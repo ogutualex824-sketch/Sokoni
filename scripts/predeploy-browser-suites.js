@@ -94,6 +94,28 @@ const sleep = (ms) => {
   catch (_) { const until = Date.now() + ms; while (Date.now() < until) {} }
 };
 
+/* ENVIRONMENT PREFLIGHT + EXCLUSIVITY. Browser suites are exclusive on a machine: on 2026-09-30 a
+   required suite reported 38/1 because another session's WebKit suites ran beside this gate and
+   Playwright clicks/navigations timed out. Widening timeouts would have hidden that; instead the
+   runner refuses to start while a peer browser run, orphaned browser processes, low memory or a
+   deploy is present, and holds a lock while it runs so a peer's preflight refuses in turn. The
+   preflight writes a record (process counts, ownership, cleanup, start/end) for each decision. */
+const LOCK_NAME = 'predeploy-browser-suites';
+const PREFLIGHT = path.join(__dirname, 'test-environment-preflight.js');
+{
+  const pf = spawnSync(process.execPath, [PREFLIGHT, '--for', 'browser', '--acquire', LOCK_NAME], { cwd: ROOT, encoding: 'utf8', timeout: 180000 });
+  process.stdout.write(String(pf.stdout || ''));
+  if (pf.status !== 0) {
+    console.log('  RELEASE BLOCKED — ENVIRONMENT NOT READY (see RESULT/REASON above). No suite was run.');
+    console.log('  Wait for the peer run / deploy to finish, or clear the named condition, then re-run.');
+    process.exit(1);
+  }
+}
+const releaseLock = () => { try { spawnSync(process.execPath, [PREFLIGHT, '--release', LOCK_NAME], { cwd: ROOT, encoding: 'utf8', timeout: 60000 }); } catch (_) {} };
+process.on('exit', releaseLock);
+process.on('SIGINT', () => { releaseLock(); process.exit(130); });
+process.on('SIGTERM', () => { releaseLock(); process.exit(143); });
+
 for (const s of REQUIRED) {
   const t0 = Date.now();
   const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', s.f)],

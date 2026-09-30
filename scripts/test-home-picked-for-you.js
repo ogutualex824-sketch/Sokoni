@@ -67,8 +67,6 @@ ck('sokoni-recommendations.js: bounded products query + sellability filter on pr
   const browser = await chromium.launch();
   const open = async (w, storage) => {
     const page = await H.page(browser, { viewport: { width: w || 390, height: 844 } });
-    /* The predeploy gate runs beside other sessions' browser suites on one machine; a contended run must not fail on time alone. */
-    page.setDefaultTimeout(60000); page.setDefaultNavigationTimeout(60000);
     if (storage) await page.__ctx.addInitScript((st) => { Object.keys(st).forEach((k) => { try { localStorage.setItem(k, st[k]); } catch (_) {} }); }, storage);
     page.__console = [];
     page.on('console', (m) => page.__console.push(m.type() + ': ' + m.text()));
@@ -115,12 +113,12 @@ ck('sokoni-recommendations.js: bounded products query + sellability filter on pr
     const btn = page.locator('#inspiqEditBtn');
     await btn.scrollIntoViewIfNeeded();
     const wasOpen = await page.evaluate(() => !!window.InspIQ && document.getElementById('inspiqPicker').innerHTML.length > 0 && document.getElementById('inspiqPicker').style.display !== 'none');
-    await btn.click({ timeout: 20000 });
+    await btn.click({ timeout: 8000 });
     await page.waitForFunction(() => !!window.InspIQ, null, { timeout: 15000 });
     await page.waitForTimeout(300);
     const t1 = await page.evaluate(() => ({ display: document.getElementById('inspiqPicker').style.display, exp: document.getElementById('inspiqEditBtn').getAttribute('aria-expanded') }));
     ck('the press toggles: an already-open onboarding picker closes, a closed one opens', wasOpen ? (t1.display === 'none' && t1.exp === 'false') : (t1.display !== 'none' && t1.exp === 'true'), Object.assign({ inspiqBefore: preLoaded, wasOpen }, t1));
-    if (wasOpen) { await btn.click({ timeout: 20000 }); await page.waitForTimeout(300); }
+    if (wasOpen) { await btn.click({ timeout: 8000 }); await page.waitForTimeout(300); }
     const fresh = await page.evaluate(() => ({ picks: document.querySelectorAll('#inspiqPicker .iq-pick-btn').length, text: document.getElementById('inspiqPicker').innerText.slice(0, 40), exp: document.getElementById('inspiqEditBtn').getAttribute('aria-expanded'), display: document.getElementById('inspiqPicker').style.display }));
     ck('a fresh visitor gets the onboarding picker (a tap loads InspIQ on demand if needed)', fresh.picks > 5 && /Pick what you love/.test(fresh.text) && fresh.display !== 'none' && fresh.exp === 'true', Object.assign({ inspiqBefore: preLoaded }, fresh));
     /* pick two and show the feed → home widget, six cards max */
@@ -148,15 +146,15 @@ ck('sokoni-recommendations.js: bounded products query + sellability filter on pr
     const before = await page.evaluate(() => ({ pickerLen: document.getElementById('inspiqPicker').innerHTML.length, feed: document.querySelectorAll('#inspiqFeed .inspiq-card').length }));
     ck('on load the home feed shows the interest widget (≤6 cards) and no picker', before.feed > 0 && before.feed <= 6 && before.pickerLen === 0, before);
     await page.locator('#inspiqEditBtn').scrollIntoViewIfNeeded();
-    await page.locator('#inspiqEditBtn').click({ timeout: 20000 });
+    await page.locator('#inspiqEditBtn').click({ timeout: 8000 });
     await page.waitForTimeout(300);
     const edit = await page.evaluate(() => ({ text: document.getElementById('inspiqPicker').innerText.slice(0, 40), active: Array.from(document.querySelectorAll('#inspiqPicker .iq-pick-btn')).filter((b) => /scale/.test(b.style.transform)).map((b) => b.dataset.cat), exp: document.getElementById('inspiqEditBtn').getAttribute('aria-expanded'), display: document.getElementById('inspiqPicker').style.display }));
     ck('Edit Interests OPENS THE EDITOR for a returning visitor, pre-selected with their interests (the live defect)', /Edit Your Interests/.test(edit.text) && edit.active.sort().join() === 'electronics,fashion' && edit.exp === 'true' && edit.display !== 'none', edit);
-    await page.locator('#inspiqEditBtn').click({ timeout: 20000 });
+    await page.locator('#inspiqEditBtn').click({ timeout: 8000 });
     await page.waitForTimeout(200);
     const closed = await page.evaluate(() => ({ display: document.getElementById('inspiqPicker').style.display, exp: document.getElementById('inspiqEditBtn').getAttribute('aria-expanded') }));
     ck('pressing it again closes the editor', closed.display === 'none' && closed.exp === 'false', closed);
-    await page.locator('#inspiqEditBtn').click({ timeout: 20000 });
+    await page.locator('#inspiqEditBtn').click({ timeout: 8000 });
     await page.waitForTimeout(200);
     await page.evaluate(() => { document.querySelector('#inspiqPicker .iq-pick-btn[data-cat="electronics"]').click(); /* deselect */ InspIQ.applyPickEdit(); });
     await page.waitForTimeout(300);

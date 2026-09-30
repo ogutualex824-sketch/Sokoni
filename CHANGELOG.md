@@ -1,3 +1,14 @@
+## [2026-09-30] — Test/deploy environment preflight + syntax-gate classification (workflow blockers, test infrastructure only) — NOT a hosting change
+
+**Files:** new `scripts/test-environment-preflight.js`, new `scripts/test-syntax-gate-classification.js`, `scripts/predeploy-syntax-gate.js`, `scripts/predeploy-browser-suites.js`, `scripts/test-home-picked-for-you.js` (timeouts restored to the certified values), new `docs/TEST_ENVIRONMENT_PREFLIGHT.md`. No application code, App Check, payment path or `firebase.json` change; production stays at b108ae3.
+**Database / API / security / breaking changes:** none.
+
+- **Environment preflight** (`--for syntax|browser|hosting|functions`): RAM (physical + commit headroom), parent-dead WebKit/Playwright orphans, peer browser lock + live peer suite runners, node capacity, functions/hosting deploy in progress, Cloud Build ongoing. Fail closed with one reason code (`OOM_RISK`, `ORPHAN_BROWSER_PROCESSES`, `PEER_BROWSER_SESSION_ACTIVE`, `NODE_SATURATION`, `DEPLOYMENT_IN_PROGRESS`, `CLOUD_BUILD_ACTIVE|UNKNOWN`); UNPROVEN is NOT_READY. Writes a JSON record per run (counts, ownership, cleanup, start/end). `--reap` terminates parent-dead orphans only.
+- **Syntax gate classifies**: exit 0 → SYNTAX_PASS; SyntaxError → SYNTAX_FAIL; crash/OOM/signal/spawn error → **SYNTAX_UNPROVEN, stop, no retry** (an OOM child was reported as "does not parse" on 2026-09-30). Runs the preflight (`--for syntax`) before sweeping. Classifier proven 14/0.
+- **Browser-suite runner** acquires the exclusivity lock via the preflight before its first suite and releases it on exit; a peer run, orphans, low memory or a deploy → RELEASE BLOCKED — ENVIRONMENT NOT READY, nothing run.
+- **Reverted** the timeout widening in `test-home-picked-for-you.js` (owner: timeouts mask contention).
+- First real run named the live state truthfully: free physical ~380 MB, 12–16 orphan browser processes, a peer WebKit suite (`test-merchant-disputes-ui.js`, not this session), a functions deploy in progress → NOT_READY.
+
 ## [2026-09-30] - DEPLOYED b108ae3 (hosting content = 85699a0: recs App Check wait+retry) -> Hosting v647 (sokoni-20260930103649-v647) 10:36Z, owner-authorized; two earlier attempts were false blocks (peer WebKit-orphan OOM: suite timeouts 38/1, then node --check OOM in the syntax gate); served sokoni-recommendations.js byte-identical to 85699a0; all other files unchanged since d55c112; rollback = v646 release of d55c112.
 
 ## [2026-09-30] - DEPLOYED d55c112 → Hosting v646 (cacheVersion sokoni-20260930093216-v646) 09:32Z, owner-authorized; artefacts 12edf13; rollback 6f7202bd5dd81d84. Live verified: markers served, 6 of 7 files byte-identical (index.html served via / — /index.html is a 301), recs widget renders, feed 6, Fastest Selling visible, no [RT] products warning, no module-not-loaded warning. Follow-up (recs App Check wait+retry) committed, NOT deployed.

@@ -26,7 +26,6 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
 const os = require('os');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -35,15 +34,43 @@ let checked = 0;
 let inlineChecked = 0;
 let inlineSkipped = 0;
 
+/* CLASSIFICATION — a child-process crash is never a syntax failure.
+   On 2026-09-30 this gate reported "1 file(s) do not parse: functions/algolia-analytics.js" and
+   blocked an authorized deploy. The child had printed "Fatal process out of memory": the machine
+   was at its commit ceiling (parent-dead WebKit orphans), and the file parses. execFileSync threw
+   the same way for a real SyntaxError and for a crashed child, so the two were indistinguishable.
+
+     node --check exits 0                                   → SYNTAX_PASS
+     node --check exits 1 with a SyntaxError on stderr      → SYNTAX_FAIL   (a code fact)
+     node --check dies by signal / OOM / any other crash    → SYNTAX_UNPROVEN — STOP, no retry
+
+   UNPROVEN stops the sweep at once: there is no point checking 1,700 more files on a machine that
+   cannot spawn a parser, and retrying until it happens to fit would turn a machine state into a
+   green light. Fix the machine (scripts/test-environment-preflight.js names the reason), re-run. */
+const { spawnSync } = require('child_process');
+let unproven = null;
+function classify(r) {
+  const err = String((r.stderr && r.stderr.toString()) || '');
+  if (r.status === 0 && !r.signal) return { kind: 'PASS' };
+  const crash = r.signal || r.error || /Fatal process out of memory|FATAL ERROR|VirtualAlloc|Allocation failed|Aborted|Segmentation fault/i.test(err);
+  const syntax = /SyntaxError/.test(err);
+  if (!crash && syntax && r.status === 1) return { kind: 'FAIL', msg: err };
+  return { kind: 'UNPROVEN', msg: (r.error ? r.error.message + '\n' : '') + (r.signal ? 'signal ' + r.signal + '\n' : '') + err, status: r.status, signal: r.signal || null };
+}
+function runCheck(file) {
+  return spawnSync(process.execPath, ['--check', file], { stdio: ['ignore', 'ignore', 'pipe'], encoding: 'utf8', timeout: 60000 });
+}
+function stopUnproven(file, c) {
+  unproven = { file, msg: String(c.msg || '').split('\n').filter((l) => l.trim()).slice(0, 4).join('\n      '), status: c.status, signal: c.signal };
+}
+
 function check(file) {
-  try {
-    execFileSync(process.execPath, ['--check', file], { stdio: ['ignore', 'ignore', 'pipe'] });
-    checked++;
-  } catch (e) {
-    const msg = String((e.stderr && e.stderr.toString()) || e.message)
-      .split('\n').filter((l) => l.trim()).slice(0, 3).join('\n      ');
-    failures.push({ file: path.relative(ROOT, file), msg });
-  }
+  if (unproven) return;
+  const c = classify(runCheck(file));
+  if (c.kind === 'PASS') { checked++; return; }
+  if (c.kind === 'UNPROVEN') { stopUnproven(path.relative(ROOT, file), c); return; }
+  const msg = c.msg.split('\n').filter((l) => l.trim()).slice(0, 3).join('\n      ');
+  failures.push({ file: path.relative(ROOT, file), msg });
 }
 
 /* INLINE <script> blocks in HTML.
@@ -80,15 +107,17 @@ function checkInlineScripts(file) {
     if (/<\s*\/?\s*script|\\\/script/i.test(body)) { inlineSkipped++; continue; }
     const line = html.slice(0, m.index).split('\n').length;
     const tmp = path.join(os.tmpdir(), 'sk-inline-' + process.pid + '-' + idx + '.js');
+    if (unproven) return;
     try {
       fs.writeFileSync(tmp, body);
-      execFileSync(process.execPath, ['--check', tmp], { stdio: ['ignore', 'ignore', 'pipe'] });
-      inlineChecked++;
-    } catch (e) {
-      const msg = String((e.stderr && e.stderr.toString()) || e.message)
-        .split('\n').filter((l) => l.trim()).slice(0, 3).join('\n      ')
-        .replace(new RegExp(tmp.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '<inline>');
-      failures.push({ file: path.relative(ROOT, file) + ' (inline <script> at line ' + line + ')', msg });
+      const c = classify(runCheck(tmp));
+      if (c.kind === 'PASS') inlineChecked++;
+      else {
+        const clean = (s) => String(s || '').replace(new RegExp(tmp.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '<inline>');
+        if (c.kind === 'UNPROVEN') { stopUnproven(path.relative(ROOT, file) + ' (inline <script> at line ' + line + ')', Object.assign({}, c, { msg: clean(c.msg) })); return; }
+        const msg = clean(c.msg).split('\n').filter((l) => l.trim()).slice(0, 3).join('\n      ');
+        failures.push({ file: path.relative(ROOT, file) + ' (inline <script> at line ' + line + ')', msg });
+      }
     } finally { try { fs.unlinkSync(tmp); } catch (_) {} }
   }
 }
@@ -123,13 +152,36 @@ function sweep(dir, depth) {
   }
 }
 
+/* As a module (scripts/test-syntax-gate-classification.js) only the classifier is exported; the
+   sweep runs when this file is the entry point. */
+if (require.main !== module) { module.exports = { classify, runCheck }; return; }
+
 console.log('[predeploy] syntax gate — checking JavaScript…');
+/* Resource preflight FIRST: a parser sweep on a machine at its commit ceiling dies halfway and
+   proves nothing. RAM / orphan / node-capacity only (--for syntax); fail closed. */
+{
+  const pf = spawnSync(process.execPath, [path.join(__dirname, 'test-environment-preflight.js'), '--for', 'syntax'], { encoding: 'utf8', timeout: 120000 });
+  process.stdout.write(String(pf.stdout || ''));
+  if (pf.status !== 0) {
+    console.error('\n  SYNTAX_UNPROVEN — environment not fit to run the parser sweep (see RESULT above).');
+    console.error('  Nothing was checked, nothing was deployed. Fix the machine, then re-run.\n');
+    process.exit(1);
+  }
+}
 sweep(ROOT, 0);
 sweep(path.join(ROOT, 'functions'), 1);
 sweepHtml(ROOT, 0);
 
+if (unproven) {
+  console.error('\n  SYNTAX_UNPROVEN — the parser process crashed; this is a MACHINE state, not a syntax result.\n');
+  console.error('    stopped at ' + unproven.file + '\n      exit=' + unproven.status + ' signal=' + unproven.signal + '\n      ' + unproven.msg + '\n');
+  console.error('  ' + checked + ' files and ' + inlineChecked + ' inline blocks had passed before the crash; the rest were NOT checked.');
+  console.error('  No retry is attempted. Run scripts/test-environment-preflight.js --for syntax, fix the reason it names, re-run.\n');
+  process.exit(1);
+}
+
 if (failures.length) {
-  console.error('\n  DEPLOY BLOCKED — ' + failures.length + ' file(s) do not parse:\n');
+  console.error('\n  SYNTAX_FAIL — DEPLOY BLOCKED — ' + failures.length + ' file(s) do not parse (SyntaxError from node --check):\n');
   failures.forEach((f) => console.error('    ' + f.file + '\n      ' + f.msg + '\n'));
   console.error('  Fix the syntax and re-run. Nothing was deployed.\n');
   process.exit(1);

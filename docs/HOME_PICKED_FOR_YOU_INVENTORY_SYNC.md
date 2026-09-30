@@ -71,6 +71,22 @@ Not proven here: behaviour against production Firestore (App Check) — the harn
 | Console | no `[RT] products` warning, no `module not loaded` warning |
 | Caveat | headless Chromium is App-Check-throttled (403), so the recs widget showed its empty state there and the catalogue came through the `/api/catalogue` fallback; a real browser session is needed to see recs cards. Playwright's own click timed out on "element is not stable" (the section animates); a programmatic click worked. |
 
+## 4c · Real-browser App Check verification (2026-09-30 10:5xZ, headed Chrome, automation fingerprint off) — a NEW finding
+
+| Check | Observed |
+|---|---|
+| App Check | `__sokoniAppCheckState` = **`exchanged`** — a valid token; zero throttling lines. This is the real-browser session the headless smoke could not provide. |
+| Recommendations request path | both reads **failed with `failed-precondition`: "The query requires an index"** — for `products` and for `mechanics`. The console link decodes to an index on `collectionGroups/products` ordered by **`__name__` DESCENDING**. The retry (also denied, same reason) is not a token problem. Widget shows the empty state. |
+| Home catalogue listener | console order: `http-fallback-ok` (97) → `read-ok` (97) → `read-ok` again ~11 s later. The catalogue reached Home through the **`/api/catalogue` HTTP fallback**, not the Firestore listener. The canonical `SokoniDB.listenProducts` uses the same `orderBy(documentId(), 'desc'), limit(200)` shape, so it hits the same missing index — a `failed-precondition` is not in its transient-retry list, so it fails once and stays silent. |
+| Consequence | Home renders the catalogue, but **live inventory updates do not reach it**: the fallback is one-shot and CDN-cacheable (≤120 s). The re-render-on-snapshot work in this slice is correct and idle until the listener can attach. This pre-dates this slice (the earlier census saw `[RT] products: query requires an index` in a headed run and I wrongly reclassified it later from a headless, App-Check-denied run as permission-denied). |
+| Status | **Recommendation cards in a real browser: NOT demonstrated** — blocked by the index, not by App Check. |
+
+**Fix options (not applied — owner decision):**
+1. **Client query change, no index:** `orderBy(documentId())` ascending (implicit, needs no index) + `limitToLast(200)` returns the newest 200 (ids are Date.now()-style) in both `onSnapshot` and `getDocs`. One-line change in `sokoni-db.js` and `sokoni-recommendations.js`; hosting-only candidate; certifiable in the harness and in a headed Chrome run.
+2. **Index deploy:** add `{collectionGroup: products, fields: [{fieldPath: __name__, order: DESCENDING}]}` (and `mechanics`) to `firestore.indexes.json` and deploy `--only firestore:indexes` — a separate gate with its own authorization; the indexes file is split/governed (`scripts/reconcile-indexes.js`, `verify-index-governance.js`) and a non-interactive indexes deploy can drop indexes absent from the file.
+
+Option 1 is the smaller blast radius and removes a whole failure class; option 2 keeps the query as written. Either way the fix must be certified in a **headed** browser with a valid token, since that is the only environment that reaches the index check.
+
 ## 5 · Performance and security
 
 - **Performance:** no new synchronous script. The three previously hidden daily sections now render, but only when they approach the viewport or at idle (same deferral as New Arrivals), so the load window is unchanged. Recommendations now read ≤200 product docs instead of the whole collection. One failing Firestore listener per home visit is gone.
