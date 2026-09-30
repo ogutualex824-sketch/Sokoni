@@ -1,3 +1,31 @@
+## [2026-10-01] — SOKONI Store: company-OWNED, owner-OPERATED (hosting) — NOT deployed
+
+**Owner decisions (binding):** the store stays owned by the company account; ONE named operator
+operates it; every other admin (superAdmins included) sees "Access denied — the SOKONI Store is
+operated by its owner" and can do nothing; the store has its own wallet on the company account;
+`+254705726803` is the contact phone and the payout number (the latter set only by the operator
+through a PIN-protected flow). **Operator record NOT yet written — run
+`scripts/infra/set-first-party-store-operator.js --apply` after deploy** (functions branch
+`feat/first-party-store-operator-on-a545818`). **NOT deployed.** Server half and census:
+`docs/SOKONI_STORE_OPERATOR_CENSUS.md` on that branch.
+
+**Files:**
+- `admin-os.html`, `super-admin.html` — a **SOKONI Store** sidebar entry (existing `<a class="nav-item">`
+  contract) → `merchant-v2.html?store=sokoni`. `sokoni-aos.js` untouched.
+- `merchant-v2.html` — `?store=sokoni` sets store mode in `<head>` (no chrome flash); the shell does
+  NOT boot in store mode (no `shops/{uid}` read, no `merchantIdentity`, no module mount).
+- `sokoni-store-workspace.js` (new) — asks `sokoniStoreGetContext` first; renders the workspace
+  (profile + contact phone via `sokoniStoreSaveProfile`, wallet, orders, products) or the
+  Access-denied panel with ZERO further store calls. Unknown renders "—". Payout number shown
+  masked (last 3) only when the server returns one; today the server reports the flow unavailable
+  and the button is disabled.
+- `scripts/test-sokoni-store-workspace-static.js` (new, 27/0);
+  `scripts/test-first-party-store-operator.js` (new, real-browser, QUEUED under the browser hold).
+
+**Database / API:** none on this tree (consumes the 5 new `sokoniStore*` callables).
+**Security:** the link authorises nothing; the server gate decides. **Deploy order:** functions FIRST
+(the page calls callables that do not exist until then — before that every caller sees "unavailable").
+
 ## [2026-09-30] - BnB: category pill strip made phone-safe (snap-scroll chips, sort on its own row) — built, browser certification QUEUED, NOT deployed
 
 **Branch `hosting/bnb-mobile-on-0271709`, built on `0271709`.** Owner ask (verbatim): "fix the bnb mobile layout the
