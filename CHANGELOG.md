@@ -1,3 +1,66 @@
+## [2026-09-30] - Inventory convergence, Phase A: the till keeps ONE meaning of stock, so a service with no stock field sells forever
+
+**Local only. NOT deployed, NOT pushed. Branch `slice/c4-convergence`.** See `docs/INVENTORY_INVARIANT.md`.
+
+**The defect** (pre-existing, found by the Quick Charge cyber-basket test QS8):
+
+- `posCompleteCheckout` read an absent `stock` as 9999 in its check, but still wrote `increment(-qty)`.
+  `increment` on an absent field **creates** it, so a printing service with no stock field became `stock: -20`
+  after one sale. Every later sale was refused with "Insufficient stock".
+- The refund had the mirror defect: `increment(+qty)` made the service metered with a tiny stock.
+- The package component loop and the pre-sale `stockDeltas` had the same flaw.
+
+**The rule now** — `shared/sellability.stockOf`, the one the online checkout already used:
+
+- a numeric `stock` is metered: `0` is sold out, and a sale decrements it, never below zero;
+- no numeric `stock` is **UNMETERED**: stock is never created, decremented or returned.
+
+**Changes in `functions/pos-zero-friction.js`**
+
+- **Sale check:** loose items and package components use `_SELL.stockOf(p).metered`. The old legacy fallback
+  (`stock ?? stockQty ?? quantity ?? 9999`) is gone.
+- **Sale write:** an unmetered item keeps its sales counters but gets no `stock`/`inventoryVersion` write. Components
+  follow the same rule. Each sale line records `stockDeducted`.
+- **Pre-sale check:** `stockDeltas` lists metered items only.
+- **Refund:** returns stock only while the item is metered, and at most the line's `stockDeducted`. The refund record
+  carries `stockReturned` per line.
+
+**Tests**
+
+- `scripts/test-inventory-unmetered-till.js` **8/0** (IA1–IA8):
+  - the cyber basket, and the same basket sold again;
+  - metered 5→3, 1<2 refused, 0 refused;
+  - the dry run;
+  - the refund (5 back, printing untouched);
+  - a pre-change sale;
+  - a package with an unmetered component;
+  - a legacy `stockQty`-only product.
+- **QS8** now uses printing with **no** stock field (permanent).
+- Updated: `test-merchant-ecosystem-convergence.js`.
+  - Three static checks (till deducts `products.stock`, bumps `inventoryVersion`, refund restores stock) now accept the
+    conditional form `_upd.stock = FieldValue.increment(…)`.
+  - Result is 144/1, identical to the parent.
+  - The check still fails if the deduction is removed.
+- Deliberate breakages **7/7**, restored byte-identically.
+- Parent `ca02732` fails 7/8 (IA3, the metered rules, passes on both by design).
+
+**Database.**
+
+- Sale lines gain `stockDeducted`, and refund items gain `stockReturned`.
+- **No migration.** Products already driven negative stay as they are; a read-only census is the owner's call.
+
+**Behaviour changes**
+
+- A product carrying **only** the legacy `stockQty` is no longer stock-limited at the till. This matches online.
+  `warehouse-scanner.html` writes `products.stockQty` from the browser; that is recorded as its own finding.
+- Unmetered sales no longer bump `inventoryVersion`.
+
+**Security.** Unchanged: the server stays authoritative, and a metered item still cannot be oversold.
+**API.** No change.
+
+**Next: Phase B.** One shared deduction helper in `shared/sellability.js` for the 8 online and legacy stock writers
+(`index.js` ×3, `b2b-wholesale`, `pos-retail-engine`, `pos-retail`, `wap`, `pos-marketplace-sync`).
+
 ## [2026-09-30] - Ecosystem Sync census: one authority per business fact, measured before any change (docs only)
 
 **Local only. NOT deployed, NOT pushed. Documentation only; no code changed.**

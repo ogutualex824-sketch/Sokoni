@@ -391,8 +391,13 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
       enriched.push({ productId: it.productId, name: p.name, qty: it.qty || 1, unitPrice: serverPrice,
         _own: String(p.shopId || p.sellerUid || '') === String(merchantId) });
       serverSubtotal += serverPrice * (it.qty || 1);
-      const from = Number(p.stock || 0), to = Math.max(0, from - (it.qty || 0));
-      stockDeltas.push({ productId: it.productId, from, to, delta: to - from });
+      /* Inventory convergence A (2026-09-30): only a METERED item has a stock delta. An item with no numeric `stock`
+         is unmetered (shared/sellability.stockOf) — it never had a "0 → 0" figure to show. */
+      const _stD = require('./shared/sellability').stockOf(p);
+      if (_stD.metered && p.trackInventory !== false) {
+        const from = _stD.stock, to = Math.max(0, from - (it.qty || 0));
+        stockDeltas.push({ productId: it.productId, from, to, delta: to - from });
+      }
     }
     /* U7c2 (2026-09-29): the SAME offer quote the real sale will apply, so the till can SHOW it before charging.
        Only this shop's own lines are quoted; an unreadable offer store is reported, never shown as "no offers". */
@@ -981,9 +986,12 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
         if (_SELL.tillBlockReason(prod)) {
           throw new HttpsError('failed-precondition', `${_sanitize(prod.name || 'An item')} is no longer for sale, so the sale was not recorded.`);
         }
-        /* Canonical stock field is `stock`; fall back to legacy names for older docs. */
-        const stock = prod.stock ?? prod.stockQty ?? prod.quantity ?? 9999;
-        if (stock < (item.qty || 1) && prod.trackInventory !== false && !_PSp.isComposite(prod))
+        /* Inventory convergence A (2026-09-30): ONE meaning of stock — shared/sellability.stockOf, the same rule online
+           checkout applies. A numeric `stock` is metered (0 = sold out); NO numeric `stock` is UNMETERED (a service,
+           a legacy product) and always sellable. The old `stock ?? stockQty ?? quantity ?? 9999` read legacy fields
+           the online path never honoured, and its 9999 let the write below drive an absent field to -qty. */
+        const _st = _SELL.stockOf(prod);
+        if (_st.metered && _st.stock < (item.qty || 1) && prod.trackInventory !== false && !_PSp.isComposite(prod))
           throw new Error(`Insufficient stock for ${prod.name}`);
       });
       _compSnaps.forEach((cs, k) => {
@@ -997,8 +1005,8 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
           throw new HttpsError('failed-precondition', 'A package in this sale contains an item that is no longer for sale, so the sale was not recorded.');
         }
         const loose = enrichedItems.reduce((n, it) => n + (it.productId === id ? (Number(it.qty) || 1) : 0), 0);
-        const stock = cp.stock ?? cp.stockQty ?? cp.quantity ?? 9999;
-        if (cp.trackInventory !== false && stock < _posComp[id] + loose) throw new Error(`Insufficient stock for ${cp.name} (in a package)`);
+        const _stC = _SELL.stockOf(cp);   /* same rule as a loose item: unmetered components are never short */
+        if (cp.trackInventory !== false && _stC.metered && _stC.stock < _posComp[id] + loose) throw new Error(`Insufficient stock for ${cp.name} (in a package)`);
       });
 
       /* ── PHASE 3: ALL WRITES ── */
@@ -1025,23 +1033,32 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
           /* the package itself: no stock of its own — only its sales counters move */
           txn.update(productRefs[i], { sold: FieldValue.increment(item.qty || 1), lastSoldAt: FieldValue.serverTimestamp(),
             totalRevenue: FieldValue.increment(item.unitPrice * (item.qty || 1)), updatedAt: FieldValue.serverTimestamp() });
+          item.stockDeducted = 0;
           return;
         }
+        item.stockDeducted = 0;   /* recorded on the sale line: a refund returns at most what THIS line took */
         if (snap.data().trackInventory !== false) {
           const _extra = (!_folded.has(item.productId) && _posComp[item.productId]) ? _posComp[item.productId] : 0;
           if (_extra) _folded.add(item.productId);
-          txn.update(productRefs[i], {
-            /* Deduct the CANONICAL `stock` — the same field inventory, catalogue and dispatch
-               read, so a till sale is immediately reflected everywhere. inventoryVersion bumps
-               so client caches invalidate. Pre-check above guarantees stock ≥ qty. */
-            stock:            FieldValue.increment(-((item.qty || 1) + _extra)),
-            inventoryVersion: FieldValue.increment(1),
+          /* Inventory convergence A (2026-09-30): an UNMETERED item (no numeric `stock`) keeps its sales counters but its
+             stock is never created, decremented or returned — increment() on an absent field would CREATE stock: -qty. */
+          const _metered = _SELL.stockOf(snap.data()).metered;
+          const _upd = {
             sold:             FieldValue.increment((item.qty || 1) + _extra),
             lastSoldAt:       FieldValue.serverTimestamp(),
             totalUnitsSold:   FieldValue.increment(item.qty || 1),
             totalRevenue:     FieldValue.increment(item.unitPrice * (item.qty || 1)),
             updatedAt:        FieldValue.serverTimestamp(),
-          });
+          };
+          if (_metered) {
+            /* Deduct the CANONICAL `stock` — the same field inventory, catalogue and dispatch
+               read, so a till sale is immediately reflected everywhere. inventoryVersion bumps
+               so client caches invalidate. Pre-check above guarantees stock ≥ qty. */
+            _upd.stock            = FieldValue.increment(-((item.qty || 1) + _extra));
+            _upd.inventoryVersion = FieldValue.increment(1);
+            item.stockDeducted    = item.qty || 1;
+          }
+          txn.update(productRefs[i], _upd);
         }
       });
 
@@ -1049,13 +1066,12 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
       _compSnaps.forEach((cs, k) => {
         const id = _posCompIds[k];
         if (_folded.has(id) || cs.data().trackInventory === false) return;
-        txn.update(_compRefs[k], {
-          stock:            FieldValue.increment(-_posComp[id]),
-          inventoryVersion: FieldValue.increment(1),
-          sold:             FieldValue.increment(_posComp[id]),
-          lastSoldAt:       FieldValue.serverTimestamp(),
-          updatedAt:        FieldValue.serverTimestamp(),
-        });
+        const _cUpd = { sold: FieldValue.increment(_posComp[id]), lastSoldAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() };
+        if (_SELL.stockOf(cs.data()).metered) {   /* an unmetered component: counters only, its stock is never created */
+          _cUpd.stock            = FieldValue.increment(-_posComp[id]);
+          _cUpd.inventoryVersion = FieldValue.increment(1);
+        }
+        txn.update(_compRefs[k], _cUpd);
       });
 
       let loyaltyAwarded = 0;
@@ -1795,16 +1811,26 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
     /* ── WRITES ── */
     /* the points: earned taken back, spent given back — with the refund, exactly once (writes only; read above) */
     pointsOutcome = _PR.applyPointsRefundTx(txn, db, _ptsCtx, { ratio: refundRatio, refundKey: refundId, reason: 'pos_refund' });
+    /* Inventory convergence A (2026-09-30): return ONLY the metered stock the sale actually took. An unmetered item
+       (no numeric `stock`) gets no stock field — increment() would CREATE one and make a service metered. A line that
+       recorded `stockDeducted` returns at most that; a sale from before it was recorded is judged by today's metering. */
+    const _SELLr = require('./shared/sellability');
     plan.forEach(pItem => {
       if (pItem.snap.exists && pItem.snap.data().trackInventory !== false) {
-        txn.update(pItem.ref, {
-          stock:            FieldValue.increment(pItem.qty),   /* return canonical stock */
-          inventoryVersion: FieldValue.increment(1),
+        const _deducted = (typeof pItem.orig.stockDeducted === 'number') ? pItem.orig.stockDeducted : pItem.qty;
+        const _ret = _SELLr.stockOf(pItem.snap.data()).metered ? Math.min(pItem.qty, _deducted) : 0;
+        const _upd = {
           sold:             FieldValue.increment(-pItem.qty),
           totalUnitsSold:   FieldValue.increment(-pItem.qty),
           totalRevenue:     FieldValue.increment(-(pItem.orig.unitPrice * pItem.qty)),
           updatedAt:        FieldValue.serverTimestamp(),
-        });
+        };
+        if (_ret > 0) {
+          _upd.stock            = FieldValue.increment(_ret);   /* return canonical stock */
+          _upd.inventoryVersion = FieldValue.increment(1);
+        }
+        pItem.stockReturned = _ret;
+        txn.update(pItem.ref, _upd);
       }
     });
 
@@ -1812,7 +1838,7 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
       id:          refundId,
       saleId,
       merchantId:  _sanitize(merchantId),
-      items:       plan.map(x => ({ productId: x.orig.productId, qty: x.qty })),
+      items:       plan.map(x => ({ productId: x.orig.productId, qty: x.qty, stockReturned: x.stockReturned || 0 })),
       refundTotal,                         /* MONEY returned — the money-paid share of what these lines cost */
       listValue, refundRatio,              /* 2026-09-29: the list value refunded, and its share of the sale */
       pointsValueShareKES: pointsKESShare, /* the part that was paid with SOKONI points — given back as points */

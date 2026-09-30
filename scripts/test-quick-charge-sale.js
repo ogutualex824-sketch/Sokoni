@@ -174,7 +174,7 @@ const saleOf = async (key) => (await all('posRetailSales')).find((x) => x.idempo
     { r7: r7.msg, r7c: r7c.msg, b7, a7, c7 });
 
   /* QS8 */
-  await db.doc('products/printing').set({ name: 'Printing (per page)', price: 10, sellerUid: A, shopId: A, status: 'active', isVisible: true, type: 'service', trackInventory: false });
+  await db.doc('products/printing').set({ name: 'Printing (per page)', price: 10, sellerUid: A, shopId: A, status: 'active', isVisible: true, type: 'service' });   /* NO stock field = UNMETERED (inventory convergence A) */
   await db.doc('products/envelope').set({ name: 'A4 Envelope', price: 20, stock: 50, sellerUid: A, shopId: A, status: 'active', isVisible: true });
   const q8 = await out(PPX.PURPOSES.pos_till_sale.price(A, { sokoniTillId: 'TILLA', saleId: 'QS8-CYBER', saleBound: true, items: [{ name: 'Till sale', price: 390, qty: 1 }] }));
   const ref8 = q8.ok && q8.ok.preferredRef;
@@ -185,7 +185,7 @@ const saleOf = async (key) => (await all('posRetailSales')).find((x) => x.idempo
   const s8 = await saleOf('QS8-CYBER') || {};
   const lines8 = s8.items || [];
   const pr8 = await get('products/printing');
-  ck('QS8 the cyber shop: printing (a catalogue service, trackInventory:false) + envelopes (stocked) + scanning (a quick charge) = ONE sale, ONE M-PESA payment, ONE receipt, KES 390; envelopes 50 → 45, printing keeps no stock figure',
+  ck('QS8 the cyber shop: printing (a catalogue service with NO stock field) + envelopes (stocked) + scanning (a quick charge) = ONE sale, ONE M-PESA payment, ONE receipt, KES 390; envelopes 50 → 45, printing keeps no stock figure',
     r8.ok && (await all('posRetailSales')).length === s8b + 1 && (await all('posReceipts')).length === rc8b + 1 && Number(s8.grandTotal) === 390
     && lines8.length === 3 && lines8.some((l) => l.productId === 'printing' && l.qty === 20) && lines8.some((l) => l.productId === 'envelope' && l.qty === 5)
     && lines8.some((l) => l.priceSource === 'quick_charge' && l.lineTotal === 90)

@@ -107,10 +107,14 @@ up('whether voiding a Merchant V2 sale is possible at all',
 head('3. SALES -> INVENTORY (canonical products/{id})');
 /* Superseded 2026-09-29 (U5 packages): the loose-item write now folds in any package component of the same product,
    `-((item.qty || 1) + _extra)` — still the one canonical products.stock decrement. */
-ck('TILL deducts canonical products.stock', /stock:\s*FieldValue\.increment\(-\(\(?item\.qty/.test(ZF));
-ck('TILL bumps inventoryVersion',           /inventoryVersion:\s*FieldValue\.increment\(1\)/.test(ZF));
+/* Superseded 2026-09-30 (inventory convergence A): the till builds its product write and adds `stock` /
+   `inventoryVersion` only for a METERED item (`_upd.stock = FieldValue.increment(...)`), so these accept the property
+   assignment as well as the object key. Behaviour — metered deducted, unmetered untouched, refund returns what was
+   taken — is proven by execution in scripts/test-inventory-unmetered-till.js. */
+ck('TILL deducts canonical products.stock', /stock\s*[:=]\s*FieldValue\.increment\(-\(\(?item\.qty/.test(ZF));
+ck('TILL bumps inventoryVersion',           /inventoryVersion\s*[:=]\s*FieldValue\.increment\(1\)/.test(ZF));
 ck('DISPATCH deducts canonical products.stock', /stock:\s*admin\.firestore\.FieldValue\.increment\(-stockItems/.test(RE));
-ck('TILL refund restores stock',            /stock:\s*FieldValue\.increment\(pItem\.qty\)/.test(ZF));
+ck('TILL refund restores stock',            /stock\s*[:=]\s*FieldValue\.increment\((pItem\.qty|_ret)\)/.test(ZF));
 ck('BOTH lineages share ONE stock field — inventory IS converged',
    /collection\('products'\)/.test(ZF) && /collection\('products'\)/.test(RE));
 
