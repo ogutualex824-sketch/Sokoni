@@ -1,3 +1,22 @@
+## 2026-09-30 — Home footer: IntaSend payment methods with real logos, every footer link working
+
+- **Payment row:** shows every method IntaSend provides (the owner chose all of them): M-Pesa, Visa,
+  Mastercard, PesaLink, Google Pay, Apple Pay, Bitcoin, plus a "Payments secured by IntaSend" badge.
+  - PayPal is removed: IntaSend does not provide it.
+  - The existing chip style is unchanged.
+  - Logo sources: PesaLink is its official logo from pesalink.co.ke; Apple Pay / Google Pay / Bitcoin are
+    Simple Icons (CC0) in each brand's colour (`assets/applepay.svg`, `googlepay.svg`, `bitcoin.svg`,
+    `pesalink.png`).
+  - The badge sits on its own line (a 4:1 mark), styled by `.payments-secured` in style.css.
+- **Links:**
+  - My Store, Boost Product, Flash Sale and KRA Tax now open merchant-v2 (#minishop, #marketing, #flash-sale,
+    #kra-tax, each accepted by merchant-v2's own route resolver) instead of the reference-only seller.html /
+    ministore.html.
+  - Start Selling keeps its canonical merchant-entry router.
+  - The two WhatsApp hand-offs (banned) now open in-app support (support.html): "💬 Chat with Support".
+- **Test:** scripts/test-footer-payments-links.js 12/0; live 72dca56 fails the 6 change rows.
+- No functions, rules or API change.
+
 ## 2026-09-30 — C0: POS card quarantine on the live line (owner-authorized)
 
 Live POS still completed card sales on the cashier's word, which the owner's rule refuses (a card payment is

@@ -1340,6 +1340,21 @@ body{
     .payments img { width: 56px; height: 35px; }
 }
 
+/* "Payments secured by IntaSend": a wide (4:1) badge, so it sits on its own line under the marks
+   rather than being letterboxed into a 62x38 chip. */
+.payments-secured {
+    display: flex;
+    justify-content: center;
+    margin-top: 10px;
+}
+.payments-secured img {
+    height: 36px;
+    width: auto;
+    max-width: 180px;
+    border-radius: 6px;
+    background: #fff;
+}
+
 /* TABLET â€” 3 columns so brand + 4 links have no orphan */
 @media(max-width: 950px) {
     .footer-container {
