@@ -888,6 +888,11 @@
        worker and reports to /api/diag, and never registers or updates anything.
        sw-register.js above remains the sole owner of registration. */
     "/sokoni-sw-telemetry.js",
+    /* Install / build reporter for the admin install counter (appInstallReport).
+       Consent-gated on window.SokoniConsent and fail-closed without it; it only
+       ASKS the worker its version (GET_VERSION) and never touches registration
+       or caching. */
+    "/sokoni-install-report.js",
   ];
 
   /* On-device build indicator, OPT-IN via ?diag=version.
