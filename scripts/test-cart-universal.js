@@ -14,6 +14,7 @@
  * sequencing is what blocks C and D exist to prove was respected.
  */
 'use strict';
+const SRC_SELF = require('fs').readFileSync(__filename, 'utf8');
 const path = require('path');
 const fs = require('fs');
 const vm = require('vm');
@@ -203,6 +204,32 @@ console.log('\nB. The rollout did not mangle any file');
       throw e;
     }
   }
+  /* SECOND NAMED 1:1 MIGRATION — track.html, e5ea3e4 (Rider Navigation & Intelligent Dispatch v1.0, live).
+     The page dropped its six legacy Firebase tags — four firebasejs/9.22.2 *-compat.js scripts,
+     sokoni-appcheck.js and sokoni-config.js — and loads Firebase through the canonical dynamic
+     import('./firebase.js'), which owns App Check and config. Restoring the tags would double-load
+     Firebase. The perimeter rule ("nothing may be LOST") therefore gets one more explicit exemption,
+     as narrow as the Font Awesome pair: ONLY track.html, ONLY when the lost set is EXACTLY these six
+     tags, and ONLY when the page contains the replacement import. Anything else lost on track.html
+     still fails; the same six lost on any other page still fail; six lost without the import still
+     fail. Owner-authorized 2026-09-30 as a test-contract repair, not a product change. */
+  const TRACK_LEGACY_TAGS = [
+    '<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"',
+    '<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"',
+    '<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"',
+    '<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"',
+    '<script src="sokoni-appcheck.js"',
+    '<script src="sokoni-config.js"',
+  ];
+  const TRACK_REPLACEMENT = /import\((['"])\.\/firebase\.js\1\)/;
+  function isTrackFirebaseMigration(file, lost, src) {
+    if (file !== 'track.html') return false;
+    if (!Array.isArray(lost) || lost.length !== TRACK_LEGACY_TAGS.length) return false;
+    const a = [...lost].sort(), b = [...TRACK_LEGACY_TAGS].sort();
+    if (!a.every((t, i) => t === b[i])) return false;
+    return TRACK_REPLACEMENT.test(String(src || ''));
+  }
+
   const overreach = rolled.filter(f => {
     if (PRE.includes(f)) return false;
     const now = tagsOf(read(f));
@@ -230,7 +257,8 @@ console.log('\nB. The rollout did not mangle any file');
     const lostFA   = was.filter((t) => t.indexOf('cdnjs.cloudflare.com/ajax/libs/font-awesome/') > -1);
     const gainedFA = gained.filter((t) => t.indexOf('"/assets/vendor/fontawesome/') > -1);
     const faMigrationOnly = lostFA.length === was.length && gainedFA.length === lostFA.length;
-    if (was.length > 0 && !faMigrationOnly) return true;
+    const trackMigrationOnly = isTrackFirebaseMigration(f, was, read(f));
+    if (was.length > 0 && !faMigrationOnly && !trackMigrationOnly) return true;
     /* Gains were originally required to be exactly sokoni-cart.js. That froze every rolled
        page against all later work, and two unrelated workstreams have since landed
        legitimately: adult-gate.js (f8c5b5a, the canonical 18+ classification) and
@@ -256,6 +284,25 @@ console.log('\nB. The rollout did not mangle any file');
   });
   ck('B', 'every page kept all its tags; new ones are only the service',
      overreach.length === 0, overreach.slice(0, 6).join(', '));
+
+  /* Deliberate-breakage controls for the track.html exemption: it must accept exactly the
+     documented migration and nothing adjacent to it. */
+  const trackSrc = read('track.html');
+  const SIX = TRACK_LEGACY_TAGS.slice();
+  ck('B', 'track exemption: accepts exactly the six legacy tags → firebase.js import on track.html',
+     isTrackFirebaseMigration('track.html', SIX, trackSrc));
+  ck('B', 'track exemption control: an UNRELATED lost script on track.html is still caught',
+     !isTrackFirebaseMigration('track.html', SIX.concat(['<script src="sokoni-cart.js"']), trackSrc));
+  ck('B', 'track exemption control: five of the six lost (a partial migration) is still caught',
+     !isTrackFirebaseMigration('track.html', SIX.slice(0, 5), trackSrc));
+  ck('B', 'track exemption control: one of the six swapped for another tag is still caught',
+     !isTrackFirebaseMigration('track.html', SIX.slice(0, 5).concat(['<script src="sokoni-wishlist.js"']), trackSrc));
+  ck('B', 'track exemption control: the same six lost on ANY OTHER page is still caught',
+     !isTrackFirebaseMigration('checkout.html', SIX, trackSrc) && !isTrackFirebaseMigration('index.html', SIX, trackSrc));
+  ck('B', 'track exemption control: six lost WITHOUT the firebase.js import is still caught',
+     !isTrackFirebaseMigration('track.html', SIX, '<html><script src="x.js"></script></html>'));
+  ck('B', 'track exemption is not a global Firebase allowance: the Font Awesome pair remains the only other exemption',
+     (SRC_SELF.split('Migration' + 'Only').length - 1) === 4 /* faMigrationOnly define+use, trackMigrationOnly define+use — a third exemption would add two more */);
   /* And prove the trailing bytes were not rewritten — the string round trip that broke
      28 files showed up first as a changed final newline. */
   const tailChanged = rolled.filter(f => {
