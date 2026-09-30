@@ -169,15 +169,18 @@ const h = (op, uid, data = {}, token) => EB._h[op]({ ...who(uid, token), data })
   /* SHOW-UP SETTLES THE BOOKING (owner decision 2026-09-27) */
   const po = await get('providerPayouts/pbA');
   const pbAfter = await get('providerBookings/pbA');
-  ck('show-up settled the booking: SOKONI 5 % (KES 1,000 of 20,000), provider net to the PROVIDER\'s business wallet',
-    ok.settled === true && po && po.settledTrigger === 'show_up' && po.commission === 100000 && ((((await get('wallets/djK')) || {}).balance || 0) - djWallet0) === 19000 && pbAfter.paymentStatus === 'settled' && pbAfter.status === 'in_progress', po && { commission: po.commission, net: po.net });
+  /* Owner 2026-09-30 — PIN YAKO NI BOOKING YAKO: the buyer gives the PIN only AFTER the service; the PIN
+     releases the held money AND completes the booking in one step (was: show-up settlement, then a
+     separate completion). */
+  ck('the PIN releases the booking: SOKONI 5 % (KES 1,000 of 20,000), provider net to the PROVIDER\'s business wallet, booking completed',
+    ok.settled === true && po && po.settledTrigger === 'pin_release' && po.commission === 100000 && ((((await get('wallets/djK')) || {}).balance || 0) - djWallet0) === 19000 && pbAfter.paymentStatus === 'settled' && pbAfter.status === 'completed', po && { commission: po.commission, net: po.net, trigger: po.settledTrigger, status: pbAfter.status });
   ck('…never the buyer\'s wallet', !((await get('wallets/buyer1')) || {}).balance && !(((await get('users/buyer1')) || {}).walletBalance > 0));
   ck('…the provider is told the amount; the commission ledger row is the 5 % lane', notices.some((n) => n.uid === 'djK' && /credited to your business wallet/.test(n.body)) && po.category === 'entertainment_bookings');
   const POps = require(Path.join(FN, 'provider-ops.js'));
   const comp = await POps._h.providerCompleteBooking({ ...who('djK'), data: { bookingId: 'pbA' } });
   const poAfter = (await get('providerPayouts/pbA')) || {};
-  ck('completion afterwards closes the booking WITHOUT paying again', comp.success && comp.settledAtShowUp === true && (await get('providerBookings/pbA')).status === 'completed' && ((((await get('wallets/djK')) || {}).balance || 0) - djWallet0) === 19000);
-  ck('…the show-up payout record survives completion unchanged (not re-settled)', poAfter.settledTrigger === 'show_up' && poAfter.commission === po.commission && poAfter.net === po.net && poAfter.status === po.status, { before: po.status, after: poAfter.status, trigger: poAfter.settledTrigger });
+  ck('a later completion call is a no-op (alreadyDone) — nothing is paid twice', comp.success && comp.alreadyDone === true && (await get('providerBookings/pbA')).status === 'completed' && ((((await get('wallets/djK')) || {}).balance || 0) - djWallet0) === 19000, comp);
+  ck('…the PIN-release payout record survives the no-op completion unchanged (not re-settled)', poAfter.settledTrigger === 'pin_release' && poAfter.commission === po.commission && poAfter.net === po.net && poAfter.status === po.status, { before: po.status, after: poAfter.status, trigger: poAfter.settledTrigger });
   ck('…a system event and a buyer notification record it', db._dump('conversations/ent_booking_svc_pbA/messages/').some((m) => /verified with the buyer's PIN/.test(m.text)) && notices.some((n) => n.type === 'ent_booking_verified' && n.uid === 'buyer1'));
   const twice = await h('entBookingVerifyPin', 'djK', { bookingRef: env.bookingRef, pin: sec.pin });
   ck('the PIN is used ONCE (a replay is refused as used)', twice.verified === false && twice.state === 'USED');
@@ -204,7 +207,9 @@ const h = (op, uid, data = {}, token) => EB._h[op]({ ...who(uid, token), data })
   /* ═══ skips ═══ */
   say('\n── what gets NO identity ──');
   const plain = { ...pb, providerId: 'plumb', commissionHub: 'provider', entClass: null };
-  ck('a non-Entertainment provider booking', (await EB.onSourceWritten('providerBookings', 'pbP', plain)).skipped === 'not_entertainment');
+  /* Owner 2026-09-30: EVERY paid service booking carries the PIN — the hub only decides the commission rate. */
+  const prP = await EB.onSourceWritten('providerBookings', 'pbP', plain);
+  ck('a PAID non-Entertainment provider booking now GETS an identity and a PIN (every service booking)', !prP.skipped && !!(await get('entBookings/svc_pbP')) && !!((await get('entBookings/svc_pbP')).pin || {}).hash, prP);
   ck('an unpaid hold', (await EB.onSourceWritten('providerBookings', 'pbH', { ...pb, status: 'pending', paymentStatus: 'pending' })).skipped === 'not_paid');
 
   /* ═══ VENUE ═══ */

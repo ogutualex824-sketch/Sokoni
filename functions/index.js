@@ -13439,6 +13439,9 @@ exports.entBookingOnEventOrder      = _entBookings.entBookingOnEventOrder;      
 exports.entBookingOnEventRefund     = _entBookings.entBookingOnEventRefund;      // trigger: eventRefundRequests/{id}
 exports.entBookingOnProviderBooking = _entBookings.entBookingOnProviderBooking;  // trigger: providerBookings/{id}
 exports.entBookingOnVenueBooking    = _entBookings.entBookingOnVenueBooking;     // trigger: bookings/{id}
+/* PIN YAKO NI BOOKING YAKO (owner 2026-09-30): buyer reads the PIN once the payment is held; the
+   provider enters it after the service — the only release of held booking money. service-booking-pin.js */
+exports.serviceBookingPin           = require('./service-booking-pin').serviceBookingPin;
 /* VENUE PAYMENTS (venue-payments.js): venue_booking activation + the unpaid-expiry / no-show sweep. */
 const _venuePay = require('./venue-payments');
 exports.venueOnBookingPayment       = _venuePay.venueOnBookingPayment;           // trigger: payments/{id}

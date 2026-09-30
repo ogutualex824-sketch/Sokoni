@@ -78,7 +78,9 @@ async function readSource(collection, id, data) {
     };
   }
   if (collection === 'providerBookings') {
-    if (d.commissionHub !== 'entertainment') return { skip: 'not_entertainment' };
+    /* 2026-09-30 (owner): EVERY paid service booking gets the envelope and the PIN — not only the
+       entertainment hub. PIN YAKO NI BOOKING YAKO: the buyer's PIN, given after the service is done,
+       is the only thing that releases the held payment. Hub only decides the commission rate. */
     if (String(d.paymentStatus || 'pending') === 'pending' && ['pending', 'requested', 'cancelled', 'expired'].includes(String(d.status))) return { skip: 'not_paid' };
     const prov = (await db.collection('providers').doc(String(d.providerId)).get()).data() || {};
     const refundState = String(d.paymentStatus) === 'refunded' ? 'COMPLETED' : (d.resolution && d.resolution.refundLock ? 'PROCESSING' : 'NONE');
@@ -241,9 +243,66 @@ async function onSourceWritten(collection, id, after) {
   if (src.skip) return { skipped: src.skip };
   const envId = ID.envIdFor(collection, id);
   const exists = (await _db().collection(COL.ENV).doc(envId).get()).exists;
-  if (!exists) return ensureEnvelope(collection, id, src);
-  return syncEnvelope(envId, src);
+  const out = !exists ? await ensureEnvelope(collection, id, src) : await syncEnvelope(envId, src);
+  if (collection === 'providerBookings') {
+    await _mirrorServiceOrder(id, after, envId).catch((e) => logger.warn('[entBookings] service order mirror failed', { id, err: e.message }));
+  }
+  return out;
 }
+
+/* ── orders/{bookingId} mirror — a service booking IS an order (type 'service_booking') ────────────
+   Written from the booking document only (never from a caller), so admin.html / AdminOS / super
+   admin see every service booking beside product orders with the escrow position the platform
+   holds: held (paid to SOKONI, awaiting the buyer's PIN), released (PIN given: provider's business
+   wallet credited, SOKONI commission recorded) or refunded. Amounts in KES. Idempotent (merge). */
+async function _mirrorServiceOrder(bookingId, b, envId) {
+  const db = _db();
+  const priceKES = Math.round((Number(b.price) || 0) / 100);
+  const feeKES   = Math.round((Number(b.fee) || 0) / 100);
+  const totalKES = priceKES + feeKES;
+  const ps = String(b.paymentStatus || 'pending');
+  const escrow = { held: 0, released: 0, refunded: 0 };
+  let commissionKES = null, providerNetKES = null, gatewayChargesKES = null;
+  if (ps === 'paid_held') escrow.held = Math.round((Number(b.heldAmount) || (Number(b.price) || 0) + (Number(b.fee) || 0)) / 100);
+  if (ps === 'settled') {
+    const payout = await db.collection('providerPayouts').doc(bookingId).get().catch(() => null);
+    const p = payout && payout.exists ? payout.data() : null;
+    if (p) {
+      commissionKES  = Math.round((Number(p.commission) || 0) / 100);
+      providerNetKES = Math.round((Number(p.settlementCents != null ? p.settlementCents : p.net) || 0) / 100);
+      escrow.released = providerNetKES;
+    } else escrow.released = totalKES;
+  }
+  if (ps === 'refunded') escrow.refunded = Math.round((Number(b.refundedCents) || 0) / 100);
+  if (b.paymentRef) {
+    const pay = await db.collection('payments').doc(String(b.paymentRef)).get().catch(() => null);
+    if (pay && pay.exists) {
+      const x = pay.data() || {};
+      const amt = Number(x.amount != null ? x.amount : x.amountKES);
+      const net = Number(x.netAmount != null ? x.netAmount : amt);
+      if (Number.isFinite(amt) && Number.isFinite(net)) gatewayChargesKES = Math.max(0, Math.round((amt - net) * 100) / 100);
+    }
+  }
+  const ref = db.collection('orders').doc(bookingId);
+  const cur = await ref.get();
+  if (cur.exists && cur.data().type && cur.data().type !== 'service_booking') return { skipped: 'id_collision' };
+  await ref.set({
+    type: 'service_booking', source: 'providerBookings', bookingId, envId,
+    buyerUid: b.customerUid || null, sellerUid: b.providerId || null, providerId: b.providerId || null,
+    hubId: b.commissionHub || null, service: b.service || null, productName: b.service || 'Service booking',
+    items: [{ name: b.service || 'Service booking', qty: 1, price: totalKES }],
+    status: b.status || null, paymentStatus: ps, paymentRef: b.paymentRef || null,
+    total: totalKES, priceKES, feeKES, currency: 'KES',
+    commissionKES, providerNetKES, gatewayChargesKES,
+    escrow, settledAt: b.settledAt || null, refundedAt: b.disbursedAt || null,
+    scheduledAt: b.startTs || b.scheduledAt || null,
+    createdAt: cur.exists && cur.data().createdAt ? cur.data().createdAt : (b.createdAt || FieldValue.serverTimestamp()),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { mirrored: true, escrow };
+}
+
+
 
 /* Enquiry → quote → booking: the paid booking CONVERTS its quote and enquiry (idempotent). */
 async function _convertEnquiry(bookingId, b) {
@@ -360,7 +419,7 @@ async function verifyPin(req) {
 async function _settleShowUp(env, actorUid) {
   try {
     let r = null;
-    if (env.source.collection === 'providerBookings') r = await require('./provider-ops').settleOnShowUp(env.source.id);
+    if (env.source.collection === 'providerBookings') r = await require('./provider-ops').settleOnPinRelease(env.source.id, actorUid);
     else if (env.source.collection === 'bookings') r = await require('./venue-payments').settleOnShowUp(env.source.id);
     await _audit('ent_booking_show_up_settlement', actorUid, env.envId, r || { skipped: 'no_settlement_path' });
     return r;
@@ -445,6 +504,40 @@ async function openConversation(req) {
 }
 
 const _h = { entBookingMine: mine, entBookingGet: get, entBookingVerifyPin: verifyPin, entBookingOpenConversation: openConversation };
+
+/* ── the two ends of the PIN, exposed through serviceBookingPin ─────────────────────────────── */
+_h.customerGetBookingPin = async (req) => {
+  if (!req.auth || !req.auth.uid) fail('unauthenticated', 'Sign in required.');
+  const uid = req.auth.uid;
+  const bookingId = String((req.data || {}).bookingId || '').trim();
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(bookingId)) fail('invalid-argument', 'bookingId is required.');
+  const envId = ID.envIdFor('providerBookings', bookingId);
+  const s = await _db().collection(COL.ENV).doc(envId).get();
+  if (!s.exists) return { issued: false, reason: 'not_yet_issued' };
+  const env = s.data();
+  if (env.buyerUid !== uid) fail('permission-denied', 'This booking is not yours.');
+  const paid = env.payment && env.payment.state === ID.PAYMENT.CONFIRMED;
+  const state = ID.pinState(env, _now());
+  if (!paid) return { issued: false, reason: 'unpaid', bookingRef: env.bookingRef, phrase: ID.PHRASE.BOOKING };
+  const sec = await _db().collection(COL.SECRETS).doc(envId).get();
+  return {
+    issued: !!(sec.exists && sec.data().pin), pin: sec.exists ? sec.data().pin : null,
+    bookingRef: env.bookingRef, phrase: ID.PHRASE.BOOKING, pinState: state,
+    verification: env.verification ? env.verification.state : null, payment: env.payment ? env.payment.state : null,
+  };
+};
+
+_h.providerVerifyBookingPin = async (req) => {
+  if (!req.auth || !req.auth.uid) fail('unauthenticated', 'Sign in required.');
+  const bookingId = String((req.data || {}).bookingId || '').trim();
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(bookingId)) fail('invalid-argument', 'bookingId is required.');
+  const s = await _db().collection(COL.ENV).doc(ID.envIdFor('providerBookings', bookingId)).get();
+  if (!s.exists) fail('failed-precondition', 'This booking has no PIN yet — it is issued when the customer\'s payment is held by SOKONI.');
+  const env = s.data();
+  if (env.providerUid !== req.auth.uid) fail('permission-denied', 'Not your booking.');
+  return verifyPin({ auth: req.auth, data: { pin: (req.data || {}).pin, bookingRef: env.bookingRef } });
+};
+
 
 /* ═══ ADMINOS — the trace, from the same canonical records ══════════════════════════════════ */
 function _admin(req) { if (!req.auth || !req.auth.uid) fail('unauthenticated', 'Sign in required.'); if (!AC.isAdmin(req)) fail('permission-denied', 'Admin only.'); return req.auth.uid; }

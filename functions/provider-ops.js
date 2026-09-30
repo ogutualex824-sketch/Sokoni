@@ -414,11 +414,52 @@ async function settleOnShowUp(bookingId) {
 }
 /* exported through the module.exports rebind at the end of this file */
 
+/* ── PIN RELEASE (owner 2026-09-30): the buyer's PIN, entered by the provider after the service, is
+   the ONE trigger that moves a held payment. It settles AND completes in one transaction: SOKONI's
+   commission is recorded on providerPayouts (what AdminOS / super admin aggregate), the provider's
+   BUSINESS wallet (wallets/{providerId}) is credited net of commission + fee, the booking becomes
+   completed / settled. Every hub, not only entertainment. Idempotent: a second call finds nothing
+   paid_held and skips. The buyer's wallet is never touched by a release. */
+async function settleOnPinRelease(bookingId, actorUid) {
+  const ref = _db().collection('providerBookings').doc(String(bookingId));
+  const snap = await ref.get();
+  if (!snap.exists) return { skipped: 'missing' };
+  const data = snap.data();
+  if (data.paymentStatus !== 'paid_held') return { skipped: `payment_${data.paymentStatus}` };
+  if (!['pending', 'confirmed', 'in_progress'].includes(data.status)) return { skipped: `status_${data.status}` };
+  const uid = data.providerId;
+  const m = await _settlementMath(uid, ref, data);
+  let out = null;
+  await _db().runTransaction(async (t) => {
+    const cur = (await t.get(ref)).data();
+    if (!cur || cur.paymentStatus !== 'paid_held' || !['pending', 'confirmed', 'in_progress'].includes(cur.status)) { out = { skipped: 'already_settled_or_changed' }; return; }
+    const lockRef = _slotLockRef(uid, cur);
+    if (lockRef) t.delete(lockRef);
+    out = _settlementWrites(t, { ref, uid, cur, m, trigger: 'pin_release',
+      statusPatch: { status: 'completed', completedAt: _ts(), pinReleasedAt: _ts(), pinReleasedBy: actorUid || null } });
+  });
+  if (out && out.credited !== undefined) logger.info('settleOnPinRelease', { bookingId, uid, gross: m.gross, commission: m.commission, credited: out.credited });
+  return out;
+}
+
 _h.providerCompleteBooking = async (req) => {
   const uid = _uid(req);
   await legal.assertLegalCompliance(uid, 'provider'); // receive settlement — dark-launched
   const { ref, data } = await _ownBooking(uid, req.data?.bookingId);
   if (data.status === 'completed') return { success: true, status: 'completed', alreadyDone: true };
+  /* A HELD payment is released only by the customer's booking PIN (PIN YAKO NI BOOKING YAKO).
+     Completing without it would either strand the money or pay before the customer agreed the
+     service happened; neither is allowed. The PIN path settles and completes together. */
+  if (data.paymentStatus === 'paid_held') {
+    const pin = String(req.data?.pin == null ? '' : req.data.pin).trim();
+    if (!pin) {
+      throw new HttpsError('failed-precondition',
+        'This booking was paid to SOKONI and is held. Ask the customer for their booking PIN — PIN YAKO NI BOOKING YAKO — and enter it to complete the service and release the payment.');
+    }
+    const r = await require('./entertainment-bookings')._h.providerVerifyBookingPin({ auth: req.auth, data: { bookingId: ref.id, pin } });
+    if (!r || !r.verified) throw new HttpsError('failed-precondition', (r && r.reason) || 'That PIN does not match this booking.');
+    return { success: true, status: 'completed', viaPin: true, settled: !!r.settled, bookingRef: r.bookingRef || null };
+  }
   if (!['confirmed', 'in_progress', 'pending'].includes(data.status)) {
     throw new HttpsError('failed-precondition', `Cannot complete a "${data.status}" booking.`);
   }
@@ -1073,4 +1114,4 @@ _h.providerToggleService = async (req) => {
 
 /* _disburseHeldFunds + _slotLockRef are reused by the booking resolution engine (Step 3 refund):
    the ONE place booking money moves, and the canonical slot-lock ref. No behavior change. */
-module.exports = { _h, _disburseHeldFunds, _slotLockRef, settleOnShowUp };   /* rebind: every export must be listed here */
+module.exports = { _h, _disburseHeldFunds, _slotLockRef, settleOnShowUp, settleOnPinRelease };   /* rebind: every export must be listed here */

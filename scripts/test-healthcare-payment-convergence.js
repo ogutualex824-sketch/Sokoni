@@ -279,7 +279,11 @@ Module._load = function (request, parent, isMain) {
     return { info() {}, warn() {}, error() {}, log() {}, debug() {} };
   }
   if (/subscription-core$/.test(request)) {
-    return { getCommissionRate: async () => PLAN_RATE, resolveSubscription: async () => null };
+    /* finos-utils prices a provider booking through getProviderPlanRate (plan id → commission-config,
+       2026-09-30); the stub answers it with the same PLAN_RATE so the hub-vs-plan contract under test
+       is unchanged. getCommissionRate stays for any other caller. */
+    return { getCommissionRate: async () => PLAN_RATE, resolveSubscription: async () => null,
+             getProviderPlanRate: async () => ({ ok: true, refused: false, rateFraction: PLAN_RATE, pct: PLAN_RATE * 100, plan: 'stub_plan', matched: true, aliasOf: null, source: 'test-stub' }) };
   }
   if (/legal-agreements$/.test(request)) {
     return { assertLegalCompliance: async () => ({ compliant: true }), complianceFor: async () => ({ compliant: true }) };
