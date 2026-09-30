@@ -182,6 +182,12 @@
       '#sk-cp-foot{padding:8px 16px;border-top:1px solid #141414;display:flex;gap:16px;' +
         'font-size:10px;color:#292929;background:#080808}' +
       '.sk-cp-hint{display:flex;align-items:center;gap:4px}' +
+      '#sk-cp-close{display:flex;align-items:center;justify-content:center;width:36px;height:36px;' +
+        'min-width:36px;margin-left:4px;border-radius:9px;border:1px solid #222;background:#141414;' +
+        'color:#9a9a9a;font-size:14px;cursor:pointer;font-family:inherit;flex-shrink:0;' +
+        '-webkit-tap-highlight-color:transparent;transition:background .15s,color .15s,border-color .15s}' +
+      '#sk-cp-close:hover,#sk-cp-close:focus-visible{background:rgba(255,60,60,.12);border-color:rgba(255,60,60,.3);color:#ff6464;outline:none}' +
+      '@media (max-width:640px){.sk-cp-esc{display:none}#sk-cp-close{width:40px;height:40px;min-width:40px}}' +
       '.sk-cp-hint kbd{border:1px solid #1e1e1e;border-radius:3px;padding:1px 4px;' +
         'font-family:monospace;font-size:9px;color:#333}';
     document.head.appendChild(style);
@@ -199,6 +205,9 @@
           '</svg>' +
           '<input id="sk-cp-inp" type="text" placeholder="Search pages and actions…" autocomplete="off" spellcheck="false" aria-label="Command search" aria-autocomplete="list" aria-controls="sk-cp-list">' +
           '<span class="sk-cp-esc">ESC</span>' +
+          /* A visible close control (owner ask 2026-09-30). ESC still works; on a phone
+             there is no ESC key, so the ✕ is the only way out besides tapping the backdrop. */
+          '<button type="button" id="sk-cp-close" aria-label="Close quick actions" title="Close (Esc)">✕</button>' +
         '</div>' +
         '<div id="sk-cp-list" role="listbox" aria-label="Search results"></div>' +
         '<div id="sk-cp-foot">' +
@@ -213,6 +222,7 @@
     _list = _overlay.querySelector('#sk-cp-list');
 
     _overlay.addEventListener('click', e => { if (e.target === _overlay) _close(); });
+    _overlay.querySelector('#sk-cp-close').addEventListener('click', _close);
     _inp.addEventListener('input', () => { _cursor = -1; _paint(_inp.value.trim()); });
     _inp.addEventListener('keydown', _onKey);
   }
@@ -308,6 +318,9 @@
 
   // ── Global keyboard shortcut (Ctrl+K / Cmd+K) ────────────────────────────
   document.addEventListener('keydown', e => {
+    /* Escape closes the palette wherever focus is (the input's own handler only sees
+       keys while it is focused — after a tap on the list it is not). */
+    if (e.key === 'Escape' && _overlay && _overlay.classList.contains('sk-cp-open')) { e.preventDefault(); _close(); return; }
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === 'k') {
       const tag = (document.activeElement || {}).tagName || '';
       if (tag === 'TEXTAREA') return; // let text areas keep Ctrl+K

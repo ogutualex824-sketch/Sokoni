@@ -399,6 +399,12 @@
       '.sk-nc-prefs-btn:hover{color:rgba(255,255,255,0.8);}',
 
       /* Empty state */
+      '.sk-nc-day{',
+        'padding:6px 16px;font-size:10px;font-weight:900;letter-spacing:.06em;',
+        'text-transform:uppercase;color:rgba(255,255,255,0.32);',
+        'background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.05);',
+        'position:sticky;top:0;z-index:1;',
+      '}',
       '.sk-nc-empty{',
         'padding:48px 24px;',
         'text-align:center;',
@@ -875,8 +881,24 @@
     _listEl.innerHTML = '';
     var frag = document.createDocumentFragment();
 
+    /* The Activity tab is a timeline: day dividers (Today / Yesterday / date),
+       the same labels notifications.html renders. Other tabs stay a flat list. */
+    var _timeline = _activeTab === 'activity';
+    var _lastDay = null;
+
     items.forEach(function(item) {
       var el;
+      if (_timeline) {
+        var day = eng.dayLabel(item.createdAt);
+        if (day !== _lastDay) {
+          var hd = document.createElement('div');
+          hd.className = 'sk-nc-day';
+          hd.setAttribute('role', 'separator');
+          hd.textContent = day;
+          frag.appendChild(hd);
+          _lastDay = day;
+        }
+      }
       if (item.isGroup && !_expandedGroups[item.id]) {
         el = _buildGroupCard(item);
       } else if (item.isGroup && _expandedGroups[item.id]) {

@@ -1023,9 +1023,6 @@
     #sk-theme-btn { font-size: 16px; }
     #sk-theme-btn:hover { background: rgba(113,255,0,0.1); }
 
-    /* ── Activity button ── */
-    #sk-activity-btn { font-size: 17px; }
-
     /* ── Hamburger menu button ── */
     #sk-menu-btn { font-size: 20px; letter-spacing: -1px; }
     #sk-menu-btn:hover { background: rgba(255,255,255,0.08); }
@@ -1042,7 +1039,6 @@
     .sk-badge.visible { display: flex; align-items: center; justify-content: center; }
     #sk-notif-badge { background: #ff4d6d; color: #fff; }
     #sk-msg-badge   { background: #71ff00; color: #000; }
-    #sk-activity-badge { background: #fbbf24; color: #000; }
 
     /* The unread badge followed Messages into the bottom bar. .sk-badge is
        position:absolute, so its host must be positioned or it anchors to whatever
@@ -1246,6 +1242,20 @@
     /* ── Site menu drawer — layout handled by sokoni-drawers.css ── */
     /* #sk-menu-drawer is a .sk-drawer; header/close/backdrop/swipe/ESC
        are all managed by SokoniDrawer. Content styles below. */
+    /* Menu header: the generic drawer header is 52px with a 13px title. This
+       drawer shows the logo instead, so it gets a taller header and a bigger
+       image; the logo link grows to fill the row, which is what pushes ✕ to
+       the right corner (the generic header only spaces children with a gap). */
+    #sk-menu-head { min-height: 72px; padding-left: 12px; }
+    #sk-menu-logo {
+      flex: 1 1 auto; display: flex; align-items: center; min-width: 0;
+      text-decoration: none; -webkit-tap-highlight-color: transparent;
+    }
+    #sk-menu-logo img {
+      height: 56px; width: auto; max-width: 70%; object-fit: contain;
+      display: block; mix-blend-mode: screen;
+    }
+    #sk-menu-head .sk-drawer-close { margin-left: auto; flex-shrink: 0; }
     #sk-menu-grid {
       display: grid; grid-template-columns: 1fr 1fr;
       gap: 10px; padding: 20px;
@@ -1332,8 +1342,6 @@
       /* Mobile: hide Messages + Theme */
       #sk-msg-btn { display: none !important; }
       #sk-theme-btn { display: none !important; }
-      /* Activity visible on mobile */
-      #sk-activity-btn { display: flex !important; }
       /* Cart pill: compact */
       #sk-nav-cart { padding: 5px 9px; font-size: 11px; }
       /* Avatar */
@@ -1471,32 +1479,6 @@
           '<span style="font-size:9px;color:#444;margin-left:4px;font-family:monospace;display:none" class="sk-cp-shortcut">⌘K</span>' +
         '</button>' +
 
-        /* Notifications */
-        '<button type="button" class="sk-nav-icon-btn" aria-label="Notifications" aria-expanded="false" aria-haspopup="dialog" id="sk-notif-btn">' +
-          '<span id="sk-notif-bell-icon" aria-hidden="true">🔔</span>' +
-          '<span class="sk-badge" id="sk-notif-badge" role="status" aria-label="Unread notifications"></span>' +
-        '</button>' +
-
-        /* Activity center */
-        '<a href="notifications.html?tab=activity" class="sk-nav-icon-btn" id="sk-activity-btn" aria-label="Activity" title="Activity feed">' +
-          '<span aria-hidden="true">⚡</span>' +
-          '<span class="sk-badge" id="sk-activity-badge" role="status" aria-label="New activity"></span>' +
-        '</a>' +
-
-        /* MESSAGES LEFT THE HEADER — there must be ONE destination for a
-           conversation. It lived here AND in the bottom bar, so a tap on either
-           reached the same wall by two routes, and any future divergence between
-           them would be invisible until someone noticed their messages differed.
-
-           The unread BADGE was not dropped with it: `sk-msg-badge` now lives on the
-           bottom-nav Messages tab, keeping the same id, so the two writers at
-           _setBadge('sk-msg-badge', …) below continue to work unchanged. No second
-           counter, no new authority, and no orphaned binding — which is what
-           deleting the element alone would have left.
-
-           The 🔔 bell stays exactly where it is: notifications are the ALERT
-           mechanism, Messages is the destination they open into. */
-
         /* Cart — except ON the cart page, where this slot carries Wishlist instead.
            A Cart button that navigates to the page you are already on is dead weight;
            Wishlist is the action a shopper actually wants from there, and it reuses the
@@ -1521,6 +1503,26 @@
                  Blank text and a neutral label when the count is unknown. */
               '<span aria-hidden="true">🛒</span> <span id="sk-nav-cart-pip" style="display:' + (cartCount > 0 ? 'flex' : 'none') + ';" aria-label="' + (cartCount == null ? 'Cart' : cartCount + ' items') + '">' + (cartCount == null ? '' : cartCount) + '</span>' +
             '</a>') +
+
+        /* MESSAGES LEFT THE HEADER — there must be ONE destination for a
+           conversation. It lived here AND in the bottom bar, so a tap on either
+           reached the same wall by two routes, and any future divergence between
+           them would be invisible until someone noticed their messages differed.
+
+           The unread BADGE was not dropped with it: `sk-msg-badge` now lives on the
+           bottom-nav Messages tab, keeping the same id, so the two writers at
+           _setBadge('sk-msg-badge', …) below continue to work unchanged. No second
+           counter, no new authority, and no orphaned binding — which is what
+           deleting the element alone would have left.
+
+           The 🔔 bell stays exactly where it is: notifications are the ALERT
+           mechanism, Messages is the destination they open into. */
+
+        /* Notifications */
+        '<button type="button" class="sk-nav-icon-btn" aria-label="Notifications" aria-expanded="false" aria-haspopup="dialog" id="sk-notif-btn">' +
+          '<span id="sk-notif-bell-icon" aria-hidden="true">🔔</span>' +
+          '<span class="sk-badge" id="sk-notif-badge" role="status" aria-label="Unread notifications"></span>' +
+        '</button>' +
 
         /* Avatar / Profile — opens account dropdown */
         '<div class="sk-acct-wrap" id="sk-acct-wrap">' +
@@ -1702,12 +1704,12 @@
     drawer.setAttribute('aria-label', 'Site menu');
 
     drawer.innerHTML =
-      /* Drawer header — logo + close button */
-      '<div class="sk-drawer-header">' +
-        '<div style="display:flex;align-items:center;gap:9px;margin-left:4px">' +
-          '<img src="assets/sokoni logoo.jpeg" alt="SOKONI" style="height:40px;width:auto;object-fit:contain;mix-blend-mode:screen">' +
-          '<span style="font-size:19px;font-weight:900;letter-spacing:.04em;color:#fff;line-height:1">SOKO<em style="font-style:normal;color:#71ff00">NI</em></span>' +
-        '</div>' +
+      /* Drawer header — the logo alone on the left (no wordmark: the image IS the
+         brand), the close ✕ pinned to the right corner. Owner ask 2026-09-30. */
+      '<div class="sk-drawer-header" id="sk-menu-head">' +
+        '<a href="/" id="sk-menu-logo" aria-label="SOKONI Home">' +
+          '<img src="assets/sokoni logoo.jpeg" alt="SOKONI">' +
+        '</a>' +
         '<button class="sk-drawer-close" type="button" aria-label="Close menu">✕</button>' +
       '</div>' +
       /* Scrollable drawer body */

@@ -103,7 +103,6 @@ html:not(.sk-no-header) body {
 .sk-badge.visible { display: flex; align-items: center; justify-content: center; }
 #sk-notif-badge { background: #ff4d6d; color: #fff; }
 #sk-msg-badge   { background: #71ff00; color: #000; }
-#sk-activity-badge { background: #fbbf24; color: #000; }
 #sk-nav-cart-pip {
   background: #71ff00; color: #000; border-radius: 20px;
   min-width: 16px; height: 16px; font-size: 9px; font-weight: 900;

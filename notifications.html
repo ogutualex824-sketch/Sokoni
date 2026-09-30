@@ -440,6 +440,10 @@
       <span>⭐</span><span>Important</span>
       <span class="nc-sidebar-badge" id="nc-sb-important" style="display:none"></span>
     </div>
+    <div class="nc-sidebar-item" data-cat="activity">
+      <span>⚡</span><span>Activity</span>
+      <span class="nc-sidebar-badge" id="nc-sb-activity" style="display:none"></span>
+    </div>
 
     <div class="nc-sidebar-title" style="margin-top:8px">Commerce</div>
     <div class="nc-sidebar-item" data-cat="orders">
@@ -540,6 +544,7 @@
       <button class="nc-mob-tab active" data-cat="all">🔔 All</button>
       <button class="nc-mob-tab" data-cat="unread">🔵 Unread</button>
       <button class="nc-mob-tab" data-cat="important">⭐ Important</button>
+      <button class="nc-mob-tab" data-cat="activity">⚡ Activity</button>
       <button class="nc-mob-tab" data-cat="orders">📦 Orders</button>
       <button class="nc-mob-tab" data-cat="payments">💳 Payments</button>
       <button class="nc-mob-tab" data-cat="messages">💬 Messages</button>
@@ -812,18 +817,12 @@
       return;
     }
 
-    /* Group by date */
-    var today     = new Date(); today.setHours(0,0,0,0);
-    var yesterday = new Date(today - 86400000);
+    /* Group by date (labels come from the engine, shared with the bell panel) */
     var groups    = {};
     var order     = [];
 
     items.forEach(function(n) {
-      var d = new Date(n.createdAt || Date.now()); d.setHours(0,0,0,0);
-      var label;
-      if (d >= today)     { label = 'Today'; }
-      else if (d >= yesterday) { label = 'Yesterday'; }
-      else { label = d.toLocaleDateString('en-KE', { weekday:'long', month:'short', day:'numeric' }); }
+      var label = eng.dayLabel(n.createdAt);
       if (!groups[label]) { groups[label] = []; order.push(label); }
       groups[label].push(n);
     });
@@ -937,7 +936,7 @@
   /* ── Badge updates ── */
   function _updateBadges(counts) {
     counts = counts || {};
-    var cats = ['all','unread','important','orders','payments','messages','deliveries',
+    var cats = ['all','unread','important','activity','orders','payments','messages','deliveries',
                 'marketplace','bookings','inventory','pos','employees','finance',
                 'business','security','verification','support','ai','promotions','updates','system'];
     cats.forEach(function(cat) {
@@ -1056,11 +1055,16 @@
 
   /* ── Boot sequence ── */
   function _boot() {
-    /* Deep-link to preferences via #preferences hash */
-    if (window.location.hash === '#preferences') {
+    /* Deep links: #preferences, ?tab=<category> (the URL the header's old ⚡ button
+       used, never handled until now) or #<category>. Unknown values fall back to All. */
+    var _want = (window.location.hash || '').replace(/^#/, '');
+    try { _want = new URLSearchParams(window.location.search).get('tab') || _want; } catch (_) {}
+    _want = String(_want).toLowerCase().replace(/[^a-z]/g, '');
+    var _known = !!document.querySelector('.nc-sidebar-item[data-cat="' + _want + '"]');
+    if (_want === 'preferences') {
       _selectPreferences();
     } else {
-      _selectCategory('all');
+      _selectCategory(_known ? _want : 'all');
     }
 
     /* Wait for engine — bounded, so a failed/blocked engine script surfaces a

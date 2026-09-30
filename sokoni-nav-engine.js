@@ -363,16 +363,6 @@
     } catch (_) {}
   }
 
-  function _popHistory() {
-    try {
-      var hist = JSON.parse(sessionStorage.getItem('sk_nav_hist') || '[]');
-      if (hist.length && hist[hist.length - 1].page === _page) hist.pop();
-      var prev = hist.length ? hist[hist.length - 1] : null;
-      sessionStorage.setItem('sk_nav_hist', JSON.stringify(hist));
-      return prev ? prev.page : null;
-    } catch (_) { return null; }
-  }
-
   /* ── Active tab detection ────────────────────────────────── */
   /* Normalise both sides: strip .html so Firebase cleanUrls (/page vs page.html)
      doesn't prevent active-state matching in production. */
@@ -468,30 +458,15 @@
   }
 
   /* ═══════════════════════════════════════════════════════════
-     SMART BACK + WORKSPACE CHIP + DASHBOARD SHORTCUT
+     DASHBOARD SHORTCUT
+     The top-left "←" back button that used to be built here was removed on
+     2026-09-30 (owner ask): the header logo already returns Home and the
+     browser/bottom-nav own "back". Do not reintroduce it.
   ═══════════════════════════════════════════════════════════ */
   function _buildBackBtn(ws) {
     var topNav = document.getElementById('sk-top-nav');
     if (!topNav) return;
 
-    if (!document.getElementById('sk-nav-back-btn')) {
-      var btn  = document.createElement('button');
-      btn.type = 'button';
-      btn.id   = 'sk-nav-back-btn';
-      btn.setAttribute('aria-label', 'Go back');
-      btn.innerHTML = '&#8592;';
-      btn.addEventListener('click', function () {
-        var prev = _popHistory();
-        if (prev && prev !== _page) {
-          location.href = prev;
-        } else if (history.length > 1) {
-          history.back();
-        } else {
-          location.href = _BACK[ws] || 'index.html';
-        }
-      });
-      topNav.insertBefore(btn, topNav.firstChild);
-    }
 
     /* ── #sk-nav-role-chip REMOVED ────────────────────────────────────────────
        The chip sat beside the SOKONI logo and named a role in uppercase. It came
@@ -520,12 +495,9 @@
       dash.href   = 'seller.html';
       dash.setAttribute('aria-label', 'Seller Dashboard');
       dash.innerHTML = '<span aria-hidden="true">🏪</span> Hub';
-      /* Anchored on the back button now that the role chip is gone. It used to sit
-         after the chip and fall back to appending when the chip was absent — which,
-         with the chip removed, would silently move the Hub shortcut to the far end
-         of the nav on every seller sub-page. */
-      var backEl = document.getElementById('sk-nav-back-btn');
-      topNav.insertBefore(dash, backEl ? backEl.nextSibling : topNav.firstChild);
+      /* First child of the nav: the back button and the role chip that used to
+         precede it are both gone, so the Hub shortcut leads the row. */
+      topNav.insertBefore(dash, topNav.firstChild);
     }
   }
 
@@ -804,7 +776,7 @@
   window.addEventListener('storage', function (e) {
     if (e.key !== 'sokoniUser') return;
     _destroySidebar();
-    ['sk-seller-subnav','sk-nav-back-btn','sk-nav-role-chip',
+    ['sk-seller-subnav','sk-nav-role-chip',
      'sk-menu-role-badge','sk-nav-dash-btn','sk-seller-more-drawer'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.remove();

@@ -42,6 +42,11 @@
     all:          { label: 'All',           icon: '🔔', defaultOn: true  },
     unread:       { label: 'Unread',        icon: '🔵', defaultOn: true  },
     important:    { label: 'Important',     icon: '⭐', defaultOn: true  },
+    /* Virtual view, not a stored category: the ⚡ Activity feed the header button
+       used to link to (notifications.html?tab=activity) but which never existed.
+       A chronological "what happened" timeline across the transactional
+       categories in ACTIVITY_CATEGORIES, read or unread. */
+    activity:     { label: 'Activity',      icon: '⚡', defaultOn: true  },
     orders:       { label: 'Orders',        icon: '📦', defaultOn: true  },
     payments:     { label: 'Payments',      icon: '💳', defaultOn: true  },
     messages:     { label: 'Messages',      icon: '💬', defaultOn: true  },
@@ -63,11 +68,19 @@
   });
 
   var PANEL_CATEGORIES = [
-    'all','unread','important','orders','payments','messages',
+    'all','unread','important','activity','orders','payments','messages',
     'marketplace','deliveries','bookings','inventory','pos',
     'employees','security','system','updates','promotions',
     'ai','business','verification','finance','support'
   ];
+
+  /* Which stored categories make up the Activity view. Alerts (security, system,
+     updates, promotions, support, ai, verification, employees, messages) are not
+     activity — they stay in their own tabs so the timeline is only things that
+     happened to the user's orders, money, deliveries, bookings and sales. */
+  var ACTIVITY_CATEGORIES = Object.freeze([
+    'orders','payments','deliveries','bookings','marketplace','pos','inventory','finance','business'
+  ]);
 
   var PREF_CATEGORIES = [
     'orders','payments','messages','marketplace','deliveries',
@@ -577,6 +590,17 @@
     _syncQueue();
   }
 
+  /* Does notification n belong to tab `cat`? Virtual tabs (all / unread /
+     important / activity) are resolved here, once, so getAll() and markAllRead()
+     can never disagree about what a tab contains. */
+  function _inCategory(n, cat) {
+    if (!cat || cat === 'all')  return true;
+    if (cat === 'unread')       return !n.read;
+    if (cat === 'important')    return PRIORITY_RANK[n.priority] >= PRIORITY_RANK[PRIORITY.HIGH];
+    if (cat === 'activity')     return ACTIVITY_CATEGORIES.indexOf(n.category) !== -1;
+    return n.category === cat;
+  }
+
   function _computeUnreadCounts(notifications) {
     var counts = { all: 0 };
     notifications.forEach(function(n) {
@@ -585,6 +609,9 @@
         counts[n.category] = (counts[n.category] || 0) + 1;
         if (PRIORITY_RANK[n.priority] >= PRIORITY_RANK[PRIORITY.HIGH]) {
           counts.important = (counts.important || 0) + 1;
+        }
+        if (ACTIVITY_CATEGORIES.indexOf(n.category) !== -1) {
+          counts.activity = (counts.activity || 0) + 1;
         }
       }
     });
@@ -611,6 +638,7 @@
     CATEGORIES: CATEGORIES,
     PANEL_CATEGORIES: PANEL_CATEGORIES,
     PREF_CATEGORIES: PREF_CATEGORIES,
+    ACTIVITY_CATEGORIES: ACTIVITY_CATEGORIES,
     ACTIONS:    ACTIONS,
     prefs:      NotifPrefs,
     queue:      NotifQueue,
@@ -678,16 +706,8 @@
         list = list.filter(function(n) { return !n.archived; });
       }
 
-      if (opts.category && opts.category !== 'all' && opts.category !== 'unread' && opts.category !== 'important') {
-        list = list.filter(function(n) { return n.category === opts.category; });
-      }
-      if (opts.category === 'unread') {
-        list = list.filter(function(n) { return !n.read; });
-      }
-      if (opts.category === 'important') {
-        list = list.filter(function(n) {
-          return PRIORITY_RANK[n.priority] >= PRIORITY_RANK[PRIORITY.HIGH];
-        });
+      if (opts.category && opts.category !== 'all') {
+        list = list.filter(function(n) { return _inCategory(n, opts.category); });
       }
       if (opts.unreadOnly) {
         list = list.filter(function(n) { return !n.read; });
@@ -727,7 +747,9 @@
     markAllRead: function(category) {
       var ids = _cache
         .filter(function(n) {
-          return !n.read && !n.archived && (!category || category === 'all' || n.category === category);
+          /* _inCategory resolves the virtual tabs too — before this, "Mark All Read"
+             on Unread / Important matched n.category === 'unread' and did nothing. */
+          return !n.read && !n.archived && _inCategory(n, category);
         })
         .map(function(n) { return n.id; });
       return Promise.all(ids.map(function(id) { return SokoniNotifEngine._update(id, { read: true }); }));
@@ -886,6 +908,16 @@
     _emit: _emit,
 
     /* ── Utilities ── */
+    /** 'Today' / 'Yesterday' / 'Monday, Sep 28' — the one day-divider label both
+        the bell panel and notifications.html use, so the two never drift. */
+    dayLabel: function(ts) {
+      var today = new Date(); today.setHours(0,0,0,0);
+      var d = new Date(ts || Date.now()); d.setHours(0,0,0,0);
+      if (d >= today) return 'Today';
+      if (d >= new Date(today - 86400000)) return 'Yesterday';
+      return d.toLocaleDateString('en-KE', { weekday: 'long', month: 'short', day: 'numeric' });
+    },
+
     formatTime: function(ts) {
       if (!ts) return '';
       var d   = new Date(ts);

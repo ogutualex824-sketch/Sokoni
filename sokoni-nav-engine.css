@@ -1,39 +1,9 @@
 /* ================================================================
    SOKONI Navigation Engine v2.0 — Premium Role-Based Navigation
-   Back button | Role chip | Hub shortcut
+   Hub shortcut
    Seller sub-nav | Context bottom nav | More drawer
    Multi-role switcher | Store identity card
 ================================================================ */
-
-/* ── Smart back button (in #sk-top-nav) ─────────────────────── */
-#sk-nav-back-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.09);
-  cursor: pointer;
-  font-size: 18px;
-  color: rgba(255,255,255,0.75);
-  flex-shrink: 0;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
-  margin-right: 4px;
-  line-height: 1;
-}
-#sk-nav-back-btn:hover {
-  background: rgba(113,255,0,0.1);
-  border-color: rgba(113,255,0,0.3);
-  color: #71ff00;
-  transform: translateX(-2px);
-}
-#sk-nav-back-btn:active { transform: scale(0.92); }
-
-/* Role chip REMOVED — see sokoni-nav-engine.js. It named a role from an
-   unauthenticated localStorage pick, beside the logo, contradicting the profile
-   menu. The profile dropdown is the single control that names the acting role. */
 
 /* ── "Hub" dashboard shortcut (seller sub-pages only) ────────── */
 #sk-nav-dash-btn {
