@@ -258,11 +258,30 @@
     '.pr-act{flex:1;min-height:36px;border-radius:9px;cursor:pointer;font:inherit;font-weight:700;font-size:12px;',
     'background:transparent;color:inherit;border:1px solid var(--line,rgba(255,255,255,.14))}',
     '.pr-act.danger{color:#ff6b6b;border-color:rgba(255,107,107,.35)}',
-    '.pr-sheet{position:fixed;inset:0;z-index:70;display:flex;align-items:flex-end;justify-content:center}',
+    /* ── THE SHEET IS SIZED TO THE VISUAL VIEWPORT, NOT THE LAYOUT VIEWPORT ────────────
+       Reported on a phone: "not scrollable to bottom — the keyboard hides the bottom
+       control". Cause: `inset:0` + `max-height:92vh`. When the soft keyboard opens, iOS
+       Safari and Chrome/Android (interactive-widget=resizes-visual, the default) shrink
+       only the VISUAL viewport; `vh`, `dvh` and `position:fixed` keep measuring the LAYOUT
+       viewport, so the sheet stayed 92% of the full screen and its bottom edge — the
+       Add product row — sat behind the keyboard. Scrolling inside the sheet cannot reveal
+       an edge that is off-screen, so the form read as "does not scroll to the bottom".
+
+       Fix: the sheet's top/height follow window.visualViewport (fitSheet() below writes
+       --pr-vvt/--pr-vvh on the host whenever the keyboard changes the visual viewport);
+       the CSS fallback is the dynamic viewport height. The panel is the ONE scroller —
+       overscroll-behavior:contain so reaching its end never chains into the page behind,
+       scroll-padding-bottom so a focused field near the end is brought clear of the edge,
+       and padding-bottom leaves room to keep scrolling past the last control. */
+    '.pr-sheet{position:fixed;left:0;right:0;top:var(--pr-vvt,0px);height:var(--pr-vvh,100vh);',
+      'z-index:70;display:flex;align-items:flex-end;justify-content:center}',
+    '@supports (height:100dvh){.pr-sheet{height:var(--pr-vvh,100dvh)}}',
     '.pr-scrim{position:absolute;inset:0;background:rgba(0,0,0,.62)}',
-    '.pr-panel{position:relative;width:100%;max-width:520px;max-height:92vh;overflow:auto;',
+    '.pr-panel{position:relative;width:100%;max-width:520px;max-height:92%;overflow:auto;',
+    'overscroll-behavior:contain;-webkit-overflow-scrolling:touch;',
+    'scroll-padding-top:16px;scroll-padding-bottom:calc(84px + env(safe-area-inset-bottom,0px));',
     'background:var(--card,#0e0e0e);border:1px solid var(--line,rgba(255,255,255,.14));',
-    'border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px))}',
+    'border-radius:18px 18px 0 0;padding:18px 16px calc(32px + env(safe-area-inset-bottom,0px))}',
     '@media (min-width:600px){.pr-sheet{align-items:center}.pr-panel{border-radius:18px}}',
     '.pr-ph2{font-size:17px;font-weight:800;margin-bottom:2px}',
     '.pr-psub{font-size:12.5px;color:var(--txt2,rgba(255,255,255,.55));margin-bottom:16px}',
@@ -279,7 +298,9 @@
     '.pr-row{display:flex;gap:10px}.pr-row>.pr-f{flex:1;min-width:0}',
     '.pr-err{font-size:12.5px;color:#ff6b6b;margin-top:6px}',
     '.pr-note{font-size:12px;color:var(--txt2,rgba(255,255,255,.5));margin-top:5px;line-height:1.5}',
-    '.pr-foot{display:flex;gap:9px;margin-top:6px}',
+    /* In normal flow AFTER the last field — never sticky, never fixed — so it is reached
+       by scrolling past the form, and nothing overlays the field above it. */
+    '.pr-foot{display:flex;gap:9px;margin-top:14px}',
     '.pr-foot>button{flex:1;min-height:48px;border-radius:12px;cursor:pointer;font:inherit;font-weight:800;font-size:14px}',
     '.pr-save{background:var(--acc,#71ff00);color:#050505;border:0}',
     '.pr-save[disabled]{opacity:.55;cursor:progress}',
@@ -333,6 +354,33 @@
       editor: null,      /* null = closed; otherwise the open create/edit/delete form */
       destroyed: false,
     };
+
+    /* ── KEYBOARD-AWARE SHEET ─────────────────────────────────────────────────
+       The sheet is position:fixed, and a fixed box measures the LAYOUT viewport —
+       which the soft keyboard does not shrink on iOS or on Chrome/Android. Only
+       window.visualViewport knows the region the merchant can actually see. Its
+       height and offset are written as CSS custom properties on the host (the sheet
+       inherits them), so the sheet's bottom edge — where Add product lives — is the
+       top of the keyboard, not the bottom of the screen behind it. Cleared when no
+       editor is open, and detached on destroy. No visualViewport (old engines):
+       the CSS fallback of 100dvh applies and nothing here runs. */
+    var _vv = (typeof window !== 'undefined' && window.visualViewport) || null;
+    function fitSheet () {
+      if (!host || !host.style) return;
+      if (S.destroyed || !S.editor || !_vv) {
+        host.style.removeProperty('--pr-vvh');
+        host.style.removeProperty('--pr-vvt');
+        return;
+      }
+      var h = Math.round(_vv.height), t = Math.round(_vv.offsetTop || 0);
+      if (!(h > 0)) return;
+      host.style.setProperty('--pr-vvh', h + 'px');
+      host.style.setProperty('--pr-vvt', t + 'px');
+    }
+    if (_vv && _vv.addEventListener) {
+      _vv.addEventListener('resize', fitSheet);
+      _vv.addEventListener('scroll', fitSheet);
+    }
 
     function skeleton () {
       var cells = '';
@@ -577,6 +625,7 @@
           '</select>' +
         '</div>' + body +
         (S.editor ? editorHTML() : '');
+      fitSheet();
     }
 
     function opt (v, label, cur) {
@@ -1883,6 +1932,11 @@
         host.removeEventListener('change', onChange);
         host.removeEventListener('click', onClick);
         document.removeEventListener('keydown', onKey);
+        if (_vv && _vv.removeEventListener) {
+          _vv.removeEventListener('resize', fitSheet);
+          _vv.removeEventListener('scroll', fitSheet);
+        }
+        fitSheet();
         if (host && host.classList) host.classList.remove(HOST_CLASS);
         host.innerHTML = '';
       },

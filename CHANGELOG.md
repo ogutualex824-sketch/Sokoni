@@ -75,6 +75,51 @@ Part B and the nav suites were queued behind a machine HOLD at certification tim
 **Owner decisions (open).** Payments/Refunds category has no backing type on this line; direct person-to-person
 "Message" buttons need a transaction entry or a server-anchored enquiry type; header badge query and
 `messages-admin.html` unexported callables are separate repairs.
+## [2026-09-30] - Uploader on phones: the Add-product sheet ends at the keyboard, not behind it; one scroller, reachable bottom and top
+
+**Branch `hosting/uploader-mobile-on-59effdf`, built on `59effdf`. Layout/scroll only — no data logic, callable,
+validation or upload path changed. Not deployed.**
+
+**Owner report (a phone):** the uploader "is still not scrollable to bottom — the keyboard makes it hard to read the
+bottom control when the page reaches bottom".
+
+**Diagnosis (static, `sokoni-merchant-products.js`).** The uploader is the products module's bottom sheet:
+`.pr-sheet{position:fixed;inset:0}` holding `.pr-panel{max-height:92vh;overflow:auto}` — the panel is the one
+scroller and the Add product row (`.pr-foot`) is already in normal flow after the last field. The defect is the
+sheet's height: when the soft keyboard opens, iOS Safari and Chrome/Android (`interactive-widget=resizes-visual`,
+the default) shrink only the **visual** viewport; `vh`/`dvh` and `position:fixed` keep measuring the **layout**
+viewport, so the sheet stayed 92% of the full screen and its bottom edge — the Add product row — sat behind the
+keyboard. Scrolling inside the sheet cannot reveal an edge that is off-screen, hence "does not scroll to the bottom".
+Secondary: no `overscroll-behavior` (reaching the end chained the gesture into the page behind), no
+`scroll-padding-bottom` (a focused field near the end sat on the edge), 18px bottom padding.
+
+**Fix.**
+- `.pr-sheet` is sized to the visual viewport: `top:var(--pr-vvt,0)`, `height:var(--pr-vvh,100vh)` with a
+  `100dvh` fallback under `@supports`. The module's `fitSheet()` writes `--pr-vvh/--pr-vvt` on the host from
+  `window.visualViewport` on its `resize`/`scroll` events while an editor is open; cleared on close and detached on
+  destroy. Engines without `visualViewport` get the dvh fallback.
+- `.pr-panel`: `max-height:92%` of the sheet (not of the screen), `overscroll-behavior:contain`,
+  `scroll-padding-top/bottom` (84px + safe-area), `padding-bottom: 32px + safe-area` so the merchant can keep
+  scrolling past the last control; `.pr-foot` stays static flow (never sticky/fixed) with a 14px gap.
+
+**Harness — `scripts/test-uploader-mobile-scroll.js` (NEW, hermetic Chromium, opens the REAL shell
+`merchant-v2.html#products`).** Every external origin refused; the Firebase modular SDK replaced by stub modules
+(owner-uid auth, async EMPTY Firestore snapshots, callables answering `{data:{}}` or a named reply); the writer is
+never invoked. Asserts at 390x800, 390x420 (viewport resized) and 360x800: the one scroller is identifiable with
+`overflow-y:auto` + `overscroll-behavior:contain` and no nested vertical scroller; scrollTop reaches max and 0; the
+first field and Add product are hit-testable (`elementFromPoint`) after `scrollIntoView`; Add product is in DOM
+flow after the last field, static, ≥44px; no horizontal overflow; every control ≥44px. Keyboard simulated twice: the
+viewport resized to 420, and — the real phone shape — layout viewport 800 with a faked `window.visualViewport` of
+420 (plus an iOS-style `offsetTop`), asserting the sheet's bottom edge becomes the keyboard's top and the focused
+field / Add product scroll above it. **Negative control:** a fixed 120px bar over the bottom with the panel's padding
+removed makes the reachability check fail; removing it restores the pass.
+
+**Browser certification QUEUED** — a peer deploy holds every Playwright run; this harness and
+`test-merchant-route-gate.js` have not been executed on this change. Static suites on this tree:
+`test-merchant-routes` 65/0, `test-mv2-1-sidebar` 14/0, `test-inshell-chrome` 30/0.
+
+- Files: `sokoni-merchant-products.js`, `scripts/test-uploader-mobile-scroll.js` (new), `CHANGELOG.md`.
+- Database / API / security changes: none. Breaking: none.
 
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
