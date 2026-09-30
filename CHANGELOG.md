@@ -1,3 +1,15 @@
+## [2026-09-30] - DEPLOYMENT PREFLIGHT (READ ONLY) for the providerDispatch shell-gate candidate — 11/12 pass, 1 live-estate caveat; deployment NOT authorized
+
+docs/DEPLOY_PREFLIGHT_PROVIDERDISPATCH_SHELL_GATE.md + docs/release-gates/deploy-preflight-providerdispatch.json. Rollback target
+providerdispatch-00048-qiz active (100% traffic, Ready, created 2026-08-22); live source generation 1787386174474483, archive re-downloaded
+sha-identical to the pin's copy; candidate b28567c (tree c49c712) closure 34 = certified set; ops 59→61 (+businessWorkspace, +workspaceHome,
+none removed), dispatcher identical outside the two edits; 377 archive-identical files, provider-onboarding ARCHIVE-IDENTICAL, 0 violations;
+no secret bound live or declared by the candidate; .env hash-identical; no overlapping providerDispatch work in any ref; Kasindi untouched
+(adminAudit 22 / applications 13 / applicationDecisions 0 — record not read); hosting out of scope. CAVEAT: the Functions estate moved
+underneath by PEER deploys (delivery D2 22:47Z, webhookWhatsapp 00:12Z, initiateSTKPush/initiateSellerPayout/verifyIntasendPayment 00:39Z;
+1,720→1,722 rows) — providerDispatch itself unchanged; any release must be sequenced (one deploy at a time) and this preflight re-run
+immediately before the command.
+
 ## [2026-09-30] - providerDispatch SHELL-GATE CANDIDATE constructed and certified (worktree C:/temp/sok-pd-cand, branch candidate/providerdispatch-shell-gate @ 40693c6, functions tree c49c712) — NOT deployed
 
 docs/CANDIDATE_PROVIDERDISPATCH_SHELL_GATE.md + docs/release-gates/providerdispatch-candidate-manifest.json. PIN e521e03: functions/ = the deployed
