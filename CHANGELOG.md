@@ -1,3 +1,5 @@
+## [2026-09-30] - DEPLOYED b108ae3 (hosting content = 85699a0: recs App Check wait+retry) -> Hosting v647 (sokoni-20260930103649-v647) 10:36Z, owner-authorized; two earlier attempts were false blocks (peer WebKit-orphan OOM: suite timeouts 38/1, then node --check OOM in the syntax gate); served sokoni-recommendations.js byte-identical to 85699a0; all other files unchanged since d55c112; rollback = v646 release of d55c112.
+
 ## [2026-09-30] - DEPLOYED d55c112 → Hosting v646 (cacheVersion sokoni-20260930093216-v646) 09:32Z, owner-authorized; artefacts 12edf13; rollback 6f7202bd5dd81d84. Live verified: markers served, 6 of 7 files byte-identical (index.html served via / — /index.html is a 301), recs widget renders, feed 6, Fastest Selling visible, no [RT] products warning, no module-not-loaded warning. Follow-up (recs App Check wait+retry) committed, NOT deployed.
 
 ## [2026-09-30] — Home: Edit Interests works, Picked For You renders, every home grid re-syncs with the catalogue — DEPLOYED as d55c112 (see line above)
