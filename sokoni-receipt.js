@@ -142,6 +142,20 @@
     return label ? 'Role: ' + label : null;
   }
 
+  /* A KRA eTIMS verification URL: https on a kra.go.ke host — the only thing that can have come from KRA. */
+  function isKraEtimsUrl (u) {
+    if (!u) return false;
+    try { var x = new URL(String(u)); return x.protocol === 'https:' && /(^|\.)kra\.go\.ke$/i.test(x.hostname); }
+    catch (_) { return false; }
+  }
+  function _etimsQrOf (o) {
+    return (o && ((o.etims && (o.etims.qrUrl || o.etims.verifyUrl)) || o.etimsQrUrl)) || '';
+  }
+
+  /* toText({ qrSentinel: true }) puts this ONE line where the two codes go, so a paper adapter can draw them as
+     real images instead of printing their URLs. */
+  var QR_SENTINEL = '\u0001SOKONI_QR_PAIR\u0001';
+
   function render (order, opts) {
     var o = order || {};
     var settings = opts || {};
@@ -209,6 +223,9 @@
     } else out.warnings.push('who served this sale is not recorded');
     /* A terminal id ONLY when a real terminal exists. */
     if (_s(o.terminalId)) saleLines.push('Terminal: ' + _s(o.terminalId, 40));
+    /* eTIMS — the KRA invoice number, only when KRA issued one for this sale. */
+    var _etimsNo = _s((o.etims && (o.etims.invoiceNo || o.etims.invoiceNumber)) || o.etimsNo || o.etimsInvoiceNo, 48);
+    if (_etimsNo) saleLines.push('eTIMS Inv: ' + _etimsNo);
     out.blocks.push({ type: 'reference', lines: saleLines });
 
     /* ── 3. CUSTOMER — present only when the order has one ───────────────────── */
@@ -325,6 +342,12 @@
          dispute rather than a decorative link. */
       qr: ref ? { url: RECEIPT_URL_BASE + encodeURIComponent(ref),
                   caption: 'Scan to view or verify this receipt' } : null,
+      /* THE KRA eTIMS CODE — the second of two EQUAL codes (owner, 2026-09-29). It is printed ONLY from a real
+         eTIMS response (an https URL on a kra.go.ke host). Otherwise the slot says "pending": a synthetic KRA code
+         would be a forged tax document, and a sample never has one. */
+      kraQr: (!isSample && isKraEtimsUrl(_etimsQrOf(o)))
+        ? { url: _etimsQrOf(o), caption: 'Scan to verify with KRA eTIMS' }
+        : { url: null, pending: true, caption: 'KRA eTIMS: pending' },
       keep: 'Keep this receipt for your records.',
       poweredBy: POWERED_BY,
       company: BRAVILEX,
@@ -463,10 +486,19 @@
         /* The URL is pushed WHOLE. Hard-wrapping it to the column would split it
            mid-path, and a split URL is not tappable in WhatsApp — which is where
            most of these receipts actually go. The printer wraps it itself. */
-        if (b.qr) {
-          L.push(_centre('[ SOKONI QR ]', cols));
-          _wrap(b.qr.caption, cols).forEach(function (l) { L.push(_centre(l, cols)); });
-          L.push(b.qr.url);
+        if (o.qrSentinel && (b.qr || b.kraQr)) {
+          L.push(QR_SENTINEL);
+        } else {
+          if (b.qr) {
+            L.push(_centre('[ SOKONI QR ]', cols));
+            _wrap(b.qr.caption, cols).forEach(function (l) { L.push(_centre(l, cols)); });
+            L.push(b.qr.url);
+          }
+          if (b.kraQr) {
+            L.push(_centre(b.kraQr.url ? '[ KRA eTIMS QR ]' : '[ eTIMS pending ]', cols));
+            _wrap(b.kraQr.caption, cols).forEach(function (l) { L.push(_centre(l, cols)); });
+            if (b.kraQr.url) L.push(b.kraQr.url);
+          }
         }
         if (b.keep) { L.push(''); _wrap(b.keep, cols).forEach(function (l) { L.push(_centre(l, cols)); }); }
         L.push('');
@@ -502,6 +534,7 @@
     employeeNoLine: employeeNoLine,
     PLATFORM: PLATFORM, BRAVILEX: BRAVILEX, POWERED_BY: POWERED_BY, TAGLINE: TAGLINE,
     SAMPLE_NOTICE: SAMPLE_NOTICE, RECEIPT_URL_BASE: RECEIPT_URL_BASE,
+    isKraEtimsUrl: isKraEtimsUrl, QR_SENTINEL: QR_SENTINEL,
     DEFAULT_COLS: DEFAULT_COLS, SERVER_ROLES: SERVER_ROLES,
   };
   /* NOTE: NOT `SokoniReceipt` — that global belongs to the existing POS receipt

@@ -116,6 +116,7 @@ window.SokoniAOS = (() => {
     const loaders = {
       dashboard:     _loadDashboard,
       users:         () => _loadUsers(),
+      applications:  () => _loadApplications(true),
       marketplace:   () => _loadMarketplace(),
       services:      () => _loadServices(),
       delivery:      () => _loadDelivery(),
@@ -581,6 +582,134 @@ window.SokoniAOS = (() => {
       body.innerHTML = _emptyMsg("Couldn't load providers.") + '<div style="text-align:center;margin-top:8px"><button class="aos-btn-sm" onclick="SokoniAOS.navigate(\'services\')">Try again</button></div>';
     }
   }
+
+  // ── Applications (canonical applicationList / applicationDecide / applicationReconcile) ──
+  /* 2026-09-30. The ONE administrative decision path for applications/* from every intake.
+     Reads go through applicationList (server-side, index-free, projection health included);
+     decisions through applicationDecide, which writes the server decision record, the audit
+     row, and projects the canonical role + registry + workspace synchronously, returning a
+     receipt. Nothing here writes Firestore directly, and nothing grants a role client-side.
+     Admin and Super Admin share this module; the server admits both (_requireAdmin). */
+  const _APP_ROLE_LABEL = { seller:"Seller", provider:"Provider", rider:"Rider", driver:"Rider", mechanic:"Mechanic",
+    landlord:"Landlord", tenant:"Tenant", health:"Health", legal:"Legal" };
+  let _appsCache = null;
+  function _appRole(i) { const r = i.role === "driver" ? "rider" : i.role; return r || null; }
+  function _appStatusWord(st) {
+    return ({ pending:"In review", approved:"Approved", rejected:"Rejected", suspended:"Suspended",
+      info_requested:"More info requested", withdrawn:"Withdrawn" })[st] || st || "—";
+  }
+  function _appProjection(i) {
+    const p = i.projectionStatus || "";
+    if (i.status === "approved" && p === "applied") return '<div class="app-proj ok">Live — role and workspace granted</div>';
+    if (i.status === "approved") return '<div class="app-proj bad">Approved, NOT live' + (i.projectionError ? ' — ' + _esc(i.projectionError) : '') + '</div>';
+    if (p === "blocked_unknown_role") return '<div class="app-proj bad">Role not recognised — cannot be granted as filed</div>';
+    if (p === "blocked_unauthorised_decision") return '<div class="app-proj bad">Status set without an admin decision — nothing was granted</div>';
+    return "";
+  }
+  async function _loadApplications(force) {
+    const body = document.getElementById("appsBody");
+    if (!body) return;
+    if (force || !_appsCache) {
+      body.innerHTML = '<tr><td colspan="6" class="empty-cell">' + _spinner() + '</td></tr>';
+      try {
+        _appsCache = await _call("applicationList", { limit: 500 });
+      } catch (e) {
+        _appsCache = null;
+        body.innerHTML = '<tr><td colspan="6" class="empty-cell">Couldn\u2019t load applications — ' + _esc(e && e.message || "server unavailable")
+          + ' <button class="aos-btn-sm" data-app-act="reload">Try again</button></td></tr>';
+        return;
+      }
+    }
+    const all = (_appsCache && _appsCache.items) || [];
+    const st = (document.getElementById("appStatusFilter") || {}).value || "";
+    const rf = (document.getElementById("appRoleFilter") || {}).value || "";
+    const items = all.filter((i) => {
+      if (st === "unpublished") { if (!(i.status === "approved" && i.projectionStatus !== "applied")) return false; }
+      else if (st && i.status !== st) return false;
+      if (rf === "unresolved") return !i.role;
+      if (rf && _appRole(i) !== rf) return false;
+      return true;
+    });
+    const counts = (_appsCache && _appsCache.counts) || {};
+    const pend = counts.pending || 0;
+    const badge = document.getElementById("navAppsBadge");
+    if (badge) { badge.textContent = String(pend); badge.hidden = !pend; }
+    const tot = document.getElementById("appTotal");
+    if (tot) tot.textContent = items.length + " shown · " + (counts.pending || 0) + " in review · " + ((_appsCache && _appsCache.unpublished) || 0) + " approved but not live";
+    if (!items.length) { body.innerHTML = _emptyRow(6, "No applications match this filter"); return; }
+    const me = _currentUser && _currentUser.uid;
+    body.innerHTML = items.map((i) => {
+      const role = _appRole(i);
+      const own = !!(me && i.uid && i.uid === me);
+      const dis = own ? ' disabled title="You cannot decide your own application"' : "";
+      const b = (act, label) => '<button class="aos-btn-sm" data-app-act="' + act + '" data-app-id="' + _esc(i.id) + '"' + dis + '>' + label + '</button>';
+      let acts = "";
+      if (i.status === "pending" || i.status === "info_requested") acts = b("approve", "Approve") + b("reject", "Reject") + (i.status === "pending" ? b("request_info", "Ask for info") : "");
+      else if (i.status === "approved") acts = (i.projectionStatus !== "applied" ? b("reconcile", "Publish now") : "") + b("suspend", "Suspend");
+      else if (i.status === "rejected" || i.status === "suspended") acts = b("approve", "Approve");
+      const contact = [i.phoneNumber || i.phone, i.email].filter(Boolean).map(_esc).join("<br>") || "—";
+      const where = [i.area, i.city || i.location].filter(Boolean).map(_esc).join(", ");
+      return '<tr>'
+        + '<td>' + _esc(i.name || "—") + (where ? '<div class="app-sub">' + where + '</div>' : "") + (own ? '<div class="app-sub">Your own application</div>' : "") + '</td>'
+        + '<td>' + (role ? _esc(_APP_ROLE_LABEL[role] || role) : '<span class="status-badge st-rejected">Unresolved</span>')
+          + ((i.categoryLabel || i.category) ? '<div class="app-sub">' + _esc(i.categoryLabel || i.category) + '</div>' : "") + '</td>'
+        + '<td>' + contact + '</td>'
+        + '<td>' + _ago(i.receivedAt || i.createdAt) + '</td>'
+        + '<td><span class="status-badge st-' + _esc(i.status) + '">' + _esc(_appStatusWord(i.status)) + '</span>' + _appProjection(i) + '</td>'
+        + '<td><div class="app-acts">' + (acts || '<span class="app-sub">—</span>') + '</div></td>'
+        + '</tr>';
+    }).join("");
+  }
+  function _findApp(id) { return ((_appsCache && _appsCache.items) || []).find((x) => x.id === id) || null; }
+  async function _decideApplication(id, decision) {
+    const a = _findApp(id);
+    if (!a) { _toast("Application not found — refresh the list", "error"); return; }
+    if (_currentUser && a.uid === _currentUser.uid) { _toast("You cannot decide your own application", "error"); return; }
+    let reason = null;
+    if (decision !== "approve") {
+      const ask = { reject: "Reason for rejecting (the applicant sees this):", suspend: "Reason for suspending:",
+        request_info: "What does the applicant need to add?" }[decision];
+      reason = prompt(ask);
+      if (reason === null) return;
+      reason = reason.trim();
+      if (!reason) { _toast("A reason is required", "error"); return; }
+    } else if (!confirm("Approve " + (a.name || "this applicant") + " as " + (_APP_ROLE_LABEL[_appRole(a)] || _appRole(a) || "their requested role") + "? This grants the role and opens their workspace.")) {
+      return;
+    }
+    try {
+      const r = await _call("applicationDecide", { applicationId: id, decision, reason });
+      const rc = r && r.receipt;
+      if (decision === "approve") {
+        _toast(rc && rc.ok === false ? "Decision saved, but NOT live: " + (rc.reason || "projection failed") : "Approved — role and workspace granted", rc && rc.ok === false ? "error" : "success");
+      } else {
+        _toast(({ reject: "Rejected", suspend: "Suspended", request_info: "More information requested" })[decision], "success");
+      }
+    } catch (e) {
+      _toast("Not decided: " + (e && e.message || "server refused"), "error");
+    }
+    _loadApplications(true);
+  }
+  async function _reconcileApplication(id) {
+    try {
+      const r = await _call("applicationReconcile", { applicationId: id });
+      const res = r && r.results && r.results[0];
+      if (res && res.refused) _toast("Not published: no recorded admin decision for this approval — decide it again", "error");
+      else if (res && res.ok === false) _toast("Not published: " + (res.reason || "projection failed"), "error");
+      else _toast("Published — role and workspace granted", "success");
+    } catch (e) {
+      _toast("Not published: " + (e && e.message || "server refused"), "error");
+    }
+    _loadApplications(true);
+  }
+  /* One delegated handler: ids travel in data attributes, never inside an inline script. */
+  document.addEventListener("click", (ev) => {
+    const btn = ev.target && ev.target.closest ? ev.target.closest("[data-app-act]") : null;
+    if (!btn || btn.disabled) return;
+    const act = btn.getAttribute("data-app-act"), id = btn.getAttribute("data-app-id");
+    if (act === "reload") { _loadApplications(true); return; }
+    if (act === "reconcile") { _reconcileApplication(id); return; }
+    if (["approve", "reject", "suspend", "request_info"].includes(act)) _decideApplication(id, act);
+  });
 
   // ── Bookings (canonical providerBookings via adminGetBookings) ───────────────
   async function _loadBookings(status) {
@@ -2484,6 +2613,10 @@ window.SokoniAOS = (() => {
     loadPayments:        _loadPayments,
     // Users
     loadUsers:           _loadUsers,
+    // Applications
+    loadApplications:    _loadApplications,
+    decideApplication:   _decideApplication,
+    reconcileApplication: _reconcileApplication,
     viewUser,
     banUser,
     changeRole,

@@ -9,6 +9,73 @@
 **Files:** **new** `sokoni-pos-stk.js` (one adapter: the sell engine's callStk/callVerify → posInitiateIntasendPayment / posCheckPaymentStatus), `till.html` (wiring + `sw-register.js` so cashier devices self-update), `merchant-v2.html` (Sell tab wiring), `pos-checkout.html` (single IntaSend POS call per sale attempt; the SokoniPay booking branch that booked a till sale as a platform booking removed), **new** `scripts/test-pos-stk-intasend.js` (17/0: pages, adapter ↔ live contract, emulator chain with the LIVE functions code: request → postill_ ref → pending → webhook POS finaliser → completed; failed callback → failed; resend = new attempt).
 **Functions / rules / DB:** none — the server rail is already live. **Money:** a sale is finalised only when posCheckPaymentStatus reports the IntaSend webhook's confirmation; the shop is resolved server-side (assertShopAccess). Same fix as `7ffd640` / `3134e3f` (unpushed branch not based on live) — ported narrowly onto live `72dca56`.
 
+
+## [2026-09-30] — Earn with SOKONI connected end to end: every card files a real application, AdminOS decides it, approval opens the right dashboard — candidate, NOT deployed
+
+**Files:** `opportunity.html`, `business-apply.html`, `sokoni-role-authority.js`, `admin-os.html`, `sokoni-aos.js`, `index.html`; suites `scripts/test-role-authority.js`, `scripts/test-role-switch-routing.js`, `scripts/test-role-entry-convergence.js` (pinned destinations updated, not loosened); new `scripts/test-earn-application-chain.js`; new `docs/EARN_WITH_SOKONI.md`.
+**Database / rules / indexes / Functions / production data:** none changed. **API changes:** none — AdminOS uses the existing `applicationList` / `applicationDecide` / `applicationReconcile` callables. **Breaking changes:** approved providers now switch into `provider-dashboard.html` instead of the public `providers.html`; unapproved seller/provider workspace visits go to `business-apply.html` instead of `onboarding-seller.html` / `provider-onboarding.html`.
+**Security:** removes a WhatsApp hand-off that collected name/phone outside the platform; stops routing provider applicants into the self-publishing `providerPublish` path; the new AdminOS module never writes Firestore and refuses self-decision. **Performance:** one owner-scoped query (≤20 docs) on the earn page for signed-in visitors; AdminOS loads the list once per panel open.
+
+- **Earn page:** ten ways to earn, each opening an existing intake that files `applications/*` (rider, mechanic via HubRegister, seller/provider/freelancer/agent/promoter via business-apply with a category label, landlord, health/legal); affiliate states "no application needed". The WhatsApp form and its false "Application sent!" are replaced by a chooser; the duplicate Driver card is merged into Rider; "KES 45K+ top earners" removed and the earnings table labelled as estimates (UI Data Integrity rule). New **Your applications** panel shows real statuses and opens the dashboard only via `SokoniRoleAuthority.hubFor()`.
+- **business-apply:** `?offer=` preselect, `?category=&label=` as a reviewer label (FORBIDDEN filter still strips role/status/claims — executed on the real primitive), "Open your workspace" once approved.
+- **Role authority:** provider workspace = `provider-dashboard.html`; seller/provider application routes = the gated `business-apply.html`.
+- **AdminOS › Applications:** status/role filters incl. "approved, not live" and "unresolved"; approve / reject / ask for info / suspend / publish now; one delegated handler, ids in data attributes.
+- **Security census (production, read-only):** the serving `applicationLifecycle` trusts the uid *named* in `decidedBy` and can grant `claims.admin`; served rules let an applicant write `status`/`decidedBy`/`requestedRole`; admin uids are readable on decided applications. No exploitation evidence. The existing fix K13-A `7df7817` + K13-B `f66f2c1` re-verified today against the live archives (parents identical; 11/0, 8/0; counterproofs reproduce) and queued for deploy. See `docs/EARN_WITH_SOKONI.md` §4.
+- **Proof:** earn chain 75/0, sabotage 6/6; role authority 155/0; role-switch routing 51/0; AdminOS honesty suites 28/0, 59/0, 147/0; admin nav/KPI/bulk-payout, home-logo, map ratchet, profile buyer view green.
+
+## [2026-09-30] — Profile presents as a buyer profile unless the acting role is a held business role — candidate, NOT deployed
+
+**Files:** `profile.html`, new `scripts/test-profile-buyer-view.js`, `docs/PROFILE_BUYER_VIEW.md`. **Rules / Functions / role authority / production data:** untouched. **Breaking changes:** none — presentation only; a held business role, once active, shows the business command centre exactly as before.
+- `<html data-sk-profile-view>` is set from the acting role wherever the role switcher renders; business-only blocks (`cmdBusinesses`, `cmdWorkspaces`, `pi7BizHealth`, `pi6ExecCmdsWrap`, `piQaRoleActions`, `upBizHub`, `pi7ModuleCards`, `statListings`, `statRating`) carry `sk-biz-only` and are hidden in the buyer view with `!important`. Default on first paint: buyer.
+- Personal tabs, the seller-application card, buyer stats, loyalty, activity and hubs stay in every view. Suite 17/0.
+
+## [2026-09-30] — Merchant-v2: Business Pulse + Customers from a server-authoritative source; scanner decodes on every device; failed callables become observable; one-page POS setup included — candidate, NOT deployed
+
+**Files:** `functions/merchant-dashboard-facts.js` (new callable `merchantDashboardFacts`, exported in `functions/index.js`), `sokoni-merchant-dashboard.js`, `sokoni-merchant-customers.js`, `sokoni-merchant-customers-ui.js`, `merchant-v2.html`, `pos-barcode.js`; merge of `7dd719c` (one-page POS setup: `pos-setup.html`, `pos-hardware-wizard.html`, `pos-printer-setup.html`, `sokoni-pos-print-service.js`, `sokoni-receipt.js`); new suites `scripts/test-merchant-dashboard-facts.js` (27/0), `scripts/test-pos-barcode-decoder-matrix.js` (16/0); `docs/MERCHANT_DASHBOARD_FACTS.md`.
+**Database / rules / indexes / App Check / production data:** none changed. **API changes:** one new callable, `merchantDashboardFacts({op:'facts'|'customers'})`, App Check enforced, scoped only by the caller's uid (no client id accepted). **Deployment:** the callable needs a scoped functions deploy (`--only functions:merchantDashboardFacts`); the rest is hosting. **Breaking changes:** none; every client change falls back to the previous behaviour when the callable is unavailable.
+**Security:** no new write path; the callable returns only the caller's own sales-derived figures and customers. **Performance:** two bounded reads (≤500 each) per dashboard load, replacing figures that were unknown by design.
+
+- **Business Pulse** rendered dashes because till sales (`posRetailSales`) are admin-only readable and `posDailySummary` has no rule — no client could compute the day's money. The callable computes till + online takings, orders, identified customers, trend and the 7-day series for the signed-in merchant, each figure carrying `known / partial / unknown` and its reason; a truncated sample is partial, never a wrong total.
+- **Customers** were empty because `crmCustomerProfiles` is empty project-wide (only the CRM callables build it). Profiles still win when present; otherwise customers are derived from the shop's real orders and identified till sales, completeness stated, walk-ins reported.
+- **Barcode scanner "unavailable"** was the device, not the code: `BarcodeDetector` is honest only on Android Chrome (desktop Chrome/Edge report no formats and reject every detect; iOS/Firefox lack it). `pos-barcode.js` now falls back to the ZXing build `sokoni-barcode.js` already uses, for live frames, image uploads and a detector that fails mid-session; `hasDecoder()` answers truthfully.
+- **POS / till "internal"**: seven days of logs show no server error and no request from the merchant reaching the till dispatcher — the failure happens in the browser before the call lands. The shell's callable wrapper now reports every failed callable to `logClientDiagnostic` (name, code, message, online, App Check state, page, UA) and rethrows unchanged, so the next occurrence names its cause.
+- **POS setup page** (`7dd719c`) merged (owner: ship the recently built page; reuse, no duplicates). The POS button contract is unchanged: setup first while unconfigured, then `pos.html` opening on Checkout.
+
+## [2026-09-30] — Inventory-gate blockers repaired as their own test-contract slices; gate APPROVED on ddf317b — NOT a hosting change
+
+**Files:** scripts/test-map-engine-ratchet.js, scripts/test-merchant-products-2c-media.js, scripts/test-cart-universal.js, scripts/test-merchant-capability.js, scripts/environment-preflight.js, docs. No product file, rule, index, Function or deployment configuration changed; hosting content identical to 82d8ce0.
+
+- map-engine ratchet: L.map( counts as Leaflet only where Leaflet is loaded (business-apply.html false positive). 8/0.
+- 2c-media: fetches the DEPLOYED Storage rules (read-only) when the gitignored snapshot is absent; failed fetch stays BLOCKED. 56/0.
+- cart-universal: born-after pages skip the inserted-block line-ending check; second NAMED 1:1 migration exemption for track.html (exact six legacy Firebase tags → import(./firebase.js), e5ea3e4), with breakage controls (unrelated loss, partial, swapped, other page, no import) and a self-check that the Font Awesome pair remains the only other exemption. 54/0.
+- merchant-capability: reuse of 55b000c derived structure with this lineage withheld set inventory,offers,sell. 46/0.
+- environment-preflight: Emulator ports check (EMULATOR_IN_USE); the emulator gate is exclusive on a machine.
+- Full gate on ddf317b: APPROVED, 342 PASS, 0 FAIL/BLOCKED; only the pre-existing seller-wiring change-detection TIMEOUT (non-blocking). Artefact docs/release-gates/ddf317b.json.
+
+## [2026-09-30] — Catalogue ordering key = `uploadedAt`: two readers + three writers (hosting-only candidate) — NOT deployed
+
+**Files:** `sokoni-db.js`, `sokoni-recommendations.js`, `merchant-v2.html`, `sokoni-inventory.js`, `seller-wiring.js`; new `scripts/test-product-uploadedat-authority.js`; docs. Owner-authorized slice after the writer census (`docs/PRODUCT_TIMESTAMP_WRITER_CENSUS.md`).
+**Database / rules / indexes / Functions / App Check / production data:** none touched. `firestore.indexes.json` unchanged — `uploadedAt` uses the built-in single-field index. **Breaking changes:** none for today's data (97 / 97 live products carry `uploadedAt`).
+**Security:** no new write path; the products create rule is unchanged. **Server authority for the timestamp is NOT claimed** — every `uploadedAt` remains a browser-clock value; making it server-authoritative (a rule on `request.time` or an onCreate trigger) is a separate gate.
+
+- **Readers.** `SokoniDB.listenProducts` (unfiltered path) and the recommendations pool read `orderBy('uploadedAt', 'desc'), limit(200)`. Replaces `orderBy(documentId(), 'desc')`, which Firestore answers with `failed-precondition: requires an index` (proven in headed Chrome with a valid App Check token) and which was never a chronology here (11 / 97 ids are `Date.now()`-style). Other recommendation pools (mechanics) take a plain bounded read. **Explicit:** Firestore omits a product that lacks the field.
+- **merchant-v2 adapter** stamps `uploadedAt = Date.now()` (a NUMBER, type-consistent with the 96 numeric live rows; a Timestamp would sort above them forever by Firestore type order) on `create` only; `createdAt` keeps its server-timestamp semantics; edits never rewrite it.
+- **sokoni-inventory** stamps `uploadedAt = Date.parse(now)` in the `isNew` branch and the canonicaliser preserves `createdAt` / numeric `uploadedAt` instead of dropping them; an existing product lacking them gets nothing invented.
+- **seller-wiring** sets `uploadedAt` only from a legitimate creation time (the row's numeric value, or the millisecond embedded in a `Date.now()`-style id) and otherwise omits it; on an existing document the re-sync strips it with the other server-owned fields. **A seller's sign-in time can no longer become product chronology.**
+- **Proof:** `test-product-uploadedat-authority.js` 34 / 0 (exact file set; 97-product ordering model incl. the known QATEST100 Timestamp row; sign-in sync of all 97 rows changes nothing; adapter/canonicaliser/resolver behaviour in sandboxes; breakage controls) · catalogue authority 67/0 · tombstone 34/0 · sellability 74/0 · secondary apps 9/0 · home routing 31/0 · merchant shell callables 19/0. Cart sub-suites of the inventory gate fail only their dirty-tree assertion before commit (they name these very files); the gate itself runs at deploy because `sokoni-inventory.js` matches its path filter. Syntax gate and headed-Chrome verification: see the slice doc — run when the environment preflight permits.
+
+## [2026-09-30] — Test/deploy environment preflight + syntax-gate classification (workflow blockers, test infrastructure only) — NOT a hosting change
+
+**Files:** new `scripts/environment-preflight.js`, new `scripts/test-syntax-gate-classification.js`, `scripts/predeploy-syntax-gate.js`, `scripts/predeploy-browser-suites.js`, `scripts/test-home-picked-for-you.js` (timeouts restored to the certified values), new `docs/TEST_ENVIRONMENT_PREFLIGHT.md`. No application code, App Check, payment path or `firebase.json` change; production stays at b108ae3.
+**Database / API / security / breaking changes:** none.
+
+- **Environment preflight** (`--for syntax|browser|hosting|functions`): RAM (physical + commit headroom), parent-dead WebKit/Playwright orphans, peer browser lock + live peer suite runners, node capacity, functions/hosting deploy in progress, Cloud Build ongoing. Fail closed with one reason code (`OOM_RISK`, `ORPHAN_BROWSER_PROCESSES`, `PEER_BROWSER_SESSION_ACTIVE`, `NODE_SATURATION`, `DEPLOYMENT_IN_PROGRESS`, `CLOUD_BUILD_ACTIVE|UNKNOWN`); UNPROVEN is NOT_READY. Writes a JSON record per run (counts, ownership, cleanup, start/end). `--reap` terminates parent-dead orphans only.
+- **Syntax gate classifies**: exit 0 → SYNTAX_PASS; SyntaxError → SYNTAX_FAIL; crash/OOM/signal/spawn error → **SYNTAX_UNPROVEN, stop, no retry** (an OOM child was reported as "does not parse" on 2026-09-30). Runs the preflight (`--for syntax`) before sweeping. Classifier proven 14/0.
+- **Browser-suite runner** acquires the exclusivity lock via the preflight before its first suite and releases it on exit; a peer run, orphans, low memory or a deploy → RELEASE BLOCKED — ENVIRONMENT NOT READY, nothing run.
+- **Reverted** the timeout widening in `test-home-picked-for-you.js` (owner: timeouts mask contention).
+- First real run named the live state truthfully: free physical ~380 MB, 12–16 orphan browser processes, a peer WebKit suite (`test-merchant-disputes-ui.js`, not this session), a functions deploy in progress → NOT_READY.
+
+## [2026-09-30] - DEPLOYED b108ae3 (hosting content = 85699a0: recs App Check wait+retry) -> Hosting v647 (sokoni-20260930103649-v647) 10:36Z, owner-authorized; two earlier attempts were false blocks (peer WebKit-orphan OOM: suite timeouts 38/1, then node --check OOM in the syntax gate); served sokoni-recommendations.js byte-identical to 85699a0; all other files unchanged since d55c112; rollback = v646 release of d55c112.
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
@@ -346,6 +413,76 @@ The goal sheet keeps its own open/close transition.
 
 The site-wide privacy consent dialog (`#_sokoniPrivacyBanner`) is separate and intentional (Kenya DPA
 2019). It disappears once Accept or Reject is chosen.
+## [2026-09-29] — POS Setup: one page, set up once, edit anytime · premium receipt with KRA eTIMS (NOT deployed)
+
+**Why.** POS setup was a seven-step wizard whose business step silently turned a failed lookup into "create your
+business". Its device step could never register a device: it sent `navigator.platform`, which the server refuses.
+Hardware and diagnostics lived on separate pages, payment setup was a Daraja-only Till card that can no longer
+verify, and receipts carried no KRA eTIMS code.
+
+- **Change:**
+  - **`pos-setup.html`:** after sign-in, ONE scrolling page with a sticky chip bar:
+    Business · Branch · Device · Payments · Receipt · Hardware · Diagnostics · Commission.
+    - **Chips** are green only from server answers (never `localStorage`), amber when the server reports a gap.
+    - **Business:** a dropdown of the merchant's businesses, each with its business type.
+    - **Branch:** chips; change at any time.
+    - **Device:** registered once through `bootstrapDevice`/`registerDevice`, with a mapped platform, `deviceType`
+      and `deviceName`, confirmed by `getDeviceList`. Rename it or move it to another branch at any time.
+    - **Payments:** IntaSend. SOKONI Till / QR are shown as "Activates with your business wallet" (no collection,
+      no QR drawn).
+    - **Receipt:** the premium receipt (`SokoniReceiptDoc`) as a SAMPLE, at 58mm or 80mm (the till's paper width),
+      with an honest test print: the printer when connected, otherwise the print dialog; never "printed" unless it was.
+    - **Hardware and Diagnostics:** the existing wizard and console embedded. Diagnostics opens straight into the FULL
+      advanced console: all 12 tabs, Diagnostics included.
+    - **Commission:** 5% POS/Till, 15% online on every package, 07:00 daily once the business wallet is live;
+      outstanding "—".
+    - `?edit=1` keeps a set-up merchant on the page. The Daraja payment-destination card and its code are removed.
+  - **`sokoni-receipt.js` (the receipt contract):**
+    - an `eTIMS Inv:` line only when KRA issued one;
+    - a KRA eTIMS code (`closing.kraQr`) EQUAL to the SOKONI code, printed only from a real `https://*.kra.go.ke`
+      eTIMS URL, otherwise "eTIMS pending" (every sample too);
+    - `isKraEtimsUrl`, and `toText({ qrSentinel })` for image adapters.
+  - **`sokoni-pos-print-service.js`:**
+    - the two codes print SIDE BY SIDE as one raster image that fits the paper: 384 dots at 58mm, 576 at 80mm.
+      Without a canvas they print stacked;
+    - the legacy sale receipt and invoice use the same pair (a look-alike KRA host prints "eTIMS pending");
+    - `sampleBanner`;
+    - an OPT-IN `context.useDoc` path prints the premium `SokoniReceiptDoc` document. Every existing caller prints
+      what it printed before.
+  - **`pos-printer-setup.html`:** "Back to POS" removed (a `?return=` caller still gets "Back" to itself when not
+    embedded). There is an embed mode, and the console's commission card is hidden when embedded.
+  - **`pos-hardware-wizard.html`:** embed mode (back link hidden).
+- **Files:**
+  - `pos-setup.html`, `pos-printer-setup.html`, `pos-hardware-wizard.html`;
+  - `sokoni-receipt.js`, `sokoni-pos-print-service.js`;
+  - `scripts/test-pos-setup-page.js` (new), `scripts/test-pos-manual-till-payment.js` (boundary tripwire only);
+  - `docs/POS_SETUP_PAGE.md` (new), `docs/RECEIPT_CONTRACT.md`;
+  - `CHANGELOG.md`.
+- **Database / API:** none. The page calls only callables that are already deployed; no server change.
+- **Security:**
+  - the KRA code cannot be forged by a look-alike host;
+  - the printer console's return link now accepts only same-origin paths (it accepted any `?return=` value before);
+  - no Daraja surface remains on the setup page.
+- **Evidence:**
+  - `test-pos-setup-page`: **44 passed, 0 failed**, stable across 3 consecutive runs (WebKit iPhone 13 and Chromium 1280), plus 1 UNPROVEN (the
+    embedded consoles' signed-in content needs a real session). Old tree (`be7c676`): 0 passed (no setup page).
+  - **Tripwire (owner-authorized 2026-09-29):** `scripts/test-pos-manual-till-payment.js`'s "SokoniReceiptDoc is
+    still NOT the POS renderer" became a BOUNDARY check. It verifies that:
+    - the sale builder never references `SokoniReceiptDoc`, and still renders the payment (manual-Till codes);
+    - every `SokoniReceiptDoc` reference sits inside the opt-in `_buildDocReceipt`;
+    - that path is taken only with `context.useDoc` and a document.
+
+    57/0 on the new tree. It catches 3 of 3 mutants: premium receipt in the sale builder, doc path unconditional, a
+    stray reference elsewhere. Live sale receipts and manual-Till behaviour are unchanged.
+  - The 30 related suites, old vs new: the only difference is that approved tripwire change.
+  - `test-receipt-contract` 132/0 on both.
+  - The syntax gate is clean.
+- **Commission — UI policy display ≠ deployed commission authority.** The page states the owner's rules (5% POS/Till,
+  15% online) as a DISPLAY. The rate table deployed on this line still carries the earlier figures, and production
+  charges follow it until the commission rules ship. This commit does not change the commission table. The
+  outstanding balance shows "—" because no balance service is deployed.
+- **Not in this commit:** commission deployment, eTIMS generation, the print host's unread `doc`, payment convergence.
+- **UNPROVEN:** the embedded consoles' signed-in content (paired devices, printer state) — needs a real merchant session.
 
 ## [2026-09-21] — Port the catalogue / business-application / POS-tender surface onto the served hosting lineage
 

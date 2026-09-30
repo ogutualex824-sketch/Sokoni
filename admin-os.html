@@ -147,6 +147,15 @@
     .role-provider{background:rgba(76,175,80,.2);color:#a5d6a7}
     .role-moderator{background:rgba(233,30,99,.2);color:#f48fb1}
     .st-active{background:rgba(76,175,80,.2);color:#a5d6a7}
+    /* Applications module (2026-09-30) */
+    .st-approved{background:rgba(76,175,80,.2);color:#a5d6a7}
+    .st-rejected,.st-withdrawn{background:rgba(244,67,54,.2);color:#ef9a9a}
+    .st-info_requested{background:rgba(56,189,248,.18);color:#7dd3fc}
+    .app-proj{font-size:11px;margin-top:3px}
+    .app-proj.bad{color:#ef9a9a}.app-proj.ok{color:#a5d6a7}.app-proj.muted{color:var(--aos-muted)}
+    .app-acts{display:flex;flex-wrap:wrap;gap:6px}
+    .app-acts .aos-btn-sm[disabled]{opacity:.45;cursor:not-allowed}
+    .app-sub{font-size:11px;color:var(--aos-muted)}
     .st-inactive,.st-cancelled{background:rgba(158,158,158,.2);color:#bdbdbd}
     .st-banned,.st-suspended{background:rgba(244,67,54,.2);color:#ef9a9a}
     .st-pending{background:rgba(255,152,0,.2);color:#ffcc80}
@@ -338,6 +347,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
     <div class="nav-group">
       <div class="nav-group-label">People</div>
       <button class="nav-item" data-section="users" data-label="User Management" onclick="SokoniAOS.navigate('users');_closeSidebar()"><span class="nav-icon">&#x1F465;</span>Users</button>
+      <button class="nav-item" data-section="applications" data-label="Applications" onclick="SokoniAOS.navigate('applications');_closeSidebar()"><span class="nav-icon">&#x1F4DD;</span>Applications<span class="nav-badge" id="navAppsBadge" hidden></span></button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Commerce</div>
@@ -458,6 +468,33 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
           <table class="aos-table">
             <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Last Login</th><th>Actions</th></tr></thead>
             <tbody id="usersBody"><tr><td colspan="7" class="empty-cell"><div class="aos-spinner"><div></div></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- APPLICATIONS (2026-09-30) — every intake (Earn with SOKONI, business-apply, rider,
+           landlord, professional, hub registration) files applications/*. This is where an
+           administrator decides them; approval grants the canonical role and the workspace. -->
+      <div class="aos-panel" id="panel-applications" hidden>
+        <div class="panel-toolbar">
+          <h2>Applications</h2>
+          <select id="appStatusFilter" aria-label="Filter by status" onchange="SokoniAOS.loadApplications()">
+            <option value="pending">In review</option><option value="info_requested">More info requested</option>
+            <option value="approved">Approved</option><option value="unpublished">Approved, not live</option>
+            <option value="rejected">Rejected</option><option value="suspended">Suspended</option><option value="">All</option>
+          </select>
+          <select id="appRoleFilter" aria-label="Filter by role" onchange="SokoniAOS.loadApplications()">
+            <option value="">All roles</option><option value="seller">Seller</option><option value="provider">Provider</option>
+            <option value="rider">Rider</option><option value="mechanic">Mechanic</option><option value="landlord">Landlord</option>
+            <option value="health">Health</option><option value="legal">Legal</option><option value="unresolved">Unresolved role</option>
+          </select>
+          <button class="aos-btn-sm" onclick="SokoniAOS.loadApplications(true)">Refresh</button>
+          <span id="appTotal" style="color:var(--aos-muted);font-size:12px;margin-left:auto"></span>
+        </div>
+        <div style="overflow-x:auto" id="appsWrap">
+          <table class="aos-table">
+            <thead><tr><th>Applicant</th><th>Role</th><th>Contact</th><th>Submitted</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="appsBody"><tr><td colspan="6" class="empty-cell"><div class="aos-spinner"><div></div></div></td></tr></tbody>
           </table>
         </div>
       </div>

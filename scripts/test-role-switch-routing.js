@@ -61,7 +61,7 @@ function loadHub(approved, mutate) {
   ck('hubFor exported', /hubFor:\s+hubFor/.test(RA));
   ck('admin has NO acting-context destination', all.HUBS.admin === undefined && all.HUBS.superAdmin === undefined);
   ck('destinations are ones already in use (no invented URLs)',
-     ['index.html', 'merchant.html', 'providers.html', 'driver.html', 'car-hub.html',
+     ['index.html', 'merchant.html', 'provider-dashboard.html', 'driver.html', 'car-hub.html',
       'healthcare.html', 'legal-hub.html', 'landlord.html', 'property.html']
        .every((u) => PRO.includes(u)));
 
@@ -72,6 +72,9 @@ function loadHub(approved, mutate) {
      carries the POS/printer/scanner integration. */
   ck('seller -> merchant-v2.html', multi.hubFor('seller') === 'merchant-v2.html', multi.hubFor('seller'));
   ck('rider  -> driver.html', multi.hubFor('rider') === 'driver.html', multi.hubFor('rider'));
+  { const prov = loadHub(['buyer', 'provider']);
+    ck('provider -> provider-dashboard.html (its workspace, not the public providers.html directory)',
+       prov.hubFor('provider') === 'provider-dashboard.html', prov.hubFor('provider')); }
   ck('every approved role resolves a destination', ['buyer', 'seller', 'rider'].every((r) => !!multi.hubFor(r)));
 
   head('2 - routing NEVER grants: an unheld role has no destination');

@@ -1439,6 +1439,111 @@
     .pd-note.bad  { background: rgba(255,68,68,.07); border-color: rgba(255,68,68,.28); color: #ffb3b3; }
     .pd-note strong { color: var(--sk-text, #fff); }
     @media (min-width: 600px) { .pd-seg button { flex: 1 1 0; } }
+
+    /* ══ THE SETUP PAGE (step 4) ═════════════════════════════════════════════════════════════════
+       One scrolling page. The chip bar sticks to the top of the step's own scroll container. */
+    .setup-page { align-items: stretch; padding-top: 0; }
+    .setup-wrap { width: 100%; max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+    .setup-head { padding-top: 18px; }
+    .chip-bar {
+      position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; overflow-x: auto;
+      padding: 10px 2px; margin: 0 -2px; background: var(--sk-surface);
+      scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    }
+    .chip-bar::-webkit-scrollbar { display: none; }
+    .sc-chip {
+      flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; min-height: 36px;
+      padding: 7px 13px; border-radius: 999px; font: 700 12.5px/1 inherit; cursor: pointer;
+      border: 1px solid var(--sk-border, rgba(255,255,255,.12)); background: rgba(255,255,255,.04);
+      color: var(--sk-text-muted, rgba(255,255,255,.65));
+    }
+    .sc-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.3); flex: 0 0 auto; }
+    .sc-chip[data-state="done"]      { border-color: rgba(113,255,0,.45); background: rgba(113,255,0,.10); color: var(--sk-green, #71ff00); }
+    .sc-chip[data-state="done"] .sc-dot { background: var(--sk-green, #71ff00); }
+    .sc-chip[data-state="attention"] { border-color: rgba(255,149,0,.45); background: rgba(255,149,0,.08); color: #ffb04d; }
+    .sc-chip[data-state="attention"] .sc-dot { background: #ff9500; }
+    .sc-chip[data-state="info"] .sc-dot { background: transparent; border: 1.5px solid rgba(255,255,255,.4); }
+    .sc-chip:focus-visible { outline: 2px solid var(--sk-accent, #71ff00); outline-offset: 2px; }
+
+    .setup-sec {
+      width: 100%; scroll-margin-top: 64px; padding: 16px; border-radius: 16px; text-align: left;
+      border: 1px solid var(--sk-border, rgba(255,255,255,.10)); background: rgba(255,255,255,.025);
+      display: flex; flex-direction: column; align-items: stretch;
+    }
+    .sec-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .sec-head h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--sk-text, #fff); }
+    .sec-tag { font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 999px; background: rgba(113,255,0,.12); color: var(--sk-green, #71ff00); }
+    .sec-sub { margin: 6px 0 12px; font-size: 13px; line-height: 1.55; color: var(--sk-text-muted, rgba(255,255,255,.62)); }
+    .sec-link { align-self: flex-start; margin-top: 8px; font-size: 13px; }
+    .setup-sec .btn-primary, .setup-sec .btn-secondary { margin-top: 12px; }
+    #biz-select { width: 100%; min-height: 48px; }
+    .biz-type-line { margin-top: 8px; font-size: 13px; color: var(--sk-text-muted, rgba(255,255,255,.62)); }
+    .biz-type-line b { color: var(--sk-text, #fff); }
+
+    /* Branches render as chips; the same cards the branch logic already builds. */
+    #sec-branch .branch-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    #sec-branch .branch-card { flex: 0 1 auto; width: auto; min-height: 44px; padding: 8px 14px; border-radius: 999px; }
+    #sec-branch .branch-card .branch-icon, #sec-branch .branch-card .branch-addr { display: none; }
+
+    .dev-card { border: 1px solid var(--sk-border, rgba(255,255,255,.10)); border-radius: 12px; overflow: hidden; }
+    .dev-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; font-size: 13px; color: var(--sk-text, #fff); }
+    .dev-row + .dev-row { border-top: 1px solid var(--sk-border, rgba(255,255,255,.08)); }
+    .dev-lbl { color: var(--sk-text-muted, rgba(255,255,255,.55)); }
+    .dev-row > span:last-child { text-align: right; overflow-wrap: anywhere; }
+    .dev-prov { margin-top: 12px; }
+
+    .pay-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 560px) { .pay-grid { grid-template-columns: 1fr 1fr; } }
+    .pay-tile { border: 1px dashed rgba(255,255,255,.18); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+    .pay-tile-h { font-weight: 800; font-size: 14px; color: var(--sk-text, #fff); }
+    .pay-ph { height: 84px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; letter-spacing: 2px;
+              color: rgba(255,255,255,.28); background: repeating-linear-gradient(45deg, rgba(255,255,255,.03) 0 8px, transparent 8px 16px); }
+    .pay-badge { align-self: flex-start; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,.08); color: rgba(255,255,255,.75); }
+    .pay-tile p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--sk-text-muted, rgba(255,255,255,.6)); }
+
+    .rcpt-wrap { display: flex; justify-content: center; }
+    /* A TRUE 58mm receipt: the paper is 58mm, the printable band 48mm (384 dots). The two codes sit LEFT and RIGHT,
+       equal size, exactly as the printer draws them. */
+    .rcpt { width: 58mm; max-width: 100%; box-sizing: border-box; background: #fff; color: #111; border-radius: 4px; padding: 3mm 5mm 4mm; }
+    .rcpt .rc-text { margin: 0; white-space: pre-wrap; font: 7.4pt/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #111; }
+    .rcpt .rc-qrs { display: flex; flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 2mm; margin: 2mm 0; }
+    .rcpt .rc-qr { margin: 0; flex: 0 0 23mm; display: flex; flex-direction: column; align-items: center; gap: 1mm; }
+    .rcpt .rc-qr-box { width: 23mm; height: 23mm; display: grid; place-items: center; }
+    .rcpt .rc-qr-box canvas { width: 23mm !important; height: 23mm !important; image-rendering: pixelated; }
+    .rcpt .rc-qr-pending { box-sizing: border-box; border: 2px dashed #555; text-align: center; font-weight: 800; font-size: 8pt; line-height: 1.2; color: #333; }
+    .rcpt figcaption { font-size: 6.5pt; font-weight: 700; color: #111; text-align: center; line-height: 1.2; }
+    .rcpt[data-paper="80mm"] { width: 80mm; padding: 3mm 6mm 4mm; }
+    .rcpt[data-paper="80mm"] .rc-qr { flex-basis: 32mm; }
+    .rcpt[data-paper="80mm"] .rc-qr-box, .rcpt[data-paper="80mm"] .rc-qr-box canvas { width: 32mm !important; height: 32mm !important; }
+    .rcpt-size { display: flex; gap: 8px; margin-bottom: 10px; }
+    .rcpt-size-btn { flex: 0 0 auto; min-height: 36px; padding: 6px 14px; border-radius: 999px; font: 700 12.5px/1 inherit; cursor: pointer;
+                     border: 1px solid var(--sk-border, rgba(255,255,255,.14)); background: transparent; color: var(--sk-text-muted, rgba(255,255,255,.7)); }
+    .rcpt-size-btn[aria-pressed="true"] { border-color: rgba(113,255,0,.5); background: rgba(113,255,0,.1); color: var(--sk-green, #71ff00); }
+    .rcpt-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .rcpt-actions > button { flex: 1 1 180px; }
+    .rcpt-status { margin: 10px 0 0; font-size: 13px; color: var(--sk-text-muted, rgba(255,255,255,.7)); min-height: 1em; }
+
+    .embed-wrap { border-radius: 12px; overflow: hidden; border: 1px solid var(--sk-border, rgba(255,255,255,.10)); background: #0b0b0b; }
+    .setup-embed { display: block; width: 100%; height: 640px; border: 0; }
+
+    .comm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+    .comm-card { border: 1px solid var(--sk-border, rgba(255,255,255,.10)); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+    .comm-card b { font-size: 26px; color: var(--sk-text, #fff); }
+    .comm-card span { font-size: 12px; color: var(--sk-text-muted, rgba(255,255,255,.6)); }
+    .comm-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 2px; font-size: 13px; color: var(--sk-text, #fff);
+                border-top: 1px solid var(--sk-border, rgba(255,255,255,.08)); margin-top: 8px; }
+    .comm-row > span:first-child { color: var(--sk-text-muted, rgba(255,255,255,.55)); }
+    .comm-row > span:last-child { text-align: right; }
+    .comm-note { margin: 6px 0 0; font-size: 12px; color: var(--sk-text-muted, rgba(255,255,255,.55)); }
+    .setup-finish { gap: 10px; }
+
+    /* Test print with no printer: the device's print dialog prints ONLY the sample receipt. */
+    @media print {
+      html.printing-receipt body * { visibility: hidden !important; }
+      html.printing-receipt #rcpt-preview, html.printing-receipt #rcpt-preview * { visibility: visible !important; }
+      html.printing-receipt #rcpt-preview { position: fixed; left: 0; top: 0; max-width: none; border-radius: 0; }
+      html.printing-receipt #wizard-shell { position: static; overflow: visible; }
+    }
   </style>
 </head>
 <body>
@@ -1453,10 +1558,7 @@
     <div class="step-dot active" id="dot-1" aria-label="Step 1: Welcome"></div>
     <div class="step-dot"        id="dot-2" aria-label="Step 2: Network check"></div>
     <div class="step-dot"        id="dot-3" aria-label="Step 3: Sign in"></div>
-    <div class="step-dot"        id="dot-4" aria-label="Step 4: Select business"></div>
-    <div class="step-dot"        id="dot-5" aria-label="Step 5: Select branch"></div>
-    <div class="step-dot"        id="dot-6" aria-label="Step 6: Provisioning"></div>
-    <div class="step-dot"        id="dot-7" aria-label="Step 7: Ready"></div>
+    <div class="step-dot"        id="dot-4" aria-label="Step 4: POS setup"></div>
   </nav>
 
   <!-- Viewport -->
@@ -1639,15 +1741,34 @@
       </div>
     </section>
 
-    <!-- ═══════ STEP 4 — SELECT BUSINESS ═══════ -->
-    <section id="step-4" class="step-panel" aria-label="Select your business">
-      <div class="step-inner">
+    <!-- ═══════ STEP 4 — POS SETUP (one scrolling page) ════════════════════════════════════════
+         Business · Branch · Device · Payments · Receipt · Hardware · Diagnostics · Commission.
+         A chip turns GREEN only from SERVER-confirmed state (getSetupStatus, the server business/branch lists,
+         getDeviceList / registerDevice) — never from localStorage. Set up once; every section stays editable. -->
+    <section id="step-4" class="step-panel setup-page" aria-label="POS setup">
+      <div class="setup-wrap">
 
-        <h2 class="wiz-title" style="margin-top:0">Your Businesses</h2>
-        <p class="wiz-sub">Select the business you want to operate.</p>
+        <header class="setup-head">
+          <h2 class="wiz-title" style="margin:0">POS Setup</h2>
+          <p class="wiz-sub" id="setup-head-sub" style="margin:4px 0 0">Set up once — change anything, anytime.</p>
+        </header>
 
-        <div style="width:100%;margin-top:24px;">
+        <nav class="chip-bar" id="chip-bar" aria-label="Setup sections">
+      <button type="button" class="sc-chip" id="chip-business" data-sec="business" data-state="pending" aria-label="Business: not confirmed yet"><span class="sc-dot" aria-hidden="true"></span>Business</button>
+      <button type="button" class="sc-chip" id="chip-branch" data-sec="branch" data-state="pending" aria-label="Branch: not confirmed yet"><span class="sc-dot" aria-hidden="true"></span>Branch</button>
+      <button type="button" class="sc-chip" id="chip-device" data-sec="device" data-state="pending" aria-label="Device: not confirmed yet"><span class="sc-dot" aria-hidden="true"></span>Device</button>
+      <button type="button" class="sc-chip" id="chip-payments" data-sec="payments" data-state="pending" aria-label="Payments: not confirmed yet"><span class="sc-dot" aria-hidden="true"></span>Payments</button>
+      <button type="button" class="sc-chip" id="chip-receipt" data-sec="receipt" data-state="pending" aria-label="Receipt: not confirmed yet"><span class="sc-dot" aria-hidden="true"></span>Receipt</button>
+      <button type="button" class="sc-chip" id="chip-hardware" data-sec="hardware" data-state="pending" aria-label="Hardware: not confirmed yet"><span class="sc-dot" aria-hidden="true"></span>Hardware</button>
+      <button type="button" class="sc-chip" id="chip-diagnostics" data-sec="diagnostics" data-state="pending" aria-label="Diagnostics: not confirmed yet"><span class="sc-dot" aria-hidden="true"></span>Diagnostics</button>
+      <button type="button" class="sc-chip" id="chip-commission" data-sec="commission" data-state="pending" aria-label="Commission: not confirmed yet"><span class="sc-dot" aria-hidden="true"></span>Commission</button>
+        </nav>
 
+        <!-- ── BUSINESS ─────────────────────────────────────────────────────────── -->
+        <section class="setup-sec" id="sec-business" aria-labelledby="sec-business-h">
+          <div class="sec-head"><h3 id="sec-business-h">Business</h3></div>
+          <p class="sec-sub">Choose the business this POS works for.</p>
+          <div style="width:100%;">
           <!-- Search (shown when >5 businesses) -->
           <div class="search-wrap" id="biz-search-wrap" style="display:none;" aria-label="Search businesses">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1680,28 +1801,14 @@
 
           <!-- Error -->
           <div class="error-box" id="biz-error" role="alert" style="margin-top:12px;"></div>
+          </div>
+        </section>
 
-        </div>
-
-        <button class="btn-primary" id="btn-biz-continue" disabled aria-label="Continue with selected business">
-          Continue
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M5 12h14M12 5l7 7-7 7"/>
-          </svg>
-        </button>
-
-      </div>
-    </section>
-
-    <!-- ═══════ STEP 5 — SELECT BRANCH ═══════ -->
-    <section id="step-5" class="step-panel" aria-label="Select your branch">
-      <div class="step-inner">
-
-        <h2 class="wiz-title" style="margin-top:0" id="step5-title">Select Branch</h2>
-        <p class="wiz-sub" id="step5-sub">Choose a branch to operate from.</p>
-
-        <div style="width:100%;margin-top:24px;">
-
+        <!-- ── BRANCH ───────────────────────────────────────────────────────────── -->
+        <section class="setup-sec" id="sec-branch" aria-labelledby="step5-title">
+          <div class="sec-head"><h3 id="step5-title">Branch</h3></div>
+          <p class="sec-sub" id="step5-sub">Choose a business first.</p>
+          <div style="width:100%;">
           <!-- Loading — skeletons, not a spinner. A spinner tells the merchant
                nothing is happening; skeletons show the shape of what is coming
                and stop the layout jumping when it arrives. -->
@@ -1743,38 +1850,24 @@
 
           <!-- Genuine backend failure only -->
           <div class="error-box" id="branch-error" role="alert" style="margin-top:12px;white-space:pre-line;text-align:left;"></div>
+          </div>
+          <button class="btn-primary" id="btn-branch-continue" disabled aria-label="Use the selected branch for this device">Use this branch</button>
+          <a href="admin-os.html" class="btn-ghost sec-link" aria-label="Add a new branch">+ Add Branch</a>
+        </section>
 
-        </div>
-
-        <button class="btn-primary" id="btn-branch-continue" disabled aria-label="Continue with selected branch">
-          Continue
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M5 12h14M12 5l7 7-7 7"/>
-          </svg>
-        </button>
-
-        <a href="admin-os.html" class="btn-ghost" style="margin-top:12px;" aria-label="Add a new branch">
-          + Add Branch
-        </a>
-
-      </div>
-    </section>
-
-    <!-- ═══════ STEP 6 — PROVISIONING ═══════ -->
-    <section id="step-6" class="step-panel" aria-label="Provisioning your POS device">
-      <div class="step-inner">
-
-        <div class="provision-icon" aria-hidden="true">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="3" width="20" height="14" rx="2"/>
-            <path d="M8 21h8M12 17v4"/>
-            <path d="M7 8l3 3 5-5"/>
-          </svg>
-        </div>
-
-        <h2 class="wiz-title" style="margin-top:0">Provisioning Device</h2>
-        <p class="wiz-sub">Setting up your POS — this takes just a few seconds.</p>
-
+        <!-- ── DEVICE ───────────────────────────────────────────────────────────── -->
+        <section class="setup-sec" id="sec-device" aria-labelledby="sec-device-h">
+          <div class="sec-head"><h3 id="sec-device-h">Device</h3></div>
+          <p class="sec-sub">This phone, tablet or laptop is registered once. Rename it or move it to another branch anytime.</p>
+          <div class="dev-card" id="dev-card">
+            <div class="dev-row"><span class="dev-lbl">This device</span><span id="dev-kind">—</span></div>
+            <div class="dev-row"><span class="dev-lbl">Status</span><span id="dev-status">Choose a business and branch</span></div>
+            <div class="dev-row"><span class="dev-lbl">Registered to</span><span id="dev-where">—</span></div>
+          </div>
+          <label class="input-label" for="dev-name" style="margin-top:12px">Device name</label>
+          <input type="text" class="sk-input" id="dev-name" maxlength="60" autocomplete="off" placeholder="e.g. Front counter phone">
+          <button class="btn-primary" id="btn-dev-register" disabled>Register this device</button>
+          <div class="dev-prov" id="dev-prov" hidden>
         <!-- Overall progress -->
         <div class="overall-progress-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="overall-progress-bar-wrap">
           <div class="overall-progress-bar">
@@ -1850,46 +1943,75 @@
                 style="display:none;margin-top:16px;" aria-label="Retry provisioning">
           Retry
         </button>
-
-      </div>
-    </section>
-
-    <!-- ═══════ STEP 7 — READY ═══════ -->
-    <section id="step-7" class="step-panel" aria-label="Setup complete, POS is ready">
-      <div class="step-inner">
-
-        <!-- Animated checkmark -->
-        <div class="ready-check" aria-hidden="true">
-          <svg width="120" height="120" viewBox="0 0 100 100">
-            <circle class="bg-circle" cx="50" cy="50" r="48"/>
-            <circle class="ring" cx="50" cy="50" r="45" id="ready-ring"/>
-            <path class="tick" d="M30 50 L44 64 L70 36" id="ready-tick"/>
-          </svg>
-        </div>
-
-        <h2 class="wiz-title" style="margin-top:0;color:var(--sk-green)">You're Ready to Sell!</h2>
-
-        <p class="ready-biz-name" id="ready-biz-name" aria-live="polite"></p>
-
-        <!-- Stats -->
-        <div class="ready-stats" role="list" aria-label="Setup summary statistics">
-          <div class="ready-stat" role="listitem">
-            <div class="ready-stat-val" id="ready-products">—</div>
-            <div class="ready-stat-lbl">Products</div>
           </div>
-          <div class="ready-stat" role="listitem">
-            <div class="ready-stat-val" id="ready-payments">—</div>
-            <div class="ready-stat-lbl">Payment Methods</div>
-          </div>
-          <div class="ready-stat" role="listitem">
-            <div class="ready-stat-val" id="ready-loyalty">—</div>
-            <div class="ready-stat-lbl">Loyalty</div>
-          </div>
-        </div>
+        </section>
 
+        <!-- ── PAYMENTS ─────────────────────────────────────────────────────────── -->
+        <section class="setup-sec" id="sec-payments" aria-labelledby="sec-payments-h">
+          <div class="sec-head"><h3 id="sec-payments-h">Payments</h3><span class="sec-tag">IntaSend</span></div>
+          <p class="sec-sub">SOKONI payments run through <b>IntaSend</b> — M-PESA, card and the other methods enabled on SOKONI's IntaSend account. Card details are typed on IntaSend's own page, never into SOKONI.</p>
+          <div class="pay-grid">
+            <div class="pay-tile" id="pay-till">
+              <div class="pay-tile-h">SOKONI Till</div>
+              <div class="pay-ph" aria-hidden="true">Till</div>
+              <span class="pay-badge">Activates with your business wallet</span>
+              <p>Customers will pay your SOKONI Till into your business wallet. It is not active yet, so no payment can be taken with it today.</p>
+            </div>
+            <div class="pay-tile" id="pay-qr">
+              <div class="pay-tile-h">SOKONI QR</div>
+              <div class="pay-ph" aria-hidden="true">QR</div>
+              <span class="pay-badge">Activates with your business wallet</span>
+              <p>A code customers scan to pay for a product at the till or in the cart. No QR is shown until it can really collect money.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── RECEIPT ──────────────────────────────────────────────────────────── -->
+        <section class="setup-sec" id="sec-receipt" aria-labelledby="sec-receipt-h">
+          <div class="sec-head"><h3 id="sec-receipt-h">Receipt</h3></div>
+          <p class="sec-sub">The same receipt your customers get: KRA PIN and eTIMS details, the mysokoni.co.ke code and the KRA eTIMS code.</p>
+          <div class="rcpt-size" role="group" aria-label="Receipt paper size">
+            <button type="button" class="rcpt-size-btn" data-paper="58mm">58 mm</button>
+            <button type="button" class="rcpt-size-btn" data-paper="80mm">80 mm</button>
+          </div>
+          <div class="rcpt-wrap"><div class="rcpt" id="rcpt-preview" aria-label="Sample receipt preview"></div></div>
+          <div class="rcpt-actions">
+            <button class="btn-primary" id="btn-test-print">Test print (sample)</button>
+            <button class="btn-secondary" id="btn-rcpt-connect">Connect a printer</button>
+          </div>
+          <p class="rcpt-status" id="rcpt-status" role="status" aria-live="polite"></p>
+        </section>
+
+        <!-- ── HARDWARE (the existing hardware wizard, embedded) ────────────────── -->
+        <section class="setup-sec" id="sec-hardware" aria-labelledby="sec-hardware-h">
+          <div class="sec-head"><h3 id="sec-hardware-h">Hardware</h3></div>
+          <p class="sec-sub">Pair and test printers, scanners, cash drawers, scales and displays.</p>
+          <div class="embed-wrap"><iframe class="setup-embed" id="frame-hardware" title="Hardware wizard" data-src="pos-hardware-wizard.html?embed=setup"></iframe></div>
+        </section>
+
+        <!-- ── DIAGNOSTICS (the existing printer & device console, embedded) ────── -->
+        <section class="setup-sec" id="sec-diagnostics" aria-labelledby="sec-diagnostics-h">
+          <div class="sec-head"><h3 id="sec-diagnostics-h">Diagnostics</h3></div>
+          <p class="sec-sub">Advanced printer settings and platform diagnostics.</p>
+          <div class="embed-wrap"><iframe class="setup-embed" id="frame-diagnostics" title="Printer settings and diagnostics" data-src="pos-printer-setup.html?embed=setup"></iframe></div>
+        </section>
+
+        <!-- ── COMMISSION ───────────────────────────────────────────────────────── -->
+        <section class="setup-sec" id="sec-commission" aria-labelledby="sec-commission-h">
+          <div class="sec-head"><h3 id="sec-commission-h">SOKONI commission</h3></div>
+          <div class="comm-grid">
+            <div class="comm-card"><b id="comm-pos-rate">—</b><span>of every POS / Till sale</span></div>
+            <div class="comm-card"><b id="comm-online-rate">—</b><span>of online sales, on every package</span></div>
+          </div>
+          <div class="comm-row"><span>Collection</span><span>Daily at 07:00 — starts when your business wallet is live</span></div>
+          <div class="comm-row"><span>Outstanding</span><span id="comm-outstanding">—</span></div>
+          <p class="comm-note" id="comm-note">Your balance is not available here yet, so none is shown.</p>
+        </section>
+
+        <!-- ── FINISH ───────────────────────────────────────────────────────────── -->
+        <section class="setup-sec setup-finish" id="sec-finish" aria-label="Finish setup">
         <!-- Legal agreements gate (legalDispatch) — required before opening POS -->
         <div id="legal-gate" style="width:100%;margin:6px 0 14px;text-align:left;display:none;"></div>
-
         <!-- Setup checklist — production-readiness gate (getSetupStatus) -->
         <div id="setup-checklist-wrap" style="width:100%;margin:6px 0 14px;text-align:left;display:none;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
@@ -1902,26 +2024,6 @@
                  functions/business-bootstrap.js. Hidden until there is something to say. -->
             <div id="setup-gaps" style="display:none;margin-top:10px;"></div>
         </div>
-
-        <!-- ── Payment destination (M-PESA Till / PayBill) ─────────────────
-             Post-provisioning only. Steps 1–6 do not touch this and it cannot
-             affect device pairing; a merchant who ignores it still reaches
-             "Open POS" exactly as before.
-
-             Reuses the existing getPaymentDestination / savePaymentDestination
-             callables — no new endpoint, and the canonical
-             auth.uid → activeShopId authority is unchanged. Rendering is
-             owner-only: a cashier cannot read or write this document (rules
-             restrict it to owner/admin), so they get an honest read-only
-             notice rather than a form that fails on save. -->
-        <div id="pd-card-wrap" style="width:100%;margin:6px 0 14px;text-align:left;display:none;">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
-            <span style="font-size:13px;font-weight:800;color:var(--sk-text);">M-PESA payment destination</span>
-            <span id="pd-badge" class="pd-badge mut">Not configured</span>
-          </div>
-          <div id="pd-card" class="pd-card"></div>
-        </div>
-
         <button class="btn-primary" id="btn-open-pos" aria-label="Open the POS and start selling">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="2" y="3" width="20" height="14" rx="2"/>
@@ -1929,23 +2031,6 @@
           </svg>
           Open POS
         </button>
-
-        <button class="btn-secondary" id="btn-configure-hw" aria-label="Configure POS hardware like printers and scanners">
-          Configure Hardware
-        </button>
-
-        <!-- ═══════════════════════════════════════════════════════════════
-             ADVANCED SETUP
-             The wizard provisions a till; these are the consoles that RUN it.
-             They existed already and were fully built, but pos-setup.html
-             linked to NONE of them — a merchant who finished the wizard had no
-             route to till management, cash control, staff operations, hardware
-             or reporting except by knowing the URLs. This is that route.
-
-             Nothing here is new configuration and nothing has been moved out
-             of the pages it belongs to; each card opens the existing console,
-             which keeps owning its own settings.
-        ═══════════════════════════════════════════════════════════════ -->
         <details class="adv-setup" id="adv-setup">
           <summary class="adv-summary">
             <span>Advanced setup</span>
@@ -1986,6 +2071,7 @@
             <a class="adv-card" href="pos-observability.html"><span class="adv-i">🩺</span><b>Observability</b><i>Health, errors and sync state</i></a>
           </div>
         </details>
+        </section>
 
       </div>
     </section>
@@ -2114,7 +2200,7 @@ function toast(msg, type = '', duration = 3500) {
 ════════════════════════════════════════════════════════════════ */
 const WIZ = {
   currentStep:    1,
-  totalSteps:     7,
+  totalSteps:     4,
   user:           null,
   businesses:     [],
   selectedBiz:    null,   // { id, name, logo, businessType }
@@ -2168,7 +2254,7 @@ function loadDraft() {
     const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
     if (!d || d.v !== DRAFT_VERSION) return null;
     if (!(Date.now() - (d.savedAt || 0) < DRAFT_MAX_AGE)) { clearDraft(); return null; }
-    if (!(typeof d.currentStep === 'number' && d.currentStep >= 4 && d.currentStep <= 6)) return null;
+    if (!(typeof d.currentStep === 'number' && d.currentStep === 4)) return null;
     return d;
   } catch (_) { return null; }
 }
@@ -2267,10 +2353,9 @@ function goToStep(n) {
 function onStepEnter(step) {
   if (step === 2) initNetworkStep();
   if (step === 3) initAuthStep();
-  if (step === 4) initBizStep();
-  if (step === 5) initBranchStep();
-  if (step === 6) initProvisionStep();
-  if (step === 7) initReadyStep();
+  /* Step 4 is the whole setup page: it starts with the business, and each section follows from the one
+     before (business → branch → device) without leaving the page. */
+  if (step === 4) initSetupPage();
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -2607,8 +2692,8 @@ let _bizAllItems = [];
 async function initBizStep() {
   _bizAllItems     = [];
   WIZ.selectedBiz  = null;
+  _paintChips();
 
-  document.getElementById('btn-biz-continue').disabled = true;
   document.getElementById('biz-loading').style.display  = 'flex';
   const _loadMsg = document.getElementById('biz-loading-msg');
   if (_loadMsg) _loadMsg.textContent = 'Loading your businesses…';
@@ -2636,6 +2721,10 @@ async function initBizStep() {
     // Strategy: call a discovery CF (listMerchants); gracefully fall back to
     // prompting the user to enter their merchant ID.
     let businesses = [];
+    /* The PRIMARY lookup's failure is kept. It used to be discarded here, so when getMyBusinesses failed and the
+       legacy fallback found nothing, a merchant WITH businesses was shown "Create your business" — a failure
+       rendered as an empty account. */
+    let _primaryErr = null;
 
     // Onboarding v2 — auto-detect businesses the user owns (NO Merchant ID needed).
     try {
@@ -2647,7 +2736,9 @@ async function initBizStep() {
             branch: b.branch, status: b.status,
           }))
         : [];
-    } catch (_) {
+    } catch (primaryErr) {
+      _primaryErr = primaryErr;
+      console.error('[POS setup] getMyBusinesses failed', { code: primaryErr && primaryErr.code, message: primaryErr && primaryErr.message });
       // Backward-compatible fallback: legacy claims-based discovery.
       const token = await WIZ.user.getIdTokenResult(true);
       const merchantIds = token.claims.merchantIds ||
@@ -2666,10 +2757,15 @@ async function initBizStep() {
     document.getElementById('biz-loading').style.display = 'none';
 
     if (businesses.length === 0) {
+      /* An EMPTY answer is a new merchant; a FAILED lookup is not. Only the first may offer "Create". */
+      if (_primaryErr) throw _primaryErr;
       // First-time user — Create Your Business (never prompt for a Merchant ID).
       renderCreateBusiness();
       return;
     }
+
+    /* Every business is offered in the dropdown, each with its type; the choice drives the rest of the page. */
+    renderBizList(businesses);
 
     /* ── Resume from draft ───────────────────────────────────────────────────
        The saved id is a HINT about which entry to preselect, never a grant. It
@@ -2686,9 +2782,7 @@ async function initBizStep() {
     if (_draft && _draft.biz && _draft.biz.id) {
       const _match = businesses.find((b) => (b.id || b.merchantId) === _draft.biz.id);
       if (_match) {
-        WIZ.selectedBiz = _match;
-        if (_match.branches) WIZ._bizBranches = _match.branches;
-        goToStep(_draft.currentStep >= 5 ? 5 : 4);
+        selectBiz(businesses.indexOf(_match));
         return;
       }
       clearDraft();   /* no longer accessible to this user — do not keep offering it */
@@ -2696,10 +2790,7 @@ async function initBizStep() {
 
     // Auto-select if only 1
     if (businesses.length === 1) {
-      WIZ.selectedBiz = businesses[0];
-      // Store branches if available
-      if (businesses[0].branches) WIZ._bizBranches = businesses[0].branches;
-      goToStep(5);
+      selectBiz(0);
       return;
     }
 
@@ -2707,8 +2798,6 @@ async function initBizStep() {
     if (businesses.length > 5) {
       document.getElementById('biz-search-wrap').style.display = 'block';
     }
-
-    renderBizList(businesses);
 
   } catch (err) {
     document.getElementById('biz-loading').style.display = 'none';
@@ -2719,40 +2808,48 @@ async function initBizStep() {
   }
 }
 
+/* THE BUSINESS PICKER — a dropdown of the merchant's own businesses (server list only), each showing its business
+   type. Option values are indexes into _bizAllItems, so a filtered list still selects the right business. */
 function renderBizList(items) {
   const list = document.getElementById('biz-list');
-  list.style.display = 'flex';
-  list.innerHTML = items.map((biz, idx) => {
-    const initial = esc((biz.name || '?')[0].toUpperCase());
-    const name    = esc(biz.name || 'Unnamed Business');
-    const type    = esc(biz.businessType || '');
-    const logo    = biz.logo ? `<img src="${esc(biz.logo)}" alt="" loading="lazy">` : initial;
-    return `
-      <div class="sk-card biz-card" role="listitem" tabindex="0"
-           data-idx="${idx}" aria-label="Select ${name}"
-           onclick="selectBiz(${idx})"
-           onkeydown="if(event.key==='Enter'||event.key===' ')selectBiz(${idx})">
-        <div class="biz-avatar">${logo}</div>
-        <div class="biz-info">
-          <div class="biz-name">${name}</div>
-          ${type ? `<div class="biz-type">${type}</div>` : ''}
-        </div>
-        <div class="biz-check" id="biz-check-${idx}"></div>
-      </div>`;
+  list.style.display = 'block';
+  const sel = WIZ.selectedBiz ? _bizAllItems.indexOf(WIZ.selectedBiz) : -1;
+  const opts = items.map((biz) => {
+    const idx  = _bizAllItems.indexOf(biz);
+    const name = esc(biz.name || 'Unnamed Business');
+    const type = esc(biz.businessType || biz.category || '');
+    return `<option value="${idx}"${idx === sel ? ' selected' : ''}>${name}${type ? ' — ' + type : ''}</option>`;
   }).join('');
+  list.innerHTML = `
+    <label class="input-label" for="biz-select">Business</label>
+    <select class="sk-input" id="biz-select" aria-label="Select your business">
+      ${sel < 0 ? '<option value="" selected disabled>Choose a business…</option>' : ''}${opts}
+    </select>
+    <div class="biz-type-line" id="biz-type-line">${WIZ.selectedBiz ? _bizTypeLine(WIZ.selectedBiz) : ''}</div>
+    <button type="button" class="btn-ghost sec-link" id="btn-biz-create-new">+ Create a new business</button>`;
+  document.getElementById('biz-select').addEventListener('change', (e) => {
+    const i = Number(e.target.value);
+    if (Number.isInteger(i) && i >= 0) selectBiz(i);
+  });
+  document.getElementById('btn-biz-create-new').addEventListener('click', () => renderCreateBusiness());
+}
+
+function _bizTypeLine(biz) {
+  const type = biz.businessType || biz.category || '';
+  return type ? 'Business type: <b>' + esc(type) + '</b>' : 'Business type not set';
 }
 
 function selectBiz(idx) {
-  // Deselect all
-  document.querySelectorAll('#biz-list .sk-card').forEach(c => c.classList.remove('selected'));
-  // Select this one
-  const card = document.querySelector(`#biz-list [data-idx="${idx}"]`);
-  if (card) card.classList.add('selected');
-
-  WIZ.selectedBiz = _bizAllItems[idx];
-  if (_bizAllItems[idx].branches) WIZ._bizBranches = _bizAllItems[idx].branches;
-  document.getElementById('btn-biz-continue').disabled = false;
+  const biz = _bizAllItems[idx];
+  if (!biz) return;
+  WIZ.selectedBiz = biz;
+  WIZ.selectedMerchantId = biz.merchantId || biz.id;
+  WIZ._bizBranches = Array.isArray(biz.branches) ? biz.branches : null;
+  renderBizList(_bizAllItems);
+  saveDraft();
+  onBizSelected();
 }
+
 
 /* Manual merchant ID entry fallback */
 function renderBizManualEntry() {
@@ -2821,11 +2918,11 @@ async function createMyBusiness() {
       phone:        (document.getElementById('cb-phone')   || {}).value?.trim() || '',
     });
     const d = res.data;
-    WIZ.selectedBiz        = { id: d.merchantId, merchantId: d.merchantId, name: d.name, logo: null, businessType: d.category };
-    WIZ.selectedMerchantId = d.merchantId;
-    WIZ._bizBranches       = [{ id: d.branchId, name: 'Main Branch' }];
     WIZ.newBusinessQr      = d.qr;            // shown later in Business Settings
-    goToStep(5);
+    /* The server just created it — it joins the picker as a server-returned business. */
+    _bizAllItems.push({ id: d.merchantId, merchantId: d.merchantId, name: d.name, logo: null, businessType: d.category,
+                        category: d.category, branches: [{ id: d.branchId, name: 'Main Branch' }] });
+    selectBiz(_bizAllItems.length - 1);
   } catch (err) {
     errEl.textContent = _skWhy(err, 'Could not create business. Please try again.');
     errEl.classList.add('visible');
@@ -2847,16 +2944,15 @@ async function loadManualMerchant() {
   try {
     const pair = await SPOS('pairDevice')({ merchantId: mid });
     const res  = await CF('getBusinessConfig')({ merchantId: pair.data.merchantId });
-    const biz = {
+    _bizAllItems.push({
       id:           mid,
+      merchantId:   mid,
       name:         res.data.business.name,
       logo:         res.data.business.logo,
       businessType: res.data.business.businessType,
-    };
-    WIZ.selectedBiz    = biz;
-    WIZ._bizBranches   = res.data.branches || [];
-    WIZ.selectedMerchantId = mid;
-    goToStep(5);
+      branches:     res.data.branches || [],
+    });
+    selectBiz(_bizAllItems.length - 1);
   } catch (err) {
     errEl.textContent = 'Business not found or access denied. Check your Merchant ID.';
     errEl.classList.add('visible');
@@ -2870,13 +2966,6 @@ document.getElementById('biz-search').addEventListener('input', e => {
     ? _bizAllItems.filter(b => (b.name || '').toLowerCase().includes(q))
     : _bizAllItems;
   renderBizList(filtered);
-  WIZ.selectedBiz = null;
-  document.getElementById('btn-biz-continue').disabled = true;
-});
-
-document.getElementById('btn-biz-continue').addEventListener('click', () => {
-  if (!WIZ.selectedBiz) return;
-  goToStep(5);
 });
 
 /* ═══════════════════════════════════════════════════════════════
@@ -2962,6 +3051,7 @@ async function initBranchStep() {
     $('branch-single-addr').textContent = _branches[0].address || _branches[0].location || '';
     show('branch-single', true);
     $('btn-branch-continue').disabled = false;
+    _onBranchConfirmed();
     return;
   }
 
@@ -3051,7 +3141,8 @@ document.getElementById('btn-branch-continue').addEventListener('click', () => {
     box.classList.add('visible');
     return;
   }
-  goToStep(6);
+  _onBranchConfirmed();
+  _scrollToSec('device');
 });
 
 /* Case 1 — first branch. Routed through the existing business registration
@@ -3239,18 +3330,25 @@ async function initProvisionStep() {
   setLiveMsg('Securing device registration...');
 
   try {
-    const platform   = navigator.userAgentData?.platform || navigator.platform || 'Web';
     const appVersion = '4.0.0';
     const regFn = CF('registerDevice');
+    /* The server accepts ONLY web | android | ios | windows | linux. The raw navigator value ("Win32",
+       "Linux armv8l", "Android") was sent before, was always refused, and the refusal was shown as
+       "registration pending" — so no device ever registered from this page. Mapped here to the server's list. */
+    const deviceName = _deviceNameInput();
     await regFn({
       deviceId,
       merchantId,
       branchId,
-      platform,
+      platform:   _devicePlatform(),
+      deviceType: _deviceType(),
+      deviceName,
       appVersion,
     });
+    _devState = { registered: true, merchantId, branchId, deviceName, source: 'registerDevice' };
     setProvTask(1, 'done');
   } catch (err) {
+    _devState = { registered: false, merchantId, branchId, error: err, source: 'registerDevice' };
     /* Non-fatal by design — the device works without server-side registration
        on first install, so setup continues. But it is still LOGGED: swallowing
        it silently is how the whole device cluster could be undeployed without
@@ -3262,10 +3360,11 @@ async function initProvisionStep() {
         window.SokoniAsync.report('POSSetup', 'registerDevice', err, { merchantId, branchId, nonFatal: true });
       }
     } catch (_) {}
+    /* NOT "ready (registration pending)": the server refused it, and the Device chip stays unconfirmed. */
     document.getElementById('prov-label-1').textContent =
       code === 'permission-denied' ? 'Device not registered (permission denied)'
-                                   : 'Device ready (registration pending)';
-    setProvTask(1, 'done');
+                                   : 'Device not registered — tap Register again';
+    setProvTask(1, 'error');
   }
 
   // ── TASK 2: Payments & loyalty ──
@@ -3312,9 +3411,11 @@ async function initProvisionStep() {
   clearDraft();   /* setup finished — a stale draft must not resurrect the wizard */
 
   setLiveMsg('All done!');
-  await _delay(600);
+  await _delay(400);
 
-  goToStep(7);
+  /* The page stays: the device is now provisioned, and the sections below it (receipt, hardware, ...) are the
+     next things to set. Server state is re-read so the chips reflect what the server confirmed. */
+  _afterProvisioned();
 }
 
 /* Turn a callable failure into something the operator can act on.
@@ -3451,289 +3552,383 @@ function _delay(ms) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   STEP 7 — READY
+   STEP 4 — THE POS SETUP PAGE
+   One scrolling page: Business · Branch · Device · Payments · Receipt · Hardware · Diagnostics · Commission.
+
+   CHIPS ARE GREEN ONLY FROM THE SERVER. Each chip's state is derived from server answers held in memory for this
+   session — the server's business and branch lists, getSetupStatus, getDeviceList / registerDevice. Nothing read
+   from localStorage can turn a chip green: a browser that "remembers" a setup is not a set-up till.
+     done       server-confirmed
+     attention  the server answered and something is missing
+     pending    not confirmed yet / not answered
+     info       an informational section (payments before the business wallet, diagnostics, commission) — never green
 ════════════════════════════════════════════════════════════════ */
-function initReadyStep() {
-  // Animate checkmark
-  requestAnimationFrame(() => {
-    const ring = document.getElementById('ready-ring');
-    const tick = document.getElementById('ready-tick');
-    if (ring) ring.classList.add('animate');
-    if (tick) tick.classList.add('animate');
-  });
 
-  // Business / branch info
-  const bizName    = WIZ.selectedBiz    ? WIZ.selectedBiz.name    : '';
-  const branchName = WIZ.selectedBranch ? WIZ.selectedBranch.name : '';
-  const bizEl = document.getElementById('ready-biz-name');
-  if (bizEl) {
-    bizEl.innerHTML = `<strong>${esc(bizName)}</strong>${branchName ? ' · ' + esc(branchName) : ''}`;
-  }
+/* SOKONI commission — owner-directed display (2026-09-29): 5% of every POS/Till sale, 15% of online sales on every
+   package, collected daily at 07:00 once the business wallet is live. One constant, not scattered literals.
+   NOTE: the rate table deployed on this line (sokoni-commission-rates.js / commission-config.js) still carries the
+   earlier figures; production charges follow that table until the commission rules ship. */
+const COMMISSION_POLICY = Object.freeze({ posPct: 5, onlinePct: 15 });
 
-  // Stats from bootstrap
-  const data = WIZ.bootstrapData;
-  if (data) {
-    const productsEl  = document.getElementById('ready-products');
-    const paymentsEl  = document.getElementById('ready-payments');
-    const loyaltyEl   = document.getElementById('ready-loyalty');
+let _devState = null;        /* { registered, merchantId, branchId, deviceName, source } — server answers only */
+let _setupPageReady = false;
 
-    const productCount = Array.isArray(data.products) ? data.products.length : 0;
-    const pmCount      = Array.isArray(data.paymentMethods) ? data.paymentMethods.length : 0;
-    const loyaltyOn    = data.loyalty?.enabled;
-
-    if (productsEl)  productsEl.textContent  = productCount;
-    if (paymentsEl)  paymentsEl.textContent  = pmCount;
-    if (loyaltyEl)   loyaltyEl.textContent   = loyaltyOn ? 'On' : 'Off';
-  }
-
-  // Mandatory setup checklist + production-readiness gate (getSetupStatus).
-  renderSetupChecklist();
-
-  // M-PESA payment destination (Till / PayBill) — owner-only, additive.
-  renderPaymentDestination();
-
-  // Legal agreements gate — merchant must accept required agreements (legalDispatch).
-  renderLegalGate();
+function _scrollToSec(key) {
+  const el = document.getElementById('sec-' + key);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   PAYMENT DESTINATION — M-PESA Till / PayBill  (step 7, additive)
-
-   Where this merchant's customers pay. Their own account: SOKONI does not hold
-   the sale proceeds, and its commission is billed separately.
-
-   AUTHORITY. Every status shown here comes from getPaymentDestination. Nothing
-   in this file may render VERIFIED from local state — a merchant who talked
-   their own browser into showing "Verified" would believe money was reaching a
-   destination nobody tested. paymentDestinations is `allow write: if false`;
-   savePaymentDestination only ever STAGES a replacement, and only the Daraja
-   STK callback can promote one.
-
-   SCOPE. Deliberately owner-only, and deliberately NOT merchantId-scoped. POS
-   setup selects a business by `merchantId`, while the payment backend resolves
-   auth.uid → users/{uid}.activeShopId → shops/{shopId}. Passing merchantId in
-   would need a backend authorization change; instead this card renders only
-   when the signed-in account's own shop IS the selected business, and says so
-   plainly otherwise. That way it can never mis-scope a save to the wrong
-   business — the failure mode this guards against is silent and financial.
-════════════════════════════════════════════════════════════════ */
-const PD = {
-  loaded: false, busy: false, mode: 'loading',   /* loading | owner | readonly | error */
-  reason: null, err: null,
-  status: 'NOT_CONFIGURED', active: null, pending: null,
-  productionAuthorized: false, lastFailureReason: null,
-  draftType: 'TILL', draftNumber: '', draftName: '',
-};
-
-const PD_LABEL = {
-  NOT_CONFIGURED: 'Not configured', PENDING_TEST: 'Awaiting verification',
-  TESTING: 'Verifying…', VERIFIED: 'Verified', FAILED: 'Verification failed',
-};
-const PD_TONE = {
-  NOT_CONFIGURED: 'mut', PENDING_TEST: 'warn', TESTING: 'warn',
-  VERIFIED: 'ok', FAILED: 'bad',
-};
-
-async function renderPaymentDestination() {
-  const wrap = document.getElementById('pd-card-wrap');
-  if (!wrap) return;
-  wrap.style.display = 'block';
-  PD.mode = 'loading'; _pdPaint();
-
-  try {
-    const res = await CF('getPaymentDestination')({});
-    const d = (res && res.data) || {};
-
-    /* The selected business must BE this account's shop. If it is not, the save
-       would silently target a different business — refuse rather than mis-scope. */
-    const selected = (WIZ.selectedBiz && (WIZ.selectedBiz.id || WIZ.selectedBiz.merchantId)) || null;
-    if (selected && d.shopId && String(selected) !== String(d.shopId)) {
-      PD.mode = 'readonly';
-      PD.reason = 'Payment details for this business are managed from its own owner account.';
-      _pdPaint();
-      return;
-    }
-
-    PD.status               = d.status || 'NOT_CONFIGURED';
-    PD.active               = d.activeDestination || null;
-    PD.pending              = d.pending || null;
-    PD.productionAuthorized = d.productionAuthorized === true;
-    PD.lastFailureReason    = d.lastFailureReason || null;
-
-    const seed = PD.pending || PD.active;
-    if (seed && !PD.draftNumber) {
-      PD.draftType   = seed.destinationType || 'TILL';
-      PD.draftNumber = seed.destinationNumber || '';
-      PD.draftName   = seed.accountName || '';
-    }
-    PD.mode = 'owner';
-    PD.loaded = true;
-    _pdPaint();
-    _pdSyncReadyTile();
-  } catch (e) {
-    /* A cashier legitimately cannot read this document — rules restrict it to
-       owner/admin. That is not an error to shout about, it is the expected
-       answer for a till operator, so it renders as a calm read-only notice. */
-    const code = (e && (e.code || e.message)) || '';
-    if (/permission-denied|failed-precondition|not-found/i.test(String(code))) {
-      PD.mode = 'readonly';
-      PD.reason = 'Business owner required to change payment details.';
-    } else {
-      PD.mode = 'error';
-      PD.err = (e && e.message) || 'Payment settings could not be loaded.';
-    }
-    _pdPaint();
-  }
-}
-
-function _pdDestCard(d, isActive) {
-  if (!d) return '';
-  const st = d.status || (isActive ? 'VERIFIED' : 'PENDING_TEST');
-  return '<div class="' + (isActive ? 'pd-live' : 'pd-pending') + '">' +
-    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">' +
-      '<span style="font-size:12px;font-weight:700;min-width:0;">' +
-        esc(d.destinationType === 'PAYBILL' ? 'M-PESA PayBill' : 'M-PESA Till') + '</span>' +
-      '<span class="pd-badge ' + (PD_TONE[st] || 'mut') + '">' + esc(PD_LABEL[st] || st) + '</span>' +
-    '</div>' +
-    '<div class="pd-num">' + esc(d.destinationNumber || '—') + '</div>' +
-    '<div class="pd-sub">' + esc(d.accountName || '') +
-      (isActive ? ' · <strong>Currently collecting</strong>' : '') + '</div>' +
-  '</div>';
-}
-
-function _pdPaint() {
-  const host  = document.getElementById('pd-card');
-  const badge = document.getElementById('pd-badge');
-  if (!host) return;
-
-  if (PD.mode === 'loading') {
-    host.innerHTML = '<div class="pd-sub">Loading payment settings…</div>';
-    if (badge) { badge.className = 'pd-badge mut'; badge.textContent = 'Checking…'; }
-    return;
-  }
-  if (PD.mode === 'error') {
-    host.innerHTML = '<div class="pd-note bad">' + esc(PD.err) + '</div>';
-    if (badge) { badge.className = 'pd-badge bad'; badge.textContent = 'Unavailable'; }
-    return;
-  }
-  if (PD.mode === 'readonly') {
-    host.innerHTML = '<div class="pd-note"><strong>' + esc(PD.reason) + '</strong><br>' +
-      'Customer payments go directly to the business owner\'s own M-PESA account. ' +
-      'Ask the owner to set or change it from Business Setup.</div>';
-    if (badge) { badge.className = 'pd-badge mut'; badge.textContent = 'Owner only'; }
-    return;
-  }
-
-  /* Owner mode */
-  const st = PD.active ? 'VERIFIED' : PD.status;
-  if (badge) { badge.className = 'pd-badge ' + (PD_TONE[st] || 'mut'); badge.textContent = PD_LABEL[st] || st; }
-
-  let h = '<div class="pd-sub" style="margin-bottom:10px;">Customer payments go <strong>directly</strong> to your own ' +
-          'M-PESA account. SOKONI does not hold your sale proceeds — its 5% commission ' +
-          '(minimum KES 10 per sale) is billed to you separately.</div>';
-
-  if (PD.active) h += _pdDestCard(PD.active, true);
-  if (PD.pending) {
-    h += '<div class="pd-lbl">Replacement — not yet active</div>' + _pdDestCard(PD.pending, false);
-    if (PD.active) {
-      h += '<div class="pd-note">Your existing destination keeps collecting until the new one is verified.</div>';
-    }
-  }
-  if (!PD.active && !PD.pending) h += '<div class="pd-note">No payment destination configured yet.</div>';
-  if (PD.lastFailureReason) {
-    h += '<div class="pd-note bad">Last verification attempt failed: ' + esc(PD.lastFailureReason) + '</div>';
-  }
-
-  h += '<div class="pd-lbl">' + (PD.active ? 'Change destination' : 'Add your destination') + '</div>' +
-    '<div class="pd-seg" role="radiogroup" aria-label="Destination type">' +
-      '<button type="button" role="radio" aria-checked="' + (PD.draftType === 'TILL' ? 'true' : 'false') + '" ' +
-        'class="' + (PD.draftType === 'TILL' ? 'on' : '') + '" data-pd="type" data-v="TILL">Buy Goods Till</button>' +
-      '<button type="button" role="radio" aria-checked="' + (PD.draftType === 'PAYBILL' ? 'true' : 'false') + '" ' +
-        'class="' + (PD.draftType === 'PAYBILL' ? 'on' : '') + '" data-pd="type" data-v="PAYBILL">PayBill</button>' +
-    '</div>' +
-    '<label class="pd-lbl" for="pd-num" style="margin-top:0;">' +
-      (PD.draftType === 'PAYBILL' ? 'PayBill number' : 'Till number') + '</label>' +
-    '<input id="pd-num" class="pd-in" inputmode="numeric" autocomplete="off" maxlength="7" ' +
-      'placeholder="e.g. 123456" value="' + esc(PD.draftNumber) + '">' +
-    '<label class="pd-lbl" for="pd-name" style="margin-top:0;">Business / account name</label>' +
-    '<input id="pd-name" class="pd-in" maxlength="120" placeholder="Name on your M-PESA account" ' +
-      'value="' + esc(PD.draftName) + '">';
-
-  const canSave = /^\d{5,7}$/.test(PD.draftNumber) && PD.draftName.trim().length > 0 && !PD.busy;
-  h += '<button class="pd-btn solid" data-pd="save"' + (canSave ? '' : ' disabled') + '>' +
-       (PD.busy ? 'Saving…' : 'Save payment destination') + '</button>';
-
-  /* Disabled because the BACKEND refuses to route live customer money to a
-     merchant destination until Safaricom authorises the multi-merchant
-     arrangement. Same wording as Business Setup, deliberately. */
-  if (!PD.productionAuthorized) {
-    h += '<div class="pd-note warn" role="status"><strong>Payment verification unavailable</strong><br>' +
-         'Your M-PESA payment destination is saved securely. SOKONI is awaiting payment-provider ' +
-         'authorization before verification can be activated. You do not need to do anything — ' +
-         'we will enable the test as soon as it is available.</div>' +
-         '<button class="pd-btn" disabled aria-disabled="true" ' +
-         'title="Awaiting payment-provider authorization">Test payment — unavailable</button>';
-  } else {
-    h += '<button class="pd-btn" data-pd="test"' + (PD.pending ? '' : ' disabled') + '>Send test payment</button>';
-  }
-
-  host.innerHTML = h;
-}
-
-/* Keep the existing "Payment Methods" tile consistent with the destination.
-   It counts configured payment METHODS from bootstrap; a verified M-PESA
-   destination is one more of those, so the tile gains a suffix rather than
-   being overwritten with an unrelated number. */
-function _pdSyncReadyTile() {
-  const el = document.getElementById('ready-payments');
-  if (!el || PD.mode !== 'owner') return;
-  const verified = !!(PD.active && PD.active.status === 'VERIFIED');
-  el.title = verified
-    ? 'M-PESA destination verified'
-    : (PD.active || PD.pending ? 'M-PESA destination awaiting verification' : 'No M-PESA destination configured');
-}
-
-/* Delegated — the card is re-rendered wholesale, so per-element listeners would
-   be lost on every repaint. */
-document.addEventListener('click', function (ev) {
-  const el = ev.target && ev.target.closest ? ev.target.closest('[data-pd]') : null;
-  if (!el) return;
-  const act = el.getAttribute('data-pd');
-  if (act === 'type') { PD.draftType = el.getAttribute('data-v') || 'TILL'; _pdPaint(); return; }
-  if (act === 'save') { _pdSave(); return; }
-});
-
-/* Typed values update state and the save button IN PLACE — repainting on every
-   keystroke would tear the keyboard down mid-number on a phone. */
-document.addEventListener('input', function (ev) {
-  const el = ev.target; if (!el || !el.id) return;
-  if (el.id === 'pd-num') {
-    PD.draftNumber = (el.value || '').replace(/\D/g, '').slice(0, 7);
-    if (el.value !== PD.draftNumber) el.value = PD.draftNumber;
-  } else if (el.id === 'pd-name') {
-    PD.draftName = el.value || '';
-  } else return;
-  const btn = document.querySelector('[data-pd="save"]');
-  if (btn) btn.disabled = !(/^\d{5,7}$/.test(PD.draftNumber) && PD.draftName.trim().length > 0 && !PD.busy);
-});
-
-async function _pdSave() {
-  if (PD.busy) return;
-  PD.busy = true; _pdPaint();
-  try {
-    await CF('savePaymentDestination')({
-      destinationType:   PD.draftType,
-      destinationNumber: PD.draftNumber,
-      accountName:       PD.draftName,
+function initSetupPage() {
+  if (!_setupPageReady) {
+    _setupPageReady = true;
+    document.querySelectorAll('#chip-bar .sc-chip').forEach((c) => {
+      c.addEventListener('click', () => _scrollToSec(c.dataset.sec));
     });
-    PD.busy = false;
-    await renderPaymentDestination();
-  } catch (e) {
-    PD.busy = false;
-    PD.err = (e && e.message) || 'Could not save your payment destination.';
-    PD.mode = 'error';
-    _pdPaint();
+    document.getElementById('btn-dev-register').addEventListener('click', _onRegisterDevice);
+    document.getElementById('btn-test-print').addEventListener('click', _testPrintSample);
+    document.getElementById('btn-rcpt-connect').addEventListener('click', _connectPrinter);
+    document.querySelectorAll('.rcpt-size-btn').forEach((b) => b.addEventListener('click', () => _setPaperWidth(b.dataset.paper)));
+    _initEmbeds();
+    _paintCommission();
   }
+  document.getElementById('dev-kind').textContent = _deviceKindLabel();
+  _paintReceipt();
+  _paintChips();
+  initBizStep();
+}
+
+/* ── business → branch → device ─────────────────────────────────────────────────────────────── */
+function onBizSelected() {
+  _devState = null;
+  _setupStatus = null;
+  WIZ.selectedBranch = null;
+  WIZ.bootstrapData = null;
+  _paintChips();
+  _paintDevice();
+  _paintReceipt();
+  initBranchStep();
+  renderSetupChecklist().then(_paintChips);
+  renderLegalGate();
+  _refreshDevice();
+}
+
+function _onBranchConfirmed() {
+  if (!WIZ.selectedBranch) return;
+  saveDraft();
+  _paintChips();
+  _paintDevice();
+  _paintReceipt();
+}
+
+async function _afterProvisioned() {
+  await renderSetupChecklist();
+  await _refreshDevice();
+  _paintChips();
+  _paintDevice();
+  _paintReceipt();
+  _scrollToSec('receipt');
+}
+
+/* ── device ─────────────────────────────────────────────────────────────────────────────────── */
+function _devicePlatform() {
+  const ua = (navigator.userAgent || '').toLowerCase();
+  const p  = String((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '').toLowerCase();
+  if (/android/.test(ua) || /android/.test(p)) return 'android';
+  if (/iphone|ipad|ipod/.test(ua) || /ios/.test(p)) return 'ios';
+  if (/win/.test(p)) return 'windows';
+  if (/linux/.test(p)) return 'linux';
+  return 'web';
+}
+function _deviceType() {
+  const ua = (navigator.userAgent || '').toLowerCase();
+  if (/ipad|tablet/.test(ua)) return 'tablet';
+  if (/mobi|android|iphone/.test(ua)) return 'mobile_pos';
+  return 'pos_terminal';
+}
+function _deviceKindLabel() {
+  const t = _deviceType(), p = _devicePlatform();
+  const kind = t === 'mobile_pos' ? 'Phone' : t === 'tablet' ? 'Tablet' : 'Computer';
+  const os = { android: 'Android', ios: 'iOS', windows: 'Windows', linux: 'Linux', web: 'Browser' }[p];
+  return kind + ' · ' + os;
+}
+function _deviceNameInput() {
+  const v = ((document.getElementById('dev-name') || {}).value || '').trim();
+  return v || (_deviceKindLabel() + ' till');
+}
+function _localDeviceId() {
+  try { return localStorage.getItem('sokoni_device_id'); } catch (_) { return null; }
+}
+
+/* The server's view of THIS device, for the selected business: getDeviceList (owners/admins). A staff account is
+   refused that list — then only a registerDevice answer from this session can confirm the device. */
+async function _refreshDevice() {
+  const mid = _setupMerchantId();
+  const did = _localDeviceId();
+  if (!mid || !did) { _paintDevice(); return; }
+  try {
+    const res = await CF('getDeviceList')({ merchantId: mid });
+    const list = (res.data && Array.isArray(res.data.devices)) ? res.data.devices : [];
+    const me = list.find((d) => String(d.deviceId || '').toLowerCase() === String(did).toLowerCase());
+    if (me && me.status === 'active') {
+      _devState = { registered: true, merchantId: mid, branchId: me.branchId, deviceName: me.deviceName, source: 'getDeviceList' };
+      const nameEl = document.getElementById('dev-name');
+      if (nameEl && !nameEl.value && me.deviceName) nameEl.value = me.deviceName;
+    } else if (!_devState || _devState.merchantId !== mid) {
+      _devState = { registered: false, merchantId: mid, source: 'getDeviceList',
+                    status: me ? me.status : 'not_registered' };
+    }
+  } catch (e) {
+    /* Unknown is not "not registered": keep whatever the server told us this session, and say we could not check. */
+    if (!_devState || _devState.merchantId !== mid) _devState = { registered: null, merchantId: mid, source: 'unavailable' };
+  }
+  _paintDevice();
+  _paintChips();
+}
+
+function _branchName(id) {
+  const b = (_branches || []).find((x) => x.id === id);
+  return b ? (b.name || 'Branch') : null;
+}
+
+function _paintDevice() {
+  const st = document.getElementById('dev-status'), wh = document.getElementById('dev-where');
+  const btn = document.getElementById('btn-dev-register');
+  if (!st || !wh || !btn) return;
+  const biz = WIZ.selectedBiz, br = WIZ.selectedBranch, d = _devState;
+  if (!biz) { st.textContent = 'Choose a business and branch'; wh.textContent = '—'; btn.disabled = true; btn.textContent = 'Register this device'; return; }
+  if (d && d.registered === true && d.merchantId === _setupMerchantId()) {
+    const bname = _branchName(d.branchId) || 'another branch';
+    st.textContent = 'Registered' + (d.deviceName ? ' as “' + d.deviceName + '”' : '');
+    wh.textContent = (biz.name || 'Business') + ' · ' + bname;
+    if (br && br.id !== d.branchId) { btn.disabled = false; btn.textContent = 'Move this device to ' + (br.name || 'this branch'); }
+    else { btn.disabled = !br; btn.textContent = 'Save device name'; }
+    return;
+  }
+  wh.textContent = '—';
+  st.textContent = d && d.registered === null ? 'Could not check with SOKONI just now'
+                 : d && d.status === 'decommissioned' ? 'This device was decommissioned — contact your administrator'
+                 : d && d.error ? 'Not registered — the last attempt was refused'
+                 : 'Not registered yet';
+  btn.disabled = !br;
+  btn.textContent = br ? 'Register this device' : 'Choose a branch first';
+}
+
+async function _onRegisterDevice() {
+  if (!WIZ.selectedBiz || !WIZ.selectedBranch) { _scrollToSec(WIZ.selectedBiz ? 'branch' : 'business'); return; }
+  const btn = document.getElementById('btn-dev-register');
+  btn.disabled = true;
+  document.getElementById('dev-prov').hidden = false;
+  try { await initProvisionStep(); }
+  finally { _paintDevice(); }
+}
+
+/* ── chips ──────────────────────────────────────────────────────────────────────────────────── */
+function _chipStates() {
+  const cl  = (_setupStatus && _setupStatus.checklist) || null;
+  const biz = WIZ.selectedBiz, br = WIZ.selectedBranch, d = _devState;
+  const serverBiz = !!(biz && _bizAllItems.indexOf(biz) >= 0);
+  const serverBr  = !!(br && Array.isArray(_branches) && _branches.indexOf(br) >= 0);
+  const fromList  = (key) => (cl ? (cl[key] ? 'done' : 'attention') : 'pending');
+  return {
+    business:    !serverBiz ? 'pending' : fromList('businessCreated'),
+    branch:      !serverBr  ? 'pending' : fromList('branchCreated'),
+    device:      d && d.registered === true && biz && d.merchantId === _setupMerchantId()
+                   && (!br || d.branchId === br.id) ? 'done'
+                 : d && d.registered === false ? 'attention' : 'pending',
+    payments:    'info',
+    receipt:     !serverBiz ? 'pending' : fromList('taxesConfigured'),
+    hardware:    !serverBiz ? 'pending' : fromList('hardwareConnected'),
+    diagnostics: 'info',
+    commission:  'info',
+  };
+}
+const _CHIP_WORD = { done: 'confirmed', attention: 'needs attention', pending: 'not confirmed yet', info: 'information' };
+function _paintChips() {
+  const states = _chipStates();
+  Object.keys(states).forEach((k) => {
+    const c = document.getElementById('chip-' + k);
+    if (!c) return;
+    c.dataset.state = states[k];
+    c.setAttribute('aria-label', c.textContent.trim() + ': ' + _CHIP_WORD[states[k]]);
+  });
+}
+
+/* ── receipt ────────────────────────────────────────────────────────────────────────────────── */
+/* THE PREMIUM SALES RECEIPT — SokoniReceiptDoc, the ONE receipt contract every SOKONI receipt is rendered through
+   (Merchant Receipts, the print host, the printer console). This page adds no layout of its own: the sample is a
+   real SokoniReceiptDoc document marked SAMPLE, with the merchant's real identity where the server provided it —
+   business, branch, phone, KRA PIN — and every line absent when its data is absent. Delivery/pickup, eTIMS and the
+   two equal codes (mysokoni.co.ke and KRA eTIMS, "pending" until KRA issues one) come from the same contract. */
+function _storeFacts() {
+  const b = (WIZ.bootstrapData && (WIZ.bootstrapData.business || WIZ.bootstrapData.merchant)) || {};
+  return {
+    name:   (WIZ.selectedBiz && WIZ.selectedBiz.name) || b.name || '',
+    branch: (WIZ.selectedBranch && WIZ.selectedBranch.name) || '',
+    kraPin: b.kraPin || b.kra_pin || (b.tax && b.tax.kraPin) || '',
+    phone:  b.phone || b.phoneNumber || '',
+    email:  b.email || '',
+    address: b.address || b.location || '',
+    logo:   (WIZ.selectedBiz && WIZ.selectedBiz.logo) || b.logo || null,
+  };
+}
+function _sampleInput() {
+  const s = _storeFacts();
+  const C = window.SokoniCash;
+  const settlement = C ? C.settle({ totalMinor: 10000, tenders: [{ method: 'cash', amountMinor: 10000 }] }) : null;
+  return {
+    sample: true,
+    receiptId: 'SAMPLE-0001',
+    items: [{ name: 'Sample item', qty: 1, unitMinor: 10000, lineMinor: 10000 }],
+    totals: { subtotalMinor: 10000, taxMinor: 1379, totalMinor: 10000 },
+    settlement,
+    shop: { name: s.name, phone: s.phone, email: s.email, address: s.address, logo: s.logo, branch: s.branch },
+    tax: { kraPin: s.kraPin },
+  };
+}
+function _sampleDoc() {
+  const R = window.SokoniReceiptDoc;
+  if (!R || typeof R.render !== 'function') return null;
+  return R.render(_sampleInput(), { sample: true });
+}
+function _qrCanvas(url, size) {
+  try { if (window.SokoniQR && typeof window.SokoniQR.generateCanvas === 'function') return window.SokoniQR.generateCanvas(url, size); }
+  catch (_) {}
+  return null;
+}
+/* PAPER SIZE — the till's own setting in the print service (the same one the printer uses), 58mm or 80mm. */
+function _paperWidth() {
+  try { const t = window.PosPrintService && window.PosPrintService.till; const w = t && t.get('default').paperWidth; return w === '80mm' ? '80mm' : '58mm'; }
+  catch (_) { return '58mm'; }
+}
+function _setPaperWidth(w) {
+  try { const t = window.PosPrintService && window.PosPrintService.till; if (t && typeof t.update === 'function') t.update('default', { paperWidth: w }); } catch (_) {}
+  _paintReceipt();
+}
+function _paintReceipt() {
+  const host = document.getElementById('rcpt-preview');
+  if (!host) return;
+  const paper = _paperWidth();
+  host.dataset.paper = paper;
+  document.querySelectorAll('.rcpt-size-btn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.paper === paper)));
+  const R = window.SokoniReceiptDoc;
+  const doc = _sampleDoc();
+  if (!doc) { host.textContent = 'The receipt design is still loading…'; return; }
+  const text = R.toText(doc, { cols: paper === '80mm' ? 48 : 32, qrSentinel: true });
+  const parts = text.split(R.QR_SENTINEL);
+  const closing = (doc.blocks || []).find((x) => x && x.type === 'closing') || {};
+  host.innerHTML = '';
+  const pre = (t) => { const p = document.createElement('pre'); p.className = 'rc-text'; p.textContent = t.replace(/^\n+|\n+$/g, ''); return p; };
+  host.appendChild(pre(parts[0] || ''));
+  if (parts.length > 1) {
+    const pair = document.createElement('div');
+    pair.className = 'rc-qrs';
+    const cell = (qr, fallback) => {
+      const fig = document.createElement('figure'); fig.className = 'rc-qr';
+      const box = document.createElement('div'); box.className = 'rc-qr-box';
+      const cv = qr && qr.url ? _qrCanvas(qr.url, 120) : null;
+      if (cv) box.appendChild(cv);
+      else { box.classList.add('rc-qr-pending'); box.textContent = fallback; }
+      const cap = document.createElement('figcaption'); cap.textContent = (qr && qr.caption) || '';
+      fig.appendChild(box); fig.appendChild(cap);
+      return fig;
+    };
+    pair.appendChild(cell(closing.qr, 'SOKONI'));
+    pair.appendChild(cell(closing.kraQr, 'eTIMS pending'));
+    host.appendChild(pair);
+    host.appendChild(pre(parts[1] || ''));
+  }
+}
+
+function _printerConnected() {
+  try { return !!((window.SokoniPrinter && window.SokoniPrinter.connected) || (window.PrinterManager && window.PrinterManager.connected)); }
+  catch (_) { return false; }
+}
+async function _connectPrinter() {
+  const st = document.getElementById('rcpt-status');
+  if (!window.PosPrintService || typeof window.PosPrintService.connect !== 'function') {
+    st.textContent = 'The printer service did not load on this page. Use the Diagnostics section below to pair a printer.';
+    return;
+  }
+  try {
+    const ok = await window.PosPrintService.connect();
+    st.textContent = ok ? 'Printer connected. Tap Test print.' : 'No printer was chosen.';
+  } catch (e) { st.textContent = 'Could not connect: ' + ((e && e.message) || 'unknown error'); }
+}
+/* A PAIRED printer gets the SAMPLE premium receipt through the same print service every sale uses (useDoc: the
+   SokoniReceiptDoc document, not the legacy layout). With none connected, the device's own print dialog opens on
+   the sample. Neither case is reported as "printed" unless it was. */
+async function _testPrintSample() {
+  const st  = document.getElementById('rcpt-status');
+  const svc = window.PosPrintService;
+  st.textContent = 'Preparing the sample receipt…';
+  _paintReceipt();
+  let connected = _printerConnected();
+  if (!connected && svc && typeof svc.autoReconnect === 'function') {
+    try { await svc.autoReconnect(); } catch (_) {}
+    connected = _printerConnected();
+  }
+  const doc = _sampleDoc();
+  if (connected && doc && svc && typeof svc.printReceipt === 'function') {
+    try {
+      const r = await svc.printReceipt(Object.assign({ id: 'sample_' + Date.now() }, _sampleInput()),
+        { __fromShell: true, sample: true, useDoc: true, doc });
+      if (r && r.status !== 'failed' && !r.queued && !r.skipped) {
+        st.textContent = 'Sample sent to your printer. Check that it printed correctly.';
+        return;
+      }
+      st.textContent = 'Your printer did not take the sample (' + ((r && (r.error || r.status)) || 'no answer') + '). Opening the print dialog instead.';
+    } catch (e) {
+      st.textContent = 'Your printer did not take the sample (' + ((e && e.message) || 'error') + '). Opening the print dialog instead.';
+    }
+  } else {
+    st.textContent = 'No printer is connected, so your device\'s print dialog is opening — choose a printer there.';
+  }
+  /* The print dialog's page is the receipt's own paper width. */
+  let pg = document.getElementById('rcpt-page-style');
+  if (!pg) { pg = document.createElement('style'); pg.id = 'rcpt-page-style'; document.head.appendChild(pg); }
+  pg.textContent = '@page { size: ' + _paperWidth() + ' auto; margin: 0; }';
+  document.documentElement.classList.add('printing-receipt');
+  try { window.print(); } finally {
+    setTimeout(() => document.documentElement.classList.remove('printing-receipt'), 500);
+  }
+}
+
+/* ── embedded consoles (hardware wizard, diagnostics) ───────────────────────────────────────── */
+function _sizeEmbed(frame) {
+  try {
+    const doc = frame.contentDocument;
+    if (!doc || !doc.documentElement) return;
+    const h = Math.max(doc.documentElement.scrollHeight, doc.body ? doc.body.scrollHeight : 0);
+    if (h > 0) frame.style.height = Math.min(Math.max(h, 320), 6000) + 'px';
+  } catch (_) { /* cross-origin never happens here; ignore */ }
+}
+function _initEmbeds() {
+  const frames = Array.from(document.querySelectorAll('iframe.setup-embed'));
+  const load = (f) => {
+    if (f.src || !f.dataset.src) return;
+    f.addEventListener('load', () => {
+      _sizeEmbed(f);
+      try {
+        const RO = f.contentWindow && f.contentWindow.ResizeObserver;
+        if (RO && f.contentDocument && f.contentDocument.body) new RO(() => _sizeEmbed(f)).observe(f.contentDocument.body);
+      } catch (_) {}
+      setTimeout(() => _sizeEmbed(f), 1200);
+    });
+    f.src = f.dataset.src;
+  };
+  if (!('IntersectionObserver' in window)) { frames.forEach(load); return; }
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e) => { if (e.isIntersecting) { load(e.target); io.unobserve(e.target); } });
+  }, { root: document.getElementById('step-4'), rootMargin: '600px 0px' });
+  frames.forEach((f) => io.observe(f));
+}
+
+/* ── commission ─────────────────────────────────────────────────────────────────────────────── */
+function _paintCommission() {
+  const pos = document.getElementById('comm-pos-rate'), onl = document.getElementById('comm-online-rate');
+  if (pos) pos.textContent = COMMISSION_POLICY.posPct + '%';
+  if (onl) onl.textContent = COMMISSION_POLICY.onlinePct + '%';
+  /* No deployed endpoint on this line returns the merchant's outstanding balance, so none is shown — "—", never 0. */
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -3796,7 +3991,7 @@ const SETUP_TASKS = [
     skip:    { text: 'Skip — add later', mark: 'inventoryReady' } },
   { key: 'hardwareConnected',  label: 'Hardware',     required: true,
     desc: 'Connect a printer, scanner or cash drawer — or just use this device.',
-    primary: { text: 'Set up hardware', href: 'pos-hardware-wizard.html' },
+    primary: { text: 'Set up hardware', href: '#sec-hardware' },
     skip:    { text: 'Use this device only', mark: 'hardwareConnected' } },
   { key: 'testSaleSuccessful', label: 'Test sale',    required: true,
     desc: 'Run one practice sale so you know the flow before your first customer.',
@@ -3978,7 +4173,7 @@ function _paintSetupGuide(s) {
            honest state; the wizard implied they had never set one up. Reconnect stays
            an explicit tap — Web Bluetooth cannot re-open a GATT link without one, so
            an automatic claim here would be a lie the cashier discovers at the till. */
-        btns.push('<button class="setup-act setup-act-primary" data-href="/pos-printer-setup.html">' +
+        btns.push('<button class="setup-act setup-act-primary" data-href="#sec-diagnostics">' +
           esc('Reconnect ' + (_pr.name || 'your printer')) + '</button>');
       } else if (t.primary) {
         const attr = t.primary.mark ? `data-mark="${t.primary.mark}"` : `data-href="${t.primary.href}"`;
@@ -4001,6 +4196,8 @@ function _paintSetupGuide(s) {
   /* Wire actions (delegated once per paint). */
   list.querySelectorAll('.setup-act').forEach((btn) => {
     btn.addEventListener('click', () => {
+      /* The hardware wizard and the printer console are sections of this page now — scroll, don't leave. */
+      if (btn.dataset.href && btn.dataset.href.indexOf('#sec-') === 0) { _scrollToSec(btn.dataset.href.slice(5)); return; }
       if (btn.dataset.href) { window.location.href = btn.dataset.href; return; }
       if (btn.dataset.mark) _completeSetupStep(btn.dataset.mark, btn);
     });
@@ -4059,24 +4256,28 @@ document.getElementById('btn-open-pos').addEventListener('click', () => {
   window.location.href = _posTarget();
 });
 
-document.getElementById('btn-configure-hw').addEventListener('click', () => {
-  window.location.href = 'pos-hardware-wizard.html';
-});
 
 /* ═══════════════════════════════════════════════════════════════
    BOOT — check if setup already done
 ════════════════════════════════════════════════════════════════ */
 (function boot() {
-  const goLive = () => window.location.replace(_posTarget());
+  /* EDIT MODE (?edit=1): the merchant came here on purpose, to change something. Setup is done once, but every
+     section stays editable — so an already-set-up till must NOT be bounced to the POS in this mode. */
+  const EDIT = /[?&](edit|manage)=1(&|$)/.test(location.search);
+  const goLive = () => { if (!EDIT) window.location.replace(_posTarget()); };
+  /* A signed-in merchant whose setup is not finished (or who is editing) lands on the setup page itself — welcome
+     and the network check are first-run screens. */
+  const openSetup = (user) => { WIZ.user = user; if (WIZ.currentStep < 4) goToStep(4); };
 
   // Fast path: previously-completed setup + already signed in.
-  if (localStorage.getItem('sokoni_setup_complete') === '1' && _auth.currentUser) { goLive(); return; }
+  if (!EDIT && localStorage.getItem('sokoni_setup_complete') === '1' && _auth.currentUser) { goLive(); return; }
 
   // Authoritative resume gate (mandatory first-run spec): the merchant enters live
   // POS ONLY when getSetupStatus.productionReady is true. Otherwise the wizard
   // resumes from the first incomplete step — never restarts.
   _auth.onAuthStateChanged(async (user) => {
     if (!user) return;
+    if (EDIT) { openSetup(user); return; }
     try {
       const res = await SPOS('getSetupStatus')({});
       const s = (res && res.data) || {};
@@ -4089,6 +4290,7 @@ document.getElementById('btn-configure-hw').addEventListener('click', () => {
       if (s.hasBusiness && !s.productionReady) {
         localStorage.removeItem('sokoni_setup_complete');
         WIZ.resumeNextStep = s.nextStep || null;   // consumed by the business/ready steps
+        openSetup(user);
       }
       // No business → the wizard's create flow handles it.
     } catch (_) {
@@ -4114,6 +4316,7 @@ document.getElementById('btn-configure-hw').addEventListener('click', () => {
         if (s2.hasBusiness && !s2.productionReady) {
           localStorage.removeItem('sokoni_setup_complete');
           WIZ.resumeNextStep = s2.nextStep || null;             /* resume, never restart */
+          openSetup(user);
           return;
         }
         /* No business on the authoritative source → genuinely a new merchant. */
@@ -4135,6 +4338,17 @@ document.getElementById('btn-configure-hw').addEventListener('click', () => {
      (line ~2362); with it undefined that call threw ReferenceError and left step
      4 blank. Closing the tag properly restores _skWhy. -->
 <script src="sokoni-activation-preflight.js" defer></script>
+<!-- Receipt section: the QR renderer and the SAME print stack the till uses (same order as pos-printer-setup.html),
+     so Test print sends the sample through the production print path. -->
+<script src="sokoni-qr.js" defer></script>
+<script src="sokoni-universal-printer.js" defer></script>
+<script src="sokoni-bluetooth-printer.js" defer></script>
+<script src="sokoni-printer-manager.js" defer></script>
+<script src="sokoni-receipt-id.js" defer></script>
+<script src="sokoni-cash.js" defer></script>
+<script src="sokoni-fulfilment.js" defer></script>
+<script src="sokoni-receipt.js" defer></script>
+<script src="sokoni-pos-print-service.js" defer></script>
 <script>
 /* Turn a caught error into advice that matches its cause. Blaming the
    connection for a permission failure sends people to reboot a router while the

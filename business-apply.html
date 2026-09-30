@@ -60,6 +60,8 @@ h1{font-size:clamp(25px,6vw,36px);font-weight:900;letter-spacing:-.025em;margin:
   font-size:9.5px;font-weight:800;letter-spacing:.08em;
 }
 .badge.dual{background:var(--ga);color:var(--g);border:1px solid rgba(113,255,0,.3)}
+.ws-link{display:inline-block;padding:9px 12px;border-radius:10px;background:var(--ga);border:1px solid rgba(113,255,0,.3);color:var(--g);font-weight:800;font-size:13px;text-decoration:none}
+.ws-link:focus-visible{outline:2px solid var(--g);outline-offset:2px}
 
 /* ── Choice cards ───────────────────────────────────────────────────────── */
 .sec-h{
@@ -241,6 +243,24 @@ const esc = (s) => String(s == null ? '' : s).replace(/[<>"'&]/g,
 
 const state = { choice: null, scope: null, apps: {}, loading: true, busy: false };
 
+/* ── Deep link from Earn with SOKONI (opportunity.html), 2026-09-30 ──
+   ?offer=products|services|both preselects the choice once the real status has loaded (an
+   approved or in-review side stays disabled — render() clears a disabled choice).
+   ?category=&label= say WHICH way to earn the applicant came from. They become the
+   application's category / categoryLabel, two fields the shared PROFILE_FIELDS allow-list
+   already accepts — a label for the reviewer, never a role, a claim or a status. */
+const _qs = new URLSearchParams(location.search);
+const OFFER = ['products', 'services', 'both'].includes(_qs.get('offer')) ? _qs.get('offer') : null;
+const HINT = {};
+{ const c = String(_qs.get('category') || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40);
+  const l = String(_qs.get('label') || '').replace(/[<>"'&]/g, '').trim().slice(0, 60);
+  if (c) HINT.category = c;
+  if (l) HINT.categoryLabel = l; }
+let _offerApplied = false;
+/* The workspace each approved side opens — the same destinations as
+   sokoni-role-authority.js WORKSPACE_HUBS (seller / provider). */
+const WORKSPACE = { products: 'merchant-v2.html', services: 'provider-dashboard.html' };
+
 /* Mirrors functions/shared/business-scope.js. The SERVER is authoritative —
    this is presentation only, and every write it leads to is re-decided there.
    Kept deliberately identical in its strictness: unknown status is NOT active. */
@@ -268,6 +288,7 @@ async function load() {
     services: appP && appP.exists() ? String(appP.data().status || '') : null,
   };
   state.loading = false;
+  if (OFFER && !_offerApplied) { _offerApplied = true; if (!state.choice) state.choice = OFFER; }
   render();
 }
 
@@ -306,6 +327,12 @@ function render() {
   if (p === 'approved' && s === 'approved') {
     html += '<div style="margin-top:12px"><span class="badge dual">DUAL BUSINESS</span></div>';
   }
+  /* An approved side opens its workspace from here — approval is where the dashboard is
+     granted, so the applicant should not have to go looking for it. */
+  const open = [];
+  if (p === 'approved') open.push('<a class="ws-link" href="' + WORKSPACE.products + '">Open your shop workspace →</a>');
+  if (s === 'approved') open.push('<a class="ws-link" href="' + WORKSPACE.services + '">Open your provider dashboard →</a>');
+  if (open.length) html += '<div style="margin-top:12px;display:flex;flex-direction:column;gap:6px">' + open.join('') + '</div>';
   $('statusBody').innerHTML = html;
 
   /* ── Choice availability ── */
@@ -399,8 +426,8 @@ window.App = {
       if (!prim) { failed.push([side, 'The application module did not load. Refresh and try again.']); continue; }
       try {
         const r = await prim.submit({
-          uid, fs, agreementAccepted: true, source: 'business-apply',
-          profile: {},
+          uid, fs, agreementAccepted: true, source: OFFER ? 'earn-with-sokoni' : 'business-apply',
+          profile: Object.assign({}, HINT),
         });
         if (r.ok) done.push(side);
         else failed.push([side, r.message || r.reason || 'Refused.']);

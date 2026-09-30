@@ -711,19 +711,29 @@ exports.wfGetBusinessMembers = onCall({ region: 'us-central1' }, async (request)
 exports.wfGetMyWorkspaces = onCall({ region: 'us-central1' }, async (request) => {
   const uid = _assertAuth(request);
 
-  const [membershipsSnap, invitesSnap] = await Promise.all([
+  /* NO orderBy ON THESE READS. `where(uid) + orderBy(addedAt)` and
+     `where(invitedUid) + where(status) + orderBy(sentAt)` each need a composite index this project
+     does not have: on 2026-09-30 the invitations read failed in production with
+     FAILED_PRECONDITION "The query requires an index", the callable threw an unhandled error and
+     account-centre received `internal`. One employee holds a handful of memberships and invites,
+     so the equality reads below (bounded) are sorted here instead — no index to deploy, no
+     index-governance dependency, same order the caller always received (newest first). */
+  const _ms = ts => (ts && typeof ts.toMillis === 'function') ? ts.toMillis()
+                  : (ts && ts.seconds ? ts.seconds * 1000 : (typeof ts === 'number' ? ts : null));
+  const _newestFirst = (field) => (x, y) => (_ms(y.data()[field]) || 0) - (_ms(x.data()[field]) || 0);
+  const [membershipsRaw, invitesRaw] = await Promise.all([
     db.collection('workspaceMemberships')
       .where('uid', '==', uid)
-      .orderBy('addedAt', 'desc')
+      .limit(200)
       .get(),
     db.collection('workspaceInvitations')
       .where('invitedUid', '==', uid)
       .where('status', '==', 'pending')
-      .orderBy('sentAt', 'desc')
+      .limit(200)
       .get(),
   ]);
-
-  const _ms = ts => ts?.seconds ? ts.seconds * 1000 : null;
+  const membershipsSnap = { docs: membershipsRaw.docs.slice().sort(_newestFirst('addedAt')) };
+  const invitesSnap     = { docs: invitesRaw.docs.slice().sort(_newestFirst('sentAt')) };
 
   const active = [], past = [];
   membershipsSnap.docs.forEach(d => {

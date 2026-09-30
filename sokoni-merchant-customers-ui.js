@@ -224,7 +224,7 @@
     function load() {
       if (!ctx.scope || !ctx.scope.sellerUid) { S.phase = 'not_signed_in'; paint(); return Promise.resolve(); }
       S.phase = 'loading'; paint();
-      return MC.listCustomers({ scope: ctx.scope, db: ctx.db }).then(function (r) {
+      return MC.listCustomers({ scope: ctx.scope, db: ctx.db, callFacts: ctx.callFacts }).then(function (r) {
         if (!r.ok) { S.phase = 'error'; S.error = r.error; paint(); return; }
         S.customers = r.customers || [];
         S.phase = 'ready'; paint();

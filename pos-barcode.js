@@ -19,18 +19,78 @@ const PosBarcode = (function () {
   let _lastTime = 0;
 
   /* ── Init ────────────────────────────────────────────────────── */
+  /* ── ZXing fallback decoder ─────────────────────────────────────────
+     2026-09-30: the merchant's scanner reported "unavailable". BarcodeDetector is the only
+     decoder this module had, and it is honest only on Android Chrome: on Windows / Linux
+     Chrome and Edge the constructor exists but getSupportedFormats() is EMPTY and every
+     detect() rejects ("Barcode detection service unavailable"); on iOS Safari and Firefox
+     the API is absent. sokoni-barcode.js already carries a ZXing (WASM) fallback from the
+     same CDN — this is the same engine, so every scan path here (live camera, image upload,
+     hardware wedge) resolves on every device, still through the ONE submitScannedCode. */
+  const ZXING_CDN = 'https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js';
+  let _zxingP = null, _zxingReader = null, _zxingFailed = false, _nativeUnusable = false;
+  function _loadZXing() {
+    if (typeof window.ZXing !== 'undefined') return Promise.resolve(window.ZXing);
+    if (_zxingP) return _zxingP;
+    _zxingP = new Promise((res, rej) => {
+      const sc = document.createElement('script');
+      sc.src = ZXING_CDN; sc.async = true;
+      sc.onload  = () => (typeof window.ZXing !== 'undefined' ? res(window.ZXing) : rej(new Error('ZXing did not define a global')));
+      sc.onerror = () => rej(new Error('ZXing failed to load'));
+      document.head.appendChild(sc);
+    }).catch((e) => { _zxingFailed = true; _zxingP = null; throw e; });
+    return _zxingP;
+  }
+  async function _zxing() {
+    const Z = await _loadZXing();
+    if (!_zxingReader) _zxingReader = new Z.BrowserMultiFormatReader();
+    return _zxingReader;
+  }
+  /* Any image source → a canvas ZXing can read (File/Blob, <img>, <video>, <canvas>, ImageBitmap). */
+  async function _toCanvas(src) {
+    let bmp = null, w = 0, h = 0, drawable = src;
+    if (typeof Blob !== 'undefined' && src instanceof Blob) { bmp = await createImageBitmap(src); drawable = bmp; }
+    if (typeof HTMLCanvasElement !== 'undefined' && drawable instanceof HTMLCanvasElement) return drawable;
+    if (typeof HTMLVideoElement !== 'undefined' && drawable instanceof HTMLVideoElement) { w = drawable.videoWidth; h = drawable.videoHeight; }
+    else { w = drawable.naturalWidth || drawable.width || 0; h = drawable.naturalHeight || drawable.height || 0; }
+    if (!w || !h) { try { bmp && bmp.close && bmp.close(); } catch (_) {} throw new Error('empty_frame'); }
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    c.getContext('2d').drawImage(drawable, 0, 0, w, h);
+    try { bmp && bmp.close && bmp.close(); } catch (_) {}
+    return c;
+  }
+  async function _zxingDecode(src) {
+    const reader = await _zxing();
+    const canvas = await _toCanvas(src);
+    try {
+      const result = reader.decodeFromCanvas(canvas);
+      const raw = result && typeof result.getText === 'function' ? result.getText() : null;
+      if (typeof raw !== 'string' || !raw.trim()) return { ok: false, reason: 'no_barcode_found' };
+      const fmt = result.getBarcodeFormat ? String(result.getBarcodeFormat()) : null;
+      return { ok: true, code: raw.trim(), format: fmt };
+    } catch (e) {
+      /* ZXing signals "nothing in this frame" as NotFoundException — a real answer, not a fault */
+      return { ok: false, reason: 'no_barcode_found' };
+    }
+  }
+  /* A decoder exists when the native one is usable, or ZXing is available / not yet proven unavailable. */
+  function hasDecoder() { return !!_detector || (!_zxingFailed); }
+
   async function init() {
     if ('BarcodeDetector' in window) {
       try {
         const fmts = await BarcodeDetector.getSupportedFormats().catch(() => []);
-        const use  = fmts.length
-          ? fmts
-          : ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code','data_matrix'];
-        _detector = new BarcodeDetector({ formats: use });
+        if (fmts.length) {
+          _detector = new BarcodeDetector({ formats: fmts });
+        } else {
+          /* present but empty = unusable (desktop Chrome/Edge): fall through to ZXing */
+          _nativeUnusable = true; _detector = null;
+        }
       } catch (_) { _detector = null; }
     }
+    if (!_detector) { _loadZXing().catch(() => {}); }   /* warm the fallback; failure is recorded, not thrown */
     document.addEventListener('keydown', _onKey, true);
-    return { detector: !!_detector };
+    return { detector: !!_detector, fallback: !_detector ? 'zxing' : null, nativeUnusable: _nativeUnusable };
   }
 
   /* ── Decode a barcode from a STILL IMAGE ─────────────────────────
@@ -48,7 +108,11 @@ const PosBarcode = (function () {
      real answer the UI can act on, not an error to swallow. */
   async function decodeImage(fileOrBlob) {
     if (!fileOrBlob) return { ok: false, reason: 'no_image' };
-    if (!_detector) return { ok: false, reason: 'no_decoder' };
+    if (!_detector) {
+      if (_zxingFailed) return { ok: false, reason: 'no_decoder' };
+      try { return await _zxingDecode(fileOrBlob); }
+      catch (e) { return { ok: false, reason: (e && e.message === 'empty_frame') ? 'unreadable_image' : 'no_decoder' }; }
+    }
 
     let bitmap = null;
     try {
@@ -70,6 +134,12 @@ const PosBarcode = (function () {
 
       return { ok: true, code: raw.trim(), format: found[0].format || null };
     } catch (err) {
+      /* Desktop Chrome/Edge: the native detector exists but its service does not. Switch this
+         session to ZXing and answer the SAME frame with it, so the failure is invisible. */
+      if (err && /NotSupported|not supported|unavailable/i.test(String(err.name || '') + ' ' + String(err.message || ''))) {
+        _nativeUnusable = true; _detector = null;
+        try { return await _zxingDecode(fileOrBlob); } catch (_) { return { ok: false, reason: 'no_decoder' }; }
+      }
       return { ok: false, reason: 'decode_failed' };
     } finally {
       try { bitmap && bitmap.close && bitmap.close(); } catch (_) {}
@@ -151,8 +221,17 @@ const PosBarcode = (function () {
           } catch (_) {}
         }, 350);
       } else {
-        /* Fallback: alert user that manual entry is needed */
-        console.warn('[PosBarcode] BarcodeDetector not available — use hardware scanner or manual entry');
+        /* ZXing continuous decode from the same <video>; a load failure leaves the hardware
+           wedge and manual entry, and says so once. */
+        try {
+          const reader = await _zxing();
+          reader.decodeFromVideoElement(videoEl, (result) => {
+            if (_active && result && typeof result.getText === 'function') _emit(result.getText());
+          });
+          _zxingLive = reader;
+        } catch (e) {
+          console.warn('[PosBarcode] no camera decoder on this device (' + (e && e.message) + ') — use hardware scanner or manual entry');
+        }
       }
       return true;
     } catch (e) {
@@ -161,9 +240,11 @@ const PosBarcode = (function () {
     }
   }
 
+  let _zxingLive = null;
   function stopCamera() {
     _active = false;
     clearInterval(_scanTimer);
+    if (_zxingLive) { try { _zxingLive.reset(); } catch (_) {} _zxingLive = null; }
     if (_stream)  { _stream.getTracks().forEach(t => t.stop()); _stream = null; }
     if (_videoEl) { _videoEl.srcObject = null; _videoEl = null; }
   }
@@ -260,7 +341,9 @@ const PosBarcode = (function () {
   return { init, startCamera, stopCamera, setCallback, clearCallback, destroy, generateSVG, generateProductBarcode, ean13CheckDigit,
            /* Premium Scanner surface. decodeImage extracts a VALUE; submitScannedCode routes
               it through the same debounce and callback every other scan path uses. */
-           decodeImage, submitScannedCode, hasDecoder: () => !!_detector };
+           decodeImage, submitScannedCode, hasDecoder,
+           /* test seams — the fallback plumbing, so a suite can prove the device matrix without a camera */
+           _fallback: { loadZXing: _loadZXing, zxingDecode: _zxingDecode, state: () => ({ native: !!_detector, nativeUnusable: _nativeUnusable, zxingFailed: _zxingFailed }) } };
 })();
 
 window.PosBarcode = PosBarcode;

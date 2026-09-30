@@ -1963,6 +1963,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
          with. The dashboard renders no tile for a destination that does not resolve. */
       resolves: function (id) { return !!CONTRACT.resolve(id); },
       db: {
+        /* Server-authoritative Business Pulse (till + online, computed for the signed-in merchant). */
+        readFacts:          _callable('merchantDashboardFacts'),
         queryOrders:        function (spec) { return _q(spec, 'Orders are not available yet.'); },
         queryProducts:      function (spec) { return _q(spec, 'The product catalogue is not available yet.'); },
         queryStats:         function (spec) { return _q(spec, 'Product statistics are not available yet.'); },
@@ -2123,8 +2125,38 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         return import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js').then(function (fn) {
           return fn.httpsCallable(fn.getFunctions(window.firebaseApp), name)(payload);
         });
+      }).catch(function (e) {
+        /* OBSERVABILITY, NOT RECOVERY. On 2026-09-30 the till and POS kept prompting "internal"
+           while the dispatcher's logs showed NO request from the merchant at all — the failure
+           happened in the browser before the call landed (the SDK reports a failed fetch, a
+           blocked request or a non-JSON reply as code 'internal'). Nothing recorded it. A failed
+           callable is now reported with the facts needed to tell those apart, then rethrown
+           unchanged so every caller's own handling is exactly as before. */
+        _reportCallableFailure(name, e);
+        throw e;
       });
     };
+  }
+  function _reportCallableFailure (name, e) {
+    try {
+      var code = (e && (e.code || e.name)) || 'unknown';
+      if (!/internal|unavailable|deadline|not-found|unauthenticated|failed-precondition/i.test(String(code))) return;
+      var payload = {
+        kind: 'callable-failed', name: String(name), code: String(code).slice(0, 40),
+        message: String((e && e.message) || '').slice(0, 200),
+        details: (function () { try { return JSON.stringify(e && e.details).slice(0, 200); } catch (_) { return null; } })(),
+        online: (typeof navigator !== 'undefined') ? navigator.onLine : null,
+        appCheck: window.__sokoniAppCheckState || null,
+        page: location.pathname + location.hash.slice(0, 40),
+        ua: (typeof navigator !== 'undefined') ? navigator.userAgent.slice(0, 120) : null,
+      };
+      /* Reuse the ONE diagnostics callable the crash sentinel already uses; never loop on itself. */
+      if (name === 'logClientDiagnostic') return;
+      import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js').then(function (fn) {
+        return fn.httpsCallable(fn.getFunctions(window.firebaseApp, 'us-central1'), 'logClientDiagnostic')({ event: 'callable-failed', severity: 'error', context: payload });
+      }).catch(function () {});
+      try { console.warn('[merchant-v2] callable failed', payload); } catch (_) {}
+    } catch (_) {}
   }
 
 
@@ -2206,6 +2238,16 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         var data = Object.assign({}, o.data, { updatedAt: m.fs.serverTimestamp() });
         if (o.mode === 'create') {
           data.createdAt = m.fs.serverTimestamp();
+          /* uploadedAt is the catalogue's ORDERING KEY (sokoni-db.js orders by it; a product
+             without it is not listed on Home). This writer never stamped it (writer census
+             2026-09-30), so every merchant-v2 product would have been invisible to the ordered
+             catalogue. It is a NUMBER (epoch ms) on purpose: 96 of 97 live products carry a
+             numeric uploadedAt, and Firestore orders by TYPE before value, so a Timestamp here
+             would sort above every numeric row forever regardless of age. createdAt keeps its
+             server-time semantics unchanged. Whether uploadedAt should become server-authoritative
+             (a rule on request.time, or an onCreate trigger) is a separate gate; until then this
+             is the same browser-clock value every other writer records. Never rewritten on edit. */
+          if (typeof data.uploadedAt !== 'number' || !isFinite(data.uploadedAt)) data.uploadedAt = Date.now();
           return m.fs.runTransaction(window.firebaseDB, function (tx) {
             return tx.get(ref).then(function (snap) {
               /* A replay claims the SAME document rather than adding a second.
@@ -2496,6 +2538,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                     db: _mdb, onToast: toast }; } },
     customers:  { global: 'SokoniMerchantCustomersUI', ctx: function () { return {
                     scope: _scope(), shopName: _shopName(), origin: location.origin, db: _mdb,
+                    callFacts: _callable('merchantDashboardFacts'), /* customers derived from real sales when no profiles exist */
                     callProfile: _callable('getCustomerProfile'), callDashboard: _callable('getCRMDashboard'),
                     onToast: toast }; } },
     shop:       { global: 'SokoniMerchantStoreUI',     ctx: function () { return {

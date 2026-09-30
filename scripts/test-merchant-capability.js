@@ -169,11 +169,13 @@ CAP.ALWAYS_NATIVE.forEach(id => {
         a && b ? 'v1=' + a.outcome + ' v2=' + b.outcome : 'route missing');
 });
 
+/* The negotiation surface is DOWNGRADE ∪ WITHHOLD and nothing else. Both sets are frozen
+   BY NAME below, and this check is derived from them rather than from a literal count.
+   A bare count went stale silently: it said 12 while the comment beside it said 10, and it
+   stayed at 12 while `offers` shipped — the gate is change-scoped, so nothing ran to catch
+   it. Naming the members instead means a route that becomes negotiable unexpectedly still
+   fails here, while a DELIBERATE new surface is added to one list, in the open. */
 const negotiated = v1.rows.filter(r => r.outcome !== 'native').map(r => r.id).sort();
-/* 10 since Products became native in v2. A route only becomes negotiable when one shell
-   renders it natively and the other does not; products was kind:'seller' — identical in
-   both shells — until the merchant-v2 migration. */
-check('exactly 12 routes need negotiation in v1', negotiated.length === 12, negotiated.join(','));
 
 /* ── 3. PROOF 1 — v1 + certified registry: no blank native surfaces ──────── */
 console.log('\n3. PROOF — Merchant v1 loading the CERTIFIED registry');
@@ -181,14 +183,30 @@ console.log('\n3. PROOF — Merchant v1 loading the CERTIFIED registry');
 check('v1 opens NO blank panel on any of the ' + C.ROUTES.length + ' routes', v1.blanks.length === 0,
       v1.blanks.length ? v1.blanks.map(b => b.id).join(',') : '0 blanks / ' + C.ROUTES.length + ' routes');
 
+/* DOWNGRADED = upgraded in v2 but with a legacy equivalent v1 can still render. */
+const V1_DOWNGRADED = 'customers,disputes,flash-sale,kra-tax,marketing,messages,products,receipts,shop,staff';
 const v1down = v1.rows.filter(r => r.outcome === 'downgrade').map(r => r.id).sort();
 check('the 10 upgraded surfaces DOWNGRADE rather than blank',
-      v1down.join(',') === 'customers,disputes,flash-sale,kra-tax,marketing,messages,products,receipts,shop,staff',
+      v1down.join(',') === V1_DOWNGRADED,
       v1down.join(','));
 
+/* WITHHELD = v2-only surfaces with no v1 renderer AND no legacy equivalent, so v1 drops them
+   from every nav projection rather than promising a panel it cannot mount.
+     inventory, sell   the original two
+     offers            Offer Studio, merchant-v2 only (B1, be7c676)
+     supply            the merchant-to-merchant procurement workspace, merchant-v2 only
+   Withholding each of these is the CORRECT outcome, not a defect: adding a legacy equivalent
+   is what would move one of them into the downgrade list above. */
+const V1_WITHHELD = 'inventory,offers,sell';   /* this lineage has no supply route; offers is withheld in v1 since be7c676 (B1 Offers port) */
 const v1hold = v1.rows.filter(r => r.outcome === 'withhold').map(r => r.id).sort();
-check('only the 2 genuinely-new surfaces are withheld',
-      v1hold.join(',') === 'inventory,sell', v1hold.join(','));
+check('only the genuinely-new surfaces are withheld',
+      v1hold.join(',') === V1_WITHHELD, v1hold.join(','));
+
+/* Derived, so it cannot go stale on its own: every negotiated route must be accounted for by
+   one of the two frozen sets, and nothing may be negotiable without appearing in one. */
+check('the negotiation surface is exactly DOWNGRADE + WITHHOLD — no third outcome',
+      negotiated.join(',') === V1_DOWNGRADED.split(',').concat(V1_WITHHELD.split(',')).sort().join(','),
+      negotiated.join(','));
 check('withheld routes are absent from every nav projection',
       v1hold.every(id => !v1.nav.some(r => r.id === id)),
       'nav = ' + v1.nav.length + ' of ' + C.ROUTES.length + ' routes');

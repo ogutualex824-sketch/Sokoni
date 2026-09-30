@@ -4,6 +4,9 @@
 <!-- In-shell boundary. The CLASS must land before first paint, or a module flashes its own
      chrome inside the shell. Lifted verbatim from verification.html. -->
 <script>(function(){try{if(!window.parent||window.parent===window)return;var p=window.parent.location.pathname||"";var i=p.lastIndexOf("/");var last=(i<0?p:p.slice(i+1)).toLowerCase();if(last==="merchant"||last==="merchant.html"||last==="merchant-v2"||last==="merchant-v2.html"||window.parent.SokoniShell){document.documentElement.className+=" sk-in-shell";document.documentElement.setAttribute("data-sk-shell","merchant");}}catch(e){}})();</script>
+<script>/* EMBEDDED IN THE POS SETUP PAGE (?embed=setup, framed by a same-origin /pos-setup page): this console is a
+   SECTION of that page, so its own site chrome and back links are hidden. Anything else keeps standalone behaviour. */
+(function(){try{if(!window.parent||window.parent===window)return;if(new URLSearchParams(location.search).get("embed")!=="setup")return;var pp=window.parent.location.pathname||"";if(!/\/pos-setup(\.html)?$/.test(pp))return;var de=document.documentElement;de.classList.add("sk-setup-embed");var st=document.createElement("style");st.textContent=".sk-setup-embed .sk-shared-header,.sk-setup-embed #shared-header,.sk-setup-embed .bottom-nav,.sk-setup-embed .pos-quick-nav,.sk-setup-embed #_sokoniPrivacyBanner,.sk-setup-embed #sokoniScrollTop,.sk-setup-embed .hw-header__back,.sk-setup-embed .back-link{display:none!important}.sk-setup-embed body{padding-bottom:0!important}.sk-setup-embed .cc-card:has(#cc-comm){display:none!important}";(document.head||de).appendChild(st);document.addEventListener("DOMContentLoaded",function(){document.body.classList.add("sk-cc-advanced");});}catch(e){}})();</script>
 <script src="sokoni-inshell.js" defer></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
@@ -287,18 +290,24 @@ input:checked+.slider:before{transform:translateX(18px)}
 <div class="pos-header">
   <span class="pos-header-icon">&#128424;</span>
   <h1>Advanced Printer Settings</h1>
-  <a href="pos.html" class="back-link">&#8592; Back to POS</a>
+  <!-- No "Back to POS" here (owner, 2026-09-29): this console is a section of the POS Setup page now. -->
   <script>
     /* Canonical return flow — every printer button routes here via openPrinterSetup()
-       with a ?return= path. Repoint "Back" to the caller; updateStatusBar() auto-returns
-       once a connection succeeds here. */
+       with a ?return= path. A caller that sent the merchant here still gets a "Back" to
+       IT (not to POS); updateStatusBar() auto-returns once a connection succeeds here.
+       Embedded in the setup page there is nowhere to go back to, so none is drawn. */
     (function () {
       try {
         var ret = new URLSearchParams(location.search).get('return');
         if (ret) {
           window._ppsReturnUrl = ret;
-          var bl = document.querySelector('.back-link');
-          if (bl) { bl.setAttribute('href', ret); bl.innerHTML = '&#8592; Back'; }
+          var embedded = document.documentElement.classList.contains('sk-setup-embed');
+          if (!embedded && ret.charAt(0) === '/' && ret.charAt(1) !== '/') {
+            var a = document.createElement('a');
+            a.className = 'back-link'; a.href = ret; a.innerHTML = '&#8592; Back';
+            var h = document.currentScript && document.currentScript.parentNode;
+            if (h) h.appendChild(a);
+          }
         }
       } catch (_) {}
     })();
@@ -2908,6 +2917,12 @@ Promise.race([
      defended, and this screen is one step away from asking them to pay it. So
      it states the position instead of inventing an amount. */
   function renderCommission() {
+    /* Embedded in the POS Setup page, commission has its own section there — one statement per page, not two. */
+    if (document.documentElement.classList.contains('sk-setup-embed')) {
+      var card = $('cc-comm') && $('cc-comm').closest('.cc-card');
+      if (card) card.style.display = 'none';
+      return;
+    }
     $('cc-comm').innerHTML =
       row('warn', 'Commission billing is not active yet') +
       '<p class="cc-note">SOKONI charges a commission on completed sales. ' +

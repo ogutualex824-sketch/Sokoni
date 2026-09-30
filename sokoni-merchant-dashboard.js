@@ -185,6 +185,35 @@
     };
     if (!scope.ok) return out;
 
+    /* ── SERVER-AUTHORITATIVE FACTS (merchantDashboardFacts) ──────────────────
+       Till sales are admin-only readable and no client aggregate exists, so the day's
+       money was unknown here by design. The callable computes today's takings (till +
+       online), orders, identified customers, the trend and the 7-day series with the
+       Admin SDK for the SIGNED-IN merchant only, each figure carrying its own state
+       (known / partial / unknown) and reason. When it answers, those figures are the
+       authority; the client-side reads below still fill low stock, best seller and
+       waiting replies, and remain the fallback when the callable is unavailable. */
+    var srv = null;
+    if (ctx.db && typeof ctx.db.readFacts === 'function') {
+      try {
+        var r = await ctx.db.readFacts({ op: 'facts' });
+        var d = (r && r.data) ? r.data : r;
+        if (d && d.ok && d.facts) srv = d.facts;
+      } catch (e) { srv = null; /* fall back to the client reads, all marked as before */ }
+    }
+    var _st = function (v) { return (v && v.state) ? { state: v.state, value: (v.state === 'unknown' ? null : Number(v.value)), note: v.note || null } : null; };
+    if (srv) {
+      if (_st(srv.takings))     out.takings   = _st(srv.takings);
+      if (_st(srv.trend))       out.trend     = _st(srv.trend);
+      if (_st(srv.ordersToday)) out.orders    = _st(srv.ordersToday);
+      if (_st(srv.customers))   out.customers = _st(srv.customers);
+      if (Array.isArray(srv.series) && srv.series.length === 7) out.series = srv.series;
+      if (typeof srv.needsAttention === 'number') out.needsAttention = srv.needsAttention;
+      out.tillToday   = _st(srv.tillToday) || null;
+      out.onlineToday = _st(srv.onlineToday) || null;
+      out.factsSource = 'server';
+    }
+
     /* ── TODAY'S TAKINGS — deliberately unknown ───────────────────────────────
        posDailySummary has NO rule in the served ruleset, so a client read is denied, and
        posRetailSales is isAdmin() only. There is no canonical client source for the day's
@@ -210,17 +239,17 @@
            exists to prevent — even when the inflation is only one order. */
         return ms !== null && ms >= today.getTime();
       });
-      out.orders = partial(t.length, 'Online orders only · till sales not included');
+      if (!srv) out.orders = partial(t.length, 'Online orders only · till sales not included');
       /* NEEDS ATTENTION — an order the merchant still has to act on. Derived from the
          order's own status, which is the merchant-readable authority; shipped, completed,
          cancelled and refunded are done with. */
       var OPEN = ['pending', 'paid', 'confirmed', 'processing'];
-      out.needsAttention = (rows || []).filter(function (o) {
+      if (!srv) out.needsAttention = (rows || []).filter(function (o) {
         return o && OPEN.indexOf(String(o.status)) > -1;
       }).length;
       var ids = {};
       t.forEach(function (o) { var b = o.buyerUid || o.buyerId || o.uid; if (b) ids[b] = 1; });
-      out.customers = partial(Object.keys(ids).length, 'From online orders only');
+      if (!srv) out.customers = partial(Object.keys(ids).length, 'From online orders only');
     }).catch(function () { /* leave unknown */ }));
 
     /* ── LOW STOCK — products the shop owns, stock read from the canonical field ── */

@@ -305,6 +305,12 @@ const SokoniInventory = (() => {
       updatedAt:   nowISO(),
       updatedBy:   currentUid(),
     };
+    /* Creation chronology is PRESERVED, not dropped (writer census 2026-09-30): createdAt as
+       given (ISO string from saveProduct, or a FieldValue from the Duplicate path), and
+       uploadedAt only when it is a finite epoch-ms number. Nothing is invented for a product
+       that lacks them; the merge write simply leaves those fields as they are. */
+    if (product.createdAt != null) out.createdAt = product.createdAt;
+    if (typeof product.uploadedAt === 'number' && isFinite(product.uploadedAt)) out.uploadedAt = product.uploadedAt;
     /* Stock is set ONLY when explicitly provided — a metadata edit (price/name/…) must never
        merge-clobber the product's real stock to 0. Stage 2 owns authoritative deductions. */
     if (product.stockLevel != null || product.stock != null) {
@@ -495,6 +501,12 @@ const SokoniInventory = (() => {
       product.id        = `prod_${uid6()}`;
       product.createdAt = now;
       product.createdBy = currentUid();
+      /* The catalogue's ORDERING KEY, stamped once at creation as epoch ms (the same instant as
+         createdAt). Before this, _toCanonical dropped both, so a product created here had no
+         usable chronology and would be omitted by the ordered catalogue read. An EXISTING
+         product that lacks the field is NOT given one here — that would manufacture history;
+         it stays absent (explicit) until a separate, deliberate backfill. */
+      product.uploadedAt = Date.parse(now);
     }
     if (!product.sku)  product.sku  = generateSKU(product);
     product.updatedAt = now;
@@ -1335,6 +1347,8 @@ const SokoniInventory = (() => {
     // Products
     getProducts, subscribeProducts, getProduct, getProductByBarcode,
     saveProduct, addProduct, updateProduct, deleteProduct, importProducts, searchProducts,
+    /* test seam — the pure canonicaliser, so the chronology contract can be proven without IndexedDB */
+    _toCanonical,
     getCategories,
 
     // Stock Levels

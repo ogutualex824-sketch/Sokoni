@@ -33,7 +33,15 @@ const ck = (l, ok, d) => {
 /* The primitives that mean "this page owns map or location logic itself". Constructing a
    map or reading the device position directly is the thing being counted; merely holding
    a coordinate is not. */
-const OWNS_MAP_OR_GPS = /L\.map\s*\(|new\s+google\.maps\.Map|navigator\.geolocation\.(getCurrentPosition|watchPosition)/;
+/* `L.map(` is a Leaflet call only where Leaflet is loaded. 2026-09-30: business-apply.html calls
+   Array.prototype.map on a local named `L` (`L.map((x) => ...)`) and this regex counted it as a new
+   map implementation, blocking the inventory gate for an unrelated candidate. The Leaflet branch now
+   requires the page to reference Leaflet (script/stylesheet or `L.tileLayer` / `L.marker`); the
+   Google Maps and geolocation branches are unchanged. */
+const LEAFLET_CALL   = /L\.map\s*\(/;
+const LOADS_LEAFLET  = /leaflet(\.js|\.css|@|\/)|L\.tileLayer\s*\(|L\.marker\s*\(/i;
+const OTHER_MAP_GPS  = /new\s+google\.maps\.Map|navigator\.geolocation\.(getCurrentPosition|watchPosition)/;
+const OWNS_MAP_OR_GPS = { test: (src) => OTHER_MAP_GPS.test(src) || (LEAFLET_CALL.test(src) && LOADS_LEAFLET.test(src)) };
 
 /* Comments are not code. A page that DESCRIBES getCurrentPosition while calling the
    canonical engine must not be counted — the same trap the App Check ratchet hit. */

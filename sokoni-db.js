@@ -803,7 +803,20 @@ const SokoniDB = {
       if (opts.category || opts.sellerUid) {
         q = query(q, limit(cap));
       } else {
-        q = query(q, orderBy(documentId(), 'desc'), limit(cap));
+        /* ORDERING KEY = uploadedAt (2026-09-30). Proven in headed Chrome holding a VALID App
+           Check token: `orderBy(documentId(), 'desc')` is answered with `failed-precondition:
+           The query requires an index` (a composite on __name__ DESCENDING this project does
+           not have), and `limitToLast` is executed as the same reversed order — so this
+           listener failed once, silently, and Home ran on the /api/catalogue fallback alone.
+           Document id was also never a chronology here: 11 of 97 live ids are Date.now()-style,
+           86 are labels (VP97, TC101, …). `uploadedAt` is the catalogue's own creation time
+           (97 / 97 live products carry it; New Arrivals already sorts by it) and a single field
+           order uses the built-in index — no composite, firestore.indexes.json untouched.
+           EXPLICIT: Firestore omits a document that LACKS the orderBy field. Every production
+           writer now stamps uploadedAt at creation (docs/PRODUCT_TIMESTAMP_WRITER_CENSUS.md);
+           a product without it is not listed here rather than sorted somewhere invented.
+           Server authority for the value is a separate gate; this is the ordering key only. */
+        q = query(q, orderBy('uploadedAt', 'desc'), limit(cap));
       }
 
       emit('listener-attached', { attempt });
