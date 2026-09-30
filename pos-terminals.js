@@ -114,28 +114,28 @@ window.PosTerminals = (() => {
     },
   };
 
+  /* ── BATCH 0a — NO FABRICATED CARD APPROVALS ─────────────────────────────────
+     This adapter used to wait 2.5–4.5 s and then APPROVE 90% of the time with an
+     invented authCode ('SIM…'), a random last-4 and a random scheme. pos.js completed
+     the sale on that result and the receipt gate printed it as "Card approved by the
+     terminal". It served every manual/simulated terminal AND every Bluetooth terminal
+     (no Bluetooth payment driver exists). No money ever moved.
+
+     It now NEVER approves: it reports 'unavailable', carries no authCode, no card
+     details and no reference, and is marked `simulated`. The adapter object and its
+     interface are kept so the real-terminal path can be wired later — a real driver
+     must replace it, never re-enable it. */
+  const CARD_UNAVAILABLE_MSG = 'Card unavailable — use M-Pesa or cash.';
   const SimulatedAdapter = {
     _active: null,
     async initiate(amount) {
-      return new Promise(resolve => {
-        const delay = 2500 + Math.random() * 2000;
-        this._active = setTimeout(() => {
-          this._active = null;
-          const outcome = Math.random() > 0.1 ? 'approved' : 'declined';
-          if (outcome === 'approved') {
-            resolve({
-              status: 'approved',
-              authCode: 'SIM' + Math.random().toString(36).slice(2,8).toUpperCase(),
-              cardLast4: '' + Math.floor(1000 + Math.random() * 9000),
-              cardScheme: ['Visa','Mastercard','Amex'][Math.floor(Math.random()*3)],
-              reference: 'TSIM' + Date.now(),
-              amount,
-            });
-          } else {
-            resolve({ status:'declined', reason:'Insufficient funds', reference:'TSIM' + Date.now() });
-          }
-        }, delay);
-      });
+      return {
+        status: 'unavailable',
+        simulated: true,
+        reason: 'Simulated terminal — not a payment. ' + CARD_UNAVAILABLE_MSG,
+        reference: null,
+        amount,
+      };
     },
     cancel() { if (this._active) { clearTimeout(this._active); this._active = null; } },
   };
@@ -258,8 +258,15 @@ window.PosTerminals = (() => {
 
   async function _runBT(device, amount) {
     /* Real Bluetooth PDQ: connect to GATT server, write payment request characteristic.
-       Protocol is manufacturer-specific. Falls back to simulated until SDK is integrated. */
-    return SimulatedAdapter.initiate(amount);
+       Protocol is manufacturer-specific and NO driver exists. This used to fall back to
+       the simulator, which approved on its own (batch 0a). Without a driver there is no
+       payment: report it as unavailable. */
+    return {
+      status: 'unavailable',
+      reason: 'Bluetooth card terminal has no payment driver yet. ' + CARD_UNAVAILABLE_MSG,
+      reference: null,
+      amount,
+    };
   }
 
   async function _runNet(device, amount) {
@@ -288,6 +295,7 @@ window.PosTerminals = (() => {
     if (r.status === 'declined')  return `Declined — ${r.reason || 'Try another card'}`;
     if (r.status === 'timeout')   return 'No response from terminal — please retry';
     if (r.status === 'cancelled') return 'Payment cancelled';
+    if (r.status === 'unavailable') return r.reason || CARD_UNAVAILABLE_MSG;
     return r.reason || 'Error';
   }
 

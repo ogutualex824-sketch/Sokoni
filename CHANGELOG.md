@@ -1,3 +1,24 @@
+## 2026-09-30 — C0: POS card quarantine on the live line (owner-authorized)
+
+Live POS still completed card sales on the cashier's word, which the owner's rule refuses (a card payment is
+completed only by an IntaSend-confirmed checkout):
+- `pos-terminals.js` SimulatedAdapter "approved" about 90% of cards at random (`SIM…` auth codes);
+- `pos-checkout.html` finalised a card sale immediately, with no provider reference.
+
+Changes:
+- **pos.js / pos-terminals.js:** the served-lineage 0a quarantine (eca1d58) is applied verbatim. Simulator,
+  manual and Bluetooth terminals return "unavailable" and never approve; a SIM/TSIM approval can never
+  complete a sale.
+- **pos-checkout.html:** the card button no longer finalises. A split carrying a card amount is refused. The
+  cashier sees "Card unavailable — use M-Pesa or cash." Cash, M-Pesa and wallet are unchanged, and the Card
+  button stays visible.
+- **Tests:** test-0a-card-fabrication.js (OLD fabricates, NEW refuses; cash control completes);
+  test-c0-pos-checkout-card.js 6/0 (live 72dca56 fails C0-1/2/3).
+- **Scope:** hosting only. No functions, rules or API change; `functions/pos-terminal-live.js` from eca1d58 is
+  NOT included.
+- **Next:** C1, a real KES-1 card payment to capture IntaSend's card confirmation; then C3, a POS "Card
+  (IntaSend)" checkout on the cashier's device.
+
 ## 2026-09-30 — Unboxing Wall: a post is a SUBMISSION for AdminOS approval, never a self-publication
 
 Owner decision: every unboxing post is approved in AdminOS (approve / decline / archive / delete) before it

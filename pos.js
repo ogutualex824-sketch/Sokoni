@@ -1284,6 +1284,15 @@ const SPos = (function () {
   /* ═══════════════════════════════════════════════════════════
      PAYMENT
   ═══════════════════════════════════════════════════════════ */
+  /* ── BATCH 0a — CARD IS UNAVAILABLE UNTIL A REAL CARD PATH EXISTS ─────────────
+     No card path in this till can take a payment today: the terminal simulator used to
+     invent approvals, Bluetooth terminals have no driver, and the IntaSend-hosted card
+     checkout is not built. The Card button stays visible (it is the future surface) but
+     it cannot complete a sale. Flip this only together with a real, server-verified
+     card path. */
+  const CARD_TENDER_AVAILABLE = false;
+  const CARD_UNAVAILABLE_MSG  = 'Card unavailable — use M-Pesa or cash.';
+
   const payment = {
     setMethod(method) {
       state.payMethod   = method;
@@ -1303,9 +1312,10 @@ const SPos = (function () {
         : isT
         ? `🏪 Record KES ${total.toFixed(2)} Till payment`
         : isC
-        ? `💳 Charge KES ${total.toFixed(2)} via Card`
+        ? (CARD_TENDER_AVAILABLE ? `💳 Charge KES ${total.toFixed(2)} via Card` : `💳 ${CARD_UNAVAILABLE_MSG}`)
         : `Charge KES ${total.toFixed(2)}`;
-      payBtn.disabled = total <= 0;
+      payBtn.disabled = total <= 0 || (isC && !CARD_TENDER_AVAILABLE);
+      if (isC && !CARD_TENDER_AVAILABLE) toast(CARD_UNAVAILABLE_MSG, 'error');
       /* Sync mobile charge button label + style */
       const _mBtn2 = document.getElementById('mobile-pay-btn');
       if (_mBtn2) { _mBtn2.textContent = payBtn.textContent; _mBtn2.className = 'cart-mobile-pay-btn' + (isM || isT ? ' mpesa' : ''); }
@@ -1355,11 +1365,16 @@ const SPos = (function () {
       }
 
       if (method === 'card') {
+        /* Batch 0a: no card sale can complete (every other entry — F-keys, the mobile
+           charge button — also lands here, so the refusal is here, not only on the button). */
+        if (!CARD_TENDER_AVAILABLE) { toast(CARD_UNAVAILABLE_MSG, 'error'); return; }
         if (!window.PosTerminals) { toast('Terminal module not loaded', 'error'); return; }
         const tillId = state.settings.tillId || '1';
         const result = await PosTerminals.payment.initiate(total, tillId);
         if (!result) return; // no terminal assigned — error shown by module
-        if (result.status === 'approved') {
+        /* A simulated result is never a payment, whatever its status says. */
+        const _simulated = result.simulated === true || /^T?SIM/i.test(String(result.authCode || result.reference || ''));
+        if (result.status === 'approved' && !_simulated) {
           await payment.complete({
             method:      'card',
             amountPaid:  total,
