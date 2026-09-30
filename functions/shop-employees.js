@@ -147,6 +147,20 @@ async function resolveShopAccess(uid, shopId) {
        failed would tell a prober how to shape a better forgery. */
   }
 
+  /* SOKONI STORE (first-party) — OPERATOR, NOT ADMIN (owner decision 2026-10-01).
+     For the one first-party shop the admin arm below is REPLACED by the server-only
+     operator record: the named operator is served (with or without admin claims), and
+     every other account — admin and superAdmin included — is refused. Owner and
+     corroborated-employee access above are unchanged. Ordinary shops never reach this. */
+  if (shop.firstParty === true) {
+    const OP = require('./first-party-store-operator');
+    if (await OP.isStoreOperatorFor(uid, String(shopId), _db())) {
+      return { role: 'admin', via: 'operator', shopOwnerId: ownerUid };
+    }
+    throw new HttpsError('permission-denied',
+      'Access denied — the SOKONI Store is operated by its owner.', { reason: OP.REASON.NOT_OPERATOR });
+  }
+
   /* Platform admin, from claims — the one thing a client cannot forge. */
   try {
     const claims = (await getAuth().getUser(uid)).customClaims || {};

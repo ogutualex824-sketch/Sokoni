@@ -593,3 +593,9 @@ exports.getShopAvailability = onCall(
     return eff;
   }
 );
+
+/* Internal seam — NOT a callable. The SOKONI Store operator workspace
+   (first-party-store-workspace.js) sanitises the store's profile with THIS
+   allowlist rather than a copy of it, so the two can never drift. Read-only use:
+   no behaviour of any function in this file changes. */
+exports._internal = Object.freeze({ cleanProfile: _cleanProfile, TEXT_FIELDS });

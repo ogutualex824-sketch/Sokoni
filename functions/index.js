@@ -11453,6 +11453,18 @@ exports.saveShopProfile            = kasshop.saveShopProfile;
 exports.setShopAvailability        = kasshop.setShopAvailability;
 exports.getShopAvailability        = kasshop.getShopAvailability;
 
+/* ── SOKONI Store (first-party) — OPERATOR-ONLY workspace (2026-10-01) ─────────
+   Every callable is gated by first-party-store-operator.assertStoreOperator: the
+   named operator in the server-only firstPartyStoreOperators record is served;
+   admin / superAdmin claims alone are refused (reason 'not-store-operator').
+   Exported by name — a callable not re-exported here is never deployed. */
+const _sokoniStore = require('./first-party-store-workspace');
+exports.sokoniStoreGetContext      = _sokoniStore.sokoniStoreGetContext;
+exports.sokoniStoreSaveProfile     = _sokoniStore.sokoniStoreSaveProfile;
+exports.sokoniStoreListProducts    = _sokoniStore.sokoniStoreListProducts;
+exports.sokoniStoreListOrders      = _sokoniStore.sokoniStoreListOrders;
+exports.sokoniStoreGetWallet       = _sokoniStore.sokoniStoreGetWallet;
+
 /* ── MiniShop Campaign Engine v1.0 ──────────────────────────────────────── */
 const minishopCampaigns = require('./minishop-campaigns');
 exports.createMinishopCampaign  = minishopCampaigns.createMinishopCampaign;
