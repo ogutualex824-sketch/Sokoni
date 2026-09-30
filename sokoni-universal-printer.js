@@ -1291,8 +1291,31 @@ class NetworkAdapter {
     localStorage.setItem('spp_net_printers', JSON.stringify(list));
   }
 
+  /* BRIDGE ROUTE (2026-10-01). An ordinary Wi-Fi/LAN ESC/POS printer speaks raw TCP on port 9100, which no
+     browser can open. endpoint 'bridge://<host>:<port>' routes through the local SOKONI Print Bridge
+     (window.SokoniPrintBridge → http://127.0.0.1:9101), which validates the destination and opens the socket.
+     The http/ws endpoints below stay for printers that really speak HTTP or WebSocket. */
+  static bridgeTarget (ep) {
+    const m = /^bridge:\/\/([^/:]+):(\d{1,5})$/.exec(String(ep || ''));
+    return m ? { host: m[1], port: Number(m[2]) } : null;
+  }
+  static saveBridge (name, host, port) {
+    NetworkAdapter.save(name || ('Wi-Fi printer ' + host), 'bridge://' + String(host).trim() + ':' + (Number(port) || 9100));
+  }
   async connect (info) {
     const ep = info.endpoint;
+    const bt = NetworkAdapter.bridgeTarget(ep);
+    if (bt) {
+      const B = (typeof window !== 'undefined') ? window.SokoniPrintBridge : null;
+      if (!B) throw Object.assign(new Error('The print bridge client is not loaded on this page.'), { code: PRINTER_ERRORS.OFFLINE });
+      const st = await B.status();
+      if (!st.ok) throw Object.assign(new Error(st.message), { code: PRINTER_ERRORS.OFFLINE, state: st.state });
+      const pr = await B.probe(bt.host, bt.port);
+      if (!pr.ok) throw Object.assign(new Error(pr.message), { code: PRINTER_ERRORS.OFFLINE, state: pr.state });
+      this._ep = ep; this._proto = 'bridge'; this._bridge = bt; this.ok = true; this._info = info;
+      return;
+    }
+    this._bridge = null;
     this._ep = ep; this._proto = ep.startsWith('ws') ? 'ws' : 'http';
     if (this._proto === 'ws') {
       await new Promise((res, rej) => {
@@ -1317,6 +1340,18 @@ class NetworkAdapter {
 
   async write (data) {
     if (!this.ok) throw Object.assign(new Error('Network printer not connected'), { code: PRINTER_ERRORS.OFFLINE });
+    if (this._proto === 'bridge') {
+      /* Printed = the bridge answered SENT (every byte flushed to the printer's socket). Anything else throws
+         with the bridge's reason; a bridge or printer that stopped answering marks the adapter disconnected. */
+      const B = window.SokoniPrintBridge;
+      const r = B ? await B.print(this._bridge.host, this._bridge.port, data, B.newJobId('net'))
+                  : { ok: false, state: 'not-running', message: 'The print bridge client is not loaded on this page.' };
+      if (!r.ok) {
+        if (r.state === 'not-running' || r.state === 'permission-denied' || r.state === 'printer-unreachable') this.ok = false;
+        throw Object.assign(new Error(r.message), { code: this.ok ? PRINTER_ERRORS.UNKNOWN : PRINTER_ERRORS.OFFLINE, state: r.state, retryable: !!r.retryable });
+      }
+      return;
+    }
     if (this._proto === 'ws') {
       this._ws.send(data.buffer instanceof ArrayBuffer ? data.buffer : data);
     } else {
@@ -1886,6 +1921,16 @@ const api = {
   getTrace:           (...a) => getInstance().getTrace(...a),
   clearTrace:         (...a) => getInstance().clearTrace(...a),
   openSetup:          (opts) => _openPrinterSetup(opts),
+  /* Wi-Fi / LAN printers through the local SOKONI Print Bridge (saved in spp_net_printers as bridge://host:port). */
+  /* Two call shapes, both kept: PrinterManager passes (name, endpoint) with an http/ws/bridge endpoint; the
+     Wi-Fi setup passes (name, host, port) for an ESC/POS printer reached through the bridge. */
+  saveNetworkPrinter:   (name, hostOrEp, port) => (/^(bridge|https?|wss?):\/\//i.test(String(hostOrEp || ''))
+                                                    ? NetworkAdapter.save(name, String(hostOrEp).trim())
+                                                    : NetworkAdapter.saveBridge(name, hostOrEp, port)),
+  removeNetworkPrinter: (hostOrEp, port) => NetworkAdapter.remove(/^(bridge|https?|wss?):\/\//i.test(String(hostOrEp || ''))
+                                                    ? String(hostOrEp).trim()
+                                                    : 'bridge://' + String(hostOrEp).trim() + ':' + (Number(port) || 9100)),
+  networkPrinters:      () => { try { return JSON.parse(localStorage.getItem('spp_net_printers') || '[]').filter((p) => NetworkAdapter.bridgeTarget(p.endpoint)); } catch (_) { return []; } },
   get connected ()          { return getInstance().connected; },
 
   /* Status & capabilities */
@@ -1928,9 +1973,8 @@ const api = {
   on:                 (...a) => getInstance().on(...a),
   off:                (...a) => getInstance().off(...a),
 
-  /* Network printer helpers */
-  saveNetworkPrinter:   NetworkAdapter.save,
-  removeNetworkPrinter: NetworkAdapter.remove,
+  /* Network printer helpers: saveNetworkPrinter / removeNetworkPrinter / networkPrinters are defined above
+     (both call shapes). They used to be assigned here too, and the later key silently won. */
 
   /* Exposed for extension */
   ESCPOSEncoder,

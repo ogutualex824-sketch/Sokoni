@@ -362,18 +362,32 @@ input:checked+.slider:before{transform:translateX(18px)}
   <div class="card">
     <div class="card-top"></div>
     <div class="card-body">
-      <div class="card-title">Add Network / Wi-Fi Printer</div>
+      <div class="card-title">Wi-Fi / LAN Printer</div>
+      <!-- 2026-10-01. An ordinary network thermal printer listens on raw TCP port 9100, which a browser cannot open.
+           The SOKONI Print Bridge runs on THIS computer and carries the receipt to the printer on the shop network.
+           Every button below tests the real route; nothing is reported as working because it was saved. -->
+      <div class="net-bridge" id="netBridgeLine" role="status" aria-live="polite" style="font-size:12px;color:var(--sub);margin:-2px 0 10px">Checking for the SOKONI Print Bridge on this computer…</div>
       <div class="net-form">
         <div class="form-group">
-          <label>Endpoint URL</label>
-          <input id="netEndpoint" placeholder="http://192.168.1.x or ws://192.168.1.x" value="">
+          <label for="netHost">Printer IP address</label>
+          <input id="netHost" placeholder="192.168.1.50" inputmode="decimal" autocomplete="off" value="">
+        </div>
+        <div class="form-group" style="max-width:110px">
+          <label for="netPort">Port</label>
+          <input id="netPort" type="number" inputmode="numeric" min="9100" max="9109" value="9100">
         </div>
         <div class="form-group">
-          <label>Display Name</label>
-          <input id="netName" placeholder="Kitchen Printer" value="">
+          <label for="netName">Display name</label>
+          <input id="netName" placeholder="Front counter printer" value="">
         </div>
-        <button class="btn btn-primary" onclick="addNetworkPrinter()" style="align-self:flex-end;height:40px">Add</button>
       </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px">
+        <button class="btn btn-sm" type="button" onclick="netTestConnection()">Test connection</button>
+        <button class="btn btn-sm" type="button" onclick="netTestPrint()">Test print</button>
+        <button class="btn btn-sm btn-primary" type="button" onclick="addNetworkPrinter()">Save printer</button>
+        <button class="btn btn-sm" type="button" id="netRetryBtn" onclick="netRetry()" hidden>Retry last job</button>
+      </div>
+      <div id="netResult" role="status" aria-live="polite" style="font-size:12px;min-height:16px;margin-bottom:8px"></div>
       <div class="device-list" id="netPrinterList"></div>
     </div>
   </div>
@@ -1066,6 +1080,7 @@ input:checked+.slider:before{transform:translateX(18px)}
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 <script src="/sokoni-appcheck.js"></script>
+<script src="sokoni-print-bridge.js"></script>
 <script src="sokoni-universal-printer.js"></script>
 <script src="sokoni-bluetooth-printer.js"></script>
 <script src="sokoni-printer-manager.js"></script>
@@ -1582,16 +1597,74 @@ async function disconnectPrinter () {
   toast('Disconnected');
 }
 
-/* ── Network printers ── */
-function addNetworkPrinter () {
-  const ep   = document.getElementById('netEndpoint').value.trim();
-  const name = document.getElementById('netName').value.trim() || 'Network Printer';
-  if (!ep) { toast('Enter an endpoint URL'); return; }
-  PrinterManager.saveNetworkPrinter(name, ep);
-  document.getElementById('netEndpoint').value = '';
-  document.getElementById('netName').value = '';
+/* ── Network printers (Wi-Fi / LAN through the SOKONI Print Bridge) ── */
+function _netTarget () {
+  const host = (document.getElementById('netHost').value || '').trim();
+  const port = Number(document.getElementById('netPort').value) || 9100;
+  return { host, port };
+}
+function _netSay (r) {
+  const el = document.getElementById('netResult'); if (!el) return;
+  el.textContent = (r && r.message) || '';
+  el.style.color = r && r.ok ? 'var(--green, #71ff00)' : 'var(--amber, #fbbf24)';
+}
+async function netBridgeCheck () {
+  const line = document.getElementById('netBridgeLine');
+  const B = window.SokoniPrintBridge;
+  if (!B) { if (line) line.textContent = 'The print bridge client did not load on this page. Reload and try again.'; return null; }
+  const st = await B.status();
+  if (line) line.textContent = st.ok ? 'SOKONI Print Bridge ' + (st.version ? 'v' + st.version + ' ' : '') + 'is running on this computer.' : st.message;
+  return st;
+}
+/* Test connection = the bridge is running AND the printer answers on its port. Nothing is printed. */
+async function netTestConnection () {
+  const t = _netTarget();
+  if (!t.host) { _netSay({ ok: false, message: 'Enter the printer\'s IP address.' }); return; }
+  _netSay({ ok: true, message: 'Testing…' });
+  const st = await netBridgeCheck(); if (!st || !st.ok) { _netSay(st || { ok: false, message: 'Print bridge unavailable.' }); return; }
+  _netSay(await window.SokoniPrintBridge.probe(t.host, t.port));
+}
+/* A real minimal ESC/POS receipt through the canonical encoder. "Sent" only when the bridge says SENT. */
+let _netLast = null;
+function _netTestBytes () {
+  const E = window.SokoniPrinter && window.SokoniPrinter.ESCPOSEncoder;
+  if (!E) return null;
+  return new E().init().ac().bold(true).text('SOKONI').lf().bold(false).text('Wi-Fi printer test').lf()
+    .text(new Date().toLocaleString('en-KE')).lf(2).cut().build();
+}
+async function netTestPrint () {
+  const t = _netTarget();
+  if (!t.host) { _netSay({ ok: false, message: 'Enter the printer\'s IP address.' }); return; }
+  const bytes = _netTestBytes();
+  if (!bytes) { _netSay({ ok: false, message: 'The printer engine is not loaded on this page.' }); return; }
+  const B = window.SokoniPrintBridge;
+  if (!B) { _netSay({ ok: false, message: 'The print bridge client did not load on this page.' }); return; }
+  _netLast = { host: t.host, port: t.port, bytes, jobId: B.newJobId('test') };
+  _netSay({ ok: true, message: 'Sending a test receipt…' });
+  const r = await B.print(_netLast.host, _netLast.port, _netLast.bytes, _netLast.jobId);
+  _netSay(r.ok ? { ok: true, message: 'Test receipt sent to the printer. Check that it printed.' } : r);
+  document.getElementById('netRetryBtn').hidden = !!r.ok;
+}
+/* Retry uses the SAME job id, so a job the printer already took is answered from the bridge's memory and
+   never printed twice. */
+async function netRetry () {
+  if (!_netLast || !window.SokoniPrintBridge) return;
+  _netSay({ ok: true, message: 'Retrying…' });
+  const r = await window.SokoniPrintBridge.print(_netLast.host, _netLast.port, _netLast.bytes, _netLast.jobId, { retry: false });
+  _netSay(r.ok ? { ok: true, message: r.duplicate ? 'The printer had already taken this job — not printed twice.' : 'Sent to the printer.' } : r);
+  document.getElementById('netRetryBtn').hidden = !!r.ok;
+}
+async function addNetworkPrinter () {
+  const t = _netTarget();
+  const name = document.getElementById('netName').value.trim() || ('Wi-Fi printer ' + t.host);
+  if (!t.host) { _netSay({ ok: false, message: 'Enter the printer\'s IP address.' }); return; }
+  /* Saving is not proof: the route is tested first and the result is shown either way. */
+  const B = window.SokoniPrintBridge;
+  const pr = B ? await B.probe(t.host, t.port) : { ok: false, message: 'The print bridge client did not load on this page.' };
+  if (window.SokoniPrinter && typeof window.SokoniPrinter.saveNetworkPrinter === 'function') window.SokoniPrinter.saveNetworkPrinter(name, t.host, t.port);
   renderNetPrinters();
-  toast('Network printer saved');
+  _netSay(pr.ok ? { ok: true, message: 'Saved — the printer answered. Tap Connect to use it.' }
+                : { ok: false, message: 'Saved, but not reachable yet: ' + pr.message });
 }
 
 function renderNetPrinters () {
@@ -1621,6 +1694,7 @@ function removeNet (ep) {
   renderNetPrinters();
 }
 renderNetPrinters();
+setTimeout(function () { netBridgeCheck(); }, 0);
 
 /* ── Capabilities ── */
 async function detectCaps () {

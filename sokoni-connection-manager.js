@@ -13,7 +13,7 @@
  *   usb       — WebUSB bulk-OUT endpoint
  *   bluetooth — Web Bluetooth GATT characteristic write
  *   serial    — Web Serial port write stream
- *   network   — SOKONI Desktop bridge (localhost:9101) → Cloud Function fallback
+ *   network   — local SOKONI Print Bridge (window.SokoniPrintBridge) only; no cloud fallback
  *   android   — window.SokoniAndroid.printESCPOS() (Bluetooth Classic SPP)
  *   browser   — window.print() text fallback
  *
@@ -28,8 +28,7 @@
 (function (global) {
     'use strict';
 
-    var BRIDGE_URL = 'http://localhost:9101';
-    var PROXY_CF   = 'https://us-central1-sokoni-aeb26.cloudfunctions.net/posPrint';
+    /* Bridge address, auth and job ids live in sokoni-print-bridge.js (window.SokoniPrintBridge). */
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -283,48 +282,22 @@
     NetworkConnection.prototype.constructor = NetworkConnection;
 
     NetworkConnection.prototype.setup = async function () {
-        // Check if the local SOKONI Desktop bridge is alive
-        try {
-            var ctrl = new AbortController();
-            var t = setTimeout(function () { ctrl.abort(); }, 2000);
-            var resp = await fetch(BRIDGE_URL + '/ping', { signal: ctrl.signal });
-            clearTimeout(t);
-            if (resp.ok) { this._bridge = 'bridge'; return; }
-        } catch (_) {}
-
-        this._bridge = 'proxy';
+        /* The local SOKONI Print Bridge is the only network route (window.SokoniPrintBridge). There is no
+           cloud fallback: it cannot reach a printer inside the shop's Wi-Fi. */
+        var st = global.SokoniPrintBridge ? await global.SokoniPrintBridge.status() : { ok: false, state: 'not-running' };
+        this._bridge = st.ok ? 'bridge' : null;
+        this._bridgeState = st.state;
     };
 
     NetworkConnection.prototype.write = async function (bytes) {
         if (!this.isConnected) throw new Error('Network connection not ready');
-        var b64 = _u8b64(_ab2u8(bytes));
-
-        if (this._bridge === 'bridge') {
-            var ctrl = new AbortController();
-            var t = setTimeout(function () { ctrl.abort(); }, this._timeout);
-            try {
-                var resp = await fetch(BRIDGE_URL + '/print', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ host: this._host, port: this._port, data: b64 }),
-                    signal: ctrl.signal,
-                });
-                clearTimeout(t);
-                if (!resp.ok) throw new Error('Bridge error: ' + resp.status);
-                return;
-            } catch (e) {
-                clearTimeout(t);
-                if (e.name !== 'AbortError') throw e;
-            }
-        }
-
-        // Cloud Function proxy fallback
-        var resp2 = await fetch(PROXY_CF, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ host: this._host, port: this._port, data: b64 }),
-        });
-        if (!resp2.ok) throw new Error('Network proxy error: ' + resp2.status);
+        var B = global.SokoniPrintBridge;
+        if (!B) throw new Error('The print bridge client did not load on this page.');
+        /* ONE route, one job id. The old code fell back to the cloud relay on a TIMEOUT — a slow bridge that
+           had already printed would print again from the cloud path. */
+        var r = await B.print(this._host, this._port || 9100, _ab2u8(bytes), B.newJobId('cm'));
+        if (!r.ok) throw Object.assign(new Error(r.message), { code: r.code || r.state, state: r.state, retryable: !!r.retryable, userMessage: r.message });
+        return;
     };
 
     NetworkConnection.prototype.close = function () {

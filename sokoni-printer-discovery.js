@@ -267,7 +267,8 @@ window.SokoniPrinterDiscovery = (() => {
     if (localBridge) {
       /* Ask the local bridge to scan the network */
       try {
-        const resp = await fetch('http://localhost:9101/scan-printers', {
+        /* The bridge answers 501 here: sweeping the LAN from a web request is not offered. Manual IP entry is. */
+        const resp = await fetch(window.SokoniPrintBridge.BASE + '/scan-printers', {
           signal: AbortSignal.timeout(5000),
         });
         if (resp.ok) {
@@ -297,11 +298,9 @@ window.SokoniPrinterDiscovery = (() => {
     const localBridge = await _checkLocalBridge();
     if (localBridge) {
       try {
-        const resp = await fetch(`http://localhost:9101/probe?host=${encodeURIComponent(host)}&port=${port}`, {
-          signal: AbortSignal.timeout(3000),
-        });
-        if (resp.ok) {
-          const info = await resp.json().catch(() => ({}));
+        const pr = await window.SokoniPrintBridge.probe(host, port);
+        if (pr.ok) {
+          const info = {};
           return {
             id:         `net-${host}-${port}`,
             name:       info.name || `Printer @ ${host}:${port}`,
@@ -379,10 +378,8 @@ window.SokoniPrinterDiscovery = (() => {
   let _bridgeCache = null;
   async function _checkLocalBridge() {
     if (_bridgeCache !== null) return _bridgeCache;
-    try {
-      const resp = await fetch('http://localhost:9101/ping', { signal: AbortSignal.timeout(500) });
-      _bridgeCache = resp.ok;
-    } catch (_) { _bridgeCache = false; }
+    try { const st = window.SokoniPrintBridge ? await window.SokoniPrintBridge.status() : null; _bridgeCache = !!(st && st.ok); }
+    catch (_) { _bridgeCache = false; }
     return _bridgeCache;
   }
 

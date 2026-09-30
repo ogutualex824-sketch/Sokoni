@@ -1,3 +1,14 @@
+## [2026-10-01] — Wi-Fi / LAN printing through the SOKONI Print Bridge (local 127.0.0.1:9101) — candidate, NOT deployed
+
+**Files:** new `tools/sokoni-print-bridge/bridge.js` + `start-bridge.cmd`, new `sokoni-print-bridge.js`, `sokoni-universal-printer.js`, `sokoni-pos-print.js`, `sokoni-printer-providers.js`, `sokoni-connection-manager.js`, `sokoni-printer-discovery.js`, `pos-printer.js`, `pos-printer-setup.html`, 13 printer pages (one script tag), `firebase.json` (headers); new `scripts/test-lan-print-bridge.js`, `docs/LAN_PRINTING.md`, `docs/release-gates/lan-print-bridge.md`.
+**Functions / rules / data:** none. **Headers:** Permissions-Policy `local-network=(self), loopback-network=(self)`; CSP connect-src `http://127.0.0.1:9101` only. **Breaking:** network printing no longer falls back to the cloud `posPrint` function (it could never reach a shop LAN).
+**Security:** the bridge listens on loopback only, checks the Host header, allows only exact origins, verifies Firebase ID tokens (no shared secret), accepts only private-LAN IPv4 destinations on 9100–9109 (DNS answers pinned), and is idempotent by job id.
+
+- The bridge the pages had called for months did not exist; it is now a small Node program implementing the callers' own contract. The callers had disagreed on the body shape; all now use one client.
+- Canonical engine: `NetworkAdapter` bridge route (`bridge://host:port`); duplicate API keys that silently overrode the network helpers removed.
+- Printer console: Wi-Fi / LAN form with a real Test connection, a real ESC/POS Test print, Save (tested first), and Retry with the same job id.
+- Proof: 61/0, sabotage 10/10; 22 existing printer suites unchanged. **Physical receipt and real-Chrome run NOT yet observed** (docs/LAN_PRINTING.md §6).
+
 ## [2026-10-01] — merchantDashboardFacts: "today" is Nairobi's day, not the server's (UTC) — candidate, NOT deployed
 
 **Files:** `functions/merchant-dashboard-facts.js`, `scripts/test-merchant-dashboard-facts.js`, `docs/MERCHANT_DASHBOARD_FACTS.md`. **Rules / data / other functions:** none.

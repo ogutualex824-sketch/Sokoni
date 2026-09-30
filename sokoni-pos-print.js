@@ -412,24 +412,21 @@ window.SokoniPosprint = (() => {
     };
   }
 
-  /* Network transport — local bridge first, then Cloud Function */
+  /* Network transport — the local SOKONI Print Bridge ONLY (window.SokoniPrintBridge).
+     The Cloud Function fallback is gone: a public cloud function is not inside the shop's Wi-Fi and could
+     never reach the printer. The invented default host (192.168.1.100) is gone too — no address, no print. */
   async function _buildNetworkTransport(config) {
-    const host = config.host || '192.168.1.100';
+    const host = config.host || '';
     const port = config.port || 9100;
-
-    /* Try local SOKONI Desktop bridge (WebSocket → TCP) */
-    const localBridgeOk = await _probeLocalBridge();
-
+    const B = window.SokoniPrintBridge;
+    const st = B ? await B.status() : { ok: false, state: 'not-running', message: 'The print bridge client did not load on this page.' };
     return {
       type: 'network',
-      host, port, localBridgeOk,
+      host, port, localBridgeOk: !!st.ok, bridgeState: st.state,
       async send(bytes) {
-        if (localBridgeOk) {
-          await _sendViaLocalBridge(host, port, bytes);
-        } else {
-          /* Cloud Function proxy — requires internet */
-          await _sendViaCloudProxy(host, port, bytes);
-        }
+        if (!B) throw Object.assign(new Error(st.message), { code: 'not-running', state: 'not-running' });
+        const r = await B.print(host, port, bytes, B.newJobId('pp'));
+        if (!r.ok) throw Object.assign(new Error(r.message), { code: r.code || r.state, state: r.state, retryable: !!r.retryable, userMessage: r.message });
       },
       disconnect() {},
     };
@@ -480,44 +477,7 @@ window.SokoniPosprint = (() => {
     };
   }
 
-  /* Local SOKONI Desktop bridge probe (WebSocket on localhost:9101) */
-  let _localBridgeStatus = null;
-  async function _probeLocalBridge() {
-    if (_localBridgeStatus !== null) return _localBridgeStatus;
-    try {
-      const resp = await fetch('http://localhost:9101/ping', { signal: AbortSignal.timeout(500) });
-      _localBridgeStatus = resp.ok;
-    } catch (_) { _localBridgeStatus = false; }
-    return _localBridgeStatus;
-  }
-
-  async function _sendViaLocalBridge(host, port, bytes) {
-    const resp = await fetch('http://localhost:9101/print', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream', 'X-Target-Host': host, 'X-Target-Port': String(port) },
-      body: bytes,
-    });
-    if (!resp.ok) throw new Error('Local bridge error: ' + resp.status);
-  }
-
-  async function _sendViaCloudProxy(host, port, bytes) {
-    const CF = 'https://us-central1-sokoni-aeb26.cloudfunctions.net/posPrint';
-    let idToken = '';
-    try {
-      const auth = window.firebase?.auth?.() || window.firebaseAuth;
-      if (auth?.currentUser) idToken = await auth.currentUser.getIdToken();
-    } catch (_) {}
-    const qs = new URLSearchParams({ host, port: String(port) });
-    const resp = await fetch(`${CF}?${qs}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream', ...(idToken && { 'Authorization': `Bearer ${idToken}` }) },
-      body: bytes,
-    });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error || 'Network printer error: ' + resp.status);
-    }
-  }
+  /* (bridge probe / local send / cloud proxy helpers removed 2026-10-01 — see _buildNetworkTransport) */
 
   /* ── Print Queue ── */
   async function _addToQueue(job) {

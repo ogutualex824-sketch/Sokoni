@@ -621,12 +621,11 @@
 
     // ---------------------------------------------------------------------------
     // NetworkPrinterProvider (Phase 2)
-    // Prints via SOKONI Desktop bridge (localhost:9101) or Cloud Function proxy.
+    // Prints via the local SOKONI Print Bridge (window.SokoniPrintBridge) only — no cloud fallback.
     // No browser permissions required — user supplies IP address.
     // ---------------------------------------------------------------------------
 
-    var BRIDGE_URL  = 'http://localhost:9101';
-    var PROXY_URL   = 'https://us-central1-sokoni-aeb26.cloudfunctions.net/posPrint';
+    /* Bridge address, auth and job ids live in sokoni-print-bridge.js (window.SokoniPrintBridge). */
 
     function NetworkPrinterProvider() {
         PrinterProvider.call(this);
@@ -664,12 +663,9 @@
     };
 
     NetworkPrinterProvider.prototype.connect = async function (descriptor) {
-        // Check if local bridge is running
+        // Is the local SOKONI Print Bridge running (and reachable from this page)?
         var bridgeAvailable = false;
-        try {
-            var resp = await fetch(BRIDGE_URL + '/ping', { method: 'GET', signal: AbortSignal.timeout(2000) });
-            bridgeAvailable = resp.ok;
-        } catch (_) {}
+        try { var st = global.SokoniPrintBridge ? await global.SokoniPrintBridge.status() : null; bridgeAvailable = !!(st && st.ok); } catch (_) {}
 
         return {
             type:           'network',
@@ -679,25 +675,12 @@
         };
     };
 
+    /* Through the local SOKONI Print Bridge only (window.SokoniPrintBridge); no cloud fallback. */
     NetworkPrinterProvider.prototype.write = async function (connection, bytes) {
-        var b64 = btoa(String.fromCharCode.apply(null, bytes));
-        var payload = {
-            host: connection.host,
-            port: connection.port,
-            data: b64,
-        };
-
-        var url = connection.bridgeAvailable ? (BRIDGE_URL + '/print') : PROXY_URL;
-        var resp = await fetch(url, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify(payload),
-        });
-        if (!resp.ok) {
-            var body = {};
-            try { body = await resp.json(); } catch (_) {}
-            throw new Error('Network print failed: ' + (body.error || resp.statusText));
-        }
+        var B = global.SokoniPrintBridge;
+        if (!B) throw Object.assign(new Error('The print bridge client did not load on this page.'), { userMessage: 'The print bridge client did not load on this page. Reload and try again.' });
+        var r = await B.print(connection.host, connection.port || 9100, bytes, B.newJobId('prov'));
+        if (!r.ok) throw Object.assign(new Error(r.message), { code: r.code || r.state, state: r.state, retryable: !!r.retryable, userMessage: r.message });
     };
 
     NetworkPrinterProvider.prototype.disconnect = async function () {};

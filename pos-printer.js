@@ -336,8 +336,13 @@ const PosPrinter = (function () {
   }
 
   /* ── Connect: Network ─────────────────────────────────────────── */
+  /* Wi-Fi / LAN printer through the local SOKONI Print Bridge. Connecting PROVES the route (bridge running,
+     printer answering) — it used to just store host/port and report success. */
   async function connectNetwork(host, port = 9100) {
-    // Verify reachability via a simple fetch (requires CORS-enabled proxy in prod)
+    const B = window.SokoniPrintBridge;
+    if (!B) throw new Error('The print bridge client did not load on this page.');
+    const pr = await B.probe(host, port);
+    if (!pr.ok) throw Object.assign(new Error(pr.message), { code: pr.code || pr.state, state: pr.state });
     _conn = { host, port };
     _type = 'network';
     return `${host}:${port}`;
@@ -370,41 +375,12 @@ const PosPrinter = (function () {
         await _conn.device.transferOut(_conn.endpointNum, bytes.slice(i, i + MTU));
       }
     } else if (_type === 'network') {
-      /* Forward ESC/POS bytes through the posPrint Cloud Function.
-         The function validates auth, SSRF-guards the host, and opens
-         a raw TCP socket to the printer on port 9100 (or custom port). */
-      const CF_BASE = 'https://us-central1-sokoni-aeb26.cloudfunctions.net';
-      const shopId  = (window.SOKONI_CONFIG && window.SOKONI_CONFIG.shopId) || '';
-
-      /* Obtain Firebase ID token for auth */
-      let idToken = '';
-      try {
-        const fb   = window.firebase || window.firebaseApp;
-        const auth = fb && (typeof fb.auth === 'function' ? fb.auth() : fb.auth);
-        if (auth && auth.currentUser) {
-          idToken = await auth.currentUser.getIdToken();
-        }
-      } catch (_) {}
-
-      const qs = new URLSearchParams({
-        host:   _conn.host,
-        port:   String(_conn.port || 9100),
-        shopId,
-      });
-
-      const resp = await fetch(`${CF_BASE}/posPrint?${qs}`, {
-        method:  'POST',
-        headers: {
-          'Content-Type':  'application/octet-stream',
-          'Authorization': idToken ? `Bearer ${idToken}` : '',
-        },
-        body: bytes,
-      });
-
-      if (!resp.ok) {
-        const errBody = await resp.json().catch(() => ({}));
-        throw new Error('Network printer error: ' + (errBody.error || resp.status));
-      }
+      /* Through the local SOKONI Print Bridge (window.SokoniPrintBridge). It used to post to the cloud
+         posPrint function, which is not inside the shop's Wi-Fi and so could never reach the printer. */
+      const B = window.SokoniPrintBridge;
+      if (!B) throw new Error('The print bridge client did not load on this page.');
+      const r = await B.print(_conn.host, _conn.port || 9100, bytes, B.newJobId('pp1'));
+      if (!r.ok) throw Object.assign(new Error(r.message), { code: r.code || r.state, state: r.state, retryable: !!r.retryable, userMessage: r.message });
     }
   }
 
