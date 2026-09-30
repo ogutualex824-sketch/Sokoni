@@ -1,3 +1,15 @@
+## [2026-09-30] - DEPLOYED: providerDispatch shell gate, candidate c7e26b6 → revision providerdispatch-00050-rur (owner-authorized; no --force)
+
+docs/LANDING_PROVIDERDISPATCH_SHELL_GATE.md + docs/release-gates/providerdispatch-landing.json. Final preflight 01:54Z green; no Cloud Build,
+no function updated in 30 min, three peers holding; tree == c7e26b6. Deployed 02:07:13Z. PROVEN FROM THE NEW SOURCE ARCHIVE (generation
+1790733957691735): 388/388 candidate files byte-identical, .env hash-identical; minInstances 0 = live; ops 61 with businessWorkspace +
+workspaceHome; 22/23 pre-existing closure modules identical (only the dispatcher differs); provider-onboarding.js == old archive; no
+secret bound; env keys unchanged; rollback 00048-qiz Ready; startup probe succeeded, no load errors. SMOKE: endpoint probes answer
+UNAUTHENTICATED for new/existing/unknown ops (App Check first — not an identity proof); functional smoke of the two new ops NOT attempted
+(needs a real provider browser session; Kasindi excluded). USER-VISIBLE CHANGE: none yet — live hosting 49e0f3a serves no workspace consumer
+(404) and the live provider dashboard does not load one; the gate takes effect only when the hosting counterpart ships (separate
+authorization). Counts after: adminAudit 22, applications 13, applicationDecisions 0, providers 11 — unchanged; Kasindi not read.
+
 ## [2026-09-30] - NEW CANDIDATE c7e26b6: providerDispatch shell gate with minInstances matched to live (0) — re-certified; NOT deployed (owner authorized the config repair + re-certification only)
 
 docs/CANDIDATE_PROVIDERDISPATCH_SHELL_GATE_C7E26B6.md + docs/release-gates/providerdispatch-candidate-c7e26b6-manifest.json. Supersedes b28567c (the
