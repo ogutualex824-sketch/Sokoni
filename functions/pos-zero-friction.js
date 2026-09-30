@@ -1016,12 +1016,20 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
            'cannot be confirmed. Send the payment request and wait for the customer to pay.');
       }
 
-      const paySnap = await db.collection('posPayments').doc(ref).get();
-      if (!paySnap.exists) {
-        _e('No ' + method.toUpperCase() + ' payment was found for this sale. ' +
-           'Nothing has been charged.', 'not-found');
+      /* POS/Till convergence — an IntaSend M-PESA PROMPT (postill_ ref) is confirmed from its two
+         server-only records, by the SAME certified module; every other reference keeps the QR
+         rail below, unchanged. */
+      const _own = require('./shared/pos-payment-ownership');
+      const _stk = _own.isStkRef(ref);
+      let pay = null;
+      if (!_stk) {
+        const paySnap = await db.collection('posPayments').doc(ref).get();
+        if (!paySnap.exists) {
+          _e('No ' + method.toUpperCase() + ' payment was found for this sale. ' +
+             'Nothing has been charged.', 'not-found');
+        }
+        pay = paySnap.data() || {};
       }
-      const pay = paySnap.data() || {};
 
       /* ── MAY THIS PAYMENT SETTLE THIS SALE? — asked of the certified module
          `shared/pos-payment-ownership.js` rather than re-decided here.
@@ -1047,8 +1055,17 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
 
          Certified by scripts/certify-pos-payment-ownership.js, whose W7-1..W7-4
          assert exactly this wiring. See Amendment A.1.5. */
-      const _confirm = require('./shared/pos-payment-ownership')
-        .assertConfirmable(pay, { merchantId, cashierId });
+      let _confirm;
+      if (_stk) {
+        const [iSnap, sSnap] = await Promise.all([
+          db.collection('posPaymentIntents').doc(ref).get(),
+          db.collection('posPaymentStatus').doc(ref).get(),
+        ]);
+        _confirm = _own.assertConfirmableStk(iSnap.exists ? iSnap.data() : null,
+          sSnap.exists ? sSnap.data() : null, { merchantId, idempotencyKey });
+      } else {
+        _confirm = _own.assertConfirmable(pay, { merchantId, cashierId });
+      }
       if (!_confirm.ok) {
         _e(_confirm.message,
            _confirm.reason === 'wrong_shop' ? 'permission-denied'
@@ -1095,8 +1112,11 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
          stored sale show the real M-PESA code rather than the client's guess. */
       p.confirmed = true;
       p.confirmedAmount = isFinite(confirmedAmount) ? confirmedAmount : null;
-      if (pay.mpesaCode) p.mpesaCode = pay.mpesaCode;
-      if (pay.paidPhone) p.paidPhone = pay.paidPhone;
+      if (pay && pay.mpesaCode) p.mpesaCode = pay.mpesaCode;
+      if (pay && pay.paidPhone) p.paidPhone = pay.paidPhone;
+      /* STK rail: the webhook records the reference, not the M-PESA receipt code — so none is
+         claimed here. The line says which rail confirmed it and against what. */
+      if (_stk) { p.provider = 'intasend'; p.rail = 'stk'; p.providerRef = ref; }
     }
 
     /* ── 4b. Derive the authoritative open shift ──────────────────────────

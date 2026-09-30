@@ -11217,6 +11217,9 @@ exports.processReferralOnOrderComplete = referral.processReferralOnOrderComplete
 /* ── SmartPOS Zero Friction Checkout v1.0 ───────────────────────────── */
 const posZF = require('./pos-zero-friction');
 exports.posCompleteCheckout    = posZF.posCompleteCheckout;
+/* Business Pulse — today's takings for the Nairobi day, read from the canonical sale record
+   (posRetailSales) after proving owner/admin/manager access. Read-only. */
+exports.merchantTillTakings = require("./merchant-till-takings").makeMerchantTillTakings({ onCall, HttpsError, db: admin.firestore() });
 exports.posValidateCoupon      = posZF.posValidateCoupon;
 exports.posLookupCustomer      = posZF.posLookupCustomer;
 exports.posProcessRefund       = posZF.posProcessRefund;

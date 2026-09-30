@@ -128,4 +128,63 @@ function assertConfirmable(pay, actor) {
   return { ok: true, rail, owner, amount: Number.isFinite(amount) ? amount : null };
 }
 
-module.exports = { assertConfirmable, classifyRail, ownerOf, QR_PAID, QR_STATUSES };
+/* ── THE STK RAIL (POS/Till convergence, 2026-09-30) ─────────────────────────────────────────
+   The IntaSend M-PESA prompt a till sends through posInitiateIntasendPayment is keyed
+   `postill_<shop>_<saleKey>`. Its money facts live in TWO server-only documents, neither of which
+   a browser can write:
+     posPaymentIntents/{ref}  — written ONCE by the initiator: merchantId (proved by shop access),
+                                idempotencyKey (the sale's own key), amountCents (what the customer
+                                was asked to pay), provider:'intasend';
+     posPaymentStatus/{ref}   — written by webhookIntasend's finalizeFromWebhook: 'completed' |
+                                'failed' | 'pending'. A terminal status is final.
+   Before this, the checkout looked for such a payment in posPayments (the QR rail), found nothing,
+   and refused every paid M-PESA till prompt — the two halves had never met.
+
+   Rules, in order: the documents exist and are IntaSend's; the intent belongs to THIS shop; the
+   intent was raised for THIS sale (same idempotency key — a payment for one basket cannot settle
+   another); the provider has reported it completed. The amount returned is the amount the
+   customer was prompted for and approved — a COMPLETE STK is payment of exactly that sum. The
+   gateway's own figure is not used for sufficiency because IntaSend reports it NET of fees.
+   NEVER throws, NEVER writes — the caller keeps its sufficiency check and its spent-once claim. */
+const STK_PREFIX = 'postill_';
+const STK_PAID = 'completed';
+
+function isStkRef(ref) { return typeof ref === 'string' && ref.indexOf(STK_PREFIX) === 0; }
+
+/**
+ * May this IntaSend M-PESA prompt settle this sale?
+ *
+ * @param {object|null} intent   posPaymentIntents/{ref}, as read by the caller
+ * @param {object|null} status   posPaymentStatus/{ref}, as read by the caller
+ * @param {object} actor         { merchantId, idempotencyKey } — resolved by the caller
+ */
+function assertConfirmableStk(intent, status, actor) {
+  const a = actor || {};
+  if (!intent || typeof intent !== 'object') {
+    return refuse('no_document', 'No M-PESA request was found for this sale. Nothing has been charged.');
+  }
+  if (String(intent.provider || '') !== 'intasend') {
+    return refuse('unknown_shape', 'That payment request cannot be identified, so it cannot be confirmed.');
+  }
+  const owner = (typeof intent.merchantId === 'string' && intent.merchantId) ? intent.merchantId : null;
+  if (!owner) {
+    return refuse('no_owner', 'That payment request does not identify its shop, so it cannot be confirmed.');
+  }
+  if (owner !== String(a.merchantId || '')) {
+    return refuse('wrong_shop', 'That payment belongs to a different shop.');
+  }
+  if (!a.idempotencyKey || String(intent.idempotencyKey || '') !== String(a.idempotencyKey)) {
+    return refuse('wrong_sale', 'That M-PESA payment was requested for a different sale.');
+  }
+  const st = String((status && status.status) || 'pending');
+  if (st !== STK_PAID) {
+    return refuse('not_paid',
+      st === 'failed'
+        ? 'The customer\'s M-PESA payment did not go through. Nothing was completed; try again.'
+        : 'The customer has not completed this M-PESA payment yet. Wait for their confirmation.');
+  }
+  const cents = Number(intent.amountCents);
+  return { ok: true, rail: 'stk', owner, amount: Number.isFinite(cents) ? cents / 100 : null };
+}
+
+module.exports = { assertConfirmable, assertConfirmableStk, isStkRef, classifyRail, ownerOf, QR_PAID, QR_STATUSES, STK_PREFIX };
