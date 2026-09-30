@@ -28,7 +28,14 @@ const crypto                 = require('crypto');
 
 if (!admin.apps.length) admin.initializeApp();
 const db   = admin.firestore();
-const auth = admin.auth();
+/* LAZY, deliberately. This was `const auth = admin.auth()` — evaluated at MODULE
+   LOAD, which forces the Auth service to exist the moment anything requires this
+   file. procurement.js requires it at ITS top level, so two certification suites
+   crashed with "admin.auth is not a function" before running a single assertion, and
+   any consumer stubbing firebase-admin without an auth() had the same problem.
+   Sibling authorities (shop-employees, merchant-identity) already resolve their
+   services lazily for this reason. Three call sites, no behaviour change. */
+const auth = () => admin.auth();
 
 /* ═══════════════════════════════════════════════════════════════
    CONSTANTS
@@ -191,7 +198,7 @@ exports.wfInviteEmployee = onCall({ region: 'us-central1' }, async (request) => 
   let invitedToken = null;
   if (invitedEmail) {
     try {
-      const userRecord = await auth.getUserByEmail(invitedEmail);
+      const userRecord = await auth().getUserByEmail(invitedEmail);
       invitedUid = userRecord.uid;
     } catch (_) { /* not found — they'll create an account on acceptance */ }
   }
@@ -356,7 +363,7 @@ exports.wfAcceptInvitation = onCall({ region: 'us-central1' }, async (request) =
   }
 
   /* Validate invitee email matches (if targeted) */
-  const userRecord = await auth.getUser(uid);
+  const userRecord = await auth().getUser(uid);
   if (inv.invitedEmail && inv.invitedEmail !== _normaliseEmail(userRecord.email || '')) {
     throw new HttpsError('permission-denied', `This invitation was sent to ${inv.invitedEmail}.`);
   }
@@ -1125,7 +1132,7 @@ exports.wfUpdateProfessionalProfile = onCall({ region: 'us-central1' }, async (r
 exports.wfGetPendingInvitationsByEmail = onCall({ region: 'us-central1' }, async (request) => {
   const uid = _assertAuth(request);
 
-  const userRecord = await auth.getUser(uid);
+  const userRecord = await auth().getUser(uid);
   const email      = _normaliseEmail(userRecord.email || '');
   if (!email) return { invitations: [] };
 

@@ -326,7 +326,11 @@ const getBranchPerformanceComparison = onCall(OPT, async (req) => {
 
           snap.forEach(doc => {
             const d = doc.data();
-            const qty          = d.qty           ?? d.quantity         ?? 0;
+            /* posProducts has two live writers with different stock field names
+               (posUpsertProduct: stockQty; the seller.js marketplace mirror:
+               stockLevel) — see docs/POSPRODUCTS_MIGRATION_GRAPH.md. Neither is
+               `qty`/`quantity`, which this read every real document as 0 stock. */
+            const qty          = d.stockQty      ?? d.stockLevel        ?? 0;
             const reorderPoint = d.reorderPoint  ?? d.reorder_point    ?? 0;
             if (qty <= reorderPoint) lowStockCount++;
           });

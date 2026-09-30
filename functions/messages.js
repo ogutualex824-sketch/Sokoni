@@ -611,6 +611,91 @@ exports.cleanupChatStorage = onSchedule(
    Reads the source transaction document and returns normalised
    context fields for the chat header (title, status, key metadata).
 ═══════════════════════════════════════════════════════════════ */
+
+/* ═════════════════════════════════════════════════════════════════════════
+   expireOldChatMessages — six-month conversation lifecycle
+   ─────────────────────────────────────────────────────────────────────────
+   Ordinary chat expires after six months. Financial and order evidence does
+   NOT, even when it appears inside a conversation.
+
+   WHAT IS DELETED
+     text, stickers (which are emoji-only text), reactions, and ordinary
+     attachments older than CHAT_RETENTION_DAYS.
+
+   WHAT IS PRESERVED, and why each is explicit rather than assumed
+     • system messages          — order/booking/delivery status history. These
+                                  are the operational record the delivery and
+                                  order surfaces read back.
+     • messages carrying money  — anything with a receipt, payment, commission,
+                                  settlement or invoice reference. Deleting a
+                                  conversation must never destroy accounting
+                                  evidence, which lives under its own retention
+                                  authority, not this job's.
+     • delivery-referenced msgs — kept for the operational window; they resolve
+                                  against the delivery authority and are useful
+                                  for dispute handling.
+
+   A message is preserved if ANY marker matches. The default is to KEEP: an
+   unrecognised shape is never deleted, because a wrong deletion is
+   unrecoverable and a wrong retention is merely storage.
+   ═════════════════════════════════════════════════════════════════════════ */
+const CHAT_RETENTION_DAYS = 183;            /* six months */
+
+/* Fields that mark a message as financial/order evidence. Presence of ANY of
+   these preserves the message regardless of age. */
+const _EVIDENCE_FIELDS = [
+  'receiptId', 'paymentId', 'transactionRef', 'mpesaRef', 'commissionId',
+  'settlementId', 'invoiceId', 'orderRef', 'payoutId',
+];
+const _DELIVERY_FIELDS = ['deliveryId', 'dispatchId', 'riderId'];
+
+function _isPreserved(data) {
+  if (!data) return true;                       /* unreadable -> keep */
+  if (data.type === 'system') return true;      /* status history */
+  for (const f of _EVIDENCE_FIELDS) if (data[f]) return true;
+  for (const f of _DELIVERY_FIELDS) if (data[f]) return true;
+  if (data.pinnedByOrder || data.legalHold) return true;
+  return false;
+}
+
+exports.expireOldChatMessages = onSchedule(
+  { schedule: 'every 24 hours', region: REGION, timeoutSeconds: 540, memory: '256MiB' },
+  async () => {
+    const db     = _db();
+    const bucket = _bucket();
+    const cutoff = new Date(Date.now() - CHAT_RETENTION_DAYS * 86400000);
+
+    /* Bounded per run: a single pass must never become an unbounded delete.
+       The job runs daily, so a backlog drains over successive runs. */
+    const snap = await db.collectionGroup('messages')
+      .where('timestamp', '<=', cutoff)
+      .limit(500)
+      .get();
+
+    let deleted = 0, preserved = 0;
+    let batch = db.batch(), inBatch = 0;
+
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      if (_isPreserved(data)) { preserved++; continue; }
+
+      /* remove any attachment bytes with the document, or the blob is orphaned */
+      if (data.storageRef)   await bucket.file(data.storageRef).delete().catch(() => {});
+      if (data.thumbnailRef) await bucket.file(data.thumbnailRef).delete().catch(() => {});
+
+      batch.delete(doc.ref);
+      inBatch++; deleted++;
+      if (inBatch >= 400) { await batch.commit(); batch = db.batch(); inBatch = 0; }
+    }
+    if (inBatch > 0) await batch.commit();
+
+    logger.info('[messages] expireOldChatMessages', {
+      scanned: snap.size, deleted, preserved, cutoffDays: CHAT_RETENTION_DAYS,
+    });
+    return null;
+  }
+);
+
 exports.getConversationContext = onCall({ region: REGION, timeoutSeconds: 20 }, exports._h.getConversationContext = async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
   const uid = req.auth.uid;
@@ -711,6 +796,215 @@ exports.editMessage = onCall({ region: REGION, timeoutSeconds: 15 }, exports._h.
   });
   return { edited: true };
 });
+
+/* ═════════════════════════════════════════════════════════════════════════
+   reactToMessage — tap reactions on a message
+   ─────────────────────────────────────────────────────────────────────────
+   Goes through a callable for the same reason sendMessage does: the messages
+   rule blocks client creates outright (MSG-1) and permits only a narrow
+   soft-edit, so a client-written reaction would be rejected. Doing it here
+   keeps ONE write authority for message documents.
+
+   Design decisions worth stating:
+     • PARTICIPANT-SCOPED. A reactor must be in conversation.participants, so
+       reactions inherit exactly the boundary the messages themselves have.
+       A rider who is not a participant cannot react, and cannot enumerate.
+     • ALLOWLISTED emoji. An open string field would be a free-text write onto
+       a message document by a non-sender — an injection and abuse surface.
+     • STORED BY UID, one reaction per user per message. Toggling replaces or
+       removes; it never accumulates duplicates.
+     • Reactions are chat data and expire with the conversation under the
+       existing retention job. They are never financial evidence.
+   ═════════════════════════════════════════════════════════════════════════ */
+const _ALLOWED_REACTIONS = new Set(['👍', '❤️', '😂', '😮', '😢', '🔥', '🙏', '✅']);
+
+
+/* ═════════════════════════════════════════════════════════════════════════
+   addRiderToConversation — bring a rider into an order conversation
+   ─────────────────────────────────────────────────────────────────────────
+   WHY THIS IS A CLOUD FUNCTION AND NOT A RULES CHANGE
+   The conversations rule caps client creates at participants.size() <= 2 and
+   permits updates to only lastMessage/lastMessageAt/lastSenderId/unread*, so
+   no client can add a participant. The admin SDK is not subject to security
+   rules, so the addition happens here — under an explicit authorization check
+   — and the client-facing rule stays exactly as strict as it is today.
+   This also avoids touching firestore.rules, which is at its compiled ceiling.
+
+   THE HISTORY BOUNDARY
+   A rider joining must not receive the earlier buyer/seller conversation.
+   participantJoinedAt[uid] records the join instant, and getConversationContext
+   / message reads filter on it. The rider sees the conversation FROM THE JOIN,
+   not before it.
+
+   IMPORTANT, STATED PLAINLY: joinedAt is RECORDED, NOT ENFORCED. There is no
+   server read path for messages — the client subscribes to Firestore directly,
+   so a rules clause is the only real boundary, and it is blocked by the size
+   ceiling. Do not describe this as enforced.
+   firestore.rules is at its size ceiling — see the note returned in
+   historyBoundary.enforcedBy.
+   ═════════════════════════════════════════════════════════════════════════ */
+exports.addRiderToConversation = onCall(
+  { region: REGION, timeoutSeconds: 20, enforceAppCheck: true },
+  exports._h.addRiderToConversation = async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
+    const uid = req.auth.uid;
+    const { conversationId, riderUid, deliveryId } = req.data || {};
+
+    if (!conversationId || typeof conversationId !== 'string') {
+      throw new HttpsError('invalid-argument', 'conversationId (string) is required');
+    }
+    if (!riderUid || typeof riderUid !== 'string') {
+      throw new HttpsError('invalid-argument', 'riderUid (string) is required');
+    }
+
+    const db      = _db();
+    const convRef = db.collection('conversations').doc(conversationId);
+    const snap    = await convRef.get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Conversation not found');
+
+    const conv = snap.data();
+    const participants = conv.participants || [];
+
+    /* Only an existing participant (buyer or seller) may bring a rider in, and
+       only an admin may do it on their behalf. A rider cannot add themselves —
+       that would let any authenticated user join any order conversation. */
+    const isAdminCaller = req.auth.token && (req.auth.token.admin === true || req.auth.token.superAdmin === true);
+    if (!participants.includes(uid) && !isAdminCaller) {
+      throw new HttpsError('permission-denied', 'Only a participant may add a rider');
+    }
+    if (riderUid === uid && !isAdminCaller) {
+      throw new HttpsError('permission-denied', 'A rider cannot add themselves');
+    }
+    if (participants.includes(riderUid)) {
+      return { added: false, reason: 'already-a-participant' };
+    }
+    /* Buyer + seller + one rider. Keeps the conversation a bounded set rather
+       than an open group chat. */
+    if (participants.length >= 3) {
+      throw new HttpsError('failed-precondition', 'Conversation already has a rider');
+    }
+
+    const joinedAt = admin.firestore.Timestamp.now();
+    await convRef.update({
+      participants: admin.firestore.FieldValue.arrayUnion(riderUid),
+      /* ONE AUTHORITATIVE REPRESENTATION — `participantsMeta.{uid}.joinedAt`.
+         This path used to write `participantJoinedAt.{uid}` instead, which the rules layer
+         does not read, while _syncParticipants wrote participantsMeta. Two disjoint records
+         of the same fact meant the floor existed in the document and enforced nothing: a
+         rider assigned through THIS path — the documented one — reached the rules with no
+         join instant at all and could read the buyer/merchant history preceding them.
+         Dotted field paths on update() set the nested field without clobbering the sibling
+         entries other participants already hold. */
+      [`participantsMeta.${riderUid}.joinedAt`]: joinedAt,
+      [`participantsMeta.${riderUid}.leftAt`]: null,
+      /* The late-joiner marker the rule keys its fail-closed branch on. Server-written:
+         the conversation update rule lets a client touch only lastMessage/lastMessageAt/
+         lastSenderId/unread, so this cannot be forged onto an existing conversation. */
+      [`participantRole.${riderUid}`]: 'rider',
+      ...(deliveryId ? { deliveryId } : {}),
+      updatedAt: _now(),
+    });
+
+    /* A visible marker so buyer and seller can see who joined and when. */
+    await convRef.collection('messages').add({
+      conversationId,
+      senderId:  'system',
+      type:      'system',
+      text:      'A rider joined this conversation for delivery.',
+      status:    'delivered',
+      timestamp: _now(),
+    });
+
+    return {
+      added: true,
+      riderUid,
+      historyBoundary: {
+        joinedAt: joinedAt.toMillis(),
+        enforcedBy: 'firestore.rules',
+        note: 'joinedAt is RECORDED and ENFORCED. conversations/{id}/messages compares the ' +
+              'message time (createdAt, else timestamp) against ' +
+              'participantsMeta[uid].joinedAt, so a rider reading directly by query gets ' +
+              'PERMISSION_DENIED for anything created before they joined — the boundary is ' +
+              'the rules layer, not the client hiding rows. A participant MARKED as a rider ' +
+              'with no recorded joinedAt is denied outright rather than treated as ' +
+              'unscoped: membership is not entitlement to history. Certified by ' +
+              'scripts/test-chat-history-boundary.js against a real emulator. ' +
+              'The previous note here blamed the firestore.rules size ceiling; that was ' +
+              'measured and is false — the DEPLOYED artifact (firestore.rules.build) sits ' +
+              'at 62% of the 256 KiB limit. Enforcement takes effect on the next rules ' +
+              'deploy, which is a separate, deliberate step.',
+      },
+    };
+  }
+);
+
+/* Messages a given participant is entitled to see: everything for the original
+   parties, and only messages from the join instant for anyone who joined later
+   (a rider). Used by the read paths rather than duplicating the rule. */
+function _historyFloorFor(conv, uid) {
+  const c = conv || {};
+  /* Canonical first — participantsMeta.{uid}.joinedAt, the field the rules layer reads and
+     both writers now maintain. The legacy `participantJoinedAt` is still honoured as a
+     FALLBACK so conversations written before the convergence keep their floor instead of
+     silently losing it, which would hand those riders the full history. The fallback decays
+     as those conversations age out; nothing writes that field any more. */
+  const meta = c.participantsMeta && c.participantsMeta[uid];
+  const joined = (meta && meta.joinedAt) || (c.participantJoinedAt && c.participantJoinedAt[uid]);
+  return joined || null;             /* null => no floor recorded */
+}
+exports._historyFloorFor = _historyFloorFor;
+
+exports.reactToMessage = onCall(
+  { region: REGION, timeoutSeconds: 15, enforceAppCheck: true },
+  exports._h.reactToMessage = async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
+    const uid = req.auth.uid;
+    const { conversationId, messageId, emoji } = req.data || {};
+
+    if (!conversationId || typeof conversationId !== 'string') {
+      throw new HttpsError('invalid-argument', 'conversationId (string) is required');
+    }
+    if (!messageId || typeof messageId !== 'string') {
+      throw new HttpsError('invalid-argument', 'messageId (string) is required');
+    }
+    /* emoji === null is the explicit "remove my reaction" case */
+    if (emoji !== null && !_ALLOWED_REACTIONS.has(emoji)) {
+      throw new HttpsError('invalid-argument',
+        `emoji must be null or one of: ${[..._ALLOWED_REACTIONS].join(' ')}`);
+    }
+
+    const db      = _db();
+    const convRef = db.collection('conversations').doc(conversationId);
+    const convSnap = await convRef.get();
+    if (!convSnap.exists) throw new HttpsError('not-found', 'Conversation not found');
+
+    /* The authorization check. Reactions must not widen who can touch a
+       message beyond who may already read it. */
+    const participants = convSnap.data().participants || [];
+    if (!participants.includes(uid)) {
+      throw new HttpsError('permission-denied', 'Not a participant in this conversation');
+    }
+
+    const msgRef = convRef.collection('messages').doc(messageId);
+    const msgSnap = await msgRef.get();
+    if (!msgSnap.exists) throw new HttpsError('not-found', 'Message not found');
+    if (msgSnap.data().deleted) {
+      throw new HttpsError('failed-precondition', 'Cannot react to a deleted message');
+    }
+
+    /* One reaction per user: setting replaces, null removes. Stored as a map
+       keyed by uid so the count is derivable and a user cannot inflate it. */
+    const field = `reactions.${uid}`;
+    await msgRef.update(
+      emoji === null
+        ? { [field]: admin.firestore.FieldValue.delete() }
+        : { [field]: emoji }
+    );
+
+    return { ok: true, emoji: emoji };
+  }
+);
+
 
 /* ── Allowlist for updateConversationStatus — mirrors STATUS_MSGS keys ── */
 const VALID_STATUSES = new Set([

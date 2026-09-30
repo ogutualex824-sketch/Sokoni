@@ -18,6 +18,17 @@ function _id()  { return _db().collection('_').doc().id; }
 function _esc(s){ return String(s||'').replace(/[<>"']/g,''); }
 function _san(v,max){ return String(v||'').slice(0,max); }
 
+/* WHY A FIGURE MAY BE REPORTED AT ALL.
+
+   Every aggregate below reads a collection and sums what comes back. An empty snapshot
+   summed to zero and returned as `{ revenue: 0, units: 0 }` — which is a claim about a
+   merchant's trading, made when nobody looked. orderItems and returnItems are EMPTY in
+   production and have no producer anywhere, so that claim was false for every merchant
+   with real orders.
+
+   This does not change any arithmetic. It changes whether the result is allowed to be
+   presented as measured. */
+const _AV = require('./analytics-availability');
 const _CALL = { region: 'us-central1', enforceAppCheck: true };
 
 // Handler registry — consumed by analytics-dispatch.js
@@ -79,16 +90,28 @@ function _emptyTimeSeries(fromMs, toMs, granularity) {
   return map;
 }
 
+/* Shop access is resolved by the ONE shopEmployees contract.
+
+   This used to grant employee access on `empSnap.exists` ALONE. Because
+   firestore.rules permits any signed-in client to create a shopEmployees document
+   at an arbitrary id provided it sets `shopOwnerId` to itself, a client could
+   write `shopEmployees/{someOtherShop}_{ownUid}` and be read here as that shop's
+   staff — a cross-tenant escalation into another merchant's analytics.
+
+   shop-employees.js corroborates the record against the shop document (the
+   record's shopOwnerId must equal the shop's real owner), refuses the legacy
+   {uid} key, and requires an active, known role. */
+const _shopEmployees = require('./shop-employees');
+
 async function _assertShop(uid, shopId) {
-  const shopSnap = await _db().collection('shops').doc(shopId).get();
-  if (!shopSnap.exists) throw new Error('Shop not found');
-  const d = shopSnap.data();
-  if (d.ownerId === uid) return 'owner';
-  const empSnap = await _db().collection('shopEmployees').doc(shopId + '_' + uid).get();
-  if (empSnap.exists) return empSnap.data().role || 'employee';
-  const claims = (await admin.auth().getUser(uid)).customClaims || {};
-  if (claims.role === 'admin' || claims.role === 'superAdmin') return 'admin';
-  throw new Error('Access denied');
+  try {
+    return await _shopEmployees.assertShopAccess(uid, shopId);
+  } catch (e) {
+    /* This module's callers expect a bare Error with these messages; preserve
+       them so behaviour above is unchanged. */
+    if (e && e.code === 'not-found') throw new Error('Shop not found');
+    throw new Error('Access denied');
+  }
 }
 
 async function _assertAdmin(uid) {
@@ -111,14 +134,16 @@ exports.salesGetSummary = onCall(_CALL, exports._h.salesGetSummary = async req =
   await _assertShop(uid, shopId);
   const { fromMs, toMs } = _period(period, customFrom, customTo);
   const fromTs = admin.firestore.Timestamp.fromMillis(fromMs);
+  const toTs   = admin.firestore.Timestamp.fromMillis(toMs);
   const prevFrom = admin.firestore.Timestamp.fromMillis(fromMs - (toMs - fromMs));
   const prevTo   = fromTs;
 
   // Current period
   const [curSnap, prevSnap, refSnap] = await Promise.all([
-    _db().collection('orders').where('shopId', '==', shopId).where('createdAt', '>=', fromTs).limit(2000).get(),
+    _db().collection('orders').where('shopId', '==', shopId)
+      .where('createdAt', '>=', fromTs).where('createdAt', '<', toTs).limit(2000).get(),
     _db().collection('orders').where('shopId', '==', shopId).where('createdAt', '>=', prevFrom).where('createdAt', '<', prevTo).limit(2000).get(),
-    _db().collection('refunds').where('shopId', '==', shopId).where('createdAt', '>=', fromTs).limit(500).get(),
+    _db().collection('refunds').where('shopId', '==', shopId).where('createdAt', '>=', fromTs).where('createdAt', '<', toTs).limit(500).get(),
   ]);
 
   function _agg(docs) {
@@ -161,9 +186,10 @@ exports.salesGetTimeSeries = onCall(_CALL, exports._h.salesGetTimeSeries = async
   const { fromMs, toMs } = _period(period, customFrom, customTo);
   const gran = granularity || _autoGranularity(fromMs, toMs);
   const fromTs = admin.firestore.Timestamp.fromMillis(fromMs);
+  const toTs   = admin.firestore.Timestamp.fromMillis(toMs);
 
   const snap = await _db().collection('orders').where('shopId', '==', shopId)
-    .where('createdAt', '>=', fromTs).limit(3000).get();
+    .where('createdAt', '>=', fromTs).where('createdAt', '<', toTs).limit(3000).get();
 
   const revenueMap = _emptyTimeSeries(fromMs, toMs, gran);
   const ordersMap  = { ...revenueMap };
@@ -194,9 +220,11 @@ exports.salesGetByCategory = onCall(_CALL, exports._h.salesGetByCategory = async
   await _assertShop(uid, shopId);
   const { fromMs, toMs } = _period(period, customFrom, customTo);
   const fromTs = admin.firestore.Timestamp.fromMillis(fromMs);
+  const toTs   = admin.firestore.Timestamp.fromMillis(toMs);
 
-  const snap = await _db().collection('orderItems').where('shopId', '==', shopId)
-    .where('createdAt', '>=', fromTs).limit(5000).get();
+  const _r = await _AV.read('orderItems', _db().collection('orderItems').where('shopId', '==', shopId)
+    .where('createdAt', '>=', fromTs).where('createdAt', '<', toTs).limit(5000).get());
+  const snap = { docs: _r.docs };
 
   const catMap = {};
   snap.docs.forEach(d => {
@@ -212,7 +240,7 @@ exports.salesGetByCategory = onCall(_CALL, exports._h.salesGetByCategory = async
   })).sort((a, b) => b.revenue - a.revenue);
 
   const total = rows.reduce((s, r) => s + r.revenue, 0);
-  return { rows: rows.slice(0, 50).map(r => ({ ...r, share: total ? Math.round((r.revenue / total) * 100) : 0 })) };
+  return _AV.envelope([_r], { rows: rows.slice(0, 50).map(r => ({ ...r, share: total ? Math.round((r.revenue / total) * 100) : 0 })) });
 });
 
 /** salesGetByChannel — marketplace vs POS vs API vs WhatsApp */
@@ -285,8 +313,9 @@ exports.salesGetTopProducts = onCall(_CALL, exports._h.salesGetTopProducts = asy
   const { fromMs } = _period(period);
   const fromTs = admin.firestore.Timestamp.fromMillis(fromMs);
 
-  const snap = await _db().collection('orderItems').where('shopId', '==', shopId)
-    .where('createdAt', '>=', fromTs).limit(5000).get();
+  const _r = await _AV.read('orderItems', _db().collection('orderItems').where('shopId', '==', shopId)
+    .where('createdAt', '>=', fromTs).limit(5000).get());
+  const snap = { docs: _r.docs };
 
   const products = {};
   snap.docs.forEach(d => {
@@ -300,7 +329,7 @@ exports.salesGetTopProducts = onCall(_CALL, exports._h.salesGetTopProducts = asy
 
   const rows = Object.values(products).map(p => ({ ...p, orders: p.orders.size }));
   rows.sort((a, b) => b[metric] - a[metric]);
-  return { metric, rows: rows.slice(0, n).map(r => ({ ...r, revenue: Math.round(r.revenue) })) };
+  return _AV.envelope([_r], { metric, rows: rows.slice(0, n).map(r => ({ ...r, revenue: Math.round(r.revenue) })) });
 });
 
 /** salesGetHourlyHeatmap — order volume by day-of-week × hour-of-day */
@@ -724,8 +753,9 @@ exports.productGetSalesVelocity = onCall(_CALL, exports._h.productGetSalesVeloci
   const days = Math.max(1, (toMs - fromMs) / 86400000);
   const fromTs = admin.firestore.Timestamp.fromMillis(fromMs);
 
-  const snap = await _db().collection('orderItems').where('shopId', '==', shopId)
-    .where('createdAt', '>=', fromTs).limit(5000).get();
+  const _r = await _AV.read('orderItems', _db().collection('orderItems').where('shopId', '==', shopId)
+    .where('createdAt', '>=', fromTs).limit(5000).get());
+  const snap = { docs: _r.docs };
 
   const products = {};
   snap.docs.forEach(d => {
@@ -735,12 +765,12 @@ exports.productGetSalesVelocity = onCall(_CALL, exports._h.productGetSalesVeloci
     products[productId].units += quantity;
   });
 
-  return {
+  return _AV.envelope([_r], {
     days: Math.round(days),
     products: Object.values(products).map(p => ({
       ...p, velocity: Math.round((p.units / days) * 10) / 10,
     })).sort((a, b) => b.velocity - a.velocity).slice(0, n),
-  };
+  });
 });
 
 /** productGetReturnRate — refund/return count per product */
@@ -752,10 +782,11 @@ exports.productGetReturnRate = onCall(_CALL, exports._h.productGetReturnRate = a
   const { fromMs } = _period(period);
   const fromTs = admin.firestore.Timestamp.fromMillis(fromMs);
 
-  const [ordersSnap, returnsSnap] = await Promise.all([
-    _db().collection('orderItems').where('shopId', '==', shopId).where('createdAt', '>=', fromTs).limit(5000).get(),
-    _db().collection('returnItems').where('shopId', '==', shopId).where('createdAt', '>=', fromTs).limit(1000).get(),
+  const [_ro, _rr] = await Promise.all([
+    _AV.read('orderItems', _db().collection('orderItems').where('shopId', '==', shopId).where('createdAt', '>=', fromTs).limit(5000).get()),
+    _AV.read('returnItems', _db().collection('returnItems').where('shopId', '==', shopId).where('createdAt', '>=', fromTs).limit(1000).get()),
   ]);
+  const ordersSnap = { docs: _ro.docs }, returnsSnap = { docs: _rr.docs };
 
   const sold = {}, returned = {};
   ordersSnap.docs.forEach(d => {
@@ -774,7 +805,7 @@ exports.productGetReturnRate = onCall(_CALL, exports._h.productGetReturnRate = a
     returnRate: Math.round(((returned[productId] || 0) / sold[productId]) * 100),
   })).filter(r => r.returned > 0).sort((a, b) => b.returnRate - a.returnRate);
 
-  return { products: result.slice(0, 50) };
+  return _AV.envelope([_ro, _rr], { products: result.slice(0, 50) });
 });
 
 /** productGetReviewSentiment — avg rating and review count per product */
@@ -816,8 +847,9 @@ exports.productGetMarginAnalysis = onCall(_CALL, exports._h.productGetMarginAnal
   const { fromMs } = _period(period);
   const fromTs = admin.firestore.Timestamp.fromMillis(fromMs);
 
-  const snap = await _db().collection('orderItems').where('shopId', '==', shopId)
-    .where('createdAt', '>=', fromTs).limit(5000).get();
+  const _r = await _AV.read('orderItems', _db().collection('orderItems').where('shopId', '==', shopId)
+    .where('createdAt', '>=', fromTs).limit(5000).get());
+  const snap = { docs: _r.docs };
 
   const products = {};
   snap.docs.forEach(d => {
@@ -829,7 +861,7 @@ exports.productGetMarginAnalysis = onCall(_CALL, exports._h.productGetMarginAnal
     products[productId].units   += quantity;
   });
 
-  return {
+  return _AV.envelope([_r], {
     products: Object.values(products)
       .filter(p => p.cost > 0)
       .map(p => ({
@@ -840,7 +872,7 @@ exports.productGetMarginAnalysis = onCall(_CALL, exports._h.productGetMarginAnal
       }))
       .sort((a, b) => b.grossProfit - a.grossProfit)
       .slice(0, n),
-  };
+  });
 });
 
 /** productGetInventoryTurnover — turnover ratio per product */
@@ -853,10 +885,11 @@ exports.productGetInventoryTurnover = onCall(_CALL, exports._h.productGetInvento
   const days = Math.max(1, (toMs - fromMs) / 86400000);
   const fromTs = admin.firestore.Timestamp.fromMillis(fromMs);
 
-  const [soldSnap, stockSnap] = await Promise.all([
-    _db().collection('orderItems').where('shopId', '==', shopId).where('createdAt', '>=', fromTs).limit(5000).get(),
+  const [_rs, stockSnap] = await Promise.all([
+    _AV.read('orderItems', _db().collection('orderItems').where('shopId', '==', shopId).where('createdAt', '>=', fromTs).limit(5000).get()),
     _db().collection('warehouseStock').where('shopId', '==', shopId).limit(500).get(),
   ]);
+  const soldSnap = { docs: _rs.docs };
 
   const sold = {}, productNames = {};
   soldSnap.docs.forEach(d => {
@@ -881,7 +914,7 @@ exports.productGetInventoryTurnover = onCall(_CALL, exports._h.productGetInvento
     return { productId, productName: productNames[productId], soldUnits, onHand, turnover, daysOnHand };
   }).sort((a, b) => (b.turnover || 0) - (a.turnover || 0));
 
-  return { days: Math.round(days), products: result.slice(0, 50) };
+  return _AV.envelope([_rs], { days: Math.round(days), products: result.slice(0, 50) });
 });
 
 /** productGetSlowMovers — products sold fewer than N units in period */
@@ -894,10 +927,11 @@ exports.productGetSlowMovers = onCall(_CALL, exports._h.productGetSlowMovers = a
   const { fromMs } = _period(period);
   const fromTs = admin.firestore.Timestamp.fromMillis(fromMs);
 
-  const [soldSnap, productSnap] = await Promise.all([
-    _db().collection('orderItems').where('shopId', '==', shopId).where('createdAt', '>=', fromTs).limit(5000).get(),
+  const [_rs, productSnap] = await Promise.all([
+    _AV.read('orderItems', _db().collection('orderItems').where('shopId', '==', shopId).where('createdAt', '>=', fromTs).limit(5000).get()),
     _db().collection('products').where('shopId', '==', shopId).where('status', '==', 'active').limit(500).get(),
   ]);
+  const soldSnap = { docs: _rs.docs };
 
   const sold = {};
   soldSnap.docs.forEach(d => {
@@ -911,7 +945,7 @@ exports.productGetSlowMovers = onCall(_CALL, exports._h.productGetSlowMovers = a
     .sort((a, b) => a.unitsSold - b.unitsSold)
     .slice(0, 50);
 
-  return { threshold: thresh, products: slow.map(p => ({ productId: p.productId, name: p.name || p.title, unitsSold: p.unitsSold, price: p.price || 0 })) };
+  return _AV.envelope([_rs], { threshold: thresh, products: slow.map(p => ({ productId: p.productId, name: p.name || p.title, unitsSold: p.unitsSold, price: p.price || 0 })) });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1138,7 +1172,7 @@ exports.analyticsExport = onCall(_CALL, exports._h.analyticsExport = async req =
   const allowed = ['orders', 'orderItems', 'analyticsEvents'];
   if (!allowed.includes(dataType)) throw new Error('Invalid dataType');
 
-  const { fromMs } = _period(period, customFrom, customTo);
+  const { fromMs, toMs } = _period(period, customFrom, customTo);
   const fromTs = admin.firestore.Timestamp.fromMillis(fromMs);
 
   const snap = await _db().collection(dataType).where('shopId', '==', shopId)
@@ -1155,33 +1189,104 @@ exports.analyticsExport = onCall(_CALL, exports._h.analyticsExport = async req =
   return { count: rows.length, dataType, rows };
 });
 
-/** analyticsSnapshotDaily — scheduled: record daily KPI snapshots per shop */
+/** analyticsSnapshotDaily — scheduled: record daily KPI snapshots per shop.
+ *
+ * ── IT JOINED ON A FIELD ORDERS DO NOT HAVE ─────────────────────────────────
+ * It queried `orders.where('shopId','==',shopDoc.id)`. Production evidence, read-only,
+ * 2026-09-12: 0 of 10 sampled orders carry a top-level `shopId`; 10 of 10 carry
+ * `sellerUid`; and a `shops` document's ID *is* that sellerUid (shops carry no ownerId).
+ * So the join key was simply wrong.
+ *
+ * It has not been writing false figures, though — it has been writing NOTHING. The query
+ * also needs a composite index that production does not have, so every shop threw, the
+ * per-shop `catch (_) {}` swallowed it, an empty batch committed, and analyticsSnapshots
+ * is empty. Nobody could tell, because the failure was silent.
+ *
+ * The dangerous part is what would happen NEXT: adding the shopId+createdAt index — which
+ * the Firestore error helpfully offers a one-click link to create — would make the query
+ * SUCCEED, match nothing, and begin persisting `{ orders: 0, revenue: 0 }` for every shop
+ * every night. The index would activate the defect. Fixing the key first is what stops
+ * that.
+ *
+ * ── A SNAPSHOT NOW SAYS WHAT KIND OF ZERO IT IS ─────────────────────────────
+ * A persisted `revenue: 0` is a durable claim about a merchant's trading. It is written
+ * only when the sources were actually read. A failed read writes no row at all and says
+ * so in the logs; it never becomes a zero. */
 exports.analyticsSnapshotDaily = require('firebase-functions/v2/scheduler').onSchedule(
   { schedule: 'every day 23:55', timeZone: 'Africa/Nairobi', region: 'us-central1' },
   async () => {
     const db = _db();
     const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
     const dateStr = yesterday.toISOString().slice(0, 10);
+
+    /* HALF-OPEN [start, nextStart). The old bound was `<= 23:59:59.999`, which drops
+       anything in the final millisecond of the day — a gap that belongs to no snapshot
+       at all. Half-open has no seam and no overlap between consecutive days. */
     const dayStart = new Date(dateStr + 'T00:00:00.000Z');
-    const dayEnd   = new Date(dateStr + 'T23:59:59.999Z');
+    const nextStart = new Date(dayStart.getTime() + 86400000);
     const startTs = admin.firestore.Timestamp.fromDate(dayStart);
-    const endTs   = admin.firestore.Timestamp.fromDate(dayEnd);
+    const endTs   = admin.firestore.Timestamp.fromDate(nextStart);
 
     const shopsSnap = await db.collection('shops').where('status', '==', 'active').limit(500).get();
     const batch = db.batch();
+    let written = 0, skipped = 0;
 
     await Promise.all(shopsSnap.docs.map(async shopDoc => {
       const shopId = shopDoc.id;
-      try {
-        const ordSnap = await db.collection('orders').where('shopId', '==', shopId)
-          .where('createdAt', '>=', startTs).where('createdAt', '<=', endTs).limit(500).get();
-        const revenue = ordSnap.docs.filter(d => ['completed','delivered','paid'].includes(d.data().status))
-          .reduce((s, d) => s + (d.data().total || 0), 0);
-        const snapRef = db.collection('analyticsSnapshots').doc(shopId + '_' + dateStr);
-        batch.set(snapRef, { shopId, date: dateStr, orders: ordSnap.size, revenue: Math.round(revenue), createdAt: _ts() });
-      } catch (_) { /* non-fatal per shop */ }
+
+      /* BOTH KEYS, UNIONED. sellerUid is what live orders carry and what a shop's id is;
+         shopId is read too so a legacy order carrying it is not lost. Deduplicated by
+         document id, because an order holding both must be counted once. */
+      const [bySeller, byShop] = await Promise.all([
+        _AV.read('orders', db.collection('orders').where('sellerUid', '==', shopId)
+          .where('createdAt', '>=', startTs).where('createdAt', '<', endTs).limit(500).get()),
+        _AV.read('orders', db.collection('orders').where('shopId', '==', shopId)
+          .where('createdAt', '>=', startTs).where('createdAt', '<', endTs).limit(500).get()),
+      ]);
+
+      /* A READ THAT DID NOT COMPLETE IS NOT A ZERO. No row is written, and the reason is
+         logged — the silence of the old `catch (_) {}` is why nobody knew this job had
+         never produced anything. */
+      if (!_AV.reportable(bySeller, byShop)) {
+        skipped++;
+        console.warn('[analyticsSnapshotDaily] no snapshot for ' + shopId + ' on ' + dateStr,
+          { sellerUid: bySeller.state, shopId: byShop.state,
+            reason: bySeller.reason || byShop.reason || null });
+        return;
+      }
+
+      const seen = new Map();
+      bySeller.docs.concat(byShop.docs).forEach(d => { if (!seen.has(d.id)) seen.set(d.id, d); });
+      const docs = [...seen.values()];
+
+      /* REVENUE IS SUMMED ONLY IF EVERY COUNTED ORDER CARRIES AN AMOUNT. One order with
+         no usable total would silently undercount the shop's day, and an undercount
+         persisted as fact is the same defect as a zero, just harder to notice. */
+      const earning = docs.filter(d => ['completed', 'delivered', 'paid'].includes((d.data() || {}).status));
+      const amounts = earning.map(d => {
+        const v = d.data() || {};
+        return typeof v.total === 'number' ? v.total
+             : typeof v.orderTotal === 'number' ? v.orderTotal : null;
+      });
+      const revenueKnown = amounts.every(a => a !== null);
+      const revenue = revenueKnown ? amounts.reduce((s2, a) => s2 + a, 0) : null;
+
+      const snapRef = db.collection('analyticsSnapshots').doc(shopId + '_' + dateStr);
+      batch.set(snapRef, {
+        shopId, date: dateStr,
+        orders: docs.length,
+        revenue: revenueKnown ? Math.round(revenue) : null,
+        /* The snapshot declares what it is. OK covers a measured zero: the sources were
+           read and the merchant traded nothing that day. */
+        dataState: revenueKnown ? _AV.STATE.OK : _AV.STATE.NO_DATA,
+        revenueUnavailableReason: revenueKnown ? null : 'one or more earning orders carry no amount',
+        createdAt: _ts(),
+      });
+      written++;
     }));
 
     await batch.commit();
+    console.log('[analyticsSnapshotDaily] ' + dateStr + ': ' + written + ' snapshot(s), ' +
+      skipped + ' shop(s) skipped because their sources could not be read');
   }
 );

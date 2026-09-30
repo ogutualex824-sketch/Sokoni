@@ -21,6 +21,11 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret }       = require('firebase-functions/params');
 
 const SENDGRID_KEY = defineSecret('SENDGRID_API_KEY');
+/* Signs and verifies the points-redemption challenge codes. Declared HERE because a
+   secret a function does not declare is simply absent at runtime — and this one failing
+   closed means redemption is unavailable rather than insecure, which is the right
+   direction but would still be a feature that silently never works. */
+const SOKONI_HMAC_KEY = defineSecret('SOKONI_HMAC_KEY');
 
 const posCrmPro      = require('./pos-crm-pro');
 const posCompleteness= require('./pos-completeness');
@@ -32,6 +37,8 @@ const posIntegrations= require('./pos-integrations');
 const posHq          = require('./pos-hq');
 const posMultiTill   = require('./pos-multi-till');
 const posCashManager = require('./pos-cash-manager');
+const posSupplierSync= require('./pos-supplier-sync');  // supplier/procurement server-authoritative writes
+const posRedemption  = require('./pos-redemption-ops');   // points redemption: mint + customer confirm
 const bizBootstrap   = require('./business-bootstrap');   // onboarding v2: getMyBusinesses/createBusiness/pairDevice/regeneratePairingQR
 
 function _merge() {
@@ -55,13 +62,15 @@ const _H = _merge(
   posHq._h,
   posMultiTill._h,
   posCashManager._h,
-  bizBootstrap._h
+  posSupplierSync._h,
+  bizBootstrap._h,
+  posRedemption._h
 );
 
 const _OPTS = {
   region:          'us-central1',
   enforceAppCheck: true,
-  secrets:         [SENDGRID_KEY],
+  secrets:         [SENDGRID_KEY, SOKONI_HMAC_KEY],
   timeoutSeconds:  120,
   memory:          '512MiB',
   maxInstances:    20,

@@ -129,6 +129,28 @@ exports.merchantAdjustStock = onCall(
     const mvRef    = db.collection('stockMovements').doc(adjustmentId);
     const isAdmin  = await _isPlatformAdmin(uid);
 
+    /* ── EMPLOYEE AUTHORITY, resolved BEFORE the transaction ──────────────────
+       resolveActor performs reads of its own, and a Firestore transaction must do
+       all of its reads through `t` — so the employment question is settled here and
+       the transaction below consumes a plain boolean. The transaction still
+       re-reads the product and re-checks ownership, so nothing is decided on stale
+       state: this only ever ADDS a permitted actor, never skips a check.
+
+       A refusal is an ordinary answer (`ok:false`), and a THROW means the authority
+       itself was unavailable — neither may silently become "allowed", so both land
+       on `false`. */
+    let employeeMayAdjust = false;
+    if (!isAdmin && shopId) {
+      try {
+        const actor = await require('./merchant-identity')._internal.resolveActor(uid, String(shopId));
+        employeeMayAdjust = !!(actor && actor.ok &&
+          (actor.capabilities || []).indexOf('manageInventory') !== -1);
+      } catch (e) {
+        logger.error('[merchantAdjustStock] employment check failed', { uid, shopId, error: e.message });
+        employeeMayAdjust = false;
+      }
+    }
+
     const result = await db.runTransaction(async (t) => {
       /* Idempotency is claimed INSIDE the transaction. A replay returns the
          original outcome and performs no second mutation. */
@@ -150,23 +172,37 @@ exports.merchantAdjustStock = onCall(
       /* ── Ownership: exactly three answers, deliberately ───────────────────
            SELLER OWNER    products/{id}.sellerUid === uid    → allowed
            PLATFORM ADMIN  role admin | superAdmin            → allowed
-           SHOP EMPLOYEE   —                                  → BLOCKED
+           SHOP EMPLOYEE   manageInventory capability         → allowed
 
          `sellerUid` is the field firestore.rules gates product updates on, so
          this callable enforces the same owner invariant rather than a weaker
          one. A caller may not adjust another seller's stock by naming their own
          shopId.
 
-         The employee case is blocked ON PURPOSE and must stay blocked until an
-         employee authorization model is formally defined. The only existing
-         signal is a `shopEmployees/{shopId}_{uid}` document, and firestore.rules
-         permits ANY authenticated client to create a shopEmployees document
-         whose payload names itself (`shopOwnerId == request.auth.uid`). Treating
-         that as stock-write authority would let a caller mint their own
-         permission. Do not add an employee branch here by reading that
-         collection — it needs a verified contract first. */
-      if (!isAdmin && p.sellerUid !== uid)
+         THE EMPLOYEE BRANCH, ADDED 2026-09-06. It was blocked, and the condition
+         this comment set for unblocking it was "it needs a verified contract
+         first". That contract now exists. The objection was that the only signal
+         was a `shopEmployees` document whose mere EXISTENCE was believed, while
+         firestore.rules lets any client create one naming itself — so a caller
+         could mint their own permission. merchant-identity's resolveActor no longer
+         believes existence: it reads the CANONICAL `{shopId}_{uid}` key and
+         CORROBORATES `shopOwnerId` against the shop document, which a self-named
+         forgery cannot satisfy, then requires ACTIVE employment and a known role.
+
+         Authority is asked for BY CAPABILITY, never by role name, and comes from
+         resolveActor — so the owner's narrowing restrictions apply here for free:
+         an owner who withdraws `manageInventory` from a manager withdraws it here
+         too. `manageInventory` is the ONLY capability consulted, so nothing else
+         crosses this boundary. */
+      if (!isAdmin && p.sellerUid !== uid && !employeeMayAdjust)
         throw new HttpsError('permission-denied', 'That product does not belong to this seller.');
+
+      /* An employee's authority is scoped to the shop they were resolved against, so
+         the product must belong to THAT shop's owner. Without this, an employee
+         holding manageInventory at shop A could adjust a product owned by anyone
+         whose record happened to carry no shopId. */
+      if (!isAdmin && p.sellerUid !== uid && String(p.sellerUid || '') !== String(shopId || ''))
+        throw new HttpsError('permission-denied', 'That product does not belong to this shop.');
 
       /* The caller's asserted scope must agree with the product's own, when the
          product carries one. Prevents a correct owner writing a movement filed

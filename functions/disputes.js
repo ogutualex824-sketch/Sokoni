@@ -9,19 +9,22 @@ const _ac = require('./admin-claim');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 
+/* THE ELIGIBILITY AUTHORITY. Who may open a dispute, and until when, is decided in a
+   pure module so it can be reasoned about and tested without a database. */
+const ELIG = require('./dispute-eligibility');
+const PIN  = require('./warranty-pin');
+/* Reusing the warranty rail's own delivery reader rather than writing a second one:
+   two functions answering "was this delivered" is two answers waiting to disagree. */
+const { deliveryFacts } = require('./warranty-returns')._internal;
+
 const db         = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 
-const VALID_REASONS = [
-  'not_received',     // Item never delivered
-  'wrong_item',       // Wrong item sent
-  'not_as_described', // Significantly different from listing
-  'counterfeit',      // Fake/counterfeit product
-  'damaged',          // Arrived damaged
-  'defective',        // Not working/defective
-  'overcharged',      // Charged wrong amount
-  'other',
-];
+/* ONE VOCABULARY. Derived from the eligibility authority rather than restated here —
+   a reason this rail accepts but that authority has never heard of would be a dispute
+   with no window, and a reason the authority knows that this rail rejects would be a
+   complaint a buyer cannot make. */
+const VALID_REASONS = ELIG.DISPUTE_REASON_KEYS;
 const OPEN_STATUSES = ['open', 'investigating', 'seller_responded'];
 
 function _requireAuth(auth) {
@@ -45,19 +48,58 @@ exports.createDispute = onCall({ enforceAppCheck: true }, async request => {
   if (String(description).trim().length < 10)
     throw new HttpsError('invalid-argument', 'Please provide a more detailed description');
 
-  // Verify order ownership
   const orderDoc = await db.collection('orders').doc(orderId).get();
   if (!orderDoc.exists) throw new HttpsError('not-found', 'Order not found');
-  const order = orderDoc.data();
-  const isBuyer = order.buyerId === uid || order.userId === uid || order.customerId === uid;
-  if (!isBuyer) throw new HttpsError('permission-denied', 'This is not your order');
+  const order = Object.assign({ id: orderId }, orderDoc.data());
 
-  // 30-day window from delivery (or creation if undelivered)
-  const refTs = order.deliveredAt || order.createdAt;
-  if (refTs) {
-    const refDate = refTs.toDate ? refTs.toDate() : new Date(refTs);
-    if ((Date.now() - refDate.getTime()) > 30 * 86400000)
-      throw new HttpsError('failed-precondition', 'Dispute window has closed (30 days)');
+  /* ── WAS IT ACTUALLY DELIVERED ───────────────────────────────────────────
+     From the delivery job's own confirmed receipt where there is one — the moment a
+     rider and a buyer jointly confirmed with a PIN — and only then from the order's
+     status, which other paths can advance without anything reaching a doorstep. */
+  const delivery = await deliveryFacts(order).catch(() => ({ delivered: false, deliveredAt: null }));
+
+  /* ── THE SELLER'S OWN PROMISE, AS PINNED AT PURCHASE ─────────────────────
+     Not the policy currently on the listing: a seller may have shortened or deleted
+     that since the sale, and a promise that can be edited afterwards is not a promise.
+     `lineIndex` names which item is being disputed; without one the complaint is about
+     the order as a whole and falls to the platform term. */
+  const view = PIN.warrantyView(order, { deliveredAt: delivery.deliveredAt });
+  const lineIndex = (request.data && request.data.lineIndex);
+  const line = (view && view.ok && Array.isArray(view.lines) && lineIndex != null && lineIndex !== '')
+    ? view.lines.find(l => String(l.line) === String(lineIndex)) || null
+    : null;
+
+  /* An open dispute already on this order — read here so the authority can name it
+     rather than the buyer meeting a bare refusal. */
+  const priorSnap = await db.collection('disputes').doc('dp_' + orderId).get();
+  const prior = priorSnap.exists ? priorSnap.data() : null;
+  const priorOpen = prior && OPEN_STATUSES.includes(prior.status) ? priorSnap.id : null;
+
+  /* ── THE DECISION ────────────────────────────────────────────────────────
+     Ownership, payment, receipt and the deadline, all answered by the authority. This
+     rail previously measured a flat 30 days from delivery-or-creation for every
+     complaint, which ignored the warranty the buyer actually purchased: a seller
+     offering 6 months and a seller offering none were enforced identically. */
+  const verdict = ELIG.eligibility({
+    order, uid, reason, line,
+    delivery,
+    purchasedAt: order.createdAt || null,
+    existingOpenDisputeId: priorOpen,
+  });
+
+  if (!verdict.ok) {
+    const HUMAN = {
+      NOT_YOUR_ORDER:   ['permission-denied',   'This is not your order'],
+      ORDER_NOT_PAID:   ['failed-precondition', 'This order has not been paid for yet'],
+      ORDER_HAS_NO_BUYER:['failed-precondition','This order has no buyer on record'],
+      NOT_DELIVERED_YET:['failed-precondition', verdict.detail ||
+        'This can be raised once the item reaches you.'],
+      WINDOW_CLOSED:    ['failed-precondition', 'The window for raising this has closed'],
+      ALREADY_OPEN:     ['already-exists',      'An open dispute already exists for this order'],
+      UNKNOWN_REASON:   ['invalid-argument',    'Invalid reason'],
+      NO_ANCHOR_DATE:   ['failed-precondition', 'This order has no date we can measure from'],
+    }[verdict.reason] || ['failed-precondition', 'This dispute cannot be opened'];
+    throw new HttpsError(HUMAN[0], HUMAN[1]);
   }
 
   // Deterministic doc ID prevents concurrent duplicates; check + create are atomic
@@ -81,6 +123,21 @@ exports.createDispute = onCall({ enforceAppCheck: true }, async request => {
       resolutionAmount: null,
       evidence:         [],
       timeline:         [{ event: 'opened', actor: uid, actorRole: 'buyer', note: 'Dispute opened by buyer', ts: new Date().toISOString() }],
+
+      /* WHAT GOVERNED THIS DISPUTE, recorded at the moment it opened. Months later
+         the question "why was this still in time" has to be answerable from the
+         document itself — recomputing it against today's policy would answer a
+         different question. */
+      lineIndex:     (lineIndex == null || lineIndex === '') ? null : Number(lineIndex),
+      productId:     line ? (line.productId || null) : null,
+      governedBy:    verdict.governedBy,
+      policyVersion: (verdict.window && verdict.window.policyVersion) || null,
+      windowExpiresAt: (verdict.window && verdict.window.expiresAt) || null,
+      deliveredAt:   delivery.deliveredAt || null,
+
+      /* NOT AN OUTCOME. Recorded so nothing downstream can mistake the absence of a
+         decision for a decision of "no fault". */
+      fault:         verdict.fault,
       sellerResponse:   null,
       sellerRespondedAt:null,
       createdAt: FieldValue.serverTimestamp(),

@@ -73,14 +73,59 @@ function _san(s, max = 500) {
  */
 async function _ownedShop(uid) {
   const db = _db();
-  for (const field of ['sellerUid', 'ownerUid', 'ownerId']) {
-    const snap = await db.collection('shops').where(field, '==', uid).limit(2).get();
-    if (snap.empty) continue;
-    if (snap.size > 1) {
-      logger.warn('KassShop: uid owns multiple shops', { field, count: snap.size });
+
+  /* ── WHICH SHOP, WHEN THERE IS MORE THAN ONE ────────────────────────────────────────
+     Sorting by document id was deterministic, and determinism was the right thing to fix
+     at the time — "whichever came back first" is worse. But deterministic is not the same
+     as CORRECT: the lowest-sorted id is an arbitrary choice among the caller's own shops,
+     so a merchant operating their second shop was shown their first, every time, with only
+     a server log to say so.
+
+     The account already records the answer. `users/{uid}.activeShopId` is written by
+     approval and by the shop switcher — it IS the shop this account is operating — and
+     nothing here was reading it.
+
+     STILL SCOPED BY UID. The selection only chooses AMONG shops this query already proved
+     the caller owns; it is never used to address a shop directly. A stale or tampered
+     activeShopId that does not appear in the owned set is ignored rather than honoured, so
+     this cannot become a way to name someone else's shop.
+
+     The limit rises from 2 to 10 because a choice cannot be made among results that were
+     never fetched — at 2, a merchant's third shop could never be selected. It stays small:
+     this is a per-request read, and an owner with more than ten shops is a different
+     product decision, not a page-size one. */
+  let preferred = null;
+  try {
+    const u = await db.collection('users').doc(String(uid)).get();
+    if (u.exists) {
+      const d = u.data() || {};
+      preferred = d.activeShopId || d.activeStoreId || null;
     }
-    /* Deterministic when several match — never "whichever came back first". */
+  } catch (_) { preferred = null; }
+
+  for (const field of ['sellerUid', 'ownerUid', 'ownerId']) {
+    const snap = await db.collection('shops').where(field, '==', uid).limit(10).get();
+    if (snap.empty) continue;
+
     const docs = snap.docs.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+    if (docs.length > 1) {
+      const chosen = preferred && docs.find((d) => d.id === String(preferred));
+      if (chosen) {
+        logger.info('KassShop: owner has multiple shops; using the account active shop',
+          { field, count: docs.length, shopId: chosen.id });
+        return { id: chosen.id, data: chosen.data() || {} };
+      }
+      /* No usable preference. Fall back to the deterministic choice AND say why, so the
+         log distinguishes "the merchant has not chosen" from "the merchant chose a shop we
+         could not find" — those need different fixes. */
+      logger.warn('KassShop: owner has multiple shops and no resolvable active shop', {
+        field, count: docs.length,
+        activeShopId: preferred || null,
+        reason: preferred ? 'activeShopId is not among the owned shops' : 'no activeShopId set',
+      });
+    }
+
     return { id: docs[0].id, data: docs[0].data() || {} };
   }
   return null;

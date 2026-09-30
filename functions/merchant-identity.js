@@ -39,6 +39,7 @@
 'use strict';
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { evaluateShiftAccess } = require('./merchant-shift-gate');
 const admin = require('firebase-admin');
 
 const REGION = 'us-central1';
@@ -70,27 +71,91 @@ function _employmentActive(rec) {
 /* Employment roles, mapped to the receipt's vocabulary. An unknown role is NOT
    silently promoted to 'staff' — it is refused, because a receipt should not name
    a role nobody defined. */
+/* ── THE CANONICAL EMPLOYEE ROLES — ratified 2026-09-06 ────────────────────────
+   `cashier | manager | inventory | support`, and no others. This file previously
+   declared `staff` and `supervisor`, which shop-employees.js's SHOP_ROLES does not
+   contain — and SHOP_ROLES is what the invite writer ENFORCES
+   (`if (!SHOP_ROLES.includes(role)) throw "Invalid role"`). So `staff` and
+   `supervisor` could never be invited and existed only here, while `inventory` and
+   `support` could be invited and resolved to nothing at all: two of the four
+   invitable roles could not sell, and two of the roles this file understood could
+   not exist. The mismatch survived because production `shopEmployees` is empty —
+   no record ever exercised the seam.
+
+   This map is now a DISPLAY LABEL over the canonical list, not a second gate. The
+   gate is SHOP_ROLES, in one place. */
 const EMPLOYEE_ROLES = {
-  cashier: { role: 'cashier', label: 'Staff' },
-  staff: { role: 'staff', label: 'Staff' },
+  cashier: { role: 'cashier', label: 'Cashier' },
   manager: { role: 'manager', label: 'Manager' },
-  supervisor: { role: 'manager', label: 'Manager' },
+  inventory: { role: 'inventory', label: 'Stock' },
+  support: { role: 'support', label: 'Support' },
 };
 
-/* Operations an employment role may perform. Deliberately explicit: a new role
-   grants nothing until it is listed here. */
+/* ── THE CAPABILITY VOCABULARY ────────────────────────────────────────────────
+   Declared in FULL, once, before any surface enforces it — so Step 1B is pure
+   enforcement against a settled vocabulary rather than verbs invented per page.
+   Every backend operation that an employee can reach names one of these. */
+const CAPABILITIES = Object.freeze([
+  'sell', 'collectPayment', 'printReceipt', 'viewReceipts',
+  'discount', 'refund',
+  'openShift', 'closeShift',
+  'manageInventory', 'manageProducts', 'supply',
+  'viewOrders', 'manageOrders',
+  'viewAnalytics', 'viewFinancials',
+  'manageStaff', 'manageStore', 'manageAvailability', 'manageCalendar',
+  'manageNotifications',
+]);
+
+/* THE OWNER IS NOT AN EMPLOYEE ROLE. The business owner's authority comes from
+   owning the shop — `shops/{uid}`, the document id — not from an employment
+   record, so it is declared separately and is deliberately not a key of
+   ROLE_CAPABILITIES. An owner cannot be invited, restricted or revoked. */
+const OWNER_CAPABILITIES = Object.freeze(CAPABILITIES.slice());
+
+/* The CEILING each employment role may reach. Deliberately explicit: a new role
+   grants nothing until it is listed here, and nothing may exceed CAPABILITIES. */
 const ROLE_CAPABILITIES = {
-  owner: ['sell', 'refund', 'discount', 'openShift', 'closeShift', 'manageStaff'],
-  manager: ['sell', 'refund', 'discount', 'openShift', 'closeShift'],
-  cashier: ['sell', 'openShift'],
-  staff: ['sell'],
+  manager:   ['sell', 'collectPayment', 'printReceipt', 'viewReceipts', 'discount', 'refund',
+              'openShift', 'closeShift', 'manageInventory', 'manageProducts', 'supply',
+              'viewOrders', 'manageOrders', 'viewAnalytics', 'viewFinancials',
+              'manageNotifications'],
+  cashier:   ['sell', 'collectPayment', 'printReceipt', 'viewReceipts', 'openShift', 'closeShift'],
+  inventory: ['manageInventory', 'manageProducts', 'supply', 'viewOrders'],
+  support:   ['viewOrders', 'manageOrders', 'viewReceipts', 'manageNotifications'],
 };
+
+/* ── OWNER RESTRICTIONS — a NARROWING overlay, never a grant ───────────────────
+       effective = roleCeiling ∩ (allowed by the owner)
+   and never `roleCeiling ∪ ownerGrants`. The distinction is the whole point: an
+   owner may say a cashier must not discount, but no entry in the permission editor
+   can make a cashier a manager. A restriction naming a capability the role never
+   had is a no-op, not an escalation.
+
+   `emp.restrictions` is an array of capability names the owner has WITHDRAWN. It is
+   read from the employment document, which only the owner (or a platform admin) can
+   write — see assertShopOwner in shop-employees.js. */
+function effectiveCapabilities(roleCeiling, restrictions) {
+  const ceiling = Array.isArray(roleCeiling) ? roleCeiling : [];
+  const denied = Array.isArray(restrictions)
+    ? restrictions.map((r) => String(r || '').trim()).filter(Boolean)
+    : [];
+  /* INTERSECTION, expressed as the ceiling minus withdrawals. Anything the owner
+     names that is not in the ceiling simply never appears — it cannot add. */
+  return ceiling.filter((c) => denied.indexOf(c) === -1);
+}
 
 /* ══════════════════════════════════════════════════════════════════════════════
    THE AUTHORITY — every caller in this file goes through here
    ══════════════════════════════════════════════════════════════════════════════
    Returns { ok:true, shopId, shop, servedBy } or { ok:false, reason }.
    Never throws for an ordinary refusal; the caller decides how to surface it. */
+/* A canonical store id is minted by store-identity and is structurally distinguishable from
+   a Firebase uid. Used ONLY to decide whether a missing `ownerId` may be substituted by the
+   document id — never to grant anything. */
+function isCanonicalStoreKey(id) {
+  return /^STR_[0-9a-f]{24}$/.test(String(id || ''));
+}
+
 async function resolveActor(uid, requestedShopId) {
   if (!uid) return { ok: false, reason: 'unauthenticated' };
   const shopId = _s(requestedShopId, 64);
@@ -101,15 +166,34 @@ async function resolveActor(uid, requestedShopId) {
   const shop = shopSnap.data() || {};
 
   /* ── THE OWNER ───────────────────────────────────────────────────────────
-     shops/{uid} is keyed BY the owner's uid, so ownership is the document id
-     itself — there is no ownerId field to forge. */
-  if (uid === shopId) {
+     Ownership is a FACT ABOUT THE STORE DOCUMENT, not an equality between two strings.
+
+     This was `uid === shopId`, justified by "there is no ownerId field to forge" — true
+     while every store was keyed on its owner's uid, and false the moment a store has its
+     own identity. Under the canonical chain (uid -> businessId -> storeId) the owner's uid
+     and the store id are DIFFERENT BY DESIGN, so the old test refused the real owner and
+     then fell through to the employee branch, which refused them again as
+     `not-employed-here`: no POS sale and no servedBy, for the person who owns the shop.
+
+     The forgery concern is answered by the rules rather than by the key: `shops` is
+     `allow create: if isAdmin()` (Cloud Functions only), and the owner-update allowlist
+     does not include `ownerId` — so a merchant can edit their storefront copy but cannot
+     name themselves the owner of anything.
+
+     LEGACY STAYS VALID. A store provisioned before the chain existed is keyed on the uid
+     and may carry no ownerId at all; for those the document id remains the proof. */
+  const shopOwnerUid = _s(shop.ownerId || shop.sellerUid || shop.ownerUid, 64);
+  const isOwner = shopOwnerUid ? (shopOwnerUid === uid) : (uid === shopId);
+  if (isOwner) {
     const person = await _personName(uid);
     if (!person) return { ok: false, reason: 'owner-name-unresolved' };
     return {
       ok: true, shopId: shopId, shop: shop,
       servedBy: { uid: uid, name: person, role: 'owner', label: 'Owner' },
-      capabilities: ROLE_CAPABILITIES.owner.slice(),
+      /* The owner is NOT an employee role — their authority comes from owning the
+           shop, so it is never narrowed by a restrictions field they would have to
+           write against themselves. */
+        capabilities: OWNER_CAPABILITIES.slice(),
       source: 'shop-owner',
     };
   }
@@ -118,10 +202,49 @@ async function resolveActor(uid, requestedShopId) {
      shopEmployees/{empUid}.shopOwnerId must equal the shop being acted on. A
      self-declared record (shopOwnerId == the employee) therefore matches only
      their OWN shop and grants nothing over anyone else's. */
-  const empSnap = await _db().collection('shopEmployees').doc(uid).get();
+  /* THE CANONICAL KEY — `{shopId}_{uid}`, ratified 2026-09-06. This read used
+     `shopEmployees/{uid}`, which shop-employees.js exports as `legacyEmployeeDocId`
+     and explicitly "refuses to honour", while the invite writer has always created
+     `{shopId}_{uid}`. An accepted invite was therefore invisible to the one reader
+     that gates POS sales and servedBy — which is why shop-employees.js's header
+     says employee access "has never worked in production".
+
+     NO FALLBACK to the legacy id. A reader accepting both would recreate the split
+     authority the consolidation removed. Production carries ZERO shopEmployees and
+     ZERO shopInvites (census 2026-09-06, with users/shops/applications as controls),
+     so this cut-off revokes nobody. */
+  const empSnap = await _db().collection('shopEmployees').doc(`${shopId}_${uid}`).get();
   if (!empSnap.exists) return { ok: false, reason: 'not-employed-here' };
   const emp = empSnap.data() || {};
-  if (_s(emp.shopOwnerId, 64) !== shopId) return { ok: false, reason: 'not-employed-here' };
+
+  /* CORROBORATION against the shop document, not the record's own say-so.
+     firestore.rules lets any signed-in client create a shopEmployees document whose
+     shopOwnerId is THEMSELVES, so a record proves nothing on its own. The shop
+     document names the real owner; a forgery will not agree with it.
+
+     The record must name the shop's REAL OWNER. That owner comes from the store document,
+     which is the only party that can vouch for it.
+
+     This previously compared `emp.shopOwnerId` to the SHOP ID, which was the same value
+     only because the store was keyed on its owner. Under the canonical chain those are
+     different, so the comparison rejected every legitimate employee — and, worse, the
+     `shopOwner !== shopId` consistency assertion rejected the store outright as
+     `shop-ownership-inconsistent` before any employee was even considered.
+
+     Comparing against the resolved owner is the same check shop-employees.js already
+     performs (`String(e.shopOwnerId) !== String(ownerUid)`), so the two corroborations now
+     agree instead of one being a uid-keyed special case of the other. Under legacy keying
+     the owner and the id are equal, so nothing changes for an existing shop. */
+  const shopOwner = shopOwnerUid;
+  /* A store with no owner recorded at all cannot corroborate anything. Legacy stores are
+     keyed on the owner, so the id itself supplies it; a canonical store must state it. */
+  const effectiveOwner = shopOwner || (isCanonicalStoreKey(shopId) ? null : shopId);
+  if (!effectiveOwner) return { ok: false, reason: 'shop-ownership-inconsistent' };
+  if (_s(emp.shopOwnerId, 64) !== effectiveOwner) return { ok: false, reason: 'not-employed-here' };
+  /* The record must also name the shop it is filed under and the person it is for,
+     or a document copied between shops would still read as valid. */
+  if (emp.shopId !== undefined && _s(emp.shopId, 64) !== shopId) return { ok: false, reason: 'not-employed-here' };
+  if (emp.uid !== undefined && _s(emp.uid, 64) !== uid) return { ok: false, reason: 'not-employed-here' };
   if (!_employmentActive(emp)) return { ok: false, reason: 'employment-inactive' };
 
   const mapped = EMPLOYEE_ROLES[_s(emp.role, 24).toLowerCase()];
@@ -136,7 +259,10 @@ async function resolveActor(uid, requestedShopId) {
   return {
     ok: true, shopId: shopId, shop: shop,
     servedBy: { uid: uid, name: name, role: mapped.role, label: mapped.label },
-    capabilities: (ROLE_CAPABILITIES[mapped.role] || []).slice(),
+    /* The role's CEILING, narrowed by whatever the owner has withdrawn. Never
+       widened: a restriction naming a capability this role never had is a no-op. */
+    capabilities: effectiveCapabilities(ROLE_CAPABILITIES[mapped.role], emp.restrictions),
+    restrictions: Array.isArray(emp.restrictions) ? emp.restrictions.slice() : [],
     source: 'shop-employee',
   };
 }
@@ -180,6 +306,23 @@ exports.merchantIdentity = onCall(OPTS, async ({ data, auth }) => {
   const uid = _uid(auth);
   const r = await resolveActor(uid, (data || {}).shopId);
   if (!r.ok) throw new HttpsError('permission-denied', 'identity-unresolved:' + r.reason);
+
+  /* ── SHIFT ACCESS POLICY — MERCHANT V2 ONLY ──────────────────────────────
+     Applied HERE and deliberately not inside resolveActor. That function is the
+     shared identity primitive behind employeeSaleAuthorize, merchant-inventory's
+     transactional writes, pos-retail-engine and pos-zero-friction's sale path; a
+     temporal gate inside it would make every POS sale and inventory write
+     shift-bound, so a cashier a minute past their shift end could not finish a
+     sale already in progress. Merchant V2 access and the right to complete a
+     till transaction are different questions.
+
+     Identity is resolved FIRST and is unchanged: this only decides whether an
+     already-identified person may work right now. Off shift is permission-denied,
+     not an identity failure, and the reason says so — the shell can tell "you are
+     not staff here" from "your shift has not started". */
+  const shift = await evaluateShiftAccess({ actor: r, shop: r.shop, uid: uid });
+  if (!shift.allow) throw new HttpsError('permission-denied', 'off-shift:' + shift.reason);
+
   return {
     shop: shopIdentity(r.shopId, r.shop),
     servedBy: r.servedBy,
@@ -378,7 +521,8 @@ exports.adminLinkMerchantAccounts = onCall(OPTS, async ({ data, auth }) => {
 
 /* Internals exported for the certification suite. Not part of the callable API. */
 exports._internal = {
-  resolveActor, shopIdentity, ROLE_CAPABILITIES, EMPLOYEE_ROLES,
+  resolveActor, shopIdentity, ROLE_CAPABILITIES, OWNER_CAPABILITIES, EMPLOYEE_ROLES,
+  CAPABILITIES, effectiveCapabilities,
   ACTIVE_EMPLOYMENT, _employmentActive,
   LINKS, linkedUids, merchantLink,
 };

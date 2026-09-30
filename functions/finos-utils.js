@@ -467,15 +467,69 @@ async function calculateCommission(db, opts) {
   }
 
   const base = CC.resolveRate(category);
+
+  /* ── FIXED-RATE CATEGORIES: a universal commercial rule, immune to per-seller pricing ──
+   * POS/Till is 5% for every business, every sale, with no seller-plan exceptions. That is
+   * only true if NOTHING can modulate it, so a fixed category bypasses all four override
+   * layers: commissionRules, revenueConfig/{seller_*,hub_*,global}, the subscription
+   * absolute-rate compatibility mode, and the plan adjustment step below.
+   *
+   * Note this deliberately ignores `rule` and `rcPct` even when one matched — an admin
+   * writing revenueConfig/seller_<uid> must not be able to quietly exempt one merchant from
+   * a universal rule. The bypass is recorded on the result so the ledger shows WHY the
+   * override did not apply, rather than silently discarding it.
+   *
+   * MIN_COMMISSION_KES still applies: the floor is a separate concern. */
+  const fixedCategory = CC.isFixedRateCategory(category);
+  const overrideIgnored = fixedCategory && (!!rule || rcPct !== null || subRatePct !== null);
+
+  /* ── MARKETPLACE SELLER PLAN LADDER (owner ruling 2026-09-07) ──────────────────────
+   * A SOKONI marketplace order is one SOKONI brought the seller, and a subscription buys
+   * a smaller cut of it: Free 15%, Basic 10%, Pro 5%, Enterprise 0%. Absolute rates, from
+   * commission-config.MARKETPLACE_PLAN_RATES — the single sanctioned table.
+   *
+   * IT DEFERS TO fixedCategory. POS/Till is a fixed 5% for every business and the bypass
+   * above already makes it immune to per-seller pricing; re-excluding it here would be a
+   * second answer to the same question, and the two would eventually disagree. So the
+   * ladder simply never runs on a fixed category.
+   *
+   * PRECEDENCE: commissionRules and revenueConfig still outrank it, so an admin can still
+   * override one seller. It outranks `subscriptionRole`, which is the PROVIDER
+   * compatibility path and never applied to marketplace sellers.
+   *
+   * NO SUBSCRIPTION IS NOT A DISCOUNT. Absent, expired or unreadable resolves to Free —
+   * the HIGHEST rate. Every existing subscription document predates this ladder, so that
+   * fallback is the normal path rather than an edge case. */
+  let mktPct = null, mktPlan = null, mktFloorExempt = false, mktSkipped = null;
+  if (!fixedCategory && !rule && rcPct === null && sellerId && CC.isMarketplaceSellerSale(category)) {
+    let tier = null;
+    try {
+      const sub = await _resolveSellerPlan(sellerId);
+      if (sub && sub.tier && sub.active) tier = sub.tier;
+      else mktSkipped = sub && sub.tier ? 'plan_inactive' : 'no_plan';
+    } catch (_) {
+      mktSkipped = 'plan_lookup_failed';
+    }
+    const m = CC.resolveMarketplaceRate(tier);
+    mktPct = m.pct; mktPlan = m.plan; mktFloorExempt = m.floorExempt;
+  }
+
   let commissionCents;
-  let effectiveRate = rule ? rule.rate
+  let effectiveRate = fixedCategory ? base.pct
+                    : (rule ? rule.rate
                     : (rcPct !== null ? rcPct
-                    : (subRatePct !== null ? subRatePct : base.pct));
-  /* Flat fees: a revenueConfig override wins, else the config's own fixedKES (e.g. vehicles). */
-  const fixedKES = rcFixedKES || base.fixedKES || 0;
+                    : (mktPct !== null ? mktPct
+                    : (subRatePct !== null ? subRatePct : base.pct))));
+  /* Flat fees: a revenueConfig override wins, else the config's own fixedKES (e.g. vehicles).
+     A fixed category takes its own fixedKES only — same reasoning as the rate. */
+  const fixedKES = fixedCategory ? (base.fixedKES || 0) : (rcFixedKES || base.fixedKES || 0);
   /* True when the plan rate is the authority for this booking — used below to keep the
      platform minimum off a flow that never had one. */
-  const usingSubRate = (!rule && rcPct === null && subRatePct !== null);
+  /* `mktPct === null` is load-bearing: the ladder OUTRANKS subRatePct, so without it a
+     call site passing `subscriptionRole` would be flagged as "priced by its subscription"
+     and would silently lose the KES 10 platform minimum on marketplace sales. Marketplace
+     sellers KEEP the floor — only the provider path never had one. */
+  const usingSubRate = (!rule && rcPct === null && mktPct === null && subRatePct !== null);
 
   /* ── STEP 4: subscription plan adjustment ──────────────────────────────────────────────
    * Applied to whatever base survived rules -> revenueConfig -> category, so the seller's
@@ -500,7 +554,16 @@ async function calculateCommission(db, opts) {
      Phase 1 costs one cached config read and nothing else. */
   const planCfg = await _planAdjustmentOverrides(db);
 
-  if (!CC.planRolloutEnabled(planCfg)) {
+  if (mktPct !== null) {
+    /* The ladder IS this seller's plan pricing. Discounting it here would apply the plan
+       twice — a Pro seller paying 5% less a Pro discount. */
+    planSkipped = 'marketplace_plan_rate_applied';
+    planId = mktPlan;
+  } else if (fixedCategory) {
+    /* Checked BEFORE the rollout switch so the reason recorded is the real one: even with
+       plan discounts fully enabled, a fixed-rate category is never discounted. */
+    planSkipped = 'fixed_rate_category';
+  } else if (!CC.planRolloutEnabled(planCfg)) {
     planSkipped = 'rollout_disabled';
   } else if (sellerId && !(rule && rule.type === 'fixed')) {
     const sub = await _resolveSellerPlan(sellerId);
@@ -559,7 +622,7 @@ async function calculateCommission(db, opts) {
        KES 4. Introducing the floor here would silently raise it to KES 10 — a 150% increase on
        small bookings, and exactly the kind of unapproved repricing this migration must avoid.
        Compatibility mode means compatible, including at the edges. */
-    if (effectiveRate > 0 && !usingSubRate && !skipMinimum) {
+    if (effectiveRate > 0 && !usingSubRate && !skipMinimum && !mktFloorExempt) {
       commissionCents = Math.max(commissionCents, CC.MIN_COMMISSION_KES * 100);
     }
     if (fixedKES) commissionCents += fixedKES * 100;
@@ -596,16 +659,33 @@ async function calculateCommission(db, opts) {
        over this function instead of a second engine with its own table and its own arithmetic. */
     fixedKES,
     category:   base.category,
-    ruleId:     rule ? rule.id : 'default',
-    ruleSource: rule ? (rule.entityId ? 'entity_specific' : rule.category)
+    /* A fixed-rate category reports the fixed authority, NOT the override it ignored.
+       Reporting `commission_rule` for a sale that was priced by the universal POS/Till rule
+       would make the ledger say a rule set the price when it did not — the exact kind of
+       unreproducible settlement this breakdown exists to prevent. */
+    ruleId:     fixedCategory ? 'fixed_rate_category' : (rule ? rule.id : 'default'),
+    ruleSource: fixedCategory ? 'fixed_rate_category'
+              : (rule ? (rule.entityId ? 'entity_specific' : rule.category)
               : (rcPct !== null ? 'revenue_config'
-              : (usingSubRate ? 'subscription_plan_rate' : 'default_table')),
+              : (mktPct !== null ? 'marketplace_plan_ladder'
+              : (usingSubRate ? 'subscription_plan_rate' : 'default_table')))),
     /* Which authority actually priced this transaction. Written to the ledger so a settlement
        can be explained years later without re-deriving it. */
-    pricingSource: rule ? 'commission_rule'
+    pricingSource: fixedCategory ? 'fixed_rate_category (universal rule, overrides bypassed)'
+                 : (rule ? 'commission_rule'
                  : (rcPct !== null ? 'revenue_config'
+                 : (mktPct !== null ? 'marketplace_plan_ladder'
                  : (usingSubRate ? 'subscription_plan_rate (compatibility mode)'
-                 : 'category_default')),
+                 : 'category_default')))),
+    /* The LANE this sale was priced on, stated rather than inferred from the category.
+       'pos' and 'marketplace' are different commercial products, and a category table
+       alone cannot say which one a row belongs to. */
+    commissionLane: mktPct !== null ? 'marketplace' : (fixedCategory ? 'pos' : null),
+    /* True when an override existed and was deliberately not applied. Recorded rather than
+       discarded, so an operator can see their revenueConfig/commissionRules entry had no
+       effect instead of wondering why the rate did not move. */
+    fixedRateCategory: fixedCategory,
+    overrideIgnored:   overrideIgnored,
 
     /* ── AUDIT BREAKDOWN ────────────────────────────────────────────────────────────────
      * Written verbatim into commissionLedger and shown verbatim to the seller, so a
@@ -628,8 +708,18 @@ async function calculateCommission(db, opts) {
       ? (planLabel || ('Plan: ' + planId))
       : (holidayApplied ? 'Commission holiday'
         : (rule ? 'Commission rule' : (rcPct !== null ? 'Revenue configuration' : 'Category default'))),
+    /* A settlement recording "5%" with no way to prove "5% because Pro" is what made nine
+       disagreeing tables survivable. `marketplaceLadderApplied: false` is evidence too — it
+       proves a POS/till sale was lane-EXEMPT, not merely untiered. */
+    marketplaceLadderApplied: mktPct !== null,
+    marketplacePlan:          mktPlan,
+    marketplacePlanSkipped:   mktSkipped,
     calculatedAt: Date.now(),
-    engineVersion: 2,                           /* bumped when the resolution ORDER changes */
+    /* 3 — the marketplace seller plan ladder was inserted between revenueConfig and the
+       subscriptionRole compatibility path. The resolution ORDER changed, so the version
+       does: a ledger row written at 2 was priced by a different algorithm and must stay
+       explainable under the rules that produced it. */
+    engineVersion: 3,
   };
 }
 

@@ -17,6 +17,11 @@ const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const admin                  = require('firebase-admin');
 const crypto                 = require('crypto');
 const { defineSecret }       = require('firebase-functions/params');
+/* The canonical loyalty accounting authority. reconcileLoyaltyLedger consumes it rather than
+   summing the ledger itself — see the header on that function. */
+const ACC                    = require('./loyalty-accounting');
+/* The canonical event semantics — classOf, so the dashboard never keeps a second vocabulary. */
+const EV                     = require('./loyalty-event');
 
 const db     = admin.firestore();
 const F      = admin.firestore.FieldValue;
@@ -382,8 +387,10 @@ exports.loyaltyCheckoutOrchestrate = onCall({
   campSnap.forEach(d => activeCampaigns.push({ id: d.id, ...d.data() }));
 
   // --- Validate redemption ---
-  const redemptionRate   = config.redemptionRate    || 100; // points per KES
-  const maxRedemptionPct = config.maxRedemptionPct  || 50;
+  /* One rate authority — see rewards-rate.js. Decided 2026-09-12: 10 points = KES 1. */
+  const _rn              = require('./rewards-rate').normalizeRewardsRate(config);
+  const redemptionRate   = _rn.redemptionRate;       // points per KES
+  const maxRedemptionPct = _rn.maxRedemptionPct;
   if (redeemPoints > 0) {
     const currentBalance = accountData.balance || 0;
     if (currentBalance < redeemPoints) {
@@ -710,7 +717,7 @@ exports.loyaltyPreflightCheck = onCall({ ...OPT, timeoutSeconds: 10 }, exports._
   const tier             = _getTier(account.lifetimePoints || 0);
   const tierIdx          = TIERS.findIndex(t => t.name === tier.name);
   const nextTierObj      = tierIdx > 0 ? TIERS[tierIdx - 1] : null;
-  const redemptionRate   = config.redemptionRate || 100;
+  const redemptionRate   = require('./rewards-rate').normalizeRewardsRate(config).redemptionRate;
   const redemptionValue  = redeemPoints > 0 ? parseFloat((redeemPoints / redemptionRate).toFixed(2)) : 0;
 
   return {
@@ -998,6 +1005,9 @@ exports.getPersonalizedOffers = onCall({
 
   const [accSnap, ledgerSnap, configSnap, campSnap] = await Promise.all([
     db.collection('loyaltyAccounts').doc(uid).get(),
+    /* ACCOUNTING-EXEMPT: the customer's ten most recent events, used as context for a
+       personalised-offer prompt. A recency SAMPLE, never summed into a reported figure —
+       orderBy desc + limit(10) is the intent, not a truncated total. */
     db.collection('loyaltyLedger').where('uid', '==', uid).orderBy('createdAt', 'desc').limit(10).get(),
     db.collection('loyaltyMerchantConfigs').doc(merchantId).get(),
     db.collection('loyaltyMerchantConfigs').doc(merchantId).collection('campaigns').where('active', '==', true).get(),
@@ -1119,61 +1129,220 @@ exports.getMembershipBenefits = onCall({ region: REGION }, exports._h.getMembers
 // ---------------------------------------------------------------------------
 // 11. getLoyaltyFraudDashboard
 // ---------------------------------------------------------------------------
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   FRAUD DASHBOARD — repaired under LOYALTY-FRAUD-DASHBOARD-ACCOUNTING.
+
+   WHAT IT USED TO DO
+   ------------------
+       .limit(500) … entries = snap.docs.map(d => d.data())
+       totalPoints += e.pointsEarned   || 0;
+       totalRedeem += e.pointsRedeemed || 0;
+       redemptionRate = totalRedeem / totalPoints * 100
+
+   Three defects in four lines. The window was capped at 500 rows and summed as a total. The
+   fields are the loyalty-enterprise DIALECT: measured at each of the 14 ledger write objects,
+   TEN carry `points` — the whole canonical loyalty.js rail and every POS redemption — while
+   only three carry `pointsEarned` and one carries `pointsRedeemed`. So the reported
+   totalPointsIssued omitted the canonical rail, and the reported redemptionRate was a ratio of
+   two figures that both missed every POS redemption. A fraud dashboard blind to POS redemption
+   is worse than none, and nothing in the output said the view was partial.
+
+   WHAT IT DOES NOW
+   ----------------
+   1. EVERY ACCOUNTING FIGURE COMES FROM loyalty-accounting.aggregate. This function performs no
+      summation of its own. UNAVAILABLE and INCOMPLETE are passed through with NO numeric
+      section attached, so there is nothing to render as a zero.
+   2. THE MERCHANT IS RESOLVED, NOT ACCEPTED. An unresolvable merchantId returns
+      UNRESOLVED_MERCHANT rather than an empty scan — which would otherwise render as a
+      confident "no fraud detected" for a merchant that does not exist.
+   3. BEHAVIOURAL SIGNALS ARE NOT ACCOUNTING, AND SAY SO. They come from the SAME single pager
+      (loyalty-accounting.scanLedger) rather than a second query, so scope, window, failure and
+      truncation semantics cannot drift from the figures beside them.
+   4. REDEMPTION MEANS THE CANONICAL `redeem` CLASS — which is written by loyalty.js (online)
+      and by the POS redemption factory (pos). `checkout` is NOT counted as a redemption: it
+      is the sole writer carrying pointsRedeemed and its semantics are unresolved, so counting
+      it would establish an accounting meaning by guess. Its presence is reported as an explicit
+      limitation naming LOYALTY-CHECKOUT-EVENT-SEMANTICS.
+   5. NO RATE IS RECOMPUTED. Valuation comes from the events, each carrying the rate and
+      rateVersion that valued it; today's configuration is never applied to a historical event.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+
+const _FRAUD_SCHEMA = 2;
+const _fsan = (v, n) => String(v === undefined || v === null ? '' : v).replace(/[^\w.@:-]/g, '').slice(0, n);
+
+/* Behavioural thresholds. Named, so a reader can see what "suspicious" means here. */
+const _FRAUD_REDEMPTIONS_PER_DAY = 5;
+
 exports.getLoyaltyFraudDashboard = onCall({ ...OPT, timeoutSeconds: 20 }, exports._h.getLoyaltyFraudDashboard = async (req) => {
   if (!req.auth?.token?.admin) throw new HttpsError('permission-denied', 'Admin only');
-  const { merchantId, days = 7 } = req.data;
+
+  const merchantId = _fsan(req.data && req.data.merchantId, 64);
   if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId is required');
 
+  const rawDays = Number(req.data && req.data.days);
+  const days = Number.isFinite(rawDays) && rawDays > 0 ? Math.min(Math.floor(rawDays), 365) : 7;
   const since = new Date(Date.now() - days * 86400000);
-  const snap  = await db.collection('loyaltyLedger')
-    .where('merchantId', '==', merchantId)
-    .where('createdAt', '>=', admin.firestore.Timestamp.fromDate(since))
-    .orderBy('createdAt', 'desc')
-    .limit(500)
-    .get();
 
-  const entries = snap.docs.map(d => d.data());
+  const scope = { merchantId, days, since: since.toISOString() };
 
-  // Redemptions per customer per day
-  const redemptionMap = {};
-  const payRefSet     = new Set();
-  const dupPayRefs    = [];
-  let   totalPoints   = 0;
-  let   totalRedeem   = 0;
+  /* ── 1. the merchant must RESOLVE ─────────────────────────────────────────────────
+     An unknown merchantId would otherwise scan nothing and report a clean sheet. Absence of
+     a tenant is not absence of fraud. */
+  let biz;
+  try {
+    biz = await db.collection('businesses').doc(merchantId).get();
+  } catch (err) {
+    return { schemaVersion: _FRAUD_SCHEMA, state: 'UNAVAILABLE', scope,
+             reason: 'merchant lookup failed: ' + ((err && err.message) || String(err)) };
+  }
+  if (!biz.exists) {
+    return { schemaVersion: _FRAUD_SCHEMA, state: 'UNRESOLVED_MERCHANT', scope,
+             reason: 'no businesses/' + merchantId + ' — a scan of nothing is not a clean sheet' };
+  }
 
-  for (const e of entries) {
-    totalPoints += e.pointsEarned || 0;
-    totalRedeem += e.pointsRedeemed || 0;
+  /* ── 2. THE ACCOUNTING AUTHORITY — the only source of figures ─────────────────── */
+  const agg = await ACC.aggregate(db, { merchantId, since });
+  if (agg.state !== 'OK') {
+    /* No numeric section. Deliberately nothing to mistake for a measurement. */
+    return {
+      schemaVersion: _FRAUD_SCHEMA,
+      state: agg.state,
+      reason: agg.reason,
+      scope,
+      authority: 'loyalty-accounting.aggregate',
+      eventsRead: agg.eventsRead,
+      eventsScanned: agg.eventsScanned,
+    };
+  }
 
-    if (e.type === 'checkout' && e.pointsRedeemed > 0) {
-      const day = e.createdAt?.toDate().toISOString().slice(0, 10) || 'unknown';
-      const key = `${e.uid}_${day}`;
-      redemptionMap[key] = (redemptionMap[key] || 0) + 1;
+  /* ── 3. behavioural signals, from the SAME pager ──────────────────────────────────
+     Not accounting. Counted per customer per day over canonical REDEEM events only. */
+  const redemptionsByCustomerDay = {};
+  const payRefSeen = new Set();
+  const duplicatePaymentRefs = [];
+  let checkoutEventsSeen = 0;
+
+  const scan = await ACC.scanLedger(db, { merchantId, since }, (e) => {
+    const type = String(e.type || '');
+
+    if (EV.classOf(type) === 'REDEEM') {
+      const at = e.createdAt && typeof e.createdAt.toDate === 'function' ? e.createdAt.toDate() : null;
+      const day = at ? at.toISOString().slice(0, 10) : '(undated)';
+      const key = _fsan(e.uid, 64) + '|' + day;
+      redemptionsByCustomerDay[key] = (redemptionsByCustomerDay[key] || 0) + 1;
     }
+
+    if (type === 'checkout') checkoutEventsSeen++;
+
     if (e.paymentRef) {
-      if (payRefSet.has(e.paymentRef)) dupPayRefs.push({ uid: e.uid, paymentRef: e.paymentRef });
-      payRefSet.add(e.paymentRef);
+      const ref = String(e.paymentRef);
+      if (payRefSeen.has(ref)) duplicatePaymentRefs.push({ uid: _fsan(e.uid, 64), paymentRef: _fsan(ref, 120) });
+      payRefSeen.add(ref);
+    }
+  });
+
+  if (scan.state !== 'OK') {
+    /* The figures were established but the behavioural pass was not. Say which, rather than
+       reporting an empty flag list that reads as "nothing suspicious". */
+    return {
+      schemaVersion: _FRAUD_SCHEMA,
+      state: 'INCOMPLETE',
+      reason: 'accounting established, behavioural scan ' + scan.state + ': ' + scan.reason,
+      scope,
+      authority: 'loyalty-accounting.aggregate',
+    };
+  }
+
+  const flagged = [];
+  for (const [key, count] of Object.entries(redemptionsByCustomerDay)) {
+    if (count > _FRAUD_REDEMPTIONS_PER_DAY) {
+      const [uid, day] = key.split('|');
+      flagged.push({ uid, day, redemptions: count,
+                     reason: 'more than ' + _FRAUD_REDEMPTIONS_PER_DAY + ' canonical redemptions in one day' });
     }
   }
+  for (const d of duplicatePaymentRefs) flagged.push({ ...d, reason: 'duplicate paymentRef' });
 
-  const flaggedAccounts = [];
-  for (const [key, count] of Object.entries(redemptionMap)) {
-    if (count > 5) flaggedAccounts.push({ key, redemptionsPerDay: count, reason: 'High daily redemptions' });
+  /* ── 4. limitations, stated rather than implied ───────────────────────────────── */
+  const limitations = [];
+  if (checkoutEventsSeen > 0) {
+    limitations.push({
+      blocker: 'LOYALTY-CHECKOUT-EVENT-SEMANTICS',
+      events: checkoutEventsSeen,
+      detail: 'checkout events are present in this window and are NOT counted as redemptions. ' +
+              'checkout is the only writer carrying pointsRedeemed and its accounting semantics ' +
+              'are undeclared; counting it would establish a meaning by guess. Redemption ' +
+              'figures here cover the canonical redeem class only.',
+    });
   }
-  for (const d of dupPayRefs) {
-    flaggedAccounts.push({ ...d, reason: 'Duplicate paymentRef' });
+  if (agg.unclassified.length) {
+    limitations.push({
+      blocker: 'LOYALTY-CHECKOUT-EVENT-SEMANTICS',
+      detail: 'the window contains event types this platform does not classify; they are ' +
+              'excluded from every total rather than counted as zero',
+      types: agg.unclassified,
+    });
+  }
+  if (agg.valuation.eventsUnvalued > 0) {
+    limitations.push({
+      detail: 'events written before the canonical schema carry no KES valuation. They are ' +
+              'COUNTED as unvalued, never summed as zero, and no rate is applied to them ' +
+              'retrospectively.',
+      eventsUnvalued: agg.valuation.eventsUnvalued,
+    });
+  }
+  if (agg.window.eventsUndated > 0) {
+    limitations.push({
+      detail: 'events that could not be placed in time were excluded from the window',
+      eventsUndated: agg.window.eventsUndated,
+    });
   }
 
-  const redemptionRate = totalPoints > 0 ? parseFloat((totalRedeem / totalPoints * 100).toFixed(1)) : 0;
+  /* Issued is positive, redeemed is negative by canonical sign. A ratio is reported only when
+     there is something to divide by — never 0 standing in for "no basis". */
+  const issued = agg.byClass.ISSUE.points;
+  const redeemed = Math.abs(agg.byClass.REDEEM.points);
 
   return {
-    flaggedAccounts,
-    suspiciousPatterns: flaggedAccounts.length > 0 ? ['high_redemption', 'duplicate_payref'].slice(0, flaggedAccounts.length) : [],
-    stats: {
-      totalTransactions: entries.length,
-      totalPointsIssued: totalPoints,
-      redemptionRate,
+    schemaVersion: _FRAUD_SCHEMA,
+    state: 'OK',
+    scope,
+    authority: 'loyalty-accounting.aggregate',
+    merchant: { merchantId, resolved: true },
+
+    accounting: {
+      eventsRead: agg.eventsRead,
+      eventsScanned: agg.eventsScanned,
+      window: agg.window,
+      points: {
+        issued,
+        redeemed,
+        expired:  Math.abs(agg.byClass.EXPIRE.points),
+        reversed: agg.byClass.REVERSE.points,
+        adjusted: agg.byClass.ADJUST.points,
+        outstanding: agg.points.outstanding,
+      },
+      byType: agg.byType,
+      byRail: agg.byRail,
+      valuation: {
+        valuedKES: agg.valuation.valuedKES,
+        eventsValued: agg.valuation.eventsValued,
+        eventsUnvalued: agg.valuation.eventsUnvalued,
+        /* WHICH configuration valued each event. Never re-derived from today's rate. */
+        rateVersions: agg.valuation.rateVersions,
+      },
+      unclassified: agg.unclassified,
+      /* null, not 0, when there is no issuance to form a ratio against. */
+      redemptionRatePct: issued > 0 ? parseFloat((redeemed / issued * 100).toFixed(1)) : null,
     },
+
+    signals: {
+      basis: 'canonical redeem class only (rails: online and pos); checkout excluded',
+      flagged,
+      suspiciousPatterns: [...new Set(flagged.map((f) => f.reason))],
+    },
+
+    limitations,
   };
 });
 
@@ -1208,112 +1377,367 @@ exports.joinLoyaltyNetwork = onCall({ ...OPT, timeoutSeconds: 15 }, exports._h.j
 // ---------------------------------------------------------------------------
 // 13. getCrossMerchantPoints
 // ---------------------------------------------------------------------------
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   CROSS-MERCHANT POINTS — repaired under LOYALTY-CROSS-MERCHANT-ACCOUNTING.
+
+   IT HAD NO AUTHORIZATION AT ALL
+   ------------------------------
+       const { uid } = req.data;
+       if (!uid) throw new HttpsError('invalid-argument', 'uid is required');
+
+   That was the whole caller model. Any caller — including an unauthenticated one, App Check
+   gates apps rather than users — could name any customer and read their loyalty balance, tier,
+   lifetime points, and the full list of merchants they shop at with amounts. A customer
+   privacy leak and a competitive-intelligence leak in the same response, reachable directly
+   and through loyaltyDispatch. That is repaired here rather than left for a later gate: it is
+   the same read path this gate had to touch, and the callable has no consumer to break.
+
+   NOW: the caller must be the account holder, or a platform admin. A merchant is NOT a
+   permitted caller — the response spans merchants by construction, so serving it to one
+   merchant would hand them a customer's activity at their competitors. A merchant-scoped view
+   of their OWN row is a different capability and needs its own gate; it is not invented here.
+
+   THE ACCOUNTING WAS THE DIALECT DEFECT
+   -------------------------------------
+       byMerchant[e.merchantId].earned   += e.pointsEarned   || 0;
+       byMerchant[e.merchantId].redeemed += e.pointsRedeemed || 0;
+       byMerchant[e.merchantId].visits   += 1;
+
+   over a .limit(50) window. Measured at each of the 14 ledger write objects, TEN carry
+   `points` — the whole canonical loyalty.js rail and every POS redemption — and only three
+   carry `pointsEarned`. So a merchant whose events come from the canonical rail read
+   0 earned / 0 redeemed while `visits` counted correctly: the row looked ALIVE and said the
+   money was zero. That is worse than an empty row, because it reads as a measurement.
+
+   NOW: every figure comes from loyalty-accounting.aggregateGrouped, grouped on the
+   SERVER-WRITTEN merchantId. The handler classifies nothing itself.
+
+   A ROW IS NEVER FINANCIALLY POPULATED BY VISITS ALONE. Where a merchant's events are all
+   unclassified — `checkout` is written but undeclared — the row carries NO points object at
+   all and says accounting: 'UNESTABLISHED'. Zero and "not established" are different answers,
+   and a visit count beside a zero is exactly how they get confused.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+
+const _XM_SCHEMA = 2;
+
 exports.getCrossMerchantPoints = onCall({ ...OPT, timeoutSeconds: 15 }, exports._h.getCrossMerchantPoints = async (req) => {
-  const { uid } = req.data;
-  if (!uid) throw new HttpsError('invalid-argument', 'uid is required');
+  /* ── 1. AUTHORIZATION — there was none ──────────────────────────────────────── */
+  const auth = req.auth;
+  if (!auth || !auth.uid) throw new HttpsError('unauthenticated', 'Sign-in required.');
 
-  const [accSnap, ledgerSnap] = await Promise.all([
-    db.collection('loyaltyAccounts').doc(uid).get(),
-    db.collection('loyaltyLedger').where('uid', '==', uid).orderBy('createdAt', 'desc').limit(50).get(),
-  ]);
+  const target = _fsan(req.data && req.data.uid, 128);
+  if (!target) throw new HttpsError('invalid-argument', 'uid is required');
 
-  if (!accSnap.exists) throw new HttpsError('not-found', 'Loyalty account not found');
-  const account = accSnap.data();
-  const entries = ledgerSnap.docs.map(d => d.data());
-
-  // Group earnings by merchant
-  const byMerchant = {};
-  for (const e of entries) {
-    if (!e.merchantId) continue;
-    if (!byMerchant[e.merchantId]) byMerchant[e.merchantId] = { earned: 0, redeemed: 0, visits: 0 };
-    byMerchant[e.merchantId].earned   += e.pointsEarned   || 0;
-    byMerchant[e.merchantId].redeemed += e.pointsRedeemed || 0;
-    byMerchant[e.merchantId].visits   += 1;
+  const t = auth.token || {};
+  const isAdmin = t.admin === true || t.superAdmin === true;
+  if (!isAdmin && target !== auth.uid) {
+    /* A merchant or seller claim lands here too, deliberately. */
+    throw new HttpsError('permission-denied', 'That loyalty account is not yours.');
   }
 
+  /* ── 2. the account ─────────────────────────────────────────────────────────── */
+  let accSnap;
+  try {
+    accSnap = await db.collection('loyaltyAccounts').doc(target).get();
+  } catch (err) {
+    return { schemaVersion: _XM_SCHEMA, state: 'UNAVAILABLE', uid: target,
+             reason: 'account read failed: ' + ((err && err.message) || String(err)) };
+  }
+  if (!accSnap.exists) throw new HttpsError('not-found', 'Loyalty account not found');
+  const account = accSnap.data() || {};
+
+  /* ── 3. THE ACCOUNTING AUTHORITY, grouped on the SERVER-WRITTEN merchantId ──────
+     The grouping key comes off each event, never off the request: a caller-supplied
+     merchantId cannot re-attribute, merge or redirect a row. */
+  const grouped = await ACC.aggregateGrouped(db, { uid: target }, 'merchantId');
+
+  if (grouped.state !== 'OK') {
+    /* NO breakdown, and in particular NO visit counts. A visit count without its accounting
+       is precisely how a merchant comes to look financially populated when nothing was
+       established. */
+    return {
+      schemaVersion: _XM_SCHEMA,
+      state: grouped.state,
+      reason: grouped.reason,
+      uid: target,
+      authority: 'loyalty-accounting.aggregateGrouped',
+      eventsRead: grouped.eventsRead,
+      eventsScanned: grouped.eventsScanned,
+    };
+  }
+
+  /* ── 4. one row per merchant ────────────────────────────────────────────────── */
+  const merchantBreakdown = {};
+  for (const mid of Object.keys(grouped.groups)) {
+    const g = grouped.groups[mid];
+
+    const row = {
+      visits: g.eventsRead,
+      unclassified: g.unclassified,
+      valuation: {
+        valuedKES: g.valuation.valuedKES,
+        eventsValued: g.valuation.eventsValued,
+        /* Counted, never summed as zero. */
+        eventsUnvalued: g.valuation.eventsUnvalued,
+        /* WHICH configuration valued each event. Never re-derived from today's rate. */
+        rateVersions: g.valuation.rateVersions,
+      },
+    };
+
+    if (g.classifiedEvents === 0) {
+      /* Every event here is of a type this platform does not classify. There is no financial
+         figure to report, and reporting zeros beside a live visit count would invent one. */
+      row.accounting = 'UNESTABLISHED';
+      row.reason = 'no classifiable events for this merchant; see LOYALTY-CHECKOUT-EVENT-SEMANTICS';
+    } else {
+      row.accounting = g.unclassified.length ? 'PARTIAL' : 'ESTABLISHED';
+      row.points = {
+        earned:   g.points.issued,
+        redeemed: Math.abs(g.points.redeemed),
+        expired:  Math.abs(g.points.expired),
+        reversed: g.points.reversed,
+        adjusted: g.points.adjusted,
+        outstanding: g.points.outstanding,
+      };
+      row.byRail = g.byRail;
+    }
+    merchantBreakdown[mid] = row;
+  }
+
+  /* ── 5. the stored account fields — absence survives ────────────────────────── */
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
   return {
-    uid,
-    loyaltyId:       account.loyaltyId,
-    totalBalance:    account.balance        || 0,
-    cashbackBalance: account.cashbackBalance || 0,
-    lifetimePoints:  account.lifetimePoints  || 0,
-    currentTier:     account.currentTier     || 'bronze',
-    merchantBreakdown: byMerchant,
+    schemaVersion: _XM_SCHEMA,
+    state: 'OK',
+    uid: target,
+    authority: 'loyalty-accounting.aggregateGrouped',
+    eventsRead: grouped.eventsRead,
+    eventsScanned: grouped.eventsScanned,
+    /* Events carrying no merchantId. Reported, not folded into any merchant's row. */
+    ungroupedEvents: grouped.ungrouped,
+
+    /* STORED on the account document. Not derived here, and not reconciled here — drift
+       between these and the canonical figures is reconcileLoyaltyLedger's subject. null means
+       the field is ABSENT, which is not the same as a balance of zero. */
+    account: {
+      loyaltyId:       account.loyaltyId || null,
+      storedBalance:   num(account.balance),
+      cashbackBalance: num(account.cashbackBalance),
+      lifetimePoints:  num(account.lifetimePoints),
+      currentTier:     account.currentTier || null,
+    },
+
+    merchantBreakdown,
   };
 });
 
 // ---------------------------------------------------------------------------
 // 14. reconcileLoyaltyLedger (scheduled: daily 0AM UTC = 3AM EAT)
 // ---------------------------------------------------------------------------
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   RECONCILIATION — repaired under LOYALTY-RECONCILIATION-INTEGRITY.
+
+   WHAT THIS JOB USED TO DO, AND WHY IT HAD TO CHANGE
+   --------------------------------------------------
+   It is a DAILY SCHEDULED WRITER. It summed the ledger itself:
+
+       .get().catch(() => null)                       // a failed query became null
+       for (const entry of (ledger?.docs || []))      // …and null became an empty loop
+       computedBalance += (d.pointsEarned || 0) - (d.pointsRedeemed || 0);
+
+   Two independent paths produced computedBalance 0 against a real stored balance:
+
+     · a FAILED query — swallowed, indistinguishable from an account with no events;
+     · a SUCCESSFUL read of any account whose events carry `points`. Measured at each of the
+       14 loyaltyLedger write objects: TEN carry `points` — the whole canonical loyalty.js
+       rail and every POS redemption — while only three carry `pointsEarned` and one carries
+       `pointsRedeemed`.
+
+   Either path read as balance drift, and the job then WROTE a durable loyaltyReconciliation
+   record and a high-severity adminAlerts row asserting the customer's balance was wrong. It
+   did not display a wrong number; it recorded one, into the collections an investigator would
+   later treat as evidence.
+
+   WHAT IT DOES NOW
+   ----------------
+   1. THE COMPUTED SIDE IS NOT COMPUTED HERE. loyalty-accounting.aggregate is the one
+      authority: it pages every event, derives signs from the full canonical vocabulary, and
+      returns state UNAVAILABLE / INCOMPLETE with NO totals rather than a zero.
+   2. THE STORED SIDE IS `balance`. Measured at the write: loyalty.js and loyalty-enterprise.js
+      both write `balance` to loyaltyAccounts and neither writes `pointsBalance`.
+   3. A COMPARISON IS EITHER ESTABLISHED OR IT IS NOT. Four things each stop it, and none of
+      them produces a discrepancy, a record or an alert:
+        · the aggregate is not OK (UNAVAILABLE / INCOMPLETE);
+        · the ledger holds events this platform cannot classify — `checkout` is written but
+          absent from the canonical vocabulary, and unclassified events are kept OUT of the
+          aggregate's totals, so comparing against them would manufacture a drift;
+        · the account carries no numeric `balance`;
+        · the account document is missing.
+      A record is written ONLY from a comparison that was successfully established.
+   4. IDEMPOTENT PER PERIOD. The record and the alert are keyed on uid + the UTC period, so a
+      re-run of the same day overwrites rather than accumulating. The old job used .doc() with
+      a generated id, so every re-run minted fresh evidence of the same alleged drift.
+   5. PROVENANCE TRAVELS WITH THE FIGURE. Each record carries the authority that produced it,
+      the account field compared, how many events were read, the class breakdown and the
+      unvalued count — enough to explain the number without re-deriving it.
+
+   CASHBACK IS DELIBERATELY NOT RECONCILED. It was, against `cashbackEarned`, a field two of
+   the fourteen writers produce. There is no canonical cashback authority — loyalty-accounting
+   values POINTS and holds no cashback concept — and inventing one inside a scheduled writer is
+   the second-authority defect this repair exists to remove. Recorded as
+   LOYALTY-CASHBACK-NO-CANONICAL-AUTHORITY rather than approximated.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+
+/* Points are integers on every canonical writer; this tolerance exists for float noise only,
+   NOT to suppress small real drifts. The old job used `> 1`, which hid a genuine one-point
+   discrepancy. */
+const _RECON_EPSILON = 1e-9;
+const _RECON_SCHEMA  = 2;
+
+/* A sweep processes a BATCH of accounts per run. Saturation is REPORTED (accountsDue vs the
+   bound) rather than silently dropping the remainder. */
+const _RECON_BATCH = 200;
+
+function _reconPeriodKey(d) {
+  /* UTC day. The schedule is 0 0 * * * UTC, so the period and the run agree. */
+  return d.toISOString().slice(0, 10);
+}
+
 exports.reconcileLoyaltyLedger = onSchedule({ schedule: '0 0 * * *', region: REGION }, async () => {
-  const since    = new Date(Date.now() - 86400000);
-  const accSnap  = await db.collection('loyaltyAccounts')
-    .where('lastPurchaseAt', '>=', admin.firestore.Timestamp.fromDate(since))
-    .limit(200)
-    .get();
+  const runAt     = new Date();
+  const periodKey = _reconPeriodKey(runAt);
+  const since     = new Date(runAt.getTime() - 86400000);
 
-  let checked    = 0;
-  let mismatches = 0;
+  let accSnap;
+  try {
+    accSnap = await db.collection('loyaltyAccounts')
+      .where('lastPurchaseAt', '>=', admin.firestore.Timestamp.fromDate(since))
+      /* ACCOUNTING-EXEMPT: a sweep bound, not a reported figure. Saturation is reported
+         below as accountsDue >= the bound; nothing here is summed into a total. */
+      .limit(_RECON_BATCH)
+      .get();
+  } catch (err) {
+    /* The account query itself failed. That is an UNAVAILABLE run, not a run that found
+       nothing wrong — and it writes nothing at all. */
+    console.error('[loyalty] reconcile UNAVAILABLE: account query failed', err);
+    return;
+  }
 
-  /* Batch all per-account ledger queries in parallel */
-  const ledgerSnaps = await Promise.all(
-    accSnap.docs.map(d => db.collection('loyaltyLedger').where('uid', '==', d.id).get().catch(() => null))
-  );
+  const outcome = {
+    period: periodKey,
+    accountsDue: accSnap.size,
+    batchSaturated: accSnap.size >= _RECON_BATCH,
+    established: 0,
+    clean: 0,
+    discrepancies: 0,
+    unresolvedNoBalance: 0,
+    unresolvedUnclassified: 0,
+    aggregateUnavailable: 0,
+  };
 
-  /* Collect mismatch writes into batches */
   const reconcBatch = db.batch();
   const alertBatch  = db.batch();
   let batchWrites = 0;
 
-  for (let i = 0; i < accSnap.docs.length; i++) {
-    const accDoc   = accSnap.docs[i];
-    const uid      = accDoc.id;
-    const account  = accDoc.data();
-    const ledger   = ledgerSnaps[i];
+  for (const accDoc of accSnap.docs) {
+    const uid     = accDoc.id;
+    const account = accDoc.data() || {};
     try {
-      let computedBalance  = 0;
-      let computedCashback = 0;
+      /* THE ONE AUTHORITY. Not a query written here. */
+      const agg = await ACC.aggregate(db, { uid });
 
-      for (const entry of (ledger?.docs || [])) {
-        const d = entry.data();
-        computedBalance  += (d.pointsEarned || 0) - (d.pointsRedeemed || 0);
-        computedCashback += d.cashbackEarned || 0;
+      if (!agg || agg.state !== 'OK') {
+        /* No totals exist on a non-OK aggregate. There is deliberately nothing to compare,
+           and therefore nothing to record. */
+        outcome.aggregateUnavailable++;
+        console.warn('[loyalty] reconcile: aggregate ' + ((agg && agg.state) || 'MISSING') +
+                     ' for uid=' + uid + ' — no comparison established, nothing written',
+                     { reason: (agg && agg.reason) || null });
+        continue;
       }
 
-      const balanceDrift  = Math.abs(computedBalance  - (account.balance        || 0));
-      const cashbackDrift = Math.abs(computedCashback - (account.cashbackBalance || 0));
-
-      if (balanceDrift > 1 || cashbackDrift > 0.01) {
-        mismatches++;
-        batchWrites++;
-        reconcBatch.set(db.collection('loyaltyReconciliation').doc(), {
-          uid,
-          computedBalance,
-          storedBalance:   account.balance        || 0,
-          balanceDrift,
-          computedCashback,
-          storedCashback:  account.cashbackBalance || 0,
-          cashbackDrift,
-          detectedAt:      F.serverTimestamp(),
-          status:          'flagged',
-        });
-        alertBatch.set(db.collection('adminAlerts').doc(), {
-          type:      'loyalty_reconciliation_mismatch',
-          uid,
-          balanceDrift,
-          cashbackDrift,
-          severity:  'high',
-          createdAt: F.serverTimestamp(),
-        });
+      if (agg.unclassified && agg.unclassified.length) {
+        /* Unclassified events are kept OUT of the aggregate's totals by design. Comparing a
+           total that excludes them against a stored balance that includes them would invent
+           a drift. See LOYALTY-CHECKOUT-EVENT-SEMANTICS. */
+        outcome.unresolvedUnclassified++;
+        console.warn('[loyalty] reconcile: uid=' + uid + ' has unclassified event types — ' +
+                     'no comparison established, nothing written',
+                     { types: agg.unclassified.map((u) => u.type) });
+        continue;
       }
-      checked++;
-    } catch (e) {
-      console.error(`reconcileLoyaltyLedger uid=${uid}`, e);
+
+      /* THE ACCOUNT AUTHORITY IS `balance`. An absent field is UNRESOLVED, never zero. */
+      const stored = account.balance;
+      if (typeof stored !== 'number' || !Number.isFinite(stored)) {
+        outcome.unresolvedNoBalance++;
+        console.warn('[loyalty] reconcile: uid=' + uid + ' carries no numeric balance — ' +
+                     'no comparison established, nothing written');
+        continue;
+      }
+
+      const computed = agg.points.outstanding;
+      if (typeof computed !== 'number' || !Number.isFinite(computed)) {
+        outcome.aggregateUnavailable++;
+        continue;
+      }
+
+      outcome.established++;
+      const drift = Math.abs(computed - stored);
+      if (drift <= _RECON_EPSILON) { outcome.clean++; continue; }
+
+      /* ESTABLISHED and genuinely divergent. This is the only path that writes. */
+      outcome.discrepancies++;
+      batchWrites++;
+
+      const key = _sha256('loyaltyReconciliation|' + uid + '|' + periodKey);
+      reconcBatch.set(db.collection('loyaltyReconciliation').doc(key), {
+        schemaVersion:   _RECON_SCHEMA,
+        uid,
+        period:          periodKey,
+        /* provenance: what produced the figure, and against which field */
+        authority:       'loyalty-accounting.aggregate',
+        accountField:    'balance',
+        aggregateState:  agg.state,
+        eventsRead:      agg.eventsRead,
+        byClass:         agg.byClass,
+        eventsValued:    agg.valuation.eventsValued,
+        eventsUnvalued:  agg.valuation.eventsUnvalued,
+        /* the comparison */
+        computedBalance: computed,
+        storedBalance:   stored,
+        balanceDrift:    drift,
+        /* Cashback is NOT reconciled — no canonical authority exists for it. */
+        cashbackReconciled: false,
+        cashbackReason:  'no canonical cashback authority (LOYALTY-CASHBACK-NO-CANONICAL-AUTHORITY)',
+        status:          'flagged',
+        detectedAt:      F.serverTimestamp(),
+      });
+
+      alertBatch.set(db.collection('adminAlerts').doc(
+        _sha256('loyaltyReconciliationAlert|' + uid + '|' + periodKey)), {
+        type:         'loyalty_reconciliation_mismatch',
+        uid,
+        period:       periodKey,
+        balanceDrift: drift,
+        authority:    'loyalty-accounting.aggregate',
+        eventsRead:   agg.eventsRead,
+        severity:     'high',
+        createdAt:    F.serverTimestamp(),
+      });
+    } catch (err) {
+      /* An unexpected failure for ONE account is that account's outcome, not a discrepancy. */
+      outcome.aggregateUnavailable++;
+      console.error('[loyalty] reconcile uid=' + uid + ' failed — nothing written for it', err);
     }
   }
 
   if (batchWrites > 0) await Promise.all([reconcBatch.commit(), alertBatch.commit()]);
-  console.log(`reconcileLoyaltyLedger: checked=${checked}, mismatches=${mismatches}`);
+
+  /* The explicit outcome of the run. Every account is accounted for in exactly one bucket,
+     so a run that established nothing cannot be read as a run that found nothing wrong. */
+  console.log('[loyalty] reconcileLoyaltyLedger', outcome);
 });
 
 // ---------------------------------------------------------------------------

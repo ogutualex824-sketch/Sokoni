@@ -168,8 +168,10 @@ async function nextSeq(sellerUid) {
    previous inline implementation across 5,100 fuzz cases (scripts/test-etims-tax-
    engine.js §7), so this is behaviour-preserving. Do NOT reintroduce inline VAT math
    here or elsewhere — extend the engine instead. */
-function calcLine(item, vatStatus) {
-  return TaxEngine.computeLine(item, vatStatus);
+function calcLine(item, vatStatus, config) {
+  /* `config` is forwarded, not interpreted. The tax engine owns the RATE; callers may only
+     state a TREATMENT (inclusive vs exclusive), and only where a gate demands one. */
+  return TaxEngine.computeLine(item, vatStatus, config);
 }
 
 function calcTotals(lines) {
@@ -922,9 +924,56 @@ const etimsBulkGenerate = onCall({ secrets: _ALL_SECRETS, timeoutSeconds:300, en
 });
 
 /* 10 ─ SOKONI platform invoice (commissions, subscriptions, etc.) */
-const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: true }, async req => {
-  if (!_ac.isAdmin(req)) throw new HttpsError("permission-denied","Admins only");
-  const { sellerUid, feeType, amount, reference, description } = req.data;
+/**
+ * THE ONE PLATFORM-INVOICE IMPLEMENTATION.
+ *
+ * Extracted from the callable below because commission-invoice.js already calls
+ * `etims._issuePlatformInvoice({...})` — and that export did not exist. The body lived
+ * inline inside the onCall wrapper, so the generator was invoking `undefined` and would
+ * have thrown a TypeError the first time a commission invoice was issued. This repo has
+ * shipped that exact class of defect before: three POS callables that existed, passed
+ * their tests, and were unreachable.
+ *
+ * The callable keeps the ADMIN CHECK and delegates the work. Authorisation stays on the
+ * transport where the caller is known; a server-side caller like the commission generator
+ * has already established its own authority and must not be made to fake a request object
+ * to satisfy an admin gate meant for a browser.
+ */
+/* ── VAT TREATMENT GATE — FEE-TYPE SCOPED ──────────────────────────────────────────────
+   Only `commission` is gated. The scope is the whole point: subscription, advertising,
+   delivery, verification and premium keep the behaviour they have always had, because
+   changing how an unrelated fee is taxed is a repricing, not a refactor.
+
+   WHY COMMISSION SPECIFICALLY. etims-tax-engine computes VAT with
+   `const inclusive = cfg.inclusive !== false`, so an ABSENT treatment silently resolves to
+   inclusive. For a commission that is not a default, it is an answer to a commercial
+   question — "is the 5% VAT-inclusive or VAT-exclusive?" — worth ~14% of every commission,
+   decided by a library default nobody ratified. So for commission it must be stated, by a
+   named person, in commissionVatPolicy.
+
+   NO RATE IS DEFINED HERE. This gate carries a TREATMENT (inclusive vs exclusive) into the
+   existing tax engine, which remains the authority on the rate. */
+const VAT_GATED_FEE_TYPES = new Set(["commission"]);
+const UNSET_REASON =
+  "a VAT treatment may not be inferred from a library default. " +
+  "This fee requires an explicit decision: set commissionVatPolicy with a boolean " +
+  "`inclusive` and an attributable `decidedBy`.";
+
+async function _issuePlatformInvoice({ sellerUid, feeType, amount, reference, description,
+                                       vatInclusive: vatTreatment }) {
+  /* Non-gated fee types keep their prior behaviour — inclusive — unchanged. */
+  let vatInclusive = true;
+  if (VAT_GATED_FEE_TYPES.has(feeType)) {
+    if (vatTreatment === undefined || vatTreatment === null) {
+      throw new HttpsError("failed-precondition", UNSET_REASON);
+    }
+    vatInclusive = vatTreatment;
+    /* NO TRUTHY COERCION. "yes", 1 and "false" are all refused: a treatment worth 14% of
+       the fee must be a decision, not whatever a caller happened to send. */
+    if (typeof vatInclusive !== "boolean") {
+      throw new HttpsError("failed-precondition", UNSET_REASON);
+    }
+  }
 
   const FEE_LABELS = {
     commission:"Platform Commission Fee", subscription:"Subscription Fee",
@@ -948,7 +997,7 @@ const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: tr
 
   const platProfile = { kraPin:platPin, businessName:COMPANY.legalName, regNo:COMPANY.registrationNumber, branchId:"00", vatStatus:"registered", address:COMPANY.address, postal:postalLine(), invoicePrefix:"SOKONI" };
   const lineItems   = [{ name: FEE_LABELS[feeType]+(description?`: ${description}`:""), quantity:1, unitPrice:amount, discountRate:0 }];
-  const kraLines    = lineItems.map((it,i) => calcLine({...it,seq:i+1},"registered"));
+  const kraLines    = lineItems.map((it,i) => calcLine({...it,seq:i+1},"registered",{ inclusive: vatInclusive }));
   const totals      = calcTotals(kraLines);
 
   let buyer = null;
@@ -991,6 +1040,15 @@ const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: tr
     await enqueue({ invoiceId:invRef.id, sellerUid:"_platform", priority:2 });
     return { success:true, invoiceId:invRef.id, invoiceNumber:invNo, status:"queued" };
   }
+}
+
+/* The callable. Admin-gated, then delegates — one implementation, no second copy. */
+const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: true }, async req => {
+  if (!_ac.isAdmin(req)) throw new HttpsError("permission-denied","Admins only");
+  const { sellerUid, feeType, amount, reference, description, vatInclusive } = req.data || {};
+  /* The treatment is forwarded, never defaulted here — the gate inside decides whether this
+     fee type requires one. Admin authorisation stays on this boundary. */
+  return _issuePlatformInvoice({ sellerUid, feeType, amount, reference, description, vatInclusive });
 });
 
 /* 11 ─ Get buyer receipts */
@@ -1262,6 +1320,9 @@ module.exports = {
   etimsProcessQueue,
   etimsBulkGenerate,
   etimsPlatformInvoice,
+  /* The shared implementation, exported because commission-invoice.js calls it directly.
+     Without this the generator invokes undefined and throws at runtime. */
+  _issuePlatformInvoice,
   etimsGetBuyerReceipts,
   etimsDownloadReceipt,
   etimsGetSellerStats,

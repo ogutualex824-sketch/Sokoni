@@ -41,9 +41,8 @@ function _assertAdmin(req) {
 
      settlement-engine.js:7,173 books every sale as
        "100% of every customer payment is collected into the Bravilex account first"
-     darajaSTKPush (index.js:3089-3130) sends
-       BusinessShortCode / PartyB = shopSettings/{sellerUid}.darajaShortCode
-       i.e. straight to the SELLER's own shortcode.
+     the legacy STK initiator sent the payment straight to the SELLER's own
+       shortcode, taken from that seller's own shopSettings.
 
    So the seller receives 100% while the ledger records a platform commission
    that was never collected — commission booked as revenue, settlement
@@ -85,7 +84,7 @@ function _defaults() {
     /* Platform collection shortcode used ONLY in CENTRAL_MOR. Operational-public
        (customers see it when paying), so it belongs here rather than in a client
        literal. Empty until provisioned — and empty means CENTRAL_MOR cannot
-       engage. A Paybill is required, not a Buy Goods Till: reference-based C2B
+       engage. A Paybill is required, not a Buy Goods Till: reference-based
        reconciliation needs the account/reference field that Till lacks. */
     centralPaybill: '',
     /* Merchant-of-Record BANK account is intentionally NOT here — its number is
@@ -205,7 +204,7 @@ exports.adminSetPaymentConfig = onCall(
 module.exports._defaults   = _defaults;
 module.exports._publicView = _publicView;
 
-/* Consumed server-side by the payment initiators (darajaSTKPush, QR, C2B) so the
+/* Consumed server-side by the payment initiators (STK, QR) so the
    route is decided in ONE place and stamped onto every payment record. Exported
    as plain functions/constants — not callables — so no client can reach them. */
 module.exports.resolveCollectionRoute = resolveCollectionRoute;

@@ -31,6 +31,8 @@ const { onSchedule }                  = require("firebase-functions/v2/scheduler
 const admin                           = require("firebase-admin");
 
 const { assertAuth, assertAdmin }     = require("./shared/errors");
+/* Roles have ONE writer — users.roles[] and the Auth claim always move together. */
+const { roleFieldPatch, syncRoleClaim } = require("./role-authority");
 
 const db = admin.firestore();
 
@@ -1084,12 +1086,44 @@ async function _svcRentalRelease({ assetId }, inst) {
   return { released: true };
 }
 
+/* Seller activation goes through the ONE role primitive (./role-authority):
+   `role: "seller"` alone granted nothing the platform reads — the role gate and
+   the analytics gate read `roles` (array), firestore.rules reads the Auth claim
+   — so a verified seller landed in the app as a buyer. The legacy `role` string
+   is preserved for the readers that still consult it.
+
+   Atomicity is unchanged: this was, and remains, ONE document write. The claim
+   is minted after it, because setCustomUserClaims is an Auth call.
+
+   A claim that does not mint THROWS. The step carries no `onFailure`, so the
+   instance is marked failed and swept to the DLQ instead of advancing to
+   "Notify Seller: Approved" — telling a merchant their account is live when
+   their token says otherwise is the exact failure this replaces. The Firestore
+   write is an idempotent merge, so a re-run converges. */
 async function _svcSellerActivate({ uid, sellerUid, businessName }, inst) {
-  await db.collection("users").doc(sellerUid ?? uid).set({
-    role: "seller", verifiedAt: Date.now(), businessName,
-    serverTs: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { activated: true };
+  const target = sellerUid ?? uid;
+  if (!target) throw new Error("seller.activate: no uid provided");
+
+  await db.collection("users").doc(target).set(
+    roleFieldPatch("seller", true, {
+      role: "seller",
+      verifiedAt: Date.now(),
+      businessName,
+      serverTs: admin.firestore.FieldValue.serverTimestamp(),
+    }),
+    { merge: true },
+  );
+
+  const claim = await syncRoleClaim(target, "seller", true, {
+    source: "wap.seller.activate", entityId: inst?.id ?? null,
+  });
+  if (!claim.ok) {
+    throw new Error(
+      `seller.activate: role written for ${target} but the Auth claim did not mint (${claim.error}) — see roleClaimReconcile/${claim.reconcileId}`,
+    );
+  }
+
+  return { activated: true, uid: target, roleKey: claim.key, claim: claim.claim };
 }
 
 async function _svcNotification({ to, template, data, channels }, inst) {

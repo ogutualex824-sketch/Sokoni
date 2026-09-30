@@ -56,13 +56,24 @@ const REASON = {
  *
  * @returns {{ok: true, merchantId: string}|{ok: false, reason: string, count?: number}}
  */
-async function resolveMerchantIdForOwner (ownerUid) {
+async function resolveMerchantIdForOwner (ownerUid, dbOverride) {
   if (!ownerUid || typeof ownerUid !== 'string') {
     return { ok: false, reason: REASON.MALFORMED };
   }
 
+  /* THE HANDLE IS THE CALLER'S WHEN THE CALLER HAS ONE.
+     Defaults to the ambient `admin.firestore()`, which is what every existing call site
+     wants and what they keep. A caller that was HANDED a Firestore — settlement receives one
+     as a parameter — must be able to resolve against that same handle, or it silently reads a
+     different database than the one it is about to write.
+
+     That is not hypothetical: this resolver was reached from a settlement test whose whole
+     module graph was stubbed, and because it used the ambient handle it read the REAL
+     project instead. A test that touches production is not a test. */
+  const fs = dbOverride || db();
+
   /* TWO, not one. Enough to detect ambiguity, still a cheap read. */
-  const snap = await db().collection('businesses')
+  const snap = await fs.collection('businesses')
     .where('ownerId', '==', ownerUid)
     .limit(2)
     .get();

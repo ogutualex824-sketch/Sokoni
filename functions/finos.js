@@ -10,6 +10,8 @@ const { onSchedule }                    = require('firebase-functions/v2/schedul
 const { defineSecret }                  = require('firebase-functions/params');
 const logger                            = require('firebase-functions/logger');
 const admin                             = require('firebase-admin');
+const RIDER_SHARE = require('./rider-share-authority');
+const RIDER_DEST = require('./rider-earning-destination');
 const Anthropic                         = require('@anthropic-ai/sdk');
 const crypto                            = require('crypto');
 
@@ -32,6 +34,22 @@ function _assertAdmin(req) {
    1. recordPayment — callable
    Records an incoming payment, distributes earnings to wallets.
 ──────────────────────────────────────────────────────────────*/
+/* ── THE AUTHORITATIVE DELIVERY ALLOCATION ───────────────────────────────────
+   Resolved from the quote pinned to the delivery job when it was raised. Read
+   SERVER-SIDE from the job, never accepted from the caller: recordPayment is reachable
+   from the browser, and a caller who could supply the quote could supply the rider's
+   pay. Returns an allocation that is either authoritative or explicitly unallocated;
+   it never contains a percentage. */
+async function _deliveryAllocation(db, orderId, deliveryCents) {
+  if (!(deliveryCents > 0)) return RIDER_SHARE.unallocated(0, 'NO_DELIVERY_AMOUNT');
+  let quote = null;
+  try {
+    const snap = await db.collection('deliveryJobs')
+      .where('orderId', '==', String(orderId)).limit(1).get();
+    if (!snap.empty) quote = (snap.docs[0].data() || {}).pinnedQuote || null;
+  } catch (_) { /* an unreadable job is an unquoted delivery, not a reason to guess */ }
+  return RIDER_SHARE.allocate({ pinnedQuote: quote, deliveryMinor: deliveryCents });
+}
 exports.recordPayment = onCall(
   { region: REGION, timeoutSeconds: 60, memory: '256MiB', invoker: 'private', enforceAppCheck: true },
   async (request) => {
@@ -56,8 +74,15 @@ exports.recordPayment = onCall(
 
     const deliveryCents = Math.round(deliveryFeeCents || 0);
     const tipCts        = Math.round(tipCents || 0);
-    const riderEarnings = Math.round(deliveryCents * 0.88); /* Rider keeps 88% of delivery fee */
-    const platformDeliv = deliveryCents - riderEarnings;
+    /* THE 88% IS GONE. It multiplied a delivery fee that arrives FROM THE BROWSER
+       (sokoni-finos.js passes deliveryFeeCents) by a constant that three other places
+       disagreed with, and credited the result to a rider. Both halves now come from
+       the quote pinned to the delivery job, or neither does. */
+    const _alloc = await _deliveryAllocation(db, orderId, deliveryCents);
+    const riderEarnings = _alloc.riderMinor;
+    const platformDeliv = _alloc.commissionMinor;
+    const _unallocatedDelivery = _alloc.unallocatedMinor || 0;
+    const _allocSource = _alloc.source;
 
     const db = _db();
 
@@ -178,6 +203,7 @@ exports.recordPayment = onCall(
 
     /* Wallet credits — idempotency guard prevents double-credit if CF crashes
        between ledgerBatch.commit() and here, then retries before markIdempotency */
+    let _riderPayable = null;
     const walletIdemKey = `wallet_credit:${orderId}`;
     const walletIdemRef = db.collection('finosWalletIdempotency').doc(walletIdemKey);
     const walletIdemSnap = await walletIdemRef.get();
@@ -186,12 +212,43 @@ exports.recordPayment = onCall(
         const sentinel = await txn.get(walletIdemRef);
         if (sentinel.exists) return; // another concurrent invocation already completed
         U.creditWalletTxn(txn, db, sellerId, 'seller', comm.sellerNetCents, { description: `Order ${orderId}`, orderId, type: 'order_earning' });
-        if (riderId && (riderEarnings + tipCts) > 0) {
-          U.creditWalletTxn(txn, db, riderId, 'rider', riderEarnings + tipCts, { description: `Delivery+tip ${orderId}`, orderId, type: 'delivery_earning' });
-        }
+          /* RIDER MONEY GOES TO THE RIDER'S BUSINESS WALLET, OR IT IS HELD.
+
+             This credited wallets/{riderUid} — a PERSONAL wallet — while the certified
+             delivery settlement credits businessWallets/{businessId} and refuses a
+             personal fallback outright. Two destinations meant two meanings of "rider
+             money" and a reconciliation nobody could close.
+
+             The destination is resolved SERVER-SIDE from the rider's uid. A rider with
+             no business identity is HELD — attributable, idempotent, settleable — never
+             redirected to their personal wallet.
+
+             Delivery fee and tip travel together because the platform already counts
+             both as rider earnings; the provenance differs, the destination does not. */
+          /* Recorded for AFTER the transaction: a business-wallet credit runs its own
+             transaction, and starting one inside another is how a money path deadlocks. */
+          _riderPayable = (riderId && (riderEarnings + tipCts) > 0)
+            ? { riderUid: riderId, amountMinor: riderEarnings + tipCts } : null;
         U.creditWalletTxn(txn, db, 'platform_master', 'platform', comm.commissionCents + platformDeliv, { description: `Commission+platform delivery ${orderId}`, orderId, type: 'commission' });
         txn.set(walletIdemRef, { orderId, creditedAt: admin.firestore.FieldValue.serverTimestamp() });
       });
+    }
+
+    /* THE RIDER'S MONEY, to their business wallet or held. Outside the wallet
+       transaction above by necessity — business-wallet.credit opens its own. */
+    let _riderOutcome = null;
+    if (_riderPayable) {
+      _riderOutcome = await RIDER_DEST.creditOrHold({
+        db,
+        riderUid: _riderPayable.riderUid,
+        amountMinor: _riderPayable.amountMinor,
+        /* Deterministic per order, so a replay credits or holds exactly once. */
+        ref: 'order_' + String(orderId) + '_delivery',
+        orderId: String(orderId),
+        provenance: 'delivery_earning',
+        source: 'delivery',
+        description: 'Delivery+tip ' + orderId,
+      }).catch((e) => ({ ok: false, reason: 'DESTINATION_ERROR', detail: (e && e.message) || String(e) }));
     }
 
     /* Update order with financial fingerprint */
@@ -199,6 +256,16 @@ exports.recordPayment = onCall(
       financialProcessed: true, commissionRate: comm.effectiveRate,
       commissionCents: comm.commissionCents, sellerNetCents: comm.sellerNetCents,
       vatCents: vat.taxCents, deliveryRiderNetCents: riderEarnings,
+      /* WHERE THE FIGURE CAME FROM, and what was held back. An unallocated delivery
+         must not be indistinguishable from a delivery that was free. */
+      deliveryAllocationSource: _allocSource,
+      deliveryPricingVersion: _alloc.pricingVersion || null,
+      deliveryUnallocatedCents: _unallocatedDelivery,
+      deliveryUnallocatedReason: _alloc.unallocatedReason || null,
+      /* WHERE THE RIDER'S MONEY WENT. A hold must not look like a payment. */
+      riderDestination: _riderOutcome ? (_riderOutcome.held ? 'held' : 'business_wallet') : 'none',
+      riderBusinessId: (_riderOutcome && _riderOutcome.businessId) || null,
+      riderHoldReason: (_riderOutcome && _riderOutcome.reason) || null,
       financialProcessedAt: _now(),
     }).catch(() => {});
 
@@ -262,7 +329,14 @@ exports.processRefund = onCall(
       creditAccount: U.ACCOUNTS.EXTERNAL_GATEWAY,
       description:   `Refund for order ${orderId}: ${reason || 'customer request'}`,
       orderId, sellerId, buyerId: order.buyerUid, category: order.category,
-      metadata: { ratio, reason, commClawback, sellerClawback },
+      /* `reason` is OPTIONAL in this callable's signature — the description above already
+         falls back to 'customer request'. Passed raw into metadata it is `undefined`, and
+         Firestore rejects an undefined field by throwing, so a refund called WITHOUT a
+         reason failed outright with an opaque internal error. This is the first write in
+         the sequence, so nothing was half-applied — the refund simply never happened.
+         Same class as the commissionLedger.checkoutId defect fixed in 90aba0c; found the
+         same way, by a certification check that passed for the wrong reason. */
+      metadata: { ratio, reason: reason || null, commClawback, sellerClawback },
       idempotencyKey: ikey,
     });
 

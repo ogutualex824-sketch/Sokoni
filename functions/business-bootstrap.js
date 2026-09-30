@@ -27,6 +27,9 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin  = require('firebase-admin');
 const crypto = require('crypto');
+/* The ONE seller-trial authority — extracted FROM this file precisely so the payload has a
+   single home. See functions/seller-trial.js; this module must not rebuild it. */
+const { buildSellerFreeTrial } = require('./seller-trial');
 
 const db     = admin.firestore();
 const F      = admin.firestore.FieldValue;
@@ -146,7 +149,12 @@ async function _buildBundle(merchantId, branchId) {
     db.collection('branches').doc(branchId).get(),
     db.collection('posProducts')
       .where('merchantId', '==', merchantId)
-      .where('status', '==', 'active')
+      /* `active` is a BOOLEAN on posProducts, written by the canonical writer
+         (pos-inventory-pro.js). There is no `status` field on these documents, so
+         this filtered on one the writer never creates and matched NOTHING for every
+         merchant — getSetupStatus saw zero POS products regardless of the catalogue.
+         Two sibling queries were already converted; these two were missed. */
+      .where('active', '==', true)
       .limit(500)
       .get(),
     db.collection('categories')
@@ -497,7 +505,10 @@ exports.getIncrementalSync = onCall(OPT, async (req) => {
   const [productsSnap, employeesSnap, discountsSnap, flagsSnap] = await Promise.all([
     db.collection('posProducts')
       .where('merchantId', '==', safeMerchantId)
-      .where('status', '==', 'active')
+      /* Same correction as getSetupStatus above: `active` is the boolean the
+         canonical writer sets; `status` does not exist on posProducts, so
+         getIncrementalSync returned nothing for every merchant. */
+      .where('active', '==', true)
       .where('updatedAt', '>', sinceDate)
       .limit(200)
       .get(),
@@ -1040,24 +1051,22 @@ async function _createBusiness(req) {
   const _graceEnd  = admin.firestore.Timestamp.fromMillis(
     _trialMs + (TRIAL_DAYS + TRIAL_GRACE_DAYS) * 86400000
   );
-  batch.set(db.collection('subscriptions').doc(merchantId), {
-    merchantId,
-    uid,                                  // required by the expiry notifier (users/{uid})
-    hubType:  'seller',                   // drives the post-trial downgrade to `${hubType}_free`
-    planId:   'seller_free',
+  /* ONE IMPLEMENTATION OF THE TRIAL, NOT TWO. This payload was written out in full here
+     while functions/seller-trial.js — extracted from this very block precisely so there would
+     be one — sat unused. Two copies of a commercial entitlement drift, and this one already
+     had: it was missing `shopId`, `sellerUid` and `source`, and the next field the expiry
+     machinery starts reading would have been added to one and not the other.
+
+     The document id and the batch are unchanged — still subscriptions/{merchantId}, still
+     written in the same batch as the rest of onboarding, so the trial stays atomic with the
+     business it belongs to. `now` and `nowMs` are injected because the caller owns the
+     server-timestamp sentinel and a sentinel cannot be used in the boundary arithmetic. */
+  batch.set(db.collection('subscriptions').doc(merchantId), buildSellerFreeTrial({
+    uid, shopId: merchantId,
     planName: 'SmartPOS',
-    plan: 'trial',
-    status: 'trialing',
-    trial: true,                          // subscription-core.computeStatus gate
-    trialDays: TRIAL_DAYS,
-    trialStartsAt:      now,
-    currentPeriodStart: now,
-    trialEndsAt:      _trialEnd,          // subscription-core
-    currentPeriodEnd: _trialEnd,          // sub-billing sweep + sub-engine renewal query
-    graceEnd:         _graceEnd,
-    autoActivated: true,
-    startedAt: now, createdAt: now,
-  });
+    source: 'pos_onboarding',
+    now, nowMs: _trialMs,
+  }));
   batch.set(db.collection('merchants').doc(merchantId), {
     merchantId, name: businessName, ownerId: uid, adminUids: [uid], status: 'active', createdAt: now,
   });
@@ -1164,7 +1173,7 @@ async function _regeneratePairingQR(req) {
    editable fields. Automatic STK needs them because Safaricom binds the
    passkey to the shortcode — base64(ShortCode + PassKey + Timestamp) cannot be
    signed for a till SOKONI does not hold the passkey for — which is exactly
-   why automatic STK is an upgrade requiring the merchant's own Daraja app,
+   why automatic STK is an upgrade requiring the merchant's own provider app,
    and not a prerequisite for selling.
 
    Written SERVER-SIDE because posSettings has no Firestore rule at all, and
@@ -1233,7 +1242,7 @@ async function _getPaymentDestination(req) {
     mpesaTill: v.mpesaTill || '',
     mpesaAccountName: v.mpesaAccountName || '',
     /* Automatic STK is an UPGRADE and is reported, never assumed. It requires
-       the merchant's own Daraja credentials, which this door does not accept. */
+       the merchant's own provider credentials, which this door does not accept. */
     autoStkEnabled: false,
   };
 }

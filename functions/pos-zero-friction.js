@@ -76,6 +76,15 @@ async function _postSaleFinancials(o) {
       const r = await pc.resolveCollectionRoute(db);
       out.collectionRoute = r.route;
     } catch (_) { out.collectionRoute = 'DIRECT_TO_SELLER'; }
+
+    /* A PROVEN COLLECTION OUTRANKS THE CONFIGURED ROUTE.
+       `resolveCollectionRoute` answers "how is this platform configured to collect", which is
+       a standing setting. `o.collected` answers "was THIS sale collected", which is a fact
+       about one transaction and is the one that decides where the money is. A Sell tender
+       taken through the Till reaches the SOKONI collection account whatever the default
+       route says, and reconciliation must record what happened rather than what was
+       configured. */
+    if (o.collected && o.collected.ok) out.collectionRoute = 'CENTRAL_MOR';
     /* Cash is never centrally collected whatever the route says — it is in a
        drawer. Recording the configured route against a cash sale would misstate
        who holds the money. */
@@ -183,9 +192,13 @@ async function _postSaleFinancials(o) {
       /* What the seller keeps, from the same engine — so the merchant wallet and
          the platform never disagree about the split of one sale. */
       sellerNetCents: sellerNetCents,
-      /* Not collected at the point of sale — see the note at the call site. */
-      collected: false,
-      settlement: 'receivable',
+      /* WHETHER SOKONI ACTUALLY TOOK THE MONEY, per sale — not per configuration.
+         On a DIRECT_TO_SELLER till sale the seller holds the cash and owes us a share, so
+         the commission is a RECEIVABLE. On a sale collected into the SOKONI account the
+         commission is already in our hands and the merchant is credited net, so calling it a
+         receivable would book a debt nobody owes and leave a sweep chasing it forever. */
+      collected: !!(o.collected && o.collected.ok),
+      settlement: (o.collected && o.collected.ok) ? 'collected_at_source' : 'receivable',
     };
 
     /* ── THE LEDGER ENTRY ──────────────────────────────────────────────────
@@ -197,10 +210,21 @@ async function _postSaleFinancials(o) {
        amount, and a zero-value entry would be noise in a reconciliation. */
     if (commissionCents > 0) {
       const FU = require('./finos-utils');
+      /* THE DIRECTION FOLLOWS THE MONEY.
+           not collected → DR seller / CR revenue. The seller holds the cash and owes us; the
+                           debit is the receivable, and nothing is drawn from platform
+                           clearing because no platform cash exists for this sale.
+           collected     → DR platform:clearing / CR revenue. The cash IS in the platform
+                           account; the commission is taken from it, and the merchant is
+                           credited net. Booking a seller receivable here would invent a debt
+                           against a merchant who has already been charged. */
+      const _collected = !!(o.collected && o.collected.ok);
       await FU.createLedgerEntry(db, {
-        type: 'pos_commission_receivable',
+        type: _collected ? 'pos_commission_collected' : 'pos_commission_receivable',
         amountCents: commissionCents,
-        debitAccount: FU.ACCOUNTS ? FU.ACCOUNTS.seller(o.merchantId) : ('seller:' + o.merchantId),
+        debitAccount: _collected
+          ? ((FU.ACCOUNTS && FU.ACCOUNTS.PLATFORM_CLEARING) || 'platform:clearing')
+          : (FU.ACCOUNTS ? FU.ACCOUNTS.seller(o.merchantId) : ('seller:' + o.merchantId)),
         creditAccount: (FU.ACCOUNTS && FU.ACCOUNTS.PLATFORM_REVENUE) || 'platform:revenue',
         description: 'SOKONI commission on till sale ' + o.saleId,
         orderId: o.saleId,
@@ -212,6 +236,144 @@ async function _postSaleFinancials(o) {
         idempotencyKey: 'poscomm_' + o.idempotencyKey,
         metadata: { collectionRoute: out.collectionRoute, commissionPct: pct },
       });
+    }
+
+    /* ── THE BUSINESS WALLET ────────────────────────────────────────────────
+       What the seller KEEPS, credited to the wallet of the BUSINESS — not to the
+       personal wallet of whoever owns it. `sellerNetCents` comes from the same engine
+       that produced the commission, so the wallet and the ledger cannot disagree about
+       the split of one sale.
+
+       CASH IS EXCLUDED, DELIBERATELY. A cash sale puts money in a DRAWER; crediting a
+       wallet for it would state that SOKONI is holding funds it has never touched, and
+       a merchant reconciling their drawer against that balance would be counting the
+       same shillings twice. `collectionRoute` already distinguishes the two, so the
+       wallet follows the money rather than the sale.
+
+       ── AND CASH WAS NOT THE ONLY MONEY SOKONI NEVER TOUCHED ─────────────────────────
+       The condition below read `collectionRoute !== 'CASH_IN_DRAWER'`, which credited the
+       wallet on a DIRECT_TO_SELLER M-Pesa sale — a sale where the customer paid the
+       MERCHANT'S OWN till and the platform received nothing. The sentence above says
+       exactly why that is wrong; the test it was written as simply did not cover it.
+
+       It mattered because this balance is spendable. `businessWalletDraw` moves it to the
+       owner's personal wallet and `requestSellerPayout` pays it out of the SOKONI collection
+       account over the B2C rail — so a merchant was paid twice for one sale: once by the
+       customer into their own till, once by us. The commission receivable recovered a
+       fraction of it and the rest was simply given away.
+
+       The wallet is now credited ONLY on a collection SOKONI actually holds — a sale proven
+       against a paid Till payment intent (see pos-collection-proof.js). A DIRECT_TO_SELLER
+       sale still records, still posts its commission receivable, and credits nothing,
+       because there is nothing of ours to credit.
+
+       IDEMPOTENT BY THE SALE. The ref is derived from the sale id, so a retried posting
+       credits nothing a second time — the same guarantee the ledger entry gets from its
+       idempotencyKey, enforced by the wallet's own transaction rather than by this
+       caller remembering to check.
+
+       NON-FATAL. The sale has happened and the books are already posted; a wallet that
+       could not be credited is a repairable discrepancy, not a reason to fail a sale the
+       customer has paid for. It is recorded, not swallowed. */
+    /* ── AND THE ROUTE ALONE IS NOT EVIDENCE THAT MONEY ARRIVED ──────────────────────
+       This read `collectionRoute === 'CENTRAL_MOR'`, which is a CONFIGURATION — "how is
+       this platform set up to collect" — and not a fact about this sale. Proven collection
+       forces the route to CENTRAL_MOR, so for M-PESA and Till/QR the two agreed and the
+       condition looked sound. They come apart on any tender that carries no proof: with the
+       platform configured CENTRAL_MOR, a card sale approved by the client — in the limit, by
+       `Math.random()` — satisfied this condition and credited a spendable wallet balance
+       for money SOKONI never received.
+       The credit now requires the PROOF, not the setting. A configuration change can no
+       longer turn an unverified approval into money, which is the whole point of keeping
+       these two ideas separate. The refusal above should already have stopped such a sale
+       from existing; this is the second wall, and it is the one that guards the money. */
+    const _proven = !!(o.collected && o.collected.ok === true);
+    if (out.collectionRoute === 'CENTRAL_MOR' && _proven && sellerNetCents > 0) {
+      try {
+        const si = require('./store-identity');
+        const ti = require('./tenant-identity');
+        /* The merchantId here may be a legacy uid or a canonical business id. Resolving it
+           rather than assuming keeps one code path for both. */
+        let businessId = null;
+        /* THE OWNER UID IS TRACKED SEPARATELY FROM THE MERCHANT ID, and that distinction is
+           the whole point of the guard below.
+
+           This read `assertNotUidShaped(businessId, String(o.merchantId))`. In the FIRST
+           branch — `businesses/{merchantId}` exists, which is the normal case for a
+           provisioned merchant — businessId IS merchantId, so the two arguments were the same
+           string and the guard threw on every canonical merchant:
+
+               "store id must not equal the owner uid"
+
+           The throw was caught, a posFinancialRepair row was filed, and the sale completed.
+           So the POS wallet credit never once succeeded for a properly provisioned merchant;
+           it failed silently into a repair queue that nothing drains.
+
+           The guard is asking "is this business id actually a person's uid?" — and the answer
+           needs the OWNER'S uid, not the id we happened to look the business up by. */
+        let ownerUid = null;
+        const bizSnap = await db.collection('businesses').doc(String(o.merchantId)).get();
+        if (bizSnap.exists) {
+          businessId = String(o.merchantId);
+          ownerUid = String((bizSnap.data() || {}).ownerId || '') || null;
+        } else {
+          /* merchantId is a uid here, so it IS the owner — and the guard becomes the real
+             check that the resolved business id is not that same uid. */
+          const owned = await ti.resolveMerchantIdForOwner(String(o.merchantId));
+          if (owned.ok) { businessId = owned.merchantId; ownerUid = String(o.merchantId); }
+        }
+        if (businessId) {
+          si.assertNotUidShaped(businessId, ownerUid);
+          const bw = require('./business-wallet');
+          const cr = await bw.credit({
+            businessId,
+            ownerUid: null,
+            amountMinor: sellerNetCents,
+            ref: 'possale_' + String(o.saleId),
+            kind: 'pos_sale',
+            /* ── POS OR TILL? THE COLLECTION KNOWS ────────────────────────────────────────
+               Both are shop sales and both land in the same wallet, but they are different
+               streams to a merchant deciding whether the Till is worth having:
+
+                 TILL   the customer scanned the provisioned SOKONI Till / QR and paid it
+                        themselves — pos-collection-proof reports rail 'till_qr'
+                 POS    the sale was rung up on the counter and the cashier prompted the
+                        phone — rail 'sell_stk'
+
+               Taken from the PROVEN collection rather than from anything the client said,
+               so the stream a sale is filed under is decided by how the money actually
+               arrived. Absent proof there is no wallet credit at all, so this is never
+               guessed at. */
+            source: {
+              channel: (o.collected && o.collected.rail === 'till_qr') ? 'TILL' : 'POS',
+              /* HOW it was paid, from the same proof — a second dimension, not a channel. */
+              method: (o.collected && o.collected.method) || 'UNKNOWN',
+              businessId: businessId,
+              shopId: (o.collected && o.collected.shopId) || null,
+              saleId: String(o.saleId),
+              paymentRef: (o.collected && o.collected.ref) || null,
+              grossMinor: toCents(o.total),
+              commissionMinor: commissionCents,
+              netMinor: sellerNetCents,
+              currency: 'KES',
+            },
+            metadata: { saleId: o.saleId, collectionRoute: out.collectionRoute },
+          });
+          out.businessWallet = { businessId, creditedMinor: cr.applied ? cr.amountMinor : 0,
+                                 idempotent: !!cr.idempotent, balanceMinor: cr.balanceMinor };
+        } else {
+          out.businessWallet = { businessId: null, skipped: 'no-business-for-merchant' };
+        }
+      } catch (e) {
+        out.businessWallet = { error: (e && e.message) || String(e) };
+        try {
+          await db.collection('posFinancialRepair').doc(String(o.saleId) + '_wallet').set({
+            saleId: o.saleId, merchantId: o.merchantId, sellerNetCents,
+            reason: 'business_wallet_credit_failed',
+            error: out.businessWallet.error, at: FieldValue.serverTimestamp(),
+          }, { merge: true });
+        } catch (_) { }
+      }
     }
 
     out.status = 'posted';
@@ -249,17 +411,27 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
   const {
     idempotencyKey,
     merchantId,
-    branchId      = 'default',
+    /* NOT defaulted to a placeholder. `'default'` is not a branch — see
+       pos-branch-authority. The requested value is resolved and PROVED against the
+       merchant below; an absent one becomes the merchant's real default branch. */
+    branchId: requestedBranchId,
     shiftId,
     items         = [],
     customer,
     payments      = [],
     couponCode,
     loyaltyRedeemPoints = 0,
+    redemptionChallengeId = null,
     subtotal,
     discountTotal = 0,
     taxTotal      = 0,
     grandTotal,
+    /* PROOF THAT SOKONI COLLECTED THIS SALE — a paymentIntents reference the IntaSend
+       webhook has moved to `paid`. The client names it; every fact that decides money is
+       then read from the server's own record of it. Absent means the sale was not centrally
+       collected, which is a legitimate state (cash, or a merchant's own till) and simply
+       earns no wallet credit. See pos-collection-proof.js. */
+    collectedIntentRef,
     metadata      = {},
   } = data || {};
 
@@ -267,6 +439,100 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
   if (!merchantId)     _e('merchantId required');
   if (!items?.length)  _e('items required');
   if (!grandTotal || grandTotal < 0) _e('grandTotal invalid');
+
+  /* ── 07:00 DAILY BUSINESS-DAY GATE (P3) ─────────────────────────────────────
+     A business owing SOKONI commission may not BEGIN a new POS/Till business day.
+     Enforced HERE, on the server, before any sale effect: no client can decline to
+     ask, and a client that never calls the gate callable still cannot sell.
+
+     Placed after argument validation and BEFORE the idempotency claim, the order
+     write, the stock write and the payment — a blocked till must leave no trace,
+     exactly like a refused claim in order-claim.js.
+
+     It does NOT re-price anything and does NOT touch sale proceeds: the POS model is
+     unchanged — the seller keeps the cash and owes a receivable. The gate only asks
+     whether yesterday's obligation was settled.
+
+     Opening is idempotent, so ten tills starting at 07:00:00 produce one open record. */
+  /* ══ THE MERCHANT MUST BE PROVEN, AND BEFORE THE GATE ════════════════════
+     `merchantId` arrives in the request body and, until this block, was checked for
+     PRESENCE only. The comment below this one says the branch is resolved "AFTER
+     merchantId has been server-established" — but nothing established it. The actor
+     IS resolved further down, and is consumed only for discount authority, one error
+     message and the receipt's servedBy line; no path refused the sale.
+
+     THIS IS WHAT MAKES THE GATE BELOW MEAN ANYTHING. `assertBusinessDayOpen` keys on
+     `merchantId`, so on an unproven id a merchant whose till is closed could pass a
+     clean shop's id and keep trading, or pass a rival's id and close theirs. A gate on
+     a forgeable identifier is not enforcement; it is the appearance of it.
+
+     TWO AUTHORITIES, UNION — the same pair the discount check further down already
+     uses. resolveActor covers the owner (keyed off the shops/{uid} document id, so
+     ownership cannot be forged by writing a field) and shopEmployees staff on the
+     canonical composite key. The canonical path covers staff who exist only in
+     workspaceMemberships; requiring resolveActor alone would refuse every one of them.
+
+     The actor is resolved again further down for discount authority. That second read
+     is left alone deliberately: hoisting it would move a variable across two scopes in
+     money code to save one document read, and the read is cheaper than the mistake. */
+  {
+    let _proven = false;
+    try {
+      const _a = await resolveActor(cashierId, merchantId);
+      _proven = !!(_a && _a.ok);
+    } catch (err) {
+      _e('Staff permissions could not be checked, so this sale was not completed. ' +
+         'Nothing has been charged.', 'unavailable');
+    }
+    if (!_proven) {
+      let _canon = null;
+      try {
+        const _b = await db.collection('businesses').doc(String(merchantId)).get();
+        if (_b.exists) _canon = String(merchantId);
+        else {
+          const { resolveMerchantIdForOwner } = require('./tenant-identity');
+          const _own = await resolveMerchantIdForOwner(String(merchantId));
+          if (_own && _own.ok) _canon = _own.merchantId;
+        }
+      } catch (_) { _canon = null; }
+      if (_canon) {
+        try {
+          const { _assertBusinessPermission } = require('./workforce-identity');
+          /* `sales` — the capability to transact here at all. NOT `discounts`, which is
+             strictly narrower and would refuse ordinary cashiers. */
+          await _assertBusinessPermission(cashierId, _canon, 'sales');
+          _proven = true;
+        } catch (_) { /* not a member here, or without the capability */ }
+      }
+    }
+    if (!_proven) {
+      _e('You are not authorised to record a sale for this shop.', 'permission-denied');
+    }
+  }
+
+  {
+    const _gate = require('./pos-business-day-gate');
+    await _gate.assertBusinessDayOpen(db, String(merchantId));
+  }
+
+  /* ── BRANCH, RESOLVED AND PROVED ──────────────────────────────────────────
+     `branchId` arrived from the client and was written straight through with a
+     `'default'` fallback, so a sale could be filed under a branch the merchant does
+     not own — or under a placeholder that is not a branch at all. Resolved here,
+     AFTER merchantId has been server-established.
+
+     A branch the caller NAMED but cannot prove is fatal: they asked for a specific
+     scope and are not entitled to it, and quietly moving the sale to a different
+     branch would misattribute the takings. An ABSENT branch is not fatal — it
+     resolves to the merchant's own default branch, or to null, which is what these
+     records already accept for an unknown scope. */
+  const _branchAuth = require('./pos-branch-authority');
+  const _branch = await _branchAuth.resolveBranchId(db, String(merchantId), requestedBranchId);
+  if (!_branch.ok) {
+    _e('That branch does not belong to this business, so the sale was not completed. '
+       + '(' + _branch.reason + ')', 'permission-denied');
+  }
+  const branchId = _branch.branchId;
 
   /* ── DRY-RUN (checkout-convergence shadow instrumentation) ──
      Side-effect-FREE: validate + price against the CANONICAL products collection and compute
@@ -446,12 +712,83 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     const totalDiscount = _round2(manualDiscount + couponDiscount);
     if (totalDiscount > serverSubtotal) _e('The discounts together exceed the sale');
 
+    /* ── POINTS, PRICED BY THE SERVER ────────────────────────────────────────
+       `loyaltyRedeemPoints` is a COUNT the till asked to spend. What that count is
+       worth is decided here, from the canonical loyaltyMerchantConfigs — never sent by the
+       browser. pos-checkout.html previously subtracted its own KES figure from the
+       total it displayed while omitting it from `discountTotal`, so the two sides
+       disagreed by exactly the points value and the mismatch guard below refused
+       every points sale. That is why redeeming points at a till has never worked.
+
+       READ BEFORE THE TRANSACTION, RE-READ INSIDE IT. The total has to be known
+       here, because the tender check below prices against it — but these snapshots
+       are outside the transaction and could be stale by the time it commits. So this
+       authorisation is PROVISIONAL: it prices the sale, and the transaction re-runs
+       the identical calculation on its own snapshots and refuses if the answer moved.
+       A balance that changed under us aborts the sale rather than charging a total
+       nobody agreed to. */
+    const _loyalty = require('./pos-loyalty-redemption');
+    const _redeemBase = _round2(serverSubtotal - totalDiscount);
+    let _preAuth = { ok: false, approvedPoints: 0, approvedKES: 0, reason: null };
+    if (loyaltyRedeemPoints && customer?.id) {
+      const [_pcSnap, _plSnap] = await Promise.all([
+        db.collection('posCustomers').doc(customer.id).get(),
+        require('./rewards-rate').configRef(db, merchantId).get(),
+      ]);
+      _preAuth = _loyalty.authorize({
+        custSnap: _pcSnap, progSnap: _plSnap,
+        pointsRequested: loyaltyRedeemPoints,
+        redeemableBaseKES: _redeemBase,
+      });
+      /* A refusal is stated, not silently priced at zero. Charging the full amount
+         after a till showed a points discount is the same class of defect as granting
+         one that was never authorised. */
+      if (!_preAuth.ok) {
+        _e('Points could not be redeemed: ' + (_preAuth.reason || 'not authorised') +
+           '. Ring the sale up again without points.', 'failed-precondition');
+      }
+    }
+    const loyaltyRedeemKES = _preAuth.approvedKES || 0;
+
+    /* ── THE CUSTOMER MUST HAVE AGREED ───────────────────────────────────────
+       Points are money, and a cashier alone must not be able to spend a customer's
+       balance. Where any points are being redeemed a CONFIRMED challenge is required —
+       there is no path that spends points on the cashier's word.
+
+       Checked here so a missing or invalid challenge refuses BEFORE tenders are taken,
+       and re-checked inside the transaction below against the same sale. This read is
+       outside the transaction and therefore advisory; the in-transaction re-check is the
+       one that decides.
+
+       No HMAC secret is needed on this path: verifying the CODE happens at confirmation
+       time, and what the sale verifies is the recorded state and the binding. */
+    let _chal = null;
+    if (_preAuth.ok && _preAuth.approvedPoints > 0) {
+      const _cm = require('./pos-redemption-challenge');
+      if (!redemptionChallengeId) {
+        _e('This redemption needs the customer to confirm it on the till. ' +
+           'Start "Pay with Points" and ask the customer to approve.', 'failed-precondition');
+      }
+      _chal = await db.collection(_cm.COLLECTION).doc(String(redemptionChallengeId)).get();
+      /* Date.now() directly, NOT the `now` binding — that const is declared further down,
+         inside the transaction block, so referencing it here is a temporal dead zone
+         throw. It would never have fired on a sale without a challenge, because the
+         refusal above returns first; it would have fired on the first sale that supplied
+         one, which is the only path anybody would have been testing by then. */
+      const v = _cm.checkSpendable({
+        snap: _chal, merchantId, customerId: customer && customer.id,
+        saleKey: idempotencyKey,
+        points: _preAuth.approvedPoints, valueKES: _preAuth.approvedKES, now: Date.now(),
+      });
+      if (!v.ok) _e('Points redemption refused: ' + v.reason + '.', 'failed-precondition');
+    }
+
     /* ── the authoritative total ───────────────────────────────────────────
        Computed from the server's OWN prices and the discount it just
        authorised. The caller's grandTotal is not used; it is only compared, so
        a till showing a different figure from the one being charged is refused
        loudly instead of charging silently. */
-    const authoritativeTotal = _round2(serverSubtotal - totalDiscount + (taxTotal || 0));
+    const authoritativeTotal = _round2(serverSubtotal - totalDiscount - loyaltyRedeemKES + (taxTotal || 0));
     if (authoritativeTotal < 0) _e('The sale total cannot be negative');
     if (Math.abs(authoritativeTotal - Number(grandTotal)) > 1) {
       _e('Total mismatch: this device is showing ' + grandTotal +
@@ -481,18 +818,35 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     }
 
     /* ── non-cash money must be CONFIRMED, and spent once ──────────────────
-       `posPayments/{checkoutId}` is written by darajaSTKPush and moved to
-       `completed` ONLY by darajaSTKCallback — the webhook Safaricom calls after
-       the buyer enters their PIN. Reading it here is what makes the difference
+       `posPayments/{checkoutId}` is a server-written record that only a payment
+       callback can move to `completed`. Reading it here is what makes the difference
        between "M-PESA was selected" and "M-PESA was paid". The client cannot
        write that document, so it cannot promote its own payment.
 
        Cash is exempt: the cashier is physically holding it, and the drawer
        reconciliation is what audits it. Wallet is validated separately below
        and debited inside the transaction. */
-    const CONFIRMABLE = { mpesa: 1, card: 1, mpesa_daraja: 1 };
+    const CONFIRMABLE = { mpesa: 1, card: 1 };
+    /* THE CLOSED SET OF TENDERS THIS PATH ACCEPTS.
+       An unrecognised method used to fall straight through `continue` and skip
+       confirmation entirely — so any method this server did not know about became money
+       accepted WITHOUT proof of payment, whether it was a retired rail, a typo, or a
+       client sending something new. Unknown now REFUSES.
+
+       Membership here is NOT confirmation, and the two must not be confused:
+         mpesa / card   confirmed below against a server-written payment record
+         cash           physically held; audited by drawer reconciliation
+         wallet         validated and debited inside the transaction below
+         gift_card      NOT verified here at all: no code, balance or existence
+                        check runs in this path
+       A method may only be added here once its settlement is accounted for. */
+    const ACCEPTED = { mpesa: 1, card: 1, cash: 1, wallet: 1, gift_card: 1 };
     for (const p of _pay) {
       const method = String((p && p.method) || '').toLowerCase();
+      if (!ACCEPTED[method]) {
+        _e('"' + (method || '(none)') + '" is not an accepted POS/Till payment method.',
+           'failed-precondition');
+      }
       if (!CONFIRMABLE[method]) continue;
 
       const ref = String((p && (p.ref || p.reference || p.checkoutId || p.transactionRef)) || '').trim();
@@ -501,12 +855,41 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
            'cannot be confirmed. Send the payment request and wait for the customer to pay.');
       }
 
-      const paySnap = await db.collection('posPayments').doc(ref).get();
-      if (!paySnap.exists) {
-        _e('No ' + method.toUpperCase() + ' payment was found for this sale. ' +
-           'Nothing has been charged.', 'not-found');
+      /* ── WHERE THE CONFIRMATION LIVES (P6/P7) ────────────────────────────────
+         The legacy rail wrote posPayments/{ref}. IntaSend writes posPaymentStatus/{ref}
+         via the P5 webhook bridge. Reading only posPayments after the cutover would look for a
+         document that is never created, and EVERY till sale paid through IntaSend would
+         be refused with "no payment was found" — the customer charged, the sale
+         impossible to complete.
+
+         The two are normalised to one shape here so every check below — completed,
+         belongs to THIS shop, sufficient amount, spent exactly once — runs unchanged
+         against either rail. Legacy posPayments refs keep working, which is what lets a
+         payment taken before the cutover still settle after it. */
+      const _isIntasend = require('./pos-intasend-initiation').isPosRef(ref);
+      let pay;
+      if (_isIntasend) {
+        const sSnap = await db.collection('posPaymentStatus').doc(ref).get();
+        if (!sSnap.exists) {
+          _e('No ' + method.toUpperCase() + ' payment was found for this sale. ' +
+             'Nothing has been charged.', 'not-found');
+        }
+        const s = sSnap.data() || {};
+        pay = {
+          status:     s.status,                       /* 'completed' | 'failed' | 'pending' */
+          sellerUid:  s.merchantId || null,
+          paidAmount: (s.confirmedAmountKES != null) ? Number(s.confirmedAmountKES)
+                    : (s.amountCents != null ? Number(s.amountCents) / 100 : null),
+          mpesaCode:  s.transactionRef || null,
+        };
+      } else {
+        const paySnap = await db.collection('posPayments').doc(ref).get();
+        if (!paySnap.exists) {
+          _e('No ' + method.toUpperCase() + ' payment was found for this sale. ' +
+             'Nothing has been charged.', 'not-found');
+        }
+        pay = paySnap.data() || {};
       }
-      const pay = paySnap.data() || {};
 
       if (pay.status !== 'completed') {
         _e('The customer has not completed this payment yet (' + (pay.status || 'pending') + '). ' +
@@ -587,17 +970,75 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       /* ── PHASE 1: ALL READS (parallel) ── */
       const productRefs = enrichedItems.map(item => db.collection('products').doc(item.productId));
       const custRef = customer?.id ? db.collection('posCustomers').doc(customer.id) : null;
-      const progRef = customer?.id ? db.collection('loyaltyPrograms').doc(merchantId) : null;
+      /* CANONICAL rewards config. This was loyaltyPrograms/{merchantId} — client-written,
+         with no Firestore rule, therefore never creatable, therefore a redemption authority
+         that refused every merchant in production. */
+      const progRef = customer?.id ? require('./rewards-rate').configRef(db, merchantId) : null;
 
-      const [wTxSnap, wSnap, custSnap, progSnap, ...productSnaps] = await Promise.all([
+      /* The challenge is re-read INSIDE the transaction: the pre-check above ran against
+         a snapshot taken outside it, and between the two the challenge can be consumed by a
+         concurrent sale. Reading it here is what makes double-spend impossible. */
+      const _chalRef = redemptionChallengeId
+        ? db.collection(require('./pos-redemption-challenge').COLLECTION).doc(String(redemptionChallengeId))
+        : null;
+      const [wTxSnap, wSnap, custSnap, progSnap, _chalSnap, ...productSnaps] = await Promise.all([
         walletPayment ? txn.get(walletTxRef)  : Promise.resolve(null),
         walletPayment ? txn.get(walletDocRef) : Promise.resolve(null),
         custRef ? txn.get(custRef) : Promise.resolve(null),
         progRef ? txn.get(progRef) : Promise.resolve(null),
+        _chalRef ? txn.get(_chalRef) : Promise.resolve(null),
         ...productRefs.map(r => txn.get(r)),
       ]);
 
       /* ── PHASE 2: VALIDATE (no writes yet, so a rejection touches nothing) ── */
+
+      /* POINTS, RE-AUTHORISED ON THE TRANSACTION'S OWN SNAPSHOTS.
+         The provisional authorisation above priced the sale from a read taken outside
+         this transaction. Between then and now the balance can have moved — the same
+         customer scanned at a second till, a refund landed, a concurrent sale spent the
+         points first. Re-running the identical calculation here, on snapshots Firestore
+         guarantees are consistent with the commit, is what makes an overspend
+         impossible: two tills racing for one balance cannot both succeed, because the
+         loser's re-authorisation disagrees and its whole transaction aborts.
+
+         DISAGREEMENT ABORTS THE SALE; it never silently reprices. The tenders were
+         already collected against the provisional total, so quietly charging a
+         different figure would take money the customer never agreed to — and quietly
+         approving fewer points would hand over goods that were not paid for. */
+      let _txAuth = { ok: false, approvedPoints: 0, approvedKES: 0 };
+      if (loyaltyRedeemPoints && custRef) {
+        _txAuth = _loyalty.authorize({
+          custSnap, progSnap,
+          pointsRequested: loyaltyRedeemPoints,
+          redeemableBaseKES: _redeemBase,
+        });
+        if (!_txAuth.ok || _txAuth.approvedPoints !== _preAuth.approvedPoints ||
+            _txAuth.approvedKES !== _preAuth.approvedKES) {
+          throw new HttpsError('aborted',
+            'The points balance changed while this sale was being completed. ' +
+            'Nothing was charged and no points were spent. Ring the sale up again.');
+        }
+
+        /* THE CUSTOMER'S CONSENT, RE-VERIFIED AGAINST THE FIGURES BEING SPENT.
+           Not a repeat of the pre-check: that ran on a snapshot taken outside this
+           transaction, and a concurrent sale can consume a challenge in between. It is
+           also bound to _txAuth — the figures this transaction is actually about to
+           burn — so a challenge minted for one amount cannot settle another even if the
+           balance moved in a way that happened to re-price identically.
+
+           checkSpendable independently re-asserts that the confirming principal was not
+           the minting cashier, so the sale never takes a confirmation flag on trust. */
+        const _cmv = require('./pos-redemption-challenge').checkSpendable({
+          snap: _chalSnap, merchantId, customerId: customer && customer.id,
+          saleKey: idempotencyKey,
+          points: _txAuth.approvedPoints, valueKES: _txAuth.approvedKES, now: now,
+        });
+        if (!_cmv.ok) {
+          throw new HttpsError('failed-precondition',
+            'Points redemption refused: ' + _cmv.reason + '. Nothing was charged.');
+        }
+      }
+
       /* Wallet: idempotent skip if the deterministic txn doc already exists (prior attempt). */
       const doWalletDeduct = walletPayment && !wTxSnap.exists;
       if (doWalletDeduct) {
@@ -654,12 +1095,34 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
 
       let loyaltyAwarded = 0;
       if (custRef && custSnap.exists) {
-        const prog    = progSnap && progSnap.exists ? progSnap.data() : { points: { earnRate: 1, earnDenom: 100 } };
-        const earnCfg = prog.points || { earnRate: 1, earnDenom: 100 };
-        loyaltyAwarded = Math.floor((serverSubtotal / earnCfg.earnDenom) * earnCfg.earnRate);
+        /* EARN, FROM THE SAME CANONICAL RULE THE REDEMPTION USES.
+           This computed (subtotal / 100) * 1 — one point per KES 100, a 0.1% reward — while
+           the customer authority granted pointsPerKES 0.1, one point per KES 10. A tenfold
+           divergence in what the SAME customer earned depending on which surface rang the
+           sale, and neither figure was wrong on its own terms because neither knew the
+           other existed.
 
+           SOKONI's rule: 1 point per KES 10 earned, 10 points = KES 1 redeemed — a 1%
+           effective reward. Both halves now come from loyaltyMerchantConfigs through
+           normalizeRewardsRate, so a merchant cannot hold one economics for giving and
+           another for taking, and the old 1/100 fallback is gone rather than demoted. */
+        const _norm = require('./rewards-rate')
+          .normalizeRewardsRate(progSnap && progSnap.exists ? progSnap.data() : null);
+        loyaltyAwarded = Math.floor(serverSubtotal * _norm.pointsPerKES);
+
+        /* THE BURN IS THE AUTHORISED FIGURE, NOT THE REQUESTED ONE.
+           This used to subtract the caller's `loyaltyRedeemPoints` directly, clamped by
+           Math.max(0, …). The clamp stopped a negative balance but nothing else: an
+           unvalidated count could burn points the customer never had — floored at zero,
+           so the loss was silent — and burn them without reducing the price by a single
+           shilling, because no loyalty term existed in the total at all.
+
+           `_txAuth.approvedPoints` was re-derived above from this transaction's own
+           snapshots and is the same figure the sale was priced on. It can never exceed
+           the balance, because authorize() refuses when it would. */
         const cust      = custSnap.data();
-        const newPoints = Math.max(0, (cust.loyaltyPoints || 0) + loyaltyAwarded - loyaltyRedeemPoints);
+        const _burn     = _txAuth.approvedPoints || 0;
+        const newPoints = Math.max(0, (cust.loyaltyPoints || 0) + loyaltyAwarded - _burn);
         txn.update(custRef, {
           loyaltyPoints:  newPoints,
           lifetimePoints: FieldValue.increment(loyaltyAwarded),
@@ -667,6 +1130,28 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
           lastPurchaseAt: FieldValue.serverTimestamp(),
           purchaseCount:  FieldValue.increment(1),
         });
+
+        /* THE LIABILITY, RECORDED SEPARATELY AND IN THE SAME COMMIT.
+           A balance alone cannot be reconciled or reversed: it says what is left, never
+           what was spent or against which sale. This ledger entry is what makes every
+           redeemed point traceable to one customer, one sale and one rate context — and
+           it is written INSIDE the sale's transaction, so points and sale commit together
+           or not at all. A sale that fails after this point takes the burn with it. */
+        if (_burn > 0) {
+          /* THE CHALLENGE IS SPENT IN THE SAME COMMIT AS THE POINTS.
+             Consumed here rather than at confirmation time, so a sale that fails after
+             this point takes the consumption with it and the customer keeps both their
+             points and a challenge they can still use. One commit, or neither. */
+          if (_chalRef) {
+            txn.update(_chalRef, require('./pos-redemption-challenge').consumePatch(now));
+          }
+
+          const _le = _loyalty.ledgerEntry({
+            idempotencyKey, merchantId, customerId: customer.id, saleId,
+            authorized: _txAuth, at: FieldValue.serverTimestamp(),
+          });
+          txn.set(db.collection(_loyalty.LEDGER).doc(_le.id), _le.doc);
+        }
       }
 
       if (couponCode) {
@@ -705,6 +1190,105 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
        which is exactly the defect payment-config.js:41-55 warns about.
        On a till sale SOKONI's commission is a RECEIVABLE: the seller already
        holds the money and owes us a share. */
+    /* ── WAS THIS COLLECTED BY SOKONI? ──────────────────────────────────────────────────
+       Verified against the AUTHORITATIVE total the server just computed, not against
+       anything the client sent — so a caller cannot present a small real collection to
+       complete a large sale. The merchant is the RESOLVED one, so naming another shop's
+       payment reference gains nothing.
+
+       A failure here does not fail the sale. A cashier who mistypes a reference, or whose
+       customer has not finished paying, must not lose a basket — the sale records as
+       uncollected, which is the truth, and earns no wallet credit. The reason is carried on
+       the sale so it is answerable later instead of vanishing. */
+    let _collected = null;
+    if (collectedIntentRef) {
+      try {
+        const CP = require('./pos-collection-proof');
+        _collected = await CP.verifyAndClaimCollection(db, {
+          intentRef: collectedIntentRef,
+          saleId,
+          merchantUid: merchantId,
+          amountCents: Math.round(Number(authoritativeTotal) * 100),
+        });
+      } catch (e) {
+        _collected = { ok: false, reason: 'collection-check-failed',
+                       remedy: (e && e.message) || String(e) };
+      }
+    }
+
+    /* ══ NON-CASH MONEY MUST BE PROVEN BEFORE A SALE EXISTS ═══════════════════════════
+       THE AUTHORITY BOUNDARY, ENFORCED WHERE THE SALE IS DECIDED.
+
+       `requiresCollection()` has existed in pos-collection-proof.js — cash needs no proof,
+       everything else does — and was called from NOWHERE. The rule was written down and
+       never became an enforcement point, which is the same as not having it.
+
+       What that permitted, traced end to end: the POS card tender routed a Bluetooth or
+       "manual" terminal to a client-side SimulatedAdapter that approved on
+       `Math.random() > 0.1` with a fabricated authCode, cardLast4 and cardScheme. The
+       browser then called this function with a non-cash payment line and no collection
+       reference, and a sale was recorded, stock was moved and commission was accrued for
+       money nobody had collected. Configure the platform CENTRAL_MOR — the direction of
+       travel for merchant-of-record — and that fabricated approval would also have
+       credited the business wallet, which is spendable.
+
+       WHY HERE AND NOT IN THE BROWSER. The browser is the thing being defended against.
+       It cannot be trusted to decline its own sale, and it cannot manufacture the way past
+       this check either: `_collected` is derived on the server by
+       CP.verifyAndClaimCollection against the total the server itself computed, from a
+       reference the client may name but cannot forge a result for. A caller may send
+       `collected: { ok: true }` in any shape it likes; nothing here reads it.
+
+       FAILS CLOSED, AND SAYS WHY. A cashier who has genuinely taken money must be able to
+       act on the refusal, so the reason and the remedy travel with it rather than a bare
+       "failed-precondition".
+
+       CASH IS UNAFFECTED, DELIBERATELY. Cash is in a drawer, SOKONI never touched it, and
+       demanding a collection proof for it would refuse every legitimate cash sale. Its
+       existing controls — the drawer reconciliation and the tendered/change arithmetic
+       above — are the ones that apply. */
+    {
+      const CPX = require('./pos-collection-proof');
+      /* ── WHICH LINES ARE STILL UNPROVEN ─────────────────────────────────────────────
+         THIS WAS TOO BROAD IN ITS FIRST FORM, and the RC sweep caught it. It demanded a
+         `collectedIntentRef` for EVERY non-cash line and ignored the confirmation this
+         function already performs — the loop above resolves each CONFIRMABLE tender's
+         reference against posPaymentStatus (or legacy posPayments), and refuses unless the
+         payment is completed, belongs to this shop, covers the amount and has not already
+         been spent on another sale. That is collection proof, obtained by a different
+         route and if anything a stricter one. Requiring a second, different proof on top
+         of it refused sales the server had already fully confirmed: test-sale-authority
+         S18 — "a payment the SERVER confirmed does complete the sale", the permitted case
+         without which every refusal around it proves nothing — went from PASS to FAIL,
+         along with every mixed cash+M-PESA basket.
+
+         The real gap is the one the CONFIRMABLE comment above names: a non-cash method
+         that is neither RETIRED nor CONFIRMABLE hits `continue` and skips confirmation
+         ENTIRELY. Those are the lines with nothing behind them, and those are what this
+         refuses. CONFIRMABLE is referenced rather than restated, so a method added to one
+         can never quietly bypass the other. */
+      const unproven = _pay.filter((p) => {
+        const m = String((p && p.method) || '').toLowerCase();
+        if (m === 'cash') return false;          /* in the drawer; nothing to collect */
+        if (CONFIRMABLE[m]) return false;        /* the loop above verified and claimed it */
+        return true;                             /* non-cash and never confirmed */
+      });
+      if (unproven.length && !(_collected && _collected.ok === true)) {
+        const methods = [...new Set(unproven.map((p) => String((p && p.method) || '?').toLowerCase()))];
+        const why = _collected
+          ? (_collected.reason || 'collection-not-verified')
+          : 'no-collection-reference';
+        throw new HttpsError('failed-precondition',
+          'This sale cannot be completed: SOKONI has no proof it collected the ' +
+          methods.join('/') + ' payment. ' +
+          (_collected && _collected.remedy
+            ? String(_collected.remedy)
+            : 'Take the payment through SOKONI Pay or the SOKONI Till so the collection is ' +
+              'confirmed, or tender cash.') +
+          ' [' + why + ']');
+      }
+    }
+
     const financial = await _postSaleFinancials({
       saleId, merchantId, cashierId, idempotencyKey,
       items: enrichedItems,
@@ -712,6 +1296,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       discount: totalDiscount,
       total: authoritativeTotal,
       payments: _pay,
+      collected: _collected,
       /* So the drawer figure can be recorded NET of what was handed back. */
       changeDue: changeDue,
     });
@@ -739,7 +1324,16 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       payments,
       couponCode:         couponCode ? _sanitize(couponCode) : null,
       couponDiscount,
-      loyaltyRedeemed:    loyaltyRedeemPoints,
+      /* THE AUTHORISED FIGURE, NOT THE REQUESTED ONE. This recorded
+         `loyaltyRedeemPoints` — the count the till asked for — which is the number the
+         server may legitimately reduce (a cap, or points worth more than the sale). A
+         sale saying 10,000 while the ledger says 200 is precisely the disagreement
+         between the sale record and the loyalty ledger that reconciliation cannot
+         resolve, and it is the reason both figures are now taken from one authorisation.
+         `loyaltyRedeemedKES` is stored beside it so the receipt does not have to
+         re-derive the cash value and reach a different answer. */
+      loyaltyRedeemed:    _preAuth.approvedPoints || 0,
+      loyaltyRedeemedKES: loyaltyRedeemKES,
       loyaltyAwarded,
       subtotal:           serverSubtotal,
       discountTotal:      totalDiscount,
@@ -762,6 +1356,13 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       /* WHERE the money is, per sale: drawer vs provider, split by method. */
       position:           financial.position,
       collectionRoute:    financial.collectionRoute,
+      /* WHETHER SOKONI HOLDS THIS MONEY, recorded on the sale itself so reconciliation and
+         support can answer it without re-deriving anything. A refusal keeps its reason: a
+         sale that failed its collection check is a sale somebody has to look at, and a
+         `collected: false` with no explanation is the kind of gap that gets guessed at. */
+      collected:          !!(_collected && _collected.ok),
+      collectionRef:      (_collected && _collected.ok) ? _collected.ref : null,
+      collectionProblem:  (_collected && !_collected.ok) ? _collected.reason : null,
       financialPosting:   financial.status,
       financialError:     financial.error || null,
 
@@ -838,7 +1439,11 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       total:      authoritativeTotal,
       payments,
       loyaltyAwarded,
-      loyaltyRedeemed: loyaltyRedeemPoints,
+      /* The receipt states what was ACTUALLY spent and what it was worth — the same
+         pair the sale record and the ledger carry. A receipt quoting the requested
+         count would be the one document the customer keeps, disagreeing with both. */
+      loyaltyRedeemed: _preAuth.approvedPoints || 0,
+      loyaltyRedeemedKES: loyaltyRedeemKES,
       customer:   customer?.name || 'Guest',
       cashier:    cashierId,
       timestamp:  new Date(now).toISOString(),
@@ -934,46 +1539,73 @@ exports.posValidateCoupon = onCall(cfg, async ({ data, auth }) => {
 /* ════════════════════════════════════════════════════════════════
    posLookupCustomer — multi-method: phone, QR code, member ID, email
 ════════════════════════════════════════════════════════════════ */
+/* Every lookup is scoped to the CALLER'S customers.
+
+   This function previously searched `posCustomers` collection-wide by phone,
+   document id, email or member-card code with no merchant filter at all, and
+   returned the customer's name, email, phone, loyalty points, tier, total spent
+   and purchase count. Any signed-in account could look up any customer on the
+   platform by phone number — and a phone number is guessable, so it was
+   enumerable cross-tenant PII disclosure. `merchantId` was accepted but used
+   ONLY to fetch the loyalty-programme config, long after the customer had
+   already been selected.
+
+   The owner now comes from AUTH (see pos-customer-scope.js) and is part of every
+   query rather than a filter applied afterwards — a post-filter still reads the
+   other merchant's document into memory before discarding it.
+
+   A miss returns exactly `{ found: false }`, the same shape and the same
+   response as a customer that genuinely does not exist. "Exists, but not yours"
+   is itself an existence disclosure, so the two cases are indistinguishable. */
+const _custScope = require('./pos-customer-scope');
+
 exports.posLookupCustomer = onCall(cfg, async ({ data, auth }) => {
   await _assertAuth(auth);
   const { query, method = 'auto', merchantId } = data || {};
   if (!query) _e('query required');
 
-  const q    = String(query).trim();
-  const coll = db.collection('posCustomers');
-  let snap   = null;
+  const owner = _custScope.resolveOwner(auth, data && data.sellerId);
+  const q     = String(query).trim();
+  let doc     = null;
 
   if (method === 'phone' || method === 'auto') {
     const phone = q.replace(/\s/g, '').replace(/^0/, '+254');
-    snap = await coll.where('phone', '==', phone).limit(1).get();
-    if (snap.empty) snap = await coll.where('phone', '==', q).limit(1).get();
+    doc = await _custScope.findOwned(db, owner, 'phone', phone);
+    if (!doc) doc = await _custScope.findOwned(db, owner, 'phone', q);
   }
 
-  if ((!snap || snap.empty) && (method === 'id' || method === 'auto')) {
-    const direct = await coll.doc(q).get();
-    if (direct.exists) snap = { docs: [direct], empty: false };
+  if (!doc && (method === 'id' || method === 'auto')) {
+    doc = await _custScope.getOwned(db, owner, q);
   }
 
-  if ((!snap || snap.empty) && (method === 'email' || method === 'auto')) {
-    snap = await coll.where('email', '==', q.toLowerCase()).limit(1).get();
+  if (!doc && (method === 'email' || method === 'auto')) {
+    doc = await _custScope.findOwned(db, owner, 'email', q.toLowerCase());
   }
 
-  if ((!snap || snap.empty) && (method === 'memberCard' || method === 'auto')) {
-    snap = await coll.where('memberCardCode', '==', q.toUpperCase()).limit(1).get();
+  if (!doc && (method === 'memberCard' || method === 'auto')) {
+    doc = await _custScope.findOwned(db, owner, 'memberCardCode', q.toUpperCase());
   }
 
-  if (!snap || snap.empty) return { found: false };
+  if (!doc) return { found: false };
 
-  const doc  = snap.docs[0];
   const cust = doc.data();
 
   /* Fetch loyalty info if merchantId provided */
   let loyalty = null;
   if (merchantId) {
-    const progSnap = await db.collection('loyaltyPrograms').doc(merchantId).get();
+    /* CANONICAL config, and NOT conditional on the document existing.
+       This read loyaltyPrograms — uncreatable, so `prog` was always null, so `loyalty`
+       stayed null, so the till's redeem control never rendered at all. The redemption
+       authority refusing was only half the failure; the other half was that a cashier
+       could never see the option to try.
+
+       The rate goes through normalizeRewardsRate: the stored field is POINTS PER KES and
+       this needs KES PER POINT, and reading it directly would invert rather than convert. */
+    const _rates = require('./rewards-rate');
+    const progSnap = await _rates.configRef(db, merchantId).get();
     const prog     = progSnap.exists ? progSnap.data() : null;
-    if (prog) {
-      const pointValue = prog.points?.pointValue || 0.5;
+    {
+      const pointValue = _rates.normalizeRewardsRate(prog).pointValueKES;
       loyalty = {
         points:      cust.loyaltyPoints || 0,
         pointsValue: Math.round((cust.loyaltyPoints || 0) * pointValue * 100) / 100,
@@ -1047,6 +1679,54 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
   if (sale.merchantId !== merchantId) _e('Unauthorized', 'permission-denied');
   if (sale.status === 'refunded') _e('Sale already fully refunded');
 
+  /* ── MANAGER APPROVAL — the first mutation that actually SPENDS one ──────────────────
+     `_consumeApproval` (pos-staff-ops.js) has been complete for weeks — transactional,
+     replay-safe, binding-checked — and had ZERO call sites. Its own comment said so:
+     "NOTHING CONSUMES ONE YET... manager approval is not enforceable end-to-end until they
+     do." So the Sales Control Centre could show a manager approving a refund, record the
+     decision, and authorise nothing: the refund proceeded on `_assertRefundAuthority` alone
+     whether or not anyone had approved it. An approval that gates nothing is theatre.
+
+     OPTIONAL, DELIBERATELY. Refund authority is unchanged: a manager or owner may still
+     refund directly, exactly as before. What changes is that when an approval IS presented,
+     it is now VERIFIED and SPENT rather than decorative — so a shop that wants two-person
+     control can have it, and no existing caller breaks. Making it mandatory is a policy
+     decision with a live blast radius, and it is not made here.
+
+     CONSUMED BEFORE THE REFUND IS WRITTEN. The other order refunds first and then tries to
+     spend the approval, so a failure between the two leaves money returned on an
+     authorisation nobody verified. This order fails the safe way: a burned approval on a
+     refund that did not happen, which a manager can simply re-approve. Money is never moved
+     on an unverified approval.
+
+     BOUND TO THIS SALE AND THIS AMOUNT. `_consumeApproval` re-checks both against what the
+     manager actually saw, so an approval for a KES 200 refund cannot be spent on a KES 2,000
+     one, and an approval for another sale cannot be spent here at all. */
+  let approvalReceipt = null;
+  if (data && data.approvalId) {
+    /* The amount is derived from the ORIGINAL sale, never from the caller — a client-supplied
+       total would let the requester choose what the manager appears to have approved. The
+       refund transaction recomputes it below from the same source and must agree. */
+    let expectedTotal = 0;
+    for (const refItem of items) {
+      const orig = (sale.items || []).find((i) => i.productId === refItem.productId);
+      if (!orig) _e('Item ' + refItem.productId + ' not in original sale');
+      const qty = Number(refItem.qty);
+      if (!Number.isFinite(qty) || qty <= 0) _e('Refund qty must be positive');
+      if (qty > orig.qty) _e('Cannot refund more than sold');
+      expectedTotal += orig.unitPrice * qty;
+    }
+    expectedTotal = Math.round(expectedTotal * 100) / 100;
+
+    const { consume } = require('./pos-staff-ops')._approvals;
+    approvalReceipt = await consume(String(data.approvalId), {
+      sellerId:    String(merchantId),
+      type:        'refund',
+      binding:     { saleId: String(saleId), amount: expectedTotal },
+      consumerUid: managerId,
+    });
+  }
+
   /* IDEMPOTENCY: refundId used to be a random id, so a double-tapped "Refund" created TWO
      refund records and returned the stock TWICE. Derive it from the caller's key (falling back
      to the saleId, since a sale can only be fully refunded once) and short-circuit inside the
@@ -1103,6 +1783,14 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
       refundMethod,
       reason:      _sanitize(reason),
       processedBy: managerId,
+      /* WHO AUTHORISED IT, when an approval was presented. Recorded on the refund itself so
+         a reconciliation can answer "who agreed to this?" without joining two collections,
+         and so a refund taken on direct manager authority is visibly distinguishable from
+         one taken under two-person control. Null is honest: it means nobody approved it
+         separately, not that the approver is unknown. */
+      approvalId:  approvalReceipt ? approvalReceipt.approvalId : null,
+      approvedBy:  approvalReceipt ? (approvalReceipt.reviewedBy || null) : null,
+      requestedBy: approvalReceipt ? (approvalReceipt.requestedBy || null) : null,
       createdAt:   FieldValue.serverTimestamp(),
     });
     txn.update(saleRef, { status: 'refunded', refundId, refundedAt: FieldValue.serverTimestamp() });
@@ -1115,7 +1803,10 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
       action:     'pos.refund',
       actorUid:   managerId,
       actorRole:  (auth && auth.token && auth.token.role) || null,
-      branchId:   sale.branchId || 'default',
+      /* The sale's OWN branch, or nothing. A refund recorded against a placeholder
+         branch is a false scope on a financial reversal — the exact record a shift
+         dispute turns on. writeAudit normalises it either way. */
+      branchId:   sale.branchId || null,
       objectType: 'order',
       objectId:   saleId,
       before:     { paymentStatus: 'paid' },
@@ -1135,7 +1826,11 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
 ════════════════════════════════════════════════════════════════ */
 exports.posLogReprint = onCall(cfg, async ({ data, auth }) => {
   await _assertAuth(auth);
-  const { orderId, receiptType = 'sale', printerName = null, branchId = 'default', merchantId = null } = data || {};
+  /* branchId is NOT defaulted to a placeholder — this is the call site that produced
+     every `branchId: "default"` reprint record in production. Left undefined here and
+     normalised by writeAudit, so an unknown scope records as NULL rather than as a
+     branch that does not exist. */
+  const { orderId, receiptType = 'sale', printerName = null, branchId, merchantId = null } = data || {};
   if (!orderId) _e('orderId required');
 
   const cntRef = db.collection('posReprintCounters').doc(String(orderId));
@@ -1165,7 +1860,10 @@ exports.posLogReprint = onCall(cfg, async ({ data, auth }) => {
 ════════════════════════════════════════════════════════════════ */
 exports.posGetQueueMetrics = onCall(cfg, async ({ data, auth }) => {
   await _assertAuth(auth);
-  const { merchantId, branchId = 'default', days = 7 } = data || {};
+  /* A read-only metric filter. An absent branch means ALL branches, which is what the
+     caller intends — substituting a placeholder silently filtered to a branch that
+     does not exist and returned nothing. */
+  const { merchantId, branchId, days = 7 } = data || {};
   if (!merchantId) _e('merchantId required');
 
   const since = new Date();
@@ -1292,3 +1990,13 @@ exports.posCheckPaymentStatus = onCall(cfg, async ({ data, auth }) => {
   /* Still waiting for webhook */
   return { status: 'pending' };
 });
+
+/* ── ONE POSTING PATH, SHARED BY BOTH SALE RAILS ──────────────────────────────────────
+   `recordPOSSale` (pos-retail-engine.js) writes sales too and posted NOTHING: no tax, no
+   commission accrual, no wallet credit. So a merchant selling through that rail was
+   gated on a commission ledger their own sales never wrote to — enforced against an
+   empty balance, which is a gate that cannot close.
+
+   Exported rather than reimplemented. Two posting implementations would drift, and the
+   one that drifted would be the one nobody was reading. */
+module.exports._postSaleFinancials = _postSaleFinancials;

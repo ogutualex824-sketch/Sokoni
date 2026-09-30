@@ -70,6 +70,38 @@ function _requireAdmin(ctx) {
   return auth;
 }
 
+/**
+ * The merchant the CALLER controls — resolved, never supplied.
+ *
+ * `_requireMerchant` proves the caller is A merchant. It cannot prove they are THE merchant,
+ * and `_san(merchantId || auth.uid, 64)` let the request decide the difference. This resolves
+ * the caller's own merchant through tenant-identity's canonical resolver — the same one
+ * store-identity.resolveChain uses, which refuses AMBIGUITY (an owner with two businesses) and
+ * a stored/doc-id disagreement rather than guessing.
+ *
+ * A platform admin may still name a merchant explicitly; that is a pre-existing capability of
+ * these handlers and removing it would be a different change from this one.
+ *
+ * @returns the merchantId, or throws permission-denied.
+ */
+async function _resolveOwnMerchant(auth, suppliedMerchantId) {
+  const t = (auth && auth.token) || {};
+  if ((t.admin === true || t.superAdmin === true) && suppliedMerchantId) {
+    return _san(String(suppliedMerchantId), 64);
+  }
+  const { resolveMerchantIdForOwner } = require('./tenant-identity');
+  const biz = await resolveMerchantIdForOwner(auth.uid);
+  if (!biz.ok) {
+    throw new HttpsError('permission-denied',
+      'No merchant identity for this caller (' + biz.reason + ').');
+  }
+  const mid = _san(biz.merchantId, 64);
+  if (suppliedMerchantId && _san(String(suppliedMerchantId), 64) !== mid) {
+    throw new HttpsError('permission-denied', 'That merchant is not yours.');
+  }
+  return mid;
+}
+
 function _requireMerchant(ctx) {
   const auth = _requireAuth(ctx);
   const t = auth.token || {};
@@ -402,20 +434,83 @@ exports.lookupLoyaltyCustomer = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeou
 // ═════════════════════════════════════════════════════════════════════════════
 
 exports.awardLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, exports._h.awardLoyaltyPoints = async (req) => {
-  _requireAuth(req);
+  /* ── AUTHORITY ────────────────────────────────────────────────────────────
+     This handler used to guard with _requireAuth alone and then take customerUid,
+     amountKES, orderId and merchantId straight from the request. Proven at runtime
+     (dea9d79): an ordinary signed-in user credited 100,000 points to a third party
+     against an invented order, attributed to a merchant they did not own.
+
+     Firestore rules never covered this. They cannot: a callable runs with admin
+     credentials and no rule applies to it. Rules holding 40/40 said nothing about
+     this path, which is the whole lesson of the L2 trace.
+
+     The repair binds every one of those four inputs to a fact rather than a claim:
+
+       orderId    the only identifier the caller still supplies, and it must resolve
+       seller     orders/{orderId}.sellerUid MUST equal the caller — this is what
+                  makes it the caller's sale rather than someone else's
+       merchantId resolved FROM THE CALLER by tenant-identity's canonical resolver,
+                  never read from the request
+       customer   orders/{orderId}.buyerUid
+       amountKES  orders/{orderId}.total
+
+     A supplied value that DISAGREES with the derived one is refused rather than
+     ignored. Silently ignoring it would let a caller believe it set the amount and
+     leave the disagreement invisible; refusing makes tampering an event. */
+  const auth = _requireAuth(req);
   const {
-    customerUid, amountKES, orderId, paymentId,
-    merchantId, branchId, terminalId, cashierId,
+    customerUid: _claimedCustomerUid, amountKES: _claimedAmountKES, orderId, paymentId,
+    merchantId: _claimedMerchantId, branchId, terminalId, cashierId,
     category, campaignIds = [],
   } = req.data || {};
 
-  if (!customerUid)            throw new HttpsError('invalid-argument', 'customerUid required');
-  if (!amountKES || amountKES <= 0) throw new HttpsError('invalid-argument', 'amountKES must be positive');
-  if (!orderId)                throw new HttpsError('invalid-argument', 'orderId required');
-  if (!merchantId)             throw new HttpsError('invalid-argument', 'merchantId required');
+  if (!orderId) throw new HttpsError('invalid-argument', 'orderId required');
 
   const db  = _db();
-  const mid = _san(merchantId, 64);
+
+  /* THE ORDER IS THE AUTHORITY for who sold, who bought, and how much. */
+  const _orderSnap = await db.collection('orders').doc(_san(String(orderId), 128)).get();
+  if (!_orderSnap.exists) throw new HttpsError('not-found', 'Order not found');
+  const _order = _orderSnap.data() || {};
+
+  /* The caller must be the order's SELLER. Production orders carry sellerUid (10 of 10
+     sampled); sellerId is accepted as the legacy spelling because refusing a merchant
+     whose rows predate the rename would be a regression, not a guard. */
+  const _orderSeller = _order.sellerUid || _order.sellerId || null;
+  if (!_orderSeller) throw new HttpsError('failed-precondition', 'Order names no seller.');
+  if (String(_orderSeller) !== String(auth.uid)) {
+    throw new HttpsError('permission-denied', 'That order does not belong to you.');
+  }
+
+  /* merchantId comes from the CALLER, through the canonical uid -> business resolver.
+     Not a parallel identity authority: this is the same resolveMerchantIdForOwner that
+     store-identity's resolveChain uses, and it refuses ambiguity (two businesses) and a
+     stored/doc-id disagreement rather than guessing. */
+  const { resolveMerchantIdForOwner } = require('./tenant-identity');
+  const _biz = await resolveMerchantIdForOwner(auth.uid);
+  if (!_biz.ok) {
+    throw new HttpsError('permission-denied',
+      'No merchant identity for this caller (' + _biz.reason + ').');
+  }
+  const mid = _san(_biz.merchantId, 64);
+  if (_claimedMerchantId && _san(String(_claimedMerchantId), 64) !== mid) {
+    throw new HttpsError('permission-denied', 'merchantId does not belong to you.');
+  }
+
+  /* Customer and amount are FACTS OF THE ORDER, never parameters. */
+  const customerUid = _order.buyerUid || _order.uid || null;
+  if (!customerUid) throw new HttpsError('failed-precondition', 'Order names no buyer.');
+  if (_claimedCustomerUid && String(_claimedCustomerUid) !== String(customerUid)) {
+    throw new HttpsError('permission-denied', 'customerUid does not match the order.');
+  }
+
+  const amountKES = Number(_order.total);
+  if (!Number.isFinite(amountKES) || amountKES <= 0) {
+    throw new HttpsError('failed-precondition', 'Order has no payable total.');
+  }
+  if (_claimedAmountKES != null && Number(_claimedAmountKES) !== amountKES) {
+    throw new HttpsError('invalid-argument', 'amountKES does not match the order total.');
+  }
   const idKey = _ledgerKey(['earn', customerUid, orderId, mid]);
 
   // Load config + campaigns in parallel (non-critical config reads; idempotency is enforced
@@ -426,9 +521,32 @@ exports.awardLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, exports._h.a
   ]);
   const config = cfgSnap.exists ? cfgSnap.data() : _defaultConfig(mid);
 
+  /* THE RATE THAT VALUES THESE POINTS, AND WHICH CONFIGURATION PRODUCED IT.
+     Taken from the ONE rate authority so the online rail cannot value points by a second
+     route, and captured here — at award time — because re-deriving it later from whatever
+     the configuration says then would make the past move whenever the present changes.
+     An absent config yields the platform rate and the 'platform-default' version, which is
+     the honest label rather than a merchant version the merchant never set. */
+  const _rates = require('./rewards-rate');
+  const _norm = _rates.normalizeRewardsRate(cfgSnap.exists ? cfgSnap.data() : null);
+  const _EV = require('./loyalty-event');
+
+  /* A CAMPAIGN BELONGS TO A MERCHANT. This filter checked `active` and the date window but
+     not ownership, so a campaign created under merchant B could multiply an award attributed
+     to merchant A — extra liability on books that never authorised it.
+
+     A foreign campaign is REFUSED, not silently dropped: dropping it would leave the merchant
+     believing a bonus applied and the customer short, with nothing in the record to show why. */
+  const _foreign = cSnaps.filter((s) => s.exists && String(s.data().merchantId || '') !== mid);
+  if (_foreign.length) {
+    throw new HttpsError('permission-denied',
+      'Campaign ' + _foreign[0].id + ' belongs to another merchant.');
+  }
+
   const now   = Date.now();
   const activeCampaigns = cSnaps
     .filter(s => s.exists && s.data().active &&
+      String(s.data().merchantId || '') === mid &&
       s.data().startsAt?.toMillis() <= now &&
       (!s.data().endsAt || s.data().endsAt.toMillis() >= now))
     .map(s => s.data());
@@ -506,6 +624,24 @@ exports.awardLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, exports._h.a
       category: _san(category || '', 64),
       description: `Earned at ${config.programName || 'SOKONI'}`,
       expiresAt, expired: false, idempotencyKey: idKey, createdAt: _now(),
+
+      /* ── CANONICAL ACCOUNTING FIELDS (L5) ──────────────────────────────────
+         rail   : set by the PRODUCER, never by the caller. A browser that could name its
+                  own rail could make an online award look like a till transaction and
+                  every rail-scoped total would then describe nothing.
+         rate   : KES per point, through the single inversion in rewards-rate.js.
+         rateVersion : which configuration produced that rate.
+         valueKES    : what these points are WORTH — the liability this event creates.
+                  Distinct from amountKES above, which is what the customer SPENT.
+         klass  : the accounting class, so an aggregate never re-derives semantics. */
+      rail:        _EV.RAIL.ONLINE,
+      klass:       _EV.classOf('earn'),
+      rate:        _norm.pointValueKES,
+      rateVersion: _norm.rateVersion,
+      valueKES:    Math.round(pts.total * _norm.pointValueKES * 100) / 100,
+      actor:       auth.uid,
+      orderRef:    _san(orderId, 128),
+      schemaVersion: 1,
     });
 
     result = {
@@ -568,8 +704,14 @@ exports.redeemLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, exports._h.
     if (pointsToRedeem > available)
       throw new HttpsError('failed-precondition', `Insufficient points. Available: ${available}`);
 
-    const rate        = config.redemptionRate || 100;    // 100 pts = KES 1
-    const maxPct      = config.maxRedemptionPct || 50;
+    /* THE ONE RATE AUTHORITY. This read `config.redemptionRate || 100` while the POS rail
+       read the same configuration through rewards-rate.js and defaulted to 10 — so the same
+       customer's points were worth ten times more at a till than online whenever a merchant
+       had no stored rate, which in production was every merchant. Commercial decision taken
+       2026-09-12: 10 points = KES 1. */
+    const _rn         = require('./rewards-rate').normalizeRewardsRate(config);
+    const rate        = _rn.redemptionRate;
+    const maxPct      = _rn.maxRedemptionPct;
     const maxKES      = Math.floor(totalAmountKES * maxPct / 100);
     const wantedKES   = Math.floor(pointsToRedeem / rate);
     const approvedKES = Math.min(wantedKES, maxKES);
@@ -745,6 +887,8 @@ exports.getLoyaltyTiers = onCall(OPT, exports._h.getLoyaltyTiers = async (req) =
     const snap = await _db().collection('loyaltyMerchantConfigs').doc(_san(merchantId, 64)).get();
     if (snap.exists) config = snap.data();
   }
+  const _tierRates = require('./rewards-rate').normalizeRewardsRate(config);
+
   return {
     tiers: TIERS.map(t => ({
       ...t,
@@ -755,8 +899,10 @@ exports.getLoyaltyTiers = onCall(OPT, exports._h.getLoyaltyTiers = async (req) =
         : t.key === 'platinum' ? ['3x points', 'Exclusive discounts', 'VIP events', 'Double points days']
         : ['5x points', 'Dedicated account manager', 'First access to products', 'Premium benefits'],
     })),
-    earnRate: config.pointsPerKES || 0.1,
-    redemptionRate: config.redemptionRate || 100,
+    /* Reported to the client through the same authority that prices a redemption, so the
+       rate a customer is SHOWN cannot differ from the rate they are CHARGED. */
+    earnRate: _tierRates.pointsPerKES,
+    redemptionRate: _tierRates.redemptionRate,
     programName: config.programName || 'SOKONI Rewards',
   };
 });
@@ -823,9 +969,24 @@ exports.getLoyaltyLeaderboard = onCall(OPT, exports._h.getLoyaltyLeaderboard = a
 // ═════════════════════════════════════════════════════════════════════════════
 
 exports.configureLoyaltyProgram = onCall({ ...OPT, timeoutSeconds: 20 }, exports._h.configureLoyaltyProgram = async (req) => {
+  /* ── AUTHORITY ────────────────────────────────────────────────────────────
+     `_san(merchantId || auth.uid, 64)` made the request the authority: _requireMerchant
+     proves the caller is A merchant, not THE merchant, so any seller could rewrite any
+     merchant's economics. Proven at runtime (dea9d79): a seller with no relationship to
+     the target rewrote its redemptionRate from 10 to 1 — a ten-fold revaluation of every
+     point that merchant has outstanding.
+
+     The rate is the economic rule; rewards-rate.js exists precisely so it cannot be set
+     casually. The caller's merchant identity is now RESOLVED, never supplied.
+
+     An explicit merchantId is still honoured for a platform admin, because admin override
+     is an existing capability of this callable and removing it would be a different change
+     from the one this repair is for. */
   const auth = _requireMerchant(req);
   const { merchantId, ...cfg } = req.data || {};
-  const mid = _san(merchantId || auth.uid, 64);
+  /* The same authority as every other merchant-scoped handler, from one definition. Five
+     copies of this check would be five chances to get it wrong. */
+  const mid = await _resolveOwnMerchant(auth, merchantId);
 
   if (cfg.pointsPerKES != null && (cfg.pointsPerKES < 0 || cfg.pointsPerKES > 100))
     throw new HttpsError('invalid-argument', 'pointsPerKES must be 0–100');
@@ -884,7 +1045,7 @@ exports.createLoyaltyCampaign = onCall({ ...OPT, timeoutSeconds: 20 }, exports._
   if (!['multiplier','fixed','percent'].includes(bonusType))
     throw new HttpsError('invalid-argument', 'bonusType must be multiplier|fixed|percent');
 
-  const mid = _san(merchantId || auth.uid, 64);
+  const mid = await _resolveOwnMerchant(auth, merchantId);
   const ref = _db().collection('loyaltyCampaigns').doc();
   await ref.set({
     id: ref.id, merchantId: mid, name: _san(name, 128),
@@ -933,34 +1094,81 @@ exports.getActiveCampaigns = onCall({ ...OPT, timeoutSeconds: 10 }, exports._h.g
 exports.getMerchantLoyaltyDashboard = onCall({ ...OPT, timeoutSeconds: 30, memory: '256MiB' }, exports._h.getMerchantLoyaltyDashboard = async (req) => {
   const auth = _requireMerchant(req);
   const { merchantId, days = 30 } = req.data || {};
-  const mid    = _san(merchantId || auth.uid, 64);
+  const mid    = await _resolveOwnMerchant(auth, merchantId);
   const db     = _db();
   const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - _safeInt(days) * 24 * 60 * 60 * 1000);
 
-  const [totalSnap, newSnap, earnSnap, redeemSnap] = await Promise.all([
-    db.collection('loyaltyAccounts').where('lastMerchantId', '==', mid).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
-    db.collection('loyaltyAccounts').where('lastMerchantId', '==', mid).where('joinedAt', '>=', cutoff).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
-    db.collection('loyaltyLedger').where('merchantId', '==', mid).where('type', '==', 'earn').where('createdAt', '>=', cutoff).limit(500).get().catch(() => ({ docs: [] })),
-    db.collection('loyaltyLedger').where('merchantId', '==', mid).where('type', '==', 'redeem').where('createdAt', '>=', cutoff).limit(500).get().catch(() => ({ docs: [] })),
+  /* ── LEDGER FIGURES COME FROM THE CANONICAL AGGREGATE (L5) ───────────────────
+     This used to run two limit(500) type-filtered queries, each with a catch that returned
+     an empty result — so a failed query became an accounting zero, a merchant with more than
+     500 events saw a silently partial total, and reversals, expiries and adjustments were
+     excluded from every figure. All four defects lived in the four lines this replaces. */
+  const _ACC = require('./loyalty-accounting');
+  const _agg = await _ACC.aggregate(db, { merchantId: mid, since: cutoff });
+
+  /* A COUNT THAT FAILS IS NOT ZERO MEMBERS. The catch that produced { count: 0 } made an
+     outage look like an empty programme; null says "not measured" and the flag says why. */
+  const _count = async (q) => { try { return (await q.count().get()).data().count; } catch (e) { return null; } };
+  const [totalMembers, newMembers] = await Promise.all([
+    _count(db.collection('loyaltyAccounts').where('lastMerchantId', '==', mid)),
+    _count(db.collection('loyaltyAccounts').where('lastMerchantId', '==', mid).where('joinedAt', '>=', cutoff)),
   ]);
 
-  const earns   = earnSnap.docs.map(d => d.data());
-  const redeems = redeemSnap.docs.map(d => d.data());
-  const issued   = earns.reduce((s, d) => s + (d.points || 0), 0);
-  const redeemed = redeems.reduce((s, d) => s + Math.abs(d.points || 0), 0);
-  const revenue  = earns.reduce((s, d) => s + (d.amountKES || 0), 0);
-  const cashback = redeems.reduce((s, d) => s + (d.cashbackKES || 0), 0);
+  /* Top customers still need the rows themselves; this is a LEADERBOARD, not an accounting
+     total, so a bounded read is honest here — and it is labelled as bounded. */
+  /* ACCOUNTING-EXEMPT: a top-5 leaderboard, not a total; boundedness is reported to the
+     caller as topCustomersBounded so a clipped list is never mistaken for the whole. */
+  let topCustomers = [];
+  let topCustomersBounded = false;
+  try {
+    const _lead = await db.collection('loyaltyLedger')
+      .where('merchantId', '==', mid).where('type', '==', 'earn')
+      .where('createdAt', '>=', cutoff).limit(500).get();
+    topCustomersBounded = _lead.size === 500;
+    const topMap = {};
+    for (const d of _lead.docs) {
+      const v = d.data();
+      if (v.uid && Number.isFinite(Number(v.points))) topMap[v.uid] = (topMap[v.uid] || 0) + Number(v.points);
+    }
+    topCustomers = Object.entries(topMap).sort(([, a], [, b]) => b - a).slice(0, 5)
+      .map(([uid, pts]) => ({ uid, pointsEarned: pts }));
+  } catch (e) { topCustomers = null; }
 
-  const topMap = {};
-  for (const d of earns) { if (d.uid) topMap[d.uid] = (topMap[d.uid] || 0) + (d.points || 0); }
-  const topCustomers = Object.entries(topMap).sort(([,a],[,b]) => b - a).slice(0, 5).map(([uid, pts]) => ({ uid, pointsEarned: pts }));
+  if (_agg.state !== 'OK') {
+    /* NO POINT FIGURES AT ALL. There is nothing here that renders as a number, which is the
+       only safe answer when the ledger could not be read completely. */
+    return {
+      period: days, state: _agg.state, reason: _agg.reason,
+      totalMembers, newMembers, topCustomers, topCustomersBounded,
+    };
+  }
+
+  const issued   = _agg.points.issued;
+  const redeemed = Math.abs(_agg.points.redeemed);
 
   return {
     period: days,
-    totalMembers: totalSnap.data().count, newMembers: newSnap.data().count,
-    pointsIssued: issued, pointsRedeemed: redeemed,
+    state: 'OK',
+    totalMembers, newMembers,
+    pointsIssued: issued,
+    pointsRedeemed: redeemed,
+    /* THE FIGURES THAT WERE PREVIOUSLY EXCLUDED ALTOGETHER. */
+    pointsExpired: Math.abs(_agg.points.expired),
+    pointsReversed: _agg.points.reversed,
+    pointsAdjusted: _agg.points.adjusted,
+    pointsOutstanding: _agg.points.outstanding,
     redemptionRate: issued > 0 ? Math.round(redeemed / issued * 100) : 0,
-    cashbackKES: cashback, revenueFromMembers: revenue, topCustomers,
+    /* KES is reported only for events that carry a rate AND its version. The count of
+       events with NO valuation travels with it, so an unvalued ledger is never mistaken for
+       a worthless one. */
+    valuedKES: _agg.valuation.valuedKES,
+    eventsValued: _agg.valuation.eventsValued,
+    eventsUnvalued: _agg.valuation.eventsUnvalued,
+    rateVersions: _agg.valuation.rateVersions,
+    byRail: _agg.byRail,
+    unclassified: _agg.unclassified,
+    eventsRead: _agg.eventsRead,
+    topCustomers, topCustomersBounded,
   };
 });
 
@@ -978,7 +1186,7 @@ exports.createLoyaltyReward = onCall({ ...OPT, timeoutSeconds: 20 }, exports._h.
   const valid = ['discount','cashback','free_item','gift_card','voucher','free_delivery','vip_upgrade','scratch_card','lucky_draw'];
   if (!valid.includes(rewardType)) throw new HttpsError('invalid-argument', 'Invalid rewardType');
 
-  const mid = _san(merchantId || auth.uid, 64);
+  const mid = await _resolveOwnMerchant(auth, merchantId);
   const ref = _db().collection('loyaltyRewards').doc();
   await ref.set({
     id: ref.id, merchantId: mid, name: _san(name, 128),
@@ -1251,22 +1459,33 @@ exports.voidLoyaltyTransaction = onCall({ ...OPT, timeoutSeconds: 30 }, exports.
 exports.getLoyaltyInsights = onCall({ ...OPT, timeoutSeconds: 60, memory: '512MiB' }, exports._h.getLoyaltyInsights = async (req) => {
   const auth = _requireMerchant(req);
   const { merchantId, days = 30 } = req.data || {};
-  const mid    = _san(merchantId || auth.uid, 64);
+  const mid    = await _resolveOwnMerchant(auth, merchantId);
   const db     = _db();
   const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - _safeInt(days) * 24 * 60 * 60 * 1000);
 
-  const [earnSnap, redeemSnap, membersSnap, cfgSnap] = await Promise.all([
-    db.collection('loyaltyLedger').where('merchantId', '==', mid).where('type', '==', 'earn').where('createdAt', '>=', cutoff).limit(500).get(),
-    db.collection('loyaltyLedger').where('merchantId', '==', mid).where('type', '==', 'redeem').where('createdAt', '>=', cutoff).limit(200).get(),
-    db.collection('loyaltyAccounts').where('lastMerchantId', '==', mid).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+  /* ── LEDGER FIGURES FROM THE CANONICAL AGGREGATE (L5) ────────────────────────
+     These numbers go into a prompt that asks for advice on a merchant's economics. A
+     truncated or failure-zeroed total does not merely render wrong — it becomes the premise
+     of a recommendation. The four defects this replaces were: two limit()-capped sums, a
+     count catching to zero, and a two-type vocabulary out of eleven. */
+  const _ACC = require('./loyalty-accounting');
+  const [_agg, membersCount, cfgSnap] = await Promise.all([
+    _ACC.aggregate(db, { merchantId: mid, since: cutoff }),
+    (async () => { try { return (await db.collection('loyaltyAccounts')
+      .where('lastMerchantId', '==', mid).count().get()).data().count; } catch (e) { return null; } })(),
     db.collection('loyaltyMerchantConfigs').doc(mid).get(),
   ]);
 
-  const earns    = earnSnap.docs.map(d => d.data());
-  const issued   = earns.reduce((s, d) => s + (d.points || 0), 0);
-  const redeemed = redeemSnap.docs.reduce((s, d) => s + Math.abs(d.points || 0), 0);
-  const revenue  = earns.reduce((s, d) => s + (d.amountKES || 0), 0);
-  const members  = membersSnap.data().count;
+  if (_agg.state !== 'OK') {
+    /* No figures, and therefore no advice founded on them. */
+    return { state: _agg.state, reason: _agg.reason, insights: [] };
+  }
+
+  const issued   = _agg.points.issued;
+  const redeemed = Math.abs(_agg.points.redeemed);
+  /* Only events that carry a rate AND its version contribute a KES figure. */
+  const revenue  = _agg.valuation.valuedKES;
+  const members  = membersCount;
   const config   = cfgSnap.exists ? cfgSnap.data() : _defaultConfig(mid);
   const rate     = issued > 0 ? (redeemed / issued * 100).toFixed(1) : 0;
 
@@ -1314,6 +1533,9 @@ exports.processExpiringPoints = onSchedule(
     const db  = _db();
     const now = admin.firestore.Timestamp.now();
 
+    /* ACCOUNTING-EXEMPT: an expiry sweep processes a BATCH of work per run; the bound is the
+       batch size, not a reported figure. Nothing here is summed into a total, and the type
+       filter is the sweep's subject rather than a partial view of the ledger. */
     const snap = await db.collection('loyaltyLedger')
       .where('type', '==', 'earn')
       .where('expiresAt', '<=', now)

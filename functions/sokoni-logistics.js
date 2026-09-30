@@ -291,9 +291,21 @@
       push: function (d) { return { title: 'Rider Assigned', body: 'Your order is being picked up by ' + d.riderName + '. ETA: ' + d.etaMin + ' min.' }; },
       sms:  function (d) { return 'SOKONI: ' + d.riderName + ' is picking up your order. Track: ' + d.trackUrl; },
     },
+    /* THE RIDE TO THE SHOP. Between `driver_assigned` and the parcel being collected there
+       was no stage at all, so the buyer saw nothing during the longest silent stretch of the
+       journey — which is exactly when they call support to ask whether anything is happening.
+       The rider has accepted and is travelling to the shop; that is a fact worth sending. */
+    driver_en_route_pickup: {
+      push: function (d) { return { title: 'Rider On The Way To The Shop', body: (d.riderName || 'Your rider') + ' has accepted and is heading to the shop to collect your order.' }; },
+      sms:  function (d) { return 'SOKONI: ' + (d.riderName || 'Your rider') + ' is on the way to the shop to collect your order. Track: ' + d.trackUrl; },
+    },
+    /* NAME/COPY MISMATCH, corrected: this stage is the rider ARRIVING AT THE SELLER, but the
+       body announced "has collected your parcel and is heading to you" — a post-collection
+       message on a pre-collection event. A buyer told the parcel is collected, then left
+       waiting while it is still on the counter, has been told something untrue. */
     driver_at_seller: {
-      push: function (d) { return { title: 'Parcel Collected', body: d.riderName + ' has collected your parcel and is heading to you.' }; },
-      sms:  function (d) { return 'SOKONI: Your parcel has been picked up and is on its way!'; },
+      push: function (d) { return { title: 'Rider At The Shop', body: (d.riderName || 'Your rider') + ' has arrived at the shop and is collecting your order.' }; },
+      sms:  function (d) { return 'SOKONI: Your rider is at the shop collecting your order.'; },
     },
     in_transit: {
       push: function (d) { return { title: 'Out for Delivery', body: 'Your order is on the way. ETA: ' + d.etaMin + ' min.' }; },
@@ -310,6 +322,25 @@
     failed_delivery: {
       push: function (d) { return { title: 'Delivery Attempt Failed', body: d.failReason + '. We will contact you shortly.' }; },
       sms:  function (d) { return 'SOKONI: Delivery attempt failed (' + d.failReason + '). Our team will assist. Ref: ' + d.deliveryRef; },
+    },
+
+    /* ── RETURN AND REFUND — reconciled with the client copy (owner ruling 2026-09-07) ──
+       These two existed ONLY in the browser copy of this module. Two copies of one
+       vocabulary disagreeing is how a stage silently stops notifying: `renderNotification`
+       returns null for an unknown stage, and a null return is indistinguishable from
+       "nothing to send" — so a server-side return or refund reached the customer as
+       silence, on exactly the two events people chase support about.
+
+       The wording is TAKEN FROM the client copy rather than newly written. A second
+       phrasing of the same event is how a buyer gets told two different things about one
+       refund depending on which side sent it. */
+    return_initiated: {
+      push: function () { return { title: 'Order Being Returned', body: 'Your order is being returned to the seller. A refund will be processed.' }; },
+      sms:  function (d) { return 'SOKONI: Your order ' + d.deliveryRef + ' is being returned. Refund will follow.'; },
+    },
+    refund_initiated: {
+      push: function () { return { title: 'Refund Initiated', body: 'A refund has been initiated for your order. You will receive it within 3-5 business days.' }; },
+      sms:  function (d) { return 'SOKONI: Refund initiated for order ' + d.deliveryRef + '. Allow 3-5 business days for M-Pesa reversal.'; },
     },
   };
 

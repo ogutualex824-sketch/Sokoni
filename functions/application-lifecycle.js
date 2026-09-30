@@ -68,6 +68,9 @@ const logger = require('firebase-functions/logger');
 /* Canonical role vocabulary (Roles Phase 1). The single definition of what an
    application may declare; see functions/role-vocabulary.js. */
 const VOCAB = require('./role-vocabulary');
+/* The ONE seller-trial authority. This module builds no trial payload of its own —
+   two copies of a commercial entitlement drift, which is why seller-trial.js exists. */
+const { startSellerFreeTrial } = require('./seller-trial');
 
 const REGION = 'us-central1';
 const _db = () => getFirestore();
@@ -211,6 +214,34 @@ function resolveRole(app) {
   ].filter(Boolean).join(' ').toLowerCase();
 
   const test = (re) => re.test(hay);
+
+  /* ── An EXPLICIT declaration beats keyword guessing ──────────────────────
+     The keyword pool below matches on EVERY descriptive field, including the
+     merchant's own product `category`. That is right for intakes whose `type` is
+     prose ("Cleaning Company / Housekeeper"), and wrong for the ones that declare a
+     canonical role — because `legal` and `health` are tested BEFORE `seller`, so a
+     shop selling health or legal PRODUCTS was routed to a provider registry and never
+     given a shop, a till or a storefront:
+
+         { type:'seller', hub:'marketplace', category:'healthcare' }  ->  health
+         { type:'seller', hub:'marketplace', category:'legal'      }  ->  legal
+
+     Both are merchants. sokoni-merchant-application.js writes `type: 'seller'`
+     deliberately as the intake vocabulary, and a stated intake must not be overridden
+     by a guess about what the applicant sells.
+
+     Matched EXACTLY, never as a substring, so prose types (hub-register.js writes
+     `type: 'business'`) still fall through to the keyword pool and resolve as before. */
+  const DECLARED_TYPES = {
+    seller: 'seller', merchant: 'seller', vendor: 'seller',
+    driver: 'driver', rider: 'driver',
+    provider: 'provider', professional: 'provider',
+    legal: 'legal', health: 'health',
+  };
+  const declared = String(app.type == null ? '' : app.type).trim().toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(DECLARED_TYPES, declared)) {
+    return { role: DECLARED_TYPES[declared], by: 'declared' };
+  }
 
   /* LEGACY PATH ONLY. Everything below reads documents written before
      `requestedRole` existed. `by` is stamped 'legacy-*' so a reviewer can tell a
@@ -515,6 +546,9 @@ async function projectDriver(db, app, uid, approved) {
       }, { merge: true });
     }
     await batch.commit();
+    /* THE BUSINESS IS DELIBERATELY UNTOUCHED. It holds earnings the rider has already
+       made; suspending the right to work is not confiscation of money already earned,
+       and a retracted business would strand settled funds nobody could reach. */
     return { collection: 'drivers+rideDrivers', id: uid, action: rideSnap.exists || drvSnap.exists ? 'retracted' : 'noop_absent' };
   }
 
@@ -592,10 +626,58 @@ async function projectDriver(db, app, uid, approved) {
   }, { merge: true });
 
   await batch.commit();
+
+  /* ── THE RIDER'S BUSINESS ────────────────────────────────────────────────────
+     Delivery earnings are trading proceeds, and the certified settlement pays them to
+     businessWallets/{businessId} while refusing a personal wallet outright. A rider
+     without a business therefore cannot be paid — their money is held on the job with
+     `deliverySettlementHold` and stays there.
+
+     Merchants are provisioned at approval by this same primitive. Riders went through
+     the same approval and got dispatch records but no business, so every one of them
+     met that hold. Provisioning here closes it at the moment the right to work is
+     granted, using the mechanism that already exists rather than a second one.
+
+     BEST-EFFORT ON PURPOSE. A rider whose business could not be created is still an
+     approved rider: refusing the whole approval because a wallet destination is
+     missing would keep somebody off the road over money they have not yet earned. The
+     outcome is returned so the caller can see it, and settlement keeps holding until
+     it exists — which is the behaviour that was already correct. */
+  let riderBusiness = { created: false, reason: 'not-attempted', merchantId: null };
+  /* EXPLICITLY GUARDED AT THE CALL SITE. The function already returns early when
+     !approved, so this condition is always true here — it is kept because the guard
+     that matters is ninety lines above, and a reader (or a checker) at this line cannot
+     see it. A provisioning call that can only be shown safe by scrolling is one that a
+     later edit can silently unguard. */
+  if (approved) try {
+    const bb = require('./business-bootstrap');
+    riderBusiness = await bb._ensureBusinessForOwner({
+      uid: String(uid),
+      /* The rider's own name, because this business IS the rider trading. A generic
+         label would make every rider's wallet indistinguishable in an audit. */
+      businessName: name || 'Rider',
+      category: 'Delivery',
+      phone: _san(app.phone, 24) || _san(app.phoneNumber, 24) || '',
+      county: _sanText(app.county, 100) || '',
+      city: _sanText(app.city, 100) || '',
+    });
+  } catch (e) {
+    riderBusiness = { created: false, reason: 'provisioning-failed',
+                      detail: (e && e.message) || String(e), merchantId: null };
+  }
+
   return {
     collection: 'drivers+rideDrivers', id: uid,
     action: rideSnap.exists ? 'updated' : 'created',
     documentsMissing: missing,
+    /* NAMED IN THE RESULT so an approval that could not give a rider a wallet
+       destination is visible, rather than discovered later as an unpaid delivery. */
+    riderBusiness: {
+      provisioned: riderBusiness.created === true ||
+                   riderBusiness.reason === 'already-provisioned',
+      businessId: riderBusiness.merchantId || null,
+      reason: riderBusiness.reason,
+    },
   };
 }
 
@@ -761,7 +843,253 @@ async function projectLegal(db, app, uid, approved) {
    `legal` GRADUATED out of this map in Roles Phase 2: "delegated" meant nobody
    wrote the document, so approving an advocate produced no profile and no search
    presence. It now runs projectLegal above. */
-const DELEGATED_ROLES = { seller: 'sellers', health: 'healthProviders' };
+/* `seller` USED to be in here — the projection recorded `action: 'delegated'` and
+   wrote nothing, on the assumption that sellers have their own onboarding. That
+   assumption is false: the only writers of `sellers/{uid}` are client-side forms,
+   and nothing server-side creates `shops/{shopId}` at all. An approved merchant
+   therefore got a role and a claim and NO SHOP — authorised to sell, with nowhere
+   to sell from, and `mintSokoniTillCore` refusing with "Shop not found" because a
+   Till is keyed on a shop that was never created. Seller is projected properly by
+   projectSeller below; health still genuinely has its own registry. */
+const DELEGATED_ROLES = { health: 'healthProviders' };
+
+/* The placeholder-shop-id guard that used to live here is REMOVED, not disabled.
+   It existed to sanitise a client-declared `app.shopId` — rejecting 'main',
+   'default' and friends so every merchant did not land on a shared `shops/main`.
+   Under the ratified contract the declared value is ignored outright, so there is
+   no path for a placeholder to reach the store id and the guard could only give a
+   false impression that one is still being filtered. Keeping dead validation for a
+   field nobody reads is how a future reader concludes the field is still honoured. */
+
+/**
+ * Approval → a LIVE shop, created BEFORE the role is granted.
+ *
+ * The ordering is deliberate and load-bearing. If the shop cannot be established,
+ * applyDecision's catch records the failure and rethrows, so no seller role and no
+ * claim are handed out. The state this removes is "approved merchant with no shop".
+ *
+ * The shop id comes from the application when it named a real one, otherwise the
+ * account's own marketplace shop `shops/{uid}`. An account id and a shop id are
+ * different concepts even when they share a value.
+ *
+ * IDEMPOTENT rather than transactional, and only across documents it owns:
+ * deterministic ids + merge, so re-approving converges instead of forking a second
+ * shop, and `createdAt` is written only when the shop is new. It is NOT atomic
+ * across shops/sellers/users — see the provisioning note in applyDecision.
+ */
+async function projectSeller(db, app, uid, approved, chain) {
+  /* THE CANONICAL STORE ID IS THE OWNER'S UID — ratified 2026-09-06. It is never
+     taken from the application.
+
+     `app.shopId` is CLIENT-WRITABLE: applications permit an owner update and
+     `noAdminFields()` withholds thirteen fields, none of them shopId. Honouring it
+     let an applicant choose where their store was created, and three things break
+     when that value is not the uid:
+
+       1. firestore.rules is `match /shops/{uid}` with
+          `allow update: if ... request.auth.uid == uid`, and `ownerId` is not in the
+          update allowlist — the merchant could not edit their own store.
+       2. merchant-identity's resolveActor proves ownership as `uid === shopId`
+          ("there is no ownerId field to forge"), so the owner fell through to the
+          employee branch and was refused `not-employed-here`: no POS sale, and no
+          servedBy on the receipt.
+       3. Worst: an applicant could declare ANOTHER user's uid and have approval
+          create `shops/{victimUid}` carrying their own trading name, after which the
+          victim could never be provisioned at their own canonical id.
+
+     The declared value is IGNORED rather than validated. There is no legitimate case
+     for a merchant naming their own store's document id, and a validator would only
+     narrow the same hole. Multi-store merchants are a separate slice with an explicit
+     authority model — not a writable field on an application. */
+  /* ── THE STORE ID IS THE STORE'S OWN, NOT THE OWNER'S ────────────────────────────────
+     This used to be `String(uid)`, and the three reasons recorded above for that choice
+     were all real. None of them required the store to BE the owner; they required that the
+     owner could not CHOOSE the id, that ownership was provable, and that rules could
+     express the check. A server-minted id satisfies all three and keeps the identities
+     distinct:
+
+       1. rules  — `shops/{storeId}` now authorises on `resource.data.ownerId`, so the
+                   owner can still edit their store without the id being their uid
+       2. proof  — merchant-identity resolves ownership from the STORE DOCUMENT rather than
+                   by comparing two strings that were only ever equal by construction
+       3. hijack — `app.shopId` is still ignored completely. The id is minted server-side,
+                   so a declared value has nothing to attach to
+
+     A merchant provisioned before this change keeps their uid-keyed store: store-identity
+     resolves by `ownerId`, so both keyspaces answer to one lookup and no row is rewritten.
+     `chain` is resolved by the caller precisely so that this projection cannot invent an
+     identity of its own — if the chain could not be established, approval does not reach
+     here. */
+  const shopId = String((chain && chain.storeId) || uid);
+  const businessId = (chain && chain.businessId) || null;
+  const shopRef = db.collection('shops').doc(shopId);
+  const sellerRef = db.collection('sellers').doc(String(uid));
+  const userRef = db.collection('users').doc(String(uid));
+  /* The business DIRECTORY record, written at the CANONICAL business id.
+
+     This was `businesses/{uid}`, and that was a serious defect rather than a cosmetic one.
+     `businesses` is the GENERATED-MERCHANT keyspace: tenant-identity states that its
+     document id "can never equal an auth uid", and every POS authority relies on that to
+     tell a person from a shop. Writing a uid-keyed row into it broke the invariant, and
+     then broke provisioning outright — `_ensureBusinessForOwner` looks for
+     `where ownerId == uid` FIRST, found this row, and returned `already-provisioned` with
+     `merchantId = uid`. So the real business was never created: no branch, no owner staff,
+     no payment methods, no setup checklist, and merchantId collapsed onto the uid.
+
+     The row is still written — the directory gap it was added to close is real — but onto
+     the business the canonical provisioner created, as a merge. One record, one keyspace. */
+  const bizRef = businessId
+    ? db.collection('businesses').doc(String(businessId))
+    : null;
+
+  const name = _sanText(app.name || app.businessName || app.storeName, 160) || 'My Shop';
+  /* Both reads before any write — the directory row's createdAt must be preserved, and
+     that cannot be decided after the batch has started. */
+  const [existing, bizExisting] = await Promise.all([
+    shopRef.get(),
+    bizRef ? bizRef.get().catch(() => null) : Promise.resolve(null),
+  ]);
+
+  if (!approved) {
+    /* A rejection has nothing to retract. A suspension DEACTIVATES the shop but
+       never deletes it — products, orders and history stay intact for reinstatement. */
+    if (existing.exists) {
+      await shopRef.set({ status: 'suspended', suspendedAt: _ts(), updatedAt: _ts() }, { merge: true });
+      await sellerRef.set({ status: 'suspended', active: false, updatedAt: _ts() }, { merge: true }).catch(() => {});
+      /* Retract the listing too. A suspended merchant that stays discoverable is the same
+         defect as an approved one that never appears — the registries must move together
+         or they disagree about who is live. */
+      if (bizRef) await bizRef.set({ status: 'suspended', updatedAt: _ts() }, { merge: true }).catch(() => {});
+      return { collection: 'shops', id: shopId, action: 'suspended' };
+    }
+    return { collection: 'shops', id: shopId, action: 'none' };
+  }
+
+  const batch = db.batch();
+
+  /* The canonical shop. `ownerId` is what every server-side ownership check reads;
+     `sellerUid` states the same fact in the merchant vocabulary. */
+  batch.set(shopRef, {
+    shopId,
+    storeId: shopId,
+    /* UPWARD LINK. Without it a store can only be traced to its owner, and the business it
+       trades as has to be re-derived from the uid at every call site — which is how the
+       two tenant spaces drifted apart in the first place. */
+    businessId,
+    ownerId: String(uid),
+    sellerUid: String(uid),
+    name,
+    nameLower: name.toLowerCase(),
+    status: 'active',
+    activatedAt: _ts(),
+    updatedAt: _ts(),
+    ...(existing.exists ? {} : { createdAt: _ts() }),
+  }, { merge: true });
+
+  /* The business directory listing. `createdAt` is preserved on re-approval so the
+     directory's orderBy('createdAt') cannot silently drop a reinstated merchant.
+
+     `verified` is deliberately NOT written. The homepage counts `businesses where
+     verified == true` and the field drives a trust badge, so setting it would be a trust
+     claim made as a side effect of an approval — a commercial decision, not a projection. */
+  if (bizRef) batch.set(bizRef, {
+    uid: String(uid),
+    ownerId: String(uid),
+    /* The chain, PERSISTED — so "which store belongs to this business?" is a field to read
+       rather than a join to guess at. */
+    shopId,
+    storeId: shopId,
+    name,
+    businessName: name,
+    nameLower: name.toLowerCase(),
+    status: 'active',
+    source: 'application_approval',
+    applicationId: app.applicationId || null,
+    updatedAt: _ts(),
+    ...(bizExisting && bizExisting.exists ? {} : { createdAt: _ts() }),
+    ...(app.category ? { category: _sanText(app.category, 80) } : {}),
+    ...(app.description ? { description: _sanText(app.description, 1000) } : {}),
+    ...(app.phoneNumber || app.phone ? { phone: app.phoneNumber || app.phone } : {}),
+    ...(app.email ? { email: app.email } : {}),
+    ...(app.location || app.city ? { city: _sanText(app.location || app.city, 160) } : {}),
+  }, { merge: true });
+
+  /* The registry row discovery reads. `updatedAt` is required — a row without it
+     is invisible to the freshness-ordered listings. */
+  batch.set(sellerRef, {
+    uid: String(uid), shopId, storeId: shopId, businessId, name, status: 'active', active: true,
+    updatedAt: _ts(), ...(existing.exists ? {} : { createdAt: _ts() }),
+  }, { merge: true });
+
+  /* Which shop this account is operating. The merchant workspace resolves the
+     shop from here, so without it the shell has no shop to open. */
+  /* The account's pointers into the chain. `activeShopId` is what the merchant shell opens;
+     `businessId` is what the POS authorities resolve against. Both are recorded so neither
+     has to be inferred from the uid. */
+  batch.set(userRef, {
+    activeShopId: shopId,
+    activeStoreId: shopId,
+    ...(businessId ? { businessId } : {}),
+    updatedAt: _ts(),
+  }, { merge: true });
+
+  await batch.commit();
+
+  /* ── STORE AVAILABILITY ─────────────────────────────────────────────────
+     The canonical chain already exists and is NOT re-invented here:
+
+        shops/{shopId} -> ownerUid -> providerAvailability/{ownerUid}
+                       -> kasshop.effectiveForShop -> getMinishopPublic
+
+     `shops.openingHours` is a DENORMALISED copy — effectiveForShop's own comment
+     says "the seller-managed timetable wins over the copy denormalised on the
+     shop" — so the timetable is written where the resolver reads it, in the exact
+     shape merchant-v2's editor writes: `hours` keyed sun..sat, `overrides` as a
+     MAP (the overrides SUBCOLLECTION is invisible to the resolver).
+
+     WRITTEN ONCE, NEVER OVERWRITTEN. A re-approval must not reset hours the
+     merchant has since edited, so this is skipped whenever a document already
+     exists — which is also what makes the whole provisioning workflow safe to
+     retry.
+
+     BEHAVIOUR NOTE, deliberate: with no document at all,
+     computeEffectiveAvailability returns `{ open: true, reason: 'no_schedule' }`
+     — a merchant with no timetable is treated as always open. Provisioning real
+     hours therefore CHANGES when a new merchant shows as open. That is the point
+     of provisioning a store "ready for operation", but it is a real change, so
+     `hoursSource` records that these are defaults rather than a decision the
+     merchant made — the readiness layer can then ask them to confirm. */
+  try {
+    const availRef = db.collection('providerAvailability').doc(String(uid));
+    const availSnap = await availRef.get();
+    if (!availSnap.exists) {
+      const period = [{ open: '08:00', close: '18:00' }];
+      const hours = {
+        sun: { closed: true, periods: [] },
+        mon: { closed: false, periods: period },
+        tue: { closed: false, periods: period },
+        wed: { closed: false, periods: period },
+        thu: { closed: false, periods: period },
+        fri: { closed: false, periods: period },
+        sat: { closed: false, periods: period },
+      };
+      await availRef.set({
+        uid: String(uid),
+        hours,
+        overrides: {},
+        hoursSource: 'provisioned_default',
+        provisionedAt: _ts(),
+        updatedAt: _ts(),
+      }, { merge: true });
+    }
+  } catch (e) {
+    /* Non-fatal, like the POS defaults: a store that exists with no timetable is
+       open, not broken. Reported so it is visible rather than silent. */
+    logger.warn('[appLifecycle] availability provisioning failed', { uid, error: e.message });
+  }
+
+  return { collection: 'shops', id: shopId, action: existing.exists ? 'reactivated' : 'created' };
+}
 
 /* ── CANONICAL ROLE PROFILES (Roles Phase 2) ────────────────────────────────
    One uid-keyed profile per canonical role that had none. These are the account's
@@ -1031,10 +1359,126 @@ async function applyDecision(appId, app, opts = {}) {
          the service directory, which is exactly how a landlord ended up listed
          as a cleaning company. */
       receipt.writes.push(await projectRoleProfile(db, app, uid, role, approved));
+    } else if (role === 'seller' || role === 'merchant') {
+      /* ── THE CANONICAL CHAIN, ESTABLISHED BEFORE ANYTHING IS PROJECTED ──────────────
+         uid -> businessId -> storeId -> storefront.
+
+         ORDER IS THE WHOLE POINT. The business used to be provisioned AFTER the store, so
+         the store had no business to belong to and took the only id available — the uid.
+         Establishing the business first gives the store something to be a store OF.
+
+         Both steps are idempotent by their own guards (an ownerId query plus a
+         transactional provisioning claim), so a re-approval, a retry, or two admins
+         clicking at once resolve the SAME business and the SAME store rather than minting
+         a second of either.
+
+         NON-FATAL, like the POS provisioning below it, and for the same reason: approval is
+         the merchant's status change. If the chain cannot be established the merchant is
+         still approved, the store is still projected at the legacy id so nothing is lost,
+         and the failure is recorded on the application where a reviewer will see it. */
+      let chain = null;
+      if (approved) {
+        try {
+          const bb = require('./business-bootstrap');
+          const si = require('./store-identity');
+          const prov = await bb._ensureBusinessForOwner({
+            uid,
+            businessName: app.businessName || app.name || '',
+            category: app.category || app.businessType || '',
+            phone: app.phoneNumber || '',
+            county: app.county || '', city: app.city || '',
+          });
+          if (prov && prov.merchantId) {
+            /* The business id must not BE the uid. If it is, an older row collapsed the
+               keyspace and binding a new store to it would propagate the collapse rather
+               than end it — so the chain is refused and the legacy path is used. */
+            si.assertNotUidShaped(prov.merchantId, uid);
+            const st = await si.ensureStoreForBusiness({
+              uid, businessId: prov.merchantId,
+            });
+            if (st && st.storeId) {
+              chain = { businessId: prov.merchantId, storeId: st.storeId, legacy: !!st.legacy };
+            }
+          }
+        } catch (e) {
+          chain = null;
+          receipt.notes = (receipt.notes || []).concat(['chain_unresolved: ' + e.message]);
+        }
+      }
+
+      /* BEFORE grantAccountRole below, deliberately: a shop that cannot be
+         established must not leave a claim behind. */
+      receipt.writes.push(await projectSeller(db, app, uid, approved, chain));
+
+      /* ── THE BUSINESS WALLET ────────────────────────────────────────────────────────
+         Provisioned with the business, not on first sale. A merchant whose wallet appears
+         only when money arrives has no balance to show, no statement to reconcile, and no
+         account for a commission obligation to be recorded against — and the first sale is
+         the worst possible moment to discover that.
+
+         Keyed on the businessId, never the uid: the personal wallet at `wallets/{uid}` is
+         a different account, in a different unit, and is left untouched. */
+      if (approved && chain && chain.businessId) {
+        try {
+          const bw = require('./business-wallet');
+          const w = await bw.ensureWallet(chain.businessId, uid, { storeId: chain.storeId });
+          receipt.writes.push({ collection: 'businessWallets', id: chain.businessId,
+                                action: w.created ? 'created' : 'existing' });
+        } catch (e) {
+          receipt.notes = (receipt.notes || []).concat(['business_wallet_failed: ' + e.message]);
+        }
+      }
     } else if (DELEGATED_ROLES[role]) {
       receipt.writes.push({ collection: DELEGATED_ROLES[role], id: uid, action: 'delegated' });
     } else {
       receipt.writes.push(await projectProvider(db, app, uid, approved));
+    }
+
+    /* THE TRIAL IS AN ENTITLEMENT OF APPROVAL, not of POS onboarding alone.
+       functions/seller-trial.js names this path as one of its TWO legitimate callers —
+       "business-bootstrap._createBusiness … / … application approval (projectSeller)" — and
+       it was never wired. An approved marketplace seller got a shop, a role and a till and NO
+       subscription: nothing for the expiry sweep to find, and no entitlement to check.
+
+       Guarded on the DECISION, not on the projection: only an approval, and only for a
+       seller. A rejection, a suspension or any other role must not start a trial. It sits
+       after projectSeller because the shop must exist first, and the shop id it keys on is
+       the canonical one that projection established.
+
+       startSellerFreeTrial is idempotent — an existing subscription for the shop is left
+       untouched, so a re-approval can neither mint a second nor restart the clock — and it
+       REPORTS rather than throws, which is what makes it safe on a path that has already
+       created the shop and granted the role. Its own header states that trade: failing the
+       whole decision because the subscription write failed would be worse than reporting it. */
+    if (approved && role === 'seller') {
+      const _trial = await startSellerFreeTrial({
+        db, uid: String(uid), shopId: String(uid),
+        planName: 'SOKONI Seller', source: 'application_approval',
+      });
+      if (!_trial.created && _trial.reason === 'error') {
+        logger.warn('[appLifecycle] seller trial not started', { uid, error: _trial.error });
+      }
+      receipt.writes.push({ collection: 'subscriptions', id: String(uid),
+                            action: _trial.created ? 'trial_started' : ('trial_' + _trial.reason) });
+    }
+
+    /* ── LEGAL ENGINE IS THE AUTHORITY (application-legal-convergence) ─────────
+       An approval must NOT grant a capability unless the role's required agreements
+       are signed in legalAcceptances. assertLegalCompliance() is the engine's guard;
+       it is DARK-LAUNCHED per role via legalConfig/enforcement — so this call is a
+       no-op (returns compliant) until enforcement is deliberately enabled for the
+       role, at which point a missing/outdated agreement FAILS CLOSED: it throws
+       failed-precondition, applyDecision throws, and NO grant is applied. The
+       applications.agreementAccepted boolean does NOT satisfy this — the signed,
+       versioned legalAcceptances record is the only proof.
+
+       Role mapping: the application's resolved role → the engine's agreement-role
+       vocabulary (ROLE_AGREEMENTS keys). Only gates the APPROVE case — a rejection
+       or suspension must not be blocked on missing agreements. */
+    if (approved) {
+      var _AGR_ROLE = { seller: 'merchant', merchant: 'merchant', provider: 'provider',
+                        legal: 'provider', health: 'healthcare', driver: 'driver', rider: 'driver' };
+      await require('./legal-agreements').assertLegalCompliance(uid, _AGR_ROLE[role] || role);
     }
 
     /* A pending application must not grant anything; only a decision does. */
@@ -1077,12 +1521,62 @@ async function applyDecision(appId, app, opts = {}) {
           phone: app.phoneNumber || '',
           county: app.county || '', city: app.city || '',
         });
+        /* ── SOKONI TILL + QR ──────────────────────────────────────────────
+           The merchant's POS identity and their payment QR, provisioned
+           automatically so approval alone is enough to start selling.
+
+           REUSES the already-certified mintSokoniTillCore (81/0) rather than
+           minting a second identity: it allocates the Till in a transaction
+           against a per-shop counter, and `onExisting: 'return'` makes a retry
+           return the existing Till instead of forking one. The QR is NOT a
+           separate artifact — the Till's own HMAC-signed token IS the QR payload,
+           so there is one identity and one signature, and no second QR format.
+
+           `source: 'approval'` distinguishes this from the merchant's own
+           self-service mint, which keeps `onExisting: 'throw'`.
+
+           Keyed on the canonical shop projectSeller created above — which is why
+           that runs first, and why this cannot be reordered ahead of it. */
+        let till = null;
+        try {
+          /* The SAME canonical store projectSeller used — resolved, never the
+             client-writable app.shopId. A Till minted against a declared shop id would bind
+             the merchant's payment destination to a store document they neither own nor can
+             edit.
+
+             RESOLVED RATHER THAN RE-DERIVED. This read `String(uid)`, which was the store id
+             only while the store WAS the owner. Re-deriving it here would mint the Till
+             against a document that no longer exists for a merchant provisioned on the
+             canonical chain — a till bound to nothing, discovered at the first sale.
+
+             The legacy uid is the fallback and stays correct for merchants provisioned
+             before the chain existed, because their store genuinely is keyed on it. */
+          let tillShopId = String(uid);
+          try {
+            const si = require('./store-identity');
+            const st0 = await si.resolveStoreForOwner(uid);
+            if (st0.ok) tillShopId = st0.storeId;
+          } catch (_) { /* fall back to the legacy id */ }
+          const st = require('./sokoni-till');
+          till = await st._internal.mintSokoniTillCore({
+            shopId: tillShopId, actorUid: uid, source: 'approval', onExisting: 'return',
+          });
+        } catch (e) {
+          logger.error('[appLifecycle] till provisioning FAILED', { appId, uid, error: e.message });
+          till = { error: String((e && e.message) || e).slice(0, 200) };
+        }
+
         await db.collection('applications').doc(appId).set({
           posProvisioning: { ok: true, created: prov.created === true,
                              reason: prov.reason || null,
                              merchantId: prov.merchantId || null, at: _ts() },
+          tillProvisioning: (till && till.sokoniTillId)
+            ? { ok: true, sokoniTillId: till.sokoniTillId, shopId: till.shopId,
+                branchId: till.branchId || null, created: till.created === true, at: _ts() }
+            : { ok: false, error: (till && till.error) || 'no till returned', at: _ts() },
         }, { merge: true });
-        logger.info('[appLifecycle] pos provisioning', { appId, uid, ...prov });
+        logger.info('[appLifecycle] pos provisioning', { appId, uid, ...prov,
+          sokoniTillId: (till && till.sokoniTillId) || null });
       } catch (e) {
         await db.collection('applications').doc(appId).set({
           posProvisioning: { ok: false, error: String(e && e.message || e).slice(0, 300), at: _ts() },
@@ -1149,6 +1643,52 @@ async function applyDecision(appId, app, opts = {}) {
    Settles in at most two extra hops: normalise (1), project (1), then every
    guard short-circuits.
    ────────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+   DECISION AUTHORITY — restored 2026-09-06.
+
+   Originally shipped as `bc9bf4c` ("an application could approve itself — verify
+   the decider, not the document"). The reconciliation onto the live baseline
+   preserved LIVE's copy of this file, which never carried the fix, so the hole
+   was silently reopened. `test-application-decision-authority` — which executes
+   the real handler rather than reading source — caught it: A1 reported 1 minted
+   claim on a self-approval.
+
+   THE HOLE. `firestore.rules` lets an applicant update their own application:
+
+       allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields())
+
+   `noAdminFields()` withholds isAdmin/suspended/banned/adminApproved/featured/
+   verified/flagged/adminNote/role/approved/approvedAt/approvedBy/commissionRate —
+   but NOT `status`, the one field the projection consults. So any signed-in user
+   could write `status: 'approved'` (or 'active'/'accepted'/'verified' — canonStatus
+   maps all four) onto their OWN request and be granted the role and the Auth claim
+   by this trigger. The rule's own comment says self-approval is impossible; it
+   guards a field the decision engine never looks at.
+
+   Every legitimate decision goes through `applicationDecide`, which is admin-only
+   and stamps `decidedBy`. But `decidedBy` is itself client-writable, so trusting
+   its presence would only move the forgery one field along. Custom claims are the
+   one thing a client cannot write, so authorisation is decided by reading the
+   claims of the account named in `decidedBy`.
+
+   Returns { ok } — never throws: an unresolvable decider is a refusal, not a
+   crash that leaves the application in limbo.
+   ────────────────────────────────────────────────────────────────────────── */
+async function decisionAuthority(after) {
+  const by = typeof after.decidedBy === 'string' ? after.decidedBy.trim() : '';
+  if (!by) {
+    return { ok: false, reason: 'no decidedBy — a decision is only made through applicationDecide' };
+  }
+  try {
+    const user = await getAuth().getUser(by);
+    const claims = user.customClaims || {};
+    if (claims.admin === true || claims.superAdmin === true) return { ok: true, by };
+    return { ok: false, reason: `decidedBy "${by}" holds no admin claim` };
+  } catch (e) {
+    return { ok: false, reason: `decidedBy "${by}" is not a resolvable account (${e.message})` };
+  }
+}
+
 exports.applicationLifecycle = onDocumentWritten(
   { document: 'applications/{appId}', region: REGION, timeoutSeconds: 120, memory: '256MiB' },
   async (event) => {
@@ -1172,7 +1712,44 @@ exports.applicationLifecycle = onDocumentWritten(
     if (after.decisionAppliedFor === status && after.projectionStatus === 'applied') return;
     if (status === 'pending') return;                     // nothing to grant yet
 
-    await applyDecision(appId, after, {});
+    const authority = await decisionAuthority(after);
+    if (!authority.ok) {
+      /* Already recorded for this exact status: return WITHOUT writing. The block
+         below is itself a write to this document, so re-writing it would re-fire
+         this trigger forever. */
+      if (after.projectionStatus === 'blocked_unauthorised_decision' && after.blockedFor === status) return;
+
+      /* The status is left as the client wrote it — deliberately. Rewriting it would
+         silently downgrade a legitimately-decided legacy application that predates
+         `decidedBy`; blocking the PROJECTION grants nothing either way, and an admin
+         re-deciding through applicationDecide clears it. */
+      await event.data.after.ref.set({
+        projectionStatus: 'blocked_unauthorised_decision',
+        blockedFor: status,
+        projectionError: `Refusing to apply "${status}": ${authority.reason}. No role or claim was granted.`,
+        decisionAppliedFor: FieldValue.delete(),
+        updatedAt: _ts(),
+      }, { merge: true });
+
+      await _db().collection('adminAlerts').doc(`application_unauthorised_decision__${appId}`).set({
+        kind: 'application_unauthorised_decision',
+        severity: 'high',
+        message: `Application ${appId} carries status "${after.status}" that no administrator made. Nothing was granted. If this is a real decision, re-decide it through the admin console.`,
+        appId,
+        uid: after.uid || null,
+        claimedStatus: String(after.status || ''),
+        decidedBy: after.decidedBy || null,
+        reason: authority.reason,
+        createdAt: _ts(),
+      }, { merge: true }).catch(() => {});
+
+      logger.error('[appLifecycle] REFUSED unauthorised decision', {
+        appId, uid: after.uid || null, status, reason: authority.reason,
+      });
+      return;
+    }
+
+    await applyDecision(appId, after, { decidedBy: authority.by });
   }
 );
 

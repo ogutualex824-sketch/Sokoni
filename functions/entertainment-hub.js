@@ -236,6 +236,14 @@ exports.purchaseEntertainment = onCall(CF_OPTS, async (req) => {
       creatorUid: listing.creatorUid, title: listing.title,
       price: listing.price, currency: listing.currency,
       platformFee, creatorAmount: listing.price - platformFee,
+      /* THE SAME NUMBERS, AS WHOLE CENTS. The two above are shillings arrived at by
+         float subtraction; these are what the settlement authority reads and what the
+         business wallet requires, because money that has been through a float cannot be
+         reconciled against a provider's record of it. Derived from the commission
+         engine's own cents, not re-derived from the shillings. */
+      grossMinor:         _comm.orderAmountCents,
+      platformFeeMinor:   _comm.commissionCents,
+      creatorAmountMinor: _comm.sellerNetCents,
       status: 'pending_payment', idempotencyKey,
       createdAt: FieldValue.serverTimestamp(),
     });
@@ -283,6 +291,95 @@ exports.rateEntertainmentContent = onCall(CF_OPTS, async (req) => {
   return { ok: true };
 });
 
+/* ── 8b. _settleConfirmedPurchase — the ONLY way content revenue reaches a creator ──
+ *
+ * NOT REACHABLE TODAY, AND DELIBERATELY SO.
+ *
+ * `purchaseEntertainment` writes `pending_payment` and nothing in this repository
+ * charges the buyer, confirms the charge, or completes the purchase. Content revenue
+ * therefore lands NOWHERE — the creator's split is computed, stored, and read by no one.
+ * That missing payment rail is a named blocker, not something this function pretends to
+ * close: a destination is not a caller, and adding one here would be inventing a second
+ * payment flow beside the canonical purchase gate.
+ *
+ * It exists now, before the rail does, because the alternative is writing it under
+ * deadline pressure the day PPV goes live — which is exactly how delivery earnings ended
+ * up in five personal wallets. When a confirmation finally arrives, the destination is
+ * already decided, already server-authoritative, and already certified.
+ *
+ * The caller supplies the provider's confirmation. It may never supply a destination:
+ * the creator's business is resolved from the LISTING's creatorUid, server-side.
+ */
+async function _settleConfirmedPurchase(purchaseId, confirmation, dbOverride) {
+  const fs = dbOverride || db();
+  const CSA = require('./creator-settlement-authority');
+  const CED = require('./creator-earning-destination');
+
+  const pSnap = await fs.collection('entertainmentPurchases').doc(String(purchaseId || '')).get();
+  if (!pSnap.exists) return { ok: false, reason: CSA.REASON.NO_PURCHASE };
+  const purchase = Object.assign({ purchaseId: pSnap.id }, pSnap.data() || {});
+
+  const lSnap = await fs.collection('entertainmentListings').doc(String(purchase.listingId || '')).get();
+  if (!lSnap.exists) return { ok: false, reason: CSA.REASON.NO_LISTING };
+  const listing = Object.assign({ listingId: lSnap.id }, lSnap.data() || {});
+
+  /* The authority decides. Cross-title, cross-creator, unconfirmed, already-settled,
+     self-purchase and every arithmetic disagreement are refused in there, where they
+     can be tested without a database. */
+  const decision = CSA.settlementFor({ purchase, listing, confirmation });
+  if (!decision.ok) return decision;
+  const plan = decision.plan;
+
+  /* CLAIM BEFORE CREDIT. The marker is the settlement ref, so a replay through any
+     entry point addresses this same document and the second run refuses. Crediting
+     first and marking after would pay twice on a retry between the two. */
+  const claimed = await fs.runTransaction(async (t) => {
+    const cur = await t.get(pSnap.ref);
+    const d = cur.data() || {};
+    if (d.settlementRef || d.settledAt) return false;
+    t.update(pSnap.ref, {
+      status: 'completed',
+      settlementRef: plan.ref,
+      settledAt: FieldValue.serverTimestamp(),
+      settledAmountMinor: plan.amountMinor,
+      settledBusinessResolved: false,
+    });
+    return true;
+  });
+  if (!claimed) return { ok: false, reason: CSA.REASON.ALREADY_SETTLED };
+
+  /* THE MONEY, to the creator's BUSINESS wallet or held. Outside the transaction
+     because a business-wallet credit opens its own, and nesting would deadlock. */
+  const res = await CED.creditOrHold({
+    db: fs,
+    creatorUid: plan.creatorUid,
+    amountMinor: plan.amountMinor,
+    ref: plan.ref,
+    listingId: plan.listingId,
+    purchaseId: plan.purchaseId,
+    provenance: plan.provenance,
+    description: 'Content revenue — ' + String(listing.title || plan.listingId),
+    source: {
+      channel: 'ONLINE',
+      paymentRef: plan.providerRef,
+      grossMinor: plan.grossMinor,
+      commissionMinor: plan.commissionMinor,
+      netMinor: plan.amountMinor,
+      currency: plan.currency,
+    },
+  });
+
+  await pSnap.ref.update({
+    settledBusinessResolved: res && res.credited === true,
+    settlementHeld: !!(res && res.held),
+    settlementHoldReason: (res && res.held) ? (res.reason || null) : null,
+  }).catch(() => {});
+
+  return { ok: true, ref: plan.ref, amountMinor: plan.amountMinor,
+           credited: !!(res && res.credited), held: !!(res && res.held),
+           reason: (res && res.reason) || null };
+}
+
 /* ── 9. getCreatorDashboard ── */
 exports.getCreatorDashboard = onCall(CF_OPTS, async (req) => {
   const uid = requireAuth(req);
@@ -290,11 +387,39 @@ exports.getCreatorDashboard = onCall(CF_OPTS, async (req) => {
     .where('creatorUid', '==', uid).orderBy('createdAt', 'desc').limit(100).get();
   const listings = snap.docs.map(d => d.data());
   const totalViews = listings.reduce((s, l) => s + (l.viewCount || 0), 0);
-  const totalRevenue = listings.reduce((s, l) => s + ((l.price || 0) * (l.purchaseCount || 0)), 0);
+
+  /* REVENUE IS WHAT SETTLED, NOT WHAT WAS ASKED.
+
+     This was `price × purchaseCount`. purchaseCount increments when a purchase record is
+     CREATED — status `pending_payment` — so it counted a listing's asking price times the
+     number of people who started a checkout as money the creator had earned. No purchase
+     on this platform has ever reached `completed`, which made the figure not merely
+     optimistic but entirely fabricated.
+
+     Settled purchases carry `settledAmountMinor`, written by the settlement authority
+     against a provider confirmation. Summing those is the only honest answer, and zero
+     settled purchases is a true zero rather than a guess. */
+  const settledSnap = await db().collection('entertainmentPurchases')
+    .where('creatorUid', '==', uid)
+    .where('status', '==', 'completed')
+    .limit(500).get().catch(() => null);
+  const settled = settledSnap ? settledSnap.docs.map((d) => d.data() || {}) : [];
+  const totalRevenueMinor = settled.reduce((s, p) => s + (Number(p.settledAmountMinor) || 0), 0);
+  const totalRevenue = totalRevenueMinor / 100;
+
+  /* Named for what it is, and kept out of the revenue figure. */
+  const pendingSnap = await db().collection('entertainmentPurchases')
+    .where('creatorUid', '==', uid)
+    .where('status', '==', 'pending_payment')
+    .limit(500).get().catch(() => null);
+  const pendingRevenueMinor = pendingSnap
+    ? pendingSnap.docs.reduce((s, d) => s + (Number((d.data() || {}).creatorAmountMinor) || 0), 0) : 0;
   return {
     totalListings: listings.length,
     active: listings.filter(l => l.status === 'active').length,
-    totalViews, totalRevenue,
+    totalViews,
+    totalRevenue, totalRevenueMinor,
+    pendingRevenueMinor, settledCount: settled.length,
     listings: listings.map(l => ({
       listingId: l.listingId, title: l.title, category: l.category,
       entType: l.entType, status: l.status,
@@ -314,4 +439,7 @@ module.exports = {
   getMyEntertainmentPurchases: exports.getMyEntertainmentPurchases,
   rateEntertainmentContent:    exports.rateEntertainmentContent,
   getCreatorDashboard:         exports.getCreatorDashboard,
+  /* Not a callable. The single settlement path, exported so it can be certified and so
+     the day a payment rail confirms a PPV there is one place to call, not a new one. */
+  _settleConfirmedPurchase,
 };

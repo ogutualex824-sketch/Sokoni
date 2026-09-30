@@ -30,6 +30,45 @@ function _assertAdmin(req) {
   if (!t.admin && !t.superAdmin) throw new HttpsError('permission-denied', 'Admin only.');
 }
 
+/* ── THE COMMISSION AGREEMENT IS BOUND TO THE OPERATIVE RATE ──────────────────
+   A merchant signing a "Commission Agreement" whose text is independent of the rate the
+   platform actually charges signs nothing useful: the config could move from 5% to 8% and
+   every stored acceptance would still read as compliant, because compliance was only ever
+   "an agreement with this id at this version exists".
+
+   So the operative terms come from ONE authority — functions/commission-config.js, which
+   owns RATES.marketplace and MIN_COMMISSION_KES — and the agreement's VERSION carries a
+   fingerprint of them. assertLegalCompliance already treats a version mismatch as missing
+   (`accepted[a.id] !== a.version`), so changing the rate or the floor makes every prior
+   acceptance stale and fails closed the moment enforcement is on. Nothing silently
+   represents terms that are no longer the terms.
+
+   The admin base version is PRESERVED and composed with, not replaced: publishing new
+   agreement prose still bumps `1.0` -> `1.1`, and a config change still moves the
+   fingerprint. Either alone invalidates. */
+const CC = require('./commission-config');
+
+function commissionTerms() {
+  const r = (CC.RATES && CC.RATES.marketplace) || {};
+  return {
+    pct:      Number(r.pct),
+    fixedKES: Number(r.fixedKES || 0),
+    minKES:   Number(CC.MIN_COMMISSION_KES),
+  };
+}
+/* Deterministic, human-legible, and stable for identical terms — so the version a merchant
+   signed can be read back and understood without a lookup table. */
+function commissionTermsFingerprint() {
+  const t = commissionTerms();
+  if (!Number.isFinite(t.pct) || !Number.isFinite(t.minKES)) {
+    /* FAIL LOUD rather than fingerprinting NaN. A silent 'pctNaN' would be stable, would
+       compare equal to itself, and would therefore bind the agreement to nothing at all. */
+    throw new Error('commission terms unavailable: cannot version the Commission Agreement');
+  }
+  return `pct${t.pct}-fix${t.fixedKES}-min${t.minKES}`;
+}
+const COMMISSION_AGREEMENT_ID = 'commission-agreement';
+
 /* ── Agreement catalogue (default current versions; overridden by legalAgreements docs) ── */
 const CORE = [
   { id: 'terms-of-service',     name: 'Terms of Service' },
@@ -169,14 +208,30 @@ async function _catalogueFor(role, atMs) {
                 : (typeof sch.effectiveFrom === 'number' ? sch.effectiveFrom : Date.parse(sch.effectiveFrom));
       if (Number.isFinite(eff) && now >= eff) { version = String(sch.version); effectiveDate = sch.effectiveFrom; }
     }
+    /* The Commission Agreement's version is COMPOSED with the operative terms, and the
+       terms themselves travel with it so no surface has to restate the rate from memory. */
+    let terms = null;
+    if (a.id === COMMISSION_AGREEMENT_ID) {
+      terms = commissionTerms();
+      version = `${version}+${commissionTermsFingerprint()}`;
+    }
+
     return {
       id: a.id, name: o.name || a.name, version,
-      summary: o.summary || a.summary || null,
+      /* The operative sentence is GENERATED, never taken from the override: an admin editing
+         prose must not be able to publish a Commission Agreement that states a rate the
+         platform does not charge. Any additional override prose is kept alongside it. */
+      summary: terms
+        ? `SOKONI charges ${terms.pct}% commission per completed sale, with a minimum of ` +
+          `KES ${terms.minKES} per transaction.` +
+          (o.summary || a.summary ? ' ' + (o.summary || a.summary) : '')
+        : (o.summary || a.summary || null),
       keyPoints: (Array.isArray(o.keyPoints) && o.keyPoints.slice(0, 8)) || a.keyPoints || null,
       url: o.url || a.url || null,
       readingMinutes: o.readingMinutes || a.readingMinutes || 3,
       publishedDate: o.publishedDate || null, effectiveDate,
       hash: _hash(a.id, version), status: o.status || 'active',
+      ...(terms ? { commissionTerms: terms } : {}),
     };
   }).filter(Boolean);
 }
@@ -188,13 +243,43 @@ async function _catalogueFor(role, atMs) {
    is rolled out for that role — so existing users are never suddenly locked out
    (no breaking changes). When enabled, it throws failed-precondition listing the
    missing agreements. */
+/* ── DEFAULTS: `merchant` IS ENFORCED ─────────────────────────────────────────
+   Dark-launching was the right call while the acceptance UI was being rolled out: an
+   absent flag meant "allow", so nobody was locked out of an operation they had been
+   performing for months.
+
+   For MERCHANT it is now the wrong default, because the operation being guarded is
+   APPROVAL — an event that only happens to merchants who are joining now, through an
+   intake that already collects and records a versioned acceptance. Nobody existing can be
+   locked out of being approved; they already were. What the old default did instead was
+   let a merchant be approved onto terms they had never seen, which is the thing the
+   engine was built to prevent, left switched off.
+
+   A DEFAULT, NOT A CONSTANT. An explicitly stored `false` still wins — legalSetEnforcement
+   can disable it, and an operator who needs to approve someone during an incident is not
+   blocked by a value baked into a deploy. What changes is that FORGETTING to configure it
+   no longer silently means "off": the safe state is the one you get by doing nothing.
+
+   Only `merchant` is defaulted on. The other roles keep the dark-launch contract, because
+   their acceptance surfaces have not been certified and flipping them here would be a
+   rollout decision disguised as a default. */
+const ENFORCEMENT_DEFAULTS = Object.freeze({ merchant: true });
+
 let _enfCache = null, _enfAt = 0;
 async function _enforcementFlags() {
   if (_enfCache && (Date.now() - _enfAt) < 60000) return _enfCache; // 60s TTL
+  let stored = {};
   try {
     const snap = await _db().collection('legalConfig').doc('enforcement').get();
-    _enfCache = snap.exists ? (snap.data() || {}) : {};
-  } catch (_) { _enfCache = _enfCache || {}; }
+    stored = snap.exists ? (snap.data() || {}) : {};
+  } catch (_) {
+    /* A config read that FAILED is not a config that says "off". Falling through to the
+       defaults keeps the safe state safe during an outage; the previous behaviour would
+       have quietly disabled enforcement exactly when least observable. */
+    stored = _enfCache || {};
+  }
+  /* Stored values win, including an explicit `false`; defaults only fill absences. */
+  _enfCache = Object.assign({}, ENFORCEMENT_DEFAULTS, stored);
   _enfAt = Date.now();
   return _enfCache;
 }
@@ -739,4 +824,11 @@ module.exports = {
   _h, CORE, ROLE_AGREEMENTS, DEFAULT_VERSION,
   DECLARATION_VERSION, DECLARATION_TEXT,
   assertLegalCompliance,
+  /* Exported so certification asserts against the SAME derivation the catalogue uses,
+     rather than re-deriving the fingerprint and proving only that two copies agree. */
+  COMMISSION_AGREEMENT_ID, commissionTerms, commissionTermsFingerprint,
+  _catalogueFor,
+  /* In THIS object, not assigned earlier: module.exports is rebound below the midpoint of
+     this file, so an earlier `module.exports.X =` would be silently orphaned. */
+  ENFORCEMENT_DEFAULTS,
 };

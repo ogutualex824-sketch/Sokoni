@@ -36,7 +36,12 @@
    entitlement carries this, so a consumer can record which generation it acted
    on — during a migration that turns "these two screens disagree" into "this
    one resolved v1 and that one resolved v2". */
-const CATALOG_VERSION = 1;
+/* 2 — the Free listing allowance went 10 -> 100 for the merchant beta (2026-09-07).
+   Bumped because this file's own contract says it increments when pricing or ALLOWANCES
+   change: every productCounters document records the catalogVersion that produced its
+   ceiling, so a counter still showing 10 is then self-explaining ("resolved from v1 before
+   the change") rather than the start of an investigation. */
+const CATALOG_VERSION = 2;
 
 /* ── THE ONE SUBSCRIPTION LIFECYCLE ─────────────────────────────────────────
    Every SOKONI package moves through these states and no vertical invents its
@@ -103,7 +108,24 @@ const PLANS = Object.freeze({
     id: 'FREE',
     label: 'Free',
     priceKES: 0,
-    listingLimit: 10,
+    /* 50 — the authorised free allowance (owner ruling 2026-09-08).
+       History: 10 originally, raised to 100 for the merchant beta (2026-09-07), settled at 50.
+
+       THE LADDER IS THE POINT. FREE 50 / STARTER 100 gives a free merchant an allowance they
+       can actually build a shop on, while leaving the paid tier a real capacity upgrade to
+       sell. At 100 the two plans were identical on listings, so STARTER bought nothing here;
+       at 10 the free tier was too thin to be usable.
+
+       This number is the whole control: product-limit.js resolves the ceiling from this
+       catalogue and writes it to productCounters.maxProducts, which is what firestore.rules
+       enforces. There is no second number to keep in step, and adding one would be the defect.
+
+       SAFE FOR EXISTING MERCHANTS IN BOTH DIRECTIONS. grandfatheredFloor is a FLOOR, not an
+       override: a merchant who took on more than 50 while the beta cap of 100 was live KEEPS
+       what they hold. They cannot add more until they are back under the ceiling, but nothing
+       already published is removed or hidden. Silently deleting listings a merchant was
+       invited to create would be the worst possible reading of a pricing change. */
+    listingLimit: 50,
     walletEnabled: false,
     premiumAnalytics: false,
     prioritySupport: false,

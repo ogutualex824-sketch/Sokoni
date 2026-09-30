@@ -24,7 +24,7 @@
 
    THE COLLECTION RAIL IS NOT INVENTED HERE, AND FAILS CLOSED
    ─────────────────────────────────────────────────────────
-   No rail today can debit a seller. mpesa-c2b.js is INBOUND ONLY (validation and
+   No rail today can debit a seller. The retired inbound callbacks were INBOUND ONLY (validation and
    confirmation webhooks for someone paying the Paybill); it cannot initiate a charge.
    IntaSend B2C is a PAYOUT rail — building on it would pay every seller 5% of their
    till sales daily instead of collecting it, which is the single most expensive
@@ -107,7 +107,13 @@ function collectionKey (sellerId, period) { return 'poscollect_' + sellerId + '_
 function _rail (cfg) {
   if (!cfg || cfg.enabled !== true || !cfg.railId) return null;
   const reg = (module.exports._railRegistry) || {};
-  return reg[cfg.railId] || null;
+  const entry = reg[cfg.railId];
+  if (!entry) return null;
+  /* A registry entry may be a ready adapter (tests inject these) or a FACTORY that
+     needs the operator's configured method, currency and credential. Building it here
+     rather than at module load keeps the credential out of process memory until an
+     operator has actually approved a collection. */
+  return (typeof entry === 'function') ? entry(cfg) : entry;
 }
 
 async function _railConfig (db) {
@@ -337,7 +343,99 @@ async function runDailyCollection (db, opts) {
   return { period, attempted: results.length, results, reconciliation: report };
 }
 
+/* ── THE EVENING-BEFORE REMINDER ──────────────────────────────────────────────
+   A merchant should learn their commission is due BEFORE the money leaves, not by
+   finding it gone. This warns every seller carrying an outstanding obligation that the
+   06:00 gate will collect it in the morning.
+
+   ── WHY 20:00 AND NOT 05:00 ─────────────────────────────────────────────────
+   Not taste — the notification engine decides it. notify.js applies quiet hours that
+   default to 22:00-07:00 and `pos_commission_due` is `commerce` priority, so anything
+   sent between those hours is suppressed for most merchants. A 05:00 reminder would be
+   dropped by the engine for exactly the people it is meant to warn, and an hour before
+   dawn is not time to act in anyway. 20:00 is after the trading day, inside waking
+   hours, and leaves a merchant the whole evening to fund their M-PESA balance.
+
+   ── IT WARNS. IT DOES NOT COLLECT, AND IT DOES NOT RESTRICT ─────────────────
+   No money moves here and no restriction is written. The figure is read from the same
+   outstandingForSeller the gate itself uses — a reminder quoting a number the gate
+   would not recognise is worse than no reminder.
+
+   The amount is a SNAPSHOT at 20:00. Sales after it still accrue and are still
+   collected, so the message says what is due rather than promising a final total. */
+const REMINDER_TYPE = 'pos_commission_due';
+
+function _kes (cents) {
+  return 'KES ' + (Number(cents || 0) / 100).toFixed(2);
+}
+
+async function remindSellersOfGate (db, opts) {
+  const o = opts || {};
+  const period = o.period || periodKey();
+  const sellers = await sellersWithReceivables(db);
+  const notify = o.notify || (async (payload) => {
+    const n = require('./notify');
+    return (n.notify || n)(payload);
+  });
+
+  const sent = [];
+  const skipped = [];
+  for (const sellerId of sellers) {
+    let bal;
+    try {
+      bal = await outstandingForSeller(db, sellerId);
+    } catch (e) {
+      skipped.push({ sellerId, reason: 'balance_unreadable' });
+      continue;
+    }
+
+    /* Nothing outstanding is nothing to warn about. A reminder for a zero balance
+       teaches merchants that the message does not mean anything. */
+    if (!(bal.outstandingCents > 0)) { skipped.push({ sellerId, reason: 'nothing_outstanding' }); continue; }
+
+    try {
+      await notify({
+        uid: sellerId,
+        type: REMINDER_TYPE,
+        title: 'Commission due in the morning',
+        body: 'Your POS/Till commission of ' + _kes(bal.outstandingCents) +
+              ' is due at the 06:00 collection gate.',
+        vars: { amount: _kes(bal.outstandingCents), gate: '06:00' },
+        /* ONE REMINDER PER SELLER PER EVENING. The engine treats dedupeKey as an
+           at-most-once guarantee, so a retried schedule or a redelivery is a no-op
+           rather than a second message about the same deadline. */
+        dedupeKey: 'poscommission_reminder_' + sellerId + '_' + period,
+        data: { kind: 'pos_commission_due', period, outstandingCents: String(bal.outstandingCents) },
+      });
+      sent.push({ sellerId, outstandingCents: bal.outstandingCents });
+    } catch (e) {
+      /* A merchant who cannot be reached is still collected from — the reminder is a
+         courtesy, not a precondition. Recorded so a silent delivery failure is visible. */
+      skipped.push({ sellerId, reason: 'notify_failed', error: (e && e.message) || String(e) });
+    }
+  }
+
+  return { period, sellers: sellers.length, sent: sent.length, skipped: skipped.length, details: { sent, skipped } };
+}
+
+exports.posCommissionDueReminder = onSchedule(
+  { schedule: '0 20 * * *', timeZone: 'Africa/Nairobi', region: REGION,
+    timeoutSeconds: 540, memory: '256MiB' },
+  async () => { await remindSellersOfGate(_db()); },
+);
+
 exports.posCommissionDailyCollection = onSchedule(
+  /* 06:00 Africa/Nairobi — THE collection gate, and the one place that time exists in
+     executable form. Every merchant's outstanding POS/Till obligation becomes due here.
+
+     It is a GATE, not an expiry timer: there is no per-sale deadline, no hourly sweep
+     and no elapsed-hours calculation anywhere in this file. An obligation outstanding
+     when the gate runs is collected that morning; one settled before it never is.
+
+     The prose in this repository described 07:00 for a while and the cron said 06:00.
+     Nothing asserted the hour, so neither could correct the other — a comment cannot
+     fail. The commercial rule is 06:00, the prose has been corrected to match, and the
+     schedule is now pinned so the next disagreement has to be deliberate. */
   { schedule: '0 6 * * *', timeZone: 'Africa/Nairobi', region: REGION,
     timeoutSeconds: 540, memory: '256MiB' },
   async () => { await runDailyCollection(_db()); },
@@ -353,7 +451,31 @@ exports.posCommissionReconcile = onCall({ region: REGION }, async ({ data, auth 
 
 /* Exported for the suite and for an operator to wire an approved rail. The registry
    is deliberately EMPTY: adding one is a commercial decision, not a code default. */
-module.exports._railRegistry = {};
+/* ── THE APPROVED RAIL REGISTRY ───────────────────────────────────────────────
+   Card, M-PESA and Bank collection goes through IntaSend, via the one payment
+   authority. Registering the factory does NOT enable it: _rail() still requires an
+   operator row with enabled === true and railId === 'intasend', so an unconfigured
+   platform continues to record `blocked_no_rail` and move no money.
+
+   CASH IS ABSENT BY CONSTRUCTION, not by a filter that could be edited. There is no
+   cash rail to register: cash is settled at a drawer and SOKONI cannot collect it
+   electronically. The rail itself refuses a cash-configured attempt as a second layer.
+
+   SOKONI WALLET IS ALSO ABSENT. It is an internal monetary operation, not a provider
+   transaction, and its backend is frozen (wallet-backend-v1.0-frozen). It stays behind
+   its own certification gate rather than being smuggled in through a provider rail. */
+const _intasendRail = require('./pos-commission-rail-intasend');
+module.exports._railRegistry = {
+  [_intasendRail.RAIL_ID]: (cfg) => _intasendRail.createRail({
+    method:   cfg && cfg.method,        /* MPESA | CARD | BANK — operator-chosen */
+    currency: cfg && cfg.currency,      /* explicit; never defaulted to KES here */
+    apiKey:   cfg && cfg.apiKey,
+    env:      process.env,
+  }),
+};
+/* Exposed so certification can assert the RESOLUTION RULE itself rather than a proxy
+   for it. A suite that re-implements the rule proves only that it can re-implement it. */
+module.exports._resolveRailForTest = _rail;
 module.exports.periodKey = periodKey;
 module.exports.collectionKey = collectionKey;
 module.exports.outstandingForSeller = outstandingForSeller;
@@ -362,5 +484,7 @@ module.exports.collectForSeller = collectForSeller;
 module.exports.runDailyCollection = runDailyCollection;
 module.exports.reconcile = reconcile;
 module.exports.STATE = STATE;
+module.exports.remindSellersOfGate = remindSellersOfGate;
+module.exports.REMINDER_TYPE = REMINDER_TYPE;
 module.exports.TYPE_ACCRUAL = TYPE_ACCRUAL;
 module.exports.TYPE_COLLECTED = TYPE_COLLECTED;

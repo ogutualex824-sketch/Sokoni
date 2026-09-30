@@ -1305,8 +1305,8 @@ exports.adminGetAuditLogs = onCall({ region: 'us-central1', maxInstances: 10, en
 
    WHY A DEDICATED COLLECTION. The pre-existing "featured shop" mechanism
    (sokoni-spotlight.js) queried `shopSettings where featuredOnHome==true`, but
-   shopSettings is per-owner readable ONLY and holds live M-Pesa/Daraja secrets
-   (darajaConsumerSecret, darajaPassKey). An anonymous homepage cannot read it,
+   shopSettings is per-owner readable ONLY and holds live merchant payment
+   secrets. An anonymous homepage cannot read it,
    and it must never be widened. `users/{uid}` is likewise self/admin-only (PII).
    So featured state lives in `featuredShops/{merchantUid}` — a SECRETS-FREE
    projection: public-readable only while actively featured (enforced in rules),
@@ -1322,7 +1322,7 @@ exports.adminGetAuditLogs = onCall({ region: 'us-central1', maxInstances: 10, en
 ──────────────────────────────────────────────────────────────────────────── */
 
 /* Only these display fields are ever copied into the public projection. A strict
-   allow-list guarantees no shopSettings secret (daraja*) can leak into a
+   allow-list guarantees no shopSettings secret can leak into a
    world-readable doc, regardless of what else the source docs carry. */
 const _FEATURED_SAFE_FIELDS = ['shopName', 'logo', 'logoUrl', 'category',
   'categoryLabel', 'location', 'rating', 'totalSales', 'handle', 'shopHandle', 'storeUrl'];
@@ -1401,3 +1401,479 @@ exports._h.adminListFeaturedShops = async (req) => {
     }),
   };
 };
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MERCHANT ESTATE — sellers, shops, and the people who work in them
+
+   Admin OS could see products, orders and users, but had no view of the
+   REGISTRIES an approved merchant is actually projected onto. So the one screen
+   an operator lives in could not answer the questions that matter after an
+   approval:
+
+     • which shops exist, and who owns each one;
+     • which sellers are approved but have no shop (`projectSeller` never ran,
+       or ran and failed) — an account authorised to sell with nowhere to sell
+       from, which is invisible in every other view;
+     • who has been given access to a shop, and in what role.
+
+   These register in the `_h` registry ONLY — no standalone onCall — so they add
+   no new Cloud Run service and ride the already-invokable adminOsDispatch.
+   They do require adminOsDispatch itself to be REDEPLOYED before they resolve;
+   until then the dispatcher answers 'not-found' listing the ops it does know.
+
+   ── Employee rows are CORROBORATED, not merely read ────────────────────────
+   firestore.rules permits any signed-in client to create a `shopEmployees`
+   document, so the collection contains rows nobody vetted. `listShopEmployees`
+   (functions/shop-employees.js) therefore corroborates every row three ways
+   before showing it to a shop owner. An admin console that skipped that would
+   display a forged row as though it were staff — and it is the console people
+   trust most. The SAME contract is applied here, through the same module, and
+   rows that fail it are REPORTED as disputed rather than silently dropped: an
+   operator needs to see a forgery attempt, not be protected from knowing.
+──────────────────────────────────────────────────────────────────────────── */
+
+const _shopEmp = require('./shop-employees');
+
+/* Owner of a shop, in the ONE vocabulary the projection writes. `ownerId` is
+   what server-side ownership checks read; `sellerUid` states the same fact in
+   the merchant vocabulary; `uid` is the legacy spelling on pre-projection
+   documents. Never `shopId === uid` — that conflation is what the Store
+   identity migration exists to remove. */
+const _shopOwner = (x) => (x && (x.ownerId || x.sellerUid || x.uid)) || null;
+
+exports._h.adminGetShops = async (req) => {
+  _requireAdmin(req);
+  const { limit: lim, search, status } = req.data || {};
+  const db = getFirestore();
+  const snap = await db.collection('shops').limit(Math.min(Number(lim) || 500, 2000)).get()
+    .catch(() => ({ docs: [] }));
+
+  let items = (snap.docs || []).map((d) => {
+    const x = d.data() || {};
+    const ownerId = _shopOwner(x);
+    return {
+      shopId: d.id,
+      name: x.name || x.shopName || x.businessName || '',
+      ownerId,
+      /* An operator cannot act on a shop with no owner — it belongs to nobody,
+         cannot be suspended through the seller, and cannot be reconciled. It is
+         a finding, so it is stated rather than rendered as an empty cell. */
+      ownerless: !ownerId,
+      status: x.status || '',
+      category: x.category || '',
+      location: x.location || x.city || '',
+      /* Provenance: 'application_approval' means projectSeller established it.
+         Anything else predates the lifecycle or came from another writer. */
+      source: x.source || null,
+      applicationId: x.applicationId || null,
+      createdAt: _iso(x.createdAt),
+      activatedAt: _iso(x.activatedAt),
+      updatedAt: _iso(x.updatedAt),
+      _ms: _ms(x.createdAt) || _ms(x.activatedAt),
+    };
+  });
+
+  if (status) items = items.filter((s) => String(s.status).toLowerCase() === String(status).toLowerCase());
+  if (search) {
+    const q = String(search).toLowerCase();
+    items = items.filter((s) => (s.name || '').toLowerCase().includes(q)
+      || s.shopId.toLowerCase().includes(q)
+      || String(s.ownerId || '').toLowerCase().includes(q));
+  }
+  items.sort((a, b) => b._ms - a._ms);
+  items.forEach((s) => { delete s._ms; });
+
+  const active = items.filter((s) => String(s.status).toLowerCase() === 'active').length;
+  const ownerless = items.filter((s) => s.ownerless).length;
+  const fromApproval = items.filter((s) => s.source === 'application_approval').length;
+  return _env('shops', items, { active, ownerless, fromApproval });
+};
+
+exports._h.adminGetSellers = async (req) => {
+  _requireAdmin(req);
+  const { limit: lim, search, status } = req.data || {};
+  const db = getFirestore();
+
+  /* Both registries in one read pair, because the question an operator asks is
+     never "list sellers" — it is "which approved sellers have no live shop".
+     Answering that from two screens invites the two screens to disagree. */
+  const [sellerSnap, shopSnap] = await Promise.all([
+    db.collection('sellers').limit(Math.min(Number(lim) || 500, 2000)).get().catch(() => ({ docs: [] })),
+    db.collection('shops').limit(2000).get().catch(() => ({ docs: [] })),
+  ]);
+
+  const shopsById = new Map();
+  const shopsByOwner = new Map();
+  (shopSnap.docs || []).forEach((d) => {
+    const x = d.data() || {};
+    shopsById.set(d.id, { id: d.id, status: x.status || '', name: x.name || '' });
+    const o = _shopOwner(x);
+    if (o && !shopsByOwner.has(o)) shopsByOwner.set(o, { id: d.id, status: x.status || '', name: x.name || '' });
+  });
+
+  let items = (sellerSnap.docs || []).map((d) => {
+    const x = d.data() || {};
+    const declared = x.shopId ? shopsById.get(String(x.shopId)) : null;
+    /* Fall back to ownership, never to `shopId = uid`: a seller whose declared
+       shop does not exist is a DIFFERENT finding from one whose shop is simply
+       recorded under another id, and collapsing them hides the first. */
+    const owned = shopsByOwner.get(d.id) || null;
+    const shop = declared || owned;
+    return {
+      uid: d.id,
+      name: x.name || x.businessName || '',
+      status: x.status || '',
+      active: x.active !== false,
+      declaredShopId: x.shopId || null,
+      shopId: shop ? shop.id : null,
+      shopName: shop ? shop.name : '',
+      shopStatus: shop ? shop.status : '',
+      /* THE state this screen exists to surface: authorised to sell, nowhere to
+         sell from. Reconcile the application to repair it. */
+      shopMissing: !shop,
+      declaredShopMissing: !!(x.shopId && !declared),
+      createdAt: _iso(x.createdAt),
+      updatedAt: _iso(x.updatedAt),
+      _ms: _ms(x.updatedAt) || _ms(x.createdAt),
+    };
+  });
+
+  if (status) items = items.filter((s) => String(s.status).toLowerCase() === String(status).toLowerCase());
+  if (search) {
+    const q = String(search).toLowerCase();
+    items = items.filter((s) => (s.name || '').toLowerCase().includes(q) || s.uid.toLowerCase().includes(q));
+  }
+  items.sort((a, b) => b._ms - a._ms);
+  items.forEach((s) => { delete s._ms; });
+
+  const active = items.filter((s) => s.active && String(s.status).toLowerCase() === 'active').length;
+  const shopMissing = items.filter((s) => s.shopMissing).length;
+  return _env('sellers', items, { active, shopMissing });
+};
+
+/* One shop, whole: the owner, the staff, and how much is actually in it. This
+   is the "everything a shop and their employees" view. */
+exports._h.adminGetShopDetail = async (req) => {
+  _requireAdmin(req);
+  const shopId = req.data && req.data.shopId ? String(req.data.shopId).slice(0, 200) : '';
+  if (!shopId) throw new HttpsError('invalid-argument', 'shopId is required');
+
+  const db = getFirestore();
+  const shopSnap = await db.collection('shops').doc(shopId).get();
+  if (!shopSnap.exists) throw new HttpsError('not-found', 'No shop ' + shopId);
+  const shop = shopSnap.data() || {};
+  const ownerUid = _shopOwner(shop);
+
+  const [empSnap, ownerSnap, sellerSnap] = await Promise.all([
+    db.collection('shopEmployees').where('shopId', '==', shopId).limit(200).get().catch(() => ({ docs: [] })),
+    ownerUid ? db.collection('users').doc(ownerUid).get().catch(() => null) : Promise.resolve(null),
+    ownerUid ? db.collection('sellers').doc(ownerUid).get().catch(() => null) : Promise.resolve(null),
+  ]);
+
+  /* Same three-way corroboration listShopEmployees applies — canonical key,
+     known role, and a shopOwnerId that matches THIS shop's owner. */
+  const employees = [];
+  const disputed = [];
+  (empSnap.docs || []).forEach((d) => {
+    const e = d.data() || {};
+    const reasons = [];
+    if (d.id !== _shopEmp.employeeDocId(shopId, e.uid)) reasons.push('not on the canonical key');
+    if (!_shopEmp.SHOP_ROLES.includes(e.role)) reasons.push('unknown role "' + e.role + '"');
+    if (!ownerUid || String(e.shopOwnerId || '') !== String(ownerUid)) reasons.push('shopOwnerId does not match the shop owner');
+    const row = {
+      id: d.id, uid: e.uid || null, email: e.email || null, name: e.name || null,
+      role: e.role || null, active: e.active !== false, joinedAt: e.joinedAt || null,
+    };
+    if (reasons.length) disputed.push(Object.assign({}, row, { reasons }));
+    else employees.push(row);
+  });
+
+  /* Counts. `products` ownership is enforced on `sellerUid` in firestore.rules,
+     but `sellerId` and `shopId` are both queried elsewhere in this codebase, so
+     all three are counted and REPORTED SEPARATELY. A single number here would
+     be a guess about which field this shop's writers used; three numbers are
+     evidence, and a disagreement between them is itself the finding. */
+  const _count = async (col, field, value) => {
+    if (!value) return null;
+    try { return (await db.collection(col).where(field, '==', value).count().get()).data().count; }
+    catch (_) { return null; }
+  };
+  const [pBySellerUid, pBySellerId, pByShopId, ordersBySellerId] = await Promise.all([
+    _count('products', 'sellerUid', ownerUid),
+    _count('products', 'sellerId', ownerUid),
+    _count('products', 'shopId', shopId),
+    _count('orders', 'sellerId', ownerUid),
+  ]);
+
+  const ownerData = ownerSnap && ownerSnap.exists ? ownerSnap.data() : null;
+  return {
+    ok: true,
+    shop: {
+      shopId,
+      name: shop.name || shop.shopName || '',
+      ownerId: ownerUid,
+      ownerless: !ownerUid,
+      status: shop.status || '',
+      category: shop.category || '',
+      location: shop.location || shop.city || '',
+      phoneNumber: shop.phoneNumber || '',
+      source: shop.source || null,
+      applicationId: shop.applicationId || null,
+      createdAt: _iso(shop.createdAt),
+      activatedAt: _iso(shop.activatedAt),
+      updatedAt: _iso(shop.updatedAt),
+    },
+    owner: ownerData ? {
+      uid: ownerUid,
+      name: ownerData.displayName || ownerData.name || '',
+      email: ownerData.email || '',
+      phone: ownerData.phone || ownerData.phoneNumber || '',
+      roles: Array.isArray(ownerData.roles) ? ownerData.roles : [],
+      /* The field merchant.html resolves first. If this disagrees with shopId,
+         the merchant lands in a workspace that cannot tell which shop is theirs. */
+      activeShopId: ownerData.activeShopId || null,
+      activeShopMatches: String(ownerData.activeShopId || '') === shopId,
+      sellerRegistered: !!(sellerSnap && sellerSnap.exists),
+    } : null,
+    employees,
+    disputed,
+    counts: {
+      employees: employees.length,
+      disputedEmployees: disputed.length,
+      productsBySellerUid: pBySellerUid,
+      productsBySellerId: pBySellerId,
+      productsByShopId: pByShopId,
+      ordersBySellerId: ordersBySellerId,
+    },
+  };
+};
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════
+   LOYALTY OBSERVATORY  (L6)
+   ═══════════════════════════════════════════════════════════════════════════════════════
+        Sale / Order → Loyalty Authority → canonical event → loyalty-accounting → HERE
+
+   AdminOS OBSERVES. It does not compute a second total, hold a second balance, or own a
+   second rate. Every figure below comes from functions/loyalty-accounting.js, which is the
+   one aggregate, and every figure is traceable to the events that produced it.
+
+   THREE THINGS THIS DELIBERATELY DOES NOT DO
+
+     · it never reads wallets.rewardPoints. That field is initialised to 0 by the wallet
+       engine and written by nothing else — 69 of 74 production wallets do not carry it at
+       all. Rendering it as a loyalty balance would publish a number no producer maintains.
+
+     · it never reconstructs a historical KES value from today's configuration. Each event
+       carries the rate AND the rateVersion that valued it; a re-derivation would make the
+       past move whenever the present changes. Events written before L5 carry no valuation,
+       and that is reported as unvalued rather than repaired with a guess.
+
+     · it never renders 0 for an answer it does not have. When the accounting authority
+       returns UNAVAILABLE or INCOMPLETE this passes the state through WITH NO FIGURES
+       ATTACHED, because a zero that means "the query failed" is a fabricated financial fact.
+   ═══════════════════════════════════════════════════════════════════════════════════════ */
+
+const _LOY_ACC = require('./loyalty-accounting');
+const _LOY_EV = require('./loyalty-event');
+
+/** Normalise an optional ISO date without inventing a bound. */
+function _loyDate(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/* ── 1. THE OVERVIEW ──────────────────────────────────────────────────────────────────
+   Totals for a scope, straight from the accounting authority. */
+exports.adminLoyaltyOverview = onCall(
+  { region: 'us-central1', maxInstances: 10, enforceAppCheck: true },
+  exports._h.adminLoyaltyOverview = async (req) => {
+    _requireAdmin(req);
+    const d = req.data || {};
+    const agg = await _LOY_ACC.aggregate(getFirestore(), {
+      merchantId: d.merchantId ? String(d.merchantId) : undefined,
+      rail: d.rail ? String(d.rail) : undefined,
+      since: _loyDate(d.since) || undefined,
+      until: _loyDate(d.until) || undefined,
+    });
+
+    /* PASSED THROUGH, NOT FLATTENED. A caller must branch on state before rendering; there
+       is deliberately nothing numeric here to render otherwise. */
+    if (agg.state !== 'OK') {
+      return {
+        state: agg.state,
+        reason: agg.reason,
+        eventsRead: agg.eventsRead,
+        scope: { merchantId: d.merchantId || null, rail: d.rail || null },
+      };
+    }
+
+    return {
+      state: 'OK',
+      scope: { merchantId: d.merchantId || null, rail: d.rail || null,
+               since: d.since || null, until: d.until || null },
+      eventsRead: agg.eventsRead,
+
+      points: {
+        earned:      agg.byClass.ISSUE.points,
+        redeemed:    Math.abs(agg.byClass.REDEEM.points),
+        expired:     Math.abs(agg.byClass.EXPIRE.points),
+        reversed:    agg.byClass.REVERSE.points,
+        adjusted:    agg.byClass.ADJUST.points,
+        outstanding: agg.points.outstanding,
+      },
+
+      /* VALUED KES IS NOT TOTAL IMPLIED KES. Only events carrying a rate AND its version
+         contribute, and the count that cannot be valued travels beside the figure so the
+         two are never confused. */
+      valuation: {
+        valuedKES:      agg.valuation.valuedKES,
+        eventsValued:   agg.valuation.eventsValued,
+        eventsUnvalued: agg.valuation.eventsUnvalued,
+        rateVersions:   agg.valuation.rateVersions,
+        note: 'valuedKES covers only events that carry a rate and its version. ' +
+              'eventsUnvalued are NOT worth zero — they are unvalued, and historical value ' +
+              'is not reconstructed from the current configuration.',
+      },
+
+      byRail: agg.byRail,
+      byType: agg.byType,
+      /* Types this platform does not recognise: counted, never folded into a total. */
+      unclassified: agg.unclassified,
+    };
+  });
+
+/* ── 2. THE DRILL-DOWN ────────────────────────────────────────────────────────────────
+   The events behind a total. Cursor-paged so a caller can walk the WHOLE set; the page
+   size bounds one response, never the answer. */
+exports.adminLoyaltyEvents = onCall(
+  { region: 'us-central1', maxInstances: 10, enforceAppCheck: true },
+  exports._h.adminLoyaltyEvents = async (req) => {
+    _requireAdmin(req);
+    const d = req.data || {};
+    const size = Math.min(Math.max(Number(d.pageSize) || 100, 1), 500);
+    const db = getFirestore();
+
+    let q = db.collection('loyaltyLedger');
+    if (d.merchantId)  q = q.where('merchantId', '==', String(d.merchantId));
+    if (d.customerUid) q = q.where('uid', '==', String(d.customerUid));
+    if (d.rail)        q = q.where('rail', '==', String(d.rail));
+    if (d.orderRef)    q = q.where('orderRef', '==', String(d.orderRef));
+    if (d.type)        q = q.where('type', '==', String(d.type));
+    q = q.orderBy('__name__').limit(size);
+    if (d.cursor) q = q.startAfter(String(d.cursor));
+
+    let snap;
+    try { snap = await q.get(); }
+    catch (err) {
+      /* Not an empty list. An empty list says "there are none". */
+      return { state: 'UNAVAILABLE', reason: 'event query failed: ' + (err.message || String(err)) };
+    }
+
+    const events = snap.docs.map((doc) => {
+      const e = doc.data() || {};
+      return {
+        eventId: doc.id,
+        type: e.type || null,
+        klass: e.klass || _LOY_EV.classOf(e.type) || null,
+        /* The signed contribution, by the canonical semantics — null when unclassifiable. */
+        signedPoints: _LOY_EV.signedPoints(e),
+        points: Number.isFinite(Number(e.points)) ? Number(e.points) : null,
+        rail: e.rail || null,
+        merchantId: e.merchantId || null,
+        customerUid: e.uid || null,
+        orderRef: e.orderRef || e.orderId || null,
+        /* Provenance of the valuation, or explicit nulls. Never a zero. */
+        valueKES: (e.valueKES === undefined || e.valueKES === null) ? null : Number(e.valueKES),
+        rate: (e.rate === undefined || e.rate === null) ? null : Number(e.rate),
+        rateVersion: e.rateVersion || null,
+        valued: !!(e.valueKES !== undefined && e.valueKES !== null && e.rate && e.rateVersion),
+        reversalOf: e.reversalOf || e.originalEntryId || null,
+        actor: e.actor || e.adjustedBy || e.voidedBy || e.cashierId || null,
+        idempotencyKey: e.idempotencyKey || null,
+        createdAt: e.createdAt || null,
+        schemaVersion: e.schemaVersion || null,
+      };
+    });
+
+    return {
+      state: 'OK',
+      events,
+      /* A cursor, not a truncation: absent means this really is the end. */
+      nextCursor: snap.size === size ? snap.docs[snap.docs.length - 1].id : null,
+      pageSize: size,
+    };
+  });
+
+/* ── 3. ONE EVENT, EXPLAINED ──────────────────────────────────────────────────────────
+   The audit route: a single event with its originating order and, for a reversal, the
+   original event it undoes. */
+exports.adminLoyaltyEventTrace = onCall(
+  { region: 'us-central1', maxInstances: 10, enforceAppCheck: true },
+  exports._h.adminLoyaltyEventTrace = async (req) => {
+    _requireAdmin(req);
+    const id = String((req.data || {}).eventId || '');
+    if (!id) throw new HttpsError('invalid-argument', 'eventId required');
+    const db = getFirestore();
+
+    let snap;
+    try { snap = await db.collection('loyaltyLedger').doc(id).get(); }
+    catch (err) { return { state: 'UNAVAILABLE', reason: 'event read failed: ' + (err.message || String(err)) }; }
+    if (!snap.exists) return { state: 'NOT_FOUND', eventId: id };
+
+    const e = snap.data() || {};
+    const out = {
+      state: 'OK',
+      event: {
+        eventId: id,
+        type: e.type || null,
+        klass: e.klass || _LOY_EV.classOf(e.type) || null,
+        signedPoints: _LOY_EV.signedPoints(e),
+        rail: e.rail || null,
+        merchantId: e.merchantId || null,
+        customerUid: e.uid || null,
+        orderRef: e.orderRef || e.orderId || null,
+        valueKES: (e.valueKES === undefined || e.valueKES === null) ? null : Number(e.valueKES),
+        rate: (e.rate === undefined || e.rate === null) ? null : Number(e.rate),
+        rateVersion: e.rateVersion || null,
+        actor: e.actor || e.adjustedBy || e.voidedBy || null,
+        createdAt: e.createdAt || null,
+      },
+      /* Why a figure cannot be explained, when it cannot. */
+      valuationProvenance: (e.valueKES !== undefined && e.valueKES !== null && e.rate && e.rateVersion)
+        ? { valued: true, rate: Number(e.rate), rateVersion: String(e.rateVersion) }
+        : { valued: false,
+            reason: 'this event carries no rate/version — written before the canonical schema, ' +
+                    'or by a producer that could not establish the authority. Its KES value is ' +
+                    'UNRESOLVED and is not reconstructed from the current configuration.' },
+      order: null,
+      reversal: null,
+    };
+
+    const ref = e.orderRef || e.orderId;
+    if (ref) {
+      try {
+        const o = await db.collection('orders').doc(String(ref)).get();
+        out.order = o.exists
+          ? { orderId: o.id, sellerUid: o.get('sellerUid') || null,
+              buyerUid: o.get('buyerUid') || null, total: o.get('total') ?? null,
+              status: o.get('status') || null }
+          : { orderId: String(ref), state: 'NOT_FOUND' };
+      } catch (err) { out.order = { orderId: String(ref), state: 'UNAVAILABLE' }; }
+    }
+
+    const orig = e.reversalOf || e.originalEntryId;
+    if (orig) {
+      try {
+        const p = await db.collection('loyaltyLedger').doc(String(orig)).get();
+        out.reversal = p.exists
+          ? { originalEventId: p.id, type: p.get('type') || null,
+              points: p.get('points') ?? null,
+              valueKES: p.get('valueKES') ?? null, rateVersion: p.get('rateVersion') || null }
+          : { originalEventId: String(orig), state: 'NOT_FOUND' };
+      } catch (err) { out.reversal = { originalEventId: String(orig), state: 'UNAVAILABLE' }; }
+    }
+
+    return out;
+  });

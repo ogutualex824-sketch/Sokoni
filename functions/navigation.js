@@ -779,7 +779,15 @@ exports.processDriverEarning = onDocumentCreated('driverEarningQueue/{docId}', a
      deterministically from the queue doc id (one credit record per queue entry, by
      construction). Exactly-once with respect to money. */
   const docId     = event.params.docId;
-  const walletRef = db.collection('wallets').doc(riderId);
+  /* DORMANT, AND NOW POINTED AT THE RIGHT PLACE.
+
+     Nothing enqueues driverEarningQueue with an amount, so this trigger does not fire.
+     This change does not wake it — a destination is not a caller — but a dormant path
+     aimed at a personal wallet means the day somebody wires a legitimate enqueue, the
+     wrong destination ships with it.
+
+     The claim and its idempotency stay exactly where they were; only the money moves
+     elsewhere, after the transaction, because a business-wallet credit opens its own. */
   /* Cross-rail exactly-once. When this earning is tied to an order, share the SAME
      idempotency key the delivered-trigger payout uses: onOrderStatusChange writes
      walletTransactions/{rider}_{order}_delivery when orders.status flips to `delivered`.
@@ -814,12 +822,10 @@ exports.processDriverEarning = onDocumentCreated('driverEarningQueue/{docId}', a
       createdAt:   FieldValue.serverTimestamp(),
     });
 
-    /* Safe here: runs at most once, guarded by the `processed` + shared-key checks above. */
-    txn.set(walletRef, {
-      balance:   FieldValue.increment(amount),
-      currency:  'KES',
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    /* THE PERSONAL-WALLET CREDIT IS GONE. Delivery earnings are trading proceeds and
+       belong in the rider's business wallet; this wrote wallets/{riderId}.balance.
+       The transaction still CLAIMS the earning — `processed` plus the shared key — so
+       the exactly-once property that guards against double-pay is unchanged. */
 
     txn.update(snap.ref, {
       processed:   true,
@@ -828,6 +834,22 @@ exports.processDriverEarning = onDocumentCreated('driverEarningQueue/{docId}', a
 
     return true;
   });
+
+  /* The money, to the rider's BUSINESS wallet or held — only if THIS run claimed the
+     earning. A replay returned false above and must not credit again. */
+  if (applied) {
+    const RIDER_DEST = require('./rider-earning-destination');
+    await RIDER_DEST.creditOrHold({
+      db,
+      riderUid: riderId,
+      amountMinor: Math.round(Number(amount) * 100),
+      ref: canonicalId,
+      orderId: orderId || null,
+      provenance: 'delivery_earning',
+      source: 'delivery',
+      description: 'Trip delivery earning',
+    }).catch(() => {});
+  }
 
   if (!applied) {
     console.log(`Driver earning: duplicate trigger delivery ignored (queue=${docId})`);

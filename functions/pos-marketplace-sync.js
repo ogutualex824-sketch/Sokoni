@@ -256,7 +256,18 @@ exports.updateClickAndCollectStatus = onCall(CF_OPTIONS, async ({ auth, data }) 
           deliveryAddress: order.deliveryAddress || order.address || '',
           items: (order.items || []).map(i => ({ productId: i.productId || i.id, name: i.name, qty: i.qty || 1 })),
           orderTotal: Number(order.total || 0), deliveryFee: fee,
-          driverNet: Math.round(fee * 0.8), commissionPct: 5,
+          /* driverNet WAS `Math.round(fee * 0.8)` — a rider share invented at the moment
+             a dispatch record was written, disagreeing with the 0.88 the rider's own screen
+             showed and with what the platform actually paid. Three numbers for one
+             question, none of them what anybody agreed to.
+
+             It is NOT replaced with a better percentage. What a delivery pays is decided
+             by delivery-quote.js and PINNED onto the delivery job; this record is a
+             dispatch artefact and has no authority to state an earning. Null means
+             "not stated here", which a reader can act on — a plausible number cannot. */
+          driverNet: null,
+          driverNetSource: 'pinned-quote-on-deliveryJobs',
+          commissionPct: 5,
           vehicleType: 'moto', speed: 'same_day', category: 'general',
           /* proofPin is NOT stored on the packageRequest — the assigned rider can
              read this document under firestore.rules, so a plaintext PIN here is

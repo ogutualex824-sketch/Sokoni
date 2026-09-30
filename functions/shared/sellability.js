@@ -28,7 +28,7 @@
                                     + isDeleted|deleted + visible|isVisible===false
      listenProducts (sokoni-db.js)  NO status filter at all — returns everything
      availability-enforce.js        isVisible===false, status==='archived' only
-     darajaSTKPush (index.js)       status && status !== 'active'
+     the legacy STK initiator       status && status !== 'active'
      admin.html                     removed|unpublished|deleted
 
    Two of those are supposed to be the SAME authority. `/api/catalogue` hides a
@@ -66,7 +66,8 @@
    is untracked — most legacy SOKONI products have no stock field at all, and
    treating absent as 0 would take the entire legacy catalogue off sale. Absent
    stock therefore means unmetered and always purchasable, which is exactly what
-   the pre-charge guard in darajaSTKPush already does.
+   the pre-charge guard did on the retired rail. The equivalent guard now
+   lives on the IntaSend initiation path.
 
    STATE PRECEDENCE. Listing beats shop state beats stock: a hidden product in an
    open shop is `unavailable`, not `out_of_stock`, because restocking it would not

@@ -20,9 +20,31 @@ const { defineSecret }                  = require('firebase-functions/params');
 const logger                             = require('firebase-functions/logger');
 const admin                              = require('firebase-admin');
 const { getAdapter, listAdapters }       = require('./payment-adapters');
+const _AV                                = require('./analytics-availability');
 
 const INTASEND_PRIVATE_KEY = defineSecret('INTASEND_PRIVATE_KEY');
 const REGION               = 'us-central1';
+
+/* The webhook's own declared timeout, named ONCE so the lock-staleness rule below cannot
+   drift away from it. A run cannot outlive this, so a lock older than it is abandoned —
+   that is a derived bound, not a number someone picked. */
+const FOS_WEBHOOK_TIMEOUT_SECONDS = 30;
+
+/* ── PROVIDER PAYMENT SUCCESS IS NOT FINOS SETTLEMENT SUCCESS ────────────────
+   The webhook used to conflate them: it marked the payment COMPLETE, burned an
+   idempotency key, ran settlement inside `.catch(err => logger.error(...))`, and returned
+   HTTP 200 whatever happened. A settlement failure therefore left a payment that looked
+   settled, an accounting transaction that had rolled back, and a redelivery answered
+   `duplicate_skipped` — permanently unrecoverable, and silent.
+
+   These four states are the settlement's, never the provider's. ONLY `SETTLED` may refuse
+   a retry. */
+const SETTLE = Object.freeze({
+  IN_PROGRESS: 'IN_PROGRESS',  /* claimed, outcome not yet known               */
+  SETTLED:     'SETTLED',      /* accounting committed — the ONLY terminal ok  */
+  WITHHELD:    'WITHHELD',     /* deliberately not settled, awaiting a human   */
+  FAILED:      'FAILED',       /* did not settle, and should be retried        */
+});
 
 const db  = () => admin.firestore();
 const now = () => admin.firestore.FieldValue.serverTimestamp();
@@ -207,7 +229,7 @@ exports.fosInitiatePayment = onCall(
 exports.fosSecureWebhook = onRequest(
   {
     region:         REGION,
-    timeoutSeconds: 30,
+    timeoutSeconds: FOS_WEBHOOK_TIMEOUT_SECONDS,
     memory:         '256MiB',
     secrets:        [INTASEND_PRIVATE_KEY],
   },
@@ -237,51 +259,160 @@ exports.fosSecureWebhook = onRequest(
 
     if (!apiRef) { res.status(400).json({ error: 'Missing api_ref' }); return; }
 
-    /* Idempotency — use create() for atomic "set-if-not-exists" so two concurrent
-       webhook deliveries cannot both slip through the check before either writes */
+    /* ── THE CLAIM IS A LOCK, NOT A RECEIPT ──────────────────────────────────
+       `create()` is still the atomic set-if-not-exists that stops two concurrent
+       deliveries from both settling. What changed is that the record now carries the
+       settlement OUTCOME and is revisited when that outcome is known. Previously it was
+       written once, before any work, and never updated — so a failure burned the key. */
     const idKey = `webhook_${provider}_${apiRef}`;
     const idRef = db().collection('finosIdempotency').doc(idKey);
+
+    let attempts = 1;
     try {
-      await idRef.create({ idKey, apiRef, provider, processedAt: now(), lockedAt: now() });
+      await idRef.create({
+        idKey, apiRef, provider,
+        state:    SETTLE.IN_PROGRESS,
+        attempts: 1,
+        lockedAt: now(),
+      });
     } catch (lockErr) {
-      if (lockErr.code === 6 || lockErr.message?.includes('ALREADY_EXISTS')) {
-        res.status(200).json({ status: 'duplicate_skipped' });
+      if (!(lockErr.code === 6 || lockErr.message?.includes('ALREADY_EXISTS'))) throw lockErr;
+
+      const prior = await idRef.get();
+      const p = prior.exists ? prior.data() : {};
+
+      /* The ONLY state that may refuse a retry. */
+      if (p.state === SETTLE.SETTLED) {
+        res.status(200).json({ status: 'duplicate_skipped', settlement: SETTLE.SETTLED });
         return;
       }
-      throw lockErr;
-    }
 
-    if (invoiceState === 'COMPLETE' && netAmount > 0) {
-      /* Update payment record */
-      const paySnap = await db().collection('payments').doc(apiRef).get();
-      if (paySnap.exists) {
-        await paySnap.ref.update({ status: 'COMPLETE', checkoutId, updatedAt: now() });
+      /* A lock cannot be held by a live run for longer than this function may live, so
+         anything older than that was abandoned mid-flight and is ours to take over.
+         Without this, a crash between claim and settlement would be permanent. */
+      const lockedMs = (p.lockedAt && p.lockedAt.toMillis && p.lockedAt.toMillis()) || 0;
+      const abandoned = (Date.now() - lockedMs) > (FOS_WEBHOOK_TIMEOUT_SECONDS * 1000);
 
-        /* If linked to a fosTransaction, complete it */
-        const payData = paySnap.data();
-        if (payData.fosTransactionId) {
-          await _processFOSTransaction(payData.fosTransactionId, {
-            payRef: apiRef, netAmount, provider, checkoutId,
-          }).catch(err => logger.error('[FOS/webhook] processFOSTransaction error', { err: err.message }));
-        }
+      if (p.state === SETTLE.IN_PROGRESS && !abandoned) {
+        /* A sibling delivery is mid-settlement. Refusing here is not a burned key: that
+           delivery will record the outcome, and a later redelivery can still take over. */
+        res.status(409).json({ status: 'in_progress', retryable: true });
+        return;
       }
 
-      logger.info('[FOS/webhook] Payment processed', { apiRef, netAmount, provider });
+      attempts = (p.attempts || 1) + 1;
+      await idRef.update({ state: SETTLE.IN_PROGRESS, attempts, lockedAt: now() });
     }
 
-    res.status(200).json({ status: 'ok' });
+    const payDocRef = db().collection('payments').doc(apiRef);
+
+    /* Record the outcome in BOTH places that a reader might trust, then answer the
+       provider accordingly. Nothing below may leave the idempotency record SETTLED
+       unless the accounting actually committed. */
+    const finish = async (state, httpCode, extra) => {
+      await idRef.set(Object.assign({
+        state, attempts, updatedAt: now(),
+      }, state === SETTLE.SETTLED ? { settledAt: now() } : { failedAt: now() },
+         extra && extra.record ? extra.record : {}), { merge: true });
+
+      /* Only ever UPDATE an existing payment. A webhook must not conjure a payments
+         document for a reference it could not resolve. */
+      const snap = await payDocRef.get();
+      if (snap.exists) {
+        await payDocRef.update(Object.assign({
+          fosSettlementState: state, updatedAt: now(),
+        }, state === SETTLE.SETTLED ? { fosSettledAt: now() } : {},
+           extra && extra.payment ? extra.payment : {}));
+      }
+      res.status(httpCode).json(Object.assign(
+        { status: httpCode === 200 ? 'ok' : 'settlement_not_completed', settlement: state },
+        httpCode >= 500 ? { retryable: true } : {}));
+    };
+
+    const failClosed = async (stage, err) => {
+      logger.error('[FOS/webhook] settlement did NOT complete', {
+        apiRef, provider, stage, attempts, err: err && err.message });
+      await finish(SETTLE.FAILED, 500, {
+        record:  { lastStage: stage, lastError: String((err && err.message) || err).slice(0, 500) },
+        payment: { fosSettlementError: String((err && err.message) || err).slice(0, 500) },
+      });
+    };
+
+    /* Not a completed payment: nothing to settle, and saying so is not a settlement
+       failure. The key is closed so redeliveries of the same non-event are cheap. */
+    if (!(invoiceState === 'COMPLETE' && netAmount > 0)) {
+      await idRef.set({
+        state: SETTLE.SETTLED, attempts, settledAt: now(),
+        settlement: 'NOT_APPLICABLE', invoiceState: invoiceState || null,
+      }, { merge: true });
+      res.status(200).json({ status: 'ok', settlement: 'not_applicable' });
+      return;
+    }
+
+    const paySnap = await payDocRef.get();
+    if (!paySnap.exists) {
+      /* An unresolved accounting destination. FAIL CLOSED, and do not burn the key — the
+         payment document may simply not have been written yet. */
+      await failClosed('payment_not_found', new Error('payments/' + apiRef + ' does not exist'));
+      return;
+    }
+
+    /* The provider's fact, recorded as the provider's fact — and settlement recorded, in
+       the same write, as explicitly NOT yet done. */
+    await payDocRef.update({
+      status: 'COMPLETE', checkoutId, updatedAt: now(),
+      fosSettlementState: SETTLE.IN_PROGRESS,
+    });
+
+    const payData = paySnap.data();
+    let outcome;
+    try {
+      outcome = payData.fosTransactionId
+        ? await _processFOSTransaction(payData.fosTransactionId, {
+            payRef: apiRef, netAmount, provider, checkoutId })
+        /* No FinOS accounting is attached to this payment. There is nothing to settle,
+           which is a different thing from having settled something. */
+        : { outcome: SETTLE.SETTLED, detail: 'no_fos_transaction' };
+    } catch (err) {
+      await failClosed('settlement', err);
+      return;
+    }
+
+    if (outcome.outcome === SETTLE.WITHHELD) {
+      /* A deliberate non-settlement awaiting a human — not a provider problem, so the
+         provider is not asked to retry. The record is NOT settled, so once the cause is
+         cleared a redelivery or an operator replay can still settle it. */
+      logger.error('[FOS/webhook] settlement WITHHELD', { apiRef, reason: outcome.reason });
+      await finish(SETTLE.WITHHELD, 200, {
+        record:  { reason: outcome.reason || null },
+        payment: { fosSettlementReason: outcome.reason || null },
+      });
+      return;
+    }
+
+    logger.info('[FOS/webhook] settled', {
+      apiRef, netAmount, provider, attempts, detail: outcome.detail || null });
+    await finish(SETTLE.SETTLED, 200, { record: { detail: outcome.detail || null } });
   }
 );
 
-/* Internal: complete a fosTransaction after payment confirmed */
+/* Internal: complete a fosTransaction after payment confirmed.
+
+   Every exit now SAYS what happened. It used to return bare `undefined` for three very
+   different outcomes — settled, already settled, and deliberately not settled — and the
+   caller read all three as success. */
 async function _processFOSTransaction(txId, { payRef, netAmount, provider, checkoutId }) {
   const fsdb  = db();
   const txRef = fsdb.collection('fosTransactions').doc(txId);
   const txSnap = await txRef.get();
-  if (!txSnap.exists) return;
+  /* The payment names an accounting destination that does not exist. That is not a
+     no-op; it is an unresolved destination, and it must fail closed. */
+  if (!txSnap.exists) {
+    throw new Error('fosTransactions/' + txId + ' does not exist — unresolved accounting destination');
+  }
 
   const tx = txSnap.data();
-  if (tx.status === 'COMPLETED') return; /* Already processed */
+  if (tx.status === 'COMPLETED') return { outcome: SETTLE.SETTLED, detail: 'already_settled' };
 
   /* Calculate commission via existing finos-utils.
    *
@@ -332,7 +463,7 @@ async function _processFOSTransaction(txId, { payRef, netAmount, provider, check
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     logger.error('[FOS] Settlement withheld, commission unavailable', { txId, payRef });
-    return;
+    return { outcome: SETTLE.WITHHELD, reason: 'commission_unavailable' };
   }
 
   const netCents = tx.amountCents - commissionCents;
@@ -398,6 +529,7 @@ async function _processFOSTransaction(txId, { payRef, netAmount, provider, check
   /* The old commission-failure review-queue write lived here, AFTER the wallets were
      already credited at zero commission. It is gone: the failure path now returns above,
      before any money moves. */
+  return { outcome: SETTLE.SETTLED, detail: 'settled' };
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -929,111 +1061,149 @@ exports.fosGetAdminConsole = onCall(
     const weekStart  = new Date(now_dt); weekStart.setDate(weekStart.getDate() - 7);
     const monthStart = new Date(now_dt); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
 
-    /* Run all queries concurrently */
-    const [
-      todaySnap, weekSnap, pendingRefunds, pendingPayouts,
-      openDisputes, recentTx, walletSnap,
-    ] = await Promise.all([
+    /* ── EVERY READ REPORTS WHAT HAPPENED ────────────────────────────────────
+       Two defects are being removed here, and they are opposites.
+
+       The first: three queries had no catch at all, so one missing index rejected the
+       WHOLE Promise.all and the admin saw an error page instead of the five figures
+       that were perfectly readable. A financial console must degrade per figure.
+
+       The second: the other three converted failure into empty — payouts to a legacy
+       alias, escrows to `{ docs: [] }`, the platform wallet to `null` — and the
+       aggregation below turned each of those into `0`. An admin cannot tell a queue
+       that is clear from a queue that could not be read.
+
+       `_AV.read` never rejects, so Promise.all cannot; each result carries its own
+       state, and the envelope decides per block whether a figure may be shown. The
+       payouts fallback is KEPT — it is a real alias — but it is now reported as a
+       fallback instead of passing for the canonical answer. */
+    const [today, week, refunds, payouts, disputes, recent, wallet] = await Promise.all([
       /* Today's completed fosTransactions */
-      fsdb.collection('fosTransactions')
+      _AV.read('fosTransactions', fsdb.collection('fosTransactions')
         .where('status', '==', 'COMPLETED')
         .where('createdAt', '>=', ts(todayStart))
         .limit(500)
-        .get(),
+        .get()),
 
       /* This week's completed */
-      fsdb.collection('fosTransactions')
+      _AV.read('fosTransactions', fsdb.collection('fosTransactions')
         .where('status', '==', 'COMPLETED')
         .where('createdAt', '>=', ts(weekStart))
         .limit(1000)
-        .get(),
+        .get()),
 
       /* Pending refunds */
-      fsdb.collection('fosRefundQueue')
+      _AV.read('fosRefundQueue', fsdb.collection('fosRefundQueue')
         .where('status', '==', 'pending')
         .orderBy('createdAt', 'desc')
         .limit(50)
-        .get(),
+        .get()),
 
-      /* Pending payouts */
-      fsdb.collection('payouts')
-        .where('status', '==', 'pending')
-        .orderBy('createdAt', 'desc')
-        .limit(50)
-        .get().catch(() => fsdb.collection('fosPayouts')
+      /* Pending payouts, with the legacy fosPayouts alias as a declared fallback.
+         The status predicate is UNCHANGED: whether a `pending_review` bank payout
+         belongs in this queue is PAYOUT-STATUS-VOCABULARY, a commercial decision, and
+         this slice does not touch it. */
+      _AV.readWithFallback(
+        { collection: 'payouts', run: () => fsdb.collection('payouts')
           .where('status', '==', 'pending')
-          .limit(50).get()),
+          .orderBy('createdAt', 'desc')
+          .limit(50)
+          .get() },
+        { collection: 'fosPayouts', run: () => fsdb.collection('fosPayouts')
+          .where('status', '==', 'pending')
+          .limit(50)
+          .get() },
+      ),
 
       /* Open disputes */
-      fsdb.collection('escrows')
+      _AV.read('escrows', fsdb.collection('escrows')
         .where('status', '==', 'disputed')
         .limit(50)
-        .get().catch(() => ({ empty: true, docs: [] })),
+        .get()),
 
       /* Recent 20 transactions */
-      fsdb.collection('fosTransactions')
+      _AV.read('fosTransactions', fsdb.collection('fosTransactions')
         .orderBy('createdAt', 'desc')
         .limit(20)
-        .get(),
+        .get()),
 
-      /* Platform wallet */
-      fsdb.collection('wallets').doc('__platform__').get().catch(() => null),
+      /* Platform wallet. A missing document is NOT a balance of zero — and note that
+         financial-os credits `wallets/__platform__` while finos and finos-router use
+         `platform_master`. Which identity is canonical is PLATFORM-WALLET-IDENTITY,
+         named as a blocker and NOT decided here. Reporting NO_DATA is the honest
+         answer either way; reporting 0 was not. */
+      _AV.readDoc('wallets', fsdb.collection('wallets').doc('__platform__').get()),
     ]);
 
-    /* Aggregate today */
-    let todayRevCents = 0, todayCommCents = 0, todayTxCount = 0;
-    todaySnap.forEach(d => {
-      const tx = d.data();
-      todayRevCents  += tx.amountCents || 0;
-      todayCommCents += tx.commissionCents || 0;
-      todayTxCount++;
-    });
-
-    /* Aggregate week */
-    let weekRevCents = 0, weekCommCents = 0, weekTxCount = 0;
-    weekSnap.forEach(d => {
-      const tx = d.data();
-      weekRevCents  += tx.amountCents || 0;
-      weekCommCents += tx.commissionCents || 0;
-      weekTxCount++;
-    });
-
-    const kes = (c) => Math.round(c / 100);
-    const platformWallet = walletSnap?.data() || {};
-
-    return {
-      kpis: {
-        todayRevenueKES:     kes(todayRevCents),
-        todayCommissionKES:  kes(todayCommCents),
-        todayTransactions:   todayTxCount,
-        weekRevenueKES:      kes(weekRevCents),
-        weekCommissionKES:   kes(weekCommCents),
-        weekTransactions:    weekTxCount,
-        platformBalanceKES:  kes(platformWallet.availableCents || 0),
-      },
-      queues: {
-        pendingRefunds:  pendingRefunds.size,
-        pendingPayouts:  pendingPayouts.size,
-        openDisputes:    openDisputes.docs?.length || 0,
-      },
-      pendingRefundsList: pendingRefunds.docs.map(d => ({
-        id:         d.id,
-        amountKES:  d.data().amountKES,
-        reason:     d.data().reason,
-        buyerUid:   d.data().buyerUid,
-        createdAt:  d.data().createdAt?.toDate?.()?.toISOString() || '',
-      })),
-      recentTransactions: recentTx.docs.map(d => ({
-        id:             d.id,
-        hubType:        d.data().hubType,
-        amountCents:    d.data().amountCents,
-        commissionCents: d.data().commissionCents,
-        status:         d.data().status,
-        provider:       d.data().provider,
-        payRef:         d.data().payRef,
-        createdAt:      d.data().createdAt?.toDate?.()?.toISOString() || '',
-      })),
-      generatedAt: new Date().toISOString(),
+    /* ── AGGREGATION ────────────────────────────────────────────────────────────
+       Unchanged arithmetic, over docs that are empty when a read failed. The figures
+       are never handed out in that case — the envelope drops the payload — so this
+       cannot leak a zero derived from a failure. */
+    const sum = (r) => {
+      let revenueCents = 0, commissionCents = 0, count = 0;
+      r.docs.forEach((d) => {
+        const tx = d.data();
+        revenueCents    += tx.amountCents || 0;
+        commissionCents += tx.commissionCents || 0;
+        count++;
+      });
+      return { revenueCents, commissionCents, count };
     };
+    const kes = (c) => Math.round(c / 100);
+
+    const t = sum(today);
+    const w = sum(week);
+    const walletData = (wallet.doc && wallet.doc.data()) || {};
+
+    const blocks = {
+      today: _AV.envelopeWithProvenance(today, {
+        revenueKES:    kes(t.revenueCents),
+        commissionKES: kes(t.commissionCents),
+        transactions:  t.count,
+      }),
+      week: _AV.envelopeWithProvenance(week, {
+        revenueKES:    kes(w.revenueCents),
+        commissionKES: kes(w.commissionCents),
+        transactions:  w.count,
+      }),
+      refunds: _AV.envelopeWithProvenance(refunds, {
+        count: refunds.docs.length,
+        items: refunds.docs.map((d) => ({
+          id:        d.id,
+          amountKES: d.data().amountKES,
+          reason:    d.data().reason,
+          buyerUid:  d.data().buyerUid,
+          createdAt: d.data().createdAt?.toDate?.()?.toISOString() || '',
+        })),
+      }),
+      payouts:  _AV.envelopeWithProvenance(payouts,  { count: payouts.docs.length }),
+      disputes: _AV.envelopeWithProvenance(disputes, { count: disputes.docs.length }),
+      recentTransactions: _AV.envelopeWithProvenance(recent, {
+        items: recent.docs.map((d) => ({
+          id:              d.id,
+          hubType:         d.data().hubType,
+          amountCents:     d.data().amountCents,
+          commissionCents: d.data().commissionCents,
+          status:          d.data().status,
+          provider:        d.data().provider,
+          payRef:          d.data().payRef,
+          createdAt:       d.data().createdAt?.toDate?.()?.toISOString() || '',
+        })),
+      }),
+      platformWallet: _AV.envelopeWithProvenance(wallet, {
+        balanceKES: kes(walletData.availableCents || 0),
+      }),
+    };
+
+    /* A named list, so a surface can say WHICH figures it is missing rather than
+       deciding for itself by probing for undefined. */
+    const unavailable = Object.keys(blocks).filter((k) => !blocks[k].available);
+
+    return Object.assign({}, blocks, {
+      available:   unavailable.length === 0,
+      unavailable,
+      degraded:    Object.keys(blocks).filter((k) => blocks[k].degraded),
+      generatedAt: new Date().toISOString(),
+    });
   }
 );

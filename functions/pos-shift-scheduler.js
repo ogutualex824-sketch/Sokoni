@@ -21,24 +21,240 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const admin                  = require('firebase-admin');
 
-if (!admin.apps.length) admin.initializeApp();
+/* Same load-time guard as merchant-shift-gate.js, and for the same reason: the
+   certification harness stubs firebase-admin, so `admin.apps` is undefined and `.length`
+   threw before this module finished loading — a crash reported as a harness fault rather
+   than as a failing check, which reads like broken tooling instead of untested money code.
+   Production behaviour is unchanged; the accessor below is lazy either way. */
+if (!admin.apps || !admin.apps.length) {
+  try { admin.initializeApp(); } catch (_) { /* stubbed admin: initialised lazily */ }
+}
 const db     = () => admin.firestore();
 const TS     = () => admin.firestore.FieldValue.serverTimestamp();
 const _CF    = { region: 'us-central1', enforceAppCheck: true };
 const _SCHED = { region: 'us-central1', schedule: '0 7 * * 1', timeZone: 'Africa/Nairobi' }; // Mon 07:00
+
+const { assertMerchantAccess, canAccessMerchant } = require('./merchant-authority');
+
+/* ── TENANT BINDING ────────────────────────────────────────────────────────
+   _requireRole below answers "does this caller hold a manager claim ANYWHERE".
+   It is a GLOBAL claim, never scoped to the seller being acted on, and it was
+   the only gate on this module. So a holder of that claim could publish or
+   modify a roster for ANY sellerId, and any signed-in caller could read one:
+   ten callables took the tenant from request.data and never checked it.
+
+   That is the defect class where a check against a caller-controlled value is
+   worse than no check, and it matters more here than it looks: this roster is
+   intended to become an authorization input for Merchant V2 shift access. A
+   store the restricted party can author would make that feature's guarantee
+   void — an employee could grant themselves a shift.
+
+   assertMerchantAccess is the SAME helper the procurement callables use — self
+   access, businesses/{id}.ownerId, declared adminUids, an unforgeable admin
+   claim, and FAIL CLOSED on an unknown merchant. No second authority is
+   introduced.
+
+   _requireRole is GONE. It was kept here as a preliminary capability check on the
+   reasoning that a global role is still useful as long as it cannot stand in for
+   tenancy. That reasoning assumed the claim it read existed; it did not, so the
+   check could only ever refuse — including the owner. It is replaced below by a
+   level resolved FOR THE TENANT, which answers capability and tenancy in one
+   decision rather than stacking a global check in front of a scoped one. */
+async function _assertSeller(auth, sellerId) {
+  return assertMerchantAccess(auth, sellerId);
+}
+
+/* Callables addressed by a DOCUMENT ID rather than a tenant. The id proves
+   nothing on its own — anyone can name one — so the stored document is read to
+   learn which tenant it belongs to, and THAT is what gets authorized. The read
+   is unavoidable: it is how the tenant becomes known. Nothing is returned to
+   the caller and nothing is mutated before the check. */
+async function _assertRoster(auth, rosterId, opts) {
+  if (!rosterId) throw new HttpsError('invalid-argument', 'rosterId required');
+  const snap = await db().collection('posRosters').doc(String(rosterId)).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Roster not found');
+  const roster = snap.data() || {};
+
+  /* One way in: authority over the merchant that owns the roster. */
+  if (await canAccessMerchant(auth, roster.sellerId)) return { snap, roster };
+
+  /* The other: being ROSTERED on it. An employee acting on their own shift —
+     acknowledging it, asking to swap it — has no authority over the merchant
+     and must not need any; requiring it here would lock every employee out of
+     their own schedule. Assignment is the proof of belonging, and each caller
+     still re-checks the SPECIFIC slot it was given ("You are not assigned to
+     this shift"), so this widens who may look up the roster, never what they
+     may then do to it. */
+  if (opts && opts.orAssigned) {
+    const assigned = (roster.slots || []).some((sl) =>
+      ((sl && sl.assignedStaff) || []).some((a) => a && a.uid === auth.uid));
+    if (assigned) return { snap, roster };
+  }
+
+  throw new HttpsError('permission-denied', 'Not authorised for this roster.');
+}
 
 /* ── Auth helpers ──────────────────────────────────────────── */
 function _requireAuth(req) {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
   return req.auth;
 }
-function _requireRole(auth, minRole) {
-  const levels = { cashier: 0, supervisor: 1, manager: 2, owner: 3, admin: 4 };
-  const posRole = auth.token?.posRole || auth.token?.role || 'cashier';
-  const userLvl = levels[posRole] ?? 0;
-  const reqLvl  = levels[minRole]  ?? 0;
-  if (userLvl < reqLvl)
+/* ── WHO MAY MANAGE A ROSTER ───────────────────────────────────────────────
+   This replaces a gate that could never open. _requireRole() scored the caller
+   from auth.token.posRole || auth.token.role and defaulted to 'cashier'. No
+   function in this repository mints either: claimsFor() and
+   application-lifecycle.js write per-role BOOLEANS (claims.seller = true), and
+   the only role STRING ever minted is role:"superAdmin" on the one-time
+   bootstrap in index.js — a value absent from the level map below, so it
+   scored 0 as well. Every caller therefore scored 0, and the five gated
+   callables were unreachable by the shop owner, by a platform admin, and by
+   everyone else. Proven at runtime in
+   scripts/probe-shift-scheduler-reachability.js before this change.
+
+   The level is now resolved FOR THE TENANT BEING ACTED ON, from the authority
+   that already exists, in this order:
+
+     platform admin  — an unforgeable boolean claim
+     owner           — canAccessMerchant(), the same helper _assertSeller uses
+     manager         — a CORROBORATED shopEmployees record at a shop this
+                       tenant owns
+
+   A global claim is not consulted at all, because a global answer cannot bind a
+   tenant: that is the defect class this module's own tenant-binding comment
+   describes, and re-introducing it here would undo it.
+
+   The corroboration is the one resolveShopAccess performs, reusing its own
+   exported primitive rather than restating the rule: a forged employment record
+   names the forger as owner, the real shop document names the real one, and the
+   two will not agree. Without it, an employee could write themselves a manager
+   record and then author the roster that governs their own shift access —
+   which is precisely the guarantee f8b5e02 depends on. */
+const { EMPLOYEES, SHOP_ROLES, shopOwnerOf } = require('./shop-employees');
+
+const LEVELS = { cashier: 0, supervisor: 1, manager: 2, owner: 3, admin: 4 };
+
+/* The employment vocabulary has no 'supervisor'. manager is the only staff role
+   that manages a roster; cashier, inventory and support are staff who are
+   rostered, not staff who roster. Anything unlisted stays at 0 — a new
+   employment role must be granted scheduling authority deliberately, never by
+   being added to SHOP_ROLES. */
+const EMPLOYMENT_LEVEL = { manager: LEVELS.manager };
+
+/* The uid whose shops belong to this tenant. sellerId is usually the owner's own
+   uid, which assertMerchantAccess treats as self-access. When a merchant runs
+   under a distinct businesses/{id}, the owner is named there. Anything else
+   resolves to null and the employment path simply does not apply — FAIL CLOSED,
+   the same posture assertMerchantAccess takes on an unknown merchant. */
+async function _tenantOwnerUid(sellerId) {
+  const sid = String(sellerId || '');
+  if (!sid) return null;
+  try {
+    const snap = await db().collection('businesses').doc(sid).get();
+    if (snap.exists) {
+      const owner = String((snap.data() || {}).ownerId || '');
+      if (owner) return owner;
+    }
+  } catch (_) { /* an unreadable authority is not an authorising one */ }
+  return sid;
+}
+
+/**
+ * Every CORROBORATED, ACTIVE employment `uid` holds at the tenant owned by
+ * `tenantOwner`, as employment roles.
+ *
+ * ONE scan, used for two different questions — "what may this caller do here"
+ * and "does this person work here" — so the two can never drift into disagreeing
+ * about what counts as employment.
+ *
+ * The corroboration is resolveShopAccess's: a forged record names the forger as
+ * the shop's owner, the real shop document names the real one, and the two will
+ * not agree. Without it a person could write themselves onto any roster.
+ */
+async function _employmentRolesAt(uid, tenantOwner) {
+  const u = String(uid || '');
+  const owner = String(tenantOwner || '');
+  if (!u || !owner) return [];
+  const snap = await db().collection(EMPLOYEES).where('uid', '==', u).get();
+  const roles = [];
+  for (const doc of snap.docs) {
+    const e = doc.data() || {};
+    if (e.active === false) continue;
+    if (!SHOP_ROLES.includes(e.role)) continue;
+    const shopId = String(e.shopId || '');
+    if (!shopId) continue;
+    const shopSnap = await db().collection('shops').doc(shopId).get();
+    if (!shopSnap.exists) continue;
+    const ownerUid = shopOwnerOf(shopSnap.data() || {});
+    if (!ownerUid) continue;
+    if (String(e.shopOwnerId || '') !== String(ownerUid)) continue;   /* corroboration */
+    if (String(ownerUid) !== owner) continue;                         /* and the right tenant */
+    roles.push(e.role);
+  }
+  return roles;
+}
+
+async function _employmentLevel(auth, sellerId) {
+  const uid = String((auth && auth.uid) || '');
+  if (!uid) return 0;
+  const tenantOwner = await _tenantOwnerUid(sellerId);
+  if (!tenantOwner) return 0;
+  const roles = await _employmentRolesAt(uid, tenantOwner);
+  return roles.reduce((best, r) => Math.max(best, EMPLOYMENT_LEVEL[r] || 0), 0);
+}
+
+/**
+ * May `staffUid` be put on this tenant's roster at all?
+ *
+ * A roster names who works when. Writing somebody onto one who does not work
+ * there produces a staffing record about a person with no relationship to the
+ * merchant — and the roster is an authorization INPUT for Merchant V2 shift
+ * access, so the set of names in it should never be wider than the set of people
+ * who work there. assignShift previously took staffUid on trust.
+ *
+ * The tenant OWNER counts: a sole trader who works their own counter has no
+ * shopEmployees record and must still be rosterable.
+ */
+async function _isTenantMember(sellerId, staffUid) {
+  const who = String(staffUid || '');
+  if (!who) return false;
+  const tenantOwner = await _tenantOwnerUid(sellerId);
+  if (!tenantOwner) return false;
+  if (who === tenantOwner) return true;
+  const roles = await _employmentRolesAt(who, tenantOwner);
+  return roles.length > 0;
+}
+
+async function _levelFor(auth, sellerId) {
+  const t = (auth && auth.token) || {};
+  if (t.admin === true || t.superAdmin === true) return LEVELS.admin;
+  if (await canAccessMerchant(auth, sellerId)) return LEVELS.owner;
+  return _employmentLevel(auth, sellerId);
+}
+
+/* Tenancy and capability in ONE decision. The level can only be reached by
+   holding authority over THIS sellerId, so this replaces the old
+   _requireRole + _assertSeller pair rather than sitting in front of it — and it
+   is never weaker: everyone who satisfied _assertSeller scores owner or above. */
+async function _requireSellerRole(auth, sellerId, minRole) {
+  if (!sellerId) throw new HttpsError('invalid-argument', 'sellerId required');
+  const have = await _levelFor(auth, sellerId);
+  if (have < (LEVELS[minRole] ?? 0))
     throw new HttpsError('permission-denied', `Requires ${minRole} role or above`);
+  return have;
+}
+
+/* The same decision for callables addressed by a roster id. The id proves
+   nothing, so the stored document names the tenant and THAT is what is scored.
+   Nothing is returned or mutated before the check. */
+async function _requireRosterRole(auth, rosterId, minRole) {
+  if (!rosterId) throw new HttpsError('invalid-argument', 'rosterId required');
+  const snap = await db().collection('posRosters').doc(String(rosterId)).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Roster not found');
+  const roster = snap.data() || {};
+  const have = await _levelFor(auth, roster.sellerId);
+  if (have < (LEVELS[minRole] ?? 0))
+    throw new HttpsError('permission-denied', 'Not authorised for this roster.');
+  return { snap, roster, level: have };
 }
 function _san(v, max = 200) {
   return typeof v === 'string' ? v.replace(/[<>"'`]/g, '').trim().slice(0, max) : '';
@@ -58,6 +274,105 @@ function _isoTime(v) {
 /* ── Weekday names ─────────────────────────────────────────── */
 const WEEKDAYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
 
+/* ══ SHIFT TIME SEMANTICS ═══════════════════════════════════════════════════
+   startTime/endTime are LOCAL WALL-CLOCK in the shop's configured timezone.
+   Deciding whether a shift is running therefore needs an actual instant, not a
+   string comparison — '23:30' > '05:00' is true and means nothing about time.
+
+   The offset is read from Intl at the instant in question rather than assumed.
+   Africa/Nairobi is UTC+3 today, but a hardcoded +3 is a latent bug the moment a
+   rule changes, and a zone with DST would be wrong twice a year. This mirrors
+   pos-business-day-gate.js, which already refuses that shortcut, including its
+   two hard-won details: some ICU builds report hour '24' at midnight, and the
+   offset needs a second pass to converge across a DST boundary.
+
+   NOT wired into any authorization path yet. This slice establishes correct
+   semantics so the shift-access slice has something sound to build on. */
+
+/** Is this a timezone this runtime can actually resolve? Intl is the authority. */
+function isValidTimezone(tz) {
+  if (typeof tz !== 'string' || !tz.trim()) return false;
+  /* Shape first: Intl accepts some non-IANA aliases, and 'UTC' or a bare offset
+     is not a shop location. Require Region/City. */
+  if (!/^[A-Za-z][A-Za-z0-9_+-]*\/[A-Za-z0-9_+\-/]+$/.test(tz)) return false;
+  try { new Intl.DateTimeFormat('en-CA', { timeZone: tz }); return true; }
+  catch (_) { return false; }
+}
+
+function _partsAt(ms, tz) {
+  const f = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const p = {};
+  for (const { type, value } of f.formatToParts(new Date(ms))) p[type] = value;
+  const hour = (Number(p.hour) === 24) ? 0 : Number(p.hour);   /* ICU '24' at midnight */
+  return { y: Number(p.year), m: Number(p.month), d: Number(p.day),
+           hour, min: Number(p.minute), sec: Number(p.second) };
+}
+
+/** The zone's offset from UTC at a given instant, in ms. Derived, never assumed. */
+function _offsetMsAt(ms, tz) {
+  const p = _partsAt(ms, tz);
+  return Date.UTC(p.y, p.m - 1, p.d, p.hour, p.min, p.sec) - (ms - (ms % 1000));
+}
+
+/** The instant at which `YYYY-MM-DD HH:MM` occurred in `tz`. */
+function instantFor(dateStr, timeStr, tz, dayOffset) {
+  const [y, m, d] = String(dateStr).split('-').map(Number);
+  const [hh, mm]  = String(timeStr).split(':').map(Number);
+  const wall = Date.UTC(y, m - 1, d + (dayOffset || 0), hh, mm, 0);
+  /* Two passes: read the offset near the target, then at the corrected instant,
+     so the result converges even when a DST change sits between them. */
+  let t = wall - _offsetMsAt(wall, tz);
+  t = wall - _offsetMsAt(t, tz);
+  return t;
+}
+
+/**
+ * Is a rostered shift running at `now`?
+ *
+ *   08:00 -> 17:00   same calendar day
+ *   21:00 -> 05:00   crosses midnight, ends the NEXT day
+ *   08:00 -> 08:00   REJECTED — see below
+ *
+ * The interval is half-open, [start, end): a shift ending at 17:00 is over AT
+ * 17:00. The closeout allowance is a separate decision and deliberately not
+ * folded in here.
+ *
+ * `now` is always explicit so this is deterministic and testable. Nothing reads
+ * a browser or server local timezone.
+ */
+function isShiftActive({ shiftDate, startTime, endTime, timezone, now }) {
+  if (!isValidTimezone(timezone)) return { active: false, reason: 'invalid-timezone' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(shiftDate))) return { active: false, reason: 'invalid-date' };
+  if (!/^\d{2}:\d{2}$/.test(String(startTime)) || !/^\d{2}:\d{2}$/.test(String(endTime))) {
+    return { active: false, reason: 'invalid-time' };
+  }
+  const [sh, sm] = String(startTime).split(':').map(Number);
+  const [eh, em] = String(endTime).split(':').map(Number);
+  if (sh > 23 || eh > 23 || sm > 59 || em > 59) return { active: false, reason: 'invalid-time' };
+
+  /* EQUAL START AND END. Read as a zero-length shift, not a 24-hour one. The
+     scheduler has never defined it, and guessing "24 hours" would hand someone a
+     full day of access from a value they may well have typed by mistake. */
+  if (startTime === endTime) return { active: false, reason: 'zero-length-shift' };
+
+  const startMs = instantFor(shiftDate, startTime, timezone, 0);
+  const overnight = endTime < startTime;
+  const endMs = instantFor(shiftDate, endTime, timezone, overnight ? 1 : 0);
+  const t = (typeof now === 'number') ? now : Date.now();
+
+  return {
+    active: t >= startMs && t < endMs,
+    overnight,
+    startMs,
+    endMs,
+    reason: null,
+  };
+}
+
 /* ================================================================
    createShiftTemplate
    Define a reusable shift pattern: name, start/end, required staff,
@@ -67,10 +382,10 @@ const WEEKDAYS = ['sunday','monday','tuesday','wednesday','thursday','friday','s
 ================================================================ */
 exports.createShiftTemplate = onCall(_CF, async (request) => {
   const auth = _requireAuth(request);
-  _requireRole(auth, 'manager');
 
   const { sellerId, name, startTime, endTime, requiredStaff, rolesNeeded, days, description } = request.data;
-  if (!sellerId)      throw new HttpsError('invalid-argument', 'sellerId required');
+  /* Tenancy AND capability, before any write. */
+  await _requireSellerRole(auth, sellerId, 'manager');
   if (!name)          throw new HttpsError('invalid-argument', 'name required');
   if (!startTime)     throw new HttpsError('invalid-argument', 'startTime required');
   if (!endTime)       throw new HttpsError('invalid-argument', 'endTime required');
@@ -78,8 +393,14 @@ exports.createShiftTemplate = onCall(_CF, async (request) => {
 
   _isoTime(startTime);
   _isoTime(endTime);
-  if (startTime >= endTime && !(startTime > '22:00' && endTime < '06:00'))
-    throw new HttpsError('invalid-argument', 'startTime must be before endTime (except overnight shifts)');
+  /* OVERNIGHT IS A PROPERTY OF THE INTERVAL, NOT OF THE CLOCK FACE. The old rule
+     allowed an overnight shift only when `startTime > '22:00' && endTime < '06:00'`,
+     which rejected 21:00-05:00 and 22:00-07:00 — both ordinary night shifts — for
+     no reason other than where the string sorted. Any start after any end simply
+     crosses midnight; the only genuinely undefined case is start === end, which is
+     refused rather than guessed at as a 24-hour shift. */
+  if (startTime === endTime)
+    throw new HttpsError('invalid-argument', 'startTime and endTime cannot be identical.');
 
   const validDays = (days || WEEKDAYS).filter(d => WEEKDAYS.includes(d.toLowerCase()));
 
@@ -112,10 +433,10 @@ exports.createShiftTemplate = onCall(_CF, async (request) => {
 ================================================================ */
 exports.publishWeeklyRoster = onCall(_CF, async (request) => {
   const auth = _requireAuth(request);
-  _requireRole(auth, 'manager');
 
   const { sellerId, branchId, weekStartDate, slots } = request.data;
-  if (!sellerId)       throw new HttpsError('invalid-argument', 'sellerId required');
+  /* Tenancy AND capability, before any write. */
+  await _requireSellerRole(auth, sellerId, 'manager');
   if (!weekStartDate)  throw new HttpsError('invalid-argument', 'weekStartDate required');
   if (!Array.isArray(slots) || slots.length === 0)
     throw new HttpsError('invalid-argument', 'slots[] required');
@@ -172,16 +493,24 @@ exports.publishWeeklyRoster = onCall(_CF, async (request) => {
 ================================================================ */
 exports.assignShift = onCall(_CF, async (request) => {
   const auth = _requireAuth(request);
-  _requireRole(auth, 'supervisor');
 
   const { rosterId, slotIndex, staffUid, note } = request.data;
-  if (!rosterId)           throw new HttpsError('invalid-argument', 'rosterId required');
   if (slotIndex == null)   throw new HttpsError('invalid-argument', 'slotIndex required');
   if (!staffUid)           throw new HttpsError('invalid-argument', 'staffUid required');
 
-  const rosterSnap = await db().collection('posRosters').doc(rosterId).get();
-  if (!rosterSnap.exists) throw new HttpsError('not-found', 'Roster not found');
-  const roster = rosterSnap.data();
+  /* AUTHORIZED LOOKUP. The rosterId is caller-supplied and proves nothing; the
+     stored document names the tenant, and that is what is scored. Nothing is
+     returned or mutated before the check. */
+  const { snap: rosterSnap, roster } = await _requireRosterRole(auth, rosterId, 'supervisor');
+
+  /* AUTHORISED CALLER IS NOT THE WHOLE INVARIANT. Being allowed to write this
+     tenant's roster does not make every uid a valid thing to write into it, and
+     staffUid was taken on trust — so a manager (or the owner) could roster
+     somebody who works nowhere, or somebody who works for a different merchant.
+     Checked AFTER the caller's authority, so this never becomes an oracle for
+     "does this uid work here" that an unauthorised caller could query. */
+  if (!(await _isTenantMember(roster.sellerId, staffUid)))
+    throw new HttpsError('failed-precondition', 'That person is not on this shop\'s team.');
 
   if (slotIndex < 0 || slotIndex >= roster.slots.length)
     throw new HttpsError('out-of-range', `slotIndex ${slotIndex} out of range`);
@@ -238,9 +567,10 @@ exports.swapShiftRequest = onCall(_CF, async (request) => {
   if (mySlotIndex == null) throw new HttpsError('invalid-argument', 'mySlotIndex required');
   if (!targetUid)        throw new HttpsError('invalid-argument', 'targetUid required');
 
-  const rosterSnap = await db().collection('posRosters').doc(rosterId).get();
-  if (!rosterSnap.exists) throw new HttpsError('not-found', 'Roster not found');
-  const roster = rosterSnap.data();
+  /* AUTHORIZED LOOKUP. The rosterId is caller-supplied and proves nothing; the
+     stored document names the tenant, and that is what is authorized. Nothing is
+     returned or mutated before the check. */
+  const { snap: rosterSnap, roster } = await _assertRoster(auth, rosterId, { orAssigned: true });
   const slot   = roster.slots[mySlotIndex];
   if (!slot) throw new HttpsError('not-found', 'Slot not found');
 
@@ -297,7 +627,10 @@ exports.approveShiftSwap = onCall(_CF, async (request) => {
     update.status = action === 'accept_target' ? 'pending_manager' : 'rejected_by_target';
 
   } else if (action === 'approve' || action === 'reject') {
-    _requireRole(auth, 'manager');
+    /* The swap document stores a rosterId, not a tenant, so the tenant is
+       resolved through it. A global manager claim previously let anyone approve
+       anyone's swap; approval is a management act over THIS merchant's roster. */
+    await _requireRosterRole(auth, swap.rosterId, 'manager');
     if (swap.status !== 'pending_manager')
       throw new HttpsError('failed-precondition', 'Swap is not awaiting manager approval');
     update.managerApproved = action === 'approve';
@@ -329,6 +662,9 @@ exports.setStaffAvailability = onCall(_CF, async (request) => {
 
   const { sellerId, entries } = request.data;
   if (!sellerId) throw new HttpsError('invalid-argument', 'sellerId required');
+  /* isManager above is a GLOBAL claim. Setting your own availability needs no
+     tenant authority; setting anyone else's does, and the claim alone is not it. */
+  if (String(staffUid) !== String(auth.uid)) await _assertSeller(auth, sellerId);
   if (!Array.isArray(entries) || entries.length === 0)
     throw new HttpsError('invalid-argument', 'entries[] required');
 
@@ -364,9 +700,19 @@ exports.setStaffAvailability = onCall(_CF, async (request) => {
    Input: { sellerId, branchId?, startDate, endDate }
 ================================================================ */
 exports.getRoster = onCall(_CF, async (request) => {
-  _requireAuth(request);
+  const auth = _requireAuth(request);
   const { sellerId, branchId, startDate, endDate } = request.data;
-  if (!sellerId)   throw new HttpsError('invalid-argument', 'sellerId required');
+  /* BEFORE the query: a roster names who works when, and reading another
+     merchant's is a staffing leak even though nothing is mutated.
+
+     Scored at SUPERVISOR, matching getRosterGaps, so a corroborated manager may
+     read the week they are allowed to publish. It was owner-only, which made the
+     manager authority granted in ab2d50a unusable in practice: publishing merges
+     into the existing week, so a manager who cannot READ the roster cannot safely
+     WRITE it either — their first save would republish over everything already
+     there. Widened deliberately, and only to the level that already governs the
+     roster's other reads. */
+  await _requireSellerRole(auth, sellerId, 'supervisor');
   if (!startDate)  throw new HttpsError('invalid-argument', 'startDate required');
   if (!endDate)    throw new HttpsError('invalid-argument', 'endDate required');
 
@@ -391,12 +737,12 @@ exports.getRoster = onCall(_CF, async (request) => {
 ================================================================ */
 exports.getRosterGaps = onCall(_CF, async (request) => {
   const auth = _requireAuth(request);
-  _requireRole(auth, 'supervisor');
 
   const { sellerId, branchId } = request.data;
   const startDate = request.data.startDate || _today();
   const endDate   = request.data.endDate   || _today();
-  if (!sellerId) throw new HttpsError('invalid-argument', 'sellerId required');
+  /* Tenancy AND capability, before the query. */
+  await _requireSellerRole(auth, sellerId, 'supervisor');
 
   _isoDate(startDate);
   _isoDate(endDate);
@@ -448,6 +794,11 @@ exports.getStaffRoster = onCall(_CF, async (request) => {
   const days      = Math.min(request.data.days || 14, 60);
 
   if (!sellerId) throw new HttpsError('invalid-argument', 'sellerId required');
+  /* `staffUid || auth.uid` let any caller name anyone. Reading your OWN
+     schedule stays open — the slot filter below only ever matches rows that
+     name you, so it cannot reveal a colleague. Asking about SOMEONE ELSE is a
+     management act and requires authority over that merchant. */
+  if (String(staffUid) !== String(auth.uid)) await _assertSeller(auth, sellerId);
   _isoDate(startDate);
 
   /* Compute endDate */
@@ -499,9 +850,10 @@ exports.acknowledgeShift = onCall(_CF, async (request) => {
   if (!rosterId)       throw new HttpsError('invalid-argument', 'rosterId required');
   if (slotIndex == null) throw new HttpsError('invalid-argument', 'slotIndex required');
 
-  const rosterSnap = await db().collection('posRosters').doc(rosterId).get();
-  if (!rosterSnap.exists) throw new HttpsError('not-found', 'Roster not found');
-  const roster  = rosterSnap.data();
+  /* AUTHORIZED LOOKUP. The rosterId is caller-supplied and proves nothing; the
+     stored document names the tenant, and that is what is authorized. Nothing is
+     returned or mutated before the check. */
+  const { snap: rosterSnap, roster } = await _assertRoster(auth, rosterId, { orAssigned: true });
   const slot    = roster.slots[slotIndex];
   if (!slot) throw new HttpsError('not-found', 'Slot not found');
 
@@ -634,3 +986,18 @@ function _dateAdd(dateStr, days) {
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
 }
+
+/* ── Test seam ──────────────────────────────────────────────────────────────
+   Exported so the time semantics are PROVED rather than described. These are
+   pure functions; nothing here is a Cloud Function and index.js must not
+   re-export them. */
+/** The local calendar date (YYYY-MM-DD) at an instant, in a given zone. Exposed
+    so the Merchant V2 shift gate can bound its roster lookup without building a
+    second timezone helper — the offset logic lives here and only here. */
+function localDateKey (ms, tz) {
+  const p = _partsAt(typeof ms === 'number' ? ms : Date.now(), tz);
+  const pad = (n) => String(n).padStart(2, '0');
+  return p.y + '-' + pad(p.m) + '-' + pad(p.d);
+}
+
+exports._internal = { isValidTimezone, isShiftActive, instantFor, localDateKey };

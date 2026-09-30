@@ -28,6 +28,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const logger                 = require('firebase-functions/logger');
 const admin                  = require('firebase-admin');
+const RIDER_SHARE = require('./rider-share-authority');
 
 const U   = require('./finos-utils');
 const SA  = require('./settlement-account');
@@ -45,7 +46,11 @@ function _assertAdmin(req) {
 const _int = (v) => Math.max(0, Math.round(Number(v) || 0));
 
 /* Default rider share of the delivery fee — mirrors finos.js (0.88). */
-const DEFAULT_RIDER_PCT = 0.88;
+/* DEFAULT_RIDER_PCT IS GONE. It was 0.88, and NOTHING supplied riderPct — every
+   settlement through this engine therefore used it while the pinned delivery quote
+   was believed to be authoritative. A default that nobody overrides is not a default;
+   it is the rule. An unquoted delivery now allocates NOTHING to the rider and says
+   why, rather than paying a number three other files disagreed with. */
 
 /* ────────────────────────────────────────────────────────────────
    computeSettlement — the ONE canonical deductions waterfall.
@@ -126,9 +131,17 @@ async function computeSettlement(db, input = {}) {
 
   /* 6 ── Delivery / rider allocation */
   const deliveryFeeCents = _int(input.deliveryFeeCents);
-  const riderPct         = typeof input.riderPct === 'number' ? input.riderPct : DEFAULT_RIDER_PCT;
-  const riderNetCents    = _int(deliveryFeeCents * riderPct);
-  const platformDelivCents = _int(deliveryFeeCents - riderNetCents);
+  /* THE PINNED QUOTE, or nothing. The caller supplies the quote it resolved from the
+     delivery job; it may not supply a percentage, because a percentage of a fee
+     deciding what a rider deserves is exactly what the quote authority replaced. */
+  const _alloc = RIDER_SHARE.allocate({
+    pinnedQuote: input.pinnedQuote || null,
+    deliveryMinor: deliveryFeeCents,
+  });
+  const riderNetCents      = _int(_alloc.riderMinor);
+  const platformDelivCents = _int(_alloc.commissionMinor);
+  const deliveryUnallocatedCents = _int(_alloc.unallocatedMinor || 0);
+  const deliveryAllocationSource = _alloc.source;
 
   /* 7 ── Rewards, referral, affiliate, service charge (surfaced).
          `discountCents` / `discountFundedBy` are resolved at the top, because the
@@ -177,11 +190,44 @@ async function computeSettlement(db, input = {}) {
     collectionAccount: SA.getSettlementAccountMasked(),   // masked — never the full number
     currency: 'KES',
     gross: grossCents,
-    commission: { cents: commissionCents, rate: effectiveRate },
+    /* ── THE RATE, AND WHAT SET IT ────────────────────────────────────────────────────────
+       `cents` and `rate` are unchanged. The four fields beside them are ADDITIVE and carry
+       the pricing provenance the commission engine already computes and this breakdown used
+       to discard: which plan rung applied, which lane priced it, which authority won the
+       precedence chain, and which rule.
+
+       Settlement persists them, so a split can be explained years later without re-deriving
+       it from a catalogue that has since moved — and a merchant disputing "why 15%?" can be
+       answered from the record instead of from today's configuration. Nulls are honest: they
+       say the engine reported no plan, which is not the same as the seller having none. */
+    commission: {
+      cents: commissionCents,
+      rate: effectiveRate,
+      planId:        comm.planId        ?? null,
+      lane:          comm.commissionLane ?? null,
+      pricingSource: comm.pricingSource ?? null,
+      ruleId:        comm.ruleId        ?? null,
+    },
     gatewayFee: gatewayFeeCents,
     tax: { vatCents, whtCents },
     discount: { cents: discountCents, fundedBy: discountFundedBy },
-    delivery: { feeCents: deliveryFeeCents, riderNetCents, platformCents: platformDelivCents },
+    /* ── THE HELD MONEY TRAVELS WITH THE BREAKDOWN ──────────────────────────────────────
+       These three were computed and thrown away. A settlement that allocated NOTHING to the
+       rider looked identical to one that had no delivery at all: both reported riderNetCents
+       0, and the record could not say that KES 200 was collected and is waiting on a quote
+       nobody pinned. Unexplainable held money is how a reconciliation stops closing.
+
+       The source says WHICH authority decided — pinned_quote or unallocated — for
+       the same reason the commission rate travels with its ruleId. */
+    delivery: {
+      feeCents: deliveryFeeCents,
+      riderNetCents,
+      platformCents: platformDelivCents,
+      unallocatedCents: deliveryUnallocatedCents,
+      unallocatedReason: _alloc.unallocatedReason || null,
+      allocationSource: deliveryAllocationSource,
+      pricingVersion: _alloc.pricingVersion || null,
+    },
     referralBonusCents, affiliateCommissionCents, serviceChargeCents,
     sellerNetCents,                 // credited to seller wallet at settlement
     sellerAfterWhtCents,            // paid out after WHT at cash-out

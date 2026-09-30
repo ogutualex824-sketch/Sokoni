@@ -39,7 +39,10 @@ function _assertAdmin(req) {
 }
 
 /* Payment methods under migration control. */
-const METHODS = ['intasend', 'mpesa_daraja', 'card', 'wallet', 'smartpos', 'qr', 'subscription', 'bank'];
+/* setMethodMode validates against this list, so a rail absent from it is unconfigurable
+   rather than merely unused — a method left in the allowlist is one config write away
+   from being live. */
+const METHODS = ['intasend', 'card', 'wallet', 'smartpos', 'qr', 'subscription', 'bank'];
 const MODES   = ['legacy', 'shadow', 'mor'];
 
 /* Safe defaults — everything legacy, rollout 0%, empty allowlist. */

@@ -28,7 +28,12 @@ function writeAudit(db, e) {
     action:     e.action || 'unknown',
     actorUid:   e.actorUid || null,
     actorRole:  e.actorRole || null,
-    branchId:   e.branchId || null,
+    /* "when known" means NULL when it is not. Callers were substituting the literal
+       'default', which reads as a real branch to anyone investigating a shift
+       dispute or a till reconciliation and is indistinguishable from a branch
+       genuinely named "default". Normalised at the boundary so no caller — present
+       or future — can record a fabricated scope. */
+    branchId:   require('./pos-branch-authority').auditBranchId(e.branchId),
     objectType: e.objectType || null,
     objectId:   e.objectId || null,
     before:     e.before === undefined ? null : e.before,

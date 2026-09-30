@@ -17,7 +17,7 @@
    human, never silently dropped and never used to erase a sale. This mirrors the
    oversell rule: a post-payment race is recorded, not rejected.
 
-   SCOPE: manual Till payments only. Nothing here touches Daraja, STK Push, C2B,
+   SCOPE: manual Till payments only. Nothing here touches STK Push,
    commission, or productionAuthorized.
 ================================================================ */
 'use strict';
@@ -186,7 +186,7 @@ exports.onPosTransactionMpesaRef = onDocumentWritten(
   }
 );
 
-/* Exported for tests and for any future C2B/STK origin that needs the same
+/* Exported for tests and for any future payment origin that needs the same
    invariant without duplicating the transaction. */
 exports._claimReference = claimReference;
 exports._normaliseRef   = normaliseRef;

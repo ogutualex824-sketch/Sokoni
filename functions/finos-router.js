@@ -21,6 +21,8 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const logger                 = require('firebase-functions/logger');
 const admin                  = require('firebase-admin');
+const RIDER_SHARE = require('./rider-share-authority');
+const RIDER_DEST = require('./rider-earning-destination');
 const U                      = require('./finos-utils');
 
 const REGION = 'us-central1';
@@ -121,6 +123,22 @@ async function _verifyPayment(db, paymentRef) {
    UNIVERSAL ENTRY POINT: every hub calls this for any payment.
    Routes automatically through commission, wallets, and optionally escrow.
 ──────────────────────────────────────────────────────────────*/
+/* ── THE AUTHORITATIVE DELIVERY ALLOCATION ───────────────────────────────────
+   Resolved from the quote pinned to the delivery job when it was raised. Read
+   SERVER-SIDE from the job, never accepted from the caller: recordPayment is reachable
+   from the browser, and a caller who could supply the quote could supply the rider's
+   pay. Returns an allocation that is either authoritative or explicitly unallocated;
+   it never contains a percentage. */
+async function _deliveryAllocation(db, orderId, deliveryCents) {
+  if (!(deliveryCents > 0)) return RIDER_SHARE.unallocated(0, 'NO_DELIVERY_AMOUNT');
+  let quote = null;
+  try {
+    const snap = await db.collection('deliveryJobs')
+      .where('orderId', '==', String(orderId)).limit(1).get();
+    if (!snap.empty) quote = (snap.docs[0].data() || {}).pinnedQuote || null;
+  } catch (_) { /* an unreadable job is an unquoted delivery, not a reason to guess */ }
+  return RIDER_SHARE.allocate({ pinnedQuote: quote, deliveryMinor: deliveryCents });
+}
 exports.finosRecordTransaction = onCall(
   { region: REGION, timeoutSeconds: 60, memory: '256MiB', invoker: 'private' },
   async (request) => {
@@ -180,8 +198,16 @@ exports.finosRecordTransaction = onCall(
 
     const deliveryCents  = Math.round(deliveryFeeCents || 0);
     const tipCts         = Math.round(tipCents || 0);
-    const riderEarnings  = deliveryCents > 0 ? Math.round(deliveryCents * 0.88) : 0;
-    const platformDeliv  = deliveryCents - riderEarnings;
+    /* THE 88% IS GONE — see finos.js. Both halves come from the pinned quote, or the
+       delivery portion is held unallocated and the reason recorded. */
+    /* transactionId is the ONLY reference this callable receives — there is no orderId in
+       its payload. Where a delivery job is keyed on a different identifier the lookup
+       simply finds nothing, and the delivery portion is held unallocated with a reason
+       rather than split by a constant. */
+    let _riderPayable = null;
+    const _alloc = await _deliveryAllocation(db, transactionId, deliveryCents);
+    const riderEarnings  = _alloc.riderMinor;
+    const platformDeliv  = _alloc.commissionMinor;
 
     /* Determine escrow policy */
     const rule      = await _getSettlementRule(db, hub);
@@ -258,10 +284,21 @@ exports.finosRecordTransaction = onCall(
           comm.commissionCents + platformDeliv,
           { description: `Commission ${transactionId}`, orderId: transactionId, type: 'commission' });
 
-        if (riderId && (riderEarnings + tipCts) > 0) {
-          U.creditWalletTxn(txn, db, riderId, 'rider', riderEarnings + tipCts,
-            { description: `Delivery ${transactionId}`, orderId: transactionId, type: 'delivery_earning' });
-        }
+          /* RIDER MONEY GOES TO THE RIDER'S BUSINESS WALLET, OR IT IS HELD.
+
+             This credited wallets/{riderUid} — a PERSONAL wallet — while the certified
+             delivery settlement credits businessWallets/{businessId} and refuses a
+             personal fallback outright. Two destinations meant two meanings of "rider
+             money" and a reconciliation nobody could close.
+
+             The destination is resolved SERVER-SIDE from the rider's uid. A rider with
+             no business identity is HELD — attributable, idempotent, settleable — never
+             redirected to their personal wallet.
+
+             Delivery fee and tip travel together because the platform already counts
+             both as rider earnings; the provenance differs, the destination does not. */
+          _riderPayable = (riderId && (riderEarnings + tipCts) > 0)
+            ? { riderUid: riderId, amountMinor: riderEarnings + tipCts } : null;
 
         /* Hold seller earnings in escrow — NOT credited to wallet yet */
         txn.set(escrowRef, {
@@ -314,14 +351,40 @@ exports.finosRecordTransaction = onCall(
       await db.runTransaction(async (txn) => {
         U.creditWalletTxn(txn, db, sellerId, 'seller', comm.sellerNetCents,
           { description: `[${hub}] Order ${transactionId}`, orderId: transactionId, type: 'order_earning' });
-        if (riderId && (riderEarnings + tipCts) > 0) {
-          U.creditWalletTxn(txn, db, riderId, 'rider', riderEarnings + tipCts,
-            { description: `Delivery ${transactionId}`, orderId: transactionId, type: 'delivery_earning' });
-        }
+          /* RIDER MONEY GOES TO THE RIDER'S BUSINESS WALLET, OR IT IS HELD.
+
+             This credited wallets/{riderUid} — a PERSONAL wallet — while the certified
+             delivery settlement credits businessWallets/{businessId} and refuses a
+             personal fallback outright. Two destinations meant two meanings of "rider
+             money" and a reconciliation nobody could close.
+
+             The destination is resolved SERVER-SIDE from the rider's uid. A rider with
+             no business identity is HELD — attributable, idempotent, settleable — never
+             redirected to their personal wallet.
+
+             Delivery fee and tip travel together because the platform already counts
+             both as rider earnings; the provenance differs, the destination does not. */
+          _riderPayable = (riderId && (riderEarnings + tipCts) > 0)
+            ? { riderUid: riderId, amountMinor: riderEarnings + tipCts } : null;
         U.creditWalletTxn(txn, db, 'platform_master', 'platform',
           comm.commissionCents + platformDeliv,
           { description: `Commission ${transactionId}`, orderId: transactionId, type: 'commission' });
       });
+
+    /* THE RIDER'S MONEY, once either branch has decided what it is. Business wallet
+       or held — never the personal wallet this used to credit. */
+    if (_riderPayable) {
+      await RIDER_DEST.creditOrHold({
+        db,
+        riderUid: _riderPayable.riderUid,
+        amountMinor: _riderPayable.amountMinor,
+        ref: 'txn_' + String(transactionId) + '_delivery',
+        orderId: String(transactionId),
+        provenance: 'delivery_earning',
+        source: 'delivery',
+        description: 'Delivery ' + transactionId,
+      }).catch(() => {});
+    }
 
       await U.createLedgerEntry(db, {
         type: 'seller_earning', amountCents: comm.sellerNetCents,

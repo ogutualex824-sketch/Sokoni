@@ -164,6 +164,108 @@ class IntaSendAdapter extends PaymentAdapter {
     };
   }
 
+  /* ══ CARD, THROUGH THE SAME COLLECTION AUTHORITY ══════════════════════════════════════
+     CARD IS A PAYMENT METHOD ON THIS RAIL, NOT A RAIL OF ITS OWN. SOKONI had an
+     independent card path — PosTerminals, with Bluetooth and "manual" adapters that
+     approved on `Math.random()` — and it was removed because a client cannot be the
+     authority on whether money arrived. Rebuilding it as a second acquirer would
+     reintroduce the same problem in better clothes: a second thing that can say "paid",
+     a second webhook to trust, a second reconciliation.
+
+     So card goes where M-PESA already goes. IntaSend collects it into the SOKONI account,
+     confirms it on the same webhook, and the confirmation becomes the same collection
+     proof — which is what the wallet credit already requires. Nothing downstream needs to
+     learn a new idea about money.
+
+     WHY A DIFFERENT ENDPOINT THAN initiatePayment(). STK is a push: the customer's handset
+     rings. A card cannot be pushed to — the cardholder has to enter a PAN, and 3-D Secure
+     may need to challenge them — so IntaSend's Checkout API returns a hosted URL the
+     customer completes. Same api_ref, same webhook, same proof; a different way of
+     reaching the payer. Forcing both through one function would have meant one of them
+     lying about what it returns.
+
+     card_tarrif: 'BUSINESS-PAYS'. IntaSend can pass the processing fee to the customer
+     instead. It is set here, on the server, so the price a customer is shown is the price
+     they pay — a fee added at the last step is a different total than the one the basket
+     agreed to, and the sale would no longer match the amount the intent was minted for.
+     The processing cost is a platform expense, accounted separately from the 5%
+     commission; the two must not be blended, because one is revenue and the other is not.
+
+     THE AMOUNT IS NEVER THE CALLER'S. As with STK, the amount written here comes from the
+     server-side intent, so a browser cannot open a checkout for a figure of its choosing. */
+  async initiateCardCheckout({ amountKES, ref, narrative, currency = 'KES',
+                               email, firstName, lastName, redirectUrl, cardOnly = false }) {
+    const amount = Math.round(Number(amountKES));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error('IntaSendAdapter.initiateCardCheckout: a positive amount is required');
+    }
+    /* ── WHICH METHODS THE CUSTOMER IS OFFERED ──────────────────────────────────────
+       IntaSend's contract: send `method` and the hosted page shows ONLY that method;
+       omit it and the page shows every method the ACCOUNT has enabled.
+
+       The unified SOKONI flow omits it. Pinning CARD-PAYMENT made card a hard
+       dependency — if the account has not been enabled for cards, the checkout is
+       simply unusable and the customer has no way to pay at all. Omitting it fails
+       SOFT: card appears when the account can take cards, and M-PESA carries the sale
+       when it cannot.
+
+       `cardOnly` keeps the deliberate card-only flow available, because "show the
+       customer only cards" is a legitimate thing to ask for — it just must be ASKED
+       for, not be the accidental default.
+
+       `card_tarrif` is sent only on the card-only path. It governs who absorbs the card
+       processing fee, and attaching it to a checkout that may well be paid by M-PESA
+       states a commercial term about a rail the customer may never touch. */
+    const body = {
+      currency,
+      amount,
+      api_ref:     ref,
+      comment:     narrative || `SOKONI ${ref}`,
+    };
+    if (cardOnly) {
+      body.method      = 'CARD-PAYMENT';
+      /* SOKONI absorbs the processing fee — see above. */
+      body.card_tarrif = 'BUSINESS-PAYS';
+    }
+    if (email)       body.email      = String(email);
+    if (firstName)   body.first_name = String(firstName);
+    if (lastName)    body.last_name  = String(lastName);
+    if (redirectUrl) body.redirect_url = String(redirectUrl);
+
+    const res = await this._request('/api/v1/checkout/', 'POST', body);
+    const ok = res.status === 200 || res.status === 201;
+    const invoiceId = res.body?.invoice?.invoice_id || res.body?.id || null;
+    /* The URL the customer completes the card payment on. Without it there is nothing to
+       show, so a 2xx that carries no URL is NOT a success — reporting one would leave a
+       till waiting on a payment that was never reachable. */
+    const url = res.body?.url || res.body?.checkout_url || null;
+    return {
+      success:     ok && !!url,
+      url,
+      invoiceId,
+      checkoutId:  invoiceId,
+      providerRef: ref,
+      /* WHAT PAID IS NOT KNOWN YET.
+
+         This said 'CARD' unconditionally. On the unified checkout `method` is
+         deliberately omitted so IntaSend shows every method the account has enabled,
+         and the customer may well choose M-PESA — so a result asserting CARD is
+         asserting something this function cannot know. Nothing reads it today, which
+         makes it a trap rather than a live defect: the next reader would believe it.
+
+         The actual tender is resolved from the provider's confirmation, by
+         intasend-authority.verifyProviderResult, which reads it from the payload and
+         has no parameter for the requested method precisely so it cannot fall back
+         to one. */
+      method:      cardOnly ? 'CARD' : null,
+      methodSource: cardOnly ? 'requested_card_only' : 'awaiting_provider_confirmation',
+      rawResponse: res.body,
+      error: (ok && url) ? null
+        : (res.body?.detail || res.body?.errors?.[0]?.detail
+           || (ok ? 'IntaSend accepted the checkout but returned no payment URL' : 'IntaSend card checkout error')),
+    };
+  }
+
   async verifyPayment(ref) {
     const res = await this._request(`/api/v1/payment/collection/?api_ref=${encodeURIComponent(ref)}`, 'GET');
     const tx  = res.body?.results?.[0];

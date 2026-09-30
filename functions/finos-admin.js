@@ -10,14 +10,25 @@ const db         = () => admin.firestore();
 const now        = () => admin.firestore.FieldValue.serverTimestamp();
 const FieldValue = admin.firestore.FieldValue;
 
+/* 'mpesa_direct' IS GONE FROM BOTH LISTS, AND THAT IS THE POINT OF REMOVING IT HERE.
+   It was the direct-collection rail under another name: each merchant collecting into their own
+   Safaricom shortcode with their own credentials. It sat in this allowlist with
+   enabled:false, which reads harmless and is not — setProviderConfig validates against
+   VALID_PROVIDERS and nothing else, so a single admin write could have switched a retired
+   rail back on. The SETTLEMENT registry was censused under one spelling; this is a
+   different registry using another, which is exactly how it survived that census.
+
+   M-PESA has not gone anywhere — it is how most customers pay. It is collected through
+   IntaSend into SOKONI's own account and settled to the merchant wallet, which is what
+   SOKONI Pay, SOKONI QR and the SOKONI Till all resolve to. What is gone is the idea of a
+   merchant-operated Safaricom rail. */
 const VALID_PROVIDERS = [
-  'intasend', 'mpesa_direct', 'stripe',
+  'intasend', 'stripe',
   'bank_transfer', 'airtel_money', 'equity_eazzy',
 ];
 
 const PROVIDER_DEFAULTS = [
-  { providerId: 'intasend',      name: 'IntaSend',      enabled: true,  sandbox: false },
-  { providerId: 'mpesa_direct',  name: 'M-Pesa Direct', enabled: false, sandbox: true  },
+  { providerId: 'intasend',      name: 'SOKONI Pay (IntaSend)', enabled: true,  sandbox: false },
   { providerId: 'stripe',        name: 'Stripe',        enabled: false, sandbox: true  },
   { providerId: 'bank_transfer', name: 'Bank Transfer', enabled: true,  sandbox: false },
 ];

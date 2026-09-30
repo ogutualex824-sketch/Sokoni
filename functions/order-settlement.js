@@ -20,6 +20,11 @@
    ========================================================================== */
 const admin = require('firebase-admin');
 const SE = require('./settlement-engine');
+/* WHERE a settlement may go, and whether it may go at all. Never inferred here. */
+const SD = require('./settlement-destination');
+/* The business wallet's own arithmetic and document ids — used so this file moves that
+   wallet inside its transaction WITHOUT keeping a second copy of how a balance is computed. */
+const BW = require('./business-wallet');
 
 const STATES = { UNSETTLED: 'UNSETTLED', HELD: 'HELD', ELIGIBLE: 'ELIGIBLE_FOR_SETTLEMENT', SETTLING: 'SETTLING', SETTLED: 'SETTLED', REFUNDED: 'REFUNDED', REVERSED: 'REVERSED' };
 const DEFAULT_AUTOCONFIRM_DAYS = 3;
@@ -63,6 +68,42 @@ function _platformFundedDiscountCents(order) {
   return loyalty + (promoIsSellerFunded ? 0 : promo);
 }
 
+/* ── THE DELIVERY PROOF GATE ────────────────────────────────────────────────────────────
+   Money does not move on an unproven delivery.
+
+   The buyer's PIN is issued WITH the order and entered at the door; delivery-complete.js
+   records the result as `deliveryAuthorizedBy` — `rider_pin` when the rider submitted the
+   buyer's PIN, `buyer_confirmation` when the buyer confirmed directly. One event, two
+   witnesses. Without one of them the delivery is a claim, not a fact, and settling on a
+   claim pays the seller for goods nobody can show were handed over.
+
+   THE HOLD IS NOT TERMINAL. An unproven delivery order goes to HELD with
+   `settlementNote: 'awaiting_delivery_proof'` and settles the moment proof arrives — the
+   sweep and the status trigger both re-enter here. A permanent refusal would strand real
+   money belonging to a seller who did nothing wrong.
+
+   NON-DELIVERY ORDERS STILL SETTLE, recording `deliveryProof: 'not_required'` rather than
+   being silently exempt — so "how much settled without proof, and why" is a query an
+   auditor can run instead of an assumption they have to accept. */
+const PROOF_METHODS = ['rider_pin', 'buyer_confirmation'];
+
+/* Deliberately INCLUSIVE: anything carrying a rider, a delivery reference, a fee or an
+   address is a delivery. Guessing "not a delivery" is the failure that releases money
+   early, so the ambiguous case resolves towards requiring proof. */
+function _isDeliveryOrder(o) {
+  if (!o) return false;
+  if (o.fulfilmentType === 'pickup' || o.fulfillmentType === 'pickup') return false;
+  return !!(o.assignedDriverUid || o.riderId || o.assignedRiderId || o.deliveryRef ||
+            Number(o.deliveryFee || 0) > 0 || o.deliveryAddress);
+}
+
+/* Only the two witnessed methods count — a truthy string of any other shape is not a proof,
+   and accepting one would let a future writer invent an authority. */
+function _deliveryProofOf(o) {
+  const m = o && o.deliveryAuthorizedBy;
+  return (typeof m === 'string' && PROOF_METHODS.indexOf(m) !== -1) ? m : null;
+}
+
 /* Settle ONE fulfilled product order exactly once. Reuses the canonical engine for the
    breakdown, credits the seller's withdrawable wallet, writes settlement + wallet txn +
    balanced ledger, and advances the state machine. Idempotent + replay-safe. */
@@ -93,6 +134,15 @@ async function settleOrder(db, adminSdk, orderId) {
 
   const settleRef = db.collection('settlements').doc(orderId);   /* deterministic → exactly-once */
 
+  /* ── WHERE THIS SETTLES, DECIDED BEFORE ANY MONEY MOVES ─────────────────────────────────
+     Resolved outside the transaction because it reads the business and store records. The
+     two facts that can change underneath it — the order's payment proof and its settlement
+     state — are BOTH re-checked against the in-transaction snapshot below, so a stale read
+     here cannot authorise a credit.
+
+     `dest` is consulted, never trusted from the order: see settlement-destination.js. */
+  const dest = sellerId ? await SD.resolveSettlementDestination(db, order) : { ok: false, reason: SD.REASON.NO_SELLER };
+
   const res = await db.runTransaction(async (t) => {
     const s = await t.get(orderRef);
     if (!s.exists) return { outcome: 'no-order' };
@@ -103,39 +153,205 @@ async function settleOrder(db, adminSdk, orderId) {
     /* Only a held/eligible, non-cancelled/refunded order settles. */
     if (['cancelled', 'refunded'].includes(o.status)) return { outcome: 'terminal-skip' };
     if (!sellerId) { t.update(orderRef, { settlementStatus: STATES.SETTLED, settlementNote: 'no-seller', settledAt: FV.serverTimestamp() }); return { outcome: 'no-seller' }; }
+
+    /* Read the IN-TRANSACTION snapshot, not the pre-read above: proof can arrive between
+       the two, and a gate reading a stale snapshot would hold an order that is already
+       proven. HELD is a wait, not a refusal — the next pass settles it. */
+    const isDelivery = _isDeliveryOrder(o);
+    const proof = _deliveryProofOf(o);
+    if (isDelivery && !proof) {
+      t.update(orderRef, {
+        settlementStatus: STATES.HELD,
+        settlementNote: 'awaiting_delivery_proof',
+        updatedAt: FV.serverTimestamp(),
+      });
+      return { outcome: 'awaiting-delivery-proof', sellerId, grossCents };
+    }
     if (!breakdown || grossCents <= 0) { t.update(orderRef, { settlementStatus: STATES.SETTLED, settlementNote: 'zero-gross', settledAt: FV.serverTimestamp() }); return { outcome: 'zero-gross' }; }
+
+    /* ── FAIL CLOSED ON THE DESTINATION ──────────────────────────────────────────────────
+       Two questions, both answered before a cent moves: did SOKONI actually COLLECT this
+       money, and which business wallet does it belong to?
+
+       `sokoniCollected` is re-evaluated on the IN-TRANSACTION snapshot, not on the pre-read
+       used above — the same reason the delivery-proof gate re-reads. It is the check that
+       was missing entirely: the state machine proved an order had progressed, never that it
+       had been paid. A seller may move their own order to `completed` under the Firestore
+       rules, which fires this settlement; without this gate that alone credited a wallet.
+
+       HELD, NOT FAILED, NOT SETTLED. The order keeps its money claim and stays visible for
+       reconciliation with a reason and a remedy. Marking it SETTLED would discharge a debt
+       nobody paid; marking it failed would lose the buyer's payment. */
+    if (!SD.sokoniCollected(o) || !dest.ok) {
+      const reason = !SD.sokoniCollected(o) ? SD.REASON.NOT_COLLECTED : dest.reason;
+      t.update(orderRef, {
+        settlementStatus: STATES.HELD,
+        settlementNote: 'destination_unresolved',
+        settlementHoldReason: reason,
+        updatedAt: FV.serverTimestamp(),
+      });
+      /* Deterministic id → one hold record per order, updated in place as attempts repeat. */
+      t.set(db.collection('settlementHolds').doc(orderId), {
+        orderId, sellerId,
+        reason,
+        remedy: SD.REMEDY[reason] || null,
+        detail: dest.detail === undefined ? null : dest.detail,
+        grossCents,
+        paymentVerified: o.paymentVerified === true,
+        status: 'held',
+        lastAttemptAt: FV.serverTimestamp(),
+      }, { merge: true });
+      return { outcome: 'destination-unresolved', reason, sellerId, grossCents };
+    }
 
     const netCents = Number(breakdown.sellerNetCents) || 0;
     /* engine returns commission nested: { commission: { cents, rate } }. */
     const commissionCents = Number(breakdown.commission && breakdown.commission.cents) || 0;
     const netShillings = Math.floor(netCents / 100);
 
-    /* 1 — credit the ONE canonical withdrawable wallet (shillings). set-merge auto-creates.
-       AUTO-RECOVERY (ratified policy): pay down any outstanding refundRecoveryDebt FIRST; only the
-       remainder becomes withdrawable balance. (wallet read is before any write in this txn.) */
-    let appliedToDebt = 0, withdrawable = netShillings;
-    if (netShillings >= 1) {
-      const wRef = db.collection('wallets').doc(sellerId);
-      const wSnap = await t.get(wRef);
-      const debt = wSnap.exists ? Math.max(0, Number(wSnap.data().refundRecoveryDebt) || 0) : 0;
-      appliedToDebt = Math.min(debt, netShillings);
-      withdrawable = netShillings - appliedToDebt;
-      t.set(wRef, {
-        balance: FV.increment(withdrawable),
-        refundRecoveryDebt: FV.increment(-appliedToDebt),
-        updatedAt: FV.serverTimestamp(),
-      }, { merge: true });
-      /* 2 — wallet transaction (deterministic id → no double-credit). */
-      t.set(db.collection('walletTransactions').doc(`${sellerId}_${orderId}_ordersettle`), {
-        uid: sellerId, type: 'order_settlement', amount: withdrawable, appliedToDebt, grossCredit: netShillings,
-        currency: 'KES', orderId, sourceType: 'order', sourceId: orderId,
-        grossCents, commissionCents, netCents, createdAt: FV.serverTimestamp(),
-      });
+    /* 1 — credit the BUSINESS wallet, in CENTS, in this same transaction.
+       ────────────────────────────────────────────────────────────────────────────────────
+       WHICH WALLET, AND WHY IT CHANGED
+       This used to credit `wallets/{sellerId}` — the seller's PERSONAL wallet, the account
+       that funds their top-ups and personal spending. Shop takings are not personal money:
+       they carry the marketplace commission, refunds owed to customers, and a reconciliation
+       the merchant can be asked to produce. Once blended into a personal balance, "what does
+       this shop owe?" has no answer, because the number has already been mixed with money
+       that was never the shop's.
+
+       `businessWallets/{businessId}` is where the POS/Till lane has always settled
+       (pos-zero-friction.js). One business earning through two channels must not have two
+       different answers to how much it has earned.
+
+       THE UNIT CHANGED TOO, AND THAT FIXES A LEAK
+       The personal wallet holds whole KES, so this credited `Math.floor(netCents / 100)` and
+       silently dropped up to 99 cents on EVERY order — money that left the buyer, was
+       recorded in the ledger as `sellerNetCents`, and was then credited to nobody. The
+       business wallet is integer cents, so the credit is now exactly `netCents` and
+       gross = commission + merchantNet holds to the cent.
+
+       IN THIS TRANSACTION, DELIBERATELY
+       The wallet moves in the same atomic step that marks the order settled. A credit that
+       could fail on its own would leave an order recorded as settled with the merchant
+       unpaid — and `settlementStatus` would say the debt was discharged. The arithmetic is
+       business-wallet.js's own `planMove`, not a second copy of it, and the ledger entry is
+       written at the same deterministic id `_move` uses, so replay is idempotent across both
+       entry points rather than only within one. */
+    let appliedToDebtMinor = 0, creditedMinor = 0, walletBalanceMinor = null;
+    if (netCents >= 1) {
+      const bwRef = db.collection(BW.WALLETS).doc(String(dest.businessId));
+      const beRef = db.collection(BW.ENTRIES)
+        .doc(BW.entryDocId(dest.businessId, BW.assertRef(`ordersettle_${orderId}`)));
+      const [bwSnap, beSnap] = await Promise.all([t.get(bwRef), t.get(beRef)]);
+
+      if (beSnap.exists) {
+        /* Already credited by an earlier attempt. The settlement record below is written at a
+           deterministic id too, so this branch only runs on a partial replay; it must change
+           no balance. */
+        creditedMinor = Number((beSnap.data() || {}).amountMinor || 0);
+        walletBalanceMinor = Number((bwSnap.exists ? bwSnap.data().balanceMinor : 0) || 0);
+      } else {
+        const before = Number((bwSnap.exists ? bwSnap.data().balanceMinor : 0) || 0);
+        const debtBefore = Number((bwSnap.exists ? bwSnap.data().recoveryDebtMinor : 0) || 0);
+        /* AUTO-RECOVERY (ratified policy, unchanged in substance): an outstanding reversal
+           debt is paid down FIRST; only the remainder becomes spendable balance. */
+        const plan = BW.planMove(+1, {
+          amountMinor: netCents, recovery: true,
+          balanceBeforeMinor: before, recoveryDebtBeforeMinor: debtBefore,
+        });
+        appliedToDebtMinor = plan.appliedToDebtMinor;
+        /* FROM THE PLAN, never assigned alongside it. `creditedMinor` is what the settlement
+           RECORD says was paid; taking it from a second expression let the record and the
+           balance disagree — a sabotage that floored the credit to whole shillings changed the
+           record and left the money right, which no assertion could see. One value, one
+           source. */
+        creditedMinor = plan.amountMinor;
+        walletBalanceMinor = plan.balanceAfterMinor;
+
+        if (!bwSnap.exists) {
+          t.set(bwRef, {
+            businessId: dest.businessId, ownerId: dest.ownerUid || null,
+            storeId: dest.storeId || null, currency: 'KES',
+            balanceMinor: 0, recoveryDebtMinor: 0,
+            createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp(),
+          });
+        }
+        t.set(beRef, {
+          ref: `ordersettle_${orderId}`,
+          businessId: dest.businessId,
+          storeId: dest.storeId || null,
+          direction: 'credit',
+          amountMinor: netCents,
+          balanceBeforeMinor: plan.balanceBeforeMinor,
+          balanceAfterMinor: plan.balanceAfterMinor,
+          appliedToDebtMinor: plan.appliedToDebtMinor,
+          shortfallMinor: plan.shortfallMinor,
+          recoveryDebtBeforeMinor: plan.recoveryDebtBeforeMinor,
+          recoveryDebtAfterMinor: plan.recoveryDebtAfterMinor,
+          currency: 'KES',
+          kind: 'marketplace_settlement',
+          sourceUid: null,
+          /* WHERE IT CAME FROM AND WHAT IT WAS WORTH — the ONLINE stream of the one wallet
+             ledger. Gross and commission are stored beside the net that moved, so "online
+             commission this month" is a read of this ledger rather than a join back to
+             orders, which would be a second source of truth to disagree with. */
+          source: {
+            channel: 'ONLINE',
+            businessId: dest.businessId,
+            shopId: dest.storeId || null,
+            orderId: orderId,
+            paymentRef: o.paymentRef || o.mpesaCode || null,
+            grossMinor: grossCents,
+            commissionMinor: commissionCents,
+            netMinor: netCents,
+            currency: 'KES',
+          },
+          metadata: { orderId, grossCents, commissionCents },
+          createdAt: FV.serverTimestamp(),
+        });
+        t.update(bwRef, {
+          balanceMinor: plan.balanceAfterMinor,
+          recoveryDebtMinor: plan.recoveryDebtAfterMinor,
+          updatedAt: FV.serverTimestamp(),
+        });
+      }
     }
     /* 3 — settlement record (canonical, deterministic). */
     t.set(settleRef, {
       orderId, sellerId, grossCents, commissionCents, sellerNetCents: netCents,
       netShillingsCredited: netShillings, category: 'marketplace',
+
+      /* ── WHERE THE MONEY WENT, RECORDED ON THE SETTLEMENT ITSELF ──────────────────────
+         A reversal must debit the wallet this settlement actually credited, and it must
+         learn that from the RECORD rather than by re-deriving it. Re-deriving would ask
+         today's chain about yesterday's payment: a merchant who has since been re-provisioned
+         onto a different business id would have the reversal taken from a wallet that never
+         received the money, while the one that did keeps it.
+
+         `settlementDestination` is therefore the authority for reverseSettledOrder(). */
+      settlementDestination: 'business_wallet',
+      businessId: dest.businessId,
+      storeId: dest.storeId || null,
+      ownerUid: dest.ownerUid || null,
+      legacyStore: !!dest.legacyStore,
+      creditedMinor,
+      appliedToDebtMinor,
+      walletBalanceMinorAfter: walletBalanceMinor,
+
+      /* ── WHAT PRICED IT ──────────────────────────────────────────────────────────────
+         The plan, the rate and the authority that set it, kept with the settlement so the
+         split can be explained years later without re-deriving it from a catalogue that has
+         since moved. Nulls are honest: they say the engine did not report a plan, which is
+         different from saying the seller had none. */
+      commissionRate: (breakdown.commission && breakdown.commission.rate) ?? null,
+      commissionPlanId: (breakdown.commission && breakdown.commission.planId) ?? null,
+      commissionLane: (breakdown.commission && breakdown.commission.lane) ?? null,
+      pricingSource: (breakdown.commission && breakdown.commission.pricingSource) ?? null,
+      commissionRuleId: (breakdown.commission && breakdown.commission.ruleId) ?? null,
+      /* WHAT AUTHORISED THIS RELEASE. 'not_required' is recorded rather than omitted so an
+         auditor can query how much settled without delivery proof, and why. */
+      deliveryProof: isDelivery ? proof : 'not_required',
+      deliveryProvenAt: isDelivery ? (o.deliveredAt || null) : null,
       ledgerPlan: breakdown.ledgerPlan || [],   /* immutable snapshot → post-settlement reversal swaps it */
       engineVersion: 'settlement-engine', status: 'settled', createdAt: FV.serverTimestamp(),
     });
@@ -152,11 +368,23 @@ async function settleOrder(db, adminSdk, orderId) {
       escrow: Object.assign({}, o.escrow || {}, { released: netCents, settledAt: Date.now() }),
       settledAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp(),
     });
-    return { outcome: 'settled', sellerId, netShillings, commissionCents };
+    return { outcome: 'settled', sellerId, netShillings, commissionCents,
+             /* The lane and the exact cents, so a caller never has to infer either. */
+             destination: 'business_wallet', businessId: dest.businessId,
+             storeId: dest.storeId || null,
+             creditedMinor, appliedToDebtMinor, netCents };
   });
 
   if (res.outcome === 'settled') {
-    console.log(`[order-settlement] SETTLED ${orderId} → seller ${res.sellerId} +${res.netShillings} KES (commission ${res.commissionCents}c)`);
+    console.log(`[order-settlement] SETTLED ${orderId} → business ${res.businessId} `
+      + `+${res.creditedMinor}c (commission ${res.commissionCents}c`
+      + (res.appliedToDebtMinor ? `, ${res.appliedToDebtMinor}c cleared prior reversal debt` : '')
+      + ')');
+  } else if (res.outcome === 'destination-unresolved') {
+    /* Loud, and NAMED. A held settlement is money SOKONI is holding for a merchant who is
+       not being paid; it must never be a quiet no-op in the logs. */
+    console.error(`[order-settlement] HELD ${orderId} — ${res.reason} `
+      + `(seller ${res.sellerId}, ${res.grossCents}c) — see settlementHolds/${orderId}`);
   }
   return res;
 }
@@ -213,8 +441,90 @@ async function reverseSettledOrder(db, adminSdk, orderId, opts = {}) {
     const netCents = Number(s.sellerNetCents) || 0;
     const sellerId = o.sellerUid || o.sellerId || s.sellerId || null;
 
+    /* ── THE REVERSAL FOLLOWS THE RECORDED LANE ──────────────────────────────────────────
+       `settlementDestination` is read from the SETTLEMENT, never re-derived from the seller.
+       Re-deriving would ask today's identity chain about yesterday's payment: a merchant
+       re-provisioned onto a different business id since the sale would have the money taken
+       from a wallet that never received it, while the wallet that did keeps it.
+
+       Settlements written before this change carry no `settlementDestination`. They credited
+       the personal wallet, so they are reversed there — the legacy branch below is not a
+       fallback for an unresolved case, it is the correct treatment for a payment that
+       genuinely went to that account. Absent is read as 'personal_wallet' deliberately, and
+       ONLY here, where the historical fact is unambiguous. */
+    const lane = s.settlementDestination === 'business_wallet' ? 'business_wallet' : 'personal_wallet';
+
     let shortfall = 0, recoveredFromBalance = 0;
-    if (sellerId && netShillings > 0) {
+    let reversedMinor = 0, shortfallMinor = 0, recoveredMinor = 0;
+
+    if (lane === 'business_wallet' && s.businessId && netCents > 0) {
+      /* CENTS, matching what was credited. Reversing a rounded shilling figure against a
+         cents balance would leave a residue on every reversal. */
+      const bwRef = db.collection(BW.WALLETS).doc(String(s.businessId));
+      const beRef = db.collection(BW.ENTRIES)
+        .doc(BW.entryDocId(s.businessId, BW.assertRef(`ordersettle_reversal_${orderId}`)));
+      const [bwSnap, beSnap] = await Promise.all([t.get(bwRef), t.get(beRef)]);
+
+      if (!beSnap.exists) {
+        const before = Number((bwSnap.exists ? bwSnap.data().balanceMinor : 0) || 0);
+        const debtBefore = Number((bwSnap.exists ? bwSnap.data().recoveryDebtMinor : 0) || 0);
+        /* EXPLICIT DEBT (the same ratified policy the personal lane runs): the balance is
+           floored at zero and whatever the merchant already moved out becomes a recoverable
+           debt that future settlements clear first. */
+        const plan = BW.planMove(-1, {
+          amountMinor: netCents, recovery: true,
+          balanceBeforeMinor: before, recoveryDebtBeforeMinor: debtBefore,
+        });
+        reversedMinor = netCents;
+        recoveredMinor = netCents - plan.shortfallMinor;
+        shortfallMinor = plan.shortfallMinor;
+
+        t.set(beRef, {
+          ref: `ordersettle_reversal_${orderId}`,
+          businessId: String(s.businessId),
+          storeId: s.storeId || null,
+          direction: 'debit',
+          amountMinor: netCents,
+          balanceBeforeMinor: plan.balanceBeforeMinor,
+          balanceAfterMinor: plan.balanceAfterMinor,
+          appliedToDebtMinor: plan.appliedToDebtMinor,
+          shortfallMinor: plan.shortfallMinor,
+          recoveryDebtBeforeMinor: plan.recoveryDebtBeforeMinor,
+          recoveryDebtAfterMinor: plan.recoveryDebtAfterMinor,
+          currency: 'KES',
+          kind: 'marketplace_settlement_reversal',
+          sourceUid: null,
+          /* THE SAME STREAM IT CAME FROM. A refunded order is not a sale that happened and
+             then a separate negative event — it is a sale that stopped counting, so it has to
+             leave the channel it entered. Carrying the channel here is what lets the
+             breakdown subtract rather than accumulate a phantom online total. */
+          source: {
+            channel: 'ONLINE',
+            businessId: String(s.businessId),
+            shopId: s.storeId || null,
+            orderId: orderId,
+            paymentRef: null,
+            grossMinor: Number(s.grossCents) || 0,
+            commissionMinor: Number(s.commissionCents) || 0,
+            netMinor: netCents,
+            currency: 'KES',
+          },
+          metadata: { orderId, reason: opts.reason || 'post-settlement-refund' },
+          createdAt: FV.serverTimestamp(),
+        });
+        t.set(bwRef, {
+          balanceMinor: plan.balanceAfterMinor,
+          recoveryDebtMinor: plan.recoveryDebtAfterMinor,
+          updatedAt: FV.serverTimestamp(),
+        }, { merge: true });
+      }
+      /* Reported in shillings too, so the reversal record and its readers keep one shape
+         across both lanes. */
+      recoveredFromBalance = Math.floor(recoveredMinor / 100);
+      shortfall = Math.floor(shortfallMinor / 100);
+
+    } else if (sellerId && netShillings > 0) {
+      /* LEGACY LANE — a settlement written before the destination moved. Unchanged. */
       const wRef = db.collection('wallets').doc(sellerId);
       const wSnap = await t.get(wRef);
       const bal = wSnap.exists ? (Number(wSnap.data().balance) || 0) : 0;
@@ -239,6 +549,11 @@ async function reverseSettledOrder(db, adminSdk, orderId, opts = {}) {
     t.set(db.collection('settlementReversals').doc(orderId), {
       orderId, settlementId: orderId, refundId: opts.refundRef || null, reversalId: `${orderId}_reversal`,
       sellerId, netReversedShillings: netShillings, recoveredFromBalance, debtAdded: shortfall,
+      /* The lane, and the exact cents. Which wallet was debited is the first thing a
+         reconciliation asks, and it must not have to guess from an era. */
+      settlementDestination: lane,
+      businessId: s.businessId || null,
+      reversedMinor, recoveredMinor, shortfallMinor,
       reason: opts.reason || 'post-settlement-refund',
       recoveryStatus: shortfall > 0 ? 'recovering' : 'complete', createdAt: FV.serverTimestamp(),
     });

@@ -13,6 +13,7 @@
  */
 
 const { onCall, HttpsError }  = require('firebase-functions/v2/https');
+const _custScope = require('./pos-customer-scope');
 const { onSchedule }          = require('firebase-functions/v2/scheduler');
 const { defineSecret }        = require('firebase-functions/params');
 const admin                   = require('firebase-admin');
@@ -105,19 +106,21 @@ function _calcPoints(amount) { return Math.floor(amount / 10); }
  * CF: getPOSCustomer — look up by phone or customerId
  * Returns customer profile + loyalty status
  */
+/* The second unscoped read path, closed the same way as posLookupCustomer: this
+   also looked a customer up by phone across the whole collection. */
 exports.getPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.getPOSCustomer = async (req) => {
-  _adminOrSeller(req);
+  const auth = _adminOrSeller(req);
   const { phone, customerId } = req.data || {};
+  const owner = _custScope.resolveOwner(auth, req.data && req.data.sellerId);
+  const fdb = admin.firestore();
 
   let snap;
   if (customerId) {
-    snap = await admin.firestore().collection('posCustomers').doc(_san(customerId, 40)).get();
+    snap = await _custScope.getOwned(fdb, owner, _san(customerId, 40));
   } else if (phone) {
     const normalized = _normalizePhone(phone);
     if (!normalized) throw new HttpsError('invalid-argument', 'Invalid phone number');
-    const q = await admin.firestore().collection('posCustomers')
-      .where('phone', '==', normalized).limit(1).get();
-    snap = q.empty ? null : q.docs[0];
+    snap = await _custScope.findOwned(fdb, owner, 'phone', normalized);
   } else {
     throw new HttpsError('invalid-argument', 'phone or customerId required');
   }
@@ -132,41 +135,59 @@ exports.getPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.getPOSCust
 /**
  * CF: upsertPOSCustomer — create or update customer profile
  */
+/* The WRITE-SIDE twin of the disclosure, and the reason this is a data-model fix
+   rather than a query fix.
+
+   The "existing customer" lookup was collection-wide by phone, so a second
+   merchant upserting a phone number already on file UPDATED THE FIRST
+   MERCHANT'S customer document — one record shared between two businesses, with
+   the later name and email overwriting the earlier. And nothing on the create
+   path recorded an owner at all, which is why no reader could filter by one.
+
+   Both halves are fixed here: the lookup is scoped to the caller, and every
+   create is stamped with the resolved owner so the record can be filtered from
+   now on. A legacy record with no owner is invisible to this lookup, so the next
+   upsert creates a correctly-owned one — the path heals forward without a
+   backfill, at the cost of the old record's history. */
 exports.upsertPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.upsertPOSCustomer = async (req) => {
-  _adminOrSeller(req);
+  const auth = _adminOrSeller(req);
   const { customerId, phone, name, email } = req.data || {};
+  const owner = _custScope.resolveOwner(auth, req.data && req.data.sellerId);
+  const fdb = admin.firestore();
 
   const normalized = _normalizePhone(phone);
   if (!normalized) throw new HttpsError('invalid-argument', 'Invalid phone number');
 
-  /* Look up existing by phone */
-  const existing = await admin.firestore().collection('posCustomers')
-    .where('phone', '==', normalized).limit(1).get();
+  /* Look up an existing customer OF THIS MERCHANT by phone. */
+  const existingDoc = await _custScope.findOwned(fdb, owner, 'phone', normalized);
 
-  const docRef = !existing.empty
-    ? existing.docs[0].ref
+  const docRef = existingDoc
+    ? existingDoc.ref
     : (customerId
-        ? admin.firestore().collection('posCustomers').doc(_san(customerId, 40))
-        : admin.firestore().collection('posCustomers').doc());
+        ? fdb.collection('posCustomers').doc(_san(customerId, 40))
+        : fdb.collection('posCustomers').doc());
 
   const payload = {
     phone:         normalized,
-    name:          name ? _san(name, 100)  : (existing.empty ? 'Guest Customer' : admin.firestore.FieldValue.delete()),
+    name:          name ? _san(name, 100)  : (!existingDoc ? 'Guest Customer' : admin.firestore.FieldValue.delete()),
     email:         email ? _san(email, 200) : admin.firestore.FieldValue.delete(),
     updatedAt:     now(),
   };
 
-  if (existing.empty) {
-    /* New customer */
+  if (!existingDoc) {
+    /* New customer — stamped with its owner, so it can be scoped ever after. */
     await docRef.set({
       ...payload,
+      ..._custScope.ownerStamp(owner),
       loyaltyPoints: 0,
       totalSpend:    0,
       visitCount:    0,
       createdAt:     now(),
     });
   } else {
-    await docRef.update(payload);
+    /* An existing record keeps its owner; re-stamping repairs one created before
+       the owner field existed but reached here through a composite id. */
+    await docRef.update({ ...payload, ..._custScope.ownerStamp(owner) });
   }
 
   const snap = await docRef.get();
@@ -197,6 +218,91 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
   if (!payment || !payment.amount) throw new HttpsError('invalid-argument', 'payment required');
 
   const fdb = admin.firestore();
+
+  /* ── THE SECOND SALE RAIL ────────────────────────────────────────────────────────────
+     posCompleteCheckout proves the actor and then asserts the business-day gate, so a
+     merchant with unpaid POS commission cannot open a new sales day. This handler writes a
+     sale too — and had neither check. It is not dead code: smartpos-dispatch.js merges
+     pos-retail-engine._h and index.js exports smartPosDispatch, so it is callable in
+     production today.
+
+     That made the gate optional. A merchant refused at the checkout rail could record the
+     same sale here and trade all day without settling anything: a gate one rail enforces is
+     not a gate, it is a suggestion.
+
+     `_adminOrSeller` above is not sufficient for either concern. It asks only whether the
+     caller holds SOME seller role — it never binds `sellerId` to the caller — so any
+     authenticated seller could also write a sale attributed to somebody else's shop.
+
+     Same mechanism and same ORDER as the checkout rail: prove first, gate second. Proving
+     first means an unauthorised caller is refused before a gate lookup can leak whether
+     another merchant owes commission. */
+  /* ONE identity, used for all of proving, gating, LOOKUP and ATTRIBUTION.
+
+     The sale record used to store the raw `sellerId || auth.uid` while the checks used the
+     sanitised value. `_san` strips < > " ' and backticks, so the two could differ: a
+     merchant who owns shop `abc` could send `abc<`, be proven and gated as `abc`, and have
+     the sale written against `abc<` — a shop id that exists nowhere. Commission accounting
+     keyed on sellerId would never see that sale. It is the same dodge as an ungated rail,
+     reached by a quieter route.
+
+     The seller lookup also truncated at 40 where everything else used 64, so an id longer
+     than 40 characters could resolve one shop and be recorded against another.
+
+     Deriving it once, here, is what stops the four from drifting apart again. */
+  const _sellerId = _san(sellerId || auth.uid, 64);
+  {
+    const _claims = auth.token || {};
+    const _isAdmin = _claims.admin === true || _claims.superAdmin === true
+      || _claims.role === 'admin' || _claims.role === 'super_admin';
+
+    let _proven = _isAdmin;
+    if (!_proven) {
+      /* The owner, keyed off the shops/{uid} document id. */
+      try {
+        const { resolveActor } = require('./merchant-identity')._internal;
+        const _a = await resolveActor(auth.uid, _sellerId);
+        _proven = !!(_a && _a.ok);
+      } catch (err) {
+        throw new HttpsError('unavailable',
+          'Staff permissions could not be checked, so this sale was not recorded. ' +
+          'Nothing has been charged.');
+      }
+    }
+    if (!_proven) {
+      /* Employees are keyed on the BUSINESS, not the shop, so resolveActor alone would
+         refuse every invited cashier. Resolve the canonical business, then ask whether this
+         staff member may record a sale for it. */
+      let _canon = null;
+      try {
+        const _b = await fdb.collection('businesses').doc(String(_sellerId)).get();
+        if (_b.exists) _canon = String(_sellerId);
+        else {
+          const { resolveMerchantIdForOwner } = require('./tenant-identity');
+          const _own = await resolveMerchantIdForOwner(String(_sellerId));
+          if (_own && _own.ok) _canon = _own.merchantId;
+        }
+      } catch (_) { _canon = null; }
+      if (_canon) {
+        try {
+          const { _assertBusinessPermission } = require('./workforce-identity');
+          await _assertBusinessPermission(auth.uid, _canon, 'sales');
+          _proven = true;
+        } catch (_) { }
+      }
+    }
+    if (!_proven) {
+      throw new HttpsError('permission-denied',
+        'You are not authorised to record a sale for this shop.');
+    }
+  }
+
+  /* The gate, second — and keyed on the PROVEN seller, never on the declared one. */
+  {
+    const _gate = require('./pos-business-day-gate');
+    await _gate.assertBusinessDayOpen(fdb, String(_sellerId));
+  }
+
   const saleRef = fdb.collection('posSales').doc();
   const saleId  = saleRef.id;
   const receiptId = _receiptId();
@@ -245,7 +351,7 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
   const tier          = _tier(pointsTotal);
 
   /* Store info from seller profile */
-  const sellerSnap = await fdb.collection('sellers').doc(_san(sellerId || auth.uid, 40)).get();
+  const sellerSnap = await fdb.collection('sellers').doc(_sellerId).get();
   const store = sellerSnap.exists ? {
     name:    sellerSnap.data().businessName || sellerSnap.data().name || 'SOKONI Store',
     address: sellerSnap.data().address || '',
@@ -291,7 +397,7 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
   batch.set(saleRef, {
     saleId,
     receiptId,
-    sellerId:      sellerId || auth.uid,
+    sellerId:      _sellerId,
     branchId:      branchId ? _san(branchId, 40) : null,
     sessionId:     sessionId ? _san(sessionId, 40) : null,
     cashierUid:    cashierUid || auth.uid,
@@ -316,7 +422,7 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
   batch.set(receiptRef, {
     receiptId,
     saleId,
-    sellerId: sellerId || auth.uid,
+    sellerId: _sellerId,
     store,
     sale: {
       date:     new Date().toISOString(),
@@ -341,6 +447,47 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
 
   await batch.commit();
 
+  /* ── POST THE FINANCIALS ────────────────────────────────────────────────────────────
+     This rail wrote a sale and posted NOTHING against it: no tax line, no commission
+     accrual, no wallet credit. The 07:00 business-day gate reads
+     `pos-commission-collection.outstandingForSeller`, which sums accruals — so a merchant
+     trading here was gated on a balance their own sales never contributed to. Adding the
+     gate without this would have been enforcement against an empty ledger: a gate that
+     can never close, which is worse than no gate because it reads as one.
+
+     REUSES pos-zero-friction._postSaleFinancials rather than posting here. Two posting
+     implementations would drift on the commission rate, the collection route or the
+     wallet, and the one that drifted would be the one nobody was reading.
+
+     AFTER the commit, deliberately. The sale is the customer's and has happened; the
+     books follow it. A posting failure is recorded as repairable rather than failing a
+     sale that was already paid for — the same contract the other rail has. */
+  let _financial = null;
+  try {
+    const { _postSaleFinancials } = require('./pos-zero-friction');
+    _financial = await _postSaleFinancials({
+      saleId,
+      merchantId: _sellerId,
+      total,
+      /* This rail takes ONE payment object rather than a tender list. Normalised into the
+         shape the posting path expects, so cash is still recognised as cash and does not
+         credit a wallet for money sitting in a drawer. */
+      payments: [{ method: String((payment && payment.method) || 'cash'), amount: total }],
+      changeDue: 0,
+      idempotencyKey: 'retail_' + saleId,
+      items: validatedItems,
+    });
+  } catch (e) {
+    try {
+      await fdb.collection('posFinancialRepair').doc(String(saleId)).set({
+        saleId, merchantId: _sellerId, total,
+        reason: 'recordPOSSale_posting_failed',
+        error: (e && e.message) || String(e),
+        at: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } catch (_) { }
+  }
+
   /* Award loyalty points (outside batch — ok if this fails) */
   if (customerDocRef && pointsEarned > 0) {
     await customerDocRef.update({
@@ -354,7 +501,7 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
 
   /* Emit platform event */
   await _emitEvent('pos.checkout.completed', {
-    saleId, receiptId, sellerId: sellerId || auth.uid, total, itemCount: validatedItems.length,
+    saleId, receiptId, sellerId: _sellerId, total, itemCount: validatedItems.length,
     paymentMethod: payment.method, customerId: customer ? customerDocRef?.id : null,
   });
 

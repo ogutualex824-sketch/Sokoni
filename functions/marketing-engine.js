@@ -442,7 +442,13 @@ Example: ["Product A","Product B","Product C"]`,
     if (suggestions.length > 0) {
       const prodSnap = await db.collection('posProducts')
         .where('merchantId', '==', merchantId)
-        .where('status', '==', 'active')
+        /* `active` (boolean) is the canonical writer's field — posUpsertProduct in
+           pos-inventory-pro.js, now the ONLY writer since the seller.js mirror was
+           retired 2026-09-03 (Option C, docs/POSPRODUCTS_MIGRATION_GRAPH.md).
+           `merchantId == X AND status == 'active'` matched NOTHING under either
+           writer, ever: canonical docs carry merchantId but never status, and the
+           retired mirror carried status but keyed identity on sellerId. */
+        .where('active', '==', true)
         .limit(100)
         .get();
 
@@ -495,7 +501,10 @@ const getUpsellRecommendations = onCall(OPT_AI, _h.getUpsellRecommendations = as
       .where('merchantId', '==', merchantId)
       .where('category', '==', anchor.category)
       .where('price', '>=', priceFloor)
-      .where('status', '==', 'active')
+      /* Canonical active state — see the note in getPromotionRecommendations above.
+         NOTE: this changes the index signature. Requires the composite
+         posProducts(merchantId, category, active, price) added alongside. */
+      .where('active', '==', true)
       .orderBy('price')
       .limit(20)
       .get();
@@ -527,7 +536,9 @@ const getUpsellRecommendations = onCall(OPT_AI, _h.getUpsellRecommendations = as
         .where('merchantId', '==', merchantId)
         .where('variantGroupId', '==', anchor.variantGroupId)
         .where('price', '>=', priceFloor)
-        .where('status', '==', 'active')
+        /* Canonical active state. Requires the composite
+           posProducts(merchantId, variantGroupId, active, price). */
+        .where('active', '==', true)
         .limit(10)
         .get();
 

@@ -32,11 +32,16 @@
     acceptanceRate: 0.10,
   };
 
-  /* ── Vehicle capacity registry ── */
+  /* ── Vehicle capacity registry ──
+     EBEE is a NAMED type, not a motorcycle with a footnote. It shares the e-bike
+     envelope rather than the motorcycle one, which is the whole point: a job that fits
+     a moto does not necessarily fit an EBEE, and offering it one because it happened to
+     be nearby is exactly what capacity gating exists to prevent. */
   var VEHICLE_CAPACITY = {
     moto:    { maxWeightKg:  15, sizeRank: 2 }, /* size rank: small=0 medium=1 large=2 xl=3 */
     bicycle: { maxWeightKg:   8, sizeRank: 1 },
     ebike:   { maxWeightKg:  12, sizeRank: 2 },
+    ebee:    { maxWeightKg:  12, sizeRank: 2 },
     tuktuk:  { maxWeightKg:  30, sizeRank: 2 },
     car:     { maxWeightKg:  50, sizeRank: 3 },
     van:     { maxWeightKg: 200, sizeRank: 3 },
@@ -73,8 +78,16 @@
     return SIZE_RANK[size] != null ? SIZE_RANK[size] : 0;
   }
 
+  /* AN UNKNOWN VEHICLE HAS NO CAPACITY, and that is not the same as having a
+     motorcycle's. This returned VEHICLE_CAPACITY.moto for anything unrecognised, so a
+     vehicle the registry had never heard of was silently granted 15 kg and a large
+     parcel — the most permissive two-wheeler envelope on the board. A rider could then
+     be offered a job their vehicle cannot carry, on the strength of a typo.
+
+     Returning null makes the rider INELIGIBLE, which is the safe direction: an
+     unregistered vehicle is refused work rather than handed a stranger's limits. */
   function _vehCap(type) {
-    return VEHICLE_CAPACITY[type] || VEHICLE_CAPACITY.moto;
+    return VEHICLE_CAPACITY[type] || null;
   }
 
   /* ─────────────────────────────────────────────────────────────
@@ -101,6 +114,7 @@
     if (distKm > CFG.maxDispatchRadiusKm)       return null;
 
     var cap = _vehCap(rider.vehicleType || 'moto');
+    if (!cap)                                        return null;  /* unregistered vehicle */
     if ((delivery.weightKg || 1) > cap.maxWeightKg)  return null;
     if (_sizeRankOf(delivery.parcelSize) > cap.sizeRank) return null;
 
@@ -121,7 +135,17 @@
     var workScore   = 1 - (active / CFG.maxConcurrentPerRider);
     var vehScore    = (rider.vehicleType || 'moto') === (delivery.vehicleType || 'moto') ? 1.0
                     : cap.sizeRank >= _sizeRankOf(delivery.parcelSize) ? 0.7 : 0.3;
-    var ratingScore = Math.min(1, (rider.rating || 4.0) / 5.0);
+    /* AN UNRATED RIDER DOES NOT BORROW A RATING. This scored a rider with no history as
+       4.0/5 — a fabricated record that ranked a brand-new account alongside one that had
+       earned it, and a figure no completed delivery ever produced.
+
+       A rider with no verified deliveries now scores NEUTRAL on this component and is
+       marked unrated, so the merchant sees "new rider" rather than a number nobody
+       earned. ratingBasis carries the count the rating was computed from, because a
+       4.9 from 3 deliveries and a 4.9 from 1,284 are different facts. */
+    var _ratedDeliveries = Number(rider.ratedDeliveryCount || 0);
+    var _hasRating = _ratedDeliveries > 0 && rider.rating != null;
+    var ratingScore = _hasRating ? Math.min(1, Number(rider.rating) / 5.0) : 0.5;
     var accScore    = rider.acceptanceRate != null ? rider.acceptanceRate : 0.80;
 
     var raw = WEIGHTS.distance       * distScore
@@ -142,6 +166,11 @@
       score:      Math.round(final * 1000) / 1000,
       distKm:     Math.round(distKm * 10) / 10,
       etaMin:     Math.round(etaMin),
+      /* RATING PROVENANCE, at the top level because it is a fact about the rating rather
+         than an input to the score. A consumer deciding whether to SHOW a number should
+         not have to read the scoring internals to learn whether one was ever earned. */
+      rated:       _hasRating,
+      ratingBasis: _hasRating ? _ratedDeliveries : 0,
       components: {
         distScore, etaScore, workScore, vehScore, ratingScore, accScore,
         hubBonus, batteryPenalty, signalPenalty,

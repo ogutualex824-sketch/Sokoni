@@ -167,6 +167,31 @@ You have received Purchase Order ${poNumber || ''} from ${merchant || 'a SOKONI 
 Please check your email or supplier portal.`,
   },
 
+  /* The evening-before reminder. States the amount and the deadline, and nothing else —
+     no rate, no breakdown, no instruction the merchant cannot act on. The figure comes
+     from the collection gate's own outstanding reader; this template only prints it. */
+  pos_commission_due: {
+    category: 'transactional', pref: 'payments',
+    body: ({ amount, gate }) =>
+`SOKONI
+
+Your POS/Till commission of ${amount} is due at the ${gate || '06:00'} collection gate tomorrow morning.
+
+Keep your M-PESA balance funded to avoid interruption.`,
+  },
+
+  /* The morning outcome. Critical, because by the time this is sent the money has either
+     moved or failed to. */
+  pos_commission_gate: {
+    category: 'transactional', pref: 'payments',
+    body: ({ amount, outcome }) =>
+`SOKONI
+
+${outcome === 'collected'
+  ? `POS/Till commission of ${amount} collected. Thank you.`
+  : `We could not collect your POS/Till commission of ${amount} this morning.`}`,
+  },
+
   order_placed: {
     category: 'transactional', pref: 'orders',
     body: ({ orderId, total }) =>
