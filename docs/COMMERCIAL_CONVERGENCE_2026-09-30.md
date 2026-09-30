@@ -255,3 +255,49 @@ Then: `write-vat-policy.js --apply` (when the adviser's reference exists) · `ba
 
 ### 8.7 Remaining blockers (all outside code)
 VAT applicability + registration facts (owner/adviser) · eTIMS platform credentials · FREE-50 backfill authorization · B1 `gate_error` proof (sokoni-70) · production deployment approval.
+
+
+---
+
+## 9 · Release gates and the FREE-50 authorization packet (2026-09-30, later)
+
+**Gate A — engineering: GREEN.** **Gate B — business/fiscal: OPEN** (VAT applicability + SOKONI registration facts + adviser reference; eTIMS platform credentials; FREE-50 production authorization). **Gate C — deployment: OPEN** (explicit approval). Added Gate B blocker: the UI states two VAT treatments — `terms.html:255` (16% VAT *deducted* from platform fees = inclusive) vs `legal-hub.html:3228` (VAT *charged at the prevailing rate* = exclusive). **Do not deploy hosting while both statements stand**; the losing page changes with the VAT decision.
+
+### 9.1 FREE-50 — authorization packet (production write NOT performed)
+
+| requirement | evidence |
+|---|---|
+| dry-run artifact retained | `docs/backups/free50-dryrun-2026-09-30T13-30-40-241Z.json` (committed) |
+| exact identities | 12, listed below (from the artifact) |
+| KASS 102 → ceiling ≥ 102 | target 102 with `grandfatheredFloor 102`; live re-check 2026-09-30: `shops/D5Ql2E…` = **KASS SHOP**, products 102 by `sellerUid` / 97 by `shopId`, counter `maxProducts 10, count −24, catalogVersion 1` |
+| no counter decreases | 12/12 targets ≥ current; the script exits 3 before writing if any row would reduce |
+| idempotence / version guard | `migrationVersion: catalog-v3-free50-2026-09-30`; second apply = 12 skip / 0 writes |
+| `--authorized-by` recorded | written to `migratedBy`, echoed in the evidence file |
+| post-write readback | every counter read back after the write; `--verify <evidence>` re-checks live vs expected at any time |
+| rollback tested / available | `--rollback <apply-evidence>` restores the recorded before-values, writes its own readback evidence, `--verify` confirms |
+| rehearsal | `scripts/test-backfill-v3-emulator.js` **16/0** on the emulator with the production shape: dry-run → refused apply without auth → apply (12 written, 12 readback) → verify → idempotent re-apply → never-reduce guard (500 stays 500) → rollback → verify |
+
+| identity | classification | current max | actual products | stored count | target | floor |
+|---|---|---|---|---|---|---|
+| `D5Ql2EYr95bt79IpcGTmOMTK0P83` | KASS SHOP (real merchant) | 10 | 102 | -24 | 102 | 102 |
+| `MERCHANT_A_uid_11` | test / QA identity (0 products) | 10 | 0 | — | 50 | — |
+| `SELLER_A` | test / QA identity (0 products) | 10 | 0 | — | 50 | — |
+| `SELLER_A_uid_7f3` | test / QA identity (0 products) | 10 | 0 | — | 50 | — |
+| `_qa_seller_1786036746494` | test / QA identity (0 products) | 10 | 0 | 0 | 50 | — |
+| `oXrgbq2oBwadJSfsk0NypDCAXVT2` | test / QA identity (0 products) | 10 | 0 | 0 | 50 | — |
+| `rc-not-this-seller-uid` | test / QA identity (0 products) | 10 | 0 | 0 | 50 | — |
+| `xrH21J5GFbW8PluCZ2ny5nIuf602` | test / QA identity (0 products) | 10 | 0 | 10 | 50 | — |
+| `zzz_diag_merchant` | test / QA identity (0 products) | 10 | 0 | — | 50 | — |
+| `zzz_release_verify_synthetic` | test / QA identity (0 products) | 10 | 0 | — | 50 | — |
+| `zzz_verify_annual` | test / QA identity (0 products) | 10 | 0 | — | 50 | — |
+| `zzz_verify_monthly` | test / QA identity (0 products) | 10 | 0 | — | 50 | — |
+
+Eleven of the twelve are test/QA residue (see [[project_prod_cert_account_residue]]); writing 50 to them is harmless and keeps the run uniform, but they are candidates for deletion in that separate cleanup — not here. The stored **count −24** on KASS is counter drift; the backfill never writes `count` (that is `recount-product-counters.js`, a separate operation to authorize separately).
+
+**Command, when authorized (a separate change from the code deployment):**
+```
+node scripts/backfill-product-counters-v3.js                                   # dry-run again immediately before
+node scripts/backfill-product-counters-v3.js --apply --authorized-by "<owner name>"
+node scripts/backfill-product-counters-v3.js --verify docs/backups/free50-apply-<ts>.json
+```
+Then verify the chain on KASS: `canPublishProduct` (ceiling 102, at limit), the plan panel (`getMerchantEntitlements` → 50 for new usage, 102 held), and that nothing was removed.
