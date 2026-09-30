@@ -53,16 +53,21 @@
     .logo-icon img{width:100%;height:100%;object-fit:contain;display:block}
     .logo-text{font-size:13px;font-weight:700;letter-spacing:.5px}
     .logo-sub{font-size:10px;color:var(--aos-muted)}
-    .nav-group{padding:8px 0}
-    .nav-group-label{font-size:10px;font-weight:600;color:var(--aos-muted);letter-spacing:1px;text-transform:uppercase;padding:8px 16px 4px}
-    .nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;color:var(--aos-text);transition:background .15s,color .15s;font-size:13px;border:none;background:none;width:100%;text-align:left;text-decoration:none}
+    /* ── Navigation items: merchant-v2.html's sidebar vocabulary ─────────────
+       Rounded 11px rows inside an 8px-padded scroller, uppercase 10.5px group
+       labels, and an active state drawn with the accent's dim fill + line — the
+       same shape the merchant shell uses (.nav-item / .nav-item.on / .side-group),
+       in this console's green tokens. One vocabulary across the platform's shells. */
+    .nav-group{padding:4px 0}
+    .nav-group-label{font-size:10.5px;font-weight:800;color:var(--aos-muted);letter-spacing:.09em;text-transform:uppercase;padding:10px 12px 4px}
+    .nav-item{display:flex;align-items:center;gap:11px;padding:10px 11px;margin-bottom:2px;border-radius:11px;cursor:pointer;color:var(--aos-text);transition:background .15s,color .15s;font-size:13.5px;font-weight:600;border:1px solid transparent;background:none;width:100%;text-align:left;text-decoration:none}
     .nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
-    .nav-item.active{background:rgba(113,255,0,.1);color:var(--aos-accent);font-weight:600}
+    .nav-item.active{background:var(--ga);color:var(--aos-accent);border-color:rgba(113,255,0,.32);font-weight:700}
     .nav-icon{font-size:15px;width:18px;text-align:center;flex-shrink:0}
     /* Children: an existing tab inside the parent panel, reached through the same
        router and the same *Tab() selector as the in-panel tab bar. Indented under
        the parent; the parent lights up while one of its children is current. */
-    .nav-item.nav-child{padding:7px 16px 7px 30px;font-size:12.5px;color:var(--aos-muted)}
+    .nav-item.nav-child{padding:8px 11px 8px 34px;font-size:12.5px;color:var(--aos-muted)}
     .nav-item.nav-child .nav-icon{font-size:12px;width:14px}
     .nav-item.nav-child.active{font-weight:600}
     .nav-item.parent-active{color:var(--aos-accent)}
@@ -150,7 +155,12 @@
     .ec-stage-n{font-size:1.25rem;font-weight:800;color:var(--aos-text);line-height:1}
     .ec-stage-l{font-size:.66rem;color:var(--aos-sub);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
     .ec-skel{height:60px;border-radius:var(--aos-radius);background:linear-gradient(90deg,var(--aos-surface) 25%,rgba(255,255,255,.05) 37%,var(--aos-surface) 63%);background-size:400% 100%;animation:ecsk 1.2s ease infinite}
-    .aos-input{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:8px;color:var(--aos-text);padding:8px 12px;font-size:14px;outline:none;min-width:200px}
+    .aos-input{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:8px;color:var(--aos-text);padding:8px 12px;font-size:14px;outline:none;min-width:min(200px,100%);max-width:100%}
+    /* A toolbar control may be as wide as the toolbar, never wider: a 200px floor
+       beside two selects held the Users panel at 405px on a 390px phone. Below
+       768px every toolbar control takes its own full row. */
+    .panel-toolbar input,.panel-toolbar select{max-width:100%;min-width:0}
+    @media(max-width:768px){.panel-toolbar input,.panel-toolbar select,.panel-toolbar .aos-input{width:100%!important;min-width:0!important;flex:1 1 100%}}
     .aos-input:focus{border-color:var(--aos-accent)}
     /* Executive report */
     .rep-card{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:16px;margin-bottom:14px;max-width:560px}
@@ -357,14 +367,14 @@
       body.sidebar-collapsed .nav-item .nav-icon{font-size:18px}
       body.sidebar-collapsed .nav-badge{display:none}
     }
-    @media(max-width:768px){.aos-sidebar{transform:translateX(-100%);transition:transform .25s}.aos-sidebar.open{transform:translateX(0)}.aos-sidebar.open ~ .aos-scrim{display:block}.aos-main{margin-left:0}.mobile-menu-btn{display:flex!important}}
+    @media(max-width:768px){.aos-sidebar{transform:translateX(-100%);transition:transform .22s cubic-bezier(.4,0,.2,1)}.aos-sidebar.open{transform:translateX(0)}.aos-sidebar.open ~ .aos-scrim{display:block}.aos-main{margin-left:0}.mobile-menu-btn{display:flex!important}}
     /* ── Sidebar scroll region, focus, motion (Merchant V2's drawer contract) ──
        The sidebar is a flex column that never scrolls itself; only the <nav>
        does. min-height:0 is what lets the nav shrink and scroll instead of
        pushing the footer (Sign Out) below the viewport — the same fix
        merchant-v2.html carries on .side-scroll. */
     .aos-logo,.aos-sidebar-footer{flex:0 0 auto}
-    .aos-nav{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+    .aos-nav{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:4px 8px 6px}
     .nav-label{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .18s,width .18s}
     /* Keyboard focus is visible; :focus:not(:focus-visible) in sokoni-tokens.css
        already keeps the ring off pointer clicks. */

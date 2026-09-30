@@ -56,20 +56,32 @@
     @keyframes spin{to{transform:rotate(360deg)}}
 
     /* ── Sidebar ── */
-    .sa-sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;transition:transform .25s}
+    .sa-sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow:hidden;transition:transform .22s cubic-bezier(.4,0,.2,1)}
+    /* ── Sidebar scroll region, focus, motion (Merchant V2's drawer contract, the
+       same shape AdminOS carries). The sidebar is a flex column that never scrolls
+       itself; only the <nav> does. min-height:0 lets the nav shrink and scroll
+       instead of pushing the footer (Sign Out) below the viewport. */
+    .sa-logo,.sa-sidebar-footer{flex:0 0 auto}
+    .sa-nav{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:4px 8px 6px}
+    .nav-label{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .18s,width .18s}
+    .nav-item:focus-visible,.sa-sidebar-toggle:focus-visible,.signout-btn:focus-visible,.mobile-menu-btn:focus-visible,.sa-topbar-signout:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
     .sa-logo{padding:20px 16px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
     .logo-icon{width:36px;height:36px;border-radius:9px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(255,255,255,.04)}
     .logo-icon img{width:100%;height:100%;object-fit:contain;display:block}
     .logo-text{font-size:13px;font-weight:700;letter-spacing:.5px}
     .logo-sub{font-size:10px;color:var(--accent);font-weight:600;letter-spacing:.5px}
     .nav-group{padding:8px 0}
-    .nav-group-label{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;padding:8px 16px 4px}
-    .nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;color:var(--text);transition:background .15s,color .15s;font-size:13px;border:none;background:none;width:100%;text-align:left;text-decoration:none}
+    /* ── Navigation items: merchant-v2.html's sidebar vocabulary, in this console's
+       accent. Rounded rows in an 8px-padded scroller, uppercase group labels, and an
+       active state drawn with the accent's dim fill + line. */
+    .nav-group{padding:4px 0}
+    .nav-group-label{font-size:10.5px;font-weight:800;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;padding:10px 12px 4px}
+    .nav-item{display:flex;align-items:center;gap:11px;padding:10px 11px;margin-bottom:2px;border-radius:11px;cursor:pointer;color:var(--text);transition:background .15s,color .15s;font-size:13.5px;font-weight:600;border:1px solid transparent;background:none;width:100%;text-align:left;text-decoration:none}
     .nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
-    .nav-item.active{background:rgba(224,64,251,.15);color:var(--accent);font-weight:600}
+    .nav-item.active{background:rgba(224,64,251,.12);color:var(--accent);border-color:rgba(224,64,251,.32);font-weight:700}
     .nav-icon{font-size:15px;width:18px;text-align:center;flex-shrink:0}
     /* AdminOS child links: indented under their parent link, as in AdminOS itself. */
-    .nav-item.nav-child{padding:7px 16px 7px 30px;font-size:12.5px;color:var(--muted)}
+    .nav-item.nav-child{padding:8px 11px 8px 34px;font-size:12.5px;color:var(--muted)}
     .nav-item.nav-child .nav-icon{font-size:12px;width:14px}
     .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;border-radius:10px;padding:1px 6px;font-weight:700}
     .sa-sidebar-footer{margin-top:auto;padding:16px;border-top:1px solid var(--border)}
@@ -85,10 +97,18 @@
     /* min-width:0 — a flex item defaults to min-width:auto and refuses to shrink
        below its content, so one wide table widens the column and then the page. */
     .sa-main{margin-left:var(--sidebar-w);flex:1;min-width:0;display:flex;flex-direction:column;min-height:100vh}
-    .sa-topbar{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;gap:16px}
+    /* flex-wrap + min-width:0 so the topbar reflows rather than forcing the column
+       wider than the screen: title + email + Sign Out + the profile menu measured
+       417px on a 390px phone. The title truncates; the email yields first. */
+    .sa-topbar{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--border);padding:8px 24px;min-height:56px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;min-width:0}
+    @media(max-width:640px){
+      .sa-topbar{padding:8px 12px;gap:10px}
+      .sa-topbar-email{display:none}
+      .sa-content{padding:14px 12px}
+    }
     .mobile-menu-btn{display:none;width:36px;height:36px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);align-items:center;justify-content:center;cursor:pointer;font-size:18px;color:var(--text)}
-    .sa-topbar-title{flex:1;font-size:18px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-    .sa-topbar-email{font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .sa-topbar-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:18px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .sa-topbar-email{font-size:12px;color:var(--muted);max-width:200px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .sa-topbar-signout{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-size:12px;transition:all .15s}
     .sa-topbar-signout:hover{border-color:var(--red);color:var(--red)}
     .sa-content{flex:1;min-width:0;padding:24px;overflow-y:auto}
@@ -176,6 +196,7 @@
     /* ── Panel Toolbar ── */
     .panel-toolbar{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
     .panel-toolbar h2{flex:1;font-size:16px;font-weight:600}
+    .sa-input,.sa-select{max-width:100%}
     .sa-input{padding:7px 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;outline:none;font-family:var(--font)}
     .sa-input:focus{border-color:var(--accent)}
     .sa-select{padding:7px 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;outline:none;cursor:pointer;font-family:var(--font)}
@@ -224,7 +245,7 @@
     .danger-actions{display:flex;flex-wrap:wrap;gap:10px}
     .confirm-gate{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;padding:12px;background:rgba(0,0,0,.2);border-radius:8px}
     .confirm-gate label{font-size:12px;color:var(--muted)}
-    .confirm-gate .sa-input{width:160px}
+    .confirm-gate .sa-input{width:160px;max-width:100%}
     .confirm-gate .sa-btn.danger:disabled{opacity:.4;cursor:not-allowed}
 
     /* ── Secrets Checklist ── */
@@ -294,7 +315,10 @@
       body.sa-collapsed .logo-titles,body.sa-collapsed .sa-user-info-text,body.sa-collapsed .nav-group-label,body.sa-collapsed .signout-btn{display:none}
       body.sa-collapsed .sa-logo{justify-content:center}
       body.sa-collapsed .sa-sidebar-toggle{transform:rotate(180deg);margin:0}
-      body.sa-collapsed .nav-item{font-size:0;justify-content:center;padding:10px 0;gap:0}
+      body.sa-collapsed .nav-item{justify-content:center;padding:10px 0;gap:0}
+      body.sa-collapsed .nav-item.nav-child{padding:6px 0}
+      body.sa-collapsed .nav-item.nav-child .nav-icon{font-size:14px}
+      body.sa-collapsed .nav-label{opacity:0;width:0;overflow:hidden}
       body.sa-collapsed .nav-item .nav-icon{font-size:18px}
       body.sa-collapsed .nav-badge{display:none}
     }
@@ -311,6 +335,13 @@
       .kpi-grid,.fin-kpi-grid{grid-template-columns:1fr}
       .sa-content{padding:16px}
     }
+    @media(prefers-reduced-motion:reduce){
+      .sa-sidebar,.sa-main,.nav-label{transition:none}
+      /* id-scoped and !important: sokoni-polish.css:198's button rule (0,4,1) beats
+         the platform's reduced-motion reset on *, so the sidebar's own buttons must
+         out-specify it. */
+      #saSidebar button,#mobileMenuBtn{transition:none!important}
+    }
   </style>
 <!-- Shared admin responsive module (Constitution Rule 8 cross-device clause). -->
 <link rel="stylesheet" href="sokoni-admin-responsive.css">
@@ -324,66 +355,67 @@
 </div>
 
 <!-- Sidebar -->
-<aside class="sa-sidebar" id="saSidebar">
+<aside class="sa-sidebar" id="saSidebar" aria-label="Super Admin sidebar">
   <div class="sa-logo">
     <div class="logo-icon"><img src="/assets/logosokoni.png" alt="Sokoni" loading="eager"></div>
     <div class="logo-titles">
       <div class="logo-text" id="saShopName">SOKONI</div>
       <div class="logo-sub">SUPER ADMIN</div>
     </div>
-    <button class="sa-sidebar-toggle" onclick="_saSidebarToggle()" aria-label="Collapse or close menu" title="Collapse menu">&#x00AB;</button>
+    <button class="sa-sidebar-toggle" id="saSidebarToggle" type="button" onclick="_saSidebarToggle()" aria-label="Collapse menu" aria-expanded="true" title="Collapse menu">&#x00AB;</button>
   </div>
 
-  <a href="admin-os.html" class="nav-item" style="text-decoration:none;display:flex;align-items:center;gap:8px;margin-bottom:6px">
-    <span class="nav-icon">&#8592;</span>Back to Admin
+  <nav class="sa-nav" id="saNav" aria-label="Super Admin navigation">
+  <a href="admin-os.html" class="nav-item" data-label="Back to Admin" style="margin-bottom:6px">
+    <span class="nav-icon">&#8592;</span><span class="nav-label">Back to Admin</span>
   </a>
 
   <div class="nav-group">
     <div class="nav-group-label">Overview</div>
-    <button class="nav-item active" data-section="overview" onclick="SA.nav('overview');_closeSidebar()">
-      <span class="nav-icon">&#x1F4CA;</span>Platform Overview
+    <button class="nav-item active" data-section="overview" data-label="Platform Overview" type="button" onclick="SA.nav('overview');_closeSidebar()">
+      <span class="nav-icon">&#x1F4CA;</span><span class="nav-label">Platform Overview</span>
     </button>
   </div>
 
   <div class="nav-group">
     <div class="nav-group-label">People</div>
-    <button class="nav-item" data-section="users" onclick="SA.nav('users');_closeSidebar()">
-      <span class="nav-icon">&#x1F465;</span>User Management
+    <button class="nav-item" data-section="users" data-label="User Management" type="button" onclick="SA.nav('users');_closeSidebar()">
+      <span class="nav-icon">&#x1F465;</span><span class="nav-label">User Management</span>
     </button>
   </div>
 
   <div class="nav-group">
     <div class="nav-group-label">Finance</div>
-    <button class="nav-item" data-section="applications" onclick="SA.nav('applications');_closeSidebar()">
-      <span>&#x1F4EC;</span><span>Applications</span>
+    <button class="nav-item" data-section="applications" data-label="Applications" type="button" onclick="SA.nav('applications');_closeSidebar()">
+      <span class="nav-icon">&#x1F4EC;</span><span class="nav-label">Applications</span>
       <span id="saAppsBadge" style="margin-left:auto;background:#ff3c3c;color:#fff;border-radius:999px;padding:1px 6px;font-size:10px;font-weight:800;display:none"></span>
     </button>
-    <button class="nav-item" data-section="financial" onclick="SA.nav('financial');_closeSidebar()">
-      <span class="nav-icon">&#x1F4B0;</span>Financial Oversight
+    <button class="nav-item" data-section="financial" data-label="Financial Oversight" type="button" onclick="SA.nav('financial');_closeSidebar()">
+      <span class="nav-icon">&#x1F4B0;</span><span class="nav-label">Financial Oversight</span>
     </button>
   </div>
 
   <div class="nav-group">
     <div class="nav-group-label">Configuration</div>
-    <button class="nav-item" data-section="config" onclick="SA.nav('config');_closeSidebar()">
-      <span class="nav-icon">&#x2699;&#xFE0F;</span>Platform Config
+    <button class="nav-item" data-section="config" data-label="Platform Config" type="button" onclick="SA.nav('config');_closeSidebar()">
+      <span class="nav-icon">&#x2699;&#xFE0F;</span><span class="nav-label">Platform Config</span>
     </button>
-    <button class="nav-item" data-section="emergency" onclick="SA.nav('emergency');_closeSidebar()">
-      <span class="nav-icon">&#x26A1;</span>Emergency Controls
+    <button class="nav-item" data-section="emergency" data-label="Emergency Controls" type="button" onclick="SA.nav('emergency');_closeSidebar()">
+      <span class="nav-icon">&#x26A1;</span><span class="nav-label">Emergency Controls</span>
       <span class="nav-badge">!</span>
     </button>
   </div>
 
   <div class="nav-group">
     <div class="nav-group-label">Operations</div>
-    <button class="nav-item" data-section="audit" onclick="SA.nav('audit');_closeSidebar()">
-      <span class="nav-icon">&#x1F4CB;</span>Audit Log
+    <button class="nav-item" data-section="audit" data-label="Audit Log" type="button" onclick="SA.nav('audit');_closeSidebar()">
+      <span class="nav-icon">&#x1F4CB;</span><span class="nav-label">Audit Log</span>
     </button>
-    <button class="nav-item" data-section="broadcast" onclick="SA.nav('broadcast');_closeSidebar()">
-      <span class="nav-icon">&#x1F4E2;</span>Platform Broadcast
+    <button class="nav-item" data-section="broadcast" data-label="Platform Broadcast" type="button" onclick="SA.nav('broadcast');_closeSidebar()">
+      <span class="nav-icon">&#x1F4E2;</span><span class="nav-label">Platform Broadcast</span>
     </button>
-    <button class="nav-item" data-section="secrets" onclick="SA.nav('secrets');_closeSidebar()">
-      <span class="nav-icon">&#x1F511;</span>Secrets Checklist
+    <button class="nav-item" data-section="secrets" data-label="Secrets Checklist" type="button" onclick="SA.nav('secrets');_closeSidebar()">
+      <span class="nav-icon">&#x1F511;</span><span class="nav-label">Secrets Checklist</span>
     </button>
   </div>
 
@@ -396,81 +428,82 @@
   <div class="nav-group" id="saAdminOsGroup">
     <div class="nav-group-label">AdminOS Workspaces</div>
     <a class="nav-item" href="admin-os.html#marketplace" data-aos-route="marketplace" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F6D2;</span>Marketplace
+      <span class="nav-icon">&#x1F6D2;</span><span class="nav-label">Marketplace</span>
     </a>
     <a class="nav-item nav-child" href="admin-os.html#marketplace/products" data-aos-route="marketplace/products" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F4E6;</span>Products
+      <span class="nav-icon">&#x1F4E6;</span><span class="nav-label">Products</span>
     </a>
     <a class="nav-item nav-child" href="admin-os.html#marketplace/orders" data-aos-route="marketplace/orders" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F9FE;</span>Orders
+      <span class="nav-icon">&#x1F9FE;</span><span class="nav-label">Orders</span>
     </a>
     <a class="nav-item nav-child" href="admin-os.html#marketplace/reviews" data-aos-route="marketplace/reviews" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x2B50;</span>Reviews
+      <span class="nav-icon">&#x2B50;</span><span class="nav-label">Reviews</span>
     </a>
     <a class="nav-item" href="admin-os.html#financial" data-aos-route="financial" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F4B0;</span>Financial Center
+      <span class="nav-icon">&#x1F4B0;</span><span class="nav-label">Financial Center</span>
     </a>
     <a class="nav-item nav-child" href="admin-os.html#financial/wallet" data-aos-route="financial/wallet" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F45B;</span>Wallets
+      <span class="nav-icon">&#x1F45B;</span><span class="nav-label">Wallets</span>
     </a>
     <a class="nav-item nav-child" href="admin-os.html#financial/payouts" data-aos-route="financial/payouts" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F3E7;</span>Withdrawals
+      <span class="nav-icon">&#x1F3E7;</span><span class="nav-label">Withdrawals</span>
     </a>
     <a class="nav-item nav-child" href="admin-os.html#financial/disputes" data-aos-route="financial/disputes" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x2696;&#xFE0F;</span>Disputes
+      <span class="nav-icon">&#x2696;&#xFE0F;</span><span class="nav-label">Disputes</span>
     </a>
     <a class="nav-item nav-child" href="admin-os.html#financial/commissions" data-aos-route="financial/commissions" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F4B8;</span>Commissions
+      <span class="nav-icon">&#x1F4B8;</span><span class="nav-label">Commissions</span>
     </a>
     <a class="nav-item" href="admin-os.html#comms" data-aos-route="comms" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F4E2;</span>Communications
+      <span class="nav-icon">&#x1F4E2;</span><span class="nav-label">Communications</span>
     </a>
     <a class="nav-item nav-child" href="admin-os.html#comms/push" data-aos-route="comms/push" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F514;</span>Notifications
+      <span class="nav-icon">&#x1F514;</span><span class="nav-label">Notifications</span>
     </a>
     <a class="nav-item" href="admin-os.html#services" data-aos-route="services" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F527;</span>Service Hubs
+      <span class="nav-icon">&#x1F527;</span><span class="nav-label">Service Hubs</span>
     </a>
     <a class="nav-item" href="admin-os.html#delivery" data-aos-route="delivery" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F697;</span>Delivery Operations
+      <span class="nav-icon">&#x1F697;</span><span class="nav-label">Delivery Operations</span>
     </a>
     <a class="nav-item" href="admin-os.html#bookings" data-aos-route="bookings" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F4C5;</span>Bookings
+      <span class="nav-icon">&#x1F4C5;</span><span class="nav-label">Bookings</span>
     </a>
     <a class="nav-item" href="admin-os.html#payments" data-aos-route="payments" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F4B3;</span>Payments
+      <span class="nav-icon">&#x1F4B3;</span><span class="nav-label">Payments</span>
     </a>
     <a class="nav-item" href="admin-os.html#support" data-aos-route="support" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F3A7;</span>Customer Support
+      <span class="nav-icon">&#x1F3A7;</span><span class="nav-label">Customer Support</span>
     </a>
     <a class="nav-item" href="admin-os.html#content" data-aos-route="content" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F4DD;</span>Content Management
+      <span class="nav-icon">&#x1F4DD;</span><span class="nav-label">Content Management</span>
     </a>
     <a class="nav-item" href="admin-os.html#ai" data-aos-route="ai" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F916;</span>AI Operations
+      <span class="nav-icon">&#x1F916;</span><span class="nav-label">AI Operations</span>
     </a>
     <a class="nav-item" href="admin-os.html#search" data-aos-route="search" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F50D;</span>Search Management
+      <span class="nav-icon">&#x1F50D;</span><span class="nav-label">Search Management</span>
     </a>
     <a class="nav-item" href="admin-os.html#analytics" data-aos-route="analytics" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F4CA;</span>Analytics &amp; BI
+      <span class="nav-icon">&#x1F4CA;</span><span class="nav-label">Analytics &amp; BI</span>
     </a>
     <a class="nav-item" href="admin-os.html#smartpos" data-aos-route="smartpos" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F5A8;&#xFE0F;</span>SmartPOS
+      <span class="nav-icon">&#x1F5A8;&#xFE0F;</span><span class="nav-label">SmartPOS</span>
     </a>
     <a class="nav-item" href="admin-os.html#fraud" data-aos-route="fraud" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F6E1;&#xFE0F;</span>Fraud &amp; Trust
+      <span class="nav-icon">&#x1F6E1;&#xFE0F;</span><span class="nav-label">Fraud &amp; Trust</span>
     </a>
     <a class="nav-item" href="admin-os.html#hubs" data-aos-route="hubs" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F3D7;&#xFE0F;</span>Hub Registry
+      <span class="nav-icon">&#x1F3D7;&#xFE0F;</span><span class="nav-label">Hub Registry</span>
     </a>
     <a class="nav-item" href="admin-os.html#workflows" data-aos-route="workflows" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x267B;&#xFE0F;</span>Workflow Center
+      <span class="nav-icon">&#x267B;&#xFE0F;</span><span class="nav-label">Workflow Center</span>
     </a>
     <a class="nav-item" href="admin-os.html#security" data-aos-route="security" onclick="_closeSidebar()">
-      <span class="nav-icon">&#x1F510;</span>Security
+      <span class="nav-icon">&#x1F510;</span><span class="nav-label">Security</span>
     </a>
   </div>
+  </nav>
 
   <div class="sa-sidebar-footer">
     <div class="sa-user-chip">
@@ -483,13 +516,13 @@
     <button class="signout-btn" onclick="SA.signOut()">Sign Out</button>
   </div>
 </aside>
-<div class="sa-scrim" id="saScrim" onclick="_closeSidebar()"></div>
+<div class="sa-scrim" id="saScrim" aria-hidden="true" onclick="_closeSidebar()"></div>
 
 <!-- Main -->
 <div class="sa-main">
   <!-- Topbar -->
   <header class="sa-topbar">
-    <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="_toggleSidebar()" aria-label="Menu">&#9776;</button>
+    <button class="mobile-menu-btn" id="mobileMenuBtn" type="button" onclick="_toggleSidebar()" aria-label="Open menu" aria-controls="saSidebar" aria-expanded="false">&#9776;</button>
     <div class="sa-topbar-title">SOKONI Super Admin</div>
     <span class="sa-topbar-email" id="saTopbarEmail"></span>
     <button class="sa-topbar-signout" onclick="SA.signOut()">Sign Out</button>
@@ -1007,15 +1040,53 @@ function _fmtMoney(n){
 }
 
 // ── Mobile sidebar ─────────────────────────────────────────
-function _toggleSidebar(){document.getElementById('saSidebar').classList.toggle('open')}
-function _closeSidebar(){if(window.innerWidth<=768)document.getElementById('saSidebar').classList.remove('open')}
+/* Merchant V2's drawer contract, the same shape AdminOS carries: ONE markup tree is a
+   fixed rail on desktop and an off-canvas drawer on phones. Open → drawer + scrim;
+   Escape, the « control, the scrim, or choosing a section → closed. Focus moves into
+   the drawer on open and back to the menu button on close. Routing is untouched:
+   every section still goes through SA.nav(). */
+var _MOBILE_Q=window.matchMedia('(max-width:768px)');
+function _isMobile(){return _MOBILE_Q.matches}
+function _sbEl(id){return document.getElementById(id)}
+function _syncSidebarA11y(){
+  var side=_sbEl('saSidebar'),menu=_sbEl('mobileMenuBtn'),tog=_sbEl('saSidebarToggle');
+  if(!side)return;
+  var open=side.classList.contains('open'),collapsed=document.body.classList.contains('sa-collapsed');
+  if(menu)menu.setAttribute('aria-expanded',String(open));
+  if(tog){
+    if(_isMobile()){tog.setAttribute('aria-label','Close menu');tog.title='Close menu';tog.removeAttribute('aria-expanded');}
+    else{var l=collapsed?'Expand menu':'Collapse menu';tog.setAttribute('aria-label',l);tog.title=l;tog.setAttribute('aria-expanded',String(!collapsed));}
+  }
+  /* Collapsed rail: the label is visually gone, so the name travels on the title. */
+  var rail=collapsed&&!_isMobile();
+  side.querySelectorAll('.nav-item').forEach(function(n){
+    if(rail)n.title=n.getAttribute('data-label')||n.textContent.trim();else n.removeAttribute('title');
+  });
+}
+function _openSidebar(){
+  _sbEl('saSidebar').classList.add('open');_syncSidebarA11y();
+  var t=_sbEl('saSidebarToggle');if(t)t.focus();
+}
+function _closeSidebar(){
+  var side=_sbEl('saSidebar'),was=side.classList.contains('open');
+  side.classList.remove('open');_syncSidebarA11y();
+  if(was&&_isMobile()){var m=_sbEl('mobileMenuBtn');if(m)m.focus();}
+}
+function _toggleSidebar(){ if(_sbEl('saSidebar').classList.contains('open'))_closeSidebar();else _openSidebar(); }
 /* Toggle: on mobile dismisses the drawer; on desktop collapses to an icon rail, remembered per browser. */
 function _saSidebarToggle(){
-  if(window.innerWidth<=768){ document.getElementById('saSidebar').classList.remove('open'); return; }
+  if(_isMobile()){ _closeSidebar(); return; }
   var c=document.body.classList.toggle('sa-collapsed');
   try{ localStorage.setItem('saSidebarCollapsed', c?'1':'0'); }catch(_){}
+  _syncSidebarA11y();
 }
-(function(){ try{ if(localStorage.getItem('saSidebarCollapsed')==='1' && window.innerWidth>768){ var _ap=function(){document.body.classList.add('sa-collapsed');}; document.body?_ap():document.addEventListener('DOMContentLoaded',_ap); } }catch(_){} })();
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'&&_sbEl('saSidebar')&&_sbEl('saSidebar').classList.contains('open')){e.preventDefault();_closeSidebar();}
+});
+/* Crossing the phone breakpoint with the drawer open must not leave it stuck open. */
+if(_MOBILE_Q.addEventListener)_MOBILE_Q.addEventListener('change',function(){_sbEl('saSidebar').classList.remove('open');_syncSidebarA11y();});
+(function(){ try{ if(localStorage.getItem('saSidebarCollapsed')==='1' && window.innerWidth>768){ var _ap=function(){document.body.classList.add('sa-collapsed');_syncSidebarA11y();}; document.body?_ap():document.addEventListener('DOMContentLoaded',_ap); } }catch(_){} })();
+document.addEventListener('DOMContentLoaded',_syncSidebarA11y);
 
 // ── Toast ──────────────────────────────────────────────────
 function _toast(msg,type='info',dur=3500){
@@ -1085,8 +1156,13 @@ const SA={
   // Navigation ──────────────────────────────────────────────
   nav(section){
     document.querySelectorAll('.sa-panel').forEach(p=>p.hidden=true);
-    document.querySelectorAll('.nav-item').forEach(n=>{
-      n.classList.toggle('active',n.dataset.section===section);
+    /* .active is the styling hook; aria-current is the state assistive tech reads.
+       Both move together here and nowhere else, so they cannot disagree. */
+    document.querySelectorAll('#saNav .nav-item').forEach(n=>{
+      const on=n.dataset.section===section;
+      n.classList.toggle('active',on);
+      if(on)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');
+      if(on){try{n.scrollIntoView({block:'nearest'});}catch(_){}}
     });
     const panel=document.getElementById('panel-'+section);
     if(panel)panel.hidden=false;
