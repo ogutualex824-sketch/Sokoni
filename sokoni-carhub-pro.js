@@ -30,19 +30,34 @@ window.CarHubPro = (function(){
 
   function kes(n){ return 'KES ' + Number(n||0).toLocaleString(); }
 
+  /* Resolves true ONLY when the Firestore write (SokoniDB.saveApplication)
+     resolved. false = no SokoniDB or the write rejected; the record is then
+     cached in localStorage only and must NEVER be reported as recorded on
+     SOKONI (CLAUDE.md "UI Data Integrity"). Never rejects. */
   async function fsWrite(collection, data) {
     try {
       if(window.SokoniDB && typeof window.SokoniDB.saveApplication === 'function'){
-        return await window.SokoniDB.saveApplication({ ...data, category: collection });
+        await window.SokoniDB.saveApplication({ ...data, category: collection });
+        return true;
       }
-    } catch(e){ console.warn('[CarHubPro] Firestore:', e.message); }
+    } catch(e){ console.warn('[CarHubPro] Firestore:', e && e.message); }
     try {
       const key='chpro_'+collection;
       const arr=JSON.parse(localStorage.getItem(key)||'[]');
       arr.unshift(data);
       localStorage.setItem(key, JSON.stringify(arr.slice(0,200)));
     } catch(e){}
-    return data.id||('REQ-'+Date.now());
+    return false;
+  }
+
+  /* Neutral pending + honest failure copy shared by every CarHubPro form. */
+  function _pending(msgEl){
+    if(msgEl){ msgEl.textContent='Saving…'; msgEl.style.color='rgba(255,255,255,0.6)'; }
+  }
+  function _saveFailed(msgEl, topic, ref){
+    const href='support.html?topic='+encodeURIComponent(topic||'request')+(ref?'&ref='+encodeURIComponent(ref):'');
+    if(msgEl){ msgEl.innerHTML='⚠️ Couldn\'t save — please try again or <a href="'+href+'" style="color:#ff9800;">contact Support</a>.'; msgEl.style.color='#ff9800'; }
+    toast('Couldn\'t save — please try again.','error');
   }
 
   function rateLimit(key, max, windowMs){
@@ -433,11 +448,13 @@ window.CarHubPro = (function(){
       mechId,mechName:mech?.name||'',mechPhone:mech?.phone||'',
       serviceType:service,vehicle,clientName:name,clientPhone:phone,
       preferredDate:date,problem,status:'pending',createdAt:Date.now()};
-    await fsWrite('mechanic_bookings',booking);
+    _pending(msgEl);
+    const ok=await fsWrite('mechanic_bookings',booking);
     saveBuyerActivity('mechanic_bookings',booking);
+    if(!ok){ _saveFailed(msgEl,'booking',booking.id); return; }
     /* Recorded via fsWrite above — no WhatsApp hand-off (owner 2026-09-30). */
     if(msgEl){msgEl.innerHTML=`✅ Booking <strong>${_esc(booking.id)}</strong> recorded on SOKONI for ${_esc(mech?.name||'')}. Need help? <a href="support.html?topic=booking&ref=${encodeURIComponent(booking.id)}" style="color:#71ff00;">Contact Support</a>`;msgEl.style.color='#71ff00';}
-    toast('✅ Mechanic booking submitted!');
+    toast('✅ Mechanic booking recorded on SOKONI');
     setTimeout(closeChpModal,2600);
   }
 
@@ -598,9 +615,11 @@ window.CarHubPro = (function(){
       inStock:true,createdAt:Date.now()};
     const saved=JSON.parse(localStorage.getItem('chpro_parts_listings')||'[]');
     saved.unshift(part); localStorage.setItem('chpro_parts_listings',JSON.stringify(saved));
-    await fsWrite('spare_parts',part);
-    if(msgEl){msgEl.innerHTML='✅ Part listed! Buyers can now find it on SOKONI.';msgEl.style.color='#71ff00';}
-    toast('✅ Spare part listed!');
+    _pending(msgEl);
+    const ok=await fsWrite('spare_parts',part);
+    if(!ok){ _saveFailed(msgEl,'request',part.id); return; }
+    if(msgEl){msgEl.innerHTML='✅ Part listing <strong>'+_esc(part.id)+'</strong> recorded on SOKONI.';msgEl.style.color='#71ff00';}
+    toast('✅ Spare part listing recorded on SOKONI');
     setTimeout(()=>{closeChpModal();renderPartsGrid();},2000);
   }
 
@@ -609,12 +628,13 @@ window.CarHubPro = (function(){
   ════════════════════════════════════════════════════ */
 
   const RS_SERVICES={
-    towing:{label:'Towing Service',provider:'0712000111',emoji:'🚛',eta:'20-40 min'},
-    tire:{label:'Tyre Replacement',provider:'0722000222',emoji:'🛞',eta:'15-30 min'},
-    battery:{label:'Battery Jump-Start',provider:'0733000333',emoji:'🔋',eta:'10-20 min'},
-    fuel:{label:'Fuel Delivery',provider:'0744000444',emoji:'⛽',eta:'20-35 min'},
-    lockout:{label:'Lockout Assistance',provider:'0755000555',emoji:'🔓',eta:'15-25 min'},
-    mechanic:{label:'Emergency Mechanic',provider:'0712345678',emoji:'🔧',eta:'30-60 min'},
+    /* No ETA field: there is no dispatch or ETA source, so none may be shown. */
+    towing:{label:'Towing Service',provider:'0712000111',emoji:'🚛'},
+    tire:{label:'Tyre Replacement',provider:'0722000222',emoji:'🛞'},
+    battery:{label:'Battery Jump-Start',provider:'0733000333',emoji:'🔋'},
+    fuel:{label:'Fuel Delivery',provider:'0744000444',emoji:'⛽'},
+    lockout:{label:'Lockout Assistance',provider:'0755000555',emoji:'🔓'},
+    mechanic:{label:'Emergency Mechanic',provider:'0712345678',emoji:'🔧'},
   };
 
   async function submitRoadsideRequest(type){
@@ -630,9 +650,18 @@ window.CarHubPro = (function(){
     const svc=RS_SERVICES[type]||RS_SERVICES.towing;
     const req={id:'RS'+Date.now().toString().slice(-8),type:'roadside_request',
       serviceType:type,serviceLabel:svc.label,vehicle,location,phone,
-      description:desc,status:'dispatched',eta:svc.eta,createdAt:Date.now()};
-    await fsWrite('roadside_requests',req);
+      description:desc,status:'pending',createdAt:Date.now()};
+    /* Nothing is dispatched client-side: no provider is contacted and there is
+       no ETA source. status was 'dispatched' with a hard-coded ETA — both were
+       fabricated, so the record now says what is true: pending. */
+    _pending(msgEl);
+    const ok=await fsWrite('roadside_requests',req);
     saveBuyerActivity('roadside_requests',req);
+    if(!ok){
+      if(msgEl){ msgEl.innerHTML='⚠️ Couldn\'t save your request. <a href="support.html?topic=sos&ref='+encodeURIComponent(req.id)+'" style="color:#ff9800;">Open an SOS support ticket</a> or call <a href="tel:999" style="color:#ff9800;">999</a> / <a href="tel:112" style="color:#ff9800;">112</a> in an emergency.'; msgEl.style.color='#ff9800'; }
+      toast('Couldn\'t save — please try again.','error');
+      return;
+    }
     /* Recorded via fsWrite above; urgent follow-up goes to a SOKONI SOS support ticket, not a WhatsApp hop (owner 2026-09-30). */
     const wa=encodeURIComponent(`SOKONI ROADSIDE ALERT\n\nRef: ${req.id}\nPhone: ${phone}\nVehicle: ${vehicle}\nLocation: ${location}\nService: ${svc.label}\nDetails: ${desc||'No extra details'}`);
     const panel=document.getElementById('rsFormPanel');
@@ -643,22 +672,22 @@ window.CarHubPro = (function(){
       result.innerHTML=`
         <div style="text-align:center;padding:20px 0;">
           <div style="font-size:56px;margin-bottom:16px;animation:sosPulse 1.5s infinite;">${svc.emoji}</div>
-          <div style="font-size:18px;font-weight:900;color:#71ff00;margin-bottom:8px;">${svc.label} Dispatched!</div>
-          <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:16px;">Ref: <strong style="color:white;">${req.id}</strong></div>
+          <div style="font-size:18px;font-weight:900;color:#71ff00;margin-bottom:8px;">${_esc(svc.label)} request recorded</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:16px;">Ref: <strong style="color:white;">${_esc(req.id)}</strong></div>
           <div style="background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.2);border-radius:14px;padding:16px;margin-bottom:16px;">
-            <div style="font-size:26px;font-weight:900;color:#71ff00;">ETA: ${svc.eta}</div>
-            <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">Estimated arrival at your location</div>
+            <div style="font-size:14px;font-weight:800;color:white;">No provider has been dispatched yet.</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:6px;line-height:1.6;">SOKONI Support will confirm a provider with you at <strong style="color:white;">${_esc(phone)}</strong>. For urgent help, open an SOS support ticket below.</div>
           </div>
-          <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:16px;line-height:1.7;">Stay with your vehicle. A technician will call you at <strong style="color:white;">${phone}</strong> shortly.</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:16px;line-height:1.7;">If you are in danger, call emergency services: <a href="tel:999" style="color:#ff3333;font-weight:800;">999</a> / <a href="tel:112" style="color:#ff3333;font-weight:800;">112</a>.</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
             <a href="tel:999" style="padding:12px;background:rgba(255,33,33,0.12);border:1px solid rgba(255,33,33,0.3);border-radius:11px;color:#ff3333;font-weight:900;font-size:13px;text-decoration:none;text-align:center;">🚨 Police 999</a>
             <a href="tel:0800723000" style="padding:12px;background:rgba(255,100,0,0.1);border:1px solid rgba(255,100,0,0.25);border-radius:11px;color:#ff9800;font-weight:900;font-size:13px;text-decoration:none;text-align:center;">🏥 Ambulance</a>
           </div>
-          <a href="support.html?topic=sos&ref=${encodeURIComponent(req.id)}&desc=${wa}" style="display:block;padding:12px;margin-bottom:10px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.28);border-radius:11px;color:#25d366;font-weight:900;font-size:13px;text-decoration:none;text-align:center;">💬 Contact Support (SOS)</a>
+          <a href="support.html?topic=sos&ref=${encodeURIComponent(req.id)}&desc=${wa}" style="display:block;padding:12px;margin-bottom:10px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.28);border-radius:11px;color:#25d366;font-weight:900;font-size:13px;text-decoration:none;text-align:center;">💬 Open an SOS support ticket</a>
           <button type="button" onclick="CarHubPro.resetRoadsideForm()" style="width:100%;padding:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:rgba(255,255,255,0.5);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Request Another Service</button>
         </div>`;
     }
-    toast('✅ Roadside assistance dispatched!');
+    toast('✅ Roadside request recorded — Support will confirm a provider');
   }
 
   function resetRoadsideForm(){
@@ -732,12 +761,14 @@ window.CarHubPro = (function(){
       loanTerm:document.getElementById('finTerm')?.value||48,
       interestRate:document.getElementById('finRate')?.value||13,
       status:'pending',createdAt:Date.now()};
-    await fsWrite('financing_applications',app);
+    _pending(msgEl);
+    const ok=await fsWrite('financing_applications',app);
     saveBuyerActivity('financing_applications',app);
+    if(!ok){ _saveFailed(msgEl,'request',app.id); return; }
     /* Recorded via fsWrite above — no WhatsApp hand-off to the bank (owner 2026-09-30). */
     const _ce=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     if(msgEl){msgEl.innerHTML=`✅ Application <strong>${_ce(app.id)}</strong> recorded on SOKONI (preferred partner: ${_ce(partner)}). Questions? <a href="support.html?topic=request&ref=${encodeURIComponent(app.id)}" style="color:#71ff00;">Contact Support</a>`;msgEl.style.color='#71ff00';}
-    toast('✅ Financing application submitted!');
+    toast('✅ Financing application recorded on SOKONI');
   }
 
   /* ════════════════════════════════════════════════════
@@ -758,12 +789,14 @@ window.CarHubPro = (function(){
     const booking={id:'INSP'+Date.now().toString().slice(-8),type:'inspection_booking',
       vehicle,inspectionType:type,preferredCenter:center,
       preferredDate:date,phone,status:'pending',createdAt:Date.now()};
-    await fsWrite('inspection_bookings',booking);
+    _pending(msgEl);
+    const ok=await fsWrite('inspection_bookings',booking);
     saveBuyerActivity('inspection_bookings',booking);
+    if(!ok){ _saveFailed(msgEl,'booking',booking.id); return; }
     const c=INSPECTION_CENTERS.find(x=>x.name===center)||INSPECTION_CENTERS[1];
     /* Recorded via fsWrite above — no WhatsApp hand-off to the centre (owner 2026-09-30). */
     if(msgEl){msgEl.innerHTML=`✅ Booking <strong>${_esc(booking.id)}</strong> recorded on SOKONI for ${_esc(c.name)}. Need help? <a href="support.html?topic=booking&ref=${encodeURIComponent(booking.id)}" style="color:#71ff00;">Contact Support</a>`;msgEl.style.color='#71ff00';}
-    toast('✅ Inspection booked!');
+    toast('✅ Inspection booking recorded on SOKONI');
   }
 
   /* ════════════════════════════════════════════════════
@@ -820,12 +853,14 @@ window.CarHubPro = (function(){
       vehicleType:document.getElementById('transVehicleType')?.value||'sedan',
       serviceType:document.getElementById('transServiceType')?.value||'open-carrier',
       preferredDate:date,phone,status:'pending',createdAt:Date.now()};
-    await fsWrite('transport_requests',req);
+    _pending(msgEl);
+    const ok=await fsWrite('transport_requests',req);
     saveBuyerActivity('transport_requests',req);
+    if(!ok){ _saveFailed(msgEl,'quote',req.id); return; }
     /* Recorded via fsWrite above — no WhatsApp hand-off to a provider (owner 2026-09-30). */
     const wa=encodeURIComponent(`Car transport request ${req.id}: ${vehicle} (${req.vehicleType}), ${(CITIES[from]||{label:from}).label} → ${(CITIES[to]||{label:to}).label}, ${date}, ${req.serviceType}. Please provide a quote.`);
     if(msgEl){msgEl.innerHTML=`✅ Request <strong>${_esc(req.id)}</strong> recorded on SOKONI. Get your quote: <a href="support.html?topic=quote&ref=${encodeURIComponent(req.id)}&desc=${wa}" style="color:#71ff00;">Contact Support</a>`;msgEl.style.color='#71ff00';}
-    toast('✅ Transport request submitted!');
+    toast('✅ Transport request recorded on SOKONI');
   }
 
   /* ════════════════════════════════════════════════════

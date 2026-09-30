@@ -720,12 +720,16 @@ function bookRepair() {
   let bks = []; try { bks = JSON.parse(localStorage.getItem('sokoniRepairs'))||[]; } catch(e) {}
   bks.unshift({ ref, name, phone, device, type, date, loc, status:'sent', createdAt:Date.now() });
   localStorage.setItem('sokoniRepairs', JSON.stringify(bks.slice(0,20)));
-  _thFireWrite('techRepairs', { ref, name, phone, device, repairType:type, date, location:loc, notes:desc, status:'pending' });
+  _thPending(msgEl);
+  const _repWrite = _thFireWrite('techRepairs', { ref, name, phone, device, repairType:type, date, location:loc, notes:desc, status:'pending' });
   if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
     SokoniPay.waConnect('254705726803', msg, {providerName:'SOKONI Tech Hub',category:'default',serviceDesc:type||'Device Repair'});
   }
   /* no WhatsApp hand-off (owner 2026-09-30) */
-  if(msgEl) { msgEl.innerHTML=`✅ Booking recorded! Ref: <strong>${_esc(ref)}</strong>`; msgEl.style.color='#00d4ff'; }
+  _repWrite.then(function(ok){
+    if(!ok){ _thFailed(msgEl,'booking',ref); return; }
+    if(msgEl) { msgEl.innerHTML=`✅ Booking recorded on SOKONI. Ref: <strong>${_esc(ref)}</strong>`; msgEl.style.color='#00d4ff'; }
+  });
 }
 window.bookRepair = bookRepair;
 
@@ -828,11 +832,13 @@ function postTechRequest() {
   let reqs = []; try { reqs = JSON.parse(localStorage.getItem('askHub_tech'))||[]; } catch(e) {}
   reqs.unshift({ id:'TREQ'+Date.now(), text, cat: cat||'General', phone, ts: Date.now() });
   localStorage.setItem('askHub_tech', JSON.stringify(reqs.slice(0,30)));
-  _thFireWrite('techRequests', { text, category: cat||'General', phone, status:'open' });
   document.getElementById('techAskText').value = '';
   document.getElementById('techAskPhone').value = '';
   renderTechAskFeed();
-  showTechToast('Request posted to Tech Hub!');
+  showTechToast('Saving…');
+  _thFireWrite('techRequests', { text, category: cat||'General', phone, status:'open' }).then(function(ok){
+    showTechToast(ok ? 'Request posted to Tech Hub' : 'Couldn\'t save — please try again or contact Support.');
+  });
 }
 window.postTechRequest = postTechRequest;
 
@@ -872,9 +878,12 @@ function listDevice() {
   };
   let local = []; try { local = JSON.parse(localStorage.getItem('sokoniDevices'))||[]; } catch(e) {}
   local.unshift(dev); localStorage.setItem('sokoniDevices', JSON.stringify(local.slice(0,50)));
-  _thFireWrite('techDevices', { ...dev, status:'active' });
-  if(msgEl) { msgEl.innerHTML='✅ Device listed! <a href="javascript:void(0)" onclick="goThPanel(\'devices\',null)" style="color:#00d4ff;font-weight:700;">View Listings →</a>'; msgEl.style.color='#00d4ff'; }
-  ['sellDevName','sellDevPrice','sellDevPhone','sellDevDesc'].forEach(id => { const el=document.getElementById(id); if(el)el.value=''; });
+  _thPending(msgEl);
+  _thFireWrite('techDevices', { ...dev, status:'active' }).then(function(ok){
+    if(!ok){ _thFailed(msgEl,'request',dev.id); return; }
+    if(msgEl) { msgEl.innerHTML='✅ Device listing recorded on SOKONI. <a href="javascript:void(0)" onclick="goThPanel(\'devices\',null)" style="color:#00d4ff;font-weight:700;">View Listings →</a>'; msgEl.style.color='#00d4ff'; }
+    ['sellDevName','sellDevPrice','sellDevPhone','sellDevDesc'].forEach(id => { const el=document.getElementById(id); if(el)el.value=''; });
+  });
 }
 window.listDevice = listDevice;
 
@@ -906,7 +915,10 @@ function goThPanel(name, btn) {
 }
 window.goThPanel = goThPanel;
 
-/* ── FIRESTORE WRITE (fire-and-forget) ── */
+/* ── FIRESTORE WRITE ──
+   Resolves true ONLY when addDoc resolved (Firestore acknowledged the write);
+   false on any failure. Never rejects. Callers must not say "recorded /
+   submitted / listed" unless it resolved true (CLAUDE.md "UI Data Integrity"). */
 async function _thFireWrite(coll, data) {
   try {
     const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
@@ -914,7 +926,15 @@ async function _thFireWrite(coll, data) {
     const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
     const _a=getApps().find(a=>a.name==="th-write")||initializeApp(_cfg,"th-write");
     await addDoc(collection(getFirestore(_a),coll),{...data,createdAt:serverTimestamp()});
-  } catch(e){}
+    return true;
+  } catch(e){ try{ console.warn('[TechHub] write failed:',coll,e&&e.code||''); }catch(_){} return false; }
+}
+/* Shared honest-state copy for _thFireWrite callers. */
+function _thPending(el){ if(el){ el.textContent='Saving…'; el.style.color='rgba(255,255,255,0.6)'; } }
+function _thFailed(el,topic,ref){
+  var href='support.html?topic='+encodeURIComponent(topic||'request')+(ref?'&ref='+encodeURIComponent(ref):'');
+  if(el){ el.innerHTML='⚠️ Couldn\'t save — please try again or <a href="'+href+'" style="color:#ff9800;">contact Support</a>.'; el.style.color='#ff9800'; }
+  else showTechToast('Couldn\'t save — please try again or contact Support.');
 }
 
 let _thDevicesUnsub = null;
@@ -978,11 +998,14 @@ function submitITRequest() {
   const budget=document.getElementById('itsBudget')?.value||'';
   const timeline=document.getElementById('itsTimeline')?.value||'';
   const desc=document.getElementById('itsDesc')?.value||'';
-  _thFireWrite('techITRequests',{ref,name,phone,company,service:svc,budget,timeline,desc,hub:'tech-hub'});
   const msg=`🖥️ *SOKONI Tech Hub — IT Service Request*\n\nRef: ${ref}\n👤 ${name}${company?' ('+company+')':''}\n📞 ${phone}\n🛠️ Service: ${svc}\n💰 Budget: ${budget}\n⏱️ Timeline: ${timeline}\n${desc?'\n📝 '+desc:''}\n\nPlease get back to me. Thank you!`;
-  /* IT service request → support ticket (owner 2026-09-30); techITRequests record above stands. */
-  if(msgEl){msgEl.innerHTML=`✅ Request recorded! Ref: <strong>${_esc(ref)}</strong> — opening SOKONI Support…`;msgEl.style.color='#818cf8';}
-  setTimeout(function(){ location.href = 'support.html?topic=request&desc=' + encodeURIComponent(msg); }, 600);
+  _thPending(msgEl);
+  /* IT service request → support ticket (owner 2026-09-30); "recorded" only once the techITRequests write resolved. */
+  _thFireWrite('techITRequests',{ref,name,phone,company,service:svc,budget,timeline,desc,hub:'tech-hub'}).then(function(ok){
+    if(!ok){ _thFailed(msgEl,'request',ref); return; }
+    if(msgEl){msgEl.innerHTML=`✅ Request recorded on SOKONI. Ref: <strong>${_esc(ref)}</strong> — opening SOKONI Support…`;msgEl.style.color='#818cf8';}
+    setTimeout(function(){ location.href = 'support.html?topic=request&desc=' + encodeURIComponent(msg); }, 600);
+  });
 }
 window.submitITRequest = submitITRequest;
 
@@ -1072,9 +1095,12 @@ function registerStartup() {
   const stage=document.getElementById('stStage')?.value||'';
   const funding=document.getElementById('stFunding')?.value||'';
   const pitch=document.getElementById('stPitch')?.value||'';
-  _thFireWrite('techStartups',{ref,name,founder,phone,sector,stage,funding,pitch,hub:'tech-hub'});
-  /* Recorded in techStartups above — no WhatsApp hand-off to the admin (owner 2026-09-30). */
-  if(msgEl){msgEl.innerHTML=`✅ Submitted! Ref: <strong>${_esc(ref)}</strong>. Questions? <a href="support.html?topic=request&ref=${encodeURIComponent(ref)}" style="color:#fb923c;">Contact Support</a>`;msgEl.style.color='#fb923c';}
+  _thPending(msgEl);
+  /* Recorded in techStartups — no WhatsApp hand-off to the admin (owner 2026-09-30). Success copy only after the write resolves. */
+  _thFireWrite('techStartups',{ref,name,founder,phone,sector,stage,funding,pitch,hub:'tech-hub'}).then(function(ok){
+    if(!ok){ _thFailed(msgEl,'request',ref); return; }
+    if(msgEl){msgEl.innerHTML=`✅ Submission recorded on SOKONI. Ref: <strong>${_esc(ref)}</strong>. Questions? <a href="support.html?topic=request&ref=${encodeURIComponent(ref)}" style="color:#fb923c;">Contact Support</a>`;msgEl.style.color='#fb923c';}
+  });
 }
 window.registerStartup = registerStartup;
 
@@ -1164,9 +1190,12 @@ function postJob() {
   const salary=document.getElementById('jobSalary')?.value||'';
   const loc=document.getElementById('jobLocation')?.value||'Nairobi';
   const desc=document.getElementById('jobDesc')?.value||'';
-  _thFireWrite('techJobs',{ref,title,company,phone,type,salary,loc,desc,hub:'tech-hub'});
-  /* Recorded in techJobs above — no WhatsApp hand-off to the admin (owner 2026-09-30). */
-  if(msgEl){msgEl.innerHTML=`✅ Job posted! Ref: <strong>${_esc(ref)}</strong>. Questions? <a href="support.html?topic=request&ref=${encodeURIComponent(ref)}" style="color:#fb7185;">Contact Support</a>`;msgEl.style.color='#fb7185';}
+  _thPending(msgEl);
+  /* Recorded in techJobs — no WhatsApp hand-off to the admin (owner 2026-09-30). Success copy only after the write resolves. */
+  _thFireWrite('techJobs',{ref,title,company,phone,type,salary,loc,desc,hub:'tech-hub'}).then(function(ok){
+    if(!ok){ _thFailed(msgEl,'request',ref); return; }
+    if(msgEl){msgEl.innerHTML=`✅ Job post recorded on SOKONI. Ref: <strong>${_esc(ref)}</strong>. Questions? <a href="support.html?topic=request&ref=${encodeURIComponent(ref)}" style="color:#fb7185;">Contact Support</a>`;msgEl.style.color='#fb7185';}
+  });
 }
 window.postJob = postJob;
 

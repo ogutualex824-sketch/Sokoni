@@ -375,7 +375,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
   <div style="background:rgba(0,180,90,0.04);border:1px solid rgba(0,180,90,0.12);border-radius:16px;padding:16px;margin-bottom:18px;">
     <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.5);margin-bottom:10px;">📢 WhatsApp Broadcast</div>
     <input type="text" id="broadcastMsg" class="bo-input" placeholder="Type your message to all customers…" style="margin-bottom:8px;">
-    <button type="button" onclick="sendBroadcast()" class="bo-btn bo-btn-success bo-btn-sm" style="width:100%;">📤 Send to All via WhatsApp</button>
+    <button type="button" onclick="sendBroadcast()" class="bo-btn bo-btn-success bo-btn-sm" style="width:100%;">📤 Share via WhatsApp</button>
     <div class="bo-msg" id="broadcastStatus"></div>
   </div>
 
@@ -777,7 +777,8 @@ function sendBroadcast(){
   if(!custs.length){msg('broadcastStatus','No customers yet — add customers first',false);return;}
   var full='📢 *'+(biz.name||'SOKONI Business')+'*\n\n'+m;
   window.open('https://wa.me/?text='+encodeURIComponent(full),'_blank'); /* wa-allowed:marketing */
-  msg('broadcastStatus','✅ Message ready — broadcast to '+custs.length+' customers via WhatsApp',true);
+  /* Only a share sheet is opened — nothing is sent to anyone by SOKONI, so no "broadcast to N" claim. */
+  msg('broadcastStatus','WhatsApp opened — choose who to send it to',true);
 }
 window.sendBroadcast=sendBroadcast;
 

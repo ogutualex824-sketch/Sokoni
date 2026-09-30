@@ -2229,7 +2229,8 @@ function submitDLVerification(){
   queue.unshift({id:"DL"+Date.now().toString().slice(-7),holderName:name,dlNumber:num,dlClass:cls,dlExpiry:expiry,phone:emPhone,submittedAt:Date.now(),status:"pending"});
   saveDLQueue(queue);
 
-  if(msgEl){msgEl.textContent="✅ Submitted! Your DL is under review. You will be notified within 30 minutes.";msgEl.style.color="#71ff00";}
+  /* Saved to localStorage only (saveDLRecord/saveDLQueue) — nothing reaches a SOKONI reviewer, so it must not say "submitted / under review". */
+  if(msgEl){msgEl.innerHTML='Saved on this device only — your licence has <strong>not</strong> been sent to SOKONI for review yet. <a href="support.html?topic=request&desc='+encodeURIComponent('Driving licence verification: '+num)+'" style="color:#ff9800;">Contact Support</a> to complete verification.';msgEl.style.color="#ff9800";}
   updateDLNavBtn();
   setTimeout(()=>closeOverlay("dlUploadOverlay"),2500);
 }
@@ -2550,16 +2551,26 @@ function confirmBooking(){
   const bid="BK"+Date.now().toString().slice(-7);
   const booking={id:bid,carId:c.id,carMake:c.make,carModel:c.model,carPlate:c.plate,carImage:c.image||"",ownerName:c.owner||"",ownerPhone:c.ownerPhone||"",renterName:name,renterPhone:phone,pickupDate:p,returnDate:r,days,priceDay:dp,insurance:ins,deposit:c.deposit||0,total,status:"active",carLat:c.lat,carLng:c.lng,createdAt:Date.now()};
   const bookings=getBookings();bookings.unshift(booking);saveBookings(bookings);
-  _chFireWrite('carRentals',{...booking,hub:'car-rental'});
+  _chPending(msgEl);
+  const _rentalWrite=_chFireWrite('carRentals',{...booking,hub:'car-rental'});
   const cars=getCars(),idx=cars.findIndex(x=>x.id===c.id);
   if(idx>-1){cars[idx].status="rented";saveCars(cars);}
-  /* Booking is recorded in-app (carRentals); no WhatsApp hand-off to the owner. */
-  /* Show M-Pesa STK push instructions */
-  if(msgEl){
-    msgEl.innerHTML=`✅ Booking <strong>${_esc(bid)}</strong> confirmed!<br><span style="font-size:10px;color:rgba(255,255,255,0.5);">M-Pesa STK push sent to ${_esc(phone)}. Enter your PIN to complete payment. Booking recorded on SOKONI. Need help? <a href="support.html?topic=booking&ref=${encodeURIComponent(bid)}" style="color:#71ff00;">Contact Support</a></span>`;
-    msgEl.style.color="#71ff00";
-  }
-  showFleetMsg("✅ Booking confirmed — M-Pesa request sent!");
+  /* Booking is recorded in-app (carRentals); no WhatsApp hand-off to the owner.
+     No STK push is initiated from this function, so the UI must not say one was
+     sent; "recorded on SOKONI" is shown only after Firestore acknowledged the write. */
+  _rentalWrite.then(function(ok){
+    if(!ok){
+      _chFailed(msgEl,'booking',bid);
+      showFleetMsg("Couldn't save booking "+bid+" — please try again or contact Support.");
+      return;
+    }
+    if(msgEl){
+      msgEl.innerHTML=`✅ Booking <strong>${_esc(bid)}</strong> recorded on SOKONI.<br><span style="font-size:10px;color:rgba(255,255,255,0.5);">No M-Pesa payment prompt has been sent from this page. Need help? <a href="support.html?topic=booking&ref=${encodeURIComponent(bid)}" style="color:#71ff00;">Contact Support</a></span>`;
+      msgEl.style.color="#71ff00";
+    }
+    showFleetMsg("✅ Booking "+bid+" recorded on SOKONI");
+    setTimeout(()=>{closeOverlay("bookingOverlay");showTab("bookings",null);renderBookings();filterCars();},3000);
+  });
   /* Record SOKONI commission (12% car-rental rate) */
   if(typeof SokoniPay !== 'undefined' && SokoniPay.saveCommission){
     var _cPct =SokoniCommission.pct('car-rental');
@@ -2568,7 +2579,6 @@ function confirmBooking(){
     SokoniPay.saveFee&&SokoniPay.saveFee({ref:bid,providerName:c.owner||'Car Owner',category:'car-rental',totalPaid:total,sokoniCut:_cCut,providerNet:total-_cCut,commissionPct:_cPct,phone:phone,providerPhone:c.ownerPhone||'',serviceDesc:c.make+' '+c.model+' rental',status:'paid',paymentType:'car_rental',createdAt:Date.now()});
   }
   if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'rental',buyerName:name,buyerPhone:phone,items:[{name:c.make+' '+c.model+' ('+c.plate+') Rental',category:'Car Rental',qty:days,price:dp},{name:'Security Deposit',category:'Deposit',qty:1,price:c.deposit||0}].concat(ins?[{name:'Insurance',category:'Insurance',qty:days,price:500}]:[]),subtotal:dp*days+(ins?500*days:0),total:total,paymentMethod:'M-Pesa',paymentRef:bid,sellerName:'SOKONI Car Hub',date:new Date().toISOString(),notes:'Pickup: '+p+' | Return: '+r});},1000);
-  setTimeout(()=>{closeOverlay("bookingOverlay");showTab("bookings",null);renderBookings();filterCars();},3000);
 }
 
 /* MY BOOKINGS */
@@ -2654,13 +2664,14 @@ function triggerSOS(bookingId){
     modal.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;";
     modal.innerHTML=`<div style="max-width:420px;width:100%;background:#1a0000;border:2px solid rgba(255,33,33,0.5);border-radius:20px;padding:28px 24px;text-align:center;">
       <div style="font-size:52px;margin-bottom:12px;animation:sosPulse 1s infinite;">🆘</div>
-      <div style="font-size:20px;font-weight:900;color:#ff3333;margin-bottom:8px;">SOS ALERT SENT</div>
+      <div style="font-size:20px;font-weight:900;color:#ff3333;margin-bottom:8px;">SOS — GET HELP NOW</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.7);margin-bottom:12px;line-height:1.6;">No alert has been sent yet. Call emergency services on <a href="tel:999" style="color:#ff3333;font-weight:800;">999</a> / <a href="tel:112" style="color:#ff3333;font-weight:800;">112</a>, or open an SOS support ticket below.</div>
       <div id="sosCarInfo" style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:18px;line-height:1.7;"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px;">
         <a id="sosCallPolice" href="tel:999" style="padding:12px;background:rgba(255,33,33,0.15);border:1px solid rgba(255,33,33,0.4);border-radius:11px;color:#ff3333;font-weight:900;font-size:13px;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;">📞 Police 999</a>
         <a href="tel:0800723000" style="padding:12px;background:rgba(255,100,0,0.12);border:1px solid rgba(255,100,0,0.3);border-radius:11px;color:#ff9800;font-weight:900;font-size:13px;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="fas fa-ambulance"></i> Ambulance</a>
       </div>
-      <a id="sosWA" href="support.html?topic=sos" style="display:block;padding:12px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.3);border-radius:11px;color:#25d366;font-weight:900;font-size:13px;text-decoration:none;margin-bottom:14px;">💬 Contact SOKONI Support (SOS)</a>
+      <a id="sosWA" href="support.html?topic=sos" style="display:block;padding:12px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.3);border-radius:11px;color:#25d366;font-weight:900;font-size:13px;text-decoration:none;margin-bottom:14px;">💬 Open an SOS support ticket</a>
       <button type="button" onclick="document.getElementById('sosModal').style.display='none'" style="width:100%;padding:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:rgba(255,255,255,0.5);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Close</button>
     </div>`;
     document.body.appendChild(modal);
@@ -2671,7 +2682,9 @@ function triggerSOS(bookingId){
   const waEl=document.getElementById("sosWA");
   if(waEl) waEl.href=`support.html?topic=sos&ref=${encodeURIComponent(bookingId)}&desc=${msg}`;
   modal.style.display="flex";
-  showFleetMsg("🆘 SOS sent — emergency contacts notified");
+  /* triggerSOS writes nothing and notifies no one — it only opens this panel.
+     The SOS record is created when the user submits the support.html?topic=sos ticket. */
+  showFleetMsg("🆘 Open an SOS support ticket or call 999 / 112");
 }
 
 /* FLEET MANAGER */
@@ -2816,7 +2829,7 @@ document.getElementById("driverLicFile")?.addEventListener("change",e=>{const n=
 ["docLogbook","docInsurance","docInspection","docOwnerDL"].forEach(id=>{
   document.getElementById(id)?.addEventListener("change",e=>{
     const statusEl=document.getElementById(id+"Status");
-    if(statusEl&&e.target.files[0]){statusEl.textContent="✓ Uploaded";statusEl.className="doc-status doc-ok";}
+    if(statusEl&&e.target.files[0]){statusEl.textContent="✓ Selected";statusEl.className="doc-status doc-ok";}
   });
 });
 
@@ -2827,19 +2840,8 @@ function testTrackerConnection(){
   const statusEl=document.getElementById("trackerStatus");
   if(!brand){if(statusEl){statusEl.textContent="Select a tracker brand first";statusEl.style.color="#ff9800";}return;}
   if(!imei||imei.length<10){if(statusEl){statusEl.textContent="Enter a valid IMEI (15 digits)";statusEl.style.color="#ff9800";}return;}
-  if(statusEl){statusEl.textContent="⏳ Pinging device...";statusEl.style.color="rgba(255,255,255,0.45)";}
-  setTimeout(()=>{
-    const ok=Math.random()>0.2;
-    if(statusEl){
-      if(ok){
-        const lat=(-1.286+(Math.random()-.5)*.05).toFixed(5);
-        const lng=(36.817+(Math.random()-.5)*.05).toFixed(5);
-        statusEl.innerHTML=`<span style="color:#71ff00;">✅ Device online — Last ping: just now · Signal: Strong · Position: ${lat}, ${lng}</span>`;
-      }else{
-        statusEl.innerHTML=`<span style="color:#ff9800;">⚠️ No response. Check: (1) Tracker is powered, (2) SIM has data, (3) IMEI is correct.</span>`;
-      }
-    }
-  },2200);
+  /* No device is contacted here: the old result (online/offline, signal, position) was Math.random(). */
+  if(statusEl){statusEl.textContent="Connection test unavailable — no ping was sent. The device's status appears once it reports to SOKONI.";statusEl.style.color="rgba(255,255,255,0.6)";}
 }
 
 /* ══════════════════════════════════════════════
@@ -3205,7 +3207,8 @@ function submitCarForSale(){
   try{products=JSON.parse(localStorage.getItem("sellerProducts"))||[];}catch(e){}
   products.unshift(listing);
   localStorage.setItem("sellerProducts",JSON.stringify(products));
-  if(msgEl){msgEl.innerHTML=`✅ Your car is now listed! <button type="button" onclick="renderBuySellGrid();document.getElementById('sellCarFormWrap').style.display='none';window.scrollTo({top:0,behavior:'smooth'});" style="color:#71ff00;background:none;border:none;cursor:pointer;font-size:inherit;padding:0;font-family:inherit;">View listing →</button>`;msgEl.style.color="#71ff00";}
+  /* localStorage only (sellerProducts) — not published to SOKONI, so it must not say "listed". */
+  if(msgEl){msgEl.innerHTML=`Saved on this device only — not yet published on SOKONI. <button type="button" onclick="renderBuySellGrid();document.getElementById('sellCarFormWrap').style.display='none';window.scrollTo({top:0,behavior:'smooth'});" style="color:#71ff00;background:none;border:none;cursor:pointer;font-size:inherit;padding:0;font-family:inherit;">View listing →</button>`;msgEl.style.color="#71ff00";}
   /* clear form */
   ["bsMake","bsModel","bsYear","bsPrice","bsPhone","bsMileage","bsDesc","bsPhoto"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   renderBuySellGrid();
@@ -3512,15 +3515,10 @@ window.testTrackerConnection = function(){
     status.textContent='⚠️ Enter a valid IMEI (min 10 digits) first.';
     return;
   }
-  status.style.color='#ff9800';
-  status.textContent='🔄 Connecting to SOKONI GPS platform…';
-
-  setTimeout(function(){
-    status.style.color='#39ff14';
-    status.textContent='✅ Tracker online — IMEI '+imei.slice(0,6)+'***'
-      +(brand?' ('+brand.charAt(0).toUpperCase()+brand.slice(1)+')':'')
-      +' · Signal: Strong · Last ping: now';
-  }, 1800);
+  /* No device is contacted here — "Tracker online · Signal: Strong" was shown unconditionally. */
+  void brand;
+  status.style.color='rgba(255,255,255,0.6)';
+  status.textContent='Connection test unavailable — no ping was sent. The device\'s status appears once it reports to SOKONI.';
 };
 
 /* Re-draw fleet when tracking tab re-opens */
@@ -3832,9 +3830,10 @@ function trkToggleTheftMode() {
       .then(function() { showFleetMsg('Theft recovery mode disabled.'); })
       .catch(function(e) { showFleetMsg(e.message); });
   } else {
-    _skConfirm('Activate THEFT RECOVERY MODE? This will send an alert and intensify location tracking.',function(){
+    _skConfirm('Activate THEFT RECOVERY MODE? This will record an in-app theft alert and intensify location tracking. It does not notify the police.',function(){
       window.SokoniTracking.enableTheftMode(_trkActiveVehicleId)
-        .then(function() { showFleetMsg('Theft recovery mode activated! Authorities have been alerted.'); })
+        /* enableTheftMode only updates trackedVehicles + writes an in-app alert; it contacts no authority. */
+        .then(function() { showFleetMsg('Theft recovery mode activated. Police have NOT been notified — report the theft on 999 / 112.'); })
         .catch(function(e) { showFleetMsg(e.message); });
     });
   }
@@ -4539,16 +4538,19 @@ var CarHubPro = (function(){
       +'Name: '+name+'\nPhone: '+myPhone+'\nVehicle: '+vehicle
       +(date?'\nDate: '+date:'')+'\nService: '+desc
     );
-    if(msg) msg.textContent='✅ Booking recorded in SOKONI.';
     void waText; /* no WhatsApp hand-off (owner 2026-09-30) */
-    /* save to localStorage */
+    /* save to localStorage (local cache only — not "recorded on SOKONI") */
+    var bk={id:'MCH'+Date.now(),mechanic:(_bookingMech||{}).name||'',name:name,phone:myPhone,vehicle:vehicle,desc:desc,date:date,ts:Date.now()};
     try {
-      var bk={id:'MCH'+Date.now(),mechanic:(_bookingMech||{}).name||'',name:name,phone:myPhone,vehicle:vehicle,desc:desc,date:date,ts:Date.now()};
       var bks=[]; try{bks=JSON.parse(localStorage.getItem('sokoniMechBookings')||'[]');}catch(e){}
       bks.unshift(bk);
       localStorage.setItem('sokoniMechBookings',JSON.stringify(bks.slice(0,50)));
-      _chFireWrite('mechBookings',{...bk,hub:'car-mechanic',status:'pending'});
     } catch(e){}
+    _chPending(msg);
+    _chFireWrite('mechBookings',{...bk,hub:'car-mechanic',status:'pending'}).then(function(ok){
+      if(!ok){ _chFailed(msg,'booking',bk.id); return; }
+      if(msg){ msg.textContent='✅ Booking '+bk.id+' recorded on SOKONI.'; msg.style.color='#71ff00'; }
+    });
   }
 
   /* ── PARTS ── */
@@ -4637,9 +4639,12 @@ var CarHubPro = (function(){
     var parts=[]; try{parts=JSON.parse(localStorage.getItem('sokoniParts')||'[]');}catch(e){}
     parts.unshift(part);
     localStorage.setItem('sokoniParts',JSON.stringify(parts.slice(0,100)));
-    _chFireWrite('carParts',{...part,status:'active'});
-    if(msg) msg.textContent='✅ Part listed successfully!';
-    setTimeout(function(){ closeChpModal(); renderPartsGrid(); }, 1200);
+    _chPending(msg);
+    _chFireWrite('carParts',{...part,status:'active'}).then(function(ok){
+      if(!ok){ _chFailed(msg,'request',part.id); return; }
+      if(msg){ msg.textContent='✅ Part listing recorded on SOKONI.'; msg.style.color='#71ff00'; }
+      setTimeout(function(){ closeChpModal(); renderPartsGrid(); }, 1200);
+    });
   }
 
   /* ── ROADSIDE ASSISTANCE ── */
@@ -4652,11 +4657,18 @@ var CarHubPro = (function(){
     var waText = encodeURIComponent('SOKONI Roadside SOS\nService: '+(serviceType||'Emergency')+'\nLocation: '+loc+'\nPhone: '+phone+(desc?'\nDetails: '+desc:''));
     var data={type:'roadside_sos',service:serviceType,location:loc,phone:phone,desc:desc,ts:new Date().toISOString()};
     try{ localStorage.setItem('sokoniSOS_'+Date.now(),JSON.stringify(data)); }catch(e){}
-    _chFireWrite('carSOS',{service:serviceType,location:loc,phone:phone,description:desc,status:'open'});
-    if(msg){ msg.textContent='✅ SOS sent! Connecting you to nearest responders...'; msg.style.color='#71ff00'; }
-    else showFleetMsg('SOS sent! Connecting you to nearest responders...');
-    /* SOS → a CRITICAL support ticket the ops team sees (owner 2026-09-30), not a WhatsApp chat. */
-    setTimeout(function(){ location.href = 'support.html?topic=sos&desc=' + encodeURIComponent(decodeURIComponent(waText)); }, 800);
+    _chPending(msg);
+    /* Nobody is contacted by this write — "sent"/"connecting to responders" was never true.
+       The SOS support ticket is opened either way; if in danger, 999/112. */
+    _chFireWrite('carSOS',{service:serviceType,location:loc,phone:phone,description:desc,status:'open'}).then(function(ok){
+      var text = ok
+        ? '✅ SOS recorded on SOKONI. Opening an SOS support ticket… In danger? Call 999 / 112.'
+        : '⚠️ Couldn\'t save — opening an SOS support ticket instead. In danger? Call 999 / 112.';
+      if(msg){ msg.textContent=text; msg.style.color= ok ? '#71ff00' : '#ff9800'; }
+      else showFleetMsg(text);
+      /* SOS → a CRITICAL support ticket the ops team sees (owner 2026-09-30), not a WhatsApp chat. */
+      setTimeout(function(){ location.href = 'support.html?topic=sos&desc=' + encodeURIComponent(decodeURIComponent(waText)); }, 800);
+    });
   }
 
   /* ── FINANCING ── */
@@ -4688,9 +4700,12 @@ var CarHubPro = (function(){
     if(!name||!phone||!income||!partner){ if(msg){ msg.textContent='⚠️ Fill all required fields.'; msg.style.color='#ff9800'; } return; }
     var data={type:'car_finance',name:name,phone:phone,income:income,partner:partner,ts:new Date().toISOString()};
     try{ localStorage.setItem('sokoniFinApp_'+Date.now(),JSON.stringify(data)); }catch(e){}
-    _chFireWrite('carFinanceApplications',{name,phone,monthlyIncome:income,financingPartner:partner,status:'pending'});
-    /* Recorded in carFinanceApplications above — in-app confirmation, no WhatsApp hand-off (owner 2026-09-30). */
-    if(msg){ msg.innerHTML='✅ Application recorded on SOKONI. Questions? <a href="support.html?topic=request&desc='+encodeURIComponent('Car finance application — '+partner)+'" style="color:#71ff00;">Contact Support</a>'; msg.style.color='#71ff00'; }
+    _chPending(msg);
+    /* Recorded in carFinanceApplications — in-app confirmation only after the write resolves, no WhatsApp hand-off (owner 2026-09-30). */
+    _chFireWrite('carFinanceApplications',{name,phone,monthlyIncome:income,financingPartner:partner,status:'pending'}).then(function(ok){
+      if(!ok){ _chFailed(msg,'request'); return; }
+      if(msg){ msg.innerHTML='✅ Application recorded on SOKONI. Questions? <a href="support.html?topic=request&desc='+encodeURIComponent('Car finance application — '+partner)+'" style="color:#71ff00;">Contact Support</a>'; msg.style.color='#71ff00'; }
+    });
   }
 
   /* ── AI PRICE ESTIMATE ── */
@@ -4725,9 +4740,12 @@ var CarHubPro = (function(){
     var centerName = center?center.querySelector('[style*="font-weight:800"]')?.textContent||'Selected Center':'SOKONI Inspection Centre';
     var data={type:'inspection',vehicle:vehicle,date:date,phone:phone,center:centerName,ts:new Date().toISOString()};
     try{ localStorage.setItem('sokoniInsp_'+Date.now(),JSON.stringify(data)); }catch(e){}
-    _chFireWrite('carInspections',{vehicle,date,phone,center:centerName,status:'pending'});
+    _chPending(msg);
     var wa=encodeURIComponent('SOKONI Inspection Booking\nVehicle: '+vehicle+'\nDate: '+date+'\nCenter: '+centerName+'\nPhone: '+phone);
-    if(msg){ msg.textContent='✅ Booking recorded in SOKONI.'; msg.style.color='#71ff00'; }
+    _chFireWrite('carInspections',{vehicle,date,phone,center:centerName,status:'pending'}).then(function(ok){
+      if(!ok){ _chFailed(msg,'booking'); return; }
+      if(msg){ msg.textContent='✅ Booking recorded on SOKONI.'; msg.style.color='#71ff00'; }
+    });
     void wa; /* no WhatsApp hand-off (owner 2026-09-30) */
   }
 
@@ -4768,10 +4786,14 @@ var CarHubPro = (function(){
     var vt   = (document.getElementById('transVehicleType')||{}).value||'Saloon';
     var svc  = (document.getElementById('transServiceType')||{}).value||'Open transporter';
     var wa   = encodeURIComponent('SOKONI Vehicle Transport Request\nFrom: '+from+'\nTo: '+to+'\nVehicle: '+vt+'\nService: '+svc+'\nPhone: '+phone);
-    _chFireWrite('carTransportRequests',{from,to,vehicleType:vt,serviceType:svc,phone,status:'open'});
-    if(msg){ msg.textContent='✅ Request sent! Connecting with transporters...'; msg.style.color='#71ff00'; }
-    /* Transport request → support ticket (owner 2026-09-30); the carTransportRequests record above stands. */
-    setTimeout(function(){ location.href = 'support.html?topic=request&desc=' + encodeURIComponent(decodeURIComponent(wa)); }, 800);
+    _chPending(msg);
+    /* No transporter is contacted by this write — "sent / connecting with transporters" was never true. */
+    _chFireWrite('carTransportRequests',{from,to,vehicleType:vt,serviceType:svc,phone,status:'open'}).then(function(ok){
+      if(!ok){ _chFailed(msg,'request'); return; }
+      if(msg){ msg.textContent='✅ Request recorded on SOKONI. Opening a support ticket for your quote…'; msg.style.color='#71ff00'; }
+      /* Transport request → support ticket (owner 2026-09-30); the carTransportRequests record above stands. */
+      setTimeout(function(){ location.href = 'support.html?topic=request&desc=' + encodeURIComponent(decodeURIComponent(wa)); }, 800);
+    });
   }
 
   /* ── BUYER DASHBOARD ── */
@@ -4875,12 +4897,19 @@ function submitRegisterMechanic(){
   if(!name||!phone){if(msg)msg.textContent='⚠️ Name and phone are required.';return;}
   const data={type:'mechanic_registration',name,phone,location:(document.getElementById('regMechLocation')||{}).value||'',specs:(document.getElementById('regMechSpecs')||{}).value||'',ts:new Date().toISOString()};
   localStorage.setItem('sokoniMechReg_'+Date.now(),JSON.stringify(data));
-  _chFireWrite('carMechanics',{type:'mechanic_registration',name,phone,location:(document.getElementById('regMechLocation')||{}).value||'',specs:(document.getElementById('regMechSpecs')||{}).value||'',status:'pending'});
-  /* Recorded in carMechanics above — no WhatsApp hand-off to the admin (owner 2026-09-30). */
-  if(msg)msg.innerHTML='✅ Registration submitted! Our team will contact you within 24 hours. Questions? <a href="support.html?topic=request&desc='+encodeURIComponent('Mechanic registration: '+name)+'" style="color:#71ff00;">Contact Support</a>';
+  _chPending(msg);
+  /* Recorded in carMechanics — no WhatsApp hand-off to the admin (owner 2026-09-30). Success copy only after the write resolves. */
+  _chFireWrite('carMechanics',{type:'mechanic_registration',name,phone,location:(document.getElementById('regMechLocation')||{}).value||'',specs:(document.getElementById('regMechSpecs')||{}).value||'',status:'pending'}).then(function(ok){
+    if(!ok){ _chFailed(msg,'request'); return; }
+    if(msg){ msg.innerHTML='✅ Registration recorded on SOKONI. Questions? <a href="support.html?topic=request&desc='+encodeURIComponent('Mechanic registration: '+name)+'" style="color:#71ff00;">Contact Support</a>'; msg.style.color='#71ff00'; }
+  });
 }
 
-/* ── FIRESTORE FIRE-AND-FORGET ── */
+/* ── FIRESTORE WRITE ──
+   Resolves true ONLY when addDoc resolved (Firestore acknowledged the write);
+   false on any failure (SDK load, rules denial, offline). Never rejects.
+   Callers must await it and must not say "recorded on SOKONI" unless true
+   (CLAUDE.md "UI Data Integrity"). */
 async function _chFireWrite(coll,data){
   try{
     const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
@@ -4888,7 +4917,15 @@ async function _chFireWrite(coll,data){
     const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
     const _a=getApps().find(a=>a.name==="ch-write")||initializeApp(_cfg,"ch-write");
     await addDoc(collection(getFirestore(_a),coll),{...data,createdAt:serverTimestamp()});
-  }catch(e){}
+    return true;
+  }catch(e){ try{ console.warn('[CarHub] write failed:',coll,e&&e.code||''); }catch(_){} return false; }
+}
+/* Shared honest-state copy for _chFireWrite callers. */
+function _chPending(el){ if(el){ el.textContent='Saving…'; el.style.color='rgba(255,255,255,0.6)'; } }
+function _chFailed(el,topic,ref){
+  var href='support.html?topic='+encodeURIComponent(topic||'request')+(ref?'&ref='+encodeURIComponent(ref):'');
+  if(el){ el.innerHTML='⚠️ Couldn\'t save — please try again or <a href="'+href+'" style="color:#ff9800;">contact Support</a>.'; el.style.color='#ff9800'; }
+  else { try{ showFleetMsg('Couldn\'t save — please try again or contact Support.'); }catch(_){} }
 }
 </script>
   <!-- REGISTER CTA — universal fallback for other business types -->

@@ -88,6 +88,31 @@ W19 forbids any client write to `refundRequests`.
 | F9 | food-rider "Call Customer" is a hard-coded placeholder number | food-rider.html |
 | F10 | pos-ios-print-test.html inline script already unparseable (sw-register injected into a JS string) | pos-ios-print-test.html |
 
+## Closure repair set (owner 2026-10-01) — on top of the frozen reference `63dc9b0`
+
+Owner decisions: refunds stay **ticket → human review** (no auto wallet refund, B9.31 not deployed yet); **rent is the
+landlord's/agency's money** — SOKONI earns from the Property Hub subscription, not rent; notifications may say *sent*
+only when a transport accepted the message; `index.html` footer + `opportunity.html` stay with their owning agents.
+
+| Finding | Resolution | Proof |
+|---|---|---|
+| F1 refund authority | Unchanged by decision: Request refund = support ticket with order reference + reason; no money path | `test-b2-inapp-e2e.js` R0–R4 on the emulator with the REAL adminOsDispatch: ticket written, `refundRequests`/`walletTransactions`/`wallets` untouched, balance unchanged |
+| F2 landlord payments | **Rent is external.** The browser payment paths are retired: Daraja `SokoniMpesa.pay`, the IntaSend inline SDK (+ `sokoni-mpesa.js`, unpkg SDK tag) and the **3-second fake "Payment Confirmed"**. Replaced by **Record rent received** → `paymentSource: EXTERNAL`, `verification: LANDLORD_RECORDED`, channel + sanitised reference; never labelled SOKONI-verified. Every payment instruction states *paid directly to the landlord/agency — not processed or verified by SOKONI*. The hidden browser-side **2% "commission on rent" → SOKONI ledger** hook is removed (rent is never SOKONI revenue). Invoice WhatsApp sends keep `wa-allowed:invoice`. | `test-landlord-external-rent.js` 19/0 |
+| F3 landlord XSS | Every tenant/landlord/property value escaped with the page's `_esc`; inline handlers take only `_jsId`-validated ids (the service-charge IIFE that spliced raw tenant data into JS is now `sendServiceChargeWA(id)`); tel: digits-only | parse 3/3; enumerated in the repair commit |
+| F4 contact seller | `buildContactRequest` (pure): signed-in only, `buyerUid`, `sellerUid` from the Firestore product doc (not cache), own-product refused, message capped → passes the SERVED rule. Premium and non-premium sellers use the same request (the store.html bounce loop is gone). **Seller Enquiries** sheet in merchant-v2 (Dashboard → 💬 Buyer enquiries): list, Call, Mark responded (`status`/`respondedAt` only). store.html chip → "Ask about a product". | `test-contact-requests.js` 48/0 |
+| F5 false success | Hub write helpers resolve true only when the Firestore write resolves; "recorded on SOKONI" shown only then (Saving… / honest failure + Support link otherwise). car-hub SOS no longer claims "alert sent"; roadside no longer "Dispatched! ETA" (stored status `pending`, invented ETA removed); theft mode no longer "authorities alerted"; tracker test no longer fabricates signal; business-os broadcast copy honest; landlord "sent via WhatsApp" → "WhatsApp opened — tap Send". | parse checks; manual list in the repair commit |
+| F6 approval notices | Lawyer / firm / healthcare facility approve **and reject** → live `applicationDecide` (healthcare now from the server applications record; local-only items cannot be approved). Property → live `notifySend` to the host. One status function renders **Notified** only for a channel exactly `'sent'`; otherwise *Notification pending* / *Delivery failed*. Also fixed: property ✅/❌ acted on the wrong listing under a filter; error toasts vanished at 0 ms. | `test-admin-approval-notify.js` 50/0 |
+| Security sabotage | 13 mutations across the five suites (chat type widening, id validation, hostile id, refund→money route, unmarked wa.me, WhatsApp support link, fake confirmation, SOKONI-verified rent, channel check, rent commission, missing buyerUid, queued-as-sent, WhatsApp order chase) | **13/13 CAUGHT**, byte-identical restore |
+
+**Server gaps handed to their owners (no functions change in this slice):** `applyDecision` drops the `notify()` result and
+never notifies rejections (sokoni-27, next lifecycle slice after K13); `notifySend` checks `users.roles`, not the admin
+claim; no trigger notifies a seller of a new `contactRequests` doc; `(sellerUid, createdAt)` index absent (Enquiries
+sorts client-side, cap 200); rules do not bind `contactRequests.sellerUid` to the product doc.
+
+**Property Hub subscription programme** (owner 2026-10-01) is a separate slice: census first — existing subscription
+authority, `property_agent` plan + entitlement resolver, landlord collections, AdminOS property operations — then
+subscription-first monetisation with rent kept as a separate financial domain.
+
 ## Certification
 
 `node scripts/test-slice-b-support-whatsapp.js --static` → **32/0** (S1–S6, W1–W19, N1–N3, B1–B4 in Chromium with every

@@ -1,3 +1,43 @@
+## [2026-10-01] - Slice B2 closure: landlord rent is external (fake payment + rent commission removed), contact seller end to end, truthful notices and confirmations, landlord XSS — built, certified, NOT deployed
+
+**Branch `hosting/slice-b2-on-chain`, on top of the frozen B2 reference `63dc9b0`.** Hosting only. Owner decisions
+(2026-10-01): refunds stay ticket → human review; rent is the landlord's/agency's money (SOKONI earns from the Property
+Hub subscription, a separate slice); "sent" only when a transport accepted it. Record: `docs/SLICE_B2_WHATSAPP_IN_APP.md`
+§ Closure repair set.
+
+**Summary.**
+- **landlord.html — rent.** Retired all browser payment paths (Daraja `SokoniMpesa.pay`, IntaSend inline SDK, and a
+  3-second timer that showed "Payment Confirmed" and marked rent paid with no provider call). New **Record rent
+  received**: `paymentSource EXTERNAL`, `verification LANDLORD_RECORDED`, never SOKONI-verified. Payment instructions
+  say "paid directly to the landlord/agency — not processed or verified by SOKONI". Removed a browser-side 2%
+  "commission on rent" booked to a SOKONI ledger on every rent tick.
+- **landlord.html — XSS.** All tenant/landlord/property values escaped; inline handlers take validated ids only.
+- **Contact seller.** product.js writes `contactRequests` with `buyerUid` + product-doc `sellerUid` (passes the served
+  rule; previously every submit was denied); premium bounce loop removed; merchant-v2 **Buyer enquiries** sheet;
+  store.html chip honest.
+- **Approval notices (admin.html).** Lawyer/firm/facility decisions via `applicationDecide`; property via `notifySend`;
+  "Notified" only for a channel reporting `'sent'`, else pending/failed. Wrong-listing-under-filter bug and 0 ms error
+  toasts fixed.
+- **Hub confirmations.** car-hub, sokoni-carhub-pro, home-services, tech-hub, business-os: success only after the write
+  resolves; no "SOS sent", "Dispatched! ETA", "authorities alerted", fabricated tracker signal.
+
+**Files affected.** landlord.html, product.js, merchant-v2.html, store.html, admin.html, car-hub.html,
+sokoni-carhub-pro.js, home-services.html, tech-hub.html, business-os.html; tests `test-landlord-external-rent.js`,
+`test-contact-requests.js`, `test-admin-approval-notify.js`, `test-b2-inapp-e2e.js` (new); docs.
+
+**Database changes.** None to schema. landlord rent history entries gain `paymentSource`/`verification`; roadside
+requests store `status:'pending'` (was an invented `dispatched` + ETA). **API changes.** None (consumes live
+`applicationDecide`, `notifySend`, `messagesDispatch`, `adminOsDispatch`). **Breaking.** landlord "Collect via M-Pesa"
+is gone (it never collected through SOKONI); admin legal/health approvals no longer write local-only state.
+
+**Security.** Removes an unauthenticated browser payment path and fabricated payment state; closes landlord XSS
+(incl. raw tenant data spliced into inline JS); contact requests bound to the signed-in buyer; no client write of
+money state anywhere in the slice.
+
+**Certification.** slice-B 36/0 (incl. R rows, emulator) · My Orders e2e 12/0 (emulator, REAL createConversation +
+adminOsDispatch; no money moved) · contact 48/0 · admin notify 50/0 · landlord 19/0 · merchant order share 46/0 ·
+sabotage **13/13 CAUGHT**, byte-identical restore. Parent comparison: in the commit.
+
 ## [2026-10-01] - Slice B2: WhatsApp only for OTP, invoices and marketing — every other hand-off now in SOKONI; in-app order chat + refund request — built, certified, NOT deployed
 
 **Branch `hosting/slice-b2-on-chain`, built on `hosting/chain-on-3e8dd53` @ `54b72cc`.** Hosting only; deploys after the
