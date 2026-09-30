@@ -24,6 +24,11 @@
     .mo-wrap{padding:16px;max-width:640px;margin:0 auto;}
     .mo-card{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px;cursor:pointer;transition:border-color .15s;text-decoration:none;color:inherit;}
     .mo-card:active{border-color:var(--acc);}
+    .mo-item{margin-bottom:12px;}
+    .mo-item .mo-card{margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0;}
+    .mo-actions{display:flex;gap:8px;padding:8px 10px;background:var(--card);border:1px solid var(--line);border-top:0;border-radius:0 0 14px 14px;}
+    .mo-act{flex:1;min-height:44px;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;border:1px solid var(--line);color:inherit;text-decoration:none;font-size:13px;font-weight:700;}
+    .mo-act:focus-visible{outline:2px solid var(--acc);outline-offset:2px;}
     .mo-id{font-weight:800;font-size:15px;word-break:break-word;}
     .mo-sub{color:var(--dim);font-size:12.5px;margin-top:3px;}
     .mo-right{text-align:right;flex-shrink:0;}
@@ -89,6 +94,31 @@
       if (o.deliveryRef) return 'delivery-tracking.html?ref=' + encodeURIComponent(o.deliveryRef);
       return 'delivery-tracking.html?order=' + encodeURIComponent(o.id || o._fsId || '');
     }
+    /* In-app actions (Slice B2 — owner 2026-09-30: communication and refunds stay in SOKONI).
+       Only for an order that exists in Firestore (_fsId = its document id): a cache-only
+       order has no server record to talk or claim about.
+       · Message seller → chat.html?tx=order — the server derives the parties from the
+         order and refuses anyone who is not on it.
+       · Request refund → a SUPPORT TICKET (topic payment, the order id attached). A refund
+         is a REQUEST that a person reviews in AdminOS; this button never moves money and
+         never claims a refund happened. */
+    var NO_CHAT   = { cancelled:1 };
+    var REFUNDABLE = { paid:1, confirmed:1, processing:1, shipped:1, out_for_delivery:1, rider_assigned:1,
+                       rider_en_route:1, picked_up:1, in_transit:1, delivered:1, completed:1 };
+    function orderActions(o){
+      var id = o && o._fsId;
+      if (!id || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) return '';
+      var out = '';
+      if (!NO_CHAT[o.status]) {
+        out += '<a class="mo-act" href="chat.html?tx=order&amp;txId=' + encodeURIComponent(id) + '">&#128172; Message seller</a>';
+      }
+      if (REFUNDABLE[o.status]) {
+        var desc = 'Refund request for order ' + id + '. Reason: ';
+        out += '<a class="mo-act" href="support.html?topic=payment&amp;ref=' + encodeURIComponent(id) +
+               '&amp;desc=' + encodeURIComponent(desc) + '">&#8617; Request refund</a>';
+      }
+      return out ? '<div class="mo-actions">' + out + '</div>' : '';
+    }
     function orderDate(o){
       if (o.date) return esc(o.date);
       var s = o.createdAt && (o.createdAt.seconds || o.createdAt._seconds);
@@ -106,12 +136,14 @@
         var dateStr = orderDate(o);
         var items = (o.items && o.items.length) ? ' &middot; ' + o.items.length + ' item(s)' : '';
         var total = Number(o.total != null ? o.total : (o.orderTotal || 0)).toLocaleString();
-        return '<a class="mo-card" href="' + esc(orderHref(o)) + '">' +
+        var card = '<a class="mo-card" href="' + esc(orderHref(o)) + '">' +
             '<div><div class="mo-id">' + esc(o.id || o._fsId || 'Order') + '</div>' +
             '<div class="mo-sub">' + dateStr + items + '</div></div>' +
             '<div class="mo-right"><div class="mo-amt">KES ' + total + '</div>' +
             '<span class="mo-badge" style="background:' + st.c + '22;color:' + st.c + ';border:1px solid ' + st.c + '55;">' + esc(st.l) + '</span></div>' +
           '</a>';
+        var acts = orderActions(o);
+        return acts ? '<div class="mo-item">' + card + acts + '</div>' : card;
       }).join('');
     }
 

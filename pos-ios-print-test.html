@@ -497,7 +497,7 @@
           <td>WhatsApp digital receipt</td>
           <td class="m-yes">✅ Available</td>
           <td class="m-yes">✅ Available</td>
-          <td class="m-yes" title="Primary digital delivery method on iOS — wa.me/ URL scheme opens WhatsApp">✅ Primary digital</td>
+          <td class="m-yes" data-wa-allowed="invoice" title="Primary digital delivery method on iOS — wa.me/ URL scheme opens WhatsApp (wa-allowed:invoice)">✅ Primary digital</td>
         </tr>
         <tr>
           <td>Share Sheet (Web Share API)</td>
@@ -784,7 +784,7 @@ function runWhatsApp () {
             '*TOTAL: KES 232.00* (incl. 16% VAT)\n\n' +
             'This is a TEST receipt from SOKONI SmartPOS iOS certification.\n' +
             'https://mysokoni.co.ke';
-  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank'); /* wa-allowed:invoice */
 }
 
 /* ── Verdict ── */

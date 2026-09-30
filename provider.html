@@ -644,7 +644,7 @@ body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:var(--bg);co
     <div style="margin-top:16px;background:rgba(255,152,0,0.06);border:1px solid rgba(255,152,0,0.18);border-radius:14px;padding:16px 18px;">
       <div style="font-size:13px;font-weight:800;color:#ff9800;margin-bottom:6px;">💸 Outstanding Commission</div>
       <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.7;margin-bottom:10px;">SOKONI earns a small completion commission on each service. Pay via M-PESA Paybill <strong style="color:white;"><span data-sk-pay="commissionPaybill">522522</span></strong>, Account: your booking ref.</div>
-      <button type="button" onclick="window.open('https://wa.me/254705726803?text=I+want+to+pay+my+SOKONI+commission','_blank')" style="padding:9px 18px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;"><i class="fab fa-whatsapp"></i> Pay Commission via WhatsApp</button>
+      <button type="button" onclick="window.location.href='support.html?topic=payment&desc='+encodeURIComponent('I want to pay my SOKONI commission')" style="padding:9px 18px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">💬 Commission question? Contact Support</button>
     </div>
   </div>
 
@@ -1234,7 +1234,7 @@ function _renderBookingCard(b, compact){
     </div>
     <div class="bk-actions">
       ${b.status==='pending'?`<button type="button" class="bk-confirm" onclick="confirmBooking('${b.id}')">✅ Confirm</button><button type="button" class="bk-decline" onclick="declineBooking('${b.id}')">✗</button>`:''}
-      ${b.phone?`<button type="button" class="bk-wa" onclick="waBooking('${b.id}')"><i class="fab fa-whatsapp"></i></button>`:''}
+      ${b.phone?`<button type="button" class="bk-wa" onclick="waBooking('${b.id}')" title="Message client" aria-label="Message client"><i class="fas fa-comment-dots"></i></button>`:''}
     </div>
   </div>`;
 }
@@ -1259,7 +1259,6 @@ function confirmBooking(id){
   const b=_bookings.find(x=>x.id===id); if(!b) return;
   b.status='confirmed'; saveBookings(); renderBookingsList(); renderOverview();
   pvToast('✅ '+b.client+' confirmed for '+b.time);
-  if(b.phone){ const wa=b.phone.replace(/^0/,'254').replace(/\D/g,''); const msg=encodeURIComponent(`✅ *Booking Confirmed!*\n\nHi ${b.client}!\nYour booking at ${_profile.name} is confirmed.\n📅 Date: ${b.date}\n⏰ Time: ${b.time}\n💼 Service: ${b.service}\n📍 Ref: ${b.ref}\n\nSee you soon! 🙏`); window.open('https://wa.me/'+wa+'?text='+msg,'_blank'); }
   if(window.SokoniPay && SokoniPay.saveCommission){
     var _svc = _services && _services.find(s=>s.name===b.service);
     var _price = _svc ? (_svc.price||0) : 0;
@@ -1279,9 +1278,11 @@ window.declineBooking=declineBooking;
 
 function waBooking(id){
   const b=_bookings.find(x=>x.id===id); if(!b||!b.phone) return;
-  const wa=b.phone.replace(/^0/,'254').replace(/\D/g,'');
-  const msg=encodeURIComponent(`Hi ${b.client}! This is ${_profile.name} from SOKONI. Regarding your booking for ${b.service} on ${b.date} at ${b.time}. Ref: ${b.ref}`);
-  window.open('https://wa.me/'+wa+'?text='+msg,'_blank');
+  /* _fsId is the doc id in `bookings` (SokoniDB.listenProviderBookings) → in-app booking chat.
+     A local-only booking has no server record → SOKONI Support. */
+  window.location.href = b._fsId
+    ? 'chat.html?tx=service_booking&txId=' + encodeURIComponent(b._fsId)
+    : 'support.html?topic=booking&ref=' + encodeURIComponent(b.ref||b.id||'') + '&desc=' + encodeURIComponent('Booking for ' + b.service + ' on ' + b.date + ' at ' + b.time + ' (client: ' + b.client + ')');
 }
 window.waBooking=waBooking;
 
@@ -1523,19 +1524,14 @@ function _publishAvailability(){
 }
 
 function notifyAllClients(){
-  const upcoming=_bookings.filter(b=>b.status==='confirmed'&&b.phone&&b.date>=new Date().toISOString().slice(0,10));
-  if(!upcoming.length){ pvToast('No upcoming confirmed clients with phone numbers'); return; }
-  upcoming.forEach((b,i)=>setTimeout(()=>{
-    const wa=b.phone.replace(/^0/,'254').replace(/\D/g,'');
-    const msg=encodeURIComponent(`Hi ${b.client}! 👋 Reminder from ${_profile.name} on SOKONI. Your booking: ${b.service} on ${b.date} at ${b.time}. See you soon! Ref: ${b.ref}`);
-    window.open('https://wa.me/'+wa+'?text='+msg,'_blank');
-  }, i*500));
-  pvToast('📣 Sending WhatsApp reminders to '+upcoming.length+' clients…');
+  /* No WhatsApp bulk hand-off (owner 2026-09-30): message each client in-app from their booking card. */
+  showTab('bookings');
+  pvToast('💬 Message each client from their booking card');
 }
 window.notifyAllClients=notifyAllClients;
 
 function copyBookingLink(){ if(!_profile) return; navigator.clipboard?.writeText('https://sokoni.app/book/'+_profile.id).catch(()=>{}); pvToast('📋 Link copied!'); }
-function shareToWhatsApp(){ if(!_profile) return; const msg=encodeURIComponent('📋 Book me on SOKONI: https://sokoni.app/book/'+_profile.id+'\n\n'+_profile.name+' · '+CATS[_selectedCat]?.label); window.open('https://wa.me/?text='+msg,'_blank'); }
+function shareToWhatsApp(){ if(!_profile) return; const msg=encodeURIComponent('📋 Book me on SOKONI: https://sokoni.app/book/'+_profile.id+'\n\n'+_profile.name+' · '+CATS[_selectedCat]?.label); window.open('https://wa.me/?text='+msg,'_blank'); /* wa-allowed:marketing */ }
 window.copyBookingLink=copyBookingLink; window.shareToWhatsApp=shareToWhatsApp;
 
 function deleteProviderAccount(){

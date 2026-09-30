@@ -687,7 +687,7 @@ else{
                             &#x1F4AC; Chat Seller
                         </button>
                         <button class="prd-cta-icon-btn wishlist" onclick="addToWishlistProduct()">&#x2764;&#xFE0F; Save</button>
-                        <button class="prd-cta-icon-btn share" onclick="(function(){var url=window.SokoniReferral?SokoniReferral.getShareURL(window.location.href):window.location.href;if(window.SokoniSocial&&product)SokoniSocial.openShareModal({id:product.id||'p',name:product.name||'Product',category:product.category||'',tagline:product.description||'',rating:product.rating||5,type:'product',shareURL:url});else if(navigator.share)navigator.share({title:product&&product.name||'SOKONI',url:url}).catch(function(){});else window.open('https://wa.me/?text='+encodeURIComponent((product&&product.name||'Check this out')+' on SOKONI: '+url),'_blank');})()">&#x1F4E4; Share</button>
+                        <button class="prd-cta-icon-btn share" onclick="(function(){var url=window.SokoniReferral?SokoniReferral.getShareURL(window.location.href):window.location.href;if(window.SokoniSocial&&product)SokoniSocial.openShareModal({id:product.id||'p',name:product.name||'Product',category:product.category||'',tagline:product.description||'',rating:product.rating||5,type:'product',shareURL:url});else if(navigator.share)navigator.share({title:product&&product.name||'SOKONI',url:url}).catch(function(){});else window.open('https://wa.me/?text='+encodeURIComponent((product&&product.name||'Check this out')+' on SOKONI: '+url),'_blank');/* wa-allowed:marketing */})()">&#x1F4E4; Share</button>
                     </div>
                 </div>
 
@@ -876,7 +876,7 @@ else{
                     window._prdSellerWhatsApp = subData.whatsapp || product.sellerWhatsApp || '';
                     /* Update Chat button label */
                     var waBtn = document.getElementById('prdWaBtn');
-                    if(waBtn && isPremium) waBtn.innerHTML = '&#x1F4AC; WhatsApp Seller';
+                    if(waBtn && isPremium) waBtn.innerHTML = '&#x1F6CD;&#xFE0F; Seller Store';
                 } catch(_){}
             }
 
@@ -1499,21 +1499,24 @@ async function contactSellerWhatsApp(){
         }catch(e){ console.warn("[ContactSeller] Firestore failed:", e.message); }
     }
 
-    /* Fallback: WhatsApp — fire commission gate then open */
-    const phone = (product.sellerPhone || product.phone || '').replace(/\D/g,'');
-    const waNum = phone.length >= 9 ? (phone.startsWith('254') ? phone : '254' + phone.replace(/^0/,'')) : '254705726803';
-    const pname = (product.name || 'this item').substring(0, 60);
-    const price = Number(product.price || 0).toLocaleString();
-    const plainMsg = `Hi, I'm interested in "${pname}" (KES ${price}) on SOKONI. Is it still available?`;
-    if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
-        SokoniPay.waConnect(waNum, plainMsg, {
-            providerName: product.sellerName || 'Seller',
-            category: product.category || 'product',
-            serviceDesc: 'Product inquiry: ' + pname,
-        });
-    } else {
-        window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(plainMsg)}`, '_blank');
+    /* Fallback: stay in SOKONI — the seller's store page, else a support request
+       (no WhatsApp hand-off; owner decision 2026-09-30). */
+    _prdInAppSellerContact();
+}
+
+/* In-app seller contact with no order yet: the seller's SOKONI store page
+   (same link as the seller card), or — with no seller id — a support request
+   naming the product so the SOKONI team connects the buyer. */
+function _prdInAppSellerContact() {
+    var p = (typeof product !== 'undefined' && product) ? product : {};
+    var sellerUid = p.sellerUid || p.sellerId || '';
+    if (sellerUid) {
+        window.location.href = 'store.html?id=' + encodeURIComponent(sellerUid);
+        return;
     }
+    var pid  = String(p.id || new URLSearchParams(location.search).get('id') || '');
+    var desc = 'Product enquiry: ' + String(p.name || 'a product').substring(0, 60) + (pid ? ' (id ' + pid + ')' : '');
+    window.location.href = 'support.html?topic=request' + (pid ? '&ref=' + encodeURIComponent(pid) : '') + '&desc=' + encodeURIComponent(desc);
 }
 window.contactSellerWhatsApp = contactSellerWhatsApp;
 
@@ -1529,7 +1532,7 @@ function shareProductWhatsApp(){
         return;
     }
     const text = encodeURIComponent(`🛍️ Check out "${product.name}" on SOKONI — KES ${Number(product.price).toLocaleString()}\n\nhttps://mysokoni.co.ke/product.html`);
-    window.open(`https://wa.me/?text=${text}`, "_blank");
+    window.open(`https://wa.me/?text=${text}`, "_blank"); /* wa-allowed:marketing */
 }
 
 /* MAKE AN OFFER */
@@ -2004,19 +2007,15 @@ function _maskPhone(phone) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   P13: WhatsApp gating — premium gets direct link,
-         non-premium gets in-app contact request modal
+   P13: Seller contact — premium goes to the seller's SOKONI store page,
+         non-premium gets in-app contact request modal (no WhatsApp hand-off)
 ═══════════════════════════════════════════════════════ */
 function contactSellerGated() {
     var isPremium = window._prdSellerIsPremium;
-    var waNumber  = window._prdSellerWhatsApp || window._prdSellerPhone || '';
-    if (isPremium && waNumber) {
-        /* Premium seller — direct WhatsApp */
-        var productTitle = (typeof product !== 'undefined' && product.name) ? product.name : 'this product';
-        var msg = 'Hi, I am interested in *' + productTitle + '* listed on SOKONI. ' + window.location.href;
-        var clean = waNumber.replace(/[^0-9]/g,'');
-        if (clean.startsWith('0')) clean = '254' + clean.slice(1);
-        window.open('https://wa.me/' + clean + '?text=' + encodeURIComponent(msg), '_blank');
+    if (isPremium) {
+        /* Premium seller — their SOKONI store page (was a direct WhatsApp
+           hand-off; all buyer↔seller contact stays in SOKONI). */
+        _prdInAppSellerContact();
     } else {
         /* Non-premium — open in-app contact request */
         _openContactRequestModal();

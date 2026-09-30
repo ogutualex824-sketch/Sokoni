@@ -567,7 +567,7 @@
       }
     }
 
-    /* Local 07… form for tel:/wa.me links, from whichever shape is present. */
+    /* Local 07… form for tel: links, from whichever shape is present. */
     function _localPhone(a){
       var d = String(a.phoneNumber||a.phone||a.mpesa||'').replace(/\D/g,'');
       if(/^254[17]\d{8}$/.test(d)) return '0'+d.slice(3);
@@ -597,13 +597,11 @@
         var name  = a.name||a.fullName||a.businessName||'—';
 
         /* Contact cell. A reviewer's job is to ring the applicant and confirm who
-           they are, so the number is a live tel:/WhatsApp link rather than text —
+           they are, so the number is a live tel: link rather than text —
            and when there is no reachable number that is stated outright instead
            of rendering an em dash that looks like a formatting quirk. */
         var contact = phone
           ? '<a href="tel:+'+esc(intl)+'" style="color:#71ff00;font-weight:700;text-decoration:none;">'+esc(phone)+'</a>'
-            +' <a href="https://wa.me/'+esc(intl)+'" target="_blank" rel="noopener" title="WhatsApp"'
-            +' style="text-decoration:none;">💬</a>'
             +(a.email?'<div style="font-size:10px;color:rgba(255,255,255,0.35);">'+esc(a.email)+'</div>':'')
           : '<span style="color:#ff8c42;font-weight:700;" title="Cannot be identity-checked by phone">no number</span>';
 

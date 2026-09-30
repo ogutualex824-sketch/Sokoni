@@ -255,7 +255,7 @@ function _share(platform){
   var tag=sd.tagline||'Kenya\'s favourite marketplace';
   var waText='🛍️ Check out *'+name+'* on SOKONI!\n\n'+tag+'\n\n🔗 '+url+'\n\n_Fast delivery | M-Pesa accepted | 🇰🇪 Kenya_';
   var tw='🛍️ '+name+' — '+tag+' | '+url+' #SOKONI #Kenya #KenyaShopping';
-  if(platform==='wa') window.open('https://api.whatsapp.com/send?text='+encodeURIComponent(waText),'_blank');
+  if(platform==='wa') window.open('https://api.whatsapp.com/send?text='+encodeURIComponent(waText),'_blank'); /* wa-allowed:marketing — share, no recipient chosen */
   else if(platform==='fb') window.open('https://www.facebook.com/sharer/sharer.php?u='+encodeURIComponent(url),'_blank');
   else if(platform==='x') window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(tw),'_blank');
   else if(platform==='tg') window.open('https://t.me/share/url?url='+encodeURIComponent(url)+'&text='+encodeURIComponent('🛍️ '+name+' on SOKONI'),'_blank');
@@ -544,7 +544,7 @@ function notifyFollowers(opts){
   var user=null; try{user=JSON.parse(localStorage.getItem('sokoniUser')||'null');}catch(e){}
   var sellerName=opts.name||( user&&user.name)||'Seller';
   var msg='🛍️ *'+sellerName+'* has an update for you on SOKONI!\n\n'+(opts.message||'New products and great deals available now!')+'\n\n🔗 '+(opts.url||BASE_URL)+'\n\n_Reply STOP to unsubscribe_';
-  window.open('https://api.whatsapp.com/send?text='+encodeURIComponent(msg),'_blank');
+  window.open('https://api.whatsapp.com/send?text='+encodeURIComponent(msg),'_blank'); /* wa-allowed:marketing — share, no recipient chosen */
 }
 
 /* ═══════════════════════════════════════════════════════════

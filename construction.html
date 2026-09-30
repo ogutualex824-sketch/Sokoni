@@ -975,7 +975,7 @@ function filterProducts(){
         <div class="cn-btns">
           <button type="button" class="cn-btn-cart" onclick="openOrder('${p.id}')">🛒 Order Now</button>
           <button type="button" class="cn-btn-quote" onclick="openQuoteFor('${p.name}')">📋 Quote</button>
-          <a class="cn-btn-wa" href="https://wa.me/254${p.phone||'722200000'}?text=${encodeURIComponent('Hi! I found '+p.name+' on SOKONI Construction Hub. I need a price quote for bulk order. Please advise.')}" target="_blank"><i class="fab fa-whatsapp"></i></a>
+          <a class="cn-btn-wa" href="support.html?topic=quote&desc=${encodeURIComponent('I need a bulk-order price quote for '+p.name+(p.supplier?' ('+p.supplier+')':'')+' on SOKONI Construction Hub.')}" title="Contact Support" aria-label="Contact Support">💬</a>
         </div>
       </div>
     </div>`).join("");
@@ -1036,7 +1036,7 @@ function renderSuppliers(){
       <div style="display:flex;gap:8px;">
         <button type="button" class="sup-book-btn" style="flex:1;" onclick="contactSupplier('${s.id}')">📋 Get Quote</button>
         <a href="tel:${s.phone}" style="padding:9px 12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:9px;color:#f59e0b;text-decoration:none;display:flex;align-items:center;">📞</a>
-        <a href="https://wa.me/254${s.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi '+s.name+'! I found you on SOKONI Construction Hub. Please send me a price list and availability.')}" target="_blank" style="padding:9px 12px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);border-radius:9px;color:#25d366;text-decoration:none;display:flex;align-items:center;"><i class="fab fa-whatsapp"></i></a>
+        <a href="support.html?topic=quote&desc=${encodeURIComponent('Please send me a price list and availability from '+s.name+' (SOKONI Construction Hub).')}" title="Contact Support" aria-label="Contact Support" style="padding:9px 12px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);border-radius:9px;color:#25d366;text-decoration:none;display:flex;align-items:center;">💬</a>
       </div>
 <div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);"><button type="button" onclick="window.SokoniSocial&&SokoniSocial.toggleFollow('con_${s.id}','${s.name.replace(/'/g,"\\'")}',this,'construction')" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">❤ Follow</button><button type="button" onclick="window.SokoniSocial&&SokoniSocial.openShareModal({id:'con_${s.id}',name:'${s.name.replace(/'/g,"\\'")}',category:'construction',type:'supplier'})" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:8px;font-size:12px;cursor:pointer;flex-shrink:0;">📣</button></div>
     </div>`;
@@ -1202,7 +1202,7 @@ function renderContractors(){
       </div>
       <div class="ctr-actions" style="padding:0 16px 16px;">
         <button class="ctr-btn ctr-btn-book" onclick="bookContractor('${c.id}')">📅 Book Now</button>
-        <button class="ctr-btn ctr-btn-wa" onclick="waContractor('${c.phone}','${c.name}')">💬 WhatsApp</button>
+        <button class="ctr-btn ctr-btn-wa" onclick="waContractor('${c.phone}','${c.name}')">💬 Enquire</button>
       </div>
     </div>`).join('');
 }
@@ -1212,9 +1212,10 @@ function bookContractor(id){
   if(window.SokoniPay) SokoniPay.bookNow({service:'Contractor Booking',provider:c.name,amount:0,phone:c.phone});
   else location.href = 'support.html?topic=booking&ref=' + encodeURIComponent(c.name); /* in-app, never a WhatsApp/phone hand-off */
 }
+/* No provider uid on these cards — the SOKONI team connects the customer in-app (owner 2026-09-30). */
 function waContractor(phone, name){
-  const msg = encodeURIComponent(`Hi ${name}, I found you on Sokoni Construction Hub and I'd like to discuss a project.`);
-  window.open(`https://wa.me/254${phone.replace(/^0/,'')}?text=${msg}`,'_blank');
+  const msg = encodeURIComponent(`I'd like to hire ${name} (found on SOKONI Construction Hub) to discuss a project.`);
+  location.href = `support.html?topic=hire&desc=${msg}`;
 }
 
 /* ════════════════════════════════════════════════════════════

@@ -205,7 +205,7 @@ function load() {
       <button class="sp-btn blue" onclick="contactSupplier()">💬 Message</button>
       <button class="sp-btn green" onclick="switchTab('rfq',document.querySelector('.sp-tab:nth-child(4)'))">📋 Send RFQ</button>
       <a href="tel:${_sup.phone}" class="sp-btn blue">📞 Call</a>
-      <a href="https://wa.me/254${(_sup.phone||'').replace(/^0/,'')}?text=${encodeURIComponent('Hi '+_sup.name+', I found your profile on SOKONI B2B. I am interested in your products.')}" target="_blank" class="sp-btn wa">💬 WhatsApp</a>
+      <a href="support.html?topic=quote&ref=${encodeURIComponent(_sup.id||'')}&desc=${encodeURIComponent('I am interested in products from '+_sup.name+' (SOKONI B2B).')}" class="sp-btn wa">💬 Contact Support</a>
     </div>`;
 
   document.getElementById('rfqSupName').textContent = _sup.name;

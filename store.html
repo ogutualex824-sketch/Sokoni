@@ -633,7 +633,6 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
   const ctBar   = document.getElementById("stContactBar");
   const contacts = [];
   if(store?.phone){
-    contacts.push(`<a href="https://wa.me/${store.phone.replace(/\D/g,'')}" target="_blank" class="st-contact-btn st-wa"><i class="fab fa-whatsapp"></i> WhatsApp</a>`);
     contacts.push(`<a href="tel:${store.phone}" class="st-contact-btn st-call">📞 Call</a>`);
   }
   if(store?.email)     contacts.push(`<a href="mailto:${store.email}" class="st-contact-btn st-mail">📧 Email</a>`);

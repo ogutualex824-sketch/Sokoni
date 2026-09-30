@@ -1800,7 +1800,7 @@ function generateReferral(){
     <div style="font-size:20px;font-weight:900;color:#c084fc;letter-spacing:2px;margin-bottom:10px;">${code}</div>
     <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:10px;">Share this message on WhatsApp:</div>
     <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:10px;font-size:12px;color:rgba(255,255,255,0.6);line-height:1.6;margin-bottom:10px;">"Join Sokoni Riders and earn on your terms! 88% commission, paid daily to M-PESA, e-bike friendly. Sign up at mysokoni.co.ke/driver.html and use code <strong style="color:#c084fc;">${code}</strong> — you'll earn a bonus once approved."</div>
-    <a href="https://wa.me/?text=Join%20Sokoni%20Riders%20and%20earn%20on%20your%20terms!%2088%25%20commission%2C%20paid%20daily%20to%20M-PESA%2C%20e-bike%20friendly.%20Sign%20up%20at%20mysokoni.co.ke%2Fdriver.html%20and%20use%20code%20${code}" target="_blank" style="display:inline-block;padding:9px 18px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.25);border-radius:9px;color:#25d366;font-size:12px;font-weight:700;text-decoration:none;">📤 Share on WhatsApp</a>
+    <a data-wa-allowed="marketing" href="https://wa.me/?text=Join%20Sokoni%20Riders%20and%20earn%20on%20your%20terms!%2088%25%20commission%2C%20paid%20daily%20to%20M-PESA%2C%20e-bike%20friendly.%20Sign%20up%20at%20mysokoni.co.ke%2Fdriver.html%20and%20use%20code%20${code}" target="_blank" style="display:inline-block;padding:9px 18px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.25);border-radius:9px;color:#25d366;font-size:12px;font-weight:700;text-decoration:none;">📤 Share on WhatsApp</a>
   `;
 }
 
@@ -2168,6 +2168,10 @@ function _showDrvDelivery(req) {
       : (_pc.lat != null ? _pc.lat + ',' + _pc.lng : (req.pickupAddress || ''));
     const _navDest = encodeURIComponent(_navRaw);
     const _buyerPhone = req.buyerPhone || req.customerPhone || '';
+    /* packageRequests doc id (listenDriverDeliveryRequests maps it to _fsId) — the in-app
+       chat thread key for tx=logistics_request. Firestore ids are [A-Za-z0-9]; strip anything
+       else so it is safe inside the inline handler. */
+    const _txId = String(req._fsId || '').replace(/[^A-Za-z0-9_-]/g, '');
     el.style.cssText = 'background:rgba(0,170,255,0.07);border:2px solid rgba(0,170,255,0.3);border-radius:16px;padding:16px;margin-bottom:16px;';
     el.innerHTML = `
       <div style="font-size:12px;font-weight:900;color:#00aaff;margin-bottom:8px;">${icon} ACTIVE DELIVERY · ${req.deliveryRef||req.ref}</div>
@@ -2185,7 +2189,7 @@ function _showDrvDelivery(req) {
       <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
         <button onclick="window._drvNavigate('${_navDest}')" style="flex:1 1 110px;padding:11px;background:rgba(0,170,255,0.14);border:1px solid rgba(0,170,255,0.35);color:#00aaff;font-weight:800;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">🧭 Navigate</button>
         ${_buyerPhone?`<button onclick="location.href='tel:${_buyerPhone}'" title="Call buyer" style="padding:11px 13px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;">📞</button>`:''}
-        ${_buyerPhone?`<button onclick="window._drvChat('${_buyerPhone}')" title="Chat buyer (WhatsApp)" style="padding:11px 13px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.3);color:#25d366;font-weight:800;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;">💬</button>`:''}
+        ${_txId?`<button onclick="window._drvChat('${_txId}')" title="Message buyer" aria-label="Message buyer" style="padding:11px 13px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.3);color:#25d366;font-weight:800;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;">💬</button>`:''}
         <button onclick="window._drvReportIssue('${req.deliveryRef||req.ref}')" title="Report a problem" style="padding:11px 13px;background:rgba(255,61,61,0.08);border:1px solid rgba(255,61,61,0.25);color:#ff6b6b;font-weight:800;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;">🚨</button>
         <button onclick="document.getElementById('drvProofInput_${req.deliveryRef||req.ref}').click()" title="Upload delivery photo" style="padding:11px 13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:#fff;font-weight:800;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;">📷</button>
         <input id="drvProofInput_${req.deliveryRef||req.ref}" type="file" accept="image/*" capture="environment" style="display:none;" onchange="window._drvUploadProof(this,'${req.deliveryRef||req.ref}')">
@@ -2234,13 +2238,13 @@ function _drvDeliveryShadow(dRef, pin, lat, lng) {
   } catch (_) {}
 }
 
-/* Chat buyer via WhatsApp (practical for riders; in-app chat can replace this later). */
-window._drvChat = function (phone) {
-  var p = String(phone || '').replace(/\D/g, '');
-  if (!p) { try { window.toast('No buyer phone on file', false); } catch (_) {} return; }
-  if (p.charAt(0) === '0') p = '254' + p.slice(1);
-  else if (p.slice(0, 3) !== '254') p = '254' + p;
-  window.open('https://wa.me/' + p, '_blank');
+/* Message the buyer in-app, on the thread keyed to this packageRequests job. The server
+   derives the parties (buyerUid/uid/sellerUid/assignedDriverId) and refuses non-parties.
+   (Owner decision 2026-09-30: no WhatsApp hand-offs.) */
+window._drvChat = function (txId) {
+  var id = String(txId || '').replace(/[^A-Za-z0-9_-]/g, '');
+  if (!id) { try { window.toast('Chat unavailable for this delivery', false); } catch (_) {} return; }
+  window.location.href = 'chat.html?tx=logistics_request&txId=' + encodeURIComponent(id);
 };
 
 /* Report a delivery problem — non-destructive: flags the delivery (never changes its

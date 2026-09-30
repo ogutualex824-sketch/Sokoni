@@ -894,11 +894,11 @@ body{padding-bottom:70px;}
         <div style="font-size:11px;font-weight:800;color:#71ff00;">Upload Now →</div>
       </div>
       <!-- NTSA Contact -->
-      <a href="https://wa.me/254709932000" target="_blank" style="display:block;background:rgba(37,211,102,0.06);border:1px solid rgba(37,211,102,0.2);border-radius:16px;padding:18px;text-decoration:none;transition:all .2s;" onmouseover="this.style.borderColor='rgba(37,211,102,0.45)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='rgba(37,211,102,0.2)';this.style.transform='translateY(0)'">
+      <a href="support.html?topic=request&amp;desc=I%20need%20help%20with%20my%20NTSA%20%2F%20TIMS%20account%20(driving%20licence)." aria-label="Support" title="Support" style="display:block;background:rgba(37,211,102,0.06);border:1px solid rgba(37,211,102,0.2);border-radius:16px;padding:18px;text-decoration:none;transition:all .2s;" onmouseover="this.style.borderColor='rgba(37,211,102,0.45)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='rgba(37,211,102,0.2)';this.style.transform='translateY(0)'">
         <div style="font-size:32px;margin-bottom:10px;">💬</div>
         <div style="font-size:14px;font-weight:900;color:white;margin-bottom:4px;">NTSA Helpdesk</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:12px;line-height:1.6;">Contact NTSA directly: <strong style="color:white;">0709 932 000</strong> or WhatsApp for help with TIMS account issues.</div>
-        <div style="font-size:11px;font-weight:800;color:#25d366;"><i class="fab fa-whatsapp"></i> WhatsApp NTSA →</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:12px;line-height:1.6;">Contact NTSA directly: <strong style="color:white;">0709 932 000</strong> or ask SOKONI Support for help with TIMS account issues.</div>
+        <div style="font-size:11px;font-weight:800;color:#25d366;">💬 Chat with Support →</div>
       </a>
     </div>
   </div>
@@ -1667,7 +1667,7 @@ body{padding-bottom:70px;}
       <button type="button" onclick="document.getElementById('trkAddDeviceForm').style.display='block'" style="padding:8px 16px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:12px;border:none;border-radius:10px;cursor:pointer;font-family:inherit;">+ Register Device</button>
     </div>
     <div style="background:rgba(0,170,255,0.04);border:1px solid rgba(0,170,255,0.15);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:rgba(255,255,255,0.5);">
-      Compatible GPS trackers: <strong style="color:white;">Teltonika, Coban, Eelink, GT06, JT701</strong> and any device supporting GPRS reporting. For device setup support: <a href="https://wa.me/254705726803" target="_blank" style="color:#71ff00;font-weight:700;">WhatsApp us</a>.
+      Compatible GPS trackers: <strong style="color:white;">Teltonika, Coban, Eelink, GT06, JT701</strong> and any device supporting GPRS reporting. For device setup support: <a href="support.html?topic=request&amp;desc=I%20need%20help%20setting%20up%20my%20GPS%20tracker%20on%20SOKONI%20Car%20Hub." style="color:#71ff00;font-weight:700;">Chat with Support</a>.
     </div>
     <div id="trkDevicesList">
       <div class="trk-empty"><div>🛰️</div><div>No GPS devices registered</div></div>
@@ -1782,7 +1782,7 @@ body{padding-bottom:70px;}
       </div>
     </div>
     <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px 18px;font-size:12px;color:rgba(255,255,255,0.4);text-align:center;">
-      All plans include M-Pesa payment. Cancel anytime. Need a custom fleet quote? <a href="https://wa.me/254705726803" target="_blank" style="color:#71ff00;font-weight:700;">WhatsApp us</a>
+      All plans include M-Pesa payment. Cancel anytime. Need a custom fleet quote? <a href="support.html?topic=quote&amp;desc=I%20need%20a%20custom%20fleet%20tracking%20quote." style="color:#71ff00;font-weight:700;">Chat with Support</a>
     </div>
   </div>
 
@@ -2553,15 +2553,10 @@ function confirmBooking(){
   _chFireWrite('carRentals',{...booking,hub:'car-rental'});
   const cars=getCars(),idx=cars.findIndex(x=>x.id===c.id);
   if(idx>-1){cars[idx].status="rented";saveCars(cars);}
-  /* Notify car owner via WhatsApp */
-  const ownerWA=(c.ownerPhone||"").replace(/^0/,"254").replace(/\D/g,"");
-  if(ownerWA){
-    const ownerMsg=encodeURIComponent(`🚗 *SOKONI Car Hub — New Booking*\n\nRef: ${bid}\n\n👤 Renter: ${name}\n📞 Phone: ${phone}\n🚗 Car: ${c.make} ${c.model} (${c.plate})\n📅 ${p} → ${r} (${days} day${days!==1?"s":""})\n💰 Total: KES ${total.toLocaleString()}\n\nPlease confirm availability and coordinate pickup. Thank you!`);
-    setTimeout(()=>window.open(`https://wa.me/${ownerWA}?text=${ownerMsg}`,"_blank"),800);
-  }
+  /* Booking is recorded in-app (carRentals); no WhatsApp hand-off to the owner. */
   /* Show M-Pesa STK push instructions */
   if(msgEl){
-    msgEl.innerHTML=`✅ Booking <strong>${_esc(bid)}</strong> confirmed!<br><span style="font-size:10px;color:rgba(255,255,255,0.5);">M-Pesa STK push sent to ${_esc(phone)}. Enter your PIN to complete payment. Car owner notified via WhatsApp.</span>`;
+    msgEl.innerHTML=`✅ Booking <strong>${_esc(bid)}</strong> confirmed!<br><span style="font-size:10px;color:rgba(255,255,255,0.5);">M-Pesa STK push sent to ${_esc(phone)}. Enter your PIN to complete payment. Booking recorded on SOKONI. Need help? <a href="support.html?topic=booking&ref=${encodeURIComponent(bid)}" style="color:#71ff00;">Contact Support</a></span>`;
     msgEl.style.color="#71ff00";
   }
   showFleetMsg("✅ Booking confirmed — M-Pesa request sent!");
@@ -2605,7 +2600,7 @@ function renderBookings(){
         ${b.status==='pending'?`
           <button type="button" class="ch-bk-btn ch-track-btn" onclick="showTab('bookings',null)" style="cursor:default;opacity:.7;">⏳ Awaiting Confirmation</button>
           <a href="tel:${b.ownerPhone||''}" class="ch-bk-btn" style="background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;text-decoration:none;display:inline-flex;align-items:center;padding:9px 14px;border-radius:10px;font-size:12px;font-weight:800;">📞 Contact Owner</a>
-          <a href="https://wa.me/${(b.ownerPhone||'').replace(/^0/,'254').replace(/\D/g,'')}?text=${encodeURIComponent('Hi! My booking #'+b.id+' for '+b.carMake+' '+b.carModel+' is pending. Can you confirm?')}" target="_blank" class="ch-bk-btn" style="background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;text-decoration:none;display:inline-flex;align-items:center;padding:9px 14px;border-radius:10px;font-size:12px;font-weight:800;"><i class="fab fa-whatsapp" style="margin-right:4px;"></i>WhatsApp</a>
+          <a href="support.html?topic=booking&ref=${encodeURIComponent(b.id||'')}&desc=${encodeURIComponent('My car hire booking #'+b.id+' for '+b.carMake+' '+b.carModel+' is pending. Please help me get it confirmed.')}" class="ch-bk-btn" style="background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;text-decoration:none;display:inline-flex;align-items:center;padding:9px 14px;border-radius:10px;font-size:12px;font-weight:800;">💬 Contact Support</a>
           <button type="button" class="ch-bk-btn ch-cancel-btn" onclick="cancelBooking('${b.id}')">Cancel</button>
         `:''}
         ${b.status==='completed'?`
@@ -2665,17 +2660,16 @@ function triggerSOS(bookingId){
         <a id="sosCallPolice" href="tel:999" style="padding:12px;background:rgba(255,33,33,0.15);border:1px solid rgba(255,33,33,0.4);border-radius:11px;color:#ff3333;font-weight:900;font-size:13px;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;">📞 Police 999</a>
         <a href="tel:0800723000" style="padding:12px;background:rgba(255,100,0,0.12);border:1px solid rgba(255,100,0,0.3);border-radius:11px;color:#ff9800;font-weight:900;font-size:13px;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="fas fa-ambulance"></i> Ambulance</a>
       </div>
-      <a id="sosWA" href="javascript:void(0)" target="_blank" style="display:block;padding:12px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.3);border-radius:11px;color:#25d366;font-weight:900;font-size:13px;text-decoration:none;margin-bottom:14px;"><i class="fab fa-whatsapp"></i> WhatsApp Car Owner</a>
+      <a id="sosWA" href="support.html?topic=sos" style="display:block;padding:12px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.3);border-radius:11px;color:#25d366;font-weight:900;font-size:13px;text-decoration:none;margin-bottom:14px;">💬 Contact SOKONI Support (SOS)</a>
       <button type="button" onclick="document.getElementById('sosModal').style.display='none'" style="width:100%;padding:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:rgba(255,255,255,0.5);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Close</button>
     </div>`;
     document.body.appendChild(modal);
   }
   const car=getCars().find(c=>c.id===bk.carId);
   document.getElementById("sosCarInfo").innerHTML=`Car: <strong style="color:white;">${_esc(bk.carMake)} ${_esc(bk.carModel)} (${_esc(bk.carPlate)})</strong><br>Booking: ${_esc(bookingId)}<br>Renter: ${_esc(bk.renterName)} · ${_esc(bk.renterPhone)}`;
-  const ownerPhone=(car?.ownerPhone||"").replace(/^0/,"254").replace(/\D/g,"");
   const msg=encodeURIComponent(`🆘 SOKONI SOS ALERT\n\nCar: ${bk.carMake} ${bk.carModel} (${bk.carPlate})\nRenter: ${bk.renterName}\nPhone: ${bk.renterPhone}\nBooking: ${bookingId}\n\nPlease respond immediately.`);
   const waEl=document.getElementById("sosWA");
-  if(waEl) waEl.href=ownerPhone?`https://wa.me/${ownerPhone}?text=${msg}`:`https://wa.me/?text=${msg}`;
+  if(waEl) waEl.href=`support.html?topic=sos&ref=${encodeURIComponent(bookingId)}&desc=${msg}`;
   modal.style.display="flex";
   showFleetMsg("🆘 SOS sent — emergency contacts notified");
 }
@@ -3155,8 +3149,7 @@ function renderBuySellGrid(){
 
   grid.innerHTML=cars.map(c=>{
     const price=Number(c.price).toLocaleString();
-    const phone=(c.carPhone||c.sellerPhone||"").replace(/^0/,"254").replace(/\D/g,"");
-    const waMsg=encodeURIComponent(`Hi! I saw your ${c.name} listed on SOKONI Car Hub for KES ${price}. Is it still available?`);
+    const waMsg=encodeURIComponent(`I'm interested in the ${c.name} listed on SOKONI Car Hub for KES ${price}${c.sellerName?` by ${c.sellerName}`:""}. Is it still available?`);
     return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:18px;overflow:hidden;transition:all .25s;cursor:pointer;" onmouseover="this.style.borderColor='rgba(113,255,0,0.3)';this.style.transform='translateY(-3px)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)';this.style.transform='translateY(0)'">
       <div style="height:180px;background:linear-gradient(135deg,#0d1a0d,#0d1020);display:flex;align-items:center;justify-content:center;overflow:hidden;">
         <img loading="lazy" src="${c.image||''}" alt="${c.name}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.nextSibling.style.display='flex'">
@@ -3171,7 +3164,7 @@ function renderBuySellGrid(){
         <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;">📍 ${(c.location||"Kenya").charAt(0).toUpperCase()+(c.location||"kenya").slice(1)} · ${c.sellerName||"Private Seller"}</div>
         <div style="font-size:21px;font-weight:900;color:#71ff00;margin-bottom:12px;">KES ${price}</div>
         <div style="display:flex;gap:8px;">
-          ${phone?`<a href="https://wa.me/${phone}?text=${waMsg}" target="_blank" style="flex:1;padding:10px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:10px;color:#25d366;font-size:12px;font-weight:800;text-decoration:none;text-align:center;"><i class="fab fa-whatsapp"></i> WhatsApp</a>`:""}
+          <a href="support.html?topic=hire&desc=${waMsg}" style="flex:1;padding:10px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:10px;color:#25d366;font-size:12px;font-weight:800;text-decoration:none;text-align:center;">💬 Enquire</a>
           <a href="tel:${c.carPhone||''}" style="flex:1;padding:10px;background:rgba(113,255,0,0.09);border:1px solid rgba(113,255,0,0.25);border-radius:10px;color:#71ff00;font-size:12px;font-weight:800;text-decoration:none;text-align:center;">📞 Call</a>
         </div>
       </div>
@@ -3984,7 +3977,7 @@ function trkWhatsAppShareLink() {
   if (!_trkCurrentShareResult) return;
   var link = window.location.origin + '/' + _trkCurrentShareResult.link;
   var text = encodeURIComponent('Track my vehicle live: ' + link + '\n(Link expires in ' + document.getElementById('shareExpiry').value + ' hours)');
-  window.open('https://wa.me/?text=' + text, '_blank');
+  window.open('https://wa.me/?text=' + text, '_blank'); /* wa-allowed:marketing */
 }
 
 function trkSubscribe(plan) {
@@ -4003,7 +3996,7 @@ function trkSubscribe(plan) {
     });
   } else {
     var wa = encodeURIComponent('I would like to subscribe to SOKONI Vehicle Tracking — ' + plan + ' plan (KES ' + price + '/month). Please send M-Pesa details.');
-    window.open('https://wa.me/254705726803?text=' + wa, '_blank');
+    window.location.href = 'support.html?topic=payment&desc=' + wa;
   }
 }
 
@@ -4479,8 +4472,8 @@ var CarHubPro = (function(){
     grid.innerHTML = list.map(function(m){
       /* Defensive: a merchant who has not yet supplied a phone (onboarded but incomplete)
          must not throw and take the whole grid down with them. */
-      var phone = _mechStr(m.phone).replace(/^0/,'254').replace(/\D/g,'');
-      var waMsg = encodeURIComponent('Hi '+_mechStr(m.name)+'! I found you on SOKONI Car Hub. I need help with my vehicle. Can you assist?');
+      /* Account uid of the garage owner (uid-keyed role profile carries ownerUid; self-registered docs carry uid). */
+      var provUid = _mechStr(m.ownerUid || m.uid);
       var stars = _stars(m.rating || 0);
       var featHtml = _mechArr(m.features).map(function(f){ return '<span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.18);color:#fb923c;">'+(FEAT_LBL[f]||f)+'</span>'; }).join('');
       var svcHtml = _mechArr(m.services).slice(0,4).map(function(s){ return '<span style="font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);">'+s+'</span>'; }).join('');
@@ -4499,7 +4492,7 @@ var CarHubPro = (function(){
         +(m.rate?'<div style="font-size:12px;color:#f97316;font-weight:700;margin-bottom:12px;">KES '+m.rate.toLocaleString()+'/hr labour rate</div>':'')
         +'<div style="display:flex;gap:8px;">'
         +'<button type="button" onclick="CarHubPro.openMechBooking(\''+m.id+'\')" style="flex:1;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,#f97316,#ea580c);color:white;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;">📅 Book Now</button>'
-        +'<a href="https://wa.me/'+phone+'?text='+waMsg+'" target="_blank" rel="noopener" style="padding:10px 14px;border:1px solid rgba(37,211,102,0.25);border-radius:10px;background:rgba(37,211,102,0.08);color:#25d366;font-size:13px;text-decoration:none;display:flex;align-items:center;justify-content:center;"><i class="fab fa-whatsapp"></i></a>'
+        +(provUid?'<a href="provider-profile.html?uid='+encodeURIComponent(provUid)+'" title="View profile" aria-label="View profile" style="padding:10px 14px;border:1px solid rgba(37,211,102,0.25);border-radius:10px;background:rgba(37,211,102,0.08);color:#25d366;font-size:13px;text-decoration:none;display:flex;align-items:center;justify-content:center;">💬</a>':'')
         +'<a href="tel:'+m.phone+'" style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:10px;background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.6);font-size:13px;text-decoration:none;display:flex;align-items:center;justify-content:center;">📞</a>'
         +'</div>'
         +'</div>';
@@ -4589,8 +4582,7 @@ var CarHubPro = (function(){
       return;
     }
     grid.innerHTML = list.map(function(p){
-      var ph=(p.phone||'').replace(/^0/,'254').replace(/\D/g,'');
-      var wa=encodeURIComponent('Hi! I saw the '+p.name+' listed on SOKONI Car Hub for KES '+(p.price||0).toLocaleString()+'. Is it still available?');
+      var wa=encodeURIComponent('I\'m interested in the '+p.name+' listed on SOKONI Car Hub for KES '+(p.price||0).toLocaleString()+(p.seller?' ('+p.seller+')':'')+'. Is it still available?');
       var condColor = p.condition==='New'?'#71ff00':p.condition==='Refurbished'?'#00aaff':'#ff9800';
       return '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:16px;transition:all .2s;" onmouseover="this.style.borderColor=\'rgba(249,115,22,0.3)\'" onmouseout="this.style.borderColor=\'rgba(255,255,255,0.07)\'">'
         +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'
@@ -4602,7 +4594,7 @@ var CarHubPro = (function(){
         +'<div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;">📍 '+(p.location||'')+' · '+(p.seller||'Private Seller')+'</div>'
         +'<div style="font-size:19px;font-weight:900;color:#f97316;margin-bottom:12px;">KES '+(p.price||0).toLocaleString()+'</div>'
         +'<div style="display:flex;gap:8px;">'
-        +(ph?'<a href="https://wa.me/'+ph+'?text='+wa+'" target="_blank" rel="noopener" style="flex:1;padding:9px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:10px;color:#25d366;font-size:12px;font-weight:800;text-decoration:none;text-align:center;"><i class="fab fa-whatsapp"></i> WhatsApp</a>':'')
+        +'<a href="support.html?topic=hire&desc='+wa+'" style="flex:1;padding:9px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:10px;color:#25d366;font-size:12px;font-weight:800;text-decoration:none;text-align:center;">💬 Enquire</a>'
         +'<a href="tel:'+(p.phone||'')+'" style="flex:1;padding:9px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);border-radius:10px;color:#f97316;font-size:12px;font-weight:800;text-decoration:none;text-align:center;">📞 Call</a>'
         +'</div>'
         +'</div>';
@@ -4697,9 +4689,8 @@ var CarHubPro = (function(){
     var data={type:'car_finance',name:name,phone:phone,income:income,partner:partner,ts:new Date().toISOString()};
     try{ localStorage.setItem('sokoniFinApp_'+Date.now(),JSON.stringify(data)); }catch(e){}
     _chFireWrite('carFinanceApplications',{name,phone,monthlyIncome:income,financingPartner:partner,status:'pending'});
-    var wa=encodeURIComponent('SOKONI Car Finance Application\nName: '+name+'\nPhone: '+phone+'\nIncome: KES '+income+'\nBank: '+partner);
-    if(msg){ msg.textContent='✅ Application submitted! Redirecting to WhatsApp...'; msg.style.color='#71ff00'; }
-    setTimeout(function(){ window.open('https://wa.me/254705726803?text='+wa,'_blank'); }, 1000);
+    /* Recorded in carFinanceApplications above — in-app confirmation, no WhatsApp hand-off (owner 2026-09-30). */
+    if(msg){ msg.innerHTML='✅ Application recorded on SOKONI. Questions? <a href="support.html?topic=request&desc='+encodeURIComponent('Car finance application — '+partner)+'" style="color:#71ff00;">Contact Support</a>'; msg.style.color='#71ff00'; }
   }
 
   /* ── AI PRICE ESTIMATE ── */
@@ -4885,9 +4876,8 @@ function submitRegisterMechanic(){
   const data={type:'mechanic_registration',name,phone,location:(document.getElementById('regMechLocation')||{}).value||'',specs:(document.getElementById('regMechSpecs')||{}).value||'',ts:new Date().toISOString()};
   localStorage.setItem('sokoniMechReg_'+Date.now(),JSON.stringify(data));
   _chFireWrite('carMechanics',{type:'mechanic_registration',name,phone,location:(document.getElementById('regMechLocation')||{}).value||'',specs:(document.getElementById('regMechSpecs')||{}).value||'',status:'pending'});
-  if(msg)msg.textContent='✅ Registration submitted! Our team will contact you within 24 hours.';
-  const wa=encodeURIComponent('New mechanic registration on SOKONI:\nName: '+name+'\nPhone: '+phone);
-  setTimeout(function(){window.open('https://wa.me/254705726803?text='+wa,'_blank');},1500);
+  /* Recorded in carMechanics above — no WhatsApp hand-off to the admin (owner 2026-09-30). */
+  if(msg)msg.innerHTML='✅ Registration submitted! Our team will contact you within 24 hours. Questions? <a href="support.html?topic=request&desc='+encodeURIComponent('Mechanic registration: '+name)+'" style="color:#71ff00;">Contact Support</a>';
 }
 
 /* ── FIRESTORE FIRE-AND-FORGET ── */

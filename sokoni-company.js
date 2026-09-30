@@ -114,7 +114,7 @@
   /* ── The support number, on the page (Slice C5) ──────────────────────────
      ONE source: C.supportPhone (mirrors functions/company-identity.js). A page
      marks its control with data-support-phone="tel" (a call link) or
-     data-support-phone="wa" (a WhatsApp link) and, optionally, an element with
+     data-support-phone="wa" (legacy: now the in-app Support page, Slice B2) and, optionally, an element with
      data-support-phone-text for the visible number. FAIL CLOSED: when no number is
      configured the control loses its href and says so — a page never shows a
      digit this file did not supply. support.html once linked a placeholder number
@@ -127,7 +127,9 @@
   C.supportPhoneHref = function (kind) {
     var d = C.supportPhoneDigits();
     if (!d) return null;
-    return kind === 'wa' ? 'https://wa.me/' + d.replace(/^\+/, '') : 'tel:' + d;
+    /* Slice B2 (owner 2026-09-30): support never leaves SOKONI. A legacy
+       data-support-phone="wa" control opens the in-app Support page instead. */
+    return kind === 'wa' ? 'support.html' : 'tel:' + d;
   };
   C.applySupportPhone = function (root) {
     var scope = root || (typeof document !== 'undefined' ? document : null);
@@ -139,7 +141,7 @@
       var text = el.querySelector('[data-support-phone-text]');
       if (href) {
         var msg = el.getAttribute('data-support-phone-text-param');
-        el.setAttribute('href', href + (kind === 'wa' && msg ? '?text=' + encodeURIComponent(msg) : ''));
+        el.setAttribute('href', href + (kind === 'wa' && msg ? '?desc=' + encodeURIComponent(msg) : ''));
         el.setAttribute('data-support-phone-state', 'configured');
         if (text) text.textContent = C.supportPhone;
       } else {

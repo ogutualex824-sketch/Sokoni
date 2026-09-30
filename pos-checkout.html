@@ -3762,7 +3762,7 @@ const Checkout = (() => {
     btn.innerHTML = '📱 Send receipt via WhatsApp';
     btn.title = 'Opens WhatsApp with pre-filled receipt message';
     btn.onclick = () => {
-      window.open(`https://wa.me/${num}?text=${text}`, '_blank', 'noopener');
+      window.open(`https://wa.me/${num}?text=${text}`, '_blank', 'noopener'); /* wa-allowed:invoice */
       btn.remove();
     };
     document.body.appendChild(btn);

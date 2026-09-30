@@ -1831,7 +1831,7 @@ function renderEventsGrid() {
         ${hasFsTickets && !isPast ? `<span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.18);color:#71ff00;font-weight:700;">✓ Instant QR Ticket</span>` : ''}
       </div>
       <div style="display:flex;gap:8px;">
-        ${hasFsTickets && !isPast ? `<button type="button" onclick="openTicketModal('${e.fsId}')" style="flex:1;padding:10px;background:linear-gradient(135deg,#a855f7,#71ff00);border:none;border-radius:12px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">${isFree?'🎟️ Reserve Free':'🎟️ Buy Ticket'}</button>` : `<a href="https://wa.me/254${(e.phone||'').replace(/^0/,'')}?text=${encodeURIComponent('Hi, I\'d like to buy a ticket for '+(e.name||'')+ ' on '+e.date+'. Please send payment details.')}" target="_blank" rel="noopener" style="flex:1;display:block;text-align:center;padding:10px;background:linear-gradient(135deg,#a855f7,#71ff00);color:white;font-weight:900;font-size:13px;border-radius:12px;text-decoration:none;">${isFree?'🎟️ Reserve Spot':'🎟️ Buy Ticket'}</a>`}
+        ${hasFsTickets && !isPast ? `<button type="button" onclick="openTicketModal('${e.fsId}')" style="flex:1;padding:10px;background:linear-gradient(135deg,#a855f7,#71ff00);border:none;border-radius:12px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">${isFree?'🎟️ Reserve Free':'🎟️ Buy Ticket'}</button>` : `<a href="support.html?topic=booking&desc=${encodeURIComponent('Ticket request: '+(e.name||'')+ ' on '+e.date)}" style="flex:1;display:block;text-align:center;padding:10px;background:linear-gradient(135deg,#a855f7,#71ff00);color:white;font-weight:900;font-size:13px;border-radius:12px;text-decoration:none;">${isFree?'🎟️ Reserve Spot':'🎟️ Buy Ticket'}</a>`}
       </div>
     </div>`;
   }).join('');
@@ -2017,7 +2017,7 @@ function _renderTicketShareBtns(ticket) {
     'SOKONI Team'
   ].join('\n');
 
-  const waUrl    = `https://wa.me/${waPhone}?text=${encodeURIComponent(waText)}`;
+  const waUrl    = `https://wa.me/${waPhone}?text=${encodeURIComponent(waText)}`; /* wa-allowed:invoice — the buyer's own ticket receipt */
   const mailUrl  = `mailto:${buyerEmail}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
 
   wrap.innerHTML =
@@ -2250,7 +2250,7 @@ function renderEntFeed() {
           <span style="margin-left:auto;font-size:9px;padding:2px 7px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:4px;color:#4ade80;font-weight:700;">OPEN</span>
         </div>
         <div style="font-size:12px;color:rgba(255,255,255,0.75);line-height:1.5;">${r.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-        ${r.phone ? `<a href="https://wa.me/254${r.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi, I saw your Entertainment Hub request: '+r.text+'\n\nI can help — SOKONI Verified Performer')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>` : ''}
+        ${r.phone ? `<a href="support.html?topic=request&desc=${encodeURIComponent('I can help with this Entertainment Hub request: '+r.text)}" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>` : ''}
       </div>`).join('');
 }
 
@@ -2286,7 +2286,7 @@ function renderEntFeedHome() {
           <span style="margin-left:auto;font-size:9px;padding:2px 7px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:4px;color:#4ade80;font-weight:700;">OPEN</span>
         </div>
         <div style="font-size:12px;color:rgba(255,255,255,0.75);line-height:1.5;">${r.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-        ${r.phone ? `<a href="https://wa.me/254${r.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi, I saw your Entertainment Hub request: '+r.text+'\n\nI can help — SOKONI Verified Performer')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>` : ''}
+        ${r.phone ? `<a href="support.html?topic=request&desc=${encodeURIComponent('I can help with this Entertainment Hub request: '+r.text)}" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>` : ''}
       </div>`).join('');
 }
 window.postEntRequestHome = postEntRequestHome;

@@ -1736,7 +1736,7 @@
     var name = _state.shopName || 'my shop';
     var msg = 'Check out ' + name + ' on SOKONI — Kenya\'s #1 marketplace! ' + url;
     var targets = {
-      whatsapp: 'https://wa.me/?text=' + encodeURIComponent(msg),
+      whatsapp: 'https://wa.me/?text=' + encodeURIComponent(msg), /* wa-allowed:marketing — share, no recipient chosen */
       facebook: 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url),
       x: 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(msg),
       telegram: 'https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(msg)
@@ -2088,7 +2088,7 @@
     var name = _state.shopName || 'My Shop';
     var msg = 'Check out ' + name + ' on SOKONI! ' + url;
     var platforms = [
-      {name:'WhatsApp', icon:'&#128241;', color:'#25d366', href:'https://wa.me/?text=' + encodeURIComponent(msg)},
+      {name:'WhatsApp', icon:'&#128241;', color:'#25d366', href:'https://wa.me/?text=' + encodeURIComponent(msg)}, /* wa-allowed:marketing — share, no recipient chosen */
       {name:'Instagram', icon:'&#128247;', color:'#e1306c', href:'https://www.instagram.com/'},
       {name:'Facebook', icon:'&#128279;', color:'#1877f2', href:'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url)},
       {name:'X (Twitter)', icon:'&#10005;', color:'#1da1f2', href:'https://twitter.com/intent/tweet?text=' + encodeURIComponent(msg)},

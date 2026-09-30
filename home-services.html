@@ -460,7 +460,7 @@ function renderProvidersGrid(list){
       <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.55;margin-bottom:10px;">${p.bio}</div>
       <div style="font-size:15px;font-weight:900;color:#f59e0b;margin-bottom:12px;">${p.rate}</div>
       <div style="display:flex;gap:6px;">
-        <button type="button" onclick="contactProvider('${(p.id||'').replace(/'/g,'').replace(/"/g,'')}','${(p.name||'').replace(/'/g,'\\\'').replace(/"/g,'')}','${(p.phone||'').replace(/'/g,'').replace(/"/g,'')}')" class="hs-wa-btn" style="flex:1;">💬 WhatsApp</button>
+        <button type="button" onclick="contactProvider('${(p.id||'').replace(/'/g,'').replace(/"/g,'')}','${(p.name||'').replace(/'/g,'\\\'').replace(/"/g,'')}','${(p.phone||'').replace(/'/g,'').replace(/"/g,'')}','${encodeURIComponent(p.uid||'').replace(/'/g,'%27')}')" class="hs-wa-btn" style="flex:1;">💬 Book</button>
         <button type="button" onclick="openReviewModal('${(p.id||'').replace(/'/g,'').replace(/"/g,'')}','${(p.name||'').replace(/'/g,'\\\'').replace(/"/g,'')}')" style="padding:8px 12px;border:1px solid rgba(245,158,11,0.2);border-radius:9px;background:rgba(245,158,11,0.05);color:#f59e0b;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;" title="Rate this provider">⭐ Rate</button>
       </div>
     </div>`).join('');
@@ -530,7 +530,7 @@ function renderQuotesFeed(){
       </div>
       <div style="font-size:12px;color:rgba(255,255,255,0.65);">${q.desc.slice(0,120)}${q.desc.length>120?'…':''}</div>
       ${q.budget?`<div style="font-size:11px;color:#f59e0b;margin-top:4px;">Budget: ${q.budget}</div>`:''}
-      <a href="https://wa.me/254${q.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi! I saw your quote request for '+q.service+' on SOKONI Home Services. I can help. My rate is: ')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Send Quote</a>
+      <a href="support.html?topic=request&ref=${encodeURIComponent(q.id||'')}&desc=${encodeURIComponent('I can quote for this SOKONI Home Services request ('+q.service+'). My rate is: ')}" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Send Quote</a>
     </div>`).join('');
 }
 
@@ -562,7 +562,7 @@ function renderHsAskFeed(){
         <span style="font-size:11px;color:rgba(255,255,255,0.3);">${ago(r.ts)}</span>
       </div>
       <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.5;">${r.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-      ${r.phone?`<a href="https://wa.me/254${r.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi! I can help with your home service request: '+r.text)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>`:''}
+      ${r.phone?`<a href="support.html?topic=request&ref=${encodeURIComponent(r.id||'')}&desc=${encodeURIComponent('I can help with this home service request: '+r.text)}" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>`:''}
     </div>`).join('');
 }
 
@@ -584,9 +584,8 @@ function registerProvider(){
   };
   let local=[];try{local=JSON.parse(localStorage.getItem('sokoniHomeProviders')||'[]');}catch(e){}
   local.unshift(p);localStorage.setItem('sokoniHomeProviders',JSON.stringify(local.slice(0,50)));
-  const msg=`🏠 *SOKONI Home Services — New Provider Registration*\n\n👤 ${name}\n📞 ${phone}\n🔧 Service: ${service}\n📍 Area: ${area}\n${p.rate?'💰 Rate: '+p.rate:''}${p.bio?'\n\n'+p.bio:''}`;
-  window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
-  if(msgEl){msgEl.innerHTML='✅ Registered! You\'ll start receiving job alerts.';msgEl.style.color='#f59e0b';}
+  /* Recorded in homeServiceProviders below — no WhatsApp hand-off to the admin (owner 2026-09-30). */
+  if(msgEl){msgEl.innerHTML='✅ Registered! You\'ll start receiving job alerts. Questions? <a href="support.html?topic=request&desc='+encodeURIComponent('Home Services provider registration: '+name+' ('+service+')')+'" style="color:#f59e0b;">Contact Support</a>';msgEl.style.color='#f59e0b';}
   /* Firestore write — fire-and-forget */
   _hsFireWrite('homeServiceProviders',{...p,registrationStatus:'pending',hub:'home-services'});
   ['regName','regPhone','regArea','regRate','regBio'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
@@ -659,11 +658,15 @@ async function _hsFireWrite(coll, data) {
 window._hsFireWrite=_hsFireWrite;
 
 /* ── CONTACT PROVIDER (lead fee tracking) ── */
-function contactProvider(id, name, phone) {
+function contactProvider(id, name, phone, uidEnc) {
   /* Track lead fee — fire-and-forget */
   _hsFireWrite('homeServiceLeads',{providerId:id,providerName:name,hub:'home-services',feeKES:30,status:'pending'});
-  const msg=encodeURIComponent('Hi '+name+', I found you on SOKONI Home Services. I need help with: ');
-  window.open('https://wa.me/254'+phone.replace(/^0/,'')+'?text='+msg,'_blank');
+  /* In-app only (owner 2026-09-30): a provider with an account uid (homeServiceProviders.uid)
+     → their SOKONI profile, which hosts the booking flow; otherwise this page's own booking form. */
+  if(uidEnc){ location.href='provider-profile.html?uid='+uidEnc; return; }
+  goToPanel('book');
+  const d=document.getElementById('bkDesc');
+  if(d&&!d.value) d.value='Preferred provider: '+name+'. I need help with: ';
 }
 window.contactProvider=contactProvider;
 

@@ -92,7 +92,7 @@
     document.body.appendChild(overlay);
 
     document.getElementById('_ss_wa').addEventListener('click', function () {
-      window.open('https://wa.me/?text=' + encodeURIComponent(waMsg), '_blank');
+      window.open('https://wa.me/?text=' + encodeURIComponent(waMsg), '_blank'); /* wa-allowed:marketing — share, no recipient chosen */
     });
     document.getElementById('_ss_tw').addEventListener('click', function () {
       window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(twTxt), '_blank');

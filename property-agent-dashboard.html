@@ -267,7 +267,7 @@ function renderTab(tab) {
         <div style="font-size:12px;color:rgba(255,255,255,0.55);margin-top:6px;line-height:1.5;">"${(i.message||'').slice(0,120)}${(i.message||'').length>120?'...':''}"</div>
         <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
           <a href="tel:${i.phone}" class="ad-btn green">📞 Call ${i.phone}</a>
-          <a href="https://wa.me/254${(i.phone||'').replace(/[^0-9]/g,'').replace(/^0/,'')}" target="_blank" class="ad-btn" style="background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;">WhatsApp</a>
+          <a href="support.html?topic=request&ref=${encodeURIComponent(i.id||'')}&desc=${encodeURIComponent('Property inquiry '+(i.id||'')+' from '+(i.name||'')+' about '+(i.propertyTitle||'Property'))}" class="ad-btn" style="background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;">💬 Contact Support</a>
         </div>
       </div>`;
     }).join('');

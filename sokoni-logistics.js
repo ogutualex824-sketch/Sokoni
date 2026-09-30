@@ -347,13 +347,17 @@
 
   /*
    * whatsappDeepLink(phone, message) → URL
-   * Opens WhatsApp chat with pre-filled message (wa.me deep link).
+   * Name kept for API compatibility only. Rider↔customer contact no longer
+   * hands off to WhatsApp (owner decision 2026-09-30: WhatsApp is OTP /
+   * invoice / marketing only). With no packageRequests id in this helper's
+   * signature there is no in-app chat target (chat.html?tx=logistics_request
+   * needs one), so it returns a tel: link; `message` is ignored.
    */
-  function whatsappDeepLink(phone, message) {
+  function whatsappDeepLink(phone, message) { // eslint-disable-line no-unused-vars
     var cleaned = String(phone || '').replace(/\D/g, '');
     /* Normalize Kenyan number to international format */
     if (cleaned.startsWith('0') && cleaned.length === 10) cleaned = '254' + cleaned.slice(1);
-    return 'https://wa.me/' + cleaned + '?text=' + encodeURIComponent(message || '');
+    return cleaned ? 'tel:+' + cleaned : '';
   }
 
   /* ─────────────────────────────────────────────────────────────

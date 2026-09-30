@@ -627,7 +627,7 @@ function scrollToPost(id){
 
 function shareToWhatsApp(title){
   const url = encodeURIComponent("https://mysokoni.co.ke/community.html");
-  window.open(`https://wa.me/?text=${title}%20-%20Sokoni%20Community%20${url}`, "_blank");
+  window.open(`https://wa.me/?text=${title}%20-%20Sokoni%20Community%20${url}`, "_blank"); /* wa-allowed:marketing */
 }
 
 window.filterType    = filterType;
@@ -810,7 +810,7 @@ function createGroup() {
   if(msgEl){msgEl.innerHTML='✅ Group created! Share on WhatsApp to invite members.';msgEl.style.color='#71ff00';}
   document.getElementById('ccGName').value='';document.getElementById('ccGDesc').value='';document.getElementById('ccGPhone').value='';
   renderCCGroups();
-  if (phone) { const msg=`👥 Join my SOKONI Community Group: *${name}*\n\n${desc}\n\nJoin here: https://mysokoni.co.ke/community.html`; window.open(`https://wa.me/254${phone.replace(/^0/,'')}?text=${encodeURIComponent(msg)}`,'_blank'); }
+  if (phone) { const msg=`👥 Join my SOKONI Community Group: *${name}*\n\n${desc}\n\nJoin here: https://mysokoni.co.ke/community.html`; window.open(`https://wa.me/254${phone.replace(/^0/,'')}?text=${encodeURIComponent(msg)}`,'_blank'); } /* wa-allowed:marketing */
   /* Persist to Firestore so groups are discoverable across devices */
   (function(){
     const FS_URL='https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
@@ -1080,7 +1080,7 @@ window.rsvpEvent = function(id, status) {
 
 window.shareEvWA = function(titleEnc, date) {
   const t = decodeURIComponent(titleEnc);
-  window.open(`https://wa.me/?text=${encodeURIComponent(`📅 ${t} (${date}) — SOKONI Community\nhttps://mysokoni.co.ke/community.html`)}`, '_blank');
+  window.open(`https://wa.me/?text=${encodeURIComponent(`📅 ${t} (${date}) — SOKONI Community\nhttps://mysokoni.co.ke/community.html`)}`, '_blank'); /* wa-allowed:marketing */
 };
 
 window.submitEvent = async function() {

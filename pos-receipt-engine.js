@@ -1000,7 +1000,7 @@
       try {
         var d    = normalise(saleData);
         var text = buildText(d);
-        var url  = 'https://wa.me/?text=' + encodeURIComponent(text);
+        var url  = 'https://wa.me/?text=' + encodeURIComponent(text); /* wa-allowed:invoice — the receipt itself */
         window.open(url, '_blank', 'noopener,noreferrer');
       } catch (err) {
         console.error('[SokoniReceiptEngine] shareWhatsApp() error:', err);

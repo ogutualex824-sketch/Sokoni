@@ -1493,7 +1493,7 @@ async function buyNow(productId, _trigBtn){
 function shareProductWA(name, price){
     const decoded = decodeURIComponent(name);
     const text    = encodeURIComponent(`🛍️ "${decoded}" — KES ${Number(price).toLocaleString()} on SOKONI Kenya!\nhttps://mysokoni.co.ke`);
-    window.open(`https://wa.me/?text=${text}`, "_blank");
+    window.open(`https://wa.me/?text=${text}`, "_blank"); /* wa-allowed:marketing */
 }
 
 /* QUICK OFFER FROM CARD */
@@ -2201,7 +2201,7 @@ const botResponses = [
     { keys:["digital","ebook","course","software","download"], reply:"Find digital products at <a href='tech-hub.html' style='color:#71ff00'>💻 Digital & eSoko</a> — eBooks, courses, software and more. Instant download after purchase! 📲" },
 
     /* ── Support ── */
-    { keys:["contact","phone","email","support","help","human","agent"], reply:"📞 <a href='tel:+254705726803' style='color:#71ff00'>+254 705 726 803</a><br>📧 <a href='mailto:info@sokoni.co.ke' style='color:#71ff00'>info@sokoni.co.ke</a><br>💬 <a href='https://wa.me/254705726803' style='color:#71ff00'>WhatsApp (fastest)</a><br>⏰ Support: Mon–Sat 7am–10pm" },
+    { keys:["contact","phone","email","support","help","human","agent"], reply:"📞 <a href='tel:+254705726803' style='color:#71ff00'>+254 705 726 803</a><br>📧 <a href='mailto:info@sokoni.co.ke' style='color:#71ff00'>info@sokoni.co.ke</a><br>💬 <a href='support.html?topic=general' style='color:#71ff00'>Chat with Support (fastest)</a><br>⏰ Support: Mon–Sat 7am–10pm" },
     { keys:["dispute","scam","fraud","not received","cheated"], reply:"We take disputes seriously! 🔒 Go to <a href='dispute.html' style='color:#ff9800'>⚠️ Report Dispute</a> and describe the issue. We investigate within 24 hours and protect your money. 💪" },
     { keys:["community","forum","ask question","post","review"], reply:"Join the <a href='community.html' style='color:#71ff00'>💬 Sokoni Community</a>! Ask questions, share reviews, recommend sellers and connect with other buyers and sellers across Kenya. 🌍" },
 
@@ -2260,7 +2260,7 @@ function botReply(message){
     /* Fallback — proactive help */
     const fallbacks = [
         "I'm not sure about that, but I can help with orders, delivery, selling, healthcare & events! Try asking: <em>'How do I track my order?'</em> or <em>'How do I sell on Sokoni?'</em> 😊",
-        "Hmm, let me get a human to help! 👤 Reach us on <a href='https://wa.me/254705726803' style='color:#71ff00'>WhatsApp</a> (fastest) or call <a href='tel:+254705726803' style='color:#71ff00'>+254 705 726 803</a>.",
+        "Hmm, let me get a human to help! 👤 Reach us via <a href='support.html?topic=general' style='color:#71ff00'>💬 Contact Support</a> (fastest) or call <a href='tel:+254705726803' style='color:#71ff00'>+254 705 726 803</a>.",
         "I didn't quite get that! Try rephrasing or ask something like:<br>• <em>'Where is my order?'</em><br>• <em>'I want to sell on Sokoni'</em><br>• <em>'Book a DJ for my event'</em> 🎉",
     ];
     return fallbacks[Math.floor(Math.random() * fallbacks.length)];

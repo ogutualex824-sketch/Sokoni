@@ -780,7 +780,7 @@ function sharePassport() {
   if (navigator.share) {
     navigator.share({ title:'My SOKONI Trust Passport', text: msg }).catch(()=>{});
   } else {
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank'); /* wa-allowed:marketing — share, no recipient chosen */
   }
 }
 window.sharePassport = sharePassport;

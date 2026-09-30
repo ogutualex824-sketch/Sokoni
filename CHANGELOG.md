@@ -1,3 +1,46 @@
+## [2026-10-01] - Slice B2: WhatsApp only for OTP, invoices and marketing — every other hand-off now in SOKONI; in-app order chat + refund request — built, certified, NOT deployed
+
+**Branch `hosting/slice-b2-on-chain`, built on `hosting/chain-on-3e8dd53` @ `54b72cc`.** Hosting only; deploys after the
+chain. Owner decision (2026-09-30): "all communications and bookings happen within SOKONI and a refund system must be in
+place … we only use WhatsApp for OTP and invoices and marketing." Full record: `docs/SLICE_B2_WHATSAPP_IN_APP.md`.
+
+**Summary.** 176 WhatsApp hand-offs across 76 client files (chain tip census) replaced with the in-app path that already
+exists: SOKONI support numbers → `support.html` tickets; counterparties on an order/booking/parcel → the new
+`chat.html?tx=<type>&txId=<id>` (server `messagesDispatch.createConversation`, parties derived, non-parties refused);
+providers before a transaction → `provider-profile.html` / the page's own booking or enquiry modal; registrations,
+applications, quotes, SOS, commission payment → prefilled support tickets (or the existing Firestore write, hop dropped);
+admin/merchant notices → removed, `tel:` kept. What stays is marked on its line `wa-allowed:<otp|invoice|marketing>`
+(POS receipts, rent/water/service-charge invoices, booking invoices, recipient-less shares, referral invites, SEO brand
+profile). My Orders gains **💬 Message seller** and **↩ Request refund** (a support ticket a person reviews — never a
+money call).
+
+**Files affected.** 86 client files (the 76 hand-off files + share-only files marked + `chat.html`, `my-orders.html`),
+`scripts/test-slice-b-support-whatsapp.js` (W12–W19, N2–N3), `scripts/test-merchant-order-share.js` (contract updated:
+Message buyer replaces the retired WhatsApp share), `docs/SLICE_B2_WHATSAPP_IN_APP.md`.
+
+**Database changes.** None. **API changes.** None — `chat.html` consumes the existing `messagesDispatch` op
+`createConversation` (live archive byte-identical to this tree's `functions/messages.js`). **Breaking changes.** Pages no
+longer open WhatsApp for chat/booking/support; `landlord.html` loses its non-invoice WhatsApp sends (notices,
+agreements, bulk messages); `merchant-v2.html` loses `waMessage`/`orderDestination`.
+
+**Security.** Removes off-platform channels with no record, audit or moderation. `chat.html?tx=` accepts only
+server-derivable types (W14 = equality with `PARTY_FIELDS`) and a validated id; the server refuses non-parties. Every new
+link value is `encodeURIComponent`'d (reviewed). W19: no client page may write `refundRequests` (its creation credits a
+wallet).
+
+**FINDING — refund authority (owner decision needed, not changed).** Live `createDispute` refuses every checkout order
+(`buyerId|userId|customerId` vs checkout's `uid`/`buyerUid`), and widening it would feed `autoOnDisputeCreate`'s
+≤ KES 1,000 auto **buyer_wins** → `refundRequests` → automatic wallet credit, against the rule *refund = request, owner
+approves*. Ten further findings (landlord personal-M-Pesa invoices, landlord XSS, product contact modal denied by rules,
+success-before-write copy, silent admin approvals, …) are tabled in the doc.
+
+**Certification.** `test-slice-b-support-whatsapp.js --static` **32/0** (incl. B1–B4 in Chromium, N1–N3 negative
+controls); `test-merchant-order-share.js` **46/0**; `predeploy-syntax-gate.js` 1823 JS + 455 inline blocks parse.
+Parent (`54b72cc`) vs candidate over the 182 suites that read a changed file: see the commit that records the re-run.
+
+**Not changed, by agreement.** `index.html` footer WhatsApp links (sokoni-70's candidate), `opportunity.html` applyNow
+(sokoni-27's in-app application, 85b8516) — both named in W12's `PEER_OWNED`, removed after the rebase.
+
 ## [2026-09-30] - BnB: category pill strip made phone-safe (snap-scroll chips, sort on its own row) — built, browser certification QUEUED, NOT deployed
 
 **Branch `hosting/bnb-mobile-on-0271709`, built on `0271709`.** Owner ask (verbatim): "fix the bnb mobile layout the

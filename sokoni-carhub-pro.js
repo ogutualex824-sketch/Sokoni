@@ -357,7 +357,6 @@ window.CarHubPro = (function(){
   function openMechDetail(id){
     const m=getMechanics().find(x=>x.id===id); if(!m) return;
     const content=document.getElementById('chpModalContent'); if(!content) return;
-    const phone=(m.phone||'').replace(/^0/,'254');
     content.innerHTML=`
       <div style="height:200px;overflow:hidden;border-radius:14px;margin-bottom:14px;background:rgba(255,255,255,0.04);">
         <img loading="lazy" src="${m.image}" alt="${m.name}" style="width:100%;height:200px;object-fit:cover;" onerror="this.style.display='none'">
@@ -384,7 +383,7 @@ window.CarHubPro = (function(){
         <a href="tel:${m.phone}" style="padding:13px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-weight:900;font-size:13px;text-decoration:none;text-align:center;">📞 Call Now</a>
         <button type="button" onclick="closeChpModal();CarHubPro.openMechBooking('${m.id}')" style="padding:13px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:13px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;">📅 Book Service</button>
       </div>
-      <a href="https://wa.me/${phone}?text=${encodeURIComponent('Hi! I found your garage on SOKONI Car Hub and need your services.')}" target="_blank" style="display:block;padding:12px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.22);border-radius:12px;color:#25d366;font-weight:800;font-size:13px;text-align:center;text-decoration:none;"><i class="fab fa-whatsapp"></i> WhatsApp Mechanic</a>`;
+      <a href="support.html?topic=booking&desc=${encodeURIComponent('I need help booking '+(m.name||'a garage')+' on SOKONI Car Hub.')}" style="display:block;padding:12px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.22);border-radius:12px;color:#25d366;font-weight:800;font-size:13px;text-align:center;text-decoration:none;">💬 Contact Support</a>`;
     openChpModal(m.name,'🔧 Verified Garage');
   }
 
@@ -436,12 +435,8 @@ window.CarHubPro = (function(){
       preferredDate:date,problem,status:'pending',createdAt:Date.now()};
     await fsWrite('mechanic_bookings',booking);
     saveBuyerActivity('mechanic_bookings',booking);
-    const mPhone=(mech?.phone||'').replace(/^0/,'254').replace(/\D/g,'');
-    if(mPhone){
-      const wa=encodeURIComponent(`🔧 *SOKONI — Service Booking*\n\nRef: ${booking.id}\n👤 ${name} (${phone})\n🚗 ${vehicle}\n🛠️ ${service}\n📅 ${date}\n📝 ${problem||'No extra details'}\n\nPlease confirm availability.`);
-      setTimeout(()=>window.open(`https://wa.me/${mPhone}?text=${wa}`,'_blank'),500);
-    }
-    if(msgEl){msgEl.innerHTML=`✅ Booking <strong>${_esc(booking.id)}</strong> sent to ${_esc(mech?.name||'')}! They will call you shortly.`;msgEl.style.color='#71ff00';}
+    /* Recorded via fsWrite above — no WhatsApp hand-off (owner 2026-09-30). */
+    if(msgEl){msgEl.innerHTML=`✅ Booking <strong>${_esc(booking.id)}</strong> recorded on SOKONI for ${_esc(mech?.name||'')}. Need help? <a href="support.html?topic=booking&ref=${encodeURIComponent(booking.id)}" style="color:#71ff00;">Contact Support</a>`;msgEl.style.color='#71ff00';}
     toast('✅ Mechanic booking submitted!');
     setTimeout(closeChpModal,2600);
   }
@@ -480,8 +475,7 @@ window.CarHubPro = (function(){
     }
     grid.innerHTML=parts.map(p=>{
       const condColor=p.condition==='New'?'#71ff00':p.condition==='Used'?'#ff9800':'#00aaff';
-      const ph=(p.sellerPhone||'').replace(/^0/,'254').replace(/\D/g,'');
-      const wa=encodeURIComponent(`Hi! I saw your "${p.name}" on SOKONI Car Hub for ${kes(p.price)}. Is it available?`);
+      const wa=encodeURIComponent(`I'm interested in "${p.name}"${p.seller?` from ${p.seller}`:''} on SOKONI Car Hub for ${kes(p.price)}. Is it available?`);
       return `<div class="chp-card" onclick="CarHubPro.openPartDetail('${p.id}')">
         <div style="height:160px;overflow:hidden;border-radius:14px 14px 0 0;position:relative;background:linear-gradient(135deg,#1a0d10,#0d1020);">
           <img loading="lazy" src="${p.image}" alt="${p.name}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">
@@ -497,7 +491,7 @@ window.CarHubPro = (function(){
           <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-bottom:10px;">📍 ${p.location}</div>
           <div style="font-size:20px;font-weight:900;color:#71ff00;margin-bottom:10px;">${kes(p.price)}</div>
           <div style="display:flex;gap:7px;">
-            ${ph?`<a href="https://wa.me/${ph}?text=${wa}" target="_blank" onclick="event.stopPropagation()" style="flex:1;padding:9px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:9px;color:#25d366;font-size:11px;font-weight:800;text-decoration:none;text-align:center;"><i class="fab fa-whatsapp"></i> WhatsApp</a>`:''}
+            <a href="support.html?topic=hire&desc=${wa}" onclick="event.stopPropagation()" style="flex:1;padding:9px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:9px;color:#25d366;font-size:11px;font-weight:800;text-decoration:none;text-align:center;">💬 Enquire</a>
             <a href="tel:${p.sellerPhone}" onclick="event.stopPropagation()" style="padding:9px 12px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:9px;color:#71ff00;font-size:12px;font-weight:800;text-decoration:none;">📞</a>
           </div>
         </div>
@@ -514,8 +508,7 @@ window.CarHubPro = (function(){
 
   function openPartDetail(id){
     const p=getParts().find(x=>x.id===id); if(!p) return;
-    const ph=(p.sellerPhone||'').replace(/^0/,'254').replace(/\D/g,'');
-    const wa=encodeURIComponent(`Hi ${p.seller}! I saw your "${p.name}" on SOKONI Car Hub for ${kes(p.price)}. Is it available?`);
+    const wa=encodeURIComponent(`I'm interested in "${p.name}"${p.seller?` from ${p.seller}`:''} on SOKONI Car Hub for ${kes(p.price)}. Is it available?`);
     const condColor=p.condition==='New'?'#71ff00':p.condition==='Used'?'#ff9800':'#00aaff';
     const content=document.getElementById('chpModalContent'); if(!content) return;
     content.innerHTML=`
@@ -539,7 +532,7 @@ window.CarHubPro = (function(){
         <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:rgba(255,255,255,0.4);">Phone</span><a href="tel:${p.sellerPhone}" style="font-weight:700;color:#71ff00;">${p.sellerPhone}</a></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        ${ph?`<a href="https://wa.me/${ph}?text=${wa}" target="_blank" style="padding:13px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.28);border-radius:12px;color:#25d366;font-weight:900;font-size:13px;text-align:center;text-decoration:none;"><i class="fab fa-whatsapp"></i> WhatsApp</a>`:''}
+        <a href="support.html?topic=hire&desc=${wa}" style="padding:13px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.28);border-radius:12px;color:#25d366;font-weight:900;font-size:13px;text-align:center;text-decoration:none;">💬 Enquire</a>
         <a href="tel:${p.sellerPhone}" style="padding:13px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.28);border-radius:12px;color:#71ff00;font-weight:900;font-size:13px;text-align:center;text-decoration:none;">📞 Call Seller</a>
       </div>`;
     openChpModal('Part Details','');
@@ -640,9 +633,8 @@ window.CarHubPro = (function(){
       description:desc,status:'dispatched',eta:svc.eta,createdAt:Date.now()};
     await fsWrite('roadside_requests',req);
     saveBuyerActivity('roadside_requests',req);
-    const prov=svc.provider.replace(/^0/,'254');
-    const wa=encodeURIComponent(`${svc.emoji} *SOKONI ROADSIDE ALERT*\n\nRef: ${req.id}\n📞 ${phone}\n🚗 ${vehicle}\n📍 ${location}\n🛠️ ${svc.label}\n📝 ${desc||'No extra details'}\n\nPlease respond urgently.`);
-    setTimeout(()=>window.open(`https://wa.me/${prov}?text=${wa}`,'_blank'),400);
+    /* Recorded via fsWrite above; urgent follow-up goes to a SOKONI SOS support ticket, not a WhatsApp hop (owner 2026-09-30). */
+    const wa=encodeURIComponent(`SOKONI ROADSIDE ALERT\n\nRef: ${req.id}\nPhone: ${phone}\nVehicle: ${vehicle}\nLocation: ${location}\nService: ${svc.label}\nDetails: ${desc||'No extra details'}`);
     const panel=document.getElementById('rsFormPanel');
     const result=document.getElementById('rsResultPanel');
     if(panel) panel.style.display='none';
@@ -662,6 +654,7 @@ window.CarHubPro = (function(){
             <a href="tel:999" style="padding:12px;background:rgba(255,33,33,0.12);border:1px solid rgba(255,33,33,0.3);border-radius:11px;color:#ff3333;font-weight:900;font-size:13px;text-decoration:none;text-align:center;">🚨 Police 999</a>
             <a href="tel:0800723000" style="padding:12px;background:rgba(255,100,0,0.1);border:1px solid rgba(255,100,0,0.25);border-radius:11px;color:#ff9800;font-weight:900;font-size:13px;text-decoration:none;text-align:center;">🏥 Ambulance</a>
           </div>
+          <a href="support.html?topic=sos&ref=${encodeURIComponent(req.id)}&desc=${wa}" style="display:block;padding:12px;margin-bottom:10px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.28);border-radius:11px;color:#25d366;font-weight:900;font-size:13px;text-decoration:none;text-align:center;">💬 Contact Support (SOS)</a>
           <button type="button" onclick="CarHubPro.resetRoadsideForm()" style="width:100%;padding:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:rgba(255,255,255,0.5);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Request Another Service</button>
         </div>`;
     }
@@ -741,15 +734,9 @@ window.CarHubPro = (function(){
       status:'pending',createdAt:Date.now()};
     await fsWrite('financing_applications',app);
     saveBuyerActivity('financing_applications',app);
-    // WhatsApp to bank
-    const bankInfo=FINANCE_PARTNERS.find(p=>p.name===partner);
-    if(bankInfo){
-      const ph=bankInfo.phone.replace(/^0/,'254');
-      const wa=encodeURIComponent(`💰 *SOKONI — Loan Application*\n\nRef: ${app.id}\nApplicant: ${name}\nPhone: ${phone}\nMonthly Income: ${kes(income)}\nVehicle Price: ${kes(vehiclePrice)}\nTerm: ${app.loanTerm} months\n\nPlease contact the applicant.`);
-      setTimeout(()=>window.open(`https://wa.me/${ph}?text=${wa}`,'_blank'),400);
-    }
+    /* Recorded via fsWrite above — no WhatsApp hand-off to the bank (owner 2026-09-30). */
     const _ce=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    if(msgEl){msgEl.innerHTML=`✅ Application <strong>${_ce(app.id)}</strong> sent to ${_ce(partner)}! A loan officer will contact you within 24 hours.`;msgEl.style.color='#71ff00';}
+    if(msgEl){msgEl.innerHTML=`✅ Application <strong>${_ce(app.id)}</strong> recorded on SOKONI (preferred partner: ${_ce(partner)}). Questions? <a href="support.html?topic=request&ref=${encodeURIComponent(app.id)}" style="color:#71ff00;">Contact Support</a>`;msgEl.style.color='#71ff00';}
     toast('✅ Financing application submitted!');
   }
 
@@ -774,10 +761,8 @@ window.CarHubPro = (function(){
     await fsWrite('inspection_bookings',booking);
     saveBuyerActivity('inspection_bookings',booking);
     const c=INSPECTION_CENTERS.find(x=>x.name===center)||INSPECTION_CENTERS[1];
-    const ph=c.phone.replace(/^0/,'254');
-    const wa=encodeURIComponent(`🔍 *SOKONI — Inspection Booking*\n\nRef: ${booking.id}\n📞 ${phone}\n🚗 ${vehicle}\n🔍 ${type}\n📅 ${date}\n\nPlease confirm the appointment.`);
-    setTimeout(()=>window.open(`https://wa.me/${ph}?text=${wa}`,'_blank'),400);
-    if(msgEl){msgEl.innerHTML=`✅ Booking <strong>${_esc(booking.id)}</strong> confirmed! ${_esc(c.name)} will contact you at <strong>${_esc(phone)}</strong>.`;msgEl.style.color='#71ff00';}
+    /* Recorded via fsWrite above — no WhatsApp hand-off to the centre (owner 2026-09-30). */
+    if(msgEl){msgEl.innerHTML=`✅ Booking <strong>${_esc(booking.id)}</strong> recorded on SOKONI for ${_esc(c.name)}. Need help? <a href="support.html?topic=booking&ref=${encodeURIComponent(booking.id)}" style="color:#71ff00;">Contact Support</a>`;msgEl.style.color='#71ff00';}
     toast('✅ Inspection booked!');
   }
 
@@ -837,11 +822,9 @@ window.CarHubPro = (function(){
       preferredDate:date,phone,status:'pending',createdAt:Date.now()};
     await fsWrite('transport_requests',req);
     saveBuyerActivity('transport_requests',req);
-    const prov=TRANSPORT_PROVIDERS[0];
-    const ph=prov.phone.replace(/^0/,'254');
-    const wa=encodeURIComponent(`🚛 *SOKONI — Car Transport*\n\nRef: ${req.id}\n📞 ${phone}\n🚗 ${vehicle} (${req.vehicleType})\n📍 ${(CITIES[from]||{label:from}).label} → ${(CITIES[to]||{label:to}).label}\n📅 ${date}\n🚛 ${req.serviceType}\n\nPlease provide a quote.`);
-    setTimeout(()=>window.open(`https://wa.me/${ph}?text=${wa}`,'_blank'),400);
-    if(msgEl){msgEl.innerHTML=`✅ Request <strong>${_esc(req.id)}</strong> sent! Provider will contact you at ${_esc(phone)}.`;msgEl.style.color='#71ff00';}
+    /* Recorded via fsWrite above — no WhatsApp hand-off to a provider (owner 2026-09-30). */
+    const wa=encodeURIComponent(`Car transport request ${req.id}: ${vehicle} (${req.vehicleType}), ${(CITIES[from]||{label:from}).label} → ${(CITIES[to]||{label:to}).label}, ${date}, ${req.serviceType}. Please provide a quote.`);
+    if(msgEl){msgEl.innerHTML=`✅ Request <strong>${_esc(req.id)}</strong> recorded on SOKONI. Get your quote: <a href="support.html?topic=quote&ref=${encodeURIComponent(req.id)}&desc=${wa}" style="color:#71ff00;">Contact Support</a>`;msgEl.style.color='#71ff00';}
     toast('✅ Transport request submitted!');
   }
 

@@ -1809,7 +1809,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
       var link = (document.getElementById('empInviteLink') || {}).value || '';
       if (!link) return;
       var msg = encodeURIComponent('You have been invited to join our team on SOKONI SmartPOS.\n\nClick this link to set up your account:\n' + link);
-      window.open('https://wa.me/?text=' + msg, '_blank');
+      window.open('https://wa.me/?text=' + msg, '_blank'); /* wa-allowed:marketing */
     }
     /* Enhance renderEmployees to add data-role and empty state */
     var _origRenderEmployees = window.renderEmployees;
@@ -2409,7 +2409,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
               </div>
               <div class="sw-preview-actions">
                 <button type="button" class="sw-preview-shop-btn">🛍️ Shop Now</button>
-                <a class="sw-preview-wa-btn" id="swPreviewWa" href="javascript:void(0)"><i class="fab fa-whatsapp"></i> Chat</a>
+                <a class="sw-preview-wa-btn" id="swPreviewWa" href="javascript:void(0)"><i class="fas fa-comment"></i> Chat</a>
               </div>
             </div>
           </div>
@@ -2632,8 +2632,8 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           if(swData.logoSrc){pl.innerHTML=`<img loading="lazy" src="${swData.logoSrc}" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">`;}
           else{pl.textContent='🏪';}
         }
-        const wa=document.getElementById('swPreviewWa');
-        if(wa&&phone)wa.href=`https://wa.me/254${phone.replace(/^0/,'')}`;
+        /* Slice B2: the preview "Chat" button no longer links to the seller's WhatsApp —
+           buyers message sellers inside SOKONI. It stays an inert preview control. */
         swUpdateChecklist();
       }
       window.swUpdatePreview=swUpdatePreview;
@@ -3288,7 +3288,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
         </div>
         <div class="flash-input-group">
           <label style="color:rgba(255,255,255,0.5);font-size:11px;">💬 WhatsApp Business</label>
-          <input type="tel" id="storeWhatsApp" class="flash-input" placeholder="07XXXXXXXX (for wa.me link)" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
+          <input type="tel" id="storeWhatsApp" class="flash-input" placeholder="07XXXXXXXX" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
         </div>
         <div class="flash-input-group">
           <label style="color:rgba(255,255,255,0.5);font-size:11px;">👻 Snapchat</label>
@@ -6086,7 +6086,8 @@ window.deleteSellerAccount=deleteSellerAccount;
     body.innerHTML = list.map(function(c){
       var initials = (c.name||'?').split(' ').map(function(w){ return w[0]||''; }).join('').slice(0,2).toUpperCase();
       var repeat = c.orders >= 2;
-      var wa = c.phone && c.phone!=='—' ? 'https://wa.me/254'+c.phone.slice(1) : '#';
+      /* Slice B2: customer contact is a tel: call (no transaction id on an aggregated customer row). */
+      var tel = c.phone && c.phone!=='—' ? 'tel:+254'+String(c.phone).replace(/\D/g,'').replace(/^(254|0)/,'') : '#';
       return '<tr>'
         +'<td><div style="display:flex;align-items:center;gap:10px;">'
         +'<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#71ff00,#00cc44);color:#000;font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">'+initials+'</div>'
@@ -6098,7 +6099,7 @@ window.deleteSellerAccount=deleteSellerAccount;
         +'<td style="color:#71ff00;font-weight:800;">KES '+c.spend.toLocaleString()+'</td>'
         +'<td style="color:rgba(255,255,255,0.5);white-space:nowrap;">'+( c.lastDate||'—')+'</td>'
         +'<td><div style="display:flex;gap:6px;">'
-        +(c.phone&&c.phone!=='—'?'<a href="'+wa+'" target="_blank" style="background:#25D366;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;">WhatsApp</a>':'')
+        +(c.phone&&c.phone!=='—'?'<a href="'+tel+'" style="background:#25D366;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;">📞 Call</a>':'')
         +'</div></td>'
         +'</tr>';
     }).join('');
@@ -6245,7 +6246,7 @@ window.deleteSellerAccount=deleteSellerAccount;
         if(navigator.share){
           navigator.share({title:'Receipt '+rcpNum, text:txt}).catch(function(){});
         } else {
-          var wa = 'https://wa.me/?text='+encodeURIComponent(txt);
+          var wa = 'https://wa.me/?text='+encodeURIComponent(txt); /* wa-allowed:invoice */
           window.open(wa, '_blank');
         }
       };
@@ -6519,11 +6520,13 @@ function _deliveryCard(d) {
             style="padding:11px 16px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);color:#00aaff;font-weight:700;border-radius:11px;font-size:12px;text-decoration:none;white-space:nowrap;">
             📍 Track
           </a>` : ''}
-        <a href="https://wa.me/${(d.buyerPhone||'').replace(/^0/,'254').replace(/\D/g,'')}"
-          target="_blank"
+        ${(d.orderId || d._fsId) ? `<a href="chat.html?tx=${d.orderId ? 'order' : 'logistics_request'}&txId=${encodeURIComponent(d.orderId || d._fsId)}"
           style="padding:11px 14px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);color:rgba(37,211,102,0.9);font-weight:700;border-radius:11px;font-size:12px;text-decoration:none;white-space:nowrap;">
-          💬 WhatsApp
-        </a>
+          💬 Message buyer
+        </a>` : (d.buyerPhone ? `<a href="tel:+${String(d.buyerPhone).replace(/\D/g,'').replace(/^0/,'254')}"
+          style="padding:11px 14px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);color:rgba(37,211,102,0.9);font-weight:700;border-radius:11px;font-size:12px;text-decoration:none;white-space:nowrap;">
+          📞 Call buyer
+        </a>` : '')}
       </div>
     </div>`;
 }

@@ -35,7 +35,7 @@ const SokoniSEO = (() => {
       addressCountry:  "KE"
     },
     sameAs: [
-      "https://wa.me/254705726803",
+      "https://wa.me/254705726803", /* wa-allowed:marketing — brand profile in the SEO sameAs list */
       "https://mysokoni.co.ke"
     ],
     keywords: "SOKONI, mysokoni, online shopping kenya, buy online kenya, services nairobi, services kenya, plumber nairobi, electrician nairobi, m-pesa payment kenya, wholesale kenya, bnb nairobi, house for rent nairobi, healthcare kenya, marketplace kenya, online market kenya, sokoni kenya, sokoni marketplace"

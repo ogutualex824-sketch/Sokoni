@@ -304,9 +304,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
           <div style="font-size:14px;font-weight:800;color:white;">📄 Generated Agreement — Review &amp; Send</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" onclick="copyAgreement()" style="padding:8px 14px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Copy</button>
-            <button type="button" onclick="sendAgreementWhatsApp()" style="padding:8px 14px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">💬 Send via WhatsApp</button>
-            <button type="button" onclick="printAgreement()" style="padding:8px 14px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print / Save PDF</button>
+            <button type="button" onclick="copyAgreement()" style="padding:8px 14px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Copy</button>            <button type="button" onclick="printAgreement()" style="padding:8px 14px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print / Save PDF</button>
             <button type="button" onclick="saveAgreement()" style="padding:8px 14px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">💾 Save Agreement</button>
           </div>
         </div>
@@ -712,9 +710,7 @@
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;">📄 Generated Notice — Edit if needed</div>
         <div style="display:flex;gap:6px;">
-          <button type="button" onclick="copyNoticeText()" style="padding:5px 10px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Copy</button>
-          <button type="button" onclick="sendNoticeWhatsApp()" style="padding:5px 10px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">💬 WhatsApp</button>
-          <button type="button" onclick="printNotice()" style="padding:5px 10px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print/PDF</button>
+          <button type="button" onclick="copyNoticeText()" style="padding:5px 10px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Copy</button>          <button type="button" onclick="printNotice()" style="padding:5px 10px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print/PDF</button>
         </div>
       </div>
       <textarea id="noticeGeneratedText" style="width:100%;min-height:280px;padding:16px;background:rgba(255,255,255,0.05);border:1px solid rgba(113,255,0,0.2);border-radius:12px;color:rgba(255,255,255,0.85);font-size:16px;line-height:1.8;outline:none;font-family:'Courier New',monospace;resize:vertical;"></textarea>
@@ -884,9 +880,7 @@
     </select>
     <textarea id="bmMessage" class="modal-input" rows="6" placeholder="Type your message here..." style="resize:vertical;"></textarea>
     <div id="bmResult" style="min-height:14px;font-size:12px;margin:8px 0;color:#71ff00;"></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <button type="button" class="modal-confirm-btn" style="flex:1;" onclick="sendBulkMessageWA()">💬 Open in WhatsApp</button>
-      <button type="button" class="modal-confirm-btn" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);" onclick="saveCommunication()">💾 Save Log</button>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">      <button type="button" class="modal-confirm-btn" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);" onclick="saveCommunication()">💾 Save Log</button>
       <button type="button" class="modal-cancel-btn" onclick="document.getElementById('bulkMessageModal').style.display='none'">Cancel</button>
     </div>
   </div>
@@ -1194,7 +1188,7 @@
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button type="button" class="unit-btn unit-btn-green" onclick="toggleRentFromRentSection('${u.propId}','${u.id}')">✅ Mark Paid</button>
             ${u.tenantPhone ? `<button type="button" class="unit-btn unit-btn-blue" onclick="sendRentInvoiceWA('${u.propId}','${u.id}','${month}')">📨 Invoice</button>` : ""}
-            ${u.tenantPhone ? `<button type="button" class="unit-btn unit-btn-grey" style="color:#f59e0b;border-color:rgba(245,158,11,0.3);" onclick="sendRentReminderWA('${u.propId}','${u.id}')">⏰ Remind</button>` : ""}
+            ${u.tenantPhone ? `<button type="button" class="unit-btn unit-btn-grey" style="color:#f59e0b;border-color:rgba(245,158,11,0.3);" onclick="callTenantReminder('${u.propId}','${u.id}')">📞 Remind</button>` : ""}
           </div>
         </div>`).join("")}
       <h3 style="color:rgba(255,255,255,0.5);font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:24px 0 12px;">✅ Paid (${paid.length})</h3>
@@ -2560,11 +2554,8 @@ Date: ${formattedIssue}
     }, 1200);
   }
 
-  function sendNoticeWhatsApp(){
-    const text = document.getElementById("noticeGeneratedText")?.value;
-    if(!text) return;
-    window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank");
-  }
+  /* Slice B2: sendNoticeWhatsApp removed — a tenancy notice is not an invoice, so it
+     is not sent over WhatsApp (owner decision 2026-09-30). Print / Copy remain. */
 
   function copyNoticeText(){
     const text = document.getElementById("noticeGeneratedText")?.value;
@@ -2658,10 +2649,8 @@ Date: ${formattedIssue}
     grid.innerHTML = all.map(n => {
       const daysLeft = Math.ceil((new Date(n.vacateDate) - Date.now()) / 86400000);
       const urgent   = daysLeft >= 0 && daysLeft <= 7;
-      const phone    = n.tenantPhone ? n.tenantPhone.replace(/^0/, "254") : "";
-      const waLink   = n.noticeText && phone
-          ? `https://wa.me/${phone}?text=${encodeURIComponent(n.noticeText)}`
-          : `https://wa.me/?text=${encodeURIComponent(n.noticeText||"")}`;
+      /* Slice B2: notices are not invoices — no WhatsApp hop; a tel: call link instead. */
+      const phone    = n.tenantPhone ? String(n.tenantPhone).replace(/\D/g, "").replace(/^0/, "254") : "";
       return `
       <div style="background:rgba(255,255,255,0.03);border:1px solid ${urgent?'rgba(255,100,0,0.3)':'rgba(255,255,255,0.07)'};border-radius:14px;padding:16px 18px;margin-bottom:12px;">
         <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;">
@@ -2675,7 +2664,7 @@ Date: ${formattedIssue}
             <div style="font-size:11px;color:rgba(255,255,255,0.35);">Issued: ${n.issuedDate} · Effective: <strong style="color:rgba(255,255,255,0.6);">${n.vacateDate}</strong></div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;">
-            ${n.noticeText ? `<a href="${waLink}" target="_blank" style="padding:6px 11px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:8px;font-size:10px;font-weight:700;text-decoration:none;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;">💬 WhatsApp</a>` : ""}
+            ${phone ? `<a href="tel:+${phone}" style="padding:6px 11px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:8px;font-size:10px;font-weight:700;text-decoration:none;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;">📞 Call</a>` : ""}
             ${n.noticeText ? `<button type="button" onclick="printNoticeById('${n.id}')" style="padding:6px 11px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print</button>` : ""}
             ${n.noticeText ? `<button type="button" onclick="copyNoticeById('${n.id}')" style="padding:6px 11px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.2);color:#00aaff;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Copy</button>` : ""}
             <button type="button" onclick="deleteNotice('${n.id}')" style="padding:6px 10px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:8px;font-size:10px;cursor:pointer;font-family:inherit;">🗑 Delete</button>
@@ -2723,7 +2712,6 @@ Date: ${formattedIssue}
   window.openNoticeModal   = openNoticeModal;
   window.onNoticeTypeChange= onNoticeTypeChange;
   window.generateAINotice  = generateAINotice;
-  window.sendNoticeWhatsApp= sendNoticeWhatsApp;
   window.copyNoticeText    = copyNoticeText;
   window.printNotice       = printNotice;
   window.saveNotice        = saveNotice;
@@ -3114,13 +3102,9 @@ Both parties should retain a signed copy of this agreement.
     showNotif("✅ Agreement saved!","success");
   }
 
-  function sendAgreementWhatsApp(){
-    const text = document.getElementById("agreementText")?.value;
-    if(!text){ showNotif("Generate agreement first","error"); return; }
-    const tPhone = document.getElementById("agTenantPhone")?.value.replace(/^0/,"254").replace(/^\+/,"");
-    const url    = tPhone ? `https://wa.me/${tPhone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(url,"_blank");
-  }
+  /* Slice B2: sendAgreementWhatsApp / sendSavedAgreementWA removed — a tenancy
+     agreement is not an invoice/receipt/statement, so it is not sent over WhatsApp
+     (owner decision 2026-09-30). Copy / Print-PDF remain. */
 
   function copyAgreement(){
     const text = document.getElementById("agreementText")?.value;
@@ -3169,20 +3153,12 @@ Both parties should retain a signed copy of this agreement.
           <div style="font-size:12px;color:rgba(255,255,255,0.5);">🏢 ${a.unitNo} · ${a.propName} · ${a.startDate||"—"}</div>
           <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px;">Ref: ${a.ref} · Rent: KES ${Number(a.rent||0).toLocaleString()}/mo · Created: ${new Date(a.createdAt).toLocaleDateString("en-KE")}</div>
         </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;">
-          <button type="button" onclick="sendSavedAgreementWA('${a.ref}')" style="padding:6px 11px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">💬 WhatsApp</button>
-          <button type="button" onclick="printSavedAgreement('${a.ref}')" style="padding:6px 11px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print/PDF</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;">          <button type="button" onclick="printSavedAgreement('${a.ref}')" style="padding:6px 11px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print/PDF</button>
           <button type="button" onclick="viewSavedAgreement('${a.ref}')" style="padding:6px 11px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">👁 View</button>
           <button type="button" onclick="deleteSavedAgreement('${a.ref}')" style="padding:6px 10px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:8px;font-size:10px;cursor:pointer;font-family:inherit;">🗑</button>
         </div>
       </div>`
     ).join("");
-  }
-
-  function sendSavedAgreementWA(ref){
-    const a = getAgreements().find(x=>x.ref===ref);
-    if(!a) return;
-    window.open("https://wa.me/?text=" + encodeURIComponent(a.agreementText), "_blank");
   }
 
   function printSavedAgreement(ref){
@@ -3219,10 +3195,8 @@ Both parties should retain a signed copy of this agreement.
   window.openAgreementForm      = openAgreementForm;
   window.generateAgreement      = generateAgreement;
   window.saveAgreement          = saveAgreement;
-  window.sendAgreementWhatsApp  = sendAgreementWhatsApp;
   window.copyAgreement          = copyAgreement;
   window.printAgreement         = printAgreement;
-  window.sendSavedAgreementWA   = sendSavedAgreementWA;
   window.printSavedAgreement    = printSavedAgreement;
   window.viewSavedAgreement     = viewSavedAgreement;
   window.deleteSavedAgreement   = deleteSavedAgreement;
@@ -3257,7 +3231,7 @@ Both parties should retain a signed copy of this agreement.
       `────────────────────\n` +
       `Please pay via M-Pesa to: ${prop?.phone||"[Landlord Phone]"}\n` +
       `Thank you! — ${prop?.landlord||"Landlord"}`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank"); /* wa-allowed:invoice */
     showNotif("Opening WhatsApp with water bill","success");
   }
 
@@ -3314,23 +3288,21 @@ Both parties should retain a signed copy of this agreement.
       `Pay via M-Pesa: ${prop?.phone||"[Landlord M-Pesa]"}\n` +
       `Issued by: ${prop?.landlord||"Landlord"}\n` +
       `Address: ${prop?.address||""}, ${prop?.city||""}`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank"); /* wa-allowed:invoice */
     /* Log as sent invoice */
     _saveInvoiceRecord({ type:"rent", propId, unitId, tenant:unit.tenant, tenantPhone:unit.tenantPhone, unit:unit.number, prop:prop?.name, amount:unit.rent, month, status:"sent", sentAt:Date.now() });
     showNotif("Rent invoice sent via WhatsApp","success");
   }
 
-  function sendRentReminderWA(propId, unitId){
-    const { prop, unit } = _getUnit(propId, unitId);
+  /* Slice B2: a rent reminder is a notice, not an invoice — it no longer opens
+     WhatsApp (owner decision 2026-09-30). "Remind" now places a phone call; the
+     "📨 Invoice" button (sendRentInvoiceWA) remains the written channel. */
+  function callTenantReminder(propId, unitId){
+    const { unit } = _getUnit(propId, unitId);
     if(!unit) return;
     const phone = String(unit.tenantPhone||"").replace(/\D/g,'').replace(/^0/,"254");
-    const month = getCurrentMonth();
-    const text = `⏰ RENT REMINDER — ${prop?.name||"Property"}\n\n` +
-      `Hi ${unit.tenant}, your rent of KES ${Number(unit.rent||0).toLocaleString()} for ${month} is due.\n\n` +
-      `Please pay via M-Pesa to: ${prop?.phone||"[Landlord M-Pesa]"}\n\n` +
-      `Thank you! — ${prop?.landlord||"Landlord"}`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
-    showNotif("Rent reminder sent","success");
+    if(!phone){ showNotif("No phone number for this tenant","error"); return; }
+    window.location.href = `tel:+${phone}`;
   }
 
   function sendRentReceiptWA(propId, unitId, month){
@@ -3350,7 +3322,7 @@ Both parties should retain a signed copy of this agreement.
       `────────────────────\n` +
       `Thank you for your payment!\n` +
       `— ${prop?.landlord||"Landlord"}, ${prop?.name||""}`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank"); /* wa-allowed:invoice */
     showNotif("Rent receipt sent via WhatsApp","success");
   }
 
@@ -3469,7 +3441,7 @@ Both parties should retain a signed copy of this agreement.
     const all = _getInvoices(); all.unshift(inv); _saveInvoices(all);
     const phone = String(unit.tenantPhone||"").replace(/\D/g,'').replace(/^0/,"254");
     const text  = _buildInvoiceText(inv, unit, prop);
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank"); /* wa-allowed:invoice */
     document.getElementById("invoiceModal").style.display = "none";
     renderInvoicesSection();
     showNotif("Invoice sent via WhatsApp!","success");
@@ -3485,7 +3457,7 @@ Both parties should retain a signed copy of this agreement.
     inv.status="sent"; inv.sentAt=Date.now();
     _saveInvoices(all);
     const text = _buildInvoiceText(inv, unit, prop);
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank"); /* wa-allowed:invoice */
     renderInvoicesSection();
     showNotif("Invoice resent","success");
   }
@@ -3514,7 +3486,7 @@ Both parties should retain a signed copy of this agreement.
       if(!phone) return;
       const { prop, unit } = _getUnit(inv.propId, inv.unitId);
       const text = _buildInvoiceText(inv, unit, prop);
-      setTimeout(()=>window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank"), count*800);
+      setTimeout(()=>window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank"), count*800); /* wa-allowed:invoice */
       inv.status="sent"; inv.sentAt=Date.now(); count++;
     });
     _saveInvoices(all.concat(_getInvoices().filter(i=>i.status==="paid")));
@@ -3618,7 +3590,7 @@ Both parties should retain a signed copy of this agreement.
     pending.forEach((c,i)=>{
       const phone=String(c.tenantPhone||"").replace(/\D/g,'').replace(/^0/,"254");
       const text=`💡 SERVICE CHARGE — ${c.prop||"Property"}\n────────────────────\nTenant: ${c.tenant}\nUnit: ${c.unit}\nPeriod: ${c.month}\nCharge: ${TYPE_NAME[c.type]||c.type}\n${c.desc?`Details: ${c.desc}\n`:""}\nAMOUNT: KES ${Number(c.amount||0).toLocaleString()}\n────────────────────\nPay to: ${c.propPhone||"[Landlord M-Pesa]"}\nThank you!`;
-      setTimeout(()=>window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`,"_blank"),i*800);
+      setTimeout(()=>window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`,"_blank"),i*800); /* wa-allowed:invoice */
       c.status="sent"; c.sentAt=Date.now();
     });
     _saveSC(_getSC().map(c=>pending.find(p=>p.id===c.id)||c));
@@ -3649,7 +3621,7 @@ Both parties should retain a signed copy of this agreement.
         </div>
         <div style="font-weight:900;color:white;font-size:16px;">KES ${Number(c.amount||0).toLocaleString()}</div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
-          ${c.tenantPhone?`<button type="button" class="unit-btn unit-btn-blue" onclick="(()=>{ const ph=String('${c.tenantPhone||""}').replace(/\\D/g,'').replace(/^0/,'254'); window.open('https://wa.me/'+ph+'?text='+encodeURIComponent('💡 SERVICE CHARGE — ${c.prop||""}\nUnit: ${c.unit}\nTenant: ${c.tenant}\nCharge: ${c.type}\nPeriod: ${c.month}\nAMOUNT: KES ${Number(c.amount||0).toLocaleString()}\nPay to: ${c.propPhone||"[M-Pesa]"}'),'_blank'); })()">💬 Send</button>`:""}
+          ${c.tenantPhone /* wa-allowed:invoice */ ?`<button type="button" class="unit-btn unit-btn-blue" data-wa-allowed="invoice" onclick="(()=>{ const ph=String('${c.tenantPhone||""}').replace(/\\D/g,'').replace(/^0/,'254'); window.open('https://wa.me/'+ph+'?text='+encodeURIComponent('💡 SERVICE CHARGE — ${c.prop||""}\nUnit: ${c.unit}\nTenant: ${c.tenant}\nCharge: ${c.type}\nPeriod: ${c.month}\nAMOUNT: KES ${Number(c.amount||0).toLocaleString()}\nPay to: ${c.propPhone||"[M-Pesa]"}'),'_blank'); })()">💬 Send</button>`:""}
           <button type="button" class="unit-btn ${c.status==="paid"?"unit-btn-grey":"unit-btn-green"}" onclick="toggleSCPaid('${c.id}')">${c.status==="paid"?"↩ Unmark":"✅ Paid"}</button>
           <button type="button" class="unit-btn unit-btn-red" onclick="deleteSC('${c.id}')">🗑️</button>
         </div>
@@ -3698,32 +3670,10 @@ Both parties should retain a signed copy of this agreement.
     if(type==="water_bill") document.getElementById("bmTarget").value="all";
   }
 
-  function sendBulkMessageWA(){
-    const target  = document.getElementById("bmTarget").value;
-    const message = document.getElementById("bmMessage").value.trim();
-    if(!message){ showNotif("Enter a message","error"); return; }
-    const props  = getData();
-    const month  = getCurrentMonth();
-    let targets=[];
-    if(target==="all"){
-      targets = props.flatMap(p=>(p.units||[]).filter(u=>u.status==="occupied"&&u.tenantPhone).map(u=>({...u,propId:p.id,propName:p.name,propPhone:p.phone})));
-    } else if(target==="unpaid"){
-      targets = props.flatMap(p=>(p.units||[]).filter(u=>u.status==="occupied"&&!rentStatus(u,month).paid&&u.tenantPhone).map(u=>({...u,propId:p.id,propName:p.name,propPhone:p.phone})));
-    } else {
-      const [pId,uId]=document.getElementById("bmUnitTarget").value.split("|");
-      const prop=props.find(p=>p.id===pId); const u=prop?.units?.find(u=>u.id===uId);
-      if(u&&u.tenantPhone) targets=[{...u,propId:pId,propName:prop?.name,propPhone:prop?.phone}];
-    }
-    if(!targets.length){ showNotif("No tenants with phone numbers found","error"); return; }
-    targets.forEach((u,i)=>{
-      const phone=String(u.tenantPhone||"").replace(/\D/g,'').replace(/^0/,"254");
-      const msg=message.replace(/\[TENANT\]/g,u.tenant||"Tenant").replace(/\[RENT\]/g,`KES ${Number(u.rent||0).toLocaleString()}`).replace(/\[MONTH\]/g,month).replace(/\[UNIT\]/g,u.number||"").replace(/\[MPESA\]/g,u.propPhone||"[M-Pesa]").replace(/\[PROPERTY\]/g,u.propName||"the property");
-      setTimeout(()=>window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`,"_blank"),i*800);
-    });
-    saveCommunication(message,target,targets.length);
-    document.getElementById("bmResult").innerHTML=`<span style="color:#71ff00;">✅ Opening WhatsApp for ${targets.length} tenant(s)...</span>`;
-    showNotif(`${targets.length} message(s) queued`,"success");
-  }
+  /* Slice B2: sendBulkMessageWA removed — bulk tenant messages (reminders, maintenance,
+     general and move-out notices) are notices, not invoices, so they are no longer
+     handed off to WhatsApp (owner decision 2026-09-30). The modal keeps "Save Log";
+     invoices/bills/receipts keep their own WhatsApp send buttons. */
 
   function saveCommunication(msg, target, count){
     const m = typeof msg==="string"?msg:document.getElementById("bmMessage")?.value.trim()||"";
@@ -3823,14 +3773,13 @@ Both parties should retain a signed copy of this agreement.
   window.toggleSCPaid              = toggleSCPaid;
   window.deleteSC                  = deleteSC;
   window.openBulkMessageModal      = openBulkMessageModal;
-  window.sendBulkMessageWA         = sendBulkMessageWA;
   window.saveCommunication         = saveCommunication;
   window.loadMsgTemplate           = loadMsgTemplate;
   window.openQuickMessage          = openQuickMessage;
   window.sendWaterBillWA           = sendWaterBillWA;
   window.printWaterBill            = printWaterBill;
   window.sendRentInvoiceWA         = sendRentInvoiceWA;
-  window.sendRentReminderWA        = sendRentReminderWA;
+  window.callTenantReminder        = callTenantReminder;
   window.sendRentReceiptWA         = sendRentReceiptWA;
   window.onInvTypeChange           = onInvTypeChange;
 

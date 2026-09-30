@@ -195,7 +195,7 @@
   <!-- REGISTER YOUR GARAGE -->
   <div class="mc-register" id="registerSection">
     <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">🏪 List Your Garage or Mechanic Service</div>
-    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:20px;">Get discovered by thousands of car owners. Free listing  get jobs via WhatsApp instantly.</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:20px;">Get discovered by thousands of car owners. Free listing  get booking requests on SOKONI instantly.</div>
 
     <div class="mc-register-g">
       <div>
@@ -787,7 +787,7 @@ function renderAskHubFeed(hub) {
           <div style="margin-left:auto;font-size:9px;padding:2px 7px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:4px;color:#4ade80;font-weight:700;">OPEN</div>
         </div>
         <div style="font-size:12px;color:rgba(255,255,255,0.75);line-height:1.5;">${safeHtml(r.text)}</div>
-        ${r.phone ? `<div style="margin-top:8px;"><a href="https://wa.me/254${r.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi, I saw your SOKONI mechanics request: '+r.text+'\n\nI can help! — SOKONI Verified Mechanic')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);border-radius:8px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond on WhatsApp</a></div>` : ''}
+        ${r.phone ? `<div style="margin-top:8px;"><a href="support.html?topic=request&ref=${encodeURIComponent(r.id||'')}&desc=${encodeURIComponent('I can help with this SOKONI mechanics request: '+r.text)}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);border-radius:8px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a></div>` : ''}
       </div>`).join('');
 }
 
@@ -893,7 +893,7 @@ function renderPartsGrid(parts) {
       </div>
       <div class="mc-bio">${safeHtml(p.seller||'Seller')}</div>
       <div class="mc-actions">
-        <a href="https://wa.me/254${(p.phone||'').replace(/^0/,'')}?text=${encodeURIComponent('Hi, I saw your '+p.name+' listing on SOKONI Parts. Is it still available? Fits: '+p.fits)}" target="_blank" rel="noopener" class="mc-book-btn" style="text-align:center;text-decoration:none;display:block;">💬 WhatsApp Seller</a>
+        <a href="support.html?topic=hire&desc=${encodeURIComponent('I\'m interested in the '+p.name+' listing'+(p.seller?' from '+p.seller:'')+' on SOKONI Parts. Is it still available? Fits: '+p.fits)}" class="mc-book-btn" style="text-align:center;text-decoration:none;display:block;">💬 Enquire</a>
       </div>
     </div>`).join('');
 }

@@ -63,7 +63,7 @@
        actually contacts a court or the legal desk. Padding grows the hit area without
        moving anything: these already sit on their own lines. */
     .law-pane a[href^="tel:"],
-    .law-pane a[href^="https://wa.me"],
+    .law-pane a[href^="support.html"],
     .law-pane a[href^="mailto:"]{
       display:inline-flex; align-items:center; min-height:44px; padding:2px 4px; margin:-2px -4px;
     }
@@ -889,8 +889,8 @@
         <div style="font-size:20px;font-weight:900;color:#c8ff80;margin-bottom:8px;">Registration Submitted!</div>
         <div id="firmRegRef" style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:14px;letter-spacing:.5px;"></div>
         <div style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.7;margin-bottom:22px;">Our team will review your submission and contact you within 24 hours to verify and activate your listing.</div>
-        <a id="firmRegWA" href="javascript:void(0)" style="display:inline-flex;align-items:center;gap:8px;padding:13px 26px;background:linear-gradient(135deg,#25d366,#128c7e);color:white;border-radius:13px;font-weight:900;font-size:13px;text-decoration:none;">
-          📱 Follow up on WhatsApp
+        <a id="firmRegWA" href="support.html?topic=request" style="display:inline-flex;align-items:center;gap:8px;padding:13px 26px;background:linear-gradient(135deg,#25d366,#128c7e);color:white;border-radius:13px;font-weight:900;font-size:13px;text-decoration:none;">
+          💬 Follow up with Support
         </a>
       </div>
     </div>
@@ -921,7 +921,7 @@
       </div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(113,255,0,0.15);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span style="font-size:11px;color:rgba(255,255,255,0.4);">Questions about verification?</span>
-        <a href="https://wa.me/254703480154?text=Hello%2C%20I%20want%20to%20enquire%20about%20advocate%20verification%20on%20SOKONI%20Legal%20Hub" target="_blank" style="padding:6px 14px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:8px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">📲 WhatsApp SOKONI Legal Team</a>
+        <a href="support.html?topic=request&amp;desc=Advocate%20verification%20enquiry%20(SOKONI%20Legal%20Hub)" style="padding:6px 14px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:8px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Contact Support</a>
       </div>
     </div>
 
@@ -930,7 +930,7 @@
       <div style="font-size:12px;font-weight:800;color:#ff9800;margin-bottom:8px;">📋 Your Previous Application</div>
       <div id="existingAppInfo" style="font-size:11px;color:rgba(255,255,255,0.55);line-height:1.7;"></div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-        <a id="existingAppWA" href="javascript:void(0)" target="_blank" style="padding:7px 14px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:8px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">📲 Follow Up on WhatsApp</a>
+        <a id="existingAppWA" href="support.html?topic=request" style="padding:7px 14px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:8px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Follow Up with Support</a>
         <button type="button" onclick="clearExistingApp()" style="padding:7px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.4);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">  Re-apply</button>
       </div>
     </div>
@@ -1032,7 +1032,7 @@
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;max-width:360px;margin:0 auto;">
         <button type="button" onclick="showLawTab('lawyers',null)" style="padding:13px 24px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;border:none;border-radius:12px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">👁️ View My Listing</button>
-        <a id="regWAFollowUp" href="javascript:void(0)" target="_blank" style="padding:12px 24px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:12px;color:#25d366;font-weight:800;font-size:13px;text-decoration:none;">📲 WhatsApp SOKONI to Expedite Verification</a>
+        <a id="regWAFollowUp" href="support.html?topic=request" style="padding:12px 24px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:12px;color:#25d366;font-weight:800;font-size:13px;text-decoration:none;">💬 Contact Support to Expedite Verification</a>
       </div>
       <div id="regRef" style="margin-top:18px;font-size:11px;color:rgba(255,255,255,0.25);"></div>
     </div>
@@ -3390,7 +3390,7 @@ function printLegalDoc(){
 function shareDocWA(){
   const text = document.getElementById("docOutput")?.value;
   if(!text) return;
-  window.open("https://wa.me/?text="+encodeURIComponent(text),"_blank");
+  window.open("https://wa.me/?text="+encodeURIComponent(text),"_blank"); /* wa-allowed:marketing */
 }
 
 window.selectDocType = selectDocType;
@@ -3807,8 +3807,8 @@ async function checkExistingApp(){
   }
   const waLink = document.getElementById("existingAppWA");
   if(waLink){
-    const msg = encodeURIComponent(`Hi SOKONI Legal Team, I submitted an advocate listing application (Ref: ${app.ref}) for Advocate ${app.name}, Roll #${app.rollNo}. I would like to check on my verification status. Thank you.`);
-    waLink.href = `https://wa.me/254703480154?text=${msg}`;
+    const msg = encodeURIComponent(`I submitted an advocate listing application (Ref: ${app.ref}) for Advocate ${app.name}, Roll #${app.rollNo}. I would like to check on my verification status.`);
+    waLink.href = `support.html?topic=request&ref=${encodeURIComponent(app.ref||'')}&desc=${msg}`;
   }
 }
 
@@ -3878,18 +3878,8 @@ async function registerLawyer(){
     }).catch(e=>console.warn('[SOKONI] Lawyer app save:',e.message));
   }
 
-  /* Notify SOKONI admin via WhatsApp */
-  const adminWA = "254703480154";
-  const adminMsg = encodeURIComponent(
-    `⚖️ *SOKONI Legal Hub  New Advocate Application*\n\nRef: ${ref}\n\n` +
-    `👤 Name: Advocate ${name}\n🔢 Roll #: ${roll}\n⚖️ Spec: ${SPEC_LABELS[spec]||spec}\n` +
-    `📞 Phone: ${phone}\n✉️ Email: ${email}\n` +
-    `🏢 Firm: ${lawyer.firm||"N/A"}\n📍 Location: ${lawyer.location}\n` +
-    `💰 Rate: KES ${Number(rate).toLocaleString()} ${lawyer.rateType}\n\n` +
-    `📝 Bio: ${bio.substring(0,200)}\n\n` +
-    `Please verify Roll #${roll} at lsk.or.ke and update their listing status.\n` +
-    `⏰ Submitted: ${new Date().toLocaleString("en-KE")}`
-  );
+  /* The application is already in the admin queue (SokoniDB.saveApplication above) —
+     no WhatsApp hand-off to the admin (owner 2026-09-30). */
 
   /* Show success state */
   const formEl   = document.getElementById("lawRegForm");
@@ -3900,13 +3890,10 @@ async function registerLawyer(){
   if(formEl) formEl.style.display = "none";
   if(successEl) successEl.style.display = "block";
   if(waLink){
-    const followMsg = encodeURIComponent(`Hi SOKONI, I just submitted my advocate listing (Ref: ${ref}) and would like to expedite LSK verification. My Roll Number is ${roll}. Thank you.`);
-    waLink.href = `https://wa.me/${adminWA}?text=${followMsg}`;
+    const followMsg = encodeURIComponent(`I just submitted my advocate listing (Ref: ${ref}) and would like to expedite LSK verification. My Roll Number is ${roll}.`);
+    waLink.href = `support.html?topic=request&ref=${encodeURIComponent(ref)}&desc=${followMsg}`;
   }
   if(refEl) refEl.textContent = `Application Ref: ${ref}`;
-
-  /* Open WhatsApp to admin after short delay */
-  setTimeout(()=>{ window.open(`https://wa.me/${adminWA}?text=${adminMsg}`, "_blank"); }, 1500);
 }
 
 function clearExistingApp(){
@@ -4179,7 +4166,7 @@ async function renderAppointments(){
         <div class="appt-badge ${badgeClass}">${(a.status||'pending').toUpperCase()}</div>
         <div class="appt-actions">
           ${a.status==='pending'?`<button class="appt-btn" onclick="cancelAppointment('${idSafe}','${cIdSafe}',${a.isCF?'true':'false'})" style="border-color:rgba(255,68,68,0.25);color:#ff6b6b;">Cancel</button>`:''}
-          ${a.status==='confirmed'?`<a href="https://wa.me/254703480154?text=Appointment%20${encodeURIComponent(a.id||'')}%20query" target="_blank" class="appt-btn" style="border-color:rgba(37,211,102,0.3);color:#25d366;text-decoration:none;">WhatsApp Lawyer</a>`:''}
+          ${a.status==='confirmed'?`<a href="support.html?topic=booking&ref=${encodeURIComponent(a.id||'')}&desc=${encodeURIComponent('Legal appointment query'+(a.id?' ('+a.id+')':''))}" class="appt-btn" style="border-color:rgba(37,211,102,0.3);color:#25d366;text-decoration:none;">💬 Contact Support</a>`:''}
           ${a.status==='completed'?`<button class="appt-btn" onclick="showReviewForm('${idSafe}')" style="border-color:rgba(255,193,7,0.3);color:#ffc107;">Leave Review</button>`:''}
         </div>
       </div>
@@ -5170,22 +5157,8 @@ function _setPct(labelId, barId, pct){
       });
     }
 
-    /* Notify admin via WhatsApp */
-    var adminWA = '254703480154';
-    var planLabel = {basic:'Free Basic', premium:'Premium (KES 2,500/mo)', elite:'Elite (KES 5,500/mo)'}[_firmPlan]||_firmPlan;
-    var waMsg = encodeURIComponent(
-      '🏢 *SOKONI Legal Hub — New Law Firm Registration*\n\nRef: ' + ref +
-      '\n\n🏢 Firm: ' + firmData.name +
-      '\n📅 Est: ' + (firmData.yearFounded||'N/A') +
-      '\n👥 Advocates: ' + (firmData.size||'N/A') +
-      '\n📍 City: ' + firmData.city +
-      '\n⚖️ Areas: ' + (firmData.specializations||'N/A') +
-      '\n📞 Phone: ' + firmData.phone +
-      '\n✉️ Email: ' + firmData.email +
-      '\n🌐 Web: ' + (firmData.website||'N/A') +
-      '\n💎 Plan: ' + planLabel +
-      '\n⏰ ' + new Date().toLocaleString('en-KE')
-    );
+    /* The registration is already in the admin queue (SokoniDB.saveApplication above) —
+       no WhatsApp hand-off to the admin (owner 2026-09-30). */
 
     /* Show success state */
     var formEl    = document.getElementById('firmRegForm');
@@ -5197,13 +5170,10 @@ function _setPct(labelId, barId, pct){
     if(successEl) successEl.style.display = 'block';
     if(refEl) refEl.textContent = 'Registration Ref: ' + ref;
     if(waLink){
-      var followMsg = encodeURIComponent('Hi SOKONI, I just registered our law firm ' + firmData.name + ' (Ref: ' + ref + '). Please let us know once our listing is live. Thank you.');
-      waLink.href = 'https://wa.me/' + adminWA + '?text=' + followMsg;
+      var followMsg = encodeURIComponent('I just registered our law firm ' + firmData.name + ' (Ref: ' + ref + '). Please let us know once our listing is live.');
+      waLink.href = 'support.html?topic=request&ref=' + encodeURIComponent(ref) + '&desc=' + followMsg;
       waLink.onclick = null;
     }
-
-    /* Open admin WhatsApp notification after short delay */
-    setTimeout(function(){ window.open('https://wa.me/' + adminWA + '?text=' + waMsg, '_blank'); }, 1500);
   };
 })();
 </script><script src="sokoni-audit.js" defer></script>

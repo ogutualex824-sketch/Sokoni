@@ -16,7 +16,12 @@
  *      waConnect has no wa.me and no window.open; the eleven hub pages' booking submits and
  *      the parcel/rider/tracking support controls point at support.html; the remaining wa.me
  *      on those pages are the enumerated legacy classes (contact chips, registrations, share).
- *   N  negative control: put the old wa.me hop back into waConnect (in memory) → W fails.
+ *   W12-W19  Slice B2 (owner 2026-09-30: WhatsApp ONLY for OTP, invoices, marketing): every client
+ *      line still naming wa.me carries wa-allowed:<otp|invoice|marketing>; chat.html?tx= opens only
+ *      server-derivable transaction threads; My Orders' in-app actions (executed); no client page
+ *      writes the auto-crediting refundRequests collection.
+ *   N  negative controls: the old wa.me hop back into waConnect (N1); an unmarked hand-off and an
+ *      invented marker class are both caught by the W12 detector (N2, N3).
  *
  * Run (all rows):  firebase emulators:exec --only firestore,auth --project demo-sliceb
  *                    "node scripts/test-slice-b-support-whatsapp.js"
@@ -92,9 +97,74 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
     ['mechanics.html', 'SOKONI ROADSIDE SOS', "location.href = 'support.html?topic=sos"], ['home-services.html', 'Quote Request*', "location.href = 'support.html?topic=quote"], ['tech-hub.html', 'IT Service Request', "location.href = 'support.html?topic=request"]];
   ck('W11 request-shaped hops (SOS ×2, transport, quote, IT request) now open a support ticket with the details prefilled', req.every(([f, near, to]) => { const t = read(f); const i = t.indexOf(near); return i > 0 && t.slice(i, i + 1200).includes(to); }), null);
 
+  /* ── W12+ Slice B2 (owner 2026-09-30): WhatsApp is ONLY for OTP, invoices and marketing. Every
+     client line that still names wa.me / api.whatsapp.com must declare which of the three it is,
+     on that line, with `wa-allowed:<otp|invoice|marketing>`. Anything else is a hand-off. ── */
+  console.log('\n── W12+: Slice B2 — WhatsApp only for OTP, invoices and marketing ──');
+  const { execSync } = require('child_process');
+  const clientFiles = execSync('git ls-files -- "*.html" "*.js"', { cwd: ROOT, encoding: 'utf8' }).split(/\r?\n/)
+    .filter((f) => f && !/^(functions|scripts|docs|tests|node_modules|e2e|playwright)\//.test(f));
+  const WA_RE = /wa\.me\/|api\.whatsapp\.com/;
+  /* Two spellings of one marker: `wa-allowed:<class>` in JS comments, data-wa-allowed="<class>" in markup. */
+  const ALLOWED_RE = /(?:wa-allowed:|data-wa-allowed=")(otp|invoice|marketing)\b/;
+  const unmarked = (text, f) => text.split(/\r?\n/).map((l, i) => [l, i + 1]).filter(([l]) => WA_RE.test(l) && !ALLOWED_RE.test(l)).map(([l, n]) => f + ':' + n);
+  /* index.html's two FOOTER links are converted by sokoni-70's hosting candidate (b1-unboxing-card0),
+     which deploys before this slice; B2 does not edit those lines to avoid a conflict. They are
+     named here, by exact URL, and nowhere else. After the rebase onto that deploy this list is empty. */
+  /* opportunity.html applyNow() is claimed by sokoni-27's in-app application slice (owner ask, 2026-09-30);
+     B2 leaves that one line to it. */
+  const PEER_OWNED = (f, line) => (f === 'index.html' && /(social-handle|fa-whatsapp|aria-label="SOKONI on Wha)/.test(line) && /wa\.me\/254705726803"/.test(line))
+    || (f === 'index.html' && /<!-- This link's href was https:\/\/wa\.me\/\.\.\. /.test(line))   /* a comment inside that footer block, not a link */
+    || (f === 'opportunity.html' && /window\.open\(`https:\/\/wa\.me\/254705726803\?text=\$\{encodeURIComponent\(msg\)\}`/.test(line));
+  const hand = [];
+  for (const f of clientFiles) {
+    let t; try { t = read(f); } catch (_) { continue; }
+    if (!WA_RE.test(t)) continue;
+    const lines = t.split(/\r?\n/);
+    for (const ref of unmarked(t, f)) { const n = Number(ref.split(':').pop()); if (!PEER_OWNED(f, lines[n - 1])) hand.push(ref); }
+  }
+  ck('W12 no client file hands anyone to WhatsApp: every remaining wa.me line is marked otp / invoice / marketing', hand.length === 0, hand.slice(0, 40));
+  const bad = [];
+  for (const f of clientFiles) { let t; try { t = read(f); } catch (_) { continue; } (t.match(/(?:wa-allowed:|data-wa-allowed=")[a-z]*/g) || []).forEach((m) => { if (!/^(?:wa-allowed:|data-wa-allowed=")(otp|invoice|marketing)$/.test(m)) bad.push(f + ' ' + m); }); }
+  ck('W13 the marker vocabulary is exactly otp / invoice / marketing (no fourth class can be smuggled in)', bad.length === 0, bad);
+  const chat = read('chat.html');
+  const openable = (chat.match(/var TX_OPENABLE = \{([\s\S]*?)\};/) || [])[1] || '';
+  const txKeys = (openable.match(/[a-z_]+(?=:1)/g) || []).sort();
+  const msgs = read('functions/messages.js');
+  const partyKeys = (((msgs.match(/const PARTY_FIELDS = \{([\s\S]*?)\n\};/) || [])[1] || '').match(/^\s+([a-z_]+):/gm) || []).map((s) => s.trim().replace(':', '')).sort();
+  ck('W14 chat.html?tx= opens only transaction types the server can derive parties for (TX_OPENABLE == PARTY_FIELDS)', txKeys.length > 0 && JSON.stringify(txKeys) === JSON.stringify(partyKeys), { txKeys, partyKeys });
+  ck('W15 chat.html?tx= asks the server (SokoniChat.createConversation) and shows nothing until it answers; the id is validated', /SokoniChat\.createConversation\(TX_TYPE, TX_ID\)/.test(chat) && /\/\^\[A-Za-z0-9_-\]\{1,128\}\$\/\.test\(TX_ID\)/.test(chat) && /CONV_ID = id;/.test(chat), null);
+  const cctx = vm.createContext({ window: {}, document: undefined });
+  cctx.window = cctx; vm.runInContext(read('sokoni-company.js'), cctx, { filename: 'sokoni-company.js' });
+  const CO = cctx.SOKONI_COMPANY;
+  const coWa = CO && CO.supportPhoneHref && CO.supportPhoneHref('wa');
+  ck('W16 the support-number helper never builds a WhatsApp link: its legacy "wa" kind opens the in-app Support page', coWa === null || coWa === 'support.html', coWa);
+
+  /* W17 — My Orders, EXECUTED: orderActions() is lifted from the page and run on fixtures. */
+  const mo = read('my-orders.html');
+  const oaSrc = mo.slice(mo.indexOf('var NO_CHAT'), mo.indexOf('function orderDate(o){'));
+  const oa = vm.runInNewContext(oaSrc + '; orderActions;', { encodeURIComponent });
+  const aPaid = oa({ _fsId: 'ord_A1', status: 'delivered' });
+  const aPend = oa({ _fsId: 'ord_A2', status: 'pending_payment' });
+  const aCanc = oa({ _fsId: 'ord_A3', status: 'cancelled' });
+  const aCache = oa({ id: 'LOCAL-1', status: 'delivered' });
+  const aEvil = oa({ _fsId: 'x"><img src=x onerror=alert(1)>', status: 'delivered' });
+  ck('W17 My Orders: a delivered order offers in-app Message seller (chat.html?tx=order) + Request refund (a support ticket, never a money call)',
+    /chat\.html\?tx=order&amp;txId=ord_A1/.test(aPaid) && /support\.html\?topic=payment&amp;ref=ord_A1/.test(aPaid) && !/wa\.me|createDispute|refundRequests|refundPayment/.test(aPaid), aPaid);
+  ck('W18 My Orders: unpaid → no refund action; cancelled → no chat; cache-only order (no server id) → no actions; a hostile id → no actions',
+    /Message seller/.test(aPend) && !/Request refund/.test(aPend) && !/Message seller/.test(aCanc) && aCache === '' && aEvil === '', { aPend, aCanc, aCache, aEvil });
+
+  /* W19 — `refundRequests` IS a money path (autoOnRefundRequest credits a wallet on create).
+     No client file may write it; refunds stay REQUESTS a person approves. */
+  const rrWriters = [];
+  for (const f of clientFiles) { let t; try { t = read(f); } catch (_) { continue; } if (/collection\(\s*(db\s*,\s*)?['"]refundRequests['"]\s*\)\s*\.(add|doc)|doc\(\s*db\s*,\s*['"]refundRequests['"]|addDoc\(\s*collection\(\s*db\s*,\s*['"]refundRequests['"]/.test(t)) rrWriters.push(f); }
+  ck('W19 no client page writes refundRequests (creating one IS a wallet credit — never wired to a button)', rrWriters.length === 0, rrWriters);
+
   /* ── N: negative control (in memory) ── */
   const sabotaged = waBody.replace('_bookingRecorded(ref, opts)', 'window.open("https://wa.me/"+providerPhone)');
   ck('N1  negative control: the old wa.me hop back in waConnect turns W1 red', /wa\.me|window\.open/.test(sabotaged), null);
+  ck('N2  negative control: an unmarked provider hand-off line is caught by the W12 detector', unmarked("x\n<a href=\"https://wa.me/${p.phone}?text=hi\">Chat</a>\n", 'probe.html').length === 1, null);
+  ck('N3  negative control: a marked invoice line passes, a made-up marker class does not', unmarked("window.open('https://wa.me/'+n) /* wa-allowed:invoice */", 'p.js').length === 0 && unmarked("window.open('https://wa.me/'+n) /* wa-allowed:support */", 'p.js').length === 1, null);
 
   /* ── B: the real page, in a browser, with a stub firebase and every other origin aborted ── */
   console.log('\n── B: support.html in Chromium — the form reaches adminOsDispatch and shows the server id ──');

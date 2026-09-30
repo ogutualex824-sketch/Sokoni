@@ -205,8 +205,7 @@ function renderOrder() {
       <div class="fo-rider-sub">${o.riderRating ? '⭐ '+esc(String(o.riderRating))+' · ' : ''}On the way to you</div>
     </div>
     <div class="fo-rider-actions">
-      ${o.riderPhone ? `<a href="tel:${esc(o.riderPhone)}" class="fo-rider-btn fo-rider-call">📞</a>
-      <a href="https://wa.me/${esc(o.riderPhone.replace(/^0/,'254').replace(/\D/g,''))}" class="fo-rider-btn fo-rider-wa" target="_blank">💬</a>` : ''}
+      ${o.riderPhone ? `<a href="tel:${esc(o.riderPhone)}" class="fo-rider-btn fo-rider-call">📞</a>` : ''}
     </div>
   </div>` : ''}
 
