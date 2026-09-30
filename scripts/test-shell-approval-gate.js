@@ -101,8 +101,12 @@ const SHAVE = '13iuLZx63jN5evaNcUnx7bhDSfs1';
   ck('the authority wrote NOTHING while answering (store identical except the CONTROL seed)', J(db._dump('providers/')) === J(JSON.parse(before).filter((r) => r.path.startsWith('providers/'))) && db._dump('adminAudit/').length === 0);
   const C = require(Path.join(FN, 'shared', 'cleanup-claimed-ids.json')); const M = require('C:/Users/USER1/OneDrive/Desktop/SOKONI/docs/release-gates/c3-cleanup-manifest.json');
   ck('static cleanup copy: 34 ids, digest 028299e7…, identical to the release-gate manifest', C.count === 34 && C.digest === M.digest && J(C.ids) === J(M.ids), C.digest.slice(0, 16));
-  const client = fs.readFileSync(Path.join(ROOT, 'sokoni-business-workspace.js'), 'utf8');
-  ck('client consumer redirects REAPPLICATION_REQUIRED to the server-named route and never decides a state itself', /REAPPLICATION_REQUIRED/.test(client) && /location\.replace\('\/' \+ String\(w\.route\)/.test(client) && !/approvedAt|isAdmin/.test(client));
+  /* the client consumer is a HOSTING asset; a Functions-only candidate tree may not carry it — then n/a, not a failure */
+  const clientPath = Path.join(ROOT, 'sokoni-business-workspace.js');
+  if (fs.existsSync(clientPath)) {
+    const client = fs.readFileSync(clientPath, 'utf8');
+    ck('client consumer redirects REAPPLICATION_REQUIRED to the server-named route and never decides a state itself', /REAPPLICATION_REQUIRED/.test(client) && /location\.replace\('\/' \+ String\(w\.route\)/.test(client) && !/approvedAt|isAdmin/.test(client));
+  } else say('  n/a   client consumer (sokoni-business-workspace.js) is not in this tree — a hosting asset, checked on the hosting line');
   const src = fs.readFileSync(Path.join(FN, 'business-workspace.js'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   ck('business-workspace.js still contains no Firestore write call', !/\.(set|update|add|delete)\(/.test(src));
   say('\n' + pass + ' passed, ' + fail + ' failed');
