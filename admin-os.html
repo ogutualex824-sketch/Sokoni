@@ -407,6 +407,8 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
      nothing above 768px changes, and the existing .aos-sidebar drawer is untouched (the
      module collapses .sidebar, which this console does not use). -->
 <link rel="stylesheet" href="sokoni-admin-responsive.css">
+<!-- Updates centre (shared with super-admin.html): live build, install/update metrics, release log. -->
+<link rel="stylesheet" href="sokoni-admin-updates.css">
 </head>
 <body>
   <aside class="aos-sidebar" id="aosSidebar" aria-label="AdminOS sidebar">
@@ -419,6 +421,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
     <div class="nav-group">
       <div class="nav-group-label">Overview</div>
       <button class="nav-item" data-section="dashboard" data-label="Dashboard" onclick="SokoniAOS.navigate('dashboard');_closeSidebar()"><span class="nav-icon">&#x1F3E0;</span><span class="nav-label">Dashboard</span></button>
+      <button class="nav-item" data-section="updates" data-label="Updates" onclick="SokoniAOS.navigate('updates');_closeSidebar()"><span class="nav-icon">&#x1F680;</span><span class="nav-label">Updates</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">People</div>
@@ -742,6 +745,12 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
         <div id="securityBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
+      <!-- Updates centre: ONE module (sokoni-admin-updates.js) shared with super-admin.html.
+           Deep link #updates. It renders its own heading, so the panel carries no toolbar. -->
+      <div class="aos-panel" id="panel-updates" hidden>
+        <div id="updatesBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
       <!-- Hub Registry panel -->
       <div class="aos-panel" id="panel-hubs" hidden>
         <div class="panel-toolbar">
@@ -781,6 +790,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
 
     </div>
   </main>
+  <script src="sokoni-admin-updates.js"></script>
   <script src="sokoni-aos.js"></script>
   <script>
     /* ── Sidebar chrome ──────────────────────────────────────────────────────

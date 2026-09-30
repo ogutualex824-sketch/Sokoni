@@ -345,6 +345,8 @@
   </style>
 <!-- Shared admin responsive module (Constitution Rule 8 cross-device clause). -->
 <link rel="stylesheet" href="sokoni-admin-responsive.css">
+<!-- Updates centre (shared with admin-os.html): live build, install/update metrics, release log. -->
+<link rel="stylesheet" href="sokoni-admin-updates.css">
 </head>
 <body>
 
@@ -374,6 +376,9 @@
     <div class="nav-group-label">Overview</div>
     <button class="nav-item active" data-section="overview" data-label="Platform Overview" type="button" onclick="SA.nav('overview');_closeSidebar()">
       <span class="nav-icon">&#x1F4CA;</span><span class="nav-label">Platform Overview</span>
+    </button>
+    <button class="nav-item" data-section="updates" data-label="Updates" type="button" onclick="SA.nav('updates');_closeSidebar()">
+      <span class="nav-icon">&#x1F680;</span><span class="nav-label">Updates</span>
     </button>
   </div>
 
@@ -902,6 +907,12 @@
       </div>
     </section>
 
+    <!-- ══ Updates centre ══ ONE module (sokoni-admin-updates.js) shared with admin-os.html
+         (#updates there). It renders its own heading, so the panel carries no header. -->
+    <section class="sa-panel" id="panel-updates" hidden>
+      <div id="saUpdatesBody"><div class="sa-spinner"><div></div></div></div>
+    </section>
+
     <!-- ══ SECTION 8: Secrets Checklist ══ -->
     <section class="sa-panel" id="panel-secrets" hidden>
       <div class="panel-header">
@@ -997,6 +1008,8 @@
 
 <!-- Toast Container -->
 <div class="toast-container" id="saToasts"></div>
+
+<script src="sokoni-admin-updates.js"></script>
 
 <!-- Confirm Modal (for role/suspend actions) -->
 <div class="sa-modal" id="saModal">
@@ -1149,8 +1162,11 @@ const SA={
     _wireConfirmGate('saConfirmInputCache','cg-cache-btn');
     _wireConfirmGate('saConfirmInputBroadcast','cg-broadcast-emergency-btn');
 
-    // Load initial section
-    this.nav('overview');
+    // Load initial section. A #section hash opens that NATIVE section (e.g. #updates),
+    // validated against a sidebar button that exists; anything else lands on overview.
+    const _h=String(location.hash||'').replace(/^#/,'').toLowerCase();
+    const _ok=/^[a-z]+$/.test(_h)&&document.querySelector('#saNav button.nav-item[data-section="'+_h+'"]');
+    this.nav(_ok?_h:'overview');
   },
 
   // Navigation ──────────────────────────────────────────────
@@ -1176,6 +1192,18 @@ const SA={
     else if(section==='emergency')this.loadEmergency();
     else if(section==='audit')this.loadAudit();
     else if(section==='broadcast')this.loadBroadcastHistory();
+    else if(section==='updates')this.loadUpdates();
+  },
+
+  // Updates centre ── the shared module, mounted into this console's panel ──
+  loadUpdates(){
+    const body=document.getElementById('saUpdatesBody');
+    if(!body)return;
+    if(!window.SokoniAdminUpdates){
+      body.innerHTML='<p style="color:var(--muted);font-size:13px">The Updates module did not load. Reload the page to try again.</p>';
+      return;
+    }
+    window.SokoniAdminUpdates.mount(body,{console:'sa'});
   },
 
   // Sign Out ────────────────────────────────────────────────

@@ -227,6 +227,7 @@ window.SokoniAOS = (() => {
       security:      () => _loadSecurity(),
       hubs:          () => _loadHubs(),
       workflows:     () => _loadWorkflows(),
+      updates:       () => _loadUpdates(),
     };
     loaders[s]?.();
   }
@@ -2399,6 +2400,19 @@ window.SokoniAOS = (() => {
     warning:  '<span class="status-badge st-pending">warning</span>',
     degraded: '<span class="status-badge st-cancelled">degraded</span>',
   };
+
+  /* Updates centre. ONE implementation (sokoni-admin-updates.js) shared with
+     super-admin.html; this console only hands it the panel body. Re-opening the
+     section after the first load is a no-op here — the module's Refresh re-reads. */
+  function _loadUpdates() {
+    const body = document.getElementById("updatesBody");
+    if (!body) return;
+    if (!window.SokoniAdminUpdates) {
+      body.innerHTML = _emptyMsg("The Updates module did not load. Reload the page to try again.");
+      return;
+    }
+    window.SokoniAdminUpdates.mount(body, { console: "aos" });
+  }
 
   async function _loadHubs() {
     const body = document.getElementById("hubsBody");
