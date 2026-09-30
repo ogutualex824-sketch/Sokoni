@@ -1,3 +1,74 @@
+## [2026-09-30] - Secure Release integrated into the convergence line: one withdrawal flow, in the profile wallet, for every role
+
+**Local only — NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `1f21885`.**
+
+Owner: "It must be merged into the convergence branch as one reviewed integration step … preserving the in-profile
+wallet". Owner decision (2026-09-30): every Withdraw button — merchant-v2 Payments, the provider dashboard,
+seller-earnings — opens the ONE Secure Release flow in the profile wallet.
+
+See `docs/SECURE_RELEASE.md` (§ Integration) and `docs/IN_PROFILE_WALLET.md`.
+
+**What came across** — from `feat/secure-release-on-45a837d` (45a837d → a556bd0 → c701224 → c1ecdb8):
+
+- It was **ported, not merged.** A merge would have imported 25 unrelated POS-lineage commits, so each file was merged
+  three ways from the base that isolates the payout work. The in-profile wallet and convergence's own AdminOS changes
+  were preserved.
+- **45a837d's paid-state guard**, the deployed `adminProcessPayout`, is now on this line. Before, deploying this
+  line's `wallet.js` would have removed it.
+- **The Secure Release server:** PIN at request, approval moves nothing, the owner's Confirm & Release, cancel,
+  expiry, cooling, and the scrypt PIN verifier.
+- **The wallet UI:** Release, the timeline, and the ready-to-release banner.
+- **AdminOS and super-admin:** the Secure Release queues. Convergence's Outcome-unknown section is kept.
+
+**What the integration adds**
+
+- **Release notifications** open `profile.html#wallet:payouts`, the profile Wallet tab on "Your withdrawals". The
+  wallet has ONE deep-link handler (withdraw / payouts).
+- **A deep link lands on the wallet**, scrolled into view. It previously landed on the profile header.
+- **One withdrawal UI** (owner decision): merchant-v2 Payments, the provider dashboard and seller-earnings open
+  `profile.html#wallet:withdraw`.
+  - Their own forms had no PIN and no release step, so the server would have refused them.
+  - seller-earnings' call was already malformed.
+  - The merchant withdrawals list knows the new states and links an approved request to "Release it in your Wallet".
+- **Double tap:** a second tap while the PIN prompt is open no longer starts a second request.
+
+**Files**
+
+- Server and scripts: `functions/wallet.js`, `functions/wallet-engine.js`, `functions/index.js`,
+  `scripts/reconcile-payouts.js`.
+- Pages and UI modules: `sokoni-wallet-v2.js`, `wallet.html`, `profile.html`, `sokoni-aos.js`, `admin-os.html`,
+  `super-admin.html`, `sokoni-merchant-wallet.js`, `provider-dashboard.html`, `seller-earnings.html`.
+- Docs: `docs/SECURE_RELEASE.md`, `docs/repairs/PAYOUT-PAID-STATE-GUARD.md`.
+- Tests:
+  - new: `test-secure-release{,-browser,-admin-browser,-e2e-browser}.js` and `test-payout-paid-status-guard.js`;
+  - updated: `test-payout-outcome-unknown.js`, `test-creator-withdrawal.js` (both pinned to one-key mode) and
+    `test-withdrawal-browser.js`.
+
+**Database.** As in the Secure Release commits. No migration.
+
+**API.** New callables `confirmPayoutRelease` and `cancelPayoutRequest`.
+
+**Security**
+
+- Four keys: account, PIN, admin approval, owner release.
+- The guard against double payment is carried over from production.
+- No screen can submit a withdrawal without the PIN.
+
+**Breaking**
+
+- With `secureRelease` on (the default), a wallet without a PIN must set one before withdrawing.
+- Admin approval no longer pays.
+- Merchant and provider screens send users to the profile wallet to withdraw.
+
+**Tests** (details in the commit message)
+
+- Secure Release: server 18/0, browser 8/0, admin 11/0, **end-to-end 5/0 ×3** (real profile + real AdminOS).
+- Guard 26/0 on the emulator; outcome-unknown 62/0; idempotency 11/11; bulk 14/0; creator 21/0; withdrawal-browser 19/0.
+- Mutation controls: 30/30 carried over, 6/6 integration, 2/2 routing.
+
+**Deploy note.** Live hosting is `2f3bb6f` (v645, reported by sokoni-82). This line does not descend from it, and must
+be reconciled before any hosting deploy.
+
 ## [2026-09-30] - The buyer's wallet opens inside the profile page, and stays there
 
 **Local only — NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `d4a48fe`.**

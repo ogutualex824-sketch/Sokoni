@@ -230,6 +230,7 @@ window.SokoniWalletV2 = (function () {
         _startBalanceListener();   // live balance — updates instantly on send/claim/top-up/withdraw/webhook
         _claimPendingTransfers();  // auto-claim any money sent to this user's number before they registered
         await checkSellerStatus();
+        _checkReleaseReady();   // Secure Release: an approved withdrawal waiting for the owner
 
         /* Deep-link from chat's "Send money": open the pay sheet for that contact. */
         try {
@@ -243,6 +244,7 @@ window.SokoniWalletV2 = (function () {
              once this user is known so their M-PESA number is prefilled */
           const _open = _pp.get('open') || (location.hash || '').replace(/^#/, '');
           if (_open === 'withdraw') openWithdraw();
+          else if (_open === 'payouts') openPayouts();   /* Secure Release: "Your withdrawals" — where the owner releases */
         } catch (_) {}
       });
     } catch (e) {
@@ -885,8 +887,12 @@ window.SokoniWalletV2 = (function () {
   let _wdrIdemKey     = '';
   let _payoutStartedAt = 0;
 
+  function _srShowPinNotice(on) {
+    const n = document.getElementById('wdrPinNotice'); if (n) n.style.display = on ? 'flex' : 'none';
+  }
   function openWithdraw() {
     openOverlay('ovlWithdraw');
+    _srShowPinNotice(!(_dashboard && _dashboard.hasPin));
     /* Reset to the form view (a prior success may have left the success panel up). */
     const form = document.getElementById('wdrForm');    if (form) form.style.display = '';
     const succ = document.getElementById('wdrSuccess');  if (succ) succ.style.display = 'none';
@@ -977,6 +983,9 @@ window.SokoniWalletV2 = (function () {
     if (/insufficient/i.test(msg))                                                return 'Insufficient balance for this payout.';
     if (/minimum/i.test(msg))                                                     return 'Minimum payout is KSh 100.';
     if (/duplicate|already/i.test(msg))                                           return 'This withdrawal was already submitted.';
+    if (/PIN_NOT_SET/.test(msg))                                                  return 'Set your Wallet PIN before withdrawing (Security → Wallet PIN).';
+    if (/PIN_REQUIRED/.test(msg))                                                 return 'Enter your Wallet PIN to continue.';
+    if (/CURRENT_PIN_REQUIRED/.test(msg))                                         return 'Enter your current PIN — or sign in again to reset a forgotten PIN.';
     return msg || 'Payout failed. Please try again.';
   }
 
@@ -1014,6 +1023,15 @@ window.SokoniWalletV2 = (function () {
 
     if (!navigator.onLine) return _wdrShowError('You appear to be offline. Check your connection and try again.');
 
+    /* SOKONI Secure Release: the wallet PIN is REQUIRED (the server refuses without it). No PIN → secure the wallet first. */
+    if (!_dashboard?.hasPin) { _srShowPinNotice(true); return _wdrShowError('Set your Wallet PIN before withdrawing.'); }
+    if (_pinResolve) return;   /* a PIN prompt is already open for this withdrawal — a double tap must not start a second */
+    {
+      const pin = await _promptPin('Enter your PIN to request KSh ' + _fmt(amt));
+      if (!pin) return;   // cancelled — don't submit
+      payload.pin = pin;
+    }
+
     /* ONE key per withdrawal intent (user · amount · destination): a double tap,
        a retry, a reload or a second tab reuses it — the server dedupes on it. */
     const _intent = { uid: _uid, amount: amt, destination: payload.accountNumber };
@@ -1021,23 +1039,15 @@ window.SokoniWalletV2 = (function () {
       ? await window.SokoniPayoutIntent.acquire(_intent)
       : (_wdrIdemKey = _wdrIdemKey || ('po_' + (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : Math.random().toString(36).slice(2))));
 
-    /* Instant payouts require a verified PIN — collect it if the user has one set.
-       The server decides whether to grant instant; a missing PIN just routes to review. */
-    if (_dashboard?.hasPin) {
-      const pin = await _promptPin('Enter your PIN to withdraw KSh ' + _fmt(amt));
-      if (!pin) return;   // cancelled — don't submit
-      payload.pin = pin;
-    }
-
     /* Loading state — "Sending your money…" + spinner, taps blocked. */
     const origLabel = btn ? btn.innerHTML : '';
     if (btn) {
       btn.dataset.busy = '1';
       btn.disabled = true;
-      btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:8px"></span>Sending your money…';
+      btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:8px"></span>Requesting…';
     }
     _payoutStartedAt = Date.now();
-    const _reset = () => { if (btn) { btn.dataset.busy = '0'; btn.disabled = false; btn.innerHTML = origLabel || '🏧 Request Payout'; } };
+    const _reset = () => { if (btn) { btn.dataset.busy = '0'; btn.disabled = false; btn.innerHTML = origLabel || '🔐 Request release'; } };
 
     try {
       console.log('[payout] request sent', { amount: amt, method, key: payload.idempotencyKey });
@@ -1071,6 +1081,7 @@ window.SokoniWalletV2 = (function () {
       /* Release only when the refusal proves nothing was created; a timeout keeps
          the key so a retry is the SAME withdrawal. */
       if (window.SokoniPayoutIntent && window.SokoniPayoutIntent.isDefinitive(e)) window.SokoniPayoutIntent.release(_intent);
+      if (/PIN_NOT_SET/.test(String(e && e.message))) _srShowPinNotice(true);
       _wdrShowError(_payoutErr(e));
     } finally {
       _reset();
@@ -1083,7 +1094,10 @@ window.SokoniWalletV2 = (function () {
     const titleEl = document.querySelector('#wdrSuccess h3');
     const emojiEl = document.querySelector('#wdrSuccess > div');
     let title, msg, emoji;
-    if (d.status === 'outcome_unknown') {
+    if (d.secureRelease) {
+      emoji = '🔐'; title = 'Money held for you';
+      msg = 'KSh ' + _fmt(amt) + ' to ' + acct + ' is held. SOKONI reviews it, then YOU confirm the release in "Your withdrawals". Nothing is sent before you confirm.';
+    } else if (d.status === 'outcome_unknown') {
       /* Never drawn as sent: the provider gave no definitive answer. */
       emoji = '⏳'; title = 'Confirming your payout';
       msg = 'KSh ' + _fmt(amt) + ' to ' + acct + ' is being confirmed with M-PESA. Your funds are held safely — please do not request it again.';
@@ -1136,6 +1150,13 @@ window.SokoniWalletV2 = (function () {
       paid:            { t: 'Paid',       c: 'var(--g)',   i: '✅' },
       rejected:        { t: 'Rejected',   c: 'var(--red)', i: '✕'  },
       failed:          { t: 'Failed',     c: 'var(--red)', i: '✕'  },
+      /* Secure Release */
+      owner_confirmed: { t: 'Released — sending', c: '#f6c945', i: '⏳' },
+      settled_manually:{ t: 'Paid',       c: 'var(--g)',   i: '✅' },
+      outcome_unknown: { t: 'Being confirmed', c: '#f6c945', i: '⏳' },
+      cancelled:       { t: 'Cancelled',  c: 'var(--sub)', i: '↩' },
+      expired:         { t: 'Expired',    c: 'var(--sub)', i: '↩' },
+      reversed:        { t: 'Returned',   c: 'var(--sub)', i: '↩' },
     };
     return m[s] || { t: s || 'Unknown', c: 'var(--sub)', i: '•' };
   }
@@ -1155,8 +1176,9 @@ window.SokoniWalletV2 = (function () {
       list.innerHTML = '<p style="text-align:center;color:var(--sub);font-size:13px;padding:24px 0">No withdrawals yet.</p>';
       return;
     }
+    _payoutsCache = payouts;
     list.innerHTML = payouts.map((p) => {
-      const st = _payoutStatusMeta(p.status);
+      const st = p.secureRelease && p.status === 'approved' ? { t: 'Ready to release', c: 'var(--g)', i: '🔐' } : _payoutStatusMeta(p.status);
       return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:12px 14px">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
           '<span style="font-weight:800;font-size:15px">KSh ' + _fmt(p.amount) + '</span>' +
@@ -1169,8 +1191,93 @@ window.SokoniWalletV2 = (function () {
           (p.intasendRef ? '<div>Ref: ' + _esc(p.intasendRef) + '</div>' : '') +
           '<div style="opacity:.7">ID: ' + _esc(p.id) + '</div>' +
         '</div>' +
+        (p.secureRelease ? _srTimeline(p) + _srActions(p) : '') +
       '</div>';
     }).join('');
+  }
+
+  /* ─── SOKONI SECURE RELEASE — the owner's side (2026-09-30) ───────────────────────────────────────────────────────
+     Every step is the SERVER's: requested (PIN) → SOKONI approved → YOUR release → sent → completed. The owner's final
+     key is "CONFIRM & RELEASE KES X" (PIN again); the server re-verifies the amount, the destination, expiry, cooling
+     and the reserve before anything moves. */
+  let _payoutsCache = [];
+  const _SR_STEPS = [
+    ['requested', 'Requested'], ['pin_verified', 'Wallet PIN verified'], ['awaiting_owner', 'SOKONI approved'],
+    ['owner_confirmed', 'You confirmed the release'], ['sent', 'Sent'], ['done', 'Completed'],
+  ];
+  function _srReached(p) {
+    const h = (p.statusHistory || []).map((e) => e.status);
+    const has = (s) => h.includes(s);
+    const sent = ['processing', 'paid', 'settled_manually'].includes(p.status) || has('processing');
+    return { requested: true, pin_verified: has('pin_verified'), awaiting_owner: has('awaiting_owner') || has('approved'),
+      owner_confirmed: has('owner_confirmed'), sent, done: ['paid', 'settled_manually'].includes(p.status) };
+  }
+  function _srTimeline(p) {
+    const r = _srReached(p);
+    const at = (s) => { const e = (p.statusHistory || []).find((x) => x.status === s); return e && e.at ? _payoutDate(e.at) : ''; };
+    const ended = ['cancelled', 'expired', 'rejected', 'failed', 'reversed'].includes(p.status);
+    let nowMarked = false;
+    const rows = _SR_STEPS.map(([k, label]) => {
+      if (r[k]) return '<li class="done"><span class="d">✓</span><span>' + _esc(label) + (at(k) ? ' · ' + _esc(at(k)) : '') + '</span></li>';
+      if (!nowMarked && !ended) { nowMarked = true;
+        const lbl = k === 'owner_confirmed' ? 'Waiting for YOUR confirmation' : k === 'awaiting_owner' ? 'Waiting for SOKONI review' : label;
+        return '<li class="now"><span class="d">●</span><span>' + _esc(lbl) + '</span></li>'; }
+      return '<li><span class="d">○</span><span>' + _esc(label) + '</span></li>';
+    }).join('');
+    const end = ended ? '<li class="now"><span class="d">↩</span><span>' + _esc(_payoutStatusMeta(p.status).t) + ' — the funds are back in your wallet</span></li>' : '';
+    return '<ol class="sr-tl" aria-label="Withdrawal progress">' + rows + end + '</ol>';
+  }
+  function _srActions(p) {
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(String(p.id || ""))) return "";   /* server ids only — never a quote inside an onclick */
+    const id = _esc(p.id);
+    if (p.status === 'approved') {
+      const exp = p.releaseExpiresAt ? _payoutDate(p.releaseExpiresAt) : '';
+      return '<button type="button" class="sr-release" onclick="W2.releasePayout(\'' + id + '\')">🔐 CONFIRM &amp; RELEASE KSh ' + _fmt(p.amount) + '</button>' +
+        '<div class="sr-release-note">By confirming, you authorize SOKONI to release this exact amount to ' + _esc(p.destinationMasked || 'the destination shown') + '.' +
+        (exp ? ' Confirm before ' + _esc(exp) + '.' : '') + '</div>' +
+        '<button type="button" class="sr-cancel" onclick="W2.cancelPayout(\'' + id + '\')">Cancel — return the money to my wallet</button>';
+    }
+    if (p.status === 'pending') return '<button type="button" class="sr-cancel" onclick="W2.cancelPayout(\'' + id + '\')">Cancel request</button>';
+    return '';
+  }
+  async function releasePayout(id) {
+    const p = _payoutsCache.find((x) => x.id === id);
+    if (!p) return;
+    const pin = await _promptPin('Final confirmation: release KSh ' + _fmt(p.amount) + ' to ' + (p.destinationMasked || 'your destination'));
+    if (!pin) return;
+    try {
+      const res = await _callTimed('confirmPayoutRelease', { requestId: id, pin }, 25000);
+      const d = (res && res.data) || {};
+      toast(d.message || (d.status === 'processing' ? 'Sending your money…' : 'Release confirmed.'), 'success', 5000);
+    } catch (e) {
+      toast(_payoutErr(e), 'error', 6000);
+    }
+    loadDashboard(); openPayouts(); _checkReleaseReady();
+  }
+  async function cancelPayout(id) {
+    const p = _payoutsCache.find((x) => x.id === id);
+    if (!p || !window.confirm('Cancel this KSh ' + _fmt(p.amount) + ' withdrawal? The money returns to your wallet.')) return;
+    try {
+      await _callTimed('cancelPayoutRequest', { requestId: id }, 20000);
+      toast('Cancelled — the money is back in your wallet.', 'success');
+    } catch (e) {
+      toast(_payoutErr(e), 'error', 6000);
+    }
+    loadDashboard(); openPayouts(); _checkReleaseReady();
+  }
+  /* Dashboard banner: an approved withdrawal waiting for the owner's release (the server's list, not a guess) */
+  async function _checkReleaseReady() {
+    const b = document.getElementById('releaseReadyBanner');
+    if (!b) return;
+    try {
+      const res = await _callTimed('getPayoutHistory', {}, 20000);
+      const ready = ((res && res.data && res.data.payouts) || []).filter((p) => p.secureRelease && p.status === 'approved');
+      if (ready.length) {
+        const total = ready.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+        _setText('releaseReadySub', (ready.length === 1 ? 'KSh ' + _fmt(total) + ' approved' : ready.length + ' withdrawals · KSh ' + _fmt(total)) + ' — confirm to send. No money has been sent yet.');
+        b.style.display = 'flex';
+      } else b.style.display = 'none';
+    } catch (_) { b.style.display = 'none'; }
   }
 
   /* ─── REQUEST MONEY ─── */
@@ -1492,7 +1599,16 @@ window.SokoniWalletV2 = (function () {
   function openLimits() { openSecurity(); }
 
   /* ─── PIN SETUP ─── */
-  function openPinSetup() {
+  let _pinCurrent = null;
+  async function openPinSetup() {
+    _pinCurrent = null;
+    closeOverlay('ovlWithdraw');
+    if (_dashboard && _dashboard.hasPin) {
+      /* Secure Release: an existing PIN is changed only with the current PIN (or right after signing in again) */
+      const c = await _promptPin('Enter your CURRENT PIN to change it');
+      if (!c) return;
+      _pinCurrent = c;
+    }
     _pinBuffer = '';
     _pinStage  = 'set';
     _pinFirst  = '';
@@ -1539,7 +1655,10 @@ window.SokoniWalletV2 = (function () {
       }
       try {
         const fn = await _cf('walletV2SetPin');
-        await fn({ pin: _pinBuffer });
+        await fn(Object.assign({ pin: _pinBuffer }, _pinCurrent ? { currentPin: _pinCurrent } : {}));
+        _pinCurrent = null;
+        if (_dashboard) _dashboard.hasPin = true;
+        _srShowPinNotice(false);
         toast('Wallet PIN set successfully', 'success');
         closeOverlay('ovlPinSetup');
         const pinBtn = document.getElementById('pinBtnLabel');
@@ -1547,7 +1666,7 @@ window.SokoniWalletV2 = (function () {
         _pinBuffer = '';
         _pinFirst  = '';
       } catch (e) {
-        toast(e.message || 'Could not set PIN', 'error');
+        toast(_payoutErr(e) || 'Could not set PIN', 'error');
         _pinBuffer = '';
         _updatePinDots();
       }
@@ -2087,6 +2206,7 @@ window.SokoniWalletV2 = (function () {
     sndKey, sndKeyDel, setSendAmt,
     /* Withdraw */
     openWithdraw, wdrMethodChange, requestPayout, wdrAmountInput, openPayouts,
+    releasePayout, cancelPayout,   /* SOKONI Secure Release */
     /* Request */
     openRequest, createRequest, shareReqLink, copyReqLink,
     /* Savings */

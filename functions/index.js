@@ -12169,6 +12169,9 @@ exports.adminProcessPayout     = wallet.adminProcessPayout;
 exports.adminGetPendingPayouts = wallet.adminGetPendingPayouts;
 exports.adminPayoutOps         = wallet.adminPayoutOps;
 exports.adminResolvePayoutOutcome = wallet.adminResolvePayoutOutcome;
+/* SOKONI Secure Release (2026-09-30): the owner's final key, and the owner's cancel */
+exports.confirmPayoutRelease   = wallet.confirmPayoutRelease;
+exports.cancelPayoutRequest    = wallet.cancelPayoutRequest;
 exports.reconcilePayouts       = wallet.reconcilePayouts;
 exports.processPayoutRetries   = wallet.processPayoutRetries;
 exports.sweepEarningsToWallet  = wallet.sweepEarningsToWallet;

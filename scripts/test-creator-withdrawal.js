@@ -55,6 +55,10 @@ const ck = (l, ok, d) => { quiet('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d ? ' 
   /* p0: royalties ACCRUED in the ledger, quarter not settled → nothing in the wallet */
   await db.doc('royaltyLedger/earn_X_v1_p0').set({ uid: 'p0', kind: 'EARN', amountCents: 50000, periodId: '2026-Q4' });
   /* p1: a quarter was DISTRIBUTED — exactly what creatorAdminDistribute writes */
+  /* secureRelease: false — this suite certifies the ONE-KEY mechanics (approval → B2C, Mark Paid from approved), which stay
+     reachable when an admin switches Secure Release off. The two-key flow for the same withdrawal authority (creator
+     royalties included — the same wallet) is certified by scripts/test-secure-release*.js. */
+  await db.doc('config/payouts').set({ secureRelease: false }, { merge: true });
   await db.doc('wallets/p1').set({ balance: 300 });
   await db.doc('walletTransactions/p1_2026-Q3_royalty').set({ uid: 'p1', type: 'royalty_release', amount: 300, periodId: '2026-Q3' });
   await db.doc('wallets/p2').set({ balance: 300 });

@@ -1765,7 +1765,19 @@ const SA={
       const fn=this._fns.httpsCallable('adminGetPendingPayouts');
       const res=await fn({});
       const payouts=(res.data&&res.data.payouts)||[];
-      if(!payouts.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No pending payouts.</p>';return;}
+      /* SOKONI Secure Release (2026-09-30): approval sends NO money; the owner releases; only then is it paid — by hand
+         here with evidence, or automatically. Released-by-owner (and legacy approved) payouts are listed to be paid. */
+      const ready=await this._loadReadyPayouts();
+      const readyHtml='<h3 style="font-size:14px;margin:18px 0 8px">Released by the owner — ready to pay</h3>'+(
+        !ready.ok?'<p style="color:var(--muted);font-size:13px">Could not be loaded ('+_esc(ready.error)+') — the count is unknown, not zero.</p>'
+        :!ready.rows.length?'<p style="color:var(--muted);font-size:13px">No released payouts are waiting to be paid.</p>'
+        :'<div class="table-wrap"><table class="sa-table"><thead><tr><th>Owner</th><th>Amount</th><th>Send to</th><th>State</th><th>Actions</th></tr></thead><tbody>'+
+          ready.rows.map(p=>'<tr><td>'+_esc(String(p.sellerUid||'—').slice(0,10))+'</td><td>'+_esc(_fmtMoney(p.amount))+'</td><td>'+_esc((p.method||'—')+' · '+(p.accountNumber||'—'))+'</td>'+
+            '<td>'+(p.status==='owner_confirmed'?'Released by owner — not paid':'Approved (legacy) — not paid')+'</td>'+
+            '<td><button class="sa-btn-sm success" onclick="SA.processPayout(\''+_esc(p.id)+'\',\'paid\')">Mark Paid</button> '+
+            '<button class="sa-btn-sm danger" onclick="SA.processPayout(\''+_esc(p.id)+'\',\'reject\')">Reject</button></td></tr>').join('')+
+          '</tbody></table></div>');
+      if(!payouts.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No pending payouts.</p>'+readyHtml;return;}
       el.innerHTML=`
         <div class="table-wrap">
           <table class="sa-table">
@@ -1779,7 +1791,6 @@ const SA={
                   <td style="font-size:11px;color:var(--muted)">${_esc(_fmtDate(p.createdAt))}</td>
                   <td>
                     <button class="sa-btn-sm success" onclick="SA.processPayout('${_esc(p.id||p.payoutId)}','approve')">Approve</button>
-                    <button class="sa-btn-sm" onclick="SA.processPayout('${_esc(p.id||p.payoutId)}','paid')">Mark Paid</button>
                     <button class="sa-btn-sm danger" onclick="SA.processPayout('${_esc(p.id||p.payoutId)}','reject')">Reject</button>
                   </td>
                 </tr>
@@ -1787,12 +1798,18 @@ const SA={
             </tbody>
           </table>
         </div>
-      `;
+      `+readyHtml;
     }catch(e){
       el.innerHTML='<p style="color:var(--muted);font-size:13px">Could not load payouts: '+_esc(e.message)+'</p>';
     }
   },
-
+  async _loadReadyPayouts(){
+    try{
+      const snap=await this._db.collection('payoutRequests').where('status','in',['approved','owner_confirmed']).limit(200).get();
+      const rows=snap.docs.map(d=>Object.assign({id:d.id},d.data())).filter(p=>p.status==='owner_confirmed'||(p.status==='approved'&&!p.secureRelease));
+      return {ok:true,rows};
+    }catch(e){ return {ok:false,rows:[],error:(e&&e.message)||String(e)}; }
+  },
   async loadPayoutOps(){
     const el=document.getElementById('saPayoutOps');
     if(!el)return;
@@ -1813,7 +1830,6 @@ const SA={
           <td>${p.retryCount||0}</td>
           <td style="font-size:11px">${_esc(p.lastWebhookState||'—')}</td>
           <td>
-            <button class="sa-btn-sm" onclick="SA.processPayout('${_esc(p.id)}','paid')">Mark Paid</button>
             <button class="sa-btn-sm danger" onclick="SA.processPayout('${_esc(p.id)}','reject')">Reject</button>
           </td>
         </tr>`).join('')}
@@ -1854,7 +1870,16 @@ const SA={
         (action==='paid'?' Only mark Paid if the money was actually sent to the seller — this books a completed payout and releases the hold.':''),
       ()=>{
         const fn=this._fns.httpsCallable('adminProcessPayout');
-        fn({requestId:id,status})
+        const payload={requestId:id,status};
+        if(status==='paid'){
+          const ref=(window.prompt('M-PESA / transaction reference of the money you sent:')||'').trim();
+          if(!ref){_toast('Nothing submitted — a transaction reference is required.','error');return;}
+          const att=(window.prompt('Attestation — who sent it, how, and when:')||'').trim();
+          if(!att){_toast('Nothing submitted — an attestation is required.','error');return;}
+          payload.externalReference=ref.slice(0,120); payload.attestation=att.slice(0,500);
+        }
+        if(status==='rejected'){ payload.note=((window.prompt('Rejection reason (optional):')||'').trim()).slice(0,500); }
+        fn(payload)
           .then(()=>{_toast('Payout '+status,'success');this.loadPayouts();if(this.loadPayoutOps)this.loadPayoutOps();})
           .catch(e=>_toast('Error: '+e.message,'error'));
       },

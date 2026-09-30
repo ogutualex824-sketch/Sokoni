@@ -175,8 +175,9 @@ async function _refundPayout(db, rid, newStatus, extra = {}) {
     outcome.status = payout.status;
     /* terminal — idempotent. settled_manually and reversed are terminal too: the
        money of the first left the business, the second was already returned. */
-    if (['paid', 'settled_manually', 'rejected', 'failed', 'reversed'].includes(payout.status)) return;
+    if (['paid', 'settled_manually', 'rejected', 'failed', 'reversed', 'cancelled', 'expired'].includes(payout.status)) return;
     if (extra.requireStatus && payout.status !== extra.requireStatus) return;
+    if (Array.isArray(extra.allowStatuses) && !extra.allowStatuses.includes(payout.status)) return;
     const res = extra.resolution ? await _readResolution(t, extra.resolution) : null;
     if (res && res.blocked) { outcome.blocked = res.blocked; return; }
     const walletRef = db.collection('wallets').doc(payout.sellerUid);
@@ -219,13 +220,25 @@ async function _refundPayout(db, rid, newStatus, extra = {}) {
  * ('paid'), the money came back → credit balance. If still in-flight, release the
  * reserved hold. Idempotent.
  */
+/* Only a payout the GATEWAY holds or completed can be reversed by the gateway (census 2026-09-29):
+     · paid ..................................... completed, then returned → credit the amount back
+     · processing / approving / retry_scheduled /
+       outcome_unknown .......................... a B2C request was sent and the hold is still reserved → release it
+   Everything else is refused with NO financial effect: rejected / failed / reversed already returned the funds
+   (a reversal there credited the seller twice — measured: balance 1,000 → 1,100, reserved 0 → −100);
+   settled_manually left out-of-band, not through the gateway; pending / approved / scheduled never reached it. */
+const _REVERSIBLE = ['paid', 'processing', 'approving', 'retry_scheduled', 'outcome_unknown'];
+
 async function _reversePayout(db, rid, detail) {
   const reqRef = db.collection('payoutRequests').doc(rid);
+  let outcome = { applied: false, status: null };
   await db.runTransaction(async (t) => {
+    outcome = { applied: false, status: null };   // reset per optimistic attempt
     const snap = await t.get(reqRef);
     if (!snap.exists) return;
     const p = snap.data();
-    if (p.status === 'reversed') return;   // idempotent
+    outcome.status = p.status;
+    if (!_REVERSIBLE.includes(p.status)) return;   // terminal or never sent — no financial effect (reversed: idempotent)
     const walletRef = db.collection('wallets').doc(p.sellerUid);
     if (p.status === 'paid') {
       /* Completed then returned → credit the amount back to available balance. */
@@ -238,11 +251,22 @@ async function _reversePayout(db, rid, detail) {
       status: 'reversed', updatedAt: Timestamp.now(),
       statusHistory: FieldValue.arrayUnion(_payoutEvent('reversed', detail || 'Payout reversed')),
     });
+    outcome = { applied: true, status: 'reversed' };
   });
+  return outcome;
 }
 
 const crypto = require('crypto');
 function _sha256(input) { return crypto.createHash('sha256').update(String(input), 'utf8').digest('hex'); }
+
+/* Secure Release: WHERE the money goes, as one key. The approval records it; the owner's release recomputes it from
+   the request as it is NOW and must match — so an approved amount or destination can never be changed and then
+   released. (No client can write payoutRequests at all: firestore.rules has no write rule for it.) */
+function _destinationKey(p) {
+  return _sha256([p.method || '', String(p.accountNumber || ''), String(p.bankCode || '')].join('|'));
+}
+/* The ONE wallet PIN authority (wallet-engine) — lazily, so this module never loads before its callables need it. */
+function _pinAuthority() { return require('./wallet-engine')._pinAuthority; }
 
 /* config/payouts — adjustable WITHOUT code changes. Safe defaults (system off). */
 const PAYOUT_CONFIG_DEFAULTS = {
@@ -254,6 +278,13 @@ const PAYOUT_CONFIG_DEFAULTS = {
   dailyLimit:         50000,   // KES — max instant total per seller per day
   scheduledAbove:     0,       // KES — amounts >= this route to 'scheduled' (0 = off)
   maxPayoutsPerDay:   3,       // velocity gate — max payout REQUESTS per seller per EAT day
+  /* SOKONI Secure Release (owner, 2026-09-30) — a TWO-KEY withdrawal, ON by default:
+     wallet PIN at request → admin approval (moves nothing) → the OWNER's final "Confirm & Release" → money moves.
+     Switching it off (config/payouts.secureRelease = false) restores the previous one-key flow; only admins can. */
+  secureRelease:              true,
+  releaseWindowHours:         72,      // an approval the owner has not confirmed in this window expires
+  newDestinationCoolingHours: 24,      // a destination first used less than this ago cannot be RELEASED to yet
+  maxPerRequest:              150000,  // KES — one withdrawal request never exceeds this
 };
 
 async function _getPayoutConfig(db) {
@@ -281,7 +312,7 @@ async function _todayPayoutTotal(db, uid) {
 async function _hasActivePayout(db, uid) {
   try {
     const snap = await db.collection('payoutRequests').where('sellerUid', '==', uid).limit(50).get();
-    return snap.docs.some((d) => ['pending', 'approving', 'approved', 'processing', 'approval_failed', 'scheduled', 'outcome_unknown'].includes(d.data().status));
+    return snap.docs.some((d) => ['pending', 'approving', 'approved', 'owner_confirmed', 'processing', 'approval_failed', 'scheduled', 'outcome_unknown'].includes(d.data().status));
   } catch (_) { return true; }   // fail safe → treat as active → not instant
 }
 
@@ -307,7 +338,7 @@ async function _assessPayoutRisk(db, uid, amount, method, pin, cfg) {
 
   const walletSnap = await db.collection('wallets').doc(uid).get();
   const w = walletSnap.exists ? walletSnap.data() : {};
-  const pinVerified = !!(w.pinHash && pin && _sha256(`${pin}${uid}`) === w.pinHash);
+  const pinVerified = !!(pin && _pinAuthority().pinMatches(w, uid, pin));
 
   if (!cfg.enabled)                    reasons.push('system_disabled');
   if (!cfg.autoB2C)                    reasons.push('auto_off');
@@ -460,11 +491,20 @@ function _notifyPayout(kind, payout, rid) {
     const map = {
       paid:   { type: 'payout_paid',   title: 'Payout sent ✅',   body: `KSh ${amt} sent to ${dest}. Ref ${ref}.` },
       failed: { type: 'payout_failed', title: 'Payout failed',    body: `Your KSh ${amt} withdrawal failed and the funds were returned to your wallet.` },
+      /* Secure Release */
+      requested:       { type: 'payout_requested',       title: 'Withdrawal requested',                 body: `KSh ${amt} to ${dest} is held for you and waiting for SOKONI review. No money has been sent.` },
+      release_ready:   { type: 'payout_release_ready',   title: '🔐 Your money is ready to be released', body: `Your KSh ${amt} withdrawal to ${dest} was approved. No money has been sent yet — open your wallet and confirm only if these details are correct.` },
+      owner_confirmed: { type: 'payout_owner_confirmed', title: 'Release confirmed',                    body: `You confirmed the release of KSh ${amt} to ${dest}.` },
+      cancelled:       { type: 'payout_cancelled',       title: 'Withdrawal cancelled',                 body: `Your KSh ${amt} withdrawal was cancelled and the funds are back in your wallet.` },
+      rejected:        { type: 'payout_rejected',        title: 'Withdrawal not approved',              body: `Your KSh ${amt} withdrawal was not approved and the funds are back in your wallet.` },
+      expired:         { type: 'payout_expired',         title: 'Withdrawal expired',                   body: `Your approved KSh ${amt} withdrawal was not confirmed in time. The funds are back in your wallet — request again when ready.` },
+      outcome_unknown: { type: 'payout_outcome_unknown', title: 'Withdrawal being confirmed',            body: `We are confirming your KSh ${amt} withdrawal with the provider. Your funds are held safely — please do not request it again.` },
     }[kind];
     if (!map) return;
     notify({
       uid: payout.sellerUid, type: map.type, title: map.title, body: map.body,
       dedupeKey: `${map.type}_${rid}`,
+      deepLink: '/profile.html#wallet:payouts',   /* Secure Release: the profile Wallet tab, on "Your withdrawals" */
       data: { requestId: rid, amount: amt, reference: ref, destination: dest, kind },
     }).catch(() => {});
   } catch (_) { /* notifications must never break payouts */ }
@@ -997,7 +1037,17 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
 
   /* ── Risk engine: decide instant vs review vs scheduled (before reserving) ── */
   const cfg  = await _getPayoutConfig(db);
+  const secure = cfg.secureRelease !== false;
+  if (secure) {
+    /* Key 1 (the owner): the wallet PIN, verified by the ONE PIN authority — required, counted, locks at the cap */
+    await _pinAuthority().assertPinOk(db, uid, pin, { require: true });
+    if (amt > (Number(cfg.maxPerRequest) || 150000)) {
+      throw new HttpsError('invalid-argument', `One withdrawal can be at most KSh ${Number(cfg.maxPerRequest) || 150000}.`);
+    }
+  }
   const risk = await _assessPayoutRisk(db, uid, amt, method, pin, cfg);
+  /* Secure Release: nothing is ever sent at request time — every request waits for admin review, then the owner */
+  if (secure) { risk.mode = 'review'; if (!risk.reasons.includes('secure_release')) risk.reasons.push('secure_release'); }
   _plog('risk', { sellerUid: uid, amount: amt }, { mode: risk.mode, reasons: risk.reasons });
   /* Initial status by mode: instant reserves as a transient 'approving' then fires
      B2C; review → 'pending'; scheduled → 'scheduled'. */
@@ -1017,6 +1067,7 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
 
   /* Atomically dedupe + check velocity + balance, reserve amount, create request */
   let deduplicated = false;
+  let destFirstSeen = null;
   await db.runTransaction(async (t) => {
     const [walletSnap, velocitySnap, existingReq] = await Promise.all([
       t.get(walletRef), t.get(velocityRef), t.get(reqRef),
@@ -1047,7 +1098,13 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
     }
 
     t.set(velocityRef, { date: today, count: todayCount + 1, updatedAt: Timestamp.now() }, { merge: true });
-    t.update(walletRef, { balance: balance - amt, pendingPayout: FieldValue.increment(amt) });
+    /* Secure Release: remember when this destination was FIRST used (cooling period before a release to it) */
+    const destKey = _destinationKey({ method, accountNumber: sanitizedAccount, bankCode: method === 'bank' ? _san(bankCode, 20) : null });
+    const knownDest = walletSnap.exists && walletSnap.data().payoutDestinations && walletSnap.data().payoutDestinations[destKey];
+    destFirstSeen = knownDest || Timestamp.now();
+    const wUpd = { balance: balance - amt, pendingPayout: FieldValue.increment(amt) };
+    if (secure && !knownDest) wUpd['payoutDestinations.' + destKey] = destFirstSeen;
+    t.update(walletRef, wUpd);
     t.set(reqRef, {
       sellerUid:     uid,
       correlationId: reqId,
@@ -1060,10 +1117,14 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
       bankName:      method === 'bank' ? _san(bankName, 100) : null,
       mode:          risk.mode,
       riskReasons:   risk.reasons,
+      ...(secure ? { secureRelease: true, destinationKey: _destinationKey({ method, accountNumber: sanitizedAccount, bankCode: method === 'bank' ? _san(bankCode, 20) : null }),
+                     destinationFirstSeenAt: destFirstSeen, pinVerifiedAt: Timestamp.now() } : {}),
       status:        initialStatus,
       statusHistory: [_payoutEvent('requested', 'Request submitted'),
+                      ...(secure ? [_payoutEvent('pin_verified', 'Wallet PIN verified')] : []),
                       _payoutEvent(initialStatus, risk.mode === 'instant' ? 'Instant — auto-approved by risk engine'
                                                   : risk.mode === 'scheduled' ? 'Scheduled for later processing'
+                                                  : secure ? 'Held — waiting for SOKONI review (Secure Release)'
                                                   : 'Queued for admin review')],
       intasendRef:   null,
       note:          null,
@@ -1081,6 +1142,7 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
 
   await _payoutMetric(db, 'requests');
   _plog('reserved', { id: reqId, correlationId: reqId, sellerUid: uid, amount: amt, status: initialStatus });
+  if (secure) _notifyPayout('requested', { sellerUid: uid, amount: amt, accountNumber: sanitizedAccount }, reqId);
 
   /* ── Instant path: disburse via IntaSend B2C immediately (webhook confirms paid) ── */
   if (risk.mode === 'instant') {
@@ -1120,9 +1182,12 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
     success: true, requestId: reqId, mode: risk.mode, status: initialStatus,
     amount: amt, accountNumber: sanitizedAccount,
     estimatedArrival: estimated,
+    ...(secure ? { secureRelease: true } : {}),
     message: risk.mode === 'scheduled'
       ? 'Scheduled — your payout will be processed within 24 hours.'
-      : 'Submitted — under review. Funds arrive within 24 hours once approved.',
+      : secure
+        ? 'Requested — your money is held for you. SOKONI reviews it, then YOU confirm the release. Nothing is sent before you confirm.'
+        : 'Submitted — under review. Funds arrive within 24 hours once approved.',
   };
 });
 
@@ -1172,6 +1237,11 @@ exports.getPayoutHistory = onCall({ cors: true, enforceAppCheck: true }, async (
       statusHistory: Array.isArray(p.statusHistory)
         ? p.statusHistory.map((e) => ({ status: e.status, detail: e.detail ?? null, at: e.at ?? null }))
         : [],
+      /* Secure Release: whether this request needs the owner's release, and until when */
+      secureRelease: p.secureRelease === true,
+      releaseExpiresAt: (p.approval && p.approval.expiresAt) || null,
+      releasableAfter: p.secureRelease && p.destinationFirstSeenAt && p.destinationFirstSeenAt.toMillis
+        ? p.destinationFirstSeenAt.toMillis() : null,
       createdAt: p.createdAt,
       updatedAt: p.updatedAt ?? p.processedAt ?? p.createdAt,
       processedAt: p.processedAt ?? null,
@@ -1225,14 +1295,35 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker
     if (payout.status === 'outcome_unknown') {
       throw new HttpsError('failed-precondition', 'This payout has an unknown provider outcome — resolve it with provider evidence (adminResolvePayoutOutcome), not a manual mark.');
     }
+    /* APPROVED ONLY (owner decision 2026-09-29, payout paid-state census). `approved` is the one state in which no
+       gateway payment was ever sent: approval leaves a payout `approved` only when automatic payout is off (or the
+       method is not M-PESA). Every other source is refused, and the check runs INSIDE the settlement transaction
+       (requireStatus), so a status that changes between the read above and the settle cannot slip through:
+         · pending ................. not approved — settling it would skip the approval step
+         · approving / processing /
+           retry_scheduled ......... a gateway payment was sent or is being sent — settling by hand could pay twice
+                                     (a later gateway COMPLETED is swallowed as "already settled")
+         · rejected / failed /
+           reversed ................ the funds were already returned to the seller
+         · outcome_unknown ......... provider evidence required (adminResolvePayoutOutcome) */
+    /* Secure Release: money leaves only after the OWNER's release — so a hand payment needs 'owner_confirmed' */
+    const manualSource = payout.secureRelease ? 'owner_confirmed' : 'approved';
     const settled = await _settlePayoutPaid(db, rid, {
-      finalStatus: 'settled_manually', processedBy: request.auth.uid, refuseStatuses: ['outcome_unknown'],
+      finalStatus: 'settled_manually', processedBy: request.auth.uid, requireStatus: manualSource, refuseStatuses: ['outcome_unknown'],
       externalReference, attestation, detail: 'Settled manually — ref ' + externalReference,
     });
     if (!settled.applied && !['paid', 'settled_manually'].includes(settled.status)) {
-      throw new HttpsError('failed-precondition', settled.status === 'outcome_unknown'
-        ? 'This payout has an unknown provider outcome — resolve it with provider evidence (adminResolvePayoutOutcome), not a manual mark.'
-        : `Cannot settle a payout that is "${settled.status}" — its funds were already returned.`);
+      const st = settled.status;
+      throw new HttpsError('failed-precondition',
+        st === 'outcome_unknown'
+          ? 'This payout has an unknown provider outcome — resolve it with provider evidence (adminResolvePayoutOutcome), not a manual mark.'
+          : ['rejected', 'failed', 'reversed'].includes(st)
+            ? `Cannot settle a payout that is "${st}" — its funds were already returned.`
+            : ['approving', 'processing', 'retry_scheduled'].includes(st)
+              ? `Cannot mark a "${st}" payout paid by hand — a gateway payment was sent or is being sent, so a manual payment could pay twice.`
+              : payout.secureRelease && st === 'approved'
+                ? 'The owner has not confirmed this release yet — Secure Release pays only after the owner confirms.'
+                : `Only an ${manualSource === 'owner_confirmed' ? 'owner-confirmed' : 'approved'} payout can be marked paid by hand — this one is "${st}".`);
     }
     if (settled.applied) await _payoutMetric(db, 'settledManually');
     return { success: true, status: settled.applied ? 'settled_manually' : settled.status, externalReference, ...(settled.applied ? {} : { alreadySettled: true }) };
@@ -1242,10 +1333,13 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker
   if (status === 'rejected') {
     /* NOT retry_scheduled / outcome_unknown: a B2C request was already sent for those
        and may have executed — returning the funds could pay the seller twice. */
-    if (!['pending', 'approved', 'approval_failed'].includes(payout.status)) {
+    /* owner_confirmed (Secure Release) has sent nothing either — the admin may still decline it */
+    const rejectable = ['pending', 'approved', 'approval_failed', 'owner_confirmed'];
+    if (!rejectable.includes(payout.status)) {
       throw new HttpsError('failed-precondition', `Cannot reject a payout that is "${payout.status}" — funds may already be disbursed.`);
     }
-    await _refundPayout(db, rid, 'rejected', { processedBy: request.auth.uid, note: _san(note, 500) || null, detail: 'Rejected by admin' });
+    await _refundPayout(db, rid, 'rejected', { processedBy: request.auth.uid, note: _san(note, 500) || null, detail: 'Rejected by admin', allowStatuses: rejectable });
+    if (payout.secureRelease) _notifyPayout('rejected', payout, rid);
     await _payoutMetric(db, 'rejected');
     return { success: true, status: 'rejected' };
   }
@@ -1273,6 +1367,21 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker
   if (!gated) throw new HttpsError('failed-precondition', 'Payout is already being processed.');
   await _payoutMetric(db, 'approvals');
 
+  /* ── Secure Release: approval is KEY 2 and moves NOTHING. It records exactly what was approved (amount, where to,
+        whose wallet) and until when; the OWNER's release (confirmPayoutRelease) must match it. ── */
+  if (payout.secureRelease) {
+    const cfgSR = await _getPayoutConfig(db);
+    const expiresAt = Timestamp.fromMillis(Date.now() + (Number(cfgSR.releaseWindowHours) || 72) * 3600 * 1000);
+    await reqRef.update({
+      status: 'approved', updatedAt: Timestamp.now(),
+      approval: { amount: payout.amount, destinationKey: _destinationKey(payout), sellerUid: payout.sellerUid,
+                  approvedBy: request.auth.uid, approvedAt: Timestamp.now(), expiresAt },
+      statusHistory: FieldValue.arrayUnion(_payoutEvent('awaiting_owner', 'Approved — waiting for the owner to confirm the release')),
+    });
+    _notifyPayout('release_ready', payout, rid);
+    return { success: true, status: 'approved', awaitingOwner: true, releaseExpiresAt: expiresAt.toMillis() };
+  }
+
   const autoOn = await _autoB2CEnabled(db);
   /* Manual mode (flag off) or non-M-Pesa (B2C is M-Pesa only): leave approved for
      hand disbursement — unchanged behaviour, no real money moved automatically. */
@@ -1292,6 +1401,118 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker
   throw new HttpsError('failed-precondition',
     'PAYOUT_GATEWAY_FAILED — ' + (res.error || 'IntaSend B2C error') + ' · funds returned to the seller.',
     { code: 'PAYOUT_GATEWAY_FAILED', gateway: 'IntaSend', reason: res.error || null });
+});
+
+// ─── 8a. SOKONI Secure Release — the OWNER's final key ────────────────────────
+/**
+ * confirmPayoutRelease({ requestId, pin }) — "CONFIRM & RELEASE KES X". The owner's final authorization; the server
+ * re-verifies EVERYTHING before any money moves:
+ *   signed in · the request is theirs · it is Secure Release · it is APPROVED (admin key present) · the amount and
+ *   the destination are EXACTLY what was approved (fingerprint) · the approval has not expired · the destination is
+ *   past its cooling period · the wallet PIN (the one PIN authority, counted + locking) · the wallet is not frozen and
+ *   still holds the reserve.
+ * Then APPROVED → OWNER_CONFIRMED. With automatic payouts on (M-PESA), the release goes straight to the existing B2C
+ * path (PROCESSING → PAID via the webhook, or OUTCOME_UNKNOWN — never re-sent). With automatic payouts off, SOKONI pays
+ * it by hand, and only an owner_confirmed payout can be marked paid.
+ * An expired approval is cancelled and the funds returned — the owner requests again.
+ */
+exports.confirmPayoutRelease = onCall({ cors: true, enforceAppCheck: true, secrets: [INTASEND_KEY] }, async (request) => {
+  _requireAuth(request);
+  await checkRateLimit(request, 'payment');
+  const db = getFirestore();
+  const uid = request.auth.uid;
+  const rid = _san((request.data || {}).requestId, 128);
+  if (!rid) throw new HttpsError('invalid-argument', 'requestId is required');
+  const reqRef = db.collection('payoutRequests').doc(rid);
+  const snap = await reqRef.get();
+  /* not-found for another person's request too — its existence is not disclosed */
+  if (!snap.exists || snap.data().sellerUid !== uid) throw new HttpsError('not-found', 'Withdrawal not found');
+  const p0 = snap.data();
+  if (!p0.secureRelease) throw new HttpsError('failed-precondition', 'This withdrawal does not use Secure Release.');
+  /* The owner already gave the final key — whatever happened since is reported, never re-authorized or re-sent */
+  if (p0.ownerConfirmedAt) return { success: true, status: p0.status, alreadyConfirmed: true };
+  if (p0.status !== 'approved') throw new HttpsError('failed-precondition', `This withdrawal is "${p0.status}" — only an approved withdrawal can be released.`);
+
+  /* The owner's key: the wallet PIN, through the ONE PIN authority (wrong PINs are counted; locks at the cap) */
+  await _pinAuthority().assertPinOk(db, uid, (request.data || {}).pin, { require: true });
+
+  const cfg = await _getPayoutConfig(db);
+  const autoOn = await _autoB2CEnabled(db);
+  let result = null, expired = false;
+  await db.runTransaction(async (t) => {
+    result = null; expired = false;                          // reset per optimistic attempt
+    const s = await t.get(reqRef);
+    const p = s.data();
+    const w = await t.get(db.collection('wallets').doc(uid));
+    if (p.status !== 'approved') { result = { status: p.status, stale: true }; return; }
+    const a = p.approval || {};
+    /* Immutable approval: what is released must be EXACTLY what was approved */
+    if (a.amount !== p.amount || a.sellerUid !== p.sellerUid || a.destinationKey !== _destinationKey(p) || a.sellerUid !== uid) {
+      result = { refused: 'The withdrawal no longer matches what was approved, so it cannot be released. Cancel it and request again.' }; return;
+    }
+    if (!a.expiresAt || a.expiresAt.toMillis() <= Date.now()) { expired = true; return; }
+    const coolMs = (Number(cfg.newDestinationCoolingHours) || 0) * 3600 * 1000;
+    const first = p.destinationFirstSeenAt && p.destinationFirstSeenAt.toMillis ? p.destinationFirstSeenAt.toMillis() : 0;
+    if (coolMs && first && Date.now() - first < coolMs) {
+      result = { refused: 'This is a new destination. For your safety it can receive a release from ' + new Date(first + coolMs).toISOString() + '.', coolingUntil: first + coolMs }; return;
+    }
+    const wd = w.exists ? w.data() : {};
+    if (wd.frozen === true || wd.pinLocked === true) { result = { refused: 'Your wallet is locked — a release is not possible.' }; return; }
+    if ((Number(wd.pendingPayout) || 0) < p.amount) { result = { refused: 'The held funds for this withdrawal are no longer reserved — contact support.' }; return; }
+    const auto = autoOn && p.method === 'mpesa';
+    t.update(reqRef, {
+      status: auto ? 'approving' : 'owner_confirmed',
+      ownerConfirmedAt: Timestamp.now(), updatedAt: Timestamp.now(),
+      statusHistory: FieldValue.arrayUnion(_payoutEvent('owner_confirmed', 'Owner confirmed the release (PIN verified)')),
+    });
+    result = { status: auto ? 'approving' : 'owner_confirmed', auto };
+  });
+
+  if (expired) {
+    await _refundPayout(db, rid, 'expired', { requireStatus: 'approved', detail: 'Approval expired before the owner confirmed' });
+    _notifyPayout('expired', p0, rid);
+    throw new HttpsError('failed-precondition', 'This approval expired. The funds are back in your wallet — request the withdrawal again.');
+  }
+  if (result && result.refused) throw new HttpsError('failed-precondition', result.refused, result.coolingUntil ? { coolingUntil: result.coolingUntil } : undefined);
+  if (result && result.stale) return { success: true, status: result.status, alreadyConfirmed: true };
+  _notifyPayout('owner_confirmed', p0, rid);
+  if (!result.auto) {
+    return { success: true, status: 'owner_confirmed', message: 'Release confirmed. SOKONI sends your money to the destination shown — usually within 24 hours.' };
+  }
+  const res = await _disburseB2C(db, rid, { ...p0, id: rid });
+  if (res.ok) return { success: true, status: 'processing', intasendRef: res.intasendRef, message: 'Sending your money…' };
+  if (res.outcomeUnknown) {
+    _notifyPayout('outcome_unknown', p0, rid);
+    return { success: true, status: 'outcome_unknown', message: 'We are confirming this payout with M-PESA. Your funds are held safely — please do not request it again.' };
+  }
+  return { success: true, status: 'failed', message: 'We could not send to that destination and returned the funds to your wallet.' };
+});
+
+/**
+ * cancelPayoutRequest({ requestId }) — the owner withdraws their own request BEFORE they have released it
+ * (pending or approved). Nothing was sent, so the held funds return in one transaction. After the owner's release it
+ * is SOKONI's to complete or decline — never cancelled from the device.
+ */
+exports.cancelPayoutRequest = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+  _requireAuth(request);
+  await checkRateLimit(request, 'payment');
+  const db = getFirestore();
+  const uid = request.auth.uid;
+  const rid = _san((request.data || {}).requestId, 128);
+  if (!rid) throw new HttpsError('invalid-argument', 'requestId is required');
+  const snap = await db.collection('payoutRequests').doc(rid).get();
+  if (!snap.exists || snap.data().sellerUid !== uid) throw new HttpsError('not-found', 'Withdrawal not found');
+  const p = snap.data();
+  if (p.status === 'cancelled') return { success: true, status: 'cancelled', alreadyCancelled: true };
+  if (!['pending', 'approved'].includes(p.status)) {
+    throw new HttpsError('failed-precondition', `A withdrawal that is "${p.status}" can no longer be cancelled from here.`);
+  }
+  const out = await _refundPayout(db, rid, 'cancelled', { allowStatuses: ['pending', 'approved'], processedBy: uid, detail: 'Cancelled by the owner' });
+  if (out && out.applied === false && out.status !== 'cancelled') {
+    throw new HttpsError('failed-precondition', `A withdrawal that is "${out.status}" can no longer be cancelled from here.`);
+  }
+  _notifyPayout('cancelled', p, rid);
+  return { success: true, status: 'cancelled' };
 });
 
 // ─── 8b. adminResolvePayoutOutcome — evidence-based end of OUTCOME_UNKNOWN ────
@@ -1628,6 +1849,18 @@ exports.reconcilePayouts = onSchedule(
       await _payoutMetric(db, 'reconcileExceptions', flagged);
       console.warn(`[reconcilePayouts] Flagged ${flagged} stalled payout(s) for review`);
     }
+
+    /* Secure Release: an approval the owner never confirmed expires — the held funds return to the wallet (nothing
+       was ever sent: 'approved' is before the owner's key). Only the transaction's own read decides. */
+    const appr = await db.collection('payoutRequests').where('status', '==', 'approved').limit(100).get().catch(() => null);
+    let expiredN = 0;
+    for (const doc of (appr ? appr.docs : [])) {
+      const p = doc.data();
+      if (!p.secureRelease || !p.approval || !p.approval.expiresAt || p.approval.expiresAt.toMillis() > Date.now()) continue;
+      const out = await _refundPayout(db, doc.id, 'expired', { requireStatus: 'approved', detail: 'Approval expired before the owner confirmed' }).catch(() => null);
+      if (out && out.applied) { expiredN++; _notifyPayout('expired', p, doc.id); }
+    }
+    if (expiredN > 0) console.warn(`[reconcilePayouts] Expired ${expiredN} unconfirmed Secure Release approval(s)`);
   }
 );
 
@@ -1755,7 +1988,7 @@ exports.adminPayoutOps = onCall({ cors: true, enforceAppCheck: true }, async (re
   _requireAdmin(request);
   const db = getFirestore();
 
-  const states = ['processing', 'retry_scheduled', 'outcome_unknown', 'failed', 'approval_failed', 'pending', 'approved', 'scheduled'];
+  const states = ['processing', 'retry_scheduled', 'outcome_unknown', 'failed', 'approval_failed', 'pending', 'approved', 'owner_confirmed', 'scheduled'];
   const byState = {};
   await Promise.all(states.map(async (st) => {
     const snap = await db.collection('payoutRequests').where('status', '==', st).limit(100).get().catch(() => null);
@@ -1871,9 +2104,17 @@ exports.finalizeB2CPayoutFromWebhook = async function (db, ref, state, rawPayloa
     await _settlePayoutPaid(db, reqRef.id, { intasendRef: p.intasendRef || ref, webhookReceivedAt: Timestamp.now(), detail: `IntaSend B2C completed (${rawStatus})` });
     _plog('paid', { ...p, id: reqRef.id, status: 'paid' });   /* metric+latency inside _settlePayoutPaid */
   } else if (isReversed) {
-    await _reversePayout(db, reqRef.id, `IntaSend reversed (${rawStatus})`);
-    await _payoutMetric(db, 'reversed');
-    _plog('reversed', { ...p, id: reqRef.id, status: 'reversed' });
+    const rv = await _reversePayout(db, reqRef.id, `IntaSend reversed (${rawStatus})`);
+    if (rv.applied) {
+      await _payoutMetric(db, 'reversed');
+      _plog('reversed', { ...p, id: reqRef.id, status: 'reversed' });
+    } else {
+      /* A reversal for a payout that is already terminal (or never reached the gateway) moves no money. Recorded, not applied. */
+      await reqRef.update({
+        statusHistory: FieldValue.arrayUnion(_payoutEvent('reversal_refused', `IntaSend ${rawStatus} ignored — payout is "${rv.status}"`)),
+      }).catch(() => {});
+      _plog('reversal_refused', { ...p, id: reqRef.id }, { webhookState: rawStatus, status: rv.status });
+    }
   } else if (isFailed) {
     /* _refundPayout is a no-op if already terminal — never double-pays. */
     await _refundPayout(db, reqRef.id, 'failed', { detail: `IntaSend B2C failed (${rawStatus})` });

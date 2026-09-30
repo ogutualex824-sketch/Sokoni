@@ -3892,7 +3892,10 @@ function _ensureWalletFrame(action){
   var host = document.getElementById('walletHost');
   if(!host) return;
   var fr = host.querySelector('iframe');
-  var src = 'wallet.html?shell=profile' + (action === 'withdraw' ? '&open=withdraw' : '');
+  var act = (action === 'withdraw' || action === 'payouts') ? action : null;   /* the wallet's own deep links */
+  /* an action (a notification / command deep link) lands ON the wallet, not on the profile header above it */
+  if(act) setTimeout(function(){ try { host.scrollIntoView({ block: 'start' }); } catch(e){} }, 0);
+  var src = 'wallet.html?shell=profile' + (act ? '&open=' + act : '');
   if(!fr){
     fr = document.createElement('iframe');
     fr.title = 'SOKONI Wallet';
@@ -3902,16 +3905,17 @@ function _ensureWalletFrame(action){
     host.appendChild(fr);
     host.hidden = false;
     var sum = document.getElementById('walletSummary'); if(sum) sum.hidden = true;
-  } else if(action === 'withdraw'){
-    try { if(fr.contentWindow && fr.contentWindow.W2 && fr.contentWindow.W2.openWithdraw) { fr.contentWindow.W2.openWithdraw(); return; } } catch(e){}
+  } else if(act){
+    var fn = act === 'withdraw' ? 'openWithdraw' : 'openPayouts';
+    try { if(fr.contentWindow && fr.contentWindow.W2 && fr.contentWindow.W2[fn]) { fr.contentWindow.W2[fn](); return; } } catch(e){}
     fr.src = src;
   }
 }
 /* Any wallet.html link or command on this page opens the Wallet TAB (never a navigation away) */
 function _openWalletIn(href){
   var h = String(href || '');
-  var withdraw = /#withdraw|open=withdraw/.test(h);
-  var target = '#wallet' + (withdraw ? ':withdraw' : '');
+  var sub = /#withdraw|open=withdraw/.test(h) ? 'withdraw' : /#payouts|open=payouts/.test(h) ? 'payouts' : '';
+  var target = '#wallet' + (sub ? ':' + sub : '');
   if(location.hash !== target) location.hash = target; else _openTabFromHash();
   var p = document.getElementById('panel-wallet'); if(p && p.scrollIntoView) p.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }

@@ -1483,32 +1483,12 @@ const W={
     _q('walTxMore').style.display=(W._txHasMore&&W._txFilter==='all'&&!W._txSearch)?'block':'none';
   },
   /* Withdraw sheet — the ONE withdraw path, unchanged backend. */
-  withdraw(){const avail=Number((W._bal||{}).balance||0);_q('wdSheet').style.display='flex';document.body.style.overflow='hidden';_q('wdAvail').textContent=_sKsh(avail);_q('wdAmt').value=avail>=100?String(avail):'';_q('wdPhone').value=W._acct()||'';W.wdErr('');},
+  /* SOKONI Secure Release (owner decision 2026-09-30): withdrawals are requested, PIN-verified and RELEASED in the ONE
+     premium wallet (profile Wallet tab) — the same personal wallet this dashboard shows. */
+  withdraw(){ location.href='/profile.html#wallet:withdraw'; },
   wdClose(){_q('wdSheet').style.display='none';document.body.style.overflow='';},
   wdErr(m){const el=_q('wdErr');if(el)el.textContent=m||'';},
-  async wdSubmit(){
-    const avail=Number((W._bal||{}).balance||0);
-    const amount=parseInt(String((_q('wdAmt')||{}).value||'').replace(/[^0-9]/g,''),10);
-    const phone=String((_q('wdPhone')||{}).value||'').trim();
-    if(!(amount>=100))return W.wdErr('Minimum withdrawal is KSh 100.');
-    if(amount>avail)return W.wdErr(`That exceeds your available ${_sKsh(avail)}.`);
-    if(!/^(?:\+?254|0)?7\d{8}$/.test(phone.replace(/\s/g,'')))return W.wdErr('Enter a valid Safaricom number (07XXXXXXXX).');
-    /* ONE key per withdrawal intent (sokoni-payout-intent.js): a double tap, a retry,
-       a reload or a second tab reuses it, so the server's pout_{key} dedupe holds.
-       It was 'po_'+Date.now() — a new financial identity on every tap. */
-    if(W._wdBusy)return;W._wdBusy=true;
-    const _intent={uid:(firebase.auth().currentUser||{}).uid,amount,destination:phone};
-    showLoad('Requesting withdrawal…');
-    try{
-      const idempotencyKey=await window.SokoniPayoutIntent.acquire(_intent);
-      const r=await firebase.functions().httpsCallable('requestSellerPayout')({amount,method:'mpesa',accountNumber:phone,idempotencyKey});
-      const _unknown=r.data&&r.data.status==='outcome_unknown';
-      /* outcome_unknown is not concluded: the key is KEPT so a retry is the same withdrawal. */
-      if(!_unknown)window.SokoniPayoutIntent.release(_intent);
-      W.wdClose();toast(_unknown?'We are confirming this payout with M-PESA — your funds are held. Do not request it again.':('Withdrawal requested — pending approval'+((r.data&&r.data.reference)?(' · '+r.data.reference):'')),'ok');
-      W.load();
-    }catch(e){if(window.SokoniPayoutIntent.isDefinitive(e))window.SokoniPayoutIntent.release(_intent);W.wdErr(e.message||'Withdrawal failed');}finally{W._wdBusy=false;hideLoad();}
-  },
+  wdSubmit(){ location.href='/profile.html#wallet:withdraw'; },   /* Secure Release: the one wallet */
 };
 
 /* ── Customers (Phase 6) — lightweight CRM over providerGetCustomers (aggregated from

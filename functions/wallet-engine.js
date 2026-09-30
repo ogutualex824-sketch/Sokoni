@@ -174,17 +174,49 @@ async function _resolveRecipientByPhone(db, normalizedPhone) {
  *   failed-precondition 'PIN_REQUIRED'  — PIN is set but none supplied (client should prompt)
  *   permission-denied   'Incorrect PIN' — wrong PIN (or lock message once locked)
  */
-async function _assertPinOk(db, uid, pin) {
+/* ── WALLET PIN VERIFIER (Secure Release, 2026-09-30) ───────────────────────────────────────────────────────────────
+   ONE PIN authority for every wallet. New PINs are stored as a salted scrypt verifier (pinVerifier) — never the PIN,
+   never an unsalted fast hash. A legacy sha256(pin+uid) pinHash still verifies, and is UPGRADED to a verifier (and
+   removed) on its next successful use. 4–6 digits. Comparisons are constant-time. */
+const PIN_RE = /^\d{4,6}$/;
+const _SCRYPT = { N: 16384, r: 8, p: 1 };
+function _makePinVerifier(pin) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  return { alg: 'scrypt-16384-8-1', salt, hash: crypto.scryptSync(String(pin), salt, 32, _SCRYPT).toString('hex') };
+}
+function _walletHasPin(w) { return !!(w && (w.pinVerifier || w.pinHash)); }
+function _pinMatches(w, uid, pin) {
+  if (!w || !PIN_RE.test(String(pin || ''))) return false;
+  if (w.pinVerifier && w.pinVerifier.salt && w.pinVerifier.hash) {
+    const got = crypto.scryptSync(String(pin), w.pinVerifier.salt, 32, _SCRYPT);
+    const want = Buffer.from(String(w.pinVerifier.hash), 'hex');
+    return want.length === got.length && crypto.timingSafeEqual(got, want);
+  }
+  if (w.pinHash) {
+    const a = Buffer.from(_sha256(`${pin}${uid}`)), b = Buffer.from(String(w.pinHash));
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  }
+  return false;
+}
+
+/* opts.require: a money-out action that REQUIRES a PIN (Secure Release) — no PIN set is a refusal, not a pass. */
+async function _assertPinOk(db, uid, pin, opts = {}) {
   const wref  = db.collection('wallets').doc(uid);
   const wsnap = await wref.get();
   const w = wsnap.exists ? wsnap.data() : {};
-  if (!w.pinHash) return;                       // no PIN configured → nothing to authorize against
+  if (!_walletHasPin(w)) {
+    if (opts.require) throw new HttpsError('failed-precondition', 'PIN_NOT_SET');
+    return;                                     // no PIN configured → nothing to authorize against (legacy callers)
+  }
   if (w.pinLocked) throw new HttpsError('failed-precondition', 'Wallet is PIN-locked. Reset it in Security.');
-  if (!pin || !/^\d{4}$/.test(String(pin))) {
+  if (!pin || !PIN_RE.test(String(pin))) {
     throw new HttpsError('failed-precondition', 'PIN_REQUIRED');
   }
-  if (_sha256(`${pin}${uid}`) === w.pinHash) {
+  if (_pinMatches(w, uid, pin)) {
     await db.collection('walletPinAttempts').doc(uid).set({ verifyAttempts: 0 }, { merge: true }).catch(() => {});
+    if (!w.pinVerifier) {                       // legacy hash → upgrade in place, drop the weak hash
+      await wref.update({ pinVerifier: _makePinVerifier(pin), pinHash: FieldValue.delete(), updatedAt: Timestamp.now() }).catch(() => {});
+    }
     return;
   }
   // Wrong PIN — track attempts within the window; lock+freeze at the cap.
@@ -403,7 +435,7 @@ exports.walletV2Dashboard = onCall(BASE_OPTS, async (request) => {
       rewardPoints:    w.rewardPoints     ?? 0,
       tier:            w.tier             ?? 'bronze',
       frozen:          w.frozen           ?? false,
-      hasPin:          !!w.pinHash,
+      hasPin:          _walletHasPin(w),
       todayPaid,
       monthPaid,
       pinLocked:       w.pinLocked        ?? false,
@@ -1236,9 +1268,24 @@ exports.walletV2SetPin = onCall(BASE_OPTS, async (request) => {
   const uid = _requireAuth(request);
   const db  = _db();
 
-  const { pin } = request.data || {};
-  if (!pin || !/^\d{4}$/.test(String(pin))) {
-    throw new HttpsError('invalid-argument', 'PIN must be exactly 4 digits');
+  const { pin, currentPin } = request.data || {};
+  if (!pin || !PIN_RE.test(String(pin))) {
+    throw new HttpsError('invalid-argument', 'PIN must be 4 to 6 digits');
+  }
+
+  /* Secure Release: an EXISTING PIN is changed only with the current PIN, or within 5 minutes of a fresh sign-in
+     (the "Forgot PIN" path: sign in again, then set a new one). A session alone is not enough. */
+  {
+    const cur = await db.collection('wallets').doc(uid).get();
+    const cw = cur.exists ? cur.data() : {};
+    if (_walletHasPin(cw)) {
+      const authAt = Number((request.auth && request.auth.token && request.auth.token.auth_time) || 0);
+      const freshSignIn = authAt > 0 && (Date.now() / 1000 - authAt) < 300;
+      if (!freshSignIn) {
+        if (!currentPin) throw new HttpsError('failed-precondition', 'CURRENT_PIN_REQUIRED');
+        await _assertPinOk(db, uid, currentPin);   // counts wrong attempts, locks at the cap
+      }
+    }
   }
 
   // Rate limit: max 5 set-PIN calls per hour
@@ -1266,16 +1313,15 @@ exports.walletV2SetPin = onCall(BASE_OPTS, async (request) => {
       await rateRef.set({ setAttempts: 1, windowStart: Timestamp.now() });
     }
 
-    // Hash: SHA-256(pin + uid) — uid acts as per-user salt
-    const pinHash = _sha256(`${pin}${uid}`);
-
+    // Salted scrypt verifier (Secure Release) — the PIN itself is never stored
     await db.collection('wallets').doc(uid).update({
-      pinHash,
-      pinLocked:  false,
-      updatedAt:  Timestamp.now(),
+      pinVerifier: _makePinVerifier(pin),
+      pinHash:     FieldValue.delete(),
+      pinLocked:   false,
+      updatedAt:   Timestamp.now(),
     });
 
-    await _audit(db, uid, 'PIN_SET', { method: 'sha256' });
+    await _audit(db, uid, 'PIN_SET', { method: 'scrypt' });
 
     return { success: true };
   } catch (err) {
@@ -1301,8 +1347,8 @@ exports.walletV2VerifyPin = onCall(BASE_OPTS, async (request) => {
   const db  = _db();
 
   const { pin } = request.data || {};
-  if (!pin || !/^\d{4}$/.test(String(pin))) {
-    throw new HttpsError('invalid-argument', 'PIN must be exactly 4 digits');
+  if (!pin || !PIN_RE.test(String(pin))) {
+    throw new HttpsError('invalid-argument', 'PIN must be 4 to 6 digits');
   }
 
   try {
@@ -1315,7 +1361,7 @@ exports.walletV2VerifyPin = onCall(BASE_OPTS, async (request) => {
 
     const wallet = walletSnap.data();
     if (wallet.pinLocked) throw new HttpsError('failed-precondition', 'Wallet is PIN-locked. Contact support.');
-    if (!wallet.pinHash)  throw new HttpsError('failed-precondition', 'No PIN set. Please set a PIN first.');
+    if (!_walletHasPin(wallet)) throw new HttpsError('failed-precondition', 'No PIN set. Please set a PIN first.');
 
     // Track failed attempts
     const now      = Date.now();
@@ -1327,8 +1373,7 @@ exports.walletV2VerifyPin = onCall(BASE_OPTS, async (request) => {
       attempts       = now - windowMs < PIN_WINDOW_MS ? (rd.verifyAttempts ?? 0) : 0;
     }
 
-    const inputHash = _sha256(`${pin}${uid}`);
-    const valid     = inputHash === wallet.pinHash;
+    const valid     = _pinMatches(wallet, uid, pin);
 
     if (valid) {
       // Reset attempts on success
@@ -2029,3 +2074,7 @@ exports.walletV2EscrowRelease = onCall(BASE_OPTS, async (request) => {
 
 /* Internals shared with functions/loyalty-points.js (Points P1, 2026-09-29): the ONE phone → SOKONI-user resolver. */
 exports._internal = { normalizePhone: _normalizePhone, resolveRecipientByPhone: _resolveRecipientByPhone };
+
+/* Secure Release (2026-09-30): the ONE wallet PIN authority, shared with the payout authority (wallet.js).
+   Not a Cloud Function — index.js re-exports functions by name only. */
+exports._pinAuthority = { assertPinOk: _assertPinOk, walletHasPin: _walletHasPin, pinMatches: _pinMatches, makePinVerifier: _makePinVerifier };

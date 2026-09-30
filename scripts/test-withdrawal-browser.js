@@ -11,6 +11,12 @@
  *   W1 double click · W2 two tabs · W3 reload after a lost response ·
  *   W4 retry after a definitive refusal · W5 outcome unknown
  *
+ * SOKONI Secure Release (2026-09-30, owner decision): the premium wallet is the ONE withdrawal surface. It always asks
+ * for the wallet PIN (answered here by the harness); the server runs in ONE-KEY mode (config secureRelease:false) so
+ * "one provider execution per request" stays measurable — Secure Release's own two-key flow is certified by
+ * test-secure-release*.js. The provider dashboard and the merchant wallet no longer submit withdrawals: their Withdraw
+ * opens the one wallet (profile.html#wallet:withdraw), proven below.
+ *
  *   node scripts/test-withdrawal-browser.js
  */
 'use strict';
@@ -52,7 +58,7 @@ async function server(name, data, uid) {
     }
     if (name === 'walletV2Dashboard' || name === 'getWalletBalance') {
       const w = (await db.doc('wallets/' + uid).get()).data() || {};
-      return { ok: { balance: w.balance || 0, pendingPayout: w.pendingPayout || 0, hasPin: false, currency: 'KES' } };
+      return { ok: { balance: w.balance || 0, pendingPayout: w.pendingPayout || 0, hasPin: true, currency: 'KES' } };   /* the wallet has a PIN (Secure Release UI always asks) */
     }
     return { ok: {} };
   } catch (e) { return { err: { code: e.code || 'internal', message: e.message } }; }
@@ -113,7 +119,7 @@ const settleAll = async (uid) => {
 };
 
 (async () => {
-  await db.doc('config/payouts').set({ enabled: true, autoB2C: true, requirePin: false, instantLimit: 100000, dailyLimit: 1000000, holdNewSellersDays: 0, maxPayoutsPerDay: 50, scheduledAbove: 0 });
+  await db.doc('config/payouts').set({ secureRelease: false, enabled: true, autoB2C: true, requirePin: false, instantLimit: 100000, dailyLimit: 1000000, holdNewSellersDays: 0, maxPayoutsPerDay: 50, scheduledAbove: 0 });
   const mkUser = async (u, bal) => { await db.doc('wallets/' + u).set({ balance: bal }); await db.doc('users/' + u).set({ accountStatus: 'active', payoutVerified: true, createdAt: F.Timestamp.fromMillis(Date.now() - 90 * 86400000) }); };
   for (const u of ['wu1', 'wu2', 'pu1', 'mu1']) await mkUser(u, 5000);
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
@@ -140,6 +146,12 @@ const settleAll = async (uid) => {
       await page.goto(BASE + '/wallet.html');
       await page.waitForFunction(() => window.W2 && typeof window.W2.requestPayout === 'function', null, { timeout: 15000 });
       await page.waitForTimeout(400);                                            /* dashboard loaded (walletV2Dashboard) */
+      await page.evaluate(() => {
+        if (!window.__pinAnswerer) window.__pinAnswerer = setInterval(() => {
+          const o = document.querySelector('#ovlPinVerify.open'), i = document.getElementById('pinVerifyInput');
+          if (o && i && !i.value) { i.value = '4829'; i.dispatchEvent(new Event('input')); }
+        }, 40);
+      });
       await page.evaluate(() => { window.W2.openWithdraw(); });
       await page.evaluate(() => {
         document.getElementById('wdrAmount').value = '500';
@@ -150,11 +162,14 @@ const settleAll = async (uid) => {
     const pa = await wc.newPage();
     await openWallet(pa);
     let n0 = sends.length;
-    await pa.evaluate(async () => { await Promise.all([window.W2.requestPayout(), window.W2.requestPayout()]); });
+    const k0 = keysSeen.length;
+    await pa.evaluate(() => { window.W2.requestPayout(); window.W2.requestPayout(); });   /* not awaited: two taps */
+    for (let i = 0; i < 60 && !(await payoutsOf('wu1')).length; i++) await pa.waitForTimeout(100);
+    await pa.waitForTimeout(600);
     let pw = await payoutsOf('wu1');
-    ck('W1 double click (two concurrent submits past the busy guard) → ONE payout', pw.length === 1, pw.map((p) => p.id));
+    ck('W1 double click → ONE payout', pw.length === 1, pw.map((p) => p.id));
     ck('W1 → ONE provider execution', sends.length - n0 === 1, sends.length - n0);
-    ck('W1 both submits carried the same key', new Set(keysSeen.slice(-2).map((k) => k.key)).size === 1, keysSeen.slice(-2));
+    ck('W1 the second tap is ignored while the PIN prompt is open → ONE request reached the server', keysSeen.length - k0 === 1, keysSeen.slice(k0));
     ck('W1 the key is released after the success (localStorage slot cleared)', await pa.evaluate(() => !Object.keys(localStorage).some((k) => k.startsWith('sk_payout_intent_wu1_500_'))));
 
     /* W2 — two tabs, same user / amount / destination */
@@ -207,62 +222,41 @@ const settleAll = async (uid) => {
     ck('W5 only the Super Admin evidence path can end it (the page calls nothing else)', !/adminResolvePayoutOutcome|adminProcessPayout/.test(fs.readFileSync(Path.join(ROOT, 'sokoni-wallet-v2.js'), 'utf8')));
     await wc.close();
 
-    /* ═══ provider-dashboard.html ═══ */
+    /* ═══ provider-dashboard.html — Withdraw opens the ONE wallet (Secure Release, owner decision 2026-09-30) ═══ */
     say('\n── provider-dashboard.html ──');
     const pc = await ctxFor({ uid: 'pu1', phoneNumber: '+254722222222', displayName: 'Pro' });
-    const openProv = async (page) => {
-      await page.goto(BASE + '/provider-dashboard.html');
-      await page.waitForFunction(() => typeof W !== 'undefined' && typeof W.wdSubmit === 'function', null, { timeout: 15000 });
-      await page.evaluate(() => {
-        window.__toasts = []; window.toast = (m) => window.__toasts.push(String(m));
-        W._bal = { balance: 5000 }; W.withdraw();
-        document.getElementById('wdAmt').value = '700'; document.getElementById('wdPhone').value = '0722222222';
-      });
-    };
-    const q1 = await pc.newPage(); await openProv(q1);
-    n0 = sends.length;
-    await q1.evaluate(async () => { await Promise.all([W.wdSubmit(), W.wdSubmit()]); });
-    let pp = await payoutsOf('pu1');
-    ck('W1 double tap → ONE payout, ONE provider execution', pp.length === 1 && sends.length - n0 === 1, { payouts: pp.length, sends: sends.length - n0 });
-    ck("W1 the key is no longer 'po_'+Date.now() (it is the intent key)", /^po_[0-9a-f]{20,}$/.test(pp[0].id.replace(/^pout_/, '')), pp[0].id);
-    const q2 = await pc.newPage(); await settleAll('pu1'); await openProv(q2); await openProv(q1);
-    n0 = sends.length;
-    await Promise.all([q1.evaluate(() => W.wdSubmit()), q2.evaluate(() => W.wdSubmit())]);
-    pp = await payoutsOf('pu1');
-    ck('W2 two tabs → ONE new payout, ONE provider execution', pp.length === 2 && sends.length - n0 === 1, { payouts: pp.length, sends: sends.length - n0 });
-    await settleAll('pu1'); MODE = 'timeout'; await openProv(q1);
-    await q1.evaluate(() => W.wdSubmit());
-    const t = await q1.evaluate(() => window.__toasts.slice(-1)[0] || '');
-    ck('W5 outcome unknown → "confirming … do not request it again", key retained', /confirming this payout/i.test(t) && await q1.evaluate(() => Object.keys(localStorage).some((k) => k.startsWith('sk_payout_intent_pu1_700_'))), t);
-    MODE = 'ok'; n0 = sends.length; await openProv(q1);
-    await q1.evaluate(() => W.wdSubmit());
-    ck('W5 retry → same identity, NO new provider request', sends.length - n0 === 0 && (await payoutsOf('pu1')).length === 3);
+    const q1 = await pc.newPage();
+    await q1.goto(BASE + '/provider-dashboard.html');
+    await q1.waitForFunction(() => typeof W !== 'undefined' && typeof W.withdraw === 'function', null, { timeout: 15000 });
+    const pk0 = keysSeen.length;
+    await Promise.all([q1.waitForURL(/\/profile\.html#wallet:withdraw$/, { timeout: 8000 }).catch(() => null), q1.evaluate(() => W.withdraw())]);
+    const provUrl = q1.url();
+    const q2 = await pc.newPage();
+    await q2.goto(BASE + '/provider-dashboard.html');
+    await q2.waitForFunction(() => typeof W !== 'undefined' && typeof W.wdSubmit === 'function', null, { timeout: 15000 });
+    await Promise.all([q2.waitForURL(/\/profile\.html#wallet:withdraw$/, { timeout: 8000 }).catch(() => null), q2.evaluate(() => W.wdSubmit())]);
+    ck('provider: Withdraw (and the old sheet submit) open the ONE wallet — nothing is submitted from this page',
+      /\/profile\.html#wallet:withdraw$/.test(provUrl) && /\/profile\.html#wallet:withdraw$/.test(q2.url()) && keysSeen.length === pk0 && (await payoutsOf('pu1')).length === 0, { provUrl, q2: q2.url() });
     await pc.close();
 
-    /* ═══ merchant wallet (sokoni-merchant-wallet.js) ═══ */
+    /* ═══ merchant wallet (sokoni-merchant-wallet.js) — Withdraw opens the ONE wallet ═══ */
     say('\n── merchant wallet ──');
     const mc = await ctxFor({ uid: 'mu1' });
-    const mountM = async (page) => {
-      await page.goto(BASE + '/merchant-harness.html');
-      await page.evaluate(() => {
-        const call = (n) => (d) => window.__srv(n, d, 'mu1').then((r) => { if (r.err) { const e = new Error(r.err.message); e.code = 'functions/' + r.err.code; throw e; } return { data: r.ok }; });
-        window.SokoniMerchantWallet.mount(document.getElementById('host'), {
-          scope: { ok: true, sellerUid: 'mu1', shopId: 's1' }, shopName: 'Shop',
-          entitlement: () => Promise.resolve({ premium: true }), readWallet: () => Promise.resolve({ balance: 5000 }),
-          readTransactions: () => Promise.resolve([]), readPayouts: () => Promise.resolve([]),
-          callWithdraw: call('requestSellerPayout'), onToast: () => {} });
-      });
-      await page.waitForTimeout(200);
-      await page.click('[data-wa="withdraw"]');
-      await page.fill('#wa-amt', '900'); await page.fill('#wa-phone', '0733333333');
-    };
-    const m1 = await mc.newPage(), m2 = await mc.newPage();
-    await mountM(m1); await mountM(m2);
-    n0 = sends.length;
-    await Promise.all([m1.click('[data-wa="do-withdraw"]'), m2.click('[data-wa="do-withdraw"]')]);
-    await m1.waitForTimeout(600);
-    const mp = await payoutsOf('mu1');
-    ck('merchant: two tabs → ONE payout, ONE provider execution (was one per tab)', mp.length === 1 && sends.length - n0 === 1, { payouts: mp.length, sends: sends.length - n0 });
+    const m1 = await mc.newPage();
+    await m1.goto(BASE + '/merchant-harness.html');
+    await m1.evaluate(() => {
+      window.SokoniMerchantWallet.mount(document.getElementById('host'), {
+        scope: { ok: true, sellerUid: 'mu1', shopId: 's1' }, shopName: 'Shop',
+        entitlement: () => Promise.resolve({ premium: true }), readWallet: () => Promise.resolve({ balance: 5000 }),
+        readTransactions: () => Promise.resolve([]),
+        readPayouts: () => Promise.resolve([{ id: 'pout_x', status: 'approved', secureRelease: true, amount: 900, accountNumber: '254733333333', method: 'mpesa' }]),
+        callWithdraw: () => { window.__merchantSubmitted = true; return Promise.resolve({ data: {} }); }, onToast: () => {} });
+    });
+    await m1.waitForTimeout(300);
+    const mk0 = keysSeen.length;
+    await Promise.all([m1.waitForURL(/\/profile\.html#wallet:withdraw$/, { timeout: 8000 }).catch(() => null), m1.click('[data-wa="withdraw"]')]);
+    const mUrl = m1.url();
+    ck('merchant: Withdraw opens the ONE wallet — this module submits nothing', /\/profile\.html#wallet:withdraw$/.test(mUrl) && keysSeen.length === mk0 && (await payoutsOf('mu1')).length === 0, mUrl);
     await mc.close();
 
     /* ═══ server: a key is never shared across accounts ═══ */

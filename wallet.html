@@ -105,6 +105,23 @@ html.in-profile{--hdr-h:0px}
 html.in-profile #wal-top{display:none}
 /* role separation: the enterprise merchant dashboard is not part of a personal wallet (business money lives in merchant-v2) */
 html.in-profile a[href="sfos-wallet.html"]{display:none}
+/* ── SOKONI Secure Release ── */
+.sr-banner{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;margin:0 0 10px;padding:10px 14px;border-radius:var(--radius-s);
+  border:1px solid rgba(113,255,0,.45);background:rgba(113,255,0,.08);color:var(--txt);font:inherit;text-align:left;cursor:pointer}
+.sr-banner-ic{font-size:20px}
+.sr-banner-txt{flex:1;min-width:0;display:flex;flex-direction:column;font-size:12px;color:var(--sub);line-height:1.4}
+.sr-banner-txt b{color:var(--txt);font-size:13.5px}
+.sr-protect{font-size:12px;color:var(--sub);line-height:1.5;padding:10px 12px;border-radius:var(--radius-s);border:1px solid var(--bor);margin-bottom:12px}
+.sr-pin-notice{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:var(--radius-s);background:rgba(246,201,69,.08);border:1px solid rgba(246,201,69,.35);margin-bottom:12px;font-size:13px;color:var(--txt)}
+.sr-tl{list-style:none;margin:10px 0 4px;padding:0;display:flex;flex-direction:column;gap:6px}
+.sr-tl li{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--sub);line-height:1.4}
+.sr-tl li .d{flex:0 0 18px;text-align:center}
+.sr-tl li.done{color:var(--txt)}
+.sr-tl li.now{color:var(--g);font-weight:700}
+.sr-release{width:100%;min-height:52px;margin-top:10px;border:0;border-radius:var(--radius-s);background:var(--g);color:#050505;font:inherit;font-weight:900;font-size:15px;letter-spacing:.02em;cursor:pointer}
+.sr-release:disabled{opacity:.55;cursor:default}
+.sr-release-note{font-size:11.5px;color:var(--sub);line-height:1.5;margin-top:6px;text-align:center}
+.sr-cancel{width:100%;min-height:44px;margin-top:8px;border:1px solid var(--bor);border-radius:var(--radius-s);background:transparent;color:var(--sub);font:inherit;font-weight:700;cursor:pointer}
 #wal-top-avatar{
   width:34px;height:34px;border-radius:50%;
   background:var(--ga);border:2px solid var(--g);
@@ -983,6 +1000,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,.tx-item:focus-visible,
       <div id="pendingPayoutRow" onclick="W2.openPayouts()" style="display:none;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--sub);margin-bottom:10px;cursor:pointer">
         <span>⏳</span> Pending withdrawal: <b id="pendingPayoutVal" style="color:var(--txt)">KSh 0</b> · arrives within 24h ›
       </div>
+      <!-- SOKONI Secure Release: an approved withdrawal is waiting for the owner's final key -->
+      <button type="button" id="releaseReadyBanner" class="sr-banner" onclick="W2.openPayouts()" style="display:none">
+        <span class="sr-banner-ic">🔐</span>
+        <span class="sr-banner-txt"><b>Your money is ready to be released</b><span id="releaseReadySub">Approved — confirm it to send. No money has been sent yet.</span></span>
+        <span aria-hidden="true">›</span>
+      </button>
       <div class="bal-sub-row">
         <div class="bal-mini" id="miniSavings" onclick="W2.openVaultsList()">
           <div class="bal-mini-label">Savings</div>
@@ -1481,6 +1504,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,.tx-item:focus-visible,
     <div class="ovl-body">
       <!-- FORM -->
       <div id="wdrForm">
+        <div class="sr-protect">🔐 Protected by <b>SOKONI Secure Release</b> — your PIN, SOKONI's review, then YOUR final confirmation. Nothing is sent before you confirm.</div>
+        <div id="wdrPinNotice" class="sr-pin-notice" role="alert" style="display:none">
+          <b>⚠ Wallet security incomplete</b>
+          <span>Set your Wallet PIN before withdrawing.</span>
+          <button type="button" class="btn btn-primary" style="margin-top:10px" onclick="W2.openPinSetup()">Secure my wallet</button>
+        </div>
         <div class="info-row">
           <span class="k">Available to withdraw</span>
           <span class="v" style="color:var(--g)" id="wdrAvail">KSh —</span>
@@ -1547,7 +1576,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,.tx-item:focus-visible,
             </p>
           </div>
           <button class="btn btn-primary" id="wdrSubmitBtn" onclick="W2.requestPayout()">
-            🏧 Request Payout
+            🔐 Request release
           </button>
           <p style="text-align:center;margin-top:12px">
             <a onclick="W2.openPayouts()" style="font-size:13px;color:var(--g);cursor:pointer;text-decoration:underline">View past withdrawals ›</a>

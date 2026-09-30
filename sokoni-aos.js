@@ -890,9 +890,12 @@ window.SokoniAOS = (() => {
             <td>${c.status!=="paid"?`<button class="aos-btn-sm success" onclick="SokoniAOS.markCommPaid('${c.id}')">Mark Paid</button>`:"—"}</td>
           </tr>`).join("")}</tbody></table>` : _emptyMsg("No commission entries");
       } else if (tab === "payouts") {
-        const data = await _call("aosGetPendingPayouts");
+        /* SOKONI Secure Release (2026-09-30, ports the 4259b92 manual queue): approval moves NO money. The tab shows
+           Awaiting review (pending, from the server) · Awaiting the owner's release (approved Secure Release) · Ready
+           to pay (owner_confirmed — or a legacy approved request from before Secure Release). Approve ≠ Paid. */
+        const [data, queue] = await Promise.all([_call("aosGetPendingPayouts"), _loadReleaseQueues()]);
         const payouts = data.payouts || [];
-        body.innerHTML = payouts.length ? `<div class="payout-actions">
+        const pendingHtml = payouts.length ? `<div class="payout-actions">
           <button class="aos-btn success" onclick="SokoniAOS.approveAllPayouts()">Approve All (${payouts.length})</button>
         </div>
         <table class="aos-table"><thead><tr>
@@ -907,6 +910,10 @@ window.SokoniAOS = (() => {
               <button class="aos-btn-sm danger" onclick="SokoniAOS.rejectPayout('${p.id}')">Reject</button>
             </td>
           </tr>`).join("")}</tbody></table>` : _emptyMsg("No pending payouts");
+        body.innerHTML = `<div class="payout-banner" id="payoutModeBanner" role="status"><strong>SOKONI Secure Release.</strong> Approving sends NO money — the owner then confirms the release with their PIN. Money moves only after both: automatically (M-PESA, when automatic payout is on) or by hand here, recorded with evidence.</div>`
+          + `<h3 class="payout-q-title" id="payoutQPending">Awaiting review</h3>` + pendingHtml
+          + `<h3 class="payout-q-title" id="payoutQOwner">🔐 Approved — awaiting the owner's release</h3>` + _ownerQueueHtml(queue)
+          + `<h3 class="payout-q-title" id="payoutQReady">Ready to pay — released by the owner</h3>` + _readyQueueHtml(queue);
         body.insertAdjacentHTML("beforeend", await _outcomeUnknownSection());
       } else if (tab === "disputes") {
         /* 2026-09-29: the shared trust queue (sokoni-trust-queues.js) — the same surface super admin mounts. The old
@@ -1058,13 +1065,22 @@ window.SokoniAOS = (() => {
     _financialTab("payouts");
   }
   async function approvePayout(id) {
+    let res;
     try {
-      await _call("adminProcessPayout", { requestId: id, status: "approved" });
+      res = await _call("adminProcessPayout", { requestId: id, status: "approved" });
     } catch (e) {
       _toast(e.message, "error");
       return;
     }
-    _toast("Payout approved", "success"); _financialTab("payouts");
+    _toast(_approveOutcome(res), "success"); _financialTab("payouts");
+  }
+  /* What an approval response says about money movement (wallet.js adminProcessPayout) — never assumed. */
+  function _approveOutcome(res) {
+    const st = res && res.status;
+    if (res && res.awaitingOwner) return "Approved — no money was sent. The owner must now confirm the release with their PIN.";
+    if (st === "approved" && res.autoB2C === false) return "Approved — no money was sent. Send it manually, then Mark Paid.";
+    if (st === "processing") return "Approved — IntaSend payout started" + (res.intasendRef ? " (" + res.intasendRef + ")" : "") + ".";
+    return "Approved — server status: " + (st || "—") + ".";
   }
   /* OUTCOME_UNKNOWN payouts: a B2C request was sent and the provider gave no
      definitive answer, so the money may or may not have left. Funds stay reserved
@@ -1127,12 +1143,126 @@ window.SokoniAOS = (() => {
   async function rejectPayout(id) {
     const note = prompt("Rejection reason:");
     try {
-      await _call("finosRequestBankPayout", { payoutId: id, action:"reject", note });
+      /* the live payout authority — finosRequestBankPayout is retired and always threw (census 2026-09-30) */
+      if (note === null) return;   /* cancelled the prompt — nothing submitted */
+      await _call("adminProcessPayout", { requestId: id, status: "rejected", note: note || "" });
     } catch (e) {
       _toast(e.message, "error");
       return;
     }
-    _toast("Payout rejected","success"); _financialTab("payouts");
+    _toast("Payout rejected — the funds are back in the owner's wallet","success"); _financialTab("payouts");
+  }
+
+  /* ── Secure Release queues + Mark Paid (ports 4259b92) ───────────────────────────────────────────────────────
+     The UI never changes a payout's state. Mark Paid only SUBMITS evidence (a transaction / M-PESA reference and an
+     attestation) to the existing adminProcessPayout contract; the server decides, and accepts it only for a payout the
+     OWNER has released (or a legacy approved one). */
+  function _tsMs(v) {
+    if (!v) return 0;
+    if (typeof v.toMillis === "function") return v.toMillis();
+    if (typeof v._seconds === "number") return v._seconds * 1000;
+    if (typeof v.seconds === "number") return v.seconds * 1000;
+    const n = new Date(v).getTime();
+    return isFinite(n) ? n : 0;
+  }
+  /* Money someone will send by hand is shown EXACTLY — never a compact "1.0K". */
+  function _kesExact(n) {
+    const v = Number(n);
+    return isFinite(v) ? "KES " + v.toLocaleString("en-KE", { maximumFractionDigits: 2 }) : "—";
+  }
+  function _markPaidEvidence(ref, att) {
+    const externalReference = String(ref == null ? "" : ref).trim();
+    const attestation = String(att == null ? "" : att).trim();
+    if (!externalReference) return { ok: false, field: "ref", error: "Enter the M-PESA / transaction reference of the money you sent." };
+    if (externalReference.length > 120) return { ok: false, field: "ref", error: "The reference is too long (120 characters max)." };
+    if (!attestation) return { ok: false, field: "att", error: "Enter an attestation: who sent it, how, and when." };
+    if (attestation.length > 500) return { ok: false, field: "att", error: "The attestation is too long (500 characters max)." };
+    return { ok: true, externalReference: externalReference, attestation: attestation };
+  }
+  /* Payable by hand = released by the owner, or a legacy (pre-Secure-Release) approved request */
+  function _payableByHand(p) { return !!p && (p.status === "owner_confirmed" || (p.status === "approved" && !p.secureRelease)); }
+  async function _loadReleaseQueues() {
+    try {
+      const snap = await _db.collection("payoutRequests").where("status", "in", ["approved", "owner_confirmed"]).limit(200).get();
+      const rows = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      rows.sort(function (a, b) { return _tsMs(b.ownerConfirmedAt || b.approvedAt) - _tsMs(a.ownerConfirmedAt || a.approvedAt); });
+      return { ok: true, owner: rows.filter(function (r) { return r.status === "approved" && r.secureRelease; }), ready: rows.filter(_payableByHand) };
+    } catch (e) {
+      return { ok: false, owner: [], ready: [], error: (e && e.message) || String(e) };
+    }
+  }
+  function _ownerQueueHtml(q) {
+    if (!q.ok) return `<p class="aos-muted" id="payoutQOwnerError">These could not be loaded (${_esc(q.error)}). Their count is unknown — not zero.</p>`;
+    if (!q.owner.length) return _emptyMsg("No approved payouts are waiting for their owner");
+    return `<table class="aos-table" id="payoutOwnerTable"><thead><tr>
+        <th>Request</th><th>Owner</th><th>Reserved</th><th>Send to</th><th>Approved</th><th>Owner must confirm by</th><th>Action</th>
+      </tr></thead><tbody>${q.owner.map(p => `<tr data-payout-id="${_esc(p.id)}">
+        <td class="aos-mono">${_esc(String(p.id).slice(-12))}</td>
+        <td class="aos-mono">${_esc(String(p.sellerUid || "—").slice(0, 10))}</td>
+        <td>${_esc(_kesExact(p.amount))}</td>
+        <td class="aos-mono">${_esc(p.method || "—")} · ${_esc(p.accountNumber || "—")}</td>
+        <td class="aos-muted">${_esc(p.approvedAt ? new Date(_tsMs(p.approvedAt)).toLocaleString("en-KE") : "—")}</td>
+        <td class="aos-muted">${_esc(p.approval && p.approval.expiresAt ? new Date(_tsMs(p.approval.expiresAt)).toLocaleString("en-KE") : "—")}</td>
+        <td><span class="status-badge st-approved">Awaiting owner — not paid</span>
+            <button class="aos-btn-sm danger" onclick="SokoniAOS.rejectPayout('${_esc(p.id)}')">Reject</button></td>
+      </tr>`).join("")}</tbody></table>`;
+  }
+  function _readyQueueHtml(q) {
+    if (!q.ok) return `<p class="aos-muted" id="payoutQReadyError">Ready payouts could not be loaded (${_esc(q.error)}). Their count is unknown — not zero.</p>`;
+    if (!q.ready.length) return _emptyMsg("No released payouts are waiting to be paid");
+    return `<table class="aos-table" id="payoutReadyTable"><thead><tr>
+        <th>Request</th><th>Owner</th><th>Reserved</th><th>Method</th><th>Send to</th><th>Released</th><th>State</th><th>Action</th>
+      </tr></thead><tbody>${q.ready.map(p => `<tr data-payout-id="${_esc(p.id)}">
+        <td class="aos-mono">${_esc(String(p.id).slice(-12))}</td>
+        <td class="aos-mono">${_esc(String(p.sellerUid || "—").slice(0, 10))}</td>
+        <td>${_esc(_kesExact(p.amount))}</td>
+        <td>${_esc(p.method || "—")}</td>
+        <td class="aos-mono">${_esc(p.accountNumber || "—")}${p.bankName ? " · " + _esc(p.bankName) : ""}</td>
+        <td class="aos-muted">${_esc(p.ownerConfirmedAt ? new Date(_tsMs(p.ownerConfirmedAt)).toLocaleString("en-KE") : (p.secureRelease ? "—" : "legacy approval"))}</td>
+        <td><span class="status-badge st-approved">${p.status === "owner_confirmed" ? "Released by owner — not paid" : "Approved — not paid"}</span></td>
+        <td><button class="aos-btn-sm success" onclick="SokoniAOS.markPayoutPaid('${_esc(p.id)}')">Mark Paid</button>
+            <button class="aos-btn-sm danger" onclick="SokoniAOS.rejectPayout('${_esc(p.id)}')">Reject</button></td>
+      </tr>`).join("")}</tbody></table>`;
+  }
+  async function markPayoutPaid(id) {
+    /* Freshness only: the row may have moved on since it was drawn. The SERVER is the authority. */
+    let cur;
+    try { const s = await _db.collection("payoutRequests").doc(id).get(); cur = s.exists ? s.data() : null; }
+    catch (e) { cur = undefined; }
+    if (cur === null) { _toast("That payout no longer exists. Nothing was submitted.", "error"); _financialTab("payouts"); return; }
+    if (cur && !_payableByHand(cur)) {
+      _toast(cur.status === "approved" ? "The owner has not released this payout yet. Nothing was submitted." : "This payout is now “" + cur.status + "”. Nothing was submitted.", "error");
+      _financialTab("payouts"); return;
+    }
+    _modal("Mark payout paid", `
+      <p class="aos-muted">Only record this after the money has actually been sent. SOKONI does not send it from here.</p>
+      <p><strong>${_esc(_kesExact(cur && cur.amount))}</strong> · ${_esc((cur && cur.method) || "—")} · ${_esc((cur && cur.accountNumber) || "—")}</p>
+      <label class="config-label"><span>M-PESA / transaction reference</span><input type="text" id="mpRef" maxlength="120" autocomplete="off"></label>
+      <label class="config-label"><span>Attestation (who sent it, how, when)</span><textarea id="mpAtt" maxlength="500" rows="3"></textarea></label>
+      <p id="mpErr" class="aos-muted" role="alert"></p>
+      <button class="aos-btn success" id="mpSubmit" disabled>Submit to server</button>`);
+    const refEl = document.getElementById("mpRef"), attEl = document.getElementById("mpAtt");
+    const btn = document.getElementById("mpSubmit"), err = document.getElementById("mpErr");
+    const sync = function () { btn.disabled = !_markPaidEvidence(refEl.value, attEl.value).ok; };
+    refEl.addEventListener("input", sync); attEl.addEventListener("input", sync);
+    btn.addEventListener("click", async function () {
+      const v = _markPaidEvidence(refEl.value, attEl.value);
+      if (!v.ok) { err.textContent = v.error; sync(); return; }
+      btn.disabled = true; btn.textContent = "Submitting…"; err.textContent = "";
+      try {
+        await _call("adminProcessPayout", { requestId: id, status: "paid", externalReference: v.externalReference, attestation: v.attestation });
+      } catch (e) {
+        err.textContent = "The server did not accept this: " + ((e && e.message) || e);
+        btn.textContent = "Submit to server"; sync();
+        return;
+      }
+      /* Report the state the SERVER recorded — read back, never assumed. */
+      let after = null;
+      try { const s2 = await _db.collection("payoutRequests").doc(id).get(); after = s2.exists ? s2.data().status : null; } catch (_) {}
+      _closeModal();
+      _toast("Server recorded this payout as “" + (after || "—") + "”.", "success");
+      _financialTab("payouts");
+    });
   }
   async function processRefund(id, action) {
     const note = action === "rejected" ? prompt("Rejection reason:") : "";
@@ -3330,6 +3460,9 @@ window.SokoniAOS = (() => {
     approveAllPayouts,
     approvePayout,
     rejectPayout,
+    markPayoutPaid,
+    /* pure helpers of the Secure Release queues, for certification */
+    _payoutQueue: { approveOutcome: _approveOutcome, markPaidEvidence: _markPaidEvidence, payableByHand: _payableByHand },
     resolvePayoutOutcome,
     processRefund,
     // Support

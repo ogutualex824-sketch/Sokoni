@@ -162,6 +162,11 @@
     /* Application lifecycle statuses. Without these an approved/rejected badge
        rendered as an unstyled pill — legible, but not scannable. */
     .st-approved{background:rgba(76,175,80,.2);color:#a5d6a7}
+    /* SOKONI Secure Release queues (ports 4259b92): Approve ≠ Paid must be unmistakable */
+    .payout-banner{border-radius:var(--aos-radius);padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.5;border:1px solid var(--aos-border);background:var(--aos-surface2)}
+    .payout-q-title{font-size:14px;margin:18px 0 8px}
+    .status-badge.st-approved{background:rgba(245,158,11,.18);color:#f59e0b}
+    #aosModal textarea{width:100%;box-sizing:border-box}
     .st-rejected,.st-info_requested{background:rgba(244,67,54,.2);color:#ef9a9a}
     /* Applications & estate — cards, and the rows that carry a finding. */
     .aos-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}

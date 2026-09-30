@@ -400,7 +400,8 @@ function _txnLabel(e){
 }
 
 /* ── Withdraw flow ── */
-function _openWithdraw(){
+function _openWithdraw(){ location.href='/profile.html#wallet:withdraw'; return; /* SOKONI Secure Release: the one wallet */ }
+function _openWithdrawLegacy(){
   document.getElementById('withdrawModal').classList.add('open');
   document.getElementById('withdrawPhone').focus();
 }

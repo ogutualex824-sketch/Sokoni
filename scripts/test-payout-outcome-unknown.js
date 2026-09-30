@@ -63,7 +63,9 @@ const ck = (l, ok, d) => { quiet('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== 
 
 (async () => {
   /* INSTANT mode: the provider CAN be reached at request time. */
-  await db.doc('config/payouts').set({ enabled: true, autoB2C: true, requirePin: false, instantLimit: 100000, dailyLimit: 1000000, holdNewSellersDays: 0, maxPayoutsPerDay: 50, scheduledAbove: 0 });
+  /* secureRelease: false — this suite proves the ONE-KEY instant mechanics, which stay reachable when an admin switches
+     Secure Release off (config/payouts.secureRelease). Secure Release itself: scripts/test-secure-release.js. */
+  await db.doc('config/payouts').set({ secureRelease: false, enabled: true, autoB2C: true, requirePin: false, instantLimit: 100000, dailyLimit: 1000000, holdNewSellersDays: 0, maxPayoutsPerDay: 50, scheduledAbove: 0 });
   const mkUser = async (u, bal) => { await db.doc('wallets/' + u).set({ balance: bal }); await db.doc('users/' + u).set({ accountStatus: 'active', payoutVerified: true, createdAt: F.Timestamp.fromMillis(Date.now() - 90 * 86400000) }); };
 
   /* ── W1 ── */

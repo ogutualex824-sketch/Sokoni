@@ -108,7 +108,12 @@ const ck = (l, ok, d) => { quiet('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== 
   ck('an intent older than the TTL is not reused', (await PI.acquire({ ...intent, storage: stale, now: () => NOW })) !== 'po_old');
   const pd = fs.readFileSync(Path.join(ROOT, 'provider-dashboard.html'), 'utf8');
   const wv = fs.readFileSync(Path.join(ROOT, 'sokoni-wallet-v2.js'), 'utf8');
-  ck("provider-dashboard.html no longer mints 'po_'+Date.now()", !/idempotencyKey:'po_'\+Date\.now\(\)/.test(pd) && /SokoniPayoutIntent\.acquire/.test(pd) && /sokoni-payout-intent\.js/.test(pd));
+  /* Secure Release (owner decision 2026-09-30): the provider dashboard no longer submits withdrawals — Withdraw opens the
+     ONE wallet (profile.html#wallet:withdraw), which keys every request with SokoniPayoutIntent (checked just below). So
+     the invariant is: this page never mints a timestamp key, and it either uses the intent key or submits nothing. */
+  const pdSubmits = /httpsCallable\('requestSellerPayout'\)/.test(pd);
+  ck("provider-dashboard.html no longer mints 'po_'+Date.now()", !/idempotencyKey:'po_'\+Date\.now\(\)/.test(pd)
+    && (pdSubmits ? (/SokoniPayoutIntent\.acquire/.test(pd) && /sokoni-payout-intent\.js/.test(pd)) : /profile\.html#wallet:withdraw/.test(pd)));
   ck('wallet.html (Creator withdrawals) uses the same intent key', /SokoniPayoutIntent\.acquire\(_intent\)/.test(wv) && !/_uid \|\| 'anon'\) \+ '_' \+ Date\.now\(\)/.test(wv)
     && /sokoni-payout-intent\.js/.test(fs.readFileSync(Path.join(ROOT, 'wallet.html'), 'utf8')));
 

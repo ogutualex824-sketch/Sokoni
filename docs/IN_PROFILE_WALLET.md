@@ -74,3 +74,15 @@ viewport-high (`100dvh − 140px`, 540–980px) rather than content-high, which 
   them. This belongs to the wallet backend, which is frozen.
 - **Secure Release** (two-key withdrawal) is a separate slice on the frozen wallet backend. Its base branch (the payout
   repairs 45a837d, 4259b92 and 61098e9) is an owner decision.
+
+## Secure Release (integrated 2026-09-30)
+
+The hosted wallet is the owner's side of **SOKONI Secure Release** (`docs/SECURE_RELEASE.md`).
+
+- Profile's Wallet tab accepts two actions:
+  - `#wallet:withdraw` opens the withdraw sheet;
+  - `#wallet:payouts` opens "Your withdrawals", where the owner releases an approved withdrawal.
+- Release notifications link to `/profile.html#wallet:payouts`.
+- A deep link scrolls the wallet into view.
+- **Every role's Withdraw button** (merchant-v2 Payments, provider dashboard, seller-earnings) opens
+  `/profile.html#wallet:withdraw`. There is one withdrawal UI.

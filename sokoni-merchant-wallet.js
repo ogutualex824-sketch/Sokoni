@@ -222,6 +222,8 @@
     approved: 'pending', processing: 'pending', retry_scheduled: 'pending',
     outcome_unknown: 'pending',
     approval_failed: 'pending',
+    owner_confirmed: 'pending',                  /* Secure Release: the owner released it; not paid yet */
+    cancelled: 'failed', expired: 'failed',      /* funds returned to the wallet */
     paid: 'completed', settled_manually: 'completed',
     failed: 'failed', rejected: 'failed',
     reversed: 'reversed',
@@ -243,6 +245,9 @@
     scheduled: 'Scheduled',
     approving: 'Being approved',
     approved: 'Approved — awaiting manual disbursement',
+    owner_confirmed: 'Released by you — being sent',
+    cancelled: 'Cancelled — returned to your wallet',
+    expired: 'Approval expired — returned to your wallet',
     processing: 'Being sent',
     retry_scheduled: 'Retrying',
     outcome_unknown: 'Being confirmed with M-PESA — funds held',
@@ -898,6 +903,7 @@
           '<div class="wa-m">' + esc(when(d)) + ' · ' +
             esc(STATUS_WORD[raw] || raw || 'Unknown state') + '</div>' +
           '<span class="wa-badge ' + STATE_CLASS[state] + '">' + esc(STATE_LABEL[state]) + '</span>' +
+          (raw === 'approved' && p.secureRelease ? ' <button class="wa-btn pri" data-wa="release">🔐 Ready to release — open your Wallet</button>' : '') +
         '</div>' +
         '<div class="wa-amt">' + (amt === null ? '—' : esc(amt)) + '</div>' +
       '</div>';
@@ -1102,86 +1108,13 @@
       setTimeout(tick, 5000);
     }
 
-    function doWithdraw () {
-      if (S.busy) return;
-      S.formErr = null;
-
-      if (S.values.dest !== 'mpesa') {
-        S.formErr = 'Only withdrawals to an M-Pesa mobile number are available.'; return paint();
-      }
-      var amt = amountOf();
-      if (amt === null || !Number.isInteger(amt)) {
-        S.formErr = 'Enter a whole amount in shillings.'; return paint();
-      }
-      if (amt < PAYOUT_MIN) {
-        S.formErr = 'The smallest withdrawal is ' + money(PAYOUT_MIN) + '.'; return paint();
-      }
-      var bal = S.wallet ? Number(S.wallet.balance || 0) : null;
-      if (bal !== null && amt > bal) {
-        S.formErr = 'That is more than your available balance.'; return paint();
-      }
-      if (!String(S.values.phone || '').trim()) {
-        S.formErr = 'Enter the M-Pesa number to send to.'; return paint();
-      }
-      if (typeof ctx.callWithdraw !== 'function') {
-        S.formErr = 'Withdrawal is not available in this workspace.'; return paint();
-      }
-
-      if (!S.idem) S.idem = newIdem();
-      S.busy = true; paint();
-
-      /* ONE key per withdrawal INTENT, shared across tabs and reloads
-         (sokoni-payout-intent.js). S.idem lived in this page's memory only: a second
-         tab, or a reload after a lost response, minted a new key — a second
-         withdrawal. Without a verified uid the old per-tab key is kept (a key is
-         never shared across users). */
-      var PI = (typeof window !== 'undefined') ? window.SokoniPayoutIntent : null;
-      var sc = (typeof ctx.scope === 'object' && ctx.scope) || {};
-      var fbUser = (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) || null;
-      var wUid = sc.sellerUid || sc.uid || (fbUser && fbUser.uid) || null;
-      var intent = { uid: wUid, amount: amt, destination: String(S.values.phone).trim() };
-      var keyP = (PI && wUid) ? PI.acquire(intent) : Promise.resolve(S.idem);
-
-      keyP.then(function (key) { S.idem = key; return ctx.callWithdraw({
-        amount: amt,
-        method: 'mpesa',
-        accountNumber: String(S.values.phone).trim(),
-        idempotencyKey: key,
-      }); }).then(function (r) {
-        if (!alive()) return;
-        var d = (r && r.data) || r || {};
-        S.busy = false;
-        /* THE SERVER'S OWN SENTENCE. Never "sent", never "paid", never a status
-           this screen decided. requestSellerPayout returns a `message` for every
-           outcome it produces, including the instant path, and that is what the
-           merchant reads. */
-        S.serverSaid = d.message ||
-          'Your withdrawal request was received. Its state will appear under Withdrawals.';
-        if (d.deduplicated) {
-          S.serverSaid = 'This request was already submitted — it has not been duplicated.';
-        }
-        S.idem = null;                 /* attempt concluded; a new one gets a new key */
-        /* …unless the provider outcome is unknown: then the intent stays open. */
-        if (PI && wUid && d.status !== 'outcome_unknown') PI.release(intent);
-        S.values.amount = '';
-        /* The form closes and the merchant lands back on the wallet, where the
-           request they just made is now one of the counted states. Leaving the
-           form up would invite a second submission of the same withdrawal. */
-        S.form = null;
-        toast(S.serverSaid);
-        paint();                       /* land back on the wallet immediately… */
-        refresh();                     /* …then let the server's own state arrive */
-      }).catch(function (e) {
-        if (!alive()) return;
-        S.busy = false;
-        /* The key is KEPT on failure: if the request actually landed and only
-           the response was lost, retrying with the same key returns the existing
-           withdrawal instead of creating a second one. Released only when the
-           refusal proves nothing was created. */
-        if (PI && wUid && PI.isDefinitive(e)) { PI.release(intent); S.idem = null; }
-        S.formErr = serverMessage(e, 'The withdrawal request could not be submitted.');
-        paint();
-      });
+    /* SOKONI Secure Release (owner decision 2026-09-30): a withdrawal is requested, PIN-verified, approved and RELEASED in
+       the ONE premium wallet (profile Wallet tab) — the same personal wallet (wallets/{uid}) this screen shows. This
+       module no longer submits withdrawals itself: its old form had no PIN and no release step, so the server would
+       refuse it. Withdraw opens the one wallet; "Release" of an approved request happens there too. */
+    function openOneWallet (sub) {
+      var to = '/profile.html#wallet:' + (sub === 'payouts' ? 'payouts' : 'withdraw');
+      try { (window.top || window).location.href = to; } catch (_) { location.href = to; }
     }
 
     /* ── THE DRAW: business wallet → personal wallet ────────────────────────
@@ -1270,10 +1203,10 @@
       if (!b) return;
       var a = b.dataset.wa;
       if (a === 'topup')       return openForm('topup');
-      if (a === 'withdraw')    return openForm('withdraw');
+      if (a === 'withdraw')    return openOneWallet('withdraw');   /* Secure Release: the one wallet */
+      if (a === 'release')     return openOneWallet('payouts');
       if (a === 'cancel')      { S.form = null; S.formErr = null; S.serverSaid = null; S.idem = null; return paint(); }
       if (a === 'do-topup')    return doTopUp();
-      if (a === 'do-withdraw') return doWithdraw();
       if (a === 'draw')        return doDraw();
       if (a === 'retry-ent')   { S.ent = undefined; paint(); return loadEnt().then(paint); }
       if (a === 'plans') {
