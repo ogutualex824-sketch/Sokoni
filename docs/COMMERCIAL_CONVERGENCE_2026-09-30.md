@@ -301,3 +301,48 @@ node scripts/backfill-product-counters-v3.js --apply --authorized-by "<owner nam
 node scripts/backfill-product-counters-v3.js --verify docs/backups/free50-apply-<ts>.json
 ```
 Then verify the chain on KASS: `canPublishProduct` (ceiling 102, at limit), the plan panel (`getMerchantEntitlements` → 50 for new usage, 102 held), and that nothing was removed.
+
+
+---
+
+## 10 · Pre-deployment evidence (2026-09-30, late) — lineage gate per function, order corrected, hosting re-based
+
+Nothing deployed, pushed, or written to production. Live hosting moved to `72dca56` / v649 (tip `3e8dd53`, snapshot unchanged at the old 3% file) by sokoni-32; sokoni-70 holds the deploy queue for B1 (`b026856`, `gate_error` now proven 32/0).
+
+### 10.1 Hosting candidate re-based
+`convergence/commercial-web-on-3e8dd53` @ **`358edee`** (`C:/temp/sok-conv-web2`; the old branch on `18e3711` is kept untouched). Cherry-picks applied cleanly (CHANGELOG merged by prepending). Gates: snapshot `--check` in sync and byte-identical to the functions branch · single-source PASS · `guard-no-rollback`: "local contains live 72dca56 — allowing" · JS syntax OK · syntax gate PASS · live entry-splash change (`72dca56`) intact · header snapshot injection present. `index.html`'s three inline "errors" are JSON-LD / module blocks identical on live. No `.env` blob in any of my commits (`functions/.env` is tracked and untouched by me).
+
+### 10.2 The lineage gate, per function — what the LIVE function has that the candidate lacks (reachable set only)
+Method: download each function's live source archive (they vanish from GCS), take the handler module and its static `require()` closure, compare comment-stripped line sets. Lines outside the closure are packaged but never run in that revision. Archives retained in the scratchpad `live-archives/` with the JSON report.
+
+| function | live build | reachable delta | explanation |
+|---|---|---|---|
+| `getCommissionConfig` | 08-22 | 28 lines: schedule rows (3% → 15% etc.), `finos-utils` fixed-category/provider changes, `subscription-core` export line | **the intended change** (§2, §7) |
+| `previewCommission` | 08-30 | 128 lines: schedule rows; `commission.js` `_COMMISSION_OPS` dispatch table (an 08-30 consolidation wrapper — its exported functions all still exist here) and `packageTier` / `packageRateApplied` response fields (no client reads them; the candidate returns `planId` / `planStatus` / `marketplacePlan` instead); `finos-utils` `settlementState` helper (a `createLedgerEntry` argument not on the preview path) | explained; **but see 10.3 — must not precede the charging path** |
+| `subGetPlans`, `subActivate` | 09-09 (hosting) | 47: `merchant-identity` old employment predicate (the 09-20 fix removed it, §7.5), catalogue v1→v3 (§7.2), retired provider rows + one period copy (§8.2, §7.4) | intended |
+| `subAutoActivateOnPayment` | 09-09 | 6: period arithmetic → `subscription-period.js`, grace table | intended |
+| `onPaymentIntentPaid`, `reconcileSubscriptionPayment` | 09-09 | 42: as above + `product-limit` pre-`serverReserved` forms + `PERIOD_DAYS` (30/365 days → calendar month, §7.4) | intended |
+| `getMerchantEntitlements` | 09-09 | 15: catalogue v1→v3 | intended |
+| `canPublishProduct` (handler `product-limit.js`) | 09-09 | 39: as above | intended |
+| `createPaymentIntent` | 09-09 | was 104 → **two real regressions found and fixed** (10.4); remaining 23+2: `event_ticket` now prices from an `eventOrders` document (c4 event hub contract, `orderId`) instead of raw `eventId/tier` — the **live client has no `event_ticket` caller at all** (grep of `3e8dd53`: none), so nothing in production calls the old contract; the c4 event hub will ship with its own client. `_mintRef` return-shape line is the points-aware intent (`_pointsOf`) | explained |
+| `createCheckoutSession`, `onSellerPaymentCreated` | 08-22 / 08-30, **defined inline in `index.js`** | closure = the whole index tree: 4–6 modules missing (`verification-engine`, `verification-vocabulary`, `role-vocabulary`, `shared/product-authority`, `print-intents`, `shop-access`, `delivery-policy` — hosting-only modules, **never on the c4 line**) and ~3,300 removed lines, mostly in modules those two handlers do not call | **NOT explained at handler level** — needs a function-body call-graph, not a module closure. **Held out of the first deployment**; deploy only after that finer diff, or after the index-level convergence |
+
+### 10.3 Order correction — the charging authority moves first
+`webhookIntasend` (`00068-del`, 09-06 config) is what **charges** an online order (`calculateCommission` inside the webhook; marketplace 5%). Deploying `previewCommission` / `getCommissionConfig` first would make the server *quote* 15% while the webhook *charges* 5% — the same inconsistency the hosting snapshot rule prevents. So the first production step is the commission authority on the containment lineage:
+
+**Unit 3 — `draft/commission-authority-on-68811e1` @ `a0fec85`** (`C:/temp/sok-whunit3`): ONE file, `functions/commission-config.js` byte-for-byte from the functions branch. `68811e1`'s own `finos-utils` already consumes `isFixedRateCategory` / `resolveRate`; under this file it prices **online 15% · POS absolute 5% (fixed_rate_category) · property KES 5,000 · hotel 15%** (proven with its own `calculateCommission`). P5, D1/Q6, atomic guard, stamp-PAID untouched. Same mechanics as B1: `--only functions:webhookIntasend`, `.env` parity, Ready=True before traffic, route by name, never `--to-latest`. **P0-4 gate — owner approval required; belongs in sokoni-70's webhook queue after B1.**
+
+### 10.4 Two regressions the gate caught (fixed on the functions branch)
+`createPaymentIntent`'s live purpose registry has **`boost`, `marketing_boost`, `commission_collection`** — all called by the shipped client (`marketing.html`, `sokoni-pay.js`, `subscriptions.html`) — and `commission-collection.computeOutstandingKES`. The c4 lineage never had them (13 c4 commits on the registry added event/venue/POS/product purposes instead). Deploying the candidate would have refused every boost payment and every commission collection as an unregistered purpose. Ported byte-for-byte from the live archive; `test-commercial-facts-invariants` 2d/2e now pin every live purpose (24/0); `test-payment-intents` 12/0.
+
+### 10.5 Corrected deployment order (for approval — nothing executed)
+0. sokoni-70: B1 on `webhookIntasend` (unchanged 5%). *(their queue)*
+1. **Unit 3** on `webhookIntasend` (owner P0-4 approval) → online 15% / POS 5% / property 5,000 charged. Verify by content diff of the new archive vs `a0fec85` and `previewCommission`-style calculation on the emulator.
+2. `getCommissionConfig`, `previewCommission` — now consistent with the charging path.
+3. subscription set (`sub*`, `adminSub*`), intent rail (`createPaymentIntent`, `subscriptionPaymentMethods`, `payIntentWithWallet`, `onPaymentIntentPaid`, `reconcileSubscriptionPayment`, `activateSubscription`), entitlement (`getMerchantEntitlements`, `onSubscriptionChangedSyncEntitlements`, `onSubscriptionChangedSyncLimit`, `onAiSubscriptionChangedSyncLimit`, `canPublishProduct`, `recountMarketplaceProducts`, `onMarketplaceProductCreated/Deleted`), invoices (`subIssuePendingInvoices`, `subIssueInvoice`, `issueCommissionInvoice`), `runDailyReconciliation` — each: live-archive reachable diff (done above), Ready=True, named route.
+4. **Held:** `createCheckoutSession`, `onSellerPaymentCreated` until the handler-level diff explains their index-tree delta.
+5. VAT documents (when the adviser's reference exists) · FREE-50 backfill (when authorized) — separate changes.
+6. Hosting from `convergence/commercial-web-on-3e8dd53` @ `358edee` — only after step 2 is verified live; then parity: `SokoniCommission.pct('marketplace') === getCommissionConfig().rates.marketplace.pct`.
+
+### 10.6 Still open before Gate C can close
+Owner approval for Unit 3 (P0-4) · the four Gate B items (§9) · the `terms.html` / `legal-hub.html` VAT-treatment contradiction (hosting blocker) · handler-level diff for the two held functions.
