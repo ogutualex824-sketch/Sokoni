@@ -12,6 +12,15 @@ receipt with timestamps (+ PDF via SokoniInvoice), Support; Spent = server paid 
 F1 rider→pickup distance shown when known, PIN completion routed to completeParcelWithPin for parcels. `track.html`: parcels from
 packageRequests (sent + incoming). Cert: `scripts/test-parcel-page.js` 14/0 (hermetic Chromium, stub modules + callables); syntax gate
 1798 clean. Requires the parcel functions (a545818) to be live first. **Deploy NOT run** (classifier denied production deploys).
+## 2026-09-30 — LEGAL-HUB COMMISSION: WhatsApp payment hand-off → SOKONI Support (own unit, certified, NOT deployed)
+
+Census: `legal-hub.html` "Log & Pay Commission" — an advocate self-reports a case fee; the page computes 5% CLIENT-SIDE, writes
+localStorage + a BROWSER-authored `legalCommissions/{ref}` (status invoiced), instructs payment to Safaricom Paybill 522522
+(outside IntaSend), and offered `wa.me/254703480154` "I want to pay my commission". No server intent, no verification, no
+settlement authority; `posSettleCommission` is merchant/till-scoped and does not apply to providers. Verdict: a PAYMENT hand-off.
+Smallest replacement (this commit): the WhatsApp control becomes "🛟 Settle via SOKONI Support" → `support.html?topic=payment&ref=SOK-…`
+with fee/owed prefilled. Intended end state (separate functions slice): an IntaSend provider-commission flow with a server rate
+(finos-utils) and ledger. `scripts/test-legal-commission-link.js` 3/0. Files: `legal-hub.html`, the test, `CHANGELOG.md`.
 
 ## 2026-09-30 — HOTFIX to the header unit: palette close on phones + quick-actions trigger on the home page
 
@@ -28,6 +37,27 @@ Owner-authorized hosting deploy of the header commit ALONE (Slice B held). Live 
 `version.json` commit 2bcdae2, cacheVersion sokoni-20260930144454-v648; palette close button served; Activity button absent from
 `shared-header.js`; menu logo header present; back button absent from `sokoni-nav-engine.js`; Activity view present in the
 notification engine. Rollback = the previous hosting version (b108ae3). This entry commits the pipeline artefacts only.
+## 2026-09-30 — SLICE B (hosting candidate, NOT deployed): Support authority on the customer page + WhatsApp booking hand-offs replaced
+
+Owner-authorized to build and certify (no deployment). On `hosting/parcel-rail-on-b108ae3` (live base b108ae3 re-verified).
+
+- **Support authority.** `support.html` now ports the repaired page: submit → `SokoniSupportContact.submit` → `adminOsDispatch`
+  {op: adminCreateSupportTicket} → `supportTickets/{id}` (server-minted id shown; localStorage is a cache of the server id, written
+  after the reply). Ticket lookup reads the server record. **No WhatsApp** card, follow-up or fallback anywhere on the page; the two
+  WhatsApp controls became in-app Messages. `?topic=&ref=&desc=` prefill lets every Support button arrive with context; `sos` = critical.
+  AdminOS routing proven: the super admin's `adminGetSupportTickets` returns the ticket; a customer is refused. New libs on this line:
+  `sokoni-support-contact.js`, `sokoni-record-links.js`; `sokoni-company.js` gains the support-phone helper (tel only in use).
+- **WhatsApp booking replacement.** `sokoni-pay.js` `waConnect` keeps the deposit gateway and ends in an in-app confirmation with a
+  Support link (13 hub callers converge). Direct hops migrated on cleaning, plumbing, electrical, phone-repair, car-rental,
+  home-services, tech-hub (incl. 2× Hire via WhatsApp), mechanics, legal-hub, car-hub (mechanic + inspection), construction
+  (contractor fallback + equipment fallback). Request-shaped hops (roadside SOS ×2, vehicle transport, home-services quote,
+  tech-hub IT request) open a prefilled support ticket. Parcel/rider/tracking: `delivery.html` Book-via-WhatsApp → Support,
+  share → native share/copy, hard-coded number gone; `driver.html` rider support → ticket; `delivery-tracking.html` SOS → ticket.
+- **Deliberately untouched:** `bookNow` and its three malformed callers (own contract repair); contact chips, registrations,
+  admin follow-ups and share links (legacy/keep classes — enumerated in the cert).
+- **Certification:** `scripts/test-slice-b-support-whatsapp.js` — 26/0 (library in VM, real page in Chromium with every other
+  origin aborted, real `adminOsDispatch` from the deployed F1-R lineage on the Firestore emulator, negative control).
+- **Files:** 17 modified + 2 new libs + 1 test. **Database / API / rules / functions:** none. **Deploy:** NOT authorized yet.
 
 ## [2026-09-30] - DEPLOYED d55c112 → Hosting v646 (cacheVersion sokoni-20260930093216-v646) 09:32Z, owner-authorized; artefacts 12edf13; rollback 6f7202bd5dd81d84. Live verified: markers served, 6 of 7 files byte-identical (index.html served via / — /index.html is a 301), recs widget renders, feed 6, Fastest Selling visible, no [RT] products warning, no module-not-loaded warning. Follow-up (recs App Check wait+retry) committed, NOT deployed.
 

@@ -253,7 +253,8 @@
     <input class="pg-input" type="tel" id="pgPhone" placeholder="07XXXXXXXX">
     <label class="pg-label">Extra Notes (optional)</label>
     <textarea class="pg-input" id="pgNotes" rows="2" placeholder="e.g. Need child seat, prefer automatic, airport flight number..." style="resize:none;"></textarea>
-    <button type="button" class="pg-submit-btn" onclick="submitBooking()">📅 Confirm via WhatsApp →</button>
+    <button type="button" class="pg-submit-btn" onclick="submitBooking()">📋 Confirm Booking</button>
+    <a href="support.html?topic=booking" class="sk-support-cta" style="display:block;text-align:center;margin-top:8px;padding:11px;border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;text-decoration:none;background:rgba(113,255,0,0.05);">🛟 Need help? Contact Support</a>
     <div class="pg-modal-msg" id="pgModalMsg"></div>
   </div>
 </div>
@@ -353,7 +354,7 @@ function closeBooking(){
 async function submitBooking(){
   const _sbtn=document.querySelector('.pg-submit-btn');
   if(_sbtn){_sbtn.disabled=true;_sbtn.textContent='⏳ Processing...';}
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('car_rental_book',10,300000)){if(_sbtn){_sbtn.disabled=false;_sbtn.textContent='📅 Confirm via WhatsApp →';}(window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('car_rental_book',10,300000)){if(_sbtn){_sbtn.disabled=false;_sbtn.textContent='📋 Confirm Booking';}(window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
   const name=document.getElementById('pgName')?.value.trim();
   const phone=document.getElementById('pgPhone')?.value.trim();
   const pickup=document.getElementById('pgPickup')?.value.trim();
@@ -363,7 +364,7 @@ async function submitBooking(){
   const notes=document.getElementById('pgNotes')?.value.trim();
   const msgEl=document.getElementById('pgModalMsg');
   const types=[...document.querySelectorAll('#pgChips .pg-chip.sel')].map(c=>c.textContent.trim()).join(', ');
-  if(!name||!phone||!pickup){if(_sbtn){_sbtn.disabled=false;_sbtn.textContent='📅 Confirm via WhatsApp →';}if(msgEl){msgEl.textContent='⚠️ Please fill name, phone and pickup location.';msgEl.style.color='#ff6b6b';}return;}
+  if(!name||!phone||!pickup){if(_sbtn){_sbtn.disabled=false;_sbtn.textContent='📋 Confirm Booking';}if(msgEl){msgEl.textContent='⚠️ Please fill name, phone and pickup location.';msgEl.style.color='#ff6b6b';}return;}
   /* If car has sellerUid and a daily rate — pay with M-Pesa */
   if(selectedCar?.sellerUid && window.SokoniMpesa && days && selectedCar.rateNum){
     const total = selectedCar.rateNum * Number(days);
@@ -376,16 +377,15 @@ async function submitBooking(){
       description: selectedCar.name + ' · ' + days + ' day(s)',
       sellerName:  selectedCar.owner,
     });
-    if(outcome !== 'success'){if(_sbtn){_sbtn.disabled=false;_sbtn.textContent='📅 Confirm via WhatsApp →';}return;}
+    if(outcome !== 'success'){if(_sbtn){_sbtn.disabled=false;_sbtn.textContent='📋 Confirm Booking';}return;}
   }
   const id=_carBkgId||('CAR'+Date.now().toString().slice(-8));
   const msg=`Hi${selectedCar?' '+selectedCar.owner:''}! I found you on SOKONI and need a car rental.\n\n📋 Booking ID: ${id}\n👤 Name: ${name}\n📞 Phone: ${phone}\n🚗 Vehicle Type: ${types||'Not specified'}\n📍 Pickup: ${pickup}\n🏁 Drop-off: ${drop||'Not specified'}\n📅 Date: ${date||'Flexible'}\n🗓️ Duration: ${days||'TBD'} day(s)\n${notes?'📝 Notes: '+notes+'\n':''}\nPlease confirm availability & price. Thank you!`;
   const _crWA = (selectedCar?.phone||'0705726803').replace(/^0/,'254').replace(/\D/g,'');
   if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
     SokoniPay.waConnect(_crWA, msg, {providerName:selectedCar?.owner||'SOKONI Car Rental',category:'car-rental',serviceDesc:(selectedCar?.name||types||'Car Rental')+(days?' · '+days+' day(s)':'')});
-  } else {
-    window.open(`https://wa.me/${_crWA}?text=${encodeURIComponent(msg)}`,'_blank');
   }
+  /* no WhatsApp hand-off (owner 2026-09-30) */
   let bks=[];try{bks=JSON.parse(localStorage.getItem('sokoniBookings')||'[]');}catch(e){}
   bks.unshift({id,type:'car-rental',vehicle:selectedCar?.name||types||'Car Rental',name,phone,pickup,drop,date,days,notes,status:'requested',createdAt:new Date().toISOString()});
   localStorage.setItem('sokoniBookings',JSON.stringify(bks.slice(0,100)));
@@ -398,7 +398,7 @@ async function submitBooking(){
   }catch(e){}})();
   if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:(selectedCar?.name||types||'Car Rental')+(days?' — '+days+' day(s)':''),category:'Car Rental',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'WhatsApp Booking',paymentRef:id,sellerName:selectedCar?.owner||'SOKONI Car Rental',date:new Date().toISOString(),notes:pickup});},700);
   _carBkgId=null;
-  if(msgEl){msgEl.innerHTML=`✅ Booking <strong style="color:#0ea5e9;">${id}</strong> sent via WhatsApp!`;msgEl.style.color='#22c55e';}
+  if(msgEl){msgEl.innerHTML=`✅ Booking <strong style="color:#0ea5e9;">${id}</strong> recorded in SOKONI.`;msgEl.style.color='#22c55e';}
   setTimeout(closeBooking,3000);
 }
 window.openBooking=openBooking;window.openBookingFor=openBookingFor;window.closeBooking=closeBooking;window.submitBooking=submitBooking;

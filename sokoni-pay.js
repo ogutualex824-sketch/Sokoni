@@ -355,24 +355,41 @@ function showGateway(options){
 }
 
 /* ═══════════════════════════════════════════════════════════
-   WHATSAPP CONNECT — intercept every WA link with deposit
+   BOOKING CONNECT — formerly "WhatsApp Connect"; in-app only since 2026-09-30
 ═══════════════════════════════════════════════════════════ */
+function _bookingRecorded(ref, opts){
+  opts = opts || {};
+  try {
+    var wrap = document.createElement('div');
+    wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.setAttribute('aria-label','Booking recorded');
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px;';
+    var esc = function(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+    wrap.innerHTML = '<div style="max-width:380px;width:100%;background:#111;border:1px solid rgba(113,255,0,.22);border-radius:22px;padding:26px 22px;text-align:center;">'
+      + '<div style="font-size:44px;margin-bottom:8px;">✅</div>'
+      + '<div style="font-size:18px;font-weight:900;color:#fff;margin-bottom:6px;">Booking recorded</div>'
+      + '<div style="font-size:12px;color:rgba(255,255,255,.5);line-height:1.6;margin-bottom:14px;">Ref <strong style="color:#71ff00;">' + esc(ref) + '</strong>'
+      + (opts.providerName ? ' · ' + esc(opts.providerName) : '') + '<br>Your deposit is confirmed and the provider has been notified in SOKONI. Track it under <a href="bookings.html" style="color:#71ff00;">My Bookings</a>.</div>'
+      + '<a href="support.html?topic=booking&ref=' + encodeURIComponent(ref) + '" style="display:block;padding:12px;border:1px solid rgba(113,255,0,.3);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;text-decoration:none;margin-bottom:8px;">🛟 Need help? Contact Support</a>'
+      + '<button type="button" data-close style="width:100%;padding:11px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:#fff;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;">Done</button>'
+      + '</div>';
+    wrap.querySelector('[data-close]').addEventListener('click', function(){ wrap.remove(); });
+    wrap.addEventListener('click', function(e){ if (e.target === wrap) wrap.remove(); });
+    document.body.appendChild(wrap);
+  } catch (_) { (window._skToast||alert)('✅ Booking recorded. Ref: ' + ref); }
+}
+/* Owner directive 2026-09-27/30: NO booking hand-off to WhatsApp. The deposit gateway
+   is unchanged (server STK + webhook confirmation creates bookings/{ref} and notifies
+   both parties in-app). After payment the sender gets an in-app confirmation and a
+   Support entry point — never a WhatsApp chat. The name is kept because ~13 hub pages
+   call it. Never reintroduce the WhatsApp hop here. */
 function waConnect(providerPhone, message, opts){
-  /*
-    opts = { providerName, category, serviceDesc }
-    Opens booking gateway first, then WhatsApp with ref embedded
-  */
   opts = opts || {};
   showGateway({
     providerName:  opts.providerName  || "Service Provider",
     category:      opts.category      || "default",
-    serviceDesc:   opts.serviceDesc   || "Book via WhatsApp",
+    serviceDesc:   opts.serviceDesc   || "Booking",
     providerPhone: providerPhone,
-    onSuccess: function(ref){
-      const fullMsg = "📋 Booking Ref: *"+ref+"*\n\n"+message+"\n\n_Booked via SOKONI_";
-      const ph = providerPhone.replace(/^0/,"254").replace(/\D/g,"");
-      window.open("https://wa.me/"+ph+"?text="+encodeURIComponent(fullMsg),"_blank");
-    }
+    onSuccess: function(ref){ _bookingRecorded(ref, opts); }
   });
 }
 

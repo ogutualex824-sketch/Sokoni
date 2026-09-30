@@ -1254,7 +1254,10 @@ window.dtSOSBuyer = function(ref, driverPhone) {
     + '\nRider: ' + (d.driverName||'') + ' · ' + (driverPhone||'')
     + '\nStatus: ' + (d.status||'')
     + '\n\nPlease assist urgently.');
-  window.open('https://wa.me/254705726803?text=' + msg, '_blank');
+  /* SOS goes to SOKONI Support as a ticket (owner 2026-09-30), not to a WhatsApp chat.
+     The message body travels as the prefilled description. */
+  void msg;
+  location.href = 'support.html?topic=delivery&ref=' + encodeURIComponent(ref || '');
 };
 
 window.dtShareWA = function() {

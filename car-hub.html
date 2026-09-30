@@ -4528,8 +4528,9 @@ var CarHubPro = (function(){
       +'<div style="margin-bottom:10px;"><label class="ch-input-label">Problem / Service Needed*</label><textarea class="ch-input" id="mechBkDesc" rows="3" placeholder="Describe the issue or service you need..." style="margin-top:4px;resize:vertical;"></textarea></div>'
       +'<div style="margin-bottom:16px;"><label class="ch-input-label">Preferred Date</label><input class="ch-input" type="date" id="mechBkDate" style="margin-top:4px;"></div>'
       +'<div id="mechBkMsg" style="font-size:12px;color:#f97316;text-align:center;min-height:14px;margin-bottom:8px;"></div>'
-      +'<button type="button" onclick="CarHubPro.confirmMechBooking(\''+phone+'\')" style="width:100%;padding:13px;background:linear-gradient(135deg,#f97316,#ea580c);color:white;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;">📅 Confirm & Message on WhatsApp</button>'
-    , 'Book this mechanic via WhatsApp — fast, direct, no waiting');
+      +'<button type="button" onclick="CarHubPro.confirmMechBooking(\''+phone+'\')" style="width:100%;padding:13px;background:linear-gradient(135deg,#f97316,#ea580c);color:white;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;">📋 Confirm Booking</button>'
+      +'<a href="support.html?topic=booking" class="sk-support-cta" style="display:block;text-align:center;margin-top:8px;padding:11px;border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;text-decoration:none;background:rgba(113,255,0,0.05);">🛟 Need help? Contact Support</a>'
+    , 'Book this mechanic in SOKONI — fast, direct, tracked');
   }
 
   function confirmMechBooking(phone){
@@ -4545,8 +4546,8 @@ var CarHubPro = (function(){
       +'Name: '+name+'\nPhone: '+myPhone+'\nVehicle: '+vehicle
       +(date?'\nDate: '+date:'')+'\nService: '+desc
     );
-    if(msg) msg.textContent='✅ Opening WhatsApp...';
-    setTimeout(function(){ window.open('https://wa.me/'+phone+'?text='+waText,'_blank'); }, 600);
+    if(msg) msg.textContent='✅ Booking recorded in SOKONI.';
+    void waText; /* no WhatsApp hand-off (owner 2026-09-30) */
     /* save to localStorage */
     try {
       var bk={id:'MCH'+Date.now(),mechanic:(_bookingMech||{}).name||'',name:name,phone:myPhone,vehicle:vehicle,desc:desc,date:date,ts:Date.now()};
@@ -4662,7 +4663,8 @@ var CarHubPro = (function(){
     _chFireWrite('carSOS',{service:serviceType,location:loc,phone:phone,description:desc,status:'open'});
     if(msg){ msg.textContent='✅ SOS sent! Connecting you to nearest responders...'; msg.style.color='#71ff00'; }
     else showFleetMsg('SOS sent! Connecting you to nearest responders...');
-    setTimeout(function(){ window.open('https://wa.me/254705726803?text='+waText,'_blank'); }, 800);
+    /* SOS → a CRITICAL support ticket the ops team sees (owner 2026-09-30), not a WhatsApp chat. */
+    setTimeout(function(){ location.href = 'support.html?topic=sos&desc=' + encodeURIComponent(decodeURIComponent(waText)); }, 800);
   }
 
   /* ── FINANCING ── */
@@ -4734,8 +4736,8 @@ var CarHubPro = (function(){
     try{ localStorage.setItem('sokoniInsp_'+Date.now(),JSON.stringify(data)); }catch(e){}
     _chFireWrite('carInspections',{vehicle,date,phone,center:centerName,status:'pending'});
     var wa=encodeURIComponent('SOKONI Inspection Booking\nVehicle: '+vehicle+'\nDate: '+date+'\nCenter: '+centerName+'\nPhone: '+phone);
-    if(msg){ msg.textContent='✅ Booking confirmed! Opening WhatsApp...'; msg.style.color='#71ff00'; }
-    setTimeout(function(){ window.open('https://wa.me/254705726803?text='+wa,'_blank'); }, 1000);
+    if(msg){ msg.textContent='✅ Booking recorded in SOKONI.'; msg.style.color='#71ff00'; }
+    void wa; /* no WhatsApp hand-off (owner 2026-09-30) */
   }
 
   /* ── TRANSPORT QUOTE ── */
@@ -4777,7 +4779,8 @@ var CarHubPro = (function(){
     var wa   = encodeURIComponent('SOKONI Vehicle Transport Request\nFrom: '+from+'\nTo: '+to+'\nVehicle: '+vt+'\nService: '+svc+'\nPhone: '+phone);
     _chFireWrite('carTransportRequests',{from,to,vehicleType:vt,serviceType:svc,phone,status:'open'});
     if(msg){ msg.textContent='✅ Request sent! Connecting with transporters...'; msg.style.color='#71ff00'; }
-    setTimeout(function(){ window.open('https://wa.me/254705726803?text='+wa,'_blank'); }, 800);
+    /* Transport request → support ticket (owner 2026-09-30); the carTransportRequests record above stands. */
+    setTimeout(function(){ location.href = 'support.html?topic=request&desc=' + encodeURIComponent(decodeURIComponent(wa)); }, 800);
   }
 
   /* ── BUYER DASHBOARD ── */
