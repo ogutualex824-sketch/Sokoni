@@ -1,3 +1,14 @@
+## [2026-09-30] - NEW CANDIDATE c7e26b6: providerDispatch shell gate with minInstances matched to live (0) — re-certified; NOT deployed (owner authorized the config repair + re-certification only)
+
+docs/CANDIDATE_PROVIDERDISPATCH_SHELL_GATE_C7E26B6.md + docs/release-gates/providerdispatch-candidate-c7e26b6-manifest.json. Supersedes b28567c (the
+attempted candidate the CLI correctly refused — preserved in history). One change: functions/provider-dispatch.js _OPTS.minInstances 1 → 0 to
+equal the live minInstanceCount; manifest diff vs b28567c = exactly that one blob. Dispatcher diff vs the pinned archive = minInstances +
+business-workspace merge + two ROUTES; _OPTS otherwise identical (region, enforceAppCheck true, 120 s, 512 MiB). Re-certified on the candidate:
+gate 21/0, archive-compat 9/0, mutations 9/0 (assertion failures 9/8/1/1/1/1/4, no crash), capabilities 46/0, business-workspace 30/0,
+workspace-capability 51/0; closure 34 = certified set; ops 59→61 (+businessWorkspace, +workspaceHome); provider-onboarding ARCHIVE-IDENTICAL;
+0 exclusion violations; no secret declared/bound; .env hash == archive; clean tree. Syntax gate result to follow. Deployment of c7e26b6 NOT
+authorized; never --force. Live hosting now 49e0f3a (peer release 00:20Z) — future hosting candidates descend from it.
+
 ## [2026-09-30] - providerDispatch deploy ATTEMPT (owner-authorized b28567c after a green final preflight) ABORTED BY THE CLI BEFORE UPLOAD — production unchanged; owner decision needed on minInstances
 
 Final preflight 01:18Z green (11/12, estate caveat controlled: no Cloud Build in progress, no function updated in 30 min, all three peer sessions
