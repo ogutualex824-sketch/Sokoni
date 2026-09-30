@@ -1,3 +1,9 @@
+## [2026-09-30] — Profile presents as a buyer profile unless the acting role is a held business role — candidate, NOT deployed
+
+**Files:** `profile.html`, new `scripts/test-profile-buyer-view.js`, `docs/PROFILE_BUYER_VIEW.md`. **Rules / Functions / role authority / production data:** untouched. **Breaking changes:** none — presentation only; a held business role, once active, shows the business command centre exactly as before.
+- `<html data-sk-profile-view>` is set from the acting role wherever the role switcher renders; business-only blocks (`cmdBusinesses`, `cmdWorkspaces`, `pi7BizHealth`, `pi6ExecCmdsWrap`, `piQaRoleActions`, `upBizHub`, `pi7ModuleCards`, `statListings`, `statRating`) carry `sk-biz-only` and are hidden in the buyer view with `!important`. Default on first paint: buyer.
+- Personal tabs, the seller-application card, buyer stats, loyalty, activity and hubs stay in every view. Suite 17/0.
+
 ## [2026-09-30] — Merchant-v2: Business Pulse + Customers from a server-authoritative source; scanner decodes on every device; failed callables become observable; one-page POS setup included — candidate, NOT deployed
 
 **Files:** `functions/merchant-dashboard-facts.js` (new callable `merchantDashboardFacts`, exported in `functions/index.js`), `sokoni-merchant-dashboard.js`, `sokoni-merchant-customers.js`, `sokoni-merchant-customers-ui.js`, `merchant-v2.html`, `pos-barcode.js`; merge of `7dd719c` (one-page POS setup: `pos-setup.html`, `pos-hardware-wizard.html`, `pos-printer-setup.html`, `sokoni-pos-print-service.js`, `sokoni-receipt.js`); new suites `scripts/test-merchant-dashboard-facts.js` (27/0), `scripts/test-pos-barcode-decoder-matrix.js` (16/0); `docs/MERCHANT_DASHBOARD_FACTS.md`.

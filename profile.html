@@ -10,7 +10,7 @@
      the floating search/inbox buttons and .menu-toggle. Those are position:fixed at
      top:20px / z-index 9950 and would otherwise land on top of nav.upn — the same
      overlap already documented for seller.html. -->
-<html lang="en" class="sk-no-header" data-splash="1" data-require-auth="true" data-own-header>
+<html lang="en" class="sk-no-header" data-splash="1" data-require-auth="true" data-own-header data-sk-profile-view="buyer">
 <head>
   <script src="sokoni-crash-sentinel.js"></script>
   <!-- ── Auth gate ──────────────────────────────────────────────────────────
@@ -254,6 +254,17 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
 .up-social-row a{color:rgba(255,255,255,0.55);text-decoration:none;}
 .up-social-row a span{color:#fff;}
 
+/* ── BUYER PRESENTATION (2026-09-30) ─────────────────────────────────────────────
+   The profile is one page for every role. Its overview grew a business command centre
+   (business hub, business health, module summaries, executive commands, businesses /
+   workspaces tiles, listings / rating stats) that rendered for EVERY visitor, so a buyer
+   saw a merchant's dashboard with dashes in it. One attribute on <html>, set from the
+   acting role (SokoniRoleAuthority when verified, the local mirror until then), decides the
+   presentation; business-only blocks carry .sk-biz-only and stay hidden in the buyer view
+   whatever a later render sets on them. Personal tabs (orders, bookings, wallet, identity,
+   employment, career, ID card, vault) are for the PERSON and stay in every view. Switching
+   to a held business role re-applies the attribute; nothing is granted or revoked. */
+html[data-sk-profile-view="buyer"] .sk-biz-only{display:none !important;}
 .up-role-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px;}
 .up-role-chip{
   padding:4px 12px;border-radius:20px;font-size:11px;font-weight:800;
@@ -1970,12 +1981,12 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
         <div class="pi-cmd-lbl">Profile Complete</div>
         <div class="pi-cmd-sub" id="cmdComplSub"></div>
       </div>
-      <div class="pi-cmd-card">
+      <div class="pi-cmd-card sk-biz-only">
         <div class="pi-cmd-val" id="cmdBusinesses">&#8212;</div>
         <div class="pi-cmd-lbl">Businesses</div>
         <div class="pi-cmd-sub">Registered</div>
       </div>
-      <div class="pi-cmd-card">
+      <div class="pi-cmd-card sk-biz-only">
         <div class="pi-cmd-val" id="cmdWorkspaces">&#8212;</div>
         <div class="pi-cmd-lbl">Workspaces</div>
         <div class="pi-cmd-sub">Active</div>
@@ -2023,7 +2034,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
     </div>
 
     <!-- ── S7: Business Health ── -->
-    <div class="up-card" id="pi7BizHealth" style="padding:14px 16px;display:none;"></div>
+    <div class="up-card sk-biz-only" id="pi7BizHealth" style="padding:14px 16px;display:none;"></div>
 
     <!-- ── S5: Smart Insights Strip ── -->
     <div class="up-card" style="padding:12px 16px;">
@@ -2051,7 +2062,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
     <div class="up-card" id="pi7PinsWrap" style="padding:14px 16px;display:none;"></div>
 
     <!-- ── S6: Executive Commands ── -->
-    <div class="up-card" id="pi6ExecCmdsWrap" style="padding:14px 16px;display:none;"></div>
+    <div class="up-card sk-biz-only" id="pi6ExecCmdsWrap" style="padding:14px 16px;display:none;"></div>
 
     <!-- ── Quick Actions ── -->
     <div class="up-card" style="padding:16px;">
@@ -2083,7 +2094,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
         </button>
       </div>
       <!-- Seller / Business Owner actions (shown after auth) -->
-      <div class="pi-qa-grid" id="piQaRoleActions" style="display:none;margin-top:8px;">
+      <div class="pi-qa-grid sk-biz-only" id="piQaRoleActions" style="display:none;margin-top:8px;">
         <a class="pi-qa-item" href="merchant-v2.html" data-sk-merchant-entry>
           <span class="pi-qa-icon">&#43;</span><span class="pi-qa-lbl">Add Product</span>
         </a>
@@ -2107,13 +2118,13 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
     <!-- ── Business Management hub — role-driven modules (Marketplace / Services / Finance /
          Insights / Rider / Admin). Additive: shows ONLY the modules the user has access to,
          and a seller+provider sees BOTH. Populated by _renderBusinessHub(). -->
-    <div class="up-card" id="upBizHub" style="padding:16px;display:none;">
+    <div class="up-card sk-biz-only" id="upBizHub" style="padding:16px;display:none;">
       <div class="up-card-title">&#128188; Business Management</div>
       <div id="upBizHubGrid" style="display:flex;flex-direction:column;gap:14px;margin-top:6px;"></div>
     </div>
 
     <!-- ── S7: Cross-Module Summaries ── -->
-    <div class="up-card" id="pi7ModuleCards" style="padding:14px 16px;display:none;"></div>
+    <div class="up-card sk-biz-only" id="pi7ModuleCards" style="padding:14px 16px;display:none;"></div>
 
     <!-- ── Wallet Snapshot (populated after auth) ── -->
     <div class="up-card" id="piWalletSnap" style="display:none;padding:16px;">
@@ -2138,8 +2149,8 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
     <div class="up-stats" id="upOverviewStats">
       <div class="up-stat"><div class="up-stat-val" id="statOrders">0</div><div class="up-stat-lbl">Orders</div></div>
       <div class="up-stat"><div class="up-stat-val" id="statSpent">0</div><div class="up-stat-lbl">Spent (K)</div></div>
-      <div class="up-stat"><div class="up-stat-val" id="statListings">0</div><div class="up-stat-lbl">Listings</div></div>
-      <div class="up-stat"><div class="up-stat-val" id="statRating">&#8212;</div><div class="up-stat-lbl">Rating</div></div>
+      <div class="up-stat sk-biz-only"><div class="up-stat-val" id="statListings">0</div><div class="up-stat-lbl">Listings</div></div>
+      <div class="up-stat sk-biz-only"><div class="up-stat-val" id="statRating">&#8212;</div><div class="up-stat-lbl">Rating</div></div>
     </div>
 
     <div class="up-card">
@@ -4019,6 +4030,21 @@ function _approvedRolesOrCached(cached){
   return cached;
 }
 
+/* WHICH PRESENTATION does this profile get? 'business' only when the ACTING role is a held
+   non-buyer role (the same acting-context rule _actingAs applies to the Business Hub); every
+   other case — buyer active, no active role yet, an active role the account does not hold —
+   is the buyer view. Pure, so it is proven directly. */
+function _profileViewFor(activeRole, roles){
+  var r = Array.isArray(roles) ? roles : [];
+  var a = String(activeRole || '');
+  if (!a || a === 'buyer') return 'buyer';
+  return r.indexOf(a) > -1 ? 'business' : 'buyer';
+}
+function _applyProfileView(activeRole, roles){
+  var view = _profileViewFor(activeRole, roles);
+  try { document.documentElement.setAttribute('data-sk-profile-view', view); } catch(_) {}
+  return view;
+}
 function renderRoleSwitcher(){
   _user = getUser();
   var roles = _user.roles && _user.roles.length ? _user.roles : ['buyer'];
@@ -4026,6 +4052,7 @@ function renderRoleSwitcher(){
   var activeRole = (window.SokoniRoleAuthority && window.SokoniRoleAuthority.isVerified())
     ? window.SokoniRoleAuthority.getActiveRole()
     : (_user.activeRole || roles[0] || 'buyer');
+  _applyProfileView(activeRole, roles);
   var rd = getRoleDef(activeRole);
 
   var emojiEl = document.getElementById('rsActiveEmoji');
