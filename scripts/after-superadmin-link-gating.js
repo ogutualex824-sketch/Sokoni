@@ -76,7 +76,11 @@ console.log('\n  ── every other route is claim-gated or unreachable without 
 const perms = read('sokoni-permissions.js');
 ck('adminHomeFor() returns it only for hasRole(superAdmin)',
   /if \(hasRole\('superAdmin'\)\) return 'super-admin\.html';/.test(perms), '');
-const header = read('shared-header.js');
+/* 2026-09-30: the account popup + role switcher were factored out of shared-header.js into
+   sokoni-profile-menu.js (one implementation, mounted by shared-header pages AND merchant-v2).
+   The renderer moved; the property did not. Read BOTH files so a future move back cannot
+   silently drop the check either way. */
+const header = read('sokoni-profile-menu.js') + '\n' + read('shared-header.js');
 /* This matched the RETIRED standalone switcher's spelling. That control and its
    builder are gone, so the pattern went missing and the row failed — while the
    property it exists to protect held perfectly well in the live account popup, one
