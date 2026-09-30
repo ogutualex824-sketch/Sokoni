@@ -1,3 +1,16 @@
+## [2026-09-30] - HOSTING PREFLIGHT (READ ONLY): shell-gate consumer + Complete Application surface on the live line 49e0f3a — candidate 2f3bb6f certified against the DEPLOYED function code; deployment NOT authorized
+
+docs/HOSTING_PREFLIGHT_SHELL_GATE_CONSUMER.md + docs/release-gates/hosting-preflight-shell-gate-consumer.json. Worktree C:/temp/sok-host-gate,
+branch hosting/shell-gate-consumer-on-49e0f3a, tip 2f3bb6f = live 49e0f3a + one commit (rollback guard: contains live). Ships EXACTLY 4 files:
+provider-dashboard.html (+2 lines: the consumer script tag), sokoni-business-workspace.js (98e516ef…), complete-application.html (9cf6ecb4…),
+sokoni-complete-application.js (3f681de2…) — the three new files byte-identical to the capability line. Browser suite run IN THE CANDIDATE against
+FUNCTIONS_DIR=sok-pd-cand (c7e26b6, the deployed dispatcher) with the real onboarding/ops handlers answering the dashboard's boot ops: 21/0 — the
+live dashboard redirects a REAPPLICATION_REQUIRED provider to /complete-application, keeps a VALID one (data-ws-state AVAILABLE), shows a REFUSED
+one the notice. Consumer gained a fallback notice box for dashboards without #hcWorkspace (capability line aca09aa; sidebar 90/0, projection
+29/0, gate 22/0). Hosting gates PASS; syntax gate result to follow. Live serves every dependency; the 3 new paths are 404 today. WHEN SHIPPED:
+providers holding the claim who reach the dashboard get gated (Kasindi/Langa'ta class); DJ holds no claim (already sent to onboarding by the live
+dashboard); sellers/merchant-v2 NOT gated by this slice. Rollback = Hosting version 3cbdf961791900b8.
+
 ## [2026-09-30] - DEPLOYED: providerDispatch shell gate, candidate c7e26b6 → revision providerdispatch-00050-rur (owner-authorized; no --force)
 
 docs/LANDING_PROVIDERDISPATCH_SHELL_GATE.md + docs/release-gates/providerdispatch-landing.json. Final preflight 01:54Z green; no Cloud Build,
