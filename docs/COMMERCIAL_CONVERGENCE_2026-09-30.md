@@ -196,3 +196,62 @@ Result: the intent rail has **one** writer (`reconcilePaidIntent`); every other 
 | 5 | verify client/server parity: `SokoniCommission.pct('marketplace') === getCommissionConfig().rates.marketplace.pct` on the live site; `subscriptions.html` renders `subGetPlans` | curl + browser | — |
 
 **HARD STOP honoured:** no production traffic change. Open for the owner: step 0 items; the two-document-model question (7.4); `ROLE_DEFAULT_COMMISSION` retirement.
+
+
+---
+
+## 8 · Final gap closure (2026-09-30, third pass) — the four blockers
+
+### 8.1 VAT — closed with a policy framework; the applicability decision stays with the owner/adviser
+
+Record: [[VAT_POLICY_2026-09-30]] (KRA references; the seven-row applicability matrix; how to arm). Implementation: `revenueConfig/*_vat` now carries `applicability: taxable | zero_rated | exempt` (+ `inclusive` for taxable, `effectiveFrom`), the loader is fail-closed on anything unresolved, `etims._issuePlatformInvoice` takes `taxCategory` and refuses an unknown one, both invoice modules pass and record it. Proven: `test-vat-policy.js` 19/0 (taxable inclusive 500 → 431.03 + 68.97; exclusive → +80; zero-rated B / VAT 0; exempt C / no VAT; seven unresolved shapes → null), e2e 23/0 (configured → issued; absent → deferred → sweep issues exactly once). `scripts/write-vat-policy.js --dry-run` **refuses** the manifest as it stands (every decision field null) — that refusal is the intended state until the adviser's reference exists; `--read` shows both production documents **absent** (invoices refuse / defer). **No production write made.**
+
+Decisions the matrix leaves to the owner/adviser (§2 of the policy doc): SOKONI's VAT registration status (not in the repository); commission and subscription applicability + treatment (the two live pages `terms.html:255` / `legal-hub.html:3228` disagree on inclusive vs exclusive — one must be corrected when the decision lands). Merchant→buyer, BnB stays, property transfers, rent and utilities are **not SOKONI supplies**: SOKONI invoices only its own fee on them (commission), and merchant VAT is already modelled per `etimsProfiles`.
+
+### 8.2 provider_basic / provider_pro — retired, fail-closed
+
+Evidence: production `providerSubscriptions` 5 docs, all `plan: free_trial`; subscription intents `starter` 9 / `business` 1 / `seller_basic` 1; **no** `provider_basic` or `provider_pro` anywhere in production, checkout, entitlement, reconciliation or tests — only the `PLANS` rows, an entitlement alias, and `plans.html`'s "popular" marker. `provider_pro` (KES 2,499, "Provider Pro") is **not** the canonical `pro` (KES 1,499): a different price is a different plan → retired, not aliased. Done: `PLANS.provider_basic/provider_pro` → `isActive:false, retired:'2026-09-30'` (hidden by `subGetPlans`, refused by `createPaymentIntent`); `plans.html` popular → `pro`; `PROVIDER_PLAN_ALIASES = { free_trial → provider_free }` (the production spelling, the "Free Trial 20%" tier); `PROVIDER_RETIRED_IDS`; `resolveProviderRate`: known → rate, alias → rate, **no plan → Free 20% (a known state)**, retired/unknown → `refused` (pct null); `subscription-core` throws `provider_plan_refused`; `finos-utils` **rethrows** (the booking is held, never priced at the category default); the snapshot's `providerPct()` returns `null` for retired/unknown. `test-provider-plan-ladder.js` **38/0** (A5/A6 retired & unknown refused; C6 engine throws; E1–E4 not for sale; F1 client mirrors). Note: the owner's brief named canonical ids `provider_starter/_pro/_business/_enterprise`; the immutable ids in `PLANS` are `starter`, `pro`, `business` and the cross-hub `enterprise` — kept as they are (renaming an id is what breaks stored documents).
+
+### 8.3 FREE-50 — catalogue/entitlement/UI/tests agree; production backfill prepared, NOT executed
+
+Catalogue v3 = owner ruling `c1d8ea1` (FREE 50 / PROFESSIONAL 100 / BUSINESS, ENTERPRISE unlimited); `entitlement-authority`, `product-limit` and every suite read the catalogue value; client copy that stated "10 products" (`sokoni-trust.js` ×2, `subscriptions.html` FAQ) now points at the plan panel instead of a literal. Tool: `scripts/backfill-product-counters-v3.js` — dry-run by default, `--apply` only with `--authorized-by`, `--rollback <evidence>`; never reduces a ceiling, never writes `count`, grandfathers a merchant above the ceiling, idempotent by `migrationVersion`, evidence JSON per run.
+**Dry-run against production (reads only, evidence `docs/backups/free50-dryrun-2026-09-30T13-30-40-241Z.json`):** 12 counters, all `maxProducts: 10` (v1), all resolve INACTIVE → catalogue 50. Eleven are test/QA identities (`MERCHANT_A_uid`, `SELLER_A*`, `_qa_*`, `rc-not-this*`, `zzz_*`, two zero-product uids) → 50. **One real merchant** (`D5Ql2E…`, the KASS shop): **102 products by `sellerUid` / 97 by `shopId`, stored `count: −24`, ceiling 10** → target **102 with `grandfatheredFloor: 102`** (nothing removed; cannot add until under the ceiling — the floor is a floor). Count drift on 2 counters is reported, not written (`recount-product-counters.js` is the separate operation). 0 sellers hold products without a counter. **Authorization to apply is not given; the write has not happened.** After apply, the chain to verify: catalogue → `resolveEffective` → `productCounters.maxProducts` → `canPublishProduct` → plan panel.
+
+### 8.4 Webhook stamp-PAID on 68811e1 — nothing to port; the chain is proven on the containment tree
+
+`68811e1` already carries the stamp-PAID block in both webhooks (`index.js` 7381–7409 `intasendWebhook`, 8976–9004 `webhookIntasend`) and exports `onPaymentIntentPaid`; it has **zero** `subData.paymentRef !== apiRef` activation guards. The rival writer existed only on the c4 index (converted in §7). sokoni-70 was told to port nothing and to assert presence instead. Proof on the containment tree (`scripts/test-webhook-stamp-paid-chain.js`, `FN_DIR=C:/temp/sok-recovery/functions`, Firestore emulator, synthetic challenge, log `docs/backups/webhook-stamp-paid-proof-68811e1-2026-09-30.log`): **10/0** — valid COMPLETE callback → 200, `payments/{ref}` COMPLETE, intent `paid` + `activationPending` by the webhook, no subscription written by the webhook; `reconcilePaidIntent` → `subscriptions/{uid}` active from the intent's plan, `reconciledAt` + `subscriptionId` recorded; replayed callback → nothing changes; replayed reconcile → `replayed:true`, one subscription document. The B1 gate (`gate_error` branch) belongs to sokoni-70's draft; its status is theirs to report — it is **not** part of this proof and not claimed here.
+
+### 8.5 Final commercial matrix
+
+| area | authority | tests | production evidence | status |
+|---|---|---|---|---|
+| Commission | `commission-config.js` (`5db1540` + 09-30: POS bypass, property flat, delivery floor, provider lane) | schedule 25/0 · agreement 62/0 · lane-sep 22/0 · pos-lane 92/0 · pos-sale 78/0 · settlement 53/0 · KASS 7/0 · healthcare-plan 16/0 · facts 22/0 · single-source PASS · audit 0 independent | live serves the 09-06 config (5%) via `webhookintasend-00068-del`; `getCommissionConfig` 3% (08-22) | **READY — not deployed** |
+| POS | `FIXED_RATE_CATEGORIES=['pos']`, absolute 5%, overrides bypassed and not read | fixed-rate-bypass 20/0 (rule + revenueConfig cannot reprice a till sale) | 00068-del already absolute 5% | **READY (unchanged live)** |
+| Provider plans | `PROVIDER_PLAN_RATES` by plan id; alias `free_trial`; retired ids refused | provider-plan-ladder 38/0 · facts 3a–3c | prod: 5 provider subs all `free_trial` → 20%; no retired ids in use | **READY — not deployed** |
+| Subscriptions | `PLANS` (sub-billing) · activation = `reconcilePaidIntent` · period = `subscription-period.js` | pay-methods 71/0 · writers 24/0 · paid-trial 82/0 · trial-activation 43/0 · entitlement-authority 79/0 · adapter-period 36/0 | live functions are the hosting lineage (09-09); 7 subs, none active | **READY — not deployed** |
+| Invoices | `etims._issuePlatformInvoice` consumed by `commission-invoice` (ledger) and `subscription-invoice` (finalized payment) | commission-invoice 52/0 · e2e 23/0 (dup callback, racing writers, deferred → sweep once) | `platformInvoices` empty; `etimsInvoices` platform none | **READY — blocked on VAT + eTIMS creds (by design)** |
+| VAT | `revenueConfig/commission_vat`, `subscription_vat` with applicability; loader fail-closed | vat-policy 19/0 · e2e C | both documents **absent** (`--read`) | **OWNER/ADVISER decision — code fail-closed** |
+| Property | `RATES.property = KES 5,000 flat` | schedule / agreement / facts 1c | live 2% (09-06) | **READY — not deployed** |
+| BnB | `RATES.hotel 15%` (alias `bnb`); host VAT per `etimsProfiles`; SOKONI invoices commission only | schedule (hotel row) · VAT matrix row | live 5% | **READY — not deployed** |
+| Payment webhook | `68811e1` containment (P5, D1/Q6, atomic guard, stamp-PAID, absolute POS) | stamp-paid chain 10/0 · verify-candidate 48/48 · smoke-postill | serving `00068-del`, no real callback since 09-14 | **LIVE; B1 gate candidate with sokoni-70 (gate_error branch: theirs to prove)** |
+| Free listing limits | catalogue v3 50/100/∞/∞ (`c1d8ea1`) | entitlement-authority 79/0 · free-entitlement 100/0 · counter-reconciliation 34/0 | 12 counters at 10; dry-run computed; **backfill not applied** | **READY — backfill awaits authorization** |
+| Hosting snapshot | generated from the same `commission-config.js`; byte-identical on both branches | `--check` PASS both trees · single-source PASS both · syntax gate PASS | live serves the 3% file | **READY — publish after Functions only** |
+
+No UNKNOWN. No PARTIAL. UNPROVEN on a live money path: none in this scope (the B1 `gate_error` branch is outside it and not claimed).
+
+### 8.6 Deployment order (for approval — nothing executed)
+
+**Functions** (`convergence/commercial-fn-on-ef1e992`), one at a time, each after the per-function live-archive content diff and `Ready=True`, peers holding browser suites:
+1. `getCommissionConfig`, `previewCommission` (the 3% / 5% contradiction ends here)
+2. `createCheckoutSession`, `onSellerPaymentCreated`
+3. subscription set: `subGetPlans`, `subGetStatus`, `subActivate`, `subCancel`, `subReactivate`, `subGetBillingHistory`, `adminSub*` (7), `subProcessExpirations`, `subSendRenewalReminders`, `subScheduleRenewals`, `subAutoActivateOnPayment`, `subUpgradeWithProration`, `subCheckFeature`, `subRetryFailedPayments`, `subDowngrade`
+4. intent rail: `createPaymentIntent`, `subscriptionPaymentMethods`, `payIntentWithWallet`, `onPaymentIntentPaid`, `reconcileSubscriptionPayment`, `activateSubscription`
+5. entitlement: `getMerchantEntitlements`, `onSubscriptionChangedSyncEntitlements`, `onSubscriptionChangedSyncLimit`, `onAiSubscriptionChangedSyncLimit`, `canPublishProduct`, `recountMarketplaceProducts`, `onMarketplaceProductCreated/Deleted`
+6. invoices: `subIssuePendingInvoices`, `subIssueInvoice`, `issueCommissionInvoice`; reconciliation: `runDailyReconciliation`
+7. **not from this branch:** `webhookIntasend` stays on `68811e1` (B1 candidate via sokoni-70, P0-4 gate)
+Then: `write-vat-policy.js --apply` (when the adviser's reference exists) · `backfill-product-counters-v3.js --apply --authorized-by` · verify `getCommissionConfig` 15 / POS 5 / property 5000; one subscription on the proven path.
+
+**Hosting** (`convergence/commercial-web-on-18e3711`): only after step 6 verified — `guard-no-rollback`, syntax gate (PASS), single-source (PASS), then curl parity `SokoniCommission.pct('marketplace') === getCommissionConfig().rates.marketplace.pct`, `subscriptions.html` renders `subGetPlans`.
+
+### 8.7 Remaining blockers (all outside code)
+VAT applicability + registration facts (owner/adviser) · eTIMS platform credentials · FREE-50 backfill authorization · B1 `gate_error` proof (sokoni-70) · production deployment approval.

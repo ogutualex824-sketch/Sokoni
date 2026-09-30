@@ -1,3 +1,7 @@
+## [2026-09-30] — Re-levelled with the functions branch (provider lane fail-closed, providerPct null for retired ids); allowance copy no longer states a number — LOCAL, NOT DEPLOYED (`convergence/commercial-web-on-18e3711`)
+
+**Files:** `sokoni-commission-rates.js` (byte-identical to functions), `scripts/build-commission-snapshot.js`, `functions/commission-config.js`, `plans.html` (popular provider plan → `pro`; `provider_pro` retired), `sokoni-trust.js` + `subscriptions.html` (no literal listing allowance; the plan panel / plan card is the source), `docs/COMMERCIAL_CONVERGENCE_2026-09-30.md` §8, `docs/VAT_POLICY_2026-09-30.md`. Publication still gated on the Functions deploy.
+
 ## [2026-09-30] — Snapshot + authority config re-levelled with the functions branch (provider lane, alias fix) — LOCAL, NOT DEPLOYED (`convergence/commercial-web-on-18e3711`)
 
 **Files:** `sokoni-commission-rates.js` (byte-identical to the functions branch: `providerPct()`, `marketplacePct` alias table derived from the authority — `seller_*` spellings previously returned `undefined`), `scripts/build-commission-snapshot.js`, `functions/commission-config.js`, `docs/COMMERCIAL_CONVERGENCE_2026-09-30.md` (§7 gap closure + deployment matrix). Publication still gated on the functions deploy.
