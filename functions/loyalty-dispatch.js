@@ -126,6 +126,10 @@ const _OPTS = {
   secrets:         [LOYALTY_HMAC],
   timeoutSeconds:  120,
   memory:          '512MiB',
+  /* Pinned to the LIVE service (maxScale 80, read 2026-10-01). The CLI does not carry
+     maxInstances over from the running service and ignores firebase.json codebase keys,
+     so an unset value here would silently change the live ceiling on deploy. */
+  maxInstances:    80,
 };
 
 /**
