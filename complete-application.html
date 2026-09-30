@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <script src="security.js"></script>
+  <script src="sokoni-cart.js"></script>
+  <script src="shared-header.js" defer></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Complete your business application — SOKONI</title>
+  <meta name="description" content="Complete a business registration that needs to be finished before your SOKONI workspace can open.">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="sokoni-legal.css">
+  <script type="module" src="firebase.js"></script>
+  <script src="sokoni-auth-state.js"></script>
+  <!-- the EXISTING intake (fresh applications go through it, never a parallel form) and its rate schedule -->
+  <script src="sokoni-commission-rates.js"></script>
+  <script src="hub-register.js" defer></script>
+  <script src="sokoni-complete-application.js"></script>
+  <style>
+    .ca-wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+    .ca-h1 { font-size: 22px; margin: 0 0 8px; }
+    .ca-lede { color: var(--muted, #aaa); font-size: 14.5px; line-height: 1.6; margin: 0 0 18px; }
+    .ca-list { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 10px; }
+    .ca-row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; justify-content: space-between; padding: 12px 14px; border: 1px solid var(--border, rgba(255,255,255,.12)); border-radius: 10px; background: rgba(255,255,255,.03); }
+    .ca-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .ca-btn { display: inline-block; background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.28); border-radius: 8px; padding: 10px 16px; font-size: 14px; cursor: pointer; text-decoration: none; }
+    .ca-btn-primary { background: var(--accent, #71ff00); color: #0a0a0a; border-color: transparent; font-weight: 600; }
+    .ca-btn-quiet { opacity: .8; }
+    .ca-note { color: var(--muted, #aaa); font-size: 13.5px; }
+    .ca-note code, .ca-row code { color: var(--accent, #71ff00); }
+    @media (max-width: 480px) { .ca-row { flex-direction: column; align-items: stretch; } .ca-btn { width: 100%; text-align: center; } }
+  </style>
+</head>
+<body>
+  <main class="ca-wrap">
+    <div id="caHost" data-ca-state="boot" aria-live="polite"><p class="ca-lede">Checking your business registration…</p></div>
+  </main>
+  <script>
+  (function () {
+    var host = document.getElementById('caHost');
+    var FS = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+    var deps = {
+      host: host,
+      /* the ONE workspace authority; the caller's own account, never another's */
+      workspace: function () {
+        var call = (typeof window.sokoniCallable === 'function') ? window.sokoniCallable('providerDispatch') : firebase.functions().httpsCallable('providerDispatch');
+        return call({ op: 'businessWorkspace' }).then(function (r) { return r && r.data; });
+      },
+      /* the applicant's ONLY write here: withdraw one of their own pending applications (non-decisive status) */
+      withdraw: function (id) {
+        return import(FS).then(function (fs) { return fs.updateDoc(fs.doc(window.firebaseDB, 'applications', id), { status: 'withdrawn', withdrawnAt: new Date().toISOString(), withdrawnBy: 'applicant' }); });
+      },
+      openIntake: function () { if (window.HubRegister) window.HubRegister.open({}); else window.location.href = '/register'; }
+    };
+    /* Test seam (browser suite): I/O only, never the logic. */
+    if (window.SokoniCompleteApplicationDeps) Object.assign(deps, window.SokoniCompleteApplicationDeps);
+    var started = false;
+    function start(session) {
+      if (started) return; started = true;
+      var user = (session && session.uid) ? session : (window.firebaseAuth && window.firebaseAuth.currentUser) || null;
+      if (!user) { host.setAttribute('data-ca-state', 'signed_out'); host.innerHTML = '<h1 class="ca-h1">Sign in to continue</h1><p class="ca-lede" data-ca-signed-out>Sign in with the account that registered your business to complete its application.</p>'; return; }
+      window.__caMounted = SokoniCompleteApplication.mount(deps);
+    }
+    function viaAuthState() { if (!started && window.SokoniAuthState && typeof window.SokoniAuthState.whenResolved === 'function') window.SokoniAuthState.whenResolved(function (s) { start(s); }); }
+    document.addEventListener('sokoniAuthReady', function (ev) { start((ev.detail && ev.detail.user) || (window.firebaseAuth && window.firebaseAuth.currentUser) || null); }, { once: true });
+    function viaPromise() { if (!started && typeof window.waitForSokoniAuthReady === 'function') window.waitForSokoniAuthReady(function (d) { start((d && d.user) || (window.firebaseAuth && window.firebaseAuth.currentUser) || null); }); }
+    viaAuthState(); viaPromise(); window.addEventListener('load', function () { viaAuthState(); viaPromise(); });
+  })();
+  </script>
+</body>
+</html>
