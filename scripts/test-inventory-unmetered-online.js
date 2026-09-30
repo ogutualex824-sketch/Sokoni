@@ -50,6 +50,7 @@ const origReq = Module.prototype.require;
 Module.prototype.require = function (id) {
   if (id === 'firebase-admin/firestore') return { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath };
   if (id === 'firebase-admin') return ADMIN;
+  if (id === 'firebase-admin/auth') return { getAuth: () => ({ getUser: async () => ({ customClaims: {} }) }) };
   if (id === 'firebase-functions/v2/https') return { onCall: onCallStub, onRequest: onCallStub, HttpsError };
   if (id === 'firebase-functions/v2/scheduler') return { onSchedule: (_o, h) => h };
   if (id === 'firebase-functions/v2/firestore') return { onDocumentWritten: (_o, h) => h, onDocumentCreated: (_o, h) => h, onDocumentUpdated: (_o, h) => h };
@@ -136,6 +137,7 @@ const alerts = async () => (await all('oversoldAlerts'));
   /* IB4 */
   const PR = load(path.join(FN, 'pos-retail.js'));
   const sync = (saleId, items) => PR.posSyncToMarketplace({ auth: { uid: 'shopA', token: {} }, data: { branchId: 'main', saleId, items } });
+  await db.doc('shops/shopA').set({ name: 'Cyber Point', sellerUid: 'shopA' });   /* the sync is authorized against the shop (security slice) */
   await P('photo', {}); await P('usb', { stock: 1 }); await P('card', { stock: 9 });
   const ac = (await alerts()).length;
   const y1 = await out(sync('S1', [{ productId: 'photo', qtyDeducted: 4 }, { productId: 'usb', qtyDeducted: 2 }]));

@@ -301,6 +301,38 @@ Detection fails the build immediately.
   platform-wide is DECISION_REQUIRED (740 isAuthed() references) — §24.
 See [[CREATOR_HUB]] §9, §13.
 
+## Inventory authorization — who may move a shop's stock (2026-09-30)
+
+**Defect.** `posSyncToMarketplace` (`functions/pos-retail.js`, exported from `functions/index.js`) had only one gate:
+`request.auth`. So any signed-in account could move any product's `stock` and `soldCount`. Its idempotency record
+was keyed by `saleId` alone, so an account could claim another shop's sale id first, and that shop's real sync was
+dropped as a "duplicate".
+
+**Two separate findings, not one.**
+1. **The security defect:** the server endpoint's authorization boundary was insufficient. Any signed-in account,
+   unrelated to the shop, could invoke it directly and move another shop's stock.
+2. **Why the known path never exercised it:** the only in-repo caller, `pos-sales.js` `_syncToMarketplace`,
+   supplied `qty` instead of `qtyDeducted`. The function rejected every item, so that caller never moved stock.
+   **Do not read the defect as "the POS was moving other shops' stock".** It was a reachable boundary, not an observed
+   mutation. The caller is untouched here; repairing or retiring it is a separate decision.
+
+**Rule now.** caller → authenticated uid → every target product (read from the database) → its owning shop
+(`shopId || sellerUid`, never from the request) → `shop-employees.resolveShopAccess` plus the `sell` capability → only
+then any mutation.
+
+- A mixed-shop sale is rejected **whole**; nothing is partially moved.
+- A refusal writes nothing and claims nothing.
+- The idempotency record is `posSyncIdempotency/{shopId}_{saleId}`, claimed atomically with `create()`.
+- Each stock transaction re-checks the product's owner, so a product moved to another shop mid-call is not written.
+
+**Authority reused, not added:** `resolveShopAccess` recognises the owner, a corroborated employee, or a platform admin
+from claims, all from data. The other two merchant guards (`merchant-authority`, `business-bootstrap`) remain
+unconverged, as before.
+
+**Evidence.** `scripts/test-possync-ownership.js` 11/0 (PO1–PO11). The parent `2c2736d` fails 8 of 11: the stranger,
+the other shop's cashier and the forger each moved stock, and the squatted sale id dropped the real sync. Deliberate
+breakages 6/6. See [[INVENTORY_INVARIANT]].
+
 ## Related Documents
 
 - [[ARCHITECTURE]] — Full system architecture

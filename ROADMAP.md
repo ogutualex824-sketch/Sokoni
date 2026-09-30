@@ -474,7 +474,7 @@ quick-charge line (scanning), paid by ONE M-PESA payment → one sale, one recei
   unmetered) and with the never-negative stock invariant. It hits every catalogue service or legacy product without a
   stock field, which is exactly the cyber shop's printing. Its own slice, before Step 3.
   **→ Fixed 2026-09-30, local: Phase A (till) and Phase B (every writer, one shared helper).** See [[INVENTORY_INVARIANT]].
-- **`posSyncToMarketplace` has no shop-ownership check** (found by Phase B): any signed-in account can move any product's stock. Its own repair.
+- ~~**`posSyncToMarketplace` has no shop-ownership check**~~ — **fixed 2026-09-30** (security slice, local): `resolveShopAccess` + `sell`; mixed-shop sales rejected whole; idempotency keyed shop + sale.
 - Catalogue sale lines carry no `lineTotal`; quick-charge lines do (sale-record shape inconsistency).
 
 - **Offline POS blocker:** `pos-checkout.html`'s offline save calls `PosSales.park`, which does not exist

@@ -49,11 +49,55 @@ exports.posSyncToMarketplace = onCall(
     }
     if (!saleId) throw new HttpsError('invalid-argument', 'saleId is required for idempotency');
 
-    /* Idempotency: reject duplicate syncs for the same sale */
-    const idempRef = db.collection('posSyncIdempotency').doc(String(saleId).slice(0, 128));
-    const idempSnap = await idempRef.get();
-    if (idempSnap.exists) return { synced: 0, duplicate: true };
-    await idempRef.set({ saleId, syncedAt: admin.firestore.FieldValue.serverTimestamp(), uid: request.auth.uid });
+    /* ── WHO may move this stock (inventory authorization, 2026-09-30) ─────────────────────────────────
+       Before this, ANY signed-in account could move ANY product's stock and soldCount: the only gate was
+       request.auth. Now, BEFORE anything is written:
+         - every product is read and its owning shop taken from the STORED record (shopId || sellerUid — the
+           till's rule). saleId / branchId / items never confer ownership;
+         - one sale belongs to ONE shop: items of two shops reject the WHOLE sync — nothing is partially moved;
+         - the caller must hold the 'sell' capability at that shop, decided by shop-employees.resolveShopAccess
+           (the till's authority: owner / corroborated employee / platform admin, from DATA, never a claim).
+       A refusal moves nothing and claims nothing. */
+    const { resolveShopAccess, capabilitiesForRole } = require('./shop-employees');
+    const _ownerOfProduct = (p) => String((p && (p.shopId || p.sellerUid)) || '');
+    const errors = [];
+    const _valid = [];
+    for (const item of items) {
+      const { productId, qtyDeducted } = item || {};
+      if (!productId || typeof qtyDeducted !== 'number' || !(qtyDeducted > 0)) {
+        errors.push(`Invalid item: ${JSON.stringify(item)}`);
+        continue;
+      }
+      _valid.push({ productId: String(productId), qtyDeducted });
+    }
+    const _snaps = await Promise.all(_valid.map((it) => db.collection('products').doc(it.productId).get()));
+    const _shops = new Set();
+    _snaps.forEach((s) => {
+      if (!s.exists) return;   /* a product that is gone has no stock to move */
+      const owner = _ownerOfProduct(s.data());
+      if (!owner) throw new HttpsError('permission-denied', 'A product in this sale has no owning shop, so nothing was synced.');
+      _shops.add(owner);
+    });
+    if (_shops.size > 1) {
+      throw new HttpsError('permission-denied', 'These items belong to different shops. A sale belongs to one shop, so nothing was synced.');
+    }
+    if (_shops.size === 0) return { synced: 0, errors };
+    const shopId = [..._shops][0];
+    const _access = await resolveShopAccess(request.auth.uid, shopId);   /* throws permission-denied */
+    if (!capabilitiesForRole(_access.role).includes('sell')) {
+      throw new HttpsError('permission-denied', 'Your role at this shop cannot record sales, so nothing was synced.');
+    }
+
+    /* Idempotency: reject duplicate syncs for the same sale — keyed by SHOP + sale. Keyed by saleId alone, anyone
+       could claim another shop's sale id first and that shop's real sync would be dropped as a "duplicate".
+       create() is atomic; the old get()+set() let two concurrent syncs both pass. */
+    const idempRef = db.collection('posSyncIdempotency').doc((shopId + '_' + String(saleId)).replace(/\//g, '_').slice(0, 256));
+    try {
+      await idempRef.create({ saleId: String(saleId), shopId, syncedAt: admin.firestore.FieldValue.serverTimestamp(), uid: request.auth.uid });
+    } catch (e) {
+      if (e && (e.code === 6 || e.code === 'already-exists' || /already exists/i.test(String(e.message)))) return { synced: 0, duplicate: true };
+      throw e;
+    }
 
     /* Inventory convergence B (2026-09-30). The old code was a blind batch of increment(-qtyDeducted): its comment
        said "floor-at-zero is enforced by a Firestore security rule", but this runs with the Admin SDK, which BYPASSES
@@ -62,22 +106,17 @@ exports.posSyncToMarketplace = onCall(
        (shared/sellability.planStockDeduction): the device has ALREADY sold it, so a short metered item is taken down
        to zero and the shortfall FLAGGED (oversoldAlerts), never refused; an unmetered item moves counters only. */
     const _SELL = require('./shared/sellability');
-    const errors = [];
     let synced = 0;
 
-    for (const item of items) {
-      const { productId, qtyDeducted } = item;
-      if (!productId || typeof qtyDeducted !== 'number' || !(qtyDeducted > 0)) {
-        errors.push(`Invalid item: ${JSON.stringify(item)}`);
-        continue;
-      }
-
+    for (const { productId, qtyDeducted } of _valid) {
       /* Find matching marketplace product by productId or externalId */
       const prodRef = db.collection('products').doc(String(productId));
       try {
         await db.runTransaction(async (t) => {
           const prodSnap = await t.get(prodRef);
           if (!prodSnap.exists) return;
+          /* re-checked on the transaction's own read: a product moved to another shop mid-call is not written */
+          if (_ownerOfProduct(prodSnap.data()) !== shopId) throw new Error('this product no longer belongs to the shop');
           const plan = _SELL.planStockDeduction(prodSnap.data(), qtyDeducted, { onShort: 'flag' });
           const upd = {
             soldCount:    admin.firestore.FieldValue.increment(qtyDeducted),

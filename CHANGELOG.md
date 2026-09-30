@@ -1,3 +1,56 @@
+## [2026-09-30] - Security: only a shop's own people may move its stock through POS device sync
+
+**Local only. NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `2c2736d`.** See `docs/SECURITY.md`
+§ Inventory authorization.
+
+**Defect (found by inventory Phase B).** `posSyncToMarketplace` (`functions/pos-retail.js`, exported from `index.js`)
+had one gate, `request.auth`. Any signed-in account could move any product's `stock` and `soldCount`. Its idempotency
+record was keyed by `saleId` alone: anyone could claim another shop's sale id first, and that shop's real sync was
+dropped as a "duplicate".
+
+**Two separate findings, not one.**
+1. **The security defect:** the server endpoint's authorization boundary was insufficient. Any signed-in account,
+   unrelated to the shop, could invoke it directly and move another shop's stock.
+2. **Why the known path never exercised it:** the only in-repo caller, `pos-sales.js` `_syncToMarketplace`,
+   supplied `qty` instead of `qtyDeducted`. The function rejected every item, so that caller never moved stock.
+   **Do not read the defect as "the POS was moving other shops' stock".** It was a reachable boundary, not an observed
+   mutation. The caller is untouched here; repairing or retiring it is a separate decision.
+
+**Fix.** Before anything is written:
+
+- every product is read, and its owning shop comes from the stored record (`shopId || sellerUid`);
+- items from two shops reject the **whole** sync;
+- the caller must hold `sell` at that shop, via `shop-employees.resolveShopAccess` (owner, corroborated employee, or
+  admin). This is the till's existing authority; no new guard was added;
+- a refusal moves nothing and claims nothing;
+- the idempotency key is `{shopId}_{saleId}`, claimed atomically with `create()` (the old `get()` + `set()` raced);
+- each stock transaction re-checks the owner.
+
+**Tests.**
+
+- `scripts/test-possync-ownership.js` **11/0**: owner, repeat, cashier, stranger, another shop's cashier, forged
+  employee, mixed-shop sale, the sale-id reservation race, a non-selling role, admin, and a product that changes shop
+  mid-call.
+- Parent `2c2736d` fails 8: the attacks moved stock, and the squatted sale id dropped the real sync.
+- Deliberate breakages **6/6**.
+- `test-inventory-unmetered-online.js` IB4 now seeds the shop's owner record, because the sync is authorized.
+
+**Behaviour change.**
+
+- A sync by an account with no access to the products' shop, or with items of two shops, is now refused.
+
+**Found, not changed (pre-existing).** The only in-repo caller, `pos-sales.js` `_syncToMarketplace`, sends `sale.items`
+with **`qty`**, not `qtyDeducted`.
+
+- The function has always rejected every such item as invalid, so this caller has never moved stock, before or after
+  this change.
+- The exposure closed here was the callable itself, reachable directly by any signed-in account.
+- The dead legacy device sync is recorded in `docs/INVENTORY_INVARIANT.md`, for the owner to decide whether to repair
+  or retire it.
+
+**Database.** `posSyncIdempotency` ids become `{shopId}_{saleId}`, and old `{saleId}` records are ignored. No
+migration.
+
 ## [2026-09-30] - Inventory convergence, Phase B: every stock writer asks ONE authority — no service is refused, no stock goes negative
 
 **Local only. NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `0e23ca3`.** See

@@ -55,9 +55,12 @@ every writer, instead of eight separate readings of stock:
 
 ## Findings recorded by Phase B, NOT fixed here
 
-- **`posSyncToMarketplace` has no shop-ownership check.** Any signed-in account can move any product's stock and
-  `soldCount`. It is exported from `functions/index.js`. This is an authorization defect, not a stock-semantics one, so
-  it is its own repair.
+- ~~**`posSyncToMarketplace` has no shop-ownership check.**~~ **Resolved 2026-09-30** in its own security slice:
+  `resolveShopAccess` plus the `sell` capability; mixed-shop sales are rejected whole; the idempotency key is shop +
+  sale. See [[SECURITY]] § Inventory authorization.
+- **The legacy POS device sync never moves stock.** `pos-sales.js` `_syncToMarketplace` sends items with `qty`, and
+  `posSyncToMarketplace` requires `qtyDeducted`, so every item is rejected as invalid. This is pre-existing. Repairing or
+  retiring it is the owner's call.
 - **`warehouse-scanner.html` writes `products.stockQty` from the browser.** This carries over from Phase A.
 - **Production negative stock** left by the old code is not repaired. A read-only census is the owner's call.
 
