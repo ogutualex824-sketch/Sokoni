@@ -398,7 +398,7 @@ const setToken = (claims) => { TOKEN = { claims: claims || {} }; };
   const gProv = await RA.guardWorkspace('provider');
   ck('a different unapproved role is denied too', !gProv.ok && gProv.reason === 'not-approved', gProv.reason);
   ck('...and lands on ITS application flow, so the destination is derived per role',
-     global.window.__replaced === 'provider-onboarding.html', global.window.__replaced);
+     global.window.__replaced === 'business-apply.html?offer=services', global.window.__replaced);
 
   /* THE REDIRECT-LOOP GUARD: "cannot verify" must never bounce. */
   global.window.__replaced = null;

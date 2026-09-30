@@ -458,7 +458,11 @@
   var WORKSPACE_HUBS = {
     buyer:    'index.html',
     seller:   'merchant-v2.html',
-    provider: 'providers.html',
+    /* 2026-09-30 (earn → approval → dashboard): was 'providers.html', the PUBLIC provider
+       directory, so an approved provider who switched role landed on a list of other
+       providers. Their workspace is provider-dashboard.html — already guarded for this role
+       in WORKSPACE_ROUTES below and already linked by the Profile's "My Services". */
+    provider: 'provider-dashboard.html',
     rider:    'driver.html',
     mechanic: 'car-hub.html',
     health:   'healthcare.html',
@@ -488,8 +492,13 @@
      application/authorization flow ("Buyer -> X -> X application"). Falls back to
      /profile for any role without a dedicated intake. Canonical keys (driver -> rider). */
   var APPLICATION_ROUTES = {
-    seller:   'onboarding-seller.html',
-    provider: 'provider-onboarding.html',
+    /* 2026-09-30: seller and provider now go to the ONE gated application (business-apply.html:
+       agreement, a real applications/{uid}--merchant|--provider document, reviewed by an admin
+       through applicationDecide). The previous targets were dead ends for review:
+       onboarding-seller.html files no application at all, and provider-onboarding.html
+       self-publishes through providerPublish without any admin decision. */
+    seller:   'business-apply.html?offer=products',
+    provider: 'business-apply.html?offer=services',
     rider:    'onboarding-driver.html',
     landlord: 'onboarding-landlord.html',
   };

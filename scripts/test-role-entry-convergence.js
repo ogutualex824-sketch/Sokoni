@@ -90,7 +90,7 @@ const approved = (page, role) => page.evaluate((r) => window.SokoniRoleAuthority
     await page.close();
   }
   await redirectTo('landlord', 'onboarding-landlord.html');
-  await redirectTo('provider', 'provider-onboarding.html');
+  await redirectTo('provider', 'business-apply.html');   /* 2026-09-30: the gated application, not the self-publishing provider-onboarding */
   await redirectTo('rider', 'onboarding-driver.html');
 
   // Approved landlord -> guardWorkspace stays (no redirect)
