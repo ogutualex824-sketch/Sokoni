@@ -90,6 +90,14 @@ const TYPES = {
   booking_paid:         { priority: 'commerce',  category: 'orders',   smsTemplate: null },
   booking_refund:       { priority: 'commerce',  category: 'payments', smsTemplate: null },
   booking_released:     { priority: 'commerce',  category: 'orders',   smsTemplate: null },
+  /* The same defect as the four above, left behind by that repair and found by census on
+     2026-09-30. `booking_confirmed` is sent to the BUYER by webhookIntasend (index.js)
+     the moment a booking payment lands; the caller wraps it in .catch(){}, so it vanished
+     with no log at all. Same routing as its peers; SMS stays off because no approved
+     template exists for it. Scoped deliberately: the other five types found unregistered
+     by that census belong to functions on OTHER lineages (providerDispatch,
+     updateClickAndCollectStatus, adminProcessPayout) and are NOT registered here. */
+  booking_confirmed:    { priority: 'commerce',  category: 'orders',   smsTemplate: null },
   wallet_credit:        { priority: 'commerce',  category: 'wallet',   smsTemplate: 'wallet_credit' },
   order_placed:         { priority: 'commerce',  category: 'orders',   smsTemplate: 'order_placed' },
   order_accepted:       { priority: 'commerce',  category: 'orders',   smsTemplate: 'order_accepted' },
@@ -332,10 +340,52 @@ async function sendPush(uid, payload) {
 /* ══════════════════════════════════════════════════════════════════════════
    notify() — the ONE entry point
 ═════════════════════════════════════════════════════════════════════════ */
+/* Record a notification REJECTED before it could be processed.
+
+   The unknown-type guard below throws at the top of notify(), before the first notifyLog
+   write, and every caller of an unregistered type wraps the call in .catch(){}. The result
+   was the worst failure class available: no delivery on any channel, no notifyLog row, no
+   console line, no error escaping.
+
+   This does NOT soften the failure — the caller still throws. It only makes the failure
+   leave a trace, through mechanisms that already exist here: `logger` (used by _sendPush
+   above) and the notifyLog collection. No new logging authority.
+
+   TOTAL: it never throws, because a fault in the audit path must not replace the real
+   error with a different one. The doc id is namespaced `rejected:` so it can never collide
+   with a real notification key, and is deterministic so a retry of the same bad call
+   updates one row instead of growing the collection. */
+async function _recordRejection (reason, { uid, type, title, body, dedupeKey }) {
+  try {
+    logger.error('[notify] rejected', {
+      reason, type: String(type), uid: uid ? String(uid).slice(0, 8) : '(none)',
+    });
+  } catch (_) { /* logging must never mask the rejection */ }
+  try {
+    if (!uid) return;                       /* no uid -> no stable key; the log line stands alone */
+    const id = `rejected:${reason}:${String(type)}:${uid}:${_contentHash(title, body)}`;
+    await db().collection(LOG).doc(id).set({
+      uid, type: String(type), status: 'rejected', reason,
+      dedupeKey: dedupeKey || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } catch (_) { /* audit is best-effort; the throw is the contract */ }
+}
+
 async function notify({ uid, type, title, body, vars = {}, phone, email, image, deepLink, group, dedupeKey, data, awaitDelivery = true }) {
   const t = TYPES[type];
-  if (!t) throw new HttpsError('invalid-argument', `Unknown notification type "${type}".`);
-  if (!uid) throw new HttpsError('invalid-argument', 'uid is required.');
+  if (!t) {
+    /* Still a HARD failure — an unregistered type is a programming error and must not be
+       delivered as some default. It is simply no longer a silent one: the throw sits ~20
+       lines before the first notifyLog write, and every caller of an unregistered type
+       wraps the call in .catch(){}, so the failure previously left no trace anywhere. */
+    await _recordRejection('unknown_type', { uid, type, title, body, dedupeKey });
+    throw new HttpsError('invalid-argument', `Unknown notification type "${type}".`);
+  }
+  if (!uid) {
+    await _recordRejection('missing_uid', { uid, type, title, body, dedupeKey });
+    throw new HttpsError('invalid-argument', 'uid is required.');
+  }
 
   /* Idempotency AND duplicate suppression — two different guarantees.
 
@@ -425,17 +475,50 @@ async function notify({ uid, type, title, body, vars = {}, phone, email, image, 
   /* SMS — forced for critical; for commerce ONLY as a fallback when push could not
      land. Sending both by default would spam the user and burn credit for nothing. */
   const wantSms = ch.sms || (ch.smsFallback && !pushOk);
-  if (wantSms && t.smsTemplate && phone) {
-    const r = await sms.enqueue({
-      to: phone,
-      template: t.smsTemplate,
-      vars: { ...vars, title, body },
-      uid,
-      dedupeKey: `sms:${key}`,          /* the SMS inherits the same idempotency */
-    });
-    result.channels.sms = r.suppressed ? 'suppressed_by_preference'
-                        : r.deduped   ? 'deduped'
-                        : 'queued';
+  if (wantSms && t.smsTemplate) {
+    /* RESOLVE THE RECIPIENT, exactly as push and email already do.
+       `phone` is a caller OVERRIDE, not the only source. Push reads users/{uid} for its
+       tokens; email falls back to the Auth address when the caller supplies none. SMS had
+       the override and no fallback — so `wantSms && t.smsTemplate && phone` was false at
+       its last term for every caller that passes none, sms.enqueue() was never reached,
+       and smsQueueWorker drained an empty queue every minute without one error. In THIS
+       function that blocks payment_success and order_placed, both sent by webhookIntasend
+       with no caller phone.
+
+       Canonical source is users/{uid}.phoneNumber ("+254…"). The legacy `phone` field is
+       deliberately NOT read: reviving it to raise apparent reach would undo a
+       canonicalisation the write path already completed.
+
+       No phoneVerified check, deliberately. Every writer of this field sources it from
+       Firebase Auth — firebase.js at user-doc creation, wallet-engine's
+       getUserByPhoneNumber backfill, wallet-engine's phone_number-claim gate, and
+       profile.html only after a confirmed SMS code — so it is verified by provenance.
+       A flag check would add a second verification policy beside Firebase Auth. */
+    let to = phone;
+    if (!to) {
+      try {
+        const snap = await db().collection('users').doc(uid).get();
+        const pn = snap.exists ? (snap.data() || {}).phoneNumber : null;
+        if (typeof pn === 'string' && pn.trim()) to = pn.trim();
+      } catch (_) { /* a lookup failure must not break the other channels */ }
+    }
+
+    if (!to) {
+      /* VISIBLE, not silent. The old code simply skipped, leaving result.channels.sms
+         unset — which is why a healthy SMS platform looked fine while delivering nothing. */
+      result.channels.sms = 'no_phone_on_record';
+    } else {
+      const r = await sms.enqueue({
+        to,
+        template: t.smsTemplate,
+        vars: { ...vars, title, body },
+        uid,
+        dedupeKey: `sms:${key}`,        /* the SMS inherits the same idempotency */
+      });
+      result.channels.sms = r.suppressed ? 'suppressed_by_preference'
+                          : r.deduped   ? 'deduped'
+                          : 'queued';
+    }
   } else if (ch.smsFallback && pushOk) {
     result.channels.sms = 'not_needed_push_delivered';
   }
