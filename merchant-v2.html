@@ -782,6 +782,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <!-- ONE product specification model for every category — groceries, vehicles,
      electronics, clothing. Loaded before the writer that consults it; without it specs
      are simply not stored and a product still saves. -->
+<!-- U4 (ported 2026-10-01): the ONE sellability decision + the canonical tombstone the writer's archiveProduct and the
+     adapter above write (byte-identical to functions/shared/sellability.js; from dde631b / 332d458) -->
+<script src="sokoni-sellability.js"></script>
 <script src="sokoni-product-specs.js"></script>
 <script src="sokoni-merchant-media.js"></script>
 <!-- AI product photography. sokoni-creative.js already implements removeBackground,
@@ -2317,10 +2320,19 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         return m.fs.setDoc(ref, data, { merge: true }).then(function () { return { replayed: false }; });
       });
     },
+    /* U4 (2026-09-29, ported 2026-10-01): this adapter NEVER physically deletes a product. It was the merchant-v2 "Remove" hard delete
+       (deleteDoc) that orphaned reviews, ratings, order lines and the POS / Inventory mirrors. The canonical tombstone
+       (sokoni-sellability.js, from 332d458) is written as a MERGE instead — the writer's archiveProduct is the path the
+       UI uses; this only makes any other caller safe. */
     deleteProduct: function (o) {
+      var self = this;
       return sdk().then(function (m) {
         if (!window.firebaseDB) throw new Error('Products cannot be changed just now.');
-        return m.fs.deleteDoc(m.fs.doc(window.firebaseDB, 'products', o.id));
+        var t = (window.SokoniSellability && window.SokoniSellability.tombstonePatch) ? window.SokoniSellability.tombstonePatch() : { status: 'archived', isVisible: false };
+        /* Through writeProduct, the ONE guarded write site (_refuseAuthorityFields + server updatedAt), rather than a
+           second setDoc: scripts/gate-inventory-writers.js registers this file at 2 sites and says to fix the change,
+           not broaden the entry. */
+        return self.writeProduct({ id: o.id, data: Object.assign(t, { archivedAt: m.fs.serverTimestamp() }), mode: 'update' });
       });
     },
     getProduct: function (id) {

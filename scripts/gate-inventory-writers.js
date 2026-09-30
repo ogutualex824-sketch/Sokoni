@@ -137,7 +137,9 @@ const CLIENT = [
      · SokoniMerchantData._productFields no longer allowlists `stock`;
      · the specs path no longer copies `stock` out of built.patch (variant totals reached the
        document that way, and removing the allowlist entry alone would NOT have closed it);
-     · updateProduct THROWS on a stock or variants patch rather than dropping it;
+     · updateProduct THROWS on a stock patch, or on a variants patch that carries a quantity,
+       rather than dropping it; a variants patch without quantities keeps every stored row's
+       quantity (owner decision 2026-10-01, scripts/test-uploader-writer-decisions.js);
      · opening stock at create is handed to merchantAdjustStock — the server authority — as the
        product's first movement, so it is transactional, floored, versioned and filed in
        stockMovements;

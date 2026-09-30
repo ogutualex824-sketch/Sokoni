@@ -12,7 +12,9 @@
        createProduct DOES accept an `openingStock`, and routes it through merchantAdjustStock
        as the product's first movement — so it is transactional, floored, versioned and filed
        in stockMovements like every other change. It is never a field in the metadata write.
-       updateProduct REFUSES a stock patch outright rather than dropping it silently.
+       updateProduct REFUSES a stock patch outright rather than dropping it silently, and
+       (owner decision 2026-10-01) it refuses a per-variant quantity too: a variants patch
+       may rename, reprice or re-SKU rows, but each stored row keeps the quantity it had.
 
        This paragraph previously claimed the module had "no stock-writing function at all —
        not one", while `_productFields` allowlisted `stock` and the specs path added it again
@@ -136,6 +138,15 @@
   async function listProducts(o) {
     var scope = o.scope;
     var rows = await o.db.queryProducts(productQuery(scope));
+    return mapProducts(rows);
+  }
+
+  /* THE ONE ROW MAPPING, shared by the one-shot read (listProducts) and the live read
+     (subscribeProducts). Extracted 2026-10-01: the live line's subscribeProducts called
+     `mapProducts`, a name that was never defined anywhere — a ReferenceError waiting for the
+     first adapter that implemented subscribeProducts. Defining it HERE, as the mapping
+     listProducts already used, means both reads yield identical rows by construction. */
+  function mapProducts(rows) {
     return (rows || []).map(function (p) {
       var stock = (typeof p.stock === 'number') ? p.stock : null;
       return {
@@ -150,28 +161,44 @@
         lowStock: (stock != null && typeof p.lowStockThreshold === 'number')
           ? stock <= p.lowStockThreshold : (stock != null ? stock <= 5 : null),
         inventoryVersion: (typeof p.inventoryVersion === 'number') ? p.inventoryVersion : null,
+        /* buyer price offers are opt-in per product (owner rule, T2b 2026-09-29) */
+        acceptOffers: p.acceptOffers === true,
 
-        /* ── Carried for display and for EDIT ────────────────────────────────
-           These were dropped, and silently: the Products surface filters on
-           `status`, searches `category`, and renders `image` — none of which
-           survived this mapping, so the status filter matched nothing, the
-           category search found nothing, and every card fell back to the 📦
-           placeholder. Each of those failures looks exactly like a merchant
-           with no drafts, no categories and no photos, which is why none of
-           them announced itself.
-
-           `image` is carried READ-ONLY. Attaching or replacing media is 2c;
-           nothing here uploads, and the editor does not expose it. */
+        /* ── FROM 4f67b4b (ported verbatim 2026-09-29, universal catalogue U4) — carried for display and for EDIT ──
+           These were dropped, and silently: the Products surface filters on `status`, searches `category`, and
+           renders `image` — none of which survived this mapping, so the status filter matched nothing, the category
+           search found nothing, and every card fell back to the 📦 placeholder. Each of those failures looks exactly
+           like a merchant with no drafts, no categories and no photos, which is why none of them announced itself.
+           `image` is carried READ-ONLY; attaching media is attachProductImages. */
         category: p.category || null,
         description: p.description || '',
         status: p.status || null,
         costPrice: (typeof p.costPrice === 'number') ? p.costPrice : null,
         lowStockThreshold: (typeof p.lowStockThreshold === 'number') ? p.lowStockThreshold : null,
         image: p.image || (Array.isArray(p.images) ? p.images[0] : null) || null,
-        /* The whole gallery, because slot POSITION is the Storage path and the
-           media surface has to know how many slots are already taken. */
+        /* The whole gallery, because slot POSITION is the Storage path and the media surface has to know how many
+           slots are already taken. */
         images: Array.isArray(p.images) ? p.images.filter(Boolean) : [],
         sellerUid: p.sellerUid || null,
+
+        /* ── U4 additions (2026-09-29): what THIS branch's newer editor (Listing Studio, d0443b8's allowlist, the
+           99-category sections) reads when a merchant opens an existing listing. Without them an edit opened blank —
+           the KEBS number, the food licence, the variants and the listing type all looked unset. Passed as stored;
+           the writer's allowlist still decides what may be written back. The lifecycle fields let the list separate
+           live, draft and archived. */
+        isVisible: p.isVisible !== false,
+        statusBeforeArchive: p.statusBeforeArchive || null,
+        listingType: p.listingType || null,
+        title: p.title || null,
+        specs: p.specs || null, attributes: p.attributes || null, variants: Array.isArray(p.variants) ? p.variants : null,
+        stockUnit: p.stockUnit || null, tags: Array.isArray(p.tags) ? p.tags : null,
+        barcode: p.barcode || null, brand: p.brand || null, condition: p.condition || null, location: p.location || null,
+        kebsCert: p.kebsCert || null, foodLicence: p.foodLicence || null, ownership: p.ownership || null,
+        verificationStatus: p.verificationStatus || null, warranty: p.warranty || null,
+        wholesalePrice: (typeof p.wholesalePrice === 'number') ? p.wholesalePrice : null,
+        minWholesaleQty: (typeof p.minWholesaleQty === 'number') ? p.minWholesaleQty : null,
+        deliveryCost: (typeof p.deliveryCost === 'number') ? p.deliveryCost : null,
+        digitalUrl: p.digitalUrl || null, digitalLicense: p.digitalLicense || null, video: p.video || null,
       };
     });
   }
@@ -238,35 +265,77 @@
     /* Carried because the Inventory projection maps it to buyingPrice; without it
        every mirrored product would report a 0 cost and therefore a 100% margin. */
     if (p.costPrice !== undefined) out.costPrice = Number(p.costPrice);
-    /* stock is DELIBERATELY ABSENT from product metadata. It is inventory authority, and it
-       moves only through merchantAdjustStock — a server transaction that floors at zero and
-       writes stock + updatedAt + inventoryVersion together. Allowing it here let the Products
-       editor change a shelf count through a plain setDoc(merge): no transaction, no version,
-       no movement record. Opening stock at CREATE is still supported, routed through that same
-       server authority — see openingStockOf() and createProduct's openingStock. */
+    /* FROM 4f67b4b (ported 2026-09-29, U1): stock is DELIBERATELY ABSENT from product metadata. It is inventory
+       authority, and it moves only through merchantAdjustStock — a server transaction that floors at zero and
+       writes stock + updatedAt + inventoryVersion together. Allowing it here let the Products form write an
+       untransacted shelf count with no movement record. Opening stock at CREATE is still supported, routed
+       through that same server authority — see openingStockOf() and createProduct's opening stock. */
     if (p.sku !== undefined)   out.sku = p.sku ? String(p.sku).trim().slice(0, 64) : null;
     if (p.category !== undefined) out.category = p.category ? String(p.category).slice(0, 64) : null;
     if (p.description !== undefined) out.description = String(p.description || '').slice(0, 4000);
     if (p.status !== undefined) out.status = String(p.status || 'active');
     if (p.lowStockThreshold !== undefined) out.lowStockThreshold = Number(p.lowStockThreshold);
 
-    /* ── SPECIFICATIONS, UNITS AND VARIANTS ───────────────────────────────
-       This whitelist DROPS anything it does not name, which is why it is the right
-       place for these: without an entry here, specs and variants would be silently
-       discarded and the editor would appear to save them.
+    /* ── THE EIGHTEEN FIELDS THE FORM COLLECTED AND THIS WRITER DISCARDED ─────
+       Measured 2026-09-22: the editor's FORM_KEYS plus its nested groups produce
+       twenty-seven fields; this whitelist carried nine. The other eighteen were
+       captured, normalised, assembled into `out` by fieldsFromForm — and dropped here
+       without a word. A control that renders, validates and then evaporates is worse
+       than an absent one: the merchant believes the KEBS number is on the product.
 
+       IT WAS ALSO A REGRESSION. seller.js:813-815 writes `kebsCert`, `location` and
+       `deliveryCost` straight into the product document. Merchant V2's Products route
+       moved onto this writer, so those three stopped persisting for anyone using it —
+       a live loss of compliance data, not a cosmetic gap.
+
+       NORMALISATION FOLLOWS THE RULES ALREADY SET ABOVE, not new ones:
+         · empty string is ABSENT for money, never 0 — a blank delivery cost must not
+           become free delivery, the same reason a blank costPrice must not become a
+           100% margin;
+         · strings are trimmed and bounded, like name/sku/description;
+         · objects are passed whole, because the parts of a policy travel together —
+           sending a warranty's duration without its remedies is the defect the editor
+           already fixed on its side;
+         · an explicitly emptied object is passed through as-is rather than skipped, so
+           a merchant can REMOVE a record they entered by mistake. The editor's comment
+           states that contract; honouring it is this writer's half. */
+
+    /* Bounded free text. */
+    ['brand', 'condition', 'location', 'kebsCert', 'digitalUrl', 'digitalLicense', 'listingType']
+      .forEach(function (k) {
+        if (p[k] !== undefined) out[k] = p[k] ? String(p[k]).trim().slice(0, 300) : null;
+      });
+    /* Tags: an array or a comma string, normalised to a bounded array of non-empty tags. */
+    if (p.tags !== undefined) {
+      var t = Array.isArray(p.tags) ? p.tags : String(p.tags || '').split(',');
+      out.tags = t.map(function (x) { return String(x || '').trim().slice(0, 40); })
+                  .filter(Boolean).slice(0, 30);
+    }
+    /* Money and counts. Empty is ABSENT — never zero. */
+    ['deliveryCost', 'wholesalePrice', 'minWholesaleQty'].forEach(function (k) {
+      if (p[k] === undefined) return;
+      if (p[k] === '' || p[k] === null) return;
+      out[k] = Number(p[k]);
+    });
+    /* Structured records, passed whole. `specs`, `stockUnit` and `variants` are NOT in this
+       list: they go through SokoniProductSpecs.build() below (owner decision 2026-10-01 —
+       the live line's validation is kept; c4 had passed them whole and unvalidated). */
+    ['attributes', 'ownership', 'foodLicence', 'warranty']
+      .forEach(function (k) {
+        if (p[k] !== undefined) out[k] = p[k];
+      });
+
+    /* ── SPECIFICATIONS, UNITS AND VARIANTS (restored from the live line, 6d524dd) ──────
        SokoniProductSpecs owns the shape — one canonical model for groceries, vehicles,
        electronics and everything else, rather than a schema per category. It returns an
        ADDITIVE patch: it never writes name, price, category or the plural colors/sizes/
-       weights arrays that live documents already carry.
-
-       `stock` is the exception, and deliberately. Where a product has variants the
-       product-level figure is their SUM, recomputed there rather than taken from input —
-       POS reads products.stock, and two places to change one number is how a till and a
-       catalogue come to disagree about a shelf.
+       weights arrays that live documents already carry. It REFUSES duplicate variant
+       combinations, an unnamed variant, and a unit it does not recognise — a refusal here
+       fails the whole save with the model's own words, rather than storing a malformed record.
 
        Absent module = specs simply not stored. It is optional data, so a missing script
-       must not stop a merchant saving a product; price, stock and name are unaffected. */
+       must not stop a merchant saving a product; price, stock and name are unaffected. It is
+       also never stored UNVALIDATED: no model, no specs/variants/stockUnit write. */
     var SP = (typeof window !== 'undefined' && window.SokoniProductSpecs) ||
              (typeof globalThis !== 'undefined' && globalThis.SokoniProductSpecs) || null;
     if (SP && (p.specs !== undefined || p.variants !== undefined || p.stockUnit !== undefined)) {
@@ -278,10 +347,43 @@
          they take the same route as any other opening quantity. */
       Object.keys(built.patch).forEach(function (k) { if (k !== 'stock') out[k] = built.patch[k]; });
     }
+
+    /* ── FROM 4f67b4b (the 99-category upload form), ported 2026-09-29 (universal catalogue U1) ─────────────
+       Layered ON this writer (d0443b8's allowlist stays the structure); these are the parts 4f67b4b had that
+       this branch did not: */
+    var TX = (typeof window !== 'undefined' && window.SokoniProductTaxonomy) ||
+             (typeof globalThis !== 'undefined' && globalThis.SokoniProductTaxonomy) || null;
+    var _str = function (v, n) { return v === null ? null : String(v || '').trim().slice(0, n); };
+    /* DIGITAL / SERVICE are DERIVED from the category, never taken from the caller — the taxonomy owns that
+       answer (a listing flagged digital in a physical category is one the checkout would try to deliver). */
+    if (p.category !== undefined && TX && out.category) {
+      var kind = TX.kindOf(out.category);
+      out.isDigital = kind === 'digital';
+      out.isService = kind === 'service';
+    }
+    /* FOOD HANDLING — the six legacy keys, normalised; an all-empty record is REMOVED (null). */
+    var FOOD_KEYS = ['permit', 'kebs', 'kmc', 'halal', 'storage', 'slaughter'];
+    if (p.foodLicence !== undefined) {
+      var fl = p.foodLicence || {}, fout = {}, anyFood = false;
+      FOOD_KEYS.forEach(function (k) { var v = _str(fl[k], 120); fout[k] = v || null; if (v) anyFood = true; });
+      out.foodLicence = anyFood ? fout : null;
+    }
+    /* OWNERSHIP — a merchant may DECLARE; only a reviewer may approve. `status` and `verificationStatus` are
+       CLAMPED to pending: verificationStatus === 'approved' is what puts "✅ Verified Owner" on a card, and passing
+       the object whole (as above) let a crafted write self-issue that badge. */
+    if (p.ownership !== undefined) {
+      var ow = p.ownership || {};
+      var serial = _str(ow.serial, 120), source = _str(ow.source, 64);
+      out.ownership = (!serial && !source) ? null
+        : { serial: serial, source: source, declared: ow.declared === true, submittedAt: Date.now(), status: 'pending' };
+      out.verificationStatus = out.ownership ? 'pending' : 'none';
+    }
+
     return out;
   }
 
-  /* The opening quantity a create is asking for, from either a plain stock figure or the sum of
+  /* FROM 4f67b4b (ported verbatim 2026-09-29, U1).
+     The opening quantity a create is asking for, from either a plain stock figure or the sum of
      variant rows. Returns null when none was asked for — null, never 0: an unknown shelf count
      rendered as zero is a fabricated fact, and "no opening stock given" is not "there are none".
      Whole numbers only, non-negative, and bounded by the server's own MAX_DELTA so a value the
@@ -302,6 +404,30 @@
     if (n < 0) throw new Error('Opening stock cannot be negative.');
     if (n > MAX_OPENING) throw new Error('Opening stock is implausibly large.');
     return n;
+  }
+
+  /* Universal catalogue U3 (2026-09-29): an EXPLICIT listing type must be one this kind of business may list
+     (sokoni-catalogue-capabilities.js, keyed on the shop's C1 category). Enforced only when the caller states the
+     business category (`businessCategory` present — null means unclassified, goods only); inferred types are never
+     refused, so an unclassified shop's ordinary listings keep working exactly as today. CLIENT-side: the server-side
+     equivalent belongs to the product rules (stage 3).
+     BROWSER-ENFORCED ONLY (owner decision 2026-10-01): no function and no Firestore rule checks these limits, so a
+     forged client write bypasses them. This is a guide for honest clients, NOT an enforcement boundary. The server
+     check is queued as its own functions unit; do not describe this as enforcement until that unit is deployed. */
+  function _assertCatalogueType(o, fields) {
+    if (!o || !Object.prototype.hasOwnProperty.call(o, 'businessCategory')) return;
+    if (!fields || !fields.listingType) return;
+    var CCm = (typeof window !== 'undefined' && window.SokoniCatalogueCapabilities) ||
+              (typeof globalThis !== 'undefined' && globalThis.SokoniCatalogueCapabilities) || null;
+    if (!CCm) return;
+    var TXc = (typeof window !== 'undefined' && window.SokoniProductTaxonomy) ||
+              (typeof globalThis !== 'undefined' && globalThis.SokoniProductTaxonomy) || null;
+    var v = CCm.check(o.businessCategory || null, { listingType: fields.listingType, category: fields.category }, TXc);
+    if (!v.ok) {
+      var e = new Error(v.errors[0].message);
+      e.code = v.errors[0].code; e.validation = v.errors.map(function (x) { return x.message; });
+      throw e;
+    }
   }
 
   function _validate(fields, opts) {
@@ -326,6 +452,49 @@
     /* Cost may be 0 (unknown), but never negative. */
     if (fields.costPrice !== undefined && (!isFinite(fields.costPrice) || fields.costPrice < 0)) {
       errs.push('Cost price cannot be negative.');
+    }
+    /* THE NEWLY CARRIED MONEY FIELDS GET THE SAME TREATMENT AS costPrice, because
+       carrying a field without validating it is only half of not discarding it. A
+       negative delivery cost or wholesale price would otherwise reach the document and
+       be discovered by whatever arithmetic consumes it. */
+    if (fields.deliveryCost !== undefined && (!isFinite(fields.deliveryCost) || fields.deliveryCost < 0)) {
+      errs.push('Delivery cost cannot be negative.');
+    }
+    if (fields.wholesalePrice !== undefined && (!isFinite(fields.wholesalePrice) || fields.wholesalePrice < 0)) {
+      errs.push('Wholesale price cannot be negative.');
+    }
+    if (fields.minWholesaleQty !== undefined &&
+        (!isFinite(fields.minWholesaleQty) || fields.minWholesaleQty < 0)) {
+      errs.push('Minimum wholesale quantity cannot be negative.');
+    }
+
+    /* ── FROM 4f67b4b, ported 2026-09-29 (U1): the deal / download / permit rules ──────────────────────── */
+    /* BULK: both or neither; above zero; BELOW the unit price; a minimum of 2 ("bulk, minimum one" is the
+       ordinary price wearing a badge). */
+    var hasWp = fields.wholesalePrice !== undefined && fields.wholesalePrice !== null;
+    var hasWq = fields.minWholesaleQty !== undefined && fields.minWholesaleQty !== null;
+    if (hasWp !== hasWq) errs.push('A bulk deal needs both a wholesale price and a minimum quantity.');
+    if (hasWp && isFinite(fields.wholesalePrice) && fields.wholesalePrice === 0) {
+      errs.push('The wholesale price must be above zero.');
+    } else if (hasWp && isFinite(fields.price) && fields.price > 0 && fields.wholesalePrice >= fields.price) {
+      errs.push('The wholesale price must be lower than the normal price — otherwise it is not a bulk deal.');
+    }
+    if (hasWq && isFinite(fields.minWholesaleQty) && fields.minWholesaleQty >= 0
+        && (!Number.isInteger(Number(fields.minWholesaleQty)) || fields.minWholesaleQty < 2)) {
+      errs.push('The minimum bulk quantity must be a whole number of 2 or more.');
+    }
+    /* DIGITAL: a download that is not an https link cannot be fetched from an https page. */
+    if (fields.isDigital === true && fields.digitalUrl !== undefined) {
+      if (!fields.digitalUrl) errs.push('A digital product needs a download link.');
+      else if (!/^https:\/\//i.test(fields.digitalUrl)) errs.push('The download link must start with https://');
+    }
+    /* FOOD: the county permit is the one food record legally required to trade — asked only of food categories. */
+    var TXv = (typeof window !== 'undefined' && window.SokoniProductTaxonomy) ||
+              (typeof globalThis !== 'undefined' && globalThis.SokoniProductTaxonomy) || null;
+    if (TXv && fields.category && TXv.needsFoodLicence(fields.category)) {
+      if (!fields.foodLicence || !fields.foodLicence.permit) {
+        errs.push('Food and agricultural products need a county food business permit number.');
+      }
     }
     return errs;
   }
@@ -356,24 +525,12 @@
          already committed — but it is never hidden either. */
   var PRODUCT_MIRRORS = ['inventory', 'pos'];
 
-  /* THE SHELF COUNT THE PROJECTIONS CARRY.
-     `doc.stock` no longer exists — stock left the product metadata write and moved to the
-     inventory authority. Reading it from the doc therefore yielded 0 for EVERY product, and
-     both mirrors (inventory_products.stockLevel, posProducts.stockLevel) told the till a
-     product with 40 units had none. merchantAdjustStock does not update these projections, so
-     that 0 would have stood indefinitely.
-
-     `established` is what the authority actually put on the shelf: the opening quantity when
-     the adjustment succeeded, and 0 when there was none. For a NEW product 0 is a true
-     statement — nothing has been received yet — which is different from rendering an unknown
-     count as zero. When an opening adjustment FAILED, the caller passes 0 too: claiming stock
-     the authority refused would be the fabrication. */
+  /* FROM 4f67b4b (ported 2026-09-29, U1): THE SHELF COUNT THE PROJECTIONS CARRY. doc.stock no longer exists
+     (stock left the metadata write), so the mirrors take `established` — what the authority actually put on the
+     shelf: the opening quantity when the adjustment succeeded, 0 when there was none or it failed. */
   function productProjections(doc, scope, established) {
-    /* The image the product actually has. Empty at creation — a product is valid
-       without pictures — and filled once attachProductImages has real Storage
-       addresses. Never a data: URI: the canonical rule rejects those outright,
-       and one 195KB base64 image in a product record poisoned every search index
-       batch it shipped in. */
+    /* FROM 4f67b4b / 911ec98 (ported 2026-09-29, U1): the mirrors carry the product's real photo — never an inline
+       data: URL — so the till and the Inventory Manager show what the storefront shows. */
     var img = (typeof doc.image === 'string' && doc.image.indexOf('data:') !== 0) ? doc.image : '';
     var sku = doc.sku || ('SKU-' + String(doc.id).slice(-8).toUpperCase());
     var wh  = doc.warehouseId || scope.shopId || 'main';
@@ -390,7 +547,7 @@
           category: doc.category || '', stockLevel: stock,
           reorderPoint: (doc.lowStockThreshold != null ? Number(doc.lowStockThreshold) : 10),
           unit: 'pcs', imageUrl: img, description: doc.description || '',
-          sku: sku, warehouseId: wh, active: true, tenantId: scope.sellerUid,
+          sku: sku, warehouseId: wh, active: doc.status !== 'archived', tenantId: scope.sellerUid,
           sourceProductId: doc.id,          /* the link back to the storefront */
         },
       },
@@ -401,7 +558,8 @@
           category: doc.category || '', sku: sku, unit: 'pcs', stockLevel: stock,
           reorderPoint: (doc.lowStockThreshold != null ? Number(doc.lowStockThreshold) : 10),
           imageUrl: img, description: doc.description || '',
-          sellerId: scope.sellerUid, status: 'active', tenantId: scope.sellerUid,
+          /* U4 (2026-09-29): the till copy FOLLOWS the lifecycle — an archived product is not sellable at the POS */
+          sellerId: scope.sellerUid, status: doc.status === 'archived' ? 'archived' : 'active', tenantId: scope.sellerUid,
         },
       },
     };
@@ -451,11 +609,12 @@
     if (!scope || !scope.ok) throw new Error('merchant data: a resolved shop scope is required');
     _requireWriter(o.db);
 
-    /* Computed BEFORE anything is written, so an invalid opening quantity refuses the whole
+    /* FROM 4f67b4b (U1): computed BEFORE anything is written, so an invalid opening quantity refuses the whole
        create rather than leaving a product behind that nobody asked for. */
     var opening = openingStockOf(o.product);
 
     var fields = _productFields(o.product);
+    _assertCatalogueType(o, fields);
     var errs = _validate(fields, { creating: true });
     if (errs.length) { var e = new Error(errs[0]); e.validation = errs; throw e; }
 
@@ -488,20 +647,13 @@
        replay returns the existing record rather than adding a second one. */
     var res = await o.db.writeProduct({ id: id, data: doc, mode: 'create' });
 
-    /* ── OPENING STOCK — through the server authority, never written here ──────
-       The product document is created WITHOUT a stock field, so until this lands the shelf
-       count is unknown rather than zero. merchantAdjustStock is the only path that floors at
-       zero, bumps inventoryVersion and files a stockMovements row, so an opening quantity is
-       simply the first movement — auditable like every other one.
-
-       adjustmentId is DETERMINISTIC on the product id. A retried create claims the same
-       product id, so it also claims the same adjustment id, and the server's idempotency
-       returns the original outcome instead of stacking a second opening quantity on top.
-
-       A failure here does NOT fail the create. The product genuinely exists; its stock is
-       genuinely unknown; and the caller is told exactly that so it can offer a retry rather
-       than reporting a success it cannot support. Silence would leave a merchant believing a
-       shelf count was recorded when it was not. */
+    /* ── FROM 4f67b4b (ported verbatim 2026-09-29, U1): OPENING STOCK — through the server authority ──────
+       The product document is created WITHOUT a stock field, so until this lands the shelf count is unknown
+       rather than zero. merchantAdjustStock is the only path that floors at zero, bumps inventoryVersion and
+       files a stockMovements row, so an opening quantity is simply the first movement.
+       adjustmentId is DETERMINISTIC on the product id: a retried create claims the same adjustment id and the
+       server's idempotency returns the original outcome instead of stacking a second opening quantity.
+       A failure here does NOT fail the create — the caller is told exactly that (openingStock.ok === false). */
     var stockResult = null;
     if (opening !== null && opening > 0) {
       if (typeof o.adjustStock !== 'function') {
@@ -528,8 +680,7 @@
 
     /* Mirrors run on a replay too. They are merge-writes keyed by the same id, so
        repeating one changes nothing — and a replay is exactly how a mirror that
-       failed the first time gets repaired. */
-    /* The mirrors run AFTER the opening adjustment, and carry what it actually established. */
+       failed the first time gets repaired. They run AFTER the opening adjustment and carry what it established. */
     var mirrors = await _writeMirrors(o.db, doc, scope,
       (stockResult && stockResult.ok) ? stockResult.opening : 0);
 
@@ -560,15 +711,74 @@
     /* REFUSED, not dropped. Silently ignoring a stock edit is worse than rejecting it: the
        merchant types a figure, sees "Changes saved.", and the shelf count never moves. A
        fabricated success is the one outcome this module must never produce. */
-    if (o.patch && (o.patch.stock !== undefined ||
-                    (Array.isArray(o.patch.variants) && o.patch.variants.length))) {
+    if (o.patch && o.patch.stock !== undefined) {
       var sErr = new Error('Stock is changed in Inventory, not here.');
       sErr.code = 'stock-not-editable';
       throw sErr;
     }
 
-    var fields = _productFields(o.patch);
+    /* ── VARIANT QUANTITIES: Inventory is the only stock writer (owner decision 2026-10-01) ──
+       The live line refused ANY variants patch; c4 refused none and merged per-variant
+       quantities through a plain setDoc(merge) — no transaction, no version, no movement row.
+       The owner kept live's RULE and scoped it to what it protects: a variants patch may change
+       a row's options, price, SKU or barcode, but it may not carry a quantity. Each stored row
+       keeps the quantity it had (matched by its id); a row added by an edit starts at 0, which
+       is a true statement — nothing has been received for it yet. Rows without an id get a
+       fresh one here, never a positional one, so a new row can never inherit another row's
+       quantity by landing on its index. */
+    var variantPatch = null;
+    if (o.patch && Array.isArray(o.patch.variants) && o.patch.variants.length) {
+      var carriesQty = o.patch.variants.some(function (v) {
+        return v && v.stock !== undefined && v.stock !== null && v.stock !== '';
+      });
+      if (carriesQty) {
+        var vErr = new Error('Variant quantities are changed in Inventory, not here.');
+        vErr.code = 'stock-not-editable';          /* the live code: the UI already routes it to Inventory */
+        vErr.reason = 'variant-quantity';
+        throw vErr;
+      }
+      if (!existing) {
+        var uErr = new Error('merchant data: the stored product is needed to keep its variant quantities.');
+        uErr.code = 'variant-stock-unverifiable';
+        throw uErr;
+      }
+      var storedQty = {};
+      (Array.isArray(existing.variants) ? existing.variants : []).forEach(function (v, i) {
+        if (!v) return;
+        var sid = (v.id != null && String(v.id).trim()) ? String(v.id).trim() : ('v' + (i + 1));
+        storedQty[sid] = Math.max(0, Number(v.stock) || 0);
+      });
+      var used = {}, seq = 0;
+      Object.keys(storedQty).forEach(function (k) { used[k] = 1; });
+      var claimed = {};
+      var rows = o.patch.variants.map(function (v) {
+        var row = Object.assign({}, v || {});
+        var rid = (row.id != null && String(row.id).trim()) ? String(row.id).trim() : '';
+        /* an id is honoured only for a stored row, and only once */
+        if (!rid || !Object.prototype.hasOwnProperty.call(storedQty, rid) || claimed[rid]) {
+          do { seq++; rid = 'v' + (Object.keys(storedQty).length + seq); } while (used[rid]);
+        }
+        claimed[rid] = 1; used[rid] = 1;
+        row.id = rid;
+        return row;
+      });
+      variantPatch = Object.assign({}, o.patch, { variants: rows });
+    }
+
+    var fields = _productFields(variantPatch || o.patch);
+    if (Array.isArray(fields.variants)) {
+      var keep = {};
+      (Array.isArray(existing && existing.variants) ? existing.variants : []).forEach(function (v, i) {
+        if (!v) return;
+        var sid = (v.id != null && String(v.id).trim()) ? String(v.id).trim() : ('v' + (i + 1));
+        keep[sid] = Math.max(0, Number(v.stock) || 0);
+      });
+      fields.variants = fields.variants.map(function (v) {
+        return Object.assign({}, v, { stock: Object.prototype.hasOwnProperty.call(keep, v.id) ? keep[v.id] : 0 });
+      });
+    }
     if (!Object.keys(fields).length) throw new Error('merchant data: nothing to update');
+    _assertCatalogueType(o, fields);
     var errs = _validate(fields, { creating: false });
     if (errs.length) { var e = new Error(errs[0]); e.validation = errs; throw e; }
 
@@ -580,6 +790,73 @@
     return { id: o.id, patch: fields };
   }
 
+  /* ══ LIFECYCLE: ARCHIVE / RESTORE (universal catalogue U4, 2026-09-29) ═════════════════════════════════════
+     "Remove" used to HARD-DELETE products/{id} through the adapter's deleteDoc and leave the Inventory and POS
+     mirrors behind — a till could still sell a product the shop no longer had, and every review, rating and order
+     line lost its referent. Owner invariant (B9.17): product existence is changed ONLY by an explicit lifecycle act,
+     and that act TOMBSTONES — the canonical shape is sokoni-sellability.js's tombstonePatch() (ported from 332d458):
+     { status:'archived', isVisible:false }. availability-enforce already refuses 'archived' at checkout.
+
+     Archived products leave the shop, the till (the POS mirror follows) and discovery, stay in the merchant's catalogue
+     (the Archived filter) with their history, and can be RESTORED to the status they had. */
+  function _tombstone() {
+    var SL = (typeof window !== 'undefined' && window.SokoniSellability) ||
+             (typeof globalThis !== 'undefined' && globalThis.SokoniSellability) || null;
+    return SL && typeof SL.tombstonePatch === 'function' ? SL.tombstonePatch() : { status: 'archived', isVisible: false };
+  }
+
+  async function _ownedExisting(o) {
+    var scope = o.scope;
+    if (!scope || !scope.ok) throw new Error('merchant data: a resolved shop scope is required');
+    _requireWriter(o.db);
+    if (!o.id) throw new Error('merchant data: product id required');
+    /* the STORED record, and it must exist — an unknown id is refused, never silently "archived" */
+    var existing = o.existing || (o.db.getProduct ? await o.db.getProduct(o.id) : null);
+    if (!existing) { var nf = new Error('merchant data: that product no longer exists.'); nf.code = 'not-found'; throw nf; }
+    assertInScope(scope, Object.assign({ id: o.id }, existing));
+    return existing;
+  }
+
+  /** archiveProduct({ scope, db, id }) — delist: off sale, off the till, out of discovery; history kept. */
+  async function archiveProduct(o) {
+    var existing = await _ownedExisting(o);
+    if (existing.status === 'archived') return { id: o.id, archived: true, already: true };
+    var patch = Object.assign(_tombstone(), {
+      /* restore returns it to what it was (a draft stays a draft) */
+      statusBeforeArchive: existing.status && existing.status !== 'archived' ? existing.status : 'active',
+      archivedAt: o.now || Date.now(),
+    });
+    await o.db.writeProduct({ id: o.id, data: patch, mode: 'update' });
+    var doc = Object.assign({}, existing, patch, { id: o.id });
+    var mirrors = await _writeMirrors(o.db, doc, o.scope);
+    return { id: o.id, archived: true, mirrors: mirrors, complete: mirrorsComplete(mirrors) };
+  }
+
+  /** restoreProduct({ scope, db, id }) — back to the status it had before it was archived. */
+  async function restoreProduct(o) {
+    var existing = await _ownedExisting(o);
+    if (existing.status !== 'archived') return { id: o.id, restored: false, reason: 'not-archived' };
+    var back = existing.statusBeforeArchive && existing.statusBeforeArchive !== 'archived' ? existing.statusBeforeArchive : 'active';
+    var patch = { status: back, isVisible: back === 'active', archivedAt: null, statusBeforeArchive: null };
+    await o.db.writeProduct({ id: o.id, data: patch, mode: 'update' });
+    var doc = Object.assign({}, existing, patch, { id: o.id });
+    var mirrors = await _writeMirrors(o.db, doc, o.scope);
+    return { id: o.id, restored: true, status: back, mirrors: mirrors, complete: mirrorsComplete(mirrors) };
+  }
+
+  /**
+   * deleteProduct({ scope, db, id }) — KEPT so any caller gets the safe behaviour: it ARCHIVES. Merchant-v2 never
+   * physically deletes a product (owner invariant; 332d458). A permanent removal, where an authority permits one,
+   * belongs to the server, not to a client writer.
+   */
+  async function deleteProduct(o) {
+    var r = await archiveProduct(o);
+    return Object.assign({ deleted: false, method: 'tombstone' }, r);
+  }
+
+  /* ── FROM 4f67b4b (911ec98 / 511836c lineage), ported VERBATIM 2026-09-29 (universal catalogue U1). The
+     products module (:1530) calls it; this branch had the media module, the putImage adapter and every helper
+     below, but not this function — so adding a photo threw. ── */
   /**
    * attachProductImages({ scope, db, media, storage, id, files, existing, onProgress })
    *
@@ -666,25 +943,6 @@
       rejected: check.rejected,
       mirrors: mirrors, complete: mirrorsComplete(mirrors),
     };
-  }
-
-  /**
-   * deleteProduct({ scope, db, id })
-   * Ownership verified against the stored record before anything is removed.
-   */
-  async function deleteProduct(o) {
-    var scope = o.scope;
-    if (!scope || !scope.ok) throw new Error('merchant data: a resolved shop scope is required');
-    if (!o.db || typeof o.db.deleteProduct !== 'function') {
-      throw new Error('merchant data: this db adapter cannot delete products');
-    }
-    if (!o.id) throw new Error('merchant data: product id required');
-
-    var existing = o.existing || (o.db.getProduct ? await o.db.getProduct(o.id) : null);
-    if (existing) assertInScope(scope, Object.assign({ id: o.id }, existing));
-
-    await o.db.deleteProduct({ id: o.id });
-    return { id: o.id, deleted: true };
   }
 
   /* Only products belonging to this shop may enter a cart. A cart line from
@@ -977,6 +1235,8 @@
     createProduct: createProduct,
     updateProduct: updateProduct,
     deleteProduct: deleteProduct,
+    archiveProduct: archiveProduct,
+    restoreProduct: restoreProduct,
     attachProductImages: attachProductImages,
     assertInScope: assertInScope,
     productProjections: productProjections,
