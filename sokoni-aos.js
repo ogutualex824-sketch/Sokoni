@@ -55,7 +55,15 @@ window.SokoniAOS = (() => {
     if (el) el.textContent = _currentUser.name || _currentUser.email;
     if (_currentUser.isSuper) document.body.classList.add("is-super");
     _watchTableLabels();
-    _navigate("dashboard");
+    /* DEEP LINK. A route in the hash opens it — `#security`, or `#financial/payouts` for a
+       tab inside a section — so admin-os.html#security lands on Security rather than on
+       the dashboard, which is what makes the Super Admin sidebar's links truthful rather
+       than decorative. Validated by _parseRoute against a nav item and a tab button that
+       actually exist, so an unknown or hostile hash falls back to the dashboard and can
+       never be spliced into a selector. */
+    const _r = _parseRoute(location.hash);
+    _navigate(_r ? _r.section : "dashboard", _r ? _r.tab : null);
+    _listenForRoutes();
     _startLiveKPIs();
   }
 
@@ -100,15 +108,45 @@ window.SokoniAOS = (() => {
   }
 
   // ── Navigation ───────────────────────────────────────────────────────────────
-  function _navigate(section) {
-    document.querySelectorAll(".aos-panel").forEach(p => p.hidden = true);
-    document.querySelectorAll(".nav-item").forEach(n => { n.classList.remove("active"); n.removeAttribute("aria-current"); });
-    const panel = document.getElementById("panel-" + section);
-    if (panel) panel.hidden = false;
-    const nav = document.querySelector(`.nav-item[data-section="${section}"]`);
+  /* Tab selectors keyed by section. A child route calls the EXISTING selector — the
+     same function the in-panel tab bar calls — so a sidebar child is never a second
+     implementation of a tab. A section absent here has no tab children, and a tab
+     is only honoured when its button exists in that panel's tab bar. */
+  const _TAB_SELECTORS = {
+    marketplace: (t) => _marketplaceTab(t),
+    financial:   (t) => _financialTab(t),
+    comms:       (t) => _commsTab(t),
+    content:     (t) => _contentTab(t),
+    smartpos:    (t) => _posTab(t),
+    analytics:   (t) => _analyticsTab(t),
+  };
+  let _route = { section: null, tab: null };
+
+  /* "#section" or "#section/tab" → { section, tab } or null. Only [a-z]+ tokens ever
+     reach a selector, and both must exist in the document. A valid section with an
+     unknown tab opens the section on its default tab rather than failing the route. */
+  function _parseRoute(hash) {
+    const m = /^([a-z]+)(?:\/([a-z]+))?$/.exec(String(hash || "").replace(/^#/, "").toLowerCase());
+    if (!m) return null;
+    const section = m[1], tab = m[2] || null;
+    if (!document.querySelector('#aosNav .nav-item[data-section="' + section + '"]:not([data-tab])')) return null;
+    const tabOk = tab && document.querySelector('#panel-' + section + ' .tab-bar .tab-btn[data-tab="' + tab + '"]');
+    return { section, tab: tabOk ? tab : null };
+  }
+
+  /* Sidebar + URL state for a route. Used by navigate() AND by a direct click on an
+     in-panel tab button, so the sidebar, the tab bar and the hash never disagree. */
+  function _setNavState(section, tab) {
+    _route = { section, tab: tab || null };
+    document.querySelectorAll("#aosNav .nav-item").forEach(n => { n.classList.remove("active", "parent-active"); n.removeAttribute("aria-current"); });
+    const parent = document.querySelector(`#aosNav .nav-item[data-section="${section}"]:not([data-tab])`);
+    const child  = tab ? document.querySelector(`#aosNav .nav-item[data-section="${section}"][data-tab="${tab}"]`) : null;
+    const nav = child || parent;
+    if (child && parent) parent.classList.add("parent-active");
     if (nav) {
       /* .active is the styling hook; aria-current is the state assistive tech reads.
-         Both move together here and nowhere else, so they cannot disagree. */
+         Both move together here and nowhere else, so they cannot disagree — and a
+         child route puts them on the child, never on both. */
       nav.classList.add("active");
       nav.setAttribute("aria-current", "page");
       /* Keep the chosen item in view in the long list. The <nav> is its own
@@ -116,8 +154,54 @@ window.SokoniAOS = (() => {
       try { nav.scrollIntoView({ block: "nearest" }); } catch (_) {}
     }
     const bc = document.getElementById("aosBreadcrumb");
-    if (bc) bc.textContent = nav?.dataset.label || section;
-    if (!_panelCache[section]) { _loadPanel(section); _panelCache[section] = true; }
+    if (bc) bc.textContent = (parent?.dataset.label || section) + (child ? " · " + (child.dataset.label || tab) : "");
+    /* replaceState, not location.hash: no scroll-to-anchor, no history spam and no
+       hashchange re-entry. The hashchange listener below still serves a hand-edited URL. */
+    const want = "#" + section + (tab ? "/" + tab : "");
+    if (location.hash !== want) { try { history.replaceState(null, "", want); } catch (_) {} }
+  }
+
+  function _navigate(section, tab) {
+    const select = _TAB_SELECTORS[section];
+    const requested = (tab && select) ? tab : null;
+    document.querySelectorAll(".aos-panel").forEach(p => p.hidden = true);
+    const panel = document.getElementById("panel-" + section);
+    if (panel) panel.hidden = false;
+    /* Re-opening a loaded section from its parent item shows whatever tab is already
+       on screen; the sidebar and the hash say so rather than claiming the default. */
+    let shown = requested;
+    if (!shown && select && _panelCache[section] && panel)
+      shown = (panel.querySelector(".tab-bar .tab-btn.active") || {}).dataset?.tab || null;
+    _setNavState(section, shown);
+    if (!_panelCache[section]) {
+      _panelCache[section] = true;
+      /* A requested tab REPLACES the loader on first open: every tab-bearing loader is
+         exactly `_xTab(<default>)`, so running both would race two renders into one body. */
+      if (requested) select(requested); else _loadPanel(section);
+    } else if (requested) {
+      select(requested);
+    }
+  }
+
+  /* Attached from _bootUI, once the UI exists and the operator is verified — not at
+     script load, where there is no routed UI to keep in step yet. */
+  let _routesListening = false;
+  function _listenForRoutes() {
+    if (_routesListening) return;
+    _routesListening = true;
+    /* A hand-edited URL still routes (replaceState never fires this). */
+    window.addEventListener("hashchange", () => {
+      const r = _parseRoute(location.hash);
+      if (r && (r.section !== _route.section || r.tab !== _route.tab)) _navigate(r.section, r.tab);
+    });
+    /* A direct click on an in-panel tab is secondary navigation; it reports its state to
+       the sidebar and the URL rather than leaving them pointing at the parent. */
+    document.addEventListener("click", (e) => {
+      const b = e.target && e.target.closest && e.target.closest(".aos-panel .tab-bar .tab-btn[data-tab]");
+      if (!b) return;
+      const panel = b.closest(".aos-panel");
+      if (panel && panel.id.indexOf("panel-") === 0) _setNavState(panel.id.slice(6), b.dataset.tab);
+    });
   }
 
   function _loadPanel(s) {
