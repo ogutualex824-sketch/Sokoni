@@ -6,7 +6,7 @@ equal the live minInstanceCount; manifest diff vs b28567c = exactly that one blo
 business-workspace merge + two ROUTES; _OPTS otherwise identical (region, enforceAppCheck true, 120 s, 512 MiB). Re-certified on the candidate:
 gate 21/0, archive-compat 9/0, mutations 9/0 (assertion failures 9/8/1/1/1/1/4, no crash), capabilities 46/0, business-workspace 30/0,
 workspace-capability 51/0; closure 34 = certified set; ops 59→61 (+businessWorkspace, +workspaceHome); provider-onboarding ARCHIVE-IDENTICAL;
-0 exclusion violations; no secret declared/bound; .env hash == archive; clean tree. Syntax gate result to follow. Deployment of c7e26b6 NOT
+0 exclusion violations; no secret declared/bound; .env hash == archive; clean tree; syntax gate PASS (1,649 files). Deployment of c7e26b6 NOT
 authorized; never --force. Live hosting now 49e0f3a (peer release 00:20Z) — future hosting candidates descend from it.
 
 ## [2026-09-30] - providerDispatch deploy ATTEMPT (owner-authorized b28567c after a green final preflight) ABORTED BY THE CLI BEFORE UPLOAD — production unchanged; owner decision needed on minInstances

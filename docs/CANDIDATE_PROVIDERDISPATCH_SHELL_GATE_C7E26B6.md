@@ -32,7 +32,7 @@
 | No secret / environment change | candidate declares no secret; live binds none; `functions/.env` hash-identical to the archive's copy (values never read) |
 | Runtime configuration matches live | `minInstances: 0` = live `minInstanceCount` 0 |
 | Workspace suites | capabilities 46 / 0 · business-workspace 30 / 0 · workspace-capability 51 / 0 |
-| Syntax gate | see §4 |
+| Syntax gate (run in the candidate tree) | **PASS** — 1,649 JavaScript files and 441 inline script blocks parse cleanly |
 | Worktree | clean at `c7e26b6` |
 | Kasindi | not read, not written |
 | Hosting | untouched (live hosting is now `49e0f3a`, released by another session at 00:20Z; any future hosting candidate descends from it) |
