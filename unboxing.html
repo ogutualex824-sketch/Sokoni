@@ -622,53 +622,39 @@ function submitReview(){
   if(!comment||comment.length<10){if(msgEl){msgEl.textContent='💬 Please write at least 10 characters.';msgEl.style.color='#ff6b6b';}return;}
 
   const btn=document.getElementById('ubSubmitBtn');
-  btn.disabled=true;btn.textContent='Posting...';
+  btn.disabled=true;btn.textContent='Submitting...';
+  const _resetBtn=()=>{btn.disabled=false;btn.textContent='📦 Post My Unboxing Review →';};
 
-  const review={
-    id:'ubr_'+Date.now(),
-    rating:formStar,
-    product,
-    category:formCat,
-    comment,
-    reviewer,
-    orderId,
-    date:new Date().toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'}),
-    likes:0,
-    liked:false,
-    verified:!!orderId,
-    photos:uploadedPhotos.length?uploadedPhotos:[CAT_EMOJIS[formCat]||'📦'],
-    photoCount:uploadedPhotos.length||1
-  };
-
-  setTimeout(()=>{
-    const reviews=getReviews();
-    reviews.unshift(review);
-    saveReviews(reviews);
-
-    /* Push to Firestore — photos excluded (base64 too large for Firestore) */
-    if(window.SokoniDB){
-      window.SokoniDB.saveUnboxingReview(review)
-        .catch(e=>console.warn('[SOKONI] Unboxing save failed:',e.message));
-    }
-
-    /* Add loyalty points */
-    try{const u=JSON.parse(localStorage.getItem('sokoniUser')||'{}');u.points=(u.points||0)+50;localStorage.setItem('sokoniUser',JSON.stringify(u));}catch{}
-
-    /* Reset form */
+  /* A SUBMISSION, not a publication (owner, 2026-09-30): AdminOS approves every unboxing post before it
+     appears on the wall. So nothing is added to the wall here, no points are invented in this browser, and
+     success is shown only after the server has actually stored the submission. Photos are not uploaded yet
+     (the review media pipeline is a later slice), so only the text and rating are submitted. */
+  if(!window.SokoniDB||typeof window.SokoniDB.saveUnboxingReview!=='function'){
+    if(msgEl){msgEl.textContent='Sharing is unavailable right now. Please refresh and try again.';msgEl.style.color='#ff6b6b';}
+    _resetBtn();return;
+  }
+  window.SokoniDB.saveUnboxingReview({
+    rating:formStar, product, category:formCat, comment, reviewer, orderId,
+    photoEmoji:CAT_EMOJIS[formCat]||'📦'
+  }).then(()=>{
     uploadedPhotos=[];formStar=0;formCat='';
     document.querySelectorAll('.ub-star-btn').forEach(b=>b.classList.remove('lit'));
     document.querySelectorAll('.ub-cat-btn').forEach(b=>b.classList.remove('active'));
     ['ubProduct','ubComment','ubReviewer','ubOrderId'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     renderPreviews();
-    btn.disabled=false;btn.textContent='📦 Post My Unboxing Review →';
-    if(msgEl){msgEl.textContent='';};
-
+    _resetBtn();
+    if(msgEl){msgEl.textContent='';}
     closeUpload();
-    confetti();
-    showToast('🎉 Review posted! +50 loyalty points added.',4000);
-    updateStats();
-    renderGallery();
-  },600);
+    showToast('✅ Submitted. Your unboxing will appear on the wall once SOKONI approves it.',5000);
+  }).catch(e=>{
+    const signedOut=(e&&(e.code==='unauthenticated'||e.code==='permission-denied'));
+    if(msgEl){
+      msgEl.textContent=signedOut?'Please sign in to share your unboxing.':'Could not submit your unboxing. Please try again.';
+      msgEl.style.color='#ff6b6b';
+    }
+    console.warn('[SOKONI] Unboxing submit failed:',e&&e.message);
+    _resetBtn();
+  });
 }
 
 /* ═══════ CONFETTI ═══════ */
