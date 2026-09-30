@@ -1,3 +1,18 @@
+## 2026-10-01 — Home: the location prompt is asked once, then remembered
+
+The owner reported that after accepting location, the prompt kept popping up. Cause: `script.js`
+`initNearbyLocation()` called `getCurrentPosition()` on EVERY home load and remembered nothing. Browsers that grant
+per visit (Safari, Chrome "allow this time") re-showed their prompt every time. The baseline test measures live
+72dca56 asking on 5 of 5 visits.
+
+Now:
+- a saved location (`sokoniBuyerLoc`) is reused without asking;
+- permission 'granted' refreshes silently;
+- 'prompt' is asked at most ONCE ever (`sokoniBuyerLocAsked`); a refusal is remembered; 'denied' is never asked.
+
+The page's "Use my location" button is unchanged. Test: scripts/test-home-location-once.js 6/0 (it runs the real
+function across visits); live fails L-1/L-2/L-4/L-5. Hosting only.
+
 ## 2026-09-30 — Payment pages: IntaSend's methods with real logos; only the proven method is usable
 
 The SOKONI IntaSend account (owner-run invoice read, 2026-09-30) has only M-PESA payments: 28 COMPLETE, 18 FAILED,
