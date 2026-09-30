@@ -54,7 +54,12 @@ const aos = read('admin-os.html');
 const aosJs = read('sokoni-aos.js');
 console.log('\n  ── admin-os.html');
 const marked = (aos.match(/data-requires-superadmin/g) || []).length;
-ck('both Super Admin links are marked', marked >= 3, marked + ' occurrence(s) incl. the CSS rule');
+/* Derived from the document, not a fixed count: the dashboard quick-link grid was
+   removed (one primary path per destination, 2026-09-30), so the number of Super
+   Admin links is whatever admin-os.html carries. The contract is that EVERY one of
+   them is marked, plus the CSS rule that hides them — that is links + 1. */
+const saLinks = (aos.match(/href="super-admin.html"/g) || []).length;
+ck('every Super Admin link is marked (plus the CSS rule)', saLinks >= 1 && marked >= saLinks + 1, marked + ' occurrence(s) for ' + saLinks + ' link(s) incl. the CSS rule');
 ck('a CSS rule hides them without the claim',
   /body:not\(\.is-super\) \[data-requires-superadmin\]\{display:none/.test(aos), '');
 /* The gate is only real if something actually sets that class from a verified claim. */
