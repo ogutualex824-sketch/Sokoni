@@ -33,6 +33,10 @@ const head = (t) => console.log('\n-- ' + t + ' --');
 
 const RA  = fs.readFileSync(path.join(ROOT, 'sokoni-role-authority.js'), 'utf8');
 const SH  = fs.readFileSync(path.join(ROOT, 'shared-header.js'), 'utf8');
+/* The switch, the mirror and the acting-role resolver moved out of the header into
+   sokoni-profile-menu.js (2026-09-30) — one implementation for the header AND the
+   merchant shell. The assertions below read the file that now carries them. */
+const PM  = fs.readFileSync(path.join(ROOT, 'sokoni-profile-menu.js'), 'utf8');
 const WS  = fs.readFileSync(path.join(ROOT, 'sokoni-workspace.js'), 'utf8');
 const IDX = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const PRO = fs.readFileSync(path.join(ROOT, 'profile.html'), 'utf8');
@@ -91,7 +95,7 @@ function loadHub(approved, mutate) {
   ck('index.html is still the only static #sk-top-nav page', (IDX.match(/id="sk-top-nav"/g) || []).length === 1);
 
   head('4 - the switch routes, and never falls back to Profile');
-  const sw = SH.slice(SH.indexOf('window._skSwitchRole = async function'), SH.indexOf('function _skMirrorRoleLocally'));
+  const sw = PM.slice(PM.indexOf('window._skSwitchRole = async function'), PM.indexOf('function _skMirrorRoleLocally'));
   ck('the switch consults RA.hubFor', /hubFor\(role\)/.test(sw));
   ck('no hardcoded profile destination in the switch', !/profile\.html/.test(sw));
   ck('skips navigation when already on the destination', /here\.toLowerCase\(\) !== hub\.toLowerCase\(\)/.test(sw));
@@ -100,11 +104,11 @@ function loadHub(approved, mutate) {
      sw.indexOf('setActiveRole') < sw.indexOf('_skMirrorRoleLocally(role)'));
 
   head('5 - header and Profile read the same acting role');
-  ck('_skActingRole resolver exists', /function _skActingRole\(fallback\)/.test(SH));
-  ck('popup highlight no longer derives from roles[0]', !/const active\s+= roles\[0\]/.test(SH));
-  ck('popup highlight uses the resolver', /const active\s+= _skActingRole\(/.test(SH));
+  ck('_skActingRole resolver exists', /function _skActingRole\(fallback\)/.test(PM));
+  ck('popup highlight no longer derives from roles[0]', !/const active\s+= roles\[0\]/.test(PM));
+  ck('popup highlight uses the resolver', /const active\s+= _skActingRole\(/.test(PM));
   ck('the acting-as line uses the same resolver',
-     /function _skActiveRoleLine\(active\) \{\s*var role = _skActingRole\(active\);/.test(SH));
+     /function _skActiveRoleLine\(active\) \{\s*var role = _skActingRole\(active\);/.test(PM));
   ck('Profile still consumes the event (df1459a intact)', /addEventListener\('sokoniActiveRoleChanged'/.test(PRO));
   ck('Profile Business Hub still acting-role gated', /_actingAs\('seller', u\)/.test(PRO));
   ck('My Store still entitlement-based', /function _isSellerUser\(u\)\{   return _hasRole\('seller', u\); \}/.test(PRO));
@@ -119,7 +123,7 @@ function loadHub(approved, mutate) {
      /u\.activeRole\s*=/.test(WS_CODE + '\nu.activeRole = ws.role;'));
   ck('control: stripping left switchTo intact', /function switchTo\(businessId\)/.test(WS_CODE));
   ck('workspace role still available on activeWorkspace', /u\.activeWorkspace\s*=/.test(WS));
-  const mirror = SH.slice(SH.indexOf('function _skMirrorRoleLocally'), SH.indexOf('function _skMirrorRoleLocally') + 900);
+  const mirror = PM.slice(PM.indexOf('function _skMirrorRoleLocally'), PM.indexOf('function _skMirrorRoleLocally') + 900);
   ck('mirror never writes claims', !/setCustomUserClaims|getIdToken/.test(mirror));
   ck('mirror never touches applications/sellers', !/applications|sellers/.test(mirror));
   ck('mirror does not ADD to roles[] (reorder only)', !/roles\.push\(/.test(mirror));

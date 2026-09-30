@@ -5,7 +5,9 @@
    That list exists twice:
 
      firebase.js      _SOKONI_LS_KEEP   canonical, used by sokoniSignOut()
-     shared-header.js _SK_LS_KEEP       fallback, used on pages without firebase.js
+     sokoni-profile-menu.js _SK_LS_KEEP fallback, used on pages without firebase.js
+                                       (moved out of shared-header.js 2026-09-30; the
+                                        header injects the menu file on every page)
 
    The duplication is not gratuitous: 181 pages load shared-header.js and not
    firebase.js, so the fallback cannot read the canonical copy at runtime. But a
@@ -31,10 +33,10 @@ const ck = (l, ok, d) => {
 console.log('\nSign-out keep-list parity\n' + '='.repeat(60));
 
 const canonical = read('firebase.js').match(/const _SOKONI_LS_KEEP\s*=\s*(\/.*\/[a-z]*);/);
-const mirror    = read('shared-header.js').match(/var _SK_LS_KEEP\s*=\s*(\/.*\/[a-z]*);/);
+const mirror    = read('sokoni-profile-menu.js').match(/var _SK_LS_KEEP\s*=\s*(\/.*\/[a-z]*);/);
 
 ck('firebase.js declares _SOKONI_LS_KEEP', !!canonical);
-ck('shared-header.js declares _SK_LS_KEEP', !!mirror);
+ck('sokoni-profile-menu.js declares _SK_LS_KEEP', !!mirror);
 
 if (canonical && mirror) {
   ck('the two keep-lists are byte-identical', canonical[1] === mirror[1],
@@ -54,7 +56,7 @@ if (canonical && mirror) {
 }
 
 /* The fallback is the whole point: it must actually clear, not merely navigate. */
-const sh = read('shared-header.js');
+const sh = read('sokoni-profile-menu.js');
 ck('the no-firebase.js fallback wipes storage rather than only redirecting',
    /_skLocalSignOutFallback[\s\S]{0,900}removeItem/.test(sh));
 ck('sign-out uses location.replace so Back cannot re-render the authed page',

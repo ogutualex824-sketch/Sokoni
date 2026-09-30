@@ -29,6 +29,10 @@ const ck = (label, ok, detail) => {
 const head = (t) => console.log('\n── ' + t + ' ──');
 
 const header = fs.readFileSync(path.join(ROOT, 'shared-header.js'), 'utf8');
+/* The account dropdown was factored out of the header (2026-09-30): the header injects
+   sokoni-profile-menu.js and keeps only the avatar slot. The dropdown assertions read the
+   file that now builds it. */
+const menu   = fs.readFileSync(path.join(ROOT, 'sokoni-profile-menu.js'), 'utf8');
 const engine = fs.readFileSync(path.join(ROOT, 'sokoni-nav-engine.js'), 'utf8');
 const active = fs.readFileSync(path.join(ROOT, 'nav-active.js'), 'utf8');
 
@@ -196,8 +200,8 @@ head('10 · one route vocabulary across every surface');
    in a CSS rule, so slicing from it captured styles and every assertion below ran
    against 698 characters of CSS. The control now asserts the slice contains a known
    menu entry, because a length check passed that quite happily. */
-const _acctAt = header.indexOf("'<div class=\"sk-acct-links\">'");
-const acct = _acctAt === -1 ? '' : header.slice(_acctAt, header.indexOf('sk-acct-link-danger', _acctAt));
+const _acctAt = menu.indexOf("'<div class=\"sk-acct-links\">'");
+const acct = _acctAt === -1 ? '' : menu.slice(_acctAt, menu.indexOf('sk-acct-link-danger', _acctAt));
 ck('CONTROL — the account menu markup was isolated',
    acct.length > 300 && /My Profile/.test(acct), acct.length + ' chars');
 /* Restating the links is how a menu ends up pointing at a route the bar no longer
@@ -205,8 +209,9 @@ ck('CONTROL — the account menu markup was isolated',
 ck('the dropdown builds its shortcuts FROM the tab array',
    /window\.SokoniBottomNav && window\.SokoniBottomNav\.TABS/.test(acct));
 ck('it does not restate the five hrefs', !/category\.html\?cat=all/.test(acct));
-ck('the tabs exist before any consumer runs',
-   header.indexOf('window.SokoniBottomNav =') < header.indexOf('_buildAcctPopup(user);'));
+ck('the tabs are defined by the header and read LAZILY by the menu (at popup build, not at load)',
+   header.indexOf('window.SokoniBottomNav =') > -1 && menu.indexOf('_buildAcctPopup(user);') > -1 &&
+   menu.indexOf('window.SokoniBottomNav && window.SokoniBottomNav.TABS') > menu.indexOf('function _buildAcctPopup(user)'));
 ck('a missing tab array omits the section rather than rendering dead links',
    /if \(!tabs\.length\) return '';/.test(acct));
 
@@ -217,7 +222,7 @@ head('11 · the dropdown speaks the same emoji language');
      acct.indexOf(e) !== -1);
 });
 ck('Sign Out is 🚪 and stays separated as an ACTION',
-   /sk-acct-separator[\s\S]{0,200}🚪 Sign Out/.test(header));
+   /sk-acct-separator[\s\S]{0,200}🚪 Sign Out/.test(menu));
 /* The emoji are presentation only. */
 ck('role-aware entries are preserved',
    /My Workspaces/.test(acct) && /Wallet/.test(acct));

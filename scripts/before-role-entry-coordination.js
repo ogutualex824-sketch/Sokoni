@@ -35,7 +35,7 @@ console.log('='.repeat(78));
 console.log('\n1 — every switcher must ask an authority before switching');
 
 const SWITCHERS = [
-  { name: 'shared-header._skSwitchRole', file: 'shared-header.js',
+  { name: 'profile-menu._skSwitchRole', file: 'sokoni-profile-menu.js',   /* factored out of shared-header.js 2026-09-30 */
     body: (s) => s.slice(s.indexOf('window._skSwitchRole = async function'),
                          s.indexOf('function _skMirrorRoleLocally')) },
   { name: 'profile.switchRole', file: 'profile.html',
