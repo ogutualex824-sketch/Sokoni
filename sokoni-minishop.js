@@ -412,18 +412,23 @@ window.SokoniMiniShop = (() => {
     const discount = p.discountPercent ? parseInt(p.discountPercent) : (orig > price && orig > 0 ? Math.round((orig - price) / orig * 100) : 0);
     const badge = p.isBestseller ? '<span class="ms-badge ms-badge-popular">Bestseller</span>' : (discount > 0 ? '<span class="ms-badge ms-badge-sale">-' + discount + '%</span>' : '');
     const imgUrl = _esc(p.imageUrl || p.images?.[0] || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'200\' height=\'200\'%3E%3Crect fill=\'%23111\' width=\'200\' height=\'200\'/%3E%3C/svg%3E');
+    /* COMPACT PREMIUM CARD (owner 2026-09-30): no labelled buttons. ❤ (top-right) and 🛒
+       (bottom-right) are icons on the photo; the Bestseller / -% badge sits in a chip row UNDER
+       the photo so nothing covers the image. Same handlers and the same .ms-add-btn /
+       .ms-wishlist-btn classes, so cart behaviour and its tests are unchanged. */
     return `<div class="ms-product-card" onclick="location.href='product.html?id=${_esc(p.id)}'">
-  <img src="${imgUrl}" alt="${_esc(p.name)}" class="ms-product-img" loading="lazy">
-  ${badge}
-  <button class="ms-wishlist-btn" onclick="event.stopPropagation();SokoniMiniShop.toggleWishlist('${_esc(p.id)}')" aria-label="Wishlist">&#x2665;</button>
+  <div class="ms-photo">
+    <img src="${imgUrl}" alt="${_esc(p.name)}" class="ms-product-img" loading="lazy">
+    <button type="button" class="ms-wishlist-btn" onclick="event.stopPropagation();SokoniMiniShop.toggleWishlist('${_esc(p.id)}')" aria-label="Save ${_esc(p.name)} to wishlist">&#x2665;</button>
+    <button type="button" class="ms-add-btn"
+            aria-label="Add ${_esc(p.name)} to cart"
+            onclick="event.stopPropagation();SokoniMiniShop.addToCart('${_esc(p.id)}')">&#128722;</button>
+  </div>
+  ${badge ? '<div class="ms-chips">' + badge + '</div>' : ''}
   <div class="ms-product-body">
     <div class="ms-product-name">${_esc(p.name)}</div>
     <div class="ms-product-price">KES ${price.toLocaleString()}${orig > price ? '<span class="ms-product-original-price"> KES ' + orig.toLocaleString() + '</span>' : ''}</div>
     ${p.rating ? '<div class="ms-prod-rating">' + _stars(p.rating) + ' <span class="ms-prod-rating-count">(' + (p.reviewCount || 0) + ')</span></div>' : ''}
-    <button type="button" class="ms-add-btn"
-            aria-label="Add ${_esc(p.name)} to cart"
-            onclick="event.stopPropagation();SokoniMiniShop.addToCart('${_esc(p.id)}')">
-      &#128722; Add to cart</button>
   </div>
 </div>`;
   }

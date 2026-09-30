@@ -2628,3 +2628,41 @@ ul, ol {
 /* END OF MINISHOP 2.0 CSS DESIGN SYSTEM
    Version: 2.0.0 | 2026-07-08
 ───────────────────────────────────────────── */
+
+/* ─────────────────────────────────────────────
+   COMPACT PREMIUM CARD (owner 2026-09-30)
+   No labelled buttons: ❤ top-right and 🛒 bottom-right float on the photo (30px to the eye,
+   ≥44px tap target via ::before); badges sit in a chip row under the photo; 3 cards per row
+   on phones. Mirrors compact-grid.css, which this page does not load.
+───────────────────────────────────────────── */
+.ms-photo { position: relative; }
+.ms-product-card .ms-wishlist-btn,
+.ms-product-card .ms-add-btn {
+  position: absolute; z-index: 3;
+  width: 30px; height: 30px; min-height: 0; max-height: 30px; min-width: 0;
+  margin: 0; padding: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; line-height: 1;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+}
+.ms-product-card .ms-wishlist-btn { top: 7px; right: 7px; border: 1px solid rgba(255,255,255,0.22); }
+.ms-product-card .ms-add-btn { bottom: 7px; right: 7px; top: auto; background: rgba(113,255,0,0.9); color: #050f05; border: 1px solid #71ff00; }
+.ms-product-card .ms-wishlist-btn::before,
+.ms-product-card .ms-add-btn::before { content: ""; position: absolute; inset: -7px; border-radius: 50%; }
+.ms-product-card .ms-add-btn:focus-visible,
+.ms-product-card .ms-wishlist-btn:focus-visible { outline: 2px solid #71ff00; outline-offset: 2px; }
+.ms-chips { display: flex; gap: 4px; padding: 6px 8px 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.ms-chips::-webkit-scrollbar { display: none; }
+.ms-chips .ms-badge { position: static; font-size: 9px; padding: 1px 7px; flex: 0 0 auto; }
+@media (max-width: 479px) {
+  .ms-product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+  .ms-product-card .ms-product-body { padding: 6px 7px 8px; }
+  .ms-product-card .ms-product-name { font-size: 10.5px; }
+  .ms-product-card .ms-product-price { font-size: 12px; }
+  .ms-product-card .ms-wishlist-btn,
+  .ms-product-card .ms-add-btn { width: 28px; height: 28px; max-height: 28px; font-size: 13px; }
+  .ms-product-card .ms-wishlist-btn::before,
+  .ms-product-card .ms-add-btn::before { inset: -8px; }
+  .ms-product-card .ms-wishlist-btn { top: 5px; right: 5px; }
+  .ms-product-card .ms-add-btn { bottom: 5px; right: 5px; }
+}
