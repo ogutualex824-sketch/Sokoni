@@ -101,6 +101,9 @@ const codeOf = async (p) => { try { const r = await p; return { ok: true, r }; }
   ck('G2  catalogueOnly returns the rate card', r.ok && r.catalogue && Object.keys(r.catalogue.vehicles).length === 8, r);
   r = await call(P.getParcelQuote, 'sender', { vehicleType: 'boda', distanceKm: 99, pickup: { lat: -1.2921, lng: 36.8219 }, dropoff: { lat: -1.3032, lng: 36.7073 } });
   ck('G3  with both coordinates the SERVER distance wins over the declared 99km', r.ok && r.distanceSource === 'server_coords' && r.quote.distanceKm > 10 && r.quote.distanceKm < 25, r.quote && r.quote.distanceKm);
+  const qBefore = (await db.collection('parcelQuotes').get()).size;
+  r = await call(P.getParcelQuote, 'sender', { vehicleType: 'boda', pickup: PK, dropoff: DR, preview: true });
+  ck('G1b a signed-in PRICE CHECK (preview) prices but writes nothing and gets no quoteId', r.ok && r.quote.total > 0 && r.quoteId === null && (await db.collection('parcelQuotes').get()).size === qBefore, { r: r.quoteId, before: qBefore });
   r = await call(P.getParcelQuote, 'sender', { vehicleType: 'boda', pickup: PK, dropoff: DR, weight: 'medium', urgency: 'express' });
   const quoteId = r.quoteId;
   const qdoc = (await db.collection('parcelQuotes').doc(quoteId).get()).data();

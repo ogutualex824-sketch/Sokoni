@@ -233,7 +233,9 @@ function makeParcelRequests(deps) {
     const qt = quote({ vehicleType: d.vehicleType, distanceKm, weight: d.weight, urgency: d.urgency });
     const uid = request.auth && request.auth.uid;
     let quoteId = null, expiresAt = null;
-    if (uid) {
+    /* preview:true = "just checking the price" — the owner rule says a price check creates
+       nothing, signed in or not. Only a booking-form quote is stored (claimable, 15 min). */
+    if (uid && !d.preview) {
       const ref = db.collection('parcelQuotes').doc();
       quoteId = ref.id;
       expiresAt = _now() + QUOTE_TTL_MS;
