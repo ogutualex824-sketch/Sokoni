@@ -1,3 +1,23 @@
+## 2026-09-30 — Unboxing Wall: a post is a SUBMISSION for AdminOS approval, never a self-publication
+
+Owner decision: every unboxing post is approved in AdminOS (approve / decline / archive / delete) before it
+appears on the wall.
+
+- **`sokoni-db.js` `saveUnboxingReview`** writes an explicit field list: uid, rating 1-5, product, category,
+  comment, reviewer, orderId, photoEmoji, createdAt.
+  - It sends no status, so the post is born pending.
+  - It never sends `verified`, `likes` or moderation fields; Verified Buy belongs to the server, moderation
+    to AdminOS.
+  - It is a pure create and requires sign-in.
+- **`unboxing.html`** shows success only after the save completes: "Submitted. Your unboxing will appear on the
+  wall once SOKONI approves it."
+  - It no longer adds the post to the local wall as if published.
+  - It no longer invents +50 loyalty points in the browser.
+  - Sign-in and failure states are explicit.
+- **Photos** are still not uploaded (the review media pipeline is a later slice). No API change.
+- **Database:** the payload is accepted by today's served rules AND by the R0 rules candidate. This is required
+  ordering: it ships before R0.
+
 ## [2026-09-30] - DEPLOYED d55c112 → Hosting v646 (cacheVersion sokoni-20260930093216-v646) 09:32Z, owner-authorized; artefacts 12edf13; rollback 6f7202bd5dd81d84. Live verified: markers served, 6 of 7 files byte-identical (index.html served via / — /index.html is a 301), recs widget renders, feed 6, Fastest Selling visible, no [RT] products warning, no module-not-loaded warning. Follow-up (recs App Check wait+retry) committed, NOT deployed.
 
 ## [2026-09-30] — Home: Edit Interests works, Picked For You renders, every home grid re-syncs with the catalogue — DEPLOYED as d55c112 (see line above)
