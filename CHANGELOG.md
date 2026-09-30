@@ -1,3 +1,49 @@
+## [2026-09-30] — F1 pickup location, ported to the PAYMENT functions lineage (bdbd29c) — NOT deployed
+
+**Why a separate port.** Production serves `webhookIntasend` and `updateClickAndCollectStatus` from this lineage
+(live archives match bdbd29c exactly, line endings aside), while the rider functions (`riderPresence`,
+`availableDeliveries`, `claimAvailableDelivery`, `dispatchDelivery`) serve from f50e675. The two trees differ
+in 76 files, and each has about 54 files the other lacks. Deploying either group from the other's tree would
+substitute foreign code under it. So F1 is carried in both, with the authority files byte-identical in each.
+The rider-lineage half is `feat/f1-pickup-location` (e91f9db + 5a0935e).
+
+**Files:**
+- `functions/pickup-location.js` (new), `functions/geo-point.js` (new), `functions/shop-employees.js` (new here;
+  npm-only; unexported). All three are byte-identical to the rider lineage.
+- `functions/index.js`: the webhook delivery writer only (+8/−1).
+- `functions/pos-marketplace-sync.js`: the "ready" writer (+8).
+- `scripts/test-f1-payment-lineage.js` (new), `CHANGELOG.md`.
+
+**Not here, by design:** `shopSetPickupLocation`. Its one writer is served from the rider lineage and is not
+exported from this tree. The board, dispatch and navigation hunks are also left out: nothing deployed from this
+lineage executes them.
+**Database / rules / API changes:** none new beyond F1 (server-only `deliveryPickups/{deliveryRef}`; no rule, so
+deny-by-default).
+**Security:** the webhook no longer writes `pickupCoords:null`. It writes a snapshot of the seller's shop point,
+never anything from the payment metadata or the client. With no shop point it writes `pickupLocation:null`
+plus `pickupLocationGap`.
+**Breaking changes:** none.
+
+**Tests.**
+- `test-f1-payment-lineage.js` **19/0** drives the real `webhookIntasend`: challenge, marketplace finalisation,
+  delivery write, replay, and smuggled meta. It also drives `updateClickAndCollectStatus`, the shared helpers,
+  and the served rules.
+- Unmodified bdbd29c fails all 12 F1 rows. 7/7 sabotages are caught.
+- Regression:
+
+  | Suite | Result |
+  |---|---|
+  | delivery-pin-unreachable | 65/0 |
+  | notify-booking-types | 59/0 |
+  | notify-six-types-behaviour | 85/0 |
+  | notify-sms-recipient | 28/0 |
+  | notify | 26/0 |
+  | pos-financial-trace | 20/0 |
+  | subscription-pay-methods | 71/0 (2 unproven) |
+
+- `verify-webhook-authority webhookIntasend` FAILs identically on unmodified bdbd29c (ADR-0014: subscription /
+  entitlement are reachable only via intasendWebhook). That is pre-existing, and F1 does not touch it.
+
 ## [2026-09-30] — `payment-success.js`: two raw control bytes made a payment file invisible to text tooling (live lineage, NOT deployed)
 
 `functions/payment-success.js` was classified **binary** by git and grep. Cause established before any

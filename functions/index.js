@@ -8433,11 +8433,18 @@ exports.webhookIntasend = onRequest(
               const _exists = await _delDoc.get();
               if (!_exists.exists) {
                 const _pin = String(Math.floor(1000 + Math.random() * 9000));
+                /* F1 — the pickup is a SNAPSHOT of the seller's shop pickupLocation, read on the
+                   server (pickup-location.js). This line used to write pickupCoords:null for every
+                   delivery. No shop point → pickupLocation:null plus a stated pickupLocationGap,
+                   never an invented position. Nothing client-supplied is read for it. */
+                const _pickupFields = await require("./pickup-location").ensureDeliveryPickup(db, _delRef, {
+                  shopId: null, sellerUid: _pm.sellerUid,
+                });
                 await _delDoc.set({
                   ref: _delRef, deliveryRef: _delRef, orderId: _pm.orderId, orderRef: apiRef,
                   buyerName:  _pm.buyerName || "", buyerPhone: payData.phone || "", buyerUid: payData.uid || null,
                   sellerName: _pm.sellerName || "SOKONI", sellerUid: _pm.sellerUid, sellerPhone: "",
-                  pickupAddress:   _pm.sellerName || "Shop", pickupCoords: null,
+                  pickupAddress:   _pm.sellerName || "Shop", ..._pickupFields,
                   deliveryAddress: _pm.address || _pm.deliveryAddress || "", deliveryCoords: null,
                   items:      _lines.map(i => ({ productId: i.productId, name: i.name, qty: i.qty })),
                   orderTotal: amount, deliveryFee: _delivery,
