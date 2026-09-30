@@ -36,7 +36,9 @@ ok(/role="button" tabindex="0"/.test(CODE),
 console.log('\n2. Tapping Edit opens the editor, not the detail sheet');
 /* Both live on the same card. Without the guard the card handler wins and Edit becomes
    unreachable — a control that looks live and does the wrong thing. */
-ok(/\[data-pr="edit"\],\[data-pr="photos"\],\[data-pr="del"\],\[data-pr="menu"\]/.test(CODE),
+/* 2026-10-01 (advanced uploader port, c4 U4 0f5e032): Remove became Archive and a Restore control was added; the
+   exclusion list carries restore too. Same guard, one more explicit control. */
+ok(/\[data-pr="edit"\],\[data-pr="photos"\],\[data-pr="del"\],\[data-pr="restore"\],\[data-pr="menu"\]/.test(CODE),
    'the card-open handler excludes the explicit action controls');
 const openIdx = CODE.indexOf('data-pr="open"]');
 const menuIdx = CODE.indexOf('data-pr="menu"]');
@@ -45,7 +47,8 @@ ok(menuIdx > -1 && openIdx > -1 && menuIdx < openIdx,
 
 /* ── 3. THE OVERFLOW MENU ─────────────────────────────────────────────────── */
 console.log('\n3. The quick-action menu');
-['✏️ Edit', '📦 Adjust stock', '👁️ View details', '🗑️ Remove'].forEach((label) => {
+/* 🗑️ Remove is 🗄️ Archive since the uploader port (owner invariant: a product is tombstoned, never deleted) */
+['✏️ Edit', '📦 Adjust stock', '👁️ View details', '🗄️ Archive'].forEach((label) => {
   ok(SRC.indexOf(label) > -1, 'offers ' + label);
 });
 ok(/S\.menu = \(S\.menu === mi\) \? null : mi;/.test(SRC),

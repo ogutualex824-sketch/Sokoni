@@ -240,6 +240,13 @@ async function refusal(fn) {
   ck('K1 an UNCLASSIFIED business listing a room is refused by the writer', !!e && db.log.length === 0, e && (e.code + ' ' + e.message));
   ck('K2 the writer states the check is CLIENT-side', /CLIENT-side/.test(SRC));
 
+  head('U - the editor offers no per-variant quantity on an EXISTING product (static; the browser run is queued)');
+  const PSRC = fs.readFileSync(path.join(ROOT, 'sokoni-merchant-products.js'), 'utf8');
+  ck('U1 the quantity input is rendered only when NOT editing', /\(editing\s*\?[\s\S]{0,700}:\s*'<input class="pr-i pr-vqty" data-pf="variant\.' \+ r \+ '\.stock"/.test(PSRC));
+  ck('U2 a stored row carries its id in a hidden field (how the writer matches it)', PSRC.indexOf('data-pf="variant.\' + r + \'.id"') > -1);
+  ck('U3 the section points at Inventory instead', /Variant quantities are changed in Inventory, not here/.test(PSRC) && /data-pr="go" data-route="inventory">📦 Adjust stock in Inventory/.test(PSRC));
+  ck('U4 no "sum of every variant" promise while editing', /var total = \(!editing && SP/.test(PSRC));
+
   console.log('\n' + '='.repeat(76));
   console.log('  ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

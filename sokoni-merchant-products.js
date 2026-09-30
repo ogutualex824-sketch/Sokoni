@@ -116,6 +116,64 @@
     '.pr-chip.warn.on{border-color:#ffb020;background:rgba(255,176,32,.12)}',
     '.pr-chip.bad.on{border-color:#ff6b6b;background:rgba(255,107,107,.12)}',
     '.pr-quick{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}',
+    /* BATCH BAR. Sticky, because a merchant ticking their way down a long shelf must not
+       have to scroll back up to press print. It appears only once something is selected. */
+    '.pr-batch{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:8px;flex-wrap:wrap;',
+      'margin:0 0 12px;padding:10px 12px;border-radius:13px;',
+      'background:rgba(113,255,0,.10);border:1px solid rgba(113,255,0,.30);',
+      '-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}',
+    '.pr-batch-n{font-size:13px;font-weight:900;color:var(--acc,#71ff00);margin-right:auto}',
+    '.pr-batch-b{min-height:38px;padding:9px 14px;border-radius:11px;border:0;cursor:pointer;',
+      'font-family:inherit;font-size:12.5px;font-weight:800;background:var(--acc,#71ff00);color:#050505}',
+    '.pr-batch-b.ghost{background:transparent;color:inherit;',
+      'border:1px solid var(--line,rgba(255,255,255,.18))}',
+    '.pr-batch-b[disabled]{opacity:.55;cursor:default}',
+    /* THE TICK. Its own control, sized for a thumb, and raised above the image so a card
+       whose photo fills the corner is still selectable. */
+    '.pr-pick{position:absolute;top:7px;left:7px;z-index:10;width:26px;height:26px;border-radius:8px;',
+      'cursor:pointer;font-family:inherit;font-size:14px;font-weight:900;line-height:1;',
+      'display:flex;align-items:center;justify-content:center;',
+      'background:rgba(0,0,0,.55);color:transparent;',
+      'border:1.5px solid rgba(255,255,255,.45);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}',
+    '.pr-pick[aria-checked="true"]{background:var(--acc,#71ff00);border-color:var(--acc,#71ff00);color:#050505}',
+    '.pr-card.is-picked{border-color:var(--acc,#71ff00)}',
+    /* ── MEDIA STUDIO. Each line is a measured fact, so the states are distinguishable:
+       a warning must not look like a tick, or the panel becomes reassurance. */
+    '.pr-mchks{list-style:none;margin:14px 0 0;padding:0}',
+    '.pr-mchk{display:flex;align-items:flex-start;gap:8px;padding:6px 0;font-size:12.5px;',
+      'font-weight:600;line-height:1.45;color:var(--txt2,rgba(255,255,255,.62))}',
+    '.pr-mchk>span{flex:0 0 auto;font-weight:900;width:13px}',
+    '.pr-mchk--ok>span{color:var(--acc,#71ff00)}',
+    '.pr-mchk--warn{color:#ffb74d}.pr-mchk--warn>span{color:#ffb020}',
+    '.pr-shots{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}',
+    '.pr-shot{font-size:11px;font-weight:700;padding:5px 10px;border-radius:8px;',
+      'color:var(--txt2,rgba(255,255,255,.6));border:1px dashed var(--line,rgba(255,255,255,.16))}',
+    /* Reorder. Buttons, not drag: a thumb on a phone is where these photos are chosen. */
+    '.pr-porder{display:flex;align-items:center;justify-content:center;gap:7px;margin:7px 0 4px}',
+    /* 44px: every control in the sheet is a thumb target (test-uploader-mobile-scroll.js check D). */
+    '.pr-pmove{width:44px;height:44px;border-radius:10px;cursor:pointer;font-family:inherit;',
+      'font-size:13px;font-weight:900;line-height:1;background:rgba(255,255,255,.06);',
+      'color:inherit;border:1px solid var(--line,rgba(255,255,255,.14))}',
+    '.pr-pmove[disabled]{opacity:.3;cursor:default}',
+    '.pr-pnum{font-size:10.5px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;',
+      'color:var(--txt3,#8b8b8b);min-width:34px;text-align:center}',
+    /* Lifecycle moves. Only the legal ones are ever rendered. */
+    '.ls-life-acts{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 4px}',
+    '.ls-life-btn{min-height:44px;padding:8px 14px;border-radius:10px;cursor:pointer;',
+      'font-family:inherit;font-size:12.5px;font-weight:800;background:rgba(255,255,255,.05);',
+      'color:inherit;border:1px solid var(--line,rgba(255,255,255,.14));text-transform:none;letter-spacing:normal}',
+    '.ls-life-btn.go{background:var(--acc,#71ff00);color:#050505;border-color:var(--acc,#71ff00)}',
+    '.ls-life-btn.warn{color:#ffb74d;border-color:rgba(255,152,0,.3)}',
+    /* BUSINESS CONTEXT. Where this listing is going, said before the merchant describes it —
+       a merchant with several workspaces must not type forty fields into the wrong shop. */
+    '.pr-bizctx{display:flex;align-items:center;flex-wrap:wrap;gap:6px 9px;margin:0 0 14px;',
+      'padding:10px 13px;border-radius:12px;background:rgba(255,255,255,.04);',
+      'border:1px solid var(--line,rgba(255,255,255,.1))}',
+    '.pr-bizctx-l{font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;',
+      'color:var(--txt3,#8b8b8b)}',
+    '.pr-bizctx b{font-size:13.5px;font-weight:900}',
+    '.pr-bizctx-h{width:100%;font-size:11px;font-weight:600;color:var(--txt3,#8b8b8b)}',
+    '.pr-bizctx-none{font-size:12.5px;font-weight:700;color:#ffb74d}',
     '.pr-q{flex:1 1 auto;min-height:44px;padding:11px 15px;border-radius:13px;border:0;cursor:pointer;',
       'font-family:inherit;font-size:13.5px;font-weight:800;background:var(--acc,#71ff00);color:#050505}',
     '.pr-q.ghost{background:transparent;color:inherit;border:1px solid var(--line,rgba(255,255,255,.14))}',
@@ -195,6 +253,10 @@
     '.pr-vrow{display:flex;gap:8px;margin-bottom:6px}',
     '.pr-vrow .pr-i{flex:1;min-width:0}',
     '.pr-vqty{flex:0 0 84px !important;min-width:84px}',
+    /* EDIT: the quantity is a read-out, not a control (Inventory owns it). */
+    '.pr-vqty-ro{display:flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:46px;',
+      'border-radius:11px;font-weight:800;font-size:14px;color:var(--txt2,rgba(255,255,255,.7));',
+      'background:rgba(255,255,255,.02);border:1px dashed var(--line,rgba(255,255,255,.16))}',
     '.pr-vrow2{display:flex;gap:8px;margin-bottom:12px;padding-bottom:12px;',
       'border-bottom:1px solid var(--line,rgba(255,255,255,.07))}',
     '.pr-vrow2 .pr-i{flex:1;min-width:0;font-size:12.5px}',
@@ -236,7 +298,7 @@
     '.pr-pimg{width:82px;height:82px;flex:0 0 82px;border-radius:11px;object-fit:cover;',
       'background:rgba(255,255,255,.06);display:block}',
     '.pr-ptools{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}',
-    '.pr-ptool{padding:8px 11px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:12px;',
+    '.pr-ptool{min-height:44px;padding:8px 11px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:12px;',
       'font-weight:800;background:transparent;color:inherit;',
       'border:1px solid var(--line,rgba(255,255,255,.16))}',
     '.pr-ptool[disabled]{opacity:.45;cursor:default}',
@@ -272,9 +334,11 @@
        the CSS fallback is the dynamic viewport height. The panel is the ONE scroller —
        overscroll-behavior:contain so reaching its end never chains into the page behind,
        scroll-padding-bottom so a focused field near the end is brought clear of the edge,
-       and padding-bottom leaves room to keep scrolling past the last control. */
+       and padding-bottom leaves room to keep scrolling past the last control.
+       z-index is the overlay token (c4 e10d464): a full-screen sheet must out-rank the
+       header (scripts/test-overlays.js). */
     '.pr-sheet{position:fixed;left:0;right:0;top:var(--pr-vvt,0px);height:var(--pr-vvh,100vh);',
-      'z-index:70;display:flex;align-items:flex-end;justify-content:center}',
+      'z-index:var(--sk-z-sheet, 100010);display:flex;align-items:flex-end;justify-content:center}',
     '@supports (height:100dvh){.pr-sheet{height:var(--pr-vvh,100dvh)}}',
     '.pr-scrim{position:absolute;inset:0;background:rgba(0,0,0,.62)}',
     '.pr-panel{position:relative;width:100%;max-width:520px;max-height:92%;overflow:auto;',
@@ -298,6 +362,65 @@
     '.pr-row{display:flex;gap:10px}.pr-row>.pr-f{flex:1;min-width:0}',
     '.pr-err{font-size:12.5px;color:#ff6b6b;margin-top:6px}',
     '.pr-note{font-size:12px;color:var(--txt2,rgba(255,255,255,.5));margin-top:5px;line-height:1.5}',
+    /* ── SCAN CONTROL ─────────────────────────────────────────────────────────
+       An input with a button welded to its right edge. The two share one row so the
+       barcode field reads as one control, and the button keeps the 44px minimum
+       target every other control here uses — a merchant taps this holding a product
+       in the other hand. flex + min-width:0 so the input can actually shrink on a
+       390px screen instead of pushing the button off the edge. */
+    '.pr-scanrow{display:flex;gap:8px;align-items:stretch}',
+    '.pr-scanrow>.pr-i{flex:1 1 auto;min-width:0}',
+    '.pr-scan{flex:0 0 auto;min-height:46px;padding:0 14px;border-radius:11px;cursor:pointer;',
+      'font-family:inherit;font-size:13px;font-weight:800;white-space:nowrap;',
+      'border:1px solid var(--acc,#71ff00);background:rgba(113,255,0,.10);color:var(--acc,#71ff00)}',
+    '.pr-scan:disabled{opacity:.5;cursor:default}',
+    /* ── THE MIGRATED UPLOAD FORM ─────────────────────────────────────────────
+       Sections, not one long column. The form now asks for up to forty things and a
+       flat list of forty inputs is a form people abandon; grouping them under a
+       heading with an emoji lets a merchant scan for the part they care about and
+       skip the rest. Only the sections that apply are rendered at all. */
+    '.pr-sec{border:1px solid var(--line,rgba(255,255,255,.10));border-radius:14px;',
+    'padding:13px 13px 4px;margin:0 0 14px;background:rgba(255,255,255,.02)}',
+    '.pr-sec-h{display:flex;align-items:center;gap:8px;margin-bottom:3px}',
+    '.pr-sec-e{font-size:16px;line-height:1}',
+    '.pr-sec-t{font-size:13.5px;font-weight:800;letter-spacing:.01em}',
+    '.pr-sec-s{font-size:12px;color:var(--txt2,rgba(255,255,255,.5));margin-bottom:11px;line-height:1.5}',
+    /* Native select, styled to match the inputs. The arrow is drawn rather than
+       inherited so it looks the same on Android and iOS. */
+    '.pr-sel{appearance:none;-webkit-appearance:none;padding-right:34px;cursor:pointer;',
+    "background-image:url(\"data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\");",
+    'background-repeat:no-repeat;background-position:right 12px center}',
+    '.pr-sel option{background:#101010;color:#fff}',
+    '.pr-sel optgroup{background:#0a0a0a;color:var(--brand,#71ff00);font-weight:800}',
+    /* The live bulk-deal read-out. Deliberately loud: a wrong bulk tier is expensive. */
+    '.pr-bulk-strip{display:flex;flex-wrap:wrap;align-items:center;gap:5px 12px;font-size:12.5px;',
+    'background:rgba(0,170,255,.10);border:1px solid rgba(0,170,255,.28);color:#7fd4ff;',
+    'border-radius:11px;padding:9px 11px;margin:2px 0 10px}',
+    '.pr-bulk-strip b{color:#00aaff}',
+    '.pr-warn--age{background:rgba(255,152,0,.10);border:1px solid rgba(255,152,0,.32);color:#ffb020}',
+    '.pr-ok{font-size:12.5px;color:var(--brand,#71ff00);margin-top:8px;line-height:1.5}',
+    /* THE CHECKBOX IS THE LABEL. A native box is 13-17px, far under the 44px thumb target every other
+       control here keeps (test-uploader-mobile-scroll.js check D). So the whole label row is the hit area
+       (min-height 44px, tapping anywhere toggles), the real input stays in the DOM, focusable and
+       announced, but visually hidden, and .pr-cbox draws the box. Keyboard focus is shown on the box. */
+    '.pr-check{position:relative;display:flex;align-items:center;gap:10px;min-height:44px;font-size:12.5px;line-height:1.5;',
+    'margin:2px 0 12px;padding:4px 0;color:var(--txt2,rgba(255,255,255,.75));cursor:pointer}',
+    '.pr-check input{position:absolute;width:1px;height:1px;margin:0;padding:0;border:0;opacity:0;',
+      'clip:rect(0 0 0 0);clip-path:inset(50%);overflow:hidden;white-space:nowrap}',
+    '.pr-cbox{flex:0 0 22px;width:22px;height:22px;border-radius:6px;box-sizing:border-box;',
+      'display:inline-flex;align-items:center;justify-content:center;',
+      'border:2px solid var(--line,rgba(255,255,255,.35));background:rgba(255,255,255,.04)}',
+    '.pr-check input:checked+.pr-cbox{background:var(--brand,#71ff00);border-color:var(--brand,#71ff00)}',
+    ".pr-check input:checked+.pr-cbox::after{content:'\\2713';color:#06210a;font-size:14px;font-weight:900;line-height:1}",
+    '.pr-check input:focus-visible+.pr-cbox{outline:2px solid var(--acc,#71ff00);outline-offset:2px}',
+    '.pr-check input:disabled+.pr-cbox{opacity:.5}',
+    '.pr-ai-btn{width:100%;min-height:46px;border-radius:12px;cursor:pointer;font:inherit;',
+    'font-size:14px;font-weight:800;border:1px solid rgba(113,255,0,.34);',
+    'background:linear-gradient(135deg,rgba(113,255,0,.16),rgba(113,255,0,.06));',
+    'color:var(--brand,#71ff00);transition:filter .15s ease,transform .12s ease}',
+    '.pr-ai-btn:hover{filter:brightness(1.12)}',
+    '.pr-ai-btn:active{transform:scale(.98)}',
+    '.pr-ai-btn:disabled{opacity:.55;cursor:not-allowed}',
     /* In normal flow AFTER the last field — never sticky, never fixed — so it is reached
        by scrolling past the form, and nothing overlays the field above it. */
     '.pr-foot{display:flex;gap:9px;margin-top:14px}',
@@ -431,8 +554,9 @@
     }
 
     function counts () {
-      var c = { all: 0, in: 0, low: 0, out: 0, unknown: 0 };
-      (S.rows || []).forEach(function (p) { c.all++; c[stockState(p)]++; });
+      var c = { all: 0, in: 0, low: 0, out: 0, unknown: 0, archived: 0 };
+      /* U4: archived products are not part of the live catalogue — counted apart, never as "out of stock" */
+      (S.rows || []).forEach(function (p) { if (p.status === 'archived') { c.archived++; return; } c.all++; c[stockState(p)]++; });
       return c;
     }
 
@@ -479,6 +603,9 @@
           return false;
         });
       }
+      /* U4 (2026-09-29): archived products live under their own filter — never mixed into the live list */
+      if (S.status === 'archived') rows = rows.filter(function (p) { return p.status === 'archived'; });
+      else rows = rows.filter(function (p) { return p.status !== 'archived'; });
       if (S.status === 'active')  rows = rows.filter(function (p) { return p.status === 'active'; });
       if (S.status === 'draft')   rows = rows.filter(function (p) { return p.status && p.status !== 'active'; });
       /* Stock filters go through stockState — the SAME classifier the counts use, so a
@@ -518,6 +645,8 @@
 
     /* One visible availability state per card, from the same classifier as the counts. */
     function statusPill (p) {
+      /* U4: an archived product is neither in nor out of stock — it is not for sale */
+      if (p && p.status === 'archived') return '<span class="pr-tag unk">🗄️ Archived</span>';
       var st = stockState(p);
       if (st === 'out')     return '<span class="pr-tag out">● Out of stock</span>';
       if (st === 'low')     return '<span class="pr-tag low">⚠ Low stock</span>';
@@ -529,8 +658,17 @@
       var img = p.image || (Array.isArray(p.images) && p.images[0]) || null;
       var price = money(p.price);
       var draft = p.status && p.status !== 'active';
-      return '<div class="pr-card' + (S.menu === i ? ' menu-open' : '') + '" data-pr="open" data-i="' + i + '" role="button" tabindex="0" ' +
+      var picked = !!(S.selected && S.selected[p.id]);
+      return '<div class="pr-card' + (S.menu === i ? ' menu-open' : '') +
+        (picked ? ' is-picked' : '') + '" data-pr="open" data-i="' + i + '" role="button" tabindex="0" ' +
         'aria-label="' + esc(p.name || 'Product') + ' — open details">' +
+        /* THE TICK IS ITS OWN CONTROL, not the card. data-pr="pick" is checked before the
+           card-body branch in onClick, so ticking a product never opens it — the mistake
+           that makes a bulk selector infuriating on a phone. */
+        '<button class="pr-pick" data-pr="pick" data-i="' + i + '" role="checkbox" ' +
+          'aria-checked="' + (picked ? 'true' : 'false') + '" ' +
+          'aria-label="Select ' + esc(p.name || 'product') + ' for printing">' +
+          (picked ? '✓' : '') + '</button>' +
         (img ? '<img class="pr-img" loading="lazy" alt="" src="' + esc(img) + '">'
              : '<div class="pr-ph" aria-hidden="true">📦</div>') +
         '<div class="pr-b">' +
@@ -566,7 +704,10 @@
             '<button role="menuitem" data-pr="edit" data-i="' + i + '">✏️ Edit</button>' +
             '<button role="menuitem" data-pr="go" data-route="inventory">📦 Adjust stock</button>' +
             '<button role="menuitem" data-pr="open" data-i="' + i + '">👁️ View details</button>' +
-            '<button role="menuitem" class="danger" data-pr="del" data-i="' + i + '">🗑️ Remove</button>' +
+            '<button role="menuitem" data-pr="tag1" data-i="' + i + '">🖨 Print price tag</button>' +
+            ((p && p.status === 'archived')
+              ? '<button role="menuitem" data-pr="restore" data-i="' + i + '">♻️ Restore</button>'
+              : '<button role="menuitem" class="danger" data-pr="del" data-i="' + i + '">🗄️ Archive</button>') +
           '</div>' +
       '</div>';
     }
@@ -612,6 +753,11 @@
            shell's own router — never a link out to the legacy shell. */
         '<div class="pr-quick">' +
           '<button class="pr-q" data-pr="add">＋ Add product</button>' +
+          /* SCAN FIRST, DECIDE SECOND. Scanning an item the shop already stocks opens
+             THAT product rather than starting a duplicate — the commonest way a
+             catalogue acquires two records for one item is someone re-adding
+             something they could not find by name. */
+          '<button class="pr-q ghost" data-pr="scanadd">📷 Scan an item</button>' +
           '<button class="pr-q ghost" data-pr="go" data-route="inventory">📦 Inventory</button>' +
         '</div>' +
         '<div class="pr-tools">' +
@@ -620,15 +766,35 @@
           '<select class="pr-sel" aria-label="Filter by status" data-pr="status">' +
             opt('all', 'All', S.status) + opt('active', 'Active', S.status) +
             opt('draft', 'Draft', S.status) + opt('out', 'Out of stock', S.status) +
+            opt('archived', 'Archived', S.status) +
           '</select>' +
           '<select class="pr-sel" aria-label="Sort products" data-pr="sort">' +
             opt('recent', 'Newest', S.sort) + opt('name', 'Name', S.sort) +
             opt('price-asc', 'Price ↑', S.sort) + opt('price-desc', 'Price ↓', S.sort) +
             opt('stock', 'Stock', S.sort) +
           '</select>' +
-        '</div>' + body +
+        '</div>' + batchBarHTML() + body +
         (S.editor ? editorHTML() : '');
       fitSheet();
+    }
+
+    /* ── BATCH BAR ───────────────────────────────────────────────────────────
+       Present only once something is ticked. A permanent bar offering to print 0 tags is
+       a control that spends most of its life disabled, and a merchant learns to ignore it.
+
+       It names the COUNT, so nobody presses print without knowing how much paper is about
+       to come out — the difference between a 3-tag correction and a 40-tag shelf run. */
+    function batchBarHTML () {
+      var n = selectedCount();
+      if (!n) return '';
+      return '<div class="pr-batch" role="region" aria-label="Selected products">' +
+        '<span class="pr-batch-n">' + n + ' selected</span>' +
+        '<button class="pr-batch-b" data-pr="tagsel"' + (S.printing ? ' disabled' : '') + '>' +
+          (S.printing ? 'Printing…' : '🖨 Print ' + n + ' price tag' + (n === 1 ? '' : 's')) +
+        '</button>' +
+        '<button class="pr-batch-b ghost" data-pr="pickall">Select all shown</button>' +
+        '<button class="pr-batch-b ghost" data-pr="pickno">Clear</button>' +
+      '</div>';
     }
 
     function opt (v, label, cur) {
@@ -638,6 +804,10 @@
     /* ── LOAD: the canonical reader, and the ceiling for display ──────────── */
     function load () {
       skeleton();
+      /* A SELECTION MUST NOT OUTLIVE ITS ROWS. Reloading the catalogue can remove, rename
+         or re-price anything that was ticked, and printing a tag for a record that is no
+         longer on screen is how a shelf ends up with a price nobody set. */
+      S.selected = {};
       var md = (typeof window !== 'undefined') && window.SokoniMerchantData;
       if (!md || typeof md.listProducts !== 'function') {
         S.err = 'SokoniMerchantData unavailable';
@@ -708,8 +878,109 @@
     }
     function closeEditor () { S.editor = null; _picked = []; paint(); }
 
-    var FORM_KEYS = ['name', 'price', 'costPrice', 'stock', 'sku', 'category', 'description', 'status'];
-    var NUMERIC = { price: 1, costPrice: 1, stock: 1 };
+    /* ══ SCANNING ══════════════════════════════════════════════════════════════════════
+       A shop's catalogue is built standing over a box of stock, and the barcode is the one
+       field on the form that a machine gets right every time and a person gets wrong often
+       enough to matter — thirteen digits copied by eye is how an item ends up unscannable
+       at the counter and nobody finds out until a customer is waiting.
+
+       SokoniBarcode DECODES; this surface RESOLVES. The decoder is handed no catalogue and
+       returns a string, and the matching below runs over S.rows — the products already
+       loaded for THIS shop's scope. A scan therefore cannot reach another merchant's
+       product, because no query is issued at all.
+
+       ABSENT IS SAID, NEVER MIMED. If the module did not load there is no scanner, and the
+       button says so instead of opening something that cannot work. */
+    function scanner () {
+      var B = (typeof window !== 'undefined') && window.SokoniBarcode;
+      return (B && typeof B.scanOnce === 'function') ? B : null;
+    }
+
+    /* Fill one form field from a scan, without disturbing anything else the merchant has
+       typed. captureForm() first: the repaint that shows the scanned value rebuilds the
+       sheet, and rebuilding it without capturing would discard every other field. */
+    function scanIntoField (key) {
+      var B = scanner();
+      if (!B) return say('No scanner is available on this device.');
+      captureForm();
+      B.scanOnce({ title: 'Scan the barcode' }).then(function (code) {
+        if (!code || !S.editor) return;                 /* closed, or the sheet went away */
+        /* WRITTEN INTO THE LIVE FIELD, NOT THROUGH A REPAINT. The editor renders spec
+           inputs from the NESTED values.specs, while submit assembles them from the FLAT
+           dotted keys — so setting the flat key and repainting would store the code and
+           show an empty box. Setting the input and re-capturing keeps the two in step
+           through the form's own machinery, and avoids rebuilding a sheet the merchant is
+           part-way through filling in. */
+        var el = host.querySelector('[data-pf="' + key + '"]');
+        if (!el) return;
+        el.value = String(code);
+        S.editor.values[key] = String(code);
+        captureForm();
+        if (el.focus) { try { el.focus(); } catch (_) {} }
+      }).catch(function () { say('The scanner could not start.'); });
+    }
+
+    /* Scan an item and land on the right screen for it.
+         already stocked → open THAT product, so a re-scan corrects a record instead of
+                           creating a second one for the same item
+         not stocked yet → open Add product with the barcode already filled in
+         two matches     → refuse. Two products answering to one code is a catalogue
+                           defect, and opening either of them is how the wrong record
+                           gets edited. Show the merchant both by searching the code. */
+    function scanToAdd () {
+      var B = scanner();
+      if (!B) return say('No scanner is available on this device.');
+      B.scanOnce({ title: 'Scan an item' }).then(function (code) {
+        if (!code) return;
+        var rows = S.rows || [];
+        var t = String(code).trim().toLowerCase();
+        var hits = rows.filter(function (p) {
+          return [p.sku, p.barcode, (p.specs && p.specs.barcode)].some(function (v) {
+            return String(v == null ? '' : v).trim().toLowerCase() === t;
+          });
+        });
+
+        if (hits.length === 1) {
+          openEditor('edit', hits[0]);
+          say('Already in your catalogue — opened for editing.');
+          return;
+        }
+        if (hits.length > 1) {
+          S.q = String(code); S.menu = null; paint();
+          say('More than one product carries that code. Fix the duplicate before scanning it at the till.');
+          return;
+        }
+        /* New item. Open the form with the code already in place — the merchant scanned
+           it, so re-typing it would be asking them to do the part the scanner just did. */
+        openEditor('create', null);
+        if (S.editor) {
+          /* BOTH SHAPES, because the form keeps two. `specs` is what the editor RENDERS
+             from, so this is what puts the code in the visible box; `spec.barcode` is what
+             fieldsFromForm assembles the patch from, so this is what actually saves it.
+             Setting only one gives either a code that is stored but invisible, or one that
+             is shown and then silently dropped. */
+          S.editor.values['spec.barcode'] = String(code);
+          S.editor.values.specs = Object.assign({}, S.editor.values.specs, { barcode: String(code) });
+          paint();
+        }
+        var el = host.querySelector('[data-pf="name"]');
+        if (el && el.focus) { try { el.focus(); } catch (_) {} }
+      }).catch(function () { say('The scanner could not start.'); });
+    }
+
+    /* Every TOP-LEVEL field the form shows. The nested ones (spec., stockUnit., ownership.,
+       foodLicence., variant.) are assembled separately in fieldsFromForm — this list is for
+       flat product fields only, and a field missing from it is a field the form appears to
+       save and silently discards. */
+    var FORM_KEYS = ['name', 'price', 'costPrice', 'stock', 'sku', 'category', 'description', 'status',
+                     'location', 'condition', 'brand', 'kebsCert', 'deliveryCost',
+                     'wholesalePrice', 'minWholesaleQty', 'digitalUrl', 'digitalLicense', 'tags',
+                     /* The Listing Studio's type picker. It is a hidden input rather than a
+                        chip's own state so that a tapped type and a typed field reach the
+                        writer by one route — see sokoni-listing-studio.js. */
+                     'listingType'];
+    var NUMERIC = { price: 1, costPrice: 1, stock: 1,
+                    deliveryCost: 1, wholesalePrice: 1, minWholesaleQty: 1 };
 
     /* Pull every field the form is showing into editor state. */
     function captureForm () {
@@ -718,12 +989,81 @@
         var el = host.querySelector('[data-pf="' + k + '"]');
         if (el) S.editor.values[k] = el.value;
       });
+      /* The nested controls (ownership., foodLicence.) are mirrored by onInput/onChange as
+         the merchant types, but a control they never touched has no entry — so a section
+         rendered with existing values would lose them on save. Read them straight off the
+         DOM, which is the only place that knows what is currently on screen. */
+      /* spec., stockUnit., variant. and vopt. belong in this sweep for exactly the reason
+         stated above, and were missing from it. fieldsFromForm assembles `out.specs` from
+         the flat dotted keys held in state, and `_productFields` REPLACES the stored specs
+         object with what it is given. So a merchant who opened a product, corrected the
+         brand and saved sent `{brand}` alone — and the barcode, weight, dimensions and
+         every variant went with the save. Touch one specification, lose the rest.
+
+         Reading them off the DOM makes what is ON SCREEN the thing that gets saved, which
+         is what the merchant believes is happening. It also makes the scanned barcode
+         survive a repaint without the scan handler having to know the form's internal
+         key shape. */
+      var nestedEls = host.querySelectorAll(
+        '[data-pf^="ownership."], [data-pf^="foodLicence."], [data-pf^="spec."], ' +
+        '[data-pf^="stockUnit."], [data-pf^="variant."], [data-pf^="vopt."], [data-pf^="lf."]');
+      Array.prototype.forEach.call(nestedEls, function (el) {
+        var k = el.getAttribute('data-pf');
+        S.editor.values[k] = (el.type === 'checkbox') ? (el.checked ? '1' : '') : el.value;
+      });
+
+      /* THE WARRANTY IS READ FROM ITS TILES, not from data-pf inputs — it is a structured
+         promise rather than a field, and reading it off the DOM keeps the saved policy
+         identical to the preview the seller was looking at when they pressed save. */
+      var W = (typeof window !== 'undefined' && window.SokoniWarrantyUI) || null;
+      if (W && host.querySelector('[data-wty-root]')) {
+        S.editor.values._warranty = W.readBuilder(host);
+      }
     }
 
     /* EDIT-mode stock: the figure as Inventory holds it, and where to change it. Deliberately
        carries NO data-pf attribute — captureForm() reads by data-pf, so this cannot contribute
        to a patch even if FORM_KEYS still names stock. Two independent reasons it cannot mutate:
        no input, and updateProduct refuses a stock patch outright. */
+    /* ── WARRANTY & RETURNS ─────────────────────────────────────────────────
+       The seller's promise about this product, built from selectable tiles with a live
+       preview of exactly what the buyer will see. Rendered by sokoni-warranty-ui.js so
+       the merchant's builder and the buyer's panel share ONE vocabulary — a remedy
+       offered here that the server drops would be a promise no buyer can ever claim.
+
+       Absent when the module has not loaded, rather than degraded into raw checkboxes:
+       a half-rendered policy builder is how a seller saves a promise they did not mean. */
+    /* Repaints ONLY the preview and the conditional groups — never the whole sheet.
+       Re-rendering the editor on every tile tap would discard whatever the merchant had
+       typed into the fields above, which is exactly the loss that makes people distrust a
+       form. */
+    function repaintWarranty () {
+      var W = (typeof window !== 'undefined' && window.SokoniWarrantyUI) || null;
+      if (!W || !host.querySelector) return;
+      var root = host.querySelector('[data-wty-root]');
+      if (!root) return;
+      var read = W.readBuilder(host);
+      if (S.editor && S.editor.values) S.editor.values._warranty = read;
+      var pv = root.querySelector('[data-wty-preview]');
+      if (pv) pv.innerHTML = W.previewHTML(read || {});
+      var none = !!(read && read.durationDays === 0);
+      Array.prototype.forEach.call(root.querySelectorAll('[data-wty-when="protected"]'),
+        function (el) { el.hidden = none; });
+      var custom = root.querySelector('.wty-custom');
+      var chosen = root.querySelector('[data-wty="duration"][aria-pressed="true"]');
+      if (custom) {
+        custom.hidden = !(chosen && chosen.getAttribute('data-key') === 'custom');
+      }
+    }
+
+    function warrantyHTML (p) {
+      var W = (typeof window !== 'undefined' && window.SokoniWarrantyUI) || null;
+      if (!W) return '';
+      var stored = (S.editor && S.editor.values && S.editor.values._warranty) ||
+                   (p && p.warranty) || null;
+      return '<div class="pr-f pr-warranty" data-warranty-host>' + W.policyBuilderHTML(stored) + '</div>';
+    }
+
     function stockReadHTML (p) {
       var raw = p && p.stock;
       var known = (raw !== undefined && raw !== null && raw !== '' && isFinite(Number(raw)));
@@ -739,6 +1079,14 @@
     function fieldsFromForm () {
       var v = (S.editor && S.editor.values) || {};
       var out = {};
+
+      /* The whole policy travels as ONE object. Sending its parts separately is how a
+         seller who changes the duration loses the remedies — the same defect the nested
+         specification fields already had, fixed the same way.
+
+         null means the seller chose nothing, and nothing is written: an absent warranty
+         is a real answer and must not be overwritten with an empty one on every save. */
+      if (v._warranty) out.warranty = v._warranty;
       FORM_KEYS.forEach(function (k) {
         var raw = v[k];
         if (raw === undefined) return;
@@ -762,7 +1110,10 @@
          A blank weight must not become a weight of 0. */
       var nested = {};
       Object.keys(v).forEach(function (k) {
-        if (k.indexOf('spec.') !== 0 && k.indexOf('stockUnit.') !== 0) return;
+        /* ownership. and foodLicence. join spec. and stockUnit. — the form is flat and
+           these two models are not. */
+        if (k.indexOf('spec.') !== 0 && k.indexOf('stockUnit.') !== 0 &&
+            k.indexOf('ownership.') !== 0 && k.indexOf('foodLicence.') !== 0) return;
         var raw = v[k];
         if (raw === '' || raw === null || raw === undefined) return;
         var path = k.split('.');
@@ -787,6 +1138,11 @@
 
       if (nested.spec && Object.keys(nested.spec).length) out.specs = nested.spec;
       if (nested.stockUnit && nested.stockUnit.name) out.stockUnit = nested.stockUnit;
+      /* Sent whenever the section was on screen, even when emptied — that is how a merchant
+         REMOVES a record they entered by mistake. The writer normalises an all-blank object
+         to null rather than storing six empty strings. */
+      if (nested.foodLicence) out.foodLicence = nested.foodLicence;
+      if (nested.ownership)   out.ownership = nested.ownership;
 
       /* ── VARIANTS ──────────────────────────────────────────────────────────
          The option NAMES are the merchant's own ("Colour", "Size"), so they cannot be
@@ -827,6 +1183,45 @@
         .map(function (i) { return vrows[i]; })
         .filter(function (r) { return Object.keys(r.attrs).length > 0; });
       if (variants.length) out.variants = variants;
+
+      /* ── LISTING ATTRIBUTES ────────────────────────────────────────────────
+         The type-specific fields the Listing Studio drew, gathered out of the flat `lf.`
+         namespace into the one `attributes` object the universal listing model describes.
+         They are NOT promoted to top-level fields: a room's `guests` and a vehicle's
+         `mileage` are properties of that type, and spreading them across the product
+         record would give every listing thirty columns it has no use for.
+
+         A list field was typed as one comma-separated line and is split back here, because
+         the model says it is a list and the form is the only place it was ever a string.
+         Blank entries are dropped rather than stored as empty strings. */
+      var LMod = (typeof window !== 'undefined' && window.SokoniListingModel) || null;
+      var listKeys = {};
+      if (LMod) {
+        LMod.fieldsFor({ listingType: v.listingType, category: v.category }).forEach(function (f) {
+          if (f.kind === 'list') listKeys[f.key] = 1;
+        });
+      }
+      var lattrs = {};
+      Object.keys(v).forEach(function (k) {
+        if (k.indexOf('lf.') !== 0) return;
+        var raw = v[k];
+        if (raw === '' || raw === null || raw === undefined) return;
+        var name = k.slice(3);
+        if (listKeys[name] && typeof raw === 'string') {
+          var parts = raw.split(',').map(function (s) { return s.trim(); })
+                         .filter(function (s) { return s !== ''; });
+          if (!parts.length) return;
+          lattrs[name] = parts;
+        } else {
+          lattrs[name] = raw;
+        }
+      });
+      if (Object.keys(lattrs).length) out.attributes = lattrs;
+
+      /* An unset type is ABSENT, never the empty string. Storing '' would turn "SOKONI
+         inferred this from the category" into "the merchant chose nothing", and the type
+         authority reads an explicit value ahead of its own inference. */
+      if (out.listingType === '' || out.listingType == null) delete out.listingType;
 
       return out;
     }
@@ -875,6 +1270,122 @@
     }
 
     function reportCreate (res) { say(createText(res)); }
+
+    /* ══ PRICE TAGS ══════════════════════════════════════════════════════
+       Shelf labels for products that already exist.
+
+       WHICH ENGINE, AND WHY IT CHANGED. This used to call PosPrintService.printPriceTag().
+       That method does not exist and never has: PosPrintService prints RECEIPTS and the
+       other POS documents — sale, refund, quote, invoice, kitchen ticket, shift report —
+       and has no label surface at all. So the guard below it fired on every single press
+       and the button said "the printer service is not loaded on this page", which was also
+       untrue: the service was loaded, it simply cannot print labels. The control had never
+       once produced a tag.
+
+       The label authority is sokoni-label-engine.js, which owns TSPL, ZPL, ESC/POS and the
+       browser-print fallback, and which POS already uses. Routing here is not a second
+       printing system — it is the only one that prints labels. PosPrintService is still
+       preferred if it ever grows the method, so the day it does, this switches back without
+       a code change.
+
+       BATCH IS THE ENGINE'S NATIVE SHAPE. printLabel() takes an ARRAY; printPriceTag() is
+       merely its one-item wrapper. So printing a shelf of tags is one job with N items, not
+       N jobs — which is what a label printer expects and what stops a 40-tag run becoming
+       40 separate connection attempts. */
+    function labelService () {
+      var svc = window.PosPrintService;
+      if (svc && typeof svc.printPriceTag === 'function') {
+        return { print: function (items, o) {
+          return items.length === 1 ? svc.printPriceTag(items[0], o)
+                                    : Promise.all(items.map(function (i) { return svc.printPriceTag(i, o); }));
+        }, name: 'pos' };
+      }
+      var eng = window.SokoniLabelEngine;
+      if (eng && typeof eng.printLabel === 'function') {
+        return { print: function (items, o) {
+          return eng.printLabel(items, Object.assign({ showPrice: true, showBarcode: true }, o));
+        }, name: 'label' };
+      }
+      return null;
+    }
+
+    /* The fields the label engine reads, taken from the STORED record. */
+    function tagItem (p) {
+      return {
+        name: p.name || p.title || '',
+        price: p.price,
+        sku: p.sku || '',
+        barcode: (p.specs && p.specs.barcode) || p.barcode || p.sku || '',
+        shopName: ctx.shopName || '',
+      };
+    }
+
+    function printTags (products, opts) {
+      var list = (products || []).filter(function (p) { return p && p.id; });
+      if (!list.length) return say('Nothing selected to print.');
+
+      var svc = labelService();
+      if (!svc) {
+        /* Named honestly. "Not loaded" was the old lie; this says which piece is missing. */
+        return say('No label printer is available on this page — sokoni-label-engine.js is not loaded.');
+      }
+
+      S.printing = true; paint();
+      var settle = function (msg) {
+        if (S.destroyed) return;
+        S.printing = false;
+        if (S.editor) S.editor.printing = false;
+        paint();
+        if (msg) say(msg);
+      };
+
+      var n = list.length;
+      var noun = n === 1 ? 'Price tag' : n + ' price tags';
+      Promise.resolve(svc.print(list.map(tagItem), opts || { copies: 1 }))
+        .then(function (r) {
+          /* Never announce paper that does not exist: a queued job is reported distinctly
+             from a printed one. */
+          if (r && r.queued) return settle('No printer connected — ' +
+            (n === 1 ? 'the tag is queued.' : 'the ' + n + ' tags are queued.'));
+          settle(noun + ' sent to the printer.');
+        })
+        .catch(function (e) {
+          if (e && e.code === 'BARCODE_UNAVAILABLE') {
+            return settle(n === 1
+              ? 'This product has no SKU or barcode yet, so there is nothing scannable to print.'
+              : 'Some of these have no SKU or barcode, so there is nothing scannable to print.');
+          }
+          settle('Could not print: ' + ((e && e.message) || 'please try again.'));
+        });
+    }
+
+    function printPriceTag () {
+      var E = S.editor;
+      if (!E || E.busy || E.printing) return;
+      /* The STORED record, never the form. A merchant may have typed a new price
+         and not saved it; printing that would put a figure on a shelf that the
+         till would refuse to honour. */
+      var p = E.product;
+      if (!p || !p.id) return say('Add the product first, then reopen it to print its tag.');
+      E.printing = true; E.err = null; paint();
+      printTags([p]);
+    }
+
+    /* ── BATCH ───────────────────────────────────────────────────────────────
+       A merchant pricing a shelf does not open forty products one at a time. Selection is
+       held here rather than on the records, so nothing about a product changes by being
+       ticked, and it is cleared whenever the list is reloaded — a selection that outlived
+       its rows would print a tag for something no longer on screen. */
+    function selectedProducts () {
+      var ids = S.selected || {};
+      return (S.rows || []).filter(function (p) { return p && ids[p.id]; });
+    }
+    function selectedCount () { return Object.keys(S.selected || {}).length; }
+    function printSelectedTags () {
+      var list = selectedProducts();
+      if (!list.length) return say('Select the products you want tags for first.');
+      printTags(list);
+    }
 
     /* The product is WRITTEN by the time this runs, so its existence is never in doubt —
        only the photos are. Every branch therefore reports the product outcome first and
@@ -930,15 +1441,17 @@
       try {
         var M = md();
         if (E.mode === 'delete') {
-          run = M.deleteProduct({ scope: ctx.scope, db: ctx.db, id: E.product.id });
+          run = M.archiveProduct({ scope: ctx.scope, db: ctx.db, id: E.product.id });
         } else if (E.mode === 'edit') {
           var patch = changedOnly(fieldsFromForm(), E.product);   /* stored record, not the form */
           if (!Object.keys(patch).length) { E.busy = false; closeEditor(); return say('Nothing changed.'); }
-          run = M.updateProduct({ scope: ctx.scope, db: ctx.db, id: E.product.id, patch: patch });
+          run = M.updateProduct({ scope: ctx.scope, db: ctx.db, id: E.product.id, patch: patch, businessCategory: bizCategory() });
         } else {
           run = M.createProduct({
             scope: ctx.scope, db: ctx.db, draftToken: E.token,
             product: fieldsFromForm(),
+            /* the capability matrix: the writer refuses a listing type this kind of business may not list (U3) */
+            businessCategory: bizCategory(),
             /* Opening stock does NOT ride in the product document. This is the invoker for
                merchantAdjustStock; the writer files the opening quantity as the product's first
                movement, transactional and versioned, exactly like every later one. */
@@ -962,7 +1475,7 @@
         S.editor = null;
         if (mode === 'create') reportCreate(res || {});
         else if (mode === 'edit') say('Changes saved.');
-        else say('Product deleted.');
+        else say('Product archived — find it under Archived to restore it.');
         /* Re-READ. The list is never patched from what we believe we wrote. */
         S.rows = null; load();
       })).catch(done(function (e) {
@@ -1208,6 +1721,69 @@
     /* Per-photo preview + tools. Previously the sheet showed only a COUNT of chosen
        photos, so a merchant could not see what they were about to upload, let alone edit
        it. objectURLs are revoked on the next paint to avoid leaking one per repaint. */
+    /* ══ MEDIA STUDIO ════════════════════════════════════════════════════════
+       The readiness of this listing's photographs, MEASURED rather than asserted.
+
+       WHY NOT A TICKLIST OF REASSURANCES. The spec sketches "✓ Optimized ✓ Correct aspect
+       ratio ✓ Ready for publishing", and the tempting build is four green ticks that are
+       always green. Those would be decoration: a merchant reads them as a check that ran.
+       So each line below is a fact this surface can actually establish — a count it can see,
+       a file size it holds, a main image that either exists or does not — and anything it
+       cannot measure is not claimed.
+
+       Aspect ratio is deliberately ABSENT for stored photos. Measuring it means loading
+       every image and reading naturalWidth, which this synchronous renderer cannot do, and
+       a ratio guessed from a URL would be exactly the invented reassurance being avoided. */
+    function mediaChecksHTML (p) {
+      var have = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
+      var rows = [];
+      function line (state, text) {
+        var mark = state === 'ok' ? '✓' : (state === 'warn' ? '⚠' : '·');
+        rows.push('<li class="pr-mchk pr-mchk--' + state + '"><span>' + mark + '</span>' +
+                  esc(text) + '</li>');
+      }
+
+      if (have.length) line('ok', 'Main image set — the first photo is what buyers see');
+      else if (_picked.length) line('warn', 'No main image yet — the first one you upload becomes it');
+      else line('warn', 'No photos. A listing without one is rarely opened');
+
+      if (have.length) {
+        line(have.length >= 3 ? 'ok' : 'warn',
+             have.length + (have.length === 1 ? ' photo published' : ' photos published') +
+             (have.length >= 3 ? '' : ' — three or more sell better'));
+      }
+
+      /* PENDING FILES ARE MEASURABLE, because this surface is holding them. Size is read
+         from the File itself, not estimated. */
+      if (_picked.length) {
+        var bytes = 0, known = true;
+        _picked.forEach(function (f) {
+          if (f && typeof f.size === 'number') bytes += f.size; else known = false;
+        });
+        line('ok', _picked.length + (_picked.length === 1 ? ' photo ready' : ' photos ready') +
+             (known ? ' · ' + (bytes / 1048576).toFixed(1) + ' MB before compression' : ''));
+        line('ok', 'Compressed on upload — the media pipeline resizes and re-encodes');
+      }
+      return '<ul class="pr-mchks">' + rows.join('') + '</ul>';
+    }
+
+    /* The shot list for this listing's type — Room / Bathroom / View for a hotel, Dish /
+       Presentation / Menu for a restaurant. Metadata over ONE pipeline, which is why it
+       renders names and no second uploader. Drawn by the Listing Studio so the Photos sheet
+       and the editor show the merchant the same list. */
+    function shotListHTML (p) {
+      var LS = studio();
+      if (!LS) return '';
+      var M = (typeof window !== 'undefined') && window.SokoniListingModel;
+      if (!M) return '';
+      var groups = M.mediaGroupsFor(liveListing(p));
+      if (!groups || !groups.length) return '';
+      return '<div class="pr-note" style="margin:14px 0 6px">Shots buyers of this type expect</div>' +
+        '<div class="pr-shots">' + groups.map(function (g) {
+          return '<span class="pr-shot">' + esc(g) + '</span>';
+        }).join('') + '</div>';
+    }
+
     function pickedHTML () {
       if (!_picked.length) return '';
       var C = creative();
@@ -1219,6 +1795,21 @@
         var busy = E.aiBusy === i;
         return '<div class="pr-pick">' +
           (url ? '<img class="pr-pimg" alt="" src="' + esc(url) + '">' : '<div class="pr-pimg"></div>') +
+          /* ORDER MATTERS, AND HERE IT IS CHANGEABLE. The first photo uploaded becomes the
+             main image, so a merchant who picked their best shot second needs to move it.
+
+             Buttons rather than HTML5 drag: drag-and-drop is unreliable under a thumb on a
+             phone, which is where most of these photos are chosen, and it cannot be driven
+             by a test. Only PENDING photos move — reordering ones already stored would need
+             the product writer, and offering a control that could not save would be worse
+             than not offering it. The sheet says which is which. */
+          '<div class="pr-porder">' +
+            '<button class="pr-pmove" data-pr="pmove" data-i="' + i + '" data-dir="-1"' +
+              (i === 0 ? ' disabled' : '') + ' aria-label="Move earlier">←</button>' +
+            '<span class="pr-pnum">' + (i === 0 ? 'Main' : String(i + 1)) + '</span>' +
+            '<button class="pr-pmove" data-pr="pmove" data-i="' + i + '" data-dir="1"' +
+              (i === _picked.length - 1 ? ' disabled' : '') + ' aria-label="Move later">→</button>' +
+          '</div>' +
           '<div class="pr-ptools">' +
             (C ? AI_TOOLS.map(function (t) {
                    return '<button class="pr-ptool" data-pr="ai" data-i="' + i + '" data-tool="' + t.id + '"' +
@@ -1269,7 +1860,7 @@
         '<div class="pr-panel" role="dialog" aria-modal="true" aria-label="Product photos">' +
         '<div class="pr-ph2">Photos</div>' +
         '<div class="pr-psub">' + esc(p.name || 'Untitled') + '</div>' +
-        thumbs + rejected +
+        thumbs + rejected + mediaChecksHTML(p) + shotListHTML(p) +
         '<div class="pr-f"><label class="pr-l" for="pf-photos">Add photos</label>' +
           /* `accept` mirrors the deployed Storage rule's safeImageOnly list, and
              no `capture` attribute — on iOS `capture` forces the camera and takes
@@ -1359,6 +1950,309 @@
         (note ? '<div class="pr-note">' + esc(note) + '</div>' : '') + '</div>';
     }
 
+    /* A field with a Scan button. The input keeps its data-pf, so a scanned value and
+       a typed one reach S.editor.values by exactly the same route and the writer
+       cannot tell them apart — the scanner is an input method, not a second path
+       into the record.
+
+       data-sokoni-scan opts this input in to the hardware wedge, so a merchant with a
+       handheld can simply scan while the field has focus, with no button at all. Every
+       OTHER field is left out of that opt-in deliberately: a wedge that captured
+       keystrokes from the price box would eat what the merchant was typing. */
+    function scanFld (key, label, attrs, val, note) {
+      return '<div class="pr-f"><label class="pr-l" for="pf-' + key + '">' + esc(label) + '</label>' +
+        '<div class="pr-scanrow">' +
+          '<input class="pr-i" id="pf-' + key + '" data-pf="' + key + '" data-sokoni-scan ' + attrs +
+          ' value="' + esc(val == null ? '' : val) + '">' +
+          '<button type="button" class="pr-scan" data-pr="scanfield" data-field="' + esc(key) + '" ' +
+            'aria-label="Scan ' + esc(label) + '">📷 Scan</button>' +
+        '</div>' +
+        (note ? '<div class="pr-note">' + esc(note) + '</div>' : '') + '</div>';
+    }
+
+    /* ══ THE REST OF THE UPLOAD FORM ═══════════════════════════════════════════════════════
+       Migrated from seller.html. That form asked for far more than this one did — a category
+       out of 99, a location, proof of ownership for high-theft goods, six food-licensing
+       records, digital delivery, a KEBS number and a bulk-price tier — and Merchant V2 asked
+       for a category as FREE TEXT and nothing else. A merchant moving across lost most of
+       what they could describe about what they sell.
+
+       SIX OF THOSE FIELDS WERE NEVER SAVED. The food permit, KEBS food number, KMC number,
+       halal certificate, cold-chain type and slaughter route were collected by the legacy
+       form and written nowhere. They are persisted here — see sokoni-merchant-data.js.
+
+       THE FORM CHANGES SHAPE WITH THE CATEGORY. A phone needs an IMEI; a goat needs a
+       slaughter record; an e-book needs a download link and none of the above. Showing every
+       field to everyone is how an upload form becomes one merchants abandon halfway. The
+       rules come from the taxonomy, which lifted them from the legacy form unchanged. */
+    function tax () {
+      return (typeof window !== 'undefined' && window.SokoniProductTaxonomy) || null;
+    }
+
+    /* The category the form is currently shaped by — the merchant's live choice while typing,
+       falling back to what the product already carries. */
+    function liveCategory (p) {
+      var v = S.editor && S.editor.values;
+      if (v && v.category !== undefined) return v.category;
+      return (p && p.category) || '';
+    }
+
+    function sectionOpen (emoji, title, sub) {
+      return '<div class="pr-sec"><div class="pr-sec-h">' +
+        '<span class="pr-sec-e">' + emoji + '</span>' +
+        '<span class="pr-sec-t">' + esc(title) + '</span></div>' +
+        (sub ? '<div class="pr-sec-s">' + esc(sub) + '</div>' : '');
+    }
+    var sectionClose = '</div>';
+
+    /* A <select> built from a taxonomy vocabulary. Every option carries its own emoji, so the
+       list is scannable on a phone rather than a wall of words. */
+    function selectHTML (key, label, list, cur, placeholder, note) {
+      var T = tax();
+      if (!T) return '';
+      return '<div class="pr-f"><label class="pr-l" for="pf-' + key + '">' + esc(label) + '</label>' +
+        '<select class="pr-i pr-sel" id="pf-' + key + '" data-pf="' + key + '">' +
+        T.optionsHtml(list, cur, esc, placeholder) + '</select>' +
+        (note ? '<div class="pr-note">' + esc(note) + '</div>' : '') + '</div>';
+    }
+
+    /* ── CATEGORY: 99 options in 20 groups, the whole marketplace ─────────────────────────
+       It was an <input type="text">. A merchant typing "phones" produced a category nothing
+       else on the platform recognises — not the storefront filters, not the commission lane,
+       not the spec suggestions — and no message ever said so. A closed list cannot miss. */
+    function categoryHTML (p) {
+      var T = tax();
+      var cur = liveCategory(p);
+      if (!T) {
+        /* The taxonomy script did not load. Fall back to the free-text field rather than
+           offering an empty dropdown — a merchant must still be able to save. */
+        return fld('category', 'Category', 'type="text" autocomplete="off" maxlength="64"', cur,
+          'Category list unavailable — type it, and check it against your shop later.');
+      }
+      var info = T.infoFor(cur);
+      return '<div class="pr-f"><label class="pr-l" for="pf-category">Category</label>' +
+        '<select class="pr-i pr-sel" id="pf-category" data-pf="category">' +
+        T.categoryOptionsHtml(cur, esc) + '</select>' +
+        (info ? '<div class="pr-note">' + esc(info.groupEmoji + ' ' + info.group) +
+                ' · this decides which details you are asked for below.</div>'
+              : '<div class="pr-note">Pick the closest one — it decides how buyers find you ' +
+                'and what you are asked for below.</div>') +
+        (T.isAdult(cur)
+          ? '<div class="pr-warn pr-warn--age">🔞 Age-restricted. Buyers must confirm ' +
+            'they are 18+ before they can order, and you confirm you may legally sell this in Kenya.</div>'
+          : '') +
+        '</div>';
+    }
+
+    /* ── BULK / WHOLESALE ────────────────────────────────────────────────────────────────
+       The saving is shown as the merchant types, because a bulk tier is easy to get backwards
+       and the moment to notice is now — not when someone orders fifty. The figure is computed
+       from the two numbers on screen and labelled as a preview; the writer re-checks it and
+       refuses a wholesale price at or above the unit price. */
+    function bulkHTML (p) {
+      var v = (S.editor && S.editor.values) || {};
+      var price = Number(v.price !== undefined ? v.price : p.price) || 0;
+      var wp = Number(v.wholesalePrice !== undefined ? v.wholesalePrice : p.wholesalePrice) || 0;
+      var wq = Number(v.minWholesaleQty !== undefined ? v.minWholesaleQty : p.minWholesaleQty) || 0;
+      var strip = '';
+      if (wp > 0 && price > 0) {
+        if (wp >= price) {
+          strip = '<div class="pr-warn">⚠️ That is not a discount — the bulk price is ' +
+            'the same as or higher than your normal price.</div>';
+        } else {
+          var save = price - wp;
+          var pct = Math.round((save / price) * 100);
+          strip = '<div class="pr-bulk-strip">🏷️ <b>Bulk deal</b>' +
+            '<span>Saves KES ' + esc(String(Math.round(save))) + ' each (' + pct + '%)</span>' +
+            (wq > 1 ? '<span>from ' + esc(String(wq)) + ' units</span>' : '') + '</div>';
+        }
+      }
+      return sectionOpen('📦', 'Bulk deal', 'Optional — a lower price for larger orders.') +
+        '<div class="pr-row">' +
+          fld('wholesalePrice', 'Bulk price (KES)', 'type="number" inputmode="decimal" min="0" step="any"',
+              p.wholesalePrice, '') +
+          fld('minWholesaleQty', 'Minimum quantity', 'type="number" inputmode="numeric" min="2" step="1"',
+              p.minWholesaleQty, '') +
+        '</div>' + strip +
+        '<div class="pr-note">Leave both empty for no bulk deal. Minimum 2 — "bulk, minimum one" ' +
+        'is just your normal price.</div>' + sectionClose;
+    }
+
+    /* ── OWNERSHIP: high-theft goods ─────────────────────────────────────────────────────
+       Phones, laptops, consoles, cameras, vehicles, tyres, luxury goods. The taxonomy carries
+       what to ask for per category — an IMEI is not a chassis number — and the wording is the
+       legacy form's own. Only a reviewer can approve it: the writer clamps the status. */
+    function ownershipHTML (p) {
+      var T = tax(); if (!T) return '';
+      var cat = liveCategory(p);
+      var cfg = T.ownershipFor(cat);
+      if (!cfg) return '';
+      var own = p.ownership || {};
+      return sectionOpen('🛡️', 'Proof of ownership', cfg.sub) +
+        fld('ownership.serial', cfg.serial, 'type="text" autocomplete="off" maxlength="120"',
+            own.serial, cfg.hint) +
+        selectHTML('ownership.source', 'Where did you get it?', T.OWNER_SOURCES, own.source,
+          '🤔 Select source', 'Optional, but it speeds up approval.') +
+        (T.needsOwnerDoc(cat)
+          ? '<div class="pr-note">📄 ' + esc(cfg.doc) +
+            ' is required before this listing is approved. Upload it from the listing once saved.</div>'
+          : '') +
+        '<label class="pr-check"><input type="checkbox" data-pf="ownership.declared"' +
+          (own.declared ? ' checked' : '') + '><span class="pr-cbox" aria-hidden="true"></span>' +
+          '<span>I confirm this item is mine to sell and the details above are true.</span></label>' +
+        '<div class="pr-note">Listed as <b>pending review</b>. The "Verified owner" badge is ' +
+        'added by SOKONI after checking — it is never something a listing can claim for itself.</div>' +
+        sectionClose;
+    }
+
+    /* ── FOOD LICENSING ──────────────────────────────────────────────────────────────────
+       Six records the legacy form collected and threw away. The county permit is the one that
+       is legally required to trade, so the writer refuses a food listing without it. */
+    function foodHTML (p) {
+      var T = tax(); if (!T) return '';
+      if (!T.needsFoodLicence(liveCategory(p))) return '';
+      var fl = p.foodLicence || {};
+      return sectionOpen('🥩', 'Food licensing',
+        'Required to sell food in Kenya. These are stored with your listing.') +
+        fld('foodLicence.permit', 'County food business permit no.',
+            'type="text" autocomplete="off" maxlength="120" required', fl.permit,
+            'Required — e.g. NRB-FBP-2024-XXXXX') +
+        '<div class="pr-row">' +
+          fld('foodLicence.kebs', 'KEBS / KEFRI no.', 'type="text" maxlength="120"', fl.kebs) +
+          fld('foodLicence.kmc', 'KMC no. (meat)', 'type="text" maxlength="120"', fl.kmc) +
+        '</div>' +
+        fld('foodLicence.halal', 'Halal certificate', 'type="text" maxlength="120"', fl.halal) +
+        selectHTML('foodLicence.storage', 'Storage / cold chain', T.FOOD_STORAGE, fl.storage,
+          '🌡️ Select storage method') +
+        selectHTML('foodLicence.slaughter', 'Slaughter / processing', T.FOOD_SLAUGHTER, fl.slaughter,
+          '🚫 Not applicable') +
+        sectionClose;
+    }
+
+    /* ── DIGITAL DELIVERY ────────────────────────────────────────────────────────────────
+       Only https: a buyer who paid and then cannot fetch what they bought has been sold
+       nothing, and a browser on an https page blocks an http download outright. */
+    function digitalHTML (p) {
+      var T = tax(); if (!T) return '';
+      if (T.kindOf(liveCategory(p)) !== 'digital') return '';
+      return sectionOpen('💾', 'Digital delivery',
+        'The buyer gets this the moment payment clears.') +
+        fld('digitalUrl', 'Download link', 'type="url" inputmode="url" maxlength="2048" ' +
+            'placeholder="https://…"', p.digitalUrl, 'Must start with https://') +
+        fld('digitalLicense', 'Licence key / access code', 'type="text" maxlength="200"',
+            p.digitalLicense, 'Optional.') +
+        sectionClose;
+    }
+
+    /* ── ✨ WRITE IT FOR ME ──────────────────────────────────────────────────────────────
+       `generateProductMetadata` is a REAL deployed callable (functions/media-engine.js →
+       index.js:10107): Gemini Pro Vision reads the product photograph and returns a title,
+       a description, features, tags and a suggested price, with a rule-based fallback when
+       the model is unavailable and a hard limit of 30 calls per merchant per day.
+
+       IT NEEDS A PHOTOGRAPH, and says so. The callable's first act is to refuse an empty
+       imageUrl, so a button offered before a photo exists would fail every time it was
+       pressed. On CREATE the photo is still a local File — it has no URL until the product
+       is saved and the upload runs — so the control explains that rather than pretending.
+       seller.html labelled its image input "✨ AI enhanced" with nothing behind it; a second
+       decorative AI button would be the same lie twice.
+
+       IT PROPOSES, IT DOES NOT DECIDE. The result lands in the form for the merchant to edit
+       and only reaches Firestore when they save. Nothing is auto-published, and the suggested
+       price is shown as a suggestion — never written into the price field, which is a
+       commercial decision and theirs. */
+    function aiImageUrl (p) {
+      var u = p && (p.image || (Array.isArray(p.images) && p.images[0]));
+      return (typeof u === 'string' && /^https?:\/\//i.test(u)) ? u : null;
+    }
+
+    function aiWriteHTML (p) {
+      var creating = S.editor && S.editor.mode === 'create';
+      var url = aiImageUrl(p);
+      var st = (S.editor && S.editor.ai) || null;
+      var body;
+      if (creating || !url) {
+        body = '<div class="pr-note">' + (creating
+          ? 'Save the product with a photo first, then reopen it and SOKONI can write the ' +
+            'description for you from the picture.'
+          : 'Add a photo to this product and SOKONI can write its description from the picture.') +
+          '</div>';
+      } else {
+        body = '<button type="button" class="pr-ai-btn" data-pr="ai-write"' +
+          (st && st.busy ? ' disabled' : '') + '>' +
+          (st && st.busy ? '✨ Reading your photo…' : '✨ Write it for me') + '</button>' +
+          '<div class="pr-note">Reads your product photo and suggests a name, description ' +
+          'and search tags. You can edit anything before saving. 30 a day.</div>';
+      }
+      return sectionOpen('🤖', 'SOKONI AI', 'Let the photo do the typing.') +
+        body +
+        (st && st.err ? '<div class="pr-err">' + esc(st.err) + '</div>' : '') +
+        (st && st.price ? '<div class="pr-note">💡 Similar items sell around <b>KES ' +
+          esc(String(st.price)) + '</b>. Your price stays yours — this is only a hint.</div>' : '') +
+        (st && st.done ? '<div class="pr-ok">✅ Filled in below. Edit anything you like, ' +
+          'then save.</div>' : '') +
+        sectionClose;
+    }
+
+    function runAiWrite () {
+      var E = S.editor;
+      if (!E || E.mode === 'create') return;
+      var p = E.product || {};
+      var url = aiImageUrl(p);
+      if (!url) return;
+      if (typeof ctx.callAiMetadata !== 'function') {
+        E.ai = { err: 'The AI writer is not available in this workspace.' };
+        return paint();
+      }
+      captureForm();
+      E.ai = { busy: true };
+      paint();
+      ctx.callAiMetadata({ imageUrl: url, category: liveCategory(p) || '' }).then(function (r) {
+        if (!S.editor) return;
+        var d = (r && r.data) || r || {};
+        var m = d.metadata || d;
+        var v = S.editor.values;
+        /* Only fill what the merchant has not written. Overwriting a description someone
+           just typed, because they pressed a button to get HELP, is the fastest way to make
+           a feature untrusted. */
+        if (m.title && !String(v.name || p.name || '').trim()) v.name = String(m.title).slice(0, 200);
+        if (m.description) {
+          var existing = String(v.description !== undefined ? v.description : (p.description || '')).trim();
+          if (!existing) v.description = String(m.description).slice(0, 4000);
+        }
+        if (Array.isArray(m.tags) && m.tags.length) v.tags = m.tags.slice(0, 15).join(', ');
+        S.editor.ai = {
+          done: true,
+          price: (m.suggestedPrice && isFinite(Number(m.suggestedPrice)))
+            ? Math.round(Number(m.suggestedPrice)) : null
+        };
+        paint();
+      }).catch(function (e) {
+        if (!S.editor) return;
+        /* The server's own sentence — including its "30 a day" refusal, which is the one a
+           merchant most needs to read verbatim. */
+        var msg = (e && (e.message || (e.details && e.details.message))) || '';
+        msg = String(msg).replace(/^(FirebaseError:\s*)?(functions\/)?[a-z-]+:\s*/i, '');
+        S.editor.ai = { err: msg || 'The AI writer could not be reached. Nothing was changed.' };
+        paint();
+      });
+    }
+
+    /* ── STANDARDS ───────────────────────────────────────────────────────────────────────
+       Shown for the classes of physical goods where the KEBS mark applies. Never for a
+       service or a download, which cannot carry one. */
+    function kebsHTML (p) {
+      var T = tax(); if (!T) return '';
+      var cat = liveCategory(p);
+      if (T.kindOf(cat) !== 'physical') return '';
+      return '<div class="pr-f"><label class="pr-l" for="pf-kebsCert">KEBS certificate no.</label>' +
+        '<input class="pr-i" id="pf-kebsCert" data-pf="kebsCert" type="text" maxlength="64" ' +
+        'value="' + esc(p.kebsCert == null ? '' : p.kebsCert) + '">' +
+        '<div class="pr-note">' + (T.showsKebs(cat)
+          ? '✅ Buyers look for this on ' + esc(T.labelFor(cat) || 'this kind of product') + '. Optional.'
+          : 'Optional.') + '</div></div>';
+    }
+
 
     /* The specification model, or null when its script did not load. Specs are optional
        data: without the model the section is simply not offered and a product still saves
@@ -1380,7 +2274,13 @@
           '<input class="pr-i" id="pf-' + key + '-v" data-pf="spec.' + key + '.v" type="number" ' +
             'inputmode="decimal" step="any" placeholder="—" value="' + esc(v == null ? '' : v) + '">' +
           '<select class="pr-i pr-u" aria-label="' + esc(label) + ' unit" data-pf="spec.' + key + '.u">' +
-            units.map(function (x) { return opt(x, x, u); }).join('') +
+            /* One glyph for the whole dimension — 📏 for every length, ⚖️ for every
+               weight. The emoji says what KIND of measurement this is, which is the useful
+               distinction; three unrelated pictures for mm/cm/m would not be. */
+            units.map(function (x) {
+              var T = tax();
+              return opt(x, (T ? T.dimensionEmoji(dim) + ' ' : '') + x, u);
+            }).join('') +
           '</select>' +
         '</div></div>';
     }
@@ -1420,7 +2320,13 @@
           '<input class="pr-i" data-pf="spec.dimensions.' + k + '.v" type="number" inputmode="decimal" ' +
             'step="any" placeholder="—" aria-label="' + esc(label) + '" value="' + esc(v == null ? '' : v) + '">' +
           '<select class="pr-i pr-u" aria-label="' + esc(label) + ' unit" data-pf="spec.dimensions.' + k + '.u">' +
-            units.map(function (x) { return opt(x, x, u); }).join('') + '</select>' +
+            /* Length, width and height are all lengths — one 📏 for the row, same rule as
+               every other measurement select. This builder is separate from measureField(),
+               which is why it needed the change twice. */
+            units.map(function (x) {
+              var T = tax();
+              return opt(x, (T ? T.dimensionEmoji('length') + ' ' : '') + x, u);
+            }).join('') + '</select>' +
         '</div>';
       };
       return '<div class="pr-f"><label class="pr-l">Dimensions</label>' +
@@ -1491,8 +2397,14 @@
       return '<div class="pr-row">' +
         '<div class="pr-f"><label class="pr-l" for="pf-su">Counted in</label>' +
           '<select class="pr-i" id="pf-su" data-pf="stockUnit.name">' +
-            '<option value="">—</option>' +
-            units.map(function (x) { return opt(x, x, su.name || ''); }).join('') +
+            '<option value="">📦 —</option>' +
+            /* Emoji per unit, from the taxonomy: a select of bare words ("kg", "boxes",
+               "crates") is the hardest kind to scan on a phone, and every other dropdown in
+               this form now carries one. */
+            units.map(function (x) {
+              var T = tax();
+              return opt(x, (T ? T.stockUnitEmoji(x) + ' ' : '') + x, su.name || '');
+            }).join('') +
           '</select></div>' +
         '<div class="pr-f"><label class="pr-l" for="pf-supp">Units per pack</label>' +
           '<input class="pr-i" id="pf-supp" data-pf="stockUnit.perPack" type="number" inputmode="numeric" ' +
@@ -1528,15 +2440,53 @@
       var extra = (S.editor && S.editor.variantRows) || 0;
       var n = rows.length + extra;
 
+      /* ── UNIVERSAL VARIANTS ──────────────────────────────────────────────────────
+         The mechanism was ALREADY universal: the option names are the merchant's own free
+         text and every row carries its own price, stock, SKU and barcode. What was not
+         universal was the WORDING — "colour, size, capacity" is a shop's vocabulary, and a
+         restaurant reading it does not realise the same grid gives them Regular / Large,
+         or a salon 30 / 60 / 90 minutes.
+
+         So the guidance and the placeholder follow the listing type. The datalist offers
+         those names without imposing them: a merchant may still type anything, which is
+         what keeps one variant system serving every vertical. */
+      var VAR_HINT = {
+        food:     { eg: 'Portion',  list: ['Portion', 'Size', 'Spice level', 'Add-on'],
+                    note: 'Same dish, different options — portion, size, extras.' },
+        drink:    { eg: 'Size',     list: ['Size', 'Serving', 'Flavour'],
+                    note: 'Same drink, different options — serving size, flavour.' },
+        room:     { eg: 'Room type', list: ['Room type', 'Occupancy', 'View', 'Board'],
+                    note: 'Same property, different rooms — type, occupancy, board.' },
+        service:  { eg: 'Duration', list: ['Duration', 'Tier', 'Provider'],
+                    note: 'Same service, different options — duration, tier, provider.' },
+        event:    { eg: 'Ticket',   list: ['Ticket', 'Tier', 'Seating'],
+                    note: 'Same event, different tickets — tier, seating.' },
+        rental:   { eg: 'Period',   list: ['Period', 'Size', 'Condition'],
+                    note: 'Same item, different terms — period, size.' },
+        vehicle:  { eg: 'Trim',     list: ['Trim', 'Colour', 'Transmission'],
+                    note: 'Same model, different options — trim, colour.' },
+        property: { eg: 'Unit',     list: ['Unit', 'Floor', 'Bedrooms'],
+                    note: 'Same development, different units — floor, bedrooms.' },
+      };
+      var _lsv = studio();
+      var _vt = _lsv ? _lsv.typeIdOf(liveListing(p)) : 'product';
+      var vh = VAR_HINT[_vt] || { eg: 'Colour', list: ['Colour', 'Size', 'Capacity', 'Material'],
+                    note: 'Same product, different options — colour, size, capacity.' };
+
       var head = '<div class="pr-sec">🔀 Variants</div>' +
         '<div class="pr-note" style="margin:-4px 0 10px">' +
-          'Same product, different options — colour, size, capacity. Each keeps its own stock, ' +
+          esc(vh.note) + ' Each keeps its own stock, price and SKU, ' +
           'and the product total becomes their sum.' +
         '</div>' +
+        '<datalist id="pf-varopts">' +
+          vh.list.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') +
+        '</datalist>' +
         '<div class="pr-vopts">' +
           names.map(function (nm, i) {
             return '<input class="pr-i" data-pf="vopt.' + i + '" type="text" maxlength="30" ' +
-              'placeholder="Option ' + (i + 1) + ' (e.g. Colour)" aria-label="Option name ' + (i + 1) + '" ' +
+              'list="pf-varopts" ' +
+              'placeholder="Option ' + (i + 1) + ' (e.g. ' + esc(vh.eg) + ')" ' +
+              'aria-label="Option name ' + (i + 1) + '" ' +
               'value="' + esc(nm || '') + '">';
           }).join('') +
           (names.length < 3
@@ -1544,9 +2494,19 @@
             : '') +
         '</div>';
 
+      /* ── QUANTITIES ON AN EXISTING PRODUCT ARE INVENTORY'S (owner decision 2026-10-01) ──────
+         On CREATE each row takes an opening quantity; the writer files their sum through
+         merchantAdjustStock as the product's first movement. On EDIT there is no quantity input
+         at all: the writer refuses a variants patch that carries one, and keeps every stored
+         row's quantity by its id. So an existing row shows its quantity READ-ONLY and carries its
+         id in a hidden field (that is how the writer matches it), a row added here starts at 0,
+         and the section points at Inventory, the one place a shelf count changes. */
+      var editing = !!(S.editor && S.editor.mode === 'edit');
       var body = '';
       for (var r = 0; r < n; r++) {
         var row = rows[r] || { attrs: {}, stock: '' };
+        var stored = editing && r < rows.length;
+        var vid = stored ? ((row.id != null && String(row.id).trim()) ? String(row.id).trim() : ('v' + (r + 1))) : '';
         body += '<div class="pr-vrow">' +
           names.map(function (nm, i) {
             var val = nm ? (row.attrs || {})[nm] : '';
@@ -1554,9 +2514,13 @@
               'placeholder="' + esc(nm || 'Value') + '" aria-label="' + esc(nm || 'Option value') + '" ' +
               'value="' + esc(val == null ? '' : val) + '">';
           }).join('') +
-          '<input class="pr-i pr-vqty" data-pf="variant.' + r + '.stock" type="number" inputmode="numeric" ' +
-            'min="0" step="1" placeholder="Qty" aria-label="Quantity" ' +
-            'value="' + esc(row.stock == null ? '' : row.stock) + '">' +
+          (editing
+            ? (stored ? '<input type="hidden" data-pf="variant.' + r + '.id" value="' + esc(vid) + '">' : '') +
+              '<span class="pr-vqty pr-vqty-ro" role="note" aria-label="Quantity, changed in Inventory">' +
+                (stored ? esc(row.stock == null ? '—' : row.stock) : '0') + '</span>'
+            : '<input class="pr-i pr-vqty" data-pf="variant.' + r + '.stock" type="number" inputmode="numeric" ' +
+                'min="0" step="1" placeholder="Qty" aria-label="Quantity" ' +
+                'value="' + esc(row.stock == null ? '' : row.stock) + '">') +
         '</div>' +
         '<div class="pr-vrow2">' +
           '<input class="pr-i" data-pf="variant.' + r + '.sku" type="text" maxlength="64" ' +
@@ -1574,10 +2538,15 @@
          writer uses, not a second addition. */
       var SP = specModel();
       var typedRows = fieldsFromForm().variants || [];
-      var total = (SP && typedRows.length) ? SP.totalStock(typedRows, null) : null;
+      var total = (!editing && SP && typedRows.length) ? SP.totalStock(typedRows, null) : null;
 
       return head + body +
         '<button type="button" class="pr-addspec" data-pr="addvariant">＋ Add variant</button>' +
+        (editing
+          ? '<div class="pr-note pr-vstock">Variant quantities are changed in Inventory, not here — ' +
+              'names, prices, SKUs and barcodes save from this form. A variant added here starts at 0 until stock is received.</div>' +
+            '<button type="button" class="pr-addspec" data-pr="go" data-route="inventory">📦 Adjust stock in Inventory</button>'
+          : '') +
         (total !== null
           ? '<div class="pr-vtot">Product stock becomes <b>' + esc(total) + '</b> — the sum of every variant.</div>'
           : '');
@@ -1588,7 +2557,11 @@
       var specs = p.specs || {};
       return '<div class="pr-sec">📏 Specifications</div>' +
         fld('spec.brand', 'Brand', 'type="text" autocomplete="off" maxlength="80"', specs.brand) +
-        fld('spec.barcode', 'Barcode', 'type="text" autocomplete="off" maxlength="64" inputmode="numeric"', specs.barcode) +
+        /* The barcode is the one field on this form a machine can fill in correctly
+           and a person routinely cannot: thirteen digits copied by eye is how a
+           product ends up unscannable at the till for a single transposed pair. */
+        scanFld('spec.barcode', 'Barcode', 'type="text" autocomplete="off" maxlength="64" inputmode="numeric"',
+                specs.barcode, 'Scan it rather than typing it — this is what the till matches when the item is scanned at the counter.') +
         measureField('weight', 'Weight', 'weight', specs.weight, 'kg') +
         dimensionField(specs.dimensions) +
         measureField('capacity', 'Capacity', 'volume', specs.capacity, 'l') +
@@ -1696,10 +2669,119 @@
           '<button class="pr-add" data-pr="edit" data-i="' + i + '">✏️ Edit product</button>' +
           '<button class="pr-btn" data-pr="go" data-route="inventory">📦 Adjust inventory</button>' +
           '<button class="pr-btn" data-pr="photos" data-i="' + i + '">📸 Photos</button>' +
-          '<button class="pr-btn danger" data-pr="del" data-i="' + i + '">🗑️ Remove</button>' +
+          ((p && p.status === 'archived')
+            ? '<button class="pr-btn" data-pr="restore" data-i="' + i + '">♻️ Restore</button>'
+            : '<button class="pr-btn danger" data-pr="del" data-i="' + i + '">🗄️ Archive</button>') +
         '</div>' +
         '<button class="pr-cancel" style="width:100%;margin-top:10px" data-pr="close">Close</button>' +
         '</div></div>';
+    }
+
+    /* ══ THE LISTING STUDIO ════════════════════════════════════════════════════════════
+       What turns this editor from a product uploader into a listing editor. It is drawn by
+       sokoni-listing-studio.js INTO this form — not beside it, not in a second panel and
+       not in a second page — because a merchant who sells goods, serves food and lets rooms
+       should have one place to describe all three.
+
+       ABSENT WHEN THE MODULE HAS NOT LOADED. Every call below returns '' if the Studio is
+       missing, so the form degrades to exactly the product editor it was rather than to a
+       half-rendered one. */
+    function studio () {
+      return (typeof window !== 'undefined' && window.SokoniListingStudio) || null;
+    }
+
+    /* The shop's C1 business category (shops/{id}.business.category, set by AdminOS classification). The catalogue
+       capability matrix decides which listing types it may use — null means not yet classified (goods only). U3. */
+    function bizCategory () {
+      try { return (typeof ctx.businessCategory === 'function' ? ctx.businessCategory() : ctx.businessCategory) || null; }
+      catch (_) { return null; }
+    }
+
+    /* The listing as it stands RIGHT NOW — stored record plus whatever is typed — so the
+       quality score and the preview describe what the merchant is looking at. Scoring the
+       saved record instead would report a percentage for a listing that no longer exists. */
+    function liveListing (p) {
+      var LS = studio();
+      return LS ? LS.applyFormValues(p || {}, p || {}) : (p || {});
+    }
+
+    /* Keys the NATIVE form already draws, which the Studio must not draw again. The fixed
+       half is this form's own top-level inputs; the rest is whatever the specifications
+       section is currently offering for the chosen category, which is why `model` appears
+       under Vehicle but not under a phone — the specs already asked for it there.
+
+       Derived rather than listed, so a field added to either side cannot end up as two
+       boxes for one value with the writer unable to tell which the merchant meant. */
+    function studioSkipKeys (p) {
+      var keys = ['name', 'description', 'price', 'category', 'location',
+                  'condition', 'brand', 'sku', 'stock', 'warranty'];
+      var SP = specModel();
+      if (SP && typeof SP.suggestionsFor === 'function') {
+        try {
+          (SP.suggestionsFor(liveCategory(p)) || []).forEach(function (s) {
+            if (s && s.key) keys.push(s.key);
+          });
+        } catch (_) { /* a taxonomy miss must not take the form down with it */ }
+      }
+      return keys;
+    }
+
+    /* The four reports that close the form. Built as one string so they can be re-rendered
+       together into their container without rebuilding the sheet. */
+    function studioReportHTML (p, device) {
+      var LS = studio();
+      if (!LS) return '';
+      var live = liveListing(p);
+      return LS.mediaGroupsHTML(live) + LS.lifecycleHTML(live) +
+             LS.qualityHTML(live) + LS.previewHTML(live, device);
+    }
+
+    /* REPAINTS ONLY THE REPORTS, never the sheet — the same rule repaintWarranty() follows,
+       and for the same reason: rebuilding the editor on every field the merchant leaves
+       would move the caret and lose the selection, which is exactly the behaviour that
+       makes a long form feel broken.
+
+       It is called on `change`, so the score answers the merchant's last completed edit
+       rather than each keystroke. A percentage that flickers on every letter is noise. */
+    function refreshStudioReport () {
+      var box = host.querySelector && host.querySelector('[data-ls-report]');
+      if (!box || !S.editor) return;
+      captureForm();
+      box.innerHTML = studioReportHTML(S.editor.values || {}, S.editor.device);
+    }
+
+    /* ── BUSINESS CONTEXT ────────────────────────────────────────────────────
+       WHERE this listing is going, stated before the merchant starts describing it.
+
+       The spec's point is that business context and listing type are SEPARATE: one account
+       runs a shop, a restaurant and an apartment block, and the same form serves all three.
+       The type picker below answers "what is this"; this answers "whose is it". A merchant
+       with several workspaces who has just switched needs to see which one they are in
+       before they type forty fields into the wrong shop.
+
+       IT SHOWS, IT DOES NOT SWITCH. The shell already owns workspace switching — it reloads
+       deliberately, because a dozen modules assume one shop for their lifetime, and
+       re-resolving in place would leave half of them holding the previous shop's data. A
+       second switcher here would either duplicate that or, worse, appear to switch without
+       doing it. So this points at the control that works.
+
+       ABSENT NAME IS SAID, NOT GUESSED. Without a resolved shop the destination is unknown,
+       and a listing about to be written somewhere unnamed is exactly what a merchant should
+       be told rather than reassured about. */
+    function businessContextHTML () {
+      var name = (ctx.shopName && String(ctx.shopName).trim()) || '';
+      var scope = ctx.scope || {};
+      var id = scope.shopId || '';
+      return '<div class="pr-bizctx">' +
+        '<span class="pr-bizctx-l">Listing goes to</span>' +
+        (name
+          ? '<b>' + esc(name) + '</b>'
+          : (id ? '<b>' + esc(String(id).slice(0, 12)) + '</b>'
+                : '<span class="pr-bizctx-none">No shop resolved — this cannot be saved yet</span>')) +
+        (name || id
+          ? '<span class="pr-bizctx-h">Switch business from the shop menu at the top</span>'
+          : '') +
+      '</div>';
     }
 
     function editorHTML () {
@@ -1709,16 +2791,17 @@
       /* Render from the TYPED values, falling back to the stored record. */
       var p = (E.mode === 'delete') ? (E.product || {}) : (E.values || {});
       if (E.mode === 'delete') {
-        return '<div class="pr-sheet"><div class="pr-scrim" data-pr="close"></div><div class="pr-panel" role="dialog" aria-modal="true" aria-label="Delete product">' +
-          '<div class="pr-ph2">Delete this product?</div>' +
+        /* U4 (2026-09-29): ARCHIVE, never delete — the product id is a foreign key for reviews, ratings and order lines. */
+        return '<div class="pr-sheet"><div class="pr-scrim" data-pr="close"></div><div class="pr-panel" role="dialog" aria-modal="true" aria-label="Archive product">' +
+          '<div class="pr-ph2">Archive this product?</div>' +
           '<div class="pr-psub">' + esc(p.name || 'Untitled') + '</div>' +
-          '<div class="pr-warn">It will be removed from your catalogue and from the till. ' +
-          'Orders already placed keep their record. This cannot be undone.</div>' +
+          '<div class="pr-warn">It leaves your shop, the till and marketing, and buyers can no longer order it. ' +
+          'Its orders, reviews and history are kept, and you can restore it any time from the Archived filter.</div>' +
           (E.err ? '<div class="pr-err">' + esc(E.err) + '</div>' : '') +
           '<div class="pr-foot">' +
             '<button class="pr-cancel" data-pr="close">Keep it</button>' +
             '<button class="pr-danger" data-pr="submit"' + (E.busy ? ' disabled' : '') + '>' +
-              (E.busy ? 'Deleting…' : 'Delete') + '</button>' +
+              (E.busy ? 'Archiving…' : 'Archive') + '</button>' +
           '</div></div></div>';
       }
       var creating = E.mode === 'create';
@@ -1729,6 +2812,8 @@
           ? 'It goes to your shop, your Inventory and the till.'
           : esc(p.name || 'Untitled')) + '</div>' +
         (E.blocked ? '<div class="pr-block">' + esc(E.blocked) + '</div>' : '') +
+        businessContextHTML() +
+        (studio() ? studio().typePickerHTML(liveListing(p), { businessCategory: bizCategory() }) : '') +
         fld('name', 'Product name', 'type="text" autocomplete="off" maxlength="200" required', p.name) +
         '<div class="pr-row">' +
           fld('price', 'Price (KES)', 'type="number" inputmode="decimal" min="1" step="any" required', p.price) +
@@ -1745,23 +2830,68 @@
             : stockReadHTML(p)) +
           fld('sku', 'SKU', 'type="text" autocomplete="off" maxlength="64"', p.sku) +
         '</div>' +
-        fld('category', 'Category', 'type="text" autocomplete="off" maxlength="64"', p.category) +
+        categoryHTML(p) +
+        /* Condition and location are what a buyer asks first about anything second-hand or
+           bulky, and neither existed in V2 at all. */
+        '<div class="pr-row">' +
+          (tax() ? selectHTML('condition', 'Condition', tax().CONDITIONS, p.condition,
+                              '✨ Select condition') : '') +
+          fld('brand', 'Brand', 'type="text" autocomplete="off" maxlength="80"', p.brand) +
+        '</div>' +
+        (tax() ? selectHTML('location', 'Where it is', tax().LOCATIONS, p.location,
+                            '📍 Select location',
+                            'Buyers filter by town, and delivery is quoted from here.') : '') +
+        fld('deliveryCost', 'Delivery cost (KES)', 'type="number" inputmode="decimal" min="0" step="any"',
+            p.deliveryCost, 'Leave empty or 0 for free delivery.') +
         stockUnitHTML(p) +
+        bulkHTML(p) +
         specsHTML(p) +
+        (studio() ? studio().extraFieldsHTML(liveListing(p), studioSkipKeys(p)) : '') +
+        ownershipHTML(p) +
+        foodHTML(p) +
+        digitalHTML(p) +
+        kebsHTML(p) +
+        warrantyHTML(p) +
+        aiWriteHTML(p) +
         '<div class="pr-f"><label class="pr-l" for="pf-description">Description</label>' +
           '<textarea class="pr-i" id="pf-description" data-pf="description" maxlength="4000">' +
-          esc(p.description || '') + '</textarea></div>' +
+          esc((S.editor && S.editor.values.description !== undefined)
+              ? S.editor.values.description : (p.description || '')) + '</textarea></div>' +
+        fld('tags', 'Search tags', 'type="text" autocomplete="off" maxlength="400"',
+            (S.editor && S.editor.values.tags !== undefined)
+              ? S.editor.values.tags
+              : (Array.isArray(p.tags) ? p.tags.join(', ') : p.tags),
+            'Comma separated. Helps buyers find this — up to 15.') +
         '<div class="pr-f"><label class="pr-l" for="pf-status">Visibility</label>' +
           '<select class="pr-i" id="pf-status" data-pf="status">' +
-            opt('active', 'Active — on sale', p.status || 'active') +
-            opt('draft', 'Draft — hidden', p.status || 'active') +
+            (tax()
+              ? tax().VISIBILITY.map(function (v) {
+                  return opt(v.value, v.emoji + ' ' + v.label, p.status || 'active');
+                }).join('')
+              : opt('active', 'Active — on sale', p.status || 'active') +
+                opt('draft', 'Draft — hidden', p.status || 'active')) +
           '</select>' +
           (creating ? '' : '<div class="pr-note">Photos are added separately. A product sells without one.</div>') +
           '</div>' +
         (creating ? createPhotosHTML() : '') +
+        /* The closing half of the Studio: the shot list, where this listing sits in its
+           lifecycle, what is still missing, and what a buyer will see. Placed last because
+           all four are reports on the form above them — a completeness score shown before
+           the fields it scores would only ever read 0%. */
+        '<div data-ls-report>' + studioReportHTML(p, E.device) + '</div>' +
         (E.err ? '<div class="pr-err">' + esc(E.err) + '</div>' : '') +
         '<div class="pr-foot">' +
           '<button class="pr-cancel" data-pr="close">Cancel</button>' +
+          /* A price tag can only be printed for a product that EXISTS. While
+             creating there is no id, no stored price and no canonical SKU, so the
+             button is present but disabled and says why — a hidden control reads
+             as a missing feature, and printing an unsaved form would put a price
+             on a shelf for a product the till has never heard of. */
+          '<button class="pr-print" data-pr="printtag" title="' +
+            (creating ? 'Add the product first, then reopen it to print its tag'
+                      : 'Print a shelf price tag for this product') + '"' +
+            ((creating || E.busy || E.printing) ? ' disabled' : '') + '>' +
+            (E.printing ? 'Printing…' : '🖨 Print price tag') + '</button>' +
           '<button class="pr-save" data-pr="submit"' + (E.busy ? ' disabled' : '') + '>' +
             (E.busy ? 'Saving…' : (creating ? 'Add product' : 'Save changes')) + '</button>' +
         '</div></div></div>';
@@ -1795,7 +2925,15 @@
       if (S.editor && el.getAttribute('data-pf') === 'photos') return onFiles(el.files);
       if (S.editor && el.getAttribute('data-pf') === 'photo-capture') return onFiles(el.files, true);
       if (S.editor && el.getAttribute('data-pf')) {
-        S.editor.values[el.getAttribute('data-pf')] = el.value;
+        var pf = el.getAttribute('data-pf');
+        S.editor.values[pf] = (el.type === 'checkbox') ? (el.checked ? '1' : '') : el.value;
+        /* THE CATEGORY DECIDES WHICH SECTIONS EXIST. Changing it from a phone to a goat has
+           to swap an IMEI field for a slaughter record, so this one repaints. captureForm()
+           first, or everything typed so far is thrown away by the rebuild. */
+        if (pf === 'category') { captureForm(); paint(); return; }
+        /* Every other completed edit updates the quality report and the preview in place,
+           so the merchant can see a listing get stronger as they fill it in. */
+        refreshStudioReport();
         return;
       }
       var k = el.getAttribute('data-pr');
@@ -1811,6 +2949,131 @@
          them — otherwise Edit would open a detail sheet instead of the editor. */
       /* The overflow menu. One open at a time, and tapping the same control closes it —
          a menu that only ever opens is a menu a merchant has to navigate away from. */
+      /* Checked BEFORE [data-pr="ai"], because `closest('[data-pr="ai"]')` would not match
+         "ai-write" but the reverse order still reads confusingly to the next editor. The two
+         are different features: this one writes TEXT from the photograph, that one edits the
+         photograph itself. */
+      /* The getAttribute re-check is not belt-and-braces, it is the established idiom in this
+         file (see [data-pr="ai"] below) and it is load-bearing: closest() is stubbed in the
+         suites, and a stub that answers every selector would let this branch swallow the
+         SUBMIT click — one tap on "Add product" would run the AI writer and save nothing.
+         Matching the selector is not the same as being the element. */
+      /* WARRANTY TILES. Checked first because they carry no data-pr and would otherwise
+         fall through to the card-body branch, which opens a detail sheet — a seller
+         choosing a remedy would find the product opening instead.
+
+         The getAttribute re-check is this file's established idiom and is load-bearing:
+         closest() is stubbed in the suites, and a stub answering every selector would let
+         this branch swallow the submit click. */
+      /* ── LISTING STUDIO CONTROLS ────────────────────────────────────────────────────
+         The type chips and the preview's device toggle. Checked before the warranty tiles
+         and the card body for the same reason those are checked early: they carry no
+         data-pr, and would otherwise fall through to a branch that opens a detail sheet.
+
+         captureForm() runs first so that repainting the sheet keeps whatever the merchant
+         has already typed. A picker that emptied the form it is attached to would be worse
+         than no picker. */
+      /* ── BATCH SELECTION ────────────────────────────────────────────────────────────
+         Checked BEFORE the card-body branch, which is the whole point: a tick must never
+         also open the product. The tick's own control carries data-pr="pick", and the
+         getAttribute re-check is this file's established idiom because closest() is stubbed
+         in the suites and a stub answering every selector would swallow other clicks. */
+      var pickBtn = ev.target.closest && ev.target.closest('[data-pr="pick"]');
+      if (pickBtn && pickBtn.getAttribute && pickBtn.getAttribute('data-pr') === 'pick') {
+        ev.preventDefault(); ev.stopPropagation();
+        var pp = (S.painted || [])[Number(pickBtn.getAttribute('data-i'))];
+        if (!pp || !pp.id) return;
+        S.selected = S.selected || {};
+        if (S.selected[pp.id]) delete S.selected[pp.id]; else S.selected[pp.id] = true;
+        return paint();
+      }
+
+      var lsBtn = ev.target.closest && ev.target.closest('[data-ls]');
+      if (lsBtn && lsBtn.getAttribute && lsBtn.getAttribute('data-ls') && S.editor) {
+        var lsKind = lsBtn.getAttribute('data-ls');
+        if (lsKind === 'type') {
+          ev.preventDefault();
+          captureForm();
+          S.editor.values.listingType = lsBtn.getAttribute('data-type') || '';
+          paint();
+          return;
+        }
+        /* A LIFECYCLE MOVE IS A VISIBILITY CHANGE, not a second status field. It sets the
+           form's own `status`, so the merchant still presses Save and the certified writer
+           still performs the write — this button changes what will be saved, never the
+           record. Publishing is refused while anything required is missing, which is the
+           one gate validate() exists for. */
+        if (lsKind === 'life') {
+          ev.preventDefault();
+          captureForm();
+          var to = lsBtn.getAttribute('data-to');
+          var LM = (typeof window !== 'undefined') && window.SokoniListingModel;
+          var LS2 = studio();
+          if (to === 'live' && LM && LS2) {
+            var v = LM.validate(LS2.applyFormValues(S.editor.values || {}, S.editor.values || {}));
+            if (!v.ok) {
+              S.editor.err = 'Not published — still needed: ' +
+                v.blocking.map(function (b) { return b.label; }).join(', ') + '.';
+              return paint();
+            }
+          }
+          /* THE SELECT CAN ONLY EXPRESS WHAT IT HAS OPTIONS FOR. Visibility is active or
+             draft — the taxonomy's vocabulary — while the lifecycle has five states. Writing
+             'paused' into `status` set a value with no matching <option>, so the select
+             silently fell back to showing "active" while the chain read "Paused": two
+             states disagreeing on screen, the exact failure this was meant to avoid.
+
+             So each state is mapped to the VISIBILITY it implies, and the precise state is
+             kept in its own field. They are then two facts about one listing rather than
+             two answers to one question. */
+          S.editor.values.status = (to === 'live') ? 'active' : 'draft';
+          S.editor.values.lifecycle = to;
+          S.editor.err = null;
+          paint();
+          say(to === 'live'
+            ? 'Set to live. Press Save to apply it.'
+            : 'Set to ' + to + ' — hidden from buyers. Press Save to apply it.');
+          return;
+        }
+        if (lsKind === 'device') {
+          ev.preventDefault();
+          S.editor.device = lsBtn.getAttribute('data-device') === 'desktop' ? 'desktop' : 'mobile';
+          /* Only the reports redraw. Rebuilding the whole sheet to switch a preview between
+             phone and desktop would scroll the merchant back to the top of a long form. */
+          refreshStudioReport();
+          return;
+        }
+      }
+
+      var wtyTile = ev.target.closest && ev.target.closest('[data-wty]');
+      if (wtyTile && wtyTile.getAttribute && wtyTile.getAttribute('data-wty')) {
+        var kind = wtyTile.getAttribute('data-wty');
+        if (kind === 'duration' || kind === 'remedy' || kind === 'reason') {
+          ev.preventDefault();
+          if (kind === 'duration') {
+            /* One duration. A policy with two lengths is not a policy. */
+            var all = host.querySelectorAll('[data-wty="duration"]');
+            Array.prototype.forEach.call(all, function (b) {
+              b.setAttribute('aria-pressed', 'false');
+              if (b.classList) b.classList.remove('is-on');
+            });
+            wtyTile.setAttribute('aria-pressed', 'true');
+            if (wtyTile.classList) wtyTile.classList.add('is-on');
+          } else {
+            var on = wtyTile.getAttribute('aria-pressed') !== 'true';
+            wtyTile.setAttribute('aria-pressed', on ? 'true' : 'false');
+            if (wtyTile.classList) wtyTile.classList.toggle('is-on', on);
+          }
+          repaintWarranty();
+          return;
+        }
+      }
+
+      var aiWrite = ev.target.closest && ev.target.closest('[data-pr="ai-write"]');
+      if (aiWrite && aiWrite.getAttribute && aiWrite.getAttribute('data-pr') === 'ai-write') {
+        runAiWrite();
+        return;
+      }
       var aiBtn = ev.target.closest && ev.target.closest('[data-pr="ai"]');
       if (aiBtn && aiBtn.getAttribute && aiBtn.getAttribute('data-pr') === 'ai') {
         applyAiTool(Number(aiBtn.getAttribute('data-i')), aiBtn.getAttribute('data-tool'));
@@ -1832,7 +3095,7 @@
 
       var openCard = ev.target.closest && ev.target.closest('[data-pr="open"]');
       if (openCard && openCard.getAttribute && openCard.getAttribute('data-pr') === 'open' &&
-          !(ev.target.closest && ev.target.closest('[data-pr="edit"],[data-pr="photos"],[data-pr="del"],[data-pr="menu"]'))) {
+          !(ev.target.closest && ev.target.closest('[data-pr="edit"],[data-pr="photos"],[data-pr="del"],[data-pr="restore"],[data-pr="menu"]'))) {
         var oi = Number(openCard.getAttribute('data-i'));
         var op = S.painted && S.painted[oi];
         if (op) { S.editor = { mode: 'detail', product: op, index: oi }; paint(); }
@@ -1896,10 +3159,57 @@
 
       if (k === 'retry') { S.err = null; S.rows = null; return load(); }
       if (k === 'add')   return openEditor('create', null);
+      if (k === 'scanadd') return scanToAdd();
+      /* The field is named by the button, never inferred from position: a Scan button
+         that wrote to whichever input happened to be nearest would silently fill the
+         wrong field the first time this form is reordered. */
+      if (k === 'scanfield') {
+        var sf = el.getAttribute('data-field');
+        return sf ? scanIntoField(sf) : undefined;
+      }
       if (k === 'close') { if (S.editor && S.editor.busy) return; return closeEditor(); }
       if (k === 'submit') return submit();
+      /* Reorder a PENDING photo. _originals is moved with it, or an undo would restore the
+         wrong picture to the wrong slot. */
+      if (k === 'pmove') {
+        var mi = Number(el.getAttribute('data-i'));
+        var mj = mi + Number(el.getAttribute('data-dir'));
+        if (mi < 0 || mj < 0 || mi >= _picked.length || mj >= _picked.length) return;
+        var swap = function (arr) { var t = arr[mi]; arr[mi] = arr[mj]; arr[mj] = t; };
+        swap(_picked); swap(_originals);
+        return paint();
+      }
+      if (k === 'printtag') return printPriceTag();
+      /* Batch: the selection, or one product straight from its row menu. */
+      if (k === 'tagsel')  return printSelectedTags();
+      if (k === 'tag1') {
+        var t1 = (S.painted || [])[Number(el.getAttribute('data-i'))];
+        S.menu = null;
+        return t1 && t1.id ? printTags([t1])
+                           : say('Add the product first, then print its tag.');
+      }
+      if (k === 'pickall') {
+        S.selected = S.selected || {};
+        /* Only what is ON SCREEN. "All" meaning the whole catalogue behind a filter is how
+           someone prints four hundred tags intending to print four. */
+        (S.painted || []).forEach(function (p) { if (p && p.id) S.selected[p.id] = true; });
+        return paint();
+      }
+      if (k === 'pickno') { S.selected = {}; return paint(); }
       if (k === 'submit-photos') return submitPhotos();
 
+      if (k === 'restore') {
+        var ri = Number(el.getAttribute('data-i'));
+        var rp = (S.painted || [])[ri];
+        if (!rp) return say('That product is no longer in view — reopen Products and try again.');
+        var MR; try { MR = md(); } catch (e) { return say(e.message); }
+        el.disabled = true;
+        MR.restoreProduct({ scope: ctx.scope, db: ctx.db, id: rp.id }).then(function (r) {
+          say(r && r.restored ? 'Restored — ' + (rp.name || 'the product') + ' is back in your catalogue.' : 'It was not archived.');
+          S.menu = null; S.rows = null; load();           /* re-READ, never patched from belief */
+        }).catch(function (e) { el.disabled = false; say((e && e.message) || 'It could not be restored.'); });
+        return;
+      }
       if (k === 'edit' || k === 'del' || k === 'photos') {
         /* Resolve through the rows captured at paint time. An index into a list
            that has since been re-filtered would open the wrong product — and for

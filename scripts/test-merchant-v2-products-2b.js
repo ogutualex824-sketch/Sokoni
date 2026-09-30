@@ -279,16 +279,21 @@ function fill(host, values) {
   ck('editing did NOT consult canPublishProduct', true,
      'proven in the writer suite; a merchant at their limit must still fix a typo');
 
-  head('5 - DELETE reaches the writer');
+  /* SUPERSEDED 2026-09-29 (universal catalogue U4, owner invariant B9.17 / 332d458): Remove ARCHIVES — the product is
+     tombstoned ({status:'archived', isVisible:false}), never physically deleted, because its id is a foreign key for
+     reviews, ratings and order lines; the POS / Inventory mirrors follow instead of being orphaned. */
+  head('5 - REMOVE archives through the writer (never a physical delete)');
   db.reset();
   click(ui.host, '[data-pr="del"]');
-  ck('a confirmation is required first', ui.host.innerHTML.indexOf('Delete this product?') > -1,
-     'no single-tap destruction');
-  ck('nothing deleted merely by asking', db.log.length === 0);
+  ck('a confirmation is required first', ui.host.innerHTML.indexOf('Archive this product?') > -1,
+     'no single-tap removal');
+  ck('nothing changed merely by asking', db.log.length === 0);
   click(ui.host, '[data-pr="submit"]');
   await settle(14);
-  ck('the product was deleted', !db.products.p1, JSON.stringify(Object.keys(db.products)));
-  ck('exactly one delete', db.log.filter((l) => l.op === 'delete').length === 1);
+  ck('the product was ARCHIVED, not deleted', !!db.products.p1 && db.products.p1.status === 'archived' && db.products.p1.isVisible === false,
+     JSON.stringify(db.products.p1 || null));
+  ck('no physical delete at all; the till copy follows', db.log.filter((l) => l.op === 'delete').length === 0
+     && !!db.mirrors['posProducts/p1'] && db.mirrors['posProducts/p1'].status === 'archived');
 
   head('6 - OWNERSHIP is enforced by the writer, not by what the UI renders');
   /* The user\'s requirement: edit and delete must be scoped to actual ownership,
@@ -402,9 +407,11 @@ function fill(host, values) {
   ck('no boost / story / promote (2d)', !/boost|promoteToStory|flashSale/i.test(code));
   ck('no limit arithmetic — the gate is asked, not modelled',
      !/count\s*<\s*(limit|max)|remaining\s*[<>]/.test(code));
+  /* U4 (2026-09-29): the lifecycle mutations are archive / restore — Remove no longer calls deleteProduct */
   ck('every mutation goes through SokoniMerchantData',
-     (code.match(/M\.(createProduct|updateProduct|deleteProduct)\(/g) || []).length === 3,
-     'create, update and delete — no fourth path');
+     (code.match(/M\.(createProduct|updateProduct)\(/g) || []).length === 2 && /M\.archiveProduct\(/.test(code)
+     && /MR\.restoreProduct\(/.test(code) && !/M\.deleteProduct\(/.test(code),
+     'create, update, archive, restore — no other path');
   ck('NC the comment stripper left the code intact', code.indexOf('function submit') > -1);
 
   head('12 - seller.html is untouched');

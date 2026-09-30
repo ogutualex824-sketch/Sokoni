@@ -786,6 +786,29 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      adapter above write (byte-identical to functions/shared/sellability.js; from dde631b / 332d458) -->
 <script src="sokoni-sellability.js"></script>
 <script src="sokoni-product-specs.js"></script>
+<!-- ADVANCED UPLOADER (ported 2026-10-01 from slice/c4-convergence @ 0f5e032, units A-C; hosting only).
+     U1 (312fdb4): the 99-category product taxonomy and the warranty policy builder the products module calls. -->
+<script src="sokoni-product-taxonomy.js"></script>
+<link rel="stylesheet" href="sokoni-warranty-ui.css">
+<script src="sokoni-warranty-ui.js"></script>
+<!-- U2/U3 (eb7d2ac): what each kind of business may list — byte-identical copy of functions/shared/catalogue-capabilities.js.
+     BROWSER-ENFORCED ONLY: no function or rule checks it yet; the server check is queued as its own functions unit. -->
+<script src="sokoni-catalogue-capabilities.js"></script>
+<!-- THE LISTING MODELS (659d083). Listing types decide what a listing IS; the listing model owns which fields each
+     type collects, how complete it is and what state it is in. Pure data and pure functions — they render nothing and
+     write nothing, so the certified product writer remains the single write authority. -->
+<script src="sokoni-listing-types.js"></script>
+<script src="sokoni-listing-model.js"></script>
+<!-- The Listing Studio (e10d464) renders the two models above INTO the existing product editor — the type picker, the
+     type's own fields, the shot list, the quality report and the customer preview. It is a renderer, not a second
+     uploader: it mounts nothing, owns no route and writes nothing, so Products remains the one place a listing is created. -->
+<link rel="stylesheet" href="sokoni-listing-studio.css">
+<script src="sokoni-listing-studio.js"></script>
+<!-- The availability reading the Studio's customer preview shows (7531e57) — the SAME renderer the listing page uses. -->
+<script src="sokoni-availability-view.js"></script>
+<!-- LABEL ENGINE (9a864b0) — the price-tag authority. PosPrintService has no label surface, which is why the Products
+     price-tag button never printed. printLabel() takes an array, so a shelf of tags is one job with N items. -->
+<script src="sokoni-label-engine.js" defer></script>
 <script src="sokoni-merchant-media.js"></script>
 <!-- AI product photography. sokoni-creative.js already implements removeBackground,
      enhanceProduct and smartCrop; sokoni-ai-subscriptions.js owns the per-plan quota and
@@ -2483,6 +2506,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
        exactly what the Storage rule checks request.auth.uid against. */
     products:   { global: 'SokoniMerchantProducts',    ctx: function () { return {
                     scope: _scope(), db: _mdb, shopName: _shopName(),
+                    /* the shop's C1 category (set by AdminOS classification) — the catalogue capability matrix reads it
+                       (eb7d2ac, U3). BROWSER-ENFORCED ONLY; null = unclassified = goods and digital only. */
+                    businessCategory: function () { return (S.shop && S.shop.business && S.shop.business.category) || null; },
                     /* The SAME server authority Inventory uses. Products never writes a shelf
                        count itself; an opening quantity is handed to merchantAdjustStock so it
                        is transactional, floored, versioned and recorded as a movement. */
@@ -2495,6 +2521,18 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                         : Promise.resolve(null);
                     },
                     canPublish: _callable('canPublishProduct'),
+                    /* AI AUTHORING (30208f3) — the control existed and had no authority behind it.
+                       The module calls ctx.callAiMetadata({ imageUrl, category }); this ctx
+                       never provided it, so the writer reported itself "not available in this
+                       workspace" — an honest degradation, and a dead feature.
+                       generateProductMetadata (functions/media-engine.js; LIVE per the 2026-09-30
+                       functions list) takes { imageUrl, category, language } — the same shape,
+                       not an adapted one. It is auth-gated and rate-limited to 30 calls per uid
+                       per day, and it ASSISTS: the module fills only fields the merchant has
+                       left blank, never overwriting something just typed. AI does not decide
+                       ownership, price, tax, stock or authorization — the submission is still
+                       the merchant's, through the same certified writer. */
+                    callAiMetadata: _callable('generateProductMetadata'),
                     storage: _mdb,
                     /* Navigation is the SHELL's. The module asks to route rather than setting
                        location, so Back, reload and #products keep working and it needs no
