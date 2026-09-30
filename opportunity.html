@@ -9,7 +9,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SOKONI Opportunity Hub — Earn Money with Sokoni Kenya</title>
-<meta name="description" content="Earn income with SOKONI — become a delivery rider, mechanic, freelancer, property agent, event promoter or affiliate marketer across Kenya.">
+<meta name="description" content="Earn income with SOKONI — apply in-app as a delivery rider, mechanic, seller, service provider, freelancer, property agent, event promoter, landlord, health or legal professional, or share as an affiliate.">
 <!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://mysokoni.co.ke/opportunity.html">
@@ -80,6 +80,30 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#060a06;color:white;
 .op-earnings-table tr:last-child td{border-bottom:none;}
 .op-earnings-table tr:hover td{background:rgba(113,255,0,0.02);}
 .green{color:#71ff00;font-weight:800;}
+
+/* My applications (2026-09-30) — the visitor's own applications/* documents, read under the
+   owner-read rule. Status words only; never a number that is not in the document. */
+.op-mine{max-width:1100px;margin:0 auto 8px;padding:0 18px;}
+.op-mine-card{background:rgba(255,255,255,0.03);border:1px solid rgba(113,255,0,0.18);border-radius:18px;padding:18px 18px 12px;}
+.op-mine-h{font-size:13px;font-weight:900;color:#71ff00;letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px;}
+.op-mine-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px;padding:10px 0;border-top:1px solid rgba(255,255,255,0.06);}
+.op-mine-row:first-of-type{border-top:none;}
+.op-mine-role{font-size:14px;font-weight:800;color:#fff;}
+.op-mine-sub{font-size:12px;color:rgba(255,255,255,0.45);margin-top:2px;}
+.op-st{display:inline-block;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid transparent;}
+.op-st-review{background:rgba(251,191,36,0.1);border-color:rgba(251,191,36,0.3);color:#fbbf24;}
+.op-st-ok{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+.op-st-no{background:rgba(248,113,113,0.1);border-color:rgba(248,113,113,0.3);color:#f87171;}
+.op-st-info{background:rgba(56,189,248,0.1);border-color:rgba(56,189,248,0.3);color:#38bdf8;}
+.op-mine-act{display:inline-block;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:800;text-decoration:none;color:#060a06;background:#71ff00;}
+.op-mine-act.quiet{background:transparent;color:#71ff00;border:1px solid rgba(113,255,0,0.3);}
+.op-mine-note{font-size:12px;color:rgba(255,255,255,0.45);padding:6px 0;}
+.op-apply-btn:focus-visible,.op-mine-act:focus-visible,.op-choose-go:focus-visible{outline:2px solid #71ff00;outline-offset:2px;}
+.op-choose{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end;}
+@media(max-width:560px){.op-choose{grid-template-columns:1fr;}}
+.op-choose select{width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:rgba(255,255,255,0.85);font-size:16px;font-family:inherit;}
+.op-choose-go{padding:13px 20px;background:linear-gradient(135deg,#71ff00,#00d4ff);border:none;border-radius:12px;color:#060a06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;}
+.op-choose-go[disabled]{opacity:.45;cursor:not-allowed;}
 </style>
 <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
      through SokoniCart; without this tag the pip cannot render a count. -->
@@ -101,11 +125,18 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#060a06;color:white;
   <h1>Turn Your Skills Into<br><span>Real Income</span></h1>
   <p>Whether you have a motorbike, a wrench, a laptop or just time — SOKONI has an earning path for you. No boss. No fixed hours. You decide.</p>
   <div class="op-hero-stats">
-    <div class="op-hero-stat"><strong>KES 45K+</strong><span>Top earners / month</span></div>
-    <div class="op-hero-stat"><strong>8 Ways</strong><span>To earn on Sokoni</span></div>
-    <div class="op-hero-stat"><strong>47 Counties</strong><span>Opportunities across Kenya</span></div>
+    <div class="op-hero-stat"><strong id="opWaysCount">—</strong><span>Ways to earn on Sokoni</span></div>
+    <div class="op-hero-stat"><strong>In-app</strong><span>Apply once, track it here</span></div>
+    <div class="op-hero-stat"><strong>Reviewed</strong><span>By a person at SOKONI</span></div>
   </div>
 </div>
+
+<section class="op-mine" id="opMine" hidden aria-live="polite">
+  <div class="op-mine-card">
+    <div class="op-mine-h">Your applications</div>
+    <div id="opMineBody"><div class="op-mine-note">Checking your applications…</div></div>
+  </div>
+</section>
 
 <div class="op-filter-bar">
   <button type="button" class="op-pill active" onclick="filterOps('all',this)">All Opportunities</button>
@@ -118,7 +149,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#060a06;color:white;
 <div class="op-body">
   <div class="op-grid" id="opGrid"></div>
 
-  <div class="op-section-h">📊 Monthly Earnings Guide</div>
+  <div class="op-section-h">📊 Monthly Earnings Guide — estimates</div>
+  <p style="font-size:12px;color:rgba(255,255,255,0.45);margin:-6px 0 10px;">Illustrative ranges to help you plan, not a promise or a record of what anyone has earned. What you earn depends on your work, area and demand.</p>
   <div style="overflow-x:auto;">
     <table class="op-earnings-table">
       <thead><tr><th>Role</th><th>Beginner</th><th>Active</th><th>Top Earner</th><th>Requirements</th></tr></thead>
@@ -130,41 +162,23 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#060a06;color:white;
         <tr><td>🎁 Affiliate</td><td>KES 2,000</td><td>KES 8,000</td><td class="green">KES 25,000+</td><td>Phone + audience</td></tr>
         <tr><td>📣 Event Promoter</td><td>KES 3,000</td><td>KES 12,000</td><td class="green">KES 40,000+</td><td>Network + hustle</td></tr>
         <tr><td>🏪 Seller</td><td>KES 5,000</td><td>KES 25,000</td><td class="green">KES 100,000+</td><td>Products + capital</td></tr>
-        <tr><td>🚗 Driver</td><td>KES 10,000</td><td>KES 22,000</td><td class="green">KES 38,000+</td><td>Car + license</td></tr>
+        <tr><td>🚗 Driver (car / van)</td><td>KES 10,000</td><td>KES 22,000</td><td class="green">KES 38,000+</td><td>Car + license</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="op-section-h">🙋 Apply — All Opportunities</div>
   <div style="background:rgba(113,255,0,0.04);border:1px solid rgba(113,255,0,0.15);border-radius:20px;padding:24px;">
-    <div style="font-size:14px;font-weight:800;color:white;margin-bottom:18px;">📋 Quick Application</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" id="applyGrid">
+    <div style="font-size:14px;font-weight:800;color:white;margin-bottom:6px;">📋 Start your application</div>
+    <p style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:14px;line-height:1.6;">Pick what you want to do. You will fill in the application for that role in the app — it goes straight to SOKONI for review, and you can track it at the top of this page.</p>
+    <div class="op-choose">
       <div>
-        <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;">Your Name *</label>
-        <input type="text" id="applyName" placeholder="Full name" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;">
-        <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;">Phone (WhatsApp) *</label>
-        <input type="tel" id="applyPhone" placeholder="07XXXXXXXX" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;">
+        <label for="applyRole" style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;">Opportunity *</label>
+        <select id="applyRole" onchange="document.getElementById('applyGo').disabled=!this.value"><option value="">Select a role</option></select>
       </div>
-      <div>
-        <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;">Opportunity *</label>
-        <select id="applyRole" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:rgba(255,255,255,0.8);font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;">
-          <option value="">Select a role</option>
-          <option>🛵 Delivery Rider</option><option>🔧 Mechanic / Fundi</option>
-          <option>🏠 Property Agent</option><option>💻 Freelancer</option>
-          <option>🎁 Affiliate Marketer</option><option>📣 Event Promoter</option>
-          <option>🏪 Seller / Vendor</option><option>🚗 Driver</option>
-        </select>
-        <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;">Your Location</label>
-        <select id="applyLoc" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:rgba(255,255,255,0.8);font-size:16px;outline:none;font-family:inherit;">
-          <option>Nairobi</option><option>Mombasa</option><option>Kisumu</option>
-          <option>Nakuru</option><option>Eldoret</option><option>Thika</option><option>Other</option>
-        </select>
-      </div>
+      <button type="button" id="applyGo" class="op-choose-go" disabled onclick="applyNow()">Continue to application →</button>
     </div>
-    <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin:10px 0 4px;">Tell us about yourself (experience, equipment, availability)</label>
-    <textarea id="applyBio" placeholder="e.g. I have a motorbike and 2 years delivery experience in Nairobi CBD area…" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;min-height:80px;resize:vertical;margin-bottom:12px;"></textarea>
-    <button type="button" onclick="applyNow()" style="width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#00d4ff);border:none;border-radius:12px;color:#060a06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🚀 Apply via WhatsApp</button>
-    <div id="applyMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+    <div id="applyMsg" role="status" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
   </div>
 </div>
 
@@ -172,70 +186,106 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#060a06;color:white;
 <nav class="bottom-nav" role="navigation" aria-label="Main navigation" data-sokoni-nav></nav>
 
 <script>
+/* ── WAYS TO EARN (2026-09-30) ────────────────────────────────────────────────
+   Every card opens an EXISTING intake that files a real applications/* document; nothing
+   on this page writes one itself, and nothing here grants anything. The ONE decision path
+   is an administrator in AdminOS → applicationDecide → applicationLifecycle, which grants
+   the canonical role; the workspace then comes from sokoni-role-authority.js hubFor().
+
+     apply.href → a page whose intake declares the role:
+       onboarding-driver.html        requestedRole 'rider'
+       business-apply.html           applications/{uid}--merchant (seller) | --provider
+                                     (provider), after the Business Agreement
+       onboarding-landlord.html      requestedRole 'landlord'
+       onboarding-professional.html  requestedRole 'health' | 'legal'
+     apply.hub  → HubRegister.open(hub, category): hub-register.js, requestedRole from its
+                  _ROLE_BY_CATEGORY ('mechanic').
+     apply.none → no application exists for it (the affiliate programme runs on referral
+                  links); the card says so instead of pretending to file one.
+
+   The old "Delivery Driver" card was the same page as "Delivery Rider" — one card now. */
+const _svc = (category, label) =>
+  'business-apply.html?offer=services&category=' + category + '&label=' + encodeURIComponent(label);
 const OPS = [
   {
-    id:'rider', cat:'gig', emoji:'🛵', title:'Delivery Rider',
+    id:'rider', cat:'gig', emoji:'🛵', title:'Delivery Rider / Driver',
     color:'#f97316', glow:'rgba(249,115,22,1)',
-    sub:'Deliver food, packages and goods across your city. Be your own boss. Earn daily.',
-    earn:'KES 800–2,000/day', earnLabel:'Based on 8–12 deliveries',
-    perks:['88% of every delivery fee (vs Bolt/Uber 75%)','Daily payouts to M-Pesa','Priority order assignment for top riders','Fuel & maintenance support network'],
-    link:'driver.html', linkLabel:'Join as Rider'
+    sub:'Deliver food, parcels and marketplace orders. Boda boda, e-bike, car, van or pickup welcome.',
+    earn:'KES 800–2,000/day', earnLabel:'Estimate, based on 8–12 deliveries',
+    perks:['88% of every delivery fee (vs Bolt/Uber 75%)','Payouts to M-Pesa','GPS-tracked orders for your safety','Flexible hours — work when you want'],
+    apply:{ href:'onboarding-driver.html' }, role:'rider', linkLabel:'Apply as Rider'
   },
   {
     id:'mechanic', cat:'service', emoji:'🔧', title:'Mechanic / Fundi',
     color:'#f97316', glow:'rgba(249,115,22,1)',
     sub:'List your garage or mobile mechanic services. Get bookings, roadside SOS calls, and parts orders.',
-    earn:'KES 400–3,000/job', earnLabel:'Depending on service type',
-    perks:['Verified mechanic badge on your profile','Roadside SOS call alerts near your location','Parts marketplace to buy & sell','No commission on direct bookings'],
-    link:'car-hub.html', linkLabel:'Register as Mechanic'
+    earn:'KES 400–3,000/job', earnLabel:'Estimate, depending on service type',
+    perks:['Verified mechanic badge once approved','Roadside SOS call alerts near your location','Parts marketplace to buy & sell','No commission on direct bookings'],
+    apply:{ hub:'car', category:'mechanic' }, role:'mechanic', linkLabel:'Apply as Mechanic'
   },
   {
-    id:'agent', cat:'sales', emoji:'🏠', title:'Property Agent',
-    color:'#38bdf8', glow:'rgba(56,189,248,1)',
-    sub:'List and sell properties. Earn commission on every successful rental or sale you close.',
-    earn:'KES 5,000–50,000/deal', earnLabel:'3–5% commission on deals',
-    perks:['Free property listing (no monthly fee)','Leads sent directly to your WhatsApp','Verified agent badge','Access to landlord management tools'],
-    link:'property.html', linkLabel:'Become an Agent'
+    id:'seller', cat:'sales', emoji:'🏪', title:'Seller / Vendor',
+    color:'#71ff00', glow:'rgba(113,255,0,1)',
+    sub:'Open your Sokoni shop. Sell physical products, digital goods, food or wholesale.',
+    earn:'Your margins', earnLabel:'You set your prices',
+    perks:['Shop workspace with stock, orders and the SOKONI till','M-Pesa payments built in','Delivery & logistics network','Boost listings to reach more buyers'],
+    apply:{ href:'business-apply.html?offer=products' }, role:'seller', linkLabel:'Apply to sell'
+  },
+  {
+    id:'services', cat:'service', emoji:'🛠', title:'Service Provider',
+    color:'#22d3ee', glow:'rgba(34,211,238,1)',
+    sub:'Cleaning, repairs, salon, printing, tutoring, events, consulting — take bookings and get paid.',
+    earn:'You set your rates', earnLabel:'Per job or per booking',
+    perks:['Provider dashboard with bookings and services','Quick Charge for one-off work','Reviews that build your reputation','Found in SOKONI search once approved'],
+    apply:{ href:_svc('services', 'Service Provider') }, role:'provider', linkLabel:'Apply as Provider'
   },
   {
     id:'freelancer', cat:'digital', emoji:'💻', title:'Freelancer',
     color:'#a855f7', glow:'rgba(168,85,247,1)',
     sub:'Offer web design, coding, writing, marketing, social media or any digital skill on Sokoni.',
-    earn:'KES 2,000–30,000/project', earnLabel:'You set your own rates',
+    earn:'KES 2,000–30,000/project', earnLabel:'Estimate — you set your own rates',
     perks:['Your own professional profile page','Portfolio showcase','Sokoni escrow for safe payments','Featured in Digital Services Hub'],
-    link:'tech-hub.html', linkLabel:'Join as Freelancer'
+    apply:{ href:_svc('freelancer', 'Freelancer') }, role:'provider', linkLabel:'Apply as Freelancer'
+  },
+  {
+    id:'agent', cat:'sales', emoji:'🏠', title:'Property Agent',
+    color:'#38bdf8', glow:'rgba(56,189,248,1)',
+    sub:'List and let or sell properties. Earn commission on every successful rental or sale you close.',
+    earn:'KES 5,000–50,000/deal', earnLabel:'Estimate, 3–5% commission on deals',
+    perks:['Free property listing (no monthly fee)','Leads delivered in the app','Verified agent badge once approved','Access to landlord management tools'],
+    apply:{ href:_svc('property-agent', 'Property Agent') }, role:'provider', linkLabel:'Apply as Agent'
+  },
+  {
+    id:'promoter', cat:'sales', emoji:'📣', title:'Event Promoter',
+    color:'#a855f7', glow:'rgba(168,85,247,1)',
+    sub:'Promote events on Sokoni. Sell tickets, share event pages, earn on every ticket sold.',
+    earn:'KES 50–500/ticket', earnLabel:'Estimate, per ticket sold via your link',
+    perks:['Promote unlimited events','Commission on every ticket sold','Co-promotion with entertainment hub','Perfect for club, church & campus promoters'],
+    apply:{ href:_svc('event-promoter', 'Event Promoter') }, role:'provider', linkLabel:'Apply as Promoter'
+  },
+  {
+    id:'landlord', cat:'service', emoji:'🏘', title:'Landlord',
+    color:'#34d399', glow:'rgba(52,211,153,1)',
+    sub:'List your units, collect rent and manage tenants from one landlord workspace.',
+    earn:'Your rent roll', earnLabel:'Rent collected through SOKONI',
+    perks:['Landlord workspace for units and tenants','Rent reminders and receipts','Vacancies listed in the Property hub','Verified landlord badge once approved'],
+    apply:{ href:'onboarding-landlord.html' }, role:'landlord', linkLabel:'Apply as Landlord'
+  },
+  {
+    id:'professional', cat:'service', emoji:'🩺', title:'Health or Legal Professional',
+    color:'#60a5fa', glow:'rgba(96,165,250,1)',
+    sub:'Doctors, clinics, nurses and lawyers — take appointments and consultations on SOKONI.',
+    earn:'Your consultation fee', earnLabel:'Per appointment or matter',
+    perks:['Professional profile, verified before you go live','Appointments and consultations','Listed in the Healthcare or Legal hub','Your licence details reviewed by SOKONI'],
+    apply:{ href:'onboarding-professional.html' }, role:'health', linkLabel:'Apply as a Professional'
   },
   {
     id:'affiliate', cat:'sales', emoji:'🎁', title:'Affiliate Marketer',
     color:'#71ff00', glow:'rgba(113,255,0,1)',
     sub:'Share Sokoni products and services. Earn a cut every time someone buys through your link.',
-    earn:'5–15% per sale', earnLabel:'Unlimited earning potential',
-    perks:['Unique referral link & dashboard','Real-time earnings tracker','Bonus tiers — earn more as you grow','Works from your phone, anywhere in Kenya'],
-    link:'referral.html', linkLabel:'Get Your Affiliate Link'
-  },
-  {
-    id:'promoter', cat:'sales', emoji:'📣', title:'Event Promoter',
-    color:'#a855f7', glow:'rgba(168,85,247,1)',
-    sub:'Promote events on Sokoni. Sell tickets, share event pages, earn commission on every ticket sold.',
-    earn:'KES 50–500/ticket', earnLabel:'Per ticket sold via your link',
-    perks:['Promote unlimited events','Commission on every ticket sold','Co-promotion with entertainment hub','Perfect for club, church & campus promoters'],
-    link:'entertainment.html', linkLabel:'Start Promoting'
-  },
-  {
-    id:'seller', cat:'sales', emoji:'🏪', title:'Seller / Vendor',
-    color:'#71ff00', glow:'rgba(113,255,0,1)',
-    sub:'Open your Sokoni store. Sell physical products, digital goods, food or wholesale. Reach thousands of buyers.',
-    earn:'Unlimited', earnLabel:'You keep your margins',
-    perks:['Free store setup in 5 minutes','M-Pesa and card payments built-in','Delivery & logistics network','Boost listings to reach more buyers'],
-    link:'seller.html', linkLabel:'Open My Store'
-  },
-  {
-    id:'driver', cat:'gig', emoji:'🛵', title:'Delivery Driver',
-    color:'#fbbf24', glow:'rgba(251,191,36,1)',
-    sub:'Deliver parcels, food, documents and marketplace orders across Kenya. Boda boda, e-bike, car, van or pickup welcome.',
-    earn:'KES 800–3,500/day', earnLabel:'Based on deliveries completed',
-    perks:['88% commission — Kenya\'s fairest rate','GPS-tracked orders for your safety','Flexible hours — work when you want','Weekly M-Pesa payouts'],
-    link:'driver.html', linkLabel:'Register as Driver'
+    earn:'5–15% per sale', earnLabel:'On eligible sales through your link',
+    perks:['No application needed — start with your referral link','Earnings tracked in your referral dashboard','Bonus tiers as you grow','Works from your phone, anywhere in Kenya'],
+    apply:{ none:true, href:'referral.html' }, role:null, linkLabel:'Get Your Affiliate Link'
   },
 ];
 
@@ -263,7 +313,7 @@ function renderGrid() {
       <div class="op-perks">
         ${o.perks.map(p=>`<div class="op-perk" style="--c:${o.color};"><span style="width:18px;height:18px;border-radius:50%;background:rgba(${hexToRgb(o.color)},0.12);border:1px solid rgba(${hexToRgb(o.color)},0.3);color:${o.color};font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✓</span>${p}</div>`).join('')}
       </div>
-      <a href="${o.link}" class="op-apply-btn" style="background:rgba(${hexToRgb(o.color)},0.1);border:1px solid rgba(${hexToRgb(o.color)},0.28);color:${o.color};text-decoration:none;display:block;text-align:center;">${o.linkLabel} →</a>
+      ${_applyControl(o)}
     </div>`).join('');
 }
 
@@ -272,23 +322,152 @@ function hexToRgb(hex) {
   return `${r},${g},${b}`;
 }
 
+/* The card's call to action. A link for page intakes, a button for the hub-register intake.
+   Styling is identical; only the mechanism differs. */
+function _applyControl(o) {
+  const st = 'background:rgba(' + hexToRgb(o.color) + ',0.1);border:1px solid rgba(' + hexToRgb(o.color) + ',0.28);color:' + o.color + ';text-decoration:none;display:block;text-align:center;';
+  if (o.apply && o.apply.hub) {
+    return '<button type="button" class="op-apply-btn" style="' + st + '" onclick="openHubIntake(\'' + o.id + '\')">' + o.linkLabel + ' →</button>';
+  }
+  return '<a href="' + o.apply.href + '" class="op-apply-btn" style="' + st + '">' + o.linkLabel + ' →</a>';
+}
+
+/* hub-register.js is loaded with defer; if it has not arrived, go to the hub that hosts the
+   same intake rather than failing silently. */
+const _HUB_PAGE = { car:'car-hub.html' };
+function openHubIntake(id) {
+  const o = OPS.find((x) => x.id === id); if (!o || !o.apply || !o.apply.hub) return;
+  if (window.HubRegister && typeof window.HubRegister.open === 'function') {
+    window.HubRegister.open({ hub:o.apply.hub, category:o.apply.category });
+  } else {
+    window.location.href = _HUB_PAGE[o.apply.hub] || 'index.html';
+  }
+}
+window.openHubIntake = openHubIntake;
+
+/* The chooser lists the same cards, so the two can never disagree. */
+(function _fillChooser() {
+  const sel = document.getElementById('applyRole'); if (!sel) return;
+  OPS.forEach((o) => { const opt = document.createElement('option'); opt.value = o.id; opt.textContent = o.emoji + ' ' + o.title + (o.apply && o.apply.none ? ' (no application needed)' : ''); sel.appendChild(opt); });
+  const n = document.getElementById('opWaysCount'); if (n) n.textContent = String(OPS.length);
+}());
+
+/* Replaces the WhatsApp hand-off, which filed nothing and then claimed the application had been sent.
+   This opens the chosen role's real application; it never claims a submission happened. */
 function applyNow() {
-  const name  = (document.getElementById('applyName')?.value||'').trim();
-  const phone = (document.getElementById('applyPhone')?.value||'').trim();
-  const role  = document.getElementById('applyRole')?.value||'';
-  const loc   = document.getElementById('applyLoc')?.value||'';
-  const bio   = document.getElementById('applyBio')?.value||'';
+  const id = document.getElementById('applyRole')?.value || '';
   const msgEl = document.getElementById('applyMsg');
-  if (!name||!phone||!role) { if(msgEl){msgEl.textContent='Please fill your name, phone and role';msgEl.style.color='#f97316';} return; }
-  const msg = `💼 *SOKONI Opportunity Application*\n\n👤 Name: ${name}\n📞 Phone: ${phone}\n🎯 Role: ${role}\n📍 Location: ${loc}${bio?'\n\n'+bio:''}\n\nPlease get back to me. Thank you!`;
-  window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`, '_blank');
-  if(msgEl){msgEl.innerHTML='✅ Application sent! We\'ll be in touch within 24hrs.';msgEl.style.color='#71ff00';}
+  const o = OPS.find((x) => x.id === id);
+  if (!o) { if (msgEl) { msgEl.textContent = 'Choose an opportunity first.'; msgEl.style.color = '#f97316'; } return; }
+  if (o.apply.hub) { if (msgEl) msgEl.textContent = ''; openHubIntake(o.id); return; }
+  if (msgEl) { msgEl.textContent = 'Opening the ' + o.title + ' application…'; msgEl.style.color = 'rgba(255,255,255,0.6)'; }
+  window.location.href = o.apply.href;
 }
 window.applyNow = applyNow;
 
+/* ── YOUR APPLICATIONS ────────────────────────────────────────────────────────
+   Reads the visitor's OWN applications (where uid == auth.uid — the owner-read rule) and
+   shows each one's real status. "Open your dashboard" comes ONLY from
+   SokoniRoleAuthority.hubFor(role), which answers only for a role present in the signed ID
+   token — so the page can never open a workspace the server has not granted. When an
+   application is approved but the token predates the grant, the token is refreshed once. */
+const _ROLE_LABEL = { seller:'Seller / Shop', provider:'Service provider', rider:'Delivery rider', driver:'Delivery rider',
+  mechanic:'Mechanic', health:'Health professional', legal:'Legal professional', landlord:'Landlord', tenant:'Tenant' };
+const _canonRole = (r) => (r === 'driver' ? 'rider' : r);
+function _statusOf(a) {
+  const v = String(a.status || '').toLowerCase();
+  if (['approved', 'active', 'accepted', 'verified'].includes(v)) return 'approved';
+  if (['rejected', 'declined', 'denied'].includes(v)) return 'rejected';
+  if (v === 'suspended') return 'suspended';
+  if (v === 'info_requested') return 'info';
+  if (v === 'withdrawn') return 'withdrawn';
+  return 'review';
+}
+function _esc(x) { return String(x == null ? '' : x).replace(/[<>"'&]/g, (c) => ({ '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;', '&':'&amp;' }[c])); }
+function _roleOf(a) {
+  if (a.role) return _canonRole(a.role);
+  if (a.requestedRole) return _canonRole(a.requestedRole);
+  if (String(a.applicationId || '').endsWith('--merchant')) return 'seller';
+  if (String(a.applicationId || '').endsWith('--provider')) return 'provider';
+  return null;
+}
+function _whenAuth() {
+  if (typeof window.waitForSokoniAuthReady === 'function') return window.waitForSokoniAuthReady();
+  return new Promise((res) => {
+    document.addEventListener('sokoniAuthReady', (e) => res(e.detail), { once:true });
+    let n = 0; const t = setInterval(() => { if (typeof window.waitForSokoniAuthReady === 'function' || ++n > 150) { clearInterval(t); res(window.waitForSokoniAuthReady ? window.waitForSokoniAuthReady() : null); } }, 100);
+  });
+}
+function _whenAuthority() {
+  if (window.SokoniRoleAuthority) return window.SokoniRoleAuthority.ready().catch(() => null);
+  return new Promise((res) => { let n = 0; const t = setInterval(() => {
+    if (window.SokoniRoleAuthority) { clearInterval(t); window.SokoniRoleAuthority.ready().then(res, () => res(null)); }
+    else if (++n > 150) { clearInterval(t); res(null); } }, 100); });
+}
+let _refreshedOnce = false;
+async function renderMyApplications() {
+  const box = document.getElementById('opMine'), body = document.getElementById('opMineBody');
+  if (!box || !body) return;
+  await _whenAuth();
+  const user = window.firebaseAuth && window.firebaseAuth.currentUser;
+  if (!user || !window.firebaseDB) { box.hidden = true; return; }
+  box.hidden = false;
+  let docs;
+  try {
+    const fsm = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    const snap = await fsm.getDocs(fsm.query(fsm.collection(window.firebaseDB, 'applications'), fsm.where('uid', '==', user.uid), fsm.limit(20)));
+    docs = snap.docs.map((d) => Object.assign({ applicationId: d.id }, d.data()));
+  } catch (e) {
+    /* Unknown is not "none": say we could not check. */
+    body.innerHTML = '<div class="op-mine-note">We could not load your applications right now. Refresh to try again.</div>';
+    return;
+  }
+  if (!docs.length) { body.innerHTML = '<div class="op-mine-note">You have not applied for anything yet. Pick a way to earn below.</div>'; return; }
+  const RA = await _whenAuthority().then(() => window.SokoniRoleAuthority || null);
+  const approvedRoles = docs.filter((a) => _statusOf(a) === 'approved').map(_roleOf).filter(Boolean);
+  if (RA && !_refreshedOnce && approvedRoles.some((r) => !RA.hubFor(r))) {
+    _refreshedOnce = true;
+    try { await RA.refresh(true); } catch (_) {}
+  }
+  const ts = (a) => (a.receivedAt && a.receivedAt.toMillis ? a.receivedAt.toMillis() : 0) || (a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : Number(a.createdAt) || 0) || Date.parse(a.submittedAt || '') || 0;
+  docs.sort((x, y) => ts(y) - ts(x));
+  body.innerHTML = docs.map((a) => {
+    const st = _statusOf(a), role = _roleOf(a);
+    const label = _ROLE_LABEL[role] || 'Application';
+    const sub = a.categoryLabel || a.category || '';
+    let badge, action = '';
+    if (st === 'approved') {
+      const hub = RA && role ? RA.hubFor(role) : null;
+      badge = '<span class="op-st op-st-ok">Approved</span>';
+      action = hub ? '<a class="op-mine-act" href="' + _esc(hub) + '">Open your dashboard →</a>'
+                   : '<span class="op-mine-note">Approved — your dashboard unlocks once the approval finishes applying. Refresh in a minute.</span>';
+    } else if (st === 'rejected') {
+      badge = '<span class="op-st op-st-no">Not approved</span>';
+      if (a.reviewReason) action = '<span class="op-mine-note">' + _esc(a.reviewReason) + '</span>';
+    } else if (st === 'suspended') {
+      badge = '<span class="op-st op-st-no">Suspended</span>';
+      action = '<a class="op-mine-act quiet" href="support.html">Contact support</a>';
+    } else if (st === 'info') {
+      badge = '<span class="op-st op-st-info">More info needed</span>';
+      action = '<a class="op-mine-act quiet" href="complete-application.html">Complete your application</a>';
+    } else if (st === 'withdrawn') {
+      badge = '<span class="op-st op-st-no">Withdrawn</span>';
+    } else {
+      badge = '<span class="op-st op-st-review">In review</span>';
+      if (a.projectionStatus === 'blocked_unknown_role') action = '<span class="op-mine-note">A reviewer needs to confirm which role this is for.</span>';
+    }
+    return '<div class="op-mine-row"><div><div class="op-mine-role">' + _esc(label) + ' ' + badge + '</div>'
+      + (sub ? '<div class="op-mine-sub">' + _esc(sub) + '</div>' : '') + '</div><div>' + action + '</div></div>';
+  }).join('');
+}
+window.renderMyApplications = renderMyApplications;
+
 renderGrid();
+renderMyApplications();
+</script>renderGrid();
 </script>
 <script type="module" src="sokoni-init.js"></script>
+<script src="hub-register.js" defer></script>
 <script src="nav-active.js" defer></script>
 <script src="sw-register.js" defer></script>
 <script src="sokoni-audit.js" defer></script>
