@@ -55,6 +55,7 @@ Live catalogue shape (public `/api/catalogue`, 97 products): all carry numeric `
 | `test-home-logo-routing.js` | 31 / 0 (2 unproven, pre-existing) |
 | `predeploy-syntax-gate.js` | PASS — 1,794 files, 453 inline blocks |
 | `perf-guard.js` | PASS (one pre-existing WARN on `posStartupScripts`, no POS file touched) |
+| `predeploy-browser-suites.js` (the hosting deploy hook) | **EXECUTED 33 / 33**, including the new suite — packet `docs/release-gates/hosting-preflight-home-picked-for-you.json` |
 
 Not proven here: behaviour against production Firestore (App Check) — the harness shims the SDK. The live post-deploy smoke (`scratchpad/home-smoke2.js` pattern) must show: recommendations widget children > 0, no `[SokoniRecs] module not loaded`, no `[RT] products` warning, Edit Interests opening the editor for a visitor with saved interests, Fastest Selling visible.
 

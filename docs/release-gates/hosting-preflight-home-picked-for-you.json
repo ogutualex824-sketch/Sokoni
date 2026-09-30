@@ -1,0 +1,21 @@
+{
+  "slice": "home: Edit Interests + Picked For You + home grids in sync with the catalogue",
+  "date": "2026-09-30",
+  "candidate": { "worktree": "C:/temp/sok-home", "branch": "hosting/home-picked-for-you-on-2f3bb6f", "commit": "f2b2fc8", "descendsFromLive": "2f3bb6f" },
+  "live": { "hostingCommit": "2f3bb6f", "version": "6f7202bd5dd81d84", "cacheVersion": "sokoni-20260930030022-v645" },
+  "scope": { "hosting": true, "functions": false, "rules": false, "indexes": false },
+  "filesShipped": ["index.html", "inspiq.js", "sokoni-lazy.js", "sokoni-recommendations.js", "script.js", "sokoni-db.js", "realtime.js"],
+  "notShipped": ["scripts/**", "docs/**", "CHANGELOG.md"],
+  "gates": {
+    "test-home-picked-for-you.js": "39/0",
+    "predeploy-browser-suites.js": "EXECUTED 33/33 (incl. the new suite, 27s)",
+    "predeploy-syntax-gate.js": "PASS 1794 files, 453 inline blocks",
+    "perf-guard.js": "PASS (pre-existing WARN posStartupScripts 66>63, no POS file changed)",
+    "guard-no-rollback.js": "local f2b2fc8 contains live 2f3bb6f — allowing",
+    "guard-deploy-cooldown.js": "allowing",
+    "regressions": { "test-cart-browser-certification.js": "52/0", "test-sellability-contract.js": "74/0", "test-home-logo-routing.js": "31/0 (2 unproven, pre-existing)" }
+  },
+  "unproven": "live behaviour under App Check (harness shims the SDK) — verify post-deploy: recs widget children>0, no '[SokoniRecs] module not loaded', no '[RT] products' warning, Edit Interests opens the editor for a visitor with saved interests, Fastest Selling visible",
+  "rollback": { "hostingVersion": "6f7202bd5dd81d84" },
+  "deployment": "NOT authorized — owner must name the commit"
+}
