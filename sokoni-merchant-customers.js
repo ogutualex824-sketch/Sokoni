@@ -134,7 +134,34 @@
     }
     try {
       var rows = await o.db.queryProfiles(profileQuery(scope));
-      return { ok: true, customers: (rows || []).map(projectCustomer), count: (rows || []).length };
+      if (rows && rows.length) {
+        return { ok: true, customers: rows.map(projectCustomer), count: rows.length, source: 'profiles' };
+      }
+      /* NO PROFILES YET. crmCustomerProfiles is built only by the CRM callables, which nothing
+         runs for a shop's ordinary sales — on 2026-09-30 the collection was EMPTY project-wide
+         while KASS SHOP had 10 online orders and 5 till sales. An empty profile set was rendered
+         as "you have no customers", which is false. The server-authoritative source
+         (merchantDashboardFacts {op:'customers'}) derives customers from the shop's real orders
+         and identified till sales, scoped to the signed-in merchant, with completeness stated.
+         Profiles remain the richer source and win whenever they exist. */
+      if (typeof o.callFacts === 'function') {
+        var res = _unwrap(await o.callFacts({ op: 'customers' }));
+        if (res && res.ok && Array.isArray(res.customers)) {
+          return {
+            ok: true,
+            customers: res.customers.map(function (c) {
+              return projectCustomer({
+                uid: c.uid || null, name: c.name || '', phone: c.phone || '',
+                segment: 'customer', clv: null,
+                orderCount: c.orderCount, totalSpend: c.totalSpend, avgOrderValue: c.avgOrderValue,
+                lastOrderAt: c.lastOrderAt || null, firstOrderAt: c.firstOrderAt || null,
+              });
+            }),
+            count: res.count || 0, source: 'sales', completeness: res.completeness || null, note: res.note || null,
+          };
+        }
+      }
+      return { ok: true, customers: [], count: 0, source: 'profiles' };
     } catch (e) {
       /* A rules refusal arrives here as permission-denied. Reported, never
          rendered as "you have no customers". */
