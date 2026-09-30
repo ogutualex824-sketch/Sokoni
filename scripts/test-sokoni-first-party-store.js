@@ -1,0 +1,329 @@
+#!/usr/bin/env node
+/**
+ * SOKONI STORE — OPERATOR-ONLY authority (hermetic; no emulator, no network, no production)
+ *
+ * Adapted from 526f330's admin-only suite to the 2026-10-01 owner decision:
+ *   · the store stays OWNED by the company account;
+ *   · ONE named operator, from the server-only record firstPartyStoreOperators/{storeId};
+ *   · admin / superAdmin claims alone are REFUSED with reason 'not-store-operator'.
+ *
+ * Drives the REAL handlers (functions/first-party-store-workspace.js `_h`), the REAL gate
+ * (first-party-store-operator.js), the REAL tenant-identity resolver and the REAL
+ * shop-employees.resolveShopAccess, over an in-memory Firestore that records every read.
+ * firebase-admin is replaced in require.cache BEFORE any module under test loads, so no
+ * code path can reach a live project.
+ *
+ *   node scripts/test-sokoni-first-party-store.js
+ */
+'use strict';
+const path = require('path');
+const fs = require('fs');
+const { execSync } = require('child_process');
+
+const ROOT = path.resolve(__dirname, '..');
+const FN = path.join(ROOT, 'functions');
+
+let pass = 0, fail = 0;
+const ok = (name, cond, detail) => {
+  if (cond) { pass++; console.log('  PASS  ' + name); }
+  else { fail++; console.log('  FAIL  ' + name + (detail ? '   [' + detail + ']' : '')); }
+};
+
+/* ── In-memory Firestore (only what the code under test uses) ─────────────────────── */
+function makeDb() {
+  const store = new Map();            // "col/id" -> data
+  const reads = [];                   // collection names read (doc gets + queries)
+  const writes = [];                  // { op, path }
+  const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v, function (k, x) { const o = this[k]; return o instanceof Date ? { __date: o.getTime() } : x; })));
+  const snapOf = (col, id) => {
+    const key = col + '/' + id;
+    const has = store.has(key);
+    return { id, exists: has, ref: docRef(col, id), data: () => (has ? clone(store.get(key)) : undefined) };
+  };
+  function docRef(col, id) {
+    return {
+      id, path: col + '/' + id,
+      async get() { reads.push(col); return snapOf(col, id); },
+      async create(d) {
+        const key = col + '/' + id;
+        if (store.has(key)) { const e = new Error('ALREADY_EXISTS'); e.code = 6; throw e; }
+        writes.push({ op: 'create', path: key }); store.set(key, clone(d));
+      },
+      async set(d, o) {
+        const key = col + '/' + id; writes.push({ op: 'set', path: key });
+        store.set(key, o && o.merge ? Object.assign({}, store.get(key) || {}, clone(d)) : clone(d));
+      },
+      async update(d) {
+        const key = col + '/' + id;
+        if (!store.has(key)) { const e = new Error('NOT_FOUND'); e.code = 5; throw e; }
+        writes.push({ op: 'update', path: key }); store.set(key, Object.assign({}, store.get(key), clone(d)));
+      },
+    };
+  }
+  function query(col, filters, order, lim) {
+    return {
+      where(f, op, v) { if (op !== '==') throw new Error('fake: only =='); return query(col, filters.concat([[f, v]]), order, lim); },
+      orderBy(f, dir) { return query(col, filters, [f, dir], lim); },
+      limit(n) { return query(col, filters, order, n); },
+      async get() {
+        reads.push(col);
+        let docs = [];
+        for (const [key, d] of store) {
+          const [c, id] = key.split('/');
+          if (c !== col) continue;
+          if (filters.every(([f, v]) => d[f] === v)) docs.push(snapOf(c, id));
+        }
+        if (order) {
+          const [f, dir] = order;
+          const val = (s) => { const x = s.data()[f]; return x && x.__date ? x.__date : (typeof x === 'number' ? x : 0); };
+          docs.sort((a, b) => (dir === 'desc' ? val(b) - val(a) : val(a) - val(b)));
+        }
+        if (lim != null) docs = docs.slice(0, lim);
+        return { docs, size: docs.length, empty: docs.length === 0 };
+      },
+    };
+  }
+  let autoId = 0;
+  const db = {
+    collection(col) {
+      const q = query(col, [], null, null);
+      return Object.assign(q, {
+        doc: (id) => docRef(col, id),
+        async add(d) { const id = 'auto' + (++autoId); await docRef(col, id).set(d); return docRef(col, id); },
+      });
+    },
+    async runTransaction(fn) {
+      const tx = {
+        get: (ref) => ref.get(),
+        update: (ref, d) => ref.update(d),
+        set: (ref, d, o) => ref.set(d, o),
+      };
+      return fn(tx);
+    },
+    _store: store, _reads: reads, _writes: writes,
+    _put(col, id, d) { store.set(col + '/' + id, clone(d)); },
+    _get(col, id) { return store.get(col + '/' + id); },
+  };
+  return db;
+}
+
+/* ── Replace firebase-admin BEFORE anything under test loads ──────────────────────── */
+let DB = makeDb();
+const fnRequire = require('module').createRequire(path.join(FN, 'package.json'));
+function stub(spec, exportsObj) {
+  const p = fnRequire.resolve(spec);
+  require.cache[p] = { id: p, filename: p, loaded: true, exports: exportsObj };
+}
+stub('firebase-admin', { apps: [1], initializeApp() {}, firestore: () => DB });
+stub('firebase-admin/firestore', {
+  getFirestore: () => DB,
+  FieldValue: { serverTimestamp: () => new Date(), increment: (n) => n, arrayUnion: (...a) => a, delete: () => null },
+  Timestamp: { now: () => new Date(), fromMillis: (m) => new Date(m) },
+});
+const AUTH_USERS = {};
+stub('firebase-admin/auth', { getAuth: () => ({ getUser: async (uid) => { if (!AUTH_USERS[uid]) { const e = new Error('no user'); e.code = 'auth/user-not-found'; throw e; } return AUTH_USERS[uid]; } }) });
+
+const OP = require(path.join(FN, 'first-party-store-operator.js'));
+const WS = require(path.join(FN, 'first-party-store-workspace.js'));
+const SE = require(path.join(FN, 'shop-employees.js'));
+
+/* ── The certified production chain, as data (ids from the owner's read, 2026-10-01) ── */
+const OWNER = 'vbaSOKL4h8WWGqa6Xfi1eLaEPnS2';          /* company account — owns, does not operate */
+const OPERATOR = 'D5Ql2EYr95bt79IpcGTmOMTK0P83';       /* the named operator */
+const OTHER_ADMIN = 'ochiIsaacAdminUid000000000';      /* an AdminOS admin, not the operator */
+const SUPER = 'someSuperAdminUid0000000000';
+const STORE = 'STR_147f5ce11b424ec4bb892519';
+const BIZ = 'SOK-XX2338';
+
+function seed(opts) {
+  const o = opts || {};
+  DB = makeDb();
+  DB._put('shops', STORE, Object.assign({
+    name: 'SOKONI Store', firstParty: true, ownerId: OWNER,
+    ownerEmail: 'bravilexinternational@gmail.com', operatorEmail: 'alexochieng3030@gmail.com',
+    phone: null, status: 'active',
+  }, o.shop || {}));
+  DB._put('businesses', BIZ, Object.assign({ ownerId: OWNER, businessType: 'SOKONI_FIRST_PARTY_STORE', status: 'active', name: 'SOKONI Store' }, o.business || {}));
+  /* the operator's own, unrelated merchant life (KASS SHOP) — must never leak in */
+  DB._put('shops', OPERATOR, { name: 'KASS SHOP', sellerUid: OPERATOR, ownerId: OPERATOR });
+  DB._put('wallets', OPERATOR, { uid: OPERATOR, balance: 777 });
+  /* an ordinary merchant */
+  DB._put('shops', 'merchantShop1', { name: 'A Real Merchant', sellerUid: 'merchantUid1', ownerId: 'merchantUid1' });
+  DB._put('products', 'p-store-1', { name: 'Store Mug', price: 500, shopId: STORE });
+  DB._put('products', 'p-store-2', { name: 'Store Tee', price: 1200, sellerUid: BIZ, stock: 4 });
+  DB._put('products', 'p-merchant', { name: 'Merchant Goods', price: 90, sellerUid: 'merchantUid1', shopId: 'merchantShop1' });
+  DB._put('orders', 'o-store-1', { sellerUid: BIZ, status: 'paid', total: 500, createdAt: new Date(1000), buyerPhone: '+254700000001', items: [{}] });
+  DB._put('orders', 'o-store-2', { sellerUid: BIZ, status: 'completed', total: 1200, createdAt: new Date(2000), items: [{}, {}] });
+  DB._put('orders', 'o-merchant', { sellerUid: 'merchantUid1', status: 'paid', total: 90, createdAt: new Date(3000) });
+  if (o.record !== null) {
+    DB._put(OP.OPERATORS, STORE, Object.assign({ storeId: STORE, businessId: BIZ, ownerUid: OWNER, operatorUids: [OPERATOR] }, o.record || {}));
+  }
+}
+
+const req = (uid, token, data) => (uid ? { auth: { uid, token: token || {} }, data: data || {} } : { data: data || {} });
+async function refusal(fn) { try { await fn(); return null; } catch (e) { return { code: e.code, reason: e.details && e.details.reason, message: e.message }; } }
+
+const CALLABLES = ['sokoniStoreGetContext', 'sokoniStoreSaveProfile', 'sokoniStoreListProducts', 'sokoniStoreListOrders', 'sokoniStoreGetWallet'];
+const STORE_DATA_COLLECTIONS = ['products', 'orders', 'wallets', 'businessWallets', 'firstPartyStoreAudit'];
+
+(async () => {
+  console.log('SOKONI STORE — operator-only authority (hermetic)\n');
+
+  /* ── A. the gate ─────────────────────────────────────────────────────────── */
+  seed();
+  let ctx = await WS._h.sokoniStoreGetContext(req(OPERATOR, {}));
+  ok('A1 operator WITHOUT admin claims is served', ctx.ok === true && ctx.operator === true);
+  ok('A2 context names the certified store + business', ctx.storeId === STORE && ctx.businessId === BIZ);
+  ctx = await WS._h.sokoniStoreGetContext(req(OPERATOR, { admin: true, superAdmin: true }));
+  ok('A3 operator WITH admin+superAdmin claims is served (claims neither help nor hurt)', ctx.ok === true);
+
+  let r = await refusal(() => WS._h.sokoniStoreGetContext(req(OTHER_ADMIN, { admin: true })));
+  ok('A4 admin-not-operator refused: permission-denied / not-store-operator', r && r.code === 'permission-denied' && r.reason === 'not-store-operator', JSON.stringify(r));
+  ok('A5 refusal text is the owner\'s wording', r && /Access denied — the SOKONI Store is operated by its owner/.test(r.message));
+  r = await refusal(() => WS._h.sokoniStoreGetContext(req(SUPER, { admin: true, superAdmin: true })));
+  ok('A6 superAdmin-not-operator refused: not-store-operator', r && r.code === 'permission-denied' && r.reason === 'not-store-operator');
+  r = await refusal(() => WS._h.sokoniStoreGetContext(req(null)));
+  ok('A7 unauthenticated refused', r && r.code === 'unauthenticated');
+  r = await refusal(() => WS._h.sokoniStoreGetContext(req(OWNER, {})));
+  ok('A8 the company OWNER account is not the operator either (only the record grants)', r && r.reason === 'not-store-operator');
+
+  /* ── B. forgeries have no effect ─────────────────────────────────────────── */
+  seed();
+  r = await refusal(() => WS._h.sokoniStoreGetContext(req(OTHER_ADMIN, { admin: true },
+    { operatorUids: [OTHER_ADMIN], operator: true, storeId: STORE, businessId: BIZ, uid: OPERATOR })));
+  ok('B1 client-sent operator fields are ignored (admin still refused)', r && r.reason === 'not-store-operator');
+  seed({ shop: { operatorEmail: 'ochiisaac@gmail.com', operatorUids: [OTHER_ADMIN] } });
+  r = await refusal(() => WS._h.sokoniStoreGetContext(req(OTHER_ADMIN, { admin: true, email: 'ochiisaac@gmail.com' })));
+  ok('B2 operatorEmail / operatorUids ON THE SHOP DOC grant nothing', r && r.reason === 'not-store-operator');
+  seed({ record: { businessId: 'SOK-OTHER' } });
+  r = await refusal(() => WS._h.sokoniStoreGetContext(req(OPERATOR, {})));
+  ok('B3 a STALE record (names another business) grants nothing', r && r.reason === 'not-store-operator');
+  seed({ record: { operatorUids: OPERATOR } });
+  r = await refusal(() => WS._h.sokoniStoreGetContext(req(OPERATOR, {})));
+  ok('B4 malformed operatorUids (string, not array) grants nothing', r && r.reason === 'not-store-operator');
+  seed({ record: null });
+  r = await refusal(() => WS._h.sokoniStoreGetContext(req(OPERATOR, { admin: true, superAdmin: true })));
+  ok('B5 no record written yet → even the intended operator is refused (fail closed)', r && r.reason === 'not-store-operator');
+
+  /* ── C. the chain fails closed ──────────────────────────────────────────── */
+  seed(); DB._put('shops', 'STR_second', { firstParty: true, ownerId: OWNER });
+  r = await refusal(() => WS._h.sokoniStoreGetContext(req(OPERATOR)));
+  ok('C1 two firstParty shops → refused (ambiguous), operator included', r && r.code === 'failed-precondition' && r.reason === 'store-designation-ambiguous');
+  seed({ shop: { sellerUid: OPERATOR } });
+  r = await refusal(() => WS._h.sokoniStoreGetContext(req(OPERATOR)));
+  ok('C2 store doc carrying sellerUid → refused', r && r.reason === 'store-carries-sellerUid');
+  seed({ business: { businessType: 'Electronics' } });
+  r = await refusal(() => WS._h.sokoniStoreGetContext(req(OPERATOR)));
+  ok('C3 business label missing → refused (label must agree with the chain)', r && r.reason === 'store-business-not-first-party');
+  seed(); DB._put('businesses', 'SOK-SECOND', { ownerId: OWNER, businessType: 'SOKONI_FIRST_PARTY_STORE', status: 'active' });
+  r = await refusal(() => WS._h.sokoniStoreGetContext(req(OPERATOR)));
+  ok('C4 owner with two businesses → refused (ambiguous chain)', r && r.reason === 'store-owner-has-multiple-businesses');
+  seed(); DB._put('businesses', 'SOK-FORGED', { ownerId: 'strangerUid', businessType: 'SOKONI_FIRST_PARTY_STORE', status: 'active' });
+  ctx = await WS._h.sokoniStoreGetContext(req(OPERATOR));
+  ok('C5 a stranger\'s forged SOKONI_FIRST_PARTY_STORE business does not displace the chain', ctx.businessId === BIZ);
+
+  /* ── D. every callable refuses a non-operator BEFORE any store-data read ── */
+  for (const name of CALLABLES) {
+    seed();
+    const before = DB._reads.length;
+    const rr = await refusal(() => WS._h[name](req(OTHER_ADMIN, { admin: true, superAdmin: true }, { profile: { phone: '0700000000' } })));
+    const touched = DB._reads.slice(before).filter((c) => STORE_DATA_COLLECTIONS.includes(c));
+    ok(`D ${name}: admin refused, zero store-data reads, zero writes`,
+      rr && rr.reason === 'not-store-operator' && touched.length === 0 && DB._writes.length === 0,
+      JSON.stringify({ rr, touched, writes: DB._writes }));
+  }
+  ok('D6 no callable accepts a shopId/businessId/uid parameter (source)',
+    !/req\.data\s*\|\|\s*\{\}\)\.(shopId|businessId|uid|storeId)|data\.(shopId|businessId|storeId)/.test(fs.readFileSync(path.join(FN, 'first-party-store-workspace.js'), 'utf8')));
+
+  /* ── E. profile / contact phone ─────────────────────────────────────────── */
+  seed();
+  const sv = await WS._h.sokoniStoreSaveProfile(req(OPERATOR, {}, { profile: { phone: '0705 726 803', tagline: '<b>Official</b> SOKONI goods' } }));
+  const shopAfter = DB._get('shops', STORE);
+  ok('E1 operator saves the contact phone → stored E.164', sv.ok && shopAfter.phone === '+254705726803');
+  ok('E2 HTML stripped by kasshop\'s own sanitiser', shopAfter.tagline === 'Official SOKONI goods');
+  ok('E3 ownership untouched: ownerId, firstParty kept; NO sellerUid written', shopAfter.ownerId === OWNER && shopAfter.firstParty === true && !('sellerUid' in shopAfter));
+  ok('E4 the operator\'s own KASS SHOP is untouched', DB._get('shops', OPERATOR).phone === undefined);
+  ok('E5 audit row written to the server-only audit collection', [...DB._store.keys()].some((k) => k.startsWith('firstPartyStoreAudit/')));
+  r = await refusal(() => WS._h.sokoniStoreSaveProfile(req(OPERATOR, {}, { profile: { phone: '12345' } })));
+  ok('E6 invalid phone refused (invalid-phone)', r && r.code === 'invalid-argument' && r.reason === 'invalid-phone');
+  r = await refusal(() => WS._h.sokoniStoreSaveProfile(req(OPERATOR, {}, { profile: { sellerUid: OPERATOR, ownerId: OPERATOR, firstParty: false, status: 'suspended' } })));
+  ok('E7 identity/standing fields are not writable (nothing to save)', r && r.reason === 'empty-patch');
+  ok('E8 …and the shop still names the company owner', DB._get('shops', STORE).ownerId === OWNER && DB._get('shops', STORE).firstParty === true);
+  seed();
+  r = await refusal(() => WS._h.sokoniStoreSaveProfile(req(OTHER_ADMIN, { admin: true }, { profile: { phone: '0711111111' } })));
+  ok('E9 admin cannot save the store profile; phone unchanged', r && r.reason === 'not-store-operator' && DB._get('shops', STORE).phone === null);
+  ok('E10 +254 / 254 / 07 / 01 forms normalise; landline refused',
+    WS._internal.normalizeKePhone('+254705726803') === '+254705726803' &&
+    WS._internal.normalizeKePhone('254105726803') === '+254105726803' &&
+    WS._internal.normalizeKePhone('0205726803') === null);
+
+  /* ── F. products / orders / wallet ──────────────────────────────────────── */
+  seed();
+  const pr = await WS._h.sokoniStoreListProducts(req(OPERATOR));
+  const ids = pr.products.map((p) => p.id).sort().join(',');
+  ok('F1 store products by shopId AND by business sellerUid; merchant goods excluded', ids === 'p-store-1,p-store-2', ids);
+  ok('F2 absent stock is UNMETERED (null), never 0', pr.products.find((p) => p.id === 'p-store-1').stock === null && pr.products.find((p) => p.id === 'p-store-2').stock === 4);
+  const or = await WS._h.sokoniStoreListOrders(req(OPERATOR));
+  ok('F3 store orders = sellerUid SOK-XX2338 only, newest first', or.orders.map((o) => o.id).join(',') === 'o-store-2,o-store-1');
+  ok('F4 no buyer PII in the order list', !JSON.stringify(or).includes('+254700000001'));
+  const wl = await WS._h.sokoniStoreGetWallet(req(OPERATOR));
+  ok('F5 company wallet absent → exists:false, balance null (not 0)', wl.storeWallet.exists === false && wl.storeWallet.balance === null);
+  ok('F6 the operator\'s PERSONAL wallet is never read into the store view', !JSON.stringify(wl).includes('777'));
+  ok('F7 payout destination reported unavailable (no authority exists — census)', wl.payoutDestination.status === 'unavailable');
+  seed(); DB._put('wallets', OWNER, { uid: OWNER, balance: 0, v2: true, pinHash: null });
+  const wl2 = await WS._h.sokoniStoreGetWallet(req(OPERATOR));
+  ok('F8 once created, the company wallet reads as a real 0 (canonical zero is fine)', wl2.storeWallet.exists === true && wl2.storeWallet.balance === 0 && wl2.storeWallet.pinSet === false);
+
+  /* ── G. no money write path in the workspace ────────────────────────────── */
+  const wsSrc = fs.readFileSync(path.join(FN, 'first-party-store-workspace.js'), 'utf8');
+  ok('G1 workspace never writes wallets / businessWallets / payout fields',
+    !/collection\('(wallets|businessWallets|payoutRequests)'\)[^;]*\.(set|update|create|add)\(/.test(wsSrc) && !/payout(Destination|Phone|Number|Account)\s*:/.test(wsSrc.replace(/payoutDestination: \{ status: 'unavailable'[^}]*\}/g, '')));
+  ok('G2 no payout-destination callable is exported (none built — census)', !Object.keys(WS).some((k) => /payout/i.test(k)));
+
+  /* ── H. shop-employees.resolveShopAccess carve-out ──────────────────────── */
+  seed();
+  AUTH_USERS[OTHER_ADMIN] = { uid: OTHER_ADMIN, customClaims: { admin: true } };
+  AUTH_USERS[SUPER] = { uid: SUPER, customClaims: { admin: true, superAdmin: true } };
+  r = await refusal(() => SE.resolveShopAccess(OTHER_ADMIN, STORE));
+  ok('H1 merchantIdentity path: admin on the store → permission-denied not-store-operator', r && r.code === 'permission-denied' && r.reason === 'not-store-operator');
+  r = await refusal(() => SE.resolveShopAccess(SUPER, STORE));
+  ok('H2 …superAdmin likewise', r && r.reason === 'not-store-operator');
+  const opAccess = await SE.resolveShopAccess(OPERATOR, STORE);
+  ok('H3 the operator resolves via:"operator"', opAccess.via === 'operator');
+  const ownAccess = await SE.resolveShopAccess(OWNER, STORE);
+  ok('H4 the company owner still resolves via:"owner" (ownership unchanged)', ownAccess.via === 'owner');
+  const mAccess = await SE.resolveShopAccess(OTHER_ADMIN, 'merchantShop1');
+  ok('H5 ordinary shops: the admin arm is unchanged', mAccess.via === 'admin');
+  r = await refusal(() => SE.assertShopOwner(OPERATOR, STORE));
+  ok('H6 staff management of the store stays owner-only (operator refused)', r && r.code === 'permission-denied');
+
+  /* ── I. the one-off script (not executed against anything) ──────────────── */
+  const SCRIPT = path.join(ROOT, 'scripts', 'infra', 'set-first-party-store-operator.js');
+  const sSrc = fs.readFileSync(SCRIPT, 'utf8');
+  const { walletV2Shape, operatorRecord } = require(SCRIPT);
+  const weSrc = fs.readFileSync(path.join(FN, 'wallet-engine.js'), 'utf8');
+  const m = weSrc.match(/async function _ensureWallet\(db, uid\) \{[\s\S]*?await ref\.set\(\{([\s\S]*?)\}\);/);
+  const engineKeys = m ? m[1].split('\n').map((l) => (l.match(/^\s*([A-Za-z0-9_]+)\s*[:,]/) || [])[1]).filter(Boolean).sort() : [];
+  const scriptKeys = Object.keys(walletV2Shape('x', new Date())).sort();
+  ok('I1 script wallet shape == wallet-engine _ensureWallet v2 shape (drift detector)', engineKeys.length > 10 && engineKeys.join() === scriptKeys.join(), engineKeys.join() + ' vs ' + scriptKeys.join());
+  ok('I2 script opens balance at 0 (no money is created)', walletV2Shape('x').balance === 0 && walletV2Shape('x').pendingBalance === 0);
+  ok('I3 script writes ONLY with create() — no set()/update() on any ref', /\.create\(/.test(sSrc) && !/\.(set|update)\(/.test(sSrc.replace(/^\s*(\/\/|\*).*$/gm, '')));
+  ok('I4 script is dry-run by default (--apply gates every write)', /const APPLY = process\.argv\.includes\('--apply'\)/.test(sSrc) && sSrc.indexOf('if (!APPLY)') < sSrc.indexOf('await recRef.create(') && sSrc.indexOf('if (!APPLY)') < sSrc.indexOf('await wRef.create('));
+  ok('I5 script never writes shops / businesses / claims / payout', !/collection\('(shops|businesses)'\)\.doc\([^)]*\)\.(create|set|update)|setCustomUserClaims|payout(Destination|Number)\s*:/.test(sSrc));
+  const chainNow = await OP.resolveStoreChain(DB);
+  ok('I6 the record the script writes is exactly what the gate accepts', OP.recordAuthorises(operatorRecord(chainNow, OPERATOR, new Date()), chainNow, OPERATOR));
+
+  /* ── J. settlement path unchanged by this slice ─────────────────────────── */
+  let diff = '';
+  try { diff = execSync('git diff HEAD --name-only -- functions/order-settlement.js functions/settlement-engine.js functions/wallet.js functions/wallet-engine.js functions/commission.js', { cwd: ROOT }).toString().trim(); } catch (_) { diff = 'git-unavailable'; }
+  ok('J1 order-settlement / settlement-engine / wallet / wallet-engine / commission untouched by this slice', diff === '', diff);
+  ok('J2 store orders settle where they did: order-settlement keys the credit by order.sellerUid (= SOK-XX2338)',
+    /const sellerId = order\.sellerUid \|\| order\.sellerId/.test(fs.readFileSync(path.join(FN, 'order-settlement.js'), 'utf8')));
+
+  /* ── K. registration ─────────────────────────────────────────────────────── */
+  const idx = fs.readFileSync(path.join(FN, 'index.js'), 'utf8');
+  for (const n of CALLABLES) ok(`K ${n} exported by name in index.js`, new RegExp('exports\\.' + n + '\\s*=\\s*_sokoniStore\\.' + n + ';').test(idx));
+
+  console.log(`\n${pass} PASS / ${fail} FAIL`);
+  process.exit(fail ? 1 : 0);
+})().catch((e) => { console.error('CRASH (not a pass):', e && (e.stack || e)); process.exit(2); });
