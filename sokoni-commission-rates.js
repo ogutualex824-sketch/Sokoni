@@ -233,4 +233,34 @@
       } catch (e) { return Promise.resolve(false); }
     },
   };
+
+  /* Declarative binding for copy that states a rate — one mechanism, no page-level literals.
+       <span data-sokoni-rate="marketplace"></span>                       -> "15%"  (or "KES 2,000" for a flat fee)
+       <span data-sokoni-rate="marketplace" data-sokoni-rate-format="keep"></span> -> "85%"  (the seller share)
+     A category the authority does not know renders an em dash — never the default bucket, never a guess.
+     Runs on DOMContentLoaded and again after refresh(); SokoniCommission.fill(root) re-binds injected markup. */
+  function fill(root) {
+    var scope = root && root.querySelectorAll ? root : (typeof document !== "undefined" ? document : null);
+    if (!scope) return 0;
+    var nodes = scope.querySelectorAll("[data-sokoni-rate]"), n = 0;
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i], r = resolve(el.getAttribute("data-sokoni-rate"));
+      var fmt = el.getAttribute("data-sokoni-rate-format") || "pct";
+      var text = "—";
+      if (r.matched) {
+        if (r.fixedKES && !r.pct) text = "KES " + Number(r.fixedKES).toLocaleString();
+        else if (fmt === "keep") text = (100 - r.pct) + "%";
+        else text = r.pct + "%";
+      }
+      el.textContent = text; n++;
+    }
+    return n;
+  }
+  window.SokoniCommission.fill = fill;
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { fill(document); });
+    else fill(document);
+  }
+  var _refresh = window.SokoniCommission.refresh;
+  window.SokoniCommission.refresh = function () { return _refresh().then(function (ok) { if (ok) fill(document); return ok; }); };
 })(window);
