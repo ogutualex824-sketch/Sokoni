@@ -64,13 +64,16 @@
 .sk-upd-pill-warn{color:var(--upd-warn);border-color:color-mix(in srgb,var(--upd-warn) 50%,transparent)}
 .sk-upd-pill-muted{color:var(--upd-muted)}
 
-/* install metrics — neutral state */
+/* install metrics — neutral state by default; solid only when the server measured it */
 .sk-upd-metrics{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
 .sk-upd-metric{border:1px dashed var(--upd-border);border-radius:var(--upd-radius);padding:12px 14px;background:var(--upd-surface2)}
 .sk-upd-metric-label{font-size:12px;font-weight:700;margin:0 0 6px;color:var(--upd-text)}
 .sk-upd-metric-value{font-size:26px;font-weight:800;line-height:1;margin:0 0 6px;color:var(--upd-muted)}
 .sk-upd-metric-state{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--upd-warn);margin:0 0 6px}
 .sk-upd-metric-why{font-size:12px;line-height:1.5;color:var(--upd-muted);margin:0}
+.sk-upd-metric[data-measured="true"]{border-style:solid}
+.sk-upd-metric[data-measured="true"] .sk-upd-metric-value{color:var(--upd-text)}
+.sk-upd-metric-state-ok{color:var(--upd-ok)}
 
 /* release log */
 .sk-upd-filters{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:10px;margin-bottom:10px}

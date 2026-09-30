@@ -2411,7 +2411,9 @@ window.SokoniAOS = (() => {
       body.innerHTML = _emptyMsg("The Updates module did not load. Reload the page to try again.");
       return;
     }
-    window.SokoniAdminUpdates.mount(body, { console: "aos" });
+    /* The module reads its release log and install counts through THIS console's
+       canonical callable transport (_call — not in _ADMIN_OS_OPS, so direct by name). */
+    window.SokoniAdminUpdates.mount(body, { console: "aos", call: (name, data) => _call(name, data) });
   }
 
   async function _loadHubs() {

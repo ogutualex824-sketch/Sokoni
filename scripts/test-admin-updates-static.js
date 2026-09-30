@@ -8,15 +8,21 @@
         the stylesheet and the module (loaded before the router), and route it
         (AdminOS loader + deep link; Super Admin SA.nav branch + #hash).
      B. The module has no second data path: no Firestore, no localStorage as a
-        source, no innerHTML, every fetch cache-busted.
-     C. Rendered through a minimal DOM shim with fixture version.json +
-        release-log.json: every install metric renders the NEUTRAL state
-        ("—" + "Not measured yet" + a reason) and never a number; the live facts
-        come from version.json; the log renders newest first; "Live now" appears
-        only for the entry that records a deployment of the live commit.
-     D. NEGATIVE CONTROLS: a fabricated "0" injected into a metric is caught by
-        the same predicate; a stale-proof claim (deployed, other commit) is not
-        promoted to "Live now".
+        source, no innerHTML; /version.json is the only fetch; the release log
+        and the install counts come ONLY from two admin callables
+        (adminReleaseLog, adminGetAppInstallStats) through the console's own
+        transport; no public release-log.json exists or is referenced (owner
+        decision A).
+     C. Rendered through a minimal DOM shim with a fixture version.json and
+        STUBBED callables: not-computed-yet / not deployed / refused -> every
+        metric "—" + "Not measured yet" + a reason; the log shows "not available
+        yet", never an empty list; a computed aggregate renders its figures with
+        "since" and "computed" (a canonical 0 is a 0; a null is "—"); paging
+        follows the server cursor; "Live now" only for the entry that records a
+        deployment of the live commit.
+     D. NEGATIVE CONTROLS: a fabricated "0" injected into an unmeasured metric
+        is caught by the same predicate; a stale-proof claim (deployed, other
+        commit) is not promoted to "Live now".
      E. CSS adds no palette: every hex is a var() fallback; phone 44px and
         reduced-motion rules exist.
 
@@ -53,7 +59,7 @@ const navBlock = aosHtml.slice(aosHtml.indexOf('<nav class="aos-nav" id="aosNav"
 ok('AdminOS: the item sits inside <nav id="aosNav"> (where aria-current is managed)', navBlock.includes('data-section="updates"'));
 ok('AdminOS: #panel-updates exists, hidden by default, with #updatesBody', /<div class="aos-panel" id="panel-updates" hidden>\s*<div id="updatesBody">/.test(aosHtml));
 ok('AdminOS: loader registered (updates: () => _loadUpdates())', /updates:\s*\(\) => _loadUpdates\(\)/.test(aosJs) && /function _loadUpdates\(\)/.test(aosJs));
-ok('AdminOS: loader mounts the SHARED module into #updatesBody', /SokoniAdminUpdates\.mount\(body, \{ console: "aos" \}\)/.test(aosJs));
+ok('AdminOS: loader mounts the SHARED module into #updatesBody', /SokoniAdminUpdates\.mount\(body, \{ console: "aos",/.test(aosJs));
 ok('AdminOS: deep link #updates is accepted by the router (its own route regex, a parent nav item with no data-tab)', (() => {
   const src = aosJs.slice(aosJs.indexOf('function _parseRoute(hash)'));
   const m = /const m = \/(.+?)\/\.exec\(/.exec(src);
@@ -69,24 +75,30 @@ ok('Super Admin sidebar: one Updates item in the nav contract (button, .nav-labe
 const saNav = saHtml.slice(saHtml.indexOf('id="saNav"'), saHtml.indexOf('</nav>', saHtml.indexOf('id="saNav"')));
 ok('Super Admin: the item sits inside <nav id="saNav">', saNav.includes('data-section="updates"'));
 ok('Super Admin: #panel-updates is a hidden .sa-panel with #saUpdatesBody', /<section class="sa-panel" id="panel-updates" hidden>\s*<div id="saUpdatesBody">/.test(saHtml));
-ok('Super Admin: SA.nav routes updates -> loadUpdates -> shared module', /else if\(section==='updates'\)this\.loadUpdates\(\);/.test(saHtml) && /SokoniAdminUpdates\.mount\(body,\{console:'sa'\}\)/.test(saHtml));
+ok('Super Admin: SA.nav routes updates -> loadUpdates -> shared module', /else if\(section==='updates'\)this\.loadUpdates\(\);/.test(saHtml) && /SokoniAdminUpdates\.mount\(body,\{console:'sa',/.test(saHtml));
 ok('Super Admin: #updates hash opens it, validated against a native sidebar button', /#saNav button\.nav-item\[data-section=/.test(saHtml) && /\/\^\[a-z\]\+\$\/\.test\(_h\)/.test(saHtml));
 ok('Super Admin: module script + stylesheet included once each', count(saHtml, 'src="sokoni-admin-updates.js"') === 1 && count(saHtml, 'href="sokoni-admin-updates.css"') === 1);
 ok('Super Admin: module loads before the inline SA script that calls it', saHtml.indexOf('src="sokoni-admin-updates.js"') < saHtml.indexOf('const SA={'));
 ok('Super Admin keeps every native panel it had', ['overview', 'users', 'applications', 'financial', 'config', 'emergency', 'audit', 'broadcast', 'secrets'].every((s) => saHtml.includes(`data-section="${s}"`) && saHtml.includes(`id="panel-${s}"`)));
 
 /* ── B. one data path ──────────────────────────────────────────────────── */
-console.log('\n[B — the module has no second data path]');
+console.log('\n[B — the module has no second data path; the log is admin-only]');
 const code = modJs.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-ok('no Firestore / Functions / firebase access', !/firestore|httpsCallable|firebase\./i.test(code));
+ok('no Firestore access', !/firestore/i.test(code));
+ok('the only firebase reference is the fallback callable transport (firebase.functions().httpsCallable)', (code.match(/firebase\./g) || []).length === 2 && /window\.firebase\.functions\(\)\.httpsCallable\(name\)/.test(code));
 ok('no localStorage / sessionStorage / indexedDB', !/localStorage|sessionStorage|indexedDB/.test(code));
 ok('no innerHTML / insertAdjacentHTML / document.write (textContent only)', !/innerHTML|insertAdjacentHTML|document\.write/.test(code));
 ok('every fetch goes through fetchJson (cache-busted, no-store)', count(code, 'fetch(') === 1 && /cb=' \+ Date\.now\(\)/.test(code) && /cache: 'no-store'/.test(code));
-ok('reads /version.json and /release-log.json only', /fetchJson\('\/version\.json'\)/.test(code) && /fetchJson\('\/release-log\.json'\)/.test(code) && (code.match(/fetchJson\('/g) || []).length === 2);
+ok('fetches /version.json ONLY — no /release-log.json anywhere in the module', /fetchJson\('\/version\.json'\)/.test(code) && (code.match(/fetchJson\('/g) || []).length === 1 && !/release-log\.json/.test(code));
+ok('reads the log and the counts through exactly two admin callables', /self\.call\('adminReleaseLog', q\)/.test(code) && /self\.call\('adminGetAppInstallStats', \{\}\)/.test(code) && (code.match(/self\.call\('/g) || []).length === 2);
+ok('decision A: NO release-log.json at the hosting root', !fs.existsSync(path.join(ROOT, 'release-log.json')));
+ok('decision A: nothing references a public /release-log.json (both consoles + module)', ![aosHtml, saHtml, aosJs, modJs].some((s) => /['"(]\/?release-log\.json/.test(s)));
+ok('AdminOS hands the module its canonical _call transport', /SokoniAdminUpdates\.mount\(body, \{ console: "aos", call: \(name, data\) => _call\(name, data\) \}\)/.test(aosJs));
+ok('Super Admin hands the module its own functions instance', /SokoniAdminUpdates\.mount\(body,\{console:'sa',call:\(name,data\)=>fns\.httpsCallable\(name\)\(data\|\|\{\}\)\.then\(r=>r&&r\.data\)\}\)/.test(saHtml));
 ok('module parses', (() => { try { new vm.Script(modJs); return true; } catch (e) { return false; } })());
 
 /* ── C. DOM shim render ────────────────────────────────────────────────── */
-console.log('\n[C — render through a DOM shim with fixtures]');
+console.log('\n[C — render through a DOM shim with stubbed callables]');
 function makeDom() {
   const byId = new Map();
   class Node {
@@ -120,68 +132,96 @@ const FIX_LOG = {
     { id: 'd', date: '2026-09-01', title: 'Plain entry', type: 'other', claim: null, commits: [], summary: '', files: [], filesMore: 0 },
   ],
 };
+const STATS_COMPUTED = { state: 'computed', computedAt: '2026-10-01T06:00:00.000Z', since: '2026-10-01T03:12:00.000Z', devices: 12, total: 0, standalone: 4, active7: 9, active30: 12, onLive: null, behind: null, liveCacheVersion: null, liveError: 'version.json HTTP 503' };
+const NOT_FOUND = { code: 'functions/not-found', message: 'NOT_FOUND' };
 
-async function renderWith({ version, log, versionStatus = 200 }) {
+/* A stub of the adminReleaseLog contract: server-side filter + opaque cursor. */
+function logServer(log) {
+  return (q) => {
+    const st = (e) => (q.liveCommit && e.claim === 'deployed' && e.commits.some((c) => q.liveCommit.indexOf(c) === 0) ? 'live' : e.claim === 'deployed' ? 'deployed' : e.claim === 'not-deployed' ? 'not-deployed' : 'committed');
+    const hits = log.entries.filter((e) => (q.type === 'all' || e.type === q.type) && (q.status === 'all' || st(e) === q.status) && (!q.q || e.title.toLowerCase().includes(q.q)));
+    const off = q.cursor ? parseInt(q.cursor.slice(2), 10) : 0;
+    const page = hits.slice(off, off + q.limit);
+    return { schema: 1, source: log.source, sourceSha256: log.sourceSha256, entryCount: log.entries.length, total: hits.length, entries: page, nextCursor: off + page.length < hits.length ? 'o:' + (off + page.length) : null };
+  };
+}
+
+async function renderWith({ version, log, stats, logErr, statsErr, versionStatus = 200 }) {
   const { document, Node } = makeDom();
   const fetched = [];
+  const calls = [];
   const win = {
     document,
     navigator: {},
     matchMedia: () => ({ matches: false }),
     fetch: async (url) => {
       fetched.push(url);
-      const body = /version\.json/.test(url) ? version : /release-log\.json/.test(url) ? log : null;
-      const status = /version\.json/.test(url) ? versionStatus : (body ? 200 : 404);
+      const body = /version\.json/.test(url) ? version : null;
+      const status = /version\.json/.test(url) ? versionStatus : 404;
       return { ok: status === 200 && !!body, status, json: async () => JSON.parse(JSON.stringify(body)) };
     },
-    WeakMap, Promise, Date, Math, JSON, String, Array, Object, parseInt, isNaN, setTimeout, clearTimeout,
+    WeakMap, Promise, Date, Math, JSON, String, Array, Object, Number, parseInt, isNaN, isFinite, setTimeout, clearTimeout,
   };
   win.window = win;
   vm.createContext(win);
   vm.runInContext(modJs, win);
   const host = new Node('div');
-  win.SokoniAdminUpdates.mount(host, { console: 'aos' });
-  for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
-  return { host, fetched, api: win.SokoniAdminUpdates };
+  const call = async (name, data) => {
+    calls.push({ name, data: JSON.parse(JSON.stringify(data)) });
+    await new Promise((r) => setImmediate(r));
+    if (name === 'adminReleaseLog') { if (logErr) throw logErr; return logServer(log)(data); }
+    if (name === 'adminGetAppInstallStats') { if (statsErr) throw statsErr; return stats; }
+    throw { code: 'functions/not-found' };
+  };
+  win.SokoniAdminUpdates.mount(host, { console: 'aos', call });
+  const tick = async () => { for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r)); };
+  await tick();
+  return { host, fetched, calls, api: win.SokoniAdminUpdates, tick };
 }
 
 const cls = (n, c) => (' ' + (n.className || '') + ' ').includes(' ' + c + ' ');
-/* The predicate the browser cert uses too: an install metric value must be the
-   neutral dash, and no install-metric text may carry a digit. */
+const metricsOf = (host) => host.all((n) => n.attrs && n.attrs['data-metric']).map((m) => ({
+  key: m.attrs['data-metric'],
+  measured: m.attrs['data-measured'],
+  value: (m.all((n) => cls(n, 'sk-upd-metric-value'))[0] || { textContent: null }).textContent.trim(),
+  state: (m.all((n) => cls(n, 'sk-upd-metric-state'))[0] || { textContent: null }).textContent,
+  why: (m.all((n) => cls(n, 'sk-upd-metric-why'))[0] || { textContent: '' }).textContent,
+}));
+/* The predicate the browser cert uses too: an UNMEASURED metric must be the
+   neutral dash, carry no digit, say "Not measured yet" and give a reason. */
 function metricViolations(host) {
-  const metrics = host.all((n) => n.attrs && n.attrs['data-metric']);
+  const ms = metricsOf(host);
   const bad = [];
-  metrics.forEach((m) => {
-    const val = m.all((n) => cls(n, 'sk-upd-metric-value'))[0];
-    const state = m.all((n) => cls(n, 'sk-upd-metric-state'))[0];
-    const why = m.all((n) => cls(n, 'sk-upd-metric-why'))[0];
-    const v = val ? val.textContent.trim() : null;
-    if (v !== '—') bad.push({ metric: m.attrs['data-metric'], value: v });
-    if (/\d/.test(v || '')) bad.push({ metric: m.attrs['data-metric'], digit: v });
-    if (!state || state.textContent !== 'Not measured yet') bad.push({ metric: m.attrs['data-metric'], state: state && state.textContent });
-    if (!why || why.textContent.length < 20) bad.push({ metric: m.attrs['data-metric'], reason: 'missing' });
+  ms.filter((m) => m.measured !== 'true').forEach((m) => {
+    if (m.value !== '—') bad.push({ metric: m.key, value: m.value });
+    if (/\d/.test(m.value || '')) bad.push({ metric: m.key, digit: m.value });
+    if (m.state !== 'Not measured yet') bad.push({ metric: m.key, state: m.state });
+    if (!m.why || m.why.length < 20) bad.push({ metric: m.key, reason: 'missing' });
   });
-  return { count: metrics.length, bad };
+  return { count: ms.length, unmeasured: ms.filter((m) => m.measured !== 'true').length, bad };
 }
+const entriesOf = (host) => host.all((n) => n.attrs && n.attrs['data-status'] && n.tagName === 'LI');
 
 (async () => {
-  const r = await renderWith({ version: FIX_VERSION, log: FIX_LOG });
+  /* C1 — functions deployed, aggregate not computed yet */
+  const r = await renderWith({ version: FIX_VERSION, log: FIX_LOG, stats: { state: 'not-computed-yet' } });
   const text = r.host.textContent;
   const mv = metricViolations(r.host);
-  ok(`every install metric (${mv.count}) renders "—" + "Not measured yet" + a reason, never a number`, mv.count >= 3 && mv.bad.length === 0, mv.bad);
-  ok('every metric declares source:null (no canonical source exists)', r.api.INSTALL_METRICS.every((m) => m.source === null));
-  ok('the section says plainly it is not measured, and why', /Not measured yet\. SOKONI does not record installs/.test(text));
-  ok('fetches are cache-busted', r.fetched.length === 2 && r.fetched.every((u) => /\?cb=\d+$/.test(u)), r.fetched);
+  ok(`not-computed-yet: every install metric (${mv.count}) renders "—" + "Not measured yet" + a reason, never a number`, mv.count >= 7 && mv.unmeasured === mv.count && mv.bad.length === 0, mv.bad);
+  ok('not-computed-yet: the reason says the first count has not run', metricsOf(r.host).filter((m) => m.key !== 'androidApp').every((m) => /first count has not run yet/.test(m.why)));
+  ok('the section notice says "Not measured yet" and why', /Not measured yet\. The install counter is live, but its first count has not run yet/.test(text));
+  ok('the only fetch is /version.json, cache-busted', r.fetched.length === 1 && /^\/version\.json\?cb=\d+$/.test(r.fetched[0]), r.fetched);
+  const logCall = r.calls.find((c) => c.name === 'adminReleaseLog');
+  ok('adminReleaseLog asked for one page of 40 with the LIVE commit for status proof', logCall && logCall.data.limit === 40 && logCall.data.liveCommit === FIX_VERSION.commit && !logCall.data.cursor, logCall);
   const fact = (k) => { const n = r.host.all((x) => x.attrs && x.attrs['data-fact'] === k)[0]; return n ? n.textContent : null; };
   ok('Live now: commit from version.json', /abc1234/.test(fact('commit') || ''), fact('commit'));
   ok('Live now: branch from version.json', /hosting\/fixture/.test(fact('branch') || ''));
   ok('Live now: cache version from version.json', /v649/.test(fact('cacheVersion') || ''));
   ok('Live now: build time rendered (EAT)', /EAT/.test(fact('buildTime') || ''), fact('buildTime'));
   ok('This browser: no controller -> neutral "cannot be read", not "up to date"', /cannot be read/.test(fact('verdict') || '') && !/Up to date/.test(fact('verdict') || ''), fact('verdict'));
-  const entries = r.host.all((n) => n.attrs && n.attrs['data-status'] && n.tagName === 'LI');
-  const dates = entries.map((e) => e.attrs['data-date']);
+  const dates = entriesOf(r.host).map((e) => e.attrs['data-date']);
   ok('release log renders newest first', JSON.stringify(dates) === JSON.stringify(['2026-10-01', '2026-09-30', '2026-09-29', '2026-09-01']), dates);
-  const st = Object.fromEntries(entries.map((e) => [e.attrs['data-date'], e.attrs['data-status']]));
+  const st = Object.fromEntries(entriesOf(r.host).map((e) => [e.attrs['data-date'], e.attrs['data-status']]));
   ok('"Live now" ONLY for the entry that deployed the live commit', st['2026-09-30'] === 'live' && Object.values(st).filter((s) => s === 'live').length === 1, st);
   ok('NEGATIVE: an older DEPLOYED claim is the changelog’s claim, not "live"', st['2026-09-29'] === 'deployed', st);
   ok('an entry with no claim is "Committed"', st['2026-09-01'] === 'committed' && st['2026-10-01'] === 'not-deployed', st);
@@ -190,16 +230,46 @@ function metricViolations(host) {
   const firstVal = r.host.all((n) => cls(n, 'sk-upd-metric-value'))[0];
   firstVal.textContent = '0';
   const mv2 = metricViolations(r.host);
-  ok('NEGATIVE: an injected "0" in an install metric is caught', mv2.bad.some((b) => b.value === '0'), mv2.bad);
+  ok('NEGATIVE: an injected "0" in an unmeasured install metric is caught', mv2.bad.some((b) => b.value === '0'), mv2.bad);
 
-  /* version.json unreadable -> neutral, and nothing is promoted to live */
-  const r2 = await renderWith({ version: FIX_VERSION, log: FIX_LOG, versionStatus: 503 });
+  /* C2 — functions NOT deployed: both callables not-found */
+  const r2 = await renderWith({ version: FIX_VERSION, logErr: NOT_FOUND, statsErr: NOT_FOUND });
   const t2 = r2.host.textContent;
-  ok('version.json unreadable -> explicit error, facts render "—"', /Could not read \/version\.json \(HTTP 503\)/.test(t2));
-  const st2 = r2.host.all((n) => n.attrs && n.attrs['data-status'] && n.tagName === 'LI').map((e) => e.attrs['data-status']);
-  ok('version.json unreadable -> no entry is claimed "Live now"', !st2.includes('live'), st2);
-  const r3 = await renderWith({ version: FIX_VERSION, log: null });
-  ok('release-log.json missing -> explicit error, no entries invented', /Could not read \/release-log\.json/.test(r3.host.textContent) && r3.host.all((n) => n.attrs && n.attrs['data-status'] && n.tagName === 'LI').length === 0);
+  ok('log callable not deployed -> "Release log is served to admins by the server — not available yet"', /Release log is served to admins by the server — not available yet \(functions\/not-found\)/.test(t2));
+  ok('log callable not deployed -> NO entries and no "no entries" line (never an empty list as if there were no releases)', entriesOf(r2.host).length === 0 && !/No entries match|has no entries/.test(t2));
+  const mv3 = metricViolations(r2.host);
+  ok('stats callable not deployed -> every metric neutral with the "not available" reason', mv3.bad.length === 0 && metricsOf(r2.host).filter((m) => m.key !== 'androidApp').every((m) => /not available on the server yet/.test(m.why)), mv3.bad);
+  const r2b = await renderWith({ version: FIX_VERSION, logErr: { code: 'functions/permission-denied' }, statsErr: { code: 'functions/permission-denied' } });
+  ok('a refusal (permission-denied) is reported as a refusal, not as "not available yet", and lists nothing', /did not return the release log \(functions\/permission-denied\)/.test(r2b.host.textContent) && entriesOf(r2b.host).length === 0 && metricViolations(r2b.host).bad.length === 0);
+
+  /* C3 — computed aggregate */
+  const r3 = await renderWith({ version: FIX_VERSION, log: FIX_LOG, stats: STATS_COMPUTED });
+  const m3 = Object.fromEntries(metricsOf(r3.host).map((m) => [m.key, m]));
+  ok('computed: figures render from the aggregate (devices 12, active7 9, standalone 4)', m3.devices.value === '12' && m3.active7.value === '9' && m3.standalone.value === '4' && m3.devices.measured === 'true' && m3.devices.state === 'Measured');
+  ok('computed: a canonical 0 from the server renders as 0 (measured), not as unknown', m3.installs.value === '0' && m3.installs.measured === 'true');
+  ok('computed: each figure carries "Since <date>" and "Computed <stamp>"', ['devices', 'installs', 'active30'].every((k) => /Since 01 Oct 2026/.test(m3[k].why) && /Computed 01 Oct 2026/.test(m3[k].why)), m3.devices.why);
+  ok('computed: onLive/behind null -> "—" + Not measured yet + the liveError reason (never 0)', ['onLatest', 'behind'].every((k) => m3[k].value === '—' && m3[k].state === 'Not measured yet' && /version\.json HTTP 503/.test(m3[k].why)));
+  ok('computed: Play Store downloads stay unmeasured (no canonical source)', m3.androidApp.value === '—' && m3.androidApp.measured === 'false');
+  ok('computed: the unmeasured metrics still pass the neutral predicate', metricViolations(r3.host).bad.length === 0);
+  ok('computed: the notice states the counting start and that nothing earlier is estimated', /Counting since 01 Oct 2026.*nothing before it is counted or estimated/.test(r3.host.textContent));
+
+  /* C4 — paging through the cursor */
+  const big = { schema: 1, source: 'CHANGELOG.md', sourceSha256: 'e'.repeat(64), entryCount: 45, entries: [] };
+  for (let i = 0; i < 45; i++) big.entries.push({ id: 'p' + i, date: '2026-09-' + String(30 - Math.floor(i / 2)).padStart(2, '0'), title: 'entry ' + i, type: 'feat', claim: null, commits: [], summary: '', files: [], filesMore: 0 });
+  const r4 = await renderWith({ version: FIX_VERSION, log: big, stats: { state: 'not-computed-yet' } });
+  const more = r4.host.all((n) => n.attrs && n.attrs['data-upd'] === 'more')[0];
+  ok('page 1: 40 entries, "Show 5 more (5 remaining)"', entriesOf(r4.host).length === 40 && more && !more.hidden && more.textContent === 'Show 5 more (5 remaining)', more && more.textContent);
+  more.listeners.click[0].call(more);
+  await r4.tick();
+  const logCalls = r4.calls.filter((c) => c.name === 'adminReleaseLog');
+  ok('Show more sends the server cursor and appends', logCalls.length === 2 && logCalls[1].data.cursor === 'o:40' && entriesOf(r4.host).length === 45 && more.hidden, logCalls.map((c) => c.data.cursor));
+
+  /* C5 — version.json unreadable -> neutral, nothing promoted to live */
+  const r5 = await renderWith({ version: FIX_VERSION, log: FIX_LOG, stats: { state: 'not-computed-yet' }, versionStatus: 503 });
+  const t5 = r5.host.textContent;
+  ok('version.json unreadable -> explicit error, facts render "—"', /Could not read \/version\.json \(HTTP 503\)/.test(t5));
+  const st5 = entriesOf(r5.host).map((e) => e.attrs['data-status']);
+  ok('version.json unreadable -> no entry is claimed "Live now", and no liveCommit is sent', !st5.includes('live') && r5.calls.every((c) => !c.data.liveCommit), st5);
 
   /* ── E. CSS ──────────────────────────────────────────────────────────── */
   console.log('\n[E — styles reuse the host tokens]');

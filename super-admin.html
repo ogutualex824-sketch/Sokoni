@@ -1203,7 +1203,9 @@ const SA={
       body.innerHTML='<p style="color:var(--muted);font-size:13px">The Updates module did not load. Reload the page to try again.</p>';
       return;
     }
-    window.SokoniAdminUpdates.mount(body,{console:'sa'});
+    /* Release log + install counts come from admin callables, through this console's own functions instance. */
+    const fns=this._fns||firebase.functions();
+    window.SokoniAdminUpdates.mount(body,{console:'sa',call:(name,data)=>fns.httpsCallable(name)(data||{}).then(r=>r&&r.data)});
   },
 
   // Sign Out ────────────────────────────────────────────────

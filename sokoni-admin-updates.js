@@ -2,24 +2,30 @@
    SOKONI — Updates centre (AdminOS + Super Admin, ONE implementation)
    sokoni-admin-updates.js   ·   styles: sokoni-admin-updates.css
 
-   Mounted by BOTH consoles into their own panel:
+   Mounted by BOTH consoles into their own panel, each handing in its OWN
+   canonical callable transport (opts.call):
      admin-os.html     #panel-updates  via SokoniAOS.navigate('updates')  (deep link #updates)
+                       call = sokoni-aos.js _call()
      super-admin.html  #panel-updates  via SA.nav('updates')
+                       call = SA._fns.httpsCallable(name)(data)
 
    THREE SECTIONS, each from a canonical source or shown as not measured:
      1. Live now          /version.json (fetched fresh) + this browser's own
                           service worker (GET_VERSION on the controller).
-     2. Installs & updates  NO canonical source exists today (census:
-                          docs/ADMIN_UPDATES_CENTER_CENSUS.md). Every metric
-                          renders the neutral state and the reason. It never
-                          renders 0 and never an estimate — unknown is not zero.
-     3. Release log       /release-log.json, generated from CHANGELOG.md by
-                          scripts/build-release-log.js (hosting does not serve
-                          .md). An entry is "Committed" unless /version.json
-                          proves it is the live build.
+     2. Installs & updates  the server aggregate, read through the admin callable
+                          adminGetAppInstallStats (functions/app-release-metrics.js).
+                          'not-computed-yet', an undeployed callable, or a null
+                          figure renders "—" + "Not measured yet" + the reason.
+                          Never 0 for unknown; never an estimate; nothing before
+                          the counter's "since" date is back-filled.
+     3. Release log       ADMIN-ONLY (owner decision A): paged from the admin
+                          callable adminReleaseLog, which serves the log bundled
+                          in the functions source. There is NO public
+                          /release-log.json. While the callable is not deployed
+                          the section says so — never an empty list.
 
    No Firestore reads, no writes, no localStorage as a source. Everything is
-   rendered with textContent — nothing from a fetched file reaches innerHTML.
+   rendered with textContent — nothing from the server reaches innerHTML.
    ========================================================================= */
 (function () {
   'use strict';
@@ -27,26 +33,39 @@
 
   var PAGE = 40;
   var NEUTRAL = '—';
+  var NOT_MEASURED = 'Not measured yet';
+  var LOG_UNAVAILABLE = 'Release log is served to admins by the server — not available yet';
 
   /* ── Install / update metrics ──────────────────────────────────────────────
-     source: null means NO canonical source exists. The renderer shows NEUTRAL
-     and "Not measured yet" for every such metric. When a server slice lands
-     (appInstalls + version heartbeat, aggregated server-side — see the census),
-     a metric gains a `source` and only then may render a figure. */
+     field: the adminGetAppInstallStats field that carries the figure. A metric
+     with field:null has NO canonical source and always renders the neutral
+     state with its reason. */
   var INSTALL_METRICS = [
-    { key: 'installs', label: 'App installs (downloads)', source: null,
-      reason: 'Nothing records an install. The browser’s appinstalled event is handled only to hide the install banner (sw-register.js, index.html); no server record is written.' },
-    { key: 'onLatest', label: 'Devices on the live build', source: null,
-      reason: 'No device reports the build it runs to a store an admin can read. SW telemetry goes to /api/diag → routeDiagnostics: anomaly beacons from an unauthenticated endpoint, not one row per device, 30-day TTL, and no admin read rule.' },
-    { key: 'behind', label: 'Devices still on an older build', source: null,
-      reason: 'Same gap: without a per-device build heartbeat there is nothing to compare against the live cacheVersion.' },
-    { key: 'androidApp', label: 'Android app (Play Store) downloads', source: null,
+    { key: 'installs', field: 'total', label: 'App installs',
+      def: 'Devices that reported the browser’s “app installed” event.' },
+    { key: 'standalone', field: 'standalone', label: 'Opened as the installed app',
+      def: 'Devices whose latest report came from the installed app — includes iPhones, which never fire an install event.' },
+    { key: 'active7', field: 'active7', label: 'Active devices · 7 days',
+      def: 'Devices that reported in during the last 7 days.' },
+    { key: 'active30', field: 'active30', label: 'Active devices · 30 days',
+      def: 'Devices that reported in during the last 30 days.' },
+    { key: 'onLatest', field: 'onLive', label: 'Devices on the live build',
+      def: 'Devices whose latest report was the build production serves now.' },
+    { key: 'behind', field: 'behind', label: 'Devices on an older build',
+      def: 'Devices whose latest report was any other build — includes devices not seen recently.' },
+    { key: 'devices', field: 'devices', label: 'Devices reporting',
+      def: 'Every device that has reported at least once (browser tab or installed app).' },
+    { key: 'androidApp', field: null, label: 'Android app (Play Store) downloads',
       reason: 'Play Console statistics are not exported to SOKONI, and whether the TWA package is published is not recorded in this repository.' },
-    { key: 'signedInDevices', label: 'Signed-in devices', source: null,
-      reason: 'userDevices is server-written on sign-in (deviceRegister) but records no install or build, has no admin read rule, and no count callable exists.' },
   ];
 
   var TYPE_LABEL = { fix: 'Fix', feat: 'Feature', deploy: 'Deploy record', docs: 'Docs', test: 'Test', other: 'Change' };
+
+  /* A callable that is not deployed surfaces as not-found / unavailable — or as
+     'internal' when the 404 carries no CORS headers. All three mean "the server
+     side of this is not there yet", which is rendered as exactly that. */
+  var NOT_DEPLOYED = /^(functions\/)?(not-found|unavailable|internal)$/;
+  function errCode(e) { return String((e && e.code) || (e && e.message) || 'unknown'); }
 
   /* ── tiny DOM helper: textContent only ─────────────────────────────────── */
   function h(tag, attrs, kids) {
@@ -85,6 +104,15 @@
     return r.json();
   }
 
+  /* Fallback transport when a console hands none in: the compat SDK both
+     consoles already load. Returns the callable's data. */
+  function defaultCall(name, data) {
+    if (!window.firebase || typeof window.firebase.functions !== 'function') {
+      return Promise.reject({ code: 'functions/unavailable', message: 'Firebase Functions is not loaded on this page' });
+    }
+    return window.firebase.functions().httpsCallable(name)(data || {}).then(function (r) { return r && r.data; });
+  }
+
   /* The cache version THIS browser's controlling worker runs — asked, not guessed. */
   function runningVersion() {
     return new Promise(function (resolve) {
@@ -107,11 +135,13 @@
   function Centre(host, opts) {
     this.host = host;
     this.console = (opts && opts.console) || 'aos';
+    this.call = (opts && typeof opts.call === 'function') ? opts.call : defaultCall;
     this.live = null;       /* version.json or null */
     this.liveError = null;
-    this.log = null;
-    this.logError = null;
-    this.shown = PAGE;
+    this.stats = { state: 'loading' };
+    this.log = { state: 'loading', entries: [], total: 0, entryCount: 0, next: null, source: null, sha: null, code: null };
+    this.logSeq = 0;
+    this.searchTimer = null;
     this.filter = { q: '', type: 'all', status: 'all' };
     this.render();
     this.refresh();
@@ -132,32 +162,26 @@
     };
 
     this.liveBody = h('div', { class: 'sk-upd-facts', 'data-upd': 'live' }, [h('p', { class: 'sk-upd-muted', text: 'Reading /version.json…' })]);
+    this.instMeta = h('p', { class: 'sk-upd-notice', 'data-upd': 'installs-notice' });
     this.instBody = h('div', { class: 'sk-upd-metrics', 'data-upd': 'installs' });
-    this.logMeta = h('p', { class: 'sk-upd-muted', 'data-upd': 'log-meta', text: 'Reading /release-log.json…' });
+    this.logMeta = h('p', { class: 'sk-upd-muted', 'data-upd': 'log-meta', text: 'Asking the server for the release log…' });
     this.logList = h('ol', { class: 'sk-upd-timeline', 'data-upd': 'log', 'aria-label': 'Release log, newest first' });
-    this.moreBtn = h('button', { type: 'button', class: 'sk-upd-btn', hidden: true, 'data-upd': 'more', onclick: function () { self.shown += PAGE; self.renderLog(); } });
+    this.moreBtn = h('button', { type: 'button', class: 'sk-upd-btn', hidden: true, 'data-upd': 'more', onclick: function () { self.loadLog(false); } });
 
-    var search = h('input', { type: 'search', id: uid + 'Q', class: 'sk-upd-input', placeholder: 'Search titles, files, commits…', autocomplete: 'off',
-      oninput: function () { self.filter.q = this.value.trim().toLowerCase(); self.shown = PAGE; self.renderLog(); } });
-    var typeSel = h('select', { id: uid + 'T', class: 'sk-upd-input', onchange: function () { self.filter.type = this.value; self.shown = PAGE; self.renderLog(); } },
+    var search = h('input', { type: 'search', id: uid + 'Q', class: 'sk-upd-input', placeholder: 'Search titles, files, commits…', autocomplete: 'off', maxlength: '100',
+      oninput: function () {
+        var v = this.value.trim().toLowerCase();
+        clearTimeout(self.searchTimer);
+        self.searchTimer = setTimeout(function () { self.filter.q = v; self.loadLog(true); }, 300);
+      } });
+    var typeSel = h('select', { id: uid + 'T', class: 'sk-upd-input', onchange: function () { self.filter.type = this.value; self.loadLog(true); } },
       [['all', 'All types'], ['fix', 'Fixes'], ['feat', 'Features'], ['deploy', 'Deploy records'], ['docs', 'Docs'], ['test', 'Tests'], ['other', 'Other changes']]
         .map(function (o) { return h('option', { value: o[0], text: o[1] }); }));
-    var statSel = h('select', { id: uid + 'S', class: 'sk-upd-input', onchange: function () { self.filter.status = this.value; self.shown = PAGE; self.renderLog(); } },
+    var statSel = h('select', { id: uid + 'S', class: 'sk-upd-input', onchange: function () { self.filter.status = this.value; self.loadLog(true); } },
       [['all', 'Any status'], ['live', 'Proven live now'], ['deployed', 'Changelog says deployed'], ['not-deployed', 'Changelog says not deployed'], ['committed', 'Committed (no claim)']]
         .map(function (o) { return h('option', { value: o[0], text: o[1] }); }));
 
-    INSTALL_METRICS.forEach(function (m) {
-      /* Neutral state ONLY. Every metric here has source:null today, and a metric
-         without a canonical source never renders a figure — not 0, not an estimate.
-         Wiring a real source is a server slice, not an edit to this line. */
-      var value = NEUTRAL;
-      self.instBody.appendChild(h('article', { class: 'sk-upd-metric', 'data-metric': m.key, 'data-measured': 'false' }, [
-        h('h4', { class: 'sk-upd-metric-label', text: m.label }),
-        h('p', { class: 'sk-upd-metric-value', 'aria-label': m.label + ': not measured yet', text: value }),
-        h('p', { class: 'sk-upd-metric-state', text: 'Not measured yet' }),
-        h('p', { class: 'sk-upd-metric-why', text: m.reason }),
-      ]));
-    });
+    this.renderInstalls();
 
     var section = function (id, title, lede, body) {
       return h('section', { class: 'sk-upd-section', id: id, 'aria-labelledby': id + 'H' }, [
@@ -182,16 +206,13 @@
       ]),
       this.status,
       section(this.ids.live, 'Live now', 'The build production is serving, read fresh from /version.json, and the build this browser is running.', [this.liveBody]),
-      section(this.ids.inst, 'Installs & updates', 'How many people have installed SOKONI and how many have updated to the live build.', [
-        h('p', { class: 'sk-upd-notice', 'data-upd': 'installs-notice' }, [
-          h('strong', { text: 'Not measured yet. ' }),
-          'SOKONI does not record installs or the build each device runs, so there is no honest count to show. The server slice that would measure it is designed in the census (appInstalls + a build heartbeat, counted server-side).',
-        ]),
+      section(this.ids.inst, 'Installs & updates', 'How many devices have installed SOKONI and how many run the live build — counted on the server from devices that report in.', [
+        this.instMeta,
         this.instBody,
       ]),
-      section(this.ids.log, 'Release log', 'Fixes and features in order, newest first — generated from CHANGELOG.md of the deployed tree.', [
+      section(this.ids.log, 'Release log', 'Fixes and features in order, newest first — served to admins only, generated from the CHANGELOG.md of the tree the server was deployed from.', [
         h('p', { class: 'sk-upd-notice' }, [
-          'Every entry is at least ', h('strong', { text: 'Committed' }), ' — written up in this tree’s changelog. ',
+          'Every entry is at least ', h('strong', { text: 'Committed' }), ' — written up in the changelog. ',
           h('strong', { text: 'Live now' }), ' is shown only where /version.json proves it: the entry records a deployment of the exact commit production reports. A changelog heading that says “deployed” is shown as the changelog’s claim, not as proof.',
         ]),
         h('div', { class: 'sk-upd-filters', role: 'search' }, [
@@ -210,20 +231,89 @@
   Centre.prototype.refresh = async function (announce) {
     var self = this;
     if (announce) this.status.textContent = 'Refreshing…';
-    var results = await Promise.all([
+    /* version.json first: the log's "Live now" filter needs the live commit. */
+    await Promise.all([
       fetchJson('/version.json').then(function (v) { self.live = v; self.liveError = null; }, function (e) { self.live = null; self.liveError = e.message || 'unreadable'; }),
-      this.log ? Promise.resolve() : fetchJson('/release-log.json').then(function (l) {
-        if (!l || !Array.isArray(l.entries)) throw new Error('unexpected shape');
-        self.log = l; self.logError = null;
-      }, function (e) { self.logError = e.message || 'unreadable'; }),
       runningVersion().then(function (r) { self.running = r; }),
     ]);
-    void results;
     this.renderLive();
-    this.renderLog();
+    await Promise.all([this.loadStats(), this.loadLog(true)]);
     if (announce) this.status.textContent = 'Updates refreshed.';
   };
 
+  /* ── installs ──────────────────────────────────────────────────────────── */
+  Centre.prototype.loadStats = function () {
+    var self = this;
+    return Promise.resolve().then(function () { return self.call('adminGetAppInstallStats', {}); }).then(function (d) {
+      if (d && d.state === 'computed') self.stats = d;
+      else if (d && d.state === 'not-computed-yet') self.stats = { state: 'not-computed-yet' };
+      else self.stats = { state: 'error', code: 'unexpected response' };
+    }, function (e) {
+      var code = errCode(e);
+      self.stats = { state: NOT_DEPLOYED.test(code) ? 'unavailable' : 'error', code: code };
+    }).then(function () { self.renderInstalls(); });
+  };
+
+  Centre.prototype.renderInstalls = function () {
+    var self = this, s = this.stats || { state: 'loading' };
+    var since = s.state === 'computed' ? fmtStamp(s.since) : null;
+    var computed = s.state === 'computed' ? fmtStamp(s.computedAt) : null;
+
+    /* Section notice — what state the counter is in, in words. */
+    var m = this.instMeta;
+    m.textContent = '';
+    m.className = 'sk-upd-notice';
+    if (s.state === 'loading') {
+      m.appendChild(document.createTextNode('Asking the server for the install counter…'));
+    } else if (s.state === 'computed') {
+      m.appendChild(h('strong', { text: 'Measured on the server. ' }));
+      m.appendChild(document.createTextNode(
+        (since ? 'Counting since ' + since.abs + ' — the first report received; nothing before it is counted or estimated. ' : 'No device has reported yet. ')
+        + (computed ? 'Last computed ' + computed.abs + (computed.rel ? ' (' + computed.rel + ')' : '') + '; recomputed every 6 hours. ' : '')
+        + 'Only devices whose owner accepted analytics consent report in.'));
+    } else {
+      m.className = 'sk-upd-notice sk-upd-warn';
+      m.appendChild(h('strong', { text: NOT_MEASURED + '. ' }));
+      m.appendChild(document.createTextNode(this.stateReason(s)));
+    }
+
+    this.instBody.textContent = '';
+    INSTALL_METRICS.forEach(function (mt) {
+      var v = (s.state === 'computed' && mt.field) ? s[mt.field] : null;
+      var measured = typeof v === 'number' && isFinite(v);
+      var reason;
+      if (measured) {
+        reason = mt.def + (since ? ' Since ' + since.abs + '.' : '') + (computed ? ' Computed ' + computed.abs + '.' : '');
+      } else if (!mt.field) {
+        reason = mt.reason;
+      } else if (s.state === 'computed') {
+        reason = (mt.field === 'onLive' || mt.field === 'behind')
+          ? 'The live build could not be read when the count ran' + (s.liveError ? ' (' + s.liveError + ')' : '') + ', so there was nothing to compare against.'
+          : 'This figure is not in the latest aggregate.';
+      } else {
+        reason = self.stateReason(s);
+      }
+      /* A figure is rendered ONLY when the canonical aggregate carries a number
+         for it. Everything else is the neutral dash — not 0, not an estimate. */
+      var value = measured ? Number(v).toLocaleString('en-KE') : NEUTRAL;
+      var state = measured ? 'Measured' : s.state === 'loading' && mt.field ? 'Checking…' : NOT_MEASURED;
+      self.instBody.appendChild(h('article', { class: 'sk-upd-metric', 'data-metric': mt.key, 'data-measured': measured ? 'true' : 'false' }, [
+        h('h4', { class: 'sk-upd-metric-label', text: mt.label }),
+        h('p', { class: 'sk-upd-metric-value', 'aria-label': mt.label + ': ' + (measured ? value : 'not measured yet'), text: value }),
+        h('p', { class: 'sk-upd-metric-state' + (measured ? ' sk-upd-metric-state-ok' : ''), text: state }),
+        h('p', { class: 'sk-upd-metric-why', text: reason }),
+      ]));
+    });
+  };
+
+  Centre.prototype.stateReason = function (s) {
+    if (s.state === 'loading') return 'Asking the server…';
+    if (s.state === 'not-computed-yet') return 'The install counter is live, but its first count has not run yet (it runs every 6 hours).';
+    if (s.state === 'unavailable') return 'The install counter (adminGetAppInstallStats) is not available on the server yet (' + s.code + '). Installs before it ships are never back-filled.';
+    return 'The server did not return the install counter (' + (s.code || 'unknown') + ').';
+  };
+
+  /* ── live ──────────────────────────────────────────────────────────────── */
   Centre.prototype.renderLive = function () {
     var b = this.liveBody;
     b.textContent = '';
@@ -274,10 +364,12 @@
 
   Centre.prototype.liveCommit = function () {
     var v = this.live;
-    return v && (v.commit || v.commitShort) ? String(v.commit || v.commitShort).toLowerCase() : null;
+    var c = v && (v.commit || v.commitShort) ? String(v.commit || v.commitShort).toLowerCase() : null;
+    return c && /^[0-9a-f]{7,40}$/.test(c) ? c : null;
   };
 
-  /* PROVEN live: the entry records a deployment AND names the commit production reports. */
+  /* PROVEN live: the entry records a deployment AND names the commit production
+     reports. Same rule as the server's statusOf (functions/app-release-metrics.js). */
   Centre.prototype.statusOf = function (e) {
     var live = this.liveCommit();
     if (live && e.claim === 'deployed' && Array.isArray(e.commits) && e.commits.some(function (c) {
@@ -295,35 +387,54 @@
     committed: 'Committed',
   };
 
-  Centre.prototype.matches = function (e) {
-    var f = this.filter;
-    if (f.type !== 'all' && e.type !== f.type) return false;
-    if (f.status !== 'all' && this.statusOf(e) !== f.status) return false;
-    if (f.q) {
-      var hay = (e.title + ' ' + (e.summary || '') + ' ' + (e.files || []).join(' ') + ' ' + (e.commits || []).join(' ') + ' ' + (e.date || '')).toLowerCase();
-      if (hay.indexOf(f.q) < 0) return false;
-    }
-    return true;
+  /* ── release log (server-paged) ────────────────────────────────────────── */
+  Centre.prototype.loadLog = function (reset) {
+    var self = this, L = this.log;
+    var seq = ++this.logSeq;   /* a newer request wins; late answers are dropped */
+    var q = { limit: PAGE, type: this.filter.type, status: this.filter.status, q: this.filter.q };
+    var lc = this.liveCommit();
+    if (lc) q.liveCommit = lc;
+    if (!reset && L.next) q.cursor = L.next;
+    if (reset) { L.state = L.state === 'ok' ? 'ok' : 'loading'; }
+    this.moreBtn.disabled = true;
+    return Promise.resolve().then(function () { return self.call('adminReleaseLog', q); }).then(function (d) {
+      if (seq !== self.logSeq) return;
+      if (!d || !Array.isArray(d.entries)) throw { code: 'unexpected response' };
+      L.entries = reset ? d.entries.slice() : L.entries.concat(d.entries);
+      L.total = typeof d.total === 'number' ? d.total : L.entries.length;
+      L.entryCount = typeof d.entryCount === 'number' ? d.entryCount : L.total;
+      L.next = d.nextCursor || null;
+      L.source = d.source || 'CHANGELOG.md';
+      L.sha = d.sourceSha256 || null;
+      L.state = 'ok'; L.code = null;
+    }).catch(function (e) {
+      if (seq !== self.logSeq) return;
+      var code = errCode(e);
+      L.state = NOT_DEPLOYED.test(code) ? 'unavailable' : 'error';
+      L.code = code;
+      L.entries = []; L.next = null;
+    }).then(function () { if (seq === self.logSeq) self.renderLog(); });
   };
 
   Centre.prototype.renderLog = function () {
-    var self = this, list = this.logList;
+    var self = this, list = this.logList, L = this.log;
     list.textContent = '';
-    if (!this.log) {
-      this.logMeta.textContent = this.logError
-        ? 'Could not read /release-log.json (' + this.logError + '). No entries are shown in its place.'
-        : 'Reading /release-log.json…';
+    this.moreBtn.disabled = false;
+    if (L.state !== 'ok') {
+      this.logMeta.textContent = L.state === 'unavailable'
+        ? LOG_UNAVAILABLE + ' (' + L.code + '). No entries are shown in its place.'
+        : L.state === 'error'
+          ? 'The server did not return the release log (' + L.code + '). No entries are shown in its place.'
+          : 'Asking the server for the release log…';
       this.moreBtn.hidden = true;
       return;
     }
-    var all = this.log.entries;
-    var hits = all.filter(function (e) { return self.matches(e); });
-    var page = hits.slice(0, this.shown);
-    this.logMeta.textContent = 'Showing ' + page.length + ' of ' + hits.length + (hits.length !== all.length ? ' matching (' + all.length + ' in the log)' : ' entries')
-      + ' · source ' + (this.log.source || 'CHANGELOG.md') + (this.log.sourceSha256 ? ' @ sha256 ' + String(this.log.sourceSha256).slice(0, 12) : '');
-    if (!hits.length) list.appendChild(h('li', { class: 'sk-upd-empty', text: 'No entries match these filters.' }));
+    var filtered = this.filter.q || this.filter.type !== 'all' || this.filter.status !== 'all';
+    this.logMeta.textContent = 'Showing ' + L.entries.length + ' of ' + L.total + (filtered ? ' matching (' + L.entryCount + ' in the log)' : ' entries')
+      + ' · source ' + L.source + (L.sha ? ' @ sha256 ' + String(L.sha).slice(0, 12) : '');
+    if (!L.entries.length) list.appendChild(h('li', { class: 'sk-upd-empty', text: L.entryCount ? 'No entries match these filters.' : 'The server’s release log has no entries.' }));
     var lastDate;
-    page.forEach(function (e) {
+    L.entries.forEach(function (e) {
       if (e.date !== lastDate) {
         lastDate = e.date;
         list.appendChild(h('li', { class: 'sk-upd-day', 'aria-hidden': 'true' }, [h('span', { text: fmtDate(e.date) })]));
@@ -348,9 +459,9 @@
       }
       list.appendChild(h('li', { class: 'sk-upd-entry', 'data-date': e.date || '', 'data-type': e.type, 'data-status': st }, [h('article', {}, kids)]));
     });
-    var left = hits.length - page.length;
-    this.moreBtn.hidden = left <= 0;
-    this.moreBtn.textContent = left > 0 ? 'Show ' + Math.min(PAGE, left) + ' more (' + left + ' remaining)' : '';
+    var left = L.total - L.entries.length;
+    this.moreBtn.hidden = !(L.next && left > 0);
+    this.moreBtn.textContent = L.next && left > 0 ? 'Show ' + Math.min(PAGE, left) + ' more (' + left + ' remaining)' : '';
   };
 
   var mounted = new WeakMap();
