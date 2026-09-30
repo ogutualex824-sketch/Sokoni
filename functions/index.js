@@ -10505,6 +10505,12 @@ exports.previewEmailTemplate = onCall({ cors: ["https://mysokoni.co.ke", "https:
 const merchantInventory = require("./merchant-inventory");
 exports.merchantAdjustStock          = merchantInventory.merchantAdjustStock;
 
+/* Business Pulse + Customers, computed server-side for the AUTHENTICATED merchant only —
+   till sales (posRetailSales) are admin-only readable and crmCustomerProfiles is never built,
+   so no client could show either (docs/MERCHANT_DASHBOARD_FACTS.md, 2026-09-30). */
+const merchantDashboardFacts = require("./merchant-dashboard-facts");
+exports.merchantDashboardFacts       = merchantDashboardFacts.merchantDashboardFacts;
+
 const inventoryEngine = require("./inventory-engine");
 exports.inventoryAdjustStock         = inventoryEngine.inventoryAdjustStock;
 exports.inventoryReserveStock        = inventoryEngine.inventoryReserveStock;
