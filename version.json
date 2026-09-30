@@ -1,10 +1,10 @@
 {
-  "commit": "2f3bb6f8a685d9c1f0278399d8fdbf09c8218f94",
-  "commitShort": "2f3bb6f",
-  "branch": "hosting/shell-gate-consumer-on-49e0f3a",
-  "buildTime": "2026-09-30T03:00:23.678Z",
+  "commit": "d55c11219cb63c1fb3232aa1f729be7b7ee48088",
+  "commitShort": "d55c112",
+  "branch": "hosting/home-picked-for-you-on-2f3bb6f",
+  "buildTime": "2026-09-30T09:32:18.551Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260930030022-v645",
+  "cacheVersion": "sokoni-20260930093216-v646",
   "environment": "production",
   "dirtyWorkingTree": false,
   "pipelineArtifacts": [
