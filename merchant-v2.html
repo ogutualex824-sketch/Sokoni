@@ -1263,7 +1263,21 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       var _posReady = null;
       try { _posReady = localStorage.getItem('posSetupComplete'); } catch (_) { _posReady = null; }
       if (!_posReady) { showOnly(framePanel('pos:setup', 'pos-hardware-wizard.html', m.name)); return; }
-      showOnly(framePanel('pos', 'pos.html' + (m.tab && m.tab !== 'pos' ? '#' + m.tab : ''), m.name)); return;
+      /* A pos route lands at its tab, or — for an overlay entry such as the Sales Control
+         Centre — at its action: pos.js honours both as #<view>. */
+      var _posView = m.action || (m.tab && m.tab !== 'pos' ? m.tab : '');
+      var _posPanel = framePanel('pos', 'pos.html' + (_posView ? '#' + _posView : ''), m.name);
+      showOnly(_posPanel);
+      /* framePanel caches by key, so a SECOND pos-kind route (Sales Control Centre) must
+         re-target the frame that already exists: set its hash and let pos.js's hashchange
+         handler switch the view / open the overlay. Same-origin, no reload, one POS instance. */
+      try {
+        var _pf = _posPanel.querySelector('iframe');
+        var _want = '#' + (_posView || 'pos');
+        if (_pf && _pf.contentWindow && _pf.contentWindow.location && _pf.contentWindow.document && _pf.contentWindow.document.readyState !== 'loading'
+            && _pf.contentWindow.location.hash !== _want) _pf.contentWindow.location.hash = _want;
+      } catch (_) {}
+      return;
     }
     if (m.kind === 'seller') { showOnly(framePanel('seller:' + (m.sec || ''), 'seller.html' + (m.sec ? '#' + m.sec : ''), m.name)); return; }
     if (m.kind === 'page')   { showOnly(framePanel('page:' + rid, m.src, m.name)); return; }
