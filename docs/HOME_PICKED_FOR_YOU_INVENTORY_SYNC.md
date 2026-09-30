@@ -146,3 +146,16 @@ Executed by a runner that acquired the browser lock **by the preflight's exit co
 Note: the listener returns **102** documents where `/api/catalogue` returns 97 — the API applies the server-side listing filter, the client applies `isPubliclyListed` after delivery, so Home renders the same listed set either way. Recorded, not a defect of this slice.
 
 Still separate: server authority for `uploadedAt`; the inventory gate's pre-existing failures ([[TEST_ENVIRONMENT_PREFLIGHT]] §7). **Deployment is not authorized.**
+
+## 4g · Re-port onto live `2bcdae2` — candidate `2a95e4c` (owner-authorized 2026-09-30; NOT deployed)
+
+Live moved to `2bcdae2` (header asks, v648, another session) while `82d8ce0` awaited deployment; deploying `82d8ce0` would have rolled that release back, so the final preflight stopped. The slice was re-ported as a merge (history of `82d8ce0` untouched) on branch `hosting/uploadedat-on-2bcdae2`, worktree `C:/temp/sok-home2`.
+
+| Check | Result |
+|---|---|
+| Lineage / content | descends from `2bcdae2`, contains `82d8ce0`; hosting content vs live = exactly the five slice files (+ pipeline artefacts); `sokoni-db.js`, `sokoni-recommendations.js`, `sokoni-inventory.js`, `seller-wiring.js` byte-identical to `82d8ce0`; `merchant-v2.html` hunk on top of the header release identical to the `82d8ce0` hunk; rules / indexes / Functions / `firebase.json` / storage rules untouched |
+| Slice suite | 34 / 0 |
+| Syntax gate | 1,799 files + 453 inline blocks, preflight READY |
+| Regressions | catalogue authority 67/0 · tombstone 34/0 · sellability 74/0 · merchant-capability 46/0 · map-engine 8/0 · cart-universal 54/0 · classification 14/0 |
+| Full inventory gate | run 1 BLOCKED by a transient (`test-merchant-exit-runtime` 12/1 on a report-only-CSP console note from an external response under machine load; 13/0 ×3 on this tree and ×3 on a pure `2bcdae2` control in a clean window — artefact `2a95e4c.run1-blocked-transient.json`); **run 2 APPROVED: 343 PASS, 342 blocking, 0 FAIL, 0 BLOCKED**, only the pre-existing non-blocking seller-wiring TIMEOUT (`2a95e4c.json`) |
+| Headed Chrome, clean window | pending the window (see below) |
