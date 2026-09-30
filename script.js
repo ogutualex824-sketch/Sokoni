@@ -661,21 +661,56 @@ function distanceBadge(product){
     return `<div class="distance-badge dist-far">📍 ${km} km</div>`;
 }
 
-/* Request geolocation on load */
+/* Nearby location — asked ONCE, then remembered (owner, 2026-10-01: "after accepting it should stop popping").
+   The home page used to call getCurrentPosition() on EVERY load. Browsers that grant location per visit
+   (Safari, Chrome's "allow this time") showed their permission prompt again every time, even after the buyer
+   had accepted. Now:
+     - a location we already have is reused and the browser is not asked;
+     - the browser is asked silently only when permission is already 'granted' (a refresh, no prompt);
+     - otherwise it is asked at most ONCE ever; a refusal is remembered too, so it is never re-prompted
+       automatically. The page's own "Use my location" button stays the deliberate way to refresh. */
+const _SK_LOC_KEY   = "sokoniBuyerLoc";      /* {lat, lng, city, t} */
+const _SK_LOC_ASKED = "sokoniBuyerLocAsked"; /* '1' once the browser prompt has been shown */
+function _skApplyBuyerLocation(loc){
+    buyerLocation = { lat: loc.lat, lng: loc.lng };
+    buyerCity = loc.city || detectBuyerCity(loc.lat, loc.lng).city;
+    try { localStorage.setItem("sokoniBuyerCity", buyerCity); } catch(_) {}
+    displayNearbySection();
+    displayProducts(products.slice(0, 8)); // re-render with distance badges
+}
+function _skSavedCityFallback(){
+    let saved = null; try { saved = localStorage.getItem("sokoniBuyerCity"); } catch(_) {}
+    if(saved){ buyerCity = saved; displayNearbySection(); }
+}
 function initNearbyLocation(){
+    let savedLoc = null, asked = false;
+    try { savedLoc = JSON.parse(localStorage.getItem(_SK_LOC_KEY) || "null"); } catch(_) { savedLoc = null; }
+    try { asked = localStorage.getItem(_SK_LOC_ASKED) === "1"; } catch(_) {}
+    if(savedLoc && isFinite(savedLoc.lat) && isFinite(savedLoc.lng)) _skApplyBuyerLocation(savedLoc);   /* no prompt */
+    else _skSavedCityFallback();
     if(!("geolocation" in navigator)) return;
-    navigator.geolocation.getCurrentPosition(pos => {
-        buyerLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        const { city, distKm } = detectBuyerCity(buyerLocation.lat, buyerLocation.lng);
-        buyerCity = city;
-        localStorage.setItem("sokoniBuyerCity", city);
-        displayNearbySection();
-        displayProducts(products.slice(0, 8)); // re-render with distance badges
-    }, () => {
-        /* Use saved city if any */
-        const saved = localStorage.getItem("sokoniBuyerCity");
-        if(saved){ buyerCity = saved; displayNearbySection(); }
-    });
+
+    const ask = () => navigator.geolocation.getCurrentPosition(pos => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude, t: Date.now() };
+        loc.city = detectBuyerCity(loc.lat, loc.lng).city;
+        try { localStorage.setItem(_SK_LOC_KEY, JSON.stringify(loc)); } catch(_) {}
+        _skApplyBuyerLocation(loc);
+    }, () => { /* refused or unavailable: keep what we have; never re-prompt automatically */ },
+       { maximumAge: 10 * 60 * 1000, timeout: 10000 });
+    const askOnce = () => {
+        if(asked || savedLoc) return;                     /* already asked, or already have a location */
+        try { localStorage.setItem(_SK_LOC_ASKED, "1"); } catch(_) {}
+        ask();
+    };
+    if(navigator.permissions && typeof navigator.permissions.query === "function"){
+        navigator.permissions.query({ name: "geolocation" }).then(st => {
+            if(st.state === "granted") ask();              /* silent refresh, no prompt */
+            else if(st.state === "prompt") askOnce();      /* at most once, ever */
+            /* 'denied': never ask */
+        }).catch(askOnce);
+    } else {
+        askOnce();                                          /* older Safari: no Permissions API */
+    }
 }
 
 function displayNearbySection(){
