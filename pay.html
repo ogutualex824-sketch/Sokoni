@@ -599,7 +599,7 @@
         <!-- M-Pesa -->
         <div class="pay-method-tab selected" id="tabMpesa" onclick="selectMethod('mpesa')" role="radio" aria-checked="true" tabindex="0" aria-label="Pay with M-Pesa">
           <div class="pay-method-header">
-            <div class="pay-method-icon mpesa" aria-hidden="true">📱</div>
+            <div class="pay-method-icon mpesa" aria-hidden="true"><img src="assets/mpesa.PNG" alt="" width="34" height="20" style="object-fit:contain"></div>
             <div>
               <div class="pay-method-name">M-Pesa</div>
               <div class="pay-method-desc">STK Push to your phone</div>
@@ -643,16 +643,16 @@
         <!-- Card -->
         <div class="pay-method-tab" id="tabCard" onclick="selectMethod('card')" role="radio" aria-checked="false" tabindex="0" aria-label="Pay with card">
           <div class="pay-method-header">
-            <div class="pay-method-icon card" aria-hidden="true">💳</div>
+            <div class="pay-method-icon card" aria-hidden="true"><img src="assets/visa.PNG" alt="" width="17" height="12" style="object-fit:contain"><img src="assets/mastercard.PNG" alt="" width="17" height="12" style="object-fit:contain"></div>
             <div>
               <div class="pay-method-name">Card</div>
-              <div class="pay-method-desc">Visa Â· Mastercard</div>
+              <div class="pay-method-desc">Visa · Mastercard — available soon</div>
             </div>
             <div class="pay-method-selector"></div>
           </div>
           <div class="pay-method-body">
-            <p style="font-size:13px;color:var(--sk-muted);margin-bottom:14px;">You'll be redirected to a secure IntaSend payment page to complete your card payment.</p>
-            <button class="pay-btn pay-btn-card" id="btnPayCard" onclick="payCard()" aria-label="Pay with card">
+            <p style="font-size:13px;color:var(--sk-muted);margin-bottom:14px;">Card payments through IntaSend are coming soon. Please pay with M-Pesa for now.</p>
+            <button class="pay-btn pay-btn-card" id="btnPayCard" onclick="payCard()" aria-label="Card payments coming soon" disabled>
               <span class="pay-btn-spinner" aria-hidden="true"></span>
               <span class="pay-btn-text">Pay with Card</span>
             </button>
@@ -965,8 +965,13 @@ window.payMpesa = async function() {
 };
 
 /* ── Pay with Card ── */
+/* Card is NOT live (owner, 2026-09-30): the SOKONI IntaSend account has only M-Pesa payments, and
+   initiatePOSQRPayment's card branch only CONSTRUCTS a checkout URL without calling IntaSend, so it led to a
+   checkout that does not exist. Card returns as a real IntaSend hosted checkout (C3) after the KES 1 card test. */
+const CARD_LIVE = false;
 window.payCard = async function() {
   const btn = $('btnPayCard');
+  if (!CARD_LIVE) { btn.disabled = true; return; }
   btn.disabled = true;
   btn.classList.add('loading');
 

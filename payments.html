@@ -328,32 +328,35 @@ nav.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:rgb
     <div class="pmt-card-title" style="font-size:16px;margin-bottom:4px;">Choose Payment Method</div>
     <div class="pmt-card-sub" style="margin-bottom:16px;">Select how you want to receive payments. You can add more later.</div>
 
+    <!-- IntaSend is SOKONI's one payment provider (owner, 2026-09-30). SOKONI collects every payment through its
+         IntaSend account and pays merchants out to their SOKONI wallet, so a merchant needs no gateway account or
+         credentials. M-Pesa Direct (Daraja) is retired; Pesapal and Flutterwave are not SOKONI providers. Only
+         M-Pesa has completed payments on the account today; the other marks are the methods IntaSend offers. -->
     <div class="pmt-provider-grid">
-      <div class="pmt-provider-card" id="prov-mpesa" onclick="wizChooseProvider('mpesa')">
-        <div class="rec-badge">★ Recommended</div>
-        <div class="pmt-provider-logo">🟢</div>
-        <div class="pmt-provider-name">M-Pesa Direct</div>
-        <div class="pmt-provider-desc">Daraja API — money goes straight to your M-Pesa account</div>
-      </div>
-      <div class="pmt-provider-card coming-soon" title="Coming Soon">
-        <div class="pmt-provider-logo">💳</div>
+      <div class="pmt-provider-card" id="prov-intasend" onclick="wizChooseProvider('intasend')">
+        <div class="rec-badge">★ Active</div>
+        <div class="pmt-provider-logo"><img src="assets/intasend%20trust%20badge.jpeg" alt="IntaSend" width="120" height="30" style="object-fit:contain;max-width:100%;border-radius:6px;background:#fff"></div>
         <div class="pmt-provider-name">IntaSend</div>
-        <div class="pmt-provider-desc">Cards + M-Pesa with simple setup</div>
+        <div class="pmt-provider-desc">M-Pesa now; card, PesaLink, Google Pay, Apple Pay and Bitcoin as they go live. No setup needed.</div>
+        <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;margin-top:8px">
+          <img src="assets/mpesa.PNG" alt="M-Pesa" title="M-Pesa" width="34" height="20" loading="lazy" style="object-fit:contain;background:#fff;border-radius:4px;padding:1px">
+          <img src="assets/visa.PNG" alt="Visa" title="Visa (soon)" width="34" height="20" loading="lazy" style="object-fit:contain;background:#fff;border-radius:4px;padding:1px;opacity:.55">
+          <img src="assets/mastercard.PNG" alt="Mastercard" title="Mastercard (soon)" width="34" height="20" loading="lazy" style="object-fit:contain;background:#fff;border-radius:4px;padding:1px;opacity:.55">
+          <img src="assets/pesalink.png" alt="PesaLink" title="PesaLink (soon)" width="34" height="20" loading="lazy" style="object-fit:contain;background:#fff;border-radius:4px;padding:1px;opacity:.55">
+          <img src="assets/googlepay.svg" alt="Google Pay" title="Google Pay (soon)" width="34" height="20" loading="lazy" style="object-fit:contain;background:#fff;border-radius:4px;padding:1px;opacity:.55">
+          <img src="assets/applepay.svg" alt="Apple Pay" title="Apple Pay (soon)" width="34" height="20" loading="lazy" style="object-fit:contain;background:#fff;border-radius:4px;padding:1px;opacity:.55">
+          <img src="assets/bitcoin.svg" alt="Bitcoin" title="Bitcoin (soon)" width="34" height="20" loading="lazy" style="object-fit:contain;background:#fff;border-radius:4px;padding:1px;opacity:.55">
+        </div>
       </div>
-      <div class="pmt-provider-card coming-soon" title="Coming Soon">
-        <div class="pmt-provider-logo">🌍</div>
-        <div class="pmt-provider-name">Pesapal</div>
-        <div class="pmt-provider-desc">Multiple payment channels</div>
-      </div>
-      <div class="pmt-provider-card coming-soon" title="Coming Soon">
-        <div class="pmt-provider-logo">🔶</div>
-        <div class="pmt-provider-name">Flutterwave</div>
-        <div class="pmt-provider-desc">International payments</div>
+      <div class="pmt-provider-card coming-soon" title="Retired" aria-disabled="true">
+        <div class="pmt-provider-logo"><img src="assets/mpesa.PNG" alt="M-Pesa" width="60" height="24" style="object-fit:contain;background:#fff;border-radius:4px"></div>
+        <div class="pmt-provider-name">M-Pesa Direct</div>
+        <div class="pmt-provider-desc">Retired: your own Daraja keys are no longer used. M-Pesa is collected through IntaSend.</div>
       </div>
     </div>
 
     <div class="pmt-info">
-      <strong>Why M-Pesa Direct?</strong> Money goes directly from the customer's phone into your Paybill or Till. SOKONI never touches the funds — it only orchestrates the transaction.
+      <strong>How you get paid:</strong> customers pay SOKONI through IntaSend (M-Pesa today). Your earnings land in your SOKONI wallet, and you withdraw them to your M-Pesa or bank from the Wallet.
     </div>
 
     <div class="pmt-msg" id="wiz2Msg"></div>
@@ -904,13 +907,17 @@ function wizChooseProvider(p) {
   document.querySelectorAll('.pmt-provider-card').forEach(c => c.classList.remove('selected'));
   document.getElementById('prov-' + p)?.classList.add('selected');
   _wizProvider = p;
-  /* Only M-Pesa goes to next step immediately */
-  if (p === 'mpesa') {
-    setTimeout(() => _goToStep(3), 300);
+  /* IntaSend is the only provider and needs no merchant setup (owner, 2026-09-30); M-Pesa Direct (Daraja) is retired,
+     so nothing leads into the retired credential steps any more. */
+  const msg = document.getElementById('wiz2Msg');
+  if (!msg) return;
+  if (p === 'intasend') {
+    msg.innerHTML = '✅ You’re set up: SOKONI collects your payments through IntaSend. Manage payouts in your '
+      + '<a href="merchant-v2.html#wallet" style="color:#71ff00">Wallet</a>.';
   } else {
-    const msg = document.getElementById('wiz2Msg');
-    if (msg) { msg.textContent = 'Coming soon — select M-Pesa Direct for now.'; msg.className = 'pmt-msg info'; }
+    msg.textContent = 'M-Pesa Direct is retired: payments are collected through IntaSend.';
   }
+  msg.className = 'pmt-msg info';
 }
 
 function wizChooseMpesaType(t) {

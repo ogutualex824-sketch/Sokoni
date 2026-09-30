@@ -1,3 +1,26 @@
+## 2026-09-30 — Payment pages: IntaSend's methods with real logos; only the proven method is usable
+
+The SOKONI IntaSend account (owner-run invoice read, 2026-09-30) has only M-PESA payments: 28 COMPLETE, 18 FAILED,
+5 PENDING. So M-Pesa is the only usable method. Card (Visa/Mastercard), PesaLink, Google Pay, Apple Pay and Bitcoin
+are shown with their real marks as "Soon"; each is switched on once proven.
+
+- **checkout.html:** the 10 mixed tiles are replaced by IntaSend's six. Airtel, T-Kash, Equity, MTN, EcoCash,
+  Chipper, PayPal and Bank RTGS are removed (IntaSend does not provide them). PayPal and Bank previously COULD be
+  selected and opened a modal for a rail SOKONI does not have; `UNINTEGRATED_PAYMENTS` now refuses every
+  non-proven id.
+- **pay.html:**
+  - real M-Pesa / Visa / Mastercard logos replace the emoji circles;
+  - the "Visa Â· Mastercard" mojibake is fixed;
+  - card is marked "available soon", with its button disabled and `payCard()` refusing. `initiatePOSQRPayment`'s
+    card branch only constructed a checkout URL without calling IntaSend, so it led nowhere.
+- **payments.html (merchant setup):**
+  - IntaSend is the active provider (real badge + method marks, "No setup needed"; points to the Wallet for
+    payouts);
+  - M-Pesa Direct (Daraja) is marked retired and can no longer lead into the retired credential steps;
+  - Pesapal and Flutterwave are removed.
+- **Test:** scripts/test-payment-methods-intasend.js 13/0; live 72dca56 fails all 13.
+- Hosting only. No functions, rules or API change.
+
 ## 2026-09-30 — Home footer: IntaSend payment methods with real logos, every footer link working
 
 - **Payment row:** shows every method IntaSend provides (the owner chose all of them): M-Pesa, Visa,

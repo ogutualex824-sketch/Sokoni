@@ -145,6 +145,9 @@
       background:rgba(255,255,255,0.07);
     }
 
+    .pay-method-card.pay-soon{ opacity:0.55; cursor:not-allowed; }
+    .pay-method-card.pay-soon:hover{ border-color:rgba(255,255,255,0.08); background:rgba(255,255,255,0.04); }
+    .pay-soon-tag{ position:absolute; top:6px; left:8px; font-size:9px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#ffc107; background:rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.3); border-radius:6px; padding:1px 5px; }
     .pay-method-card.active-pay{
       border-color:#71ff00;
       background:rgba(113,255,0,0.07);
@@ -973,78 +976,58 @@
         <div class="co-card-title">💳 Payment Method</div>
         <div class="payment-methods">
 
-          <div class="pay-method-section-label">🇰🇪 Kenya</div>
+          <!-- Methods offered through IntaSend, SOKONI's one payment provider (owner, 2026-09-30). M-Pesa is the only
+               method with completed payments on the account (IntaSend invoices, 2026-09-30: 28 COMPLETE, all M-PESA),
+               so it is the only one selectable. The rest are shown with their real marks and stay "Soon" until
+               proven on the account; selectPayment() refuses them (UNINTEGRATED_PAYMENTS). Airtel, T-Kash, Equity,
+               MTN, EcoCash, Chipper, PayPal and Bank RTGS were removed: IntaSend does not provide them. -->
+          <div class="pay-method-section-label">🔒 Secure payment by IntaSend</div>
 
           <div class="pay-method-card active-pay-mpesa" id="payMpesa" onclick="selectPayment('mpesa')">
             <div class="pay-check">✓</div>
-            <div class="pay-method-icon"><img src="assets/mpesa.PNG" alt="M-Pesa" loading="lazy" width="60" height="30"></div>
+            <div class="pay-method-icon"><img src="assets/mpesa.PNG" alt="M-Pesa" loading="lazy" width="60" height="30" style="object-fit:contain"></div>
             <div class="pay-method-label">M-Pesa</div>
             <div class="pay-method-sub">STK Push</div>
           </div>
 
-          <div class="pay-method-card" id="payAirtel" onclick="selectPayment('airtel')">
+          <div class="pay-method-card pay-soon" id="payCard" onclick="selectPayment('card')" aria-disabled="true">
             <div class="pay-check">✓</div>
-            <div class="pay-method-icon">🔴</div>
-            <div class="pay-method-label">Airtel</div>
-            <div class="pay-method-sub">Airtel Money</div>
-          </div>
-
-          <div class="pay-method-card" id="payTkash" onclick="selectPayment('tkash')">
-            <div class="pay-check">✓</div>
-            <div class="pay-method-icon">📡</div>
-            <div class="pay-method-label">T-Kash</div>
-            <div class="pay-method-sub">Telkom Kenya</div>
-          </div>
-
-          <div class="pay-method-card" id="payEquity" onclick="selectPayment('equity')">
-            <div class="pay-check">✓</div>
-            <div class="pay-method-icon">🏦</div>
-            <div class="pay-method-label">Equity</div>
-            <div class="pay-method-sub">EazzY Banking</div>
-          </div>
-
-          <div class="pay-method-card" id="payCard" onclick="selectPayment('card')">
-            <div class="pay-check">✓</div>
-            <div class="pay-method-icon"><span class="pay-logo-pair"><img src="assets/visa.PNG" alt="Visa" loading="lazy" width="44" height="22"><img src="assets/mastercard.PNG" alt="Mastercard" loading="lazy" width="36" height="22"></span></div>
+            <div class="pay-soon-tag">Soon</div>
+            <div class="pay-method-icon"><span class="pay-logo-pair"><img src="assets/visa.PNG" alt="Visa" loading="lazy" width="44" height="30" style="object-fit:contain"><img src="assets/mastercard.PNG" alt="Mastercard" loading="lazy" width="44" height="30" style="object-fit:contain"></span></div>
             <div class="pay-method-label">Card</div>
             <div class="pay-method-sub">Visa / Mastercard</div>
           </div>
 
-          <div class="pay-method-section-label">🌍 Africa &amp; Global</div>
-
-          <div class="pay-method-card" id="payMtn" onclick="selectPayment('mtn')">
+          <div class="pay-method-card pay-soon" id="payPesalink" onclick="selectPayment('pesalink')" aria-disabled="true">
             <div class="pay-check">✓</div>
-            <div class="pay-method-icon">🟡</div>
-            <div class="pay-method-label">MTN</div>
-            <div class="pay-method-sub">Mobile Money</div>
+            <div class="pay-soon-tag">Soon</div>
+            <div class="pay-method-icon"><img src="assets/pesalink.png" alt="PesaLink" loading="lazy" width="60" height="30" style="object-fit:contain"></div>
+            <div class="pay-method-label">PesaLink</div>
+            <div class="pay-method-sub">Bank transfer</div>
           </div>
 
-          <div class="pay-method-card" id="payEcocash" onclick="selectPayment('ecocash')">
+          <div class="pay-method-card pay-soon" id="payGooglepay" onclick="selectPayment('googlepay')" aria-disabled="true">
             <div class="pay-check">✓</div>
-            <div class="pay-method-icon">💚</div>
-            <div class="pay-method-label">EcoCash</div>
-            <div class="pay-method-sub">Zimbabwe</div>
+            <div class="pay-soon-tag">Soon</div>
+            <div class="pay-method-icon"><img src="assets/googlepay.svg" alt="Google Pay" loading="lazy" width="60" height="30" style="object-fit:contain"></div>
+            <div class="pay-method-label">Google Pay</div>
+            <div class="pay-method-sub">Wallet</div>
           </div>
 
-          <div class="pay-method-card" id="payChipper" onclick="selectPayment('chipper')">
+          <div class="pay-method-card pay-soon" id="payApplepay" onclick="selectPayment('applepay')" aria-disabled="true">
             <div class="pay-check">✓</div>
-            <div class="pay-method-icon">✈️</div>
-            <div class="pay-method-label">Chipper</div>
-            <div class="pay-method-sub">Pan-Africa</div>
+            <div class="pay-soon-tag">Soon</div>
+            <div class="pay-method-icon"><img src="assets/applepay.svg" alt="Apple Pay" loading="lazy" width="60" height="30" style="object-fit:contain"></div>
+            <div class="pay-method-label">Apple Pay</div>
+            <div class="pay-method-sub">Wallet</div>
           </div>
 
-          <div class="pay-method-card" id="payPaypal" onclick="selectPayment('paypal')">
+          <div class="pay-method-card pay-soon" id="payBitcoin" onclick="selectPayment('bitcoin')" aria-disabled="true">
             <div class="pay-check">✓</div>
-            <div class="pay-method-icon"><img src="assets/paypal.PNG" alt="PayPal" loading="lazy" width="60" height="30"></div>
-            <div class="pay-method-label">PayPal</div>
-            <div class="pay-method-sub">International</div>
-          </div>
-
-          <div class="pay-method-card" id="payBank" onclick="selectPayment('bank')">
-            <div class="pay-check">✓</div>
-            <div class="pay-method-icon">🏛️</div>
-            <div class="pay-method-label">Bank</div>
-            <div class="pay-method-sub">RTGS / EFT</div>
+            <div class="pay-soon-tag">Soon</div>
+            <div class="pay-method-icon"><img src="assets/bitcoin.svg" alt="Bitcoin" loading="lazy" width="60" height="30" style="object-fit:contain"></div>
+            <div class="pay-method-label">Bitcoin</div>
+            <div class="pay-method-sub">Crypto</div>
           </div>
 
         </div>
@@ -1927,7 +1910,9 @@ checkInstallment();
         api_ref;
      3. confirmation through webhookIntasend — never the browser.
    Until all three hold, M-Pesa is the honest answer. */
-const UNINTEGRATED_PAYMENTS = ["airtel","tkash","equity","mtn","ecocash","chipper","card"];
+/* Selectable only when proven on the SOKONI IntaSend account (only M-Pesa today). The legacy ids stay listed so a
+   stale caller can never select a rail SOKONI does not have (paypal/bank used to open a modal for one). */
+const UNINTEGRATED_PAYMENTS = ["card","pesalink","googlepay","applepay","bitcoin","airtel","tkash","equity","mtn","ecocash","chipper","paypal","bank"];
 
 function selectPayment(method){
   if (UNINTEGRATED_PAYMENTS.includes(method)) {
