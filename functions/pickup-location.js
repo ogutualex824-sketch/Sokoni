@@ -28,11 +28,12 @@
  *   substituted for the pickup in navDispatchRider.
  *
  * REUSED, NOT RE-INVENTED
- *   - the location shape and its validation: rider-presence.validLocation (the D2 rule);
- *   - who may act for a shop: shop-employees.resolveShopAccess / shopOwnerOf.
+ *   - the location shape and its validation: geo-point.validLocation (the D2 rule, re-exported by rider-presence);
+ *   - who may act for a shop: shop-employees.resolveShopAccess / shopOwnerOf (self-contained: it needs
+ *     only npm packages, so it travels whole into any functions lineage — see the F1 port notes).
  */
 
-const { validLocation } = require('./rider-presence');
+const { validLocation } = require('./geo-point');     /* the D2 rule, from its leaf module */
 
 const PICKUPS = 'deliveryPickups';
 const LABEL_MAX = 120;

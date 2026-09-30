@@ -170,12 +170,9 @@ function publicState(st) {
   return st.state === 'suspended' || st.state === 'ineligible' ? 'not_eligible' : st.state;
 }
 
-function validLocation(data) {
-  const lat = Number(data && data.lat), lng = Number(data && data.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  if (lat < -90 || lat > 90 || lng < -180 || lng > 180 || (lat === 0 && lng === 0)) return null;
-  return { lat, lng };
-}
+/* The position rule lives in geo-point.js (a leaf, so every functions lineage can load it);
+   re-exported below so existing callers of rider-presence.validLocation are unchanged. */
+const { validLocation } = require('./geo-point');
 
 async function displayNameFor(db, uid, driver, token) {
   try {
