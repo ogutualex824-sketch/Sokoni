@@ -92,8 +92,19 @@
    *   pickupLat, pickupLng, weightKg, parcelSize, vehicleType
    * }
    */
+  /* F1 — a point is usable only when both coordinates are finite, in range, and not 0°,0° (the
+     same rule as rider-presence.validLocation). Anything else is UNKNOWN, never a position. */
+  function _validPt(lat, lng) {
+    var a = Number(lat), b = Number(lng);
+    return isFinite(a) && isFinite(b) && lat !== null && lng !== null && lat !== '' && lng !== '' &&
+      a >= -90 && a <= 90 && b >= -180 && b <= 180 && !(a === 0 && b === 0);
+  }
+
   function scoreRider(rider, delivery) {
     if (!rider.lat || !rider.lng)               return null;
+    /* No authoritative pickup → no distance → no score. This used to fall through to haversine on
+       undefined (NaN), and NaN > maxDispatchRadiusKm is false, so an unknown pickup did not exclude. */
+    if (!_validPt(delivery.pickupLat, delivery.pickupLng)) return null;
     if (!rider.isOnline && !rider.online)        return null;
     if (rider.status === 'break')               return null; /* Rider on break */
 
@@ -321,10 +332,13 @@
    */
   function findBestHub(delivery, hubs) {
     if (!hubs || !hubs.length) return null;
-    var pickLat  = delivery.pickupLat    || delivery.pickupCoords?.lat    || 0;
-    var pickLng  = delivery.pickupLng    || delivery.pickupCoords?.lng    || 0;
-    var dropLat  = delivery.dropoffLat   || delivery.deliveryCoords?.lat  || 0;
-    var dropLng  = delivery.dropoffLng   || delivery.deliveryCoords?.lng  || 0;
+    var pickLat  = delivery.pickupLat    || delivery.pickupCoords?.lat;
+    var pickLng  = delivery.pickupLng    || delivery.pickupCoords?.lng;
+    var dropLat  = delivery.dropoffLat   || delivery.deliveryCoords?.lat;
+    var dropLng  = delivery.dropoffLng   || delivery.deliveryCoords?.lng;
+    /* F1 — the midpoint needs BOTH ends. A missing end used to become 0 (the point 0°,0°), which
+       pulled the "best hub" toward the Gulf of Guinea. Unknown → no hub. */
+    if (!_validPt(pickLat, pickLng) || !_validPt(dropLat, dropLng)) return null;
     var midLat   = (pickLat + dropLat) / 2;
     var midLng   = (pickLng + dropLng) / 2;
     var best = null, bestDist = Infinity;

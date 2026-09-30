@@ -63,7 +63,9 @@ function _scoreRider(rider, stats, pickupLat, pickupLng, vehicleRequired) {
   let score = 0;
 
   // Distance (0–40): ≤1km = 40, ≤3km = 30, ≤5km = 20, ≤10km = 10, >10km = 0
-  const distM  = _hav(rider.lat || 0, rider.lng || 0, pickupLat, pickupLng);
+  /* F1: callers pass only riders with a valid position (navDispatchRider skips the rest), so there
+     is no `|| 0` here — a missing position must never become the point 0°,0°. */
+  const distM  = _hav(rider.lat, rider.lng, pickupLat, pickupLng);
   const distKm = distM / 1000;
   if (distKm <= 1)       score += 40;
   else if (distKm <= 3)  score += 30;
@@ -105,14 +107,26 @@ exports.navDispatchRider = onCall({ enforceAppCheck: true }, async request => {
   if (!orderSnap.exists) throw new HttpsError('not-found', 'Order not found');
   const order = orderSnap.data();
 
+  /* F1 — the pickup is the AUTHORITATIVE point: the delivery's server-only snapshot (deliveryPickups),
+     else the seller's shop pickupLocation (pickup-location.js). It is never order.pickupLat/pickupLng — those are written
+     from the BROWSER's request body — and never the drop-off standing in for a missing pickup. */
+  const _pl = require('./pickup-location');
+  let pickupPt = null;
+  pickupPt = (await _pl.authoritativePickups(db, ['DEL' + orderId])).get('DEL' + orderId) || null;
+  if (!pickupPt) {
+    const _shop = await _pl.resolveShop(db, { shopId: order.shopId || null, sellerUid: order.sellerUid || order.sellerId || null });
+    const _snap = _shop.id ? _pl.snapshotFromShop(_shop.id, _shop.data) : null;
+    if (_snap) pickupPt = { lat: _snap.lat, lng: _snap.lng };
+  }
+
   // Build stops from order
   const stops = [];
-  if (order.pickupLat && order.pickupLng) {
+  if (pickupPt) {
     stops.push({
       type:    'pickup',
       name:    _san(order.pickupName || order.vendorName || 'Pickup', 120),
-      lat:     order.pickupLat,
-      lng:     order.pickupLng,
+      lat:     pickupPt.lat,
+      lng:     pickupPt.lng,
       orderId: orderId,
       phone:   order.vendorPhone || null,
       status:  'pending',
@@ -132,14 +146,16 @@ exports.navDispatchRider = onCall({ enforceAppCheck: true }, async request => {
   // Manual assignment (admin override)
   let assignedRiderId = null;
   let assignedScore   = 0;
-  let assignedDistKm  = 0;
+  let assignedDistKm  = null;   /* F1: unknown until measured against a real pickup — never 0 by default */
 
   if (manualRiderId) {
     assignedRiderId = manualRiderId;
   } else {
-    // Auto-dispatch: find best available rider
-    const pickupLat = stops[0]?.lat || stops[stops.length - 1].lat;
-    const pickupLng = stops[0]?.lng || stops[stops.length - 1].lng;
+    /* Auto-dispatch ranks riders by distance to the pickup. With no authoritative pickup there is no
+       distance, so there is no ranking: refuse, rather than measure riders against the drop-off. */
+    if (!pickupPt) throw new HttpsError('failed-precondition', 'pickup_location_unknown: this order has no pickup location yet, so riders cannot be ranked by distance.');
+    const pickupLat = pickupPt.lat;
+    const pickupLng = pickupPt.lng;
 
     const ridersSnap = await db.collection('riderLocations')
       .where('status', '==', 'active')
@@ -158,6 +174,8 @@ exports.navDispatchRider = onCall({ enforceAppCheck: true }, async request => {
         const loc   = doc.data();
         const stats = driverMap[doc.id] || {};
         if (!stats.available) continue;
+        /* F1: a rider with no valid position is not "at 0°,0°" — they are unrankable, so skipped. */
+        if (_pl.distanceKm(loc, pickupPt) === null) continue;
         const { score, distKm } = _scoreRider(loc, stats, pickupLat, pickupLng, vehicleRequired);
         if (score > bestScore) { bestScore = score; bestId = doc.id; bestDist = distKm; }
       }

@@ -6857,6 +6857,7 @@ exports.availableDeliveries = onRequest(
          client can write them) plus FRESH server-written presence. The inline check that stood
          here read approval off the rideDrivers presence shard. */
       const _rp = require("./rider-presence");
+      const _pickupAuth = require("./pickup-location");   /* F1: server-side distance */
       const st = await _rp.stateFor(db, decoded.uid);
       if (st.state === "suspended" || st.state === "ineligible") {
         return res.status(403).json({ ok: false, error: "not_an_approved_rider", state: "not_eligible" });
@@ -6879,6 +6880,9 @@ exports.availableDeliveries = onRequest(
       const { calculateCommission: _calcJob } = require("./finos-utils");
       const deliveries = [];
       let refused = 0;
+      /* F1: the authoritative pickup for every job, from the server-only deliveryPickups record
+         (one batched read) — never the job document's own, client-reachable pickup fields. */
+      const _pickupMap = await _pickupAuth.authoritativePickups(db, jobs.map((j) => j.id));
       for (const o of jobs) {
         const v = await _rp.validateJob(db, o, async (ref) => orderMap.get(ref.id) || { exists: false, data: () => null });
         if (!v.ok) { refused++; continue; }
@@ -6905,8 +6909,10 @@ exports.availableDeliveries = onRequest(
           itemCount: Array.isArray(v.order.items) ? v.order.items.length : (Array.isArray(o.items) ? o.items.length : 0),
           deliveryFee: fee, riderEarning, driverNet: riderEarning,
           vehicleType: o.vehicleType || null, speed: o.speed || null,
-          /* No coordinates exist yet — distance is unknown, never invented. */
-          distanceKm: null,
+          /* F1 — server-side only: the rider's fresh position to the job's pickup SNAPSHOT.
+             Either missing → null (unknown), never invented; pickupKnown says which. */
+          distanceKm: _pickupAuth.distanceKm(st.location, _pickupMap.get(String(o.id))),
+          pickupKnown: !!_pickupMap.get(String(o.id)),
           /* Deliberately ABSENT: buyerName, buyerPhone, deliveryAddress, items,
              orderTotal — and proofPin, which no rider-facing payload should ever
              have carried. The rider types the PIN the customer reads to them;
@@ -6986,6 +6992,8 @@ exports.claimAvailableDelivery = onCall(
 /* D2 (2026-09-29) — the ONLY writer of rider presence (rideDrivers). The browser requests
    online / heartbeat / offline; the server decides eligibility (DL-01) and writes presence. */
 exports.riderPresence = require("./rider-presence").makeRiderPresence({ onCall, HttpsError, admin, db });
+/* F1 — the ONLY writer of shops/{shopId}.pickupLocation (owner, admin or shop manager). */
+exports.shopSetPickupLocation = require("./pickup-location").makeSetPickupLocation({ onCall, HttpsError, admin, db, logger: console });
 
 exports.catalogue = onRequest(
   { cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"], timeoutSeconds: 15, invoker: "public", memory: "256MiB" },
@@ -8087,11 +8095,18 @@ exports.webhookIntasend = onRequest(
                   console.warn('[webhookIntasend] delivery created UNPRICED', {
                     ref: _delRef, reason: _deliveryPricing.pricingBlocked });
                 }
+                /* F1 — the pickup is a SNAPSHOT of the seller's shop pickupLocation, read on the
+                   server (pickup-location.js). This line used to write pickupCoords:null for every
+                   delivery. No shop point → pickupLocation:null plus a stated pickupLocationGap,
+                   never an invented position. Nothing client-supplied is read for it. */
+                const _pickupFields = await require("./pickup-location").ensureDeliveryPickup(db, _delRef, {
+                  shopId: null, sellerUid: _pm.sellerUid,
+                });
                 await _delDoc.set({
                   ref: _delRef, deliveryRef: _delRef, orderId: _pm.orderId, orderRef: apiRef,
                   buyerName:  _pm.buyerName || "", buyerPhone: payData.phone || "", buyerUid: payData.uid || null,
                   sellerName: _pm.sellerName || "SOKONI", sellerUid: _pm.sellerUid, sellerPhone: "",
-                  pickupAddress:   _pm.sellerName || "Shop", pickupCoords: null,
+                  pickupAddress:   _pm.sellerName || "Shop", ..._pickupFields,
                   deliveryAddress: _pm.address || _pm.deliveryAddress || "", deliveryCoords: null,
                   items:      _lines.map(i => ({ productId: i.productId, name: i.name, qty: i.qty })),
                   orderTotal: amount,

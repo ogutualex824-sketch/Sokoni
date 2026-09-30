@@ -247,7 +247,15 @@ exports.updateClickAndCollectStatus = onCall(CF_OPTIONS, async ({ auth, data }) 
         const delId  = `DEL${orderId}`;
         const pin    = String(Math.floor(1000 + Math.random() * 9000));
         const fee    = Number(order.deliveryFee || order.delivery || 0);
+        /* F1 — pickup is a SNAPSHOT of the seller's shop pickupLocation (pickup-location.js). This
+           write merges, so "ready" pressed twice — or a webhook-created record — must not produce a
+           second, conflicting pickup fact: the server-only deliveryPickups/{delId} snapshot is
+           created once and re-projected, otherwise an explicit pickupLocationGap. */
+        const _pickupFields = await require('./pickup-location').ensureDeliveryPickup(db, delId, {
+          shopId: order.shopId || null, sellerUid: sellerId,
+        });
         await db.doc(`packageRequests/${delId}`).set({
+          ..._pickupFields,
           ref: delId, deliveryRef: delId, orderId, orderRef: orderId,
           buyerName:  order.customerName || order.buyerName || '',
           buyerPhone: order.customerPhone || order.buyerPhone || '', buyerUid,

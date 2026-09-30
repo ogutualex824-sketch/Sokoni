@@ -1,3 +1,70 @@
+## [2026-09-30] — F1 (server): the pickup-location authority — NOT deployed
+
+**Files:**
+- `functions/pickup-location.js` (new);
+- `functions/index.js`: the webhook delivery write, the rider board, and the `shopSetPickupLocation` export;
+- `functions/pos-marketplace-sync.js`: the "ready" delivery write;
+- `functions/rider-presence.js`: `stateFor` now returns the rider's fresh location;
+- `functions/dispatch.js`: `dispatchDelivery` and `optimizeBatchRoute`;
+- `functions/sokoni-dispatch.js`: `scoreRider` and `findBestHub`;
+- `functions/navigation.js`: `navDispatchRider`;
+- `scripts/test-f1-pickup-location.js` (new), `CHANGELOG.md`.
+
+**Database changes:**
+- new `shops/{id}.pickupLocation`;
+- new server-only collection `deliveryPickups/{deliveryRef}`. It has no Firestore rule, so it is deny-by-default
+  (verified against the served ruleset).
+- `packageRequests` gains a `pickupLocation` / `pickupCoords` projection and `pickupLocationGap`.
+
+**API changes:**
+- new callable `shopSetPickupLocation`;
+- the board adds `distanceKm` (server-computed) and `pickupKnown`;
+- `dispatchDelivery` can return `pickup_location_unknown`;
+- `optimizeBatchRoute` adds `unlocated` and `riderLocationKnown`, and its `totalKm` may be null.
+
+**Rules changes:** none. **Breaking changes:** none for callers. Invented distances become null or unknown.
+
+**Contract.** The merchant sets `shops.pickupLocation` through `shopSetPickupLocation`, and the server validates
+it with the D2 `validLocation` rule. Delivery creation then copies a server-only snapshot into `deliveryPickups`
+using `create()`, and projects it onto the delivery. Distance is computed on the server only, and rider ranking,
+batching and navigation consume that snapshot.
+
+**Negative contract.** With no pickup coordinates there is no distance, no proximity, no rider-radius claim and
+no batching. These fallbacks are removed:
+- `optimizeBatchRoute`'s 0°,0°;
+- `findBestHub`'s 0°,0° midpoint;
+- `scoreRider` passing NaN;
+- `navDispatchRider` substituting the drop-off for the pickup, and ranking riders with no position as if at
+  0°,0°.
+
+**Who may set the pickup.** The shop owner, a platform admin, or a corroborated manager, all through the existing
+`shop-employees.resolveShopAccess`. No third guard was added. Cashiers and forged employee records are refused.
+
+**Why a server-only snapshot record.** `packageRequests` can still be created and edited from a browser; that
+rules hardening is a separate, unapproved slice. A pickup kept only on that document would therefore keep a buyer's
+forged value. With the snapshot record:
+- the first snapshot for a delivery wins;
+- a retried webhook or a second "ready" cannot replace it;
+- a shop that later moves its pickup does not rewrite existing deliveries;
+- every consumer reads that record, not the projection.
+
+**Verified.** `test-f1-pickup-location` runs the real handlers on the Firestore and Auth emulators plus the served
+rules: **37/0**.
+- The pre-F1 tree fails 31 rows.
+- **12 of 12 sabotages are caught:** cashier allowed, validation skipped, consumers reading the projection,
+  overwrite instead of create, legacy fields on the board, a stale rider position, dispatch, batch and navigation
+  fallbacks, the `scoreRider` and `findBestHub` checks, and an invented default point.
+- **Regression:** D2 presence 37/0, dispatch authority 45/0, delivery PIN 65/0, DL-01 41/0, seller-handover
+  55/55, suspension 27/0, unified tracking 15/15, d1a provisioning 24/0.
+
+**Not in F1, by owner direction:** rider-wallet settlement, commission, online-order dispatch and map UI.
+**Still to do:**
+- **F1b (hosting):** the merchant capture control, the browser "5 km" default and the random-km sources, and
+  showing the server `distanceKm` on the rider board.
+- **Owned by sokoni-66:** the quote endpoint trusts a browser `distanceKm`.
+- **Port first:** `webhookIntasend` and `updateClickAndCollectStatus` were redeployed 09-30 by sokoni-45 from
+  `bdbd29c`, so F1 must be ported onto that deployed source before it ships.
+
 ## [2026-09-30] — Test repair: PIN-unreachable rows 2.2 / 2.11 pin the D2 eligibility chain (owner-authorized)
 
 **Files:** `scripts/test-delivery-pin-unreachable.js`, `CHANGELOG.md`. **No production code, rules or API change.**

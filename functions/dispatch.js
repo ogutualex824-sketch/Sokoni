@@ -141,7 +141,16 @@ exports.dispatchDelivery = onCall(
         reasons: elig.refused.reduce((a, r) => { a[r.reason] = (a[r.reason] || 0) + 1; return a; }, {}),
       });
     }
-    const ranked  = SokoniDispatch.rankRiders(riders, delivery);
+    /* F1 — rank only against the AUTHORITATIVE pickup (the server-only deliveryPickups snapshot —
+       never the delivery document's own fields, never 0°,0°, never the drop-off). Without one there
+       is no distance to rank by: say so, and do NOT tell the seller "no riders available", which
+       would be false — riders may exist; the pickup point does not. */
+    const _pickPt = (await require('./pickup-location').authoritativePickups(firestore, [deliveryRef])).get(String(deliveryRef));
+    if (!_pickPt) {
+      logger.warn('[dispatch] pickup location unknown — not ranking riders', { deliveryRef });
+      return { status: 'pickup_location_unknown', ranked: 0 };
+    }
+    const ranked  = SokoniDispatch.rankRiders(riders, Object.assign({}, delivery, { pickupLat: _pickPt.lat, pickupLng: _pickPt.lng }));
 
     if (!ranked.length) {
       await firestore.collection('dispatchQueue').doc(deliveryRef).set({
@@ -617,15 +626,29 @@ exports.optimizeBatchRoute = onCall(
       throw new HttpsError('permission-denied', 'None of those deliveries are assigned to you.');
     }
     const valid = authorised;
-    const stops = [];
+    /* F1 — stops are placed only at KNOWN points (pickup-location: the shop snapshot / validated
+       legacy fields). A missing coordinate used to become 0 — the point 0°,0° — and still produced
+       a route and a totalKm. Unknown stops are now listed separately and never routed through, and
+       totalKm is null whenever any stop, or the rider's own position, is unknown. */
+    const _pl = require('./pickup-location');
+    const rider = require('./rider-presence').validLocation({ lat: riderLat, lng: riderLng });
+    const stops = [], unlocated = [];
+    const _pickups = await _pl.authoritativePickups(firestore, valid.map((d) => d.id));
     valid.forEach(d => {
-      stops.push({ id: d.id + '_pickup',  type: 'pickup',  deliveryId: d.id, lat: d.pickupLat || 0,  lng: d.pickupLng || 0,  label: d.pickupAddress || 'Pickup' });
-      stops.push({ id: d.id + '_dropoff', type: 'dropoff', deliveryId: d.id, lat: d.dropoffLat || (d.deliveryCoords?.lat || 0), lng: d.dropoffLng || (d.deliveryCoords?.lng || 0), label: d.dropoffAddress || d.deliveryAddress || 'Dropoff', customerName: d.buyerName, customerPhone: d.buyerPhone });
+      const pk = _pickups.get(String(d.id)), dp = _pl.dropoffPointOf(d);
+      const pickup  = { id: d.id + '_pickup',  type: 'pickup',  deliveryId: d.id, label: d.pickupAddress || 'Pickup' };
+      const dropoff = { id: d.id + '_dropoff', type: 'dropoff', deliveryId: d.id, label: d.dropoffAddress || d.deliveryAddress || 'Dropoff', customerName: d.buyerName, customerPhone: d.buyerPhone };
+      if (pk) stops.push(Object.assign(pickup, pk)); else unlocated.push(Object.assign(pickup, { reason: 'pickup_location_unknown' }));
+      if (dp) stops.push(Object.assign(dropoff, dp)); else unlocated.push(Object.assign(dropoff, { reason: 'dropoff_location_unknown' }));
     });
-    const optimized = SokoniDispatch.optimizeStopOrder(riderLat, riderLng, stops);
-    let totalKm = 0, prevLat = riderLat, prevLng = riderLng;
-    optimized.forEach(s => { totalKm += SokoniDispatch.haversine(prevLat, prevLng, s.lat, s.lng); prevLat = s.lat; prevLng = s.lng; });
-    return { stops: optimized, totalKm: Math.round(totalKm * 10) / 10 };
+    const optimized = rider ? SokoniDispatch.optimizeStopOrder(rider.lat, rider.lng, stops) : stops;
+    let totalKm = null;
+    if (rider && !unlocated.length && optimized.length) {
+      let km = 0, prevLat = rider.lat, prevLng = rider.lng;
+      optimized.forEach(s => { km += SokoniDispatch.haversine(prevLat, prevLng, s.lat, s.lng); prevLat = s.lat; prevLng = s.lng; });
+      totalKm = Math.round(km * 10) / 10;
+    }
+    return { stops: optimized, unlocated, totalKm, riderLocationKnown: !!rider };
   }
 );
 

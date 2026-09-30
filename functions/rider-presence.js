@@ -95,11 +95,16 @@ async function stateFor(db, uid, nowMs) {
     activeJobCount(db, uid),
   ]);
   const driver = dSnap.exists ? dSnap.data() : null;
+  const presence = pSnap.exists ? pSnap.data() : null;
   const st = presenceState({
-    presence: pSnap.exists ? pSnap.data() : null, driver,
+    presence, driver,
     verification: vSnap.exists ? vSnap.data() : null, nowMs: now, staleSeconds, activeCount,
   });
-  return Object.assign(st, { staleSeconds, activeCount, driver });
+  /* F1: the rider's position for server-side distance — only when valid AND reported within the
+     same stale window as presence. An old fix is not a position (unknown → distance stays null). */
+  const locAt = presence ? toMillis(presence.locationUpdatedAt) : null;
+  const location = (presence && locAt && now - locAt <= staleSeconds * 1000) ? validLocation(presence) : null;
+  return Object.assign(st, { staleSeconds, activeCount, driver, location });
 }
 
 /**
