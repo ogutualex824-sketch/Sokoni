@@ -477,6 +477,12 @@ quick-charge line (scanning), paid by ONE M-PESA payment → one sale, one recei
 - ~~**`posSyncToMarketplace` has no shop-ownership check**~~ — **fixed 2026-09-30** (security slice, local): `resolveShopAccess` + `sell`; mixed-shop sales rejected whole; idempotency keyed shop + sale.
 - Catalogue sale lines carry no `lineTotal`; quick-charge lines do (sale-record shape inconsistency).
 
+- **Offline POS blockers — three calls to `PosSales` functions that do not exist** (census 2026-09-30):
+  - `PosSales.park` (the real name is `parkSale`);
+  - `PosSales.getParked` (`getParkedSales`);
+  - `PosSales.getActiveShift` (`getCurrentShift`).
+
+  They go to the offline-convergence slice.
 - **Offline POS blocker:** `pos-checkout.html`'s offline save calls `PosSales.park`, which does not exist
   (`pos-sales.js` exports `parkSale`). Belongs to the offline-convergence slice. Not to be patched with an improvised
   implementation.

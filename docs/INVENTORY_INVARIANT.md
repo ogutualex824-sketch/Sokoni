@@ -59,8 +59,11 @@ every writer, instead of eight separate readings of stock:
   `resolveShopAccess` plus the `sell` capability; mixed-shop sales are rejected whole; the idempotency key is shop +
   sale. See [[SECURITY]] § Inventory authorization.
 - **The legacy POS device sync never moves stock.** `pos-sales.js` `_syncToMarketplace` sends items with `qty`, and
-  `posSyncToMarketplace` requires `qtyDeducted`, so every item is rejected as invalid. This is pre-existing. Repairing or
-  retiring it is the owner's call.
+  `posSyncToMarketplace` requires `qtyDeducted`, so every item is rejected as invalid. This is pre-existing.
+  - **Owner decision 2026-09-30: leave it, secured.** No code change.
+  - `recordSale` is the only trigger of `_syncToMarketplace`, and it has **no caller anywhere**. So the server callable
+    has no in-repo client; it is locked to the shop's own staff (`de3f896`).
+  - `pos-sales.js` itself stays: `pos-checkout.html`, `pos.html` and `pos-reports.html` use it for local reads.
 - **`warehouse-scanner.html` writes `products.stockQty` from the browser.** This carries over from Phase A.
 - **Production negative stock** left by the old code is not repaired. A read-only census is the owner's call.
 
