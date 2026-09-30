@@ -220,10 +220,16 @@ function makeParcelRequests(deps) {
     const d = request.data || {};
     const cat = activeCatalogue();
     if (d.catalogueOnly) return { ok: true, catalogue: publicCatalogue(cat) };
-    let distanceKm = Number(d.distanceKm);
-    let distanceSource = 'declared';
+    /* OWNER RULE (2026-09-30): coordinates are REQUIRED for a price. The distance is computed
+       here from validated pickup + drop-off points; a typed distance is never read. Missing or
+       invalid coordinates → `quote_unavailable` (a stated unknown, never an invented figure), and
+       nothing is written. A quote has no side effect: no job, no charge, no rider, no debt. */
     const p = _validLatLng(d.pickup), q = _validLatLng(d.dropoff);
-    if (p && q) { distanceKm = Math.max(MIN_DISTANCE_KM, Math.round(_haversineKm(p.lat, p.lng, q.lat, q.lng) * 1.3 * 10) / 10); distanceSource = 'server_coords'; }
+    if (!p || !q) {
+      return { ok: false, state: 'quote_unavailable', reason: !p && !q ? 'coordinates_required' : (!p ? 'pickup_coordinates_required' : 'dropoff_coordinates_required'), catalogue: publicCatalogue(cat) };
+    }
+    const distanceKm = Math.max(MIN_DISTANCE_KM, Math.round(_haversineKm(p.lat, p.lng, q.lat, q.lng) * 1.3 * 10) / 10);
+    const distanceSource = 'server_coords';
     const qt = quote({ vehicleType: d.vehicleType, distanceKm, weight: d.weight, urgency: d.urgency });
     const uid = request.auth && request.auth.uid;
     let quoteId = null, expiresAt = null;
@@ -262,6 +268,9 @@ function makeParcelRequests(deps) {
     if (scheduledAt && isNaN(scheduledAt.getTime())) throw new HttpsError('invalid-argument', 'Invalid scheduled time.');
     const pickupCoords  = _validLatLng(d.pickupCoords);
     const dropoffCoords = _validLatLng(d.deliveryCoords);
+    /* Same rule as the quote: a parcel job needs both validated points. The quote already had
+       them; the request must present the same facts or it is refused, never guessed. */
+    if (!pickupCoords || !dropoffCoords) throw new HttpsError('failed-precondition', 'Pickup and drop-off locations are required (choose them on the map or use your location).');
     const recipient = await (deps.resolveRecipient || resolveRecipient)(admin, db, recipientPhone);
     if (!recipient || !recipient.uid) {
       throw new HttpsError('failed-precondition', 'The recipient must have a SOKONI account. Ask them to sign up with ' + recipientPhone.replace(/^254/, '0') + ', then try again.');
@@ -285,6 +294,14 @@ function makeParcelRequests(deps) {
       if (!exp || exp < _now()) throw new HttpsError('failed-precondition', 'That price has expired. Get a new one.');
       qt = qd.quote;
       t.update(quoteRef, { status: 'claimed', parcelId, claimedAt: FV.serverTimestamp() });
+      /* F1-R (preserved): the authoritative pickup for ANY job is the server-only
+         deliveryPickups/{deliveryRef} record, which the board, dispatch and navigation read
+         through pickup-location.authoritativePickups(). A merchant job snapshots the shop's
+         point; a parcel snapshots the sender's validated point. create(): first fact wins. */
+      t.create(db.collection('deliveryPickups').doc(jobId), {
+        deliveryRef: jobId, lat: pickupCoords.lat, lng: pickupCoords.lng,
+        label: _areaOf(pickupAddress) || null, source: 'parcel_sender', parcelId, capturedAt: FV.serverTimestamp(),
+      });
       t.set(parcelRef, {
         uid, quoteId, jobId, kind: 'parcel', recipientUid: recipient.uid,
         catalogueVersion: qt.catalogueVersion, currency: qt.currency,

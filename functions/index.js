@@ -6917,7 +6917,12 @@ exports.availableDeliveries = onRequest(
             deliveryArea: _deliveryArea(o), itemCount: 1,
             deliveryFee: Number.isFinite(pfee) ? pfee : null, riderEarning: pEarn, driverNet: pEarn,
             vehicleType: o.vehicleType || null, speed: o.speed || o.urgency || null,
-            distanceKm: Number.isFinite(Number(o.distanceKm)) ? Number(o.distanceKm) : null,
+            /* F1-R: distanceKm is the RIDER's fresh position to the authoritative pickup
+               (deliveryPickups), null when either is unknown — never invented. tripKm is the
+               server-computed pickup→drop-off length the parcel was priced on. */
+            distanceKm: _pickupAuth.distanceKm(st.location, _pickupMap.get(String(o.id))),
+            pickupKnown: !!_pickupMap.get(String(o.id)),
+            tripKm: Number.isFinite(Number(o.distanceKm)) ? Number(o.distanceKm) : null,
             packageType: o.packageType || null, weight: o.weight || null,
           });
           continue;
