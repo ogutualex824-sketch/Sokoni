@@ -413,8 +413,9 @@
     <textarea class="cl-input" id="clNotes" rows="2" placeholder="e.g. 3-bedroom house, have dog, need eco products..." style="resize:none;"></textarea>
 
     <button type="button" class="cl-submit-btn" onclick="submitBooking()">
-      📅 Confirm Booking via WhatsApp →
+      📋 Confirm Booking
     </button>
+    <a href="support.html?topic=booking" class="sk-support-cta" style="display:block;text-align:center;margin-top:8px;padding:11px;border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;text-decoration:none;background:rgba(113,255,0,0.05);">🛟 Need help? Contact Support</a>
     <div class="cl-modal-msg" id="clModalMsg"></div>
   </div>
 </div>
@@ -687,11 +688,10 @@ function submitBooking() {
   const _waNum = provPhone.replace(/^0/,'254').replace(/\D/g,'');
   if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
     SokoniPay.waConnect(_waNum, msg, {providerName:booking.provider||'Cleaning Pro',category:'cleaning',serviceDesc:services||'Cleaning Service'});
-  } else {
-    window.open(`https://wa.me/${_waNum}?text=${encodeURIComponent(msg)}`, '_blank');
   }
+  /* no WhatsApp hand-off (owner 2026-09-30): the booking is recorded in SOKONI */
 
-  if (msgEl) { msgEl.innerHTML = `✅ Booking <strong style="color:#00d4ff;">${_esc(booking.id)}</strong> sent via WhatsApp! The cleaner will confirm shortly.`; msgEl.style.color = '#22c55e'; }
+  if (msgEl) { msgEl.innerHTML = `✅ Booking <strong style="color:#00d4ff;">${_esc(booking.id)}</strong> recorded in SOKONI! The cleaner will confirm in-app.`; msgEl.style.color = '#22c55e'; }
 
   if(window.SokoniInvoice){
     setTimeout(()=>{

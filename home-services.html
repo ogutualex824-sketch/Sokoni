@@ -185,7 +185,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0805;color:white;
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.5);cursor:pointer;"><input type="checkbox" id="bkUrgent" style="accent-color:#f59e0b;"> 🚨 Urgent / Emergency</label>
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.5);cursor:pointer;"><input type="checkbox" id="bkGetQuotes"> 💰 Get quotes from 3 providers</label>
       </div>
-      <button type="button" onclick="bookHomeService()" style="width:100%;padding:14px;background:linear-gradient(135deg,#f59e0b,#fbbf24);border:none;border-radius:12px;color:#0a0805;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">📋 Book via WhatsApp</button>
+      <button type="button" onclick="bookHomeService()" style="width:100%;padding:14px;background:linear-gradient(135deg,#f59e0b,#fbbf24);border:none;border-radius:12px;color:#0a0805;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">📋 Confirm Booking</button>
+      <a href="support.html?topic=booking" class="sk-support-cta" style="display:block;text-align:center;margin-top:8px;padding:11px;border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;text-decoration:none;background:rgba(113,255,0,0.05);">🛟 Need help? Contact Support</a>
       <div id="bkMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
     </div>
   </div>
@@ -483,9 +484,8 @@ function bookHomeService(){
   localStorage.setItem('sokoniHomeBookings',JSON.stringify(bks.slice(0,30)));
   if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
     SokoniPay.waConnect('254705726803', msg, {providerName:'SOKONI Home Services',category:'home-services',serviceDesc:'Home service: '+service});
-  } else {
-    window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
   }
+  /* no WhatsApp hand-off (owner 2026-09-30) */
   if(msgEl){msgEl.innerHTML=`✅ Booked! Ref: <strong>${_esc(ref)}</strong>`;msgEl.style.color='#f59e0b';}
   /* Firestore write — fire-and-forget */
   _hsFireWrite('homeServiceBookings',{ref,name,phone,service,loc,date,description:desc,status:'pending',hub:'home-services'});
@@ -509,8 +509,9 @@ function requestQuotes(){
   localStorage.setItem('hsQuoteRequests',JSON.stringify(quotes.slice(0,30)));
   _hsFireWrite('homeServiceQuotes',{service,location:loc,phone,description:desc,budget,status:'open'});
   const msg=`💰 *SOKONI Home Services — Quote Request*\n\n🔧 Service: ${service}\n📍 Location: ${loc}\n📞 Contact: ${phone}${budget?'\n💰 Budget: '+budget:''}\n\n📝 ${desc}\n\nPlease send your best quote!`;
-  window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
-  if(msgEl){msgEl.innerHTML='✅ Quote request sent to providers!';msgEl.style.color='#f59e0b';}
+  /* Quote request → support ticket (owner 2026-09-30); homeServiceQuotes record above stands. */
+  if(msgEl){msgEl.innerHTML='✅ Quote request recorded — opening SOKONI Support…';msgEl.style.color='#f59e0b';}
+  setTimeout(function(){ location.href = 'support.html?topic=quote&desc=' + encodeURIComponent(msg); }, 600);
   renderQuotesFeed();
 }
 window.requestQuotes=requestQuotes;

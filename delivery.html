@@ -326,7 +326,7 @@
 
   <!-- Actions -->
   <button type="button" class="dh-btn-primary" onclick="bookDeliveryFS()">📲 Book &amp; Pay with M-Pesa</button>
-  <button type="button" class="dh-btn-secondary" onclick="bookDeliveryWA()">💬 Book via WhatsApp</button>
+  <a href="support.html?topic=parcel" class="dh-btn-secondary" style="display:block;text-align:center;text-decoration:none;">🛟 Need help? Contact SOKONI Support</a>
   <button type="button" class="dh-btn-outline" style="margin-top:4px;" onclick="showDelTab('calc')">🧮 Just Check Pricing</button>
 </div>
 
@@ -453,7 +453,6 @@ const VEHICLES = {
 const WEIGHT_SUR = { light:0, medium:0.1, heavy:0.25, bulk:0.4 };
 const URG_MULT   = { standard:1, express:1.3, urgent:1.6 };
 const URG_ETA    = { standard:'', express:' (express)', urgent:' (priority)' };
-const SOKONI_WA  = '254705726803';
 
 let _selVehicle    = null;
 let _calcVehicle   = null; /* for pricing tab */
@@ -777,29 +776,9 @@ function _getBookingData(){
            total:r.total, rName, rPhone, phone, notes, pkgType, deliveryType:_delivType };
 }
 
-/* ── Book via WhatsApp ── */
-function bookDeliveryWA(){
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('del_wa',10,300000)){
-    (window._skToast||alert)('Too many booking attempts. Wait 5 minutes.'); return;
-  }
-  const d = _getBookingData(); if(!d) return;
-  const v = d.vehicleData;
-  const ref = 'DEL' + Date.now().toString().slice(-6);
-  const msg = encodeURIComponent(
-    `🚚 *SOKONI Delivery Request*\n\nRef: ${ref}\n`+
-    `Type: ${d.deliveryType.replace('_',' ')}\n`+
-    `Vehicle: ${v.icon} ${v.label}\n`+
-    `From: ${d.from||'TBC'}\nTo: ${d.to||'TBC'}\n`+
-    `Distance: ~${d.km} km\nLoad: ${d.weight}\nUrgency: ${d.urgency}\n`+
-    `💰 Total: KES ${d.total.toLocaleString()}\n`+
-    `${d.rName?`\nRecipient: ${d.rName}`:''}${d.rPhone?`\nRecipient Phone: ${d.rPhone}`:''}`+
-    `${d.phone?`\nSender Phone: ${d.phone}`:''}`+
-    `${d.notes?`\nNotes: ${d.notes}`:''}\n\nPlease confirm. 🙏`
-  );
-  if(window.SokoniInvoice) setTimeout(()=>SokoniInvoice.generate({type:'delivery',buyerName:d.rName||'Customer',buyerPhone:d.rPhone||d.phone||'',items:[{name:`${v.icon} ${v.label} Delivery`,category:'Delivery',qty:1,price:d.total}],subtotal:d.total,total:d.total,paymentMethod:'WhatsApp Booking',paymentRef:ref,sellerName:'SOKONI Delivery Partners',date:new Date().toISOString(),notes:`${d.from} → ${d.to}`}),800);
-  window.open(`https://wa.me/${SOKONI_WA}?text=${msg}`,'_blank');
-  dhToast(`✅ WhatsApp opened! Ref: ${ref}`);
-}
+/* Book via WhatsApp — REMOVED 2026-09-30 (owner: no booking hand-off to WhatsApp).
+   The Support link above reaches the server ticket authority (support.html →
+   SokoniSupportContact → adminOsDispatch/adminCreateSupportTicket → supportTickets). */
 
 /* ── Book via Firestore + M-Pesa ── */
 async function bookDeliveryFS(){
@@ -912,8 +891,10 @@ function trackMyDelivery(){
 function shareDeliveryLink(){
   if(!_successData) return;
   const url = _successData.trackingUrl || `https://mysokoni.co.ke/delivery-tracking.html?ref=${_successData.deliveryRef}`;
-  const msg = encodeURIComponent(`📦 Track my SOKONI Delivery\n\nRef: ${_successData.deliveryRef}\n\n👉 ${url}`);
-  window.open(`https://wa.me/?text=${msg}`,'_blank');
+  const text = `📦 Track my SOKONI Delivery — Ref: ${_successData.deliveryRef}`;
+  /* Native share sheet (the person picks the app), else copy. Never a WhatsApp hop. */
+  if(navigator.share){ navigator.share({ title:'SOKONI Delivery', text, url }).catch(()=>{}); return; }
+  (navigator.clipboard?.writeText(`${text}\n${url}`) || Promise.reject()).then(()=>dhToast('🔗 Tracking link copied!')).catch(()=>dhToast(url,'blue'));
 }
 
 /* ── Status badge ── */

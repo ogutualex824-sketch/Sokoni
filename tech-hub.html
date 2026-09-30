@@ -217,7 +217,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050a0f;color:white;
       </div>
       <label class="th-label">Describe the Problem</label>
       <textarea id="repDesc" class="th-input" style="min-height:70px;resize:vertical;" placeholder="e.g. Screen cracked after drop, touch still works but display has lines..."></textarea>
-      <button type="button" onclick="bookRepair()" style="width:100%;padding:14px;background:linear-gradient(135deg,#00d4ff,#0ea5e9);border:none;border-radius:12px;color:#050a0f;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🔧 Book Repair via WhatsApp</button>
+      <button type="button" onclick="bookRepair()" style="width:100%;padding:14px;background:linear-gradient(135deg,#00d4ff,#0ea5e9);border:none;border-radius:12px;color:#050a0f;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🔧 Book Repair</button>
+      <a href="support.html?topic=booking" class="sk-support-cta" style="display:block;text-align:center;margin-top:8px;padding:11px;border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;text-decoration:none;background:rgba(113,255,0,0.05);">🛟 Need help? Contact Support</a>
       <div id="repMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
     </div>
     <div style="margin-top:28px;">
@@ -722,10 +723,9 @@ function bookRepair() {
   _thFireWrite('techRepairs', { ref, name, phone, device, repairType:type, date, location:loc, notes:desc, status:'pending' });
   if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
     SokoniPay.waConnect('254705726803', msg, {providerName:'SOKONI Tech Hub',category:'default',serviceDesc:type||'Device Repair'});
-  } else {
-    window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`, '_blank');
   }
-  if(msgEl) { msgEl.innerHTML=`✅ Booking sent! Ref: <strong>${_esc(ref)}</strong>`; msgEl.style.color='#00d4ff'; }
+  /* no WhatsApp hand-off (owner 2026-09-30) */
+  if(msgEl) { msgEl.innerHTML=`✅ Booking recorded! Ref: <strong>${_esc(ref)}</strong>`; msgEl.style.color='#00d4ff'; }
 }
 window.bookRepair = bookRepair;
 
@@ -815,7 +815,7 @@ function renderTechsGrid(list) {
         <div class="th-card-price" style="font-size:15px;">KES ${Number(t.rate).toLocaleString()}<span>/hr</span></div>
         <span style="font-size:11px;color:rgba(255,255,255,0.4);">⭐ ${t.rating} · ${t.jobs} jobs</span>
       </div>
-      <a href="https://wa.me/254${t.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi '+t.name+', I found you on SOKONI Tech Hub. I need help with: ')}" target="_blank" rel="noopener" class="th-wa-btn">💬 Hire via WhatsApp</a>
+      <a href="support.html?topic=hire&ref=${encodeURIComponent(t.name)}" class="th-wa-btn">🛟 Hire via SOKONI</a>
     </div>`).join('');
 }
 
@@ -980,8 +980,9 @@ function submitITRequest() {
   const desc=document.getElementById('itsDesc')?.value||'';
   _thFireWrite('techITRequests',{ref,name,phone,company,service:svc,budget,timeline,desc,hub:'tech-hub'});
   const msg=`🖥️ *SOKONI Tech Hub — IT Service Request*\n\nRef: ${ref}\n👤 ${name}${company?' ('+company+')':''}\n📞 ${phone}\n🛠️ Service: ${svc}\n💰 Budget: ${budget}\n⏱️ Timeline: ${timeline}\n${desc?'\n📝 '+desc:''}\n\nPlease get back to me. Thank you!`;
-  window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
-  if(msgEl){msgEl.innerHTML=`✅ Request sent! Ref: <strong>${_esc(ref)}</strong>`;msgEl.style.color='#818cf8';}
+  /* IT service request → support ticket (owner 2026-09-30); techITRequests record above stands. */
+  if(msgEl){msgEl.innerHTML=`✅ Request recorded! Ref: <strong>${_esc(ref)}</strong> — opening SOKONI Support…`;msgEl.style.color='#818cf8';}
+  setTimeout(function(){ location.href = 'support.html?topic=request&desc=' + encodeURIComponent(msg); }, 600);
 }
 window.submitITRequest = submitITRequest;
 
@@ -1018,7 +1019,7 @@ function filterFreelancers() {
         <div class="th-card-price" style="color:#2dd4bf;">${f.rate}</div>
         <span style="font-size:11px;color:rgba(255,255,255,0.4);">⭐ ${f.rating} · ${f.jobs} jobs</span>
       </div>
-      <a href="https://wa.me/254${f.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi '+f.name+', I found your profile on SOKONI Tech Hub. I need help with: ')}" target="_blank" rel="noopener" class="th-wa-btn" style="background:rgba(20,184,166,0.07);border-color:rgba(20,184,166,0.25);color:#2dd4bf;">💬 Hire via WhatsApp</a>
+      <a href="support.html?topic=hire&ref=${encodeURIComponent(f.name)}" class="th-wa-btn" style="background:rgba(20,184,166,0.07);border-color:rgba(20,184,166,0.25);color:#2dd4bf;">🛟 Hire via SOKONI</a>
     </div>`).join('');
 }
 window.filterFreelancers = filterFreelancers;

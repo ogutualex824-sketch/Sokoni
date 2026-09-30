@@ -1,3 +1,25 @@
+## 2026-09-30 — SLICE B (hosting candidate, NOT deployed): Support authority on the customer page + WhatsApp booking hand-offs replaced
+
+Owner-authorized to build and certify (no deployment). On `hosting/parcel-rail-on-b108ae3` (live base b108ae3 re-verified).
+
+- **Support authority.** `support.html` now ports the repaired page: submit → `SokoniSupportContact.submit` → `adminOsDispatch`
+  {op: adminCreateSupportTicket} → `supportTickets/{id}` (server-minted id shown; localStorage is a cache of the server id, written
+  after the reply). Ticket lookup reads the server record. **No WhatsApp** card, follow-up or fallback anywhere on the page; the two
+  WhatsApp controls became in-app Messages. `?topic=&ref=&desc=` prefill lets every Support button arrive with context; `sos` = critical.
+  AdminOS routing proven: the super admin's `adminGetSupportTickets` returns the ticket; a customer is refused. New libs on this line:
+  `sokoni-support-contact.js`, `sokoni-record-links.js`; `sokoni-company.js` gains the support-phone helper (tel only in use).
+- **WhatsApp booking replacement.** `sokoni-pay.js` `waConnect` keeps the deposit gateway and ends in an in-app confirmation with a
+  Support link (13 hub callers converge). Direct hops migrated on cleaning, plumbing, electrical, phone-repair, car-rental,
+  home-services, tech-hub (incl. 2× Hire via WhatsApp), mechanics, legal-hub, car-hub (mechanic + inspection), construction
+  (contractor fallback + equipment fallback). Request-shaped hops (roadside SOS ×2, vehicle transport, home-services quote,
+  tech-hub IT request) open a prefilled support ticket. Parcel/rider/tracking: `delivery.html` Book-via-WhatsApp → Support,
+  share → native share/copy, hard-coded number gone; `driver.html` rider support → ticket; `delivery-tracking.html` SOS → ticket.
+- **Deliberately untouched:** `bookNow` and its three malformed callers (own contract repair); contact chips, registrations,
+  admin follow-ups and share links (legacy/keep classes — enumerated in the cert).
+- **Certification:** `scripts/test-slice-b-support-whatsapp.js` — 26/0 (library in VM, real page in Chromium with every other
+  origin aborted, real `adminOsDispatch` from the deployed F1-R lineage on the Firestore emulator, negative control).
+- **Files:** 17 modified + 2 new libs + 1 test. **Database / API / rules / functions:** none. **Deploy:** NOT authorized yet.
+
 ## [2026-09-30] - DEPLOYED d55c112 → Hosting v646 (cacheVersion sokoni-20260930093216-v646) 09:32Z, owner-authorized; artefacts 12edf13; rollback 6f7202bd5dd81d84. Live verified: markers served, 6 of 7 files byte-identical (index.html served via / — /index.html is a 301), recs widget renders, feed 6, Fastest Selling visible, no [RT] products warning, no module-not-loaded warning. Follow-up (recs App Check wait+retry) committed, NOT deployed.
 
 ## [2026-09-30] — Home: Edit Interests works, Picked For You renders, every home grid re-syncs with the catalogue — DEPLOYED as d55c112 (see line above)

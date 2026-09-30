@@ -2055,7 +2055,7 @@ function confirmConsultation(lawyerId){
       `⚖️ *SOKONI Legal Hub  Consultation Request*\n\nRef: ${ref}\n\n👤 Client: ${name}\n📞 Phone: ${phone}\n🔍 Matter: ${matter}\n📅 Date: ${date||"Flexible"}\n🕐 Time: ${time||"TBD"}\n${mpesaCode?`💚 Deposit paid: ${mpesaCode}\n`:""}\n${details?`Details:\n${details}\n\n`:""}`+
       `I found you on SOKONI Legal Hub and would like to book a consultation. Please confirm your availability. Thank you!`
     );
-    if(msgEl){ msgEl.innerHTML=`✅ Opening WhatsApp... Booking ref: <strong>${lhEsc(ref)}</strong>`; msgEl.style.color="#71ff00"; }
+    if(msgEl){ msgEl.innerHTML=`✅ Booking recorded in SOKONI. Ref: <strong>${lhEsc(ref)}</strong> · <a href="support.html?topic=booking&ref=${encodeURIComponent(ref)}" style="color:#71ff00;">🛟 Support</a>`; msgEl.style.color="#71ff00"; }
     /* Track lead fee — recorded when WhatsApp contact is actually shared */
     (async function(){try{
       const{initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
@@ -2067,9 +2067,8 @@ function confirmConsultation(lawyerId){
     }catch(e){}})();
     if(typeof SokoniPay!=='undefined'&&SokoniPay.waConnect){
       SokoniPay.waConnect(wa, decodeURIComponent(msg), {providerName:l.name,category:'legal',serviceDesc:matter+' Consultation'});
-    } else {
-      setTimeout(()=>{ window.open(`https://wa.me/${wa}?text=${msg}`,"_blank"); },600);
     }
+    /* no WhatsApp hand-off (owner 2026-09-30) */
     window._lhCloseTimer = setTimeout(closeConsultModal, 2000);
   }
 

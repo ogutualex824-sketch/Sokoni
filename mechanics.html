@@ -10,9 +10,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>SOKONI Mechanics  Find Garages & Auto Mechanics in Kenya</title>
   <meta property="og:title" content="SOKONI Mechanics — Find Trusted Garages & Auto Repair in Kenya | SOKONI">
-  <meta property="og:description" content="Find trusted mechanics and garages near you in Kenya. Book via WhatsApp, pay with M-Pesa on SOKONI SOKONI Mechanics Kenya.">
+  <meta property="og:description" content="Find trusted mechanics and garages near you in Kenya. Book in-app, pay with M-Pesa on SOKONI SOKONI Mechanics Kenya.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/logosokoni.png">
-  <meta name="description" content="Find trusted mechanics, garages and auto repair shops near you in Kenya. Book via WhatsApp, pay with M-Pesa.">
+  <meta name="description" content="Find trusted mechanics, garages and auto repair shops near you in Kenya. Book in-app, pay with M-Pesa.">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#f97316">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -134,7 +134,7 @@
 <section class="mc-hero">
   <div class="mc-badge">🔧 SOKONI Mechanics</div>
   <h1>Fix It Fast.<br><span>Find a Mechanic Near You.</span></h1>
-  <p>Verified mechanics, garages, auto electricians &amp; body shops across Kenya. Book via WhatsApp, pay with M-Pesa.</p>
+  <p>Verified mechanics, garages, auto electricians &amp; body shops across Kenya. Book in-app, pay with M-Pesa.</p>
   <div class="mc-search-row">
     <input type="text" id="srchMech" placeholder="Search by name, speciality or area⬦" oninput="applyFilters()">
     <select id="srchLoc" onchange="applyFilters()" style="max-width:180px;">
@@ -658,7 +658,8 @@ function openBookMech(id){
     </div>
     <label class="mc-label">Your Location (for mobile mechanic)</label>
     <input type="text" id="bkMLoc" class="mc-input" placeholder="e.g. Kilimani, near Junction Mall">
-    <button type="button" onclick="confirmMechBooking('${m.id}')" style="width:100%;padding:14px;background:linear-gradient(135deg,#f97316,#ea580c);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-bottom:8px;"> Send Booking via WhatsApp</button>
+    <button type="button" onclick="confirmMechBooking('${m.id}')" style="width:100%;padding:14px;background:linear-gradient(135deg,#f97316,#ea580c);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-bottom:8px;">📋 Send Booking</button>
+    <a href="support.html?topic=booking" class="sk-support-cta" style="display:block;text-align:center;margin-top:8px;padding:11px;border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;text-decoration:none;background:rgba(113,255,0,0.05);">🛟 Need help? Contact Support</a>
     <button type="button" onclick="closeMechModal()" style="width:100%;padding:11px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.4);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button>
     <div id="bkMMsg" style="margin-top:10px;font-size:12px;min-height:14px;"></div>`;
   document.getElementById("mechOverlay").style.display="flex";
@@ -696,8 +697,9 @@ function confirmMechBooking(id){
     }catch(e){}
   }
   const msg=encodeURIComponent(`🔧 *SOKONI Mechanics  Booking Request*\n\nRef: ${ref}\n\n`+plainMsg);
-  if(msgEl){msgEl.innerHTML=`✅ Opening WhatsApp... Ref: <strong>${safeHtml(ref)}</strong>`;msgEl.style.color="#71ff00";}
-  setTimeout(()=>{window.open(`https://wa.me/${wa}?text=${msg}`,"_blank");setTimeout(closeMechModal,2000);},600);
+  if(msgEl){msgEl.innerHTML=`✅ Booking recorded in SOKONI. Ref: <strong>${safeHtml(ref)}</strong>`;msgEl.style.color="#71ff00";}
+  /* no WhatsApp hand-off (owner 2026-09-30) */
+  void msg; setTimeout(closeMechModal,2000);
 }
 
 function closeMechModal(){
@@ -836,8 +838,11 @@ function sendSOS() {
   const wa = (mobile247.length && mobile247[0].phone)
     ? mobile247[0].phone.replace(/^0/,'254').replace(/\D/g,'')
     : '254705726803';
-  window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, '_blank');
-  showMechToast('SOS sent! Help is on the way.');
+  /* SOS → CRITICAL support ticket (owner 2026-09-30). A WhatsApp number nobody is guaranteed to
+     watch is not an emergency channel; the ticket reaches AdminOS. */
+  void wa;
+  showMechToast('Opening SOKONI Support…');
+  location.href = 'support.html?topic=sos&desc=' + encodeURIComponent(msg);
 }
 window.sendSOS = sendSOS;
 
