@@ -40,7 +40,7 @@
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html,body{height:100%;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
     body{background:var(--bg);color:var(--txt);display:flex;font-size:14px;line-height:1.5}
-    .aos-sidebar{width:var(--aos-sidebar-w);min-height:100vh;background:linear-gradient(180deg,#0c120c 0%,#070b07 100%);border-right:1px solid var(--aos-border);box-shadow:4px 0 24px rgba(0,0,0,.35);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto}
+    .aos-sidebar{width:var(--aos-sidebar-w);min-height:100vh;background:linear-gradient(180deg,#0c120c 0%,#070b07 100%);border-right:1px solid var(--aos-border);box-shadow:4px 0 24px rgba(0,0,0,.35);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow:hidden}
     .aos-logo{padding:20px 16px 16px;border-bottom:1px solid var(--aos-border);display:flex;align-items:center;gap:10px}
     .logo-icon{width:36px;height:36px;border-radius:9px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(255,255,255,.04)}
     .logo-icon img{width:100%;height:100%;object-fit:contain;display:block}
@@ -325,12 +325,37 @@
       body.sidebar-collapsed .aos-logo{justify-content:center}
       body.sidebar-collapsed .aos-sidebar-footer{display:flex;justify-content:center}
       body.sidebar-collapsed .aos-sidebar-toggle{transform:rotate(180deg);margin:0}
-      body.sidebar-collapsed .nav-item{font-size:0;justify-content:center;padding:10px 0;gap:0}
+      body.sidebar-collapsed .nav-item{justify-content:center;padding:10px 0;gap:0}
       body.sidebar-collapsed .nav-item .nav-icon{font-size:18px}
       body.sidebar-collapsed .nav-badge{display:none}
     }
     @media(max-width:768px){.aos-sidebar{transform:translateX(-100%);transition:transform .25s}.aos-sidebar.open{transform:translateX(0)}.aos-sidebar.open ~ .aos-scrim{display:block}.aos-main{margin-left:0}.mobile-menu-btn{display:flex!important}}
-  
+    /* ── Sidebar scroll region, focus, motion (Merchant V2's drawer contract) ──
+       The sidebar is a flex column that never scrolls itself; only the <nav>
+       does. min-height:0 is what lets the nav shrink and scroll instead of
+       pushing the footer (Sign Out) below the viewport — the same fix
+       merchant-v2.html carries on .side-scroll. */
+    .aos-logo,.aos-sidebar-footer{flex:0 0 auto}
+    .aos-nav{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+    .nav-label{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .18s,width .18s}
+    /* Keyboard focus is visible; :focus:not(:focus-visible) in sokoni-tokens.css
+       already keeps the ring off pointer clicks. */
+    .nav-item:focus-visible,.aos-sidebar-toggle:focus-visible,.signout-btn:focus-visible,.mobile-menu-btn:focus-visible{outline:2px solid var(--aos-accent);outline-offset:-2px}
+    @media(min-width:769px){
+      /* Collapsed rail: labels shrink to nothing rather than font-size:0, so the
+         icons stay put and the badge/label text is still real text. */
+      body.sidebar-collapsed .nav-label{opacity:0;width:0;overflow:hidden}
+    }
+    @media(prefers-reduced-motion:reduce){
+      .aos-sidebar,.aos-main,.nav-label{transition:none}
+      /* id-scoped and !important on purpose: sokoni-polish.css:198 sets
+         `button:not(…)×4{transition:transform .13s … !important}`, specificity
+         (0,4,1), which beats the platform's own reduced-motion reset on `*`, so
+         every button keeps animating under the preference. (1,0,1) wins here;
+         the platform-wide defect is recorded, not fixed, in this slice. */
+      #aosSidebar button,#aosMenuBtn{transition:none!important}
+    }
+
 /* super-admin.html requires claims.superAdmin === true, so these two links are a
    dead end for an ordinary Admin - they land on "This account does not carry the
    Super Admin role". sokoni-aos.js:50 already sets body.is-super from the verified
@@ -346,63 +371,65 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
 <link rel="stylesheet" href="sokoni-admin-responsive.css">
 </head>
 <body>
-  <aside class="aos-sidebar" id="aosSidebar">
+  <aside class="aos-sidebar" id="aosSidebar" aria-label="AdminOS sidebar">
     <div class="aos-logo">
       <div class="logo-icon"><img src="/assets/logosokoni.png" alt="Sokoni" loading="eager"></div>
       <div class="logo-titles"><div class="logo-text">SOKONI AOS</div><div class="logo-sub">Mission Control</div></div>
-      <button class="aos-sidebar-toggle" onclick="_sidebarToggle()" aria-label="Collapse or close menu" title="Collapse menu">&#x00AB;</button>
+      <button class="aos-sidebar-toggle" id="aosSidebarToggle" type="button" onclick="_sidebarToggle()" aria-label="Collapse menu" aria-expanded="true" title="Collapse menu">&#x00AB;</button>
     </div>
+    <nav class="aos-nav" id="aosNav" aria-label="AdminOS navigation">
     <div class="nav-group">
       <div class="nav-group-label">Overview</div>
-      <button class="nav-item" data-section="dashboard" data-label="Dashboard" onclick="SokoniAOS.navigate('dashboard');_closeSidebar()"><span class="nav-icon">&#x1F3E0;</span>Dashboard</button>
+      <button class="nav-item" data-section="dashboard" data-label="Dashboard" onclick="SokoniAOS.navigate('dashboard');_closeSidebar()"><span class="nav-icon">&#x1F3E0;</span><span class="nav-label">Dashboard</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">People</div>
-      <button class="nav-item" data-section="users" data-label="User Management" onclick="SokoniAOS.navigate('users');_closeSidebar()"><span class="nav-icon">&#x1F465;</span>Users</button>
+      <button class="nav-item" data-section="users" data-label="User Management" onclick="SokoniAOS.navigate('users');_closeSidebar()"><span class="nav-icon">&#x1F465;</span><span class="nav-label">Users</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Commerce</div>
-      <button class="nav-item" data-section="marketplace" data-label="Marketplace" onclick="SokoniAOS.navigate('marketplace');_closeSidebar()"><span class="nav-icon">&#x1F6D2;</span>Marketplace</button>
-      <button class="nav-item" data-section="services" data-label="Service Hubs" onclick="SokoniAOS.navigate('services');_closeSidebar()"><span class="nav-icon">&#x1F527;</span>Service Hubs</button>
-      <button class="nav-item" data-section="delivery" data-label="Delivery Operations" onclick="SokoniAOS.navigate('delivery');_closeSidebar()"><span class="nav-icon">&#x1F697;</span>Delivery</button>
+      <button class="nav-item" data-section="marketplace" data-label="Marketplace" onclick="SokoniAOS.navigate('marketplace');_closeSidebar()"><span class="nav-icon">&#x1F6D2;</span><span class="nav-label">Marketplace</span></button>
+      <button class="nav-item" data-section="services" data-label="Service Hubs" onclick="SokoniAOS.navigate('services');_closeSidebar()"><span class="nav-icon">&#x1F527;</span><span class="nav-label">Service Hubs</span></button>
+      <button class="nav-item" data-section="delivery" data-label="Delivery Operations" onclick="SokoniAOS.navigate('delivery');_closeSidebar()"><span class="nav-icon">&#x1F697;</span><span class="nav-label">Delivery</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Operations</div>
-      <button class="nav-item" data-section="financial" data-label="Financial Center" onclick="SokoniAOS.navigate('financial');_closeSidebar()"><span class="nav-icon">&#x1F4B0;</span>Financial</button>
-      <button class="nav-item" data-section="bookings" data-label="Bookings" onclick="SokoniAOS.navigate('bookings');_closeSidebar()"><span class="nav-icon">&#x1F4C5;</span>Bookings</button>
-      <button class="nav-item" data-section="payments" data-label="Payments" onclick="SokoniAOS.navigate('payments');_closeSidebar()"><span class="nav-icon">&#x1F4B3;</span>Payments</button>
-      <button class="nav-item" data-section="support" data-label="Customer Support" onclick="SokoniAOS.navigate('support');_closeSidebar()"><span class="nav-icon">&#x1F3A7;</span>Support<span class="nav-badge" id="sidebarTicketBadge" hidden>0</span></button>
-      <button class="nav-item" data-section="comms" data-label="Communications" onclick="SokoniAOS.navigate('comms');_closeSidebar()"><span class="nav-icon">&#x1F4E2;</span>Communications</button>
-      <button class="nav-item" data-section="content" data-label="Content Management" onclick="SokoniAOS.navigate('content');_closeSidebar()"><span class="nav-icon">&#x1F4DD;</span>Content</button>
+      <button class="nav-item" data-section="financial" data-label="Financial Center" onclick="SokoniAOS.navigate('financial');_closeSidebar()"><span class="nav-icon">&#x1F4B0;</span><span class="nav-label">Financial</span></button>
+      <button class="nav-item" data-section="bookings" data-label="Bookings" onclick="SokoniAOS.navigate('bookings');_closeSidebar()"><span class="nav-icon">&#x1F4C5;</span><span class="nav-label">Bookings</span></button>
+      <button class="nav-item" data-section="payments" data-label="Payments" onclick="SokoniAOS.navigate('payments');_closeSidebar()"><span class="nav-icon">&#x1F4B3;</span><span class="nav-label">Payments</span></button>
+      <button class="nav-item" data-section="support" data-label="Customer Support" onclick="SokoniAOS.navigate('support');_closeSidebar()"><span class="nav-icon">&#x1F3A7;</span><span class="nav-label">Support</span><span class="nav-badge" id="sidebarTicketBadge" hidden>0</span></button>
+      <button class="nav-item" data-section="comms" data-label="Communications" onclick="SokoniAOS.navigate('comms');_closeSidebar()"><span class="nav-icon">&#x1F4E2;</span><span class="nav-label">Communications</span></button>
+      <button class="nav-item" data-section="content" data-label="Content Management" onclick="SokoniAOS.navigate('content');_closeSidebar()"><span class="nav-icon">&#x1F4DD;</span><span class="nav-label">Content</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Intelligence</div>
-      <button class="nav-item" data-section="ai" data-label="AI Operations" onclick="SokoniAOS.navigate('ai');_closeSidebar()"><span class="nav-icon">&#x1F916;</span>AI</button>
-      <button class="nav-item" data-section="search" data-label="Search Management" onclick="SokoniAOS.navigate('search');_closeSidebar()"><span class="nav-icon">&#x1F50D;</span>Search</button>
-      <button class="nav-item" data-section="analytics" data-label="Analytics &amp; BI" onclick="SokoniAOS.navigate('analytics');_closeSidebar()"><span class="nav-icon">&#x1F4CA;</span>Analytics</button>
+      <button class="nav-item" data-section="ai" data-label="AI Operations" onclick="SokoniAOS.navigate('ai');_closeSidebar()"><span class="nav-icon">&#x1F916;</span><span class="nav-label">AI</span></button>
+      <button class="nav-item" data-section="search" data-label="Search Management" onclick="SokoniAOS.navigate('search');_closeSidebar()"><span class="nav-icon">&#x1F50D;</span><span class="nav-label">Search</span></button>
+      <button class="nav-item" data-section="analytics" data-label="Analytics &amp; BI" onclick="SokoniAOS.navigate('analytics');_closeSidebar()"><span class="nav-icon">&#x1F4CA;</span><span class="nav-label">Analytics</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Platform</div>
-      <button class="nav-item" data-section="smartpos" data-label="SmartPOS" onclick="SokoniAOS.navigate('smartpos');_closeSidebar()"><span class="nav-icon">&#x1F5A8;&#xFE0F;</span>SmartPOS</button>
-      <button class="nav-item" data-section="fraud" data-label="Fraud &amp; Trust" onclick="SokoniAOS.navigate('fraud');_closeSidebar()"><span class="nav-icon">&#x1F6E1;&#xFE0F;</span>Fraud &amp; Trust</button>
-      <button class="nav-item" data-section="config" data-label="Platform Config" onclick="SokoniAOS.navigate('config');_closeSidebar()"><span class="nav-icon">&#x2699;&#xFE0F;</span>Config</button>
-      <button class="nav-item" data-section="hubs" data-label="Hub Registry" onclick="SokoniAOS.navigate('hubs');_closeSidebar()"><span class="nav-icon">&#x1F3D7;&#xFE0F;</span>Hubs</button>
-      <button class="nav-item" data-section="workflows" data-label="Workflow Center" onclick="SokoniAOS.navigate('workflows');_closeSidebar()"><span class="nav-icon">&#x267B;&#xFE0F;</span>Workflows</button>
-      <button class="nav-item" data-section="audit" data-label="Audit Center" onclick="SokoniAOS.navigate('audit');_closeSidebar()"><span class="nav-icon">&#x1F4CB;</span>Audit</button>
-      <button class="nav-item" data-section="security" data-label="Security" onclick="SokoniAOS.navigate('security');_closeSidebar()"><span class="nav-icon">&#x1F510;</span>Security</button>
+      <button class="nav-item" data-section="smartpos" data-label="SmartPOS" onclick="SokoniAOS.navigate('smartpos');_closeSidebar()"><span class="nav-icon">&#x1F5A8;&#xFE0F;</span><span class="nav-label">SmartPOS</span></button>
+      <button class="nav-item" data-section="fraud" data-label="Fraud &amp; Trust" onclick="SokoniAOS.navigate('fraud');_closeSidebar()"><span class="nav-icon">&#x1F6E1;&#xFE0F;</span><span class="nav-label">Fraud &amp; Trust</span></button>
+      <button class="nav-item" data-section="config" data-label="Platform Config" onclick="SokoniAOS.navigate('config');_closeSidebar()"><span class="nav-icon">&#x2699;&#xFE0F;</span><span class="nav-label">Config</span></button>
+      <button class="nav-item" data-section="hubs" data-label="Hub Registry" onclick="SokoniAOS.navigate('hubs');_closeSidebar()"><span class="nav-icon">&#x1F3D7;&#xFE0F;</span><span class="nav-label">Hubs</span></button>
+      <button class="nav-item" data-section="workflows" data-label="Workflow Center" onclick="SokoniAOS.navigate('workflows');_closeSidebar()"><span class="nav-icon">&#x267B;&#xFE0F;</span><span class="nav-label">Workflows</span></button>
+      <button class="nav-item" data-section="audit" data-label="Audit Center" onclick="SokoniAOS.navigate('audit');_closeSidebar()"><span class="nav-icon">&#x1F4CB;</span><span class="nav-label">Audit</span></button>
+      <button class="nav-item" data-section="security" data-label="Security" onclick="SokoniAOS.navigate('security');_closeSidebar()"><span class="nav-icon">&#x1F510;</span><span class="nav-label">Security</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Tools</div>
-      <a class="nav-item" href="platform-hub.html"><span class="nav-icon">&#x1F310;</span>Hub Portal</a>
-      <a class="nav-item" href="platform-health.html"><span class="nav-icon">&#x1F49A;</span>Platform Health</a>
-      <a class="nav-item" href="finos.html"><span class="nav-icon">&#x1F3E6;</span>FinOS</a>
-      <a class="nav-item" href="trust-safety.html"><span class="nav-icon">&#x1F512;</span>Trust &amp; Safety</a>
-      <a class="nav-item" href="launch-readiness.html"><span class="nav-icon">&#x1F680;</span>Launch Readiness</a>
-      <a class="nav-item" href="reliability-center.html"><span class="nav-icon">&#x1F4E1;</span>Reliability</a>
-      <a class="nav-item" href="automation-center.html"><span class="nav-icon">&#x1F916;</span>Automation</a>
-      <a class="nav-item" href="automation-engine.html"><span class="nav-icon">&#x2699;&#xFE0F;</span>ADE Rules</a>
-      <a class="nav-item" data-requires-superadmin href="super-admin.html"><span class="nav-icon">&#x1F451;</span>Super Admin</a>
+      <a class="nav-item" href="platform-hub.html"><span class="nav-icon">&#x1F310;</span><span class="nav-label">Hub Portal</span></a>
+      <a class="nav-item" href="platform-health.html"><span class="nav-icon">&#x1F49A;</span><span class="nav-label">Platform Health</span></a>
+      <a class="nav-item" href="finos.html"><span class="nav-icon">&#x1F3E6;</span><span class="nav-label">FinOS</span></a>
+      <a class="nav-item" href="trust-safety.html"><span class="nav-icon">&#x1F512;</span><span class="nav-label">Trust &amp; Safety</span></a>
+      <a class="nav-item" href="launch-readiness.html"><span class="nav-icon">&#x1F680;</span><span class="nav-label">Launch Readiness</span></a>
+      <a class="nav-item" href="reliability-center.html"><span class="nav-icon">&#x1F4E1;</span><span class="nav-label">Reliability</span></a>
+      <a class="nav-item" href="automation-center.html"><span class="nav-icon">&#x1F916;</span><span class="nav-label">Automation</span></a>
+      <a class="nav-item" href="automation-engine.html"><span class="nav-icon">&#x2699;&#xFE0F;</span><span class="nav-label">ADE Rules</span></a>
+      <a class="nav-item" data-requires-superadmin href="super-admin.html"><span class="nav-icon">&#x1F451;</span><span class="nav-label">Super Admin</span></a>
     </div>
+    </nav>
     <div class="aos-sidebar-footer">
       <div class="aos-user-chip">
         <div class="aos-user-avatar">A</div>
@@ -411,11 +438,11 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       <button class="signout-btn" onclick="SokoniAOS.signOut()">Sign Out</button>
     </div>
   </aside>
-  <div class="aos-scrim" id="aosScrim" onclick="_closeSidebar()"></div>
+  <div class="aos-scrim" id="aosScrim" aria-hidden="true" onclick="_closeSidebar()"></div>
 
   <main class="aos-main">
     <header class="aos-header">
-      <button class="mobile-menu-btn" onclick="_openSidebar()">&#x2630;</button>
+      <button class="mobile-menu-btn" id="aosMenuBtn" type="button" onclick="_openSidebar()" aria-label="Open menu" aria-controls="aosSidebar" aria-expanded="false">&#x2630;</button>
       <div class="aos-breadcrumb" id="aosBreadcrumb">Dashboard</div>
       <div class="aos-header-search"><input type="search" placeholder="Quick user search&#x2026;" oninput="SokoniAOS.navigate('users');SokoniAOS.loadUsers(this.value)" aria-label="Search"></div>
       <button class="header-notif-btn" onclick="SokoniAOS.navigate('comms')" title="Notifications">&#x1F514;</button>
@@ -707,16 +734,55 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
   </main>
   <script src="sokoni-aos.js"></script>
   <script>
-    function _openSidebar()  { document.getElementById("aosSidebar").classList.add("open"); }
-    function _closeSidebar() { document.getElementById("aosSidebar").classList.remove("open"); }
+    /* ── Sidebar chrome ──────────────────────────────────────────────────────
+       Merchant V2's drawer contract, adapted: ONE markup tree is a fixed rail on
+       desktop and an off-canvas drawer on phones. Open → drawer + scrim; Escape,
+       the « control, the scrim, or choosing a section → closed. Focus moves into
+       the drawer on open and back to the menu button on close, so a keyboard
+       user is never left on a control the scrim now covers. Routing is untouched:
+       every section still goes through SokoniAOS.navigate(). */
+    var _MOBILE_Q = window.matchMedia('(max-width:768px)');
+    function _isMobile() { return _MOBILE_Q.matches; }
+    function _sbEl(id) { return document.getElementById(id); }
+    function _syncSidebarA11y() {
+      var side = _sbEl('aosSidebar'), menu = _sbEl('aosMenuBtn'), tog = _sbEl('aosSidebarToggle');
+      if (!side) return;
+      var open = side.classList.contains('open'), collapsed = document.body.classList.contains('sidebar-collapsed');
+      if (menu) menu.setAttribute('aria-expanded', String(open));
+      if (tog) {
+        if (_isMobile()) { tog.setAttribute('aria-label', 'Close menu'); tog.title = 'Close menu'; tog.removeAttribute('aria-expanded'); }
+        else { var l = collapsed ? 'Expand menu' : 'Collapse menu'; tog.setAttribute('aria-label', l); tog.title = l; tog.setAttribute('aria-expanded', String(!collapsed)); }
+      }
+      /* Collapsed rail: the label is visually gone, so the name travels on the title. */
+      var rail = collapsed && !_isMobile();
+      side.querySelectorAll('.nav-item').forEach(function (n) {
+        if (rail) n.title = n.getAttribute('data-label') || n.textContent.trim(); else n.removeAttribute('title');
+      });
+    }
+    function _openSidebar() {
+      _sbEl('aosSidebar').classList.add('open'); _syncSidebarA11y();
+      var t = _sbEl('aosSidebarToggle'); if (t) t.focus();
+    }
+    function _closeSidebar() {
+      var side = _sbEl('aosSidebar'), was = side.classList.contains('open');
+      side.classList.remove('open'); _syncSidebarA11y();
+      if (was && _isMobile()) { var m = _sbEl('aosMenuBtn'); if (m) m.focus(); }
+    }
     /* Toggle: on mobile the button dismisses the drawer; on desktop it collapses the
        sidebar to an icon rail, and the choice is remembered per browser. */
     function _sidebarToggle() {
-      if (window.innerWidth <= 768) { _closeSidebar(); return; }
+      if (_isMobile()) { _closeSidebar(); return; }
       var c = document.body.classList.toggle('sidebar-collapsed');
       try { localStorage.setItem('aosSidebarCollapsed', c ? '1' : '0'); } catch (_) {}
+      _syncSidebarA11y();
     }
-    (function(){ try { if (localStorage.getItem('aosSidebarCollapsed') === '1' && window.innerWidth > 768) { var _ap = function(){ document.body.classList.add('sidebar-collapsed'); }; document.body ? _ap() : document.addEventListener('DOMContentLoaded', _ap); } } catch (_) {} })();
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && _sbEl('aosSidebar') && _sbEl('aosSidebar').classList.contains('open')) { e.preventDefault(); _closeSidebar(); }
+    });
+    /* Crossing the phone breakpoint with the drawer open must not leave it stuck open. */
+    if (_MOBILE_Q.addEventListener) _MOBILE_Q.addEventListener('change', function () { _sbEl('aosSidebar').classList.remove('open'); _syncSidebarA11y(); });
+    (function(){ try { if (localStorage.getItem('aosSidebarCollapsed') === '1' && window.innerWidth > 768) { var _ap = function(){ document.body.classList.add('sidebar-collapsed'); _syncSidebarA11y(); }; document.body ? _ap() : document.addEventListener('DOMContentLoaded', _ap); } } catch (_) {} })();
+    document.addEventListener('DOMContentLoaded', _syncSidebarA11y);
     document.addEventListener("DOMContentLoaded", function() {
       try {
         var _aosTicketUnsub = firebase.firestore().collection("supportTickets").where("status","==","open")
