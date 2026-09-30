@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-/* test-environment-preflight.js — is THIS MACHINE fit to certify or deploy right now?
+/* environment-preflight.js — is THIS MACHINE fit to certify or deploy right now?
  *
- *   node scripts/test-environment-preflight.js                 report, exit 0 READY / 1 NOT_READY
- *   node scripts/test-environment-preflight.js --json          machine-readable record on stdout too
- *   node scripts/test-environment-preflight.js --reap          also terminate PARENT-DEAD WebKit/Playwright
+ *   node scripts/environment-preflight.js                 report, exit 0 READY / 1 NOT_READY
+ *   node scripts/environment-preflight.js --json          machine-readable record on stdout too
+ *   node scripts/environment-preflight.js --reap          also terminate PARENT-DEAD WebKit/Playwright
  *                                                              orphans (never a process whose parent is alive)
- *   node scripts/test-environment-preflight.js --acquire NAME  take the peer browser lock for this run
- *   node scripts/test-environment-preflight.js --release NAME  release it
- *   node scripts/test-environment-preflight.js --for hosting|functions|browser|syntax
+ *   node scripts/environment-preflight.js --acquire NAME  take the peer browser lock for this run
+ *   node scripts/environment-preflight.js --release NAME  release it
+ *   node scripts/environment-preflight.js --for hosting|functions|browser|syntax
  *                                                              which deploy/test window is being asked for
  *
  * Why this exists (2026-09-30). Two owner-authorized hosting deploys were blocked by gates that

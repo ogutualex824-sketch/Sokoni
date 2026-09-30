@@ -57,7 +57,7 @@ ck('sokoni-recommendations.js: bounded products query + sellability filter on pr
     P('p3', { sold: 5, status: 'archived' }),                           /* unlisted → nowhere on Home */
     P('p4', { sold: 9, uploadedAt: { _seconds: Math.floor((T0 + 9000) / 1000), _nanoseconds: 0 } }), /* Timestamp-shaped date */
     P('p5', { sold: 1 }), P('p6', { sold: 2 }), P('p7', { sold: 3, outOfStock: true }), P('p8', { sold: 4 }),
-    P('p9', { sold: 0 }), P('p10', { sold: 0 }),                                   /* unsold, sellable: picks material */
+    P('p9', { sold: 0, uploadedAt: T0 + 8500 }), P('p10', { sold: 0 }),           /* unsold, sellable: picks material; p9 sits between p8 and p4 so no two dates tie */
   ];
   for (const p of seed) await db.doc('products/' + p.id).set(p);
 

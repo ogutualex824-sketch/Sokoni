@@ -1,6 +1,6 @@
 # Test / Deployment Environment Preflight
 
-**Date:** 2026-09-30 · **Runner:** `node scripts/test-environment-preflight.js [--for syntax|browser|hosting|functions] [--reap] [--json]` · **Verdicts:** `READY` / `NOT_READY` + one reason code — fail closed, UNPROVEN is NOT_READY.
+**Date:** 2026-09-30 · **Runner:** `node scripts/environment-preflight.js [--for syntax|browser|hosting|functions] [--reap] [--json]` · **Verdicts:** `READY` / `NOT_READY` + one reason code — fail closed, UNPROVEN is NOT_READY.
 **Related:** [[RELEASE_GATE_LIVE_CATALOGUE]] · [[HOME_PICKED_FOR_YOU_INVENTORY_SYNC]] · `scripts/predeploy-syntax-gate.js` · `scripts/predeploy-browser-suites.js`
 
 This is test and deployment **infrastructure only**. It changes no application code, no App Check, no payment path and no deployment configuration (`firebase.json` is untouched; the existing predeploy hooks call it).

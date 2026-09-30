@@ -45,7 +45,7 @@ try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
 /* the gate's contract, from its source */
 const src = fs.readFileSync(path.join(__dirname, 'predeploy-syntax-gate.js'), 'utf8');
 ck('the gate stops the sweep on UNPROVEN and never retries', /if \(unproven\) return;/.test(src) && /No retry is attempted/.test(src) && !/for \(let attempt/.test(src));
-ck('the gate runs the environment preflight (--for syntax) before sweeping', /test-environment-preflight\.js'\), '--for', 'syntax'/.test(src));
+ck('the gate runs the environment preflight (--for syntax) before sweeping', /environment-preflight\.js'\), '--for', 'syntax'/.test(src));
 ck('a real failure is labelled SYNTAX_FAIL, a crash SYNTAX_UNPROVEN — never conflated', /SYNTAX_FAIL — DEPLOY BLOCKED/.test(src) && /SYNTAX_UNPROVEN — the parser process crashed/.test(src));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

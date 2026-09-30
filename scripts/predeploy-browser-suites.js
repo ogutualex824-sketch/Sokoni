@@ -101,7 +101,7 @@ const sleep = (ms) => {
    deploy is present, and holds a lock while it runs so a peer's preflight refuses in turn. The
    preflight writes a record (process counts, ownership, cleanup, start/end) for each decision. */
 const LOCK_NAME = 'predeploy-browser-suites';
-const PREFLIGHT = path.join(__dirname, 'test-environment-preflight.js');
+const PREFLIGHT = path.join(__dirname, 'environment-preflight.js');
 {
   const pf = spawnSync(process.execPath, [PREFLIGHT, '--for', 'browser', '--acquire', LOCK_NAME], { cwd: ROOT, encoding: 'utf8', timeout: 180000 });
   process.stdout.write(String(pf.stdout || ''));

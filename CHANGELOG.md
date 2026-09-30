@@ -12,7 +12,7 @@
 
 ## [2026-09-30] — Test/deploy environment preflight + syntax-gate classification (workflow blockers, test infrastructure only) — NOT a hosting change
 
-**Files:** new `scripts/test-environment-preflight.js`, new `scripts/test-syntax-gate-classification.js`, `scripts/predeploy-syntax-gate.js`, `scripts/predeploy-browser-suites.js`, `scripts/test-home-picked-for-you.js` (timeouts restored to the certified values), new `docs/TEST_ENVIRONMENT_PREFLIGHT.md`. No application code, App Check, payment path or `firebase.json` change; production stays at b108ae3.
+**Files:** new `scripts/environment-preflight.js`, new `scripts/test-syntax-gate-classification.js`, `scripts/predeploy-syntax-gate.js`, `scripts/predeploy-browser-suites.js`, `scripts/test-home-picked-for-you.js` (timeouts restored to the certified values), new `docs/TEST_ENVIRONMENT_PREFLIGHT.md`. No application code, App Check, payment path or `firebase.json` change; production stays at b108ae3.
 **Database / API / security / breaking changes:** none.
 
 - **Environment preflight** (`--for syntax|browser|hosting|functions`): RAM (physical + commit headroom), parent-dead WebKit/Playwright orphans, peer browser lock + live peer suite runners, node capacity, functions/hosting deploy in progress, Cloud Build ongoing. Fail closed with one reason code (`OOM_RISK`, `ORPHAN_BROWSER_PROCESSES`, `PEER_BROWSER_SESSION_ACTIVE`, `NODE_SATURATION`, `DEPLOYMENT_IN_PROGRESS`, `CLOUD_BUILD_ACTIVE|UNKNOWN`); UNPROVEN is NOT_READY. Writes a JSON record per run (counts, ownership, cleanup, start/end). `--reap` terminates parent-dead orphans only.

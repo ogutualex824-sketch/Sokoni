@@ -46,7 +46,7 @@ let inlineSkipped = 0;
 
    UNPROVEN stops the sweep at once: there is no point checking 1,700 more files on a machine that
    cannot spawn a parser, and retrying until it happens to fit would turn a machine state into a
-   green light. Fix the machine (scripts/test-environment-preflight.js names the reason), re-run. */
+   green light. Fix the machine (scripts/environment-preflight.js names the reason), re-run. */
 const { spawnSync } = require('child_process');
 let unproven = null;
 function classify(r) {
@@ -160,7 +160,7 @@ console.log('[predeploy] syntax gate — checking JavaScript…');
 /* Resource preflight FIRST: a parser sweep on a machine at its commit ceiling dies halfway and
    proves nothing. RAM / orphan / node-capacity only (--for syntax); fail closed. */
 {
-  const pf = spawnSync(process.execPath, [path.join(__dirname, 'test-environment-preflight.js'), '--for', 'syntax'], { encoding: 'utf8', timeout: 120000 });
+  const pf = spawnSync(process.execPath, [path.join(__dirname, 'environment-preflight.js'), '--for', 'syntax'], { encoding: 'utf8', timeout: 120000 });
   process.stdout.write(String(pf.stdout || ''));
   if (pf.status !== 0) {
     console.error('\n  SYNTAX_UNPROVEN — environment not fit to run the parser sweep (see RESULT above).');
@@ -176,7 +176,7 @@ if (unproven) {
   console.error('\n  SYNTAX_UNPROVEN — the parser process crashed; this is a MACHINE state, not a syntax result.\n');
   console.error('    stopped at ' + unproven.file + '\n      exit=' + unproven.status + ' signal=' + unproven.signal + '\n      ' + unproven.msg + '\n');
   console.error('  ' + checked + ' files and ' + inlineChecked + ' inline blocks had passed before the crash; the rest were NOT checked.');
-  console.error('  No retry is attempted. Run scripts/test-environment-preflight.js --for syntax, fix the reason it names, re-run.\n');
+  console.error('  No retry is attempted. Run scripts/environment-preflight.js --for syntax, fix the reason it names, re-run.\n');
   process.exit(1);
 }
 
