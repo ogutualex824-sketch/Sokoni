@@ -23,7 +23,9 @@
  *   SC8  refused: signed out · not staff · a bad phone · no name
  *   SC9  concurrent saves of one new number create ONE customer
  *   SC10 attach: the sale names the customer from the shop's OWN record (not what the caller typed) and her card then
- *        shows 1 purchase, KES 1,000 lifetime spend, a last purchase, and her SOKONI points from the canonical account
+ *        shows 1 purchase, KES 1,000 lifetime spend, a last purchase, and her SOKONI points from the canonical account.
+ *        Since Quick Charge Step 2 (2026-09-30) the ATTACHED customer earns on the sale (1 pt / KES 10, from the phone on
+ *        the shop's own record): 1,240 before + 100 from this sale's ONE earn row = 1,340.
  *   SC10b a customer with no SOKONI account is 'none' with NO points figure (the till shows —, never 0)
  *   SC11 another shop cannot attach this shop's customer to its sale
  *
@@ -151,10 +153,10 @@ const save = (uid, shopId, phone, name) => call('posCustomerSave', uid, { shopId
     payments: [{ method: 'cash', amount: 1000 }], customer: { id: JID, name: 'Forged Name', phone: '0799999999' } }, auth: { uid: A, token: { posRole: 'cashier' } } }).catch((e) => ({ err: e.message }));
   const rec = (await all('posRetailSales')).find((x) => x.id === 'SALE-SC-1' || x.idempotencyKey === 'SALE-SC-1') || (await all('posRetailSales'))[0];
   const card = await call('posCustomerCard', 'cashA', { shopId: A, customerId: JID });
-  ck('SC10 attach: the sale names her from the shop\'s OWN record; her card shows 1 purchase, KES 1,000, a last purchase and 1,240 SOKONI points',
+  ck('SC10 attach: the sale names her from the shop\'s OWN record; her card shows 1 purchase, KES 1,000, a last purchase and 1,340 SOKONI points (1,240 + the 100 she earned on THIS sale, one earn row)',
     !sale.err && rec && rec.customer && rec.customer.id === JID && rec.customer.name === 'Jane Wanjiru' && rec.customer.phone === '254722376801'
-    && card.purchaseCount === 1 && card.totalSpent === 1000 && card.lastPurchaseAt != null && card.sokoniPoints === 1240 && card.sokoni === 'member' && card.maskedPhone === '0722 ••• •801',
-    { err: sale.err, cust: rec && rec.customer, card });
+    && card.purchaseCount === 1 && card.totalSpent === 1000 && card.lastPurchaseAt != null && card.sokoniPoints === 1340 && (await all('loyaltyLedger')).filter((l) => l.type === 'earn' && l.uid === 'jane' && l.points === 100 && String(l.orderId || '').indexOf(rec.id) !== -1).length === 1 && card.sokoni === 'member' && card.maskedPhone === '0722 ••• •801',
+    { err: sale.err, cust: rec && rec.customer, card, earn: (await all('loyaltyLedger')).filter((l) => l.uid === 'jane').map((l) => [l.type, l.points, l.orderId]) });
 
   /* SC10b: no SOKONI account on the number is said as such — not 0 */
   const cardJ = await call('posCustomerCard', 'cashA', { shopId: A, customerId: SC.customerDocId(A, '254722376999') });

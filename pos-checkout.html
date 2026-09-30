@@ -443,6 +443,13 @@ input, select, textarea { background: var(--sur2); color: var(--txt); border-col
 .cs-new input { flex: 1; min-width: 0; }
 .cust-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 4px; margin-top: 6px; font-size: 11px; color: var(--muted); }
 .cust-stats b { display: block; color: #1a1a1a; font-size: 12.5px; }
+/* Quick charge (Step 2) */
+.qc-form { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.qc-form[hidden] { display: none; }
+.qc-form #qc-desc { flex: 2 1 160px; min-width: 0; }
+.qc-form #qc-amt { flex: 1 1 90px; min-width: 0; }
+.qc-form .cs-note { flex-basis: 100%; }
+.ci-quick { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
 
 /* Loyalty & coupon */
 .loyalty-section {
@@ -1102,6 +1109,15 @@ body.queue-mode .hotkey-bar      { display: none; }
     <div class="panel-header">
       Cart
       <span class="items-count-badge" id="cart-badge">0 items</span>
+      <!-- Quick charge (Step 2, 2026-09-30): a described, cashier-priced line on THIS sale — not a product -->
+      <button type="button" class="cust-scan-btn" id="qc-open" onclick="Checkout.quickChargeOpen()" title="Add a quick charge (a service or fee — not a product)" style="margin-left:auto">＋ Quick charge</button>
+    </div>
+    <div id="qc-form" class="qc-form" hidden>
+      <input type="text" class="cust-input" id="qc-desc" maxlength="140" autocomplete="off" placeholder="What is the customer paying for?" aria-label="Quick charge description">
+      <input type="text" class="cust-input" id="qc-amt" inputmode="decimal" autocomplete="off" placeholder="Amount (KES)" aria-label="Quick charge amount">
+      <button type="button" class="cust-scan-btn" id="qc-add" onclick="Checkout.quickChargeAdd()">Add</button>
+      <button type="button" class="cust-scan-btn" onclick="Checkout.quickChargeClose()" aria-label="Cancel">✕</button>
+      <div class="cs-note" id="qc-err" role="alert"></div>
     </div>
 
     <div class="panel-body" id="cart-body">
@@ -2180,6 +2196,7 @@ const Checkout = (() => {
         <button class="ci-remove" onclick="Checkout.removeItem(${idx})" tabindex="-1">&times;</button>
         <div class="ci-info">
           <div class="ci-name" title="${_e(item.name)}">${_e(item.name)}</div>
+          ${item.quick ? '<div class="ci-quick">Quick charge · not a product</div>' : ''}
           ${item.sku ? `<div class="ci-sku">${_e(item.sku)}</div>` : ''}
           ${item.lineDiscount > 0 ? `<div class="ci-line-discount">-${item.lineDiscount}% line discount</div>` : ''}
         </div>
@@ -2195,6 +2212,31 @@ const Checkout = (() => {
       `;
       rows.appendChild(row);
     });
+  }
+
+  /* ── QUICK CHARGE (Step 2, 2026-09-30) ────────────────────────────────────────────────────────────────────────────
+     A described, cashier-priced line on THIS sale — a delivery fee, a repair, a service. It has no product, so no stock
+     and no offer; posCompleteCheckout prices it through its quick_charge lane (description required, bounded, the
+     cashier attributed) with the rest of the sale — the customer, points, payment proof and receipt are the sale's own. */
+  function quickChargeOpen() { const f = document.getElementById('qc-form'); if (f) { f.hidden = false; const d = document.getElementById('qc-desc'); if (d) d.focus(); } }
+  function quickChargeClose() {
+    const f = document.getElementById('qc-form'); if (f) f.hidden = true;
+    ['qc-desc', 'qc-amt'].forEach((id) => { const e = document.getElementById(id); if (e) e.value = ''; });
+    const er = document.getElementById('qc-err'); if (er) er.textContent = '';
+  }
+  function quickChargeAdd() {
+    const desc = ((document.getElementById('qc-desc') || {}).value || '').replace(/[<>]/g, '').trim().slice(0, 140);
+    const amt = Math.round(Number(((document.getElementById('qc-amt') || {}).value || '').replace(/[^0-9.]/g, '')) * 100) / 100;
+    const er = document.getElementById('qc-err');
+    if (desc.length < 2) { if (er) er.textContent = 'Describe the charge (what the customer is paying for).'; return; }
+    if (!(amt > 0)) { if (er) er.textContent = 'Enter the amount to charge.'; return; }
+    const n = _s.items.filter(i => i.quick).length + 1;
+    _s.items.push({ productId: 'qc_' + n + '_' + Math.round(amt * 100), quick: true, name: desc, sku: '', unitPrice: amt, qty: 1, lineDiscount: 0, categoryId: '' });
+    quickChargeClose();
+    _renderCart();
+    _updateTotals();
+    _broadcastDisplayUpdate();
+    _setState('ITEMS');
   }
 
   function removeItem(idx) {
@@ -2226,11 +2268,13 @@ const Checkout = (() => {
   async function _quoteOffers() {
     const key = _offerKey();
     if (!_s.items.length) { _s.offer = null; return null; }
+    /* only quick charges: no product to quote an offer on — none applies, and none is computed here */
+    if (!_s.items.some(i => !i.quick)) { _s.offer = { key, ok: true, discount: 0, applied: [] }; return _s.offer; }
     const seq = ++_offerSeq;
     let next;
     try {
       const fn = firebase.functions().httpsCallable('shopOfferQuote');
-      const r = await fn({ channel: 'till', shopId: _resolveMerchantId(), items: _s.items.map(i => ({ productId: i.productId, qty: i.qty })) });
+      const r = await fn({ channel: 'till', shopId: _resolveMerchantId(), items: _s.items.filter(i => !i.quick).map(i => ({ productId: i.productId, qty: i.qty })) });
       const sh = ((r && r.data && r.data.shops) || [])[0];
       next = { key, ok: true, discount: sh ? Number(sh.discount) || 0 : 0, applied: sh ? (sh.applied || []) : [] };
     } catch (e) {
@@ -3086,7 +3130,7 @@ const Checkout = (() => {
       if (!d.exists || !d.sokoniTillId) throw new Error('This shop has no SOKONI Till yet, so M-PESA and card cannot be taken here.');
       _s.tillId = d.sokoniTillId;
     }
-    const r = await firebase.functions().httpsCallable('createPaymentIntent')({ purpose: 'pos_till_sale', sokoniTillId: _s.tillId, saleId: _s.saleKey,
+    const r = await firebase.functions().httpsCallable('createPaymentIntent')({ purpose: 'pos_till_sale', sokoniTillId: _s.tillId, saleId: _s.saleKey, saleBound: true,
       items: [{ name: 'POS sale', price: amount, qty: 1 }] });
     const d = (r && r.data) || {};
     return { ref: d.ref, amount: d.amount != null ? d.amount : amount };
@@ -3143,7 +3187,9 @@ const Checkout = (() => {
         branchId:      _s.branchId,
         registerId:    (window.PosMultiTill && PosMultiTill.getRegisterId()) || null,
         registerName:  (window.PosMultiTill && PosMultiTill.getRegisterName()) || null,
-        items:         _s.items.map(i => ({ productId:i.productId, qty:i.qty, unitPrice:i.unitPrice, name:i.name })),
+        items:         _s.items.map(i => i.quick
+                         ? ({ quickCharge: true, description: i.name, unitPrice: i.unitPrice, qty: i.qty })
+                         : ({ productId:i.productId, qty:i.qty, unitPrice:i.unitPrice, name:i.name })),
         customer:      _s.customer ? { id:_s.customer.id, name:_s.customer.name, phone:_s.customer.phone } : null,
         payments,
         couponCode:    _s.coupon?.code || null,
@@ -4401,6 +4447,8 @@ const Checkout = (() => {
     addItem, removeItem, changeQty, clearSearch,
     /* Customer */
     lookupCustomer, clearCustomer, scanCustomer,
+    /* Quick charge */
+    quickChargeOpen, quickChargeClose, quickChargeAdd,
     /* Smart Customer Search */
     pickCustomer, saveNewCustomer,
     /* SOKONI points (P1) */

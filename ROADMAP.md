@@ -431,7 +431,8 @@ an account with consent (SMS, feature phones included). See [[SOKONI_POINTS]].
   are in every selling business agreement.
 - **Next (owner asks 2026-09-29):**
   - points on bookings and services beyond the till and Quick Charge;
-  - Quick Charge redemption;
+  - ~~Quick Charge redemption~~ — done 2026-09-30: a Quick Charge is a line on the till sale, so it uses the till's
+    buyer-confirmed points tender (Step 2 below);
   - free-delivery offers shown on product cards;
   - per-area free vs charged delivery in the shop's delivery settings wizard;
   - a scheduled hold sweeper.
@@ -443,6 +444,45 @@ an account with consent (SMS, feature phones included). See [[SOKONI_POINTS]].
     because tills send `split`, `gift_card` and `mpesa_till_manual`;
   - shop-local `posCustomers.points` (legacy POS CRM) coexists with the SOKONI balance; legacy tills (pos-v2 online,
   merchant.html) have no phone field; `pos-crm-pro redeemGiftCard` has no merchant scope (separate issue).
+
+---
+
+## Commerce convergence — one slice at a time (branch `slice/c4-convergence`, local only)
+
+Owner order (2026-09-30): Secure Release → Quick Charge → payment labels → refunds → delivery → bookings →
+marketing/offers → tax invoice → event terms → stories → marketer role → spotlight → discovery → listing docs →
+category matrix. Nothing deployed or pushed.
+
+| Step | Slice | State |
+|---|---|---|
+| 1 | Secure Release integrated into the convergence line — one withdrawal flow, in the profile wallet | ✅ committed `a496c8d` (local) |
+| 2 | Quick Charge is a line on the one canonical till sale — customer, points, payment proof, receipt | ✅ committed (local) — [[QUICK_CHARGE_CENSUS]] |
+| 3 | Payment-label convergence: every tender label maps to server evidence | ⏭ next |
+
+**Supported by Step 2 (the cyber-shop case, `test-quick-charge-sale.js` QS8):** one basket mixes a catalogue product
+(envelopes, stock taken once), a catalogue service marked `trackInventory:false` (printing), and a free-typed
+quick-charge line (scanning), paid by ONE M-PESA payment → one sale, one receipt.
+
+**Recorded gaps — deliberately NOT fixed inside Step 2:**
+
+- **Unmetered stock goes negative at the till (found by QS8, 2026-09-30, pre-existing).** `posCompleteCheckout` treats
+  an absent `stock` as unlimited in its check (`?? 9999`) but still writes `increment(-qty)` unless
+  `trackInventory === false`, creating `stock: -qty`. The next sale of that item is then refused ("Insufficient
+  stock"). This disagrees with the canonical rule in `functions/shared/sellability.js` (no numeric `stock` =
+  unmetered) and with the never-negative stock invariant. It hits every catalogue service or legacy product without a
+  stock field, which is exactly the cyber shop's printing. Its own slice, before Step 3.
+- Catalogue sale lines carry no `lineTotal`; quick-charge lines do (sale-record shape inconsistency).
+
+- **Offline POS blocker:** `pos-checkout.html`'s offline save calls `PosSales.park`, which does not exist
+  (`pos-sales.js` exports `parkSale`). Belongs to the offline-convergence slice. Not to be patched with an improvised
+  implementation.
+- **Parallel QR rail:** `pos-qr.js` (used by `pos.html` and `pay.html`) is a second QR payment path. Step 3 censuses it
+  and decides whether it can be routed into the canonical payment authority. It is not to be deleted just because the
+  Till flow exists.
+- **Tenders accepted without evidence:** `split`, `gift_card`, `mpesa_till_manual` and arbitrary labels (Step 3).
+- `pos-service-pricing`'s catalogue lane still reads `posProducts`; only its `quick_charge` lane is wired.
+- `test-smart-customer-poscheckout-browser` CP1 fails on both `a496c8d` and Step 2 (pre-existing, investigate).
+- Live hosting is `2f3bb6f`; this line must be reconciled with it before any hosting deploy.
 
 ---
 

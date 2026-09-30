@@ -1,3 +1,93 @@
+## [2026-09-30] - Quick Charge is a line on ONE canonical till sale — customer, points, payment proof and receipt included (Step 2)
+
+**Local only — NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `a496c8d`.**
+
+Owner direction: "use till and poscheckout". Census: `docs/QUICK_CHARGE_CENSUS.md`.
+
+**Before**
+
+- Quick Charge (the Till & QR module) minted a free-typed IntaSend payment with no sale behind it.
+- No `posRetailSales` record existed, so the charge was invisible to POS reports and sales views.
+- There was no customer; points came from a typed phone.
+- The webhook wrote its own receipt. It did this for **every** paid till payment, so every M-PESA or card sale made
+  through merchant-v2 Sell or pos-checkout also got a **second receipt**, keyed by the payment.
+- `functions/shared/pos-service-pricing.js`, the designed price core for exactly this case, was wired to nothing.
+
+**After**
+
+- **Canonical sale.** `posCompleteCheckout` accepts a `quickCharge` line.
+  - It is priced by the existing core's `quick_charge` lane: description required, max KES 20,000 per line, the
+    operator attributed.
+  - It has no product, stock or offers, and a `quickCharge` line carrying a `productId` is refused.
+  - The customer, points, payment proof, commission (5% POS lane, taken once at settlement for IntaSend money), tax
+    estimate and receipt all come from the existing sale authority.
+  - The pre-sale dry run prices the line identically.
+- **Points belong to the attached customer.** With no points phone typed, the server credits the customer attached to
+  the sale, using the phone on the shop's own record. A number with no SOKONI account earns nothing, and a retried sale
+  earns once.
+- **Sale-bound payments.**
+  - The pricer marks a payment for a sale as `saleBound`.
+  - For such a payment the webhook only marks it PAID; the sale owns the receipt and the points. This fixes the
+    duplicate receipt.
+  - Intent-level points on a sale-bound payment are refused; the sale's buyer-confirmed points tender is used instead.
+- **Surfaces**
+  - **The till (merchant-v2 Sell)** and **pos-checkout**: "＋ Quick charge" (description + amount). The line says it is
+    not a product. Smart Customer Search, SOKONI points, M-PESA/card (sale-bound) and cash all work on the same sale.
+  - **The Till & QR module:** its free-typed charge card hands over to Sell. The permanent QR (the customer types the
+    amount) is unchanged.
+- **Kept separate:** buyer-typed permanent-Till payments (`buyer_entered`, pay-q). There is no cashier sale; the
+  webhook still receipts and earns for them.
+
+**Files**
+
+- Server: `functions/pos-zero-friction.js`, `functions/payment-purposes.js`, `functions/index.js` (webhook).
+- UI: `sokoni-merchant-data.js`, `sokoni-merchant-sell.js`, `pos-checkout.html`, `sokoni-merchant-till.js`.
+- Docs: `docs/QUICK_CHARGE_CENSUS.md` (census + result), `docs/SOKONI_POINTS.md`, `ROADMAP.md`, this file.
+- Updated test: `scripts/test-smart-customer-search.js` (SC10).
+- New tests: `scripts/test-quick-charge-{sale,sell-browser,poscheckout-browser}.js`,
+  `scripts/test-till-quick-charge-handover-browser.js`.
+- **Removed (superseded; their UI no longer exists):** `test-points-quick-charge-browser.js`,
+  `test-points-p1-quick-browser.js`. Their evidence now lives in the new suites and `test-points-p2b-browser.js`.
+
+**Database.** Sale lines may carry `productId: null`, `priceSource: 'quick_charge'` and `authorizedBy`. Payment
+intents may carry `metadata.saleBound`. No migration.
+
+**API**
+
+- `posCompleteCheckout` `items[]` accepts `{ quickCharge: true, description, unitPrice, qty }`.
+- `createPaymentIntent('pos_till_sale')` accepts `saleBound: true`.
+
+**Security**
+
+- Cashier-named figures are bounded and attributed.
+- A quick charge cannot carry a product.
+- Points follow the attached customer's record, never a typed number.
+- Another shop's customer is refused, as before.
+
+**Breaking**
+
+- The Till & QR module no longer rings up a charge itself; it opens Sell.
+
+**Tests changed**
+
+- `test-smart-customer-search.js` SC10 now expects 1,340 points, not 1,240. The attached customer earns 100 on the
+  KES 1,000 sale. This is an intended behaviour change, and the test asserts exactly one earn row.
+- `test-quick-charge-sale.js` QS7: a quick line carrying a productId is refused before any money, stock, receipt or points
+  move (with a positive control).
+- QS8: **the cyber basket, a permanent regression.** Printing + envelopes + scanning → one payment, one sale, one
+  receipt.
+
+**Known and recorded, not changed**
+
+- **Unmetered stock goes negative (pre-existing, found by QS8).**
+  - `posCompleteCheckout` writes `stock: -qty` onto an item with no stock field, so its next sale is refused.
+  - The till refund and the online stock writers share the defect.
+  - Fixed next, as its own slice (inventory convergence).
+- pos-checkout's offline path calls `PosSales.park`, which does not exist (`pos-sales.js` exports `parkSale`). This is
+  pre-existing.
+- `pos-qr.js` is a second, parallel QR rail still used by `pos.html` and `pay.html`.
+- `pos-service-pricing`'s catalogue lane still reads `posProducts`; only its `quick_charge` lane is used.
+
 ## [2026-09-30] - Secure Release integrated into the convergence line: one withdrawal flow, in the profile wallet, for every role
 
 **Local only — NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `1f21885`.**

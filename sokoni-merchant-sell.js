@@ -397,6 +397,7 @@
       if (!S.cart.length) {
         return '<div class="msl-bar" style="border-top-color:var(--line)">' +
           '<div class="sum"><div class="l" style="font-size:12px">Tap a product to start a sale</div></div>' +
+          (typeof md.addQuickCharge === 'function' ? '<button class="msl-btn ghost" data-act="quick-open">＋ Quick charge</button>' : '') +
         '</div>';
       }
       return '<div class="msl-bar">' +
@@ -413,7 +414,7 @@
     /* ── Sheets ───────────────────────────────────────────────────────────── */
     function sheetHTML() {
       if (!S.sheet) return '';
-      var inner = (S.sheet === 'cart') ? cartSheet() : paySheet();
+      var inner = (S.sheet === 'cart') ? cartSheet() : (S.sheet === 'quick') ? quickSheet() : paySheet();
       return '<div class="msl-scrim" data-act="close-sheet"></div><div class="msl-sheet" role="dialog" aria-modal="true">' + inner + '</div>';
     }
 
@@ -431,7 +432,8 @@
             return '<div class="msl-line">' +
               '<div class="info"><div class="nm">' + esc(l.name || 'Product') + '</div>' +
                 '<div class="sub' + (w ? ' warn' : '') + '">' +
-                  (w ? 'Only ' + w.available + ' in stock' :
+                  (l.quick ? 'Quick charge · ' + esc(md.formatKES(l.price * l.qty)) :
+                   w ? 'Only ' + w.available + ' in stock' :
                        esc(md.formatKES(l.price)) + ' each · ' + esc(md.formatKES(l.price * l.qty))) +
                 '</div></div>' +
               '<div class="msl-step">' +
@@ -449,11 +451,41 @@
               }).join('')
             : '') +
           '<div class="msl-tot grand"><span>Total</span><b>' + esc(md.formatKES(t.due)) + '</b></div>' +
+          (typeof md.addQuickCharge === 'function' ? '<button class="msl-btn ghost wide" data-act="quick-open" style="margin-top:10px">＋ Quick charge</button>' : '') +
         '</div>' +
         '<div class="msl-sh-f">' +
           '<button class="msl-btn solid wide" data-act="charge">Charge ' + esc(md.formatKES(t.due)) + '</button>' +
           '<button class="msl-btn ghost wide" data-act="clear-cart">Cancel this sale</button>' +
         '</div>';
+    }
+
+    /* ── QUICK CHARGE (Step 2, 2026-09-30) ────────────────────────────────────────────────────────────────────────
+       A described, cashier-priced line on THIS sale — a delivery fee, a repair, a service. Not a product: no stock, no
+       offers. It goes to posCompleteCheckout with the rest of the sale (the server's quick_charge lane prices it), so the
+       customer, points, payment proof, receipt and commission are the till sale's own. */
+    function quickSheet() {
+      var q = S.quick || {};
+      return '<div class="msl-sh-h"><div class="t">Quick charge</div>' +
+          '<button class="msl-sh-x" data-act="quick-cancel" aria-label="Close">×</button></div>' +
+        '<div class="msl-sh-b">' +
+          '<div class="msl-lbl">What is the customer paying for?</div>' +
+          '<input class="msl-inp" id="msl-qdesc" maxlength="140" autocomplete="off" placeholder="e.g. Delivery to Kilimani" value="' + esc(q.desc || '') + '" aria-label="Quick charge description" style="margin-bottom:10px">' +
+          '<div class="msl-lbl">Amount (KES)</div>' +
+          '<input class="msl-inp" id="msl-qamt" inputmode="decimal" autocomplete="off" placeholder="0" value="' + esc(q.amt || '') + '" aria-label="Quick charge amount">' +
+          (q.error ? '<div class="msl-note" style="color:#ffb020" role="alert">' + esc(q.error) + '</div>' : '') +
+          '<div class="msl-note">Not a catalogue product — no stock is taken. It is charged on this sale with everything else.</div>' +
+        '</div>' +
+        '<div class="msl-sh-f">' +
+          '<button class="msl-btn solid wide" data-act="quick-add">Add to sale</button>' +
+          '<button class="msl-btn ghost wide" data-act="quick-cancel">Cancel</button>' +
+        '</div>';
+    }
+    function quickAdd() {
+      var q = S.quick = Object.assign({}, S.quick || {});
+      try {
+        S.cart = md.addQuickCharge(S.cart, q.desc, String(q.amt || '').replace(/[^0-9.]/g, ''));
+        S.quick = null; S.sheet = 'cart'; S.offer = null; paint();
+      } catch (e) { q.error = e.message; paint(); }
     }
 
     /* ── SOKONI POINTS (P1, 2026-09-29) ──────────────────────────────────────────────────────────────────────────
@@ -668,7 +700,7 @@
       Promise.resolve(ctx.callMyTill({ shopId: shopId })).then(function (r) {
         var till = (r && r.data) || r || {};
         if (!till.exists || !till.sokoniTillId) throw new Error('This shop has no SOKONI Till yet, so M-PESA and card cannot be taken here.');
-        return ctx.callCreateIntent({ purpose: 'pos_till_sale', sokoniTillId: till.sokoniTillId, saleId: saleKey(),
+        return ctx.callCreateIntent({ purpose: 'pos_till_sale', sokoniTillId: till.sokoniTillId, saleId: saleKey(), saleBound: true,
           items: [{ name: 'Till sale', price: t.payable, qty: 1 }] });
       }).then(function (r) {
         var d = (r && r.data) || r || {};
@@ -1067,6 +1099,9 @@
                                     } else S.sheet = null;
                                     paint(); return; }
       if (act === 'charge')       { S.startedAt = Date.now(); openPay(); return; }
+      if (act === 'quick-open')   { S.quick = {}; S.sheet = 'quick'; paint(); return; }
+      if (act === 'quick-add')    { quickAdd(); return; }
+      if (act === 'quick-cancel') { S.quick = null; S.sheet = S.cart.length ? 'cart' : null; paint(); return; }
       if (act === 'clear-cart')   { S.cart = []; S.sheet = null; S.saleToken = null; paint(); return; }
       if (act === 'inc')          { var l1 = S.cart[i]; if (l1) { S.cart = md.setLineQty(S.cart, l1.productId, l1.qty + 1); paint(); } return; }
       if (act === 'dec')          { var l2 = S.cart[i]; if (l2) { S.cart = md.setLineQty(S.cart, l2.productId, l2.qty - 1);
@@ -1115,6 +1150,8 @@
       if (el.id === 'msl-bphone') { S.buyer = Object.assign({}, S.buyer || {}, { phone: el.value, state: 'idle' }); return; }
       if (el.id === 'msl-bname')  { S.buyer = Object.assign({}, S.buyer || {}, { name: el.value }); return; }
       if (el.id === 'msl-cq')     { custSearch(el.value || ''); return; }
+      if (el.id === 'msl-qdesc')  { S.quick = Object.assign({}, S.quick || {}, { desc: el.value }); return; }
+      if (el.id === 'msl-qamt')   { S.quick = Object.assign({}, S.quick || {}, { amt: el.value }); return; }
       if (el.id === 'msl-cname')  { if (S.cust) S.cust.name = el.value; return; }
       if (el.id === 'msl-cash') {
         var n = parseInt(String(el.value).replace(/[^0-9]/g, ''), 10);

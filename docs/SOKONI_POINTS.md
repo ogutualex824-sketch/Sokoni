@@ -38,7 +38,8 @@ There is **no second points store**. Points live in the canonical loyalty collec
 
 **Ledger ids are the idempotency guarantee:**
 
-- till `earn__till__{saleId}` · Quick Charge `earn__quick__{intentRef}`
+- till `earn__till__{saleId}` — this includes a Quick Charge, which since 2026-09-30 is a line on the till sale
+- buyer-typed permanent-Till payment (pay-q, no cashier sale) `earn__quick__{intentRef}`
 - orders `earn__order__{orderId}__{shopId}` — **one per (order, shop) whichever payment path confirms it**, so the
   IntaSend webhook finaliser and `verifyIntasendPayment` can never both credit one order.
 
@@ -143,14 +144,19 @@ Seller Agreement (`legal.html#sellers`, section 8) carries the same clause.
 businesses in that role are asked to accept the new terms before their next enforced action. Check the flags before
 deploying.
 
-### Quick Charge (2026-09-29)
+### Quick Charge (2026-09-30 — superseded the 2026-09-29 intent-level design)
 
-The SAME buyer-confirmed till redemption, bound to the Quick Charge sale id:
-- the Quick Charge pricer (`pos_till_sale`) takes the points off the amount asked, on cashier charges only;
-- the webhook spends the hold when the rest is PAID, keyed by the intent;
-- the receipt goes to `posReceipts/{intentRef}` with the points and the money;
-- earning is on the money only;
-- refunds reverse by `orderId = intentRef`.
+A Quick Charge is now a **line on the one till sale** (merchant-v2 Sell or pos-checkout), so it has exactly the till's
+points behaviour — see [[QUICK_CHARGE_CENSUS]]:
+- spending: the sale's buyer-confirmed **points tender** (P2b), capped at 25% like every till sale;
+- the M-PESA/card payment is **sale-bound** (`metadata.saleBound`). The pricer **refuses** intent-level points on it
+  ("Points on this sale are paid with the sale's points tender, not on the payment"), so points cannot be spent twice;
+- the webhook only marks a sale-bound payment PAID. The receipt (`posReceipts/{saleId}`) and the earn
+  (`earn__till__{saleId}`) belong to `posCompleteCheckout`;
+- earning is on the money only; refunds reverse by the sale id like any till sale.
+
+The 2026-09-29 intent-level path (hold spent by the webhook, `posReceipts/{intentRef}`) remains **only** for the
+buyer-typed permanent-Till payment (pay-q), where no cashier sale exists.
 
 ### Refunds (2026-09-29)
 
@@ -182,8 +188,8 @@ All in `functions/loyalty-points.js` → `earnForSale(db, {...})`. Never throws 
 
 | Channel | Trigger | Buyer | Amount |
 |---|---|---|---|
-| Till (merchant-v2 Sell, pos-checkout.html) | `posCompleteCheckout`, after the receipt | `buyerPhone` the cashier looked up | the sale's `authoritativeTotal` |
-| Quick Charge | `webhookIntasend`, till intent **PAID** | intent `metadata.buyerPhone`, or the paying number when the buyer paid from their own phone | the **confirmed** amount |
+| Till (merchant-v2 Sell, pos-checkout.html) — **including Quick Charge lines** | `posCompleteCheckout`, after the receipt | `buyerPhone` the cashier looked up; otherwise the phone on **this shop's own record** of the customer attached to the sale (Smart Customer) | the sale's `authoritativeTotal` less any points tender |
+| Buyer-typed permanent Till (pay-q) | `webhookIntasend`, till intent **PAID**, not sale-bound | intent `metadata.buyerPhone`, or the paying number when the buyer paid from their own phone | the **confirmed** amount |
 | Online (M-Pesa / IntaSend) | `webhookIntasend` product finaliser | `payData.uid` | goods − shop offer discount (delivery excluded) |
 | Card checkout session | `verifyIntasendPayment` | `sessionDoc.uid` | per shop: its lines − its offers (delivery excluded) |
 
@@ -205,8 +211,8 @@ Callables (exported in `functions/index.js`):
   - the cashier receives no password, link or code — the buyer signs in with their own number and an SMS code;
   - a ceiling of **100 accounts per shop per day** (`tillBuyerCreates/{shopId}_{day}`).
 
-UI: merchant-v2 Sell pay sheet ("Customer points"), `pos-checkout.html` (⭐ row), Quick Charge (phone field +
-"Check points / create account"). Only a buyer the server has identified is sent with the sale — a number typed but
+UI: merchant-v2 Sell pay sheet ("Customer points") and `pos-checkout.html` (⭐ row). A Quick Charge is rung on
+those same screens (2026-09-30); the Till & QR module hands over to Sell. Only a buyer the server has identified is sent with the sale — a number typed but
 never looked up is not.
 
 ## SMS
@@ -243,9 +249,14 @@ Queued through `sms-service.enqueue` (a worker sends). Feature-phone buyers are 
   Sabotage 17/17.
 - `scripts/test-points-p2b-browser.js` (Sell) PW1–PW5 and `scripts/test-points-p2b-poscheckout-browser.js` PC1–PC3, in
   real Chromium against the real callables. UI sabotage 5/5.
-- `scripts/test-points-p1-quick-browser.js` — PQ1–PQ4, the real Quick Charge module with the real callables and the real
-  Quick Charge pricer; the PAID step is the webhook's own `earnForSale` call.
-- UI sabotage 4/4: a phone that was never checked is not sent; creation needs consent (Sell and Quick Charge).
+- UI sabotage 4/4: a phone that was never checked is not sent; creation needs consent (Sell; the Quick Charge half
+  was retired with its screen on 2026-09-30).
+- **Quick Charge (2026-09-30)** — `scripts/test-quick-charge-sale.js` QS1–QS7 (QS5: the attached customer earns once,
+  no account → none, another shop's customer refused; QS6: sale-bound, intent-level points refused; QS7: a quick charge
+  with a productId is refused before any payment, stock, receipt or points move, with a positive control). Browser:
+  `test-quick-charge-sell-browser.js`, `test-quick-charge-poscheckout-browser.js`,
+  `test-till-quick-charge-handover-browser.js`. `test-points-p1-quick-browser.js` and
+  `test-points-quick-charge-browser.js` were removed — the screen they drove no longer exists.
 
 ## Deployment
 

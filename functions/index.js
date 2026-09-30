@@ -8092,7 +8092,11 @@ exports.webhookIntasend = onRequest(
                now been PAID, so the hold is spent — once (the same hold authority as the POS; a replay changes nothing;
                a hold that lapsed first is re-deducted or its shortfall flagged, never refused). The receipt goes to the
                canonical posReceipts store, keyed by the intent, with the payment components the sale really had. */
-            try {
+            /* Step 2 (2026-09-30): a SALE-BOUND payment (the till, pos-checkout, Quick Charge) belongs to a sale that
+               posCompleteCheckout completes — that sale writes the receipt and settles the points. Writing them here too
+               gave every such sale a second receipt (keyed by the intent). Only an unbound Till payment is recorded here. */
+            const _saleBound = !!(((_iSnap2.data() || {}).metadata || {}).saleBound);
+            if (!_saleBound) try {
               const _qmd = (_iSnap2.data() || {}).metadata || {};
               const _rid = _qmd.pointsRedemptionId || null;
               if (_rid) {
@@ -8120,7 +8124,7 @@ exports.webhookIntasend = onRequest(
             /* Points P1 (2026-09-29): Quick Charge earns SOKONI points for the buyer — the one the cashier identified
                (intent metadata, server-stored), or, when the BUYER paid from their own phone (pay-q), that paying number.
                From the CONFIRMED amount, once, per intent. Never affects the payment. */
-            try {
+            if (!_saleBound) try {
               const _md = (_iSnap2.data() || {}).metadata || {};
               const _bp = _md.buyerPhone || (_md.sourceMode === "buyer_entered" ? (payData.phone || null) : null);
               if (_bp) {

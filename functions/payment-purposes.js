@@ -381,6 +381,14 @@ const PURPOSES = {
       /* Slice 13 (2026-09-29): the till SALE this payment is for. posCompleteCheckout accepts an M-PESA / card tender only
          when the paid intent names ITS sale key here, so one IntaSend payment can never settle a different sale. */
       if (data && data.saleId && /^[A-Za-z0-9_-]{3,80}$/.test(String(data.saleId))) quote.metadata = Object.assign({}, quote.metadata, { saleId: String(data.saleId) });
+      /* Step 2 (2026-09-30): SALE-BOUND — the payment for a sale posCompleteCheckout will complete (the till, pos-checkout,
+         Quick Charge). That sale owns the receipt, the points earned and the points spent; the webhook only marks the
+         intent PAID (the sale's payment proof). Points on such a charge go through the sale's own points tender. */
+      if (data && data.saleBound === true) {
+        if (!quote.metadata.saleId) fail('invalid-argument', 'A sale-bound payment needs its sale reference.');
+        if (data.pointsRedemptionId) fail('failed-precondition', 'Points on this sale are paid with the sale’s points tender, not on the payment.');
+        quote.metadata = Object.assign({}, quote.metadata, { saleBound: true });
+      }
       /* Points (2026-09-29): PAY PART OF A QUICK CHARGE WITH SOKONI POINTS — through the same buyer-confirmed till
          redemption the POS uses (functions/loyalty-points-spend.js), bound to THIS charge by its sale id. Only on the
          cashier's own charge (pos_cart), never on a buyer-typed permanent-Till payment. The server reads the value

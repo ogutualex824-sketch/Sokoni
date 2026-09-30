@@ -966,6 +966,8 @@
       shiftId: o.shiftId || null,
       sellerUid: scope.sellerUid,        /* who rang it up */
       items: cart.map(function (l) {
+        /* Quick charge (Step 2): no product — the server prices it through its quick_charge lane */
+        if (l.quick) return { quickCharge: true, description: l.name || '', unitPrice: Number(l.price) || 0, qty: Number(l.qty) || 0 };
         return {
           productId: String(l.productId),
           qty: Number(l.qty) || 0,
@@ -1077,6 +1079,23 @@
       /* carried for the on-screen stock warning only — the server re-reads canonical stock */
       knownStock: (typeof product.stock === 'number') ? product.stock : null,
     });
+    return out;
+  }
+
+  /**
+   * QUICK CHARGE (Step 2, 2026-09-30): a described one-off line — a delivery fee, a repair, a government application.
+   * NOT a product: no catalogue id, no stock, no offers. The till names the figure; the server prices it through
+   * posCompleteCheckout's quick_charge lane (description required, bounded, attributed to the cashier) on the same sale.
+   * The line's key is client-only (qc_…) so it can be changed or removed like any line; it never reaches the server.
+   */
+  function addQuickCharge(cart, description, amount) {
+    var d = String(description == null ? '' : description).replace(/[<>]/g, '').trim().slice(0, 140);
+    var a = Math.round(Number(amount) * 100) / 100;
+    if (d.length < 2) { var e1 = new Error('Describe the charge (what the customer is paying for).'); e1.code = 'QC_DESCRIPTION'; throw e1; }
+    if (!(a > 0) || !isFinite(a)) { var e2 = new Error('Enter the amount to charge.'); e2.code = 'QC_AMOUNT'; throw e2; }
+    var out = (cart || []).map(function (l) { return Object.assign({}, l); });
+    var n = 1; out.forEach(function (l) { if (l.quick) n++; });
+    out.push({ productId: 'qc_' + n + '_' + Math.round(a * 100), quick: true, name: d, price: a, qty: 1, knownStock: null });
     return out;
   }
 
@@ -1204,6 +1223,7 @@
     buildPreview: buildPreview,
     previewSale: previewSale,
     addToCart: addToCart,
+    addQuickCharge: addQuickCharge,
     setLineQty: setLineQty,
     removeLine: removeLine,
     cartWarnings: cartWarnings,

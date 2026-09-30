@@ -160,30 +160,14 @@
             '<div class="sk-till-qr" data-qr="permanent"></div>' +
           '</section>' +
 
+          /* Step 2 (2026-09-30, owner: "use till and poscheckout"): a charge the CASHIER rings up — a product sale or a
+             quick charge (a service, a fee) — is made on Sell, where it is ONE canonical sale: the customer, SOKONI points,
+             the M-PESA / card QR and the receipt. This card used to mint a free-typed payment with no sale behind it. The
+             permanent QR above (the customer types the amount) is unchanged. */
           '<section class="sk-till-card">' +
-            '<h3>Dynamic QR (POS sale)</h3>' +
-            '<p class="sk-till-hint">Enter the sale amount, generate a one-time QR for this exact sale.</p>' +
-            '<div class="sk-till-dynamic">' +
-              '<input type="number" min="1" step="1" placeholder="Amount (KES)" data-f="amount">' +
-              '<input type="text" maxlength="120" placeholder="What is this sale for? (optional)" data-f="note">' +
-              /* Points P1: WHO earns the SOKONI points when this is PAID — a phone, never a points figure */
-              '<input type="tel" maxlength="20" inputmode="tel" placeholder="Customer phone for SOKONI points (optional)" data-f="buyerPhone" aria-label="Customer phone for SOKONI points">' +
-              '<button type="button" data-act="buyer-check">⭐ Check points / create account</button>' +
-              '<p class="sk-till-msg" data-f="buyerMsg" aria-live="polite" hidden></p>' +
-              /* Quick Charge × points (2026-09-29): the same buyer-confirmed redemption as the till */
-              '<div data-el="pts" hidden>' +
-                '<button type="button" data-act="pts-start">⭐ Pay part with points</button>' +
-                '<div data-el="pts-code" hidden>' +
-                  '<input type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code from the customer" data-f="ptsCode" aria-label="Customer\u2019s points code">' +
-                  '<button type="button" data-act="pts-confirm">Confirm</button>' +
-                  '<button type="button" data-act="pts-cancel">Cancel</button>' +
-                '</div>' +
-                '<p class="sk-till-msg" data-f="ptsMsg" aria-live="polite" hidden></p>' +
-              '</div>' +
-              '<button type="button" data-act="gen-dynamic">Generate QR</button>' +
-            '</div>' +
-            '<div class="sk-till-dynamic-msg" data-el="dynamic-msg" hidden></div>' +
-            '<div class="sk-till-qr" data-qr="dynamic" hidden></div>' +
+            '<h3>Quick charge</h3>' +
+            '<p class="sk-till-hint">Ring up a quick charge (a service or a fee) or a product sale on Sell — the customer, SOKONI points, the M-PESA or card QR and the receipt are recorded on one sale.</p>' +
+            '<button type="button" data-route="sell" data-act="to-sell">💳 Quick charge on Sell</button>' +
           '</section>' +
 
           '<section class="sk-till-card sk-till-activity">' +

@@ -307,7 +307,7 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
     merchantId,
     branchId      = 'default',
     shiftId,
-    items         = [],
+    items: _itemsIn = [],
     customer,
     payments      = [],
     couponCode,
@@ -322,7 +322,33 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
 
   if (!idempotencyKey) _e('idempotencyKey required');
   if (!merchantId)     _e('merchantId required');
-  if (!items?.length)  _e('items required');
+  if (!Array.isArray(_itemsIn) || !_itemsIn.length) _e('items required');
+  /* QUICK CHARGE (Step 2, 2026-09-30 — owner: "use till and poscheckout"): a described, cashier-priced line with NO
+     catalogue item — a delivery fee, a repair, a government application. It is a line ON THIS SALE, priced by the
+     existing pure core (shared/pos-service-pricing.js, the quick_charge lane: description required, bounded, attributed
+     to the cashier). It has NO product, NO stock and NO offers — it can never become a shadow product. Every other part
+     of the sale — the merchant proof, the payment proof, customer, points, commission, tax, receipt — is this function's
+     own, unchanged. Product lines below are exactly as before. */
+  const items = _itemsIn.filter((it) => !(it && it.quickCharge === true));
+  const _quickIn = _itemsIn.filter((it) => it && it.quickCharge === true);
+  if (_quickIn.some((it) => it.productId)) _e('A quick charge is not a catalogue item — sell a product from the catalogue instead.');
+  let quickLines = [];
+  if (_quickIn.length) {
+    let _qp;
+    try {
+      /* The core's trust boundary is "the till's own operator". THIS function proves that below (resolveActor — owner or
+         authorised staff of merchantId — and the sale is refused otherwise), so the core is asked on the shop's behalf and
+         the line is attributed to the real cashier. Pure: nothing is written before the sale's own checks pass. */
+      _qp = require('./shared/pos-service-pricing').priceServiceBasket({
+        lines: _quickIn.map((it) => ({ description: it.description || it.name, unitPriceKES: it.unitPrice, qty: it.qty })),
+        catalogue: {}, callerUid: String(merchantId), merchantUid: String(merchantId),
+      });
+    } catch (qe) { _e(qe.message || 'That quick charge could not be priced.', qe.code || 'invalid-argument'); }
+    quickLines = _qp.lines.map((l) => ({
+      productId: null, name: l.name, qty: l.qty, unitPrice: l.unitCents / 100, lineTotal: l.lineCents / 100,
+      priceSource: 'quick_charge', authorizedBy: String(cashierId), categoryId: null,
+    }));
+  }
   if (!grandTotal || grandTotal < 0) _e('grandTotal invalid');
   /* LOYALTY REDEMPTION — ported from main's Q0a (dd9dc2a), the redemption rule only. The transaction writes
      `loyaltyPoints = max(0, points + awarded - loyaltyRedeemPoints)` with the browser's figure: a NEGATIVE value
@@ -374,6 +400,8 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
       lines: enriched.filter((l) => l._own), deliveryFee: 0, buyerUid: (customer && customer.id) ? String(customer.id) : null });
     const _offerDiscount = _oq.unavailable ? null : Math.max(0, Number(_oq.discount) || 0);
     enriched.forEach((l) => { delete l._own; });
+    /* Quick charge: the same core figure the real sale books (no offers, no stock) */
+    quickLines.forEach((l) => { serverSubtotal += l.lineTotal; enriched.push(Object.assign({}, l)); });
     return {
       dryRun: true,
       ok: differences.length === 0 && !_oq.unavailable,
@@ -445,6 +473,9 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
       enrichedItems.push({ ...item, name: _sanitize(prod.name), unitPrice: serverPrice, categoryId: prod.category || prod.categoryId || null });
       serverSubtotal += serverPrice * (item.qty || 1);
     }
+    /* Quick charge: the core's figure, never the caller's subtotal */
+    quickLines.forEach((l) => { serverSubtotal += l.lineTotal; });
+    const saleLines = enrichedItems.concat(quickLines);   /* what the sale, its tax trace and its receipt record */
 
     /* Allow ±2% rounding tolerance on subtotal */
     if (Math.abs(serverSubtotal - subtotal) > serverSubtotal * 0.02 + 1) {
@@ -1098,7 +1129,7 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
        holds the money and owes us a share. */
     const financial = await _postSaleFinancials({
       saleId, merchantId, cashierId, idempotencyKey,
-      items: enrichedItems,
+      items: saleLines,
       subtotal: serverSubtotal,
       discount: totalDiscount,
       total: authoritativeTotal,
@@ -1169,7 +1200,7 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
       cashierId:       _sanitize(cashierId),
       /* SERVER-DERIVED (4b). Never the caller's claim. */
       shiftId:         resolvedShiftId,
-      items:           enrichedItems,
+      items:           saleLines,
       customer:        customer ? {
         id:    _sanitize(customer.id || ''),
         name:  _sanitize((custOnFile && custOnFile.name) || customer.name || 'Guest'),
@@ -1337,7 +1368,7 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
       receiptNo:  saleId.slice(-8).toUpperCase(),
       saleId,
       merchantId,
-      items:      enrichedItems,
+      items:      saleLines,
       subtotal:   serverSubtotal,
       discount:   totalDiscount,
       offersApplied: offersApplied.map((o) => ({ label: o.label, amount: o.amount })),   /* U7c2: named on the receipt */
@@ -1397,9 +1428,12 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
        says WHO; the amount is never the device's. A points problem (unknown number, blocked account) never undoes a
        completed sale: it is reported on the receipt instead. Idempotent per sale (earn__till__{saleId}). */
     let pointsEarned = null;
-    if (buyerPhone) {
+    /* Step 2 (2026-09-30): the buyer is the one the cashier identified for points, or else the CUSTOMER ATTACHED to this
+       sale — the phone on the shop's own record (custOnFile), never a typed number. No SOKONI account on it → no points. */
+    const _earnPhone = buyerPhone || (custOnFile && custOnFile.phone) || null;
+    if (_earnPhone) {
       try {
-        const _earn = await require('./loyalty-points').earnForSale(db, { buyerPhone: String(buyerPhone), issuerShopId: String(merchantId),
+        const _earn = await require('./loyalty-points').earnForSale(db, { buyerPhone: String(_earnPhone), issuerShopId: String(merchantId),
           saleId, amountKES: _round2(authoritativeTotal - (pointsTender ? pointsTender.kes : 0)), source: 'till',   /* P2b: not on points */ shopName: receipt.merchantName || receipt.shopName || null });
         pointsEarned = _earn && _earn.ok ? { points: _earn.points || 0, balance: _earn.balance == null ? null : _earn.balance }
                                          : { points: 0, reason: (_earn && _earn.reason) || 'not-credited' };
