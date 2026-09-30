@@ -66,6 +66,49 @@
     /* ── Map container ── */
     .sd-map { width: 100%; height: 200px; border-radius: 14px; overflow: hidden; margin-top: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); }
 
+    /* ── MV2-3: responsive reflow (the page had no media rules) ── */
+    .sd-page { padding: 18px 4% 110px; }
+    .sd-tabs { position: sticky; top: 0; z-index: 5; background: #050505; padding: 8px 0; margin-bottom: 16px; }
+    .sd-tab { min-height: 40px; white-space: nowrap; }
+    .sd-card-actions a, .sd-card-actions button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+    .sd-stage { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 800; letter-spacing: .02em; }
+    .sd-stage.s-wait { background: rgba(251,191,36,.10); color: #fbbf24; border: 1px solid rgba(251,191,36,.25); }
+    .sd-stage.s-prep { background: rgba(255,255,255,.06); color: rgba(255,255,255,.7); border: 1px solid rgba(255,255,255,.14); }
+    .sd-stage.s-move { background: rgba(0,170,255,.10); color: #00aaff; border: 1px solid rgba(0,170,255,.25); }
+    .sd-stage.s-done { background: rgba(113,255,0,.10); color: #71ff00; border: 1px solid rgba(113,255,0,.25); }
+    .sd-stage.s-exc  { background: rgba(255,61,61,.10); color: #ff6b6b; border: 1px solid rgba(255,61,61,.25); }
+    .sd-ladder { display: flex; gap: 4px; flex-wrap: wrap; margin: 8px 0 2px; }
+    .sd-ladder span { font-size: 10px; color: rgba(255,255,255,.28); padding: 2px 7px; border-radius: 10px; border: 1px solid rgba(255,255,255,.08); }
+    .sd-ladder span.on { color: #71ff00; border-color: rgba(113,255,0,.35); background: rgba(113,255,0,.08); }
+    .sd-ladder span.past { color: rgba(255,255,255,.5); }
+    .sd-rbadge { font-size: 9.5px; font-weight: 900; letter-spacing: .08em; padding: 2px 7px; border-radius: 8px; }
+    .sd-rbadge.shop { color: #71ff00; background: rgba(113,255,0,.10); border: 1px solid rgba(113,255,0,.3); }
+    .sd-rbadge.net  { color: #64b4ff; background: rgba(100,180,255,.10); border: 1px solid rgba(100,180,255,.3); }
+    .sd-ractions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .sd-ractions a, .sd-ractions button { min-height: 40px; padding: 8px 12px; border-radius: 10px; font-size: 12px; font-weight: 800; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-family: inherit; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); color: rgba(255,255,255,.8); }
+    .sd-ractions .call { color: #71ff00; border-color: rgba(113,255,0,.3); }
+    .sd-loc-note { font-size: 11.5px; color: rgba(255,255,255,.42); margin-top: 6px; }
+    #hubMap { width: 100%; height: 52vh; min-height: 300px; border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.03); }
+    .sd-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: rgba(255,255,255,.5); margin: 10px 0; }
+    .sd-maplist { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap: 8px; margin-top: 10px; }
+    .sd-maplist .sd-card { margin: 0; padding: 12px 14px; }
+    @media (max-width: 640px) {
+      .sd-page { padding: 12px 12px 110px; }
+      .sd-page h1 { font-size: 17px !important; }
+      .sd-stats { grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 14px; }
+      .sd-stat { padding: 12px 10px; }
+      .sd-stat-val { font-size: 19px; }
+      .sd-card { padding: 14px; border-radius: 14px; }
+      .sd-card-actions > * { flex: 1 1 100%; }
+      .sd-map { height: 170px; }
+      #hubMap { height: 46vh; }
+      .sd-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 1100px) {
+      .sd-stats { grid-template-columns: repeat(5, 1fr); }
+      #tabActive #activeList, #pendingList { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+      #activeList .sd-card, #pendingList .sd-card { margin-bottom: 0; }
+    }
     /* ── Rider info strip ── */
     .sd-rider { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: rgba(113,255,0,0.05); border: 1px solid rgba(113,255,0,0.12); border-radius: 12px; margin-top: 8px; }
     .sd-rider-icon { font-size: 20px; }
@@ -104,8 +147,8 @@
 </head>
 <body>
 <div class="sd-page">
-  <h1 style="font-size:20px;font-weight:900;color:white;margin-bottom:4px;">Delivery Dashboard</h1>
-  <p style="color:rgba(255,255,255,0.4);font-size:13px;margin-bottom:20px;">Real-time view of all your deliveries</p>
+  <h1 style="font-size:20px;font-weight:900;color:white;margin-bottom:4px;">Delivery Hub</h1>
+  <p style="color:rgba(255,255,255,0.4);font-size:13px;margin-bottom:14px;">Live deliveries · orders · riders · map · exceptions — one operational view</p>
 
   <!-- Stats -->
   <div class="sd-stats" id="sdStats">
@@ -118,14 +161,15 @@
 
   <!-- Tabs -->
   <div class="sd-tabs">
-    <button class="sd-tab active" data-tab="active">Active</button>
-    <!-- Label only. data-tab stays "riders" — it backs the #riders deep link the
-         merchant route registry uses (seller-delivery.html#riders). -->
-    <button class="sd-tab" data-tab="riders">Rider Availability</button>
-    <button class="sd-tab" data-tab="pending">Pending</button>
-    <button class="sd-tab" data-tab="history">History</button>
-    <button class="sd-tab" data-tab="failed">Failed/Returns</button>
-    <button class="sd-tab" data-tab="analytics">Analytics</button>
+    <!-- MV2-3 order (owner): Live → Orders → Riders → Map → Exceptions. data-tab values are kept —
+         they back the #riders / #active deep links the merchant route registry uses. -->
+    <button class="sd-tab active" data-tab="active">🛵 Live</button>
+    <button class="sd-tab" data-tab="pending">🧾 Orders</button>
+    <button class="sd-tab" data-tab="riders">🏍️ Riders</button>
+    <button class="sd-tab" data-tab="map">🗺️ Map</button>
+    <button class="sd-tab" data-tab="failed">⚠️ Exceptions</button>
+    <button class="sd-tab" data-tab="history">🕑 History</button>
+    <button class="sd-tab" data-tab="analytics">📈 Analytics</button>
   </div>
 
   <!-- Tab panels -->
@@ -141,6 +185,14 @@
 
   <div id="tabPending" style="display:none">
     <div id="pendingList"></div>
+  </div>
+  <!-- MV2-3: ONE map over every active delivery — pickup (F1 projection on the job) → rider
+       (rideDrivers position the rider publishes) → drop-off (the order's destination). Where a
+       point is unknown the list says "Location unavailable"; nothing is invented. -->
+  <div id="tabMap" style="display:none">
+    <div class="sd-legend"><span>🏪 Pickup</span><span>🏍️ Rider (live)</span><span>🎯 Drop-off</span></div>
+    <div id="hubMap"></div>
+    <div class="sd-maplist" id="hubMapList"></div>
   </div>
   <div id="tabHistory" style="display:none">
     <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -180,6 +232,8 @@
 <script type="module" src="firebase.js"></script>
 <script src="sokoni-dispatch.js"></script>
 <script src="sokoni-logistics.js"></script>
+<!-- MV2-3: Chat enters the existing in-app inbox (conversations), never a second chat system -->
+<script src="sokoni-inbox.js"></script>
 <script>
 (function () {
   'use strict';
@@ -192,6 +246,10 @@
   var _activeDeliveries = [];
   var _miniMaps = {};
   var _miniMapUnsubs = {};
+  /* MV2-3: the server's presence freshness window (platformConfig/riderPresence.staleAfterSeconds default 300). Declared here — a var assigned after a render statement is undefined during that render. */
+  var STALE_MS = 300000;
+  /* MV2-3: declared with the rest of the state so a synchronously-delivered snapshot (cache, harness) can render before the renderer definitions further down. */
+  var LADDER = ['Awaiting payment','Paid','Preparing','Ready','Assigned','Picked up','In transit','Arriving','Delivered'];
   window.addEventListener('beforeunload', function() { Object.values(_miniMapUnsubs).forEach(function(fn){ fn(); }); });
 
   /* ── Bootstrap ── */
@@ -201,6 +259,7 @@
     _initTabs();
     _loadActive();
     _loadStats();
+    _loadStoreRiders();   /* MV2-3: SHOP / SOKONI badges on Live cards need the classification early */
   });
 
   /* ── Tab switching ── */
@@ -210,7 +269,7 @@
         var tab = btn.dataset.tab;
         document.querySelectorAll('.sd-tab').forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
-        ['active','riders','pending','history','failed','analytics'].forEach(function (t) {
+        ['active','riders','pending','map','history','failed','analytics'].forEach(function (t) {
           document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = t === tab ? '' : 'none';
         });
         if (tab === 'riders'    && !_unsubRiders)   { _loadRiders(); _loadStoreRiders(); }
@@ -218,6 +277,7 @@
         if (tab === 'history'   && !_unsubHistory)  _loadHistory();
         if (tab === 'failed'    && !_unsubFailed)   _loadFailed();
         if (tab === 'analytics')                    _loadAnalytics();
+        if (tab === 'map')                          _renderHubMap();
       });
     });
     document.getElementById('histSearch').addEventListener('input', _filterHistory);
@@ -240,6 +300,7 @@
      which belongs to another shop. */
   var _unsubRiders = null;
   var _riders = [];
+  /* MV2-3 marker */
 
   /* ══ WHOSE RIDER IS THIS? ═══════════════════════════════════════════════════
      A rider is a STORE rider when this shop has classified them in shopEmployees, and
@@ -276,6 +337,7 @@
         });
         _storeRiderIds = set;
         if (_riders.length) _renderRiders();   /* regroup what is already on screen */
+        if (_activeDeliveries.length) _renderActive();   /* MV2-3: badges on the Live cards */
       })
       .catch(function (err) {
         console.warn('[delivery-hub] store roster unavailable:', err && (err.code || err.message));
@@ -316,7 +378,7 @@
 
   function _renderRiders() {
     var el = document.getElementById('ridersList');
-    if (!_riders.length) {
+    if (!_riders.length && !_activeDeliveries.some(function (d) { return d.riderId || d.driverId || d.assignedDriverId; })) {
       el.innerHTML = '<div class="sd-empty"><div class="sd-empty-icon">🏍️</div>' +
         '<div class="sd-empty-text">No riders available right now.<br>' +
         'Riders appear here as soon as they go online.</div></div>';
@@ -334,7 +396,16 @@
        under SOKONI rather than flickering between sections. */
     var known = _storeRiderIds || {};
     var store = [], network = [];
-    _riders.forEach(function (r) { (known[r.uid] ? store : network).push(r); });
+    var seen = {};
+    _riders.forEach(function (r) { seen[r.uid] = true; (known[r.uid] ? store : network).push(r); });
+    /* A rider carrying one of MY deliveries belongs on my roster even if the online query
+       missed them (offline, stale, or beyond the limit): the job record names them. */
+    Object.keys(mine).forEach(function (rid) {
+      if (seen[rid]) return;
+      var j = mine[rid];
+      var r = { uid: rid, name: j.riderName || j.assignedRiderName || 'Rider', presence: null, _fromJob: true };
+      (known[rid] ? store : network).push(r);
+    });
 
     function section (title, note, rows, tone) {
       if (!rows.length) return '';
@@ -344,7 +415,7 @@
           '<span class="sd-rcount">' + rows.length + '</span>' +
         '</div>' +
         '<div class="sd-rsub">' + note + '</div>' +
-        rows.map(riderCard).join('') +
+        rows.map(function (r) { return riderCard(r, tone === 'store'); }).join('') +
       '</div>';
     }
 
@@ -356,32 +427,53 @@
           'everyone is listed under SOKONI. Your deliveries are unaffected.</div>'
         : '');
 
-    function riderCard (r) {
+    /* MV2-3: presence is the SERVER's (rider-presence.js writes presence/lastSeen; a bare legacy
+       isOnline:true with no fresh lastSeen is STALE, not online — the same rule the board applies).
+       Controls: Chat → the in-app inbox; Call → only the rider carrying THIS seller's job, and only
+       with the number the job record already carries; View delivery → the tracking page. No uid,
+       no private number, no address is printed for anyone else. */
+    function _ms(v) { return v && v.toMillis ? v.toMillis() : (v && v.seconds ? v.seconds * 1000 : (typeof v === 'number' ? v : (v ? Date.parse(v) || 0 : 0))); }
+    window._sdPresence = _presence;
+    function _presence(r) {
+      var last = _ms(r.lastSeen);
+      if (r.presence === 'offline') return { key: 'offline', label: 'Offline', dot: 'rgba(255,255,255,0.3)' };
+      if (r.presence == null && r.isOnline !== true && r.online !== true) return { key: 'offline', label: 'Offline', dot: 'rgba(255,255,255,0.3)' };
+      if (!last || Date.now() - last > STALE_MS) return { key: 'stale', label: 'Stale' + (last ? ' · seen ' + Math.round((Date.now() - last) / 60000) + 'm ago' : ' · no heartbeat'), dot: '#f5a623' };
+      return { key: 'online', label: 'Available', dot: '#71ff00' };
+    }
+    function riderCard (r, isStore) {
       var job = mine[r.uid];
       var busyElsewhere = !job && (r.currentDeliveryId || r.onTrip === true);
-      var state = job ? 'On your delivery' : (busyElsewhere ? 'On another delivery' : 'Available');
-      var dot = job ? '#00aaff' : (busyElsewhere ? '#f5a623' : '#71ff00');
+      var pr = _presence(r);
+      var state = job ? 'On your delivery' : (busyElsewhere ? 'On another delivery' : pr.label);
+      var dot = job ? '#00aaff' : (busyElsewhere ? '#f5a623' : pr.dot);
       var name = _riderEsc(r.name || r.displayName || r.fullName || 'Rider');
-      /* Rating only when the rider actually has one — an unrated rider must not be
-         rendered as 0.0, which reads as a terrible rider rather than a new one. */
       var rating = (typeof r.rating === 'number' && r.rating > 0)
         ? '<span style="color:rgba(255,255,255,0.45);">★ ' + r.rating.toFixed(1) + '</span>' : '';
       var vehicle = r.vehicleType ? '<span style="color:rgba(255,255,255,0.35);">' + _riderEsc(r.vehicleType) + '</span>' : '';
-
-      return '<div class="sd-card" style="display:flex;align-items:center;gap:12px;">' +
-        '<span style="color:' + dot + ';font-size:18px;line-height:1;">●</span>' +
+      var badge = '<span class="sd-rbadge ' + (isStore ? 'shop">SHOP RIDER' : 'net">SOKONI RIDER') + '</span>';
+      var phone = job && (job.riderPhone || job.assignedRiderPhone) ? String(job.riderPhone || job.assignedRiderPhone) : '';
+      var actions = '<div class="sd-ractions">' +
+        '<button type="button" data-chat="' + _riderEsc(r.uid) + '" data-name="' + name + '">💬 Chat</button>' +
+        (phone ? '<a class="call" href="tel:' + _riderEsc(phone.replace(/[^\d+]/g, '')) + '">📞 Call</a>' : '') +
+        (job ? '<a target="_blank" rel="noopener" href="delivery-tracking.html?ref=' + encodeURIComponent(job.id) + '">📍 View delivery</a>' : '') +
+        '</div>';
+      return '<div class="sd-card" data-rider-state="' + (job ? 'on-my-delivery' : (busyElsewhere ? 'busy' : pr.key)) + '" style="display:flex;align-items:flex-start;gap:12px;">' +
+        '<span style="color:' + dot + ';font-size:18px;line-height:1;margin-top:2px;">●</span>' +
         '<div style="flex:1;min-width:0;">' +
-          '<div style="font-weight:800;color:white;">' + name + '</div>' +
-          '<div style="font-size:12px;display:flex;gap:10px;flex-wrap:wrap;margin-top:2px;">' +
+          '<div style="font-weight:800;color:white;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + name + badge + '</div>' +
+          '<div style="font-size:12px;display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 8px;">' +
             '<span style="color:' + dot + ';font-weight:700;">' + state + '</span>' + vehicle + rating +
-          '</div>' +
+          '</div>' + actions +
         '</div>' +
-        /* Same tracking destination and ?ref= convention the delivery cards already use —
-           one tracking surface over the canonical delivery record, not a second one. */
-        (job ? '<a class="btn-track" style="flex:0 0 auto;padding:8px 14px;" target="_blank" rel="noopener" ' +
-               'href="delivery-tracking.html?ref=' + encodeURIComponent(job.id) + '">Track</a>' : '') +
       '</div>';
     }
+    el.querySelectorAll('button[data-chat]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (!window.SokoniInbox) { location.href = 'messages.html'; return; }
+        SokoniInbox.openChat({ otherUid: b.getAttribute('data-chat'), otherName: b.getAttribute('data-name'), type: (SokoniInbox.HUB_TYPES && SokoniInbox.HUB_TYPES.GENERAL) || 'general', context: 'Delivery Hub' });
+      });
+    });
   }
 
   /* ══ THREE STATES, NOT TWO ═══════════════════════════════════════════════════
@@ -443,6 +535,8 @@
         _activeDeliveries = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
         _renderActive();
         _updateStats();
+        if (_riders.length || _storeRiderIds) { try { _renderRiders(); } catch (_) {} }
+        if (document.getElementById('tabMap').style.display !== 'none') _renderHubMap();
       }, function (err) {
         /* Stats are derived from this same set, so a failed load must not leave
            yesterday's numbers on screen as if they were current. */
@@ -461,6 +555,25 @@
     _activeDeliveries.forEach(function (d) { if (d.riderId || d.driverId) _initMiniMap(d); });
   }
 
+  /* MV2-3: the owner's stage ladder over the canonical statuses. One mapping, used by cards and the map. */
+  function _stage(d) {
+    var st = d.status || 'unknown';
+    var M = { pending_payment:0, awaiting_payment:0, paid:1, order_placed:2, preparing:2, ready_for_pickup:3, awaiting_rider:3, retry_scheduled:3,
+              driver_assigned:4, driver_accepted:4, rider_assigned:4, driver_at_seller:5, picked_up:5, in_transit:6, arriving:7, delivered:8, buyer_confirmed:8, completed:8 };
+    var exc = /failed|returned|return_in_progress|refund|support_required|cancel/.test(st);
+    var i = exc ? -1 : (M[st] == null ? -1 : M[st]);
+    var cls = exc ? 's-exc' : i <= 1 ? 's-wait' : i <= 3 ? 's-prep' : i <= 7 ? 's-move' : 's-done';
+    return { index: i, label: exc ? 'Exception · ' + st.replace(/_/g, ' ') : (i >= 0 ? LADDER[i] : st.replace(/_/g, ' ')), cls: cls, exception: exc };
+  }
+  function _ladderHtml(d) { var sg = _stage(d); return '<div class="sd-ladder">' + LADDER.map(function (l, i) { return '<span class="' + (i === sg.index ? 'on' : (i < sg.index ? 'past' : '')) + '">' + l + '</span>'; }).join('') + '</div>'; }
+  function _pickupText(d) {
+    var p = d.pickupLocation || null, c = d.pickupCoords || null;
+    if (p && p.label) return p.label; if (c && isFinite(c.lat)) return 'Shop pickup point'; if (d.pickupAddress) return d.pickupAddress;
+    return 'Pickup location unknown' + (d.pickupLocationGap ? ' (' + String(d.pickupLocationGap).replace(/_/g, ' ') + ')' : '');
+  }
+  function _dropPoint(d) { var lat = d.deliveryLat != null ? d.deliveryLat : (d.deliveryCoords && d.deliveryCoords.lat); var lng = d.deliveryLng != null ? d.deliveryLng : (d.deliveryCoords && d.deliveryCoords.lng); return (isFinite(lat) && isFinite(lng) && !(lat === 0 && lng === 0)) ? { lat: Number(lat), lng: Number(lng) } : null; }
+  function _pickPoint(d) { var c = d.pickupCoords || d.pickupLocation; return (c && isFinite(c.lat) && isFinite(c.lng) && !(c.lat === 0 && c.lng === 0)) ? { lat: Number(c.lat), lng: Number(c.lng) } : null; }
+
   function _buildCard(d) {
     var status   = d.status || 'unknown';
     var badgeCls = { driver_assigned:'badge-blue', driver_accepted:'badge-blue', driver_at_seller:'badge-orange', in_transit:'badge-orange', arriving:'badge-green', delivered:'badge-green', failed:'badge-red', returned:'badge-red' }[status] || 'badge-grey';
@@ -468,7 +581,9 @@
     var createdStr = d.createdAt ? new Date(d.createdAt.seconds ? d.createdAt.seconds*1000 : d.createdAt).toLocaleString('en-KE',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'}) : '—';
     var riderHtml = '';
     if (d.assignedRiderName || d.riderName) {
-      riderHtml = `<div class="sd-rider"><span class="sd-rider-icon">🏍️</span><div><div class="sd-rider-name">${_esc(d.assignedRiderName||d.riderName||'Rider')}</div><div class="sd-rider-sub">${_esc(d.assignedRiderPhone||d.riderPhone||'')} ${d.dispatchDistKm ? '· '+d.dispatchDistKm+'km away' : ''}</div></div><div class="sd-rider-eta">${d.dispatchEtaMin ? d.dispatchEtaMin+'min' : 'ETA —'}</div></div>`;
+      var _rid = d.riderId || d.assignedRiderId || d.assignedDriverId || '';
+      var _rph = String(d.riderPhone || d.assignedRiderPhone || '').replace(/[^\d+]/g, '');
+      riderHtml = `<div class="sd-rider"><span class="sd-rider-icon">🏍️</span><div style="flex:1;min-width:0;"><div class="sd-rider-name">${_esc(d.assignedRiderName||d.riderName||'Rider')} <span class="sd-rbadge ${(_storeRiderIds||{})[_rid] ? 'shop">SHOP RIDER' : 'net">SOKONI RIDER'}</span></div><div class="sd-ractions" style="margin-top:6px;">${_rid ? '<button type="button" onclick="_sdChat(\'' + _esc(_rid) + '\',\'' + _esc(d.riderName||'Rider') + '\',\'' + _esc(d.id) + '\')">💬 Chat</button>' : ''}${_rph ? '<a class="call" href="tel:' + _esc(_rph) + '">📞 Call</a>' : ''}</div></div><div class="sd-rider-sub">${_esc(d.assignedRiderPhone||d.riderPhone||'')} ${d.dispatchDistKm ? '· '+d.dispatchDistKm+'km away' : ''}</div></div><div class="sd-rider-eta">${d.dispatchEtaMin ? d.dispatchEtaMin+'min' : 'ETA —'}</div></div>`;
     }
     return `
       <div class="sd-card">
@@ -477,15 +592,18 @@
             <div class="sd-card-id">Order #${_esc(d.id.slice(-8).toUpperCase())}</div>
             <div class="sd-card-time">${createdStr}</div>
           </div>
-          <span class="sd-badge ${badgeCls}">${statusLabel}</span>
+          <span class="sd-stage ${_stage(d).cls}">${_esc(_stage(d).label)}</span>
         </div>
+        ${_ladderHtml(d)}
         <div class="sd-card-body">
-          <div>To: ${_esc(d.deliveryAddress || d.dropoffAddress || '—')}</div>
+          <div>From: ${_esc(_pickupText(d))}</div>
+          <div>To: ${_esc(d.deliveryAddress || d.dropoffAddress || '—')}${_dropPoint(d) ? '' : ' <span class="sd-loc-note">(drop-off location unavailable)</span>'}</div>
           <div>Buyer: ${_esc(d.buyerName || '—')} ${d.buyerPhone ? '· '+_esc(d.buyerPhone) : ''}</div>
           <div>Fee: KES ${(d.deliveryFee||0).toLocaleString()} ${d.vehicleType ? '· '+d.vehicleType : ''}</div>
         </div>
         ${riderHtml}
         <div id="map_${d.id}" class="sd-map" style="display:${d.assignedRiderId||d.riderId?'block':'none'}"></div>
+        <div class="sd-loc-note" id="loc_${d.id}">${d.assignedRiderId||d.riderId ? 'Rider location: waiting for a fix…' : ''}</div>
         <div class="sd-card-actions">
           <a class="btn-track" href="delivery-tracking.html?ref=${_esc(d.id)}" target="_blank">Track Live</a>
           <button class="btn-report" onclick="_openReport('${_esc(d.id)}')">Report Issue</button>
@@ -504,7 +622,10 @@
     _miniMapUnsubs[mapId] = firebase.firestore().collection('rideDrivers').doc(riderId)
       .onSnapshot(function (snap) {
         var riderData = snap.data() || {};
-        if (!riderData.lat || !riderData.lng) return;
+        var _note = document.getElementById('loc_' + d.id);
+        var _fresh = riderData.locationUpdatedAt ? (Date.now() - (riderData.locationUpdatedAt.toMillis ? riderData.locationUpdatedAt.toMillis() : (riderData.locationUpdatedAt.seconds || 0) * 1000)) < 300000 : false;
+        if (!riderData.lat || !riderData.lng) { if (_note) _note.textContent = 'Rider location unavailable'; return; }
+        if (_note) _note.textContent = _fresh ? 'Rider location: live' : 'Rider location: last known (not fresh)';
         /* Lazy-init map */
         if (!_miniMaps[mapId]) {
           if (!window.L) {
@@ -519,12 +640,58 @@
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
           var icon = L.divIcon({ html:'<div style="font-size:22px;line-height:1">🏍️</div>', iconSize:[28,28], iconAnchor:[14,14], className:'' });
           _miniMaps[mapId] = { map: m, marker: L.marker([riderData.lat, riderData.lng], { icon }).addTo(m) };
+          /* pickup → drop-off context, from the job's own facts only */
+          var pk = _pickPoint(d), dp = _dropPoint(d), pts = [[riderData.lat, riderData.lng]];
+          if (pk) { L.marker([pk.lat, pk.lng], { icon: L.divIcon({ html: '<div style="font-size:20px;line-height:1">🏪</div>', iconSize: [24, 24], iconAnchor: [12, 12], className: '' }) }).addTo(m); pts.push([pk.lat, pk.lng]); }
+          if (dp) { L.marker([dp.lat, dp.lng], { icon: L.divIcon({ html: '<div style="font-size:20px;line-height:1">🎯</div>', iconSize: [24, 24], iconAnchor: [12, 12], className: '' }) }).addTo(m); pts.push([dp.lat, dp.lng]); }
+          if (pts.length > 1) { L.polyline(pts, { color: '#71ff00', weight: 3, opacity: .6, dashArray: '6 6' }).addTo(m); try { m.fitBounds(pts, { padding: [18, 18] }); } catch (_) {} }
         } else {
           _miniMaps[mapId].marker.setLatLng([riderData.lat, riderData.lng]);
           _miniMaps[mapId].map.panTo([riderData.lat, riderData.lng]);
         }
       });
   }
+
+  /* ── MV2-3: one map over all active deliveries ── */
+  var _hubMap = null, _hubLayer = null, _hubRiderUnsubs = {}, _hubRiderPos = {};
+  function _renderHubMap() {
+    var listEl = document.getElementById('hubMapList');
+    if (!window.L) { document.getElementById('hubMap').innerHTML = '<div style="padding:20px;color:rgba(255,255,255,.45);font-size:13px;">Map library unavailable.</div>'; return; }
+    if (!_hubMap) { _hubMap = L.map('hubMap', { zoomControl: true, attributionControl: false }).setView([-1.2921, 36.8219], 11); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(_hubMap); }
+    if (_hubLayer) _hubLayer.clearLayers(); else _hubLayer = L.layerGroup().addTo(_hubMap);
+    var pts = [], rows = [];
+    var ico = function (e) { return L.divIcon({ html: '<div style="font-size:20px;line-height:1">' + e + '</div>', iconSize: [24, 24], iconAnchor: [12, 12], className: '' }); };
+    _activeDeliveries.forEach(function (d) {
+      var pk = _pickPoint(d), dp = _dropPoint(d), rid = d.riderId || d.assignedRiderId || d.assignedDriverId, rp = rid ? _hubRiderPos[rid] : null;
+      if (pk) { L.marker([pk.lat, pk.lng], { icon: ico('🏪') }).addTo(_hubLayer); pts.push([pk.lat, pk.lng]); }
+      if (dp) { L.marker([dp.lat, dp.lng], { icon: ico('🎯') }).addTo(_hubLayer); pts.push([dp.lat, dp.lng]); }
+      if (rp) { L.marker([rp.lat, rp.lng], { icon: ico('🏍️') }).addTo(_hubLayer).bindTooltip(_esc(d.riderName || 'Rider')); pts.push([rp.lat, rp.lng]); }
+      var line = [pk, rp, dp].filter(Boolean).map(function (p) { return [p.lat, p.lng]; });
+      if (line.length > 1) L.polyline(line, { color: '#71ff00', weight: 3, opacity: .55, dashArray: '6 6' }).addTo(_hubLayer);
+      var missing = [];
+      if (!pk) missing.push('pickup'); if (!dp) missing.push('drop-off'); if (rid && !rp) missing.push('rider');
+      rows.push('<div class="sd-card"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><b style="color:white;">#' + _esc(d.id.slice(-8).toUpperCase()) + '</b><span class="sd-stage ' + _stage(d).cls + '">' + _esc(_stage(d).label) + '</span></div>' +
+        '<div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:4px;">' + _esc(_pickupText(d)) + ' → ' + _esc(d.deliveryAddress || d.dropoffAddress || '—') + '</div>' +
+        (missing.length ? '<div class="sd-loc-note">Location unavailable: ' + missing.join(', ') + '</div>' : '') +
+        '<div class="sd-ractions" style="margin-top:8px;"><a target="_blank" rel="noopener" href="delivery-tracking.html?ref=' + encodeURIComponent(d.id) + '">📍 Track</a></div></div>');
+      /* live rider position from the record the rider publishes (rideDrivers) — subscribe once per rider */
+      if (rid && !_hubRiderUnsubs[rid]) {
+        _hubRiderUnsubs[rid] = function () {};   /* claimed; replaced by the real unsub below */
+        _hubRiderUnsubs[rid] = firebase.firestore().collection('rideDrivers').doc(rid).onSnapshot(function (snap) {
+          var r = snap.data() || {};
+          if (r.lat && r.lng) _hubRiderPos[rid] = { lat: r.lat, lng: r.lng }; else delete _hubRiderPos[rid];
+          if (document.getElementById('tabMap').style.display !== 'none') _renderHubMap();
+        }, function () {});
+      }
+    });
+    listEl.innerHTML = rows.length ? rows.join('') : '<div class="sd-empty"><div class="sd-empty-icon">🗺️</div><div class="sd-empty-text">No active deliveries to map right now</div></div>';
+    if (pts.length) { try { _hubMap.fitBounds(pts, { padding: [24, 24], maxZoom: 15 }); } catch (_) {} }
+    setTimeout(function () { try { _hubMap.invalidateSize(); } catch (_) {} }, 50);
+  }
+  window._sdChat = function (uid, name, deliveryRef) {
+    if (!window.SokoniInbox) { location.href = 'messages.html'; return; }
+    SokoniInbox.openChat({ otherUid: uid, otherName: name, type: (SokoniInbox.HUB_TYPES && SokoniInbox.HUB_TYPES.GENERAL) || 'general', context: 'Delivery ' + deliveryRef, contextId: deliveryRef });
+  };
 
   /* ── Pending deliveries ── */
   function _loadPending() {
