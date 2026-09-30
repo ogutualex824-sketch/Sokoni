@@ -8407,6 +8407,54 @@ exports.webhookIntasend = onRequest(
 
     const fsStatus = state === "COMPLETE" ? "COMPLETE" : state === "FAILED" ? "FAILED" : "PENDING";
 
+    /* ══ ONLINE PRODUCT CHECKOUT GATE (owner repair #1, 2026-09-30) ═════════════════════════
+       A payment carrying a server-minted product_order intent settles ONLY on exact evidence:
+       the intent is THIS order's, the currency is KES, and the GROSS amount the buyer paid
+       (invoice.value — NOT net_amount, which is value minus IntaSend's charges) equals the
+       intent to the cent. Anything else is parked as REVIEW BEFORE the COMPLETE claim, so no
+       commission, wallet credit, stock move or order finalisation can follow. A replayed
+       delivery re-evaluates to the same answer. Payments with no product_order intent are
+       untouched here (the enforcement for those is a later, separate step). ══ */
+    if (fsStatus === "COMPLETE") {
+      const { assessProductOrderPayment } = require("./payment-attribution");
+      const _gIntentRef = existing.intentRef || apiRef;
+      /* Park = the same REVIEW record in every refusal case: nothing settles, the evidence stays on
+         payments/{ref}, the provider gets 200 and stops retrying, and a replay re-evaluates. */
+      const _park = async (reason, extra) => {
+        await payRef.update(Object.assign({
+          status:            "REVIEW",
+          reviewReason:      reason,
+          intasendState:     state,
+          confirmedAmount:   amount,
+          updatedAt:         admin.firestore.FieldValue.serverTimestamp(),
+          webhookReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, extra || {}));
+      };
+      let _gSnap = null;
+      try {
+        _gSnap = await db.collection("paymentIntents").doc(String(_gIntentRef)).get();
+      } catch (readErr) {
+        /* The gate cannot tell whether this is a product payment. Nothing may settle unverified, so
+           park it (reviewer re-drives it); only if even the park cannot be written, ask for a retry. */
+        logger.error("PRODUCT_ORDER_GATE_ERROR — intent unreadable, payment parked", { ref: apiRef, intentRef: _gIntentRef, err: String(readErr && readErr.message || readErr) });
+        try { await _park("gate_error"); res.status(200).send("OK"); }
+        catch (_) { res.status(500).send("RETRY"); }
+        return;
+      }
+      const _gate = assessProductOrderPayment(_gSnap.exists ? _gSnap.data() : null, {   /* pure: never throws */
+        apiRef,
+        grossAmount: (invoice.value !== undefined ? invoice.value : req.body?.value),
+        currency:    invoice.currency || req.body?.currency || null,
+      });
+      if (_gate.applies && !_gate.ok) {
+        await _park(_gate.reason, { expectedAmountCents: _gate.expectedCents ?? null, confirmedGrossCents: _gate.confirmedCents ?? null });
+        logger.error("PRODUCT_ORDER_PAYMENT_REFUSED", { ref: apiRef, intentRef: _gIntentRef, reason: _gate.reason,
+          expectedCents: _gate.expectedCents ?? null, confirmedCents: _gate.confirmedCents ?? null });
+        res.status(200).send("OK");
+        return;
+      }
+    }
+
     let claimed = false;
     await db.runTransaction(async (txn) => {
       const s = await txn.get(payRef);

@@ -117,4 +117,59 @@ function decidePaidTransition({ intent, confirmedAmount, isTillSale }) {
   return { action: 'mark_paid' };
 }
 
-module.exports = { mergeAttribution, resolveFinancialAttribution, decidePaidTransition, TERMINAL_INTENT_STATUSES };
+/**
+ * ONLINE PRODUCT CHECKOUT — may this provider confirmation settle this order? (owner repair #1,
+ * 2026-09-30; drafted for review by the webhook-lineage owner).
+ *
+ * Applies ONLY when the payment carries a server-minted `product_order` intent (createPaymentIntent,
+ * priced from the catalogue, seller resolved from each product's own record). Without one the webhook
+ * keeps today's behaviour — the enforcement that refuses intent-less product payments is a separate,
+ * later step, safe only once the checkout client that mints intents is live.
+ *
+ * The comparison is on the GROSS amount the buyer paid (`value`), to the CENT, in KES.
+ *
+ * WHY GROSS — MEASURED, DO NOT "CORRECT" THIS TO `amount`. Production webhookIntasend logs (read-only,
+ * key names and amount relationships only; first fee-bearing COMPLETE seen 2026-09-14T01:15:13Z,
+ * sampled 2026-09-30) show IntaSend's collection body is FLAT — invoice_id, api_ref, state, value,
+ * net_amount, charges, currency, provider at the top level, no `invoice` wrapper — and on COMPLETE
+ * M-PESA `value − net_amount === charges` (e.g. 1.80, 0.03). The webhook's own `amount` is
+ * `net_amount`, so an exact gate on it would refuse every legitimate payment that carried a fee.
+ * Whole-shilling rounding is deliberately NOT used: KES 389.60 must not satisfy KES 390.00.
+ *
+ * SCOPE OF THE EVIDENCE. All 11 collection bodies in the 30 days to 2026-09-30 were provider M-PESA,
+ * each carrying `value` and `currency`. Card is not on this rail today (online checkout refuses it).
+ * If a card or other method is added to product checkout, re-verify that its confirmation carries
+ * `value` + `currency` BEFORE enabling it — otherwise every such payment parks as missing_evidence.
+ *
+ * Pure apart from the one intent read the caller passes in. Never throws, never writes.
+ *
+ * @param {object|null} intent   paymentIntents/{intentRef} data, or null
+ * @param {object} evidence      { apiRef, grossAmount, currency } from the provider payload
+ * @returns {{applies:false}|{applies:true, ok:boolean, reason?:string, expectedCents?:number, confirmedCents?:number}}
+ */
+function assessProductOrderPayment(intent, evidence) {
+  if (!intent || intent.purpose !== 'product_order') return { applies: false };
+  const e = evidence || {};
+  const md = (intent.metadata && typeof intent.metadata === 'object') ? intent.metadata : {};
+  const expectedCents = Number(intent.amountCents);
+  const refuse = (reason, extra) => Object.assign({ applies: true, ok: false, reason, expectedCents }, extra || {});
+
+  /* The intent must be THIS order's: a valid payment for another order cannot settle this one. */
+  if (!e.apiRef || String(md.orderId || '') !== String(e.apiRef) || String(intent.resourceId || '') !== String(e.apiRef)) {
+    return refuse('wrong_order');
+  }
+  if (TERMINAL_INTENT_STATUSES.includes(intent.status) && intent.status !== 'paid') return refuse('intent_terminal');
+  if (!Number.isInteger(expectedCents) || expectedCents <= 0) return refuse('intent_amount_invalid');
+  const cur = String(e.currency || '').toUpperCase();
+  if (!cur) return refuse('missing_evidence');
+  if (cur !== 'KES' || String(intent.currency || 'KES').toUpperCase() !== 'KES') return refuse('wrong_currency');
+  const gross = Number(e.grossAmount);
+  if (e.grossAmount === null || e.grossAmount === undefined || e.grossAmount === '' || !Number.isFinite(gross)) {
+    return refuse('missing_evidence');
+  }
+  const confirmedCents = Math.round(gross * 100);
+  if (confirmedCents !== expectedCents) return refuse('amount_mismatch', { confirmedCents });
+  return { applies: true, ok: true, expectedCents, confirmedCents };
+}
+
+module.exports = { mergeAttribution, resolveFinancialAttribution, decidePaidTransition, assessProductOrderPayment, TERMINAL_INTENT_STATUSES };
