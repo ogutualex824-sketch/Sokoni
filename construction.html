@@ -1210,7 +1210,7 @@ function renderContractors(){
 function bookContractor(id){
   const c = DEMO_CONTRACTORS.find(x=>x.id===id); if(!c) return;
   if(window.SokoniPay) SokoniPay.bookNow({service:'Contractor Booking',provider:c.name,amount:0,phone:c.phone});
-  else (window._skToast||alert)(`To book ${c.name}, call/WhatsApp: ${c.phone}`);
+  else location.href = 'support.html?topic=booking&ref=' + encodeURIComponent(c.name); /* in-app, never a WhatsApp/phone hand-off */
 }
 function waContractor(phone, name){
   const msg = encodeURIComponent(`Hi ${name}, I found you on Sokoni Construction Hub and I'd like to discuss a project.`);
@@ -1267,11 +1267,9 @@ function renderEquipment(){
 
 function bookEquipment(id){
   const e = DEMO_EQUIPMENT.find(x=>x.id===id); if(!e) return;
+  /* bookNow shape here is the malformed one the census flagged — repaired in its own slice, NOT here. */
   if(window.SokoniPay) SokoniPay.bookNow({service:'Equipment Rental',provider:e.owner,amount:e.rate,phone:e.phone});
-  else {
-    const msg = encodeURIComponent(`Hi, I'd like to hire your ${e.name} listed on Sokoni Construction Hub. Please confirm availability and terms.`);
-    window.open(`https://wa.me/254${e.phone.replace(/^0/,'')}?text=${msg}`,'_blank');
-  }
+  else location.href = 'support.html?topic=booking&ref=' + encodeURIComponent(e.name); /* no WhatsApp fallback (owner 2026-09-30) */
 }
 
 /* ════════════════════════════════════════════════════════════

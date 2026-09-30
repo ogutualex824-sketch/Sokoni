@@ -1119,7 +1119,10 @@
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
         <button type="button" onclick="submitCaseCompletion()" style="padding:12px 24px;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;border-radius:12px;color:black;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">✅ Log Completion & Get Invoice</button>
-        <a href="https://wa.me/254703480154?text=I%20want%20to%20pay%20my%20SOKONI%20commission%20for%20a%20completed%20legal%20case" target="_blank" style="padding:12px 18px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:12px;color:#25d366;font-weight:700;font-size:13px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">📲 WhatsApp SOKONI</a>
+        <!-- "Pay my commission via WhatsApp" REMOVED 2026-09-30 (owner: WhatsApp is never the hand-off for a SOKONI
+             payment). The request now raises a SOKONI Support ticket carrying the reference; settlement through an
+             IntaSend provider-commission flow is a separate functions slice (no server authority exists yet). -->
+        <a href="#" onclick="event.preventDefault();location.href='support.html?topic=payment&ref='+encodeURIComponent((document.getElementById('prevRef')||{}).textContent||'SOK-legal-commission')+'&desc='+encodeURIComponent('Commission settlement for a completed legal case. Fee: '+((document.getElementById('prevTotal')||{}).textContent||'')+' · Owed: '+((document.getElementById('prevOwed')||{}).textContent||''))" style="padding:12px 18px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-weight:700;font-size:13px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">🛟 Settle via SOKONI Support</a>
       </div>
       <div id="caseCompMsg" style="margin-top:12px;font-size:12px;min-height:16px;"></div>
     </div>
@@ -2055,7 +2058,7 @@ function confirmConsultation(lawyerId){
       `⚖️ *SOKONI Legal Hub  Consultation Request*\n\nRef: ${ref}\n\n👤 Client: ${name}\n📞 Phone: ${phone}\n🔍 Matter: ${matter}\n📅 Date: ${date||"Flexible"}\n🕐 Time: ${time||"TBD"}\n${mpesaCode?`💚 Deposit paid: ${mpesaCode}\n`:""}\n${details?`Details:\n${details}\n\n`:""}`+
       `I found you on SOKONI Legal Hub and would like to book a consultation. Please confirm your availability. Thank you!`
     );
-    if(msgEl){ msgEl.innerHTML=`✅ Opening WhatsApp... Booking ref: <strong>${lhEsc(ref)}</strong>`; msgEl.style.color="#71ff00"; }
+    if(msgEl){ msgEl.innerHTML=`✅ Booking recorded in SOKONI. Ref: <strong>${lhEsc(ref)}</strong> · <a href="support.html?topic=booking&ref=${encodeURIComponent(ref)}" style="color:#71ff00;">🛟 Support</a>`; msgEl.style.color="#71ff00"; }
     /* Track lead fee — recorded when WhatsApp contact is actually shared */
     (async function(){try{
       const{initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
@@ -2067,9 +2070,8 @@ function confirmConsultation(lawyerId){
     }catch(e){}})();
     if(typeof SokoniPay!=='undefined'&&SokoniPay.waConnect){
       SokoniPay.waConnect(wa, decodeURIComponent(msg), {providerName:l.name,category:'legal',serviceDesc:matter+' Consultation'});
-    } else {
-      setTimeout(()=>{ window.open(`https://wa.me/${wa}?text=${msg}`,"_blank"); },600);
     }
+    /* no WhatsApp hand-off (owner 2026-09-30) */
     window._lhCloseTimer = setTimeout(closeConsultModal, 2000);
   }
 

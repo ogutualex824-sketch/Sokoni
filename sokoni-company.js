@@ -111,5 +111,50 @@
     };
   };
 
+  /* ── The support number, on the page (Slice C5) ──────────────────────────
+     ONE source: C.supportPhone (mirrors functions/company-identity.js). A page
+     marks its control with data-support-phone="tel" (a call link) or
+     data-support-phone="wa" (a WhatsApp link) and, optionally, an element with
+     data-support-phone-text for the visible number. FAIL CLOSED: when no number is
+     configured the control loses its href and says so — a page never shows a
+     digit this file did not supply. support.html once linked a placeholder number
+     nobody answers; that is the defect this helper exists to end.
+     data-support-phone-text-param="…" adds a prefilled WhatsApp message (?text=). */
+  C.supportPhoneDigits = function () {
+    var d = String(C.supportPhone || '').replace(/[^\d+]/g, '');
+    return /^\+?\d{9,15}$/.test(d) ? d : '';
+  };
+  C.supportPhoneHref = function (kind) {
+    var d = C.supportPhoneDigits();
+    if (!d) return null;
+    return kind === 'wa' ? 'https://wa.me/' + d.replace(/^\+/, '') : 'tel:' + d;
+  };
+  C.applySupportPhone = function (root) {
+    var scope = root || (typeof document !== 'undefined' ? document : null);
+    if (!scope || !scope.querySelectorAll) return 0;
+    var n = 0;
+    Array.prototype.forEach.call(scope.querySelectorAll('[data-support-phone]'), function (el) {
+      var kind = el.getAttribute('data-support-phone') === 'wa' ? 'wa' : 'tel';
+      var href = C.supportPhoneHref(kind);
+      var text = el.querySelector('[data-support-phone-text]');
+      if (href) {
+        var msg = el.getAttribute('data-support-phone-text-param');
+        el.setAttribute('href', href + (kind === 'wa' && msg ? '?text=' + encodeURIComponent(msg) : ''));
+        el.setAttribute('data-support-phone-state', 'configured');
+        if (text) text.textContent = C.supportPhone;
+      } else {
+        el.removeAttribute('href');
+        el.setAttribute('data-support-phone-state', 'unconfigured');
+        el.setAttribute('aria-disabled', 'true');
+        if (text) text.textContent = 'Support line not configured';
+      }
+      n++;
+    });
+    return n;
+  };
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { C.applySupportPhone(); });
+    else C.applySupportPhone();
+  }
   w.SOKONI_COMPANY = C;
 })(typeof window !== 'undefined' ? window : this);
