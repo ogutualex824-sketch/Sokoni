@@ -30,7 +30,7 @@ const errs = typeof C.validate === 'function' ? C.validate() : ['no validate'];
 ck('R2  validate() is clean with the new route (partition + kinds + tab + action)', Array.isArray(errs) && errs.length === 0, errs);
 const groups = C.MORE_GROUPS || [];
 const sales = groups.find((g) => g.key === 'sales');
-ck('R3  Sales group exists and holds sales-control; headings are Sales / Operations / Growth / Back office', !!sales && sales.ids.includes('sales-control') && groups.map((g) => g.label).join('|') === 'Sales|Operations|Growth|Back office', groups.map((g) => g.label));
+ck('R3  Sales group exists and holds sales-control; headings are Sales / Operations / Commerce / Growth / Back office (Commerce added by MV2-2a)', !!sales && sales.ids.includes('sales-control') && groups.map((g) => g.label).join('|') === 'Sales|Operations|Commerce|Growth|Back office', groups.map((g) => g.label));
 const more = C.ROUTES.filter((x) => x.tier === 'more').map((x) => x.id).sort();
 const grouped = groups.flatMap((g) => g.ids).sort();
 ck('R4  every more-tier route is in exactly one group and vice versa', JSON.stringify(more) === JSON.stringify(grouped), { more, grouped });
