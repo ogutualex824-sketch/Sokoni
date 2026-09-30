@@ -1,3 +1,16 @@
+## [2026-09-30] - providerDispatch SHELL-GATE CANDIDATE constructed and certified (worktree C:/temp/sok-pd-cand, branch candidate/providerdispatch-shell-gate @ 40693c6, functions tree c49c712) — NOT deployed
+
+docs/CANDIDATE_PROVIDERDISPATCH_SHELL_GATE.md + docs/release-gates/providerdispatch-candidate-manifest.json. PIN e521e03: functions/ = the deployed
+archive byte-for-byte (378 files, 0 mismatches; base 8c1c4fe matched 371/378, the 7 others hold archive bytes traced to ed1c16b/0dbb200/f4422b4/
+b29d4fb). GATE c49c712: 10 modules identical to slice/c4-capability-consumer + the two-line dispatcher merge (business-workspace._h; ops
+businessWorkspace, workspaceHome); subscription-core/-catalog stay at ARCHIVE versions. Closure 34 = 23 archive + 11. EXCLUSION PROOF 0
+violations: commission-config, finos-utils, subscription-*, notify, sms-service, provider-onboarding, provider-ops, booking-service,
+booking-payment-sweep, availability, legal-agreements, application-lifecycle, universal-onboarding ARCHIVE-IDENTICAL; provider-shop,
+sokoni-till, event-ops, entertainment/creator/venue stack, provider-directory, role-authority… ABSENT. Certified on the candidate: gate
+suite 21/0, archive-compat 9/0 (unstubbed archive subscription modules), MUTATIONS 9/0 (7 mutations each fail by assertion), capabilities
+46/0, business-workspace 30/0, workspace-capability 51/0, require-closure/commission/delivery/payout gates PASS, allowlist not blocked,
+.env hash-identical to the archive copy, no secrets declared, clean tree. Syntax gate result to follow. Deployment NOT authorized.
+
 ## [2026-09-30] - providerDispatch LINEAGE CENSUS (READ ONLY): what a redeploy would change; the 12 changed modules classified; 54 new modules traced to their call paths; deployment NOT authorized
 
 docs/PROVIDERDISPATCH_LINEAGE_CENSUS.md + docs/release-gates/providerdispatch-lineage-census.json. Deployed archive (2026-08-22; blobs
