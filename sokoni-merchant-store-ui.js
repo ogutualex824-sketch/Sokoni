@@ -196,7 +196,23 @@
       if (k === 'error') console.error('[merchant store] ' + m);
     }
 
+    /* The Details tab hosts the FULL shop profile editor (sokoni-merchant-shop-profile.js — the seller.html wizard,
+       ported 2026-09-29) when the shell supplies ctx.mountProfile. It lives in ONE persistent element that each
+       paint re-attaches, so a repaint of this panel never throws away a half-filled step. */
+    var profileEl = null, profileUI = null;
+    function attachProfile() {
+      var slot = host.querySelector('[data-profile-slot]');
+      if (!slot) return;
+      if (!profileEl) {
+        profileEl = (host.ownerDocument || document).createElement('div');
+        profileUI = ctx.mountProfile(profileEl);
+      }
+      slot.appendChild(profileEl);
+    }
+
     function load() {
+      var wanted = typeof ctx.takeTab === 'function' ? ctx.takeTab() : null;
+      if (wanted) S.tab = wanted;
       if (!ctx.scope || !ctx.scope.sellerUid) { S.phase = 'not_signed_in'; paint(); return Promise.resolve(); }
       S.phase = 'loading'; paint();
       return MS.loadIdentity({ callIdentity: ctx.callIdentity }).then(function (r) {
@@ -227,6 +243,7 @@
     /* ── Render ───────────────────────────────────────────────────────────── */
     function paint() {
       host.innerHTML = '<div class="mst">' + topHTML() + bodyHTML() + ctaHTML() + '</div>';
+      if (S.phase === 'ready' && S.tab === 'details' && typeof ctx.mountProfile === 'function') attachProfile();
     }
 
     function topHTML() {
@@ -239,7 +256,7 @@
     }
 
     function ctaHTML() {
-      if (S.phase !== 'ready' || S.tab !== 'details') return '';
+      if (S.phase !== 'ready' || S.tab !== 'details' || typeof ctx.mountProfile === 'function') return '';
       var changed = Object.keys(MS.changedFields(S.saved, S.draft)).length;
       return '<div class="mst-cta"><button class="mst-btn solid wide" data-act="save"' +
         (S.busy || !changed ? ' disabled' : '') + '>' +
@@ -270,7 +287,7 @@
           '<div style="margin-top:18px"><button class="mst-btn" data-act="reload">Try again</button></div>' +
           '</div></div>';
       }
-      if (S.tab === 'details') return detailsHTML();
+      if (S.tab === 'details') return typeof ctx.mountProfile === 'function' ? '<div class="mst-body" data-profile-slot></div>' : detailsHTML();
       if (S.tab === 'share') return shareHTML();
       return storefrontHTML();
     }
@@ -619,6 +636,7 @@
       destroy: function () {
         host.removeEventListener('click', onClick);
         host.removeEventListener('input', onInput);
+        if (profileUI && profileUI.destroy) profileUI.destroy();
       },
     };
   }
