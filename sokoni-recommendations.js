@@ -149,7 +149,7 @@
       const { initializeApp, getApps } = await import(
         'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'
       );
-      const { getFirestore, collection, getDocs } = await import(
+      const { getFirestore, collection, getDocs, query, orderBy, limit, documentId } = await import(
         'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
       );
 
@@ -274,13 +274,33 @@
          that are guaranteed to be denied and logged as errors. */
       const READABLE = SPECS.filter(s => !s._skip && (!s._authOnly || _signedIn));
 
+      /* Recommendations may only offer what the shop can sell. Same canonical
+         predicate as Home, Shop and checkout (sokoni-sellability.js): unlisted,
+         deleted, hidden, flagged out of stock or depleted products are not
+         candidates. Fail OPEN when the module is absent — never blank a real pool
+         over a script load; the product page still refuses to sell it. */
+      const _sellable = (d) => {
+        const S = (typeof window !== 'undefined') && window.SokoniSellability;
+        if (!S || typeof S.availabilityOf !== 'function') return true;
+        try { return !!S.availabilityOf(d, undefined).sellable; } catch (_) { return true; }
+      };
+      /* Bounded like the canonical catalogue listener: newest 200 by document id
+         (ids are Date.now()-style, so this is the active inventory) instead of the
+         ENTIRE collection — the same OOM anti-pattern sokoni-db.js already fixed. */
+      const _CAP = 200;
+      const _boundedQuery = (col) => {
+        try { return query(collection(db, col), orderBy(documentId(), 'desc'), limit(_CAP)); }
+        catch (_) { return collection(db, col); }
+      };
+
       const results = await Promise.all(
         READABLE.map(async spec => {
           try {
-            const snap = await getDocs(collection(db, spec.col));
+            const snap = await getDocs(_boundedQuery(spec.col));
             const items = [];
             snap.forEach(docSnap => {
               const d = docSnap.data();
+              if (spec.type === 'product' && !_sellable(d)) return;
               items.push({
                 id:         docSnap.id,
                 type:       spec.type,

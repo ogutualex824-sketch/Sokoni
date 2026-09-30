@@ -512,10 +512,8 @@ function loadProducts(){
     const trendCountEl = document.getElementById("pTrendCount");
     if(trendCountEl) trendCountEl.textContent = (window.__sokoniProductCount || products.length) + "+ products";
 
-    /* DISPLAY — home page shows up to 20 trending cards */
-    displayProducts(products.slice(0, 20));
-    displayNewArrivals();
-    displayRecommendedProducts();
+    /* DISPLAY — home page shows up to 20 trending cards, plus the deferred grids */
+    _renderHomeProductGrids();
     displayFeaturedShops();
     startLivePopup();
     initNearbyLocation();
@@ -1247,6 +1245,15 @@ function displayProducts(productsToShow = []){
       card.style.setProperty('--p9i', (i * 0.04) + 's');
     });
 
+    /* RENDER TOKEN. The second batch is appended at idle, up to 1.5s later. displayProducts
+       runs again on every catalogue snapshot, so a NEWER render could land in between — and
+       the older call's deferred batch then appended its by-then-stale rows onto the fresh
+       grid. Proven in the harness: the boot render (demo rows on localhost) was replaced by
+       the Firestore catalogue, then the boot render's second batch of demo rows appended
+       itself underneath the real one. In production the same race appends the previous
+       snapshot's stock/price/removed rows after a live update. Each call takes a token; a
+       deferred batch that is no longer the latest render does nothing. */
+    const token = (displayProducts._token = (displayProducts._token || 0) + 1);
     if (rest.length === 0) return;
 
     const scheduleIdle = window.requestIdleCallback
@@ -1254,6 +1261,7 @@ function displayProducts(productsToShow = []){
         : (cb) => setTimeout(cb, 60);
 
     scheduleIdle(() => {
+        if (displayProducts._token !== token) return;   /* a newer render owns the grid */
         /* Append rest without touching already-rendered first batch */
         const frag = document.createElement('div');
         frag.innerHTML = rest.map(p => buildProductCard(p)).join('');
@@ -1898,24 +1906,76 @@ function displayFeaturedShops(){
    CLS risk is low by construction: the section is already `display:none` until
    built, and at 6522px both it and everything it displaces are off-screen, so
    the reveal produces no visible shift either way. */
-function displayNewArrivals(){
-    const section = document.getElementById("newArrivalsSection");
-    const grid    = document.getElementById("newArrivalsGrid");
+/* ── Home grids: ONE deferral, ONE listing rule, re-rendered on every catalogue snapshot ──
+
+   Before this, New Arrivals was built once (the `skDeferState` guard returned on every
+   later call) from whatever `products` held at build time, so a stock change, a sold-out
+   item or a seller's delete that the live listener delivered a moment later never reached
+   it; Trending re-rendered, New Arrivals did not, and the two grids disagreed about the
+   same product. The Fastest Selling / Big Discounts / Today's Picks sections were defined
+   but never called from anywhere (git history: no caller was ever committed), so their
+   markup shipped permanently hidden. And none of these paths applied the canonical
+   listing predicate that Trending applies, so a removed / unpublished product could
+   survive on Home in New Arrivals alone.
+
+   Now every home grid goes through _deferHomeGrid: it is built when it approaches the
+   viewport (or at idle), and once built it is RE-RENDERED by each later call — which
+   _homeMergeFirestore makes on every snapshot — so what a card says about stock is what
+   the catalogue said last. Cards are built by buildProductCard, whose availability comes
+   from SokoniSellability, so the badge, the overlay and the disabled buttons all move
+   together with the inventory. Listing eligibility is _listedForHome — the same
+   isPubliclyListed the Trending grid, Shop and /api/catalogue use. */
+function _listedForHome(p){
+    const S = (typeof window !== 'undefined') && window.SokoniSellability;
+    if (!S || typeof S.isPubliclyListed !== 'function') return !!p;   /* fail open, never blank a real catalogue */
+    return !!p && S.isPubliclyListed(p);
+}
+
+/* When was this product listed? uploadedAt is a number for 96 of 97 live products but a
+   Firestore Timestamp object for one, and older rows carry only createdAt (a Timestamp
+   serialised as {_seconds}). `new Date(object)` is NaN, which sorted those rows to the
+   end regardless of age. Accept every shape; fall back to the Date.now()-style id. */
+function _productTime(p){
+    const cand = [p && p.uploadedAt, p && p.createdAt, p && p.publishedAt];
+    for (const v of cand) {
+        if (v == null) continue;
+        if (typeof v === 'number' && isFinite(v)) return v;
+        if (typeof v === 'string') { const t = Date.parse(v); if (isFinite(t)) return t; }
+        if (typeof v === 'object') {
+            if (typeof v.toMillis === 'function') { try { return v.toMillis(); } catch (e) {} }
+            const s = v.seconds != null ? v.seconds : v._seconds;
+            if (typeof s === 'number') return s * 1000;
+        }
+    }
+    const n = Number(p && p.id);
+    return isFinite(n) && n > 1e11 ? n : 0;
+}
+
+/* Deferred build + live re-render for a home grid.
+   render(section, grid) → true when it rendered rows, false when it had nothing
+   (the section then stays / becomes hidden — an empty grid is never shown). */
+const _homeGridState = {};
+function _deferHomeGrid(sectionId, gridId, render){
+    const section = document.getElementById(sectionId);
+    const grid    = document.getElementById(gridId);
     if(!grid || !section) return;
-    if(section.dataset.skDeferState) return;   /* already built or scheduled */
+    const st = _homeGridState[sectionId] || (_homeGridState[sectionId] = { state: null });
 
-    function _buildNewArrivals(){
-        if(section.dataset.skDeferState === 'built') return;
+    function _build(){
+        st.state = 'built';
         section.dataset.skDeferState = 'built';
-        _renderNewArrivals(section, grid);
+        let shown = false;
+        try { shown = !!render(section, grid); } catch (e) { try { console.warn('[home] grid render failed', sectionId, e && e.message); } catch (_) {} }
+        section.style.display = shown ? "block" : "none";
+        if (shown) _attachPcardDelegation(grid);   /* removes before adding — safe to repeat */
     }
 
-    if(!('IntersectionObserver' in window) || !section.parentNode){
-        section.dataset.skDeferState = 'built';
-        _renderNewArrivals(section, grid);
-        return;
-    }
+    if(st.state === 'built'){ _build(); return; }          /* live re-render on a later snapshot */
+    if(st.state === 'pending') return;                      /* the scheduled build reads the latest products */
 
+    if(!('IntersectionObserver' in window) || !section.parentNode){ _build(); return; }
+
+    st.state = 'pending';
     section.dataset.skDeferState = 'pending';
 
     const sentinel = document.createElement('div');
@@ -1923,11 +1983,14 @@ function displayNewArrivals(){
     sentinel.style.cssText = 'height:1px;width:100%;pointer-events:none;';
     section.parentNode.insertBefore(sentinel, section);
 
-    const io = new IntersectionObserver(function(entries){
-        if(!entries.some(e => e.isIntersecting)) return;
+    const fire = function(){
+        if(st.state === 'built') return;
         io.disconnect();
         if(sentinel.parentNode) sentinel.parentNode.removeChild(sentinel);
-        _buildNewArrivals();
+        _build();
+    };
+    const io = new IntersectionObserver(function(entries){
+        if(entries.some(e => e.isIntersecting)) fire();
     }, { rootMargin: '800px 0px' });
     io.observe(sentinel);
 
@@ -1935,30 +1998,21 @@ function displayNewArrivals(){
        outside the load window. requestIdleCallback is absent on older Safari,
        which is a large share of the traffic this helps, so the timeout is
        load-bearing rather than decorative. */
-    const idle = function(){
-        if(section.dataset.skDeferState === 'built') return;
-        io.disconnect();
-        if(sentinel.parentNode) sentinel.parentNode.removeChild(sentinel);
-        _buildNewArrivals();
-    };
-    if(typeof requestIdleCallback === 'function') requestIdleCallback(idle, { timeout: 8000 });
-    else setTimeout(idle, 6000);
+    if(typeof requestIdleCallback === 'function') requestIdleCallback(fire, { timeout: 8000 });
+    else setTimeout(fire, 6000);
+}
+
+function displayNewArrivals(){
+    _deferHomeGrid("newArrivalsSection", "newArrivalsGrid", _renderNewArrivals);
 }
 
 function _renderNewArrivals(section, grid){
-    const newest = [...products].sort((a,b) => {
-        const ta = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
-        const tb = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
-        return tb - ta;
-    }).slice(0, 20);
-    section.style.display = "block";
+    const newest = products.filter(_listedForHome)
+        .sort((a,b) => _productTime(b) - _productTime(a))
+        .slice(0, 20);
+    if(!newest.length){ grid.innerHTML = ""; return false; }
     grid.innerHTML = newest.map(p => buildProductCard(p, "compact")).join("");
-    /* Without this every card in New Arrivals was inert: cart, wishlist, buy,
-       share and the card-tap that opens the product all rely on one delegated
-       listener, and it was attached only to #productsContainer. Both sections
-       populate on first paint, so the dead buttons were visible immediately.
-       _attachPcardDelegation removes before adding, so this is safe to repeat. */
-    _attachPcardDelegation(grid);
+    return true;
 }
 
 /* =========================
@@ -1970,12 +2024,27 @@ function displayRecommendedProducts(){
     const container = document.getElementById("recommendedContainer");
     if(!container) return;
 
-    // Recommended = shuffle products, show 6 on home page
-    const shuffled = [...products].sort(() => Math.random() - 0.5).slice(0, 6);
-    section.style.display = "block";
-    container.innerHTML = shuffled.map(p => buildProductCard(p, "large")).join("");
-    _attachPcardDelegation(container)
-      + (products.length > 6
+    /* Recommended = 6 listed products. The selection is made ONCE per page and kept
+       across catalogue snapshots (each snapshot re-renders the SAME six with their
+       current stock), because this runs on every live update and a fresh random
+       shuffle each time made the section visibly reshuffle whenever any product
+       changed. A kept id whose product is no longer listed is dropped and refilled. */
+    const listed = products.filter(_listedForHome);
+    if(!listed.length){ if(section) section.style.display = "none"; return; }
+    const byId = new Map(listed.map(p => [String(p.id), p]));
+    let kept = (displayRecommendedProducts._ids || []).filter(id => byId.has(id));
+    if(kept.length < Math.min(6, listed.length)){
+        const pool = listed.filter(p => !kept.includes(String(p.id))).sort(() => Math.random() - 0.5);
+        kept = kept.concat(pool.slice(0, 6 - kept.length).map(p => String(p.id)));
+    }
+    displayRecommendedProducts._ids = kept;
+    const picks = kept.map(id => byId.get(id));
+    if(section) section.style.display = "block";
+    /* The "See all" link used to be concatenated onto the RETURN VALUE of
+       _attachPcardDelegation (undefined) — a string that went nowhere, so the link
+       never rendered. It is now part of the grid. */
+    container.innerHTML = picks.map(p => buildProductCard(p, "large")).join("")
+      + (listed.length > 6
           ? `<div style="grid-column:1/-1;text-align:center;padding:8px 0 12px;">
                <a href="category.html?cat=all"
                   style="display:inline-flex;align-items:center;gap:7px;padding:11px 24px;
@@ -1984,6 +2053,7 @@ function displayRecommendedProducts(){
                  ✨ See All ${window.__sokoniProductCount || products.length}+ Products →
                </a>
              </div>` : "");
+    _attachPcardDelegation(container);
 
     /* Update marketplace stats with real counts */
     const statsSection = document.getElementById("marketplaceStats");
@@ -2001,26 +2071,37 @@ function displayRecommendedProducts(){
    DAILY AUTO-SELECTIONS
 ========================= */
 
+/* Each daily section is a deferred, live-re-rendered home grid (see _deferHomeGrid).
+   Eligibility is the canonical sellability decision (listed AND sellable) — the old
+   `!p.outOfStock` read only the flag, so a product depleted to stock 0, or removed by
+   its seller, still qualified as "flying off the shelves". A sold-out product is not
+   offered as fastest selling, discounted or a pick; it is still shown, marked, in
+   Trending and New Arrivals, where the card says so. */
+function _sellableForHome(p){
+    return _listedForHome(p) && !!_homeAvailability(p).sellable;
+}
+
 function displayFastestSelling(){
-    const sec  = document.getElementById("fastestSellingSection");
-    const grid = document.getElementById("fastestSellingGrid");
-    if(!grid) return;
-    const top = [...products]
-        .filter(p => (p.sold || 0) > 0 && !p.outOfStock)
-        .sort((a, b) => (b.sold || 0) - (a.sold || 0))
-        .slice(0, 20);
-    if(!top.length) return;
-    grid.innerHTML = top.map(p => buildProductCard(p, "compact")).join("");
-    if(sec) sec.style.display = "block";
+    _deferHomeGrid("fastestSellingSection", "fastestSellingGrid", function(sec, grid){
+        const top = products
+            .filter(p => _sellableForHome(p) && (Number(p.sold) || 0) > 0)
+            .sort((a, b) => (Number(b.sold) || 0) - (Number(a.sold) || 0))
+            .slice(0, 20);
+        if(!top.length){ grid.innerHTML = ""; return false; }
+        grid.innerHTML = top.map(p => buildProductCard(p, "compact")).join("");
+        return true;
+    });
 }
 
 function displayBiggestDiscounts(){
-    const sec  = document.getElementById("biggestDiscountsSection");
-    const grid = document.getElementById("biggestDiscountsGrid");
-    if(!grid || !products.length) return;
+    _deferHomeGrid("biggestDiscountsSection", "biggestDiscountsGrid", _renderBiggestDiscounts);
+}
+
+function _renderBiggestDiscounts(sec, grid){
+    if(!products.length){ grid.innerHTML = ""; return false; }
 
     const withDiscount = products
-        .filter(p => !p.outOfStock && p.priceHistory && p.priceHistory.length)
+        .filter(p => _sellableForHome(p) && Array.isArray(p.priceHistory) && p.priceHistory.length)
         .map(p => {
             /* Find the peak historical price as the "original" */
             const peakPrice = Math.max(...p.priceHistory.map(h => h.price || h.newPrice || 0), p.price);
@@ -2031,27 +2112,31 @@ function displayBiggestDiscounts(){
         .sort((a, b) => b._discPct - a._discPct)
         .slice(0, 20);
 
-    if(!withDiscount.length) return;
+    if(!withDiscount.length){ grid.innerHTML = ""; return false; }
     grid.innerHTML = withDiscount.map(p => {
         const card = buildProductCard(p, "compact");
         /* Inject a prominent discount pill over the card by wrapping in a relative container */
         return card.replace(
-            'style="position:relative;animation:cardFadeIn 0.4s ease;"',
-            `style="position:relative;animation:cardFadeIn 0.4s ease;" data-disc="${p._discPct}"`
+            'style="position:relative;animation:cardFadeIn 0.35s ease;"',
+            `style="position:relative;animation:cardFadeIn 0.35s ease;" data-disc="${p._discPct}"`
         ).replace(
             /(<div class="product-img-wrap">)/,
             `<div style="position:absolute;top:8px;left:8px;z-index:3;background:linear-gradient(135deg,#ff4444,#ff7700);color:white;font-size:11px;font-weight:900;padding:4px 10px;border-radius:20px;box-shadow:0 2px 8px rgba(255,68,68,0.4);">-${p._discPct}% OFF</div>$1`
         );
     }).join("");
-    if(sec) sec.style.display = "block";
+    return true;
 }
 
 function displayTodaysPicks(){
-    const sec  = document.getElementById("todaysPicksSection");
-    const grid = document.getElementById("todaysPicksGrid");
-    if(!grid || products.length < 4) return;
+    _deferHomeGrid("todaysPicksSection", "todaysPicksGrid", _renderTodaysPicks);
+}
 
-    /* Deterministic daily shuffle — same picks all day, changes at midnight */
+function _renderTodaysPicks(sec, grid){
+    /* Deterministic daily shuffle — same picks all day, changes at midnight. Seeded
+       from the date and applied to a STABLY ORDERED pool (by id), so a live snapshot
+       that reorders `products` does not reorder today's picks. */
+    const pool = products.filter(_sellableForHome).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    if(pool.length < 4){ grid.innerHTML = ""; return false; }
     const dateSeed = new Date().toISOString().slice(0, 10)
         .split("").reduce((acc, c) => acc * 31 + c.charCodeAt(0), 1);
     let seed = dateSeed;
@@ -2059,14 +2144,24 @@ function displayTodaysPicks(){
         seed = (seed * 1664525 + 1013904223) & 0xffffffff;
         return Math.abs(seed) % max;
     }
-    const pool = [...products].filter(p => !p.outOfStock);
     for(let i = pool.length - 1; i > 0; i--){
         const j = nextRand(i + 1);
         [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     const picks = pool.slice(0, 20);
     grid.innerHTML = picks.map(p => buildProductCard(p, "compact")).join("");
-    if(sec) sec.style.display = "block";
+    return true;
+}
+
+/* Every home product grid, in one place, so boot and every live snapshot render the
+   same set of sections and none can be forgotten again. */
+function _renderHomeProductGrids(){
+    displayProducts(products.slice(0, 20));
+    displayNewArrivals();
+    displayRecommendedProducts();
+    displayFastestSelling();
+    displayBiggestDiscounts();
+    displayTodaysPicks();
 }
 
 /* =========================
@@ -4588,7 +4683,7 @@ if(document.readyState === "complete" || document.readyState === "interactive"){
 
    Local-only products are preserved: a listing uploaded but not yet synced to
    Firestore must not vanish from its own seller's view. */
-window._homeMergeFirestore = function (fsProducts) {
+window._homeMergeFirestore = function (fsProducts, meta) {
     /* Record the read BEFORE the empty check. An empty snapshot is a SUCCESSFUL
        read of an empty catalogue, and returning early without noting that left
        the watchdog unable to tell "Firestore says there is nothing" from
@@ -4611,8 +4706,29 @@ window._homeMergeFirestore = function (fsProducts) {
     }
 
     const fsIds = new Set(fsProducts.map(p => String(p.id)));
+
+    /* AUTHORITY IS OBEYED HERE, NEVER RECOMPUTED (same contract as category.js).
+       SokoniDB.listenProducts stamps each delivery: `fresh` is server-confirmed and
+       current and may REMOVE; `stale` / `unconfirmed` / absent may only update and add.
+       Before this, every product ever seen was preserved forever as "local-only", so a
+       listing its seller deleted or unpublished stayed on Home from the warm cache until
+       the visitor cleared storage — and the cart could still be filled from it.
+       The seller's OWN unsynced listing is still preserved (that was the reason the
+       preservation existed): ownership is the signed-in uid or email on the row. */
+    const authority = (meta && meta.authority) || (meta && meta.authoritative ? 'fresh' : 'unconfirmed');
+    const authoritative = authority === 'fresh';
+    const _me = (function(){
+        try {
+            const u = window.firebaseAuth && window.firebaseAuth.currentUser;
+            if (u) return { uid: u.uid, email: (u.email || '').toLowerCase() };
+            const s = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+            return s ? { uid: s.uid || null, email: String(s.email || '').toLowerCase() } : null;
+        } catch (e) { return null; }
+    })();
+    const _mine = p => !!_me && ((p.sellerUid && p.sellerUid === _me.uid) || (p.sellerEmail && String(p.sellerEmail).toLowerCase() === _me.email && _me.email));
     const localOnly = (Array.isArray(products) ? products : []).filter(p =>
         !FALLBACK_PRODUCTS.some(d => d.id === p.id) && !fsIds.has(String(p.id))
+        && (!authoritative || _mine(p))
     );
     products = [...fsProducts, ...localOnly];
 
@@ -4645,9 +4761,9 @@ window._homeMergeFirestore = function (fsProducts) {
     const trendCountEl = document.getElementById("pTrendCount");
     if (trendCountEl) trendCountEl.textContent = (window.__sokoniProductCount || products.length) + "+ products";
 
-    displayProducts(products.slice(0, 20));
-    if (typeof displayNewArrivals === "function") displayNewArrivals();
-    if (typeof displayRecommendedProducts === "function") displayRecommendedProducts();
+    /* Every grid, every snapshot — New Arrivals and the daily sections included, so a
+       stock change reaches all of them, not only Trending. */
+    _renderHomeProductGrids();
 
     /* Home listener is bounded to 200, so products.length under-reports the real
        catalogue. Fetch the true total ONCE (cheap server count aggregate, no docs

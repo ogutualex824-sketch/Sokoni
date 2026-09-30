@@ -72,6 +72,7 @@ const REQUIRED = [
   { f: 'test-adminos-tier1-dead-controls.js', why: 'the five dead AdminOS controls report failure, not success', browser: false, ms: 120000 },
   { f: 'test-adminos-tier2-action-honesty.js', why: 'a success toast is emitted only after the callable resolves', browser: false, ms: 120000 },
   { f: 'test-nearby-city-normalisation.js', why: 'Sellers Near You resolves only cities it can justify — never a guessed catchment', browser: false, ms: 120000 },
+  { f: 'test-home-picked-for-you.js', why: 'Edit Interests works for every visitor; Picked For You renders after the lazy load; every home grid re-syncs with the catalogue', browser: true, ms: 300000 },
 ];
 
 console.log(NL + '[predeploy] required release suites — ' + REQUIRED.length + ' declared');

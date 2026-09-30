@@ -13,6 +13,15 @@ import {
 
 const _log = window.SokoniLogger || { log:()=>{}, warn:()=>{}, error:()=>{} };
 
+/* This module is THE catalogue listener for index.html and category.html.
+   realtime.js (injected on every page by security.js) used to attach a second,
+   unbounded-then-capped products listener beside it, with its own visibility rule
+   and its own render of the same grid — and, attaching before the App Check token
+   existed, it logged "[RT] products: Missing or insufficient permissions" on every
+   home visit. The flag lets realtime.js stand down when the canonical listener is
+   present, and keeps it as a fallback when this module fails to load. */
+try { window.__sokoniCatalogueModule = true; } catch (_) {}
+
 /* Search keeps a warm catalogue cache (in-session 10 min, localStorage 30 min)
    so queries match locally instead of hitting the network. Without an explicit
    invalidation a seller who adds or removes a product and searches for it

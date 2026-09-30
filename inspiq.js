@@ -743,13 +743,54 @@
     }
   }
 
+  /* The home page shows the capped, rotating feed (renderHome); the dedicated
+     page shows the infinite one (renderForYou). Both pick flows used to call
+     renderForYou unconditionally, so applying a pick on the home page swapped the
+     rotating widget for an infinite scroller until the next reload. One decision,
+     made here, used by both. */
+  function _isHomePage() {
+    return /\/(index\.html)?$/.test(window.location.pathname.split('?')[0]);
+  }
+  function _renderFeedForPage() {
+    if (_isHomePage()) renderHome('inspiqFeed'); else renderForYou('inspiqFeed');
+  }
+
   function applyPick() {
     _picked.forEach(cat => track(cat, 5));
+    _picked.clear();
     const picker = document.getElementById('inspiqPicker');
     if (picker) picker.style.display = 'none';
-    renderForYou('inspiqFeed');
+    _setEditorExpanded(false);
+    _renderFeedForPage();
     const section = document.getElementById('inspiqSection');
     if (section) section.style.display = '';
+  }
+
+  /* ─── EDIT INTERESTS — the one entry point for the "Edit Interests" control ───
+     Before this, the home button toggled the container's display and then called
+     renderPicker(), which EMPTIES the container for anyone who already has
+     interests — precisely the person pressing "Edit". So the button did nothing
+     for every returning visitor (measured live 2026-09-30: picker innerHTML 0
+     after the click). Now: a fresh visitor gets the onboarding picker, a
+     returning one gets the editor pre-populated with their current interests,
+     and pressing the button again closes it. */
+  function _setEditorExpanded(open) {
+    const btn = document.getElementById('inspiqEditBtn');
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  function toggleEditor(containerId) {
+    const el = document.getElementById(containerId || 'inspiqPicker');
+    if (!el) return false;
+    const isOpen = el.style.display !== 'none' && el.innerHTML.trim().length > 0;
+    if (isOpen) {
+      el.style.display = 'none';
+      _setEditorExpanded(false);
+      return false;
+    }
+    if (hasInterests()) renderPickerEdit(el.id); else renderPicker(el.id);
+    el.style.display = '';
+    _setEditorExpanded(true);
+    return true;
   }
 
   /* ─── EDIT INTERESTS (for existing users) ─── */
@@ -795,7 +836,11 @@
     _picked.clear();
     const picker = document.getElementById('inspiqPicker');
     if (picker) picker.style.display = 'none';
-    renderForYou('inspiqFeed');
+    _setEditorExpanded(false);
+    /* A visitor who deselects everything has no interests again: the home widget
+       hides itself (renderHome does so when there is nothing to show) and the next
+       press of Edit Interests offers the onboarding picker. */
+    _renderFeedForPage();
   }
 
   function trackClick(cat) {
@@ -887,7 +932,7 @@
   }
 
   /* ─── HOME FEED — 10 cards, rotating ─── */
-  const HOME_LIMIT    = 10;
+  const HOME_LIMIT    = 6;   /* owner 2026-09-30: the home feed shows six cards */
   const HOME_ROTATE_MS = 4500; // swap one card every 4.5 s
   let   _homeRotateTimer = null;
 
@@ -952,7 +997,7 @@
 
   /* ─── PUBLIC API ─── */
   window.InspIQ = {
-    track, trackClick, pickInterest, applyPick, applyPickEdit,
+    track, trackClick, pickInterest, applyPick, applyPickEdit, toggleEditor,
     getTopCategories, getPersona, generateCards,
     renderHome, renderForYou, renderPicker, renderPickerEdit, showNotif, hasInterests,
   };

@@ -2358,9 +2358,13 @@
           <p style="font-size:11px;color:rgba(255,255,255,0.35);margin:3px 0 0;font-weight:400;" id="inspiqSubline">
             Personalised picks &amp; trending deals just for you</p>
         </div>
-        <button type="button"
-          onclick="document.getElementById('inspiqPicker').style.display=document.getElementById('inspiqPicker').style.display==='none'?'':'none';InspIQ.renderPicker('inspiqPicker')"
-          style="padding:6px 12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;border-radius:8px;cursor:pointer;font-family:inherit;">✨
+        <!-- InspIQ is lazy-loaded (sokoni-lazy.js). The handler below loads it on demand
+             and then opens the editor for a returning visitor or the picker for a new one;
+             the old inline toggle called renderPicker(), which empties the container for
+             anyone who already has interests, so the button did nothing for them. -->
+        <button type="button" id="inspiqEditBtn" aria-controls="inspiqPicker" aria-expanded="false"
+          onclick="window.sokoniToggleInterests ? sokoniToggleInterests(this) : void 0"
+          style="padding:6px 12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;border-radius:8px;cursor:pointer;font-family:inherit;min-height:32px;">✨
           Edit Interests</button>
       </div>
     </div>
@@ -2915,8 +2919,12 @@
 import SokoniDB from "./sokoni-db.js";
 (window.__sokoniAppCheckReady || Promise.resolve()).then(function (status) {
   try { window.dispatchEvent(new CustomEvent("sokoni:catalogue", { detail: { phase: "appcheck-ready", status: status } })); } catch (e) {}
-  SokoniDB.listenProducts({}, function (fsProducts) {
-    if (typeof window._homeMergeFirestore === "function") window._homeMergeFirestore(fsProducts);
+  /* Forward `meta` verbatim, as category.html does. It says whether the read was
+     server-confirmed; _homeMergeFirestore drops products the catalogue no longer
+     returns ONLY when it was. Without it every delivery looks unconfirmed and a
+     product deleted or unpublished by its seller stays on Home from the warm cache. */
+  SokoniDB.listenProducts({}, function (fsProducts, meta) {
+    if (typeof window._homeMergeFirestore === "function") window._homeMergeFirestore(fsProducts, meta);
   });
 });
 </script>
@@ -4027,6 +4035,43 @@ document.addEventListener('DOMContentLoaded',function(){
 <!-- ── PERSONALISED RECOMMENDATIONS ── -->
 
 <script>
+/* ── Lazy-module readiness (shared by Edit Interests and the recommendations loader) ──
+   sokoni-recommendations.js and inspiq.js are loaded by sokoni-lazy.js on the first
+   interaction or at idle, so neither exists at DOMContentLoaded. Anything that needs
+   one waits for it here. Without SokoniLazy (an older cached loader) this falls back
+   to a bounded poll, and gives up honestly rather than hanging. */
+function sokoniWhenLazyModule(src, globalName, maxMs) {
+  if (window[globalName]) return Promise.resolve(true);
+  if (window.SokoniLazy && typeof SokoniLazy.whenLoaded === 'function') {
+    return SokoniLazy.whenLoaded(src).then(function (ok) { return ok && !!window[globalName]; });
+  }
+  return new Promise(function (resolve) {
+    var waited = 0, step = 250, cap = maxMs || 15000;
+    var t = setInterval(function () {
+      waited += step;
+      if (window[globalName]) { clearInterval(t); resolve(true); }
+      else if (waited >= cap) { clearInterval(t); resolve(false); }
+    }, step);
+  });
+}
+
+/* Edit Interests: load InspIQ on demand (a tap IS the interaction the lazy loader
+   waits for, but the module has not executed yet when the click handler runs), then
+   toggle the editor. The button is disabled while loading so a double tap cannot
+   open two editors. */
+function sokoniToggleInterests(btn) {
+  if (window.InspIQ && typeof InspIQ.toggleEditor === 'function') { InspIQ.toggleEditor('inspiqPicker'); return; }
+  if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
+  if (window.SokoniLazy && typeof SokoniLazy.load === 'function') SokoniLazy.load();
+  sokoniWhenLazyModule('inspiq.js', 'InspIQ', 15000).then(function (ok) {
+    if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
+    if (ok && typeof InspIQ.toggleEditor === 'function') { InspIQ.toggleEditor('inspiqPicker'); return; }
+    console.warn('[InspIQ] editor unavailable — module did not load');
+    var el = document.getElementById('inspiqPicker');
+    if (el) { el.style.display = ''; el.innerHTML = '<div role="status" style="padding:12px 0;font-size:12px;color:rgba(255,255,255,0.5);">Interests could not be loaded just now. Please try again.</div>'; }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   /* This chain had NO error handling: if init() or getForYou() rejected, the
      .then() never ran, nothing rendered, and nothing was logged. Combined with
@@ -4034,13 +4079,18 @@ document.addEventListener('DOMContentLoaded', function () {
      a visitor saw an empty gap and we saw nothing at all.
 
      Failures are now surfaced (console + errorLog via logClientDiagnostic where
-     available) and the container is left in a known state rather than blank. */
-  if (!window.SokoniRecs) {
+     available) and the container is left in a known state rather than blank.
+
+     The module is lazy-loaded, so this WAITS for it instead of bailing at
+     DOMContentLoaded — the bail-out ran on every production visit (2026-09-30)
+     and the widget never rendered once. */
+  sokoniWhenLazyModule('sokoni-recommendations.js', 'SokoniRecs', 20000).then(function (ok) {
+  if (!ok || !window.SokoniRecs) {
     console.warn('[SokoniRecs] module not loaded — recommendations skipped');
     return;
   }
   SokoniRecs.init().then(function () {
-    return SokoniRecs.getForYou(8);
+    return SokoniRecs.getForYou(6);   /* owner 2026-09-30: six on the home page */
   }).then(function (items) {
     /* pass viewCount so the policy engine can score confidence correctly */
     var viewHist = [];
@@ -4054,6 +4104,7 @@ document.addEventListener('DOMContentLoaded', function () {
     try {
       SokoniRecs.renderWidget('sk-recs-foryou', [], 'Picked For You', { viewCount: 0 });
     } catch (_) {}
+  });
   });
 });
 </script>

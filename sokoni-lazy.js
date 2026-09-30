@@ -36,17 +36,63 @@
   var loaded = (window.__sokoniLazyLoaded = window.__sokoniLazyLoaded || {});
   var fired = false;
 
+  /* ── Readiness contract ─────────────────────────────────────────────────────
+     A page that lists a module here has, by definition, code that wants to call
+     it later. Before this contract that code had two bad options: assume the
+     module was present at DOMContentLoaded (it never is — that is the point of
+     this loader) or poll for it. Measured on production 2026-09-30: the home
+     page's recommendations loader took the first option and bailed with
+     "module not loaded" on every visit, and the Edit Interests button called
+     `InspIQ` before a first tap had loaded it.
+
+     Each script now resolves a promise when it has EXECUTED (its onload), and
+     the loader dispatches `sokoni:lazy-loaded` with `{ src }` per script plus
+     `sokoni:lazy-complete` once every listed script has settled. A failed load
+     settles too (`ok:false`) so a waiter is never left hanging.
+
+       SokoniLazy.load()              start loading now (a user intent, e.g. a tap)
+       SokoniLazy.whenLoaded(src)     Promise<boolean> — true when executed, false on error
+       SokoniLazy.isLoaded(src)       synchronous check                                    */
+  var settled = (window.__sokoniLazySettled = window.__sokoniLazySettled || {});
+  var waiters = {};
+  var pending = 0;
+
+  function key(src) { return String(src || '').replace(/^\.?\//, '').split('?')[0]; }
+
+  function settle(src, ok) {
+    var k = key(src);
+    settled[k] = ok ? 'ok' : 'error';
+    (waiters[k] || []).forEach(function (r) { try { r(!!ok); } catch (_) {} });
+    waiters[k] = [];
+    try { window.dispatchEvent(new CustomEvent('sokoni:lazy-loaded', { detail: { src: k, ok: !!ok } })); } catch (_) {}
+    pending = Math.max(0, pending - 1);
+    if (pending === 0) {
+      try { window.dispatchEvent(new CustomEvent('sokoni:lazy-complete', { detail: { loaded: Object.keys(settled) } })); } catch (_) {}
+    }
+  }
+
+  function whenLoaded(src) {
+    var k = key(src);
+    if (settled[k]) return Promise.resolve(settled[k] === 'ok');
+    return new Promise(function (resolve) { (waiters[k] = waiters[k] || []).push(resolve); });
+  }
+
+  function isLoaded(src) { return settled[key(src)] === 'ok'; }
+
   function loadOne(src) {
     if (!src || loaded[src]) return;
     loaded[src] = true;
+    pending++;
     var s = document.createElement('script');
     s.src = src;
     s.async = false;          /* preserve relative execution order */
     s.defer = true;
+    s.onload = function () { settle(src, true); };
     /* A lazy module failing must never take the page with it — it was optional
        by definition, which is why it is in this list. */
     s.onerror = function () {
       if (window.console && console.warn) console.warn('[SokoniLazy] failed to load ' + src);
+      settle(src, false);
     };
     document.head.appendChild(s);
   }
@@ -67,6 +113,8 @@
     }
     list.forEach(loadOne);
   }
+
+  window.SokoniLazy = { load: run, whenLoaded: whenLoaded, isLoaded: isLoaded };
 
   var EVENTS = ['pointerdown', 'touchstart', 'keydown', 'scroll'];
   function teardown() {

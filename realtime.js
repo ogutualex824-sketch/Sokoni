@@ -132,6 +132,13 @@
 
   async function _listenProducts() {
     const db = _getDb(); if (!db) return;
+    /* Home and category pages own their catalogue through SokoniDB.listenProducts
+       (bounded, App-Check-aware, authority-stamped, with the /api/catalogue fallback).
+       When that module is present this duplicate must not run: it raced the token and
+       failed with permission-denied on every home visit (measured 2026-09-30), and when
+       it did succeed it re-rendered the grid with a different visibility rule. It stays
+       as a fallback only for a page where the canonical module never loaded. */
+    if (window.__sokoniCatalogueModule) return;
     try {
       const { collection, onSnapshot, query, where, orderBy, limit, documentId } = await import(FS_URL);
       /* BOUNDED (was an unbounded onSnapshot over the ENTIRE products collection — a duplicate of
@@ -144,12 +151,19 @@
         /* Category page: equality filter + cap (no orderBy → no composite index needed). */
         if (cat) q = query(collection(db, 'products'), where('category', '==', cat), limit(200));
       }
-      _track(onSnapshot(q,
-        snap => _renderProducts(
-          snap.docs.map(d => { const v = { ...d.data() }; delete v._syncedAt; return v; })
-        ),
+      /* The flag can arrive AFTER this attached (the canonical module is fetched over
+         the network while an auth-ready event can start us first), so it is checked
+         again on every delivery: the moment the canonical listener exists this one
+         renders nothing and detaches. */
+      let unsub = null;
+      unsub = onSnapshot(q,
+        snap => {
+          if (window.__sokoniCatalogueModule) { try { if (unsub) unsub(); } catch (_) {} return; }
+          _renderProducts(snap.docs.map(d => { const v = { ...d.data() }; delete v._syncedAt; return v; }));
+        },
         e => console.warn('[RT] products:', e.message)
-      ));
+      );
+      _track(unsub);
     } catch(e) { console.warn('[RT] listenProducts:', e.message); }
   }
 

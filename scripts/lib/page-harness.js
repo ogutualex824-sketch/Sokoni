@@ -44,7 +44,7 @@ function importedNames(root) {
 const SHIM_CORE = `
 window.__fsShim = (function(){
   const snap = (r) => r && r.exists ? { id: r.id, exists: () => true, data: () => r.data, get: (k) => (r.data || {})[k], ref: { id: r.id, path: r.path } } : { id: r && r.id, exists: () => false, data: () => undefined, get: () => undefined };
-  const qsnap = (rows) => ({ empty: !rows.length, size: rows.length, docs: rows.map((r) => Object.assign(snap(r), { exists: true })), forEach(f) { rows.forEach((r) => f(Object.assign(snap(r), { exists: true }))); } });
+  const qsnap = (rows) => ({ empty: !rows.length, size: rows.length, metadata: { fromCache: false, hasPendingWrites: false }, docs: rows.map((r) => Object.assign(snap(r), { exists: true })), forEach(f) { rows.forEach((r) => f(Object.assign(snap(r), { exists: true }))); } });
   return {
     get: async (path) => snap(await window.__fs('get', path)),
     query: async (q) => qsnap(await window.__fs('query', q)),
