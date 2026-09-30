@@ -3408,6 +3408,9 @@ async function initProvisionStep() {
   localStorage.setItem('sokoni_merchant_id', merchantId);
   localStorage.setItem('sokoni_branch_id',   branchId);
   localStorage.setItem('sokoni_setup_complete', '1');
+  /* The durable per-merchant record merchant-v2's POS route reads (2026-10-01) — without it a merchant who
+     finished here was still sent through the hardware wizard. */
+  try { if (window.SokoniTillRegistry && _uidNow()) window.SokoniTillRegistry.markSetupComplete(_uidNow(), { branchId }); } catch (_) {}
   clearDraft();   /* setup finished — a stale draft must not resurrect the wizard */
 
   setLiveMsg('All done!');
@@ -3738,12 +3741,15 @@ function _chipStates() {
     payments:    'info',
     receipt:     !serverBiz ? 'pending' : fromList('taxesConfigured'),
     hardware:    !serverBiz ? 'pending' : fromList('hardwareConnected'),
-    diagnostics: 'info',
+    /* The printer as it is right now, from the SAME registry + transport the merchant shell's chip reads:
+       connected → confirmed, paired but not answering → needs attention, never paired → not confirmed. */
+    diagnostics: (function () { try { const t = _printerTruth(); return t.state === 'connected' ? 'done' : t.state === 'saved' ? 'attention' : 'pending'; } catch (_) { return 'info'; } }()),
     commission:  'info',
   };
 }
 const _CHIP_WORD = { done: 'confirmed', attention: 'needs attention', pending: 'not confirmed yet', info: 'information' };
 function _paintChips() {
+  try { _paintPrinterLine(); } catch (_) {}
   const states = _chipStates();
   Object.keys(states).forEach((k) => {
     const c = document.getElementById('chip-' + k);
@@ -3801,6 +3807,10 @@ function _paperWidth() {
   catch (_) { return '58mm'; }
 }
 function _setPaperWidth(w) {
+  /* ONE paper size (2026-10-01). PosPrintService lays receipts out from its till config, while the engine
+     (labels, SokoniPrinter.print, the checkout fallback) reads its own spp_config — 58mm here and 80mm there
+     printed the same receipt two widths. Both are set together. */
+  try { const sp = window.SokoniPrinter; if (sp && typeof sp.setConfig === 'function') sp.setConfig({ paperWidth: w }); } catch (_) {}
   try { const t = window.PosPrintService && window.PosPrintService.till; if (t && typeof t.update === 'function') t.update('default', { paperWidth: w }); } catch (_) {}
   _paintReceipt();
 }
@@ -3839,6 +3849,36 @@ function _paintReceipt() {
   }
 }
 
+/* ONE SETUP IS ENOUGH (2026-10-01). Pairing here used to be recorded only in the engine's spp_profile; the
+   merchant shell reconnects from the till registry (sk_devices_<uid>), which nothing on this page wrote, so a
+   printer paired here was unknown to merchant-v2. After a successful connect the engine's device record is
+   saved into the registry — the same (type, id) record the shell writes, newest wins. */
+function _uidNow() { try { return (_auth.currentUser && _auth.currentUser.uid) || null; } catch (_) { return null; } }
+function _savePrinterRecord() {
+  const R = window.SokoniTillRegistry, uid = _uidNow();
+  if (!R || typeof R.save !== 'function' || !uid) return null;
+  let d = null;
+  try { const prof = JSON.parse(localStorage.getItem('spp_profile') || '{}') || {}; d = prof.lastDevice || null; } catch (_) { d = null; }
+  if (!d || !(d.id || d.name)) return null;
+  R.save(uid, { type: 'printer', id: String(d.id || d.name), name: d.name ? String(d.name) : 'Printer' });
+  return R.printer(uid, _printerConnected(), d.name || null);
+}
+/* The printer as every surface sees it: registry record + whether a transport answers right now. */
+function _printerTruth() {
+  const R = window.SokoniTillRegistry, uid = _uidNow();
+  const live = _printerConnected() || !!_shellPrinter.connected;
+  const liveName = (window.SokoniPrinter && window.SokoniPrinter.getStatus && (window.SokoniPrinter.getStatus() || {}).deviceName) || _shellPrinter.name || null;
+  if (!R || !uid) return { state: live ? 'connected' : 'none', connected: live, name: liveName, label: live ? 'Connected' : 'No device paired' };
+  return R.printer(uid, live, liveName);
+}
+function _paintPrinterLine() {
+  const st = document.getElementById('rcpt-status');
+  if (!st || st.dataset.busy === '1') return;
+  const t = _printerTruth();
+  st.textContent = t.state === 'connected' ? 'Printer: connected' + (t.name ? ' — ' + t.name : '') + '. Tap Test print.'
+                 : t.state === 'saved' ? 'Printer: ' + (t.name || 'saved printer') + ' is saved but not connected — tap Connect printer once.'
+                 : 'No printer paired yet — tap Connect printer.';
+}
 function _printerConnected() {
   try { return !!((window.SokoniPrinter && window.SokoniPrinter.connected) || (window.PrinterManager && window.PrinterManager.connected)); }
   catch (_) { return false; }
@@ -3851,8 +3891,14 @@ async function _connectPrinter() {
   }
   try {
     const ok = await window.PosPrintService.connect();
-    st.textContent = ok ? 'Printer connected. Tap Test print.' : 'No printer was chosen.';
+    if (ok) {
+      const rec = _savePrinterRecord();
+      st.textContent = 'Printer connected' + (rec && rec.name ? ' — ' + rec.name : '') + ' and saved for this till. Tap Test print.';
+    } else {
+      st.textContent = 'No printer was chosen.';
+    }
   } catch (e) { st.textContent = 'Could not connect: ' + ((e && e.message) || 'unknown error'); }
+  try { _paintChips(); } catch (_) {}
 }
 /* A PAIRED printer gets the SAMPLE premium receipt through the same print service every sale uses (useDoc: the
    SokoniReceiptDoc document, not the legacy layout). With none connected, the device's own print dialog opens on
@@ -3867,6 +3913,7 @@ async function _testPrintSample() {
     try { await svc.autoReconnect(); } catch (_) {}
     connected = _printerConnected();
   }
+  if (connected) { try { _savePrinterRecord(); _paintChips(); } catch (_) {} }
   const doc = _sampleDoc();
   if (connected && doc && svc && typeof svc.printReceipt === 'function') {
     try {
