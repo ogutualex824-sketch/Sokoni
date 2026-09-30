@@ -645,7 +645,17 @@ img {
 @media (max-width: 768px) {
   .admin-sidebar,
   .seller-sidebar,
-  [class*="-sidebar"]:not([class*="mini"]) {
+  /* AdminOS is excluded because it owns its own drawer behaviour.
+     [class*="-sidebar"] also matches .aos-sidebar, and forcing it to
+     width:100%;position:relative put a 320px in-flow block at the head of the
+     AdminOS flex row — collapsing .aos-main to ZERO width on every phone
+     viewport. The content area was unreachable; only the translateX(-100%)
+     hid the evidence.
+
+     Excluded here, at the selector, rather than fought with a fourth layer of
+     !important in admin-os.html: the broad match is the defect. The exclusion
+     is scoped to one class, so no other admin or seller sidebar changes. */
+  [class*="-sidebar"]:not([class*="mini"]):not(.aos-sidebar) {
     width: 100% !important;
     position: relative !important;
     height: auto !important;
