@@ -1571,12 +1571,7 @@ service cloud.firestore {
   }
   match /verifications/{sellerUid} {
   allow read:   if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
-  allow create: if isAuthed()
-  && request.auth.uid == sellerUid
-  && request.resource.data.status == 'pending'
-  && !request.resource.data.keys().hasAny(['verifiedAt','approvedBy']);
-  allow update: if isAdmin();
-  allow delete: if isAdmin();
+  allow write:  if false;
   }
   match /homeServiceBookings/{bookingId} {
   allow read:   if isAdmin()
@@ -1725,13 +1720,9 @@ service cloud.firestore {
   || (isAuthed() && resource.data.ownerUid == request.auth.uid);
   }
   match /verificationRequests/{reqId} {
-  allow create: if isAuthed()
-  && request.resource.data.applicantUid == request.auth.uid
-  && request.resource.data.status == 'pending';
   allow read:   if isAdmin()
   || (isAuthed() && resource.data.applicantUid == request.auth.uid);
-  allow update: if isAdmin();
-  allow delete: if isAdmin();
+  allow write:  if false;
   }
   match /adminLog/{logId} {
   allow create: if isAdmin();
@@ -1838,8 +1829,7 @@ service cloud.firestore {
   && request.resource.data.description is string
   && request.resource.data.description.size() <= 5000
   && request.resource.data.contactEmail is string
-  && !('applicants' in request.resource.data)
-  || request.resource.data.applicants == 0;
+  && (!('applicants' in request.resource.data) || request.resource.data.applicants == 0);
   allow update: if isAdmin()
   || (isAuthed() && resource.data.uid == request.auth.uid
   && request.resource.data.uid == resource.data.uid

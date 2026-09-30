@@ -1597,14 +1597,13 @@ service cloud.firestore {
   && resource != null
   && request.resource.data.total <= resource.data.total);
   }
+  /* VERIFICATION BADGES — server-only writes (owner 2026-10-01, sokoni-4d fix 1). The served create let an owner
+     write verifications/{self} with facets.<type>.state:'approved' — a forged badge that the public /profile
+     projection would show. verificationSubmit / verificationDecide / verificationRevoke (Admin SDK) are the only
+     writers; no browser path writes here on any live or pending hosting lineage (census 2026-10-01). */
   match /verifications/{sellerUid} {
   allow read:   if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
-  allow create: if isAuthed()
-  && request.auth.uid == sellerUid
-  && request.resource.data.status == 'pending'
-  && !request.resource.data.keys().hasAny(['verifiedAt','approvedBy']);
-  allow update: if isAdmin();
-  allow delete: if isAdmin();
+  allow write:  if false;
   }
   match /homeServiceBookings/{bookingId} {
   allow read:   if isAdmin()
@@ -1755,14 +1754,12 @@ service cloud.firestore {
   allow delete: if isAdmin()
   || (isAuthed() && resource.data.ownerUid == request.auth.uid);
   }
+  /* Server-only writes (owner 2026-10-01): verification.html submits through verificationSubmit; AdminOS decides
+     through verificationDecide. Reads unchanged (the applicant tracks their own request). */
   match /verificationRequests/{reqId} {
-  allow create: if isAuthed()
-  && request.resource.data.applicantUid == request.auth.uid
-  && request.resource.data.status == 'pending';
   allow read:   if isAdmin()
   || (isAuthed() && resource.data.applicantUid == request.auth.uid);
-  allow update: if isAdmin();
-  allow delete: if isAdmin();
+  allow write:  if false;
   }
   match /adminLog/{logId} {
   allow create: if isAdmin();
@@ -1869,8 +1866,9 @@ service cloud.firestore {
   && request.resource.data.description is string
   && request.resource.data.description.size() <= 5000
   && request.resource.data.contactEmail is string
-  && !('applicants' in request.resource.data)
-  || request.resource.data.applicants == 0;
+  /* owner 2026-10-01 (sokoni-4d fix 2): parenthesised. Unwrapped, `A && … && !x || applicants == 0` let ANYONE —
+     signed out included — create a job by sending applicants: 0. */
+  && (!('applicants' in request.resource.data) || request.resource.data.applicants == 0);
   allow update: if isAdmin()
   || (isAuthed() && resource.data.uid == request.auth.uid
   && request.resource.data.uid == resource.data.uid
