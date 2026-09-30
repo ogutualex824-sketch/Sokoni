@@ -496,28 +496,40 @@ head('8 - notify.js and sms-service.js are not involved');
 
   ok('sms-service still owns the provider seam', /atSendSMS\(/.test(sms));
 
-  /* The honest assertion is that THIS change touched neither sender — proven against git,
-     not by asserting a feature. */
-  const changed = cp.execSync('git diff --name-only HEAD', { cwd: ROOT, encoding: 'utf8' })
-    .split('\n').map(s => s.trim()).filter(Boolean);
-  ok('control — the changed-file list was read', Array.isArray(changed));
-  ok('functions/notify.js is not modified by this change',
-     changed.indexOf('functions/notify.js') === -1, changed.join(' · '));
-  ok('functions/sms-service.js is not modified', changed.indexOf('functions/sms-service.js') === -1);
-  ok('no WhatsApp file is modified', !changed.some(f => /whatsapp/i.test(f)));
-  ok('no payment function is modified',
+  /* The honest assertion is that the ROUTING CHANGE touched neither sender — proven
+     against git. Anchored to the routing commit's OWN diff, not to the working tree:
+     the tree legitimately carries the later notification repairs (A/B/C), and checking
+     the tree would make this assertion decay into "nothing else has happened since",
+     which is not the guarantee it is here to give. */
+  const ROUTING_COMMIT = '7fe4281';
+  let changed = [];
+  let anchored = true;
+  try {
+    changed = cp.execSync('git show --name-only --format= ' + ROUTING_COMMIT,
+      { cwd: ROOT, encoding: 'utf8' }).split('\n').map(s => s.trim()).filter(Boolean);
+  } catch (_) { anchored = false; }
+  ok('control — the routing commit\'s file list was read', anchored && changed.length >= 2,
+     changed.join(' · '));
+  ok('the routing commit did not touch notify.js',
+     changed.indexOf('functions/notify.js') === -1);
+  ok('nor sms-service.js', changed.indexOf('functions/sms-service.js') === -1);
+  ok('nor any WhatsApp file', !changed.some(f => /whatsapp/i.test(f)));
+  ok('nor any payment function',
      !changed.some(f => /payment|intasend|daraja|payout|wallet/i.test(f)));
-  ok('no Firebase Auth surface is modified',
+  ok('nor any Firebase Auth surface',
      changed.indexOf('firebase.js') === -1 && changed.indexOf('auth.js') === -1);
 
-  /* RECORDED, NOT REPAIRED — a lineage gap, not something this slice introduced.
-     notify.js here gates SMS on a caller-supplied `phone` argument; the fallback to
-     users/{uid}.phoneNumber exists on another lineage and is NOT ported. Capture being
-     reachable does not by itself make a message send on this lineage. */
-  ok('KNOWN GAP pinned — notify.js here has no users/{uid}.phoneNumber fallback',
-     !/phoneNumber/.test(notify));
-  ok('and still gates SMS on the caller-supplied phone argument',
-     /wantSms && t\.smsTemplate && phone/.test(notify));
+  /* PIN FLIPPED 2026-09-30. This previously recorded a live-lineage gap: notify.js
+     gated SMS on a caller-supplied `phone` and had no canonical fallback, so making
+     capture reachable could not by itself make a message send. Repair B closed it.
+     The pin is kept, inverted, so the gap cannot silently reopen. */
+  ok('GAP CLOSED — notify.js resolves users/{uid}.phoneNumber',
+     /collection\('users'\)\.doc\(uid\)/.test(notify) && /phoneNumber/.test(notify));
+  ok('and no longer gates SMS on the caller-supplied phone argument',
+     !/wantSms && t\.smsTemplate && phone/.test(notify));
+  ok('the caller override still wins when supplied', /let to = phone;/.test(notify));
+  ok('an unreachable user is REPORTED, not silently skipped',
+     /no_phone_on_record/.test(notify));
 }
 
 console.log('\n  what this suite does NOT prove');

@@ -1,3 +1,86 @@
+## [2026-09-30] — Notification integrity: six types that threw, and an SMS recipient nobody resolved (live lineage, NOT deployed)
+
+Two repairs to `functions/notify.js`, in dependency order. **A** had to come first: restoring recipient
+resolution while six notification types still threw would have made a partly-broken engine look healthier
+without fixing the underlying losses.
+
+### A · Six unregistered types, and a failure nothing could see
+
+A census on 2026-09-30 found **six** notification types passed by live callers that were **not in the TYPES
+table**. `notify()` throws `invalid-argument` on an unknown type — and every one of these callers wraps the
+call in `.catch(() => {})`.
+
+| type | caller | who never heard |
+|---|---|---|
+| `booking_confirmed` | `index.js` (webhookIntasend) | buyer, on a paid booking |
+| `booking_affected` | `booking-resolution.js` | customer, when a provider's availability change invalidates a booking |
+| `order_ready_pickup` | `pos-marketplace-sync.js` | buyer, click-and-collect ready |
+| `order_dispatching` | `pos-marketplace-sync.js` | buyer, awaiting a rider |
+| `payout_paid` | `wallet.js` | seller, withdrawal sent |
+| `payout_failed` | `wallet.js` | seller, withdrawal failed |
+
+All six registered with **`smsTemplate: null`** — no approved template exists for any of them in
+`sms-service.js`, and none was invented. `payout_failed` is deliberately `commerce`, not `critical`:
+critical bypasses preferences **and** quiet hours, which is right for a fraud warning and wrong for a
+retryable payout whose funds are already returned. Categories stay inside the existing vocabulary, because
+`CATEGORIES` is **derived** from TYPES and a new one would silently change every user's preferences schema.
+
+**Observability.** The throw sat at the top of `notify()`, **20 lines before the first `notifyLog` write** —
+so an unknown type produced no delivery, no log row, no console line and no escaping error. New
+`_recordRejection()` records to the **existing** `logger` and the **existing** `notifyLog` collection before
+throwing. **No new logging authority.** It is total (never throws, so an audit fault cannot replace the real
+error), its doc id is namespaced `rejected:` so it cannot collide with a real notification, and it is
+deterministic so a retry updates one row. **The throw is unchanged — an unregistered type is still a hard
+failure, just no longer an invisible one.**
+
+The **55 `.catch(() => {})` sites were deliberately left alone.** Recording at the source covers every
+caller, present and future; `notifyLog` already goes `processing` → `done` so mid-flight failures leave a
+stalled row, and background failures already log. Editing 55 catches across four files would be larger and
+riskier for no added coverage.
+
+### B · The SMS recipient was never resolved, only accepted
+
+`if (wantSms && t.smsTemplate && phone)` — `phone` is a **caller override**. Push reads `users/{uid}` for
+tokens and email falls back to the Auth address; SMS had the override and no fallback, so the condition was
+false at its last term for every caller that passes none. **Four blocked call sites**, two of them
+`payment_success` **inside the live payment webhook**.
+
+Now: caller `phone` → else `users/{uid}.phoneNumber` → else the visible `no_phone_on_record`.
+**`wantSms`, types, templates, `dedupeKey`, provider selection and queue semantics are untouched.**
+
+**No `phoneVerified` check, deliberately.** Every writer of that field sources it from Firebase Auth —
+`firebase.js` at user-doc creation, `wallet-engine`'s `getUserByPhoneNumber` backfill, `wallet-engine`'s
+`phone_number`-claim gate, and `profile.html` only after a confirmed code. It is **verified by provenance**;
+a flag check would add a second verification policy beside Firebase Auth, which is the authority. The legacy
+`phone` field is still not read.
+
+### Tests
+
+- **`test-notify-booking-types.js` widened, 45 → 258 lines, 59 assertions.** It no longer maintains a
+  hand-written four-type list or scans two hard-coded files: it **derives** the caller set and brace-matches
+  every `notify()` call, handling single **and double** quotes, ternaries and lookup tables. The old regex
+  `notify\(\s*\{[^}]*?type:\s*'([^']+)'` could see none of those — which is exactly why `booking_confirmed`
+  in `index.js` went unnoticed. An unresolvable call site now **fails** rather than being skipped. It also
+  parses TYPES from source instead of `require()`ing firebase-admin, so it runs in a worktree with no
+  `node_modules` — previously it could not run here at all.
+- **`test-notify-sms-recipient.js` ported, 28 assertions**, extended with the four census-identified sites.
+- **`test-profile-verification-routing.js` 108 → 110.** Its `KNOWN GAP` pins for notify.js **fired correctly**
+  when B closed the gap; they are inverted to `GAP CLOSED` rather than deleted, and the "touched no sender"
+  check is re-anchored to commit `7fe4281`'s own diff rather than the working tree.
+- **Negative controls:** unregister `payout_paid` → **3** fail; move the rejection record after the throw →
+  **1** fail; restore the old `&& phone` gate → **8** fail.
+- Syntax gate: 1792 JS files + 452 inline blocks clean. Payment suites unchanged and green
+  (payment-integrity 19 checks, payment-authority 22/0, b2c-webhook 12/0, audit clean).
+
+**Two test bugs caught by their own controls**, both of which would have produced false green: the
+observability extractor grabbed `_recordRejection`'s destructured parameter list instead of its body, and a
+"supplies no caller phone" check matched the **receipt's** `customer: { phone: p.phone }` in
+`payment-success.js`. That second one is a real distinction now pinned: the payment record's unverified
+phone exists and is deliberately **never** passed to `notify()`, so it cannot become an SMS recipient.
+
+**Not deployed.** WhatsApp (inbound and outbound), Firebase phone authentication, payment business logic and
+the `address` route are untouched; the address defect stays pinned as a separate issue.
+
 ## [2026-09-30] — Phone/email verification: four entry points that could never reach the flow (live lineage, NOT deployed)
 
 The verified-phone flow on `profile.html` is complete and correct, and was **unreachable from every surface that
