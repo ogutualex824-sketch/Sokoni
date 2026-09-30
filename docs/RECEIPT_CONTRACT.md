@@ -112,6 +112,27 @@ document.
 set is name/phone/email/address/city/…). It is read from a supplied tax profile and
 omitted otherwise. Never invented, never stored as a receipt-only copy.
 
+### Two equal codes: SOKONI and KRA eTIMS (2026-09-29)
+
+Every receipt carries **two codes of equal size, side by side**: the SOKONI verify code on the left and the
+**KRA eTIMS** code on the right (`closing.qr` and `closing.kraQr`).
+
+- **The KRA code is printed only from a real eTIMS response**, meaning an `https` URL on a `kra.go.ke` host
+  (`etims.qrUrl` / `etimsQrUrl`, checked by `isKraEtimsUrl`).
+- Anything else shows **`eTIMS pending`** in the same-size slot:
+  - no eTIMS record;
+  - a SOKONI URL;
+  - a look-alike host such as `kra.go.ke.evil.example`;
+  - **every sample**.
+
+  A synthetic KRA code would be a forged tax document.
+- **eTIMS invoice number:** `eTIMS Inv: <no>` joins the reference lines, but only when KRA issued one.
+- **On paper** the two codes are drawn into **one raster image** (ESC/POS `GS v 0`) that fits the printable band
+  exactly: **384 dots at 58mm, 576 at 80mm**. A caption line sits under each half. A caller with no canvas gets
+  the two codes one under the other.
+- **`toText(doc, { qrSentinel: true })`** places a single marker line (`QR_SENTINEL`) where the pair goes, so an
+  adapter can draw real images in its place.
+
 ## Two adapters, one composition
 
 **The phone is canonical. The P58E is optional physical output.** A merchant with no
@@ -184,5 +205,9 @@ Two defects the suite caught in its own runs:
 - Merchant identity authority (logo, shopName, businessName, phone, email, address,
   town, KRA PIN) is not populated at approval/setup.
 - The phone presentation adapter (the polished digital receipt) is specified here but
-  not built; only the text adapter exists.
+  not built; only the text adapter exists. The POS Setup page presents the text adapter plus the two drawn codes.
+- **Paper:** `PosPrintService` prints this document only on request (`context.useDoc`, used by the POS Setup test
+  print). Every other caller still prints the older `_buildSaleReceipt` layout. The print host
+  (`sokoni-print-host-listener.js`) passes a rendered `doc` that the service does not read today.
+- No producer of `etims.qrUrl` exists yet, so every receipt currently shows `eTIMS pending`.
 - Nothing is deployed.

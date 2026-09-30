@@ -69,6 +69,59 @@ function _b (...args) {
   return parts;
 }
 
+/* A KRA eTIMS verification URL is accepted only as an https URL on a kra.go.ke host — the only thing that can have
+   come from KRA. Everything else (empty, a SOKONI URL, a guess) is "eTIMS pending". */
+function _isKraEtimsUrl (u) {
+  if (!u) return false;
+  try { const x = new URL(String(u)); return x.protocol === 'https:' && /(^|\.)kra\.go\.ke$/i.test(x.hostname); }
+  catch (_) { return false; }
+}
+
+/* THE TWO CODES SIDE BY SIDE (owner, 2026-09-29: left and right, not stacked). ESC/POS's native QR command prints
+   one code per line, so both are drawn into ONE image — the mysokoni.co.ke code on the left, the KRA eTIMS code (or
+   a boxed "eTIMS pending") on the right, equal size — and sent as a raster (GS v 0). Needs a canvas and SokoniQR;
+   without them (a non-browser caller) this returns null and the codes are printed one under the other. */
+function _qrPairRaster (sokoniUrl, kraUrl, widthDots) {
+  try {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return null;
+    const Q = window.SokoniQR;
+    if (!Q || typeof Q.generateCanvas !== 'function') return null;
+    const width = Math.floor(widthDots / 8) * 8;
+    const gap = 16;
+    const cell = Math.floor((width - gap) / 2);
+    const cv = document.createElement('canvas');
+    cv.width = width; cv.height = cell;
+    const g = cv.getContext('2d');
+    if (!g) return null;
+    g.imageSmoothingEnabled = false;
+    g.fillStyle = '#fff'; g.fillRect(0, 0, width, cell);
+    if (sokoniUrl) g.drawImage(Q.generateCanvas(sokoniUrl, cell), 0, 0, cell, cell);
+    const x2 = cell + gap;
+    if (kraUrl) {
+      g.drawImage(Q.generateCanvas(kraUrl, cell), x2, 0, cell, cell);
+    } else {
+      g.strokeStyle = '#000'; g.lineWidth = 3; g.setLineDash([10, 7]);
+      g.strokeRect(x2 + 4, 4, cell - 8, cell - 8);
+      g.setLineDash([]); g.fillStyle = '#000'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = 'bold 30px sans-serif';
+      g.fillText('eTIMS', x2 + cell / 2, cell / 2 - 18);
+      g.fillText('pending', x2 + cell / 2, cell / 2 + 20);
+    }
+    const px = g.getImageData(0, 0, width, cell).data;
+    const bpr = width / 8;
+    const out = new Uint8Array(8 + bpr * cell);
+    out.set([GS, 0x76, 0x30, 0x00, bpr & 0xFF, (bpr >> 8) & 0xFF, cell & 0xFF, (cell >> 8) & 0xFF]);
+    for (let y = 0; y < cell; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const lum = px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114;
+        if (px[i + 3] > 127 && lum < 128) out[8 + y * bpr + (x >> 3)] |= (0x80 >> (x & 7));
+      }
+    }
+    return out;
+  } catch (_) { return null; }
+}
+
 function _buildQr (url, size = 6) {
   const data = ENC.encode(url);
   const len  = data.length + 3;
@@ -245,6 +298,56 @@ class RawReceiptBuilder {
     this._blank(1);
     this._center('Scan to verify receipt');
     this._push(CMD.ALIGN_LEFT);
+    return this;
+  }
+
+  /* TWO EQUAL CODES (owner, 2026-09-29), stacked because 58mm paper has no room side by side: the mysokoni.co.ke
+     code, then the KRA eTIMS code — same module size. The KRA code prints ONLY from a real eTIMS response (an
+     https URL on a kra.go.ke host); anything else prints a boxed "eTIMS pending". A synthetic KRA code would be a
+     forged tax document. */
+  qrPair (sokoniUrl, etimsUrl) {
+    const kra = _isKraEtimsUrl(etimsUrl) ? etimsUrl : null;
+    /* Side by side when the page can draw them (58mm: 384 dots, 80mm: 576). */
+    const raster = _qrPairRaster(sokoniUrl, kra, this._w >= 48 ? 576 : 384);
+    if (raster) {
+      const half = Math.floor(this._w / 2);
+      const mid = (t) => { t = String(t).slice(0, half); const l = Math.floor((half - t.length) / 2); return ' '.repeat(l) + t + ' '.repeat(half - t.length - l); };
+      this._push(CMD.ALIGN_CENTER);
+      this._blank(1);
+      this._push(raster);
+      this._push(CMD.ALIGN_LEFT);
+      this._ln(mid('mysokoni.co.ke') + mid(kra ? 'KRA eTIMS' : 'eTIMS pending'));
+      this._ln(mid('verify receipt') + mid(kra ? 'verify invoice' : ''));
+      this._blank(1);
+      return this;
+    }
+    /* No canvas: one under the other, same codes, same size. */
+    this._push(CMD.ALIGN_CENTER);
+    if (sokoniUrl) {
+      this._blank(1);
+      this._push(_buildQr(sokoniUrl, 5));
+      this._center('mysokoni.co.ke - verify receipt');
+    }
+    this._blank(1);
+    if (_isKraEtimsUrl(etimsUrl)) {
+      this._push(_buildQr(etimsUrl, 5));
+      this._center('KRA eTIMS - verify invoice');
+    } else {
+      this._center('+----------------+');
+      this._center('| eTIMS pending  |');
+      this._center('+----------------+');
+      this._center('KRA eTIMS');
+    }
+    this._blank(1);
+    this._push(CMD.ALIGN_LEFT);
+    return this;
+  }
+
+  /* A sample (setup-page test print) says so at the top — it must never pass for a real sale. */
+  sampleBanner () {
+    this._push(CMD.ALIGN_CENTER, CMD.BOLD_ON);
+    this._center('*** SAMPLE - NOT A SALE ***');
+    this._push(CMD.BOLD_OFF, CMD.ALIGN_LEFT);
     return this;
   }
 
@@ -1297,6 +1400,31 @@ class PosPrintService {
     }, delay);
   }
 
+  /* ── THE PREMIUM RECEIPT ON PAPER (opt-in: context.useDoc) ────────────────────────────────────────────────────
+     Prints a SokoniReceiptDoc document — the SAME design the phone shows — as the contract's own ASCII text, and
+     draws its two EQUAL codes (mysokoni.co.ke, KRA eTIMS or "eTIMS pending") as real QR images exactly where the
+     document places them. No second receipt layout is introduced. */
+  _buildDocReceipt (doc, context = {}) {
+    const R = (typeof window !== 'undefined') && window.SokoniReceiptDoc;
+    if (!R || typeof R.toText !== 'function') throw new Error('SokoniReceiptDoc is not loaded on this page.');
+    const tillCfg = this.till.get(context.registerId || 'default');
+    const cols = (tillCfg.paperWidth || '58mm') === '58mm' ? 32 : 48;
+    const b = new RawReceiptBuilder(cols);
+    const text = R.toText(doc, { cols, ascii: true, qrSentinel: true });
+    /* The ASCII adapter strips control characters, so the sentinel arrives as its printable core. */
+    const mark = String(R.QR_SENTINEL || '').replace(/[^\x20-\x7E]/g, '');
+    const closing = ((doc && doc.blocks) || []).find((x) => x && x.type === 'closing') || {};
+    text.split('\n').forEach((line) => {
+      if (mark && line.trim() === mark) {
+        b.qrPair(closing.qr && closing.qr.url, closing.kraQr && closing.kraQr.url);
+      } else {
+        b._ln(line);
+      }
+    });
+    b.cut(true);
+    return b.build();
+  }
+
   /* ── Build production receipt bytes ────────────────────────── */
   _buildSaleReceipt (receipt, context = {}) {
     const tillCfg = this.till.get(context.registerId || 'default');
@@ -1304,6 +1432,7 @@ class PosPrintService {
     const store   = Object.assign({}, _getStoreProfile(), context.store || {});
 
     const b = new RawReceiptBuilder(is58mm ? 32 : 48);
+    if (receipt.sample || context.sample) b.sampleBanner();
     b.header({
       businessName: store.businessName  || context.businessName || 'SOKONI SmartPOS',
       branchName:   store.branchName    || context.branchName   || receipt.branchId || '',
@@ -1342,10 +1471,10 @@ class PosPrintService {
     const loyalty = receipt.loyalty || context.loyalty || {};
     if (loyalty.pointsEarned || loyalty.pointsBalance) b.loyalty(loyalty);
 
-    /* QR Code — verify URL */
+    /* QR codes — mysokoni.co.ke verify URL and, beside it in equal size, KRA eTIMS (only from a real eTIMS URL). */
     const verifyUrl = receipt.receiptUrl
       || `https://mysokoni.co.ke/r/${receiptIdOf(receipt) || ''}`;
-    b.qrBlock(verifyUrl);
+    b.qrPair(verifyUrl, receipt.etimsQrUrl || (receipt.etims && receipt.etims.qrUrl) || '');
 
     /* Barcode of receipt number */
     if (receiptIdOf(receipt)) b.barcodeBlock(String(receiptIdOf(receipt)).replace(/[^A-Za-z0-9]/g, ''));
@@ -1384,7 +1513,11 @@ class PosPrintService {
       data:        receipt,
     };
 
-    const bytes = this._buildSaleReceipt(receipt, context);
+    /* context.useDoc: print the PREMIUM receipt (a SokoniReceiptDoc document) instead of the legacy builder. Opt-in,
+       so every existing caller prints exactly what it printed before. */
+    const bytes = (context.useDoc && context.doc)
+      ? this._buildDocReceipt(context.doc, context)
+      : this._buildSaleReceipt(receipt, context);
     const result = await this._print(bytes, meta);
 
     /* Cash drawer: fire after first copy */
@@ -1667,7 +1800,8 @@ class PosPrintService {
     if (data.items?.length) b.items(data.items);
     b.totals({ subtotal: data.subtotal, discount: data.discount, vat: data.vat, grandTotal: data.total });
     b._eq(); b._center('OFFICIAL TAX INVOICE'); b._eq();
-    b.qrBlock(data.verifyUrl || data.etimsQrUrl || '');
+    /* Two equal codes; the verify URL no longer stands in for a missing KRA code. */
+    b.qrPair(data.verifyUrl || '', data.etimsQrUrl || '');
     b.footer('Thank you for your business.', store.website); b.cut();
     return this._print(b.build(), { docType:'pos_invoice', receiptId: invoiceIdOf(data) });
   }
