@@ -59,7 +59,7 @@ const SHAVE = '13iuLZx63jN5evaNcUnx7bhDSfs1';
   ck('VALID_APPROVAL (application by admin account) → provider-dashboard, AVAILABLE; approval.state VALID_APPROVAL', v.route === 'provider-dashboard.html' && v.state === 'AVAILABLE' && v.approval?.state === 'VALID_APPROVAL', { route: v.route, state: v.state, approval: v.approval?.state });
   const d = await BW.workspaceFor(db, 'dj');
   ck('DJ shape (status only, no application) → REAPPLICATION_REQUIRED, route complete-application.html, path fresh, approval NO_APPROVAL/live_status_only', d.state === 'REAPPLICATION_REQUIRED' && d.route === 'complete-application.html' && d.remediation?.applicationPath?.mode === 'fresh' && d.approval?.state === 'NO_APPROVAL' && d.approval?.subtype === 'live_status_only' && d.reason === 'live_status_only', { state: d.state, route: d.route, path: d.remediation?.applicationPath?.mode });
-  ck('   Overview + Settings only; every workspace module withheld; a message the user can act on', d.modules.overview.state === 'AVAILABLE' && d.modules.settings.state === 'AVAILABLE' && Object.keys(d.modules).filter((k) => !['overview', 'settings'].includes(k)).every((k) => d.modules[k].state !== 'AVAILABLE') && /completed/.test(d.message));
+  ck('   Overview + Settings only; every workspace module withheld; a message the user can act on', d.modules?.overview?.state === 'AVAILABLE' && d.modules?.settings?.state === 'AVAILABLE' && Object.keys(d.modules || {}).filter((k) => !['overview', 'settings'].includes(k)).every((k) => d.modules[k].state !== 'AVAILABLE') && /completed/.test(d.message));
   const k = await BW.workspaceFor(db, 'kas');
   ck('Kasindi shape (approved by "reindex") → REAPPLICATION_REQUIRED, redecide_existing PRVMS7IACKG, agreement required + unsatisfied, preserve names the reindex decision', k.state === 'REAPPLICATION_REQUIRED' && k.remediation?.applicationPath?.mode === 'redecide_existing' && k.remediation?.applicationPath?.applicationId === 'PRVMS7IACKG' && k.remediation?.agreement?.required && !k.remediation?.agreement?.satisfied && k.remediation?.preserve?.some((p) => p.decidedBy === 'reindex'), k.remediation);
   const h = await BW.workspaceFor(db, 'hc');
@@ -84,14 +84,14 @@ const SHAVE = '13iuLZx63jN5evaNcUnx7bhDSfs1';
 
   say('\n── homeFor ──');
   const hd = await BW.homeFor(db, 'dj', {});
-  ck('DJ home: one business entry routed to the completion surface; apply false; approval carried', hd.homes.length === 1 && hd.primary.route === 'complete-application.html' && hd.apply === false && hd.homes[0].approval === 'NO_APPROVAL');
+  ck('DJ home: one business entry routed to the completion surface; apply false; approval carried', hd.homes.length === 1 && hd.primary?.route === 'complete-application.html' && hd.apply === false && hd.homes[0].approval === 'NO_APPROVAL');
   const hs = await BW.homeFor(db, 'shopper', {});
-  ck('shop owner without approval: NO merchant-v2 shop home — only the completion entry', !hs.homes.some((x) => x.route === 'merchant-v2.html') && hs.primary.route === 'complete-application.html', hs.homes.map((x) => x.route));
+  ck('shop owner without approval: NO merchant-v2 shop home — only the completion entry', !hs.homes.some((x) => x.route === 'merchant-v2.html') && hs.primary?.route === 'complete-application.html', hs.homes.map((x) => x.route));
   await AF.seedApproved(db, 'shopper', 'seller');
   const hs2 = await BW.homeFor(db, 'shopper', {});
   ck('CONTROL: once the seller decision exists the shop home routes to merchant-v2', hs2.homes.some((x) => x.route === 'merchant-v2.html'), hs2.homes.map((x) => x.route));
   const hv = await BW.homeFor(db, 'valid1', {});
-  ck('valid provider home unchanged: provider-dashboard primary', hv.primary.route === 'provider-dashboard.html');
+  ck('valid provider home unchanged: provider-dashboard primary', hv.primary?.route === 'provider-dashboard.html');
 
   say('\n── handler, read-only, static copy, client consumer ──');
   const viaHandler = await BW._h.businessWorkspace({ auth: { uid: 'roleonly', token: { seller: true } } });
