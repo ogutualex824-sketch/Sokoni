@@ -109,6 +109,7 @@ async function issueForReceivable(ledgerRowId, { actor = 'system' } = {}) {
       reference:   String(ledgerRowId),
       description: _describe(d),
       vatInclusive: policy.inclusive,
+      taxCategory:  policy.taxCategory,     /* standard | zero_rated | exempt — from the policy, never inferred */
     });
   } catch (err) {
     /* ── INVARIANT 2 ────────────────────────────────────────────────────
@@ -135,6 +136,7 @@ async function issueForReceivable(ledgerRowId, { actor = 'system' } = {}) {
       invoiceId,
       invoicedAt:        FieldValue.serverTimestamp(),
       invoiceVatInclusive: policy.inclusive,     /* what it was issued under */
+      invoiceTaxCategory:  policy.taxCategory,
       invoiceVatDecidedBy: policy.decidedBy,
     });
     return true;

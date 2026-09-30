@@ -60,7 +60,9 @@ const PLANS = {
   /* ── SERVICE PROVIDERS ── */
   provider_free:     { id:'provider_free',     hubType:'service_provider', tier:'free',  name:'Provider Free',     price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ services_limit:3,    calendar:false, online_booking:true,  analytics:false, priority_listing:false, team_members:1, ai_assistant:false }},
-  provider_basic:    { id:'provider_basic',    hubType:'service_provider', tier:'basic', name:'Provider Basic',    price:{monthly:99900,   annual:999000   }, trial:{days:3}, grace:{days:3},  isActive:true,
+  /* RETIRED 2026-09-30 (owner): no row in the provider schedule, no live dependency. Kept so a historical
+     document still resolves a name; subGetPlans hides it and createPaymentIntent refuses it. */
+  provider_basic:    { id:'provider_basic',    hubType:'service_provider', tier:'basic', name:'Provider Basic',    price:{monthly:99900,   annual:999000   }, trial:{days:3}, grace:{days:3},  isActive:false, retired:'2026-09-30', retiredReason:'no row in the 2026-09-28 provider schedule; no live dependency',
     features:{ services_limit:20,   calendar:true,  online_booking:true,  analytics:true,  priority_listing:false, team_members:3, ai_assistant:false }},
   /* ── PROVIDER SUBSCRIPTION TIERS (migrated from subscriptions.html) ──
      These are the plans customers actually purchase. They lived only in a
@@ -74,7 +76,8 @@ const PLANS = {
   business:          { id:'business',          hubType:'service_provider', tier:'business', name:'Business',  price:{monthly:499900,  annual:4798800  }, trial:{days:3}, grace:{days:7},  isActive:true,
     features:{ services_limit:-1,   leads_per_month:-1,  calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:20, badge_verified:true, ai_assistant:true, bulk_import:true, api_access:true }},
 
-  provider_pro:      { id:'provider_pro',      hubType:'service_provider', tier:'pro',   name:'Provider Pro',      price:{monthly:249900,  annual:2499000  }, trial:{days:3}, grace:{days:5},  isActive:true,
+  /* RETIRED 2026-09-30 (owner): NOT the canonical `pro` (KES 1,499) — a different price is a different plan. */
+  provider_pro:      { id:'provider_pro',      hubType:'service_provider', tier:'pro',   name:'Provider Pro',      price:{monthly:249900,  annual:2499000  }, trial:{days:3}, grace:{days:5},  isActive:false, retired:'2026-09-30', retiredReason:'not equivalent to canonical pro (KES 2,499 vs 1,499); retired fail-closed',
     features:{ services_limit:-1,   calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:10,ai_assistant:true,  bulk_import:true }},
 
   /* ── RESTAURANTS ── */

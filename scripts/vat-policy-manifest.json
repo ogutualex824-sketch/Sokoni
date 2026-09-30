@@ -1,0 +1,31 @@
+{
+  "_readme": "Source for scripts/write-vat-policy.js. Every null below is an OWNER / TAX-ADVISER decision (docs/VAT_POLICY_2026-09-30.md §2). The writer refuses to write while any decision field is null. Code never infers VAT: until these documents exist in production, commission invoices REFUSE and subscription invoices DEFER.",
+  "revenueConfig/commission_vat": {
+    "enabled": true,
+    "applicability": null,
+    "inclusive": null,
+    "decidedBy": null,
+    "reference": null,
+    "effectiveFrom": null,
+    "_supply": "SOKONI commission (marketplace 15%, POS 5%, provider ladder, hub rates, flat property/vehicle fees) — supplier SOKONI, recipient merchant/provider",
+    "_options": { "applicability": ["taxable", "zero_rated", "exempt"], "inclusive": "boolean, required only when applicability = taxable" },
+    "_evidence_to_resolve": [
+      "SOKONI VAT registration status (VAT Act 2013 s.34) — not in the repository; ETIMS_PLATFORM_PIN is a secret",
+      "terms.html:255 says the 16% VAT on platform fees is deducted (inclusive); legal-hub.html:3228 reads as charged on top (exclusive) — pick one, fix the other page"
+    ]
+  },
+  "revenueConfig/subscription_vat": {
+    "enabled": true,
+    "applicability": null,
+    "inclusive": null,
+    "decidedBy": null,
+    "reference": null,
+    "effectiveFrom": null,
+    "_supply": "SOKONI subscription fee (sub-billing PLANS prices) — supplier SOKONI, recipient subscriber",
+    "_options": { "applicability": ["taxable", "zero_rated", "exempt"], "inclusive": "boolean, required only when applicability = taxable" },
+    "_evidence_to_resolve": [
+      "same registration fact as commission_vat",
+      "advertised plan prices read as consumer prices (inclusive) — a decision, not an assumption"
+    ]
+  }
+}

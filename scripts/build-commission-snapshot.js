@@ -45,6 +45,7 @@ const marketplaceDefaultPlan = CC.MARKETPLACE_DEFAULT_PLAN || 'free';
 const providerPlanPct = {};
 for (const [k, v] of Object.entries(CC.PROVIDER_PLAN_RATES || {})) providerPlanPct[k] = v.pct;
 const providerDefaultPlan = CC.PROVIDER_DEFAULT_PLAN || 'provider_free';
+const providerPlanAlias = CC.PROVIDER_PLAN_ALIASES || {};
 const marketplaceCategories = Array.from(CC.MARKETPLACE_SELLER_CATEGORIES);
 
 const body = `/* ============================================================================
@@ -84,6 +85,7 @@ const body = `/* ===============================================================
      PLAN ID. An unknown plan resolves to the HIGHEST rate, exactly as the server does. */
   var PROVIDER_PLAN_PCT = ${JSON.stringify(providerPlanPct, null, 2).replace(/\n/g, '\n  ')};
   var PROVIDER_DEFAULT_PLAN = ${JSON.stringify(providerDefaultPlan)};
+  var PROVIDER_PLAN_ALIAS = ${JSON.stringify(providerPlanAlias)};
 
   /* RAW category labels priced by the plan ladder. "pos" is deliberately ABSENT even though
      it ALIASES to marketplace — keying on the resolved category would put every till sale on
@@ -125,10 +127,13 @@ const body = `/* ===============================================================
     /* The rate on a POS / till sale. Takes no plan, because it does not depend on one. */
     posPct: function () { return POS_FLAT_PCT; },
     /* The rate a service provider on planId pays on a booking. Unknown plan -> highest rate. */
+    /* Mirrors the server exactly: no plan -> Free (20%); an aliased spelling -> its plan; an unknown
+       or retired id -> null (the server REFUSES such a booking; the client must not quote a number). */
     providerPct: function (planId) {
-      var k = String(planId || '').trim().toLowerCase();
-      if (!Object.prototype.hasOwnProperty.call(PROVIDER_PLAN_PCT, k)) k = PROVIDER_DEFAULT_PLAN;
-      return PROVIDER_PLAN_PCT[k];
+      var k = String(planId == null ? '' : planId).trim().toLowerCase();
+      if (k === '') k = PROVIDER_DEFAULT_PLAN;
+      else if (Object.prototype.hasOwnProperty.call(PROVIDER_PLAN_ALIAS, k)) k = PROVIDER_PLAN_ALIAS[k];
+      return Object.prototype.hasOwnProperty.call(PROVIDER_PLAN_PCT, k) ? PROVIDER_PLAN_PCT[k] : null;
     },
     PROVIDER_PLAN_PCT: PROVIDER_PLAN_PCT,
     isMarketplaceSellerSale: function (cat) {

@@ -458,7 +458,7 @@ async function calculateCommission(db, opts) {
    * revenueConfig/hub_provider { commissionPct: 15 }, which outranks it. That is the
    * deliberate business decision; this code does not make it. */
   let subRatePct = null;
-  let subPlan = null, subPlanMatched = null, subRateSource = null, subPlanLegacy = false;
+  let subPlan = null, subPlanMatched = null, subRateSource = null, subPlanAliasOf = null;
   if (!rule && rcPct === null && !fixedCategory && subscriptionRole && sellerId) {
     try {
       const subCore = require('./subscription-core');
@@ -468,14 +468,17 @@ async function calculateCommission(db, opts) {
         ? await subCore.getProviderPlanRate(sellerId, { role: subscriptionRole })
         : null;
       const frac = pr ? pr.rateFraction : await subCore.getCommissionRate(sellerId, { role: subscriptionRole });
-      if (pr) { subPlan = pr.plan; subPlanMatched = pr.matched; subRateSource = pr.source; subPlanLegacy = pr.legacyUnmapped; }
+      if (pr) { subPlan = pr.plan; subPlanMatched = pr.matched; subRateSource = pr.source; subPlanAliasOf = pr.aliasOf || null; }
       /* 0.07 * 100 is 7.000000000000001 in IEEE-754. Round to 3dp: a rate written into an
          immutable ledger must not carry float dust. The commission itself is unaffected —
          Math.round() absorbs it — but the RECORDED rate would have been wrong forever. */
       if (Number.isFinite(frac) && frac >= 0 && frac <= 1) {
         subRatePct = Math.round(frac * 100 * 1000) / 1000;
       }
-    } catch (_) {
+    } catch (e) {
+      /* A REFUSED provider plan (unknown / retired id) is a fail-closed answer, not an outage:
+         it must stop the settlement, never fall through to the category default. */
+      if (e && e.code === 'provider_plan_refused') throw e;
       /* Subscription Engine unavailable: fall through to the category default rather than
          guess. A wrong rate is worse than a well-defined one. */
     }
@@ -689,7 +692,7 @@ async function calculateCommission(db, opts) {
     fixedRateCategory: fixedCategory,           /* POS / Till: RATES[category] and nothing else */
     providerPlan: subPlan,                      /* provider lane: the plan id that priced it, or null */
     providerPlanMatched: subPlanMatched,        /* false = unknown/inactive plan -> highest rate */
-    providerPlanLegacyUnmapped: subPlanLegacy,  /* provider_basic / provider_pro: owner mapping required */
+    providerPlanAliasOf: subPlanAliasOf,        /* e.g. 'free_trial' -> provider_free; null when the id was canonical */
     providerRateSource: subRateSource,
     overrideIgnored,                            /* a matching commissionRule existed and was bypassed */
 

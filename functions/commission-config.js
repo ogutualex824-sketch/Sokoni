@@ -686,23 +686,41 @@ const PROVIDER_PLAN_RATES = {
   business:      { pct: 7,  floorExempt: true },   /* Business       */
   enterprise:    { pct: 5,  floorExempt: true },   /* Enterprise     */
 };
-const PROVIDER_DEFAULT_PLAN = 'provider_free';
-const PROVIDER_UNMAPPED_LEGACY_IDS = Object.freeze(['provider_basic', 'provider_pro']);
+const PROVIDER_DEFAULT_PLAN = 'provider_free';   /* NO plan at all = Free — a known commercial state, not a fallback */
+
+/* Historical spellings that are the SAME plan, mapped explicitly. `free_trial` is what every
+   production providerSubscriptions document carries (5 of 5 on 2026-09-30) and is the Free Trial
+   tier the schedule names at 20%. Nothing else is aliased: a spelling not listed here is refused. */
+const PROVIDER_PLAN_ALIASES = Object.freeze({ free_trial: 'provider_free' });
+
+/* RETIRED 2026-09-30 (owner). `provider_basic` (KES 999, tier basic) has no row in the schedule and
+   no live dependency anywhere (0 production subscriptions, 0 intents, no checkout path);
+   `provider_pro` (KES 2,499, "Provider Pro") is NOT the canonical `pro` (KES 1,499) — a different
+   price is a different plan, so it is retired rather than aliased. Both stay in sub-billing.PLANS
+   with isActive:false so a historical document still names something, but a booking on either is
+   REFUSED here, never priced by a guess. */
+const PROVIDER_RETIRED_IDS = Object.freeze(['provider_basic', 'provider_pro']);
 
 function resolveProviderRate(planId) {
-  const raw = String(planId || '').trim().toLowerCase();
-  const matched = Object.prototype.hasOwnProperty.call(PROVIDER_PLAN_RATES, raw);
-  const plan = matched ? raw : PROVIDER_DEFAULT_PLAN;
-  const r = PROVIDER_PLAN_RATES[plan];
+  const raw = String(planId == null ? '' : planId).trim().toLowerCase();
+  const key = raw === '' ? PROVIDER_DEFAULT_PLAN : (PROVIDER_PLAN_ALIASES[raw] || raw);
+  if (Object.prototype.hasOwnProperty.call(PROVIDER_PLAN_RATES, key)) {
+    const r = PROVIDER_PLAN_RATES[key];
+    return {
+      ok: true, refused: false,
+      pct: r.pct, rateFraction: r.pct / 100, floorExempt: r.floorExempt,
+      plan: key, matched: true,
+      aliasOf: raw !== '' && raw !== key ? raw : null,
+      source: 'commission-config.PROVIDER_PLAN_RATES',
+    };
+  }
+  /* FAIL CLOSED. An unknown or retired plan id is not priced at any rate; the caller must refuse
+     the transaction (finos-utils rethrows; the payment is held, never settled on a guess). */
   return {
-    pct: r.pct,
-    rateFraction: r.pct / 100,
-    floorExempt: r.floorExempt,
-    plan,
-    matched,
-    legacyUnmapped: PROVIDER_UNMAPPED_LEGACY_IDS.indexOf(raw) !== -1,
-    source: matched ? 'commission-config.PROVIDER_PLAN_RATES'
-                    : 'commission-config.PROVIDER_PLAN_RATES (unknown plan -> highest rate)',
+    ok: false, refused: true,
+    reason: PROVIDER_RETIRED_IDS.indexOf(raw) !== -1 ? 'provider_plan_retired' : 'provider_plan_unknown',
+    pct: null, rateFraction: null, floorExempt: true, plan: raw, matched: false, aliasOf: null,
+    source: 'commission-config.PROVIDER_PLAN_RATES (refused)',
   };
 }
 
@@ -714,7 +732,8 @@ module.exports = {
   resolveProviderRate,
   PROVIDER_PLAN_RATES: Object.freeze(PROVIDER_PLAN_RATES),
   PROVIDER_DEFAULT_PLAN,
-  PROVIDER_UNMAPPED_LEGACY_IDS,
+  PROVIDER_PLAN_ALIASES,
+  PROVIDER_RETIRED_IDS,
   categoryForHub,
   MIN_COMMISSION_KES,
   PLAN_ADJUSTMENTS_DOC,

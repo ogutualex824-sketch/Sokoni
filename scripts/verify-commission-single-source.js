@@ -42,6 +42,8 @@ const ALLOWLIST = {
   'scripts/test-pos-commission-lane.js':        'certification fixture deliberately plants a prohibited rate for the guard',
   'scripts/test-healthcare-subscription-foundation.js':
     'regression fixture preserves legacy subscription documents without applying their rate',
+  'scripts/test-provider-plan-ladder.js':
+    'fixture: a legacy providerSubscriptions document carrying commissionRate, proven IGNORED by subscription-core (the plan id is the only authority)',
   'scripts/test-kass-commission-authority.js':
     'test double: swaps in a FAKE authority to prove KASS reads, never copies, the rates; not deployed, read by no charging path',
   'scripts/test-commission-schedule.js':

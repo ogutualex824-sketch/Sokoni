@@ -148,7 +148,7 @@ async function issueForSubscriptionPayment(paymentRef, { actor = 'system' } = {}
     const etims = require('./etims');
     result = await etims._issuePlatformInvoice({
       sellerUid: tx.uid, feeType: FEE_TYPE, amount: tx.amountKES, reference: ref,
-      description: _describe(tx), vatInclusive: policy.inclusive,
+      description: _describe(tx), vatInclusive: policy.inclusive, taxCategory: policy.taxCategory,
     });
   } catch (err) {
     await _settle(db, ref, { status: 'failed', reason: 'invoice_engine_failed', error: String(err && err.message || err).slice(0, 200), subInvoicePending: true, source: tx.source, uid: tx.uid, amountKES: tx.amountKES });
@@ -164,7 +164,7 @@ async function issueForSubscriptionPayment(paymentRef, { actor = 'system' } = {}
 
   await _settle(db, ref, {
     status: 'issued', invoiceId, subInvoicePending: _FV().delete(), reason: _FV().delete(), error: _FV().delete(),
-    source: tx.source, uid: tx.uid, amountKES: tx.amountKES, vatInclusive: policy.inclusive,
+    source: tx.source, uid: tx.uid, amountKES: tx.amountKES, vatInclusive: policy.inclusive, taxCategory: policy.taxCategory,
     vatDecidedBy: policy.decidedBy, issuedAt: _FV().serverTimestamp(), engineDuplicate: result.duplicate === true,
   });
 

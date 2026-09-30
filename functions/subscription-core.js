@@ -302,6 +302,12 @@ async function getProviderPlanRate(uid, opts = {}) {
   const active = !!(c && c.found && isActive(c.status));
   const planId = active ? ((c.raw && (c.raw.planId || c.raw.plan)) || c.tier || null) : null;
   const r = CC.resolveProviderRate(planId);
+  if (r.refused) {
+    /* FAIL CLOSED: an unknown or retired plan id must not price a booking at any rate. */
+    const e = new Error(`Provider plan "${planId}" is ${r.reason === 'provider_plan_retired' ? 'retired' : 'unknown'}; the booking commission cannot be determined.`);
+    e.code = 'provider_plan_refused'; e.reason = r.reason; e.planId = planId; e.uid = uid;
+    throw e;
+  }
   return { ...r, active, planId, subscriptionSource: c && c.source ? c.source : 'none' };
 }
 

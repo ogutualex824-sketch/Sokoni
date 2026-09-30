@@ -1,0 +1,292 @@
+{
+  "version": "catalog-v3-free50-2026-09-30",
+  "mode": "DRY RUN",
+  "project": "sokoni-aeb26",
+  "at": "2026-09-30T13:30:40.241Z",
+  "authorizedBy": null,
+  "catalog": {
+    "FREE": 50,
+    "PROFESSIONAL": 100,
+    "BUSINESS": -1,
+    "ENTERPRISE": -1
+  },
+  "rows": [
+    {
+      "uid": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+      "plan": "INACTIVE",
+      "source": "subscription-catalog",
+      "catalogVersion": 3,
+      "before": {
+        "maxProducts": 10,
+        "grandfatheredFloor": null,
+        "catalogVersion": 1,
+        "count": -24
+      },
+      "actual": {
+        "bySellerUid": 102,
+        "byShopId": 97
+      },
+      "actualN": 102,
+      "catalogMax": 50,
+      "target": 102,
+      "grandfatheredFloor": 102,
+      "countDrift": -126,
+      "action": "write",
+      "written": false
+    },
+    {
+      "uid": "MERCHANT_A_uid_11",
+      "plan": "INACTIVE",
+      "source": "subscription-catalog",
+      "catalogVersion": 3,
+      "before": {
+        "maxProducts": 10,
+        "grandfatheredFloor": null,
+        "catalogVersion": 1,
+        "count": null
+      },
+      "actual": {
+        "bySellerUid": 0,
+        "byShopId": 0
+      },
+      "actualN": 0,
+      "catalogMax": 50,
+      "target": 50,
+      "grandfatheredFloor": null,
+      "countDrift": null,
+      "action": "write",
+      "written": false
+    },
+    {
+      "uid": "SELLER_A",
+      "plan": "INACTIVE",
+      "source": "subscription-catalog",
+      "catalogVersion": 3,
+      "before": {
+        "maxProducts": 10,
+        "grandfatheredFloor": null,
+        "catalogVersion": 1,
+        "count": null
+      },
+      "actual": {
+        "bySellerUid": 0,
+        "byShopId": 0
+      },
+      "actualN": 0,
+      "catalogMax": 50,
+      "target": 50,
+      "grandfatheredFloor": null,
+      "countDrift": null,
+      "action": "write",
+      "written": false
+    },
+    {
+      "uid": "SELLER_A_uid_7f3",
+      "plan": "INACTIVE",
+      "source": "subscription-catalog",
+      "catalogVersion": 3,
+      "before": {
+        "maxProducts": 10,
+        "grandfatheredFloor": null,
+        "catalogVersion": 1,
+        "count": null
+      },
+      "actual": {
+        "bySellerUid": 0,
+        "byShopId": 0
+      },
+      "actualN": 0,
+      "catalogMax": 50,
+      "target": 50,
+      "grandfatheredFloor": null,
+      "countDrift": null,
+      "action": "write",
+      "written": false
+    },
+    {
+      "uid": "_qa_seller_1786036746494",
+      "plan": "INACTIVE",
+      "source": "no-subscription",
+      "catalogVersion": 3,
+      "before": {
+        "maxProducts": 10,
+        "grandfatheredFloor": null,
+        "catalogVersion": null,
+        "count": 0
+      },
+      "actual": {
+        "bySellerUid": 0,
+        "byShopId": 0
+      },
+      "actualN": 0,
+      "catalogMax": 50,
+      "target": 50,
+      "grandfatheredFloor": null,
+      "countDrift": 0,
+      "action": "write",
+      "written": false
+    },
+    {
+      "uid": "oXrgbq2oBwadJSfsk0NypDCAXVT2",
+      "plan": "INACTIVE",
+      "source": "no-subscription",
+      "catalogVersion": 3,
+      "before": {
+        "maxProducts": 10,
+        "grandfatheredFloor": null,
+        "catalogVersion": null,
+        "count": 0
+      },
+      "actual": {
+        "bySellerUid": 0,
+        "byShopId": 0
+      },
+      "actualN": 0,
+      "catalogMax": 50,
+      "target": 50,
+      "grandfatheredFloor": null,
+      "countDrift": 0,
+      "action": "write",
+      "written": false
+    },
+    {
+      "uid": "rc-not-this-seller-uid",
+      "plan": "INACTIVE",
+      "source": "no-subscription",
+      "catalogVersion": 3,
+      "before": {
+        "maxProducts": 10,
+        "grandfatheredFloor": null,
+        "catalogVersion": null,
+        "count": 0
+      },
+      "actual": {
+        "bySellerUid": 0,
+        "byShopId": 0
+      },
+      "actualN": 0,
+      "catalogMax": 50,
+      "target": 50,
+      "grandfatheredFloor": null,
+      "countDrift": 0,
+      "action": "write",
+      "written": false
+    },
+    {
+      "uid": "xrH21J5GFbW8PluCZ2ny5nIuf602",
+      "plan": "INACTIVE",
+      "source": "subscription-catalog",
+      "catalogVersion": 3,
+      "before": {
+        "maxProducts": 10,
+        "grandfatheredFloor": null,
+        "catalogVersion": 1,
+        "count": 10
+      },
+      "actual": {
+        "bySellerUid": 0,
+        "byShopId": 0
+      },
+      "actualN": 0,
+      "catalogMax": 50,
+      "target": 50,
+      "grandfatheredFloor": null,
+      "countDrift": 10,
+      "action": "write",
+      "written": false
+    },
+    {
+      "uid": "zzz_diag_merchant",
+      "plan": "INACTIVE",
+      "source": "no-subscription",
+      "catalogVersion": 3,
+      "before": {
+        "maxProducts": 10,
+        "grandfatheredFloor": null,
+        "catalogVersion": 1,
+        "count": null
+      },
+      "actual": {
+        "bySellerUid": 0,
+        "byShopId": 0
+      },
+      "actualN": 0,
+      "catalogMax": 50,
+      "target": 50,
+      "grandfatheredFloor": null,
+      "countDrift": null,
+      "action": "write",
+      "written": false
+    },
+    {
+      "uid": "zzz_release_verify_synthetic",
+      "plan": "INACTIVE",
+      "source": "no-subscription",
+      "catalogVersion": 3,
+      "before": {
+        "maxProducts": 10,
+        "grandfatheredFloor": null,
+        "catalogVersion": 1,
+        "count": null
+      },
+      "actual": {
+        "bySellerUid": 0,
+        "byShopId": 0
+      },
+      "actualN": 0,
+      "catalogMax": 50,
+      "target": 50,
+      "grandfatheredFloor": null,
+      "countDrift": null,
+      "action": "write",
+      "written": false
+    },
+    {
+      "uid": "zzz_verify_annual",
+      "plan": "INACTIVE",
+      "source": "no-subscription",
+      "catalogVersion": 3,
+      "before": {
+        "maxProducts": 10,
+        "grandfatheredFloor": null,
+        "catalogVersion": 1,
+        "count": null
+      },
+      "actual": {
+        "bySellerUid": 0,
+        "byShopId": 0
+      },
+      "actualN": 0,
+      "catalogMax": 50,
+      "target": 50,
+      "grandfatheredFloor": null,
+      "countDrift": null,
+      "action": "write",
+      "written": false
+    },
+    {
+      "uid": "zzz_verify_monthly",
+      "plan": "INACTIVE",
+      "source": "no-subscription",
+      "catalogVersion": 3,
+      "before": {
+        "maxProducts": 10,
+        "grandfatheredFloor": null,
+        "catalogVersion": 1,
+        "count": null
+      },
+      "actual": {
+        "bySellerUid": 0,
+        "byShopId": 0
+      },
+      "actualN": 0,
+      "catalogMax": 50,
+      "target": 50,
+      "grandfatheredFloor": null,
+      "countDrift": null,
+      "action": "write",
+      "written": false
+    }
+  ],
+  "sellersWithoutCounter": 0
+}

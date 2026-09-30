@@ -1110,12 +1110,28 @@ const etimsBulkGenerate = onCall({ secrets: _ALL_SECRETS, timeoutSeconds:300, en
  * an absent config as inclusive, which is how an undecided tax position became a
  * library default. A caller must state the treatment it is issuing under.
  */
-async function _issuePlatformInvoice({ sellerUid, feeType, amount, reference, description, vatInclusive }) {
-  if (typeof vatInclusive !== "boolean") {
+/* Platform invoices state their VAT category explicitly (revenueConfig/*_vat policy):
+     standard   — taxable supply, VAT at the engine rate, inclusive/exclusive of the stated price
+     zero_rated — taxable at 0% (KRA category B)
+     exempt     — not a taxable supply / supplier not registered (category C, no VAT line)
+   Omitted ⇒ 'standard' (the only meaning the function had before 2026-09-30), so existing
+   callers are unchanged; an unknown value is refused, never mapped. */
+const PLATFORM_TAX_STATUS = Object.freeze({ standard: "registered", zero_rated: "zero_rated", exempt: "exempt" });
+function _platformTaxStatusFor(taxCategory) {
+  const key = taxCategory == null ? "standard" : String(taxCategory);
+  if (!Object.prototype.hasOwnProperty.call(PLATFORM_TAX_STATUS, key)) {
+    throw new HttpsError("invalid-argument", `Unknown platform tax category "${key}" — a VAT treatment may not be inferred.`);
+  }
+  return PLATFORM_TAX_STATUS[key];
+}
+
+async function _issuePlatformInvoice({ sellerUid, feeType, amount, reference, description, vatInclusive, taxCategory }) {
+  const vatStatus = _platformTaxStatusFor(taxCategory);
+  if (vatStatus === "registered" && typeof vatInclusive !== "boolean") {
     throw new HttpsError("failed-precondition",
       "vatInclusive must be stated explicitly — a VAT treatment may not be inferred.");
   }
-  const taxConfig = { inclusive: vatInclusive };
+  const taxConfig = { inclusive: vatStatus === "registered" ? vatInclusive : true };
 
   const FEE_LABELS = {
     commission:"Platform Commission Fee", subscription:"Subscription Fee",
@@ -1137,9 +1153,9 @@ async function _issuePlatformInvoice({ sellerUid, feeType, amount, reference, de
   const invNo  = `SOKONI-${String(invcNo).padStart(6,"0")}`;
   const now    = new Date().toISOString();
 
-  const platProfile = { kraPin:platPin, businessName:COMPANY.legalName, regNo:COMPANY.registrationNumber, branchId:"00", vatStatus:"registered", address:COMPANY.address, postal:postalLine(), invoicePrefix:"SOKONI" };
+  const platProfile = { kraPin:platPin, businessName:COMPANY.legalName, regNo:COMPANY.registrationNumber, branchId:"00", vatStatus, address:COMPANY.address, postal:postalLine(), invoicePrefix:"SOKONI" };
   const lineItems   = [{ name: FEE_LABELS[feeType]+(description?`: ${description}`:""), quantity:1, unitPrice:amount, discountRate:0 }];
-  const kraLines    = lineItems.map((it,i) => calcLine({...it,seq:i+1},"registered",taxConfig));
+  const kraLines    = lineItems.map((it,i) => calcLine({...it,seq:i+1},vatStatus,taxConfig));
   const totals      = calcTotals(kraLines);
 
   let buyer = null;
@@ -1158,7 +1174,7 @@ async function _issuePlatformInvoice({ sellerUid, feeType, amount, reference, de
     sellerUid:"_platform", orderId:reference||null, bulkJobId:null, orderIds:null,
     buyerUid:null, billToSellerUid:sellerUid||null,
     invoiceNumber:invNo, internalSequence:invcNo,
-    isPlatformInvoice:true, platformFeeType:feeType,
+    isPlatformInvoice:true, platformFeeType:feeType, platformTaxCategory: taxCategory == null ? "standard" : String(taxCategory), platformVatInclusive: taxConfig.inclusive,
     seller:{kraPin:platPin,name:COMPANY.legalName,branchId:"00"},
     buyer: buyer||{name:"Platform Client"},
     lineItems:kraLines, totals, currency:"KES",
@@ -1494,6 +1510,7 @@ module.exports = {
      commission generator reuses it instead of growing a second one. Callers must
      supply `vatInclusive` — it has no default by design. */
   _issuePlatformInvoice,
+  _platformTaxStatusFor,
   /* Event ticket fiscalisation (functions/event-fiscal.js) reuses the ONE order-invoice path and the
      ONE requeue path — no second eTIMS implementation. */
   generateForOrder,

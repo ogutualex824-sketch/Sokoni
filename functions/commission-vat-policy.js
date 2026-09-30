@@ -55,19 +55,37 @@ async function loadVatPolicy(db, docPath) {
     const c = snap.data() || {};
     if (c.enabled !== true) return null;
 
-    /* `inclusive` must be an explicit boolean. A missing or truthy-ish value is
-       NOT interpreted — that would be the library-default failure again, one
-       layer up. */
-    if (typeof c.inclusive !== 'boolean') return null;
+    /* APPLICABILITY is decided by the business against KRA's rules, never here:
+         'taxable'    — a taxable supply by a VAT-registered supplier: VAT at the configured
+                        treatment (inclusive / exclusive of the stated price)
+         'zero_rated' — taxable at 0%: the invoice states the supply, VAT 0
+         'exempt'     — not a taxable supply (or the supplier is not VAT-registered): no VAT line
+       Absent applicability is read as 'taxable' ONLY when `inclusive` is an explicit boolean —
+       the pre-2026-09-30 document shape meant exactly that. Anything else is unresolved ⇒ null. */
+    const applicability = c.applicability != null ? String(c.applicability)
+      : (typeof c.inclusive === 'boolean' ? 'taxable' : null);
+    if (['taxable', 'zero_rated', 'exempt'].indexOf(applicability) === -1) return null;
+    if (c.effectiveFrom) {
+      const from = c.effectiveFrom.toMillis ? c.effectiveFrom.toMillis() : Date.parse(String(c.effectiveFrom));
+      if (Number.isFinite(from) && from > Date.now()) return null;   /* not yet in force */
+    }
+
+    /* For a taxable supply the treatment of the stated price must be explicit; for zero-rated
+       and exempt supplies there is no VAT to include or exclude, so `inclusive` is irrelevant
+       and reported as null. */
+    if (applicability === 'taxable' && typeof c.inclusive !== 'boolean') return null;
 
     /* An unattributable tax decision is not a decision. */
     if (!c.decidedBy) return null;
 
     return {
-      inclusive: c.inclusive,
+      applicability,
+      taxCategory: applicability === 'taxable' ? 'standard' : applicability,
+      inclusive: applicability === 'taxable' ? c.inclusive : null,
       decidedBy: String(c.decidedBy),
       reference: c.reference ? String(c.reference) : null,
       decidedAt: c.decidedAt || null,
+      effectiveFrom: c.effectiveFrom || null,
     };
   } catch (_e) {
     /* Unreadable config is indistinguishable from absent config, and both mean
