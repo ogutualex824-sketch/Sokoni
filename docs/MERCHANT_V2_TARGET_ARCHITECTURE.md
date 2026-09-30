@@ -96,3 +96,7 @@ ten competing destination fields would be the most expensive mistake available h
 - trust the device clock for a stored financial timestamp
 - make POS Setup a prerequisite for selling
 - render a receipt total that was not produced by the same server authority as the order
+
+## Header chrome: profile menu
+
+The shell header carries the shared avatar → account dropdown → role switcher, mounted from `sokoni-profile-menu.js` (the same module `shared-header.js` injects on every other page). Authority, API and certification: [[SHARED_PROFILE_MENU]].

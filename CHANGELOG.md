@@ -129,6 +129,47 @@ returns early when the host has no CSSOM, leaving the CSS fallback in force.
 
 - Files: `sokoni-merchant-products.js`, `scripts/test-uploader-mobile-scroll.js` (new), `CHANGELOG.md`.
 - Database / API / security changes: none. Breaking: none.
+## [2026-09-30] - Merchant shell: the profile icon + account dropdown + role switcher, as ONE shared control — built, statically certified, browser certification QUEUED, NOT deployed
+
+**Branch `hosting/merchant-profile-menu-on-59effdf`, on `59effdf`.** Owner: "in merchant dash there is no profile icon in
+header with the role drop down." `merchant-v2.html` replaces the marketplace header with its own chrome and so never
+received the avatar/account dropdown/role switcher that every `shared-header.js` page has.
+
+**Factored out, not duplicated.** The account dropdown, role switcher, sign-out and workspace switch moved
+**verbatim** (by line range) from `shared-header.js` into a mountable module, `sokoni-profile-menu.js`
+(`SokoniProfileMenu.mount(hostEl, { size })` / `open` / `close` / `toggle` / `isOpen`). `shared-header.js` keeps only
+the avatar slot in its nav and injects the module (same idempotent bootstrap shape as `sw-register.js`); every
+`onclick` in the header markup (`_skToggleAcct`, `_skSwitchRole`, `_skEnterAdmin`, `_skSignOutFromAcct`,
+`_skSwitchWorkspace`, `_skCloseAcct`) is now defined once, in the module. The dropdown's CSS moved with it (inserted
+first in `<head>`, so page CSS still wins). `index.html`'s static nav is untouched.
+
+**Mounted in the shell.** `merchant-v2.html` header block gains `#hdr-acct` after the printer chip; the foot of the page
+loads `sokoni-permissions.js` → `sokoni-role-authority.js` → `sokoni-profile-menu.js` (the shell does not load the
+header that bootstraps them elsewhere) and mounts at a 44px target. No route, module-map or sidebar change.
+
+**Authority unchanged.** Roles come only from `SokoniRoleAuthority` (signed claims); the switch routes through
+`RA.setActiveRole` → `RA.hubFor(role)` exactly as the shared header does. The legacy floating
+`sokoni-profile-switcher.js` (DASH map sends `merchant` → `pos.html`) is NOT loaded and NOT revived.
+
+**Additions on every page:** Escape now closes the open menu and returns focus to the avatar (behaviour only; DOM unchanged).
+
+**Files:** `sokoni-profile-menu.js` (new), `shared-header.js` (−742/+32), `merchant-v2.html` (header slot + 4 script
+tags), `scripts/test-merchant-profile-menu.js` (new cert), `scripts/before-role-entry-coordination.js`,
+`scripts/test-customer-nav.js`, `scripts/test-role-switch-routing.js`, `scripts/test-signout-keep-parity.js`
+(re-pointed at the module), `docs/SHARED_PROFILE_MENU.md` (new).
+**Database / API / security changes:** none — same writes (`users/{uid}.activeRole`), same guards. **Breaking:** none;
+the module is loaded by the header on every page, so pages that call `window._skSwitchRole` (account-centre,
+sokoni-admin-entry) keep working — the global now arrives one script-load after the header rather than with it.
+
+**Certification.** Static, run: `test-merchant-routes` 65/0 · `test-mv2-1-sidebar` 14/0 · `test-inshell-chrome` 30/0 ·
+`test-customer-nav` 62/0 · `test-role-switch-routing` 50/0 · `test-signout-keep-parity` 7/0 ·
+`before-role-entry-coordination` 16 passed / 1 failed / 1 unproven — **identical at the 59effdf baseline** (the failing
+`_lsFallback` assertion predates this slice). `predeploy-syntax-gate`: 1809 JS files + 455 inline blocks parse cleanly (exit 0).
+**Browser certification QUEUED (browser hold in force, not run):** `scripts/test-merchant-profile-menu.js` (390 + 1280:
+avatar/44px/dropdown-in-viewport/role list == authority set/switch → intercepted `users/{uid}` write + `sokoniActiveRoleChanged`
++ intercepted navigation to `RA.hubFor('rider')`/Escape/outside click/keyboard; negative control with zero claims; index.html
+dropdown DOM byte-identical vs the `59effdf` export), `scripts/test-header-candidate.js` (must stay 11/0),
+`scripts/test-merchant-route-gate.js`.
 
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
