@@ -140,6 +140,17 @@ console.log('\nPayment integrity — the money path\n');
   _amountServerAuthoritative
     ? ok('the charged amount comes from createPaymentIntent, not from the browser (B1)')
     : bad('product checkout charges a client-computed amount — a buyer could underpay while stock decrements');
+
+  /* B1 — the intent call must reach the server at all. firebase.js initialises the
+     page's app (and App Check) on SDK 10.12.2; a callable built from a page-local
+     import of another SDK version binds to an empty app registry and throws
+     app/no-app before any network request — which would fail EVERY M-Pesa checkout
+     while every shape assertion above still passed. createPaymentIntent enforces
+     App Check, so the shared window.sokoniCallable is the one correct binding. */
+  const _intentBinding = (code.match(/const\s+_mkIntent\s*=\s*([^;]+);/) || [])[1] || '';
+  /window\.sokoniCallable\(\s*'createPaymentIntent'\s*\)/.test(_intentBinding) && !/getFunctions/.test(_intentBinding)
+    ? ok('createPaymentIntent is called through the shared App-Check-aware sokoniCallable (B1)')
+    : bad('createPaymentIntent is bound outside firebase.js — a foreign SDK instance has no app and no App Check token');
 }
 
 /* ── 5. An order is only "paid" when a PROVIDER said so ──────────────────────
