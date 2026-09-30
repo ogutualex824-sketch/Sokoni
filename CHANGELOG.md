@@ -1,3 +1,16 @@
+## 2026-10-01 — Home KASS chat sends the user's sign-in (it answered "Authentication required" to everything)
+
+`script.js` sendMessage() POSTed to sokoniChat with NO auth_token. Live sokoniChat refuses a missing token, so
+every home-chat message came back as "Authentication required to use KASS AI.", shown as the bot's reply.
+
+- It now attaches the signed-in user's Firebase ID token (canonical `window.firebaseAuth`).
+- A signed-out visitor is asked to sign in, and the paid endpoint is not called.
+- An expired sign-in asks the user to sign in again.
+- The server's daily-limit / resting text (429 kass_*) is shown as written.
+- Pairs with the functions fix adde663 (verified-uid auth + 30/day + USD 5/day).
+- Test: scripts/test-home-kass-chat.js 5/0 (runs the real sendMessage); live 72dca56 fails C-1/C-3/C-5.
+- Hosting only.
+
 ## 2026-10-01 — Home: the location prompt is asked once, then remembered
 
 The owner reported that after accepting location, the prompt kept popping up. Cause: `script.js`

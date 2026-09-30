@@ -2414,15 +2414,31 @@ function sendMessage(){
     msgs?.appendChild(thinking);
     if(msgs) msgs.scrollTop = msgs.scrollHeight;
 
-    fetch(_CHAT_FN, {
+    /* KASS requires a verified sign-in (sokoniChat refuses a missing or invalid token, and caps each user at 30
+       messages a day). This call used to send NO token, so on live every message came back as "Authentication
+       required", shown as if it were the bot's answer. It now attaches the signed-in user's Firebase ID token
+       from the canonical app, asks a signed-out visitor to sign in, and shows the daily-limit / resting
+       messages as written by the server. */
+    const _user = window.firebaseAuth && window.firebaseAuth.currentUser;
+    if (!_user) {
+        document.getElementById("botThinking")?.remove();
+        const signIn = "Please sign in to chat with KASS — it only takes a moment. 🙂";
+        _chatHistory.push({ role: "assistant", content: signIn });
+        addBotMessage(signIn);
+        return;
+    }
+    Promise.resolve(_user.getIdToken())
+    .then(token => fetch(_CHAT_FN, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: _chatHistory.slice(-10) }),
-    })
-    .then(r => r.json())
-    .then(data => {
+        body: JSON.stringify({ messages: _chatHistory.slice(-10), auth_token: token }),
+    }))
+    .then(r => r.json().then(data => ({ status: r.status, data })))
+    .then(({ status, data }) => {
         document.getElementById("botThinking")?.remove();
-        const reply = data.response || data.error || botReply(text);
+        let reply;
+        if (status === 401) reply = "Your sign-in has expired — please sign in again to keep chatting with KASS.";
+        else reply = data.response || data.error || botReply(text);   /* 429 kass_* carries the friendly limit text */
         _chatHistory.push({ role: "assistant", content: reply });
         addBotMessage(reply);
     })
