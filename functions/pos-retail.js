@@ -55,36 +55,56 @@ exports.posSyncToMarketplace = onCall(
     if (idempSnap.exists) return { synced: 0, duplicate: true };
     await idempRef.set({ saleId, syncedAt: admin.firestore.FieldValue.serverTimestamp(), uid: request.auth.uid });
 
-    const batch = db.batch();
+    /* Inventory convergence B (2026-09-30). The old code was a blind batch of increment(-qtyDeducted): its comment
+       said "floor-at-zero is enforced by a Firestore security rule", but this runs with the Admin SDK, which BYPASSES
+       rules — so counted stock could go below zero, an unmetered item got stock:-qty, and a negative qtyDeducted
+       RAISED stock. Now each item is its own transaction over the ONE stock decision
+       (shared/sellability.planStockDeduction): the device has ALREADY sold it, so a short metered item is taken down
+       to zero and the shortfall FLAGGED (oversoldAlerts), never refused; an unmetered item moves counters only. */
+    const _SELL = require('./shared/sellability');
     const errors = [];
+    let synced = 0;
 
     for (const item of items) {
       const { productId, qtyDeducted } = item;
-      if (!productId || typeof qtyDeducted !== 'number') {
+      if (!productId || typeof qtyDeducted !== 'number' || !(qtyDeducted > 0)) {
         errors.push(`Invalid item: ${JSON.stringify(item)}`);
         continue;
       }
 
       /* Find matching marketplace product by productId or externalId */
-      const prodRef = db.collection('products').doc(productId);
-      const prodSnap = await prodRef.get();
-      if (!prodSnap.exists) continue;
-
-      /* Use atomic FieldValue.increment so concurrent POS device syncs
-         from multiple branches don't overwrite each other's updates.
-         Stock floor-at-zero is enforced by a Firestore security rule; the
-         soldCount mirror lets analytics catch any negative-stock events. */
-      batch.update(prodRef, {
-        stock:        admin.firestore.FieldValue.increment(-qtyDeducted),
-        soldCount:    admin.firestore.FieldValue.increment(qtyDeducted),
-        updatedAt:    Date.now(),
-        lastPOSSyncAt: Date.now(),
-        lastPOSBranch: branchId || 'default',
-      });
+      const prodRef = db.collection('products').doc(String(productId));
+      try {
+        await db.runTransaction(async (t) => {
+          const prodSnap = await t.get(prodRef);
+          if (!prodSnap.exists) return;
+          const plan = _SELL.planStockDeduction(prodSnap.data(), qtyDeducted, { onShort: 'flag' });
+          const upd = {
+            soldCount:    admin.firestore.FieldValue.increment(qtyDeducted),
+            updatedAt:    Date.now(),
+            lastPOSSyncAt: Date.now(),
+            lastPOSBranch: branchId || 'default',
+          };
+          if (plan.deduct > 0) {
+            upd.stock            = admin.firestore.FieldValue.increment(-plan.deduct);
+            upd.inventoryVersion = admin.firestore.FieldValue.increment(1);
+          }
+          if (plan.shortfall) {
+            t.set(db.collection('oversoldAlerts').doc(), {
+              productId: String(productId), requested: qtyDeducted, available: prodSnap.data().stock,
+              reason: 'pos_device_sync', saleId: String(saleId), branchId: branchId || 'default',
+              path: 'posSyncToMarketplace', createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+          t.update(prodRef, upd);
+        });
+        synced++;
+      } catch (e) {
+        errors.push(`${productId}: ${e.message}`);
+      }
     }
 
-    await batch.commit();
-    return { synced: items.length - errors.length, errors };
+    return { synced, errors };
   }
 );
 

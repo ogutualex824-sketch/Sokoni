@@ -436,22 +436,37 @@ const approveWholesaleOrder = onCall(CF_OPTIONS, _h.approveWholesaleOrder = asyn
       throw new HttpsError('already-exists', 'Order was already processed by another actor.');
     }
 
-    /* Deduct stock for each line item */
+    /* Deduct stock for each line item.
+       Inventory convergence B (2026-09-30):
+       - ALL reads first: a tx.get after a tx.update is rejected by Firestore, so every multi-item approval threw;
+       - the ONE stock decision (shared/sellability.planStockDeduction): `stock ?? 0` REFUSED every unmetered item
+         (a service, a legacy product) — now it is approved with no stock write;
+       - a metered item still refuses more than there is (nothing is paid yet), and stock + inventoryVersion +
+         updatedAt move together. */
+    const _SELL = require('./shared/sellability');
+    const _lines = [];
     for (const item of order.items) {
-      const prodRef  = db.collection('products').doc(item.productId);
-      const prodSnap = await tx.get(prodRef);
-      if (!prodSnap.exists) {
-        throw new HttpsError('not-found', `Product '${item.productId}' no longer exists.`);
+      const prodRef = db.collection('products').doc(item.productId);
+      _lines.push({ item, prodRef, prodSnap: await tx.get(prodRef) });
+    }
+    for (const l of _lines) {
+      if (!l.prodSnap.exists) {
+        throw new HttpsError('not-found', `Product '${l.item.productId}' no longer exists.`);
       }
-      const currentStock = prodSnap.data().stock ?? 0;
-      if (currentStock < item.quantity) {
+      l.plan = _SELL.planStockDeduction(l.prodSnap.data(), l.item.quantity, { onShort: 'refuse' });
+      if (l.plan.refused) {
         throw new HttpsError(
           'resource-exhausted',
-          `Insufficient stock for '${item.productId}' (available: ${currentStock}, requested: ${item.quantity}).`
+          `Insufficient stock for '${l.item.productId}' (available: ${l.plan.available}, requested: ${l.item.quantity}).`
         );
       }
-      tx.update(prodRef, {
-        stock: admin.firestore.FieldValue.increment(-item.quantity),
+    }
+    for (const l of _lines) {
+      if (!(l.plan.deduct > 0)) continue;   /* unmetered: no stock to move */
+      tx.update(l.prodRef, {
+        stock:            admin.firestore.FieldValue.increment(-l.plan.deduct),
+        inventoryVersion: admin.firestore.FieldValue.increment(1),
+        updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
       });
     }
 

@@ -1,3 +1,64 @@
+## [2026-09-30] - Inventory convergence, Phase B: every stock writer asks ONE authority — no service is refused, no stock goes negative
+
+**Local only. NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `0e23ca3`.** See
+`docs/INVENTORY_INVARIANT.md`.
+
+**The authority.** Two pure functions in `functions/shared/sellability.js` (and its byte-identical browser twin
+`sokoni-sellability.js`):
+
+- `planStockDeduction(product, qty, { onShort: 'refuse' | 'flag' })`
+- `planStockReturn(product, qty, deducted)`
+
+The rules:
+
+- A numeric `stock` is metered and never goes below zero.
+- No numeric `stock` means unmetered: stock is never created, decremented or returned.
+- A deleted product is never written to.
+- `refuse` applies before payment. `flag` applies once the money is taken: take what is there and record the
+  shortfall in `oversoldAlerts`.
+
+**Every writer now consumes it** (9, including one the first census missed).
+
+| Writer | Change |
+|---|---|
+| The till (`posCompleteCheckout`, `posProcessRefund`) | Phase A logic now expressed through the helper |
+| `index.js` `verifyIntasendPayment`, `_finalizeMarketplacePayment`, `darajaSTKCallback` (flag) | Unmetered → no stock write, where it used to CREATE `stock: -qty` and take the product off sale. A deleted product no longer throws inside the finaliser, which used to leave a PAID payment with no order |
+| `b2b-wholesale` `approveWholesaleOrder` (refuse) | All reads first: a multi-item approval threw. Unmetered is no longer refused. `inventoryVersion` + `updatedAt` added |
+| `pos-retail-engine` `recordPOSSale` (refuse) | Unmetered → counters only. It now bumps `inventoryVersion` (resolves finding D-b) |
+| `pos-retail` `posSyncToMarketplace` (flag) | One transaction per item. It was a blind batch whose comment trusted a security rule the Admin SDK bypasses, so counted stock could go negative. A negative quantity is refused; it used to RAISE stock |
+| `wap` inventory reserve/release | Reads first: a multi-item reserve threw. Unmetered is no longer refused. The reservation records what was taken, and release returns exactly that |
+| `pos-marketplace-sync` `createClickAndCollect` | **The 9th writer.** It wrote an absolute `Math.max(0, cur − qty)` and refused every unmetered item. Lines now record `stockDeducted` |
+| `pos-marketplace-sync` cancel | The order and products are read inside the transaction; two concurrent cancels could return stock twice. Metered → exact quantity back; unmetered → nothing; a deleted product no longer fails the cancel. `stockReturn` is recorded on the order |
+
+**Tests**
+
+- `scripts/test-inventory-unmetered-online.js` **7/0** (IB1–IB7). The parent `0e23ca3` fails **0/7**, showing each
+  writer's defect.
+- Deliberate breakages **13/13**; the Phase A till breakages, re-anchored, **7/7**.
+- `test-merchant-ecosystem-convergence.js`:
+  - static checks now accept the helper form;
+  - finding D-b is flipped to RESOLVED and guards the fix;
+  - result is 144/1, identical to the parent.
+
+**Database.**
+
+- New fields: C&C lines `stockDeducted`; C&C cancel `stockReturn`; `reservations.{order}` (the taken quantity, 0 for
+  unmetered); `oversoldAlerts.reason` `product_missing` / `pos_device_sync`.
+- **No migration.**
+
+**Behaviour changes**
+
+- B2B approval, WAP reservation and click & collect now **accept** unmetered items; before, they refused them.
+- Device sync refuses a non-positive quantity.
+
+**Security**
+
+- Found, NOT fixed here: `posSyncToMarketplace` has **no shop-ownership check**. Any signed-in account can move any
+  product's stock. It needs its own repair.
+- Otherwise unchanged: the server stays authoritative.
+
+**API.** No change.
+
 ## [2026-09-30] - Inventory convergence, Phase A: the till keeps ONE meaning of stock, so a service with no stock field sells forever
 
 **Local only. NOT deployed, NOT pushed. Branch `slice/c4-convergence`.** See `docs/INVENTORY_INVARIANT.md`.

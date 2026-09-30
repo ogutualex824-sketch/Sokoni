@@ -303,6 +303,44 @@
     return { ok: true, reason: null };
   }
 
+  /* ── ONE stock-movement authority (inventory convergence B, 2026-09-30) ─────────
+     Every writer of products.stock asks HERE what to do, then builds its own write. This module stays pure — no
+     Firestore — because it also runs in the browser. Only a METERED product (numeric `stock`, see stockOf) ever has
+     its stock moved; an unmetered one (a service, a legacy product) never has stock created, decremented or returned.
+
+     planStockDeduction(product, qty, { onShort: 'refuse' | 'flag' })
+       { exists:false, deduct:0 }                      the product document is gone — write nothing to it
+       { metered:false, deduct:0 }                     unmetered, or trackInventory:false — no stock write at all
+       { metered:true, deduct:qty, next }              enough stock
+       { metered:true, refused:true, available }       short, BEFORE payment ('refuse' — the default)
+       { metered:true, deduct:have, shortfall, next }  short, money ALREADY taken ('flag'): take what is there, never
+                                                       below zero, and the writer records the shortfall (oversoldAlerts)
+     planStockReturn(product, qty, deducted)
+       restore = min(qty, deducted ?? qty) — only while the product exists AND is metered now; otherwise 0, so a
+       return can never create a stock field on a service. */
+  function planStockDeduction(product, qty, opts) {
+    var q = Number(qty);
+    if (!product) return { exists: false, metered: false, deduct: 0 };
+    var st = stockOf(product);
+    if (!st.metered || product.trackInventory === false) return { exists: true, metered: false, deduct: 0 };
+    if (!(q > 0)) return { exists: true, metered: true, deduct: 0, next: st.stock };
+    var have = Math.max(0, st.stock);   /* a legacy negative figure is never driven further down */
+    if (have >= q) return { exists: true, metered: true, deduct: q, next: st.stock - q };
+    if (opts && opts.onShort === 'flag') {
+      return { exists: true, metered: true, deduct: have, shortfall: q - have, next: st.stock - have };
+    }
+    return { exists: true, metered: true, refused: true, deduct: 0, available: have };
+  }
+
+  function planStockReturn(product, qty, deducted) {
+    var q = Number(qty);
+    if (!product) return { exists: false, metered: false, restore: 0 };
+    var metered = stockOf(product).metered && product.trackInventory !== false;
+    if (!metered || !(q > 0)) return { exists: true, metered: metered, restore: 0 };
+    var d = (typeof deducted === 'number' && isFinite(deducted)) ? Math.max(0, deducted) : q;
+    return { exists: true, metered: true, restore: Math.min(q, d) };
+  }
+
   var API = {
     VERSION:            VERSION,
     STATES:             STATES,
@@ -316,6 +354,8 @@
     TILL_BLOCKED_STATUSES: TILL_BLOCKED_STATUSES,
     tillBlockReason:    tillBlockReason,
     stockOf:           stockOf,
+    planStockDeduction: planStockDeduction,
+    planStockReturn:   planStockReturn,
     lowStockThresholdOf: lowStockThresholdOf,
     availabilityOf:     availabilityOf,
     maxOrderableQty:    maxOrderableQty,

@@ -458,8 +458,8 @@ category matrix. Nothing deployed or pushed.
 | 1 | Secure Release integrated into the convergence line — one withdrawal flow, in the profile wallet | ✅ committed `a496c8d` (local) |
 | 2 | Quick Charge is a line on the one canonical till sale — customer, points, payment proof, receipt | ✅ committed (local) — [[QUICK_CHARGE_CENSUS]] |
 | 2b | Inventory convergence Phase A (till): one meaning of stock, from `sellability.stockOf` | ✅ committed (local) — [[INVENTORY_INVARIANT]] |
-| 2c | Inventory convergence Phase B: one shared deduction helper for the 8 online writers | ⏭ next |
-| 3 | Payment-label convergence: every tender label maps to server evidence | after 2c |
+| 2c | Inventory convergence Phase B: one shared deduction helper for every stock writer (9) | ✅ committed (local) — [[INVENTORY_INVARIANT]] |
+| 3 | Payment-label convergence: every tender label maps to server evidence | ⏭ next — waits on the owner's read-only commerce census (INTASEND_CONFIRMED on hold) |
 
 **Supported by Step 2 (the cyber-shop case, `test-quick-charge-sale.js` QS8):** one basket mixes a catalogue product
 (envelopes, stock taken once), a catalogue service marked `trackInventory:false` (printing), and a free-typed
@@ -473,7 +473,8 @@ quick-charge line (scanning), paid by ONE M-PESA payment → one sale, one recei
   stock"). This disagrees with the canonical rule in `functions/shared/sellability.js` (no numeric `stock` =
   unmetered) and with the never-negative stock invariant. It hits every catalogue service or legacy product without a
   stock field, which is exactly the cyber shop's printing. Its own slice, before Step 3.
-  **→ Phase A (till) fixed 2026-09-30, local; Phase B (online writers, one shared helper) next.** See [[INVENTORY_INVARIANT]].
+  **→ Fixed 2026-09-30, local: Phase A (till) and Phase B (every writer, one shared helper).** See [[INVENTORY_INVARIANT]].
+- **`posSyncToMarketplace` has no shop-ownership check** (found by Phase B): any signed-in account can move any product's stock. Its own repair.
 - Catalogue sale lines carry no `lineTotal`; quick-charge lines do (sale-record shape inconsistency).
 
 - **Offline POS blocker:** `pos-checkout.html`'s offline save calls `PosSales.park`, which does not exist

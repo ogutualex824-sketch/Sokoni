@@ -3260,17 +3260,19 @@ exports.verifyIntasendPayment = onRequest(
                 reason: 'package_component_foreign', viaPackage: item.viaPackage, createdAt: admin.firestore.FieldValue.serverTimestamp() });
               return;
             }
-            const cur = pdata.stock;
             const priorVer = Number(pdata.inventoryVersion) || 0;
             /* Payment is already confirmed, so a last-item race is flagged, not
                rejected — but stock must never go negative. Deduct at most what
-               remains; the oversoldAlerts record carries the true shortfall. */
-            let dec = qty;
-            if (typeof cur === 'number' && cur < qty) {
-              dec = Math.max(0, cur);
+               remains; the oversoldAlerts record carries the true shortfall.
+               Inventory convergence B (2026-09-30): the ONE stock decision — an UNMETERED item (no numeric `stock`)
+               is not written at all (increment(-qty) used to CREATE stock:-qty and take it off sale). */
+            const _plan = require('./shared/sellability').planStockDeduction(pdata, qty, { onShort: 'flag' });
+            if (!_plan.metered) return;
+            const dec = _plan.deduct;
+            if (_plan.shortfall) {
               t.set(db.collection('oversoldAlerts').doc(), {
                 orderId, productId: item.productId,
-                requested: qty, available: cur,
+                requested: qty, available: pdata.stock,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
               });
             }
@@ -4033,37 +4035,46 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
           });
           continue;
         }
-        const cur = snap.exists ? pdata.stock : null;
         const priorVer = Number(pdata.inventoryVersion) || 0;
-        let dec = qty;
-        if (typeof cur === "number" && cur < qty) {
-          dec = Math.max(0, cur);
+        /* Inventory convergence B (2026-09-30): the ONE stock decision (shared/sellability.planStockDeduction). The
+           money is already taken, so a short METERED item is FLAGGED and floored at zero, never refused. An UNMETERED
+           item (no numeric `stock`) has no stock to move — increment(-qty) used to CREATE stock:-qty and take it off
+           sale. A product whose document is gone is not written (txn.update on a missing doc threw and failed the whole
+           order finalisation, leaving a PAID payment with no order) — the gap is flagged instead. */
+        const _plan = require("./shared/sellability").planStockDeduction(snap.exists ? pdata : null, qty, { onShort: "flag" });
+        if (!_plan.exists || _plan.shortfall) {
           txn.set(db.collection("oversoldAlerts").doc(), {
             orderId:   orderId || checkoutId || null,
-            productId: pid, requested: qty, available: cur,
+            productId: pid, requested: qty, available: _plan.exists ? (typeof pdata.stock === "number" ? pdata.stock : null) : null,
+            ...(_plan.exists ? {} : { reason: "product_missing" }),
             path:      pathLabel || "marketplace", createdAt: ts,
           });
         }
-        /* Stock + sold + version in ONE atomic write. `sold` was never persisted on
-           the marketplace path (client-only, in a JS array), so best-selling sorts
-           and revenue analytics undercounted every sale. Inside the inventoryApplied
-           guard, so a webhook retry cannot double-count. */
-        const _newStock = (typeof cur === "number") ? Math.max(0, cur - dec) : null;
-        const _stockUpd = {
-          stock:            admin.firestore.FieldValue.increment(-dec),
-          sold:             admin.firestore.FieldValue.increment(dec),
-          updatedAt:        ts,
-          inventoryVersion: admin.firestore.FieldValue.increment(1),
-          /* Order/source attribution for the canonical inventoryMovements audit trail —
-             the `indexProductUpdate` trigger records the movement from ONE place and reads
-             these (only when this write changed them, so a later POS sale can't inherit them). */
-          lastSaleOrderId:  orderId || null,
-          lastStockSource:  pathLabel || "marketplace",
-        };
-        /* Sold out → flag unavailable so it stops being buyable (product page /
-           checkout guard on outOfStock). Restock clears it via the seller editor. */
-        if (_newStock === 0) _stockUpd.outOfStock = true;
-        txn.update(ref, _stockUpd);
+        /* units SOLD on this line (the receipt and `sold`): what was taken for a metered item, the full qty otherwise */
+        const dec = _plan.metered ? _plan.deduct : qty;
+        if (_plan.exists) {
+          /* Stock + sold + version in ONE atomic write. `sold` was never persisted on
+             the marketplace path (client-only, in a JS array), so best-selling sorts
+             and revenue analytics undercounted every sale. Inside the inventoryApplied
+             guard, so a webhook retry cannot double-count. */
+          const _stockUpd = {
+            sold:             admin.firestore.FieldValue.increment(dec),
+            updatedAt:        ts,
+          };
+          if (_plan.metered) {
+            _stockUpd.stock            = admin.firestore.FieldValue.increment(-_plan.deduct);
+            _stockUpd.inventoryVersion = admin.firestore.FieldValue.increment(1);
+            /* Order/source attribution for the canonical inventoryMovements audit trail —
+               the `indexProductUpdate` trigger records the movement from ONE place and reads
+               these (only when this write changed them, so a later POS sale can't inherit them). */
+            _stockUpd.lastSaleOrderId  = orderId || null;
+            _stockUpd.lastStockSource  = pathLabel || "marketplace";
+            /* Sold out → flag unavailable so it stops being buyable (product page /
+               checkout guard on outOfStock). Restock clears it via the seller editor. */
+            if (_plan.next <= 0) _stockUpd.outOfStock = true;
+          }
+          txn.update(ref, _stockUpd);
+        }
         /* Inventory movement is now recorded centrally by the indexProductUpdate trigger
            (keyed `${pid}_v${version}`, exactly-once) rather than written here — one audit
            path for ALL stock-mutating flows, not just this one. */
@@ -4391,18 +4402,21 @@ exports.darajaSTKCallback = onRequest(
                  recorded for reconciliation (parity with the IntaSend path). */
               for (const { ref, pid, qty, snap } of stockReads) {
                 const pdata = snap.exists ? snap.data() : {};
-                const cur = snap.exists ? pdata.stock : null;
                 const priorVer = Number(pdata.inventoryVersion) || 0;
-                let dec = qty;
-                if (typeof cur === "number" && cur < qty) {
-                  dec = Math.max(0, cur);
+                /* Inventory convergence B (2026-09-30): the ONE stock decision. Unmetered (no numeric `stock`) or a
+                   deleted product → no write (the old code created stock:-qty, or threw on the missing doc). */
+                const _plan = require("./shared/sellability").planStockDeduction(snap.exists ? pdata : null, qty, { onShort: "flag" });
+                if (!_plan.exists || _plan.shortfall) {
                   txn.set(db.collection("oversoldAlerts").doc(), {
                     orderId:   payData.orderId || checkoutId || null,
-                    productId: pid, requested: qty, available: cur,
+                    productId: pid, requested: qty, available: _plan.exists ? pdata.stock : null,
+                    ...(_plan.exists ? {} : { reason: "product_missing" }),
                     path:      "daraja",
                     createdAt: ts,
                   });
                 }
+                if (!_plan.metered) continue;
+                const dec = _plan.deduct;
                 /* One atomic write: stock + updatedAt + inventoryVersion, so
                    listeners see a single monotonic change signal. */
                 txn.update(ref, {

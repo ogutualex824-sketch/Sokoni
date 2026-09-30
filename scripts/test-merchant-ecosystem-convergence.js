@@ -111,9 +111,9 @@ head('3. SALES -> INVENTORY (canonical products/{id})');
    `inventoryVersion` only for a METERED item (`_upd.stock = FieldValue.increment(...)`), so these accept the property
    assignment as well as the object key. Behaviour — metered deducted, unmetered untouched, refund returns what was
    taken — is proven by execution in scripts/test-inventory-unmetered-till.js. */
-ck('TILL deducts canonical products.stock', /stock\s*[:=]\s*FieldValue\.increment\(-\(\(?item\.qty/.test(ZF));
+ck('TILL deducts canonical products.stock', /stock\s*[:=]\s*FieldValue\.increment\(-(\(\(?item\.qty|_plan\.deduct)/.test(ZF));
 ck('TILL bumps inventoryVersion',           /inventoryVersion\s*[:=]\s*FieldValue\.increment\(1\)/.test(ZF));
-ck('DISPATCH deducts canonical products.stock', /stock:\s*admin\.firestore\.FieldValue\.increment\(-stockItems/.test(RE));
+ck('DISPATCH deducts canonical products.stock', /stock\s*[:=]\s*admin\.firestore\.FieldValue\.increment\(-stockItems/.test(RE));
 ck('TILL refund restores stock',            /stock\s*[:=]\s*FieldValue\.increment\((pItem\.qty|_ret)\)/.test(ZF));
 ck('BOTH lineages share ONE stock field — inventory IS converged',
    /collection\('products'\)/.test(ZF) && /collection\('products'\)/.test(RE));
@@ -123,9 +123,11 @@ ck('BOTH lineages share ONE stock field — inventory IS converged',
 ck('FINDING D-a — TILL writes `sold`, DISPATCH writes `soldCount` (two spellings)',
    /\bsold:\s*FieldValue\.increment/.test(ZF) && /soldCount:\s*admin\.firestore\.FieldValue\.increment/.test(RE),
    'one counter per lineage; a reader of either sees half the sales');
-ck('FINDING D-b — DISPATCH moves stock WITHOUT bumping inventoryVersion',
-   !/inventoryVersion/.test(RE),
-   'client caches are not invalidated by a DISPATCH sale');
+/* RESOLVED 2026-09-30 (inventory convergence B): recordPOSSale now bumps inventoryVersion with every stock move, and
+   an unmetered item moves no stock at all. The finding is kept as the regression guard for its fix. */
+ck('FINDING D-b RESOLVED — DISPATCH bumps inventoryVersion whenever it moves stock',
+   /_upd\.stock\s*=[\s\S]{0,160}_upd\.inventoryVersion\s*=\s*admin\.firestore\.FieldValue\.increment\(1\)/.test(RE),
+   'client caches are invalidated by a DISPATCH sale');
 
 /* ══ 4. The five surfaces that read the wrong lineage (blocker B-2) ════════════ */
 head('4. Which lineage each routed intelligence surface reads');

@@ -785,25 +785,43 @@ async function _dispatchHandler(handler, input, instance) {
 /* ── Service implementations ─────────────────────────────────── */
 
 async function _svcInventoryReserve({ orderId, items }, inst) {
+  /* Inventory convergence B (2026-09-30):
+     - ALL reads first, then all writes: the old loop did txn.get after txn.update, which Firestore rejects, so every
+       multi-item reservation threw. Now one short item refuses the WHOLE reservation and nothing is written.
+     - the ONE stock decision (shared/sellability.planStockDeduction): `stock ?? 0` REFUSED every unmetered item; now
+       it is reserved with nothing taken (reservations.{orderId} = 0), so release returns nothing and never creates stock.
+     - reservations.{orderId} records what was actually TAKEN; release returns exactly that. */
+  const _SELL = require("./shared/sellability");
   const results = [];
   await db.runTransaction(async (txn) => {
+    const reads = [];
     for (const item of (items ?? [])) {
       const ref  = db.collection("products").doc(item.productId);
-      const snap = await txn.get(ref);
+      reads.push({ item, ref, snap: await txn.get(ref) });
+    }
+    const writes = [];
+    for (const { item, ref, snap } of reads) {
       if (!snap.exists) throw new Error(`Product ${item.productId} not found`);
 
-      /* Idempotency: if already reserved for this order, skip */
-      if (snap.data().reservations?.[orderId]) {
+      /* Idempotency: if already reserved for this order, skip (0 is a real reservation of an unmetered item) */
+      const prior = snap.data().reservations?.[orderId];
+      if (prior !== undefined && prior !== null) {
         results.push({ productId: item.productId, reserved: item.qty, idempotent: true });
         continue;
       }
-      const stock = snap.data().stock ?? 0;
-      if (stock < item.qty) throw new Error(`Insufficient stock for ${item.productId} (need ${item.qty}, have ${stock})`);
-      txn.update(ref, {
-        stock: admin.firestore.FieldValue.increment(-item.qty),
-        [`reservations.${orderId}`]: item.qty,
-      });
-      results.push({ productId: item.productId, reserved: item.qty });
+      const plan = _SELL.planStockDeduction(snap.data(), item.qty, { onShort: "refuse" });
+      if (plan.refused) throw new Error(`Insufficient stock for ${item.productId} (need ${item.qty}, have ${plan.available})`);
+      writes.push({ ref, item, plan });
+    }
+    for (const { ref, item, plan } of writes) {
+      const upd = { [`reservations.${orderId}`]: plan.deduct };
+      if (plan.deduct > 0) {
+        upd.stock            = admin.firestore.FieldValue.increment(-plan.deduct);
+        upd.inventoryVersion = admin.firestore.FieldValue.increment(1);
+        upd.updatedAt        = admin.firestore.FieldValue.serverTimestamp();
+      }
+      txn.update(ref, upd);
+      results.push({ productId: item.productId, reserved: item.qty, stockTaken: plan.deduct });
     }
   });
   return { reserved: true, items: results, orderId };
@@ -817,11 +835,17 @@ async function _svcInventoryRelease({ orderId, items }, inst) {
       const snap = await txn.get(ref);
       if (!snap.exists) return;
       const reservedQty = snap.data().reservations?.[orderId];
-      if (!reservedQty) return;  /* Already released — idempotent */
-      txn.update(ref, {
-        stock: admin.firestore.FieldValue.increment(reservedQty),
-        [`reservations.${orderId}`]: admin.firestore.FieldValue.delete(),
-      });
+      if (reservedQty === undefined || reservedQty === null) return;  /* Already released — idempotent */
+      /* Inventory convergence B: return exactly what the reservation took, and only while the product is metered —
+         a reservation of an unmetered item (0) returns nothing and never creates a stock field. */
+      const restore = require("./shared/sellability").planStockReturn(snap.data(), Number(reservedQty) || 0, Number(reservedQty) || 0).restore;
+      const upd = { [`reservations.${orderId}`]: admin.firestore.FieldValue.delete() };
+      if (restore > 0) {
+        upd.stock            = admin.firestore.FieldValue.increment(restore);
+        upd.inventoryVersion = admin.firestore.FieldValue.increment(1);
+        upd.updatedAt        = admin.firestore.FieldValue.serverTimestamp();
+      }
+      txn.update(ref, upd);
     });
   }
   return { released: true };

@@ -62,9 +62,11 @@ exports.createClickAndCollect = onCall(CF_OPTIONS, async ({ auth, data }) => {
       throw new HttpsError('permission-denied', `Product ${productId} does not belong to this shop.`);
     if (pd.active === false || String(pd.status || '').toLowerCase() === 'inactive')
       throw new HttpsError('failed-precondition', `${pd.name} is not currently available.`);
-    const _stk = Number(pd.stock ?? pd.stockQty ?? pd.quantity ?? 0);
-    if (_stk < qty)
-      throw new HttpsError('failed-precondition', `Insufficient stock for ${pd.name}. Available: ${_stk}`);
+    /* Inventory convergence B (2026-09-30): the ONE stock decision. `stock ?? stockQty ?? quantity ?? 0` REFUSED
+       every unmetered item (a service, a legacy product) and honoured legacy fields online checkout never reads. */
+    const _pre = require('./shared/sellability').planStockDeduction(pd, qty, { onShort: 'refuse' });
+    if (_pre.refused)
+      throw new HttpsError('failed-precondition', `Insufficient stock for ${pd.name}. Available: ${_pre.available}`);
     lineItems.push({
       productId: String(productId),
       name: pd.name,
@@ -84,24 +86,27 @@ exports.createClickAndCollect = onCall(CF_OPTIONS, async ({ auth, data }) => {
     // the indexProductUpdate trigger records the movement to inventoryMovements.
     const refs  = lineItems.map((li) => db.collection('products').doc(li.productId));
     const snaps = await Promise.all(refs.map((r) => t.get(r)));
+    const _SELL = require('./shared/sellability');
+    const plans = [];
     for (let i = 0; i < lineItems.length; i++) {
       if (!snaps[i].exists) throw new HttpsError('not-found', `Product ${lineItems[i].productId} not found.`);
-      const d = snaps[i].data();
-      const cur = Number(d.stock ?? d.stockQty ?? d.quantity ?? 0);
-      if (cur < lineItems[i].qty)
-        throw new HttpsError('failed-precondition', `Insufficient stock for ${lineItems[i].name}. Available: ${cur}`);
+      const plan = _SELL.planStockDeduction(snaps[i].data(), lineItems[i].qty, { onShort: 'refuse' });
+      if (plan.refused)
+        throw new HttpsError('failed-precondition', `Insufficient stock for ${lineItems[i].name}. Available: ${plan.available}`);
+      plans.push(plan);
     }
     for (let i = 0; i < lineItems.length; i++) {
-      const d = snaps[i].data();
-      const cur = Number(d.stock ?? d.stockQty ?? d.quantity ?? 0);
-      t.update(refs[i], {
-        stock:            Math.max(0, cur - lineItems[i].qty),
-        sold:             FieldValue.increment(lineItems[i].qty),
-        inventoryVersion: FieldValue.increment(1),
-        updatedAt:        FieldValue.serverTimestamp(),
-        lastSaleOrderId:  orderId,
-        lastStockSource:  'click-and-collect',
-      });
+      const plan = plans[i];
+      /* recorded on the order line: the cancel returns exactly this, and nothing for an unmetered item */
+      lineItems[i].stockDeducted = plan.deduct;
+      const upd = { sold: FieldValue.increment(lineItems[i].qty), updatedAt: FieldValue.serverTimestamp() };
+      if (plan.deduct > 0) {
+        upd.stock            = FieldValue.increment(-plan.deduct);   /* pre-checked in this txn: never below zero */
+        upd.inventoryVersion = FieldValue.increment(1);
+        upd.lastSaleOrderId  = orderId;
+        upd.lastStockSource  = 'click-and-collect';
+      }
+      t.update(refs[i], upd);
     }
     t.set(db.doc(`sellers/${sellerId}/clickAndCollect/${orderId}`), {
       orderId,
@@ -201,19 +206,42 @@ exports.updateClickAndCollectStatus = onCall(CF_OPTIONS, async ({ auth, data }) 
   if (status === 'cancelled') update.cancelledAt = now;
 
   if (status === 'cancelled') {
+    /* Inventory convergence B (2026-09-30). The old cancel wrote increment(+qty) to every product WITHOUT reading it:
+       an unmetered product (a service) was given a stock field, a deleted product made the whole cancel throw, and the
+       order was checked OUTSIDE the transaction, so two concurrent cancels could both return the stock. Now: the order
+       and every product are read INSIDE the transaction first; the status is re-checked there; each return is the ONE
+       stock decision (shared/sellability.planStockReturn) — metered → the quantity back, unmetered → nothing, deleted →
+       nothing — and what was (not) returned is recorded on the order. */
+    const _SELL = require('./shared/sellability');
     await db.runTransaction(async (t) => {
-      // Restore stock to the SAME canonical products.stock the order deducted (was the empty
-      // sellers/{uid}/products subcollection). Bumps inventoryVersion + stamps source so the
-      // indexProductUpdate trigger records a 'restock' movement.
-      for (const item of order.items ?? []) {
-        t.update(db.collection('products').doc(String(item.productId)), {
-          stock:            FieldValue.increment(item.qty),
-          inventoryVersion: FieldValue.increment(1),
-          updatedAt:        FieldValue.serverTimestamp(),
-          lastStockSource:  'click-and-collect-cancel',
-        });
+      const fresh = await t.get(ref);
+      const cur = fresh.exists ? fresh.data() : null;
+      if (!cur || !(TRANSITIONS[cur.status] ?? []).includes(status)) {
+        throw new HttpsError('failed-precondition', `Cannot transition from '${cur ? cur.status : 'missing'}' to '${status}'.`);
       }
-      t.update(ref, update);
+      const lines = [];
+      for (const item of cur.items ?? []) {
+        const pRef = db.collection('products').doc(String(item.productId));
+        lines.push({ item, pRef, pSnap: await t.get(pRef) });
+      }
+      const stockReturn = [];
+      for (const { item, pRef, pSnap } of lines) {
+        const plan = _SELL.planStockReturn(pSnap.exists ? pSnap.data() : null, Number(item.qty) || 0, item.stockDeducted);
+        stockReturn.push({ productId: String(item.productId), returned: plan.restore,
+          reason: !plan.exists ? 'product_missing' : (plan.metered ? null : 'unmetered') });
+        if (plan.restore > 0) {
+          // Restore stock to the SAME canonical products.stock the order deducted (was the empty
+          // sellers/{uid}/products subcollection). Bumps inventoryVersion + stamps source so the
+          // indexProductUpdate trigger records a 'restock' movement.
+          t.update(pRef, {
+            stock:            FieldValue.increment(plan.restore),
+            inventoryVersion: FieldValue.increment(1),
+            updatedAt:        FieldValue.serverTimestamp(),
+            lastStockSource:  'click-and-collect-cancel',
+          });
+        }
+      }
+      t.update(ref, Object.assign({}, update, { stockReturn }));
     });
   } else {
     await ref.update(update);

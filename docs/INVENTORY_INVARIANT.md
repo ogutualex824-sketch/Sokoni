@@ -1,6 +1,6 @@
 # Inventory invariant — one meaning of stock
 
-**Status:** Phase A (till) built locally, not deployed. Phase B (the online writers) is next.
+**Status:** Phase A (till) and Phase B (every other writer) built locally, not deployed.
 **Owner decision:** 2026-09-30. **Authority:** `functions/shared/sellability.js` → `stockOf(p)`.
 
 Related: [[SmartPOS]] · [[PACKAGES_AND_BUNDLES]] · [[QUICK_CHARGE_CENSUS]] · [[ECOSYSTEM_SYNC_CENSUS]] ·
@@ -34,14 +34,15 @@ next sale was refused for good. A refund doing `increment(+n)` made a service me
 | Till sale write | same (loose items, folded components, the component loop) | ✅ Phase A: an unmetered item keeps `sold`/`totalUnitsSold`/`totalRevenue`, with no `stock` or `inventoryVersion` write |
 | Till pre-sale check | same, `dryRun` → `stockDeltas` | ✅ Phase A: metered items only; never a fake `0 → 0` |
 | Till refund | `pos-zero-friction.js` `posProcessRefund` | ✅ Phase A: returns only while metered, and at most the line's `stockDeducted`. The refund record carries `stockReturned` per line. A sale from before `stockDeducted` existed is judged by today's metering. |
-| Online order finaliser | `index.js` ≈3280 | ⏭ Phase B |
-| Shared marketplace deduction | `index.js` ≈4053 | ⏭ Phase B |
-| Legacy Daraja path | `index.js` ≈4409 | ⏭ Phase B |
-| B2B wholesale | `b2b-wholesale.js` 454 | ⏭ Phase B |
-| Retail engine (second POS rail) | `pos-retail-engine.js` 394 | ⏭ Phase B |
-| Retail | `pos-retail.js` 78 | ⏭ Phase B |
-| WAP | `wap.js` 803 (+ reservation return 822) | ⏭ Phase B |
-| Marketplace sync return | `pos-marketplace-sync.js` 210 | ⏭ Phase B |
+| Card-session verify | `index.js` `verifyIntasendPayment` | ✅ Phase B: `planStockDeduction(…, flag)`. Unmetered → no write; short → floored at 0 + `oversoldAlerts` |
+| Marketplace finaliser | `index.js` `_finalizeMarketplacePayment` | ✅ Phase B: flag. Unmetered → `sold` only. A **deleted** product is not written; it used to throw and leave a PAID payment with no order, and is now flagged `product_missing` |
+| Legacy Daraja callback | `index.js` `darajaSTKCallback` | ✅ Phase B: flag, same as above (Daraja itself is retired) |
+| B2B wholesale approval | `b2b-wholesale.js` `approveWholesaleOrder` | ✅ Phase B: refuse. All reads come first (a multi-item approval **threw**); unmetered is no longer refused; stock + `inventoryVersion` + `updatedAt` move together |
+| Retail engine (second POS rail) | `pos-retail-engine.js` `recordPOSSale` | ✅ Phase B: refuse. Unmetered → counters only; now bumps `inventoryVersion` (resolves finding D-b) |
+| POS device sync | `pos-retail.js` `posSyncToMarketplace` | ✅ Phase B: one transaction per item (it was a blind batch that trusted a rule the Admin SDK bypasses); flag; a negative quantity is refused (it used to **raise** stock) |
+| WAP reserve / release | `wap.js` `_svcInventoryReserve` / `_svcInventoryRelease` | ✅ Phase B: reads first (a multi-item reserve **threw**); unmetered is no longer refused; `reservations.{order}` records what was taken; release returns exactly that |
+| Click & collect create | `pos-marketplace-sync.js` `createClickAndCollect` | ✅ Phase B, **the 9th writer**. It was missed by the first census because it wrote an absolute `Math.max(0, cur − qty)`, not an increment. `stock ?? stockQty ?? quantity ?? 0` refused every unmetered item. Lines now record `stockDeducted` |
+| Click & collect cancel | same, `updateClickAndCollectStatus` | ✅ Phase B: the order and products are read **inside** the transaction (two concurrent cancels could both return stock). `planStockReturn` is used. A deleted product no longer fails the cancel. The order records `stockReturn` |
 
 **Phase B design (owner-approved 2026-09-30).** One shared deduction helper in `shared/sellability.js`, consumed by
 every writer, instead of eight separate readings of stock:
@@ -51,6 +52,14 @@ every writer, instead of eight separate readings of stock:
 - metered and insufficient → refuse, or flag in `oversoldAlerts` where payment is already taken (house rule:
   never reject a post-payment race);
 - never negative.
+
+## Findings recorded by Phase B, NOT fixed here
+
+- **`posSyncToMarketplace` has no shop-ownership check.** Any signed-in account can move any product's stock and
+  `soldCount`. It is exported from `functions/index.js`. This is an authorization defect, not a stock-semantics one, so
+  it is its own repair.
+- **`warehouse-scanner.html` writes `products.stockQty` from the browser.** This carries over from Phase A.
+- **Production negative stock** left by the old code is not repaired. A read-only census is the owner's call.
 
 ## Sale-line record
 
@@ -77,6 +86,29 @@ A till sale line now records **`stockDeducted`**: the units that line took from 
   `stockDeducted`, invented dry-run delta.
 - **Parent (`ca02732`):** 7 of 8 fail. The one that passes on the parent is IA3, metered behaviour, which is unchanged
   by design.
+
+## Evidence (Phase B)
+
+**`scripts/test-inventory-unmetered-online.js` — 7/0**
+
+| Check | What it proves |
+|---|---|
+| IB1 | The helper table, and the browser twin is byte-identical |
+| IB2 | Finaliser: unmetered, repeat, metered, short (flagged), deleted product (order still finalises) |
+| IB3 | B2B: multi-item approved; a short line refuses the whole approval |
+| IB4 | Device sync: unmetered, short → 0 + alert, a negative quantity refused |
+| IB5 | WAP: multi-item reserve, atomic refusal, exact release |
+| IB6 | Click & collect: create/cancel with a deleted product; a second cancel is refused |
+| IB7 | Structural: the inline `index.js` handlers and `recordPOSSale` consume the helper, and no raw stock write remains |
+
+- **Parent `0e23ca3`: 0/7.**
+  - IB2: a service goes to `stock: -3`.
+  - IB3, IB5, IB6: unmetered items are refused.
+  - IB4: counted stock goes to -1, and a negative quantity raises stock from 9 to 14.
+- **Deliberate breakages 13/13**, covering the helper, every writer, and twin drift. The Phase A till breakages
+  re-anchored onto the refactored till are 7/7.
+- `merchant-ecosystem-convergence` is 144/1, identical to the parent. Finding D-b flipped to RESOLVED and now guards
+  the fix.
 
 ## Behaviour changes to know before deploying
 

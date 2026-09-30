@@ -381,20 +381,28 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
             `"${stockItems[i].name}" belongs to another shop and cannot be sold here.`);
         }
 
-        const currentStock = snaps[i].data().stock;
-        if (typeof currentStock === 'number' && currentStock < stockItems[i].qty) {
+        /* Inventory convergence B (2026-09-30): the ONE stock decision (shared/sellability.planStockDeduction) */
+        const _plan = require('./shared/sellability').planStockDeduction(snaps[i].data(), stockItems[i].qty, { onShort: 'refuse' });
+        if (_plan.refused) {
           throw new HttpsError('failed-precondition',
-            `Insufficient stock for "${stockItems[i].name}": ${currentStock} unit(s) available, ${stockItems[i].qty} requested`);
+            `Insufficient stock for "${stockItems[i].name}": ${_plan.available} unit(s) available, ${stockItems[i].qty} requested`);
         }
+        stockItems[i]._deduct = _plan.deduct;
       }
 
       for (let i = 0; i < snaps.length; i++) {
         if (!snaps[i].exists) continue;
-        t.update(refs[i], {
-          stock:      admin.firestore.FieldValue.increment(-stockItems[i].qty),
+        const _upd = {
           soldCount:  admin.firestore.FieldValue.increment(stockItems[i].qty),
           lastSoldAt: now(),
-        });
+        };
+        /* an UNMETERED item (no numeric `stock`): counters only — increment(-qty) used to CREATE stock:-qty */
+        if (stockItems[i]._deduct > 0) {
+          _upd.stock            = admin.firestore.FieldValue.increment(-stockItems[i]._deduct);
+          _upd.inventoryVersion = admin.firestore.FieldValue.increment(1);
+          _upd.updatedAt        = now();
+        }
+        t.update(refs[i], _upd);
       }
     });
   }
