@@ -1,3 +1,32 @@
+## [2026-09-30] - Payments: a till tender has ONE spelling — "Wallet" no longer completes a sale with no money
+
+**Local only. NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `e8cde7d`.** Owner-approved fix of this
+line's own label authority (`ef1e992`). INTASEND_CONFIRMED / Track A are not touched.
+
+**Defect, proven by execution.** `posCompleteCheckout` lower-cased the tender label for the allow-list and for the
+M-PESA/card confirmation, but matched it **exactly** for the wallet debit and the cash-change rule.
+
+- `"Wallet"` passed the allow-list, skipped confirmation, was never debited, and completed the sale: goods out, no
+  money.
+- `"WALLET"` against a funded wallet also completed without debiting it.
+
+**Fix.** `functions/pos-zero-friction.js` canonicalises every tender in place (`trim().toLowerCase()`) as soon as the
+payments are read, before any reader.
+
+**Tests**
+
+- `test-payment-labels.js` PL10 (suite **11/0**) covers "Wallet" refused on an empty wallet, "WALLET" debited
+  1,000 → 0 as the positive control, " CASH " giving change, and "MPESA" with no proof refused.
+- Parent `e8cde7d` fails PL10.
+- Breakages **2/2**.
+- Quick Charge 8/0 and the inventory till suite still pass.
+
+**Production — NOT fixed here.** A static read by another session, not executed, found that the SERVING
+`posCompleteCheckout` (`ee37437`) has no allow-list. Any invented label completes a sale with no money there. It is
+recorded in `docs/PAYMENT_LABEL_AUTHORITY.md` and in the commerce census (Track A).
+
+**API / database.** A tender's `method` is stored lower-case. No migration.
+
 ## [2026-09-30] - Security: only a shop's own people may move its stock through POS device sync
 
 **Local only. NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `2c2736d`.** See `docs/SECURITY.md`

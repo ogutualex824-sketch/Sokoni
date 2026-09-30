@@ -778,6 +778,11 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
     for (const p of _pay) {
       const a = Number(p && p.amount);
       if (!isFinite(a) || a <= 0) _e('Every payment needs a positive amount');
+      /* ONE spelling of every tender (2026-09-30). The allow-list and the M-PESA/card confirmation lower-cased the
+         label, but the wallet debit and the cash-change rule matched it EXACTLY — so "Wallet" passed the allow-list,
+         was never debited, and completed the sale with no money (proven). Canonicalised here, in place, before ANY
+         reader, so every check below and the sale record see the same label. */
+      p.method = String(p.method == null ? '' : p.method).trim().toLowerCase();
     }
     const tendered = _round2(_pay.reduce((s, p) => s + Number(p.amount || 0), 0));
     if (tendered + 1 < authoritativeTotal) {

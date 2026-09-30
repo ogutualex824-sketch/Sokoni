@@ -12,6 +12,7 @@
  *   PL7 ALL PAYMENTS = INTASEND: a completed Daraja record and the mpesa_daraja label settle NOTHING (owner 2026-09-29)
  *   PL8 a split proves every component
  *   PL9 end to end with the REAL Quick Charge pricer: its payment names the sale and settles only that sale
+ *   PL10 one spelling per tender: "Wallet"/"WALLET"/" CASH "/"MPESA" behave exactly like their lowercase forms (2026-09-30)
  */
 'use strict';
 process.env.GCLOUD_PROJECT = 'demo-payment-labels';
@@ -191,6 +192,27 @@ const card = (code, o) => db.doc('giftCards/' + code.match(/.{1,4}/g).join('-'))
   } catch (e) { p9.err = e.message; }
   ck('PL9 the REAL Quick Charge pricer binds its payment to the sale (metadata.saleId); that payment settles THAT sale and no other',
     p9.saleId === K('9') && p9.sale && p9.sale.saleId && /different sale/.test(p9.other || ''), { saleId: p9.saleId, sale: p9.sale && p9.sale.saleId, other: p9.other, err: p9.err });
+
+  /* PL10 — ONE spelling of every tender (2026-09-30). The allow-list and the M-PESA/card check lower-cased the label,
+     but the wallet debit matched 'wallet' EXACTLY — so "Wallet" completed a sale with no money (proven). */
+  const p10 = {};
+  try {
+    const st0 = await stock(), n0 = await sales();
+    p10.a = await sale4(K('10a'), [{ method: 'Wallet', amount: 1000 }], { customer: { id: 'wcEmpty' } }).then(() => 'COMPLETED', (e) => e.message);
+    p10.aStock = await stock(); p10.aSales = await sales();
+    await db.doc('posWallets/wcFull').set({ balance: 1000 });
+    p10.b = await sale4(K('10b'), [{ method: 'WALLET', amount: 1000 }], { customer: { id: 'wcFull' } }).then((r) => r && r.saleId, (e) => 'ERR ' + e.message);
+    p10.bal = ((await get('posWallets/wcFull')) || {}).balance;
+    p10.wtx = !!(await get('posWalletTransactions/' + K('10b') + '_wallet'));
+    p10.c = await sale4(K('10c'), [{ method: ' CASH ', amount: 1200 }]).then((r) => r && r.saleId, (e) => 'ERR ' + e.message);
+    p10.d = await sale4(K('10d'), [{ method: 'MPESA', amount: 1000 }]).then(() => 'COMPLETED', (e) => e.message);
+    p10.st0 = st0; p10.n0 = n0;
+  } catch (e) { p10.err = e.message; }
+  ck('PL10 a tender label is ONE spelling whatever its case: "Wallet" with an empty wallet is refused and nothing moves; "WALLET" with KES 1,000 IS debited (1,000 → 0, wallet transaction written — positive control); " CASH " still gives change; "MPESA" with no proof is refused',
+    /Insufficient wallet balance/.test(p10.a || '') && p10.aStock === p10.st0 && p10.aSales === p10.n0
+    && typeof p10.b === 'string' && !/^ERR/.test(p10.b) && p10.bal === 0 && p10.wtx
+    && typeof p10.c === 'string' && !/^ERR/.test(p10.c) && /no IntaSend payment reference/.test(p10.d || ''),
+    p10);
 
   say(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

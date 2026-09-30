@@ -73,6 +73,41 @@ Owner decision still open: whether existing `posGiftCards` / `loyaltyGiftCards` 
   path) and the Daraja `posSendMpesa`. Card uses the payment QR. A gift card goes to the server as code + PIN; the
   device-side IndexedDB check and decrement are retired.
 
+## One spelling per tender (fixed 2026-09-30)
+
+**Defect, proven by execution.** The allow-list and the M-PESA/card confirmation lower-cased the tender label, but the
+wallet debit (`payments.find(p => p.method === 'wallet')`) and the cash-change rule matched it **exactly**.
+
+- `"Wallet"` passed the allow-list, was never debited, and **completed the sale with no money**: goods out, no
+  `posWalletTransactions`.
+- `"WALLET"` against a funded wallet completed and left the balance untouched.
+
+**Fix.** `posCompleteCheckout` canonicalises every tender, in place, the moment the payments are read
+(`method = String(method).trim().toLowerCase()`), before any reader. The allow-list, points, gift cards, the IntaSend
+confirmation, the wallet debit, the cash-change rule and the sale record then all see one spelling. No reader keeps a
+private copy of the rule.
+
+**Evidence.** `test-payment-labels.js` PL10:
+
+- `"Wallet"` with an empty wallet is refused and nothing moves;
+- `"WALLET"` with KES 1,000 is debited to 0 and the wallet transaction is written (positive control);
+- `" CASH "` gives change;
+- `"MPESA"` with no proof is refused.
+
+The parent `e8cde7d` fails PL10: `"Wallet"` completes, and the funded wallet is not debited. Breakages 2/2 (no
+canonicalisation; case without trim).
+
+**Serving production is worse, measured statically by another session and NOT executed.** The live
+`posCompleteCheckout` (`ee37437`) has **no tender allow-list**, so `"Wallet"` or any invented label (`"free"`, `"bank"`)
+skips confirmation and debit and completes the sale. The POS line (`8183694` / `3357619`) adds the allow-list but keeps
+the exact-match wallet debit. This fix is local to `slice/c4-convergence`. The serving lineage needs the same
+one-spelling rule when the owner assigns it; it is Track A in `C:/temp/COMMERCE_CENSUS_2026-09-30.md`.
+
+> **PORT HAZARD.** The undeployed POS line (`8183694`, and sokoni-69's frozen `3357619`) carries the same residual
+> hole: the 6b allow-list lower-cases, while the wallet debit matches `'wallet'` exactly. **Whoever ports that line onto
+> the serving lineage must take this canonicalisation, or a merge that includes it.** Otherwise the bypass is
+> re-imported. PL10 is the regression test to carry with it.
+
 ## Evidence
 
 | | |
