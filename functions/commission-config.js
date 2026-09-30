@@ -661,11 +661,60 @@ function categoryForHub(hub) {
   return resolveRate(hub).category;
 }
 
+/* ── PROVIDER BOOKING LANE — plan-keyed, owner schedule 2026-09-28: 20 / 15 / 10 / 7 / 5 ──────
+   A service-provider booking (hubId 'provider', the `subscriptionRole: 'provider'` path in
+   finos-utils) is priced by the provider's PLAN. Before 2026-09-30 that ladder existed only in
+   prose (finos-utils, provider-ops: "Free Trial 20%, Starter 15%, Professional 10%, Business 7%,
+   Enterprise 5%") and in a subscription document's optional `commissionRate` field, while
+   subscription-core fell back to a role default of 20%. This table is now the ONLY source.
+
+   KEYED BY PLAN ID (sub-billing.js PLANS ids), never by display name — a label can be reworded,
+   an id cannot. Unknown, inactive or absent plans resolve to the HIGHEST rate (provider_free),
+   never the cheapest, exactly as the POS and marketplace lanes do.
+
+   NOT A FLOOR LANE: the provider path never had the KES 10 minimum (a KES 20 booking at 20%
+   charges KES 4), and introducing one here would be an unapproved repricing.
+
+   `provider_basic` and `provider_pro` are legacy ids with no row in the owner schedule and
+   ZERO production subscriptions. They resolve fail-closed to 20% and are flagged
+   (`legacyUnmapped`) so a sale on them is visible; an owner mapping is required before either
+   is sold again — see docs/COMMERCIAL_CONVERGENCE_2026-09-30.md. */
+const PROVIDER_PLAN_RATES = {
+  provider_free: { pct: 20, floorExempt: true },   /* Free Trial     */
+  starter:       { pct: 15, floorExempt: true },   /* Starter        */
+  pro:           { pct: 10, floorExempt: true },   /* Professional   */
+  business:      { pct: 7,  floorExempt: true },   /* Business       */
+  enterprise:    { pct: 5,  floorExempt: true },   /* Enterprise     */
+};
+const PROVIDER_DEFAULT_PLAN = 'provider_free';
+const PROVIDER_UNMAPPED_LEGACY_IDS = Object.freeze(['provider_basic', 'provider_pro']);
+
+function resolveProviderRate(planId) {
+  const raw = String(planId || '').trim().toLowerCase();
+  const matched = Object.prototype.hasOwnProperty.call(PROVIDER_PLAN_RATES, raw);
+  const plan = matched ? raw : PROVIDER_DEFAULT_PLAN;
+  const r = PROVIDER_PLAN_RATES[plan];
+  return {
+    pct: r.pct,
+    rateFraction: r.pct / 100,
+    floorExempt: r.floorExempt,
+    plan,
+    matched,
+    legacyUnmapped: PROVIDER_UNMAPPED_LEGACY_IDS.indexOf(raw) !== -1,
+    source: matched ? 'commission-config.PROVIDER_PLAN_RATES'
+                    : 'commission-config.PROVIDER_PLAN_RATES (unknown plan -> highest rate)',
+  };
+}
+
 module.exports = {
   resolveRate,
   listCategories,
   isFixedRateCategory,
   FIXED_RATE_CATEGORIES,
+  resolveProviderRate,
+  PROVIDER_PLAN_RATES: Object.freeze(PROVIDER_PLAN_RATES),
+  PROVIDER_DEFAULT_PLAN,
+  PROVIDER_UNMAPPED_LEGACY_IDS,
   categoryForHub,
   MIN_COMMISSION_KES,
   PLAN_ADJUSTMENTS_DOC,

@@ -1,3 +1,7 @@
+## [2026-09-30] — Snapshot + authority config re-levelled with the functions branch (provider lane, alias fix) — LOCAL, NOT DEPLOYED (`convergence/commercial-web-on-18e3711`)
+
+**Files:** `sokoni-commission-rates.js` (byte-identical to the functions branch: `providerPct()`, `marketplacePct` alias table derived from the authority — `seller_*` spellings previously returned `undefined`), `scripts/build-commission-snapshot.js`, `functions/commission-config.js`, `docs/COMMERCIAL_CONVERGENCE_2026-09-30.md` (§7 gap closure + deployment matrix). Publication still gated on the functions deploy.
+
 ## [2026-09-30] — Client rates come from the one commission authority; subscriptions page renders the subscription authority — LOCAL, NOT DEPLOYED (`convergence/commercial-web-on-18e3711`, descends from live `b108ae3`/v647)
 
 **Files:** `sokoni-commission-rates.js` (regenerated from the converged `functions/commission-config.js`; **byte-identical to the functions branch's**), `scripts/build-commission-snapshot.js` + `functions/commission-config.js` (brought level with `convergence/commercial-fn-on-ef1e992` so `--check` and `verify-commission-single-source` agree on this tree), `shared-header.js` (injects the snapshot on every header page, idempotent), `legal.html`, `legal-hub.html`, `seller.js`, `sokoni-trust.js`, `script.js`, `pos-setup.html`, `invoice.html`, `event-manager.html`, `subscriptions.html`.
