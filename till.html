@@ -106,6 +106,7 @@
 <script src="sokoni-receipt-id.js" defer></script>
 <script src="sokoni-receipt.js" defer></script>
 <script src="sokoni-merchant-data.js" defer></script>
+<script src="sokoni-barcode.js" defer></script>   <!-- camera / manual-entry barcode scanner (decodes only; the shop's own catalogue matches) -->
 <script src="sokoni-pos-stk.js" defer></script>   <!-- M-PESA on the IntaSend POS rail (posInitiateIntasendPayment) -->
 <script src="sokoni-merchant-sell.js" defer></script>
 <script src="sokoni-pos-context.js" defer></script>
@@ -460,6 +461,14 @@
            translates the engine's two calls onto it. Request and confirmation stay separate calls. */
         callStk: (window.sokoniCallable && window.SokoniPosStk ? window.SokoniPosStk.callStk(window.sokoniCallable) : null),
         callVerify: (window.sokoniCallable && window.SokoniPosStk ? window.SokoniPosStk.callVerify(window.sokoniCallable) : null),
+        /* The scan button (camera, or type the code). USB / Bluetooth scanners need nothing here: the sell
+           engine reads them as fast keystrokes ending in Enter. Either way the code is matched against THIS
+           shop's loaded catalogue (barcode or SKU, one exact match) — never another merchant's products. */
+        openScanner: function () {
+          var B = window.SokoniBarcode;
+          if (!B || typeof B.scanOnce !== 'function') { sub('Barcode scanning is not available on this device.'); return Promise.resolve(null); }
+          return B.scanOnce({ title: 'Scan an item' });
+        },
         onToast: function (t) { sub(String(t || '')); },
         onPrint: function () { return Promise.resolve(); }
       });

@@ -1414,7 +1414,8 @@
         if (!code) return;
         var hit = md.findByCode(S.products, code);
         if (hit) { addProduct(hit); return; }
-        /* No single unambiguous match — show the operator what the code found
+        /* (camera path; a keyboard-wedge scan goes through submitCode above)
+           No single unambiguous match — show the operator what the code found
            rather than silently adding the wrong item. */
         S.term = String(code); paint();
         toast('No product matches that code exactly.', 'error');
@@ -1554,6 +1555,57 @@
       }
     }
 
+    /* ── HID BARCODE SCANNERS (POS/Till convergence, owner 2026-09-30) ─────────────────────────
+       A USB or Bluetooth scanner is a KEYBOARD: it types the code quickly and ends with Enter. So a
+       merchant opens SOKONI in Chrome, plugs the scanner in, and scans — no driver, no app. Two ways in:
+         · the search field has focus → Enter looks the typed code up exactly;
+         · nothing text-like has focus → keystrokes arriving faster than a person types, ending in
+           Enter or Tab, are taken as one scan.
+       Either way the code is matched by md.findByCode against THIS shop's loaded catalogue (one
+       product lookup — barcode or SKU, a unique exact match only) and added with addProduct, which
+       raises the quantity of a line already in the basket. Enter is consumed so it can never press
+       a focused button or leave the page. Money and identity fields are never captured. */
+    var SCAN_GAP_MS = 45, SCAN_MIN_LEN = 4, SCAN_DUP_MS = 400;
+    var _wedge = { buf: '', last: 0 }, _lastScan = { code: '', at: 0 };
+    function normCode(v) { return String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f\s]+/g, '').slice(0, 64); }
+    function submitCode(raw, source) {
+      var code = normCode(raw);
+      if (!code) return false;
+      var now = Date.now();
+      if (code === _lastScan.code && now - _lastScan.at < SCAN_DUP_MS) return true;   /* scanner double-fire */
+      _lastScan = { code: code, at: now };
+      var hit = md.findByCode(S.products, code);
+      if (hit) { S.term = ''; addProduct(hit); return true; }
+      S.term = code; paint();
+      toast('No product in this shop matches ' + code + '. Add it to your products, or search by name.', 'error');
+      return false;
+    }
+    function isTextField(el) {
+      if (!el || !el.tagName) return false;
+      var t = el.tagName.toLowerCase();
+      return t === 'textarea' || el.isContentEditable || (t === 'input' && !/^(button|checkbox|radio|submit|range|color|file)$/i.test(el.type || ''));
+    }
+    function onKeydown(ev) {
+      if (ev.defaultPrevented || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      if (!host.isConnected || host.offsetParent === null) return;          /* the Till is not on screen */
+      var el = ev.target;
+      if (el && el.id === 'msl-q') {
+        if (ev.key === 'Enter') { ev.preventDefault(); var v = el.value; el.value = ''; if (!submitCode(v, 'field')) el.value = normCode(v); }
+        return;
+      }
+      if (isTextField(el)) return;                                          /* cash, phone, notes: never captured */
+      var now = Date.now();
+      if (ev.key === 'Enter' || ev.key === 'Tab') {
+        var b = _wedge.buf; _wedge.buf = '';
+        if (b.length >= SCAN_MIN_LEN && now - _wedge.last < 200) { ev.preventDefault(); submitCode(b, 'wedge'); }
+        return;
+      }
+      if (ev.key && ev.key.length === 1) {
+        if (now - _wedge.last > SCAN_GAP_MS) _wedge.buf = '';               /* a human-speed key starts over */
+        _wedge.buf += ev.key; _wedge.last = now;
+      }
+    }
+
     function onChange(ev) {
       var el = ev.target;
       if (el && el.getAttribute && el.getAttribute('data-act') === 'qty') paint();
@@ -1562,6 +1614,8 @@
     host.addEventListener('click', onClick);
     host.addEventListener('input', onInput);
     host.addEventListener('change', onChange);
+    var _doc = host.ownerDocument || (typeof document !== 'undefined' ? document : null);
+    if (_doc) _doc.addEventListener('keydown', onKeydown, true);
 
     load();
 
@@ -1572,6 +1626,7 @@
         host.removeEventListener('click', onClick);
         host.removeEventListener('input', onInput);
         host.removeEventListener('change', onChange);
+        if (_doc) _doc.removeEventListener('keydown', onKeydown, true);
         /* Release the live catalogue listener too. An onSnapshot that outlives its
            surface holds a socket open and bills reads for a panel nobody is
            looking at — the same leak the STK poll had. */
