@@ -71,6 +71,30 @@ Deliberate breakages **8/8**.
 - discovery for garages, professionals, facilities and riders.
 
 The home **product feed** fix is sokoni-27's (`hosting/uploadedat-on-2bcdae2`).
+## 2026-09-30 — MV2-2a (Merchant Operations Convergence): Supply workspace ported to the live line — certified, NOT deployed
+
+Route `supply` (native, more tier, new **Commerce** group) + `sokoni-merchant-supply.js`, ported from `86d6ca7` onto
+`hosting/merchant-v2-premium-on-6f566a6`. Owner ask: suppliers in the Supply page with chat, invoice and ordering. Rule kept:
+EXPOSE the existing procurement engine; no parallel supplier, order, invoice or chat authority.
+- **Backing measured against the LIVE functions estate** (`firebase functions:list` 2026-09-30). Backed: Overview / Procurement / Spend /
+  Forecast (getProcurementDashboard, getProcurementForecast), Suppliers (listSuppliers), Purchase Orders (listPurchaseOrders), Incoming
+  Orders + Business Orders (getInboundSupplyOrders), Supply Performance (getSupplierPerformance). **Stated as not available yet** (their
+  server read is NOT deployed on this line: listGRNs, listSupplierInvoices, findSuppliers, getSupplyCatalogue, listWarehouseStock,
+  listStockMovements): Receiving, Invoices, Payments, Find Suppliers, Supply Catalogue, Products I Supply, Stock, Movements — each names
+  the missing op; no sample data. They ship with the procurement functions slice (MV2-2b).
+- **Suppliers:** ＋ Add supplier → `addSupplier` (name, contact, phone, email, terms 7–90, credit limit, KRA PIN upper-cased; engine
+  validates). Row actions: 📄 New order → `createPurchaseOrder({merchantId, supplierId, items:[{name, qty, unitCost}]})` with the
+  ENGINE's PO number/subtotal/VAT/total shown (nothing computed in the browser); 📞 Call from the record's phone; 💬 Chat → the in-app
+  inbox (`SokoniInbox.openChat`, `sokoni-inbox.js` now loaded by the shell) ONLY when the record carries a counterparty uid. The live
+  `procSuppliers` record has no account link and no `isSokoniBusiness` flag, so Chat does not appear and Type renders "—" on live data;
+  the linking ships with findSuppliers (MV2-2b). B2B page suppliers are demo/localStorage and are NOT read (not an authority).
+- **Incoming / Business Orders (supplier side):** 🧾 Create invoice → `createSupplierInvoice({poId, invoiceNumber, invoiceDate, dueDate,
+  amount, vatAmount})`; the engine's invoice number is shown. An engine refusal is shown verbatim; nothing is marked done.
+- **Evidence:** `scripts/test-mv2-2a-supply.js` 15/0 (hermetic Chromium; backing map ⇔ live estate with a negative control; every
+  action's payload asserted; refusal + empty-form paths; no overflow at 390px) · test-merchant-routes 65/0 · test-merchant-route-gate
+  205/0 · test-inshell-chrome 30/0. The Slice H identity harness (`test-merchant-context-slice-h`) is NOT ported: `resolveMerchantContext`
+  is live but absent from this line's `functions/` source, so the harness cannot execute it here (memory: prod = a union of lineages).
+- Files: `merchant-v2.html`, `sokoni-merchant-routes.js`, `sokoni-merchant-supply.js` (new), the test, `CHANGELOG.md`.
 
 ## 2026-09-30 — MV2-3 (Merchant Operations Convergence): Delivery Hub converged — certified, NOT deployed
 
