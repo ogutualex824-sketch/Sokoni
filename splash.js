@@ -16,7 +16,16 @@
   if (window.self !== window.top) return;
   if (document.documentElement.dataset.noSplash === 'true') return;
 
-  window.SokoniSplash = true;
+  window.SokoniSplash = true;   /* set even when we skip below, so no other splash system draws a second overlay */
+
+  /* ── Once per visit (owner, 2026-09-30) ───────────────────────────────────────────
+     The splash greets the FIRST page of a browsing session. Coming back to home after a search (or any later
+     navigation) must NOT splash again — that second splash is what made the entry feel unclean. A blocked or
+     unavailable sessionStorage falls back to showing it (never to a broken page). */
+  try {
+    if (window.sessionStorage.getItem('sk_spl_seen') === '1') return;
+    window.sessionStorage.setItem('sk_spl_seen', '1');
+  } catch (_) { /* storage blocked: show the splash */ }
 
   /* ── Page detection ───────────────────────────────────────────────────── */
   var _raw = location.pathname.split('/').pop() || '';
@@ -223,7 +232,14 @@
   _s.textContent =
     /* Prevent white flash while body hasn't painted yet */
     'html,body{background:#050505}' +
-    '#sk-spl{position:fixed;inset:0;z-index:2147483647;' +
+    /* The WHOLE device viewport, stated explicitly (2026-09-30): inset:0 alone left the size to each engine's idea of the
+       fixed containing block while mobile toolbars move. 100vh is the fallback; 100dvh tracks the visible area as the
+       toolbar shows/hides; min-height:100svh never lets it be shorter than the small viewport. Safe areas (notch, home
+       indicator) are padded inside so the mark stays centred in the usable area while the colour runs edge to edge. */
+    '#sk-spl{position:fixed;inset:0;z-index:2147483647;box-sizing:border-box;' +
+    'width:100vw;height:100vh;height:100dvh;min-height:100svh;' +
+    'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);' +
+    'background-color:#050505;' +
     'background:radial-gradient(ellipse 90% 80% at 50% 44%,#0e1a06 0%,#0a0a0a 58%,#050505 100%);' +
     'display:flex;align-items:center;justify-content:center;' +
     'will-change:opacity,transform}' +
@@ -231,7 +247,14 @@
     'transition:opacity .55s cubic-bezier(.4,0,.2,1),transform .55s cubic-bezier(.4,0,.2,1)!important;' +
     'pointer-events:none}' +
     '.spl-inner{display:flex;flex-direction:column;align-items:center;gap:26px;text-align:center;' +
-    'position:relative;padding:0 24px}' +
+    'position:relative;z-index:1;padding:0 24px}' +
+
+    /* ── THE COLOUR JOURNEY (restored 2026-09-30, owner: "the premium splash … with stars or glitter, fused with many
+       colours, not too much") — the home splash of the initial platform (b905bc9 "HOME SPLASH — creative colour
+       journey"): five brand colours, glitter drifting and slowly changing colour behind the mark, a halo that breathes
+       through the palette, a tagline that shimmers through it, and a bar that flows through all five. */
+    '#sk-spl{--sc1:#71ff00;--sc2:#00d4ff;--sc3:#a855f7;--sc4:#f59e0b;--sc5:#ec4899}' +
+    '.spl-glitter{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;display:block}' +
 
     /* ── THE LOGO ─────────────────────────────────────────────────────────────
        On its own: no card, no frame, no background, no wordmark beside it.
@@ -272,13 +295,13 @@
     '.spl-mark::before{content:"";position:absolute;width:74%;height:74%;z-index:1;' +
     'border-radius:50%;pointer-events:none;' +
     'background:radial-gradient(circle,rgba(113,255,0,.20),rgba(113,255,0,.05) 45%,transparent 70%);' +
-    'filter:blur(26px);animation:splHalo 4.6s ease-in-out 1s infinite}' +
+    'filter:blur(26px);animation:splHalo 4.6s ease-in-out 1s infinite,splHaloCol 3.2s ease-in-out .2s infinite}' +
 
     /* Per-page tagline */
     '.spl-line{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
     'font-size:clamp(10px,2.6vw,12px);font-weight:700;letter-spacing:.2em;' +
     'text-transform:uppercase;color:rgba(255,255,255,.42);' +
-    'animation:splFade .6s .5s cubic-bezier(.4,0,.2,1) both}' +
+    'animation:splFade .6s .5s cubic-bezier(.4,0,.2,1) both,splTagCol 3s ease-in-out 1s infinite}' +
 
     /* A single hairline that fills once — calmer and more "premium fintech" than
        three bouncing dots, and it reads as progress rather than decoration. */
@@ -286,7 +309,7 @@
     'background:rgba(255,255,255,.08);overflow:hidden;margin-top:2px;' +
     'animation:splFade .5s .62s cubic-bezier(.4,0,.2,1) both}' +
     '.spl-dots span{position:absolute;inset:0;display:block;border-radius:2px;' +
-    'background:linear-gradient(90deg,rgba(113,255,0,0),#71ff00 55%,#a6ff5c);' +
+    'background:linear-gradient(90deg,rgba(113,255,0,0),var(--sc1) 22%,var(--sc2) 42%,var(--sc3) 62%,var(--sc4) 80%,var(--sc5));' +
     'transform:translateX(-100%);' +
     'animation:splBar 1.5s cubic-bezier(.65,0,.35,1) .7s infinite}' +
     '.spl-dots span:nth-child(2),.spl-dots span:nth-child(3){display:none}' +
@@ -304,6 +327,15 @@
     '@keyframes splSheen{' +
     '0%{transform:translateX(-120%)}' +
     '58%,100%{transform:translateX(120%)}}' +
+    /* The halo and the tagline travel the five colours (the original home splash's homeLogoGlow / homeTaglineColor) */
+    '@keyframes splHaloCol{' +
+    '0%,100%{background:radial-gradient(circle,rgba(113,255,0,.22),rgba(113,255,0,.05) 45%,transparent 70%)}' +
+    '25%{background:radial-gradient(circle,rgba(0,212,255,.22),rgba(0,212,255,.05) 45%,transparent 70%)}' +
+    '50%{background:radial-gradient(circle,rgba(168,85,247,.22),rgba(168,85,247,.05) 45%,transparent 70%)}' +
+    '75%{background:radial-gradient(circle,rgba(245,158,11,.22),rgba(245,158,11,.05) 45%,transparent 70%)}}' +
+    '@keyframes splTagCol{' +
+    '0%,100%{color:rgba(113,255,0,.85)}25%{color:rgba(0,212,255,.85)}' +
+    '50%{color:rgba(168,85,247,.85)}75%{color:rgba(245,158,11,.85)}}' +
     '@keyframes splBar{' +
     '0%{transform:translateX(-100%)}' +
     '55%{transform:translateX(0)}' +
@@ -313,7 +345,7 @@
     '@media(prefers-reduced-motion:reduce){' +
     '.spl-logo,.spl-mark,.spl-mark::before,.spl-mark::after,' +
     '.spl-line,.spl-dots,.spl-dots span{animation:none!important;transform:none!important}' +
-    '.spl-logo{opacity:1}}';
+    '.spl-logo{opacity:1}.spl-glitter{display:none!important}}';
 
   (document.head || document.documentElement).appendChild(_s);
 
@@ -325,6 +357,7 @@
      "SOKO NI" wordmark beside it — the logo already carries the brand, and pairing it
      with a text wordmark said the name twice. */
   _el.innerHTML =
+    '<canvas class="spl-glitter" aria-hidden="true"></canvas>' +
     '<div class="spl-inner">' +
     /* The wrapper exists only to carry the halo (::before, behind) and the light
        sweep (::after, in front). The logo itself stays a clean, un-decorated PNG. */
@@ -335,10 +368,50 @@
     '<div class="spl-dots"><span></span></div>' +
     '</div>';
 
+  /* ── Glitter: the original home splash's particles (b905bc9) ─────────────────────────────────
+     70 soft points drifting, each slowly blending from one brand colour into the next. Wrapped in try/catch: a canvas
+     problem must never keep the splash up (the dismiss below is independent of it). Stopped on dismiss; never started
+     when the OS asks for reduced motion. */
+  var _raf = 0;
+  function _glitter() {
+    try {
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      var cv = _el.querySelector('.spl-glitter'); if (!cv || !cv.getContext) return;
+      var cx = cv.getContext('2d'); if (!cx) return;
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var W = cv.clientWidth || window.innerWidth, H = cv.clientHeight || window.innerHeight;
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cx.scale(dpr, dpr);
+      var PAL = [[113, 255, 0], [0, 212, 255], [168, 85, 247], [245, 158, 11], [236, 72, 153]];
+      var pts = [];
+      for (var i = 0; i < 70; i++) {
+        pts.push({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 2.2 + 0.4,
+          dx: (Math.random() - 0.5) * 0.55, dy: (Math.random() - 0.5) * 0.55, a: Math.random() * 0.45 + 0.08,
+          ci: Math.floor(Math.random() * PAL.length), ct: Math.random(), cs: 0.002 + Math.random() * 0.003 });
+      }
+      (function frame() {
+        cx.clearRect(0, 0, W, H);
+        for (var k = 0; k < pts.length; k++) {
+          var p = pts[k];
+          p.ct += p.cs; if (p.ct >= 1) { p.ct -= 1; p.ci = (p.ci + 1) % PAL.length; }
+          var c0 = PAL[p.ci], c1 = PAL[(p.ci + 1) % PAL.length], t = p.ct;
+          cx.beginPath(); cx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          cx.fillStyle = 'rgba(' + Math.round(c0[0] + (c1[0] - c0[0]) * t) + ',' + Math.round(c0[1] + (c1[1] - c0[1]) * t) + ',' +
+            Math.round(c0[2] + (c1[2] - c0[2]) * t) + ',' + p.a + ')';
+          cx.fill();
+          p.x += p.dx; p.y += p.dy;
+          if (p.x < 0 || p.x > W) p.dx *= -1;
+          if (p.y < 0 || p.y > H) p.dy *= -1;
+        }
+        _raf = window.requestAnimationFrame(frame);
+      })();
+    } catch (_) { /* decoration only */ }
+  }
+
   /* ── Mount (body may not exist yet when run from <head>) ──────────────── */
   function _mount() {
     var t = document.body || document.documentElement;
     t.insertBefore(_el, t.firstChild);
+    _glitter();
   }
   if (document.body) { _mount(); }
   else { document.addEventListener('DOMContentLoaded', _mount, { once: true }); }
@@ -352,6 +425,7 @@
     setTimeout(function () {
       _el.classList.add('spl-out');
       setTimeout(function () {
+        if (_raf) { try { window.cancelAnimationFrame(_raf); } catch (_) {} _raf = 0; }
         if (_el.parentNode) _el.parentNode.removeChild(_el);
         if (_s.parentNode)  _s.parentNode.removeChild(_s);
       }, 600);

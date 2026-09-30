@@ -2235,7 +2235,7 @@ const botResponses = [
     { keys:["lorry","truck","cargo","freight","bulk delivery"], reply:"Need to move heavy cargo? Sokoni has lorry (up to 20 tonnes), canter (7 tonnes) and pickup (3 tonnes) drivers. <a href='driver.html' style='color:#71ff00'>Book a Driver →</a> 🚚" },
 
     /* ── Account & Profile ── */
-    { keys:["account","login","register","signup","create account"], reply:"Creating an account is free and takes 30 seconds! <a href='signup.html' style='color:#71ff00'>Create Account →</a><br>Benefits: track orders, earn loyalty points, message sellers & more. 🔑" },
+    { keys:["account","login","register","signup","create account"], reply:"Creating an account is free and takes 30 seconds! <a href='onboarding.html?mode=signup' style='color:#71ff00'>Create Account →</a><br>Benefits: track orders, earn loyalty points, message sellers & more. 🔑" },
     { keys:["points","loyalty","reward","earn points","sokoni points"], reply:"🌟 <strong>Sokoni Loyalty Points:</strong><br>• Earn 1 pt per KES 10 spent<br>• 100 pts = 5% discount<br>• 500 pts = Free cap<br>• 1000 pts = Free hoodie<br>View yours in <a href='profile.html' style='color:#71ff00'>Profile →</a>" },
     { keys:["referral","refer","invite friend"], reply:"Refer a friend and earn <strong>KES 200</strong> when they make their first purchase! Share your referral link from <a href='referral.html' style='color:#71ff00'>Refer & Earn →</a> 🤝" },
 
@@ -3393,7 +3393,7 @@ function showWelcomePopup(){
                 <div class="mkt-perk"><i class="fas fa-truck"></i> Fast delivery across Kenya</div>
                 <div class="mkt-perk"><i class="fas fa-shield-alt"></i> Secure M-Pesa payments</div>
             </div>
-            <a href="signup.html" class="mkt-popup-cta">Create Free Account →</a>
+            <a href="onboarding.html?mode=signup" class="mkt-popup-cta">Create Free Account →</a>
             <button class="mkt-popup-skip" onclick="document.getElementById('welcomePopup').remove()">Maybe later</button>
         </div>
     `;
