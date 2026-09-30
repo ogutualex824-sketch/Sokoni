@@ -1,3 +1,30 @@
+## [2026-09-30] - Ecosystem Sync census: one authority per business fact, measured before any change (docs only)
+
+**Local only. NOT deployed, NOT pushed. Documentation only; no code changed.**
+
+`docs/ECOSYSTEM_SYNC_CENSUS.md` is the read-only section-0 census for the owner's "Final Ecosystem Sync" programme.
+It covers:
+
+- ownership: the 285 worktrees, and the other agents' branches, including live hosting `2f3bb6f`;
+- the fiscal spine: the eTIMS authority, duplicate submitters, unverified KRA values in code, tax maths in 12 places,
+  no levy framework, and payroll gaps;
+- payment → record → receipt linkage: the `hub_registration` payment with no PAID record, duplicate online receipts,
+  and the `posReceipts` rule/writer field mismatch;
+- notifications: split recipient field, double sends, dead links;
+- realtime (merchant-v2 has no listeners) and AdminOS → merchant propagation;
+- the ~17 destination pages that run competing workflows;
+- the starting FACT × SURFACE matrix.
+
+**Owner decisions recorded:**
+
+- The slice order is **locked**: inventory convergence (Phase A till, Phase B one shared deduction helper) → payment
+  labels → category capability matrix → ES-1 fiscal honesty … ES-8.
+- **The public KRA/eTIMS claims stay as written**: about, FAQ and trust-and-safety. This is a product decision, not
+  evidence; the matrix records KRA's real state.
+- Levies, payroll tables, commission VAT and OSCU/VSCU wait for supplied inputs.
+
+Database, API and security: no changes.
+
 ## [2026-09-30] - Quick Charge is a line on ONE canonical till sale — customer, points, payment proof and receipt included (Step 2)
 
 **Local only — NOT deployed, NOT pushed. Branch `slice/c4-convergence` on `a496c8d`.**
