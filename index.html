@@ -2711,8 +2711,8 @@
           <a href="https://youtube.com/@mysokoni_ke" target="_blank" rel="noopener noreferrer me" aria-label="SOKONI on YouTube">
             <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.2 6.2a2.2 2.2 0 0 0-1.5-1.5C15.3 4.3 10 4.3 10 4.3s-5.3 0-6.7.4A2.2 2.2 0 0 0 1.8 6.2 23 23 0 0 0 1.4 10c0 1.3.1 2.6.4 3.8a2.2 2.2 0 0 0 1.5 1.5c1.4.4 6.7.4 6.7.4s5.3 0 6.7-.4a2.2 2.2 0 0 0 1.5-1.5c.3-1.2.4-2.5.4-3.8s-.1-2.6-.4-3.8ZM8.4 12.4V7.6l4.2 2.4-4.2 2.4Z"/></svg>
           </a>
-          <a href="https://wa.me/254705726803" target="_blank" rel="noopener noreferrer me" aria-label="SOKONI on WhatsApp">
-            <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M10 2a8 8 0 0 0-6.9 12L2 18l4.1-1.1A8 8 0 1 0 10 2Zm0 14.5a6.5 6.5 0 0 1-3.3-.9l-.24-.14-2.44.64.65-2.38-.16-.25A6.5 6.5 0 1 1 10 16.5Zm3.6-4.86c-.2-.1-1.17-.58-1.35-.64s-.31-.1-.45.1-.51.64-.63.77-.23.15-.43.05a5.3 5.3 0 0 1-2.65-2.32c-.2-.34.2-.32.57-1.06a.36.36 0 0 0 0-.34c0-.1-.45-1.08-.61-1.47s-.33-.34-.45-.34h-.38a.73.73 0 0 0-.53.25 2.2 2.2 0 0 0-.69 1.64 3.83 3.83 0 0 0 .8 2.03 8.75 8.75 0 0 0 3.35 2.96c1.25.54 1.74.58 2.36.49a2 2 0 0 0 1.32-.94 1.64 1.64 0 0 0 .11-.93c-.04-.08-.17-.13-.36-.23Z"/></svg>
+          <a href="support.html" aria-label="Chat with SOKONI Support" title="Chat with SOKONI Support">
+            <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 3h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8l-4 3v-3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>
           </a>
         </div>
       </div>
@@ -2735,10 +2735,10 @@
       <div class="footer-links">
         <h3>Sell on Sokoni</h3>
         <a data-sk-merchant-entry href="seller.html">➕ Start Selling</a>
-        <a href="ministore.html">🏪 My Store</a>
-        <a href="seller.html#boosts">📢 Boost Product</a>
-        <a href="seller.html#flash-sales">⚡ Flash Sale</a>
-        <a href="seller.html#tax">🧾 KRA Tax</a>
+        <a href="merchant-v2.html#minishop">🏪 My Store</a>
+        <a href="merchant-v2.html#marketing">📢 Boost Product</a>
+        <a href="merchant-v2.html#flash-sale">⚡ Flash Sale</a>
+        <a href="merchant-v2.html#kra-tax">🧾 KRA Tax</a>
         <a href="delivery.html">🚛 Delivery</a>
         <a href="subscriptions.html">👑 Go Premium</a>
       </div>
@@ -2769,7 +2769,7 @@
         <a href="mailto:info@mysokoni.co.ke">📧 info@mysokoni.co.ke</a>
         <a href="tel:+254705726803">📞 +254 705 726 803</a>
         <a href="tel:+254722376801">📞 +254 722 376 801</a>
-        <a href="https://wa.me/254705726803" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp fa-fw"></i> WhatsApp Us</a>
+        <a href="support.html">💬 Chat with Support</a>
         <a href="https://instagram.com/mysokoni.ke" target="_blank" rel="noopener noreferrer"><i class="fab fa-instagram fa-fw"></i> @mysokoni.ke</a>
         <a href="services.html">🛠️ Services Hub</a>
       </div>
@@ -2793,11 +2793,21 @@
         <a href="legal.html#data">🛡️ Data</a>
       </div>
 
-      <div class="payments">
+      <!-- Payment methods offered through IntaSend, SOKONI's one payment provider (owner, 2026-09-30).
+           PayPal is not an IntaSend method and is not offered, so it was removed. Marks: M-Pesa / Visa /
+           Mastercard are the existing assets; PesaLink is its official logo; Apple Pay / Google Pay / Bitcoin
+           are Simple Icons (CC0) in each brand's own colour. -->
+      <div class="payments" aria-label="Payment methods">
         <img loading="lazy" decoding="async" src="assets/mpesa.PNG" alt="M-Pesa" width="48" height="30">
         <img loading="lazy" decoding="async" src="assets/visa.PNG" alt="Visa" width="48" height="30">
         <img loading="lazy" decoding="async" src="assets/mastercard.PNG" alt="Mastercard" width="48" height="30">
-        <img loading="lazy" decoding="async" src="assets/paypal.PNG" alt="PayPal" width="48" height="30">
+        <img loading="lazy" decoding="async" src="assets/pesalink.png" alt="PesaLink" width="48" height="30">
+        <img loading="lazy" decoding="async" src="assets/googlepay.svg" alt="Google Pay" width="48" height="30">
+        <img loading="lazy" decoding="async" src="assets/applepay.svg" alt="Apple Pay" width="48" height="30">
+        <img loading="lazy" decoding="async" src="assets/bitcoin.svg" alt="Bitcoin" width="48" height="30">
+      </div>
+      <div class="payments-secured">
+        <img loading="lazy" decoding="async" src="assets/intasend%20trust%20badge.jpeg" alt="Payments secured by IntaSend" width="160" height="40">
       </div>
 
       <p class="footer-credit">Made by <span>Kass.</span> 🔌</p>
