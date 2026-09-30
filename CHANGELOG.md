@@ -1,3 +1,36 @@
+## [2026-09-30] — Repair #1, Unit 1: createPaymentIntent learns product_order (server price, server seller) — built on live 7d115bc
+
+**Why.** The live online checkout was client-priced, and the buyer-supplied sellerUid decided which wallet was
+credited (commerce census 2026-09-30, defect 1). Live createPaymentIntent (== 7d115bc) had no product_order
+purpose, so product checkout could never mint a server-priced intent.
+
+**What.** This is a surgical port from the production webhook lineage 68811e1. It is not B1 Commit A as-is:
+4b5f3fa still fell back to a browser-supplied sellerUid when products had none.
+
+- `functions/payment-purposes.js`:
+  - `validateOrderLines` — the shared catalogue, availability and stock validator;
+  - `product_order`:
+    - price is server-recomputed, with delivery from the merchant's own config;
+    - the seller comes from each product's own record;
+    - a cart with no seller on record is refused;
+    - a multi-seller cart is refused;
+    - `amountCents`/KES;
+    - `preferredRef` = the order id;
+  - all 8 live purposes are kept, including `commission_collection`.
+- `functions/payment-intents.js`: a deterministic ref when a pricer asks for one. A replay of the same buyer,
+  purpose, order and amount returns the existing intent; a mismatch fails closed; a terminal intent is never
+  replayed.
+- Tests:
+  - `scripts/test-product-payment-authority.js` (B1): 25/25 with the Unit 3 client.
+  - `scripts/test-b1-online-checkout-chain.js`: 32/0, the full chain with Unit 2's webhook gate and Unit 3's
+    client. The live baseline reproduces a credit to a browser-named wallet.
+  - 13/13 single-defect mutants.
+
+**Inert alone.** Nothing calls `purpose:'product_order'` until Unit 3 (hosting 0c7a7c2) ships.
+**Deploy order:** Unit 1 → Unit 2 (webhookIntasend gate) → Unit 3. Unit 4 (enforcement) is not built.
+**Database / rules / API:** none. This adds a new purpose value on an existing callable.
+**Commission:** unchanged.
+
 ## [2026-08-28] — Home logo 7-tap → Admin OS (/admin-os) · reconciled onto live b2c9cb4 — CANDIDATE, not deployed
 
 **Not deployed.** Branch `rc/logo-7tap-live` — the 7-tap candidate (`4642314`, originally off `a58afc2`)

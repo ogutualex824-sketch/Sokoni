@@ -87,7 +87,17 @@ exports.createPaymentIntent = onCall(_OPTS, async (request) => {
       throw new HttpsError('invalid-argument', 'Invalid phone number.');
     }
 
-    const ref2 = _mintRef();
+    /* DETERMINISTIC REF, when the pricer asks for one.
+       The marketplace product path keys payments/{ref} and orders/{ref} to the
+       SAME deterministic order id, so a retry reuses one order identity instead
+       of minting a second. Letting createPaymentIntent mint its own ref here
+       would introduce a competing identity and force retry/idempotency semantics
+       to be rebuilt around it. A pricer that returns `preferredRef` therefore
+       owns the identity; everything else keeps the random ref. */
+    const ref2 = quote.preferredRef ? String(quote.preferredRef) : _mintRef();
+    if (quote.preferredRef && !/^[A-Za-z0-9_-]{6,128}$/.test(ref2)) {
+      throw new HttpsError('invalid-argument', 'Invalid order reference.');
+    }
     const now2 = Date.now();
     const intent2 = {
       ref:          ref2,
@@ -109,7 +119,58 @@ exports.createPaymentIntent = onCall(_OPTS, async (request) => {
       createdBy:    'createPaymentIntent',
     };
 
-    await db().collection('paymentIntents').doc(ref2).create(intent2);
+    /* IDEMPOTENT REPLAY.
+       With a deterministic ref, a retry of the same checkout necessarily hits an
+       existing document. `.create()` throws ALREADY_EXISTS; surfacing that as a
+       payment failure would strand a buyer who simply tapped Pay twice.
+
+       So a replay RETURNS the existing intent — but only after proving it is the
+       same purchase. Ownership, purpose, resource and amount must all match. A
+       mismatch FAILS CLOSED rather than overwriting: an existing intent whose
+       amount differs is either a stale cart or an attempt to re-price an
+       identity that has already been quoted, and silently replacing it would
+       hand back exactly the client-controlled amount B1 exists to remove.
+
+       A terminal intent is never replayed — paying it again is a new purchase
+       and must not reuse a consumed identity. */
+    try {
+      await db().collection('paymentIntents').doc(ref2).create(intent2);
+    } catch (createErr) {
+      if (!quote.preferredRef || createErr.code !== 6 /* ALREADY_EXISTS */) throw createErr;
+
+      const priorSnap = await db().collection('paymentIntents').doc(ref2).get();
+      if (!priorSnap.exists) throw createErr;              /* raced deletion — surface it */
+      const prior = priorSnap.data() || {};
+
+      const sameBuyer    = prior.uid === uid;
+      const samePurpose  = prior.purpose === quote.purpose;
+      const sameResource = String(prior.resourceId || '') === String(quote.resourceId || '');
+      const sameAmount   = Number(prior.amountCents) === Number(quote.amountCents);
+      const terminal     = ['paid', 'completed', 'cancelled', 'expired'].includes(String(prior.status));
+
+      if (!sameBuyer || !samePurpose || !sameResource) {
+        logger.error('[intent] replay REFUSED — identity mismatch', {
+          ref: ref2, sameBuyer, samePurpose, sameResource,
+        });
+        throw new HttpsError('permission-denied', 'This order reference is already in use.');
+      }
+      if (terminal) {
+        throw new HttpsError('failed-precondition',
+          'This order has already been paid. Start a new order.');
+      }
+      if (!sameAmount) {
+        logger.error('[intent] replay REFUSED — amount changed for an existing intent', {
+          ref: ref2, priorCents: prior.amountCents, quotedCents: quote.amountCents,
+        });
+        throw new HttpsError('failed-precondition',
+          'Your cart has changed since this order was created. Please refresh and try again.',
+          { serverAmount: Math.round(Number(quote.amountCents) / 100) });
+      }
+
+      logger.info('[intent] idempotent replay', { ref: ref2, purpose: prior.purpose, amount: prior.amount });
+      return { ref: ref2, amount: prior.amount, currency: prior.currency || 'KES',
+        purpose: prior.purpose, replay: true };
+    }
     timeline.mark(ref2, 'intent_created', {
       uid, purpose: quote.purpose, resourceId: quote.resourceId, amount: quote.amount,
     });
