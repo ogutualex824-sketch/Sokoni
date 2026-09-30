@@ -71,6 +71,70 @@ Deliberate breakages **8/8**.
 - discovery for garages, professionals, facilities and riders.
 
 The home **product feed** fix is sokoni-27's (`hosting/uploadedat-on-2bcdae2`).
+## 2026-09-30 — Compact premium cards ported onto the live-descendant chain (`hosting/cards-port-on-85d74af`) — certified (static + ported suites), browser certification queued, NOT deployed
+
+**What.** The seven `feat/compact-premium-cards` commits (`bd91d04`, `c50217d`, `77dcf44`, `1b51515`, `b3c86dd`,
+`3b9733b`, `5323149`, built on `49e0f3a`) cherry-picked one at a time (`-x`) onto `85d74af`, the tip of the
+live-descendant chain (MV2-1 / MV2-3 / MV2-2a). The two entries below this one are the source commits' own records
+and describe the design; this entry records the port.
+
+**Files (21):** `business.html`, `car-rental.html`, `category.html`, `category.js`, `cleaning.html`, `compact-grid.css`,
+`electrical.html`, `index.html`, `minishop.css`, `phone-repair.html`, `plumbing.html`, `providers.html`, `script.js`,
+`services.html`, `sokoni-card-chips.js` (new), `sokoni-minishop.js`, `sokoni-spotlight.js`, `store.html`,
+`scripts/test-cart-browser-certification.js`, `scripts/test-shop-card-actions.js`, `CHANGELOG.md`;
+plus `scripts/test-compact-premium-cards.js` (new, this entry).
+
+**Conflicts and resolutions.** One: `CHANGELOG.md` on `bd91d04` (both lines added a top entry). Resolved by keeping
+the source entry above this chain's MV2-2a entry and dropping the source's dangling "Delivery Hub D2 released" heading
+(that record, `4ca00b8`, is not on this chain and its body was not in the hunk). Every other file auto-merged, including
+`script.js` where this chain's `data-store-url` featured-shop work and the source's escaped 🏪 icon now coexist, and the
+five service pages where this chain's "no WhatsApp booking hand-off" modal edits sit beside the source's card edits.
+
+**Hard constraints verified.** `#sk-nav-actions` in `index.html` is byte-identical to `85d74af`
+(`git diff 85d74af -- index.html | grep sk-nav-actions` → nothing; the block diffed directly → identical). Not touched by
+the port: `shared-header.js`, `sokoni-command-palette.js`, `sw-register.js`, `service-worker.js`, `version.json`,
+`delivery.html`, `driver.html`, `seller-delivery.html`, `merchant-v2.html`. No source commit touched any of them.
+
+**Owner card rules re-verified on the ported tree** (source read, per renderer, comments stripped): emoji icons only
+(❤ 🛒 on the photo; 📩 for services); the shop-logo ring stays; 3 per row on phones (home, category, shop, MiniShop,
+business grids); provider cards 💬 📩; shop cards one 🏪; no `wa.me` / `whatsapp` in any card renderer; names escaped;
+no URL spliced into an inline script (nearby cards use a delegated `data-store-url` listener with an allow-list).
+WhatsApp reference counts per touched file only fell or held; none of the remaining references is a listing card
+(booking modals, share sheets, the shop header contact row, the footer).
+
+**Evidence.**
+- `scripts/test-shop-card-actions.js` — **26 passed, 0 failed**, 2 unproven (as on the source branch).
+- `scripts/test-cart-browser-certification.js` — **56 passed, 0 failed** (hermetic Chromium, local static server).
+- `scripts/test-header-candidate.js` — **11 passed, 0 failed** (unchanged header).
+- `scripts/test-compact-premium-cards.js --static-only` — **23 passed, 0 failed**, exit 3 (PARTIAL by design: the
+  browser section did not run).
+- `scripts/predeploy-syntax-gate.js` — see the port report; run on the committed tree.
+- **QUEUED under a machine hold (a peer session's production deploy):** `scripts/test-compact-premium-cards.js`
+  (full: home / business / providers / services at 390px, 3 per row, icons, no wa.me, no overflow, real taps, legacy
+  negative control) and `scripts/test-home-picked-for-you.js`. Until they run, the browser half of this port is
+  **unproven**, not failed and not passed.
+- Not run on purpose: `scripts/verify-shop-card-viewports.js` targets `https://mysokoni.co.ke` (live origin).
+
+**New cert — `scripts/test-compact-premium-cards.js`.** The source commits quote per-page browser checks (16/0, 18/0,
+19/0, 20/0, 96/0) that were never committed. This suite replaces them: hermetic Playwright Chromium from
+`node_modules`, `scripts/lib/page-harness.js` (real files, Firebase SDK shimmed over the fake Firestore with
+asynchronous snapshots, every other origin fulfilled empty), tricky seller / provider names to prove escaping, a
+provider with a phone number to prove no wa.me is derived from it, and a legacy-card negative control in both sections.
+`--static-only` exits 3 and prints PARTIAL — it can never be mistaken for a pass.
+
+**Deliberately left out of the port:** nothing from the seven commits. The source branch's two release-artefact
+commits (`29a814a` service-worker/version bump, `4ca00b8` D2 record) were never part of the port and were not taken.
+
+**Flagged, not changed (outside the seven commits):** `business.html` `serviceCardHtml` still renders a
+`wa.me` "Book Now" on the business page's *service* cards — pre-existing, not a product card, and the page has no
+in-app booking handler to route it to. It violates the owner's "no WhatsApp hand-off on any card" rule and needs its own
+slice. The source entries' own flags stand: 📢 Sponsored and the SPOTLIGHT list read the viewer's localStorage; the
+promotion writer accepts other shops' productIds.
+
+**Database / rules / API changes:** none. **Security:** as recorded by the source entries (KEBS title escaped; business
+add-to-cart no longer embeds JSON in an attribute; shop names escaped; no inline URL splice).
+**Deployment:** hosting only; NOT deployed. Any hosting candidate must still descend from the live pointer.
+
 ## [2026-09-30] — Compact premium cards, part 2: MiniShop, business, providers, shops, service pages (UI only) — NOT deployed
 
 **Files:**
