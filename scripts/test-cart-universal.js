@@ -150,7 +150,12 @@ console.log('\nB. The rollout did not mangle any file');
      checkout, so a CRLF working file reads back as LF and every mixed file looks newly
      broken. Check the INSERTED BLOCK instead: its three lines must all end the same way
      as the tag line that follows them. That is exactly the property the rollout promised.  */
+  const existedAtBase = (f) => { try { cp.execSync('git cat-file -e ' + BASE + ':' + f, { cwd: ROOT, stdio: 'ignore' }); return true; } catch (_) { return false; } };
   const badEol = rolled.filter(f => {
+    /* A page born after the rollout (2026-09-30: agreement-acknowledge.html, complete-application.html)
+       carries the tag from its first commit — there is no inserted block whose line endings could
+       disagree with the surrounding file. Only pages the rollout EDITED have that property. */
+    if (!existedAtBase(f)) return false;
     const s = read(f);
     const i = s.indexOf('<!-- Canonical cart access path');
     if (i === -1) return true;
