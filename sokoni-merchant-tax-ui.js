@@ -562,6 +562,10 @@
         field('address', 'Business address', 'text', '') +
         field('phone', 'Business phone', 'text', '') +
 
+        '<div class="mtx-note"><b>KRA status: Ready — credentials required.</b> This module is fully wired to ' +
+        'eTIMS. Live registration and invoice submission are enabled only once SOKONI\'s platform KRA ' +
+        'credentials are configured on the server; until then the server refuses to register and nothing ' +
+        'is submitted or simulated.</div>' +
         '<div class="mtx-note">Your PIN is checked with KRA before the profile is activated. If KRA ' +
         'rejects it, nothing is saved and you will see their reason.</div>' +
         '<div style="margin-top:13px"><button class="mtx-btn" data-a="register"' +

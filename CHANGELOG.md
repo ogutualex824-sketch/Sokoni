@@ -1,3 +1,19 @@
+## 2026-09-30 — MV2-1 (Merchant Operations Convergence, first slice; certified, NOT deployed): sidebar exposure + shell cleanup
+
+On `hosting/merchant-v2-premium-on-6f566a6`. No new authority; see `docs/MERCHANT_OPERATIONS_CONVERGENCE_MAP.md` for the census.
+- **Sales Control Centre in the sidebar.** New registry route `sales-control` (kind pos, tab pos + validated `action:'salescontrol'`).
+  The shell re-targets the ONE cached POS frame by hash; `pos.js` opens the existing overlay (PosSalesView.open) from
+  `#salescontrol` on boot, hashchange and popstate. One POS instance, one overlay — an entry point, not a second surface.
+- **Sidebar groups** for the more tier: Sales · Operations · Growth · Back office (still a total partition; validate() clean).
+- **Returns:** the SOKONI logo image in the page's own top bar is gone (a second branding block under the shell header).
+- **KRA:** the setup card states "KRA status: Ready — credentials required" as the server's precondition; nothing submitted or simulated.
+- **Not in this slice (census recorded):** Supply workspace = other lineage (86d6ca7) → port slice MV2-2; Delivery Hub reflow/riders/maps
+  MV2-3; Orders ledger MV2-4; Returns lifecycle MV2-5; Disputes MV2-6; Customers/Messages/Connect MV2-7; expiring media MV2-8.
+- **Evidence:** test-mv2-1-sidebar 14/0 · test-merchant-routes 65/0 · test-merchant-route-gate 191/0 · test-inshell-chrome 30/0 ·
+  test-sales-control-centre 61/0 · test-pos-lazy-features 34/0 · test-pos-boot-budget 9/0 · syntax gate 1799 clean.
+  test-merchant-visual-gate fails IDENTICALLY on the untouched base (pre-existing; not a release suite).
+- **Files:** `sokoni-merchant-routes.js`, `merchant-v2.html`, `pos.js`, `returns.html`, `sokoni-merchant-tax-ui.js`, `scripts/test-mv2-1-sidebar.js`, `CHANGELOG.md`.
+
 ## 2026-09-30 — PARCEL HOSTING SLICE (own unit, certified, NOT deployed): Send a Parcel talks only to the parcel functions
 
 On `hosting/parcel-page-on-a8aafac` (live hotfix line). `delivery.html`: the rate card, every price, the request, the payment and the

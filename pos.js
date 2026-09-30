@@ -4342,13 +4342,23 @@ const SPos = (function () {
     go(tab) { ui.switchTab(tab); },
     init() {
       /* Back/Forward: restore the view named in the URL, without pushing a new entry. */
+      /* #salescontrol is a deep-link to the Sales Control Centre OVERLAY, not a tab: the
+         merchant shell's sidebar entry (MV2-1) and any bookmark land here. Same entry point
+         as the in-POS button (nav action 'salescontrol'). */
+      const openSalesControlFromHash = () => { try { window.PosSalesView && window.PosSalesView.open(); } catch (_) {} };
+      window.addEventListener('hashchange', () => {
+        const t = (location.hash || '').replace(/^#/, '');
+        if (t === 'salescontrol') openSalesControlFromHash();
+      });
       window.addEventListener('popstate', () => {
         const t = (location.hash || '').replace(/^#/, '') || 'pos';
+        if (t === 'salescontrol') { openSalesControlFromHash(); return; }
         if (nav.KNOWN.includes(t)) ui.switchTab(t, { fromHistory: true });
       });
       /* Deep-link on boot: honour an incoming #view (Phase-4 standalone→shell redirects rely on this). */
       const boot = (location.hash || '').replace(/^#/, '');
-      if (boot && nav.KNOWN.includes(boot) && boot !== 'pos') ui.switchTab(boot, { fromHistory: true });
+      if (boot === 'salescontrol') setTimeout(openSalesControlFromHash, 0);
+      else if (boot && nav.KNOWN.includes(boot) && boot !== 'pos') ui.switchTab(boot, { fromHistory: true });
     },
   };
 
