@@ -1,3 +1,19 @@
+## [2026-09-30] - providerDispatch LINEAGE CENSUS (READ ONLY): what a redeploy would change; the 12 changed modules classified; 54 new modules traced to their call paths; deployment NOT authorized
+
+docs/PROVIDERDISPATCH_LINEAGE_CENSUS.md + docs/release-gates/providerdispatch-lineage-census.json. Deployed archive (2026-08-22; blobs
+from early-August provider-os phases; revision providerdispatch-00048-qiz) vs 764d1d1. REQUIRED for the shell gate = a 12-module closure
+(business-workspace + shared/* + business-category + capability-authority + healthcare-category/plans/workspace + subscription-*) and a
+two-line dispatcher merge. Of the 12 changed modules: provider-onboarding.js = SECURITY FIXES FOR LIVE VECTORS (production providerPublish
+still activates + mints provider:true for any self-service publisher; providerActivateSubscription still trusts a client paymentRef) but also
+BREAKS the live provider-onboarding.html verification submission (URLs refused); provider-ops / booking-service / booking-payment-sweep /
+availability = unrelated c4 (entertainment settlement at show-up, availability authority, rate cards); commission-config / finos-utils /
+subscription-core = money policy that would run in ONE function while every other deployed function keeps the old policy (SPLIT-BRAIN);
+notify.js = SMS newly sends (phone fallback); legal-agreements = prerequisite, dark; sms-service inert. 54 new modules: 46 reachable
+through EXISTING ops (booking-service → ent-*/kasshop; provider-ops → entertainment-bookings → event-* → creator-hub), 8 only via the
+new providerRequestShop op (till mint, seller role grant), 0 loaded-only; event-ops declares SOKONI_HMAC_KEY which the dispatcher does not
+bind. Verdict: a clean production-shaped release IS constructible (archive + 12 modules + merge, from a pinned commit) but not from this
+branch as-is; the provider-onboarding fixes deserve their own candidate. HOLD tonight (owner).
+
 ## [2026-09-30] - Functions preflight for the shell gate authority (providerDispatch) — READ ONLY; both named blockers examined; deployment NOT authorized
 
 docs/FUNCTIONS_PREFLIGHT_SHELL_GATE.md + docs/release-gates/functions-preflight-shell-gate.json. SELF-MINT: this lineage already carries the
