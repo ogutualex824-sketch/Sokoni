@@ -711,6 +711,17 @@ function displayNearbySection(){
     const CAT_LABELS = { fashion:"👕 Fashion", electronics:"📱 Electronics", furniture:"🛋️ Furniture", beauty:"💄 Beauty", food:"🍎 Food", shoes:"👟 Shoes", bags:"👜 Bags", books:"📚 Books", appliances:"🏠 Appliances", cars:"🚗 Cars", sports:"⚽ Sports", printing:"🖨️ Printing" };
 
     const grid = document.getElementById("nearbyGrid");
+    /* One delegated listener per grid (bound once): the card opens its storefront. Only
+       http(s), root-relative and seller-public URLs are followed. */
+    if (grid && !grid._skStoreNav) {
+        grid._skStoreNav = true;
+        grid.addEventListener("click", function (e) {
+            const card = e.target.closest("[data-store-url]");
+            if (!card || e.target.closest("a,button")) return;
+            const url = card.dataset.storeUrl;
+            if (url && /^(https?:\/\/|\/|seller-public\.html)/i.test(url)) window.location.href = url;
+        });
+    }
     if(!grid) return;
 
     const sellers = Object.values(sellerMap).slice(0, 20);
@@ -738,21 +749,23 @@ function displayNearbySection(){
         const tags = [...new Set(s.products.map(p => p.category))].slice(0, 2);
         const profileUrl = `seller-public.html?seller=${encodeURIComponent(s.name)}`;
 
-        return `<div class="seller-card" style="cursor:pointer;" onclick="window.location.href='${profileUrl}'">
+        /* Compact card (owner 2026-09-30): one 🏪 icon instead of the labelled "View Seller" button;
+           the card opens the storefront through the delegated listener below. The URL used to be
+           spliced into an inline onclick string — encodeURIComponent leaves ' unescaped, so a shop
+           name with an apostrophe broke out of it. Values are now escaped. */
+        return `<div class="seller-card" style="cursor:pointer;" data-store-url="${_escHtml(profileUrl)}">
             <div class="seller-avatar" style="background:linear-gradient(135deg,rgba(113,255,0,0.15),rgba(0,170,255,0.15));display:flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:50%;border:2px solid rgba(113,255,0,0.3);">
                 <span style="font-size:22px;font-weight:900;color:#71ff00;">${initials}</span>
             </div>
-            <h3>${s.name}</h3>
-            <div class="seller-location-tag">📍 ${locationName}</div>
+            <h3>${_escHtml(s.name)}</h3>
+            <div class="seller-location-tag">📍 ${_escHtml(locationName)}</div>
             <div class="seller-stars">${starsHtml}</div>
             <p class="seller-rating-text">${ratingText}${totalSales > 0 ? " · " + totalSales + " Sales" : ""}</p>
             <div class="seller-tags">
                 ${tags.map(t => `<span class="seller-tag">${CAT_LABELS[t] || "🛍️ " + t}</span>`).join("")}
                 <span class="seller-tag">📦 ${s.products.length} listing${s.products.length !== 1 ? "s" : ""}</span>
             </div>
-            <a href="${profileUrl}" class="seller-visit-btn" onclick="event.stopPropagation()">
-                <i class="fas fa-store"></i> View Seller
-            </a>
+            <a href="${_escHtml(profileUrl)}" class="seller-visit-ico" aria-label="Visit ${_escHtml(s.name)} storefront" title="Visit storefront" onclick="event.stopPropagation()">🏪</a>
         </div>`;
     }).join("");
 }
@@ -1794,16 +1807,14 @@ function displayFeaturedShops(){
                 <span class="featured-ribbon-star">★</span>
             </div>
             <div class="seller-avatar" style="${avatarStyle}">${avatarInner}</div>
-            <h3>${f.storeName}</h3>
-            <div class="seller-location-tag">📍 ${locationName}</div>
+            <h3>${_escHtml(f.storeName)}</h3>
+            <div class="seller-location-tag">📍 ${_escHtml(locationName)}</div>
             ${ratingHtml}
-            ${f.tagline ? `<p class="fs-tagline">${f.tagline.substring(0,50)}</p>` : ""}
+            ${f.tagline ? `<p class="fs-tagline">${_escHtml(String(f.tagline).substring(0,50))}</p>` : ""}
             <div class="seller-tags">
                 <span class="seller-tag">📦 ${f.productCount||0} products</span>
             </div>
-            <a href="${f.storeUrl}" class="seller-visit-btn fs-visit-btn" onclick="event.stopPropagation()">
-                <i class="fas fa-store"></i> Visit Store
-            </a>
+            <a href="${_escHtml(String(f.storeUrl||''))}" class="seller-visit-ico fs-visit-btn" aria-label="Visit ${_escHtml(f.storeName)} storefront" title="Visit storefront" onclick="event.stopPropagation()">🏪</a>
         </div>`;
     }).join("") + `
         <div class="seller-card featured-shop-promo">

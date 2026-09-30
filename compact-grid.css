@@ -1636,3 +1636,13 @@ body.light-mode #storiesSection {
 @media (min-width: 601px) and (max-width: 900px) {
   html body .cat-premium-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
 }
+/* Shop / seller cards (owner 2026-09-30): the labelled "View Seller" / "Visit Store" button is a
+   single 🏪 icon; the card itself opens the storefront. 36px to the eye, ≥44px tap target. */
+.seller-card .seller-visit-ico {
+  position: relative; display: inline-flex !important; align-items: center; justify-content: center;
+  width: 36px !important; height: 36px !important; min-height: 0 !important; min-width: 0 !important; padding: 0 !important;
+  margin: 8px auto 0; border-radius: 50%; font-size: 17px; line-height: 1; text-decoration: none;
+  background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.35);
+}
+.seller-card .seller-visit-ico::before { content: ""; position: absolute; inset: -4px; border-radius: 50%; }
+.seller-card .seller-visit-ico:focus-visible { outline: 2px solid #71ff00; outline-offset: 2px; }
