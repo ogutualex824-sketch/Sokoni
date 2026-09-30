@@ -1,3 +1,13 @@
+## 2026-09-30 — LEGAL-HUB COMMISSION: WhatsApp payment hand-off → SOKONI Support (own unit, certified, NOT deployed)
+
+Census: `legal-hub.html` "Log & Pay Commission" — an advocate self-reports a case fee; the page computes 5% CLIENT-SIDE, writes
+localStorage + a BROWSER-authored `legalCommissions/{ref}` (status invoiced), instructs payment to Safaricom Paybill 522522
+(outside IntaSend), and offered `wa.me/254703480154` "I want to pay my commission". No server intent, no verification, no
+settlement authority; `posSettleCommission` is merchant/till-scoped and does not apply to providers. Verdict: a PAYMENT hand-off.
+Smallest replacement (this commit): the WhatsApp control becomes "🛟 Settle via SOKONI Support" → `support.html?topic=payment&ref=SOK-…`
+with fee/owed prefilled. Intended end state (separate functions slice): an IntaSend provider-commission flow with a server rate
+(finos-utils) and ledger. `scripts/test-legal-commission-link.js` 3/0. Files: `legal-hub.html`, the test, `CHANGELOG.md`.
+
 ## 2026-09-30 — HOTFIX to the header unit: palette close on phones + quick-actions trigger on the home page
 
 Owner report after v648: the quick-actions (command palette) close button "does not close" on a phone, and the trigger is
