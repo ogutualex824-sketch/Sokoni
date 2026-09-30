@@ -8413,8 +8413,10 @@ exports.webhookIntasend = onRequest(
        (invoice.value — NOT net_amount, which is value minus IntaSend's charges) equals the
        intent to the cent. Anything else is parked as REVIEW BEFORE the COMPLETE claim, so no
        commission, wallet credit, stock move or order finalisation can follow. A replayed
-       delivery re-evaluates to the same answer. Payments with no product_order intent are
-       untouched here (the enforcement for those is a later, separate step). ══ */
+       delivery re-evaluates to the same answer. Unit 4b: an intent-less payment whose meta would
+       FINALISE a marketplace order (wouldFinalizeMarketplaceOrder — the same predicate the
+       settlement branch uses) parks as missing_intent: its seller, items and amount would all be
+       browser-supplied. Every other intent-less payment is untouched. ══ */
     if (fsStatus === "COMPLETE") {
       const { assessProductOrderPayment } = require("./payment-attribution");
       const _gIntentRef = existing.intentRef || apiRef;
@@ -8445,6 +8447,7 @@ exports.webhookIntasend = onRequest(
         apiRef,
         grossAmount: (invoice.value !== undefined ? invoice.value : req.body?.value),
         currency:    invoice.currency || req.body?.currency || null,
+        legacyMeta:  existing.meta || null,   /* Unit 4b: decides only WHETHER to refuse, never who is paid */
       });
       if (_gate.applies && !_gate.ok) {
         await _park(_gate.reason, { expectedAmountCents: _gate.expectedCents ?? null, confirmedGrossCents: _gate.confirmedCents ?? null });
@@ -8754,10 +8757,9 @@ exports.webhookIntasend = onRequest(
           orderId:   attribution.orderId   || (payData.meta || {}).orderId,
           items:     (attribution.items && attribution.items.length) ? attribution.items : (payData.meta || {}).items,
         };
-        const _cat = String(_pm.category || "").toLowerCase();
-        const _isProductPay = !!_pm.orderId
-          && _pm.type !== "booking"
-          && !["subscription", "wallet_topup", "topup"].includes(_cat);
+        /* Unit 4b: the ONE predicate — the pre-claim gate refuses an intent-less payment by the same
+           test, so what it refuses can never drift from what this branch would finalise. */
+        const _isProductPay = require("./payment-attribution").wouldFinalizeMarketplaceOrder(_pm);
         if (_isProductPay) {
           const _fin = await _finalizeMarketplacePayment(db, admin, {
             checkoutId:    apiRef,

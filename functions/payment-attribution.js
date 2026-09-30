@@ -118,13 +118,42 @@ function decidePaidTransition({ intent, confirmedAmount, isTillSale }) {
 }
 
 /**
+ * Would webhookIntasend's settlement branch finalise a marketplace order (order → paid, stock
+ * decremented via _finalizeMarketplacePayment) for this meta? THE one definition: the settlement branch
+ * and the Unit 4b gate both call it, so "what the gate refuses" can never drift from "what settlement
+ * would do". Semantics are byte-for-byte the expression it replaced in index.js (lowercase, NOT
+ * trimmed; String() coercion) — changing them changes live settlement, not just the gate.
+ */
+function wouldFinalizeMarketplaceOrder(meta) {
+  const m = (meta && typeof meta === 'object') ? meta : {};
+  const cat = String(m.category || '').toLowerCase();
+  return !!m.orderId
+    && m.type !== 'booking'
+    && !['subscription', 'wallet_topup', 'topup'].includes(cat);
+}
+
+/**
  * ONLINE PRODUCT CHECKOUT — may this provider confirmation settle this order? (owner repair #1,
  * 2026-09-30; drafted for review by the webhook-lineage owner).
  *
  * Applies ONLY when the payment carries a server-minted `product_order` intent (createPaymentIntent,
- * priced from the catalogue, seller resolved from each product's own record). Without one the webhook
- * keeps today's behaviour — the enforcement that refuses intent-less product payments is a separate,
- * later step, safe only once the checkout client that mints intents is live.
+ * priced from the catalogue, seller resolved from each product's own record).
+ *
+ * UNIT 4b — AN INTENT-LESS PAYMENT MAY NOT FINALISE A MARKETPLACE ORDER. When there is NO intent and
+ * the client-written meta would drive `_finalizeMarketplacePayment` (order → paid, stock decremented),
+ * the payment is refused as `missing_intent`: the seller, the items and the amount would all come from
+ * the browser (legacy_meta). Keyed on that EFFECT (wouldFinalizeMarketplaceOrder — the webhook's own
+ * settlement branch calls the same predicate), NOT on the `category` label:
+ *   - a label is browser-chosen, so `category:'default'` + `orderId` would dodge a label rule and
+ *     still finalise the order;
+ *   - SokoniPay's gateway labels a deposit `product.category || 'product'` (product.js contact-seller
+ *     fallback) with NO orderId — it finalises no order and must not be refused here.
+ * Census 2026-09-30 (live hosting b108ae3): checkout.html is the only STK caller that sends orderId, and
+ * sokoni-intasend.js forwards orderId only when the caller supplies it. POS, bookings and every other
+ * SokoniPay caller keep today's behaviour until their own migration.
+ * DEPLOY ORDER: only after the checkout client that mints product_order intents is live (Unit 3) AND
+ * initiateSTKPush refuses intent-less product STKs (Unit 4a), and after in-flight legacy STKs drain.
+ * A straggler is PARKED as REVIEW, never lost: the money is captured and a reviewer re-drives it.
  *
  * The comparison is on the GROSS amount the buyer paid (`value`), to the CENT, in KES.
  *
@@ -144,12 +173,19 @@ function decidePaidTransition({ intent, confirmedAmount, isTillSale }) {
  * Pure apart from the one intent read the caller passes in. Never throws, never writes.
  *
  * @param {object|null} intent   paymentIntents/{intentRef} data, or null
- * @param {object} evidence      { apiRef, grossAmount, currency } from the provider payload
+ * @param {object} evidence      { apiRef, grossAmount, currency } from the provider payload, plus
+ *                               legacyMeta: payments/{ref}.meta (client-written; used ONLY to decide
+ *                               that a refusal applies, never to decide who is paid or how much)
  * @returns {{applies:false}|{applies:true, ok:boolean, reason?:string, expectedCents?:number, confirmedCents?:number}}
  */
 function assessProductOrderPayment(intent, evidence) {
-  if (!intent || intent.purpose !== 'product_order') return { applies: false };
   const e = evidence || {};
+  if (!intent) {
+    return wouldFinalizeMarketplaceOrder(e.legacyMeta)
+      ? { applies: true, ok: false, reason: 'missing_intent', expectedCents: null }
+      : { applies: false };
+  }
+  if (intent.purpose !== 'product_order') return { applies: false };
   const md = (intent.metadata && typeof intent.metadata === 'object') ? intent.metadata : {};
   const expectedCents = Number(intent.amountCents);
   const refuse = (reason, extra) => Object.assign({ applies: true, ok: false, reason, expectedCents }, extra || {});
@@ -172,4 +208,4 @@ function assessProductOrderPayment(intent, evidence) {
   return { applies: true, ok: true, expectedCents, confirmedCents };
 }
 
-module.exports = { mergeAttribution, resolveFinancialAttribution, decidePaidTransition, assessProductOrderPayment, TERMINAL_INTENT_STATUSES };
+module.exports = { mergeAttribution, resolveFinancialAttribution, decidePaidTransition, assessProductOrderPayment, wouldFinalizeMarketplaceOrder, TERMINAL_INTENT_STATUSES };

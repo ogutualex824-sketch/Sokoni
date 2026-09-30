@@ -18,11 +18,50 @@ Anything else parks the payment as `status: 'REVIEW'` with a `reviewReason` **be
 so no commission, wallet credit, stock move or order finalisation can follow.
 
 The reasons are: `wrong_order`, `wrong_currency`, `amount_mismatch`, `missing_evidence`,
-`intent_terminal`, `intent_amount_invalid`, and `gate_error` (the intent could not be read). A replayed
+`intent_terminal`, `intent_amount_invalid`, `gate_error` (the intent could not be read), and — from
+Unit 4b — `missing_intent`. A replayed
 delivery re-evaluates the same way.
 
-Payments **without** a `product_order` intent are unchanged. Refusing those is a later step ("Unit 4"),
-safe only once the checkout that mints intents is live.
+## Unit 4 — an intent-less payment may not finalise a marketplace order
+
+The rule on both sides is keyed on the **effect**, never on a label: *would this payment's meta
+finalise a marketplace order* (order → paid, stock decremented)? The predicate is
+`wouldFinalizeMarketplaceOrder`: `orderId` present, `type` not `booking`, and category not
+subscription/wallet_topup/topup. It uses the exact semantics of the webhook's settlement branch.
+
+- **Why not the `category` label.** A label is chosen by the browser.
+  - `category:'default'` + `orderId` would dodge a label rule and still finalise the order.
+  - The census (2026-09-30, hosting `b108ae3`) found that SokoniPay's gateway labels a **deposit**
+    `product.category || 'product'` (the product.js contact-seller fallback) with **no** orderId. A
+    label rule would have refused that live flow.
+  - `checkout.html` is the only STK caller that sends `orderId`.
+- **4a, `initiateSTKPush`.** `functions/stk-intent-enforcement.js` gains `wouldFinalizeMarketplaceOrder`
+  (matched `marketplace_order`). Such an STK with no intent is refused before any money moves. Built
+  on the live initiateSTKPush source `8afb25d`.
+- **4b, `webhookIntasend`.** With no intent, the same predicate on `payments/{ref}.meta` parks the
+  payment as `REVIEW(missing_intent)` before the COMPLETE claim.
+  - The settlement branch now calls the **same** function (`_isProductPay`), so the refusal cannot
+    drift from settlement.
+  - The meta decides only *whether* to refuse, never who is paid or how much.
+- **Unchanged.** POS, bookings, SokoniPay deposits and every other intent-less payment behave as
+  before, until each caller's own migration.
+- **Deploy order:**
+  1. Unit 1, then Unit 2, then Unit 3 (the checkout that mints intents).
+  2. Then 4a.
+  3. Then 4b, after in-flight legacy STK payments have drained.
+  - A straggler that arrives after 4b is parked, not lost: the money is captured and a reviewer
+    re-drives it.
+- **Certification:**
+  - `scripts/test-product-intent-enforcement-webhook.js` (pure, 29 rows):
+    - 15 caller controls;
+    - P-7, the shared predicate against the verbatim 68811e1 settlement expression on 350 edge cases.
+
+    The 4b rows fail on the Unit 2 draft.
+  - `scripts/test-b1-online-checkout-chain.js` (emulator):
+    - C-1a/C-1r/C-2: zero money effects on the parked payments;
+    - C-3a..d: SokoniPay, booking, POS and food controls settle COMPLETE.
+  - 4a: `test-healthcare-subscription-foundation.js` STK-6e..6h.
+  - 4a vs 4b predicate equivalence: 300 cases.
 
 ## Why GROSS (`value`), never the webhook's `amount` — measured
 
