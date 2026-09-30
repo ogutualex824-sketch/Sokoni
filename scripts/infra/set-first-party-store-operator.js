@@ -47,7 +47,7 @@ const expectEmail = _arg('--expect-email');
 const SET_BY = 'scripts/infra/set-first-party-store-operator.js';
 
 /** wallet-engine.js _ensureWallet (v2) creation shape, balance 0. Kept in step by
-    scripts/test-first-party-store-operator-unit.js, which parses the source and fails on drift. */
+    scripts/test-sokoni-first-party-store.js (I1), which parses the source and fails on drift. */
 function walletV2Shape(uid, now) {
   return {
     uid,
