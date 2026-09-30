@@ -220,13 +220,30 @@
     }
     .biz-product-cat { font-size: 11px; color: rgba(255,255,255,0.35); margin-bottom: 6px; }
     .biz-product-price { font-size: 14px; font-weight: 900; color: #71ff00; }
-    .biz-product-cart-btn {
-      width: 100%; margin-top: 8px; padding: 8px; border-radius: 9px;
-      background: rgba(113,255,0,0.1); border: 1px solid rgba(113,255,0,0.2);
-      color: #71ff00; font-size: 12px; font-weight: 800; cursor: pointer;
-      font-family: inherit; transition: background .2s;
+    /* Compact premium card (owner 2026-09-30): 🛒 icon on the photo, ≥44px tap target. */
+    .biz-product-card { position: relative; }
+    .biz-photo-icons { position: absolute; top: 0; left: 0; right: 0; aspect-ratio: 1; pointer-events: none; z-index: 3; }
+    .biz-product-cart-btn.biz-ico {
+      pointer-events: auto; position: absolute; right: 7px; bottom: 7px;
+      /* !important: a global phone rule forces every button to min-height:44px, which stretched
+         the icon into a 28×44 oval */
+      width: 30px !important; height: 30px !important; min-height: 0 !important; max-height: 30px !important;
+      min-width: 0 !important; margin: 0; padding: 0 !important;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      background: rgba(113,255,0,0.9); border: 1px solid #71ff00; color: #050f05;
+      font-size: 14px; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.45);
     }
-    .biz-product-cart-btn:hover { background: rgba(113,255,0,0.2); }
+    .biz-product-cart-btn.biz-ico::before { content: ""; position: absolute; inset: -7px; border-radius: 50%; }
+    .biz-product-cart-btn.biz-ico:focus-visible { outline: 2px solid #71ff00; outline-offset: 2px; }
+    @media (max-width: 600px) {
+      .biz-products-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 7px !important; }
+      .biz-product-info { padding: 6px 7px 8px; }
+      .biz-product-name { font-size: 10.5px; }
+      .biz-product-cat { font-size: 9.5px; margin-bottom: 3px; }
+      .biz-product-price { font-size: 12px; }
+      .biz-product-cart-btn.biz-ico { width: 28px !important; height: 28px !important; max-height: 28px !important; right: 5px; bottom: 5px; font-size: 13px; }
+      .biz-product-cart-btn.biz-ico::before { inset: -8px; }
+    }
 
     /* ── FILTER CHIPS ── */
     .biz-filter-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
@@ -1117,10 +1134,20 @@ function renderProducts(list) {
   grid.innerHTML = list.map(p => productCardHtml(p)).join('');
 }
 
+/* COMPACT PREMIUM CARD (owner 2026-09-30): no labelled button — a 🛒 icon on the photo,
+   inside .biz-photo-icons (a transparent square over the image, OUTSIDE the product link,
+   so the tap never navigates). This page loads no wishlist service, so there is no ❤.
+
+   The old button carried the product in an inline onclick built with JSON.stringify, whose
+   double quotes ended the double-quoted attribute: the handler never parsed, and a product
+   name containing quotes could escape the attribute. The product now lives in an index read
+   by ONE delegated listener; only the id goes into the markup, escaped. */
+const _bizCardIndex = new Map();
 function productCardHtml(p) {
   const imgHtml = p.image
     ? `<img class="biz-product-img" src="${escHtml(p.image)}" alt="${escHtml(p.name)}" loading="lazy">`
     : `<div class="biz-product-img-placeholder">🛍️</div>`;
+  _bizCardIndex.set(String(p.id), { name: p.name || 'Product', price: Number(p.price || 0), image: p.image || '' });
   return `
     <div class="biz-product-card" data-cat="${escHtml(p.category || '')}">
       <a href="product.html?id=${escHtml(p.id)}" style="display:block;text-decoration:none;">
@@ -1131,11 +1158,19 @@ function productCardHtml(p) {
           <div class="biz-product-price">KES ${Number(p.price || 0).toLocaleString()}</div>
         </div>
       </a>
-      <button type="button" class="biz-product-cart-btn" onclick="bizAddToCart(${JSON.stringify(p.id)},${JSON.stringify(p.name)},${JSON.stringify(p.price)},${JSON.stringify(p.image||'')})">
-        <i class="fas fa-cart-plus"></i> Add to Cart
-      </button>
+      <div class="biz-photo-icons">
+        <button type="button" class="biz-product-cart-btn biz-ico" data-biz-cart="${escHtml(String(p.id))}"
+                aria-label="Add ${escHtml(p.name || 'product')} to cart">🛒</button>
+      </div>
     </div>`;
 }
+document.addEventListener('click', function (ev) {
+  const btn = ev.target && ev.target.closest ? ev.target.closest('[data-biz-cart]') : null;
+  if (!btn) return;
+  ev.preventDefault(); ev.stopPropagation();
+  const id = btn.getAttribute('data-biz-cart'), p = _bizCardIndex.get(id);
+  if (p) window.bizAddToCart(id, p.name, p.price, p.image);
+});
 
 window.bizFilterProducts = function (cat, btn) {
   document.querySelectorAll('#prodChips .biz-chip').forEach(c => c.classList.remove('active'));
