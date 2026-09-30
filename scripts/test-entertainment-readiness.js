@@ -106,7 +106,10 @@ const read = (f) => fs.readFileSync(Path.join(ROOT, f), 'utf8');
   say('\n── application decisions: server record ──');
   const AL = read('functions/application-lifecycle.js');
   const dIdx = AL.indexOf("await db.collection(DECISIONS).doc(String(applicationId)).set(");
-  const aIdx = AL.indexOf('await ref.set({\n      status,', dIdx) >= 0 ? AL.indexOf('await ref.set({\n      status,', dIdx) : AL.indexOf('await ref.set({\r\n      status,', dIdx);
+  /* 2026-09-30 (capability merge): the application write now opens with the preserved prior decision (`...preserved,`,
+     priorDecisionsPatch) before `status,` — the ORDER being asserted (decision record first) is unchanged. */
+  const _aw = dIdx > 0 ? AL.slice(dIdx).search(/await ref\.set\(\{\r?\n\s*(\.\.\.preserved,\r?\n\s*)?status,/) : -1;
+  const aIdx = _aw >= 0 ? dIdx + _aw : -1;
   ck('applicationDecide writes the decision record BEFORE the application (the trigger must find it)', dIdx > 0 && aIdx > dIdx);
   ck('the trigger passes the application id to decisionAuthority', /decisionAuthority\(after, appId\)/.test(AL));
   ck('reconcile (single + sweep) refuses a status with no matching record', (AL.match(/await decisionAuthority\(app, (snap|d)\.id\)/g) || []).length === 2);

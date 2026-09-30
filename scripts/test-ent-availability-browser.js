@@ -30,10 +30,13 @@ const FN = Path.join(ROOT, 'functions');
 const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
 const F = makeFakeFirestore({ clock: () => Date.now(), strictReadOrder: true });
 const db = F.db;
+/* The capability shell gate (merged 2026-09-30) accepts only a provider whose approval was DECIDED by a resolvable admin:
+   an approvedAt-only fixture is INVALID_LEGACY_APPROVAL. Seed the decision the producer would have written (FIXTURE != CONTRACT). */
+require('./lib/approval-fixture').autoApproveOnWrite(db);
 const say = console.log; console.log = console.info = console.warn = console.error = console.debug = () => {};
 const resolveIn = (m) => require.resolve(m, { paths: [FN] });
 const stub = (m, exp) => { const p = m.startsWith('./') ? Path.join(FN, m + '.js') : resolveIn(m); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
-const authApi = { getUser: async (u) => ({ uid: u, customClaims: {} }) };
+const authApi = { getUser: async (u) => ({ uid: u, customClaims: /^admin/.test(String(u)) ? { admin: true } : {} }) };
 const ADMIN = { apps: [{}], initializeApp: () => ({}), app: () => ({}), firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath }), auth: () => authApi, storage: () => ({ bucket: () => ({}) }) };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
 stub('firebase-admin/auth', { getAuth: () => authApi });

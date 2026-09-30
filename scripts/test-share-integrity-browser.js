@@ -30,9 +30,12 @@ const FN = Path.join(ROOT, 'functions');
 const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
 const F = makeFakeFirestore({ clock: () => Date.now(), strictReadOrder: true });
 const db = F.db;
+/* The capability shell gate (merged 2026-09-30) accepts only a provider whose approval was DECIDED by a resolvable admin:
+   an approvedAt-only fixture is INVALID_LEGACY_APPROVAL. Seed the decision the producer would have written (FIXTURE != CONTRACT). */
+require('./lib/approval-fixture').autoApproveOnWrite(db);
 const say = console.log; console.log = console.info = console.warn = console.error = console.debug = () => {};
 const stub = (m, exp) => { const p = m.startsWith('./') ? Path.join(FN, m + '.js') : require.resolve(m, { paths: [FN] }); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
-const authApi = { getUser: async (u) => ({ uid: u, customClaims: {} }), setCustomUserClaims: async () => {} };
+const authApi = { getUser: async (u) => ({ uid: u, customClaims: /^admin/.test(String(u)) ? { admin: true } : {} }), setCustomUserClaims: async () => {} };
 const ADMIN = { apps: [{}], initializeApp: () => ({}), app: () => ({}), firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath }), auth: () => authApi, storage: () => ({ bucket: () => ({}) }) };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
 stub('firebase-admin/auth', { getAuth: () => authApi });
@@ -71,8 +74,11 @@ const CARD_PAGE = '<!doctype html><html><head><meta charset="utf-8"><meta name="
   const STAMP_PH1 = { category: require(Path.join(FN, 'business-category.js')).categoryFromApplication(APP_PH1, APP_PH1.role).category, source: 'application', applicationId: 'app_ph1',
     lane: require(Path.join(FN, 'provider-hub.js')).classifyDecidedApplication(Object.assign({}, APP_PH1, { role: APP_PH1.role })) };
   if (STAMP_PH1.category !== 'artist_creator' || STAMP_PH1.lane.hub !== 'entertainment') throw new Error('fixture: the producers no longer stamp a photographer as artist_creator / entertainment — ' + JSON.stringify(STAMP_PH1));
-  await db.doc('providers/ph1').set({ uid: 'ph1', name: 'Jane Photography', status: 'active', verified: true, category: 'photographer', acceptsBookings: true, rating: 5, reviewCount: 99,
+  await db.doc('providers/ph1').set({ uid: 'ph1', name: 'Jane Photography', status: 'active', verified: true, approvedAt: 1 /* the projection of the admin decision seeded below */, category: 'photographer', acceptsBookings: true, rating: 5, reviewCount: 99,
     business: STAMP_PH1 });
+  /* The capability shell gate (merged 2026-09-30): an operating provider's approval is an ADMIN DECISION, not a flag —
+     seed the decided application the producer would have (scripts/lib/approval-fixture.js). */
+  await require('./lib/approval-fixture').seedApproved(db, 'ph1', 'provider', { category: 'photographer' });
   await db.doc('providerProfiles/ph1').set({ uid: 'ph1', providerId: 'PRV-AB12CD34', status: 'active', name: 'Jane Photography' });
   await db.doc('applications/app_ph1').set(APP_PH1);
   await db.doc('providerAvailability/ph1').set({ uid: 'ph1', modes: ['fixed_hours'], schedule: WEEK, appt: { enabled: true, durationMins: 60, maxDaysAhead: 90, minNoticeHours: 1, allowSameDay: true }, cap: {} });

@@ -36,11 +36,14 @@ const REAL_NOW = Date.now();
 let NOW = REAL_NOW;
 const F = makeFakeFirestore({ clock: () => NOW, strictReadOrder: true });
 const db = F.db;
+/* The capability shell gate (merged 2026-09-30) accepts only a provider whose approval was DECIDED by a resolvable admin:
+   an approvedAt-only fixture is INVALID_LEGACY_APPROVAL. Seed the decision the producer would have written (FIXTURE != CONTRACT). */
+require('./lib/approval-fixture').autoApproveOnWrite(db);
 const say = console.log;
 console.log = console.info = console.warn = console.debug = () => {};
 const resolveIn = (m) => require.resolve(m, { paths: [FN] });
 const stub = (m, exp) => { const p = m.startsWith('./') ? Path.join(FN, m + '.js') : resolveIn(m); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
-const authApi = { getUser: async (u) => ({ uid: u, customClaims: {} }) };
+const authApi = { getUser: async (u) => ({ uid: u, customClaims: /^admin/.test(String(u)) ? { admin: true } : {} }) };
 const ADMIN = { apps: [{}], initializeApp: () => ({}), app: () => ({}),
   firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath }), auth: () => authApi, storage: () => ({ bucket: () => ({}) }) };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
@@ -84,7 +87,7 @@ async function seedProvider(uid, opts) {
   const _app = { category: o.category || 'photographer', role: 'provider' };
   const c1 = require(_fn + '/business-category.js').categoryFromApplication(_app, 'provider').category;
   const lane = require(_fn + '/provider-hub.js').classifyDecidedApplication(_app);   /* the producer's own lane classifier */
-  await db.doc(`providers/${uid}`).set({ name: uid, status: o.status || 'active', approvedAt: 1, category: o.category || 'photographer', acceptsBookings: true, ...(o.decided !== false ? { business: { category: c1, lane, source: 'application' } } : {}) });   /* the stamp exists only once an application was DECIDED (projectProvider writes it at approval) */
+  await db.doc(`providers/${uid}`).set({ name: uid, status: o.status || 'active', ...(o.decided !== false ? { approvedAt: 1 } : {}) /* a never-approved provider carries no approval artefact (2026-09-30) */, category: o.category || 'photographer', acceptsBookings: true, ...(o.decided !== false ? { business: { category: c1, lane, source: 'application' } } : {}) });   /* the stamp exists only once an application was DECIDED (projectProvider writes it at approval) */
   if (o.decided !== false) await db.doc(`applications/app_${uid}`).set({ uid, status: 'approved', role: 'provider', category: o.category || 'photographer' });
   await db.doc(`providerAvailability/${uid}`).set(cfgDoc(o.cfg));
   await db.doc(`providerServices/svc_${uid}`).set({ providerId: uid, name: 'Portrait session', price: 500000, fee: 0, deposit: 0, durationMins: 60, active: true });
@@ -138,7 +141,11 @@ const book = (buyer, provider, svc, date, time, extra) => BS._h.bookingCreateSer
   ck('an UNVERIFIED artist takes no public bookings: every day UNAVAILABLE, and no reason given', un.bookable === false && Object.values(un.days).every((s) => s === 'UNAVAILABLE') && !JSON.stringify(un).includes('VERIFIED'));
   ck('…and cannot be booked directly either', (await code(book('b1', 'dj0', 'svc_dj0', D10, '10:00'))) === 'failed-precondition');
   ck('a SUSPENDED provider cannot be booked', (await code(book('b1', 'sus', 'svc_sus', D10, '10:00'))) === 'failed-precondition');
-  await db.doc('applications/app_dj0').set({ uid: 'dj0', status: 'approved', role: 'provider', category: 'dj' });
+  /* An APPROVAL is an admin decision (capability shell gate, merged 2026-09-30): a bare status:'approved' with no decider
+     is INVALID_LEGACY_APPROVAL. The decision fields mirror scripts/lib/approval-fixture.js seedApproved. */
+  await db.doc('applications/app_dj0').set({ uid: 'dj0', status: 'approved', role: 'provider', category: 'dj',
+    statusCanonical: 'approved', decidedBy: 'admin_1', decidedAt: '2026-09-01T09:00:00.000Z', decisionAppliedFor: 'approved',
+    projectionStatus: 'applied', agreementAccepted: true, agreementVersion: '2026-09-07-lanes-mkt-ladder-pos-5pct' });
   ck('after the application is APPROVED the artist becomes bookable', (await AV._h.entAvailMonth({ ...who(null), data: { providerId: 'dj0', month: CORE.monthOf(D10) } })).bookable === true);
 
   /* ═══ 3. the race ═══ */
