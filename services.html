@@ -285,6 +285,17 @@
       box-shadow: 0 16px 48px rgba(0,0,0,0.4), 0 0 0 1px rgba(113,255,0,0.08);
     }
     /* Coloured cover band */
+    /* Compact premium card icons on the cover strip (owner 2026-09-30): 30px to the eye,
+       ≥44px tap target via ::before. */
+    .pv-icons { position: absolute; top: 8px; right: 8px; display: flex; gap: 12px; z-index: 3; }
+    .pv-ico { position: relative; width: 30px !important; height: 30px !important; min-height: 0 !important; max-height: 30px !important; min-width: 0 !important;
+      padding: 0 !important; margin: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 14px; line-height: 1; cursor: pointer; text-decoration: none;
+      background: rgba(8,8,8,0.62); border: 1px solid rgba(255,255,255,0.22); color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+    .pv-ico--book { background: rgba(113,255,0,0.9); border-color: #71ff00; color: #050f05; }
+    .pv-ico::before { content: ""; position: absolute; inset: -7px; border-radius: 50%; }
+    .pv-ico:focus-visible { outline: 2px solid #71ff00; outline-offset: 2px; }
+    .pv-card[data-profile-href] { cursor: pointer; }
     .pv-cover {
       height: 76px; position: relative;
       background: linear-gradient(135deg, rgba(113,255,0,0.13), rgba(0,170,255,0.09));
@@ -1112,8 +1123,17 @@ function renderProviders(){
       ? `<div class="pv-stars">${"★".repeat(Math.round(p.rating))}${"☆".repeat(5-Math.round(p.rating))} <span>${p.rating.toFixed(1)}${p.jobsCompleted?` · ${p.jobsCompleted} jobs`:""}</span></div>`
       : `<div class="pv-stars" style="color:rgba(255,255,255,0.4);font-size:12px;">New on SOKONI</div>`;
     return `
-    <div class="pv-card ${p.available===false?'pv-unavail':''}" data-provider-id="${pid}">
+    <div class="pv-card ${p.available===false?'pv-unavail':''}" data-provider-id="${pid}" data-profile-href="${esc(p.profileUrl)}">
       <div class="pv-cover ${coverCls}">
+        <!-- COMPACT PREMIUM CARD (owner 2026-09-30): 💬 message and 📩 book as icons on the
+             decorative cover strip — no names in buttons, no labelled footer row. The whole card
+             opens the profile (delegated listener below). New classes on purpose: sokoni-social
+             injects a Follow row only next to .pv-book-btn, and the card should not grow one. -->
+        <div class="pv-icons">
+          <button type="button" class="pv-ico pv-ico--msg" aria-label="Message ${esc(p.name)}" title="Message ${firstName}"
+                  onclick="event.stopPropagation();window.SokoniInbox?SokoniInbox.openChat({otherUid:'${jsId}',otherName:'${jsName}',type:'customer-provider',context:'${catLabel} · SOKONI Services'}):location.href='messages.html'">💬</button>
+          <a class="pv-ico pv-ico--book" href="${esc(p.profileUrl)}" aria-label="Book ${esc(p.name)}" title="Book ${firstName}" onclick="event.stopPropagation()">📩</a>
+        </div>
         <div class="pv-avatar-wrap">
           <div class="pv-avatar" data-initials="${esc(initials)}">${p.photo
             ? `<img src="${esc(p.photo)}" alt="${firstName}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" onerror="this.onerror=null;this.parentNode.textContent=this.parentNode.dataset.initials">`
@@ -1136,14 +1156,20 @@ function renderProviders(){
         <div class="pv-skills">${(p.skills||[]).slice(0,3).map(s=>`<span class="pv-skill">${esc(s)}</span>`).join("")}</div>
         ${bioText?`<div class="pv-bio">"${bioText}"</div>`:""}
         ${p.rate!=null?`<div class="pv-rate">KES ${Number(p.rate).toLocaleString()} <span>${rateLabel}</span></div>`:``}
-        <div class="pv-foot">
-          <a class="pv-book-btn" href="${esc(p.profileUrl)}" style="text-decoration:none;display:flex;align-items:center;justify-content:center;">📩 Book ${firstName}</a>
-          <button type="button" class="pv-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'${jsId}',otherName:'${jsName}',type:'customer-provider',context:'${catLabel} · SOKONI Services'}):location.href='messages.html'" title="Message ${firstName}">💬 Message ${firstName}</button>
-        </div>
       </div>
     </div>`;
   }).join("");
 }
+
+/* Compact premium card: a tap anywhere on a provider card (not on its icons or links) opens
+   the profile. One delegated listener; the href comes from the card's escaped data attribute,
+   never from an inline script string. */
+document.addEventListener('click', function (ev) {
+  const card = ev.target && ev.target.closest ? ev.target.closest('.pv-card[data-profile-href]') : null;
+  if (!card || ev.target.closest('a,button,input,select,textarea,label')) return;
+  const href = card.getAttribute('data-profile-href');
+  if (href) location.href = href;
+});
 
 /* ── Open booking modal ── */
 let _currentBookingProviderId = null;
