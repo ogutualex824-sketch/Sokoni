@@ -1,0 +1,15 @@
+=== 2026-09-30T13:57:41Z preflight READY twice; lock acquired
+RAM available       PASS      free physical 766 MB (WARN: below 1500), free virtual 8827 MB
+Orphan WebKit       PASS      0 orphan browser processes, 0 owned by live runs
+Peer browser lock   PASS      no peer browser run
+RESULT: READY
+tree: 7431054 test(home): recs predicate follows the uploadedAt qu clean=yes
+live before: "commitShort": "b108ae3"
+=== home suite
+39 passed, 0 failed
+=== HEADED baseline (live files)
+{"attempt":1,"candidate":false,"served":{"db":0,"recs":0},"result":{"appState":"exchanged","evts":"appcheck-ready > listener-attached > failed-precondition:The query requires an index. You can create it here: https:/ > http-fallback-ok:97 > read-ok:97","recsCards":0,"recsText":"No recommendations yet — browse a few items to personalise y","trendingFirst":["VP97","VP96","VP95","VP100"],"trendingCount":20,"newArrivalsFirst":["QATEST100","1784796275236","1784762904410"]},"logs":["[SokoniRecs] Fetch error for products The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/sokoni-aeb26/firestore/indexes?create_composite=Ck1wcm9qZWN0","[SokoniRecs] Fetch error for mechanics The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/sokoni-aeb26/firestore/indexes?create_composite=Ck5wcm9qZWN"]}
+=== HEADED candidate 82d8ce0 (readers served in place)
+{"attempt":1,"candidate":true,"served":{"db":1,"recs":1},"result":{"appState":"exchanged","evts":"appcheck-ready > listener-attached > snapshot:102:false > read-ok:102","recsCards":6,"recsText":"✨ Picked For You◎ AI · LOW\n🛍️\nSOKONI QA Test Product\nvape ·","trendingFirst":["QATEST100","1784796275236","1784762904410","1784762785525"],"trendingCount":20,"newArrivalsFirst":["QATEST100","1784796275236","1784762904410"]},"logs":[]}
+live after: "commitShort": "b108ae3"
+=== 2026-09-30T13:59:05Z done

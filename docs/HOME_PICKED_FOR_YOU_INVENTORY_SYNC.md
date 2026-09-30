@@ -129,3 +129,20 @@ Hosting-only: re-release the current live version (`6f7202bd5dd81d84`, commit `2
 ## 7 · Deploy, when authorized (not now)
 
 From `C:/temp/sok-home` at the authorized commit, clean, after re-reading `version.json` (must still be `2f3bb6f`; a descendant → rebase; a non-ancestor → re-port): `firebase deploy --only hosting --project sokoni-aeb26 -m "home picked-for-you + inventory sync <commit>"`. One deploy at a time; never `--force`; the browser gate needs both `node_modules` junctions and no peer browser suite running. Verify cache-busted as in §4.
+
+## 4f · Headed-Chrome verification of `82d8ce0` in a CLEAN window (2026-09-30 13:57–13:59Z) — PASSED
+
+Executed by a runner that acquired the browser lock **by the preflight's exit code inside the same process** (READY twice, 20 s apart: free physical 766 MB, 0 orphans, no peer run), after an earlier attempt was discarded as provisional because the window closed between detection and use. Log: `docs/release-gates/headed-82d8ce0-clean.txt`.
+
+| | Live baseline (files as served today) | **Candidate `82d8ce0`** (`sokoni-db.js` + `sokoni-recommendations.js` served in place on the live origin) |
+|---|---|---|
+| App Check | `exchanged` (valid token) | `exchanged` |
+| Catalogue listener | `listener-attached → failed-precondition: The query requires an index → http-fallback-ok:97 → read-ok:97` (HTTP fallback is the catalogue) | **`listener-attached → snapshot:102 (fromCache:false) → read-ok:102`** — the Firestore listener delivers, no fallback needed |
+| Recommendations | 0 cards, "requires an index" ×2 | **6 cards**, no errors |
+| Trending order | `VP97, VP96, VP95, VP100` (lexicographic ids) | `QATEST100` (Timestamp-typed, known), then `1784796275236, 1784762904410, 1784762785525` (newest first) |
+| Live hosting pointer before / after | `b108ae3` / `b108ae3` | unchanged — nothing deployed |
+| Home browser suite (`test-home-picked-for-you.js`) in the same window | — | 39 / 0 |
+
+Note: the listener returns **102** documents where `/api/catalogue` returns 97 — the API applies the server-side listing filter, the client applies `isPubliclyListed` after delivery, so Home renders the same listed set either way. Recorded, not a defect of this slice.
+
+Still separate: server authority for `uploadedAt`; the inventory gate's pre-existing failures ([[TEST_ENVIRONMENT_PREFLIGHT]] §7). **Deployment is not authorized.**
