@@ -111,7 +111,8 @@
     .pg-modal-msg{font-size:12px;min-height:16px;margin-top:10px;text-align:center;}
     @media(max-width:600px){.pg-type-grid{grid-template-columns:repeat(3,1fr);}.pg-provider-grid{grid-template-columns:1fr;}}
     @media(min-width:769px){.bottom-nav{display:none!important;}body{padding-bottom:0;}}
-  </style>
+  /* Compact card icon (owner 2026-09-30): 30px to the eye, ≥44px tap target. */.pg-ico{position:relative;width:30px!important;height:30px!important;min-height:0!important;max-height:30px!important;min-width:0!important;padding:0!important;margin:0;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:14px;line-height:1;cursor:pointer;background:rgba(113,255,0,0.9);border:1px solid #71ff00;color:#050f05;}.pg-ico::before{content:"";position:absolute;inset:-7px;border-radius:50%;}.pg-ico:focus-visible{outline:2px solid #71ff00;outline-offset:2px;}
+</style>
 <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
      through SokoniCart; without this tag the pip cannot render a count. -->
 <script src="sokoni-cart.js"></script>
@@ -304,8 +305,7 @@ function renderCars(){
         <div class="pg-car-foot">
           <div class="pg-car-rate">${c.rate} <small>${c.rateType}</small></div>
           <div class="pg-car-btns">
-            <a href="https://wa.me/254${c.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi! I found '+c.name+' on SOKONI. Is it available for rental? Please confirm.')}" target="_blank" class="pg-wa-btn"><i class="fab fa-whatsapp"></i></a>
-            <button type="button" class="pg-book-btn" onclick="openBookingFor('${c.id}','${c.name}')">Book →</button>
+            <button type="button" class="pg-ico" aria-label="Book ${c.name}" title="Book" onclick="openBookingFor('${c.id}','${c.name}')">📩</button>
           </div>
         </div>
       </div>

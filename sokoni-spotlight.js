@@ -78,11 +78,10 @@ window.SokoniSpotlight = (function(){
       + '<div class="seller-stars">' + s.stars + '</div>'
       + '<p class="seller-rating-text">' + s.rating + '</p>'
       + '<div class="seller-tags">' + s.tags.map(function(t){ return '<span class="seller-tag">'+t+'</span>'; }).join('') + '</div>'
-      + '<a href="category.html?cat=' + s.cat + '" class="seller-visit-btn">🏪 Visit Store</a>'
-      + '<div class="seller-follow-row">'
-      + '<button type="button" class="seller-follow-btn" onclick="window.SokoniSocial&&window.SokoniSocial.toggleFollow(\''+s.id+'\',\''+s.name+'\',this,\'store\')">+ Follow</button>'
-      + '<button type="button" class="seller-share-btn" onclick="window.SokoniSocial&&window.SokoniSocial.openShareModal({id:\''+s.id+'\',name:\''+s.name+'\',type:\'store\'})">📣</button>'
-      + '</div></div>';
+      /* Compact card (owner 2026-09-30): shop cards keep ONE 🏪 icon — "Visit Store", "+ Follow"
+         and 📣 share are no longer on the card. */
+      + '<a href="category.html?cat=' + encodeURIComponent(s.cat) + '" class="seller-visit-ico" aria-label="Visit ' + s.name + ' storefront" title="Visit storefront">🏪</a>'
+      + '</div>';
   }
 
   /* ── Visibility gate (Sprint 2, Experiment 2) ────────────────────────────────

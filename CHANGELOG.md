@@ -71,6 +71,59 @@ Deliberate breakages **8/8**.
 - discovery for garages, professionals, facilities and riders.
 
 The home **product feed** fix is sokoni-27's (`hosting/uploadedat-on-2bcdae2`).
+## [2026-09-30] — Compact premium cards, part 2: MiniShop, business, providers, shops, service pages (UI only) — NOT deployed
+
+**Files:**
+- `sokoni-minishop.js`, `minishop.css`, `business.html`;
+- `services.html`, `providers.html`, `cleaning.html`;
+- `plumbing.html`, `electrical.html`, `phone-repair.html`, `car-rental.html`;
+- `script.js`, `sokoni-spotlight.js`, `index.html`, `compact-grid.css`, `CHANGELOG.md`.
+
+**Database / rules / API changes:** none.
+
+**Commits:** `c50217d` MiniShop · `77dcf44` business · `1b51515` services.html providers · `b3c86dd`
+providers.html · `3b9733b` home shop cards · this commit (spotlight shop cards, cleaning, and the four service
+pages).
+
+**Design (owner, 2026-09-30):**
+- product cards: ❤ / 🛒;
+- provider cards: 💬 in-app message and 📩 book;
+- shop cards: 🏪.
+- No labelled buttons, no Follow/share rows on cards, and the whole card opens the profile or storefront.
+- Every icon is 30px to the eye with a ≥44px tap target.
+
+**Security / correctness fixed on the way:**
+- **Business page Add to Cart never worked:** an inline `onclick` built with `JSON.stringify` broke its own
+  attribute (proven in Chromium). It now uses a delegated listener over an id index.
+- **Shop names were injectable:** names and taglines were inserted raw into markup, and a name with `'` broke out
+  of an inline `onclick`. They are now escaped, and navigation goes through escaped data attributes.
+- **WhatsApp removed from cards:** wa.me links were taken off `providers.html`, `cleaning.html` and the four
+  service pages (owner: wa.me hand-offs are banned).
+
+**Verified in Chromium at 390 and 1280:**
+
+| Surface | Candidate | Live / baseline |
+|---|---|---|
+| MiniShop | 16/0 | — |
+| Business (real cart tap with a quote-named product) | 19/0 | — |
+| services.html providers | 18/0 | 6/10 |
+| providers.html | 20/0 | 10/8 |
+| Home shop cards | 16/0 | 4/10 |
+| Spotlight, cleaning and the four service pages | **96/0** | **30/66** |
+
+Also green: minishop cart 28/0, trust 29/0, `test-cart-2-3-4` 50/0, `test-cart-final` 77/0 (emulator), role-switch
+routing 50/0, nearby-city 49/0, and check-inline-js on every page touched.
+
+**Flagged for the owner, not changed:**
+- **Home spotlight section:** hard-coded shops each marked "✓ SOKONI VERIFIED" with invented ratings and sales, and
+  "Join 500+ sellers".
+- **Viewer-local state:** "📢 Sponsored" and the featured "SPOTLIGHT" list read the viewer's own `localStorage`.
+- **Promo card:** "Reach 10× more buyers" is an unverified claim.
+- **Four service pages:** plumbing, electrical, phone-repair and car-rental list hard-coded providers and book
+  through WhatsApp (one falls back to a fixed number). The cleaning booking form is also WhatsApp.
+- **providers.html on phones:** the Verified badge and price are invisible because the banner collapses to 2px.
+- **Promotion writer:** it accepts other shops' productIds. This needs a server repair.
+
 ## [2026-09-30] — Compact premium product cards: home, Shop/category and shop pages (UI only) — NOT deployed
 
 **Files:**

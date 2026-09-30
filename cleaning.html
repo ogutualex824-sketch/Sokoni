@@ -83,7 +83,15 @@
     .cl-filter-pill:hover,.cl-filter-pill.active{background:rgba(0,212,255,0.1);border-color:rgba(0,212,255,0.3);color:#00d4ff;}
 
     .cl-provider-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
-    .cl-provider-card{background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;transition:border-color .2s,transform .2s;}
+    .cl-provider-card{background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;transition:border-color .2s,transform .2s;position:relative;}
+    .cl-provider-card[data-profile-href]{cursor:pointer;}
+    /* Compact card icons (owner 2026-09-30): 30px to the eye, ≥44px tap target. */
+    .cl-icons{position:absolute;top:14px;right:14px;display:flex;gap:12px;z-index:2;}
+    .cl-ico{position:relative;width:30px!important;height:30px!important;min-height:0!important;max-height:30px!important;min-width:0!important;padding:0!important;margin:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;line-height:1;cursor:pointer;text-decoration:none;background:rgba(8,8,8,0.62);border:1px solid rgba(255,255,255,0.22);color:#fff;}
+    .cl-ico--book{background:rgba(113,255,0,0.9);border-color:#71ff00;color:#050f05;}
+    .cl-ico::before{content:"";position:absolute;inset:-7px;border-radius:50%;}
+    .cl-ico:focus-visible{outline:2px solid #71ff00;outline-offset:2px;}
+    .cl-prov-top{padding-right:84px;}
     .cl-provider-card:hover{border-color:rgba(0,212,255,0.28);transform:translateY(-2px);}
     .cl-prov-top{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;}
     .cl-prov-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,rgba(0,212,255,0.2),rgba(0,140,180,0.15));display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;border:1px solid rgba(0,212,255,0.2);}
@@ -534,7 +542,7 @@ function renderProviders() {
   }
 
   grid.innerHTML = list.map(p => {
-    const waNum = String(p.phone || '').replace(/\D/g, '').replace(/^0/, '254');
+    /* No WhatsApp hand-off: contact stays in-app (owner directive — wa.me links are banned). */
     const jsId  = esc(String(p.uid).replace(/'/g, "\\'"));
     const jsNm  = esc(String(p.name || '').replace(/'/g, "\\'"));
     /* Stars only where a rating exists. The old template ran
@@ -548,7 +556,13 @@ function renderProviders() {
       : `<span class="cl-prov-rnum" style="color:rgba(255,255,255,0.4);">New on SOKONI</span>`;
 
     return `
-    <div class="cl-provider-card" id="prov-${esc(p.uid)}">
+    <div class="cl-provider-card" id="prov-${esc(p.uid)}" data-profile-href="${esc(p.profileUrl)}">
+      <!-- Compact card (owner 2026-09-30): 💬 in-app message and 📩 book as icons; the card opens
+           the profile. No WhatsApp, no labelled buttons, no follow/share row on the card. -->
+      <div class="cl-icons">
+        <button type="button" class="cl-ico cl-ico--msg" aria-label="Message ${esc(p.name)}" title="Message in-app" onclick="event.stopPropagation();window.SokoniInbox?SokoniInbox.openChat({otherUid:'${jsId}',otherName:'${jsNm}',type:'customer-provider',context:'Cleaning · SOKONI Services'}):location.href='messages.html'">💬</button>
+        <a class="cl-ico cl-ico--book" href="${esc(p.profileUrl)}" aria-label="Book ${esc(p.name)}" title="Book" onclick="event.stopPropagation()">📩</a>
+      </div>
       <div class="cl-prov-top">
         <div class="cl-prov-avatar">${esc(p.emoji || '🧹')}</div>
         <div style="flex:1;min-width:0;">
@@ -567,15 +581,19 @@ function renderProviders() {
       <div class="cl-prov-skills">${(p.skills || []).slice(0, 6).map(s => `<span class="cl-prov-skill">${esc(s)}</span>`).join('')}</div>
       <div class="cl-prov-foot">
         <div class="cl-prov-rate">${p.rate != null ? 'KES ' + Number(p.rate).toLocaleString() : '<small style="color:rgba(255,255,255,0.35);">Ask for a quote</small>'} ${p.rate != null && p.rateType ? `<small>${esc(p.rateType)}</small>` : ''}</div>
-        <div style="display:flex;gap:6px;align-items:center;">
-          ${waNum ? `<a href="https://wa.me/${esc(waNum)}?text=${encodeURIComponent('Hi! I found you on SOKONI and would like to book a cleaning service. Please confirm your availability.')}" target="_blank" rel="noopener" class="cl-wa-btn"><i class="fab fa-whatsapp"></i> WhatsApp</a>` : ''}
-          <a class="cl-book-btn" href="${esc(p.profileUrl)}" style="text-decoration:none;display:inline-flex;align-items:center;">Book →</a>
-        </div>
-<div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);"><button type="button" onclick="window.SokoniSocial&&SokoniSocial.toggleFollow('${jsId}','${jsNm}',this,'cleaner')" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">❤ Follow</button><button type="button" onclick="window.SokoniSocial&&SokoniSocial.openShareModal({id:'cleaner_${jsId}',name:'${jsNm}',category:'cleaner',tagline:'',type:'cleaner'})" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:8px;font-size:12px;cursor:pointer;flex-shrink:0;">📣</button></div>
       </div>
     </div>`;
   }).join('');
 }
+
+/* Compact card: a tap anywhere on a provider card (not on its icons or links) opens the profile —
+   one delegated listener; the href comes from the card's escaped data attribute. */
+document.addEventListener('click', function (ev) {
+  const card = ev.target && ev.target.closest ? ev.target.closest('.cl-provider-card[data-profile-href]') : null;
+  if (!card || ev.target.closest('a,button,input,select,textarea,label')) return;
+  const href = card.getAttribute('data-profile-href');
+  if (href) location.href = href;
+});
 
 /* ── FILTER HELPERS ── */
 function filterByType(type, el) {
