@@ -1,3 +1,14 @@
+## [2026-09-30] — Inventory-gate blockers repaired as their own test-contract slices; gate APPROVED on ddf317b — NOT a hosting change
+
+**Files:** scripts/test-map-engine-ratchet.js, scripts/test-merchant-products-2c-media.js, scripts/test-cart-universal.js, scripts/test-merchant-capability.js, scripts/environment-preflight.js, docs. No product file, rule, index, Function or deployment configuration changed; hosting content identical to 82d8ce0.
+
+- map-engine ratchet: L.map( counts as Leaflet only where Leaflet is loaded (business-apply.html false positive). 8/0.
+- 2c-media: fetches the DEPLOYED Storage rules (read-only) when the gitignored snapshot is absent; failed fetch stays BLOCKED. 56/0.
+- cart-universal: born-after pages skip the inserted-block line-ending check; second NAMED 1:1 migration exemption for track.html (exact six legacy Firebase tags → import(./firebase.js), e5ea3e4), with breakage controls (unrelated loss, partial, swapped, other page, no import) and a self-check that the Font Awesome pair remains the only other exemption. 54/0.
+- merchant-capability: reuse of 55b000c derived structure with this lineage withheld set inventory,offers,sell. 46/0.
+- environment-preflight: Emulator ports check (EMULATOR_IN_USE); the emulator gate is exclusive on a machine.
+- Full gate on ddf317b: APPROVED, 342 PASS, 0 FAIL/BLOCKED; only the pre-existing seller-wiring change-detection TIMEOUT (non-blocking). Artefact docs/release-gates/ddf317b.json.
+
 ## [2026-09-30] — Catalogue ordering key = `uploadedAt`: two readers + three writers (hosting-only candidate) — NOT deployed
 
 **Files:** `sokoni-db.js`, `sokoni-recommendations.js`, `merchant-v2.html`, `sokoni-inventory.js`, `seller-wiring.js`; new `scripts/test-product-uploadedat-authority.js`; docs. Owner-authorized slice after the writer census (`docs/PRODUCT_TIMESTAMP_WRITER_CENSUS.md`).

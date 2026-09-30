@@ -89,3 +89,7 @@ This is a governance dependency, **not** evidence that `82d8ce0` broke inventory
 ### 2a · Added 2026-09-30 — Emulator ports (`--for gate`, and in hosting / functions)
 
 `gate-inventory` runs `firebase emulators:exec`; it died twice with "Could not start Authentication Emulator, port taken" because another session was running the same emulator-backed gate. The preflight now reports listeners on 4400 / 4500 / 8080 / 9099 with the owning pid (marked when it is a firebase emulator) → `EMULATOR_IN_USE`. The gate is exclusive on a machine, like the browser suites. Run `node scripts/environment-preflight.js --for gate` before `node scripts/gate-inventory.js`.
+
+### 7b · Outcome (2026-09-30 15:0xZ) — the inventory gate is GREEN on the repaired tree
+
+Full `gate-inventory` run on `ddf317b` (detached from tool timeouts, emulator ports free, tree clean): **APPROVED** — 342 PASS rows, 341 blocking suites passed, 0 FAIL, 0 BLOCKED. The only non-PASS row is the pre-existing `test-seller-wiring-change-detection` TIMEOUT (passes all 13 cases, never exits; non-blocking by the gate's own rule, own item). The four repaired suites inside the gate: map-engine ratchet PASS · merchant-products-2c-media PASS (deployed rules fetched) · cart-universal PASS (54 assertions incl. the track.html exemption controls) · merchant-capability PASS. Artefact: `docs/release-gates/ddf317b.json`. Hosting content is byte-identical to `82d8ce0`; rules, indexes, Functions and `firebase.json` untouched.
