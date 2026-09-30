@@ -1,3 +1,41 @@
+## [2026-09-30] - BnB: category pill strip made phone-safe (snap-scroll chips, sort on its own row) — built, browser certification QUEUED, NOT deployed
+
+**Branch `hosting/bnb-mobile-on-0271709`, built on `0271709`.** Owner ask (verbatim): "fix the bnb mobile layout the
+categories buttons or card are in a mess".
+
+**What was wrong (static diagnosis on 0271709).** `bnb.html`'s `.bnb-filter-bar` was one `flex-wrap` row holding six
+type pills and a right-aligned sort `<select>`, with the 28px desktop gutters at every width. On phones the global
+select rules (`font-size:16px`, `padding:12px 16px` / `36px` arrow gutter, `width:100%` — `style.css`, `mobile.css`,
+`sokoni-premium-v2.css`) and the global 44px button floor turned it into three uneven pill rows with the sort control
+stranded, alone, on a fourth. `bnb-hub.html`'s `.bh-type-bar` was already an `overflow-x:auto` strip; `bnb-manage.html`
+has no category strip (its `.ll-sidebar` is the host-dashboard nav).
+
+**Fix (CSS + one wrapper element; no data logic, callables, reads or permission checks touched).**
+- `bnb.html`: the six pills are wrapped in `<div class="bnb-pill-strip" role="group" aria-label="Stay type">`; the
+  sort control stays a sibling. `filterBnB` / `sortBnBs` untouched.
+- `landlord.css`: `.bnb-pill-strip` is an inline wrapping flex row on desktop (visually identical to before). At
+  `<= 768px` it becomes a horizontal snap-scroll chip strip (`overflow-x:auto`, `scroll-snap-type:x proximity`,
+  hidden scrollbar, bleeds edge to edge with `margin:0 -16px`), pills are `flex:0 0 auto`, `white-space:nowrap`,
+  `min-height:44px`; the sort `<select>` takes its own full-width row under the strip. Gutters 16px on phones.
+  Premium dark tokens unchanged.
+
+**Evidence.**
+- `scripts/test-bnb-mobile-layout.js` (new, hermetic Chromium: local static server on a random port, every
+  external origin aborted, firebase compat stubbed with async empty snapshots, `auth-guard.js` / `sokoni-routing.js` /
+  `sokoni-init.js` / mock-data stubbed). Renders `bnb.html`, `bnb-hub.html`, `bnb-manage.html` at 360 / 390 / 768 /
+  1280 and asserts: no horizontal page overflow; every category control inside the viewport or inside a horizontally
+  scrollable strip; no two controls overlap; >= 40px tall on phones; labels not clipped; each control reachable
+  (`elementFromPoint`); plus a negative control that injects a broken strip and proves O/V/X/H/L fail.
+- Baseline measurement (0271709 tree via `SOKONI_BNB_ROOT`) and the post-fix run: **QUEUED** — a browser hold was in
+  force for a peer production deploy while this slice was built; the runs are listed in the hand-off and this entry is
+  to be updated with the pass/fail counts when they complete.
+- `node scripts/predeploy-syntax-gate.js`: see hand-off.
+
+**Files:** `bnb.html`, `landlord.css`, `scripts/test-bnb-mobile-layout.js`, `CHANGELOG.md`.
+**Database / API / security changes:** none. **Breaking:** none. **Deployment:** hosting only; NOT deployed.
+
+---
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
