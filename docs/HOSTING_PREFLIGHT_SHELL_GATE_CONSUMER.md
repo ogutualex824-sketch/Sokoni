@@ -25,7 +25,7 @@ Not shipped (hosting ignore): `scripts/**` test files. No functions, no rules, n
 | same suite on the capability line | 21 / 0 |
 | capability line regressions after the consumer change | sidebar-browser 90 / 0 · projection-browser 29 / 0 · shell gate 22 / 0 |
 | Hosting gates on the candidate | rollback guard allow · cooldown allow · commission single-source PASS · perf-guard PASS · base64 PASS · gate-inventory skipped (no inventory file) · money-toast PASS |
-| `predeploy-syntax-gate.js` | see §6 |
+| `predeploy-syntax-gate.js` (run in the candidate tree) | **PASS** — 1,794 JavaScript files and 453 inline script blocks parse cleanly |
 | Live dependencies served | `hub-register.js`, `sokoni-commission-rates.js`, `sokoni-auth-state.js`, `firebase.js`, `sokoni-legal.css`, `/agreement-acknowledge` all 200 |
 | Post-deploy markers | `/complete-application`, `/sokoni-complete-application.js`, `/sokoni-business-workspace.js` are **404 today** |
 | Worktree | clean at `2f3bb6f` |

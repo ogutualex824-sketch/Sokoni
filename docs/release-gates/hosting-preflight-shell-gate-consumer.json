@@ -61,7 +61,7 @@
       "auditBase64": "PASS",
       "gateInventory": "skipped (no inventory file changed)",
       "moneyToast": "PASS",
-      "syntaxGate": "pending at write time — see CHANGELOG"
+      "syntaxGate": "PASS (1,794 files, 453 inline blocks)"
     },
     "liveDependencies200": [
       "hub-register.js",

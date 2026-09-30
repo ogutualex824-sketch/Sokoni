@@ -7,7 +7,7 @@ sokoni-complete-application.js (3f681de2…) — the three new files byte-identi
 FUNCTIONS_DIR=sok-pd-cand (c7e26b6, the deployed dispatcher) with the real onboarding/ops handlers answering the dashboard's boot ops: 21/0 — the
 live dashboard redirects a REAPPLICATION_REQUIRED provider to /complete-application, keeps a VALID one (data-ws-state AVAILABLE), shows a REFUSED
 one the notice. Consumer gained a fallback notice box for dashboards without #hcWorkspace (capability line aca09aa; sidebar 90/0, projection
-29/0, gate 22/0). Hosting gates PASS; syntax gate result to follow. Live serves every dependency; the 3 new paths are 404 today. WHEN SHIPPED:
+29/0, gate 22/0). Hosting gates PASS; syntax gate PASS (1,794 files). Live serves every dependency; the 3 new paths are 404 today. WHEN SHIPPED:
 providers holding the claim who reach the dashboard get gated (Kasindi/Langa'ta class); DJ holds no claim (already sent to onboarding by the live
 dashboard); sellers/merchant-v2 NOT gated by this slice. Rollback = Hosting version 3cbdf961791900b8.
 
