@@ -30,7 +30,7 @@
     if (b.paymentStatus === 'settled' || b.status === 'completed') return { label: '✅ Completed', done: true, tone: 'ok' };
     if (b.paymentStatus === 'refunded') return { label: '↩ Refunded', done: true, tone: 'warn' };
     if (b.status === 'cancelled') return { label: b.cancelReason === 'payment-expired' ? '⌛ Expired — please rebook' : '✖ Cancelled', done: true, tone: 'warn' };
-    if (b.paymentStatus === 'paid_held') return { label: '💰 Paid • Held — awaiting provider', done: true, tone: 'ok' };
+    if (b.paymentStatus === 'paid_held') return { label: '🔒 Paid to SOKONI • held safely until you give the provider your PIN', done: true, tone: 'ok' };
     return { label: '⏳ Awaiting payment…', done: false, tone: 'pending' };
   }
 
@@ -229,11 +229,18 @@
     body(`
       <div class="sbs-note">${esc(_ctx.serviceName || 'Service')} · ${esc(_ctx.date)} ${esc(_ctx.time)}</div>
       <div class="sbs-price">KSh ${Number(_ctx.amountKES).toLocaleString()}</div>
-      <div class="sbs-note">Paid to SOKONI and held until the service is completed. Deposit is refundable per the cancellation policy.</div>
+      <div class="sbs-note"><b>PIN YAKO NI BOOKING YAKO.</b> You pay SOKONI, not the provider. After payment you get a booking PIN — give it to the provider <b>only after the service is done</b>. Until then your money is held safely by SOKONI and is refundable under the cancellation policy.</div>
+      <div class="sbs-note" id="sbsCardWrap" style="display:none"><button class="sbs-btn" id="sbsCard" style="background:#1f2937" onclick="SokoniBookService._payHosted()">Pay by card or another method</button></div>
       <input class="sbs-in" id="sbsPhone" inputmode="numeric" placeholder="M-Pesa number e.g. 0712345678" value="${esc(phone || '')}">
       <button class="sbs-btn" id="sbsPay" onclick="SokoniBookService._pay()">Pay with M-Pesa</button>
       <div class="sbs-note" id="sbsHold"></div>
       <div class="sbs-note" id="sbsPayNote"></div>`);
+    /* Card and every other IntaSend method: offered ONLY when the server says this purpose is enabled
+       and at least one method is proven (getCheckoutMethods). The same intent, the same held booking. */
+    try {
+      const m = await call('getCheckoutMethods', { purpose: 'service_booking' });
+      if (m && m.hosted) { const w = document.getElementById('sbsCardWrap'); if (w) w.style.display = ''; }
+    } catch (_) { /* M-Pesa stays available */ }
     startHoldCountdown();
   }
 
@@ -316,6 +323,32 @@
     } catch (e) { go.disabled = false; go.textContent = 'Submit review'; if (note) note.textContent = e.message || 'Could not submit your review.'; }
   }
 
+  /* ── PIN YAKO NI BOOKING YAKO — the buyer's PIN, read from the server once the payment is held. ── */
+  async function showPin(bookingId) {
+    const el = document.getElementById('sbsPin');
+    try {
+      const r = await call('serviceBookingPin', { op: 'getMyBookingPin', bookingId });
+      if (!el) return;
+      if (r && r.issued && r.pin) {
+        el.innerHTML = '<div style="font-size:12px;letter-spacing:.08em;opacity:.8">' + esc(r.phrase || 'PIN YAKO NI BOOKING YAKO') + '</div>'
+          + '<div style="font-size:30px;font-weight:800;letter-spacing:.3em;margin:6px 0">' + esc(r.pin) + '</div>'
+          + '<div>Booking ' + esc(r.bookingRef || '') + '</div>'
+          + '<div style="margin-top:6px">Give this PIN to the provider <b>only after the service is done</b>. The PIN releases your payment to the provider. Until then SOKONI holds it safely and it is refundable under the cancellation policy.</div>';
+      } else {
+        el.textContent = 'Your PIN appears here as soon as SOKONI confirms your payment.';
+      }
+    } catch (e) { if (el) el.textContent = 'Your PIN is in My Bookings. Give it to the provider only after the service is done.'; }
+  }
+
+  async function payHosted() {
+    const note = document.getElementById('sbsPayNote');
+    try {
+      const r = await call('initiateHostedCheckout', { ref: _ctx.ref, returnPath: location.pathname + location.search });
+      if (r && r.url) { location.href = r.url; return; }
+      if (note) note.textContent = 'Card payment is not available right now. Please use M-Pesa.';
+    } catch (e) { if (note) note.textContent = e.message || 'Card payment is not available right now. Please use M-Pesa.'; }
+  }
+
   /* ── 5. Observe the booking doc — every state comes from Firestore. ── */
   function observe(bookingId) {
     _ctx.bookingId = bookingId;
@@ -340,7 +373,9 @@
         title(st.tone === 'warn' ? 'Booking update' : 'Booking confirmed');
         body(`<div class="sbs-state">${st.label}</div>
           <div class="sbs-note" style="text-align:center">${esc(_ctx.serviceName || '')}${b.date ? ' · ' + esc(b.date) + ' ' + esc(b.startTime || '') : ''}</div>
+          ${b.paymentStatus === 'paid_held' ? '<div class="sbs-note" id="sbsPin" style="text-align:center">Getting your booking PIN…</div>' : ''}
           <button class="sbs-btn" onclick="SokoniBookService.close()">Done</button>`);
+        if (b.paymentStatus === 'paid_held') showPin(bookingId);
         if (b.paymentStatus === 'paid_held' || b.paymentStatus === 'settled' || b.status === 'cancelled') sessionStorage.removeItem(K);
       }
     }, () => { /* listener error — leave the last rendered state */ });
@@ -385,7 +420,7 @@
       if (_unsub) { _unsub(); _unsub = null; }
       const el = document.getElementById('sbsModal'); if (el) el.style.display = 'none'; document.body.style.overflow = '';
     },
-    _pick: pick, _pickSvc: pickSvc, _create: create, _pay: pay, _star: star, _review: submitReview,
+    _pick: pick, _pickSvc: pickSvc, _create: create, _pay: pay, _payHosted: payHosted, _star: star, _review: submitReview,
     _chooseOptions: chooseOptions, _opt: updatePreview, _continue: continueToBooking,   /* Slice D */
   };
   global.SokoniBookService = Api;
