@@ -6209,6 +6209,9 @@ exports.initiateSTKPush = onCall(
            MIGRATED: subscriptions (subscriptions.html -> createPaymentIntent,
            deployed 2026-07-20). A subscription payment without an intent is
            now refused rather than charged at a browser-supplied figure.
+           MIGRATED: marketplace product checkout (checkout.html -> product_order
+           intent, owner repair #1), keyed on the EFFECT (meta would finalise an
+           order), not on a category label. Ship only after that client is live.
 
            To migrate the next caller: point it at createPaymentIntent, deploy
            the client FIRST, then add its category here. Adding the category

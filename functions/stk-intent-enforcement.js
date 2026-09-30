@@ -74,7 +74,37 @@ function isEnforcedPaymentCategory(meta) {
   for (const c of candidates) {
     if (ENFORCED.includes(c)) return { enforced: true, matched: c };
   }
+  /* Unit 4a (owner repair #1): keyed on the EFFECT, not a label. */
+  if (wouldFinalizeMarketplaceOrder(m)) return { enforced: true, matched: 'marketplace_order' };
   return { enforced: false, matched: null };
 }
 
-module.exports = { ENFORCED, normalise, isEnforcedPaymentCategory };
+/**
+ * Would this meta, once paid, finalise a marketplace order (order → paid, stock decremented)?
+ *
+ * Unit 4a refuses such an STK when no intent exists, because its seller, items and amount would all
+ * be browser-supplied. It is keyed on the EFFECT rather than on `category`:
+ *   - a label is chosen by the browser, so `category:'default'` + `orderId` would dodge a label rule;
+ *   - SokoniPay's gateway labels a deposit `product.category || 'product'` (product.js contact-seller
+ *     fallback) with NO orderId. That finalises no order, and refusing it would break a live flow.
+ * Census 2026-09-30 (hosting b108ae3): checkout.html is the only STK caller that sends orderId, and
+ * sokoni-intasend.js forwards orderId only when the caller supplies it.
+ *
+ * SAME SEMANTICS as webhookIntasend's settlement predicate (functions/payment-attribution.js
+ * wouldFinalizeMarketplaceOrder on the webhook lineage): lowercase, NOT trimmed, String() coercion.
+ * Kept identical deliberately: what the STK refuses must be exactly what settlement would finalise.
+ * The two lineages cannot share a file today, so the certification asserts the equivalence.
+ *
+ * DEPLOY ORDER: only after the checkout that mints product_order intents is live (Unit 3). The
+ * checkout before it sends orderId WITHOUT an intent, so enforcing earlier refuses every marketplace
+ * M-Pesa payment.
+ */
+function wouldFinalizeMarketplaceOrder(meta) {
+  const m = (meta && typeof meta === 'object') ? meta : {};
+  const cat = String(m.category || '').toLowerCase();
+  return !!m.orderId
+    && m.type !== 'booking'
+    && !['subscription', 'wallet_topup', 'topup'].includes(cat);
+}
+
+module.exports = { ENFORCED, normalise, isEnforcedPaymentCategory, wouldFinalizeMarketplaceOrder };

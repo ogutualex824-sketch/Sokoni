@@ -1,3 +1,17 @@
+## 2026-09-30 — Repair #1 Unit 4a: initiateSTKPush refuses an intent-less STK that would finalise a marketplace order
+
+Base: live initiateSTKPush source `8afb25d`. `functions/stk-intent-enforcement.js` gains
+`wouldFinalizeMarketplaceOrder`: orderId present, not a booking, and category not subscription / wallet_topup /
+topup. `isEnforcedPaymentCategory` returns it as `marketplace_order`, so such an STK with no server intent is
+refused before any money moves.
+
+- **Keyed on the effect, not a label.** A browser-chosen category cannot dodge it. SokoniPay's `'product'`
+  deposit (no orderId) and bookings stay allowed.
+- **Semantics.** Identical to webhookIntasend's settlement predicate: 300-case equivalence with Unit 4b.
+- **Tests.** `test-healthcare-subscription-foundation.js` 124/0. The original STK-6 row is unchanged; STK-6e..6h
+  are added and fail on 8afb25d. **No database, API or rules change.**
+- **Deploy order.** Only after the checkout that mints product_order intents (Unit 3) is live.
+
 ## 2026-09-29 — C3: existing-identity classification census and the exact cleanup manifest (READ ONLY, owner-authorized; NOT deployed)
 
 Production read-only census (`sokoni-aeb26`, 16:47Z), authorized by the owner in read-only scope. Nothing created,

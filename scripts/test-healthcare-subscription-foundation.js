@@ -922,6 +922,19 @@ async function partStkEnforcement() {
       E({ category: c }) === false);
   }
   ck('STK-6b absent meta is allowed (unchanged)', E(undefined) === false && E(null) === false);
+  /* STK-6e..6h — Unit 4a (owner repair #1): product checkout is migrated, and enforcement is keyed on
+     the EFFECT — meta that would finalise a marketplace order — never on a category label. */
+  ck('STK-6e the pre-Unit-3 checkout meta (orderId, no intent) is refused',
+    E({ category: 'product', orderId: 'o1', sellerUid: 's', items: [{ id: 'p', qty: 1 }] }) === true);
+  ck('STK-6f relabelling does not dodge it — "default", absent, or a catalogue category + orderId',
+    E({ category: 'default', orderId: 'o1' }) === true && E({ orderId: 'o1' }) === true
+    && E({ category: 'electronics', orderId: 'o1' }) === true);
+  ck('STK-6g CONTROL the SokoniPay deposit labelled "product" by product.js (no orderId) is allowed',
+    E({ category: 'product', providerName: 'Shop', serviceDesc: 'Product inquiry: x' }) === false
+    && E({ purpose: 'product_order' }) === false);
+  ck('STK-6h CONTROL bookings / top-ups carrying an orderId are allowed (settlement finalises no order)',
+    E({ type: 'booking', orderId: 'o1', providerId: 'p' }) === false
+    && E({ category: 'wallet_topup', orderId: 'o1' }) === false);
 
   /* STK-1 — with a valid intent the enforced branch is never reached: the guard lives in the
      `else` of "an intent exists". Asserted structurally against the shipped source, scoped by
