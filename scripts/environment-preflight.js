@@ -28,6 +28,7 @@
  *   Node capacity        count of node.exe (runaway test runners)                  NODE_SATURATION
  *   Functions deploy     a `firebase deploy` with functions in scope is running     DEPLOYMENT_IN_PROGRESS
  *   Hosting deploy       a `firebase deploy` with hosting in scope is running       DEPLOYMENT_IN_PROGRESS
+ *   Emulator ports       listeners on 4400/4500/8080/9099 (a peer's emulator-backed gate)  EMULATOR_IN_USE
  *   Cloud Build          an ongoing build (gcloud); unknown = UNPROVEN, fail closed CLOUD_BUILD_ACTIVE / CLOUD_BUILD_UNKNOWN
  *
  * Every run writes a record (counts, ownership, cleanup result, start/end time) under
@@ -71,10 +72,12 @@ try { fs.mkdirSync(LOCK_DIR, { recursive: true }); } catch (_) {}
 const SCOPE = {
   syntax:    ['RAM available', 'Orphan WebKit', 'Node capacity'],
   browser:   ['RAM available', 'Orphan WebKit', 'Peer browser lock', 'Node capacity', 'Functions deploy', 'Hosting deploy'],
-  hosting:   ['RAM available', 'Orphan WebKit', 'Peer browser lock', 'Node capacity', 'Functions deploy', 'Hosting deploy', 'Cloud Build'],
-  functions: ['RAM available', 'Orphan WebKit', 'Peer browser lock', 'Node capacity', 'Functions deploy', 'Hosting deploy', 'Cloud Build'],
+  /* the emulator-backed inventory gate (test-inventory.js --gate) needs the Firebase emulator ports */
+  gate:      ['RAM available', 'Orphan WebKit', 'Node capacity', 'Emulator ports'],
+  hosting:   ['RAM available', 'Orphan WebKit', 'Peer browser lock', 'Node capacity', 'Functions deploy', 'Hosting deploy', 'Emulator ports', 'Cloud Build'],
+  functions: ['RAM available', 'Orphan WebKit', 'Peer browser lock', 'Node capacity', 'Functions deploy', 'Hosting deploy', 'Emulator ports', 'Cloud Build'],
 };
-if (!SCOPE[FOR]) { console.error('unknown --for ' + FOR + ' (syntax|browser|hosting|functions)'); process.exit(2); }
+if (!SCOPE[FOR]) { console.error('unknown --for ' + FOR + ' (syntax|browser|gate|hosting|functions)'); process.exit(2); }
 const wants = (name) => SCOPE[FOR].includes(name);
 
 const startedAt = new Date().toISOString();
@@ -218,6 +221,22 @@ function lockHolderAlive(lock, procs) {
         const l = { name: ACQUIRE, pid: process.ppid, since: new Date().toISOString(), for: FOR };
         try { fs.writeFileSync(LOCK_FILE, JSON.stringify(l)); record.lock = l; } catch (e) { add('Peer browser lock', 'UNPROVEN', 'could not write lock: ' + e.message, 'PEER_BROWSER_SESSION_ACTIVE'); }
       }
+    }
+
+    /* Emulator ports. 2026-09-30: gate-inventory (firebase emulators:exec) died twice with
+       "Could not start Authentication Emulator, port taken" because another session was running the
+       same emulator-backed gate. Listeners on the emulator ports mean the gate cannot start here now;
+       the owning pid is named so the operator can tell a peer's run from a stale one. */
+    if (wants('Emulator ports')) {
+      const EMU_PORTS = [4400, 4500, 8080, 9099];
+      const out = ps("Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in " + EMU_PORTS.join(',') + " } | ForEach-Object { \"$($_.LocalPort):$($_.OwningProcess)\" } | Sort-Object -Unique");
+      const rows = String(out || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      if (out === null) add('Emulator ports', 'UNPROVEN', 'listener table unavailable', 'EMULATOR_IN_USE');
+      else if (rows.length) {
+        const pids = [...new Set(rows.map((r) => r.split(':')[1]))];
+        const owners = pids.map((pid) => { const p = procs.find((x) => String(x.pid) === pid); return pid + (p ? '=' + p.name + (/(emulators:exec|emulators:start)/.test(p.cmd) ? '(firebase emulator)' : '') : ''); });
+        add('Emulator ports', 'FAIL', 'listening: ' + rows.join(' ') + ' — owner pid ' + owners.join(', '), 'EMULATOR_IN_USE');
+      } else add('Emulator ports', 'PASS', 'ports ' + EMU_PORTS.join('/') + ' free');
     }
 
     if (nodes.length > T.maxNodeProcs) add('Node capacity', 'FAIL', `${nodes.length} node.exe processes (limit ${T.maxNodeProcs})`, 'NODE_SATURATION');
