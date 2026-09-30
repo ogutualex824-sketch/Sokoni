@@ -3879,7 +3879,8 @@ function _openTabFromHash(){
   var sub = null;
   if(key.indexOf(':') > 0){ sub = key.slice(key.indexOf(':') + 1); key = key.slice(0, key.indexOf(':')); }
   if(document.getElementById('panel-'+key)) switchTab(key, true);
-  if(key === 'wallet') _ensureWalletFrame(sub);
+  /* the tab router stays independent of the hosted wallet (it is tested in isolation) */
+  if(key === 'wallet' && typeof _ensureWalletFrame === 'function') _ensureWalletFrame(sub);
 }
 
 /* ══ IN-PROFILE WALLET (2026-09-30) ══════════════════════════════════════════════════════════════════════════
