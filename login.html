@@ -81,13 +81,13 @@
       <!-- Email + Password -->
       <div class="auth-field">
         <i class="fas fa-envelope" aria-hidden="true"></i>
-        <input type="email" id="loginEmail" placeholder="Email address"
+        <input type="email" id="loginEmail" placeholder="Email address" aria-label="Email address" autocomplete="email"
                autocomplete="email" onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
       </div>
 
       <div class="auth-field" style="position:relative;">
         <i class="fas fa-lock" aria-hidden="true"></i>
-        <input type="password" id="loginPassword" placeholder="Password"
+        <input type="password" id="loginPassword" placeholder="Password" aria-label="Password" autocomplete="current-password"
                autocomplete="current-password" onkeydown="if(event.key==='Enter')loginUser()" style="padding-right:44px;">
         <button type="button" onclick="toggleLoginPw()" tabindex="-1" class="auth-pw-toggle" title="Show/hide password">
           <i class="fas fa-eye" aria-hidden="true"></i>

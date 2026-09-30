@@ -40,7 +40,7 @@
   ══════════════════════════════════════════════════════════════ */
   --sk-text-primary:    rgba(255,255,255,0.95);
   --sk-text-secondary:  rgba(255,255,255,0.6);
-  --sk-text-tertiary:   rgba(255,255,255,0.35);
+  --sk-text-tertiary:   rgba(255,255,255,0.55);   /* was 0.35 = 3.16:1, below WCAG AA 4.5:1 (2026-10-01) */
   --sk-text-disabled:   rgba(255,255,255,0.2);
   --sk-text-inverse:    #050f05;
   --sk-text-brand:      #71ff00;

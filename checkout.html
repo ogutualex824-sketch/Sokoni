@@ -952,10 +952,10 @@
           <div class="co-addr-chips" id="coAddrChips"></div>
         </div>
         <div class="co-input-row">
-          <input class="co-input" type="text" id="coName" placeholder="Full Name">
-          <input class="co-input" type="tel" id="coPhone" placeholder="Phone — 07XXXXXXXX">
+          <input class="co-input" type="text" id="coName" placeholder="Full Name" aria-label="Full name" autocomplete="name">
+          <input class="co-input" type="tel" id="coPhone" placeholder="Phone — 07XXXXXXXX" aria-label="Phone number" autocomplete="tel">
         </div>
-        <input class="co-input" type="text" id="coAddress" placeholder="Delivery Address / Area e.g. Westlands, Nairobi">
+        <input class="co-input" type="text" id="coAddress" placeholder="Delivery Address / Area e.g. Westlands, Nairobi" aria-label="Delivery address or area" autocomplete="street-address">
         <div style="display:flex;gap:8px;margin-bottom:12px;">
           <button type="button" onclick="useGPSLocation()" id="gpsBtn" style="flex:1;padding:11px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);color:#71ff00;font-size:12px;font-weight:700;border-radius:12px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;transition:0.2s;">
             <i class="fas fa-crosshairs"></i> Auto-detect Location

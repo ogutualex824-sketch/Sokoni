@@ -70,7 +70,7 @@ html:not(.sk-no-header) body {
   border-radius: 28px; color: rgba(255,255,255,0.92); font-size: 14px;
   font-family: inherit; outline: none;
 }
-#sk-nav-search::placeholder { color: rgba(255,255,255,0.32); font-size: 14px; }
+#sk-nav-search::placeholder { color: rgba(255,255,255,0.55); font-size: 14px; }
 #sk-nav-search-icon {
   position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
   font-size: 15px; pointer-events: none; opacity: .45;
@@ -10781,7 +10781,7 @@ body.light-mode .pcard-variants{ color:rgba(0,0,0,0.5); }
 }
 
 .review-textarea:focus{ border-color:rgba(113,255,0,0.4); }
-.review-textarea::placeholder{ color:rgba(255,255,255,0.3); }
+.review-textarea::placeholder{ color:rgba(255,255,255,0.55); }
 
 .reviews-list{
     display:flex;
@@ -11474,7 +11474,7 @@ body.light-mode .pcard-variants{ color:rgba(0,0,0,0.5); }
 }
 
 .chat-input-premium input:focus{ border-color:rgba(113,255,0,0.4); }
-.chat-input-premium input::placeholder{ color:rgba(255,255,255,0.3); }
+.chat-input-premium input::placeholder{ color:rgba(255,255,255,0.55); }
 
 .chat-input-premium button{
     width:38px;

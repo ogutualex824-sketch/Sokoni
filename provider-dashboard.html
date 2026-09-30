@@ -1674,7 +1674,7 @@ const Sv={
       const price=s.priceType==='quotation'?'On quote':('KSh '+this._c2k(s.price).toLocaleString()+(s.priceType==='hourly'?'/hr':''));
       const dur=s.durationMins?(' · '+s.durationMins+' min'):'';
       const extras=[s.fee?('Fee KSh '+this._c2k(s.fee).toLocaleString()):'',s.deposit?('Deposit KSh '+this._c2k(s.deposit).toLocaleString()):''].filter(Boolean).join(' · ');
-      const thumb=(Array.isArray(s.images)&&s.images[0])?`<img src="${this._esc(s.images[0])}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;float:right;margin-left:8px">`:'';
+      const thumb=(Array.isArray(s.images)&&s.images[0])?`<img src="${this._esc(s.images[0])}" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:8px;float:right;margin-left:8px">`:'';
       /* Status: Active (published+visible) / Paused (hidden) / Draft (no price set). */
       const isDraft=!s.price&&s.priceType!=='quotation';
       const st=isDraft?['Draft','var(--sub)']:on?['Active','var(--ok)']:['Paused','var(--warn)'];
@@ -1720,7 +1720,7 @@ const Sv={
   openAdd(){this._set({})},
   openEdit(id){const s=this._svc.find(x=>x.id===id);if(s)this._set(s)},
   closeForm(){_q('svForm').style.display='none'},
-  _renderImgs(){_q('svImgs').innerHTML=this._imgs.map(u=>`<div style="position:relative"><img src="${this._esc(u)}" style="width:52px;height:52px;object-fit:cover;border-radius:8px"><button type="button" onclick="Sv.removeImage('${this._esc(u)}')" style="position:absolute;top:-6px;right:-6px;background:var(--warn);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:.7rem;cursor:pointer">×</button></div>`).join('')},
+  _renderImgs(){_q('svImgs').innerHTML=this._imgs.map(u=>`<div style="position:relative"><img src="${this._esc(u)}" alt="Service photo" style="width:52px;height:52px;object-fit:cover;border-radius:8px"><button type="button" onclick="Sv.removeImage('${this._esc(u)}')" style="position:absolute;top:-6px;right:-6px;background:var(--warn);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:.7rem;cursor:pointer">×</button></div>`).join('')},
   removeImage(u){this._imgs=this._imgs.filter(x=>x!==u);this._renderImgs()},
   async uploadImage(input){
     const file=input.files&&input.files[0];if(!file)return;
@@ -1760,7 +1760,7 @@ const Sv={
   async qr(id){
     showLoad('Generating QR…');
     try{const r=await this._fn()({op:'providerGenerateQR',serviceId:id});const d=r.data||{};const img=d.qrUrl||d.qrCode||d.url||(_data&&_data.profile&&_data.profile.qrCode);hideLoad();
-      if(img){const w=window.open('','_blank');if(w){w.document.write('<title>Service QR — SOKONI</title><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh"><img src="'+img+'" style="max-width:90vw;max-height:90vh"></body>')}else{toast('QR ready — allow pop-ups to view it.','err')}}
+      if(img){const w=window.open('','_blank');if(w){w.document.write('<title>Service QR — SOKONI</title><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh"><img src="'+img+'" alt="Service QR code" style="max-width:90vw;max-height:90vh"></body>')}else{toast('QR ready — allow pop-ups to view it.','err')}}
       else{toast('QR not available for this service yet.','err')}
     }catch(e){hideLoad();toast(e.message||'QR failed','err')}
   },

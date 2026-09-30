@@ -1,3 +1,8 @@
+## [2026-10-01] — Accessibility and licensing: contrast, field names, zoom, alt text, licence inventory (hosting, NOT deployed)
+
+**Change:** `--sk-text-tertiary` 0.35 → 0.55 (3.16:1 → 6.25:1 on #050f05, WCAG AA); dark placeholders 0.30/0.32 → 0.55; login and checkout name/phone/address fields get `aria-label` + `autocomplete`; zoom restored on chat, payments, minishop-status and business-health (WCAG 1.4.4). Operator kiosks (POS, KASS consoles, kitchen display, print station, SmartPOS manager auth) keep their lock as a documented exception. Alt text on the home notification thumbnail and the provider dashboard service images/QR. New `assets/vendor/fontawesome/6.5.1/LICENSE.txt` and `docs/THIRD_PARTY_LICENSES.md` (every CDN library with version, licence, data flow and SRI status). `scripts/test-trust-integrity.js` 45/0.
+**Open (in the inventory):** nine Firebase SDK versions, 16 CDN scripts without SRI (IntaSend SDK first), unpinned qrcode/jsQR, Unsplash image sources unrecorded, third-party QR endpoints, 969 onclick handlers on non-controls (needs per-page work).
+
 ## [2026-10-01] — One privacy notice, a working cookie-settings control, Do Not Track / GPC honoured (hosting, NOT deployed)
 
 **Why (census P2 #21):** the consent banner and signup.html linked the OLDER legal.html#privacy / #cookies text instead of the canonical privacy.html / cookie-policy.html / terms.html; cookie-policy.html said preferences could only be changed "by clearing your cookies or contacting us"; it claimed Do Not Track was respected, but no code read it.

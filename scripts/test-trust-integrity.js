@@ -114,5 +114,19 @@ ck('E6 login reset modal no longer collects an unused date of birth', !/id="rese
 const claimFiles = fs.readdirSync(ROOT).filter((f) => f.endsWith('.html') && /(Kenya(?:'|&#39;|’)s) #1 /.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
 ck('E7 no page claims "Kenya\'s #1 marketplace"', claimFiles.length === 0, claimFiles);
 
+console.log('\nF. accessibility + licensing');
+const tok = src('sokoni-tokens.css');
+const alpha = (tok.match(/--sk-text-tertiary:\s*rgba\(255,255,255,([0-9.]+)\)/) || [])[1];
+const lum = (a) => { const ch = (v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }; const bg = [5, 15, 5]; const rgb = bg.map((b) => a * 255 + (1 - a) * b); return 0.2126 * ch(rgb[0]) + 0.7152 * ch(rgb[1]) + 0.0722 * ch(rgb[2]); };
+const ratio = alpha ? (lum(+alpha) + 0.05) / (lum(0) + 0.05) : 0;
+ck('F1 tertiary text token meets WCAG AA 4.5:1 on the brand background (' + ratio.toFixed(2) + ':1)', ratio >= 4.5, alpha);
+const st = src('style.css');
+ck('F2 dark placeholders no longer 0.30/0.32 alpha (2.6:1)', !/#sk-nav-search::placeholder \{ color: rgba\(255,255,255,0\.32\)/.test(st) && !/\.review-textarea::placeholder\{ color:rgba\(255,255,255,0\.3\); \}/.test(st) && !/\.chat-input-premium input::placeholder\{ color:rgba\(255,255,255,0\.3\); \}/.test(st));
+ck('F3 login + checkout fields have programmatic names', /id="loginEmail"[^>]*aria-label=/.test(src('login.html')) && /id="loginPassword"[^>]*aria-label=/.test(src('login.html')) && ['coName', 'coPhone', 'coAddress'].every((id) => new RegExp('id="' + id + '"[^>]*aria-label=').test(src('checkout.html'))));
+const zoomBlocked = ['chat.html', 'payments.html', 'minishop-status.html', 'business-health.html'].filter((f) => /name="viewport"[^>]*(user-scalable=(no|0)|maximum-scale=1)/.test(src(f)));
+ck('F4 customer/merchant pages allow zoom (WCAG 1.4.4)', zoomBlocked.length === 0, zoomBlocked);
+ck('F5 Font Awesome LICENSE.txt ships next to the self-hosted copy; licence inventory exists',
+  fs.existsSync(path.join(ROOT, 'assets/vendor/fontawesome/6.5.1/LICENSE.txt')) && fs.existsSync(path.join(ROOT, 'docs/THIRD_PARTY_LICENSES.md')));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
