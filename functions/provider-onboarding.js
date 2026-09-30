@@ -276,6 +276,21 @@ exports._h.providerActivateSubscription = _h.providerActivateSubscription = asyn
   if (!plan || !PLANS[plan]) throw new HttpsError('invalid-argument', 'Invalid plan.');
 
   const p   = PLANS[plan];
+
+  /* ── A CLIENT-SUPPLIED paymentRef IS NOT PROOF OF PAYMENT (ported from 2f4fc20, 2026-10-01) ──
+   * This handler took `paymentRef` from the request, never verified it, and wrote
+   * status:'active' with the plan's commissionRate and limits. It is reachable from the browser
+   * (provider-dispatch.js -> provider-onboarding.html / sokoni-provider.js), so any provider could
+   * self-grant a priced plan for nothing — unlimited listings and a lower commission rate.
+   * A PRICED plan cannot be activated here at all; it activates only from a verified payment.
+   * free_trial stays self-serve because it costs nothing: there is no payment to forge. */
+  const priceCents = billingCycle === 'yearly' ? Number(p.yearly) : Number(p.monthly);
+  if (Number.isFinite(priceCents) && priceCents > 0) {
+    logger.warn('[provider] refused unverified paid activation', { uid, plan, hadRef: !!paymentRef });
+    throw new HttpsError('failed-precondition',
+      'A paid plan cannot be activated from the client. Start a payment with '
+      + 'createPaymentIntent; the subscription activates once the payment is verified.');
+  }
   const now = new Date();
   const renewalDate = plan === 'free_trial'
     ? new Date(now.getTime() + p.trialDays * 86400000)
@@ -340,7 +355,18 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
       'This provider listing is suspended. Contact support to be reinstated.');
   }
 
-  const providerId = d.providerId || await _genProviderId();
+  /* ── PUBLISH WRITES CONTENT. THE APPLICATION LIFECYCLE OWNS PUBLIC STATE. (2f4fc20, ported 2026-10-01)
+     Completing the self-service wizard used to write providers/{uid} with status:'active',
+     searchable:true, acceptsBookings:true and mint claims.provider — with no application, no admin
+     decision and no audit record. Publishing now writes CONTENT only. The fields that make a
+     provider discoverable and bookable are written by projectProvider() when an administrator
+     approves the application. A SUSPENDED or DEACTIVATED provider is not approved, so re-running
+     the wizard cannot restore them. */
+  const _regSnap = await _db().collection('providers').doc(uid).get();
+  const _regCur  = _regSnap.exists ? (_regSnap.data() || {}) : {};
+  const approved = _regSnap.exists && ['active', 'approved'].includes(_regCur.status);
+
+  const providerId = d.providerId || _regCur.providerId || await _genProviderId();
   /* /provider/{providerId} has no hosting rewrite — firebase.json routes
      /shop, /@, /card and /pay, but not /provider — so every QR code and
      profile link built from it resolved to a 404. The public profile page is
@@ -366,7 +392,9 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     bookingConfig: draft.bookings || {},
     notifications: draft.notifications || { sms: true, email: true, push: true },
     qrCode: qrData, rating: 0, reviewCount: 0, bookingCount: 0,
-    featured: false, verified: false, searchable: true,
+    featured: false, verified: false,
+    /* searchable gates providerSearchProviders; approval decides it, not the wizard. */
+    searchable: approved,
     updatedAt: _ts(),
   }, { merge: true });
 
@@ -402,11 +430,16 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     location:    _pubLoc,
     city:        _pubCity,
     skills:      _pubSkills,
-    status:      'active',
-    searchable:  true,
-    isPublic:    true,
-    acceptsBookings: true,
-    available:   true,
+    /* STATE FIELDS — written on FIRST CREATION ONLY, and created CLOSED. If the registry row
+       exists, publishing writes no state: the lifecycle owns it (merge:true keeps it). booking-service
+       refuses pending_approval (ACTIVE_PROVIDER_STATES = ['active','approved']). */
+    ...(_regSnap.exists ? {} : {
+      status:          'pending_approval',
+      searchable:      false,
+      isPublic:        false,
+      acceptsBookings: false,
+      available:       false,
+    }),
     /* Index inline — do NOT rely on the create-only indexProviderCreate trigger,
        which never fires on a re-publish of an existing doc. */
     nameLower:       _pubName ? _pubName.toLowerCase() : '',
@@ -415,7 +448,7 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     ...(_pubRate || {}),
     /* Verification and featuring are admin decisions and are never granted by
        the act of publishing. merge:true leaves an existing admin value alone. */
-    rating: 0, reviewCount: 0, jobsCompleted: 0,
+    ...(_regSnap.exists ? {} : { rating: 0, reviewCount: 0, jobsCompleted: 0 }),
     publishedAt: _ts(), updatedAt: _ts(),
   }, { merge: true });
 
@@ -440,11 +473,19 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
   }, { merge: true });
 
   // Set custom auth claim
-  await _auth().setCustomUserClaims(uid, { ...(await _auth().getUser(uid)).customClaims, provider: true, providerId });
+  /* claims.provider ONLY for an already-approved provider — grantAccountRole (applicationDecide ->
+     applicationLifecycle) is the one writer of that authority. Idempotent re-stamp of providerId
+     for an approved provider; everyone else's claims are left exactly as they were. */
+  if (approved) {
+    await _auth().setCustomUserClaims(uid, { ...(await _auth().getUser(uid)).customClaims, provider: true, providerId });
+  }
 
   await batch.commit();
   logger.info('[provider] profile published', { uid, providerId });
-  return { success: true, providerId, qrCode: qrData, profileUrl: `https://mysokoni.co.ke/provider-profile.html?uid=${uid}` };
+  /* `approved` + `status` let the client say what actually happened: an unapproved provider's
+     profile is saved and awaits review; it is not live. */
+  return { success: true, providerId, qrCode: qrData, profileUrl: `https://mysokoni.co.ke/provider-profile.html?uid=${uid}`,
+           approved, status: approved ? _regCur.status : (_regSnap.exists ? (_regCur.status || 'pending_approval') : 'pending_approval') };
 };
 
 /* ── 6. providerGetProfile ───────────────────────────────────────────────────── */
