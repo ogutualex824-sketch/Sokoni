@@ -1,3 +1,13 @@
+## 2026-09-30 — HOTFIX to the header unit: palette close on phones + quick-actions trigger on the home page
+
+Owner report after v648: the quick-actions (command palette) close button "does not close" on a phone, and the trigger is
+missing from the home page header. Measured: at phone width the overlay kept opacity 1 after the class was removed (one
+overlay, one style block, no overriding rule found); on desktop it faded. `sokoni-command-palette.js` now makes the closed
+state explicit (visibility hidden at once, display none after the fade; open restores them) and `index.html`'s baked nav
+gains the same `#sk-cp-btn` trigger the dynamic header has. `scripts/test-header-candidate.js` 11/0 incl. a real tap on ✕
+at 390px and a reopen. Files: `sokoni-command-palette.js`, `index.html`, `scripts/test-header-candidate.js`, `CHANGELOG.md`.
+
+## 2026-09-30 — DEPLOYED: header asks (2bcdae2 → hosting v648, live commit 2bcdae2)
 ## 2026-09-30 — SLICE B (hosting candidate, NOT deployed): Support authority on the customer page + WhatsApp booking hand-offs replaced
 
 Owner-authorized to build and certify (no deployment). On `hosting/parcel-rail-on-b108ae3` (live base b108ae3 re-verified).

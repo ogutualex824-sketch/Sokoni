@@ -151,7 +151,8 @@
         'backdrop-filter:blur(6px);display:flex;align-items:flex-start;justify-content:center;' +
         'padding-top:clamp(56px,11vh,130px);opacity:0;pointer-events:none;' +
         'transition:opacity .18s ease}' +
-      '#sk-cp.sk-cp-open{opacity:1;pointer-events:auto}' +
+      '#sk-cp.sk-cp-open{opacity:1;pointer-events:auto;visibility:visible}' +
+      '#sk-cp:not(.sk-cp-open){visibility:hidden}' +
       '#sk-cp-box{background:#0e0e0e;border:1px solid #1e1e1e;border-radius:14px;' +
         'width:min(620px,96vw);max-height:72vh;display:flex;flex-direction:column;' +
         'overflow:hidden;box-shadow:0 28px 72px rgba(0,0,0,.8);' +
@@ -296,19 +297,34 @@
     if (item.href) { _addRecent(item); location.href = item.href; }
   }
 
+  let _hideTimer = null;
   function _open() {
     _init();
     _cursor = -1;
     _inp.value = '';
     _paint('');
-    _overlay.classList.add('sk-cp-open');
+    clearTimeout(_hideTimer);
+    /* display first, then the class on the next frame so the fade still runs */
+    _overlay.style.display = 'flex';
+    _overlay.style.visibility = 'visible';
+    requestAnimationFrame(() => {
+      _overlay.classList.add('sk-cp-open');
+      _inp.focus();
+    });
     document.documentElement.style.overflowY = 'hidden';
-    requestAnimationFrame(() => _inp.focus());
   }
 
   function _close() {
     if (!_overlay) return;
     _overlay.classList.remove('sk-cp-open');
+    /* Closing used to rely on the opacity transition alone. On phones the overlay was
+       observed staying at opacity 1 after the class was removed, which reads as "the
+       close button does nothing" (2026-09-30). The closed state is now explicit:
+       hidden to pointers and assistive tech at once, and out of the render tree after
+       the fade — whatever else the cascade or compositor does. */
+    _overlay.style.visibility = 'hidden';
+    clearTimeout(_hideTimer);
+    _hideTimer = setTimeout(() => { if (!_overlay.classList.contains('sk-cp-open')) _overlay.style.display = 'none'; }, 220);
     document.documentElement.style.overflowY = '';
   }
 

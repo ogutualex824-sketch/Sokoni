@@ -68,6 +68,21 @@ const ck = (l, ok, got) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l +
   await page.waitForTimeout(1500);
   const home = await page.evaluate(() => { const kids = Array.from(document.querySelectorAll('#sk-nav-actions > *')).map((e) => e.id); return { kids, cart: kids.indexOf('sk-nav-cart'), bell: kids.indexOf('sk-notif-btn'), activity: kids.includes('sk-activity-btn') }; });
   ck('H5  home page static nav: cart before bell, no ⚡', home.cart >= 0 && home.bell > home.cart && !home.activity, home);
+  ck('H6  home page static nav carries the quick-actions trigger (#sk-cp-btn)', home.kids.includes('sk-cp-btn'), home.kids);
+  /* Phone width: the closed palette must be GONE — not merely class-less with the overlay still painted. */
+  const ph = await browser.newPage({ viewport: { width: 390, height: 800 } });
+  await ph.route('**/*', (route) => route.request().url().startsWith(base) ? route.continue() : route.abort());
+  await ph.goto(base + '/services.html', { waitUntil: 'domcontentloaded' });
+  await ph.waitForTimeout(4500);
+  await ph.evaluate(() => window.SokoniCP.open()); await ph.waitForTimeout(400);
+  const r1 = await ph.evaluate(() => { const b = document.getElementById('sk-cp-close').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
+  await ph.mouse.click(r1.x, r1.y); await ph.waitForTimeout(500);
+  const st = await ph.evaluate(() => { const el = document.getElementById('sk-cp'); const cs = getComputedStyle(el); return { open: el.classList.contains('sk-cp-open'), visibility: cs.visibility, display: cs.display, pe: cs.pointerEvents }; });
+  ck('H7  phone: a real tap on ✕ leaves the palette hidden (visibility hidden, display none, no pointer events)', !st.open && st.visibility === 'hidden' && st.display === 'none' && st.pe === 'none', st);
+  await ph.evaluate(() => window.SokoniCP.open()); await ph.waitForTimeout(1000);
+  const re = await ph.evaluate(() => { const el = document.getElementById('sk-cp'); const cs = getComputedStyle(el); return { open: el.classList.contains('sk-cp-open'), visibility: cs.visibility, display: cs.display, opacity: cs.opacity }; });
+  ck('H8  phone: it reopens visibly after being closed', re.open && re.visibility === 'visible' && re.display === 'flex' && Number(re.opacity) > 0.9, re);
+  await ph.close();
   await browser.close(); srv.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
