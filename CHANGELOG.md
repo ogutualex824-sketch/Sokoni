@@ -1,3 +1,10 @@
+## [2026-10-01] — ODPC certificate image shown on the legal page (hosting)
+
+**Why:** the owner asked for the ODPC Certificate of Registration to be displayed on the legal page. sokoni-27 (83363cd) added the registration text; this adds the certificate itself inside that section, with no second copy of the text.
+**Files:** `legal.html` (figure inside #regulatory-registration), `assets/legal/odpc-registration-certificate-2026.jpg` (owner-supplied certificate, 900×1159 JPEG, 206 KB, from a 2 MB PNG), `scripts/test-odpc-certificate-image.js` (12/0; sabotage: image removed → 7 fail).
+**Wording:** Data Processor, exactly as the certificate states; values derived in the test from `functions/company-identity.js`. The "Data Controller" lines are unchanged pending the owner's legal decision.
+**Functions / rules / DB / API:** none. **Security:** none (static asset, CSP img-src self). **Breaking:** none.
+
 ## [2026-10-01] — Till barcode scanner works: camera + USB/Bluetooth scanners add the shop's own product (hosting; `hosting/pos-stk-intasend-on-72dca56`)
 
 **Why it did not work:** the till passed no `openScanner` (tap → "No scanner is available on this device"); merchant-v2's was a placeholder; codes matched only `sku`, never `barcode`; a USB/Bluetooth scanner's keystrokes only filtered the list. **Production fact:** 0 of 102 products carry a barcode or SKU yet — scans answer "no product in this shop matches" until the shop adds barcodes (Listing Studio scan buttons, now wired).
