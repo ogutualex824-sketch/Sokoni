@@ -1,10 +1,10 @@
 {
-  "commit": "d108f6cc935391cc26415498ebc57f563a971b32",
-  "commitShort": "d108f6c",
-  "branch": "slice/reack-surface-on-live",
-  "buildTime": "2026-09-29T20:58:38.280Z",
+  "commit": "2f3bb6f8a685d9c1f0278399d8fdbf09c8218f94",
+  "commitShort": "2f3bb6f",
+  "branch": "hosting/shell-gate-consumer-on-49e0f3a",
+  "buildTime": "2026-09-30T03:00:23.678Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260929205835-v642",
+  "cacheVersion": "sokoni-20260930030022-v645",
   "environment": "production",
   "dirtyWorkingTree": false,
   "pipelineArtifacts": [
