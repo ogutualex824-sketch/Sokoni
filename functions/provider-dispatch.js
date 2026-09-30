@@ -9,6 +9,8 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 
 const _OPTS = {
+  /* the booking PIN hash (booking-pin-core) needs SOKONI_HMAC_KEY in the completion path */
+  secrets:         [require('./booking-pin-core').SOKONI_HMAC_KEY],
   region:          'us-central1',
   enforceAppCheck: true,
   timeoutSeconds:  120,

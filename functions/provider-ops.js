@@ -190,6 +190,15 @@ _h.providerCompleteBooking = async (req) => {
   await legal.assertLegalCompliance(uid, 'provider'); // receive settlement — dark-launched
   const { ref, data } = await _ownBooking(uid, req.data?.bookingId);
   if (data.status === 'completed') return { success: true, status: 'completed', alreadyDone: true };
+  /* PIN YAKO NI BOOKING YAKO (owner 2026-09-30): a booking the customer PAID is held by SOKONI and is
+     completed — and the money released to the provider's business wallet below — only with the
+     customer's booking PIN, which they give after the service. booking-pin-core.js */
+  let viaPin = false;
+  if (data.paymentStatus === 'paid_held') {
+    const v = await require('./booking-pin-core')._internal.verifyForCompletion({ bookingId: ref.id, providerUid: uid, pin: req.data?.pin });
+    if (!v.ok) throw new HttpsError('failed-precondition', v.reason);
+    viaPin = true;
+  }
   if (!['confirmed', 'in_progress', 'pending'].includes(data.status)) {
     throw new HttpsError('failed-precondition', `Cannot complete a "${data.status}" booking.`);
   }
@@ -354,7 +363,7 @@ _h.providerCompleteBooking = async (req) => {
 
   if (result && result.alreadyDone) return { success: true, status: 'completed', alreadyDone: true };
   logger.info('providerCompleteBooking', { uid, bookingId: ref.id, gross, commission, net, fee: feeCents, creditedShillings: result.credited, held: result.held, remainderCents });
-  return { success: true, status: 'completed', gross, commission, net, fee: feeCents, settlementCents: settleCents, held: result.held, creditedShillings: result.credited, remainderCents };
+  return { success: true, status: 'completed', viaPin, gross, commission, net, fee: feeCents, settlementCents: settleCents, held: result.held, creditedShillings: result.credited, remainderCents };
 };
 
 /* ============================================================================
