@@ -804,7 +804,6 @@ window._setDeliveryCity = function(city, modal){
 };
 if (!window.pickDeliveryLocation) window.pickDeliveryLocation = pickDeliveryLocation;
 
-const KEBS_REQUIRED_CATS = new Set(["food","agriculture","livestock","electronics","computers","cameras","appliances","gaming","health","beauty","skincare","haircare","fragrances","toys","kids","tyres","auto-parts"]);
 
 /* ----- VERIFIED SELLER BADGE ----- */
 function isSellerVerified(){
@@ -881,14 +880,10 @@ function wishlistDemandBadge(product){
     return `<div class="wishlist-demand-badge ${hot ? "demand-hot" : ""}">❤️ ${count} want${count>1?"s":""} this</div>`;
 }
 
+/* The KEBS rule lives in sokoni-card-chips.js — one source for the home grid and the
+   Shop/category grid (which does not load this file). */
 function kebsBadge(product){
-    if(product.kebsCert){
-        return `<div class="kebs-badge kebs-certified" title="KEBS Certified: ${product.kebsCert}">🏅 KEBS</div>`;
-    }
-    if(KEBS_REQUIRED_CATS.has(product.category)){
-        return `<div class="kebs-badge kebs-unverified" title="KEBS certification not provided">⚠️ No KEBS</div>`;
-    }
-    return "";
+    return (window.SokoniCardChips && window.SokoniCardChips.kebsBadge(product)) || "";
 }
 
 /* Card variant line — "Black • XL", "Black • 256GB", "500ml".
@@ -963,7 +958,6 @@ function buildProductCard(product, size = "normal"){
       : product.verificationStatus === "pending"
       ? `<div style="font-size:10px;font-weight:700;background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.2);color:#ff9800;padding:3px 8px;border-radius:6px;display:inline-block;margin-bottom:4px;">🔍 Ownership Review</div>`
       : "";
-    const compact    = (size === "compact");
     const _mkSafeId  = id => String(id||'').replace(/[^a-zA-Z0-9_-]/g,'');
     /* Asked at render time, so a card cannot disagree with canonical state. */
     const inWishlist = _isWishlisted(product.id);
@@ -972,54 +966,19 @@ function buildProductCard(product, size = "normal"){
         ? `<span class="pcard-stock pcard-stock--low">⚡ Only ${stockNum} left</span>`
         : '';
     const SVC_CATS = new Set(["phone-repair","computer-repair","electronics-repair","graphic-design","photography","videography","music-audio","cleaning","laundry","gardening","plumbing","electrical","interior-design","delivery-service","courier","boda-delivery","marketing","accounting","legal","virtual-assistant","printing","tutoring","coaching","events","catering","hair-beauty","fitness","services"]);
-    const DIG_CATS = new Set(["ebook","template","course","software","license"]);
     const isServiceProd = SVC_CATS.has(product.category) || product.isService;
-    const isDigitalProd = DIG_CATS.has(product.category) || product.isDigital;
-    const buyLabel = isServiceProd ? "📩 Book" : isDigitalProd ? "⚡ Get" : "Buy Now";
-    const cartLabel = isServiceProd ? "📋 Enquire" : isDigitalProd ? "🛒 Buy" : "🛒 Cart";
-
-    /* ── All user-data goes into data-* attributes; zero inline JS injection. ──
-       A single delegated listener on productsContainer handles all interactions.
-       data-name stores the HTML-escaped product name; dataset.name returns the
-       decoded raw value, which the handler then passes to functions. ── */
-    const dName  = _escHtml(product.name);
-    const dPrice = Number(product.price) || 0;
-
-    const btnRow = compact
-        ? `<div class="pcard-actions pcard-actions--compact">
-                <div class="pcard-row">
-                    <button class="pcard-btn pcard-btn--cart" data-action="cart" ${btnDisabled}>
-                        ${isServiceProd ? "📩" : "🛒"} <span>${isServiceProd ? "Book" : "Cart"}</span>
-                    </button>
-                    <button class="pcard-btn pcard-btn--wish${inWishlist?' pcard-btn--wish-active':''}" data-action="wish" title="${inWishlist?'Saved':'Wishlist'}">
-                        ❤
-                    </button>
-                    <button class="pcard-btn pcard-btn--buy" data-action="buy" ${btnDisabled}>
-                        ${isServiceProd ? "📋" : "⚡"} <span>${isServiceProd ? "Hire" : "Buy"}</span>
-                    </button>
-                </div>
-           </div>`
-        : `<div class="pcard-actions">
-                <div class="pcard-row">
-                    <button class="pcard-btn pcard-btn--cart" data-action="cart" ${btnDisabled}>
-                        ${isServiceProd ? "📩" : "🛒"} ${cartLabel.replace(/^[^\s]+ /,"")}
-                    </button>
-                    <button class="pcard-btn pcard-btn--wish${inWishlist?' pcard-btn--wish-active':''}" data-action="wish" title="${inWishlist?'Saved':'Wishlist'}">❤</button>
-                    <button class="pcard-btn pcard-btn--buy" data-action="buy" ${btnDisabled}>
-                        ${buyLabel}
-                    </button>
-                </div>
-                <div class="pcard-row pcard-row--secondary">
-                    <button class="pcard-btn pcard-btn--share" data-action="share"
-                            data-name="${dName}" data-price="${dPrice}">
-                        <i class="fab fa-whatsapp"></i> Share
-                    </button>
-                    <button class="pcard-btn pcard-btn--offer" data-action="offer"
-                            data-name="${dName}" data-price="${dPrice}">
-                        ${isServiceProd ? "💬 Chat" : "🏷️ Offer"}
-                    </button>
-                </div>
-           </div>`;
+    /* ── COMPACT PREMIUM CARD (owner 2026-09-30) ──────────────────────────────
+       No labelled buttons. Two emoji icons float on the photo — ❤ wishlist (top-right)
+       and 🛒 cart / 📩 book (bottom-right) — so more products fit per screen. Buy Now,
+       Share and Offer live on the product page, which the card tap opens.
+       The icons keep the SAME data-action contract (_productCardClick → addToWishlist /
+       buyProduct), and carry an aria-label because an emoji alone is not an accessible
+       name. The visual is small; the hit area stays ≥44px (compact-grid.css). ── */
+    const aName = _escHtml(product.name);
+    const icoWish = `<button type="button" class="pcard-ico pcard-ico--wish${inWishlist ? ' is-on' : ''}" data-action="wish"
+            aria-label="${inWishlist ? 'Saved' : 'Save'} ${aName} ${inWishlist ? 'in' : 'to'} wishlist" aria-pressed="${inWishlist}">❤</button>`;
+    const icoCart = `<button type="button" class="pcard-ico pcard-ico--cart" data-action="cart" ${btnDisabled}
+            aria-label="${isServiceProd ? 'Book' : 'Add'} ${aName}${isServiceProd ? '' : ' to cart'}">${isServiceProd ? '📩' : '🛒'}</button>`;
 
     const catEmoji = {electronics:'📱',fashion:'👗',beauty:'💄',shoes:'👟',food:'🛒',computers:'💻',appliances:'🔌',sports:'⚽',furniture:'🛋️',accessories:'👜',construction:'🏗️',printing:'🖨️',services:'🛠️',gas:'🔥',charcoal:'🪵',solar:'☀️'};
     const catLabel = product.category ? (product.category.charAt(0).toUpperCase()+product.category.slice(1).replace(/-/g,' ')) : 'Shop';
@@ -1034,27 +993,10 @@ function buildProductCard(product, size = "normal"){
         ${product.sellerName ? `<span class="pcard-ov-seller">🏪 ${_escHtml(String(product.sellerName).slice(0, 24))}</span>` : ''}
     </div>`;
 
-    const _soldCnt  = Number(product.soldCount  || 0);
-    const _wishCnt  = Number(product.wishlistCount || 0);
-    const _stripInfo = _soldCnt > 5  ? `✅ ${_soldCnt.toLocaleString()} sold` :
-                       _wishCnt >= 5 ? `🔥 ${_wishCnt} want this` :
-                       product.sellerName ? `🏪 ${_escHtml(product.sellerName.split(' ')[0])}` : '📦 In stock';
-
-    /* data-stop-prop on the strip prevents accidental card-open on strip touch/scroll */
-    const mobileStrip = `<div class="pcard-mobile-strip" data-stop-prop="1">
-        <div class="pcard-m-top-row">
-            <span class="pcard-strip-info">${_stripInfo}</span>${stockChip}
-        </div>
-        <div class="pcard-m-btns">
-            <button class="pcard-m-wish${inWishlist?' pcard-m-wish--active':''}" data-action="wish" title="${inWishlist?'Saved':'Wishlist'}">❤</button>
-            <button class="pcard-m-cart" data-action="cart" ${btnDisabled}>${isServiceProd?'📩':'🛒'}</button>
-            <button class="pcard-m-buy" data-action="buy" ${btnDisabled}>${isServiceProd?'Book':'⚡ Buy'}</button>
-        </div>
-    </div>`;
-
+    if (window.SokoniCardChips) window.SokoniCardChips.schedulePromoChips();   /* server promotion chips, sokoni-card-chips.js */
     /* data-pid is the single source of truth for which product this card represents */
     return `
-        <div class="product-card ${boosted ? "product-boosted" : ""} ${isAdult ? "adult-card" : ""} ${oos ? "oos-card" : ""}" style="position:relative;animation:cardFadeIn 0.35s ease;" data-pid="${safeId}">
+        <div class="product-card ${boosted ? "product-boosted" : ""} ${isAdult ? "adult-card" : ""} ${oos ? "oos-card" : ""}" style="position:relative;animation:cardFadeIn 0.35s ease;" data-pid="${safeId}" data-shop="${_escHtml(String(product.shopId || ''))}">
             ${adultBadge}
             ${oosOverlay}
             <div class="product-img-wrap" data-emoji="${catEmoji[product.category]||'🛍️'}">
@@ -1064,9 +1006,11 @@ function buildProductCard(product, size = "normal"){
                 ${locTag}
                 ${nameOverlay}
                 ${shopRing}
+                ${icoWish}
+                ${icoCart}
             </div>
+            <div class="pcard-chips"${badge || kebs || stockChip ? '' : ' hidden'}>${stockChip}${badge}${kebs}</div>
             <div class="product-body">
-                ${badge || kebs ? `<div class="pcard-badge-row">${badge}${kebs}</div>` : ""}
                 <h3 class="product-name">${_escHtml(product.name)}</h3>
                 ${_variantSummaryHtml(product)}
                 ${getSellerBadgesHtml(product.sellerName,'sm')}
@@ -1076,8 +1020,6 @@ function buildProductCard(product, size = "normal"){
                 </div>
                 ${rating ? `<div class="rating-stars" style="font-size:9px;color:rgba(255,193,7,0.8);font-weight:700;margin-top:2px;">${ratingStarsHtml(rating.avg)} <span style="color:rgba(255,255,255,0.35);font-size:8px;">(${rating.count})</span></div>` : ""}
             </div>
-            ${btnRow}
-            ${mobileStrip}
         </div>
     `;
 }
@@ -2428,7 +2370,7 @@ function _startProactiveChat(){
             h < 12 ? "☀️ Good morning! What can I help you with today?" : h < 17 ? "🌤️ Good afternoon! Can I help you find something?" : "🌙 Good evening! Looking for something specific?",
         ];
         const msg = msgs[Math.floor(Math.random() * msgs.length)];
-        tip.style.cssText = "position:fixed;bottom:148px;right:14px;background:#1a1a1a;border:1px solid rgba(113,255,0,0.3);border-radius:14px 14px 4px 14px;padding:10px 14px;font-size:13px;color:white;font-family:'Segoe UI',system-ui,sans-serif;z-index:10000;max-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.4);animation:chatTipIn .3s ease;line-height:1.4;cursor:pointer;";
+        tip.style.cssText = "position:fixed;bottom:148px;right:14px;background:#1a1a1a;border:1px solid rgba(113,255,0,0.3);border-radius:14px 14px 4px 14px;padding:10px 14px;font-size:13px;color:white;font-family:'Segoe UI',system-ui,sans-serif;z-index:10000;max-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.4);animation:chatTipIn .3s ease;line-height:1.4;pointer-events:none;";
         tip.innerHTML = msg + `<div style="font-size:10px;color:rgba(113,255,0,0.7);margin-top:4px;font-weight:700;">Ask KASS →</div>`;
         if(!document.getElementById("_chatTipStyle")){
             const s = document.createElement("style");
@@ -2436,7 +2378,9 @@ function _startProactiveChat(){
             s.textContent = "@keyframes chatTipIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}";
             document.head.appendChild(s);
         }
-        tip.onclick = () => { tip.remove(); kassBtn.click(); };
+        /* Pass-through (owner 2026-09-30: nothing may cover a button). The bubble floats over the
+           product grid for 7s, exactly where the right-hand cards keep their 🛒; it must not
+           swallow those taps. The KASS button beside it still opens the chat. */
         document.body.appendChild(tip);
         setTimeout(() => { tip.style.opacity="0"; tip.style.transition="opacity .4s"; setTimeout(()=>tip.remove(),400); }, 7000);
     }, 8000);

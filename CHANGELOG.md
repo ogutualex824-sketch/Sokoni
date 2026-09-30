@@ -71,6 +71,78 @@ Deliberate breakages **8/8**.
 - discovery for garages, professionals, facilities and riders.
 
 The home **product feed** fix is sokoni-27's (`hosting/uploadedat-on-2bcdae2`).
+## [2026-09-30] — Compact premium product cards: home, Shop/category and shop pages (UI only) — NOT deployed
+
+**Files:**
+- `script.js`, `category.js`, `category.html`, `store.html`, `index.html`, `compact-grid.css`;
+- `sokoni-card-chips.js` (new);
+- `scripts/test-cart-browser-certification.js`, `scripts/test-shop-card-actions.js`, `CHANGELOG.md`.
+
+**Database / rules / API changes:** none. The cards read the existing public `miniShopGetPromotions`.
+**Security:** the KEBS certificate text is now escaped (it was interpolated raw into a `title` attribute).
+**Breaking changes:** listing cards no longer carry Buy Now, Share or Offer buttons, by the owner's decision. They
+remain on the product page.
+
+**Owner design (2026-09-30).**
+- **No labelled buttons.** Two emoji icons float on the photo: ❤ wishlist just under the shop logo (top-right),
+  and 🛒 cart (📩 book for services) at bottom-right.
+- **Positions kept:** the 18+ badge stays top-left and the shop logo stays top-right.
+- **Nothing covers the photo.** On phones, name, price and rating moved below the photo; the dark name overlay no
+  longer sits on the image.
+- **Chip row under the photo:**
+  - ⚡ Only N left;
+  - KEBS / ⚠️ No KEBS;
+  - NEW / HOT / Sponsored / Digital;
+  - promotion chips: ⚡ Flash sale, 🎁 Bundle, 🏷️ Coupon, 🎉 Promo, and ⏳ Ends soon when a promotion ends within 24h.
+- **Density:** 3 cards per row on phones, 4 on tablets, 6 on desktop. Live shows 2 per row with three stacked
+  buttons per card.
+- The icons are 30px to the eye with a ≥44px tap target (`::before` ring).
+- The global 44px button `min-height` no longer stretches the icons into ovals.
+- The 18+ badge, logo, ❤ and 🛒 never overlap.
+
+**Promotion chips come from the server only.** The product's OWN shop's active, unexpired promotions (merchant-v2
+Marketing) are read once per shop and cached for 5 minutes. The promotion writer does not yet check that listed
+productIds belong to the shop, so a promotion is applied only to cards of the shop it was read for. If the read
+fails, no chip is shown (no guessed badge).
+
+**One source for chips:** `sokoni-card-chips.js` holds the KEBS rule, the low-stock rule and the promotion lookup.
+The home page and the Shop/category page (which do not share a script) both use it; there is no second copy of the
+KEBS category list.
+
+**Converged renderers:**
+- home (`script.js buildProductCard`);
+- Shop/category (`category.js`): its Buy Now row and phone strip are gone, and its 18+ badge takes the home
+  position;
+- shop page (`store.html stActionRows`): the icons sit in a transparent square over the photo, OUTSIDE the product
+  link, so an icon tap never navigates. The same data-st-* handler is kept.
+
+**Chat tip:** the KASS proactive tip floated over the grid for 7 seconds, exactly where right-hand cards keep their
+🛒. It now passes taps through.
+
+**Tests (owner-authorised contract change).**
+- `test-cart-browser-certification`: the "Buy Now on the card" section became the compact card contract. It checks
+  that there is no labelled Buy button on cards, that the 🛒 has an accessible name and a hit-tested ≥44px target,
+  and that tapping the card opens the product page. **56/0.**
+- `test-shop-card-actions`: re-pointed from the retired rows to the icons. It checks the icons are present, the
+  rows are absent, there is one `stActionRows` definition used by all 3 renderers, the icon layer is outside the
+  link, and the styling holds. **26/0.**
+
+**Verified.** Chromium, live origin and real data, with the candidate files served in place, at 390, 768 and 1280.
+- Home: **60/0** vs live **25/35 fail**.
+- Shop/category: **32/0**.
+- Also green: shop-logo 21/0, minishop trust 29/0, minishop cart 28/0.
+- The KEBS, low-stock and promotion chips were proven with local fixture cards; no product in view carried them
+  live.
+- **UNPROVEN:** the shop page (`store.html`) renders no cards on live production either (with `?id=` or
+  `?store=`), so its conversion is source-verified only.
+
+**Findings flagged, not changed:**
+- **📢 Sponsored** is read from the viewer's own browser storage. It needs a server source.
+- **The promotion writer** accepts other shops' productIds. This needs a server repair.
+- **KASS chat tip lines** include unverified claims ("Flash deals are live!").
+
+**Not yet converted:** MiniShop, business, provider and service cards.
+
 ## 2026-09-30 — MV2-2a (Merchant Operations Convergence): Supply workspace ported to the live line — certified, NOT deployed
 
 Route `supply` (native, more tier, new **Commerce** group) + `sokoni-merchant-supply.js`, ported from `86d6ca7` onto

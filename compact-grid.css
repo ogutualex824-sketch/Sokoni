@@ -1452,3 +1452,187 @@ body.light-mode #storiesSection {
   margin: 0 12px 4px !important;
   box-shadow: 0 4px 24px rgba(0,0,0,0.12) !important;
 }
+
+/* ════════════════════════════════════════════════════════
+   COMPACT PREMIUM PRODUCT CARD (owner 2026-09-30)
+   No labelled buttons on listing cards. Two emoji icons float on the photo:
+   the shop logo ring stays top-right with ❤ wishlist just below it, 🛒 cart / 📩 book
+   bottom-right. The 18+ badge keeps its place (top-left). KEBS / NEW / HOT chips show in
+   the photo overlay on phones. Phones get 3 cards per row, tablets 4.
+   Icons are 30px to the eye but keep a ≥44px touch target via ::before.
+   Last in the file on purpose: it overrides the older button rows above.
+════════════════════════════════════════════════════════ */
+.product-card .pcard-actions,
+.product-card .pcard-mobile-strip { display: none !important; }
+
+:is(.product-card, .st-product-card) .pcard-ico {
+  position: absolute !important;
+  z-index: 6 !important;
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 0 !important;
+  min-height: 0 !important; /* a global 44px min-height on buttons stretched the icon into an oval */
+  max-height: 30px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 50% !important;
+  border: 1px solid rgba(255,255,255,0.22) !important;
+  background: rgba(8,8,8,0.62) !important;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: #fff !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+  transition: transform .15s ease, background .15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+/* invisible 44×44 hit area centred on the 30px icon */
+:is(.product-card, .st-product-card) .pcard-ico::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+}
+:is(.product-card, .st-product-card) .pcard-ico:hover { transform: scale(1.08); background: rgba(8,8,8,0.8) !important; }
+:is(.product-card, .st-product-card) .pcard-ico:active { transform: scale(0.94); }
+:is(.product-card, .st-product-card) .pcard-ico:focus-visible { outline: 2px solid #71ff00 !important; outline-offset: 2px; }
+:is(.product-card, .st-product-card) .pcard-ico--wish { top: 39px !important; right: 7px !important; color: rgba(255,255,255,0.85) !important; }
+:is(.product-card, .st-product-card) .pcard-ico--wish.is-on { color: #ff3b5c !important; background: rgba(255,59,92,0.16) !important; border-color: rgba(255,59,92,0.45) !important; }
+:is(.product-card, .st-product-card) .pcard-ico--cart { bottom: 7px !important; right: 7px !important; background: rgba(113,255,0,0.9) !important; border-color: rgba(113,255,0,1) !important; color: #050f05 !important; }
+:is(.product-card, .st-product-card) .pcard-ico--cart:disabled { opacity: .35 !important; cursor: not-allowed; }
+
+/* the shop logo stays where it was — top-right; the ❤ sits just below it */
+.product-card .pcard-shop-ring {
+  right: 7px !important;
+  top: 7px !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 0 !important;
+  min-height: 0 !important; /* a touch-target rule grew the ring to 44px and pushed it under the 18+ badge */
+  font-size: 10px !important;
+}
+.product-card .pcard-shop-ring::before { content: ""; position: absolute; inset: -8px; border-radius: 50%; }
+
+/* CHIP ROW — directly UNDER the photo, never on it. Trust and promotion chips:
+   KEBS / No KEBS, NEW / HOT / Sponsored / Digital, ⚡ Flash sale / 🎁 Bundle / 🏷️ Coupon /
+   🎉 Promo and ⏳ Ends soon (server promotions). One line; extra chips scroll sideways
+   rather than wrap, so every card in a row keeps the same height. Hidden when empty. */
+:is(.product-card, .st-product-card) .pcard-chips {
+  display: flex; gap: 4px; align-items: center;
+  padding: 5px 6px 0; min-height: 0;
+  overflow-x: auto; overflow-y: hidden; white-space: nowrap;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+:is(.product-card, .st-product-card) .pcard-chips::-webkit-scrollbar { display: none; }
+:is(.product-card, .st-product-card) .pcard-chips[hidden] { display: none !important; }
+:is(.product-card, .st-product-card) .pcard-chips .prod-badge,
+:is(.product-card, .st-product-card) .pcard-chips .kebs-badge {
+  position: static !important; flex: 0 0 auto;
+  font-size: 9px !important; font-weight: 800 !important; line-height: 1.5 !important;
+  padding: 1px 6px !important; border-radius: 6px !important; margin: 0 !important;
+  display: inline-flex !important; align-items: center; gap: 2px;
+}
+.product-card .pcard-promo--flash { background: rgba(255,152,0,0.16) !important; color: #ffb74d !important; border: 1px solid rgba(255,152,0,0.4) !important; }
+.product-card .pcard-promo--promo { background: rgba(113,255,0,0.12) !important; color: #9dff4a !important; border: 1px solid rgba(113,255,0,0.35) !important; }
+.product-card .pcard-promo--soon  { background: rgba(255,59,92,0.14) !important; color: #ff7a8f !important; border: 1px solid rgba(255,59,92,0.4) !important; }
+
+/* the photo name/price overlay leaves room for the 🛒 on its right */
+.product-card .pcard-name-overlay { padding-right: 42px !important; }
+:is(.product-card, .st-product-card) .pcard-chips .pcard-stock { position: static !important; flex: 0 0 auto; font-size: 9px !important; font-weight: 800 !important; padding: 1px 6px !important; border-radius: 6px !important; margin: 0 !important; line-height: 1.5 !important; }
+
+/* PHONES — 3 per row. `html body` + id.class outranks mobile.css `#productsContainer.ptrend-grid`
+   and the inline `#productsContainer` rule, which both pin 2 columns. */
+@media (max-width: 600px) {
+  html body .products-grid,
+  html body .ptrend-grid,
+  html body #productsContainer,
+  html body #productsContainer.ptrend-grid,
+  html body #flashProductsGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+  .product-card .pcard-name-overlay { padding: 34px 38px 7px 7px !important; }
+  .product-card .pcard-ov-cat,
+  .product-card .pcard-ov-seller { display: none !important; }
+  .product-card .pcard-ov-name { font-size: 10.5px !important; line-height: 1.2 !important; }
+  .product-card .pcard-ov-price { font-size: 11.5px !important; }
+  .product-card .pcard-ov-stars { font-size: 8.5px !important; }
+  :is(.product-card, .st-product-card) .pcard-ico { width: 28px !important; height: 28px !important; max-height: 28px !important; font-size: 13px !important; }
+  :is(.product-card, .st-product-card) .pcard-ico::before { inset: -8px; }
+  :is(.product-card, .st-product-card) .pcard-ico--wish { top: 33px !important; right: 5px !important; }
+  :is(.product-card, .st-product-card) .pcard-ico--cart { bottom: 5px !important; right: 5px !important; }
+  .product-card .pcard-shop-ring { right: 5px !important; top: 5px !important; width: 24px !important; height: 24px !important; font-size: 9px !important; }
+}
+
+/* TABLETS — 4 per row */
+@media (min-width: 601px) and (max-width: 900px) {
+  html body .products-grid,
+  html body .ptrend-grid,
+  html body #productsContainer,
+  html body #productsContainer.ptrend-grid,
+  html body #flashProductsGrid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+}
+
+/* PHONES & SMALL TABLETS (≤767px) — nothing covers the photo (owner 2026-09-30).
+   The name/price overlay used to sit on the lower half of the image; at 3 cards per row it hid
+   most of it. Name (2 lines), price and rating now sit BELOW the photo, as they already do on
+   larger screens. The photo carries only the four small corner items: 18+, shop logo, ❤, 🛒.
+   Selectors carry #productsContainer because the rules they override do. */
+@media (max-width: 767px) {
+  html body #productsContainer .product-card .pcard-name-overlay,
+  html body .ptrend-grid .product-card .pcard-name-overlay,
+  html body .products-grid .product-card .pcard-name-overlay { display: none !important; }
+
+  html body #productsContainer .product-card .product-body,
+  html body .ptrend-grid .product-card .product-body,
+  html body .products-grid .product-card .product-body {
+    display: block !important;
+    padding: 4px 6px 7px !important;
+    min-height: 0 !important;
+    height: auto !important;
+    text-align: left !important;
+  }
+  html body .product-card .product-body > :not(.product-name):not(.price-row):not(.rating-stars) { display: none !important; }
+  html body .product-card .product-body .product-name {
+    font-size: 10.5px !important; line-height: 1.25 !important; font-weight: 700 !important;
+    margin: 0 0 3px !important; min-height: 2.5em !important;
+    /* older rules centre the name and pin a one-line height, which cut its second line */
+    height: auto !important; max-height: 2.5em !important; white-space: normal !important; text-align: left !important;
+    display: -webkit-box !important; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden !important;
+  }
+  html body .product-card .product-body .price-row { margin: 0 !important; display: flex !important; align-items: baseline; gap: 4px; }
+  html body .product-card .product-body .price { font-size: 12px !important; font-weight: 900 !important; margin: 0 !important; }
+  html body .product-card .product-body .price-row > :not(.price) { display: none !important; }
+  html body .product-card .product-body .rating-stars { font-size: 8.5px !important; margin-top: 1px !important; }
+}
+
+/* Shop page (store.html): no shop-logo badge above the ❤, so it sits at the top corner. */
+.st-photo-icons .pcard-ico--wish { top: 7px !important; }
+@media (max-width: 600px) { .st-photo-icons .pcard-ico--wish { top: 5px !important; } }
+/* Shop page grid — same density as the marketplace: 3 per row on phones, 4 on tablets. */
+@media (max-width: 600px) {
+  html body .st-products-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 7px !important; }
+  html body .st-products-grid .st-product-info { padding: 6px 7px 7px !important; }
+  html body .st-products-grid .st-product-name { font-size: 10.5px !important; }
+  html body .st-products-grid .st-product-price { font-size: 12px !important; }
+}
+@media (min-width: 601px) and (max-width: 900px) {
+  html body .st-products-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+}
+/* Shop/category grid — same density: 3 per row on phones, 4 on tablets (desktop keeps 6). */
+@media (max-width: 600px) {
+  html body .cat-premium-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 7px !important; }
+  html body .cat-premium-grid .product-card .product-body { padding: 5px 6px 7px !important; }
+  html body .cat-premium-grid .product-card .product-name { font-size: 10.5px !important; line-height: 1.25 !important; }
+  html body .cat-premium-grid .product-card .price { font-size: 12px !important; }
+}
+@media (min-width: 601px) and (max-width: 900px) {
+  html body .cat-premium-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+}

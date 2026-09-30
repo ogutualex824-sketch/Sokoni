@@ -198,7 +198,12 @@
       background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
       border-radius: 16px; overflow: hidden; cursor: pointer; text-decoration: none;
       transition: transform .2s, border-color .2s; display: block;
+      position: relative;   /* anchors the .st-photo-icons layer over the square photo */
     }
+    /* A transparent square over the photo (the image is aspect-ratio 1, full card width).
+       Only the two icons take taps; everything else passes through to the product link. */
+    .st-photo-icons { position: absolute; top: 0; left: 0; right: 0; aspect-ratio: 1; pointer-events: none; z-index: 5; }
+    .st-photo-icons .pcard-ico { pointer-events: auto; }
     .st-product-card:hover { transform: translateY(-3px); border-color: rgba(113,255,0,0.25); }
     /* The card is no longer the anchor — controls must not live inside a link — so the
        link styling moves to the element that actually wraps the image and the text. */
@@ -388,32 +393,37 @@
      viewport; adding local handlers instead would make it another writer of the cart
      shape sokoni-cart.js exists to consolidate. -->
 <script src="sokoni-wishlist.js"></script>
+<script src="sokoni-card-chips.js"></script>
 <script src="market-actions.js"></script>
 <script>
 /* ONE definition of the shop card's action rows. This page has THREE product renderers
    (the cached-shop path and two live-Firestore paths); emitting the markup inline in each
    would guarantee they drift, which is the whole reason the shop diverged from the
-   marketplace in the first place. The structure is the canonical pcard one that
-   category.js and script.js emit and compact-grid.css already styles: .pcard-actions is
-   the desktop row (hidden below 600px), .pcard-mobile-strip the 44x44 mobile strip
-   (hidden above it). Exactly one row is visible at any width, so a tap fires once.
+   marketplace in the first place. Since 2026-09-30 it is the compact premium card that
+   category.js and script.js emit too: two icon controls (❤, 🛒) on the photo and no
+   labelled rows, styled once in compact-grid.css.
 
    Buttons carry the product id only — serialising a product into a data attribute would
    mean HTML-escaping user-supplied names for no benefit. */
-function stActionRows (id, name) {
+function stActionRows (id, name, p) {
+  /* COMPACT PREMIUM CARD (owner 2026-09-30): no labelled buttons. ❤ and 🛒 sit on the
+     square photo inside .st-photo-icons — a transparent square laid over the image,
+     OUTSIDE the product link, so an icon tap can never also navigate. Buy Now lives on the
+     product page the card link opens. The chip row (low stock, KEBS, server promotions via
+     sokoni-card-chips.js) sits below the card text, never on the photo. Same data-st-*
+     contract, so the document-level handler below is unchanged. */
   var i = String(id).replace(/"/g, '&quot;');
   var n = String(name || '').replace(/[<>"&]/g, function (c) {
     return { '<': '&lt;', '>': '&gt;', '"': '&quot;', '&': '&amp;' }[c];
   });
-  return '<div class="pcard-actions">'
-       +   '<button type="button" class="pcard-wish" data-st-wish="' + i + '" aria-label="Save ' + n + ' to wishlist">&#10084;</button>'
-       +   '<button type="button" class="pcard-cart" data-st-cart="' + i + '" aria-label="Add ' + n + ' to cart">&#128722; Add</button>'
+  var C = window.SokoniCardChips;
+  var chips = (C && p) ? (C.lowStockChip(p) + C.kebsBadge(p)) : '';
+  if (C) C.schedulePromoChips();   /* debounced: one promotion pass after this render */
+  return '<div class="st-photo-icons">'
+       +   '<button type="button" class="pcard-ico pcard-ico--wish" data-st-wish="' + i + '" aria-label="Save ' + n + ' to wishlist">&#10084;</button>'
+       +   '<button type="button" class="pcard-ico pcard-ico--cart" data-st-cart="' + i + '" aria-label="Add ' + n + ' to cart">&#128722;</button>'
        + '</div>'
-       + '<div class="pcard-mobile-strip" data-stop-prop="1"><div class="pcard-m-btns">'
-       +   '<button type="button" class="pcard-m-wish" data-st-wish="' + i + '" aria-label="Save ' + n + ' to wishlist">&#10084;</button>'
-       +   '<button type="button" class="pcard-m-cart" data-st-cart="' + i + '" aria-label="Add ' + n + ' to cart">&#128722;</button>'
-       +   '<button type="button" class="pcard-m-buy" data-st-buy="' + i + '" aria-label="Buy ' + n + ' now">&#9889;</button>'
-       + '</div></div>';
+       + '<div class="pcard-chips"' + (chips ? '' : ' hidden') + '>' + chips + '</div>';
 }
 
 /* ONE listener on the document, not one per grid. This page has three renderers writing
@@ -710,17 +720,15 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
          HTML and is announced as a link. So the anchor now wraps only the image and text,
          and the controls sit beside it inside the card.
 
-         The markup is the CANONICAL pcard structure category.js and script.js already
-         emit and compact-grid.css already styles: .pcard-actions is the desktop row
-         (display:none below 600px) and .pcard-mobile-strip is the mobile strip with 44x44
-         tap targets (hidden above it). Exactly one row is visible at any width, so a tap
-         can only fire once — and the shop cards cannot drift from the marketplace cards,
+         The markup is the CANONICAL compact card that category.js and script.js also
+         emit (stActionRows): ❤ and 🛒 icons on the photo, each with a ≥44px tap target,
+         and no labelled rows — so the shop cards cannot drift from the marketplace cards,
          because there is no second implementation.
 
          Buttons carry the product ID only. Serialising the product into a data attribute
          would need HTML-escaping a JSON blob containing user-supplied names — an
          injection surface for no benefit, when the row is already in memory. */
-      return `<div class="st-product-card">
+      return `<div class="st-product-card" data-pid="${String(p.id).replace(/"/g, '&quot;')}" data-shop="${String(p.shopId || '').replace(/"/g, '&quot;')}">
         <a class="st-product-link" href="product.html?id=${p.id}">
           ${window.renderProductImage
             ? renderProductImage({ product: p, alt: p.name, wrap: false })
@@ -731,7 +739,7 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
             ${wsTag}
           </div>
         </a>
-        ${stActionRows(p.id, p.name)}
+        ${stActionRows(p.id, p.name, p)}
       </div>`;
     }).join("");
 
@@ -1012,12 +1020,12 @@ function stRenderCollections(prods) {
           + items.map(function(p) {
               var img  = (window.pickProductImage ? pickProductImage(p) : p.image) || "assets/default-product.png";
               var name = (p.name || "").replace(/</g, "&lt;");
-              return '<div class="st-product-card">' + '<a class="st-product-link" href="product.html?id=' + p.id + '">'
+              return '<div class="st-product-card" data-pid="' + String(p.id).replace(/"/g, '&quot;') + '" data-shop="' + String(p.shopId || '').replace(/"/g, '&quot;') + '">' + '<a class="st-product-link" href="product.html?id=' + p.id + '">'
                 + '<img src="' + img + '" alt="' + name + '" loading="lazy" onerror="this.src=\'assets/default-product.png\'">'
                 + '<div class="st-product-info">'
                 + '<div class="st-product-name">' + name + '</div>'
                 + '<div class="st-product-price">KES ' + Number(p.price || 0).toLocaleString() + '</div>'
-                + '</div></a>' + stActionRows(p.id, name) + '</div>';
+                + '</div></a>' + stActionRows(p.id, name, p) + '</div>';
             }).join("")
           + '</div></div>';
       }).join("")
@@ -1169,12 +1177,12 @@ async function _stLoadFirestore(uid) {
             var ws = p.wholesalePrice
               ? '<div class="st-wholesale-tag">🏷️ Bulk: KES ' + Number(p.wholesalePrice).toLocaleString()
                 + ' (min ' + p.minWholesaleQty + ')</div>' : "";
-            return '<div class="st-product-card">' + '<a class="st-product-link" href="product.html?id=' + p.id + '">'
+            return '<div class="st-product-card" data-pid="' + String(p.id).replace(/"/g, '&quot;') + '" data-shop="' + String(p.shopId || '').replace(/"/g, '&quot;') + '">' + '<a class="st-product-link" href="product.html?id=' + p.id + '">'
               + '<img src="' + (p.image || "assets/default-product.png") + '" alt="' + (p.name||"").replace(/</g,"&lt;") + '" loading="lazy">'
               + '<div class="st-product-info">'
               + '<div class="st-product-name">' + (p.name||"").replace(/</g,"&lt;") + '</div>'
               + '<div class="st-product-price">KES ' + Number(p.price||0).toLocaleString() + '</div>'
-              + ws + '</div></a>' + stActionRows(p.id, name) + '</div>';
+              + ws + '</div></a>' + stActionRows(p.id, name, p) + '</div>';
           }).join("");
         }
       }

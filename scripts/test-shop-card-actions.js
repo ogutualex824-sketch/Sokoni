@@ -39,21 +39,29 @@ const CAT = read('category.js');
 
 /* ── 1 · CONTROL ─────────────────────────────────────────────────────────────── */
 head('1 · CONTROL — the reference implementation is present to compare against');
-ck('category.js emits the canonical rows', CAT.indexOf('pcard-mobile-strip') > -1 &&
-   CAT.indexOf('pcard-actions') > -1,
+/* The compact premium card (owner 2026-09-30): listing cards carry two icon controls on the
+   photo — ❤ wishlist and 🛒 cart — and NO labelled rows. category.js is the reference. */
+ck('category.js emits the canonical icon controls', CAT.indexOf('pcard-ico pcard-ico--wish') > -1 &&
+   CAT.indexOf('pcard-ico pcard-ico--cart') > -1,
    'if the reference vanished, every comparison below would be vacuous');
-ck('CONTROL the stylesheet governs both rows',
-   CSS.indexOf('.pcard-actions') > -1 && CSS.indexOf('.pcard-mobile-strip') > -1);
+ck('NEGATIVE category.js no longer emits the labelled rows',
+   CAT.indexOf('class="pcard-actions"') === -1 && CAT.indexOf('pcard-mobile-strip') === -1,
+   'the owner removed Buy/Add rows from listing cards on purpose');
+ck('CONTROL the stylesheet governs the icons on both card kinds',
+   CSS.indexOf(':is(.product-card, .st-product-card) .pcard-ico') > -1);
 
 /* ── 2 · THE SHOP EMITS THE CANONICAL MARKUP ────────────────────────────────── */
-head('2 · the shop card carries both rows');
-ck('a desktop action row is emitted', STORE.indexOf('class="pcard-actions"') > -1,
-   'the shop had none on any viewport');
-ck('a mobile action strip is emitted', STORE.indexOf('class="pcard-mobile-strip"') > -1);
-ck('the mobile strip carries all three controls',
-   STORE.indexOf('pcard-m-wish') > -1 && STORE.indexOf('pcard-m-cart') > -1 &&
-   STORE.indexOf('pcard-m-buy') > -1,
-   'wishlist, add-to-cart and buy');
+head('2 · the shop card carries the icon controls');
+ck('the ❤ wishlist icon is emitted', STORE.indexOf('class="pcard-ico pcard-ico--wish"') > -1);
+ck('the 🛒 cart icon is emitted', STORE.indexOf('class="pcard-ico pcard-ico--cart"') > -1);
+ck('both icons carry accessible names',
+   /pcard-ico--wish" data-st-wish="' \+ i \+ '" aria-label="Save /.test(STORE) &&
+   /pcard-ico--cart" data-st-cart="' \+ i \+ '" aria-label="Add /.test(STORE),
+   'an emoji alone is not an accessible name');
+ck('NEGATIVE no labelled row or Buy control on the shop card',
+   STORE.indexOf('class="pcard-actions"') === -1 && STORE.indexOf('pcard-mobile-strip') === -1 &&
+   STORE.indexOf('data-st-buy="') === -1,
+   'Buy Now lives on the product page the card link opens');
 ck('NEGATIVE no shop-only button class was invented',
    !/class="st-(cart|buy|wish)-btn/.test(STORE),
    'a second implementation is exactly what drifts from the marketplace');
@@ -90,29 +98,25 @@ ck('one delegated listener at document level, not one per grid or card',
    'handler covers only whichever ran, and per-button handlers leak on every re-render');
 ck('the action markup has exactly ONE definition',
    (STORE.match(/function stActionRows/g) || []).length === 1 &&
-   (STORE.match(/class="pcard-actions"/g) || []).length === 1,
+   (STORE.match(/class="st-photo-icons"/g) || []).length === 1,
    'three renderers emitting their own copy is how the shop drifted from the marketplace');
-ck('every renderer uses it', (STORE.match(/stActionRows\(/g) || []).length === 3,
+ck('every renderer uses it, passing the product (for its chips)',
+   (STORE.match(/stActionRows\(p\.id, (p\.name|name), p\)/g) || []).length === 3,
    'the cached-shop path and both live-Firestore paths');
+ck('the icon layer sits OUTSIDE the product link',
+   /<\/a>' \+ stActionRows\(/.test(STORE) && /<\/a>\s*\n\s*\$\{stActionRows\(/.test(STORE),
+   'an icon inside the link would also navigate on tap');
 
-/* ── 5 · THE STYLESHEET NO LONGER OMITS THE SHOP GRID ───────────────────────── */
-head('5 · the mobile-strip selector asymmetry');
+/* ── 5 · THE STYLESHEET ──────────────────────────────────────────────────────── */
+head('5 · the compact card styling');
 {
-  const strip = (CSS.match(/\.[a-z-]+ \.pcard-mobile-strip/g) || []);
-  ck('CONTROL mobile-strip selector groups were found', strip.length > 0, strip.length + ' selectors');
-  ck('the shop grid is styled by the strip rules',
-     CSS.indexOf('.st-products-grid .pcard-mobile-strip') > -1);
-  ck('the previously-omitted .products-grid is styled too',
-     CSS.indexOf('.products-grid .pcard-mobile-strip') > -1,
-     'the desktop row was scoped to three containers, the strip to two');
-  ck('NEGATIVE no selector was duplicated inside a group',
-     (function () {
-       const groups = CSS.split('}').filter((g) => g.indexOf('.pcard-') > -1);
-       return groups.every((g) => ['\\.products-grid', '\\.st-products-grid'].every((s) => {
-         const m = g.match(new RegExp(s + ' \\.pcard-[a-z-]+', 'g')) || [];
-         return m.length === new Set(m).size;
-       }));
-     })());
+  ck('the icons keep a ≥44px tap area (invisible ::before ring)',
+     /\.pcard-ico::before\s*\{[^}]*inset:\s*-7px/.test(CSS));
+  ck('a global 44px button min-height cannot stretch the icons into ovals',
+     /\.pcard-ico\s*\{[^}]*min-height:\s*0 !important/.test(CSS));
+  ck('the shop grid is 3 per row on phones',
+     /@media \(max-width: 600px\)\s*\{\s*html body \.st-products-grid \{ grid-template-columns: repeat\(3/.test(CSS));
+  ck('the chip row can never cover the photo', CSS.indexOf('.pcard-chips') > -1 && STORE.indexOf('class="pcard-chips"') > -1);
   ck('CONTROL the stylesheet still balances', (CSS.match(/\{/g) || []).length === (CSS.match(/\}/g) || []).length);
 }
 

@@ -324,27 +324,44 @@ const BADGE = `(function () {
       ck(label + ': the cart still works after being emptied',
          readd.lines === 1 && readd.units === 1, JSON.stringify(readd));
 
-      /* ── BUY NOW — followed only to the checkout boundary ── */
-      await page.evaluate(() => {
-        const c = window.SokoniCart;
-        c.add({ id: 'p2', name: 'Sugar 2kg', price: 320, sellerId: 'SELLER_B', qty: 3 });
+      /* ── COMPACT CARD CONTRACT (owner decision 2026-09-30) ──
+         Listing cards carry NO labelled Buy button any more — the owner removed it on purpose
+         so more products fit per screen. This section used to click "Buy Now" on the card; it
+         now proves the contract that replaced it, not the old UI:
+           (a) no labelled Buy control on a listing card;
+           (b) the 🛒 cart control is an icon with an accessible name and a real ≥44px tap area
+               (hit-tested, not just measured);
+           (c) tapping the card itself opens the product page, where Buy Now lives. */
+      const buyOnCard = await page.locator('.product-card button[aria-label^="Buy "]:visible').count();
+      ck(label + ': no labelled Buy button on listing cards (compact card)', buyOnCard === 0, buyOnCard + ' visible');
+
+      /* The page scrolls inside its own container, which in-page scrollIntoView does not move —
+         let Playwright bring the icon into view first, then hit-test at and around its centre. */
+      await page.locator('.product-card .pcard-ico--cart').first().scrollIntoViewIfNeeded().catch(() => {});
+      await page.waitForTimeout(300);
+      const cartIcon = await page.evaluate(() => {
+        const card = document.querySelector('.product-card');
+        const ic = card && card.querySelector('.pcard-ico--cart');
+        if (!ic) return { ok: false, why: 'no .pcard-ico--cart' };
+        const b = ic.getBoundingClientRect(), cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+        const probe = (x, y) => { const e = document.elementFromPoint(x, y); return !!e && (e === ic || ic.contains(e)); };
+        return { ok: true, name: ic.getAttribute('aria-label') || '', glyph: ic.textContent.trim(),
+                 hit: [probe(cx, cy), probe(cx - 20, cy), probe(cx, cy - 20)] };
       });
-      const buy = page.locator('button[aria-label^="Buy "]:visible').first();
-      const buyCount = await buy.count();
-      if (buyCount) {
-        await buy.click({ timeout: 5000 }).catch(() => {});
-        await page.waitForTimeout(2500);
-        const url = page.url();
-        /* SIGNED OUT, express checkout must route to LOGIN, not to a payment screen.
-           That is the checkout gate, and reaching login is the correct boundary for an
-           unauthenticated shopper — this suite never authenticates and never pays. */
-        ck(label + ': Buy Now leaves the shop page for the purchase path',
-           /checkout|login/i.test(url), url.split('/').pop().slice(0, 40));
-        ck(label + ': signed out, it stops at the auth gate rather than a payment screen',
-           !/pay|stk|intasend/i.test(url), url.split('/').pop().slice(0, 40));
-      } else {
-        ck(label + ': a Buy Now control exists on the card', false, 'no Buy button found');
-      }
+      ck(label + ': the cart icon has an accessible name', cartIcon.ok && /^Add .+ to cart$/.test(cartIcon.name), cartIcon.name || cartIcon.why);
+      ck(label + ': the cart icon has a ≥44px tap area', cartIcon.ok && cartIcon.hit.every(Boolean), JSON.stringify(cartIcon.hit));
+
+      /* Tap the photo's left-middle — clear of the corner items (18+, logo, ❤, 🛒) — which is what
+         a shopper taps to open a product. */
+      const cardEl = page.locator('.product-card .product-img-wrap').first();
+      await cardEl.scrollIntoViewIfNeeded().catch(() => {});
+      const box = await cardEl.boundingBox();
+      let clickErr = '';
+      await cardEl.click({ timeout: 5000, position: { x: Math.max(4, Math.round((box ? box.width : 40) * 0.3)), y: Math.round((box ? box.height : 80) * 0.5) } }).catch((e) => { clickErr = String(e.message || e).replace(/\u001b\[[0-9;]*m/g, '').split('\n').slice(0, 9).join(' | ').slice(0, 700); });
+      await page.waitForTimeout(2500);
+      const url = page.url();
+      ck(label + ': tapping the card opens the product page (where Buy Now lives)',
+         /product(\.html)?\?id=|\/product\b/i.test(url), url.split('/').pop().slice(0, 50) + (clickErr ? ' — click: ' + clickErr : ''));
     } finally {
       await ctx.close();
     }

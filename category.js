@@ -363,7 +363,9 @@ function renderProducts(list){
         const isAdult = typeof isProductAgeRestricted === "function"
                           ? isProductAgeRestricted(p)
                           : (p.ageRestricted === true);
-        const adultBadge = isAdult ? `<div class="adult-card-badge" style="position:absolute;top:5px;right:5px;z-index:4;font-size:8px;font-weight:900;background:rgba(255,30,30,0.85);color:white;padding:2px 6px;border-radius:5px;">🔞 18+</div>` : "";
+        /* Class-only: the shared .adult-card-badge rule places it top-left, as on the home card —
+           the top-right corner now belongs to the shop logo and the ❤ (compact card, 2026-09-30). */
+        const adultBadge = isAdult ? `<div class="adult-card-badge">🔞 18+</div>` : "";
         /* Sellability comes from the ONE canonical decision (sokoni-sellability.js),
            the same module functions/shared/sellability.js gives createCheckoutSession.
 
@@ -393,13 +395,31 @@ function renderProducts(list){
         const _csc = _csn ? ['#6366f1','#f59e0b','#10b981','#e11d48','#a8ff58','#0891b2','#dc2626','#059669'][_csn.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%8] : '';
         const cShopRing = _csn ? `<a class="pcard-shop-ring" href="seller-public.html?seller=${encodeURIComponent(_csn)}" onclick="event.stopPropagation()" title="Visit ${_csn.replace(/"/g,'&quot;').replace(/</g,'&lt;')}" style="background:${_csc};">${_csi}</a>` : '';
         const cardHtml = `
-        <div class="product-card" style="position:relative;animation:cardFadeIn 0.35s ease;cursor:pointer;" onclick="openProductCat('${_esc(p.id)}')">
+        <div class="product-card${isAdult ? ' adult-card' : ''}" style="position:relative;animation:cardFadeIn 0.35s ease;cursor:pointer;" onclick="openProductCat('${_esc(p.id)}')" data-pid="${_esc(p.id)}" data-shop="${_esc(p.shopId || '')}">
             ${adultBadge}
             ${oosOverlay}
             <div class="product-img-wrap">
                 <img src="${(window.pickProductImage && pickProductImage(p)) || p.image || p.imageUrl || p.thumbnail || p.photo || p.coverImage || 'assets/default-product.png'}" alt="${_esc(p.name)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/default-product.png'">
                 ${cShopRing}
+                ${(function(){
+                    /* COMPACT PREMIUM CARD (owner 2026-09-30): no labelled buttons — ❤ under the shop
+                       logo, 🛒 bottom-right, on the photo. Same handlers as before (addToCart /
+                       addToWishlistCat); Buy Now lives on the product page, which the card opens.
+                       aria-labels keep an accessible name; the tap target is ≥44px (compact-grid.css). */
+                    const pid = _esc(p.id), dis = oos ? 'disabled' : '';
+                    return '<button type="button" class="pcard-ico pcard-ico--wish" ' + dis + ' data-wish-pid="' + pid + '" '
+                      + 'aria-label="Save ' + _esc(p.name) + ' to wishlist" onclick="event.stopPropagation();addToWishlistCat(\'' + pid + '\')">❤</button>'
+                      + '<button type="button" class="pcard-ico pcard-ico--cart" ' + dis + ' '
+                      + 'aria-label="Add ' + _esc(p.name) + ' to cart" onclick="event.stopPropagation();addToCart(\'' + pid + '\')">🛒</button>';
+                })()}
             </div>
+            ${(function(){
+                /* Chip row UNDER the photo — low stock and KEBS from the shared module
+                   (sokoni-card-chips.js); server promotion chips are added by it after render. */
+                const C = window.SokoniCardChips;
+                const chips = C ? ((oos ? '' : C.lowStockChip(p)) + C.kebsBadge(p)) : '';
+                return '<div class="pcard-chips"' + (chips ? '' : ' hidden') + '>' + chips + '</div>';
+            })()}
             <div class="product-body">
                 <h3 class="product-name">${_esc(p.name)}</h3>
                 ${(function(){
@@ -425,83 +445,6 @@ function renderProducts(list){
                     })()}
                     ${rating}
                 </div>
-                ${(function(){
-                    /* The handlers addToCart / addToWishlistCat / buyNowCat have
-                       existed and been exported on window since this page was
-                       written — nothing ever rendered controls to reach them, so
-                       category shoppers could not add to cart at all and had to
-                       tap through to the product page.
-
-                       These call those existing handlers rather than introducing
-                       a fifth add-to-cart implementation. stopPropagation is
-                       required because the whole card carries its own onclick to
-                       open the product; without it every add would also navigate
-                       away, which is the likely reason buttons were left out. */
-                    const pid = _esc(p.id);
-                    const dis = oos ? 'disabled' : '';
-                    const btn = 'flex:1;padding:7px 0;border-radius:9px;font-size:12px;font-weight:800;'
-                              + 'cursor:' + (oos ? 'not-allowed' : 'pointer') + ';font-family:inherit;'
-                              + 'transition:transform .12s,opacity .12s;opacity:' + (oos ? '0.35' : '1') + ';';
-                    return '<div class="pcard-actions" style="display:flex;gap:6px;margin-top:7px;">'
-                      + '<button type="button" ' + dis + ' aria-label="Add ' + _esc(p.name) + ' to cart" '
-                      +   'onclick="event.stopPropagation();addToCart(\'' + pid + '\')" '
-                      +   'style="' + btn + 'background:#71ff00;color:#050505;border:none;">🛒 Add</button>'
-                      /* data-wish-pid lets _catSyncWishlistButtons() reflect canonical
-                         state on this card without re-rendering the grid. */
-                      + '<button type="button" ' + dis + ' aria-label="Save ' + _esc(p.name) + ' to wishlist" '
-                      +   'data-wish-pid="' + _esc(pid) + '" '
-                      +   'onclick="event.stopPropagation();addToWishlistCat(\'' + pid + '\')" '
-                      +   'style="' + btn + 'background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.22);flex:0 0 42px;">🤍</button>'
-                      + '</div>'
-                      /* Buy Now — for shoppers who want to purchase immediately
-                         without a cart round-trip. Calls the existing buyNowCat
-                         handler (checkout with just this item). */
-                      + '<button type="button" ' + dis + ' aria-label="Buy ' + _esc(p.name) + ' now" '
-                      +   'onclick="event.stopPropagation();buyNowCat(\'' + pid + '\')" '
-                      +   'style="' + btn + 'width:100%;margin-top:6px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#050505;border:none;">⚡ Buy Now</button>'
-
-                      /* ── MOBILE ACTION STRIP ──────────────────────────────────
-                         Everything above is the DESKTOP row, and compact-grid.css
-                         carries `@media (max-width:600px) .pcard-actions{display:none
-                         !important}` — the mobile grid is two 120px columns, which a
-                         three-button desktop row cannot fit.
-
-                         So on a phone this page rendered add-to-cart controls that
-                         were display:none. All 50 buttons measured 0x0 and the Shop
-                         page had NO way to add to cart at all below 600px. That is
-                         the whole of the reported "Add to Cart is unresponsive":
-                         not a dead handler, not an overlay stealing the click — no
-                         clickable box existed.
-
-                         compact-grid.css already ships the designed replacement
-                         (.pcard-mobile-strip + .pcard-m-wish/-cart/-buy, 40px round
-                         tap targets) and styles it globally, not scoped to the
-                         homepage grid — with `.pcard-mobile-strip{display:none}` at
-                         top level, so exactly one of the two rows is visible at any
-                         width. The homepage renders it; this page never did, because
-                         ab6e2fa added the desktop row without a mobile counterpart.
-
-                         Rendering the SAME canonical markup here therefore fixes the
-                         page with no new CSS, and the buttons call the SAME
-                         addToCart / addToWishlistCat / buyNowCat handlers the
-                         desktop row uses — no second cart implementation, no
-                         duplicated delegated-handler logic. Exactly one of the two
-                         rows is ever visible, so a tap can only ever fire once. */
-                      + '<div class="pcard-mobile-strip" data-stop-prop="1">'
-                      +   '<div class="pcard-m-btns">'
-                      +     '<button type="button" class="pcard-m-wish" ' + dis + ' '
-                      +       'data-wish-pid="' + _esc(pid) + '" '
-                      +       'aria-label="Save ' + _esc(p.name) + ' to wishlist" '
-                      +       'onclick="event.stopPropagation();addToWishlistCat(\'' + pid + '\')">❤</button>'
-                      +     '<button type="button" class="pcard-m-cart" ' + dis + ' '
-                      +       'aria-label="Add ' + _esc(p.name) + ' to cart" '
-                      +       'onclick="event.stopPropagation();addToCart(\'' + pid + '\')">🛒</button>'
-                      +     '<button type="button" class="pcard-m-buy" ' + dis + ' '
-                      +       'aria-label="Buy ' + _esc(p.name) + ' now" '
-                      +       'onclick="event.stopPropagation();buyNowCat(\'' + pid + '\')">⚡ Buy</button>'
-                      +   '</div>'
-                      + '</div>';
-                })()}
             </div>
         </div>
         `;
@@ -512,6 +455,7 @@ function renderProducts(list){
     /* Fill the rating placeholders from the CANONICAL aggregate. Fire-and-forget:
        a rating is decoration, and the grid must never wait on it. */
     _hydrateCardRatings(list);
+    if (window.SokoniCardChips) window.SokoniCardChips.schedulePromoChips();
 }
 
 /* ── CANONICAL REVIEW AFFORDANCE ───────────────────────────────────────────
