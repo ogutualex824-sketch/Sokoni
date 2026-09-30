@@ -815,7 +815,21 @@ function toggleCtx() {
 ═══════════════════════════════════════════════════════════════════ */
 function _startListeners() {
   _unsub = SokoniChat.onMessagesChanged(CONV_ID, function (err, msgs) {
-    if (err) { console.error('[chat] messages:', err); return; }
+    if (err) {
+      /* A denied or failed read used to leave the spinner up forever ("nothing loads").
+         Unreadable is a state of its own — not "no messages", not offline. */
+      console.error('[chat] messages:', err);
+      var ls = document.getElementById('loading-state');
+      var denied = err && /permission-denied|failed-precondition|unauthenticated/.test(String(err.code || ''));
+      ls.setAttribute('data-state', 'unreadable');
+      ls.innerHTML = '<span class="material-icons" aria-hidden="true">&#xe32a;</span>' +
+        '<div style="font-weight:600">Messages unavailable</div>' +
+        '<div style="font-size:13px;max-width:280px;text-align:center">' +
+        (denied ? 'You don’t have access to this conversation’s messages.' : 'This conversation could not be read right now.') +
+        '</div>';
+      ls.style.display = 'flex';
+      return;
+    }
     document.getElementById('loading-state').style.display = 'none';
     var atBottom = _isAtBottom();
     _allMsgs = msgs;

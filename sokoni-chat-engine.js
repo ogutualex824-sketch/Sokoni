@@ -158,6 +158,92 @@ var CONTEXTS = {
 };
 
 /* ─────────────────────────────────────────────────────────────
+   CATEGORY REGISTRY  (2026-09-30, messages inbox repair)
+   A category is a NAMED SET OF CONTEXTS KEYS — never a type of its
+   own. The inbox renders chips from this list, so a category can
+   only exist here if the engine already knows the types behind it.
+
+     kind 'all'    — every conversation
+     kind 'unread' — unreadCount > 0 (server-written on the projection)
+     kind 'action' — every context whose actions carry `action`
+                     (Invoices = contexts that offer `view_invoice`;
+                      there is NO invoice conversation type)
+     kind 'other'  — a transactionType the registry does not know
+                     (legacy rows); rendered only when one exists
+     types [...]   — explicit CONTEXTS keys
+
+   Every CONTEXTS key is covered by exactly one `types` category —
+   scripts/test-messages-premium.js holds that line.
+──────────────────────────────────────────────────────────────*/
+var CATEGORIES = [
+  { id:'all',        label:'All',         icon:'forum',            kind:'all' },
+  { id:'unread',     label:'Unread',      icon:'mark_chat_unread', kind:'unread' },
+  { id:'orders',     label:'Orders',      icon:'shopping_bag',     types:['order','food_order','pharmacy_order'] },
+  { id:'deliveries', label:'Deliveries',  icon:'local_shipping',   types:['logistics_request'] },
+  { id:'invoices',   label:'Invoices',    icon:'receipt_long',     kind:'action', action:'view_invoice' },
+  { id:'bookings',   label:'Bookings',    icon:'event_available',  types:['service_booking','hotel_reservation','event_booking'] },
+  { id:'healthcare', label:'Healthcare',  icon:'local_hospital',   types:['healthcare_appointment'] },
+  { id:'legal',      label:'Legal',       icon:'balance',          types:['legal_consultation'] },
+  { id:'property',   label:'Property',    icon:'home',             types:['property_inquiry'] },
+  { id:'vehicles',   label:'Vehicles',    icon:'directions_car',   types:['vehicle_inquiry'] },
+  { id:'work',       label:'Jobs & Work', icon:'work',             types:['job_application','freelancer_engagement'] },
+  { id:'finance',    label:'Finance',     icon:'account_balance',  types:['financial_request','insurance_request'] },
+  { id:'quotes',     label:'Quotes',      icon:'request_quote',    types:['rfq'] },
+  { id:'support',    label:'Support',     icon:'headset_mic',      types:['support_ticket'] },
+  { id:'other',      label:'Other',       icon:'chat',             kind:'other' },
+];
+
+/* Resolve action-derived categories ONCE from the registry above, and refuse a
+   category that names a type the engine does not have — a chip with no backing
+   type is exactly the defect this registry exists to prevent. */
+(function _resolveCategories() {
+  CATEGORIES.forEach(function (cat) {
+    if (cat.kind === 'action') {
+      cat.types = Object.keys(CONTEXTS).filter(function (k) {
+        return (CONTEXTS[k].actions || []).some(function (a) { return a.id === cat.action; });
+      });
+      cat.derived = true;
+    }
+    (cat.types || []).forEach(function (t) {
+      if (!CONTEXTS[t]) throw new Error('[chat] category "' + cat.id + '" names unknown type "' + t + '"');
+    });
+  });
+})();
+
+function getCategory(id) {
+  for (var i = 0; i < CATEGORIES.length; i++) if (CATEGORIES[i].id === id) return CATEGORIES[i];
+  return null;
+}
+
+/* Does conversation `c` (a userConversations projection row) belong to `cat`?
+   Only fields the server writes are consulted: transactionType, unreadCount. */
+function categoryMatches(cat, c) {
+  if (typeof cat === 'string') cat = getCategory(cat);
+  if (!cat || !c) return false;
+  var type = c.transactionType;
+  if (cat.kind === 'all')    return true;
+  if (cat.kind === 'unread') return (typeof c.unreadCount === 'number' ? c.unreadCount : 0) > 0;
+  if (cat.kind === 'other')  return !CONTEXTS[type];
+  return (cat.types || []).indexOf(type) !== -1;
+}
+
+/* Per-category counts from REAL rows. `visible` hides `other` until a row needs it. */
+function categorySummary(convs) {
+  convs = convs || [];
+  return CATEGORIES.map(function (cat) {
+    var count = 0, unread = 0;
+    convs.forEach(function (c) {
+      if (!categoryMatches(cat, c)) return;
+      count++;
+      unread += (typeof c.unreadCount === 'number' && c.unreadCount > 0) ? c.unreadCount : 0;
+    });
+    return { id: cat.id, label: cat.label, icon: cat.icon, kind: cat.kind || 'types',
+             derived: !!cat.derived, types: (cat.types || []).slice(), count: count, unread: unread,
+             visible: cat.kind === 'other' ? count > 0 : true };
+  });
+}
+
+/* ─────────────────────────────────────────────────────────────
    FIREBASE ACCESSORS
 ──────────────────────────────────────────────────────────────*/
 function _db()  { return firebase.firestore(); }
@@ -479,11 +565,13 @@ function _cfMsg(op, data) {
   return _fns().httpsCallable('messagesDispatch')({ op: op, ...(data || {}) });
 }
 
-function createConversation(transactionType, transactionId, participantUids, metadata) {
+/* Participants are DERIVED BY THE SERVER from the transaction (functions/messages.js
+   _partiesOf). The third argument is kept for call-compatibility but is never sent:
+   a client-supplied list is inert server-side and must not travel in the request. */
+function createConversation(transactionType, transactionId, _participantUidsIgnored, metadata) {
   return _cfMsg('createConversation', {
     transactionType: transactionType,
     transactionId:   transactionId,
-    participantUids: participantUids,
     metadata:        metadata || {},
   }).then(function(r) { return r.data; });
 }
@@ -630,6 +718,12 @@ var SokoniChat = {
   getConversationContext: getConversationContext,
   CONTEXTS:               CONTEXTS,
   getContext: function(type) { return CONTEXTS[type] || { label:'Conversation', icon:'chat', actions:[], fields:[] }; },
+
+  /* Categories (inbox chips) — derived from CONTEXTS, see CATEGORY REGISTRY */
+  CATEGORIES:       CATEGORIES,
+  getCategory:      getCategory,
+  categoryMatches:  categoryMatches,
+  categorySummary:  categorySummary,
 
   /* Utilities */
   timeStr:  _timeStr,

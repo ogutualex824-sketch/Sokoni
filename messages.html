@@ -11,117 +11,194 @@
 <script src="sokoni-cart.js"></script>
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Messages — SOKONI</title>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <link rel="stylesheet" href="sokoni-tokens.css">
 <style>
+/* ══════════════════════════════════════════════════════════════════════════
+   Messages inbox (2026-09-30 repair). Two panes on one page: the conversation
+   LIST and the open THREAD. Phones stack them (data-view toggles which one is
+   on screen, with a 44px back button); ≥769px shows both side by side.
+
+   Everything rendered here comes from the SAME engine calls chat.html uses
+   (SokoniChat.onConversationsChanged / getConversation / onMessagesChanged /
+   sendMessage / markRead). No second chat authority; no client-side
+   participant writes; no uploads (chat.html keeps attachments and voice).
+   ══════════════════════════════════════════════════════════════════════════ */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-/* Premium dark by default (was light + gated behind prefers-color-scheme:dark, which
-   left it light on light-OS devices while the platform forces data-theme="dark"). */
-:root{--c-bg:#050505;--c-surface:#111115;--c-border:rgba(255,255,255,0.08);--c-primary:#71ff00;--c-primary-light:rgba(113,255,0,0.07);--c-text:rgba(255,255,255,0.9);--c-sub:rgba(255,255,255,0.42);--c-red:#f87171;--radius:12px}
-body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);min-height:100vh;padding-bottom:80px}
+:root{--c-bg:#050505;--c-surface:#111115;--c-surface2:#17171c;--c-border:rgba(255,255,255,0.08);--c-primary:#71ff00;--c-primary-light:rgba(113,255,0,0.07);--c-text:rgba(255,255,255,0.9);--c-sub:rgba(255,255,255,0.46);--c-red:#f87171;--c-amber:#fbbf24;--radius:12px;--bnav-h:calc(64px + env(safe-area-inset-bottom,0px))}
+html,body{max-width:100%;overflow-x:hidden}
+body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);min-height:100vh}
 
-/* Sticks BELOW the shared header, not at viewport top. shared-header.js injects a
-   position:fixed nav and publishes its measured height as --sk-header-h; a sticky bar
-   pinned at top:0 scrolls straight underneath it (z-index 100 vs 100001) and the
-   "Messages" title disappears behind the header. Same contract .sk-sub-nav uses. */
-.topbar{position:sticky;top:var(--sk-header-h,58px);z-index:100;background:var(--c-surface);border-bottom:1px solid var(--c-border);padding:0 16px;height:60px;display:flex;align-items:center;gap:12px}
-.topbar h1{font-size:20px;font-weight:700;flex:1}
-.icon-btn{width:40px;height:40px;border:none;background:none;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--c-sub)}
-.icon-btn:hover{background:var(--c-bg)}
+/* The app fills the viewport BELOW the measured shared header (--sk-header-h,
+   published by shared-header.js, which also pads the body by that amount) and
+   ABOVE the fixed bottom nav on phones. */
+.mx{display:grid;grid-template-columns:1fr;height:calc(100vh - var(--sk-header-h,58px) - var(--bnav-h));height:calc(100dvh - var(--sk-header-h,58px) - var(--bnav-h));min-height:320px;overflow:hidden}
+.pane{min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--c-bg)}
+.pane-list{border-right:1px solid var(--c-border)}
+.pane-thread{display:none}
+.mx[data-view="thread"] .pane-list{display:none}
+.mx[data-view="thread"] .pane-thread{display:flex}
 
-.search-wrap{padding:12px 16px;background:var(--c-surface);border-bottom:1px solid var(--c-border)}
-.search-box{display:flex;align-items:center;gap:8px;background:var(--c-bg);border:1px solid var(--c-border);border-radius:10px;padding:0 12px;height:42px}
-.search-box input{flex:1;border:none;background:none;font-size:14px;color:var(--c-text);outline:none}
+/* ── List pane ── */
+.lhead{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:0 16px;height:56px;background:var(--c-surface);border-bottom:1px solid var(--c-border)}
+.lhead h1{font-size:20px;font-weight:700;flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+.tot{font-size:11px;font-weight:700;background:var(--c-primary);color:#000;border-radius:10px;min-width:20px;height:20px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center}
+.icon-btn{width:44px;height:44px;border:none;background:none;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--c-sub);text-decoration:none;flex-shrink:0}
+.icon-btn:hover{background:rgba(255,255,255,0.05)}
+.icon-btn:focus-visible{outline:2px solid var(--c-primary);outline-offset:2px}
+
+.search-wrap{flex:0 0 auto;padding:10px 16px;background:var(--c-surface);border-bottom:1px solid var(--c-border)}
+.search-box{display:flex;align-items:center;gap:8px;background:var(--c-bg);border:1px solid var(--c-border);border-radius:12px;padding:0 12px;height:44px}
+.search-box input{flex:1;min-width:0;border:none;background:none;font-size:15px;color:var(--c-text);outline:none}
 .search-box .material-icons{font-size:20px;color:var(--c-sub)}
 
-.filters{display:flex;gap:8px;padding:12px 16px;overflow-x:auto;scrollbar-width:none;background:var(--c-surface);border-bottom:1px solid var(--c-border)}
+.filters{flex:0 0 auto;display:flex;gap:8px;padding:10px 16px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;background:var(--c-surface);border-bottom:1px solid var(--c-border);-webkit-overflow-scrolling:touch}
 .filters::-webkit-scrollbar{display:none}
-.filter-chip{white-space:nowrap;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:500;border:1.5px solid var(--c-border);background:var(--c-surface);cursor:pointer;color:var(--c-sub);transition:.15s}
-.filter-chip.active{background:rgba(113,255,0,0.12);border-color:rgba(113,255,0,0.35);color:#71ff00}
+.filter-chip{white-space:nowrap;min-height:44px;padding:0 14px;border-radius:22px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--c-border);background:var(--c-surface2);cursor:pointer;color:var(--c-sub);transition:.15s;font-family:inherit;flex-shrink:0}
+.filter-chip .material-icons{font-size:17px}
+.filter-chip .cnt{font-size:11px;opacity:.75}
+.filter-chip .ub{font-size:11px;font-weight:700;background:var(--c-primary);color:#000;border-radius:9px;min-width:18px;height:18px;padding:0 5px;display:inline-flex;align-items:center;justify-content:center}
+.filter-chip.active{background:rgba(113,255,0,0.12);border-color:rgba(113,255,0,0.4);color:#71ff00}
+.filter-chip:focus-visible{outline:2px solid var(--c-primary);outline-offset:2px}
 
-.conv-list{padding:8px 0}
-.conv-item{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;border-bottom:1px solid var(--c-border);background:var(--c-surface);transition:.1s;text-decoration:none;color:inherit}
+.notice{flex:0 0 auto;margin:10px 16px 0;padding:10px 12px;border:1px solid rgba(251,191,36,.35);background:rgba(251,191,36,.08);border-radius:10px;font-size:13px;line-height:1.45;color:var(--c-text)}
+.notice b{color:var(--c-amber)}
+
+.conv-list{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 0}
+.conv-item{display:flex;align-items:center;gap:12px;padding:12px 16px;min-height:72px;cursor:pointer;border-bottom:1px solid var(--c-border);background:var(--c-surface);transition:.1s;text-decoration:none;color:inherit;width:100%}
 .conv-item:hover{background:rgba(255,255,255,0.04)}
 .conv-item.unread{background:var(--c-primary-light)}
-.conv-avatar{width:48px;height:48px;border-radius:50%;background:var(--c-primary);display:flex;align-items:center;justify-content:center;color:#000;font-size:20px;flex-shrink:0;overflow:hidden}
+.conv-item.open{background:rgba(113,255,0,0.12)}
+.conv-item:focus-visible{outline:2px solid var(--c-primary);outline-offset:-2px}
+.conv-avatar{width:46px;height:46px;border-radius:14px;background:rgba(113,255,0,.12);border:1px solid rgba(113,255,0,.28);display:flex;align-items:center;justify-content:center;color:var(--c-primary);font-size:20px;flex-shrink:0;overflow:hidden}
+.conv-item.unread .conv-avatar{background:var(--c-primary);color:#000}
 .conv-avatar img{width:100%;height:100%;object-fit:cover}
 .conv-body{flex:1;min-width:0}
 .conv-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.conv-subtitle{font-size:12px;color:var(--c-sub);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conv-subtitle{font-size:12px;color:var(--c-sub);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:6px;align-items:center}
+.conv-type{font-size:10px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;padding:1px 6px;border-radius:6px;background:rgba(255,255,255,.07);color:var(--c-sub);flex-shrink:0}
 .conv-preview{font-size:13px;color:var(--c-sub);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .conv-item.unread .conv-preview{color:var(--c-text);font-weight:500}
 .conv-meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
-.conv-time{font-size:11px;color:var(--c-sub)}
+.conv-time{font-size:11px;color:var(--c-sub);white-space:nowrap}
 .unread-badge{background:var(--c-primary);color:#000;font-size:11px;font-weight:700;border-radius:10px;min-width:20px;height:20px;padding:0 6px;display:flex;align-items:center;justify-content:center}
 
-.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:64px 24px;text-align:center}
-.empty .material-icons{font-size:64px;color:rgba(255,255,255,0.18);margin-bottom:16px}
-.empty h3{font-size:18px;font-weight:600;margin-bottom:8px}
-.empty p{font-size:14px;color:var(--c-sub);max-width:280px;line-height:1.5}
+/* ── States (list + thread share these) ── */
+.state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;text-align:center;gap:8px}
+.state .material-icons{font-size:56px;color:rgba(255,255,255,0.18);margin-bottom:8px}
+.state h3{font-size:17px;font-weight:600}
+.state p{font-size:14px;color:var(--c-sub);max-width:300px;line-height:1.5}
+.state .btn{margin-top:10px;min-height:44px;padding:0 18px;border-radius:12px;border:1px solid rgba(113,255,0,.35);background:rgba(113,255,0,.1);color:var(--c-primary);font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.state[data-kind="unreadable"] .material-icons{color:rgba(248,113,113,.55)}
+.state[data-kind="unauth"] .material-icons{color:rgba(113,255,0,.45)}
 
 .skeleton{background:linear-gradient(90deg,#1a1a1e 25%,#222226 50%,#1a1a1e 75%);background-size:200%;animation:shimmer 1.2s infinite;border-radius:6px}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .sk-conv{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--c-border);background:var(--c-surface)}
-.sk-avatar{width:48px;height:48px;border-radius:50%;flex-shrink:0}
+.sk-avatar{width:46px;height:46px;border-radius:14px;flex-shrink:0}
 .sk-body{flex:1}
 .sk-line{height:13px;margin-bottom:7px;border-radius:4px}
 .sk-line.w80{width:80%}.sk-line.w60{width:60%}.sk-line.w40{width:40%}
+@media(prefers-reduced-motion:reduce){.skeleton{animation:none}}
 
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--c-surface);border-top:1px solid var(--c-border);display:flex;height:calc(64px + env(safe-area-inset-bottom,0px));z-index:100;padding-bottom:env(safe-area-inset-bottom,0px)}
+/* ── Thread pane: header / scrolling body / composer FOOTER ── */
+#thread{display:flex;flex-direction:column;flex:1;min-height:0}
+#thread[hidden]{display:none}
+.thead{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:6px 8px 6px 4px;min-height:56px;background:var(--c-surface);border-bottom:1px solid var(--c-border)}
+.tt{flex:1;min-width:0}
+.tt .n{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tt .s{font-size:12px;color:var(--c-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.ro{flex:0 0 auto;padding:8px 14px;font-size:12.5px;background:rgba(251,191,36,.08);border-bottom:1px solid rgba(251,191,36,.3);color:var(--c-amber)}
+.tbody{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 12px;display:flex;flex-direction:column;gap:8px}
+.msg{max-width:82%;padding:10px 13px;border-radius:16px;font-size:14px;line-height:1.45;overflow-wrap:anywhere;word-break:break-word;background:var(--c-surface2);border:1px solid var(--c-border);align-self:flex-start}
+.msg.mine{align-self:flex-end;background:rgba(113,255,0,.12);border-color:rgba(113,255,0,.28)}
+.msg.sys{align-self:center;max-width:92%;font-size:12px;color:var(--c-sub);background:none;border:none;text-align:center}
+.msg .mt{display:block;font-size:10.5px;color:var(--c-sub);margin-top:4px;text-align:right}
+.msg.del{font-style:italic;color:var(--c-sub)}
+.msg .att{color:var(--c-primary);text-decoration:none;font-weight:600}
+.composer{flex:0 0 auto;display:flex;align-items:flex-end;gap:8px;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));background:var(--c-surface);border-top:1px solid var(--c-border)}
+.composer textarea{flex:1;min-width:0;min-height:44px;max-height:120px;resize:none;padding:11px 14px;border-radius:14px;border:1px solid var(--c-border);background:var(--c-bg);color:var(--c-text);font:inherit;font-size:15px;outline:none}
+.composer textarea:focus{border-color:rgba(113,255,0,.4)}
+.composer button{width:44px;height:44px;border-radius:50%;border:none;background:var(--c-primary);color:#000;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.composer button:disabled{opacity:.45;cursor:default}
+.composer button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.send-err{flex:0 0 auto;padding:6px 14px;font-size:12.5px;color:var(--c-red);background:rgba(248,113,113,.08);border-top:1px solid rgba(248,113,113,.25)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--c-surface);border-top:1px solid var(--c-border);display:flex;height:var(--bnav-h);z-index:100;padding-bottom:env(safe-area-inset-bottom,0px)}
 /* .bnav-item tabs are styled by the canonical fallback in sokoni-platform-override.css */
 
 @media(min-width:769px){
+  :root{--bnav-h:0px}
   .bottom-nav{display:none}
-  body{padding-bottom:0;max-width:640px;margin:0 auto}
+  .mx{grid-template-columns:minmax(320px,400px) 1fr}
+  .pane-thread{display:flex}
+  .mx[data-view="thread"] .pane-list{display:flex}
+  #backBtn{display:none}
 }
-
-/* Dark is now the single default (folded into the base rules above), so the platform's
-   forced data-theme="dark" is honoured on every device regardless of OS colour scheme. */
 </style>
 </head>
 <body>
 
-<div class="topbar">
-  <h1>Messages</h1>
-  <button class="icon-btn" onclick="location.href='/'"><span class="material-icons" aria-hidden="true">&#xe88a;</span></button>
+<div class="mx" id="app" data-view="list">
+
+  <section class="pane pane-list" aria-label="Conversations">
+    <header class="lhead">
+      <h1>Messages <span id="unreadTotal" class="tot" hidden aria-label="unread messages"></span></h1>
+      <a class="icon-btn" href="/" aria-label="Home"><span class="material-icons" aria-hidden="true">&#xe88a;</span></a>
+    </header>
+
+    <div class="search-wrap">
+      <div class="search-box">
+        <span class="material-icons" aria-hidden="true">&#xe8b6;</span>
+        <input type="search" id="searchInput" placeholder="Search conversations…" autocomplete="off" aria-label="Search conversations">
+      </div>
+    </div>
+
+    <!-- Chips are rendered from SokoniChat.CATEGORIES (derived from the engine's
+         CONTEXTS). The markup is empty on purpose: a chip that is not backed by a
+         type the engine knows must not exist. -->
+    <div class="filters" id="filters" role="tablist" aria-label="Conversation categories"></div>
+
+    <div id="notice" class="notice" hidden></div>
+
+    <div id="convList" class="conv-list" data-state="loading" aria-live="polite" aria-busy="true">
+      <div class="sk-conv"><div class="skeleton sk-avatar"></div><div class="sk-body"><div class="skeleton sk-line w80"></div><div class="skeleton sk-line w60"></div><div class="skeleton sk-line w40"></div></div></div>
+      <div class="sk-conv"><div class="skeleton sk-avatar"></div><div class="sk-body"><div class="skeleton sk-line w80"></div><div class="skeleton sk-line w60"></div><div class="skeleton sk-line w40"></div></div></div>
+      <div class="sk-conv"><div class="skeleton sk-avatar"></div><div class="sk-body"><div class="skeleton sk-line w80"></div><div class="skeleton sk-line w60"></div><div class="skeleton sk-line w40"></div></div></div>
+    </div>
+  </section>
+
+  <section class="pane pane-thread" aria-label="Conversation" id="threadPane" data-state="idle">
+    <div id="threadIdle" class="state" data-kind="idle">
+      <span class="material-icons" aria-hidden="true">&#xe0b7;</span>
+      <h3>Pick a conversation</h3>
+      <p>Select a thread on the left to read and reply here.</p>
+    </div>
+    <div id="thread" hidden>
+      <header class="thead">
+        <button type="button" id="backBtn" class="icon-btn" aria-label="Back to conversations"><span class="material-icons" aria-hidden="true">&#xe5c4;</span></button>
+        <div class="tt"><div class="n" id="tName"></div><div class="s" id="tSub"></div></div>
+        <a id="tOpen" class="icon-btn" href="#" title="Open full chat (attachments, voice, actions)" aria-label="Open full chat"><span class="material-icons" aria-hidden="true">&#xe89e;</span></a>
+      </header>
+      <div id="tBanner" class="ro" hidden></div>
+      <div id="tBody" class="tbody" aria-live="polite"></div>
+      <div id="sendErr" class="send-err" hidden role="alert"></div>
+      <form id="composer" class="composer" autocomplete="off">
+        <label for="msgInput" class="sr">Message</label>
+        <textarea id="msgInput" rows="1" maxlength="4000" placeholder="Write a message…"></textarea>
+        <button type="submit" id="sendBtn" aria-label="Send"><span class="material-icons" aria-hidden="true">&#xe163;</span></button>
+      </form>
+    </div>
+  </section>
+
 </div>
 
-<div class="search-wrap">
-  <div class="search-box">
-    <span class="material-icons" aria-hidden="true">&#xe8b6;</span>
-    <input type="text" id="searchInput" placeholder="Search conversations…" autocomplete="off">
-  </div>
-</div>
-
-<div class="filters">
-  <button class="filter-chip active" data-filter="all">All</button>
-  <button class="filter-chip" data-filter="order">Orders</button>
-  <button class="filter-chip" data-filter="service_booking">Services</button>
-  <button class="filter-chip" data-filter="food_order">Food</button>
-  <button class="filter-chip" data-filter="property_inquiry">Property</button>
-  <button class="filter-chip" data-filter="vehicle_inquiry">Vehicles</button>
-  <button class="filter-chip" data-filter="job_application">Jobs</button>
-  <button class="filter-chip" data-filter="healthcare_appointment">Healthcare</button>
-  <button class="filter-chip" data-filter="legal_consultation">Legal</button>
-  <button class="filter-chip" data-filter="hotel_reservation">Hotels</button>
-  <button class="filter-chip" data-filter="logistics_request">Delivery</button>
-  <button class="filter-chip" data-filter="rfq">Quotes</button>
-  <button class="filter-chip" data-filter="support_ticket">Support</button>
-</div>
-
-<div id="convList" class="conv-list">
-  <div class="sk-conv"><div class="skeleton sk-avatar"></div><div class="sk-body"><div class="skeleton sk-line w80"></div><div class="skeleton sk-line w60"></div><div class="skeleton sk-line w40"></div></div></div>
-  <div class="sk-conv"><div class="skeleton sk-avatar"></div><div class="sk-body"><div class="skeleton sk-line w80"></div><div class="skeleton sk-line w60"></div><div class="skeleton sk-line w40"></div></div></div>
-  <div class="sk-conv"><div class="skeleton sk-avatar"></div><div class="sk-body"><div class="skeleton sk-line w80"></div><div class="skeleton sk-line w60"></div><div class="skeleton sk-line w40"></div></div></div>
-</div>
-
-<!-- Canonical bottom nav — matches sokoni-nav-engine _CANONICAL_TABS so first paint
-     equals the hydrated state (the engine overwrites this at runtime). Styled by the
-     nav-unification fallback in sokoni-platform-override.css. -->
+<!-- Canonical bottom nav — filled by shared-header.js ([data-sokoni-nav]). -->
 <nav class="bottom-nav" data-workspace="buyer" aria-label="Primary navigation" data-sokoni-nav></nav>
 
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
@@ -136,77 +213,269 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
 <script>
 (function(){
 'use strict';
-var _unsub=null,_all=[],_filter='all',_search='';
+var UID=null, _unsub=null, _all=[], _filter='all', _search='', _listState='loading';
+var _openId=null, _unsubMsgs=null, _conv=null, _sending=false;
+var esc=function(s){return SokoniChat.esc(s);};
+var $=function(id){return document.getElementById(id);};
+var _params=new URLSearchParams(location.search);
 
-firebase.auth().onAuthStateChanged(function(user){
-  if(!user){location.href='login.html?redirect=messages.html';return;}
-  _subscribe();
-});
+/* ── LOAD PATH: auth → projection → render. Every branch ends in a named state. ── */
+function _boot(){
+  var auth;
+  try{ auth=firebase.auth(); }
+  catch(e){ _setList('unreadable',{hint:'The messaging service did not start on this page.'}); return; }
+  var settled=false;
+  var wd=setTimeout(function(){ if(!settled)_setList('connecting'); },8000);
+  auth.onAuthStateChanged(function(user){
+    settled=true; clearTimeout(wd);
+    if(!user){ UID=null; _teardown(); _setList('unauth'); return; }
+    UID=user.uid;
+    _subscribe();
+    _noticeFromUrl();
+    var want=_params.get('id');
+    if(want)_openThread(want);
+  });
+}
 
 function _subscribe(){
   if(_unsub)_unsub();
+  _setList('loading');
   _unsub=SokoniChat.onConversationsChanged(function(err,convs){
-    if(err){_renderErr();return;}
-    _all=convs||[];_render();
+    if(err){ _all=[]; _setList('unreadable',{err:err}); _renderChips(); return; }
+    _all=Array.isArray(convs)?convs:[];
+    _renderChips();
+    _renderList();
   });
 }
 
-document.querySelectorAll('.filter-chip').forEach(function(btn){
-  btn.addEventListener('click',function(){
-    document.querySelectorAll('.filter-chip').forEach(function(b){b.classList.remove('active');});
-    btn.classList.add('active');_filter=btn.dataset.filter;_render();
-  });
+function _teardown(){
+  if(_unsub){_unsub();_unsub=null;}
+  _closeThread();
+  _all=[]; _renderChips();
+}
+
+/* ── Categories: chips come from the engine registry, counts from real rows ── */
+function _renderChips(){
+  var host=$('filters');
+  var sum=SokoniChat.categorySummary(_all);
+  var known=sum.some(function(c){return c.id===_filter && c.visible;});
+  if(!known)_filter='all';
+  host.innerHTML=sum.filter(function(c){return c.visible;}).map(function(c){
+    return '<button type="button" role="tab" class="filter-chip'+(c.id===_filter?' active':'')+'" data-filter="'+esc(c.id)+'" data-count="'+c.count+'" data-unread="'+c.unread+'" aria-selected="'+(c.id===_filter)+'">'+
+      '<span class="material-icons" aria-hidden="true">'+esc(c.icon)+'</span>'+esc(c.label)+
+      (c.count?'<span class="cnt">'+c.count+'</span>':'')+
+      (c.unread?'<span class="ub" aria-label="'+c.unread+' unread">'+Math.min(c.unread,99)+'</span>':'')+
+    '</button>';
+  }).join('');
+  var total=0; _all.forEach(function(c){ if(typeof c.unreadCount==='number'&&c.unreadCount>0)total+=c.unreadCount; });
+  var tot=$('unreadTotal'); tot.textContent=total?String(Math.min(total,99)):''; tot.hidden=!total;
+}
+$('filters').addEventListener('click',function(ev){
+  var b=ev.target.closest('[data-filter]'); if(!b)return;
+  _filter=b.getAttribute('data-filter');
+  _renderChips(); _renderList();
 });
 
 var _st;
-document.getElementById('searchInput').addEventListener('input',function(e){
-  clearTimeout(_st);_st=setTimeout(function(){_search=e.target.value.toLowerCase().trim();_render();},220);
+$('searchInput').addEventListener('input',function(e){
+  clearTimeout(_st);_st=setTimeout(function(){_search=e.target.value.toLowerCase().trim();_renderList();},180);
 });
 
-function _render(){
-  var list=_all;
-  if(_filter!=='all')list=list.filter(function(c){return c.transactionType===_filter;});
-  if(_search)list=list.filter(function(c){
-    return(c.title+' '+c.participantName+' '+(c.lastMessageText||'')).toLowerCase().includes(_search);
-  });
-  var el=document.getElementById('convList');
-  if(!list.length){
-    el.innerHTML='<div class="empty"><span class="material-icons" aria-hidden="true">&#xe0cb;</span><h3>No conversations</h3><p>'+
-      (_filter!=='all'||_search?'No matching conversations found.':
-       'Your conversations appear here when you place an order, make a booking, or submit an inquiry.')+
-      '</p></div>';return;
+/* ── List states. "Empty" is only ever a REAL empty snapshot. ── */
+function _setList(kind,o){
+  o=o||{}; _listState=kind;
+  var el=$('convList');
+  el.setAttribute('data-state',kind);
+  el.setAttribute('aria-busy',kind==='loading'||kind==='connecting'?'true':'false');
+  if(kind==='loading'){
+    el.innerHTML=new Array(4).join('<div class="sk-conv"><div class="skeleton sk-avatar"></div><div class="sk-body"><div class="skeleton sk-line w80"></div><div class="skeleton sk-line w60"></div><div class="skeleton sk-line w40"></div></div></div>');
+    return;
   }
-  el.innerHTML=list.map(_convHtml).join('');
+  if(kind==='connecting'){
+    el.innerHTML=_state('connecting','&#xe627;','Still connecting…','We are waiting for your sign-in to be confirmed. Your messages are not gone.');
+    return;
+  }
+  if(kind==='unauth'){
+    el.innerHTML=_state('unauth','&#xe7fd;','Sign in to see your messages','Your conversations are private to your account.',
+      '<a class="btn" href="login.html?redirect=messages.html">Sign in</a>');
+    return;
+  }
+  if(kind==='unreadable'){
+    var code=o.err&&o.err.code?String(o.err.code):'';
+    var denied=/permission-denied|failed-precondition|unauthenticated/.test(code);
+    var hint=o.hint||(denied?'Your inbox could not be read with your current access. This is not the same as having no messages.':
+                       'Your inbox could not be loaded right now. This is not the same as having no messages.');
+    el.innerHTML=_state('unreadable','&#xe32a;','Messages unavailable',hint+(code?' <span style="opacity:.6">('+esc(code)+')</span>':''),
+      '<button type="button" class="btn" id="retryBtn">Try again</button>');
+    var rb=$('retryBtn'); if(rb)rb.addEventListener('click',function(){ if(UID)_subscribe(); else _boot(); });
+    return;
+  }
+  if(kind==='empty'){
+    el.innerHTML=_state('empty','&#xe0cb;','No conversations yet','Conversations start from an order, a booking or an enquiry. They will appear here as soon as one exists.');
+    return;
+  }
+  if(kind==='empty-filter'){
+    el.innerHTML=_state('empty-filter','&#xe8b6;','Nothing here',(o.label?'No conversations in '+esc(o.label):'No conversations match')+(_search?' for “'+esc(_search)+'”':'')+'.');
+    return;
+  }
+}
+function _state(kind,icon,h,p,cta){
+  return '<div class="state" data-kind="'+kind+'"><span class="material-icons" aria-hidden="true">'+icon+'</span><h3>'+h+'</h3><p>'+p+'</p>'+(cta||'')+'</div>';
 }
 
-function _renderErr(){
-  document.getElementById('convList').innerHTML=
-    '<div class="empty"><span class="material-icons" aria-hidden="true">&#xe001;</span><h3>Could not load messages</h3><p>Check your connection and try again.</p></div>';
+function _renderList(){
+  if(_listState==='unreadable'||_listState==='unauth'||_listState==='connecting')return;
+  var cat=SokoniChat.getCategory(_filter)||SokoniChat.getCategory('all');
+  var list=_all.filter(function(c){return SokoniChat.categoryMatches(cat,c);});
+  if(_search)list=list.filter(function(c){
+    return((c.title||'')+' '+(c.participantName||'')+' '+(c.lastMessageText||'')).toLowerCase().indexOf(_search)!==-1;
+  });
+  if(!_all.length){_setList('empty');return;}
+  if(!list.length){_setList('empty-filter',{label:cat.label});return;}
+  _listState='ready';
+  var el=$('convList'); el.setAttribute('data-state','ready'); el.setAttribute('aria-busy','false');
+  el.innerHTML=list.map(_convHtml).join('');
 }
 
 function _convHtml(c){
   var ctx=SokoniChat.getContext(c.transactionType);
-  var unread=(c.unreadCount||0)>0;
+  var unread=(typeof c.unreadCount==='number'?c.unreadCount:0)>0;
   var preview=c.lastMessageText||'No messages yet';
   var t=c.lastMessageAt?SokoniChat.timeStr(c.lastMessageAt):'';
+  var id=c.conversationId||c.id||'';
   var avatar=c.participantAvatar
-    ?'<img src="'+SokoniChat.esc(c.participantAvatar)+'" alt="">'
-    :'<span class="material-icons">'+ctx.icon+'</span>';
-  return '<a class="conv-item'+(unread?' unread':'')+'" href="chat.html?id='+encodeURIComponent(c.conversationId)+'">'+
+    ?'<img src="'+esc(c.participantAvatar)+'" alt="">'
+    :'<span class="material-icons" aria-hidden="true">'+esc(ctx.icon)+'</span>';
+  return '<a class="conv-item'+(unread?' unread':'')+(id===_openId?' open':'')+'" href="chat.html?id='+encodeURIComponent(id)+'" data-conv-id="'+esc(id)+'" data-type="'+esc(c.transactionType||'')+'">'+
     '<div class="conv-avatar">'+avatar+'</div>'+
     '<div class="conv-body">'+
-      '<div class="conv-title">'+SokoniChat.esc(c.participantName||'Unknown')+'</div>'+
-      '<div class="conv-subtitle">'+SokoniChat.esc(c.title||'')+'</div>'+
-      '<div class="conv-preview">'+SokoniChat.esc(preview)+'</div>'+
+      '<div class="conv-title">'+esc(c.participantName||'Unknown')+'</div>'+
+      '<div class="conv-subtitle"><span class="conv-type">'+esc(ctx.label)+'</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis">'+esc(c.title||'')+'</span></div>'+
+      '<div class="conv-preview">'+esc(preview)+'</div>'+
     '</div>'+
     '<div class="conv-meta">'+
-      '<span class="conv-time">'+SokoniChat.esc(t)+'</span>'+
+      '<span class="conv-time">'+esc(t)+'</span>'+
       (unread?'<span class="unread-badge">'+Math.min(c.unreadCount,99)+'</span>':'')+
     '</div>'+
   '</a>';
 }
 
-window.addEventListener('beforeunload',function(){if(_unsub)_unsub();});
+/* Rows open in the thread pane; the href stays for middle-click / no-JS. */
+$('convList').addEventListener('click',function(ev){
+  var a=ev.target.closest('[data-conv-id]'); if(!a)return;
+  if(ev.metaKey||ev.ctrlKey||ev.shiftKey||ev.button===1)return;
+  ev.preventDefault();
+  _openThread(a.getAttribute('data-conv-id'));
+});
+
+/* ── Legacy hub entry: messages.html?with=<uid>&name=… (SokoniInbox.openChat).
+   The server creates conversations only from a transaction, so there is nothing
+   this page can open for a bare uid. Say so instead of showing an empty inbox. ── */
+function _noticeFromUrl(){
+  var w=_params.get('with'); if(!w)return;
+  var n=$('notice'); var name=_params.get('name')||'';
+  n.innerHTML='<b>Direct messaging isn’t available yet.</b> Conversations'+(name?' with '+esc(name):'')+
+    ' start from an order, a booking or an enquiry with them — once one exists it appears here.';
+  n.hidden=false;
+}
+
+/* ── THREAD PANE — the same engine calls as chat.html ── */
+function _openThread(id){
+  if(!id)return;
+  _closeThread();
+  _openId=id;
+  var app=$('app'); app.setAttribute('data-view','thread');
+  $('threadIdle').hidden=true; $('thread').hidden=false;
+  $('tOpen').setAttribute('href','chat.html?id='+encodeURIComponent(id));
+  $('tName').textContent=''; $('tSub').textContent=''; $('tBanner').hidden=true; $('sendErr').hidden=true;
+  _setThread('loading');
+  $('composer').hidden=true;
+  _renderList();
+  SokoniChat.getConversation(id).then(function(conv){
+    if(_openId!==id)return;
+    if(!conv){ _setThread('unreadable',{hint:'You are not a participant in this conversation, or it does not exist.'}); return; }
+    _conv=conv;
+    var ctx=SokoniChat.getContext(conv.transactionType);
+    var others=(conv.participants||[]).filter(function(p){return p!==UID;});
+    var names=others.map(function(p){return (conv.participantNames||{})[p]||'User';}).join(', ')||'Conversation';
+    $('tName').textContent=names;
+    $('tSub').textContent=ctx.label+(conv.transactionTitle?' · '+conv.transactionTitle:'');
+    var ro=conv.status==='read_only'||conv.status==='suspended'||conv.status==='closed'||conv.status==='archived';
+    $('tBanner').hidden=!ro;
+    if(ro)$('tBanner').textContent='This conversation is '+conv.status.replace('_',' ')+'. You can read it but not reply here.';
+    $('composer').hidden=ro;
+    _unsubMsgs=SokoniChat.onMessagesChanged(id,function(err,msgs){
+      if(_openId!==id)return;
+      if(err){ _setThread('unreadable',{err:err}); $('composer').hidden=true; return; }
+      if(!msgs.length){ _setThread('empty'); return; }
+      _setThread('ready'); _renderMsgs(msgs);
+      SokoniChat.markRead(id);
+    });
+  }).catch(function(err){ if(_openId===id)_setThread('unreadable',{err:err}); });
+}
+
+function _closeThread(){
+  if(_unsubMsgs){_unsubMsgs();_unsubMsgs=null;}
+  _openId=null; _conv=null;
+  $('thread').hidden=true; $('threadIdle').hidden=false;
+  $('tBody').innerHTML=''; $('composer').hidden=false;
+  $('threadPane').setAttribute('data-state','idle');
+  $('app').setAttribute('data-view','list');
+}
+$('backBtn').addEventListener('click',function(){ _closeThread(); _renderList(); });
+
+function _setThread(kind,o){
+  o=o||{}; $('threadPane').setAttribute('data-state',kind);
+  var b=$('tBody');
+  if(kind==='loading'){ b.innerHTML='<div class="state" data-kind="loading"><span class="material-icons" aria-hidden="true">&#xe86a;</span><p>Loading messages…</p></div>'; return; }
+  if(kind==='empty'){ b.innerHTML=_state('empty','&#xe0cb;','No messages yet','Say hello — your message goes straight to the other party.'); return; }
+  if(kind==='unreadable'){
+    var code=o.err&&o.err.code?String(o.err.code):'';
+    var denied=/permission-denied|failed-precondition|unauthenticated/.test(code);
+    b.innerHTML=_state('unreadable','&#xe32a;','Messages unavailable',(o.hint||(denied?'You don’t have access to this conversation’s messages.':'This conversation could not be read right now.'))+(code?' <span style="opacity:.6">('+esc(code)+')</span>':''));
+    return;
+  }
+}
+
+function _renderMsgs(msgs){
+  var b=$('tBody');
+  b.innerHTML=msgs.map(function(m){
+    var mine=m.senderId===UID, t=m.timestamp?SokoniChat.msgTime(m.timestamp):'';
+    if(m.type==='system'||m.senderId==='system')return '<div class="msg sys" data-msg-id="'+esc(m.id)+'">'+esc(m.text||'')+'</div>';
+    if(m.deleted)return '<div class="msg del'+(mine?' mine':'')+'" data-msg-id="'+esc(m.id)+'">Message deleted<span class="mt">'+esc(t)+'</span></div>';
+    var body;
+    if(m.type==='text'||!m.type)body=esc(m.text||'');
+    else if(m.type==='location')body='📍 '+esc(m.address||'Shared a location');
+    else body='<a class="att" href="chat.html?id='+encodeURIComponent(_openId)+'">'+esc({image:'📷 Photo',pdf:'📄 Document',document:'📄 Document',voice:'🎤 Voice note'}[m.type]||'Attachment')+(m.fileName?' · '+esc(m.fileName):'')+' — open full chat</a>';
+    return '<div class="msg'+(mine?' mine':'')+'" data-msg-id="'+esc(m.id)+'" data-mine="'+mine+'">'+body+'<span class="mt">'+esc(t)+(m.edited?' · edited':'')+'</span></div>';
+  }).join('');
+  b.scrollTop=b.scrollHeight;   /* newest message in view on every render (20-message window) */
+}
+
+/* Send = text only, through the engine (sendMessage CF). Nothing is shown as sent
+   until the callable resolves. */
+$('composer').addEventListener('submit',function(ev){
+  ev.preventDefault();
+  if(_sending||!_openId)return;
+  var ta=$('msgInput'); var text=(ta.value||'').trim();
+  if(!text)return;
+  _sending=true; $('sendBtn').disabled=true; $('sendErr').hidden=true;
+  SokoniChat.sendMessage(_openId,{type:'text',text:text}).then(function(){
+    ta.value=''; ta.style.height='';
+  }).catch(function(e){
+    var el=$('sendErr'); el.textContent='Not sent: '+((e&&e.message)||'please try again.'); el.hidden=false;
+  }).then(function(){ _sending=false; $('sendBtn').disabled=false; });
+});
+$('msgInput').addEventListener('keydown',function(e){
+  if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); $('composer').requestSubmit?$('composer').requestSubmit():$('sendBtn').click(); }
+});
+$('msgInput').addEventListener('input',function(){ this.style.height=''; this.style.height=Math.min(this.scrollHeight,120)+'px'; if(_openId)SokoniChat.handleTyping(_openId); });
+
+window.addEventListener('beforeunload',function(){ if(_unsub)_unsub(); if(_unsubMsgs)_unsubMsgs(); });
+window.addEventListener('popstate',function(){ var id=new URLSearchParams(location.search).get('id'); if(!id&&_openId)_closeThread(); });
+
+_renderChips();
+_boot();
 })();
 </script>
 <script src="sokoni-merchant-diag.js" defer></script>
