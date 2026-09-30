@@ -6872,11 +6872,22 @@ exports.availableDeliveries = onRequest(
       /* D2: only jobs the SERVER created and readied reach the board (canonical DEL{orderId},
          order paymentVerified + awaiting_rider, unassigned, same seller). A browser can create a
          packageRequests doc with any fields; that doc is refused here, not merely hidden. */
-      const orderIds = [...new Set(jobs.filter((j) => j.orderId).map((j) => String(j.orderId)))];
+      const orderIds = [...new Set(jobs.filter((j) => j.orderId && j.kind !== "parcel").map((j) => String(j.orderId)))];
       const orderSnaps = orderIds.length ? await db.getAll(...orderIds.map((id) => db.collection("orders").doc(id))) : [];
       const orderMap = new Map(orderSnaps.map((s) => [s.id, s]));
       const intentSnaps = orderIds.length ? await db.getAll(...orderIds.map((id) => db.collection("paymentIntents").doc(id))) : [];
       const intentMap = new Map(intentSnaps.map((s) => [s.id, s]));
+      /* D5 — parcel jobs validate against parcelRequests (server-only). Prefetched like orders so
+         the validator's injected reader can serve BOTH collections; a miss is an honest
+         { exists:false }, which validateJob refuses. */
+      const parcelIds = [...new Set(jobs.filter((j) => j.kind === "parcel" && j.parcelId).map((j) => String(j.parcelId)))];
+      const parcelSnaps = parcelIds.length ? await db.getAll(...parcelIds.map((id) => db.collection("parcelRequests").doc(id))) : [];
+      const parcelMap = new Map(parcelSnaps.map((s) => [s.id, s]));
+      const _lookup = async (ref) => {
+        const col = ref && ref.parent && ref.parent.id;
+        const hit = col === "parcelRequests" ? parcelMap.get(ref.id) : orderMap.get(ref.id);
+        return hit || { exists: false, data: () => null };
+      };
       const { calculateCommission: _calcJob } = require("./finos-utils");
       const deliveries = [];
       let refused = 0;
@@ -6884,9 +6895,33 @@ exports.availableDeliveries = onRequest(
          (one batched read) — never the job document's own, client-reachable pickup fields. */
       const _pickupMap = await _pickupAuth.authoritativePickups(db, jobs.map((j) => j.id));
       for (const o of jobs) {
-        const v = await _rp.validateJob(db, o, async (ref) => orderMap.get(ref.id) || { exists: false, data: () => null });
+        const v = await _rp.validateJob(db, o, _lookup);
         if (!v.ok) { refused++; continue; }
         if (!_rp.vehicleCompatible(st.driver && st.driver.vehicleType, o.vehicleType)) continue;
+        /* D5 (2026-09-30) — a PARCEL job. Its money is the server record validateJob just read
+           (parcelRequests.deliveryFee, catalogue-priced, paid via IntaSend). Same commission call
+           as an order, so the rider figure comes from ONE authority. Rider-safe projection: areas
+           only, no names, no phones, no street addresses, no PIN. */
+        if (o.kind === "parcel" && v.parcel) {
+          const pfee = Number(v.parcel.deliveryFee);
+          let pEarn = null;
+          if (Number.isFinite(pfee) && pfee > 0) {
+            try {
+              const c = await _calcJob(db, { orderAmountCents: Math.round(pfee * 100), category: "hub", sellerId: null, hubId: "delivery", skipMinimum: true });
+              pEarn = Math.max(0, Math.round(pfee - (c ? c.commissionCents / 100 : 0)));
+            } catch (_) { pEarn = null; }
+          }
+          deliveries.push({
+            id: o.id, orderId: null, kind: "parcel", parcelId: o.parcelId,
+            sellerName: "Parcel pickup", pickupAddress: o.pickupArea || null, pickupArea: o.pickupArea || null,
+            deliveryArea: _deliveryArea(o), itemCount: 1,
+            deliveryFee: Number.isFinite(pfee) ? pfee : null, riderEarning: pEarn, driverNet: pEarn,
+            vehicleType: o.vehicleType || null, speed: o.speed || o.urgency || null,
+            distanceKm: Number.isFinite(Number(o.distanceKm)) ? Number(o.distanceKm) : null,
+            packageType: o.packageType || null, weight: o.weight || null,
+          });
+          continue;
+        }
         /* Money from a SERVER money record (the product_order payment intent), never from the job
            doc or order.deliveryFee — both can carry a browser-written number. The rider figure uses
            the SAME commission call the payout uses (read-only use of the shared authority). */
@@ -6976,6 +7011,9 @@ exports.claimAvailableDelivery = onCall(
       });
       if (d.orderId) t.set(db.collection("orders").doc(String(d.orderId)),
         { status: "rider_assigned", assignedDriverUid: uid, riderAssignedAt: nowTs, updatedAt: nowTs }, { merge: true });
+      /* D5 — a parcel's server record follows the job (validateJob proved they agree). */
+      if (d.kind === "parcel" && d.parcelId) t.set(db.collection("parcelRequests").doc(String(d.parcelId)),
+        { status: "driver_accepted", riderId: uid, riderAssignedAt: nowTs, updatedAt: nowTs }, { merge: true });
       /* proofPin was returned here. Handing the rider the proof-of-delivery code
          at CLAIM time makes the code worthless: it exists so the customer can
          prove the handover happened, and a rider holding it can close a delivery
@@ -6994,6 +7032,16 @@ exports.claimAvailableDelivery = onCall(
 exports.riderPresence = require("./rider-presence").makeRiderPresence({ onCall, HttpsError, admin, db });
 /* F1 — the ONLY writer of shops/{shopId}.pickupLocation (owner, admin or shop manager). */
 exports.shopSetPickupLocation = require("./pickup-location").makeSetPickupLocation({ onCall, HttpsError, admin, db, logger: console });
+
+/* D5 (2026-09-30) — Send a Parcel on the packageRequests rail. ONE writer of parcel jobs and
+   money records; server-priced, IntaSend-paid (STK or hosted checkout), server-confirmed. */
+const _parcel = require("./parcel-requests").makeParcelRequests({ onCall, HttpsError, admin, db, INTASEND_PRIVATE_KEY });
+exports.getParcelQuote        = _parcel.getParcelQuote;
+exports.createParcelRequest   = _parcel.createParcelRequest;
+exports.payParcelRequest      = _parcel.payParcelRequest;
+exports.confirmParcelPayment  = _parcel.confirmParcelPayment;
+exports.getMyParcelPin        = _parcel.getMyParcelPin;
+exports.completeParcelWithPin = _parcel.completeParcelWithPin;
 
 exports.catalogue = onRequest(
   { cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"], timeoutSeconds: 15, invoker: "public", memory: "256MiB" },

@@ -114,6 +114,26 @@ async function stateFor(db, uid, nowMs) {
 async function validateJob(db, pkg, getFn) {
   const get = getFn || ((ref) => ref.get());
   const d = pkg || {};
+  /* D5 (2026-09-30) — PARCELS. A parcel job (kind:'parcel') has no order; its server
+     record is parcelRequests/{parcelId} (no client rule → default deny), written only by
+     functions/parcel-requests.js. The job id must be the canonical PRC{parcelId}, the record
+     must be PAID and awaiting a rider, and the two must name the same sender. A browser can
+     write kind:'parcel' onto a packageRequests doc; it cannot write the record — refused here. */
+  if (d.kind === 'parcel') {
+    if (!d.parcelId) return { ok: false, reason: 'no_parcel' };
+    if (d.id !== 'PRC' + d.parcelId) return { ok: false, reason: 'non_canonical_id' };
+    if (d.status !== 'awaiting_rider') return { ok: false, reason: 'job_not_awaiting_rider' };
+    if (d.assignedRiderId || d.riderId || d.assignedDriverId || d.assignedDriverUid) return { ok: false, reason: 'job_assigned' };
+    const ps = await get(db.collection('parcelRequests').doc(String(d.parcelId)));
+    if (!ps.exists) return { ok: false, reason: 'parcel_missing' };
+    const p = ps.data() || {};
+    if (!p.payment || p.payment.state !== 'paid') return { ok: false, reason: 'parcel_not_paid' };
+    if (p.status !== 'awaiting_rider') return { ok: false, reason: 'parcel_not_ready_for_rider' };
+    if (p.riderId) return { ok: false, reason: 'parcel_assigned' };
+    if (p.uid !== d.uid) return { ok: false, reason: 'sender_mismatch' };
+    if (p.jobId && p.jobId !== d.id) return { ok: false, reason: 'job_mismatch' };
+    return { ok: true, reason: 'ok', parcel: p, order: null };
+  }
   if (!d.orderId) return { ok: false, reason: 'no_order' };
   if (d.id !== 'DEL' + d.orderId) return { ok: false, reason: 'non_canonical_id' };
   if (d.status !== 'awaiting_rider') return { ok: false, reason: 'job_not_awaiting_rider' };
