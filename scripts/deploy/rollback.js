@@ -1,133 +1,25 @@
 #!/usr/bin/env node
-/**
- * SOKONI Full-Stack Rollback
- *
- * Rolls back: Hosting + Cloud Functions + Firestore rules
- * in the correct reverse order to avoid mixed-version states.
- *
- * Usage:
- *   node scripts/deploy/rollback.js [--release=<firebase-release-id>]
- *   FIREBASE_TOKEN=xxx node scripts/deploy/rollback.js
- */
 'use strict';
+/* ============================================================================
+   RETIRED 2026-10-01 — this script is disabled on purpose. It refuses to run.
+   ----------------------------------------------------------------------------
+   What it used to do, and why that is unsafe on this project:
+     1. `git stash` — a REPO-WIDE stash in a repository several agents write concurrently,
+        which can take or later pop another session's uncommitted work.
+     2. check out an old tag and run a FULL `firebase deploy --only functions --force`.
+        Production Cloud Functions are a union of several code lineages; a full deploy from
+        any single tree deletes or regresses every function that tree does not match.
+     3. deploy old Firestore rules wholesale.
+   It had never been exercised (the canary workflow that calls it has no runs).
 
-const { execSync, spawnSync } = require('child_process');
-const path = require('path');
-
-const PROJECT = process.env.FIREBASE_PROJECT || 'sokoni-aeb26';
-const ROOT    = path.resolve(__dirname, '../..');
-
-function run(cmd, opts = {}) {
-  console.log(`\n$ ${cmd}`);
-  const result = spawnSync(cmd, { shell: true, cwd: ROOT, stdio: 'inherit', ...opts });
-  if (result.status !== 0) throw new Error(`Command failed: ${cmd}`);
-  return result;
-}
-
-function runCapture(cmd) {
-  return execSync(cmd, { cwd: ROOT, encoding: 'utf8' }).trim();
-}
-
-async function rollback() {
-  console.log('\n🔄  SOKONI FULL-STACK ROLLBACK');
-  console.log('   Project:', PROJECT);
-  console.log('   Time:   ', new Date().toISOString());
-  console.log('─'.repeat(60));
-
-  /* ── Step 1: Identify previous release ─────────────────────── */
-  let releaseId = process.argv.find(a => a.startsWith('--release='))?.split('=')[1];
-
-  if (!releaseId) {
-    try {
-      const releases = runCapture(
-        `npx -y firebase-tools hosting:releases:list --project ${PROJECT} --limit 3 --json`
-      );
-      const parsed = JSON.parse(releases);
-      const list   = parsed?.result?.releases || [];
-      /* Skip current (index 0), take previous (index 1) */
-      releaseId = list[1]?.name?.split('/').pop();
-    } catch {
-      console.warn('   Could not auto-detect previous release — using "previous"');
-      releaseId = 'previous';
-    }
-  }
-
-  console.log(`\n[1/4] Rolling back Hosting to release: ${releaseId}`);
-  try {
-    run(`npx -y firebase-tools hosting:rollback --version ${releaseId} --project ${PROJECT} --force`);
-    console.log('   ✅  Hosting rolled back');
-  } catch {
-    console.error('   ❌  Hosting rollback failed — manual intervention needed');
-  }
-
-  /* ── Step 2: Roll back Cloud Functions via previous git tag ── */
-  console.log('\n[2/4] Identifying previous release tag for Cloud Functions...');
-  let prevTag;
-  try {
-    const tags = runCapture('git tag --sort=-version:refname | grep "^release-" | head -2');
-    const tagList = tags.split('\n').filter(Boolean);
-    prevTag = tagList[1]; /* [0] is current, [1] is previous */
-    console.log(`   Previous tag: ${prevTag}`);
-  } catch {
-    console.warn('   No release tags found — skipping functions rollback');
-  }
-
-  if (prevTag) {
-    console.log(`\n[3/4] Checking out ${prevTag} and redeploying Cloud Functions...`);
-    try {
-      run(`git stash`);
-      run(`git checkout ${prevTag} -- functions/`);
-      run(`npx -y firebase-tools deploy --only functions --project ${PROJECT} --force`, {
-        env: { ...process.env, FIREBASE_TOKEN: process.env.FIREBASE_TOKEN },
-      });
-      run(`git checkout HEAD -- functions/`);
-      run(`git stash pop || true`);
-      console.log('   ✅  Cloud Functions rolled back');
-    } catch (err) {
-      console.error('   ❌  Functions rollback failed:', err.message);
-      console.error('   Restoring working tree...');
-      try { run(`git checkout HEAD -- functions/`); run(`git stash pop || true`); } catch {}
-    }
-  }
-
-  /* ── Step 3: Roll back Firestore rules ────────────────────── */
-  console.log('\n[4/4] Rolling back Firestore rules...');
-  if (prevTag) {
-    try {
-      run(`git checkout ${prevTag} -- firestore.rules firestore.indexes.json`);
-      run(`npx -y firebase-tools deploy --only firestore --project ${PROJECT}`, {
-        env: { ...process.env, FIREBASE_TOKEN: process.env.FIREBASE_TOKEN },
-      });
-      run(`git checkout HEAD -- firestore.rules firestore.indexes.json`);
-      console.log('   ✅  Firestore rules rolled back');
-    } catch (err) {
-      console.error('   ❌  Firestore rules rollback failed:', err.message);
-      try { run(`git checkout HEAD -- firestore.rules firestore.indexes.json`); } catch {}
-    }
-  } else {
-    console.warn('   ⚠️  No previous tag — skipping Firestore rules rollback');
-  }
-
-  /* ── Step 4: Post-rollback health check ───────────────────── */
-  console.log('\n[Health Check] Verifying rollback...');
-  await new Promise(r => setTimeout(r, 15_000));
-  try {
-    const status = runCapture(
-      `curl -s -o /dev/null -w "%{http_code}" https://us-central1-${PROJECT}.cloudfunctions.net/systemHealthCheck`
-    );
-    if (status === '200' || status === '206') {
-      console.log(`   ✅  Health check passed (HTTP ${status})`);
-    } else {
-      console.error(`   ❌  Health check returned HTTP ${status} — platform may be degraded`);
-    }
-  } catch {
-    console.warn('   ⚠️  Health check skipped (curl not available)');
-  }
-
-  console.log('\n✅  ROLLBACK COMPLETE\n');
-}
-
-rollback().catch(err => {
-  console.error('\n❌  ROLLBACK FAILED:', err.message);
-  process.exit(1);
-});
+   Recovery now re-points traffic at artefacts that already exist, one surface at a time,
+   dry-run by default:
+     node scripts/deploy/recover.js hosting --list
+     node scripts/deploy/recover.js hosting --to-version=<versionId> [--execute]
+     node scripts/deploy/recover.js function --service=<svc> --status
+     node scripts/deploy/recover.js function --service=<svc> --to-revision=<rev> [--execute --confirm=<svc>]
+   Procedure: docs/BLUE_GREEN_RECOVERY.md.  The previous implementation is in git history.
+   ============================================================================ */
+console.error('scripts/deploy/rollback.js is RETIRED (unsafe full-functions redeploy + repo-wide git stash).');
+console.error('Use scripts/deploy/recover.js — see docs/BLUE_GREEN_RECOVERY.md.');
+process.exit(2);
