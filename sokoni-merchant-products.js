@@ -88,6 +88,8 @@
     'justify-content:center;font-size:24px;color:var(--txt2,rgba(255,255,255,.3))}',
     '.pr-b{padding:10px 11px 4px;min-width:0}',
     '.pr-card>.pr-acts{padding:0 11px 12px;margin-top:5px}',
+    '.pr-labelacts{display:flex;flex-wrap:wrap;gap:8px;margin:-2px 0 12px}',
+    '.pr-labelacts .pr-act{flex:1 1 140px;min-height:40px}',
     '.pr-n{font-size:13px;font-weight:700;line-height:1.35;overflow:hidden;display:-webkit-box;',
     '-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}',
     '.pr-p{font-size:14px;font-weight:800;margin-top:5px}',
@@ -515,6 +517,9 @@
             '<button role="menuitem" data-pr="edit" data-i="' + i + '">✏️ Edit</button>' +
             '<button role="menuitem" data-pr="go" data-route="inventory">📦 Adjust stock</button>' +
             '<button role="menuitem" data-pr="open" data-i="' + i + '">👁️ View details</button>' +
+            /* Labels print on the shell's printer — the SAME connection the till uses. */
+            '<button role="menuitem" data-pr="label-price" data-i="' + i + '">🏷️ Print price tag</button>' +
+            '<button role="menuitem" data-pr="label-barcode" data-i="' + i + '">▦ Print barcode label</button>' +
             '<button role="menuitem" class="danger" data-pr="del" data-i="' + i + '">🗑️ Remove</button>' +
           '</div>' +
       '</div>';
@@ -804,6 +809,26 @@
     }
 
     function say (msg) { if (typeof ctx.onToast === 'function') ctx.onToast(msg); }
+
+    /* PRICE TAGS AND BARCODE LABELS. The shell owns the printer; this module only asks.
+       Whatever the shell answers is what the merchant is told — "printed" only when the
+       printer took the label, otherwise the shell's reason (no barcode, not connected). */
+    var _labelBusy = false;
+    function printLabelFor (kind, p) {
+      if (typeof ctx.printLabel !== 'function') return say('Label printing is not available in this workspace.');
+      if (_labelBusy) return;
+      _labelBusy = true;
+      say(kind === 'price' ? 'Printing price tag…' : 'Printing barcode label…');
+      return Promise.resolve(ctx.printLabel(kind, p)).then(function (r) {
+        _labelBusy = false;
+        if (r && r.ok) say(kind === 'price' ? 'Price tag printed.' : 'Barcode label printed.');
+        else say((r && r.message) || 'The label did not print.');
+        return r;
+      }, function (e) {
+        _labelBusy = false;
+        say('The label did not print: ' + ((e && e.message) || 'printer error'));
+      });
+    }
 
     /* A mutation reports what ACTUALLY happened, including partial success. A
        product that reached the catalogue but not the till is not a plain
@@ -1537,6 +1562,12 @@
       return '<div class="pr-sec">📏 Specifications</div>' +
         fld('spec.brand', 'Brand', 'type="text" autocomplete="off" maxlength="80"', specs.brand) +
         fld('spec.barcode', 'Barcode', 'type="text" autocomplete="off" maxlength="64" inputmode="numeric"', specs.barcode) +
+        /* Print what the form shows now — the typed name, price and barcode — so a label can
+           come out before the product is even saved. */
+        '<div class="pr-labelacts">' +
+          '<button type="button" class="pr-act" data-pr="label-price-form">🏷️ Print price tag</button>' +
+          '<button type="button" class="pr-act" data-pr="label-barcode-form">▦ Print barcode</button>' +
+        '</div>' +
         measureField('weight', 'Weight', 'weight', specs.weight, 'kg') +
         dimensionField(specs.dimensions) +
         measureField('capacity', 'Capacity', 'volume', specs.capacity, 'l') +
@@ -1847,6 +1878,23 @@
       if (k === 'close') { if (S.editor && S.editor.busy) return; return closeEditor(); }
       if (k === 'submit') return submit();
       if (k === 'submit-photos') return submitPhotos();
+
+      if (k === 'label-price' || k === 'label-barcode') {
+        /* Resolved through the painted rows, like every other card action. */
+        var li = Number(el.getAttribute('data-i'));
+        var lp = (S.painted || [])[li];
+        if (!lp) return say('That product is no longer in view — reopen Products and try again.');
+        S.menu = null; paint();
+        return printLabelFor(k === 'label-price' ? 'price' : 'barcode', lp);
+      }
+      if (k === 'label-price-form' || k === 'label-barcode-form') {
+        captureForm();
+        var ff = fieldsFromForm();
+        return printLabelFor(k === 'label-price-form' ? 'price' : 'barcode', {
+          name: ff.name || '', price: ff.price, sku: ff.sku || null,
+          specs: ff.specs || {}, barcode: (ff.specs && ff.specs.barcode) || '',
+        });
+      }
 
       if (k === 'edit' || k === 'del' || k === 'photos') {
         /* Resolve through the rows captured at paint time. An index into a list

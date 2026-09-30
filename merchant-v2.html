@@ -944,9 +944,17 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     else if (p.state === 'connecting')  { pc = 'warn'; pt = 'Connecting…'; }
     else if (p.state === 'saved')       { pc = '';     pt = 'Printer saved'; }
     else if (p.state === 'unsupported') { pc = '';     pt = 'Printer (unsupported)'; }
+    /* 2026-10-01: these three used to fall through to the same grey "Printer" as a till
+       with nothing paired, so a merchant could not tell "tap once" from "never set up". */
+    else if (p.state === 'needs-tap')        { pc = 'warn'; pt = 'Tap to reconnect printer'; }
+    else if (p.state === 'reconnect-failed') { pc = 'bad';  pt = 'Printer offline'; }
+    else if (p.saved)                        { pc = '';     pt = 'Printer saved'; }
     setDot('st-print', pc); setDot('top-print', pc);
     text('st-print-t', pt);
-    text('top-print-t', p.state === 'connected' ? (p.name || 'Ready') : 'Printer');
+    text('top-print-t', p.state === 'connected' ? (p.name || 'Ready')
+                      : p.state === 'needs-tap' ? 'Tap printer'
+                      : p.state === 'reconnect-failed' ? 'Printer offline'
+                      : p.saved ? 'Printer saved' : 'Printer');
     /* ONE TAP FROM ANYWHERE. Without this the only route to Reconnect was to navigate
        to Devices, which is a long way from the till mid-sale. Connected -> open Devices;
        disconnected -> reconnect straight away. The handler is SYNCHRONOUS into
@@ -1260,8 +1268,16 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 
          A SEPARATE panel key on purpose: framePanel caches by key, so reusing 'pos' would
          keep serving the cached wizard iframe after setup completed. */
+      /* ONE SETUP IS ENOUGH (2026-10-01): pos-setup.html finishes by writing its own
+         completion record (SokoniTillRegistry sk_pos_setup_<uid>, legacy sokoni_setup_complete),
+         not posSetupComplete — so a merchant who completed POS setup was still sent through
+         the hardware wizard here. Any of the three means this till is set up. */
       var _posReady = null;
-      try { _posReady = localStorage.getItem('posSetupComplete'); } catch (_) { _posReady = null; }
+      try {
+        _posReady = localStorage.getItem('posSetupComplete')
+                 || (localStorage.getItem('sokoni_setup_complete') === '1' ? '1' : null)
+                 || (function () { var r = JSON.parse(localStorage.getItem('sk_pos_setup_' + (S.uid || 'anon')) || 'null'); return r && r.complete === true ? '1' : null; }());
+      } catch (_) { _posReady = null; }
       if (!_posReady) { showOnly(framePanel('pos:setup', 'pos-hardware-wizard.html', m.name)); return; }
       showOnly(framePanel('pos', 'pos.html' + (m.tab && m.tab !== 'pos' ? '#' + m.tab : ''), m.name)); return;
     }
@@ -1562,10 +1578,41 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      module asks. A merchant with no printer never pays for it. */
   var DEV = { printer: { state: 'unknown', name: null, saved: null, reason: '' }, list: [] };
   function devKey () { return 'sk_devices_' + (S.uid || 'anon'); }
+  /* THE ENGINE'S OWN PAIRING. SokoniPrinter records the last device it connected to in
+     spp_profile.lastDevice — whichever page paired it (POS setup, the printer console, the
+     hardware wizard, the in-POS dropdown). This shell used to reconnect ONLY from
+     sk_devices_<uid>, which none of those pages wrote, so a printer paired once in POS setup
+     was never picked up here and the merchant had to pair again. Read-only here; the pairing
+     itself is the engine's. */
+  function _enginePairing () {
+    try {
+      var prof = JSON.parse(localStorage.getItem('spp_profile') || '{}') || {};
+      var d = prof.lastDevice;
+      if (d && (d.id || d.name)) {
+        return { type: 'printer', id: String(d.id || d.name), name: d.name ? String(d.name) : 'Printer',
+                 transport: d.type ? String(d.type) : null, at: Date.now(), adopted: true };
+      }
+    } catch (_) {}
+    return null;
+  }
   function loadDevices () {
     /* Keyed BY UID so a shared till never shows the previous merchant's devices. */
     try { DEV.list = JSON.parse(localStorage.getItem(devKey()) || '[]') || []; } catch (_) { DEV.list = []; }
-    DEV.printer.saved = DEV.list.filter(function (d) { return d.type === 'printer'; })[0] || null;
+    /* The MOST RECENT printer record wins — the same rule SokoniTillRegistry.first() uses,
+       so POS setup and this shell always name the same printer. */
+    var printers = DEV.list.filter(function (d) { return d && d.type === 'printer'; });
+    DEV.printer.saved = printers.length ? printers[printers.length - 1] : null;
+    /* ONE SETUP IS ENOUGH: nothing recorded for this merchant yet, but the engine on this
+       device holds a pairing → adopt it into the merchant's record. Only for a signed-in
+       merchant: an anonymous key would hand the pairing to whoever signs in next. */
+    if (!DEV.printer.saved && S.uid) {
+      var ep = _enginePairing();
+      if (ep) {
+        DEV.list = DEV.list.concat([ep]);
+        try { localStorage.setItem(devKey(), JSON.stringify(DEV.list)); } catch (_) {}
+        DEV.printer.saved = ep;
+      }
+    }
     if (DEV.printer.saved && DEV.printer.state === 'unknown') DEV.printer.state = 'saved';
   }
   function saveDevice (d) {
@@ -1573,6 +1620,88 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     DEV.list = DEV.list.filter(function (x) { return !(x.type === d.type && x.id === d.id); }).concat([d]);
     try { localStorage.setItem(devKey(), JSON.stringify(DEV.list)); } catch (_) {}
     loadDevices(); emit('devices'); paintStatus(); broadcastDevices();
+  }
+
+  /* WHAT ACTUALLY HAPPENED to a print job, in one shape every caller reads. printReceipt
+     answers {success:true}, {queued:true}, {skipped:true} or {status:'fallback_success'|
+     'failed'} — never an `ok` field — so Receipts reported EVERY successful print as
+     "did not print". A queued job is NOT printed: it waits for the printer to come back. */
+  function _printOutcome (r) {
+    var queued = !!(r && (r.queued || r.status === 'queued' || r.status === 'queued_offline'));
+    var ok = !!(r && !queued && !r.skipped && (r.success === true || r.status === 'success' || r.status === 'fallback_success'));
+    return { ok: ok, queued: queued, fallback: !!(r && r.status === 'fallback_success'),
+             error: ok ? null : ((r && (r.error || (r.skipped ? 'skipped' : r.status))) || (queued ? 'queued' : 'no answer')),
+             raw: r || null };
+  }
+  /* ONE receipt path for every native surface (Sell, Receipts, Orders' reprint via Receipts).
+     Sell hands the composed SokoniReceiptDoc as the second argument — it used to be dropped,
+     so Sell printed the legacy layout while POS setup's test print showed the premium one.
+     Receipts hands {order, copies}; copies are printed one after another and stop at the
+     first failure, so "3 copies printed" is never said about one. */
+  function _shellPrintReceipt (job, doc) {
+    return printerEngine().then(function (eng) {
+      if (!eng || typeof eng.printReceipt !== 'function') {
+        toast('No printer service is loaded.');
+        return { ok: false, error: 'No printer service is loaded.' };
+      }
+      var wrapped = !!(job && job.order && Object.prototype.hasOwnProperty.call(job, 'copies'));
+      var order = wrapped ? job.order : job;
+      var copies = wrapped ? Math.max(1, Math.min(5, Number(job.copies) || 1)) : 1;
+      var opts = (doc && typeof doc === 'object') ? { __fromShell: true, useDoc: true, doc: doc } : { __fromShell: true };
+      var n = 0;
+      var next = function () {
+        return Promise.resolve(eng.printReceipt(order, opts)).then(function (r) {
+          var o = _printOutcome(r); n++;
+          return (o.ok && n < copies) ? next() : o;
+        });
+      };
+      return next().then(function (o) {
+        if (!wrapped) {
+          if (o.queued) toast('Printer not connected — the receipt is queued and prints when it reconnects.');
+          else if (!o.ok) toast('The receipt did not print (' + o.error + '). Check the printer, then try again.');
+        }
+        paintStatus();
+        return o;
+      }, function (e) {
+        var msg = (e && e.message) || 'printer error';
+        if (!wrapped) toast('The receipt did not print (' + msg + ').');
+        return { ok: false, error: msg };
+      });
+    });
+  }
+
+  /* LABELS — price tags and barcode labels from Products, on the SAME connection the till
+     uses. The engine's own 'label' document (name, price, SKU, barcode) — no second
+     label engine. A label is printed NOW or not at all: a label queued for later is a
+     sticker the merchant never sees come out, so no printer means a clear answer instead. */
+  async function _printLabel (kind, p) {
+    p = p || {};
+    var code = String(p.barcode || (p.specs && p.specs.barcode) || '').trim();
+    if (kind === 'barcode' && !code) {
+      return { ok: false, reason: 'no_barcode', message: 'This product has no barcode yet. Add one in Edit › Barcode, then print.' };
+    }
+    var sp = window.SokoniPrinter;
+    if (!sp || !sp.connected) {
+      /* One silent reconnect of the saved printer — never a chooser from here. */
+      try { var svc = await printerEngine(); if (svc && svc.autoReconnect && DEV.printer.saved) await svc.autoReconnect(); } catch (_) {}
+      sp = window.SokoniPrinter;
+    }
+    if (!sp || !sp.connected || typeof sp.printNow !== 'function') {
+      paintStatus();
+      return { ok: false, reason: 'no_printer',
+               message: DEV.printer.saved ? 'Your printer is saved but not connected. Tap the printer chip at the top, then print again.'
+                                          : 'No printer is set up. Pair one in POS Setup › Receipt, then print again.' };
+    }
+    var price = (p.price === '' || p.price == null || !isFinite(Number(p.price))) ? null : Number(p.price);
+    var data = kind === 'price'
+      ? { productName: String(p.name || '').slice(0, 48), price: price, sku: p.sku ? String(p.sku).slice(0, 32) : null, barcode: code || null }
+      : { productName: String(p.name || '').slice(0, 48), barcode: code };
+    try {
+      await sp.printNow('label', data, { copies: 1 });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, reason: 'failed', message: 'The label did not print: ' + ((e && e.message) || 'printer error') };
+    }
   }
 
   async function printerEngine () {
@@ -2366,14 +2495,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       callStk: _callable('darajaSTKPush'),
       callVerify: _callable('verifyPaymentStatus'),
       onToast: toast,
-      onPrint: function (job) {
-        /* Routed through the shell's device layer, so a receipt printed from Sell uses
-           the SAME connection POS uses — that is the point of owning devices here. */
-        return printerEngine().then(function (eng) {
-          if (eng && eng.printReceipt) return eng.printReceipt(job);
-          toast('No printer service is loaded.');
-        });
-      },
+      onPrint: function (job, doc) { return _shellPrintReceipt(job, doc); },
       openScanner: function () {
         /* Not wired in v2 yet. Say so rather than resolving with a fake code — a
            silent no-op here would look like a broken scan to a merchant at the till. */
@@ -2431,6 +2553,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                        location, so Back, reload and #products keep working and it needs no
                        navigation control of its own. */
                     go: go,
+                    /* Price tags and barcode labels print on the shell's printer. */
+                    printLabel: function (kind, product) { return _printLabel(kind, product); },
                     onToast: toast }; } },
     inventory:  { global: 'SokoniMerchantInventoryUI', ctx: _ctx },
     offers:     { global: 'SokoniMerchantOffers',      ctx: function () { return {
@@ -3597,8 +3721,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       ok = await eng.connect();
     }
     if (ok) {
-      DEV.printer.name = DEV.printer.name || 'Printer';
-      saveDevice({ type: 'printer', id: DEV.printer.name, name: DEV.printer.name, at: Date.now() });
+      /* The DEVICE id the engine just recorded — not the display name, which is often just
+         "Printer" and made two different printers indistinguishable in the record. */
+      var ep = _enginePairing();
+      DEV.printer.name = (ep && ep.name) || DEV.printer.name || 'Printer';
+      saveDevice({ type: 'printer', id: (ep && ep.id) || DEV.printer.name, name: DEV.printer.name,
+                   transport: (ep && ep.transport) || null, at: Date.now() });
     }
     DEV.printer.state = ok ? 'connected' : (DEV.printer.saved ? 'saved' : 'unknown');
     if (ok) DEV.printer.reason = '';           /* a success must not leave a stale warning */

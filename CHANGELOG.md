@@ -1,3 +1,15 @@
+## [2026-10-01] — Printer: one setup across merchant-v2; price tags + barcode labels in Products; honest receipts and chips — candidate, NOT deployed
+
+**Files:** `merchant-v2.html`, `pos-setup.html`, `sokoni-merchant-products.js`; new `scripts/test-printer-one-setup.js`; new `docs/PRINTER_ONE_SETUP.md`.
+**Database / rules / Functions / production data:** none. **Storage:** no new key — converges on the existing `sk_devices_<uid>` / `sk_pos_setup_<uid>` (SokoniTillRegistry). **API changes:** none; no new print engine (ADR-0001), labels use the engine's existing `label` document. **Breaking changes:** none.
+**Security:** a signed-out shell never adopts a pairing into the anonymous key. **Performance:** no new scripts; perf-guard PASS.
+
+- **One setup:** POS setup saves its pairing into the till registry; the shell adopts the engine pairing when the merchant has none, newest record wins, and saves the device id, not the name. The POS route accepts every setup-complete record. Paper size sets both configs.
+- **Receipts:** Sell's premium SokoniReceiptDoc now prints (it was dropped); Receipts prints N copies and stops at the first failure; one outcome shape (`ok` / `queued` / `error`) — Receipts no longer reports every success as "did not print"; a queued job is never "printed".
+- **Labels:** Print price tag / Print barcode label on each product and under the Barcode field in the uploader form, on the shell printer; no-barcode, disconnected and never-paired each get a clear answer.
+- **Chips:** needs-tap (amber), reconnect-failed (red), saved and unpaired each have their own words; POS setup's Diagnostics chip shows the real printer from the same registry.
+- **Proof:** new suite 49/0, sabotage 6/6; 30 existing printer / receipt / POS / merchant suites green; perf-guard PASS.
+
 ## [2026-09-30] — Earn with SOKONI connected end to end: every card files a real application, AdminOS decides it, approval opens the right dashboard — candidate, NOT deployed
 
 **Files:** `opportunity.html`, `business-apply.html`, `sokoni-role-authority.js`, `admin-os.html`, `sokoni-aos.js`, `index.html`; suites `scripts/test-role-authority.js`, `scripts/test-role-switch-routing.js`, `scripts/test-role-entry-convergence.js` (pinned destinations updated, not loosened); new `scripts/test-earn-application-chain.js`; new `docs/EARN_WITH_SOKONI.md`.
