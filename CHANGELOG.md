@@ -1,3 +1,47 @@
+## [2026-10-01] - Updates centre: admin-only release log via adminReleaseLog + install/update counter wired (adminGetAppInstallStats) + consent-gated install reporter; NOT deployed
+
+**Branch `hosting/admin-updates-center-on-54b72cc`.** Implements owner decisions A–C
+(`docs/ADMIN_UPDATES_CENTER_CENSUS.md`). The server half is on `feat/admin-updates-fn-on-a545818` (functions tree).
+
+**Functions to deploy BY NAME before this hosting build is useful — all NEW:** `adminReleaseLog`, `appInstallReport`,
+`scheduledAppInstallStats`, `adminGetAppInstallStats`. Until they are deployed this page shows "Release log is served to
+admins by the server — not available yet" and "— · Not measured yet" — never an empty log, never 0.
+
+**A — release log is admin-only.** `release-log.json` removed from the hosting root (it was a public static file; 33 of
+775 entries describe security defects). `scripts/build-release-log.js` now writes `functions/data/release-log.json`
+(bundled with functions; `functions/**` is hosting-ignored). The module pages it from `adminReleaseLog` (40 per page,
+server cursor, server-side type/status/search filters, the live commit sent so "Proven live now" works across pages).
+
+**B — installs & updates from the canonical aggregate only.** Tiles read `adminGetAppInstallStats`: not-computed-yet,
+an undeployed callable, a refusal or a null figure → "—" + "Not measured yet" + the reason; figures only when the
+aggregate carries them, each with "Since <date>" and "Computed <stamp>". Nothing before the counter's first report is
+back-filled or estimated. Play Store downloads remain unmeasured.
+
+**Client reporter `sokoni-install-report.js`** (new), injected once through `sw-register.js`'s existing `_mods` list —
+no SW registration or caching logic touched. `install` on `appinstalled`; `checkin` at most once per Nairobi day with
+the SW `CACHE_VERSION` (GET_VERSION) + standalone flag + a platform enum (never the UA string). **Consent: gated on
+`window.SokoniConsent.onChange` (security.js), FAIL CLOSED** — no authority on the page → never reports; a withdrawal
+stops it; the flag is re-checked right before the send. Limits stated in the census: consent is stored client-side only
+and the banner has no per-category choice yet.
+
+**C — no rules change, no index change.** `appInstalls` / `appInstallMetrics` have no rule → default-deny to every
+client; all writes are Admin SDK; all reads go through admin-checked callables.
+
+**Files:** `sokoni-admin-updates.js`, `sokoni-admin-updates.css`, `sokoni-aos.js`, `super-admin.html`,
+`sokoni-install-report.js` (new), `sw-register.js`, `scripts/build-release-log.js`, `functions/data/release-log.json`
+(new), `release-log.json` (removed), `scripts/test-release-log.js`, `scripts/test-admin-updates-static.js`,
+`scripts/test-install-report.js` (new), `scripts/test-admin-updates-center.js`, `docs/ADMIN_UPDATES_CENTER_CENSUS.md`,
+`CHANGELOG.md`.
+
+**Database changes:** none from hosting. **API changes:** consumes the four new callables. **Security:** removes a
+public file that republished security-defect write-ups; the reporter sends no identity. **Breaking:** none.
+
+**Evidence.** `test-release-log` **41/0** · `test-admin-updates-static` **63/0** (mutation: unknown rendered as "0" →
+6 failures) · `test-install-report` **22/0** (mutation: fail-open without SokoniConsent → caught) ·
+`test-admin-nav-context` **3/0** · `after-superadmin-link-gating` **13/0** · `audit-duplicate-ids` no regression ·
+`predeploy-syntax-gate` exit 0. **QUEUED (browser hold):** `scripts/test-admin-updates-center.js` (stubbed callables,
+deployed + absent modes).
+
 ## [2026-10-01] - Updates centre in AdminOS + Super Admin; install/update metrics: NOT MEASURED YET (no canonical source exists); browser certification QUEUED; NOT deployed
 
 **Branch `hosting/admin-updates-center-on-54b72cc`, built on `54b72cc` (hosting chain tip, descends from live).** Owner
