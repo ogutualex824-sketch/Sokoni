@@ -1,0 +1,64 @@
+{
+  "slice": "hosting-landing-shell-gate-consumer",
+  "deployedAt": "2026-09-30T03:07:38Z",
+  "authorizedBy": "owner (2f3bb6f only)",
+  "candidate": {
+    "worktree": "C:/temp/sok-host-gate",
+    "tip": "2f3bb6f",
+    "base": "49e0f3a"
+  },
+  "release": {
+    "name": "1790737658252000",
+    "version": "6f7202bd5dd81d84",
+    "files": 865,
+    "cacheVersion": "sokoni-20260930030022-v645"
+  },
+  "firstAttempt": {
+    "aborted": true,
+    "gate": "scripts/predeploy-browser-suites.js (test-approval-primitive.js: firebase-functions/logger unresolved — missing functions/node_modules junction in my worktree)",
+    "productionTouched": false
+  },
+  "secondAttempt": {
+    "hook": "32/32 EXECUTED",
+    "deployed": true
+  },
+  "verification": {
+    "livePointer": "2f3bb6f",
+    "paths200": [
+      "/complete-application",
+      "/sokoni-complete-application.js",
+      "/sokoni-business-workspace.js",
+      "/provider-dashboard",
+      "/agreement-acknowledge"
+    ],
+    "byteIdentical": {
+      "consumer": "98e516ef0e07",
+      "module": "3f681de25d85",
+      "page": "9cf6ecb4a69f"
+    },
+    "dashboardLoadsConsumer": true,
+    "markers": {
+      "page": "data-ca-state=boot",
+      "consumer": "REAPPLICATION_REQUIRED"
+    },
+    "signedOutSmoke": {
+      "state": "signed_out",
+      "firestoreRequests": 0,
+      "errors": 0,
+      "overflow": false
+    },
+    "rules": "b87c94e4 unchanged",
+    "functions": "providerdispatch-00050-rur unchanged; none updated in 40 min",
+    "rollback": "3cbdf961791900b8 FINALIZED"
+  },
+  "notLiveEvidence": [
+    "valid provider unchanged",
+    "REAPPLICATION_REQUIRED → completion surface",
+    "refused notice"
+  ],
+  "harnessEvidence": "21/0 against deployed dispatcher code c7e26b6",
+  "kasindi": {
+    "read": false,
+    "written": false
+  }
+}

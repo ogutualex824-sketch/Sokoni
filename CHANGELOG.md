@@ -1,3 +1,15 @@
+## [2026-09-30] - DEPLOYED: Hosting 2f3bb6f — shell-gate consumer + Complete Application surface (release 1790737658252000 / version 6f7202bd5dd81d84, v645); owner-authorized
+
+docs/LANDING_HOSTING_SHELL_GATE_CONSUMER.md + docs/release-gates/hosting-landing-shell-gate-consumer.json. First attempt aborted in the live
+line's predeploy-browser-suites hook (test-approval-primitive.js could not load firebase-functions/logger — my worktree lacked the
+functions/node_modules junction; the CLI showed it as a cross-spawn ENOENT); production untouched, artefacts reverted. Junction added → hook
+32/32 EXECUTED → quick preflight re-run → same candidate deployed 03:07:38Z. Verified: version.json 2f3bb6f/v645; the three paths 200,
+served bytes == candidate (consumer 98e516ef…, module 3f681de2…, page 9cf6ecb4…); provider-dashboard loads the consumer; signed-out live
+smoke = signed_out, zero Firestore requests, no errors; rules b87c94e4 and providerdispatch-00050-rur unchanged; rollback 3cbdf961791900b8
+available. Signed-in behaviours (valid unchanged / REAPPLICATION_REQUIRED → completion / refused notice) NOT exercised live (no account in
+scope) — harness 21/0 against the deployed dispatcher code. NOW LIVE FOR USERS: claim-holding providers reaching the dashboard receive the
+derived state; held → /complete-application. Sellers/merchant-v2, buyers, onboarding path unchanged. Live hosting lineage = 2f3bb6f.
+
 ## [2026-09-30] - HOSTING PREFLIGHT (READ ONLY): shell-gate consumer + Complete Application surface on the live line 49e0f3a — candidate 2f3bb6f certified against the DEPLOYED function code; deployment NOT authorized
 
 docs/HOSTING_PREFLIGHT_SHELL_GATE_CONSUMER.md + docs/release-gates/hosting-preflight-shell-gate-consumer.json. Worktree C:/temp/sok-host-gate,
