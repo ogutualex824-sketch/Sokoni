@@ -1,3 +1,8 @@
+## [2026-09-30] - CANDIDATE: providerDispatch shell gate — pinned deployed archive (e521e03) + 10 gate modules + two-line dispatcher merge (c49c712); certified, NOT deployed
+
+See docs/CANDIDATE_PROVIDERDISPATCH_SHELL_GATE.md on slice/c4-capability-consumer. This branch exists to be deployed with
+firebase deploy --only functions:providerDispatch when the owner authorizes it; every other module is the archive's bytes.
+
 ## [2026-08-24] - The till said "no shop" because a query FAILED, not because it answered.
 
 Hosting only. `sokoni-pos-context.js`, `till.html`,
