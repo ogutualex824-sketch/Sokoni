@@ -1,3 +1,26 @@
+## 2026-10-01 — KASS: an invalid sign-in never reaches the AI, and AI spend is capped (owner-authorized)
+
+Base: the LIVE sokoniChat source `e521e03` (sokonichat-00058-hal archive == e521e03, 0 files differ).
+
+- **Auth (d872a65's logic, ported):** live /api/chat refused only a MISSING token. Any string (e.g. "x") reached
+  the paid model; the baseline test reproduces HTTP 200 plus a model call. Now only a verified Firebase ID token
+  continues (401 auth_required / auth_invalid / auth_expired), and a per-tool access map is default-deny.
+- **Rate limit:** keyed on the verified uid (30/min), not the client-controlled leftmost X-Forwarded-For.
+- **Budget guard (new `functions/kass-budget.js`), owner decisions:** 30 messages per user per day; a USD 5 per
+  day global ceiling (Africa/Nairobi day).
+  - One transaction admits or refuses before any model call, and FAILS CLOSED if the budget is unreadable.
+  - Every model call meters its real `response.usage` into `aiUsage/{day}`. This also fixes AdminOS
+    adminGetAiStats, which read `totalTokens` that nothing wrote.
+  - The tool loop stops at the ceiling.
+  - Limits can be tuned in `config/kassBudget`.
+- `maxInstances: 10` on sokoniChat.
+- **Tests:** scripts/test-kass-budget.js 17/0 (the real module + the real sokoniChat handler, Anthropic stubbed).
+  Live e521e03 fails B-1 (bypass), B-4 (spoofable key) and the budget rows.
+- **Database:** new docs `aiUsage/{YYYY-MM-DD}` + `aiUsage/{day}/kassUsers/{uid}` (Admin SDK only), and optional
+  `config/kassBudget`. No rules change. Deploy: `--only functions:sokoniChat`.
+- **Not in this slice:** the `kass` admin agent (minInstances:1), prompt caching, the kass-*.html role pages,
+  KASS on profile.html.
+
 ## [2026-08-24] - The till said "no shop" because a query FAILED, not because it answered.
 
 Hosting only. `sokoni-pos-context.js`, `till.html`,

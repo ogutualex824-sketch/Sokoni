@@ -1305,12 +1305,39 @@ const _PAGE_MAP = {
 };
 
 /* Verify Firebase ID token and return uid, or null on failure. */
-async function _verifyKassToken(token) {
-  if (!token) return null;
+/* KASS authentication has THREE distinct outcomes, and an invalid credential is NEVER a guest.
+   It used to be: verifyIdToken failed → null → the request continued as a guest with every read tool, so ANY
+   non-empty string ("x") bypassed the "Authentication required" check that a MISSING token hit. Missing and invalid
+   are now told apart, and only a verified Firebase ID token reaches the tools. */
+async function _classifyKassAuth(token) {
+  if (token === undefined || token === null || token === '') return { state: 'missing' };
+  if (typeof token !== 'string' || token.length > 4096) return { state: 'invalid', reason: 'malformed' };
   try {
-    const decoded = await admin.auth().verifyIdToken(String(token).slice(0, 4096));
-    return decoded.uid || null;
-  } catch(e) { return null; }
+    const decoded = await admin.auth().verifyIdToken(token);
+    return decoded && decoded.uid ? { state: 'valid', uid: decoded.uid } : { state: 'invalid', reason: 'invalid' };
+  } catch (e) {
+    const code = (e && e.code) || '';
+    return { state: 'invalid', reason: code === 'auth/id-token-expired' ? 'expired' : code === 'auth/id-token-revoked' ? 'revoked' : 'invalid' };
+  }
+}
+
+/* Which caller may run each KASS tool — EXPLICIT, default deny. 'user' needs a verified identity; 'public' is a
+   read-only catalogue/directory lookup that exposes nothing about the caller. Anonymous chat is NOT enabled
+   (KASS_GUEST_CHAT = false): the endpoint refuses a missing token, as it always has, so today every tool runs for a
+   verified user. The map is enforced anyway, so a tool can never run without an explicit grant — and enabling a
+   guest mode later is a deliberate change here, never a side effect of a failed token check. */
+const KASS_GUEST_CHAT = false;
+const _KASS_TOOL_ACCESS = Object.freeze({
+  get_page_url: 'public', find_businesses: 'public', search_marketplace: 'public', search_stays: 'public',
+  search_restaurants: 'public', search_events: 'public', search_jobs: 'public', compare_products: 'public',
+  add_to_cart: 'user', view_cart: 'user', get_my_orders: 'user', track_order: 'user', cancel_order: 'user',
+  save_to_wishlist: 'user', get_wallet: 'user', book_stay: 'user',
+});
+function _kassToolAllowed(name, ctx) {
+  const access = _KASS_TOOL_ACCESS[name];
+  if (access === 'user') return !!(ctx && ctx.uid);
+  if (access === 'public') return !!(ctx && ctx.uid) || KASS_GUEST_CHAT;
+  return false;   /* unlisted tool: never runs */
 }
 
 /* Standard auth-required response for action tools. */
@@ -1319,6 +1346,9 @@ function _authRequired() {
 }
 
 async function _execChatTool(name, input, ctx) {
+  if (!_kassToolAllowed(name, ctx)) {
+    return _KASS_TOOL_ACCESS[name] ? _authRequired() : { error: 'That action is not available.' };
+  }
   try {
     if (name === "get_page_url") {
       const d = (input.intent || "").toLowerCase();
@@ -1639,34 +1669,51 @@ async function _execChatTool(name, input, ctx) {
 }
 
 exports.sokoniChat = onRequest(
-  { secrets: [ANTHROPIC_API_KEY], cors: ['https://mysokoni.co.ke', 'https://sokoni-aeb26.web.app'], timeoutSeconds: 120, memory: '512MiB', invoker: "public" },
+  /* maxInstances caps how far a flood can scale this paid endpoint (owner: "SOKONI must be well capped"). */
+  { secrets: [ANTHROPIC_API_KEY], cors: ['https://mysokoni.co.ke', 'https://sokoni-aeb26.web.app'], timeoutSeconds: 120, memory: '512MiB', invoker: "public", maxInstances: 10 },
   async (req, res) => {
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
       return;
     }
 
-    /* Rate limit: 30 messages per IP per minute — Firestore-backed so it works across all CF instances */
-    const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.ip || "unknown";
-    const _chatRl = await checkRateLimitDurable(`chat_${ip}`, 30, 60);
-    if (!_chatRl.ok) {
-      res.status(429).json({ error: "Too many messages — please wait a moment before trying again." });
-      return;
-    }
-
-    const { messages, auth_token } = req.body;
+    const { messages, auth_token } = req.body || {};
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       res.status(400).json({ error: "messages array required" });
       return;
     }
 
-    /* Require auth — unauthenticated callers get free AI access at platform cost.
-       Verify the Firebase ID token; fall back to the legacy KASS token for old clients. */
-    if (!auth_token) {
-      res.status(401).json({ error: "Authentication required to use KASS AI." });
+    /* Require auth — unauthenticated callers get free AI access at platform cost. A MISSING token and an INVALID
+       one are different answers, and neither becomes a guest: only a verified Firebase ID token continues. */
+    const _auth = await _classifyKassAuth(auth_token);
+    if (_auth.state === 'missing') {
+      res.status(401).json({ error: "Authentication required to use KASS AI.", code: "auth_required" });
       return;
     }
-    const uid = await _verifyKassToken(auth_token);
+    if (_auth.state !== 'valid') {
+      res.status(401).json({ error: "Your sign-in has expired or is not valid. Please sign in again to use KASS AI.",
+        code: _auth.reason === 'expired' ? "auth_expired" : "auth_invalid" });
+      return;
+    }
+    const uid = _auth.uid;
+
+    /* Rate limit per VERIFIED user, not per IP: the old key was the leftmost X-Forwarded-For, which the caller
+       controls, so it limited nothing. 30 messages per user per minute, Firestore-backed across instances. */
+    const _chatRl = await checkRateLimitDurable(`chat_uid_${uid}`, 30, 60);
+    if (!_chatRl.ok) {
+      res.status(429).json({ error: "Too many messages — please wait a moment before trying again." });
+      return;
+    }
+
+    /* Budget guard (functions/kass-budget.js): 30 messages per user per day, and a USD 5 per day ceiling across
+       everyone. It fails CLOSED: an unreadable budget is a refusal, never free spend. */
+    const _kassBudget = require("./kass-budget");
+    const _admit = await _kassBudget.admit(db, admin, uid);
+    if (!_admit.ok) {
+      res.status(_admit.reason === "budget_unavailable" ? 503 : 429)
+        .json({ error: _kassBudget.MESSAGES[_admit.reason], code: "kass_" + _admit.reason });
+      return;
+    }
 
     /* Sanitize: keep last 20 turns, text only */
     const history = messages.slice(-20).map(m => ({
@@ -2083,6 +2130,8 @@ assistant that happens to know their subject — not a menu of departments.`;
       const MAX_ITER = 5;
 
       for (let iter = 0; iter < MAX_ITER; iter++) {
+        /* A further model call inside the same message stops once today's global ceiling is reached. */
+        if (iter > 0 && !(await _kassBudget.canContinue(db, _admit.day))) break;
         const aiRes = await anthropic.messages.create({
           model: "claude-haiku-4-5-20251001",
           max_tokens: 1024,
@@ -2090,6 +2139,7 @@ assistant that happens to know their subject — not a menu of departments.`;
           tools: _CHAT_TOOLS,
           messages: currentMessages,
         });
+        await _kassBudget.meter(db, admin, _admit.day, uid, aiRes.usage);   /* real usage → aiUsage/{day} */
 
         if (aiRes.stop_reason === "end_turn" || aiRes.stop_reason !== "tool_use") {
           finalResponse = aiRes.content.filter(b => b.type === "text").map(b => b.text).join("").trim();
