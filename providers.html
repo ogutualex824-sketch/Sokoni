@@ -113,6 +113,19 @@
       position: relative;
     }
     .pv-card:hover { border-color: rgba(113,255,0,0.25); transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+    /* Compact premium card icons (owner 2026-09-30): 30px to the eye, ≥44px tap target. */
+    /* A direct child of the card (not the banner): below 600px the card turns horizontal and the
+       banner collapses to 2px, which put banner-anchored icons on the avatar. */
+    .pv-icons { position: absolute; top: 22px; left: 22px; display: flex; gap: 12px; z-index: 3; }
+    @media (max-width: 600px) { .pv-icons { top: 10px; left: auto; right: 10px; } .pv-card .pv-name { padding-right: 84px; } }
+    .pv-ico { position: relative; width: 30px !important; height: 30px !important; min-height: 0 !important; max-height: 30px !important; min-width: 0 !important;
+      padding: 0 !important; margin: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 14px; line-height: 1; cursor: pointer; text-decoration: none;
+      background: rgba(8,8,8,0.62); border: 1px solid rgba(255,255,255,0.22); color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+    .pv-ico--book { background: rgba(113,255,0,0.9); border-color: #71ff00; color: #050f05; }
+    .pv-ico::before { content: ""; position: absolute; inset: -7px; border-radius: 50%; }
+    .pv-ico:focus-visible { outline: 2px solid #71ff00; outline-offset: 2px; }
+    .pv-card[data-profile-href] { cursor: pointer; }
     .pv-card-banner {
       height: 80px; background: linear-gradient(135deg,#1a2a0a,#0d1a05);
       position: relative; overflow: hidden;
@@ -404,16 +417,22 @@ function renderGrid(list) {
   }
 
   grid.innerHTML = list.map(function (p) {
-    var waNum = String(p.phone || '').replace(/\D/g, '').replace(/^0/, '254');
-    var waMsg = encodeURIComponent('Hi ' + p.name + ', I found you on SOKONI and would like to book your service.');
+    /* No WhatsApp hand-off: contact stays in-app (owner directive — wa.me links are banned). */
     var pid   = p.uid;
     var jsId  = "'" + String(pid).replace(/'/g, "\\'") + "'";
     var jsNm  = "'" + String(p.name).replace(/'/g, "\\'") + "'";
     var initials = String(p.name).trim().split(/\s+/).map(function (w) { return w[0]; })
       .join('').slice(0, 2).toUpperCase();
 
-    return '<div class="pv-card" id="pv-card-' + esc(pid) + '">'
+    return '<div class="pv-card" id="pv-card-' + esc(pid) + '" data-profile-href="' + esc(p.profileUrl) + '">'
+      + '<div class="pv-icons">'
+      +   '<button type="button" class="pv-ico pv-ico--msg" aria-label="Message ' + esc(p.name) + '" title="Message in-app" onclick="event.stopPropagation();window.SokoniInbox?SokoniInbox.openChat({otherUid:' + esc(jsId) + ',otherName:' + esc(jsNm) + ',type:\'customer-provider\',context:\'' + esc(String(p.categoryLabel).replace(/'/g, "\\'")) + '\'}):location.href=\'messages.html\'">💬</button>'
+      +   '<a class="pv-ico pv-ico--book" href="' + esc(p.profileUrl) + '" aria-label="Book ' + esc(p.name) + '" title="View &amp; book" onclick="event.stopPropagation()">📩</a>'
+      + '</div>'
       + '<div class="pv-card-banner" style="background:linear-gradient(135deg,#0d1a05,#1a2a0a);">'
+      /* COMPACT PREMIUM CARD (owner 2026-09-30): 💬 in-app message and 📩 book as icons on the
+         banner (top-left; Verified is top-right, the price bottom-right). No labelled buttons, no
+         follow button on the card — following stays on the profile. The card opens the profile. */
       /* The badge reflects the record. An unverified provider is not labelled
          verified — that claim is the whole value of the badge. */
       + (p.verified ? '<div class="pv-verified-badge">✅ Verified</div>' : '')
@@ -442,19 +461,20 @@ function renderGrid(list) {
       + '<div class="pv-tags">'
       + (p.skills || []).slice(0, 4).map(function (t) { return '<span class="pv-tag">' + esc(t) + '</span>'; }).join('')
       + '</div>'
-      + '<div class="pv-actions">'
-      + '<a href="' + esc(p.profileUrl) + '" class="pv-btn-book" style="text-decoration:none;display:flex;align-items:center;justify-content:center;">View &amp; Book</a>'
-      + (waNum ? '<a href="https://wa.me/' + esc(waNum) + '?text=' + waMsg + '" target="_blank" rel="noopener" class="pv-btn-wa" title="WhatsApp">💬 WA</a>' : '')
-      + '<button type="button" class="pv-btn-wa" style="text-decoration:none;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:' + esc(jsId) + ',otherName:' + esc(jsNm) + ',type:\'customer-provider\',context:\'' + esc(String(p.categoryLabel).replace(/'/g, "\\'")) + '\'}):location.href=\'messages.html\'" title="Message in-app">✉️</button>'
-      + '<button type="button" class="pv-btn-follow" id="pvFollow-' + esc(pid) + '" onclick="pvToggleFollow(' + esc(jsId) + ',' + esc(jsNm) + ')" title="Follow provider">'
-      + '<i class="fas fa-user-plus"></i></button>'
-      + '</div>'
-      + '<div class="pv-follower-count" id="pvFollowers-' + esc(pid) + '"></div>'
       + '</div></div>';
   }).join('');
 
   initPvFollows(list);
 }
+
+/* Compact premium card: a tap anywhere on a provider card (not on its icons or links) opens the
+   profile — one delegated listener, the href read from the card's escaped data attribute. */
+document.addEventListener('click', function (ev) {
+  var card = ev.target && ev.target.closest ? ev.target.closest('.pv-card[data-profile-href]') : null;
+  if (!card || ev.target.closest('a,button,input,select,textarea,label')) return;
+  var href = card.getAttribute('data-profile-href');
+  if (href) location.href = href;
+});
 
 /* Stats are computed from the loaded set. They used to be four fixed numbers
    ("4.8★", "47 counties") printed regardless of what the page showed. */
