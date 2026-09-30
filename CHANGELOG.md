@@ -1,3 +1,9 @@
+## [2026-10-01] — Password reset links expire after 25 minutes, work once, and are stored only as a hash (functions, NOT deployed)
+
+**Why:** owner requirement. Firebase reset codes last a fixed hour (not configurable), and the only rate limit was a browser sessionStorage counter.
+**New:** `functions/password-reset-gate.js`, exporting `authRequestPasswordReset` + `authCompletePasswordReset` (App Check; durable fail-closed limits; SHA-256-only token storage; 25-minute expiry; single use; newer link revokes older; sessions revoked; owner notified; securityEvents). Exported by name in `functions/index.js`. `docs/PASSWORD_RESET_25_MINUTES.md`. `scripts/test-password-reset-25m.js` 25/0, sabotage (expiry removed) fails B2.
+**DB:** new server-only collections passwordResetTokens / passwordResetState / passwordResetRate (default-deny, no rules change). **API:** two new callables. **Security:** closes enumeration and client-only rate limiting on reset; residual native sendOobCode documented. **Deploy:** the two named functions first, then hosting (login + reset-password.html).
+
 ## [2026-09-30] - CANDIDATE: providerDispatch shell gate — pinned deployed archive (e521e03) + 10 gate modules + two-line dispatcher merge (c49c712); certified, NOT deployed
 
 See docs/CANDIDATE_PROVIDERDISPATCH_SHELL_GATE.md on slice/c4-capability-consumer. This branch exists to be deployed with

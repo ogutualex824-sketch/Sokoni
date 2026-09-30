@@ -12761,6 +12761,10 @@ exports.auditInviteOnboarding = onCall(
 /* Re-send a password-setup link to an invitee who never received one. Separate
    from resendInvitation because the remedy for a stranded account is the LINK,
    not another invitation record. */
+/* 25-minute, single-use password reset (owner 2026-10-01) — see functions/password-reset-gate.js */
+exports.authRequestPasswordReset = require('./password-reset-gate').authRequestPasswordReset;
+exports.authCompletePasswordReset = require('./password-reset-gate').authCompletePasswordReset;
+
 exports.resendPasswordSetup = onCall(
   { region: 'us-central1', maxInstances: 5, enforceAppCheck: true,
     secrets: require('./email-service').EMAIL_SECRETS },
