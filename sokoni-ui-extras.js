@@ -205,7 +205,7 @@
     /* ── Auth row — shown when logged out, replaced when logged in ── */
     '<div class="mmenu-auth" id="mmenuAuthRow">',
       '<a href="login.html" id="mmenuLoginLink" class="mmenu-btn-login">🔑 Login</a>',
-      '<a href="signup.html" id="mmenuSignupLink" class="mmenu-btn-signup">✨ Create Account</a>',
+      '<a href="onboarding.html?mode=signup" id="mmenuSignupLink" class="mmenu-btn-signup">✨ Create Account</a>',
     '</div>',
     /* ── logged-in greeting (hidden by default, shown by JS) ── */
     '<div class="mmenu-user-row" id="mmenuUserRow" style="display:none">',

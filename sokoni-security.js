@@ -224,7 +224,7 @@
     descEl.appendChild(document.createTextNode(' to access this section.'));
 
     var regBtn = document.createElement('a');
-    regBtn.href = 'signup.html';
+    regBtn.href = 'onboarding.html';
     regBtn.style.cssText = 'display:block;padding:13px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:14px;border-radius:12px;text-decoration:none;margin-bottom:10px;';
     regBtn.textContent = 'Register as ' + label + ' →';
 
