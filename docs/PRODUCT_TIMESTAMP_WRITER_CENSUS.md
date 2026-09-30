@@ -57,6 +57,10 @@ And no writer is server-authoritative: every `uploadedAt` is a client clock.
 
 The **smallest** repair that makes the readers correct on today's data is **a alone** (97 / 97 carry the field; QATEST100's Timestamp value sorts first under desc by Firestore type order and is a QA row). The smallest repair that stays correct as products are created is **a + b + c + d** (hosting only, four files). **e** is what makes the timestamp server-authoritative and is a separate gate either way.
 
+## 5a · Outcome (2026-09-30, same day)
+
+The owner authorized **a + b + c + d** as one hosting-only slice; **e** (server authority) and **f** (backfill) stay separate. Implemented and certified locally — see [[HOME_PICKED_FOR_YOU_INVENTORY_SYNC]] §4e and `scripts/test-product-uploadedat-authority.js` (34 / 0). Not deployed.
+
 ## 6 · Not in scope, recorded separately
 
 The live Home listener fails once on the missing `__name__ DESC` index and Home continues on `/api/catalogue` (one-shot, CDN-cacheable): a pre-existing architecture finding with its own repair, not to be folded into the ordering change ([[HOME_PICKED_FOR_YOU_INVENTORY_SYNC]] §4c).

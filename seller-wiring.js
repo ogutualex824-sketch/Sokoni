@@ -31,6 +31,30 @@
     return null;
   }
 
+  /* A legitimate creation time for a cached product row, or null.
+       1. its own uploadedAt when it is a finite epoch-ms number (seller.js stamps Date.now())
+       2. the millisecond embedded in a Date.now()-style id: "1784796275236", "CARS1758…", "MS1758…"
+     Never the current time: a sign-in is not a product's chronology. */
+  function _creationTimeOf(product) {
+    if (!product) return null;
+    const v = product.uploadedAt;
+    if (typeof v === 'number' && isFinite(v) && v > 0) return v;
+    if (typeof v === 'string' && /^\d{12,14}$/.test(v)) return Number(v);
+    const m = String(product.id || '').match(/^(?:CARS|MS)?(\d{13})$/);
+    if (m) return Number(m[1]);
+    return null;
+  }
+
+  /* Fields a re-sync of an EXISTING document may never touch: money / inventory / ownership
+     (server-authoritative) and the creation chronology (uploadedAt). */
+  function _stripServerOwned(payload) {
+    delete payload.price; delete payload.costPrice; delete payload.deliveryCost;
+    delete payload.stock; delete payload.outOfStock; delete payload.sold;
+    delete payload.sellerUid;
+    delete payload.uploadedAt;
+    return payload;
+  }
+
   /* ── Safe truncate for Firestore size limit ─────────────────── */
   function _trimPayload(product) {
     const p = {
@@ -52,9 +76,17 @@
       sellerEmail: String(product.sellerEmail || ''),
       sellerUid:   String(_uid || product.sellerUid || ''),
       views:       Number(product.views) || 0,
-      uploadedAt:  product.uploadedAt || Date.now(),
       image:       String(product.image || '').slice(0, 200000),
     };
+    /* uploadedAt is the catalogue's ORDERING KEY and must be a CREATION time. This used to be
+       `product.uploadedAt || Date.now()` — and because _syncLocalProducts() upserts the whole
+       cached catalogue on every sign-in, a cached row without the field received the seller's
+       LOGIN time and sorted to the top as "newest" (writer census 2026-09-30). Now the value is
+       set only when a legitimate creation time exists: the row's own numeric uploadedAt, or the
+       creation millisecond embedded in a Date.now()-style id. Otherwise the field is OMITTED —
+       explicit, never fabricated. An EXISTING document never has it overwritten (see _writeProduct). */
+    const _created = _creationTimeOf(product);
+    if (_created !== null) p.uploadedAt = _created;
 
     /* Include images array only if it fits in 900 KB */
     const base = JSON.stringify(p).length;
@@ -116,9 +148,9 @@
       try {
         const _snap = await getDoc(ref);
         if (_snap.exists()) {
-          delete payload.price; delete payload.costPrice; delete payload.deliveryCost;
-          delete payload.stock; delete payload.outOfStock; delete payload.sold;
-          delete payload.sellerUid;
+          /* …and never the creation chronology: an existing uploadedAt is the catalogue's
+             ordering key and a re-sync has no legitimate newer knowledge of it. */
+          _stripServerOwned(payload);
           /* Skip the write when nothing this sync owns has actually changed.
              _syncLocalProducts() runs the WHOLE local catalogue on every login,
              so without this each pass rewrote every product and each rewrite fired
@@ -444,6 +476,8 @@
     deleteProduct : _deleteProduct,
     pullProducts  : _pullProducts,
     syncLocal     : _syncLocalProducts,
+    /* test seams — pure functions behind the chronology contract */
+    _creationTimeOf, _stripServerOwned, _trimPayload,
   };
 
 }());

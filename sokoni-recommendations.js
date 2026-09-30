@@ -284,13 +284,22 @@
         if (!S || typeof S.availabilityOf !== 'function') return true;
         try { return !!S.availabilityOf(d, undefined).sellable; } catch (_) { return true; }
       };
-      /* Bounded like the canonical catalogue listener: newest 200 by document id
-         (ids are Date.now()-style, so this is the active inventory) instead of the
-         ENTIRE collection — the same OOM anti-pattern sokoni-db.js already fixed. */
+      /* Bounded like the canonical catalogue listener (200) instead of the ENTIRE
+         collection — the same OOM anti-pattern sokoni-db.js already fixed.
+         Same ordering key as sokoni-db.js (2026-09-30, headed Chrome with a VALID App
+         Check token): `orderBy(documentId(), 'desc')` needs a composite index this
+         project lacks — exactly what the first real-browser run of this widget hit —
+         and document id is not a chronology for this catalogue anyway. `uploadedAt`
+         is (single-field, built-in index). Only `products` carries uploadedAt; the
+         other pools (mechanics) take the plain bounded read with no ordering, because
+         an orderBy on a field they do not have would return nothing. */
       const _CAP = 200;
       const _boundedQuery = (col) => {
-        try { return query(collection(db, col), orderBy(documentId(), 'desc'), limit(_CAP)); }
-        catch (_) { return collection(db, col); }
+        try {
+          return col === 'products'
+            ? query(collection(db, col), orderBy('uploadedAt', 'desc'), limit(_CAP))
+            : query(collection(db, col), limit(_CAP));
+        } catch (_) { return collection(db, col); }
       };
 
       /* App Check is ENFORCED on Firestore and its token is acquired asynchronously. This

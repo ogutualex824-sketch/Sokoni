@@ -111,6 +111,12 @@ Owner authorized option 1. The two-file change was made (`sokoni-db.js`: `orderB
 
 The honest "newest first" key for this catalogue is `uploadedAt`, which is what New Arrivals already sorts by client-side; making the server query use it means every product writer must stamp it (a small writer census + one server-side default) — that is a slice of its own, not a two-line query swap.
 
+## 4e · The authorized ordering repair — `uploadedAt` (candidate, NOT deployed)
+
+Owner-authorized after [[PRODUCT_TIMESTAMP_WRITER_CENSUS]]: readers order by `uploadedAt` desc (limit 200, built-in single-field index, no composite); merchant-v2, sokoni-inventory and seller-wiring stamp or preserve it so no future product is created without the ordering key and no sign-in can rewrite it. Server authority for the value is explicitly **not** part of this slice. Certification: `scripts/test-product-uploadedat-authority.js` (34 / 0) plus the regression suites listed in the CHANGELOG entry. The Home listener finding (§4c) is untouched by this slice: once the listener attaches without the index error, the live-update path exists again, but whether Home should keep the HTTP fallback as primary is its own decision.
+
+Known and recorded, not hidden: `QATEST100` carries a Timestamp-typed `uploadedAt` (all others are numbers) and therefore sorts first under `desc` by Firestore type order. It is a QA row; repairing its type is a production data write and is not authorized here.
+
 ## 5 · Performance and security
 
 - **Performance:** no new synchronous script. The three previously hidden daily sections now render, but only when they approach the viewport or at idle (same deferral as New Arrivals), so the load window is unchanged. Recommendations now read ≤200 product docs instead of the whole collection. One failing Firestore listener per home visit is gone.
