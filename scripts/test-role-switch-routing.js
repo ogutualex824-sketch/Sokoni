@@ -64,10 +64,15 @@ function loadHub(approved, mutate) {
   ck('WORKSPACE_HUBS exported from sokoni-role-authority.js', /WORKSPACE_HUBS:\s+WORKSPACE_HUBS/.test(RA));
   ck('hubFor exported', /hubFor:\s+hubFor/.test(RA));
   ck('admin has NO acting-context destination', all.HUBS.admin === undefined && all.HUBS.superAdmin === undefined);
+  /* Read from the REAL map (was a restated list that still named merchant.html after the
+     seller cutover). provider → provider-dashboard.html (register-routing slice): its
+     dashboard, not the public providers.html directory. */
   ck('destinations are ones already in use (no invented URLs)',
-     ['index.html', 'merchant.html', 'providers.html', 'driver.html', 'car-hub.html',
-      'healthcare.html', 'legal-hub.html', 'landlord.html', 'property.html']
-       .every((u) => PRO.includes(u)));
+     Object.keys(all.HUBS).length >= 9 &&
+     Object.keys(all.HUBS).map((k) => all.HUBS[k]).every((u) => PRO.includes(u)),
+     JSON.stringify(all.HUBS));
+  ck('provider -> provider-dashboard.html (its dashboard, not the providers.html directory)',
+     all.hubFor('provider') === 'provider-dashboard.html', all.hubFor('provider'));
 
   head('1 - an approved role routes to its workspace');
   const multi = loadHub(['buyer', 'seller', 'rider']);

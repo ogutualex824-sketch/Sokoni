@@ -217,7 +217,7 @@ ck('a missing tab array omits the section rather than rendering dead links',
 
 head('11 · the dropdown speaks the same emoji language');
 ['👤 My Profile', '📦 My Orders', '🔔 Notifications', '⚙️ Settings',
- '🛡️ Account &amp; Security', '❓ Help &amp; Support'].forEach(function (e) {
+ '🛡️ Account &amp; Security', '🏪 Register a business', '❓ Help &amp; Support'].forEach(function (e) {
   ck('menu carries ' + e.split(' ')[0] + ' ' + e.split(' ').slice(1).join(' '),
      acct.indexOf(e) !== -1);
 });

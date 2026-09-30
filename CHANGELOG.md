@@ -1,3 +1,35 @@
+## [2026-10-01] - Register my business: one entry (/offer.html), one intake (hub-register), provider lands on its dashboard — built, tested, NOT deployed
+
+**Branch `hosting/register-routing-on-b2`, on `df1a4cb`.** Hosting only. Owner ask: "Register my business" always
+reachable and in sync with "What are you offering?"; every category flows into ONE application pipeline; after
+approval the user reaches the correct dashboard. Connects what exists — no new collection, server or rules change.
+
+**Summary.**
+- **offer.html.** Every service/product card (and the building-materials link) now opens the ONE intake,
+  `HubRegister.open({category, hub})`, with an EXISTING hub-register CATS id (`data-reg-category`) via
+  `offerRegister()`; it no longer reaches the second intake (`provider.html?cat=`, whose keys were not CATS ids) or
+  hub pages (seller / tech-hub / b2b / banking / construction). Healthcare opens with no pre-selection (applicant
+  picks one of 8). Ride Sharing keeps `onboarding-driver.html` (driver KYC intake, also files `applications`).
+  sessionStorage `offerCat` hand-off removed. "Already have a dashboard?" → merchant-v2 / provider-dashboard.
+  Hero copy no longer promises "straight to the right dashboard".
+- **Account dropdown (sokoni-profile-menu.js).** "🏪 Register a business" → `/offer.html`, every signed-in role
+  (also covers a new branch/second business). shared-header has no signed-out menu (avatar → login), so none added.
+- **Wrong links.** providers.html "Become a Provider" (was seller.html), businesses.html "Register Your Business"
+  (was business-os.html), account-centre "Register a Business" (was businesses.html) → `/offer.html`.
+- **hub-register.js.** Success screen: "Application submitted — SOKONI reviews it in AdminOS" + "Track my
+  application" → `complete-application.html` (asks `businessWorkspace`, shows pending/decided/"Open your
+  workspace"). Removed the `provider.html?cat=` link, "is now on SOKONI!" and "Your paid listing is live
+  immediately!". New read-only `HubRegister.category(id)` (a copy). Everything else untouched.
+- **sokoni-role-authority.js.** `WORKSPACE_HUBS.provider` → `provider-dashboard.html` (was the public providers.html
+  directory).
+
+**Files affected.** offer.html, hub-register.js, sokoni-profile-menu.js, sokoni-role-authority.js, providers.html,
+businesses.html, account-centre.html; tests `scripts/test-register-business-entry.js` (new, 41/0),
+`test-role-switch-routing.js`, `test-customer-nav.js`, `after-role-nav-header.mjs` (expectations updated).
+
+**Database changes.** None. **API changes.** None. **Security.** No new write; the intake's sign-in precondition and
+server-priced paid path are unchanged. **Breaking.** A provider's role switch now lands on provider-dashboard.html.
+
 ## [2026-10-01] - Slice B2 closure: landlord rent is external (fake payment + rent commission removed), contact seller end to end, truthful notices and confirmations, landlord XSS — built, certified, NOT deployed
 
 **Branch `hosting/slice-b2-on-chain`, on top of the frozen B2 reference `63dc9b0`.** Hosting only. Owner decisions

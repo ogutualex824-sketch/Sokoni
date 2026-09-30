@@ -223,7 +223,8 @@ export default async function run(page) {
      The requirement is that a switch ROUTES, not merely relabels. Driven through
      the profile menu exactly as a person would, from a page that is nobody's hub,
      and asserted on where the browser actually ended up. */
-  const HUB_EXPECT = { seller: 'merchant', rider: 'driver', provider: 'providers' };
+  /* provider → provider-dashboard (register-routing slice; was the providers.html directory) */
+  const HUB_EXPECT = { seller: 'merchant', rider: 'driver', provider: 'provider-dashboard' };
   const routed = [];
   for (const role of Object.keys(HUB_EXPECT)) {
     await setScenario(page, { claims: ['seller', 'rider', 'provider'], ctx: '',

@@ -353,6 +353,11 @@
         /* Role-aware entries kept exactly as they were: the emoji are presentation,
            and role/capability authority is unchanged by this slice. */
         '<a class="sk-acct-link" href="account-centre.html#employment" onclick="window._skCloseAcct()">💼 My Workspaces</a>' +
+        /* ALWAYS present, for every signed-in role — including an account that already
+           owns a business (a new branch or a second business is a new application). It is
+           the ONE entry: /offer.html ("What are you offering?"), whose every card opens the
+           single Register My Business intake (hub-register.js → applications → AdminOS). */
+        '<a class="sk-acct-link" href="/offer.html" data-sk-register-business onclick="window._skCloseAcct()">🏪 Register a business</a>' +
         '<a class="sk-acct-link" href="wallet.html" onclick="window._skCloseAcct()">👛 Wallet</a>' +
         '<a class="sk-acct-link" href="wishlist.html" onclick="window._skCloseAcct()">❤️ Wishlist</a>' +
         '<a class="sk-acct-link" href="help.html" onclick="window._skCloseAcct()">❓ Help &amp; Support</a>' +
