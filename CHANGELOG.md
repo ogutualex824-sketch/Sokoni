@@ -33,6 +33,144 @@
 - First real run named the live state truthfully: free physical ~380 MB, 12–16 orphan browser processes, a peer WebKit suite (`test-merchant-disputes-ui.js`, not this session), a functions deploy in progress → NOT_READY.
 
 ## [2026-09-30] - DEPLOYED b108ae3 (hosting content = 85699a0: recs App Check wait+retry) -> Hosting v647 (sokoni-20260930103649-v647) 10:36Z, owner-authorized; two earlier attempts were false blocks (peer WebKit-orphan OOM: suite timeouts 38/1, then node --check OOM in the syntax gate); served sokoni-recommendations.js byte-identical to 85699a0; all other files unchanged since d55c112; rollback = v646 release of d55c112.
+## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
+
+**Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
+sokoni-aa's queued stack merges it before its own deploy). This is the owner's "no rebuild, add to what we have" pass. No new wizard, no new page.
+
+**Account entry.** Every "Create Free Account" / "Create Account" entry pointed at the legacy `signup.html`. Its role
+block is dead after sign-up, because the success screen replaces it. The canonical journey wizard already existed:
+`onboarding.html`, with Join SOKONI (sign in / create account, Google, phone), then 20 roles, then the guided setup.
+
+- The entries now open `onboarding.html?mode=signup`:
+  - the home page "Create Free Account";
+  - the welcome popup;
+  - the chatbot;
+  - login.html "Don't have an account?";
+  - the mobile menu.
+- The wizard opens on its **Create Account** tab for that mode. Every other arrival still opens on Sign In.
+- The "Register as <role>" gate (`sokoni-security.js`) opens the wizard for role selection.
+- `signup.html` itself is unchanged and still reachable.
+
+**Splash.** `#sk-spl` relied on `position:fixed; inset:0` alone. It now states the viewport explicitly:
+`width:100vw; height:100vh → 100dvh; min-height:100svh`, plus safe-area padding (notch / home indicator) and a solid
+fallback colour.
+
+**Honest limit.** In emulated iPhone (WebKit) and Android (Chromium) the splash already filled the viewport before this
+change. The owner's "3/4 of the screen" is **not reproduced** in emulation. Possible real-device causes need a
+screenshot to confirm:
+
+- the installed-app launch image (`apple-touch-startup-image` is the logo PNG, not a device-sized image);
+- the dark vignette reading as a smaller panel;
+- mobile-toolbar behaviour.
+
+**Splash restored: the owner's "premium splash with glitter, fused with many colours, not too much".** Found in git:
+the initial platform's home splash (`b905bc9`, "HOME SPLASH — creative colour journey"). `splash.js`, the one splash
+every page already uses, now carries that design, with today's logo, lifecycle and per-page taglines:
+
+- 70 glitter points drift behind the mark, each slowly blending through the five brand colours: SOKONI green
+  `#71ff00`, cyan `#00d4ff`, purple `#a855f7`, amber `#f59e0b`, rose `#ec4899`;
+- the halo breathes through the palette;
+- the tagline shimmers through it;
+- the progress bar flows through all five.
+
+**Once per visit.** The splash now greets only the first page of a browsing session. Coming back to home after a search
+no longer splashes a second time; the owner reported that double splash. `window.SokoniSplash` is still set, so no
+other splash system draws.
+
+**Behaviour.** "Reduce motion" hides the glitter and every animation. The canvas stops the moment the splash leaves. A
+canvas failure can never hold the splash up.
+
+**Tests.** `scripts/test-entry-experience-browser.js` **7/0**:
+
+- EE1: the button leads to the wizard's Create Account tab;
+- EE2: no entry links `signup.html`;
+- EE3: Sign In stays the default;
+- EE4: the splash states the full viewport, and its height equals the viewport on iPhone / Android emulation;
+- EE5: once per visit;
+- EE6: the glitter canvas draws, with the five colours;
+- EE7: reduce motion hides the glitter.
+
+All external network is blocked in the suite. The parent `e94f449` fails EE1, EE2 and EE4 (EE3 is an invariant).
+Deliberate breakages **8/8**.
+
+**Not in this slice** (next: E2/E3):
+
+- the home page's fabricated content:
+  - hard-coded doctors and ratings;
+  - "Available Now" vehicles;
+  - invented seller ratings;
+  - stats floored with `Math.max(…, 500)`;
+  - testimonials;
+- honest loading / empty / unavailable states;
+- discovery for garages, professionals, facilities and riders.
+
+The home **product feed** fix is sokoni-27's (`hosting/uploadedat-on-2bcdae2`).
+
+## 2026-09-30 — MV2-3 (Merchant Operations Convergence): Delivery Hub converged — certified, NOT deployed
+
+`seller-delivery.html` (route `deliveries`, inside the merchant shell). READS ONLY; no new authority:
+- Reflow: Live → Orders → Riders → Map → Exceptions → History → Analytics; phone rules (2-column stats, sticky tabs, 44px targets, no
+  horizontal overflow at 390px) and a 2-column desktop grid. data-tab values unchanged so #riders / #active deep links still work.
+- Every card: the owner stage ladder (Awaiting payment → … → Delivered) over the canonical statuses; From = the F1 pickup projection or
+  "Pickup location unknown (gap)"; To with "drop-off location unavailable" when no point; rider strip with SHOP RIDER / SOKONI RIDER,
+  💬 Chat (SokoniInbox → conversations) and 📞 Call only with the number the job record already carries; mini-map pickup → rider →
+  drop-off, "Rider location unavailable" / "last known (not fresh)" from the rider's own record.
+- Riders panel: the SERVER presence rule (presence/lastSeen, 300 s): Available · Stale · Offline · On your delivery; riders on this
+  seller's jobs listed even if the online query misses them; Chat for all, Call/View delivery only for the rider on my job; no uid, no
+  private number for anyone else.
+- Map tab: ONE map over all active deliveries (🏪 pickup · 🏍️ rider live · 🎯 drop-off) with "Location unavailable: pickup, drop-off, rider"
+  per missing fact — nothing invented.
+- Evidence: `scripts/test-mv2-3-delivery-hub.js` 16/0 (hermetic Chromium, stub compat Firestore with server presence shapes);
+  test-inshell-chrome 30/0; test-merchant-route-gate 191/0. Files: `seller-delivery.html`, the test, `CHANGELOG.md`.
+
+## 2026-09-30 — MV2-1 (Merchant Operations Convergence, first slice; certified, NOT deployed): sidebar exposure + shell cleanup
+
+On `hosting/merchant-v2-premium-on-6f566a6`. No new authority; see `docs/MERCHANT_OPERATIONS_CONVERGENCE_MAP.md` for the census.
+- **Sales Control Centre in the sidebar.** New registry route `sales-control` (kind pos, tab pos + validated `action:'salescontrol'`).
+  The shell re-targets the ONE cached POS frame by hash; `pos.js` opens the existing overlay (PosSalesView.open) from
+  `#salescontrol` on boot, hashchange and popstate. One POS instance, one overlay — an entry point, not a second surface.
+- **Sidebar groups** for the more tier: Sales · Operations · Growth · Back office (still a total partition; validate() clean).
+- **Returns:** the SOKONI logo image in the page's own top bar is gone (a second branding block under the shell header).
+- **KRA:** the setup card states "KRA status: Ready — credentials required" as the server's precondition; nothing submitted or simulated.
+- **Not in this slice (census recorded):** Supply workspace = other lineage (86d6ca7) → port slice MV2-2; Delivery Hub reflow/riders/maps
+  MV2-3; Orders ledger MV2-4; Returns lifecycle MV2-5; Disputes MV2-6; Customers/Messages/Connect MV2-7; expiring media MV2-8.
+- **Evidence:** test-mv2-1-sidebar 14/0 · test-merchant-routes 65/0 · test-merchant-route-gate 191/0 · test-inshell-chrome 30/0 ·
+  test-sales-control-centre 61/0 · test-pos-lazy-features 34/0 · test-pos-boot-budget 9/0 · syntax gate 1799 clean.
+  test-merchant-visual-gate fails IDENTICALLY on the untouched base (pre-existing; not a release suite).
+- **Files:** `sokoni-merchant-routes.js`, `merchant-v2.html`, `pos.js`, `returns.html`, `sokoni-merchant-tax-ui.js`, `scripts/test-mv2-1-sidebar.js`, `CHANGELOG.md`.
+
+## 2026-09-30 — PARCEL HOSTING SLICE (own unit, certified, NOT deployed): Send a Parcel talks only to the parcel functions
+
+On `hosting/parcel-page-on-a8aafac` (live hotfix line). `delivery.html`: the rate card, every price, the request, the payment and the
+confirmation come from getParcelQuote / createParcelRequest / payParcelRequest / confirmParcelPayment / getMyParcelPin. No typed
+distance exists — pickup and drop-off are geocoded (SokoniRouting.geocode) or taken from GPS, and without both points the page says
+"Quote unavailable" and Book stays disabled. Just Check Pricing calls the quote with preview:true (server writes nothing) and says it is
+a quote. Payment modal offers M-PESA STK and IntaSend checkout (card · bank · Airtel); the page never marks anything paid — it polls
+confirmParcelPayment and the success modal shows the SERVER PIN and receipt. `?paid=` return from checkout re-asks the server.
+My Deliveries lists packageRequests parcel jobs (sent + incoming) with Pay now / Cancel (unpaid only), Track, Show PIN, in-app
+receipt with timestamps (+ PDF via SokoniInvoice), Support; Spent = server paid amounts. WhatsApp booking + share hops removed.
+`delivery-hub.js`: listenSenderParcels / listenRecipientParcels / cancelParcel. `driver.html`: parcel jobs labelled, trip length and the
+F1 rider→pickup distance shown when known, PIN completion routed to completeParcelWithPin for parcels. `track.html`: parcels from
+packageRequests (sent + incoming). Cert: `scripts/test-parcel-page.js` 14/0 (hermetic Chromium, stub modules + callables); syntax gate
+1798 clean. Requires the parcel functions (a545818) to be live first. **Deploy NOT run** (classifier denied production deploys).
+
+## 2026-09-30 — HOTFIX to the header unit: palette close on phones + quick-actions trigger on the home page
+
+Owner report after v648: the quick-actions (command palette) close button "does not close" on a phone, and the trigger is
+missing from the home page header. Measured: at phone width the overlay kept opacity 1 after the class was removed (one
+overlay, one style block, no overriding rule found); on desktop it faded. `sokoni-command-palette.js` now makes the closed
+state explicit (visibility hidden at once, display none after the fade; open restores them) and `index.html`'s baked nav
+gains the same `#sk-cp-btn` trigger the dynamic header has. `scripts/test-header-candidate.js` 11/0 incl. a real tap on ✕
+at 390px and a reopen. Files: `sokoni-command-palette.js`, `index.html`, `scripts/test-header-candidate.js`, `CHANGELOG.md`.
+
+## 2026-09-30 — DEPLOYED: header asks (2bcdae2 → hosting v648, live commit 2bcdae2)
+
+Owner-authorized hosting deploy of the header commit ALONE (Slice B held). Live base before: b108ae3/v647. Verified with cache-busters:
+`version.json` commit 2bcdae2, cacheVersion sokoni-20260930144454-v648; palette close button served; Activity button absent from
+`shared-header.js`; menu logo header present; back button absent from `sokoni-nav-engine.js`; Activity view present in the
+notification engine. Rollback = the previous hosting version (b108ae3). This entry commits the pipeline artefacts only.
+
 
 ## [2026-09-30] - DEPLOYED d55c112 → Hosting v646 (cacheVersion sokoni-20260930093216-v646) 09:32Z, owner-authorized; artefacts 12edf13; rollback 6f7202bd5dd81d84. Live verified: markers served, 6 of 7 files byte-identical (index.html served via / — /index.html is a 301), recs widget renders, feed 6, Fastest Selling visible, no [RT] products warning, no module-not-loaded warning. Follow-up (recs App Check wait+retry) committed, NOT deployed.
 
