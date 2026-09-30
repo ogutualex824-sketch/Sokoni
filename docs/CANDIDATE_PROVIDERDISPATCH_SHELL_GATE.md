@@ -40,7 +40,7 @@ Not merged, not routed: `healthcare-workspace._h`, `provider-directory._h`, `pro
 | `test-shell-gate-mutations.js` — 7 mutations of the authority (gate removed; NO_APPROVAL treated as valid; cleanup ownership ignored; REFUSED not held; fail-open on unreadable; shop homes ungated; dashboard route instead of completion) — each must make the gate suite fail **by assertion** | **9 / 0**, failures 9 / 8 / 1 / 1 / 1 / 1 / 4, no crash, file restored byte-identical |
 | `test-business-capabilities.js` · `test-business-workspace.js` · `test-workspace-capability.js` | 46 / 0 · 30 / 0 · 51 / 0 |
 | `gate-functions-require-closure.js` · `verify-commission-single-source.js` · `verify-delivery-engine-sync.js` · `predeploy-payout-gate.js` (this base's functions predeploy chain + the closure gate) | PASS · PASS · PASS · exit 0 |
-| `predeploy-syntax-gate.js` | **pending — running on the candidate tree at the time of writing** (see CHANGELOG follow-up) |
+| `predeploy-syntax-gate.js` (run in the candidate tree) | **PASS** — 1,649 JavaScript files and 441 inline script blocks parse cleanly |
 | `functions-allowlist.js providerDispatch` | not blocked; prints `firebase deploy --only functions:providerDispatch`; runs nothing |
 | Comparison against the live archive | `git diff e521e03 c49c712 -- functions`: 11 files, +2,073 / −1; nothing else |
 | Configuration | `.env` identical to the archive's; no secrets bound or declared by the dispatcher |

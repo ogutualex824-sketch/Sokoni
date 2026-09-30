@@ -9,7 +9,7 @@ booking-payment-sweep, availability, legal-agreements, application-lifecycle, un
 sokoni-till, event-ops, entertainment/creator/venue stack, provider-directory, role-authority… ABSENT. Certified on the candidate: gate
 suite 21/0, archive-compat 9/0 (unstubbed archive subscription modules), MUTATIONS 9/0 (7 mutations each fail by assertion), capabilities
 46/0, business-workspace 30/0, workspace-capability 51/0, require-closure/commission/delivery/payout gates PASS, allowlist not blocked,
-.env hash-identical to the archive copy, no secrets declared, clean tree. Syntax gate result to follow. Deployment NOT authorized.
+.env hash-identical to the archive copy, no secrets declared, clean tree. Syntax gate PASS (1,649 files, 441 inline blocks). Deployment NOT authorized.
 
 ## [2026-09-30] - providerDispatch LINEAGE CENSUS (READ ONLY): what a redeploy would change; the 12 changed modules classified; 54 new modules traced to their call paths; deployment NOT authorized
 
