@@ -73,7 +73,7 @@ await T('the evidence collection starts empty', async () => {
 });
 
 await T('the catalogue reconciles, and the three are the runnable set', () => {
-  eq(registry.INTEGRATIONS.length, 60, 'technical entries: ');
+  eq(registry.INTEGRATIONS.length, 61, 'technical entries: ');
   eq(registry.OPERATIONAL_DEPENDENCIES.length, 2, '');
   const derived = registry.INTEGRATIONS
     .filter((e) => evidence.classifyEvidenceSource(e.id) === 'runnable-with-evidence')
@@ -255,7 +255,7 @@ await T('the absence partition is unchanged — migration adds evidence, not cla
     m[c] = (m[c] || 0) + 1;
   });
   eq(m['runnable-with-evidence'], 3, '');
-  eq(m['inbound-awaiting-callback'], 4, '');
+  eq(m['inbound-awaiting-callback'], 5, '');
   eq(m['declared-refusal'], 9, '');
   eq(m['measurable-unwritten'], 26, '');
   eq(m['not-applicable'], 5, '');

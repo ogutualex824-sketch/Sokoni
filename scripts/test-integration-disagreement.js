@@ -262,7 +262,7 @@ await T('a rail with no executor has no state either', async () => {
   eq(r.declaredProbeState, 'none', '');
 });
 
-await T('the baseline census — with no evidence, exactly 2 + 7 states and 51 nulls', async () => {
+await T('the baseline census — with no evidence, exactly 2 + 7 states and 52 nulls', async () => {
   const res = await resolve({});
   const m = {};
   res.integrations.forEach((i) => {
@@ -271,8 +271,8 @@ await T('the baseline census — with no evidence, exactly 2 + 7 states and 51 n
   });
   eq(m['expected-refusal'], 2, '');
   eq(m['declared-current'], 7, '');
-  eq(m['(null)'], 51, '3 runnable unobserved + 48 with no executor: ');
-  eq(res.integrations.length, 60, '');
+  eq(m['(null)'], 52, '3 runnable unobserved + 49 with no executor: ');
+  eq(res.integrations.length, 61, '');
   console.log('        ' + JSON.stringify(m));
 });
 
@@ -290,7 +290,7 @@ await T('the console contract — notRunReason — is byte-identical to before t
 
 await T('60 technical entries, 2 operational, neither touched', async () => {
   const res = await resolve({});
-  eq(res.integrations.length, 60, '');
+  eq(res.integrations.length, 61, '');
   eq(registry.OPERATIONAL_DEPENDENCIES.length, 2, '');
   const ids = new Set(res.integrations.map((i) => i.id));
   registry.OPERATIONAL_DEPENDENCIES.forEach((d) =>

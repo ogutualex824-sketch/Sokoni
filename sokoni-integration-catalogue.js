@@ -911,7 +911,29 @@
               'image is a live dependency and a licensing consideration; both are easier to reason ' +
               'about when the dependency is written down.',
     },
+    {
+      id: 'whatsapp-cloud-api', name: 'WhatsApp Cloud API — Inbound Webhook',
+      vendor: 'Meta', category: 'messaging', icon: '💬',
+      status: 'live', direction: 'inbound',
+      summary: 'Receives inbound WhatsApp messages and message-status callbacks from Meta, ' +
+               'signature-verified and recorded idempotently.',
+      evidence: {
+        modules:     ['functions/whatsapp-webhook.js'],
+        endpoints:   ['https://us-central1-sokoni-aeb26.cloudfunctions.net/webhookWhatsapp'],
+        collections: ['whatsappInbound'],
+        secrets:     ['WHATSAPP_VERIFY_TOKEN', 'WHATSAPP_APP_SECRET'],
+      },
+      health: { source: null, kind: 'measurable', kindNote: 'Inbound only — evidence arrives by correlated callback, not by a probe we can run.', note: 'A signature-verified POST from Meta is the only proof this rail works.' },
+      notes:  'INBOUND ONLY — there is no send path yet, so this entry must not be read as ' +
+              '"SOKONI can message customers on WhatsApp". Deployed and smoke-tested in ' +
+              'production: a correctly signed POST was accepted and persisted, while an unsigned ' +
+              'POST, a wrong verify token and a tampered body carrying a valid signature were ' +
+              'each refused. Message BODIES are deliberately not stored; the record says a ' +
+              'message arrived, from whom, of what type and when. Outbound, OTP and any ' +
+              'Connect/conversation wiring are separate slices.',
+    },
   ];
+
 
 
   /* ── OPERATIONAL DEPENDENCIES — a SEPARATE collection ───────────────────

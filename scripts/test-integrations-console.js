@@ -551,8 +551,8 @@ const settle = () => new Promise(r => setImmediate(() => setImmediate(r)));
     const html = m.host.innerHTML;
     const cat = m.win.SokoniIntegrationCatalogue;
 
-    ok('the browser catalogue carries 60 technical entries',
-       cat.integrations.length === 60, cat.integrations.length + '');
+    ok('the browser catalogue carries 61 technical entries',
+       cat.integrations.length === 61, cat.integrations.length + '');
     ok('and 2 operational dependencies, in a SEPARATE collection',
        Array.isArray(cat.operationalDependencies) && cat.operationalDependencies.length === 2,
        (cat.operationalDependencies || []).length + '');

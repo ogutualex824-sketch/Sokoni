@@ -85,6 +85,12 @@ const SUPPORT = {
     note: 'IntaSend reports payment state by webhook, not by a delivery receipt.' },
   'intasend-webhook':     { connected: false, accepted: false, delivered: false, received: true,
     note: 'Inbound only. The evidence that it works is a correlated inbound POST.' },
+  /* Same shape as intasend-webhook, and for the same reason: there is nothing
+     to call. Meta delivers to us, so the only evidence this rail works is a
+     correlated inbound POST that passed signature verification. Declaring
+     `connected` or `accepted` here would invite a probe that cannot exist. */
+  'whatsapp-cloud-api':   { connected: false, accepted: false, delivered: false, received: true,
+    note: 'Inbound only. Evidence is a signature-verified POST from Meta.' },
   'intasend-payouts':     { connected: true, accepted: true, delivered: false, received: true,
     note: 'A payout is accepted synchronously and settled asynchronously.' },
   'sendgrid':             { connected: true, accepted: true, delivered: true, received: true,

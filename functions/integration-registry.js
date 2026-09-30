@@ -420,6 +420,24 @@ const INTEGRATIONS = [
     status: "live", direction: "outbound",
     healthKind: "measurable",
     requiredSecrets: [], optionalEnv: [] },
+
+  /* ── WhatsApp Cloud API, added 2026-09-30 ───────────────────────────────
+     Held out of this catalogue until it was real, on the grounds that a row
+     without a capability behind it is the sokoni-webhook-engine.js defect. It
+     now clears the bar on every count: a code path
+     (functions/whatsapp-webhook.js), a DEPLOYED function (webhookWhatsapp,
+     ACTIVE, GEN_2), two bound secrets, and a production smoke test in which a
+     correctly signed POST was accepted and persisted while an unsigned one,
+     a wrong verify token and a tampered body were each refused.
+
+     INBOUND ONLY, and catalogued as such. There is no send path yet, so this
+     row must not be read as "SOKONI can message customers on WhatsApp". */
+  { id: "whatsapp-cloud-api", category: "messaging", vendor: "Meta",
+    name: "WhatsApp Cloud API — Inbound Webhook",
+    status: "live", direction: "inbound",
+    healthKind: "measurable",
+    requiredSecrets: ["WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET"],
+    optionalEnv: [] },
 ];
 
 /* ── OPERATIONAL DEPENDENCIES ───────────────────────────────────────────────
