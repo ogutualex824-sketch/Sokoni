@@ -77,6 +77,17 @@ service cloud.firestore {
   'role','approved','approvedAt','approvedBy',
   'commissionRate']);
   }
+  function appNoDecision() {
+  let d = request.resource.data;
+  let dk = ['decidedBy','decidedAt','decisionAppliedFor','projectionStatus','blockedFor','statusCanonical','reviewReason',
+  'agreementVerifiedAt','agreementVerifiedVersion','priorDecisions'];
+  return (resource == null ? !d.keys().hasAny(dk) : !d.diff(resource.data).affectedKeys().hasAny(dk))
+  && (!d.keys().hasAny(['status']) || (d.status is string && !(d.status.lower() in ['approved','active','accepted','verified','rejected','declined','denied','suspended','revoked','banned','disabled'])));
+  }
+  function appUndecided() {
+  let s = resource.data.get('status', 'pending');
+  return !(s is string && s.lower() in ['approved','active','accepted','verified','rejected','declined','denied','suspended','revoked','banned','disabled']);
+  }
   function noSelfGrant() {
   return resource == null
   ? !request.resource.data.keys()
@@ -205,10 +216,11 @@ service cloud.firestore {
   allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
   }
   match /applications/{appId} {
-  allow create: if claimsOwner() && noAdminFields();
+  allow create: if claimsOwner() && noAdminFields() && appNoDecision();
   allow read:   if isAdmin() || isOwner();
-  allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields());
-  allow delete: if isAdmin() || isOwner();
+  allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['priorDecisions']))
+  || (isOwner() && claimsOwner() && noAdminFields() && appUndecided() && appNoDecision());
+  allow delete: if isAdmin() || (isOwner() && appUndecided());
   }
   match /invitations/{inviteId} {
   allow read:   if isAdmin();
@@ -218,14 +230,15 @@ service cloud.firestore {
   || isAuthed();
   allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
   && (!request.resource.data.keys().hasAny(['status'])
-  || request.resource.data.status == 'pending');
-  allow update: if isAdmin()
+  || request.resource.data.status == 'pending')
+  && !request.resource.data.keys().hasAny(['business']);
+  allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['business']))
   || (isAuthed()
   && resource.data.uid == request.auth.uid
   && uidUnchanged()
   && !request.resource.data.diff(resource.data)
   .affectedKeys()
-  .hasAny(['status', 'verified', 'suspended', 'approved']));
+  .hasAny(['status', 'verified', 'suspended', 'approved', 'business']));
   allow delete: if isAdmin();
   }
   match /bookings/{bookingId} {
@@ -477,9 +490,9 @@ service cloud.firestore {
   match /reviews/{reviewId} {
   allow read:   if resource.data.status == "approved"
   || (request.auth != null && (request.auth.uid == resource.data.authorUid || isAdmin()));
-  allow create: if claimsOwner() && noAdminFields();
-  allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
-  allow delete: if isAdmin() || isOwner();
+  allow create: if false;
+  allow update: if isAdmin();
+  allow delete: if isAdmin();
   }
   match /etims_submissions/{docId} {
   allow create:               if claimsOwner();
@@ -1045,10 +1058,16 @@ service cloud.firestore {
   allow read, delete:   if isAdmin();
   }
   match /unboxingReviews/{reviewId} {
-  allow read:   if true;
-  allow create: if claimsOwner();
-  allow update: if (isAdmin() || isOwner()) && uidUnchanged();
-  allow delete: if isAdmin() || isOwner();
+  allow read:   if resource.data.status == "approved"
+  || (request.auth != null && (request.auth.uid == resource.data.uid || isAdmin()));
+  allow create: if claimsOwner()
+  && request.resource.data.rating is int
+  && request.resource.data.rating >= 1
+  && request.resource.data.rating <= 5
+  && !request.resource.data.keys().hasAny(['status','verified','orderVerified','orderVerifiedAt','approved','approvedAt','approvedBy',
+  'featured','likes','archived','archivedAt','declinedAt','moderatedBy','moderatedAt','moderationNote']);
+  allow update: if isAdmin();
+  allow delete: if isAdmin();
   }
   match /shopEmployees/{empUid} {
   allow read:   if isAdmin()
@@ -1656,7 +1675,8 @@ service cloud.firestore {
   match /businesses/{bizId} {
   allow read:   if true;
   allow create: if false;
-  allow update: if isAdmin()
+  allow update: if (isAdmin()
+  && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['capabilities', 'business']))
   || (isOwner() && uidUnchanged() && noAdminFields()
   && request.resource.data.diff(resource.data).affectedKeys()
   .hasOnly(['name','businessName','nameLower','tagline',

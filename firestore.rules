@@ -77,6 +77,25 @@ service cloud.firestore {
   'role','approved','approvedAt','approvedBy',
   'commissionRate']);
   }
+  /* CAPABILITY CANDIDATE 1 (2026-09-30, from slice/c4-convergence ab3a891; served base f20be7d). An applicant may
+     create, amend or withdraw their own UNDECIDED application, but may never DECIDE it. Before this, the served rule
+     let an owner write status:'approved' + decidedBy on their own application — a forged self-approval.
+     priorDecisions is the immutable history of superseded decisions, appended only by applicationDecide (server). */
+  /* COMBINED with K13-C (sokoni-27, ad183b0 — ported from its 6c67a34d base onto the served f20be7d/b87c94e4):
+     appNoDecision() = no decision key touched and no decisive status written; appUndecided() = the stored
+     application is not decided, so a DECIDED application is frozen to its applicant (no edit, reopen or delete).
+     Decision keys = K13-C's seven + the capability line's agreement-verification pair and priorDecisions. */
+  function appNoDecision() {
+  let d = request.resource.data;
+  let dk = ['decidedBy','decidedAt','decisionAppliedFor','projectionStatus','blockedFor','statusCanonical','reviewReason',
+  'agreementVerifiedAt','agreementVerifiedVersion','priorDecisions'];
+  return (resource == null ? !d.keys().hasAny(dk) : !d.diff(resource.data).affectedKeys().hasAny(dk))
+  && (!d.keys().hasAny(['status']) || (d.status is string && !(d.status.lower() in ['approved','active','accepted','verified','rejected','declined','denied','suspended','revoked','banned','disabled'])));
+  }
+  function appUndecided() {
+  let s = resource.data.get('status', 'pending');
+  return !(s is string && s.lower() in ['approved','active','accepted','verified','rejected','declined','denied','suspended','revoked','banned','disabled']);
+  }
   function noSelfGrant() {
   return resource == null
   ? !request.resource.data.keys()
@@ -208,10 +227,12 @@ service cloud.firestore {
   allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
   }
   match /applications/{appId} {
-  allow create: if claimsOwner() && noAdminFields();
+  allow create: if claimsOwner() && noAdminFields() && appNoDecision();
   allow read:   if isAdmin() || isOwner();
-  allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields());
-  allow delete: if isAdmin() || isOwner();
+  /* priorDecisions: not even an administrator's raw client write may touch it (capability candidate 1). */
+  allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['priorDecisions']))
+  || (isOwner() && claimsOwner() && noAdminFields() && appUndecided() && appNoDecision());
+  allow delete: if isAdmin() || (isOwner() && appUndecided());
   }
   match /invitations/{inviteId} {
   allow read:   if isAdmin();
@@ -219,16 +240,20 @@ service cloud.firestore {
   match /providers/{providerId} {
   allow read:   if resource.data.status == 'active' || resource.data.status == 'approved'
   || isAuthed();
+  /* CAPABILITY CANDIDATE 1 (c4 CHANGELOG 236): `business` — the ONE canonical category + commercial lane that
+     decides a provider's dashboard route — is server-written ONLY (applicationDecide at approval; bizAdminClassify
+     for audited correction). Not by the provider, and not by an admin's raw client write. */
   allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
   && (!request.resource.data.keys().hasAny(['status'])
-  || request.resource.data.status == 'pending');
-  allow update: if isAdmin()
+  || request.resource.data.status == 'pending')
+  && !request.resource.data.keys().hasAny(['business']);
+  allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['business']))
   || (isAuthed()
   && resource.data.uid == request.auth.uid
   && uidUnchanged()
   && !request.resource.data.diff(resource.data)
   .affectedKeys()
-  .hasAny(['status', 'verified', 'suspended', 'approved']));
+  .hasAny(['status', 'verified', 'suspended', 'approved', 'business']));
   allow delete: if isAdmin();
   }
   match /bookings/{bookingId} {
@@ -479,12 +504,16 @@ service cloud.firestore {
   allow update: if isAdmin();
   allow delete: if isAdmin();
   }
+  /* R0 (2026-09-30, owner): a browser could create a review with status "approved", any target, rating and
+     authorUid, and no order — public at once and counted by ratingsSummary (noAdminFields never blocked
+     `status`). submitReview / adminModerateReview (Admin SDK) are the only writers. Same containment as the
+     c4 line (slice/c4-convergence). */
   match /reviews/{reviewId} {
   allow read:   if resource.data.status == "approved"
   || (request.auth != null && (request.auth.uid == resource.data.authorUid || isAdmin()));
-  allow create: if claimsOwner() && noAdminFields();
-  allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
-  allow delete: if isAdmin() || isOwner();
+  allow create: if false;
+  allow update: if isAdmin();
+  allow delete: if isAdmin();
   }
   match /etims_submissions/{docId} {
   allow create:               if claimsOwner();
@@ -1049,11 +1078,24 @@ service cloud.firestore {
   allow create, update: if isAdmin();
   allow read, delete:   if isAdmin();
   }
+  /* R0 (2026-09-30, owner): every unboxing post is approved in AdminOS (approve / decline / archive / delete)
+     before it is public, and every submission must REACH AdminOS. It used to be read:true with a client create
+     that set its own `verified` from a typed order id. Now:
+       - public read is approved-only; the author and admins read their own / all;
+       - a signed-in buyer may SUBMIT, and a submission is born PENDING: it may not carry status or any field
+         the server or a moderator decides (verified / Verified Buy / likes / featured / moderation stamps);
+       - every later change is an AdminOS action. */
   match /unboxingReviews/{reviewId} {
-  allow read:   if true;
-  allow create: if claimsOwner();
-  allow update: if (isAdmin() || isOwner()) && uidUnchanged();
-  allow delete: if isAdmin() || isOwner();
+  allow read:   if resource.data.status == "approved"
+  || (request.auth != null && (request.auth.uid == resource.data.uid || isAdmin()));
+  allow create: if claimsOwner()
+  && request.resource.data.rating is int
+  && request.resource.data.rating >= 1
+  && request.resource.data.rating <= 5
+  && !request.resource.data.keys().hasAny(['status','verified','orderVerified','orderVerifiedAt','approved','approvedAt','approvedBy',
+  'featured','likes','archived','archivedAt','declinedAt','moderatedBy','moderatedAt','moderationNote']);
+  allow update: if isAdmin();
+  allow delete: if isAdmin();
   }
   match /shopEmployees/{empUid} {
   allow read:   if isAdmin()
@@ -1661,7 +1703,11 @@ service cloud.firestore {
   match /businesses/{bizId} {
   allow read:   if true;
   allow create: if false;
-  allow update: if isAdmin()
+  /* R1 (capability candidate 1): `capabilities` (the approved-capability stamp) and `business` (the C1 category stamp)
+     are SERVER-ONLY — not even an admin's RAW client write may touch them; the audited server paths are the only
+     writers. The owner branch below already cannot (its hasOnly allowlist excludes both). */
+  allow update: if (isAdmin()
+  && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['capabilities', 'business']))
   || (isOwner() && uidUnchanged() && noAdminFields()
   && request.resource.data.diff(resource.data).affectedKeys()
   .hasOnly(['name','businessName','nameLower','tagline',
