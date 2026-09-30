@@ -878,6 +878,64 @@
 
 .bnb-sort{ margin-left: auto; }
 
+/* Pill strip wrapper (2026-09-30): on desktop it is an inline flex row inside the bar,
+   visually identical to the previous flat markup; on phones it becomes the scroll strip below. */
+.bnb-pill-strip{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* ── BnB filter bar on phones/tablets (<= 768px) ──
+   The six type pills used to wrap into three uneven rows with the sort control stranded
+   on a fourth: the sort <select> (16px font + 36px padding forced by the global phone
+   select rules) was the widest item, right-aligned and alone. Now: one horizontal
+   snap-scroll chip strip bleeding edge to edge, 44px tap targets, and the sort control
+   on its own full-width row underneath. Desktop (>= 769px) is untouched. */
+@media(max-width:768px){
+    .bnb-filter-bar{
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 12px 16px;
+    }
+    .bnb-pill-strip{
+        flex: 1 1 100%;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+        scroll-snap-type: x proximity;
+        scroll-padding-left: 16px;
+        scrollbar-width: none;
+        margin: 0 -16px;
+        padding: 2px 16px;
+    }
+    .bnb-pill-strip::-webkit-scrollbar{ display: none; }
+    .bnb-pill{
+        flex: 0 0 auto;
+        white-space: nowrap;
+        min-height: 44px;
+        padding: 0 16px;
+        font-size: 13px;
+        scroll-snap-align: start;
+    }
+    .bnb-sort{
+        flex: 1 1 100%;
+        margin-left: 0;
+        min-width: 0;
+    }
+    .bnb-sort select{
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+}
+
 /* BNB GRID */
 
 .bnb-grid{

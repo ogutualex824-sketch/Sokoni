@@ -76,12 +76,15 @@
 
 <!-- FILTER PILLS -->
 <div class="bnb-filter-bar">
-  <button type="button" class="bnb-pill active-pill" onclick="filterBnB('all',this)">🏠 All</button>
-  <button type="button" class="bnb-pill" onclick="filterBnB('bnb',this)">🏡 BnB</button>
-  <button type="button" class="bnb-pill" onclick="filterBnB('hotel',this)">🏨 Hotel</button>
-  <button type="button" class="bnb-pill" onclick="filterBnB('apartment',this)">🏢 Apartment</button>
-  <button type="button" class="bnb-pill" onclick="filterBnB('villa',this)">🏰 Villa</button>
-  <button type="button" class="bnb-pill" onclick="filterBnB('studio',this)">🛋️ Studio</button>
+  <!-- Phones: one horizontal snap-scroll chip strip (see landlord.css .bnb-pill-strip); desktop: unchanged inline row. -->
+  <div class="bnb-pill-strip" role="group" aria-label="Stay type">
+    <button type="button" class="bnb-pill active-pill" onclick="filterBnB('all',this)">🏠 All</button>
+    <button type="button" class="bnb-pill" onclick="filterBnB('bnb',this)">🏡 BnB</button>
+    <button type="button" class="bnb-pill" onclick="filterBnB('hotel',this)">🏨 Hotel</button>
+    <button type="button" class="bnb-pill" onclick="filterBnB('apartment',this)">🏢 Apartment</button>
+    <button type="button" class="bnb-pill" onclick="filterBnB('villa',this)">🏰 Villa</button>
+    <button type="button" class="bnb-pill" onclick="filterBnB('studio',this)">🛋️ Studio</button>
+  </div>
   <div class="bnb-sort">
     <select id="bnbSort" onchange="sortBnBs()" class="location-filter-select">
       <option value="default">Sort: Default</option>
