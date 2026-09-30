@@ -84,6 +84,39 @@ const src = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
   ck('C3 no "Uploaded ✓" for files that are never sent', !/Uploaded ✓/.test(ob) && /Chosen · not sent yet/.test(ob));
   ck('C4 no "3× more bookings" / "24-48 hours" claims', !/3× more bookings|24-48 hours/.test(ob));
 
+  console.log('\nD. legal gate retry (executed: service fails, then recovers)');
+  {
+    let calls = 0;
+    const fb = { functions: () => ({ httpsCallable: () => async (data) => {
+      calls++;
+      if (calls === 1) throw new Error('unavailable');
+      return { data: { compliant: true } };
+    } }) };
+    let btnHandler = null;
+    const el = {
+      innerHTML: '', style: {}, classList: { add() {}, remove() {} },
+      querySelector: (sel) => (sel === '.slg-btn' ? { addEventListener: (ev, fn) => { if (ev === 'click') btnHandler = fn; } } : null),
+      querySelectorAll: () => [],
+    };
+    const gctx = {
+      window: {}, firebase: fb, console, setTimeout, Promise,
+      document: { getElementById: () => null, createElement: () => ({}), head: { appendChild() {} }, querySelector: () => null },
+      navigator: { userAgent: 'test', language: 'en' },
+    };
+    gctx.window.window = gctx.window;
+    vm.createContext(gctx);
+    vm.runInContext(src('sokoni-legal-gate.js'), gctx);
+    const results = [];
+    gctx.window.SokoniLegalGate.mount(el, { role: 'provider', onComplete: (ok, meta) => results.push({ ok, meta }) });
+    await new Promise((r) => setTimeout(r, 20));
+    ck('D1 service error → onComplete(false, unavailable) and a "Try again" button (fail closed)',
+      results.length === 1 && results[0].ok === false && results[0].meta.unavailable === true && /Try again/.test(el.innerHTML) && typeof btnHandler === 'function', results);
+    if (btnHandler) btnHandler();
+    await new Promise((r) => setTimeout(r, 20));
+    ck('D2 "Try again" after the service recovers → onComplete(true) is called again (callers re-enable)',
+      results.length === 2 && results[1].ok === true, results);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('  CRASH', e); process.exit(2); });

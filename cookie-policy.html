@@ -200,7 +200,7 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
     <h3>Clearing SOKONI Cookies</h3>
     <p>You can clear all SOKONI cookies by going to your browser's "Clear browsing data" section and selecting cookies for mysokoni.co.ke. This will sign you out and reset your preferences.</p>
     <h3>Do Not Track</h3>
-    <p>SOKONI respects the Do Not Track (DNT) browser signal. When DNT is enabled, we disable all non-essential analytics and functional cookies.</p>
+    <p>SOKONI honours the Do Not Track (DNT) and Global Privacy Control (GPC) browser signals. If your browser sends either and you have not made a choice, we record "necessary cookies only", keep analytics off and do not show the banner. You can still turn analytics on below.</p>
   </section>
 
   <hr class="divider">
@@ -212,7 +212,25 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
       <li><strong>Accept all cookies</strong> — enables full personalisation and analytics</li>
       <li><strong>Accept necessary only</strong> — only strictly required and security cookies are set</li>
     </ul>
-    <p>You can change your preferences at any time by clearing your cookies or contacting us.</p>
+    <p>You can change your choice at any time here:</p>
+    <div id="cookieChoice" style="border:1px solid rgba(113,255,0,0.3);border-radius:12px;padding:14px 16px;margin:10px 0 14px;">
+      <p id="cookieChoiceState" role="status" aria-live="polite" style="margin:0 0 10px;">Checking your current choice…</p>
+      <button type="button" id="cookieAllow" style="min-height:44px;padding:10px 16px;border-radius:10px;border:0;background:#71ff00;color:#061006;font-weight:800;cursor:pointer;margin:4px 8px 4px 0;">Allow analytics cookies</button>
+      <button type="button" id="cookieNecessary" style="min-height:44px;padding:10px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.35);background:transparent;color:inherit;font-weight:800;cursor:pointer;margin:4px 0;">Necessary cookies only</button>
+    </div>
+    <script>
+    (function(){
+      function paint(){
+        var el=document.getElementById('cookieChoiceState'); if(!el) return;
+        if(!window.SokoniConsent){ el.textContent='Cookie settings are unavailable on this page. Please reload.'; return; }
+        el.textContent = window.SokoniConsent.granted() ? 'Current choice: analytics cookies allowed.'
+          : window.SokoniConsent.denied() ? 'Current choice: necessary cookies only.' : 'You have not made a choice yet.';
+      }
+      document.getElementById('cookieAllow').addEventListener('click',function(){ if(window.SokoniConsent){ window.SokoniConsent.grant(); } paint(); });
+      document.getElementById('cookieNecessary').addEventListener('click',function(){ if(window.SokoniConsent){ window.SokoniConsent.deny(); } paint(); });
+      if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',paint); else paint();
+    })();
+    </script>
     <p>Under the Kenya Data Protection Act 2019, we process functional and analytics cookies only with your consent (or on a legitimate interest basis where applicable).</p>
   </section>
 

@@ -1,3 +1,9 @@
+## [2026-10-01] — One privacy notice, a working cookie-settings control, Do Not Track / GPC honoured (hosting, NOT deployed)
+
+**Why (census P2 #21):** the consent banner and signup.html linked the OLDER legal.html#privacy / #cookies text instead of the canonical privacy.html / cookie-policy.html / terms.html; cookie-policy.html said preferences could only be changed "by clearing your cookies or contacting us"; it claimed Do Not Track was respected, but no code read it.
+**Change:** `security.js` banner + "Learn more" → privacy.html / cookie-policy.html; a visitor whose browser sends DNT or Global Privacy Control and who has not chosen is recorded as "necessary only" (SokoniConsent.deny) and not prompted. `signup.html` links → terms.html / privacy.html. `cookie-policy.html` #consent gains an "Allow analytics / Necessary only" control showing the current choice (SokoniConsent.grant/deny), and the DNT text now states exactly what the code does. The shared legal gate retry is executed in `scripts/test-signup-consent.js` §D (23/0).
+**Not changed:** legal.html's older privacy pane text (legal owner decision; also edited by other in-flight branches); the index footer links (sokoni-70's e78b940). The cookie decision is still stored in the browser only — a server record is a follow-up.
+
 ## [2026-10-01] — Consent at sign-up (every "Create Free Account"), fail-closed legal gate, no fake uploads (hosting, NOT deployed)
 
 **Why (census P0 #4, #7):** onboarding.html?mode=signup — the entry for every Create Free Account since 72dca56 — created accounts with no notice, no terms/privacy acceptance, no age confirmation and no consentRecords row (Google/phone too); the legal step and the shared legal gate reported "compliant" when agreements could not load; ID/licence/police-clearance tiles said "Uploaded ✓" for files never sent.

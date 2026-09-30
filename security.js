@@ -810,9 +810,9 @@ const SokoniSecurity = (() => {
               "SOKONI uses essential storage to run the site, and optional analytics ",
               "to understand how it is used. Analytics runs only if you accept — ",
               "rejecting changes nothing about how the site works for you. See our ",
-              "<a href='legal.html#privacy' style='color:#71ff00;text-decoration:underline;'>Privacy Policy</a>",
+              "<a href='privacy.html' style='color:#71ff00;text-decoration:underline;'>Privacy Policy</a>",
               " and ",
-              "<a href='legal.html#cookies' style='color:#71ff00;text-decoration:underline;'>Cookie Policy</a>",
+              "<a href='cookie-policy.html' style='color:#71ff00;text-decoration:underline;'>Cookie Policy</a>",
               ", under the Kenya Data Protection Act 2019.",
             "</div>",
 
@@ -856,7 +856,7 @@ const SokoniSecurity = (() => {
                 "Accept</button>",
             "</div>",
 
-            "<a href='legal.html#privacy' ",
+            "<a href='privacy.html' ",
               "style='display:flex;align-items:center;justify-content:center;min-height:44px;margin-top:8px;",
               "color:rgba(255,255,255,0.45);font-size:12px;font-weight:700;text-decoration:none;'>",
               "Learn more</a>",
@@ -1150,6 +1150,16 @@ const SokoniSecurity = (() => {
         document.getElementById("_sokoniPrivacyAcceptBtn").onclick = function(){ _decide(true);  };
         document.getElementById("_sokoniPrivacyRejectBtn").onclick = function(){ _decide(false); };
       };
+      /* Do Not Track / Global Privacy Control (2026-10-01). cookie-policy.html promised that DNT
+         turns non-essential analytics off; nothing implemented it. A browser that sends either
+         signal, from a visitor who has not chosen, is now recorded as "necessary only" and not
+         prompted. They can still opt in from cookie-policy.html#consent. */
+      try {
+        var _gpc = navigator.globalPrivacyControl === true;
+        var _dnt = navigator.doNotTrack === "1" || window.doNotTrack === "1" || navigator.msDoNotTrack === "1";
+        if ((_gpc || _dnt) && !window.SokoniConsent.decided()) { window.SokoniConsent.deny(); }
+      } catch (e) {}
+      if (window.SokoniConsent.decided()) { /* nothing to ask */ } else {
       /* Show after DOM is ready, skip on legal/auth pages to avoid clutter */
       var _skipPages = ["legal.html","login.html","signup.html","register.html"];
       var _thisPage = location.pathname.split("/").pop() || "index.html";
@@ -1159,6 +1169,7 @@ const SokoniSecurity = (() => {
         } else {
           setTimeout(_showBanner, 1500);
         }
+      }
       }
     }
 
