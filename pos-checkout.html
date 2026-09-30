@@ -2389,11 +2389,12 @@ const Checkout = (() => {
     }
 
     if (method === 'card') {
-      _setState('PAYMENT');
-      /* Show card terminal instruction strip */
-      document.getElementById('card-strip').classList.add('visible');
-      /* Card terminal handles auth — finalize immediately once cashier confirms card was processed */
-      _finalize('card', [{ method: 'card', amount: totals.total }], totals);
+      /* C0 card quarantine (owner, 2026-09-30): a card payment is completed ONLY by an IntaSend-confirmed
+         checkout, never because the cashier says "the card went through". The old path finalised here
+         with no provider reference, i.e. a cashier-attested payment, which the owner's rule refuses.
+         Card stays visible but unavailable until the IntaSend card checkout (C3) ships. Same message
+         as pos.js (batch 0a). */
+      _toast('Card unavailable — use M-Pesa or cash.', 'warning');
       return;
     }
 
@@ -2747,6 +2748,8 @@ const Checkout = (() => {
       { method:'cash',  amount: parseFloat(document.getElementById('split-cash').value)||0 },
       { method:'card',  amount: parseFloat(document.getElementById('split-card').value)||0 },
     ].filter(m => m.amount > 0);
+    /* C0 card quarantine: a split cannot carry a card amount until card is an IntaSend-confirmed method. */
+    if (methods.some(m => m.method === 'card')) { _toast('Card unavailable — use M-Pesa or cash.', 'warning'); return; }
     const paid = methods.reduce((s,m) => s + m.amount, 0);
     if (Math.abs(paid - totals.total) > 0.5) { _toast(`Split total (KES ${paid.toFixed(2)}) must equal ${_kes(totals.total)}`, 'warning'); return; }
     document.getElementById('split-panel').classList.remove('visible');
