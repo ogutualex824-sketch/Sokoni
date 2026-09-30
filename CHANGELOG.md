@@ -1,4 +1,50 @@
-## [2026-09-30] — Delivery Hub D2 (hosting half): the rider portal asks the server whether it is online — NOT deployed
+## [2026-09-30] — Delivery Hub D2 released: Gates A, B and C (release record)
+
+**Files:** `CHANGELOG.md` only. **Code, rules, API and database changes:** none in this entry. It records the
+production release of the two D2 entries below.
+
+**Gate A — Functions (2026-09-29 22:47Z).**
+- Deployed from `f50e675` with `--only functions:riderPresence,availableDeliveries,claimAvailableDelivery,dispatchDelivery`.
+  `.env` was excluded from the upload.
+- Revisions, all Ready at 100%:
+  - `riderpresence-00001-jep` (new);
+  - `availabledeliveries-00006-jif` (was `00005-red`);
+  - `claimavailabledelivery-00008-hok` (was `00007-bob`);
+  - `dispatchdelivery-00014-for` (was `00013-xif`).
+- The deployed source is 427 files, byte-identical to `f50e675`, with no `.env`. All four revisions run on one
+  image, `rider_presence@sha256:4cee3642…`, which is under the Artifact Registry KEEP and DELETE rules.
+- Environment: `+DARAJA_SANDBOX_SELLER_UIDS` on `availableDeliveries` and `claimAvailableDelivery` (accepted), plus
+  `+FUNCTION_SIGNATURE_TYPE` on `dispatchDelivery` (platform-reserved). Nothing was removed and no value changed.
+- Operational note: `riderPresence` runs on the default instance cap; the others are capped at 99. Recorded, not
+  changed.
+- **Rollback:** move traffic back to the previous revisions. No rebuild is needed.
+
+**Gate B — Hosting (2026-09-30 00:20Z).**
+- Live had advanced to `ec452fb`, so the D2 commit was cherry-picked onto it as `49e0f3a`. Its `driver.html` is
+  identical to `5c09b3a`.
+- Release `1790727624889000`, version `3cbdf961791900b8`, cache `v644`.
+- Against the previous release: 0 files added, 0 removed, 3 changed (`driver.html`, `service-worker.js`,
+  `version.json`). The served `/driver` is byte-identical to the candidate.
+- **Rollback:** hosting version `4c15a3ef6649eff1`.
+- The first attempt aborted before upload: the worktree lacked `functions/node_modules`, so a required browser
+  suite could not load. After the fix, the retry passed every predeploy gate.
+
+**Gate C — production smoke (owner disposition).**
+- Negative, unauthenticated path: **PASS.** The feed returns 401; `riderPresence` status and online both return
+  401, so an unauthenticated Go Online cannot write presence.
+- Production rider eligibility: **OBSERVED NOT ELIGIBLE.** The deployed authority returns
+  `verification_incomplete`.
+- Stale record: `isOnline:true`, no server `lastSeen`, last written 09-13. D2 treats this as stale/non-online by the
+  tested server rule. Live execution against this account is **UNPROVEN**.
+- Approved-rider positive path (online, heartbeat, stale transition, offline, eligible-job filtering): **UNPROVEN in
+  production.** The implementation evidence is 37/0 on the emulator, 37/0 in the browser and 15/15 mutants.
+- No production mutation (35-document update-time diff unchanged): **PASS.** No IAM change: **PASS.**
+- Go Online was deliberately not pressed. A refused Go Online writes the rider's presence to offline, which would
+  have been a production data change that adds little evidence.
+- **Finishing the positive path needs** the actual rider signing in with their consent, or a properly authorised
+  test account through an existing approved mechanism. It does not need an IAM grant.
+
+## [2026-09-30] — Delivery Hub D2 (hosting half): the rider portal asks the server whether it is online — DEPLOYED (see the release record above)
 
 **Files:** `driver.html`, `CHANGELOG.md`. Built on the live hosting commit `d108f6c`.
 **Pairs with:** functions commit `42621ef` (`feat/d2-rider-presence`). It adds the `riderPresence` callable and
