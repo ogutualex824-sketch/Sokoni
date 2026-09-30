@@ -159,12 +159,21 @@ function ok(label, cond, detail) {
         changed.push(k + ': ' + a.category + '/' + a.pct + ' -> ' + b.category + '/' + b.pct);
       }
     }
-    ok('3 EXACTLY ONE resolution changed across ' + keys.size + ' keys',
-       changed.length === 1, changed.join(' | ') || 'none changed');
-    ok('3 and it is "subscription"',
-       changed.length === 1 && /^subscription:/.test(changed[0]), changed[0]);
-    ok('3 marketplace/product rate untouched',
-       CC.resolveRate('product').pct === before.resolveRate('product').pct);
+    /* The original assertion ("exactly one key changed since 659a350") certified the C2 commit
+       on the day it landed. Later OWNER schedules (2026-09-07, 09-13, 09-27, 09-28, 09-30)
+       changed many rates deliberately, so "one change" is a fixture, not a contract. The durable
+       contract is: C2's own change is still in force, and no key that resolved before has been
+       LOST (an alias silently dropping to `default` is the defect C2 fixed). */
+    const subChange = changed.find((c) => /^subscription:/.test(c));
+    ok('3 the C2 change is still in force: "subscription" moved off the default bucket',
+       !!subChange && CC.resolveRate('subscription').category === 'subscriptions'
+       && CC.resolveRate('subscription').matched === true, subChange || 'not changed');
+    const lost = [...keys].filter((k) => before.resolveRate(k).matched === true && CC.resolveRate(k).matched !== true);
+    ok('3 no key that resolved before C2 has been lost to the default bucket',
+       lost.length === 0, lost.join(', ') || 'none lost');
+    ok('3 marketplace/product still resolve to the marketplace category (rate may move by owner schedule)',
+       CC.resolveRate('product').category === 'marketplace' && CC.resolveRate('marketplace').matched === true);
+    console.log('    (info) resolutions changed since 659a350 by owner schedules: ' + changed.length);
     ok('3 an unmapped key still falls to default, unchanged',
        CC.resolveRate('nonsense_unmapped_key').matched === false
        && CC.resolveRate('nonsense_unmapped_key').pct === before.RATES.default.pct);

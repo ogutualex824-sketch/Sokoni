@@ -6962,9 +6962,8 @@ exports.cancelPayment = onCall({ timeoutSeconds: 15 }, async (request) => {
    31 Jan + 1 month is 3 March, not 28 February. That is pre-existing sub-billing
    behaviour adopted unchanged here; changing it is a product decision, not this repair. */
 function _subPeriodEnd(start, cycle) {
-  const r = new Date(start);
-  r.setMonth(r.getMonth() + (cycle === "annual" ? 12 : 1));
-  return r;
+  /* ONE period arithmetic for every subscription writer — subscription-period.js. */
+  return require('./subscription-period').periodEnd(start, cycle);
 }
 
 exports.activateSubscription = onCall({ timeoutSeconds: 30 }, async (request) => {
@@ -7014,41 +7013,37 @@ exports.activateSubscription = onCall({ timeoutSeconds: 30 }, async (request) =>
       "This payment has no recorded billing cycle, so the subscription length cannot be determined."
     );
   }
-  const expiresAt = _subPeriodEnd(new Date(), intentCycle);
-
-  /* Atomic dedup-check + write — prevents TOCTOU race where two concurrent
-     calls for the same paymentRef both pass the dedup query and both write. */
-  let alreadyActive = false;
-  await db.runTransaction(async (txn) => {
-    const existing = await txn.get(subDocRef);
-    if (existing.exists && existing.data().paymentRef === paymentRef) {
-      alreadyActive = true;
-      return; /* idempotent — same payment already activated */
-    }
-    txn.set(subDocRef, {
-      uid,
-      plan,
-      status:      "active",
-      paymentRef,
-      activatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      expiresAt:   admin.firestore.Timestamp.fromDate(expiresAt),
-      updatedAt:   admin.firestore.FieldValue.serverTimestamp(),
-    });
-  });
-
-  if (alreadyActive) return { success: true, plan, message: "Already activated." };
-
-  /* Audit trail — one entry per activation */
+  /* ONE SUBSCRIPTION WRITER. This callable used to write subscriptions/{uid} itself, with its
+     own period arithmetic and its own idempotency field. It now stamps the payment intent PAID
+     (idempotent merge) and hands the state transition to reconcilePaidIntent — the same
+     authority the webhook and the wallet rail use. The plan and cycle come from the INTENT the
+     server minted, never from this request; `plan` above is validated only as input hygiene. */
+  if (!intentSnap.exists) {
+    throw new HttpsError("failed-precondition", "This payment has no payment intent, so the subscription cannot be activated.");
+  }
+  await db.collection("paymentIntents").doc(intentRef).set({
+    status:        "paid",
+    paidAt:        admin.firestore.FieldValue.serverTimestamp(),
+    paidVia:       "activateSubscription_cf",
+    providerRef:   paymentRef,
+    activationPending: true,
+  }, { merge: true });
+  const out = await require('./subscription-pay-methods')._internal.reconcilePaidIntent(intentRef);
+  if (!out || !out.ok) {
+    throw new HttpsError("failed-precondition", "Subscription could not be activated: " + ((out && out.reason) || "unknown"));
+  }
   db.collection("subscriptionAuditLog").add({
-    uid, plan, paymentRef,
-    action:     "ACTIVATED",
-    source:     "activateSubscription_cf",
-    expiresAt:  admin.firestore.Timestamp.fromDate(expiresAt),
+    uid, plan: out.planId || plan, paymentRef, intentRef,
+    action:     out.replayed ? "ALREADY_ACTIVE" : "ACTIVATED",
+    source:     "activateSubscription_cf -> reconcilePaidIntent",
+    subscriptionId: out.subscriptionId || null,
+    expiresAt:  out.currentPeriodEnd ? admin.firestore.Timestamp.fromMillis(out.currentPeriodEnd) : null,
     timestamp:  admin.firestore.FieldValue.serverTimestamp(),
   }).catch(e => console.error("[activateSubscription] Audit log write failed:", e.message));
-
-  console.log("[activateSubscription] Plan activated", { uid, plan, paymentRef });
-  return { success: true, plan, expiresAt: expiresAt.toISOString() };
+  if (out.replayed) return { success: true, plan: out.planId || plan, message: "Already activated." };
+  console.log("[activateSubscription] Plan activated via reconcilePaidIntent", { uid, plan: out.planId, paymentRef, intentRef });
+  return { success: true, plan: out.planId || plan,
+           expiresAt: out.currentPeriodEnd ? new Date(out.currentPeriodEnd).toISOString() : null };
 });
 
 /* ══════════════════════════════════════════════════════════════════
@@ -8755,100 +8750,26 @@ exports.webhookIntasend = onRequest(
         if (intentSnap.exists) {
           const intent = intentSnap.data();
           if (intent.purpose === "subscription" && intent.planId && intent.uid) {
-            const subRef  = db.collection("subscriptions").doc(intent.uid);
-            const subSnap = await subRef.get();
-            const subData = subSnap.exists ? subSnap.data() : null;
-
-            /* ── ENTITLEMENT FOLLOWS THE PURCHASED CYCLE (A4-F3D) ─────────────
-               This path used to write `Date.now() + 30 * 86400000` while holding
-               intent.billingCycle in the very same object literal — so an annual
-               purchase recorded a month and stamped `billingCycle: "annual"` on
-               top of it.
-
-               Correcting activateSubscription alone could not fix that. This
-               writer runs FIRST on the normal path: it is the handler that sets
-               payments/{ref} to COMPLETE, which is the precondition
-               activateSubscription requires, and it continues to here in the same
-               invocation. The browser only calls activateSubscription after the
-               confirmation it is waiting for, behind a human click — by which
-               time this document exists, so activateSubscription matches its own
-               paymentRef and returns without writing, and reconciliation declines
-               because a document exists at all. Whatever this writer records is
-               what the merchant gets.
-
-               Same period function as activateSubscription, in this same file, so
-               the two cannot drift apart.
-
-               FAILS CLOSED, and skips rather than throwing: a refusal is not an
-               error, and routing it through the catch below would log it as
-               "activation failed" and hide it among real faults. Writing nothing
-               leaves the payment COMPLETE with no entitlement, which the
-               reconciliation sweep already reports as an entitlement_gap. That is
-               a visible gap; a silently defaulted month is an invisible wrong
-               answer. */
-            const cycle      = intent.billingCycle;
-            const cycleKnown = cycle === "monthly" || cycle === "annual";
-            if (!cycleKnown) {
-              console.error("[webhookIntasend] subscription activation SKIPPED — intent records no billing cycle",
-                { ref: apiRef, uid: intent.uid, plan: intent.planId,
-                  billingCycle: intent.billingCycle === undefined ? null : intent.billingCycle });
-            }
-            if (cycleKnown && (!subData || subData.paymentRef !== apiRef)) {
-              const expiresAt = _subPeriodEnd(new Date(), cycle);
-              await subRef.set({
-                uid:          intent.uid,
-                plan:         intent.planId,
-                planName:     intent.planName || intent.planId,
-                /* The guard above has already established this is monthly or
-                   annual. The old `|| "monthly"` default is gone: it made an
-                   unknown cycle indistinguishable from a purchased monthly one. */
-                billingCycle: cycle,
-                status:       "active",
-                paymentRef:   apiRef,
-                amountPaid:   amount,
-                source:       "webhookIntasend",
-                activatedAt:  admin.firestore.FieldValue.serverTimestamp(),
-                expiresAt:    admin.firestore.Timestamp.fromDate(expiresAt),
-                updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
-              });
-              console.log("[webhookIntasend] Subscription auto-activated",
-                { uid: intent.uid, plan: intent.planId, ref: apiRef });
-
-              /* Activation used to end here, and that was the incident: this
-                 writes subscriptions/{uid}, but the seller UI reads
-                 users/{uid}.subscription.seller — a document only sub-billing.js
-                 maintains and which this path never invoked. With nothing at the
-                 read location the client fell back to its hard-coded free
-                 allowance and showed a 10-product limit to a merchant who had
-                 paid for 100, while canPublishProduct (reading the authoritative
-                 path) correctly allowed the 13th upload.
-
-                 Materialise the entitlement now so both readers agree. This is
-                 deliberately awaited rather than fire-and-forget: a merchant who
-                 has just paid reloads within seconds, and a background write that
-                 loses the race reproduces the original symptom. It cannot fail
-                 the webhook — materialiseEntitlements swallows its own errors and
-                 the subscription is already authoritative in subscriptions/{uid}.
-                 onSubscriptionChangedSyncEntitlements also fires on that write,
-                 so this is belt-and-braces against trigger latency, not the only
-                 path. */
-              /* Required locally rather than via the module-scope binding
-                 declared ~1300 lines below: that const is in its temporal dead
-                 zone until module evaluation reaches it, and depending on
-                 handler timing to stay safe is a latent ReferenceError. Node
-                 caches modules, so this costs nothing after the first call. */
-              await require('./subscription-authority')._internal
-                .materialiseEntitlements(intent.uid, "payment-complete");
-              db.collection("subscriptionAuditLog").add({
-                uid:       intent.uid,
-                plan:      intent.planId,
-                paymentRef: apiRef,
-                action:    "ACTIVATED",
-                source:    "webhookIntasend",
-                expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
-              }).catch(e => console.error("[webhookIntasend] Sub-audit log failed:", e.message));
-            }
+            /* ONE SUBSCRIPTION WRITER. This webhook used to activate subscriptions/{uid}
+               itself (and compute its own period). It no longer does. It stamps the payment
+               intent PAID and stops; the onPaymentIntentPaid trigger runs reconcilePaidIntent,
+               which is the ONLY writer of a subscription — for the wallet rail, this rail,
+               activateSubscription and every rail added later.
+               Two authorities activating the same purchase is how one payment extended a
+               period twice: each guarded on its own field name, and neither could see the
+               other. Merge-set, not create(): the trigger is idempotent, and a redelivered
+               webhook re-stamping an already-PAID intent changes nothing.
+               Ported from the production lineage (18e3711) on 2026-09-30. */
+            await db.collection("paymentIntents").doc(intentRef).set({
+              status:        "paid",
+              paidAt:        admin.firestore.FieldValue.serverTimestamp(),
+              paidVia:       "webhookIntasend",
+              providerRef:   apiRef,
+              amountPaidKES: amount,
+              activationPending: true,
+            }, { merge: true });
+            console.log("[webhookIntasend] intent stamped PAID; reconciler owns activation",
+              { intentRef, apiRef, uid: intent.uid, plan: intent.planId });
           }
         }
       } catch (subErr) {

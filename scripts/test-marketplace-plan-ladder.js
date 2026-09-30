@@ -99,11 +99,14 @@ const SELLER = 'SELLER_A_uid_7f3';       /* never equal to a shop id — see the
 
 console.log('\nPART A — the marketplace ladder, on the money\n');
 
+/* Current contract (commission-config, owner 2026-09-28): the marketplace rate is FLAT 15% on
+   every package — the plan ladder is retired as an ANSWER; the plan-keyed SHAPE is kept so an
+   unknown plan still resolves to the highest rate. Every legacy id therefore prices at 15%. */
 const LADDER = [
   ['seller_free',       15, 150000],
-  ['seller_basic',      10, 100000],
-  ['seller_pro',         5,  50000],
-  ['seller_enterprise',  0,      0],
+  ['seller_basic',      15, 150000],
+  ['seller_pro',        15, 150000],
+  ['seller_enterprise', 15, 150000],
 ];
 for (const [tier, wantPct, wantCents] of LADDER) {
   withPlan(tier);
@@ -114,7 +117,7 @@ for (const [tier, wantPct, wantCents] of LADDER) {
     r.effectiveRate === wantPct && r.commissionCents === wantCents,
     `got ${r.effectiveRate}% / ${r.commissionCents} cents`);
   ck(`A2  ${tier.padEnd(18)} records WHY it was priced that way`,
-    r.marketplaceLadderApplied === true && r.marketplacePlan === tier
+    r.marketplaceLadderApplied === true && r.marketplacePlan === CC.resolveMarketplaceRate(tier).plan
     && r.pricingSource === 'marketplace_plan_ladder',
     r.pricingSource + ' / ' + r.marketplacePlan);
 }
@@ -124,15 +127,15 @@ for (const [tier, wantPct, wantCents] of LADDER) {
   const r = await FU.calculateCommission(makeDb(), {
     orderAmountCents: 1000000, category: 'product', sellerId: SELLER,
   });
-  ck('A3  Enterprise 0% is genuinely zero — the KES 10 floor does NOT resurrect it',
-    r.commissionCents === 0, r.commissionCents + ' cents');
+  ck('A3  Enterprise pays the same flat 15% as every package (owner 2026-09-28) — no free pass',
+    r.commissionCents === 150000, r.commissionCents + ' cents');
 }
 {
   /* The floor is KEPT for marketplace sellers. A KES 97 sale at 15% is KES 14.55, above the
      floor; at Pro 5% it is KES 4.85 and the floor lifts it to KES 10. */
   withPlan('seller_pro');
   const r = await FU.calculateCommission(makeDb(), {
-    orderAmountCents: 9700, category: 'product', sellerId: SELLER,
+    orderAmountCents: 5000, category: 'product', sellerId: SELLER,   /* KES 50 at 15% = 7.50 -> floor 10 */
   });
   ck('A4  the KES 10 platform minimum still applies to a small marketplace sale',
     r.commissionCents === 1000, 'KES ' + KES(r.commissionCents));
@@ -148,7 +151,7 @@ for (const [label, tier, active] of [
     orderAmountCents: 1000000, category: 'product', sellerId: SELLER,
   });
   ck(`B1  ${label} -> Free 15%, the HIGHEST rate`,
-    r.effectiveRate === 15 && r.marketplacePlan === 'seller_free',
+    r.effectiveRate === 15 && r.marketplacePlan === CC.MARKETPLACE_DEFAULT_PLAN,
     r.effectiveRate + '% / skipped=' + r.marketplacePlanSkipped);
 }
 {
@@ -185,11 +188,11 @@ for (const tier of ['seller_free', 'seller_basic', 'seller_pro', 'seller_enterpr
 
 console.log('\nPART D — the alias survives, so the settlement term does not move\n');
 {
-  ck('D1  categoryForHub("pos") is still "marketplace" (48h settlement term unchanged)',
-    CC.categoryForHub('pos') === 'marketplace', CC.categoryForHub('pos'));
+  ck('D1  categoryForHub("pos") is its OWN category (absolute lane, owner 2026-09-28) — no longer an alias of marketplace',
+    CC.categoryForHub('pos') === 'pos', CC.categoryForHub('pos'));
   ck('D2  ...while pos is NOT a ladder category', CC.isMarketplaceSellerSale('pos') === false);
   ck('D3  the two facts are genuinely independent — resolved vs RAW keying',
-    CC.categoryForHub('pos') === CC.categoryForHub('product')
+    CC.categoryForHub('pos') !== CC.categoryForHub('product')
     && CC.isMarketplaceSellerSale('product') !== CC.isMarketplaceSellerSale('pos'));
 }
 
@@ -219,8 +222,8 @@ console.log('\nPART E — precedence: an admin can still override a seller\n');
   const r = await FU.calculateCommission(makeDb(), {
     orderAmountCents: 1000000, category: 'services', sellerId: SELLER,
   });
-  ck('E3  a services sale is untouched by the marketplace ladder (15% category rate)',
-    r.effectiveRate === 15 && r.marketplaceLadderApplied === false,
+  ck('E3  a services sale is untouched by the marketplace ladder (its own category rate, ' + CC.resolveRate('services').pct + '%)',
+    r.effectiveRate === CC.resolveRate('services').pct && r.marketplaceLadderApplied === false,
     r.effectiveRate + '% via ' + r.pricingSource);
 }
 
@@ -289,8 +292,11 @@ console.log('\nPART G — adversarial controls\n');
   const a = await FU.calculateCommission(makeDb(), { orderAmountCents: 1000000, category: 'product', sellerId: SELLER });
   withPlan('seller_pro');
   const b = await FU.calculateCommission(makeDb(), { orderAmountCents: 1000000, category: 'product', sellerId: SELLER });
-  ck('G1  the plan fixture actually moves the rate (not a fixed answer)',
-    a.effectiveRate !== b.effectiveRate, a.effectiveRate + ' vs ' + b.effectiveRate);
+  /* Under the flat contract the PLAN cannot move the marketplace rate — by design. The control
+     that proves the harness is live is the LANE: the same merchant at the till pays 5%. */
+  const t = await FU.calculateCommission(makeDb(), { orderAmountCents: 1000000, category: 'pos', sellerId: SELLER });
+  ck('G1  the plan does NOT move the rate (flat contract) while the lane does (till 5% vs online 15%)',
+    a.effectiveRate === b.effectiveRate && t.effectiveRate !== a.effectiveRate, a.effectiveRate + ' / ' + b.effectiveRate + ' / till ' + t.effectiveRate);
 
   ck('G2  an unknown category is NOT silently laddered',
     CC.isMarketplaceSellerSale('zzz_not_a_category') === false);

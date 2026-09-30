@@ -104,9 +104,20 @@ console.log('\nC. Invariant 3 — the merchant cannot verify their own Till\n');
   ck('  ...both readable only by owner or admin',
      /match \/paymentDestinations\/\{sellerUid\} \{\s*\n\s*allow read:\s*if isAdmin\(\) \|\| \(isAuthed\(\) && request\.auth\.uid == sellerUid\);/.test(RULES));
 
-  ck('savePaymentDestination NEVER writes status VERIFIED',
-     !/status:\s*STATUS\.VERIFIED[\s\S]{0,200}?savePaymentDestination/.test(PDST)
-     && /pending[\s\S]{0,200}?status: STATUS\.PENDING_TEST/.test(PDST));
+  /* Invariant 3, current form (2026-09-30): savePaymentDestination STAGES a change as
+     `pending` (PENDING_TEST) and never promotes it. The document-level `status` may stay
+     VERIFIED while a live destination stands mid-change — that is the "cannot lose a working
+     one by attempting a change" half of the invariant, not a self-verification. */
+  {
+    const a = PDST.indexOf('exports.savePaymentDestination = onCall(');
+    const b = PDST.indexOf('async function markTesting');
+    const body = a > -1 && b > a ? PDST.slice(a, b) : '';
+    ck('savePaymentDestination stages pending as PENDING_TEST and never assigns activeDestination',
+       /const pending = \{[\s\S]{0,400}?status: STATUS\.PENDING_TEST/.test(body)
+       && !/[\s,{]activeDestination\s*:\s*(pending|\{|promoted)/.test(body)   /* no promotion; a local `cur.activeDestination : null` read is fine */
+       && !/status:\s*STATUS\.VERIFIED\s*,/.test(body)
+       && /status: active \? STATUS\.VERIFIED : STATUS\.PENDING_TEST/.test(body));
+  }
   ck('confirmVerified is the ONLY producer of a verified activeDestination',
      (PDST.match(/activeDestination: promoted/g) || []).length === 1);
   ck('  ...and it is NOT exported as a callable',
@@ -234,8 +245,11 @@ console.log('\nH. No duplicate financial authority\n');
   }
   ck('still exactly one STK callback endpoint',
      (IDX.match(/exports\.darajaSTKCallback\s*=/g) || []).length === 1);
-  ck('no new STK push endpoint was created',
-     (IDX.match(/mpesa\/stkpush\/v1\/processrequest/g) || []).length === 2);
+  /* Invariant 4, current form: Daraja outbound is RETIRED from this index (docs: Daraja
+     retirement boundary). The collection rail is IntaSend; there must be ZERO STK push calls. */
+  ck('Daraja STK push is retired — zero outbound processrequest calls; IntaSend is the rail',
+     (IDX.match(/mpesa\/stkpush\/v1\/processrequest/g) || []).length === 0
+     && /intasend/i.test(IDX));
   ck('new functions are re-exported by name (deploy contract)',
      /exports\.getPaymentDestination\s*=\s*_pdest\.getPaymentDestination/.test(IDX)
      && /exports\.sweepCommissionDue\s*=\s*_ccol\.sweepCommissionDue/.test(IDX));
@@ -264,8 +278,8 @@ console.log('\nJ. IntaSend MoR boundary kept explicit\n');
      /blocked: 'production_not_authorized'/.test(PDST));
   ck('resolveCollectionRoute still defaults DIRECT_TO_SELLER',
      /collectionRoute: ROUTE_DIRECT/.test(R('functions/payment-config.js')));
-  ck('CENTRAL_MOR still refuses without central credentials',
-     /Central collection \(CENTRAL_MOR\) is enabled but central Daraja credentials are not provisioned/.test(IDX));
+  ck('central Daraja collection (CENTRAL_MOR) is retired — no central-credential branch remains',
+     !/CENTRAL_MOR/.test(IDX));
 }
 
 /* ══ N. Settlement idempotency — the contract's hard invariant ═══════════

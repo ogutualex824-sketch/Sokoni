@@ -649,9 +649,8 @@ async function subscriptionEntitlementExists(uid) {
    JavaScript rolls impossible dates forward — 31 Jan + 1 month is 3 March, not
    28 February. Pre-existing sub-billing behaviour, adopted unchanged. */
 function _periodEnd(start, cycle) {
-  const r = new Date(start);
-  r.setMonth(r.getMonth() + (cycle === 'annual' ? 12 : 1));
-  return r;
+  /* ONE period arithmetic for every subscription writer — subscription-period.js. */
+  return require('./subscription-period').periodEnd(start, cycle);
 }
 
 async function healSubscriptionEntitlement(intent, ref, log) {
@@ -680,39 +679,32 @@ async function healSubscriptionEntitlement(intent, ref, log) {
   if (cycle !== 'monthly' && cycle !== 'annual') {
     return { healed: false, reason: 'missing_billing_cycle' };
   }
-  const expiresAt = _periodEnd(new Date(), cycle);
-
-  /* Transaction: re-check absence and create atomically so a
-     real-time path that lands mid-run cannot be clobbered. */
-  const wrote = await db.runTransaction(async (txn) => {
-    const existing = await txn.get(subRef);
-    if (existing.exists) return false; // someone activated it first — done
-    txn.set(subRef, {
-      uid,
-      plan:        intent.planId,
-      status:      'active',
-      paymentRef:  ref,
-      activatedAt: F.serverTimestamp(),
-      expiresAt:   admin.firestore.Timestamp.fromDate(expiresAt),
-      updatedAt:   F.serverTimestamp(),
-    });
-    return true;
-  });
-
-  if (!wrote) return { healed: false, reason: 'already_active' };
-
-  /* Provenance goes on the audit log ONLY — the subscription doc
-     stays indistinguishable from a normally-activated one. */
+  /* ONE SUBSCRIPTION WRITER (2026-09-30). This backstop used to write subscriptions/{uid}
+     itself, with its own period arithmetic and its own "exists → skip" guard — a fourth
+     activation authority. It now stamps the intent PAID (idempotent merge; the payment above
+     is already COMPLETE and owned by this uid) and hands the transition to reconcilePaidIntent,
+     the same authority the webhook, the wallet rail and activateSubscription use. A replay is
+     reported as already_active exactly as before. */
+  await db.collection('paymentIntents').doc(ref).set({
+    status:            'paid',
+    paidAt:            F.serverTimestamp(),
+    paidVia:           'reconciliation_backstop',
+    providerRef:       ref,
+    activationPending: true,
+  }, { merge: true });
+  const out = await require('./subscription-pay-methods')._internal.reconcilePaidIntent(ref);
+  if (!out || !out.ok)  return { healed: false, reason: 'reconcile_failed:' + ((out && out.reason) || 'unknown') };
+  if (out.replayed)     return { healed: false, reason: 'already_active' };
+  /* Audit the recovery so a healed subscription stays distinguishable from a normally-activated one. */
   await db.collection('subscriptionAuditLog').add({
-    uid, plan: intent.planId, paymentRef: ref,
+    uid, plan: out.planId || intent.planId, paymentRef: ref, subscriptionId: out.subscriptionId || null,
     action:    'ACTIVATED',
-    source:    'reconciliation_backstop',
+    source:    'reconciliation_backstop -> reconcilePaidIntent',
     note:      'Operational Recovery — auto-healed by reconcileSubscriptionEntitlements',
-    expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+    expiresAt: out.currentPeriodEnd ? admin.firestore.Timestamp.fromMillis(out.currentPeriodEnd) : null,
     timestamp: F.serverTimestamp(),
   }).catch((e) => log.error('Heal audit write failed', { ref, error: e.message }));
-
-  log.audit('Subscription entitlement auto-healed', { uid, ref, plan: intent.planId });
+  log.audit('Subscription entitlement auto-healed', { uid, ref, plan: out.planId || intent.planId });
   return { healed: true };
 }
 

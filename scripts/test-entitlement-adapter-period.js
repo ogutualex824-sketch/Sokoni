@@ -106,11 +106,13 @@ function extract (file, name) {
   const i = s.indexOf('function ' + name + '(');
   return i === -1 ? null : block(s, i);
 }
+/* The shipped period functions now delegate to functions/subscription-period.js (one copy);
+   the extracted text therefore needs a require() that resolves relative to functions/. */
+const fnRequire = (m) => require(path.join(ROOT, 'functions', m));
 /* eslint-disable no-new-func */
-const W1 = new Function(extract('index.js', '_subPeriodEnd') + '\n return _subPeriodEnd;')();
-const W3 = new Function(extract('payment-reconciliation.js', '_periodEnd') + '\n return _periodEnd;')();
-const SB = new Function(extract('sub-billing.js', '_addMonths') + '\n' +
-                        extract('sub-billing.js', '_periodEnd') + '\n return _periodEnd;')();
+const W1 = new Function('require', extract('index.js', '_subPeriodEnd') + '\n return _subPeriodEnd;')(fnRequire);
+const W3 = new Function('require', extract('payment-reconciliation.js', '_periodEnd') + '\n return _periodEnd;')(fnRequire);
+const SB = new Function('require', extract('sub-billing.js', '_periodEnd') + '\n return _periodEnd;')(fnRequire);   /* _addMonths is gone: one period copy */
 
 (function () {
   console.log('══════════════════════════════════════════════════════════════════');
@@ -144,7 +146,7 @@ const SB = new Function(extract('sub-billing.js', '_addMonths') + '\n' +
 
     /* Boundary vectors — asserted on the shipped _periodEnd this adapter now
        calls, since activate() uses new Date() internally. */
-    const P = new Function(extract('entitlement-adapters.js', '_periodEnd') + '\n return _periodEnd;')();
+    const P = new Function('require', extract('entitlement-adapters.js', '_periodEnd') + '\n return _periodEnd;')(fnRequire);
     [['2026-01-31', 'monthly', '2026-03-03'], ['2024-02-29', 'annual', '2025-03-01'],
      ['2026-01-31', 'annual', '2027-01-31'], ['2026-02-28', 'monthly', '2026-03-28'],
      ['2026-03-15', 'annual', '2027-03-15']].forEach(([s, c, want]) => {

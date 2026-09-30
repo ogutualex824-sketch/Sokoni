@@ -293,8 +293,22 @@ async function reconcile(uid) {
 
 function isActive(status) { return status === STATUS.ACTIVE || status === STATUS.TRIALING || status === STATUS.GRACE; }
 
+/* Provider bookings: the rate is the plan's rate in commission-config.PROVIDER_PLAN_RATES,
+   keyed by the subscription's plan id. A document-level `commissionRate` and the role default
+   are NOT consulted for providers any more — they were the alternate mappings. */
+async function getProviderPlanRate(uid, opts = {}) {
+  const CC = require('./commission-config');
+  const c = await resolveSubscription(uid, { ...opts, role: 'provider' });
+  const active = !!(c && c.found && isActive(c.status));
+  const planId = active ? ((c.raw && (c.raw.planId || c.raw.plan)) || c.tier || null) : null;
+  const r = CC.resolveProviderRate(planId);
+  return { ...r, active, planId, subscriptionSource: c && c.source ? c.source : 'none' };
+}
+
 async function getCommissionRate(uid, opts = {}) {
+  if (opts.role === 'provider') return (await getProviderPlanRate(uid, opts)).rateFraction;
   const c = await resolveSubscription(uid, opts);
+  if (c.role === 'provider') return (await getProviderPlanRate(uid, opts)).rateFraction;
   if (c.found && Number.isFinite(c.commissionRate)) return c.commissionRate;
   const r = opts.role;
   return (r && ROLE_DEFAULT_COMMISSION[r] != null) ? ROLE_DEFAULT_COMMISSION[r] : 0.20;
@@ -366,6 +380,6 @@ _h.checkLimit = async (req) => {
 
 module.exports = {
   STATUS, computeStatus, resolveSubscription, resolveAll, reconcile,
-  isActive, getCommissionRate, getFeatures, hasFeature, assertWithinLimit,
+  isActive, getCommissionRate, getProviderPlanRate, getFeatures, hasFeature, assertWithinLimit,
   _h,
 };

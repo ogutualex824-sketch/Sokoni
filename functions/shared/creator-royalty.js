@@ -203,6 +203,7 @@ function computePool({ grossCents, providerFeeCents, taxCents = 0, policy }) {
   if (!_isCents(taxCents)) throw _err('amount_invalid', 'taxCents must be a non-negative integer');
   if (providerFeeCents + taxCents > grossCents) throw _err('deductions_exceed_gross', 'fee + tax exceed gross');
   const netCents = grossCents - providerFeeCents - taxCents;
+  /* @commission-safe: sokoniCommissionBps comes from shared/creator-commercial (the Creator Hub 30/70 royalty policy, exposed to the commission authority through shared/commercial-policy.creator_ppv); this computes the split in basis points on the NET, it defines no rate. */
   const commissionCents = Math.floor((netCents * policy.sokoniCommissionBps) / BPS_TOTAL);
   const poolCents = netCents - commissionCents;
   return {

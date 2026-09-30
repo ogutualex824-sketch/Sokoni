@@ -87,3 +87,112 @@ Pre-existing on pristine `ef1e992`, unchanged: `test-commission-48h-destinations
 ## 6 · Not done, deliberately
 
 Business End / merchant workspace subscription entry (`merchant-v2.html` reads `getMerchantEntitlements`; no plan purchase surface exists there — the purchase surfaces are `plans.html` and `subscriptions.html`, both now on the authority); Marketing Hub boosts already price server-side (`createPaymentIntent` purpose `marketing_boost`) and record no commission — no change; refunds of subscriptions (`adminSubProcessRefund`) untouched — a refund does not credit-note the fiscal invoice automatically (KRA credit notes are a separate eTIMS flow); `intasendWebhook` retirement, Daraja, POS release, provider settlement — out of scope by the brief.
+
+
+---
+
+## 7 · Second pass (2026-09-30, later) — gap closure before any deployment
+
+Owner brief: close the commercial decisions and test-contract mismatches; rewrite historical tests to the current contract, never weaken the authority; no deploy. Both branches remain unpublished.
+
+### 7.1 Provider commission ladder — ENCODED, keyed by plan id
+
+`commission-config.PROVIDER_PLAN_RATES` (owner schedule 2026-09-28, 20 / 15 / 10 / 7 / 5):
+
+| plan id (`sub-billing.PLANS`) | display | rate | note |
+|---|---|---|---|
+| `provider_free` | Provider Free / Free Trial | **20%** | default for unknown, inactive or absent plans (highest, fail-closed) |
+| `starter` | Starter | **15%** | |
+| `pro` | Pro / Professional | **10%** | |
+| `business` | Business | **7%** | |
+| `enterprise` | Enterprise | **5%** | |
+| `provider_basic`, `provider_pro` | legacy ids | 20%, **flagged `legacyUnmapped`** | no row in the owner schedule, **0 production subscriptions**; owner mapping required before either is sold |
+
+Alternate mappings removed: `subscription-core.getCommissionRate(uid,{role:'provider'})` now delegates to `resolveProviderRate(planId)` — a subscription document's `commissionRate` field and `ROLE_DEFAULT_COMMISSION.provider` no longer price a provider booking; `PLANS.features.commission_pct` (10/7/4) no longer exists on the merged `sub-billing.js`; the prose ladders in `finos-utils` / `provider-ops` are now descriptions of this table, not sources. Provenance on every engine result: `providerPlan`, `providerPlanMatched`, `providerPlanLegacyUnmapped`, `providerRateSource`. Snapshot exposes `providerPct(planId)`.
+Chain proven (`test-provider-plan-ladder.js` 26/0): plan id → authority → `calculateCommission` (the function `previewCommission` and the webhook use) → ledger row → `commission-invoice.issueForReceivable` issues **exactly** the engine amount (never recomputed) → invoice description states the plan rate. No KES 10 floor on the lane (KES 20 booking at 5% = KES 1), unchanged.
+
+### 7.2 FREE listing allowance — RESOLVED by record: 50
+
+Owner ruling **2026-09-08, commit `c1d8ea1`**: "FREE 50 / STARTER 100 / GROWTH unlimited / ENTERPRISE unlimited (was 10 originally, 100 for the beta, settled at 50)". The c4 catalogue (`CATALOG_VERSION 3`: FREE 50 / PROFESSIONAL 100 / BUSINESS −1 / ENTERPRISE −1) **is** that ruling; production's 10 is the v1 value the backfill never moved past. Catalogue, `entitlement-authority`, `product-limit` and the ported suites all read the catalogue value (no literal). Deployment consequence: `productCounters` at 10 rise to 50 on the next subscription change per account or via `scripts/backfill-product-counters.js` (owed since 09-07; not run here — a production write).
+
+### 7.3 VAT — production prerequisite, deliberately not invented
+
+Both `revenueConfig/commission_vat` and `revenueConfig/subscription_vat` are absent in production. Nothing in either branch supplies a default: `commission-invoice` **refuses**, `subscription-invoice` **defers** and the daily sweep issues once the policy exists. Proven: VAT configured → issued (e2e A, D); VAT absent → active + deferred → sweep issues **exactly once** and a second sweep issues nothing (e2e C). The two documents `{ enabled: true, inclusive: <bool>, decidedBy, decidedAt, reference }` are an owner/tax decision to be written before the first invoice — the effective source should be the advisory reference recorded in `reference`. Note for that decision: the admin-only `etimsPlatformInvoice` callable still defaults non-commission fee types to inclusive ("preserved prior behaviour"); the automated path does not inherit it.
+
+### 7.4 Subscription writer matrix — ONE state transition
+
+| writer | file | operation | can activate | can renew / extend | authority after this pass |
+|---|---|---|---|---|---|
+| `reconcilePaidIntent` | `subscription-pay-methods.js` | paid intent → `subscriptions/{uid}` | **yes** | no | **THE activation authority** (transaction, exactly-once, period via `subscription-period`) |
+| `onPaymentIntentPaid` (trigger) | same | fires the above on `paymentIntents/{ref}` → paid | via authority | — | caller |
+| `payIntentWithWallet` | same | wallet debit → intent paid | via authority | — | caller |
+| `webhookIntasend` (this index) | `index.js` | **now stamps the intent PAID only** | ~~yes~~ → via authority | — | caller (was rival #1) |
+| `activateSubscription` (legacy callable, live 08-22) | `index.js` | **now stamps + calls `reconcilePaidIntent`** | ~~yes~~ → via authority | — | caller (was rival #2) |
+| `healSubscriptionEntitlement` (reconciliation backstop) | `payment-reconciliation.js` | **now stamps + calls `reconcilePaidIntent`** | ~~yes~~ → via authority | — | caller (was rival #3) |
+| `subActivate` | `sub-billing.js` | client-initiated purchase / upgrade after verified payment → `subscriptions/{subId}` (hub-scoped document model) | yes | upgrade | **second document model** — the Subscription Engine's own store; period via `subscription-period`; trial claim via `entitlement-authority` |
+| `subAutoActivateOnPayment` | `sub-engine.js` | renewal payment COMPLETE → extend `subscriptions/{subId}` | no (needs existing doc) | **yes** | renewal authority for the engine's store; period + grace via `subscription-period` |
+| `subScheduleRenewals` / `subRetryFailedPayments` / `subProcessExpirations` / `subSendRenewalReminders` | `sub-engine.js`, `sub-billing.js` | status transitions (past_due, grace, expired), renewal payment creation | no | no (state only) | engine lifecycle |
+| `adminSubManualAction` | `sub-billing.js` | admin activate / expire / extend | admin | admin | operator path, audited |
+| `entitlement-adapters` (`activate`, `revoke`) | `entitlement-adapters.js` | shadow / healthcare adapter | shadow-only for subscriptions | — | not a live writer for subscriptions (comment: SHADOW-ONLY) |
+
+Result: the intent rail has **one** writer (`reconcilePaidIntent`); every other intent-based path is a caller. `test-subscription-pay-methods` 71/0 (was 67/4). What remains is the **two document models** (`subscriptions/{uid}` intent rail vs `subscriptions/{subId}` engine store) — a pre-existing architecture, out of this pass; both now share one period arithmetic and one invoice authority.
+
+**Period arithmetic** — one copy, `functions/subscription-period.js` (calendar month / year, grace 14/7/5/3). Six writers had six copies; `subscription-pay-methods` alone counted 30/365 **days** (a February purchase got 30 days, a leap-year annual got one day less). Converged on calendar months, what the plan is sold as; the pay-methods suites' 30-day assertions now read the module.
+
+### 7.5 merchant-identity.js — converged by evidence: c4 is the authority, hosting's copy excluded
+
+| question | answer |
+|---|---|
+| production implementation | hosting-side file, built 2026-09-09 (`merchantIdentity`, `employeeSaleAuthorize`, `adminLinkMerchantAccounts` all live from it) |
+| c4 implementation | same three exports; 3 later commits: **`1ce3fcd` 2026-09-20 "a removed shop employee could still sell — the till now consumes the contract"**, `3edaa5b` 09-29 availability, `2f4fc20` 09-15 |
+| behavioural difference | hosting keeps a private `ACTIVE_EMPLOYMENT`/`_employmentActive` predicate over a `status` field **no writer writes** (so a removed employee remained active); c4 removed it and consumes `shop-employees.employeeRecordReasons` — the recorded security fix ([[project_shop_employee_removal_fails_open]]) |
+| consumers | `entitlement-authority` (`_internal.linkedUids`, optional), `kasshop.js`, `pos-zero-friction.js` — all satisfied by c4's superset `_internal` (`resolveActor`, `shopIdentity`, `linkedUids`, `merchantLink`, capabilities) |
+| security implication | production is **behind** the 09-20 fix; deploying c4's file closes it. Merging hosting's older predicate back would reopen it |
+| final authority | **c4's `merchant-identity.js`** (this branch). The `PROVENANCE_GAP` doc's rule stands: the callables are registered by this index (`exports.merchantIdentity = _shopEmployees.merchantIdentity`) — no export was hand-added |
+
+### 7.6 Historical suites — disposition (rewritten to the current contract, none skipped, none weakened)
+
+| suite | failure | old contract | current contract | disposition | now |
+|---|---|---|---|---|---|
+| `test-commission-48h-destinations` | 3 | Daraja STK (`processrequest` ×2), `CENTRAL_MOR` credential branch, a literal `status: VERIFIED` form | Daraja outbound **retired**, IntaSend is the rail; staging never promotes `activeDestination` | asserts **zero** STK calls + IntaSend present, no `CENTRAL_MOR`, staging body has `PENDING_TEST` and no promotion | 87/0 |
+| `test-marketplace-plan-ladder` | 17 | 15/10/5/0 ladder | flat 15% every package; POS own category; services own rate | tables → 15; lane (till vs online) is the live-harness control | 40/0 |
+| `test-merchant-package-convergence` | 10 | 16/12/8/4 ladder, healthcare 5, marketplace fallback 5 | flat 15; healthcare 12; category == package rate | expectations + sabotage anchor updated | 77/0 |
+| `test-post-pin-money-chain` | 7 | ladder | flat 15; lane moves settlement | tables + F1 control rewritten | 39/0 |
+| `test-subscription-commission-classification` | 3 | "exactly one key changed since `659a350`" | C2 change in force; **no key lost** to default | fixture assertion → durable contract | 21/0 |
+| `test-subscription-writers` | 1 | `PERIOD_DAYS` literal | one period module | rewritten | 24/0 |
+| `test-subscription-pay-methods` | 4 → 2 → 0 | two hosting webhook names | every subscription-capable webhook stamps; zero activation sites | name-agnostic | 71/0 |
+
+### 7.7 audit-commission-paths — every occurrence classified
+
+| site | class | why |
+|---|---|---|
+| `money-authority.js` `planSaleAccounting` | **legitimate calculation** (annotated `@commission-safe`) | `rateFraction` is supplied by `commission-config.resolvePosRate / resolveMarketplaceRate`; it holds no percentage |
+| `shared/creator-royalty.js` split | **legitimate calculation** (annotated) | basis points from `shared/creator-commercial` (Creator Hub 30/70 policy), exposed to the authority via `shared/commercial-policy.creator_ppv` |
+| `index.js:796` analytics estimate | annotated exception (pre-existing) | moves no money |
+| 10 allow-listed tables (`verify-commission-single-source`) | non-commission rate tables | tax constants, plan catalogue, subscription-core seam |
+| `subscription-core.ROLE_DEFAULT_COMMISSION` | **stale for `provider`** (unreachable: provider now resolves via the authority); other roles unconsumed | documented; removal is a follow-up, not a live path |
+
+`audit-commission-paths`: 0 independent calculations remain. `test-commercial-facts-invariants.js` (new, 22/0) asserts the closed set: one rate table, no provider table outside the authority, one period module, invoice modules never compute, index webhooks/callable hold no `subscriptions/{uid}` writer.
+
+### 7.8 Hosting gate (evidence only)
+
+`predeploy-syntax-gate` on `convergence/commercial-web-on-18e3711`: 1,795 JS files + 454 inline blocks parse cleanly. Not deployed.
+
+### 7.9 Final invariants (release gate §9) — proven locally
+
+* **payment amount = finalized transaction amount = invoice amount**: e2e A/D (999 → `lastPaymentAmountCents` 99900 → `billingHistory.amountCents` 99900 → engine `amount` 999); facts 1a–1c for every commission lane (engine → ledger → invoice equal to the cent, flat fees carried as fees).
+* **commission in finalized transaction = commission on invoice = commission in reporting**: the ledger row is the reporting record (`commissionPct`, `commissionCents`, `grossAmount`) and the invoice module reads it without arithmetic (facts 1b, provider D1–D3).
+* **subscription payment = platform revenue = subscription invoice = entitlement activation amount**: `RATES.subscriptions = 100`; e2e A (activation and invoice from the same record); `createPaymentIntent` prices only from `PLANS` (facts 2a–2c).
+
+### 7.10 Deployment matrix — for approval, nothing executed
+
+| step | what | gate | state |
+|---|---|---|---|
+| 0 | owner writes `revenueConfig/commission_vat` + `subscription_vat`; confirms `provider_basic`/`provider_pro` mapping (or retires the ids); confirms FREE 50 rollout (backfill) | decisions | **OPEN — owner** |
+| 1 | Functions, from `convergence/commercial-fn-on-ef1e992`, **one at a time, scoped `--only functions:NAME`**, each after the live-archive content diff: `getCommissionConfig`, `previewCommission`, `createCheckoutSession`, `onSellerPaymentCreated`, the `sub*` / `adminSub*` set, `subscriptionPaymentMethods`, `payIntentWithWallet`, `onPaymentIntentPaid`, `reconcileSubscriptionPayment`, `activateSubscription`, `onAiSubscriptionChangedSyncLimit`, `subIssuePendingInvoices`, `subIssueInvoice`, `runDailyReconciliation` | `reference_functions_lineage_gate`; Ready=True per revision; peers hold browser suites | ready, **not authorized** |
+| 2 | `webhookIntasend` — **not from this branch**. The converged tree's webhook hunk (stamp-PAID + 09-28 schedule) must be ported onto `recovery/webhookintasend-on-2026-09-06` (68811e1) together with sokoni-70's B1 gate, content-diffed against the 09-06 archive | P0-4 lifecycle gate + owner go | **separate change** |
+| 3 | verify live: `getCommissionConfig` returns 15 / POS 5 / property 5000 flat; `previewCommission` agrees; one subscription payment on the emulator-proven path | post-deploy script | — |
+| 4 | Hosting from `convergence/commercial-web-on-18e3711` (`a5fa3d9`+): publishes the snapshot **only now** | `guard-no-rollback`, syntax gate (passed), single-source (passed) | ready, **not authorized** |
+| 5 | verify client/server parity: `SokoniCommission.pct('marketplace') === getCommissionConfig().rates.marketplace.pct` on the live site; `subscriptions.html` renders `subGetPlans` | curl + browser | — |
+
+**HARD STOP honoured:** no production traffic change. Open for the owner: step 0 items; the two-document-model question (7.4); `ROLE_DEFAULT_COMMISSION` retirement.

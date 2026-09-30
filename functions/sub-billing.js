@@ -146,9 +146,8 @@ function _getPlan(planId) {
   if (!p) throw new HttpsError('not-found', `Plan not found: ${planId}`);
   return p;
 }
-function _addMonths(d, n) { const r = new Date(d); r.setMonth(r.getMonth() + n); return r; }
 function _addDays(d, n)   { const r = new Date(d); r.setDate(r.getDate() + n);   return r; }
-function _periodEnd(start, cycle) { return cycle === 'annual' ? _addMonths(start, 12) : _addMonths(start, 1); }
+function _periodEnd(start, cycle) { return require('./subscription-period').periodEnd(start, cycle); } /* one copy for every writer */
 function _centsToKES(c)   { return Math.round((c || 0) / 100); }
 
 function _buildSubDoc(uid, plan, cycle, status) {

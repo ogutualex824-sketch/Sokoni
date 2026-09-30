@@ -43,10 +43,8 @@ function _addDays(date, n) {
 
 /* ── Helper: next period end ── */
 function _periodEnd(start, cycle) {
-  const d = new Date(start);
-  if (cycle === 'annual') d.setFullYear(d.getFullYear() + 1);
-  else d.setMonth(d.getMonth() + 1);
-  return d;
+  /* ONE period arithmetic for every subscription writer — subscription-period.js. */
+  return require('./subscription-period').periodEnd(start, cycle);
 }
 
 /* ── Notification writer ── */
@@ -333,7 +331,7 @@ exports.subAutoActivateOnPayment = onDocumentUpdated(
     const amountCents = Math.round((after.amount || 0) * 100);
     const now_dt      = new Date();
     const periodEnd   = _periodEnd(now_dt, billingCycle);
-    const graceDays   = sub.tier === 'enterprise' ? 14 : sub.tier === 'pro' ? 7 : sub.tier === 'basic' ? 5 : 3;
+    const graceDays   = require('./subscription-period').graceDays(sub.tier);
     const graceEnd    = _addDays(periodEnd, graceDays);
 
     await fsdb.runTransaction(async (txn) => {
@@ -502,7 +500,7 @@ exports.subUpgradeWithProration = onCall(
     /* Build new subscription period */
     const now_dt    = new Date();
     const periodEnd = _periodEnd(now_dt, billingCycle);
-    const graceDays = newPlan.tier === 'enterprise' ? 14 : newPlan.tier === 'pro' ? 7 : 5;
+    const graceDays = require('./subscription-period').graceDays(newPlan.tier);   /* was a second table (default 5) */
     const graceEnd  = _addDays(periodEnd, graceDays);
 
     const newSubDoc = {

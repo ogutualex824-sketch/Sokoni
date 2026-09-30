@@ -35,6 +35,16 @@ for (const [k, v] of Object.entries(CC.RATES)) rates[k] = { pct: v.pct, fixedKES
 const marketplacePlanPct = {};
 for (const [k, v] of Object.entries(CC.MARKETPLACE_PLAN_RATES)) marketplacePlanPct[k] = v.rateFraction * 100;
 const posFlatPct = CC.POS_FLAT_RATE_FRACTION * 100;
+/* Every plan spelling a client might pass, resolved by the AUTHORITY to its canonical plan, so the
+   browser cannot disagree with the server on any of them (test-marketplace-plan-ladder H2). */
+const marketplaceAliasIds = ['seller_free', 'seller_basic', 'seller_pro', 'seller_enterprise', 'free', 'basic', 'pro',
+  'professional', 'business', 'enterprise', 'starter', 'growth'];
+const marketplacePlanAlias = {};
+for (const id of marketplaceAliasIds) marketplacePlanAlias[id] = CC.resolveMarketplaceRate(id).plan;
+const marketplaceDefaultPlan = CC.MARKETPLACE_DEFAULT_PLAN || 'free';
+const providerPlanPct = {};
+for (const [k, v] of Object.entries(CC.PROVIDER_PLAN_RATES || {})) providerPlanPct[k] = v.pct;
+const providerDefaultPlan = CC.PROVIDER_DEFAULT_PLAN || 'provider_free';
 const marketplaceCategories = Array.from(CC.MARKETPLACE_SELLER_CATEGORIES);
 
 const body = `/* ============================================================================
@@ -67,6 +77,13 @@ const body = `/* ===============================================================
   /* POS / TILL lane — shop sales the merchant made themselves. FLAT, every plan. A
      subscription buys a better marketplace rate and changes NOTHING at the till. */
   var POS_FLAT_PCT = ${posFlatPct};
+  var MARKETPLACE_PLAN_ALIAS = ${JSON.stringify(marketplacePlanAlias)};
+  var MARKETPLACE_DEFAULT_PLAN = ${JSON.stringify(marketplaceDefaultPlan)};
+
+  /* PROVIDER BOOKING lane — plan-keyed (owner schedule 2026-09-28: 20 / 15 / 10 / 7 / 5), keyed by
+     PLAN ID. An unknown plan resolves to the HIGHEST rate, exactly as the server does. */
+  var PROVIDER_PLAN_PCT = ${JSON.stringify(providerPlanPct, null, 2).replace(/\n/g, '\n  ')};
+  var PROVIDER_DEFAULT_PLAN = ${JSON.stringify(providerDefaultPlan)};
 
   /* RAW category labels priced by the plan ladder. "pos" is deliberately ABSENT even though
      it ALIASES to marketplace — keying on the resolved category would put every till sale on
@@ -99,16 +116,21 @@ const body = `/* ===============================================================
        plan resolves to Free — the HIGHEST rate — so a display can never under-quote. */
     marketplacePct: function (planId) {
       var k = String(planId || '').trim().toLowerCase();
-      /* Mirrors commission-config.MARKETPLACE_TIER_ALIASES exactly. 'starter' and
-         'business' are deliberately absent there and must stay absent here — a client
-         that resolved them would quote a rate the server does not charge. */
-      var alias = { free:'seller_free', basic:'seller_basic', pro:'seller_pro',
-                    enterprise:'seller_enterprise' };
-      if (!Object.prototype.hasOwnProperty.call(MARKETPLACE_PLAN_PCT, k)) k = alias[k] || 'seller_free';
+      /* Aliases are resolved by the server authority at build time (MARKETPLACE_PLAN_ALIAS); an
+         unknown spelling falls to the DEFAULT plan, which is the highest rate — never the cheapest. */
+      if (!Object.prototype.hasOwnProperty.call(MARKETPLACE_PLAN_PCT, k)) k = MARKETPLACE_PLAN_ALIAS[k] || MARKETPLACE_DEFAULT_PLAN;
+      if (!Object.prototype.hasOwnProperty.call(MARKETPLACE_PLAN_PCT, k)) k = MARKETPLACE_DEFAULT_PLAN;
       return MARKETPLACE_PLAN_PCT[k];
     },
     /* The rate on a POS / till sale. Takes no plan, because it does not depend on one. */
     posPct: function () { return POS_FLAT_PCT; },
+    /* The rate a service provider on planId pays on a booking. Unknown plan -> highest rate. */
+    providerPct: function (planId) {
+      var k = String(planId || '').trim().toLowerCase();
+      if (!Object.prototype.hasOwnProperty.call(PROVIDER_PLAN_PCT, k)) k = PROVIDER_DEFAULT_PLAN;
+      return PROVIDER_PLAN_PCT[k];
+    },
+    PROVIDER_PLAN_PCT: PROVIDER_PLAN_PCT,
     isMarketplaceSellerSale: function (cat) {
       return MARKETPLACE_CATEGORIES.indexOf(String(cat || '').trim().toLowerCase()) !== -1;
     },

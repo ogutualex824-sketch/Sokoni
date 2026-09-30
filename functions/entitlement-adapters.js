@@ -49,9 +49,8 @@ const VALID_PLANS = new Set(['free', 'starter', 'pro', 'business']);
    fails a suite instead of silently producing a different answer. Collapsing the
    four copies onto one shared module is a separate, still-unmade decision. */
 function _periodEnd(start, cycle) {
-  const r = new Date(start);
-  r.setMonth(r.getMonth() + (cycle === 'annual' ? 12 : 1));
-  return r;
+  /* ONE period arithmetic for every subscription writer — subscription-period.js. */
+  return require('./subscription-period').periodEnd(start, cycle);
 }
 
 /* ── Feature flags ────────────────────────────────────────────────────────

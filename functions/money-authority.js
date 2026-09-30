@@ -182,6 +182,7 @@ function computeCommission ({ gross, rateFraction, minimumMinor = 0, floorExempt
     throw new MoneyError('COMMISSION_MIN_INVALID', 'minimumMinor must be a non-negative integer');
   }
 
+  /* @commission-safe: rateFraction is SUPPLIED by commission-config (resolvePosRate / resolveMarketplaceRate); this is the one arithmetic authority for a sale, not a rate authority — it holds no percentage of its own (test-pos-commission-lane, test-pos-sale-commission). */
   let commissionMinor = Math.round(gross.minorUnits * rateFraction);
 
   /* The floor never applies to a zero-value sale, and never exceeds the sale itself. */

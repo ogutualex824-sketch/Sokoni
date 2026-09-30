@@ -225,7 +225,9 @@ exports._internal = { METHODS, isMethod };
    Only `status === 'paid'` reconciles. `created`, `pending` and `processing` are
    refused, so no rail can activate a subscription by asking. */
 
-const PERIOD_DAYS = { monthly: 30, annual: 365 };
+/* Period arithmetic is subscription-period.js (calendar month / year), the same copy every
+   other writer uses. This file used to count 30 / 365 DAYS — the one writer that disagreed. */
+const SP = require('./subscription-period');
 
 async function reconcilePaidIntent(intentId) {
   const id = String(intentId || '').slice(0, 128);
@@ -278,7 +280,7 @@ async function reconcilePaidIntent(intentId) {
     const trialDays = Math.max(0, Math.min(90, Number(intent.trialDays) || 0));
     const trialEndMs = paidAtMs + trialDays * 86400000;
     const startMs = trialEndMs;                       /* paid period begins after the trial */
-    const endMs = startMs + PERIOD_DAYS[cycle] * 86400000;
+    const endMs = SP.periodEnd(new Date(startMs), cycle).getTime();
     const onTrial = trialDays > 0;
 
     /* One subscription per uid per hub. An upgrade REPLACES rather than
@@ -392,4 +394,4 @@ exports.reconcileSubscriptionPayment = onCall(OPTS, async ({ data, auth }) => {
 });
 
 exports._internal.reconcilePaidIntent = reconcilePaidIntent;
-exports._internal.PERIOD_DAYS = PERIOD_DAYS;
+exports._internal.periodEnd = SP.periodEnd;

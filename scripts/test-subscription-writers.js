@@ -99,7 +99,8 @@ ck('MC so a monthly-only certification could NOT have caught this',
 
 head('5 - the reconciler derives the period from the plan, not a stray field');
 const rec = read('functions/subscription-pay-methods.js');
-ck('PERIOD_DAYS is explicit', /PERIOD_DAYS = \{ monthly: 30, annual: 365 \}/.test(rec));
+ck('the period comes from subscription-period.js — the ONE copy every writer uses (no local 30/365 table)',
+   /require\('\.\/subscription-period'\)/.test(rec) && /SP\.periodEnd\(new Date\(startMs\), cycle\)/.test(rec) && !/PERIOD_DAYS = \{/.test(rec));
 ck('the cycle comes from the intent', /intent\.billingCycle === 'annual' \? 'annual' : 'monthly'/.test(rec));
 ck('currentPeriodEnd and expiresAt are the SAME value',
    /currentPeriodEnd: admin\.firestore\.Timestamp\.fromMillis\(endMs\)/.test(rec) &&

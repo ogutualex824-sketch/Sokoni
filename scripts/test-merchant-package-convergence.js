@@ -62,9 +62,9 @@ const MUTATIONS = {
   }]],
   /* Restore the retired rates. */
   rate: [[path.join('functions', 'commission-config.js'), (src) => {
-    const a = '  free:         { rateFraction: 0.16, floorExempt: false },';
+    const a = '  free:         { rateFraction: MARKETPLACE_FLAT_RATE_FRACTION, floorExempt: false },';
     if (!src.includes(a)) throw new Error('SABOTAGE rate: anchor missing — mutation vacuous');
-    return src.replace(a, '  free:         { rateFraction: 0.15, floorExempt: false },');
+    return src.replace(a, '  free:         { rateFraction: 0.16, floorExempt: false },');
   }]],
 };
 
@@ -189,35 +189,37 @@ function partCommission() {
     return;
   }
 
-  const want = { free: 16, professional: 12, business: 8, enterprise: 4 };
+  /* Current contract (owner 2026-09-28): marketplace is FLAT 15% on every package; the 09-13
+     16/12/8/4 ladder and the earlier 15/10/5/0 ladder are both retired as answers. */
+  const want = { free: 15, professional: 15, business: 15, enterprise: 15 };
   for (const [tier, pct] of Object.entries(want)) {
     const r = cc.resolveMarketplaceRate(tier);
     ck(`B1   ${tier.padEnd(13)} = ${pct}%`, r.pct === pct && r.matched === true, r.pct + '%');
   }
   /* The retired ladder must be gone as an ANSWER, not merely renamed in a comment. */
-  const old = [15, 10, 5, 0];
-  const still = CANON.map((t) => cc.resolveMarketplaceRate(t).pct).filter((p) => old.includes(p));
-  ck('B2   the retired 15/10/5/0 rates are no longer returned for any package',
-    still.length === 0, still.length ? 'still returning ' + still.join(', ') : 'retired');
+  const distinct = new Set(CANON.map((t) => cc.resolveMarketplaceRate(t).pct));
+  ck('B2   the retired LADDER shape is gone as an answer: every package returns the same flat rate',
+    distinct.size === 1, 'rates seen: ' + [...distinct].join(', '));
 
   /* Legacy ids must map to the NEW rate, not fall to the default. */
-  const map = { seller_free: 16, seller_basic: 12, seller_pro: 8, seller_enterprise: 4, starter: 12, growth: 8 };
+  const map = { seller_free: 15, seller_basic: 15, seller_pro: 15, seller_enterprise: 15, starter: 15, growth: 15 };
   const wrong = Object.entries(map).filter(([t, p]) => cc.resolveMarketplaceRate(t).pct !== p);
   ck('B3   legacy ids resolve to their canonical rate',
     wrong.length === 0, wrong.map(([t, p]) => `${t} wanted ${p} got ${cc.resolveMarketplaceRate(t).pct}`).join('; ') || 'all mapped');
 
   ck('B4   an unknown tier falls to the HIGHEST rate, never the cheapest',
-    cc.resolveMarketplaceRate('nonsense').pct === 16 && cc.resolveMarketplaceRate('nonsense').matched === false);
+    cc.resolveMarketplaceRate('nonsense').pct === 15 && cc.resolveMarketplaceRate('nonsense').matched === false);
 
   /* Blast radius: the repricing must not touch POS or Healthcare. */
   const pos = cc.POS_PLAN_RATES;
   const posFlat = pos && Object.values(pos).every((r) => r.rateFraction === 0.05);
   ck('B5   POS/Till stays FLAT 5% on every package', !!posFlat,
     pos ? Object.values(pos).map((r) => r.rateFraction * 100 + '%').join(' ') : 'absent');
-  ck('B6   Healthcare stays 5% — untouched by the merchant repricing',
-    cc.RATES.healthcare.pct === 5, cc.RATES.healthcare.pct + '%');
-  ck('B7   the marketplace CATEGORY fallback is unchanged at 5%',
-    cc.resolveRate('marketplace').pct === 5, cc.resolveRate('marketplace').pct + '%');
+  ck('B6   Healthcare bookings are 12% (owner schedule 2026-09-28) — a separate lane, not the merchant package',
+    cc.RATES.healthcare.pct === 12, cc.RATES.healthcare.pct + '%');
+  ck('B7   the marketplace CATEGORY rate equals the flat package rate (15%) — one number, not two',
+    cc.resolveRate('marketplace').pct === 15 && cc.resolveRate('marketplace').pct === cc.resolveMarketplaceRate('free').pct,
+    cc.resolveRate('marketplace').pct + '%');
 
   /* The ladder must still only apply to marketplace-style sales. */
   ck('B8   the ladder applies to marketplace/products and NOT to pos/services',
@@ -230,8 +232,8 @@ function partSnapshot() {
   const snap = source('sokoni-commission-rates.js');
   if (snap == null) { ck('C0 snapshot present', false, 'absent'); return; }
   ck('C1   snapshot carries the canonical packages',
-    /"free":\s*16/.test(snap) && /"professional":\s*12/.test(snap)
-    && /"business":\s*8/.test(snap) && /"enterprise":\s*4/.test(snap));
+    /"free":\s*15/.test(snap) && /"professional":\s*15/.test(snap)
+    && /"business":\s*15/.test(snap) && /"enterprise":\s*15/.test(snap));
   ck('C2   snapshot no longer carries the retired seller_* ladder',
     !/"seller_free":\s*15/.test(snap) && !/"seller_pro":\s*5/.test(snap));
   ck('C3   snapshot keeps POS flat 5%', /POS_FLAT_PCT\s*=\s*5/.test(snap));

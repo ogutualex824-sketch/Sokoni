@@ -458,10 +458,17 @@ async function calculateCommission(db, opts) {
    * revenueConfig/hub_provider { commissionPct: 15 }, which outranks it. That is the
    * deliberate business decision; this code does not make it. */
   let subRatePct = null;
+  let subPlan = null, subPlanMatched = null, subRateSource = null, subPlanLegacy = false;
   if (!rule && rcPct === null && !fixedCategory && subscriptionRole && sellerId) {
     try {
       const subCore = require('./subscription-core');
-      const frac = await subCore.getCommissionRate(sellerId, { role: subscriptionRole });
+      /* Providers: plan id -> commission-config.PROVIDER_PLAN_RATES, with provenance kept for
+         the ledger. Any other role keeps the compatibility call. */
+      const pr = subscriptionRole === 'provider'
+        ? await subCore.getProviderPlanRate(sellerId, { role: subscriptionRole })
+        : null;
+      const frac = pr ? pr.rateFraction : await subCore.getCommissionRate(sellerId, { role: subscriptionRole });
+      if (pr) { subPlan = pr.plan; subPlanMatched = pr.matched; subRateSource = pr.source; subPlanLegacy = pr.legacyUnmapped; }
       /* 0.07 * 100 is 7.000000000000001 in IEEE-754. Round to 3dp: a rate written into an
          immutable ledger must not carry float dust. The commission itself is unaffected —
          Math.round() absorbs it — but the RECORDED rate would have been wrong forever. */
@@ -680,6 +687,10 @@ async function calculateCommission(db, opts) {
                  : (usingSubRate ? 'subscription_plan_rate (compatibility mode)'
                  : 'category_default'))),
     fixedRateCategory: fixedCategory,           /* POS / Till: RATES[category] and nothing else */
+    providerPlan: subPlan,                      /* provider lane: the plan id that priced it, or null */
+    providerPlanMatched: subPlanMatched,        /* false = unknown/inactive plan -> highest rate */
+    providerPlanLegacyUnmapped: subPlanLegacy,  /* provider_basic / provider_pro: owner mapping required */
+    providerRateSource: subRateSource,
     overrideIgnored,                            /* a matching commissionRule existed and was bypassed */
 
     /* ── MARKETPLACE LANE PROVENANCE ────────────────────────────────────────────────────

@@ -143,11 +143,12 @@ console.log('\nPART A — the PIN is the gate, and the rider cannot open it them
 
 console.log('\nPART B — the marketplace split, at the PLAN rate, all the way to the merchant\n');
 {
+  /* Current contract: marketplace is FLAT 15% on every package (owner 2026-09-28). */
   const LADDER = [
     ['seller_free',       15, 150000, 850000],
-    ['seller_basic',      10, 100000, 900000],
-    ['seller_pro',         5,  50000, 950000],
-    ['seller_enterprise',  0,      0, 1000000],
+    ['seller_basic',      15, 150000, 850000],
+    ['seller_pro',        15, 150000, 850000],
+    ['seller_enterprise', 15, 150000, 850000],
   ];
   for (const [tier, pct, wantComm, wantNet] of LADDER) {
     withPlan(tier);
@@ -261,12 +262,16 @@ console.log('\nPART E — POS money never enters this rail\n');
 console.log('\nPART F — adversarial controls\n');
 {
   /* If the plan fixture could not move the rate, PART B proves nothing. */
+  /* Flat marketplace contract (owner 2026-09-28): the PLAN does not move the settlement; the LANE
+     does. The live-harness control is therefore the till (5%) against online (15%). */
   withPlan('seller_free');
   const f = await SE.computeSettlement(makeDb(), { grossCents: KES(10000), category: 'marketplace', sellerId: SELLER });
   withPlan('seller_pro');
   const p = await SE.computeSettlement(makeDb(), { grossCents: KES(10000), category: 'marketplace', sellerId: SELLER });
-  ck('F1  the plan fixture genuinely moves the settled amount',
-    f.sellerNetCents !== p.sellerNetCents, f.sellerNetCents + ' vs ' + p.sellerNetCents);
+  const t = await SE.computeSettlement(makeDb(), { grossCents: KES(10000), category: 'pos', sellerId: SELLER });
+  ck('F1  the plan does NOT move the settled amount (flat contract) while the lane does (till vs online)',
+    f.sellerNetCents === p.sellerNetCents && t.sellerNetCents !== f.sellerNetCents,
+    f.sellerNetCents + ' / ' + p.sellerNetCents + ' / till ' + t.sellerNetCents);
 
   /* A settlement with no seller must not silently credit somebody. */
   const none = await SE.computeSettlement(makeDb(), { grossCents: KES(10000), category: 'marketplace' });

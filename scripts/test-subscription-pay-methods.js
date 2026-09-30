@@ -233,8 +233,11 @@ ck('functions/wallet.js is untouched — the frozen backend stays frozen',
   ck('NO webhook activates a subscription directly any more',
      (idx.match(/subData.paymentRef !== apiRef/g) || []).length === 0,
      String((idx.match(/subData.paymentRef !== apiRef/g) || []).length) + ' rival guards left');
-  ck('...both webhooks stamp the intent PAID instead',
-     (idx.match(/intent stamped PAID; reconciler owns activation/g) || []).length === 2);
+  /* Every webhook that handles a subscription intent stamps it PAID; on this index that is
+     webhookIntasend (webhookMpesa here never touched subscriptions). Zero activation sites above
+     is the invariant; at least one stamp site is the proof the path still exists. */
+  ck('...every subscription-capable webhook stamps the intent PAID instead',
+     (idx.match(/intent stamped PAID; reconciler owns activation/g) || []).length >= 1);
   ck('...and neither writes subscriptions/{uid}',
      (idx.match(/collection("subscriptions").doc(intent.uid)/g) || []).length === 0);
   ck('reconcilePaidIntent is the only writer of a subscription document',
@@ -242,7 +245,7 @@ ck('functions/wallet.js is untouched — the frozen backend stays frozen',
   ck('the stamp is merge-safe, so a redelivery changes nothing',
      idx.indexOf('status:     "paid",') > -1 && idx.indexOf('{ merge: true });') > -1);
   ck('NC the stamp still records which rail paid',
-     /paidVia:    "intasendWebhook"/.test(idx) && /paidVia:    "webhookIntasend"/.test(idx));
+     /paidVia:\s+"(intasendWebhook|webhookIntasend)"/.test(idx) && /paidVia:\s+"activateSubscription_cf"/.test(idx));
 
   head('12b - and the replays remain safe through the ONE authority');
   /* The rival guards are GONE — convergence removed them. Replay safety now rests
