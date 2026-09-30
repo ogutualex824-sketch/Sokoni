@@ -36,7 +36,14 @@
       --bg:#050505;--sur:#0d0d0d;--sur2:#141414;
       --g:#71ff00;--ga:rgba(113,255,0,.12);--ga2:rgba(113,255,0,.06);
       --bor:#1a1a1a;--bor2:#222;--txt:#e8e8e8;--sub:#888;--radius:12px;
-      --aos-bg:#060a06;--aos-surface:rgba(255,255,255,0.03);--aos-surface2:rgba(255,255,255,0.06);--aos-border:rgba(255,255,255,.08);--aos-accent:#71ff00;--aos-accent2:#4fc800;--aos-success:#4caf50;--aos-warn:#ff9800;--aos-danger:#f44336;--aos-text:rgba(255,255,255,0.9);--aos-muted:rgba(255,255,255,0.4);--aos-sidebar-w:220px;--aos-radius:10px}
+      --aos-bg:#060a06;--aos-surface:rgba(255,255,255,0.03);--aos-surface2:rgba(255,255,255,0.06);--aos-border:rgba(255,255,255,.08);--aos-accent:#71ff00;--aos-accent2:#4fc800;--aos-success:#4caf50;--aos-warn:#ff9800;--aos-danger:#f44336;--aos-text:rgba(255,255,255,0.9);--aos-muted:rgba(255,255,255,0.4);
+      /* --aos-sub was referenced across admin-os.html and sokoni-aos.js and defined
+         nowhere. An undefined custom property makes the declaration invalid, so
+         `color:var(--aos-sub)` fell back to the inherited colour and section
+         headings, funnel labels and stat captions rendered at whatever their parent
+         happened to be. Defined once, slightly brighter than --aos-muted because it
+         labels content rather than de-emphasising it. */
+      --aos-sub:rgba(255,255,255,0.62);--aos-sidebar-w:220px;--aos-radius:10px}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html,body{height:100%;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
     body{background:var(--bg);color:var(--txt);display:flex;font-size:14px;line-height:1.5}
@@ -79,8 +86,23 @@
        Setting min-width:0 lets the chain collapse to the viewport and hands the
        overflow back to the container that is meant to own it. */
     .aos-main{margin-left:var(--aos-sidebar-w);flex:1;min-width:0;display:flex;flex-direction:column;min-height:100vh}
-    .aos-header{position:sticky;top:0;z-index:50;background:var(--aos-surface);border-bottom:1px solid var(--aos-border);padding:12px 24px;display:flex;align-items:center;gap:16px}
-    .aos-breadcrumb{font-size:18px;font-weight:700;flex:1}
+    /* flex-wrap so the header reflows to a second row on narrow screens rather
+       than forcing the document wider than the screen. Padding tightens on
+       phones because 24px each side is 15% of a 320px viewport. */
+    .aos-header{position:sticky;top:0;z-index:50;background:var(--aos-surface);border-bottom:1px solid var(--aos-border);padding:12px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;min-width:0}
+    @media(max-width:640px){
+      .aos-header{padding:10px 12px;gap:10px}
+      .aos-content{padding:14px 12px}
+      /* The search takes the full second row instead of competing with the
+         breadcrumb for a 320px line. */
+      .aos-header-search{order:3;flex:1 1 100%}
+    }
+    /* Truncate rather than push. A long section label used to widen the header
+       past the viewport (measured 451px of breadcrumb inside a 320px screen). */
+    .aos-breadcrumb{font-size:18px;font-weight:700;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    /* The quick-search shrinks with the header instead of holding it open. */
+    .aos-header-search{flex:1 1 140px;min-width:0}
+    .aos-header-search input{width:100%;min-width:0;box-sizing:border-box}
     .aos-header-search input{background:var(--aos-surface2);border:1px solid var(--aos-border);border-radius:20px;padding:7px 16px;color:var(--aos-text);font-size:13px;width:220px;outline:none}
     .aos-header-search input:focus{border-color:var(--aos-accent)}
     .header-notif-btn{width:36px;height:36px;border-radius:50%;background:var(--aos-surface2);border:1px solid var(--aos-border);color:var(--aos-text);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
@@ -289,9 +311,6 @@
     .delivery-stat span{font-size:11px;color:var(--aos-muted);display:block}
     .delivery-stat strong{font-size:28px;font-weight:700}
     .security-grid{display:flex;flex-direction:column;gap:24px}
-    .quick-links{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:24px}
-    .quick-link{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);cursor:pointer;text-decoration:none;color:var(--aos-text);font-size:13px;transition:border-color .15s}
-    .quick-link:hover{border-color:var(--aos-accent);color:var(--aos-accent)}
     .aos-spinner{display:flex;align-items:center;justify-content:center;padding:40px}
     .aos-spinner div{width:32px;height:32px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--aos-accent);border-radius:50%;animation:spin .7s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
@@ -444,6 +463,11 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       <a class="nav-item" href="reliability-center.html"><span class="nav-icon">&#x1F4E1;</span><span class="nav-label">Reliability</span></a>
       <a class="nav-item" href="automation-center.html"><span class="nav-icon">&#x1F916;</span><span class="nav-label">Automation</span></a>
       <a class="nav-item" href="automation-engine.html"><span class="nav-icon">&#x2699;&#xFE0F;</span><span class="nav-label">ADE Rules</span></a>
+      <!-- Moved from the dashboard quick-links: global destinations that had no
+           sidebar entry. Global destinations belong here; the dashboard keeps none. -->
+      <a class="nav-item" href="financial-os.html"><span class="nav-icon">&#x1F4C4;</span><span class="nav-label">Financial OS</span></a>
+      <a class="nav-item" href="seller-success.html"><span class="nav-icon">&#x1F3EA;</span><span class="nav-label">Seller Success</span></a>
+      <a class="nav-item" href="merchant-pipeline.html"><span class="nav-icon">&#x1F4CA;</span><span class="nav-label">Merchant Pipeline</span></a>
       <a class="nav-item" href="admin-subscriptions.html"><span class="nav-icon">&#x1F4B3;</span><span class="nav-label">Subscriptions</span></a>
       <a class="nav-item" data-requires-superadmin href="super-admin.html"><span class="nav-icon">&#x1F451;</span><span class="nav-label">Super Admin</span></a>
     </div>
@@ -463,24 +487,21 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       <button class="mobile-menu-btn" id="aosMenuBtn" type="button" onclick="_openSidebar()" aria-label="Open menu" aria-controls="aosSidebar" aria-expanded="false">&#x2630;</button>
       <div class="aos-breadcrumb" id="aosBreadcrumb">Dashboard</div>
       <div class="aos-header-search"><input type="search" placeholder="Quick user search&#x2026;" oninput="SokoniAOS.navigate('users');SokoniAOS.loadUsers(this.value)" aria-label="Search"></div>
-      <button class="header-notif-btn" onclick="SokoniAOS.navigate('comms')" title="Notifications">&#x1F514;</button>
+      <!-- The bell is the existing Notifications function, resolved through the same
+           canonical route as the sidebar child (#comms/push): the Communications
+           panel and its existing Push tab. No second notification implementation. -->
+      <button class="header-notif-btn" id="aosBellBtn" type="button" onclick="SokoniAOS.navigate('comms','push')" title="Notifications" aria-label="Notifications">&#x1F514;</button>
     </header>
 
     <div class="aos-content">
 
       <div class="aos-panel" id="panel-dashboard">
-        <div class="quick-links">
-          <a class="quick-link" href="platform-health.html">&#x1F49A; Platform Health</a>
-          <a class="quick-link" href="finos.html">&#x1F3E6; FinOS</a>
-          <a class="quick-link" href="financial-os.html">&#x1F4C4; Financial OS</a>
-          <a class="quick-link" href="trust-safety.html">&#x1F512; Trust &amp; Safety</a>
-          <a class="quick-link" href="reliability-center.html">&#x1F4E1; Reliability</a>
-          <a class="quick-link" href="automation-center.html">&#x1F916; Automation</a>
-          <a class="quick-link" href="seller-success.html">&#x1F3EA; Seller Success</a>
-          <a class="quick-link" href="merchant-pipeline.html">&#x1F4CA; Merchant Pipeline</a>
-          <a class="quick-link" href="launch-readiness.html">&#x1F680; Launch Readiness</a>
-          <a class="quick-link" data-requires-superadmin href="super-admin.html">&#x1F451; Super Admin</a>
-        </div>
+        <!-- The dashboard is a dashboard, not a second navigation system. The ten
+             quick-links that used to sit here were global destinations: seven
+             duplicated the sidebar's Tools group and three (Financial OS, Seller
+             Success, Merchant Pipeline) existed nowhere else — those three now live
+             in Tools. Contextual tool links inside Financial, SmartPOS and Delivery
+             remain: a related tool beside the work is context, not navigation. -->
         <!-- P1 Command Center — 4 sections from adminGetExecutiveDashboard + adminGetFinance (canonical). -->
         <div id="execCommand" class="exec-command"></div>
         <div class="kpi-grid">

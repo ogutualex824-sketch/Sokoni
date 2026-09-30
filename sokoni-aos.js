@@ -1803,7 +1803,13 @@ window.SokoniAOS = (() => {
                   </div>
                   <div style="background:rgba(255,255,255,.06);border-radius:4px;height:28px;position:relative">
                     <div style="background:var(--aos-accent);opacity:0.7;height:100%;border-radius:4px;width:${pct}%;transition:width .3s"></div>
-                    <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:12px;color:#000;font-weight:600">${pct}%</span>
+                    <!-- The label sits over a bar that may have ZERO width. Hardcoded
+                         #000 read fine on the bright accent fill and became black-on-black
+                         the moment a funnel step was 0 — which is the normal state of an
+                         empty funnel, so the figure vanished exactly when it was 0%.
+                         White with a dark shadow is legible on both the accent fill and
+                         the empty track. -->
+                    <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:12px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.9);font-weight:700">${pct}%</span>
                   </div>
                 </div>`;
               }).join("")}
