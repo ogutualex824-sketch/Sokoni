@@ -1,10 +1,10 @@
 {
-  "commit": "d55c11219cb63c1fb3232aa1f729be7b7ee48088",
-  "commitShort": "d55c112",
-  "branch": "hosting/home-picked-for-you-on-2f3bb6f",
-  "buildTime": "2026-09-30T09:32:18.551Z",
+  "commit": "2bcdae289ffd752dc13a02ffbb52e24281f7ac3a",
+  "commitShort": "2bcdae2",
+  "branch": "hosting/header-asks-on-b108ae3",
+  "buildTime": "2026-09-30T14:44:57.299Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260930093216-v646",
+  "cacheVersion": "sokoni-20260930144454-v648",
   "environment": "production",
   "dirtyWorkingTree": false,
   "pipelineArtifacts": [
