@@ -53,16 +53,27 @@ function millis(v) {
 const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : (typeof v === 'string' && v.trim() !== '' && isFinite(Number(v)) ? Number(v) : null);
 
 /* ── pure computation (exported for tests) ──────────────────────────────────────────────────────── */
+/* THE SHOP'S DAY (2026-10-01). "Today" used to be the SERVER's day: setHours(0) on a Cloud Functions
+   instance is midnight UTC, i.e. 03:00 in Kenya, so between midnight and 03:00 a merchant's "today" still
+   held last night's sales. Kenya keeps UTC+3 all year (no DST), so the boundary is fixed arithmetic. */
+const SHOP_TZ_OFFSET_MS = 3 * 3600 * 1000;
+const DAY_MS = 86400 * 1000;
 function dayStart(now, offsetDays) {
-  const d = new Date(now); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (offsetDays || 0)); return d.getTime();
+  const local = Number(now) + SHOP_TZ_OFFSET_MS;
+  return Math.floor(local / DAY_MS) * DAY_MS - SHOP_TZ_OFFSET_MS - (offsetDays || 0) * DAY_MS;
 }
-/* A sale's day: saleDate 'YYYY-MM-DD' when present (the till's own local day), else createdAt. */
+/* A sale's instant: its own timestamp when present (exact), else its saleDate read as noon on that day in
+   the shop's zone. saleDate alone is not trusted first because at least one writer stamps it with
+   toISOString() — a UTC date — which files a 01:00 sale under the previous day. */
 function saleMillis(s) {
+  const m = millis(s && (s.createdAt || s.checkoutStartedAt));
+  if (m !== null) return m;
   if (s && typeof s.saleDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.saleDate)) {
-    const t = new Date(s.saleDate + 'T12:00:00').getTime();
+    const [y, mo, d] = s.saleDate.split('-').map(Number);
+    const t = Date.UTC(y, mo - 1, d, 12, 0, 0) - SHOP_TZ_OFFSET_MS;
     if (isFinite(t)) return t;
   }
-  return millis(s && (s.createdAt || s.checkoutStartedAt));
+  return null;
 }
 function customerKeyOf(o) {
   const uid = o.buyerUid || o.buyerId || o.customerUid || (o.customer && (o.customer.uid || o.customer.id));
@@ -200,4 +211,4 @@ async function handler(req) {
 }
 
 exports.merchantDashboardFacts = onCall(CFG, handler);
-exports._internal = { computeFacts, computeCustomers, customerKeyOf, saleMillis, millis, handler };
+exports._internal = { computeFacts, computeCustomers, customerKeyOf, saleMillis, millis, handler, dayStart, SHOP_TZ_OFFSET_MS };
