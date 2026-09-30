@@ -44,7 +44,7 @@ ck('script.js: boot and every snapshot render the SAME set of grids', (sc.match(
 ck('script.js: daily sections use listed AND sellable, not the bare outOfStock flag', /function _sellableForHome\(p\)/.test(sc) && !/filter\(p => \(p\.sold \|\| 0\) > 0 && !p\.outOfStock\)/.test(sc) && !/filter\(p => !p\.outOfStock\)/.test(sc));
 ck('script.js: _homeMergeFirestore obeys the delivery authority; only a fresh read may drop a row, and never the seller\'s own', /window\._homeMergeFirestore = function \(fsProducts, meta\)/.test(sc) && /&& \(!authoritative \|\| _mine\(p\)\)/.test(sc));
 ck('sokoni-db.js sets the canonical-listener flag; realtime.js stands down when it is present', /window\.__sokoniCatalogueModule = true/.test(sdb) && /if \(window\.__sokoniCatalogueModule\) return;/.test(rt));
-ck('sokoni-recommendations.js: bounded products query + sellability filter on product candidates', /orderBy\(documentId\(\), 'desc'\), limit\(_CAP\)/.test(recs) && /if \(spec\.type === 'product' && !_sellable\(d\)\) return;/.test(recs));
+ck('sokoni-recommendations.js: products pool ordered by uploadedAt desc + limit(_CAP) (single-field index) + sellability filter on product candidates', /orderBy\('uploadedAt', 'desc'\), limit\(_CAP\)/.test(recs) && /if \(spec\.type === 'product' && !_sellable\(d\)\) return;/.test(recs));
 
 /* ── 2. browser ─────────────────────────────────────────────────────────────────────────────── */
 (async () => {
