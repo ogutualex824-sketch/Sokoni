@@ -116,7 +116,16 @@ removed makes the reachability check fail; removing it restores the pass.
 
 **Browser certification QUEUED** — a peer deploy holds every Playwright run; this harness and
 `test-merchant-route-gate.js` have not been executed on this change. Static suites on this tree:
-`test-merchant-routes` 65/0, `test-mv2-1-sidebar` 14/0, `test-inshell-chrome` 30/0.
+`test-merchant-routes` 65/0, `test-mv2-1-sidebar` 14/0, `test-inshell-chrome` 30/0, `test-merchant-v2-products-2b`
+59/0 (2 unproven, the suite's own labels), `test-merchant-products-2c-media` 53/0 (2 unproven, 3 BLOCKED — the
+deployed Storage rules snapshot is absent and was not fetched: no network from this worktree), `test-merchant-adjust-stock`
+39/0, `test-merchant-products-native` 23/0, `test-merchant-products-wizard-photos` 40/0, `test-merchant-v2-panels` 20/0;
+`predeploy-syntax-gate` clean (1808 files, 454 inline blocks).
+
+**Follow-up in the same slice.** The first cut of `fitSheet()` called `host.style.setProperty/removeProperty`
+unguarded; the 2b suite's hand-rolled DOM gives the host a bare `style:{}`, and the throw inside `paint()` blanked the
+surface (2b went 55 FAIL before the guard). A viewport nicety must never be able to kill paint: `fitSheet()` now
+returns early when the host has no CSSOM, leaving the CSS fallback in force.
 
 - Files: `sokoni-merchant-products.js`, `scripts/test-uploader-mobile-scroll.js` (new), `CHANGELOG.md`.
 - Database / API / security changes: none. Breaking: none.

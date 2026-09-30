@@ -366,7 +366,10 @@
        the CSS fallback of 100dvh applies and nothing here runs. */
     var _vv = (typeof window !== 'undefined' && window.visualViewport) || null;
     function fitSheet () {
-      if (!host || !host.style) return;
+      /* Never let a viewport nicety kill paint(): a host without a CSSOM (a test DOM, an
+         exotic engine) simply gets no binding — the CSS fallback still applies. */
+      if (!host || !host.style || typeof host.style.setProperty !== 'function'
+          || typeof host.style.removeProperty !== 'function') return;
       if (S.destroyed || !S.editor || !_vv) {
         host.style.removeProperty('--pr-vvh');
         host.style.removeProperty('--pr-vvt');
