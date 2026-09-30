@@ -1,5 +1,10 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<!-- data-admin-shell="own": AdminOS ships its own sidebar (#aosSidebar) and its
+     own header (.aos-header). sokoni-admin-shell.js (not loaded on this line today)
+     honours the declaration by rendering nothing, and sokoni-responsive.css keys its
+     broad [class*="-sidebar"] phone override to it. Declared on <html> because a
+     shell runs in <head>, before <body> exists. -->
+<html lang="en" data-no-header="true" data-admin-shell="own">
 <head>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
