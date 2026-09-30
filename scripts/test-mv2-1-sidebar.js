@@ -42,7 +42,7 @@ ck('S2  shell: no second POS iframe is created for the entry (same panel key "po
 
 /* ── P: pos.js boot + hash handling, executed in a VM ── */
 const pos = read('pos.js');
-const b0 = pos.indexOf("const openSalesControlFromHash = () =>"), b1 = pos.indexOf("else if (boot && nav.KNOWN.includes(boot) && boot !== 'pos') ui.switchTab(boot, { fromHistory: true });");
+const b0 = pos.indexOf("const consumeSalesControlHash = () =>"), b1 = pos.indexOf("else if (boot && nav.KNOWN.includes(boot) && boot !== 'pos') ui.switchTab(boot, { fromHistory: true });");
 ck('P0  pos.js carries the salescontrol deep-link block', b0 > 0 && b1 > b0, { b0, b1 });
 const block = pos.slice(b0, b1 + "else if (boot && nav.KNOWN.includes(boot) && boot !== 'pos') ui.switchTab(boot, { fromHistory: true });".length);
 function runBoot(hash) {
@@ -58,8 +58,14 @@ ck('P2  boot with a real tab still switches the tab and opens no overlay', c.ope
 const cc = { opened: 0 };
 const env2 = { window: { PosSalesView: { open() { cc.opened++; } }, addEventListener(t, fn) { if (t === 'hashchange') env2.__h = fn; if (t === 'popstate') env2.__p = fn; } }, location: { hash: '' }, nav: { KNOWN: ['pos'] }, ui: { switchTab() {} }, setTimeout(fn) { fn(); }, console };
 vm.runInContext('(function(){ const window = this.window, location = this.location, nav = this.nav, ui = this.ui, setTimeout = this.setTimeout;\n' + block + '\n }).call(this)', vm.createContext(env2));
-env2.location.hash = '#salescontrol'; env2.__h && env2.__h(); env2.__p && env2.__p();
-ck('P3  a later hash change / popstate to #salescontrol opens the overlay (the shell re-targets a live frame this way)', cc.opened === 2, cc);
+/* 2026-10-01: P3 used to require that a POPSTATE onto #salescontrol opens the overlay too.
+   That was the defect the owner hit ("minus / Remove sends me to Sales Control"): a back
+   step inside the POS reopened it. Contract now: the shell's re-target (hashchange) opens it
+   once; a back/forward step never does. Full sequence: scripts/test-salescontrol-hash-once.js. */
+env2.location.hash = '#salescontrol'; env2.__h && env2.__h();
+const afterHashchange = cc.opened;
+env2.location.hash = '#salescontrol'; env2.__p && env2.__p();
+ck('P3  the shell\'s hash change to #salescontrol opens the overlay once; a popstate onto #salescontrol does NOT reopen it', afterHashchange === 1 && cc.opened === 1, { afterHashchange, total: cc.opened });
 
 /* ── V: cleanup + KRA copy ── */
 const ret = read('returns.html');

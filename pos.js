@@ -4345,14 +4345,32 @@ const SPos = (function () {
       /* #salescontrol is a deep-link to the Sales Control Centre OVERLAY, not a tab: the
          merchant shell's sidebar entry (MV2-1) and any bookmark land here. Same entry point
          as the in-POS button (nav action 'salescontrol'). */
-      const openSalesControlFromHash = () => { try { window.PosSalesView && window.PosSalesView.open(); } catch (_) {} };
+      /* The hash is a ONE-SHOT request, consumed the moment it is honoured (2026-10-01 fix):
+         left in place, "#salescontrol" made every later back step inside the POS (a sheet's
+         back / Remove, the Sell stepper's history) fire popstate with the hash still reading
+         salescontrol and REOPEN the overlay. replaceState swaps the current entry to #pos
+         without firing hashchange or popstate and without adding a history step, so the
+         shell's next sidebar click (which sets #salescontrol again) is a real change. */
+      const consumeSalesControlHash = () => {
+        try {
+          if ((location.hash || '').replace(/^#/, '') === 'salescontrol' && window.history && history.replaceState) {
+            history.replaceState(history.state, '', location.pathname + location.search + '#pos');
+          }
+        } catch (_) {}
+      };
+      const openSalesControlFromHash = () => {
+        consumeSalesControlHash();
+        try { window.PosSalesView && window.PosSalesView.open(); } catch (_) {}
+      };
       window.addEventListener('hashchange', () => {
         const t = (location.hash || '').replace(/^#/, '');
         if (t === 'salescontrol') openSalesControlFromHash();
       });
       window.addEventListener('popstate', () => {
         const t = (location.hash || '').replace(/^#/, '') || 'pos';
-        if (t === 'salescontrol') { openSalesControlFromHash(); return; }
+        /* A back/forward step NEVER opens Sales Control; it only restores tabs. A stale
+           #salescontrol entry (from a page loaded before this fix) is consumed silently. */
+        if (t === 'salescontrol') { consumeSalesControlHash(); return; }
         if (nav.KNOWN.includes(t)) ui.switchTab(t, { fromHistory: true });
       });
       /* Deep-link on boot: honour an incoming #view (Phase-4 standalone→shell redirects rely on this). */
