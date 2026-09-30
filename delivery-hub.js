@@ -664,6 +664,35 @@ const DeliveryHub = {
     );
   },
 
+  /* ── PARCELS (2026-09-30) — the Send-a-Parcel rail lives on packageRequests, written ONLY by
+     the parcel functions. The browser reads the jobs it is party to (rules: uid / buyerUid) and
+     never creates one. Two equality filters, no orderBy → no composite index; sorted here. ── */
+  _listenParcels(field, uid, callback) {
+    const q = query(collection(db, 'packageRequests'), where(field, '==', uid), where('kind', '==', 'parcel'));
+    return onSnapshot(q,
+      snap => {
+        const ms = (v) => (v && v.toMillis) ? v.toMillis() : (typeof v === 'number' ? v : (v ? Date.parse(v) || 0 : 0));
+        const list = snap.docs.map(d => ({ _fsId: d.id, ...d.data() }));
+        list.sort((a, b) => ms(b.createdAt) - ms(a.createdAt));
+        callback(list);
+      },
+      err => { console.warn('[DeliveryHub] listenParcels:', err.message); callback(null, err); }
+    );
+  },
+  listenSenderParcels(uid, callback)    { return this._listenParcels('uid', uid, callback); },
+  listenRecipientParcels(uid, callback) { return this._listenParcels('buyerUid', uid, callback); },
+  /* Only an UNPAID parcel may be cancelled by its sender (status is in the owner's rule whitelist).
+     A paid one is the rider machinery's to cancel — through support, never from here. */
+  async cancelParcel(jobId, uid, reason) {
+    const ref = doc(db, 'packageRequests', jobId);
+    const snap = await getDoc(ref);
+    const d = snap.exists() ? snap.data() : null;
+    if (!d || d.uid !== uid) throw new Error('Not your parcel.');
+    if (d.status !== 'pending_payment') throw new Error('Only an unpaid parcel can be cancelled here. Contact Support for a paid one.');
+    await updateDoc(ref, { status: 'cancelled', cancelReason: reason || 'Sender cancelled', updatedAt: serverTimestamp(),
+      timeline: arrayUnion({ status: 'cancelled', at: new Date().toISOString(), by: uid }) });
+  },
+
   /* ────────────────────────────────────────────────────────
      14. listenRiderDeliveries(riderId, callback) → unsub fn
          Active deliveries assigned to this rider.

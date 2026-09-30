@@ -596,10 +596,8 @@ function _hubOrders(list){
     return _hcard('📦','Order '+id,sub,o.status,href,chip);
   }).join(''));
 }
-/* Parcels = "Send a Parcel" (delivery.html → DeliveryHub.createDelivery → `deliveries`, keyed by
-   senderUid). NOT packageRequests: those are the marketplace order deliveries, already listed
-   under Deliveries — reading them here would show every order twice. Fields and link are the
-   producer's own: deliveryAddress / recipientName, trackingUrl = delivery-tracking.html?ref=. */
+/* Parcels = "Send a Parcel" — packageRequests jobs with kind:'parcel' (server-written by the parcel
+   functions, 2026-09-30). Order deliveries carry orderId and no kind, so nothing is listed twice. */
 function _hubParcels(list){
   var act=(list||[]).filter(function(p){return _HUB_FINAL.parcel.indexOf(p.status)<0;}).slice(0,20);
   if(!act.length){_hempty('hubParcels','No parcels on the way. <a href="delivery.html">Send a parcel ›</a>');return;}
@@ -653,7 +651,10 @@ function _showHub(){
     if(!u){_hubSignedOut();return;}
     if(!db||!hub){_hubUnavailable();return;}
     _unsubs.push(db.listenUserOrders(u.uid,_hubOrders));
-    _unsubs.push(hub.listenSenderDeliveries(u.uid,_hubParcels));
+    /* Parcels are packageRequests jobs (kind:'parcel') written by the parcel functions — sent and incoming. */
+    var _pSent=[],_pIn=[];function _pEmit(){_hubParcels(_pSent.concat(_pIn.filter(function(d){return !_pSent.some(function(x){return x._fsId===d._fsId;});})));}
+    _unsubs.push(hub.listenSenderParcels(u.uid,function(l){if(l){_pSent=l;_pEmit();}}));
+    _unsubs.push(hub.listenRecipientParcels(u.uid,function(l){if(l){_pIn=l;_pEmit();}}));
     _unsubs.push(db.listenUserRideHistory(u.uid,_hubRides));
     /* SokoniDB's listeners only log a read error, so a refused or failed read would leave a
        section on "Checking…" forever. After a bounded wait, a section that never answered says

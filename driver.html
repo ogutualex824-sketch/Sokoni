@@ -2389,7 +2389,7 @@ window._drvCompleteDelivery = async function(dRef) {
 
     try {
       const _fn = window.firebaseFunctions && window.firebaseFunctions.httpsCallable
-        ? window.firebaseFunctions.httpsCallable('completeDeliveryWithPin')
+        ? window.firebaseFunctions.httpsCallable((data && data.kind === 'parcel') ? 'completeParcelWithPin' : 'completeDeliveryWithPin')
         : null;
       if (!_fn) { window.toast('❌ Cannot reach the server. Check your connection and try again.'); return; }
       const _res = await _fn({ deliveryRef: dRef, pin: entered });
@@ -2723,7 +2723,7 @@ window._ordDeliver = async function(oId) {
 
   try {
     const _fn = window.firebaseFunctions && window.firebaseFunctions.httpsCallable
-      ? window.firebaseFunctions.httpsCallable('completeDeliveryWithPin')
+      ? window.firebaseFunctions.httpsCallable((ordSnap && ordSnap.kind === 'parcel') ? 'completeParcelWithPin' : 'completeDeliveryWithPin')
       : null;
     if (!_fn) { window.toast?.('❌ Cannot reach the server. Check your connection and try again.', false); return; }
 
@@ -3536,14 +3536,16 @@ window.toggleOnline = async function() {
         /* D2: the rider figure is the server's (same commission as the payout) — no 0.88 in the
            browser. Unknown (no server money record yet) renders as —. */
         var net = _kes(d.riderEarning != null ? d.riderEarning : d.driverNet);
-        return '<div class="delivery-card"><div class="dc-top"><div><div class="dc-id">Order '+_esc(String(d.orderId||d.id).slice(0,10))+'</div>'
+        var isParcel = d.kind === 'parcel';
+        return '<div class="delivery-card"><div class="dc-top"><div><div class="dc-id">'+(isParcel ? '📦 Parcel ' : 'Order ')+_esc(String(d.orderId||d.id).slice(0,12))+'</div>'
           /* Area, not street address — and no buyer name or phone. An unclaimed job
              is assigned to nobody, so nobody has yet earned the customer's identity.
              Those details arrive after the claim, through fulfilmentScan's rider
              projection, which checks the assignment is still active. */
           + '<div class="dc-date">'+_esc(d.sellerName||'Shop')+' → '+_esc(String(d.deliveryArea||'Area not recorded').slice(0,40))+'</div></div>'
           + '<div><div class="dc-fee">'+net+' <span style="font-size:11px;color:rgba(255,255,255,0.35)">to you</span></div></div></div>'
-          + '<div class="dc-info">📦 '+(Number(d.itemCount)||0)+' item(s)'+(d.vehicleType?' · '+_esc(d.vehicleType):'')+' · 📍 Distance —</div>'
+          /* Distance is the SERVER's rider→pickup figure (F1-R), shown only when known; a parcel also shows its priced trip length. */
+          + '<div class="dc-info">📦 '+(Number(d.itemCount)||0)+' item(s)'+(d.vehicleType?' · '+_esc(d.vehicleType):'')+(isParcel && d.tripKm ? ' · '+_esc(String(d.tripKm))+' km trip' : '')+(d.distanceKm != null ? ' · 📍 '+_esc(String(d.distanceKm))+' km from you' : ' · 📍 Distance —')+'</div>'
           + '<div class="dc-actions"><button type="button" class="dc-accept-btn" data-del="'+_esc(d.id)+'">✅ Accept'+(net !== '—' ? ' — Earn '+net : '')+'</button></div></div>';
       }).join('');
       el.querySelectorAll('button[data-del]').forEach(function(b){
