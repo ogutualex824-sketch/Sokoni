@@ -1,0 +1,90 @@
+{
+  "slice": "R3",
+  "appliedAt": "2026-09-29T19:04Z",
+  "primaryDigest": "cb87e8cac1931c70b7cc423cdb4de62c76256a83ef77bce98637b562defb98e3",
+  "deferredDigest": "9f8a96e8032bd36337bbba1cae423b237056728282e39723454fd4e916348952",
+  "applied": [
+    {
+      "uid": "FqmCT4t4KehQD6EJR4m3dLVbHBo1",
+      "category": "service_business",
+      "auditId": "VrhGoDE16dK3M8MRwT06"
+    },
+    {
+      "uid": "H7p6ktBHogM5GcBy6mz8negKVbG2",
+      "category": "cleaning",
+      "auditId": "92JzdKA9irn4VhhEFuXH"
+    },
+    {
+      "uid": "X7KZGTy3ouYmGESePPxKVlC3j613",
+      "category": "trades",
+      "auditId": "XMiPAmNU61c48YSqcIPn"
+    }
+  ],
+  "secondApply": {
+    "refused": "digest_mismatch",
+    "primaryCount": 0,
+    "alreadyStampedProviders": 3
+  },
+  "preCounts": {
+    "providers": 11,
+    "businesses": 12,
+    "shops": 3,
+    "sellers": 8,
+    "products": 102,
+    "merchants": 8,
+    "applications": 13,
+    "adminAudit": 17
+  },
+  "landing": {
+    "at": "2026-09-29T19:07:03.087Z",
+    "pass": 24,
+    "fail": 0,
+    "results": {
+      "FqmCT4t4KehQD6EJR4m3dLVbHBo1": {
+        "route": "provider-dashboard.html",
+        "state": "AVAILABLE",
+        "category": "service_business",
+        "lane": "services",
+        "capability": "SERVICES",
+        "authority": "NOT_YET_STAMPED"
+      },
+      "H7p6ktBHogM5GcBy6mz8negKVbG2": {
+        "route": "provider-dashboard.html",
+        "state": "AVAILABLE",
+        "category": "cleaning",
+        "lane": "services",
+        "capability": "SERVICES",
+        "authority": "NOT_YET_STAMPED"
+      },
+      "X7KZGTy3ouYmGESePPxKVlC3j613": {
+        "route": "provider-dashboard.html",
+        "state": "AVAILABLE",
+        "category": "trades",
+        "lane": "services",
+        "capability": "SERVICES",
+        "authority": "NOT_YET_STAMPED"
+      }
+    },
+    "counts": {
+      "providers": 11,
+      "businesses": 12,
+      "shops": 3,
+      "sellers": 8,
+      "products": 102,
+      "merchants": 8,
+      "applications": 13,
+      "adminAudit": 20
+    },
+    "capabilityStamped": [
+      "IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+      "Ohg9HrtGpCXBUSzbRfaUifOPWQ32"
+    ]
+  },
+  "censusAfter": {
+    "manifestDigestUnchanged": "028299e7442516d93f3a6a2ed1555bda09f548b4ee0dd0cfbbdcc1eebbad13e2",
+    "rowsDifferingFromC3Baseline": [
+      "DG Wine (C4 stamp)",
+      "Latomi (C5 stamp)"
+    ]
+  }
+}

@@ -338,7 +338,8 @@ service cloud.firestore {
       let decisive = ['approved','active','accepted','verified','rejected','declined','denied',
                       'suspended','revoked','banned','disabled'];
       let decisionKeys = ['decidedBy','decidedAt','decisionAppliedFor','projectionStatus','blockedFor',
-                          'statusCanonical','reviewReason','agreementVerifiedAt','agreementVerifiedVersion'];
+                          'statusCanonical','reviewReason','agreementVerifiedAt','agreementVerifiedVersion',
+                          'priorDecisions'];
       let d = request.resource.data;
       return (resource == null
                 ? !d.keys().hasAny(decisionKeys)
@@ -353,7 +354,10 @@ service cloud.firestore {
       allow read:   if isAdmin() || isOwner();
       /* The applicant may amend or withdraw a request that is still theirs
          (e.g. correcting a phone number), but cannot decide it. */
-      allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields() && noApplicationDecision()
+      /* priorDecisions is the immutable record of superseded decisions, appended ONLY by applicationDecide
+         (priorDecisionsPatch); not even an administrator's raw client write may touch it. */
+      allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['priorDecisions']))
+                    || (isOwner() && claimsOwner() && noAdminFields() && noApplicationDecision()
                                      && classificationFrozenOnceDecided());
       allow delete: if isAdmin() || isOwner();
     }
@@ -2544,9 +2548,17 @@ service cloud.firestore {
 
     match /businesses/{bizId} {
       allow read:   if true;
-      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
-      allow update: if isAdmin()
-                    || (isOwner() && uidUnchanged() && noAdminFields());
+      /* R1 (capability convergence): `capabilities` — the approved-capability stamp (PRODUCTS / SERVICES) — and
+         `business` — the C1 category stamp — are SERVER-ONLY. Before this rule any owner could create
+         businesses/{their uid} carrying a well-formed stamp and be read as STAMPED: a self-granted capability.
+         Like providers.business, not even an admin's RAW client write may touch them; the audited server paths
+         (approval projection, the capability migration contract, AdminOS reclassification) are the only writers. */
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
+                    && !request.resource.data.keys().hasAny(['capabilities', 'business']);
+      allow update: if (isAdmin()
+                        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['capabilities', 'business']))
+                    || (isOwner() && uidUnchanged() && noAdminFields()
+                        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['capabilities', 'business']));
       allow delete: if isAdmin();
 
       match /pos_transactions/{txId} {

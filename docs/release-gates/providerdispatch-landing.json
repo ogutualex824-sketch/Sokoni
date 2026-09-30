@@ -1,0 +1,72 @@
+{
+  "slice": "providerdispatch-shell-gate-landing",
+  "deployedAt": "2026-09-30T02:07:13Z",
+  "authorizedBy": "owner (c7e26b6 only)",
+  "candidate": {
+    "worktree": "C:/temp/sok-pd-cand",
+    "tip": "bed11db",
+    "functionsTree": "c7e26b6",
+    "force": false
+  },
+  "finalPreflightAt": "2026-09-30T01:54:43Z",
+  "exclusivity": {
+    "cloudBuildsInProgress": 0,
+    "functionsUpdatedLast30Min": 0,
+    "peersHolding": [
+      "sokoni-da",
+      "sokoni-45",
+      "sokoni-22"
+    ]
+  },
+  "revision": {
+    "name": "providerdispatch-00050-rur",
+    "ready": true,
+    "trafficPercent": 100,
+    "functionState": "ACTIVE",
+    "sourceGeneration": "1790733957691735",
+    "archiveFiles": 389,
+    "candidateFilesByteIdentical": "388/388",
+    "envHashIdentical": true,
+    "minInstances": 0,
+    "maxInstances": 80,
+    "memory": "512Mi",
+    "timeoutSeconds": 120,
+    "secretsBound": [],
+    "envKeys": [
+      "ALGOLIA_APP_ID",
+      "AT_ENV",
+      "AT_SENDER_ID",
+      "ETIMS_ENV",
+      "TYPESENSE_NODES"
+    ]
+  },
+  "ops": {
+    "count": 61,
+    "businessWorkspace": true,
+    "workspaceHome": true,
+    "preExistingClosureIdentical": "22/23 (only provider-dispatch.js differs)",
+    "providerOnboardingUnchanged": true
+  },
+  "rollback": {
+    "revision": "providerdispatch-00048-qiz",
+    "ready": true
+  },
+  "startup": {
+    "probe": "STARTUP TCP probe succeeded after 1 attempt",
+    "errors": 0
+  },
+  "smoke": {
+    "endpointProbes": "UNAUTHENTICATED for new/existing/unknown ops (App Check first) — no identity proof",
+    "functionalSmokeOfNewOps": "not attempted (needs a real provider browser session; Kasindi excluded)",
+    "liveConsumerPresent": false,
+    "userVisibleChange": "none until hosting counterpart ships from 49e0f3a"
+  },
+  "isolation": {
+    "adminAudit": 22,
+    "applications": 13,
+    "applicationDecisions": 0,
+    "providers": 11,
+    "kasindiRead": false,
+    "kasindiWritten": false
+  }
+}

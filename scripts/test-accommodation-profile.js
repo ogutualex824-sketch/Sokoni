@@ -38,7 +38,7 @@ const say = console.log;
 console.log = console.info = console.warn = console.debug = () => {};
 const resolveIn = (m) => require.resolve(m, { paths: [FN] });
 const stub = (m, exp) => { const p = m.startsWith('./') ? Path.join(FN, m + '.js') : resolveIn(m); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
-const authApi = { getUser: async (u) => ({ uid: u, customClaims: {} }) };
+const authApi = { getUser: async (u) => ({ uid: u, customClaims: /^admin/.test(u) ? { admin: true } : {} }) };
 const ADMIN = { apps: [{}], initializeApp: () => ({}), app: () => ({}),
   firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath }), auth: () => authApi, storage: () => ({ bucket: () => ({}) }) };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
@@ -72,8 +72,8 @@ async function errCode(p) { try { await p; return null; } catch (e) { return (e.
     const today = CORE.dateOf(REAL_NOW); const D = CORE.addDays(today, 10);
     const WEEK = {}; ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach((d) => { WEEK[d] = { closed: false, periods: [{ open: '08:00', close: '20:00' }], breaks: [] }; });
     const seed = async (uid, category, svcName) => {
-      await db.doc(`providers/${uid}`).set({ name: uid, status: 'active', category, acceptsBookings: true, business: { category, source: 'application' } });
-      await db.doc(`applications/app_${uid}`).set({ uid, status: 'approved', role: 'provider', category });
+      await db.doc(`providers/${uid}`).set({ name: uid, status: 'active', approvedAt: 1, category, acceptsBookings: true, business: { category, source: 'application' } });
+      await db.doc(`applications/app_${uid}`).set({ uid, status: 'approved', role: 'provider', category, decidedBy: 'admin_1', decidedAt: 1 });
       await db.doc(`providerAvailability/${uid}`).set({ uid, modes: ['fixed_hours'], schedule: WEEK,
         appt: { enabled: true, durationMins: 60, bufferMins: 0, travelMins: 0, maxDaysAhead: 90, minNoticeHours: 1, allowSameDay: true }, cap: {} });
       await db.doc(`providerServices/svc_${uid}`).set({ providerId: uid, name: svcName, price: 500000, fee: 0, deposit: 0, durationMins: 60, active: true });

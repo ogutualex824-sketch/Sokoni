@@ -1,0 +1,58 @@
+{
+  "identity": "3SkVHLqJXzfeQlQ4PfBx5DFR4at2",
+  "application": "ENTMS9AACTG",
+  "planDigest": "b7a2053b2f82921bbd909ec84ebe8c9c1e071ec6aaeddb5ee5b0744649d170a0",
+  "appliedAt": "2026-09-29T19:31:10Z",
+  "applyResult": {
+    "previous": null,
+    "category": "artist_creator",
+    "laneUnchanged": null
+  },
+  "auditId": "moktBGFpfTaKTZIBvcdC",
+  "secondApply": "already_classified",
+  "preSnapshotAt": "2026-09-29T19:30:17.561Z",
+  "preCounts": {
+    "providers": 11,
+    "businesses": 12,
+    "shops": 3,
+    "sellers": 8,
+    "products": 102,
+    "applications": 13,
+    "adminAudit": 20,
+    "wallets": 74,
+    "providerBookings": 4
+  },
+  "landing": {
+    "at": "2026-09-29T19:32:24.331Z",
+    "pass": 14,
+    "fail": 0,
+    "stamp": {
+      "classifiedBy": "admin-sdk:classify-identity",
+      "setAt": "2026-09-29T19:31:10.000Z",
+      "source": "admin",
+      "category": "artist_creator"
+    },
+    "resolver": {
+      "route": "provider-dashboard.html",
+      "state": "AVAILABLE",
+      "category": "artist_creator",
+      "lane": "services",
+      "capability": "SERVICES"
+    },
+    "counts": {
+      "providers": 11,
+      "businesses": 12,
+      "shops": 3,
+      "sellers": 8,
+      "products": 102,
+      "applications": 13,
+      "adminAudit": 21,
+      "wallets": 74,
+      "providerBookings": 4
+    }
+  },
+  "census": {
+    "distributionUnchanged": "0/7/12/7",
+    "cleanupDigestUnchanged": "028299e7442516d93f3a6a2ed1555bda09f548b4ee0dd0cfbbdcc1eebbad13e2"
+  }
+}

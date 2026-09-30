@@ -78,7 +78,13 @@ const itemsOf = async (calKey, month) => ((await get(`entAvailability/${calKey}/
 
 async function seedProvider(uid, opts) {
   const o = opts || {};
-  await db.doc(`providers/${uid}`).set({ name: uid, status: o.status || 'active', category: o.category || 'photographer', acceptsBookings: true });
+  /* R2: an approved provider carries the C1 category stamp projectProvider writes; derived from the same free-text id
+     through the real classifier (a fixture from the producer, not a literal). Without it the workspace is PENDING_CLASSIFICATION. */
+  const _fn = require('path').join(__dirname, '..', 'functions');
+  const _app = { category: o.category || 'photographer', role: 'provider' };
+  const c1 = require(_fn + '/business-category.js').categoryFromApplication(_app, 'provider').category;
+  const lane = require(_fn + '/provider-hub.js').classifyDecidedApplication(_app);   /* the producer's own lane classifier */
+  await db.doc(`providers/${uid}`).set({ name: uid, status: o.status || 'active', approvedAt: 1, category: o.category || 'photographer', acceptsBookings: true, ...(o.decided !== false ? { business: { category: c1, lane, source: 'application' } } : {}) });   /* the stamp exists only once an application was DECIDED (projectProvider writes it at approval) */
   if (o.decided !== false) await db.doc(`applications/app_${uid}`).set({ uid, status: 'approved', role: 'provider', category: o.category || 'photographer' });
   await db.doc(`providerAvailability/${uid}`).set(cfgDoc(o.cfg));
   await db.doc(`providerServices/svc_${uid}`).set({ providerId: uid, name: 'Portrait session', price: 500000, fee: 0, deposit: 0, durationMins: 60, active: true });

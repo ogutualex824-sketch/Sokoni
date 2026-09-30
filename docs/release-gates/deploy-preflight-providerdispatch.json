@@ -1,0 +1,112 @@
+{
+  "slice": "deploy-preflight-providerdispatch-shell-gate",
+  "readOnly": true,
+  "deploymentAuthorized": false,
+  "at": "2026-09-30T01:04:48Z",
+  "candidate": {
+    "worktree": "C:/temp/sok-pd-cand",
+    "tip": "b28567c",
+    "functionsTree": "c49c712",
+    "clean": true
+  },
+  "checks": {
+    "rollbackTargetActive": {
+      "ok": true,
+      "revision": "providerdispatch-00048-qiz",
+      "traffic": 100,
+      "latestRevision": true
+    },
+    "liveSourceIsPinnedArchive": {
+      "ok": true,
+      "updateTime": "2026-09-09T06:02:15Z",
+      "generation": "1787386174474483",
+      "archiveSha256_16": "6a312842a32f4265",
+      "reDownloadIdentical": true
+    },
+    "closure": {
+      "ok": true,
+      "size": 34,
+      "sameSetAsCertified": true
+    },
+    "opsAdded": {
+      "ok": true,
+      "archive": 59,
+      "candidate": 61,
+      "added": [
+        "businessWorkspace",
+        "workspaceHome"
+      ],
+      "removed": [],
+      "dispatcherIdenticalOutsideEdits": true
+    },
+    "existingOpsByteIdentical": {
+      "ok": true,
+      "archiveIdenticalFiles": 377,
+      "gateFiles": 10,
+      "dispatcherEdit": 1,
+      "unexpected": 0,
+      "identicalToCertifiedManifest": true
+    },
+    "providerOnboardingAbsent": {
+      "ok": true,
+      "state": "ARCHIVE-IDENTICAL",
+      "exclusionViolations": 0
+    },
+    "secretsEnv": {
+      "ok": true,
+      "liveSecretsBound": [],
+      "liveEnvKeys": [
+        "ALGOLIA_APP_ID",
+        "AT_ENV",
+        "AT_SENDER_ID",
+        "ETIMS_ENV",
+        "TYPESENSE_NODES"
+      ],
+      "candidateDefineSecret": 0,
+      "envHashIdenticalToArchive": true
+    },
+    "estateUnchanged": {
+      "ok": false,
+      "note": "peer deploys since 2026-09-29 22:5xZ; providerDispatch row unchanged",
+      "changed": [
+        "availableDeliveries",
+        "claimAvailableDelivery",
+        "dispatchDelivery",
+        "riderPresence (new)",
+        "webhookWhatsapp (new)",
+        "initiateSTKPush",
+        "initiateSellerPayout",
+        "verifyIntasendPayment"
+      ],
+      "rows": {
+        "before": 1720,
+        "now": 1722
+      },
+      "providerdispatchRevisions": 49
+    },
+    "noOverlappingWork": {
+      "ok": true,
+      "gitTouchesSince20260929": "this session only",
+      "otherWorktreesOnProviderDispatch": 0
+    },
+    "kasindiUntouched": {
+      "ok": true,
+      "method": "counts only; Kasindi record not read",
+      "adminAudit": 22,
+      "applications": 13,
+      "applicationDecisions": 0
+    },
+    "hostingNotPartOfRelease": {
+      "ok": true,
+      "command": "firebase deploy --only functions:providerDispatch"
+    },
+    "rollbackRevisionUsable": {
+      "ok": true,
+      "revision": "providerdispatch-00048-qiz",
+      "ready": true,
+      "created": "2026-08-22T08:09:35Z"
+    }
+  },
+  "verdict": "11 pass; check 8 is a live-estate caveat (peers deploying) — sequence any release, re-run preflight immediately before",
+  "rawLog": "PREFLIGHT_AT 2026-09-30T01:04:48Z\n== 1 rollback target still active\nproviderdispatch-00048-qiz\tproviderdispatch-00048-qiz\t100\tTrue\r\n== 12 rollback revision exists and is Ready\nproviderdispatch-00048-qiz\tReady\tTrue\t2026-08-22T08:09:35.173487Z\r\n== 2 live source still the archive e521e03 pins\n2026-09-09T06:02:15.580996954Z\t1787386174474483\tproviderDispatch/function-source.zip\r\narchive sha256 then=6a312842a32f4265 now=6a312842a32f4265\n== 3-6 candidate package = manifest (closure 34, 59 ops archive-identical, 2 added ops, provider-onboarding archive-identical)\nb28567c\n0\n{\"tip\":\"b28567c\",\"counts\":{\"total\":388,\"archive\":377,\"gate\":10,\"dispatcherEdit\":1,\"unexpected\":0},\"closure\":34,\"excludedViolations\":0,\"archiveFilesMissingFromCandidate\":0}\nclosure 34 same set as certified: true | files identical to certified manifest: true | provider-onboarding: ARCHIVE-IDENTICAL | violations 0 | unexpected 0\nnode:fs:441\r\n    return binding.readFileUtf8(path, stringToFlags(options.flag));\r\n                   ^\r\n\r\nError: ENOENT: no such file or directory, open 'C:\\c\\temp\\sok-pd-cand\\functions\\provider-dispatch.js'\r\n    at Object.readFileSync (node:fs:441:20)\r\n    at [eval]:1:244\r\n    at runScriptInThisContext (node:internal/vm:219:10)\r\n    at node:internal/process/execution:451:12\r\n    at [eval]-wrapper:6:24\r\n    at runScriptInContext (node:internal/process/execution:449:60)\r\n    at evalFunction (node:internal/process/execution:283:30)\r\n    at evalTypeScript (node:internal/process/execution:295:3)\r\n    at node:internal/main/eval_string:71:3 {\r\n  errno: -4058,\r\n  code: 'ENOENT',\r\n  syscall: 'open',\r\n  path: 'C:\\\\c\\\\temp\\\\sok-pd-cand\\\\functions\\\\provider-dispatch.js'\r\n}\r\n\r\nNode.js v24.15.0\r\n== 7 secrets / env unchanged\n(none bound)\nenv var KEYS bound live: ALGOLIA_APP_ID,AT_ENV,AT_SENDER_ID,ETIMS_ENV,EVENTARC_CLOUD_EVENT_SOURCE,FIREBASE_CONFIG,FUNCTION_REGION,FUNCTION_SIGNATURE_TYPE,FUNCTION_TARGET,GCLOUD_PROJECT,LOG_EXECUTION_ID,TYPESENSE_NODES\ncandidate dispatcher defineSecret count: 0\n.env: candidate == archive (hash)\n== 8 functions estate / Cloud Run unchanged underneath\nfunctions rows 1722 sha 779b1c200a4460bd (2026-09-29 22:5x: aa3099d04e13e606)\n234c234\n< availableDeliveries\t2026-09-09T06:01:49.116081507Z\r\n---\n> availableDeliveries\t2026-09-29T22:47:48.545040853Z\r\n282c282\nproviderdispatch revisions: 49\n== 9 overlapping providerDispatch work by others (git, all refs, since 2026-09-29)\nc49c712 2026-09-30 Alex Ogutu  feat(providerDispatch candidate): the shell gate — business-workspace.js and its 10 supporting modules added to the p\n024aff0 2026-09-30 Alex Ogutu  feat(workspace): the shell gate — the ONE workspace authority answers the DERIVED approval state first; only VALID_AP\n30a5bea 2026-09-30 Alex Ogutu  feat(remediation): REAPPLICATION_REQUIRED derived approval state (pure) + design proven 31/0; self-approval refused in \nc391322 2026-09-29 Alex Ogutu  feat(routing): R2 — the workspace resolver routes on category + capability; both authorities required, neither inferr\na7d142f 2026-09-29 Alex Ogutu  feat(capabilities): slice 1 — the workspace authority consumes the capability read model; route = category + approved\nC:/temp/sok-compat                                          7803541 [fix/merchant-shell-capability]\nC:/temp/sok-fn-cand                                         bc44f33 [release/functions-converged-6775b09]\nC:/temp/sok-p9rc                                            895c474 [candidate/p9-entry-reconciled]\nC:/temp/sok-pd-cand                                         b28567c [candidate/providerdispatch-shell-gate]\nC:/temp/sok-perf                                            7a9b16a [perf/app-shell-inventory]\nC:/temp/sok-r1-fold                                         c9d1e3e [release/r1-fold-candidate]\n== 10 Kasindi untouched (no admin decision landed: adminAudit count; no application count change) — Kasindi's own record NOT read\nadminAudit 22 (22 after King Bruce) | applications 13 (13) | applicationDecisions 0\n== 11 hosting not part of this release\ncommand scope: firebase deploy --only functions:providerDispatch (hosting predeploy not run; candidate hosting files are 8c1c4fe's and are NOT deployed by that command)\nPREFLIGHT_END\n"
+}

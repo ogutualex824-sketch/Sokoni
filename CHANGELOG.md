@@ -939,6 +939,489 @@ row binds `_ckItemQty`. Adds `scripts/test-checkout-summary.js`: 31/0 here, 24/7
 
 **Files:** `checkout.html`, `scripts/test-checkout-summary.js` (new). No database, API, security or breaking changes.
 
+## [2026-09-30] - DEPLOYED: Hosting 2f3bb6f — shell-gate consumer + Complete Application surface (release 1790737658252000 / version 6f7202bd5dd81d84, v645); owner-authorized
+
+docs/LANDING_HOSTING_SHELL_GATE_CONSUMER.md + docs/release-gates/hosting-landing-shell-gate-consumer.json. First attempt aborted in the live
+line's predeploy-browser-suites hook (test-approval-primitive.js could not load firebase-functions/logger — my worktree lacked the
+functions/node_modules junction; the CLI showed it as a cross-spawn ENOENT); production untouched, artefacts reverted. Junction added → hook
+32/32 EXECUTED → quick preflight re-run → same candidate deployed 03:07:38Z. Verified: version.json 2f3bb6f/v645; the three paths 200,
+served bytes == candidate (consumer 98e516ef…, module 3f681de2…, page 9cf6ecb4…); provider-dashboard loads the consumer; signed-out live
+smoke = signed_out, zero Firestore requests, no errors; rules b87c94e4 and providerdispatch-00050-rur unchanged; rollback 3cbdf961791900b8
+available. Signed-in behaviours (valid unchanged / REAPPLICATION_REQUIRED → completion / refused notice) NOT exercised live (no account in
+scope) — harness 21/0 against the deployed dispatcher code. NOW LIVE FOR USERS: claim-holding providers reaching the dashboard receive the
+derived state; held → /complete-application. Sellers/merchant-v2, buyers, onboarding path unchanged. Live hosting lineage = 2f3bb6f.
+
+## [2026-09-30] - HOSTING PREFLIGHT (READ ONLY): shell-gate consumer + Complete Application surface on the live line 49e0f3a — candidate 2f3bb6f certified against the DEPLOYED function code; deployment NOT authorized
+
+docs/HOSTING_PREFLIGHT_SHELL_GATE_CONSUMER.md + docs/release-gates/hosting-preflight-shell-gate-consumer.json. Worktree C:/temp/sok-host-gate,
+branch hosting/shell-gate-consumer-on-49e0f3a, tip 2f3bb6f = live 49e0f3a + one commit (rollback guard: contains live). Ships EXACTLY 4 files:
+provider-dashboard.html (+2 lines: the consumer script tag), sokoni-business-workspace.js (98e516ef…), complete-application.html (9cf6ecb4…),
+sokoni-complete-application.js (3f681de2…) — the three new files byte-identical to the capability line. Browser suite run IN THE CANDIDATE against
+FUNCTIONS_DIR=sok-pd-cand (c7e26b6, the deployed dispatcher) with the real onboarding/ops handlers answering the dashboard's boot ops: 21/0 — the
+live dashboard redirects a REAPPLICATION_REQUIRED provider to /complete-application, keeps a VALID one (data-ws-state AVAILABLE), shows a REFUSED
+one the notice. Consumer gained a fallback notice box for dashboards without #hcWorkspace (capability line aca09aa; sidebar 90/0, projection
+29/0, gate 22/0). Hosting gates PASS; syntax gate PASS (1,794 files). Live serves every dependency; the 3 new paths are 404 today. WHEN SHIPPED:
+providers holding the claim who reach the dashboard get gated (Kasindi/Langa'ta class); DJ holds no claim (already sent to onboarding by the live
+dashboard); sellers/merchant-v2 NOT gated by this slice. Rollback = Hosting version 3cbdf961791900b8.
+
+## [2026-09-30] - DEPLOYED: providerDispatch shell gate, candidate c7e26b6 → revision providerdispatch-00050-rur (owner-authorized; no --force)
+
+docs/LANDING_PROVIDERDISPATCH_SHELL_GATE.md + docs/release-gates/providerdispatch-landing.json. Final preflight 01:54Z green; no Cloud Build,
+no function updated in 30 min, three peers holding; tree == c7e26b6. Deployed 02:07:13Z. PROVEN FROM THE NEW SOURCE ARCHIVE (generation
+1790733957691735): 388/388 candidate files byte-identical, .env hash-identical; minInstances 0 = live; ops 61 with businessWorkspace +
+workspaceHome; 22/23 pre-existing closure modules identical (only the dispatcher differs); provider-onboarding.js == old archive; no
+secret bound; env keys unchanged; rollback 00048-qiz Ready; startup probe succeeded, no load errors. SMOKE: endpoint probes answer
+UNAUTHENTICATED for new/existing/unknown ops (App Check first — not an identity proof); functional smoke of the two new ops NOT attempted
+(needs a real provider browser session; Kasindi excluded). USER-VISIBLE CHANGE: none yet — live hosting 49e0f3a serves no workspace consumer
+(404) and the live provider dashboard does not load one; the gate takes effect only when the hosting counterpart ships (separate
+authorization). Counts after: adminAudit 22, applications 13, applicationDecisions 0, providers 11 — unchanged; Kasindi not read.
+
+## [2026-09-30] - NEW CANDIDATE c7e26b6: providerDispatch shell gate with minInstances matched to live (0) — re-certified; NOT deployed (owner authorized the config repair + re-certification only)
+
+docs/CANDIDATE_PROVIDERDISPATCH_SHELL_GATE_C7E26B6.md + docs/release-gates/providerdispatch-candidate-c7e26b6-manifest.json. Supersedes b28567c (the
+attempted candidate the CLI correctly refused — preserved in history). One change: functions/provider-dispatch.js _OPTS.minInstances 1 → 0 to
+equal the live minInstanceCount; manifest diff vs b28567c = exactly that one blob. Dispatcher diff vs the pinned archive = minInstances +
+business-workspace merge + two ROUTES; _OPTS otherwise identical (region, enforceAppCheck true, 120 s, 512 MiB). Re-certified on the candidate:
+gate 21/0, archive-compat 9/0, mutations 9/0 (assertion failures 9/8/1/1/1/1/4, no crash), capabilities 46/0, business-workspace 30/0,
+workspace-capability 51/0; closure 34 = certified set; ops 59→61 (+businessWorkspace, +workspaceHome); provider-onboarding ARCHIVE-IDENTICAL;
+0 exclusion violations; no secret declared/bound; .env hash == archive; clean tree; syntax gate PASS (1,649 files). Deployment of c7e26b6 NOT
+authorized; never --force. Live hosting now 49e0f3a (peer release 00:20Z) — future hosting candidates descend from it.
+
+## [2026-09-30] - providerDispatch deploy ATTEMPT (owner-authorized b28567c after a green final preflight) ABORTED BY THE CLI BEFORE UPLOAD — production unchanged; owner decision needed on minInstances
+
+Final preflight 01:18Z green (11/12, estate caveat controlled: no Cloud Build in progress, no function updated in 30 min, all three peer sessions
+confirmed no competing deploy). firebase deploy --only functions:providerDispatch from C:/temp/sok-pd-cand @ b28567c ran the base's predeploy
+chain (all PASS), packaged 2.61 MB, then stopped: "Pass the --force option to deploy functions that increase the minimum bill". Cause: the
+ARCHIVE's own provider-dispatch.js declares minInstances: 1, while the live function runs with minInstanceCount 0 — a cost-bearing
+configuration change that is NOT part of the shell gate. No build started; providerdispatch-00048-qiz still serves 100%. Not forced.
+Options for the owner: (a) --force and accept one always-warm 512 MiB instance; (b) set minInstances: 0 in the candidate dispatcher to
+match live exactly (a third, config-only edit; re-certify + re-manifest); (c) hold. Peers notified the window is released.
+
+## [2026-09-30] - DEPLOYMENT PREFLIGHT (READ ONLY) for the providerDispatch shell-gate candidate — 11/12 pass, 1 live-estate caveat; deployment NOT authorized
+
+docs/DEPLOY_PREFLIGHT_PROVIDERDISPATCH_SHELL_GATE.md + docs/release-gates/deploy-preflight-providerdispatch.json. Rollback target
+providerdispatch-00048-qiz active (100% traffic, Ready, created 2026-08-22); live source generation 1787386174474483, archive re-downloaded
+sha-identical to the pin's copy; candidate b28567c (tree c49c712) closure 34 = certified set; ops 59→61 (+businessWorkspace, +workspaceHome,
+none removed), dispatcher identical outside the two edits; 377 archive-identical files, provider-onboarding ARCHIVE-IDENTICAL, 0 violations;
+no secret bound live or declared by the candidate; .env hash-identical; no overlapping providerDispatch work in any ref; Kasindi untouched
+(adminAudit 22 / applications 13 / applicationDecisions 0 — record not read); hosting out of scope. CAVEAT: the Functions estate moved
+underneath by PEER deploys (delivery D2 22:47Z, webhookWhatsapp 00:12Z, initiateSTKPush/initiateSellerPayout/verifyIntasendPayment 00:39Z;
+1,720→1,722 rows) — providerDispatch itself unchanged; any release must be sequenced (one deploy at a time) and this preflight re-run
+immediately before the command.
+
+## [2026-09-30] - providerDispatch SHELL-GATE CANDIDATE constructed and certified (worktree C:/temp/sok-pd-cand, branch candidate/providerdispatch-shell-gate @ 40693c6, functions tree c49c712) — NOT deployed
+
+docs/CANDIDATE_PROVIDERDISPATCH_SHELL_GATE.md + docs/release-gates/providerdispatch-candidate-manifest.json. PIN e521e03: functions/ = the deployed
+archive byte-for-byte (378 files, 0 mismatches; base 8c1c4fe matched 371/378, the 7 others hold archive bytes traced to ed1c16b/0dbb200/f4422b4/
+b29d4fb). GATE c49c712: 10 modules identical to slice/c4-capability-consumer + the two-line dispatcher merge (business-workspace._h; ops
+businessWorkspace, workspaceHome); subscription-core/-catalog stay at ARCHIVE versions. Closure 34 = 23 archive + 11. EXCLUSION PROOF 0
+violations: commission-config, finos-utils, subscription-*, notify, sms-service, provider-onboarding, provider-ops, booking-service,
+booking-payment-sweep, availability, legal-agreements, application-lifecycle, universal-onboarding ARCHIVE-IDENTICAL; provider-shop,
+sokoni-till, event-ops, entertainment/creator/venue stack, provider-directory, role-authority… ABSENT. Certified on the candidate: gate
+suite 21/0, archive-compat 9/0 (unstubbed archive subscription modules), MUTATIONS 9/0 (7 mutations each fail by assertion), capabilities
+46/0, business-workspace 30/0, workspace-capability 51/0, require-closure/commission/delivery/payout gates PASS, allowlist not blocked,
+.env hash-identical to the archive copy, no secrets declared, clean tree. Syntax gate PASS (1,649 files, 441 inline blocks). Deployment NOT authorized.
+
+## [2026-09-30] - providerDispatch LINEAGE CENSUS (READ ONLY): what a redeploy would change; the 12 changed modules classified; 54 new modules traced to their call paths; deployment NOT authorized
+
+docs/PROVIDERDISPATCH_LINEAGE_CENSUS.md + docs/release-gates/providerdispatch-lineage-census.json. Deployed archive (2026-08-22; blobs
+from early-August provider-os phases; revision providerdispatch-00048-qiz) vs 764d1d1. REQUIRED for the shell gate = a 12-module closure
+(business-workspace + shared/* + business-category + capability-authority + healthcare-category/plans/workspace + subscription-*) and a
+two-line dispatcher merge. Of the 12 changed modules: provider-onboarding.js = SECURITY FIXES FOR LIVE VECTORS (production providerPublish
+still activates + mints provider:true for any self-service publisher; providerActivateSubscription still trusts a client paymentRef) but also
+BREAKS the live provider-onboarding.html verification submission (URLs refused); provider-ops / booking-service / booking-payment-sweep /
+availability = unrelated c4 (entertainment settlement at show-up, availability authority, rate cards); commission-config / finos-utils /
+subscription-core = money policy that would run in ONE function while every other deployed function keeps the old policy (SPLIT-BRAIN);
+notify.js = SMS newly sends (phone fallback); legal-agreements = prerequisite, dark; sms-service inert. 54 new modules: 46 reachable
+through EXISTING ops (booking-service → ent-*/kasshop; provider-ops → entertainment-bookings → event-* → creator-hub), 8 only via the
+new providerRequestShop op (till mint, seller role grant), 0 loaded-only; event-ops declares SOKONI_HMAC_KEY which the dispatcher does not
+bind. Verdict: a clean production-shaped release IS constructible (archive + 12 modules + merge, from a pinned commit) but not from this
+branch as-is; the provider-onboarding fixes deserve their own candidate. HOLD tonight (owner).
+
+## [2026-09-30] - Functions preflight for the shell gate authority (providerDispatch) — READ ONLY; both named blockers examined; deployment NOT authorized
+
+docs/FUNCTIONS_PREFLIGHT_SHELL_GATE.md + docs/release-gates/functions-preflight-shell-gate.json. SELF-MINT: this lineage already carries the
+fix (537d17e, a third port of 1171a16 — neither e5ced91 nor 1171a16 is an ancestor, which is why a cherry-pick check said "does not
+apply"); universal-onboarding.js mints nothing; test-claim-minter-allowlist 21/0; the module is not in the providerDispatch closure anyway
+→ NOT a blocker (standing note corrected). MERCHANT-IDENTITY GAP: blocks blanket deploys only; a scoped --only functions:providerDispatch
+deletes nothing (proven 09-22). WHAT PRODUCTION RUNS: providerDispatch built from a 2026-08-22 archive, 23-file closure, 59 ops, NO
+business-workspace.js (the live dashboard call fails by design). WHAT A REDEPLOY SHIPS: 98-file closure, 64 ops (+businessWorkspace,
+workspaceHome, healthcareWorkspace, providerDirectory, providerRequestShop), 12 of the 23 deployed modules changed, 54 new — the c4
+lineage of all 59 existing provider ops, a lineage jump not a surgical release. Fast Functions gates PASS; allowlist prints the
+command (not blocked). Hosting side: 3 files to port to the live line; live hub-register.js lacks the agreement step (two-step
+acknowledgement for fresh applicants). Recommendation: hold; census the 12 changed modules before any release.
+
+## [2026-09-29] - Shell gate on the DERIVED approval state + Complete Application surface — implemented and tested (Functions + Hosting candidate; NOT deployed; no production write)
+
+docs/COMPLETE_APPLICATION_SHELL_GATE.md. business-workspace.js: approvalStateFor (reads users/sellers/providers/businesses/shops/applications,
+resolves deciders through Auth once, static cleanup-claimed-ids.json 34 ids digest 028299e7…) and workspaceFor now answer the derived
+approval state FIRST: VALID → R2 routing unchanged; BUYER_ONLY → found:false; PENDING → PENDING_APPROVAL + applicationPath; REFUSED → no
+route; INVALID_LEGACY/NO_APPROVAL → REAPPLICATION_REQUIRED with route complete-application.html ONLY (+ remediation payload); cleanup-owned
+→ REMEDIATION_WITHHELD; unreadable → APPROVAL_UNREADABLE (fail closed). homeFor gates shop homes the same way. Client consumer redirects
+REAPPLICATION_REQUIRED to the server route. NEW complete-application.html + sokoni-complete-application.js (pure decide + mount): fresh →
+the EXISTING HubRegister intake; redecide/continue → /agreement-acknowledge; select_among_pending → list + Withdraw (the page's ONLY write:
+own pending application status withdrawn, owner-permitted, decisive statuses refused by rules); REFUSED → new application; approved → route;
+buyer → optional intake. approval-remediation.js: raw status withdrawn read first; admin negative decisions → REFUSED. FIXTURE MIGRATION
+(scripts/lib/approval-fixture.js: stubAdminAuth + autoApproveOnWrite) across 12 suites — approvedAt-only fixtures now carry the admin
+decision; 5 assertions changed contract (status-only → REAPPLICATION_REQUIRED before CAPABILITY_CONFLICT). Suites: shell gate 22/0, complete
+application browser 18/0, design 31/0, re-ack rules 17/0, and 19 pre-existing suites green (entertainment-registry 64/1 pre-existing).
+Production consequence when shipped: 18 census accounts → completion surface; 5 valid + 64 buyers unchanged. NOT built: AdminOS wiring,
+per-identity manifests, deploy.
+
+## [2026-09-29] - REAPPLICATION_REQUIRED: derived approval state + authority design, proven 31/0; self-approval made impossible in both authorities; a category stamp is never nulled by a failed derivation (design slice; NOT a migration; nothing written)
+
+docs/REAPPLICATION_REQUIRED_DESIGN.md. functions/shared/approval-remediation.js (pure): deriveApprovalState over the census evidence →
+BUYER_ONLY · VALID_APPROVAL · INVALID_LEGACY_APPROVAL · NO_APPROVAL · PENDING_APPROVAL · REFUSED; transition REAPPLICATION_REQUIRED only
+from INVALID_LEGACY/NO_APPROVAL and only when the cleanup manifest does not claim the identity (ownership withheld otherwise);
+validity = resolvable non-self admin account whose role approves the record kind; applicationPath continue_existing /
+select_among_pending (Heights: 3 candidates, none chosen, none created) / redecide_existing / fresh; agreement satisfied only at the
+current version; preserve list; categoryStamp keep. HARDENINGS: bizAdminApprovalDecide refuses uid === actor BEFORE the target read;
+applicationDecide refuses application.uid === caller before any write (SELF_DECISION); projectProvider keeps an existing
+application-sourced category when C1 cannot derive one (Langa'ta model). Suite scripts/test-approval-remediation-design.js 31/0 —
+the REAL c4 applicationDecide makes the fresh decision end to end on a DJ Bvmbxno fixture (approval ≠ classification →
+PENDING_CLASSIFICATION; wallet/bookings/services/products byte-identical; repeat/suspend preserve) and on a Langa'ta fixture (label
+decider preserved, cleaning stamp survives). Regressions green (19/21/30/20/40/15/46/51). Files: functions/shared/approval-remediation.js,
+functions/application-lifecycle.js, functions/business-approval-admin.js, the suite, the doc. NOT built: the completion surface, the
+shell gate on the derived state, AdminOS wiring, per-identity manifests, any deploy.
+
+## [2026-09-29] - Approval Remediation / Reapplication CENSUS (READ ONLY; owner-authorized; nothing written)
+
+docs/APPROVAL_REMEDIATION_CENSUS.md + docs/release-gates/approval-remediation-census.json (digest fc1c154f…), script
+scripts/census-approval-remediation.js. 91 accounts + 2 orphan directory records: BUYER_ONLY 64 · VALIDLY_APPROVED 5 (protected: DG Wine,
+Latomi, Julian's Closet, Hometown Movers, k Riss) · INVALID_LEGACY 3 (Kasindi "reindex"; Langa'ta mamafua "founder-decision-2026-08-01"
+— a SECOND Kasindi, already R3-classified cleaning; KASS SHOP D5Ql… live by status with SELF-decided driver approvals) ·
+NO_APPROVAL_EVIDENCE 17 (11 live-status-only incl. DJ Bvmbxno and a second KASS SHOP with 32 wallet tx, 3 seller stubs, 3 role-only) ·
+PENDING 1 (Heights, 3 duplicate apps) · REFUSED 1 (King Bruce, evidence of today's landing). Validity = approved application decided by
+a resolvable non-self admin account whose role approves the registry kind present, or an admin_decision approve. 18 accounts routed to a
+provider/business dashboard without valid approval (live shell routes on role/claim/status); 7 publicly searchable without it; 4
+reusable applications vs 18 fresh; 9 historical decisions to preserve; 18 of 27 non-buyer accounts touch the cleanup manifest.
+Findings: role/claim-only routing must be gated by the server-derived state too; remediation authority must refuse
+decidedBy === applicant. Next: design the REAPPLICATION_REQUIRED transition; no production writes.
+
+## [2026-09-29] - Identity 4 of 6 LANDED: King Bruce REFUSED through the admin approval-decision authority (PRODUCTION, owner-authorized digest 21746cfc…)
+
+Applied 22:16:26Z by the REAL bizAdminApprovalDecide via scripts/approval-decision-manifest.js --apply, actor = the real admin account
+D5Ql2EYr… (claims verified before any target read). providers/aOdQxmUG… now carries approvalDecision {refuse, decidedBy D5Ql2EYr…,
+decidedAt, owner reason verbatim, prior {active, null, null, null}, source admin_decision}; status suspended, suspended true,
+searchable/isPublic false; NO approvedAt/approvedBy; no role; adminAudit/ERx37gnfqJk4YNFHqGdA (21→22). users, claims, wallet, 0 tx,
+0 bookings, 0 services, 0 applications byte-identical; sellers/businesses/shops absent; DJ Bvmbxno, Kasindi (provider+application)
+and k Riss digests identical. SIDE EFFECT (deployed indexProviderUpdate trigger, not the authority): searchableTerms regenerated on
+the same document. Repeat apply → already_decided_same, provider byte-identical, still 1 audit. Packet docs/LANDING_KINGBRUCE_REFUSE.md
++ docs/release-gates/kingbruce-landing.json. DJ Bvmbxno: NO decision (owner). Kasindi: unchanged tonight. NEXT slice: Approval
+Remediation / Reapplication (census → server-derived approval state → complete-application surface → same-admin decision →
+projection), no production writes until tested.
+
+## [2026-09-29] - DJ Bvmbxno + King Bruce: approval-decision plan/apply contract (15/0) and READ-ONLY production decision packets (nothing written; decisions are the owner's, tomorrow)
+
+scripts/approval-decision-manifest.js wraps the REAL bizAdminApprovalDecide: --plan (read-only snapshot, handler-mirrored refusals, exact
+mutation + untouched set, digest) and --apply <digest> --actor <adminUid> (actor must be a real admin Auth account — a tool label /
+non-account / non-admin is refused before any target read; drift -> digest_mismatch; repeat -> already_decided_same). Suite
+scripts/test-approval-decision-manifest.js 15/0. Production plans (docs/MANIFEST_APPROVAL_DECISION_DJ_KINGBRUCE.md,
+docs/release-gates/approval-decision-plans.json): DJ Bvmbxno AiJp5yzT… digest 7541ba8f… (active, no evidence, public, 0 apps,
+4 bookings / 1 service / 3 wallet tx, no claims); King Bruce aOdQxmUG… digest 21746cfc… (same shape, dormant, 0 activity). Both
+approve and refuse plans ok; approve never classifies (resolver stays PENDING_CLASSIFICATION). Kasindi: acknowledgement gate
+deferred to tomorrow at the owner's instruction (one-shot gate script 4b99840 ready). No production write.
+
+## [2026-09-29] - HOSTING DEPLOYED: signed-out fix live at ec452fb (owner-authorized); the re-acknowledgement surface is now correct for both auth states
+
+Deployed 21:43:11Z from C:/temp/sok-reack @ ec452fb: Hosting release 1790718191737000, version 4c15a3ef6649eff1 (3 files changed: the page +
+the two release artefacts); version.json = ec452fb / v643 / dirty=false; served page sha256 d5bc87e3... == the committed file on both
+lines; /agreement-acknowledge, its module and /seller-terms 200. Rules release unchanged (b87c94e4); Functions estate hash identical
+before/after (1,720 rows). Live smoke signed out: state signed_out, sign-in note rendered, ZERO Firestore requests, zero console errors
+(resolving signed-out auth introduces no data access). Signed-in mount on live NOT attempted (no authorized production account; Kasindi
+not used); the signed-in path is the harness-proven one (14/0) and production firebase.js publishes sokoniAuthReady for signed-in users.
+Rollback = version 9074367eed5d10b7 (d108f6c) or a3552ac70cd81400 (pre-surface). No Kasindi read or write; applicationDecide not run.
+NEXT: the Kasindi acknowledgement gate — business signs in and acknowledges; we read the exact fields and diff against the census.
+
+## [2026-09-29] - HOSTING DEPLOYED: re-acknowledgement surface live at d108f6c (owner-authorized, exact command); one signed-out defect found on the deployed page, fixed locally (NOT deployed)
+
+Deployed 21:09:56Z from C:/temp/sok-reack (slice/reack-surface-on-live @ d108f6c): Hosting release 1790716196877000, version 9074367eed5d10b7,
+864 files (862 + the two new); version.json = d108f6c / v642 / dirty=false. Served bytes byte-identical to the candidate and to fd21e9b
+(html a474d0a6..., js 352c3eab...); /agreement-acknowledge 200 (was 404); /seller-terms and /track still 200. Rules release unchanged
+(b87c94e4, 20:43Z) and the 1,720-row Functions estate hash identical before/after (aa3099d04e13e606). The deploy process issued no
+Firestore read or write; no Kasindi record touched; applicationDecide not run. Release artefacts committed on the candidate (66216a7).
+**Live smoke (Chromium, automation flag off, signed out): page stays at boot** — production firebase.js publishes sokoniAuthReady ONLY
+from its three signed-in paths, so a signed-out visitor never gets the signal (a signed-in user does; no Firestore traffic, no errors).
+FIX (local, both lines, byte-identical d5bc87e3...): the page now takes the canonical SokoniAuthState.whenResolved (first auth state
+for everyone, already loaded) as the primary trigger, keeping the auth-ready event/promise; unit 21/0 + Chromium 14/0 on both lines.
+**The fix is NOT deployed — a second Hosting release needs its own authorization.** Rollback of d108f6c = version a3552ac70cd81400.
+
+## [2026-09-29] - Hosting preflight for the re-acknowledgement surface (READ ONLY; deployment NOT authorized)
+
+docs/HOSTING_PREFLIGHT_REACK_SURFACE.md + docs/release-gates/hosting-preflight-reack.json. Live hosting = ff9d762 (fix/track-hub-on-93c5783,
+v641; release 1790708874166000 / version 00cbd1b719fa3898, 862 files). This capability line is NOT a descendant of live (merge-base
+3dcf572): it passes the rollback guard yet would replace production with the c4 tree, so it is not a hosting candidate. Candidate built
+in a new worktree C:/temp/sok-reack, branch slice/reack-surface-on-live, tip d108f6c = ff9d762 + cherry-pick fd21e9b (+ lineage-honest test,
++ test-only harness libs). Hosting would ship EXACTLY two files (agreement-acknowledge.html a474d0a6..., sokoni-agreement-acknowledge.js
+352c3eab..., byte-identical to fd21e9b); 0 functions/rules paths; preservation ab3a891 absent from the candidate by design. Read-only
+predeploy gates all pass on the candidate (syntax gate 1788 files); suites there 21/0 + 14/0. Served rules re-fetched after the peer P0
+release (b87c94e4, 20:43Z): applications block unchanged; the re-ack write is permitted; production still lacks every decision protection
+(applicant can write decidedBy/status/agreementVerifiedAt) -> Kasindi gate G2 must prove by field diff. Live hub-register.js has NO
+agreement handling (providers never acknowledge at intake). Rollback target: release 1790702102972000 / version a3552ac70cd81400.
+No deploy, no Firestore read or write for Kasindi.
+
+## [2026-09-29] - Kasindi repair preconditions: `priorDecisions` preservation on applicationDecide + Seller Agreement re-acknowledgement surface (built, tested; NOT deployed; Kasindi untouched)
+
+`docs/KASINDI_REPAIR_PRECONDITIONS.md`. Owner decisions on the [[KASINDI_REPAIR_CENSUS]]: proper user-facing re-acknowledgement
+(no hidden write); a real admin Auth account decides; server-side preservation of the superseded decision BEFORE any
+re-decision; vehicle = the c4 handler run locally under the manifest gate.
+**Preservation** — `functions/application-lifecycle.js` `priorDecisionsPatch` (exported `_internal`): `applicationDecide`
+appends the existing decision VERBATIM (`status, statusCanonical, decidedBy, decidedAt, decisionAppliedFor, projectionStatus,
+reviewReason, preservedAt, preservedBy, supersededBy`) to `priorDecisions` before overwriting `decidedBy`/`decidedAt`;
+dedupe on (decidedBy, decidedAt); nothing on a first decision. **Rules:** `priorDecisions` added to `noApplicationDecision()`
+keys; applications `update` now refuses an ADMIN's raw client write to it (server-only via applicationDecide); rules rebuilt.
+`sokoni-merchant-application.js` FORBIDDEN += priorDecisions. Suite `scripts/test-application-decision-preservation.js`
+**19/0** (REAL handler via `CallableFunction.run`: gate refuses before any write; the named admin's approval preserves
+`"reindex"` verbatim, writes `applicationDecisions/`, one audit, re-projects the provider; wallet/KES 50/stray sellers
+byte-identical; dedupe; pending → no priorDecisions).
+**Surface** — `agreement-acknowledge.html` + `sokoni-agreement-acknowledge.js` (UMD `eligible` / `buildAcknowledgement` /
+`mount`): signed-in user's OWN applications (`where uid ==`), agreement fetched from `/seller-terms` as the intake modal
+does, checkbox-gated, `updateDoc` of exactly `agreementAccepted:true, agreementVersion, agreementAcceptedAt:<now>,
+agreementAcknowledgedSurface`; version read from `sokoni-merchant-application.js` (no third copy; refuses to mount without
+one); never backdates, never creates an application, never writes decision keys; healthcare/advocate/event-organizer →
+pointed to their versioned instruments; success only after the write resolved. Loads `shared-header.js`, `noindex`.
+Suites: `test-agreement-reacknowledge-rules` (emulator, built ruleset) **15/0**; `test-agreement-acknowledge` **21/0**;
+`test-agreement-acknowledge-browser` (real page in Chromium, I/O seam) **14/0**. Pre-existing unchanged:
+decision-authority 21/0 · merchant-application 54/0 · business-category-rules 20/0 · business-capability-rules 24/0 ·
+admin-os-wiring 327/0 · business-approval-decision 40/0. Files: `functions/application-lifecycle.js`, `firestore.rules`,
+`firestore.rules.build`, `sokoni-merchant-application.js`, `agreement-acknowledge.html`, `sokoni-agreement-acknowledge.js`,
+four suites, the doc. Database: new server-only array `applications.priorDecisions`; new client field
+`agreementAcknowledgedSurface`. Security: history immutable to clients AND admin raw writes. No deploy; Kasindi's
+application, DJ Bvmbxno and every production record untouched.
+
+## [2026-09-29] - Kasindi repair census (READ ONLY) + repair manifest for agreement + legitimate approval (NOT executed)
+
+`docs/KASINDI_REPAIR_CENSUS.md`, packet `docs/release-gates/kasindi-repair-census.json`, digest `c0b194f2…2d1e` (identifies the
+state, authorizes nothing). State: application approved by `"reindex"`, **`agreementAccepted` absent**, `applicationDecisions/`
+absent, 0 `adminAudit`, 0 `legalAcceptances`, provider live by `approvedAt` with no `approvedBy` and no C1 stamp, stray non-live
+`sellers` doc, wallet KES 50 (one completed receive), zero activity; read model SERVICES/no conflict (trusts `approvedAt`),
+resolver PENDING_CLASSIFICATION; C1 derivation `no-exact-match` → `cleaning` is an admin classification. **Deployed lineage
+verified from the built source archives:** `applicationDecide` (rev 00006-kex, archive 2026-08-24) has **no agreement gate,
+no server decision record, no decisionAuthority**; the `applicationLifecycle` trigger (00007-nox, archive 2026-09-06) has the
+**claims-only** decider check (a non-Auth actor blocks projection + raises adminAlerts); the c4 line has gate + record. Every
+version **overwrites `decidedBy`** — the July "reindex" cannot stay on the document via the existing authority; recommended:
+a `priorDecisions` arrayUnion preservation on the c4 handler before use. Agreement can be written only by the signed-in
+business (rules permit on an approved application; **no re-acknowledgement surface exists**; `legalAccept` exists but the
+generic-provider gate reads the boolean only). Manifest: gates G1–G6 → Stage 1 agreement → Stage 2 decision by a named admin
+Auth account (c4 handler via `CallableFunction.run`, or AdminOS UI without the gate) → Stage 3 projection proof →
+Stage 4 separate `cleaning` classification manifest → Stage 5 resolver. Four owner decisions listed. Nothing written.
+
+## [2026-09-29] - Business approval-decision authority (DJ Bvmbxno class) — designed, proven 40/0, registered, NOT deployed, NOT used
+
+`functions/business-approval-admin.js` → `bizAdminApprovalDecide { uid, decision: approve|refuse, reason }`, merged into
+`admin-os-dispatch.js` beside `bizAdminClassify`; design `docs/APPROVAL_DECISION_AUTHORITY.md`; suite
+`scripts/test-business-approval-decision.js` **40/0**, `test-admin-os-wiring` 327/0. Contract enforced and proven clause by
+clause: admin claim before any read/write (unauthenticated / provider / owner refused, store byte-identical); a real decision
+today (`providers/{uid}.approvalDecision = {decision, decidedBy <admin uid>, decidedAt server ts, reason, prior {status,
+approvedAt, approvedBy, decidedBy}, source admin_decision}`; approve writes `approvedAt`/`approvedBy`/`status active`, refuse
+fails closed to `suspended` + delisted with NO approval evidence); the historical status is copied into `prior`, never read as
+approval; no `applications/*` created or edited (Kasindi-shaped `"reindex"` application byte-identical); idempotent (repeat →
+`repeated:true`, original decider, no second audit, even by another admin); conflicting decision → `DECISION_EXISTS`, history
+kept; bookings/services/wallet/products untouched; approval ≠ classification (no `business` stamp; resolver still
+PENDING_CLASSIFICATION — DJ Bvmbxno does NOT become artist_creator); one `adminAudit business_approval_decision` with
+previous/next/reason/actor; role via `role-authority.grantAccountRole` only. Not pointed at any production record; the owner
+decides DJ Bvmbxno's approval, then separately its classification.
+
+## [2026-09-29] - Adjudication: Kasindi holdings limited — "reindex" is NOT valid approval evidence (READ ONLY; unclassified; no manifest)
+
+`docs/ADJUDICATION_KASINDI.md`. `applications/PRVMS7IACKG` is approved with `decidedBy: "reindex"` — a bare string, the
+only such decider in production, written by no code on any line (the word exists only as a search-reindex source label);
+`decidedAt` is **one second after intake normalisation**; no `adminAudit` for the uid or application (the audited
+`applicationDecide` arrived the same day, `5990437`, and left no record); the decider check (`bc9bf4c`, 2026-08-16) would
+refuse it today; `agreementAccepted` absent. Later processes relied on it: `provider` claim, `users.approved`,
+`searchable/isPublic` true, a stray non-live `sellers` doc, one KES 50 receive. Verdict: approval provenance NOT
+established; does not meet the k Riss standard (named admin uid, audited). Kasindi stays unclassified. Lawful routes
+named for the owner: a fresh audited admin decision on the application (blocked on the unaccepted agreement), the
+missing admin approval-decision authority (shared with DJ Bvmbxno), or leave as is. Classification target (`cleaning`)
+is not in doubt; only the approval evidence is. Nothing written.
+
+## [2026-09-29] - Identity 1 of 6 landed: k Riss classified `artist_creator` through the AdminOS authority (PRODUCTION, owner-authorized digest `b7a2053b…70a0`)
+
+**Applied 19:31:10Z** by the real `bizAdminClassify` handler (Admin SDK, actor `admin-sdk:classify-identity`):
+`providers/3SkVHLqJXzfeQlQ4PfBx5DFR4at2.business = { artist_creator, source admin, classifiedBy, setAt }` + `updatedAt`, and
+`adminAudit/moktBGFpfTaKTZIBvcdC` (`business_classify`, previous null → artist_creator, the owner-authorization reason).
+**Mutation count: one provider row + one audit.** Landing 14/0: every other provider field, the application, users doc,
+wallet and Auth claims byte-identical; no approval evidence written; sellers/businesses/shops still absent; bookings and
+products unchanged; counts unchanged except adminAudit +1; identity census distribution and cleanup digest unchanged.
+**Production resolver: artist_creator → services → provider-dashboard.html → AVAILABLE** (capability SERVICES). Second
+apply → `already_classified`, nothing written. Packet `docs/LANDING_KRISS_ARTIST_CREATOR.md` +
+`docs/release-gates/kriss-landing.json`. Kasindi, DJ Bvmbxno and the rest untouched; no deploy.
+
+## [2026-09-29] - Exact-six adjudication census (READ ONLY; no writes)
+
+`docs/ADJUDICATION_SIX_UNRESOLVED.md`. The six R3-unresolved ids reconciled (the "three status-only" are Shave 'n'
+Trims, DJ Bvmbxno, King Bruce; Shave 'n' Trims is also the synthetic one, already in the cleanup manifest). Per identity:
+approval, applicant offering, real C1, lane, capability evidence, decision. **k Riss** (approved, "voiceover" / rapper,
+C1 no exact match) → admin classification to `artist_creator`; **Kasindi** (approved by "reindex", type "Cleaning
+Company / Housekeeper") → admin classification to `cleaning`, provenance flagged; **DJ Bvmbxno** — no application, status
+only, **but 4 bookings, 1 service and 3 wallet transactions**: a trading provider with no approval evidence, needs an
+admin approval decision (no server op exists for a retroactive approval); **King Bruce** — status only, dormant, same
+decision class; **Heights Creations** — pending, three applications (seller + two duplicate provider), agreement not
+accepted, dual intent; **Shave 'n' Trims** — cleanup slice. Proposed order: k Riss → Kasindi → DJ Bvmbxno → King Bruce →
+Heights → cleanup. Nothing mutated.
+
+## [2026-09-29] - Adjudication census: DG Wine and Latomi Gadgets (READ ONLY; no mutation; deferred digest stays deferred)
+
+`docs/ADJUDICATION_DG_WINE_LATOMI.md`. Both applied through Register My Business as **"Wholesaler / Bulk Supplier"**
+(hub b2b, `type: business`); Latomi's own words: "We sell phones". No `productTypes`, `services` or `serviceTypes`;
+no service-shaped profile fields; **zero** bookings, services, enquiries, reviews, orders, POS or wallet activity since
+approval. The `provider` role is a classifier artefact: `\bwholesal\b` never matches "wholesaler" (DG Wine → default
+provider), and the LIVE form's hub default `requestedRole: 'provider'` for b2b (`hub-register.js:421-423` on the live
+line) made Latomi "explicit". C1 maps the application to `wholesale`, a seller category. **Finding: every
+applicant-authored fact points to PRODUCTS; nothing points to SERVICES** — a finding, not a decision. Three lawful
+resolutions per identity are laid out (A: PRODUCTS — needs an audited admin capability-decision op that does not exist
+yet, plus the existing seller projection and role grant; B: both — via the existing provider-initiated
+`providerRequestShop`; C: keep SERVICES and reclassify — unsupported). Each needs an explicit owner choice and its own
+manifest. Nothing stamped, reclassified, revoked, provisioned or deployed.
+
+## [2026-09-29] - R3 landed: three providers classified from their approval evidence (PRODUCTION, owner-authorized primary digest only)
+
+**Applied 19:04Z**, digest `cb87e8ca…98e3`: `providers/{uid}.business` stamped for Julian's Closet (service_business,
+audit `VrhGoDE16dK3M8MRwT06`), Langa'ta mamafua (cleaning, `92JzdKA9irn4VhhEFuXH`), Hometown Movers kenya (trades,
+`XMiPAmNU61c48YSqcIPn`) — projectProvider's stamp shape, from each approved application through the real C1 and lane
+classifiers. Landing proof 24/0: every other provider field and each application byte-identical; no capability, business,
+shop, seller, product, branch, KASS or cleanup record changed (counts unchanged, adminAudit +3, capability-stamped
+businesses still exactly DG Wine + Latomi); exactly those three provider rows moved; census cleanup digest unchanged.
+Post-R2 resolver on production docs for all three: **provider-dashboard.html, AVAILABLE, lane services, SERVICES**.
+Second apply with the same digest: `digest_mismatch`, `primaryCount 0`, `alreadyStampedProviders 3`, nothing written.
+Disagreement digest `9f8a96e8…8952` (DG Wine / Latomi) DEFERRED — untouched, still PENDING_CLASSIFICATION, no route.
+Packet `docs/R3_LANDING.md` + `docs/release-gates/r3-landing.json`. Apply-path suite 22/0. No deploy.
+
+## [2026-09-29] - R3 review packet: classification manifest for approved providers with no C1 stamp (READ ONLY; nothing applied)
+
+`scripts/r3-classification-manifest.js --plan` classifies each of the 11 providers from its APPROVED APPLICATION through
+the real C1 classifier and lane classifier (exactly what projectProvider does at approval); provider category text is
+never evidence. **Primary set (3, digest `cb87e8ca…98e3`)**: Julian's Closet → service_business, Langa'ta mamafua →
+cleaning, Hometown Movers → trades — each `providers/{uid}.business` stamp + 1 audit; expected post-R2 route
+provider-dashboard, AVAILABLE. **Disagreement set (2, digest `9f8a96e8…8952`, kept separate, not recommended now)**: DG
+Wine and Latomi → wholesale (a seller category) vs their SERVICES stamp → CAPABILITY_CONFLICT, no route. **Unresolved
+(6, no mutation)**: three status-only accounts (no approval evidence), Heights Creations (pending), k Riss and Kasindi
+(C1 no exact match → AdminOS by hand). No capability, business identity, KASS, manifest record or branch is touched.
+Contract suite `test-r3-classification-manifest.js` 21/0. Packet `docs/R3_CLASSIFICATION_MANIFEST.md` +
+`docs/release-gates/r3-classification-manifest.json`. `--apply` not implemented until a digest is authorized.
+
+## [2026-09-29] - R2: the workspace resolver routes on category + capability — both authorities required, neither inferred (server; NOT deployed)
+
+`functions/business-workspace.js` only. Category from the C1 stamp (`providers.business` / healthcare, else
+`businesses.business` from approval), lane from C1's `SELLER_CATEGORIES`; capability from the C2 read model through
+the R1-protected authority. products+PRODUCTS → merchant-v2; services+SERVICES → the category's route and modules
+(unchanged); both → merchant-v2 + Services workspace; lane/capability disagreement → CONFLICT, no route; **no category
+→ PENDING_CLASSIFICATION, no route (the grandfather clause is removed, owner 2026-09-29)**; UNCLASSIFIED / CONFLICT /
+unreadable → no route. DG Wine and Latomi today → PENDING_CLASSIFICATION; once C1 stamps `wholesale` → CONFLICT — never
+Merchant V2, never a service provider. Static proof the resolver consumes the authority rather than re-deriving it.
+Evidence: `test-workspace-capability.js` 51/0 (matrix M1–M15 + DG/Latomi + consumption proofs); regression node
+30 · 24 · 51 · 6 · 6 (+gate exit 0, matrix unchanged) · 28 · 88 · 76 · 49 · 95 · 27 · 40 · 46 · 45 · 18; browser 33 · 29 · 13 · 13 ·
+54 · sidebar 90; entertainment-registry 64/1 pre-existing. Assertion changes are explained by name in
+`docs/R2_ROUTING_RESOLVER.md`: grandfather removed; producer-shaped fixtures through the real classifiers, stamped only
+for DECIDED applications; the sidebar suite compares the set of visible sections (not an item count) and waits for the
+projection to apply. No stamp, no migration, no classification, no deploy.
+
+## [2026-09-29] - R1: `businesses.capabilities` and `businesses.business` are server-written only (rules; NOT deployed)
+
+Closes the self-stamp vector found by the routing census: any owner could create `businesses/{their uid}` carrying a
+well-formed capability stamp and be read as STAMPED. `firestore.rules` (one `businesses` block): create may not carry
+`capabilities` or `business`; owner updates may not affect them; an admin's RAW client write may not either — the
+audited server paths (approval projection, migration contract, AdminOS reclassification) are the only writers. All
+other business behaviour unchanged. `firestore.rules.build` rebuilt (braces 1702/1702).
+Evidence: `scripts/test-business-capability-rules.js` **24/0** on the rebuilt ruleset; **negative control 12/12 failing
+on the pre-R1 build** (the self-stamp writes succeed there, positive controls still pass); regression
+business-category-rules 20/0 · employment-events-rules 26/0 · employment-invites-rules 40/0 · shop-writer-authority
+20/0. Ledger `docs/R1_CAPABILITY_RULES.md`. No consumer change, no classification, no migration, no deploy — the served
+ruleset still carries the vector until a rules release is authorized.
+
+## [2026-09-29] - Routing convergence: read-only ownership/provenance census of C1 and the workspace authority (nothing changed)
+
+`docs/ROUTING_CONVERGENCE_CENSUS.md`. Provenance: C1 (`13597e4`) and the workspace authority (`ad7265b`…`300ddaa`) are the
+owner's own convergence lineage (`feat/creator-hub`, shared by every `slice/c4-*`); no live session claims them; extend,
+never fork. Category stamp writers: `projectProvider` / `projectSeller` at approval, AdminOS reclassification
+(`business-category-admin.js`); `providers.business` is admin-protected in rules. **Findings:** (1) **C1 has never run
+in production** — 0 of 11 providers and 0 of 12 businesses carry a category stamp; (2) **self-stamp vector**: `businesses`
+create/update allow any owner to write `capabilities` (not in `noAdminFields`), so a client could forge a STAMPED
+capability — latent (nothing deployed reads it), must be closed before any surface trusts the stamp; (3) **C1 classifies
+DG Wine and Latomi as `wholesale`, a SELLER category routed to Merchant V2, while their stamped capability is SERVICES** —
+under the locked model that is CONFLICT → no inferred dashboard; resolving it is an admin decision (PRODUCTS approval or
+reclassification), not a resolver rule. Proposed resolver table `route = f(category, capabilities)` and slice order
+(rules first, then resolver, then owner decisions on the grandfather clause and the two identities) recorded. No code,
+rules, migration or deploy in this entry.
+
+## [2026-09-29] - C5: Latomi Gadgets — business identity created under the same owner uid, SERVICES stamped from the original approval (PRODUCTION, owner-authorized)
+
+**Applied 17:29Z** with the owner-authorized command and plan digest `6b1c5044…30dc`; two writes in one transaction —
+`businesses/IaOBkEJYcCXk23UDWk0OPp7XXeD3` (capabilities.SERVICES approved, evidence = the 2026-09-03 approval; no
+PRODUCTS; searchable/isPublic false; `source: capability_migration_c5`, `migration.slice: C5`) and
+`adminAudit/kIRnqG6YJwNP70bULqmb`. Nothing else; no shop or branch (C4 decisions). Landing proof 16/0: provider,
+application, users doc, wallet and claims byte-identical; products 0 everywhere; shops/branches/sellers/merchants/
+providerProfiles absent; second apply → `already_migrated`. Full re-census: only the Latomi row changed; STAMPED set =
+DG Wine + Latomi; cleanup manifest digest unchanged. Workspace routing NOT claimed fixed (category authority unstamped).
+Packet `docs/C5_LATOMI_MIGRATION.md` + `docs/release-gates/c5-latomi-migration.json`.
+Category/capability routing, cards, cleanup and KASS are NOT started. No deploy.
+
+## [2026-09-29] - C4: DG Wine — business identity created under the same owner uid, SERVICES stamped from the original approval (PRODUCTION, owner-authorized)
+
+**Applied to production 17:20Z** under the owner's authorization naming plan digest `e1a274e2…d7b0`; two writes in one
+transaction — `businesses/Ohg9HrtGpCXBUSzbRfaUifOPWQ32` (capabilities.SERVICES approved, evidence = the 2026-09-03
+approval by the approving admin; no PRODUCTS; searchable/isPublic false) and `adminAudit/ZlbUd4RIyt9GKGtaB8bI`. Nothing
+else: provider, application, users doc, wallet and claims byte-identical after; no shop, branch, seller, subscription,
+POS data or discovery visibility (owner decisions: the shop shape is coupled to Merchant V2; no shared services branch
+model exists yet). Second apply → `already_migrated`, nothing written (the no-op check now precedes the digest check).
+Landing proof 16/0; re-census: only the DG Wine row changed (NOT_YET_STAMPED → STAMPED), cleanup manifest digest
+unchanged. **The workspace is not claimed fixed**: the category authority has not stamped this provider, so routing is
+the legacy provider path as before — the expected boundary before the category + capability routing slice.
+Packet `docs/C4_DG_WINE_MIGRATION.md` + `docs/release-gates/c4-dg-wine-migration.json`; contract suite 27/0.
+Latomi (C5), deletion, KASS and cards are NOT started. No deploy.
+
+## [2026-09-29] - Capability slice 1: the workspace authority consumes the capability read model (route = category + approved capability)
+
+**Local only — NOT deployed. Branch `slice/c4-capability-consumer` on `4ad69bf` (worktree `C:/temp/sok-cap`).**
+Owner decisions 2026-09-29: this c4 lineage is the implementation line; `feat/integrations-control-center` stays the
+coordination/evidence line; **stamping remains prohibited** — nothing here writes a capability, migrates DG Wine or
+Latomi Gadgets, deletes anything, or deploys.
+
+### What changed
+- **Ported verbatim** from the coordination line (byte-identical, asserted): `functions/shared/business-capabilities.js`
+  (the C2 read model — vocabulary PRODUCTS / SERVICES / PRODUCTS_AND_SERVICES / UNCLASSIFIED / CONFLICT, the stamp schema
+  for `businesses/{id}.capabilities`, observe → propose → routing contract) and its dependency
+  `functions/shared/business-scope.js` (liveness = live status **and** protected approval evidence). Docs:
+  `docs/CAPABILITY_AUTHORITY_READ_MODEL.md`.
+- **`functions/business-workspace.js`** — `capabilityFor(db, uid)` (reads `sellers/{uid}`, `providers/{uid}`,
+  `businesses/{uid}`; read-only) runs first in `workspaceFor`:
+  - **CONFLICT refuses routing**: a registry document live by client-writable status alone, a stamp that disagrees with
+    the registry, or a malformed stamp → `state: CAPABILITY_CONFLICT`, `route: null`, the conflict codes named,
+    Overview + Settings only; `assertModule` refuses (`WORKSPACE_MODULE_PENDING_APPROVAL`); the home carries the entry
+    with no route and a review message, never a default dashboard.
+  - **PRODUCTS** (a live, approved seller, no live provider) → `merchant-v2.html`, AVAILABLE, modules OWN_WORKSPACE.
+    Before this slice such an account was "no approved business" because only `providers` was read.
+  - **PRODUCTS_AND_SERVICES** → **one business**: `merchant-v2.html` with `servicesWorkspace: true`, the category and its
+    service-module states kept for the Services side entry (owner rule: Double Business = Merchant V2 + Services).
+  - SERVICES / UNCLASSIFIED → the existing category path, unchanged. UNCLASSIFIED routes nowhere.
+  - An unreadable capability read is `readable: false` (named error) and the category path answers — unreadable is not
+    unclassified. Every answer, and every home, carries `capability` (classification + authority status + conflicts).
+- **Fixtures aligned with the producer** in 10 suites: `projectProvider` always writes `approvedAt`; the seeds wrote
+  `status: 'active'` alone, which under the evidence rule is exactly the client-writable-status defect the model refuses
+  (CHANGELOG C3: four production records are live that way). Each seed helper gained `approvedAt: 1`; no assertion
+  changed. `test-audit-category-dashboards` K6 copies two more pure files so the tool can still fail closed.
+  `test-business-capabilities` X3 now asserts the ONLY production importer is `business-workspace.js`.
+
+### Evidence (one Chromium at a time)
+`test-workspace-capability.js` **26/0** (the owner's seven proofs: existing category routing unchanged incl. healthcare;
+capability-aware routing for PRODUCTS and for both; UNCLASSIFIED and CONFLICT refuse, with controls that flip them;
+unstamped never routes by itself; valid / disagreeing / client-shaped stamps; unreadable ≠ unclassified; write log holds
+no capability write and the authority's source has no write call; verbatim port). Regression: business-workspace 30/0 ·
+workspace-gates 24/0 · workspace-routing 33/0 · healthcare-workspace 51/0 · accommodation-profile 6/0 ·
+projection-browser 29/0 · provider-dashboard-sidebar-browser 90/0 · business-category-admin-shops-browser 13/0 ·
+ent-availability 88/0 · ent-availability-browser 54/0 · ent-communications 76/0 · ent-journeys 49/0 ·
+entertainment-bookings 95/0 · provider-agreement-role 27/0 · provider-directory 40/0 · audit-category-dashboards 6/0 ·
+`audit-category-dashboards.js --gate` exit 0 with the generated matrix unchanged · verify-capability-consumers 18/0 ·
+business-capabilities 46/0. **Pre-existing, unrelated:** `test-entertainment-registry` 64/1 ("every panel op is a
+dispatcher handler") fails identically on the untouched `4ad69bf`.
+
+### Production consequence to decide before any deploy (not a defect of this slice)
+Under the evidence rule, the four production accounts whose provider/seller record is live by status alone (C3 census:
+John wa Pork, DJ Bvmbxno, King Bruce, the second KASS SHOP seller) would receive `CAPABILITY_CONFLICT` — no working
+dashboard until an admin decision writes real approval evidence. That is the rule doing its job; the owner decides
+whether to stamp them before or after this line ever ships. No Functions deploy from this line either way until the
+self-mint hotfix provenance is resolved.
+
 ## [2026-09-29] - SOKONI Points P1: every purchase earns; the till identifies the buyer, the server credits them
 
 **Local only — NOT deployed. Branch `slice/c4-points-p1` on `c59e0f2`.** Owner ask: the till cart, pos-checkout and

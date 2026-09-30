@@ -530,6 +530,11 @@ async function projectProvider(db, app, uid, approved) {
     const priorB = existing.business || null;
     const adminSet = !!(priorB && priorB.source === 'admin' && BCAT.isCategory(priorB.category));
     let category = adminSet ? priorB.category : BCAT.categoryFromApplication(app, role).category;
+    /* AN EXISTING STAMP IS NEVER NULLED BY A FAILED DERIVATION (remediation rule 1, 2026-09-29). A re-decision on an
+       application whose text C1 cannot match (Langa'ta mamafua: `type: "business"`) used to replace a real category
+       (stamped by the R3 landing) with null, silently un-routing a live provider. If derivation fails and a valid prior
+       category exists, the prior category stays; `source` stays what it was. An admin classification still wins above. */
+    if (!adminSet && !BCAT.isCategory(category) && priorB && BCAT.isCategory(priorB.category)) category = priorB.category;
     if (role === 'health') category = (doc.healthcare ? doc.healthcare.category : (existing.healthcare || {}).category) || null;
     doc.business = {
       category: BCAT.isCategory(category) ? category : null,
@@ -1295,6 +1300,34 @@ async function decisionAuthority(after, appId) {
   }
 }
 
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PRIOR-DECISION PRESERVATION (owner decision 2026-09-29, Kasindi repair).
+   applicationDecide writes `decidedBy` / `decidedAt` onto the application document, so re-deciding a
+   document that already carries a decision would DESTROY the record of who (or what) decided it
+   before — for Kasindi, the defective July `decidedBy: "reindex"` event the adjudication rests on.
+   Before the new decision is written, the existing decision is appended to `priorDecisions`, a
+   server-only array (firestore.rules noApplicationDecision withholds it from the applicant;
+   sokoni-merchant-application.js FORBIDDEN refuses it at intake).
+   Deduplicated on (decidedBy, decidedAt): re-deciding twice preserves once. The prior state is
+   copied VERBATIM — never reinterpreted, never rewritten as an admin decision. */
+function priorDecisionsPatch(app, actor, decision) {
+  const a = app || {};
+  const by = typeof a.decidedBy === 'string' ? a.decidedBy.trim() : '';
+  if (!by) return {};
+  const existing = Array.isArray(a.priorDecisions) ? a.priorDecisions : [];
+  const at = a.decidedAt || null;
+  const same = (e) => e && e.decidedBy === by && JSON.stringify(e.decidedAt) === JSON.stringify(at);
+  if (existing.some(same)) return {};
+  const entry = {
+    status: a.status || null, statusCanonical: a.statusCanonical || null, decidedBy: by, decidedAt: at,
+    decisionAppliedFor: a.decisionAppliedFor || null, projectionStatus: a.projectionStatus || null,
+    reviewReason: a.reviewReason || null,
+    preservedAt: new Date().toISOString(), preservedBy: actor, supersededBy: decision,
+  };
+  return { priorDecisions: existing.concat([entry]) };
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    TRIGGER — applications/{appId}
    Settles in at most two extra hops: normalise (1), project (1), then every
@@ -1393,6 +1426,14 @@ exports.applicationDecide = onCall(
     const ref = db.collection('applications').doc(String(applicationId));
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'Application not found.');
+
+    /* SELF-APPROVAL IS NEVER APPROVAL (remediation rule 2). The applicant uid lives on the application, so the
+       earliest possible check is right after this read and BEFORE any write. An administrator may not decide an
+       application they submitted themselves — the deployed trigger's validity test would reject the decision, and
+       the remediation census found three such decisions; none may be added. */
+    if ((snap.data() || {}).uid && String((snap.data() || {}).uid) === String(req.auth.uid)) {
+      throw new HttpsError('permission-denied', 'An administrator cannot decide their own application.', { code: 'SELF_DECISION' });
+    }
 
     /* ── Seller Agreement gate ────────────────────────────────────────────
        A business may not be APPROVED until it has acknowledged the commercial
@@ -1493,7 +1534,10 @@ exports.applicationDecide = onCall(
       reason: _sanText(reason, 500) || null,
     });
 
+    /* Preserve the decision this one supersedes BEFORE overwriting decidedBy/decidedAt (see priorDecisionsPatch). */
+    const preserved = priorDecisionsPatch(snap.data(), actor, decision);
     await ref.set({
+      ...preserved,
       status,
       statusCanonical: canonStatus(status),
       reviewReason: _sanText(reason, 500) || null,
@@ -1704,6 +1748,7 @@ exports.applicationList = onCall(
 
 /* Internals exported for unit tests and for the reconcile script. */
 exports._internal = {
+  priorDecisionsPatch,
   toE164KE, toLocalKE, splitLocation, resolveRole, canonStatus, normVehicle, _san, _sanText,
   /* projectSeller is exported so provider-shop.js can provision a healthcare provider's
      merchant identity through THIS function rather than a healthcare-specific copy. One

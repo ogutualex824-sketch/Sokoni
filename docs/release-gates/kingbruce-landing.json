@@ -1,0 +1,154 @@
+{
+  "slice": "kingbruce-refuse-landing",
+  "uid": "aOdQxmUGLCO4hOYsdHMhWuwYV9D2",
+  "authorizedDigest": "21746cfc69025723ec4f7a308d23c1db4c54970926b65f6762aa2e32e2cc7e8b",
+  "actor": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+  "appliedAt": "2026-09-29T22:16:26.000Z",
+  "pre": {
+    "at": "2026-09-29T22:15:13.761Z",
+    "provider": {
+      "status": "active",
+      "searchable": true,
+      "isPublic": true,
+      "approvedAt": null,
+      "approvedBy": null,
+      "approvalDecision": null,
+      "updatedAt": "2026-07-24T14:13:43.000Z",
+      "searchableTermsCount": 8
+    },
+    "audits": 0,
+    "controls": {
+      "dj": "63be075ded5adf091fe1bfca4d376d5cd760267d2ec696738c1854e029457d39",
+      "kasindi": "89352ffc5fd6c20eff0fe22f4f9cb9ac2c35a6c31b29f5b918eedd45b95057df",
+      "kasindiApp": "889bada6d5df0bf3aa3a62c5c968fe43679c1e3ff47c5d466684373227024202",
+      "kriss": "08541c2ae9bf400251c39c25b8f74414d8f6871e1b2da16980ae0f5c41cc3379",
+      "providersCount": 11,
+      "adminAuditCount": 21
+    }
+  },
+  "post": {
+    "at": "2026-09-29T22:17:01.286Z",
+    "provider": {
+      "status": "suspended",
+      "suspended": true,
+      "searchable": false,
+      "isPublic": false,
+      "approvedAt": null,
+      "approvedBy": null,
+      "approvalDecision": {
+        "reason": "No valid approval evidence exists for this provider account; the account is dormant with no recorded activity requiring preservation. Refuse the current provider application state and suspend/delist the provider listing pending any future valid application.",
+        "decision": "refuse",
+        "prior": {
+          "approvedBy": null,
+          "decidedBy": null,
+          "approvedAt": null,
+          "status": "active"
+        },
+        "decidedAt": "2026-09-29T22:16:26.000Z",
+        "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+        "source": "admin_decision"
+      },
+      "updatedAt": "2026-09-29T22:16:26.000Z",
+      "searchableTermsCount": 33
+    },
+    "audit": {
+      "__id": "ERx37gnfqJk4YNFHqGdA",
+      "action": "business_approval_decision",
+      "targetUid": "aOdQxmUGLCO4hOYsdHMhWuwYV9D2",
+      "performedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+      "decision": "refuse",
+      "previous": {
+        "status": "active",
+        "approvedAt": null
+      },
+      "next": {
+        "status": "suspended",
+        "approvedAt": null
+      },
+      "reason": "No valid approval evidence exists for this provider account; the account is dormant with no recorded activity requiring preservation. Refuse the current provider application state and suspend/delist the provider listing pending any future valid application.",
+      "createdAt": "2026-09-29T22:16:26.000Z"
+    },
+    "controls": {
+      "dj": "63be075ded5adf091fe1bfca4d376d5cd760267d2ec696738c1854e029457d39",
+      "kasindi": "89352ffc5fd6c20eff0fe22f4f9cb9ac2c35a6c31b29f5b918eedd45b95057df",
+      "kasindiApp": "889bada6d5df0bf3aa3a62c5c968fe43679c1e3ff47c5d466684373227024202",
+      "kriss": "08541c2ae9bf400251c39c25b8f74414d8f6871e1b2da16980ae0f5c41cc3379",
+      "providersCount": 11,
+      "adminAuditCount": 22
+    }
+  },
+  "changedProviderFields": [
+    "approvalDecision",
+    "isPublic",
+    "searchable",
+    "searchableTerms",
+    "status",
+    "suspended",
+    "updatedAt"
+  ],
+  "sideEffect": {
+    "field": "searchableTerms",
+    "by": "indexProviderUpdate (deployed trigger, 2026-09-09)",
+    "pre": [
+      "king bruce",
+      "king",
+      "bruce",
+      "mc",
+      "artist",
+      "entertainment",
+      "events",
+      "artist / mc"
+    ],
+    "post": [
+      "king",
+      "ki",
+      "kin",
+      "bruce",
+      "br",
+      "bru",
+      "bruc",
+      "mc",
+      "entertainment",
+      "en",
+      "ent",
+      "ente",
+      "enter",
+      "entert",
+      "artist",
+      "ar",
+      "art",
+      "arti",
+      "artis",
+      "live",
+      "li",
+      "liv",
+      "performance",
+      "pe",
+      "per",
+      "perf",
+      "perfo",
+      "perfor",
+      "events",
+      "ev",
+      "eve",
+      "even",
+      "event"
+    ]
+  },
+  "unchanged": {
+    "users": true,
+    "claims": true,
+    "wallet": true,
+    "walletTx": "0==0",
+    "bookings": 0,
+    "services": 0,
+    "applications": 0,
+    "controlsIdentical": true
+  },
+  "repeatApply": {
+    "reason": "already_decided_same",
+    "providerIdenticalAfterRepeat": true,
+    "audits": 1,
+    "adminAuditCount": 22
+  }
+}

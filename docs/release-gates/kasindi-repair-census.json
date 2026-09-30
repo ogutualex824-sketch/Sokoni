@@ -1,0 +1,184 @@
+{
+  "slice": "kasindi-repair-census",
+  "readOnly": true,
+  "at": "2026-09-29T19:47:49.348Z",
+  "uid": "WLt0VowwtFcFADIJDIxXu3e6H1p1",
+  "applicationId": "PRVMS7IACKG",
+  "digest": "c0b194f29dc33bf12960c97c3f359198fc645f2dd036b16c606bc97be84c2d1e",
+  "digestOver": [
+    "application",
+    "applicationDecisions/{appId}",
+    "provider",
+    "user",
+    "seller",
+    "business",
+    "shop",
+    "auth.claims",
+    "walletTransactions"
+  ],
+  "gates": {
+    "applicationExists": true,
+    "uidMatch": true,
+    "agreementAccepted": false,
+    "agreementVersion": null,
+    "agreementAcceptedAt": null,
+    "agreementVerifiedAt": null,
+    "currentStatus": "approved",
+    "decidedBy": "reindex",
+    "decidedAt": "2026-07-30T15:11:12.000Z",
+    "serverDecisionRecordExists": false,
+    "serverDecisionRecord": null,
+    "roleForGate": "provider",
+    "gateKind": "application.agreementAccepted === true (client boolean)",
+    "healthcareBoundary": false,
+    "c1": {
+      "category": null,
+      "reason": "no-exact-match"
+    },
+    "lane": {
+      "hub": "provider",
+      "entClass": null
+    },
+    "adminAuditForUid": 0,
+    "adminAuditForApp": 0
+  },
+  "readModel": {
+    "classification": "SERVICES",
+    "conflicts": [],
+    "observed": {
+      "seller": "present_not_live",
+      "provider": "live",
+      "reasons": {
+        "products": "not_approved",
+        "services": "approved"
+      },
+      "applications": {
+        "loaded": true,
+        "approved": [
+          "SERVICES"
+        ],
+        "pending": [],
+        "rejected": []
+      },
+      "business": "absent",
+      "shop": "absent",
+      "productCount": 0,
+      "stamp": null,
+      "live": {
+        "PRODUCTS": false,
+        "SERVICES": true
+      }
+    },
+    "proposed": {
+      "PRODUCTS": "absent",
+      "SERVICES": "approved"
+    }
+  },
+  "resolverNow": {
+    "state": "PENDING_CLASSIFICATION",
+    "reason": "UNCLASSIFIED",
+    "route": null,
+    "category": null,
+    "lane": null
+  },
+  "activity": {
+    "providerBookings": 0,
+    "providerServices": 0,
+    "enquiries": 0,
+    "reviews": 0,
+    "orders": 0,
+    "products": 0
+  },
+  "auth": {
+    "claims": {
+      "provider": true
+    },
+    "created": "Tue, 21 Jul 2026 13:00:16 GMT",
+    "lastSignIn": "Tue, 04 Aug 2026 13:17:31 GMT"
+  },
+  "seller": {
+    "present": true,
+    "keys": [
+      "branches",
+      "updatedAt"
+    ],
+    "live": false
+  },
+  "business": false,
+  "shop": false,
+  "wallet": {
+    "balance": 50
+  },
+  "walletTransactions": [
+    {
+      "id": "rcv_msdiiej6_83f5b95b",
+      "type": "receive",
+      "amount": 50,
+      "status": "completed",
+      "createdAt": "2026-08-03T17:37:47.000Z"
+    }
+  ],
+  "legalAcceptances": {
+    "count": 0,
+    "doc": false
+  },
+  "adminAudit": {
+    "byUid": 0,
+    "byApp": 0
+  },
+  "provider": {
+    "status": "active",
+    "approvedAt": "2026-07-30T15:13:13.000Z",
+    "approvedBy": null,
+    "sourceApplicationId": "PRVMS7IACKG",
+    "searchable": true,
+    "isPublic": true,
+    "business": null,
+    "createdAt": "2026-07-30T15:11:15.000Z"
+  },
+  "application": {
+    "status": "approved",
+    "statusCanonical": "approved",
+    "decidedBy": "reindex",
+    "decidedAt": "2026-07-30T15:11:12.000Z",
+    "decisionAppliedFor": "approved",
+    "projectionStatus": "applied",
+    "agreementAccepted": false,
+    "agreementVersion": null,
+    "role": "provider",
+    "type": "Cleaning Company / Housekeeper",
+    "category": "Service Provider",
+    "hub": "service",
+    "createdAt": "2026-07-30T12:44:56.000Z",
+    "receivedAt": "2026-07-30T15:11:11.000Z",
+    "normalizedAt": "2026-07-30T15:11:11.000Z"
+  },
+  "deployedLineage": {
+    "applicationLifecycle": {
+      "updateTime": "2026-09-09T06:02:34Z",
+      "revision": "applicationlifecycle-00007-nox",
+      "archiveUploaded": "2026-09-06T17:45:39Z",
+      "sourceSha256_16": "351112f112bd5372",
+      "hasDecisionAuthority": true,
+      "decisionAuthorityForm": "claims-only: getUser(decidedBy) must hold admin|superAdmin; no applicationDecisions record consulted",
+      "hasAgreementGate": false
+    },
+    "applicationDecide": {
+      "updateTime": "2026-09-09T06:02:07Z",
+      "revision": "applicationdecide-00006-kex",
+      "archiveUploaded": "2026-08-24T19:14:47Z",
+      "sourceSha256_16": "bb0602e16c4724ae",
+      "hasDecisionAuthority": false,
+      "hasAgreementGate": false,
+      "writesApplicationDecisions": false,
+      "writesAdminAudit": true
+    },
+    "c4Line": {
+      "sourceSha256_16": "c206f85c000228dd",
+      "hasDecisionAuthority": true,
+      "hasAgreementGate": true,
+      "writesApplicationDecisions": true,
+      "writesAdminAudit": true
+    }
+  }
+}

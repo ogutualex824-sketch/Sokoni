@@ -30,6 +30,7 @@ const say = console.log; console.log = console.info = console.warn = console.err
 const stub = (m, exp) => { const p = m.startsWith('./') ? Path.join(FN, m + '.js') : require.resolve(m, { paths: [FN] }); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
 stub('firebase-admin', { apps: [{}], initializeApp: () => ({}), firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp }), auth: () => ({}) });
+const AF = require('./lib/approval-fixture'); AF.stubAdminAuth(stub); AF.autoApproveOnWrite(db); /* shell gate: approvedAt fixtures carry their admin decision */
 stub('./subscription-core', { resolveSubscription: async () => ({ found: false }) });
 const HW = require(Path.join(FN, 'healthcare-workspace.js'));
 const BWS = require(Path.join(FN, 'business-workspace.js'));   /* CHANGELOG 241: the dashboard projects this */
@@ -48,8 +49,13 @@ const providerDispatch = {
 };
 
 (async () => {
-  await db.doc('providers/hc1').set({ name: NAMES.hc1, status: 'active', healthcare: { category: 'facility', source: 'admin' } });
-  await db.doc('providers/ph1').set({ name: NAMES.ph1, status: 'active', category: 'photographer' });
+  await db.doc('providers/hc1').set({ name: NAMES.hc1, status: 'active', approvedAt: 1, healthcare: { category: 'facility', source: 'admin' } });
+  /* R2: an approved photographer carries the C1 stamp (photographer → artist_creator through the real classifier). The
+     pre-R2 fixture had no stamp and was GRANDFATHERED to the full dashboard; the owner removed that clause 2026-09-29. */
+  const PH1_C1 = require(Path.join(FN, 'business-category.js')).categoryFromApplication({ category: 'photographer' }, 'provider').category;
+  await db.doc('providers/ph1').set({ name: NAMES.ph1, status: 'active', approvedAt: 1, category: 'photographer', business: { category: PH1_C1, lane: require(Path.join(FN, 'provider-hub.js')).classifyDecidedApplication({ category: 'photographer', role: 'provider' }), source: 'application' } });
+  /* the module set the authority makes AVAILABLE for that profile — derived, never a literal count */
+  const PH1_EXPECTED = Object.entries(BWS.modulesForProfile(PH1_C1, { isCreator: false })).filter(([, m]) => m.state === 'AVAILABLE').map(([k]) => k).sort();
   const H = makePageHarness({ db, root: ROOT, callables: { providerDispatch } });
   await H.start();
   _base = H.BASE;
@@ -65,6 +71,10 @@ const providerDispatch = {
         await page.goto(H.BASE + '/provider-dashboard.html');
         await page.waitForFunction((n) => (document.getElementById('sbName') || {}).textContent === n, NAMES[uid], { timeout: 15000 }).catch(() => {});
         if (hc) await page.waitForFunction(() => document.documentElement.hasAttribute('data-hc-workspace'), null, { timeout: 15000 }).catch(() => {});
+        /* R2: measure the photographer only once the business-workspace projection has APPLIED (data-ws-state). Before,
+           the legacy expectation (every item but Content) equalled the projection's not-yet-applied fallback, so the
+           assertion could not tell an applied answer from an unapplied one. */
+        else await page.waitForFunction(() => document.documentElement.getAttribute('data-ws-state') === 'AVAILABLE', null, { timeout: 15000 }).catch(() => {});
         const phone = w <= 768;
         if (w === 390 || w === 1280) {   /* after the splash has finished */
           await page.waitForTimeout(3000);
@@ -81,6 +91,7 @@ const providerDispatch = {
             logo: !!(img && img.complete && img.naturalWidth > 0 && img.getAttribute('src') === 'assets/logosokoni.png'),
             left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width),
             groups: [...document.querySelectorAll('.sb-group')].filter(vis).map((g) => g.getAttribute('aria-label')),
+            wsState: document.documentElement.getAttribute('data-ws-state'), hiddenSections: document.querySelectorAll('#sidebar [data-hc-section][hidden]').length,
             visibleKeys: items.filter(vis).map((i) => i.getAttribute('data-hc-section')),
             total: items.length,
             patients: [...document.querySelectorAll('[data-hc-label="customers"]')].map((e) => e.textContent),
@@ -93,8 +104,9 @@ const providerDispatch = {
           ck(`${tag}: Healthcare — Entertainment items hidden, "Patients", the server's category label, Plan reachable`,
             !['quotes', 'bookingPin', 'calls', 'bookedHours'].some((k) => S.visibleKeys.includes(k)) && S.patients.every((t) => t === 'Patients') && /Clinic \/ Hospital \/ Facility/.test(S.kind) && S.visibleKeys.includes('subscription') && S.groups.includes('Plan'), { kind: S.kind, keys: S.visibleKeys.length, groups: S.groups });
         } else {
-          /* ph1 has no business stamp → LEGACY (grandfathered): every implemented module, except Content (not a creator) */
-          ck(`${tag}: photographer (legacy) — every item except Content, every group present`, S.visibleKeys.length === S.total - 1 && !S.visibleKeys.includes('content') && S.groups.join() === 'Overview,Storefront,Bookings,Business,Communication,Growth,Finance,Plan', { keys: S.visibleKeys.length, total: S.total, groups: S.groups });
+          /* R2: a CLASSIFIED artist sees exactly the modules its profile makes AVAILABLE (derived from the authority above);
+             Content stays hidden (not a creator); every visible group holds a visible item */
+          ck(`${tag}: photographer (artist_creator) — exactly the profile's AVAILABLE modules, Content hidden`, [...new Set(S.visibleKeys)].sort().join() === PH1_EXPECTED.join() && !S.visibleKeys.includes('content') && S.groups.length > 0, { keys: S.visibleKeys.length, uniq: new Set(S.visibleKeys).size, expected: PH1_EXPECTED.length, wsState: S.wsState, hidden: S.hiddenSections, groups: S.groups });
         }
         if (!phone) {
           ck(`${tag}: desktop — the sidebar is on screen`, S.left >= 0 && S.width >= 200);

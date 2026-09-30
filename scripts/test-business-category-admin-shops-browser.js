@@ -30,6 +30,7 @@ const say = console.log; console.log = console.info = console.warn = console.err
 const stub = (m, exp) => { const p = m.startsWith('./') ? Path.join(FN, m + '.js') : require.resolve(m, { paths: [FN] }); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
 stub('firebase-admin', { apps: [{}], initializeApp: () => ({}), firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp }), auth: () => ({}) });
+const AF = require('./lib/approval-fixture'); AF.stubAdminAuth(stub); AF.autoApproveOnWrite(db); /* shell gate: approvedAt fixtures carry their admin decision */
 const BA = require(Path.join(FN, 'business-category-admin.js'))._adminH;
 const BW = require(Path.join(FN, 'business-workspace.js'));
 const { makePageHarness } = require('./lib/page-harness.js');
@@ -48,7 +49,7 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewp
 </script></body></html>`;
 
 (async () => {
-  await db.doc('providers/p1').set({ name: 'Plumb Co', status: 'active', business: { category: null, source: 'application', lane: { hub: 'provider', entClass: null } } });
+  await db.doc('providers/p1').set({ name: 'Plumb Co', status: 'active', approvedAt: 1, business: { category: null, source: 'application', lane: { hub: 'provider', entClass: null } } });
   await db.doc('shops/legacyX').set({ sellerUid: 'lx', name: '<img src=x onerror=alert(1)>Old Duka', status: 'active', category: '<svg onload=alert(2)>' });
   await db.doc('shops/apprX').set({ sellerUid: 'ax', ownerId: 'ax', name: 'Approved Hardware', status: 'active', source: 'application_approval', applicationId: 'a1' });
   await db.doc('sellers/ax').set({ uid: 'ax', shopId: 'apprX', status: 'active' });

@@ -1,0 +1,180 @@
+{
+  "slice": "C5",
+  "identity": "IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+  "application": "y0dp5uPehfj4qFf4imKl",
+  "planDigest": "6b1c5044f1aa6fffc877f90a74490fa24409723c4959cb9a87c6be79f1c430dc",
+  "preSnapshot": {
+    "at": "2026-09-29T17:26:11.712Z",
+    "digest": "0b499fe6e161122395c2b36bed326e13f5504fbb8126503da113197845a1dcdf",
+    "auth": {
+      "uid": "IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+      "email": "ha***om",
+      "disabled": false,
+      "claims": {
+        "provider": true
+      },
+      "created": "Sat, 20 Jun 2026 02:17:46 GMT",
+      "lastSignIn": "Sat, 01 Aug 2026 21:55:29 GMT"
+    },
+    "providers": {
+      "featured": false,
+      "city": "Nairobi",
+      "available": true,
+      "categoryLabel": "Wholesaler / Bulk Supplier",
+      "rating": 0,
+      "description": "La***s \nWe sell phones ..new end ex uk\nTv",
+      "nameLower": "latomi gadgets",
+      "uid": "IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+      "createdAt": "2026-09-03T22:55:10.000Z",
+      "reviewCount": 0,
+      "providerId": "PRV-GM3AP56G",
+      "acceptsBookings": true,
+      "isPublic": true,
+      "categories": [
+        "wholesaler",
+        "Wholesaler / Bulk Supplier"
+      ],
+      "email": "ha***om",
+      "area": "simara mall",
+      "searchableTerms": "<omitted>",
+      "sourceApplicationId": "y0dp5uPehfj4qFf4imKl",
+      "publishedAt": "2026-09-03T22:55:10.000Z",
+      "searchable": true,
+      "jobsCompleted": 0,
+      "phoneNumber": "+2***07",
+      "phone": "07***07",
+      "name": "Latomi gadgets",
+      "location": "Nairobi simara mall",
+      "category": "wholesaler",
+      "status": "active",
+      "approvedAt": "2026-09-03T22:55:11.000Z",
+      "updatedAt": "2026-09-03T22:55:11.000Z"
+    },
+    "application": {
+      "id": "APP1787153242065",
+      "name": "Latomi gadgets",
+      "category": "wholesaler",
+      "categoryLabel": "Wholesaler / Bulk Supplier",
+      "hub": "b2b",
+      "requestedRole": "provider",
+      "phone": "07***07",
+      "phoneNumber": "+2***07",
+      "email": "ha***om",
+      "location": "Nairobi simara mall",
+      "description": "La***s \nWe sell phones ..new end ex uk\nTv",
+      "plan": "free",
+      "type": "business",
+      "uid": "IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+      "submittedAt": "2026-08-19T15:27:22.065Z",
+      "createdAt": 1787153242065,
+      "area": "simara mall",
+      "role": "provider",
+      "hasGeo": false,
+      "city": "Nairobi",
+      "normalizedAt": "2026-08-19T15:27:28.000Z",
+      "intakeVersion": 1,
+      "phoneVerifiable": true,
+      "nameLower": "latomi gadgets",
+      "applicationId": "y0dp5uPehfj4qFf4imKl",
+      "receivedAt": "2026-08-19T15:27:28.000Z",
+      "roleResolvedBy": "explicit",
+      "reviewReason": null,
+      "decidedAt": "2026-09-03T22:55:10.000Z",
+      "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+      "statusCanonical": "approved",
+      "status": "approved",
+      "updatedAt": "2026-09-03T22:55:10.000Z",
+      "decisionAppliedFor": "approved",
+      "projectionStatus": "applied",
+      "projectionReceipt": [
+        {
+          "collection": "providers",
+          "id": "IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+          "action": "updated",
+          "providerId": "PRV-GM3AP56G"
+        }
+      ],
+      "decisionAppliedAt": "2026-09-03T22:55:11.000Z"
+    },
+    "absent": [
+      "sellers",
+      "businesses",
+      "shops",
+      "merchants",
+      "branches",
+      "providerProfiles",
+      "providerServices",
+      "providerSubscriptions",
+      "entitlements"
+    ],
+    "products": 0,
+    "wallet": {
+      "balance": 0,
+      "currency": "KES"
+    }
+  },
+  "applied": {
+    "at": "2026-09-29T17:29Z",
+    "businessId": "IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+    "auditId": "kIRnqG6YJwNP70bULqmb",
+    "secondApply": "already_migrated"
+  },
+  "landing": {
+    "at": "2026-09-29T17:30:54.953Z",
+    "pass": 16,
+    "fail": 0,
+    "business": {
+      "uid": "IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+      "ownerId": "IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+      "name": "Latomi gadgets",
+      "businessName": "Latomi gadgets",
+      "nameLower": "latomi gadgets",
+      "status": "active",
+      "source": "capability_migration_c5",
+      "applicationId": "y0dp5uPehfj4qFf4imKl",
+      "searchable": false,
+      "isPublic": false,
+      "category": "wholesaler",
+      "description": "La***s \nWe sell phones ..new end ex uk\nTv",
+      "phone": "+2***07",
+      "email": "ha***om",
+      "city": "Nairobi simara mall",
+      "capabilities": {
+        "version": 1,
+        "SERVICES": {
+          "state": "approved",
+          "decidedBy": "D5Ql2EYr95bt79IpcGTmOMTK0P83",
+          "decidedAt": "2026-09-03T22:55:10.000Z",
+          "applicationId": "y0dp5uPehfj4qFf4imKl",
+          "source": "application_approval"
+        }
+      },
+      "migration": {
+        "slice": "C5",
+        "from": "providers/IaOBkEJYcCXk23UDWk0OPp7XXeD3",
+        "providerApprovedAt": "2026-09-03T22:55:11.000Z",
+        "sourceApplicationId": "y0dp5uPehfj4qFf4imKl"
+      },
+      "createdAt": "2026-09-29T17:30:10.000Z",
+      "updatedAt": "2026-09-29T17:30:10.000Z",
+      "searchableTerms": "<omitted>"
+    },
+    "readModel": {
+      "classification": "SERVICES",
+      "authorityStatus": "STAMPED",
+      "conflicts": [],
+      "proposed": {
+        "PRODUCTS": "absent",
+        "SERVICES": "approved"
+      }
+    }
+  },
+  "censusAfter": {
+    "manifestDigestUnchanged": "028299e7442516d93f3a6a2ed1555bda09f548b4ee0dd0cfbbdcc1eebbad13e2",
+    "stamped": [
+      "Ohg9HrtGpCXBUSzbRfaUifOPWQ32 (C4)",
+      "IaOBkEJYcCXk23UDWk0OPp7XXeD3 (C5)"
+    ],
+    "onlyRowChanged": "IaOBkEJYcCXk23UDWk0OPp7XXeD3 NOT_YET_STAMPED -> STAMPED, biz 0 -> 1"
+  }
+}

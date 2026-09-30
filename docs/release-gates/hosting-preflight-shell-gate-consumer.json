@@ -1,0 +1,84 @@
+{
+  "slice": "hosting-preflight-shell-gate-consumer",
+  "readOnly": true,
+  "deploymentAuthorized": false,
+  "at": "2026-09-30T02:34:45.821Z",
+  "live": {
+    "commit": "49e0f3a",
+    "branch": "feat/d2-rider-portal-on-ec452fb",
+    "cacheVersion": "sokoni-20260930001126-v644",
+    "release": "1790727624889000",
+    "version": "3cbdf961791900b8"
+  },
+  "candidate": {
+    "worktree": "C:/temp/sok-host-gate",
+    "branch": "hosting/shell-gate-consumer-on-49e0f3a",
+    "tip": "2f3bb6f",
+    "containsLive": true
+  },
+  "shipped": [
+    {
+      "file": "provider-dashboard.html",
+      "change": "+2 lines: comment + <script src=\"sokoni-business-workspace.js\" defer>"
+    },
+    {
+      "file": "sokoni-business-workspace.js",
+      "sha256_12": "98e516ef0e07",
+      "identicalToCapabilityLine": true
+    },
+    {
+      "file": "complete-application.html",
+      "sha256_12": "9cf6ecb4a69f",
+      "identicalToCapabilityLine": true
+    },
+    {
+      "file": "sokoni-complete-application.js",
+      "sha256_12": "3f681de25d85",
+      "identicalToCapabilityLine": true
+    }
+  ],
+  "notShipped": [
+    "scripts/**"
+  ],
+  "serverSide": {
+    "function": "providerDispatch",
+    "revision": "providerdispatch-00050-rur",
+    "functionsTree": "c7e26b6"
+  },
+  "proofs": {
+    "browserSuiteAgainstDeployedCode": "21/0",
+    "browserSuiteCapabilityLine": "21/0",
+    "capabilityRegressions": {
+      "sidebarBrowser": "90/0",
+      "projectionBrowser": "29/0",
+      "shellGate": "22/0"
+    },
+    "hostingGates": {
+      "guardNoRollback": "allow (2f3bb6f contains 49e0f3a)",
+      "cooldown": "allow",
+      "commissionSingleSource": "PASS",
+      "perfGuard": "PASS",
+      "auditBase64": "PASS",
+      "gateInventory": "skipped (no inventory file changed)",
+      "moneyToast": "PASS",
+      "syntaxGate": "PASS (1,794 files, 453 inline blocks)"
+    },
+    "liveDependencies200": [
+      "hub-register.js",
+      "sokoni-commission-rates.js",
+      "sokoni-auth-state.js",
+      "firebase.js",
+      "sokoni-legal.css",
+      "/agreement-acknowledge"
+    ],
+    "postDeployMarkers404Now": [
+      "/complete-application",
+      "/sokoni-complete-application.js",
+      "/sokoni-business-workspace.js"
+    ]
+  },
+  "userVisibleWhenShipped": "providers holding the provider claim who reach the dashboard get the server answer; held → /complete-application; valid unchanged; refused sees the explanation; sellers/merchant-v2 NOT gated by this slice",
+  "rollback": {
+    "version": "3cbdf961791900b8"
+  }
+}

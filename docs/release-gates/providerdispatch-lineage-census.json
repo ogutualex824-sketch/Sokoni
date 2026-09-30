@@ -1,0 +1,771 @@
+{
+  "slice": "providerdispatch-lineage-census",
+  "readOnly": true,
+  "deploymentAuthorized": false,
+  "at": "2026-09-30T00:06:47.887Z",
+  "deployed": {
+    "archiveUploaded": "2026-08-22T08:09:34Z",
+    "revision": "providerdispatch-00048-qiz",
+    "closureFiles": 23,
+    "ops": 59,
+    "blobOrigins": {
+      "provider-dispatch.js": "9625b11 2026-08-04",
+      "provider-ops.js": "55c9367 2026-08-04",
+      "booking-service.js": "8a7250e 2026-08-02"
+    }
+  },
+  "thisLine": {
+    "tip": "764d1d1",
+    "closureFiles": 77,
+    "ops": 64,
+    "opsAdded": [
+      "providerDirectory",
+      "providerRequestShop",
+      "healthcareWorkspace",
+      "businessWorkspace",
+      "workspaceHome"
+    ]
+  },
+  "shellGateMinimalClosure": [
+    "business-workspace.js",
+    "shared/approval-remediation.js",
+    "shared/business-capabilities.js",
+    "shared/business-scope.js",
+    "shared/cleanup-claimed-ids.json",
+    "business-category.js",
+    "capability-authority.js",
+    "healthcare-category.js",
+    "healthcare-plans.js",
+    "healthcare-workspace.js",
+    "subscription-catalog.js",
+    "subscription-core.js"
+  ],
+  "changed": [
+    {
+      "file": "availability.js",
+      "added": 65,
+      "removed": 323,
+      "reachableFromExistingOps": true,
+      "secrets": [],
+      "classification": "unrelated-c4"
+    },
+    {
+      "file": "booking-payment-sweep.js",
+      "added": 31,
+      "removed": 3,
+      "reachableFromExistingOps": true,
+      "secrets": [],
+      "classification": "unrelated-c4"
+    },
+    {
+      "file": "booking-service.js",
+      "added": 142,
+      "removed": 80,
+      "reachableFromExistingOps": true,
+      "secrets": [],
+      "classification": "unrelated-c4+prerequisite-link"
+    },
+    {
+      "file": "commission-config.js",
+      "added": 376,
+      "removed": 9,
+      "reachableFromExistingOps": true,
+      "secrets": [],
+      "classification": "unrelated-c4-money-policy"
+    },
+    {
+      "file": "finos-utils.js",
+      "added": 82,
+      "removed": 8,
+      "reachableFromExistingOps": true,
+      "secrets": [],
+      "classification": "unrelated-c4-money-policy"
+    },
+    {
+      "file": "legal-agreements.js",
+      "added": 162,
+      "removed": 13,
+      "reachableFromExistingOps": true,
+      "secrets": [],
+      "classification": "prerequisite-dark"
+    },
+    {
+      "file": "notify.js",
+      "added": 156,
+      "removed": 13,
+      "reachableFromExistingOps": true,
+      "secrets": [],
+      "classification": "newly-reachable-sms"
+    },
+    {
+      "file": "provider-dispatch.js",
+      "added": 26,
+      "removed": 1,
+      "reachableFromExistingOps": false,
+      "secrets": [
+        "QR_SIGNING_SECRET"
+      ],
+      "classification": "required+unrelated"
+    },
+    {
+      "file": "provider-onboarding.js",
+      "added": 260,
+      "removed": 67,
+      "reachableFromExistingOps": true,
+      "secrets": [],
+      "classification": "security-fix-live-vector+breaking-for-live-page"
+    },
+    {
+      "file": "provider-ops.js",
+      "added": 309,
+      "removed": 181,
+      "reachableFromExistingOps": true,
+      "secrets": [],
+      "classification": "unrelated-c4-money"
+    },
+    {
+      "file": "sms-service.js",
+      "added": 18,
+      "removed": 0,
+      "reachableFromExistingOps": true,
+      "secrets": [
+        "SMS_WEBHOOK_TOKEN"
+      ],
+      "classification": "unrelated-inert"
+    },
+    {
+      "file": "subscription-core.js",
+      "added": 51,
+      "removed": 0,
+      "reachableFromExistingOps": true,
+      "secrets": [],
+      "classification": "unrelated-c4"
+    }
+  ],
+  "newModules": [
+    {
+      "file": "business-category.js",
+      "chain": [
+        "business-workspace.js",
+        "business-category.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "business-wallet.js",
+      "chain": [
+        "provider-shop.js",
+        "business-wallet.js"
+      ],
+      "reach": "new-ops-only",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "business-workspace.js",
+      "chain": [
+        "business-workspace.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "capability-authority.js",
+      "chain": [
+        "business-workspace.js",
+        "capability-authority.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "commission-vat-policy.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "event-ops.js",
+        "entertainment-integrations.js",
+        "event-fiscal.js",
+        "etims.js",
+        "commission-vat-policy.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "creator-hub.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "venue-payments.js",
+        "financial-os.js",
+        "creator-hub.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 2
+    },
+    {
+      "file": "ent-availability.js",
+      "chain": [
+        "booking-service.js",
+        "ent-availability.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "ent-enquiries.js",
+      "chain": [
+        "booking-service.js",
+        "ent-rate-cards.js",
+        "ent-enquiries.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "ent-rate-cards.js",
+      "chain": [
+        "booking-service.js",
+        "ent-rate-cards.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "entertainment-bookings.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "entertainment-integrations.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "event-ops.js",
+        "entertainment-integrations.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "event-fiscal.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "event-ops.js",
+        "entertainment-integrations.js",
+        "event-fiscal.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "event-ops.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "event-ops.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [
+        "SOKONI_HMAC_KEY"
+      ],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "event-refunds.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "event-ops.js",
+        "event-refunds.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "event-sales.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "event-ops.js",
+        "event-sales.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "event-settlement.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "event-ops.js",
+        "event-settlement.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "healthcare-category.js",
+      "chain": [
+        "healthcare-workspace.js",
+        "healthcare-category.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "healthcare-conversations.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "messages.js",
+        "healthcare-conversations.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 1
+    },
+    {
+      "file": "healthcare-plans.js",
+      "chain": [
+        "business-workspace.js",
+        "capability-authority.js",
+        "healthcare-plans.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "healthcare-workspace.js",
+      "chain": [
+        "healthcare-workspace.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "legal-verification.js",
+      "chain": [
+        "provider-shop.js",
+        "application-lifecycle.js",
+        "legal-verification.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "lsk-adapter.js",
+      "chain": [
+        "provider-shop.js",
+        "application-lifecycle.js",
+        "legal-verification.js",
+        "lsk-adapter.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "money-authority.js",
+      "chain": [
+        "provider-shop.js",
+        "business-wallet.js",
+        "money-authority.js"
+      ],
+      "reach": "new-ops-only",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "order-advance-authority.js",
+      "chain": [
+        "booking-resolution.js",
+        "notify.js",
+        "order-advance-authority.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "provider-directory.js",
+      "chain": [
+        "provider-directory.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "provider-hub.js",
+      "chain": [
+        "booking-service.js",
+        "provider-hub.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "provider-shop.js",
+      "chain": [
+        "provider-shop.js"
+      ],
+      "reach": "new-ops-only",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "reputation.js",
+      "chain": [
+        "booking-service.js",
+        "reputation.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "role-authority.js",
+      "chain": [
+        "provider-shop.js",
+        "role-authority.js"
+      ],
+      "reach": "new-ops-only",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "seller-trial.js",
+      "chain": [
+        "provider-shop.js",
+        "application-lifecycle.js",
+        "seller-trial.js"
+      ],
+      "reach": "new-ops-only",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/approval-remediation.js",
+      "chain": [
+        "business-workspace.js",
+        "shared/approval-remediation.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/business-capabilities.js",
+      "chain": [
+        "business-workspace.js",
+        "shared/business-capabilities.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/business-scope.js",
+      "chain": [
+        "business-workspace.js",
+        "shared/business-capabilities.js",
+        "shared/business-scope.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/catalogue-capabilities.js",
+      "chain": [
+        "booking-service.js",
+        "kasshop.js",
+        "minishop.js",
+        "shared/catalogue-capabilities.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/cleanup-claimed-ids.json",
+      "chain": [
+        "business-workspace.js",
+        "shared/cleanup-claimed-ids.json"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/commercial-policy.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "venue-payments.js",
+        "shared/commercial-policy.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/communication-envelope.js",
+      "chain": [
+        "booking-resolution.js",
+        "notify.js",
+        "shared/communication-envelope.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/creator-commercial.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "venue-payments.js",
+        "shared/commercial-policy.js",
+        "shared/creator-commercial.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/creator-publishing.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "venue-payments.js",
+        "financial-os.js",
+        "creator-hub.js",
+        "shared/creator-publishing.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/creator-royalty.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "venue-payments.js",
+        "financial-os.js",
+        "creator-hub.js",
+        "shared/creator-royalty.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/creator-watermark.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "venue-payments.js",
+        "financial-os.js",
+        "creator-hub.js",
+        "shared/creator-watermark.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/ent-availability-core.js",
+      "chain": [
+        "booking-service.js",
+        "availability.js",
+        "shared/ent-availability-core.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/ent-booking-identity.js",
+      "chain": [
+        "booking-service.js",
+        "ent-availability.js",
+        "shared/ent-booking-identity.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/event-refund-reasons.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "event-ops.js",
+        "event-refunds.js",
+        "shared/event-refund-reasons.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/message-identity.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "messages.js",
+        "shared/message-identity.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/payment-capability.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "event-ops.js",
+        "entertainment-integrations.js",
+        "shared/payment-capability.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/provider-fee.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "venue-payments.js",
+        "shared/provider-fee.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shared/shop-hours.js",
+      "chain": [
+        "booking-service.js",
+        "kasshop.js",
+        "shared/shop-hours.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "shop-employees.js",
+      "chain": [
+        "booking-resolution.js",
+        "notify.js",
+        "shop-employees.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 5
+    },
+    {
+      "file": "sokoni-qr-authority.js",
+      "chain": [
+        "provider-shop.js",
+        "sokoni-till.js",
+        "sokoni-qr-authority.js"
+      ],
+      "reach": "new-ops-only",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "sokoni-till.js",
+      "chain": [
+        "provider-shop.js",
+        "sokoni-till.js"
+      ],
+      "reach": "new-ops-only",
+      "secrets": [
+        "QR_SIGNING_SECRET"
+      ],
+      "topLevelTriggers": 6
+    },
+    {
+      "file": "tenant-identity.js",
+      "chain": [
+        "provider-shop.js",
+        "application-lifecycle.js",
+        "business-bootstrap.js",
+        "tenant-identity.js"
+      ],
+      "reach": "new-ops-only",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "venue-payments.js",
+      "chain": [
+        "provider-ops.js",
+        "entertainment-bookings.js",
+        "venue-payments.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    },
+    {
+      "file": "verification-authority.js",
+      "chain": [
+        "provider-onboarding.js",
+        "verification-authority.js"
+      ],
+      "reach": "existing-ops",
+      "secrets": [],
+      "topLevelTriggers": 0
+    }
+  ],
+  "counts": {
+    "newViaExistingOps": 46,
+    "newViaNewOpsOnly": 8,
+    "loadedOnly": 0
+  },
+  "splitBrain": [
+    "commission-config.js",
+    "finos-utils.js",
+    "subscription-core.js"
+  ],
+  "unboundSecretDeclared": [
+    "SOKONI_HMAC_KEY (event-ops.js)",
+    "SMS_WEBHOOK_TOKEN (sms-service.js, unused by ops)"
+  ],
+  "recommendation": "build a minimal candidate = deployed archive + 12-module gate closure + two-line dispatcher merge, from a pinned commit; provider-onboarding security fixes as a separate candidate; hold tonight"
+}

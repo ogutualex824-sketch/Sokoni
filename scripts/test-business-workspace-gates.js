@@ -32,7 +32,7 @@ const db = F.db;
 const say = console.log; console.log = console.info = console.warn = console.debug = () => {};
 const resolveIn = (m) => require.resolve(m, { paths: [FN] });
 const stub = (m, exp) => { const p = m.startsWith('./') ? Path.join(FN, m + '.js') : resolveIn(m); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
-const authApi = { getUser: async (u) => ({ uid: u, customClaims: {} }) };
+const authApi = { getUser: async (u) => ({ uid: u, customClaims: /^admin/.test(u) ? { admin: true } : {} }) };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
 stub('firebase-admin/auth', { getAuth: () => authApi });
 stub('firebase-admin', { apps: [{}], initializeApp: () => ({}), app: () => ({}), firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath }), auth: () => authApi, storage: () => ({ bucket: () => ({}) }) });
@@ -52,8 +52,8 @@ const WEEK = {}; ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'satur
 const D = (n) => new Date(NOW + n * 86400e3).toISOString().slice(0, 10);
 
 async function seed(uid, doc) {
-  await db.doc(`providers/${uid}`).set(Object.assign({ name: uid, status: 'active', acceptsBookings: true }, doc));
-  await db.doc(`applications/app_${uid}`).set({ uid, status: 'approved', role: doc && doc.healthcare ? 'health' : 'provider', category: 'x', decidedAt: 1 });
+  await db.doc(`providers/${uid}`).set(Object.assign({ name: uid, status: 'active', approvedAt: 1, acceptsBookings: true }, doc));
+  await db.doc(`applications/app_${uid}`).set({ uid, status: 'approved', role: doc && doc.healthcare ? 'health' : 'provider', category: 'x', decidedBy: 'admin_1', decidedAt: 1 });
   await db.doc(`providerAvailability/${uid}`).set({ uid, modes: ['fixed_hours'], schedule: WEEK, appt: { enabled: true, durationMins: 60, maxDaysAhead: 90, minNoticeHours: 1, allowSameDay: true }, cap: {} });
   await db.doc(`users/${uid}`).set({ displayName: uid });
 }
@@ -102,11 +102,11 @@ const card = (uid) => RC._h.entRateCardCreate({ ...who(uid), data: { name: 'Stan
   ck('…withdrawing the quote → refused', !!q.quoteId && await codeOf(RC._h.entQuoteWithdraw({ ...who('plumber'), data: { quoteId: q.quoteId } })) === 'WORKSPACE_MODULE_NOT_APPLICABLE', q);
   ck('…disabling the discount still works (marketing is offered to a salon)', !!disc && !(await codeOf(RC._h.entDiscountDisable({ ...who('plumber'), data: { couponId: disc.id } }))));
 
-  say('\n── legacy providers are grandfathered ──');
-  ck('legacy (approved before C1): rate card, discount, availability, calendar, calls all still work',
+  say('\n── legacy providers are NO LONGER grandfathered (owner 2026-09-29: no category = not routable) ──');
+  ck('legacy (approved before C1, no category): rate card, discount, availability, calendar, calls are ALL refused (WORKSPACE_MODULE_PENDING_APPROVAL) until AdminOS classifies',
     (await Promise.all([card('legacy1'), RC._h.entDiscountCreate({ ...who('legacy1'), data: { code: 'OLDIE10', type: 'percent', value: 10, campaign: 'Launch', validTo: NOW + 30 * 86400e3, usageLimit: 50 } }),
       AV._h.entAvailSetConfig({ ...who('legacy1'), data: { config: { durationMins: 45 } } }), AV._h.entAvailBlock({ ...who('legacy1'), data: { date: D(6) } }),
-      EQ._h.entMessagingSetSettings({ ...who('legacy1'), data: { settings: { callRequests: 'ENABLED' } } })].map(codeOf))).every((c) => c === null));
+      EQ._h.entMessagingSetSettings({ ...who('legacy1'), data: { settings: { callRequests: 'ENABLED' } } })].map(codeOf))).every((c) => c === 'WORKSPACE_MODULE_PENDING_APPROVAL'));
 
   say('\n── venue calendars are venue-manager\'s ──');
   await db.doc('venues/V1').set({ name: 'Karura Hall', ownerId: 'doc1', status: 'active', openingHours: {}, slotDurationMins: 60, bookingHorizonDays: 365, pricing: { hourlyRate: 2000 } });

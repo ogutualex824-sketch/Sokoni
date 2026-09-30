@@ -1,0 +1,153 @@
+{
+  "slice": "hosting-preflight-reack-surface",
+  "readOnly": true,
+  "deploymentAuthorized": false,
+  "at": "2026-09-29T20:48:46.486Z",
+  "live": {
+    "hosting": {
+      "commit": "ff9d7620989c463fdf08dbc12cc75019f5bacce1",
+      "branch": "fix/track-hub-on-93c5783",
+      "buildTime": "2026-09-29T19:00:35.096Z",
+      "cacheVersion": "sokoni-20260929190033-v641",
+      "dirtyWorkingTree": false
+    },
+    "release": {
+      "name": "1790708874166000",
+      "time": "2026-09-29T19:07:54.166Z",
+      "version": "00cbd1b719fa3898",
+      "files": 862,
+      "status": "FINALIZED"
+    },
+    "rulesRelease": {
+      "ruleset": "b87c94e4-33af-4af5-9ece-e7c1a103dec0",
+      "updateTime": "2026-09-29T20:43:02Z",
+      "applicationsBlockUnchangedFrom": "6c67a34d"
+    }
+  },
+  "capabilityLine": {
+    "branch": "slice/c4-capability-consumer",
+    "tip": "b8cb9d8",
+    "descendantOfLive": false,
+    "mergeBaseWithLive": "3dcf5724df8a8f333e2e3eab9c8d3a1d81132c90",
+    "hostingCandidate": false,
+    "why": "diverged tree passes the rollback guard yet would replace production with the c4 tree"
+  },
+  "candidate": {
+    "worktree": "C:/temp/sok-reack",
+    "branch": "slice/reack-surface-on-live",
+    "tip": "d108f6c",
+    "base": "ff9d762",
+    "baseIsLive": true,
+    "commitsAboveLive": [
+      "463936a cherry-pick fd21e9b",
+      "f4ed51a test assertion lineage-honest",
+      "d108f6c test-only harness libs"
+    ],
+    "changedPaths": [
+      "CHANGELOG.md",
+      "agreement-acknowledge.html",
+      "docs/KASINDI_REPAIR_PRECONDITIONS.md",
+      "scripts/lib/fake-firestore-txn.js",
+      "scripts/lib/page-harness.js",
+      "scripts/test-agreement-acknowledge-browser.js",
+      "scripts/test-agreement-acknowledge.js",
+      "sokoni-agreement-acknowledge.js"
+    ],
+    "shipped": [
+      {
+        "path": "agreement-acknowledge.html",
+        "sha256_16": "a474d0a6bfe687db",
+        "identicalToCapabilityLine": true
+      },
+      {
+        "path": "sokoni-agreement-acknowledge.js",
+        "sha256_16": "352c3eab0071cd94",
+        "identicalToCapabilityLine": true
+      }
+    ],
+    "functionsOrRulesPathsInDiff": 0,
+    "expectedFileCountAfter": 864
+  },
+  "isolation": {
+    "preservationSliceOnCandidate": false,
+    "hostingOnlyCommandRunsFunctionsPredeploy": false,
+    "hostingIgnoreCovers": [
+      "functions/**",
+      "firestore.rules*",
+      "scripts/**",
+      "docs/**",
+      "**/*.md"
+    ],
+    "predeployHooksLoadFirebaseAdmin": false,
+    "pageWritesOnLoad": false,
+    "pageWritesOnlyFields": [
+      "agreementAccepted",
+      "agreementVersion",
+      "agreementAcceptedAt",
+      "agreementAcknowledgedSurface"
+    ],
+    "kasindiRecordReadOrWritten": false
+  },
+  "gates": {
+    "guardNoRollback": "allow (463936a contains ff9d762)",
+    "guardDeployCooldown": "allow",
+    "predeploySyntaxGate": "pass (1788 files, 452 inline blocks)",
+    "verifyCommissionSingleSource": "pass",
+    "perfGuard": "pass",
+    "auditBase64Writes": "pass",
+    "gateInventory": "exit 0",
+    "checkMoneyToastSafety": "pass",
+    "bumpSwVersion": "deploy-time mutator, not run (v641 -> v642)",
+    "generateVersion": "deploy-time mutator, not run"
+  },
+  "suitesOnCandidate": {
+    "test-agreement-acknowledge": "21/0",
+    "test-agreement-acknowledge-browser": "14/0"
+  },
+  "liveDependencies": {
+    "/seller-terms": 200,
+    "sokoni-merchant-application.js": 200,
+    "exportsVersion": "2026-09-07-lanes-mkt-ladder-pos-5pct",
+    "firebase.js": 200,
+    "sokoni-legal.css": 200,
+    "shared-header.js": 200,
+    "sokoni-auth-state.js": 200,
+    "/agreement-acknowledge": 404,
+    "/sokoni-agreement-acknowledge.js": 404
+  },
+  "servedRulesCheck": {
+    "suite": "test-agreement-reacknowledge-rules vs served text",
+    "reackWritePermitted": true,
+    "ownApproved": "PASS",
+    "ownPending": "PASS",
+    "stranger": "refused",
+    "anonymous": "refused",
+    "decisionProtectionsAbsent": [
+      "priorDecisions",
+      "decidedBy",
+      "agreementVerifiedAt",
+      "status change",
+      "classification freeze",
+      "admin raw priorDecisions"
+    ]
+  },
+  "rollbackTarget": {
+    "release": "1790702102972000",
+    "time": "2026-09-29T17:15:02.972Z",
+    "version": "a3552ac70cd81400",
+    "files": 862
+  },
+  "findings": [
+    "live hub-register.js has NO agreement handling; only sokoni-merchant-application.js writes the acknowledgement",
+    "production applications rules lack decision protections (9/15 assertions fail vs served text) -> Kasindi read gate G2 must prove by field diff",
+    "deployed applicationDecide still has no agreement gate"
+  ],
+  "deployCommandWhenAuthorized": "firebase deploy --only hosting --project sokoni-aeb26 -m \"reack surface d108f6c\"  (from C:/temp/sok-reack at d108f6c, clean tree, after re-reading version.json)",
+  "postDeployVerification": [
+    "version.json commit == d108f6c, cacheVersion -v642",
+    "/agreement-acknowledge 200 contains data-ack-state=\"boot\"",
+    "/sokoni-agreement-acknowledge.js 200 contains SokoniAgreementAck",
+    "Hosting releases +1, files 864",
+    "/seller-terms still 200"
+  ]
+}

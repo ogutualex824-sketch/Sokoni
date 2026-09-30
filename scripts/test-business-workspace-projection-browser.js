@@ -25,6 +25,7 @@ const say = console.log; console.log = console.info = console.warn = console.err
 const stub = (m, exp) => { const p = m.startsWith('./') ? Path.join(FN, m + '.js') : require.resolve(m, { paths: [FN] }); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; };
 stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath });
 stub('firebase-admin', { apps: [{}], initializeApp: () => ({}), firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp }), auth: () => ({}) });
+const AF = require('./lib/approval-fixture'); AF.stubAdminAuth(stub); AF.autoApproveOnWrite(db); /* shell gate: approvedAt fixtures carry their admin decision */
 stub('./subscription-core', { resolveSubscription: async () => ({ found: false }) });
 const BW = require(Path.join(FN, 'business-workspace.js'));
 const HW = require(Path.join(FN, 'healthcare-workspace.js'));
@@ -32,10 +33,10 @@ const { makePageHarness } = require('./lib/page-harness.js');
 
 let pass = 0, fail = 0;
 const ck = (l, ok, d) => { say('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== undefined && d !== '' ? '   [' + String(typeof d === 'object' ? JSON.stringify(d) : d).slice(0, 200) + ']' : '')); ok ? pass++ : fail++; };
-const biz = (category, extra) => Object.assign({ status: 'active', business: { category, source: 'application', lane: { hub: 'provider', entClass: null } } }, extra || {});
+const biz = (category, extra) => Object.assign({ status: 'active', approvedAt: 1, business: { category, source: 'application', lane: { hub: 'provider', entClass: null } } }, extra || {});
 const CASES = [
   ['plumber', biz('trades'), 'Plumb Co'],
-  ['doc1', { status: 'active', healthcare: { category: 'clinician', source: 'admin' }, business: { category: 'clinician', source: 'admin', lane: { hub: 'healthcare', entClass: null } } }, 'Dr One'],
+  ['doc1', { status: 'active', approvedAt: 1, healthcare: { category: 'clinician', source: 'admin' }, business: { category: 'clinician', source: 'admin', lane: { hub: 'healthcare', entClass: null } } }, 'Dr One'],
   ['salon1', biz('salon'), 'Cuts'],
   ['dj1', biz('artist_creator'), 'DJ One'],
   ['dj2', biz('artist_creator'), 'DJ Two'],
@@ -91,7 +92,7 @@ const CASES = [
     /* a FAILED workspace call hides nothing that was visible and invents nothing: Content (hidden by default) stays
        hidden, the rest of the menu stays (the server gates still hold) */
     {
-      await db.doc('providers/broken').set({ name: 'Broken', status: 'active' });
+      await db.doc('providers/broken').set({ name: 'Broken', status: 'active', approvedAt: 1 });
       const page = await H.page(browser, { user: { uid: 'broken', email: 'b@x.test', displayName: 'Broken' }, viewport: { width: 1280, height: 900 } });
       await page.goto(H.BASE + '/provider-dashboard.html');
       await page.waitForTimeout(2500);

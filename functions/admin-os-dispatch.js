@@ -44,7 +44,9 @@ const adminOs = (() => {
   const hcAdm = require('./healthcare-admin');
   /* Business categories — the ONE category authority's admin ops (functions/business-category-admin.js, CHANGELOG 236). */
   const bizCat = require('./business-category-admin');
-  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH, ent._adminH, eventInv._adminH, entInt._adminH, entBk._adminH, entAv._adminH, entRc._adminH, entEq._adminH, rep._adminH, legalV._adminH, hcAdm._adminH, bizCat._adminH) });
+  /* Business approval decision — the admin authority for a registry record with no valid approval evidence (business-approval-admin.js). */
+  const bizApr = require('./business-approval-admin');
+  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, creator._adminH, events._adminH, ent._adminH, eventInv._adminH, entInt._adminH, entBk._adminH, entAv._adminH, entRc._adminH, entEq._adminH, rep._adminH, legalV._adminH, hcAdm._adminH, bizCat._adminH, bizApr._adminH) });
 })();
 
 const _OPTS = {

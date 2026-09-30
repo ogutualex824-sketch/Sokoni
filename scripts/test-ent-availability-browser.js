@@ -115,7 +115,10 @@ const WEEK = {}; ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'satur
 
 async function seed() {
   for (const u of ['buyerA', 'buyerB', 'ph1']) await db.doc('users/' + u).set({ displayName: u });
-  await db.doc('providers/ph1').set({ name: 'Jane Photography', status: 'active', category: 'photographer', acceptsBookings: true });
+  /* R2: the C1 stamp projectProvider writes at approval (photographer → artist_creator through the real classifier). */
+  await db.doc('providers/ph1').set({ name: 'Jane Photography', status: 'active', approvedAt: 1, category: 'photographer', acceptsBookings: true,
+    business: { category: require(require('path').join(__dirname, '..', 'functions', 'business-category.js')).categoryFromApplication({ category: 'photographer' }, 'provider').category,
+      lane: require(require('path').join(__dirname, '..', 'functions', 'provider-hub.js')).classifyDecidedApplication({ category: 'photographer', role: 'provider' }), source: 'application' } });
   await db.doc('applications/app_ph1').set({ uid: 'ph1', status: 'approved', role: 'provider', category: 'photographer' });
   await db.doc('providerAvailability/ph1').set({ uid: 'ph1', modes: ['fixed_hours'], schedule: WEEK, appt: { enabled: true, durationMins: 60, maxDaysAhead: 90, minNoticeHours: 1, allowSameDay: true }, cap: {} });
   await db.doc('providerServices/svc_ph1').set({ providerId: 'ph1', name: 'Portrait session', price: 500000, fee: 0, deposit: 0, durationMins: 60, active: true });
