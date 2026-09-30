@@ -1,3 +1,65 @@
+## [2026-10-01] - Updates centre in AdminOS + Super Admin; install/update metrics: NOT MEASURED YET (no canonical source exists); browser certification QUEUED; NOT deployed
+
+**Branch `hosting/admin-updates-center-on-54b72cc`, built on `54b72cc` (hosting chain tip, descends from live).** Owner
+ask: an Updates page in AdminOS and Super Admin showing fixes and features in order, what is deployed and what is only
+committed, and how many people have downloaded SOKONI and how many have updated it.
+
+**Census first** (`docs/ADMIN_UPDATES_CENTER_CENSUS.md`). A browser can read the live build (`/version.json`, hosting
+only) and its own service worker (`GET_VERSION`). It cannot read `CHANGELOG.md` (`**/*.md` is hosting-ignored). No
+Firestore collection records deploys or releases. **No canonical source of installs or updates exists:** `appinstalled`
+is only used to hide the banner; `userDevices` (server-written by `deviceRegister`) records signed-in browsers with no
+build/version and has no admin read rule; SW telemetry goes to `routeDiagnostics` via an unauthenticated beacon (not
+per-device, TTL'd, no admin rule); `posDevices` is POS terminals; push tokens are client-written per account.
+
+**Built (hosting only).**
+- `sokoni-admin-updates.js` + `.css`: ONE module mounted by both consoles. AdminOS: sidebar Overview → Updates,
+  `#panel-updates`, `_loadUpdates()` in the existing router, deep link `admin-os.html#updates`. Super Admin: native
+  sidebar section via `SA.nav('updates')`; `super-admin.html#updates` opens it (a `#section` hash is honoured only for
+  an existing native sidebar button). Existing nav contract (`.nav-label`, `aria-current`, phone drawer), host tokens
+  only (no new palette), 44px targets on phones, reduced motion, textContent rendering only.
+- **Live now:** commit, branch, build time (EAT), cache version from `/version.json` (cache-busted), and this browser's
+  build vs live from its own SW; "Update this browser" reuses `sokoniCheckForUpdates()`. Unreadable → stated, never filled.
+- **Installs & updates:** five metrics, each "— · Not measured yet" with the reason. Never 0, never an estimate. The
+  server design (callable `appInstallReport` → `appInstalls/{installId}` + daily build heartbeat → scheduled `count()`
+  aggregate `platformMetrics/appInstalls`, admin-read rule) is written up as the NEXT SLICE in the census; not built.
+- **Release log:** `scripts/build-release-log.js` parses `CHANGELOG.md` into `release-log.json` (served at the root).
+  Type from the title's leading word only; deployment claim from the heading only; commits = short/full shas in the
+  heading. UI: newest first, search, type and status filters, 40 per page. Every entry is "Committed"; "Live now" only
+  when the entry records a deployment of the exact commit `/version.json` reports; "Changelog says deployed" is shown
+  as a claim, not proof.
+
+**Evidence.**
+- `node scripts/test-release-log.js` — **39 passed, 0 failed** (parser contract on every heading shape in use,
+  staleness vs `CHANGELOG.md`, negative control: one added entry is detected as stale).
+- `node scripts/test-admin-updates-static.js` — **44 passed, 0 failed** (both sidebars/panels/routing, no Firestore /
+  localStorage / innerHTML in the module, DOM-shim render with fixtures: metrics neutral, live facts from version.json,
+  newest-first, "Live now" only for the proven entry; negative controls: injected "0" caught, older DEPLOYED claim not
+  promoted; CSS hexes are var() fallbacks only).
+- Unchanged-suite regressions: `test-admin-nav-context` 3/0 · `after-superadmin-link-gating` 13/0 ·
+  `verify-admin-markup admin-os.html super-admin.html` intact (242/242, 154/154 div balance) ·
+  `audit-duplicate-ids admin-os.html super-admin.html` 0 (no regression vs 54b72cc) · `predeploy-syntax-gate` exit 0 (1828 JS files + 455 inline blocks parse).
+- **QUEUED (browser hold):** `scripts/test-admin-updates-center.js` (new; both consoles, 390/768/1280 overflow, keyboard,
+  deep links, fabricated-"0" negative control), `test-admin-layouts`, `test-adminos-sidebar-a11y`,
+  `test-adminos-nav-coverage`, `test-adminos-shell-final`.
+
+**Owner / release-owner action:** add `node scripts/build-release-log.js` to `hosting.predeploy` in `firebase.json`
+(not edited here) so each deploy ships its own tree's log; until then `test-release-log.js` fails on a stale artefact.
+
+**OWNER DECISION BEFORE DEPLOY — `release-log.json` is PUBLIC.** It is a static hosting file, so anyone can fetch
+`/release-log.json`, not only admins; the consoles' claim gate does not cover it. It republishes CHANGELOG titles and
+summaries that `**/*.md` currently keeps off the site, including security-defect narratives (33 of 775 entries match
+bypass/forge/privilege/token-type terms). Choose one before this ships: (1) accept public release notes;
+(2) serve the log through an admin-only callable or admin-rule Storage object (server slice — the module already
+fetches through one function, so only the URL changes); (3) publish a trimmed title-only log. Not decided here.
+
+**Files:** `sokoni-admin-updates.js` (new), `sokoni-admin-updates.css` (new), `admin-os.html`, `super-admin.html`,
+`sokoni-aos.js`, `scripts/build-release-log.js` (new), `release-log.json` (new, generated), `scripts/test-release-log.js`
+(new), `scripts/test-admin-updates-static.js` (new), `scripts/test-admin-updates-center.js` (new),
+`docs/ADMIN_UPDATES_CENTER_CENSUS.md` (new), `CHANGELOG.md`.
+**Database:** none (reads no Firestore). **API:** none. **Security:** no new read or write path; fetched JSON rendered via
+textContent. **Breaking:** none. **Deployment:** hosting only; NOT deployed.
+
+---
 ## [2026-09-30] - BnB: category pill strip made phone-safe (snap-scroll chips, sort on its own row) — built, browser certification QUEUED, NOT deployed
 
 **Branch `hosting/bnb-mobile-on-0271709`, built on `0271709`.** Owner ask (verbatim): "fix the bnb mobile layout the
