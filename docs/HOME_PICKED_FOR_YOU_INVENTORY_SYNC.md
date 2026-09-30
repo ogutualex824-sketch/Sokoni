@@ -1,6 +1,6 @@
 # Home — Picked For You, Edit Interests, New Arrivals and the daily grids, in sync with the catalogue
 
-**Date:** 2026-09-30 · **Surface:** `index.html` (Home) · **Lineage:** hosting candidate on `hosting/home-picked-for-you-on-2f3bb6f`, descending from the live hosting commit `2f3bb6f` (v645) · **Status:** **DEPLOYED 2026-09-30 09:32Z** as `d55c112` (owner said "deploy"), Hosting v646 `sokoni-20260930093216-v646`; artefacts `12edf13`; rollback version `6f7202bd5dd81d84`. Follow-up `sokoni-recommendations.js` App Check wait+retry committed after, NOT deployed.
+**Date:** 2026-09-30 · **Surface:** `index.html` (Home) · **Lineage:** hosting candidate on `hosting/home-picked-for-you-on-2f3bb6f`, descending from the live hosting commit `2f3bb6f` (v645) · **Status:** **DEPLOYED 2026-09-30 09:32Z** as `d55c112` (owner said "deploy"), Hosting v646 `sokoni-20260930093216-v646`; artefacts `12edf13`; rollback version `6f7202bd5dd81d84`. Follow-up `sokoni-recommendations.js` App Check wait+retry **DEPLOYED 10:36Z as tree b108ae3 (hosting content = 85699a0), Hosting v647**; served file byte-identical to 85699a0; two earlier attempts were machine-state false blocks (peer WebKit orphans: suite timeouts, then node --check out-of-memory in the syntax gate). Real-browser recommendation cards with valid App Check remain UNDEMONSTRATED (headless Chromium is App-Check throttled).
 **Suite:** `node scripts/test-home-picked-for-you.js` (39 / 0, real `index.html` in Chromium through the page harness) · registered as a required hosting predeploy suite.
 **Related:** [[RELEASE_GATE_LIVE_CATALOGUE]] · [[HOMEPAGE_FEED_SCALING]] · [[HOME_PERFORMANCE_INVESTIGATION]] · [[Marketplace]]
 
@@ -71,6 +71,52 @@ Not proven here: behaviour against production Firestore (App Check) — the harn
 | Console | no `[RT] products` warning, no `module not loaded` warning |
 | Caveat | headless Chromium is App-Check-throttled (403), so the recs widget showed its empty state there and the catalogue came through the `/api/catalogue` fallback; a real browser session is needed to see recs cards. Playwright's own click timed out on "element is not stable" (the section animates); a programmatic click worked. |
 
+## 4c · Real-browser App Check verification (2026-09-30 10:5xZ, headed Chrome, automation fingerprint off) — a NEW finding
+
+| Check | Observed |
+|---|---|
+| App Check | `__sokoniAppCheckState` = **`exchanged`** — a valid token; zero throttling lines. This is the real-browser session the headless smoke could not provide. |
+| Recommendations request path | both reads **failed with `failed-precondition`: "The query requires an index"** — for `products` and for `mechanics`. The console link decodes to an index on `collectionGroups/products` ordered by **`__name__` DESCENDING**. The retry (also denied, same reason) is not a token problem. Widget shows the empty state. |
+| Home catalogue listener | console order: `http-fallback-ok` (97) → `read-ok` (97) → `read-ok` again ~11 s later. The catalogue reached Home through the **`/api/catalogue` HTTP fallback**, not the Firestore listener. The canonical `SokoniDB.listenProducts` uses the same `orderBy(documentId(), 'desc'), limit(200)` shape, so it hits the same missing index — a `failed-precondition` is not in its transient-retry list, so it fails once and stays silent. |
+| Consequence | Home renders the catalogue, but **live inventory updates do not reach it**: the fallback is one-shot and CDN-cacheable (≤120 s). The re-render-on-snapshot work in this slice is correct and idle until the listener can attach. This pre-dates this slice (the earlier census saw `[RT] products: query requires an index` in a headed run and I wrongly reclassified it later from a headless, App-Check-denied run as permission-denied). |
+| Status | **Recommendation cards in a real browser: NOT demonstrated** — blocked by the index, not by App Check. |
+
+**Fix options (not applied — owner decision):**
+1. **Client query change, no index:** `orderBy(documentId())` ascending (implicit, needs no index) + `limitToLast(200)` returns the newest 200 (ids are Date.now()-style) in both `onSnapshot` and `getDocs`. One-line change in `sokoni-db.js` and `sokoni-recommendations.js`; hosting-only candidate; certifiable in the harness and in a headed Chrome run.
+2. **Index deploy:** add `{collectionGroup: products, fields: [{fieldPath: __name__, order: DESCENDING}]}` (and `mechanics`) to `firestore.indexes.json` and deploy `--only firestore:indexes` — a separate gate with its own authorization; the indexes file is split/governed (`scripts/reconcile-indexes.js`, `verify-index-governance.js`) and a non-interactive indexes deploy can drop indexes absent from the file.
+
+Option 1 is the smaller blast radius and removes a whole failure class; option 2 keeps the query as written. Either way the fix must be certified in a **headed** browser with a valid token, since that is the only environment that reaches the index check.
+
+## 4d · Option 1 (ascending `__name__` + `limitToLast`) — BUILT, CERTIFIED AGAINST REAL FIRESTORE, **FALSIFIED**, REVERTED (2026-09-30 11:2xZ)
+
+Owner authorized option 1. The two-file change was made (`sokoni-db.js`: `orderBy(documentId()), limitToLast(cap)` + `.reverse()`; `sokoni-recommendations.js`: `orderBy(documentId()), limitToLast(_CAP)`), parsed, and then served **in place of the live files** to a headed Chrome session on the live origin (Playwright route interception, read-only) that held a **valid App Check token** (`exchanged`, persistent profile, attempt 1).
+
+| Run | App Check | Listener events | Recommendations |
+|---|---|---|---|
+| Live baseline (attempt 2 attested) | exchanged | `listener-attached → failed-precondition: The query requires an index → http-fallback-ok:97 → read-ok:97` | 0 cards, "requires an index" for products and mechanics |
+| **Candidate files served (db:1, recs:1)** | exchanged | **identical**: `listener-attached → failed-precondition: The query requires an index → http-fallback-ok:97 → read-ok:97` | **identical**: 0 cards, "requires an index" |
+
+**Why:** Firestore executes `limitToLast(n)` by reversing every `orderBy` direction server-side and applying `limit(n)`, so an ascending `__name__` + `limitToLast` query is served as `__name__` **DESCENDING** — the very index this project lacks. The form is index-equivalent to the one it replaced. Both source files were reverted; the tree is back at the certified commit. No deploy, no index, no rules change.
+
+**A second premise fell in the same census.** Only **11 of 97** live product ids are `Date.now()`-style; 86 are hand-labelled (`VP97`, `TC101`, `QATEST100`, `F17`…). `orderBy(__name__)` was therefore never "newest first" for this catalogue — lexicographic order puts `VP97` first, which is what Trending shows today. Any `__name__`-based "newest 200" is wrong for this data even with an index.
+
+**Index-free alternatives, with the facts each depends on (owner decision, not applied):**
+
+| Form | Needs | Live coverage | Risk |
+|---|---|---|---|
+| `orderBy('uploadedAt', 'desc'), limit(200)` | the built-in single-field index (exists for every field) | **97 / 97** products carry `uploadedAt` (96 numbers, 1 Timestamp) | a product **without** the field is omitted by Firestore. Writers: `seller.js` and `seller-wiring.js` stamp `Date.now()`; `functions/profile-engine.js` writes `data.uploadedAt \|\| null` (null still sorts, first); POS-side creators (`pos-marketplace-sync.js`, `pos-retail.js`) stamp `createdAt`, not `uploadedAt` — a POS-created product may be invisible to this query. Mixed number/Timestamp values sort by type (Timestamps first under desc). |
+| `limit(200)` with no `orderBy` | nothing | all 97 (under the cap) | implicit `__name__` ascending: past 200 products the **newest** are the ones dropped |
+| `orderBy('updatedAt', 'desc')` | built-in | 92 / 97 | 5 live products omitted today |
+| option 2: index `products` + `mechanics` on `__name__` DESC | an indexes deploy | n/a | governance surface; and it would perpetuate an ordering that is not "newest" for 86 / 97 ids |
+
+The honest "newest first" key for this catalogue is `uploadedAt`, which is what New Arrivals already sorts by client-side; making the server query use it means every product writer must stamp it (a small writer census + one server-side default) — that is a slice of its own, not a two-line query swap.
+
+## 4e · The authorized ordering repair — `uploadedAt` (candidate, NOT deployed)
+
+Owner-authorized after [[PRODUCT_TIMESTAMP_WRITER_CENSUS]]: readers order by `uploadedAt` desc (limit 200, built-in single-field index, no composite); merchant-v2, sokoni-inventory and seller-wiring stamp or preserve it so no future product is created without the ordering key and no sign-in can rewrite it. Server authority for the value is explicitly **not** part of this slice. Certification: `scripts/test-product-uploadedat-authority.js` (34 / 0) plus the regression suites listed in the CHANGELOG entry. The Home listener finding (§4c) is untouched by this slice: once the listener attaches without the index error, the live-update path exists again, but whether Home should keep the HTTP fallback as primary is its own decision.
+
+Known and recorded, not hidden: `QATEST100` carries a Timestamp-typed `uploadedAt` (all others are numbers) and therefore sorts first under `desc` by Firestore type order. It is a QA row; repairing its type is a production data write and is not authorized here.
+
 ## 5 · Performance and security
 
 - **Performance:** no new synchronous script. The three previously hidden daily sections now render, but only when they approach the viewport or at idle (same deferral as New Arrivals), so the load window is unchanged. Recommendations now read ≤200 product docs instead of the whole collection. One failing Firestore listener per home visit is gone.
@@ -83,3 +129,20 @@ Hosting-only: re-release the current live version (`6f7202bd5dd81d84`, commit `2
 ## 7 · Deploy, when authorized (not now)
 
 From `C:/temp/sok-home` at the authorized commit, clean, after re-reading `version.json` (must still be `2f3bb6f`; a descendant → rebase; a non-ancestor → re-port): `firebase deploy --only hosting --project sokoni-aeb26 -m "home picked-for-you + inventory sync <commit>"`. One deploy at a time; never `--force`; the browser gate needs both `node_modules` junctions and no peer browser suite running. Verify cache-busted as in §4.
+
+## 4f · Headed-Chrome verification of `82d8ce0` in a CLEAN window (2026-09-30 13:57–13:59Z) — PASSED
+
+Executed by a runner that acquired the browser lock **by the preflight's exit code inside the same process** (READY twice, 20 s apart: free physical 766 MB, 0 orphans, no peer run), after an earlier attempt was discarded as provisional because the window closed between detection and use. Log: `docs/release-gates/headed-82d8ce0-clean.txt`.
+
+| | Live baseline (files as served today) | **Candidate `82d8ce0`** (`sokoni-db.js` + `sokoni-recommendations.js` served in place on the live origin) |
+|---|---|---|
+| App Check | `exchanged` (valid token) | `exchanged` |
+| Catalogue listener | `listener-attached → failed-precondition: The query requires an index → http-fallback-ok:97 → read-ok:97` (HTTP fallback is the catalogue) | **`listener-attached → snapshot:102 (fromCache:false) → read-ok:102`** — the Firestore listener delivers, no fallback needed |
+| Recommendations | 0 cards, "requires an index" ×2 | **6 cards**, no errors |
+| Trending order | `VP97, VP96, VP95, VP100` (lexicographic ids) | `QATEST100` (Timestamp-typed, known), then `1784796275236, 1784762904410, 1784762785525` (newest first) |
+| Live hosting pointer before / after | `b108ae3` / `b108ae3` | unchanged — nothing deployed |
+| Home browser suite (`test-home-picked-for-you.js`) in the same window | — | 39 / 0 |
+
+Note: the listener returns **102** documents where `/api/catalogue` returns 97 — the API applies the server-side listing filter, the client applies `isPubliclyListed` after delivery, so Home renders the same listed set either way. Recorded, not a defect of this slice.
+
+Still separate: server authority for `uploadedAt`; the inventory gate's pre-existing failures ([[TEST_ENVIRONMENT_PREFLIGHT]] §7). **Deployment is not authorized.**

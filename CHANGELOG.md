@@ -1,3 +1,39 @@
+## [2026-09-30] — Inventory-gate blockers repaired as their own test-contract slices; gate APPROVED on ddf317b — NOT a hosting change
+
+**Files:** scripts/test-map-engine-ratchet.js, scripts/test-merchant-products-2c-media.js, scripts/test-cart-universal.js, scripts/test-merchant-capability.js, scripts/environment-preflight.js, docs. No product file, rule, index, Function or deployment configuration changed; hosting content identical to 82d8ce0.
+
+- map-engine ratchet: L.map( counts as Leaflet only where Leaflet is loaded (business-apply.html false positive). 8/0.
+- 2c-media: fetches the DEPLOYED Storage rules (read-only) when the gitignored snapshot is absent; failed fetch stays BLOCKED. 56/0.
+- cart-universal: born-after pages skip the inserted-block line-ending check; second NAMED 1:1 migration exemption for track.html (exact six legacy Firebase tags → import(./firebase.js), e5ea3e4), with breakage controls (unrelated loss, partial, swapped, other page, no import) and a self-check that the Font Awesome pair remains the only other exemption. 54/0.
+- merchant-capability: reuse of 55b000c derived structure with this lineage withheld set inventory,offers,sell. 46/0.
+- environment-preflight: Emulator ports check (EMULATOR_IN_USE); the emulator gate is exclusive on a machine.
+- Full gate on ddf317b: APPROVED, 342 PASS, 0 FAIL/BLOCKED; only the pre-existing seller-wiring change-detection TIMEOUT (non-blocking). Artefact docs/release-gates/ddf317b.json.
+
+## [2026-09-30] — Catalogue ordering key = `uploadedAt`: two readers + three writers (hosting-only candidate) — NOT deployed
+
+**Files:** `sokoni-db.js`, `sokoni-recommendations.js`, `merchant-v2.html`, `sokoni-inventory.js`, `seller-wiring.js`; new `scripts/test-product-uploadedat-authority.js`; docs. Owner-authorized slice after the writer census (`docs/PRODUCT_TIMESTAMP_WRITER_CENSUS.md`).
+**Database / rules / indexes / Functions / App Check / production data:** none touched. `firestore.indexes.json` unchanged — `uploadedAt` uses the built-in single-field index. **Breaking changes:** none for today's data (97 / 97 live products carry `uploadedAt`).
+**Security:** no new write path; the products create rule is unchanged. **Server authority for the timestamp is NOT claimed** — every `uploadedAt` remains a browser-clock value; making it server-authoritative (a rule on `request.time` or an onCreate trigger) is a separate gate.
+
+- **Readers.** `SokoniDB.listenProducts` (unfiltered path) and the recommendations pool read `orderBy('uploadedAt', 'desc'), limit(200)`. Replaces `orderBy(documentId(), 'desc')`, which Firestore answers with `failed-precondition: requires an index` (proven in headed Chrome with a valid App Check token) and which was never a chronology here (11 / 97 ids are `Date.now()`-style). Other recommendation pools (mechanics) take a plain bounded read. **Explicit:** Firestore omits a product that lacks the field.
+- **merchant-v2 adapter** stamps `uploadedAt = Date.now()` (a NUMBER, type-consistent with the 96 numeric live rows; a Timestamp would sort above them forever by Firestore type order) on `create` only; `createdAt` keeps its server-timestamp semantics; edits never rewrite it.
+- **sokoni-inventory** stamps `uploadedAt = Date.parse(now)` in the `isNew` branch and the canonicaliser preserves `createdAt` / numeric `uploadedAt` instead of dropping them; an existing product lacking them gets nothing invented.
+- **seller-wiring** sets `uploadedAt` only from a legitimate creation time (the row's numeric value, or the millisecond embedded in a `Date.now()`-style id) and otherwise omits it; on an existing document the re-sync strips it with the other server-owned fields. **A seller's sign-in time can no longer become product chronology.**
+- **Proof:** `test-product-uploadedat-authority.js` 34 / 0 (exact file set; 97-product ordering model incl. the known QATEST100 Timestamp row; sign-in sync of all 97 rows changes nothing; adapter/canonicaliser/resolver behaviour in sandboxes; breakage controls) · catalogue authority 67/0 · tombstone 34/0 · sellability 74/0 · secondary apps 9/0 · home routing 31/0 · merchant shell callables 19/0. Cart sub-suites of the inventory gate fail only their dirty-tree assertion before commit (they name these very files); the gate itself runs at deploy because `sokoni-inventory.js` matches its path filter. Syntax gate and headed-Chrome verification: see the slice doc — run when the environment preflight permits.
+
+## [2026-09-30] — Test/deploy environment preflight + syntax-gate classification (workflow blockers, test infrastructure only) — NOT a hosting change
+
+**Files:** new `scripts/environment-preflight.js`, new `scripts/test-syntax-gate-classification.js`, `scripts/predeploy-syntax-gate.js`, `scripts/predeploy-browser-suites.js`, `scripts/test-home-picked-for-you.js` (timeouts restored to the certified values), new `docs/TEST_ENVIRONMENT_PREFLIGHT.md`. No application code, App Check, payment path or `firebase.json` change; production stays at b108ae3.
+**Database / API / security / breaking changes:** none.
+
+- **Environment preflight** (`--for syntax|browser|hosting|functions`): RAM (physical + commit headroom), parent-dead WebKit/Playwright orphans, peer browser lock + live peer suite runners, node capacity, functions/hosting deploy in progress, Cloud Build ongoing. Fail closed with one reason code (`OOM_RISK`, `ORPHAN_BROWSER_PROCESSES`, `PEER_BROWSER_SESSION_ACTIVE`, `NODE_SATURATION`, `DEPLOYMENT_IN_PROGRESS`, `CLOUD_BUILD_ACTIVE|UNKNOWN`); UNPROVEN is NOT_READY. Writes a JSON record per run (counts, ownership, cleanup, start/end). `--reap` terminates parent-dead orphans only.
+- **Syntax gate classifies**: exit 0 → SYNTAX_PASS; SyntaxError → SYNTAX_FAIL; crash/OOM/signal/spawn error → **SYNTAX_UNPROVEN, stop, no retry** (an OOM child was reported as "does not parse" on 2026-09-30). Runs the preflight (`--for syntax`) before sweeping. Classifier proven 14/0.
+- **Browser-suite runner** acquires the exclusivity lock via the preflight before its first suite and releases it on exit; a peer run, orphans, low memory or a deploy → RELEASE BLOCKED — ENVIRONMENT NOT READY, nothing run.
+- **Reverted** the timeout widening in `test-home-picked-for-you.js` (owner: timeouts mask contention).
+- First real run named the live state truthfully: free physical ~380 MB, 12–16 orphan browser processes, a peer WebKit suite (`test-merchant-disputes-ui.js`, not this session), a functions deploy in progress → NOT_READY.
+
+## [2026-09-30] - DEPLOYED b108ae3 (hosting content = 85699a0: recs App Check wait+retry) -> Hosting v647 (sokoni-20260930103649-v647) 10:36Z, owner-authorized; two earlier attempts were false blocks (peer WebKit-orphan OOM: suite timeouts 38/1, then node --check OOM in the syntax gate); served sokoni-recommendations.js byte-identical to 85699a0; all other files unchanged since d55c112; rollback = v646 release of d55c112.
+
 ## [2026-09-30] - DEPLOYED d55c112 → Hosting v646 (cacheVersion sokoni-20260930093216-v646) 09:32Z, owner-authorized; artefacts 12edf13; rollback 6f7202bd5dd81d84. Live verified: markers served, 6 of 7 files byte-identical (index.html served via / — /index.html is a 301), recs widget renders, feed 6, Fastest Selling visible, no [RT] products warning, no module-not-loaded warning. Follow-up (recs App Check wait+retry) committed, NOT deployed.
 
 ## [2026-09-30] — Home: Edit Interests works, Picked For You renders, every home grid re-syncs with the catalogue — DEPLOYED as d55c112 (see line above)

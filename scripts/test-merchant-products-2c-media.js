@@ -37,6 +37,12 @@ const bl = (l, d) => { console.log('  BLOCKED   ' + l + (d ? '   [' + d + ']' : 
    is gitignored, so no clean checkout has it and this suite aborted with ENOENT in
    CI — a stack trace where a verdict should be. */
 const RULES_PATH = path.join(ROOT, 'storage.rules.deployed');
+/* When the snapshot is absent, fetch it (read-only, scripts/fetch-deployed-storage-rules.js) rather
+   than report BLOCKED: 2026-09-30 the inventory gate was blocked on a clean checkout for exactly this.
+   A fetch that fails leaves the file absent and the assertions BLOCKED as before — never a false PASS. */
+if (!fs.existsSync(RULES_PATH)) {
+  try { require('child_process').spawnSync(process.execPath, [path.join(__dirname, 'fetch-deployed-storage-rules.js')], { stdio: 'ignore', timeout: 120000 }); } catch (_) {}
+}
 const RULES = fs.existsSync(RULES_PATH) ? fs.readFileSync(RULES_PATH, 'utf8') : null;
 const NO_RULES = 'storage.rules.deployed absent — fetch the DEPLOYED Storage rules; a ' +
                  'committed snapshot would verify a stale copy, not production';

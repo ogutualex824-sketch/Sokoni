@@ -2204,6 +2204,16 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         var data = Object.assign({}, o.data, { updatedAt: m.fs.serverTimestamp() });
         if (o.mode === 'create') {
           data.createdAt = m.fs.serverTimestamp();
+          /* uploadedAt is the catalogue's ORDERING KEY (sokoni-db.js orders by it; a product
+             without it is not listed on Home). This writer never stamped it (writer census
+             2026-09-30), so every merchant-v2 product would have been invisible to the ordered
+             catalogue. It is a NUMBER (epoch ms) on purpose: 96 of 97 live products carry a
+             numeric uploadedAt, and Firestore orders by TYPE before value, so a Timestamp here
+             would sort above every numeric row forever regardless of age. createdAt keeps its
+             server-time semantics unchanged. Whether uploadedAt should become server-authoritative
+             (a rule on request.time, or an onCreate trigger) is a separate gate; until then this
+             is the same browser-clock value every other writer records. Never rewritten on edit. */
+          if (typeof data.uploadedAt !== 'number' || !isFinite(data.uploadedAt)) data.uploadedAt = Date.now();
           return m.fs.runTransaction(window.firebaseDB, function (tx) {
             return tx.get(ref).then(function (snap) {
               /* A replay claims the SAME document rather than adding a second.
