@@ -57,10 +57,10 @@ const AI_PLANS = {
   ai_enterprise: { price: 9999, annualPrice: 99990, storageGB: 500,  credits: 1000, quotas: { removeBackground: -1, enhanceProduct: -1, smartCrop: -1, generateBanner: -1, generatePoster: -1, createStory: -1, productTitles: -1, productDescriptions: -1, bulkUploadFiles: -1, seoOptimization: -1, marketingCopy: -1, apiCalls: 50000 } },
 };
 const MKT_PLANS = {
-  free:     { price: 0,    listings: 3,   commissionPct: 15, leads: 5   },
-  starter:  { price: 499,  listings: 20,  commissionPct: 10, leads: 30  },
-  pro:      { price: 1499, listings: 999, commissionPct: 7,  leads: 999 },
-  business: { price: 4999, listings: 999, commissionPct: 4,  leads: 999 },
+  free:     { price: 0,    listings: 3,   leads: 5   },
+  starter:  { price: 499,  listings: 20,  leads: 30  },
+  pro:      { price: 1499, listings: 999, leads: 999 },
+  business: { price: 4999, listings: 999, leads: 999 },
 };
 
 /* ── HMAC token sign / verify ────────────────────────────────── */
@@ -295,18 +295,16 @@ const processSubscriptionChange = onCall(
 
     } else { /* upgrade */
       if (!payRef) throw new HttpsError('invalid-argument', 'paymentRef required for upgrade.');
-      /* FAST PATH ONLY — not the guard.
-         This read used to BE the idempotency guard: get() -> if(exists) return,
-         with the claim written later by set(). Two concurrent deliveries of the
-         same payRef both saw the document absent, both proceeded, and both ran
-         `increment(planDef.credits)` below — granting the plan's credits twice.
-         set() cannot fail on an existing document, so nothing stopped the second.
+      /* NO read-then-check. This once WAS the guard — get() -> if(exists)
+         return, with the claim written later by set(). Two concurrent
+         deliveries of the same payRef both saw the document absent, both
+         proceeded, and both ran `increment(planDef.credits)` — granting the
+         plan's credits twice.
 
-         The real claim is now batch.create() below, which is atomic. This read is
-         kept only to avoid doing pointless work on an obvious replay. */
-      const idem = await db().collection('aiPaymentRefs').doc(payRef).get();
-      if (idem.exists) return { success: true, idempotent: true };
-
+         batch.create() below is the claim, and it is atomic. Keeping the read
+         as a "fast path" only preserved the racy shape for the next reader to
+         mistake for a guard; a replay is recognised by ALREADY_EXISTS on
+         commit instead. */
       const planDef = AI_PLANS[newPlan];
       if (!planDef) throw new HttpsError('invalid-argument', `Unknown plan: ${newPlan}`);
 

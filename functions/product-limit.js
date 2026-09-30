@@ -71,7 +71,15 @@ const catalog = require('./subscription-catalog');
  */
 async function resolveMaxProducts(uid) {
   try {
+    /* resolveEFFECTIVE, not resolveSubscription. The latter returns the FIRST
+       store that answers and consults the AI store LAST, so a SmartPOS free-trial
+       document shadowed a paid ai_starter entirely — the merchant paid 499 and
+       kept the free allowance of 10. resolveEffective considers every store and
+       returns the BEST entitlement. resolveSubscription is left untouched: seven
+       other modules rely on its first-hit semantics. */
+    const ea   = require('./entitlement-authority');
     const core = require('./subscription-core');
+    const eff  = await ea.resolveEffective(uid);
     const sub  = await core.resolveSubscription(uid, {});
 
     /* An explicit per-merchant override on the subscription document still
@@ -87,12 +95,17 @@ async function resolveMaxProducts(uid) {
       };
     }
 
-    const ent = catalog.entitlementFor(sub || {});
+    /* THE EFFECTIVE entitlement, which follows an admin account link and picks
+       the best record across every store. Using `sub` here — the first-hit
+       resolution — is what left a paid merchant on the free ceiling, and it is
+       what this line previously did while the comment above claimed otherwise. */
     return {
-      max:            ent.listingLimit,
-      status:         ent.subscriptionStatus,
-      source:         ent.source,
-      catalogVersion: ent.catalogVersion,
+      max:            eff.listingLimit,
+      status:         eff.subscriptionStatus,
+      source:         eff.resolvedUid && eff.resolvedUid !== uid
+                        ? 'linked:' + eff.resolvedUid
+                        : (eff.source || 'entitlement-authority'),
+      catalogVersion: eff.catalogVersion,
     };
   } catch (_) {
     /* Resolution failed. Fall back to the catalogue's FREE allowance rather
@@ -338,9 +351,13 @@ exports.recountMarketplaceProducts = onCall({ region: REGION }, async (req) => {
  * transaction per merchant per touch for no change in outcome. Only a plan,
  * status or negotiated-limit change can move the ceiling, so only those re-sync.
  */
-exports.onSubscriptionChangedSyncLimit = onDocumentWritten(
-  { document: 'subscriptions/{subId}', region: REGION, memory: '256MiB' },
-  async (event) => {
+/* A shared handler, because the ceiling has to follow a subscription change in
+   EITHER store. It previously watched `subscriptions/` alone — and AI plans are
+   written to `aiSubscriptions/{uid}`, so a paid ai_starter purchase never
+   re-synced the ceiling. The merchant paid, and the cached allowance stayed at
+   the free 10 until something unrelated happened to touch the other collection. */
+function _syncFromEvent(idParam) {
+  return async (event) => {
     const before = event.data?.before?.data() || null;
     const after  = event.data?.after?.data()  || null;
 
@@ -350,7 +367,7 @@ exports.onSubscriptionChangedSyncLimit = onDocumentWritten(
     const src = after || before;
     if (!src) return;
 
-    const uid = src.uid || event.params.subId;
+    const uid = src.uid || event.params[idParam];
     if (!uid) return;
 
     const moved = (a, b) =>
@@ -371,7 +388,20 @@ exports.onSubscriptionChangedSyncLimit = onDocumentWritten(
          independently by scripts/backfill-product-counters.js. */
       console.error('[product-limit] ceiling re-sync FAILED for ' + uid + ': ' + e.message);
     }
-  }
+  };
+}
+
+exports.onSubscriptionChangedSyncLimit = onDocumentWritten(
+  { document: 'subscriptions/{subId}', region: REGION, memory: '256MiB' },
+  _syncFromEvent('subId')
 );
 
-exports._internal = { resolveMaxProducts, syncLimit, catalog };
+/* The AI store. Same handler, same filter, different collection — because a paid
+   ai_starter is a subscription change by every meaning that matters, and until
+   now nothing here could see one. */
+exports.onAiSubscriptionChangedSyncLimit = onDocumentWritten(
+  { document: 'aiSubscriptions/{aiUid}', region: REGION, memory: '256MiB' },
+  _syncFromEvent('aiUid')
+);
+
+exports._internal = { resolveMaxProducts, syncLimit, catalog, _syncFromEvent };

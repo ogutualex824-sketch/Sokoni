@@ -47,6 +47,42 @@
    give. */
 const CATALOG_VERSION = 3;
 
+/* ── THE ONE SUBSCRIPTION LIFECYCLE ─────────────────────────────────────────
+   Every SOKONI package moves through these states and no vertical invents its
+   own. Seller packaging, seller basic, hotel, accommodation, restaurant,
+   mechanic, pharmacy, services and the AI plans all use this vocabulary, so a
+   new vertical inherits billing rather than reimplementing it.
+
+   ENTITLED is the only question a consumer should ask. A screen must never ask
+   "is this merchant on seller_basic" — it asks what they are entitled to do. */
+const LIFECYCLE = Object.freeze({
+  FREE:                 { entitled: false, label: "Free" },
+  TRIALING:             { entitled: true,  label: "Trial" },
+  PENDING_PAYMENT:      { entitled: false, label: "Awaiting payment" },
+  PROCESSING:           { entitled: false, label: "Payment processing" },
+  ACTIVE:               { entitled: true,  label: "Active" },
+  GRACE:                { entitled: true,  label: "Payment overdue" },
+  CANCEL_AT_PERIOD_END: { entitled: true,  label: "Active until period end" },
+  EXPIRED:              { entitled: false, label: "Expired" },
+  CANCELLED:            { entitled: false, label: "Cancelled" },
+});
+
+/* Legacy status spellings seen in the stores, mapped to the lifecycle. A status
+   nobody defined resolves to FREE rather than silently entitling anyone. */
+const STATUS_ALIASES = Object.freeze({
+  active: "ACTIVE", trialing: "TRIALING", trial: "TRIALING", grace: "GRACE",
+  past_due: "GRACE", pending: "PENDING_PAYMENT", pending_payment: "PENDING_PAYMENT",
+  processing: "PROCESSING", expired: "EXPIRED", cancelled: "CANCELLED",
+  canceled: "CANCELLED", cancel_at_period_end: "CANCEL_AT_PERIOD_END",
+  none: "FREE", free: "FREE", superseded: "EXPIRED", revoked: "CANCELLED",
+});
+
+function lifecycleOf(status) {
+  const key = STATUS_ALIASES[String(status || "").toLowerCase()] || "FREE";
+  return { state: key, ...LIFECYCLE[key] };
+}
+function isEntitled(status) { return lifecycleOf(status).entitled; }
+
 /* COMMISSION IS NOT DEFINED HERE — functions/commission-config.js owns it.
  *
  * This file originally carried a commissionRate per plan: 8/6/5/3 percent. It
@@ -158,7 +194,52 @@ const ALIASES = Object.freeze({
   provider_free: 'FREE', provider_basic: 'PROFESSIONAL', provider_pro: 'BUSINESS',
   /* `professional`, `business` and `enterprise` need no alias — they ARE the keys, matched
      case-insensitively by resolve(). */
+
+  /* ── THE AI FAMILY (from the production lineage, 2026-08-19) ─────────────────────────────
+     These were absent, and their absence was not visible: resolve() falls back to FREE for an
+     unknown id (correct — a typo must not take a shop offline), so a PAID ai_starter merchant
+     silently received the free allowance while their subscription still reported ACTIVE.
+     ai-subscriptions.js PLANS is the definition these mirror. Translated into the 2026-09-13
+     package vocabulary: the production lineage mapped ai_starter → STARTER and ai_pro → GROWTH,
+     which are the tiers PROFESSIONAL and BUSINESS replaced (see the retired spellings above). */
+  ai_free: 'FREE', ai_starter: 'PROFESSIONAL', ai_pro: 'BUSINESS', ai_enterprise: 'ENTERPRISE',
+
+  /* Written by business-bootstrap as the SmartPOS trial's `plan` field. It is a STATUS word
+     sitting in a plan field; mapping it keeps it off the unknown path, and the trial's real
+     allowance comes from its planId. */
+  trial: 'FREE',
 });
+
+/* Every plan id known to be written by any subsystem. A new catalogue that
+   forgets to register here fails `unmappedPlanIds()` in the suite rather than
+   quietly resolving its paying customers to FREE — which is precisely the defect
+   the AI family caused. Keep this list SORTED BY SOURCE and complete. */
+const KNOWN_PLAN_IDS = Object.freeze([
+  /* sub-billing.js PLANS */
+  'seller_free', 'seller_basic', 'seller_pro', 'seller_enterprise',
+  /* ai-subscriptions.js PLANS */
+  'ai_free', 'ai_starter', 'ai_pro', 'ai_enterprise',
+  /* entitlement-adapters.js VALID_PLANS + index.js validPlans */
+  'free', 'starter', 'pro', 'business',
+  /* business-bootstrap.js trial document */
+  'trial',
+  /* this catalogue's own ids */
+  'FREE', 'PROFESSIONAL', 'BUSINESS', 'ENTERPRISE',
+  /* retired tier ids still in circulation — mapped, never canonical */
+  'starter', 'growth',
+]);
+
+/* Ids that do NOT resolve to a real plan — i.e. would land on FREE by accident
+   rather than by intent. `expectFree` lists the ones that are legitimately free. */
+function unmappedPlanIds(ids, expectFree) {
+  const free = new Set((expectFree || []).map((s) => String(s).toLowerCase()));
+  return (ids || []).filter((id) => {
+    const key = String(id || '').trim();
+    if (free.has(key.toLowerCase())) return false;
+    const canonical = PLANS[key.toUpperCase()] ? key.toUpperCase() : ALIASES[key.toLowerCase()];
+    return !canonical;
+  });
+}
 
 /**
  * resolve(planId) — the entitlement a subsystem should act on.
@@ -184,7 +265,10 @@ function resolve(planId) {
 function entitlementFor(subscription) {
   const sub = subscription || {};
   const status = String(sub.status || 'none').toLowerCase();
-  const entitled = ['active', 'trialing', 'grace'].includes(status);
+  /* 'trial' is ai-subscriptions.js's spelling of 'trialing' (see its status
+     queries). Treating it as unentitled meant every AI trial silently received
+     the FREE allowance — the trial existed and bought nothing. */
+  const entitled = ['active', 'trialing', 'trial', 'grace'].includes(status);
   const plan = entitled ? resolve(sub.plan || sub.planId || sub.tier) : PLANS.FREE;
 
   return {
@@ -224,4 +308,6 @@ function listingLimitFor(subscription) {
   return entitlementFor(subscription).listingLimit;
 }
 
-module.exports = { PLANS, ALIASES, resolve, entitlementFor, listingLimitFor };
+module.exports = { PLANS, ALIASES, KNOWN_PLAN_IDS, LIFECYCLE, STATUS_ALIASES,
+                   lifecycleOf, isEntitled, resolve, entitlementFor,
+                   listingLimitFor, unmappedPlanIds };

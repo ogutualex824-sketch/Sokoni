@@ -46,9 +46,9 @@ const POLICY_DOC = 'revenueConfig/commission_vat';
  *          null whenever a VAT treatment must NOT be assumed — unset, disabled,
  *          unreadable, or missing an explicit boolean.
  */
-async function loadVatPolicy(db) {
+async function loadVatPolicy(db, docPath) {
   try {
-    const [coll, id] = POLICY_DOC.split('/');
+    const [coll, id] = String(docPath || POLICY_DOC).split('/');
     const snap = await (db || admin.firestore()).collection(coll).doc(id).get();
     if (!snap.exists) return null;
 
@@ -82,4 +82,14 @@ const UNSET_REASON =
   '{ enabled: true, inclusive: <true|false>, decidedBy: "<name>" } once the tax ' +
   'position is formally decided. No invoice may be issued until then.';
 
-module.exports = { loadVatPolicy, POLICY_DOC, UNSET_REASON };
+/* Subscription fees are platform revenue too, and their VAT treatment is a SEPARATE
+   business decision (advertised plan prices may be inclusive where a commission is not).
+   Same contract: no default; unset ⇒ the subscription invoice is DEFERRED, never guessed.
+   To arm: write revenueConfig/subscription_vat { enabled: true, inclusive: <bool>, decidedBy }. */
+const SUBSCRIPTION_POLICY_DOC = 'revenueConfig/subscription_vat';
+const SUBSCRIPTION_UNSET_REASON =
+  'Subscription VAT treatment is not configured. Set revenueConfig/subscription_vat ' +
+  '{ enabled: true, inclusive: <true|false>, decidedBy: "<name>" } once the tax ' +
+  'position is formally decided. Subscription invoices are deferred until then.';
+
+module.exports = { loadVatPolicy, POLICY_DOC, UNSET_REASON, SUBSCRIPTION_POLICY_DOC, SUBSCRIPTION_UNSET_REASON };

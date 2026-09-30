@@ -11744,6 +11744,22 @@ exports.subCheckFeature           = subEngine.subCheckFeature;
 exports.subRetryFailedPayments    = subEngine.subRetryFailedPayments;
 exports.subDowngrade              = subEngine.subDowngrade;
 
+/* ── Subscription payment methods — the PRODUCTION lineage of subscription activation ──
+   Live since 2026-09-09 (subscriptionPaymentMethods, payIntentWithWallet, onPaymentIntentPaid,
+   reconcileSubscriptionPayment). One payment intent, several rails; only a VERIFIED payment
+   activates. Absent from this index until 2026-09-30 because the file lived only on the
+   hosting lineage — see docs/COMMERCIAL_CONVERGENCE_2026-09-30.md. */
+const subPayMethods = require('./subscription-pay-methods');
+exports.subscriptionPaymentMethods   = subPayMethods.subscriptionPaymentMethods;
+exports.payIntentWithWallet          = subPayMethods.payIntentWithWallet;
+exports.onPaymentIntentPaid          = subPayMethods.onPaymentIntentPaid;
+exports.reconcileSubscriptionPayment = subPayMethods.reconcileSubscriptionPayment;
+
+/* ── Subscription platform invoice — one invoice authority consuming the finalized payment ──
+   Fail-closed on revenueConfig/subscription_vat; never gates entitlement; daily retry sweep. */
+const subscriptionInvoice = require('./subscription-invoice');
+exports.subIssuePendingInvoices = subscriptionInvoice.subIssuePendingInvoices;
+exports.subIssueInvoice         = subscriptionInvoice.subIssueInvoice;
 /* ══════════════════════════════════════════════════════════════════
    FinOS v2.0 — Universal Transaction Router + Escrow + Settlement
    12 Cloud Functions extending FinOS v1.0

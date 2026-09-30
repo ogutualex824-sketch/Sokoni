@@ -398,6 +398,10 @@ exports.subAutoActivateOnPayment = onDocumentUpdated(
       paymentRef: event.params.paymentRef,
     });
 
+    /* Platform invoice for this payment — the ONE invoice authority (subscription-invoice.js).
+       Idempotent on paymentRef, so subActivate and this trigger cannot issue twice. */
+    await require('./subscription-invoice').recordAfterActivation(event.params.paymentRef, { actor: 'subAutoActivateOnPayment', uid: effectiveUid });
+
     logger.info('[sub-engine/autoActivate] Subscription auto-renewed', { subscriptionId, planId, effectiveUid });
   }
 );

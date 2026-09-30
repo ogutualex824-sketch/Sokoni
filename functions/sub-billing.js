@@ -49,13 +49,13 @@ const PLANS = {
 
   /* ── SELLERS ── */
   seller_free:       { id:'seller_free',       hubType:'seller',       tier:'free',       name:'Seller Free',       price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
-    features:{ listings_limit:10,   photos_per_listing:3,  featured_listings:0, analytics:false, bulk_import:false, priority_support:false, ai_assistant:false, team_members:1, storage_gb:1,  commission_discount_pct:0,  badge_verified:false }},
+    features:{ listings_limit:10,   photos_per_listing:3,  featured_listings:0, analytics:false, bulk_import:false, priority_support:false, ai_assistant:false, team_members:1, storage_gb:1,  badge_verified:false }},
   seller_basic:      { id:'seller_basic',      hubType:'seller',       tier:'basic',      name:'Seller Basic',      price:{monthly:99900,   annual:999000   }, trial:{days:3}, grace:{days:3},  isActive:true,
-    features:{ listings_limit:100,  photos_per_listing:6,  featured_listings:2, analytics:true,  bulk_import:false, priority_support:false, ai_assistant:false, team_members:2, storage_gb:5,  commission_discount_pct:2,  badge_verified:true  }},
+    features:{ listings_limit:100,  photos_per_listing:6,  featured_listings:2, analytics:true,  bulk_import:false, priority_support:false, ai_assistant:false, team_members:2, storage_gb:5,  badge_verified:true  }},
   seller_pro:        { id:'seller_pro',        hubType:'seller',       tier:'pro',        name:'Seller Pro',        price:{monthly:249900,  annual:2499000  }, trial:{days:3}, grace:{days:5},  isActive:true,
-    features:{ listings_limit:500,  photos_per_listing:10, featured_listings:5, analytics:true,  bulk_import:true,  priority_support:true,  ai_assistant:true,  team_members:5, storage_gb:20, commission_discount_pct:5,  badge_verified:true, api_access:true }},
+    features:{ listings_limit:500,  photos_per_listing:10, featured_listings:5, analytics:true,  bulk_import:true,  priority_support:true,  ai_assistant:true,  team_members:5, storage_gb:20, badge_verified:true, api_access:true }},
   seller_enterprise: { id:'seller_enterprise', hubType:'seller',       tier:'enterprise', name:'Seller Enterprise', price:{monthly:749900,  annual:7499000  }, trial:{days:30}, grace:{days:7},  isActive:true,
-    features:{ listings_limit:-1,   photos_per_listing:20, featured_listings:-1,analytics:true,  bulk_import:true,  priority_support:true,  ai_assistant:true,  team_members:-1,storage_gb:100,commission_discount_pct:10, badge_verified:true, api_access:true, custom_domain:true, dedicated_account_manager:true }},
+    features:{ listings_limit:-1,   photos_per_listing:20, featured_listings:-1,analytics:true,  bulk_import:true,  priority_support:true,  ai_assistant:true,  team_members:-1,storage_gb:100,badge_verified:true, api_access:true, custom_domain:true, dedicated_account_manager:true }},
 
   /* ── SERVICE PROVIDERS ── */
   provider_free:     { id:'provider_free',     hubType:'service_provider', tier:'free',  name:'Provider Free',     price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
@@ -68,11 +68,11 @@ const PLANS = {
      validate or activate them. Prices are the page's figures converted to
      cents; annual is the page's per-month annual rate x 12. */
   starter:           { id:'starter',           hubType:'service_provider', tier:'starter',  name:'Starter',   price:{monthly:49900,   annual:478800   }, trial:{days:3}, grace:{days:3},  isActive:true,
-    features:{ services_limit:20,   leads_per_month:30,  commission_pct:10, calendar:true,  online_booking:true,  analytics:false, priority_listing:false, team_members:1,  badge_verified:true }},
+    features:{ services_limit:20,   leads_per_month:30,  calendar:true,  online_booking:true,  analytics:false, priority_listing:false, team_members:1,  badge_verified:true }},
   pro:               { id:'pro',               hubType:'service_provider', tier:'pro',      name:'Pro',       price:{monthly:149900,  annual:1438800  }, trial:{days:3}, grace:{days:5},  isActive:true,
-    features:{ services_limit:-1,   leads_per_month:-1,  commission_pct:7,  calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:5,  badge_verified:true, ai_assistant:true }},
+    features:{ services_limit:-1,   leads_per_month:-1,  calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:5,  badge_verified:true, ai_assistant:true }},
   business:          { id:'business',          hubType:'service_provider', tier:'business', name:'Business',  price:{monthly:499900,  annual:4798800  }, trial:{days:3}, grace:{days:7},  isActive:true,
-    features:{ services_limit:-1,   leads_per_month:-1,  commission_pct:4,  calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:20, badge_verified:true, ai_assistant:true, bulk_import:true, api_access:true }},
+    features:{ services_limit:-1,   leads_per_month:-1,  calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:20, badge_verified:true, ai_assistant:true, bulk_import:true, api_access:true }},
 
   provider_pro:      { id:'provider_pro',      hubType:'service_provider', tier:'pro',   name:'Provider Pro',      price:{monthly:249900,  annual:2499000  }, trial:{days:3}, grace:{days:5},  isActive:true,
     features:{ services_limit:-1,   calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:10,ai_assistant:true,  bulk_import:true }},
@@ -121,7 +121,7 @@ const PLANS = {
   freelancer_free:   { id:'freelancer_free',   hubType:'freelancer',   tier:'free',       name:'Freelancer Free',   price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ services_limit:3,    portfolio_items:5,  featured_listing:false, analytics:false }},
   freelancer_pro:    { id:'freelancer_pro',    hubType:'freelancer',   tier:'pro',        name:'Freelancer Pro',    price:{monthly:99900,   annual:999000   }, trial:{days:3}, grace:{days:3},  isActive:true,
-    features:{ services_limit:-1,   portfolio_items:-1, featured_listing:true,  analytics:true, commission_discount_pct:3, ai_assistant:true }},
+    features:{ services_limit:-1,   portfolio_items:-1, featured_listing:true,  analytics:true, ai_assistant:true }},
 
   /* ── RECRUITERS ── */
   recruiter_free:    { id:'recruiter_free',    hubType:'recruiter',    tier:'free',       name:'Recruiter Free',    price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
@@ -137,7 +137,7 @@ const PLANS = {
 
   /* ── ENTERPRISE ── */
   enterprise:        { id:'enterprise',        hubType:'enterprise',   tier:'enterprise', name:'Enterprise',        price:{monthly:999900,  annual:9999000  }, trial:{days:30}, grace:{days:14}, isActive:true,
-    features:{ listings_limit:-1, team_members:-1, storage_gb:500, api_access:true, custom_domain:true, sla:'99.9%', dedicated_account_manager:true, white_label:true, analytics:true, ai_assistant:true, priority_support:true, commission_discount_pct:15 }},
+    features:{ listings_limit:-1, team_members:-1, storage_gb:500, api_access:true, custom_domain:true, sla:'99.9%', dedicated_account_manager:true, white_label:true, analytics:true, ai_assistant:true, priority_support:true }},
 };
 
 /* ── helpers ── */
@@ -244,7 +244,24 @@ exports.subGetStatus = onCall(
       if (!cur || (PRIORITY[s.status] || 0) > (PRIORITY[cur.status] || 0)) byHub[s.hubType] = s;
     });
 
-    return { subscriptions: byHub, all };
+    /* ── Trial eligibility is reported, never inferred by the browser ───────
+       The pricing page needs this to decide whether to OFFER a free trial. It
+       must not be used to decide whether a plan can be BOUGHT: purchase and
+       promotional-trial eligibility are different questions, and conflating
+       them is what produced "you have already used your free plan" on a paid
+       checkout. Read-only; the authority remains the trialLedger claim in
+       subActivate. */
+    let trial = { eligible: false, used: false, reason: 'unresolved' };
+    try {
+      const EA = require('./entitlement-authority');
+      const t  = await EA.trialState(uid);
+      trial = { eligible: t.eligible === true, used: t.used === true,
+                active: t.active === true, reason: t.reason || null };
+    } catch (e) {
+      logger.warn('[sub] trialState unavailable', { uid, err: e.message });
+    }
+
+    return { subscriptions: byHub, all, trial };
   }
 );
 
@@ -257,7 +274,19 @@ exports.subActivate = onCall(
   { region: REGION, timeoutSeconds: 60, memory: '256MiB' },
   async (req) => {
     assertAuth(req);
-    const { planId, billingCycle, paymentRef, isTrial } = req.data || {};
+    const d = req.data || {};
+    const { planId, billingCycle, paymentRef } = d;
+    /* ── THE FIELD-NAME MISMATCH, AND WHY THE ORDER MATTERED ─────────────────
+       plans.html sends `startTrial`; this destructured `isTrial`. The names
+       never met, so a trial request fell through to the PAID verification
+       branch, looked up a payment reference the client had fabricated, and threw
+       "Payment not confirmed. Complete payment first." — the reported bug.
+
+       That mismatch was ALSO the only thing preventing an unlimited free trial,
+       because nothing here checked eligibility. So accepting both spellings is
+       safe only BELOW the eligibility gate added further down; it must never be
+       moved above it. */
+    const isTrial = d.isTrial === true || d.startTrial === true;
     if (!planId) throw new HttpsError('invalid-argument', 'planId required');
 
     const cycle = billingCycle === 'annual' ? 'annual' : 'monthly';
@@ -271,6 +300,38 @@ exports.subActivate = onCall(
       const idKey  = `subact_${uid}_${paymentRef}`;
       const idem   = await fsdb.collection('finosIdempotency').doc(idKey).get();
       if (idem.exists) return { status: 'already_active', subscriptionId: idem.data().subscriptionId };
+    }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       THE TRIAL GATE — a trial is granted ONCE per merchant identity, ever
+       ══════════════════════════════════════════════════════════════════════
+       Before this, nothing recorded that a trial had been used, so a second
+       call was a second free trial indefinitely. entitlement-authority claims
+       trialLedger/{uid} with create(), so the claim is atomic and a double-tap
+       cannot mint two.
+
+       ONE-TIME PER MERCHANT IDENTITY — not per browser, per shop, per email or
+       per subscription document. The ledger is keyed by uid and resolved
+       through the account link, so a merchant with two logins gets one trial.
+
+       No payment reference is accepted for a trial. The client used to
+       fabricate `trial_<plan>_<ts>`; a trial has no payment, and pretending
+       otherwise is what routed it into the paid branch in the first place. */
+    let trialGrant = null;
+    if (isTrial) {
+      if (!(plan.trial && plan.trial.days > 0)) {
+        throw new HttpsError('failed-precondition', 'this plan has no trial');
+      }
+      const ea = require('./entitlement-authority');
+      trialGrant = await ea.startTrial(uid, planId, plan.trial.days);
+      if (!trialGrant.ok) {
+        const why = trialGrant.reason === 'trial-already-used'
+          ? 'You have already used your free trial.'
+          : trialGrant.reason === 'already-on-a-paid-plan'
+            ? 'You are already on a paid plan.'
+            : 'This trial is not available.';
+        throw new HttpsError('failed-precondition', why, { reason: trialGrant.reason });
+      }
     }
 
     /* Verify payment for paid plans (skip for free / trial) */
@@ -351,6 +412,9 @@ exports.subActivate = onCall(
         event: existing ? 'upgrade' : 'subscribe',
         refunded: false, createdAt: now(),
       });
+      /* Platform invoice for this payment — the ONE invoice authority. Never gates the
+         activation above; a missing VAT decision defers, a KRA failure is retried by sweep. */
+      await require('./subscription-invoice').recordAfterActivation(paymentRef, { actor: 'subActivate', uid });
     }
 
     await Promise.all([
@@ -732,6 +796,31 @@ exports.adminSubExportBilling = onCall(
    • In grace past graceEnd → EXPIRED (downgrade to free)
    • CancelAtPeriodEnd past currentPeriodEnd → CANCELLED
 ════════════════════════════════════════════════════════ */
+/* ── The two questions the trial sweep must answer ────────────────────────────
+   Exported so certification exercises THESE functions rather than a test-local
+   copy of the same reasoning — a re-implemented predicate agrees with itself by
+   construction and proves nothing.
+
+   _trialEndMs: when does the trial end?
+     A paid plan's trial carries its own trialEnd, because its currentPeriodEnd
+     is the PAID period and is months away. A promotional trial never had a
+     trialEnd — its currentPeriodEnd IS the trial end. Reading trialEnd first and
+     falling back keeps every existing trial behaving exactly as it did.
+
+   _isPaidTrial: has this already been paid for?
+     If yes, the trial ending starts the period they bought. If no, the trial
+     ending is a request for payment. Getting this backwards bills a paying
+     merchant twice, so it keys on the recorded payment, never on plan price. */
+function _trialEndMs(sub) {
+  const v = sub || {};
+  const te = v.trialEnd && v.trialEnd.toMillis ? v.trialEnd.toMillis() : null;
+  if (te) return te;
+  return v.currentPeriodEnd && v.currentPeriodEnd.toMillis ? v.currentPeriodEnd.toMillis() : null;
+}
+function _isPaidTrial(sub) {
+  return !!(sub && sub.paymentStatus === 'paid');
+}
+
 exports.subProcessExpirations = onSchedule(
   { schedule: '0 * * * *', timeZone: 'Africa/Nairobi', timeoutSeconds: 540, memory: '512MiB', region: REGION },
   async () => {
@@ -804,20 +893,53 @@ exports.subProcessExpirations = onSchedule(
       logger.info('[sub] Expired', { count: toExpire.length });
     }
 
-    /* 3 — Trialing past trialEnd → PAST_DUE (require payment) */
+    /* 3 — Trial ended. Where it goes depends on whether it was PAID FOR ──────
+       Two different things wear status TRIALING:
+
+         promotional trial — no payment ever taken  → PAST_DUE, ask for money
+         paid plan's trial — already settled in full → ACTIVE, ask for nothing
+
+       Sending a merchant who has already paid to PAST_DUE with "Subscribe now
+       to keep your features" bills them twice for one purchase. paymentStatus
+       is the discriminator; trialSource records which kind it was.
+
+       trialEnd is read first and currentPeriodEnd second: a paid trial carries
+       its own trialEnd (currentPeriodEnd is the PAID period, months away),
+       while legacy promotional trials only ever had currentPeriodEnd. The
+       fallback keeps every existing trial behaving exactly as before. */
     const trialSnap = await fsdb.collection('subscriptions')
       .where('status', '==', S.TRIALING).limit(500).get();
 
     const trialExpired = trialSnap.docs.filter(d => {
-      const end = d.data().currentPeriodEnd?.toMillis?.();
+      const end = _trialEndMs(d.data());
       return end && end <= now_ms;
     });
 
+    const paidTrials = trialExpired.filter(d => _isPaidTrial(d.data()));
+    const freeTrials = trialExpired.filter(d => !_isPaidTrial(d.data()));
+
     if (trialExpired.length) {
       const b = fsdb.batch();
-      trialExpired.forEach(d => b.update(d.ref, { status: S.PAST_DUE, updatedAt: now_ts }));
+      /* Paid: the trial simply ends and the period they bought begins. */
+      paidTrials.forEach(d => b.update(d.ref, {
+        status: S.ACTIVE, subscriptionStatus: 'active',
+        trialStatus: 'ended', trialEndedAt: now_ts, updatedAt: now_ts,
+      }));
+      /* Promotional: unchanged — no payment was ever taken. */
+      freeTrials.forEach(d => b.update(d.ref, {
+        status: S.PAST_DUE, trialStatus: 'ended', trialEndedAt: now_ts, updatedAt: now_ts,
+      }));
       await b.commit();
-      for (const doc of trialExpired) {
+
+      for (const doc of paidTrials) {
+        const sub = doc.data();
+        await _notify(sub.uid, 'trial_ended', {
+          title: 'Your subscription is now active',
+          body: `Your ${sub.planName} trial has ended and your paid subscription has started. Nothing more to pay.`,
+          subscriptionId: doc.id, planId: sub.planId,
+        }).catch(() => {});
+      }
+      for (const doc of freeTrials) {
         const sub = doc.data();
         await _notify(sub.uid, 'trial_ended', {
           title: 'Free trial ended',
@@ -825,7 +947,7 @@ exports.subProcessExpirations = onSchedule(
           subscriptionId: doc.id, planId: sub.planId,
         }).catch(() => {});
       }
-      logger.info('[sub] Trial expired → PAST_DUE', { count: trialExpired.length });
+      logger.info('[sub] Trial ended', { paid: paidTrials.length, promotional: freeTrials.length });
     }
   }
 );
@@ -875,3 +997,11 @@ exports.subSendRenewalReminders = onSchedule(
 /* Exported so payment-intents.js derives prices from THIS catalogue rather
    than growing a second copy. One price, one source. */
 exports.PLANS = PLANS;
+
+/* Certification seam: the trial sweep's two decisions, exercised directly.
+   The scheduled function cannot be invoked from a test, but its judgement can —
+   and its judgement is where a paying merchant gets billed twice. */
+exports._internal = Object.assign(exports._internal || {}, {
+  trialEndMs: _trialEndMs,
+  isPaidTrial: _isPaidTrial,
+});
