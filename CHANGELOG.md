@@ -1,3 +1,18 @@
+## 2026-09-30 — PARCEL HOSTING SLICE (own unit, certified, NOT deployed): Send a Parcel talks only to the parcel functions
+
+On `hosting/parcel-page-on-a8aafac` (live hotfix line). `delivery.html`: the rate card, every price, the request, the payment and the
+confirmation come from getParcelQuote / createParcelRequest / payParcelRequest / confirmParcelPayment / getMyParcelPin. No typed
+distance exists — pickup and drop-off are geocoded (SokoniRouting.geocode) or taken from GPS, and without both points the page says
+"Quote unavailable" and Book stays disabled. Just Check Pricing calls the quote with preview:true (server writes nothing) and says it is
+a quote. Payment modal offers M-PESA STK and IntaSend checkout (card · bank · Airtel); the page never marks anything paid — it polls
+confirmParcelPayment and the success modal shows the SERVER PIN and receipt. `?paid=` return from checkout re-asks the server.
+My Deliveries lists packageRequests parcel jobs (sent + incoming) with Pay now / Cancel (unpaid only), Track, Show PIN, in-app
+receipt with timestamps (+ PDF via SokoniInvoice), Support; Spent = server paid amounts. WhatsApp booking + share hops removed.
+`delivery-hub.js`: listenSenderParcels / listenRecipientParcels / cancelParcel. `driver.html`: parcel jobs labelled, trip length and the
+F1 rider→pickup distance shown when known, PIN completion routed to completeParcelWithPin for parcels. `track.html`: parcels from
+packageRequests (sent + incoming). Cert: `scripts/test-parcel-page.js` 14/0 (hermetic Chromium, stub modules + callables); syntax gate
+1798 clean. Requires the parcel functions (a545818) to be live first. **Deploy NOT run** (classifier denied production deploys).
+
 ## 2026-09-30 — HOTFIX to the header unit: palette close on phones + quick-actions trigger on the home page
 
 Owner report after v648: the quick-actions (command palette) close button "does not close" on a phone, and the trigger is

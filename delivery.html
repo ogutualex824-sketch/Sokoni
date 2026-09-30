@@ -242,8 +242,10 @@
     </div>
     <div class="dh-grid2">
       <div>
-        <label class="dh-label">Distance (km)</label>
-        <input type="number" id="distKm" class="dh-input" placeholder="e.g. 8" min="0.5" step="0.5" oninput="calcDelivery()">
+        <label class="dh-label">Route distance</label>
+        <!-- Computed by the server from the two points. A typed distance is never accepted (owner rule 2026-09-30). -->
+        <div id="distKmView" class="dh-input" style="display:flex;align-items:center;color:rgba(255,255,255,0.7);">—</div>
+        <input type="hidden" id="distKm">
       </div>
       <div>
         <label class="dh-label">Package Weight</label>
@@ -325,8 +327,8 @@
   <div id="calcMsg" style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:12px;min-height:14px;"></div>
 
   <!-- Actions -->
-  <button type="button" class="dh-btn-primary" onclick="bookDeliveryFS()">📲 Book &amp; Pay with M-Pesa</button>
-  <button type="button" class="dh-btn-secondary" onclick="bookDeliveryWA()">💬 Book via WhatsApp</button>
+  <button type="button" class="dh-btn-primary" id="bookBtn" onclick="bookParcel()" disabled>📲 Book &amp; Pay</button>
+  <a href="support.html?topic=parcel" class="dh-btn-secondary" style="display:block;text-align:center;text-decoration:none;">🛟 Need help? Contact SOKONI Support</a>
   <button type="button" class="dh-btn-outline" style="margin-top:4px;" onclick="showDelTab('calc')">🧮 Just Check Pricing</button>
 </div>
 
@@ -362,10 +364,21 @@
     <div class="dh-card-title">Delivery Cost Calculator</div>
     <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:16px;">Select vehicle · enter distance · get instant pricing</p>
     <div class="vehicle-grid" id="calcVehicleGrid"></div>
+    <label class="dh-label">Pickup Address</label>
+    <div class="addr-wrap">
+      <input id="calcPickupAddr" class="dh-input" placeholder="e.g. CBD, Westlands, Kikuyu…" oninput="onCalcAddrInput('pickup')">
+      <button class="addr-loc-btn" onclick="useMyLocation('calcPickup')" title="Use my location">📍</button>
+    </div>
+    <label class="dh-label">Dropoff Address</label>
+    <div class="addr-wrap">
+      <input id="calcDropoffAddr" class="dh-input" placeholder="e.g. Kasarani, Ngong, Thika…" oninput="onCalcAddrInput('dropoff')">
+      <button class="addr-loc-btn" onclick="useMyLocation('calcDropoff')" title="Use my location">📍</button>
+    </div>
     <div class="dh-grid2">
       <div>
-        <label class="dh-label">Distance (km)</label>
-        <input type="number" id="calcKm" class="dh-input" placeholder="e.g. 8" min="0.5" step="0.5" oninput="calcPricing()">
+        <label class="dh-label">Route distance</label>
+        <div id="calcKmView" class="dh-input" style="display:flex;align-items:center;color:rgba(255,255,255,0.7);">—</div>
+        <input type="hidden" id="calcKm">
       </div>
       <div>
         <label class="dh-label">Package Weight</label>
@@ -407,11 +420,12 @@
 <div class="dh-modal-overlay" id="successModal" style="display:none;" onclick="closeSuccessModal(event)">
   <div class="dh-modal" onclick="event.stopPropagation()">
     <div class="dh-modal-icon">🚀</div>
-    <div class="dh-modal-title">Delivery Booked!</div>
+    <div class="dh-modal-title" id="successTitle">Parcel Paid!</div>
     <div class="dh-modal-ref" id="successRef"></div>
     <div class="dh-modal-sub" id="successSub"></div>
+    <div class="dh-modal-sub" id="successReceipt" style="font-size:11px;color:rgba(255,255,255,0.45);"></div>
     <div class="dh-modal-pin">
-      <div class="dh-modal-pin-label">DELIVERY PIN — give to rider on arrival</div>
+      <div class="dh-modal-pin-label">DELIVERY PIN — the recipient reads it to the rider</div>
       <div class="dh-modal-pin-code" id="successPIN">——</div>
     </div>
     <div class="dh-modal-btn-row">
@@ -422,6 +436,37 @@
   </div>
 </div>
 
+<!-- PAYMENT MODAL — every IntaSend method. The browser never marks anything paid; it asks the
+     server to START a payment and then asks the server whether IntaSend confirmed it. -->
+<div class="dh-modal-overlay" id="payModal" style="display:none;" onclick="closePayModal(event)">
+  <div class="dh-modal" onclick="event.stopPropagation()" style="text-align:left;">
+    <div class="dh-modal-title" style="text-align:center;">Pay for your parcel</div>
+    <div class="dh-modal-ref" id="payRef" style="text-align:center;"></div>
+    <div class="dh-modal-sub" id="payAmount" style="text-align:center;font-size:20px;font-weight:900;color:#71ff00;"></div>
+    <div id="payMethods">
+      <label class="dh-label">M-PESA phone</label>
+      <input type="tel" id="payPhone" class="dh-input" placeholder="07XXXXXXXX">
+      <button type="button" class="dh-btn-primary" id="payMpesaBtn" onclick="payParcelMpesa()">📲 Pay with M-PESA (STK prompt)</button>
+      <button type="button" class="dh-btn-secondary" id="payCheckoutBtn" onclick="payParcelCheckout()">💳 Card · Bank · Airtel Money (IntaSend checkout)</button>
+    </div>
+    <div id="payMsg" style="font-size:12px;min-height:16px;margin-top:10px;text-align:center;color:rgba(255,255,255,0.5);"></div>
+    <div id="payWaiting" style="display:none;text-align:center;margin-top:8px;">
+      <button type="button" class="dh-btn-outline" onclick="checkParcelPayment()">🔄 I have paid — check again</button>
+    </div>
+    <button class="dh-btn-outline" style="margin-top:8px;" onclick="closePayModal()">Pay later</button>
+  </div>
+</div>
+<!-- IN-APP RECEIPT — the server's receipt record on the job (owner 2026-09-30). -->
+<div class="dh-modal-overlay" id="receiptModal" style="display:none;" onclick="closeReceiptModal(event)">
+  <div class="dh-modal" onclick="event.stopPropagation()" style="text-align:left;">
+    <div class="dh-modal-title" style="text-align:center;">🧾 Receipt</div>
+    <div id="receiptBody" style="font-size:13px;line-height:1.8;color:rgba(255,255,255,0.75);"></div>
+    <div class="dh-modal-btn-row" style="margin-top:12px;">
+      <button class="dh-modal-btn dh-modal-btn-primary" onclick="downloadReceiptPdf()">⬇️ PDF</button>
+      <button class="dh-modal-btn dh-modal-btn-sec" onclick="closeReceiptModal()">Done</button>
+    </div>
+  </div>
+</div>
 <div class="dh-toast" id="dhToast"></div>
 <div id="notificationContainer"></div>
 
@@ -453,7 +498,11 @@ const VEHICLES = {
 const WEIGHT_SUR = { light:0, medium:0.1, heavy:0.25, bulk:0.4 };
 const URG_MULT   = { standard:1, express:1.3, urgent:1.6 };
 const URG_ETA    = { standard:'', express:' (express)', urgent:' (priority)' };
-const SOKONI_WA  = '254705726803';
+let _catalogue = null;      /* the server rate card (getParcelQuote catalogueOnly); prices in the grids come from it */
+let _lastQuote = null;      /* the booking form's claimable server quote { quoteId, total, expiresAt, distanceKm } */
+let _calcPickup = null, _calcDropoff = null;
+let _pendingParcel = null;  /* { parcelId, deliveryRef, deliveryFee, proofPIN } awaiting payment */
+let _lastReceipt = null;
 
 let _selVehicle    = null;
 let _calcVehicle   = null; /* for pricing tab */
@@ -525,7 +574,7 @@ function renderVehicleGrid(containerId, fnName, activeKey){
       <div class="vc-icon">${v.icon}</div>
       <div class="vc-name">${v.label}</div>
       <div class="vc-cap">${v.capacity}</div>
-      <div class="vc-base">KES ${v.base.toLocaleString()}</div>
+      <div class="vc-base">${_catalogue ? 'KES ' + v.base.toLocaleString() : '—'}</div>
     </div>`
   ).join('');
 }
@@ -561,13 +610,17 @@ function useMyLocation(field){
       const el = document.getElementById('pickupAddr');
       if(el) el.value = label;
       try{ sessionStorage.setItem('dh_pickup_coords', JSON.stringify({lat,lng,label})); }catch{}
-    } else {
+    } else if(field === 'dropoff'){
       _dropoffCoords = { lat, lng };
       const el = document.getElementById('dropoffAddr');
       if(el) el.value = label;
       try{ sessionStorage.setItem('dh_dropoff_coords', JSON.stringify({lat,lng,label})); }catch{}
+    } else if(field === 'calcPickup'){
+      _calcPickup = { lat, lng }; const el=document.getElementById('calcPickupAddr'); if(el) el.value = label;
+    } else {
+      _calcDropoff = { lat, lng }; const el=document.getElementById('calcDropoffAddr'); if(el) el.value = label;
     }
-    calcDelivery();
+    if(field === 'pickup' || field === 'dropoff') calcDelivery(); else calcPricing();
     dhToast('📍 Location captured!');
   }, err => dhToast('Could not get location: ' + err.message, false),
   { timeout:8000, enableHighAccuracy:true });
@@ -583,11 +636,26 @@ function _restoreCoordsFromSession(){
 }
 document.addEventListener('DOMContentLoaded', _restoreCoordsFromSession);
 
+/* A typed address is geocoded (SokoniRouting.geocode → Nominatim) into the point the server
+   prices from. Until it resolves there is no price — never a guess. */
+const _geoTimers = {};
+function _geocodeInto(inputId, setter, after){
+  const el = document.getElementById(inputId); const q = (el && el.value || '').trim();
+  clearTimeout(_geoTimers[inputId]);
+  setter(null); after();
+  if(q.length < 3 || !window.SokoniRouting || !SokoniRouting.geocode) return;
+  _geoTimers[inputId] = setTimeout(async () => {
+    try{ const g = await SokoniRouting.geocode(q); if(g && isFinite(g.lat) && isFinite(g.lng) && (el.value||'').trim() === q){ setter({ lat: Number(g.lat), lng: Number(g.lng) }); after(); } }
+    catch(e){ /* no point → no price */ }
+  }, 700);
+}
 function onAddrInput(){
-  /* Clear captured coords when user types manually */
-  _pickupCoords  = null;
-  _dropoffCoords = null;
-  calcDelivery();
+  _geocodeInto('pickupAddr',  v => { _pickupCoords  = v; }, calcDelivery);
+  _geocodeInto('dropoffAddr', v => { _dropoffCoords = v; }, calcDelivery);
+}
+function onCalcAddrInput(which){
+  if(which === 'pickup') _geocodeInto('calcPickupAddr',  v => { _calcPickup  = v; }, calcPricing);
+  else                   _geocodeInto('calcDropoffAddr', v => { _calcDropoff = v; }, calcPricing);
 }
 
 /* ── Multi-stop ── */
@@ -663,68 +731,81 @@ async function _calcMultiStopOSRM(){
   }
 }
 
-/* ── Price calculation ── */
-function _doCalc(vehicleKey, km, weight, urgency){
-  const v = VEHICLES[vehicleKey];
-  if(!v || km<=0) return null;
-  const base     = v.base;
-  const kmCharge = Math.round(km * v.perKm);
-  const wSur     = Math.round((base+kmCharge)*(WEIGHT_SUR[weight]||0));
-  const uMult    = URG_MULT[urgency] || 1;
-  const urgFee   = Math.round((base+kmCharge+wSur)*(uMult-1));
-  const total    = Math.round((base+kmCharge+wSur)*uMult);
-  return { base, kmCharge, wSur, urgFee, total, uMult };
+/* ── Callables (firebase.js publishes window.sokoniCallable once the modular SDK is up) ── */
+function _fn(name){
+  return async (data) => {
+    for(let i=0;i<50 && !window.sokoniCallable;i++) await new Promise(r=>setTimeout(r,200));
+    if(!window.sokoniCallable) throw new Error('SOKONI is still loading. Please try again.');
+    const res = await window.sokoniCallable(name)(data||{});
+    return (res && res.data) || res;
+  };
 }
 
-function calcDelivery(){
-  const km     = parseFloat(document.getElementById('distKm')?.value) || 0;
-  const weight = document.getElementById('weightSel')?.value || 'light';
-  const msgEl  = document.getElementById('calcMsg');
-  const box    = document.getElementById('priceBox');
+/* ── Rate card from the server (labels/icons stay local; every number is the catalogue's) ── */
+async function _loadCatalogue(){
+  try{
+    const r = await _fn('getParcelQuote')({ catalogueOnly: true });
+    if(r && r.ok && r.catalogue && r.catalogue.vehicles){
+      _catalogue = r.catalogue;
+      Object.keys(VEHICLES).forEach(k => { const c = _catalogue.vehicles[k]; if(c){ VEHICLES[k].base = c.base; VEHICLES[k].perKm = c.perKm; VEHICLES[k].maxKm = c.maxKm; } });
+      renderVehicleGrid('vehicleGrid', 'selectVehicle', _selVehicle);
+      if(document.getElementById('vc_calcVehicleGrid_boda')) renderVehicleGrid('calcVehicleGrid', 'selectCalcVehicle', _calcVehicle);
+      _renderRateCard();
+    }
+  }catch(e){ console.warn('[delivery] catalogue:', e.message); }
+}
 
-  if(!_selVehicle){ box.style.display='none'; if(msgEl)msgEl.textContent='← Select a vehicle type above'; return; }
-  const v = VEHICLES[_selVehicle];
-  if(km<=0){ box.style.display='none'; if(msgEl)msgEl.textContent='Enter the distance in km above'; return; }
-  if(km>v.maxKm){ box.style.display='none'; if(msgEl){ msgEl.textContent=`⚠️ ${v.label} max range is ${v.maxKm} km. Choose a larger vehicle.`; msgEl.style.color='#f97316'; } return; }
-  if(msgEl){ msgEl.textContent=''; msgEl.style.color=''; }
-
-  const r = _doCalc(_selVehicle, km, weight, _urgency);
-  if(!r) return;
+/* ── Server quote (debounced). scope 'create' = the booking form (claimable quote);
+      scope 'calc' = Just Check Pricing (preview: the server writes NOTHING). ── */
+const _qTimers = {};
+function _renderQuote(prefix, q, msg, msgColor){
   const _s = (id,val) => { const e=document.getElementById(id); if(e)e.textContent=val; };
-  _s('prVehicle', `${v.icon} ${v.label}`);
-  _s('prDist',    `${km} km`);
-  _s('prBase',    `KES ${r.base.toLocaleString()}`);
-  _s('prKmCh',    `KES ${r.kmCharge.toLocaleString()} (${km}km × KES ${v.perKm})`);
-  _s('prTotal',   `KES ${r.total.toLocaleString()}`);
-  _s('prETA',     `⏱ ${v.eta}${URG_ETA[_urgency]}`);
-  const wRow=document.getElementById('prWRow'); if(r.wSur>0){_s('prWeight',`KES ${r.wSur.toLocaleString()}`);wRow.style.display='flex';}else wRow.style.display='none';
-  const uRow=document.getElementById('prURow'); if(r.urgFee>0){_s('prUrgLabel',_urgency==='urgent'?'🚨 Urgency fee':'⚡ Express fee');_s('prUrg',`KES ${r.urgFee.toLocaleString()}`);uRow.style.display='flex';}else uRow.style.display='none';
-  box.style.display='block';
+  const box = document.getElementById(prefix==='pr' ? 'priceBox' : 'calcPriceBox');
+  const msgEl = document.getElementById(prefix==='pr' ? 'calcMsg' : 'calcPricingMsg');
+  const kmView = document.getElementById(prefix==='pr' ? 'distKmView' : 'calcKmView');
+  const kmHidden = document.getElementById(prefix==='pr' ? 'distKm' : 'calcKm');
+  if(msgEl){ msgEl.textContent = msg || ''; msgEl.style.color = msgColor || ''; }
+  if(!q){ if(box) box.style.display='none'; if(kmView) kmView.textContent='—'; if(kmHidden) kmHidden.value=''; return; }
+  const v = VEHICLES[q.vehicleType] || {};
+  _s(prefix+'Vehicle', `${v.icon||''} ${q.vehicleLabel||v.label||q.vehicleType}`);
+  _s(prefix+'Dist', `${q.distanceKm} km`);
+  _s(prefix+'Base', `KES ${q.base.toLocaleString()}`);
+  _s(prefix==='pr'?'prKmCh':'cpKm', `KES ${q.kmCharge.toLocaleString()} (${q.distanceKm} km × KES ${v.perKm||'—'})`);
+  _s(prefix+'Total', `KES ${q.total.toLocaleString()}`);
+  _s(prefix+'ETA', `⏱ ${q.eta||v.eta||''}${URG_ETA[q.urgency]||''}`);
+  const wRow=document.getElementById(prefix+'WRow'); if(q.weightFee>0){_s(prefix+'Weight',`KES ${q.weightFee.toLocaleString()}`);wRow.style.display='flex';}else wRow.style.display='none';
+  const uRow=document.getElementById(prefix+'URow'); if(q.urgencyFee>0){_s(prefix+'UrgLabel',q.urgency==='urgent'?'🚨 Urgency fee':'⚡ Express fee');_s(prefix+'Urg',`KES ${q.urgencyFee.toLocaleString()}`);uRow.style.display='flex';}else uRow.style.display='none';
+  if(kmView) kmView.textContent = `${q.distanceKm} km (route)`; if(kmHidden) kmHidden.value = q.distanceKm;
+  if(box) box.style.display='block';
 }
-
-function calcPricing(){
-  const km     = parseFloat(document.getElementById('calcKm')?.value) || 0;
-  const weight = document.getElementById('calcWeight')?.value || 'light';
-  const msgEl  = document.getElementById('calcPricingMsg');
-  const box    = document.getElementById('calcPriceBox');
-  if(!_calcVehicle){ box.style.display='none'; if(msgEl)msgEl.textContent='← Select a vehicle above'; return; }
-  const v = VEHICLES[_calcVehicle];
-  if(km<=0){ box.style.display='none'; if(msgEl)msgEl.textContent='Enter distance in km'; return; }
-  if(km>v.maxKm){ box.style.display='none'; if(msgEl){msgEl.textContent=`⚠️ ${v.label} max range is ${v.maxKm} km`; msgEl.style.color='#f97316';} return; }
-  if(msgEl){ msgEl.textContent=''; msgEl.style.color=''; }
-  const r = _doCalc(_calcVehicle, km, weight, _calcUrg);
-  if(!r) return;
-  const _s = (id,val) => { const e=document.getElementById(id); if(e)e.textContent=val; };
-  _s('cpVehicle',`${v.icon} ${v.label}`);
-  _s('cpDist',`${km} km`);
-  _s('cpBase',`KES ${r.base.toLocaleString()}`);
-  _s('cpKm',`KES ${r.kmCharge.toLocaleString()} (${km}km × KES ${v.perKm})`);
-  _s('cpTotal',`KES ${r.total.toLocaleString()}`);
-  _s('cpETA',`⏱ ${v.eta}${URG_ETA[_calcUrg]}`);
-  const wRow=document.getElementById('cpWRow'); if(r.wSur>0){_s('cpWeight',`KES ${r.wSur.toLocaleString()}`);wRow.style.display='flex';}else wRow.style.display='none';
-  const uRow=document.getElementById('cpURow'); if(r.urgFee>0){_s('cpUrgLabel',_calcUrg==='urgent'?'🚨 Urgency':'⚡ Express');_s('cpUrg',`KES ${r.urgFee.toLocaleString()}`);uRow.style.display='flex';}else uRow.style.display='none';
-  box.style.display='block';
+function _requestQuote(scope){
+  clearTimeout(_qTimers[scope]);
+  const isCreate = scope === 'create';
+  const prefix = isCreate ? 'pr' : 'cp';
+  const vehicle = isCreate ? _selVehicle : _calcVehicle;
+  const pickup  = isCreate ? _pickupCoords : _calcPickup;
+  const dropoff = isCreate ? _dropoffCoords : _calcDropoff;
+  const weight  = document.getElementById(isCreate ? 'weightSel' : 'calcWeight')?.value || 'light';
+  const urgency = isCreate ? _urgency : _calcUrg;
+  const bookBtn = document.getElementById('bookBtn');
+  if(isCreate){ _lastQuote = null; if(bookBtn) bookBtn.disabled = true; }
+  if(!vehicle){ _renderQuote(prefix, null, '← Select a vehicle type above'); return; }
+  if(!pickup || !dropoff){ _renderQuote(prefix, null, 'Quote unavailable — set the pickup and drop-off points (type an address or tap 📍).', 'rgba(255,255,255,0.45)'); return; }
+  _renderQuote(prefix, null, '⏳ Getting your price…', '#00aaff');
+  _qTimers[scope] = setTimeout(async () => {
+    try{
+      const r = await _fn('getParcelQuote')({ vehicleType: vehicle, pickup, dropoff, weight, urgency, preview: !isCreate });
+      if(!r || !r.ok){ _renderQuote(prefix, null, r && r.state === 'quote_unavailable' ? 'Quote unavailable — we could not price these points. Check the addresses.' : 'Quote unavailable right now.', '#f97316'); return; }
+      _renderQuote(prefix, r.quote, isCreate ? 'Price held for 15 minutes' : 'This is a quote — nothing has been booked or charged.', '#71ff00');
+      if(isCreate){ _lastQuote = { quoteId: r.quoteId, total: r.quote.total, expiresAt: r.expiresAt, distanceKm: r.quote.distanceKm, vehicleType: vehicle }; if(bookBtn) bookBtn.disabled = !r.quoteId; }
+    }catch(e){
+      const m = (e && e.message) || 'Quote unavailable';
+      _renderQuote(prefix, null, m.replace(/^.*?:\s*/, ''), '#f97316');
+    }
+  }, 350);
 }
+function calcDelivery(){ _requestQuote('create'); }
+function calcPricing(){ _requestQuote('calc'); }
 
 function _renderRateCard(){
   const el = document.getElementById('rateCardGrid');
@@ -748,155 +829,160 @@ function _renderRateCard(){
 
 /* ── Booking helpers ── */
 function _getBookingData(){
-  const km      = parseFloat(document.getElementById('distKm')?.value) || 0;
   const from    = (document.getElementById('pickupAddr')?.value || '').trim();
   const to      = (document.getElementById('dropoffAddr')?.value || '').trim();
-  const weight  = document.getElementById('weightSel')?.value || 'light';
   const rName   = (document.getElementById('recipName')?.value || '').trim();
   const rPhone  = (document.getElementById('recipPhone')?.value || '').trim();
   const phone   = (document.getElementById('senderPhone')?.value || '').trim();
   const notes   = (document.getElementById('delivNotes')?.value || '').trim();
   const pkgType = document.getElementById('packageType')?.value || 'parcel';
   const msgEl   = document.getElementById('calcMsg');
-
-  if(!_selVehicle){ if(msgEl){msgEl.textContent='⚠️ Select a vehicle type'; msgEl.style.color='#f97316';} return null; }
-  if(!km && _delivType!=='multi_stop'){ if(msgEl){msgEl.textContent='⚠️ Enter the distance'; msgEl.style.color='#f97316';} return null; }
-
-  /* Validate Kenyan phone numbers (07XX, 01XX, or 254XXXXXXXXX) */
+  const fail = (t) => { if(msgEl){ msgEl.textContent = t; msgEl.style.color = '#f97316'; } return null; };
+  if(!_selVehicle) return fail('⚠️ Select a vehicle type');
+  if(!_pickupCoords || !_dropoffCoords) return fail('⚠️ Set the pickup and drop-off points');
+  if(!_lastQuote || !_lastQuote.quoteId) return fail('⚠️ Wait for the price first');
+  if(_lastQuote.expiresAt && Date.now() > _lastQuote.expiresAt){ calcDelivery(); return fail('⏳ The price expired — refreshing it, then tap Book again'); }
   const KE_PHONE = /^(?:0[17]\d{8}|254[17]\d{8}|\+254[17]\d{8})$/;
-  if(rPhone && !KE_PHONE.test(rPhone.replace(/\s/g,''))){
-    if(msgEl){msgEl.textContent='⚠️ Recipient phone must be a valid Kenyan number (07XX or 01XX)'; msgEl.style.color='#f97316';} return null;
-  }
-  if(phone && !KE_PHONE.test(phone.replace(/\s/g,''))){
-    if(msgEl){msgEl.textContent='⚠️ Your phone must be a valid Kenyan number (07XX or 01XX)'; msgEl.style.color='#f97316';} return null;
-  }
-
-  const v   = VEHICLES[_selVehicle];
-  const r   = _doCalc(_selVehicle, km||5, weight, _urgency) || { total:v.base };
-  return { from, to, km:km||5, weight, urgency:_urgency, vehicle:_selVehicle, vehicleData:v,
-           total:r.total, rName, rPhone, phone, notes, pkgType, deliveryType:_delivType };
+  if(!rPhone || !KE_PHONE.test(rPhone.replace(/\s/g,''))) return fail('⚠️ Recipient phone must be a valid Kenyan number — they must have a SOKONI account');
+  if(phone && !KE_PHONE.test(phone.replace(/\s/g,''))) return fail('⚠️ Your phone must be a valid Kenyan number');
+  return { from, to, rName, rPhone, phone, notes, pkgType, quoteId: _lastQuote.quoteId, total: _lastQuote.total };
 }
 
-/* ── Book via WhatsApp ── */
-function bookDeliveryWA(){
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('del_wa',10,300000)){
-    (window._skToast||alert)('Too many booking attempts. Wait 5 minutes.'); return;
-  }
+/* ── Book: the SERVER creates the request (deterministic PRC id) and mints the PIN ── */
+async function bookParcel(){
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('del_fs',5,300000)){ dhToast('Too many booking attempts. Wait 5 minutes.', false); return; }
   const d = _getBookingData(); if(!d) return;
-  const v = d.vehicleData;
-  const ref = 'DEL' + Date.now().toString().slice(-6);
-  const msg = encodeURIComponent(
-    `🚚 *SOKONI Delivery Request*\n\nRef: ${ref}\n`+
-    `Type: ${d.deliveryType.replace('_',' ')}\n`+
-    `Vehicle: ${v.icon} ${v.label}\n`+
-    `From: ${d.from||'TBC'}\nTo: ${d.to||'TBC'}\n`+
-    `Distance: ~${d.km} km\nLoad: ${d.weight}\nUrgency: ${d.urgency}\n`+
-    `💰 Total: KES ${d.total.toLocaleString()}\n`+
-    `${d.rName?`\nRecipient: ${d.rName}`:''}${d.rPhone?`\nRecipient Phone: ${d.rPhone}`:''}`+
-    `${d.phone?`\nSender Phone: ${d.phone}`:''}`+
-    `${d.notes?`\nNotes: ${d.notes}`:''}\n\nPlease confirm. 🙏`
-  );
-  if(window.SokoniInvoice) setTimeout(()=>SokoniInvoice.generate({type:'delivery',buyerName:d.rName||'Customer',buyerPhone:d.rPhone||d.phone||'',items:[{name:`${v.icon} ${v.label} Delivery`,category:'Delivery',qty:1,price:d.total}],subtotal:d.total,total:d.total,paymentMethod:'WhatsApp Booking',paymentRef:ref,sellerName:'SOKONI Delivery Partners',date:new Date().toISOString(),notes:`${d.from} → ${d.to}`}),800);
-  window.open(`https://wa.me/${SOKONI_WA}?text=${msg}`,'_blank');
-  dhToast(`✅ WhatsApp opened! Ref: ${ref}`);
-}
-
-/* ── Book via Firestore + M-Pesa ── */
-async function bookDeliveryFS(){
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('del_fs',5,300000)){
-    dhToast('Too many booking attempts. Wait 5 minutes.', false); return;
-  }
-  const d = _getBookingData(); if(!d) return;
-  if(!window.DeliveryHub){ dhToast('Delivery system loading, please wait…','blue'); return; }
-
-  const uid = window.firebaseAuth?.currentUser?.uid ||
-    JSON.parse(localStorage.getItem('sokoniUser')||'null')?.uid;
-  if(!uid){ dhToast('Please sign in to book a delivery', false); return; }
-
+  const uid = window.firebaseAuth?.currentUser?.uid || JSON.parse(localStorage.getItem('sokoniUser')||'null')?.uid;
+  if(!uid){ dhToast('Please sign in to send a parcel', false); return; }
   const senderUser = JSON.parse(localStorage.getItem('sokoniUser')||'null') || {};
-  const btn = document.querySelector('.dh-btn-primary');
-  if(btn){ btn.disabled=true; btn.textContent='⏳ Creating delivery…'; }
-
-  try {
-    const result = await window.DeliveryHub.createDelivery({
-      uid,
-      senderName:  senderUser.name || '',
-      senderPhone: d.phone || senderUser.phone || '',
-      deliveryType:d.deliveryType,
-      scheduledTime:document.getElementById('schedTime')?.value || null,
-      category:    d.pkgType,
-      pickupAddress: d.from,
-      pickupCoords:  _pickupCoords,
-      deliveryAddress:d.to,
-      deliveryCoords: _dropoffCoords,
-      stops: _stops,
-      recipientName:  d.rName,
-      recipientPhone: d.rPhone,
-      packageType:    d.pkgType,
-      weight:         d.weight,
-      vehicleType:    d.vehicle,
-      notes:          d.notes,
-      urgency:        d.urgency,
-      paymentMethod:  'mpesa',
+  const btn = document.getElementById('bookBtn');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Creating your request…'; }
+  try{
+    const r = await _fn('createParcelRequest')({
+      quoteId: d.quoteId, pickupAddress: d.from, deliveryAddress: d.to,
+      pickupCoords: _pickupCoords, deliveryCoords: _dropoffCoords,
+      recipientName: d.rName, recipientPhone: d.rPhone, senderName: senderUser.name || '', senderPhone: d.phone || senderUser.phone || '',
+      packageType: d.pkgType, notes: d.notes, scheduledTime: document.getElementById('schedTime')?.value || null,
     });
-
-    /* M-Pesa STK push — Daraja direct to platform account */
-    const cfg   = window.SOKONI_CONFIG || {};
-    const sPhone = (d.phone||'').replace(/^0/,'254').replace(/^\+/,'');
-    /* If platform sellerUid is configured, use Daraja direct */
-    const _platUid = cfg.platformSellerUid || null;
-    if(_platUid && sPhone && d.total > 0 && window.SokoniMpesa){
-      window.SokoniMpesa.pay({
-        sellerUid:   _platUid,
-        amount:      d.total,
-        phone:       sPhone,
-        orderId:     result.deliveryRef,
-        hub:         'delivery',
-        description: 'Delivery ' + result.deliveryRef,
-        sellerName:  'SOKONI Delivery',
-      }).then(outcome => {
-        if(outcome === 'success') dhToast('💚 Payment confirmed! Delivery booked.');
-      });
-    } else if(cfg.intasendKey && sPhone && d.total > 0){
-      /* Fallback: IntaSend */
-      try{
-        const IS = new window.IntaSend({ publicAPIKey:cfg.intasendKey, live:cfg.intasendLive!==false });
-        IS.mpesa().stkPush({ amount:d.total, phone_number:sPhone, email:senderUser.email||'', narrative:`SOKONI Delivery ${result.deliveryRef}` })
-          .then(r=>{ if(r?.invoice?.invoice_id) dhToast('💚 M-Pesa payment initiated!'); else dhToast('Payment sent — check M-Pesa prompt', 'blue'); })
-          .catch(e=>{ console.warn('[delivery] STK:', e.message); dhToast('M-Pesa prompt failed: ' + (e.message||'try again'), false); });
-      }catch(e){ console.warn('[delivery] IntaSend not loaded:', e.message); dhToast('Payment library not ready — booking saved, pay manually', false); }
-    }
-
-    /* Invoice */
-    if(window.SokoniInvoice){
-      try{
-        SokoniInvoice.generate({
-          type:'delivery', buyerName:senderUser.name||'Customer', buyerPhone:d.phone||'',
-          items:[{name:`${VEHICLES[d.vehicle].icon} ${VEHICLES[d.vehicle].label} Delivery`,category:'Delivery',qty:1,price:d.total}],
-          subtotal:d.total, total:d.total, paymentMethod:'M-Pesa', paymentRef:result.deliveryRef,
-          sellerName:'SOKONI Delivery Partners', date:new Date().toISOString(),
-          notes:`${d.from} → ${d.to} (${d.km} km)`,
-        });
-      }catch(e){ console.warn('[delivery] invoice:', e.message); dhToast('Booking saved — receipt unavailable', 'blue'); }
-    }
-
-    _successData = result;
-    showSuccessModal(result);
-
-  } catch(e){
-    console.error('[delivery] createDelivery:', e);
-    dhToast('Booking failed: ' + e.message, false);
-  } finally {
-    if(btn){ btn.disabled=false; btn.textContent='📲 Book & Pay with M-Pesa'; }
+    if(!r || !r.ok) throw new Error('The request was not created.');
+    _pendingParcel = { parcelId: r.parcelId, deliveryRef: r.deliveryRef, deliveryFee: r.deliveryFee, proofPIN: r.proofPIN, distanceKm: r.distanceKm };
+    try{ sessionStorage.setItem('dh_pending_parcel', JSON.stringify(_pendingParcel)); }catch{}
+    _lastQuote = null;
+    _openPayModal(_pendingParcel, d.phone || senderUser.phone || '');
+  }catch(e){
+    console.error('[delivery] createParcelRequest:', e);
+    dhToast(((e && e.message) || 'Booking failed').replace(/^.*?:\s*/, ''), false);
+  }finally{
+    if(btn){ btn.textContent='📲 Book & Pay'; btn.disabled = !(_lastQuote && _lastQuote.quoteId); }
   }
 }
+
+/* ── Payment: server-initiated, server-confirmed. Both IntaSend methods. ── */
+let _payPoll = null;
+function _openPayModal(p, phone){
+  _pendingParcel = p;
+  document.getElementById('payRef').textContent = p.deliveryRef || '';
+  document.getElementById('payAmount').textContent = p.deliveryFee != null ? `KES ${Number(p.deliveryFee).toLocaleString()}` : '—';
+  const ph = document.getElementById('payPhone'); if(ph && phone && !ph.value) ph.value = phone;
+  document.getElementById('payMsg').textContent = '';
+  document.getElementById('payWaiting').style.display = 'none';
+  document.getElementById('payMethods').style.display = 'block';
+  document.getElementById('payModal').style.display = 'flex';
+}
+function closePayModal(e){
+  if(e && e.target!==document.getElementById('payModal')) return;
+  clearInterval(_payPoll); _payPoll = null;
+  document.getElementById('payModal').style.display = 'none';
+  showDelTab('active');
+}
+function _payMsg(t, c){ const m=document.getElementById('payMsg'); if(m){ m.textContent=t; m.style.color=c||'rgba(255,255,255,0.5)'; } }
+async function payParcelMpesa(){
+  if(!_pendingParcel) return;
+  const phone = (document.getElementById('payPhone')?.value || '').trim();
+  if(!/^(?:0[17]\d{8}|254[17]\d{8}|\+254[17]\d{8})$/.test(phone.replace(/\s/g,''))){ _payMsg('Enter the M-PESA phone number (07XX…)', '#f97316'); return; }
+  const b = document.getElementById('payMpesaBtn'); if(b){ b.disabled = true; b.textContent = '⏳ Sending the M-PESA prompt…'; }
+  try{
+    const r = await _fn('payParcelRequest')({ parcelId: _pendingParcel.parcelId, method: 'mpesa', phone });
+    if(r && r.alreadyPaid){ await checkParcelPayment(); return; }
+    if(!r || !r.ok) throw new Error('M-PESA prompt failed');
+    _payMsg('📲 M-PESA prompt sent — enter your PIN on your phone. We confirm with IntaSend, not with your phone.', '#fbbf24');
+    document.getElementById('payWaiting').style.display = 'block';
+    clearInterval(_payPoll); let n = 0;
+    _payPoll = setInterval(async () => { n++; const done = await checkParcelPayment(true); if(done || n > 45){ clearInterval(_payPoll); _payPoll = null; if(!done) _payMsg('Still waiting for IntaSend. If you paid, tap "check again"; otherwise try again or use another method.', 'rgba(255,255,255,0.5)'); } }, 4000);
+  }catch(e){ _payMsg(((e && e.message) || 'Payment failed').replace(/^.*?:\s*/, ''), '#f97316'); }
+  finally{ if(b){ b.disabled = false; b.textContent = '📲 Pay with M-PESA (STK prompt)'; } }
+}
+async function payParcelCheckout(){
+  if(!_pendingParcel) return;
+  const b = document.getElementById('payCheckoutBtn'); if(b){ b.disabled = true; b.textContent = '⏳ Opening IntaSend checkout…'; }
+  try{
+    const email = (JSON.parse(localStorage.getItem('sokoniUser')||'null')||{}).email || '';
+    const r = await _fn('payParcelRequest')({ parcelId: _pendingParcel.parcelId, method: 'checkout', email });
+    if(r && r.alreadyPaid){ await checkParcelPayment(); return; }
+    if(!r || !r.ok || !r.url) throw new Error('Could not open the payment page');
+    _payMsg('Taking you to IntaSend checkout (M-PESA · card · bank · Airtel). You will come straight back here.', '#fbbf24');
+    location.href = r.url;
+  }catch(e){ _payMsg(((e && e.message) || 'Payment failed').replace(/^.*?:\s*/, ''), '#f97316'); if(b){ b.disabled=false; b.textContent='💳 Card · Bank · Airtel Money (IntaSend checkout)'; } }
+}
+/* Ask the SERVER whether IntaSend confirmed. Returns true once paid. */
+async function checkParcelPayment(quiet, trackingId){
+  if(!_pendingParcel) return false;
+  try{
+    const r = await _fn('confirmParcelPayment')({ parcelId: _pendingParcel.parcelId, trackingId: trackingId || undefined });
+    if(r && r.ok && r.state === 'paid'){
+      clearInterval(_payPoll); _payPoll = null;
+      document.getElementById('payModal').style.display = 'none';
+      _lastReceipt = r.receipt || null;
+      try{ sessionStorage.removeItem('dh_pending_parcel'); }catch{}
+      _successData = Object.assign({}, _pendingParcel, { receipt: r.receipt || null, trackingUrl: `delivery-tracking.html?ref=${encodeURIComponent(_pendingParcel.deliveryRef)}` });
+      showSuccessModal(_successData);
+      return true;
+    }
+    if(r && r.state === 'failed'){ _payMsg('IntaSend reports the payment failed' + (r.failedReason ? ' (' + r.failedReason + ')' : '') + '. Try again or use another method.', '#f97316'); document.getElementById('payWaiting').style.display='none'; clearInterval(_payPoll); _payPoll=null; return false; }
+    if(!quiet) _payMsg(r && r.state === 'not_found' ? 'No payment found yet for this parcel.' : 'Not confirmed yet — IntaSend has not reported it as paid.', 'rgba(255,255,255,0.5)');
+  }catch(e){ if(!quiet) _payMsg(((e && e.message) || 'Could not check').replace(/^.*?:\s*/, ''), '#f97316'); }
+  return false;
+}
+/* Back from IntaSend checkout: ?paid=<parcelId>&tracking_id=… — the redirect proves nothing; the server is asked. */
+(function(){
+  try{
+    const q = new URLSearchParams(location.search); const pid = q.get('paid'); if(!pid) return;
+    let p = null; try{ p = JSON.parse(sessionStorage.getItem('dh_pending_parcel')||'null'); }catch{}
+    _pendingParcel = (p && p.parcelId === pid) ? p : { parcelId: pid, deliveryRef: 'PRC' + pid };
+    history.replaceState(null, '', location.pathname);
+    window.addEventListener('load', () => { _openPayModal(_pendingParcel, ''); _payMsg('Checking your payment with IntaSend…', '#fbbf24'); setTimeout(() => checkParcelPayment(false, q.get('tracking_id') || q.get('checkout_id') || undefined), 800); });
+  }catch(e){}
+})();
+
+/* ── In-app receipt (server record on the job) ── */
+function _fmtTs(v){ const ms = v && v.toMillis ? v.toMillis() : (typeof v==='number'? v : (v ? Date.parse(v) : 0)); return ms ? new Date(ms).toLocaleString('en-KE',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'; }
+function _showReceipt(d){
+  const rc = d.receipt || {}; _lastReceipt = Object.assign({ deliveryRef: d.deliveryRef, from: d.pickupAddress, to: d.deliveryAddress, createdAt: d.createdAt, paidAt: d.paidAt, deliveredAt: d.deliveredAt, deliveryFee: d.deliveryFee }, rc);
+  const rows = [['Parcel', d.deliveryRef], ['Receipt no.', rc.receiptNo || '—'], ['Amount', rc.amount != null ? 'KES ' + Number(rc.amount).toLocaleString() : (d.deliveryFee != null ? 'KES ' + Number(d.deliveryFee).toLocaleString() : '—')],
+    ['Method', rc.method || rc.provider || '—'], ['M-PESA ref', rc.mpesaReference || '—'], ['Requested', _fmtTs(d.createdAt)], ['Paid', _fmtTs(rc.paidAt || d.paidAt)], ['Delivered', d.deliveredAt ? _fmtTs(d.deliveredAt) : '—'], ['Route', `${esc(d.pickupAddress||'—')} → ${esc(d.deliveryAddress||'—')}`]];
+  document.getElementById('receiptBody').innerHTML = rows.map(([k,v]) => `<div style="display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid rgba(255,255,255,0.06);padding:4px 0;"><span style="color:rgba(255,255,255,0.45);">${k}</span><span style="font-weight:700;color:white;text-align:right;">${v}</span></div>`).join('');
+  document.getElementById('receiptModal').style.display = 'flex';
+}
+function closeReceiptModal(e){ if(e && e.target!==document.getElementById('receiptModal')) return; document.getElementById('receiptModal').style.display='none'; }
+function downloadReceiptPdf(){
+  const r = _lastReceipt; if(!r || !window.SokoniInvoice){ dhToast('Receipt PDF not available', false); return; }
+  try{ SokoniInvoice.generate({ type:'delivery', buyerName:(JSON.parse(localStorage.getItem('sokoniUser')||'null')||{}).name||'Customer', buyerPhone:'', items:[{name:'Parcel delivery '+(r.deliveryRef||''),category:'Delivery',qty:1,price:Number(r.amount||r.deliveryFee||0)}], subtotal:Number(r.amount||r.deliveryFee||0), total:Number(r.amount||r.deliveryFee||0), paymentMethod:(r.method||'IntaSend'), paymentRef:r.receiptNo||r.mpesaReference||'', sellerName:'SOKONI Delivery', date:new Date().toISOString(), notes:`${r.from||''} → ${r.to||''}` }); }
+  catch(e){ dhToast('Receipt PDF failed: ' + e.message, false); }
+}
+async function showParcelPin(parcelId){
+  try{ const r = await _fn('getMyParcelPin')({ parcelId }); if(r && r.ok){ dhToast('🔑 Delivery PIN: ' + r.proofPIN + ' — the recipient reads it to the rider'); const el=document.getElementById('pin_'+parcelId); if(el) el.textContent = r.proofPIN; } }
+  catch(e){ dhToast(((e && e.message)||'PIN unavailable').replace(/^.*?:\s*/, ''), false); }
+}
+function payAgain(parcelId, ref, fee){ _openPayModal({ parcelId, deliveryRef: ref, deliveryFee: fee }, (JSON.parse(localStorage.getItem('sokoniUser')||'null')||{}).phone || ''); }
 
 /* ── Success modal ── */
 function showSuccessModal(result){
   document.getElementById('successRef').textContent = result.deliveryRef;
   document.getElementById('successSub').textContent =
-    `KES ${result.deliveryFee?.toLocaleString()} · ${result.distanceKm?.toFixed(1)} km · Rider searching…`;
-  document.getElementById('successPIN').textContent = result.proofPIN || '——';
+    `KES ${Number(result.deliveryFee||0).toLocaleString()}${result.distanceKm ? ' · ' + Number(result.distanceKm).toFixed(1) + ' km' : ''} · Paid — riders can now see it`;
+  const rc = result.receipt; const re = document.getElementById('successReceipt');
+  if(re) re.textContent = rc ? `🧾 Receipt ${rc.receiptNo||''}${rc.mpesaReference ? ' · M-PESA ' + rc.mpesaReference : ''} · ${_fmtTs(rc.paidAt)}` : '';
+  document.getElementById('successPIN').textContent = result.proofPIN || '(see My Deliveries → Show PIN)';
   document.getElementById('successModal').style.display = 'flex';
 }
 function closeSuccessModal(e){
@@ -912,13 +998,16 @@ function trackMyDelivery(){
 function shareDeliveryLink(){
   if(!_successData) return;
   const url = _successData.trackingUrl || `https://mysokoni.co.ke/delivery-tracking.html?ref=${_successData.deliveryRef}`;
-  const msg = encodeURIComponent(`📦 Track my SOKONI Delivery\n\nRef: ${_successData.deliveryRef}\n\n👉 ${url}`);
-  window.open(`https://wa.me/?text=${msg}`,'_blank');
+  const text = `📦 Track my SOKONI parcel — Ref: ${_successData.deliveryRef}`;
+  if(navigator.share){ navigator.share({ title:'SOKONI Parcel', text, url }).catch(()=>{}); return; }
+  (navigator.clipboard?.writeText(`${text}\n${url}`) || Promise.reject()).then(()=>dhToast('🔗 Tracking link copied!')).catch(()=>dhToast(url,'blue'));
 }
 
 /* ── Status badge ── */
 function _statusBadge(status){
   const MAP = {
+    pending_payment:{ label:'Awaiting payment', color:'#fbbf24' },
+    awaiting_rider: { label:'Finding a rider', color:'#00aaff' },
     pending:        { label:'Pending',        color:'#fbbf24' },
     rider_assigned: { label:'Rider Assigned', color:'#00aaff' },
     rider_en_route: { label:'En Route',       color:'#00aaff' },
@@ -937,67 +1026,45 @@ function _statusBadge(status){
   return `<span class="dlv-status" style="background:${s.color}18;border:1px solid ${s.color}44;color:${s.color};">${s.label}</span>`;
 }
 
-/* ── Render deliveries list ── */
+/* ── Render deliveries list — packageRequests parcel jobs (sent + incoming) ── */
+const _FINAL = ['delivered','completed','cancelled','failed'];
 function renderDeliveries(all){
-  const active   = all.filter(d => !['delivered','completed','cancelled'].includes(d.status));
-  const hist     = all.filter(d =>  ['delivered','completed','cancelled'].includes(d.status));
-  const spent    = all.filter(d => d.status!=='cancelled').reduce((s,d)=>s+(d.deliveryFee||0),0);
-
-  /* Stats */
+  const active   = all.filter(d => !_FINAL.includes(d.status));
+  const hist     = all.filter(d =>  _FINAL.includes(d.status));
+  /* Spent = what the SERVER recorded as paid (receipt/paidAmount), never a client sum of quotes. */
+  const spent    = all.filter(d => d.paymentState === 'paid' && d._mine !== false).reduce((s,d)=>s+Number((d.receipt&&d.receipt.amount)||d.deliveryFee||0),0);
   const _sv = (id,v)=>{ const e=document.getElementById(id); if(e)e.textContent=v; };
-  _sv('st-total', all.length);
-  _sv('st-active', active.length);
+  _sv('st-total', all.length); _sv('st-active', active.length);
   _sv('st-done', all.filter(d=>['delivered','completed'].includes(d.status)).length);
   _sv('st-spend', spent>=1000?(spent/1000).toFixed(1)+'k':spent);
-
-  /* Active pane */
   const aEl = document.getElementById('activeDeliveriesList');
-  if(aEl){
-    aEl.innerHTML = active.length ? active.map(d=>_renderDelivCard(d)).join('') :
-      `<div class="dh-empty"><div class="dh-empty-icon">📦</div><div class="dh-empty-text">No active deliveries</div><div class="dh-empty-sub">Book a delivery to get started</div></div>`;
-  }
-
-  /* History pane */
+  if(aEl) aEl.innerHTML = active.length ? active.map(d=>_renderDelivCard(d)).join('') : `<div class="dh-empty"><div class="dh-empty-icon">📦</div><div class="dh-empty-text">No active parcels</div><div class="dh-empty-sub">Send a parcel to get started</div></div>`;
   const hEl = document.getElementById('historyList');
-  if(hEl){
-    hEl.innerHTML = hist.length ? hist.map(d=>_renderDelivCard(d,true)).join('') :
-      `<div class="dh-empty"><div class="dh-empty-icon">🕑</div><div class="dh-empty-text">No delivery history yet</div><div class="dh-empty-sub">Your completed deliveries appear here</div></div>`;
-  }
+  if(hEl) hEl.innerHTML = hist.length ? hist.map(d=>_renderDelivCard(d,true)).join('') : `<div class="dh-empty"><div class="dh-empty-icon">🕑</div><div class="dh-empty-text">No parcel history yet</div><div class="dh-empty-sub">Delivered parcels appear here</div></div>`;
 }
 
 function _renderDelivCard(d, isHistory){
-  const ref    = d.deliveryRef || d.ref || d._fsId;
-  const date   = d.createdAt ? new Date(d.createdAt).toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'}) : '—';
-  const from   = esc(d.pickupAddress   || d.from || '—');
-  const to     = esc(d.deliveryAddress || d.to   || '—');
-  const fee    = Number(d.deliveryFee  || d.total || 0).toLocaleString();
+  const ref    = d.deliveryRef || d._fsId;
+  const date   = _fmtTs(d.createdAt);
+  const from   = esc(d.pickupAddress || '—');
+  const to     = esc(d.deliveryAddress || '—');
+  const fee    = d.deliveryFee != null ? 'KES ' + Number(d.deliveryFee).toLocaleString() : '—';
+  const who    = d._mine === false ? `<br>📥 Incoming from ${esc(d.senderName || 'a SOKONI sender')}` : (d.recipientName ? `<br>📤 To ${esc(d.recipientName)}` : '');
   const rider  = d.riderName ? `<br>🏍️ Rider: ${esc(d.riderName)}` : '';
-  const etaTxt = d.etaMin && ['rider_assigned','rider_en_route'].includes(d.status) ? `<br>⏱ ETA ~${d.etaMin} min` : '';
-  const trackUrl = d.trackingUrl || `delivery-tracking.html?ref=${ref}`;
-  const pinRow = (!isHistory && d.proofPIN && !['delivered','completed','cancelled'].includes(d.status))
-    ? `<div class="dh-pin-box"><span class="dh-pin-label">DELIVERY PIN</span><span class="dh-pin-code">${d.proofPIN}</span></div>` : '';
-
-  let actions = `<button class="dlv-btn dlv-btn-track" onclick="window.open('${esc(trackUrl)}','_blank')">📍 Track</button>`;
-  actions += `<button class="dlv-btn dlv-btn-copy" onclick="navigator.clipboard?.writeText('${esc(trackUrl)}').then(()=>dhToast('🔗 Link copied!'))">🔗 Copy</button>`;
-  if(d.status === 'pending' || d.status === 'rider_assigned'){
-    actions += `<button class="dlv-btn dlv-btn-cancel" onclick="_cancelDelivery('${esc(d._fsId||'')}')" >✕ Cancel</button>`;
-  }
-  if(d.status === 'delivered'){
-    actions += `<button class="dlv-btn dlv-btn-confirm" onclick="_confirmReceipt('${esc(d._fsId||'')}')">✅ Confirm Receipt</button>`;
-  }
-
+  const trackUrl = `delivery-tracking.html?ref=${encodeURIComponent(ref)}`;
+  const pinRow = (!isHistory && d.paymentState === 'paid' && !_FINAL.includes(d.status))
+    ? `<div class="dh-pin-box"><span class="dh-pin-label">DELIVERY PIN</span><span class="dh-pin-code" id="pin_${esc(d.parcelId||'')}">••••••</span><button class="dlv-btn dlv-btn-copy" onclick="showParcelPin('${esc(d.parcelId||'')}')">🔑 Show</button></div>` : '';
+  let actions = '';
+  if(d.status === 'pending_payment' && d._mine !== false) actions += `<button class="dlv-btn dlv-btn-confirm" onclick="payAgain('${esc(d.parcelId||'')}','${esc(ref)}',${Number(d.deliveryFee)||0})">💳 Pay now</button>`;
+  if(d.paymentState === 'paid') actions += `<button class="dlv-btn dlv-btn-track" onclick="window.open('${esc(trackUrl)}','_blank')">📍 Track</button>`;
+  if(d.receipt) actions += `<button class="dlv-btn dlv-btn-copy" onclick="_showReceipt(window.__parcels['${esc(d._fsId)}'])">🧾 Receipt</button>`;
+  if(d.status === 'pending_payment' && d._mine !== false) actions += `<button class="dlv-btn dlv-btn-cancel" onclick="_cancelDelivery('${esc(d._fsId||'')}')">✕ Cancel</button>`;
+  actions += `<a class="dlv-btn dlv-btn-copy" href="support.html?topic=parcel&ref=${encodeURIComponent(ref)}">🛟 Support</a>`;
+  window.__parcels = window.__parcels || {}; window.__parcels[d._fsId] = d;
   return `<div class="dlv-card">
-    <div class="dlv-top">
-      <div>
-        <div class="dlv-ref">${esc(ref)}</div>
-        <div class="dlv-date">${date}</div>
-      </div>
-      <div style="text-align:right;">
-        ${_statusBadge(d.status)}
-        <div style="font-size:13px;font-weight:900;color:#71ff00;margin-top:4px;">KES ${fee}</div>
-      </div>
-    </div>
-    <div class="dlv-route">📍 ${from}<br>🎯 ${to}${rider}${etaTxt}</div>
+    <div class="dlv-top"><div><div class="dlv-ref">${esc(ref)}</div><div class="dlv-date">${date}</div></div>
+      <div style="text-align:right;">${_statusBadge(d.status)}<div style="font-size:13px;font-weight:900;color:#71ff00;margin-top:4px;">${fee}</div></div></div>
+    <div class="dlv-route">📍 ${from}<br>🎯 ${to}${who}${rider}</div>
     ${pinRow}
     <div class="dlv-actions">${actions}</div>
   </div>`;
@@ -1005,25 +1072,19 @@ function _renderDelivCard(d, isHistory){
 
 async function _cancelDelivery(fsId, _c){
   if(!fsId || !window.DeliveryHub){ dhToast('Not available', false); return; }
-  if(!_c){ _skConfirm('Cancel this delivery?', ()=>_cancelDelivery(fsId,true)); return; }
+  if(!_c){ _skConfirm('Cancel this unpaid parcel?', ()=>_cancelDelivery(fsId,true)); return; }
   const uid = window.firebaseAuth?.currentUser?.uid || null;
   try{
-    await window.DeliveryHub.cancelDelivery(fsId, uid, 'Sender cancelled');
-    dhToast('Delivery cancelled');
+    await window.DeliveryHub.cancelParcel(fsId, uid, 'Sender cancelled');
+    dhToast('Parcel cancelled');
   }catch(e){ dhToast(e.message, false); }
 }
 
-async function _confirmReceipt(fsId){
-  if(!fsId || !window.DeliveryHub){ dhToast('Not available', false); return; }
-  const uid = window.firebaseAuth?.currentUser?.uid || null;
-  try{
-    await window.DeliveryHub.confirmReceipt(fsId, uid);
-    dhToast('✅ Receipt confirmed! Rider payout released.');
-  }catch(e){ dhToast(e.message, false); }
-}
+/* _confirmReceipt removed: a parcel is closed by the rider entering the PIN (completeParcelWithPin). */
 
 /* ── Init ── */
 renderVehicleGrid('vehicleGrid', 'selectVehicle', null);
+_loadCatalogue();
 window.addEventListener('load', () => { if(!_calcVehicle && document.getElementById('pane-calc')?.classList.contains('active')) _initCalcVehicleGrid(); });
 
 /* Pre-fill phone from user profile */
@@ -1051,11 +1112,15 @@ function _uid(){
     JSON.parse(localStorage.getItem('sokoniUser')||'null')?.uid || null;
 }
 
+let _sent = [], _incoming = [], _unsub2 = null;
+function _emit(){
+  const all = _sent.map(d => Object.assign({ _mine: true }, d)).concat(_incoming.filter(d => !_sent.some(x => x._fsId === d._fsId)).map(d => Object.assign({ _mine: false }, d)));
+  if(typeof window.renderDeliveries === 'function') window.renderDeliveries(all);
+}
 function _startListening(uid){
-  if(_unsub){ _unsub(); _unsub=null; }
-  _unsub = DeliveryHub.listenSenderDeliveries(uid, deliveries => {
-    if(typeof window.renderDeliveries === 'function') window.renderDeliveries(deliveries);
-  });
+  if(_unsub){ _unsub(); _unsub=null; } if(_unsub2){ _unsub2(); _unsub2=null; }
+  _unsub  = DeliveryHub.listenSenderParcels(uid,    list => { if(list) { _sent = list; _emit(); } });
+  _unsub2 = DeliveryHub.listenRecipientParcels(uid, list => { if(list) { _incoming = list; _emit(); } });
 }
 
 function _init(){
