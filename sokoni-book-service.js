@@ -326,18 +326,31 @@
   /* ── PIN YAKO NI BOOKING YAKO — the buyer's PIN, read from the server once the payment is held. ── */
   async function showPin(bookingId) {
     const el = document.getElementById('sbsPin');
+    const when = (ms) => { try { return new Date(ms).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; } };
     try {
       const r = await call('serviceBookingPin', { op: 'getMyBookingPin', bookingId });
       if (!el) return;
+      const renewBtn = r && r.canRenew
+        ? '<button class="sbs-btn" style="margin-top:8px" onclick="SokoniBookService._renewPin(\'' + esc(bookingId) + '\')">Get a new PIN</button>' : '';
       if (r && r.issued && r.pin) {
         el.innerHTML = '<div style="font-size:12px;letter-spacing:.08em;opacity:.8">' + esc(r.phrase || 'PIN YAKO NI BOOKING YAKO') + '</div>'
           + '<div style="font-size:30px;font-weight:800;letter-spacing:.3em;margin:6px 0">' + esc(r.pin) + '</div>'
           + '<div>Booking ' + esc(r.bookingRef || '') + '</div>'
-          + '<div style="margin-top:6px">Give this PIN to the provider <b>only after the service is done</b>. The PIN releases your payment to the provider. Until then SOKONI holds it safely and it is refundable under the cancellation policy.</div>';
+          + (r.opensAtMs || r.expiresAtMs ? '<div style="opacity:.8">Valid ' + (r.opensAtMs ? 'from ' + esc(when(r.opensAtMs)) + ' ' : '') + (r.expiresAtMs ? 'until ' + esc(when(r.expiresAtMs)) : '') + '</div>' : '')
+          + '<div style="margin-top:6px">Give this PIN to the provider <b>only after the service is done</b>. The PIN releases your payment to the provider. Until then SOKONI holds it safely and it is refundable under the cancellation policy.</div>' + renewBtn;
+      } else if (r && r.expired) {
+        el.innerHTML = '<div>Your booking PIN has expired, but your payment is still safely held by SOKONI.</div>'
+          + '<div style="opacity:.8">Get a new PIN when the service is done, then give it to the provider.</div>' + renewBtn;
       } else {
         el.textContent = 'Your PIN appears here as soon as SOKONI confirms your payment.';
       }
     } catch (e) { if (el) el.textContent = 'Your PIN is in My Bookings. Give it to the provider only after the service is done.'; }
+  }
+
+  async function renewPin(bookingId) {
+    const el = document.getElementById('sbsPin');
+    try { await call('serviceBookingPin', { op: 'renewBookingPin', bookingId }); await showPin(bookingId); }
+    catch (e) { if (el) el.insertAdjacentHTML('beforeend', '<div class="sbs-note">' + esc(e.message || 'Could not get a new PIN.') + '</div>'); }
   }
 
   async function payHosted() {
@@ -420,7 +433,7 @@
       if (_unsub) { _unsub(); _unsub = null; }
       const el = document.getElementById('sbsModal'); if (el) el.style.display = 'none'; document.body.style.overflow = '';
     },
-    _pick: pick, _pickSvc: pickSvc, _create: create, _pay: pay, _payHosted: payHosted, _star: star, _review: submitReview,
+    _pick: pick, _pickSvc: pickSvc, _create: create, _pay: pay, _payHosted: payHosted, _renewPin: renewPin, _star: star, _review: submitReview,
     _chooseOptions: chooseOptions, _opt: updatePreview, _continue: continueToBooking,   /* Slice D */
   };
   global.SokoniBookService = Api;
