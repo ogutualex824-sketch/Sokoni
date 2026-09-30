@@ -164,7 +164,13 @@ function load(opts) {
   const mods = sw.slice(sw.indexOf('const _mods = ['), sw.indexOf('];', sw.indexOf('const _mods = [')));
   ok('S1 sw-register.js injects /sokoni-install-report.js once, via _mods', (sw.match(/sokoni-install-report\.js/g) || []).length === 1 && mods.includes('"/sokoni-install-report.js"'));
   let base = null;
-  try { base = execFileSync('git', ['show', 'HEAD:sw-register.js'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (_) {}
+  /* Baseline = sw-register.js as it was just BEFORE the commit that introduced the
+     reporter line (not HEAD, which already carries it). */
+  try {
+    const git = (a) => execFileSync('git', a, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const intro = git(['log', '--format=%H', '-S', 'sokoni-install-report.js', '--', 'sw-register.js']).trim().split('\n').filter(Boolean).pop();
+    base = git(['show', (intro ? intro + '^' : 'HEAD') + ':sw-register.js']);
+  } catch (_) {}
   const strip = (s) => s.replace(/\r\n?/g, '\n').split('\n').filter((l) => !/sokoni-install-report|Install \/ build reporter|Consent-gated on window\.SokoniConsent|ASKS the worker its version|or caching\. \*\//.test(l)).join('\n');
   ok('S1 every other sw-register.js line is unchanged vs HEAD (no SW logic touched)', base !== null && strip(sw) === strip(base));
   const code = SRC.replace(/\/\*[\s\S]*?\*\//g, '');
