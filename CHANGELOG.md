@@ -10,6 +10,15 @@
 **Functions / rules / DB:** none — the server rail is already live. **Money:** a sale is finalised only when posCheckPaymentStatus reports the IntaSend webhook's confirmation; the shop is resolved server-side (assertShopAccess). Same fix as `7ffd640` / `3134e3f` (unpushed branch not based on live) — ported narrowly onto live `72dca56`.
 
 
+## [2026-10-01] — ODPC registration shown as a Data Processor registration (Privacy & Legal) — candidate, NOT deployed
+
+**Files:** `legal.html` (Data Protection tab: new "Data Protection & Regulatory Registration" section; safer hash routing), `privacy.html` (one link line), `index.html` (footer link), new `scripts/test-odpc-registration-display.js`, new `docs/release-gates/DEPLOY_EVIDENCE_TEMPLATE.md`. **Functions / rules / data:** none.
+- Shows exactly what the ODPC certificate states: Bravilex International Co. Limited, **Data Processor**, identification 630-8669-F056, serial 24670, valid 28 July 2026 – 28 July 2028, with a note that the ODPC registers controllers and processors separately and a link to odpc.go.ke.
+- **Unchanged on purpose:** every "Data Controller" line in `privacy.html` and `legal.html` (owner: the controller-role decision is pending; the processor certificate is not evidence of a controller registration). The suite compares those lines to the committed baseline.
+- `legal.html` hash handling now accepts only known sections; `#regulatory-registration` opens the Data Protection tab and scrolls to it. A crafted fragment used to be spliced into a CSS selector and throw.
+- Deploy evidence template (owner rule): no record = DEPLOYMENT NOT EXECUTED, never pass or fail.
+- Proof: 16/0, sabotage 2/2.
+
 ## [2026-10-01] — merchantDashboardFacts: "today" is Nairobi's day, not the server's (UTC) — candidate, NOT deployed
 
 **Files:** `functions/merchant-dashboard-facts.js`, `scripts/test-merchant-dashboard-facts.js`, `docs/MERCHANT_DASHBOARD_FACTS.md`. **Rules / data / other functions:** none.

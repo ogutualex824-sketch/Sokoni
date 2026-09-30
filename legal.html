@@ -339,6 +339,21 @@
       <strong>Phone:</strong> <a href="tel:+254703480154">+254 703 480 154</a>
     </div>
 
+    <!-- ODPC REGISTRATION (2026-10-01). Displayed as exactly what the certificate states — a DATA PROCESSOR
+         registration. It is not evidence of a Data Controller registration; the ODPC registers controllers and
+         processors separately. The "Data Controller Details" wording above is unchanged pending the owner's
+         legal decision on the controller role. -->
+    <h2 id="regulatory-registration">📜 Data Protection &amp; Regulatory Registration</h2>
+    <div class="legal-card">
+      <strong>Registered with:</strong> Office of the Data Protection Commissioner (ODPC), Kenya<br>
+      <strong>Registered entity:</strong> Bravilex International Co. Limited<br>
+      <strong>Registered capacity:</strong> Data Processor<br>
+      <strong>Identification:</strong> 630-8669-F056<br>
+      <strong>Certificate serial:</strong> 24670<br>
+      <strong>Valid:</strong> 28 July 2026 – 28 July 2028
+    </div>
+    <p style="font-size:13px;opacity:.8">The ODPC registers data controllers and data processors separately. This certificate covers registration as a Data Processor. You can confirm any registration with the ODPC at <a href="https://www.odpc.go.ke" target="_blank" rel="noopener noreferrer">odpc.go.ke</a>.</p>
+
     <h2>📋 Lawful Basis for Processing</h2>
     <p>We process personal data on the following legal bases under Section 30 of the Data Protection Act:</p>
     <ul>
@@ -539,11 +554,18 @@ function showLegalTab(name, btn){
 }
 window.showLegalTab = showLegalTab;
 
-/* Handle URL hash */
+/* Handle URL hash — only known sections. The fragment used to be spliced into a CSS selector, so a crafted link
+   threw. #regulatory-registration opens the Data Protection tab and scrolls to the ODPC registration. */
 const hash = window.location.hash.replace("#","");
-if(hash){
-  const btn = document.querySelector(`.legal-tab[onclick*="'${hash}'"]`);
-  if(btn) showLegalTab(hash, btn);
+const _LEGAL_TABS = ['terms','privacy','data','sellers','cookies'];
+const _tabFor = hash === 'regulatory-registration' ? 'data' : (_LEGAL_TABS.indexOf(hash) >= 0 ? hash : null);
+if(_tabFor){
+  const btn = document.querySelector('.legal-tab[onclick*="\'' + _tabFor + '\'"]');
+  if(btn) showLegalTab(_tabFor, btn);
+  if(hash === 'regulatory-registration'){
+    const el = document.getElementById('regulatory-registration');
+    if(el) setTimeout(function(){ el.scrollIntoView({ block: 'start' }); }, 60);
+  }
 }
 </script>
 <script src="seo.js" defer></script>
