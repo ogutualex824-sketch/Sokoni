@@ -1,3 +1,20 @@
+## 2026-09-30 — MV2-3 (Merchant Operations Convergence): Delivery Hub converged — certified, NOT deployed
+
+`seller-delivery.html` (route `deliveries`, inside the merchant shell). READS ONLY; no new authority:
+- Reflow: Live → Orders → Riders → Map → Exceptions → History → Analytics; phone rules (2-column stats, sticky tabs, 44px targets, no
+  horizontal overflow at 390px) and a 2-column desktop grid. data-tab values unchanged so #riders / #active deep links still work.
+- Every card: the owner stage ladder (Awaiting payment → … → Delivered) over the canonical statuses; From = the F1 pickup projection or
+  "Pickup location unknown (gap)"; To with "drop-off location unavailable" when no point; rider strip with SHOP RIDER / SOKONI RIDER,
+  💬 Chat (SokoniInbox → conversations) and 📞 Call only with the number the job record already carries; mini-map pickup → rider →
+  drop-off, "Rider location unavailable" / "last known (not fresh)" from the rider's own record.
+- Riders panel: the SERVER presence rule (presence/lastSeen, 300 s): Available · Stale · Offline · On your delivery; riders on this
+  seller's jobs listed even if the online query misses them; Chat for all, Call/View delivery only for the rider on my job; no uid, no
+  private number for anyone else.
+- Map tab: ONE map over all active deliveries (🏪 pickup · 🏍️ rider live · 🎯 drop-off) with "Location unavailable: pickup, drop-off, rider"
+  per missing fact — nothing invented.
+- Evidence: `scripts/test-mv2-3-delivery-hub.js` 16/0 (hermetic Chromium, stub compat Firestore with server presence shapes);
+  test-inshell-chrome 30/0; test-merchant-route-gate 191/0. Files: `seller-delivery.html`, the test, `CHANGELOG.md`.
+
 ## 2026-09-30 — MV2-1 (Merchant Operations Convergence, first slice; certified, NOT deployed): sidebar exposure + shell cleanup
 
 On `hosting/merchant-v2-premium-on-6f566a6`. No new authority; see `docs/MERCHANT_OPERATIONS_CONVERGENCE_MAP.md` for the census.
