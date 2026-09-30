@@ -58,6 +58,13 @@
       g.hidden = !Array.prototype.some.call(items, function (el) { return !el.hidden; });
     });
     var box = document.getElementById('hcWorkspace');
+    /* A dashboard without the workspace notice box (the live provider-dashboard.html) still gets the server's
+       explanation for a held account: the box is created at the top of the page rather than the message being lost. */
+    if (!box && w.state !== 'AVAILABLE' && (w.message || MESSAGE[w.reason])) {
+      box = document.createElement('div'); box.id = 'hcWorkspace'; box.className = 'hc-ws-notice';
+      box.setAttribute('role', 'status'); box.style.cssText = 'margin:12px 16px;padding:12px 14px;border:1px solid rgba(255,255,255,.18);border-radius:10px;background:rgba(255,255,255,.04);font:14px/1.5 system-ui;color:#eee';
+      var anchor = document.querySelector('main') || document.body; anchor.insertBefore(box, anchor.firstChild);
+    }
     var note = w.message || MESSAGE[w.reason] || null;
     /* A non-AVAILABLE workspace always explains itself; an AVAILABLE one does so only when the server sends a message —
        a profile notice for capabilities that apply but are not built yet (a hotel's stays), which the sidebar would

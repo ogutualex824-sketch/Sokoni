@@ -13,7 +13,9 @@
 'use strict';
 process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:1'; process.env.GCLOUD_PROJECT = 'demo-ca-browser';
 delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-const Path = require('path'); const ROOT = Path.resolve(__dirname, '..'); const FN = Path.join(ROOT, 'functions');
+const Path = require('path'); const ROOT = Path.resolve(__dirname, '..');
+/* FUNCTIONS_DIR lets a HOSTING candidate tree run this suite against the DEPLOYED function code (the pinned providerDispatch candidate) */
+const FN = process.env.FUNCTIONS_DIR || Path.join(ROOT, 'functions');
 const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
 const F = makeFakeFirestore({ clock: () => Date.now() }); const db = F.db;
 const say = console.log; console.log = console.info = console.warn = console.error = console.debug = () => {};
@@ -45,13 +47,19 @@ const J = (x) => JSON.stringify(x);
   await db.doc('providers/kb').set({ name: 'King Bruce', status: 'suspended', approvalDecision: { decision: 'refuse', decidedBy: 'admin_D5', source: 'admin_decision' } });
   await db.doc('providers/ok').set({ name: 'Plumb Co', status: 'active', approvedAt: '2026-09-01T09:00:00Z', business: { category: 'trades', source: 'application', lane: { hub: 'provider', entClass: null } } }); await AF.seedApproved(db, 'ok', 'provider');
   await db.doc('users/buyer').set({ roles: ['buyer'] });
-  const H = makePageHarness({ db, root: ROOT, callables: { providerDispatch: { businessWorkspace: BW._h.businessWorkspace } } });
+  /* the live dashboard boots through providerGetProfile (REAL handler from the same functions dir) and needs providerProfiles docs */
+  const PO = require(Path.join(FN, 'provider-onboarding.js'))._h;
+  for (const u of ['dj', 'ok', 'kb']) await db.doc('providerProfiles/' + u).set({ uid: u, providerId: 'PRV' + u.toUpperCase(), name: u, status: 'active', category: 'x' });
+  /* the whole REAL dispatcher surface from the same functions dir (onboarding + ops handlers), so the live dashboard's boot calls
+     are answered by the code production runs rather than by harness 'unknown op' errors; businessWorkspace last so it wins */
+  const OPS = (() => { try { return require(Path.join(FN, 'provider-ops.js'))._h || {}; } catch (e) { return {}; } })();
+  const H = makePageHarness({ db, root: ROOT, callables: { providerDispatch: Object.assign({}, PO, OPS, { businessWorkspace: BW._h.businessWorkspace }) } });
   await H.start();
   const { chromium } = require(Path.join(ROOT, 'node_modules', 'playwright'));
   const browser = await chromium.launch();
   /* the harness performs no client writes; the seam RECORDS the withdrawal the page asks for (the rules suite proves the applicant may write status 'withdrawn'), the test applies it to the store and asks the page to reload */
   const seam = "window.__withdrawn = []; window.SokoniCompleteApplicationDeps = { withdraw: (id) => { window.__withdrawn.push(id); return Promise.resolve(); } };";
-  const open = async (uid, w) => { const page = await H.page(browser, { user: uid ? { uid, claims: {} } : null, viewport: { width: w || 390, height: 800 } }); await page.addInitScript(seam); await page.goto(H.BASE + '/complete-application.html'); return page; };
+  const open = async (uid, w, claims) => { const page = await H.page(browser, { user: uid ? { uid, claims: claims || {} } : null, viewport: { width: w || 390, height: 800 } }); await page.addInitScript(seam); await page.goto(H.BASE + '/complete-application.html'); return page; };
   const view = (page) => page.waitForFunction(() => { const s = document.getElementById('caHost').getAttribute('data-ca-state'); return s && !['boot', 'loading'].includes(s); }, null, { timeout: 15000 }).then(() => page.getAttribute('#caHost', 'data-ca-state'));
   try {
     say('\n── six accounts through the REAL handler ──');
@@ -74,6 +82,20 @@ const J = (x) => JSON.stringify(x);
     page = await open('kb', 1280); ck('King Bruce shape → refused view with "Submit a new application"', (await view(page)) === 'refused' && /Submit a new application/.test(await page.textContent('[data-ca-intake]'))); await page.close();
     page = await open('ok', 1280); ck('valid provider → approved view, link to provider-dashboard.html', (await view(page)) === 'approved' && (await page.getAttribute('[data-ca-route]', 'href')) === '/provider-dashboard.html'); await page.close();
     page = await open('buyer', 1280); ck('buyer → buyer view, intake optional ("Register a business"), nothing to complete', (await view(page)) === 'buyer' && /Register a business/.test(await page.textContent('[data-ca-intake]'))); await page.close();
+    say('\n── the provider dashboard itself (consumer) ──');
+    const fsx = require('fs'); const dashPath = Path.join(ROOT, 'provider-dashboard.html');
+    if (fsx.existsSync(dashPath) && /sokoni-business-workspace\.js/.test(fsx.readFileSync(dashPath, 'utf8'))) {
+      page = await open('dj', 1280, { provider: true }); await page.goto(H.BASE + '/provider-dashboard.html');
+      await page.waitForFunction(() => /complete-application/.test(location.pathname) || document.documentElement.getAttribute('data-ws-state'), null, { timeout: 15000 }).catch(() => {});
+      ck('provider-dashboard.html for a REAPPLICATION_REQUIRED account → redirected to /complete-application by the consumer', /complete-application/.test(await page.evaluate(() => location.pathname)), await page.evaluate(() => location.pathname)); await page.close();
+      page = await open('ok', 1280, { provider: true }); await page.goto(H.BASE + '/provider-dashboard.html');
+      await page.waitForFunction(() => document.documentElement.getAttribute('data-ws-state'), null, { timeout: 15000 }).catch(() => {});
+      ck('provider-dashboard.html for a VALID account stays on the dashboard, data-ws-state AVAILABLE', !/complete-application/.test(await page.evaluate(() => location.pathname)) && (await page.getAttribute('html', 'data-ws-state')) === 'AVAILABLE', await page.getAttribute('html', 'data-ws-state')); await page.close();
+      page = await open('kb', 1280, { provider: true }); await page.goto(H.BASE + '/provider-dashboard.html');
+      await page.waitForFunction(() => document.getElementById('hcWorkspace'), null, { timeout: 15000 }).catch(() => {});
+      ck('provider-dashboard.html for a REFUSED account stays and shows the server explanation in a notice box', /did not approve/.test((await page.textContent('#hcWorkspace').catch(() => '')) || '')); await page.close();
+    } else say('  n/a   provider-dashboard.html does not load the consumer in this tree');
+    say('\n── signed out ──');
     page = await open(null, 1280); await page.waitForSelector('#caHost[data-ca-state="signed_out"]', { timeout: 15000 }); ck('signed out → sign-in note', (await page.$('[data-ca-signed-out]')) !== null); await page.close();
     ck('no adminAudit, no provider change, no wallet created by any of the above', db._dump('adminAudit/').length === 0 && db._dump('wallets/').length === 0 && (await db.doc('providers/dj').get()).data().status === 'active');
   } finally { await browser.close(); await H.stop(); }
