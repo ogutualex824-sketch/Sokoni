@@ -1,0 +1,18 @@
+{
+  "name": "sokoni-media-worker",
+  "private": true,
+  "description": "SOKONI media worker codebase — server-side validation + transcoding of Foundation media (stories/testimonials). Separate Firebase functions codebase so ffmpeg binaries never enter the main functions images.",
+  "main": "index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "test": "node ../scripts/test-foundation-media-worker.js"
+  },
+  "dependencies": {
+    "@ffprobe-installer/ffprobe": "2.1.2",
+    "ffmpeg-static": "5.3.0",
+    "firebase-admin": "^13.10.0",
+    "firebase-functions": "^7.2.5"
+  }
+}
