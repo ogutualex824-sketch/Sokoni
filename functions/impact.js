@@ -731,7 +731,22 @@ async function _settle(ref, from, outcome, extra) {
     const d = snap.data();
     if (!from.includes(d.status)) return { already: true, status: d.status };
     const balRef = fdb().collection('impactBalance').doc('current');
-    if (outcome === 'completed') {
+    let pledge = null, pledgeRef = null;
+    if (d.refundOfPledgeId) { pledgeRef = fdb().collection('foundationDonations').doc(d.refundOfPledgeId); const ps = await txn.get(pledgeRef); pledge = ps.exists ? ps.data() : null; }
+    if (outcome === 'completed' && pledgeRef) {
+      await _writeLedgerEntry(txn, {
+        type: 'refund', debit: d.amount, credit: 0, uid: d.initiatedBy, campaignId: (pledge && pledge.programmeId) || null,
+        paymentRef: extra.paymentRef || d.trackingId || null,
+        description: 'Donation refund ' + d.refundOfPledgeId + ' (' + ((d.destination && d.destination.display) || 'M-PESA') + ')',
+        meta: { disbursementId: ref.id, pledgeId: d.refundOfPledgeId, receiptId: (pledge && pledge.receiptId) || null, reversalOf: (pledge && pledge.providerReference) || null },
+      });
+      txn.update(pledgeRef, { status: d.amount >= Number((pledge && (pledge.grossKES ?? pledge.amount)) || 0) ? 'refunded' : 'partially_refunded', refundedKES: _incr(d.amount), refundedAt: _now(), updatedAt: _now() });
+      txn.set(fdb().collection('foundationStats').doc('current'), { totalDonations: _incr(-d.amount), totalRefunded: _incr(d.amount), updatedAt: _now() }, { merge: true });
+      if (pledge && pledge.programmeId) txn.set(fdb().collection('impactCampaigns').doc(pledge.programmeId), { raised: _incr(-d.amount) }, { merge: true });
+    } else if (pledgeRef) {
+      txn.update(pledgeRef, { refundDisbursementId: null, updatedAt: _now() });   /* failed / cancelled: the donation can be refunded again */
+    }
+    if (outcome === 'completed' && !pledgeRef) {
       await _writeLedgerEntry(txn, {
         type: 'disbursement', debit: d.amount, credit: 0, uid: d.initiatedBy, campaignId: d.campaignId,
         paymentRef: extra.paymentRef || d.trackingId || null,
@@ -765,11 +780,25 @@ exports.impactInitiateDisbursement = onCall(
     /* back-compat: a bare beneficiaryPhone means M-PESA */
     const data = request.data || {};
     const dest = _destination(data.destinationType || (data.beneficiaryPhone ? 'MPESA' : ''), data.destination || { phone: data.beneficiaryPhone });
+    const refundOf = data.refundOfPledgeId ? String(data.refundOfPledgeId) : null;
+    if (refundOf && !/^(PLG|CHK)_[A-Za-z0-9_-]{1,200}$/.test(refundOf)) throw new HttpsError('invalid-argument', 'Invalid donation.');
     const ref = fdb().collection('impactDisbursements').doc('DSB_' + requestId.toLowerCase());
     let existing = null;
     await fdb().runTransaction(async (txn) => {
       const cur = await txn.get(ref);
       if (cur.exists) { existing = cur.data(); return; }
+      /* DONATION REFUND (2026-10-01): the donation must be completed, not already being refunded, and the
+         refund cannot exceed what was received. The claim (refundDisbursementId) is set in this transaction,
+         so two refunds of one donation cannot both start. Ledger reversal happens only on payout confirmation. */
+      let pledgeRef = null;
+      if (refundOf) {
+        pledgeRef = fdb().collection('foundationDonations').doc(refundOf);
+        const pl = await txn.get(pledgeRef);
+        if (!pl.exists || pl.data().status !== 'completed') throw new HttpsError('failed-precondition', 'Only a completed donation can be refunded.');
+        if (pl.data().refundDisbursementId) throw new HttpsError('already-exists', 'A refund for this donation is already in progress or done.');
+        const gross = Number(pl.data().grossKES ?? pl.data().amount);
+        if (amt > gross) throw new HttpsError('invalid-argument', 'A refund cannot exceed the donation (KES ' + gross.toLocaleString() + ').');
+      }
       const balSnap = await txn.get(fdb().collection('impactBalance').doc('current'));
       const bal = balSnap.exists ? balSnap.data() : {};
       const available = (bal.balance || 0) - (bal.reservedKES || 0);
@@ -783,8 +812,10 @@ exports.impactInitiateDisbursement = onCall(
         if (amt > left) throw new HttpsError('failed-precondition', 'This exceeds what is left on the approved grant (KES ' + Math.max(0, left).toLocaleString() + ').');
         txn.set(gRef, { committedKES: _incr(amt) }, { merge: true });
       }
+      if (pledgeRef) txn.update(pledgeRef, { refundDisbursementId: ref.id, refundRequestedAt: _now(), updatedAt: _now() });
       txn.create(ref, {
-        id: ref.id, campaignId: campaignId ? _san(campaignId, 128) : null, grantId: grantId ? String(grantId) : null,
+        id: ref.id, kind: refundOf ? 'donation_refund' : 'support', refundOfPledgeId: refundOf,
+        campaignId: campaignId ? _san(campaignId, 128) : null, grantId: grantId ? String(grantId) : null,
         beneficiaryName: name, destination: dest, amount: amt, currency: 'KES', description: purpose,
         status: 'pending_approval', initiatedBy: uid, initiatedAt: _now(),
         approvedBy: null, authorizedBy: null, confirmedBy: null, paymentRef: null, trackingId: null,
@@ -957,6 +988,7 @@ exports.impactCancelDisbursement = onCall(
       const d = s.data();
       if (!['pending_approval', 'pending_authorization'].includes(d.status)) throw new HttpsError('failed-precondition', 'Only a payout that has not been authorized can be cancelled.');
       if (d.grantId) txn.set(fdb().collection('impactGrants').doc(d.grantId), { committedKES: _incr(-d.amount) }, { merge: true });
+      if (d.refundOfPledgeId) txn.update(fdb().collection('foundationDonations').doc(d.refundOfPledgeId), { refundDisbursementId: null, updatedAt: _now() });
       txn.update(ref, { status: 'cancelled', cancelledBy: request.auth.uid, cancelledAt: _now(), failureReason: why });
       await _dsbAudit(txn, ref, { action: 'cancelled', by: request.auth.uid, note: why });
     });
@@ -990,7 +1022,7 @@ exports.impactAdminFoundationData = onCall(
     }
     const size = 50;
     if (view === 'donations') {
-      const allowed = ['pledged', 'completed', 'failed', 'review', 'refunded'];
+      const allowed = ['pledged', 'completed', 'failed', 'review', 'refunded', 'partially_refunded'];
       let q = fdb().collection('foundationDonations');
       if (status) { if (!allowed.includes(status)) throw new HttpsError('invalid-argument', 'Invalid status.'); q = q.where('status', '==', status); }
       q = q.orderBy('createdAt', 'desc');
@@ -1000,7 +1032,8 @@ exports.impactAdminFoundationData = onCall(
         id: x.id, status: d.status, amount: d.amount, grossKES: d.grossKES ?? null, feeKES: d.feeKES ?? null, netKES: d.netKES ?? null, currency: d.currency || 'KES',
         destination: d.destination || null, programmeId: d.programmeId || null, purpose: d.purpose || null, method: d.method || null,
         donor: d.anonymous ? 'Anonymous' : (d.donorName || 'SOKONI User'), receiptId: d.receiptId || null, providerReference: d.providerReference || null,
-        orderId: d.orderId || null, createdAt: ms(d.createdAt), completedAt: ms(d.completedAt) }; }) };
+        orderId: d.orderId || null, refundDisbursementId: d.refundDisbursementId || null, refundedKES: d.refundedKES || 0, reviewReason: d.reviewReason || null,
+        createdAt: ms(d.createdAt), completedAt: ms(d.completedAt) }; }) };
     }
     if (view === 'disbursements') {
       const allowed = ['pending_approval', 'pending_authorization', 'processing', 'awaiting_confirmation', 'completed', 'failed', 'cancelled'];

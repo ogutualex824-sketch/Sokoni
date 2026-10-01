@@ -129,6 +129,30 @@ const ledger = (F) => [...F.db._store.keys()].filter((k) => k.startsWith('impact
   ck('F2 admin list masks destinations (no full phone / account / paybill account)', f3.ok && !/712345678|1234567890|ADM-7781/.test(txt) && /\*\*\*\*/.test(txt), txt.slice(0, 300));
   ck('F3 summary from aggregates (balance, available, counts); non-admin refused', f4.ok && f4.v.balance.balance === 5000 && f4.v.balance.available === 5000 && f4.v.disbursements.completed === 2 && f4.v.disbursements.failed === 2 && f5.code === 'permission-denied', f4.v);
 
+  /* H — donation refund through the same chain */
+  await F.db.collection('foundationDonations').doc('PLG_donor_x').set({ uid: 'donor', status: 'completed', amount: 1200, grossKES: 1200, feeKES: 30, programmeId: 'edu1', providerReference: 'INV9', receiptId: 'SKF-INV9' });
+  await F.db.collection('foundationDonations').doc('PLG_donor_p').set({ uid: 'donor', status: 'pledged', amount: 500 });
+  await F.db.collection('foundationStats').doc('current').set({ totalDonations: 1200 });
+  await F.db.collection('impactCampaigns').doc('edu1').set({ raised: 1200, status: 'active' });
+  const h0 = await run(M, 'impactInitiateDisbursement', 'adm1', { requestId: rid(20), amount: 500, beneficiaryName: 'x', description: 'refund', destinationType: 'MPESA', destination: { phone: '0711000000' }, refundOfPledgeId: 'PLG_donor_p' }, ADM);
+  const h1 = await run(M, 'impactInitiateDisbursement', 'adm1', { requestId: rid(21), amount: 1500, beneficiaryName: 'x', description: 'refund', destinationType: 'MPESA', destination: { phone: '0711000000' }, refundOfPledgeId: 'PLG_donor_x' }, ADM);
+  const h2 = await run(M, 'impactInitiateDisbursement', 'adm1', { requestId: rid(22), amount: 1200, beneficiaryName: 'Donor', description: 'Donor asked for refund', destinationType: 'MPESA', destination: { phone: '0711000000' }, refundOfPledgeId: 'PLG_donor_x' }, ADM);
+  const h3 = await run(M, 'impactInitiateDisbursement', 'adm1', { requestId: rid(23), amount: 100, beneficiaryName: 'Donor', description: 'again', destinationType: 'MPESA', destination: { phone: '0711000000' }, refundOfPledgeId: 'PLG_donor_x' }, ADM);
+  ck('H1 refund: only a completed donation, never more than received, never two at once', !h0.ok && !h1.ok && h2.ok && !h3.ok && h3.code === 'already-exists', { h0, h1, h3 });
+  const R = 'DSB_' + rid(22);
+  await run(M, 'impactApproveDisbursement', 'adm2', { disbursementId: R }, ADM);
+  await run(M, 'impactAuthorizeDisbursement', 'sup1', { disbursementId: R }, SUP);
+  const pBefore = (await F.db.collection('foundationDonations').doc('PLG_donor_x').get()).data();
+  const disbursedBefore = (await bal(F)).totalDisbursed || 0;
+  ck('H2 refund accepted by the gateway is NOT refunded yet (donation still completed)', pBefore.status === 'completed');
+  STATUS = { status: 'Completed', transaction_id: 'RF1' };
+  await run(M, 'impactRefreshDisbursementStatus', 'adm2', { disbursementId: R }, ADM);
+  const pAfter = (await F.db.collection('foundationDonations').doc('PLG_donor_x').get()).data();
+  const refundEntries = [...F.db._store.keys()].filter((k) => k.startsWith('impactLedger/')).map((k) => F.db._store.get(k).data).filter((e) => e.type === 'refund');
+  ck('H3 on confirmation: ONE refund reversal entry, donation refunded (record kept), stats and programme raised reduced, not counted as disbursed',
+    pAfter.status === 'refunded' && pAfter.amount === 1200 && refundEntries.length === 1 && refundEntries[0].debit === 1200 && refundEntries[0].meta.reversalOf === 'INV9'
+    && (await F.db.collection('foundationStats').doc('current').get()).data().totalDonations === 0 && (await F.db.collection('impactCampaigns').doc('edu1').get()).data().raised === 0 && ((await bal(F)).totalDisbursed || 0) === disbursedBefore, { pAfter, refundEntries });
+
   /* G — counterproof */
   const orig = path.join(FN, '.orig-impact-dsb.js');
   fs.writeFileSync(orig, require('child_process').execSync('git show 3a38f35:functions/impact.js', { cwd: ROOT }).toString());
