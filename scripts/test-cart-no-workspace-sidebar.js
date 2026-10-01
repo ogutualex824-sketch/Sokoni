@@ -11,7 +11,7 @@ let pass = 0, fail = 0;
 const ck = (id, ok, m, got) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + ' ' + id + ' ' + m + (ok ? '' : '   [got ' + got + ']')); ok ? pass++ : fail++; };
 const grab = (re) => (src.match(re) || [''])[0];
 const body = [grab(/var _WS_MAP = \{[\s\S]*?\n  \};/), grab(/var _CONSUMER_PAGES = \[[\s\S]*?\];/),
-  grab(/function _role\(\) \{[\s\S]*?\n  \}/), grab(/function _workspace\(\) \{[\s\S]*?\n  \}/)].join('\n');
+  grab(/function _role\(\) \{[\s\S]*?\n  \}/), grab(/function _allRoles\(\) \{[\s\S]*?\n  \}/), grab(/function _workspace\(\) \{[\s\S]*?\n  \}/)].join('\n');
 const ws = (page, user) => {
   const ls = { getItem: () => (user ? JSON.stringify(user) : null) };
   try { return new Function('_page', 'localStorage', body + '\nreturn _workspace();')(page, ls); } catch (e) { return 'THREW ' + e.message; }
@@ -26,7 +26,14 @@ ck('C-4', ws('cart', BU) === 'buyer' && ws('cart', null) === 'buyer', 'buyers an
 const DR = { roles: ['buyer', 'driver'] }, PR = { roles: ['buyer', 'provider'] };
 ck('M-1', ws('super-admin', SA) === 'superAdmin' && ws('admin-os', AD) === 'admin' && ws('pos', SE) === 'seller',
   'mapped workspace pages now MATCH (super-admin → Super Admin, admin-os → Admin, pos → Seller)', [ws('super-admin', SA), ws('admin-os', AD), ws('pos', SE)].join('/'));
-ck('M-2', ws('pos', SA) === 'seller' && ws('messages', SA) === 'seller', 'an operator on a SELLER page gets the seller workspace (the page decides, not the role)', ws('pos', SA));
+/* owner 2026-10-01 "fix so it works accordingly": on a SELLER page, a shop-less admin keeps the admin console;
+   whoever actually holds the seller role (an admin who runs a shop, a provider who also sells) works as a seller */
+const SAS = { roles: ['buyer', 'superAdmin', 'seller'] }, ADS = { roles: ['buyer', 'admin', 'seller'] }, PS = { roles: ['buyer', 'provider', 'seller'] };
+ck('M-2', ws('pos', SA) === 'superAdmin' && ws('merchant-v2', AD) === 'admin' && ws('pos', AD) === 'admin',
+  'a SHOP-LESS super admin / admin on POS or merchant-v2 keeps THEIR console (not the seller layout)', [ws('pos', SA), ws('merchant-v2', AD)].join('/'));
+ck('M-2b', ws('pos', SAS) === 'seller' && ws('merchant-v2', ADS) === 'seller' && ws('merchant-v2', PS) === 'seller' && ws('pos', SE) === 'seller',
+  'an admin who ALSO runs a shop, a provider who also sells, and a seller all work in the seller workspace there', [ws('pos', SAS), ws('merchant-v2', ADS), ws('merchant-v2', PS)].join('/'));
+ck('M-2c', ws('pos', BU) === 'buyer' && ws('pos', DR) === 'buyer', 'a buyer or driver on a seller page gets the shopper chrome', ws('pos', BU));
 ck('M-3', ws('help', SA) === 'buyer' && ws('help', SE) === 'buyer' && ws('help', AD) === 'buyer', 'an unmapped generic page shows NO console sidebar for seller / admin / super admin', ws('help', SA));
 ck('M-4', ws('finance-expenses', SE) === 'seller' && ws('settlement-dashboard', SA) === 'superAdmin' && ws('legal-admin', AD) === 'admin' && ws('rider-dashboard', DR) === 'rider',
   'the operator pages that had NO entry are classified (finance-* seller, settlement Super Admin, legal-admin Admin, rider-dashboard Rider)');

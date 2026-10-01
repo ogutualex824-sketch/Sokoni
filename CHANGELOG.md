@@ -1,3 +1,15 @@
+## [2026-10-01] — Seller pages: an admin keeps the admin console; whoever holds the seller role works as a seller
+
+**Files:** `sokoni-nav-engine.js`, `scripts/test-cart-no-workspace-sidebar.js`, `CHANGELOG.md` · **Base:** 815e360
+
+- **Owner:** "fix so it works accordingly".
+- On a seller page (POS, merchant-v2, finance-*, …):
+  - a seller, an admin who also runs a shop, or a provider who also sells → the seller workspace;
+  - a shop-less admin / super admin → keeps THEIR console;
+  - everyone else → the shopper layout.
+- Seller-role detection uses the existing `_allRoles()` (roles, isSeller, registeredAs.seller). It previously missed the provider + seller case.
+- **Tests:** cart-no-workspace-sidebar 13/0 (live fails 9); the admin→seller mutant is caught; customer-nav 62/0; navigation 11/11.
+
 ## [2026-10-01] — Navigation workspace map made authoritative (owner: "fix all")
 
 **Files:** `sokoni-nav-engine.js`, `scripts/test-cart-no-workspace-sidebar.js`, `CHANGELOG.md` · **Base:** afbaef3

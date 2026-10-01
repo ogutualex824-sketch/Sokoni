@@ -225,7 +225,14 @@
     if (!mapped) return (r === 'seller' || r === 'admin' || r === 'superAdmin') ? 'buyer' : r;
     if (mapped === 'superAdmin') return (r === 'superAdmin') ? 'superAdmin' : (r === 'admin' ? 'admin' : 'buyer');
     if (mapped === 'admin')      return (r === 'admin' || r === 'superAdmin') ? 'admin' : 'buyer';
-    if (mapped === 'seller')     return (r === 'seller' || r === 'admin' || r === 'superAdmin') ? 'seller' : 'buyer';
+    /* A SELLER page (owner 2026-10-01: "fix so it works accordingly"): anyone who actually HOLDS the seller role
+       works in the seller workspace there — including an admin who also runs a shop, and a provider who also sells
+       (_role() ranks provider above seller). An admin / super admin WITHOUT a shop is visiting, not trading: they
+       keep their own console chrome. Everyone else gets the shopper chrome. */
+    if (mapped === 'seller') {
+      if (r === 'seller' || _allRoles().indexOf('seller') > -1) return 'seller';
+      return (r === 'admin' || r === 'superAdmin') ? r : 'buyer';
+    }
     if (mapped === 'driver' || mapped === 'rider')
       return (r === 'driver' || r === 'rider' || r === 'admin' || r === 'superAdmin') ? mapped : 'buyer';
     if (mapped === 'provider')   return (r === 'provider' || r === 'admin' || r === 'superAdmin') ? 'provider' : 'buyer';
