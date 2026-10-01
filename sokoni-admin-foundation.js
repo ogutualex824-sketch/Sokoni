@@ -152,7 +152,7 @@
     var s = str(r && r.status);
     if (s !== 'approved') return s;
     if (r.published === true) return 'published';
-    var pa = toMs(r.publishAt);
+    var pa = toMs(r.scheduledFor != null ? r.scheduledFor : r.publishAt);   /* server field: scheduledFor (ms) */
     if (pa == null) return 'approved';
     return pa <= Date.now() ? 'published' : 'scheduled';
   }
@@ -533,7 +533,7 @@
       }
       var refText = [str(r.providerReference), str(r.trackingId)].filter(Boolean).join(' · ');
       return h('tr', { 'data-fd-row': id, 'data-fd-status': st }, [
-        td('Created', fmtTime(r.createdAt)),
+        td('Created', fmtTime(r.initiatedAt || r.createdAt)),   /* disbursement rows: initiatedAt */
         td('Amount', fmtKES(r.amount), 'sk-pa-num'),
         td('Beneficiary', str(r.beneficiaryName)),
         td('Purpose', str(r.description) + (r.refundOfPledgeId ? ' (refund of ' + str(r.refundOfPledgeId) + ')' : '')),
@@ -849,8 +849,8 @@
           box.appendChild(h('div', { class: 'sk-pa-scroll', tabindex: '0', role: 'region', 'aria-label': 'Ledger: ' + (g.type || 'unknown') }, [
             table('Ledger entries of type ' + g.type, ['When', 'Amount', 'Reference', 'Description'], g.entries.slice(0, 100).map(function (e) {
               e = e || {};
-              return h('tr', {}, [td('When', fmtTime(e.createdAt || e.timestamp || e.at)), td('Amount', fmtKES(e.amount), 'sk-pa-num'),
-                td('Reference', str(e.ref || e.reference || e.pledgeId || e.disbursementId || e.id), 'sk-pa-mono'), td('Description', str(e.description || e.note))]);
+              return h('tr', {}, [td('When', fmtTime(e.createdAt || e.timestamp || e.at)), td('Amount', fmtKES(isNum(e.amount) ? e.amount : (isNum(e.credit) && e.credit > 0 ? e.credit : (isNum(e.debit) && e.debit > 0 ? -e.debit : null))), 'sk-pa-num'),   /* ledger rows carry credit/debit */
+                td('Reference', str(e.paymentRef || e.ref || e.reference || e.pledgeId || e.disbursementId || e.id), 'sk-pa-mono'), td('Description', str(e.description || e.note))]);
             }))]));
         });
       }, function (e) { if (my === seq) st.fromError(e || {}, 'Ledger', REPORT_FN); });
