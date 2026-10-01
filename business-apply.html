@@ -133,6 +133,22 @@ h1{font-size:clamp(25px,6vw,36px);font-weight:900;letter-spacing:-.025em;margin:
 .skel{height:13px;border-radius:5px;background:linear-gradient(90deg,var(--sur2),var(--sur3),var(--sur2));
   background-size:200% 100%;animation:sh 1.3s infinite}
 @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+/* ── Financial partner mode (?offer=financial) ── */
+.fin{display:flex;flex-direction:column;gap:14px;margin-bottom:18px}
+.fin-f{display:flex;flex-direction:column;gap:6px}
+.fin-f label,.fin-legend{font-size:12px;font-weight:700;color:var(--txt)}
+.fin-f .opt{font-weight:400;color:var(--dim)}
+.fin input[type=text],.fin input[type=email],.fin input[type=tel],.fin input[type=url],.fin select,.fin textarea{
+  width:100%;box-sizing:border-box;background:var(--sur);border:1px solid var(--bor2);color:var(--txt);
+  border-radius:10px;padding:11px 12px;font:inherit;font-size:14px;min-height:44px}
+.fin textarea{min-height:84px;resize:vertical}
+.fin input:focus-visible,.fin select:focus-visible,.fin textarea:focus-visible{outline:2px solid var(--g);outline-offset:1px}
+.fin-svc{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;border:0;padding:0;margin:0}
+.fin-svc label{display:flex;align-items:center;gap:8px;background:var(--sur);border:1px solid var(--bor2);
+  border-radius:10px;padding:10px;font-size:13px;font-weight:500;min-height:44px;cursor:pointer}
+.fin-err{font-size:11.5px;color:#ff7a7a;min-height:0}
+.fin-err:empty{display:none}
+.fin-hint{font-size:11.5px;color:var(--sub);line-height:1.5}
 @media(max-width:420px){
   .choice{grid-template-columns:40px 1fr 22px;gap:11px;padding:15px 14px}
   .choice-i{width:40px;height:40px;font-size:18px}
@@ -144,8 +160,8 @@ h1{font-size:clamp(25px,6vw,36px);font-weight:900;letter-spacing:-.025em;margin:
 
   <header>
     <img class="logo" src="assets/sokoni-logo-dark.png" alt="SOKONI" onerror="this.style.display='none'">
-    <h1>Start your SOKONI business</h1>
-    <p class="lede">Sell products, provide services, or do both from one account — one till, one set of books, one tax record.</p>
+    <h1 id="pageH">Start your SOKONI business</h1>
+    <p class="lede" id="pageLede">Sell products, provide services, or do both from one account — one till, one set of books, one tax record.</p>
   </header>
 
   <!-- CURRENT CAPABILITIES — read from the registries an ADMIN APPROVAL wrote.
@@ -161,7 +177,7 @@ h1{font-size:clamp(25px,6vw,36px);font-weight:900;letter-spacing:-.025em;margin:
   </section>
 
   <div class="sec-h" id="choiceHeading">WHAT DO YOU OFFER?</div>
-  <div class="choices" role="group" aria-labelledby="choiceHeading">
+  <div class="choices" id="choices" role="group" aria-labelledby="choiceHeading">
 
     <button class="choice" id="c-products" aria-pressed="false" onclick="App.pick('products')">
       <span class="choice-i" aria-hidden="true">🛍</span>
@@ -191,6 +207,56 @@ h1{font-size:clamp(25px,6vw,36px);font-weight:900;letter-spacing:-.025em;margin:
     </button>
   </div>
 
+  <!-- FINANCIAL PARTNER (?offer=financial). Hidden unless that mode is active. Every field is
+       re-validated on the server (functions/financial-partner-listing.js); these checks only
+       tell the applicant early. -->
+  <form class="fin" id="finForm" hidden novalidate onsubmit="event.preventDefault()">
+    <div class="fin-f">
+      <label for="finName">Registered institution name</label>
+      <input type="text" id="finName" maxlength="120" autocomplete="organization" aria-describedby="err-institutionName">
+      <span class="fin-err" id="err-institutionName" role="alert"></span>
+    </div>
+    <div class="fin-f">
+      <label for="finType">Type of institution</label>
+      <select id="finType" aria-describedby="err-institutionType"><option value="">Choose…</option></select>
+      <span class="fin-err" id="err-institutionType" role="alert"></span>
+    </div>
+    <fieldset class="fin-f" style="border:0;padding:0;margin:0" aria-describedby="err-services">
+      <legend class="fin-legend">Services you offer <span class="opt">(1 to 8)</span></legend>
+      <div class="fin-svc" id="finServices"></div>
+      <span class="fin-err" id="err-services" role="alert"></span>
+    </fieldset>
+    <div class="fin-f">
+      <label for="finDesc">Short description <span class="opt">(optional, 300 characters)</span></label>
+      <textarea id="finDesc" maxlength="300"></textarea>
+    </div>
+    <div class="fin-f">
+      <label for="finCounty">County <span class="opt">(optional)</span></label>
+      <select id="finCounty" aria-describedby="err-county"><option value="">Not stated</option></select>
+      <span class="fin-err" id="err-county" role="alert"></span>
+    </div>
+    <div class="fin-f">
+      <label for="finWeb">Website <span class="opt">(optional, https://)</span></label>
+      <input type="url" id="finWeb" maxlength="200" placeholder="https://" inputmode="url" aria-describedby="err-website">
+      <span class="fin-err" id="err-website" role="alert"></span>
+    </div>
+    <div class="fin-f">
+      <label for="finEmail">Business email <span class="opt">(optional)</span></label>
+      <input type="email" id="finEmail" maxlength="120" autocomplete="email" aria-describedby="err-businessEmail">
+      <span class="fin-err" id="err-businessEmail" role="alert"></span>
+    </div>
+    <div class="fin-f">
+      <label for="finPhone">Business phone <span class="opt">(optional)</span></label>
+      <input type="tel" id="finPhone" maxlength="20" autocomplete="tel" placeholder="0712 345 678" aria-describedby="err-businessPhone">
+      <span class="fin-err" id="err-businessPhone" role="alert"></span>
+    </div>
+    <div class="fin-f">
+      <label for="finLic">Licence or registration number <span class="opt">(optional)</span></label>
+      <input type="text" id="finLic" maxlength="60">
+      <span class="fin-hint">Shown as “self-declared, not verified by SOKONI”. SOKONI reviews the listing; it does not verify licences.</span>
+    </div>
+  </form>
+
   <div class="gets" id="gets" style="display:none">
     <div class="gets-h" id="getsH">WHAT YOU GET</div>
     <ul id="getsList"></ul>
@@ -215,6 +281,7 @@ h1{font-size:clamp(25px,6vw,36px);font-weight:900;letter-spacing:-.025em;margin:
 
 <script src="sokoni-merchant-application.js"></script>
 <script src="sokoni-provider-application.js"></script>
+<script src="sokoni-financial-partner-application.js"></script>
 <script src="sw-register.js" defer></script>
 <script type="module">
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -251,6 +318,12 @@ const state = { choice: null, scope: null, apps: {}, loading: true, busy: false 
    already accepts — a label for the reviewer, never a role, a claim or a status. */
 const _qs = new URLSearchParams(location.search);
 const OFFER = ['products', 'services', 'both'].includes(_qs.get('offer')) ? _qs.get('offer') : null;
+/* ?offer=financial: the Banking Hub partner intake (2026-10-01). A separate application
+   (applications/{uid}--financial_partner) with its own fields; the products/services
+   choice is not shown. ?category= preselects the institution type. */
+const FIN = _qs.get('offer') === 'financial';
+const FIN_TYPE = String(_qs.get('category') || '').toUpperCase().replace(/[^A-Z_]/g, '').slice(0, 40);
+const FIN_WORKSPACE = 'financial-partner-dashboard.html';
 const HINT = {};
 { const c = String(_qs.get('category') || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40);
   const l = String(_qs.get('label') || '').replace(/[<>"'&]/g, '').trim().slice(0, 60);
@@ -272,7 +345,32 @@ function isLive(d) {
   return s ? LIVE.includes(s) : true;
 }
 
+/* Financial mode status: the LISTING the server wrote is the approval; the application's
+   status says where a request stands. A listing we cannot read is not a listing. */
+async function loadFin() {
+  const FPA = window.SokoniFinancialPartnerApplication;
+  const [listing, appF] = await Promise.all([
+    getDoc(doc(db, 'financialProviders', uid)).catch(() => null),
+    getDoc(doc(db, 'applications', FPA.docId(uid))).catch(() => null),
+  ]);
+  const ls = listing && listing.exists() ? String(listing.data().listingStatus || '') : '';
+  state.fin = ls === 'approved' ? 'approved'
+    : (() => { const a = appF && appF.exists() ? String(appF.data().status || '') : '';
+               if (!a) return ls === 'withdrawn' ? 'suspended' : 'none';
+               if (/pending|review|submitted/i.test(a)) return 'pending';
+               if (/reject|declin/i.test(a)) return 'rejected';
+               if (/suspend|revok/i.test(a) || ls === 'withdrawn') return 'suspended';
+               /* approved on the application but no approved listing: the server refused to
+                  list it (projectionStatus) — say so rather than claim a listing. */
+               if (/approv|active/i.test(a)) return 'blocked';
+               return 'none'; })();
+  state.finError = appF && appF.exists() ? String(appF.data().projectionError || '') : '';
+  state.loading = false;
+  render();
+}
+
 async function load() {
+  if (FIN) return loadFin();
   const [seller, provider, appM, appP] = await Promise.all([
     getDoc(doc(db, 'sellers', uid)).catch(() => null),
     getDoc(doc(db, 'providers', uid)).catch(() => null),
@@ -310,8 +408,74 @@ const LABEL = {
   none:     ['off', '+', 'Not applied'],
 };
 
+function renderFin() {
+  const st = state.fin || 'none';
+  const word = { approved: 'Listed', pending: 'In review', rejected: 'Not approved', suspended: 'Withdrawn',
+                 blocked: 'Approved, not listed', none: 'Not applied' }[st];
+  const mark = { approved: ['on', '✓'], pending: ['wait', '⏳'] }[st] || ['off', st === 'none' ? '+' : '!'];
+  let html = '<div class="cap"><span class="cap-mark ' + mark[0] + '" aria-hidden="true">' + mark[1] + '</span>'
+    + '<span class="cap-body"><span class="cap-t">Banking Hub listing</span>'
+    + '<span class="cap-s">' + esc(word) + ' · Banks, SACCOs, insurers, advisers and more.</span></span></div>';
+  if (st === 'approved') html += '<div style="margin-top:12px"><a class="ws-link" href="' + FIN_WORKSPACE + '">Open your partner dashboard →</a></div>';
+  if (st === 'blocked' && state.finError) html += '<div class="cap-s" style="margin-top:10px">' + esc(state.finError) + ' A person at SOKONI will contact you.</div>';
+  $('statusBody').innerHTML = html;
+  const locked = st === 'approved' || st === 'pending' || st === 'blocked';
+  $('finForm').querySelectorAll('input,select,textarea').forEach((el) => { el.disabled = locked || state.busy; });
+  const ready = !locked && $('agree').checked && !state.busy;
+  $('go').disabled = !ready;
+  $('go').textContent = state.busy ? 'Submitting…'
+    : st === 'approved' ? 'Already listed'
+    : st === 'pending' ? 'Application in review'
+    : st === 'blocked' ? 'Awaiting SOKONI'
+    : !$('agree').checked ? 'Accept the agreement to continue'
+    : st === 'rejected' || st === 'suspended' ? 'Apply again' : 'Apply to be listed';
+}
+
+function finInput() {
+  return {
+    institutionName: $('finName').value, institutionType: $('finType').value,
+    services: [...document.querySelectorAll('#finServices input:checked')].map((x) => x.value),
+    description: $('finDesc').value, county: $('finCounty').value, website: $('finWeb').value,
+    businessEmail: $('finEmail').value, businessPhone: $('finPhone').value, licenceClaimed: $('finLic').value,
+  };
+}
+
+function finShowErrors(errors) {
+  for (const k of ['institutionName', 'institutionType', 'services', 'county', 'website', 'businessEmail', 'businessPhone']) {
+    const el = $('err-' + k); if (el) el.textContent = (errors && errors[k]) || '';
+  }
+  const first = errors && Object.keys(errors)[0];
+  const focus = { institutionName: 'finName', institutionType: 'finType', county: 'finCounty', website: 'finWeb',
+                  businessEmail: 'finEmail', businessPhone: 'finPhone' }[first];
+  if (focus) $(focus).focus();
+  else if (first === 'services') { const c = document.querySelector('#finServices input'); if (c) c.focus(); }
+}
+
+function finSetup() {
+  const FPA = window.SokoniFinancialPartnerApplication;
+  $('pageH').textContent = 'List your institution on SOKONI';
+  $('pageLede').textContent = 'Banks, SACCOs, accountants, insurers and advisers: apply to appear in the Banking Hub directory. A person at SOKONI reviews every listing.';
+  $('choiceHeading').textContent = 'YOUR INSTITUTION';
+  $('choices').hidden = true;
+  $('gets').style.display = 'none';
+  $('finForm').hidden = false;
+  if (!FPA) return;
+  $('finType').insertAdjacentHTML('beforeend', FPA.INSTITUTION_TYPES.map((t) =>
+    '<option value="' + esc(t[0]) + '"' + (t[0] === FIN_TYPE ? ' selected' : '') + '>' + esc(t[1]) + '</option>').join(''));
+  $('finServices').innerHTML = FPA.SERVICES.map((t) =>
+    '<label><input type="checkbox" value="' + esc(t[0]) + '"> ' + esc(t[1]) + '</label>').join('');
+  $('finCounty').insertAdjacentHTML('beforeend', FPA.COUNTIES.map((c) => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join(''));
+  /* Cap the service picks at 8 as the applicant chooses, not only on submit. */
+  $('finServices').addEventListener('change', () => {
+    const boxes = [...document.querySelectorAll('#finServices input')];
+    const n = boxes.filter((b) => b.checked).length;
+    boxes.forEach((b) => { if (!b.checked) b.disabled = n >= 8; });
+  });
+}
+
 function render() {
   if (state.loading) return;
+  if (FIN) return renderFin();
   const p = sideState('products'), s = sideState('services');
 
   /* ── Status card ── */
@@ -409,9 +573,32 @@ const fs = {
 };
 
 window.App = {
+  async submitFin() {
+    const FPA = window.SokoniFinancialPartnerApplication;
+    if (state.busy) return;
+    if (!FPA) { say('err', 'The application module did not load. Refresh and try again.'); return; }
+    const input = finInput();
+    const v = FPA.validate(input);
+    finShowErrors(v.errors);
+    if (!v.ok) { say('err', 'Some details need fixing. Check the highlighted fields.'); return; }
+    state.busy = true; render();
+    say('info', 'Submitting…');
+    let r = null, err = null;
+    try {
+      r = await FPA.submit({ uid, fs, input, agreementAccepted: $('agree').checked,
+        source: document.referrer.indexOf('opportunity') > -1 ? 'earn-with-sokoni' : 'business-apply' });
+    } catch (e) { err = (e && e.message) || 'Could not submit.'; }
+    await load().catch(() => {});
+    state.busy = false;
+    /* Success is said only after the write resolved: Firestore confirmed the document. */
+    if (r && r.ok) say('ok', '<b>Application received.</b><br>Your listing is now in review. Nothing is listed until a person at SOKONI approves it.');
+    else { if (r && r.errors) finShowErrors(r.errors); say('err', esc((r && r.message) || err || 'Refused.')); }
+    render();
+  },
   pick(c) { state.choice = c; render(); },
   render,
   async submit() {
+    if (FIN) return App.submitFin();
     if (state.busy || !state.choice) return;
     state.busy = true; render();
     say('info', 'Submitting…');
@@ -468,6 +655,7 @@ window.App = {
   }
   const app = getApps().length ? getApps()[0] : initializeApp(cfg);
   auth = getAuth(app); db = getFirestore(app);
+  if (FIN) finSetup();
 
   onAuthStateChanged(auth, async (user) => {
     if (!user) {

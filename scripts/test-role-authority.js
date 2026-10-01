@@ -82,9 +82,10 @@ const setToken = (claims) => { TOKEN = { claims: claims || {} }; };
 
   /* ══ 1 · canonical vocabulary preserved ══ */
   head('1 · the canonical vocabulary, not a new one');
-  ['buyer', 'seller', 'provider', 'mechanic', 'rider', 'health', 'legal', 'landlord', 'tenant']
+  /* financial_partner added 2026-10-01 (Banking Hub, owner via sokoni-4d). Still exact: a role nobody agreed fails. */
+  ['buyer', 'seller', 'provider', 'mechanic', 'rider', 'health', 'legal', 'landlord', 'tenant', 'financial_partner']
     .forEach((r) => ck(r + ' is canonical', RA.CANONICAL_ROLES.indexOf(r) > -1));
-  ck('exactly the nine workspace roles', RA.CANONICAL_ROLES.length === 9, RA.CANONICAL_ROLES.join(','));
+  ck('exactly the ten workspace roles', RA.CANONICAL_ROLES.length === 10, RA.CANONICAL_ROLES.join(','));
   ck('the new roles are NOT collapsed into provider',
      ['mechanic', 'health', 'legal', 'landlord', 'tenant'].every((r) => RA.canonicalise(r) === r));
   ck('legacy `driver` normalises to rider', RA.canonicalise('driver') === 'rider');
@@ -363,7 +364,7 @@ const setToken = (claims) => { TOKEN = { claims: claims || {} }; };
      weaker, so the assertion follows the contract rather than holding it back. Still exact
      equality, so a page that is not a workspace still fails the moment it is added. */
   ck('only true workspaces are routed', Object.keys(RA.WORKSPACE_ROUTES).sort().join(',') ===
-     'driver.html,landlord.html,provider-dashboard.html,provider.html,rider-dashboard.html,seller.html',
+     'driver.html,financial-partner-dashboard.html,landlord.html,provider-dashboard.html,provider.html,rider-dashboard.html,seller.html',
      Object.keys(RA.WORKSPACE_ROUTES).join(','));
   ck('provider-dashboard.html gates on provider', RA.WORKSPACE_ROUTES['provider-dashboard.html'] === 'provider');
   ck('rider-dashboard.html gates on the CANONICAL rider',  RA.WORKSPACE_ROUTES['rider-dashboard.html'] === 'rider');

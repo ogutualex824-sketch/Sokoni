@@ -1,3 +1,17 @@
+## [2026-10-01] - Banking Hub: financial partner intake, role routing and AdminOS label — hosting, NOT deployed
+
+One intake for financial partners: business-apply.html?offer=financial files applications/{uid}--financial_partner
+(requestedRole financial_partner). hub-register.js financial categories hand off to it. See docs/FINANCIAL_PARTNER_INTAKE.md.
+
+- Files: sokoni-financial-partner-application.js (new), business-apply.html (financial mode), hub-register.js (bank, microfinance,
+  chama, accountant added; all seven financial categories hand off), sokoni-role-authority.js (canonical role, dashboard hub, page
+  guard, intake route, profile path), sokoni-aos.js (label), scripts/test-financial-partner-intake.js (new, 35/0),
+  scripts/test-role-authority.js (agreed role and page lists), docs/FINANCIAL_PARTNER_INTAKE.md (new).
+- Database: writes applications/{uid}--financial_partner only. Reads financialProviders/{uid} (needs the separate rules release).
+- Security: the forbidden-field filter is the merchant module's; licence text is labelled self-declared; server re-validates every field.
+- Depends on: functions feat/financial-partner-on-f66f2c1 deployed first; ships with sokoni-4d's financial-partner-dashboard.html.
+- Pre-existing, unrelated: test-overlays fails identically on the base (sokoni-book-service.js, sokoni-product-schema.js).
+
 ## [2026-10-01] — environment-preflight no longer blocks a release on its OWN deploy chain (scripts only)
 
 **Why (observed on the union hosting deploy, 06:4xZ):** inside `firebase deploy --only hosting` the chain is firebase → cross-env-shell → predeploy-browser-suites.js → preflight. Only {pid, ppid} were excluded, so the wrapper (its command line names predeploy-browser-suites.js) and the running deploy were reported as a PEER runner and a PEER deploy; the gate printed RELEASE BLOCKED and ran no suite (nothing uploaded; live unchanged).

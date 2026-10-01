@@ -591,7 +591,8 @@ window.SokoniAOS = (() => {
      receipt. Nothing here writes Firestore directly, and nothing grants a role client-side.
      Admin and Super Admin share this module; the server admits both (_requireAdmin). */
   const _APP_ROLE_LABEL = { seller:"Seller", provider:"Provider", rider:"Rider", driver:"Rider", mechanic:"Mechanic",
-    landlord:"Landlord", tenant:"Tenant", health:"Health", legal:"Legal" };
+    landlord:"Landlord", tenant:"Tenant", health:"Health", legal:"Legal",
+    financial_partner:"Financial partner" };
   let _appsCache = null;
   function _appRole(i) { const r = i.role === "driver" ? "rider" : i.role; return r || null; }
   function _appStatusWord(st) {

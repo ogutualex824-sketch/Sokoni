@@ -118,8 +118,15 @@
     { id:'courier',          label:'Courier / Parcel Delivery',        hub:'delivery',      emoji:'🚚' },
     { id:'boda-delivery',    label:'Boda Boda Delivery',               hub:'delivery',      emoji:'🏍️' },
     /* Financial */
+    /* These do NOT file here: a financial partner needs an institution type and services,
+       which this short form does not collect. Picking one hands off to the Banking Hub
+       intake (business-apply.html?offer=financial), the one financial_partner application. */
+    { id:'bank',             label:'Bank',                             hub:'financial',     emoji:'🏦' },
+    { id:'sacco',            label:'SACCO',                            hub:'financial',     emoji:'💰' },
+    { id:'microfinance',     label:'Microfinance Institution',         hub:'financial',     emoji:'💳' },
+    { id:'chama',            label:'Chama / Investment Group',         hub:'financial',     emoji:'🤝' },
     { id:'insurance',        label:'Insurance Agent / Broker',         hub:'financial',     emoji:'🛡️' },
-    { id:'sacco',            label:'SACCO / Microfinance / Chama',     hub:'financial',     emoji:'💰' },
+    { id:'accountant',       label:'Accountant / Tax Agent',           hub:'financial',     emoji:'🧾' },
     { id:'forex',            label:'Forex / Bureau de Change',         hub:'financial',     emoji:'💱' },
     /* Agriculture */
     { id:'farm',             label:'Farm / Fresh Produce Supplier',    hub:'agri',          emoji:'🌾' },
@@ -135,6 +142,18 @@
     /* Other */
     { id:'other',            label:'Other / General Business',         hub:'other',         emoji:'🏢' },
   ];
+
+  /* Financial category id → the Banking Hub institution type (functions/financial-partner-listing.js). */
+  var FIN_TYPE = { bank: 'BANK', sacco: 'SACCO', microfinance: 'MICROFINANCE', chama: 'CHAMA',
+                   insurance: 'INSURER', accountant: 'ACCOUNTANT', forex: 'FOREX' };
+  function _finHandoff(catId) {
+    var t = FIN_TYPE[catId];
+    if (!t) return false;
+    var c = CATS.find(function (x) { return x.id === catId; });
+    window.location.href = 'business-apply.html?offer=financial&category=' + encodeURIComponent(t)
+      + '&label=' + encodeURIComponent(c ? c.label : t);
+    return true;
+  }
 
   function _esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -378,6 +397,8 @@
     if (msgEl) { msgEl.textContent = 'Saving…'; msgEl.style.color = 'rgba(255,255,255,0.4)'; }
 
     var catObj = CATS.find(function (c) { return c.id === cat; }) || { label: cat, emoji: '🏢', hub: 'other' };
+    /* Backstop: a financial category never files a thin provider application from here. */
+    if (_finHandoff(cat)) return;
     var user = null;
     try { user = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (e) {}
 
@@ -481,11 +502,16 @@
   /* ── Public API ──────────────────────────────────────────── */
   window.HubRegister = {
     open: function (cfg) {
+      cfg = cfg || {};
+      /* A financial partner applies through the Banking Hub intake, never this form. */
+      if (_finHandoff(cfg.category) || (cfg.hub === 'financial' && !cfg.category && _finHandoff('bank'))) return;
       _injectStyles();
       _injectModal();
       _renderForm(cfg || {});
       document.getElementById('sokoniRegOverlay').classList.add('open');
       document.body.style.overflow = 'hidden';
+      var sel = document.getElementById('sreg_cat');
+      if (sel) sel.addEventListener('change', function () { _finHandoff(sel.value); });
     },
     close: function () {
       var ov = document.getElementById('sokoniRegOverlay');

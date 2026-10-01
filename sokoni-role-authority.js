@@ -41,7 +41,7 @@
      access is sokoni-permissions.js's job, and duplicating it here would create a
      second path to the same privilege. */
   var CANONICAL = ['buyer', 'seller', 'provider', 'mechanic', 'rider',
-                   'health', 'legal', 'landlord', 'tenant'];
+                   'health', 'legal', 'landlord', 'tenant', 'financial_partner'];
 
   /* Legacy claim names that mean a canonical role. Phase 2's grantAccountRole
      writes the canonical claim AND keeps the legacy one, so these are only
@@ -71,6 +71,9 @@
     legal:    'legalProviders',     /* authority; `lawyers` is its search projection */
     landlord: 'landlordProfiles',
     tenant:   'tenantProfiles',     /* PRIVATE — owner-or-admin read, never indexed */
+    /* Banking Hub listing (2026-10-01). Server-written by the lifecycle on approval;
+       withdrawn, never deleted, on revoke (listingStatus). */
+    financial_partner: 'financialProviders',
     buyer:    null,
   };
 
@@ -469,6 +472,9 @@
     legal:    'legal-hub.html',
     landlord: 'landlord.html',
     tenant:   'property.html',
+    /* Banking Hub partner workspace (sokoni-4d, 2026-10-01). Every data callable behind it
+       re-checks the financial_partner claim and listingStatus on the server. */
+    financial_partner: 'financial-partner-dashboard.html',
   };
 
   /* The destination for a role, or null when the role has no workspace. Returns null for a
@@ -487,6 +493,7 @@
     'landlord.html': 'landlord',
     'provider-dashboard.html': 'provider',
     'rider-dashboard.html':    'rider',
+    'financial-partner-dashboard.html': 'financial_partner',
   };
   /* Where an AUTHENTICATED-but-not-approved user is sent per role: the role's own
      application/authorization flow ("Buyer -> X -> X application"). Falls back to
@@ -501,6 +508,8 @@
     provider: 'business-apply.html?offer=services',
     rider:    'onboarding-driver.html',
     landlord: 'onboarding-landlord.html',
+    /* The financial-partner intake: business-apply in its financial mode. */
+    financial_partner: 'business-apply.html?offer=financial',
   };
 
   async function guardPage(opts) {
