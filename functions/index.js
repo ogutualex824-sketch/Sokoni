@@ -11717,6 +11717,10 @@ exports.impactGetPublicDashboard           = impact.impactGetPublicDashboard;
 exports.impactGetUserProfile               = impact.impactGetUserProfile;
 exports.impactCheckoutDonate               = impact.impactCheckoutDonate;
 exports.impactPledgeDonation               = impact.impactPledgeDonation;   /* standalone Foundation pledge (2026-10-01) */
+exports.impactGetMyPledge                  = impact.impactGetMyPledge;      /* donor reads own pledge status (2026-10-01) */
+/* SOKONI Foundation stories, testimonials, Media House (2026-10-01) — see functions/foundation-content.js */
+exports.foundationContentDispatch          = require('./foundation-content').foundationContentDispatch;
+exports.foundationStoryMediaGuard          = require('./foundation-content').foundationStoryMediaGuard;
 exports.impactSetRoundUp                   = impact.impactSetRoundUp;
 exports.impactCorporateApply               = impact.impactCorporateApply;
 exports.impactGetBusinessScore             = impact.impactGetBusinessScore;

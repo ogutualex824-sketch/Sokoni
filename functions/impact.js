@@ -295,7 +295,7 @@ exports.impactPledgeDonation = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const uid = request.auth.uid;
-    const { amount, destination, requestId, anonymous } = request.data || {};
+    const { amount, destination, requestId, anonymous, programmeId, purpose } = request.data || {};
     if (typeof requestId !== 'string' || requestId.length > 36 || !PLEDGE_UUID_RE.test(requestId)) {
       throw new HttpsError('invalid-argument', 'A valid requestId (UUID v4) is required.');
     }
@@ -303,7 +303,20 @@ exports.impactPledgeDonation = onCall(
     const amt = Math.round(Number(amount));
     if (!Number.isFinite(amt) || amt < 10) throw new HttpsError('invalid-argument', 'The minimum donation is KES 10.');
     if (amt > 100000) throw new HttpsError('invalid-argument', 'The maximum single donation is KES 100,000.');
-    const dest = _san(destination, 60) || 'General Foundation';
+    /* Optional tags (2026-10-01). A purpose is a donor PREFERENCE, not a legal restriction: Foundation funds
+       are unrestricted unless a programme says otherwise, and the receipt says so. A programme must exist
+       and be active — the browser's word is not enough. */
+    const PURPOSES = ['GENERAL_FOUNDATION', 'FOOD_SUPPORT', 'EDUCATION', 'HEALTH_SUPPORT', 'EMERGENCY_SUPPORT', 'COMMUNITY_SUPPORT', 'LIVELIHOOD_SUPPORT', 'OTHER'];
+    const purp = purpose == null || purpose === '' ? 'GENERAL_FOUNDATION' : String(purpose);
+    if (!PURPOSES.includes(purp)) throw new HttpsError('invalid-argument', 'Choose a listed purpose.');
+    let prog = null, progTitle = null;
+    if (programmeId != null && programmeId !== '') {
+      if (typeof programmeId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(programmeId)) throw new HttpsError('invalid-argument', 'Invalid programme.');
+      const ps = await fdb().collection('impactCampaigns').doc(programmeId).get();
+      if (!ps.exists || ps.data().status !== 'active') throw new HttpsError('invalid-argument', 'That programme is not accepting donations.');
+      prog = programmeId; progTitle = _san(ps.data().title, 60);
+    }
+    const dest = progTitle || _san(destination, 60) || 'General Foundation';
 
     /* Durable, fail-closed limit: pledges are cheap to create and must not be spammable. */
     await require('./shared/durable-limit').limit(fdb(), admin, { bucket: 'impactPledge', key: uid, max: 20, windowSec: 3600 });
@@ -316,7 +329,7 @@ exports.impactPledgeDonation = onCall(
       if (cur.exists) { existing = cur.data(); return; }
       txn.create(ref, {
         id: donId, uid, requestId: requestId.toLowerCase(),
-        amount: amt, destination: dest, method: 'Foundation Pledge',
+        amount: amt, destination: dest, programmeId: prog, purpose: purp, restricted: false, currency: 'KES', method: 'Foundation Pledge',
         frequency: 'one-time', status: 'pledged', donorName: anonymous === true ? 'Anonymous' : 'SOKONI User',
         anonymous: anonymous === true, orderId: null,
         dateStr: new Date().toLocaleDateString('en-KE', { year: 'numeric', month: 'long', day: 'numeric' }),
@@ -325,6 +338,25 @@ exports.impactPledgeDonation = onCall(
     });
     if (existing && existing.uid !== uid) throw new HttpsError('permission-denied', 'This pledge is not yours.');
     return { ok: true, pledgeId: donId, amount: existing ? existing.amount : amt, status: existing ? existing.status : 'pledged', alreadyPledged: !!existing };
+  }
+);
+
+/* 3c. impactGetMyPledge — the donor's own pledge status (2026-10-01). The donation wizard shows
+   "Confirming…" until this reads 'completed' (written ONLY by the payment authority's verified webhook).
+   Returns status and receipt fields only; never another person's pledge. */
+exports.impactGetMyPledge = onCall(
+  { timeoutSeconds: 15, enforceAppCheck: true },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+    const id = String((request.data || {}).pledgeId || '');
+    if (!/^(PLG|CHK)_[A-Za-z0-9_-]{1,200}$/.test(id)) throw new HttpsError('invalid-argument', 'Invalid pledge.');
+    const snap = await fdb().collection('foundationDonations').doc(id).get();
+    if (!snap.exists || snap.data().uid !== request.auth.uid) throw new HttpsError('not-found', 'Pledge not found.');
+    const d = snap.data();
+    const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : null);
+    return { ok: true, pledgeId: id, status: d.status, amount: d.amount, currency: d.currency || 'KES', destination: d.destination || null,
+      programmeId: d.programmeId || null, purpose: d.purpose || null, receiptId: d.receiptId || null,
+      completedAt: ms(d.completedAt), restricted: d.restricted === true };
   }
 );
 
@@ -482,13 +514,16 @@ exports.impactUpdateCampaign = onCall(
     if (!_isAdmin(request.auth)) throw new HttpsError('permission-denied', 'Admin only.');
     const { campaignId, status, verified, raised, daysLeft, update } = request.data || {};
     if (!campaignId) throw new HttpsError('invalid-argument', 'campaignId required.');
+    /* 2026-10-01: "raised" is a public money figure. It was settable to ANY number by an admin — a
+       fabricated metric. It is now moved only by verified donations (the payment authority's webhook). */
+    if (raised !== undefined) throw new HttpsError('invalid-argument', '"raised" is computed from confirmed donations and cannot be set.');
+    if (status !== undefined && !['active', 'paused', 'completed', 'closed'].includes(status)) throw new HttpsError('invalid-argument', 'Invalid status.');
 
     const ref = fdb().collection('impactCampaigns').doc(campaignId);
     const updates = { updatedAt: _now() };
 
     if (status   !== undefined) updates.status   = _san(status, 20);
     if (verified !== undefined) updates.verified  = !!verified;
-    if (raised   !== undefined) updates.raised    = Math.round(Number(raised) || 0);
     if (daysLeft !== undefined) updates.daysLeft  = Math.max(0, Number(daysLeft) || 0);
     if (update   && update.text) {
       updates.updates = admin.firestore.FieldValue.arrayUnion({
@@ -866,6 +901,11 @@ exports.impactRecordMarketplaceContribution = onCall(
   async (request) => {
     /* Only callable by internal Cloud Functions or admin */
     if (!_isAdmin(request.auth)) throw new HttpsError('permission-denied', 'Internal only.');
+    /* REFUSED (2026-10-01). This credited 1% of an admin-SUPPLIED orderTotal to the Foundation ledger with no
+       money moving into the Foundation — a ledger entry without cash, which then inflated the balance that
+       disbursements trust. Nothing calls it. A marketplace contribution, if the owner wants one, must be an
+       actual transfer recorded by the payment authority. No write happens here. */
+    throw new HttpsError('failed-precondition', 'Marketplace contributions are not recorded without an actual transfer. Owner decision required.');
     const { orderId, orderTotal, uid } = request.data || {};
     if (!orderId || !orderTotal) throw new HttpsError('invalid-argument', 'orderId and orderTotal required.');
 
