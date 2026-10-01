@@ -137,6 +137,19 @@
     }
     .sk-acct-ws-dot.active { background: #71ff00; }
     .sk-acct-role-row { text-align: left; }
+    .sk-acct-head { position: relative; padding-right: 52px; }
+    .sk-acct-close { position: absolute; top: 6px; right: 6px; width: 44px; height: 44px; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); color: rgba(255,255,255,.75);
+      font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .sk-acct-close:hover { background: rgba(255,255,255,.09); color: #fff; }
+    .sk-acct-close:focus-visible { outline: 2px solid #71ff00; outline-offset: 2px; }
+    .sk-acct-profile-btn { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 8px 14px 10px;
+      min-height: 44px; border-radius: 12px; font-weight: 800; font-size: 14px; text-decoration: none; color: #050505;
+      background: linear-gradient(135deg, #71ff00, #4fd400); box-shadow: 0 6px 18px rgba(113,255,0,.18); }
+    .sk-acct-profile-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .sk-acct-shop-branches { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .sk-acct-branch { font-size: 10px; color: rgba(255,255,255,.6); background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.08); border-radius: 999px; padding: 1px 7px; }
     .sk-acct-active-badge { flex-shrink: 0; font-size: 10px; font-weight: 800; letter-spacing: .04em;
       color: #71ff00; background: rgba(113,255,0,.1); border: 1px solid rgba(113,255,0,.28);
       border-radius: 999px; padding: 2px 8px; }
@@ -185,6 +198,53 @@
   }
 
   /* ── Account dropdown ──────────────────────────────────────────── */
+  /* ── My workspaces: shops OWNED and shops WORKED AT (owner 2026-10-01) ─────────────────────
+     Existing authorities only (census 2026-10-01):
+       owned     shops/{uid}                       — the shop document IS keyed by the owner (1 read)
+                 businesses where ownerId == uid → branches where merchantId in [ids]  (branch names; display)
+       employed  shopEmployees/{uid} → shops/{shopOwnerId}   — what merchant-v2 enforces (2 reads)
+     Served rules allow each read for the signed-in user. Cached per session for 5 minutes, so an
+     open costs nothing most of the time. Unknown is shown as "Loading…", never invented. */
+  var _MYWS_TTL = 5 * 60 * 1000;
+  function _myShopsCached(uid) {
+    try { var c = JSON.parse(sessionStorage.getItem('sk_myws_' + uid) || 'null'); if (c && Date.now() - c.at < _MYWS_TTL) return c.v; } catch (_) {}
+    return null;
+  }
+  async function _loadMyShops(uid) {
+    var db = window.firebaseDB;
+    if (!db || !uid) return null;
+    var F = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    var out = { owned: null, employed: null };
+    try {
+      var s = await F.getDoc(F.doc(db, 'shops', uid));
+      if (s.exists()) {
+        var sd = s.data() || {};
+        out.owned = { shopId: uid, name: sd.name || sd.storeName || 'My shop', branches: [] };
+        try {
+          var bz = await F.getDocs(F.query(F.collection(db, 'businesses'), F.where('ownerId', '==', uid), F.limit(10)));
+          var ids = bz.docs.map(function (d) { return d.id; });
+          if (ids.length) {
+            var br = await F.getDocs(F.query(F.collection(db, 'branches'), F.where('merchantId', 'in', ids.slice(0, 10)), F.limit(30)));
+            out.owned.branches = br.docs.map(function (d) { var x = d.data() || {}; return x.name || x.branchName || ''; }).filter(Boolean);
+          }
+        } catch (_) { /* branch names are optional detail */ }
+      }
+    } catch (_) {}
+    try {
+      var e = await F.getDoc(F.doc(db, 'shopEmployees', uid));
+      if (e.exists()) {
+        var ed = e.data() || {}, st = String(ed.status || 'active').toLowerCase();
+        if (ed.shopOwnerId && ed.shopOwnerId !== uid && (st === 'active' || st === 'accepted')) {
+          var es = await F.getDoc(F.doc(db, 'shops', ed.shopOwnerId));
+          var esd = es.exists() ? (es.data() || {}) : {};
+          out.employed = { shopId: ed.shopOwnerId, name: esd.name || esd.storeName || 'Shop', role: String(ed.role || 'staff') };
+        }
+      }
+    } catch (_) {}
+    try { sessionStorage.setItem('sk_myws_' + uid, JSON.stringify({ at: Date.now(), v: out })); } catch (_) {}
+    return out;
+  }
+
   function _buildAcctPopup(user) {
     const existing = document.getElementById('sk-acct-popup');
     if (existing) { existing.remove(); return; }
@@ -232,6 +292,12 @@
         '<div class="sk-acct-ws-info">' +
           '<div class="sk-acct-ws-name">' + _hesc(ws.businessName || 'Business') + '</div>' +
           '<div class="sk-acct-ws-role">' + wsRoleName(ws.role) + (ws.roleTitle && ws.roleTitle !== wsRoleName(ws.role) ? ' · ' + _hesc(ws.roleTitle) : '') + clockedLabel + '</div>' +
+          /* the branch this employee works at (owner 2026-10-01: "shop names and branches for employees") */
+          (ws.activeBranchName || (Array.isArray(ws.branches) && ws.branches.length)
+            ? '<div class="sk-acct-shop-branches">' +
+                (ws.activeBranchName ? [ws.activeBranchName] : ws.branches.map(function (b) { return (b && (b.name || b.branchName)) || (typeof b === 'string' ? b : ''); }))
+                  .filter(Boolean).slice(0, 6).map(function (b) { return '<span class="sk-acct-branch">' + _hesc(b) + '</span>'; }).join('') +
+              '</div>' : '') +
         '</div>' +
         '<div class="sk-acct-ws-dot ' + (isActive ? 'active' : '') + '"></div>' +
       '</button>';
@@ -239,18 +305,22 @@
 
     /* Business workspaces — only when the account belongs to at least one business. When one is
        active, a "Back to my personal account" row returns to the roles above. */
-    const wsSection = workspaces.length
-      ? '<div class="sk-acct-ws-section" data-sk-section="workspaces">' +
-          '<div class="sk-acct-ws-label">Business workspaces</div>' +
-          wsEntries +
-          (isPersonalActive ? '' :
-            '<button class="sk-acct-ws-item" data-sk-personal onclick="window._skSwitchWorkspace(\'personal\')">' +
-              '<div class="sk-acct-ws-icon">↩</div>' +
-              '<div class="sk-acct-ws-info"><div class="sk-acct-ws-name">Back to my personal account</div>' +
-              '<div class="sk-acct-ws-role">Use your own roles</div></div></button>') +
-        '</div>' +
-        '<div class="sk-acct-separator"></div>'
-      : '';
+    /* My workspaces (owner 2026-10-01): shops OWNED (with their branches) and shops WORKED AT (with the
+       job held), from the server records (_loadMyShops), then any team workspaces (workspaceMemberships)
+       below them. The shop rows are filled asynchronously into #sk-acct-myshops: "Loading…" until they
+       answer, never an invented row. */
+    const wsSection =
+      '<div class="sk-acct-ws-section" data-sk-section="workspaces">' +
+        '<div class="sk-acct-ws-label">My workspaces</div>' +
+        '<div id="sk-acct-myshops"><div class="sk-acct-ws-role" style="padding:8px 16px;">Loading your workspaces…</div></div>' +
+        wsEntries +
+        (isPersonalActive ? '' :
+          '<button class="sk-acct-ws-item" data-sk-personal onclick="window._skSwitchWorkspace(\'personal\')">' +
+            '<div class="sk-acct-ws-icon">↩</div>' +
+            '<div class="sk-acct-ws-info"><div class="sk-acct-ws-name">Back to my personal account</div>' +
+            '<div class="sk-acct-ws-role">Use your own roles</div></div></button>') +
+      '</div>' +
+      '<div class="sk-acct-separator"></div>';
 
     /* ── Role menu — ONE entry point, inside the profile dropdown ────────────────
        This listed `roles` straight from user.roles, the localStorage mirror, and had
@@ -295,10 +365,12 @@
        the acting role or the localStorage mirror: a forged mirror role must never produce a row,
        and an account with zero confirmed roles shows no role section (the "Acting as" line in the
        head still states the current role). */
-    const _myRoles = _wsRoles;
+    /* Owner 2026-10-01 layout: Buyer is the PROFILE button at the top and Seller is the shops under
+       "My workspaces", so this section lists the OTHER approved roles only (still authority-only). */
+    const _myRoles = _wsRoles.filter(function (r) { return r !== 'buyer' && r !== 'seller'; });
     const workspaceStrip = !_myRoles.length ? '' :
       '<div class="sk-acct-ws-section" data-sk-section="roles">' +
-        '<div class="sk-acct-ws-label">My roles</div>' +
+        '<div class="sk-acct-ws-label">Other roles</div>' +
         _myRoles.map(function (r) {
           var u = roleUI(r), on = isPersonalActive && r === _acting;
           return '<button class="sk-acct-ws-item sk-acct-role-row ' + (on ? 'ws-active' : '') + '" ' +
@@ -345,13 +417,17 @@
     popup.setAttribute('role', 'menu');
     popup.innerHTML =
       '<div class="sk-acct-head">' +
+        /* Close (owner 2026-10-01): top-right corner, 44px touch target. */
+        '<button type="button" class="sk-acct-close" aria-label="Close menu" data-sk-close onclick="window._skCloseAcct()">✕</button>' +
         '<div class="sk-acct-name">' + _hesc(user.name || user.displayName || 'User') + '</div>' +
         '<div class="sk-acct-email">' + _hesc(user.email || '') + '</div>' +
         _skActiveRoleLine(active) +
         _skDeliveryLine() +
       '</div>' +
-      workspaceStrip +
+      /* Profile first (owner 2026-10-01) — the buyer's place, and every account's. */
+      '<a class="sk-acct-profile-btn" href="profile.html" data-sk-profile onclick="window._skCloseAcct()">👤 My profile</a>' +
       wsSection +
+      workspaceStrip +
       rolePills +
       '<div class="sk-acct-links">' +
         /* ONE ROUTE VOCABULARY. The five destinations are read from
@@ -372,7 +448,6 @@
             }).join('') + '<div class="sk-acct-separator"></div>';
           } catch (_) { return ''; }
         })() +
-        '<a class="sk-acct-link" href="profile.html" onclick="window._skCloseAcct()">👤 My Profile</a>' +
         /* Orders left the BAR, not the product — this and the header drawer are now
            its entry points, because profile.html carried no link to it at all. */
         '<a class="sk-acct-link" href="my-orders.html" onclick="window._skCloseAcct()">📦 My Orders</a>' +
@@ -398,6 +473,50 @@
 
     const wrap = document.getElementById('sk-acct-wrap');
     if (wrap) wrap.appendChild(popup);
+
+    /* Fill "My workspaces" shop rows: cached first (instant), then the server records. */
+    (function _fillMyShops() {
+      var host = popup.querySelector('#sk-acct-myshops');
+      if (!host) return;
+      var uid = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || user.uid || '';
+      function paint(v) {
+        if (!popup.isConnected) return;
+        if (!v) { host.innerHTML = '<div class="sk-acct-ws-role" style="padding:8px 16px;">Could not load your workspaces right now.</div>'; return; }
+        var h = '';
+        if (v.owned) {
+          h += '<a class="sk-acct-ws-item" data-sk-shop="owner" href="merchant-v2.html" onclick="window._skCloseAcct()">' +
+            '<div class="sk-acct-ws-icon">🏪</div><div class="sk-acct-ws-info">' +
+            '<div class="sk-acct-ws-name">' + _hesc(v.owned.name) + '</div><div class="sk-acct-ws-role">Owner</div>' +
+            (v.owned.branches && v.owned.branches.length
+              ? '<div class="sk-acct-shop-branches">' + v.owned.branches.slice(0, 8).map(function (b) { return '<span class="sk-acct-branch">' + _hesc(b) + '</span>'; }).join('') + '</div>' : '') +
+            '</div></a>';
+        }
+        if (v.employed) {
+          var job = wsRoleName(v.employed.role);
+          if (!v.owned) {
+            h += '<a class="sk-acct-ws-item" data-sk-shop="employee" href="merchant-v2.html" onclick="window._skCloseAcct()">' +
+              '<div class="sk-acct-ws-icon">🧑‍💼</div><div class="sk-acct-ws-info">' +
+              '<div class="sk-acct-ws-name">' + _hesc(v.employed.name) + '</div><div class="sk-acct-ws-role">' + _hesc(job) + '</div></div></a>';
+          } else {
+            /* merchant-v2 resolves an owner to their OWN shop; switching to the employer's shop is not
+               possible yet (server change) — say so instead of a link that opens the wrong shop. */
+            h += '<div class="sk-acct-ws-item" data-sk-shop="employee" aria-disabled="true" style="cursor:default;opacity:.75;">' +
+              '<div class="sk-acct-ws-icon">🧑‍💼</div><div class="sk-acct-ws-info">' +
+              '<div class="sk-acct-ws-name">' + _hesc(v.employed.name) + '</div><div class="sk-acct-ws-role">' + _hesc(job) +
+              ' · your own shop opens first — shop switching is coming</div></div></div>';
+          }
+        }
+        if (!h && !workspaces.length) {
+          h = '<a class="sk-acct-ws-item" href="/offer.html" onclick="window._skCloseAcct()"><div class="sk-acct-ws-icon">＋</div>' +
+            '<div class="sk-acct-ws-info"><div class="sk-acct-ws-name">No shop yet</div><div class="sk-acct-ws-role">Register a business</div></div></a>';
+        }
+        host.innerHTML = h;
+      }
+      var cached = uid ? _myShopsCached(uid) : null;
+      if (cached) paint(cached);
+      if (!uid) { paint(null); return; }
+      _loadMyShops(uid).then(function (v) { paint(v || cached); }).catch(function () { if (!cached) paint(null); });
+    })();
 
     /* Keep the open menu inside the viewport. It is anchored right:0 to the avatar,
        and on a narrow screen a 340px menu hangs off the left edge — the overflow

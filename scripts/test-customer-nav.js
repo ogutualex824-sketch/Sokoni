@@ -203,7 +203,7 @@ head('10 · one route vocabulary across every surface');
 const _acctAt = menu.indexOf("'<div class=\"sk-acct-links\">'");
 const acct = _acctAt === -1 ? '' : menu.slice(_acctAt, menu.indexOf('sk-acct-link-danger', _acctAt));
 ck('CONTROL — the account menu markup was isolated',
-   acct.length > 300 && /My Profile/.test(acct), acct.length + ' chars');
+   acct.length > 300 && /My Orders/.test(acct), acct.length + ' chars');
 /* Restating the links is how a menu ends up pointing at a route the bar no longer
    has. It reads the same array the bar renders. */
 ck('the dropdown builds its shortcuts FROM the tab array',
@@ -216,7 +216,14 @@ ck('a missing tab array omits the section rather than rendering dead links',
    /if \(!tabs\.length\) return '';/.test(acct));
 
 head('11 · the dropdown speaks the same emoji language');
-['👤 My Profile', '📦 My Orders', '🔔 Notifications', '⚙️ Settings',
+/* Owner 2026-10-01: Profile moved to the TOP of the dropdown as its primary button (no longer a link
+   in the list); asserted on the whole menu, before the workspaces section. */
+const _popAt = menu.indexOf('popup.innerHTML =');
+ck('menu opens with 👤 My profile as the primary button, above My workspaces',
+   /class="sk-acct-profile-btn" href="profile\.html"[^>]*>👤 My profile</.test(menu) &&
+   _popAt > -1 && menu.indexOf('sk-acct-profile-btn', _popAt) > -1 &&
+   menu.indexOf('sk-acct-profile-btn', _popAt) < menu.indexOf('wsSection +', _popAt));
+['📦 My Orders', '🔔 Notifications', '⚙️ Settings',
  '🛡️ Account &amp; Security', '🏪 Register a business', '❓ Help &amp; Support'].forEach(function (e) {
   ck('menu carries ' + e.split(' ')[0] + ' ' + e.split(' ').slice(1).join(' '),
      acct.indexOf(e) !== -1);
