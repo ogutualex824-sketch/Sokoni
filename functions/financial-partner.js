@@ -37,6 +37,25 @@ const db = () => admin.firestore();
 const lim = require('./shared/durable-limit');
 const FPL = require('./financial-partner-listing');
 const COM = require('./commercial-entitlements');   /* the ONE price/plan configuration */
+/* ── Public trust markers (owner decision 2026-10-01) ─────────────────────────────────────────
+   "Registration reviewed by SOKONI" ⇐ ONLY an admin-approved registration review (never self-declared fields,
+   never payment). A licence is a SEPARATE fact: shown as verified only when an admin recorded an independent
+   check against the issuing authority's register, with the source; a past expiry shows as expired. Both are
+   exposed ONLY while the listing is approved (callers already require that). */
+const REVIEW_BADGE = Object.freeze({ label: 'Registration reviewed by SOKONI',
+  tooltip: 'SOKONI has reviewed the registration information submitted to the platform. This marker is not a government licence, professional certification, or regulatory approval.' });
+const regApproved = (r) => !!r && (r.status === 'approved' || r.status === 'verified');   /* 'verified' = legacy name */
+function licencePublic(l, nowMs = Date.now()) {
+  if (!l || l.verificationStatus !== 'verified_against_register') return null;
+  const exp = l.expiryDate ? Date.parse(l.expiryDate + 'T23:59:59Z') : null;
+  const expired = exp != null && exp < nowMs;
+  return { status: expired ? 'expired' : 'verified_against_register', licenceType: l.licenceType || null, issuingAuthority: l.issuingAuthority,
+    expiryDate: l.expiryDate || null, checkedAt: ms(l.verifiedAt), source: l.verificationSource };
+}
+function trustMarkers(w) {
+  const reg = (w && w.registration) || {};
+  return { registrationReviewed: regApproved(reg), reviewBadge: regApproved(reg) ? REVIEW_BADGE : null, licenceVerification: licencePublic(w && w.licence) };
+}
 async function planOf(partnerUid) {
   try { const e = await db().collection('entitlements').doc(partnerUid + '__partner').get(); return COM.effectivePlan(e.exists ? e.data() : null); }
   catch (_) { return COM.effectivePlan(null); }
@@ -178,6 +197,7 @@ async function getWorkspace(ctx) {
       branches: Array.isArray(w0.branches) ? w0.branches : [], hours: w0.hours || null,
     },
     registration: w.registration || { status: 'not_submitted' },
+    markers: trustMarkers(w),
     counts: { members, activeMembers, publishedProducts: products, newEnquiries },
     plan: await planOf(ctx.partnerUid).then((e) => ({ planId: e.planId, name: e.name, active: e.active, expiresAt: e.expiresAt || null, capabilities: e.capabilities, limits: e.limits })),
     analytics: await planOf(ctx.partnerUid).then(async (e) => (COM.can(e, 'analytics') ? {
@@ -219,6 +239,8 @@ async function updateProfile(ctx, d) {
 }
 
 async function submitRegistration(ctx, d) {
+  const cur = ((await ctx.ref.get()).data() || {}).registration;
+  if (cur && (cur.status === 'under_review' || regApproved(cur))) throw new HttpsError('failed-precondition', cur.status === 'under_review' ? 'Your registration is already being reviewed.' : 'Your registration was approved. Contact SOKONI support to change it.');
   const regulator = oneOf(d.regulator, ctx.cfg.regulators, 'regulator');
   const unregistered = regulator === 'Not yet registered';
   const registration = {
@@ -227,7 +249,9 @@ async function submitRegistration(ctx, d) {
     registrationNumber: unregistered ? null : str(d.registrationNumber, 40, 'Registration / licence number', { required: true, re: /^[A-Za-z0-9/.\- ]+$/ }),
     kraPin: str(d.kraPin, 11, 'KRA PIN', { re: /^[AP]\d{9}[A-Z]$/i }),
     validUntil: isoDate(d.validUntil, 'Valid until'),
-    status: 'under_review',          /* never 'verified' from here — admin-only */
+    licenceClaim: d.licenceNumber ? { licenceType: str(d.licenceType, 60, 'Licence type'), licenceNumber: str(d.licenceNumber, 40, 'Licence number', { re: /^[A-Za-z0-9/.\- ]+$/ }),
+      issuingAuthority: str(d.issuingAuthority, 80, 'Issuing authority', { required: true }), expiryDate: isoDate(d.licenceExpiry, 'Licence expiry') } : null,
+    status: 'under_review',          /* never 'approved' from here — admin-only */
     submittedAt: ts(), submittedBy: ctx.uid,
     reviewedAt: null, reviewedBy: null, reviewNote: null,
   };
@@ -471,6 +495,10 @@ async function publicDirectory(req, d) {
     partnerUid: doc.id, name: x.name || null, institutionType: x.institutionType, services: Array.isArray(x.services) ? x.services : [],
     county: x.county || null, website: x.website || null, description: x.description || null,
     label: 'Listed by SOKONI', licenceClaimed: x.licenceClaimed || null, promoted: promoted.has(doc.id), featured: featured.has(doc.id) }; });
+  if (rows.length) {
+    const wsDocs = await db().getAll(...rows.map((r) => db().collection('financialPartners').doc(r.partnerUid))).catch(() => null);
+    rows.forEach((r, i) => { const w = wsDocs && wsDocs[i] && wsDocs[i].exists ? wsDocs[i].data() : null; Object.assign(r, trustMarkers(w)); });
+  }
   rows.sort((a, b) => (Number(b.featured) - Number(a.featured)) || (Number(b.promoted) - Number(a.promoted)));
   return { rows, next: snap.docs.length === size ? snap.docs[snap.docs.length - 1].id : null, promotionsReadable: !!promo };
 }
@@ -551,7 +579,8 @@ async function publicProfile(req, d) {
     /* ALWAYS self-declared in public. An admin review is SOKONI checking paperwork, not a regulator
        (CBK/SASRA/IRA/CMA) confirming a licence; showing it publicly as 'verified' would misrepresent it.
        Whether to show a separate 'reviewed by SOKONI' marker is an OWNER decision (raised 2026-10-01). */
-    registration: { status: 'self_declared', regulator: reg.regulator || null },
+    registration: { status: regApproved(reg) ? 'reviewed' : 'self_declared', regulator: reg.regulator || null },
+    ...trustMarkers(w),
     products: prods.docs.map(productRow),
   };
 }
@@ -577,14 +606,54 @@ async function submitEnquiry(req, d) {
 
 /* ── Admin ops (AdminOS) ────────────────────────────────────────────────────────────────────── */
 async function adminListRegistrations(d) {
-  const status = oneOf(d.status || 'under_review', ['under_review', 'verified', 'rejected'], 'status');
+  const status = oneOf(d.status || 'under_review', ['under_review', 'approved', 'verified', 'rejected', 'needs_information'], 'status');
   const s = await db().collection('financialPartners').where('registration.status', '==', status).limit(100).get();
   return { rows: s.docs.map((doc) => { const r = doc.data().registration || {}; return { partnerUid: doc.id, regulator: r.regulator, registeredName: r.registeredName, registrationNumber: r.registrationNumber, kraPin: r.kraPin || null, validUntil: r.validUntil || null, status: r.status, submittedAt: ms(r.submittedAt), reviewNote: r.reviewNote || null }; }) };
 }
+async function adminRecordLicenceCheck(req, d) {
+  if (!ID_RE.test(d.partnerUid || '')) bad('Invalid partner.');
+  const result = oneOf(d.verificationStatus, ['verified_against_register', 'not_found_on_register', 'mismatch', 'cleared'], 'result');
+  const ref = db().collection('financialPartners').doc(d.partnerUid);
+  let licence = null;
+  if (result !== 'cleared') {
+    licence = {
+      licenceType: str(d.licenceType, 60, 'Licence type', { required: true }),
+      licenceNumber: str(d.licenceNumber, 40, 'Licence number', { required: true, re: /^[A-Za-z0-9/.\- ]+$/ }),
+      issuingAuthority: str(d.issuingAuthority, 80, 'Issuing authority', { required: true }),
+      expiryDate: isoDate(d.expiryDate, 'Expiry date'),
+      verificationStatus: result,
+      /* WHERE it was checked — a register URL or named register + reference. Never "document uploaded". */
+      verificationSource: str(d.verificationSource, 300, 'Verification source', { required: true }),
+      verifiedAt: ts(), verifiedBy: req.auth.uid,
+    };
+    if (/upload|document|pdf|screenshot/i.test(licence.verificationSource) && !/https?:\/\//i.test(licence.verificationSource)) bad('Cite the register you checked (URL or register name + reference), not a document.');
+  }
+  await db().runTransaction(async (tx) => {
+    const s0 = await tx.get(ref);
+    if (!s0.exists) throw new HttpsError('not-found', 'Partner workspace not found.');
+    tx.set(ref, { licence }, { merge: true });
+    tx.set(db().collection('adminActions').doc(), { type: 'financial_partner_licence_check', partnerUid: d.partnerUid, result, authority: licence ? licence.issuingAuthority : null, adminUid: req.auth.uid, at: ts() });
+  });
+  return { ok: true, verificationStatus: result };
+}
+async function adminRevokeReview(req, d) {
+  if (!ID_RE.test(d.partnerUid || '')) bad('Invalid partner.');
+  const note = str(d.note, 500, 'Reason', { required: true });
+  const ref = db().collection('financialPartners').doc(d.partnerUid);
+  await db().runTransaction(async (tx) => {
+    const s0 = await tx.get(ref);
+    const r = s0.exists ? s0.data().registration : null;
+    if (!regApproved(r)) throw new HttpsError('failed-precondition', 'There is no approved review to revoke.');
+    tx.update(ref, { 'registration.status': 'rejected', 'registration.reviewNote': note, 'registration.revokedAt': ts(), 'registration.revokedBy': req.auth.uid });
+    tx.set(db().collection('adminActions').doc(), { type: 'financial_partner_registration_review', partnerUid: d.partnerUid, verdict: 'revoked', badge: 'revoked', adminUid: req.auth.uid, at: ts() });
+  });
+  return { ok: true, status: 'rejected' };
+}
 async function adminReviewRegistration(req, d) {
   if (!ID_RE.test(d.partnerUid || '')) bad('Invalid partner.');
-  const verdict = oneOf(d.verdict, ['verified', 'rejected'], 'verdict');
-  const note = str(d.note, 500, 'Note', { required: verdict === 'rejected' });
+  const verdict0 = oneOf(d.verdict, ['approved', 'verified', 'rejected', 'needs_information'], 'verdict');
+  const verdict = verdict0 === 'verified' ? 'approved' : verdict0;
+  const note = str(d.note, 500, 'Note', { required: verdict !== 'approved' });
   const ref = db().collection('financialPartners').doc(d.partnerUid);
   await db().runTransaction(async (tx) => {
     const s = await tx.get(ref);
@@ -592,7 +661,7 @@ async function adminReviewRegistration(req, d) {
     if (!r || r.status !== 'under_review') throw new HttpsError('failed-precondition', 'Nothing is waiting for review on this partner.');
     tx.update(ref, { 'registration.status': verdict, 'registration.reviewedAt': ts(), 'registration.reviewedBy': req.auth.uid, 'registration.reviewNote': note });
   });
-  await db().collection('adminActions').add({ type: 'financial_partner_registration_review', partnerUid: d.partnerUid, verdict, adminUid: req.auth.uid, at: ts() });
+  await db().collection('adminActions').add({ type: 'financial_partner_registration_review', partnerUid: d.partnerUid, verdict, badge: verdict === 'approved' ? 'granted' : 'not_granted', adminUid: req.auth.uid, at: ts() });
   logger.info('[financial-partner] registration reviewed', { partnerUid: d.partnerUid, verdict, adminUid: req.auth.uid });
   return { ok: true, status: verdict };
 }
@@ -639,9 +708,12 @@ async function handle(req) {
     return op === 'adminListPromotionRequests' ? adminListPromotionRequests(d) : adminDecidePromotion(req, d);
   }
   if (op === 'submitEnquiry') return submitEnquiry(req, d);
-  if (op === 'adminListRegistrations' || op === 'adminReviewRegistration') {
+  if (['adminListRegistrations', 'adminReviewRegistration', 'adminRecordLicenceCheck', 'adminRevokeReview'].includes(op)) {
     if (!isAdmin(req)) throw new HttpsError('permission-denied', 'Administrator access required.');
-    return op === 'adminListRegistrations' ? adminListRegistrations(d) : adminReviewRegistration(req, d);
+    if (op === 'adminListRegistrations') return adminListRegistrations(d);
+    if (op === 'adminRecordLicenceCheck') return adminRecordLicenceCheck(req, d);
+    if (op === 'adminRevokeReview') return adminRevokeReview(req, d);
+    return adminReviewRegistration(req, d);
   }
   const fn = PARTNER_OPS[op];
   if (!fn) bad('Unknown op.');
@@ -663,4 +735,4 @@ exports.financialPartnerDispatch = onCall(OPTS, async (req) => {
     throw new HttpsError('internal', 'Something went wrong. Please try again.');
   }
 });
-exports._test = { CATEGORIES, kePhone, memberId, handle };
+exports._test = { REVIEW_BADGE, licencePublic, trustMarkers, CATEGORIES, kePhone, memberId, handle };

@@ -114,12 +114,17 @@ const keys = (pre) => [...F.db._store.keys()].filter((k) => k.startsWith(pre));
   const reg = (await F.db.collection('financialPartners').doc('saccoA').get()).data().registration;
   ck('D1 wrong regulator for category refused; submission lands as under_review even if the client says verified', !d1.ok && d2.ok && reg.status === 'under_review' && reg.kraPin === 'P051234567Z', { d1, reg });
   const d3 = await call('saccoA', { op: 'publicProfile', partnerUid: 'saccoA' });
-  ck('D2 public profile before review shows self_declared, not verified', d3.ok && d3.v.registration.status === 'self_declared', d3.v && d3.v.registration);
-  const d4 = await call('saccoA', { op: 'adminReviewRegistration', partnerUid: 'saccoA', verdict: 'verified' });
+  ck('D2 public profile before review: self_declared, NO review badge', d3.ok && d3.v.registration.status === 'self_declared' && d3.v.registrationReviewed === false && d3.v.reviewBadge === null, d3.v && d3.v.registration);
+  const d2b = await call('saccoA', { op: 'submitRegistration', regulator: 'SASRA', registeredName: 'Sacco A Ltd', registrationNumber: 'SASRA/DT/123' });
+  ck('D2b cannot resubmit while under review', !d2b.ok && d2b.code === 'failed-precondition');
+  const d4 = await call('saccoA', { op: 'adminReviewRegistration', partnerUid: 'saccoA', verdict: 'approved' });
   const d5 = await call('admin1', { op: 'adminListRegistrations' }, { admin: true });
-  const d6 = await call('admin1', { op: 'adminReviewRegistration', partnerUid: 'saccoA', verdict: 'verified' }, { admin: true });
+  const d6 = await call('admin1', { op: 'adminReviewRegistration', partnerUid: 'saccoA', verdict: 'approved' }, { admin: true });
   const d7 = await call('anyone', { op: 'publicProfile', partnerUid: 'saccoA' });
-  ck('D3 partner cannot self-verify; admin lists the queue and reviews; the PUBLIC profile still says self_declared (a paperwork review is not a licence confirmation)', !d4.ok && d4.code === 'permission-denied' && d5.ok && d5.v.rows.length === 1 && d6.ok && (await F.db.collection('financialPartners').doc('saccoA').get()).data().registration.status === 'verified' && d7.ok && d7.v.registration.status === 'self_declared' && !('registrationNumber' in d7.v.registration) && keys('adminActions/').length === 1, { d4, d5, d6, d7: d7.v && d7.v.registration });
+  ck('D3 partner cannot self-approve; admin approves → public "Registration reviewed by SOKONI" with the not-a-licence tooltip; no registration number exposed; no licence claimed as verified',
+    !d4.ok && d4.code === 'permission-denied' && d5.ok && d5.v.rows.length === 1 && d6.ok && (await F.db.collection('financialPartners').doc('saccoA').get()).data().registration.status === 'approved'
+    && d7.ok && d7.v.registrationReviewed === true && d7.v.reviewBadge.label === 'Registration reviewed by SOKONI' && /not a government licence/.test(d7.v.reviewBadge.tooltip)
+    && d7.v.registration.status === 'reviewed' && !('registrationNumber' in d7.v.registration) && d7.v.licenceVerification === null && keys('adminActions/').length === 1, { d4, d5, d6, d7: d7.v });
   const d8 = await call('admin1', { op: 'adminReviewRegistration', partnerUid: 'saccoA', verdict: 'rejected', note: 'x' }, { admin: true });
   ck('D4 a second review of a decided registration is refused', !d8.ok && d8.code === 'failed-precondition', d8);
   const d9 = await call('anyone', { op: 'publicProfile', partnerUid: 'pend' });
@@ -171,6 +176,32 @@ const keys = (pre) => [...F.db._store.keys()].filter((k) => k.startsWith(pre));
   const p5 = await call('saccoA', { op: 'getWorkspace' });
   await F.db.collection('financialProviders').doc('saccoA').update({ listingStatus: 'approved' });
   ck('P7 a withdrawn listing closes the workspace (PARTNER_NOT_APPROVED, status reported)', !p5.ok && p5.det.code === 'PARTNER_NOT_APPROVED' && p5.det.listingStatus === 'withdrawn', p5);
+
+  /* T — trust markers: reviewed ≠ licensed; licence only from an independent register check; expiry; gating */
+  await F.db.collection('financialProviders').doc('insZ').set({ name: 'Z Insurance', institutionType: 'INSURER', listingStatus: 'approved', licenceClaimed: 'IRA licence 123' });
+  await call('insZ', { op: 'submitRegistration', regulator: 'Insurance Regulatory Authority (IRA)', registeredName: 'Z Insurance Ltd', registrationNumber: 'C123', licenceType: 'General insurer', licenceNumber: 'IRA/123', issuingAuthority: 'IRA', licenceExpiry: '2027-06-30' });
+  const t1 = await call(null, { op: 'publicProfile', partnerUid: 'insZ' });
+  ck('T1 self-declared licence claim + pending review → NO badge, NO licence verification', t1.ok && t1.v.registrationReviewed === false && t1.v.licenceVerification === null, t1.v && { r: t1.v.registrationReviewed, l: t1.v.licenceVerification });
+  const t2 = await call('insZ', { op: 'adminRecordLicenceCheck', partnerUid: 'insZ', verificationStatus: 'verified_against_register', licenceType: 'x', licenceNumber: 'IRA/123', issuingAuthority: 'IRA', verificationSource: 'https://ira.go.ke' });
+  const t3 = await call('adm9', { op: 'adminRecordLicenceCheck', partnerUid: 'insZ', verificationStatus: 'verified_against_register', licenceType: 'General insurer', licenceNumber: 'IRA/123', issuingAuthority: 'IRA', expiryDate: '2027-06-30', verificationSource: 'uploaded document' }, { admin: true });
+  const t4 = await call('adm9', { op: 'adminRecordLicenceCheck', partnerUid: 'insZ', verificationStatus: 'verified_against_register', licenceType: 'General insurer', licenceNumber: 'IRA/123', issuingAuthority: 'IRA', expiryDate: '2027-06-30', verificationSource: 'https://www.ira.go.ke/licensed-insurers (checked list, entry C123)' }, { admin: true });
+  const t5 = await call(null, { op: 'publicProfile', partnerUid: 'insZ' });
+  ck('T2 partner cannot record its own licence check; an "uploaded document" is not a source; an admin register check → verified_against_register with authority + source, independent of the review badge',
+    !t2.ok && t2.code === 'permission-denied' && !t3.ok && t4.ok && t5.v.licenceVerification.status === 'verified_against_register' && t5.v.licenceVerification.issuingAuthority === 'IRA' && /ira\.go\.ke/.test(t5.v.licenceVerification.source) && t5.v.registrationReviewed === false, { t2, t3, t5: t5.v && t5.v.licenceVerification });
+  await call('adm9', { op: 'adminRecordLicenceCheck', partnerUid: 'insZ', verificationStatus: 'verified_against_register', licenceType: 'General insurer', licenceNumber: 'IRA/123', issuingAuthority: 'IRA', expiryDate: '2025-12-31', verificationSource: 'https://www.ira.go.ke/licensed-insurers' }, { admin: true });
+  const t6 = await call(null, { op: 'publicProfile', partnerUid: 'insZ' });
+  ck('T3 a licence whose expiry date has passed renders EXPIRED, never verified', t6.v.licenceVerification.status === 'expired', t6.v.licenceVerification);
+  const t7 = await call(null, { op: 'publicDirectory', types: ['INSURER', 'SACCO'] });
+  const zRow = t7.v.rows.find((r) => r.partnerUid === 'insZ'), sRow = t7.v.rows.find((r) => r.partnerUid === 'saccoA');
+  ck('T4 directory rows carry markers from the workspace doc: saccoA reviewed badge; insZ expired licence, no badge', zRow && zRow.registrationReviewed === false && zRow.licenceVerification.status === 'expired' && sRow && sRow.registrationReviewed === true && sRow.reviewBadge.label === 'Registration reviewed by SOKONI', { zRow, sRow });
+  await F.db.collection('financialProviders').doc('saccoA').update({ listingStatus: 'withdrawn' });
+  const t8 = await call(null, { op: 'publicDirectory', types: ['SACCO'] });
+  const t9 = await call(null, { op: 'publicProfile', partnerUid: 'saccoA' });
+  await F.db.collection('financialProviders').doc('saccoA').update({ listingStatus: 'approved' });
+  ck('T5 withdrawn listing → its badge is not shown anywhere (absent from directory, profile not-found)', t8.ok && !t8.v.rows.some((r) => r.partnerUid === 'saccoA') && !t9.ok && t9.code === 'not-found');
+  const t10 = await call('adm9', { op: 'adminRevokeReview', partnerUid: 'saccoA', note: 'Registration documents found to be outdated' }, { admin: true });
+  const t11 = await call(null, { op: 'publicProfile', partnerUid: 'saccoA' });
+  ck('T6 admin revokes the review → badge gone; revocation audited', t10.ok && t11.v.registrationReviewed === false && keys('adminActions/').some((k) => F.db._store.get(k).data.badge === 'revoked'));
 
   /* R — Banking Hub directory + promotion (no money; admin decides; promotion ranks, never vouches) */
   await F.db.collection('financialProviders').doc('bankQ').set({ name: 'Q Bank', institutionType: 'BANK', listingStatus: 'approved', services: ['LOANS'], licenceVerified: false });
