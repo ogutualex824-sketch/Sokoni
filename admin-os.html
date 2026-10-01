@@ -411,6 +411,8 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
 <link rel="stylesheet" href="sokoni-admin-failures.css">
 <!-- Payout approvals view (shared with super-admin.html): adminListPendingSellerPayouts / adminApproveSellerPayout. -->
 <link rel="stylesheet" href="sokoni-admin-payout-approvals.css">
+<!-- SOKONI Foundation workspace (shared with super-admin.html): tabs, counts and forms on top of sk-pa-*. -->
+<link rel="stylesheet" href="sokoni-admin-foundation.css">
 </head>
 <body>
   <aside class="aos-sidebar" id="aosSidebar" aria-label="AdminOS sidebar">
@@ -453,6 +455,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       <button class="nav-item" type="button" data-section="failures" data-label="Failures" onclick="SokoniAOS.navigate('failures');_closeSidebar()"><span class="nav-icon">&#x1F6A8;</span><span class="nav-label">Failures</span></button>
       <button class="nav-item" type="button" data-section="payout-approvals" data-label="Payout approvals" onclick="SokoniAOS.navigate('payout-approvals');_closeSidebar()"><span class="nav-icon">&#x2705;</span><span class="nav-label">Payout approvals</span></button>
       <button class="nav-item" type="button" data-section="partner-registrations" data-label="Partner registrations" onclick="SokoniAOS.navigate('partner-registrations');_closeSidebar()"><span class="nav-icon">&#x1F3E6;</span><span class="nav-label">Partner registrations</span></button>
+      <button class="nav-item" type="button" data-section="foundation" data-label="SOKONI Foundation" onclick="SokoniAOS.navigate('foundation');_closeSidebar()"><span class="nav-icon">&#x1F49A;</span><span class="nav-label">SOKONI Foundation</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Intelligence</div>
@@ -767,6 +770,12 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
         <div id="partnerRegistrationsBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
+      <!-- SOKONI Foundation: ONE module (sokoni-admin-foundation.js) shared with super-admin.html.
+           Donations, the Send-support approval chain, stories, partner promotions, reconciliation. -->
+      <div class="aos-panel" id="panel-foundation" hidden>
+        <div id="foundationBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
       <!-- Hub Registry panel -->
       <div class="aos-panel" id="panel-hubs" hidden>
         <div class="panel-toolbar">
@@ -808,6 +817,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
   </main>
   <script src="sokoni-admin-payout-approvals.js"></script>
   <script src="sokoni-admin-partner-registrations.js"></script>
+  <script src="sokoni-admin-foundation.js"></script>
   <script src="sokoni-admin-failures.js"></script>
   <script src="sokoni-aos.js"></script>
   <script>

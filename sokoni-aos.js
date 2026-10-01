@@ -230,6 +230,7 @@ window.SokoniAOS = (() => {
       failures:      () => _loadFailures(),
       "payout-approvals": () => _loadPayoutApprovals(),
       "partner-registrations": () => _loadPartnerRegistrations(),
+      foundation:    () => _loadFoundation(),
     };
     loaders[s]?.();
   }
@@ -2442,6 +2443,19 @@ window.SokoniAOS = (() => {
       return;
     }
     window.SokoniAdminPartnerRegistrations.mount(body, { console: "aos", call: (name, data) => _call(name, data) });
+  }
+
+  /* SOKONI Foundation. ONE implementation (sokoni-admin-foundation.js) shared with super-admin.html.
+     The impact* / foundationContentDispatch / financialPartnerDispatch ops check the admin claim (and,
+     for authorization, superAdmin) server-side; results are shown only after the server answers ok. */
+  function _loadFoundation() {
+    const body = document.getElementById("foundationBody");
+    if (!body) return;
+    if (!window.SokoniAdminFoundation) {
+      body.innerHTML = _emptyMsg("The SOKONI Foundation module did not load. Reload the page to try again.");
+      return;
+    }
+    window.SokoniAdminFoundation.mount(body, { console: "aos", call: (name, data) => _call(name, data) });
   }
 
   async function _loadHubs() {

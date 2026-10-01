@@ -349,6 +349,8 @@
 <link rel="stylesheet" href="sokoni-admin-failures.css">
 <!-- Payout approvals view (shared with admin-os.html): adminListPendingSellerPayouts / adminApproveSellerPayout. -->
 <link rel="stylesheet" href="sokoni-admin-payout-approvals.css">
+<!-- SOKONI Foundation workspace (shared with admin-os.html): tabs, counts and forms on top of sk-pa-*. -->
+<link rel="stylesheet" href="sokoni-admin-foundation.css">
 </head>
 <body>
 
@@ -429,6 +431,9 @@
     </button>
     <button class="nav-item" data-section="partner-registrations" data-label="Partner registrations" type="button" onclick="SA.nav('partner-registrations');_closeSidebar()">
       <span class="nav-icon">&#x1F3E6;</span><span class="nav-label">Partner registrations</span>
+    </button>
+    <button class="nav-item" data-section="foundation" data-label="SOKONI Foundation" type="button" onclick="SA.nav('foundation');_closeSidebar()">
+      <span class="nav-icon">&#x1F49A;</span><span class="nav-label">SOKONI Foundation</span>
     </button>
   </div>
 
@@ -930,6 +935,10 @@
     <section class="sa-panel" id="panel-partner-registrations" hidden>
       <div id="saPartnerRegistrationsBody"><div class="sa-spinner"><div></div></div></div>
     </section>
+    <!-- ══ SOKONI Foundation ══ ONE module (sokoni-admin-foundation.js) shared with admin-os.html. -->
+    <section class="sa-panel" id="panel-foundation" hidden>
+      <div id="saFoundationBody"><div class="sa-spinner"><div></div></div></div>
+    </section>
 
     <!-- ══ SECTION 8: Secrets Checklist ══ -->
     <section class="sa-panel" id="panel-secrets" hidden>
@@ -1030,6 +1039,7 @@
 <script src="sokoni-admin-failures.js"></script>
 <script src="sokoni-admin-payout-approvals.js"></script>
 <script src="sokoni-admin-partner-registrations.js"></script>
+<script src="sokoni-admin-foundation.js"></script>
 
 <!-- Confirm Modal (for role/suspend actions) -->
 <div class="sa-modal" id="saModal">
@@ -1212,6 +1222,7 @@ const SA={
     else if(section==='failures')this.loadFailures();
     else if(section==='payout-approvals')this.loadPayoutApprovals();
     else if(section==='partner-registrations')this.loadPartnerRegistrations();
+    else if(section==='foundation')this.loadFoundation();
   },
 
   // Failures ── the shared module, mounted into this console's panel ──
@@ -1247,6 +1258,17 @@ const SA={
     }
     const fns=this._fns||firebase.functions();
     window.SokoniAdminPartnerRegistrations.mount(body,{console:'sa',call:(name,data)=>fns.httpsCallable(name)(data||{}).then(r=>r&&r.data)});
+  },
+  // SOKONI Foundation ── the shared module; Authorize is superAdmin-only, enforced by the server ──
+  loadFoundation(){
+    const body=document.getElementById('saFoundationBody');
+    if(!body)return;
+    if(!window.SokoniAdminFoundation){
+      body.innerHTML='<p style="color:var(--muted);font-size:13px">The SOKONI Foundation module did not load. Reload the page to try again.</p>';
+      return;
+    }
+    const fns=this._fns||firebase.functions();
+    window.SokoniAdminFoundation.mount(body,{console:'sa',call:(name,data)=>fns.httpsCallable(name)(data||{}).then(r=>r&&r.data)});
   },
 
   // Sign Out ────────────────────────────────────────────────
