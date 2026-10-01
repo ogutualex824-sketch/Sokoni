@@ -63,8 +63,6 @@
 
   function renderWorkspace (ctx) {
     var p = (ctx && ctx.profile) || {};
-    var dest = ctx && ctx.payoutDestination;
-    var masked = dest && dest.status === 'set' ? maskTail(dest.masked || dest.value) : null;
     return '<div class="sks-wrap" data-sks-state="workspace">' +
       '<header class="sks-head"><div><h1 class="sks-h1">SOKONI Store</h1>' +
       '<p class="sks-muted">Operated workspace · ' + esc(ctx.businessName || 'SOKONI Store') + '</p></div></header>' +
@@ -83,12 +81,7 @@
 
       '<section class="sks-card" aria-labelledby="sks-wal-h"><h2 class="sks-h2" id="sks-wal-h">Store wallet</h2>' +
       '<div id="sks-wallet"><p class="sks-muted">Loading…</p></div>' +
-      '<div class="sks-payout"><div><strong>Payout number</strong><div class="sks-muted" id="sks-payout-val">' +
-      (masked ? esc(masked) : 'Not set') + '</div></div>' +
-      '<button type="button" class="sks-btn" id="sks-payout-btn" ' + (dest && dest.status === 'available' ? '' : 'disabled aria-disabled="true"') + '>Set payout number</button></div>' +
-      (dest && dest.status === 'unavailable'
-        ? '<p class="sks-note">The PIN-protected payout flow is not yet available for the store wallet. The payout number cannot be set here until it is.</p>'
-        : '') +
+      renderPayoutPanel(ctx) +
       '</section>' +
 
       '<section class="sks-card" aria-labelledby="sks-ord-h"><h2 class="sks-h2" id="sks-ord-h">Orders</h2><div id="sks-orders"><p class="sks-muted">Loading…</p></div></section>' +
@@ -96,15 +89,46 @@
       '</div>';
   }
 
+  /** The server sends last3 only. Anything else renders "Not set". */
+  function destText (dest) {
+    return (dest && dest.status === 'set' && /^\d{3}$/.test(String(dest.last3 || ''))) ? '••• ' + dest.last3 : null;
+  }
+
+  function renderPayoutPanel (ctx) {
+    var on = !!(ctx && ctx.payoutsEnabled === true);
+    var dest = ctx && ctx.payoutDestination;
+    var masked = destText(dest);
+    var dis = on ? '' : ' disabled aria-disabled="true"';
+    return '<div class="sks-payout"><div><strong>Payout number</strong><div class="sks-muted" id="sks-payout-val">' +
+      (masked ? esc(masked) : 'Not set') + '</div></div>' +
+      '<div class="sks-row"><button type="button" class="sks-btn" id="sks-dest-btn"' + dis + '>Set payout number</button>' +
+      '<button type="button" class="sks-btn sks-primary" id="sks-wd-btn"' + (on && masked ? '' : ' disabled aria-disabled="true"') + '>Withdraw</button></div></div>' +
+      (on ? '' : '<p class="sks-note" id="sks-payout-held">Store withdrawals are awaiting owner approval.</p>') +
+      /* Set-destination form: the number must be the operator's own verified phone (server-checked). */
+      '<form id="sks-dest-form" class="sks-form sks-sub" hidden novalidate>' +
+      '<label class="sks-field"><span>Payout number <small class="sks-muted">(your verified phone)</small></span>' +
+      '<input name="msisdn" type="tel" inputmode="tel" maxlength="16" placeholder="0705 726 803" autocomplete="off"></label>' +
+      '<label class="sks-field"><span>Wallet PIN</span><input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label>' +
+      '<div class="sks-row"><button type="submit" class="sks-btn sks-primary">Save payout number</button>' +
+      '<span class="sks-status" id="sks-dest-status" role="status" aria-live="polite"></span></div></form>' +
+      /* Withdraw form: amount + PIN only — the destination is the stored one, never typed here. */
+      '<form id="sks-wd-form" class="sks-form sks-sub" hidden novalidate>' +
+      '<label class="sks-field"><span>Amount (KES)</span><input name="amount" type="number" inputmode="numeric" min="100" step="1" autocomplete="off"></label>' +
+      '<label class="sks-field"><span>Wallet PIN</span><input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label>' +
+      '<p class="sks-note">Paid to ' + esc(masked || 'the store payout number') + ' after an admin approves.</p>' +
+      '<div class="sks-row"><button type="submit" class="sks-btn sks-primary">Request withdrawal</button>' +
+      '<span class="sks-status" id="sks-wd-status" role="status" aria-live="polite"></span></div></form>';
+  }
+
   function renderWallet (w) {
     var s = (w && w.storeWallet) || {};
     if (!s.exists) {
-      return '<p class="sks-muted">The store wallet has not been created yet.</p>' +
+      return '<p class="sks-muted" data-sks-wallet="none">No store sale has settled yet.</p>' +
         '<dl class="sks-kv"><dt>Balance</dt><dd>—</dd></dl>';
     }
     return '<dl class="sks-kv"><dt>Balance</dt><dd>' + money(s.balance) + '</dd>' +
-      '<dt>Pending payout</dt><dd>' + money(s.pendingPayout) + '</dd>' +
-      '<dt>Wallet PIN</dt><dd>' + (s.pinSet === true ? 'Set' : s.pinSet === false ? 'Not set' : '—') + '</dd></dl>';
+      '<dt>Pending payout</dt><dd>' + money(s.pendingPayout) + '</dd></dl>' +
+      (s.frozen === true ? '<p class="sks-note">The store wallet is frozen.</p>' : '');
   }
 
   function renderOrders (r) {
@@ -188,6 +212,69 @@
     });
   }
 
+  function newRequestId () {
+    try { if (window.crypto && window.crypto.randomUUID) return 'sks-' + window.crypto.randomUUID(); } catch (_) {}
+    return 'sks-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+  }
+  function reasonText (e) {
+    var r = e && e.details && e.details.reason;
+    var map = {
+      'store-payouts-not-enabled': 'Store withdrawals are awaiting owner approval.',
+      'pin-not-set': 'Set your wallet PIN first.',
+      'pin-required': 'Enter your 4-digit wallet PIN.',
+      'destination-not-operator-verified-phone': 'The payout number must be your own verified phone number.',
+      'operator-phone-not-verified': 'Verify a phone number on your account first.',
+      'payout-destination-not-set': 'Set the store payout number first.',
+      'no-store-sale-settled-yet': 'No store sale has settled yet.',
+      'insufficient-store-balance': 'Insufficient store balance for this payout.',
+      'invalid-amount': 'Minimum payout amount is KSh 100.',
+      'daily-payout-limit': 'Daily payout limit reached. Try again tomorrow.',
+      'store-wallet-frozen': 'The store wallet is frozen.',
+      'not-store-operator': DENIED_TEXT,
+    };
+    return map[r] || (e && e.message) || 'Not completed.';
+  }
+
+  function wirePayout (root, ctx) {
+    var on = !!(ctx && ctx.payoutsEnabled === true);
+    var destBtn = root.querySelector('#sks-dest-btn'), wdBtn = root.querySelector('#sks-wd-btn');
+    var destForm = root.querySelector('#sks-dest-form'), wdForm = root.querySelector('#sks-wd-form');
+    if (!on || !destForm || !wdForm) return;   /* held: nothing is wired, buttons stay disabled */
+    var wdRequestId = null;
+    if (destBtn) destBtn.addEventListener('click', function () { destForm.hidden = !destForm.hidden; wdForm.hidden = true; });
+    if (wdBtn) wdBtn.addEventListener('click', function () { wdForm.hidden = !wdForm.hidden; destForm.hidden = true; wdRequestId = newRequestId(); });
+    destForm.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var st = root.querySelector('#sks-dest-status'), b = destForm.querySelector('button[type=submit]');
+      b.disabled = true; st.textContent = 'Saving…'; st.className = 'sks-status';
+      deps.callable('sokoniStoreSetPayoutDestination')({ msisdn: destForm.elements.msisdn.value, pin: destForm.elements.pin.value })
+        .then(function (r) {
+          if (r && r.ok && r.payoutDestination) {
+            st.textContent = 'Saved.'; st.className = 'sks-status sks-ok';
+            var v = root.querySelector('#sks-payout-val'); if (v) v.textContent = destText(r.payoutDestination) || 'Not set';
+            if (wdBtn && destText(r.payoutDestination)) { wdBtn.disabled = false; wdBtn.removeAttribute('aria-disabled'); }
+          } else { st.textContent = 'Not saved.'; st.className = 'sks-status sks-err'; }
+        }, function (e) { st.textContent = reasonText(e); st.className = 'sks-status sks-err'; })
+        .then(function () { destForm.elements.pin.value = ''; b.disabled = false; });
+    });
+    wdForm.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var st = root.querySelector('#sks-wd-status'), b = wdForm.querySelector('button[type=submit]');
+      if (!wdRequestId) wdRequestId = newRequestId();
+      b.disabled = true; st.textContent = 'Submitting…'; st.className = 'sks-status';
+      /* Same requestId on a retry of THIS submission → the server de-duplicates. */
+      deps.callable('sokoniStorePayoutRequest')({ amount: Number(wdForm.elements.amount.value), pin: wdForm.elements.pin.value, requestId: wdRequestId })
+        .then(function (r) {
+          if (r && r.ok) {
+            st.textContent = r.deduplicated ? 'Already submitted.' : 'Submitted — awaiting admin approval.'; st.className = 'sks-status sks-ok';
+            wdRequestId = null;
+            deps.callable('sokoniStoreGetWallet')({}).then(function (w) { var el = root.querySelector('#sks-wallet'); if (el) el.innerHTML = renderWallet(w); }, function () {});
+          } else { st.textContent = 'Not submitted.'; st.className = 'sks-status sks-err'; }
+        }, function (e) { st.textContent = reasonText(e); st.className = 'sks-status sks-err'; })
+        .then(function () { wdForm.elements.pin.value = ''; b.disabled = false; });
+    });
+  }
+
   /* Seam: the static suite swaps these for fakes; production never touches them. */
   var deps = { whenFirebase: whenFirebase, currentUser: currentUser, callable: callable };
 
@@ -200,6 +287,7 @@
         if (!ctx || ctx.ok !== true || ctx.operator !== true) { root.innerHTML = renderDenied('denied'); return; }
         root.innerHTML = renderWorkspace(ctx);
         wireProfile(root);
+        wirePayout(root, ctx);
         /* Only an operator reaches these calls. */
         var put = function (id, html) { var el = root.querySelector('#' + id); if (el) el.innerHTML = html; };
         deps.callable('sokoniStoreGetWallet')({}).then(function (w) { put('sks-wallet', renderWallet(w)); })
@@ -218,7 +306,7 @@
     DENIED_TEXT: DENIED_TEXT,
     mount: mount,
     _deps: deps,
-    _render: { denied: renderDenied, workspace: renderWorkspace, wallet: renderWallet, orders: renderOrders, products: renderProducts, loading: renderLoading, maskTail: maskTail },
+    _render: { payout: renderPayoutPanel, destText: destText, denied: renderDenied, workspace: renderWorkspace, wallet: renderWallet, orders: renderOrders, products: renderProducts, loading: renderLoading, maskTail: maskTail },
   };
 
   if (window.__SOKONI_STORE_MODE === true && typeof document !== 'undefined') {
