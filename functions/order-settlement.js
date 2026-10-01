@@ -22,6 +22,32 @@ const admin = require('firebase-admin');
 const SE = require('./settlement-engine');
 
 const STATES = { UNSETTLED: 'UNSETTLED', HELD: 'HELD', ELIGIBLE: 'ELIGIBLE_FOR_SETTLEMENT', SETTLING: 'SETTLING', SETTLED: 'SETTLED', REFUNDED: 'REFUNDED', REVERSED: 'REVERSED' };
+
+/* ── ONE settlement state vocabulary ──────────────────────────────────────────
+   STATES above is the canonical contract. It is not the only spelling in the
+   database: _finalizeMarketplacePayment in index.js writes whatever its caller
+   passes, and the IntaSend webhook passes the LOWERCASE "settled" to mean "FinOS
+   already credited the wallet, do not settle again". Seven production orders carry
+   that value today.
+
+   Every guard here compared with ===, so a lowercase "settled" order was invisible
+   to all of them. The consequences are not uniform:
+
+     settleOrder              would settle an already-credited order      DOUBLE CREDIT
+     markRefundedIfUnsettled  would mark a settled order REFUNDED while the seller
+                              keeps the credit
+     reverseSettledOrder      would refuse to reverse it ('not-settled')
+     handleOrderRefund        would not route a refund to the reversal path
+     autoConfirmDeliveredOrders  would re-process it
+
+   Compare canonically instead. This does NOT rename anything and does not change
+   what any writer stores — settlement-dashboard.html reads the lowercase value, so
+   re-casing the writer is a separate, wider slice. It makes the READER tolerant of
+   both spellings, which is the half that governs money. */
+function _isState(value, state) {
+  return String(value == null ? '' : value).trim().toUpperCase()
+       === String(state == null ? '' : state).trim().toUpperCase();
+}
 const DEFAULT_AUTOCONFIRM_DAYS = 3;
 
 /* Auto-confirm window is CONFIG, not a constant (D2): _systemConfig/settlement.autoConfirmDays. */
@@ -96,10 +122,30 @@ async function settleOrder(db, adminSdk, orderId) {
   const res = await db.runTransaction(async (t) => {
     const s = await t.get(orderRef);
     if (!s.exists) return { outcome: 'no-order' };
+
+    /* ── THE EXACTLY-ONCE BOUNDARY FOR THE WALLET CREDIT ──────────────────────
+       Read the settlement RECORD, not the order's state string.
+
+       Deterministic ids already make settlements, walletTransactions and ledger
+       replay-safe: a repeated .set() on the same id overwrites. The wallet balance
+       is the exception — FieldValue.increment ADDS, so it is the one write a second
+       pass can double, and until now nothing but a string comparison stood in front
+       of it.
+
+       This makes the guard a fact. settlements/{orderId} exists if and only if this
+       order has been settled, it is written inside this same transaction, and
+       Firestore's transactional read makes a concurrent second attempt conflict and
+       retry — at which point it sees the record. The state string is now a
+       corroborating check rather than the sole defence, which matters because the
+       string has more than one spelling in the database and always will after a
+       writer somewhere disagrees again. */
+    const settledAlready = await t.get(settleRef);
+    if (settledAlready.exists) return { outcome: 'already-settled' };
+
     const o = s.data();
     const st = o.settlementStatus;
-    if (st === STATES.SETTLED)  return { outcome: 'already-settled' };   /* replay no-op */
-    if (st === STATES.REFUNDED) return { outcome: 'refunded-skip' };     /* refunded before settlement */
+    if (_isState(st, STATES.SETTLED))  return { outcome: 'already-settled' };   /* replay no-op */
+    if (_isState(st, STATES.REFUNDED)) return { outcome: 'refunded-skip' };     /* refunded before settlement */
     /* Only a held/eligible, non-cancelled/refunded order settles. */
     if (['cancelled', 'refunded'].includes(o.status)) return { outcome: 'terminal-skip' };
     if (!sellerId) { t.update(orderRef, { settlementStatus: STATES.SETTLED, settlementNote: 'no-seller', settledAt: FV.serverTimestamp() }); return { outcome: 'no-seller' }; }
@@ -179,7 +225,7 @@ async function markRefundedIfUnsettled(db, adminSdk, orderId) {
   return db.runTransaction(async (t) => {
     const s = await t.get(ref);
     if (!s.exists) return { outcome: 'no-order' };
-    if (s.data().settlementStatus === STATES.SETTLED) return { outcome: 'already-settled' };   /* needs reversal, not this */
+    if (_isState(s.data().settlementStatus, STATES.SETTLED)) return { outcome: 'already-settled' };   /* needs reversal, not this */
     t.update(ref, { settlementStatus: STATES.REFUNDED, updatedAt: FV.serverTimestamp() });
     return { outcome: 'marked-refunded' };
   });
@@ -204,8 +250,8 @@ async function reverseSettledOrder(db, adminSdk, orderId, opts = {}) {
     const oSnap = await t.get(orderRef);
     if (!oSnap.exists) return { outcome: 'no-order' };
     const o = oSnap.data();
-    if (o.settlementStatus === STATES.REVERSED) return { outcome: 'already-reversed' };   /* replay no-op */
-    if (o.settlementStatus !== STATES.SETTLED) return { outcome: 'not-settled' };          /* caller uses markRefundedIfUnsettled */
+    if (_isState(o.settlementStatus, STATES.REVERSED)) return { outcome: 'already-reversed' };   /* replay no-op */
+    if (!_isState(o.settlementStatus, STATES.SETTLED)) return { outcome: 'not-settled' };          /* caller uses markRefundedIfUnsettled */
 
     const sSnap = await t.get(settleRef);
     const s = sSnap.exists ? sSnap.data() : {};
@@ -267,7 +313,7 @@ async function reverseSettledOrder(db, adminSdk, orderId, opts = {}) {
 async function handleOrderRefund(db, adminSdk, orderId, opts = {}) {
   const snap = await db.collection('orders').doc(orderId).get().catch(() => null);
   if (!snap || !snap.exists) return { outcome: 'no-order' };
-  if (snap.data().settlementStatus === STATES.SETTLED) return reverseSettledOrder(db, adminSdk, orderId, opts);
+  if (_isState(snap.data().settlementStatus, STATES.SETTLED)) return reverseSettledOrder(db, adminSdk, orderId, opts);
   return markRefundedIfUnsettled(db, adminSdk, orderId);
 }
 
@@ -284,7 +330,7 @@ async function autoConfirmDeliveredOrders(db, adminSdk) {
   let confirmed = 0;
   for (const doc of snap.docs) {
     const o = doc.data();
-    if (o.settlementStatus === STATES.SETTLED || o.settlementStatus === STATES.REFUNDED) continue;
+    if (_isState(o.settlementStatus, STATES.SETTLED) || _isState(o.settlementStatus, STATES.REFUNDED)) continue;
     if (o.disputeOpen === true || o.hasDispute === true) continue;   /* dispute pauses auto-confirm */
     const deliveredMs = o.deliveredAt && o.deliveredAt.toMillis ? o.deliveredAt.toMillis()
       : (typeof o.deliveredAt === 'number' ? o.deliveredAt : 0);

@@ -154,21 +154,11 @@ async function _queueException(item) {
   }
 }
 
-/* The business ANCHOR, so these records can join the unified timeline. Additive:
-   a call site with no anchor in scope passes none and the row records itself
-   unanchored, exactly as before. The anchor is read by the ONE shared resolver,
-   which returns null rather than guessing — a notification filed under the WRONG
-   business relationship is worse than one left unjoinable. */
-const _ENV = require('./shared/communication-envelope');
 async function _notify(uid, title, body, data = {}) {
   try {
-    const a = _ENV.anchorFrom(data || {});
     await _db().collection('notifications').add({
       userId: uid, title, body, data,
       read: false, type: 'automation', priority: 'normal',
-      anchorType: a ? a.anchorType : null,
-      anchorId: a ? a.anchorId : null,
-      anchored: !!a,
       createdAt: _ts(),
     });
   } catch (_) { /* notification failures must not block automation */ }

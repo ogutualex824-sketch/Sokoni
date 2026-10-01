@@ -50,21 +50,9 @@ async function _audit(action, actorUid, data) {
 }
 
 /* ── Notification ── */
-/* The business ANCHOR, so these records can join the unified timeline. Additive:
-   a call site with no anchor in scope passes none and the row records itself
-   unanchored, exactly as before. The anchor is read by the ONE shared resolver,
-   which returns null rather than guessing — a notification filed under the WRONG
-   business relationship is worse than one left unjoinable. */
-const _ENV = require('./shared/communication-envelope');
 async function _notify(uid, type, payload) {
   try {
-    const a = _ENV.anchorFrom(payload || {});
-    await db().collection('notifications').add({
-      uid, type, ...payload, read: false, createdAt: now(),
-      anchorType: a ? a.anchorType : null,
-      anchorId: a ? a.anchorId : null,
-      anchored: !!a,
-    });
+    await db().collection('notifications').add({ uid, type, ...payload, read: false, createdAt: now() });
   } catch (_) {}
 }
 
