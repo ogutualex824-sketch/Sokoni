@@ -52,6 +52,8 @@
     ['FINANCIAL_ADVISER', 'Financial adviser'], ['INSURER', 'Insurer'],
     ['MICROFINANCE', 'Microfinance'], ['INVESTMENT', 'Investment firm'],
     ['FOREX', 'Forex bureau'], ['CHAMA', 'Chama'], ['OTHER', 'Other'],
+    ['DIGITAL_LENDER', 'Digital lender'], ['PAYMENT_PROVIDER', 'Payment / M-Pesa business services'],
+    ['BUSINESS_FINANCE', 'Business loans / merchant finance'],
   ];
   var SERVICES = [
     ['BANK_ACCOUNTS', 'Bank accounts'], ['BUSINESS_BANKING', 'Business banking'],
@@ -59,6 +61,7 @@
     ['INSURANCE', 'Insurance'], ['INVESTMENTS', 'Investments'], ['FOREX', 'Forex'],
     ['PAYMENTS', 'Payments'], ['ACCOUNTING', 'Accounting'], ['TAX', 'Tax'],
     ['ADVISORY', 'Advisory'], ['CHAMA_SERVICES', 'Chama services'], ['MICROFINANCE', 'Microfinance'],
+    ['DIGITAL_LOANS', 'Digital loans'], ['MOBILE_MONEY', 'Mobile money'],
   ];
   var COUNTIES = [
     'Mombasa', 'Kwale', 'Kilifi', 'Tana River', 'Lamu', 'Taita Taveta', 'Garissa',
