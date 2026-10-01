@@ -664,6 +664,52 @@ window.SokoniAOS = (() => {
       body.innerHTML = `<table class="aos-table"><thead><tr><th>ID</th><th>Driver</th><th>Address</th><th>Status</th><th>Time</th></tr></thead>
         <tbody>${orders.join("") || _emptyRow(5,"No deliveries")}</tbody></table>`;
     } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
+    _loadPinSettlement();
+  }
+
+  /* ── Completion PIN & held settlements (owner 2026-10-01) ─────────────────────────────────────────────────────
+     The buyer's PIN is the ONE release of a seller's held net. AdminOS sees the evidence, never the secret:
+     PIN state / expiry / sends / attempts / lock / SMS result, and the settlement hold (reason + held net).
+     Reads `orders` only (admin-readable); no PIN, no hash, no sealed copy is ever read or rendered.
+     Three bounded single-field queries — held settlements, failed PIN delivery, locked verification. */
+  async function _loadPinSettlement() {
+    const body = document.getElementById("pinSettleBody");
+    if (!body) return;
+    body.innerHTML = _spinner();
+    const now = Date.now();
+    const q = (f, op, v) => _db.collection("orders").where(f, op, v).limit(50).get().then(s => s.docs).catch(() => null);
+    const [held, failed, locked] = await Promise.all([
+      q("settlementStatus", "==", "HELD"), q("deliveryPinDelivery", "==", "FAILED"), q("deliveryPinLockedUntil", ">", now),
+    ]);
+    if (held === null && failed === null && locked === null) { body.innerHTML = _emptyMsg("Couldn't load PIN / settlement evidence."); return; }
+    const byId = new Map();
+    [[held, "held"], [failed, "sms"], [locked, "locked"]].forEach(([docs, why]) => (docs || []).forEach(d => {
+      const e = byId.get(d.id) || { id: d.id, o: d.data(), why: [] }; e.why.push(why); byId.set(d.id, e);
+    }));
+    const NOTE = { payment_not_verified_by_sokoni: "Not paid via SOKONI", awaiting_delivery_proof: "Waiting for buyer PIN",
+      self_dealing_review: "Buyer = seller — review", escrow_invalid_review: "Escrow mismatch — review",
+      escrow_changed_review: "Escrow changed — review" };
+    const pinState = (o) => !o.deliveryPinHash ? "Not issued" : o.deliveryPinStatus === "USED" ? "Used"
+      : Number(o.deliveryPinLockedUntil || 0) > now ? "Locked" : (o.deliveryPinExpiresAt && Number(o.deliveryPinExpiresAt) <= now) ? "Expired"
+      : o.deliveryPinDelivery === "FAILED" ? "SMS failed" : o.deliveryPinDelivery === "SENT" ? "Delivered" : "Issued";
+    const rows = [...byId.values()].map(({ id, o, why }) => {
+      const held = o.escrow && Number(o.escrow.heldNetCents) > 0 && !o.escrow.released ? "KES " + _fmt(Math.floor(o.escrow.heldNetCents / 100)) : "—";
+      const exp = o.deliveryPinExpiresAt ? new Date(Number(o.deliveryPinExpiresAt)).toLocaleString("en-KE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+      return `<tr>
+        <td class="aos-mono">${_esc(id.slice(0, 10))}</td>
+        <td>•••••• <span class="aos-muted">${_esc(pinState(o))}</span></td>
+        <td class="aos-muted">${_esc(exp)}</td>
+        <td>${_fmt(Number(o.deliveryPinSends || 0))}/5 · ${_fmt(Number(o.deliveryVerifyAttempts || 0))}/5</td>
+        <td>${_esc(o.deliveryPinChannel || (o.deliveryPinDelivery === "FAILED" ? "FAILED" : "—"))}</td>
+        <td><span class="status-badge st-${_esc(String(o.settlementStatus || "").toLowerCase())}">${_esc(o.settlementStatus || "—")}</span>
+            <div class="aos-muted" style="font-size:.72rem">${_esc(NOTE[o.settlementNote] || o.settlementNote || "")}</div></td>
+        <td>${_esc(held)}</td>
+        <td class="aos-muted">${_esc(why.join(" · "))}</td>
+      </tr>`;
+    });
+    body.innerHTML = rows.length
+      ? `<table class="aos-table"><thead><tr><th>Order</th><th>PIN</th><th>Expires</th><th>Sends · Attempts</th><th>Channel</th><th>Settlement</th><th>Held net</th><th>Why listed</th></tr></thead><tbody>${rows.join("")}</tbody></table>`
+      : _emptyMsg("No held settlements, failed PIN deliveries or locked PINs.");
   }
 
   // ── Financial ─────────────────────────────────────────────────────────────────

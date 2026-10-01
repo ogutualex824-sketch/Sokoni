@@ -37,5 +37,15 @@ ck('S-1', !!pb && /data-send-pin=/.test(pb) && !/deliveryPinHash|\.pin\b|sealed/
 ck('S-2', /pinIssued: !!d\.deliveryPinHash/.test(mvc) && !/pinHash:\s*d\.deliveryPinHash/.test(mvc), 'the order row carries only a boolean that a PIN exists (the hash value is never copied)');
 ck('S-3', /_callable\('sendDeliveryPin'\)\(\{ orderId: sp\.dataset\.sendPin \}\)/.test(mvc), 'the button asks the SERVER (sendDeliveryPin) — the PIN goes to the buyer\'s phone only');
 ck('S-4', /if \(!o\.isDelivery \|\| !o\.paidVerified/.test(pb), 'offered only for a PAID DELIVERY order');
+/* AdminOS */
+const aos = read('sokoni-aos.js');
+const ap = (code(aos).match(/async function _loadPinSettlement\(\) \{[\s\S]*?\n  \}\n/) || [''])[0];
+ck('A-1', !!ap && /q\("settlementStatus", "==", "HELD"\)/.test(ap) && /q\("deliveryPinDelivery", "==", "FAILED"\)/.test(ap) && /q\("deliveryPinLockedUntil", ">", now\)/.test(ap),
+  'AdminOS lists held settlements, failed PIN deliveries and locked PINs (bounded single-field order queries)');
+ck('A-2', !!ap && !/deliveryPins|sealed|deliveryPinHash\}|\$\{[^}]*deliveryPinHash/.test(ap) && /••••••/.test(ap),
+  'AdminOS never reads the PIN store nor renders a PIN or its hash — masked ••••••');
+ck('A-3', !!ap && /heldNetCents/.test(ap) && /settlementNote/.test(ap) && /deliveryVerifyAttempts/.test(ap) && /deliveryPinSends/.test(ap),
+  'the row shows the evidence: held net, hold reason, sends and attempts, channel, expiry');
+ck('A-4', /id="pinSettleBody"/.test(read('admin-os.html')) && /_loadPinSettlement\(\);/.test(code(aos)), 'the section is mounted in the Delivery panel and loads with it');
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
