@@ -463,6 +463,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
     <div class="nav-group">
       <div class="nav-group-label">Platform</div>
       <button class="nav-item" data-section="smartpos" data-label="SmartPOS" onclick="SokoniAOS.navigate('smartpos');_closeSidebar()"><span class="nav-icon">&#x1F5A8;&#xFE0F;</span><span class="nav-label">SmartPOS</span></button>
+      <button class="nav-item" data-section="moderation" data-label="Moderation" onclick="SokoniAOS.navigate('moderation');_closeSidebar()"><span class="nav-icon">&#x1F6A9;</span><span class="nav-label">Moderation</span></button>
       <button class="nav-item" data-section="fraud" data-label="Fraud &amp; Trust" onclick="SokoniAOS.navigate('fraud');_closeSidebar()"><span class="nav-icon">&#x1F6E1;&#xFE0F;</span><span class="nav-label">Fraud &amp; Trust</span></button>
       <button class="nav-item" data-section="config" data-label="Config &amp; Settings" onclick="SokoniAOS.navigate('config');_closeSidebar()"><span class="nav-icon">&#x2699;&#xFE0F;</span><span class="nav-label">Config &amp; Settings</span></button>
       <button class="nav-item" data-section="hubs" data-label="Hub Registry" onclick="SokoniAOS.navigate('hubs');_closeSidebar()"><span class="nav-icon">&#x1F3D7;&#xFE0F;</span><span class="nav-label">Hubs</span></button>
@@ -690,6 +691,16 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
           <button class="tab-btn" data-tab="shifts" onclick="SokoniAOS.posTab('shifts')">Shifts</button>
         </div>
         <div id="posBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <!-- community C3 (2026-10-01): THE moderation queue — reports on listings (and the other supported targets),
+           decided on the ONE report authority (tsGetReports / tsGetReportCase / tsReviewReport). The same module
+           super-admin.html › Moderation mounts (sokoni-trust-queues.js). It REPLACES the Fraud & Trust "Reports Queue"
+           modal (that button now opens this section) — one console, not two. Deep link: admin-os.html#moderation -->
+      <div class="aos-panel" id="panel-moderation" hidden>
+        <div class="panel-toolbar"><h2>Moderation</h2></div>
+        <p class="aos-muted" style="margin:0 0 12px;font-size:13px">Reports filed by buyers. Take a report under review, inspect the listing and its other reports, then decide. Reports are private: the seller sees the outcome, never who reported.</p>
+        <div id="moderationBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
       <div class="aos-panel" id="panel-fraud" hidden>

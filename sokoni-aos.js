@@ -241,6 +241,7 @@ window.SokoniAOS = (() => {
       ai:            () => _loadAI(),
       search:        () => _loadSearch(),
       smartpos:      () => _loadSmartPOS(),
+      moderation:    () => _loadModeration(),
       fraud:         () => _loadFraud(),
       analytics:     () => _loadAnalytics(),
       config:        () => _loadConfig(),
@@ -1624,18 +1625,19 @@ window.SokoniAOS = (() => {
         _call("adminGetFraudAlerts").catch(() => ({ alerts: [] })),
       ]);
       const d = dash.stats || dash;
+      const _n = (v) => (typeof v === "number" && isFinite(v) ? _fmt(v) : "—");   /* unknown is "—", never 0 */
       const a = alerts.alerts || [];
       body.innerHTML = `
         <div class="fraud-stats">
-          <div class="stat-card warn"><span>Pending Reports</span><strong>${_fmt(d.pendingReports||0)}</strong></div>
-          <div class="stat-card danger"><span>Critical</span><strong>${_fmt(d.criticalPending||0)}</strong></div>
-          <div class="stat-card"><span>Banned Users</span><strong>${_fmt(d.bannedUsers||0)}</strong></div>
-          <div class="stat-card warn"><span>High Risk Entities</span><strong>${_fmt(d.highRiskCount||0)}</strong></div>
-          <div class="stat-card"><span>Resolved Today</span><strong>${_fmt(d.resolvedToday||0)}</strong></div>
-          <div class="stat-card success"><span>False Positives</span><strong>${_fmt(d.falsePositives||0)}</strong></div>
+          <div class="stat-card warn"><span>Pending Reports</span><strong>${_n(d.pendingReports)}</strong></div>
+          <div class="stat-card danger"><span>Critical</span><strong>${_n(d.criticalPending)}</strong></div>
+          <div class="stat-card"><span>Banned Users</span><strong>${_n(d.bannedUsers)}</strong></div>
+          <div class="stat-card warn"><span>High Risk Entities</span><strong>${_n(d.highRiskCount)}</strong></div>
+          <div class="stat-card"><span>Resolved Today</span><strong>${_n(d.resolvedToday)}</strong></div>
+          <div class="stat-card success"><span>False Positives</span><strong>${_n(d.falsePositives)}</strong></div>
         </div>
         <div style="display:flex;gap:8px;margin:16px 0;flex-wrap:wrap">
-          <button class="aos-btn" onclick="SokoniAOS.viewReports()">&#x1F4CB; Reports Queue</button>
+          <button class="aos-btn" onclick="SokoniAOS.viewReports()">&#x1F6A9; Moderation queue</button>
           <button class="aos-btn" onclick="SokoniAOS.viewBanned()">&#x1F6AB; Banned Users</button>
           <button class="aos-btn" onclick="SokoniAOS.viewRiskScores()">&#x26A0;&#xFE0F; Risk Scores</button>
           <a class="aos-btn" href="trust-safety.html" target="_blank">&#x1F512; Full Trust Center</a>
@@ -1691,20 +1693,27 @@ window.SokoniAOS = (() => {
      Defects closed: the old table rendered r.targetId (reports carry entityId — every row read "—"), its Action button
      sent action:'action' (the server accepts approve|dismiss|escalate|… — it ALWAYS failed), and a failed read was
      swallowed into "No pending reports" (unknown shown as zero). */
+  /* community C3 (2026-10-01): the queue is now the dedicated Moderation SECTION (#moderation), not a modal — the
+     Fraud & Trust "Reports Queue" button opens that section, so there is ONE moderation console. */
   async function viewReports() {
-    _modal("Reports Queue", '<div id="aosTrustReports"></div>');
-    const box = document.querySelector("#aosModal .modal-box"); if (box) box.style.maxWidth = "980px";
-    _mountTrustQueue(document.getElementById("aosTrustReports"));
+    _navigate("moderation");
+  }
+
+  function _loadModeration() {
+    _mountTrustQueue(document.getElementById("moderationBody"));
   }
 
   function _mountTrustQueue(host) {
     if (!host) return;
     if (!window.SokoniTrustQueues) {
-      host.innerHTML = _emptyMsg("The report queue did not load — check that sokoni-trust-queues.js is served on this page.");
+      host.innerHTML = _emptyMsg("The moderation queue did not load — check that sokoni-trust-queues.js is served on this page.");
       return;
     }
+    /* shared-module contract: one module, mount(host, { console, call }) — the console name only labels the view;
+       authorisation is the server's on every call */
     window.SokoniTrustQueues.mount(host, {
-      callable: (name) => (payload) => _fn.httpsCallable(name)(payload).then((r) => r.data),
+      console: "adminos",
+      call: (name, payload) => _fn.httpsCallable(name)(payload).then((r) => r.data),
       onToast: (m, k) => _toast(m, k === "success" ? "success" : "info") });
   }
 
