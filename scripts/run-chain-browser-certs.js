@@ -20,6 +20,7 @@ const SUITES = [
   ['test-compact-premium-cards', []],
   ['test-cart-browser-certification', []],
   ['test-home-picked-for-you', []],
+  ['test-home-hub-card-buttons', []],
   ['test-admin-layouts', []],
   ['test-adminos-sidebar-a11y', []],
   ['test-adminos-nav-coverage', []],
