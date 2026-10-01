@@ -17,6 +17,20 @@
 **Functions / rules / DB:** none — the server rail is already live. **Money:** a sale is finalised only when posCheckPaymentStatus reports the IntaSend webhook's confirmation; the shop is resolved server-side (assertShopAccess). Same fix as `7ffd640` / `3134e3f` (unpushed branch not based on live) — ported narrowly onto live `72dca56`.
 
 
+## [2026-10-01] — Functions predeploy gates now actually run (Windows hook form); finding: earlier functions deploys were ungated
+
+**Files:** `firebase.json` (functions.predeploy only), new `scripts/test-functions-hooks-execute.js`. **Functions / rules / data:** none.
+- On this machine firebase-tools runs each hook through `cross-env-shell` with `shell: true`; the quoted `node "$RESOURCE_DIR/../scripts/X.js"` form is mangled into a spawn of `scripts\X.js"` and the script never runs. A faithful replica of `runCommand` proves it (quoted: not executed; relative: executed).
+- **Consequence, stated plainly:** the K13-A and K13-B deploys tonight logged "Finished running predeploy script" with zero hook output — the safety guard, syntax gate, commission, delivery and payout gates did NOT execute for them. Their code was verified independently (served source byte-identical to the reviewed commits; 11/0, 8/0; live-archive lineage identical). Earlier functions deploys from trees with the quoted form are likely in the same state.
+- Fix: the five functions hooks use the relative form hosting already uses (cf. 3fb27cb). The safety guard passes on this tree when run directly. Suite 9/0 (asserts relative form, scripts exist, and the launcher replica executes it).
+
+## [2026-10-01] — DEPLOYED Firestore rules hotfix f259c0b5: forged verification badge and signed-out job posts closed
+
+**Target:** Firestore rules, default database only (`releases/cloud.firestore` → `f259c0b5-0a9e-49c5-8578-a628a40d946c`, 00:27:37Z). **Rollback:** `b87c94e4`. Evidence: `docs/release-gates/rules-hotfix-f259c0b5.md`.
+- `verifications` and `verificationRequests`: no browser writes at all — `verificationSubmit` / `verificationDecide` / `verificationRevoke` (server) are the only writers. Live had let an owner create their own verification with an "approved" facet, which the public profile showed as a verified badge (0 such documents existed).
+- `/jobs` create: the applicants clause is parenthesised; live had let anyone, signed out included, create a job by sending `applicants: 0`.
+- Built on the live ruleset re-fetched at release time + exactly those three hunks (−390 bytes). Real rules engine (projects:test): previous live 4/4 holes open; live after 20/0.
+
 ## [2026-10-01] — ODPC registration shown as a Data Processor registration (Privacy & Legal) — candidate, NOT deployed
 
 **Files:** `legal.html` (Data Protection tab: new "Data Protection & Regulatory Registration" section; safer hash routing), `privacy.html` (one link line), `index.html` (footer link), new `scripts/test-odpc-registration-display.js`, new `docs/release-gates/DEPLOY_EVIDENCE_TEMPLATE.md`. **Functions / rules / data:** none.
