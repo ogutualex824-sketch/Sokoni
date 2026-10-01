@@ -1,3 +1,71 @@
+## [2026-10-01] - community C2: one report authority (server) — reason catalogue, one report per user per listing, seller scope, shared state machine — NOT deployed
+
+The ONE content-report authority is `reports` + functions/trust-safety.js. Before: tsReportContent accepted any reason
+text, deduped only while pending (a read-then-write race), captured no product context; tsGetReports was admin-only
+(no seller view); tsReviewReport knew approve|dismiss|escalate only, wrote non-atomically, and threw bare Errors (the
+browser saw "internal"). No client called tsReportContent (product.html wrote `flags`).
+
+**Deploy by name (functions lineage 7091029 = live a545818 + one script), after review, one at a time:**
+- `tsGetReportReasons` — **NEW** (the server reason catalogue the product-page wizard renders)
+- `tsReportContent` — REBUILT
+- `tsGetReports` — REBUILT
+- `tsReviewReport` — REBUILT
+- NOT redeployed (same file, unchanged behaviour on the live lineage): tsBanUser, tsCalculateRiskScore, tsGetRiskScores,
+  tsGetBannedTerms, tsManageBannedTerm, tsGetTrustDashboard. Their `_requireAdmin` / `_requireSuperAdmin` now throw
+  `permission-denied` HttpsErrors; that reaches them only if they are redeployed.
+
+**Lineage gate (2026-10-01, read-only):** serving revisions by `status.traffic` = 100% latest for all three:
+`tsreportcontent-00012-biz`, `tsgetreports-00012-new`, `tsreviewreport-00012-tas` (built 2026-09-09). Source archives
+`gs://gcf-v2-sources-24799054989-us-central1/<fn>/function-source.zip` generations 1787384612748574 / 1787384613323239 /
+1787384617486067 downloaded — the three archives are byte-identical (sha256 6a3128…f8a853), and their `trust-safety.js`
+(sha256 cad55a…81b52ab) is **byte-identical** to this tree's pre-change file. The change is built on the SERVING content.
+Package-level note: the 09-09 archive differs from this tree in 76 files and holds 7 files this tree lacks
+(entitlement-authority.js, role-vocabulary.js, shared/product-authority.js, shared/sellability.js,
+subscription-pay-methods.js, verification-engine.js, verification-vocabulary.js); trust-safety.js requires none of them
+(only firebase-functions/v2/https, firebase-admin/firestore, crypto). A scoped deploy still ships THIS tree's whole
+`functions/` package to these four services — run the package-level lineage diff before deploying.
+
+**Reason catalogue (`REPORT_REASONS.product`, codes):** counterfeit (high) · prohibited (critical) · misleading (medium) ·
+scam (critical) · offensive (medium) · wrong_category (low) · other (low, description ≥10 chars required). Detail ≤500,
+control characters stripped. Types without a catalogue (user, business, message, review) keep the historical free-text
+reason (≤120, keyword severity). `listing` is an alias of `product`.
+
+**Dedupe:** `create()` on `reports/{uid}_{entityType}_{entityId}` — one report per user per entity, atomic
+(ALREADY_EXISTS → `already-exists`), plus the historical pending-duplicate query for pre-C2 auto-id reports. The id embeds
+the reporter uid, so it is never returned to a seller.
+
+**Seller scope (`tsGetReports {scope:'mine'}`):** `where('context.sellerUid','==',uid)` (server-captured from the product
+doc). Returns productName, reasonCode/label, severity, status, moderationState, productHidden, the outcome note once
+decided, dates, and an opaque `ref` (sha256 prefix). Never: reportedBy, the doc id, the reporter's detail or evidence.
+REMOVED reports are hidden. Limit: keyed on the product's sellerUid — shop staff do not see the owner's reports.
+
+**State mapping — the ONE place (`REPORT_STATE`), stored → shared:** pending→pending · escalated→pending (flagged) ·
+actioned→**approved (upheld)** · dismissed→**rejected** · changes_requested · archived · removed. Stored names kept
+(existing reports and tsCalculateRiskScore / tsGetTrustDashboard query actioned/dismissed). Actions: approve|uphold,
+dismiss|reject, escalate, request_changes, archive, remove (`action:'action'` → invalid-argument). Transitions
+(`REPORT_TRANSITIONS`; anything else → failed-precondition): pending→any; escalated→decide/archive/remove;
+changes_requested→approve/dismiss/archive/remove; approved|rejected→archive/remove; archived→remove; removed final.
+tsReviewReport runs ONE transaction (all reads first): transition check, report update, product take-down
+(`isVisible:false` + `moderationHold`, on approve + hideProduct) and the `trustSafetyAudit` entry
+{decision, from/fromState, result/resultState, productHidden, resolution, performedBy} land together. Ban (superAdmin,
+user report) only on an upheld report.
+
+- Files: functions/trust-safety.js, functions/index.js (export `tsGetReportReasons`), scripts/test-report-authority.js
+  (new), scripts/lib/fake-firestore-txn.js (copied from the hosting line, test-only).
+- Database: `reports` docs gain `reasonCode`, `context`, `evidenceUrls`, deterministic ids for new reports; statuses
+  `changes_requested` / `archived` / `removed` are new. No migration (old docs map through REPORT_STATE). Index: none new
+  (single-field auto index on `context.sellerUid`).
+- API: one new callable; tsReportContent takes `reasonCode` for products (a label is refused); tsGetReports takes `state`
+  and `scope:'mine'`; tsReviewReport takes the new actions and returns `moderationState`.
+- Security: reports stay private (rules `reports: create false`, read admin); seller view server-filtered and
+  reporter-blind; App Check on all four; typed refusals. Rules unchanged.
+- Breaking: a product report with a free-text reason is now refused (no live client sends one; the hosting slice sends codes).
+- Tests: test-report-authority 16/0; COUNTERPROOF (serving 7091029 trust-safety.js) 0/16.
+  On the committed tree (a31eb71): gate-functions-require-closure PASS (unresolved NONE); predeploy-syntax-gate PASS
+  (1884 JS files, 440 inline blocks); verify-commission-single-source PASS.
+- Hosting half: branch hosting/community-reports-on-4b58c94 (wizard, shared queue, merchant-v2, super admin).
+- Rules (later slice): `flags` create → false; `communityReports` create → false after C4; retire admin.html `contentFlags` pane.
+
 ## [2026-09-30] — F1 (server): the pickup-location authority — NOT deployed
 
 **Files:**
