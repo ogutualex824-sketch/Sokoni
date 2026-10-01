@@ -51,7 +51,12 @@ const am = PM.slice(PM.indexOf('function autoMountOwnChrome'), PM.indexOf('windo
 ck('C3 auto-mount skips framed / in-shell / existing control / signed out; mounts as a flex child, fixed fallback otherwise',
   /window\.self !== window\.top/.test(am) && /SokoniInShell\.inShell/.test(am) && /sk-acct-wrap/.test(am) && /sk-admin-profile-wrap/.test(am) && /_readUser\(\)/.test(am)
   && /flex/.test(PM.slice(PM.indexOf('function _ownChromeHost'), PM.indexOf('function autoMountOwnChrome'))) && /script\[src\*="sokoni-admin-entry"\]/.test(PM));
-ck('C4 admin, super-admin and admin-os mount the admin account menu', ['admin.html', 'super-admin.html', 'admin-os.html'].every((p) => /SokoniAdminEntry\.mountControls\(/.test(read(p))));
+/* admin-os mounts it in sokoni-aos.js init() — AFTER guard('admin') passes (never before the admin check),
+   so the page itself must NOT add a second call. */
+ck('C4 admin + super-admin mount the admin menu in-page; admin-os via sokoni-aos.js after its admin guard, and NOT a second time in the page',
+  ['admin.html', 'super-admin.html'].every((p) => /SokoniAdminEntry\.mountControls\(/.test(read(p)))
+  && /SokoniAdminEntry\.mountControls\(\{ role: 'admin' \}\)/.test(read('sokoni-aos.js'))
+  && !/SokoniAdminEntry\.mountControls\(/.test(read('admin-os.html')));
 const bad = coverage(SH.replace('_flagOwnChromeAccount', '_flagDisabled'));
 ck('N1 negative control: without the own-chrome flag, dashboards are reported uncovered', bad.uncovered.length > 0, bad.uncovered.length);
 ck('N2 negative control: the admin-entry guard is load-bearing (removing it is detectable)', !/script\[src\*="sokoni-admin-entry"\]/.test(PM.replace('script[src*="sokoni-admin-entry"]', 'x')));
