@@ -2,7 +2,8 @@
 
 Related: [[sokoni-first-party-store]] · [[PROVENANCE_GAP_MERCHANT_IDENTITY]] · [[BUSINESS_WALLET_ARCHITECTURE]] · [[Payments]] · [[Authentication]] · [[Marketplace]]
 
-**Status:** built and certified hermetically on `feat/first-party-store-operator-on-a545818`
+**Status (updated 2026-10-01, second pass):** owner resolved both open items — see
+*Owner resolutions*. Built and certified hermetically on `feat/first-party-store-operator-on-a545818`
 (functions) and `hosting/first-party-store-operator-on-54b72cc` (hosting). **NOT deployed.**
 **Operator record NOT written** — run `scripts/infra/set-first-party-store-operator.js --apply`
 after deploy, with the owner's authorisation.
@@ -70,6 +71,11 @@ chain with the canonical resolver that **is** here (`tenant-identity.resolveMerc
 - **Neither lineage credits `wallets/vbaSOKL4…`.** Creating it (owner decision 3) gives the store a
   wallet on the company account, but **no settlement path feeds it**. → **Owner decision needed:**
   which document is "the store's wallet" for revenue (see *Needs the owner*).
+- **RESOLVED (owner + coordinator, 2026-10-01):** the coordinator read the **LIVE `onOrderStatusChange`
+  archive** (built 2026-09-29T20:37Z): `order-settlement.js:94 sellerId = order.sellerUid || order.sellerId`,
+  then `wallets/{sellerId}` (lines 136/236). **Live store revenue lands in `wallets/SOK-XX2338`.**
+  Owner decision: **that document IS the store wallet.** `wallets/vbaSOKL4…` is NOT created (nothing
+  would ever credit it); `wallets/SOK-XX2338` is NOT pre-created (the first settled sale creates it).
 
 ### 4. Payout-destination authority live today
 
@@ -86,6 +92,11 @@ chain with the canonical resolver that **is** here (`tenant-identity.resolveMerc
   authority** on the frozen wallet backend (registered `BUSINESS-WALLET-EXTERNAL-PAYOUT-AUTHORITY`,
   recorded not built). **Not built in this slice.** The workspace reports the destination as
   *unavailable* and offers no path to set it.
+- **RESOLVED (owner, 2026-10-01): BUILD it, HELD.** `sokoniStoreSetPayoutDestination` +
+  `sokoniStorePayoutRequest` — operator-only, operator's own PIN required and fail-closed, ONE
+  server-stored destination equal to the operator's verified Auth phone, requests created in
+  `requestSellerPayout`'s exact shape and paid ONLY by the existing `adminProcessPayout` path.
+  Ships dark behind `firstPartyStoreConfig/payouts.enabled`. See *Money-safety review*.
 
 ### 5. merchant-identity provenance gap on a545818
 
@@ -109,40 +120,100 @@ chain with the canonical resolver that **is** here (`tenant-identity.resolveMerc
   normalises the phone to E.164, and writes `shops/{storeId}` in a transaction that re-proves
   `firstParty`, `ownerId` and the absence of `sellerUid`.
 
+## Owner resolutions (2026-10-01, second pass)
+
+1. **Store wallet = `wallets/SOK-XX2338`** — proven from the live `onOrderStatusChange` archive.
+   `sokoniStoreGetWallet` reads exactly that document; absent → *"No store sale has settled yet"*
+   (`state: 'no-sale-settled-yet'`, balance `null`, never 0). The one-off **no longer creates any
+   wallet**; the company-account wallet plan is withdrawn.
+2. **Operator payout path built, HELD** behind a server-only flag (below). The owner lifts the
+   wallet freeze for this path only, after the money-safety review.
+
 ## What was built
 
 ### Functions (`C:/temp/sok-store-fn`)
 
 | File | Change |
 |---|---|
-| `functions/first-party-store-operator.js` | **new** — chain resolver + `assertStoreOperator` gate + `isStoreOperatorFor` |
-| `functions/first-party-store-workspace.js` | **new** — 5 operator-only callables |
+| `functions/first-party-store-operator.js` | **new** — chain resolver + `assertStoreOperator` gate (returns the record, incl. the server-only destination) + `isStoreOperatorFor` |
+| `functions/first-party-store-workspace.js` | **new** — 5 operator-only read/profile callables; wallet = `wallets/{businessId}` |
+| `functions/first-party-store-payout.js` | **new** — `sokoniStoreSetPayoutDestination`, `sokoniStorePayoutRequest` (HELD) |
 | `functions/shop-employees.js` | `resolveShopAccess`: for a `firstParty` shop the admin arm is replaced by the operator record |
-| `functions/kasshop.js` | `_internal` export seam (read-only reuse of the profile allowlist) |
-| `functions/index.js` | 5 exports by name |
-| `scripts/infra/set-first-party-store-operator.js` | **one-off**, dry-run default, `create()`-only |
+| `functions/kasshop.js` | `_internal` read-only seam (profile allowlist) |
+| `functions/wallet.js` | `_internal` read-only seam: `payoutEvent`, `eatDay`, `getPayoutConfig` (no behaviour change) |
+| `functions/wallet-engine.js` | `_internal` read-only seam: `assertPinOk` (no behaviour change) |
+| `functions/index.js` | 7 exports by name |
+| `scripts/infra/set-first-party-store-operator.js` | **one-off**, dry-run default, writes ONLY the operator record with `create()` |
 
 **The operator record** — `firstPartyStoreOperators/{storeId}` =
-`{storeId, businessId, ownerUid, operatorUids:[uid], decision, setBy, createdAt}`. Server-only
-(no rules match, no wildcard → clients default-denied). Must agree with the live chain or it grants
-nothing. Not on the shop doc (public read, admin-writable), not a claim, not `operatorEmail`.
+`{storeId, businessId, ownerUid, operatorUids:[uid], decision, setBy, createdAt}` plus, once the
+operator sets it, `payoutDestination: {msisdn, setAt, setBy}`. Server-only (no rules match, no
+wildcard → clients default-denied). Must agree with the live chain or it grants nothing.
 
-**Callables (all operator-gated; none accepts a shopId/businessId/uid):**
+**Callables (all operator-gated; none accepts a shopId / businessId / uid / destination):**
 `sokoniStoreGetContext`, `sokoniStoreSaveProfile`, `sokoniStoreListProducts`,
-`sokoniStoreListOrders`, `sokoniStoreGetWallet`. Refusal: `permission-denied`,
-`details.reason = 'not-store-operator'`; a broken chain is `failed-precondition` with its reason.
+`sokoniStoreListOrders`, `sokoniStoreGetWallet`, `sokoniStoreSetPayoutDestination`,
+`sokoniStorePayoutRequest`. Refusals carry a stable `details.reason`.
 
-**Money:** no commission, subscription, settlement, wallet-credit or payout code changed.
-`order-settlement`, `settlement-engine`, `wallet`, `wallet-engine`, `commission` untouched.
+### The payouts flag
+
+**`firstPartyStoreConfig/payouts` → `{ enabled: true }`** (Firestore, server-only collection — no
+rules match, so no client, admin or otherwise, can read or write it; set it from the Firebase
+console or an Admin-SDK script). **Absent, or anything other than boolean `true` (e.g. the string
+`"true"`) = OFF.** While OFF both payout callables refuse with `store-payouts-not-enabled`, and the
+workspace shows *"Store withdrawals are awaiting owner approval"* with both buttons disabled.
 
 ### Hosting (`C:/temp/sok-store-web`)
 
-- AdminOS (`admin-os.html`) and Super Admin (`super-admin.html`) sidebars: a **SOKONI Store** entry
-  → `merchant-v2.html?store=sokoni`. `sokoni-aos.js` untouched.
-- `merchant-v2.html?store=sokoni`: the merchant shell does **not boot** (no `shops/{uid}` read, no
-  `merchantIdentity`, no module mounts — so no KASS SHOP data and no flash). `sokoni-store-workspace.js`
-  asks the server (`sokoniStoreGetContext`) and renders either the workspace or the Access-denied
-  panel. A denied caller triggers **no** further store call.
+- AdminOS and Super Admin sidebars: **SOKONI Store** → `merchant-v2.html?store=sokoni`.
+- `?store=sokoni`: the merchant shell does not boot; `sokoni-store-workspace.js` asks
+  `sokoniStoreGetContext` first and renders the workspace or Access denied (zero further calls).
+- Workspace: store wallet balance (or *"No store sale has settled yet"*), payout number masked to
+  the last 3 or *"Not set"*, **Set payout number** and **Withdraw** forms with a PIN field
+  (`type=password`, numeric). Success is shown only after the server confirms.
+
+## Money-safety review checklist — what the owner verifies before flipping the flag
+
+Every money-out invariant, where it is enforced, and the test that proves it
+(`scripts/test-sokoni-first-party-store.js`, section P; emulator `scripts/test-sokoni-store-payout-emulator.js`):
+
+| # | Invariant | Enforced in | Proven by |
+|---|---|---|---|
+| 1 | Only the named operator — admin/superAdmin claims grant nothing | `assertStoreOperator` (server-only record ∧ live chain) | P1, A4–A8, B1–B5 |
+| 2 | Signed in + App Check | `onCall({enforceAppCheck:true})` | P1b (auth); App Check = deploy config |
+| 3 | Flag OFF by default; only boolean `true` enables | `_flagOn` reads `firstPartyStoreConfig/payouts` | P2, P2b, P22; rules suite (client cannot write it) |
+| 4 | PIN REQUIRED, fail-closed: no PIN set → refuse | `_assertOperatorPin` checks `pinHash` BEFORE the verifier (which passes a PIN-less wallet) | P3 (sabotage: removing the check turns P3 red) |
+| 5 | Wrong PIN → refuse (not review); attempt counter + lock at the cap | wallet-engine `_assertPinOk` (reused, unchanged) | P5, P5b |
+| 6 | PIN is the OPERATOR's own (`sha256(pin+operatorUid)`) | `_assertOperatorPin(db, gate.uid, …)` | P3–P5 |
+| 7 | Destination = the operator's VERIFIED Firebase Auth phone, read server-side (not the token) | `sokoniStoreSetPayoutDestination` → `getAuth().getUser(uid).phoneNumber` | P6, P6b, P7, P9 |
+| 8 | ONE fixed destination; the request takes no number from the client | request reads `gate.record.payoutDestination` only | P8, P11 |
+| 9 | Amount integer KES ≥ 100 (pipeline minimum) | request handler | P16 |
+| 10 | Amount ≤ store balance, read INSIDE the transaction | `runTransaction` reads `wallets/SOK-XX2338` | P15; E2 (concurrency, emulator) |
+| 11 | Reserve (balance −, pendingPayout +) and request create in ONE transaction | same transaction | P13; E3 (atomic refusal, emulator) |
+| 12 | Idempotent: `pout_<requestId>` claimed with a transactional `create()`; replay reserves nothing | transaction `get` + `create` | P14; E1 (5 concurrent, emulator) |
+| 13 | Velocity cap = sellers' (`config/payouts.maxPayoutsPerDay`, live value **20**) | wallet.js `getPayoutConfig` + `eatDay` | P18 |
+| 14 | Request shape == `requestSellerPayout`'s, field for field | `t.create(reqRef, …)` | P19 (keys derived from wallet.js source) |
+| 15 | No second execution rail: no gateway call, never marks paid, no instant mode | module has no IntaSend / adapter / settle code; `status:'pending'`, `mode:'review'` | P20 |
+| 16 | Paid / rejected / refunded ONLY by the existing admin path, keyed on `payout.sellerUid` | wallet.js `adminProcessPayout`, `_settlePayoutPaid`, `_refundPayout` (unchanged) | P21; E4 |
+| 17 | Operator's personal wallet never debited | request touches only `wallets/{businessId}` | P13b |
+| 18 | Frozen store wallet → refuse | request handler | P18b |
+| 19 | Full audit: who, when, amount, destination last 3, request id; refusals of a mismatched destination too | `firstPartyStoreAudit` (server-only) | P9c, P17 |
+| 20 | Clients see only the last 3 digits of the destination | `_destinationOf`, responses | G4, P9, P13c |
+
+**Before flipping the flag the owner must verify (live, read-only unless stated):**
+1. The deployed `adminProcessPayout` is the 45a837d paid-state-guarded build and still keys on
+   `payout.sellerUid` (diff the live archive — `wallet.js` on a545818 is what this was built against).
+2. **Live `config/payouts.autoB2C` is `false` (read 2026-10-01).** So approving a store request
+   leaves it `approved` for MANUAL disbursement, and *paid* needs an `externalReference` +
+   attestation. If `autoB2C` is ever turned on, approval sends B2C to `accountNumber` immediately.
+3. **The operator's wallet has NO PIN today (read 2026-10-01: `pinSet:false`).** Set it through the
+   existing wallet Security flow (`walletV2SetPin`) first; until then both callables refuse `pin-not-set`.
+4. The operator's Auth phone ends **…803** (read 2026-10-01) — it must still be +254705726803.
+5. `wallets/SOK-XX2338` exists (a store sale has settled) and its balance matches `settlements/*`
+   for store orders.
+6. The rules suite (`scripts/test-first-party-store-operator-rules.js`) has been RUN and is green
+   (the flag and operator docs are client-denied).
+7. Then set `firstPartyStoreConfig/payouts = { enabled: true }` — a deliberate owner act.
 
 ## Deploy list (not deployed)
 
@@ -152,56 +223,49 @@ nothing. Not on the shop doc (public read, admin-writable), not a claim, not `op
 | `sokoniStoreSaveProfile` | **NEW** | contact phone / profile |
 | `sokoniStoreListProducts` | **NEW** | read |
 | `sokoniStoreListOrders` | **NEW** | read |
-| `sokoniStoreGetWallet` | **NEW** | read |
+| `sokoniStoreGetWallet` | **NEW** | read `wallets/SOK-XX2338` |
+| `sokoniStoreSetPayoutDestination` | **NEW, HELD** | dark until the flag is set |
+| `sokoniStorePayoutRequest` | **NEW, HELD** | dark until the flag is set |
 | `merchantIdentity` | REBUILT (live) | carve-out: admins lose the store via merchant-v2's identity call |
 | `inviteShopEmployee`, `listShopEmployees`, `listShopInvites`, `removeShopEmployee` | REBUILT (live) | carve-out: admins cannot manage store staff |
 | `merchantAdjustStock` | REBUILT (live) | carve-out: admins cannot adjust store stock |
 
-**Lineage caveat — required before any REBUILT name ships:** production functions are a union of
-lineages. Download each REBUILT function's live archive and diff it against a545818
-([[reference_functions_lineage_gate]]). Deploy **scoped** (`--only functions:NAME,…`) — a full deploy
-from this tree deletes `employeeSaleAuthorize` / `adminLinkMerchantAccounts` (gap above).
-Other consumers of `resolveShopAccess` (`salesGet*`, pickup-location, shop-offers) pick up the
-carve-out only when they are next rebuilt.
+**Not rebuilt:** `requestSellerPayout`, `adminProcessPayout`, `walletV2*` — `wallet.js` and
+`wallet-engine.js` change only by an additive `_internal` seam that only the new callables read.
 
-**Index:** `orders(sellerUid ASC, createdAt DESC)` is in `firestore.indexes.json`; confirm it is
-deployed before `sokoniStoreListOrders` is relied on.
+**Lineage caveat:** diff each REBUILT function's live archive against a545818 first. Deploy
+**scoped** (`--only functions:NAME,…`) — a full deploy from this tree deletes
+`employeeSaleAuthorize` / `adminLinkMerchantAccounts` (provenance gap above). Functions FIRST, then hosting.
+
+**Index:** `orders(sellerUid ASC, createdAt DESC)` is in `firestore.indexes.json`; confirm deployed.
 
 ## Admin paths this slice does NOT close (need their own slices or a rules change)
 
-- **Rules:** `shops/{id}` `allow update: if isAdmin()` — any admin client can edit the store doc
-  directly; `wallets/{uid}` readable by any admin; `products` admin update. Needed rule (not edited
-  here — `firestore.rules` is out of scope): deny client admin writes when
-  `resource.data.firstParty == true` (Admin SDK is unaffected). `scripts/test-first-party-store-operator-rules.js`
-  reports these as KNOWN-GAP and flips to PASS once closed.
+- **Rules:** `shops/{id}` `allow update: if isAdmin()` — any admin client can edit the store doc;
+  `wallets/{uid}` readable by any admin (so the store balance is visible to admins via the SDK);
+  `products` admin update. Needed (not edited here): deny client admin writes where
+  `resource.data.firstParty == true`. The rules suite reports these as KNOWN-GAP.
 - `merchant-authority.assertMerchantAccess` admin bypass (procurement / Supply on `SOK-XX2338`).
 - `minishop.js`, `minishop-v3.js`, `minishop-campaigns.js` carry their own `_assertShopOwner`.
-- AdminOS generic moderation (users, products, orders) remains platform-wide by design.
+- `adminProcessPayout` is (by design) any admin: an admin approves/rejects store withdrawals the
+  same way they do sellers' — the money-out decision stays two-person (operator requests, admin pays).
 
 ## Needs the owner
 
-1. **Which wallet receives store revenue.** Settlement lands in `wallets/SOK-XX2338` (this lineage)
-   or `businessWallets/SOK-XX2338` (release lineage) — never in `wallets/vbaSOKL4…`. Either route
-   settlement to the company wallet (a money-path change: own slice + money-safety gate) or name
-   one of the existing landing documents as the store wallet.
-2. **The payout number.** No PIN-protected destination flow exists; the payout PIN is advisory and
-   fails open without a PIN. Setting `+254705726803` needs a new, operator-scoped, fail-closed
-   money-out authority (PIN on the store wallet, bound per transaction) — a frozen-backend decision.
-3. **Run the one-off** after deploy: dry run, then `--apply` with `--operator-uid
+1. Run the one-off after deploy: dry run, then `--apply` with `--operator-uid
    D5Ql2EYr95bt79IpcGTmOMTK0P83 --expect-email alexochieng3030@gmail.com`.
-4. **Rules change** above, if admins must be locked out at the database layer too.
+2. Set the operator's wallet PIN, then work through the money-safety checklist, then set the flag.
+3. Rules change above, if admins must be locked out at the database layer too.
 
-## One-off dry run — 2026-10-01 (read-only, production, nothing written)
+## One-off dry run — 2026-10-01 (read-only, production, nothing written) — revised script
 
 ```
 store (shops/)            STR_147f5ce11b424ec4bb892519  firstParty:true  ownerId vbaSOKL4…  sellerUid (absent)
 business (businesses/)    SOK-XX2338  SOKONI_FIRST_PARTY_STORE
-operator                  D5Ql2EYr95bt79IpcGTmOMTK0P83  alexochieng3030@gmail.com  verified, not disabled
+operator                  D5Ql2EYr95bt79IpcGTmOMTK0P83  alexochieng3030@gmail.com  verified, not disabled, phone …803
 firstPartyStoreOperators/STR_147f…   BEFORE (absent)   PLAN create
-wallets/vbaSOKL4…                     BEFORE (absent)   PLAN create (v2 shape, balance 0)
-wallets/SOK-XX2338                    (absent)   — no store sale has settled on this lineage's path
-businessWallets/SOK-XX2338            (absent)
+wallets/SOK-XX2338                    (absent) — the store wallet; created by the first settled sale
 ```
 
-The chain resolves in production through the same code the gate runs (positive control for the
-`firstParty` query and `tenant-identity`).
+Additional read-only facts (same session): operator wallet exists, `pinSet:false`, not locked, not
+frozen; `config/payouts` = `{autoB2C:false, maxPayoutsPerDay:20}`; `firstPartyStoreConfig/payouts` absent (flag OFF).

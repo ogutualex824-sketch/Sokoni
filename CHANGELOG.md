@@ -1,3 +1,37 @@
+## [2026-10-01] — SOKONI Store: store wallet = wallets/SOK-XX2338; operator payout path built HELD (server) — NOT deployed
+
+**Owner decisions (second pass):** (1) the store wallet is `wallets/SOK-XX2338` — where the LIVE
+`onOrderStatusChange` archive settles store orders (`wallets/{order.sellerUid}`); the planned
+`wallets/vbaSOKL4…` is withdrawn and NO wallet is pre-created. (2) the operator payout path is built
+under the money-safety gate and **HELD** behind a server-only flag the owner flips after review.
+
+**Flag:** `firstPartyStoreConfig/payouts.enabled` (boolean `true` only; absent = OFF). While OFF both
+payout callables refuse `store-payouts-not-enabled`.
+
+**Files:**
+- `functions/first-party-store-payout.js` (new) — `sokoniStoreSetPayoutDestination` (operator + PIN +
+  number == operator's verified Auth phone, stored server-side on the operator record) and
+  `sokoniStorePayoutRequest` (operator + PIN, pays ONLY the stored destination; reserve + request
+  create in one transaction in `requestSellerPayout`'s exact shape, status `pending`; idempotent via a
+  transactional `create()` of `pout_<requestId>`; executed only by the existing `adminProcessPayout`).
+- `functions/first-party-store-workspace.js` — `sokoniStoreGetWallet` reads `wallets/{businessId}` only;
+  context/wallet return destination last-3 and the flag state.
+- `functions/first-party-store-operator.js` — the gate also returns the record.
+- `functions/wallet.js`, `functions/wallet-engine.js` — additive read-only `_internal` seams
+  (`payoutEvent`, `eatDay`, `getPayoutConfig`; `assertPinOk`). No behaviour change; not redeployed.
+- `functions/index.js` — 2 more exports by name.
+- `scripts/infra/set-first-party-store-operator.js` — now writes ONLY the operator record.
+- `scripts/test-sokoni-first-party-store.js` (111/0), `scripts/test-sokoni-store-payout-emulator.js`
+  (new, NOT run), `scripts/test-first-party-store-operator-rules.js` (+ flag doc; NOT run),
+  `docs/SOKONI_STORE_OPERATOR_CENSUS.md` (owner resolutions + money-safety review checklist).
+
+**Database:** new server-only `firstPartyStoreConfig/payouts`; operator record gains
+`payoutDestination {msisdn, setAt, setBy}` when the operator sets it. **API:** 2 new callables (App
+Check). **Security/money:** PIN required and fail-closed (no PIN → `pin-not-set`); wrong PIN refused
+with the existing attempt counter; no client-supplied destination; no second execution rail.
+**Operator record NOT yet written — run `scripts/infra/set-first-party-store-operator.js --apply` after
+deploy.** **NOT deployed.**
+
 ## [2026-10-01] — SOKONI Store: company-OWNED, owner-OPERATED (server) — NOT deployed
 
 **Owner decisions (binding):** the store stays owned by the company account (`vbaSOKL4…`,
