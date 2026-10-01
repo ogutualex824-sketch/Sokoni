@@ -60,6 +60,11 @@ function _shouldSkip(data, collection) {
   if (!data) return true;
   if (data._noIndex === true) return true;
   if (SKIP_STATUSES.has(data.status)) return true;
+  /* community C3 (2026-10-01): the canonical listing visibility. A product with isVisible:false — taken down by
+     moderation (tsReviewReport: isVisible:false + moderationHold) or switched off by its seller — is not publicly
+     discoverable (/api/catalogue and checkout already refuse it). Going hidden fires the update trigger, which then
+     deletes it from the index; becoming visible again re-adds it. */
+  if (collection === 'products' && data.isVisible === false) return true;
   if (collection === 'users' && data.private === true) return true;
   return false;
 }

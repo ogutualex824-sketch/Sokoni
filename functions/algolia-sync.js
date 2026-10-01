@@ -30,6 +30,11 @@ function _shouldSkip(data, collection) {
   if (!data) return true;
   if (data._noIndex === true) return true;
   if (data.status === 'draft' || data.status === 'deleted') return true;
+  /* community C3 (2026-10-01): the canonical listing visibility. A product with isVisible:false — taken down by
+     moderation (tsReviewReport: isVisible:false + moderationHold) or switched off by its seller — is not publicly
+     discoverable (/api/catalogue and checkout already refuse it). Going hidden fires the update trigger, which then
+     deletes it from the index; becoming visible again re-adds it. */
+  if (collection === 'products' && data.isVisible === false) return true;
   if (collection === 'users' && (data.private === true || data.status === 'banned')) return true;
   /* Bookable services: a paused (active:false) or removed service must not appear in search.
      Toggling active/removedAt fires the update trigger, which then deletes it from the index. */
@@ -43,6 +48,9 @@ function _shouldSkipAfterUpdate(before, after, collection) {
   const wasSkip    = _shouldSkip(before, collection);
   if (nowSkip && !wasSkip) return 'delete';  // remove from index
   if (nowSkip && wasSkip)  return 'ignore';  // never was indexed
+  /* community C3: left a skip state (e.g. a hidden listing shown again) → the record is NOT in the index, so a
+     partial update would change nothing (an untouched field diffs as "no change"): write the whole record */
+  if (wasSkip && !nowSkip) return 'upsert';
   return 'update';
 }
 
@@ -77,6 +85,10 @@ function _makeTriggers(col, { skipDraft = true } = {}) {
         if (action === 'ignore') return;
         if (action === 'delete') {
           await enqueue({ collection: col, docId, operation: 'delete' });
+          return;
+        }
+        if (action === 'upsert') {
+          await enqueue({ collection: col, docId, operation: 'upsert', data: after });
           return;
         }
 
