@@ -85,6 +85,34 @@ async function _getMerchant(merchantId) {
    tender contributes to EVERY method it used — the old `paymentMethod:
    payments[0].method` recorded one tender for the whole sale, so a 4,000 M-Pesa
    + 2,000 cash sale was filed entirely under whichever came first. */
+/* THE TILL-MERCHANT PROOF — the ONE implementation, used by the sale and by the dry run (2026-10-01).
+   TWO AUTHORITIES, UNION: resolveActor (owner keyed off shops/{uid}; shopEmployees staff) is decided by the caller,
+   which passes its result in; the canonical path covers staff who exist only in workspaceMemberships, with the
+   `sales` capability. Returns { proven, canon, by } — never throws for "not a member". */
+async function _proveTillMerchant(cashierId, merchantId, actor) {
+  if (actor && actor.ok) return { proven: true, canon: null, by: 'shop_actor' };
+  let canon = null;
+  try {
+    const _b = await db.collection('businesses').doc(String(merchantId)).get();
+    if (_b.exists) canon = String(merchantId);
+    else {
+      const _own = await _resolveMerchantIdForOwner(String(merchantId));
+      if (_own && _own.ok) canon = _own.merchantId;
+    }
+  } catch (_) { canon = null; }
+  if (canon) {
+    try {
+      /* `sales` is the capability to transact here at all — NOT `discounts`,
+         which is a strictly narrower permission. Reusing the discount
+         capability would refuse ordinary cashiers, who are exactly the people
+         this call exists for. */
+      await _assertBusinessPermission(cashierId, canon, 'sales');
+      return { proven: true, canon, by: 'workspace_membership' };
+    } catch (_) { /* not a member here, or no capability */ }
+  }
+  return { proven: false, canon, by: null };
+}
+
 function _methodIncrements(position) {
   const out = {};
   const by = (position && position.byMethod) || {};
@@ -305,6 +333,20 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
   if (data && data.dryRun === true) {
     const refs  = items.map(it => db.collection('products').doc(it.productId));
     const snaps = await Promise.all(refs.map(r => r.get()));
+    /* SHELF is private: read posProducts/{id} only for lines that ask for it (no extra reads otherwise), and only
+       for a caller PROVEN for this shop on a product that belongs to it. The dry run runs before the sale's proof,
+       so without this any signed-in user could read any shop's shelf price through it. */
+    let privs = items.map(() => null);
+    if (items.some(it => it.priceTier === 'shop')) {
+      let _dActor = null;
+      try { _dActor = await resolveActor(cashierId, merchantId); } catch (_) { _dActor = null; }
+      const _dProof = await _proveTillMerchant(cashierId, merchantId, _dActor);
+      if (_dProof.proven) {
+        privs = await Promise.all(items.map((it, i) => (it.priceTier === 'shop' && snaps[i].exists
+          && _PT.productBelongsTo(snaps[i].data(), [merchantId, _dProof.canon]))
+          ? db.collection('posProducts').doc(it.productId).get().then(x => (x.exists ? x.data() : null)) : null));
+      }
+    }
     let serverSubtotal = 0;
     const enriched = [], stockDeltas = [], differences = [];
     for (let i = 0; i < items.length; i++) {
@@ -312,7 +354,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       if (!s.exists) { differences.push({ productId: it.productId, error: 'not-found' }); continue; }
       const p = s.data();
       /* Same tier rule as the real path (shared/pos-price-tier.js). */
-      const _t = _PT.resolveTierPrice(p, it.priceTier);
+      const _t = _PT.resolveTierPrice(p, it.priceTier, privs[i]);
       if (!_t.ok) { differences.push({ productId: it.productId, field: 'priceTier', error: _t.reason, tier: _t.tier }); continue; }
       const serverPrice = _t.price;
       if (Math.abs(serverPrice - (it.unitPrice || 0)) > 1) {
@@ -376,6 +418,10 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
        separate stock counter from the one inventory/catalogue/dispatch use. One source now. */
     const productRefs  = items.map(item => db.collection('products').doc(item.productId));
     const productSnaps = await Promise.all(productRefs.map(r => r.get()));
+    /* SHELF price is PRIVATE (owner, 2026-10-01): it lives only on the merchant-only posProducts/{id}, never on the
+       public product. Read only for lines that ask for the shelf tier, so online/wholesale sales cost no extra read. */
+    const shelfPrivs = await Promise.all(items.map(it => it.priceTier === 'shop'
+      ? db.collection('posProducts').doc(it.productId).get().then(x => (x.exists ? x.data() : null)) : null));
 
     let serverSubtotal = 0;
     const enrichedItems = [];
@@ -388,7 +434,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
          wholesale — and the SERVER resolves its price (shared/pos-price-tier.js). An unconfigured or unknown
          tier is refused, never priced at 0 and never silently swapped for another tier. Price tolerance
          unchanged: the device's unitPrice must match within 1 KES per item. */
-      const _tier = _PT.resolveTierPrice(prod, item.priceTier);
+      const _tier = _PT.resolveTierPrice(prod, item.priceTier, shelfPrivs[i]);
       if (!_tier.ok) {
         _e(_tier.reason === 'unsupported_tier'
           ? `"${String(item.priceTier).slice(0, 20)}" is not a price tier. Use online, shelf or wholesale.`
@@ -490,30 +536,10 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
        workspaceMemberships. Requiring resolveActor alone would refuse every sale
        by canonically-employed staff — a live till outage dressed as a security
        fix. */
-    let _merchantProven = !!(_actor && _actor.ok);
-    let _provenBy = _merchantProven ? 'shop_actor' : null;
-    let _canon = null;   /* hoisted: the product-ownership check below accepts either proven identity */
-    if (!_merchantProven) {
-      try {
-        const _b = await db.collection('businesses').doc(String(merchantId)).get();
-        if (_b.exists) _canon = String(merchantId);
-        else {
-          const _own = await _resolveMerchantIdForOwner(String(merchantId));
-          if (_own && _own.ok) _canon = _own.merchantId;
-        }
-      } catch (_) { _canon = null; }
-      if (_canon) {
-        try {
-          /* `sales` is the capability to transact here at all — NOT `discounts`,
-             which is a strictly narrower permission. Reusing the discount
-             capability would refuse ordinary cashiers, who are exactly the people
-             this call exists for. */
-          await _assertBusinessPermission(cashierId, _canon, 'sales');
-          _merchantProven = true;
-          _provenBy = 'workspace_membership';
-        } catch (_) { /* not a member here, or no capability */ }
-      }
-    }
+    const _proof = await _proveTillMerchant(cashierId, merchantId, _actor);
+    let _merchantProven = _proof.proven;
+    let _provenBy = _proof.by;
+    let _canon = _proof.proven ? _proof.canon : null;   /* the product-ownership check below accepts either proven identity */
     if (!_merchantProven) {
       _e('You are not authorised to record a sale for this shop.', 'permission-denied');
     }

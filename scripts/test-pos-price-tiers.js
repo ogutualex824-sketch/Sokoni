@@ -183,11 +183,16 @@ const noSale = () => ![...DOCS.keys()].some((k) => k.indexOf('posRetailSales/') 
 
 /* Products for the tier matrix (owner's brief, section 16). A/B/C/L belong to the till's shop; X to another shop. */
 function seedProducts() {
-  DOCS.set('products/A', { name: 'Coffee A', price: 100, shopPrice: 90, wholesalePrice: 80, stock: 50, shopId: MERCHANT, sellerUid: MERCHANT });
+  /* Shelf price is PRIVATE (owner, 2026-10-01): it lives on posProducts/{id} (merchant-only read), never on the public
+     product. Products C and X still carry a PUBLIC shopPrice to prove the server ignores it. */
+  DOCS.set('products/A', { name: 'Coffee A', price: 100, wholesalePrice: 80, stock: 50, shopId: MERCHANT, sellerUid: MERCHANT });
+  DOCS.set('posProducts/A', { name: 'Coffee A', price: 100, shopPrice: 90, sellerId: MERCHANT });
+  DOCS.set('posProducts/B', { name: 'Coffee B', price: 100, shopPrice: 85, sellerId: 'ATTACKER' });  /* forged: someone else's sellerId (a WELL-ORDERED price, so only the owner check can refuse it) */
   DOCS.set('products/B', { name: 'Coffee B', price: 100, wholesalePrice: 80, stock: 50, shopId: MERCHANT, sellerUid: MERCHANT });
   DOCS.set('products/C', { name: 'Coffee C', price: 100, shopPrice: 90, stock: 50, shopId: MERCHANT, sellerUid: MERCHANT });
   DOCS.set('products/L', { name: 'Legacy (no shopId)', price: 100, stock: 50, sellerUid: MERCHANT });
   DOCS.set('products/X', { name: 'Other shop', price: 100, shopPrice: 90, stock: 50, shopId: 'SHOP_OTHER', sellerUid: 'OTHER_OWNER' });
+  DOCS.set('posProducts/X', { name: 'Other shop', price: 100, shopPrice: 85, sellerId: 'OTHER_OWNER' });  /* the OTHER shop's genuine private shelf price */
 }
 const line = (productId, qty, unitPrice, priceTier) => Object.assign({ productId, qty, unitPrice }, priceTier === undefined ? {} : { priceTier });
 const sell = async (uid, lines, extra) => {
@@ -233,6 +238,9 @@ const stockOf = (id) => { const s = DOCS.get('products/' + id).stock; return (s 
   await T('T-8', 'unsupported tier "vip" -> REFUSED', [line('A', 1, 100, 'vip')], { ok: false, code: 'failed-precondition' });
   await T('T-9', 'client price != tier price (shop sold at 50) -> REFUSED', [line('A', 1, 50, 'shop')], { ok: false });
   await T('T-10', 'wholesale price claimed under the online tier -> REFUSED', [line('A', 1, 80, 'online')], { ok: false });
+  /* Shelf price is PRIVATE: the public product is never a source, and a forged private record never prices */
+  await T('T-12', 'C shelf from a PUBLIC shopPrice only -> REFUSED (public doc is not a source)', [line('C', 1, 90, 'shop')], { ok: false, code: 'failed-precondition' });
+  await T('T-13', 'B shelf from a posProducts record under SOMEONE ELSE\'s sellerId (KES 85) -> REFUSED', [line('B', 1, 85, 'shop')], { ok: false, code: 'failed-precondition' });
   reset(); seedProducts();
   { const uid = seedActor('employee');
     const r = await sell(uid, [Object.assign(line('A', 1, 90, 'shop'), { priceTierLabel: 'FREE' })]);
@@ -264,6 +272,18 @@ const stockOf = (id) => { const s = DOCS.get('products/' + id).stock; return (s 
   { const uid = seedActor('employee'); let r;
     try { r = await ZF.posCompleteCheckout({ data: { dryRun: true, idempotencyKey: 'IK_DRY', merchantId: MERCHANT, items: [line('B', 1, 100, 'shop')], subtotal: 100, grandTotal: 100 }, auth: { uid, token: {} } }); } catch (e) { r = { err: e.message }; }
     ck('D-1 the dry run reports an unconfigured tier as a difference', r && r.ok === false && (r.differences || []).some((x) => x.field === 'priceTier'), JSON.stringify(r).slice(0, 150)); }
+  /* The dry run runs BEFORE the sale's merchant proof — the PRIVATE shelf price must not leak through it */
+  const dry = async (uid, items) => { try { return await ZF.posCompleteCheckout({ data: { dryRun: true, idempotencyKey: 'IK_DRY2', merchantId: MERCHANT, items, subtotal: 1, grandTotal: 1 }, auth: { uid, token: {} } }); } catch (e) { return { err: e.message }; } };
+  reset(); seedProducts();
+  { const r = await dry('STRANGER_UID', [line('A', 1, 1, 'shop')]);
+    const leaked = /\b90\b/.test(JSON.stringify(r));
+    ck('D-2 a STRANGER\'s dry run gets no shelf price (tier not configured, and 90 appears nowhere)', r && r.ok === false && !leaked && (r.differences || []).some((x) => x.field === 'priceTier'), JSON.stringify(r).slice(0, 160)); }
+  reset(); seedProducts();
+  { const uid = seedActor('employee'); const r = await dry(uid, [line('A', 1, 1, 'shop')]);
+    ck('D-3 a PROVEN cashier\'s dry run previews the shelf price (90) — how a cashier who cannot read posProducts sees it', r && Array.isArray(r.items) && r.items[0] && r.items[0].unitPrice === 90 && r.items[0].priceTier === 'shop', JSON.stringify(r).slice(0, 160)); }
+  reset(); seedProducts();
+  { const uid = seedActor('employee'); const r = await dry(uid, [line('X', 1, 1, 'shop')]);
+    ck('D-4 even a proven cashier gets no shelf price for ANOTHER shop\'s product', r && !(r.items || []).some((x) => x.priceTier === 'shop'), JSON.stringify(r).slice(0, 160)); }
 
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
