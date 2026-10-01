@@ -35,7 +35,12 @@ const admin = require('firebase-admin');
 if (!admin.apps.length) admin.initializeApp();
 const db = () => admin.firestore();
 const lim = require('./shared/durable-limit');
-const FPL = require('./financial-partner-listing');   /* the ONE validator for financialProviders/{uid} */
+const FPL = require('./financial-partner-listing');
+const COM = require('./commercial-entitlements');   /* the ONE price/plan configuration */
+async function planOf(partnerUid) {
+  try { const e = await db().collection('entitlements').doc(partnerUid + '__partner').get(); return COM.effectivePlan(e.exists ? e.data() : null); }
+  catch (_) { return COM.effectivePlan(null); }
+}   /* the ONE validator for financialProviders/{uid} */
 
 const OPTS = { region: 'us-central1', enforceAppCheck: true, timeoutSeconds: 60, memory: '256MiB', minInstances: 0 };
 
@@ -75,7 +80,7 @@ const CATEGORIES = {
 const ROLE_OPS = {
   owner: '*',
   manager: ['getWorkspace', 'updateProfile', 'listMembers', 'addMember', 'importMembers', 'updateMember', 'deleteMember',
-    'listProducts', 'saveProduct', 'listEnquiries', 'updateEnquiry', 'listTeam', 'requestPromotion', 'listMyPromotions'],
+    'listProducts', 'saveProduct', 'listEnquiries', 'updateEnquiry', 'listTeam', 'requestPromotion', 'listMyPromotions', 'getCommercial'],
   officer: ['getWorkspace', 'listMembers', 'addMember', 'updateMember', 'listEnquiries', 'updateEnquiry'],
 };
 
@@ -174,6 +179,10 @@ async function getWorkspace(ctx) {
     },
     registration: w.registration || { status: 'not_submitted' },
     counts: { members, activeMembers, publishedProducts: products, newEnquiries },
+    plan: await planOf(ctx.partnerUid).then((e) => ({ planId: e.planId, name: e.name, active: e.active, expiresAt: e.expiresAt || null, capabilities: e.capabilities, limits: e.limits })),
+    analytics: await planOf(ctx.partnerUid).then(async (e) => (COM.can(e, 'analytics') ? {
+      enquiries30d: await count(db().collection('financialEnquiries').where('partnerUid', '==', ctx.partnerUid).where('createdAt', '>=', admin.firestore.Timestamp.fromMillis(Date.now() - 30 * 86400000))),
+    } : null)),
   };
 }
 
@@ -356,7 +365,8 @@ async function saveProduct(ctx, d) {
   } else {
     const n = await count(col);
     if (n == null) throw new HttpsError('unavailable', 'Could not check your catalogue size. Try again.');
-    if (n >= 100) bad('You can list up to 100 items. Archive one first.');
+    const lim = (await planOf(ctx.partnerUid)).limits || COM.BASE.limits;
+    if (n >= lim.maxProducts) bad('Your plan allows ' + lim.maxProducts + ' items. Archive one or upgrade your plan.');
     const ref = col.doc();
     await ref.create({ ...f, createdAt: ts(), createdBy: ctx.uid });
     id = ref.id;
@@ -397,6 +407,10 @@ async function addTeamMember(ctx, d, req) {
   try { user = await admin.auth().getUserByEmail(email); } catch (_) { user = null; }
   if (!user) throw new HttpsError('not-found', 'Ask them to create a SOKONI account with that email first.', { code: 'NO_ACCOUNT' });
   if (user.uid === ctx.partnerUid) bad('That is the owner account.');
+  const teamLimit = ((await planOf(ctx.partnerUid)).limits || COM.BASE.limits).maxTeam;
+  const teamNow = await count(ctx.ref.collection('team'));
+  if (teamNow == null) throw new HttpsError('unavailable', 'Could not check your team size. Try again.');
+  if (teamNow >= teamLimit) bad('Your plan allows ' + teamLimit + ' team member' + (teamLimit === 1 ? '' : 's') + '. Upgrade your plan to add more.');
   const store = db();
   const staffRef = store.collection('financialPartnerStaff').doc(user.uid);
   await store.runTransaction(async (tx) => {
@@ -435,14 +449,29 @@ async function publicDirectory(req, d) {
   let q = db().collection('financialProviders').where('listingStatus', '==', 'approved').where('institutionType', 'in', types).orderBy('name');
   if (d.cursor) { if (!ID_RE.test(d.cursor)) bad('Invalid cursor.'); const c = await db().collection('financialProviders').doc(d.cursor).get(); if (c.exists) q = q.startAfter(c); }
   const size = 24;
-  const [snap, promo] = await Promise.all([q.limit(size).get(), db().collection('financialPromotions').where('status', '==', 'active').limit(50).get().catch(() => null)]);
+  const [snap, promo, paid] = await Promise.all([q.limit(size).get(),
+    db().collection('financialPromotions').where('status', '==', 'active').limit(50).get().catch(() => null),
+    db().collection('promotionCampaigns').where('status', '==', 'active').limit(100).get().catch(() => null)]);
   const nowMs = Date.now();
   const promoted = new Set(promo ? promo.docs.map((x) => x.data()).filter((x) => (ms(x.endsAt) || 0) > nowMs && (ms(x.startsAt) || 0) <= nowMs).map((x) => x.partnerUid) : []);
+  const featured = new Set();
+  if (paid) {
+    const live = paid.docs.map((x) => x.data()).filter((c) => (ms(c.endAt) || 0) > nowMs && (ms(c.startAt) || 0) <= nowMs)
+      .sort((a, b) => (ms(a.startAt) || 0) - (ms(b.startAt) || 0));
+    const used = {};
+    for (const c of live) {
+      const cap = COM.PLACEMENT_CAPS[c.placement] || 0;
+      used[c.placement] = (used[c.placement] || 0) + 1;
+      if (used[c.placement] > cap) continue;   /* exposure is capped — never unlimited */
+      if (c.placement === 'banking_hub_category') promoted.add(c.targetId);
+      if (c.placement === 'banking_hub_featured') { featured.add(c.targetId); promoted.add(c.targetId); }
+    }
+  }
   const rows = snap.docs.map((doc) => { const x = doc.data(); return {
     partnerUid: doc.id, name: x.name || null, institutionType: x.institutionType, services: Array.isArray(x.services) ? x.services : [],
     county: x.county || null, website: x.website || null, description: x.description || null,
-    label: 'Listed by SOKONI', licenceClaimed: x.licenceClaimed || null, promoted: promoted.has(doc.id) }; });
-  rows.sort((a, b) => Number(b.promoted) - Number(a.promoted));
+    label: 'Listed by SOKONI', licenceClaimed: x.licenceClaimed || null, promoted: promoted.has(doc.id), featured: featured.has(doc.id) }; });
+  rows.sort((a, b) => (Number(b.featured) - Number(a.featured)) || (Number(b.promoted) - Number(a.promoted)));
   return { rows, next: snap.docs.length === size ? snap.docs[snap.docs.length - 1].id : null, promotionsReadable: !!promo };
 }
 
@@ -457,6 +486,10 @@ async function requestPromotion(ctx, d) {
   await ref.create({ partnerUid: ctx.partnerUid, placement, message, status: 'pending', requestedBy: ctx.uid, createdAt: ts() });
   await audit(ctx, 'requestPromotion', ref.id);
   return { ok: true, id: ref.id, status: 'pending' };
+}
+async function getCommercial(ctx) {
+  const [plan, camps] = await Promise.all([planOf(ctx.partnerUid), db().collection('promotionCampaigns').where('ownerId', '==', ctx.partnerUid).limit(20).get()]);
+  return { catalogue: COM.catalogue(), plan, campaigns: camps.docs.map((x) => { const c = x.data(); return { campaignId: x.id, productId: c.productId, placement: c.placement, status: c.status, reviewReason: c.reviewReason || null, amountKES: c.amountKES, startAt: ms(c.startAt), endAt: ms(c.endAt) }; }) };
 }
 async function listMyPromotions(ctx) {
   const [reqs, live] = await Promise.all([
@@ -568,7 +601,7 @@ async function adminReviewRegistration(req, d) {
 const PARTNER_OPS = {
   getWorkspace, updateProfile, submitRegistration, listMembers, addMember, importMembers, updateMember, deleteMember,
   listProducts, saveProduct, listEnquiries, updateEnquiry, listTeam, addTeamMember, removeTeamMember,
-  requestPromotion, listMyPromotions,
+  requestPromotion, listMyPromotions, getCommercial,
 };
 const OWNER_ONLY = new Set(['submitRegistration', 'addTeamMember', 'removeTeamMember']);
 
@@ -578,6 +611,29 @@ async function handle(req) {
   if (typeof op !== 'string') bad('"op" is required.');
   if (op === 'publicProfile') return publicProfile(req, d);
   if (op === 'publicDirectory') return publicDirectory(req, d);
+  if (op === 'adminListCommercial' || op === 'adminStopCampaign') {
+    if (!isAdmin(req)) throw new HttpsError('permission-denied', 'Administrator access required.');
+    if (op === 'adminListCommercial') {
+      const view = oneOf(d.view, ['entitlements', 'campaigns', 'fulfilments'], 'view');
+      const col = { entitlements: 'entitlements', campaigns: 'promotionCampaigns', fulfilments: 'commercialFulfilments' }[view];
+      let q = db().collection(col);
+      if (d.status) q = q.where(view === 'fulfilments' ? 'outcome' : 'status', '==', str(d.status, 30, 'status'));
+      const snap = await q.limit(100).get();
+      return { rows: snap.docs.map((x) => { const r = x.data(); return { id: x.id, ownerId: r.ownerId || null, planId: r.planId || null, productId: r.productId || null, placement: r.placement || null,
+        status: r.status || r.outcome || null, reason: r.reviewReason || r.reason || null, amountKES: r.amountKES ?? null, intentRef: r.lastPaymentRef || r.paymentIntentId || r.intentRef || null,
+        startAt: ms(r.startAt || r.startedAt || r.periodStart), endAt: ms(r.endAt || r.expiresAt || r.periodEnd) }; }) };
+    }
+    if (!ID_RE.test(d.campaignId || '')) bad('Invalid campaign.');
+    const why = str(d.reason, 300, 'Reason', { required: true });
+    const ref = db().collection('promotionCampaigns').doc(d.campaignId);
+    await db().runTransaction(async (tx) => {
+      const s0 = await tx.get(ref);
+      if (!s0.exists || !['active', 'review'].includes(s0.data().status)) throw new HttpsError('failed-precondition', 'This campaign is not running.');
+      tx.update(ref, { status: 'stopped', stoppedBy: req.auth.uid, stoppedAt: ts(), stopReason: why });
+      tx.set(db().collection('adminActions').doc(), { type: 'promotion_campaign_stopped', campaignId: d.campaignId, adminUid: req.auth.uid, reason: why, at: ts() });
+    });
+    return { ok: true, status: 'stopped', note: 'Any refund goes through the refund authority (request → approval); history is kept.' };
+  }
   if (op === 'adminListPromotionRequests' || op === 'adminDecidePromotion') {
     if (!isAdmin(req)) throw new HttpsError('permission-denied', 'Administrator access required.');
     return op === 'adminListPromotionRequests' ? adminListPromotionRequests(d) : adminDecidePromotion(req, d);

@@ -43,6 +43,8 @@ const keys = (pre) => [...F.db._store.keys()].filter((k) => k.startsWith(pre));
   console.log('financialPartnerDispatch — partner workspace\n');
   const prov = (uid, type, status) => F.db.collection('financialProviders').doc(uid).set({ name: uid.toUpperCase(), institutionType: type, listingStatus: status });
   await prov('saccoA', 'SACCO', 'approved');
+  /* saccoA holds a paid Growth plan (5 staff); fxB stays on the free base */
+  await F.db.collection('entitlements').doc('saccoA__partner').set({ status: 'active', planId: 'growth', expiresAt: F.Timestamp.fromMillis(Date.now() + 10 * 86400000) });
   await prov('fxB', 'FOREX', 'approved');
   await prov('pend', 'BANK', 'pending');
   await prov('susp', 'CHAMA', 'withdrawn');
