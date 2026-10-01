@@ -12775,6 +12775,9 @@ exports.auditInviteOnboarding = onCall(
 /* Seller payout readiness is an admin decision (owner, 2026-10-01) — see functions/seller-payout-approval.js */
 exports.adminListPendingSellerPayouts = require('./seller-payout-approval').adminListPendingSellerPayouts;
 exports.adminApproveSellerPayout = require('./seller-payout-approval').adminApproveSellerPayout;
+/* 2026-10-01 — Financial Partner Workspace: the dashboard approved banks / SACCOs / chamas / MFIs /
+   insurers / forex bureaus / accountants land on (members, products, registration, team, enquiries). */
+exports.financialPartnerDispatch = require('./financial-partner').financialPartnerDispatch;
 /* One-click marketing unsubscribe (RFC 8058, 2026-10-01) — see functions/email-unsubscribe.js */
 exports.emailUnsubscribe = require('./email-unsubscribe').emailUnsubscribe;
 /* 25-minute, single-use password reset (owner 2026-10-01) — see functions/password-reset-gate.js */
