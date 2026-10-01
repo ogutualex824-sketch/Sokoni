@@ -877,11 +877,53 @@
         busy: false,
         err: null,
         blocked: null,                    /* the server's refusal, verbatim */
+        /* SHELF PRICE (owner-private, 2026-10-01): never on the list row (products/{id} is public and never
+           carries it). An EDIT reads it once from posProducts/{id}; until then, and if that read fails, the
+           input is empty and the stored product has NO shopPrice key — so an empty box is never sent as a clear. */
+        shelf: (mode === 'edit') ? { state: 'loading' } : null,
       };
+      if (mode === 'edit' && S.editor.product) {
+        S.editor.product = Object.assign({}, S.editor.product);
+        delete S.editor.product.shopPrice;
+        delete S.editor.values.shopPrice;
+      }
       paint();
       /* Focus the first field so a keyboard user is not dropped at the scrim. */
       var f = host.querySelector('.pr-panel [data-pf]');
       if (f && f.focus) { try { f.focus(); } catch (_) {} }
+      if (mode === 'edit' && product && product.id) loadShelf(S.editor);
+    }
+
+    /* ONE read of the Shelf price for ONE opened product. A result that arrives after the sheet closed, or
+       after another product was opened, is dropped. A value the merchant already typed is never overwritten. */
+    function loadShelf (E) {
+      var m = (typeof window !== 'undefined') && window.SokoniMerchantData;
+      var fail = function () { if (S.editor === E) { E.shelf = { state: 'unreadable' }; captureForm(); paint(); } };
+      if (!m || typeof m.loadShelfPrice !== 'function') return fail();
+      var id = E.product.id;
+      Promise.resolve(m.loadShelfPrice({ scope: ctx.scope, db: ctx.db, id: id })).then(function (r) {
+        if (S.destroyed || S.editor !== E || !E.product || E.product.id !== id) return;
+        if (!r || r.state !== 'observed') return fail();
+        captureForm();
+        E.shelf = { state: 'observed' };
+        if (typeof r.shopPrice === 'number') {
+          E.product.shopPrice = r.shopPrice;     /* the STORED Shelf price — what changedOnly / a clear compare to */
+          if (E.values.shopPrice === undefined || E.values.shopPrice === '') E.values.shopPrice = r.shopPrice;
+        }
+        var act = (typeof document !== 'undefined') ? document.activeElement : null;
+        var actKey = act && act.getAttribute ? act.getAttribute('data-pf') : null;
+        paint();
+        if (actKey) {
+          var back = host.querySelector('[data-pf="' + actKey + '"]');
+          if (back && back.focus) { try { back.focus(); } catch (_) {} }
+        }
+      }, fail);
+    }
+    function shelfNote () {
+      var sh = S.editor && S.editor.shelf;
+      if (sh && sh.state === 'loading') return 'Loading the Shelf price…';
+      if (sh && sh.state === 'unreadable') return 'Shelf price not loaded. Leave it empty to keep the stored one, or type a new one.';
+      return TIER_HELP;
     }
     function closeEditor () { S.editor = null; _picked = []; paint(); }
 
@@ -1268,15 +1310,27 @@
        retry and one who wonders why the till cannot find their product. */
     /* The product outcome as TEXT, so a photo result can be appended to it. Two toasts in
        a row overwrite one another, and the sync caveat must not be the one that is lost. */
+    /* The Shelf price lives ONLY on the till copy (owner-private, 2026-10-01). When that write did not land the
+       Shelf price was NOT saved, and the message says so in words — never folded into a generic success. */
+    var SHELF_NOT_SAVED = 'The Shelf price was NOT saved — open the product and enter it again.';
     function createText (res) {
-      if (res.replayed) return 'Already saved — no duplicate was created.';
+      var shelfLost = res.shelf && res.shelf.state !== 'saved';
+      if (res.replayed) return 'Already saved — no duplicate was created.' + (shelfLost ? ' ' + SHELF_NOT_SAVED : '');
       if (res.complete) return 'Product added, and it is ready at the till.';
       var missing = Object.keys(res.mirrors || {}).filter(function (k) {
         return res.mirrors[k].state !== 'written';
       });
       return 'Product added to your catalogue. Not yet available at ' +
         (missing.indexOf('pos') > -1 ? 'the till' : 'Inventory') +
-        ' — open Products again to finish syncing.';
+        ' — open Products again to finish syncing.' + (shelfLost ? ' ' + SHELF_NOT_SAVED : '');
+    }
+    function editText (res) {
+      if (res.shelf && res.shelf.state !== 'saved') {
+        return (res.productWritten ? 'Changes saved, but the' : 'The') +
+          ' Shelf price was NOT saved — the till copy of this product could not be updated.';
+      }
+      return (res.mirrors && res.complete === false)
+        ? 'Changes saved — the till has not picked up the new prices yet.' : 'Changes saved.';
     }
 
     function reportCreate (res) { say(createText(res)); }
@@ -1491,8 +1545,7 @@
         if (mode === 'create' && _picked.length && res && res.id) return attachAfterCreate(res);
         S.editor = null;
         if (mode === 'create') reportCreate(res || {});
-        else if (mode === 'edit') say(res && res.mirrors && res.complete === false
-          ? 'Changes saved — the till has not picked up the new prices yet.' : 'Changes saved.');
+        else if (mode === 'edit') say(editText(res || {}));
         else say('Product archived — find it under Archived to restore it.');
         /* Re-READ. The list is never patched from what we believe we wrote. */
         S.rows = null; load();
@@ -2123,7 +2176,7 @@
                 'type="number" inputmode="decimal" min="1" step="any" required', p.price,
                 'Required. What buyers pay on the marketplace.') +
         tierFld('shopPrice', 'SHELF', 'Shelf — the price on the shelf in your shop (KES)',
-                'type="number" inputmode="decimal" min="0" step="any"', p.shopPrice, TIER_HELP) +
+                'type="number" inputmode="decimal" min="0" step="any"', p.shopPrice, shelfNote()) +
         tierFld('wholesalePrice', 'WHOLE', 'Wholesale — bulk price (KES)',
                 'type="number" inputmode="decimal" min="0" step="any"', p.wholesalePrice, TIER_HELP) +
         fld('minWholesaleQty', 'Bulk from (units, optional)', 'type="number" inputmode="numeric" min="2" step="1"',
