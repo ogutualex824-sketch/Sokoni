@@ -41,3 +41,13 @@ Rollback                : redeploy from 055e509 (live archive generation 1788716
 ```
 Effect: an application decision now projects only when a server decision record (applicationDecisions/{appId},
 client-unwritable) names an administrator who is not the applicant; the self-approval path to claims.admin is closed.
+
+## Env parity (post-deploy, 2026-10-01 ~02:40Z)
+sokoni-aa's read-only scripts/infra/env-parity-check.js (7091029; compares variable NAMES + value SHA-256 prefixes,
+never values) against each service's previous revision:
+```
+OK   applicationdecide     applicationdecide-00007-pex     vs applicationdecide-00006-kex     (8 vars)
+OK   applicationreconcile  applicationreconcile-00007-jeg  vs applicationreconcile-00006-geq  (8 vars)
+OK   applicationlifecycle  applicationlifecycle-00008-vaf  vs applicationlifecycle-00007-nox  (8 vars)
+```
+No environment drift (cf. the 09-30 AT_ENV incident).
