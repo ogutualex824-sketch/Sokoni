@@ -33,9 +33,11 @@ An unknown type is refused (`UNKNOWN_CATEGORY`), never guessed.
   `members`, `products`, `team`, `audit`; `financialPartnerStaff/{staffUid}`; `financialEnquiries/{id}`.
   **Client SDK access is denied** (no rules match = deny); the callable `financialPartnerDispatch` is the
   only door.
-* **Registration verification:** a partner can submit only → `under_review`. Only an administrator
-  (`adminReviewRegistration`) sets `verified` / `rejected`; the public profile shows "verified" only then,
-  otherwise "self-declared". Every review writes `adminActions`.
+* **Registration review:** a partner can submit only → `under_review`. Only an administrator
+  (`adminReviewRegistration`) sets `verified` / `rejected` (logged to `adminActions`). This is SOKONI checking
+  paperwork — **not** a regulator confirming a licence — so the public profile **always** says "self-declared"
+  and the listing's `licenceVerified` stays false (sokoni-27's doc). Showing a separate "reviewed by SOKONI"
+  marker publicly is an **owner decision** (raised 2026-10-01).
 
 ## Roles inside one partner
 | Role | Can |

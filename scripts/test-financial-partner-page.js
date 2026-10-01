@@ -43,7 +43,7 @@ for (const m of code.matchAll(/'\s*\+\s*([^;]+?)\s*\+\s*'/g)) {
        .replace(/\.(map|filter|slice|join)\(/g, '(');
   const reads = (e.match(/\b[A-Za-z_]\w*\.[A-Za-z_]\w*\b/g) || []).filter((x) => !/^(SAFE|LIT|COND)\b/.test(x));
   /* whole-row builders whose items are themselves built with esc() — checked separately below */
-  if (/^(cards|r\.rows|S\.members|c\.regulators|c\.productKinds|visible|bad)\b/.test(raw)) continue;
+  if (/^(cards|r\.rows|S\.members|c\.regulators|c\.productKinds|visible|bad|r\.promotions|r\.requests)\b/.test(raw) || /^Object\.keys\(PLACEMENTS\)/.test(raw)) continue;
   if (reads.length) offenders.push(raw.slice(0, 140));
 }
 ck('3 every concatenated server value is escaped (or only used as a condition)', offenders.length === 0, offenders.slice(0, 8));
