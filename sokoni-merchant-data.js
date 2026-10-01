@@ -441,7 +441,7 @@
      MAX_PRICE is introduced with the tiers so a mistyped extra zero is caught here, not at a till. It is
      generous on purpose: property and vehicles are listed through this same writer. */
   var MAX_PRICE = 1000000000;                      /* KES 1,000,000,000 */
-  var TIER_LABELS = [{ key: 'shopPrice', label: 'Shop' }, { key: 'wholesalePrice', label: 'Wholesale' }];
+  var TIER_LABELS = [{ key: 'shopPrice', label: 'Shelf' }, { key: 'wholesalePrice', label: 'Wholesale' }];
   var PRICE_TIER_KEYS = ['price', 'shopPrice', 'wholesalePrice'];
   /* What an EDIT may remove with a field delete. `price` is not here: the Online price is required, and an
      emptied one is refused by _validate rather than deleted. */
@@ -507,7 +507,7 @@
     /* ── PRICE TIERS (owner model, 2026-10-01) ───────────────────────────────────────────────────────
        Three independent prices on one product, no new pricing object:
          ONLINE    = price           marketplace, cart and checkout read it (required, unchanged)
-         SHOP      = shopPrice       the in-store price (optional)
+         SHELF     = shopPrice       the shelf price in the shop (optional; label "Shelf", field and tier key stay shopPrice / shop)
          WHOLESALE = wholesalePrice  the bulk price (optional)
        An absent tier is NOT AVAILABLE and is stored absent — never 0. Each SET tier is a finite number,
        > 0 and <= MAX_PRICE. Ordering: wholesale < online (strict), shop <= online, and when both are set
@@ -536,10 +536,10 @@
       errs.push('The Wholesale price must be lower than the Online price — otherwise it is not a bulk deal.');
     }
     if (okTier(sh) && okTier(on) && sh > on) {
-      errs.push('The Shop price cannot be higher than the Online price.');
+      errs.push('The Shelf price cannot be higher than the Online price.');
     }
     if (okTier(wh) && okTier(sh) && wh > sh) {
-      errs.push('The Wholesale price cannot be higher than the Shop price.');
+      errs.push('The Wholesale price cannot be higher than the Shelf price.');
     }
 
     /* ── FROM 4f67b4b, ported 2026-09-29 (U1): the deal / download / permit rules ──────────────────────── */
@@ -894,7 +894,7 @@
     if (!Object.keys(fields).length && !cleared.length) throw new Error('merchant data: nothing to update');
     _assertCatalogueType(o, fields);
     /* Ordering is checked over the tiers as they will STAND, so raising the Wholesale price above a stored
-       Online price (or lowering Online below a stored Shop price) is refused. Only when the edit touches a
+       Online price (or lowering Online below a stored Shelf price) is refused. Only when the edit touches a
        tier: a legacy record already out of order must not block an unrelated edit such as a typo in the name. */
     var touchesTier = PRICE_TIER_KEYS.some(function (k) { return fields[k] !== undefined || cleared.indexOf(k) > -1; });
     var errs = _validate(fields, { creating: false,

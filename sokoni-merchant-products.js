@@ -2064,13 +2064,13 @@
 
     /* ── PRICES: THREE INDEPENDENT TIERS (owner model, 2026-10-01) ─────────────────────────
        ONLINE    = price           what the marketplace, cart and checkout charge (required)
-       SHOP      = shopPrice       the in-store price (optional)
+       SHELF     = shopPrice       the shelf price in the shop (optional; field name unchanged)
        WHOLESALE = wholesalePrice  the bulk price (optional)
        An empty tier means "not sold at this price": it is never sent as 0. On EDIT an emptied
        tier that the product HAD is sent as null, which the writer turns into a field delete
        (see submit); a tier the merchant never touched shows its stored value and is unchanged.
 
-       The chip (ONL / SHOP / WHOLE) is visual and aria-hidden; the <label> text is the
+       The chip (ONL / SHELF / WHOLE) is visual and aria-hidden; the <label> text is the
        accessible name. Every input keeps the form's 46px height (>= 44px targets).
 
        The read-out below is computed from the numbers on screen and labelled as a preview;
@@ -2110,10 +2110,10 @@
         }
       }
       if (sh > 0 && on > 0 && sh > on) {
-        strip += '<div class="pr-warn">⚠️ The Shop price cannot be higher than the Online price.</div>';
+        strip += '<div class="pr-warn">⚠️ The Shelf price cannot be higher than the Online price.</div>';
       }
       if (wp > 0 && sh > 0 && wp > sh) {
-        strip += '<div class="pr-warn">⚠️ The Wholesale price cannot be higher than the Shop price.</div>';
+        strip += '<div class="pr-warn">⚠️ The Wholesale price cannot be higher than the Shelf price.</div>';
       }
       return '<div class="pr-sec pr-prices" role="group" aria-labelledby="pr-prices-h">' +
         '<div class="pr-sec-h"><span class="pr-sec-e">💰</span>' +
@@ -2122,7 +2122,7 @@
         tierFld('price', 'ONL', 'Online — marketplace price (KES)',
                 'type="number" inputmode="decimal" min="1" step="any" required', p.price,
                 'Required. What buyers pay on the marketplace.') +
-        tierFld('shopPrice', 'SHOP', 'Shop — in-store price (KES)',
+        tierFld('shopPrice', 'SHELF', 'Shelf — the price on the shelf in your shop (KES)',
                 'type="number" inputmode="decimal" min="0" step="any"', p.shopPrice, TIER_HELP) +
         tierFld('wholesalePrice', 'WHOLE', 'Wholesale — bulk price (KES)',
                 'type="number" inputmode="decimal" min="0" step="any"', p.wholesalePrice, TIER_HELP) +

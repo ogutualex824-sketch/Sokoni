@@ -3,7 +3,7 @@
    ══════════════════════════════════════════════════════════════════════════════
    Owner model: three independent prices on one product, no new pricing object.
      ONLINE    = price           (required; marketplace, cart, checkout read it)
-     SHOP      = shopPrice       (new, optional; the in-store price)
+     SHELF     = shopPrice       (new, optional; label "Shelf", field unchanged)
      WHOLESALE = wholesalePrice  (existing, optional; the bulk price)
    An absent tier is NOT AVAILABLE and is stored ABSENT — never 0, never null.
 
@@ -115,7 +115,7 @@ const edit = async (extra, patch, opts) => {
                                                                      b: { shopId: 'shop_A', sellerUid: 'uid_A', name: 'y', price: 9 } }) });
   const rowA = (listed.rows || listed).find ? (listed.rows || listed).find((r) => r.id === 'a') : null;
   const rowB = (listed.rows || listed).find ? (listed.rows || listed).find((r) => r.id === 'b') : null;
-  ck('F3 a listed row carries the stored Shop price', !!rowA && rowA.shopPrice === 8, rowA && JSON.stringify(rowA.shopPrice));
+  ck('F3 a listed row carries the stored Shelf price', !!rowA && rowA.shopPrice === 8, rowA && JSON.stringify(rowA.shopPrice));
   ck('F4 ...and an absent one as null (not 0)', !!rowB && rowB.shopPrice === null, rowB && JSON.stringify(rowB.shopPrice));
   ck('F5 MAX_PRICE is exported and positive', typeof M.MAX_PRICE === 'number' && M.MAX_PRICE > 0, M.MAX_PRICE);
 
@@ -136,11 +136,11 @@ const edit = async (extra, patch, opts) => {
 
   head('Z - each set tier: finite, > 0, <= MAX_PRICE');
   let x = await createErr({ name: 'S', price: 100, shopPrice: 0 });
-  ck('Z1 Shop price 0 is refused, naming the tier', !!x.e && /Shop price must be above zero/.test(x.e.message) && x.db.log.length === 0, x.e && x.e.message);
+  ck('Z1 Shelf price 0 is refused, naming the tier', !!x.e && /Shelf price must be above zero/.test(x.e.message) && x.db.log.length === 0, x.e && x.e.message);
   x = await createErr({ name: 'S', price: 100, wholesalePrice: 0 });
   ck('Z2 Wholesale price 0 is refused, naming the tier', !!x.e && /Wholesale price must be above zero/.test(x.e.message) && x.db.log.length === 0, x.e && x.e.message);
   x = await createErr({ name: 'S', price: 100, shopPrice: -5 });
-  ck('Z3 a negative Shop price is refused', !!x.e && /Shop price must be above zero/.test(x.e.message), x.e && x.e.message);
+  ck('Z3 a negative Shelf price is refused', !!x.e && /Shelf price must be above zero/.test(x.e.message), x.e && x.e.message);
   x = await createErr({ name: 'S', price: 100, wholesalePrice: 'abc' });
   ck('Z4 a non-number Wholesale price is refused', !!x.e && /Wholesale price must be above zero/.test(x.e.message), x.e && x.e.message);
   x = await createErr({ name: 'S', price: M.MAX_PRICE + 1 });
@@ -155,9 +155,9 @@ const edit = async (extra, patch, opts) => {
   x = await createErr({ name: 'S', price: 100, wholesalePrice: 150 });
   ck('O2 Wholesale above Online is refused', !!x.e && /Wholesale price must be lower than the Online price/.test(x.e.message), x.e && x.e.message);
   x = await createErr({ name: 'S', price: 100, shopPrice: 120 });
-  ck('O3 Shop above Online is refused', !!x.e && /Shop price cannot be higher than the Online price/.test(x.e.message), x.e && x.e.message);
+  ck('O3 Shelf above Online is refused', !!x.e && /Shelf price cannot be higher than the Online price/.test(x.e.message), x.e && x.e.message);
   x = await createErr({ name: 'S', price: 100, shopPrice: 80, wholesalePrice: 90 });
-  ck('O4 Wholesale above Shop is refused', !!x.e && /Wholesale price cannot be higher than the Shop price/.test(x.e.message), x.e && x.e.message);
+  ck('O4 Wholesale above Shelf is refused', !!x.e && /Wholesale price cannot be higher than the Shelf price/.test(x.e.message), x.e && x.e.message);
   ck('O5 ...every refusal writes nothing', x.db.log.length === 0 && x.db.mlog.length === 0);
   db = adapter();
   r = await create(db, { name: 'S', price: 100, shopPrice: 100, wholesalePrice: 100 - 0.5 });
@@ -203,15 +203,15 @@ const edit = async (extra, patch, opts) => {
   ed = await edit({ wholesalePrice: 800 }, { price: 700 });
   ck('E10 lowering Online below the STORED Wholesale is refused', !!ed.e && /Wholesale price must be lower than the Online price/.test(ed.e.message) && ed.db.log.length === 0, ed.e && ed.e.message);
   ed = await edit({ shopPrice: 950 }, { price: 900 });
-  ck('E11 lowering Online below the STORED Shop is refused', !!ed.e && /Shop price cannot be higher than the Online price/.test(ed.e.message), ed.e && ed.e.message);
+  ck('E11 lowering Online below the STORED Shelf is refused', !!ed.e && /Shelf price cannot be higher than the Online price/.test(ed.e.message), ed.e && ed.e.message);
   ed = await edit({ shopPrice: 900 }, { wholesalePrice: 950 });
-  ck('E12 a Wholesale above the STORED Shop is refused', !!ed.e && /Wholesale price cannot be higher than the Shop price/.test(ed.e.message), ed.e && ed.e.message);
+  ck('E12 a Wholesale above the STORED Shelf is refused', !!ed.e && /Wholesale price cannot be higher than the Shelf price/.test(ed.e.message), ed.e && ed.e.message);
   ed = await edit({ shopPrice: 900 }, { shopPrice: null, wholesalePrice: 950 });
   ck('E13 ...but clearing the Shop tier in the same edit makes that Wholesale valid', !ed.e && ed.db.store.p1.wholesalePrice === 950 && !has(ed.db.store.p1, 'shopPrice'), ed.e && ed.e.message);
   ed = await edit({ wholesalePrice: 1500 }, { name: 'Legacy fix' });
   ck('E14 a legacy record already out of order does not block an unrelated edit', !ed.e && ed.db.store.p1.name === 'Legacy fix', ed.e && ed.e.message);
   ed = await edit({ shopPrice: 950 }, { shopPrice: 0 });
-  ck('E15 an edit setting a tier to 0 is refused (0 is not "remove")', !!ed.e && /Shop price must be above zero/.test(ed.e.message) && ed.db.log.length === 0, ed.e && ed.e.message);
+  ck('E15 an edit setting a tier to 0 is refused (0 is not "remove")', !!ed.e && /Shelf price must be above zero/.test(ed.e.message) && ed.db.log.length === 0, ed.e && ed.e.message);
   ed = await edit({ shopPrice: 950 }, { shopPrice: null }, { supportsFieldDelete: false });
   ck('E16 an adapter that cannot express a delete: the removal is REFUSED with zero writes',
      !!ed.e && ed.e.code === 'field-delete-unsupported' && ed.db.log.length === 0 && ed.db.store.p1.shopPrice === 950, ed.e && ed.e.code);
@@ -261,7 +261,7 @@ const edit = async (extra, patch, opts) => {
     return re.test(PSRC);
   };
   ck('U1 Online — marketplace price, chip ONL, required', tier('price', 'ONL', 'Online — marketplace price (KES)') && /'Online — marketplace price \(KES\)',\s*'type="number" inputmode="decimal" min="1" step="any" required'/.test(PSRC));
-  ck('U2 Shop — in-store price, chip SHOP, optional', tier('shopPrice', 'SHOP', 'Shop — in-store price (KES)'));
+  ck('U2 Shelf — the price on the shelf, chip SHELF, optional (field stays shopPrice)', tier('shopPrice', 'SHELF', 'Shelf — the price on the shelf in your shop (KES)'));
   ck('U3 Wholesale — bulk price, chip WHOLE, optional', tier('wholesalePrice', 'WHOLE', 'Wholesale — bulk price (KES)'));
   ck('U4 helper text "Leave empty if not sold at this price"', /var TIER_HELP = 'Leave empty if not sold at this price';/.test(PSRC)
      && (PSRC.match(/p\.(shopPrice|wholesalePrice), TIER_HELP\)/g) || []).length === 2);
