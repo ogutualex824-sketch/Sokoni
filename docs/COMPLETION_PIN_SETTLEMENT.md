@@ -105,3 +105,38 @@ unless a separately verified remittance exists; the gate's `paymentVerified` req
   - WR-1..WR-4 run the REAL settleOrder from SETTLE_ROOT on the same emulator data: the owner's three invariants,
     plus concurrent completions releasing once.
   - **Emulator NOT YET RUN** (RAM below the floor, a peer deploy in flight).
+
+## Built 2026-10-01 — deploy queue (exact, scoped; NOTHING deployed)
+
+Each functions step:
+- runs from its OWN tree (every one is a verbatim live-archive baseline plus the change) and passes the lineage
+  gate against the live archive;
+- uses the predeploy hooks in the unquoted `node scripts/X.js` form (sokoni-27: the quoted form never executes on
+  this machine) and confirms the guard banner in the log;
+- keeps `functions/.env` for the CLI, excludes it from the artefact, and checks env vars (AT_ENV…) against the
+  previous revision;
+- verifies by `status.traffic`.
+
+| # | target | tree @ commit | why first |
+|---|---|---|---|
+| 1 | `onOrderStatusChange` | `fix/settle-gate-on-oosc-00065` @ **e2e4f0e** (base 106db63 = live 00065-fud) | closes the unpaid / self-dealt seller credit; escrow release; PIN issue at paid |
+| 2 | `deliveryPinOnAccept`, `getMyDeliveryPin` | `fix/pin-accept-read-on-live-0909a` @ **d221b25** (base 2d20faa = live 09-09) | the buyer must read a SEALED PIN before step 3 issues one |
+| 3 | `onNewOrderCreated`, `completeDeliveryWithPin`, `sendDeliveryPin` (new) | `fix/pin-issue-verify-on-live-0909b` @ **15c2c2e** (base 5f3c96c = live 09-09) | the engine: issue / send / verify |
+| 4 | `webhookIntasend` | `fix/completion-pin-seam-on-f076c64` @ **3c0a4e6** (Unit 2 + 4b + booking seam + seller hold + proofPin retired) | needs step 1 (release path). B1 sequencing with Unit 1 / Unit 3 / 4a is unchanged |
+| 5 | hosting | `hosting/completion-pin-ui-on-72dca56` @ **252a617**, rebased onto the then-live tip | needs steps 2 and 3 |
+
+**Gates still open before steps 1–4:**
+- the B1 chain emulator rows (BK-1..5, WR-1..4: the owner's three invariants on the real webhook + settleOrder);
+- sokoni-4d's booking-pin-release emulator run against WH_ROOT=C:/temp/sok-seam;
+- RAM ≥ 512 MB.
+
+**Not in this programme:**
+- **AdminOS actions.** Resend / invalidate by an admin need a server admin path. `sendDeliveryPin` accepts only
+  the seller / assigned rider / buyer.
+- **AdminOS read of `bookingPaymentReviews`, `pinDeliveryFailures` and `pinSecurityEvents`.** Server-only today;
+  admin-read rules have been requested in sokoni-32's combined ruleset.
+- **App Check enforcement on the PIN callables.** Recorded per call (`appCheck`) and not yet enforced: the App
+  Check diagnostic is open.
+- **WhatsApp:** the slot is OFF until the owner provisions a WABA.
+- **`smsEnqueue` authorisation:** a separate security fix.
+- **Hub-by-hub bookNow → service_booking intents.**
