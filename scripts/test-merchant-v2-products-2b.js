@@ -130,6 +130,9 @@ function store(seed) {
     queryProducts: async (spec) => Object.values(products).filter((p) =>
       (spec.where || []).every(([f, op, v]) => op === '==' && p[f] === v)),
     getProduct: async (id) => products[id] || null,
+    /* Shelf price (owner-private, 2026-10-01): the writer reads the stored Shelf from posProducts/{id} when an edit
+       touches the Online / Wholesale tier. This fixture is an owner-readable till copy WITHOUT a Shelf price. */
+    getPosProduct: async (id) => mirrors['posProducts/' + id] || { sellerId: UID },
     writeProduct: async ({ id, data, mode }) => {
       log.push({ op: mode, collection: 'products', id });
       if (mode === 'create' && products[id]) return { replayed: true };

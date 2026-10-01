@@ -48,6 +48,9 @@ function mkDb (over) {
     writeProduct: async (o) => { calls.writes.push(o); return { replayed: false }; },
     deleteProduct: async () => ({}),
     getProduct: async () => { calls.gets++; return calls._existing || null; },
+    /* Shelf price (owner-private, 2026-10-01): the writer reads the stored Shelf from posProducts/{id} when an edit
+       touches the Online / Wholesale tier. This fixture is an owner-readable till copy WITHOUT a Shelf price. */
+    getPosProduct: async () => ({ sellerId: 'seller_1' }),
     _existing: null,
   }, over || {});
 }

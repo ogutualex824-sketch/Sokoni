@@ -49,6 +49,9 @@ function adapter(seed) {
     },
     deleteProduct: async ({ id }) => { log.push({ op: 'delete', id }); delete store[id]; },
     getProduct: async (id) => store[id] || null,
+    /* Shelf price (owner-private, 2026-10-01): the writer reads the stored Shelf from posProducts/{id} when an edit
+       touches the Online / Wholesale tier. This fixture is an owner-readable till copy WITHOUT a Shelf price. */
+    getPosProduct: async () => ({ sellerId: 'uid_A' }),
     queryProducts: async () => Object.values(store),
   };
 }
