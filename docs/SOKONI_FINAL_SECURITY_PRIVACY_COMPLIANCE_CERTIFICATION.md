@@ -25,7 +25,7 @@ SOKONI as "fully secure" or "fully compliant".
 | B. Final commit | not yet; see the repair branches below |
 | C. Live hosting version | `be7183e87a95c14a` (live release), commit 72dca56 |
 | D. Function revisions (sample) | applicationLifecycle 00007-nox · sokoniChat 00058-hal · webhookIntasend 00068-del · finaliseExpiredDeletions 00005-sof · getErrorLog 00007-fik · processEmailQueue 00044-yos — 1,723 functions in all |
-| E. Firestore rules | served `b87c94e4`. Storage rules `182624f3` |
+| E. Firestore rules | served `b87c94e4` at census; **live is now `f259c0b5`** (reported by sokoni-32, 2026-10-01; re-fetch before any rules claim). Storage rules `182624f3` |
 | F. Composite indexes | 416 live, all READY. The repo has 408; 8 exist only live |
 
 ## Repair branches (all pushed, none deployed)
@@ -45,7 +45,7 @@ SOKONI as "fully secure" or "fully compliant".
 |---|---|---|---|
 | G | API inventory | UNPROVEN | 1,723 functions, ingress ALLOW_ALL; ~60% of callables enforce App Check (census). No machine-readable per-endpoint inventory yet. |
 | H | Rate limits | FIXED for reset + data-rights intake; FAIL elsewhere | New fail-closed `shared/durable-limit.js` (tests: reset 25/0, intake 7/0). The shared limiters still fail open, and only ~42 of 1,678 callables reference a limiter. |
-| I | Identity / UID containment | FIXED (verification badge, jobs — in sokoni-32's rules release) · FAIL, evidence handed to sokoni-32 (conversations, accountProfiles and deliveryRiders: safe as proposed; deliveries, orders and users: safe with adjustment, ≈ +1.5 KB) · POS cross-tenant with sokoni-70 | Census 1. Writer census across 402 refs with positive controls (scratchpad rules-census). Owner DECIDED 2026-10-01: seller payout readiness is admin-approved only (functions 2070d1e, hosting 6f0a576 + approvals view, rules via sokoni-32; order functions → hosting → rules). |
+| I | Identity / UID containment | FIXED in sokoni-32's combined candidate (not yet committed or released): verification badge, jobs, conversations create false, accountProfiles owner read, deliveryRiders read + stats, orders seller status blocklist — test-census-4d-rules 18/0 vs live 9/9 · DEFERRED (owner / unproven): deliveries sender status transitions, orders create seller-match, users self-update · payout-approval rules HELD until functions 2070d1e and hosting 6f0a576 are live · POS cross-tenant with sokoni-70 | Census 1 + writer census across 402 refs. Owner decided 2026-10-01: seller payout readiness is admin-approved only. |
 | J | 25-minute password reset | FIXED | `test-password-reset-25m` 25/0: 24m59s works, 25m01s refused; sabotage fails it. Residual: native 1-hour codes via direct API (config). |
 | K | Rider approval | FAIL — owned by sokoni-27 | Wording, agreement and revocation findings handed over; none fixed on any branch. |
 | L | Provider approval / publication | FIXED | `test-provider-publish-gate` 19/0. Counterproof on live code: self-publish → active + claim; enterprise plan on a fake ref → 5% commission. |
