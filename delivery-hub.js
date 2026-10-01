@@ -558,7 +558,7 @@ const DeliveryHub = {
   async confirmReceipt(fsId, senderUid) {
     await _timelineUpdate(fsId, 'completed', senderUid, {
       completedAt:       serverTimestamp(),
-      sellerPayoutReady: true,
+      /* Owner 2026-10-01: seller payout readiness is approved by an administrator (adminApproveSellerPayout); a confirmation no longer sets it. */
     });
   },
 

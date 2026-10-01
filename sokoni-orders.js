@@ -503,9 +503,8 @@ const SokoniOrders = {
   async buyerConfirm(orderId, buyerUid) {
     /* completedAt is stamped by transitionOrder (COMPLETED); buyerConfirmedAt marks
        the same moment and is server-stamped via serverStampFields. */
-    return this.transitionOrder(orderId, ORDER_STATUS.COMPLETED, buyerUid, {
-      sellerPayoutReady: true,
-    }, ['buyerConfirmedAt']);
+    /* Owner 2026-10-01: seller payout readiness is approved by an administrator (adminApproveSellerPayout); a confirmation no longer sets it. */
+    return this.transitionOrder(orderId, ORDER_STATUS.COMPLETED, buyerUid, {}, ['buyerConfirmedAt']);
   },
 
   /* ── cancelOrder(orderId, cancelledByUid, reason?) ── */
