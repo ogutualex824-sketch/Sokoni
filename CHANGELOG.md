@@ -1,3 +1,28 @@
+## 2026-10-01 — Shelf price is owner-private (uploader writer) — certified, NOT deployed
+
+Owner decision: the Shelf (in-shop) price must be truly private. `products/{id}` is publicly readable (rules `read: if true`;
+/api/catalogue returns whole docs), so `shopPrice` is NEVER stored there.
+- **Where it lives:** only `posProducts/{id}.shopPrice`. Served rules (ruleset f259c0b5, measured 2026-10-01): read/update/delete
+  `isPosOwner() || isAdmin()`, isPosOwner = `resource.data.sellerId == request.auth.uid` — owner and admins only; shop staff
+  cannot read it. Removed from `tenants/{uid}/inventory_products` (readable by claimed staff). `wholesalePrice` unchanged
+  (public on products, on both mirrors).
+- **Create:** validated with the other tiers, then stripped from the products write; the till copy carries it. If the till copy
+  write fails, the result says the Shelf price was NOT saved.
+- **Edit:** Shelf set/clear touches `posProducts/{id}.shopPrice` only (a missing till copy is reported, never created). A leaked
+  `products.shopPrice` is deleted in the same write. Ordering checks read the stored Shelf from the till copy; if it is unreadable,
+  a price edit is refused (`shelf-unreadable`, zero writes); unrelated edits never read it.
+- **Editor:** loads the Shelf price once per opened product (`loadShelfPrice`, one owner `getDoc`: observed / missing /
+  unreadable); an unloaded Shelf is never cleared. sokoni-70's `listShelfPrices` (picker branch) is the LIST reader for the
+  selling screen; both read the same field under the same owner rule — one store, two access shapes.
+- **Not covered:** archive/restore do not delete a leaked `products.shopPrice` (nothing deployed, so none expected).
+  `costPrice` has the same public exposure — separate census, needs the owner's go.
+- **Server:** posCompleteCheckout must resolve Shelf from `posProducts/{id}.shopPrice` (Admin SDK, sellerId check) and re-validate
+  ordering itself — the rules do not check tier values (sokoni-70: 4aa2227).
+- **Evidence:** test-price-tiers-writer 111/0 (two negative controls fail as intended) · uploader-writer-decisions 49/0 ·
+  merchant-product-writer 37/0 · inventory-authority-boundary 72/0 · merchant-v2-products-2b 59/0 · merchant-products-native 23/0 ·
+  products-detail-sheet 30/0 · listing-studio 63/0 · gate-inventory-writers PASS. Browser certs queued.
+- Files: `sokoni-merchant-data.js`, `sokoni-merchant-products.js`, `merchant-v2.html` (adapter `getPosProduct`), `scripts/test-price-tiers-writer.js` + fixtures.
+
 ## [2026-10-01] - Three price tiers at upload: Online=price, Shop=shopPrice (new), Wholesale=wholesalePrice; absent = not available; wholesale ≤ shop ≤ online, wholesale < online; minWholesaleQty no longer required; server tier pricing at the till = the POS session's slice; NOT deployed
 
 **Branch `hosting/uploader-advanced-on-54b72cc`** (on top of the advanced uploader units A–C below; ships with them).
