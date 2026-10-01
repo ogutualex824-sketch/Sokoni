@@ -111,7 +111,11 @@ ck('...and NOT the legacy admin.html', !/return 'admin\.html'/.test(fnBody));
 ck('...and the destination is a real page', fs.existsSync(path.join(ROOT, 'admin-os.html')));
 ck('all three admin routers agree on the canonical console',
    /return 'admin-os\.html'/.test(perms) &&
-   /'super-admin\.html'\s*:\s*'admin-os\.html'/.test(read('shared-header.js')) &&
+   /* shared-header either names the console itself (older lineages) or DELEGATES to
+      SokoniPermissions.adminHomeFor(), which the clause above pins to admin-os.html.
+      Delegation is agreement by construction, not a disagreement. */
+   (/'super-admin\.html'\s*:\s*'admin-os\.html'/.test(read('shared-header.js')) ||
+    /var admin = P\.adminHomeFor\(\);\s*if \(admin\) return admin;/.test(read('shared-header.js'))) &&
    /admin:\s*'admin-os\.html'/.test(read('sokoni-admin-entry.js')),
    'sokoni-permissions.js, shared-header.js, sokoni-admin-entry.js');
 ck('it returns null when neither claim is held', /return null/.test(fnBody));
