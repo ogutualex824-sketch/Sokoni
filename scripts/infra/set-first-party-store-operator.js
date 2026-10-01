@@ -1,28 +1,26 @@
 #!/usr/bin/env node
 /**
- * ONE-OFF — name the SOKONI Store's operator, and give the store its OWN wallet on the
- * company account. DRY RUN BY DEFAULT.
+ * ONE-OFF — name the SOKONI Store's operator. DRY RUN BY DEFAULT.
  *
  *   node scripts/infra/set-first-party-store-operator.js --operator-uid <uid> [--expect-email <email>]
  *   node scripts/infra/set-first-party-store-operator.js --operator-uid <uid> --expect-email <email> --apply
  *
  * Owner decisions 2026-10-01 (binding):
- *   · the store stays OWNED by its company account — this script never writes a shop,
- *     a business, an owner field, a claim, or a payout destination;
+ *   · the store stays OWNED by its company account — this script never writes a shop, a
+ *     business, an owner field, a claim, a wallet, or a payout destination;
  *   · ONE operator — written to the server-only record firstPartyStoreOperators/{storeId};
- *   · the store's own wallet is wallets/{companyOwnerUid} — created with the EXISTING
- *     wallet-engine v2 shape (functions/wallet-engine.js _ensureWallet), balance 0.
+ *   · the store wallet is wallets/{businessId} (= wallets/SOK-XX2338), where the LIVE settlement
+ *     path credits store sales. It is created by the FIRST SETTLED SALE, never by this script.
+ *     (The earlier plan to create wallets/{companyOwnerUid} was withdrawn: no path credits it.)
  *
  * WHAT THE DRY RUN DOES (read-only): Firestore reads of the first-party chain, the operator
- * record, three wallet documents; one Firebase Auth getUser for the named operator. No write.
+ * record and wallets/{businessId}; one Firebase Auth getUser for the named operator. No write.
  *
  * WHAT --apply DOES, and only this:
- *   1. firstPartyStoreOperators/{storeId}.create({...})  — ONLY if absent. An existing record
- *      that already names exactly this operator is a no-op; one that differs is REFUSED
- *      (never overwritten — change of operator is a deliberate, separate act).
- *   2. wallets/{companyOwnerUid}.create({...balance:0...}) — ONLY if absent. An existing wallet
- *      is never touched. create() is the claim: a concurrent creator makes this fail with
- *      ALREADY_EXISTS, which is reported and left alone (never get()+set()).
+ *   firstPartyStoreOperators/{storeId}.create({...}) — ONLY if absent. An existing record that
+ *   already names exactly this operator is a no-op; one that differs is REFUSED (never
+ *   overwritten). create() is the claim: a concurrent creator makes it fail with ALREADY_EXISTS,
+ *   which is reported and left alone (never get()+set()).
  *
  * REFUSES (exit 2) unless: exactly one shop carries firstParty:true, it has an ownerId and no
  * sellerUid, the owner has exactly one active business whose businessType is
@@ -46,20 +44,8 @@ const operatorUid = _arg('--operator-uid');
 const expectEmail = _arg('--expect-email');
 const SET_BY = 'scripts/infra/set-first-party-store-operator.js';
 
-/** wallet-engine.js _ensureWallet (v2) creation shape, balance 0. Kept in step by
-    scripts/test-sokoni-first-party-store.js (I1), which parses the source and fails on drift. */
-function walletV2Shape(uid, now) {
-  return {
-    uid,
-    balance: 0, pendingBalance: 0, savingsBalance: 0, cashbackBalance: 0, rewardPoints: 0,
-    tier: 'bronze', frozen: false, currency: 'KES',
-    dailyLimit: 50000, monthlyLimit: 500000, dailySpent: 0, monthlySpent: 0,
-    pinHash: null, pinLocked: false,
-    lastTopUp: null, pendingTopUp: null, pendingPayout: null,
-    createdAt: now, v2: true,
-  };
-}
-
+/** The record the gate reads. No payoutDestination — the operator sets that through
+    sokoniStoreSetPayoutDestination (operator + PIN + verified phone), never this script. */
 function operatorRecord(chain, uid, now) {
   return {
     storeId: chain.storeId,
@@ -79,7 +65,7 @@ async function main() {
   if (!admin.apps.length) admin.initializeApp();
   db = admin.firestore();
   const project = admin.app().options.projectId || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || '(ADC default)';
-  console.log(`SOKONI Store operator + wallet — ${APPLY ? 'APPLY' : 'DRY RUN (no writes)'} — project ${project}\n`);
+  console.log(`SOKONI Store operator — ${APPLY ? 'APPLY' : 'DRY RUN (no writes)'} — project ${project}\n`);
   if (!operatorUid) refuse('--operator-uid is required (no default: the operator is named, never assumed)');
 
   /* 1 — the chain, from data. */
@@ -102,6 +88,7 @@ async function main() {
   show('  email', user.email);
   show('  emailVerified', user.emailVerified);
   show('  disabled', user.disabled);
+  show('  verified phone (last 3)', user.phoneNumber ? String(user.phoneNumber).slice(-3) : undefined);
   if (user.disabled) refuse('operator account is disabled');
   if (expectEmail && String(user.email || '').toLowerCase() !== expectEmail.toLowerCase()) {
     refuse(`operator email ${user.email} does not match --expect-email ${expectEmail}`);
@@ -120,22 +107,10 @@ async function main() {
   else recAction = 'REFUSE (record exists and differs — not overwritten)';
   show('  PLAN', recAction);
 
-  /* 4 — the store's own wallet on the company account. */
-  const wRef = db.collection('wallets').doc(chain.ownerUid);
-  const [wSnap, landSnap, bwSnap] = await Promise.all([
-    wRef.get(),
-    db.collection('wallets').doc(chain.businessId).get(),
-    db.collection('businessWallets').doc(chain.businessId).get(),
-  ]);
-  console.log('\nwallets/' + chain.ownerUid + '  (the store\'s own wallet, company account)');
-  show('  BEFORE', wSnap.exists ? { balance: wSnap.data().balance, v2: wSnap.data().v2, pinSet: !!wSnap.data().pinHash } : undefined);
-  const wAction = wSnap.exists ? 'no-op (exists — never touched)' : 'create (v2 shape, balance 0)';
-  show('  PLAN', wAction);
-  console.log('\nSETTLEMENT LANDING (read-only, for the owner):');
-  show('  wallets/' + chain.businessId, landSnap.exists ? { balance: landSnap.data().balance } : undefined);
-  show('  businessWallets/' + chain.businessId, bwSnap.exists ? { balanceMinor: bwSnap.data().balanceMinor } : undefined);
-  console.log('  NOTE: on the a545818 lineage order-settlement credits wallets/{order.sellerUid} = wallets/' +
-    chain.businessId + ', NOT wallets/' + chain.ownerUid + '. See docs/SOKONI_STORE_OPERATOR_CENSUS.md.');
+  /* 4 — the store wallet, reported only. */
+  const wSnap = await db.collection('wallets').doc(chain.businessId).get();
+  console.log('\nwallets/' + chain.businessId + '  (the store wallet — created by the first settled sale, never here)');
+  show('  STATE', wSnap.exists ? { balance: wSnap.data().balance, pendingPayout: wSnap.data().pendingPayout } : undefined);
 
   if (recAction.startsWith('REFUSE')) refuse('operator record differs; resolve deliberately before re-running');
 
@@ -144,21 +119,15 @@ async function main() {
     return;
   }
 
-  const now = new Date();
   if (recAction === 'create') {
-    try { await recRef.create(operatorRecord(chain, operatorUid, now)); console.log('WROTE operator record'); }
+    try { await recRef.create(operatorRecord(chain, operatorUid, new Date())); console.log('WROTE operator record'); }
     catch (e) { if (e && e.code === 6) console.log('operator record appeared concurrently — left untouched'); else throw e; }
   }
-  if (!wSnap.exists) {
-    try { await wRef.create(walletV2Shape(chain.ownerUid, now)); console.log('CREATED company wallet'); }
-    catch (e) { if (e && e.code === 6) console.log('wallet appeared concurrently — left untouched'); else throw e; }
-  }
-  const [a1, a2] = await Promise.all([recRef.get(), wRef.get()]);
-  show('\noperator record AFTER', a1.exists ? { operatorUids: a1.data().operatorUids } : undefined);
-  show('company wallet AFTER', a2.exists ? { balance: a2.data().balance, v2: a2.data().v2 } : undefined);
+  const after = await recRef.get();
+  show('\noperator record AFTER', after.exists ? { operatorUids: after.data().operatorUids } : undefined);
 }
 
 if (require.main === module) {
   main().then(() => process.exit(0)).catch((e) => { console.error('ERROR', e && (e.stack || e.message)); process.exit(1); });
 }
-module.exports = { walletV2Shape, operatorRecord };
+module.exports = { operatorRecord };

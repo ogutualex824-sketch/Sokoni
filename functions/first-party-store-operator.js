@@ -167,6 +167,8 @@ async function assertStoreOperator(req, dbOverride) {
   return {
     uid, storeId: chain.storeId, businessId: chain.businessId, ownerUid: chain.ownerUid,
     shop: chain.shop, business: chain.business,
+    /* The record itself — carries the server-only payoutDestination. Never returned to a client whole. */
+    record,
   };
 }
 

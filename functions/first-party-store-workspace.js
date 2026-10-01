@@ -22,7 +22,8 @@
  *   commission / sellerBilling edits to index.js (they rebuild live payment functions).
  *
  * MONEY: read-only here. No wallet is created, credited or debited by any callable in this
- * file, and no payout destination is written. See docs/SOKONI_STORE_OPERATOR_CENSUS.md.
+ * file, and no payout destination is written here — withdrawals live in
+ * first-party-store-payout.js (held behind a server-only flag). See docs/SOKONI_STORE_OPERATOR_CENSUS.md.
  */
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
@@ -83,6 +84,13 @@ async function _audit(db, gate, action, detail) {
 }
 
 /** The public-profile projection the workspace edits. */
+/** Server-only destination → the client sees last 3 digits only. */
+function _destinationOf(record) {
+  const d = record && record.payoutDestination;
+  const digits = d && typeof d.msisdn === 'string' ? d.msisdn.replace(/\D/g, '') : '';
+  return digits.length >= 3 ? { status: 'set', last3: digits.slice(-3) } : { status: 'not-set' };
+}
+
 function _profileOf(shop) {
   const s = shop || {};
   return {
@@ -111,8 +119,8 @@ _h.sokoniStoreGetContext = async (req, dbOverride) => {
     businessId: gate.businessId,
     businessName: gate.business.name || gate.business.businessName || null,
     profile: _profileOf(gate.shop),
-    /* Stated, not implied — see the census for what is and is not built. */
-    payoutDestination: { status: 'unavailable', reason: 'no-store-payout-destination-authority' },
+    payoutDestination: _destinationOf(gate.record),
+    payoutsEnabled: await require('./first-party-store-payout')._internal.flagOn(db),
   };
 };
 
@@ -228,40 +236,30 @@ _h.sokoniStoreListOrders = async (req, dbOverride) => {
 };
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   WALLET — read-only. Reports the store's OWN wallet (company account) and, separately,
-   where this lineage's settlement actually lands, so the operator is never shown a
-   balance that silently means something else. Missing = exists:false, balance null.
+   WALLET — read-only. The store wallet is wallets/{businessId} = wallets/SOK-XX2338: where
+   the LIVE settlement path (order-settlement: wallets/{order.sellerUid}) credits store sales
+   (owner decision 2026-10-01, proven from the live onOrderStatusChange archive). It is created
+   by the first settled sale — never here. Absent = settled:false, balance null (never 0).
    ══════════════════════════════════════════════════════════════════════════════ */
 _h.sokoniStoreGetWallet = async (req, dbOverride) => {
   const db = dbOverride || _db();
   const gate = await OP.assertStoreOperator(req, db);
-  const [company, landing, business] = await Promise.all([
-    db.collection('wallets').doc(gate.ownerUid).get(),
-    db.collection('wallets').doc(gate.businessId).get(),
-    db.collection('businessWallets').doc(gate.businessId).get(),
-  ]);
-  const w = company.exists ? (company.data() || {}) : null;
-  const l = landing.exists ? (landing.data() || {}) : null;
-  const b = business.exists ? (business.data() || {}) : null;
+  const snap = await db.collection('wallets').doc(gate.businessId).get();
+  const w = snap.exists ? (snap.data() || {}) : null;
   return {
     ok: true,
     storeWallet: {
-      account: 'company',
+      walletId: gate.businessId,
       exists: !!w,
+      settled: !!w,
+      state: w ? 'active' : 'no-sale-settled-yet',
       balance: w ? _num(w.balance) : null,          /* SHILLINGS (wallets/* convention) */
       pendingPayout: w ? _num(w.pendingPayout) : null,
       currency: (w && w.currency) || 'KES',
-      pinSet: w ? !!w.pinHash : null,
       frozen: w ? w.frozen === true : null,
     },
-    /* Where marketplace settlement credits on this lineage (order-settlement.js:
-       wallets/{order.sellerUid}) and where the release lineage's settlement-destination
-       credits (businessWallets/{businessId}). Reported, never summed. */
-    settlementLanding: {
-      personalCollectionByBusinessId: { exists: !!l, balance: l ? _num(l.balance) : null },
-      businessWallet: { exists: !!b, balanceMinor: b ? _num(b.balanceMinor) : null },
-    },
-    payoutDestination: { status: 'unavailable', reason: 'no-store-payout-destination-authority' },
+    payoutDestination: _destinationOf(gate.record),
+    payoutsEnabled: await require('./first-party-store-payout')._internal.flagOn(db),
   };
 };
 
