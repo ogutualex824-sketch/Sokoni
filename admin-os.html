@@ -452,6 +452,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       <button class="nav-item" data-section="content" data-label="Content Management" onclick="SokoniAOS.navigate('content');_closeSidebar()"><span class="nav-icon">&#x1F4DD;</span><span class="nav-label">Content</span></button>
       <button class="nav-item" type="button" data-section="failures" data-label="Failures" onclick="SokoniAOS.navigate('failures');_closeSidebar()"><span class="nav-icon">&#x1F6A8;</span><span class="nav-label">Failures</span></button>
       <button class="nav-item" type="button" data-section="payout-approvals" data-label="Payout approvals" onclick="SokoniAOS.navigate('payout-approvals');_closeSidebar()"><span class="nav-icon">&#x2705;</span><span class="nav-label">Payout approvals</span></button>
+      <button class="nav-item" type="button" data-section="partner-registrations" data-label="Partner registrations" onclick="SokoniAOS.navigate('partner-registrations');_closeSidebar()"><span class="nav-icon">&#x1F3E6;</span><span class="nav-label">Partner registrations</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Intelligence</div>
@@ -760,6 +761,12 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
         <div id="payoutApprovalsBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
+      <!-- Partner registrations: ONE module (sokoni-admin-partner-registrations.js) shared with super-admin.html.
+           A financial partner's regulator registration is self-declared until an admin verifies it here. -->
+      <div class="aos-panel" id="panel-partner-registrations" hidden>
+        <div id="partnerRegistrationsBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
       <!-- Hub Registry panel -->
       <div class="aos-panel" id="panel-hubs" hidden>
         <div class="panel-toolbar">
@@ -800,6 +807,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
     </div>
   </main>
   <script src="sokoni-admin-payout-approvals.js"></script>
+  <script src="sokoni-admin-partner-registrations.js"></script>
   <script src="sokoni-admin-failures.js"></script>
   <script src="sokoni-aos.js"></script>
   <script>

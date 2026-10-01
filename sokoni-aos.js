@@ -229,6 +229,7 @@ window.SokoniAOS = (() => {
       workflows:     () => _loadWorkflows(),
       failures:      () => _loadFailures(),
       "payout-approvals": () => _loadPayoutApprovals(),
+      "partner-registrations": () => _loadPartnerRegistrations(),
     };
     loaders[s]?.();
   }
@@ -2428,6 +2429,19 @@ window.SokoniAOS = (() => {
     }
     /* Neither callable is in _ADMIN_OS_OPS, so _call reaches them directly by name. */
     window.SokoniAdminPayoutApprovals.mount(body, { console: "aos", call: (name, data) => _call(name, data) });
+  }
+
+  /* Partner registrations. ONE implementation (sokoni-admin-partner-registrations.js) shared with
+     super-admin.html. financialPartnerDispatch checks the admin claim server-side; "Verified" is shown
+     only after it answers ok:true. */
+  function _loadPartnerRegistrations() {
+    const body = document.getElementById("partnerRegistrationsBody");
+    if (!body) return;
+    if (!window.SokoniAdminPartnerRegistrations) {
+      body.innerHTML = _emptyMsg("The Partner registrations module did not load. Reload the page to try again.");
+      return;
+    }
+    window.SokoniAdminPartnerRegistrations.mount(body, { console: "aos", call: (name, data) => _call(name, data) });
   }
 
   async function _loadHubs() {

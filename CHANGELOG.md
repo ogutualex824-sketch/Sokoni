@@ -1,3 +1,7 @@
+## [2026-10-01] — AdminOS + Super Admin: Partner registrations view (hosting, NOT deployed)
+
+**Why:** financial partners submit their regulator registration from the partner workspace; an administrator must be able to review it. **What:** one shared module `sokoni-admin-partner-registrations.js` (styles reuse `sokoni-admin-payout-approvals.css`), wired into `admin-os.html` + `sokoni-aos.js` and `super-admin.html` (inline-onclick nav, own transport per console). Calls `financialPartnerDispatch` ops `adminListRegistrations` / `adminReviewRegistration` (admin claim checked server-side). Result shown only after ok:true; rejecting needs a note; unreadable / not deployed never shown as "none waiting". Wording: a review is SOKONI's paperwork check, **not** a licence confirmation — the public listing stays self-declared (owner decision pending on any public marker). Test `scripts/test-admin-partner-registrations.js` 16/0 (innerHTML sabotage caught). See [[FINANCIAL_PARTNER_WORKSPACE]].
+
 ## [2026-10-01] - AdminOS + Super Admin: "Payout approvals" view — ONE shared module, built, browser certification QUEUED, NOT deployed
 
 **Branch `hosting/admin-failures-on-chain` (on top of the Failures view and `6f0a576`).** Static hosting only. Merged
