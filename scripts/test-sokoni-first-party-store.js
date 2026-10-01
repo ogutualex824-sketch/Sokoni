@@ -40,6 +40,16 @@ function makeDb() {
     const has = store.has(key);
     return { id, exists: has, ref: docRef(col, id), data: () => (has ? clone(store.get(key)) : undefined) };
   };
+  /* FieldValue sentinels (increment / arrayUnion) applied the way Firestore applies them. */
+  function applyPatch(base, patch) {
+    const out = Object.assign({}, base || {});
+    for (const [k, v] of Object.entries(patch || {})) {
+      if (v && typeof v === 'object' && '__inc' in v) out[k] = (Number(out[k]) || 0) + v.__inc;
+      else if (v && typeof v === 'object' && '__union' in v) out[k] = (Array.isArray(out[k]) ? out[k] : []).concat(v.__union);
+      else out[k] = v;
+    }
+    return out;
+  }
   function docRef(col, id) {
     return {
       id, path: col + '/' + id,
@@ -51,12 +61,12 @@ function makeDb() {
       },
       async set(d, o) {
         const key = col + '/' + id; writes.push({ op: 'set', path: key });
-        store.set(key, o && o.merge ? Object.assign({}, store.get(key) || {}, clone(d)) : clone(d));
+        store.set(key, applyPatch(o && o.merge ? (store.get(key) || {}) : {}, clone(d)));
       },
       async update(d) {
         const key = col + '/' + id;
         if (!store.has(key)) { const e = new Error('NOT_FOUND'); e.code = 5; throw e; }
-        writes.push({ op: 'update', path: key }); store.set(key, Object.assign({}, store.get(key), clone(d)));
+        writes.push({ op: 'update', path: key }); store.set(key, applyPatch(store.get(key), clone(d)));
       },
     };
   }
@@ -118,10 +128,11 @@ function stub(spec, exportsObj) {
 stub('firebase-admin', { apps: [1], initializeApp() {}, firestore: () => DB });
 stub('firebase-admin/firestore', {
   getFirestore: () => DB,
-  FieldValue: { serverTimestamp: () => new Date(), increment: (n) => n, arrayUnion: (...a) => a, delete: () => null },
+  FieldValue: { serverTimestamp: () => new Date(), increment: (n) => ({ __inc: n }), arrayUnion: (...a) => ({ __union: a }), delete: () => null },
   Timestamp: { now: () => new Date(), fromMillis: (m) => new Date(m) },
 });
 const AUTH_USERS = {};
+require.cache[path.join(FN, 'notify.js')] = { id: 'nt', filename: path.join(FN, 'notify.js'), loaded: true, exports: { notify: async () => {} } };
 require.cache[path.join(FN, 'redis-rate-limiter.js')] = { id: 'rl', filename: path.join(FN, 'redis-rate-limiter.js'), loaded: true, exports: { checkRateLimit: async () => {} } };
 stub('firebase-admin/auth', { getAuth: () => ({ getUser: async (uid) => { if (!AUTH_USERS[uid]) { const e = new Error('no user'); e.code = 'auth/user-not-found'; throw e; } return AUTH_USERS[uid]; } }) });
 
@@ -329,8 +340,20 @@ const STORE_DATA_COLLECTIONS = ['products', 'orders', 'wallets', 'businessWallet
     const removed = body.filter((l) => l.startsWith('-'));
     const addedCode = body.filter((l) => l.startsWith('+')).map((l) => l.slice(1)).join('\n')
       .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => l.trim()).filter(Boolean);
-    ok(`J ${f}: additive only — one exports._internal seam, nothing removed`, removed.length === 0 && addedCode.length === 1 && /^exports\._internal = Object\.freeze\(/.test(addedCode[0]), JSON.stringify({ removed: removed.length, addedCode }));
+    /* wallet.js also carries the store-payout guard (owner decision 2026-10-01): the guard
+       function itself, ONE call to it, and the seam — nothing else, nothing removed. */
+    let rest = addedCode;
+    const gs = rest.indexOf('async function _assertStorePayoutActor(db, request, payout, rid) {');
+    if (gs >= 0) { const ge = rest.indexOf('}', gs + 1); const end = rest.slice(gs).findIndex((l, i) => i > 0 && l === '}'); rest = rest.slice(0, gs).concat(rest.slice(gs + end + 1)); void ge; }
+    const expected = f === 'functions/wallet.js'
+      ? ['await _assertStorePayoutActor(db, request, payout, rid);', 'exports._internal = Object.freeze({ payoutEvent: _payoutEvent, eatDay: _eatDay, getPayoutConfig: _getPayoutConfig });']
+      : ['exports._internal = Object.freeze({ assertPinOk: _assertPinOk });'];
+    ok(`J ${f}: additive only vs a545818 (= LIVE) — ${f.endsWith('wallet.js') ? 'store guard + one call + seam' : 'one seam'}; nothing removed`,
+      removed.length === 0 && JSON.stringify(rest) === JSON.stringify(expected) && (f !== 'functions/wallet.js' || gs >= 0), JSON.stringify({ removed: removed.length, rest }));
   }
+  const wSrcJ = fs.readFileSync(path.join(FN, 'wallet.js'), 'utf8');
+  ok('J3 the guard call sits immediately after the payout is loaded, before every action branch',
+    /const payout = reqSnap\.data\(\);\n\n  \/\*[\s\S]*?\*\/\n  await _assertStorePayoutActor\(db, request, payout, rid\);\n\n  \/\/ ── PAID/.test(wSrcJ.replace(/\r/g, '')));
   ok('J2 store orders settle where they did: order-settlement keys the credit by order.sellerUid (= SOK-XX2338)',
     /const sellerId = order\.sellerUid \|\| order\.sellerId/.test(fs.readFileSync(path.join(FN, 'order-settlement.js'), 'utf8')));
 
@@ -443,6 +466,71 @@ const STORE_DATA_COLLECTIONS = ['products', 'orders', 'wallets', 'businessWallet
   ok('P21 the existing admin path keys execution on payout.sellerUid (so it pays wallets/SOK-XX2338)',
     /db\.collection\('wallets'\)\.doc\(payout\.sellerUid\)/.test(wSrc) && /exports\.adminProcessPayout/.test(wSrc));
   ok('P22 the flag lives in a server-only collection and defaults OFF', PAY._internal.FLAG.collection === 'firstPartyStoreConfig' && PAY._internal.FLAG.doc === 'payouts');
+
+  /* ── Q. adminProcessPayout: store withdrawals are actioned by the store operator ONLY ── */
+  const WALLET = require(path.join(FN, 'wallet.js'));
+  const apx = (uid, token, data) => WALLET.adminProcessPayout.run({ auth: { uid, token }, data, rawRequest: {} });
+  const seedQ = () => {
+    seed();
+    DB._put('payoutRequests', 'pout_store1', { sellerUid: BIZ, amount: 500, netAmount: 500, fee: 0, method: 'mpesa', accountNumber: PHONE, status: 'pending', statusHistory: [], createdAt: new Date() });
+    DB._put('payoutRequests', 'pout_store2', { sellerUid: BIZ, amount: 300, netAmount: 300, fee: 0, method: 'mpesa', accountNumber: PHONE, status: 'pending', statusHistory: [], createdAt: new Date() });
+    DB._put('wallets', BIZ, { balance: 1000, pendingPayout: 800 });
+    DB._put('businesses', 'merchantUid1', { ownerId: 'merchantUid1', businessType: 'Electronics', status: 'active' });   /* a legacy businesses/{uid} row */
+    DB._put('payoutRequests', 'pout_m1', { sellerUid: 'merchantUid1', amount: 200, netAmount: 200, fee: 0, method: 'mpesa', accountNumber: '+254711111111', status: 'pending', statusHistory: [], createdAt: new Date() });
+    DB._put('payoutRequests', 'pout_m2', { sellerUid: 'merchantUid1', amount: 100, netAmount: 100, fee: 0, method: 'mpesa', accountNumber: '+254711111111', status: 'pending', statusHistory: [], createdAt: new Date() });
+    DB._put('wallets', 'merchantUid1', { balance: 0, pendingPayout: 300 });
+  };
+  const PAID = { status: 'paid', externalReference: 'QWE123RTY', attestation: 'Sent by M-PESA from the company till' };
+  seedQ();
+  for (const [label, tok, uid] of [['admin', { admin: true }, OTHER_ADMIN], ['superAdmin', { admin: true, superAdmin: true }, SUPER]]) {
+    for (const [act, data] of [['approve', { status: 'approved' }], ['reject', { status: 'rejected', note: 'x' }], ['mark paid', PAID]]) {
+      const before = JSON.stringify([DB._get('payoutRequests', 'pout_store1'), DB._get('wallets', BIZ)]);
+      const rq = await refusal(() => apx(uid, tok, Object.assign({ requestId: 'pout_store1' }, data)));
+      const after = JSON.stringify([DB._get('payoutRequests', 'pout_store1'), DB._get('wallets', BIZ)]);
+      ok(`Q1 ${label} (not operator) → ${act} on a STORE request refused: permission-denied / store-payout-operator-only; request + wallet unchanged`,
+        rq && rq.code === 'permission-denied' && rq.reason === 'store-payout-operator-only' && before === after, JSON.stringify(rq));
+    }
+  }
+  const refusedAudits = [...DB._store.entries()].filter(([k, v]) => k.startsWith('firstPartyStoreAudit/') && v.action === 'sokoniStore.payoutAction.refused');
+  ok('Q2 every refused action is audited (who, request, attempted status)', refusedAudits.length === 6 && refusedAudits.every(([, v]) => v.requestId === 'pout_store1' && v.adminUid && v.attemptedStatus));
+
+  const OPTOK = { admin: true, superAdmin: true };   /* the operator's real claims */
+  const ap = await apx(OPERATOR, OPTOK, { requestId: 'pout_store1', status: 'approved' }).catch((e) => ({ error: e.message }));
+  ok('Q3 the store operator approves → approved for MANUAL disbursement (autoB2C off — existing behaviour, no new path)',
+    ap.status === 'approved' && ap.autoB2C === false && DB._get('payoutRequests', 'pout_store1').status === 'approved');
+  let rq2 = await refusal(() => apx(OPERATOR, OPTOK, { requestId: 'pout_store1', status: 'paid' }));
+  ok('Q4 operator Mark Paid without externalReference + attestation → refused (existing guard holds)', rq2 && rq2.code === 'failed-precondition');
+  const pd = await apx(OPERATOR, OPTOK, Object.assign({ requestId: 'pout_store1' }, PAID)).catch((e) => ({ error: e.message }));
+  ok('Q5 operator Mark Paid with reference + attestation → settled_manually; hold released 800→300',
+    pd.status === 'settled_manually' && DB._get('payoutRequests', 'pout_store1').status === 'settled_manually' && DB._get('wallets', BIZ).pendingPayout === 300 && DB._get('wallets', BIZ).balance === 1000);
+  await apx(OPERATOR, OPTOK, Object.assign({ requestId: 'pout_store1' }, PAID)).catch(() => {});
+  ok('Q6 a second Mark Paid is a no-op (idempotent settlement — hold not released twice)', DB._get('wallets', BIZ).pendingPayout === 300);
+  rq2 = await refusal(() => apx(OPERATOR, OPTOK, { requestId: 'pout_store1', status: 'rejected', note: 'late' }));
+  ok('Q7 rejecting a settled request is refused (existing disbursed-state guard)', rq2 && rq2.code === 'failed-precondition' && DB._get('wallets', BIZ).balance === 1000);
+  const rj = await apx(OPERATOR, OPTOK, { requestId: 'pout_store2', status: 'rejected', note: 'operator cancelled' }).catch((e) => ({ error: e.message }));
+  ok('Q8 operator rejects a pending store request → rejected; funds returned to wallets/SOK-XX2338',
+    rj.status === 'rejected' && DB._get('wallets', BIZ).balance === 1300 && DB._get('wallets', BIZ).pendingPayout === 0);
+  rq2 = await refusal(() => apx(OPERATOR, {}, { requestId: 'pout_store2', status: 'approved' }));
+  ok('Q9 the operator still needs the admin claim adminProcessPayout always required (no new authority path)', rq2 && rq2.code === 'permission-denied' && rq2.reason !== 'store-payout-operator-only');
+
+  /* ordinary requests: unchanged */
+  const auditCount = () => [...DB._store.keys()].filter((k) => k.startsWith('firstPartyStoreAudit/')).length;
+  const ac0 = auditCount();
+  const m1 = await apx(OTHER_ADMIN, { admin: true }, { requestId: 'pout_m1', status: 'approved' }).catch((e) => ({ error: e.message }));
+  ok('Q10 an ordinary admin approves an ORDINARY request exactly as before', m1.status === 'approved' && DB._get('payoutRequests', 'pout_m1').status === 'approved');
+  const m2 = await apx(OTHER_ADMIN, { admin: true }, { requestId: 'pout_m2', status: 'rejected', note: 'n' }).catch((e) => ({ error: e.message }));
+  ok('Q11 …and rejects one exactly as before (refund to the seller)', m2.status === 'rejected' && DB._get('wallets', 'merchantUid1').balance === 100);
+  ok('Q12 ordinary actions write no store audit row', auditCount() === ac0);
+
+  seedQ();
+  DB._put('businesses', 'strangerUid', { ownerId: 'strangerUid', businessType: 'SOKONI_FIRST_PARTY_STORE', status: 'active' });
+  DB._put('payoutRequests', 'pout_forged', { sellerUid: 'strangerUid', amount: 50, method: 'mpesa', accountNumber: '+254722222222', status: 'pending', statusHistory: [], createdAt: new Date() });
+  DB._put('wallets', 'strangerUid', { balance: 0, pendingPayout: 50 });
+  const fg = await apx(OTHER_ADMIN, { admin: true }, { requestId: 'pout_forged', status: 'approved' }).catch((e) => ({ error: e.message }));
+  ok('Q13 a forged SOKONI_FIRST_PARTY_STORE label the chain does not resolve to is NOT the store (ordinary flow)', fg.status === 'approved');
+  DB._put('shops', 'STR_second', { firstParty: true, ownerId: OWNER });
+  rq2 = await refusal(() => apx(OPERATOR, OPTOK, { requestId: 'pout_store2', status: 'approved' }));
+  ok('Q14 store request with an unresolvable chain → refused for EVERYONE, operator included (fail closed)', rq2 && rq2.reason === 'store-payout-operator-only' && DB._get('payoutRequests', 'pout_store2').status === 'pending');
 
   /* ── K. registration ─────────────────────────────────────────────────────── */
   const idx = fs.readFileSync(path.join(FN, 'index.js'), 'utf8');
