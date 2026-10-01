@@ -1,3 +1,12 @@
+## [2026-10-01] — onOrderStatusChange issues the buyer's completion PIN at PAYMENT; the PIN is never texted after delivery
+
+**Files:** `functions/index.js` (onOrderStatusChange), `functions/shared/completion-pin.js` (byte-identical to lineages A/B), `scripts/test-oosc-completion-pin.js`, `CHANGELOG.md` · **Base:** bf54396 (on the live 00065-fud archive)
+
+- When an order becomes paid, an eligible delivery order without a PIN gets one from the completion-PIN engine (48 h, sealed, HMAC) and the buyer gets it by SMS NOW. Auto mode: never a replacement. `SOKONI_HMAC_KEY` is added to the trigger's secrets.
+- The live trigger read `deliveryPins` and texted the PIN on `delivered`: after the delivery it proves, and one more copy with the SMS provider. Removed; the delivered message omits it.
+- Tests: oosc-completion-pin 8/0 (base 106db63 fails 7); settlement gate 24/0; delivery suites unchanged-green; map-ratchet 2 fails identical on base (pre-existing).
+- Deploy: `--only functions:onOrderStatusChange` (gate + escrow release + PIN issue), with the predeploy hooks in the unquoted `node scripts/X.js` form (sokoni-27, 2026-10-01: the quoted form never executes on this machine). Confirm the guard banner in the log.
+
 ## [2026-10-01] — settleOrder releases the PAYMENT-TIME escrow (seller hold, release half)
 
 **Files:** `functions/order-settlement.js`, `scripts/test-settlement-gate.js`, `CHANGELOG.md` · **Base:** 788416b · **Database:** reads `orders.escrow` {creditVia:'finos', heldNetCents, commissionCents, grossCents, paymentRef, sellerUid}; writes `settlements/{id}.source:'payment_escrow'`.

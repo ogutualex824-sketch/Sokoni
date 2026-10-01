@@ -3050,7 +3050,8 @@ exports.verifyIntasendPayment = onRequest(
 exports.onOrderStatusChange = onDocumentUpdated(
   {
     document:       "orders/{orderId}",
-    secrets:        [...sokoniAt.secrets],
+    /* SOKONI_HMAC_KEY (2026-10-01): the completion-PIN engine issues the buyer's PIN when the order BECOMES paid. */
+    secrets:        [...sokoniAt.secrets, SOKONI_HMAC_KEY],
     minInstances:   1,
     maxInstances:   99,   /* owner ruling 2026-09-26: scaling-neutral — equals the serving revision */
   },
@@ -3066,20 +3067,36 @@ exports.onOrderStatusChange = onDocumentUpdated(
 
     console.log(`[onOrderStatusChange] ${orderId}: ${before.status} → ${toStatus}`);
 
-    /* Resolve the buyer's delivery PIN server-side, and ONLY for the status whose
-       message uses it. `deliveryPins` is CF-only (no rule), so this read is not a
-       new exposure — it is the same Admin-SDK access getMyDeliveryPin performs
-       after proving buyer identity, and the value goes only to the buyer's own
-       number. A failure here degrades the message, never the trigger. */
-    let _deliveryPin = null;
-    if (toStatus === "delivered") {
+    /* ── THE BUYER'S COMPLETION PIN IS ISSUED WHEN THE ORDER BECOMES PAID (owner 2026-10-01) ──────────────────
+       shared/completion-pin.js: a PAID delivery order gets its PIN (48 h, sealed, HMAC on the order) and the buyer
+       gets it by SMS NOW — while it is still useful. Idempotent: an order that already has a PIN keeps it (never a
+       silent replacement). Unpaid / pickup / cancelled orders get none. A failure never blocks the trigger. */
+    if ((toStatus === "paid" && before.status !== "paid") || (after.paymentVerified === true && before.paymentVerified !== true)) {
       try {
-        const _ps = await db.collection("deliveryPins").doc(String(orderId)).get();
-        if (_ps.exists) _deliveryPin = _ps.data().pin || _ps.data().proofPin || null;
+        const CP = require("./shared/completion-pin");
+        if (!CP.eligibility(after) && !after.deliveryPinHash) {
+          let _key = null;
+          try { _key = SOKONI_HMAC_KEY.value(); } catch (_) { _key = null; }
+          if (_key) {
+            const _FV = admin.firestore.FieldValue, _now = Date.now();
+            const _r = await CP.issueOrResend({ db, FV: _FV, key: _key, orderId, mode: "auto", now: _now });
+            if (_r.ok && _r.action === "issued") {
+              const _ph = await CP.resolveBuyerPhone(db, _r.buyerUid, after);
+              await CP.deliverPin({ db, FV: _FV, orderId, version: _r.version, pin: _r.pin, phone: _ph, sendSms: sokoniAt.atSendSMS, now: _now });
+            }
+          } else {
+            console.warn("[onOrderStatusChange] " + orderId + " — no HMAC key; completion PIN not issued (fail closed)");
+          }
+        }
       } catch (e) {
-        console.warn("[onOrderStatusChange] delivery PIN lookup failed:", e.message);
+        console.error("[onOrderStatusChange] completion PIN issuance failed (recoverable — seller can send it):", e && e.message);
       }
     }
+
+    /* The PIN is NOT read back here any more. It used to be texted to the buyer on `delivered` — AFTER the
+       delivery it exists to prove, so useless as proof and one more copy of a secret with the SMS provider. The
+       buyer now gets it at issue (above / sendDeliveryPin); the delivered message simply omits it. */
+    const _deliveryPin = null;
 
     const tmpl = smsTemplates(after, _deliveryPin);
     const msgs = tmpl[toStatus] || {};
