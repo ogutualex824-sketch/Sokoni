@@ -189,11 +189,11 @@
 <div class="rq-hero">
   <div class="rq-hero-badge">📋 Request &amp; Delivery Hub</div>
   <h1>Request it. <span>Deliver it.</span><br>Track it live.</h1>
-  <p>Post product requests, request delivery for your orders, or track any shipment in real time — buyer, seller and driver all see the same live status.</p>
+  <p>Draft product and delivery requests on this device. <strong data-rq-honest-banner>Requests are not published to sellers or drivers yet</strong> — nobody else can see them until request publishing goes live.</p>
   <div class="rq-stats">
-    <div class="rq-stat"><strong id="heroReqCount">0</strong> Active Requests</div>
-    <div class="rq-stat"><strong id="heroOfferCount">0</strong> Seller Offers</div>
-    <div class="rq-stat"><strong id="heroDelCount">0</strong> Deliveries</div>
+    <div class="rq-stat"><strong id="heroReqCount">—</strong> Request drafts (this device)</div>
+    <div class="rq-stat"><strong id="heroOfferCount">—</strong> Offer drafts (this device)</div>
+    <div class="rq-stat"><strong id="heroDelCount">—</strong> Delivery drafts (this device)</div>
     <div class="rq-stat"><strong>Free</strong> to Post</div>
   </div>
 </div>
@@ -210,7 +210,7 @@
   <div class="rq-post-panel">
     <div class="rq-post-header">
       <h2>📋 Post Your Request</h2>
-      <p>Tell sellers what you need</p>
+      <p>Draft what you need — saved on this device only</p>
     </div>
     <div class="rq-post-body">
       <label class="rq-label">What are you looking for? *</label>
@@ -273,18 +273,17 @@
       <input class="rq-input" type="text" id="rqPoster" placeholder="e.g. Brian or Anonymous" autocomplete="off">
 
       <button type="button" class="rq-post-btn" onclick="postRequest()">
-        📨 Post Request — Get Offers
+        💾 Save Request Draft
       </button>
       <div class="rq-post-msg" id="rqPostMsg"></div>
-      <div class="rq-post-tip">💡 Once posted, sellers will contact you directly via Sokoni Messages with their best prices. You pick the winner — no pressure.</div>
+      <div class="rq-post-tip">💡 Requests are not published to sellers yet. This saves a draft on this device only; no seller will see it or contact you about it.</div>
     </div>
   </div>
 
   <div class="rq-list-panel">
     <div class="rq-panel-header">
       <div class="rq-panel-title">
-        <div class="rq-live-dot"></div>
-        Active Requests <span id="rqCount" style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.35);margin-left:4px;">(0)</span>
+                Your request drafts <span id="rqCount" style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.35);margin-left:4px;">(0)</span>
       </div>
       <input type="search" id="rqSearch" class="rq-input" placeholder="🔍 Search requests..." oninput="applyFilters()" style="width:200px;margin:0;" autocomplete="off">
     </div>
@@ -320,7 +319,7 @@
     <div class="rq-post-panel" style="position:sticky;top:110px;">
       <div class="rq-post-header">
         <h2>🚚 Request a Delivery</h2>
-        <p>Buyer, seller or anyone — post a delivery job. Verified Sokoni drivers will pick it up.</p>
+        <p>Draft a delivery job on this device. Delivery requests are not sent to drivers yet.</p>
       </div>
       <div class="rq-post-body">
         <label class="rq-label">Your Role</label>
@@ -354,15 +353,15 @@
         <input class="rq-input" id="delPoster" placeholder="Name or phone" autocomplete="off">
         <label class="rq-label">Linked Order ID (optional)</label>
         <input class="rq-input" id="delOrderRef" placeholder="e.g. ORD1234 from your purchase" autocomplete="off">
-        <button type="button" class="rq-post-btn" style="margin-top:4px;" onclick="postDeliveryRequest()">🚛 Post Delivery Request</button>
+        <button type="button" class="rq-post-btn" style="margin-top:4px;" onclick="postDeliveryRequest()">💾 Save Delivery Draft</button>
         <div class="rq-post-msg" id="delPostMsg"></div>
-        <div class="rq-post-tip">🔒 Once a driver accepts, all three parties — buyer, seller and driver — get a live tracking link with the delivery ID.</div>
+        <div class="rq-post-tip">🔒 Delivery requests are not sent to drivers yet. The draft and its ID exist on this device only — nobody else can track it.</div>
       </div>
     </div>
 
     <div>
       <div class="rq-panel-header">
-        <div class="rq-panel-title"><div class="rq-live-dot"></div> Open Deliveries <span id="delCount" style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.35);margin-left:4px;">(0)</span></div>
+        <div class="rq-panel-title">Your delivery drafts <span id="delCount" style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.35);margin-left:4px;">(0)</span></div>
         <input type="search" id="delSearch" class="rq-input" placeholder="🔍 Search deliveries..." oninput="renderDeliveries()" style="width:180px;margin:0;" autocomplete="off">
       </div>
       <div style="display:flex;gap:5px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none;">
@@ -379,7 +378,7 @@
 <div id="mode-track" style="display:none;max-width:700px;margin:0 auto;padding:24px 20px 80px;">
   <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(113,255,0,0.15);border-radius:20px;padding:24px;">
     <div style="font-size:20px;font-weight:900;margin-bottom:4px;">🔍 Track Your Order or Delivery</div>
-    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:18px;">Buyers, sellers and drivers can all track the same shipment with the delivery or order ID.</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:18px;">Looks up delivery drafts saved on this device. For the live status of an order, open <a href="my-orders.html" style="color:#71ff00;">My Orders →</a></div>
     <div style="display:flex;gap:8px;">
       <input class="rq-input" id="trackInput" placeholder="Enter Order ID (e.g. ORD123456) or Delivery ID (e.g. DEL123456)" style="flex:1;margin:0;" onkeydown="if(event.key==='Enter')trackOrder()" autocomplete="off">
       <button type="button" onclick="trackOrder()" style="padding:10px 18px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#070707;font-weight:900;border:none;border-radius:9px;cursor:pointer;font-family:inherit;white-space:nowrap;font-size:13px;">Track →</button>
@@ -509,7 +508,7 @@ function renderList(list){
   const countEl = document.getElementById("rqCount");
   if(countEl) countEl.textContent = "("+list.length+")";
   if(!list.length){
-    el.innerHTML=`<div class="rq-empty"><div class="rq-empty-icon">🔍</div><p style="font-size:13px;">No requests found.<br><span style="font-size:11px;color:rgba(255,255,255,0.28);">Be the first to post what you need!</span></p></div>`;
+    el.innerHTML=`<div class="rq-empty"><div class="rq-empty-icon">🔍</div><p style="font-size:13px;">No requests found.<br><span style="font-size:11px;color:rgba(255,255,255,0.28);">Save a draft of what you need — it stays on this device.</span></p></div>`;
     return;
   }
   el.innerHTML = list.map(r=>{
@@ -517,7 +516,7 @@ function renderList(list){
     const offerCount = r.offers?.length||0;
     const initials = r.poster?.[0]?.toUpperCase()||"?";
     return `
-    <div class="rq-card ${URG_CARD[urg]||""}" id="rqcard-${r.id}">
+    <div class="rq-card ${URG_CARD[urg]||""}" id="rqcard-${_esc(r.id)}">
       <div class="rq-card-top">
         <div class="rq-card-left">
           <div class="rq-card-name" title="${_esc(r.name)}">${_esc(r.name)}</div>
@@ -533,45 +532,42 @@ function renderList(list){
       </div>
       ${r.desc?`<div class="rq-card-desc">${_esc(r.desc)}</div>`:""}
       <div class="rq-card-meta">
-        ${r.category?`<span class="rq-meta-tag">${CAT_EMOJI[r.category]||"📦"} ${r.category}</span>`:""}
+        ${r.category?`<span class="rq-meta-tag">${CAT_EMOJI[r.category]||"📦"} ${_esc(r.category)}</span>`:""}
         ${r.location?`<span class="rq-meta-tag">📍 ${_esc(r.location)}</span>`:""}
-        <span class="rq-meta-tag">🆔 ${r.id}</span>
-        <span class="rq-offers-pill" onclick="toggleOffers('${r.id}')">
+        <span class="rq-meta-tag">🆔 ${_esc(r.id)}</span>
+        <span class="rq-offers-pill" data-rid="${_esc(r.id)}" onclick="toggleOffers(this.dataset.rid)">
           ${offerCount} offer${offerCount!==1?"s":""} ${offerCount?'<span style="font-size:8px;margin-left:2px;">▼</span>':""}
         </span>
       </div>
-      <div class="rq-offers-list" id="offers-${r.id}">
+      <div class="rq-offers-list" id="offers-${_esc(r.id)}">
         ${(r.offers||[]).map(o=>`
           <div class="rq-offer-item">
             <div class="rq-offer-avatar">${_esc(o.sellerName?.[0]?.toUpperCase()||"S")}</div>
             <div style="flex:1;min-width:0;">
               <div class="rq-offer-seller">${_esc(o.sellerName)}</div>
               <div class="rq-offer-msg">${_esc(o.message)}</div>
-              <div class="rq-offer-contact">
-                <a href="messages.html" class="rq-oc-btn" style="background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;">💬 Chat</a>
-                <a href="tel:+254"      class="rq-oc-btn" style="background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);color:#00aaff;">📞 Call</a>
-              </div>
+              <div class="rq-offer-contact" style="font-size:10px;color:rgba(255,255,255,0.3);">Draft on this device — not delivered to anyone</div>
             </div>
             ${o.price?`<div class="rq-offer-price">KES ${Number(o.price).toLocaleString()}</div>`:""}
           </div>`).join("")}
-        ${!offerCount?`<div style="text-align:center;padding:12px;font-size:11px;color:rgba(255,255,255,0.25);">No offers yet — be the first seller to respond!</div>`:""}
+        ${!offerCount?`<div style="text-align:center;padding:12px;font-size:11px;color:rgba(255,255,255,0.25);">No offers — requests are not published to sellers yet.</div>`:""}
       </div>
       <div class="rq-upvote-row">
-        <button type="button" class="rq-upvote-btn ${(r.voted?"voted":"")}" onclick="upvote('${r.id}',this)">
-          ↑ ${r.votes||0}
+        <button type="button" class="rq-upvote-btn ${(r.voted?"voted":"")}" data-rid="${_esc(r.id)}" onclick="upvote(this.dataset.rid,this)">
+          ↑ ${Number(r.votes)||0}
         </button>
-        <span style="font-size:10px;color:rgba(255,255,255,0.25);">upvotes from interested buyers</span>
-        <button type="button" class="rq-offer-btn" onclick="toggleOfferForm('${r.id}')">
+        <span style="font-size:10px;color:rgba(255,255,255,0.25);">your vote, this device only</span>
+        <button type="button" class="rq-offer-btn" data-rid="${_esc(r.id)}" onclick="toggleOfferForm(this.dataset.rid)">
           📤 I Can Supply This →
         </button>
       </div>
-      <div class="rq-make-offer-panel" id="offer-form-${r.id}">
-        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:8px;">📤 Send Your Offer to ${_esc(r.poster||"the buyer")}</div>
-        <input class="rq-input" id="os-${r.id}" placeholder="Your shop / seller name *" autocomplete="off">
-        <input class="rq-input" type="number" id="op-${r.id}" placeholder="Your price (KES) — leave blank for negotiable" inputmode="numeric">
-        <input class="rq-input" id="om-${r.id}" placeholder="Your message — delivery time, condition, warranty... *" autocomplete="off">
-        <button type="button" class="rq-send-offer-btn" onclick="submitOffer('${r.id}')">Send Offer →</button>
-        <div id="offer-msg-${r.id}" style="font-size:11px;min-height:14px;margin-top:6px;"></div>
+      <div class="rq-make-offer-panel" id="offer-form-${_esc(r.id)}">
+        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:8px;">📤 Draft an offer for ${_esc(r.poster||"this request")} — offers are not delivered to buyers yet</div>
+        <input class="rq-input" id="os-${_esc(r.id)}" placeholder="Your shop / seller name *" autocomplete="off">
+        <input class="rq-input" type="number" id="op-${_esc(r.id)}" placeholder="Your price (KES) — leave blank for negotiable" inputmode="numeric">
+        <input class="rq-input" id="om-${_esc(r.id)}" placeholder="Your message — delivery time, condition, warranty... *" autocomplete="off">
+        <button type="button" class="rq-send-offer-btn" data-rid="${_esc(r.id)}" onclick="submitOffer(this.dataset.rid)">Save Offer Draft</button>
+        <div id="offer-msg-${_esc(r.id)}" style="font-size:11px;min-height:14px;margin-top:6px;"></div>
       </div>
     </div>`;
   }).join("");
@@ -594,7 +590,7 @@ function upvote(id, btn){
     allReqs[idx].voted = true;
     localStorage.setItem("sokoniRequests", JSON.stringify(allReqs));
     btn.classList.add("voted");
-    btn.innerHTML = `↑ ${allReqs[idx].votes}`;
+    btn.textContent = `↑ ${Number(allReqs[idx].votes)||0}`;
   }
 }
 function submitOffer(id){
@@ -608,7 +604,7 @@ function submitOffer(id){
   if(!allReqs[idx].offers) allReqs[idx].offers = [];
   allReqs[idx].offers.push({ sellerName, price:Number(price)||0, message, timestamp:Date.now() });
   localStorage.setItem("sokoniRequests", JSON.stringify(allReqs));
-  if(msgEl){msgEl.textContent="✅ Offer sent! The buyer will see it.";msgEl.style.color="#71ff00";}
+  if(msgEl){msgEl.textContent="Offer saved on this device only. Offers are not delivered to buyers yet.";msgEl.style.color="#71ff00";}
   setTimeout(()=>{ document.getElementById("offer-form-"+id)?.classList.remove("open"); applyFilters(); updateHeroStats(); },1500);
 }
 function postRequest(){
@@ -631,7 +627,7 @@ function postRequest(){
   const locEl = document.getElementById("rqLocation"); if(locEl) locEl.value="";
   document.querySelectorAll("#rqCatChips .rq-chip").forEach(c=>c.classList.remove("selected"));
   _selectedCat="";
-  if(msgEl){msgEl.innerHTML='✅ Posted! Sellers will respond via <a href="messages.html" style="color:#71ff00;">Messages →</a>';msgEl.style.color="#71ff00";}
+  if(msgEl){msgEl.textContent="Saved as a draft on this device. Requests are not published to sellers yet.";msgEl.style.color="#71ff00";}
   setTimeout(()=>{if(msgEl) msgEl.textContent="";},4000);
   updateHeroStats();
   applyFilters();
@@ -715,7 +711,7 @@ function postDeliveryRequest(){
   allDeliveries.unshift(del);
   localStorage.setItem("sokoniDeliveries", JSON.stringify(allDeliveries));
   ["delItem","delPickup","delDropoff","delBudget","delPoster","delOrderRef"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
-  if(msgEl){ msgEl.innerHTML=`✅ Posted! Delivery ID: <strong style="color:#71ff00;">${_esc(del.id)}</strong> — share this with buyer &amp; seller to track.`; msgEl.style.color="#71ff00"; }
+  if(msgEl){ msgEl.textContent="Saved as a draft on this device (ID "+del.id+"). Delivery requests are not sent to drivers yet, and this ID can only be looked up on this device."; msgEl.style.color="#71ff00"; }
   setTimeout(()=>{if(msgEl)msgEl.textContent="";},6000);
   const el = document.getElementById("heroDelCount");
   if(el) el.textContent = allDeliveries.length;
@@ -735,7 +731,7 @@ function renderDeliveries(){
   else if(_delTab==="done")   list = list.filter(d=>d.status==="delivered");
   if(countEl) countEl.textContent="("+list.length+")";
   const STATUS_COLOR={pending:"#f59e0b",accepted:"#00aaff",picked_up:"#00aaff",in_transit:"#71ff00",delivered:"#10b981"};
-  const STATUS_LABEL={pending:"Pending driver",accepted:"Driver assigned",picked_up:"Item picked up",in_transit:"In transit",delivered:"Delivered ✓"};
+  const STATUS_LABEL={pending:"Draft — not sent",accepted:"Driver assigned",picked_up:"Item picked up",in_transit:"In transit",delivered:"Delivered ✓"};
   if(!list.length){
     el.innerHTML=`<div class="rq-empty"><div class="rq-empty-icon">🚚</div><p style="font-size:13px;">No delivery requests yet.</p></div>`;
     return;
@@ -749,64 +745,27 @@ function renderDeliveries(){
         </div>
         <div class="rq-card-right">
           ${d.budget?`<div class="rq-card-budget">KES ${Number(d.budget).toLocaleString()}</div>`:"<div style='font-size:12px;color:rgba(255,255,255,0.3);'>Open offer</div>"}
-          <span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:rgba(0,0,0,0.3);border:1px solid ${STATUS_COLOR[d.status]||"#71ff00"};color:${STATUS_COLOR[d.status]||"#71ff00"};">${STATUS_LABEL[d.status]||d.status}</span>
+          <span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:rgba(0,0,0,0.3);border:1px solid ${STATUS_COLOR[d.status]||"#71ff00"};color:${STATUS_COLOR[d.status]||"#71ff00"};">${STATUS_LABEL[d.status]||_esc(d.status)}</span>
         </div>
       </div>
       <div class="rq-card-meta">
         <span class="rq-meta-tag">📦 ${_esc(d.size||"unspecified")}</span>
-        <span class="rq-meta-tag">👤 ${_esc(d.poster)} (${d.role})</span>
-        <span class="rq-meta-tag">🆔 ${d.id}</span>
+        <span class="rq-meta-tag">👤 ${_esc(d.poster)} (${_esc(d.role)})</span>
+        <span class="rq-meta-tag">🆔 ${_esc(d.id)}</span>
         ${d.orderRef?`<span class="rq-meta-tag">🧾 ${_esc(d.orderRef)}</span>`:""}
       </div>
       <div class="rq-upvote-row" style="gap:8px;">
         ${d.status==="pending"?`
-          <button type="button" class="rq-offer-btn" onclick="acceptDelivery('${d.id}')">🚗 I Can Deliver This →</button>
+          <span style="font-size:11px;color:rgba(255,255,255,0.4);">Draft — not sent to drivers yet</span>
         `:`
           <span style="font-size:11px;color:rgba(255,255,255,0.4);">Driver: ${_esc(d.driverName||"—")} · ${_esc(d.vehicle||"")}</span>
         `}
-        <button type="button" class="rq-upvote-btn" onclick="switchMode('track');document.getElementById('trackInput').value='${d.id}';trackOrder();" style="margin-left:auto;">
+        <button type="button" class="rq-upvote-btn" data-did="${_esc(d.id)}" onclick="switchMode('track');document.getElementById('trackInput').value=this.dataset.did;trackOrder();" style="margin-left:auto;">
           🔍 Track
         </button>
       </div>
-      ${d.status==="pending"?`
-      <div id="accept-form-${d.id}" style="display:none;margin-top:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px;">
-        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:8px;">🚗 Accept this delivery</div>
-        <input class="rq-input" id="adn-${d.id}" placeholder="Your name" autocomplete="off">
-        <input class="rq-input" type="tel" id="adp-${d.id}" placeholder="Your phone: 07XXXXXXXX" inputmode="tel">
-        <select class="rq-input" id="adv-${d.id}" style="cursor:pointer;">
-          <option value="motorcycle">🏍️ Motorcycle</option>
-          <option value="car">🚗 Car</option>
-          <option value="van">🚐 Van</option>
-          <option value="pickup">🛻 Pickup</option>
-        </select>
-        <button type="button" onclick="confirmAccept('${d.id}')" style="padding:9px 18px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#070707;font-weight:900;border:none;border-radius:9px;cursor:pointer;font-size:12px;font-family:inherit;">Confirm Accept →</button>
-      </div>`:""}
     </div>`).join("");
 }
-
-function acceptDelivery(id){
-  const form = document.getElementById("accept-form-"+id);
-  if(form) form.style.display = form.style.display==="none"?"block":"none";
-}
-window.acceptDelivery = acceptDelivery;
-
-function confirmAccept(id){
-  const idx = allDeliveries.findIndex(d=>d.id===id);
-  if(idx===-1) return;
-  const name  = document.getElementById("adn-"+id)?.value.trim();
-  const phone = document.getElementById("adp-"+id)?.value.trim();
-  const veh   = document.getElementById("adv-"+id)?.value;
-  if(!name||!phone){ (window._skToast||alert)("Enter your name and phone to accept."); return; }
-  allDeliveries[idx].status="accepted";
-  allDeliveries[idx].driverName=name;
-  allDeliveries[idx].driverPhone=phone;
-  allDeliveries[idx].vehicle=veh;
-  allDeliveries[idx].updatedAt=Date.now();
-  allDeliveries[idx].timeline.push({status:"accepted",time:Date.now(),note:`Driver ${name} (${veh}) accepted the delivery`});
-  localStorage.setItem("sokoniDeliveries",JSON.stringify(allDeliveries));
-  renderDeliveries();
-}
-window.confirmAccept = confirmAccept;
 
 function updateDeliveryStatus(id, newStatus, note){
   loadDeliveries();
@@ -830,11 +789,11 @@ function trackOrder(){
   try{ orders = JSON.parse(localStorage.getItem("sokoniOrders"))||[]; }catch(e){}
   const order = orders.find(o=>(o.id||"").toUpperCase()===id||(o.orderId||"").toUpperCase()===id);
   if(del){   resultEl.innerHTML = renderTrackDelivery(del); return; }
-  if(order){ resultEl.innerHTML = renderTrackOrder(order);  return; }
+  if(order){ resultEl.innerHTML = `<div style="text-align:center;padding:24px;color:rgba(255,255,255,0.45);font-size:13px;">Order <strong style="color:#71ff00;">${_esc(id)}</strong> — see its live status in <a href="my-orders.html" style="color:#71ff00;">My Orders →</a></div>`; return; }
   resultEl.innerHTML=`<div style="text-align:center;padding:24px;color:rgba(255,255,255,0.35);font-size:13px;">
     <div style="font-size:36px;margin-bottom:8px;">🔍</div>
     No order or delivery found for <strong style="color:#71ff00;">${_esc(id)}</strong><br>
-    <span style="font-size:11px;">Check the ID and try again, or post a new delivery request.</span>
+    <span style="font-size:11px;">Only delivery drafts saved on this device can be looked up here. For orders, open <a href="my-orders.html" style="color:#71ff00;">My Orders →</a></span>
   </div>`;
 }
 window.trackOrder = trackOrder;
@@ -856,7 +815,7 @@ function renderTrackDelivery(del){
       </div>
       <div style="text-align:right;">
         <div style="font-size:10px;color:rgba(255,255,255,0.35);">Delivery ID</div>
-        <div style="font-size:13px;font-weight:900;color:#71ff00;">${del.id}</div>
+        <div style="font-size:13px;font-weight:900;color:#71ff00;">${_esc(del.id)}</div>
       </div>
     </div>
     <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px;margin-bottom:18px;overflow:hidden;">
@@ -886,69 +845,16 @@ function renderTrackDelivery(del){
       </div>
       <a href="tel:${_esc(del.driverPhone)}" style="margin-left:auto;padding:8px 14px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;border-radius:9px;text-decoration:none;font-size:12px;font-weight:700;">📞 ${_esc(del.driverPhone)}</a>
     </div>`:""}
-    ${del.status!=="delivered"?`
-    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
-      ${del.status==="accepted"  ?`<button type="button" onclick="updateDeliveryStatus('${del.id}','picked_up','Item picked up by driver');trackOrder();"   style="padding:8px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);color:#71ff00;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Mark: Picked Up</button>`:""}
-      ${del.status==="picked_up" ?`<button type="button" onclick="updateDeliveryStatus('${del.id}','in_transit','Delivery in progress');trackOrder();"        style="padding:8px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);color:#71ff00;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Mark: In Transit</button>`:""}
-      ${del.status==="in_transit"?`<button type="button" onclick="updateDeliveryStatus('${del.id}','delivered','Successfully delivered');trackOrder();"        style="padding:8px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);color:#71ff00;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Mark: Delivered ✓</button>`:""}
-    </div>`:""}
-  </div>`;
-}
-
-function renderTrackOrder(order){
-  const statuses = ["placed","confirmed","dispatched","in_transit","delivered"];
-  const statusMap = {placed:0,confirmed:1,dispatched:2,in_transit:3,delivered:4};
-  const curIdx = statusMap[order.status||"placed"]||0;
-  const pc = Math.round(((curIdx+1)/statuses.length)*100);
-  return `
-  <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(113,255,0,0.15);border-radius:16px;padding:20px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
-      <div>
-        <div style="font-size:16px;font-weight:900;">🛒 Order ${_esc(order.id||order.orderId||"—")}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:3px;">${order.items?.length||1} item(s) · KES ${Number(order.total||0).toLocaleString()}</div>
-      </div>
-      <div style="text-align:right;">
-        <div style="font-size:10px;color:rgba(255,255,255,0.35);">Deliver to</div>
-        <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);">${_esc(order.address||"—")}</div>
-      </div>
-    </div>
-    <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px;margin-bottom:18px;overflow:hidden;">
-      <div style="height:100%;width:${pc}%;background:linear-gradient(90deg,#71ff00,#4fc800);border-radius:3px;"></div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      ${statuses.map((s,i)=>{
-        const done=i<=curIdx, active=i===curIdx;
-        return `<div style="display:flex;align-items:center;gap:12px;">
-          <div style="width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid ${done?"#71ff00":"rgba(255,255,255,0.1)"};background:${done?"rgba(113,255,0,0.12)":"rgba(255,255,255,0.03)"};">${STEP_ICONS[s]||"•"}</div>
-          <div style="font-size:12px;font-weight:${active?"900":"700"};color:${done?"white":"rgba(255,255,255,0.35)"};">${STEP_LABELS[s]||s}</div>
-          ${active?`<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;margin-left:auto;">NOW</span>`:""}
-        </div>`;
-      }).join("")}
-    </div>
+    <div style="margin-top:12px;font-size:11px;color:rgba(255,255,255,0.35);">Draft on this device — not sent to drivers yet.</div>
   </div>`;
 }
 
 function loadRecentOrders(){
+  /* C0 honesty: this listed totals and statuses read from a localStorage copy (sokoniOrders), which is
+     not an order's canonical state. Live orders are on My Orders. */
   const section = document.getElementById("recentOrdersSection");
   if(!section) return;
-  let orders = [];
-  try{ orders = JSON.parse(localStorage.getItem("sokoniOrders"))||[]; }catch(e){}
-  if(!orders.length){ section.innerHTML=""; return; }
-  section.innerHTML=`
-  <div style="font-size:13px;font-weight:800;color:rgba(255,255,255,0.5);margin-bottom:10px;">Your Recent Orders</div>
-  ${orders.slice(0,5).map(o=>`
-  <div class="rq-card" style="cursor:pointer;" onclick="document.getElementById('trackInput').value='${_esc(o.id||o.orderId||"")}';trackOrder();">
-    <div style="display:flex;align-items:center;justify-content:space-between;">
-      <div>
-        <div style="font-size:13px;font-weight:800;">${_esc(o.id||o.orderId||"Order")}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);">${o.items?.length||1} item(s) · ${_esc(o.address||"")}</div>
-      </div>
-      <div style="text-align:right;">
-        <div style="font-size:13px;font-weight:900;color:#71ff00;">KES ${Number(o.total||0).toLocaleString()}</div>
-        <div style="font-size:10px;color:rgba(255,255,255,0.35);">${o.status||"placed"}</div>
-      </div>
-    </div>
-  </div>`).join("")}`;
+  section.innerHTML = `<a href="my-orders.html" class="rq-card" style="display:block;text-decoration:none;color:#71ff00;font-size:13px;font-weight:800;">📦 Your orders and their live status are in My Orders →</a>`;
 }
 
 loadDeliveries();
