@@ -1,3 +1,10 @@
+## [2026-10-01] — DEPLOYED Firestore rules hotfix f259c0b5: forged verification badge and signed-out job posts closed
+
+**Target:** Firestore rules, default database only (`releases/cloud.firestore` → `f259c0b5-0a9e-49c5-8578-a628a40d946c`, 00:27:37Z). **Rollback:** `b87c94e4`. Evidence: `docs/release-gates/rules-hotfix-f259c0b5.md`.
+- `verifications` and `verificationRequests`: no browser writes at all — `verificationSubmit` / `verificationDecide` / `verificationRevoke` (server) are the only writers. Live had let an owner create their own verification with an "approved" facet, which the public profile showed as a verified badge (0 such documents existed).
+- `/jobs` create: the applicants clause is parenthesised; live had let anyone, signed out included, create a job by sending `applicants: 0`.
+- Built on the live ruleset re-fetched at release time + exactly those three hunks (−390 bytes). Real rules engine (projects:test): previous live 4/4 holes open; live after 20/0.
+
 ## [2026-10-01] — ODPC registration shown as a Data Processor registration (Privacy & Legal) — candidate, NOT deployed
 
 **Files:** `legal.html` (Data Protection tab: new "Data Protection & Regulatory Registration" section; safer hash routing), `privacy.html` (one link line), `index.html` (footer link), new `scripts/test-odpc-registration-display.js`, new `docs/release-gates/DEPLOY_EVIDENCE_TEMPLATE.md`. **Functions / rules / data:** none.
