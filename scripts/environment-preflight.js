@@ -101,6 +101,8 @@ function processes() {
   return rows.map((r) => ({
     pid: Number(r.ProcessId), ppid: Number(r.ParentProcessId), name: String(r.Name || ''),
     cmd: String(r.CommandLine || ''), parentAlive: alive.has(Number(r.ParentProcessId)),
+    /* creation time in ms ("/Date(1790…)/" from ConvertTo-Json); null when unreadable */
+    created: (function (v) { const m = /(\d{10,})/.exec(String(v || '')); return m ? Number(m[1]) : null; }(r.CreationDate)),
   }));
 }
 
@@ -149,8 +151,15 @@ function lockHolderAlive(lock, procs) {
   const mine = new Set([process.pid, process.ppid]);
   if (Array.isArray(procs)) {
     const byPid = new Map(procs.map((p) => [p.pid, p]));
+    /* PID REUSE: a parent must have been created no later than its child. A "parent" created AFTER the child is a
+       recycled id belonging to an unrelated process — stop there rather than hide it as ours. */
     let cur = byPid.get(process.ppid);
-    for (let i = 0; cur && i < 32; i++) { mine.add(cur.pid); cur = byPid.get(cur.ppid); }
+    for (let i = 0; cur && i < 32; i++) {
+      mine.add(cur.pid);
+      const up = byPid.get(cur.ppid);
+      if (up && up.created != null && cur.created != null && up.created > cur.created) break;
+      cur = up;
+    }
   }
   const record = { startedAt, for: FOR, host: os.hostname(), thresholds: T, memory: mem, processes: {}, lock: null, cleanup: null, checks: [], result: null, reason: null, endedAt: null };
 
