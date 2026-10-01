@@ -1,3 +1,20 @@
+## [2026-10-01] — smsEnqueue is no longer an open SMS relay (SMS callable authority)
+
+**Files:** `functions/sms-service.js`, `scripts/test-sms-authority.js`, `CHANGELOG.md` · **Base:** `dda12d1` = the LIVE smsenqueue-00004-get archive, verbatim
+
+- **Defect (live):** any signed-in user chose the template, the phone number, the template variables and the uid whose preferences applied. That allowed a SOKONI-branded SMS (OTP, "payment received", "SOKONI ALERT", promotion) to anyone, with any text.
+- **Fix:** caller → registered template → purpose → resolved recipient → validated parameters → the existing queue.
+  - Every template is in a registry and is SERVER-ONLY by default. Server code keeps calling `enqueue()` directly, unaffected.
+  - The only browser-callable template is `admin_alert`: admin/superAdmin callers, an ADMIN recipient by uid, phone resolved from users/{uid}.
+  - The client `to` is ignored. Parameters follow a per-template schema.
+  - The shared limiter `checkRateLimit(req,'admin')` (durable Firestore fallback) caps 20/h per caller.
+  - Every request is audited in `smsSendAudit` (actor, template, outcome, masked phone; no body, no params).
+  - It returns the TRUE state (QUEUED / DEDUPED / SUPPRESSED / FAILED), never "sent".
+- No live page calls this callable (measured on hosting 72dca56), so nothing legitimate breaks.
+- **Tests:** sms-authority 13/0 (live baseline fails 9). 6 sabotages (caller auth, arbitrary phone, arbitrary template, every-template-callable, recipient check, rate limit), each caught by a NAMED assertion.
+- **Findings, not changed here:** the live archive of this function includes `functions/.env`; deploy with `.env` excluded from the artefact. `smsQueue`/`smsDeadLetter` persist full bodies (OTPs included); this is a separate follow-up.
+- **Deploy:** `--only functions:smsEnqueue` from this tree. Not deployed.
+
 ## [2026-09-29] — P0: orders rules close the rider-payout self-credit path (rules half)
 
 **Files:** `firestore.rules`, `firestore.rules.build`, `scripts/test-p0-rider-payout-rules.js`, `CHANGELOG.md`.

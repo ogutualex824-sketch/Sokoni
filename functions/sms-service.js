@@ -440,12 +440,100 @@ exports.smsQueueWorker = onSchedule(
 );
 
 /* Admin/system enqueue. */
+/* ══ THE SMS CALLABLE AUTHORITY (owner, 2026-10-01) ═══════════════════════════════════════════════════════════
+   smsEnqueue used to be an open relay: ANY signed-in user chose the template, the phone number, the template's
+   variables and even the uid whose preferences applied — a SOKONI-branded SMS (an OTP, a "payment received", a
+   "SOKONI ALERT") to anyone, with any text in the variables. Authentication was never the boundary.
+
+   The boundary is now: CALLER → AUTHORISED TEMPLATE → AUTHORISED PURPOSE → AUTHORISED RECIPIENT → VALIDATED
+   PARAMETERS → the existing queue (enqueue → smsQueueWorker → Africa's Talking). Every template is in the
+   registry below. A template with no allowedCallers is SERVER-ONLY: server code (notify.js, auth-dispatch, the
+   completion-PIN engine, …) keeps calling enqueue() directly and is unaffected; the BROWSER can never send it.
+   No live page calls this callable (measured on hosting 72dca56), so nothing legitimate breaks.
+
+   The recipient is NEVER a client-supplied number: it is resolved from the canonical users/{uid} profile of a
+   recipient the caller is entitled to message, and the recipient's own preferences apply. Parameters are a
+   per-template schema (known keys, strings, bounded length). Rate-limited through the shared limiter (durable
+   Firestore fallback when Redis is down). Every request — allowed or refused — is audited WITHOUT the body. */
+const SMS_CALLABLE = Object.freeze({
+  /* An administrator alerting ANOTHER ADMINISTRATOR (ops paging). Recipient: a uid holding an admin claim. */
+  admin_alert: Object.freeze({
+    templateId: 'admin_alert', purpose: 'security', allowedCallers: ['admin', 'superAdmin'],
+    allowedRecipientType: 'ADMIN_USER', requiredContext: null,
+    rateLimit: { maxRequests: 20, windowSeconds: 3600 },
+    parameterSchema: { subject: 80, detail: 300 }, enabled: true,
+  }),
+});
+/** The registry entry for a template as seen by a BROWSER caller (server-only templates have no callers). */
+function smsCallablePolicy(templateId) {
+  if (!Object.hasOwn(TEMPLATES, String(templateId || ''))) return null;
+  return SMS_CALLABLE[templateId] || { templateId, purpose: TEMPLATES[templateId].pref, allowedCallers: [], allowedRecipientType: 'SERVER_RESOLVED',
+    requiredContext: null, rateLimit: null, parameterSchema: null, enabled: true };
+}
+function _callerRoles(token) {
+  const t = token || {}, out = [];
+  if (t.superAdmin === true || t.role === 'superAdmin') out.push('superAdmin');
+  if (t.admin === true || t.superAdmin === true || t.role === 'admin') out.push('admin');
+  return out;
+}
+function _maskPhone(p) { const d = String(p || '').replace(/\D/g, ''); return d.length >= 4 ? '***' + d.slice(-3) : null; }
+function _validVars(schema, vars) {
+  const v = vars && typeof vars === 'object' ? vars : {};
+  const out = {};
+  for (const k of Object.keys(v)) {
+    if (!Object.hasOwn(schema, k)) return null;                                   /* unknown parameter */
+    if (typeof v[k] !== 'string') return null;
+    const t = v[k].replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim();
+    if (t.length > schema[k]) return null;
+    out[k] = t;
+  }
+  return out;
+}
+
 exports.smsEnqueue = onCall({ region: REGION, secrets: sokoniAt.secrets }, async (request) => {
   const uid = request.auth && request.auth.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
-  const { to, template, vars, dedupeKey, targetUid } = request.data || {};
-  return enqueue({ to, template, vars, uid: targetUid || uid, dedupeKey });
+  const { template, vars, targetUid } = request.data || {};
+  const audit = (outcome, extra) => db().collection('smsSendAudit').add(Object.assign({
+    actorUid: uid, template: String(template || '').slice(0, 40), outcome, at: admin.firestore.FieldValue.serverTimestamp(),
+  }, extra || {})).catch(() => {});
+
+  const policy = smsCallablePolicy(template);
+  if (!policy) { await audit('unknown_template'); throw new HttpsError('invalid-argument', 'Unknown SMS template.', { reason: 'UNKNOWN_TEMPLATE' }); }
+  const roles = _callerRoles(request.auth.token);
+  if (!policy.enabled || !policy.allowedCallers.some((r) => roles.includes(r))) {
+    await audit('template_not_callable', { purpose: policy.purpose });
+    throw new HttpsError('permission-denied', 'This message cannot be sent from the app.', { reason: 'TEMPLATE_NOT_CALLABLE' });
+  }
+  /* recipient: resolved, never supplied */
+  const rid = String(targetUid || '').trim();
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(rid)) { await audit('no_recipient'); throw new HttpsError('invalid-argument', 'A recipient account is required.', { reason: 'RECIPIENT_REQUIRED' }); }
+  if (policy.allowedRecipientType === 'ADMIN_USER') {
+    let claims = null;
+    try { claims = (await admin.auth().getUser(rid)).customClaims || {}; } catch (_) { claims = null; }
+    if (!claims || !(claims.admin === true || claims.superAdmin === true)) {
+      await audit('recipient_not_allowed', { recipientUid: rid });
+      throw new HttpsError('permission-denied', 'That recipient cannot receive this message.', { reason: 'RECIPIENT_NOT_ALLOWED' });
+    }
+  }
+  const uSnap = await db().collection('users').doc(rid).get().catch(() => null);
+  const u = uSnap && uSnap.exists ? (uSnap.data() || {}) : {};
+  const phone = u.phone || u.phoneNumber || null;
+  if (!phone) { await audit('recipient_no_phone', { recipientUid: rid }); throw new HttpsError('failed-precondition', 'That account has no phone number.', { reason: 'RECIPIENT_NO_PHONE' }); }
+  const clean = _validVars(policy.parameterSchema || {}, vars);
+  if (!clean) { await audit('bad_parameters', { recipientUid: rid }); throw new HttpsError('invalid-argument', 'Invalid message parameters.', { reason: 'BAD_PARAMETERS' }); }
+  /* the shared limiter: per caller, durable when Redis is down */
+  const { checkRateLimit } = require('./redis-rate-limiter');
+  try { await checkRateLimit(request, 'admin', Object.assign({ byUid: true }, policy.rateLimit || {})); }
+  catch (e) { await audit('rate_limited', { recipientUid: rid }); throw e; }
+  const r = await enqueue({ to: phone, template: policy.templateId, vars: clean, uid: rid,
+    dedupeKey: 'cb_' + policy.templateId + '_' + uid + '_' + rid + '_' + Math.floor(Date.now() / 60000) });
+  const status = r && r.suppressed ? 'SUPPRESSED' : r && r.deduped ? 'DEDUPED' : r && r.queued ? 'QUEUED' : 'FAILED';
+  await audit(status.toLowerCase(), { purpose: policy.purpose, recipientUid: rid, recipientTag: _maskPhone(phone), queueId: (r && r.id) || null });
+  /* the TRUE state — QUEUED, never "sent": smsQueueWorker sends and records sent/failed on smsQueue/{id} */
+  return { ok: status !== 'FAILED', status, id: (r && r.id) || null };
 });
+exports._smsAuthority = { SMS_CALLABLE, smsCallablePolicy, _callerRoles, _validVars, _maskPhone };
 
 /* ── Preferences API ───────────────────────────────────────────────────── */
 exports.smsGetPreferences = onCall({ region: REGION }, async (request) => {
