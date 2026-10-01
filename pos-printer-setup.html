@@ -1060,12 +1060,11 @@ input:checked+.slider:before{transform:translateX(18px)}
 <div id="toast">Ready</div>
 
 <!-- Firebase compat SDK -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
-<script src="/sokoni-appcheck.js"></script>
+<!-- ONE Firebase SDK (2026-10-01). This console loaded the 9.23 COMPAT SDK (5 scripts + its App Check helper) on top
+     of the site's 10.12.2 SDK — and inside /pos-setup it is framed, so a merchant downloaded two SDKs. firebase.js is
+     the site's single SDK (modular, App Check, and the window.firebase compat shim this page's code calls). It is a
+     MODULE, i.e. it runs after the inline scripts below, so their two parse-time Firebase touches are lazy. -->
+<script type="module" src="firebase.js"></script>
 <script src="sokoni-universal-printer.js"></script>
 <script src="sokoni-bluetooth-printer.js"></script>
 <script src="sokoni-printer-manager.js"></script>
@@ -1073,18 +1072,10 @@ input:checked+.slider:before{transform:translateX(18px)}
 <script src="sokoni-receipt.js"></script>
 <script src="sokoni-pos-print-service.js"></script>
 <script>
-/* ── Firebase init ── */
-if (!firebase.apps.length) {
-  firebase.initializeApp({
-    apiKey:            "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
-    authDomain: "auth.mysokoni.co.ke",
-    projectId:         "sokoni-aeb26",
-    storageBucket:     "sokoni-aeb26.appspot.com",
-    messagingSenderId: "24799054989",
-    appId:             "1:24799054989:web:e1cf6ca8c281bf1abf26c4",
-  });
-}
-const fn = firebase.functions();
+/* ── Firebase: firebase.js initialises the ONE app (with App Check) and installs the window.firebase compat shim.
+   It runs after this script, so callables resolve the shim when they are USED (always a user action, long after
+   the module has run) instead of at parse time. Same call shape as before: fn.httpsCallable(name)(data). */
+const fn = { httpsCallable: (name, opts) => window.firebase.functions().httpsCallable(name, opts) };
 
 /* ── Panel routing ── */
 function showPanel (el) {
@@ -2716,8 +2707,19 @@ Promise.race([
 
   var MERCHANT = null;
 
-  function whenSignedIn() {
+  /* firebase.js is a module: it runs after this script. Wait for its firebaseReady event (or the shim already being
+     there) before asking who is signed in — asking earlier threw, was caught, and reported "not signed in". */
+  function firebaseReady() {
     return new Promise(function (res) {
+      if (window.firebase && typeof window.firebase.auth === 'function') return res();
+      var done = false, fin = function () { if (!done) { done = true; res(); } };
+      window.addEventListener('firebaseReady', fin, { once: true });
+      document.addEventListener('firebaseReady', fin, { once: true });
+      setTimeout(fin, 15000);
+    });
+  }
+  function whenSignedIn() {
+    return firebaseReady().then(function () { return new Promise(function (res) {
       try {
         var u = firebase.auth().currentUser;
         if (u) return res(u);
@@ -2726,7 +2728,7 @@ Promise.race([
         });
         setTimeout(function () { res(firebase.auth().currentUser || null); }, 9000);
       } catch (e) { res(null); }
-    });
+    }); });
   }
 
   /* ── SETUP STATUS — the checklist and the readiness gate ─────────────── */
