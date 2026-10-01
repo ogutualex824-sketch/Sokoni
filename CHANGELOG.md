@@ -1,3 +1,8 @@
+## [2026-10-01] — Data-rights intake abuse-controlled; one fail-closed limiter (functions:submitDataRightsRequest + reset gate refactor, NOT deployed)
+
+**Why (census P2 #22):** submitDataRightsRequest (open to non-account holders, as KDPA rights require) had no App Check, no rate limit, stored the raw IP, and crashed (500) on a non-string phone. The existing limiters fail OPEN under contention.
+**Change:** new `functions/shared/durable-limit.js` — transactional, FAIL-CLOSED limiter + right-most-XFF pseudonymised client key; submitDataRightsRequest enforces App Check, 5/hour per client and 3/day per email, type-checks phone/details, stores `ipKey` (no raw IP); the 25-minute reset gate now uses the same module (one implementation). data-deletion.html calls through firebase.js's shim on the App Check app, so enforcement does not break the form. `scripts/test-rights-intake.js` 7/0; `test-password-reset-25m` still 25/0. **Deploy:** add `functions:submitDataRightsRequest` to the security deploy set.
+
 ## [2026-10-01] — Right to erasure actually runs: no-index query, wider purge, honest outcome (functions:finaliseExpiredDeletions, NOT deployed)
 
 **Why (PROVEN live, census P0 #3):** finaliseExpiredDeletions (finaliseexpireddeletions-00005-sof; live account-manager.js / account-purge-spec.js byte-identical to this tree) queried users by status == AND deletionScheduledAt <= — a composite index that never existed — so every nightly run failed (59 FAILED_PRECONDITION 08-31→09-29) and no account was ever finalised. Backlog measured 0 (control: 85 users), so nothing is stranded today. The purge spec missed onboarding drafts (plaintext national ID), preferences, reset tokens, product reviews and six Storage prefixes; the erasure log always said "success".

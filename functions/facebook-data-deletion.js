@@ -191,9 +191,17 @@ exports.adminUpdateDataDeletionStatus = onCall(
  * Callable: users submit self-service data rights requests
  */
 exports.submitDataRightsRequest = onCall(
-  { region: REGION },
+  { region: REGION, enforceAppCheck: true },
   async (request) => {
-    const { name, email, phone, type, details } = request.data;
+    /* 2026-10-01 — open to people WITHOUT an account (KDPA rights are not account-gated), so it
+       needs abuse controls: App Check, durable FAIL-CLOSED limits per client and per email, type
+       checks (a non-string phone used to crash with a 500), and no raw IP stored (pseudonymised). */
+    const _lim = require('./shared/durable-limit');
+    const { name, email, phone, type, details } = request.data || {};
+    if ((phone != null && typeof phone !== 'string') || (details != null && typeof details !== 'string')) {
+      throw new HttpsError('invalid-argument', 'Invalid request');
+    }
+    await _lim.limit(db, admin, { bucket: 'rightsClient', key: _lim.clientKey(request.rawRequest), max: 5, windowSec: 3600 });
 
     /* Must-fix #3 — the data-deletion.html form sends KDPA-standard right names
        (deletion/access/rectification/restriction/portability/objection) that did NOT
@@ -221,6 +229,7 @@ exports.submitDataRightsRequest = onCall(
     if (!canonicalType) {
       throw new HttpsError('invalid-argument', 'Invalid request type');
     }
+    await _lim.limit(db, admin, { bucket: 'rightsEmail', key: _lim.sha('email|' + email.trim().toLowerCase()).slice(0, 32), max: 3, windowSec: 86400 });
 
     await db.collection('dataRightsRequests').add({
       name:       name.trim(),
@@ -231,7 +240,7 @@ exports.submitDataRightsRequest = onCall(
       details:    details ? details.trim().slice(0, 1000) : null,
       status:     'received',
       uid:        request.auth?.uid || null,
-      ip:         request.rawRequest?.ip || null,
+      ipKey:      _lim.clientKey(request.rawRequest),   /* pseudonymised; the raw IP is not stored */
       createdAt:  admin.firestore.FieldValue.serverTimestamp(),
       respondBy:  new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });

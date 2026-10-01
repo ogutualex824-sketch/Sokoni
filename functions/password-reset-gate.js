@@ -55,38 +55,13 @@ let _clock = () => Date.now();
 const db = () => admin.firestore();
 const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
 
-/* Client key: the RIGHT-MOST X-Forwarded-For entry is the address Google's front end saw;
-   entries to its left are client-supplied and trivially spoofed. Falls back to req.ip. */
-function _clientKey(rawRequest) {
-  const h = rawRequest && rawRequest.headers ? rawRequest.headers['x-forwarded-for'] : '';
-  const parts = String(h || '').split(',').map((s) => s.trim()).filter(Boolean);
-  const ip = parts.length ? parts[parts.length - 1] : ((rawRequest && rawRequest.ip) || 'unknown');
-  return sha256('ip|' + ip).slice(0, 32);      /* stored pseudonymised, never raw */
-}
-
+/* Rate limiting and the client key live in ONE fail-closed module (shared/durable-limit.js),
+   shared with the data-rights intake. Buckets and limits stay route-specific (LIMITS above). */
+const DL = require('./shared/durable-limit');
+const _clientKey = DL.clientKey;
 async function _limit(bucket, key) {
   const [max, windowSec] = LIMITS[bucket];
-  const now = _clock();
-  const ref = db().collection('passwordResetRate').doc(bucket + '_' + key);
-  let res;
-  try {
-    res = await db().runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const d = snap.exists ? snap.data() : null;
-      const start = d && typeof d.windowStartMs === 'number' && now - d.windowStartMs < windowSec * 1000 ? d.windowStartMs : now;
-      const count = start === (d && d.windowStartMs) ? Number(d.count || 0) : 0;
-      if (count >= max) return { ok: false, retryAfter: Math.ceil((start + windowSec * 1000 - now) / 1000) };
-      tx.set(ref, { windowStartMs: start, count: count + 1, expiresAt: admin.firestore.Timestamp.fromMillis(start + windowSec * 1000 + 86400000) });
-      return { ok: true };
-    });
-  } catch (e) {
-    logger.error('[pwreset] limiter unavailable — refusing (fail closed)', { bucket, error: e.message });
-    throw new HttpsError('unavailable', 'Password reset is temporarily unavailable. Please try again in a few minutes.', { code: 'RATE_LIMIT_UNAVAILABLE' });
-  }
-  if (!res.ok) {
-    logger.warn('[pwreset] rate limited', { bucket, rateLimited: true });
-    throw new HttpsError('resource-exhausted', 'Too many password reset attempts. Please wait and try again.', { code: 'RATE_LIMITED', retryAfterSeconds: Math.max(1, res.retryAfter) });
-  }
+  return DL.limit(db(), admin, { bucket, key, max, windowSec, collection: 'passwordResetRate', now: _clock(), logger });
 }
 
 function _esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
