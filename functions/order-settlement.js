@@ -22,6 +22,24 @@ const admin = require('firebase-admin');
 const SE = require('./settlement-engine');
 
 const STATES = { UNSETTLED: 'UNSETTLED', HELD: 'HELD', ELIGIBLE: 'ELIGIBLE_FOR_SETTLEMENT', SETTLING: 'SETTLING', SETTLED: 'SETTLED', REFUNDED: 'REFUNDED', REVERSED: 'REVERSED' };
+
+/* ── ONE ANSWER TO "IS THIS ORDER ALREADY SETTLED?" ─────────────────────────────────────
+   The IntaSend webhook credits the seller at payment time and marks the order
+   `settlementStatus: "settled"` — LOWERCASE — so that this module does not credit again.
+   Comparing against 'SETTLED' with === never saw that marker: completing a webhook-paid order
+   credited the seller a SECOND time (docs/MARKETPLACE_DOUBLE_CREDIT_MEASUREMENT.md).
+
+   Both "already settled" decisions that gate a credit — settleOrder and the auto-confirm
+   sweep — go through this one predicate, case- and whitespace-insensitive, so they cannot
+   disagree about the same order. Only a STRING can be a status: a non-string value is not
+   a known state and is not read as one.
+
+   Deliberately NOT applied to the refund routing: a webhook-credited order has no
+   settlements/{orderId} record for reverseSettledOrder to reverse, so widening that path is
+   a separate decision. */
+function isAlreadySettled(status) {
+  return typeof status === 'string' && status.trim().toUpperCase() === STATES.SETTLED;
+}
 const DEFAULT_AUTOCONFIRM_DAYS = 3;
 
 /* Auto-confirm window is CONFIG, not a constant (D2): _systemConfig/settlement.autoConfirmDays. */
@@ -98,7 +116,7 @@ async function settleOrder(db, adminSdk, orderId) {
     if (!s.exists) return { outcome: 'no-order' };
     const o = s.data();
     const st = o.settlementStatus;
-    if (st === STATES.SETTLED)  return { outcome: 'already-settled' };   /* replay no-op */
+    if (isAlreadySettled(st))   return { outcome: 'already-settled' };   /* replay no-op — any case, see isAlreadySettled */
     if (st === STATES.REFUNDED) return { outcome: 'refunded-skip' };     /* refunded before settlement */
     /* Only a held/eligible, non-cancelled/refunded order settles. */
     if (['cancelled', 'refunded'].includes(o.status)) return { outcome: 'terminal-skip' };
@@ -284,7 +302,7 @@ async function autoConfirmDeliveredOrders(db, adminSdk) {
   let confirmed = 0;
   for (const doc of snap.docs) {
     const o = doc.data();
-    if (o.settlementStatus === STATES.SETTLED || o.settlementStatus === STATES.REFUNDED) continue;
+    if (isAlreadySettled(o.settlementStatus) || o.settlementStatus === STATES.REFUNDED) continue;
     if (o.disputeOpen === true || o.hasDispute === true) continue;   /* dispute pauses auto-confirm */
     const deliveredMs = o.deliveredAt && o.deliveredAt.toMillis ? o.deliveredAt.toMillis()
       : (typeof o.deliveredAt === 'number' ? o.deliveredAt : 0);
@@ -298,7 +316,7 @@ async function autoConfirmDeliveredOrders(db, adminSdk) {
   return confirmed;
 }
 
-module.exports = { STATES, settleOrder, markEligible, markRefundedIfUnsettled, reverseSettledOrder, handleOrderRefund, autoConfirmDeliveredOrders, _grossCents,
+module.exports = { STATES, isAlreadySettled, settleOrder, markEligible, markRefundedIfUnsettled, reverseSettledOrder, handleOrderRefund, autoConfirmDeliveredOrders, _grossCents,
   /* Exposed so the funding resolver can be tested directly — it decides real money,
      and inferring it from a full settlement run would prove less. */
   _internal: { _platformFundedDiscountCents } };

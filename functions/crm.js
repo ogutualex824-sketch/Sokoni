@@ -91,7 +91,11 @@ async function assertMerchantOwner(uid, merchantId) {
   const snap = await db.collection('merchants').doc(merchantId).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Merchant not found.');
   const data = snap.data();
-  if (data.ownerId !== uid && data.adminUids && !data.adminUids.includes(uid)) {
+  /* FAIL CLOSED. Was `data.adminUids && !data.adminUids.includes(uid)`: with
+     adminUids ABSENT the middle conjunct is undefined, the whole condition is
+     false, and a NON-OWNER was GRANTED access. Latent only because every existing
+     merchant happens to carry the field. */
+  if (data.ownerId !== uid && !(Array.isArray(data.adminUids) && data.adminUids.includes(uid))) {
     throw new HttpsError('permission-denied', 'Access denied.');
   }
 }

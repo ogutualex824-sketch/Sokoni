@@ -6,6 +6,7 @@
 'use strict';
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { assertMerchantAccess } = require('./merchant-authority');
 const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { writeAudit } = require('./pos-audit');
@@ -158,6 +159,7 @@ async function _postSaleFinancials(o) {
 
     /* ── COMMISSION — the canonical rate, never a local table ──────────────── */
     let pct = null, commissionCents = 0, sellerNetCents = null;
+    let rateCategory = null, pricingSource = null;
     try {
       const FU = require('./finos-utils');
       /* Cents in, cents out — calculateCommission speaks orderAmountCents and
@@ -170,6 +172,13 @@ async function _postSaleFinancials(o) {
       pct = (c && typeof c.effectiveRate === 'number') ? c.effectiveRate : null;
       commissionCents = (c && Number.isInteger(c.commissionCents)) ? c.commissionCents : 0;
       sellerNetCents  = (c && Number.isInteger(c.sellerNetCents)) ? c.sellerNetCents : null;
+      /* PROVENANCE. `5` alone is not evidence that the POS rule priced this sale — the
+         `default` arm is ALSO 5, and that arm is what has been pricing live traffic. The
+         resolved category is what separates them, so it is recorded on the ledger entry:
+         category `pos` means the POS authority applied; category `default` on a POS sale
+         is a FAILURE even though the number looks correct. */
+      rateCategory  = (c && c.category) || null;
+      pricingSource = (c && c.pricingSource) || null;
     } catch (e) {
       out.status = 'failed';
       out.error = 'commission rate unavailable: ' + ((e && e.message) || e);
@@ -207,10 +216,24 @@ async function _postSaleFinancials(o) {
         sellerId: o.merchantId,
         category: 'pos',
         createdBy: 'posCompleteCheckout',
+        /* OUTSTANDING, not settled. The seller holds the customer's cash and OWES
+           this commission — nothing has been collected at the moment of sale. It
+           becomes 'settled' only when a payment is verified against it. Writing it
+           settled at creation (the previous behaviour) made every receivable look
+           paid, which would make any collection gate aggregate to zero. */
+        settlementState: 'outstanding',
         /* Derived from the SALE's idempotency key, so a retried posting for the
            same sale is recognised and cannot double-book commission. */
         idempotencyKey: 'poscomm_' + o.idempotencyKey,
-        metadata: { collectionRoute: out.collectionRoute, commissionPct: pct },
+        /* rateCategory is the evidence, not commissionPct. Both the POS rule and the
+           `default` arm yield 5, so only the resolved category proves which authority
+           priced this sale. A reconciliation reads this field, never the number alone. */
+        metadata: {
+          collectionRoute: out.collectionRoute,
+          commissionPct:   pct,
+          rateCategory:    rateCategory,
+          pricingSource:   pricingSource,
+        },
       });
     }
 
@@ -262,6 +285,13 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     grandTotal,
     metadata      = {},
   } = data || {};
+
+  /* THE MERCHANT BOUNDARY. Before any read of the merchant's products, any stock
+     movement, any sale, receipt, wallet or loyalty write. merchantId is supplied by
+     the caller, so it is a REQUEST — the server decides whether this caller may act
+     on it. Placed here rather than lower down so nothing is touched before the
+     answer is known. */
+  await _assertSellAuthority(auth, merchantId);
 
   if (!idempotencyKey) _e('idempotencyKey required');
   if (!merchantId)     _e('merchantId required');
@@ -902,6 +932,10 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
 exports.posValidateCoupon = onCall(cfg, async ({ data, auth }) => {
   await _assertAuth(auth);
   const { code, merchantId, subtotal = 0, customerId } = data || {};
+  /* THE MERCHANT BOUNDARY. merchantId is caller-supplied and _assertAuth only
+     proves a uid exists. Owner/admin, or an active employee with a selling
+     role — the same dual authority certified on posCompleteCheckout. */
+  await _assertSellAuthority(auth, merchantId, 'act for this merchant');
   if (!code) _e('code required');
 
   const cpSnap = await db.collection('coupons').doc(code.trim().toUpperCase()).get();
@@ -937,6 +971,10 @@ exports.posValidateCoupon = onCall(cfg, async ({ data, auth }) => {
 exports.posLookupCustomer = onCall(cfg, async ({ data, auth }) => {
   await _assertAuth(auth);
   const { query, method = 'auto', merchantId } = data || {};
+  /* THE MERCHANT BOUNDARY. merchantId is caller-supplied and _assertAuth only
+     proves a uid exists. Owner/admin, or an active employee with a selling
+     role — the same dual authority certified on posCompleteCheckout. */
+  await _assertSellAuthority(auth, merchantId, 'act for this merchant');
   if (!query) _e('query required');
 
   const q    = String(query).trim();
@@ -1006,6 +1044,74 @@ exports.posLookupCustomer = onCall(cfg, async ({ data, auth }) => {
    merchantId against the sale's own merchantId, which an attacker simply supplies correctly).
    Refunds move real money and return stock, so they now require manager/owner rank AND
    membership of the merchant that owns the sale. */
+/* ══════════════════════════════════════════════════════════════════════════════
+   _assertSellAuthority — the caller must belong to the merchant they sell for
+   ══════════════════════════════════════════════════════════════════════════════
+   RECOVERED INTENT. posCompleteCheckout called only _assertAuth, which
+   AUTHENTICATES and returns a cashierId. `merchantId` arrived in the request
+   payload and was never checked against the caller, so an authenticated user with
+   no relationship to a merchant could record a sale against it. Measured in the
+   emulator when this was first written (2e78f59, on audit/employee-attribution):
+   an outsider moved a victim's stock 50 -> 48 and filed a KES 400 sale under their
+   own uid.
+
+   That commit NEVER REACHED THE LIVE LINEAGE — it is an ancestor of neither
+   de20ba1 nor 12c6676, and `_assertSellAuthority` appeared nowhere in the live
+   tree. Its security intent is reconstructed here against the surface that
+   actually exists on live, rather than transplanted: the original called
+   `authorizeActor(uid, merchantId, 'pos.sell')`, which does not exist here, so
+   model 1 resolves through `resolveActor` and checks the `sell` capability from
+   the same ROLE_CAPABILITIES table.
+
+   WHY THIS ACCEPTS EITHER AUTHORITY. Three identity models exist here and none is
+   canonical yet:
+
+     merchant-identity   shops/{uid}      + shopEmployees
+     this file           merchants/{id}                     (_getMerchant)
+     this file           businesses/{id}  + posStaff        (_assertRefundAuthority)
+
+   Picking one would either break every merchant registered under the other, or
+   quietly redefine what a POS merchant is. Neither belongs in a security fix. So
+   the caller must satisfy AT LEAST ONE genuine authority — an outsider satisfies
+   none, which is what closes the hole — and converging the models stays the
+   separate decision it already is.
+
+   This is not theoretical: a posStaff-ONLY guard was written earlier in this
+   workstream and REJECTED BY TEST, because ordinary selling cashiers live in
+   shopEmployees, not posStaff. The union is the point.
+
+   RESOLUTION IS AT CALL TIME, so a revoked employee is refused with no cached
+   session involved. A THROW from model 1 falls through to model 2 rather than
+   failing the sale open; if model 2 also fails, the sale is refused. */
+async function _assertSellAuthority(auth, merchantId, what) {
+  if (!auth || !auth.uid) _e('Authentication required', 'unauthenticated');
+  const uidStr = String(auth.uid);
+  if (auth.token && (auth.token.admin === true || auth.token.superAdmin === true)) return uidStr;
+  if (!merchantId) _e('merchantId required');
+
+  /* 1 — the merchant-identity employment authority (shops/{uid} + shopEmployees).
+         `sell` comes from ROLE_CAPABILITIES; no new permission name is invented. */
+  try {
+    const r = await resolveActor(uidStr, String(merchantId));
+    if (r && r.ok && (r.capabilities || []).indexOf('sell') !== -1) return uidStr;
+  } catch (_) { /* fall through to the POS model rather than failing the sale open */ }
+
+  /* 2 — this file's own model, the same one _assertRefundAuthority uses. */
+  const [bizSnap, staffSnap] = await Promise.all([
+    db.collection('businesses').doc(String(merchantId)).get(),
+    db.collection('posStaff')
+      .where('merchantId', '==', String(merchantId))
+      .where('uid', '==', uidStr)
+      .where('status', '==', 'active')
+      .limit(1).get(),
+  ]);
+  if (bizSnap.exists && bizSnap.data().ownerId === uidStr) return uidStr;
+  if (!staffSnap.empty) return uidStr;
+
+  _e('Not authorized to ' + (what || 'sell for this merchant'), 'permission-denied');
+}
+
+
 async function _assertRefundAuthority(auth, merchantId) {
   if (!auth?.uid) _e('Authentication required', 'unauthenticated');
   const uidStr = auth.uid;
@@ -1136,6 +1242,10 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
 exports.posLogReprint = onCall(cfg, async ({ data, auth }) => {
   await _assertAuth(auth);
   const { orderId, receiptType = 'sale', printerName = null, branchId = 'default', merchantId = null } = data || {};
+  /* THE MERCHANT BOUNDARY. merchantId is caller-supplied and _assertAuth only
+     proves a uid exists. Owner/admin, or an active employee with a selling
+     role — the same dual authority certified on posCompleteCheckout. */
+  await _assertSellAuthority(auth, merchantId, 'act for this merchant');
   if (!orderId) _e('orderId required');
 
   const cntRef = db.collection('posReprintCounters').doc(String(orderId));
@@ -1167,6 +1277,10 @@ exports.posGetQueueMetrics = onCall(cfg, async ({ data, auth }) => {
   await _assertAuth(auth);
   const { merchantId, branchId = 'default', days = 7 } = data || {};
   if (!merchantId) _e('merchantId required');
+  /* _assertAuth only proves a uid exists — it binds no tenant. Before this, ANY
+     authenticated user could read another merchant's checkout metrics by passing
+     their merchantId. */
+  await assertMerchantAccess(auth, merchantId);
 
   const since = new Date();
   since.setDate(since.getDate() - days);
@@ -1260,6 +1374,10 @@ exports.posCleanupIdempotency = onSchedule({
 exports.posCheckPaymentStatus = onCall(cfg, async ({ data, auth }) => {
   await _assertAuth(auth);
   const { ref, merchantId } = data || {};
+  /* THE MERCHANT BOUNDARY. merchantId is caller-supplied and _assertAuth only
+     proves a uid exists. Owner/admin, or an active employee with a selling
+     role — the same dual authority certified on posCompleteCheckout. */
+  await _assertSellAuthority(auth, merchantId, 'act for this merchant');
   if (!ref) _e('ref required');
 
   /* Check posPaymentStatus collection first — webhook writes here on IntaSend callback */
