@@ -176,10 +176,34 @@ async function issueOrResend({ db, FV, key, orderId, mode, actorUid, now }) {
 
 /** Deliver a PIN the engine just produced. SMS through the existing AT authority; WhatsApp OFF (not provisioned).
  *  Records channel / provider / messageId / status — NEVER the body. The order stays incomplete either way. */
-async function deliverPin({ db, FV, orderId, version, pin, phone, sendSms, now }) {
+/* ONE PIN, WhatsApp first, SMS fallback (owner 2026-10-01: WhatsApp Cloud API may carry the completion PIN,
+   server-triggered only). `sendWhatsApp` is the ONE outbound WhatsApp sender (sokoni-32's whatsapp-sender.js
+   makeSender: approved template 'completion_pin', params {code} → Graph only, never stored); absent or
+   NOT_CONFIGURED (secrets not provisioned) → the existing AT SMS carries the SAME PIN. Each channel gets its own
+   deliveryPinLog record (channel / provider / messageId / status / failureCode) — never the PIN. */
+const WA_PIN_TEMPLATE = 'completion_pin';
+/** The ONE WhatsApp sender, or null when this tree does not carry it. Secrets are read from the function's env:
+ *  until the owner provisions WHATSAPP_ACCESS_TOKEN / WHATSAPP_PHONE_NUMBER_ID (and the calling function declares
+ *  them) every send answers NOT_CONFIGURED and deliverPin falls back to SMS. */
+function whatsAppSender() {
+  try { const W = require('../whatsapp-sender'); return W.makeSender(W.configFromEnv()); } catch (_) { return null; }
+}
+async function deliverPin({ db, FV, orderId, version, pin, phone, sendSms, sendWhatsApp, now }) {
   const log = db.collection('deliveryPinLog').doc(String(orderId) + '_v' + version + '_' + now);
   const base = { orderId: String(orderId), version, at: now, createdAt: FV.serverTimestamp() };
-  await log.set(Object.assign({}, base, { channel: 'whatsapp', provider: null, status: 'NOT_CONFIGURED' })).catch(() => {});
+  let wa = { ok: false, error: 'NOT_CONFIGURED', messageId: null };
+  if (typeof sendWhatsApp === 'function' && phone) {
+    try { wa = (await sendWhatsApp(phone, WA_PIN_TEMPLATE, { code: pin })) || { ok: false, error: 'NO_RESULT' }; }
+    catch (e) { wa = { ok: false, error: 'NETWORK', messageId: null }; }
+  }
+  await log.set(Object.assign({}, base, { channel: 'whatsapp', provider: wa.error === 'NOT_CONFIGURED' ? null : 'meta',
+    messageId: wa.messageId || null, status: wa.ok ? 'SENT' : (wa.error === 'NOT_CONFIGURED' ? 'NOT_CONFIGURED' : 'FAILED'),
+    failureCode: wa.ok ? null : String(wa.error || 'failed').slice(0, 40) })).catch(() => {});
+  if (wa.ok) {
+    await db.collection('orders').doc(String(orderId)).set({ deliveryPinDelivery: 'SENT', deliveryPinChannel: 'whatsapp',
+      updatedAt: FV.serverTimestamp() }, { merge: true }).catch(() => {});
+    return { ok: true, channel: 'whatsapp' };
+  }
   let res = { ok: false, error: 'no_phone' };
   if (phone) { try { res = (await sendSms(phone, smsText(pin))) || { ok: false, error: 'no_result' }; } catch (e) { res = { ok: false, error: String(e && e.message || e).slice(0, 80) }; } }
   const mid = res.results && res.results[0] ? res.results[0].messageId : null;
@@ -246,5 +270,5 @@ async function verifyAttempt({ db, FV, key, orderId, pin, legacyPkg, now, actorU
 module.exports = {
   PIN_TTL_MS, MAX_SENDS, MAX_ATTEMPTS, LOCK_MS, RESEND_MIN_GAP_MS, ENGINE, R,
   newPin, isPinShape, hashPin, sameHash, sealPin, openPin, buyerOf, sellerOf, riderOf, isDeliveryOrder,
-  eligibility, pinState, maskedView, smsText, issueOrResend, deliverPin, verifyAttempt, resolveBuyerPhone,
+  eligibility, pinState, maskedView, smsText, issueOrResend, deliverPin, verifyAttempt, resolveBuyerPhone, WA_PIN_TEMPLATE, whatsAppSender,
 };

@@ -130,6 +130,28 @@ const dump = () => JSON.stringify([...DOCS.entries()]);
   const d8 = await P.deliverPin({ db, FV, orderId: 'o7', version: 1, pin: i7.pin, phone: null, sendSms: okSms, now: T0 + 1 });
   ck('D-4', !d8.ok && DOCS.get('pinDeliveryFailures/o7_v1').reason === 'no_buyer_phone', 'no buyer phone → recorded as a delivery failure, never silently dropped');
 
+  /* WhatsApp first, SMS fallback — the SAME PIN (owner 2026-10-01) */
+  const waCalls = [], smsCalls = [];
+  const waOk = async (to, tpl, params) => { waCalls.push({ to, tpl, params }); return { ok: true, messageId: 'wamid.X1', error: null }; };
+  const waOff = async () => ({ ok: false, messageId: null, error: 'NOT_CONFIGURED' });
+  const waFail = async () => ({ ok: false, messageId: null, error: 'META_131026' });
+  const smsSpy = async (to, text) => { smsCalls.push(text); return { ok: true, results: [{ messageId: 'ATW', status: 'Success' }] }; };
+  paidOrder('w1'); const iw1 = await P.issueOrResend({ db, FV, key: KEY, orderId: 'w1', mode: 'auto', now: T0 });
+  const dw1 = await P.deliverPin({ db, FV, orderId: 'w1', version: 1, pin: iw1.pin, phone: '254700000001', sendSms: smsSpy, sendWhatsApp: waOk, now: T0 });
+  ck('WA-1', dw1.ok && dw1.channel === 'whatsapp' && waCalls.length === 1 && waCalls[0].tpl === 'completion_pin' && waCalls[0].params.code === iw1.pin && smsCalls.length === 0
+    && DOCS.get('orders/w1').deliveryPinChannel === 'whatsapp', 'WhatsApp configured → the PIN goes by WhatsApp (approved template completion_pin, {code}); no SMS', dw1);
+  ck('WA-2', !dump().includes(iw1.pin) && [...DOCS.values()].some((v) => v && v.channel === 'whatsapp' && v.messageId === 'wamid.X1' && v.status === 'SENT'),
+    'the WhatsApp send is logged by Meta message id — the PIN is stored NOWHERE');
+  paidOrder('w2'); const iw2 = await P.issueOrResend({ db, FV, key: KEY, orderId: 'w2', mode: 'auto', now: T0 });
+  const dw2 = await P.deliverPin({ db, FV, orderId: 'w2', version: 1, pin: iw2.pin, phone: '254700000001', sendSms: smsSpy, sendWhatsApp: waOff, now: T0 });
+  ck('WA-3', dw2.ok && dw2.channel === 'sms' && smsCalls.length === 1 && smsCalls[0].includes(iw2.pin), 'WhatsApp NOT_CONFIGURED (secrets not provisioned) → SMS carries the SAME PIN', dw2);
+  paidOrder('w3'); const iw3 = await P.issueOrResend({ db, FV, key: KEY, orderId: 'w3', mode: 'auto', now: T0 });
+  const dw3 = await P.deliverPin({ db, FV, orderId: 'w3', version: 1, pin: iw3.pin, phone: '254700000001', sendSms: smsSpy, sendWhatsApp: waFail, now: T0 });
+  const wlog = [...DOCS.entries()].filter(([k]) => k.indexOf('deliveryPinLog/w3') === 0).map(([, v]) => v);
+  ck('WA-4', dw3.ok && dw3.channel === 'sms' && smsCalls.length === 2 && wlog.some((l) => l.channel === 'whatsapp' && l.status === 'FAILED' && l.failureCode === 'META_131026') && wlog.some((l) => l.channel === 'sms' && l.status === 'SENT'),
+    'WhatsApp FAILS → SMS fallback with the same PIN; both attempts recorded (one record per channel)', wlog);
+  ck('WA-5', P.WA_PIN_TEMPLATE === 'completion_pin', 'the template name matches the one the owner creates in WhatsApp Manager');
+
   /* masked views */
   const mv = P.maskedView(DOCS.get('orders/o6'), T0 + 1);
   ck('M-1', mv.masked === '••••••' && mv.state === 'DELIVERED' && mv.maxSends === 5 && !JSON.stringify(mv).includes(i6.pin) && !JSON.stringify(mv).includes(DOCS.get('orders/o6').deliveryPinHash),

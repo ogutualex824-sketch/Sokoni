@@ -3404,7 +3404,7 @@ async function _issueDeliveryPin(orderId, data) {
     const r = await CP.issueOrResend({ db, FV, key, orderId, mode: 'auto', now });
     if (!r.ok || r.action !== 'issued') return;
     const phone = await CP.resolveBuyerPhone(db, r.buyerUid, data);
-    const d = await CP.deliverPin({ db, FV, orderId, version: r.version, pin: r.pin, phone, sendSms: sokoniAt.atSendSMS, now });
+    const d = await CP.deliverPin({ db, FV, orderId, version: r.version, pin: r.pin, phone, sendSms: sokoniAt.atSendSMS, sendWhatsApp: CP.whatsAppSender(), now });
     await db.collection('deliveryAuditLog').add({ at: FV.serverTimestamp(), phase: 'enforcing', event: 'PIN_ISSUED',
       orderId: String(orderId), version: r.version, delivered: d.ok, channel: d.channel }).catch(() => {});
   } catch (e) {

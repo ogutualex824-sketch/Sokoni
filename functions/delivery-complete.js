@@ -309,7 +309,7 @@ exports.sendDeliveryPin = onCall(
       throw new HttpsError(MSG[0], MSG[1], { reason: r.reason });
     }
     const phone = await CP.resolveBuyerPhone(db, r.buyerUid, o);
-    const dv = await CP.deliverPin({ db, FV, orderId, version: r.version, pin: r.pin, phone, sendSms: require("./sokoni-at").atSendSMS, now });
+    const dv = await CP.deliverPin({ db, FV, orderId, version: r.version, pin: r.pin, phone, sendSms: require("./sokoni-at").atSendSMS, sendWhatsApp: CP.whatsAppSender(), now });
     await _audit({ event: r.action === "issued" ? "PIN_REISSUED" : "PIN_RESENT", orderId, actorUid: uid, role, version: r.version, delivered: dv.ok, appCheck: !!req.app });
     const fresh = (await db.collection("orders").doc(orderId).get()).data() || {};
     return { ok: true, action: r.action, delivered: dv.ok, reason: dv.ok ? null : "PIN_DELIVERY_FAILED", pin: CP.maskedView(fresh, now) };
