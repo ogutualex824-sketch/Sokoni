@@ -48,9 +48,9 @@ const ADMIN_PAGE = SHELL(`<div id="host" style="padding:12px"></div><div id="toa
 <script>
   function start() {
     if (!firebase.auth().currentUser) return setTimeout(start, 50);
-    /* the same adapter AdminOS (sokoni-aos.js _mountTrustQueue) and super admin (SA.loadTrustQueue) pass */
-    window.__q = SokoniTrustQueues.mount(document.getElementById('host'), {
-      callable: function (n) { return function (p) { return firebase.functions().httpsCallable(n)(p).then(function (r) { return r.data; }); }; },
+    /* the same contract AdminOS (sokoni-aos.js _mountTrustQueue) and super admin (SA.loadTrustQueue) pass — C3: { console, call } */
+    window.__q = SokoniTrustQueues.mount(document.getElementById('host'), { console: 'adminos',
+      call: function (n, p) { return firebase.functions().httpsCallable(n)(p).then(function (r) { return r.data; }); },
       onToast: function (m) { var t = document.createElement('div'); t.className = 'toast'; t.textContent = m; document.getElementById('toasts').appendChild(t); } });
   }
   start();
@@ -74,7 +74,7 @@ const MERCHANT_PAGE = SHELL(`<div id="host" style="height:100vh;display:flex;fle
   await db.doc('products/pT').set({ name: 'Leather Boots', price: 4200, sellerUid: 'selB', status: 'active', isVisible: true });
   await TS.tsReportContent(as('buyB', { entityType: 'product', entityId: 'pT', reasonCode: 'counterfeit', detail: 'Wanjiku: brand logo is fake' }));
   const H = makePageHarness({ db, root: ROOT, pages: { '/tq-admin.html': ADMIN_PAGE, '/tq-merchant.html': MERCHANT_PAGE },
-    callables: { tsGetReports: TS.tsGetReports, tsReviewReport: TS.tsReviewReport } });
+    callables: { tsGetReports: TS.tsGetReports, tsReviewReport: TS.tsReviewReport, tsGetReportCase: TS.tsGetReportCase, tsGetReportReasons: TS.tsGetReportReasons } });
   await H.start();
   const { chromium } = require(Path.join(ROOT, 'node_modules', 'playwright'));
   const browser = await chromium.launch();
@@ -91,7 +91,7 @@ const MERCHANT_PAGE = SHELL(`<div id="host" style="height:100vh;display:flex;fle
       await R.click('[data-act="decide"][data-v="takedown"]', T); await R.waitForFunction(() => /product taken down/.test(document.body.innerText), null, T); });
     const p = (await db.doc('products/pT').get()).data();
     ck('TB4 a product report is listed and "Uphold + take product down" hides it (server)', listed && p.isVisible === false && p.moderationHold && !!p.moderationHold.reportId, { listed, vis: p.isVisible });
-    await act('drawer + Esc', async () => { await R.click('[data-act="filter"][data-v="approved"]', T); await R.waitForSelector('.stq-row', T); await R.click('.stq-row', T);
+    await act('drawer + Esc', async () => { await R.click('[data-act="filter"][data-v="upheld"]', T); await R.waitForSelector('.stq-row', T); await R.click('.stq-row', T);
       await R.waitForSelector('.stq-drawer', T); await R.keyboard.press('Escape'); await R.waitForFunction(() => !document.querySelector('.stq-drawer'), null, T); });
     const geo = await R.evaluate(() => ({ noH: document.documentElement.scrollWidth <= window.innerWidth + 1,
       small: [...document.querySelectorAll('.stq-chip, .stq-btn, .stq-row')].map((n) => n.getBoundingClientRect().height).filter((h) => h > 0 && h < 44) }));
