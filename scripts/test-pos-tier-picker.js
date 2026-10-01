@@ -60,6 +60,7 @@ ck('U-1', /data-act="tier"/.test(sell) && /aria-pressed="/.test(sell) && /aria-l
 ck('U-2', /\(on \? '✓ ?' : ''\)/.test(sell), 'the selected tier shows a ✓ (not colour alone)');
 ck('U-3', /if \(!has\) \{[\s\S]{0,200}disabled aria-disabled="true"[\s\S]{0,120}price not set/.test(sell) && !/if \(!has\) \{[^}]*data-act="tier"/.test(sell), 'an UNSET tier renders as a disabled "—" cell that cannot be selected (never 0)');
 ck('U-6', /\['online', 'shop', 'wholesale'\]\.map\(/.test(sell) && /'<\/div><\/div>' \+ tierCol \+\s*\n?\s*\/\*[\s\S]{0,400}'<div class="msl-step">'/.test(sell), 'layout: ONL / SHOP / WHOLE column, top to bottom, directly LEFT of the + / qty / − stepper');
+ck('U-8', /var tierCol = l\.quick \? '' :/.test(sell), 'a Quick Charge line (cashier-priced, no tiers) gets NO tier column');
 ck('U-7', /'\.msl-tiers\{[^']*flex-direction:column/.test(sell) && /@media \(max-width:360px\)\{\.msl-tiers/.test(sell), 'the tier column is vertical and shrinks on small phones (responsive)');
 ck('U-4', /act === 'tier'[\s\S]{0,300}md\.setLineTier\([\s\S]{0,500}S\.preflight = null; clearToken\(\)/.test(sell), 'a tier change re-runs the pre-charge check and mints a new sale key');
 ck('U-5', !/location\.(href|assign|replace)|salescontrol/i.test((sell.match(/if \(act === 'dec'\)[\s\S]{0,260}/) || [''])[0]), 'minus never navigates (no location change, no Sales Control)');
