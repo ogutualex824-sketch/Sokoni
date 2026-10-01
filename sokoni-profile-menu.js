@@ -917,11 +917,72 @@
     };
   }
 
+  /* ── OWN-CHROME DASHBOARDS (owner 2026-10-01: "all 100+ business / professional dashboards") ──
+     Dashboards that draw their own header opt out of shared-header.js (data-no-header / EXCLUDED),
+     so they never received this control. shared-header.js sets window.__skOwnChromeAccount on
+     those pages (except non-dashboards) and loads this file; here the control mounts into the
+     page's OWN top bar as an ordinary flex child — the same host-then-fixed-fallback approach
+     sokoni-admin-entry.js uses — never a second header.
+     Skipped: inside a shell or any frame (the parent already carries the menu — one menu per
+     screen; SokoniInShell.inShell is the existing detector), signed out, or when a control is
+     already mounted (#sk-acct-wrap, or the admin consoles' #sk-admin-profile-wrap). */
+  var HOST_SELECTORS = ['[data-sk-account-slot]', '.aos-header', '.sa-topbar', '.app-header', '.dash-header',
+    '.topbar', '.top-bar', '.hdr', 'header', '.navbar', '[role="banner"]'];
+  function _ownChromeHost() {
+    var vw = window.innerWidth || document.documentElement.clientWidth || 0;
+    for (var i = 0; i < HOST_SELECTORS.length; i++) {
+      var list = document.querySelectorAll(HOST_SELECTORS[i]);
+      for (var j = 0; j < list.length; j++) {
+        var el = list[j], r = el.getBoundingClientRect(), cs = window.getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+        if (r.top > 100 || r.height < 24 || r.width < vw * 0.5) continue;      /* a TOP bar, not a card header */
+        if (!/flex/.test(cs.display)) continue;                                /* only a flex bar takes a flex child */
+        return { el: el, fixed: false };
+      }
+    }
+    var box = document.getElementById('sk-acct-fixed');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'sk-acct-fixed';
+      box.style.cssText = 'position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:12px;z-index:2147482000;';
+      (document.body || document.documentElement).appendChild(box);
+    }
+    return { el: box, fixed: true };
+  }
+  function autoMountOwnChrome() {
+    try {
+      if (window.self !== window.top) return null;                                       /* framed: parent owns the menu */
+      if (window.SokoniInShell && window.SokoniInShell.inShell) return null;
+      if (document.getElementById('sk-acct-wrap') || document.getElementById('sk-admin-profile-wrap')) return null;
+      if (!_readUser()) return null;                                                     /* signed out: nothing to show */
+      var host = _ownChromeHost();
+      var m = mount(host.el, { size: 40 });
+      if (m && m.el && !host.fixed) m.el.style.marginLeft = 'auto';                      /* push to the right end of the bar */
+      return m;
+    } catch (_) { return null; }                                                         /* the dashboard must render regardless */
+  }
+
   window.SokoniProfileMenu = {
     mount: mount,
+    autoMountOwnChrome: autoMountOwnChrome,
     open:  function () { if (!document.getElementById('sk-acct-popup')) { var u = _readUser(); if (u) _buildAcctPopup(u); } },
     close: function () { window._skCloseAcct(); },
     toggle: function (e) { window._skToggleAcct(e || { stopPropagation: function () {} }); },
     isOpen: function () { return !!document.getElementById('sk-acct-popup'); },
   };
+
+  /* Own-chrome dashboards (flag set by shared-header.js): mount after the page's own
+     DOMContentLoaded work, so a page that mounts the control itself still wins (mount is a
+     per-page singleton). Admin consoles carry their own control (sokoni-admin-entry.js), which
+     some mount after DOMContentLoaded — never race it. */
+  if (window.__skOwnChromeAccount) {
+    var _auto = function () {
+      setTimeout(function () {
+        if (document.querySelector('script[src*="sokoni-admin-entry"]')) return;
+        autoMountOwnChrome();
+      }, 0);
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _auto, { once: true });
+    else _auto();
+  }
 })();

@@ -854,6 +854,13 @@ window.openCart=openCart; window.closeSheet=closeSheet; window.selPay=selPay; wi
 window.switchTab=switchTab; window.filterOrders=filterOrders; window.togglePrinterPanel=togglePrinterPanel;
 window.testPrint=testPrint; window.reconnectPrinter=reconnectPrinter; window.openScanner=openScanner;
 </script>
+<!-- Account + role menu in this till's own header (owner 2026-10-01: every dashboard). This page does not
+     load shared-header.js, so it sets the own-chrome flag itself; sokoni-profile-menu.js then mounts into the
+     page's top bar (skipped when framed inside the merchant shell, whose header already has it). -->
+<script>window.__skOwnChromeAccount = true;</script>
+<script src="/sokoni-permissions.js" defer></script>
+<script src="/sokoni-role-authority.js" defer></script>
+<script src="/sokoni-profile-menu.js" defer></script>
 <script src="/sw-register.js" defer></script>
 </body>
 </html>

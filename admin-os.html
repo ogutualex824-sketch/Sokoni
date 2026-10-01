@@ -855,5 +855,19 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       }, 10000);
     });
   </script>
+  <!-- Account + role menu in the AdminOS header (owner 2026-10-01: every dashboard carries it).
+       sokoni-admin-entry.js is already loaded (head); it mounts into .aos-header as a flex child —
+       the same call admin.html and super-admin.html make. Not inside a frame (the parent owns it). -->
+  <script>
+    (function () {
+      function _m() {
+        try {
+          if (window.self !== window.top) return;
+          if (window.SokoniAdminEntry && window.SokoniAdminEntry.mountControls) window.SokoniAdminEntry.mountControls({ role: 'admin' });
+        } catch (e) { /* the console must render even if the menu cannot */ }
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _m, { once: true }); else _m();
+    })();
+  </script>
 </body>
 </html>
