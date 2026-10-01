@@ -1,3 +1,10 @@
+## [2026-10-01] — Functions predeploy gates now actually run (Windows hook form); finding: earlier functions deploys were ungated
+
+**Files:** `firebase.json` (functions.predeploy only), new `scripts/test-functions-hooks-execute.js`. **Functions / rules / data:** none.
+- On this machine firebase-tools runs each hook through `cross-env-shell` with `shell: true`; the quoted `node "$RESOURCE_DIR/../scripts/X.js"` form is mangled into a spawn of `scripts\X.js"` and the script never runs. A faithful replica of `runCommand` proves it (quoted: not executed; relative: executed).
+- **Consequence, stated plainly:** the K13-A and K13-B deploys tonight logged "Finished running predeploy script" with zero hook output — the safety guard, syntax gate, commission, delivery and payout gates did NOT execute for them. Their code was verified independently (served source byte-identical to the reviewed commits; 11/0, 8/0; live-archive lineage identical). Earlier functions deploys from trees with the quoted form are likely in the same state.
+- Fix: the five functions hooks use the relative form hosting already uses (cf. 3fb27cb). The safety guard passes on this tree when run directly. Suite 9/0 (asserts relative form, scripts exist, and the launcher replica executes it).
+
 ## [2026-10-01] — DEPLOYED Firestore rules hotfix f259c0b5: forged verification badge and signed-out job posts closed
 
 **Target:** Firestore rules, default database only (`releases/cloud.firestore` → `f259c0b5-0a9e-49c5-8578-a628a40d946c`, 00:27:37Z). **Rollback:** `b87c94e4`. Evidence: `docs/release-gates/rules-hotfix-f259c0b5.md`.
