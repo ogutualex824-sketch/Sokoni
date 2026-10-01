@@ -86,6 +86,31 @@ const UN = require(path.join(FN, 'email-unsubscribe.js'))._internal;
   ck('E1 posSendSMS refuses non-admins before reading the payload, and enforces App Check', /enforceAppCheck: true/.test(sms) && sms.indexOf('permission-denied') < sms.indexOf('const { to, message, bulk }') && /_cl\.admin === true/.test(sms));
   ck('E2 emailUnsubscribe exported by name', /exports\.emailUnsubscribe = require\('\.\/email-unsubscribe'\)\.emailUnsubscribe;/.test(idx));
 
+  console.log('\nF. updateEmailPreferences (executed via .run)');
+  {
+    const fa2 = resolveFrom('firebase-admin');
+    require.cache[fa2].exports.auth = () => ({});
+    const T = require(path.join(FN, 'email-triggers.js'));
+    const run = (uid, prefs) => T.updateEmailPreferences.run({ auth: uid ? { uid, token: {} } : null, data: { prefs } });
+    let anon = null; try { await run(null, { marketing: true }); } catch (e) { anon = e.code; }
+    ck('F1 unauthenticated → refused', anon === 'unauthenticated', anon);
+    const r = await run('uP', { marketing: true, security: false, unsubToken: 'evil', isAdmin: true, orders: 'yes' });
+    const doc = (await F.db.collection('emailPreferences').doc('uP').get()).data();
+    ck('F2 only known boolean switches saved; security cannot be disabled; injected keys dropped',
+      r.success && doc.marketing === true && !('security' in doc && doc.security === false) && !('unsubToken' in doc) && !('isAdmin' in doc) && !('orders' in doc), doc);
+    const rows = [...F.db._store.entries()].filter(([p]) => p.startsWith('consentRecords/')).map(([, v]) => v.data);
+    ck('F3 the marketing opt-in is recorded as a consent event (marketing_email, granted, source)', rows.some((d) => d.uid === 'uP' && d.consentType === 'marketing_email' && d.granted === true && d.source === 'email-preferences'), rows);
+    await run('uP', { marketing: false });
+    const rows2 = [...F.db._store.entries()].filter(([p]) => p.startsWith('consentRecords/')).map(([, v]) => v.data).filter((d) => d.uid === 'uP');
+    const np2 = (await F.db.collection('notifyPrefs').doc('uP').get()).data() || {};
+    ck('F4 withdrawal recorded (granted:false + withdrawnAt) and promotions switched off', rows2.some((d) => d.granted === false && d.withdrawnAt) && np2.promotions && np2.promotions.email === false, { rows2: rows2.length, np2 });
+    await run('uP', { marketing: false, orders: false });
+    const rows3 = [...F.db._store.entries()].filter(([p]) => p.startsWith('consentRecords/')).map(([, v]) => v.data).filter((d) => d.uid === 'uP');
+    ck('F5 an unchanged marketing choice writes no duplicate consent row; service switch saved', rows3.length === rows2.length && (await F.db.collection('emailPreferences').doc('uP').get()).data().orders === false);
+    let empty = null; try { await run('uP', { foo: true }); } catch (e) { empty = e.code; }
+    ck('F6 no valid switch → invalid-argument', empty === 'invalid-argument', empty);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('  CRASH', e); process.exit(2); });

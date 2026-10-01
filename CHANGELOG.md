@@ -1,3 +1,7 @@
+## [2026-10-01] — updateEmailPreferences: known switches only; marketing opt-in/withdrawal recorded as consent (functions, NOT deployed)
+
+**Why:** it wrote the client object verbatim (any key/value, incl. unsubToken or security:false) and left no evidence of a marketing opt-in. **Change:** `functions/email-triggers.js` saves only boolean marketing/newsletter/orders/payments/account (security mail cannot be disabled); a marketing change writes a `consentRecords` row (consentType marketing_email, granted, source email-preferences, withdrawnAt on withdrawal) and a withdrawal also turns off notify promotions. `scripts/test-email-consent.js` §F executes the real handler (26/0). **Deploy:** add `functions:updateEmailPreferences` to the email deploy set.
+
 ## [2026-10-01] — Marketing email fails closed; working one-click unsubscribe; posSendSMS admin-only (functions, NOT deployed)
 
 **Why (census P0 #5 + email census, PROVEN in live source — 11 email functions share one 09-09 archive identical to this tree in these files):** `_checkPreferences` allowed marketing with no preferences document or on error; send() skipped the check without a uid (broadcasts); promotions/loyalty mapped to "account"; List-Unsubscribe advertised One-Click with only a mailto; the footer link went to a missing section; no unsubscribe endpoint existed. `posSendSMS` let ANY signed-in account text up to 100 arbitrary numbers per call.

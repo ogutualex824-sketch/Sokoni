@@ -908,9 +908,27 @@ exports.updateEmailPreferences = onCall(
   async (req) => {
     const uid = assertAuth(req);
     const { prefs } = req.data || {};
-    if (!prefs || typeof prefs !== "object") throw new HttpsError("invalid-argument", "prefs required");
-    await emailSvc.updatePreferences(uid, prefs);
-    return { success: true };
+    if (!prefs || typeof prefs !== "object" || Array.isArray(prefs)) throw new HttpsError("invalid-argument", "prefs required");
+    /* 2026-10-01 — only known, user-choosable switches, as booleans. This wrote the client object
+       verbatim (any key, any value). Security mail cannot be switched off: it protects the account. */
+    const ALLOWED = ["marketing", "newsletter", "orders", "payments", "account"];
+    const clean = {};
+    for (const k of ALLOWED) if (typeof prefs[k] === "boolean") clean[k] = prefs[k];
+    if (!Object.keys(clean).length) throw new HttpsError("invalid-argument", "No valid preference given.");
+    const prev = (await admin.firestore().collection("emailPreferences").doc(uid).get().catch(() => null));
+    const was = prev && prev.exists ? (prev.data() || {}).marketing === true : false;
+    await emailSvc.updatePreferences(uid, clean);
+    /* A marketing opt-in or withdrawal is a consent event: record it durably (KDPA: the controller
+       must be able to show consent). Service switches are not consent and are not recorded here. */
+    if (typeof clean.marketing === "boolean" && clean.marketing !== was) {
+      await admin.firestore().collection("consentRecords").add({
+        uid, consentType: "marketing_email", granted: clean.marketing, source: "email-preferences",
+        policyVersion: "2026-06", consentedAt: admin.firestore.FieldValue.serverTimestamp(),
+        ...(clean.marketing ? {} : { withdrawnAt: admin.firestore.FieldValue.serverTimestamp() }),
+      });
+      if (!clean.marketing) await admin.firestore().collection("notifyPrefs").doc(uid).set({ promotions: { email: false, sms: false, push: false } }, { merge: true }).catch(() => {});
+    }
+    return { success: true, saved: clean };
   }
 );
 
