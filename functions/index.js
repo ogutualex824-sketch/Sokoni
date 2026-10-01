@@ -11291,6 +11291,7 @@ exports.cdGetDiagnostics    = posCashDrawer.cdGetDiagnostics;
 
 /* ── Trust & Safety Engine v1.0 ──────────────────────────────────────── */
 const trustSafety = require('./trust-safety');
+exports.tsGetReportReasons    = trustSafety.tsGetReportReasons;   // community C2 (2026-10-01): the server reason catalogue the report wizard renders
 exports.tsReportContent       = trustSafety.tsReportContent;
 exports.tsGetReports          = trustSafety.tsGetReports;
 exports.tsReviewReport        = trustSafety.tsReviewReport;
