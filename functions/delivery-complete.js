@@ -200,7 +200,28 @@ exports.completeDeliveryWithPin = onCall(
       throw e;
     }
 
-    if (!_sameHash(computed, d.deliveryPinHash)) {
+    /* ── TWO BINDINGS, one migration ──────────────────────────────────────────
+       A PIN issued at ORDER CREATION is keyed to the order id, because no
+       packageRequest existed yet. Every delivery issued at rider-accept time is
+       keyed to the package id. Both must verify: accepting only the new binding
+       would strand every rider currently mid-delivery at a customer's door with
+       a code that no longer works, and accepting only the old one would make the
+       creation-time PIN unusable.
+
+       The order-bound hash lives on the ORDER, so it is fetched only when the
+       package's own hash does not match — no extra read on the common path. */
+    let matched = _sameHash(computed, d.deliveryPinHash);
+    if (!matched && d.orderId) {
+      try {
+        const oSnap = await db.collection("orders").doc(String(d.orderId)).get();
+        const o = oSnap.exists ? (oSnap.data() || {}) : {};
+        if (o.deliveryPinHash && o.deliveryPinBinding === "order") {
+          matched = _sameHash(_hash(String(d.orderId), pin), o.deliveryPinHash);
+        }
+      } catch (_) { /* unreadable → stays unmatched, which fails closed */ }
+    }
+
+    if (!matched) {
       await pkgRef.set({ deliveryVerifyAttempts: admin.firestore.FieldValue.increment(1) }, { merge: true }).catch(() => {});
       await _audit({ event: "complete_denied_wrong_pin", deliveryRef: pkgId, orderId: d.orderId || null, actorUid: uid, attempts: attempts + 1 });
       throw new HttpsError("permission-denied", "Wrong delivery PIN.");
