@@ -76,8 +76,9 @@
   function emptyHtml(pane) {
     var cat = pane.getAttribute('data-label') || 'institution';
     var type = pane.getAttribute('data-apply') || 'OTHER';
+    var plural = pane.getAttribute('data-plural') || (cat + 's');
     var article = /^[aeiou]/i.test(cat) ? 'an' : 'a';
-    return '<div class="bk-pending"><div class="bk-pending-t">No ' + esc(pane.getAttribute('data-plural') || cat + 's') + ' listed yet</div>' +
+    return '<div class="bk-pending"><div class="bk-pending-t">No ' + esc(plural) + ' listed yet</div>' +
       '<p class="bk-pending-p">Are you ' + article + ' ' + esc(cat) + '? Apply to be listed on SOKONI.</p>' +
       '<a class="bkd-btn bkd-btn-acc" data-apply-link href="business-apply.html?offer=financial&amp;category=' + encodeURIComponent(type) + '">Apply to be listed</a></div>';
   }
@@ -202,14 +203,20 @@
       var products = (r && Array.isArray(r.products)) ? r.products : (Array.isArray(p.products) ? p.products : []);
       var site = safeUrl(p.website || base.website);
       var reg = p.licenceClaimed || p.registrationNumber || p.registration || base.licenceClaimed;
+      var itype = p.institutionType || base.institutionType;
+      var county = p.county || base.county;
+      var promoted = (p.promoted === true || base.promoted === true);
+      var services = Array.isArray(p.services) ? p.services : [];
+      var branches = Array.isArray(p.branches) ? p.branches : [];
+      var hours = hoursText(p.hours);
       var body =
-        '<div class="bkd-tags"><span class="bkd-listed">Listed by SOKONI</span>' + ((p.promoted || base.promoted) === true ? '<span class="bkd-promo">Promoted</span>' : '') + '</div>' +
-        '<p class="bkd-type">' + esc(typeLabel(p.institutionType || base.institutionType)) + ((p.county || base.county) ? ' · ' + esc(p.county || base.county) : '') + '</p>' +
-        ((p.institutionType || base.institutionType) === 'DIGITAL_LENDER' ? '<p class="bkd-warn">Check the lender\'s CBK licence before borrowing.</p>' : '') +
+        '<div class="bkd-tags"><span class="bkd-listed">Listed by SOKONI</span>' + (promoted ? '<span class="bkd-promo">Promoted</span>' : '') + '</div>' +
+        '<p class="bkd-type">' + esc(typeLabel(itype)) + (county ? ' · ' + esc(county) : '') + '</p>' +
+        (itype === 'DIGITAL_LENDER' ? '<p class="bkd-warn">Check the lender\'s CBK licence before borrowing.</p>' : '') +
         (p.description ? '<h3>About</h3><p>' + esc(p.description) + '</p>' : '') +
-        (Array.isArray(p.services) && p.services.length ? '<h3>Services</h3>' + list(p.services, label) : '') +
-        (Array.isArray(p.branches) && p.branches.length ? '<h3>Branches</h3>' + list(p.branches, branchText) : '') +
-        (hoursText(p.hours) ? '<h3>Hours</h3><p>' + esc(hoursText(p.hours)) + '</p>' : '') +
+        (services.length ? '<h3>Services</h3>' + list(services, label) : '') +
+        (branches.length ? '<h3>Branches</h3>' + list(branches, branchText) : '') +
+        (hours ? '<h3>Hours</h3><p>' + esc(hours) + '</p>' : '') +
         (products.length ? '<h3>Products and rates</h3>' + list(products, productText) + '<p class="bkd-meta">Published by the institution. Confirm terms with them before you commit.</p>' : '') +
         (reg ? '<h3>Registration</h3><p>' + esc(reg) + ' <span class="bkd-meta">(self-declared — not checked by SOKONI)</span></p>' : '') +
         (site ? '<h3>Website</h3><p><a href="' + esc(site) + '" target="_blank" rel="noopener noreferrer">' + esc(site) + '</a></p>' : '') +
@@ -224,14 +231,15 @@
   function showContact(uid) {
     var base = findPartner(uid) || {};
     var u = currentUser();
+    var title = 'Contact ' + (base.name || 'institution');   /* openModal() escapes the title */
     if (!u) {
       var back = 'banking.html' + (location.hash || '');
-      openModal('Contact ' + (base.name || 'institution'),
+      openModal(title,
         '<p>Please sign in to contact a listed institution — it lets them reply to you and keeps your details out of public view.</p>' +
         '<p><a class="bkd-btn bkd-btn-acc" href="login.html?redirect=' + encodeURIComponent(back) + '">Sign in</a></p>');
       return;
     }
-    var m = openModal('Contact ' + (base.name || 'institution'),
+    var m = openModal(title,
       '<form id="bkdEnquiry" novalidate>' +
         '<div class="bkd-field"><label for="bkdEqName">Your name</label><input id="bkdEqName" name="name" maxlength="80" autocomplete="name" required></div>' +
         '<div class="bkd-field"><label for="bkdEqPhone">Phone number</label><input id="bkdEqPhone" name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" required></div>' +

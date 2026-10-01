@@ -125,7 +125,9 @@
     var q = new URLSearchParams();
     if (D.amount) q.set('amount', String(D.amount));
     if (D.programmeId) q.set('programme', D.programmeId);
-    a.href = 'login.html?redirect=' + encodeURIComponent('foundation.html' + (q.toString() ? '?' + q.toString() : '') + '#donate');
+    var qs = q.toString();
+    var back = 'foundation.html' + (qs ? '?' + qs : '') + '#donate';
+    a.href = 'login.html?redirect=' + encodeURIComponent(back);
     a.textContent = 'Sign in to continue';
     box.appendChild(a);
   }
