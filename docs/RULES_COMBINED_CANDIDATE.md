@@ -39,6 +39,16 @@ byte-identical (CR-stripped) to the LIVE release `cloud.firestore → rulesets/b
 `72dca56`, Slice B2, or any of 50 hosting refs; the detector's positive control finds the original `b905bc9`
 setDoc/addDoc (1 each). Live writers: `verificationSubmit`, `verificationDecide`, `verificationRevoke`.
 
+## Re-base 2026-10-01 — live is now f259c0b5
+
+The owner moved `releases/cloud.firestore` to `rulesets/f259c0b5` (updateTime 2026-10-01T00:27:37Z) = b87c94e4 + exactly
+this candidate's verifications / verificationRequests / jobs blocks (sokoni-27 hotfix; byte-verified here: 3 hunks, each
+block md5-identical to this candidate's build). This candidate therefore already CONTAINS live; against f259c0b5 it
+differs in **6 hunks** (applications functions + block, providers, reviews, unboxingReviews, businesses).
+Counterproofs re-run vs f259c0b5: verif/jobs 16/0 on BOTH (holes closed in production — confirmed); K13-C candidate
+14/0 vs live 6/8; R0 34/0 vs live 20/14. The 19 isolation suites stand (the candidate is unchanged; the base moved only
+inside blocks those suites do not exercise). **Rollback for this release = f259c0b5.**
+
 ## Release — preconditions (all open)
 
 1. **Ordering:** after sokoni-70's `e78b940` hosting is live (unboxing.html sends a clean payload; otherwise R0 refuses
