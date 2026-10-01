@@ -45,6 +45,10 @@ async function quiet(fn) { process.stdout.write = () => true; console.warn = con
   for (const c of await db.listCollections()) { const snap = await c.get(); await Promise.all(snap.docs.map((d) => d.ref.delete())); }
   const get = async (c, id) => { const s = await db.collection(c).doc(String(id)).get(); return s.exists ? s.data() : null; };
   const wallet = async (uid) => { const w = await get('wallets', uid) || {}; return Number(w.availableBalance || 0); };
+  /* SELLER HOLD (owner 2026-10-01): a marketplace payment RECORDS the seller's net as orders.escrow; it is released by
+     settleOrder (onOrderStatusChange lineage, SETTLE_ROOT) on the buyer's PIN — not credited at payment. */
+  const heldFor = async (id) => { const o = await get('orders', id) || {}; return (o.escrow && o.escrow.heldNetCents) || 0; };
+  const SETTLE = path.resolve(process.env.SETTLE_ROOT || 'C:/temp/sok-settle', 'functions');
   const stock = async (id) => Number(((await get('products', id)) || {}).stock);
 
   /* ── fixtures: two sellers, their products (the canonical seller is ON the product) ── */
@@ -125,10 +129,36 @@ async function quiet(fn) { process.stdout.write = () => true; console.warn = con
   const w1 = await wallet(S1), wa1 = await wallet(ATTACKER), s1 = await stock('b1-soda');
   ok(h.code === 200 && pay1.status === 'COMPLETE' && ord1 && /paid|confirmed|processing/i.test(String(ord1.status || ord1.paymentStatus)),
     'W-1', 'exact gross (with an IntaSend fee, net < gross) → the order settles', { code: h.code, pay: pay1.status, ord: ord1 && (ord1.status || ord1.paymentStatus) });
-  ok(w1 > w0 && wa1 === wa0, 'W-2', 'the SERVER seller is credited; the browser-named wallet gets nothing', { seller: w1 - w0, attacker: wa1 - wa0 });
+  const esc1 = (ord1 && ord1.escrow) || {};
+  ok(w1 === w0 && wa1 === wa0 && esc1.creditVia === 'finos' && esc1.sellerUid === S1 && esc1.heldNetCents > 0 && esc1.paymentRef === 'b1-ord-1'
+     && ord1.settlementStatus === 'HELD' && ord1.paymentVerified === true && !pay1.walletCreditedAt && pay1.sellerCredit === 'held_for_delivery_proof',
+    'W-2', 'SELLER HOLD: nobody is credited at payment; the SERVER seller\'s net is recorded as escrow (frozen terms) and the order is HELD', { seller: w1 - w0, attacker: wa1 - wa0, esc1, st: ord1 && ord1.settlementStatus });
   ok(s1 === s0 - 1, 'W-3', 'stock moves once', { before: s0, after: s1 });
   h = await hook('b1-ord-1', EXPECT, { net: EXPECT - 1.81, charges: 1.8 });
   ok(h.code === 200 && (await wallet(S1)) === w1 && (await stock('b1-soda')) === s1, 'W-4', 'a duplicate webhook has exactly one financial effect', { wallet: (await wallet(S1)) - w1, stock: await stock('b1-soda') });
+
+  /* ── WR: the RELEASE — the real settleOrder (SETTLE_ROOT) on the same emulator data ── */
+  {
+    let OSM = null; try { OSM = require(path.join(SETTLE, 'order-settlement.js')); } catch (e) { OSM = null; }
+    const held = await heldFor('b1-ord-1'), wR0 = await wallet(S1);
+    let r0 = OSM ? await quiet(() => OSM.settleOrder(db, admin, 'b1-ord-1')) : { outcome: 'NO_SETTLE_MODULE' };
+    ok(r0.outcome === 'held' && (await wallet(S1)) === wR0, 'WR-1', 'OWNER INVARIANT 2: paid + completed WITHOUT the buyer\'s proof → still held, seller wallet unchanged', r0);
+    await db.collection('orders').doc('b1-ord-1').set({ status: 'completed', deliveryAuthorizedBy: 'rider_pin' }, { merge: true });
+    const rs = OSM ? await quiet(() => Promise.all([OSM.settleOrder(db, admin, 'b1-ord-1'), OSM.settleOrder(db, admin, 'b1-ord-1')])) : [];
+    const wR1 = await wallet(S1);
+    ok(OSM && rs.filter((x) => x.outcome === 'settled').length === 1 && wR1 - wR0 === held && held > 0,
+      'WR-2', 'OWNER INVARIANT 3: paid + buyer PIN → EXACTLY the payment-time net released ONCE (two concurrent completions)', { held, credited: wR1 - wR0, rs: rs.map((x) => x.outcome) });
+    const rs2 = OSM ? await quiet(() => OSM.settleOrder(db, admin, 'b1-ord-1')) : {};
+    const st1 = await get('settlements', 'b1-ord-1');
+    ok(rs2.outcome === 'already-settled' && (await wallet(S1)) === wR1 && st1 && st1.source === 'payment_escrow' && st1.sellerNetCents === held,
+      'WR-3', 'a replay releases nothing; the settlement record is the payment-time escrow (no recompute)', { rs2: rs2.outcome, st1 });
+    /* OWNER INVARIANT 1: unpaid + completed + valid PIN = ZERO */
+    await db.collection('orders').doc('b1-unpaid').set({ id: 'b1-unpaid', uid: BUYER, buyerUid: BUYER, sellerUid: S1, status: 'completed', total: 5000, orderTotal: 5000,
+      deliveryAuthorizedBy: 'rider_pin', escrow: { creditVia: 'finos', heldNetCents: 475000, sellerUid: S1 } });
+    const wU = await wallet(S1);
+    const ru = OSM ? await quiet(() => OSM.settleOrder(db, admin, 'b1-unpaid')) : {};
+    ok(ru.outcome === 'held' && (await wallet(S1)) === wU, 'WR-4', 'OWNER INVARIANT 1: UNPAID + completed + valid PIN → seller payout ZERO', ru);
+  }
 
   async function refused(id, label, ref, items, value, opt, payExtra) {
     const r = await mint(items, { orderId: ref });
@@ -186,8 +216,8 @@ async function quiet(fn) { process.stdout.write = () => true; console.warn = con
         { code: hg.code, pay: pg.status, reason: pg.reviewReason, ledger: !!ledger, wallet: (await wallet(S1)) - wG, order: og.status });
       const hg2 = await hook('b1-ord-gerr', rG.ok ? rG.r.amount : 0);
       const pg2 = (await get('payments', 'b1-ord-gerr')) || {}, og2 = (await get('orders', 'b1-ord-gerr')) || {};
-      ok(hg2.code === 200 && pg2.status === 'COMPLETE' && (await wallet(S1)) > wG && (await stock('b1-cake')) === sG - 1 && og2.status !== 'pending_payment',
-        'G-2', 'a later delivery with the read restored settles normally (exactly once)', { code: hg2.code, pay: pg2.status, order: og2.status });
+      ok(hg2.code === 200 && pg2.status === 'COMPLETE' && (await wallet(S1)) === wG && (await heldFor('b1-ord-gerr')) > 0 && (await stock('b1-cake')) === sG - 1 && og2.status !== 'pending_payment',
+        'G-2', 'a later delivery with the read restored settles normally (exactly once; the seller net is HELD, not credited)', { code: hg2.code, pay: pg2.status, order: og2.status });
     } finally { DocProto.get = realGet; }
   }
 
@@ -218,7 +248,7 @@ async function quiet(fn) { process.stdout.write = () => true; console.warn = con
     await clientOrder('b1-ord-card', S1, rc.ok ? rc.r.amount : 0, cake);
     await stk('b1-ord-card', rc.ok ? rc.r.amount : 0, { orderId: 'b1-ord-card', sellerUid: S1, items: cake, category: 'product' });
     const hc = await hook('b1-ord-card', rc.ok ? rc.r.amount : 0, { net: (rc.ok ? rc.r.amount : 0) - 7.5, charges: 7.5, provider: 'CARD-PAYMENT' });
-    ok(rc.ok && hc.code === 200 && ((await get('payments', 'b1-ord-card')) || {}).status === 'COMPLETE' && (await wallet(S1)) > wc,
+    ok(rc.ok && hc.code === 200 && ((await get('payments', 'b1-ord-card')) || {}).status === 'COMPLETE' && (await wallet(S1)) === wc && (await heldFor('b1-ord-card')) > 0,
       'CD-1', 'a card-style confirmation carrying gross value + KES settles exactly like M-PESA (method is metadata, evidence is the gate)', null);
     await refused('CD-2', 'a card-style confirmation WITHOUT value (unverified card payload shape)', 'b1-ord-card2', cake, 'EXACT', { dropValue: true, provider: 'CARD-PAYMENT' });
   }

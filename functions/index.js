@@ -3978,6 +3978,7 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
     paymentMethod, pathLabel,
     settlementStatus = "queued",
     writeSellerPayment = true,
+    escrow = null,
   } = opts || {};
   const ts = admin.firestore.FieldValue.serverTimestamp();
 
@@ -4077,6 +4078,8 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
         paidAt:           ts,
         inventoryApplied: true,
         settlementStatus: settlementStatus,
+        /* the payment-time seller hold (owner 2026-10-01): the frozen terms settleOrder releases on the buyer's PIN */
+        ...(escrow ? { escrow, settlementNote: "awaiting_delivery_proof" } : {}),
         updatedAt:        ts,
       };
 
@@ -8633,6 +8636,23 @@ exports.webhookIntasend = onRequest(
          `amount - sokoniCut` matches commissionLedger.providerNet exactly, so
          the two agree. Inventing a fee here would create a number no other
          system knows about. Recorded as a gap for Finance to define. */
+      /* D1 FIX (Q6): sellerUid/orderId/items shadowed with the resolved attribution (intent-derived when available)
+         so every read below (the credit decision, _finalizeMarketplacePayment, posReceipts, clickAndCollect, delivery
+         dispatch, notifications) gets the authoritative value. Every OTHER field (hub, sellerName, buyerName, address,
+         fulfillmentType, serviceDesc) is deliberately still read from payData.meta, unchanged — see
+         docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md §3. Hoisted 2026-10-01 above the credit: the seller hold needs to know
+         whether this payment finalises a marketplace order BEFORE deciding to credit. */
+      const _pm  = {
+        ...(payData.meta || {}),
+        sellerUid: attribution.sellerUid || (payData.meta || {}).sellerUid,
+        orderId:   attribution.orderId   || (payData.meta || {}).orderId,
+        items:     (attribution.items && attribution.items.length) ? attribution.items : (payData.meta || {}).items,
+      };
+      /* Unit 4b: the ONE predicate — the pre-claim gate refuses an intent-less payment by the same test, so what it
+         refuses can never drift from what this branch would finalise. */
+      const _isProductPay = require("./payment-attribution").wouldFinalizeMarketplaceOrder(_pm);
+      /* SELLER HOLD (owner 2026-10-01): set below when a marketplace order's seller net is HELD instead of credited. */
+      let _heldEscrow = null;
       try {
         const _isSubscription =
           category === "subscription" || payData.meta?.category === "subscription";
@@ -8704,6 +8724,23 @@ exports.webhookIntasend = onRequest(
           logger.warn("BOOKING_PAYMENT_HELD_FOR_REVIEW", { ref: apiRef, parked: _parked, claimedProvider: _claimed, netShillings: _netShillings });
         } else if (!_sellerId || _netCents <= 0) {
           console.warn(`[webhookIntasend] wallet credit skipped (no seller or zero net): ${apiRef}`);
+        } else if (_isProductPay) {
+          /* ══ SELLER HOLD (owner 2026-10-01) ═══════════════════════════════════════════════════════════════════
+             "Payment determines the economic terms; verified completion determines when the already-recorded seller
+             amount becomes withdrawable." The commission is decided HERE, once (commissionLedger above), and the
+             seller's net is RECORDED on the order as `escrow` instead of credited. settleOrder (onOrderStatusChange)
+             releases exactly this net, through this same FinOS creditWalletTxn, once — and only for a paid order
+             whose delivery the buyer proved (PIN or the buyer's own confirmation), whose buyer is not the seller.
+             No rate is recomputed at release. Integer cents. */
+          _heldEscrow = {
+            creditVia: "finos", heldNetCents: _netCents,
+            commissionCents: Math.round(Number(sokoniCut || 0) * 100), grossCents: Math.round(Number(amount || 0) * 100),
+            paymentRef: apiRef, sellerUid: _sellerId, heldAt: Date.now(),
+          };
+          await db.collection("payments").doc(apiRef).set({
+            sellerCredit: "held_for_delivery_proof", sellerCreditHeldCents: _netCents, sellerCreditHeldFor: _sellerId,
+          }, { merge: true });
+          logger.info("SELLER_NET_HELD_FOR_DELIVERY_PROOF", { ref: apiRef, seller: _sellerId, netCents: _netCents, orderId: _pm.orderId || null });
         } else {
           const { creditWalletTxn } = require('./finos-utils');
           const _payDoc = db.collection("payments").doc(apiRef);
@@ -8760,15 +8797,7 @@ exports.webhookIntasend = onRequest(
            from payData.meta, unchanged — see
            docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md §3 for why those stay in
            scope for a later slice rather than this one. */
-        const _pm  = {
-          ...(payData.meta || {}),
-          sellerUid: attribution.sellerUid || (payData.meta || {}).sellerUid,
-          orderId:   attribution.orderId   || (payData.meta || {}).orderId,
-          items:     (attribution.items && attribution.items.length) ? attribution.items : (payData.meta || {}).items,
-        };
-        /* Unit 4b: the ONE predicate — the pre-claim gate refuses an intent-less payment by the same
-           test, so what it refuses can never drift from what this branch would finalise. */
-        const _isProductPay = require("./payment-attribution").wouldFinalizeMarketplaceOrder(_pm);
+        /* _pm / _isProductPay are resolved ONCE, above the wallet-credit decision. */
         if (_isProductPay) {
           const _fin = await _finalizeMarketplacePayment(db, admin, {
             checkoutId:    apiRef,
@@ -8787,7 +8816,10 @@ exports.webhookIntasend = onRequest(
             fulfillmentType: _pm.fulfillmentType || "delivery",
             paymentMethod: "mpesa_intasend",
             pathLabel:     "intasend",
-            settlementStatus:   "settled",
+            /* HELD when the seller's net was recorded as escrow above (released on the buyer's PIN by settleOrder);
+               "settled" otherwise — the legacy credit already ran, so a settlement sweep must not credit again. */
+            settlementStatus:   _heldEscrow ? "HELD" : "settled",
+            escrow:             _heldEscrow,
             writeSellerPayment: false,
           });
 

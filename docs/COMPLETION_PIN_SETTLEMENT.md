@@ -80,3 +80,28 @@ The delivery PIN today:
 7. **Separate.**
    - `smsEnqueue` lets any signed-in user SMS any template to any number.
    - Hub-by-hub bookNow → service_booking intents.
+
+## Slice 3 — the seller hold (2026-10-01)
+
+Owner, confirmed 2026-10-01: *"Payment determines the economic terms; verified completion determines when the
+already-recorded seller amount becomes withdrawable."* Cash on delivery stays outside the withdrawable-wallet payout
+unless a separately verified remittance exists; the gate's `paymentVerified` requirement enforces this.
+
+- **Webhook, this branch:** for a payment that finalises a marketplace order (`wouldFinalizeMarketplaceOrder`, now
+  resolved once ABOVE the credit decision), nobody is credited.
+  - The commission is recorded as before (`commissionLedger`).
+  - `orders/{id}.escrow` = `{creditVia:'finos', heldNetCents, commissionCents, grossCents, paymentRef, sellerUid,
+    heldAt}`; `settlementStatus:'HELD'`, `settlementNote:'awaiting_delivery_proof'`.
+  - `payments/{ref}.sellerCredit:'held_for_delivery_proof'`.
+  - Every other purpose (POS / till / top-ups / non-order sales) credits exactly as before.
+- **Release:** `fix/settle-gate-on-oosc-00065` @ **bf54396** (settleOrder). It releases exactly `heldNetCents`
+  through the same `creditWalletTxn`, once, on paid + buyer PIN / confirmation + buyer ≠ seller.
+- **Deploy order (hard):**
+  1. `onOrderStatusChange` @ bf54396 (gate + release; inert for escrow until 2).
+  2. `webhookIntasend` @ this branch, after B1 Units 2 / 4b.
+  Reversing them would leave HELD orders with no release path.
+- **Tests:**
+  - B1 chain W-2 / G-2 / CD-1 restated (held, not credited at payment).
+  - WR-1..WR-4 run the REAL settleOrder from SETTLE_ROOT on the same emulator data: the owner's three invariants,
+    plus concurrent completions releasing once.
+  - **Emulator NOT YET RUN** (RAM below the floor, a peer deploy in flight).
