@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-require-auth="true" data-no-header="true">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Partner Workspace — SOKONI</title>
+<meta name="description" content="Workspace for SOKONI financial partners: registration, members, products, enquiries and team.">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+<link rel="preconnect" href="https://us-central1-sokoni-aeb26.cloudfunctions.net" crossorigin>
+<link rel="stylesheet" href="style.css">
+<script src="security.js"></script>
+<script src="auth-guard.js"></script>
+<!-- No sokoni-role-authority.js here: its guardPage() would send team members (managers/officers, who hold no
+     financial_partner claim) to the application form. financialPartnerDispatch authorises every call server-side. -->
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-auth-state.js"></script>
+<style>
+:root{--bg:#050505;--surf:#0d0d0d;--surf2:#151515;--border:#242424;--acc:#71ff00;--acc-dim:rgba(113,255,0,.12);--text:#ececec;--sub:#a3a3a3;--err:#ff6b6b;--warn:#ffc233;--r:10px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+a{color:var(--acc)}
+.skip{position:absolute;left:-9999px}.skip:focus{left:16px;top:8px;background:var(--acc);color:#000;padding:8px 12px;border-radius:8px;z-index:9}
+.shell{display:flex;min-height:100vh}
+.sidebar{width:248px;flex-shrink:0;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.sb-head{padding:18px 16px;border-bottom:1px solid var(--border)}
+.sb-brand{font-weight:800;letter-spacing:.06em;color:var(--acc);font-size:13px}
+.sb-name{font-weight:700;font-size:15px;margin-top:8px;word-break:break-word}
+.sb-cat{font-size:12px;color:var(--sub)}
+.sb-nav{padding:10px 8px;display:flex;flex-direction:column;gap:2px}
+.sb-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border-radius:8px;border:0;background:none;color:var(--text);font:inherit;text-align:left;cursor:pointer}
+.sb-item:hover{background:var(--surf2)}
+.sb-item[aria-current="page"]{background:var(--acc-dim);color:var(--acc);font-weight:700}
+.sb-item:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.sb-badge{margin-left:auto;background:var(--acc);color:#000;border-radius:999px;font-size:11px;font-weight:800;padding:0 7px}
+.sb-foot{margin-top:auto;padding:12px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--sub)}
+main{flex:1;min-width:0;padding:24px}
+h1{font-size:22px;margin-bottom:4px}h2{font-size:16px;margin:20px 0 10px}
+.muted{color:var(--sub)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:16px}
+.card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:16px}
+.card .k{font-size:12px;color:var(--sub)}.card .v{font-size:24px;font-weight:800;margin-top:4px}
+.panel{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-top:16px}
+.pill{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;border:1px solid var(--border)}
+.pill.ok{color:var(--acc);border-color:var(--acc)}.pill.warn{color:var(--warn);border-color:var(--warn)}.pill.err{color:var(--err);border-color:var(--err)}
+form .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+label{display:block;font-size:12px;color:var(--sub);margin-bottom:4px}
+input,select,textarea{width:100%;background:var(--surf2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font:inherit}
+textarea{min-height:90px;resize:vertical}
+.check{display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:13px;color:var(--text)}.check input{width:auto;margin-top:3px}
+.btn{display:inline-flex;align-items:center;gap:6px;border-radius:8px;border:1px solid var(--border);background:var(--surf2);color:var(--text);padding:9px 14px;font:inherit;font-weight:600;cursor:pointer;min-height:40px}
+.btn.primary{background:var(--acc);color:#000;border-color:var(--acc)}
+.btn.danger{color:var(--err);border-color:var(--err)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.tbl-wrap{overflow-x:auto;margin-top:12px}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-size:12px;color:var(--sub);font-weight:600}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.toolbar>div{min-width:160px;flex:1}
+.notice{border-left:3px solid var(--warn);padding:10px 12px;background:var(--surf2);border-radius:6px;margin-top:12px;font-size:13px}
+.state{padding:48px 16px;text-align:center}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--surf2);border:1px solid var(--border);padding:10px 16px;border-radius:8px;z-index:20;max-width:calc(100% - 32px)}
+.toast.err{border-color:var(--err);color:var(--err)}
+@media (max-width:860px){
+  .shell{flex-direction:column}
+  .sidebar{width:100%;border-right:0;border-bottom:1px solid var(--border)}
+  .sb-nav{flex-direction:row;overflow-x:auto;padding:8px 16px}
+  .sb-item{white-space:nowrap;width:auto}
+  .sb-foot{display:none}
+  main{padding:16px}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="shell">
+  <aside class="sidebar" aria-label="Workspace navigation">
+    <div class="sb-head">
+      <div class="sb-brand">SOKONI PARTNER</div>
+      <div class="sb-name" id="sbName">Loading…</div>
+      <div class="sb-cat" id="sbCat"></div>
+    </div>
+    <nav class="sb-nav" id="sbNav"></nav>
+    <div class="sb-foot"><a href="banking.html">Banking Hub</a> · <a href="profile.html">My account</a></div>
+  </aside>
+  <main id="main" tabindex="-1">
+    <div class="state muted" id="boot">Opening your workspace…</div>
+    <section id="view" hidden></section>
+  </main>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="financial-partner-dashboard.js" defer></script>
+<script src="/sw-register.js" defer></script>
+</body>
+</html>
