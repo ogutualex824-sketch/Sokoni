@@ -76,7 +76,7 @@ fee policy is unresolved. Read-only audits ran on 2026-10-01 against live archiv
 ## 6. Safe next steps that move no money (can proceed on approval)
 
 - **Rules (via sokoni-32's release):**
-  - the buyer may cancel only from `pending_payment`
+  - DONE in the combined candidate (not yet released): the buyer may cancel only from `pending_payment`/`pending` (writer census agrees; tests O7–O10)
   - the seller may not set `refunded`/`cancelled`/`paid` (seller blocklist already in the candidate)
 - **Merchant V2 Sales page:** read-only, over `posRetailSales` + the shop's orders + bookings, with Open links and visible state. No action buttons until the executor exists.
 - **Merchant order detail sheet:** state and timeline; "Request refund" only once refund cases are live.
