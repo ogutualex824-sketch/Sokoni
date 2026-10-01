@@ -32,8 +32,9 @@ The client checks only tell the applicant early. The server validator,
   shows "Listed" and a link to `financial-partner-dashboard.html`.
 - An application approved but not listed (the server refused the profile) shows "Approved, not listed"
   with the server's reason. It is never shown as listed.
-- `sokoni-role-authority.js` routes the role. `WORKSPACE_HUBS.financial_partner` is the dashboard, the
-  dashboard page is guarded for the role, and an unapproved visitor is sent to the intake.
+- `sokoni-role-authority.js` routes the role. `WORKSPACE_HUBS.financial_partner` is the dashboard, and an
+  unapproved visitor is sent to the intake. The dashboard is deliberately not claim-guarded there: partner
+  staff hold no claim and are authorised server-side through `financialPartnerStaff`.
 - AdminOS Applications labels the role "Financial partner".
 
 ## Tests

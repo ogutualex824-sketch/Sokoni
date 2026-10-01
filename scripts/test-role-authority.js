@@ -364,7 +364,7 @@ const setToken = (claims) => { TOKEN = { claims: claims || {} }; };
      weaker, so the assertion follows the contract rather than holding it back. Still exact
      equality, so a page that is not a workspace still fails the moment it is added. */
   ck('only true workspaces are routed', Object.keys(RA.WORKSPACE_ROUTES).sort().join(',') ===
-     'driver.html,financial-partner-dashboard.html,landlord.html,provider-dashboard.html,provider.html,rider-dashboard.html,seller.html',
+     'driver.html,landlord.html,provider-dashboard.html,provider.html,rider-dashboard.html,seller.html',
      Object.keys(RA.WORKSPACE_ROUTES).join(','));
   ck('provider-dashboard.html gates on provider', RA.WORKSPACE_ROUTES['provider-dashboard.html'] === 'provider');
   ck('rider-dashboard.html gates on the CANONICAL rider',  RA.WORKSPACE_ROUTES['rider-dashboard.html'] === 'rider');
