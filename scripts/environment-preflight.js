@@ -140,7 +140,18 @@ function lockHolderAlive(lock, procs) {
 (function main() {
   const procs = processes();
   const mem = memory();
+  /* "mine" = this process and its WHOLE ancestor chain (2026-10-01). Inside a real hosting deploy the
+     chain is firebase deploy → cross-env-shell wrapper → predeploy-browser-suites.js → this preflight;
+     with only {pid, ppid} excluded, the wrapper (its command line names predeploy-browser-suites.js) and
+     the deploy itself were counted as a PEER runner and a PEER deploy, so the gate blocked its own release
+     ("Peer browser lock FAIL … predeploy-browser-suites.js", "Hosting deploy FAIL … pid <own deploy>").
+     A genuine peer — another session's runner or deploy — is not on this chain and is still detected. */
   const mine = new Set([process.pid, process.ppid]);
+  if (Array.isArray(procs)) {
+    const byPid = new Map(procs.map((p) => [p.pid, p]));
+    let cur = byPid.get(process.ppid);
+    for (let i = 0; cur && i < 32; i++) { mine.add(cur.pid); cur = byPid.get(cur.ppid); }
+  }
   const record = { startedAt, for: FOR, host: os.hostname(), thresholds: T, memory: mem, processes: {}, lock: null, cleanup: null, checks: [], result: null, reason: null, endedAt: null };
 
   /* release / acquire are explicit run-window operations */
@@ -174,9 +185,9 @@ function lockHolderAlive(lock, procs) {
     const browser = procs.filter(isBrowserProc);
     const orphans = browser.filter((p) => !p.parentAlive);
     const owned = browser.filter((p) => p.parentAlive);
-    const runners = procs.filter(isSuiteRunner).filter((p) => !mine.has(p.pid) && !mine.has(p.ppid));
+    const runners = procs.filter(isSuiteRunner).filter((p) => !mine.has(p.pid) && p.ppid !== process.pid);
     const nodes = procs.filter((p) => /^node\.exe$/i.test(p.name));
-    const deploys = procs.filter(isDeploy).filter((p) => !mine.has(p.pid) && !mine.has(p.ppid));
+    const deploys = procs.filter(isDeploy).filter((p) => !mine.has(p.pid) && p.ppid !== process.pid);
     record.processes = {
       browserTotal: browser.length, browserOrphans: orphans.length, browserOwned: owned.length,
       orphanPids: orphans.map((p) => p.pid), suiteRunners: runners.map((p) => ({ pid: p.pid, cmd: p.cmd.slice(0, 140) })),

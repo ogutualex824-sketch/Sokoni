@@ -1,3 +1,8 @@
+## [2026-10-01] — environment-preflight no longer blocks a release on its OWN deploy chain (scripts only)
+
+**Why (observed on the union hosting deploy, 06:4xZ):** inside `firebase deploy --only hosting` the chain is firebase → cross-env-shell → predeploy-browser-suites.js → preflight. Only {pid, ppid} were excluded, so the wrapper (its command line names predeploy-browser-suites.js) and the running deploy were reported as a PEER runner and a PEER deploy; the gate printed RELEASE BLOCKED and ran no suite (nothing uploaded; live unchanged).
+**Change:** `scripts/environment-preflight.js` excludes the whole ancestor chain (walked from the process table) plus its own children; an unrelated runner or deploy is still a peer. `scripts/test-environment-preflight-self-chain.js` 2/0 with real processes (the original code fails the self-chain case).
+
 ## [2026-10-01] — ODPC certificate image shown on the legal page (hosting)
 
 **Why:** the owner asked for the ODPC Certificate of Registration to be displayed on the legal page. sokoni-27 (83363cd) added the registration text; this adds the certificate itself inside that section, with no second copy of the text.
