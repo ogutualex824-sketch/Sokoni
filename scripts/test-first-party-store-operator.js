@@ -21,6 +21,8 @@
      4. AdminOS and Super Admin sidebars both carry the entry and it navigates
         to merchant-v2.html?store=sokoni.
      5. 390x844 and 1280x800: no horizontal page scroll in either state.
+     6. operator with the payouts flag OFF: held note, Set/Withdraw disabled,
+        no payout callable called; wallet shows "No store sale has settled yet".
    Negative control: served merchant-v2.html with the boot guard removed must
    show the merchant chrome in store mode (check 1 turns red).
 
@@ -63,8 +65,8 @@ export function httpsCallable(_f, name) {
     window.__SKS_CALLS.push(name);
     const p = window.__SKS_PERSONA || {};
     if (!p.operator) { const e = new Error('Access denied — the SOKONI Store is operated by its owner.'); e.code = 'functions/permission-denied'; e.details = { reason: 'not-store-operator' }; throw e; }
-    if (name === 'sokoniStoreGetContext') return { data: { ok: true, operator: true, storeId: 'STR_147f5ce11b424ec4bb892519', businessId: 'SOK-XX2338', businessName: 'SOKONI Store', profile: { name: 'SOKONI Store', phone: '+254705726803' }, payoutDestination: { status: 'unavailable' } } };
-    if (name === 'sokoniStoreGetWallet') return { data: { ok: true, storeWallet: { exists: false } } };
+    if (name === 'sokoniStoreGetContext') return { data: { ok: true, operator: true, storeId: 'STR_147f5ce11b424ec4bb892519', businessId: 'SOK-XX2338', businessName: 'SOKONI Store', profile: { name: 'SOKONI Store', phone: '+254705726803' }, payoutDestination: { status: 'not-set' }, payoutsEnabled: false } };
+    if (name === 'sokoniStoreGetWallet') return { data: { ok: true, storeWallet: { exists: false, state: 'no-sale-settled-yet' }, payoutDestination: { status: 'not-set' }, payoutsEnabled: false } };
     if (name === 'sokoniStoreListOrders') return { data: { ok: true, orders: [{ id: 'o1', status: 'paid', total: 500, createdAt: 1 }] } };
     if (name === 'sokoniStoreListProducts') return { data: { ok: true, products: [{ id: 'p1', name: 'STORE-SENTINEL-PRODUCT', price: 500, stock: null }] } };
     return { data: {} };
@@ -127,6 +129,9 @@ async function openStore(browser, persona, viewport, overrides) {
     ok(`1 ${tag} gate called first, then wallet/orders/products`, st.calls[0] === 'sokoniStoreGetContext' && ['sokoniStoreGetWallet', 'sokoniStoreListOrders', 'sokoniStoreListProducts'].every((n) => st.calls.includes(n)), st.calls);
     ok(`1 ${tag} merchant chrome never visible in store mode`, st.seen.chrome === false);
     ok(`5 ${tag} operator: no horizontal page scroll`, st.sx === false);
+    const held = await page.evaluate(() => ({ text: document.body.innerText, dest: document.getElementById('sks-dest-btn') && document.getElementById('sks-dest-btn').disabled, wd: document.getElementById('sks-wd-btn') && document.getElementById('sks-wd-btn').disabled }));
+    ok(`6 ${tag} operator, flag OFF: "Store withdrawals are awaiting owner approval", both buttons disabled, no-sale state`, /Store withdrawals are awaiting owner approval/.test(held.text) && held.dest === true && held.wd === true && /No store sale has settled yet/.test(held.text));
+    ok(`6 ${tag} operator, flag OFF: no payout callable was ever called`, !st.calls.some((n) => /Payout/.test(n)), st.calls);
     await ctx.close();
     /* 2, 3 admin / superAdmin not operator */
     for (const [label, persona] of [['admin', ADMIN], ['superAdmin', SUPER]]) {

@@ -61,12 +61,18 @@ const W = loadModule({});
 const R = W._render;
 ok('C1 denied panel says the owner\'s words', R.denied('denied').includes('Access denied — the SOKONI Store is operated by its owner'));
 ok('C2 denied panel carries no store data slots', !/sks-wallet|sks-orders|sks-products|sks-profile/.test(R.denied('denied')));
-ok('C3 wallet absent → "—", never 0', R.wallet({ storeWallet: { exists: false } }).includes('—') && !/KES 0/.test(R.wallet({ storeWallet: { exists: false } })));
-ok('C4 a real canonical 0 renders as KES 0', R.wallet({ storeWallet: { exists: true, balance: 0, pendingPayout: 0, pinSet: false } }).includes('KES 0'));
-const wsHtml = R.workspace({ ok: true, operator: true, businessName: 'SOKONI Store', profile: { phone: '+254705726803' }, payoutDestination: { status: 'unavailable' } });
-ok('C5 payout number: server says unavailable → "Not set", button disabled, full number never shown', /Not set/.test(wsHtml) && /id="sks-payout-btn" disabled/.test(wsHtml));
-const wsSet = R.workspace({ ok: true, operator: true, profile: {}, payoutDestination: { status: 'set', masked: '+254705726803' } });
-ok('C6 payout number masked to the last 3 digits when the server returns one', wsSet.includes('••• 803') && !wsSet.includes('705726803'));
+ok('C3 store wallet absent → "No store sale has settled yet" and "—", never 0', /No store sale has settled yet/.test(R.wallet({ storeWallet: { exists: false } })) && R.wallet({ storeWallet: { exists: false } }).includes('—') && !/KES 0/.test(R.wallet({ storeWallet: { exists: false } })));
+ok('C4 a real canonical 0 renders as KES 0', R.wallet({ storeWallet: { exists: true, balance: 0, pendingPayout: 0 } }).includes('KES 0'));
+const held = R.workspace({ ok: true, operator: true, businessName: 'SOKONI Store', profile: { phone: '+254705726803' }, payoutDestination: { status: 'not-set' }, payoutsEnabled: false });
+ok('C5 flag OFF → "Store withdrawals are awaiting owner approval"; both buttons disabled; "Not set"',
+  /Store withdrawals are awaiting owner approval/.test(held) && /id="sks-dest-btn" disabled/.test(held) && /id="sks-wd-btn" disabled/.test(held) && /Not set/.test(held));
+const onNoDest = R.workspace({ ok: true, operator: true, profile: {}, payoutDestination: { status: 'not-set' }, payoutsEnabled: true });
+ok('C5b flag ON, no destination → Set enabled, Withdraw disabled, no held note', /id="sks-dest-btn">/.test(onNoDest) && /id="sks-wd-btn" disabled/.test(onNoDest) && !/awaiting owner approval/.test(onNoDest));
+const wsSet = R.workspace({ ok: true, operator: true, profile: {}, payoutDestination: { status: 'set', last3: '803' }, payoutsEnabled: true });
+ok('C6 destination shown masked to the last 3 (server sends last3 only); Withdraw enabled', wsSet.includes('••• 803') && /id="sks-wd-btn">/.test(wsSet));
+ok('C6b a full number smuggled in any field is never rendered as the destination', R.destText({ status: 'set', last3: '705726803' }) === null && R.destText({ status: 'set', msisdn: '+254705726803' }) === null);
+const wdForm = wsSet.slice(wsSet.indexOf('id="sks-wd-form"'), wsSet.indexOf('</form>', wsSet.indexOf('id="sks-wd-form"')));
+ok('C6c the Withdraw form has amount + PIN only — no destination input', /name="amount"/.test(wdForm) && /name="pin" type="password"/.test(wdForm) && !/name="(msisdn|phone|accountNumber|destination)"/.test(wdForm));
 ok('C7 profile values are escaped', R.workspace({ profile: { name: '<img src=x onerror=alert(1)>' }, payoutDestination: {} }).includes('&lt;img'));
 ok('C8 orders: markup escaped, unknown total "—"', R.orders({ orders: [{ id: '<b>', status: 'paid', total: null }] }).includes('&lt;b&gt;') && R.orders({ orders: [{ id: 'x', total: null }] }).includes('—'));
 ok('C9 absent stock renders "—" (unmetered), not 0', R.products({ products: [{ name: 'Mug', price: 500, stock: null }] }).includes('Stock —'));
@@ -109,7 +115,7 @@ const tick = () => new Promise((r) => setTimeout(r, 30));
   W3.mount(root); await tick();
   ok('D3 operator: workspace rendered', root.innerHTML.includes('data-sks-state="workspace"'));
   ok('D4 operator: gate first, then wallet/orders/products', calls[0] === 'sokoniStoreGetContext' && ['sokoniStoreGetWallet', 'sokoniStoreListOrders', 'sokoniStoreListProducts'].every((n) => calls.includes(n)));
-  ok('D5 operator: wallet absent renders "—"', (root._slots['sks-wallet'] || {}).innerHTML.includes('—'));
+  ok('D5 operator: wallet absent renders "No store sale has settled yet"', /No store sale has settled yet/.test((root._slots['sks-wallet'] || {}).innerHTML));
 
   /* signed out */
   calls = [];
@@ -129,6 +135,10 @@ const tick = () => new Promise((r) => setTimeout(r, 30));
   ok('D7 a response without operator:true is treated as denied (fail closed)', root.innerHTML.includes('data-sks-state="denied"'));
 
   ok('E1 module never reads the URL for authority', !/location\.search|URLSearchParams/.test(ws));
+  ok('E3 payout calls are only made after the operator gate, and only when the flag is ON (source)',
+    /if \(!on \|\| !destForm \|\| !wdForm\) return;/.test(ws) && ws.indexOf("deps.callable('sokoniStorePayoutRequest')") > ws.indexOf('function wirePayout'));
+  ok('E4 the payout request sends amount, pin and requestId only — never a destination', /deps\.callable\('sokoniStorePayoutRequest'\)\(\{ amount: [^}]*, pin: [^}]*, requestId: wdRequestId \}\)/.test(ws));
+  ok('E5 PIN field cleared after every attempt', (ws.match(/elements\.pin\.value = ''/g) || []).length === 2);
   ok('E2 no success text before the server confirms (Saved. only inside the r.ok branch)', /if \(r && r\.ok\) \{\s*status\.textContent = 'Saved\.'/.test(ws));
 
   console.log(`\n${pass} PASS / ${fail} FAIL`);

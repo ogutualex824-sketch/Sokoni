@@ -1,3 +1,24 @@
+## [2026-10-01] — SOKONI Store workspace: store wallet + HELD withdrawals (hosting) — NOT deployed
+
+**Owner decisions (second pass):** the store wallet is `wallets/SOK-XX2338` (where live settlement
+lands); the operator payout path ships **HELD** behind the server-only flag
+`firstPartyStoreConfig/payouts.enabled` (functions branch `feat/first-party-store-operator-on-a545818`).
+
+**Files:**
+- `sokoni-store-workspace.js` — wallet panel reads the store wallet (absent → "No store sale has
+  settled yet", balance "—"); payout number masked to the last 3 or "Not set"; **Set payout number**
+  (number + PIN) and **Withdraw** (amount + PIN; no destination input — the server pays the stored
+  number) call `sokoniStoreSetPayoutDestination` / `sokoniStorePayoutRequest` with a per-submission
+  requestId. Flag OFF → both buttons disabled + "Store withdrawals are awaiting owner approval",
+  and no payout callable is ever called. Success shown only after the server confirms; PIN cleared
+  after every attempt.
+- `merchant-v2.html` — one CSS rule (`.sks-sub`).
+- `scripts/test-sokoni-store-workspace-static.js` (33/0); `scripts/test-first-party-store-operator.js`
+  (browser cert extended with the held state — QUEUED, browser hold).
+
+**Deploy order:** functions FIRST. **Operator record NOT yet written** — run
+`scripts/infra/set-first-party-store-operator.js --apply` after deploy. **NOT deployed.**
+
 ## [2026-10-01] — SOKONI Store: company-OWNED, owner-OPERATED (hosting) — NOT deployed
 
 **Owner decisions (binding):** the store stays owned by the company account; ONE named operator
