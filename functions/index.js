@@ -13024,6 +13024,10 @@ exports.auditInviteOnboarding = onCall(
 /* Re-send a password-setup link to an invitee who never received one. Separate
    from resendInvitation because the remedy for a stranded account is the LINK,
    not another invitation record. */
+/* 2026-10-01 — Financial Partner Workspace: the dashboard approved banks / SACCOs / chamas / MFIs /
+   insurers / forex bureaus / accountants / advisers / investment firms land on. See functions/financial-partner.js */
+exports.financialPartnerDispatch = require('./financial-partner').financialPartnerDispatch;
+
 exports.resendPasswordSetup = onCall(
   { region: 'us-central1', maxInstances: 5, enforceAppCheck: true,
     secrets: require('./email-service').EMAIL_SECRETS },
