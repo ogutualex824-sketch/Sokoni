@@ -1,3 +1,9 @@
+## [2026-10-01] — Operations Center error view reads the real failure stream (functions:getErrorLog, NOT deployed)
+
+**Why (census P2 #19, PROVEN in live source geterrorlog-00007-fik):** getErrorLog queried `platformErrors` — 0 documents, written by nothing, rules write:false — so the Operations Center always showed "No errors in the last hour" while 315 real client failure reports (incl. a stream of critical auth-android crashes 09-15→09-30) sat unread in `errorLog`.
+**Change:** `functions/operations-center.js` getErrorLog reads `errorLog` (written by logClientDiagnostic: App Check, rate-limited, server-stamped identity), newest first, bounded (hours 1–168 default 24, limit 1–200), optional severity filter, counts by severity, truncation flag; rows minimised (email masked, URL query/hash stripped so no token can surface, context ≤500); doc id = reference id. Admin-only, App Check unchanged. `scripts/test-error-log-reader.js` 10/0.
+**Lineage:** live operations-center.js is byte-identical to this tree's before the change. **Deploy:** `--only functions:getErrorLog`. **Open:** errorLog stores raw email with no TTL (needs a TTL policy — config); the client view needs the hosting half (ops-center default status "unknown" not green; an AdminOS failures view — coordinated with sokoni-aa's layout).
+
 ## [2026-10-01] — Password reset links expire after 25 minutes, work once, and are stored only as a hash (functions, NOT deployed)
 
 **Why:** owner requirement. Firebase reset codes last a fixed hour (not configurable), and the only rate limit was a browser sessionStorage counter.

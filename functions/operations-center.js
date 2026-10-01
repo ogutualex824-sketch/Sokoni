@@ -250,24 +250,51 @@ exports.triggerSelfHeal = onCall({ enforceAppCheck: true }, async (request) => {
 /* ═══════════════════════════════════════════════════════════
    CF 4: getErrorLog — recent error summary across platform
 ═══════════════════════════════════════════════════════════ */
+/* ── getErrorLog — the REAL client-failure stream (2026-10-01) ──────────────────────
+   This read `platformErrors`, which nothing in the codebase writes (0 documents; rules
+   write:false), so the Operations Center always reported "No errors in the last hour" while
+   real crash reports accumulated unread in `errorLog` (written by logClientDiagnostic with
+   App Check, rate limits and server-stamped identity). It now reads `errorLog`.
+   Returned rows are minimised for the operator: email masked, URL query/hash stripped (a
+   reset or payment link must never surface here), context capped. The document id is the
+   failure's reference id. Bounded: hours 1–168, limit 1–200. */
+function _maskEmail(e) {
+  const m = String(e || '').match(/^([^@]{0,2})[^@]*(@.+)$/);
+  return m ? m[1] + '***' + m[2] : null;
+}
+function _stripUrl(u) { return String(u || '').split(/[?#]/)[0].slice(0, 200) || null; }
+function _errorRow(id, d) {
+  const ts = d.timestamp && typeof d.timestamp.toDate === 'function' ? d.timestamp.toDate().toISOString() : null;
+  return {
+    id, at: ts, severity: d.severity || 'unknown', surface: d.surface || 'unknown',
+    code: d.code || null, message: d.message || null,
+    context: d.context ? String(d.context).slice(0, 500) : null,
+    uid: d.uid || null, email: _maskEmail(d.email), anonymous: !!d.anonymous,
+    merchantId: d.merchantId || null, orderId: d.orderId || null,
+    appVersion: d.appVersion || null, online: d.online !== false, url: _stripUrl(d.url),
+  };
+}
+async function _readErrorLog(db, data) {
+  const _num = (v, dflt) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : dflt; };
+  const hours = Math.min(Math.max(_num(data && data.hours, 24), 1), 168);
+  const lim = Math.min(Math.max(Math.floor(_num(data && data.limit, 100)), 1), 200);
+  const sev = data && typeof data.severity === 'string' && /^(critical|error|warning|info)$/.test(data.severity) ? data.severity : null;
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+  const snaps = await db.collection('errorLog')
+    .where('timestamp', '>', since)
+    .orderBy('timestamp', 'desc')
+    .limit(lim)
+    .get();
+  let rows = snaps.docs.map((d) => _errorRow(d.id, d.data() || {}));
+  if (sev) rows = rows.filter((r) => r.severity === sev);
+  const bySeverity = rows.reduce((m, r) => { m[r.severity] = (m[r.severity] || 0) + 1; return m; }, {});
+  return { errors: rows, count: rows.length, truncated: snaps.size >= lim, bySeverity, since: since.toISOString(), source: 'errorLog' };
+}
 exports.getErrorLog = onCall({ enforceAppCheck: true }, async (request) => {
   _adminRequired(request);
-  const { hours = 1, limit: lim = 100 } = request.data || {};
-
-  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-  const snaps = await admin.firestore()
-    .collection('platformErrors')
-    .where('recordedAt', '>', since)
-    .orderBy('recordedAt', 'desc')
-    .limit(Math.min(lim, 500))
-    .get();
-
-  return {
-    errors: snaps.docs.map(d => d.data()),
-    count:  snaps.size,
-    since:  since.toISOString(),
-  };
+  return _readErrorLog(admin.firestore(), request.data || {});
 });
+exports._errorLogInternal = { _readErrorLog, _errorRow, _maskEmail, _stripUrl, _adminRequired };
 
 /* ═══════════════════════════════════════════════════════════
    Scheduled: snapshot platform metrics every 5 minutes
