@@ -2327,6 +2327,16 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
            a merchant whose phone is a day slow would file today's product under
            yesterday and sort it to the bottom of their own catalogue. */
         var data = Object.assign({}, o.data, { updatedAt: m.fs.serverTimestamp() });
+        /* Price tiers (2026-10-01): an edit that REMOVES an optional tier (shopPrice / wholesalePrice /
+           minWholesaleQty) arrives as deleteFields and is written as deleteField() — absent, never 0. The
+           writer decides which; this only refuses an authority field and a delete on a create. */
+        if (o.deleteFields && o.deleteFields.length) {
+          if (o.mode === 'create') throw new Error('Products cannot be saved just now.');
+          var delObj = {};
+          o.deleteFields.forEach(function (k) { delObj[k] = 1; });
+          self._refuseAuthorityFields(delObj, 'writeProduct (delete)');
+          o.deleteFields.forEach(function (k) { data[k] = m.fs.deleteField(); });
+        }
         if (o.mode === 'create') {
           data.createdAt = m.fs.serverTimestamp();
           return m.fs.runTransaction(window.firebaseDB, function (tx) {
@@ -2372,9 +2382,18 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       return sdk().then(function (m) {
         if (!window.firebaseDB) throw new Error('mirror unavailable');
         var ref = m.fs.doc.apply(null, [window.firebaseDB].concat(o.path));
+        /* Price tiers (2026-10-01): an edit's tier patch is an UPDATE of the existing mirror (a missing mirror
+           fails and is reported, rather than being created half-filled), with deleteField() for a cleared tier. */
+        if (o.mode === 'update') {
+          var data = Object.assign({}, o.data);
+          (o.deleteFields || []).forEach(function (k) { data[k] = m.fs.deleteField(); });
+          return m.fs.updateDoc(ref, data);
+        }
         return m.fs.setDoc(ref, o.data, { merge: o.merge !== false });
       });
     },
+    /* The writer refuses to clear a price tier through an adapter that cannot express a field delete. */
+    supportsFieldDelete: true,
 
     /* ── Storage: product photographs (2c) ────────────────────────────────
        The ONE place this workspace puts bytes in a bucket. Like the product
