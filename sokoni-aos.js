@@ -65,6 +65,24 @@ window.SokoniAOS = (() => {
     _navigate(_r ? _r.section : "dashboard", _r ? _r.tab : null);
     _listenForRoutes();
     _startLiveKPIs();
+    _startTicketBadge();
+  }
+
+  /* Sidebar open-ticket badge. Started ONLY here, i.e. after the claim check and
+     guard('admin') have passed, so a non-admin never issues the supportTickets query
+     (the served rules let a non-admin read only their own tickets, so the unfiltered
+     query would be refused). Unknown stays hidden — the badge never shows a count it
+     did not read. */
+  let _ticketUnsub = null;
+  function _startTicketBadge() {
+    if (_ticketUnsub) return;
+    try {
+      const b = document.getElementById("sidebarTicketBadge");
+      _ticketUnsub = firebase.firestore().collection("supportTickets").where("status", "==", "open")
+        .onSnapshot((snap) => { if (b) { b.textContent = snap.size; b.hidden = snap.size === 0; } },
+                    () => { if (b) b.hidden = true; });
+      window.addEventListener("beforeunload", () => { if (_ticketUnsub) _ticketUnsub(); });
+    } catch (_) { /* no badge rather than a broken console */ }
   }
 
   /* ── Responsive adoption: label table cells for the mobile card layout ────────

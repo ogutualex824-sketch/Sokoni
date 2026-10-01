@@ -836,14 +836,9 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
     (function(){ try { if (localStorage.getItem('aosSidebarCollapsed') === '1' && window.innerWidth > 768) { var _ap = function(){ document.body.classList.add('sidebar-collapsed'); _syncSidebarA11y(); }; document.body ? _ap() : document.addEventListener('DOMContentLoaded', _ap); } } catch (_) {} })();
     document.addEventListener('DOMContentLoaded', _syncSidebarA11y);
     document.addEventListener("DOMContentLoaded", function() {
-      try {
-        var _aosTicketUnsub = firebase.firestore().collection("supportTickets").where("status","==","open")
-          .onSnapshot(function(snap) {
-            var b = document.getElementById("sidebarTicketBadge");
-            if (b) { b.textContent = snap.size; b.hidden = snap.size === 0; }
-          });
-        window.addEventListener('beforeunload', function() { if (_aosTicketUnsub) _aosTicketUnsub(); });
-      } catch(e) {}
+      /* The open-ticket badge listener moved into SokoniAOS._bootUI (2026-10-01): started here it
+         ran at DOMContentLoaded, BEFORE the admin gate decided, so every non-admin load issued a
+         supportTickets query the rules then refused. It now starts only after guard('admin') passes. */
       /* Loading watchdog — if the console never bootstraps (auth/engine failure or
          offline), turn the perpetual "Loading…" identity into a recoverable retry. */
       setTimeout(function () {
