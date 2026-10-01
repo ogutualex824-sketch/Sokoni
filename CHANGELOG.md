@@ -23,6 +23,25 @@ Owner decision: the Shelf (in-shop) price must be truly private. `products/{id}`
   products-detail-sheet 30/0 · listing-studio 63/0 · gate-inventory-writers PASS. Browser certs queued.
 - Files: `sokoni-merchant-data.js`, `sokoni-merchant-products.js`, `merchant-v2.html` (adapter `getPosProduct`), `scripts/test-price-tiers-writer.js` + fixtures.
 
+## 2026-10-01 — Selling screen: the cashier picks the price tier per line (ONL / SHOP / WHOLE)
+
+- **Data (`sokoni-merchant-data.js`):**
+  - each cart line keeps the product's CONFIGURED tiers (a client mirror of the server rule: ordering, KES 1bn
+    cap, numbers only) and a chosen `priceTier` (default online, so untouched lines sell exactly as before);
+  - `setLineTier()` refuses a tier the product does not have; it is never priced;
+  - `buildSale` sends `priceTier`; the server (posCompleteCheckout, fix/pos-price-tiers-on-ee37437)
+    re-resolves the price.
+- **Screen (`sokoni-merchant-sell.js`):**
+  - one compact button per configured tier ("✓ SHOP KES 140"), with an accessible name ("Use shop price —
+    KES 140"), aria-pressed, and the selected state shown by outline + ✓, not colour alone;
+  - the line shows "Shop price · KES 140 each";
+  - a tier change re-runs the pre-charge check and mints a new sale key.
+- **Cart quantity:** − decrements, and at 1 removes the line; it never navigates (unchanged; asserted).
+- **Tests:** scripts/test-pos-tier-picker.js 19/0; base 7a9f276 fails 15. Sell / uploader / tier-writer /
+  adjust-stock suites are unchanged.
+- **Release order:** ships AFTER the uploader unit (it adds shopPrice) and the server tier pricing
+  (posCompleteCheckout). Hosting only.
+
 ## [2026-10-01] - Three price tiers at upload: Online=price, Shop=shopPrice (new), Wholesale=wholesalePrice; absent = not available; wholesale ≤ shop ≤ online, wholesale < online; minWholesaleQty no longer required; server tier pricing at the till = the POS session's slice; NOT deployed
 
 **Branch `hosting/uploader-advanced-on-54b72cc`** (on top of the advanced uploader units A–C below; ships with them).
