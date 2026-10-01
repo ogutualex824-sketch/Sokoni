@@ -126,7 +126,10 @@ window.SokoniAOS = (() => {
      reach a selector, and both must exist in the document. A valid section with an
      unknown tab opens the section on its default tab rather than failing the route. */
   function _parseRoute(hash) {
-    const m = /^([a-z]+)(?:\/([a-z]+))?$/.exec(String(hash || "").replace(/^#/, "").toLowerCase());
+    /* Section and tab ids are lowercase words joined by single hyphens (e.g.
+       "payout-approvals"). Anything else — quotes, brackets, spaces — is refused here,
+       before the id reaches a selector, and the id must still match a real nav item. */
+    const m = /^([a-z]+(?:-[a-z]+)*)(?:\/([a-z]+(?:-[a-z]+)*))?$/.exec(String(hash || "").replace(/^#/, "").toLowerCase());
     if (!m) return null;
     const section = m[1], tab = m[2] || null;
     if (!document.querySelector('#aosNav .nav-item[data-section="' + section + '"]:not([data-tab])')) return null;
