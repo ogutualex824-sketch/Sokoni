@@ -1,3 +1,48 @@
+## [2026-10-01] — AdminOS + Super Admin: "SOKONI Foundation" workspace (hosting, NOT deployed)
+
+**Branch `hosting/admin-failures-on-chain`.** Static hosting only. **Reads callables that are NOT deployed yet** (all but
+`impactGetFinancialReport`); until they are, every tab says "not available yet" with evidence **unreadable** — never
+"none", never 0. Deploy after the Foundation functions slice.
+
+**Summary.** One shared module `sokoni-admin-foundation.js` (+ `sokoni-admin-foundation.css`, on top of the `sk-pa-*`
+styles) exposing `window.SokoniAdminFoundation.mount(host, {console, call, upload?})`, mounted by both consoles under
+key `foundation` (nav "SOKONI Foundation"). A keyboard-accessible tab strip (`role=tablist`, `aria-selected`, roving
+tabindex, Arrow/Home/End), each tab loaded lazily, lists bounded (cursor Load more, cap 500), no listeners:
+1. **Overview** — `impactAdminFoundationData {view:'summary'}`: balance/reserved/available/received/disbursed/fees,
+   donation + disbursement status counts (each a button opening the filtered list), story counts via
+   `foundationContentDispatch {op:'adminCounts'}`. Null balance/counts → "—"; a real 0 stays 0.
+2. **Donations** — `{view:'donations', status?, cursor?}`; Refund on completed rows opens Send support prefilled
+   (`refundOfPledgeId`, amount ≤ gross) labelled "Refund request — needs approval + super-admin authorization".
+3. **Send support** — `{view:'disbursements'}` + the chain, actions gated by status: Approve, Authorize (super admin
+   only), Check status (M-PESA), Record payment reference / Mark failed (manual rail), Confirm (second admin),
+   Cancel (before authorization; note). New support payment form: MPESA/BANK/TILL/PAYBILL fields, optional
+   grantId/campaignId, `requestId = crypto.randomUUID()` once per form open and reused on every retry (no secure
+   randomness → refuses to submit). Manual rails carry "No automated rail — you pay outside SOKONI, record the
+   reference, a second admin confirms." Status words exactly per contract; the word "Sent" never appears.
+4. **Stories & Media House** — `adminList` (status/kind), row actions by state (submit, approve, request changes,
+   reject, publish now/schedule, unpublish, archive, restore, remove; notes where required), "Published" vs
+   "Approved, not published", testimonial consent flags. New story form; media to Storage
+   `foundation-media/admin/{random}.{ext}` (JPEG/PNG/WebP ≤15 MB, MP4/WebM/MOV ≤80 MB, max 4, ≤1 video) via the
+   console's `firebase.storage()` shim; without it, "Media upload not available in this console yet" and text-only.
+   Server refusals (e.g. "Another administrator must approve a story you wrote") are shown as text.
+5. **Partner promotions** — `adminListPromotionRequests` / `adminDecidePromotion` (grant 1–90 days, decline with
+   note). "Promotion ranks a listing; it never verifies it. No payment is taken."
+6. **Reconciliation** — `impactGetFinancialReport` (live), ledger entries grouped by type, plus the warning
+   "Pre-fix checkout donations … reconcile before trusting the balance."
+
+**Security.** textContent/setAttribute only (no server string reaches innerHTML); every result shown only after the
+server answers `ok:true`; separation of duties (approver ≠ requester, super-admin authorizer, second-admin confirm,
+story author ≠ approver) is enforced server-side — the UI only labels it.
+
+**Files.** `sokoni-admin-foundation.js` (new), `sokoni-admin-foundation.css` (new), `admin-os.html`, `sokoni-aos.js`,
+`super-admin.html`, `scripts/test-admin-foundation.js` (new), `CHANGELOG.md`.
+**Functions / rules / DB: none.** Storage rules for `foundation-media/admin/` are not deployed — uploads fail with a
+clear message until they are. **Breaking: none.**
+
+**Tests.** `scripts/test-admin-foundation.js` 75/0 (fake DOM). Siblings unchanged: payout-approvals 43/0,
+partner-registrations 16/0, failures 37/0. Sabotage: "Sent" label → 5g + 6 red; new requestId per submit → 7b + 7d
+red; optimistic success → 5m red; null count as 0 → 3b + 3c red. Browser certification NOT run.
+
 ## [2026-10-01] — AdminOS + Super Admin: Partner registrations view (hosting, NOT deployed)
 
 **Why:** financial partners submit their regulator registration from the partner workspace; an administrator must be able to review it. **What:** one shared module `sokoni-admin-partner-registrations.js` (styles reuse `sokoni-admin-payout-approvals.css`), wired into `admin-os.html` + `sokoni-aos.js` and `super-admin.html` (inline-onclick nav, own transport per console). Calls `financialPartnerDispatch` ops `adminListRegistrations` / `adminReviewRegistration` (admin claim checked server-side). Result shown only after ok:true; rejecting needs a note; unreadable / not deployed never shown as "none waiting". Wording: a review is SOKONI's paperwork check, **not** a licence confirmation — the public listing stays self-declared (owner decision pending on any public marker). Test `scripts/test-admin-partner-registrations.js` 16/0 (innerHTML sabotage caught). See [[FINANCIAL_PARTNER_WORKSPACE]].
