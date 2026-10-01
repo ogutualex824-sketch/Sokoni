@@ -1,3 +1,69 @@
+## [2026-10-01] - community C2: one report authority (hosting) — product report WIZARD, AdminOS + Super Admin queue, seller reports in merchant-v2 — NOT deployed
+
+Before: product.html's report modal (one select) wrote the browser-side `flags` collection, which no admin workspace
+reads, and claimed "Report submitted" when the trust script was missing; AdminOS › Fraud & Trust › Reports Queue read
+`reports`, rendered `r.targetId` ("—" on every row — records carry `entityId`), its Action button sent
+`action:'action'` (always refused), and a failed read showed "No pending reports". Sellers and Super Admin saw nothing.
+
+**Now — ONE authority (`reports` via functions/trust-safety.js, see the functions-lineage CHANGELOG entry of the same
+date on feat/community-reports-fn-on-7091029):**
+- **Product page wizard** (`sokoni-report-wizard.js`, new): 1 reason — the SERVER's list (`tsGetReportReasons`), no
+  client list; if it cannot load, an error + retry, zero reasons offered · 2 details — required for "Something else"
+  (≥10 chars), optional otherwise, capped at 500 · 3 review + submit. Sign-in required. One report per user per listing
+  (server `create()` on a deterministic id). "Report received" only after the server answers; already-reported,
+  own-listing, signed-out and failures are shown as what they are ("Your report was NOT sent: …", details kept).
+  role=dialog + aria-modal, labelled, step announced, focus trap, Escape, focus returns, ≥44px targets.
+- **SokoniReport** (sokoni-trust.js): `reasons()` / `send()` / `submit()` call the server through the page's own app and
+  App Check; the client reason lists and the `flags` addDoc are removed. seller-public.html keeps its free-text seller
+  report on the same authority and no longer fakes success.
+- **AdminOS** Reports Queue and **Super Admin › Trust & Safety › Trust reports** mount the SAME
+  `sokoni-trust-queues.js` (ported from ec40b9b, reports only): filters in the shared moderation vocabulary, actions
+  uphold / uphold + take product down / request changes / dismiss / escalate / archive / remove, note required for
+  request-changes and remove, decisions shown only after the server returns.
+- **merchant-v2 › Disputes › Reports**: the seller's own listings only (`tsGetReports {scope:'mine'}`, server-filtered),
+  never the reporter; state label + SOKONI's outcome note once decided; "Listing taken down" when upheld with take-down.
+- **moderation.html** (legacy `flags` queue): report ids moved out of inline onclick script, `'` escaped, Ban only on a
+  user report (80a201b hunks).
+
+**State mapping (one place, server `REPORT_STATE`):** pending, escalated → pending · actioned → approved (= upheld) ·
+dismissed → rejected · changes_requested · archived · removed.
+
+**Taken from 80a201b:** trust-safety.js report parts (rebuilt on the serving file), product.html report-modal hunks
+(superseded by the wizard), sokoni-trust.js SokoniReport → tsReportContent, sokoni-aos.js report-queue fixes,
+moderation.html report-queue hunks. **Left:** reviews.js, sokoni-reviews.js, product.html SokoniReviews hunk, product.js
+(all its hunks are KEBS / fixed claims / hard-coded reviews — none is report code), script.js, style.css, review tests,
+index.js aggregatePlatformMetrics (`flags` 'open' count → `reports` 'pending' — a different function, its own gate).
+**Taken from ec40b9b:** sokoni-trust-queues.js (reports only), sokoni-aos.js / admin-os.html / super-admin.html report
+wiring, merchant-v2.html callReports + the Reports tab hunks of sokoni-merchant-disputes-ui.js, convergence tests
+(report parts). **Left (not needed for the reports queue):** the disputes view of the queue and the AdminOS disputes
+tab rewrite, super-admin `disputes` section, functions/disputes.js + admin-os.js + automation-engine.js dispute changes,
+sokoni-merchant-disputes.js `under_review`, sokoni-trust.js SokoniDispute → callables, dispute.html / dispute-portal.html,
+the conversation-report segment (messagesDispatch / moderationQueue), superadmin.html and unboxing.html (not edited),
+docs/DISPUTES_AND_REPORTS_AUTHORITY.md.
+
+**Parallel stores:** no client listing-report path writes `flags`, `communityReports` or `contentFlags` any more. Still
+open (later slices): rules `flags` create → false and `communityReports` create → false; community.html post report
+(writes `communityReports`, refused by the served rules, false "Report submitted" notice) → slice C4 (needs entity type
+`post`); admin.html `contentFlags` pane (deny-all store) and moderation.html `flags` pane → retire.
+
+- Files: sokoni-report-wizard.js (new), sokoni-trust-queues.js (new), sokoni-trust.js, product.html, seller-public.html,
+  sokoni-aos.js, admin-os.html, super-admin.html, merchant-v2.html, sokoni-merchant-disputes-ui.js, moderation.html;
+  scripts/lib/mini-dom.js, scripts/test-report-wizard.js, scripts/test-trust-integrity.js,
+  scripts/test-disputes-reports-convergence.js, scripts/test-admin-os-wiring.js (ported from the functions lineage),
+  scripts/test-report-wizard-browser.js, scripts/test-trust-integrity-browser.js, scripts/test-disputes-reports-browser.js.
+- Database / rules: none from hosting. API: consumes tsGetReportReasons (NEW), tsReportContent, tsGetReports,
+  tsReviewReport (REBUILT) — **deploy the four functions BEFORE this hosting** (old tsReportContent refuses nothing the
+  wizard sends but has no tsGetReportReasons: the wizard would show "reasons could not be loaded" — honest, but broken).
+- Security: reports private; seller view reporter-blind; no client report store; XSS fix in moderation.html.
+- Tests (SOKONI_FUNCTIONS_DIR=C:/temp/sok-reports-fn/functions): test-report-wizard 23/0 (counterproof on 4b58c94:
+  PG1/PG2 FAIL, then exit 2 — no wizard exists), test-trust-integrity 8/0, test-disputes-reports-convergence 4/0,
+  test-admin-os-wiring 270/0 (on 4b58c94: TQ0/TQ3/TQ4/TQ5 FAIL, 265/4), test-admin-nav-context 3/0, after-superadmin-link-gating 13/0,
+  verify-admin-markup intact. Without SOKONI_FUNCTIONS_DIR the suites say BLOCKED (this tree's functions/ is not the
+  report authority).
+- Gates: predeploy-syntax-gate PASS (1839 JS files, 455 inline blocks); verify-commission-single-source PASS.
+- Browser certs QUEUED (browser hold): test-report-wizard-browser (390/1280), test-trust-integrity-browser (TB4),
+  test-disputes-reports-browser (TB4/TB6/TB7) — all need SOKONI_FUNCTIONS_DIR.
+
 ## [2026-10-01] - AdminOS: head scripts deferred, admin gate order unchanged — static 7/0, browser proof QUEUED (RAM), NOT deployed
 
 admin-os.html loaded six classic scripts in <head> (security, sokoni-cart, sokoni-permissions, sokoni-role-authority,
