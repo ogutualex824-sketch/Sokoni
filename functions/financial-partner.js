@@ -62,6 +62,13 @@ const CATEGORIES = {
     productKinds: ['financial_planning', 'investment_advice', 'retirement_planning', 'insurance_advice', 'other'] },
   INVESTMENT: { label: 'Investment firm', regulators: ['Capital Markets Authority (CMA)', 'Retirement Benefits Authority (RBA)'], modules: FULL, memberLabel: 'Clients', productLabel: 'Products',
     productKinds: ['money_market_fund', 'unit_trust', 'bond', 'equity', 'pension', 'other'] },
+  /* Digital credit providers need a CBK licence; the listing never implies one (licenceVerified stays false). */
+  DIGITAL_LENDER: { label: 'Digital lender', regulators: ['Central Bank of Kenya (CBK) — Digital Credit Provider', 'Not yet licensed'], modules: FULL, memberLabel: 'Borrowers', productLabel: 'Loan products',
+    productKinds: ['personal_loan', 'business_loan', 'salary_advance', 'asset_finance', 'other'] },
+  PAYMENT_PROVIDER: { label: 'Payment / M-Pesa business services', regulators: ['Central Bank of Kenya (CBK) — Payment Service Provider', 'Safaricom M-PESA agent / aggregator', 'Other'], modules: FULL, memberLabel: 'Merchants', productLabel: 'Services',
+    productKinds: ['paybill_setup', 'till_setup', 'payment_gateway', 'bulk_payments', 'agent_services', 'other'] },
+  BUSINESS_FINANCE: { label: 'Business loans / merchant finance', regulators: ['Central Bank of Kenya (CBK)', 'Capital Markets Authority (CMA)', 'Not regulated'], modules: FULL, memberLabel: 'Clients', productLabel: 'Finance products',
+    productKinds: ['working_capital', 'invoice_finance', 'asset_finance', 'merchant_cash_advance', 'trade_finance', 'other'] },
   OTHER: { label: 'Financial services', regulators: ['Other regulator', 'Not regulated'], modules: FULL, memberLabel: 'Clients', productLabel: 'Services',
     productKinds: ['service', 'other'] },
 };
