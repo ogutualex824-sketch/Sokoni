@@ -6,7 +6,7 @@
    ============================================================================ */
 (function () {
   'use strict';
-  var ICONS = { overview: '🏠', registration: '🪪', members: '👥', products: '🧾', enquiries: '✉️', team: '🧑‍💼', profile: '⚙️' };
+  var ICONS = { overview: '🏠', registration: '🪪', members: '👥', products: '🧾', enquiries: '✉️', promote: '📣', team: '🧑‍💼', profile: '⚙️' };
   var S = { ws: null, view: 'overview', members: [], memberNext: null, memberFilter: {} };
   var $ = function (id) { return document.getElementById(id); };
   var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
@@ -56,11 +56,11 @@
   }
   function renderNav() {
     var c = S.ws.config;
-    var names = { overview: 'Overview', registration: 'Registration', members: c.memberLabel, products: c.productLabel, enquiries: 'Enquiries', team: 'Team', profile: 'Public profile' };
+    var names = { overview: 'Overview', registration: 'Registration', members: c.memberLabel, products: c.productLabel, enquiries: 'Enquiries', promote: 'Promote', team: 'Team', profile: 'Public profile' };
     /* only known module keys ever reach markup or show() */
     var visible = c.modules.filter(function (m) { return Object.prototype.hasOwnProperty.call(ICONS, m); }).filter(function (m) {
       if (m === 'registration' || m === 'team') return isOwner() || (m === 'team' && canManage());
-      if (m === 'products' || m === 'profile') return canManage();
+      if (m === 'products' || m === 'profile' || m === 'promote') return canManage();
       return true;
     });
     $('sbNav').innerHTML = visible.map(function (m) {
@@ -75,7 +75,7 @@
       if (b.getAttribute('data-nav') === view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
     var v = $('view'); v.innerHTML = '<div class="state muted">Loading…</div>';
-    ({ overview: vOverview, registration: vRegistration, members: vMembers, products: vProducts, enquiries: vEnquiries, team: vTeam, profile: vProfile }[view] || vOverview)(v);
+    ({ overview: vOverview, registration: vRegistration, members: vMembers, products: vProducts, enquiries: vEnquiries, promote: vPromote, team: vTeam, profile: vProfile }[view] || vOverview)(v);
     $('main').focus({ preventScroll: true });
   }
 
@@ -211,6 +211,34 @@
     }).catch(function (e) { var tb = $('eRows'); if (tb) tb.innerHTML = '<tr><td colspan="5" class="muted">Could not load: ' + esc(errMsg(e)) + '</td></tr>'; });
   }
 
+  var PLACEMENTS = { banking_hub_category: 'Top of your Banking Hub category', banking_hub_search: 'Banking Hub search results', foundation_partners: 'SOKONI Foundation partners section' };
+  function vPromote(v) {
+    v.innerHTML = '<h1>Promote</h1><p class="muted">Reach more people inside SOKONI. A promoted listing is shown first and marked "Promoted" — it is never presented as verified or endorsed.</p>' +
+      '<div class="notice">Promotion is free while SOKONI reviews each request. Paid promotion and plans are not available yet; nothing is charged here.</div>' +
+      '<form class="panel" id="promoForm" novalidate><h2 style="margin-top:0">Request a promotion</h2><div class="row">' +
+      '<div><label for="pr1">Where</label><select id="pr1" name="placement">' + Object.keys(PLACEMENTS).map(function (k) { return '<option value="' + esc(k) + '">' + esc(PLACEMENTS[k]) + '</option>'; }).join('') + '</select></div></div>' +
+      '<div style="margin-top:12px"><label for="pr2">What would you like to highlight? (optional)</label><textarea id="pr2" name="message" maxlength="300"></textarea></div>' +
+      '<div class="actions"><button class="btn primary" type="submit">Send request</button></div></form>' +
+      '<div class="panel"><h2 style="margin-top:0">Your promotions</h2><div id="promoList" class="muted">Loading…</div></div>';
+    loadPromotions();
+  }
+  function loadPromotions() {
+    call({ op: 'listMyPromotions' }).then(function (r) {
+      var el = $('promoList'); if (!el) return;
+      var live = r.promotions.map(function (x) {
+        var on = x.status === 'active' && x.endsAt && x.endsAt > Date.now();
+        return '<li>' + esc(PLACEMENTS[x.placement] || label(x.placement)) + ' — <span class="pill ' + (on ? 'ok' : 'warn') + '">' + (on ? 'Live until ' + esc(when(x.endsAt)) : 'Ended') + '</span></li>';
+      });
+      var reqs = r.requests.map(function (x) {
+        var st = { pending: ['warn', 'Waiting for SOKONI'], granted: ['ok', 'Granted'], declined: ['err', 'Declined'] }[x.status] || ['warn', label(x.status)];
+        return '<li>' + esc(PLACEMENTS[x.placement] || label(x.placement)) + ' · requested ' + esc(when(x.createdAt)) + ' <span class="pill ' + st[0] + '">' + esc(st[1]) + '</span>' + (x.note ? ' <span class="muted">— ' + esc(x.note) + '</span>' : '') + '</li>';
+      });
+      el.innerHTML = (live.length ? '<h3 style="font-size:14px;margin:6px 0">Live</h3><ul style="margin-left:18px">' + live.join('') + '</ul>' : '') +
+        (reqs.length ? '<h3 style="font-size:14px;margin:10px 0 6px">Requests</h3><ul style="margin-left:18px">' + reqs.join('') + '</ul>' : '') ||
+        'No promotions yet.';
+    }).catch(function (e) { var el = $('promoList'); if (el) el.textContent = 'Could not load: ' + errMsg(e); });
+  }
+
   function vTeam(v) {
     v.innerHTML = '<h1>Team</h1><p class="muted">People who work this workspace with you. Managers can do everything except team and registration; officers handle the register and enquiries.</p>' +
       '<div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Email</th><th>Role</th><th>Added</th><th><span class="skip">Actions</span></th></tr></thead><tbody id="tRows"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody></table></div></div>' +
@@ -325,6 +353,7 @@
       req = { op: 'saveProduct', id: d.id || undefined, name: d.name, kind: d.kind, status: d.status, description: d.description, rateText: d.rateText, minAmount: d.minAmount, currency: d.currency ? d.currency.toUpperCase() : undefined, buy: d.buy, sell: d.sell };
       after = function () { toast('Saved.'); form.reset(); form.elements.id.value = ''; $('pTitle').textContent = 'Add'; loadProducts(); };
     }
+    if (form.id === 'promoForm') { req = { op: 'requestPromotion', placement: d.placement, message: d.message }; after = function () { toast('Request sent — SOKONI will review it.'); form.reset(); loadPromotions(); }; }
     if (form.id === 'teamForm') { req = { op: 'addTeamMember', email: d.email, role: d.role }; after = function () { toast('Added to your team.'); show('team'); }; }
     if (form.id === 'profileForm') {
       var lines = function (s) { return String(s || '').split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean); };
