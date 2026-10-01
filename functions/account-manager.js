@@ -195,16 +195,24 @@ exports.revokeAllSessions = onCall({ region: 'us-central1' }, async (request) =>
 exports.finaliseExpiredDeletions = onSchedule(
   { schedule: '0 23 * * *', timeZone: 'UTC', region: 'us-central1' },
   async () => {
+    /* 2026-10-01 — this query combined status == with deletionScheduledAt <=, which needs a
+       composite index that never existed: EVERY nightly run failed with FAILED_PRECONDITION
+       (59 errors 08-31 → 09-29), so no account was ever finalised. Querying the single
+       auto-indexed equality and filtering the date here needs no index. Pending deletions are
+       few (a 30-day grace queue), so reading up to 500 per run is bounded and cheap. */
     const now  = admin.firestore.Timestamp.now();
-    const snap = await db.collection('users')
+    const pending = await db.collection('users')
       .where('status', '==', 'pending_deletion')
-      .where('deletionScheduledAt', '<=', now)
-      .limit(50)
+      .limit(500)
       .get();
+    const due = pending.docs.filter((d) => {
+      const at = d.get('deletionScheduledAt');
+      return at && typeof at.toMillis === 'function' && at.toMillis() <= now.toMillis();
+    }).slice(0, 50);
+    console.info('[AccountManager] finaliseExpiredDeletions', { pending: pending.size, due: due.length });
+    if (!due.length) return;
 
-    if (snap.empty) return;
-
-    for (const userDoc of snap.docs) {
+    for (const userDoc of due) {
       const uid  = userDoc.id;
       const data = userDoc.data();
 
@@ -256,7 +264,10 @@ exports.finaliseExpiredDeletions = onSchedule(
           collectionsAnonymized: _summary.anonymized,
           collectionsRetained:   _summary.retained,
           storagePurged:         _summary.storage,
-          outcome:               'success',
+          /* Never claim more than happened: a purge step that errored is a PARTIAL erasure, and
+             records kept under a legal duty make it COMPLETED WITH RETENTION, not "deleted". */
+          outcome: [..._summary.deleted, ..._summary.anonymized].some((x) => /:ERR$/.test(x)) ? 'partial_failure'
+                 : (_summary.anonymized.length || _summary.retained.length) ? 'completed_with_retention' : 'completed',
         }).catch(() => {});
 
         /* 4. Delete the Firebase Auth account — the irreversible step, last.
