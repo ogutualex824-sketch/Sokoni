@@ -63,5 +63,11 @@ ck('U-7', /'\.msl-tiers\{[^']*flex-direction:column/.test(sell) && /@media \(max
 ck('U-4', /act === 'tier'[\s\S]{0,300}md\.setLineTier\([\s\S]{0,500}S\.preflight = null; clearToken\(\)/.test(sell), 'a tier change re-runs the pre-charge check and mints a new sale key');
 ck('U-5', !/location\.(href|assign|replace)|salescontrol/i.test((sell.match(/if \(act === 'dec'\)[\s\S]{0,260}/) || [''])[0]), 'minus never navigates (no location change, no Sales Control)');
 
+/* the payment sheet (owner, 2026-10-01): items shown ABOVE the money, and the sheet scrolls on phones */
+const payAt = sell.indexOf("<div class=\"t\">Take payment</div>");
+const paySeg = payAt > 0 ? sell.slice(payAt, payAt + 4000) : '';
+ck('Y-1', /msl-pay-items[\s\S]*S\.cart\.map[\s\S]*msl-pay-it[\s\S]*Subtotal/.test(paySeg) && paySeg.indexOf('msl-pay-items') < paySeg.indexOf('Subtotal'), 'Take payment lists the sale items (qty × price, tier, line total) ABOVE the subtotal');
+ck('Y-2', /'\.msl-sh-b\{[^']*overflow-y:auto[^']*-webkit-overflow-scrolling:touch;'/.test(sell) && /overscroll-behavior:contain;touch-action:pan-y/.test(sell), 'the sheet body scrolls on iPhone (momentum, contained overscroll, vertical pan)');
+
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
