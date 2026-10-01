@@ -1,3 +1,25 @@
+## [2026-10-01] — The settlement gate: a seller is credited only for a PAID, PIN-PROVEN, arm's-length order
+
+**Files:** `functions/order-settlement.js`, `scripts/test-settlement-gate.js`, `CHANGELOG.md`
+**Base:** `106db63` = the LIVE `onOrderStatusChange` 00065-fud archive verbatim (no git commit carried it).
+**Database changes:** none. New order fields when held: `settlementStatus:'HELD'`, `settlementNote`, `settlementHeldAt`.
+**API changes:** none. **Security:** closes a seller self-credit path. **Breaking:** unverified/unproven orders no longer auto-credit.
+
+- **Defect (live):** `settleOrder` ran on any transition to `completed` and credited the seller's WITHDRAWABLE
+  wallet from the order's own client-written total, never checking payment or proof. An account could create an
+  unpaid order with itself as seller and buyer, move it to `confirmed` as seller (rules allow it), confirm as
+  buyer (`buyerConfirmDelivery`) and be credited. Merchant-attested cash orders (`paymentVerified:false` by design)
+  were credited too. The baseline credits KES 950,000 on an unpaid KES 1,000,000 self-dealt order (test X-1).
+- **Fix (owner 2026-10-01: seller money waits for the buyer's PIN):** inside the settlement transaction, settle
+  only when `paymentVerified === true` (server-set only) AND `deliveryAuthorizedBy` ∈ {rider_pin,
+  buyer_confirmation} AND buyer ≠ seller. Otherwise HELD with a reason (not terminal; re-settles once the proof
+  is present), for AdminOS review.
+- **Tests:** `test-settlement-gate.js` 14/0; BASE=106db63 fails 9. Four mutants (one per condition, plus the
+  buyer-field resolution) are each caught.
+- **Not changed:** orders settled at payment by the webhook stay a no-op. Rider payout gate untouched.
+- **Deploy:** `--only functions:onOrderStatusChange`, from this tree with the live archive's lineage check, and
+  `.env` excluded from upload. Not deployed.
+
 ## [2026-09-29] — P0: orders rules close the rider-payout self-credit path (rules half)
 
 **Files:** `firestore.rules`, `firestore.rules.build`, `scripts/test-p0-rider-payout-rules.js`, `CHANGELOG.md`.

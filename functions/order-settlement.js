@@ -81,6 +81,33 @@ function _platformFundedDiscountCents(order) {
   return loyalty + (promoIsSellerFunded ? 0 : promo);
 }
 
+/* ══ THE SETTLEMENT GATE (owner, 2026-10-01: "the PIN completion event must become the single
+   release/settlement trigger"; seller money waits for the buyer's PIN) ══════════════════════════
+   settleOrder ran on ANY transition to `completed` with a sellerUid and credited the seller's
+   WITHDRAWABLE wallet from the order's own client-written total. It never asked whether SOKONI
+   was paid, or whether delivery was proven:
+     · an unpaid order the seller moved to 'confirmed' (rules allow it) and the same account then
+       confirmed as buyer (buyerConfirmDelivery) reached `completed` → seller credited for money
+       that never arrived;
+     · a merchant-attested cash order (paymentVerified:false BY DESIGN — the merchant holds the
+       cash) was credited into the wallet as well.
+   An order now settles only when ALL of these hold; otherwise it is HELD with a reason (never
+   terminal, never a silent pass), visible to AdminOS by settlementStatus:'HELD' + settlementNote:
+     1. paymentVerified === true   — server-set only (client create forbids it; no client update
+                                      branch may write it)
+     2. deliveryAuthorizedBy is 'rider_pin' or 'buyer_confirmation' — the buyer's PIN or the
+                                      buyer's own confirmation (server-stamped in delivery-complete)
+     3. the buyer is not the seller — a self-dealt order is never auto-credited */
+const SETTLE_PROOFS = Object.freeze(['rider_pin', 'buyer_confirmation']);
+function settlementHoldReason(o, sellerId) {
+  if (!o) return 'no_order';
+  if (o.paymentVerified !== true) return 'payment_not_verified_by_sokoni';
+  if (!SETTLE_PROOFS.includes(String(o.deliveryAuthorizedBy || ''))) return 'awaiting_delivery_proof';
+  const buyer = o.buyerUid || o.uid || o.userId || o.customerUid || null;
+  if (buyer && sellerId && String(buyer) === String(sellerId)) return 'self_dealing_review';
+  return null;
+}
+
 /* Settle ONE fulfilled product order exactly once. Reuses the canonical engine for the
    breakdown, credits the seller's withdrawable wallet, writes settlement + wallet txn +
    balanced ledger, and advances the state machine. Idempotent + replay-safe. */
@@ -121,6 +148,15 @@ async function settleOrder(db, adminSdk, orderId) {
     /* Only a held/eligible, non-cancelled/refunded order settles. */
     if (['cancelled', 'refunded'].includes(o.status)) return { outcome: 'terminal-skip' };
     if (!sellerId) { t.update(orderRef, { settlementStatus: STATES.SETTLED, settlementNote: 'no-seller', settledAt: FV.serverTimestamp() }); return { outcome: 'no-seller' }; }
+    /* THE GATE — inside the transaction, on the state read in it, before any credit. */
+    const _holdReason = settlementHoldReason(o, sellerId);
+    if (_holdReason) {
+      if (st !== STATES.HELD || o.settlementNote !== _holdReason) {
+        t.update(orderRef, { settlementStatus: STATES.HELD, settlementNote: _holdReason,
+          settlementHeldAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() });
+      }
+      return { outcome: 'held', reason: _holdReason };
+    }
     if (!breakdown || grossCents <= 0) { t.update(orderRef, { settlementStatus: STATES.SETTLED, settlementNote: 'zero-gross', settledAt: FV.serverTimestamp() }); return { outcome: 'zero-gross' }; }
 
     const netCents = Number(breakdown.sellerNetCents) || 0;
@@ -173,6 +209,9 @@ async function settleOrder(db, adminSdk, orderId) {
     return { outcome: 'settled', sellerId, netShillings, commissionCents };
   });
 
+  if (res.outcome === 'held') {
+    console.warn('[order-settlement] HELD ' + orderId + ' — ' + res.reason + ' (no credit; AdminOS review)');
+  }
   if (res.outcome === 'settled') {
     console.log(`[order-settlement] SETTLED ${orderId} → seller ${res.sellerId} +${res.netShillings} KES (commission ${res.commissionCents}c)`);
   }
@@ -319,4 +358,5 @@ async function autoConfirmDeliveredOrders(db, adminSdk) {
 module.exports = { STATES, isAlreadySettled, settleOrder, markEligible, markRefundedIfUnsettled, reverseSettledOrder, handleOrderRefund, autoConfirmDeliveredOrders, _grossCents,
   /* Exposed so the funding resolver can be tested directly — it decides real money,
      and inferring it from a full settlement run would prove less. */
+  settlementHoldReason, SETTLE_PROOFS,
   _internal: { _platformFundedDiscountCents } };
