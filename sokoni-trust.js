@@ -54,54 +54,109 @@
 
   /* ================================================================
      window.SokoniReport
+     ONE report authority (community C2, 2026-10-01): every report goes to the server callable tsReportContent
+     (functions/trust-safety.js) — the `reports` store AdminOS, super admin and the seller's merchant-v2 read. The
+     browser writes NO report store any more (it used to addDoc `flags`, which no admin workspace read).
+     The reason list is the SERVER's (tsGetReportReasons) — there is no client copy to drift.
+     A report is "sent" only when the server has answered; a refusal is returned / shown as the server's reason.
   ================================================================ */
+  var _REPORT_REGION = 'us-central1';
+  var _reasonCache = {};
+
+  async function _reportCallable(name) {
+    /* the page's own app + App Check (firebase.js / sokoni-init.js) — wait for both instead of racing them */
+    for (var i = 0; i < 60 && !window.firebaseApp; i++) await new Promise(function (r) { setTimeout(r, 100); });
+    var app = window.firebaseApp || null;
+    if (!app) {
+      /* a page that started its own app without firebase.js — use it rather than starting a second one */
+      try { var A = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'); app = A.getApps()[0] || null; } catch (_) { app = null; }
+    }
+    if (!app) throw Object.assign(new Error('SOKONI is still starting — try again in a moment.'), { code: 'unavailable' });
+    if (window.__sokoniAppCheckReady && typeof window.__sokoniAppCheckReady.then === 'function') { try { await window.__sokoniAppCheckReady; } catch (_) {} }
+    var Fn = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+    var fns = (window.firebaseApp && window.firebaseFunctions) || Fn.getFunctions(app, _REPORT_REGION);
+    return Fn.httpsCallable(fns, name);
+  }
+  async function _reportUser() {
+    if (typeof window.waitForSokoniAuthReady === 'function') { try { await window.waitForSokoniAuthReady(); } catch (_) {} }
+    var a = window.firebaseAuth;
+    return (a && a.currentUser) || null;
+  }
+  function _reportErr(err) {
+    var code = String((err && err.code) || '').replace(/^functions\//, '');
+    var msg = err && err.message ? String(err.message).replace(/^FirebaseError:\s*/, '') : '';
+    if (!msg || /^internal$/i.test(msg)) msg = 'The report could not be sent. Please try again.';
+    return { ok: false, code: code || 'unknown', message: msg };
+  }
+
   window.SokoniReport = {
-    types: {
-      user:     ['Fake account', 'Harassment', 'Spam', 'Scam / fraud', 'Impersonation', 'Underage account', 'Other'],
-      listing:  ['Fake listing', 'Prohibited item', 'Wrong category', 'Misleading price', 'Counterfeit goods', 'Stolen goods', 'Other'],
-      business: ['Fake business', 'Not delivering orders', 'Fraud', 'Overcharging', 'Poor service', 'Other'],
-      message:  ['Harassment', 'Spam', 'Threats', 'Phishing link', 'Scam attempt', 'Other']
+    currentUser: _reportUser,
+
+    /* → { ok:true, reasons:[{code,label,hint,detailRequired}], freeText, detailMax, detailMinWhenRequired }
+       | { ok:false, code, message } — never a client-made list */
+    reasons: async function (entityType) {
+      var key = String(entityType || '');
+      if (_reasonCache[key]) return _reasonCache[key];
+      try {
+        var r = await (await _reportCallable('tsGetReportReasons'))({ entityType: key });
+        var d = (r && r.data) || {};
+        if (!Array.isArray(d.reasons)) return { ok: false, code: 'bad-response', message: 'The list of reasons could not be loaded.' };
+        var out = { ok: true, entityType: d.entityType || key, reasons: d.reasons, freeText: d.freeText === true,
+          detailMax: Number(d.detailMax) || 500, detailMinWhenRequired: Number(d.detailMinWhenRequired) || 10 };
+        _reasonCache[key] = out;
+        return out;
+      } catch (err) { return _reportErr(err); }
     },
 
+    /* the structured call the wizard uses: no toasts, no navigation — the caller renders the outcome.
+       → { ok:true, reportId, status } | { ok:false, code, message } */
+    send: async function (entityType, entityId, reasonCode, detail, evidenceUrls) {
+      var user = await _reportUser();
+      if (!user) return { ok: false, code: 'unauthenticated', message: 'Sign in to report.' };
+      var payload = {
+        entityType: String(entityType || ''),
+        entityId: String(entityId || '').slice(0, 128),
+        reasonCode: String(reasonCode || '').slice(0, 120),
+        detail: String(detail || '').slice(0, 500),
+        evidenceUrls: (evidenceUrls || []).filter(function (u) { return typeof u === 'string' && u.indexOf('https://') === 0; }).slice(0, 5)
+      };
+      try {
+        var r = await (await _reportCallable('tsReportContent'))(payload);
+        var d = (r && r.data) || {};
+        if (!d.reportId) return { ok: false, code: 'bad-response', message: 'The server did not confirm the report.' };
+        return { ok: true, reportId: d.reportId, status: d.status || 'pending' };
+      } catch (err) { return _reportErr(err); }
+    },
+
+    /* Historical entry point (seller-public.html): free-text reason types. Same authority; shows the outcome as a
+       toast and resolves null when NOT sent, so a caller never closes its form on a failure. */
     submit: async function (type, targetId, reason, details, evidenceUrls) {
-      /* Auth required — anonymous reports are rejected by Firestore rules */
-      var uid = getUID();
-      if (!uid) {
+      var user = await _reportUser();
+      if (!user) {
         showToast('Sign in to submit a report.', 'error');
         setTimeout(function () { window.location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search); }, 1200);
         return null;
       }
-
       if (!reason) { showToast('Please select a reason.', 'error'); return null; }
-
-      evidenceUrls = (evidenceUrls || []).filter(function(u) {
-        return typeof u === 'string' && u.startsWith('https://');
-      });
-
-      var reportData = {
-        type:         type,
-        targetId:     String(targetId).slice(0, 128),
-        reason:       String(reason).slice(0, 200),
-        details:      String(details || '').slice(0, 1000),
-        evidenceUrls: evidenceUrls,
-        reporterUid:  uid,
-        createdAt:    new Date().toISOString(),
-        status:       'pending'
+      var payload = {
+        entityType: String(type || ''),
+        entityId: String(targetId || '').slice(0, 128),
+        reason: String(reason).slice(0, 120),
+        detail: String(details || '').slice(0, 500),
+        evidenceUrls: (evidenceUrls || []).filter(function (u) { return typeof u === 'string' && u.indexOf('https://') === 0; }).slice(0, 5)
       };
-
-      /* Firestore save */
       try {
-        var db = getDB();
-        if (!db) throw new Error('No DB');
-        var fs = await firestoreImport();
-        await fs.addDoc(fs.collection(db, 'flags'), reportData);
-        showToast('Report submitted. Our team will review within 24h.');
+        var r = await (await _reportCallable('tsReportContent'))(payload);
+        var d = (r && r.data) || {};
+        if (!d.reportId) throw new Error('The server did not confirm the report.');
+        showToast('Report received — SOKONI will review it. Thank you.');
+        return d;
       } catch (err) {
-        console.error('[SokoniReport]', err);
-        showToast('Failed to submit report. Please try again.', 'error');
+        var e = _reportErr(err);
+        showToast(e.code === 'already-exists' ? 'You have already reported this — our team is reviewing it.'
+          : 'Your report was NOT sent: ' + e.message, 'error');
         return null;
       }
-      return reportData;
     }
   };
 

@@ -1144,12 +1144,13 @@ function submitSellerReport(){
   if(!reason){(window._skToast||alert)('Please select a reason.');return;}
   var sid=new URLSearchParams(location.search).get('seller')||new URLSearchParams(location.search).get('id')||'unknown';
   if(window.SokoniReport){
-    SokoniReport.submit('user',sid,reason,details).then(function(){
+    SokoniReport.submit('user',sid,reason,details).then(function(r){
+      if(!r) return;   /* NOT sent — the form stays open; SokoniReport showed the server's reason */
       document.getElementById('reportSellerModal').style.display='none';
     });
   } else {
-    document.getElementById('reportSellerModal').style.display='none';
-    (window._skToast||alert)('Report submitted. Thank you.');
+    /* 2026-10-01 (community C2): never claim a report was sent when nothing could send it */
+    (window._skToast||alert)('Reporting is not available right now — please try again shortly.');
   }
 }
 </script>

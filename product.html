@@ -380,55 +380,35 @@ document.addEventListener('DOMContentLoaded', () => {
 <script src="sokoni-social.js" defer></script>
 <script src="sokoni-referral.js" defer></script>
   <script defer src="kass-widget.js"></script>
-<!-- ── Report Listing ── -->
-<div id="reportListingBar" style="text-align:center;padding:8px 16px 4px;display:none;">
-  <button onclick="openReportListing()" style="background:none;border:none;color:rgba(255,255,255,0.3);font-size:12px;cursor:pointer;text-decoration:underline;font-family:inherit;">⚑ Report this listing</button>
+<!-- ── Report Listing (community C2, 2026-10-01) ──
+     A three-step wizard (sokoni-report-wizard.js) on the ONE report authority: the reasons are the SERVER's
+     (tsGetReportReasons), the report goes to tsReportContent, and "received" is shown only after the server answers.
+     The old modal wrote the "flags" collection from the browser (read by no admin workspace) and, when the trust script
+     was missing, claimed "Report submitted" without sending anything. -->
+<div id="reportListingBar" style="text-align:center;padding:8px 16px 4px;" hidden>
+  <button type="button" id="reportListingBtn" aria-haspopup="dialog" onclick="openReportListing(this)" style="min-height:44px;padding:0 14px;background:none;border:none;color:rgba(255,255,255,0.55);font-size:13px;cursor:pointer;text-decoration:underline;font-family:inherit;">⚑ Report this listing</button>
 </div>
-<div id="reportModal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);align-items:center;justify-content:center;padding:16px;">
-  <div style="background:#111;border:1px solid rgba(113,255,0,0.2);border-radius:20px;padding:24px;width:100%;max-width:400px;">
-    <h3 style="margin:0 0 16px;color:white;font-size:16px;">⚑ Report Listing</h3>
-    <select id="reportListingReason" style="width:100%;padding:12px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:16px;margin-bottom:12px;font-family:inherit;">
-      <option value="">Select a reason...</option>
-      <option>Counterfeit / fake item</option>
-      <option>Misleading description</option>
-      <option>Prohibited item</option>
-      <option>Wrong price / scam</option>
-      <option>Duplicate listing</option>
-      <option>Other</option>
-    </select>
-    <textarea id="reportListingDetails" placeholder="Additional details (optional)" style="width:100%;padding:12px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:16px;resize:vertical;min-height:80px;font-family:inherit;margin-bottom:12px;"></textarea>
-    <div style="display:flex;gap:10px;">
-      <button onclick="submitListingReport()" style="flex:1;padding:12px;background:#71ff00;border:none;border-radius:10px;color:#000;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;">Submit Report</button>
-      <button onclick="document.getElementById('reportModal').style.display='none'" style="padding:12px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:14px;cursor:pointer;font-family:inherit;">Cancel</button>
-    </div>
-  </div>
-</div>
+<script src="sokoni-report-wizard.js" defer></script>
 <script>
-function openReportListing(){
-  var u = window.firebaseAuth && window.firebaseAuth.currentUser;
-  if(!u){ (window._skToast||alert)('Please sign in to report a listing.'); window.location.href='login.html?next='+encodeURIComponent(location.pathname+location.search); return; }
-  document.getElementById('reportModal').style.display='flex';
+function _reportListingId(){
+  var q=new URLSearchParams(location.search);
+  return q.get('id')||q.get('product')||'';
 }
-function submitListingReport(){
-  var reason=document.getElementById('reportListingReason').value;
-  var details=document.getElementById('reportListingDetails').value;
-  if(!reason){(window._skToast||alert)('Please select a reason.');return;}
-  var pid=new URLSearchParams(location.search).get('id')||'unknown';
-  if(window.SokoniReport){
-    SokoniReport.submit('listing',pid,reason,details).then(function(){
-      document.getElementById('reportModal').style.display='none';
-      document.getElementById('reportListingReason').value='';
-      document.getElementById('reportListingDetails').value='';
-    });
-  } else {
-    document.getElementById('reportModal').style.display='none';
-    (window._skToast||alert)('Report submitted. Thank you.');
+function openReportListing(btn){
+  var pid=_reportListingId();
+  if(!pid) return;
+  if(!window.SokoniReportWizard){
+    /* never claim a report was sent when nothing could send it */
+    (window._skToast||alert)('Reporting is not available right now — please try again shortly.');
+    return;
   }
+  var nameEl=document.querySelector('.product-title, h1');
+  SokoniReportWizard.open({ entityType:'product', entityId:pid, entityName:(nameEl&&nameEl.textContent||'').trim().slice(0,120), opener:btn });
 }
-// Show report bar after page loads
+// Show the report entry only when there is a listing to report
 window.addEventListener('DOMContentLoaded',function(){
   var bar=document.getElementById('reportListingBar');
-  if(bar)bar.style.display='block';
+  if(bar&&_reportListingId())bar.hidden=false;
 });
 </script>
   <!-- Enterprise v2.0: core stack -->
