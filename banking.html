@@ -263,7 +263,6 @@
   <div class="bk-nav-right">
     <a href="services.html" class="bk-nav-link">🛠️ Services</a>
     <a href="banking.html#loans" class="bk-nav-link bk-nav-cta"><i class="fas fa-coins"></i> Apply for Loan</a>
-    <button class="bkp-notif-bell" onclick="showTab('notifs',this)" title="Notifications">🔔<span id="bkp-notif-count" class="bkp-notif-badge"></span></button>
   </div>
 </nav>
 
@@ -284,13 +283,18 @@
   <div class="alert-banner">
     <div class="alert-icon">💳</div>
     <div class="alert-info">
+      <span class="bkd-ext">External — dial from your phone</span>
       <h3>💸 Need a quick loan right now?</h3>
       <p>M-Pesa Fuliza: dial *234# · KCB M-Pesa: dial *522# · Equity Eazzy Loan: dial *247# · Timiza (Absa): dial *848# · Loop (Co-op): dial *667#</p>
     </div>
     <button type="button" class="alert-btn" onclick="openApplyModal('Emergency Loan','Any Bank')">📲 Compare & Apply</button>
   </div>
 
-  <!-- QUICK ACTION TILES -->
+  <!-- QUICK ACTION TILES
+       Each tile either switches to a directory pane or navigates to a real page.
+       The former localStorage "tools" (wallet, dashboard, BNPL, invoices, payments,
+       notifications, admin — sokoni-banking-pro.js) showed balances no server knew
+       about; they are gone. Money lives in wallet.html / financial-os.html. -->
   <div class="bk-section-h">⚡ What do you need today?</div>
   <div class="qa-grid">
     <button type="button" class="qa-tile" onclick="showTab('loans',this)">
@@ -323,141 +327,70 @@
     <button type="button" class="qa-tile" onclick="showTab('digital',this)">
       <div class="qa-icon">📱</div><div class="qa-label">Digital Loans</div>
     </button>
-    <button type="button" class="qa-tile" onclick="showTab('wallet',this)">
-      <div class="qa-icon">💳</div><div class="qa-label">My Wallet</div>
+    <button type="button" class="qa-tile" onclick="showTab('advisers',this)">
+      <div class="qa-icon">🧮</div><div class="qa-label">Accountants &amp; Advisers</div>
     </button>
-    <button type="button" class="qa-tile" onclick="showTab('dashboard',this)">
-      <div class="qa-icon">📊</div><div class="qa-label">Finance Dashboard</div>
-    </button>
-    <button type="button" class="qa-tile" onclick="showTab('bnpl',this)">
-      <div class="qa-icon">🛒</div><div class="qa-label">Buy Now Pay Later</div>
-    </button>
-    <button type="button" class="qa-tile" onclick="showTab('merchant',this)">
+    <button type="button" class="qa-tile" onclick="showTab('loans',this)">
       <div class="qa-icon">🏪</div><div class="qa-label">Merchant Finance</div>
     </button>
-    <button type="button" class="qa-tile" onclick="showTab('invoices',this)">
-      <div class="qa-icon">📜</div><div class="qa-label">Invoices</div>
-    </button>
-    <button type="button" class="qa-tile" onclick="showTab('payments',this)">
-      <div class="qa-icon">💰</div><div class="qa-label">Payment History</div>
-    </button>
-    <button type="button" class="qa-tile" onclick="showTab('admin',this)">
-      <div class="qa-icon">🛡️</div><div class="qa-label">Admin Panel</div>
+    <a class="qa-tile" href="wallet.html">
+      <div class="qa-icon">💳</div><div class="qa-label">My Wallet</div>
+    </a>
+    <a class="qa-tile" href="wallet.html">
+      <div class="qa-icon">🧾</div><div class="qa-label">Payment History</div>
+    </a>
+    <a class="qa-tile" href="financial-os.html">
+      <div class="qa-icon">📊</div><div class="qa-label">Finance Dashboard</div>
+    </a>
+    <button type="button" class="qa-tile" onclick="showTab('foundation',this)">
+      <div class="qa-icon">💚</div><div class="qa-label">SOKONI Foundation</div>
     </button>
   </div>
 
   <!-- TAB NAV -->
-  <div class="bk-tabs" id="bkTabRow">
-    <button type="button" onclick="showTab('loans',this)"        class="bk-tab active" id="tab-loans">💰 Loans</button>
-    <button type="button" onclick="showTab('accounts',this)"     class="bk-tab" id="tab-accounts">🏦 Bank Accounts</button>
-    <button type="button" onclick="showTab('saccos',this)"       class="bk-tab" id="tab-saccos">🤝 SACCOs</button>
-    <button type="button" onclick="showTab('insurance',this)"    class="bk-tab" id="tab-insurance">🛡️ Insurance</button>
-    <button type="button" onclick="showTab('investments',this)"  class="bk-tab" id="tab-investments">📈 Investments</button>
-    <button type="button" onclick="showTab('mpesa',this)"        class="bk-tab" id="tab-mpesa">📲 M-Pesa Business</button>
-    <button type="button" onclick="showTab('forex',this)"        class="bk-tab" id="tab-forex">💱 Forex</button>
-    <button type="button" onclick="showTab('microfinance',this)" class="bk-tab" id="tab-microfinance">🌱 Microfinance</button>
-    <button type="button" onclick="showTab('chamas',this)"       class="bk-tab" id="tab-chamas">👥 Chamas</button>
-    <button type="button" onclick="showTab('digital',this)"      class="bk-tab" id="tab-digital">📱 Digital Loans & Mogo</button>
-    <button type="button" onclick="showTab('wallet',this)"      class="bk-tab" id="tab-wallet">💳 My Wallet</button>
-    <button type="button" onclick="showTab('dashboard',this)"   class="bk-tab" id="tab-dashboard">📊 Dashboard</button>
-    <button type="button" onclick="showTab('bnpl',this)"        class="bk-tab" id="tab-bnpl">🛒 Buy Now Pay Later</button>
-    <button type="button" onclick="showTab('merchant',this)"    class="bk-tab" id="tab-merchant">🏪 Merchant Finance</button>
-    <button type="button" onclick="showTab('invoices',this)"    class="bk-tab" id="tab-invoices">📜 Invoices</button>
-    <button type="button" onclick="showTab('payments',this)"    class="bk-tab" id="tab-payments">💰 Payment History</button>
-    <button type="button" onclick="showTab('admin',this)"       class="bk-tab" id="tab-admin">🛡️ Admin</button>
+  <div class="bk-tabs" id="bkTabRow" role="tablist" aria-label="Banking Hub categories">
+    <button type="button" role="tab" onclick="showTab('loans',this)"        class="bk-tab active" id="tab-loans" aria-controls="pane-loans">💰 Loans</button>
+    <button type="button" role="tab" onclick="showTab('accounts',this)"     class="bk-tab" id="tab-accounts" aria-controls="pane-accounts">🏦 Bank Accounts</button>
+    <button type="button" role="tab" onclick="showTab('saccos',this)"       class="bk-tab" id="tab-saccos" aria-controls="pane-saccos">🤝 SACCOs</button>
+    <button type="button" role="tab" onclick="showTab('insurance',this)"    class="bk-tab" id="tab-insurance" aria-controls="pane-insurance">🛡️ Insurance</button>
+    <button type="button" role="tab" onclick="showTab('investments',this)"  class="bk-tab" id="tab-investments" aria-controls="pane-investments">📈 Investments</button>
+    <button type="button" role="tab" onclick="showTab('mpesa',this)"        class="bk-tab" id="tab-mpesa" aria-controls="pane-mpesa">📲 M-Pesa Business</button>
+    <button type="button" role="tab" onclick="showTab('forex',this)"        class="bk-tab" id="tab-forex" aria-controls="pane-forex">💱 Forex</button>
+    <button type="button" role="tab" onclick="showTab('microfinance',this)" class="bk-tab" id="tab-microfinance" aria-controls="pane-microfinance">🌱 Microfinance</button>
+    <button type="button" role="tab" onclick="showTab('chamas',this)"       class="bk-tab" id="tab-chamas" aria-controls="pane-chamas">👥 Chamas</button>
+    <button type="button" role="tab" onclick="showTab('digital',this)"      class="bk-tab" id="tab-digital" aria-controls="pane-digital">📱 Digital Loans</button>
+    <button type="button" role="tab" onclick="showTab('advisers',this)"     class="bk-tab" id="tab-advisers" aria-controls="pane-advisers">🧮 Accountants &amp; Advisers</button>
+    <button type="button" role="tab" onclick="showTab('foundation',this)"   class="bk-tab" id="tab-foundation" aria-controls="pane-foundation">💚 SOKONI Foundation</button>
   </div>
 
   <!-- CONTENT PANES
-       sokoni-banking-pro.js renders into pane-{name}; every renderer begins
-       `if(!p) return`, so without these containers all of them exited
-       silently and every tile was inert. -->
+       Directory panes are filled by banking-hub.js from financialPartnerDispatch
+       publicDirectory, lazily on first open. data-types is the category -> institution
+       type mapping; data-label names the category in empty states. -->
   <div class="bk-panes" id="bkPanes">
-    <div class="bk-pane" id="pane-wallet" role="tabpanel" aria-labelledby="tab-wallet"></div>
-    <div class="bk-pane" id="pane-dashboard" role="tabpanel" aria-labelledby="tab-dashboard"></div>
-    <div class="bk-pane" id="pane-bnpl" role="tabpanel" aria-labelledby="tab-bnpl"></div>
-    <div class="bk-pane" id="pane-merchant" role="tabpanel" aria-labelledby="tab-merchant"></div>
-    <div class="bk-pane" id="pane-invoices" role="tabpanel" aria-labelledby="tab-invoices"></div>
-    <div class="bk-pane" id="pane-payments" role="tabpanel" aria-labelledby="tab-payments"></div>
-    <div class="bk-pane" id="pane-notifs" role="tabpanel" aria-labelledby="tab-notifs"></div>
-    <div class="bk-pane" id="pane-admin" role="tabpanel" aria-labelledby="tab-admin"></div>
-    <div class="bk-pane" id="pane-loans" role="tabpanel" aria-labelledby="tab-loans">
-      <div class="bk-pending">
-        <div class="bk-pending-t">Business Loans</div>
-        <p class="bk-pending-p">Compare lender terms and apply in one place.</p>
-        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
-        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
-      </div>
-    </div>
-    <div class="bk-pane" id="pane-accounts" role="tabpanel" aria-labelledby="tab-accounts">
-      <div class="bk-pending">
-        <div class="bk-pending-t">Bank Accounts</div>
-        <p class="bk-pending-p">Open and manage business accounts from SOKONI.</p>
-        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
-        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
-      </div>
-    </div>
-    <div class="bk-pane" id="pane-saccos" role="tabpanel" aria-labelledby="tab-saccos">
-      <div class="bk-pending">
-        <div class="bk-pending-t">SACCOs</div>
-        <p class="bk-pending-p">Browse and join registered SACCOs.</p>
-        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
-        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
-      </div>
-    </div>
-    <div class="bk-pane" id="pane-insurance" role="tabpanel" aria-labelledby="tab-insurance">
-      <div class="bk-pending">
-        <div class="bk-pending-t">Insurance</div>
-        <p class="bk-pending-p">Compare business and personal cover.</p>
-        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
-        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
-      </div>
-    </div>
-    <div class="bk-pane" id="pane-investments" role="tabpanel" aria-labelledby="tab-investments">
-      <div class="bk-pending">
-        <div class="bk-pending-t">Investments</div>
-        <p class="bk-pending-p">Money market funds, bonds and treasury bills.</p>
-        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
-        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
-      </div>
-    </div>
-    <div class="bk-pane" id="pane-mpesa" role="tabpanel" aria-labelledby="tab-mpesa">
-      <div class="bk-pending">
-        <div class="bk-pending-t">M-Pesa Business</div>
-        <p class="bk-pending-p">Paybill and Till onboarding.</p>
-        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
-        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
-      </div>
-    </div>
-    <div class="bk-pane" id="pane-forex" role="tabpanel" aria-labelledby="tab-forex">
-      <div class="bk-pending">
-        <div class="bk-pending-t">Forex</div>
-        <p class="bk-pending-p">Live rates and currency exchange.</p>
-        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
-        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
-      </div>
-    </div>
-    <div class="bk-pane" id="pane-microfinance" role="tabpanel" aria-labelledby="tab-microfinance">
-      <div class="bk-pending">
-        <div class="bk-pending-t">Microfinance</div>
-        <p class="bk-pending-p">Small-business lenders and group loans.</p>
-        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
-        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
-      </div>
-    </div>
-    <div class="bk-pane" id="pane-chamas" role="tabpanel" aria-labelledby="tab-chamas">
-      <div class="bk-pending">
-        <div class="bk-pending-t">Chamas</div>
-        <p class="bk-pending-p">Run a group savings circle with shared records.</p>
-        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
-        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
-      </div>
-    </div>
-    <div class="bk-pane" id="pane-digital" role="tabpanel" aria-labelledby="tab-digital">
-      <div class="bk-pending">
-        <div class="bk-pending-t">Digital Loans</div>
-        <p class="bk-pending-p">Instant mobile lenders, compared side by side.</p>
-        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
-        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
+    <div class="bk-pane" id="pane-loans" role="tabpanel" aria-labelledby="tab-loans" data-types="BUSINESS_FINANCE,BANK,MICROFINANCE,DIGITAL_LENDER" data-label="lender" data-plural="lenders" data-apply="BUSINESS_FINANCE" data-intro="Business and merchant finance, banks, microfinance and digital lenders listed on SOKONI."></div>
+    <div class="bk-pane" id="pane-accounts" role="tabpanel" aria-labelledby="tab-accounts" data-types="BANK" data-label="bank" data-plural="banks" data-apply="BANK" data-intro="Banks listed on SOKONI."></div>
+    <div class="bk-pane" id="pane-saccos" role="tabpanel" aria-labelledby="tab-saccos" data-types="SACCO" data-label="SACCO" data-plural="SACCOs" data-apply="SACCO" data-intro="SACCOs listed on SOKONI."></div>
+    <div class="bk-pane" id="pane-insurance" role="tabpanel" aria-labelledby="tab-insurance" data-types="INSURER" data-label="insurer" data-plural="insurers" data-apply="INSURER" data-intro="Insurers listed on SOKONI."></div>
+    <div class="bk-pane" id="pane-investments" role="tabpanel" aria-labelledby="tab-investments" data-types="INVESTMENT,FINANCIAL_ADVISER" data-label="investment firm" data-plural="investment firms" data-apply="INVESTMENT" data-intro="Investment firms and financial advisers listed on SOKONI."></div>
+    <div class="bk-pane" id="pane-mpesa" role="tabpanel" aria-labelledby="tab-mpesa" data-types="PAYMENT_PROVIDER" data-label="payment provider" data-plural="payment providers" data-apply="PAYMENT_PROVIDER" data-intro="Payment providers listed on SOKONI."></div>
+    <div class="bk-pane" id="pane-forex" role="tabpanel" aria-labelledby="tab-forex" data-types="FOREX" data-label="forex bureau" data-plural="forex bureaus" data-apply="FOREX" data-intro="Forex bureaus listed on SOKONI."></div>
+    <div class="bk-pane" id="pane-microfinance" role="tabpanel" aria-labelledby="tab-microfinance" data-types="MICROFINANCE" data-label="microfinance institution" data-plural="microfinance institutions" data-apply="MICROFINANCE" data-intro="Microfinance institutions listed on SOKONI."></div>
+    <div class="bk-pane" id="pane-chamas" role="tabpanel" aria-labelledby="tab-chamas" data-types="CHAMA" data-label="chama" data-plural="chamas" data-apply="CHAMA" data-intro="Chamas listed on SOKONI."></div>
+    <div class="bk-pane" id="pane-digital" role="tabpanel" aria-labelledby="tab-digital" data-types="DIGITAL_LENDER" data-label="digital lender" data-plural="digital lenders" data-apply="DIGITAL_LENDER" data-intro="Digital lenders listed on SOKONI. Check the lender's CBK licence before borrowing."></div>
+    <div class="bk-pane" id="pane-advisers" role="tabpanel" aria-labelledby="tab-advisers" data-types="ACCOUNTANT,FINANCIAL_ADVISER" data-label="accountant or adviser" data-plural="accountants or advisers" data-apply="ACCOUNTANT" data-intro="Accountants and financial advisers listed on SOKONI."></div>
+    <div class="bk-pane" id="pane-foundation" role="tabpanel" aria-labelledby="tab-foundation" data-foundation="1">
+      <div class="bkd-foundation">
+        <div class="bkd-f-copy">
+          <div class="bk-pending-t">SOKONI Foundation</div>
+          <p class="bk-pending-p">Give to Foundation programmes with M-Pesa, and read stories from people the Foundation supported.</p>
+          <div class="bkd-f-cta">
+            <a class="bkd-btn bkd-btn-acc bkd-btn-lg" href="foundation.html#donate">💚 Donate</a>
+            <a class="bkd-btn" href="foundation.html#share">Share your story</a>
+          </div>
+        </div>
+        <div class="bkd-status" id="bkdFoundationStatus" role="status" aria-live="polite"></div>
+        <div class="bkd-grid" id="bkdFoundationStories"></div>
       </div>
     </div>
   </div>
@@ -499,15 +432,57 @@
   .bk-pending-s{font-size:12.5px;color:rgba(255,255,255,.42);line-height:1.6;margin:0 0 6px;}
   .bk-search-empty{padding:18px 4px;color:rgba(255,255,255,.5);font-size:13px;text-align:center;}
   @media (prefers-reduced-motion:reduce){.bk-pane.active{animation:none;}}
+  /* ── Partner directory (banking-hub.js) ── */
+  .bkd-ext{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#f59e0b;border:1px solid rgba(245,158,11,.4);border-radius:999px;padding:2px 9px;margin-bottom:6px;}
+  .bkd-intro{font-size:13.5px;color:rgba(255,255,255,.62);margin:0 0 14px;line-height:1.6;}
+  .bkd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:14px;}
+  .bkd-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:8px;min-width:0;}
+  .bkd-card h3{font-size:15.5px;font-weight:800;color:#fff;margin:0;word-break:break-word;}
+  .bkd-type{font-size:12px;color:rgba(255,255,255,.55);}
+  .bkd-tags{display:flex;flex-wrap:wrap;gap:6px;}
+  .bkd-tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.75);}
+  .bkd-listed{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;background:rgba(113,255,0,.08);border:1px solid rgba(113,255,0,.3);color:#71ff00;}
+  .bkd-promo{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);color:#f59e0b;}
+  .bkd-warn{font-size:12px;color:#fbbf24;margin:0;}
+  .bkd-meta{font-size:12.5px;color:rgba(255,255,255,.6);word-break:break-word;}
+  .bkd-meta a{color:#71ff00;}
+  .bkd-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:6px;}
+  .bkd-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:#fff;font:inherit;font-size:13.5px;font-weight:800;cursor:pointer;text-decoration:none;}
+  .bkd-btn:hover{border-color:rgba(255,255,255,.3);}
+  .bkd-btn[disabled]{opacity:.55;cursor:not-allowed;}
+  .bkd-btn-acc{background:#71ff00;border-color:#71ff00;color:#071000;}
+  .bkd-btn-lg{min-height:52px;padding:14px 28px;font-size:16px;}
+  .bkd-status{font-size:13px;color:rgba(255,255,255,.6);padding:6px 0 12px;}
+  .bkd-status:empty{display:none;}
+  .bkd-more{text-align:center;margin-top:14px;}
+  .bkd-foundation .bkd-f-copy{background:linear-gradient(135deg,rgba(113,255,0,.08),rgba(255,255,255,.02));border:1px solid rgba(113,255,0,.2);border-radius:18px;padding:22px 18px;margin-bottom:14px;}
+  .bkd-f-cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;}
+  .bkd-story img,.bkd-story video{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:12px;background:#111;}
+  .bk-tab:focus-visible,.qa-tile:focus-visible,.bkd-btn:focus-visible,.bkd-card a:focus-visible{outline:3px solid #71ff00;outline-offset:2px;}
+  .bkd-modal{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.75);display:flex;align-items:flex-end;justify-content:center;}
+  .bkd-sheet{background:#0b0d10;border:1px solid rgba(255,255,255,.1);border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:90vh;overflow:auto;padding:22px 16px calc(22px + env(safe-area-inset-bottom));color:#fff;}
+  @media (min-width:640px){.bkd-modal{align-items:center;}.bkd-sheet{border-radius:18px;}}
+  .bkd-sheet h2{font-size:18px;margin:0 0 4px;}
+  .bkd-sheet h3{font-size:14px;margin:16px 0 6px;color:rgba(255,255,255,.85);}
+  .bkd-sheet p,.bkd-sheet li{font-size:13.5px;color:rgba(255,255,255,.7);line-height:1.6;}
+  .bkd-sheet ul{padding-left:18px;margin:0;}
+  .bkd-field{margin:12px 0;}
+  .bkd-field label{display:block;font-size:13px;font-weight:700;margin-bottom:5px;}
+  .bkd-field input,.bkd-field textarea,.bkd-field select{width:100%;min-height:46px;padding:11px 13px;border-radius:11px;border:1px solid rgba(255,255,255,.16);background:#12161b;color:#fff;font:inherit;font-size:16px;}
+  .bkd-field textarea{min-height:110px;resize:vertical;}
+  .bkd-check{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:rgba(255,255,255,.75);min-height:44px;}
+  .bkd-check input{width:22px;height:22px;flex-shrink:0;accent-color:#71ff00;}
+  .bkd-err{color:#ff6b6b;font-size:13px;min-height:1em;margin:6px 0 0;}
+  .bkd-ok{color:#3ddc84;font-weight:700;}
+  .bkd-sheet-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px;}
 </style>
 <script>
-/* Base tab switcher.
-   sokoni-banking-pro.js:736 wraps window.showTab and calls the original for the
-   visual switch. No original existed, so tabs never moved and the lazy
-   renderers drew into containers that were not there. This supplies it, and
-   must stay defined BEFORE that file's DOMContentLoaded init runs. */
-window.showTab = function (name, btn) {
+/* Tab switcher. Switching emits `bk:pane` (detail.name); banking-hub.js listens
+   and lazily loads that pane's directory the first time it opens.
+   opts.noScroll is used for the initial pane on page load. */
+window.showTab = function (name, btn, opts) {
   if (!name) return;
+  document.querySelectorAll('.qa-tile').forEach(function (t) { t.classList.toggle('active', t === btn); });
   document.querySelectorAll('.bk-tab').forEach(function (t) {
     t.classList.toggle('active', t.id === 'tab-' + name);
     t.setAttribute('aria-selected', t.id === 'tab-' + name ? 'true' : 'false');
@@ -523,13 +498,17 @@ window.showTab = function (name, btn) {
     console.warn('[Banking] no pane for tab "' + name + '"');
     return;
   }
-  if (btn && btn.scrollIntoView) {
-    try { btn.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' }); } catch (e) {}
+  try { document.dispatchEvent(new CustomEvent('bk:pane', { detail: { name: name } })); } catch (e) {}
+  if (opts && opts.noScroll) return;
+  var tab = document.getElementById('tab-' + name);
+  if (tab && tab.scrollIntoView) {
+    try { tab.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' }); } catch (e) {}
   }
   var panes = document.getElementById('bkPanes');
   if (panes && panes.scrollIntoView) {
     try { panes.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) {}
   }
+  if (history.replaceState) { try { history.replaceState(null, '', '#' + name); } catch (e) {} }
 };
 
 /* Filter the quick-action tiles and the tab row by label.
@@ -613,14 +592,14 @@ window.openApplyModal = function (product, bank) {
   document.body.appendChild(m);
 };
 </script>
-<script src="sokoni-banking-pro.js" defer></script>
+<script src="banking-hub.js" defer></script>
 <script src="sokoni-audit.js" defer></script>
 <script src="sokoni-social.js" defer></script>
 <script src="sokoni-referral.js" defer></script>
 <script src="scroll-top.js" defer></script>
   <!-- REGISTER CTA — auto-injected by hub-register system -->
   <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:22px 20px;text-align:center;margin-top:0;">
-    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a </div>
+    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a bank, SACCO, insurer or adviser?</div>
     <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
     <button onclick="HubRegister.open({hub:'financial', category:'sacco'})" style="padding:12px 28px;background:#4ade80;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
   </div>
