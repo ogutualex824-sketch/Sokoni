@@ -11732,6 +11732,11 @@ exports.impactSubmitScholarship            = impact.impactSubmitScholarship;
 exports.impactInitiateDisbursement         = impact.impactInitiateDisbursement;
 exports.impactApproveDisbursement          = impact.impactApproveDisbursement;
 exports.impactAuthorizeDisbursement        = impact.impactAuthorizeDisbursement;
+/* Foundation disbursements rebuilt 2026-10-01: settle on provider confirmation; manual rails two-person */
+exports.impactRefreshDisbursementStatus    = impact.impactRefreshDisbursementStatus;
+exports.impactRecordManualDisbursement     = impact.impactRecordManualDisbursement;
+exports.impactCancelDisbursement           = impact.impactCancelDisbursement;
+exports.impactAdminFoundationData          = impact.impactAdminFoundationData;
 exports.impactGetFinancialReport           = impact.impactGetFinancialReport;
 exports.impactAdminCorporateApprove        = impact.impactAdminCorporateApprove;
 exports.impactAdminGrantReview             = impact.impactAdminGrantReview;

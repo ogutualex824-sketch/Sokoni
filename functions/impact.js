@@ -664,149 +664,354 @@ exports.impactSubmitScholarship = onCall(
 );
 
 /* ══════════════════════════════════════════════════════════
-   12. impactInitiateDisbursement — Level 1: initiate payout
-   Only admin can start; requires a second admin to approve
+   12–14. FOUNDATION DISBURSEMENTS — rebuilt 2026-10-01
+   ----------------------------------------------------------
+   Three different people move Foundation money: initiator (admin) → approver (a different admin) →
+   authorizer (superAdmin, neither of the others). Then:
+     · M-PESA  → the PROVEN IntaSend send-money contract (finos-utils.intasendB2C). The ledger is debited
+                 ONLY when IntaSend reports the payout Completed (impactRefreshDisbursementStatus) — never on
+                 the initiate response. A gateway error releases the reservation; nothing is debited.
+     · BANK / TILL / PAYBILL → NO automated rail exists on the platform (no PesaLink / B2B integration).
+                 These are MANUAL: an admin pays outside SOKONI and records the provider reference; a
+                 DIFFERENT admin confirms; only then is the ledger debited. Never shown as sent before that.
+   Money is RESERVED at authorization (impactBalance.reservedKES) so two payouts cannot spend the same
+   shilling; available = balance − reserved, re-checked inside the claiming transaction.
+   Every state change is a transaction on the disbursement doc (claim-before-act), so a double click or a
+   concurrent call cannot pay twice. Destinations are masked in every listing.
+   Statuses: pending_approval → pending_authorization → processing → (awaiting_confirmation →) completed
+             | failed | cancelled
 ══════════════════════════════════════════════════════════ */
+const DSB_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const _isSuperAdmin = (auth) => !!auth && (auth.token?.superAdmin === true || auth.token?.role === 'superAdmin' || auth.token?.role === 'super_admin');
+const _mask = (s) => { const v = String(s || ''); return v.length <= 4 ? '****' : '****' + v.slice(-4); };
+function _destination(type, d) {
+  const t = String(type || '').toUpperCase();
+  const digits = (v) => String(v || '').replace(/\D/g, '');
+  if (t === 'MPESA') {
+    const ph = digits(d.phone);
+    const m = /^(?:254|0)?([17]\d{8})$/.exec(ph);
+    if (!m) throw new HttpsError('invalid-argument', 'Enter a valid Kenyan M-PESA number.');
+    return { type: t, rail: 'intasend_b2c', phone: '254' + m[1], display: 'M-PESA ' + _mask(m[1]) };
+  }
+  if (t === 'TILL') {
+    const till = digits(d.tillNumber);
+    if (!/^\d{5,7}$/.test(till)) throw new HttpsError('invalid-argument', 'Enter a valid Till number.');
+    return { type: t, rail: 'manual', tillNumber: till, display: 'Till ' + _mask(till) };
+  }
+  if (t === 'PAYBILL') {
+    const pb = digits(d.paybillNumber), acc = _san(d.accountRef, 40);
+    if (!/^\d{5,7}$/.test(pb) || !acc) throw new HttpsError('invalid-argument', 'Enter a Paybill number and account.');
+    return { type: t, rail: 'manual', paybillNumber: pb, accountRef: acc, display: 'Paybill ' + pb + ' · ' + _mask(acc) };
+  }
+  if (t === 'BANK') {
+    const acct = digits(d.accountNumber), bank = _san(d.bankName, 80), name = _san(d.accountName, 100);
+    if (!bank || !name || !/^\d{6,20}$/.test(acct)) throw new HttpsError('invalid-argument', 'Enter the bank, account name and account number.');
+    return { type: t, rail: 'manual', bankName: bank, bankCode: _san(d.bankCode, 10) || null, accountNumber: acct, accountName: name, display: bank + ' ' + _mask(acct) };
+  }
+  throw new HttpsError('invalid-argument', 'Destination must be MPESA, BANK, TILL or PAYBILL.');
+}
+function _dsbRow(id, x) {
+  const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : null);
+  return { id, status: x.status, amount: x.amount, currency: 'KES', purpose: x.description || '', beneficiaryName: x.beneficiaryName,
+    destination: (x.destination && x.destination.display) || (x.beneficiaryPhone ? 'M-PESA ' + _mask(x.beneficiaryPhone) : null),
+    destinationType: (x.destination && x.destination.type) || 'MPESA', rail: (x.destination && x.destination.rail) || 'intasend_b2c',
+    grantId: x.grantId || null, campaignId: x.campaignId || null, paymentRef: x.paymentRef || null, trackingId: x.trackingId || null,
+    initiatedBy: x.initiatedBy, approvedBy: x.approvedBy || null, authorizedBy: x.authorizedBy || null, confirmedBy: x.confirmedBy || null,
+    failureReason: x.failureReason || null, initiatedAt: ms(x.initiatedAt), completedAt: ms(x.completedAt) };
+}
+async function _dsbAudit(txn, ref, entry) {
+  txn.update(ref, { auditLog: admin.firestore.FieldValue.arrayUnion({ ...entry, at: new Date().toISOString() }), updatedAt: _now() });
+  txn.set(fdb().collection('adminActions').doc(), { type: 'foundation_disbursement', disbursementId: ref.id, ...entry, createdAt: _now() });
+}
+/* Release a reservation and (only on success) debit the ledger — one transaction, guarded by status. */
+async function _settle(ref, from, outcome, extra) {
+  return fdb().runTransaction(async (txn) => {
+    const snap = await txn.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Disbursement not found.');
+    const d = snap.data();
+    if (!from.includes(d.status)) return { already: true, status: d.status };
+    const balRef = fdb().collection('impactBalance').doc('current');
+    if (outcome === 'completed') {
+      await _writeLedgerEntry(txn, {
+        type: 'disbursement', debit: d.amount, credit: 0, uid: d.initiatedBy, campaignId: d.campaignId,
+        paymentRef: extra.paymentRef || d.trackingId || null,
+        description: 'Disbursement to ' + d.beneficiaryName + ' (' + ((d.destination && d.destination.display) || 'M-PESA') + ') — ' + (d.description || ''),
+        meta: { disbursementId: ref.id, rail: (d.destination && d.destination.rail) || 'intasend_b2c' },
+      });
+    }
+    txn.set(balRef, { reservedKES: _incr(-d.amount), lastUpdated: _now() }, { merge: true });
+    if (d.grantId && outcome !== 'completed') txn.set(fdb().collection('impactGrants').doc(d.grantId), { committedKES: _incr(-d.amount) }, { merge: true });
+    if (d.grantId && outcome === 'completed') txn.set(fdb().collection('impactGrants').doc(d.grantId), { disbursedKES: _incr(d.amount), committedKES: _incr(-d.amount) }, { merge: true });
+    txn.update(ref, { status: outcome, ...(outcome === 'completed' ? { completedAt: _now() } : { failedAt: _now() }), ...extra });
+    await _dsbAudit(txn, ref, { action: outcome, by: extra.settledBy || 'system', note: extra.failureReason || null });
+    return { already: false, status: outcome };
+  });
+}
+
 exports.impactInitiateDisbursement = onCall(
   { timeoutSeconds: 20, enforceAppCheck: true },
   async (request) => {
     if (!_isAdmin(request.auth)) throw new HttpsError('permission-denied', 'Admin only.');
     const uid = request.auth.uid;
-    const { campaignId, grantId, beneficiaryPhone, beneficiaryName, amount, description } = request.data || {};
-
-    const amt = Math.round(Number(amount) || 0);
-    if (amt < 100) throw new HttpsError('invalid-argument', 'Minimum disbursement KES 100.');
-    if (!beneficiaryPhone || !beneficiaryName) throw new HttpsError('invalid-argument', 'Beneficiary details required.');
-
-    /* Check Foundation balance */
-    const balSnap = await fdb().collection('impactBalance').doc('current').get();
-    const available = balSnap.exists ? (balSnap.data().balance || 0) : 0;
-    if (amt > available) throw new HttpsError('failed-precondition', `Insufficient Foundation balance. Available: KES ${available.toLocaleString()}.`);
-
-    const ref = fdb().collection('impactDisbursements').doc();
-    await ref.set({
-      id: ref.id, campaignId: campaignId || null, grantId: grantId || null,
-      beneficiaryPhone: _san(beneficiaryPhone, 20),
-      beneficiaryName:  _san(beneficiaryName, 100),
-      amount: amt, description: _san(description, 500) || '',
-      status:           'pending_approval',
-      initiatedBy:      uid, initiatedAt:  _now(),
-      approvedBy:       null, approvedAt:   null,
-      authorizedBy:     null, authorizedAt: null,
-      executedAt:       null, paymentRef:   null,
-      auditLog: [{ action: 'initiated', by: uid, at: new Date().toISOString(), note: 'Disbursement initiated' }],
+    const { campaignId, grantId, beneficiaryName, amount, description, requestId } = request.data || {};
+    if (typeof requestId !== 'string' || !DSB_UUID_RE.test(requestId)) throw new HttpsError('invalid-argument', 'A valid requestId (UUID v4) is required.');
+    const amt = Math.round(Number(amount));
+    if (!Number.isFinite(amt) || amt < 100) throw new HttpsError('invalid-argument', 'Minimum disbursement KES 100.');
+    if (amt > 1000000) throw new HttpsError('invalid-argument', 'Maximum single disbursement KES 1,000,000.');
+    const name = _san(beneficiaryName, 100);
+    if (!name) throw new HttpsError('invalid-argument', 'Beneficiary name required.');
+    const purpose = _san(description, 500);
+    if (!purpose) throw new HttpsError('invalid-argument', 'Say what this support is for.');
+    /* back-compat: a bare beneficiaryPhone means M-PESA */
+    const data = request.data || {};
+    const dest = _destination(data.destinationType || (data.beneficiaryPhone ? 'MPESA' : ''), data.destination || { phone: data.beneficiaryPhone });
+    const ref = fdb().collection('impactDisbursements').doc('DSB_' + requestId.toLowerCase());
+    let existing = null;
+    await fdb().runTransaction(async (txn) => {
+      const cur = await txn.get(ref);
+      if (cur.exists) { existing = cur.data(); return; }
+      const balSnap = await txn.get(fdb().collection('impactBalance').doc('current'));
+      const bal = balSnap.exists ? balSnap.data() : {};
+      const available = (bal.balance || 0) - (bal.reservedKES || 0);
+      if (amt > available) throw new HttpsError('failed-precondition', 'Insufficient available Foundation funds. Available: KES ' + Math.max(0, available).toLocaleString() + '.');
+      if (grantId) {
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(String(grantId))) throw new HttpsError('invalid-argument', 'Invalid grant.');
+        const gRef = fdb().collection('impactGrants').doc(String(grantId));
+        const g = await txn.get(gRef);
+        if (!g.exists || g.data().status !== 'approved') throw new HttpsError('failed-precondition', 'The grant is not approved.');
+        const left = (g.data().approvedAmount || 0) - (g.data().disbursedKES || 0) - (g.data().committedKES || 0);
+        if (amt > left) throw new HttpsError('failed-precondition', 'This exceeds what is left on the approved grant (KES ' + Math.max(0, left).toLocaleString() + ').');
+        txn.set(gRef, { committedKES: _incr(amt) }, { merge: true });
+      }
+      txn.create(ref, {
+        id: ref.id, campaignId: campaignId ? _san(campaignId, 128) : null, grantId: grantId ? String(grantId) : null,
+        beneficiaryName: name, destination: dest, amount: amt, currency: 'KES', description: purpose,
+        status: 'pending_approval', initiatedBy: uid, initiatedAt: _now(),
+        approvedBy: null, authorizedBy: null, confirmedBy: null, paymentRef: null, trackingId: null,
+        auditLog: [{ action: 'initiated', by: uid, at: new Date().toISOString() }], createdAt: _now(), updatedAt: _now(),
+      });
+      txn.set(fdb().collection('adminActions').doc(), { type: 'foundation_disbursement', disbursementId: ref.id, action: 'initiated', by: uid, amount: amt, createdAt: _now() });
     });
-
-    return { ok: true, disbursementId: ref.id };
+    if (existing) return { ok: true, disbursementId: ref.id, status: existing.status, already: true };
+    return { ok: true, disbursementId: ref.id, status: 'pending_approval' };
   }
 );
 
-/* ══════════════════════════════════════════════════════════
-   13. impactApproveDisbursement — Level 2: approve
-   Must be a DIFFERENT admin from the initiator
-══════════════════════════════════════════════════════════ */
 exports.impactApproveDisbursement = onCall(
   { timeoutSeconds: 20, enforceAppCheck: true },
   async (request) => {
     if (!_isAdmin(request.auth)) throw new HttpsError('permission-denied', 'Admin only.');
     const uid = request.auth.uid;
-    const { disbursementId } = request.data || {};
-    if (!disbursementId) throw new HttpsError('invalid-argument', 'disbursementId required.');
-
-    const ref  = fdb().collection('impactDisbursements').doc(disbursementId);
-    const snap = await ref.get();
-    if (!snap.exists) throw new HttpsError('not-found', 'Disbursement not found.');
-    const d = snap.data();
-
-    if (d.status !== 'pending_approval') throw new HttpsError('failed-precondition', 'Disbursement not in pending approval state.');
-    if (d.initiatedBy === uid) throw new HttpsError('permission-denied', 'Approver must be different from initiator.');
-
-    await ref.update({
-      status: 'pending_authorization', approvedBy: uid, approvedAt: _now(),
-      auditLog: admin.firestore.FieldValue.arrayUnion({ action: 'approved', by: uid, at: new Date().toISOString() }),
+    const id = String((request.data || {}).disbursementId || '');
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw new HttpsError('invalid-argument', 'disbursementId required.');
+    const ref = fdb().collection('impactDisbursements').doc(id);
+    await fdb().runTransaction(async (txn) => {
+      const snap = await txn.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'Disbursement not found.');
+      const d = snap.data();
+      if (d.status !== 'pending_approval') throw new HttpsError('failed-precondition', 'Disbursement not in pending approval state.');
+      if (d.initiatedBy === uid) throw new HttpsError('permission-denied', 'Approver must be different from initiator.');
+      txn.update(ref, { status: 'pending_authorization', approvedBy: uid, approvedAt: _now() });
+      await _dsbAudit(txn, ref, { action: 'approved', by: uid });
     });
-
-    return { ok: true };
+    return { ok: true, status: 'pending_authorization' };
   }
 );
 
-/* ══════════════════════════════════════════════════════════
-   14. impactAuthorizeDisbursement — Level 3: final auth + execute payout
-   Requires superAdmin. Executes the IntaSend B2C payout.
-══════════════════════════════════════════════════════════ */
 exports.impactAuthorizeDisbursement = onCall(
   { timeoutSeconds: 60, enforceAppCheck: true, secrets: [INTASEND_PRIVATE_KEY] },
   async (request) => {
-    const isSuperAdmin = request.auth?.token?.superAdmin === true || request.auth?.token?.role === 'superAdmin';
-    if (!isSuperAdmin) throw new HttpsError('permission-denied', 'Super admin authorization required.');
+    if (!_isSuperAdmin(request.auth)) throw new HttpsError('permission-denied', 'Super admin authorization required.');
     const uid = request.auth.uid;
-    const { disbursementId } = request.data || {};
-    if (!disbursementId) throw new HttpsError('invalid-argument', 'disbursementId required.');
+    const id = String((request.data || {}).disbursementId || '');
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw new HttpsError('invalid-argument', 'disbursementId required.');
+    const ref = fdb().collection('impactDisbursements').doc(id);
+    /* CLAIM: pending_authorization → processing + reserve, atomically. A second call finds 'processing'. */
+    const d = await fdb().runTransaction(async (txn) => {
+      const snap = await txn.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'Disbursement not found.');
+      const x = snap.data();
+      if (x.status !== 'pending_authorization') throw new HttpsError('failed-precondition', 'Disbursement is not awaiting authorization (status: ' + x.status + ').');
+      if (x.approvedBy === uid || x.initiatedBy === uid) throw new HttpsError('permission-denied', 'The authorizer must differ from the initiator and the approver.');
+      const balRef = fdb().collection('impactBalance').doc('current');
+      const b = await txn.get(balRef);
+      const bal = b.exists ? b.data() : {};
+      const available = (bal.balance || 0) - (bal.reservedKES || 0);
+      if (x.amount > available) throw new HttpsError('failed-precondition', 'Insufficient available Foundation funds now (KES ' + Math.max(0, available).toLocaleString() + ').');
+      txn.set(balRef, { reservedKES: _incr(x.amount), lastUpdated: _now() }, { merge: true });
+      txn.update(ref, { status: 'processing', authorizedBy: uid, authorizedAt: _now() });
+      await _dsbAudit(txn, ref, { action: 'authorized', by: uid });
+      return x;
+    });
+    const rail = (d.destination && d.destination.rail) || 'intasend_b2c';
+    if (rail !== 'intasend_b2c') {
+      return { ok: true, status: 'processing', rail, next: 'Pay outside SOKONI, then record the provider reference for a second admin to confirm.' };
+    }
+    const phone = (d.destination && d.destination.phone) || _phone(d.beneficiaryPhone);
+    let res;
+    try {
+      res = await require('./finos-utils').intasendB2C(INTASEND_PRIVATE_KEY.value(), { phone, amountKES: d.amount, reference: id, remarks: 'SOKONI Foundation support' });
+    } catch (e) {
+      await _settle(ref, ['processing'], 'failed', { failureReason: 'Gateway refused: ' + _san((e.gateway && e.gateway.code) || e.message, 120), settledBy: uid });
+      throw new HttpsError('unavailable', 'IntaSend did not accept the payout. Nothing was sent and the funds were released.');
+    }
+    const trackingId = (res && (res.tracking_id || res.file_id || res.invoice_id)) || null;
+    await ref.update({ trackingId, gatewayAcceptedAt: _now() });
+    /* NOT completed: IntaSend accepted the request. Completion is confirmed by impactRefreshDisbursementStatus. */
+    return { ok: true, status: 'processing', rail, trackingId };
+  }
+);
 
-    const ref  = fdb().collection('impactDisbursements').doc(disbursementId);
+/* 14b. Confirm an M-PESA payout with IntaSend (send-money status). Completed → debit + release; Failed →
+   release. Anything else stays processing. The status contract (POST /api/v1/send-money/status/ with
+   tracking_id, per the intasend-node SDK) is UNPROVEN against the live account; an unreadable answer
+   leaves the payout processing, never completed. */
+exports.impactRefreshDisbursementStatus = onCall(
+  { timeoutSeconds: 30, enforceAppCheck: true, secrets: [INTASEND_PRIVATE_KEY] },
+  async (request) => {
+    if (!_isAdmin(request.auth)) throw new HttpsError('permission-denied', 'Admin only.');
+    const id = String((request.data || {}).disbursementId || '');
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw new HttpsError('invalid-argument', 'disbursementId required.');
+    const ref = fdb().collection('impactDisbursements').doc(id);
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'Disbursement not found.');
-    const disburse = snap.data();
-
-    if (disburse.status !== 'pending_authorization') throw new HttpsError('failed-precondition', 'Disbursement not approved yet.');
-    if (disburse.approvedBy === uid) throw new HttpsError('permission-denied', 'Final authorizer must differ from approver.');
-
-    /* Execute M-Pesa B2C */
-    const privKey = INTASEND_PRIVATE_KEY.value();
-    const isSandbox = process.env.INTASEND_SANDBOX === 'true';
-    const base = isSandbox ? 'https://sandbox.intasend.com' : 'https://payment.intasend.com';
-    const cleanPhone = _phone(disburse.beneficiaryPhone);
-
-    const payRes = await new Promise((resolve, reject) => {
-      const payload = JSON.stringify({
-        currency: 'KES', provider: 'M-PESA',
-        amount:   String(disburse.amount),
-        phone_number: cleanPhone,
-        name:     disburse.beneficiaryName,
-        account:  disbursementId,
-        narrative: disburse.description || 'SOKONI Impact Disbursement',
-      });
-      const req = require('https').request({
-        hostname: isSandbox ? 'sandbox.intasend.com' : 'payment.intasend.com',
-        path:    '/api/v1/payment/mpesa-b2c/initiate/',
-        method:  'POST',
-        headers: { 'Authorization': `Bearer ${privKey}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
-      }, res => {
-        let body = '';
-        res.on('data', c => { body += c; });
-        res.on('end', () => { try { resolve({ status: res.statusCode, data: JSON.parse(body) }); } catch(_) { reject(new Error('Parse error')); } });
-      });
-      req.on('error', reject);
-      req.write(payload);
-      req.end();
-    });
-
-    if (payRes.status !== 200 && payRes.status !== 201) {
-      throw new HttpsError('internal', payRes.data?.detail || 'Payout failed.');
+    const d = snap.data();
+    if (d.status !== 'processing' || !d.trackingId) return { ok: true, status: d.status, checked: false };
+    const base = process.env.INTASEND_SANDBOX === 'true' ? 'https://sandbox.intasend.com' : 'https://payment.intasend.com';
+    let body = null;
+    try {
+      const r = await fetch(base + '/api/v1/send-money/status/', { method: 'POST', headers: { Authorization: 'Bearer ' + INTASEND_PRIVATE_KEY.value(), 'Content-Type': 'application/json' }, body: JSON.stringify({ tracking_id: d.trackingId }) });
+      body = r.ok ? await r.json() : null;
+    } catch (_) { body = null; }
+    if (!body) return { ok: true, status: 'processing', checked: false, note: 'IntaSend status could not be read; still processing.' };
+    const tx = Array.isArray(body.transactions) ? body.transactions[0] || {} : {};
+    const st = String(tx.status || body.status || '').toLowerCase();
+    if (/^(completed|successful|success)$/.test(st)) {
+      const r = await _settle(ref, ['processing'], 'completed', { paymentRef: _san(tx.transaction_id || tx.mpesa_reference || d.trackingId, 80), settledBy: request.auth.uid });
+      return { ok: true, status: r.status, checked: true };
     }
+    if (/^(failed|cancelled|canceled|rejected|reversed)$/.test(st)) {
+      const r = await _settle(ref, ['processing'], 'failed', { failureReason: 'IntaSend reported ' + st, settledBy: request.auth.uid });
+      return { ok: true, status: r.status, checked: true };
+    }
+    return { ok: true, status: 'processing', checked: true, providerStatus: _san(st, 40) };
+  }
+);
 
-    const payRef = payRes.data?.tracking_id || payRes.data?.id || disbursementId;
-
-    /* Write to ledger + mark disbursement complete */
-    await fdb().runTransaction(async txn => {
-      await _writeLedgerEntry(txn, {
-        type: 'disbursement', debit: disburse.amount, credit: 0,
-        uid:         disburse.initiatedBy,
-        campaignId:  disburse.campaignId,
-        paymentRef:  payRef,
-        description: `Disbursement to ${disburse.beneficiaryName} (${cleanPhone}) — ${disburse.description}`,
+/* 14c. Manual rails (BANK / TILL / PAYBILL). Admin A records that they paid and the provider reference;
+   admin B (different from A) confirms → ledger debit. Either may mark it failed (releases funds). */
+exports.impactRecordManualDisbursement = onCall(
+  { timeoutSeconds: 20, enforceAppCheck: true },
+  async (request) => {
+    if (!_isAdmin(request.auth)) throw new HttpsError('permission-denied', 'Admin only.');
+    const uid = request.auth.uid;
+    const { disbursementId, action, providerReference, note } = request.data || {};
+    const id = String(disbursementId || '');
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw new HttpsError('invalid-argument', 'disbursementId required.');
+    const ref = fdb().collection('impactDisbursements').doc(id);
+    if (action === 'record') {
+      const refNo = _san(providerReference, 80);
+      if (!refNo || refNo.length < 4) throw new HttpsError('invalid-argument', 'Enter the bank / M-PESA reference of the payment you made.');
+      await fdb().runTransaction(async (txn) => {
+        const s = await txn.get(ref);
+        if (!s.exists) throw new HttpsError('not-found', 'Disbursement not found.');
+        const d = s.data();
+        if ((d.destination && d.destination.rail) !== 'manual') throw new HttpsError('failed-precondition', 'This payout goes through IntaSend, not manually.');
+        if (d.status !== 'processing') throw new HttpsError('failed-precondition', 'Only an authorized payout can be recorded.');
+        txn.update(ref, { status: 'awaiting_confirmation', paymentRef: refNo, recordedBy: uid, recordedAt: _now() });
+        await _dsbAudit(txn, ref, { action: 'recorded', by: uid, ref: refNo });
       });
+      return { ok: true, status: 'awaiting_confirmation' };
+    }
+    if (action === 'confirm') {
+      const s = await ref.get();
+      if (!s.exists) throw new HttpsError('not-found', 'Disbursement not found.');
+      if (s.data().recordedBy === uid) throw new HttpsError('permission-denied', 'A different admin must confirm the payment you recorded.');
+      const r = await _settle(ref, ['awaiting_confirmation'], 'completed', { confirmedBy: uid, settledBy: uid });
+      if (r.already) throw new HttpsError('failed-precondition', 'Nothing awaiting confirmation (status: ' + r.status + ').');
+      return { ok: true, status: 'completed' };
+    }
+    if (action === 'fail') {
+      const why = _san(note, 300);
+      if (!why) throw new HttpsError('invalid-argument', 'Say why it failed.');
+      const r = await _settle(ref, ['processing', 'awaiting_confirmation'], 'failed', { failureReason: why, settledBy: uid });
+      if (r.already) throw new HttpsError('failed-precondition', 'This payout cannot be marked failed (status: ' + r.status + ').');
+      return { ok: true, status: 'failed' };
+    }
+    throw new HttpsError('invalid-argument', 'action must be record, confirm or fail.');
+  }
+);
 
-      txn.update(ref, {
-        status: 'completed', authorizedBy: uid, authorizedAt: _now(),
-        executedAt: _now(), paymentRef: payRef,
-        auditLog: admin.firestore.FieldValue.arrayUnion({
-          action: 'executed', by: uid, at: new Date().toISOString(), payRef,
-        }),
-      });
+/* 14d. Cancel before money is committed (no reservation exists yet). */
+exports.impactCancelDisbursement = onCall(
+  { timeoutSeconds: 20, enforceAppCheck: true },
+  async (request) => {
+    if (!_isAdmin(request.auth)) throw new HttpsError('permission-denied', 'Admin only.');
+    const id = String((request.data || {}).disbursementId || '');
+    const why = _san((request.data || {}).note, 300);
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(id) || !why) throw new HttpsError('invalid-argument', 'disbursementId and a reason are required.');
+    const ref = fdb().collection('impactDisbursements').doc(id);
+    await fdb().runTransaction(async (txn) => {
+      const s = await txn.get(ref);
+      if (!s.exists) throw new HttpsError('not-found', 'Disbursement not found.');
+      const d = s.data();
+      if (!['pending_approval', 'pending_authorization'].includes(d.status)) throw new HttpsError('failed-precondition', 'Only a payout that has not been authorized can be cancelled.');
+      if (d.grantId) txn.set(fdb().collection('impactGrants').doc(d.grantId), { committedKES: _incr(-d.amount) }, { merge: true });
+      txn.update(ref, { status: 'cancelled', cancelledBy: request.auth.uid, cancelledAt: _now(), failureReason: why });
+      await _dsbAudit(txn, ref, { action: 'cancelled', by: request.auth.uid, note: why });
     });
+    return { ok: true, status: 'cancelled' };
+  }
+);
 
-    return { ok: true, paymentRef: payRef };
+/* 14e. Admin views — donations and disbursements, bounded, donor contact never returned. */
+exports.impactAdminFoundationData = onCall(
+  { timeoutSeconds: 30, enforceAppCheck: true },
+  async (request) => {
+    if (!_isAdmin(request.auth)) throw new HttpsError('permission-denied', 'Admin only.');
+    const { view, status, cursor } = request.data || {};
+    const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : null);
+    const count = async (q) => { try { return (await q.count().get()).data().count; } catch (_) { return null; } };
+    if (view === 'summary') {
+      const don = fdb().collection('foundationDonations'), dsb = fdb().collection('impactDisbursements');
+      const [balSnap, completed, pledged, failed, review, refunded, dPending, dAuth, dProc, dConf, dDone, dFail] = await Promise.all([
+        fdb().collection('impactBalance').doc('current').get().catch(() => null),
+        count(don.where('status', '==', 'completed')), count(don.where('status', '==', 'pledged')), count(don.where('status', '==', 'failed')),
+        count(don.where('status', '==', 'review')), count(don.where('status', '==', 'refunded')),
+        count(dsb.where('status', '==', 'pending_approval')), count(dsb.where('status', '==', 'pending_authorization')),
+        count(dsb.where('status', '==', 'processing')), count(dsb.where('status', '==', 'awaiting_confirmation')),
+        count(dsb.where('status', '==', 'completed')), count(dsb.where('status', '==', 'failed')),
+      ]);
+      const b = balSnap && balSnap.exists ? balSnap.data() : null;
+      return { ok: true,
+        balance: b ? { balance: b.balance ?? null, reserved: b.reservedKES ?? 0, available: b.balance == null ? null : b.balance - (b.reservedKES || 0), totalReceived: b.totalReceived ?? null, totalDisbursed: b.totalDisbursed ?? null, totalFees: b.totalFees ?? null } : null,
+        donations: { completed, pledged, failed, review, refunded },
+        disbursements: { pendingApproval: dPending, pendingAuthorization: dAuth, processing: dProc, awaitingConfirmation: dConf, completed: dDone, failed: dFail } };
+    }
+    const size = 50;
+    if (view === 'donations') {
+      const allowed = ['pledged', 'completed', 'failed', 'review', 'refunded'];
+      let q = fdb().collection('foundationDonations');
+      if (status) { if (!allowed.includes(status)) throw new HttpsError('invalid-argument', 'Invalid status.'); q = q.where('status', '==', status); }
+      q = q.orderBy('createdAt', 'desc');
+      if (cursor) { const c = await fdb().collection('foundationDonations').doc(String(cursor)).get(); if (c.exists) q = q.startAfter(c); }
+      const s = await q.limit(size).get();
+      return { ok: true, next: s.docs.length === size ? s.docs[s.docs.length - 1].id : null, rows: s.docs.map((x) => { const d = x.data(); return {
+        id: x.id, status: d.status, amount: d.amount, grossKES: d.grossKES ?? null, feeKES: d.feeKES ?? null, netKES: d.netKES ?? null, currency: d.currency || 'KES',
+        destination: d.destination || null, programmeId: d.programmeId || null, purpose: d.purpose || null, method: d.method || null,
+        donor: d.anonymous ? 'Anonymous' : (d.donorName || 'SOKONI User'), receiptId: d.receiptId || null, providerReference: d.providerReference || null,
+        orderId: d.orderId || null, createdAt: ms(d.createdAt), completedAt: ms(d.completedAt) }; }) };
+    }
+    if (view === 'disbursements') {
+      const allowed = ['pending_approval', 'pending_authorization', 'processing', 'awaiting_confirmation', 'completed', 'failed', 'cancelled'];
+      let q = fdb().collection('impactDisbursements');
+      if (status) { if (!allowed.includes(status)) throw new HttpsError('invalid-argument', 'Invalid status.'); q = q.where('status', '==', status); }
+      q = q.orderBy('initiatedAt', 'desc');
+      if (cursor) { const c = await fdb().collection('impactDisbursements').doc(String(cursor)).get(); if (c.exists) q = q.startAfter(c); }
+      const s = await q.limit(size).get();
+      return { ok: true, next: s.docs.length === size ? s.docs[s.docs.length - 1].id : null, rows: s.docs.map((x) => _dsbRow(x.id, x.data())) };
+    }
+    throw new HttpsError('invalid-argument', 'view must be summary, donations or disbursements.');
   }
 );
 
