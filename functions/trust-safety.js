@@ -1,7 +1,7 @@
 'use strict';
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const crypto = require('crypto');
 
 /* ── Severity inference ─────────────────────────────────────────────────── */
@@ -102,6 +102,7 @@ const REPORT_ACTIONS = Object.freeze({
   request_changes: 'changes_requested',
   archive: 'archived',
   remove: 'removed',
+  reopen: 'pending',                /* community C3: explicit, noted, audited — the ONLY way out of a closed decision */
 });
 /* stored status a report may move FROM, per target status. Anything else is refused (failed-precondition). */
 const REPORT_TRANSITIONS = Object.freeze({
@@ -111,10 +112,80 @@ const REPORT_TRANSITIONS = Object.freeze({
   changes_requested: ['pending', 'escalated'],
   archived:          ['pending', 'escalated', 'actioned', 'dismissed', 'changes_requested'],
   removed:           ['pending', 'escalated', 'actioned', 'dismissed', 'changes_requested', 'archived'],
+  /* community C3: a CLOSED decision is changed only by an explicit, noted, audited `reopen` — never silently */
+  pending:           ['actioned', 'dismissed', 'archived'],
 });
 function _stateOf(status) {
   return REPORT_STATE[status || 'pending'] || null;   /* an unknown stored status is shown as unknown, never guessed */
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   THE MODERATION QUEUE (community C3, 2026-10-01) — the SAME `reports` collection, decided through the SAME callables.
+   No second collection, no second state machine: the queue status below is DERIVED from the stored status plus the
+   one new field `assignedTo` (the reviewer who took the report under review).
+
+   stored status (+ assignedTo)      → queueStatus         → seller sees            → reporter is told
+   pending, nobody assigned          → open                → report_received        → (nothing new)
+   pending, assignedTo set           → under_review        → under_review           → (nothing new)
+   escalated                         → escalated           → under_review           → (nothing new)
+   changes_requested                 → needs_information   → changes_requested      → (nothing new)
+   actioned                          → upheld              → listing_action_taken (taken down) | report_upheld → resolved
+   dismissed                         → dismissed           → report_dismissed       → resolved
+   archived                          → archived            → closed                 → —
+   removed                           → removed             → (not shown)            → —
+   ═════════════════════════════════════════════════════════════════════════ */
+const OPEN_STATUSES = Object.freeze(['pending', 'escalated', 'changes_requested']);
+const QUEUE_STATUS_STORED = Object.freeze({
+  active: OPEN_STATUSES,                 /* every undecided report (open + under review + escalated + needs information) */
+  open: ['pending'], under_review: ['pending'], escalated: ['escalated'], needs_information: ['changes_requested'],
+  upheld: ['actioned'], dismissed: ['dismissed'], archived: ['archived'], removed: ['removed'],
+});
+function _queueStatusOf(r) {
+  const s = (r && r.status) || 'pending';
+  if (s === 'pending') return r.assignedTo ? 'under_review' : 'open';
+  return ({ escalated: 'escalated', changes_requested: 'needs_information', actioned: 'upheld', dismissed: 'dismissed',
+    archived: 'archived', removed: 'removed' })[s] || null;
+}
+function _sellerStatusOf(r) {
+  const s = (r && r.status) || 'pending';
+  if (s === 'pending') return r.assignedTo ? 'under_review' : 'report_received';
+  if (s === 'escalated') return 'under_review';                 /* escalation is internal — the seller is not told */
+  if (s === 'actioned') return r.productHidden === true ? 'listing_action_taken' : 'report_upheld';
+  return ({ changes_requested: 'changes_requested', dismissed: 'report_dismissed', archived: 'closed' })[s] || null;
+}
+/* Assignment is not a status change: it never moves `status`, and is offered only while a report is undecided. */
+const ASSIGN_ACTIONS = Object.freeze(['claim', 'unclaim']);
+
+/* TYPED TARGETS. One queue for every content type: a target type is a registry entry, not a new system. A report on a
+   type that is not ENABLED here is refused by every moderation operation (failed-precondition). Enforcement exists for
+   product listings only (isVisible:false + moderationHold); the others are decided and recorded without enforcement,
+   as in C2. Future types are listed DISABLED so the queue can take them later without being rewritten. */
+const MODERATION_TARGETS = Object.freeze({
+  product:            { enabled: true,  enforcement: 'listing_visibility', label: 'Product / listing' },
+  user:               { enabled: true,  enforcement: null,                 label: 'Profile' },
+  business:           { enabled: true,  enforcement: null,                 label: 'Shop / business' },
+  message:            { enabled: true,  enforcement: null,                 label: 'Message' },
+  review:             { enabled: true,  enforcement: null,                 label: 'Review' },
+  comment:            { enabled: false, enforcement: null,                 label: 'Comment' },
+  media:              { enabled: false, enforcement: null,                 label: 'Media' },
+  story:              { enabled: false, enforcement: null,                 label: 'Story' },
+  foundation_content: { enabled: false, enforcement: null,                 label: 'Foundation content' },
+});
+function _targetOf(entityType) {
+  const t = _normEntityType(entityType);
+  const m = MODERATION_TARGETS[t];
+  return { type: t, supported: !!(m && m.enabled && REPORT_ENTITY_TYPES.includes(t)), enforcement: (m && m.enforcement) || null };
+}
+/* Seller response / appeal: no appeal mechanism exists on the report authority. This hook says so explicitly, so no
+   screen implies that a dismissal or a take-down is the end of the road — the route is SOKONI Support. */
+const SELLER_RESPONSE = Object.freeze({ supported: false, route: 'support', href: 'support.html' });
+
+function _safeId(v, max) {
+  const s = String(v == null ? '' : v).trim();
+  return s && s.length <= (max || 128) && !/[/]/.test(s) && s !== '.' && s !== '..' ? s : null;
+}
+function _actorRole(req) { return req.auth && req.auth.token && req.auth.token.superAdmin ? 'superAdmin' : 'admin'; }
+function _auditId(reportId, revision) { return `rpt_${_opaqueRef(reportId)}_r${revision}`; }
 function _iso(ts) {
   return ts && typeof ts.toMillis === 'function' ? new Date(ts.toMillis()).toISOString() : null;
 }
@@ -235,146 +306,575 @@ exports.tsReportContent = onCall(OPT_REPORT, async (req) => {
 });
 
 /* ─────────────────────────────────────────────────────────────────────────
-   2. tsGetReports — admin: list reports with status filter
+   2. tsGetReports — admin: THE MODERATION QUEUE (server-filtered, bounded, paginated)
                      seller: scope:'mine' — reports on THEIR OWN products only
+
+   Indexes (measured 2026-10-01, read-only `gcloud firestore indexes composite list`: 416 live composite indexes,
+   ZERO on `reports`). So the queue uses ONLY what single-field indexes serve: equality filters (status / reasonCode /
+   context.sellerUid / context.shopId / entityId / assignedTo — merged by Firestore without a composite index), an
+   implicit document-id order, and a document-id cursor. Derived filters (open vs under review, date range when combined,
+   entity type, severity) are applied by the SERVER to the scanned window; the page says how many it scanned and
+   whether more exist. A date range alone is a real range query on createdAt (single-field). Global newest-first across
+   pages needs the composite (status ASC, createdAt DESC) — written up as a proposal, NOT added (CHANGELOG C3).
 ──────────────────────────────────────────────────────────────────────────── */
+const SEVERITY_RANK = { critical: 4, high: 3, medium: 2, low: 1 };
+const QUEUE_SORTS = ['newest', 'oldest', 'severity', 'reports'];
+
+function _adminRow(d) {
+  const r = d.data() || {};
+  return Object.assign({ id: d.id }, r, {
+    ref: _opaqueRef(d.id),
+    moderationState: _stateOf(r.status), queueStatus: _queueStatusOf(r),
+    target: _targetOf(r.entityType),
+    createdAtIso: _iso(r.createdAt), reviewedAtIso: _iso(r.reviewedAt), assignedAtIso: _iso(r.assignedAt),
+    lastActionAtIso: _iso(r.lastActionAt) || _iso(r.reviewedAt) || _iso(r.assignedAt) || null,
+    revision: Number.isInteger(r.revision) ? r.revision : 0,
+  });
+}
+function _msOf(row) { return Date.parse(row.createdAtIso) || 0; }
+
 exports.tsGetReports = onCall(OPT, async (req) => {
   const data = req.data || {};
   if (data.scope === 'mine') return _myListingReports(req);
   _requireAdmin(req);
-  const { status, state, entityType, severity, limit: lim } = data;
-
   const db = getFirestore();
-  let q = db.collection('reports');
-  if (state) {
-    /* a filter in the SHARED vocabulary → the stored statuses it covers (REPORT_STATE is the one mapping) */
-    const stored = Object.keys(REPORT_STATE).filter((k) => REPORT_STATE[k] === state);
-    if (!stored.length) throw new HttpsError('invalid-argument', 'Unknown state.');
-    q = stored.length === 1 ? q.where('status', '==', stored[0]) : q.where('status', 'in', stored);
-  } else if (status) {
-    q = q.where('status', '==', String(status));
-  }
-  q = q.limit(Math.min(Number(lim) || 100, 200));
+  const lim = Math.min(Math.max(Math.floor(Number(data.limit)) || 100, 1), 200);
 
-  const snap = await q.get();
-  let docs = snap.docs.map(d => {
-    const r = d.data() || {};
-    return { id: d.id, ...r, moderationState: _stateOf(r.status), createdAtIso: _iso(r.createdAt), reviewedAtIso: _iso(r.reviewedAt) };
+  /* status: queueStatus (C3) | state (C2 shared vocabulary) | status (stored, historical) */
+  let stored = null; const post = [];
+  if (data.queueStatus) {
+    stored = QUEUE_STATUS_STORED[String(data.queueStatus)];
+    if (!stored) throw new HttpsError('invalid-argument', 'Unknown queue status.');
+    if (data.queueStatus === 'open' || data.queueStatus === 'under_review') post.push((r) => r.queueStatus === data.queueStatus);
+  } else if (data.state) {
+    stored = Object.keys(REPORT_STATE).filter((k) => REPORT_STATE[k] === data.state);
+    if (!stored.length) throw new HttpsError('invalid-argument', 'Unknown state.');
+  } else if (data.status) {
+    stored = [String(data.status).slice(0, 40)];
+  }
+  if (data.escalated === true) stored = ['escalated'];
+
+  /* equality filters on stored fields — every value is resolved/validated here; nothing the client sends is a field name */
+  const eq = [];
+  const addEq = (field, v, label) => {
+    if (v === undefined || v === null || v === '') return;
+    const s = _safeId(v); if (!s) throw new HttpsError('invalid-argument', `Bad ${label} filter.`);
+    eq.push([field, s]);
+  };
+  addEq('reasonCode', data.reason, 'reason');
+  addEq('context.sellerUid', data.seller, 'seller');
+  addEq('context.shopId', data.shop, 'shop');
+  addEq('entityId', data.product, 'product');
+  if (data.assignee) addEq('assignedTo', data.assignee === 'me' ? req.auth.uid : data.assignee, 'reviewer');
+
+  const fromMs = data.from ? Date.parse(String(data.from)) : null;
+  const toMs = data.to ? Date.parse(String(data.to)) : null;
+  if ((data.from && !fromMs) || (data.to && !toMs)) throw new HttpsError('invalid-argument', 'Bad date filter.');
+  const dateOnly = (fromMs || toMs) && !stored && !eq.length;
+
+  let q = db.collection('reports');
+  if (stored) q = stored.length === 1 ? q.where('status', '==', stored[0]) : q.where('status', 'in', stored);
+  for (const [f, v] of eq) q = q.where(f, '==', v);
+  if (dateOnly) {
+    if (fromMs) q = q.where('createdAt', '>=', Timestamp.fromMillis(fromMs));
+    if (toMs) q = q.where('createdAt', '<=', Timestamp.fromMillis(toMs));
+    q = q.orderBy('createdAt', 'desc');
+  } else if (fromMs || toMs) {
+    post.push((r) => { const m = _msOf(r); return (!fromMs || m >= fromMs) && (!toMs || m <= toMs); });
+  }
+  if (data.after) {
+    const after = _safeId(data.after);
+    const cur = after ? await db.collection('reports').doc(after).get() : null;
+    if (!cur || !cur.exists) throw new HttpsError('invalid-argument', 'Bad page cursor.');
+    q = q.startAfter(cur);
+  }
+  const snap = await q.limit(lim).get();
+  let rows = snap.docs.map(_adminRow);
+  if (data.entityType) post.push((r) => _normEntityType(r.entityType) === _normEntityType(data.entityType));
+  if (data.severity) post.push((r) => r.severity === data.severity);
+  for (const f of post) rows = rows.filter(f);
+
+  if (data.facts === true) await _attachFacts(db, rows);
+  const sort = QUEUE_SORTS.includes(data.sort) ? data.sort : 'newest';
+  rows.sort((a, b) => {
+    if (sort === 'severity') {
+      return (SEVERITY_RANK[b.severity] || 0) - (SEVERITY_RANK[a.severity] || 0)
+        || ((b.facts || {}).reportsOnListing || 0) - ((a.facts || {}).reportsOnListing || 0) || _msOf(a) - _msOf(b);
+    }
+    if (sort === 'reports') return ((b.facts || {}).reportsOnListing || 0) - ((a.facts || {}).reportsOnListing || 0) || _msOf(a) - _msOf(b);
+    return sort === 'oldest' ? _msOf(a) - _msOf(b) : _msOf(b) - _msOf(a);
   });
 
-  // In-memory secondary filters — avoids composite indexes
-  if (entityType) docs = docs.filter(d => d.entityType === _normEntityType(entityType));
-  if (severity)   docs = docs.filter(d => d.severity === severity);
-  docs.sort((a, b) => (b.createdAt?.seconds || b.createdAt?._seconds || 0) - (a.createdAt?.seconds || a.createdAt?._seconds || 0));
-
-  return { reports: docs };
+  const out = {
+    reports: rows,
+    page: { limit: lim, scanned: snap.size, hasMore: snap.size === lim, nextCursor: snap.size === lim && snap.docs.length ? snap.docs[snap.docs.length - 1].id : null, sort },
+  };
+  if (data.groupBy === 'listing') out.groups = _groupByListing(rows);
+  return out;
 });
+
+/* PRIORITY FACTS — raw, deterministic facts from existing data; no invented danger score. The queue shows them and
+   sorts on them (severity comes from the server reason catalogue; the rest are counts the server reads). */
+async function _attachFacts(db, rows) {
+  const ents = [...new Set(rows.filter((r) => r.entityId).map((r) => r.entityId))];
+  const sellers = [...new Set(rows.map((r) => (r.context || {}).sellerUid).filter(Boolean))];
+  const count = async (q) => { try { return (await q.count().get()).data().count; } catch (_) { return null; } };   /* unknown stays null, never 0 */
+  const per = {};
+  await Promise.all(ents.map(async (id) => {
+    const base = db.collection('reports').where('entityId', '==', id);
+    const [total, open, upheld] = await Promise.all([count(base), count(base.where('status', 'in', OPEN_STATUSES)), count(base.where('status', '==', 'actioned'))]);
+    per[id] = { total, open, upheld };
+  }));
+  const bySeller = {};
+  await Promise.all(sellers.map(async (s) => {
+    bySeller[s] = await count(db.collection('reports').where('context.sellerUid', '==', s).where('status', '==', 'actioned'));
+  }));
+  const prodIds = [...new Set(rows.filter((r) => _normEntityType(r.entityType) === 'product' && r.entityId).map((r) => r.entityId))].slice(0, 100);
+  const vis = {};
+  if (prodIds.length) {
+    try {
+      const snaps = await db.getAll(...prodIds.map((id) => db.collection('products').doc(id)));
+      snaps.forEach((s) => { const p = s.exists ? (s.data() || {}) : null; vis[s.id] = p ? { visible: p.isVisible !== false, held: !!p.moderationHold } : { visible: null, held: null, missing: true }; });
+    } catch (_) { /* unknown stays unknown */ }
+  }
+  for (const r of rows) {
+    const e = per[r.entityId] || {}; const v = vis[r.entityId] || null;
+    r.facts = {
+      severity: r.severity || null,
+      reportsOnListing: e.total == null ? null : e.total,
+      openOnListing: e.open == null ? null : e.open,
+      upheldOnListing: e.upheld == null ? null : e.upheld,
+      sellerUpheld: (r.context || {}).sellerUid ? (bySeller[r.context.sellerUid] == null ? null : bySeller[r.context.sellerUid]) : null,
+      listingVisible: v ? v.visible : null,
+      listingHeld: v ? v.held : null,
+      listingMissing: !!(v && v.missing),
+    };
+  }
+}
+
+/* 1 listing + N reports: each report keeps its own record; the group only makes the shared target obvious. */
+function _groupByListing(rows) {
+  const g = new Map();
+  for (const r of rows) {
+    const key = _normEntityType(r.entityType) + ':' + (r.entityId || '');
+    if (!g.has(key)) g.set(key, { entityType: _normEntityType(r.entityType), entityId: r.entityId || null,
+      title: (r.context || {}).productName || null, sellerUid: (r.context || {}).sellerUid || null, shopId: (r.context || {}).shopId || null,
+      reportIds: [], openInPage: 0, facts: r.facts || null });
+    const x = g.get(key);
+    x.reportIds.push(r.id);
+    if (OPEN_STATUSES.includes(r.status || 'pending')) x.openInPage++;
+  }
+  return [...g.values()];
+}
 
 /* A SELLER reads reports about THEIR OWN products, filtered by the server on the server-captured context.sellerUid.
    Withheld: who reported (reportedBy), the document id (it embeds the reporter uid), the reporter's free text and
-   evidence. Reports an administrator REMOVED (abusive / bad-faith reports) are not shown. */
+   evidence, the reviewer, internal notes, escalation and the stored status / severity (internal triage). Reports an
+   administrator REMOVED (abusive / bad-faith reports) are not shown. */
 async function _myListingReports(req) {
   const uid = req.auth && req.auth.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
   const snap = await getFirestore().collection('reports').where('context.sellerUid', '==', uid).limit(100).get();
   const reports = snap.docs.map((d) => {
     const r = d.data() || {}; const c = r.context || {};
-    const status = r.status || 'pending';
-    const moderationState = _stateOf(status);
+    const moderationState = _stateOf(r.status || 'pending');
     return {
       ref: _opaqueRef(d.id),
       entityType: r.entityType || null, entityId: r.entityId || null,
       productName: c.productName || null, reasonCode: r.reasonCode || null, reason: r.reason || null,
-      severity: r.severity || null, status, moderationState,
+      moderationState,
+      sellerStatus: _sellerStatusOf(r),
       productHidden: r.productHidden === true,
-      /* the administrator's outcome note is shown once a report is decided — it tells the seller why */
+      /* the administrator's OUTCOME note (written for the seller) is shown once a report is decided — never the
+         internal note */
       outcome: moderationState === 'pending' ? null : (String(r.resolution || '').slice(0, 500) || null),
       createdAt: _iso(r.createdAt),
       decidedAt: _iso(r.reviewedAt),
+      sellerResponse: SELLER_RESPONSE,
     };
   }).filter((x) => x.moderationState !== 'removed')
     .sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
-  return { reports, scope: 'mine' };
+  return { reports, scope: 'mine', sellerResponse: SELLER_RESPONSE };
+}
+
+/* What the CALLER may do to this report NOW — computed by the server, rendered by the console (the UI never invents
+   an action). Mirrors the checks tsReviewReport enforces. */
+function _allowedActions(r, uid, isSuper) {
+  const s = (r && r.status) || 'pending';
+  const t = _targetOf(r && r.entityType);
+  if (!t.supported) return [];
+  const owner = (r && r.assignedTo) || null;
+  const mine = !owner || owner === uid || isSuper;
+  const out = [];
+  if (OPEN_STATUSES.includes(s)) {
+    if (!owner) out.push('claim');
+    else if (owner !== uid && isSuper) out.push('takeover');
+    if (owner && (owner === uid || isSuper)) out.push('unclaim');
+  }
+  if (!mine) return out;
+  for (const [action, to] of Object.entries(REPORT_ACTIONS)) {
+    if (['uphold', 'reject'].includes(action)) continue;                       /* aliases — offered once */
+    if (action === 'escalate' && s === 'escalated') continue;
+    if ((REPORT_TRANSITIONS[to] || []).includes(s)) out.push(action);
+  }
+  if (out.includes('approve') && t.enforcement === 'listing_visibility') out.push('takedown');
+  return out;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   3. tsReviewReport — admin: decide a report on the shared state machine
+   2b. tsGetReportCase — admin: one report, its listing, the other reports on that listing, its history
+──────────────────────────────────────────────────────────────────────────── */
+exports.tsGetReportCase = onCall(OPT, async (req) => {
+  _requireAdmin(req);
+  const reportId = _safeId((req.data || {}).reportId, 300);
+  if (!reportId) throw new HttpsError('invalid-argument', 'reportId is required.');
+  const db = getFirestore();
+  const snap = await db.collection('reports').doc(reportId).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Report not found.');
+  const report = _adminRow(snap);
+  const target = _targetOf(report.entityType);
+  const isSuper = !!req.auth.token.superAdmin;
+
+  let product = null, shop = null;
+  if (target.type === 'product' && report.entityId) {
+    const ps = await db.collection('products').doc(String(report.entityId)).get();
+    if (!ps.exists) product = { exists: false, id: report.entityId };
+    else {
+      const p = ps.data() || {};
+      const imgs = [].concat(Array.isArray(p.images) ? p.images : [], p.image || [], p.imageUrl || [])
+        .map((x) => (x && typeof x === 'object' ? x.url : x)).filter((u) => typeof u === 'string' && /^https:\/\//.test(u)).slice(0, 4);
+      const h = p.moderationHold || null;
+      product = {
+        exists: true, id: ps.id, name: String(p.name || '').slice(0, 160) || null, category: p.category || p.categoryId || null,
+        images: imgs, price: typeof p.price === 'number' ? p.price : null, status: p.status || null,
+        isVisible: p.isVisible !== false, sellerUid: p.sellerUid || p.sellerId || null, shopId: p.shopId || null,
+        moderationHold: h ? { reportId: h.reportId || null, reason: h.reason || null, by: h.by || null, at: _iso(h.at) } : null,
+      };
+      if (product.shopId && _safeId(product.shopId)) {
+        const ss = await db.collection('shops').doc(String(product.shopId)).get();
+        shop = ss.exists ? { id: ss.id, name: String((ss.data() || {}).name || '').slice(0, 120) || null } : { id: product.shopId, name: null, missing: true };
+      }
+    }
+  }
+
+  /* every report on the same target — each its own record (reporter, reason, time, details): never collapsed */
+  const sib = report.entityId ? await db.collection('reports').where('entityId', '==', report.entityId).limit(100).get() : { docs: [] };
+  const reports = sib.docs.map(_adminRow).filter((r) => _normEntityType(r.entityType) === target.type)
+    .map((r) => ({ id: r.id, ref: r.ref, reasonCode: r.reasonCode || null, reason: r.reason || null, detail: r.detail || '',
+      reportedBy: r.reportedBy || null, status: r.status || 'pending', queueStatus: r.queueStatus, assignedTo: r.assignedTo || null,
+      createdAtIso: r.createdAtIso, self: r.id === reportId }))
+    .sort((a, b) => (Date.parse(a.createdAtIso) || 0) - (Date.parse(b.createdAtIso) || 0));
+
+  /* HISTORY — the append-only audit rows for this report (trustSafetyAudit is server-only: no client rule) plus the
+     report's own creation; and the moderation history of the LISTING across all its reports. */
+  const auditRows = async (field, value) => {
+    const a = await db.collection('trustSafetyAudit').where(field, '==', value).limit(200).get();
+    return a.docs.map((d) => { const x = d.data() || {}; return Object.assign({ id: d.id }, x, { at: _iso(x.createdAt) }); })
+      .sort((p, q2) => (Date.parse(p.at) || 0) - (Date.parse(q2.at) || 0) || (p.revision || 0) - (q2.revision || 0));
+  };
+  const history = [{ action: 'report_filed', at: report.createdAtIso, result: 'pending', resultState: 'pending' }].concat(await auditRows('reportId', reportId));
+  const listingHistory = report.entityId
+    ? (await auditRows('entityId', report.entityId)).filter((x) => _normEntityType(x.entityType) === target.type && (x.productHidden || x.enforcement))
+    : [];
+
+  return {
+    report, target, product, shop, reports, history, listingHistory,
+    actions: _allowedActions(report, req.auth.uid, isSuper),
+    openOnListing: reports.filter((r) => OPEN_STATUSES.includes(r.status)).length,
+    /* the listing's take-down belongs to THIS report — dismissing it may restore the listing (restoreListing:true) */
+    listingHeldByThisReport: !!(product && product.moderationHold && product.moderationHold.reportId === reportId),
+    sellerResponse: SELLER_RESPONSE,
+  };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   3. tsReviewReport — admin: take under review / decide / reopen, on the ONE state machine
+
+   ONE transaction, all reads before writes: the transition is checked against the report as it is NOW (two moderators
+   deciding at once cannot both win), the reviewer lock is checked, and the product take-down and ONE audit row per
+   report land together or not at all. Idempotency: an audit row id is deterministic per report revision (create() —
+   a second write of the same transition aborts), a retried request with the same requestId returns the recorded
+   outcome without writing, and claiming a report you already hold is a no-op. Nothing the client sends is trusted as
+   a status, a decision, a seller, a reporter, a target, a hidden flag or an actor: those are resolved here.
 ──────────────────────────────────────────────────────────────────────────── */
 exports.tsReviewReport = onCall(OPT, async (req) => {
   _requireAdmin(req);
   const data = req.data || {};
-  const reportId = String(data.reportId || '');
+  const reportId = _safeId(data.reportId, 300);
   const action = String(data.action || '');
-  if (!reportId || /[/]/.test(reportId) || !action) throw new HttpsError('invalid-argument', 'reportId and action are required.');
-  const newStatus = REPORT_ACTIONS[action];
-  if (!newStatus) throw new HttpsError('invalid-argument', 'action must be one of ' + Object.keys(REPORT_ACTIONS).join('|'));
-  const resolution = _cleanText(data.resolution, 500);
+  if (!reportId || !action) throw new HttpsError('invalid-argument', 'reportId and action are required.');
+  const isAssign = ASSIGN_ACTIONS.includes(action);
+  const newStatus = isAssign ? null : REPORT_ACTIONS[action];
+  if (!isAssign && !newStatus) {
+    throw new HttpsError('invalid-argument', 'action must be one of ' + Object.keys(REPORT_ACTIONS).concat(ASSIGN_ACTIONS).join('|'));
+  }
+  const resolution = _cleanText(data.resolution, 500);          /* the OUTCOME note — the seller sees it once decided */
+  const internalNote = _cleanText(data.internalNote, 1000);     /* moderators only — never sent to a seller */
+  if (action === 'reopen' && internalNote.length < 10) {
+    throw new HttpsError('invalid-argument', 'Reopening a decided report needs an internal note (at least 10 characters) saying why.');
+  }
+  const requestId = data.requestId == null ? null : (/^[A-Za-z0-9_-]{8,64}$/.test(String(data.requestId)) ? String(data.requestId) : undefined);
+  if (requestId === undefined) throw new HttpsError('invalid-argument', 'Bad requestId.');
+  const expectedRevision = Number.isInteger(data.expectedRevision) ? data.expectedRevision : null;
+  const uid = req.auth.uid;
+  const isSuper = !!req.auth.token.superAdmin;
+  const actorRole = _actorRole(req);
+  const takeover = action === 'claim' && data.takeover === true;
+  const wantHide = !isAssign && REPORT_STATE[newStatus] === 'approved' && data.hideProduct === true;
+  const applyToListing = !isAssign && (newStatus === 'actioned' || newStatus === 'dismissed') && data.applyToListing === true;
+  /* RESTORE — the explicit reverse of a take-down, through the same canonical fields: only when DISMISSING the report
+     (or listing group) that owns the listing's moderationHold, and only to the visibility the server recorded before it. */
+  const wantRestore = !isAssign && newStatus === 'dismissed' && data.restoreListing === true;
 
   const db = getFirestore();
   const ref = db.collection('reports').doc(reportId);
-  const auditRef = db.collection('trustSafetyAudit').doc();
-  const wantHide = action !== 'escalate' && REPORT_STATE[newStatus] === 'approved' && data.hideProduct === true;
+  const correlationId = requestId || crypto.randomBytes(9).toString('hex');
 
-  /* ONE transaction: the transition is checked against the report as it is NOW (two admins deciding at once cannot
-     both win), and the product take-down and the audit entry land with it or not at all. All reads before writes. */
   const out = await db.runTransaction(async (tx) => {
+    /* ── reads ── */
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'Report not found.');
     const report = snap.data() || {};
-    const from = report.status || 'pending';
-    if (!(REPORT_TRANSITIONS[newStatus] || []).includes(from)) {
-      throw new HttpsError('failed-precondition', `This report is already ${REPORT_STATE[from] || from}; it cannot be moved to ${REPORT_STATE[newStatus]}.`);
+    const target = _targetOf(report.entityType);
+    if (!target.supported) throw new HttpsError('failed-precondition', `Reports on "${report.entityType}" cannot be moderated here (unsupported target type).`);
+    if (requestId && report.lastRequest && report.lastRequest.id === requestId && report.lastRequest.action === action) {
+      return { replayed: true, report, result: report.lastRequest.result || {} };
     }
+    const from = report.status || 'pending';
+    const rev = Number.isInteger(report.revision) ? report.revision : 0;
+    if (expectedRevision !== null && expectedRevision !== rev) {
+      throw new HttpsError('failed-precondition', 'This report changed since you opened it. Reload it and decide again.');
+    }
+    const owner = report.assignedTo || null;
+    const lockedOut = (r) => !!(r.assignedTo && r.assignedTo !== uid && !isSuper);
+
+    if (isAssign) {
+      if (!OPEN_STATUSES.includes(from)) throw new HttpsError('failed-precondition', `This report is already ${REPORT_STATE[from] || from}; it cannot be taken under review.`);
+      if (action === 'claim') {
+        if (owner === uid) return { noop: true, report, result: { assignedTo: uid } };
+        if (owner && !(isSuper && takeover)) throw new HttpsError('failed-precondition', 'Another moderator has this report under review.');
+      } else {
+        if (!owner) return { noop: true, report, result: { assignedTo: null } };
+        if (owner !== uid && !isSuper) throw new HttpsError('permission-denied', 'Only the reviewer who holds this report, or a super admin, can release it.');
+      }
+    } else {
+      if (!(REPORT_TRANSITIONS[newStatus] || []).includes(from)) {
+        throw new HttpsError('failed-precondition', `This report is already ${REPORT_STATE[from] || from}; it cannot be moved to ${REPORT_STATE[newStatus]}.`);
+      }
+      if (lockedOut(report)) throw new HttpsError('failed-precondition', 'Another moderator has this report under review.');
+    }
+
+    /* 1 listing + N reports: a decision on the LISTING resolves its other open reports — each keeps its own record */
+    let siblings = [];
+    if (applyToListing && report.entityId) {
+      const qs = await tx.get(db.collection('reports').where('entityId', '==', String(report.entityId)).limit(100));
+      siblings = qs.docs.filter((d) => d.id !== reportId).map((d) => ({ id: d.id, ref: d.ref, r: d.data() || {} }))
+        .filter((x) => _normEntityType(x.r.entityType) === target.type && OPEN_STATUSES.includes(x.r.status || 'pending'));
+      const locked = siblings.filter((x) => lockedOut(x.r));
+      if (locked.length) throw new HttpsError('failed-precondition', `${locked.length} other report(s) on this listing are under review by another moderator.`);
+    }
+
+    /* enforcement exists for listings only; hideProduct on any other target is ignored (C2 behaviour) */
+    const hide = wantHide && target.enforcement === 'listing_visibility';
+    const restore = wantRestore && target.enforcement === 'listing_visibility';
     let pref = null, psnap = null;
-    if (wantHide && report.entityType === 'product') {
+    if (hide || restore) {
       pref = db.collection('products').doc(String(report.entityId));
       psnap = await tx.get(pref);
     }
-    /* A PRODUCT report upheld with hideProduct takes the product off sale and out of discovery: isVisible:false
-       (checkout refuses it) plus a moderationHold that records why. Only this admin path writes moderationHold. */
-    const productHidden = !!(psnap && psnap.exists);
-    tx.update(ref, Object.assign({
-      status: newStatus,
-      reviewedBy: req.auth.uid,
-      resolution,
-      reviewedAt: FieldValue.serverTimestamp(),
-    }, productHidden ? { productHidden: true } : {}));
-    if (productHidden) {
-      tx.set(pref, { isVisible: false, moderationHold: { reportId, reason: report.reason || null, by: req.auth.uid, at: FieldValue.serverTimestamp() },
-        updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+
+    /* ── writes ── */
+    const now = FieldValue.serverTimestamp();
+    let enforcement = 'none';
+    if (hide) {
+      if (!psnap || !psnap.exists) enforcement = 'product_missing';
+      else {
+        const p = psnap.data() || {};
+        /* never a second hide: a listing already held by moderation is left exactly as it is */
+        if (p.isVisible === false && p.moderationHold) enforcement = 'already_hidden';
+        else {
+          enforcement = 'listing_hidden';
+          tx.set(pref, { isVisible: false, moderationHold: { reportId, reason: report.reason || null, by: uid, at: now, correlationId,
+            previousIsVisible: p.isVisible !== false }, updatedAt: now }, { merge: true });
+        }
+      }
     }
-    tx.set(auditRef, {
-      action: 'report_reviewed',
-      decision: action,
-      reportId,
-      entityId: report.entityId || null,
-      entityType: report.entityType || null,
-      from, fromState: REPORT_STATE[from] || null,
-      result: newStatus, resultState: REPORT_STATE[newStatus],
-      productHidden,
-      resolution,
-      performedBy: req.auth.uid,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-    return { report, productHidden };
+    if (restore) {
+      const p = psnap && psnap.exists ? (psnap.data() || {}) : null;
+      const hold = p && p.moderationHold;
+      if (!hold) throw new HttpsError('failed-precondition', 'This listing is not held by moderation; there is nothing to restore.');
+      const owners = [reportId].concat(siblings.map((s) => s.id));
+      if (!owners.includes(hold.reportId)) {
+        throw new HttpsError('failed-precondition', 'The listing is held by a different report. Restore it by deciding that report.');
+      }
+      const holder = hold.reportId === reportId ? report : (siblings.find((s) => s.id === hold.reportId) || {}).r || {};
+      const prior = typeof hold.previousIsVisible === 'boolean' ? hold.previousIsVisible
+        : (holder.context && typeof holder.context.isVisible === 'boolean' ? holder.context.isVisible : null);
+      if (prior === null) throw new HttpsError('failed-precondition', 'The visibility of this listing before the hold is not recorded; it cannot be restored automatically.');
+      enforcement = 'listing_restored';
+      tx.set(pref, { isVisible: prior, moderationHold: FieldValue.delete(),
+        moderationReleased: { reportId, by: uid, at: now, correlationId, restoredVisibility: prior }, updatedAt: now }, { merge: true });
+    }
+    const productHidden = enforcement === 'listing_hidden' || enforcement === 'already_hidden';
+
+    /* one write + one audit row PER REPORT (the primary and each sibling resolved with it) */
+    const apply = (id, docRef, r, primary) => {
+      const f = r.status || 'pending';
+      const rv = (Number.isInteger(r.revision) ? r.revision : 0) + 1;
+      const patch = { revision: rv, lastActionAt: now, lastActionBy: uid };
+      let to = f;
+      if (action === 'claim') Object.assign(patch, { assignedTo: uid, assignedAt: now, assignedRole: actorRole });
+      else if (action === 'unclaim') Object.assign(patch, { assignedTo: null, assignedAt: null });
+      else {
+        to = newStatus;
+        Object.assign(patch, { status: newStatus, reviewedBy: uid, reviewedAt: now, resolution });
+        if (internalNote) patch.internalNote = internalNote;
+        if (productHidden) patch.productHidden = true;
+        if (enforcement === 'listing_restored') patch.productHidden = false;
+        if (action === 'escalate') {
+          Object.assign(patch, { assignedTo: null, assignedAt: null,
+            escalation: { by: uid, byRole: actorRole, at: now, note: internalNote || null, previousReviewer: r.assignedTo || null, nextAction: 'senior_review' } });
+        }
+        if (action === 'reopen') Object.assign(patch, { assignedTo: null, assignedAt: null, reopenedBy: uid, reopenedAt: now, reopenCount: FieldValue.increment(1) });
+        if (!primary) patch.decidedWith = reportId;
+      }
+      if (primary && requestId) {
+        patch.lastRequest = { id: requestId, action, correlationId, result: { status: to, moderationState: REPORT_STATE[to] || null, productHidden, enforcement } };
+      }
+      tx.update(docRef, patch);
+      tx.create(db.collection('trustSafetyAudit').doc(_auditId(id, rv)), {
+        action: isAssign ? 'report_' + action + 'ed' : (action === 'reopen' ? 'report_reopened' : 'report_reviewed'),
+        decision: action,
+        reportId: id, reportRef: _opaqueRef(id),
+        entityId: r.entityId || null, entityType: r.entityType || null,
+        targetType: target.type, targetId: r.entityId || null,
+        from: f, fromState: REPORT_STATE[f] || null, fromQueue: _queueStatusOf(r),
+        result: to, resultState: REPORT_STATE[to] || null,
+        productHidden: !isAssign && productHidden,
+        enforcement: isAssign ? 'none' : enforcement,
+        resolution: isAssign ? '' : resolution,
+        internalNote: internalNote || null,
+        assignedTo: action === 'claim' ? uid : (action === 'unclaim' ? null : (r.assignedTo || null)),
+        performedBy: uid, actorRole,
+        revision: rv, correlationId, requestId: requestId || null,
+        groupSize: 1 + siblings.length, primary, decidedWith: primary ? null : reportId,
+        createdAt: now,
+      });
+      return { id, from: f, to, rv, report: r };
+    };
+    const decided = [apply(reportId, ref, report, true)].concat(siblings.map((s) => apply(s.id, s.ref, s.r, false)));
+    return { report, decided, productHidden, enforcement,
+      result: { status: decided[0].to, moderationState: REPORT_STATE[decided[0].to] || null, productHidden, enforcement } };
   });
 
+  const res = Object.assign({ success: true }, out.result, {
+    queueStatus: null, revision: null, resolvedReports: out.decided ? out.decided.length : 0,
+    replayed: !!out.replayed, noop: !!out.noop, correlationId: out.replayed ? (out.report.lastRequest || {}).correlationId || null : correlationId,
+  });
+  if (out.replayed || out.noop) {
+    res.status = res.status || out.report.status || 'pending';
+    res.moderationState = REPORT_STATE[res.status] || null;
+    res.revision = Number.isInteger(out.report.revision) ? out.report.revision : 0;
+    res.queueStatus = _queueStatusOf(out.report);
+    res.productHidden = res.productHidden === true;
+    return res;
+  }
+  const head = out.decided[0];
+  res.revision = head.rv;
+  res.queueStatus = _queueStatusOf(Object.assign({}, out.report, { status: head.to,
+    assignedTo: action === 'claim' ? uid : (['unclaim', 'escalate', 'reopen'].includes(action) ? null : out.report.assignedTo) }));
+
   // Ban the reported entity (user) if requested — only superAdmin can auto-ban; only on an upheld USER report
-  if (data.banUser && req.auth?.token?.superAdmin && out.report.entityType === 'user' && newStatus === 'actioned') {
+  if (data.banUser && isSuper && out.report.entityType === 'user' && newStatus === 'actioned') {
     await db.collection('users').doc(String(out.report.entityId)).update({
       status: 'banned',
       bannedAt: FieldValue.serverTimestamp(),
-      bannedBy: req.auth.uid,
+      bannedBy: uid,
       banReason: resolution || `Report actioned: ${out.report.reason}`,
     });
   }
 
-  return { success: true, status: newStatus, moderationState: REPORT_STATE[newStatus], productHidden: out.productHidden };
+  /* NOTIFICATIONS — after the decision committed, through the ONE notification authority (notify.js), recorded on the
+     report and in the audit. A failure is recorded as a failure; nothing is claimed sent that notify() did not record. */
+  if (!isAssign && ['actioned', 'dismissed', 'changes_requested'].includes(newStatus)) {
+    res.notifications = await _notifyDecision(db, out.decided, newStatus, out.productHidden, resolution, correlationId);
+  }
+  return res;
 });
 
-/* exported for tests and for the one documented mapping (CHANGELOG 2026-10-01 "community C2") */
+/* Plain text only — notify() may place `body` inside an email; a product name is seller-controlled. */
+function _plain(s, max) { return _cleanText(s, max || 80).replace(/[<>&"'`]/g, ''); }
+let _notifier = null;   /* test seam: exports._setNotifier — production uses notify.js */
+function _getNotify() {
+  if (_notifier) return _notifier;
+  /* FAIL CLOSED outside a Functions runtime. notify.js initialises the REAL firebase-admin: a local test harness that
+     loads this file with only firebase-admin/firestore stubbed would otherwise write notifyLog / notifications to the
+     live project through the developer's application-default credentials (it did, 2026-10-01 — see CHANGELOG C3).
+     Cloud Run sets K_SERVICE; the functions framework sets FUNCTION_TARGET; the emulator sets FUNCTIONS_EMULATOR. */
+  if (!(process.env.K_SERVICE || process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR === 'true')) return null;
+  try { return require('./notify').notify; } catch (e) { return null; }
+}
+async function _notifyDecision(db, decided, newStatus, productHidden, resolution, correlationId) {
+  const send = _getNotify();
+  const results = [];
+  const first = decided[0] && decided[0].report ? decided[0].report : {};
+  const c = first.context || {};
+  const name = _plain(c.productName || 'your listing');
+  const record = async (reportId, rv, audience, r) => {
+    /* recorded on the report (the case view shows it in the history); revision unchanged — it is not a transition */
+    try {
+      await db.collection('reports').doc(reportId).update({ [`notifications.${audience}`]: Object.assign({ correlationId, revision: rv, at: FieldValue.serverTimestamp() }, r) });
+    } catch (_) { /* the decision stands; a missing record is shown as "not recorded" by the console */ }
+  };
+  const fire = async (uid, msg, dedupeKey) => {
+    if (!send) return { status: 'failed', reason: 'notification authority unavailable', type: 'system_update', key: dedupeKey };
+    try {
+      const r = await send({ uid, type: 'system_update', title: msg.title, body: msg.body, deepLink: msg.deepLink || null, dedupeKey, awaitDelivery: false });
+      if (r && r.deduped) return { status: 'deduped', type: 'system_update', key: r.key || dedupeKey };
+      const inapp = r && r.channels ? r.channels.inapp || null : null;
+      return { status: inapp === 'sent' ? 'recorded' : 'failed', inapp: inapp || 'not_attempted', delivery: 'background', type: 'system_update', key: (r && r.key) || dedupeKey };
+    } catch (e) {
+      return { status: 'failed', reason: String((e && (e.code || e.message)) || 'error').slice(0, 120), type: 'system_update', key: dedupeKey };
+    }
+  };
+
+  /* SELLER — one message per listing decision (not one per report) */
+  const sellerUid = _normEntityType(first.entityType) === 'product' ? (c.sellerUid || null) : null;
+  if (sellerUid) {
+    const reason = _plain(first.reason || '', 80);
+    const note = resolution ? ' SOKONI: ' + _plain(resolution, 300) : '';
+    const msg = newStatus === 'actioned'
+      ? (productHidden
+        ? { title: 'Listing action taken', body: `Your listing "${name}" was reported (${reason}) and SOKONI has taken it down.${note}` }
+        : { title: 'Report upheld on your listing', body: `A report on your listing "${name}" (${reason}) was upheld.${note}` })
+      : newStatus === 'dismissed'
+        ? { title: 'Report dismissed', body: `A report on your listing "${name}" was reviewed and dismissed. No action is needed.` }
+        : { title: 'Change requested on your listing', body: `SOKONI reviewed a report on your listing "${name}" and asks for a change.${note}` };
+    msg.deepLink = '/merchant-v2.html#disputes';
+    const r = Object.assign({ audience: 'seller' }, await fire(sellerUid, msg, `moderation_seller_${_opaqueRef(String(first.entityId))}_${correlationId}`));
+    results.push(r);
+    await record(decided[0].id, decided[0].rv, 'seller', r);
+  }
+  /* REPORTERS — resolved, nothing more (no outcome, no admin detail); only once a report is decided */
+  if (newStatus === 'actioned' || newStatus === 'dismissed') {
+    for (const d of decided) {
+      const who = d.report && d.report.reportedBy;
+      if (!who) continue;
+      const r = Object.assign({ audience: 'reporter', ref: _opaqueRef(d.id) }, await fire(who,
+        { title: 'Your report was reviewed', body: `Thank you. SOKONI reviewed your report on "${name}". It is now resolved.` },
+        `moderation_reporter_${_opaqueRef(d.id)}_r${d.rv}`));
+      results.push(r);
+      await record(d.id, d.rv, 'reporter', r);
+    }
+  }
+  return results;
+}
+
+/* exported for tests and for the one documented mapping (CHANGELOG 2026-10-01 "community C2" / "community C3") */
 exports._reportModel = { REPORT_ENTITY_TYPES, REPORT_REASONS, REPORT_STATE, REPORT_ACTIONS, REPORT_TRANSITIONS,
-  REPORT_DETAIL_MAX, REPORT_DETAIL_MIN_WHEN_REQUIRED };
+  REPORT_DETAIL_MAX, REPORT_DETAIL_MIN_WHEN_REQUIRED, OPEN_STATUSES, QUEUE_STATUS_STORED, ASSIGN_ACTIONS, MODERATION_TARGETS,
+  SELLER_RESPONSE, queueStatusOf: _queueStatusOf, sellerStatusOf: _sellerStatusOf, allowedActions: _allowedActions };
+exports._setNotifier = (fn) => { _notifier = fn || null; };
 
 /* ─────────────────────────────────────────────────────────────────────────
    4. tsBanUser — superAdmin: ban | suspend | restore user

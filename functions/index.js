@@ -11295,6 +11295,7 @@ exports.tsGetReportReasons    = trustSafety.tsGetReportReasons;   // community C
 exports.tsReportContent       = trustSafety.tsReportContent;
 exports.tsGetReports          = trustSafety.tsGetReports;
 exports.tsReviewReport        = trustSafety.tsReviewReport;
+exports.tsGetReportCase       = trustSafety.tsGetReportCase;      // community C3 (2026-10-01): moderation case view — report, listing, sibling reports, history
 exports.tsBanUser             = trustSafety.tsBanUser;
 exports.tsCalculateRiskScore  = trustSafety.tsCalculateRiskScore;
 exports.tsGetRiskScores       = trustSafety.tsGetRiskScores;
