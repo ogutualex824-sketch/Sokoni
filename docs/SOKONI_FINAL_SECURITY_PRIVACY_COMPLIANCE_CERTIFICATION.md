@@ -35,7 +35,7 @@ SOKONI as "fully secure" or "fully compliant".
 | `port/password-reset-25m-on-shell-gate` | named functions | 25-minute reset (2 new functions) · getErrorLog → errorLog · marketing fail-closed + `emailUnsubscribe` + posSendSMS admin-only · updateEmailPreferences hardened + consent rows · erasure (no-index query, purge 1.1.0, honest outcome) · data-rights intake limits · shared fail-closed limiter |
 | `port/booking-pin-on-shell-gate` | `functions:providerDispatch` | providerPublish gated by admin approval · priced plans not self-activatable |
 | `hosting/trust-integrity-on-union` | hosting | fabrications and fake contacts removed · reset page · signup consent · fail-closed legal gate · canonical notices · cookie control · DNT/GPC · a11y · licences · recover.js · ops-center escaping · /email-preferences |
-| `hosting/admin-failures-on-chain` | hosting (merged by sokoni-aa) | AdminOS + Super Admin Failures view |
+| `hosting/admin-failures-on-chain` @54b8b33 | hosting (merged by sokoni-aa) | AdminOS + Super Admin Failures view (37/0) · client confirmations no longer set seller payout readiness · Payout approvals view (43/0) |
 | sokoni-32 `rules/capability-decisions-on-f20be7d` @51cbbf1 | Firestore rules | includes this programme's verification write:false and jobs precedence fix (emulator 16/0 vs served 10/6) |
 | sokoni-70 `fix/kass-auth-budget-on-e521e03` @adde663 | `functions:sokoniChat` | chat auth bypass + AI cost caps (sokoni-70's) |
 
