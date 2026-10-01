@@ -284,6 +284,35 @@ async function quiet(fn) { process.stdout.write = () => true; console.warn = con
   ok(!!call && !/sellerUid\s*:/.test(call) && !/\bamount\s*:/.test(call), 'K-2', 'the intent request carries NO seller and NO amount', call.slice(0, 200));
   ok(/initiateSTKPush\(phone,\s*_authTotal,\s*_ordId/.test(html) && !/initiateSTKPush\(phone,\s*orderTotal,/.test(html), 'K-3', 'STK charges the SERVER total on the order identity', null);
 
+  /* ── BK: a booking is NEVER credited at payment (owner 2026-10-01: the PIN completion is the one settlement) ──
+     The legacy bookNow callers send { type:'booking', providerId? } with NO providerBooking intent, so the
+     providerBooking hold does not catch them. They used to credit the provider's withdrawable wallets.balance
+     here; with no providerId, the BUYER's own wallet. Now: no wallet moves, the payment is parked for AdminOS. */
+  console.log('\n[BK] booking-typed payments — no payment-time credit');
+  const balOf = async (uid) => Number(((await get('wallets', uid)) || {}).balance || 0);
+  const PROV = 'b1-provider';
+  const pb0 = await balOf(PROV), bb0 = await balOf(BUYER), pa0 = await wallet(PROV), ba0 = await wallet(BUYER);
+  await stk('b1-bk-1', 1500, { type: 'booking', providerId: PROV, serviceDesc: 'Haircut' });
+  h = await hook('b1-bk-1', 1500);
+  const rv1 = await get('bookingPaymentReviews', 'b1-bk-1'), pk1 = await get('payments', 'b1-bk-1');
+  ok(h.code === 200 && await balOf(PROV) === pb0 && await wallet(PROV) === pa0 && !(await get('walletTransactions', PROV + '_b1-bk-1_booking')),
+    'BK-1', 'a legacy bookNow payment credits the named provider NOTHING at payment (neither wallets.balance nor FinOS)', { code: h.code, bal: await balOf(PROV) - pb0 });
+  ok(!!rv1 && rv1.status === 'open' && rv1.reason === 'booking_payment_without_held_booking' && rv1.claimedProviderId === PROV && rv1.grossKES === 1500
+    && pk1 && pk1.bookingSettlement === 'held_for_review' && !pk1.walletCreditedAt,
+    'BK-2', 'it is parked for AdminOS: bookingPaymentReviews/{ref} (claimed provider, gross, net) + payments marker, no walletCreditedAt', { rv1, pk: pk1 && pk1.bookingSettlement });
+  await stk('b1-bk-2', 800, { type: 'booking' });                                  /* the ~18 hubs that send no providerId */
+  h = await hook('b1-bk-2', 800);
+  const rv2 = await get('bookingPaymentReviews', 'b1-bk-2');
+  ok(h.code === 200 && await balOf(BUYER) === bb0 && await wallet(BUYER) === ba0 && !!rv2 && rv2.reason === 'booking_payment_without_provider' && rv2.claimedProviderId === null,
+    'BK-3', 'a booking with NO providerId no longer credits the BUYER\'s own wallet — parked as "without provider"', { buyerBal: await balOf(BUYER) - bb0, rv2 });
+  await stk('b1-bk-3', 1200, { type: 'service-booking', providerId: PROV });       /* intent-less service booking (intent unreadable / never minted) */
+  h = await hook('b1-bk-3', 1200);
+  ok(h.code === 200 && await balOf(PROV) === pb0 && !!(await get('bookingPaymentReviews', 'b1-bk-3')),
+    'BK-4', 'a service-booking-typed payment without its held booking is parked too, never credited', await balOf(PROV) - pb0);
+  h = await hook('b1-bk-1', 1500);                                                  /* IntaSend redelivery */
+  const revs = (await db.collection('bookingPaymentReviews').get()).size;
+  ok(h.code === 200 && revs === 3 && await balOf(PROV) === pb0, 'BK-5', 'a redelivered callback: still one review per payment, still no credit', { revs });
+
   clearTimeout(WATCHDOG);
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

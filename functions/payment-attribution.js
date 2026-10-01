@@ -73,13 +73,18 @@ function mergeAttribution({ intent, legacyMeta }) {
  * is already captured and authoritative by the time this runs).
  */
 async function resolveFinancialAttribution(db, { intentRef, legacyMeta }) {
-  let intent = null;
+  let intent = null, intentReadFailed = false;
   try {
     const snap = await db.collection('paymentIntents').doc(String(intentRef)).get();
     if (snap.exists) intent = snap.data();
-  } catch (_) { /* fail open — merged below with intent:null, same as "not found" */ }
+  } catch (_) {
+    /* Still merged with intent:null (the payment is captured; nothing here blocks the webhook), but FLAGGED:
+       an unreadable intent is not "no intent". Owner 2026-10-01: no wallet may be credited on client-supplied
+       attribution when the server's own record could not be read — the caller withholds the credit. */
+    intentReadFailed = true;
+  }
 
-  return mergeAttribution({ intent, legacyMeta });
+  return Object.assign(mergeAttribution({ intent, legacyMeta }), { intentReadFailed });
 }
 
 /**

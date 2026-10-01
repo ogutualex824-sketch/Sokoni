@@ -8659,42 +8659,51 @@ exports.webhookIntasend = onRequest(
 
         if (_isSubscription) {
           console.log(`[webhookIntasend] wallet credit skipped (subscription): ${apiRef}`);
-        } else if (!_sellerId || _netCents <= 0) {
-          console.warn(`[webhookIntasend] wallet credit skipped (no seller or zero net): ${apiRef}`);
+        } else if (attribution.intentReadFailed) {
+          /* FAIL CLOSED (owner 2026-10-01). The server's own record of who is owed could not be read, so the
+             only attribution left is the client's meta. Nobody is credited on it: the payment stands, and the
+             credit is recoverable from commissionLedger + the absent walletCreditedAt marker, via the existing
+             commissionReviewQueue. */
+          logger.warn("WEBHOOK_INTENT_UNREADABLE_CREDIT_WITHHELD", { ref: apiRef, type: attribution.type || null });
+          await db.collection("commissionReviewQueue").add({
+            ref: apiRef, uid: payData.uid, amount, reason: "intent unreadable: wallet credit withheld (fail closed)",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          }).catch(() => {});
         } else if (_isBooking) {
-          /* Booking earnings → the provider's WITHDRAWABLE wallet balance
-             (wallets.balance, in SHILLINGS) — the exact field the wallet UI shows and
-             requestSellerPayout pays out, so the provider can withdraw to M-Pesa. The
-             finos availableBalance/withdrawableBalance ledger (cents) is a SEPARATE
-             representation the withdraw flow does not read, which is why crediting it
-             would leave the earnings un-withdrawable. Idempotent via walletCreditedAt. */
+          /* ══ A BOOKING IS NEVER CREDITED AT PAYMENT (owner 2026-10-01) ══════════════════════════════════
+             "The PIN completion event must become the single release/settlement trigger". A service booking
+             with a server-minted providerBooking intent never reaches here — holdServiceBookingPayment held it
+             (paid_held) above, and providerCompleteBooking releases it once, on the buyer's PIN. What still
+             reached this branch were booking-typed payments WITHOUT that held booking: the legacy bookNow
+             callers (~18 hubs), and a service booking whose intent read failed. They used to credit the
+             provider's withdrawable wallet here, at payment — and a caller that sent no providerId had
+             _sellerId fall back to payData.uid, so the BUYER's own wallet was credited.
+             Now: no wallet is credited. The payment is recorded for AdminOS review (bookingPaymentReviews/{ref},
+             create-once in the same txn as the payments marker), where it is released to the RIGHT provider or
+             refunded. The provider id below is the CLAIMED one — client-supplied unless intent-derived. */
           const _netShillings = Math.round(Math.max(0, amount - sokoniCut));
+          const _claimed = attribution.providerId || null;
           const _payDoc = db.collection("payments").doc(apiRef);
-          const _walRef = db.collection("wallets").doc(_sellerId);
-          const _credited = await db.runTransaction(async (txn) => {
+          const _revRef = db.collection("bookingPaymentReviews").doc(apiRef);
+          const _parked = await db.runTransaction(async (txn) => {
             const snap = await txn.get(_payDoc);
-            if (!snap.exists || snap.data().walletCreditedAt) return false;
-            const wSnap = await txn.get(_walRef);
-            if (wSnap.exists) {
-              txn.update(_walRef, { balance: admin.firestore.FieldValue.increment(_netShillings) });
-            } else {
-              txn.set(_walRef, { uid: _sellerId, balance: _netShillings, currency: "KES",
-                createdAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-            }
-            txn.set(db.collection("walletTransactions").doc(`${_sellerId}_${apiRef}_booking`), {
-              uid: _sellerId, type: "booking_earning", amount: _netShillings,
-              description: `Booking earning — ${payData.meta?.serviceDesc || "service"} (ref ${apiRef})`,
-              status: "completed", createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            const rSnap = await txn.get(_revRef);
+            if (!snap.exists || snap.data().walletCreditedAt || rSnap.exists) return false;
+            txn.set(_revRef, {
+              ref: apiRef, status: "open",
+              reason: _claimed ? "booking_payment_without_held_booking" : "booking_payment_without_provider",
+              claimedProviderId: _claimed, attributionSource: attribution.source || null,
+              intentRef: existing.intentRef || null, payerUid: payData.uid || null,
+              grossKES: amount, commissionKES: sokoniCut, netKES: _netShillings,
+              serviceDesc: (payData.meta && payData.meta.serviceDesc) || null,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
-            txn.update(_payDoc, {
-              walletCreditedAt:  admin.firestore.FieldValue.serverTimestamp(),
-              walletCreditCents: _netShillings * 100,
-              walletCreditedTo:  _sellerId,
-            });
+            txn.update(_payDoc, { bookingSettlement: "held_for_review", bookingReviewRef: apiRef });
             return true;
           });
-          console.log(`[webhookIntasend] booking earning ${_credited ? "credited" : "already credited"} to provider wallet.balance`,
-            { ref: apiRef, provider: _sellerId, netShillings: _netShillings });
+          logger.warn("BOOKING_PAYMENT_HELD_FOR_REVIEW", { ref: apiRef, parked: _parked, claimedProvider: _claimed, netShillings: _netShillings });
+        } else if (!_sellerId || _netCents <= 0) {
+          console.warn(`[webhookIntasend] wallet credit skipped (no seller or zero net): ${apiRef}`);
         } else {
           const { creditWalletTxn } = require('./finos-utils');
           const _payDoc = db.collection("payments").doc(apiRef);
