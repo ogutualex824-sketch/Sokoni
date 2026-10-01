@@ -1,0 +1,39 @@
+/* ============================================================================
+   SOKONI — SOKONI Foundation workspace styles (AdminOS + Super Admin)
+   sokoni-admin-foundation.css   ·   builds on sokoni-admin-payout-approvals.css (sk-pa-*)
+
+   NO NEW PALETTE: every colour is a --pa-* token, which resolves to the host console's own
+   tokens. State is ALWAYS carried by text; colour only reinforces it.
+   ========================================================================= */
+.sk-fd-tabs{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 0 14px;padding-bottom:2px;border-bottom:1px solid var(--pa-border)}
+.sk-fd-tab{flex:0 0 auto;min-height:40px;padding:8px 14px;border:1px solid transparent;border-bottom:none;border-radius:var(--pa-radius) var(--pa-radius) 0 0;background:transparent;color:var(--pa-muted);font:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.sk-fd-tab[aria-selected="true"]{color:var(--pa-accent);border-color:var(--pa-border);background:var(--pa-surface)}
+.sk-fd-tab:focus-visible,.sk-fd-count:focus-visible{outline:2px solid var(--pa-accent);outline-offset:2px}
+.sk-fd-panel[hidden]{display:none}
+.sk-fd-h{font-size:13px;font-weight:800;letter-spacing:.04em;margin:16px 0 8px}
+
+.sk-fd-counts{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:0 0 12px}
+.sk-fd-count{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:44px;padding:10px 12px;border:1px solid var(--pa-border);border-radius:var(--pa-radius);background:var(--pa-surface);color:var(--pa-text);font:inherit;text-align:left;cursor:pointer}
+.sk-fd-count:hover{border-color:var(--pa-accent)}
+
+.sk-fd-formhost{margin:0 0 14px}
+.sk-fd-form{gap:10px}
+.sk-fd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.sk-fd-field{max-width:none}
+.sk-fd-fieldset{border:1px solid var(--pa-border);border-radius:var(--pa-radius);padding:8px 12px;margin:0;display:flex;flex-wrap:wrap;gap:8px 16px}
+.sk-fd-fieldset legend{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--pa-muted);padding:0 4px}
+.sk-fd-check{display:inline-flex;align-items:center;gap:6px;min-height:36px;font-size:13px}
+.sk-fd-media{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.sk-fd-hint{margin:4px 0;font-size:12px;color:var(--pa-muted)}
+.sk-fd-extra{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+.sk-fd-extra:empty{display:none}
+.sk-fd-more{margin:10px 0}
+.sk-fd-warn{border-left-color:var(--pa-warn);color:var(--pa-text);font-weight:700}
+td[data-fd-result="error"] .sk-pa-msg,td[data-fd-result="refused-locally"] .sk-pa-msg,[data-fd-result="error"] > .sk-fd-form .sk-pa-msg{color:var(--pa-warn)}
+td[data-fd-result="ok"] .sk-pa-msg{color:var(--pa-accent)}
+
+@media (max-width:768px){
+  .sk-fd-tab{min-height:44px}
+  .sk-fd-counts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sk-fd-grid{grid-template-columns:1fr}
+}
