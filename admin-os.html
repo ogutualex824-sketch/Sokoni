@@ -353,6 +353,9 @@
     .logo-titles{min-width:0;overflow:hidden}
     .aos-sidebar-toggle{margin-left:auto;flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--aos-border);background:rgba(255,255,255,.05);color:var(--aos-muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;transition:color .15s,border-color .15s,transform .25s}
     .aos-sidebar-toggle:hover{color:var(--aos-accent);border-color:var(--aos-accent)}
+    /* Phones: the toggle CLOSES the drawer (labelled "Close menu" by _syncSidebarA11y), so it
+       must look like a close button: a visible ✕ at a 44px target. Desktop keeps the « collapse. */
+    @media(max-width:768px){.aos-sidebar-toggle{width:44px;height:44px;font-size:0;transform:none!important;border-radius:10px}.aos-sidebar-toggle::after{content:"\2715";font-size:18px;line-height:1;color:var(--aos-text,#fff)}}
     .aos-scrim{display:none;position:fixed;inset:0;background:rgba(3,6,3,.55);z-index:99}
     @media(min-width:769px){
       body.sidebar-collapsed .aos-sidebar{width:66px}
