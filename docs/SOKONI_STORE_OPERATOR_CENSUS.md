@@ -135,28 +135,34 @@ chain with the canonical resolver that **is** here (`tenant-identity.resolveMerc
 other admins see store requests read-only. Implemented as ONE guard inside the existing
 `adminProcessPayout` — no second approval authority, no new execution path.
 
-### Lineage gate (mandatory, done BEFORE the edit — read-only)
+### Lineage gate (mandatory, read-only) — CORRECTED
+
+**Live = what `status.traffic` serves, never `latest*RevisionName`.** The first reading of this gate
+used the latest revision and was wrong; corrected the same day (coordinator, then re-verified here
+with `gcloud run services describe adminprocesspayout`).
 
 | | |
 |---|---|
-| live function | `adminProcessPayout`, revision **`adminprocesspayout-00025-loy`**, created **2026-09-30T07:04:36Z** |
-| live source | `gs://gcf-v2-sources-24799054989-us-central1/adminProcessPayout/function-source.zip#1790751875744544` |
-| live `wallet.js` vs a545818 `wallet.js` | **IDENTICAL** (CRLF-normalised `diff` empty) |
-| live `wallet.js` vs `45a837d` (paid-state guard) | **DIFFERENT — 483 changed lines; the guard is ABSENT live** |
-| previous revision `00024-mih` (2026-09-29T15:31Z), archive `#1790695830866935` | `wallet.js` **== 45a837d** (guard present) |
-| live `wallet.js` vs `8574f5d` (webhookIntasend 09-06 production baseline) | identical |
+| serving revision | **`adminprocesspayout-00024-mih`** — `spec.traffic` = `status.traffic` = **100%** (traffic pinned by the 2026-09-30 08:32Z containment) |
+| serving source | `gs://gcf-v2-sources-24799054989-us-central1/adminProcessPayout/function-source.zip#1790695830866935` |
+| serving `wallet.js` | **byte-identical to `45a837d`** (sha256 `f9ad984a15ea0d189690740a813d84ee27be5dd2feca0b07c175c585efd4f979`) — **the paid-state guard IS live** |
+| latest revision `00025-loy` (2026-09-30T07:04Z, `#1790751875744544`) | Ready, **serves 0%**; its `wallet.js` is the 09-06 baseline (== a545818 == `8574f5d`) |
+| other serving deps of `wallet.js` | `redis-rate-limiter.js`, `payment-adapters.js` identical to this tree; `finos-utils.js` differs only in the commission ladder (`wallet.js` imports `intasendB2C` but never calls it); `notify.js` differs in unrelated types / an order-advance callable (`_notifyPayout` uses `notify()` generically) — immaterial to `adminProcessPayout` |
 
-**Finding — a live money regression, not caused by this slice:** the paid-state guard (45a837d,
-deployed 2026-09-29 as `00024-mih`) was **rolled back on 2026-09-30T07:04Z** by revision
-`00025-loy`, whose `wallet.js` is the 09-06 baseline. Memory and the coordinator both record
-45a837d as live; it is not. Live today: Mark Paid is accepted from any non-terminal status and
-`_settlePayoutPaid` refuses only `paid`/`settled_manually` (so a rejected/failed payout can still be
-marked paid after its refund).
+**So the build takes the SERVING `wallet.js`:** `functions/wallet.js` = 00024-mih's `wallet.js`
+(= 45a837d — the paid-state guard is included as the serving baseline, not a new behaviour change)
+**+ the store guard + its one call + the read-only `_internal` seam**. `diff` against the serving
+file: **0 lines removed**; only those three blocks added (asserted by the suite, sha-checked base).
+Only `wallet.js` was taken from 45a837d: its `index.js` line (`adminResolvePayoutOutcome` export) and
+its `admin-os.js` STAGE change are NOT in the serving archive and are not taken.
 
-Because live == a545818, the guard was written on the LIVE code (not an older copy). **Deploying this
-`adminProcessPayout` does NOT restore 45a837d and does not remove anything that is live.** Restoring
-the paid-state guard means porting 45a837d onto this tree — an owner decision (it changes ordinary
-payout behaviour), with its own suites (`test-payout-paid-status-guard`, `test-payout-outcome-unknown`).
+**Other functions that load `wallet.js`:** every function in a deploy loads `index.js` (and so
+`wallet.js`), but of this slice's deploy list only `adminProcessPayout` runs 45a837d's changed code.
+`sokoniStorePayoutRequest` calls only `_payoutEvent` / `_eatDay` / `_getPayoutConfig` (and its
+defaults), which are byte-identical in a545818 and 45a837d. `merchantIdentity`, the staff functions,
+`merchantAdjustStock` and the other `sokoniStore*` callables never call into `wallet.js`.
+Caution for anyone else deploying from this tree: `requestSellerPayout`, `adminGetPendingPayouts`,
+`adminPayoutOps` etc. would now ship 45a837d's `wallet.js` — check their own serving revisions first.
 
 ### The change
 
@@ -253,10 +259,9 @@ Every money-out invariant, where it is enforced, and the test that proves it
 | 20 | Clients see only the last 3 digits of the destination | `_destinationOf`, responses | G4, P9, P13c |
 
 **Before flipping the flag the owner must verify (live, read-only unless stated):**
-1. **Lineage gate DONE (third pass):** the live `adminProcessPayout` (00025-loy) is the 09-06/a545818
-   `wallet.js` — the 45a837d paid-state guard is **NOT live**. Decide whether to port 45a837d before
-   flipping the flag; until then store payouts run on the same (unguarded) settlement code sellers do.
-   Deploy this tree's `adminProcessPayout` (store guard) before the flag.
+1. **Lineage gate DONE (corrected):** `adminProcessPayout` serves `00024-mih` (traffic pinned, 100%),
+   whose `wallet.js` is 45a837d — the paid-state guard IS live. This tree's `adminProcessPayout` is that
+   file + the store guard. Deploy it (see the traffic note in the deploy list) before the flag.
 2. **Live `config/payouts.autoB2C` is `false` (read 2026-10-01).** So approving a store request
    leaves it `approved` for MANUAL disbursement, and *paid* needs an `externalReference` +
    attestation. If `autoB2C` is ever turned on, approval sends B2C to `accountNumber` immediately.
@@ -283,7 +288,7 @@ Every money-out invariant, where it is enforced, and the test that proves it
 | `merchantIdentity` | REBUILT (live) | carve-out: admins lose the store via merchant-v2's identity call |
 | `inviteShopEmployee`, `listShopEmployees`, `listShopInvites`, `removeShopEmployee` | REBUILT (live) | carve-out: admins cannot manage store staff |
 | `merchantAdjustStock` | REBUILT (live) | carve-out: admins cannot adjust store stock |
-| `adminProcessPayout` | **REBUILT (live, money)** | store requests: operator only. Lineage gate: live 00025-loy `wallet.js` == a545818 (diff empty) → built on the live code. **45a837d paid-state guard is NOT live (rolled back 2026-09-30T07:04Z) and this build does not restore it.** |
+| `adminProcessPayout` | **REBUILT (live, money)** | store requests: operator only. Built on the SERVING `wallet.js` (00024-mih == 45a837d) + the store guard; diff = the guard only. **Deploying moves traffic from the pinned `00024-mih` to the new revision; the new revision carries 45a837d + the store guard; rollback target = `00024-mih` by NAME (`gcloud run services update-traffic adminprocesspayout --region us-central1 --to-revisions adminprocesspayout-00024-mih=100`), Ready first.** |
 | `sokoniStoreListPayouts` | **NEW** | operator's store payout queue (read) |
 | `sokoniStorePayoutIdentity` | **NEW** | store business id for the admin queues (read) |
 

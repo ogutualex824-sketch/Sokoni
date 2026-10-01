@@ -4,21 +4,26 @@
 other admins see store requests read-only. One guard inside the existing `adminProcessPayout` — no
 second approval authority, no new execution path.
 
-**Lineage gate (read-only, before the edit):** live `adminProcessPayout` = revision
-`adminprocesspayout-00025-loy` (2026-09-30T07:04:36Z), archive `#1790751875744544`. Its `wallet.js`
-is **identical to a545818's**, so the guard was written on the live code. **The 45a837d paid-state
-guard is NOT live:** revision `00024-mih` (2026-09-29T15:31Z) carried it (`wallet.js` == 45a837d);
-`00025-loy` rolled it back to the 09-06 baseline (`8574f5d`). This build does not restore it — owner decision.
+**Lineage gate (read-only) — CORRECTED:** `adminProcessPayout` SERVES `adminprocesspayout-00024-mih`
+(spec/status traffic 100%, pinned by the 2026-09-30 08:32Z containment); its `wallet.js` is byte-identical
+to 45a837d — **the paid-state guard IS live.** `00025-loy` is the latest Ready revision but serves 0%.
+(An earlier line here read the latest revision and said the guard was not live — that was wrong.)
+`functions/wallet.js` is now the serving file + the store guard (diff = the guard only).
+**Deploy note:** deploying `adminProcessPayout` moves traffic from the pinned 00024-mih to the new
+revision; the new revision carries 45a837d + the store guard; rollback target = 00024-mih by NAME
+(`update-traffic --to-revisions adminprocesspayout-00024-mih=100`), Ready first.
 
 **Files:**
-- `functions/wallet.js` — `_assertStorePayoutActor` + one call in `adminProcessPayout` after the payout
-  is loaded: a request whose `sellerUid` is the chain-resolved store business is actioned only by the
+- `functions/wallet.js` — the SERVING 00024-mih `wallet.js` (45a837d) + `_assertStorePayoutActor` + one call in
+  `adminProcessPayout` after the payout is loaded: a request whose `sellerUid` is the chain-resolved store business is actioned only by the
   store operator; anyone else → `permission-denied`, reason `store-payout-operator-only`, audit row.
   Labelled-but-not-the-store → ordinary; unresolvable chain → refused (fail closed). Ordinary payouts:
   one extra `businesses/{sellerUid}` read, behaviour unchanged.
 - `functions/first-party-store-payout.js` — `sokoniStoreListPayouts` (operator queue, read) and
   `sokoniStorePayoutIdentity` (admin queues: store business id, read). `functions/index.js` — exports.
-- `scripts/test-sokoni-first-party-store.js` — 131/0 (Q1–Q14: every action refused for admin/superAdmin
+- `scripts/test-payout-outcome-unknown.js` (from 45a837d, 62/0), `scripts/test-payout-paid-status-guard.js`
+  (from 45a837d, emulator — NOT run), `scripts/lib/fake-firestore-txn.js`.
+- `scripts/test-sokoni-first-party-store.js` — 133/0 (Q1–Q14 + Q8b paid-state guard for the operator: every action refused for admin/superAdmin
   non-operators with an audit row; operator approve / mark-paid (ref + attestation) / reject; existing
   guards hold; ordinary requests unchanged; forged label; fail-closed chain); 2 sabotages of the guard red.
 - `docs/SOKONI_STORE_OPERATOR_CENSUS.md` — third pass, lineage gate, deploy list.
