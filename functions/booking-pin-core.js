@@ -64,6 +64,29 @@ function _key() {
   if (process.env.K_SERVICE || process.env.FUNCTION_TARGET) fail('failed-precondition', 'Booking PIN key unavailable.');
   return 'sokoni-event-pin-TEST-ONLY';             /* local test process only — never in Cloud Functions */
 }
+/* PIN AT REST IS ENCRYPTED (2026-10-01, sokoni-70 review). The buyer must be able to view their PIN
+   again (getMyBookingPin), so a one-way hash alone cannot serve that; but a readable PIN must not sit
+   in Firestore. AES-256-GCM, key derived from SOKONI_HMAC_KEY with its own label (never the hash
+   key itself), the envelope id as associated data (a ciphertext cannot be moved to another booking).
+   Verification still uses only the HMAC hash on the envelope. Whether a buyer should be able to
+   re-view the PIN at all (vs. show-once + renew) is an OWNER decision, recorded in the docs. */
+function _encKey() { return crypto.createHmac('sha256', _key()).update('entbk-pin-enc-v1').digest(); }
+function _encPin(envId, pin) {
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', _encKey(), iv);
+  c.setAAD(Buffer.from(String(envId)));
+  const ct = Buffer.concat([c.update(String(pin), 'utf8'), c.final()]);
+  return { v: 1, iv: iv.toString('base64'), ct: ct.toString('base64'), tag: c.getAuthTag().toString('base64') };
+}
+function _decPin(envId, enc) {
+  if (!enc || enc.v !== 1) return null;
+  try {
+    const d = crypto.createDecipheriv('aes-256-gcm', _encKey(), Buffer.from(enc.iv, 'base64'));
+    d.setAAD(Buffer.from(String(envId)));
+    d.setAuthTag(Buffer.from(enc.tag, 'base64'));
+    return Buffer.concat([d.update(Buffer.from(enc.ct, 'base64')), d.final()]).toString('utf8');
+  } catch (_) { return null; }
+}
 function _pinHash(envId, pin) {
   const p = ID.normalizePin(pin);
   return p ? crypto.createHmac('sha256', _key()).update(`entbk|${envId}|${p}`).digest('hex') : null;
@@ -103,7 +126,7 @@ async function issueForBooking(bookingId, b) {
       createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), version: 1,
     });
     txn.create(db.collection(COL.REFS).doc(bookingRef), { envId, createdAt: FieldValue.serverTimestamp() });
-    txn.create(db.collection(COL.SECRETS).doc(envId), { envId, bookingRef, pin, buyerUid: b.customerUid || null, createdAt: FieldValue.serverTimestamp() });
+    txn.create(db.collection(COL.SECRETS).doc(envId), { envId, bookingRef, pinEnc: _encPin(envId, pin), buyerUid: b.customerUid || null, createdAt: FieldValue.serverTimestamp() });
     created = true;
   });
   if (created) await _audit('booking_pin_issued', 'system', envId, { bookingId });
@@ -138,12 +161,20 @@ async function mirrorServiceOrder(bookingId, b, envId) {
   const ref = db.collection('orders').doc(bookingId);
   const cur = await ref.get();
   if (cur.exists && cur.data().type && cur.data().type !== 'service_booking') return { skipped: 'id_collision' };
+  /* TRIGGER-INERT BY CONSTRUCTION (2026-10-01 audit). Live order triggers act on `status`,
+     `orderStatus`, `sellerUid`/`sellerId`, `paymentVerified`, `hubId` and rider assignment:
+     onOrderStatusChange settles on status → completed WITH sellerUid (it would credit the provider
+     a SECOND time, beside providerCompleteBooking), auto-assigns a rider on confirmed, and
+     onNewOrderCreated notifies the "seller" of a new order. This record is a VIEW of the booking for
+     the buyer's order history — so it carries the booking state under its own names and none of
+     those fields. The booking (providerBookings) stays the only authority; providerCompleteBooking
+     stays the only provider credit point. */
   await ref.set({
     type: 'service_booking', source: 'providerBookings', bookingId, envId: envId || null,
-    buyerUid: b.customerUid || null, sellerUid: b.providerId || null, providerId: b.providerId || null,
-    hubId: b.commissionHub || null, service: b.service || null, productName: b.service || 'Service booking',
+    buyerUid: b.customerUid || null, providerUid: b.providerId || null,
+    commissionHub: b.commissionHub || null, service: b.service || null, productName: b.service || 'Service booking',
     items: [{ name: b.service || 'Service booking', qty: 1, price: totalKES }],
-    status: b.status || null, paymentStatus: ps, paymentRef: b.paymentRef || null,
+    bookingStatus: b.status || null, bookingPaymentStatus: ps, paymentRef: b.paymentRef || null,
     total: totalKES, priceKES, feeKES, currency: 'KES', commissionKES, providerNetKES, gatewayChargesKES, escrow,
     scheduledAt: b.startTs || b.scheduledAt || null,
     createdAt: cur.exists && cur.data().createdAt ? cur.data().createdAt : (b.createdAt || FieldValue.serverTimestamp()),
@@ -231,7 +262,8 @@ async function customerGetBookingPin(req) {
   const renewals = Number(env.pin && env.pin.renewals) || 0;
   const canRenew = !verified && env.payment && env.payment.state === ID.PAYMENT.CONFIRMED
     && (expired || !win.opensAtMs || nowMs >= win.opensAtMs) && renewals < MAX_RENEWALS;
-  return { issued: !!(sec.exists && sec.data().pin), pin: expired ? null : (sec.exists ? sec.data().pin : null), bookingRef: env.bookingRef, phrase: ID.PHRASE.BOOKING,
+  const _pinPlain = sec.exists ? _decPin(envId, sec.data().pinEnc) : null;
+  return { issued: !!_pinPlain, pin: expired ? null : _pinPlain, bookingRef: env.bookingRef, phrase: ID.PHRASE.BOOKING,
            verification: env.verification ? env.verification.state : null, payment: env.payment ? env.payment.state : null,
            opensAtMs: win.opensAtMs || null, expiresAtMs: win.expiresAtMs, expired, canRenew, renewalsLeft: Math.max(0, MAX_RENEWALS - renewals) };
 }
@@ -264,7 +296,7 @@ async function customerRenewBookingPin(req) {
     if (renewals >= MAX_RENEWALS) fail('resource-exhausted', 'This booking has reached its PIN renewal limit — contact SOKONI support.');
     txn.update(envRef, { pin: { hash: _pinHash(envId, pin), issuedAt: FieldValue.serverTimestamp(), issuedAtMs: nowMs, renewals: renewals + 1 },
       when: { startMs: _ms(b.startTs) || _ms(b.scheduledAt), endMs: _ms(b.endTs) }, updatedAt: FieldValue.serverTimestamp() });
-    txn.set(db.collection(COL.SECRETS).doc(envId), { pin, renewedAt: FieldValue.serverTimestamp() }, { merge: true });
+    txn.set(db.collection(COL.SECRETS).doc(envId), { pinEnc: _encPin(envId, pin), pin: FieldValue.delete(), renewedAt: FieldValue.serverTimestamp() }, { merge: true });
     return { renewals: renewals + 1, expiresAtMs: nowMs + PIN_TTL_MS, bookingRef: env.bookingRef };
   });
   await _audit('booking_pin_renewed', uid, envId, { bookingId, renewals: out.renewals });
@@ -291,4 +323,4 @@ exports.entBookingOnProviderBooking = onDocumentWritten({ document: 'providerBoo
 });
 
 exports.SOKONI_HMAC_KEY = SOKONI_HMAC_KEY;
-exports._internal = { issueForBooking, mirrorServiceOrder, onBookingWritten, verifyForCompletion, customerGetBookingPin, customerRenewBookingPin, COL, PIN_TTL_MS, MAX_RENEWALS, _setClock: (fn) => { _now = fn || (() => Date.now()); } };
+exports._internal = { _encPin, _decPin, issueForBooking, mirrorServiceOrder, onBookingWritten, verifyForCompletion, customerGetBookingPin, customerRenewBookingPin, COL, PIN_TTL_MS, MAX_RENEWALS, _setClock: (fn) => { _now = fn || (() => Date.now()); } };

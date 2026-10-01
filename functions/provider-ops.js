@@ -168,16 +168,32 @@ _h.providerConfirmBooking = async (req) => {
 _h.providerDeclineBooking = async (req) => {
   const uid = _uid(req);
   const { ref, data } = await _ownBooking(uid, req.data?.bookingId);
-  if (['completed', 'cancelled'].includes(data.status)) {
+  if (['completed', 'cancelled', 'no_show'].includes(data.status)) {
     throw new HttpsError('failed-precondition', `Cannot decline a "${data.status}" booking.`);
   }
-  const batch = _db().batch();
-  batch.update(ref, { status: 'declined', declinedAt: _ts(), updatedAt: _ts(),
-    declineReason: _san(req.data?.reason, 300) || null });
-  batch.delete(_db().collection('providerCalendar').doc(ref.id));
-  const lockRef = _slotLockRef(uid, data);   /* §3.2 — release the slot lock on decline */
-  if (lockRef) batch.delete(lockRef);
-  await batch.commit();
+  if (data.status === 'declined') return { success: true, status: 'declined', alreadyDone: true };
+  /* 2026-10-01 audit (STOP S4): a PAID booking that the provider declined stayed paid_held for ever —
+     no refund, and cancel then answered "alreadyDone". Decline is now written in a transaction that
+     re-checks the status, and held funds go back exactly as a provider cancel does (full refund via
+     the existing _disburseHeldFunds — no new money path). */
+  let _declined = false;
+  await _db().runTransaction(async (t) => {
+    const cur = await t.get(ref);
+    const c = cur.exists ? cur.data() : null;
+    if (!c) throw new HttpsError('not-found', 'Booking not found.');
+    if (c.status === 'declined') return;
+    if (['completed', 'cancelled', 'no_show'].includes(c.status)) throw new HttpsError('failed-precondition', `Cannot decline a "${c.status}" booking.`);
+    t.update(ref, { status: 'declined', declinedAt: _ts(), updatedAt: _ts(),
+      declineReason: _san(req.data?.reason, 300) || null });
+    t.delete(_db().collection('providerCalendar').doc(ref.id));
+    const lockRef = _slotLockRef(uid, c);   /* §3.2 — release the slot lock on decline */
+    if (lockRef) t.delete(lockRef);
+    _declined = true;
+  });
+  if (_declined) {
+    try { await _disburseHeldFunds(data, ref, { by: 'provider', isNoShow: false }); }
+    catch (e) { logger.error('disburse-on-decline failed (recoverable)', { bookingId: ref.id, err: e.message }); }
+  }
   return { success: true, status: 'declined' };
 };
 
@@ -279,11 +295,26 @@ _h.providerCompleteBooking = async (req) => {
     const cur = bSnap.data();
     if (cur.status === 'completed') { result = { alreadyDone: true }; return; }
     if (cur.providerId !== uid) throw new HttpsError('permission-denied', 'Not your booking.');
+    /* Status re-checked INSIDE the txn (2026-10-01 audit, STOP S2): the pre-read above can be stale —
+       a cancel that lands between it and this txn would otherwise be overwritten by "completed" and
+       the provider credited on a cancelled booking. */
+    if (!['confirmed', 'in_progress', 'pending'].includes(cur.status)) {
+      throw new HttpsError('failed-precondition', `Cannot complete a "${cur.status}" booking.`);
+    }
 
     /* Credit only when the funds are HELD (paid_held) — the SINGLE provider credit point.
        Re-read inside the txn so two concurrent completions can't both credit, and a
        post-settlement retry is a no-op (status==='completed' already returned above). */
     const isHeld     = cur.paymentStatus === 'paid_held';
+    /* PIN INSIDE THE TXN (2026-10-01, sokoni-70 review). The PIN check above runs only when the
+       booking was ALREADY paid_held when read; if the payment landed between that read and this
+       transaction, the txn would see paid_held and credit WITHOUT a PIN. Held funds are released
+       only when the envelope says the customer's PIN was verified — re-read here, before any write. */
+    if (isHeld) {
+      const envSnap = await t.get(_db().collection('entBookings').doc(require('./shared/ent-booking-identity').envIdFor('providerBookings', ref.id)));
+      const vstate = envSnap.exists && envSnap.data().verification ? envSnap.data().verification.state : null;
+      if (vstate !== 'VERIFIED') throw new HttpsError('failed-precondition', "The customer's booking PIN is required to complete a paid booking.");
+    }
     const willCredit = isHeld && settleShillings >= 1;
 
     t.update(ref, Object.assign(
@@ -405,16 +436,26 @@ _h.providerCancelBooking = async (req) => {
   }
   if (data.status === 'completed') throw new HttpsError('failed-precondition', 'A completed booking cannot be cancelled.');
 
-  const batch = _db().batch();
-  batch.update(ref, {
-    status: 'cancelled', cancelledAt: _ts(), updatedAt: _ts(),
-    cancelledBy: isProvider ? 'provider' : 'customer',
-    cancelReason: _san(req.data?.reason, 300) || null,
+  /* 2026-10-01 audit (STOP S2): this was a blind batch after a stale read — a completion landing in
+     between left the booking "cancelled" AND settled (customer told it was cancelled, no refund).
+     The status is now re-read and the cancel written in ONE transaction. */
+  let _cancelOutcome = null;
+  await _db().runTransaction(async (t) => {
+    const cur = await t.get(ref);
+    const c = cur.exists ? cur.data() : null;
+    if (!c) throw new HttpsError('not-found', 'Booking not found.');
+    if (['cancelled', 'declined', 'no_show'].includes(c.status)) { _cancelOutcome = { alreadyDone: true, status: c.status }; return; }
+    if (c.status === 'completed') throw new HttpsError('failed-precondition', 'A completed booking cannot be cancelled.');
+    t.update(ref, {
+      status: 'cancelled', cancelledAt: _ts(), updatedAt: _ts(),
+      cancelledBy: isProvider ? 'provider' : 'customer',
+      cancelReason: _san(req.data?.reason, 300) || null,
+    });
+    const lockRef = _slotLockRef(c.providerId, c);   /* §3.2 release */
+    if (lockRef) t.delete(lockRef);
+    t.delete(_db().collection('providerCalendar').doc(id));
   });
-  const lockRef = _slotLockRef(data.providerId, data);   /* §3.2 release */
-  if (lockRef) batch.delete(lockRef);
-  batch.delete(_db().collection('providerCalendar').doc(id));
-  await batch.commit();
+  if (_cancelOutcome && _cancelOutcome.alreadyDone) return { success: true, status: _cancelOutcome.status, alreadyDone: true };
 
   /* Move held money per the refund policy (no-op if the booking was never paid). */
   try { await _disburseHeldFunds(data, ref, { by: isProvider ? 'provider' : 'customer', isNoShow: false }); }
