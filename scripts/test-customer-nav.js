@@ -224,7 +224,7 @@ ck('menu opens with 👤 My profile as the primary button, above My workspaces',
    _popAt > -1 && menu.indexOf('sk-acct-profile-btn', _popAt) > -1 &&
    menu.indexOf('sk-acct-profile-btn', _popAt) < menu.indexOf('wsSection +', _popAt));
 ['📦 My Orders', '🔔 Notifications', '⚙️ Settings',
- '🛡️ Account &amp; Security', '🏪 Register a business', '❓ Help &amp; Support'].forEach(function (e) {
+ '🛡️ Account &amp; Security', '🏪 Register a business', '🛟 Support', '❓ Help'].forEach(function (e) {
   ck('menu carries ' + e.split(' ')[0] + ' ' + e.split(' ').slice(1).join(' '),
      acct.indexOf(e) !== -1);
 });

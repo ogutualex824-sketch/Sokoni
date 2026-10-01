@@ -1037,7 +1037,7 @@ self.addEventListener("push", event => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || '/assets/icons/icon-192.png',
+      icon: data.icon || '/assets/logosokoni.png',
       badge: '/assets/logosokoni.png',
       ...(img ? { image: img } : {}),
       ...(tag ? { tag, renotify: true } : {}),   /* one thread per order, not eleven */

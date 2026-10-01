@@ -464,7 +464,10 @@
         '<a class="sk-acct-link" href="/offer.html" data-sk-register-business onclick="window._skCloseAcct()">🏪 Register a business</a>' +
         '<a class="sk-acct-link" href="wallet.html" onclick="window._skCloseAcct()">👛 Wallet</a>' +
         '<a class="sk-acct-link" href="wishlist.html" onclick="window._skCloseAcct()">❤️ Wishlist</a>' +
-        '<a class="sk-acct-link" href="help.html" onclick="window._skCloseAcct()">❓ Help &amp; Support</a>' +
+        /* Owner 2026-10-01: Support AND Help, each its own entry — Support opens the in-app ticket
+           (support.html → SokoniSupportContact → AdminOS), Help the self-serve help centre. */
+        '<a class="sk-acct-link" href="support.html" data-sk-support onclick="window._skCloseAcct()">🛟 Support</a>' +
+        '<a class="sk-acct-link" href="help.html" data-sk-help onclick="window._skCloseAcct()">❓ Help</a>' +
         /* Sign Out stays visually separated — it is an account ACTION, not a
            destination, and a mis-tap costs the merchant their session. */
         '<div class="sk-acct-separator"></div>' +

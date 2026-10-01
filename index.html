@@ -2823,9 +2823,10 @@
         deferredPrompt = window._sokoniInstallEvent || null;
       }
 
-      window.addEventListener("beforeinstallprompt", function () {
-        setTimeout(_showPrompt, 3000);
-      });
+      /* Owner 2026-10-01: the install offer is ONE banner on every phone (sw-register.js
+         _maybeOfferInstall — Android one-tap AND iOS steps, rate-limited). Home's compact prompt no
+         longer auto-shows, so the two never appear together; its buttons stay wired. */
+      void _showPrompt;
 
       window.addEventListener("DOMContentLoaded", function () {
         var installBtn = document.getElementById("pwaInstallBtn");
@@ -3937,7 +3938,7 @@ document.addEventListener('DOMContentLoaded',function(){
     if (Notification.permission === 'granted') {
       new Notification('💚 Payment Received — SOKONI', {
         body: 'KES ' + Number(p.amount || 0).toLocaleString() + (p.mpesaCode ? ' · ' + p.mpesaCode : ''),
-        icon: 'assets/sokoni logoo.jpeg',
+        icon: '/assets/logosokoni.png',
       });
     }
 
@@ -4004,7 +4005,7 @@ document.addEventListener('DOMContentLoaded',function(){
     if (Notification.permission === 'granted') {
       new Notification('🛒 New Order — SOKONI', {
         body: (o.buyerName || 'Customer') + (o.total ? ' · KES ' + Number(o.total).toLocaleString() : ''),
-        icon: 'assets/sokoni logoo.jpeg',
+        icon: '/assets/logosokoni.png',
       });
     }
 
