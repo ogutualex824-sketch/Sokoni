@@ -3082,7 +3082,7 @@ exports.onOrderStatusChange = onDocumentUpdated(
             const _r = await CP.issueOrResend({ db, FV: _FV, key: _key, orderId, mode: "auto", now: _now });
             if (_r.ok && _r.action === "issued") {
               const _ph = await CP.resolveBuyerPhone(db, _r.buyerUid, after);
-              await CP.deliverPin({ db, FV: _FV, orderId, version: _r.version, pin: _r.pin, phone: _ph, sendSms: sokoniAt.atSendSMS, now: _now });
+              await CP.deliverPin({ db, FV: _FV, orderId, version: _r.version, pin: _r.pin, phone: _ph, sendSms: sokoniAt.atSendSMS, sendWhatsApp: CP.whatsAppSender(), now: _now });
             }
           } else {
             console.warn("[onOrderStatusChange] " + orderId + " — no HMAC key; completion PIN not issued (fail closed)");
