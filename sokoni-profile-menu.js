@@ -291,8 +291,12 @@
       employer: { i: '💼', l: 'Employer',         w: 'Hiring' },
     };
     const roleUI = r => (Object.prototype.hasOwnProperty.call(ROLE_UI, r) ? ROLE_UI[r] : { i: '👤', l: rName(r), w: '' });
-    const _myRoles = _wsRoles.length ? _wsRoles : [_acting || 'buyer'];
-    const workspaceStrip =
+    /* Rows come ONLY from the authority (_skSwitcherState → SokoniRoleAuthority). No fallback to
+       the acting role or the localStorage mirror: a forged mirror role must never produce a row,
+       and an account with zero confirmed roles shows no role section (the "Acting as" line in the
+       head still states the current role). */
+    const _myRoles = _wsRoles;
+    const workspaceStrip = !_myRoles.length ? '' :
       '<div class="sk-acct-ws-section" data-sk-section="roles">' +
         '<div class="sk-acct-ws-label">My roles</div>' +
         _myRoles.map(function (r) {
