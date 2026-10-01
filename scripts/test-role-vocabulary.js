@@ -38,7 +38,9 @@ const head = (t) => console.log('\n── ' + t + ' ──');
 
 /* ══ 1 · the canonical set ══ */
 head('1 · canonical vocabulary');
-const EXPECTED = ['buyer', 'seller', 'provider', 'mechanic', 'rider', 'health', 'legal', 'landlord', 'tenant', 'admin', 'staff'];
+/* financial_partner added 2026-10-01 for the Banking Hub programme (owner, via sokoni-4d): listed in
+   financialProviders/{uid} by the lifecycle. This list stays a tripwire: a role nobody agreed must fail here. */
+const EXPECTED = ['buyer', 'seller', 'provider', 'mechanic', 'rider', 'health', 'legal', 'landlord', 'tenant', 'financial_partner', 'admin', 'staff'];
 EXPECTED.forEach((r) => ck(r + ' is canonical', VOCAB.isCanonicalRole(r)));
 ck('no extra roles beyond the agreed set',
    VOCAB.CANONICAL_ROLES.length === EXPECTED.length,

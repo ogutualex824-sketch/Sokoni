@@ -68,6 +68,8 @@ const logger = require('firebase-functions/logger');
 /* Canonical role vocabulary (Roles Phase 1). The single definition of what an
    application may declare; see functions/role-vocabulary.js. */
 const VOCAB = require('./role-vocabulary');
+/* financialProviders/{uid}: the ONE validator, shared with the partner dashboard's edit callable. */
+const FPL = require('./financial-partner-listing');
 
 const REGION = 'us-central1';
 const _db = () => getFirestore();
@@ -839,6 +841,32 @@ async function projectRoleProfile(db, app, uid, role, approved) {
   return { collection: spec.collection, id: uid, action: snap.exists ? 'updated' : 'created' };
 }
 
+/* ── FINANCIAL PARTNER LISTING (Banking Hub, 2026-10-01) ─────────────────────
+   financialProviders/{uid} is the public directory entry. It is rebuilt from
+   validated fields only (functions/financial-partner-listing.js) and carries
+   exactly FPL.PUBLIC_KEYS: no applicant name, ID, KRA PIN, personal contact or
+   agreement data, and licenceVerified is always false.
+   Approve  → full replace (set without merge), so a field the applicant removed
+              or that failed validation cannot linger from an earlier listing.
+   Reject / suspend / revoke → listingStatus 'withdrawn' with merge. The document
+              is kept, never deleted, the same retraction shape as providers.
+   An approval whose profile is invalid never reaches here: applyDecision refuses
+   it first, so nothing is listed and no role or claim is granted. */
+async function projectFinancialPartner(db, app, uid, approved, appId) {
+  const ref = db.collection('financialProviders').doc(uid);
+  const snap = await ref.get();
+  if (!approved) {
+    if (!snap.exists) return { collection: 'financialProviders', id: uid, action: 'none' };
+    await ref.set({ listingStatus: 'withdrawn', updatedAt: _ts() }, { merge: true });
+    return { collection: 'financialProviders', id: uid, action: 'withdrawn' };
+  }
+  const built = FPL.buildListing(app, uid, appId);
+  if (!built.ok) throw new Error('financial partner listing invalid: ' + built.reason);
+  await ref.set(Object.assign({}, built.doc, { approvedAt: _ts(), updatedAt: _ts() }));
+  return { collection: 'financialProviders', id: uid, action: snap.exists ? 'updated' : 'created',
+           ...(built.dropped.length ? { dropped: built.dropped } : {}) };
+}
+
 /* Account roles. `roles` must be written as an ARRAY — a provider whose account
    carries only `isProvider: true` lands in the app as a buyer, and the analytics
    gate reads `roles` (array), not a `role` string. Both the array and the
@@ -868,6 +896,7 @@ async function grantAccountRole(db, uid, role, approved) {
     legal:    'legal',
     landlord: 'landlord',
     tenant:   'tenant',
+    financial_partner: 'financial_partner',
     admin:    'admin',
     staff:    'staff',
   };
@@ -1014,6 +1043,34 @@ async function applyDecision(appId, app, opts = {}) {
     return { ok: false, reason: 'unknown_role', appId, requestedRole: bad };
   }
 
+  /* ── FINANCIAL PARTNER: an invalid listing is refused, never guessed ───────
+     An unknown institutionType, a name that is not 2–120 characters, or no valid
+     service means there is nothing truthful to list. Nothing is provisioned: no
+     listing, no account role, no claim. The reason is recorded on the
+     application (projectionStatus is a decision key the applicant cannot write,
+     K13-C) and raised to an admin, the same way an unknown role is. */
+  if (role === 'financial_partner' && approved) {
+    const built = FPL.buildListing(app, uid, appId);
+    if (!built.ok) {
+      await db.collection('applications').doc(appId).set({
+        projectionStatus: 'blocked_invalid_profile',
+        projectionError: FPL.REASONS[built.reason] || built.reason,
+        decisionAppliedFor: status,
+        decisionAppliedAt: _ts(),
+      }, { merge: true });
+      await db.collection('adminAlerts').add({
+        kind: 'application_profile_invalid',
+        severity: 'medium',
+        message: 'Financial partner application ' + appId + ' was approved but NOT listed: '
+               + (FPL.REASONS[built.reason] || built.reason),
+        appId, uid, reason: built.reason,
+        createdAt: _ts(),
+      }).catch(() => {});
+      logger.warn('[appLifecycle] financial partner profile invalid — not listed', { appId, reason: built.reason });
+      return { ok: false, reason: 'invalid_profile', appId, detail: built.reason };
+    }
+  }
+
   const receipt = { appId, uid, role, status, writes: [] };
 
   try {
@@ -1025,6 +1082,10 @@ async function applyDecision(appId, app, opts = {}) {
       /* legalProviders (authority) + lawyers (search projection), one commit.
          Returns TWO receipt entries, so push them individually. */
       (await projectLegal(db, app, uid, approved)).forEach((w) => receipt.writes.push(w));
+    } else if (role === 'financial_partner') {
+      /* Banking Hub directory entry. Never projectProvider: a bank is not a
+         service provider and must not appear in the services directory. */
+      receipt.writes.push(await projectFinancialPartner(db, app, uid, approved, appId));
     } else if (ROLE_PROFILES[role]) {
       /* mechanic / landlord / tenant — a uid-keyed profile this approval owns.
          Before Phase 2 these fell through to projectProvider and were filed in
@@ -1468,6 +1529,6 @@ exports.applicationList = onCall(
 exports._internal = {
   toE164KE, toLocalKE, splitLocation, resolveRole, canonStatus, normVehicle, _san, _sanText,
   buildIntakePatch, applyDecision, projectProvider, projectDriver,
-  projectLegal, projectRoleProfile, LEGAL_SPECS, ROLE_PROFILES, DELEGATED_ROLES,
+  projectLegal, projectRoleProfile, projectFinancialPartner, LEGAL_SPECS, ROLE_PROFILES, DELEGATED_ROLES,
   INTAKE_VERSION, KE_COUNTIES,
 };

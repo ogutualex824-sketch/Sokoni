@@ -1,3 +1,18 @@
+## [2026-10-01] - Applications: financial_partner role lists approved partners in financialProviders/{uid} — functions only, NOT deployed
+
+Banking Hub programme (owner, via sokoni-4d). One approval flow: a requestedRole:'financial_partner' application approved in
+AdminOS projects a public directory listing, server-written, from validated fields only. See docs/FINANCIAL_PARTNER_LISTING.md.
+
+- Files: functions/financial-partner-listing.js (new, the one validator), functions/application-lifecycle.js (projection,
+  invalid-profile refusal, ROLE_KEY), functions/role-vocabulary.js (canonical role), scripts/test-financial-partner-lifecycle.js
+  (new, 38/0, 6/6 sabotages), scripts/test-role-vocabulary.js (agreed set), docs/FINANCIAL_PARTNER_LISTING.md (new).
+- Database: new collection financialProviders/{uid}, server-written. users.roles gains financial_partner on approval.
+- API: no new callable. Auth custom claim financial_partner is set on approval and cleared on revoke.
+- Security: invalid profile refuses everything (no listing, role or claim) and alerts an admin; licenceVerified is always false;
+  verifiedBy means admin review of the listing only; no personal field reaches the public document.
+- Rules (separate release, not in this commit): financialProviders public read where listingStatus=='approved', client write:false.
+- Breaking changes: none. Neighbouring suites green: K13-B 8/0, lifecycle parity 53/0, seller application 57/0, role authority 155/0, role vocabulary 68/0.
+
 ## [2026-09-28] - HOTFIX K13-B: applicationLifecycle projects only a server-recorded, admin decision
 
 **Functions only, one file, NOT deployed.** Branch `hotfix/k13b-lifecycle-decision-authority` sits on top of the

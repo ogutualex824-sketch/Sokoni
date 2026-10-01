@@ -39,6 +39,9 @@ const CANONICAL_ROLES = Object.freeze([
   'landlord',
   'tenant',     /* RENTAL tenant. Unrelated to the `tenants/` collection, which is
                    inventory multi-tenancy (isTenantMember / sellerId claim). */
+  'financial_partner', /* Banking Hub listing: bank, SACCO, accountant, insurer … (2026-10-01).
+                   Listed in financialProviders/{uid} by the lifecycle; the listing says a
+                   SOKONI admin approved it, never that a regulator licensed it. */
   'admin',
   'staff',
 ]);
