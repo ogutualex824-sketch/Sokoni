@@ -1,3 +1,12 @@
+## [2026-10-01] — The cart (and every shopping page) shows the shopper layout, not the Super Admin sidebar
+
+**Files:** `sokoni-nav-engine.js`, `scripts/test-cart-no-workspace-sidebar.js`, `CHANGELOG.md` · **Base:** live `72dca56`
+
+- **Defect (owner report):** on the cart, a super admin got the Super Admin desktop sidebar wrapped around the cart (an admin got the admin one; a seller the seller sidebar + sub-nav). `_workspace()` returned the user's own role for any page outside its workspace map.
+- **Fix:** shopping pages always resolve to the buyer workspace, whatever the role: index, cart, checkout, product, category, search, wishlist, my-orders, track, success, services, food, property-hub, car-hub, healthcare, legal-hub, tech-hub, jobs, entertainment, notifications. Operator consoles stay one tap away in the profile menu.
+- **Found, NOT changed (flagged):** `_WS_MAP` keys carry `.html`, but `_page` is computed without it, so the map never matches any page. 47 operator pages show the role sidebar only by that accident. This fix leaves them unchanged.
+- **Tests:** cart-no-workspace-sidebar 5/0 (live fails 3, reproducing the bug); customer-nav 62/0 and navigation 11/11 unchanged.
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
