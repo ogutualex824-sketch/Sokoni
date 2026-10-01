@@ -42,9 +42,16 @@ ok(!/getImageData|putImageData|drawImage/.test(CODE),
 
 /* ── 2. LOADED, IN THE RIGHT ORDER ────────────────────────────────────────── */
 console.log('\n2. The shell loads them before Products');
-ok(/<script src="sokoni-creative\.js"><\/script>/.test(V2), 'sokoni-creative.js is loaded');
-ok(/<script src="sokoni-ai-subscriptions\.js"><\/script>/.test(V2), 'the quota authority is loaded');
-ok(V2.indexOf('sokoni-creative.js') < V2.indexOf('sokoni-merchant-products.js'),
+
+/* merchant-v2 loads section modules on first open (MODULE_SCRIPTS, keyed by route, dependency order). */
+const _reg = (function () { const m = /var MODULE_SCRIPTS = (\{[\s\S]*?\});/.exec(V2); try { return m ? (new Function('return (' + m[1] + ');'))() : {}; } catch (_) { return {}; } }());
+const _inRoute = (route, file) => (_reg[route] || []).indexOf(file);
+const _loads = (route, file) => new RegExp('<script[^>]*src="/?' + file.replace(/\./g, '\\.') + '"').test(V2) || _inRoute(route, file) >= 0;
+ok(_loads('products', 'sokoni-creative.js'), 'sokoni-creative.js is loaded');
+ok(_loads('products', 'sokoni-ai-subscriptions.js'), 'the quota authority is loaded');
+ok(_inRoute('products', 'sokoni-creative.js') >= 0 && _inRoute('products', 'sokoni-ai-subscriptions.js') >= 0
+     ? Math.max(_inRoute('products', 'sokoni-creative.js'), _inRoute('products', 'sokoni-ai-subscriptions.js')) < _inRoute('products', 'sokoni-merchant-products.js')
+     : V2.indexOf('sokoni-creative.js') < V2.indexOf('sokoni-merchant-products.js'),
    'both load BEFORE the module that consults them');
 
 /* ── 3. ENTITLEMENT IS NOT OURS TO DECIDE ─────────────────────────────────── */

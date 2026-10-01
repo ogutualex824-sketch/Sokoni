@@ -699,7 +699,6 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      campaigns before marketing, disputes/messages/customers/store/tax before their
      -ui counterparts), so this list mirrors v1's load order exactly. -->
 <script src="sokoni-merchant-data.js"></script>
-<script src="sokoni-merchant-stock.js"></script>
 <!-- ADR-009 canonical receipt-identifier accessor. Must precede sokoni-merchant-sell.js,
      which reads receipt ids through receiptIdOf(). Production loads that module STATICALLY
      here, unlike the work branch where it is loaded on demand — hence a different anchor. -->
@@ -737,31 +736,18 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      no fetches at load) and register their own global, exactly like the two
      above. scripts/test-module-authorities.js now fails the build if any module
      composes an authority this host does not load. -->
-<script src="sokoni-buyer-locations.js"></script>
 <script src="sokoni-fulfilment.js"></script>
-<script src="sokoni-shift.js"></script>
 <link rel="stylesheet" href="sokoni-merchant-dashboard.css">
 <link rel="stylesheet" href="sokoni-merchant-offers.css">
 <script src="sokoni-merchant-dashboard.js"></script>
-<script src="sokoni-merchant-sell.js"></script>
-<script src="sokoni-merchant-inventory-ui.js"></script>
+<!-- SECTION MODULES LOAD ON FIRST OPEN (2026-10-01; converged with the 0bd20bc design). Sell, Products, Inventory,
+     Offers, Wallet, Receipts, Team, Marketing, Disputes, Messages, Customers, Store, Tax and Flash were ~825 KB of
+     script parsed at EVERY start. They are listed in MODULE_SCRIPTS (inline script below) by route, in dependency
+     order, and loaded by renderModule on first open — pre-loaded the moment a finger or pointer lands on a section
+     link. Sell (the till) is warmed at idle unless the connection is save-data / 2G. Shared authorities stay here,
+     eager: data, routes, receipts, cash, fulfilment, promotions, product specs, authority, analytics. -->
 <!-- B1. The offer ARITHMETIC lives in the model; the studio only edits it. -->
 <script src="sokoni-promotion-model.js"></script>
-<script src="sokoni-merchant-offers.js"></script>
-<script src="sokoni-merchant-staff.js"></script>
-<script src="sokoni-merchant-team.js"></script>
-<script src="sokoni-merchant-campaigns.js"></script>
-<script src="sokoni-merchant-marketing.js"></script>
-<script src="sokoni-merchant-disputes.js"></script>
-<script src="sokoni-merchant-disputes-ui.js"></script>
-<script src="sokoni-merchant-messages.js"></script>
-<script src="sokoni-merchant-messages-ui.js"></script>
-<script src="sokoni-merchant-customers.js"></script>
-<script src="sokoni-merchant-customers-ui.js"></script>
-<script src="sokoni-merchant-store.js"></script>
-<script src="sokoni-merchant-store-ui.js"></script>
-<script src="sokoni-merchant-tax.js"></script>
-<script src="sokoni-merchant-tax-ui.js"></script>
 <!-- Products, native. Reads the shop-scoped authority (SokoniMerchantData.listProducts)
      and writes through the certified product writer — the SAME authority POS and Sell
      consume, so the till and the catalogue cannot disagree about stock. The module holds
@@ -771,7 +757,6 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      electronics, clothing. Loaded before the writer that consults it; without it specs
      are simply not stored and a product still saves. -->
 <script src="sokoni-product-specs.js"></script>
-<script src="sokoni-merchant-media.js"></script>
 <!-- AI product photography. sokoni-creative.js already implements removeBackground,
      enhanceProduct and smartCrop; sokoni-ai-subscriptions.js owns the per-plan quota and
      shows its own upgrade prompt. Products connects them to the photo being uploaded — it
@@ -803,15 +788,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      this shell writes it. -->
 <script src="sokoni-certification-model.js"></script>
 <script src="sokoni-authority.js"></script>
-<script src="sokoni-ai-subscriptions.js"></script>
-<script src="sokoni-creative.js"></script>
-<script src="sokoni-merchant-products.js"></script>
-<script src="sokoni-merchant-wallet.js"></script>
 <!-- Receipts. Renders through the LOCKED receipt contract (SokoniReceiptDoc in
      sokoni-receipt.js, already loaded above) over the shell's one order reader — so the
      receipt a merchant reads is the document the till prints, not a second layout. -->
-<script src="sokoni-merchant-receipts.js"></script>
-<script src="sokoni-merchant-flash.js"></script>
 <!-- The canonical metric authority. Every figure on Dashboard, Revenue, Analytics and
      Reports comes from here; this shell computes none of its own. Not deferred: the
      inline shell script reads it during first paint. -->
@@ -2660,9 +2639,132 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   /* The route's own label, so an error names what the merchant clicked. */
   function r_name (id) { return (byId[id] || {}).name || id; }
 
+  /* ══ WHICH FILES EACH SECTION NEEDS (MODULE_SCRIPTS — the 0bd20bc design, extended) ═══════════════════════════
+     Keyed by ROUTE, like MODULES. Order within a list is the dependency order the eager tags used: a data module
+     before the -ui module that consumes it. Authorities shared with the always-loaded shell stay as eager tags;
+     test-module-authorities.js checks every module's needs against eager tags + earlier entries here. */
+  var MODULE_SCRIPTS = {
+      sell: [
+          'sokoni-buyer-locations.js',
+          'sokoni-shift.js',
+          'sokoni-merchant-sell.js'
+      ],
+      inventory: [
+          'sokoni-merchant-stock.js',
+          'sokoni-merchant-inventory-ui.js'
+      ],
+      offers: [
+          'sokoni-merchant-offers.js'
+      ],
+      staff: [
+          'sokoni-merchant-staff.js',
+          'sokoni-merchant-team.js'
+      ],
+      marketing: [
+          'sokoni-merchant-campaigns.js',
+          'sokoni-merchant-marketing.js'
+      ],
+      disputes: [
+          'sokoni-merchant-disputes.js',
+          'sokoni-merchant-disputes-ui.js'
+      ],
+      messages: [
+          'sokoni-merchant-messages.js',
+          'sokoni-merchant-messages-ui.js'
+      ],
+      customers: [
+          'sokoni-merchant-customers.js',
+          'sokoni-merchant-customers-ui.js'
+      ],
+      shop: [
+          'sokoni-merchant-store.js',
+          'sokoni-merchant-store-ui.js'
+      ],
+      'kra-tax': [
+          'sokoni-merchant-tax.js',
+          'sokoni-merchant-tax-ui.js'
+      ],
+      products: [
+          'sokoni-merchant-media.js',
+          'sokoni-ai-subscriptions.js',
+          'sokoni-creative.js',
+          'sokoni-merchant-products.js'
+      ],
+      wallet: [
+          'sokoni-merchant-wallet.js'
+      ],
+      receipts: [
+          'sokoni-merchant-receipts.js'
+      ],
+      'flash-sale': [
+          'sokoni-merchant-flash.js'
+      ]
+  };
+  /* One in-flight promise per URL, resolved on the script's onload — so a double-tap or a tap during the idle
+     warm-up waits for the SAME load instead of mounting a module whose script has not executed yet. A failed
+     file is forgotten so the next open retries it. */
+  var _scriptCache = {};
+  function _loadScript (src) {
+    if (_scriptCache[src]) return _scriptCache[src];
+    _scriptCache[src] = new Promise(function (resolve, reject) {
+      var el = document.createElement('script');
+      el.src = src;
+      el.async = false;                  /* preserve execution order within a batch */
+      el.onload = function () { resolve(src); };
+      el.onerror = function () { _scriptCache[src] = null; try { el.remove(); } catch (_) {} reject(new Error(src)); };
+      document.head.appendChild(el);
+    });
+    return _scriptCache[src];
+  }
+  function _loadModuleScripts (id) {
+    var list = MODULE_SCRIPTS[id] || [];
+    /* Sequential, because the order above IS the dependency order. */
+    return list.reduce(function (chain, src) { return chain.then(function () { return _loadScript(src); }); }, Promise.resolve());
+  }
+  /* Intent pre-load: the section's code starts loading when a finger lands on (or a pointer hovers / focus reaches)
+     its link, so it is usually parsed by the time the click fires. Only for sections not yet loaded. */
+  function _preloadFor (el) {
+    var b = el && el.closest ? el.closest('[data-route]') : null;
+    var id = b && b.dataset.route;
+    var def = id && MODULES[id];
+    if (def && !window[def.global] && MODULE_SCRIPTS[id]) _loadModuleScripts(id).catch(function () {});
+  }
+  ['pointerdown', 'mouseover', 'focusin'].forEach(function (t) {
+    document.addEventListener(t, function (e) { _preloadFor(e.target); }, { passive: true });
+  });
+  /* Sell is the surface a merchant opens under pressure — warm it at idle, unless the merchant is on save-data or a
+     2G connection (no blanket prefetch: on mobile data every byte is the merchant's money). */
+  (function () {
+    var c = navigator.connection || {};
+    if (c.saveData === true || /(^|-)2g$/.test(String(c.effectiveType || ''))) return;
+    var idle = window.requestIdleCallback || function (fn) { return setTimeout(fn, 3000); };
+    var warm = function () { idle(function () { _loadModuleScripts('sell').catch(function () {}); }, { timeout: 5000 }); };
+    if (document.readyState === 'complete') warm(); else window.addEventListener('load', warm, { once: true });
+  }());
+
   function renderModule (id, p) {
     var def = MODULES[id];
     var G = window[def.global];
+    /* ── FIRST VISIT: say so now, load, then mount ──────────────────────────────────────────────────────────────
+       The panel is never blank while the section downloads, and never claims to be empty when nothing has been
+       fetched. ABANDONMENT GUARD: the merchant may navigate on while it downloads — mount only if this host is
+       still in the page AND visible (a route panel, or the Wallet's host inside Payments). */
+    if (!G && MODULE_SCRIPTS[id]) {
+      p.innerHTML = '<div class="state" data-loading="' + esc(id) + '"><span class="ico">⏳</span><b>Opening ' +
+        esc(r_name(id)) + '…</b></div>';
+      _loadModuleScripts(id).then(function () {
+        if (!p.isConnected || !p.getClientRects().length) return;
+        if (!window[def.global]) throw new Error(def.global + ' not defined by its scripts');
+        renderModule(id, p);
+      }).catch(function (e) {
+        if (!p.isConnected || !p.getClientRects().length) return;
+        console.error('[merchant-v2] module "' + id + '" failed to load:', e && e.message);
+        p.innerHTML = '<div class="state"><span class="ico">⚠️</span><b>' + esc(id) + ' could not load</b>' +
+          '<small>Its script failed to download, so this surface is unavailable. It is NOT empty — ' +
+          'nothing was fetched. Check your connection and open it again.</small></div>';
+      });
+      return;
+    }
     if (!G || typeof G.mount !== 'function') {
       p.innerHTML = '<div class="state"><span class="ico">⚠️</span><b>' + esc(id) + ' could not load</b>' +
         '<small>The module script did not load, so this surface is unavailable. It is NOT empty — ' +

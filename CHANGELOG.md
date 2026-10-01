@@ -1,3 +1,10 @@
+## [2026-10-01] — merchant-v2: section modules load on first open (−27 start scripts, −824 KB parsed at start) — candidate, NOT deployed
+
+**Files:** `merchant-v2.html` (MODULE_SCRIPTS registry + loader + intent pre-load + guarded renderModule; 27 eager tags removed), `scripts/test-module-authorities.js`, `scripts/test-merchant-wallet.js`, `scripts/test-merchant-products-native.js`, `scripts/test-merchant-receipts-native.js`, `scripts/test-products-ai-photo.js`, new `scripts/test-merchant-v2-lazy-modules.js` (ported from 0bd20bc), new `docs/MERCHANT_V2_LAZY_MODULES.md`. **Functions / rules / data:** none.
+- Start: synchronous scripts 42 → 15; local JS referenced 1,528 KB → 704 KB. Sections load on first open, pre-loaded on touch/hover; Sell warmed at idle unless save-data / 2G (no blanket prefetch on mobile data).
+- Converged with the 0bd20bc design (MODULE_SCRIPTS, per-URL promise, dependency order, abandonment guard) rather than a second loader.
+- Suites updated to keep their intent (loadable, dependencies first, guard present): authorities 51/0 (sabotage 4/4), wallet 74/0 (guard sabotage caught), products 23/0, receipts 28/0, AI-photo 35/0, lazy-modules static 8/0. **Browser network certification and throttled timings NOT yet run** (RAM floor).
+
 ## [2026-10-01] — environment-preflight no longer blocks a release on its OWN deploy chain (scripts only)
 
 **Why (observed on the union hosting deploy, 06:4xZ):** inside `firebase deploy --only hosting` the chain is firebase → cross-env-shell → predeploy-browser-suites.js → preflight. Only {pid, ppid} were excluded, so the wrapper (its command line names predeploy-browser-suites.js) and the running deploy were reported as a PEER runner and a PEER deploy; the gate printed RELEASE BLOCKED and ran no suite (nothing uploaded; live unchanged).

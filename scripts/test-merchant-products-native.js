@@ -61,12 +61,19 @@ ok(API.resolve('products') === 'products',
 console.log('\n2. merchant-v2 can actually mount the module');
 const v2 = R('merchant-v2.html');
 
-ok(/<script src="sokoni-merchant-products\.js"><\/script>/.test(v2),
-   'the module script is loaded');
-ok(/<script src="sokoni-merchant-media\.js"><\/script>/.test(v2),
+
+/* merchant-v2 loads section modules on first open (MODULE_SCRIPTS, keyed by route, dependency order). */
+const _reg = (function () { const m = /var MODULE_SCRIPTS = (\{[\s\S]*?\});/.exec(v2); try { return m ? (new Function('return (' + m[1] + ');'))() : {}; } catch (_) { return {}; } }());
+const _inRoute = (route, file) => (_reg[route] || []).indexOf(file);
+const _loads = (route, file) => new RegExp('<script[^>]*src="/?' + file.replace(/\./g, '\\.') + '"').test(v2) || _inRoute(route, file) >= 0;
+ok(_loads('products', 'sokoni-merchant-products.js'),
+   'the module script is loaded (eager tag or the products route in MODULE_SCRIPTS)');
+ok(_loads('products', 'sokoni-merchant-media.js'),
    'its media dependency is loaded');
 /* Order matters: the editor composes through media at mount time. */
-ok(v2.indexOf('sokoni-merchant-media.js') < v2.indexOf('sokoni-merchant-products.js'),
+ok(_inRoute('products', 'sokoni-merchant-media.js') >= 0
+     ? _inRoute('products', 'sokoni-merchant-media.js') < _inRoute('products', 'sokoni-merchant-products.js')
+     : v2.indexOf('sokoni-merchant-media.js') < v2.indexOf('sokoni-merchant-products.js'),
    'media loads BEFORE products');
 
 const modEntry = (function () {

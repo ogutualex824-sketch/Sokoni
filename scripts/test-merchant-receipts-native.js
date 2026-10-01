@@ -41,9 +41,14 @@ ok(API.resolve('receipts') === 'receipts', 'the legacy section key still resolve
 /* ── 2. THE SHELL MOUNTS IT ───────────────────────────────────────────────── */
 console.log('\n2. merchant-v2 can mount it');
 const v2 = R('merchant-v2.html');
-ok(/<script src="sokoni-merchant-receipts\.js"><\/script>/.test(v2), 'the module script is loaded');
-/* It renders through the locked contract, so that must load FIRST. */
-ok(v2.indexOf('sokoni-receipt.js') < v2.indexOf('sokoni-merchant-receipts.js'),
+
+/* merchant-v2 loads section modules on first open (MODULE_SCRIPTS, keyed by route, dependency order). */
+const _reg = (function () { const m = /var MODULE_SCRIPTS = (\{[\s\S]*?\});/.exec(v2); try { return m ? (new Function('return (' + m[1] + ');'))() : {}; } catch (_) { return {}; } }());
+const _inRoute = (route, file) => (_reg[route] || []).indexOf(file);
+const _loads = (route, file) => new RegExp('<script[^>]*src="/?' + file.replace(/\./g, '\\.') + '"').test(v2) || _inRoute(route, file) >= 0;
+ok(_loads('receipts', 'sokoni-merchant-receipts.js'), 'the module script is loaded (eager tag or the receipts route in MODULE_SCRIPTS)');
+/* It renders through the locked contract, so that must load FIRST — eager, i.e. before any on-demand section. */
+ok(/<script[^>]*src="sokoni-receipt\.js"/.test(v2) && v2.indexOf('src="sokoni-receipt.js"') < v2.indexOf('var MODULE_SCRIPTS'),
    'the receipt contract loads BEFORE the surface that renders through it');
 
 /* Bounded to THIS entry, not a fixed character window. A 600-char slice ran past the end of

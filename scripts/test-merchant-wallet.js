@@ -458,15 +458,15 @@ head('10 - it is STATICALLY loaded, and it is wired');
    redesign. The cost is recorded rather than hidden: the module downloads for
    every merchant, not only those who open the Wallet — which is exactly how
    every other module on this shell already behaves. */
-ck('the module is loaded by a static script tag',
-   /<script[^>]+src="sokoni-merchant-wallet\.js"/.test(SHELL),
-   'this shell has no lazy loader; a global that is never fetched is a dead surface');
+/* 2026-10-01: merchant-v2 now loads section modules on first open (MODULE_SCRIPTS, the 0bd20bc design) — WITH
+   the abandonment guard this suite always said must come back alongside an async loader. */
+const _wreg = (function () { const m = /var MODULE_SCRIPTS = (\{[\s\S]*?\});/.exec(SHELL); try { return m ? (new Function('return (' + m[1] + ');'))() : {}; } catch (_) { return {}; } }());
+ck('the module is loadable by the shell (the wallet route in MODULE_SCRIPTS)',
+   (_wreg.wallet || []).indexOf('sokoni-merchant-wallet.js') >= 0,
+   'a global that is never fetched is a dead surface');
 ck('the shell declares the module global', /wallet:\s*\{ global: 'SokoniMerchantWallet'/.test(SHELL));
-ck('the script tag sits with the other module tags, before the registry names it',
-   SHELL.indexOf('src="sokoni-merchant-wallet.js"') > -1 &&
-   SHELL.indexOf('src="sokoni-merchant-wallet.js"') <
-     SHELL.indexOf("wallet:     { global: 'SokoniMerchantWallet'"),
-   'renderModule reads window[def.global] synchronously — a tag after it would race');
+ck('its entitlement authority is eager (window.SokoniAuthority is read at mount)',
+   /<script[^>]*src="sokoni-authority\.js"/.test(SHELL));
 ck('Payments offers a Wallet view alongside its payments ledger',
    /\{ k: 'ledger', label: 'Payments in' \}, \{ k: 'wallet', label: 'Wallet' \}/.test(SHELL) &&
    /data-payview="/.test(SHELL));
@@ -487,9 +487,10 @@ ck('leaving the Wallet destroys it, so its polling stops',
   const body = rm.slice(0, end + 1);
   ck('CONTROL the renderModule body was isolated', body.length > 200 && body.length < 4000,
      body.length + ' chars');
-  ck('renderModule is SYNCHRONOUS, so no abandonment window exists',
-     !/\.then\(|await |new Promise|setTimeout|import\(/.test(body),
-     'the source lineage needed an abandonment guard only because its loader was async');
+  ck('renderModule loads asynchronously ONLY with the abandonment guard (host still in the page and visible)',
+     /_loadModuleScripts\(id\)\.then\(function \(\) \{\s*if \(!p\.isConnected \|\| !p\.getClientRects\(\)\.length\) return;/.test(body) &&
+     /\.catch\(function \(e\) \{\s*if \(!p\.isConnected \|\| !p\.getClientRects\(\)\.length\) return;/.test(body),
+     'an async load that mounted into a surface the merchant had left would render the wrong surface');
   ck('...and the Wallet is therefore mounted without a route argument',
      /renderModule\('wallet', hostEl\)/.test(SHELL),
      'passing an argument this signature ignores would imply a guard that is not there');
@@ -500,12 +501,11 @@ head('10b - PROVENANCE: the lazy-loader assumption is retired, not forgotten');
    MODULE_SCRIPTS registry and an async load. They were left FAILING rather than
    deleted, so the divergence stayed visible. Now they are replaced — and this
    control records WHY, and fires if the loader ever returns without the guard. */
-ck('no MODULE_SCRIPTS lazy registry exists on this lineage',
-   !/MODULE_SCRIPTS/.test(SHELL),
-   'if this fails, a lazy loader was reintroduced — restore the abandonment guard with it');
-ck('no module is fetched at mount time',
-   !/_loadModuleScripts/.test(SHELL),
-   'the shipped design resolves every global before mount');
+ck('the lazy loader is back WITH its guard (the condition this block was written to enforce)',
+   /var MODULE_SCRIPTS = \{/.test(SHELL) && /if \(!p\.isConnected \|\| !p\.getClientRects\(\)\.length\) return;/.test(SHELL),
+   'a lazy loader without the abandonment guard must fail here');
+ck('one in-flight load per script URL (a double-tap cannot fetch twice or mount early)',
+   /var _scriptCache = \{\};/.test(SHELL) && /el\.onload = function \(\) \{ resolve\(src\); \};/.test(SHELL));
 
 head('11 - the shell reads are owner-scoped in the QUERY');
 ck('walletTransactions is filtered by uid server-side',
