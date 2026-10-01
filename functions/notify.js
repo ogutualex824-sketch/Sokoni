@@ -52,19 +52,6 @@ const sms    = require('./sms-service');
 const sokoniAt = require('./sokoni-at');
 const emailSvc = require('./email-service');
 const emailTpl = require('./email-templates');
-/* The shared anchor vocabulary. Imported rather than restated — two lists of
-   what an anchor may be is how a sender and a timeline come to disagree. */
-const _envelope = require('./shared/communication-envelope');
-
-/** Accept an anchor only if BOTH halves are present and the type is one the platform knows. */
-function _validAnchor(anchorType, anchorId) {
-  const t = String(anchorType || '').trim();
-  const id = String(anchorId || '').trim().slice(0, 200);
-  if (!t || !id || !_envelope.ANCHOR_TYPES.includes(t)) {
-    return { anchorType: null, anchorId: null, anchored: false };
-  }
-  return { anchorType: t, anchorId: id, anchored: true };
-}
 
 if (!admin.apps.length) admin.initializeApp();
 const db = () => admin.firestore();
@@ -103,11 +90,6 @@ const TYPES = {
   booking_paid:         { priority: 'commerce',  category: 'orders',   smsTemplate: null },
   booking_refund:       { priority: 'commerce',  category: 'payments', smsTemplate: null },
   booking_released:     { priority: 'commerce',  category: 'orders',   smsTemplate: null },
-  /* Connect — an INCOMING CALL. Registered as an intent here because
-     connect-notify names an intent and never a channel: notify.js owns tokens,
-     channels and quiet hours, and a call that cannot reach a push token must
-     not silently become an SMS. smsTemplate is deliberately null. */
-  connect_incoming_call:{ priority: 'commerce',  category: 'support',  smsTemplate: null },
   wallet_credit:        { priority: 'commerce',  category: 'wallet',   smsTemplate: 'wallet_credit' },
   order_placed:         { priority: 'commerce',  category: 'orders',   smsTemplate: 'order_placed' },
   order_accepted:       { priority: 'commerce',  category: 'orders',   smsTemplate: 'order_accepted' },
@@ -350,7 +332,7 @@ async function sendPush(uid, payload) {
 /* ══════════════════════════════════════════════════════════════════════════
    notify() — the ONE entry point
 ═════════════════════════════════════════════════════════════════════════ */
-async function notify({ uid, type, title, body, vars = {}, phone, email, image, deepLink, group, dedupeKey, data, awaitDelivery = true, anchorType, anchorId }) {
+async function notify({ uid, type, title, body, vars = {}, phone, email, image, deepLink, group, dedupeKey, data, awaitDelivery = true }) {
   const t = TYPES[type];
   if (!t) throw new HttpsError('invalid-argument', `Unknown notification type "${type}".`);
   if (!uid) throw new HttpsError('invalid-argument', 'uid is required.');
@@ -373,23 +355,9 @@ async function notify({ uid, type, title, body, vars = {}, phone, email, image, 
      showing a duplicate. When in doubt, deliver. */
   const key = dedupeKey || `${type}:${uid}:${_contentHash(title, body)}:${Math.floor(Date.now() / DEDUPE_WINDOW_MS)}`;
   const logRef = db().collection(LOG).doc(key);
-  /* THE BUSINESS ANCHOR — one field, and the difference between five systems
-     and one. A notifyLog row recorded what was SENT but never what it was
-     ABOUT, so a push and the conversation it concerned could not be joined into
-     a single timeline. Callers that know their anchor pass it; callers that do
-     not record `anchored: false`, which is the honest answer for a notification
-     nobody tied to a business relationship, and is never guessed at.
-
-     VALIDATED against the shared vocabulary, never accepted as free text: an
-     anchor type the platform does not know is dropped and the row records
-     itself unanchored, rather than inventing a sixth anchor kind here. */
-  const _anchor = _validAnchor(anchorType, anchorId);
   try {
     await logRef.create({
       uid, type, priority: t.priority, category: t.category,
-      anchorType: _anchor.anchorType,
-      anchorId: _anchor.anchorId,
-      anchored: _anchor.anchored,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       status: 'processing',
     });
