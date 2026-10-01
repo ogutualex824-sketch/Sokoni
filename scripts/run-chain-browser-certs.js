@@ -21,6 +21,7 @@ const SUITES = [
   ['test-cart-browser-certification', []],
   ['test-home-picked-for-you', []],
   ['test-home-hub-card-buttons', []],
+  ['test-community-c0-browser', []],
   ['test-admin-layouts', []],
   ['test-adminos-sidebar-a11y', []],
   ['test-adminos-nav-coverage', []],
