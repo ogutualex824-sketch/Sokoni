@@ -24,12 +24,16 @@
 const INSTITUTION_TYPES = Object.freeze([
   'BANK', 'SACCO', 'ACCOUNTANT', 'FINANCIAL_ADVISER', 'INSURER',
   'MICROFINANCE', 'INVESTMENT', 'FOREX', 'CHAMA', 'OTHER',
+  /* 2026-10-01: appended (never re-ordered) so every live Banking Hub category has a type. */
+  'DIGITAL_LENDER', 'PAYMENT_PROVIDER', 'BUSINESS_FINANCE',
 ]);
 
 const SERVICES = Object.freeze([
   'BANK_ACCOUNTS', 'BUSINESS_BANKING', 'LOANS', 'MERCHANT_FINANCE', 'SAVINGS',
   'INSURANCE', 'INVESTMENTS', 'FOREX', 'PAYMENTS', 'ACCOUNTING', 'TAX',
   'ADVISORY', 'CHAMA_SERVICES', 'MICROFINANCE',
+  /* 2026-10-01: appended. */
+  'DIGITAL_LOANS', 'MOBILE_MONEY',
 ]);
 
 /* The 47 gazetted counties, canonical spelling. */

@@ -184,6 +184,9 @@ const alerts = (kind) => Object.keys(data).filter((p) => p.startsWith('adminAler
   ck('S1  validateDescriptive returns only editable fields (never name / type / status)', v.ok && Object.keys(v.fields).every((k) => FPL.EDITABLE_KEYS.includes(k)), v.fields);
   ck('S2  every editable key is a public key', FPL.EDITABLE_KEYS.every((k) => FPL.PUBLIC_KEYS.includes(k)));
   ck('S3  47 counties', FPL.COUNTIES.length === 47 && new Set(FPL.COUNTIES).size === 47);
+  ck('S4  the original ten types keep their positions (append-only)', JSON.stringify(FPL.INSTITUTION_TYPES.slice(0, 10)) === JSON.stringify(['BANK', 'SACCO', 'ACCOUNTANT', 'FINANCIAL_ADVISER', 'INSURER', 'MICROFINANCE', 'INVESTMENT', 'FOREX', 'CHAMA', 'OTHER']));
+  ck('S5  DIGITAL_LENDER / PAYMENT_PROVIDER / BUSINESS_FINANCE are listable', ['DIGITAL_LENDER', 'PAYMENT_PROVIDER', 'BUSINESS_FINANCE'].every((t) => FPL.buildListing(Object.assign({}, VALID, { institutionType: t, services: ['DIGITAL_LOANS', 'MOBILE_MONEY'] }), 'u', 'a').ok));
+  ck('S6  the original fourteen services keep their positions; DIGITAL_LOANS and MOBILE_MONEY appended', FPL.SERVICES.length === 16 && FPL.SERVICES[13] === 'MICROFINANCE' && FPL.SERVICES[14] === 'DIGITAL_LOANS' && FPL.SERVICES[15] === 'MOBILE_MONEY');
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

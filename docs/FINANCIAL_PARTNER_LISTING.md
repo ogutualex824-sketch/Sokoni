@@ -29,9 +29,9 @@ Built and tested on `feat/financial-partner-on-f66f2c1`. **Not deployed.** The F
 
 | Field | Rule |
 |---|---|
-| institutionType | One of BANK, SACCO, ACCOUNTANT, FINANCIAL_ADVISER, INSURER, MICROFINANCE, INVESTMENT, FOREX, CHAMA, OTHER. Unknown refuses the listing. It never falls back to OTHER. |
+| institutionType | One of BANK, SACCO, ACCOUNTANT, FINANCIAL_ADVISER, INSURER, MICROFINANCE, INVESTMENT, FOREX, CHAMA, OTHER, DIGITAL_LENDER, PAYMENT_PROVIDER, BUSINESS_FINANCE (append-only). Unknown refuses the listing. It never falls back to OTHER. |
 | name | `institutionName`, plain text, 2 to 120 characters, or the listing is refused. |
-| services | Subset of the 14-value enum. Unknown values are dropped, duplicates collapsed, 8 at most. If none remain, the listing is refused. |
+| services | Subset of the 16-value enum (DIGITAL_LOANS and MOBILE_MONEY appended). Unknown values are dropped, duplicates collapsed, 8 at most. If none remain, the listing is refused. |
 | description | Plain text, 300 characters at most. Markup is removed. |
 | county | One of the 47 counties, canonical spelling. Otherwise omitted. |
 | website | `https://` only, no credentials, 200 characters at most. Otherwise omitted. |
