@@ -195,9 +195,12 @@
         barcode: p.barcode || null, brand: p.brand || null, condition: p.condition || null, location: p.location || null,
         kebsCert: p.kebsCert || null, foodLicence: p.foodLicence || null, ownership: p.ownership || null,
         verificationStatus: p.verificationStatus || null, warranty: p.warranty || null,
-        /* Price tiers (2026-10-01): Online = price, Shop = shopPrice, Wholesale = wholesalePrice. An absent tier
-           maps to null ("not sold at this price"), never 0 — the editor shows it empty and never writes it back. */
-        shopPrice: (typeof p.shopPrice === 'number') ? p.shopPrice : null,
+        /* Price tiers (2026-10-01): Online = price, Wholesale = wholesalePrice. An absent tier maps to null ("not
+           sold at this price"), never 0 — the editor shows it empty and never writes it back.
+           The SHELF price (shopPrice) is NOT mapped: it is owner-private and lives only on posProducts/{id}
+           (owner decision 2026-10-01). products/{id} is publicly readable, so a row built from it never carries a
+           Shelf price — a legacy one found there is a leak, ignored here and deleted by the next edit. The edit
+           form reads the Shelf price from posProducts through loadShelfPrice(), one read per opened product. */
         wholesalePrice: (typeof p.wholesalePrice === 'number') ? p.wholesalePrice : null,
         minWholesaleQty: (typeof p.minWholesaleQty === 'number') ? p.minWholesaleQty : null,
         deliveryCost: (typeof p.deliveryCost === 'number') ? p.deliveryCost : null,
@@ -317,7 +320,9 @@
     /* Money and counts. Empty is ABSENT — never zero. `shopPrice` (the in-store tier, 2026-10-01) joins
        `wholesalePrice` here: an empty tier means "not sold at this price" and is never stored as 0. Removing a
        stored tier on an edit is NOT expressed through this allowlist — updateProduct turns an explicit
-       null / '' into a field delete (see clearedTiers). */
+       null / '' into a field delete (see clearedTiers).
+       shopPrice is ACCEPTED here as INPUT only: createProduct / updateProduct route it to posProducts/{id} and
+       strip it from every products/{id} write (owner-private, 2026-10-01). */
     ['deliveryCost', 'shopPrice', 'wholesalePrice', 'minWholesaleQty'].forEach(function (k) {
       if (p[k] === undefined) return;
       if (p[k] === '' || p[k] === null) return;
@@ -446,8 +451,15 @@
   /* What an EDIT may remove with a field delete. `price` is not here: the Online price is required, and an
      emptied one is refused by _validate rather than deleted. */
   var CLEARABLE_FIELDS = ['shopPrice', 'wholesalePrice', 'minWholesaleQty'];
-  /* The tiers the till mirrors carry beyond `price` (absent stays absent). */
-  var MIRRORED_TIERS = ['shopPrice', 'wholesalePrice'];
+  /* The tiers the till mirrors carry beyond `price` (absent stays absent).
+     SHELF IS OWNER-PRIVATE (owner decision 2026-10-01). products/{id} is publicly readable (rules `read: if true`;
+     /api/catalogue returns whole documents), so `shopPrice` is NEVER written there. Its ONLY home is
+     posProducts/{id}, whose served rules (ruleset f259c0b5) allow read/update/delete to the owner
+     (resource.data.sellerId == auth.uid) and admins only. It is NOT on tenants/{uid}/inventory_products either:
+     that collection is readable by tenant members and claimed staff — wider than posProducts. */
+  var SHELF_KEY = 'shopPrice';
+  var POS_TIERS = ['shopPrice', 'wholesalePrice'];
+  var INVENTORY_TIERS = ['wholesalePrice'];
 
   /* The optional fields a patch asks to REMOVE: present in the patch as null or ''. On create the same values
      simply mean "absent" (the allowlist drops them); only an edit turns them into a delete. */
@@ -593,7 +605,7 @@
   /* FROM 4f67b4b (ported 2026-09-29, U1): THE SHELF COUNT THE PROJECTIONS CARRY. doc.stock no longer exists
      (stock left the metadata write), so the mirrors take `established` — what the authority actually put on the
      shelf: the opening quantity when the adjustment succeeded, 0 when there was none or it failed. */
-  function productProjections(doc, scope, established) {
+  function productProjections(doc, scope, established, priv) {
     /* FROM 4f67b4b / 911ec98 (ported 2026-09-29, U1): the mirrors carry the product's real photo — never an inline
        data: URL — so the till and the Inventory Manager show what the storefront shows. */
     var img = (typeof doc.image === 'string' && doc.image.indexOf('data:') !== 0) ? doc.image : '';
@@ -628,43 +640,89 @@
         },
       },
     };
-    /* PRICE TIERS (2026-10-01): the till and the Inventory Manager carry the Shop and Wholesale prices under the
-       SAME field names as the product. Absent stays ABSENT — a tier the product does not have is omitted, never
-       written as 0 or null, so a reader cannot mistake "not sold at this price" for "free". Which tier the till
-       charges is the POS session's slice; this only makes the figures available there. */
-    MIRRORED_TIERS.forEach(function (k) {
-      var v = doc[k];
-      if (typeof v === 'number' && isFinite(v) && v > 0) { proj.inventory.data[k] = v; proj.pos.data[k] = v; }
+    /* PRICE TIERS (2026-10-01): Wholesale rides on both mirrors under the product's field name. The SHELF price
+       rides on posProducts ONLY, and ONLY from `priv` (the create's form input) — never from `doc`: doc is the
+       public products/{id} record, and a shopPrice found on it is a legacy leak, not a source. Absent stays
+       ABSENT — a tier the product does not have is omitted, never written as 0 or null. A projection without
+       a Shelf price merges onto posProducts without touching the one already there (archive / restore / photos).
+       Which tier the till charges is the POS session's slice; this only makes the figures available there. */
+    var okV = function (v) { return typeof v === 'number' && isFinite(v) && v > 0; };
+    INVENTORY_TIERS.forEach(function (k) { if (okV(doc[k])) proj.inventory.data[k] = doc[k]; });
+    POS_TIERS.forEach(function (k) {
+      var v = (k === SHELF_KEY) ? (priv && priv[k]) : doc[k];
+      if (okV(v)) proj.pos.data[k] = v;
     });
     return proj;
+  }
+
+  /* The Shelf price, read from its ONLY home (posProducts/{id}, owner/admin-readable). Never throws.
+       { state: 'observed', shopPrice: number|null }   null = the mirror exists and has no Shelf price
+       { state: 'missing' }                            no till copy — the Shelf price is unknown
+       { state: 'unreadable', reason }                 permission / network / no adapter support
+     A mirror that names another seller is treated as unreadable: it is not this owner's figure. */
+  async function _readShelf(db, id, scope) {
+    if (!db || typeof db.getPosProduct !== 'function') return { state: 'unreadable', reason: 'no-reader' };
+    try {
+      var m = await db.getPosProduct(id);
+      if (!m) return { state: 'missing' };
+      if (m.sellerId && scope && scope.sellerUid && m.sellerId !== scope.sellerUid) {
+        return { state: 'unreadable', reason: 'not-owner' };
+      }
+      var v = m[SHELF_KEY];
+      return { state: 'observed', shopPrice: (typeof v === 'number' && isFinite(v) && v > 0) ? v : null };
+    } catch (e) {
+      return { state: 'unreadable', reason: (e && (e.code || e.message)) || 'unknown' };
+    }
+  }
+
+  /**
+   * loadShelfPrice({ scope, db, id }) — the edit form's ONE read of the Shelf price for ONE opened product.
+   * Never per list row: the list is built from products/{id}, which never carries it.
+   */
+  async function loadShelfPrice(o) {
+    if (!o || !o.scope || !o.scope.ok) return { state: 'unreadable', reason: 'no-scope' };
+    if (!o.id) return { state: 'unreadable', reason: 'no-id' };
+    return _readShelf(o.db, o.id, o.scope);
   }
 
   /* The mirror patch an EDIT writes when it sets or clears a Shop / Wholesale tier: only those fields, as an
      UPDATE of the existing mirror documents (never a create — a missing mirror stays missing and is reported),
      with a field delete for each cleared tier. The Online price is deliberately not part of it: an edit to
      `price` did not reach the mirrors before this change and still does not (unchanged, stated in CHANGELOG). */
+  /* Per mirror: posProducts follows Shelf + Wholesale, inventory_products follows Wholesale only (Shelf is
+     owner-private and never goes there). A mirror with nothing to change is not written at all. */
   function tierMirrorPatch(fields, cleared) {
-    var data = {}, del = [];
-    MIRRORED_TIERS.forEach(function (k) {
-      if (cleared && cleared.indexOf(k) > -1) del.push(k);
-      else if (fields && typeof fields[k] === 'number') data[k] = fields[k];
-    });
-    return (Object.keys(data).length || del.length) ? { data: data, deleteFields: del } : null;
+    var build = function (keys) {
+      var data = {}, del = [];
+      keys.forEach(function (k) {
+        if (cleared && cleared.indexOf(k) > -1) del.push(k);
+        else if (fields && typeof fields[k] === 'number') data[k] = fields[k];
+      });
+      return (Object.keys(data).length || del.length) ? { data: data, deleteFields: del } : null;
+    };
+    var pos = build(POS_TIERS), inv = build(INVENTORY_TIERS);
+    if (!pos && !inv) return null;
+    var out = {};
+    if (inv) out.inventory = inv;
+    if (pos) out.pos = pos;
+    return out;
   }
 
-  /* Never throws, like _writeMirrors. */
+  /* Never throws, like _writeMirrors. Writes only the mirrors the patch names. */
   async function _writeTierMirrors(db, id, scope, tp) {
     var paths = { inventory: ['tenants', scope.sellerUid, 'inventory_products', id], pos: ['posProducts', id] };
     var out = {};
     for (var i = 0; i < PRODUCT_MIRRORS.length; i++) {
       var key = PRODUCT_MIRRORS[i];
+      var mp = tp[key];
+      if (!mp) continue;
       if (!db || typeof db.writeMirror !== 'function') { out[key] = { state: 'unavailable' }; continue; }
-      if (tp.deleteFields.length && db.supportsFieldDelete !== true) {
+      if (mp.deleteFields.length && db.supportsFieldDelete !== true) {
         out[key] = { state: 'failed', reason: 'field-delete-unsupported' }; continue;
       }
       try {
-        var req = { path: paths[key], data: tp.data, merge: true, mode: 'update' };
-        if (tp.deleteFields.length) req.deleteFields = tp.deleteFields.slice();
+        var req = { path: paths[key], data: mp.data, merge: true, mode: 'update' };
+        if (mp.deleteFields.length) req.deleteFields = mp.deleteFields.slice();
         await db.writeMirror(req);
         out[key] = { state: 'written' };
       } catch (e) {
@@ -676,9 +734,9 @@
 
   /* Never throws. A mirror is a projection of a record that already exists; its
      failure is reported, not raised, and never rolls back the canonical write. */
-  async function _writeMirrors(db, doc, scope, established) {
+  async function _writeMirrors(db, doc, scope, established, priv) {
     var out = {};
-    var proj = productProjections(doc, scope, established);
+    var proj = productProjections(doc, scope, established, priv);
     for (var i = 0; i < PRODUCT_MIRRORS.length; i++) {
       var key = PRODUCT_MIRRORS[i];
       if (!db || typeof db.writeMirror !== 'function') { out[key] = { state: 'unavailable' }; continue; }
@@ -751,6 +809,10 @@
       createdAt: (o.now || null),
     });
     if (doc.status === undefined) doc.status = 'active';
+    /* SHELF IS OWNER-PRIVATE (2026-10-01): validated above with the other tiers, then taken OFF the public
+       document. It reaches posProducts/{id} only, through the till projection below. */
+    var shelf = (typeof doc[SHELF_KEY] === 'number') ? doc[SHELF_KEY] : undefined;
+    delete doc[SHELF_KEY];
 
     /* create semantics: the same draftToken twice claims the same id, so a
        replay returns the existing record rather than adding a second one. */
@@ -791,13 +853,21 @@
        repeating one changes nothing — and a replay is exactly how a mirror that
        failed the first time gets repaired. They run AFTER the opening adjustment and carry what it established. */
     var mirrors = await _writeMirrors(o.db, doc, scope,
-      (stockResult && stockResult.ok) ? stockResult.opening : 0);
+      (stockResult && stockResult.ok) ? stockResult.opening : 0,
+      shelf !== undefined ? { shopPrice: shelf } : null);
 
-    return {
+    var out = {
       id: id, product: doc, replayed: !!(res && res.replayed),
       mirrors: mirrors, complete: mirrorsComplete(mirrors),
       openingStock: stockResult,
     };
+    /* The Shelf price has no other home: when the till copy did not land, it was NOT saved — said, never implied. */
+    if (shelf !== undefined) {
+      out.shelf = (mirrors.pos && mirrors.pos.state === 'written')
+        ? { state: 'saved', shopPrice: shelf }
+        : { state: 'not-saved', reason: (mirrors.pos && (mirrors.pos.reason || mirrors.pos.state)) || 'unknown' };
+    }
+    return out;
   }
 
   /**
@@ -897,8 +967,30 @@
        Online price (or lowering Online below a stored Shelf price) is refused. Only when the edit touches a
        tier: a legacy record already out of order must not block an unrelated edit such as a typo in the name. */
     var touchesTier = PRICE_TIER_KEYS.some(function (k) { return fields[k] !== undefined || cleared.indexOf(k) > -1; });
+    /* THE STORED SHELF PRICE COMES FROM posProducts/{id}, NEVER FROM products/{id} (owner-private, 2026-10-01).
+       The stored record's own shopPrice — a legacy leak if present — is ignored for validation. The Shelf price
+       is read only when ordering needs it: the edit touches the Online or Wholesale tier and does not itself
+       set or clear the Shelf price. When it cannot be read (missing till copy, permission), the edit is REFUSED
+       with zero writes rather than validated against an unknown. An edit that touches no tier never reads it. */
+    /* The patch's own values first (no read): a bad figure is refused for what it is, not as "unreadable". */
+    var errs0 = _validate(fields, { creating: false, tiers: {} });
+    if (errs0.length) { var e0 = new Error(errs0[0]); e0.validation = errs0; throw e0; }
+    var shelfInPatch = fields[SHELF_KEY] !== undefined || cleared.indexOf(SHELF_KEY) > -1;
+    var stored = Object.assign({}, existing || {});
+    delete stored[SHELF_KEY];
+    if (touchesTier && !shelfInPatch) {
+      var sr = await _readShelf(o.db, o.id, scope);
+      if (sr.state !== 'observed') {
+        var rErr = new Error('The Shelf price could not be read, so the new prices cannot be checked against it — ' +
+                             'nothing was saved. Please try again.');
+        rErr.code = 'shelf-unreadable';
+        rErr.shelf = sr;
+        throw rErr;
+      }
+      if (typeof sr.shopPrice === 'number') stored[SHELF_KEY] = sr.shopPrice;
+    }
     var errs = _validate(fields, { creating: false,
-      tiers: touchesTier ? effectiveTiers(existing, fields, cleared) : {} });
+      tiers: touchesTier ? effectiveTiers(stored, fields, cleared) : {} });
     if (errs.length) { var e = new Error(errs[0]); e.validation = errs; throw e; }
 
     /* shopId and sellerUid are never patchable — a product cannot be moved to
@@ -911,17 +1003,39 @@
       dErr.code = 'field-delete-unsupported';
       throw dErr;
     }
-    var req = { id: o.id, data: fields, mode: 'update' };
-    if (cleared.length) req.deleteFields = cleared.slice();
-    await o.db.writeProduct(req);
 
-    var out = { id: o.id, patch: fields };
+    /* products/{id} NEVER receives a Shelf price — not set, not cleared (the clear is a posProducts delete).
+       A shopPrice already ON the stored public record (legacy / leak) is DELETED in this same write, on every
+       edit, when the adapter can express a delete. */
+    var mirrorFields = Object.assign({}, fields);
+    delete fields[SHELF_KEY];
+    var prodDel = cleared.filter(function (k) { return k !== SHELF_KEY; });
+    var leaked = !!existing && Object.prototype.hasOwnProperty.call(existing, SHELF_KEY);
+    if (leaked && o.db.supportsFieldDelete === true) prodDel.push(SHELF_KEY);
+    var productWritten = false;
+    if (Object.keys(fields).length || prodDel.length) {
+      var req = { id: o.id, data: fields, mode: 'update' };
+      if (prodDel.length) req.deleteFields = prodDel;
+      await o.db.writeProduct(req);
+      productWritten = true;
+    }
+
+    var out = { id: o.id, patch: fields, productWritten: productWritten };
     if (cleared.length) out.cleared = cleared.slice();
-    /* The till and the Inventory Manager follow a Shop / Wholesale change. Reported, never raised. */
-    var tp = tierMirrorPatch(fields, cleared);
+    if (leaked) out.leakedShelfRemoved = prodDel.indexOf(SHELF_KEY) > -1;
+    /* The till follows a Shelf / Wholesale change; the Inventory Manager a Wholesale change. Reported, never
+       raised. posProducts is UPDATED, never created: a missing till copy fails and is reported. */
+    var tp = tierMirrorPatch(mirrorFields, cleared);
     if (tp) {
       out.mirrors = await _writeTierMirrors(o.db, o.id, scope, tp);
-      out.complete = mirrorsComplete(out.mirrors);
+      out.complete = Object.keys(out.mirrors).every(function (k) { return out.mirrors[k].state === 'written'; });
+    }
+    /* The Shelf price has ONE home. If posProducts did not take it, it was NOT saved — the result says so. */
+    if (shelfInPatch) {
+      var pm = out.mirrors && out.mirrors.pos;
+      out.shelf = (pm && pm.state === 'written')
+        ? { state: 'saved', cleared: cleared.indexOf(SHELF_KEY) > -1 }
+        : { state: 'not-saved', reason: (pm && (pm.reason || pm.state)) || 'unknown' };
     }
     return out;
   }
@@ -1376,6 +1490,8 @@
     attachProductImages: attachProductImages,
     assertInScope: assertInScope,
     productProjections: productProjections,
+    /* Shelf price (owner-private, 2026-10-01): the edit form's one read from posProducts/{id}. */
+    loadShelfPrice: loadShelfPrice,
     /* Price tiers (2026-10-01): Online = price, Shop = shopPrice, Wholesale = wholesalePrice. */
     MAX_PRICE: MAX_PRICE,
     PRICE_TIER_KEYS: PRICE_TIER_KEYS,
