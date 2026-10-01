@@ -16,17 +16,25 @@
 const TIERS = Object.freeze(['online', 'shop', 'wholesale']);
 const LABEL = Object.freeze({ online: 'ONLINE PRICE', shop: 'SHOP PRICE', wholesale: 'WHOLESALE PRICE' });
 
-const _pos = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
+/* The same ceiling the product writer enforces (sokoni-aa's uploader, 7a9f276). Property and vehicles use it. */
+const MAX_PRICE = 1000000000;
+/* New tiers must be real numbers: a string such as "90" is NOT an authoritative price (owner's brief). */
+const _pos = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= MAX_PRICE ? v : null);
 
-/** The prices a product actually offers. ONLINE keeps the historical `salePrice || price || 0` meaning. */
+/** The prices a product actually offers. ONLINE keeps the historical `salePrice || price || 0` meaning.
+ *  The owner's ordering is RE-CHECKED here: the uploader validates it in the browser and the rules do not, so a
+ *  product written directly could carry, e.g., a shop price above online. A tier that breaks the ordering is
+ *  treated as NOT CONFIGURED (refused), never priced: wholesale < online; shop ≤ online; wholesale ≤ shop. */
 function tierPrices(prod) {
   const p = prod || {};
-  const online = Number(p.salePrice || p.price || 0);
-  return {
-    online: Number.isFinite(online) && online >= 0 ? online : 0,
-    shop: _pos(p.shopPrice),
-    wholesale: _pos(p.wholesalePrice),
-  };
+  const onlineRaw = Number(p.salePrice || p.price || 0);
+  const online = Number.isFinite(onlineRaw) && onlineRaw >= 0 ? onlineRaw : 0;
+  let shop = _pos(p.shopPrice);
+  let wholesale = _pos(p.wholesalePrice);
+  if (shop !== null && !(shop <= online)) shop = null;
+  if (wholesale !== null && !(wholesale < online)) wholesale = null;
+  if (wholesale !== null && shop !== null && !(wholesale <= shop)) { shop = null; wholesale = null; }
+  return { online, shop, wholesale };
 }
 
 /** @returns {{ok:true, tier:string, price:number} | {ok:false, reason:'unsupported_tier'|'tier_not_configured', tier?:string}} */
@@ -46,4 +54,4 @@ function productBelongsTo(prod, provenIds) {
   return !!prod.sellerUid && ids.has(String(prod.sellerUid));   /* legacy products: shop id == owner uid */
 }
 
-module.exports = { TIERS, LABEL, tierPrices, resolveTierPrice, productBelongsTo };
+module.exports = { TIERS, LABEL, MAX_PRICE, tierPrices, resolveTierPrice, productBelongsTo };
