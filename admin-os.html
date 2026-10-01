@@ -10,22 +10,26 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
-  <script src="security.js"></script>
+<!-- HEAD SCRIPTS ARE DEFERRED (2026-10-01). ~310 KB of script used to block first paint. defer keeps DOCUMENT ORDER
+     (security -> firebase.js module -> cart -> permissions -> role-authority -> admin-entry -> shared-header) and all of
+     them run BEFORE DOMContentLoaded, which is when SokoniAOS.init() starts the admin gate. The gate order is unchanged:
+     claim check, then SokoniAdminEntry.guard(), then _bootUI(). Never make one of these async: async breaks the order. -->
+  <script src="security.js" defer></script>
 <script type="module" src="firebase.js"></script>
 <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
      through SokoniCart; without this tag the pip cannot render a count. -->
-<script src="sokoni-cart.js"></script>
+<script src="sokoni-cart.js" defer></script>
 <!-- Home routes through SokoniPermissions.adminHomeFor() for administrative roles and
      SokoniRoleAuthority.hubFor() for workspace roles. Without these the resolver is
      unreachable and an administrator's Home silently stays "/". Placed BEFORE
      shared-header in document order so a later `defer` change cannot break it. -->
-<script src="sokoni-permissions.js"></script>
-<script src="sokoni-role-authority.js"></script>
+<script src="sokoni-permissions.js" defer></script>
+<script src="sokoni-role-authority.js" defer></script>
 <!-- Administrative surface entry (F4). Gates on the CLAIM and on the administrative
      context, so an administrator acting as a workspace role no longer keeps admin access.
      Loads AFTER sokoni-permissions.js, which owns that context. -->
-<script src="sokoni-admin-entry.js"></script>
-<script src="shared-header.js"></script>
+<script src="sokoni-admin-entry.js" defer></script>
+<script src="shared-header.js" defer></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Admin OS — SOKONI Mission Control</title>

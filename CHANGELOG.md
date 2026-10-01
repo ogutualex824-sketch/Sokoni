@@ -1,3 +1,18 @@
+## [2026-10-01] - AdminOS: head scripts deferred, admin gate order unchanged — static 7/0, browser proof QUEUED (RAM), NOT deployed
+
+admin-os.html loaded six classic scripts in <head> (security, sokoni-cart, sokoni-permissions, sokoni-role-authority,
+sokoni-admin-entry, shared-header; ~310 KB) that blocked first paint. Each now carries defer. Document order is kept,
+firebase.js stays a module between them, and all of them run before DOMContentLoaded, which is when SokoniAOS.init()
+starts the gate (claim check, then SokoniAdminEntry.guard(), then _bootUI()). No script read any of these globals at parse
+time, and none uses document.write. The layout (sokoni-aa, bfef533) is untouched.
+
+- Files: admin-os.html (head tags only), scripts/test-adminos-head-defer.js (new).
+- Database / API / rules / functions: none. Security: gate order unchanged; the suite proves it in a browser for a
+  non-admin and for an admin outside the admin context (zero callables, _bootUI never runs), BEFORE vs AFTER.
+- Pre-existing, not changed here: the sidebar ticket-badge listener reads supportTickets at DOMContentLoaded, before the gate.
+- Pre-existing on the chain tip: test-home-logo-routing fails one check (three admin routers disagree); unrelated to this change.
+- Proof status: static 7/0 with two sabotages caught. Browser gate and 390/1280 timings: run node scripts/test-adminos-head-defer.js.
+
 ## [2026-09-30] - BnB: category pill strip made phone-safe (snap-scroll chips, sort on its own row) — built, browser certification QUEUED, NOT deployed
 ## [2026-09-27] — Home: hub-card buttons stay inside the card at every width (Sokoni Eats "Become Rider") — UNCOMMITTED, NOT deployed
 
