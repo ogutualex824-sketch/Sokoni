@@ -20,7 +20,7 @@
 
   var RATES = {
     "marketplace": {
-      "pct": 3,
+      "pct": 5,
       "fixedKES": 0
     },
     "food_delivery": {
@@ -55,6 +55,10 @@
       "pct": 10,
       "fixedKES": 0
     },
+    "pos": {
+      "pct": 5,
+      "fixedKES": 0
+    },
     "event_tickets": {
       "pct": 3,
       "fixedKES": 0
@@ -64,7 +68,7 @@
       "fixedKES": 0
     },
     "services": {
-      "pct": 15,
+      "pct": 5,
       "fixedKES": 0
     },
     "education": {
@@ -103,8 +107,9 @@
 
   var ALIASES = {
     "shopping": "marketplace",
-    "pos": "marketplace",
     "b2b": "marketplace",
+    "product": "marketplace",
+    "subscription": "subscriptions",
     "restaurant": "food_delivery",
     "food": "food_delivery",
     "home_services": "services",
