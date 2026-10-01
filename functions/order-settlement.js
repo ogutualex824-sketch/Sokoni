@@ -20,6 +20,7 @@
    ========================================================================== */
 const admin = require('firebase-admin');
 const SE = require('./settlement-engine');
+const FU = require('./finos-utils');
 
 const STATES = { UNSETTLED: 'UNSETTLED', HELD: 'HELD', ELIGIBLE: 'ELIGIBLE_FOR_SETTLEMENT', SETTLING: 'SETTLING', SETTLED: 'SETTLED', REFUNDED: 'REFUNDED', REVERSED: 'REVERSED' };
 
@@ -99,6 +100,18 @@ function _platformFundedDiscountCents(order) {
                                       buyer's own confirmation (server-stamped in delivery-complete)
      3. the buyer is not the seller — a self-dealt order is never auto-credited */
 const SETTLE_PROOFS = Object.freeze(['rider_pin', 'buyer_confirmation']);
+
+/* A payment-time escrow eligible for release: written by the webhook (creditVia 'finos'), a positive integer net, for
+   THIS seller, not yet released. Anything else is not an escrow release (null). */
+function _hasWebhookEscrow(o) { return !!(o && o.escrow && o.escrow.creditVia === 'finos' && !o.escrow.released); }
+function _escrowToRelease(o, sellerId) {
+  const e = o && o.escrow;
+  if (!e || e.creditVia !== 'finos' || e.released) return null;
+  const net = Number(e.heldNetCents);
+  if (!Number.isInteger(net) || net <= 0) return null;
+  if (!sellerId || String(e.sellerUid || '') !== String(sellerId)) return null;
+  return { heldNetCents: net, commissionCents: Number(e.commissionCents) || 0, grossCents: Number(e.grossCents) || 0, paymentRef: e.paymentRef || null };
+}
 function settlementHoldReason(o, sellerId) {
   if (!o) return 'no_order';
   if (o.paymentVerified !== true) return 'payment_not_verified_by_sokoni';
@@ -121,8 +134,14 @@ async function settleOrder(db, adminSdk, orderId) {
   const sellerId = order.sellerUid || order.sellerId || null;
   const grossCents = _grossCents(order);
   /* Compute OUTSIDE the txn (reads commission rules from Firestore); the txn re-guards state. */
+  /* PAYMENT-TIME ESCROW (owner 2026-10-01: seller money waits for the buyer's PIN). An order paid through IntaSend
+     carries `escrow` written by webhookIntasend AT PAYMENT: the commission was decided and recorded there
+     (commissionLedger) and the seller's net was HELD instead of credited. Releasing it must not recompute a rate or
+     write a second commission record — the recorded net is released, once, through the SAME FinOS representation
+     the webhook used to credit (creditWalletTxn). No engine call for these orders. */
+  const escrowRelease = _escrowToRelease(order, sellerId);
   let breakdown = null;
-  if (sellerId && grossCents > 0) {
+  if (!(order.escrow && order.escrow.creditVia === 'finos') && sellerId && grossCents > 0) {
     /* Discount funding. `grossCents` is the cash collected, i.e. AFTER the discount,
        so without these the seller absorbed every discount — including loyalty points
        SOKONI itself issued. Only the PLATFORM-funded portion is passed: a
@@ -156,6 +175,36 @@ async function settleOrder(db, adminSdk, orderId) {
           settlementHeldAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() });
       }
       return { outcome: 'held', reason: _holdReason };
+    }
+    /* RELEASE of a payment-time escrow — re-validated against the state read in THIS txn. */
+    const _esc = _escrowToRelease(o, sellerId);
+    /* a webhook escrow that is present but not releasable (other seller, bad amount) is NEVER settled by the
+       engine path instead — that would pay a recomputed amount into a different wallet. Held for review. */
+    if (_hasWebhookEscrow(o) && !_esc) {
+      t.update(orderRef, { settlementStatus: STATES.HELD, settlementNote: 'escrow_invalid_review', updatedAt: FV.serverTimestamp() });
+      return { outcome: 'held', reason: 'escrow_invalid_review' };
+    }
+    if (escrowRelease || _esc) {
+      if (!_esc || !escrowRelease || _esc.heldNetCents !== escrowRelease.heldNetCents) {
+        t.update(orderRef, { settlementStatus: STATES.HELD, settlementNote: 'escrow_changed_review', updatedAt: FV.serverTimestamp() });
+        return { outcome: 'held', reason: 'escrow_changed_review' };
+      }
+      FU.creditWalletTxn(t, db, sellerId, 'seller', _esc.heldNetCents, {
+        description: 'Order ' + orderId + ' released on delivery proof (' + o.deliveryAuthorizedBy + ')',
+        orderId, type: 'sale',
+      });
+      t.set(settleRef, {
+        orderId, sellerId, source: 'payment_escrow', paymentRef: _esc.paymentRef || null,
+        grossCents: _esc.grossCents || null, commissionCents: _esc.commissionCents || null,
+        sellerNetCents: _esc.heldNetCents, releasedVia: o.deliveryAuthorizedBy,
+        engineVersion: 'escrow-release', status: 'settled', createdAt: FV.serverTimestamp(),
+      });
+      t.update(orderRef, {
+        settlementStatus: STATES.SETTLED, settlementNote: FV.delete(),
+        escrow: Object.assign({}, o.escrow, { released: _esc.heldNetCents, settledAt: Date.now() }),
+        settledAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp(),
+      });
+      return { outcome: 'settled', sellerId, netShillings: Math.floor(_esc.heldNetCents / 100), commissionCents: _esc.commissionCents || 0, source: 'payment_escrow' };
     }
     if (!breakdown || grossCents <= 0) { t.update(orderRef, { settlementStatus: STATES.SETTLED, settlementNote: 'zero-gross', settledAt: FV.serverTimestamp() }); return { outcome: 'zero-gross' }; }
 
@@ -358,5 +407,5 @@ async function autoConfirmDeliveredOrders(db, adminSdk) {
 module.exports = { STATES, isAlreadySettled, settleOrder, markEligible, markRefundedIfUnsettled, reverseSettledOrder, handleOrderRefund, autoConfirmDeliveredOrders, _grossCents,
   /* Exposed so the funding resolver can be tested directly — it decides real money,
      and inferring it from a full settlement run would prove less. */
-  settlementHoldReason, SETTLE_PROOFS,
+  settlementHoldReason, SETTLE_PROOFS, _escrowToRelease,
   _internal: { _platformFundedDiscountCents } };

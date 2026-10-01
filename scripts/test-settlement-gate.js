@@ -20,17 +20,27 @@ if (process.env.BASE) fs.writeFileSync(path.join(dir, 'order-settlement.js'), ex
 const enginePath = path.join(dir, 'settlement-engine.js');
 if (process.env.BASE) fs.writeFileSync(enginePath, 'module.exports = {};');   /* resolvable; replaced by the stub below */
 require.cache[enginePath] = { id: enginePath, filename: enginePath, loaded: true, exports: {
-  computeSettlement: async (_db, o) => { const c = Math.round(o.grossCents * 0.05); return { sellerNetCents: o.grossCents - c, commission: { cents: c, rate: 0.05 }, ledgerPlan: [] }; },
+  computeSettlement: async (_db, o) => { ENGINE_CALLS++; const c = Math.round(o.grossCents * 0.05); return { sellerNetCents: o.grossCents - c, commission: { cents: c, rate: 0.05 }, ledgerPlan: [] }; },
 } };
+/* finos-utils.creditWalletTxn — stubbed with its exact write shape (identical in the webhook and this lineage) so the
+   in-memory db can apply it; ENGINE_CALLS spies the rate engine (an escrow release must make none). */
+let ENGINE_CALLS = 0;
+const finosPath = path.join(dir, 'finos-utils.js');
+if (process.env.BASE) fs.writeFileSync(finosPath, 'module.exports = {};');
+require.cache[finosPath] = { id: finosPath, filename: finosPath, loaded: true, exports: {
+  creditWalletTxn: (txn, _db, entityId, entityType, amountCents, o) => {
+    txn.set({ path: 'wallets/' + entityId }, { entityId, entityType, availableBalance: { __inc: amountCents }, withdrawableBalance: { __inc: amountCents } }, { merge: true });
+    txn.set({ path: 'finosTx/' + entityId + '_' + o.orderId }, { amountCents, orderId: o.orderId, type: o.type });
+  } } };
 const OS = require(path.join(dir, 'order-settlement.js'));
 
 /* ── in-memory Firestore (enough for settleOrder) ── */
-const DOCS = new Map(); let WRITES = [];
+const DOCS = new Map(); let WRITES = []; let BEFORE_TXN = null;   /* runs once, between settleOrder's first read and its txn */
 const INC = (n) => ({ __inc: n });
 const apply = (prev, data, merge) => { const out = merge ? Object.assign({}, prev || {}) : {}; for (const [k, v] of Object.entries(data)) out[k] = (v && v.__inc !== undefined) ? (Number((prev || {})[k]) || 0) + v.__inc : v; return out; };
 const ref = (p) => ({ path: p, get: async () => ({ exists: DOCS.has(p), data: () => DOCS.get(p) }) });
 const db = { collection: (c) => ({ doc: (id) => ref(c + '/' + id) }),
-  runTransaction: async (fn) => { const t = {
+  runTransaction: async (fn) => { if (BEFORE_TXN) { const h = BEFORE_TXN; BEFORE_TXN = null; h(); } const t = {
     get: async (r) => ({ exists: DOCS.has(r.path), data: () => DOCS.get(r.path) }),
     set: (r, d, o) => { WRITES.push(r.path); DOCS.set(r.path, apply(DOCS.get(r.path), d, o && o.merge)); },
     update: (r, d) => { WRITES.push(r.path); DOCS.set(r.path, apply(DOCS.get(r.path), d, true)); } };
@@ -94,6 +104,46 @@ const reset = () => { DOCS.clear(); WRITES = []; };
   r = await OS.settleOrder(db, adminSdk, 'g10');
   ck('G10', r.outcome === 'terminal-skip' && bal(SELLER) === 0, 'cancelled stays a terminal skip (unchanged)', r);
   ck('G11', process.env.BASE ? true : (typeof OS.settlementHoldReason === 'function' && OS.settlementHoldReason({ paymentVerified: true, deliveryAuthorizedBy: 'rider_pin', buyerUid: 'b' }, 's') === null), 'settlementHoldReason is exported for AdminOS / tests');
+
+  /* PAYMENT-TIME ESCROW RELEASE (owner 2026-10-01): "Payment determines the economic terms; verified completion
+     determines when the already-recorded seller amount becomes withdrawable." */
+  const avail = (uid) => (DOCS.get('wallets/' + uid) || {}).availableBalance || 0;
+  const esc = (o) => Object.assign({ creditVia: 'finos', heldNetCents: 95000, commissionCents: 5000, grossCents: 100000, paymentRef: 'ref1', sellerUid: SELLER }, o);
+  reset(); ENGINE_CALLS = 0; order('e1', { paymentVerified: true, deliveryAuthorizedBy: 'rider_pin', escrow: esc() });
+  r = await OS.settleOrder(db, adminSdk, 'e1'); const e1r = await OS.settleOrder(db, adminSdk, 'e1');
+  ck('E-1', r.outcome === 'settled' && avail(SELLER) === 95000 && bal(SELLER) === 0 && ENGINE_CALLS === 0 && e1r.outcome === 'already-settled' && avail(SELLER) === 95000,
+    'OWNER INVARIANT 3: paid + PIN + buyer ≠ seller → EXACTLY the payment-time net (95000c) released ONCE; no rate recompute', { r, e1r, avail: avail(SELLER), bal: bal(SELLER), ENGINE_CALLS });
+  ck('E-2', (DOCS.get('settlements/e1') || {}).source === 'payment_escrow' && DOCS.get('orders/e1').escrow.released === 95000 && ![...DOCS.keys()].some((k) => k.indexOf('ledger/e1') === 0),
+    'settlement record says payment_escrow; escrow.released stamped; NO second commission ledger (recorded at payment)', DOCS.get('settlements/e1'));
+  reset(); order('e3', { paymentVerified: true, escrow: esc() });
+  r = await OS.settleOrder(db, adminSdk, 'e3');
+  ck('E-3', r.outcome === 'held' && r.reason === 'awaiting_delivery_proof' && avail(SELLER) === 0, 'OWNER INVARIANT 2: paid + completed WITHOUT valid proof → the amount stays held', r);
+  reset(); order('e3b', { deliveryAuthorizedBy: 'rider_pin', escrow: esc() });
+  r = await OS.settleOrder(db, adminSdk, 'e3b');
+  ck('E-3b', r.outcome === 'held' && avail(SELLER) === 0 && bal(SELLER) === 0, 'OWNER INVARIANT 1: UNPAID + completed + valid PIN → seller payout ZERO (even with an escrow field present)', r);
+  reset(); ENGINE_CALLS = 0; order('e4', { paymentVerified: true, deliveryAuthorizedBy: 'rider_pin', escrow: esc({ sellerUid: 'someone_else' }) });
+  r = await OS.settleOrder(db, adminSdk, 'e4');
+  ck('E-4', r.outcome === 'held' && r.reason === 'escrow_invalid_review' && avail(SELLER) === 0 && bal(SELLER) === 0 && ENGINE_CALLS === 0,
+    'an escrow recorded for ANOTHER seller is held for review — never re-settled by the engine into a different wallet', { r, ENGINE_CALLS });
+  reset(); order('e5', { paymentVerified: true, deliveryAuthorizedBy: 'rider_pin', escrow: esc({ heldNetCents: 950.5 }) });
+  r = await OS.settleOrder(db, adminSdk, 'e5');
+  ck('E-5', r.outcome === 'held' && avail(SELLER) === 0 && bal(SELLER) === 0, 'a non-integer / non-positive escrow amount is never released', r);
+  reset(); order('e6', { paymentVerified: true, deliveryAuthorizedBy: 'rider_pin', escrow: esc(), buyerUid: SELLER, uid: SELLER });
+  r = await OS.settleOrder(db, adminSdk, 'e6');
+  ck('E-6', r.outcome === 'held' && r.reason === 'self_dealing_review' && avail(SELLER) === 0, 'the gate runs BEFORE any release (self-dealt escrow held)', r);
+  reset(); order('e7', { paymentVerified: true, deliveryAuthorizedBy: 'rider_pin', escrow: esc() });
+  const par = await Promise.all([1, 2, 3].map(() => OS.settleOrder(db, adminSdk, 'e7')));
+  ck('E-7', par.filter((x) => x.outcome === 'settled').length === 1 && avail(SELLER) === 95000, 'three concurrent completion events release ONCE', par.map((x) => x.outcome));
+
+  /* the escrow CHANGES between settleOrder's first read and its transaction (a concurrent writer) */
+  reset(); order('e8', { paymentVerified: true, deliveryAuthorizedBy: 'rider_pin', escrow: esc() });
+  BEFORE_TXN = () => { const o = DOCS.get('orders/e8'); DOCS.set('orders/e8', Object.assign({}, o, { escrow: esc({ heldNetCents: 9999999 }) })); };
+  r = await OS.settleOrder(db, adminSdk, 'e8');
+  ck('E-8', r.outcome === 'held' && r.reason === 'escrow_changed_review' && avail(SELLER) === 0, 'an escrow amount that changed mid-settlement is held for review, never released at either value', r);
+  reset(); order('e9', { paymentVerified: true, deliveryAuthorizedBy: 'rider_pin' });
+  BEFORE_TXN = () => { const o = DOCS.get('orders/e9'); DOCS.set('orders/e9', Object.assign({}, o, { escrow: esc() })); };
+  r = await OS.settleOrder(db, adminSdk, 'e9');
+  ck('E-9', r.outcome === 'held' && avail(SELLER) === 0 && bal(SELLER) === 0, 'an escrow that APPEARS after the first read (engine already priced) is held, not paid twice ways', r);
 
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

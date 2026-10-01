@@ -1,3 +1,13 @@
+## [2026-10-01] — settleOrder releases the PAYMENT-TIME escrow (seller hold, release half)
+
+**Files:** `functions/order-settlement.js`, `scripts/test-settlement-gate.js`, `CHANGELOG.md` · **Base:** 788416b · **Database:** reads `orders.escrow` {creditVia:'finos', heldNetCents, commissionCents, grossCents, paymentRef, sellerUid}; writes `settlements/{id}.source:'payment_escrow'`.
+
+- Owner 2026-10-01: "Payment determines the economic terms; verified completion determines when the already-recorded seller amount becomes withdrawable." No rate is recomputed at release.
+- An escrow order that passes the gate releases EXACTLY `heldNetCents` through the same FinOS `creditWalletTxn` the webhook credited with, once. No engine call and no second commission ledger (the commission was recorded at payment).
+- Held for review instead: an escrow for another seller or with a bad amount (`escrow_invalid_review`), and an escrow changed or appearing mid-settlement (`escrow_changed_review`).
+- Inert until the webhook writes `escrow` (next unit). **Deploy this BEFORE that webhook change.**
+- Tests: 24/0 (base 106db63 fails 19), including the owner's three invariants (E-1, E-3, E-3b), concurrency (E-7) and mid-flight (E-8/E-9). Mutants: 4 gate + 3 release guards, all caught.
+
 ## [2026-10-01] — The settlement gate: a seller is credited only for a PAID, PIN-PROVEN, arm's-length order
 
 **Files:** `functions/order-settlement.js`, `scripts/test-settlement-gate.js`, `CHANGELOG.md`
