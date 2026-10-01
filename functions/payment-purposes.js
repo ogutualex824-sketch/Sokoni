@@ -239,6 +239,45 @@ const PURPOSES = {
     },
   },
 
+  /* ── SOKONI Foundation donation (owner, 2026-10-01) ────────────────────
+     The donation is a PLEDGE first (foundationDonations/{PLG_<uid>_<requestId> | CHK_<orderId>},
+     status 'pledged', written by impactPledgeDonation / impactCheckoutDonate — no ledger, no balance).
+     This pricer turns a pledge into ITS OWN IntaSend intent: never part of an order total (the order
+     settles only on exact gross evidence, carries commission, and refunds differently).
+       · the amount is the PLEDGE's, read here — the browser never names it;
+       · only the pledge's owner can pay it, and only while it is 'pledged';
+       · KES 10 – 100,000, whole shillings, KES only;
+       · ONE intent identity per pledge (DON_<pledgeId>): a retry replays it, a second pay of a
+         completed pledge is refused — the money can never be taken twice for one pledge.
+     webhookIntasend completes it (pledge → 'completed' + impactLedger + impactBalance +
+     foundationStats + the programme's raised/donors) only on a verified COMPLETE of exactly this
+     amount. No seller, no wallet, no commission. */
+  donation: {
+    resourceType: 'foundationDonation',
+    async price(uid, data) {
+      const pledgeId = String(data.pledgeId || '').trim();
+      if (!/^(PLG|CHK)_[A-Za-z0-9_-]{1,120}$/.test(pledgeId)) fail('invalid-argument', 'A valid pledgeId is required.');
+      const s = await db().collection('foundationDonations').doc(pledgeId).get();
+      if (!s.exists) fail('not-found', 'Donation pledge not found.');
+      const p = s.data() || {};
+      if (p.uid !== uid) fail('permission-denied', 'This pledge is not yours.');
+      if (p.status !== 'pledged') fail('already-exists', 'This donation is already paid or closed.');
+      if ((p.currency || 'KES') !== 'KES') fail('failed-precondition', 'Donations are accepted in KES only.');
+      const kes = Number(p.amount);
+      if (typeof p.amount !== 'number' || !Number.isInteger(kes) || kes < 10 || kes > 100000) {
+        fail('failed-precondition', 'A donation must be a whole amount between KES 10 and KES 100,000.');
+      }
+      return {
+        amountCents: kes * 100,
+        currency: 'KES',
+        resourceType: 'foundationDonation',
+        resourceId: pledgeId,
+        preferredRef: 'DON_' + pledgeId,
+        metadata: { type: 'donation', pledgeId, programmeId: p.programmeId || null },
+      };
+    },
+  },
+
   /* ── Hub registration ─────────────────────────────────────────────────
      Replaces the localStorage grant. The tier price is read from the hub
      catalogue so a merchant cannot register for an Enterprise hub at the
