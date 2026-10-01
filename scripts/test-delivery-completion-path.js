@@ -140,8 +140,12 @@ const BODY = START > -1 ? DRIVER.slice(START, DRIVER.indexOf('\nwindow.', START 
   const DP = fs.readFileSync(path.join(ROOT, 'functions', 'delivery-complete.js'), 'utf8');
   ck('the server verifies deliveryPinHash, never proofPin',
      /deliveryPinHash/.test(DP) && !/d\.proofPin/.test(DP));
+  /* 2026-10-01: the "no hash" decision moved into the completion-PIN engine (verifyAttempt → PIN_NOT_ISSUED), which
+     the callable maps to an HttpsError. Same property, asserted where it now lives. */
+  const CPE = fs.readFileSync(path.join(ROOT, 'functions', 'shared', 'completion-pin.js'), 'utf8');
   ck('a missing hash is a rejection, not a pass-through',
-     /if \(!d\.deliveryPinHash\)[\s\S]{0,200}HttpsError/.test(DP));
+     /if \(!o\.deliveryPinHash && !\(legacyPkg && legacyPkg\.hash\)\) return \{ ok: false, reason: R\.PIN_NOT_ISSUED \}/.test(CPE)
+     && /if \(!va\.ok\) \{[\s\S]{0,1200}throw new HttpsError\(/.test(DP));
   /* Compare CODE positions, not raw file offsets: `deliveryPinHash` is discussed in
      the file header long before it is used, so an unstripped indexOf compares an
      assignment check against a comment and reports a hole that is not there. */

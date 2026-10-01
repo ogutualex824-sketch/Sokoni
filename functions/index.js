@@ -3389,52 +3389,26 @@ exports.onOrderConfirmed = onDocumentUpdated(
    created. It is logged, and the accept-time issuer in delivery-pin.js remains
    as the backstop for anything that slipped through. */
 async function _issueDeliveryPin(orderId, data) {
+  /* THE COMPLETION PIN ENGINE (owner 2026-10-01, shared/completion-pin.js). A PIN is issued only for a PAID delivery
+     order — an unpaid / pickup / cancelled order gets none (brief §5, §13). An order the webhook CREATES already paid
+     is issued here; one that becomes paid later is issued by onOrderStatusChange on that transition (same engine).
+     48 h expiry; the plaintext is never stored (HMAC on the order, sealed copy for the buyer's re-view); the buyer
+     gets it by SMS at issue time. Idempotent: an order that already has a PIN keeps it. */
   try {
-    /* Only a DELIVERY order has something to prove. A pickup or collection order
-       is settled without delivery proof and says so on its settlement record. */
-    const ful = String(data.fulfilmentType || data.fulfillmentType || data.deliveryType || '');
-    const isDelivery = !!(data.deliveryRequired === true || /^delivery$/i.test(ful) ||
-      data.deliveryAddress || data.deliveryLocation);
-    if (!isDelivery) return;
-
-    /* Idempotent. A second PIN would silently invalidate the one the buyer was
-       already given, which is worse than having none. */
-    if (data.deliveryPinHash || data.deliveryPinIssued) return;
-
-    const pin = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+    const CP = require('./shared/completion-pin');
+    if (CP.eligibility(data)) return;
     let key = null;
     try { key = SOKONI_HMAC_KEY.value(); } catch (_) { key = null; }
-    if (!key) {
-      /* FAIL CLOSED. A PIN hashed under a guessable fallback key is not a proof,
-         and issuing one would be worse than issuing none — the settlement gate
-         would then accept it as evidence. delivery-pin.js issues at accept time
-         with the real secret bound. */
-      console.warn(`[deliveryPin] ${orderId} — no HMAC key at creation; deferring issuance`);
-      return;
-    }
-    const hash = crypto.createHmac('sha256', key)
-      .update(String(orderId) + '|' + pin).digest('hex');
-
-    /* Plaintext FIRST, in the deny-by-default collection. If the second write
-       fails the buyer can still be given their code; if the order carried a hash
-       whose plaintext was never stored, the delivery could never be verified. */
-    await db.collection('deliveryPins').doc(String(orderId)).set({
-      orderId: String(orderId), pin, binding: 'order',
-      buyerUid: data.buyerUid || data.buyerId || data.userId || data.uid || null,
-      issuedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    await db.collection('orders').doc(String(orderId)).set({
-      deliveryPinHash:      hash,
-      deliveryPinBinding:   'order',      /* which ref the hash is keyed to */
-      deliveryPinIssued:    true,
-      deliveryPinIssuedAt:  admin.firestore.FieldValue.serverTimestamp(),
-      deliveryVerificationStatus: 'pending',
-    }, { merge: true });
-
-    console.log(`[deliveryPin] issued at creation for ${orderId} (order-bound)`);
+    if (!key) { console.warn('[deliveryPin] ' + orderId + ' — no HMAC key; not issued (fail closed)'); return; }
+    const FV = admin.firestore.FieldValue, now = Date.now();
+    const r = await CP.issueOrResend({ db, FV, key, orderId, mode: 'auto', now });
+    if (!r.ok || r.action !== 'issued') return;
+    const phone = await CP.resolveBuyerPhone(db, r.buyerUid, data);
+    const d = await CP.deliverPin({ db, FV, orderId, version: r.version, pin: r.pin, phone, sendSms: sokoniAt.atSendSMS, now });
+    await db.collection('deliveryAuditLog').add({ at: FV.serverTimestamp(), phase: 'enforcing', event: 'PIN_ISSUED',
+      orderId: String(orderId), version: r.version, delivered: d.ok, channel: d.channel }).catch(() => {});
   } catch (e) {
-    console.error(`[deliveryPin] issuance failed for ${orderId}:`, (e && e.message) || e);
+    console.error('[deliveryPin] issuance failed for ' + orderId + ':', (e && e.message) || e);
   }
 }
 
@@ -11621,6 +11595,7 @@ exports.getMyDeliveryPin          = _deliveryPin.getMyDeliveryPin;
 const _deliveryComplete = require("./delivery-complete");
 exports.completeDeliveryWithPin   = _deliveryComplete.completeDeliveryWithPin;
 exports.buyerConfirmDelivery      = _deliveryComplete.buyerConfirmDelivery;
+exports.sendDeliveryPin           = _deliveryComplete.sendDeliveryPin;   /* owner 2026-10-01: seller/rider/buyer asks the SERVER to send the buyer's PIN */
 // v2.0 additions
 exports.navGenerateDeliveryOTP    = navigation.navGenerateDeliveryOTP;
 exports.navGetRiderDashboard      = navigation.navGetRiderDashboard;

@@ -1,3 +1,48 @@
+## [2026-10-01] — The completion PIN engine: issue, send, verify (lineage B: onNewOrderCreated, completeDeliveryWithPin, sendDeliveryPin)
+
+**Files:**
+- `functions/shared/completion-pin.js` (new);
+- `functions/delivery-complete.js`, `functions/index.js`;
+- `scripts/test-completion-pin-core.js`, `scripts/test-delivery-pin-callables.js`;
+- 2 detectors repointed;
+- `CHANGELOG.md`.
+
+**Base:** `5f3c96c`, the LIVE 09-09 archive of onNewOrderCreated + completeDeliveryWithPin, verbatim.
+
+**Database:**
+- Order fields: `deliveryPinEngine:2`, `deliveryPinVersion`, `deliveryPinExpiresAt`, `deliveryPinStatus`,
+  `deliveryPinSends`, `deliveryPinLastSentAt`, `deliveryPinLockedUntil`, `deliveryPinDelivery`, `deliveryPinChannel`.
+- `deliveryPins/{id}.sealed` (AES-256-GCM); plaintext `pin` removed on (re)issue.
+- New server-only collections: `deliveryPinLog`, `pinDeliveryFailures`, `pinSecurityEvents`, `pinSendRate`.
+
+**API:** new callable `sendDeliveryPin({orderId})`. `completeDeliveryWithPin` returns `details.reason`
+(PIN_EXPIRED / PIN_LOCKED / PIN_NOT_ISSUED / ALREADY_COMPLETED / …).
+
+Owner rules 2026-10-01, all enforced server-side:
+- the PIN belongs to the buyer;
+- 48 h TTL (an expired PIN ≠ an expired order);
+- max 5 sends;
+- no silent replacement;
+- an atomic lockout (5 wrong → 30 min; concurrent guesses cannot slip past);
+- 6 digits only;
+- plaintext never persisted (order = HMAC; buyer re-view = sealed; SMS transient, body never logged or stored);
+- one-shot (USED);
+- issued only for a PAID delivery order (unpaid / pickup / cancelled / refunded get none);
+- SMS by the existing AT authority; WhatsApp logged NOT_CONFIGURED;
+- a failed delivery → `pinDeliveryFailures` for AdminOS, and the order stays incomplete.
+
+Legacy package-bound PINs (minted at rider accept) still verify, but only until an engine PIN exists.
+
+**Tests:**
+- core 33/0, 9 mutants caught;
+- callables 16/0 on the real handlers (the live baseline fails 12), 2 wiring mutants caught;
+- completion-path 33/0, pin-unreachable 65/0 (detectors repointed to where the property now lives, and re-proven to
+  bite), buyer-path 20/0, client-writer 22/0.
+
+**Deploy:** `--only functions:onNewOrderCreated,functions:completeDeliveryWithPin,functions:sendDeliveryPin` from this
+tree, after lineage A (getMyDeliveryPin must read `sealed` first). `buyerConfirmDelivery` is NOT deployed from here (a
+different live lineage). Not deployed.
+
 ## [2026-09-29] — P0: orders rules close the rider-payout self-credit path (rules half)
 
 **Files:** `firestore.rules`, `firestore.rules.build`, `scripts/test-p0-rider-payout-rules.js`, `CHANGELOG.md`.

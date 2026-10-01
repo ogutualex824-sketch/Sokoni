@@ -235,11 +235,19 @@ console.log('\n2. Cloud Functions reachable by a rider');
   ck('2.22 ...and every read is audited', /_audit\(\{ event: "pin_read"/.test(GET));
 
   const CDP = (bodyOf(COMP, 'completeDeliveryWithPin') || '');
+  /* 2026-10-01: verification moved into the completion-PIN engine (functions/shared/completion-pin.js verifyAttempt —
+     keyed HMAC, constant-time compare, ATOMIC attempt counter + lockout). The same four properties, asserted where
+     they now live; the callable must still check assignment BEFORE handing the PIN to the engine. */
+  const ENG = fs.readFileSync(path.join(ROOT, 'functions', 'shared', 'completion-pin.js'), 'utf8');
+  const VA = (ENG.match(/async function verifyAttempt[\s\S]*?\n}\n/) || [''])[0];
   ck('2.23 completeDeliveryWithPin STILL checks assignment before the PIN',
-    CDP.indexOf('assigned !== uid') < CDP.indexOf('_hash(pkgId, pin)'));
-  ck('2.24 ...still verifies against the keyed HMAC', /_sameHash\(computed, d\.deliveryPinHash\)/.test(CDP));
-  ck('2.25 ...still locks out after MAX_ATTEMPTS', /attempts >= MAX_ATTEMPTS/.test(CDP));
-  ck('2.26 ...still fails closed without the HMAC key', /__noKey/.test(CDP));
+    CDP.indexOf('assigned !== uid') > 0 && CDP.indexOf('assigned !== uid') < CDP.indexOf('CP.verifyAttempt('));
+  ck('2.24 ...still verifies against the keyed HMAC',
+    /createHmac\('sha256', key\)/.test(ENG) && /sameHash\(cand\.order, o\.deliveryPinHash\)/.test(VA) && /timingSafeEqual/.test(ENG));
+  ck('2.25 ...still locks out after MAX_ATTEMPTS',
+    /const lock = attempts >= MAX_ATTEMPTS;/.test(VA) && /db\.runTransaction/.test(VA) && /const MAX_ATTEMPTS\s*= 5;/.test(ENG));
+  ck('2.26 ...still fails closed without the HMAC key',
+    /e\.__noKey = true; throw e;/.test(ENG) && /if \(!key\) \{[\s\S]{0,300}throw new HttpsError\("failed-precondition"/.test(CDP));
   ck('2.27 ...and returns no PIN to the caller', !/pin:\s*[A-Za-z_$]/.test(CDP.replace(/pinPass/g, '')));
 
   const CPOD = (bodyOf(DISP, 'captureProofOfDelivery') || '');

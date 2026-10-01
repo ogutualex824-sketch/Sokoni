@@ -83,7 +83,8 @@ function _audit(entry) {
   }, entry)).catch(() => {});
 }
 
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 5;   /* legacy constant (exported via _h); the ENGINE's MAX_ATTEMPTS governs verification */
+const CP = require("./shared/completion-pin");
 
 /* Shared completion write. Runs in a transaction so two concurrent calls cannot both
    see "not yet delivered" and both proceed — the order doc is the serialisation point.
@@ -125,6 +126,7 @@ async function _completeDelivery({ orderId, pkgId, riderUid, method, actorUid })
       deliveryStatus:      "delivered",
       deliveredAt:         admin.firestore.FieldValue.serverTimestamp(),
       deliveryAuthorizedBy: method,          /* 'rider_pin' | 'buyer_confirmation' */
+      ...(method === "rider_pin" ? { deliveryPinStatus: "USED", deliveryPinUsedAt: Date.now() } : {}),
       deliveryAuthorizedActor: actorUid || null,
       updatedAt:           admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -170,61 +172,38 @@ exports.completeDeliveryWithPin = onCall(
     }
 
     /* A missing PIN is a rejection, never a pass-through. The Phase 0 code path
-       allowed `if (data.proofPin)` — no PIN meant no check at all. */
-    if (!/^\d{4,8}$/.test(pin)) {
+       allowed `if (data.proofPin)` — no PIN meant no check at all. EXACTLY 6 digits (owner 2026-10-01): a shorter
+       credential is refused, not merely relabelled. */
+    if (!CP.isPinShape(pin)) {
       await _audit({ event: "complete_denied_pin_missing", deliveryRef: pkgId, orderId: d.orderId || null, actorUid: uid });
       throw new HttpsError("invalid-argument", "Enter the delivery PIN from the customer.");
     }
-    if (!d.deliveryPinHash) {
-      await _audit({ event: "complete_denied_no_hash", deliveryRef: pkgId, orderId: d.orderId || null, actorUid: uid });
-      throw new HttpsError("failed-precondition", "No delivery PIN was issued for this delivery.");
+    if (!d.orderId) throw new HttpsError("failed-precondition", "This delivery has no linked order.");
+
+    /* ── THE ENGINE DECIDES (shared/completion-pin.js verifyAttempt) ───────────────────────────────────────
+       One transaction on the ORDER: expired → PIN_EXPIRED (not counted); locked → PIN_LOCKED; wrong → the attempt is
+       counted atomically (concurrent guesses cannot slip past) and the 5th locks for 30 min + raises a
+       pinSecurityEvents record; used / delivered → ALREADY_COMPLETED. The package-bound PIN minted at rider accept
+       before this engine still verifies, ONLY while the order carries no engine PIN — riders mid-delivery are not
+       stranded, and a reissued PIN makes every older one invalid. */
+    let key = null;
+    try { key = SOKONI_HMAC_KEY.value(); } catch (_) { key = null; }
+    if (!key) {
+      await _audit({ event: "complete_denied_no_hmac_key", deliveryRef: pkgId, orderId: d.orderId || null, actorUid: uid });
+      throw new HttpsError("failed-precondition", "Delivery verification is unavailable. Ask the customer to confirm receipt in their app.", { reason: "PIN_UNAVAILABLE" });
     }
-
-    const attempts = Number(d.deliveryVerifyAttempts || 0);
-    if (attempts >= MAX_ATTEMPTS) {
-      await _audit({ event: "complete_denied_locked", deliveryRef: pkgId, orderId: d.orderId || null, actorUid: uid, attempts });
-      throw new HttpsError("resource-exhausted", "Too many incorrect PIN attempts. Ask support to verify this delivery.");
-    }
-
-    /* Fail closed on a missing secret — never fall through to a guessable key. The buyer
-       fallback still works, so this degrades authorisation strength to zero paths rather
-       than to a weak one. */
-    let computed;
-    try { computed = _hash(pkgId, pin); }
-    catch (e) {
-      if (e && e.__noKey) {
-        await _audit({ event: "complete_denied_no_hmac_key", deliveryRef: pkgId, orderId: d.orderId || null, actorUid: uid });
-        throw new HttpsError("failed-precondition",
-          "Delivery verification is unavailable. Ask the customer to confirm receipt in their app.");
-      }
-      throw e;
-    }
-
-    /* ── TWO BINDINGS, one migration ──────────────────────────────────────────
-       A PIN issued at ORDER CREATION is keyed to the order id, because no
-       packageRequest existed yet. Every delivery issued at rider-accept time is
-       keyed to the package id. Both must verify: accepting only the new binding
-       would strand every rider currently mid-delivery at a customer's door with
-       a code that no longer works, and accepting only the old one would make the
-       creation-time PIN unusable.
-
-       The order-bound hash lives on the ORDER, so it is fetched only when the
-       package's own hash does not match — no extra read on the common path. */
-    let matched = _sameHash(computed, d.deliveryPinHash);
-    if (!matched && d.orderId) {
-      try {
-        const oSnap = await db.collection("orders").doc(String(d.orderId)).get();
-        const o = oSnap.exists ? (oSnap.data() || {}) : {};
-        if (o.deliveryPinHash && o.deliveryPinBinding === "order") {
-          matched = _sameHash(_hash(String(d.orderId), pin), o.deliveryPinHash);
-        }
-      } catch (_) { /* unreadable → stays unmatched, which fails closed */ }
-    }
-
-    if (!matched) {
-      await pkgRef.set({ deliveryVerifyAttempts: admin.firestore.FieldValue.increment(1) }, { merge: true }).catch(() => {});
-      await _audit({ event: "complete_denied_wrong_pin", deliveryRef: pkgId, orderId: d.orderId || null, actorUid: uid, attempts: attempts + 1 });
-      throw new HttpsError("permission-denied", "Wrong delivery PIN.");
+    const va = await CP.verifyAttempt({ db, FV: admin.firestore.FieldValue, key, orderId: String(d.orderId), pin,
+      legacyPkg: d.deliveryPinHash ? { ref: pkgId, hash: d.deliveryPinHash } : null, now: Date.now(), actorUid: uid });
+    if (!va.ok) {
+      await _audit({ event: "complete_denied_" + String(va.reason).toLowerCase(), deliveryRef: pkgId, orderId: d.orderId, actorUid: uid, attempts: va.attempts || null });
+      const MSG = {
+        PIN_EXPIRED:       ["failed-precondition", "This PIN has expired. Ask the seller to send the customer a new PIN."],
+        PIN_LOCKED:        ["resource-exhausted", "Too many incorrect PINs. Verification is paused for 30 minutes."],
+        PIN_NOT_ISSUED:    ["failed-precondition", "No delivery PIN has been issued for this order yet."],
+        ALREADY_COMPLETED: ["failed-precondition", "This delivery is already completed."],
+        ORDER_NOT_ELIGIBLE:["failed-precondition", "This order can no longer be completed."],
+      }[va.reason] || ["permission-denied", "Wrong delivery PIN."];
+      throw new HttpsError(MSG[0], MSG[1], { reason: va.reason, attemptsLeft: va.attempts ? Math.max(0, CP.MAX_ATTEMPTS - va.attempts) : null });
     }
 
     const orderId = d.orderId;
@@ -282,6 +261,58 @@ exports.buyerConfirmDelivery = onCall(
     await _audit({ event: r.alreadyDelivered ? "buyer_confirm_replay_inert" : "buyer_confirm_ok",
                    orderId, actorUid: uid, riderUid: rider, method: "buyer_confirmation" });
     return { ok: true, orderId, alreadyDelivered: !!r.alreadyDelivered, method: "buyer_confirmation" };
+  }
+);
+
+/* ── SEND / RESEND THE BUYER'S PIN (owner 2026-10-01) ────────────────────────────────────────────────────────
+   The seller, the ASSIGNED rider, or the buyer asks the SERVER to send the buyer their PIN. Nobody but the buyer ever
+   receives it — the caller gets the masked state only. Identity comes from auth + the order record (never a client
+   sellerId / riderId / buyerId). Within its 48 h window the SAME PIN is re-sent; after it, a new PIN is issued and the
+   old one dies. Max 5 sends per order, ≥ 60 s apart; ≤ 30 send requests per caller per hour. */
+const SEND_PER_ACTOR_HOUR = 30;
+exports.sendDeliveryPin = onCall(
+  { region: "us-central1", secrets: [SOKONI_HMAC_KEY, ...require("./sokoni-at").secrets], timeoutSeconds: 30 },
+  async (req) => {
+    const uid = req.auth && req.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Sign in to send the customer's PIN.", { reason: "UNAUTHENTICATED" });
+    const orderId = String((req.data && req.data.orderId) || "").trim();
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(orderId)) throw new HttpsError("invalid-argument", "A valid orderId is required.");
+    const oSnap = await db.collection("orders").doc(orderId).get();
+    if (!oSnap.exists) throw new HttpsError("not-found", "Order not found.", { reason: "ORDER_NOT_ELIGIBLE" });
+    const o = oSnap.data() || {};
+    const role = CP.sellerOf(o) === uid ? "seller" : (CP.riderOf(o) === uid ? "rider" : (CP.buyerOf(o) === uid ? "buyer" : null));
+    if (!role) {
+      await _audit({ event: "pin_send_denied", orderId, actorUid: uid });
+      throw new HttpsError("permission-denied", "You cannot send a PIN for this order.", { reason: "SELLER_NOT_AUTHORIZED" });
+    }
+    const FV = admin.firestore.FieldValue, now = Date.now();
+    /* per-caller rate limit (a separate counter from the per-order send cap) */
+    const rl = await db.runTransaction(async (t) => {
+      const r = db.collection("pinSendRate").doc(uid); const s = await t.get(r); const w = s.exists ? (s.data() || {}) : {};
+      const fresh = !w.windowStart || now - Number(w.windowStart) >= 3600e3;
+      const n = fresh ? 0 : Number(w.count || 0);
+      if (n >= SEND_PER_ACTOR_HOUR) return false;
+      t.set(r, { windowStart: fresh ? now : w.windowStart, count: n + 1, updatedAt: FV.serverTimestamp() }, { merge: true });
+      return true;
+    });
+    if (!rl) throw new HttpsError("resource-exhausted", "Too many PIN requests. Try again later.", { reason: "PIN_RATE_LIMITED" });
+    let key = null;
+    try { key = SOKONI_HMAC_KEY.value(); } catch (_) { key = null; }
+    if (!key) throw new HttpsError("failed-precondition", "PIN sending is unavailable right now.", { reason: "PIN_UNAVAILABLE" });
+    const r = await CP.issueOrResend({ db, FV, key, orderId, mode: "request", actorUid: uid, now });
+    if (!r.ok) {
+      await _audit({ event: "pin_send_refused", orderId, actorUid: uid, role, reason: r.reason });
+      const MSG = { PIN_RATE_LIMITED: ["resource-exhausted", "The PIN was sent recently or the send limit is reached."],
+        ORDER_NOT_PAID: ["failed-precondition", "This order is not paid, so it has no delivery PIN."],
+        ALREADY_COMPLETED: ["failed-precondition", "This order is already completed."] }[r.reason]
+        || ["failed-precondition", "This order cannot receive a delivery PIN."];
+      throw new HttpsError(MSG[0], MSG[1], { reason: r.reason });
+    }
+    const phone = await CP.resolveBuyerPhone(db, r.buyerUid, o);
+    const dv = await CP.deliverPin({ db, FV, orderId, version: r.version, pin: r.pin, phone, sendSms: require("./sokoni-at").atSendSMS, now });
+    await _audit({ event: r.action === "issued" ? "PIN_REISSUED" : "PIN_RESENT", orderId, actorUid: uid, role, version: r.version, delivered: dv.ok, appCheck: !!req.app });
+    const fresh = (await db.collection("orders").doc(orderId).get()).data() || {};
+    return { ok: true, action: r.action, delivered: dv.ok, reason: dv.ok ? null : "PIN_DELIVERY_FAILED", pin: CP.maskedView(fresh, now) };
   }
 );
 
