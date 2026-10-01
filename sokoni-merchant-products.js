@@ -397,6 +397,13 @@
     'background:rgba(0,170,255,.10);border:1px solid rgba(0,170,255,.28);color:#7fd4ff;',
     'border-radius:11px;padding:9px 11px;margin:2px 0 10px}',
     '.pr-bulk-strip b{color:#00aaff}',
+    /* Price tiers (2026-10-01): a compact chip before each tier label. Visual only (aria-hidden); the label
+       text is the accessible name. Stacked one per row so each 46px input is full-width on a phone. */
+    '.pr-tier-chip{display:inline-block;min-width:38px;margin-right:7px;padding:2px 6px;border-radius:6px;',
+    'font-size:10.5px;font-weight:800;letter-spacing:.04em;text-align:center;vertical-align:1px;',
+    'background:rgba(113,255,0,.12);border:1px solid rgba(113,255,0,.35);color:var(--brand,#71ff00)}',
+    '.pr-tier-chip--shopPrice{background:rgba(255,176,32,.10);border-color:rgba(255,176,32,.35);color:#ffb020}',
+    '.pr-tier-chip--wholesalePrice{background:rgba(0,170,255,.10);border-color:rgba(0,170,255,.32);color:#7fd4ff}',
     '.pr-warn--age{background:rgba(255,152,0,.10);border:1px solid rgba(255,152,0,.32);color:#ffb020}',
     '.pr-ok{font-size:12.5px;color:var(--brand,#71ff00);margin-top:8px;line-height:1.5}',
     /* THE CHECKBOX IS THE LABEL. A native box is 13-17px, far under the 44px thumb target every other
@@ -974,13 +981,16 @@
        save and silently discards. */
     var FORM_KEYS = ['name', 'price', 'costPrice', 'stock', 'sku', 'category', 'description', 'status',
                      'location', 'condition', 'brand', 'kebsCert', 'deliveryCost',
-                     'wholesalePrice', 'minWholesaleQty', 'digitalUrl', 'digitalLicense', 'tags',
+                     'shopPrice', 'wholesalePrice', 'minWholesaleQty', 'digitalUrl', 'digitalLicense', 'tags',
                      /* The Listing Studio's type picker. It is a hidden input rather than a
                         chip's own state so that a tapped type and a typed field reach the
                         writer by one route — see sokoni-listing-studio.js. */
                      'listingType'];
     var NUMERIC = { price: 1, costPrice: 1, stock: 1,
-                    deliveryCost: 1, wholesalePrice: 1, minWholesaleQty: 1 };
+                    deliveryCost: 1, shopPrice: 1, wholesalePrice: 1, minWholesaleQty: 1 };
+    /* Optional fields an EDIT may remove (price tiers, 2026-10-01). Emptying one the stored product HAD is sent
+       as null — the writer's signal for a field delete. Never 0. */
+    var CLEARABLE = ['shopPrice', 'wholesalePrice', 'minWholesaleQty'];
 
     /* Pull every field the form is showing into editor state. */
     function captureForm () {
@@ -1444,6 +1454,13 @@
           run = M.archiveProduct({ scope: ctx.scope, db: ctx.db, id: E.product.id });
         } else if (E.mode === 'edit') {
           var patch = changedOnly(fieldsFromForm(), E.product);   /* stored record, not the form */
+          /* A tier the merchant EMPTIED (the input was on screen and is now blank) that the stored product HAD
+             is a removal: null tells the writer to delete the field. A tier never shown, or shown and left as
+             it was, is not in the patch at all — saving never resets an untouched price. */
+          CLEARABLE.forEach(function (k) {
+            var had = E.product && typeof E.product[k] === 'number';
+            if (had && E.values && E.values[k] === '') patch[k] = null;
+          });
           if (!Object.keys(patch).length) { E.busy = false; closeEditor(); return say('Nothing changed.'); }
           run = M.updateProduct({ scope: ctx.scope, db: ctx.db, id: E.product.id, patch: patch, businessCategory: bizCategory() });
         } else {
@@ -1474,7 +1491,8 @@
         if (mode === 'create' && _picked.length && res && res.id) return attachAfterCreate(res);
         S.editor = null;
         if (mode === 'create') reportCreate(res || {});
-        else if (mode === 'edit') say('Changes saved.');
+        else if (mode === 'edit') say(res && res.mirrors && res.complete === false
+          ? 'Changes saved — the till has not picked up the new prices yet.' : 'Changes saved.');
         else say('Product archived — find it under Archived to restore it.');
         /* Re-READ. The list is never patched from what we believe we wrote. */
         S.rows = null; load();
@@ -2044,38 +2062,73 @@
         '</div>';
     }
 
-    /* ── BULK / WHOLESALE ────────────────────────────────────────────────────────────────
-       The saving is shown as the merchant types, because a bulk tier is easy to get backwards
-       and the moment to notice is now — not when someone orders fifty. The figure is computed
-       from the two numbers on screen and labelled as a preview; the writer re-checks it and
-       refuses a wholesale price at or above the unit price. */
-    function bulkHTML (p) {
+    /* ── PRICES: THREE INDEPENDENT TIERS (owner model, 2026-10-01) ─────────────────────────
+       ONLINE    = price           what the marketplace, cart and checkout charge (required)
+       SHOP      = shopPrice       the in-store price (optional)
+       WHOLESALE = wholesalePrice  the bulk price (optional)
+       An empty tier means "not sold at this price": it is never sent as 0. On EDIT an emptied
+       tier that the product HAD is sent as null, which the writer turns into a field delete
+       (see submit); a tier the merchant never touched shows its stored value and is unchanged.
+
+       The chip (ONL / SHOP / WHOLE) is visual and aria-hidden; the <label> text is the
+       accessible name. Every input keeps the form's 46px height (>= 44px targets).
+
+       The read-out below is computed from the numbers on screen and labelled as a preview;
+       the writer re-checks every rule (wholesale < online, shop <= online, wholesale <= shop)
+       and refuses with a named message. The saving strip keeps its `.pr-bulk-strip` /
+       "not a discount" contract from the bulk-deal section it replaces. */
+    var TIER_HELP = 'Leave empty if not sold at this price';
+    function tierFld (key, chip, label, attrs, val, note) {
+      return '<div class="pr-f pr-tier"><label class="pr-l" for="pf-' + key + '">' +
+        '<span class="pr-tier-chip pr-tier-chip--' + key + '" aria-hidden="true">' + chip + '</span>' +
+        esc(label) + '</label>' +
+        '<input class="pr-i" id="pf-' + key + '" data-pf="' + key + '" ' + attrs +
+        ' value="' + esc(val == null ? '' : val) + '"' +
+        (note ? ' aria-describedby="pf-' + key + '-help"' : '') + '>' +
+        (note ? '<div class="pr-note" id="pf-' + key + '-help">' + esc(note) + '</div>' : '') + '</div>';
+    }
+    function pricingHTML (p) {
       var v = (S.editor && S.editor.values) || {};
-      var price = Number(v.price !== undefined ? v.price : p.price) || 0;
-      var wp = Number(v.wholesalePrice !== undefined ? v.wholesalePrice : p.wholesalePrice) || 0;
-      var wq = Number(v.minWholesaleQty !== undefined ? v.minWholesaleQty : p.minWholesaleQty) || 0;
+      var num = function (k) {
+        var raw = v[k] !== undefined ? v[k] : p[k];
+        if (raw === '' || raw === null || raw === undefined) return 0;
+        var n = Number(raw);
+        return isFinite(n) && n > 0 ? n : 0;
+      };
+      var on = num('price'), sh = num('shopPrice'), wp = num('wholesalePrice'), wq = num('minWholesaleQty');
       var strip = '';
-      if (wp > 0 && price > 0) {
-        if (wp >= price) {
-          strip = '<div class="pr-warn">⚠️ That is not a discount — the bulk price is ' +
-            'the same as or higher than your normal price.</div>';
+      if (wp > 0 && on > 0) {
+        if (wp >= on) {
+          strip += '<div class="pr-warn">⚠️ That is not a discount — the Wholesale price is ' +
+            'the same as or higher than your Online price.</div>';
         } else {
-          var save = price - wp;
-          var pct = Math.round((save / price) * 100);
-          strip = '<div class="pr-bulk-strip">🏷️ <b>Bulk deal</b>' +
+          var save = on - wp;
+          var pct = Math.round((save / on) * 100);
+          strip += '<div class="pr-bulk-strip">🏷️ <b>Bulk deal</b>' +
             '<span>Saves KES ' + esc(String(Math.round(save))) + ' each (' + pct + '%)</span>' +
             (wq > 1 ? '<span>from ' + esc(String(wq)) + ' units</span>' : '') + '</div>';
         }
       }
-      return sectionOpen('📦', 'Bulk deal', 'Optional — a lower price for larger orders.') +
-        '<div class="pr-row">' +
-          fld('wholesalePrice', 'Bulk price (KES)', 'type="number" inputmode="decimal" min="0" step="any"',
-              p.wholesalePrice, '') +
-          fld('minWholesaleQty', 'Minimum quantity', 'type="number" inputmode="numeric" min="2" step="1"',
-              p.minWholesaleQty, '') +
-        '</div>' + strip +
-        '<div class="pr-note">Leave both empty for no bulk deal. Minimum 2 — "bulk, minimum one" ' +
-        'is just your normal price.</div>' + sectionClose;
+      if (sh > 0 && on > 0 && sh > on) {
+        strip += '<div class="pr-warn">⚠️ The Shop price cannot be higher than the Online price.</div>';
+      }
+      if (wp > 0 && sh > 0 && wp > sh) {
+        strip += '<div class="pr-warn">⚠️ The Wholesale price cannot be higher than the Shop price.</div>';
+      }
+      return '<div class="pr-sec pr-prices" role="group" aria-labelledby="pr-prices-h">' +
+        '<div class="pr-sec-h"><span class="pr-sec-e">💰</span>' +
+          '<span class="pr-sec-t" id="pr-prices-h">Prices</span></div>' +
+        '<div class="pr-sec-s">Wholesale ≤ Shop ≤ Online. Only the Online price is required.</div>' +
+        tierFld('price', 'ONL', 'Online — marketplace price (KES)',
+                'type="number" inputmode="decimal" min="1" step="any" required', p.price,
+                'Required. What buyers pay on the marketplace.') +
+        tierFld('shopPrice', 'SHOP', 'Shop — in-store price (KES)',
+                'type="number" inputmode="decimal" min="0" step="any"', p.shopPrice, TIER_HELP) +
+        tierFld('wholesalePrice', 'WHOLE', 'Wholesale — bulk price (KES)',
+                'type="number" inputmode="decimal" min="0" step="any"', p.wholesalePrice, TIER_HELP) +
+        fld('minWholesaleQty', 'Bulk from (units, optional)', 'type="number" inputmode="numeric" min="2" step="1"',
+            p.minWholesaleQty, 'For information — the smallest order the Wholesale price is meant for.') +
+        strip + sectionClose;
     }
 
     /* ── OWNERSHIP: high-theft goods ─────────────────────────────────────────────────────
@@ -2815,10 +2868,8 @@
         businessContextHTML() +
         (studio() ? studio().typePickerHTML(liveListing(p), { businessCategory: bizCategory() }) : '') +
         fld('name', 'Product name', 'type="text" autocomplete="off" maxlength="200" required', p.name) +
-        '<div class="pr-row">' +
-          fld('price', 'Price (KES)', 'type="number" inputmode="decimal" min="1" step="any" required', p.price) +
-          fld('costPrice', 'Cost (KES)', 'type="number" inputmode="decimal" min="0" step="any"', p.costPrice) +
-        '</div>' +
+        pricingHTML(p) +
+        fld('costPrice', 'Cost (KES)', 'type="number" inputmode="decimal" min="0" step="any"', p.costPrice) +
         '<div class="pr-row">' +
           /* CREATE takes an opening quantity — it becomes the product's first inventory
              movement, through merchantAdjustStock, not a metadata field.
@@ -2844,7 +2895,6 @@
         fld('deliveryCost', 'Delivery cost (KES)', 'type="number" inputmode="decimal" min="0" step="any"',
             p.deliveryCost, 'Leave empty or 0 for free delivery.') +
         stockUnitHTML(p) +
-        bulkHTML(p) +
         specsHTML(p) +
         (studio() ? studio().extraFieldsHTML(liveListing(p), studioSkipKeys(p)) : '') +
         ownershipHTML(p) +
