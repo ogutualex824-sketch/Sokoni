@@ -73,8 +73,11 @@ if (pinFn) {
   const pc = strip(pinFn);
   ck('the PIN is generated with a CSPRNG', /crypto\.randomInt\(/.test(pc), 'not Math.random');
   ck('...and is 6 digits, not 4', /padStart\(6/.test(pc), '1,000,000 possibilities, not 9,000');
+  /* 2026-10-01: the delivery document no longer stores a PIN of any kind (owner: no replacement at accept); the
+     order's HMAC is written by the completion-PIN engine. Same property — never the plaintext — asserted on both. */
+  const eng = fs.readFileSync(path.join(ROOT, 'functions', 'shared', 'completion-pin.js'), 'utf8');
   ck('the delivery document stores a HASH, never the plaintext',
-     /deliveryPinHash:\s*_hash\(/.test(pc) && !/deliveryPin:\s*pin\b/.test(pc));
+     /deliveryPinHash: hashPin\(key/.test(eng) && !/deliveryPin:\s*pin\b/.test(pc) && !/deliveryPin:\s*pin\b/.test(eng));
   ck('the hash is KEYED, so the 6 digits are not brute-forceable from it',
      /createHmac|SOKONI_HMAC_KEY/.test(pc));
   ck('the plaintext goes to deliveryPins/{orderId}', /collection\("deliveryPins"\)/.test(pc));

@@ -143,8 +143,11 @@ console.log('\n1. Firestore read paths a rider is granted (a granted read is TOT
     'delivery-pin.js');
   ck('1.3 the trigger actively DELETES any legacy plaintext as an order passes',
     /deliveryPin:\s*admin\.firestore\.FieldValue\.delete\(\)/.test(PIN));
+  /* 2026-10-01: issuance is the completion-PIN engine's (shared/completion-pin.js) — the order keeps the boolean
+     there; this trigger never writes a PIN onto the order. */
+  const ENG = fs.readFileSync(path.join(ROOT, 'functions', 'shared', 'completion-pin.js'), 'utf8');
   ck('1.4 the order keeps only a boolean that a PIN exists',
-    /deliveryPinIssued:\s*true/.test(PIN));
+    /deliveryPinIssued: true/.test(ENG) && !/deliveryPin: pin\b/.test(ENG) && !/deliveryPin:\s*pin\b/.test(PIN));
 
   /* Scoped to the packageRequests write itself. A file-wide ban would also fire on
      the deliveryPins write that now legitimately holds the value — which would make
@@ -168,8 +171,12 @@ console.log('\n1. Firestore read paths a rider is granted (a granted read is TOT
     !/proofPin/.test(syncPkg), 'merchant_ready delivery creation');
   ck('1.6b ...and the value is not lost — it moved to the CF-only deliveryPins doc',
     /deliveryPins/.test(IDX) && /deliveryPins/.test(SYNC));
-  ck('1.7 packageRequests still carries only the HASH',
-    /deliveryPinHash:\s*_hash\(/.test(PIN));
+  /* 2026-10-01 (owner: no silent replacement at accept): the package now carries NO PIN at all — neither plaintext
+     nor a package-bound hash — only the binding that it verifies against the ORDER. Stricter than "only the hash". */
+  const ACC = (PIN.match(/exports\.deliveryPinOnAccept[\s\S]*?\n\);\n/) || [''])[0];
+  ck('1.7 packageRequests carries NO PIN (no plaintext, no package-bound hash) — it verifies against the order',
+    (() => { const W = ACC.match(/event\.data\.after\.ref\.set\(\{[^}]*\}/g) || [];
+      return W.length > 0 && W.every((w) => !/deliveryPinHash|\bpin\b/i.test(w.replace(/deliveryPinBinding/g, ''))) && W.some((w) => /deliveryPinBinding: "order"/.test(w)); })());
 
   ck('1.8 `deliveryPins` has NO rule — deny-by-default is the access control',
     !/match \/deliveryPins\//.test(RULES_RAW));

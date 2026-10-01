@@ -33,6 +33,9 @@ const admin = require("firebase-admin");
 const crypto = require("crypto");
 
 const SOKONI_HMAC_KEY = defineSecret("SOKONI_HMAC_KEY");
+/* The Africa's Talking secrets the completion-PIN SMS needs (the same two sokoni-at.js declares). Declared here, not
+   imported, so loading this module does not load the SMS client; it is required lazily on the send path only. */
+const AT_SECRETS = [defineSecret("AFRICASTALKING_API_KEY"), defineSecret("AFRICASTALKING_USERNAME")];
 const db = admin.firestore();
 
 /* Cryptographically-random 6-digit code (unbiased). */
@@ -83,7 +86,7 @@ const GEOFENCE_M = 250; /* pickup/delivery radius — tighten to 50–100 m at c
 /* ── PIN issuance — fires when a delivery becomes driver_accepted ───────────────
    A NEW trigger, additive to the packageRequest. Never modifies the accept CF. */
 exports.deliveryPinOnAccept = onDocumentUpdated(
-  { document: "packageRequests/{pkgId}", region: "us-central1", secrets: [SOKONI_HMAC_KEY] },
+  { document: "packageRequests/{pkgId}", region: "us-central1", secrets: [SOKONI_HMAC_KEY, ...AT_SECRETS] },
   async (event) => {
     const before = event.data && event.data.before.data();
     const after  = event.data && event.data.after.data();
@@ -93,64 +96,43 @@ exports.deliveryPinOnAccept = onDocumentUpdated(
     if (after.deliveryPinHash) return; /* already issued — idempotent */
 
     const pkgId   = event.params.pkgId;
-    const pin      = _gen6();
     const orderId  = after.orderId || null;
     const riderUid = after.riderId || after.assignedRiderId || after.assignedDriverUid || null;
 
+    /* ── NO SILENT REPLACEMENT (owner 2026-10-01) ──────────────────────────────────────────────────────────────
+       This trigger used to mint a NEW package-bound PIN at rider accept and merge it over deliveryPins — silently
+       replacing the PIN the buyer had already been given. The buyer's PIN now comes from the completion-PIN
+       engine (shared/completion-pin.js) when the order is PAID, and rider acceptance never changes it:
+         · the order already carries a PIN  → the package only records that it verifies against the ORDER;
+         · a paid delivery order with none  → the engine issues the first one (sealed, 48 h) and SMSes the buyer;
+         · an unpaid / pickup / cancelled order → no PIN (the engine refuses), as everywhere else.
+       The PIN still never touches the order or the package in the clear: Firestore has no field-level read control,
+       and the assigned rider can read both documents whole. */
+    if (!orderId) return;
     try {
-      /* packageRequest gets the HASH + status only — NEVER the plaintext (a rider
-         could read this doc). */
-      await event.data.after.ref.set({
-        deliveryPinHash:          _hash(pkgId, pin),
-        deliveryPinVersion:       6,
-        deliveryPinIssuedAt:      admin.firestore.FieldValue.serverTimestamp(),
-        deliveryVerificationStatus: "pending",
-        deliveryVerifyAttempts:   0,
-      }, { merge: true });
-
-      /* ── The plaintext PIN does NOT go on the order document ──────────────
-         It used to. The reasoning was "riders read deliveries via CF endpoints,
-         not orders" — and the endpoints and their projections are real. What
-         failed was the word ONLY: firestore.rules grants a FULL-DOCUMENT read
-         on orders to `assignedDriverUid`, and claimAvailableDelivery sets that
-         field to the rider's uid in the same transaction that produces the
-         `driver_accepted` transition this trigger fires on. So the rider could
-         read the plaintext PIN out of the order the moment it was issued —
-         the party the PIN exists to defend against.
-
-         Firestore has no field-level read control, so no projection can fix a
-         document the rider is entitled to read. The secret therefore moves off
-         that document entirely.
-
-         `deliveryPins` has NO rule in firestore.rules and there is no
-         permissive catch-all, so it is deny-by-default: unreadable by every
-         client including the buyer, and reachable only through the Admin SDK.
-         The buyer gets it from getMyDeliveryPin, which proves buyer identity
-         first. That is strictly stronger than a buyer-readable document AND
-         costs zero rules bytes, which matters — the compiled ruleset has ~72
-         bytes of headroom. */
-      if (orderId) {
-        await db.collection("deliveryPins").doc(String(orderId)).set({
-          orderId:    String(orderId),
-          deliveryRef: pkgId,
-          pin,                                  /* CF-only; never client-readable */
-          buyerUid:   buyerUidOf(after),
-          issuedAt:   admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
-
-        /* The order keeps only the fact that a PIN exists, so track.html can
-           show the right state without the value. Any plaintext left on the
-           document by the previous implementation is removed here as the order
-           passes through — see scripts/sweep-order-delivery-pins.js for the
-           historical records this trigger will never touch again. */
-        await db.collection("orders").doc(String(orderId)).set({
-          deliveryPin:         admin.firestore.FieldValue.delete(),
-          deliveryPinIssued:   true,
-          deliveryPinIssuedAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
+      const CP = require("./shared/completion-pin");
+      /* Legacy cleanup, kept: a plaintext `deliveryPin` written onto the ORDER by a pre-2026 implementation is deleted as
+         the order passes through (the assigned rider can read the whole order). The order keeps only the boolean. */
+      await db.collection("orders").doc(String(orderId)).set({
+        deliveryPin: admin.firestore.FieldValue.delete(),
+      }, { merge: true }).catch(() => {});
+      const oSnap = await db.collection("orders").doc(String(orderId)).get();
+      const o = oSnap.exists ? (oSnap.data() || {}) : null;
+      if (o && o.deliveryPinHash) {
+        await event.data.after.ref.set({ deliveryPinBinding: "order", deliveryVerificationStatus: "pending" }, { merge: true });
+        await _audit({ event: "pin_kept_at_accept", deliveryRef: pkgId, orderId, riderUid });
+        return;
       }
-
-      await _audit({ event: "pin_issued", deliveryRef: pkgId, orderId, riderUid, method: "pin" });
+      let key = null;
+      try { key = SOKONI_HMAC_KEY.value(); } catch (_) { key = null; }
+      if (!key) { await _audit({ event: "pin_issue_no_key", deliveryRef: pkgId, orderId }); return; }
+      const FV = admin.firestore.FieldValue, now = Date.now();
+      const r = await CP.issueOrResend({ db, FV, key, orderId, mode: "auto", now });
+      if (!r.ok || r.action !== "issued") { await _audit({ event: "pin_not_issued_at_accept", deliveryRef: pkgId, orderId, reason: r.reason || r.action }); return; }
+      await event.data.after.ref.set({ deliveryPinBinding: "order", deliveryVerificationStatus: "pending" }, { merge: true });
+      const phone = await CP.resolveBuyerPhone(db, r.buyerUid, o);
+      const dv = await CP.deliverPin({ db, FV, orderId, version: r.version, pin: r.pin, phone, sendSms: require("./sokoni-at").atSendSMS, now });
+      await _audit({ event: "pin_issued", deliveryRef: pkgId, orderId, riderUid, method: "engine", version: r.version, delivered: dv.ok });
     } catch (e) {
       await _audit({ event: "pin_issue_error", deliveryRef: pkgId, orderId, error: String(e && e.message || e) });
     }
@@ -267,7 +249,7 @@ exports.deliveryVerifyShadow = onCall(
    importantly it states the invariant in code rather than relying on the buyer
    check happening to exclude them. */
 exports.getMyDeliveryPin = onCall(
-  { region: "us-central1", timeoutSeconds: 15, memory: "256MiB" },
+  { region: "us-central1", timeoutSeconds: 15, memory: "256MiB", secrets: [SOKONI_HMAC_KEY] },
   async (request) => {
     const uid = request.auth && request.auth.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Sign in to see your delivery PIN.");
@@ -291,13 +273,32 @@ exports.getMyDeliveryPin = onCall(
       throw new HttpsError("permission-denied", "The assigned rider cannot read the delivery PIN.");
     }
 
+    /* The completion-PIN engine stores the PIN SEALED (AES-256-GCM, bound to the order + version); a PIN minted
+       before it may still be stored in the clear until it is reissued. Either way only the BUYER gets it back,
+       with the masked lifecycle (state, expiry, sends) the buyer card shows. An EXPIRED PIN is not returned —
+       the buyer is told to ask the seller to send a new one. */
+    const CP = require("./shared/completion-pin");
+    const now = Date.now();
+    const view = CP.maskedView(o, now);
     const pSnap = await db.collection("deliveryPins").doc(orderId).get();
-    if (!pSnap.exists || !pSnap.data().pin) {
-      /* Not an error — a PIN is only issued once a rider accepts. */
-      return { ok: true, issued: false, pin: null };
+    const p = pSnap.exists ? (pSnap.data() || {}) : {};
+    let pin = null;
+    if (p.sealed) {
+      let key = null;
+      try { key = SOKONI_HMAC_KEY.value(); } catch (_) { key = null; }
+      pin = key ? CP.openPin(key, orderId, p.version, p.sealed) : null;
+    } else if (p.pin) {
+      pin = String(p.pin);
+    }
+    if (!pin) {
+      /* Not an error — no PIN has been issued (unpaid, pickup, or not yet paid). */
+      return { ok: true, issued: false, pin: null, state: view.state, expiresAt: view.expiresAt };
+    }
+    if (view.state === "EXPIRED" || view.state === "USED") {
+      return { ok: true, issued: true, pin: null, state: view.state, expiresAt: view.expiresAt };
     }
 
     await _audit({ event: "pin_read", orderId, actorUid: uid });
-    return { ok: true, issued: true, pin: String(pSnap.data().pin) };
+    return { ok: true, issued: true, pin, state: view.state, expiresAt: view.expiresAt, version: view.version };
   }
 );

@@ -1,3 +1,28 @@
+## [2026-10-01] — Completion PIN, lineage A: rider accept never replaces the buyer's PIN; the buyer reads a SEALED PIN
+
+**Files:** `functions/delivery-pin.js`, `functions/shared/completion-pin.js` (byte-identical to lineage B), `scripts/test-delivery-pin-accept-read.js`, `scripts/test-completion-pin-core.js`, 2 detectors repointed, `CHANGELOG.md`
+**Base:** `2d20faa` = the LIVE 09-09 archive of deliveryPinOnAccept + getMyDeliveryPin + captureProofOfDelivery, verbatim.
+
+- **deliveryPinOnAccept** (owner: no silent replacement):
+  - an order that has a PIN keeps it; the package records `deliveryPinBinding:'order'` and carries NO PIN;
+  - a paid delivery order without one gets its first PIN from the engine (sealed, 48 h, SMS to the buyer);
+  - unpaid orders get none;
+  - the legacy plaintext cleanup on the order is kept;
+  - the AT secrets are declared here (no SMS client loaded at module scope).
+- **getMyDeliveryPin:**
+  - opens the SEALED PIN (`secrets: [SOKONI_HMAC_KEY]` added); a legacy plaintext PIN still reads until reissued;
+  - returns state and expiry;
+  - an EXPIRED or USED PIN is not handed out;
+  - the rider and the seller are still refused.
+- **Tests:**
+  - accept-read 8/0 (the live baseline fails 5);
+  - engine core 33/0;
+  - pin-unreachable 65/0 and client-writer 22/0, after 3 detectors were repointed (the package now carries no PIN,
+    which is stricter than "only the hash") and re-proven to bite;
+  - buyer-path 20/0.
+- **Deploy:** `--only functions:deliveryPinOnAccept,functions:getMyDeliveryPin` from this tree, **BEFORE lineage B**
+  (so the buyer can read a sealed PIN before B issues one). Not deployed.
+
 ## [2026-09-29] — P0: orders rules close the rider-payout self-credit path (rules half)
 
 **Files:** `firestore.rules`, `firestore.rules.build`, `scripts/test-p0-rider-payout-rules.js`, `CHANGELOG.md`.
