@@ -136,6 +136,10 @@
       background: rgba(255,255,255,.2);
     }
     .sk-acct-ws-dot.active { background: #71ff00; }
+    .sk-acct-role-row { text-align: left; }
+    .sk-acct-active-badge { flex-shrink: 0; font-size: 10px; font-weight: 800; letter-spacing: .04em;
+      color: #71ff00; background: rgba(113,255,0,.1); border: 1px solid rgba(113,255,0,.28);
+      border-radius: 999px; padding: 2px 8px; }
     .sk-acct-personal-item {
       display: flex; align-items: center; gap: 10px;
       padding: 10px 16px; cursor: pointer; transition: background .12s;
@@ -210,19 +214,14 @@
     const bizEmoji = type => ({ marketplace:'🛍️', food:'🍽️', services:'🔧', healthcare:'🏥',
       events:'🎪', property:'🏠', vehicle:'🚗', hotel:'🏨' }[type] || '🏢');
 
-    /* ── Workspace switcher HTML ── */
+    /* ── Owner 2026-10-01: ROLES and WORKSPACES are shown DIFFERENTLY, never mixed ──
+       My roles            — what this account is approved to act as (from the authority),
+                             each with the workspace it opens. Personal by nature.
+       Business workspaces — businesses where the account is owner/staff (sokoniWorkspaces),
+                             each with the job held there. A business, not a role.
+       The old "Workspaces" list put a "Personal Account" row (labelled with the acting
+       role) beside staff workspaces, and showed roles only as pills, only sometimes. */
     const isPersonalActive = !activeWsId;
-
-    const personalEntry =
-      '<button class="sk-acct-personal-item ' + (isPersonalActive ? 'ws-active' : '') + '" ' +
-        'onclick="window._skSwitchWorkspace(\'personal\')">' +
-        '<div class="sk-acct-personal-icon">' + (user.name || user.email || '?').charAt(0).toUpperCase() + '</div>' +
-        '<div class="sk-acct-ws-info">' +
-          '<div class="sk-acct-ws-name">Personal Account</div>' +
-          '<div class="sk-acct-ws-role">' + rName(active) + '</div>' +
-        '</div>' +
-        '<div class="sk-acct-ws-dot ' + (isPersonalActive ? 'active' : '') + '"></div>' +
-      '</button>';
 
     const wsEntries = workspaces.map(function (ws) {
       const isActive = ws.businessId === activeWsId;
@@ -238,13 +237,20 @@
       '</button>';
     }).join('');
 
-    const switcherSection =
-      '<div class="sk-acct-ws-section">' +
-        '<div class="sk-acct-ws-label">Workspaces</div>' +
-        personalEntry +
-        wsEntries +
-      '</div>' +
-      '<div class="sk-acct-separator"></div>';
+    /* Business workspaces — only when the account belongs to at least one business. When one is
+       active, a "Back to my personal account" row returns to the roles above. */
+    const wsSection = workspaces.length
+      ? '<div class="sk-acct-ws-section" data-sk-section="workspaces">' +
+          '<div class="sk-acct-ws-label">Business workspaces</div>' +
+          wsEntries +
+          (isPersonalActive ? '' :
+            '<button class="sk-acct-ws-item" data-sk-personal onclick="window._skSwitchWorkspace(\'personal\')">' +
+              '<div class="sk-acct-ws-icon">↩</div>' +
+              '<div class="sk-acct-ws-info"><div class="sk-acct-ws-name">Back to my personal account</div>' +
+              '<div class="sk-acct-ws-role">Use your own roles</div></div></button>') +
+        '</div>' +
+        '<div class="sk-acct-separator"></div>'
+      : '';
 
     /* ── Role menu — ONE entry point, inside the profile dropdown ────────────────
        This listed `roles` straight from user.roles, the localStorage mirror, and had
@@ -267,21 +273,41 @@
     const _wsRoles = _st.roles || [];
     const _acting = _st.current || active;
 
-    const workspaceStrip = (isPersonalActive && _wsRoles.length > 1)
-      ? '<div class="sk-acct-role-strip">' +
-          '<div class="sk-acct-role-label">Switch Role</div>' +
-          '<div class="sk-acct-role-pills">' +
-            _wsRoles.map(r =>
-              /* data-sk-workspace mirrors the administrative menu's convention, so both
-                 menus are addressable the same way and a proof does not have to match
-                 on an onclick STRING to find a control. */
-              '<button class="sk-acct-role-pill ' + (r === _acting ? 'active' : '') + '" ' +
-                'data-sk-workspace="' + _hesc(r) + '" ' +
-                'onclick="window._skSwitchRole(\'' + _hesc(r) + '\')">' + _hesc(rName(r)) + '</button>'
-            ).join('') +
-          '</div>' +
-        '</div>'
-      : '';
+    /* My roles — EVERY approved role, always (one role still shows which one you are acting as),
+       each a row: icon · name · the workspace it opens · "Active". data-sk-workspace is kept (the
+       administrative menu's convention, used by proofs to address the control). Switching goes
+       through _skSwitchRole → SokoniRoleAuthority.setActiveRole → RA.hubFor() — unchanged. */
+    const ROLE_UI = {
+      buyer:    { i: '🛍️', l: 'Buyer',            w: 'Marketplace' },
+      seller:   { i: '🏪', l: 'Seller',           w: 'Merchant dashboard' },
+      provider: { i: '🛠️', l: 'Service provider', w: 'Provider dashboard' },
+      rider:    { i: '🛵', l: 'Rider',            w: 'Rider dashboard' },
+      driver:   { i: '🛵', l: 'Rider',            w: 'Rider dashboard' },
+      mechanic: { i: '🔧', l: 'Mechanic',         w: 'Car Hub workspace' },
+      health:   { i: '🩺', l: 'Healthcare',       w: 'Healthcare workspace' },
+      legal:    { i: '⚖️', l: 'Legal',            w: 'Legal workspace' },
+      landlord: { i: '🏠', l: 'Landlord',         w: 'Landlord dashboard' },
+      tenant:   { i: '🔑', l: 'Tenant',           w: 'My rental' },
+      employer: { i: '💼', l: 'Employer',         w: 'Hiring' },
+    };
+    const roleUI = r => (Object.prototype.hasOwnProperty.call(ROLE_UI, r) ? ROLE_UI[r] : { i: '👤', l: rName(r), w: '' });
+    const _myRoles = _wsRoles.length ? _wsRoles : [_acting || 'buyer'];
+    const workspaceStrip =
+      '<div class="sk-acct-ws-section" data-sk-section="roles">' +
+        '<div class="sk-acct-ws-label">My roles</div>' +
+        _myRoles.map(function (r) {
+          var u = roleUI(r), on = isPersonalActive && r === _acting;
+          return '<button class="sk-acct-ws-item sk-acct-role-row ' + (on ? 'ws-active' : '') + '" ' +
+            'data-sk-workspace="' + _hesc(r) + '" ' + (on ? 'aria-current="true" ' : '') +
+            'onclick="window._skSwitchRole(\'' + _hesc(r) + '\')">' +
+            '<div class="sk-acct-ws-icon">' + u.i + '</div>' +
+            '<div class="sk-acct-ws-info"><div class="sk-acct-ws-name">' + _hesc(u.l) + '</div>' +
+            (u.w ? '<div class="sk-acct-ws-role">Opens ' + _hesc(u.w) + '</div>' : '') + '</div>' +
+            (on ? '<span class="sk-acct-active-badge">Active</span>' : '') +
+          '</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="sk-acct-separator"></div>';
 
     /* Administration — rendered only for a claim the authority confirms. */
     var _adminEntries = [];
@@ -308,9 +334,7 @@
         '</div>'
       : '';
 
-    const rolePills = (workspaceStrip || adminStrip)
-      ? workspaceStrip + adminStrip + '<div class="sk-acct-separator"></div>'
-      : '';
+    const rolePills = adminStrip ? adminStrip + '<div class="sk-acct-separator"></div>' : '';
 
     const popup = document.createElement('div');
     popup.id = 'sk-acct-popup';
@@ -322,7 +346,8 @@
         _skActiveRoleLine(active) +
         _skDeliveryLine() +
       '</div>' +
-      switcherSection +
+      workspaceStrip +
+      wsSection +
       rolePills +
       '<div class="sk-acct-links">' +
         /* ONE ROUTE VOCABULARY. The five destinations are read from
