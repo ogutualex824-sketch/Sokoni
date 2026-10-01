@@ -5609,9 +5609,19 @@ If no products are detectable, return: []`,
    Requires AFRICASTALKING_API_KEY secret + AT_ENV in functions/.env.
 ══════════════════════════════════════════════════════════════ */
 exports.posSendSMS = onCall(
-  { secrets: [...sokoniAt.secrets], timeoutSeconds: 20, cors: true },
+  { secrets: [...sokoniAt.secrets], timeoutSeconds: 20, cors: true, enforceAppCheck: true },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+    /* 2026-10-01 — PLATFORM ADMINS ONLY. Any signed-in account could text up to 100 arbitrary
+       numbers per call (no ownership, consent or rate check) — an SMS-spam and direct-marketing
+       (KDPA s.37) exposure billed to SOKONI. The only client caller (pos-modules.js sendSMS)
+       sends {phones} while this reads {to, bulk}, so that path already failed and nothing that
+       works is lost. Merchant SMS marketing needs a consent-based design (owner decision):
+       recipients must have opted in to that merchant. */
+    const _cl = request.auth.token || {};
+    if (!(_cl.admin === true || _cl.role === "admin" || _cl.role === "super_admin")) {
+      throw new HttpsError("permission-denied", "SMS sending is restricted to SOKONI administrators.");
+    }
 
     const { to, message, bulk } = request.data || {};
 
@@ -12761,6 +12771,8 @@ exports.auditInviteOnboarding = onCall(
 /* Re-send a password-setup link to an invitee who never received one. Separate
    from resendInvitation because the remedy for a stranded account is the LINK,
    not another invitation record. */
+/* One-click marketing unsubscribe (RFC 8058, 2026-10-01) — see functions/email-unsubscribe.js */
+exports.emailUnsubscribe = require('./email-unsubscribe').emailUnsubscribe;
 /* 25-minute, single-use password reset (owner 2026-10-01) — see functions/password-reset-gate.js */
 exports.authRequestPasswordReset = require('./password-reset-gate').authRequestPasswordReset;
 exports.authCompletePasswordReset = require('./password-reset-gate').authCompletePasswordReset;

@@ -92,6 +92,13 @@ const PREF_MAP = {
   security:     "security",
   marketing:    "marketing",
   newsletter:   "marketing",
+  /* 2026-10-01: these are marketing too. Unmapped, they fell back to "account", so opting out of
+     marketing did not stop notify.js promotions (category "promotions") or loyalty birthday bonuses. */
+  promotions:   "marketing",
+  promotion:    "marketing",
+  loyalty:      "marketing",
+  campaign:     "marketing",
+  offers:       "marketing",
   delivery:     "orders",
   dispatch:     "orders",
   tracking:     "orders",
@@ -126,12 +133,16 @@ function db() {
 function _buildHeaders(payload) {
   const emailId = payload.emailId || `sokoni-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const domain  = "mysokoni.co.ke";
+  /* RFC 8058 one-click needs an HTTPS URI; it is present only on marketing mail to a known
+     recipient (payload._unsubUrl, set by send()). Other mail keeps the mailto alone and does NOT
+     advertise One-Click, which it cannot honour (2026-10-01). */
+  const unsub = payload._unsubUrl
+    ? { "List-Unsubscribe": `<${payload._unsubUrl}>, <mailto:unsubscribe@${domain}?subject=unsubscribe-${emailId}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" }
+    : { "List-Unsubscribe": `<mailto:unsubscribe@${domain}?subject=unsubscribe-${emailId}>` };
   return {
     "Message-ID":        `<${emailId}@${domain}>`,
     "X-Entity-Ref-ID":   emailId,
-    /* List-Unsubscribe headers (RFC 2369) — required by Gmail/Yahoo bulk senders */
-    "List-Unsubscribe":  `<mailto:unsubscribe@${domain}?subject=unsubscribe-${emailId}>`,
-    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    ...unsub,
     /* Feedback loop / abuse handling */
     "Feedback-ID":       `${payload.category || "system"}:${emailId}:SOKONI`,
     /* Precedence: bulk prevents auto-replies (OOO) from returning */
@@ -342,17 +353,49 @@ async function _isDuplicate(emailId) {
 }
 
 /* ── Check user email preferences ─────────────────────────── */
+/* 2026-10-01 — MARKETING FAILS CLOSED, service mail is unchanged.
+   This returned true with no preferences document and on any error, contradicting
+   getPreferences()' marketing:false default — so review-request and promotions reached people
+   who never opted in. Now: marketing-class mail needs a KNOWN recipient whose emailPreferences
+   say marketing === true; no uid, no document or a read error blocks it. Every other category
+   keeps the old behaviour (allowed unless explicitly turned off), and mail with NO category
+   (OTP / auth slices omit it deliberately) is never blocked. */
+function _isMarketing(category) { return (PREF_MAP[String(category || "").toLowerCase()] || "account") === "marketing"; }
 async function _checkPreferences(uid, category) {
-  if (!uid || !category) return true;
+  if (!category) return true;
+  const marketing = _isMarketing(category);
+  if (!uid) return !marketing;
   try {
-    const prefKey = PREF_MAP[category] || "account";
+    const prefKey = PREF_MAP[String(category).toLowerCase()] || "account";
     const snap = await db().collection("emailPreferences").doc(uid).get();
-    if (!snap.exists) return true;
-    const prefs = snap.data();
+    if (!snap.exists) return !marketing;
+    const prefs = snap.data() || {};
+    if (marketing) return prefs.marketing === true;
     return prefs[prefKey] !== false;
   } catch (e) {
-    return true;
+    return !marketing;
   }
+}
+
+/* Per-user one-click unsubscribe link for marketing mail (functions/email-unsubscribe.js).
+   The token is random, stored server-side, created on the first marketing send. */
+const UNSUB_BASE = `https://us-central1-${process.env.GCLOUD_PROJECT || "sokoni-aeb26"}.cloudfunctions.net/emailUnsubscribe`;
+async function _unsubUrlFor(uid) {
+  const ref = db().collection("emailPreferences").doc(uid);
+  const snap = await ref.get();
+  let t = snap.exists ? (snap.data() || {}).unsubToken : null;
+  if (!t) {
+    t = require("crypto").randomBytes(24).toString("base64url");
+    await ref.set({ unsubToken: t }, { merge: true });
+  }
+  return `${UNSUB_BASE}?u=${encodeURIComponent(uid)}&t=${encodeURIComponent(t)}`;
+}
+function _withUnsubFooter(payload, url) {
+  const safe = String(url).replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  const block = `<p style="font-size:12px;color:#666;margin-top:24px">You are receiving this because you chose to get offers from SOKONI. <a href="${safe}">Unsubscribe</a> — order, payment and security messages will continue.</p>`;
+  const html = /<\/body>/i.test(payload.html) ? payload.html.replace(/<\/body>/i, block + "</body>") : payload.html + block;
+  const text = payload.text ? payload.text + "\n\nUnsubscribe from SOKONI offers: " + url : payload.text;
+  return { ...payload, html, text, _unsubUrl: url };
 }
 
 /* ── Provider error extraction ─────────────────────────────
@@ -489,12 +532,21 @@ async function send(payload) {
     return { skipped: true, reason: "duplicate" };
   }
 
-  /* Preference check */
-  if (payload.uid && payload.category) {
+  /* Preference check — marketing-class mail is checked even without a uid (and then refused:
+     consent cannot be shown for an unknown recipient). */
+  if (payload.category && (payload.uid || _isMarketing(payload.category))) {
     const allowed = await _checkPreferences(payload.uid, payload.category);
     if (!allowed) {
-      console.log(`[Email] User ${payload.uid} opted out of ${payload.category}`);
-      return { skipped: true, reason: "opted_out" };
+      console.log(`[Email] ${payload.uid ? "User " + payload.uid : "Unknown recipient"} not opted in to ${payload.category}`);
+      return { skipped: true, reason: payload.uid ? "opted_out" : "no_consent_recipient" };
+    }
+  }
+  /* Marketing to a consenting recipient carries a working one-click unsubscribe. */
+  if (payload.uid && _isMarketing(payload.category)) {
+    try { payload = _withUnsubFooter(payload, await _unsubUrlFor(payload.uid)); }
+    catch (e) {
+      console.error("[Email] unsubscribe link unavailable — marketing not sent", e.message);
+      return { skipped: true, reason: "no_unsubscribe_link" };
     }
   }
 
@@ -706,6 +758,7 @@ async function updatePreferences(uid, prefs) {
 }
 
 module.exports = {
+  _checkPreferences, _isMarketing, _buildHeaders,   /* exported for tests (2026-10-01) */
   send,
   queue,
   sendOrQueue,
