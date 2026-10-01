@@ -198,9 +198,23 @@
   <div id="timeline"></div>
   <!-- Secure Delivery Authorization (Phase 0) — buyer's delivery PIN. -->
   <div id="pinBox" style="display:none;margin:16px 0 4px;padding:16px;border:1px solid rgba(113,255,0,.35);border-radius:14px;background:rgba(113,255,0,.06);text-align:center">
-    <div style="font-size:12px;letter-spacing:.08em;color:rgba(255,255,255,.6);text-transform:uppercase">🔐 Delivery PIN</div>
-    <div id="pinCode" style="font-size:34px;font-weight:900;letter-spacing:.24em;color:#71ff00;margin:6px 0 2px">— — — — — —</div>
-    <div style="font-size:12px;color:rgba(255,255,255,.55);line-height:1.5">Give this PIN to your rider <strong>only after</strong> you've received your package.</div>
+    <div style="font-size:12px;letter-spacing:.08em;color:rgba(255,255,255,.6);text-transform:uppercase">🔐 Completion PIN</div>
+    <!-- Owner 2026-10-01: masked by default — the PIN is shown only when the buyer asks, so it is not read off a
+         screen by whoever is standing at the door. Show/Hide is local; nothing is stored in the browser. -->
+    <div id="pinCode" aria-live="polite" style="font-size:34px;font-weight:900;letter-spacing:.24em;color:#71ff00;margin:6px 0 2px">• • • • • •</div>
+    <button id="pinToggle" type="button" aria-pressed="false" aria-controls="pinCode"
+            style="margin:2px 0 8px;padding:6px 14px;border-radius:999px;border:1px solid rgba(113,255,0,.4);background:transparent;color:#71ff00;font-weight:700;font-size:12px;cursor:pointer">Show PIN</button>
+    <div id="pinState" style="font-size:12px;color:rgba(255,255,255,.7);min-height:1em"></div>
+    <div style="font-size:13px;font-weight:900;color:#ffd166;margin:10px 0 4px">PIN YAKO NI PRODUCT YAKO!</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.65);line-height:1.5;text-align:left">
+      Your PIN is private. Give it <strong>only</strong> after you have checked your order:
+      <ul style="margin:6px 0 0 18px;padding:0">
+        <li>it is the right product</li><li>the quantity is correct</li><li>the condition is good</li>
+        <li>the size / model / colour matches</li><li>everything matches your order</li>
+      </ul>
+      Something wrong? Do <strong>not</strong> give the PIN — contact SOKONI Support.
+    </div>
+    <button id="pinResendBtn" type="button" style="display:none;margin-top:10px;width:100%;padding:10px;border-radius:10px;border:1px solid rgba(113,255,0,.35);background:rgba(113,255,0,.08);color:#71ff00;font-weight:700;font-size:13px;cursor:pointer">Send me a new PIN by SMS</button>
     <!-- Forgotten-PIN fallback. The rider CANNOT complete a delivery on their own word, so
          a buyer who cannot read out the PIN would otherwise be stuck. The escape hatch is
          deliberately the BUYER's, not the rider's: the party owed the goods is the party who
@@ -484,20 +498,47 @@ function _watchOrder(orderId){
         _pinBox.style.display='';
         if(_pinBox.__forOrder!==_orderId){
           _pinBox.__forOrder=_orderId;
-          document.getElementById('pinCode').textContent='· · · · · ·';
-          (async function(){
+          /* Owner 2026-10-01: the PIN is held only in this closure (never storage, never the URL) and shown only on
+             "Show PIN". The server answers with the lifecycle too: an EXPIRED PIN is not returned — the buyer is told,
+             and can ask the SERVER to send a new one (the old one dies). */
+          var _pinVal=null, _shown=false;
+          var _code=document.getElementById('pinCode'), _tog=document.getElementById('pinToggle'),
+              _st=document.getElementById('pinState'), _rs=document.getElementById('pinResendBtn');
+          var _paint=function(){
+            _code.textContent=(_pinVal&&_shown)?String(_pinVal).split('').join(' '):'• • • • • •';
+            _tog.textContent=_shown?'Hide PIN':'Show PIN'; _tog.setAttribute('aria-pressed',_shown?'true':'false');
+            _tog.style.display=_pinVal?'':'none';
+          };
+          _tog.onclick=function(){ _shown=!_shown; _paint(); };
+          var _load=async function(){
             try{
               var r=await _cf('getMyDeliveryPin')({orderId:_orderId});
-              var p=r&&r.data&&r.data.pin;
-              /* No PIN is a real answer (none issued yet) — say nothing rather than
-                 render an empty box that looks like a loading failure. */
-              if(p){ document.getElementById('pinCode').textContent=String(p).split('').join(' '); }
-              else { _pinBox.style.display='none'; }
+              var d=(r&&r.data)||{};
+              _pinVal=d.pin||null; _shown=false; _paint();
+              var exp=d.expiresAt?new Date(Number(d.expiresAt)):null;
+              if(d.state==='EXPIRED'){ _st.textContent='Your PIN has expired. Ask for a new one below — the old one no longer works.'; _rs.style.display=''; }
+              else if(d.state==='LOCKED'){ _st.textContent='Too many wrong PINs were entered. Verification is paused for a while.'; _rs.style.display='none'; }
+              else if(_pinVal){ _st.textContent=exp?('Valid until '+exp.toLocaleString('en-KE',{weekday:'short',hour:'2-digit',minute:'2-digit'})):''; _rs.style.display='none'; }
+              else if(!d.issued){ _pinBox.style.display='none'; }   /* none issued (unpaid / pickup) — say nothing */
             }catch(e){
-              document.getElementById('pinCode').textContent='—';
+              _code.textContent='—'; _st.textContent='Your PIN could not be loaded. Check your connection.';
               console.warn('[track] delivery PIN unavailable:',e&&e.message);
             }
-          })();
+          };
+          _rs.onclick=async function(){
+            _rs.disabled=true; _st.textContent='Sending…';
+            try{
+              var r=await _cf('sendDeliveryPin')({orderId:_orderId});
+              _st.textContent=(r&&r.data&&r.data.delivered)?'A new PIN was sent to your phone by SMS.':'Your new PIN is ready — tap Show PIN.';
+              await _load();
+            }catch(e){
+              var why=e&&e.details&&e.details.reason;
+              _st.textContent= why==='PIN_RATE_LIMITED'?'A PIN was sent recently. Please wait a minute and try again.'
+                              : (e&&e.message)||'Could not send a new PIN.';
+            }
+            _rs.disabled=false;
+          };
+          _paint(); _load();
         }
       } else {
         _pinBox.style.display='none';

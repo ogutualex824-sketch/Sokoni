@@ -1843,7 +1843,35 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       fulfillmentType: d.fulfillmentType || d.deliveryMethod || null,
       deliveryAddress: d.deliveryAddress || d.address || null,
       rider: d.riderName || d.assignedDriverName || null,
+      /* COMPLETION PIN (owner 2026-10-01) — the MASKED lifecycle only. The seller never receives the buyer's PIN
+         (nor its hash): these say whether one exists, when it expires and how many sends are left. */
+      pinIssued: !!d.deliveryPinHash || d.deliveryPinIssued === true,
+      pinExpiresAt: _num(d.deliveryPinExpiresAt),
+      pinSends: _num(d.deliveryPinSends) || 0,
+      pinDelivery: d.deliveryPinDelivery || null,
+      pinUsed: d.deliveryPinStatus === 'USED',
+      paidVerified: d.paymentVerified === true,
+      isDelivery: !!(d.deliveryRequired === true || /^delivery$/i.test(String(d.fulfilmentType || d.fulfillmentType || d.deliveryType || ''))
+                     || d.deliveryAddress || d.deliveryLocation),
     };
+  }
+
+  /* The completion-PIN block on the order sheet: masked state + "Send customer PIN" (server-side; the PIN goes to
+     the BUYER's phone only). Shown for a PAID DELIVERY order that is not completed/cancelled. */
+  function pinBlock (o) {
+    if (!o.isDelivery || !o.paidVerified || /cancel|refund|completed|delivered/.test(o.status)) return '';
+    var now = Date.now();
+    var state = o.pinUsed ? 'Used' : !o.pinIssued ? 'Not sent yet'
+              : (o.pinExpiresAt && o.pinExpiresAt <= now) ? 'Expired'
+              : o.pinDelivery === 'FAILED' ? 'SMS failed' : o.pinDelivery === 'SENT' ? 'Sent to the buyer' : 'Issued';
+    var exp = (o.pinExpiresAt && o.pinIssued && !o.pinUsed) ? ' · expires ' + new Date(o.pinExpiresAt).toLocaleString('en-KE', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    var left = Math.max(0, 5 - (o.pinSends || 0));
+    return '<div class="note" style="margin:0 0 12px" data-pin-block="' + esc(o.id) + '">' +
+      '<b>🔐 Buyer\'s completion PIN</b> — ' + esc(state) + esc(exp) + '<br>' +
+      '<small>The PIN belongs to the buyer. You never see it: ask the buyer for it when they have checked the order. ' +
+      'Sends left: ' + left + ' of 5.</small>' +
+      (o.pinUsed ? '' : '<div class="sheet-actions" style="margin-top:8px"><button class="act" data-send-pin="' + esc(o.id) + '"' + (left ? '' : ' disabled') + '>📲 Send customer PIN</button></div>') +
+    '</div>';
   }
 
   /* ── ONE SET OF PREDICATES ────────────────────────────────────────────────
@@ -2731,6 +2759,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                    '<span class="p">' + esc(money((it.price || 0) * (it.qty || it.quantity || 1), o.currency)) + '</span></div>';
           }).join('') + '</div>'
         : '<div class="note" style="margin:0 0 16px">This order record carries no line items.</div>') +
+      pinBlock(o) +
       /* Print and Share sit together at the top of the action bar — the two things a
          merchant reaches for most on an order. Neither is buried under "More". */
       '<div class="sheet-actions">' +
@@ -2817,6 +2846,25 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   document.addEventListener('click', function (e) {
     var o = e.target.closest('[data-order]');
     if (o) { openOrder(o.dataset.order); return; }
+    /* Send the BUYER their completion PIN — the server checks this account is the order's seller, the order is paid
+       and eligible, and the send limits; within 48 h it re-sends the same PIN, after that it issues a new one. */
+    var sp = e.target.closest('[data-send-pin]');
+    if (sp) {
+      if (sp.disabled) return;
+      sp.disabled = true; var lbl = sp.textContent; sp.textContent = 'Sending…';
+      _callable('sendDeliveryPin')({ orderId: sp.dataset.sendPin }).then(function (r) {
+        var d = (r && r.data) || {};
+        toast(d.delivered ? 'PIN sent to the buyer by SMS.' : 'PIN ready, but the SMS could not be delivered — SOKONI Support has been alerted.');
+        CACHE.orders = null; sp.textContent = lbl; sp.disabled = false;
+      }).catch(function (err) {
+        var why = err && err.details && err.details.reason;
+        toast(why === 'PIN_RATE_LIMITED' ? 'A PIN was sent recently or the limit (5) is reached.'
+            : why === 'ORDER_NOT_PAID' ? 'This order is not paid, so it has no delivery PIN.'
+            : (err && err.message) || 'Could not send the PIN.');
+        sp.textContent = lbl; sp.disabled = false;
+      });
+      return;
+    }
     var pay = e.target.closest('[data-payment]');
     if (pay) { openPayment(pay.dataset.payment); return; }
     /* Share with no usable number: explain, never open a chat with nobody. */

@@ -1,3 +1,12 @@
+## [2026-10-01] — Completion PIN screens: buyer masked card, 6-digit server-only rider entry, seller "Send customer PIN"
+
+**Files:** `track.html`, `driver.html`, `merchant-v2.html`, `scripts/test-completion-pin-ui.js`, `scripts/test-delivery-completion-path.js` (2 detectors to the new contract), `CHANGELOG.md` · **Base:** live `72dca56` (v649)
+
+- **Buyer (track.html):** the PIN is masked by default with Show/Hide (held only in memory), shows its expiry, and carries the PIN YAKO NI PRODUCT YAKO checklist (product, quantity, condition, size/model/colour, matches). An expired PIN says so, and the buyer can ask the server for a new one.
+- **Rider (driver.html):** every PIN entry is exactly 6 digits and verified by `completeDeliveryWithPin`. The hub proof modal (4 digits, checked in the browser, delivery written by the client) now uses the same server path. Server reasons (expired, locked) are shown.
+- **Seller (merchant-v2 order sheet):** the masked PIN state plus "📲 Send customer PIN" (`sendDeliveryPin`; the PIN goes to the buyer's phone only), offered only for a paid delivery order, with sends left out of 5. The row carries a boolean, never the hash.
+- **Depends on functions:** sendDeliveryPin + the engine (lineages A → B). Deploy hosting AFTER them. Tests: ui 12/0 (live 72dca56 fails 12); delivery-completion-path 33/0; map-ratchet 2 fails identical on base.
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;

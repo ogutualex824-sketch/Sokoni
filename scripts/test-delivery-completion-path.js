@@ -84,10 +84,11 @@ const BODY = START > -1 ? DRIVER.slice(START, DRIVER.indexOf('\nwindow.', START 
      /if\s*\(!dRef\)/.test(BODY) && BODY.indexOf('if (!dRef)') < BODY.indexOf('completeDeliveryWithPin'));
   ck('...with an explanation rather than a silent return',
      /No delivery record for this order/.test(BODY));
+  /* 2026-10-01 (owner): exactly 6 digits — a shorter credential is refused, not relabelled. */
   ck('a malformed PIN is refused client-side (saves a round trip)',
-     /\/\^\\d\{4,8\}\$\//.test(BODY));
+     /\/\^\\d\{6\}\$\//.test(BODY));
   ck('...and the PIN check happens BEFORE the callable',
-     BODY.indexOf('4,8') < BODY.indexOf('completeDeliveryWithPin'));
+     BODY.indexOf('\\d{6}') > 0 && BODY.indexOf('\\d{6}') < BODY.indexOf('completeDeliveryWithPin'));
   ck('a missing callable is reported, not worked around',
      /Cannot reach the server/.test(BODY));
 
@@ -107,8 +108,9 @@ const BODY = START > -1 ? DRIVER.slice(START, DRIVER.indexOf('\nwindow.', START 
   head('5 · the rest of the delivery surface is untouched');
   ck('buyerConfirmDelivery is still the buyer\'s fallback',
      /buyerConfirmDelivery/.test(fs.readFileSync(path.join(ROOT, 'functions', 'delivery-complete.js'), 'utf8')));
+  /* 2026-10-01: the hub proof modal moved off its browser-side check onto the same callable — 3 sites, all server. */
   ck('the packageRequest surface still uses the callable',
-     (DRIVER.match(/httpsCallable\('completeDeliveryWithPin'\)/g) || []).length === 2,
+     (DRIVER.match(/httpsCallable\('completeDeliveryWithPin'\)/g) || []).length === 3,
      (DRIVER.match(/httpsCallable\('completeDeliveryWithPin'\)/g) || []).length + ' call sites');
   ['_ordAccept', '_ordPickedUp', '_ordInTransit'].forEach((f) => {
     ck(f + ' (en-route status, pays nobody) is unchanged', DRIVER.indexOf('window.' + f) > -1);

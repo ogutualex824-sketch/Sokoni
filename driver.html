@@ -2380,8 +2380,8 @@ window._drvCompleteDelivery = async function(dRef) {
        anyway" fallback would reopen exactly the hole this closes. A failure here must
        surface to the rider, not be worked around. */
     const entered = (inputEl && inputEl.value || '').trim();
-    if (!/^\d{4,8}$/.test(entered)) {
-      window.toast('❌ Enter the delivery PIN from the customer.');
+    if (!/^\d{6}$/.test(entered)) {
+      window.toast('❌ Enter the customer\'s 6-digit delivery PIN.');
       return;
     }
 
@@ -2399,7 +2399,10 @@ window._drvCompleteDelivery = async function(dRef) {
     } catch (e) {
       /* The server's message is the useful one — wrong PIN, not your delivery, locked
          out after too many attempts. Show it rather than a generic failure. */
-      const _m = (e && (e.message || e.code)) || 'Delivery could not be confirmed.';
+      const _why = e && e.details && e.details.reason;
+      const _m = ({ PIN_EXPIRED: 'This PIN has expired. Ask the seller to send the customer a new PIN.',
+                    PIN_LOCKED: 'Too many wrong PINs. Verification is paused for 30 minutes.' })[_why]
+                 || (e && (e.message || e.code)) || 'Delivery could not be confirmed.';
       window.toast('❌ ' + _m);
       return;
     }
@@ -2715,8 +2718,8 @@ window._ordDeliver = async function(oId) {
     return;
   }
 
-  if (!/^\d{4,8}$/.test(otp)) {
-    window.toast?.('❌ Enter the delivery PIN from the customer.', false);
+  if (!/^\d{6}$/.test(otp)) {
+    window.toast?.('❌ Enter the customer\'s 6-digit delivery PIN.', false);
     if (otpInput) { otpInput.style.borderColor = 'rgba(255,61,61,0.6)'; }
     return;
   }
@@ -2847,14 +2850,9 @@ function _showProofModal(fsId) {
   modal.innerHTML = `
     <div style="background:#111;border:1px solid rgba(113,255,0,0.25);border-radius:20px;padding:24px;max-width:360px;width:100%;">
       <div style="font-size:14px;font-weight:900;color:#71ff00;margin-bottom:16px;">🎉 Proof of Delivery</div>
-      <p style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:14px;">Enter the 4-digit PIN the recipient shows you, then optionally capture a photo.</p>
-      <input id="dhPinEntry" inputmode="numeric" maxlength="4" placeholder="4-digit PIN"
+      <p style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:14px;">Ask the buyer for their 6-digit delivery PIN <strong>after they inspect the order</strong>. You never see the PIN — the buyer reads it to you.</p>
+      <input id="dhPinEntry" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="6-digit PIN" aria-label="Buyer's 6-digit delivery PIN"
         style="width:100%;padding:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:12px;color:white;font-size:22px;text-align:center;letter-spacing:8px;box-sizing:border-box;margin-bottom:12px;font-family:inherit;">
-      <div style="margin-bottom:12px;">
-        <label style="font-size:11px;color:rgba(255,255,255,0.4);display:block;margin-bottom:6px;">Photo (optional)</label>
-        <input type="file" id="dhPhotoInput" accept="image/*" capture="environment"
-          style="font-size:12px;color:rgba(255,255,255,0.6);">
-      </div>
       <div style="display:flex;gap:8px;margin-top:4px;">
         <button id="dhProofSubmitBtn" onclick="window._dhSubmitProof('${fsId}')"
           style="flex:1;padding:13px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:13px;font-family:inherit;">
@@ -2870,43 +2868,35 @@ function _showProofModal(fsId) {
 }
 
 window._dhSubmitProof = async function(fsId) {
+  /* Owner 2026-10-01: this modal used to take a 4-DIGIT PIN, check it IN THE BROWSER against a plaintext copy and
+     write the delivery itself (DeliveryHub.submitProof). Now it is the same server path as every other rider entry:
+     exactly 6 digits, verified by completeDeliveryWithPin against the keyed HMAC, by the ASSIGNED rider only, with
+     the atomic attempt lockout. No client status write, no fallback. */
   const pin = (document.getElementById('dhPinEntry')?.value || '').trim();
-  if (!pin || pin.length !== 4) {
-    window.toast?.('Enter the 4-digit PIN from the recipient', false);
+  if (!/^\d{6}$/.test(pin)) {
+    window.toast?.('Enter the buyer\'s 6-digit delivery PIN', false);
     return;
   }
   const btn = document.getElementById('dhProofSubmitBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
-
-  /* Optional photo → base64 */
-  let photoB64 = null;
-  const photoFile = document.getElementById('dhPhotoInput')?.files?.[0];
-  if (photoFile) {
-    photoB64 = await new Promise(res => {
-      const r = new FileReader();
-      r.onload = e => res(e.target.result);
-      r.readAsDataURL(photoFile);
-    });
-  }
-
-  /* GPS coords — use safe wrapper to prevent Safari synchronous throw */
-  let lat = null, lng = null;
-  const _proofPos = window.SokoniGeo
-    ? await SokoniGeo.getLocationAsync({ timeout:5000 })
-    : await new Promise(res => {
-        try { navigator.geolocation?.getCurrentPosition(p=>res(p?.coords),()=>res(null),{timeout:5000}); }
-        catch(_){ res(null); }
-      }).then(c => c ? {lat:c.latitude,lng:c.longitude} : null);
-  if (_proofPos) { lat = _proofPos.lat; lng = _proofPos.lng; }
-
+  if (btn) { btn.disabled = true; btn.textContent = 'Verifying…'; }
+  const a = _dhActive || {};
+  const dRef = a.packageRequestId || a.deliveryRef || fsId;
+  const WHY = { PIN_EXPIRED: 'This PIN has expired. Ask the seller to send the customer a new PIN.',
+    PIN_LOCKED: 'Too many wrong PINs. Verification is paused for 30 minutes.',
+    PIN_NOT_ISSUED: 'No PIN has been issued for this order yet.', ALREADY_COMPLETED: 'This delivery is already completed.' };
   try {
-    await DeliveryHub.submitProof(fsId, _dhRiderId, { pin, photoB64, lat, lng });
+    const _fn = window.firebaseFunctions && window.firebaseFunctions.httpsCallable
+      ? window.firebaseFunctions.httpsCallable('completeDeliveryWithPin') : null;
+    if (!_fn) throw new Error('Cannot reach the server. Check your connection and try again.');
+    const r = await _fn({ deliveryRef: dRef, pin });
+    if (!(r && r.data && r.data.ok)) throw new Error('Delivery could not be confirmed. Try again.');
     document.getElementById('dhProofModal').style.display = 'none';
-    window.toast?.('🎉 Delivered! Great job.');
+    window.toast?.(r.data.alreadyDelivered ? '✅ Already confirmed.' : '🎉 Delivered! Your earning is recorded by SOKONI.');
     _dhActive = null;
     _renderHubCard(null);
   } catch (e) {
-    window.toast?.(e.message || 'Proof failed', false);
+    const why = e && e.details && e.details.reason;
+    window.toast?.('❌ ' + (WHY[why] || (e && e.message) || 'Wrong delivery PIN.'), false);
     if (btn) { btn.disabled = false; btn.textContent = '✅ Submit Proof'; }
   }
 };
