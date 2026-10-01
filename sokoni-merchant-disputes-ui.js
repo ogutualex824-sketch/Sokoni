@@ -224,6 +224,18 @@
       changes_requested: { label: 'Changes requested — update this listing',  tone: 'action' },
       archived:          { label: 'Closed',                                   tone: 'done' },
     };
+    /* community C3: the SERVER's seller vocabulary (tsGetReports scope:'mine' → sellerStatus). Escalation, the
+       reviewer and internal notes are never sent to a seller, so they cannot appear here. REPORT_STATE above stays
+       the fallback for a server that predates C3. */
+    var SELLER_STATUS = {
+      report_received:      { label: 'Report received — SOKONI will review it',  tone: 'wait' },
+      under_review:         { label: 'Under review',                             tone: 'wait' },
+      changes_requested:    { label: 'Changes requested — update this listing',  tone: 'action' },
+      listing_action_taken: { label: 'Listing action taken — taken down',        tone: 'action' },
+      report_upheld:        { label: 'Report upheld',                            tone: 'action' },
+      report_dismissed:     { label: 'Report dismissed — no action needed',      tone: 'done' },
+      closed:               { label: 'Closed',                                   tone: 'done' },
+    };
     function reportsHTML() {
       var head = '<div class="mdp-banner"><b>Reports on your listings.</b> A buyer can report a listing they think ' +
         'is wrong, unsafe or fake. SOKONI reviews every report; who reported it is never shown. If SOKONI asks for a change ' +
@@ -240,13 +252,20 @@
           'Nothing has been reported. Accurate photos, prices and descriptions keep it that way.</div></div>';
       }
       return '<div class="mdp-body">' + head + S.reports.map(function (r) {
-        var st = r.productHidden ? { label: 'Listing taken down', tone: 'action' } : (REPORT_STATE[r.moderationState] || { label: 'Status unknown', tone: 'wait' });
+        var st = SELLER_STATUS[r.sellerStatus]
+          || (r.productHidden ? { label: 'Listing taken down', tone: 'action' } : (REPORT_STATE[r.moderationState] || { label: 'Status unknown', tone: 'wait' }));
+        var decided = r.moderationState && r.moderationState !== 'pending';
+        /* no in-app appeal exists on reports — say where to go instead of implying the outcome is final */
+        var appeal = decided && r.sellerResponse && r.sellerResponse.supported === false
+          ? '<div class="mdp-sub" style="margin-top:8px">Disagree with this outcome? <a href="support.html">Contact SOKONI Support</a>.</div>' : '';
+        var stillDown = r.productHidden && r.sellerStatus && r.sellerStatus !== 'listing_action_taken'
+          ? '<div class="mdp-sub" style="margin-top:6px">This listing is currently taken down.</div>' : '';
         var link = r.entityType === 'product' && r.entityId ? 'product.html?id=' + encodeURIComponent(r.entityId) : null;
         return '<div class="mdp-card' + (st.tone === 'action' ? ' action' : '') + '" style="cursor:default">' +
           '<div class="mdp-hd"><div class="info"><div class="mdp-nm">' + esc(r.productName || r.entityId || 'Listing') + '</div>' +
           '<div class="mdp-sub">Reported: ' + esc(r.reason || '—') + (r.createdAt ? ' · ' + esc(String(r.createdAt).slice(0, 10)) : '') + '</div></div></div>' +
           (r.outcome ? '<div class="mdp-desc"><b>SOKONI:</b> ' + esc(r.outcome) + '</div>' : '') +
-          '<div class="mdp-status ' + st.tone + '">' + esc(st.label) + '</div>' +
+          '<div class="mdp-status ' + st.tone + '">' + esc(st.label) + '</div>' + stillDown + appeal +
           (link ? ' <a class="mdp-btn ghost" style="min-height:44px;margin-top:10px" href="' + esc(link) + '">View listing</a>' : '') +
         '</div>';
       }).join('') + '</div>';
