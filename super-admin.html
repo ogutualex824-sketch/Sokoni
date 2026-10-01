@@ -345,6 +345,8 @@
   </style>
 <!-- Shared admin responsive module (Constitution Rule 8 cross-device clause). -->
 <link rel="stylesheet" href="sokoni-admin-responsive.css">
+<!-- Failures view (shared with admin-os.html): client error log read through getErrorLog. -->
+<link rel="stylesheet" href="sokoni-admin-failures.css">
 </head>
 <body>
 
@@ -416,6 +418,9 @@
     </button>
     <button class="nav-item" data-section="secrets" data-label="Secrets Checklist" type="button" onclick="SA.nav('secrets');_closeSidebar()">
       <span class="nav-icon">&#x1F511;</span><span class="nav-label">Secrets Checklist</span>
+    </button>
+    <button class="nav-item" data-section="failures" data-label="Failures" type="button">
+      <span class="nav-icon">&#x1F6A8;</span><span class="nav-label">Failures</span>
     </button>
   </div>
 
@@ -902,6 +907,12 @@
       </div>
     </section>
 
+    <!-- ══ Failures ══ ONE module (sokoni-admin-failures.js) shared with admin-os.html
+         (#failures there). It renders its own heading, so the panel carries no header. -->
+    <section class="sa-panel" id="panel-failures" hidden>
+      <div id="saFailuresBody"><div class="sa-spinner"><div></div></div></div>
+    </section>
+
     <!-- ══ SECTION 8: Secrets Checklist ══ -->
     <section class="sa-panel" id="panel-secrets" hidden>
       <div class="panel-header">
@@ -998,6 +1009,8 @@
 <!-- Toast Container -->
 <div class="toast-container" id="saToasts"></div>
 
+<script src="sokoni-admin-failures.js"></script>
+
 <!-- Confirm Modal (for role/suspend actions) -->
 <div class="sa-modal" id="saModal">
   <div class="modal-box">
@@ -1072,6 +1085,13 @@ function _closeSidebar(){
   side.classList.remove('open');_syncSidebarA11y();
   if(was&&_isMobile()){var m=_sbEl('mobileMenuBtn');if(m)m.focus();}
 }
+/* Sidebar items without an inline handler (Failures) route through SA.nav(), which
+   sets .active + aria-current. Items that still carry onclick are left alone. */
+document.addEventListener('click',function(e){
+  var b=e.target&&e.target.closest&&e.target.closest('#saNav button.nav-item[data-section]:not([onclick])');
+  if(!b||typeof SA==='undefined')return;
+  SA.nav(b.dataset.section);_closeSidebar();
+});
 function _toggleSidebar(){ if(_sbEl('saSidebar').classList.contains('open'))_closeSidebar();else _openSidebar(); }
 /* Toggle: on mobile dismisses the drawer; on desktop collapses to an icon rail, remembered per browser. */
 function _saSidebarToggle(){
@@ -1176,6 +1196,20 @@ const SA={
     else if(section==='emergency')this.loadEmergency();
     else if(section==='audit')this.loadAudit();
     else if(section==='broadcast')this.loadBroadcastHistory();
+    else if(section==='failures')this.loadFailures();
+  },
+
+  // Failures ── the shared module, mounted into this console's panel ──
+  loadFailures(){
+    const body=document.getElementById('saFailuresBody');
+    if(!body)return;
+    if(!window.SokoniAdminFailures){
+      body.innerHTML='<p style="color:var(--muted);font-size:13px">The Failures module did not load. Reload the page to try again.</p>';
+      return;
+    }
+    /* getErrorLog is an admin callable, reached through this console's own functions instance. */
+    const fns=this._fns||firebase.functions();
+    window.SokoniAdminFailures.mount(body,{console:'sa',call:(name,data)=>fns.httpsCallable(name)(data||{}).then(r=>r&&r.data)});
   },
 
   // Sign Out ────────────────────────────────────────────────

@@ -1,3 +1,49 @@
+## [2026-10-01] - AdminOS + Super Admin: "Failures" view (client error log) — ONE shared module, built, browser certification QUEUED, NOT deployed
+
+**Branch `hosting/admin-failures-on-chain`, built on `8a738e5` (`origin/hosting/chain-on-3e8dd53`).** Static hosting
+only. Mirrors the Updates centre pattern (`sokoni-admin-updates.js`, branch `hosting/admin-updates-center-on-54b72cc`):
+one module, mounted by both consoles with their OWN callable transport.
+
+**Summary.**
+- `sokoni-admin-failures.js` exposes `window.SokoniAdminFailures.mount(hostEl, {console, call})`; `call(name, data)`
+  resolves to the callable's data. It reads `getErrorLog({hours, limit:100, severity?})` and renders counts by severity,
+  a severity filter, a window filter (24 / 72 / 168 h), a Refresh button, a truncation note and a table (time, severity
+  badge with TEXT, surface, code, message + optional context, reference id / order / merchant, short uid + masked
+  email, token-free page path + build/online). The table scrolls inside an `overflow-x:auto` region; the page never
+  scrolls sideways. 44px touch targets at <=768px, visible focus, `role="status"`/`aria-live` for state text.
+- Every field is CLIENT-WRITTEN and rendered with `textContent`/`setAttribute` only; URLs are shown as text (query and
+  hash stripped again client-side), never as links.
+- Evidence vocabulary, never collapsed: `not-found` / `unavailable` / `internal` (callable not deployed) →
+  **"Failure log not available yet"** (unreadable, counts `—`); `permission-denied` → **"You do not have access"**;
+  a successful empty result → **"No client failures reported in the last N hours"** (empty, canonical 0). A severity
+  absent from `bySeverity` is 0 only when the reported figures add up to the server's `count`; otherwise `—`. Counts
+  are never computed from rows.
+- AdminOS: one `Failures` button (Operations group, appended — nothing reordered), `#panel-failures`, `failures`
+  registered in the EXISTING `_loadPanel` router (deep link `admin-os.html#failures`; `aria-current` set by the
+  router). Super Admin: one nav button (Operations group) + native `#panel-failures` opened by `SA.nav('failures')`;
+  NO hash-on-load handler (the Updates branch adds one; merge later).
+- Wiring note: every existing sidebar button on this tip uses an inline `onclick`. Per the owner contract the new
+  buttons carry none; each console gained a small delegated listener that routes ONLY `button.nav-item[data-section]`
+  without `onclick` through the same router (`SokoniAOS.navigate` / `SA.nav`) and closes the drawer.
+
+**Files.** `sokoni-admin-failures.js` (new), `sokoni-admin-failures.css` (new), `admin-os.html`, `sokoni-aos.js`,
+`super-admin.html`, `scripts/test-admin-failures.js` (new), `CHANGELOG.md`.
+
+**Functions/rules/DB: none (reads getErrorLog).** API: consumes the admin-only, App Check callable `getErrorLog`
+(NOT deployed yet). Security: no new write path; all untrusted fields escaped by construction; uid shortened.
+Breaking changes: none.
+
+**Evidence.** `node scripts/test-admin-failures.js` — 37/0 (executed in a vm with a fake DOM whose serialiser emits
+innerHTML raw: malicious message/surface inert, severity counts, three not-deployed codes, empty, denied, malformed,
+incomplete bySeverity, URL token stripped, filters re-query; plus static wiring checks). Positive control: a temp copy
+whose `h()` uses `innerHTML` fails 2 checks (exit 1). Gates: test-admin-nav-context 3/0, after-superadmin-link-gating
+13/0, verify-admin-markup (admin-os + super-admin) intact, audit-duplicate-ids no regression (output identical to
+base). Browser suites QUEUED for the layout owner's RESUME window: test-admin-layouts, test-adminos-sidebar-a11y,
+test-adminos-nav-coverage, test-adminos-shell-final.
+
+**Deploy order.** After `functions:getErrorLog` is live; merged by sokoni-aa into their hosting sequence. Until then
+the view truthfully reads "Failure log not available yet".
+
 ## [2026-09-30] - BnB: category pill strip made phone-safe (snap-scroll chips, sort on its own row) — built, browser certification QUEUED, NOT deployed
 
 **Branch `hosting/bnb-mobile-on-0271709`, built on `0271709`.** Owner ask (verbatim): "fix the bnb mobile layout the

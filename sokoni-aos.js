@@ -227,6 +227,7 @@ window.SokoniAOS = (() => {
       security:      () => _loadSecurity(),
       hubs:          () => _loadHubs(),
       workflows:     () => _loadWorkflows(),
+      failures:      () => _loadFailures(),
     };
     loaders[s]?.();
   }
@@ -2399,6 +2400,20 @@ window.SokoniAOS = (() => {
     warning:  '<span class="status-badge st-pending">warning</span>',
     degraded: '<span class="status-badge st-cancelled">degraded</span>',
   };
+
+  /* Failures view. ONE implementation (sokoni-admin-failures.js) shared with
+     super-admin.html; this console only hands it the panel body and its own
+     callable transport. Re-opening the section is a no-op — the module's Refresh re-reads. */
+  function _loadFailures() {
+    const body = document.getElementById("failuresBody");
+    if (!body) return;
+    if (!window.SokoniAdminFailures) {
+      body.innerHTML = _emptyMsg("The Failures module did not load. Reload the page to try again.");
+      return;
+    }
+    /* getErrorLog is not in _ADMIN_OS_OPS, so _call reaches it directly by name. */
+    window.SokoniAdminFailures.mount(body, { console: "aos", call: (name, data) => _call(name, data) });
+  }
 
   async function _loadHubs() {
     const body = document.getElementById("hubsBody");
