@@ -419,7 +419,7 @@
     <button class="nav-item" data-section="secrets" data-label="Secrets Checklist" type="button" onclick="SA.nav('secrets');_closeSidebar()">
       <span class="nav-icon">&#x1F511;</span><span class="nav-label">Secrets Checklist</span>
     </button>
-    <button class="nav-item" data-section="failures" data-label="Failures" type="button">
+    <button class="nav-item" data-section="failures" data-label="Failures" type="button" onclick="SA.nav('failures');_closeSidebar()">
       <span class="nav-icon">&#x1F6A8;</span><span class="nav-label">Failures</span>
     </button>
   </div>
@@ -1085,13 +1085,6 @@ function _closeSidebar(){
   side.classList.remove('open');_syncSidebarA11y();
   if(was&&_isMobile()){var m=_sbEl('mobileMenuBtn');if(m)m.focus();}
 }
-/* Sidebar items without an inline handler (Failures) route through SA.nav(), which
-   sets .active + aria-current. Items that still carry onclick are left alone. */
-document.addEventListener('click',function(e){
-  var b=e.target&&e.target.closest&&e.target.closest('#saNav button.nav-item[data-section]:not([onclick])');
-  if(!b||typeof SA==='undefined')return;
-  SA.nav(b.dataset.section);_closeSidebar();
-});
 function _toggleSidebar(){ if(_sbEl('saSidebar').classList.contains('open'))_closeSidebar();else _openSidebar(); }
 /* Toggle: on mobile dismisses the drawer; on desktop collapses to an icon rail, remembered per browser. */
 function _saSidebarToggle(){

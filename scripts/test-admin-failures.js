@@ -159,19 +159,19 @@ const MALICIOUS = '<img src=x onerror="alert(1)"><script>steal()</script>';
   const aosJs = fs.readFileSync(path.join(ROOT, 'sokoni-aos.js'), 'utf8');
   const sa = fs.readFileSync(path.join(ROOT, 'super-admin.html'), 'utf8');
   const aosBtn = (aos.match(/<button[^>]*data-section="failures"[^>]*>[\s\S]*?<\/button>/g) || []);
-  ck('admin-os: exactly one Failures sidebar button, icon then .nav-label, no inline onclick',
-    aosBtn.length === 1 && /<span class="nav-icon">[^<]*<\/span><span class="nav-label">Failures<\/span>/.test(aosBtn[0]) && !/onclick/i.test(aosBtn[0]), aosBtn.join(' | '));
+  ck('admin-os: exactly one Failures sidebar button, icon then .nav-label, inline onclick like every other nav button',
+    aosBtn.length === 1 && /<span class="nav-icon">[^<]*<\/span><span class="nav-label">Failures<\/span>/.test(aosBtn[0]) && /onclick="SokoniAOS\.navigate\('failures'\);_closeSidebar\(\)"/.test(aosBtn[0]), aosBtn.join(' | '));
   const opsGroup = (aos.match(/<div class="nav-group-label">Operations<\/div>([\s\S]*?)<\/div>/) || [])[1] || '';
   ck('admin-os: Failures sits in the Operations group', /data-section="failures"/.test(opsGroup));
   ck('admin-os: one #panel-failures + module + stylesheet loaded before sokoni-aos.js',
     (aos.match(/id="panel-failures"/g) || []).length === 1 && /<script src="sokoni-admin-failures\.js"><\/script>\s*<script src="sokoni-aos\.js">/.test(aos) && /href="sokoni-admin-failures\.css"/.test(aos));
-  ck('admin-os: data-section buttons without onclick route through SokoniAOS.navigate',
-    /closest\('button\.nav-item\[data-section\]:not\(\[onclick\]\)'\)/.test(aos) && /SokoniAOS\.navigate\(b\.dataset\.section\)/.test(aos));
+  ck('admin-os + super-admin: ONE wiring style — no delegated :not([onclick]) listener',
+    !/:not\(\[onclick\]\)/.test(aos) && !/:not\(\[onclick\]\)/.test(sa));
   ck('sokoni-aos.js: failures registered in the EXISTING _loadPanel router and mounts the shared module with _call',
     /failures:\s*\(\)\s*=>\s*_loadFailures\(\)/.test(aosJs) && /SokoniAdminFailures\.mount\(body,\s*\{\s*console:\s*"aos",\s*call:\s*\(name, data\)\s*=>\s*_call\(name, data\)/.test(aosJs));
   const saBtn = (sa.match(/<button[^>]*data-section="failures"[^>]*>[\s\S]*?<\/button>/g) || []);
-  ck('super-admin: exactly one Failures nav button with .nav-label, no inline onclick',
-    saBtn.length === 1 && /<span class="nav-label">Failures<\/span>/.test(saBtn[0]) && !/onclick/i.test(saBtn[0]), saBtn.join(' | '));
+  ck('super-admin: exactly one Failures nav button with .nav-label, inline onclick SA.nav',
+    saBtn.length === 1 && /<span class="nav-label">Failures<\/span>/.test(saBtn[0]) && /onclick="SA\.nav\('failures'\);_closeSidebar\(\)"/.test(saBtn[0]), saBtn.join(' | '));
   ck('super-admin: native #panel-failures opened by SA.nav(\'failures\') → loadFailures',
     (sa.match(/id="panel-failures"/g) || []).length === 1 && /section==='failures'\)this\.loadFailures\(\)/.test(sa) && /SokoniAdminFailures\.mount\(body,\{console:'sa',call:\(name,data\)=>fns\.httpsCallable\(name\)/.test(sa));
   ck('super-admin: no #hash-on-load handler was added by this slice', !/location\.hash/.test(sa.split('loadFailures(){')[1] || '') && !/this\.nav\(_ok\?/.test(sa));

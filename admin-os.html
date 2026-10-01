@@ -448,7 +448,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       <button class="nav-item" data-section="comms" data-label="Communications" onclick="SokoniAOS.navigate('comms');_closeSidebar()"><span class="nav-icon">&#x1F4E2;</span><span class="nav-label">Communications</span></button>
       <button class="nav-item nav-child" data-section="comms" data-tab="push" data-label="Notifications" onclick="SokoniAOS.navigate('comms','push');_closeSidebar()"><span class="nav-icon">&#x1F514;</span><span class="nav-label">Notifications</span></button>
       <button class="nav-item" data-section="content" data-label="Content Management" onclick="SokoniAOS.navigate('content');_closeSidebar()"><span class="nav-icon">&#x1F4DD;</span><span class="nav-label">Content</span></button>
-      <button class="nav-item" type="button" data-section="failures" data-label="Failures"><span class="nav-icon">&#x1F6A8;</span><span class="nav-label">Failures</span></button>
+      <button class="nav-item" type="button" data-section="failures" data-label="Failures" onclick="SokoniAOS.navigate('failures');_closeSidebar()"><span class="nav-icon">&#x1F6A8;</span><span class="nav-label">Failures</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Intelligence</div>
@@ -842,19 +842,6 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
     if (_MOBILE_Q.addEventListener) _MOBILE_Q.addEventListener('change', function () { _sbEl('aosSidebar').classList.remove('open'); _syncSidebarA11y(); });
     (function(){ try { if (localStorage.getItem('aosSidebarCollapsed') === '1' && window.innerWidth > 768) { var _ap = function(){ document.body.classList.add('sidebar-collapsed'); _syncSidebarA11y(); }; document.body ? _ap() : document.addEventListener('DOMContentLoaded', _ap); } } catch (_) {} })();
     document.addEventListener('DOMContentLoaded', _syncSidebarA11y);
-    /* Sidebar items without an inline handler (Failures) route here: the section
-       comes from data-section and goes through the SAME router, which sets
-       .active + aria-current. Items that still carry onclick are left alone. */
-    (function () {
-      var nav = _sbEl('aosNav');
-      if (!nav) return;
-      nav.addEventListener('click', function (e) {
-        var b = e.target && e.target.closest && e.target.closest('button.nav-item[data-section]:not([onclick])');
-        if (!b || !nav.contains(b) || !window.SokoniAOS) return;
-        if (b.dataset.tab) window.SokoniAOS.navigate(b.dataset.section, b.dataset.tab); else window.SokoniAOS.navigate(b.dataset.section);
-        _closeSidebar();
-      });
-    })();
     document.addEventListener("DOMContentLoaded", function() {
       try {
         var _aosTicketUnsub = firebase.firestore().collection("supportTickets").where("status","==","open")
