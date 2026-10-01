@@ -237,7 +237,7 @@ const stockOf = (id) => { const s = DOCS.get('products/' + id).stock; return (s 
   { const uid = seedActor('employee');
     const r = await sell(uid, [Object.assign(line('A', 1, 90, 'shop'), { priceTierLabel: 'FREE' })]);
     const it = lastSale() && lastSale().items[0];
-    ck('T-11 the sale records the SERVER tier + label (a client label is overwritten)', r.ok && it && it.priceTier === 'shop' && it.priceTierLabel === 'SHOP PRICE', JSON.stringify(it)); }
+    ck('T-11 the sale records the SERVER tier + label (a client label is overwritten)', r.ok && it && it.priceTier === 'shop' && it.priceTierLabel === 'SHELF PRICE', JSON.stringify(it)); }
   /* Ownership */
   await T('O-1', 'another shop\'s product -> REFUSED, no sale, no stock move', [line('X', 1, 100)], { ok: false, code: 'permission-denied' });
   await T('O-2', 'mixed cart (own + other shop) -> REFUSED whole', [line('A', 1, 100), line('X', 1, 100)], { ok: false, code: 'permission-denied' });
@@ -251,8 +251,8 @@ const stockOf = (id) => { const s = DOCS.get('products/' + id).stock; return (s 
     const res = r.ok ? r.result : null;
     const items = (res && ((res.receipt && res.receipt.items) || res.items)) || [];
     const saleIt = (lastSale() && lastSale().items) || [];
-    const has = (arr) => arr.some((x) => x.priceTier === 'shop' && x.priceTierLabel === 'SHOP PRICE' && x.unitPrice === 90 && x.qty === 2);
-    ck('R-1 the receipt / sale line carries the tier ("SHOP PRICE", 2 x 90)', r.ok && (has(items) || has(saleIt)), JSON.stringify(items.length ? items : saleIt).slice(0, 160)); }
+    const has = (arr) => arr.some((x) => x.priceTier === 'shop' && x.priceTierLabel === 'SHELF PRICE' && x.unitPrice === 90 && x.qty === 2);
+    ck('R-1 the receipt / sale line carries the tier ("SHELF PRICE", 2 x 90)', r.ok && (has(items) || has(saleIt)), JSON.stringify(items.length ? items : saleIt).slice(0, 160)); }
   /* Idempotency: the same key retried = one sale, one stock effect */
   reset(); seedProducts();
   { const uid = seedActor('employee');

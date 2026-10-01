@@ -391,8 +391,8 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       const _tier = _PT.resolveTierPrice(prod, item.priceTier);
       if (!_tier.ok) {
         _e(_tier.reason === 'unsupported_tier'
-          ? `"${String(item.priceTier).slice(0, 20)}" is not a price tier. Use online, shop or wholesale.`
-          : `${_sanitize(prod.name)} has no ${_tier.tier} price set, so it cannot be sold at that price.`,
+          ? `"${String(item.priceTier).slice(0, 20)}" is not a price tier. Use online, shelf or wholesale.`
+          : `${_sanitize(prod.name)} has no ${_PT.WORD[_tier.tier] || _tier.tier} price set, so it cannot be sold at that price.`,
           'failed-precondition');
       }
       const serverPrice = _tier.price;

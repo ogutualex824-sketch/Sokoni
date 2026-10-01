@@ -14,7 +14,10 @@
  * product by id and never checked whose it was — a merchant could sell (and decrement) another shop's product.
  */
 const TIERS = Object.freeze(['online', 'shop', 'wholesale']);
-const LABEL = Object.freeze({ online: 'ONLINE PRICE', shop: 'SHOP PRICE', wholesale: 'WHOLESALE PRICE' });
+/* Owner wording (2026-10-01): the in-store tier is the SHELF price. The stored field stays `shopPrice` and the tier
+   key stays 'shop' (no data migration; the uploader and the server agree on them) — only what people read changes. */
+const LABEL = Object.freeze({ online: 'ONLINE PRICE', shop: 'SHELF PRICE', wholesale: 'WHOLESALE PRICE' });
+const WORD = Object.freeze({ online: 'online', shop: 'shelf', wholesale: 'wholesale' });
 
 /* The same ceiling the product writer enforces (sokoni-aa's uploader, 7a9f276). Property and vehicles use it. */
 const MAX_PRICE = 1000000000;
@@ -54,4 +57,4 @@ function productBelongsTo(prod, provenIds) {
   return !!prod.sellerUid && ids.has(String(prod.sellerUid));   /* legacy products: shop id == owner uid */
 }
 
-module.exports = { TIERS, LABEL, MAX_PRICE, tierPrices, resolveTierPrice, productBelongsTo };
+module.exports = { TIERS, LABEL, WORD, MAX_PRICE, tierPrices, resolveTierPrice, productBelongsTo };
