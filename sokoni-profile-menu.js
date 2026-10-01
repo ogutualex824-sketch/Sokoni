@@ -944,7 +944,7 @@
     if (!box) {
       box = document.createElement('div');
       box.id = 'sk-acct-fixed';
-      box.style.cssText = 'position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:12px;z-index:2147482000;';
+      box.style.cssText = 'position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:calc(12px + env(safe-area-inset-right,0px));z-index:2147482000;';
       (document.body || document.documentElement).appendChild(box);
     }
     return { el: box, fixed: true };
