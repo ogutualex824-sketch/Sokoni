@@ -423,8 +423,8 @@
 
   <div class="nav-group">
     <div class="nav-group-label">Trust &amp; Safety</div>
-    <button class="nav-item" data-section="trust" data-label="Trust reports" type="button" onclick="SA.nav('trust');_closeSidebar()">
-      <span class="nav-icon">&#x1F6A9;</span><span class="nav-label">Trust reports</span>
+    <button class="nav-item" data-section="trust" data-label="Moderation" type="button" onclick="SA.nav('trust');_closeSidebar()">
+      <span class="nav-icon">&#x1F6A9;</span><span class="nav-label">Moderation</span>
     </button>
   </div>
 
@@ -821,12 +821,13 @@
       </div>
     </section>
 
-    <!-- ══ SECTION: Trust reports (community C2, 2026-10-01) ══
-         The SAME queue AdminOS › Fraud & Trust › Reports Queue mounts (sokoni-trust-queues.js) on the ONE report
-         authority (tsGetReports / tsReviewReport). Not a copy that could disagree. -->
+    <!-- ══ SECTION: Moderation (community C2 → C3, 2026-10-01) ══
+         The SAME moderation module AdminOS › Moderation mounts (sokoni-trust-queues.js) on the ONE report authority
+         (tsGetReports / tsGetReportCase / tsReviewReport). Same canonical state, a second authorised view — not a copy
+         that could disagree. A super admin may also take over a review another moderator holds (server-checked). -->
     <section class="sa-panel" id="panel-trust" hidden>
       <div class="panel-header">
-        <h2>&#x1F6A9; Trust reports</h2>
+        <h2>&#x1F6A9; Moderation</h2>
         <p>Reports on listings and users. Reports are private: the seller sees only that a listing was reported and the
            outcome, never who reported it. Upholding a product report can take the listing down.</p>
       </div>
@@ -1988,7 +1989,7 @@ const SA={
     }catch(e){_toast('Error: '+e.message,'error');}
   },
 
-  // ══ SECTION: Trust reports (sokoni-trust-queues.js, shared with AdminOS) ══
+  // ══ SECTION: Moderation (sokoni-trust-queues.js, shared with AdminOS › Moderation) ══
   loadTrustQueue(){
     const root=document.getElementById('trustRoot');
     if(!root)return;
@@ -1999,7 +2000,8 @@ const SA={
     }
     const fns=this._fns;
     window.SokoniTrustQueues.mount(root,{
-      callable:(name)=>(payload)=>fns.httpsCallable(name)(payload).then(r=>r.data),
+      console:'superadmin',
+      call:(name,payload)=>fns.httpsCallable(name)(payload).then(r=>r.data),
       onToast:(m,k)=>_toast(m,k==='success'?'success':'info') });
   },
 

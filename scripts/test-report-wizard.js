@@ -267,8 +267,11 @@ const reportsOn = async (pid) => (await db.collection('reports').where('entityId
     /callReports: _callable\('tsGetReports'\)/.test(mv) && /ctx\.callReports\(\{ scope: 'mine' \}\)/.test(mui) && /REPORT_STATE\[r\.moderationState\]/.test(mui)
       && !/reportedBy/.test(mui) && /who reported it is never shown/.test(mui) && !/target="_blank"/.test(mui.slice(mui.indexOf('function reportsHTML'), mui.indexOf('function visible'))));
   const sa = src('super-admin.html');
-  ck('SA1 super admin: Trust reports nav (inline onclick + nav-label), router branch, panel, shared queue, script tag',
-    /<button class="nav-item" data-section="trust" data-label="Trust reports" type="button" onclick="SA\.nav\('trust'\);_closeSidebar\(\)">\s*<span class="nav-icon">[^<]*<\/span><span class="nav-label">Trust reports<\/span>/.test(sa)
+  /* C3 (2026-10-01): the section was renamed "Moderation" (same id "trust", same module) and mounts with the shared
+     contract { console:'superadmin', call } — the C2 label assertion was updated to that explicit contract. */
+  ck('SA1 super admin: Moderation nav (inline onclick + nav-label), router branch, panel, shared module mounted as console "superadmin", script tag',
+    /<button class="nav-item" data-section="trust" data-label="Moderation" type="button" onclick="SA\.nav\('trust'\);_closeSidebar\(\)">\s*<span class="nav-icon">[^<]*<\/span><span class="nav-label">Moderation<\/span>/.test(sa)
+      && /console:'superadmin',\s*call:\(name,payload\)=>fns\.httpsCallable\(name\)\(payload\)/.test(sa)
       && /else if\(section==='trust'\)this\.loadTrustQueue\(\);/.test(sa) && /<section class="sa-panel" id="panel-trust" hidden>/.test(sa)
       && /window\.SokoniTrustQueues\.mount\(root,/.test(sa) && /<script src="sokoni-trust-queues\.js"><\/script>/.test(sa));
 
