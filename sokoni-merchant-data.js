@@ -195,6 +195,9 @@
         barcode: p.barcode || null, brand: p.brand || null, condition: p.condition || null, location: p.location || null,
         kebsCert: p.kebsCert || null, foodLicence: p.foodLicence || null, ownership: p.ownership || null,
         verificationStatus: p.verificationStatus || null, warranty: p.warranty || null,
+        /* Price tiers (2026-10-01): Online = price, Shop = shopPrice, Wholesale = wholesalePrice. An absent tier
+           maps to null ("not sold at this price"), never 0 — the editor shows it empty and never writes it back. */
+        shopPrice: (typeof p.shopPrice === 'number') ? p.shopPrice : null,
         wholesalePrice: (typeof p.wholesalePrice === 'number') ? p.wholesalePrice : null,
         minWholesaleQty: (typeof p.minWholesaleQty === 'number') ? p.minWholesaleQty : null,
         deliveryCost: (typeof p.deliveryCost === 'number') ? p.deliveryCost : null,
@@ -311,8 +314,11 @@
       out.tags = t.map(function (x) { return String(x || '').trim().slice(0, 40); })
                   .filter(Boolean).slice(0, 30);
     }
-    /* Money and counts. Empty is ABSENT — never zero. */
-    ['deliveryCost', 'wholesalePrice', 'minWholesaleQty'].forEach(function (k) {
+    /* Money and counts. Empty is ABSENT — never zero. `shopPrice` (the in-store tier, 2026-10-01) joins
+       `wholesalePrice` here: an empty tier means "not sold at this price" and is never stored as 0. Removing a
+       stored tier on an edit is NOT expressed through this allowlist — updateProduct turns an explicit
+       null / '' into a field delete (see clearedTiers). */
+    ['deliveryCost', 'shopPrice', 'wholesalePrice', 'minWholesaleQty'].forEach(function (k) {
       if (p[k] === undefined) return;
       if (p[k] === '' || p[k] === null) return;
       out[k] = Number(p[k]);
@@ -430,6 +436,39 @@
     }
   }
 
+  /* ── PRICE TIERS (2026-10-01) ─────────────────────────────────────────────────────────────────────────
+     There was no upper bound on a product price anywhere on this line (the rule's validPrice is `> 0` only).
+     MAX_PRICE is introduced with the tiers so a mistyped extra zero is caught here, not at a till. It is
+     generous on purpose: property and vehicles are listed through this same writer. */
+  var MAX_PRICE = 1000000000;                      /* KES 1,000,000,000 */
+  var TIER_LABELS = [{ key: 'shopPrice', label: 'Shop' }, { key: 'wholesalePrice', label: 'Wholesale' }];
+  var PRICE_TIER_KEYS = ['price', 'shopPrice', 'wholesalePrice'];
+  /* What an EDIT may remove with a field delete. `price` is not here: the Online price is required, and an
+     emptied one is refused by _validate rather than deleted. */
+  var CLEARABLE_FIELDS = ['shopPrice', 'wholesalePrice', 'minWholesaleQty'];
+  /* The tiers the till mirrors carry beyond `price` (absent stays absent). */
+  var MIRRORED_TIERS = ['shopPrice', 'wholesalePrice'];
+
+  /* The optional fields a patch asks to REMOVE: present in the patch as null or ''. On create the same values
+     simply mean "absent" (the allowlist drops them); only an edit turns them into a delete. */
+  function clearedFields(patch) {
+    var p = patch || {};
+    return CLEARABLE_FIELDS.filter(function (k) {
+      return Object.prototype.hasOwnProperty.call(p, k) && (p[k] === null || p[k] === '');
+    });
+  }
+
+  /* The tiers as they will stand after an edit: stored, overridden by the patch, minus what is cleared. */
+  function effectiveTiers(existing, fields, cleared) {
+    var out = {};
+    PRICE_TIER_KEYS.forEach(function (k) {
+      if (existing && typeof existing[k] === 'number') out[k] = existing[k];
+      if (fields && fields[k] !== undefined) out[k] = fields[k];
+      if (cleared && cleared.indexOf(k) > -1) delete out[k];
+    });
+    return out;
+  }
+
   function _validate(fields, opts) {
     var errs = [];
     var creating = !!(opts && opts.creating);
@@ -460,25 +499,51 @@
     if (fields.deliveryCost !== undefined && (!isFinite(fields.deliveryCost) || fields.deliveryCost < 0)) {
       errs.push('Delivery cost cannot be negative.');
     }
-    if (fields.wholesalePrice !== undefined && (!isFinite(fields.wholesalePrice) || fields.wholesalePrice < 0)) {
-      errs.push('Wholesale price cannot be negative.');
-    }
     if (fields.minWholesaleQty !== undefined &&
         (!isFinite(fields.minWholesaleQty) || fields.minWholesaleQty < 0)) {
       errs.push('Minimum wholesale quantity cannot be negative.');
     }
 
-    /* ── FROM 4f67b4b, ported 2026-09-29 (U1): the deal / download / permit rules ──────────────────────── */
-    /* BULK: both or neither; above zero; BELOW the unit price; a minimum of 2 ("bulk, minimum one" is the
-       ordinary price wearing a badge). */
-    var hasWp = fields.wholesalePrice !== undefined && fields.wholesalePrice !== null;
-    var hasWq = fields.minWholesaleQty !== undefined && fields.minWholesaleQty !== null;
-    if (hasWp !== hasWq) errs.push('A bulk deal needs both a wholesale price and a minimum quantity.');
-    if (hasWp && isFinite(fields.wholesalePrice) && fields.wholesalePrice === 0) {
-      errs.push('The wholesale price must be above zero.');
-    } else if (hasWp && isFinite(fields.price) && fields.price > 0 && fields.wholesalePrice >= fields.price) {
-      errs.push('The wholesale price must be lower than the normal price — otherwise it is not a bulk deal.');
+    /* ── PRICE TIERS (owner model, 2026-10-01) ───────────────────────────────────────────────────────
+       Three independent prices on one product, no new pricing object:
+         ONLINE    = price           marketplace, cart and checkout read it (required, unchanged)
+         SHOP      = shopPrice       the in-store price (optional)
+         WHOLESALE = wholesalePrice  the bulk price (optional)
+       An absent tier is NOT AVAILABLE and is stored absent — never 0. Each SET tier is a finite number,
+       > 0 and <= MAX_PRICE. Ordering: wholesale < online (strict), shop <= online, and when both are set
+       wholesale <= shop — so wholesale <= shop <= online.
+
+       `opts.tiers` is the EFFECTIVE set (on an edit: the stored tiers, overridden by the patch, minus any tier
+       being cleared); ordering is checked over it so an edit to one tier cannot leave the others out of order.
+       Without it the fields themselves are the effective set (create).
+
+       minWholesaleQty is informational and NO LONGER required with a wholesale price — the old "both or
+       neither" coupling is dropped (owner decision 2026-10-01). It is still refused when negative or not a
+       whole number of 2 or more ("bulk, minimum one" is the ordinary price wearing a badge). */
+    if (fields.price !== undefined && isFinite(fields.price) && fields.price > MAX_PRICE) {
+      errs.push('The Online price is too large (KES ' + MAX_PRICE.toLocaleString('en-KE') + ' at most).');
     }
+    TIER_LABELS.forEach(function (t) {
+      var v = fields[t.key];
+      if (v === undefined || v === null) return;
+      if (!isFinite(v) || v <= 0) errs.push('The ' + t.label + ' price must be above zero.');
+      else if (v > MAX_PRICE) errs.push('The ' + t.label + ' price is too large (KES ' + MAX_PRICE.toLocaleString('en-KE') + ' at most).');
+    });
+    var tiers = (opts && opts.tiers) || fields;
+    var okTier = function (v) { return typeof v === 'number' && isFinite(v) && v > 0; };
+    var on = tiers.price, sh = tiers.shopPrice, wh = tiers.wholesalePrice;
+    if (okTier(wh) && okTier(on) && !(wh < on)) {
+      errs.push('The Wholesale price must be lower than the Online price — otherwise it is not a bulk deal.');
+    }
+    if (okTier(sh) && okTier(on) && sh > on) {
+      errs.push('The Shop price cannot be higher than the Online price.');
+    }
+    if (okTier(wh) && okTier(sh) && wh > sh) {
+      errs.push('The Wholesale price cannot be higher than the Shop price.');
+    }
+
+    /* ── FROM 4f67b4b, ported 2026-09-29 (U1): the deal / download / permit rules ──────────────────────── */
+    var hasWq = fields.minWholesaleQty !== undefined && fields.minWholesaleQty !== null;
     if (hasWq && isFinite(fields.minWholesaleQty) && fields.minWholesaleQty >= 0
         && (!Number.isInteger(Number(fields.minWholesaleQty)) || fields.minWholesaleQty < 2)) {
       errs.push('The minimum bulk quantity must be a whole number of 2 or more.');
@@ -539,7 +604,7 @@
     var stock = (established !== undefined && established !== null)
       ? Number(established) || 0
       : Number(doc.stock) || 0;
-    return {
+    var proj = {
       inventory: {
         path: ['tenants', scope.sellerUid, 'inventory_products', doc.id],
         data: {
@@ -563,6 +628,50 @@
         },
       },
     };
+    /* PRICE TIERS (2026-10-01): the till and the Inventory Manager carry the Shop and Wholesale prices under the
+       SAME field names as the product. Absent stays ABSENT — a tier the product does not have is omitted, never
+       written as 0 or null, so a reader cannot mistake "not sold at this price" for "free". Which tier the till
+       charges is the POS session's slice; this only makes the figures available there. */
+    MIRRORED_TIERS.forEach(function (k) {
+      var v = doc[k];
+      if (typeof v === 'number' && isFinite(v) && v > 0) { proj.inventory.data[k] = v; proj.pos.data[k] = v; }
+    });
+    return proj;
+  }
+
+  /* The mirror patch an EDIT writes when it sets or clears a Shop / Wholesale tier: only those fields, as an
+     UPDATE of the existing mirror documents (never a create — a missing mirror stays missing and is reported),
+     with a field delete for each cleared tier. The Online price is deliberately not part of it: an edit to
+     `price` did not reach the mirrors before this change and still does not (unchanged, stated in CHANGELOG). */
+  function tierMirrorPatch(fields, cleared) {
+    var data = {}, del = [];
+    MIRRORED_TIERS.forEach(function (k) {
+      if (cleared && cleared.indexOf(k) > -1) del.push(k);
+      else if (fields && typeof fields[k] === 'number') data[k] = fields[k];
+    });
+    return (Object.keys(data).length || del.length) ? { data: data, deleteFields: del } : null;
+  }
+
+  /* Never throws, like _writeMirrors. */
+  async function _writeTierMirrors(db, id, scope, tp) {
+    var paths = { inventory: ['tenants', scope.sellerUid, 'inventory_products', id], pos: ['posProducts', id] };
+    var out = {};
+    for (var i = 0; i < PRODUCT_MIRRORS.length; i++) {
+      var key = PRODUCT_MIRRORS[i];
+      if (!db || typeof db.writeMirror !== 'function') { out[key] = { state: 'unavailable' }; continue; }
+      if (tp.deleteFields.length && db.supportsFieldDelete !== true) {
+        out[key] = { state: 'failed', reason: 'field-delete-unsupported' }; continue;
+      }
+      try {
+        var req = { path: paths[key], data: tp.data, merge: true, mode: 'update' };
+        if (tp.deleteFields.length) req.deleteFields = tp.deleteFields.slice();
+        await db.writeMirror(req);
+        out[key] = { state: 'written' };
+      } catch (e) {
+        out[key] = { state: 'failed', reason: (e && e.message) || 'unknown' };
+      }
+    }
+    return out;
   }
 
   /* Never throws. A mirror is a projection of a record that already exists; its
@@ -777,17 +886,44 @@
         return Object.assign({}, v, { stock: Object.prototype.hasOwnProperty.call(keep, v.id) ? keep[v.id] : 0 });
       });
     }
-    if (!Object.keys(fields).length) throw new Error('merchant data: nothing to update');
+    /* PRICE TIERS (2026-10-01): an optional tier sent as null / '' on an EDIT is a REMOVAL ("not sold at this
+       price any more"), written as a field delete — never as 0 and never as a stored null. A tier the patch does
+       not mention is not touched at all. */
+    var cleared = clearedFields(o.patch);
+    cleared.forEach(function (k) { delete fields[k]; });
+    if (!Object.keys(fields).length && !cleared.length) throw new Error('merchant data: nothing to update');
     _assertCatalogueType(o, fields);
-    var errs = _validate(fields, { creating: false });
+    /* Ordering is checked over the tiers as they will STAND, so raising the Wholesale price above a stored
+       Online price (or lowering Online below a stored Shop price) is refused. Only when the edit touches a
+       tier: a legacy record already out of order must not block an unrelated edit such as a typo in the name. */
+    var touchesTier = PRICE_TIER_KEYS.some(function (k) { return fields[k] !== undefined || cleared.indexOf(k) > -1; });
+    var errs = _validate(fields, { creating: false,
+      tiers: touchesTier ? effectiveTiers(existing, fields, cleared) : {} });
     if (errs.length) { var e = new Error(errs[0]); e.validation = errs; throw e; }
 
     /* shopId and sellerUid are never patchable — a product cannot be moved to
        another shop by an edit. */
     delete fields.shopId; delete fields.sellerUid;
 
-    await o.db.writeProduct({ id: o.id, data: fields, mode: 'update' });
-    return { id: o.id, patch: fields };
+    /* A delete the adapter cannot express would be a removal that silently did not happen — refused instead. */
+    if (cleared.length && o.db.supportsFieldDelete !== true) {
+      var dErr = new Error('This price cannot be removed just now — please try again.');
+      dErr.code = 'field-delete-unsupported';
+      throw dErr;
+    }
+    var req = { id: o.id, data: fields, mode: 'update' };
+    if (cleared.length) req.deleteFields = cleared.slice();
+    await o.db.writeProduct(req);
+
+    var out = { id: o.id, patch: fields };
+    if (cleared.length) out.cleared = cleared.slice();
+    /* The till and the Inventory Manager follow a Shop / Wholesale change. Reported, never raised. */
+    var tp = tierMirrorPatch(fields, cleared);
+    if (tp) {
+      out.mirrors = await _writeTierMirrors(o.db, o.id, scope, tp);
+      out.complete = mirrorsComplete(out.mirrors);
+    }
+    return out;
   }
 
   /* ══ LIFECYCLE: ARCHIVE / RESTORE (universal catalogue U4, 2026-09-29) ═════════════════════════════════════
@@ -1240,6 +1376,12 @@
     attachProductImages: attachProductImages,
     assertInScope: assertInScope,
     productProjections: productProjections,
+    /* Price tiers (2026-10-01): Online = price, Shop = shopPrice, Wholesale = wholesalePrice. */
+    MAX_PRICE: MAX_PRICE,
+    PRICE_TIER_KEYS: PRICE_TIER_KEYS,
+    clearedFields: clearedFields,
+    effectiveTiers: effectiveTiers,
+    tierMirrorPatch: tierMirrorPatch,
     mirrorsComplete: mirrorsComplete,
     PRODUCT_MIRRORS: PRODUCT_MIRRORS,
     idempotencyKey: idempotencyKey,
