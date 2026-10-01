@@ -77,6 +77,11 @@ function stubFor(claims) {
   }
   return s;
 }
+/* The sidebar ticket badge used to subscribe to supportTickets from an inline DOMContentLoaded handler, BEFORE the
+   gate (sokoni-aa moved it into _bootUI in 1b3f45f). On markup that still has the inline listener the read is
+   reported, not failed; once it is gone, a non-admin must make ZERO supportTickets reads. */
+const LEGACY_BADGE = AFTER.indexOf('firebase.firestore().collection(' + String.fromCharCode(34) + 'supportTickets') > -1;
+console.log('  [ticket badge: ' + (LEGACY_BADGE ? 'LEGACY inline pre-gate listener present (reported, not failed)' : 'after the gate (strict: zero supportTickets reads)') + ']');
 const IDENT = {
   nonAdmin:       { claims: {}, ctx: 'superAdmin', label: 'non-admin (no claim)' },
   adminWorkspace: { claims: { admin: true }, ctx: 'none', label: 'admin claim, workspace context' },
@@ -142,8 +147,8 @@ async function visit(browser, html, who, vp) {
         const calls = r.leftPage ? [] : (r.calls || []);
         ok(`G1  ${IDENT[k].label} [${tag}]: zero admin callables`, calls.length === 0, r.leftPage ? 'navigated away' : calls);
         ok(`G2  ${IDENT[k].label} [${tag}]: _bootUI never ran (no admin panel paint)`, !booted(r), r.leftPage ? 'navigated away' : { userName: r.userName, activeNav: r.activeNav });
-        const adminReads = r.leftPage ? [] : (r.reads || []).filter((c) => c !== 'supportTickets');
-        ok(`G3  ${IDENT[k].label} [${tag}]: no admin data read beyond the pre-existing sidebar ticket badge`, adminReads.length === 0, adminReads);
+        const adminReads = r.leftPage ? [] : (r.reads || []).filter((c) => LEGACY_BADGE ? c !== 'supportTickets' : true);
+        ok(`G3  ${IDENT[k].label} [${tag}]: no admin data read' + (LEGACY_BADGE ? ' beyond the legacy pre-gate ticket badge' : ', supportTickets included') + '`, adminReads.length === 0, adminReads);
       }
       const b = R[k + ':before'], a = R[k + ':after'];
       const sig = (r) => JSON.stringify([!!r.leftPage, r.left, booted(r), r.leftPage ? 0 : (r.calls || []).length]);
@@ -152,7 +157,7 @@ async function visit(browser, html, who, vp) {
     const nb = R['nonAdmin:after'];
     ok('G5  non-admin is sent away, never left on the console', nb.leftPage || nb.left.length > 0 || !!nb.alerted, { left: nb.left, alerted: nb.alerted });
     const pre = R['nonAdmin:before'];
-    if (!pre.leftPage && (pre.reads || []).includes('supportTickets'))
+    if (LEGACY_BADGE && !pre.leftPage && (pre.reads || []).includes('supportTickets'))
       un('PRE-EXISTING, not this change: the sidebar ticket-badge listener reads supportTickets at DOMContentLoaded, before the gate',
          'rules must refuse it for a non-admin; reported to the AdminOS owner');
 
