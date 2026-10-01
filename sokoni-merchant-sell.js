@@ -132,7 +132,16 @@
     '.msl-sh-h .t{flex:1;min-width:0;font-size:15px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
     '.msl-sh-x{width:34px;height:34px;flex:0 0 auto;border-radius:10px;border:1px solid var(--line);',
       'background:rgba(255,255,255,.05);color:var(--txt2);font-size:17px;cursor:pointer}',
-    '.msl-sh-b{flex:1;min-height:0;overflow-y:auto;padding:14px 16px}',
+    /* The sheet body scrolls on every phone: iOS needs momentum scrolling, a contained overscroll (so the page behind
+       does not take the gesture) and vertical panning explicitly allowed (owner, 2026-10-01: "it is not scrolling"). */
+    '.msl-sh-b{flex:1;min-height:0;overflow-y:auto;padding:14px 16px;-webkit-overflow-scrolling:touch;',
+      'overscroll-behavior:contain;touch-action:pan-y}',
+    /* the items in this sale, shown ABOVE the money ladder on the payment sheet */
+    '.msl-pay-items{margin:0 0 10px;padding:0 0 8px;border-bottom:1px solid var(--line)}',
+    '.msl-pay-it{display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:13px}',
+    '.msl-pay-it .n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}',
+    '.msl-pay-it .d{display:block;font-size:11px;font-weight:600;color:var(--txt2)}',
+    '.msl-pay-it b{flex:0 0 auto;font-weight:800}',
     '.msl-sh-f{flex:0 0 auto;padding:12px 16px 16px;border-top:1px solid var(--line);display:flex;',
       'flex-direction:column;gap:9px}',
 
@@ -954,6 +963,17 @@
                Shown in that order because that is the order the money moves in,
                and because a customer who is given 200 off should be able to see
                where the figure they are being asked for came from. */
+          /* THE ITEMS — the first rung, which was described here but never rendered: the cashier had to close the
+             payment sheet to see what was being sold (owner, 2026-10-01). Each line: name, qty × unit price, the
+             price tier when it is not online, and the line total. */
+          '<div class="msl-pay-items" aria-label="Items in this sale">' +
+            S.cart.map(function (l) {
+              var tierTxt = (l.priceTier && l.priceTier !== 'online') ? ' · ' + esc(md.TIER_LABEL[l.priceTier] || l.priceTier) + ' price' : '';
+              return '<div class="msl-pay-it"><span class="n">' + esc(l.name || 'Product') +
+                '<span class="d">' + l.qty + ' × ' + esc(md.formatKES(l.price)) + tierTxt + '</span></span>' +
+                '<b>' + esc(md.formatKES(l.price * l.qty)) + '</b></div>';
+            }).join('') +
+          '</div>' +
           '<div class="msl-tot"><span>Subtotal</span><b>' + esc(md.formatKES(t.subtotal)) + '</b></div>' +
           (disc > 0
             ? '<div class="msl-tot"><span>Discount</span><b>− ' + esc(md.formatKES(disc)) + '</b></div>'
