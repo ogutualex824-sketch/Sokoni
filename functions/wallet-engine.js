@@ -2026,3 +2026,10 @@ exports.walletV2EscrowRelease = onCall(BASE_OPTS, async (request) => {
     throw new HttpsError('internal', 'Could not release escrow');
   }
 });
+
+/* Internal seam — NOT a callable, and index.js never re-exports it. The SOKONI Store
+   operator payout verifies the operator's OWN wallet PIN with THIS verifier (same hash,
+   same attempt counter, same lock-and-freeze at the cap). The caller refuses a missing
+   PIN before calling it, because _assertPinOk passes a wallet with no PIN configured.
+   Read-only reuse: no behaviour of any function in this file changes. */
+exports._internal = Object.freeze({ assertPinOk: _assertPinOk });

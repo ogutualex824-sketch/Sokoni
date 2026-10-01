@@ -1760,3 +1760,10 @@ exports.sweepEarningsToWallet = onSchedule(
     if (moved) console.log(`[sweepEarningsToWallet] moved KSh ${totalShillings} into withdrawable balance across ${moved} wallet(s)`);
   }
 );
+
+/* Internal seam — NOT a callable, and index.js never re-exports it. The SOKONI Store
+   operator payout (first-party-store-payout.js) creates its payoutRequests document with
+   THESE helpers, so its status events, EAT day key and velocity cap are this file's own —
+   never a copy that could drift from what adminProcessPayout / _refundPayout expect.
+   Read-only reuse: no behaviour of any function in this file changes. */
+exports._internal = Object.freeze({ payoutEvent: _payoutEvent, eatDay: _eatDay, getPayoutConfig: _getPayoutConfig });

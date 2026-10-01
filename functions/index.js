@@ -11464,6 +11464,12 @@ exports.sokoniStoreSaveProfile     = _sokoniStore.sokoniStoreSaveProfile;
 exports.sokoniStoreListProducts    = _sokoniStore.sokoniStoreListProducts;
 exports.sokoniStoreListOrders      = _sokoniStore.sokoniStoreListOrders;
 exports.sokoniStoreGetWallet       = _sokoniStore.sokoniStoreGetWallet;
+/* Store withdrawals — HELD: deploy dark; both refuse (store-payouts-not-enabled) until the
+   owner sets firstPartyStoreConfig/payouts.enabled = true after the money-safety review.
+   No second execution rail: requests are paid by the existing adminProcessPayout path. */
+const _sokoniStorePayout = require('./first-party-store-payout');
+exports.sokoniStoreSetPayoutDestination = _sokoniStorePayout.sokoniStoreSetPayoutDestination;
+exports.sokoniStorePayoutRequest        = _sokoniStorePayout.sokoniStorePayoutRequest;
 
 /* ── MiniShop Campaign Engine v1.0 ──────────────────────────────────────── */
 const minishopCampaigns = require('./minishop-campaigns');
