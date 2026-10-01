@@ -82,7 +82,7 @@
   /* ── Views ──────────────────────────────────────────────────────────────────────────── */
   function regPill(r) {
     var st = (r && r.status) || 'not_submitted';
-    var map = { verified: ['ok', 'Verified by SOKONI'], under_review: ['warn', 'Under review'], rejected: ['err', 'Not accepted'], not_submitted: ['warn', 'Not submitted'] };
+    var map = { verified: ['ok', 'Reviewed by SOKONI'], under_review: ['warn', 'Under review'], rejected: ['err', 'Not accepted'], not_submitted: ['warn', 'Not submitted'] };
     var m = map[st] || ['warn', label(st)];
     return '<span class="pill ' + m[0] + '">' + esc(m[1]) + '</span>';
   }
@@ -95,7 +95,7 @@
     v.innerHTML = '<h1>Welcome, ' + esc(w.listing.name || 'partner') + '</h1>' +
       '<p class="muted">' + esc(c.label) + ' workspace · listing <span class="pill ok">Approved</span> · registration ' + regPill(w.registration) + '</p>' +
       '<div class="cards">' + cards.map(function (x) { return '<div class="card"><div class="k">' + esc(x[0]) + '</div><div class="v">' + shown(x[1]) + '</div></div>'; }).join('') + '</div>' +
-      (w.registration.status !== 'verified' && isOwner() ? '<div class="notice">Your registration details are <strong>' + esc(label(w.registration.status)) + '</strong>. Until SOKONI verifies them, your public listing says the details are self-declared. <button class="btn" type="button" data-nav="registration" style="margin-left:8px">Open registration</button></div>' : '') +
+      (w.registration.status !== 'verified' && isOwner() ? '<div class="notice">Your registration details are <strong>' + esc(label(w.registration.status)) + '</strong>. SOKONI reviews the paperwork; your public listing shows registration details as self-declared. <button class="btn" type="button" data-nav="registration" style="margin-left:8px">Open registration</button></div>' : '') +
       '<h2>Quick actions</h2><div class="actions">' +
       (c.modules.indexOf('members') >= 0 ? '<button class="btn primary" type="button" data-nav="members">Add ' + esc(c.memberLabel.toLowerCase().replace(/s$/, '')) + '</button>' : '') +
       (canManage() ? '<button class="btn" type="button" data-nav="products">Manage ' + esc(c.productLabel.toLowerCase()) + '</button>' : '') +
@@ -106,10 +106,10 @@
   function vRegistration(v) {
     var r = S.ws.registration || {}, c = S.ws.config;
     var locked = r.status === 'under_review' || r.status === 'verified';
-    v.innerHTML = '<h1>Registration</h1><p class="muted">Your licence or registration with the regulator. SOKONI checks it before your listing shows it as verified.</p>' +
+    v.innerHTML = '<h1>Registration</h1><p class="muted">Your licence or registration with the regulator. SOKONI reviews the paperwork — a review is not a confirmation by the regulator, so your public listing always shows these details as self-declared.</p>' +
       '<div class="panel"><p>Status: ' + regPill(r) + (r.reviewNote ? ' <span class="muted">— ' + esc(r.reviewNote) + '</span>' : '') + '</p>' +
       (r.regulator ? '<p class="muted" style="margin-top:6px">' + esc(r.regulator) + (r.registrationNumber ? ' · ' + esc(r.registrationNumber) : '') + '</p>' : '') + '</div>' +
-      (locked ? '<div class="notice">' + (r.status === 'verified' ? 'Verified. To change these details, contact SOKONI support.' : 'Submitted — SOKONI is reviewing it. You will see the result here.') + '</div>' :
+      (locked ? '<div class="notice">' + (r.status === 'verified' ? 'Reviewed by SOKONI. To change these details, contact SOKONI support.' : 'Submitted — SOKONI is reviewing it. You will see the result here.') + '</div>' :
       '<form class="panel" id="regForm" novalidate><div class="row">' +
       '<div><label for="rg1">Regulator</label><select id="rg1" name="regulator" required>' + c.regulators.map(function (x) { return '<option' + (x === r.regulator ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') + '</select></div>' +
       '<div><label for="rg2">Registered name</label><input id="rg2" name="registeredName" maxlength="120" required value="' + esc(r.registeredName || '') + '"></div>' +
