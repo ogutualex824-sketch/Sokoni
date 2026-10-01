@@ -142,6 +142,36 @@ const src = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
       const r7 = await p7.evaluate(() => { const cv = document.querySelector('#sk-spl .spl-glitter'); return cv ? getComputedStyle(cv).display : 'absent'; }).catch(() => 'err');
       ck('EE7 with "reduce motion" the glitter is not shown', r7 === 'none' || r7 === 'absent', r7);
     } finally { await x7b.close(); }
+
+    /* EE8 — the splash is the FIRST paint (owner 2026-10-01: "home loads first, then splash, then home").
+       An init script watches the DOM from the very first byte: when the first piece of home content (any
+       element inside <body> other than the splash) appears, the splash must ALREADY be attached and opaque.
+       Both engines; a slow-parsing 3,000-line page is exactly where the old DOMContentLoaded mount lost. */
+    for (const [eng, dev] of [['chromium', 'Pixel 5'], ['webkit', 'iPhone 13']]) {
+      const xb = await pw[eng].launch();
+      try {
+        const c8 = await xb.newContext(Object.assign({}, pw.devices[dev], { serviceWorkers: 'block' }));
+        await c8.route('**/*', (r) => (r.request().url().startsWith(BASE) ? r.continue() : r.abort()));
+        await c8.addInitScript(() => {
+          window.__ord = { contentFirstAt: null, splashAtContent: null, splashBg: null };
+          new MutationObserver(function (_, obs) {
+            const body = document.body; if (!body) return;
+            const content = [...body.children].find((e) => e.id !== 'sk-spl' && !/^(SCRIPT|STYLE|LINK|NOSCRIPT|TEMPLATE)$/.test(e.tagName));
+            if (!content) return;
+            const s = document.getElementById('sk-spl');
+            window.__ord.contentFirstAt = content.tagName + (content.id ? '#' + content.id : '');
+            window.__ord.splashAtContent = !!s;
+            window.__ord.splashBg = s ? getComputedStyle(s).backgroundColor : null;
+            obs.disconnect();
+          }).observe(document, { childList: true, subtree: true });
+        });
+        const p8 = await c8.newPage();
+        await p8.goto(BASE + '/index.html', { waitUntil: 'domcontentloaded' }).catch(() => null);
+        const o8 = await p8.evaluate(() => window.__ord).catch(() => null);
+        ck('EE8 [' + eng + '] the splash is attached and opaque BEFORE the first home content exists (no home → splash → home flash)',
+          !!o8 && o8.splashAtContent === true && /rgb\(5, 5, 5\)/.test(String(o8.splashBg)), o8);
+      } finally { await xb.close(); }
+    }
   } catch (e) {
     ck('EE0 harness', false, e.message);
   } finally {

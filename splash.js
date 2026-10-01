@@ -239,8 +239,10 @@
     '#sk-spl{position:fixed;inset:0;z-index:2147483647;box-sizing:border-box;' +
     'width:100vw;height:100vh;height:100dvh;min-height:100svh;' +
     'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);' +
-    'background-color:#050505;' +
+    /* shorthand FIRST, solid colour after — the shorthand resets background-color, and the colour must survive as
+       the opaque floor under the gradient (the splash is the first paint; nothing may show through it). */
     'background:radial-gradient(ellipse 90% 80% at 50% 44%,#0e1a06 0%,#0a0a0a 58%,#050505 100%);' +
+    'background-color:#050505;' +
     'display:flex;align-items:center;justify-content:center;' +
     'will-change:opacity,transform}' +
     '#sk-spl.spl-out{opacity:0!important;transform:scale(1.04)!important;' +
@@ -407,14 +409,18 @@
     } catch (_) { /* decoration only */ }
   }
 
-  /* ── Mount (body may not exist yet when run from <head>) ──────────────── */
+  /* ── Mount IMMEDIATELY — the splash must be the FIRST paint (owner, 2026-10-01) ──────────
+     Run from <head> (index.html), there is no <body> yet. Waiting for DOMContentLoaded let the
+     browser paint the home page progressively first: home → splash → home. The overlay is
+     position:fixed, full-viewport and opaque, so it does not need <body> as its parent — it is
+     appended to <html> now and the page parses and paints UNDER it. On pages that load this
+     right after <body> opens, body exists and it is inserted first, as before. */
   function _mount() {
-    var t = document.body || document.documentElement;
-    t.insertBefore(_el, t.firstChild);
+    if (document.body) document.body.insertBefore(_el, document.body.firstChild);
+    else document.documentElement.appendChild(_el);
     _glitter();
   }
-  if (document.body) { _mount(); }
-  else { document.addEventListener('DOMContentLoaded', _mount, { once: true }); }
+  _mount();
 
   /* ── Dismiss ──────────────────────────────────────────────────────────── */
   var _MIN   = 1900;
