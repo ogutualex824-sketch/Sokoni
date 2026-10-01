@@ -1,3 +1,9 @@
+## [2026-10-01] — Checkout donations are pledges, never minted as completed (functions:impactCheckoutDonate, NOT deployed)
+
+**Why (PROVEN live: impactcheckoutdonate-00007-seh serves 100%, impact.js identical to this tree; found by sokoni-aa):** any signed-in user could record a 'completed' foundation donation, an impactLedger credit (+ impactBalance, which feeds impactDisbursements) and higher foundationStats for any amount 1–100,000, with no order or payment check.
+**Change:** the order must exist and belong to the caller; one pledge per order (foundationDonations/CHK_<orderId>, created once); status 'pledged'; no ledger entry, no balance, no stats. Completing a pledge requires a server-verified payment that actually includes it — owned by the payment authority, not done here. `scripts/test-impact-checkout-pledge.js` 7/0 incl. a counterproof that the original code mints for a stranger.
+**Open (owner / payment authority):** checkout.html tells the buyer the donation "will be added to your order total", but the server-quoted total overrides the browser total, so whether the donation is ever charged is UNPROVEN — pledges may never be paid. **Deploy:** add `functions:impactCheckoutDonate` to the security set.
+
 ## [2026-10-01] — Seller payout readiness requires an admin approval (functions, NOT deployed)
 
 **Owner decision (2026-10-01):** a seller payout may be marked ready only after an administrator approves it. Before: `sellerPayoutReady` was set automatically by captureProofOfDelivery (live 00011-cig, dispatch.js identical to this tree) and by client "I received it" writes (packageRequests owner rule allows it; deliveries sender rule does not block it). Nothing reads the flag yet, so no money moved on it.

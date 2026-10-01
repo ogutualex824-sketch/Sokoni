@@ -239,37 +239,43 @@ exports.impactCheckoutDonate = onCall(
     if (amt < 1)  return { ok: true, skipped: true }; /* no-op if zero */
     if (amt > 100000) throw new HttpsError('invalid-argument', 'Donation too large for checkout add-on.');
 
-    const donId    = _txnId('CHK');
+    /* ── A CHECKOUT DONATION IS A PLEDGE UNTIL MONEY IS CONFIRMED (2026-10-01) ──────────────────
+       This wrote status 'completed', credited the Foundation ledger and bumped foundationStats for
+       ANY amount 1–100,000 the caller named, without looking at the order or its payment — any
+       signed-in user could mint "completed" donations (and ledger balance that feeds
+       impactDisbursements) with no money behind them. That breaks the server-confirmed-payment rule.
+       Now: the order must exist and belong to the caller; ONE pledge per order (doc id CHK_<orderId>,
+       created once); status 'pledged'; NO ledger entry, NO stats. A pledge becomes a completed
+       donation only when a server-verified payment that actually includes it is recorded — that
+       completion step belongs to the payment authority and is not performed here. */
+    const oid = String(orderId || '');
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(oid)) throw new HttpsError('invalid-argument', 'A valid orderId is required.');
+    const ordSnap = await fdb().collection('orders').doc(oid).get();
+    if (!ordSnap.exists) throw new HttpsError('not-found', 'Order not found.');
+    const ord = ordSnap.data() || {};
+    const buyer = ord.buyerUid || ord.uid || ord.userId || ord.customerUid || null;
+    if (buyer !== uid) throw new HttpsError('permission-denied', 'This is not your order.');
+
+    const donId    = 'CHK_' + oid;
     const dateStr  = new Date().toLocaleDateString('en-KE', { year:'numeric', month:'long', day:'numeric' });
     const verifyCode = crypto.randomBytes(8).toString('hex').toUpperCase();
+    const ref = fdb().collection('foundationDonations').doc(donId);
 
+    let existing = null;
     await fdb().runTransaction(async txn => {
-      /* Write donation record */
-      txn.set(fdb().collection('foundationDonations').doc(donId), {
+      const cur = await txn.get(ref);
+      if (cur.exists) { existing = cur.data(); return; }   /* one pledge per order — a retry is a no-op */
+      txn.create(ref, {
         id: donId, uid, checkoutId: donId, verifyCode,
-        receiptNo: _txnId('RCP'),
         amount: amt, destination: _san(destination, 60) || 'General Foundation',
         method: type === 'roundup' ? 'Round-Up' : 'Checkout Add-On',
-        frequency: 'one-time', status: 'completed', donorName: 'SOKONI User',
-        anonymous: false, orderId: orderId || null, dateStr,
-        createdAt: _now(), updatedAt: _now(), completedAt: _now(),
+        frequency: 'one-time', status: 'pledged', donorName: 'SOKONI User',
+        anonymous: false, orderId: oid, dateStr,
+        createdAt: _now(), updatedAt: _now(),
       });
-
-      /* Write to Foundation ledger */
-      await _writeLedgerEntry(txn, {
-        type:        type === 'roundup' ? 'roundup' : 'marketplace_contribution',
-        credit:      amt, debit: 0, uid,
-        orderId:     orderId || null,
-        description: type === 'roundup' ? `Round-up donation from order ${orderId}` : `Checkout donation — ${destination}`,
-      });
-
-      /* Update stats */
-      txn.set(fdb().collection('foundationStats').doc('current'), {
-        totalDonations: _incr(amt), totalDonors: _incr(1), updatedAt: _now(),
-      }, { merge: true });
     });
 
-    return { ok: true, donationId: donId };
+    return { ok: true, donationId: donId, status: existing ? existing.status : 'pledged', alreadyPledged: !!existing };
   }
 );
 
