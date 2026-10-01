@@ -1145,6 +1145,8 @@
           productId: String(l.productId),
           qty: Number(l.qty) || 0,
           unitPrice: Number(l.price) || 0,
+          /* the server resolves this tier's price from products/{id}; unitPrice must match within 1 KES */
+          priceTier: l.priceTier || 'online',
           name: l.name || '',
         };
       }),
@@ -1226,6 +1228,27 @@
     return (isFinite(q) && q > 0) ? q : 0;
   }
 
+  /* ── Price tiers (owner, 2026-10-01) ──────────────────────────────────
+     The seller sets up to three prices at upload: ONLINE (`price`), SHOP (`shopPrice`), WHOLESALE
+     (`wholesalePrice`). The cashier picks a CONFIGURED tier per line. This client copy mirrors the server rule
+     (functions/shared/pos-price-tier.js) ONLY so the screen never offers a tier the server would refuse: the
+     server re-resolves every price from products/{id} and is the authority. An absent or out-of-order tier is
+     NOT AVAILABLE — never 0, never "free", never silently another tier. */
+  var TIER_MAX = 1000000000;
+  var TIER_LABEL = { online: 'Online', shop: 'Shop', wholesale: 'Wholesale' };
+  var TIER_SHORT = { online: 'ONL', shop: 'SHOP', wholesale: 'WHOLE' };
+  function _tierNum(v) { return (typeof v === 'number' && isFinite(v) && v > 0 && v <= TIER_MAX) ? v : null; }
+  function tierPrices(product) {
+    var p = product || {};
+    var online = Number(p.salePrice || p.price || 0);
+    if (!isFinite(online) || online < 0) online = 0;
+    var shop = _tierNum(p.shopPrice), wholesale = _tierNum(p.wholesalePrice);
+    if (shop !== null && !(shop <= online)) shop = null;
+    if (wholesale !== null && !(wholesale < online)) wholesale = null;
+    if (wholesale !== null && shop !== null && !(wholesale <= shop)) { shop = null; wholesale = null; }
+    return { online: online, shop: shop, wholesale: wholesale };
+  }
+
   /** Add `qty` of a product, merging into an existing line. Refuses another shop's product. */
   function addToCart(cart, product, qty, scope) {
     if (scope) assertInScope(scope, product);
@@ -1235,15 +1258,31 @@
     var hit = null;
     for (var i = 0; i < out.length; i++) if (out[i].productId === String(product.id)) { hit = out[i]; break; }
     if (hit) { hit.qty += q; return out; }
+    var tiers = tierPrices(product);
     out.push({
       productId: String(product.id),
       name: product.name || '',
-      price: (typeof product.price === 'number') ? product.price : 0,
+      /* the line starts on ONLINE (the price it always used); `tiers` is for the on-screen picker only */
+      price: tiers.online,
+      priceTier: 'online',
+      tiers: tiers,
       qty: q,
       /* carried for the on-screen stock warning only — the server re-reads canonical stock */
       knownStock: (typeof product.stock === 'number') ? product.stock : null,
     });
     return out;
+  }
+
+  /** Switch a line to another CONFIGURED tier. An unknown or unavailable tier throws — it is never priced. */
+  function setLineTier(cart, productId, tier) {
+    var t = String(tier || '');
+    if (!TIER_LABEL[t]) throw new Error('merchant data: "' + t + '" is not a price tier');
+    return (cart || []).map(function (l) {
+      if (l.productId !== String(productId)) return Object.assign({}, l);
+      var price = l.tiers ? l.tiers[t] : (t === 'online' ? l.price : null);
+      if (price === null || price === undefined) throw new Error('merchant data: this product has no ' + TIER_LABEL[t].toLowerCase() + ' price');
+      return Object.assign({}, l, { priceTier: t, price: price });
+    });
   }
 
   /** Set an exact quantity. Zero (or less) removes the line — no ghost zero-qty lines. */
@@ -1392,6 +1431,10 @@
     previewSale: previewSale,
     addToCart: addToCart,
     setLineQty: setLineQty,
+    setLineTier: setLineTier,
+    tierPrices: tierPrices,
+    TIER_LABEL: TIER_LABEL,
+    TIER_SHORT: TIER_SHORT,
     removeLine: removeLine,
     cartWarnings: cartWarnings,
     searchProducts: searchProducts,

@@ -140,6 +140,10 @@
     /* align-items:flex-start, not center: the stepper anchors to the TOP of the
        row so a two-line product name does not drag it downward. */
     '.msl-line{display:flex;align-items:flex-start;gap:11px;padding:11px 0;border-bottom:1px solid var(--line)}',
+    /* price-tier chips (owner, 2026-10-01): compact, 32px tap target, selected = outline + ✓ (not colour alone) */
+    '.msl-tiers{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}',
+    '.msl-tier{min-height:32px;padding:4px 9px;border-radius:8px;border:1px solid var(--line);background:transparent;color:inherit;font:inherit;font-size:12px;font-weight:700;cursor:pointer}',
+    '.msl-tier.on{border:2px solid currentColor;font-weight:800}',
     '.msl-line:last-child{border-bottom:none}',
     '.msl-line .info{flex:1;min-width:0}',
     '.msl-line .nm{font-size:13.5px;font-weight:700;overflow-wrap:anywhere}',
@@ -634,12 +638,26 @@
         '<div class="msl-sh-b">' +
           S.cart.map(function (l, i) {
             var w = warnBy[l.productId];
+            /* PRICE TIER (owner, 2026-10-01): one button per tier the seller CONFIGURED for this product. The
+               server re-resolves the chosen tier's price from products/{id}; the client only asks. The selected
+               tier is announced by aria-pressed and a ✓, never by colour alone. */
+            var tier = l.priceTier || 'online';
+            var tiers = l.tiers || { online: l.price };
+            var chips = ['online', 'shop', 'wholesale'].filter(function (t) { return tiers[t] !== null && tiers[t] !== undefined; });
+            var tierRow = chips.length > 1 ? '<div class="msl-tiers" role="group" aria-label="Price for ' + esc(l.name || 'this product') + '">' +
+              chips.map(function (t) {
+                var on = t === tier, label = md.TIER_LABEL[t];
+                return '<button type="button" class="msl-tier' + (on ? ' on' : '') + '" data-act="tier" data-t="' + t + '" data-i="' + i + '"' +
+                  ' aria-pressed="' + (on ? 'true' : 'false') + '" aria-label="Use ' + label.toLowerCase() + ' price — ' + esc(md.formatKES(tiers[t])) + '">' +
+                  (on ? '✓ ' : '') + md.TIER_SHORT[t] + ' ' + esc(md.formatKES(tiers[t])) + '</button>';
+              }).join('') + '</div>' : '';
             return '<div class="msl-line">' +
               '<div class="info"><div class="nm">' + esc(l.name || 'Product') + '</div>' +
                 '<div class="sub' + (w ? ' warn' : '') + '">' +
                   (w ? 'Only ' + w.available + ' in stock' :
+                       (tier !== 'online' ? esc(md.TIER_LABEL[tier]) + ' price · ' : '') +
                        esc(md.formatKES(l.price)) + ' each · ' + esc(md.formatKES(l.price * l.qty))) +
-                '</div></div>' +
+                '</div>' + tierRow + '</div>' +
               /* + ON TOP, − at the bottom. Only the ORDER and the styling change:
                  the data-act / data-i attributes are untouched, so inc, dec and the
                  typed-quantity path all run exactly the code they ran before. */
@@ -1444,6 +1462,11 @@
                                     paint(); return; }
       if (act === 'charge')       { S.startedAt = Date.now(); openPay(); return; }
       if (act === 'clear-cart')   { S.cart = []; S.sheet = null; clearToken(); paint(); return; }
+      if (act === 'tier')         { var lt = S.cart[i]; if (lt) {
+                                    try { S.cart = md.setLineTier(S.cart, lt.productId, el.getAttribute('data-t')); }
+                                    catch (e) { /* an unavailable tier is never priced: the line keeps its tier */ }
+                                    /* a changed price invalidates the pre-charge check and the sale key */
+                                    S.preflight = null; clearToken(); paint(); } return; }
       if (act === 'inc')          { var l1 = S.cart[i]; if (l1) { S.cart = md.setLineQty(S.cart, l1.productId, l1.qty + 1); paint(); } return; }
       if (act === 'dec')          { var l2 = S.cart[i]; if (l2) { S.cart = md.setLineQty(S.cart, l2.productId, l2.qty - 1);
                                     if (!S.cart.length) S.sheet = null; paint(); } return; }
