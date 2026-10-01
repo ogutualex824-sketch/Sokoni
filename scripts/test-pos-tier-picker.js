@@ -26,7 +26,7 @@ let cart = md.addToCart([], A, 2);
 ck('P-1', typeof md.setLineTier === 'function' && cart[0].priceTier === 'online' && cart[0].price === 150, 'a new line starts on ONLINE at the online price', cart[0]);
 ck('P-2', cart[0].tiers && cart[0].tiers.shop === 140 && cart[0].tiers.wholesale === 125, 'the line knows the product\'s configured tiers', cart[0].tiers);
 let c2; try { c2 = md.setLineTier(cart, 'A', 'shop'); } catch (e) { c2 = null; }
-ck('P-3', c2 && c2[0].priceTier === 'shop' && c2[0].price === 140 && c2[0].qty === 2, 'cashier taps SHOP → KES 140, qty kept', c2 && c2[0]);
+ck('P-3', c2 && c2[0].priceTier === 'shop' && c2[0].price === 140 && c2[0].qty === 2, 'cashier taps SHELF → KES 140, qty kept', c2 && c2[0]);
 let c3; try { c3 = md.setLineTier(c2, 'A', 'wholesale'); } catch (e) { c3 = null; }
 ck('P-4', c3 && c3[0].priceTier === 'wholesale' && c3[0].price === 125, 'cashier taps WHOLESALE → KES 125', c3 && c3[0]);
 let threw = false; try { md.setLineTier(md.addToCart([], B, 1), 'B', 'shop'); } catch (e) { threw = true; }
@@ -53,6 +53,7 @@ ck('S-2', sale && sale.subtotal === 280 && sale.grandTotal === 280, 'totals foll
 const s0 = md.buildSale({ scope, cart: md.addToCart([], C, 1), payments: [{ method: 'cash', amount: 100 }], saleToken: 't2' });
 ck('S-3', s0.items[0].priceTier === 'online', 'an untouched line sells as ONLINE (unchanged behaviour)', s0.items[0]);
 
+ck('W-1', md.TIER_LABEL.shop === 'Shelf' && md.TIER_SHORT.shop === 'SHELF' && md.TIER_SHORT.online === 'ONL' && md.TIER_SHORT.wholesale === 'WHOLE', 'owner wording: the in-store tier reads SHELF / Shelf price (buttons ONL / SHELF / WHOLE)', { label: md.TIER_LABEL, short: md.TIER_SHORT });
 /* the Sell screen: chips only for configured tiers, accessible names, selected state not colour-only */
 const sell = read('sokoni-merchant-sell.js');
 ck('U-1', /data-act="tier"/.test(sell) && /aria-pressed="/.test(sell) && /aria-label="Use ' \+ label\.toLowerCase\(\) \+ ' price — '/.test(sell), 'tier buttons carry an accessible name ("Use shop price — KES 140") and aria-pressed');
