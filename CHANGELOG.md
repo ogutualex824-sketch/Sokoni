@@ -1,3 +1,266 @@
+## [2026-10-01] - community C3: the MODERATION QUEUE on the one report authority (server) — NOT deployed
+
+**NOT DEPLOYED — DEPLOYMENT QUEUED — MACHINE BELOW 512 MB MEMORY FLOOR.** Built on C2 (`4c1afb4`, also not deployed).
+
+The queue IS the `reports` collection, decided through the existing trust-safety callables. There is no
+`moderationItems`, no second moderation database, no second state machine and no adminOsDispatch change. AdminOS
+and Super Admin call the `ts*` callables directly.
+
+### Authority reused (spec §1)
+- **Report record:** `reports/{uid}_{type}_{id}` (C2).
+- **Callables:** tsGetReports, tsReviewReport and tsGetReportReasons are extended or reused. **tsGetReportCase is the only new
+  callable.**
+- **State vocabulary:** C2's `REPORT_STATE`.
+- **Listing take-down:** C2's path, `products.isVisible:false` plus `moderationHold`.
+- **Audit:** `trustSafetyAudit`. It has no client rule, so it is server-only and append-only.
+- **Notifications:** notify.js (`system_update`), unchanged.
+
+### States (stored status is unchanged; the queue status is DERIVED; one new field, `assignedTo`)
+| stored status (+ assignedTo) | queueStatus | seller sees (sellerStatus) | reporter is told |
+|---|---|---|---|
+| pending, unassigned | open | report_received | — |
+| pending, assigned | under_review | under_review | — |
+| escalated | escalated | under_review (escalation is internal) | — |
+| changes_requested | needs_information | changes_requested | — |
+| actioned | upheld | listing_action_taken (taken down) / report_upheld | resolved |
+| dismissed | dismissed | report_dismissed | resolved |
+| archived / removed | archived / removed | closed / not shown | — |
+
+**Transitions:** C2's `REPORT_TRANSITIONS`, plus `reopen` → pending, allowed from actioned, dismissed or archived.
+Reopen needs an internal note of at least 10 characters and is audited. A decided report changes only through
+reopen; claim, decide and re-decide are refused (failed-precondition).
+
+**Assignment (claim / unclaim / takeover)** never changes `status`:
+- It is allowed only while the report is undecided.
+- Claiming is idempotent: claiming a report you already hold is a no-op with no audit row.
+- A second moderator cannot claim, release or decide a report someone else holds.
+- A super admin may take over (`claim` + `takeover:true`) or release.
+- Escalation clears the lock and records `escalation {by, byRole, at, note, previousReviewer, nextAction:'senior_review'}`.
+
+### API
+**`tsGetReports` (admin)** — the queue:
+- **Filters:**
+  - status: `queueStatus` (open, under_review, escalated, needs_information, upheld, dismissed, archived, removed, active), `state` (C2), `status` (stored) or `escalated:true`;
+  - `reason`, `seller`, `shop`, `product` and `assignee` (`'me'` or a uid);
+  - `from` / `to` dates.
+- **Paging:** `limit` (≤200), with `after` as a document-id cursor.
+- **Options:** `facts:true` adds raw counts (no score); `sort` is newest, oldest, severity or reports; `groupBy:'listing'`.
+- **Returns** `{reports, page:{limit, scanned, hasMore, nextCursor, sort}, groups?}`. Each row adds `ref`,
+  `queueStatus`, `target`, `revision`, `lastActionAtIso` and `facts {severity, reportsOnListing, openOnListing,
+  upheldOnListing, sellerUpheld, listingVisible, listingHeld}`.
+- **Unknown values:** an unknown count is `null`, never 0. Unknown filter values, field names with `/` and bad cursors are
+  refused with invalid-argument.
+
+**`tsGetReports {scope:'mine'}` (seller):**
+- Adds `sellerStatus` and `sellerResponse {supported:false, route:'support', href:'support.html'}`.
+- Now WITHHOLDS the raw `status` and `severity`.
+- Never sent: the reporter, doc id, detail, evidence, internalNote, reviewer or escalation.
+
+**`tsGetReportCase {reportId}` (admin, NEW)** returns:
+- `report`: the full report, including the reporter. Only admins and super admins can call this.
+- `target {type, supported, enforcement}`.
+- `product`: name, https images ≤4, category, price, status, isVisible, sellerUid, shopId, and moderationHold.
+- `shop`: name only.
+- `reports`: every report on the same target, each kept as its own record.
+- `history`: report_filed plus the trustSafetyAudit rows for this report.
+- `listingHistory`.
+- `actions`: what THIS moderator may do to THIS report now.
+- `openOnListing`, `listingHeldByThisReport` and `sellerResponse`.
+
+**`tsReviewReport`** — actions: approve/uphold, dismiss/reject, escalate, request_changes, archive, remove, reopen, claim and unclaim.
+- **Fields:**
+  - `resolution` — the outcome note the seller sees once the report is decided;
+  - `internalNote` — moderators only;
+  - `hideProduct`, `applyToListing`, `restoreListing`, `requestId` (8–64 characters, `[A-Za-z0-9_-]`), `expectedRevision` and `takeover`.
+- **Everything runs in ONE transaction**, with all reads before writes:
+  - target-type check;
+  - requestId replay, which returns the recorded outcome and writes nothing;
+  - expectedRevision check (a stale view is refused);
+  - lock check;
+  - transition check;
+  - listing group, for `applyToListing` on uphold or dismiss: every OPEN report on the same target is resolved, each with its own update and its own audit row, all sharing a `correlationId`, marked `decidedWith`;
+  - canonical enforcement;
+  - one audit row per report, with a deterministic id `rpt_<sha16(reportId)>_r<revision>` written by `create()`.
+- **Enforcement values:**
+  - `listing_hidden`: sets `isVisible:false` plus `moderationHold{reportId, reason, by, at, correlationId, previousIsVisible}`;
+  - `already_hidden`: the hold is never rewritten, so there is no second hide;
+  - `product_missing`;
+  - `listing_restored`: only on a dismiss with `restoreListing`, only by the report (or group) that owns the hold, and only to the recorded prior visibility. Otherwise it is refused. It deletes the hold and records `moderationReleased`;
+  - `none`.
+- **Reopen never un-hides.** A new report from another user stays a new, separate report.
+- **Client fields are never trusted:** status, decision, sellerId, shopId, reporterId, targetId, hidden, resolved,
+  priority and actor are all resolved server-side (test SB6).
+
+**Typed targets (`MODERATION_TARGETS`):**
+- Enabled: product (enforcement: listing visibility), user, business, message, review. These are decided and recorded; only product has enforcement.
+- Registered DISABLED: comment, media, story, foundation_content. Every moderation operation refuses a report on a disabled or unknown type (SB5).
+- Foundation and media content can be enabled later as registry entries. The queue does not need rewriting.
+
+**Audit row (§24):**
+- action, decision, reportId, reportRef, entityType/entityId, targetType/targetId;
+- from, fromState, fromQueue, result, resultState;
+- productHidden, enforcement, resolution, internalNote, assignedTo;
+- performedBy, actorRole, revision, correlationId, requestId, groupSize, primary, decidedWith, createdAt.
+- It carries no `reportedBy` and no reporter text. The report id is the only reporter-derived value, in an admin-only, server-only store.
+
+**Notifications (§25):**
+- They are sent after commit, through `notify()` with type `system_update` and deterministic dedupe keys.
+- The seller gets one message per listing decision (upheld, dismissed or changes requested), with no reporter identity.
+- Each reporter gets "reviewed, now resolved" only, with no admin detail.
+- The result is recorded on the report as `notifications.{seller,reporter} = {status: recorded|deduped|failed, inapp, delivery, key, …}`.
+- "failed" is recorded as failed. Nothing is claimed sent that notify() did not record.
+- Text is plain: markup characters are stripped, because notify() may embed `body` in an email.
+
+### Discovery enforcement (§17) — audited every surface; server projections fixed here
+- **FIXED (this entry):**
+  - algolia-sync.js and typesense-sync.js: a `products` doc with `isVisible:false` is skipped. Hiding it deletes it
+    from the index; showing it again re-adds it. Algolia now does a full upsert when a doc leaves a skip state, because a
+    partial diff of untouched fields was a no-op.
+  - Before this, both indexers skipped on status only, and Algolia's secured-key filter `NOT isVisible:false` matched
+    nothing because the field is never indexed.
+- **Already honour it:**
+  - /api/catalogue (`catalogue`, index.js:7062);
+  - createCheckoutSession and createPaymentIntent (product_order), via availability-enforce.js:33.
+- **Server surfaces still ignoring it (follow-up slices, each with its own lineage gate):**
+  - search-service.js query filters (searchQuery and siblings) and typesense-secured-keys.js / search-admin.js `status` filters. The index fix above removes the records they would return.
+  - getMinishopPublic (minishop.js:212).
+  - sokoniAPIGateway: GET /products and search (status only); POST /orders never reads the product.
+  - sokoniChat KASS tools (search_marketplace, add_to_cart, compare_products).
+  - generateTrending → `trending/{hub}` (no hosting reader found).
+  - createClickAndCollect (pos-marketplace-sync.js:63).
+  - Not live: seoGetProductMeta, getWholesaleCatalog.
+- **Client-only follow-ups (no per-client filter added):**
+  - store.html (unfiltered Firestore query);
+  - product.html direct link (renders, marked Unavailable);
+  - product.html "You may like" (unfiltered `sellerProducts` cache from script.js:4713);
+  - search.html Algolia/Typesense hit paths;
+  - the Home "Sellers Near You" and suggestion names;
+  - SokoniDB raw loaders.
+- **PROPOSAL — RULES (not edited; isolated, needs its own certification).** Under the served ruleset, a SELLER can
+  reverse a take-down. `noAdminFields()` (served-rules.txt:67-79) protects neither `isVisible` nor `moderationHold`,
+  and sokoni-availability.js:179 writes `isVisible: !!available`. Proposed, for the products owner-update branch:
+  ```
+  && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['moderationHold','moderationReleased'])
+  && !(resource.data.get('moderationHold', null) != null
+       && request.resource.data.get('isVisible', true) != false)
+  ```
+  Also proposed: served `reports` has `write: if isAdmin()`, so an admin CLIENT can bypass the state machine and
+  audit. Propose `write: if false`; every write is a callable. **Until the products rule ships, a take-down is
+  durable only against honest clients.**
+- **Index proposal (not added):** on `reports`, `(status ASC, createdAt DESC)`, for global newest-first across pages.
+  Measured 2026-10-01: 416 live composite indexes, 0 on `reports`. Not required for correctness, because the queue
+  uses equality filters, a doc-id cursor, and server post-filters.
+
+### Lineage gates
+- **trust-safety.js:** byte-identical to the serving `tsreportcontent-00012-biz`, `tsgetreports-00012-new` and
+  `tsreviewreport-00012-tas` revisions (the C2 gate).
+- **Indexers:** `algoliaSync_products_update` (00025-dun), `algoliaSync_products_create` (00026-daq),
+  `ts_products_onUpdate` (00019-xok) and `ts_products_onCreate` (00021-tuc) all serve 100% latest (status.traffic). All
+  four source archives are the SAME 09-09 zip (sha 6a3128…), which is also the C2 archive.
+  - `typesense-sync.js`, `algolia-queue.js` and `typesense-queue.js` are byte-identical to this tree.
+  - `algolia-sync.js` serving = this tree + one `landlordProfiles` block. The C3 hunk applies to the serving copy
+    unchanged, and E1–E3 pass on it (`SERVING_ALGOLIA_SYNC=…`). The unpatched serving copy FAILS E1/E2.
+- **notify.js:** used, not changed. It is not in the C2 archive's lineage (it differs from 09-09 by pos_commission types
+  and the orderAdvance guard). `system_update` exists in both.
+
+### INCIDENT — a test harness may have written to the live project (OPEN, unverified)
+While building this slice, `scripts/test-report-authority.js` was run twice against an interim trust-safety.js that
+called `require('./notify')` unguarded. notify.js initialises the REAL firebase-admin. Application-default credentials
+exist on this machine, and the gcloud project is `sokoni-aeb26`.
+- **What may have been written:** the offline reconstruction (a recorder stub, with firebase-admin blocked) shows up to
+  5 `notify()` calls per run, to fake uids `sellerA`, `buyer1` and `buyer2`, type `system_update`. Each would `create`
+  `notifyLog/{key}` and `add` a `notifications` doc. Keys:
+  - `moderation_reporter_1f1e9c1e0e66c162_r1`;
+  - `moderation_reporter_22da1f511c9bdce5_r2`;
+  - `moderation_reporter_63fb7836952764ae_r2`;
+  - `moderation_seller_92237a12e542d37c_<random>` (×2 per run).
+  The second run's reporter keys would dedupe.
+- **Verification was attempted and denied** (auto-mode classifier, "[Production Reads]"). Whether anything landed is UNKNOWN.
+- **Owner action:** read `notifyLog` / `notifications` for those uids, and delete any rows found (an owner-authorised write).
+- **Prevention, in this commit:**
+  - `_getNotify()` FAILS CLOSED outside a Functions runtime (no `K_SERVICE` / `FUNCTION_TARGET` / `FUNCTIONS_EMULATOR`);
+  - tests use `exports._setNotifier`;
+  - the C3 suites TRIPWIRE any require of the real `firebase-admin` or `./notify`.
+
+### Files
+- functions/trust-safety.js
+- functions/index.js (export `tsGetReportCase`)
+- functions/algolia-sync.js
+- functions/typesense-sync.js
+- scripts/test-moderation-queue.js (new)
+
+### Database
+`reports` gains: `assignedTo`, `assignedAt`, `assignedRole`, `revision`, `lastActionAt`, `lastActionBy`, `lastRequest`,
+`internalNote`, `escalation`, `reopenedBy`, `reopenedAt`, `reopenCount`, `decidedWith` and `notifications`.
+
+`products.moderationHold` gains `correlationId` and `previousIsVisible`. There is a new `products.moderationReleased`.
+
+`trustSafetyAudit` ids are deterministic for C3 rows. No migration: legacy docs read as revision 0 and unassigned.
+Indexes: none.
+
+### Security
+Every action is checked server-side for:
+- admin or super admin claims;
+- target existence and type;
+- a valid transition;
+- the lock;
+- the seller scope on the server-captured `context.sellerUid`;
+- reporter privacy;
+- idempotency.
+
+Reports stay `create: false`. Rules are unchanged; see the proposals above.
+
+### Breaking changes
+- Seller payload: `status` and `severity` are removed. The C2 UI never read them.
+- A reopened or decided report can no longer be claimed.
+
+### Tests
+- **test-moderation-queue:** 40/0.
+  - Q1–Q6, R1–R3, D1–D10, E1–E3, P1–P5, A1–A2, SB1–SB10.
+  - `--failure-injection` 8/8 caught, each by its named test, on temp copies; the tree hash is unchanged.
+
+  | fault injected | named test that failed |
+  |---|---|
+  | remove AdminOS auth | SB1 |
+  | trust client status | SB6 |
+  | remove reporter privacy | SB3 |
+  | bypass product ownership | SB9 |
+  | bypass duplicate protection | SB7 |
+  | bypass canonical hide | D1 |
+  | remove audit write | A1 |
+  | allow seller self-moderation | SB4 |
+
+- **Regression:** test-report-authority 16/0.
+- **Gates** on HEAD: gate-functions-require-closure PASS, predeploy-syntax-gate PASS (1885 JS / 440 inline),
+  verify-commission-single-source PASS.
+
+### Deploy (after review, after the memory floor clears; one at a time, by name; package-level lineage diff first)
+1. tsGetReportReasons (NEW, C2)
+2. tsGetReportCase (NEW, C3)
+3. tsReportContent (C2)
+4. tsGetReports
+5. tsReviewReport
+6. ts_products_onUpdate
+7. ts_products_onCreate
+8. algoliaSync_products_update
+9. algoliaSync_products_create
+
+Then hosting (branch hosting/community-reports-on-4b58c94).
+
+- **Indexer back-fill:** products that are already hidden stay in the indexes until their next update, or a reindex
+  (`SokoniAOS.reindex` / processAlgoliaQueue).
+- **Not redeployed:** notifySend and the other notify.js users.
+
+**Dependency graph:**
+```
+hosting (sokoni-trust-queues.js, AdminOS, Super Admin, merchant-v2)
+  → callables tsGetReports / tsGetReportCase / tsReviewReport / tsGetReportReasons
+      → trust-safety.js → reports, products, shops, trustSafetyAudit
+      → notify.js (runtime only)
+products write → ts_products_* / algoliaSync_products_* → typesense-queue / algolia-queue
+  → processTypesenseQueue / processAlgoliaQueue (unchanged)
+```
+
 ## [2026-10-01] - community C2: one report authority (server) — reason catalogue, one report per user per listing, seller scope, shared state machine — NOT deployed
 
 The ONE content-report authority is `reports` + functions/trust-safety.js. Before: tsReportContent accepted any reason
