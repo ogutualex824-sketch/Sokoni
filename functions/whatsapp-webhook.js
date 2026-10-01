@@ -219,12 +219,26 @@ async function handleRequest (req, deps) {
   let recorded = { written: 0, duplicate: 0, failed: 0 };
   if (n.events.length && d.store) recorded = await recordEvents(n.events, d.store);
 
+  /* Delivery state for messages SOKONI sent (whatsapp-sender.js → whatsappSends/{wamid}): advance the ONE
+     send record — sent → delivered → read, or failed — never backwards (Meta retries and reorders). A status
+     for a message that is not ours is ignored. No message content is involved at any point. */
+  const advanced = { updated: 0, ignored: 0, failed: 0 };
+  if (d.sends) {
+    for (const ev of n.events) {
+      if (ev.kind !== 'status' || !ev.wamid || !ev.status) continue;
+      try {
+        const r = await d.sends.advance(ev.wamid, ev.status, ev.errorCode ? { errorCode: ev.errorCode } : null);
+        if (r && r.updated) advanced.updated++; else advanced.ignored++;
+      } catch (_) { advanced.failed++; }
+    }
+  }
+
   /* 200 EVENT_RECEIVED even with nothing to record. A non-200 makes Cloud API
      retry the same batch, and a batch we understood but had no rows for is not
      a failure. A storage failure is reported in the result and logged; it is
      deliberately NOT a non-200, because retrying will not fix a validation
      problem and would loop for ever. */
-  return { status: 200, body: 'EVENT_RECEIVED', reason: 'ok', events: n.events.length, recorded };
+  return { status: 200, body: 'EVENT_RECEIVED', reason: 'ok', events: n.events.length, recorded, advanced };
 }
 
 function _header (req, name) {
@@ -309,6 +323,7 @@ function buildFunction () {
           verifyToken: VERIFY.value(),
           appSecret:   APPSEC.value(),
           store:       firestoreStore(),
+          sends:       require('./whatsapp-sender').firestoreSends(),
         });
       } catch (e) {
         /* A crash must not read as an accepted event. 500 makes Cloud API
