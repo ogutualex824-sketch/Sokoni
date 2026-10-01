@@ -1,3 +1,131 @@
+## [2026-10-01] - community C3: the MODERATION QUEUE (hosting) — AdminOS Moderation section, Super Admin Moderation, seller status — NOT deployed
+
+**NOT DEPLOYED — DEPLOYMENT QUEUED — MACHINE BELOW 512 MB MEMORY FLOOR.** The functions half must ship FIRST:
+branch feat/community-reports-fn-on-7091029, CHANGELOG entry "community C3 (server)". That entry has the full
+contract: states, API, audit, notifications, discovery audit, the rules/index proposals, and the OPEN notify.js
+harness incident.
+
+**The chain:** REPORT (C2 wizard) → MODERATION QUEUE (`reports`, server-filtered) → AdminOS / Super Admin decision
+(tsReviewReport) → canonical enforcement (`products.isVisible` + `moderationHold`, search indexes follow) → SELLER
+STATUS (merchant-v2) → AUDIT (`trustSafetyAudit`).
+
+- **One module, two consoles.** sokoni-trust-queues.js is the moderation workspace that AdminOS and Super Admin
+  both mount, with the shared-module contract `mount(host, { console: 'adminos'|'superadmin', call })`. It holds no
+  status vocabulary, reason list or transition table of its own.
+  - **Views:**
+    - Pending review (C2 `state:'pending'`), Open, Under review, Escalated, Needs information, Upheld, Dismissed,
+      Archived and Removed. Each label is the server's `queueStatus`.
+  - **Filters (server-side):**
+    - reason (the server's list), seller, shop, product, "assigned to me", from/to date, and sort;
+    - group by listing (1 listing + N reports);
+    - "Load more" (the server cursor).
+  - **Rows show:**
+    - ref, listing id, title, seller and shop, reason, status;
+    - filed, last action, reviewer;
+    - raw priority facts (severity, reports on the listing, previously upheld, the seller's upheld count, listing live/hidden).
+    - An unknown fact is "—", never 0.
+  - **The case drawer** (tsGetReportCase) has four sections:
+    - REPORT: reason, details, evidence (https only), filed, status, reporter (admins only), reviewer, target.
+    - LISTING: title, https images, category, price, visibility and hold, state, seller, and shop name. It links to View
+      product, View seller and View history.
+    - ALL REPORTS on the listing: each its own record.
+    - DECISION: current state, by, when, outcome note, internal note, take-down, escalation, notification results,
+      history, the listing's moderation history, and the seller-response hook.
+  - **Actions:**
+    - Only the server's `actions` list for THIS report and THIS moderator is shown:
+      - assignment: take under review, take over, release;
+      - decisions: uphold, uphold + take listing down, request information, dismiss, escalate, archive, remove, reopen.
+    - "Apply to all N open reports on this listing" and "restore the listing on dismiss" are offered only when the
+      server says they apply.
+    - Two notes: a message to the seller (shown once decided) and an internal note (never sent).
+    - A decision is shown only after the server returns.
+    - A network failure retries with the SAME requestId (the server replays). A refusal ends the request and is
+      shown as the server worded it.
+- **AdminOS:**
+  - **New** dedicated section **Moderation**: nav item with an inline onclick and a nav-label span, `panel-moderation`,
+    loader `_loadModeration`, and deep link `admin-os.html#moderation`.
+  - **Changed:** the Fraud & Trust "Reports Queue" modal is replaced. Its button ("Moderation queue") opens the
+    section, so there is one console, not two.
+  - **Changed:** the Fraud & Trust tiles showed `x||0` over a swallowed dashboard failure. They now show "—" when a
+    figure is unknown.
+  - **Unchanged:** no adminOsDispatch op was added; the queue calls the existing `ts*` callables. admin.html is not
+    touched.
+- **Super Admin:** the "Trust reports" section is now **Moderation** (section id `trust` kept). It mounts the same
+  module as console `superadmin`; a super admin can also take over a review, which the server checks.
+- **merchant-v2 › Disputes › Reports:** shows the server's seller vocabulary:
+  - received;
+  - under review;
+  - changes requested;
+  - listing action taken;
+  - report upheld;
+  - report dismissed;
+  - closed.
+  "This listing is currently taken down" is shown while it is held. Decided reports show the appeal route ("Contact
+  SOKONI Support", support.html), because no in-app appeal exists. The reporter, reviewer, internal notes and
+  escalation are never shown, and the server never sends them.
+- **Reporter status:** no reporter status view exists in the UX, so none is added. The reporter is told "reviewed —
+  resolved" through the notification authority (see the server entry).
+
+**Files:**
+- sokoni-trust-queues.js
+- admin-os.html
+- sokoni-aos.js
+- super-admin.html
+- sokoni-merchant-disputes-ui.js
+- scripts/test-moderation-console.js (new)
+- scripts/test-report-wizard.js (SA1 updated to the new contract)
+- scripts/test-disputes-reports-browser.js (updated to the C3 contract, NOT run)
+
+**Database / rules / API:** none from hosting. It consumes tsGetReportCase (NEW), and tsGetReports and tsReviewReport
+(extended). **Security:**
+- All output is escaped; images and evidence are https only.
+- No client-authoritative field is sent. The decision payload is limited to: reportId, action, resolution,
+  internalNote, hideProduct, applyToListing, restoreListing, requestId, expectedRevision and takeover.
+
+**Tests (SOKONI_FUNCTIONS_DIR=C:/temp/sok-reports-fn/functions):**
+- **New:** test-moderation-console **13/0**.
+  - **Counterproof on 55fcbec:** MC1/MC2 FAIL, then a crash on the new mount contract.
+- **C2 regression:**
+
+  | suite | result |
+  |---|---|
+  | test-report-wizard | 23/0 |
+  | test-trust-integrity | 8/0 |
+  | test-disputes-reports-convergence | 4/0 |
+  | test-admin-os-wiring | 275/0 (TQ0–TQ5 report rows included; 2 new reachability rows for the new callables) |
+
+- **Other suites:**
+
+  | suite | result |
+  |---|---|
+  | test-admin-nav-context | 3/0 |
+  | after-superadmin-link-gating | 13/0 |
+  | test-adminos-authority-honesty | 28/0 |
+  | test-adminos-tier1-dead-controls | 59/0 |
+  | test-adminos-tier2-action-honesty | 147/0 |
+  | test-adminos-route-parse | 6/0 |
+  | test-adminos-ticket-badge-after-gate | 4/0 |
+  | test-admin-drawer-close-button | 8/0 |
+  | test-admin-kpi-source | PASS |
+  | test-catalogue-authority | 67/0 |
+  | test-merchant-v2-panels | 20/0 |
+  | verify-admin-markup | intact |
+
+- **Pre-existing failure, untouched:** after-superadmin-retirement fails 1 ("superadmin.html no longer exists").
+  superadmin.html is unchanged since 9a7227e.
+- **Gates:** predeploy-syntax-gate PASS (1840 JS / 455 inline), verify-commission-single-source PASS.
+- **QUEUED (browser hold), not run:**
+  - test-disputes-reports-browser (TB4/TB6/TB7, updated to the C3 contract);
+  - test-report-wizard-browser;
+  - test-trust-integrity-browser;
+  - test-adminos-head-defer;
+  - test-adminos-nav-coverage;
+  - test-adminos-sidebar-a11y;
+  - test-adminos-shell-final;
+  - test-admin-layouts;
+  - test-merchant-v2-modules;
+  - test-merchant-v2-certification.
+
 ## [2026-10-01] - community C2: one report authority (hosting) — product report WIZARD, AdminOS + Super Admin queue, seller reports in merchant-v2 — NOT deployed
 
 Before: product.html's report modal (one select) wrote the browser-side `flags` collection, which no admin workspace
