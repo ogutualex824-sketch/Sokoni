@@ -356,7 +356,10 @@ exports.captureProofOfDelivery = onCall(
       proofQrVerified:  qrVerified === true,
       proofGpsLat:      gpsLat         || null,
       proofGpsLng:      gpsLng         || null,
-      sellerPayoutReady:true,
+      /* Owner 2026-10-01: proof of delivery no longer marks the seller payout ready by itself —
+         an administrator approves it (adminApproveSellerPayout). */
+      sellerPayoutReady:false,
+      sellerPayoutApproval:'pending',
       updatedAt:        _now(),
     });
     batchOp.update(firestore.collection('rideDrivers').doc(riderId), {

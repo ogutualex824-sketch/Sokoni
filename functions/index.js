@@ -12771,6 +12771,9 @@ exports.auditInviteOnboarding = onCall(
 /* Re-send a password-setup link to an invitee who never received one. Separate
    from resendInvitation because the remedy for a stranded account is the LINK,
    not another invitation record. */
+/* Seller payout readiness is an admin decision (owner, 2026-10-01) — see functions/seller-payout-approval.js */
+exports.adminListPendingSellerPayouts = require('./seller-payout-approval').adminListPendingSellerPayouts;
+exports.adminApproveSellerPayout = require('./seller-payout-approval').adminApproveSellerPayout;
 /* One-click marketing unsubscribe (RFC 8058, 2026-10-01) — see functions/email-unsubscribe.js */
 exports.emailUnsubscribe = require('./email-unsubscribe').emailUnsubscribe;
 /* 25-minute, single-use password reset (owner 2026-10-01) — see functions/password-reset-gate.js */

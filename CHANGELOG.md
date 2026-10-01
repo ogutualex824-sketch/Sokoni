@@ -1,3 +1,9 @@
+## [2026-10-01] — Seller payout readiness requires an admin approval (functions, NOT deployed)
+
+**Owner decision (2026-10-01):** a seller payout may be marked ready only after an administrator approves it. Before: `sellerPayoutReady` was set automatically by captureProofOfDelivery (live 00011-cig, dispatch.js identical to this tree) and by client "I received it" writes (packageRequests owner rule allows it; deliveries sender rule does not block it). Nothing reads the flag yet, so no money moved on it.
+**Change:** new `functions/seller-payout-approval.js` — `adminListPendingSellerPayouts` (delivered/completed unapproved items in packageRequests/deliveries/orders; unreadable collections reported, never "none") and `adminApproveSellerPayout` (admin only, App Check, transaction: completed state required, no self-approval, idempotent, sets sellerPayoutReady/Approval/ApprovedBy/ApprovedAt, adminAudit row). `dispatch.js` captureProofOfDelivery writes sellerPayoutReady:false + sellerPayoutApproval:'pending'. `scripts/test-seller-payout-approval.js` 13/0.
+**Companion changes:** hosting — client confirm paths stop writing the flag + AdminOS/Super Admin "Payout approvals" view (sokoni-aa's chain); rules (sokoni-32) — packageRequests owner list drops sellerPayoutReady, deliveries sender block-list adds it. **Order:** functions → hosting → rules (rules last, or buyer "I received it" on packageRequests is denied). **Deploy:** add `functions:adminListPendingSellerPayouts,adminApproveSellerPayout,captureProofOfDelivery`.
+
 ## [2026-10-01] — Data-rights intake abuse-controlled; one fail-closed limiter (functions:submitDataRightsRequest + reset gate refactor, NOT deployed)
 
 **Why (census P2 #22):** submitDataRightsRequest (open to non-account holders, as KDPA rights require) had no App Check, no rate limit, stored the raw IP, and crashed (500) on a non-string phone. The existing limiters fail OPEN under contention.
