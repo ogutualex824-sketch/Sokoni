@@ -1,3 +1,8 @@
+## [2026-10-01] — Operations Center: escaped failure reports, unknown is not green, 24-hour window (hosting, NOT deployed)
+
+**Why:** with getErrorLog now reading real client failure reports (port/password-reset-25m-on-shell-gate 8e29ab7), the page interpolated them RAW into innerHTML — a client-written message would execute in an administrator's browser; absent subsystem status rendered "● OK"; unknown stuck-payment / dead-letter counts rendered "Normal"/"Healthy".
+**Change:** `ops-center.html` escapes every server/client value (alerts, statuses, failure reports, error text); absent status → "? UNKNOWN"; unknown counts → "? Unknown"; failure list shows severity, code, page, time, reference id, short user id and the token-free URL, with counts by severity, over the last 24 h; `sw-register.js` added. `scripts/test-trust-integrity.js` §G (51/0, statusTag executed). **Order:** deploy with or after functions:getErrorLog. **Next:** an AdminOS / Super Admin failures module on sokoni-aa's layout (54b72cc).
+
 ## [2026-10-01] — Recovery: unsafe full-stack rollback retired; per-surface blue/green recovery tool (scripts/docs, NOT deployed)
 
 **Why (census P2 #20):** `scripts/deploy/rollback.js` ran a repo-wide `git stash`, checked out an old tag and deployed ALL functions with `--force` — in a project whose functions are a union of lineages that regresses or deletes live functions. Never exercised; called by the (never-run) canary workflow.

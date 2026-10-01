@@ -198,9 +198,13 @@ function setEl(id, text) {
   if (el) el.textContent = text;
 }
 
+/* 2026-10-01 — every value rendered here comes from the server or from CLIENT failure reports
+   (errorLog), so it is escaped; and an absent status is UNKNOWN, never a green "OK". */
+function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function statusTag(status) {
   const map = { ok: ['tag-ok', '● OK'], warning: ['tag-warn', '▲ WARN'], degraded: ['tag-crit', '✕ DEGRADED'] };
-  const [cls, label] = map[status] || ['tag-warn', status];
+  if (!status) return '<span class="tag" style="opacity:.75">? UNKNOWN</span>';
+  const [cls, label] = map[status] || ['tag-warn', esc(status)];
   return `<span class="tag ${cls}">${label}</span>`;
 }
 
@@ -208,7 +212,7 @@ async function refresh() {
   try {
     const [healthRes, errorRes] = await Promise.all([
       cfHealth({}),
-      cfErrorLog({ hours: 1, limit: 10 }),
+      cfErrorLog({ hours: 24, limit: 25 }),
     ]);
 
     const h = healthRes.data;
@@ -229,10 +233,10 @@ async function refresh() {
     } else {
       alertsList.innerHTML = h.alerts.map(a => `
         <div class="alert-item ${a.level}">
-          <span class="alert-badge badge-${a.level}">${a.level}</span>
+          <span class="alert-badge badge-${esc(a.level)}">${esc(a.level)}</span>
           <div>
-            <div class="alert-message">${a.message}</div>
-            <div class="alert-system">System: ${a.system}</div>
+            <div class="alert-message">${esc(a.message)}</div>
+            <div class="alert-system">System: ${esc(a.system)}</div>
           </div>
         </div>
       `).join('');
@@ -251,10 +255,11 @@ async function refresh() {
     setEl('eventsDead',       s.eventBus.dead_letter);
 
     /* Status labels */
+    const _known = v => typeof v === 'number' && isFinite(v);
     document.getElementById('stuckStatus').innerHTML =
-      s.payments.stuck > 10 ? '<span class="crit">● Critical</span>' : '<span class="ok">● Normal</span>';
+      !_known(s.payments.stuck) ? '<span>? Unknown</span>' : s.payments.stuck > 10 ? '<span class="crit">● Critical</span>' : '<span class="ok">● Normal</span>';
     document.getElementById('eventBusStatus').innerHTML =
-      s.eventBus.dead_letter > 50 ? '<span class="warn">▲ Dead events need replay</span>' : '<span class="ok">● Healthy</span>';
+      !_known(s.eventBus.dead_letter) ? '<span>? Unknown</span>' : s.eventBus.dead_letter > 50 ? '<span class="warn">▲ Dead events need replay</span>' : '<span class="ok">● Healthy</span>';
 
     /* Subsystem table */
     const rows = Object.entries(s).map(([name, sub]) => {
@@ -270,7 +275,7 @@ async function refresh() {
       const [metricName, metricVal] = metricMap[name] || ['—', '—'];
       return `<tr>
         <td style="font-weight:600;">${name.charAt(0).toUpperCase() + name.slice(1)}</td>
-        <td>${statusTag(sub.status || 'ok')}</td>
+        <td>${statusTag(sub.status)}</td>
         <td style="color:var(--muted)">${metricName}</td>
         <td>${metricVal ?? '—'}</td>
       </tr>`;
@@ -279,21 +284,27 @@ async function refresh() {
 
     /* Error log */
     const errors = errorRes.data.errors;
+    const bySev = errorRes.data.bySeverity || {};
+    const sevLine = Object.keys(bySev).length ? Object.entries(bySev).map(([k, v]) => esc(k) + ': ' + esc(v)).join(' · ') : '';
     if (!errors || !errors.length) {
-      document.getElementById('errorLog').textContent = 'No errors in the last hour.';
+      document.getElementById('errorLog').textContent = 'No client failures reported in the last 24 hours.';
     } else {
-      document.getElementById('errorLog').innerHTML = errors.map(e => `
+      document.getElementById('errorLog').innerHTML =
+        (sevLine ? `<div style="color:var(--muted);font-size:12px;margin-bottom:8px;">${sevLine}${errorRes.data.truncated ? ' (showing newest 25)' : ''}</div>` : '') +
+        errors.map(e => `
         <div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px;">
-          <span style="color:var(--red);font-weight:600;">${e.code || 'ERROR'}</span>
-          <span style="color:var(--muted);margin-left:10px;font-size:11px;">${e.function || ''}</span>
-          <div style="margin-top:4px;color:var(--text)">${e.message || ''}</div>
+          <span style="color:var(--red);font-weight:600;">${esc(e.severity || 'error').toUpperCase()}</span>
+          <span style="font-weight:600;margin-left:8px;">${esc(e.code || 'ERROR')}</span>
+          <span style="color:var(--muted);margin-left:10px;font-size:11px;">${esc(e.surface || '')} · ${esc(e.at ? new Date(e.at).toLocaleString() : '')}</span>
+          <div style="margin-top:4px;color:var(--text)">${esc(e.message || '')}</div>
+          <div style="margin-top:4px;color:var(--muted);font-size:11px;">Ref ${esc(e.id || '—')}${e.uid ? ' · user ' + esc(String(e.uid).slice(0, 8)) + '…' : ''}${e.url ? ' · ' + esc(e.url) : ''}</div>
         </div>
       `).join('');
     }
 
   } catch (err) {
     document.getElementById('alertsList').innerHTML =
-      `<div class="alert-item critical"><span class="alert-badge badge-critical">ERROR</span><div class="alert-message">Failed to load health data: ${err.message}</div></div>`;
+      `<div class="alert-item critical"><span class="alert-badge badge-critical">ERROR</span><div class="alert-message">Failed to load health data: ${esc(err.message)}</div></div>`;
   }
 }
 
@@ -319,5 +330,6 @@ onAuthStateChanged(auth, user => {
   setInterval(refresh, 30_000); /* auto-refresh every 30s */
 });
 </script>
+<script src="/sw-register.js" defer></script>
 </body>
 </html>

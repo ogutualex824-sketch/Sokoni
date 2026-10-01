@@ -128,5 +128,19 @@ ck('F4 customer/merchant pages allow zoom (WCAG 1.4.4)', zoomBlocked.length === 
 ck('F5 Font Awesome LICENSE.txt ships next to the self-hosted copy; licence inventory exists',
   fs.existsSync(path.join(ROOT, 'assets/vendor/fontawesome/6.5.1/LICENSE.txt')) && fs.existsSync(path.join(ROOT, 'docs/THIRD_PARTY_LICENSES.md')));
 
+console.log('\nG. Operations Center (failure view)');
+const oc = src('ops-center.html');
+const tagFn = (oc.match(/function esc\(v\)[^\n]*\n[\s\S]*?function statusTag\(status\) \{[\s\S]*?\n\}/) || [''])[0];
+if (tagFn) {
+  const c = {}; vm.createContext(c); vm.runInContext(tagFn, c);
+  ck('G1 an absent status renders UNKNOWN, not a green OK (executed)', /UNKNOWN/.test(c.statusTag(undefined)) && !/tag-ok/.test(c.statusTag(undefined)) && /tag-ok/.test(c.statusTag('ok')));
+  ck('G2 an unexpected status string is escaped (executed)', !/<img/.test(c.statusTag('<img src=x onerror=alert(1)>')));
+} else ck('G1 statusTag + esc found', false);
+const errBlock = oc.slice(oc.indexOf('const errors = errorRes.data.errors;'), oc.indexOf('} catch (err)', oc.indexOf('const errors = errorRes.data.errors;')));
+ck('G3 client failure reports are escaped before rendering (message / code / surface / url)', /esc\(e\.message/.test(errBlock) && /esc\(e\.code/.test(errBlock) && /esc\(e\.surface/.test(errBlock) && !/\$\{e\.message \|\| ''\}/.test(errBlock));
+ck('G4 the view asks for the last 24 h and shows the reference id', /cfErrorLog\(\{ hours: 24/.test(oc) && /Ref \$\{esc\(e\.id/.test(oc));
+ck('G5 unknown payment/event-bus metrics are not labelled Normal/Healthy', /!_known\(s\.payments\.stuck\) \? '<span>\? Unknown<\/span>'/.test(oc) && /!_known\(s\.eventBus\.dead_letter\)/.test(oc));
+ck('G6 ops-center self-updates (sw-register.js)', /src="\/sw-register\.js"/.test(oc));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
