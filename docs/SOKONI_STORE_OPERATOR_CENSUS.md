@@ -129,6 +129,58 @@ chain with the canonical resolver that **is** here (`tenant-identity.resolveMerc
 2. **Operator payout path built, HELD** behind a server-only flag (below). The owner lifts the
    wallet freeze for this path only, after the money-safety review.
 
+## Third pass — store withdrawals are approved by the store operator ONLY (2026-10-01)
+
+**Owner decision:** only the store operator approves, rejects or marks paid a store withdrawal;
+other admins see store requests read-only. Implemented as ONE guard inside the existing
+`adminProcessPayout` — no second approval authority, no new execution path.
+
+### Lineage gate (mandatory, done BEFORE the edit — read-only)
+
+| | |
+|---|---|
+| live function | `adminProcessPayout`, revision **`adminprocesspayout-00025-loy`**, created **2026-09-30T07:04:36Z** |
+| live source | `gs://gcf-v2-sources-24799054989-us-central1/adminProcessPayout/function-source.zip#1790751875744544` |
+| live `wallet.js` vs a545818 `wallet.js` | **IDENTICAL** (CRLF-normalised `diff` empty) |
+| live `wallet.js` vs `45a837d` (paid-state guard) | **DIFFERENT — 483 changed lines; the guard is ABSENT live** |
+| previous revision `00024-mih` (2026-09-29T15:31Z), archive `#1790695830866935` | `wallet.js` **== 45a837d** (guard present) |
+| live `wallet.js` vs `8574f5d` (webhookIntasend 09-06 production baseline) | identical |
+
+**Finding — a live money regression, not caused by this slice:** the paid-state guard (45a837d,
+deployed 2026-09-29 as `00024-mih`) was **rolled back on 2026-09-30T07:04Z** by revision
+`00025-loy`, whose `wallet.js` is the 09-06 baseline. Memory and the coordinator both record
+45a837d as live; it is not. Live today: Mark Paid is accepted from any non-terminal status and
+`_settlePayoutPaid` refuses only `paid`/`settled_manually` (so a rejected/failed payout can still be
+marked paid after its refund).
+
+Because live == a545818, the guard was written on the LIVE code (not an older copy). **Deploying this
+`adminProcessPayout` does NOT restore 45a837d and does not remove anything that is live.** Restoring
+the paid-state guard means porting 45a837d onto this tree — an owner decision (it changes ordinary
+payout behaviour), with its own suites (`test-payout-paid-status-guard`, `test-payout-outcome-unknown`).
+
+### The change
+
+`wallet.js adminProcessPayout`: right after the payout is loaded and before every action branch,
+`await _assertStorePayoutActor(db, request, payout, rid)`:
+
+1. `businesses/{payout.sellerUid}` read; if it is not labelled `SOKONI_FIRST_PARTY_STORE` → return
+   (ordinary payout: one extra read, otherwise unchanged).
+2. Chain resolved (`resolveStoreChain`). Labelled but the chain points at another business → return
+   (a forged label is not the store).
+3. Caller is the store operator for the chain (`isStoreOperatorFor`) → return.
+4. Otherwise (incl. an unresolvable chain — fail CLOSED) → audit row in `firstPartyStoreAudit`
+   (`sokoniStore.payoutAction.refused`, adminUid, requestId, attempted status) and
+   `permission-denied`, reason **`store-payout-operator-only`**.
+
+`_requireAuth` / `_requireAdmin` are unchanged and still run first, so the operator acts with the
+admin claim they already hold. All existing state guards then apply unchanged to the operator.
+
+### New read-only callables
+
+- `sokoniStoreListPayouts` — operator-only: the store's `payoutRequests` (amount, status, last 3).
+- `sokoniStorePayoutIdentity` — admin/superAdmin claims: returns the chain-resolved store business id
+  so the AdminOS / Super Admin queues can render store rows read-only.
+
 ## What was built
 
 ### Functions (`C:/temp/sok-store-fn`)
@@ -194,15 +246,17 @@ Every money-out invariant, where it is enforced, and the test that proves it
 | 13 | Velocity cap = sellers' (`config/payouts.maxPayoutsPerDay`, live value **20**) | wallet.js `getPayoutConfig` + `eatDay` | P18 |
 | 14 | Request shape == `requestSellerPayout`'s, field for field | `t.create(reqRef, …)` | P19 (keys derived from wallet.js source) |
 | 15 | No second execution rail: no gateway call, never marks paid, no instant mode | module has no IntaSend / adapter / settle code; `status:'pending'`, `mode:'review'` | P20 |
-| 16 | Paid / rejected / refunded ONLY by the existing admin path, keyed on `payout.sellerUid` | wallet.js `adminProcessPayout`, `_settlePayoutPaid`, `_refundPayout` (unchanged) | P21; E4 |
+| 16 | Paid / rejected ONLY by the existing `adminProcessPayout`, keyed on `payout.sellerUid` — and for store requests ONLY by the store operator | wallet.js `adminProcessPayout` + `_assertStorePayoutActor` | P21; E4; Q1–Q14 |
 | 17 | Operator's personal wallet never debited | request touches only `wallets/{businessId}` | P13b |
 | 18 | Frozen store wallet → refuse | request handler | P18b |
 | 19 | Full audit: who, when, amount, destination last 3, request id; refusals of a mismatched destination too | `firstPartyStoreAudit` (server-only) | P9c, P17 |
 | 20 | Clients see only the last 3 digits of the destination | `_destinationOf`, responses | G4, P9, P13c |
 
 **Before flipping the flag the owner must verify (live, read-only unless stated):**
-1. The deployed `adminProcessPayout` is the 45a837d paid-state-guarded build and still keys on
-   `payout.sellerUid` (diff the live archive — `wallet.js` on a545818 is what this was built against).
+1. **Lineage gate DONE (third pass):** the live `adminProcessPayout` (00025-loy) is the 09-06/a545818
+   `wallet.js` — the 45a837d paid-state guard is **NOT live**. Decide whether to port 45a837d before
+   flipping the flag; until then store payouts run on the same (unguarded) settlement code sellers do.
+   Deploy this tree's `adminProcessPayout` (store guard) before the flag.
 2. **Live `config/payouts.autoB2C` is `false` (read 2026-10-01).** So approving a store request
    leaves it `approved` for MANUAL disbursement, and *paid* needs an `externalReference` +
    attestation. If `autoB2C` is ever turned on, approval sends B2C to `accountNumber` immediately.
@@ -229,9 +283,12 @@ Every money-out invariant, where it is enforced, and the test that proves it
 | `merchantIdentity` | REBUILT (live) | carve-out: admins lose the store via merchant-v2's identity call |
 | `inviteShopEmployee`, `listShopEmployees`, `listShopInvites`, `removeShopEmployee` | REBUILT (live) | carve-out: admins cannot manage store staff |
 | `merchantAdjustStock` | REBUILT (live) | carve-out: admins cannot adjust store stock |
+| `adminProcessPayout` | **REBUILT (live, money)** | store requests: operator only. Lineage gate: live 00025-loy `wallet.js` == a545818 (diff empty) → built on the live code. **45a837d paid-state guard is NOT live (rolled back 2026-09-30T07:04Z) and this build does not restore it.** |
+| `sokoniStoreListPayouts` | **NEW** | operator's store payout queue (read) |
+| `sokoniStorePayoutIdentity` | **NEW** | store business id for the admin queues (read) |
 
-**Not rebuilt:** `requestSellerPayout`, `adminProcessPayout`, `walletV2*` — `wallet.js` and
-`wallet-engine.js` change only by an additive `_internal` seam that only the new callables read.
+**Not rebuilt:** `requestSellerPayout`, `adminGetPendingPayouts`, `adminPayoutOps`, `walletV2*`. `wallet.js` changes by the
+store guard (only `adminProcessPayout` calls it) and an additive `_internal` seam; `wallet-engine.js` by a seam only.
 
 **Lineage caveat:** diff each REBUILT function's live archive against a545818 first. Deploy
 **scoped** (`--only functions:NAME,…`) — a full deploy from this tree deletes
@@ -247,8 +304,11 @@ Every money-out invariant, where it is enforced, and the test that proves it
   `resource.data.firstParty == true`. The rules suite reports these as KNOWN-GAP.
 - `merchant-authority.assertMerchantAccess` admin bypass (procurement / Supply on `SOK-XX2338`).
 - `minishop.js`, `minishop-v3.js`, `minishop-campaigns.js` carry their own `_assertShopOwner`.
-- `adminProcessPayout` is (by design) any admin: an admin approves/rejects store withdrawals the
-  same way they do sellers' — the money-out decision stays two-person (operator requests, admin pays).
+- ~~`adminProcessPayout` is any admin~~ — **closed in the third pass**: store requests are operator-only.
+  Consequence: a store withdrawal is now ONE-person (the operator requests AND approves); the
+  remaining controls are the operator PIN on the request, the fixed verified destination, the flag,
+  manual disbursement while `autoB2C` is off (external reference + attestation), and the audit trail.
+- `refundToWallet` (any admin) can still credit any wallet, including `wallets/SOK-XX2338` — credit-only, out of scope here.
 
 ## Needs the owner
 

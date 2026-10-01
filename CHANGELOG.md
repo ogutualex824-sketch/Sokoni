@@ -1,3 +1,31 @@
+## [2026-10-01] — SOKONI Store: store withdrawals approved by the store operator ONLY (adminProcessPayout guard) — NOT deployed
+
+**Owner decision:** only the store operator approves / rejects / marks paid a store withdrawal;
+other admins see store requests read-only. One guard inside the existing `adminProcessPayout` — no
+second approval authority, no new execution path.
+
+**Lineage gate (read-only, before the edit):** live `adminProcessPayout` = revision
+`adminprocesspayout-00025-loy` (2026-09-30T07:04:36Z), archive `#1790751875744544`. Its `wallet.js`
+is **identical to a545818's**, so the guard was written on the live code. **The 45a837d paid-state
+guard is NOT live:** revision `00024-mih` (2026-09-29T15:31Z) carried it (`wallet.js` == 45a837d);
+`00025-loy` rolled it back to the 09-06 baseline (`8574f5d`). This build does not restore it — owner decision.
+
+**Files:**
+- `functions/wallet.js` — `_assertStorePayoutActor` + one call in `adminProcessPayout` after the payout
+  is loaded: a request whose `sellerUid` is the chain-resolved store business is actioned only by the
+  store operator; anyone else → `permission-denied`, reason `store-payout-operator-only`, audit row.
+  Labelled-but-not-the-store → ordinary; unresolvable chain → refused (fail closed). Ordinary payouts:
+  one extra `businesses/{sellerUid}` read, behaviour unchanged.
+- `functions/first-party-store-payout.js` — `sokoniStoreListPayouts` (operator queue, read) and
+  `sokoniStorePayoutIdentity` (admin queues: store business id, read). `functions/index.js` — exports.
+- `scripts/test-sokoni-first-party-store.js` — 131/0 (Q1–Q14: every action refused for admin/superAdmin
+  non-operators with an audit row; operator approve / mark-paid (ref + attestation) / reject; existing
+  guards hold; ordinary requests unchanged; forged label; fail-closed chain); 2 sabotages of the guard red.
+- `docs/SOKONI_STORE_OPERATOR_CENSUS.md` — third pass, lineage gate, deploy list.
+
+**Rebuilt live:** `adminProcessPayout` (money). **New:** `sokoniStoreListPayouts`, `sokoniStorePayoutIdentity`.
+**NOT deployed.**
+
 ## [2026-10-01] — SOKONI Store: store wallet = wallets/SOK-XX2338; operator payout path built HELD (server) — NOT deployed
 
 **Owner decisions (second pass):** (1) the store wallet is `wallets/SOK-XX2338` — where the LIVE
