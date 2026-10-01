@@ -25,6 +25,7 @@ const SUITES = [
   ['test-adminos-sidebar-a11y', []],
   ['test-adminos-nav-coverage', []],
   ['test-adminos-shell-final', []],
+  ['test-adminos-head-defer', []],
   ['test-bnb-mobile-layout', []],
   ['test-messages-premium', []],
   ['test-bottom-nav-rendered', []],
