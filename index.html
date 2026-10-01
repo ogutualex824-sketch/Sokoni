@@ -3239,8 +3239,14 @@ import SokoniDB from "./sokoni-db.js";
         if (text) text.textContent = "Back online — shopping continues!";
         void toast.offsetWidth;
         toast.classList.add("show");
-        setTimeout(function () { toast.classList.remove("show"); }, 3500);
+        setTimeout(function () { toast.classList.remove("show"); }, 2000);   /* owner 2026-10-01: pop, 2 s, gone */
       }
+      /* Owner 2026-10-01: "back online should pop and show for 2 s and disappear". This toast was defined
+         but never called. It fires only on a real reconnect (an 'online' after an 'offline' on this page),
+         never on load. The offline state itself is sokoni-ui.js's #sk-offline-bar, unchanged. */
+      var _wasOffline = (typeof navigator !== "undefined" && navigator.onLine === false);
+      window.addEventListener("offline", function () { _wasOffline = true; });
+      window.addEventListener("online",  function () { if (_wasOffline) { _wasOffline = false; showNetworkToast(true); } });
 
       /* offline banner managed exclusively by sokoni-ui.js (#sk-offline-bar) */
 
