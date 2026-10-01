@@ -307,6 +307,8 @@
 
     var S = {
       phase: 'loading',        /* loading | no_shop | error | ready */
+      shelf: null,             /* the PRIVATE shelf prices: { readable, map } — owner device only */
+      shelfAsk: {},            /* productId → true while the server is asked for a shelf price (staff device) */
       error: null,
       products: [],
       term: '',
@@ -361,8 +363,12 @@
         S.phase = 'no_shop'; paint(); return Promise.resolve();
       }
       S.phase = 'loading'; paint();
-      return md.listProducts({ scope: ctx.scope, db: ctx.db }).then(function (rows) {
-        S.products = rows || [];
+      /* The shelf price is PRIVATE (posProducts, owner-only read). Read alongside the public catalogue; a staff
+         device is refused by the rules and asks the server per line instead. Never blocks the catalogue. */
+      return Promise.all([md.listProducts({ scope: ctx.scope, db: ctx.db }),
+                          md.listShelfPrices({ scope: ctx.scope, db: ctx.db })]).then(function (res) {
+        S.shelf = res[1];
+        S.products = md.withShelf(res[0], S.shelf);
         S.phase = 'ready';
         paint();
         live();
@@ -394,7 +400,7 @@
         _liveOff = md.subscribeProducts({
           scope: ctx.scope, db: ctx.db,
           onProducts: function (rows) {
-            S.products = rows || [];
+            S.products = md.withShelf(rows, S.shelf);
             /* Rows are already stored above; only the REPAINT is deferred, and
                closing the sheet paints anyway. */
             if (S.sheet) return;
@@ -669,6 +675,13 @@
             var tierCol = l.quick ? '' : '<div class="msl-tiers" role="group" aria-label="Price for ' + esc(l.name || 'this product') + '">' +
               ['online', 'shop', 'wholesale'].map(function (t) {
                 var has = tiers[t] !== null && tiers[t] !== undefined, on = has && t === tier, label = md.TIER_LABEL[t];
+                /* staff device: the shelf price is private, so the server is asked on tap (never guessed, never 0) */
+                if (t === 'shop' && !has && l.shelfPending) {
+                  var asking = !!S.shelfAsk[l.productId];
+                  return '<button type="button" class="msl-tier" data-act="tier" data-t="shop" data-i="' + i + '"' +
+                    (asking ? ' disabled aria-busy="true"' : '') + ' aria-pressed="false" aria-label="Check the shelf price">' +
+                    md.TIER_SHORT[t] + '<small>' + (asking ? '…' : '?') + '</small></button>';
+                }
                 if (!has) {
                   return '<button type="button" class="msl-tier off" disabled aria-disabled="true"' +
                     ' aria-label="' + label + ' price not set">' + md.TIER_SHORT[t] + '<small>—</small></button>';
@@ -1499,11 +1512,26 @@
                                     paint(); return; }
       if (act === 'charge')       { S.startedAt = Date.now(); openPay(); return; }
       if (act === 'clear-cart')   { S.cart = []; S.sheet = null; clearToken(); paint(); return; }
+      if (act === 'tier' && el.getAttribute('data-t') === 'shop' && S.cart[i] && S.cart[i].shelfPending
+          && !(S.cart[i].tiers && typeof S.cart[i].tiers.shop === 'number')) {
+        var lp = S.cart[i], pid = lp.productId;
+        if (S.shelfAsk[pid]) return;
+        S.shelfAsk[pid] = true; paint();
+        md.previewShelfPrice({ scope: ctx.scope, productId: pid, name: lp.name, callable: ctx.callSale }).then(function (price) {
+          S.cart = md.setLineShelf(S.cart, pid, price);
+          if (price === null) toast('This product has no shelf price.', 'info');
+          else { try { S.cart = md.setLineTier(S.cart, pid, 'shop'); } catch (_) { /* refused by the ordering rule */ } }
+        }, function () { toast('The shelf price could not be checked. Try again.', 'error'); })
+          .then(function () { delete S.shelfAsk[pid]; S.preflight = null; paint(); });
+        return;
+      }
       if (act === 'tier')         { var lt = S.cart[i]; if (lt) {
                                     try { S.cart = md.setLineTier(S.cart, lt.productId, el.getAttribute('data-t')); }
                                     catch (e) { /* an unavailable tier is never priced: the line keeps its tier */ }
-                                    /* a changed price invalidates the pre-charge check and the sale key */
-                                    S.preflight = null; clearToken(); paint(); } return; }
+                                    /* a changed price invalidates the pre-charge check; the tier is part of the sale
+                                       key (idempotencyKey), so the token stays — it is cleared only when a sale
+                                       finishes or is abandoned, never mid-attempt */
+                                    S.preflight = null; paint(); } return; }
       if (act === 'inc')          { var l1 = S.cart[i]; if (l1) { S.cart = md.setLineQty(S.cart, l1.productId, l1.qty + 1); paint(); } return; }
       if (act === 'dec')          { var l2 = S.cart[i]; if (l2) { S.cart = md.setLineQty(S.cart, l2.productId, l2.qty - 1);
                                     if (!S.cart.length) S.sheet = null; paint(); } return; }
