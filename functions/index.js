@@ -8487,6 +8487,20 @@ exports.webhookIntasend = onRequest(
        collapses CANCELLED/EXPIRED/REJECTED/TIMEOUT into "PENDING". No-op (returns false)
        for non-booking intents, so product/wallet failures fall through unchanged. */
     if (["FAILED", "CANCELLED", "EXPIRED", "REJECTED", "TIMEOUT"].includes(state)) {
+      /* SOKONI Foundation donation (owner 2026-10-01): a failed / abandoned donation marks its pledge 'failed' — never
+         a credit. Handled in isolation via the server-minted intent (foundation-donation-settle.js). */
+      const _donFail = await require('./foundation-donation-settle').settleDonationPayment(db, admin, {
+        apiRef, intentRef: existing.intentRef || apiRef, state,
+        gross:    invoice.value    != null ? invoice.value    : req.body?.value,
+        net:      invoice.net_amount != null ? invoice.net_amount : req.body?.net_amount,
+        charges:  invoice.charges  != null ? invoice.charges  : req.body?.charges,
+        currency: invoice.currency || req.body?.currency || null,
+        providerRef: checkoutId || apiRef,
+      });
+      if (_donFail) {
+        await payRef.update({ status: "FAILED", intasendState: state, updatedAt: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+        res.status(200).send("OK"); return;
+      }
       const { releaseServiceBookingOnTerminalPayment } = require('./booking-payment-sweep');
       if (await releaseServiceBookingOnTerminalPayment(db, admin, apiRef, existing.intentRef, state)) {
         res.status(200).send("OK"); return;
@@ -8498,6 +8512,18 @@ exports.webhookIntasend = onRequest(
       /* Phase E: a service-booking payment is HELD (paid_held), never credited here —
          the provider is credited only by Phase C settlement at completion. Handled in
          isolation via the server-minted intent; skips all commission/credit/creation. */
+      /* SOKONI Foundation donation (owner 2026-10-01): the ONE completion writer. On exact evidence (KES, GROSS ==
+         pledge == intent) it completes the pledge and writes impactLedger / impactBalance / foundationStats / the
+         programme's raised + donors in one transaction, idempotent on the provider reference; otherwise the pledge goes
+         to 'review'. Either way it returns here — a donation never reaches wallet, commission or order code. */
+      if (await require('./foundation-donation-settle').settleDonationPayment(db, admin, {
+        apiRef, intentRef: existing.intentRef || apiRef, state,
+        gross:    invoice.value    != null ? invoice.value    : req.body?.value,
+        net:      invoice.net_amount != null ? invoice.net_amount : req.body?.net_amount,
+        charges:  invoice.charges  != null ? invoice.charges  : req.body?.charges,
+        currency: invoice.currency || req.body?.currency || null,
+        providerRef: checkoutId || apiRef,
+      })) { res.status(200).send("OK"); return; }
       if (await _holdServiceBookingPayment(db, admin, apiRef, existing.intentRef, amount)) { res.status(200).send("OK"); return; }
 
       /* ══ D1 FIX (Q6) — financial attribution, resolved ONCE ═════════════════════════

@@ -140,3 +140,32 @@ Each functions step:
 - **WhatsApp:** the slot is OFF until the owner provisions a WABA.
 - **`smsEnqueue` authorisation:** a separate security fix.
 - **Hub-by-hub bookNow → service_booking intents.**
+
+## SOKONI Foundation donation completion (owner, 2026-10-01; contract agreed with sokoni-4d)
+
+- **Pledge → intent → webhook.** sokoni-4d's `impactPledgeDonation` / `impactCheckoutDonate` (ee0ee99) write a
+  `'pledged'` doc with no ledger. `createPaymentIntent` purpose `donation` (**1d4eef0** on the createPaymentIntent
+  lineage):
+  - the amount is the pledge's;
+  - the caller must own the pledge, and it must still be pledged;
+  - KES 10–100,000 whole;
+  - ref `DON_<pledgeId>`.
+- **The ONE completion writer:** `functions/foundation-donation-settle.js`, called by `webhookIntasend` in isolation,
+  before the booking hold and every wallet / commission branch.
+  - **Verified COMPLETE** with KES and GROSS (`invoice.value`) == pledge == intent → one transaction:
+    - pledge `completed` + `receiptId` (`SKF-<invoice>`) + `completedAt` + gross / fee / net + `providerReference`;
+    - `impactLedger/DON_<invoice>` credit gross + `DONFEE_<invoice>` fee debit, create-once;
+    - `impactBalance` (net effect);
+    - `foundationStats` (`totalDonations` + `donationsCount`);
+    - `impactCampaigns/{programmeId}`: `raised` += GROSS, `donors` += 1. An inactive campaign still counts, flagged
+      `campaignInactiveAtCompletion`.
+  - **Otherwise** → pledge `review` + reason, no credit.
+  - **FAILED / CANCELLED / EXPIRED / REJECTED / TIMEOUT** → pledge `failed`, no credit.
+  - **Replay or concurrent callbacks** → one completion.
+  - **An unreadable intent** → not settled; the generic path withholds every credit.
+- **Refunds:** sokoni-4d's refund programme. A reversal entry is appended (never a delete), keyed on the refund id.
+- **Tests:**
+  - test-foundation-donation-settle 19/0, 4 mutants caught;
+  - test-donation-intent 16/0 (base fails 12);
+  - webhook suites unchanged-green.
+- **Deploy:** createPaymentIntent unit + this webhook commit, in the webhook lane after the completion-PIN step.
