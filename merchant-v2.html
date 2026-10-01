@@ -2572,6 +2572,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                     scope: _scope(), shopName: _shopName(), origin: location.origin,
                     callList: _callable('getSellerDisputes'), callDetail: _callable('getDisputeDetail'),
                     callRespond: _callable('sellerRespondToDispute'), callEvidence: _callable('addDisputeEvidence'),
+                    /* reports on THIS account's listings — tsGetReports scope:'mine' (server-filtered; the reporter is never
+                       returned). community C2, 2026-10-01 */
+                    callReports: _callable('tsGetReports'),
                     onToast: toast }; } },
     messages:   { global: 'SokoniMerchantMessagesUI',  ctx: function () { return {
                     scope: _scope(), shopName: _shopName(), origin: location.origin,
