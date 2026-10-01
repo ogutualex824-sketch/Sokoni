@@ -97,6 +97,7 @@ function makeDb() {
         get: (ref) => ref.get(),
         update: (ref, d) => ref.update(d),
         set: (ref, d, o) => ref.set(d, o),
+        create: (ref, d) => ref.create(d),
       };
       return fn(tx);
     },
@@ -121,11 +122,13 @@ stub('firebase-admin/firestore', {
   Timestamp: { now: () => new Date(), fromMillis: (m) => new Date(m) },
 });
 const AUTH_USERS = {};
+require.cache[path.join(FN, 'redis-rate-limiter.js')] = { id: 'rl', filename: path.join(FN, 'redis-rate-limiter.js'), loaded: true, exports: { checkRateLimit: async () => {} } };
 stub('firebase-admin/auth', { getAuth: () => ({ getUser: async (uid) => { if (!AUTH_USERS[uid]) { const e = new Error('no user'); e.code = 'auth/user-not-found'; throw e; } return AUTH_USERS[uid]; } }) });
 
 const OP = require(path.join(FN, 'first-party-store-operator.js'));
 const WS = require(path.join(FN, 'first-party-store-workspace.js'));
 const SE = require(path.join(FN, 'shop-employees.js'));
+const PAY = require(path.join(FN, 'first-party-store-payout.js'));
 
 /* ── The certified production chain, as data (ids from the owner's read, 2026-10-01) ── */
 const OWNER = 'vbaSOKL4h8WWGqa6Xfi1eLaEPnS2';          /* company account — owns, does not operate */
@@ -267,18 +270,24 @@ const STORE_DATA_COLLECTIONS = ['products', 'orders', 'wallets', 'businessWallet
   ok('F3 store orders = sellerUid SOK-XX2338 only, newest first', or.orders.map((o) => o.id).join(',') === 'o-store-2,o-store-1');
   ok('F4 no buyer PII in the order list', !JSON.stringify(or).includes('+254700000001'));
   const wl = await WS._h.sokoniStoreGetWallet(req(OPERATOR));
-  ok('F5 company wallet absent → exists:false, balance null (not 0)', wl.storeWallet.exists === false && wl.storeWallet.balance === null);
+  ok('F5 store wallet = wallets/SOK-XX2338; absent → "no-sale-settled-yet", balance null (never 0)', wl.storeWallet.walletId === BIZ && wl.storeWallet.exists === false && wl.storeWallet.state === 'no-sale-settled-yet' && wl.storeWallet.balance === null);
   ok('F6 the operator\'s PERSONAL wallet is never read into the store view', !JSON.stringify(wl).includes('777'));
-  ok('F7 payout destination reported unavailable (no authority exists — census)', wl.payoutDestination.status === 'unavailable');
-  seed(); DB._put('wallets', OWNER, { uid: OWNER, balance: 0, v2: true, pinHash: null });
+  ok('F7 destination "not-set" and payouts OFF by default (flag absent)', wl.payoutDestination.status === 'not-set' && wl.payoutsEnabled === false);
+  seed(); DB._put('wallets', BIZ, { balance: 0 });
   const wl2 = await WS._h.sokoniStoreGetWallet(req(OPERATOR));
-  ok('F8 once created, the company wallet reads as a real 0 (canonical zero is fine)', wl2.storeWallet.exists === true && wl2.storeWallet.balance === 0 && wl2.storeWallet.pinSet === false);
+  ok('F8 once settlement created it, a real 0 reads as 0 (canonical zero is fine)', wl2.storeWallet.exists === true && wl2.storeWallet.balance === 0);
+  ok('F9 the company-account wallet is NOT the store wallet (not read)', !DB._reads.includes('businessWallets'));
 
   /* ── G. no money write path in the workspace ────────────────────────────── */
   const wsSrc = fs.readFileSync(path.join(FN, 'first-party-store-workspace.js'), 'utf8');
-  ok('G1 workspace never writes wallets / businessWallets / payout fields',
-    !/collection\('(wallets|businessWallets|payoutRequests)'\)[^;]*\.(set|update|create|add)\(/.test(wsSrc) && !/payout(Destination|Phone|Number|Account)\s*:/.test(wsSrc.replace(/payoutDestination: \{ status: 'unavailable'[^}]*\}/g, '')));
-  ok('G2 no payout-destination callable is exported (none built — census)', !Object.keys(WS).some((k) => /payout/i.test(k)));
+  ok('G1 workspace never writes wallets / businessWallets / payoutRequests / destination',
+    !/collection\('(wallets|businessWallets|payoutRequests)'\)[^;]*\.(set|update|create|add)\(/.test(wsSrc) && !/payoutDestination\s*:\s*\{\s*msisdn/.test(wsSrc));
+  ok('G2 workspace exports no payout callable (they live in first-party-store-payout.js)', !Object.keys(WS).some((k) => /payout/i.test(k)));
+  const wctx = await WS._h.sokoniStoreGetContext(req(OPERATOR));
+  ok('G3 context: no destination recorded → { status:"not-set" }', JSON.stringify(wctx.payoutDestination) === '{"status":"not-set"}');
+  seed({ record: { payoutDestination: { msisdn: '+254705726803' } } });
+  const wctx2 = await WS._h.sokoniStoreGetContext(req(OPERATOR));
+  ok('G4 …set destination renders as { status:"set", last3:"803" } and nothing more', JSON.stringify(wctx2.payoutDestination) === '{"status":"set","last3":"803"}' && !JSON.stringify(wctx2).includes('705726803') && wctx.ok);
 
   /* ── H. shop-employees.resolveShopAccess carve-out ──────────────────────── */
   seed();
@@ -300,28 +309,144 @@ const STORE_DATA_COLLECTIONS = ['products', 'orders', 'wallets', 'businessWallet
   /* ── I. the one-off script (not executed against anything) ──────────────── */
   const SCRIPT = path.join(ROOT, 'scripts', 'infra', 'set-first-party-store-operator.js');
   const sSrc = fs.readFileSync(SCRIPT, 'utf8');
-  const { walletV2Shape, operatorRecord } = require(SCRIPT);
-  const weSrc = fs.readFileSync(path.join(FN, 'wallet-engine.js'), 'utf8');
-  const m = weSrc.match(/async function _ensureWallet\(db, uid\) \{[\s\S]*?await ref\.set\(\{([\s\S]*?)\}\);/);
-  const engineKeys = m ? m[1].split('\n').map((l) => (l.match(/^\s*([A-Za-z0-9_]+)\s*[:,]/) || [])[1]).filter(Boolean).sort() : [];
-  const scriptKeys = Object.keys(walletV2Shape('x', new Date())).sort();
-  ok('I1 script wallet shape == wallet-engine _ensureWallet v2 shape (drift detector)', engineKeys.length > 10 && engineKeys.join() === scriptKeys.join(), engineKeys.join() + ' vs ' + scriptKeys.join());
-  ok('I2 script opens balance at 0 (no money is created)', walletV2Shape('x').balance === 0 && walletV2Shape('x').pendingBalance === 0);
-  ok('I3 script writes ONLY with create() — no set()/update() on any ref', /\.create\(/.test(sSrc) && !/\.(set|update)\(/.test(sSrc.replace(/^\s*(\/\/|\*).*$/gm, '')));
-  ok('I4 script is dry-run by default (--apply gates every write)', /const APPLY = process\.argv\.includes\('--apply'\)/.test(sSrc) && sSrc.indexOf('if (!APPLY)') < sSrc.indexOf('await recRef.create(') && sSrc.indexOf('if (!APPLY)') < sSrc.indexOf('await wRef.create('));
-  ok('I5 script never writes shops / businesses / claims / payout', !/collection\('(shops|businesses)'\)\.doc\([^)]*\)\.(create|set|update)|setCustomUserClaims|payout(Destination|Number)\s*:/.test(sSrc));
+  const code = sSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const { operatorRecord } = require(SCRIPT);
+  ok('I1 script creates NO wallet (company wallet plan withdrawn; settlement creates wallets/SOK-XX2338)', !/walletV2Shape|collection\('wallets'\)\.doc\([^)]*\)\.create|wRef\.create/.test(code));
+  ok('I2 script writes exactly one thing: the operator record, with create()', (code.match(/\.create\(/g) || []).length === 1 && /recRef\.create\(/.test(code));
+  ok('I3 script never uses set()/update()', !/\.(set|update)\(/.test(code));
+  ok('I4 script is dry-run by default (--apply gates the write)', /const APPLY = process\.argv\.includes\('--apply'\)/.test(code) && code.indexOf('if (!APPLY)') < code.indexOf('recRef.create('));
+  ok('I5 script never writes shops / businesses / claims / payout destination', !/collection\('(shops|businesses)'\)\.doc\([^)]*\)\.(create|set|update)|setCustomUserClaims|payoutDestination/.test(code));
+  seed();
   const chainNow = await OP.resolveStoreChain(DB);
   ok('I6 the record the script writes is exactly what the gate accepts', OP.recordAuthorises(operatorRecord(chainNow, OPERATOR, new Date()), chainNow, OPERATOR));
 
-  /* ── J. settlement path unchanged by this slice ─────────────────────────── */
-  let diff = '';
-  try { diff = execSync('git diff HEAD --name-only -- functions/order-settlement.js functions/settlement-engine.js functions/wallet.js functions/wallet-engine.js functions/commission.js', { cwd: ROOT }).toString().trim(); } catch (_) { diff = 'git-unavailable'; }
-  ok('J1 order-settlement / settlement-engine / wallet / wallet-engine / commission untouched by this slice', diff === '', diff);
+  /* ── J. settlement / money code unchanged except two read-only seams ────── */
+  const gitDiff = (f) => { try { return execSync('git diff a545818 -- ' + f, { cwd: ROOT }).toString(); } catch (_) { return 'git-unavailable'; } };
+  ok('J1 order-settlement / settlement-engine / commission untouched vs a545818',
+    ['functions/order-settlement.js', 'functions/settlement-engine.js', 'functions/commission.js'].every((f) => gitDiff(f) === ''));
+  for (const f of ['functions/wallet.js', 'functions/wallet-engine.js']) {
+    const body = gitDiff(f).split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
+    const removed = body.filter((l) => l.startsWith('-'));
+    const addedCode = body.filter((l) => l.startsWith('+')).map((l) => l.slice(1)).join('\n')
+      .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => l.trim()).filter(Boolean);
+    ok(`J ${f}: additive only — one exports._internal seam, nothing removed`, removed.length === 0 && addedCode.length === 1 && /^exports\._internal = Object\.freeze\(/.test(addedCode[0]), JSON.stringify({ removed: removed.length, addedCode }));
+  }
   ok('J2 store orders settle where they did: order-settlement keys the credit by order.sellerUid (= SOK-XX2338)',
     /const sellerId = order\.sellerUid \|\| order\.sellerId/.test(fs.readFileSync(path.join(FN, 'order-settlement.js'), 'utf8')));
 
+  /* ── P. operator payout (HELD behind firstPartyStoreConfig/payouts.enabled) ── */
+  const crypto = require('crypto');
+  const pinHash = (pin, uid) => crypto.createHash('sha256').update(String(pin + uid), 'utf8').digest('hex');
+  const flagOn = () => DB._put('firstPartyStoreConfig', 'payouts', { enabled: true });
+  const PHONE = '+254705726803';
+  AUTH_USERS[OPERATOR] = { uid: OPERATOR, phoneNumber: PHONE };
+  const withPin = () => DB._put('wallets', OPERATOR, { uid: OPERATOR, balance: 777, pinHash: pinHash('1234', OPERATOR), pinLocked: false });
+  const setDest = (uid, token, data) => PAY._h.sokoniStoreSetPayoutDestination(req(uid, token, data));
+  const payReq = (uid, token, data) => PAY._h.sokoniStorePayoutRequest(req(uid, token, data));
+  const writesTo = (col) => DB._writes.filter((w) => w.path.startsWith(col + '/')).length;
+
+  for (const [label, fn] of [['setDestination', setDest], ['payoutRequest', payReq]]) {
+    seed(); flagOn(); withPin();
+    let rr = await refusal(() => fn(OTHER_ADMIN, { admin: true, superAdmin: true }, { pin: '1234', msisdn: PHONE, amount: 500, requestId: 'req-admin-0001' }));
+    ok(`P1 ${label}: admin/superAdmin (not operator) refused not-store-operator, nothing written`, rr && rr.reason === 'not-store-operator' && DB._writes.length === 0, JSON.stringify(rr));
+    rr = await refusal(() => fn(null, {}, {}));
+    ok(`P1b ${label}: unauthenticated refused`, rr && rr.code === 'unauthenticated');
+    seed(); withPin();
+    rr = await refusal(() => fn(OPERATOR, {}, { pin: '1234', msisdn: PHONE, amount: 500, requestId: 'req-flagoff-01' }));
+    ok(`P2 ${label}: flag absent → store-payouts-not-enabled`, rr && rr.reason === 'store-payouts-not-enabled' && DB._writes.length === 0);
+    seed(); withPin(); DB._put('firstPartyStoreConfig', 'payouts', { enabled: 'true' });
+    rr = await refusal(() => fn(OPERATOR, {}, { pin: '1234', msisdn: PHONE, amount: 500, requestId: 'req-flagstr-01' }));
+    ok(`P2b ${label}: flag must be boolean true ("true" string stays OFF)`, rr && rr.reason === 'store-payouts-not-enabled');
+    seed(); flagOn(); DB._put('wallets', OPERATOR, { uid: OPERATOR, balance: 777, pinHash: null });
+    rr = await refusal(() => fn(OPERATOR, {}, { pin: '1234', msisdn: PHONE, amount: 500, requestId: 'req-nopin-0001' }));
+    ok(`P3 ${label}: operator wallet has no PIN → pin-not-set ("Set your wallet PIN first")`, rr && rr.reason === 'pin-not-set' && /Set your wallet PIN first/.test(rr.message));
+    seed(); flagOn(); withPin();
+    rr = await refusal(() => fn(OPERATOR, {}, { msisdn: PHONE, amount: 500, requestId: 'req-nopin-0002' }));
+    ok(`P4 ${label}: PIN omitted → pin-required`, rr && rr.reason === 'pin-required');
+    rr = await refusal(() => fn(OPERATOR, {}, { pin: '9999', msisdn: PHONE, amount: 500, requestId: 'req-badpin-001' }));
+    ok(`P5 ${label}: wrong PIN refused (permission-denied), not routed to review`, rr && rr.code === 'permission-denied' && writesTo('payoutRequests') === 0);
+    ok(`P5b ${label}: wrong PIN counted by the existing attempt counter`, !!DB._get('walletPinAttempts', OPERATOR));
+  }
+
+  seed(); flagOn(); withPin();
+  let pr2 = await refusal(() => setDest(OPERATOR, {}, { pin: '1234', msisdn: '0711111111' }));
+  ok('P6 destination ≠ operator\'s verified Auth phone → refused', pr2 && pr2.reason === 'destination-not-operator-verified-phone' && !(DB._get(OP.OPERATORS, STORE) || {}).payoutDestination);
+  pr2 = await refusal(() => setDest(OPERATOR, { phone_number: '+254711111111' }, { pin: '1234', msisdn: '+254711111111' }));
+  ok('P6b a forged token phone_number is ignored — the server reads Auth itself', pr2 && pr2.reason === 'destination-not-operator-verified-phone');
+  AUTH_USERS[OPERATOR] = { uid: OPERATOR };
+  pr2 = await refusal(() => setDest(OPERATOR, {}, { pin: '1234', msisdn: PHONE }));
+  ok('P7 operator with no verified phone → operator-phone-not-verified', pr2 && pr2.reason === 'operator-phone-not-verified');
+  AUTH_USERS[OPERATOR] = { uid: OPERATOR, phoneNumber: PHONE };
+  let r0 = await refusal(() => payReq(OPERATOR, {}, { pin: '1234', amount: 500, requestId: 'req-nodest-001', accountNumber: '0711111111' }));
+  ok('P8 request before a destination is set → payout-destination-not-set (client number NOT used)', r0 && r0.reason === 'payout-destination-not-set' && writesTo('payoutRequests') === 0);
+  const sd = await setDest(OPERATOR, {}, { pin: '1234', msisdn: '0705 726 803' });
+  const recAfter = DB._get(OP.OPERATORS, STORE);
+  ok('P9 destination = verified phone → stored server-side as E.164, response shows last 3 only',
+    sd.ok && recAfter.payoutDestination.msisdn === PHONE && recAfter.payoutDestination.setBy === OPERATOR && JSON.stringify(sd).indexOf('705726803') < 0);
+  ok('P9b the operator grant fields are untouched by set-destination', JSON.stringify(recAfter.operatorUids) === JSON.stringify([OPERATOR]) && recAfter.businessId === BIZ);
+  const auditRows = () => [...DB._store.entries()].filter(([k]) => k.startsWith('firstPartyStoreAudit/')).map(([, v]) => v);
+  ok('P9c set-destination audited: who, action, destination last 3', auditRows().some((a) => a.action === 'sokoniStore.setPayoutDestination' && a.operatorUid === OPERATOR && a.destinationLast3 === '803'));
+
+  r0 = await refusal(() => payReq(OPERATOR, {}, { pin: '1234', amount: 500, requestId: 'req-nowallet-1' }));
+  ok('P10 no settled sale (wallets/SOK-XX2338 absent) → no-store-sale-settled-yet; wallet NOT created', r0 && r0.reason === 'no-store-sale-settled-yet' && !DB._get('wallets', BIZ));
+
+  DB._put('wallets', BIZ, { balance: 2000, pendingPayout: 0 });
+  const res1 = await payReq(OPERATOR, {}, { pin: '1234', amount: 1500, requestId: 'req-store-0001', accountNumber: '0711111111', msisdn: '0722222222', phone: '0733333333', destination: '0744444444' });
+  const pdoc = DB._get('payoutRequests', 'pout_req-store-0001');
+  ok('P11 request pays ONLY the stored destination (every client-sent number ignored)', pdoc && pdoc.accountNumber === PHONE);
+  ok('P12 request is on wallets/SOK-XX2338 (sellerUid = business id), status pending, mode review',
+    pdoc.sellerUid === BIZ && pdoc.status === 'pending' && pdoc.mode === 'review' && pdoc.method === 'mpesa' && pdoc.amount === 1500 && pdoc.netAmount === 1500 && pdoc.fee === 0);
+  const wAfter = DB._get('wallets', BIZ);
+  ok('P13 reserve in the same transaction: balance 2000→500, pendingPayout 0→1500', wAfter.balance === 500 && wAfter.pendingPayout === 1500);
+  ok('P13b the operator\'s personal wallet balance is untouched', DB._get('wallets', OPERATOR).balance === 777);
+  ok('P13c response shows destination last 3 only', res1.destinationLast3 === '803' && JSON.stringify(res1).indexOf('705726803') < 0);
+  const res2 = await payReq(OPERATOR, {}, { pin: '1234', amount: 1500, requestId: 'req-store-0001' });
+  ok('P14 duplicate requestId → deduplicated, no second reserve', res2.deduplicated === true && DB._get('wallets', BIZ).balance === 500 && DB._get('wallets', BIZ).pendingPayout === 1500);
+  r0 = await refusal(() => payReq(OPERATOR, {}, { pin: '1234', amount: 501, requestId: 'req-over-00001' }));
+  ok('P15 over balance → insufficient-store-balance; wallet unchanged; no request doc', r0 && r0.reason === 'insufficient-store-balance' && DB._get('wallets', BIZ).balance === 500 && !DB._get('payoutRequests', 'pout_req-over-00001'));
+  r0 = await refusal(() => payReq(OPERATOR, {}, { pin: '1234', amount: 99, requestId: 'req-small-0001' }));
+  const r0b = await refusal(() => payReq(OPERATOR, {}, { pin: '1234', amount: 150.5, requestId: 'req-frac-00001' }));
+  const r0c = await refusal(() => payReq(OPERATOR, {}, { pin: '1234', amount: -5, requestId: 'req-neg-000001' }));
+  ok('P16 amount < 100, fractional or negative refused (invalid-amount)', [r0, r0b, r0c].every((x) => x && x.reason === 'invalid-amount'));
+  r0 = await refusal(() => payReq(OPERATOR, {}, { pin: '1234', amount: 100 }));
+  const r0d = await refusal(() => payReq(OPERATOR, {}, { pin: '1234', amount: 100, requestId: '../evil' }));
+  ok('P16b missing / malformed requestId refused (no random-id fallback)', r0 && r0.reason === 'invalid-request-id' && r0d && r0d.reason === 'invalid-request-id');
+  ok('P17 audit row for the request: who, amount, destination last 3, request id', auditRows().some((a) => a.action === 'sokoniStore.payoutRequest' && a.operatorUid === OPERATOR && a.amount === 1500 && a.destinationLast3 === '803' && a.requestId === 'pout_req-store-0001'));
+
+  /* velocity: same cap as sellers (config/payouts.maxPayoutsPerDay, default 3) */
+  seed(); flagOn(); withPin(); DB._put('wallets', BIZ, { balance: 10000, pendingPayout: 0 });
+  DB._put(OP.OPERATORS, STORE, { storeId: STORE, businessId: BIZ, ownerUid: OWNER, operatorUids: [OPERATOR], payoutDestination: { msisdn: PHONE } });
+  for (let i = 1; i <= 3; i++) await payReq(OPERATOR, {}, { pin: '1234', amount: 100, requestId: 'req-vel-000' + i });
+  r0 = await refusal(() => payReq(OPERATOR, {}, { pin: '1234', amount: 100, requestId: 'req-vel-0004' }));
+  ok('P18 4th request in one EAT day → daily-payout-limit (the seller velocity cap)', r0 && r0.reason === 'daily-payout-limit' && DB._get('wallets', BIZ).balance === 9700);
+
+  DB._put('wallets', BIZ, { balance: 9700, pendingPayout: 300, frozen: true });
+  DB._put('payoutVelocity', BIZ, { date: 'other-day', count: 0 });
+  r0 = await refusal(() => payReq(OPERATOR, {}, { pin: '1234', amount: 100, requestId: 'req-frozen-001' }));
+  ok('P18b frozen store wallet → store-wallet-frozen; nothing reserved', r0 && r0.reason === 'store-wallet-frozen' && DB._get('wallets', BIZ).balance === 9700);
+
+  /* shape: derived from wallet.js requestSellerPayout's own t.set(reqRef, {...}) */
+  const wSrc = fs.readFileSync(path.join(FN, 'wallet.js'), 'utf8');
+  const rsp = wSrc.slice(wSrc.indexOf('exports.requestSellerPayout'));
+  const bStart = rsp.indexOf('t.set(reqRef, {');
+  const block = rsp.slice(bStart, rsp.indexOf('\n    });', bStart));
+  const sellerKeys = block.split('\n').map((l) => (l.match(/^\s{6}([A-Za-z0-9_]+)\s*[:,]/) || [])[1]).filter(Boolean).sort();
+  const storeKeys = Object.keys(DB._get('payoutRequests', 'pout_req-vel-0001')).sort();
+  ok('P19 store request == requestSellerPayout request, field for field (derived from source)', sellerKeys.length >= 15 && sellerKeys.join() === storeKeys.join(), sellerKeys.join() + ' | ' + storeKeys.join());
+  const sh = DB._get('payoutRequests', 'pout_req-vel-0001').statusHistory;
+  ok('P19b statusHistory built by wallet.js\'s own payoutEvent (requested → pending)', Array.isArray(sh) && sh[0].status === 'requested' && sh[1].status === 'pending' && 'at' in sh[0]);
+
+  /* no second execution rail */
+  const pSrc = fs.readFileSync(path.join(FN, 'first-party-store-payout.js'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  ok('P20 payout module never calls a gateway, never marks paid, has no instant path',
+    !/intasend(?!Ref)|payment-adapters|_disburseB2C|sendMoneyB2C|settlePayoutPaid|'paid'|'instant'|'approved'/i.test(pSrc));
+  ok('P21 the existing admin path keys execution on payout.sellerUid (so it pays wallets/SOK-XX2338)',
+    /db\.collection\('wallets'\)\.doc\(payout\.sellerUid\)/.test(wSrc) && /exports\.adminProcessPayout/.test(wSrc));
+  ok('P22 the flag lives in a server-only collection and defaults OFF', PAY._internal.FLAG.collection === 'firstPartyStoreConfig' && PAY._internal.FLAG.doc === 'payouts');
+
   /* ── K. registration ─────────────────────────────────────────────────────── */
   const idx = fs.readFileSync(path.join(FN, 'index.js'), 'utf8');
+  for (const n of ['sokoniStoreSetPayoutDestination', 'sokoniStorePayoutRequest']) ok(`K ${n} exported by name in index.js`, new RegExp('exports\\.' + n + '\\s*=\\s*_sokoniStorePayout\\.' + n + ';').test(idx));
   for (const n of CALLABLES) ok(`K ${n} exported by name in index.js`, new RegExp('exports\\.' + n + '\\s*=\\s*_sokoniStore\\.' + n + ';').test(idx));
 
   console.log(`\n${pass} PASS / ${fail} FAIL`);

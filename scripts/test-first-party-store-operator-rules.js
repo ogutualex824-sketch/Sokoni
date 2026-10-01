@@ -6,7 +6,8 @@
           them explicitly through initializeTestEnvironment.)
 
    What only the rules engine can prove:
-     * firstPartyStoreOperators/* and firstPartyStoreAudit/* are DEFAULT-DENIED to every client
+     * firstPartyStoreOperators/*, firstPartyStoreAudit/* and firstPartyStoreConfig/* (the payouts
+       flag) are DEFAULT-DENIED to every client
        — admin, superAdmin, the operator, the company owner — for read AND write. The operator
        grant must be reachable only through the Admin SDK.
      * KNOWN GAPS (reported, not asserted as pass): today's rules let ANY admin client update
@@ -60,6 +61,8 @@ const STORE = 'STR_147f5ce11b424ec4bb892519', OWNER = 'vbaSOKL4h8WWGqa6Xfi1eLaEP
     await check(`${who}: cannot CREATE/overwrite firstPartyStoreOperators`, assertFails(db.doc('firstPartyStoreOperators/' + STORE).set({ operatorUids: [who] })));
     await check(`${who}: cannot UPDATE firstPartyStoreOperators`, assertFails(db.doc('firstPartyStoreOperators/' + STORE).update({ operatorUids: [who] })));
     await check(`${who}: cannot READ firstPartyStoreAudit`, assertFails(db.doc('firstPartyStoreAudit/a1').get()));
+    await check(`${who}: cannot WRITE the payouts flag firstPartyStoreConfig/payouts`, assertFails(db.doc('firstPartyStoreConfig/payouts').set({ enabled: true })));
+    await check(`${who}: cannot READ the payouts flag`, assertFails(db.doc('firstPartyStoreConfig/payouts').get()));
   }
   await check('anyone may still READ the public store document (storefront)', assertSucceeds(as.anon.doc('shops/' + STORE).get()));
   await gap('admin client can UPDATE shops/{store} (phone)', assertSucceeds(as.admin.doc('shops/' + STORE).update({ phone: '+254700000000' })));
