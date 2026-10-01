@@ -176,8 +176,18 @@
     'venue-manager.html':       'provider'
   };
 
+  /* SHOPPING PAGES ARE THE SHOPPER'S, WHATEVER THE ROLE (owner, 2026-10-01: "cart should only show cart").
+     An unmapped page returned the user's own role, so a super admin opening the cart got the Super Admin desktop
+     sidebar (and a seller the seller sidebar + sub-nav) wrapped around their cart. These pages are where an
+     operator is acting as a CUSTOMER — they get the buyer chrome. Workspace pages are unaffected; the admin /
+     seller consoles stay one tap away in the profile menu. */
+  var _CONSUMER_PAGES = ['index', 'cart', 'checkout', 'product', 'category', 'search', 'wishlist', 'my-orders',
+    'track', 'success', 'services', 'food', 'property-hub', 'car-hub', 'healthcare', 'legal-hub', 'tech-hub',
+    'jobs', 'entertainment', 'notifications'];
+
   function _workspace() {
     var r      = _role();
+    if (_CONSUMER_PAGES.indexOf(_page) > -1) return 'buyer';
     var mapped = _WS_MAP[_page];
     if (!mapped) return r;
     if (mapped === 'superAdmin') return (r === 'superAdmin') ? 'superAdmin' : (r === 'admin' ? 'admin' : 'buyer');
