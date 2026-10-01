@@ -320,6 +320,50 @@ await T('it writes to ONE collection, and names it', () => {
   ok(cols.every((c) => /COLLECTION/.test(c)), 'a second collection appeared: ' + cols.join(', '));
 });
 
+await T('invoker:"public" is set — its absence is a SILENT 403 from Cloud Run', () => {
+  /* The failure this guards is invisible from inside: without invoker public,
+     Cloud Run rejects Meta with 403 BEFORE any code runs, so every other
+     assertion in this suite stays green while the webhook is unreachable and
+     nothing appears in our logs to explain it. webhookIntasend, webhookMpesa
+     and webhookStripe all set it. */
+  const src = require('fs').readFileSync(path.join(ROOT, 'functions/whatsapp-webhook.js'), 'utf8');
+  const bare = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+  ok(bare.length < src.length, 'control: the comment stripper is not a no-op');
+  ok(/invoker:\s*'public'/.test(bare), 'invoker public is missing from the function options');
+  ok(!/enforceAppCheck/.test(bare),
+    'App Check must NOT be enforced — Meta cannot present a token, the signature is the auth');
+});
+
+await T('it is exported as webhookWhatsapp, matching the house convention', () => {
+  const idx = require('fs').readFileSync(path.join(ROOT, 'functions/index.js'), 'utf8');
+  ok(/exports\.webhookWhatsapp\s*=/.test(idx),
+    'not exported, or not under the webhook<Provider> name the other rails use');
+  /* The neighbours, so "the convention" is measured rather than asserted. */
+  ['webhookIntasend', 'webhookMpesa', 'webhookStripe'].forEach((n) => {
+    ok(new RegExp('exports\\.' + n + '\\s*=').test(idx), 'control: ' + n + ' should exist');
+  });
+});
+
+await T('defineSecret uses STRING LITERALS, so inventory tools can find them', () => {
+  /* The failure this guards is invisible: defineSecret(SOME_VARIABLE) binds
+     correctly at runtime but is unreadable to every grep-based secret
+     inventory in this repo — including the predeploy gate. The deploy would be
+     reported as ready while these two were missing, then fail and take every
+     other function with it. */
+  const src = require('fs').readFileSync(path.join(ROOT, 'functions/whatsapp-webhook.js'), 'utf8');
+  const bare = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+  const found = [];
+  const re = /defineSecret\(\s*(['"])([A-Z0-9_]+)\1\s*\)/g;
+  let m; while ((m = re.exec(bare))) found.push(m[2]);
+  eq(found.length, 2, 'expected two literal defineSecret bindings, got ' + found.join(','));
+
+  /* ...and the literals must agree with SECRET_NAMES, or the duplication has
+     drifted and the module and the preflight are describing different secrets. */
+  const declared = [wa.SECRET_NAMES.verifyToken, wa.SECRET_NAMES.appSecret].sort();
+  eq(JSON.stringify(found.slice().sort()), JSON.stringify(declared),
+    'the literals and SECRET_NAMES disagree: ');
+});
+
 await T('the secrets are NAMED, not embedded', () => {
   eq(wa.SECRET_NAMES.verifyToken, 'WHATSAPP_VERIFY_TOKEN', '');
   eq(wa.SECRET_NAMES.appSecret, 'WHATSAPP_APP_SECRET', '');
@@ -340,9 +384,9 @@ console.log('            control proving a valid request of the same shape is ac
 console.log('            Idempotent under Cloud API retries; message BODIES are not stored.');
 console.log('  SCOPE     INBOUND ONLY. The module contains no send path, touches no order,');
 console.log('            payment or checkout, and writes one collection.');
-console.log('  UNPROVEN  a real Meta delivery. No WABA, phone-number-id or credential');
-console.log('            exists yet, so nothing has been received from Meta — only');
-console.log('            payloads shaped like Meta’s. Not registered, not deployed, and');
-console.log('            not exported from functions/index.js.\n');
+console.log('  UNPROVEN  a real Meta delivery. The secrets are not provisioned, so');
+console.log('            nothing has been received from Meta — only payloads shaped');
+console.log('            like Meta’s. Now EXPORTED as webhookWhatsapp, but NOT');
+console.log('            deployed and NOT registered with Meta.\n');
 process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('\n  SUITE CRASHED — a crash is not a pass\n', e); process.exit(1); });
