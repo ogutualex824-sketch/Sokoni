@@ -1,3 +1,12 @@
+## [2026-10-01] — Financial Partner Workspace: the dashboard approved financial partners land on (functions + hosting + indexes, NOT deployed)
+
+**Why (owner, 2026-10-01):** "make sure there are dashboards after approval with all equipment … in the sidebar so the banks, SACCOs can do their registration, add members and all — fix for all categories."
+**What:** `financial-partner-dashboard.html` — sidebar built by the server per `institutionType` (all 10 `INSTITUTION_TYPES`: BANK, SACCO, CHAMA, MICROFINANCE, INSURER, FOREX, ACCOUNTANT, FINANCIAL_ADVISER, INVESTMENT, OTHER): Overview · Registration (licence details → admin review) · Members/Clients/Policyholders register (add, CSV import ≤200, suspend/exit, erasure) · Products/Policies/Plans/Rates/Services · Enquiries · Team (manager/officer) · Public profile.
+**Files:** functions — `functions/financial-partner.js` (callable `financialPartnerDispatch`), `functions/index.js`, `functions/shared/durable-limit.js` (byte-identical port), `firestore.indexes.json` (+4); hosting — `financial-partner-dashboard.html/.js`; tests — `scripts/test-financial-partner-workspace.js` (38/0), `scripts/test-financial-partner-page.js` (11/0); docs — `docs/FINANCIAL_PARTNER_WORKSPACE.md`.
+**Database:** new server-only `financialPartners/{uid}` (+ members/products/team/audit), `financialPartnerStaff/{uid}`, `financialEnquiries/{id}` (no rules match → client deny). Public profile edits write `financialProviders/{uid}` **EDITABLE_KEYS only**, through sokoni-27's `validateDescriptive()` (one validator for both writers), listingStatus re-checked in the transaction.
+**Security:** approval gate on every call; owner/manager/officer roles; registration self-declared → `under_review` only, admin-only verify (logged to `adminActions`); member consent attested; phone-unique `create()`; no ID/DOB/balances stored; App Check; fail-closed limits (writes 300/h, enquiries 10/day + 3/day per partner, team adds 20/day, public profile 120/10 min); audit holds ids only. Page does not load `sokoni-role-authority.js` (its guard would bounce staff).
+**Breaking:** none (new names). **Deploy order:** functions (with sokoni-27's lifecycle, same tree) + indexes → rules (financialProviders read) → hosting.
+
 ## [2026-10-01] - Applications: financial_partner role lists approved partners in financialProviders/{uid} — functions only, NOT deployed
 
 Banking Hub programme (owner, via sokoni-4d). One approval flow: a requestedRole:'financial_partner' application approved in
