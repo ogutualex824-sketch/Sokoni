@@ -690,6 +690,7 @@ const _isSuperAdmin = (auth) => !!auth && (auth.token?.superAdmin === true || au
 const _mask = (s) => { const v = String(s || ''); return v.length <= 4 ? '****' : '****' + v.slice(-4); };
 function _destination(type, d) {
   const t = String(type || '').toUpperCase();
+  const manual = d && d.rail === 'manual';   /* explicit choice when the provider cannot reach the destination */
   const digits = (v) => String(v || '').replace(/\D/g, '');
   if (t === 'MPESA') {
     const ph = digits(d.phone);
@@ -700,17 +701,19 @@ function _destination(type, d) {
   if (t === 'TILL') {
     const till = digits(d.tillNumber);
     if (!/^\d{5,7}$/.test(till)) throw new HttpsError('invalid-argument', 'Enter a valid Till number.');
-    return { type: t, rail: 'manual', tillNumber: till, display: 'Till ' + _mask(till) };
+    return { type: t, rail: manual ? 'manual' : 'intasend_b2b', tillNumber: till, display: 'Till ' + _mask(till) };
   }
   if (t === 'PAYBILL') {
     const pb = digits(d.paybillNumber), acc = _san(d.accountRef, 40);
     if (!/^\d{5,7}$/.test(pb) || !acc) throw new HttpsError('invalid-argument', 'Enter a Paybill number and account.');
-    return { type: t, rail: 'manual', paybillNumber: pb, accountRef: acc, display: 'Paybill ' + pb + ' · ' + _mask(acc) };
+    return { type: t, rail: manual ? 'manual' : 'intasend_b2b', paybillNumber: pb, accountRef: acc, display: 'Paybill ' + pb + ' · ' + _mask(acc) };
   }
   if (t === 'BANK') {
     const acct = digits(d.accountNumber), bank = _san(d.bankName, 80), name = _san(d.accountName, 100);
     if (!bank || !name || !/^\d{6,20}$/.test(acct)) throw new HttpsError('invalid-argument', 'Enter the bank, account name and account number.');
-    return { type: t, rail: 'manual', bankName: bank, bankCode: _san(d.bankCode, 10) || null, accountNumber: acct, accountName: name, display: bank + ' ' + _mask(acct) };
+    const code = String(d.bankCode || '').trim();
+    if (!manual && !/^[A-Za-z0-9]{1,10}$/.test(code)) throw new HttpsError('invalid-argument', 'Choose the bank from the provider list.');
+    return { type: t, rail: manual ? 'manual' : 'intasend_pesalink', bankName: bank, bankCode: code || null, accountNumber: acct, accountName: name, display: bank + ' ' + _mask(acct) };
   }
   throw new HttpsError('invalid-argument', 'Destination must be MPESA, BANK, TILL or PAYBILL.');
 }
@@ -721,7 +724,9 @@ function _dsbRow(id, x) {
     destinationType: (x.destination && x.destination.type) || 'MPESA', rail: (x.destination && x.destination.rail) || 'intasend_b2c',
     grantId: x.grantId || null, campaignId: x.campaignId || null, paymentRef: x.paymentRef || null, trackingId: x.trackingId || null,
     initiatedBy: x.initiatedBy, approvedBy: x.approvedBy || null, authorizedBy: x.authorizedBy || null, confirmedBy: x.confirmedBy || null,
-    failureReason: x.failureReason || null, initiatedAt: ms(x.initiatedAt), completedAt: ms(x.completedAt) };
+    failureReason: x.failureReason || null, requiresReview: !!x.requiresReview,
+    validation: x.destination && x.destination.validation ? { status: x.destination.validation.status, accountName: x.destination.validation.accountName || null } : null,
+    initiatedAt: ms(x.initiatedAt), completedAt: ms(x.completedAt) };
 }
 async function _dsbAudit(txn, ref, entry) {
   txn.update(ref, { auditLog: admin.firestore.FieldValue.arrayUnion({ ...entry, at: new Date().toISOString() }), updatedAt: _now() });
@@ -768,7 +773,7 @@ async function _settle(ref, from, outcome, extra) {
 }
 
 exports.impactInitiateDisbursement = onCall(
-  { timeoutSeconds: 20, enforceAppCheck: true },
+  { timeoutSeconds: 30, enforceAppCheck: true, secrets: [INTASEND_PRIVATE_KEY] },
   async (request) => {
     if (!_isAdmin(request.auth)) throw new HttpsError('permission-denied', 'Admin only.');
     const uid = request.auth.uid;
@@ -784,6 +789,22 @@ exports.impactInitiateDisbursement = onCall(
     /* back-compat: a bare beneficiaryPhone means M-PESA */
     const data = request.data || {};
     const dest = _destination(data.destinationType || (data.beneficiaryPhone ? 'MPESA' : ''), data.destination || { phone: data.beneficiaryPhone });
+    let requiresReview = false;
+    if (dest.rail === 'intasend_pesalink') {
+      const cat = await fdb().collection('intasendBankCodes').doc('ke').get();
+      const codes = cat.exists && Array.isArray(cat.data().codes) ? cat.data().codes : null;
+      if (!codes) throw new HttpsError('failed-precondition', 'The bank list has not been loaded from IntaSend yet. Refresh it first.');
+      const hit = codes.find((c) => c.bankCode === dest.bankCode);
+      if (!hit) throw new HttpsError('invalid-argument', 'That bank is not supported by the payout provider.');
+      dest.bankName = hit.bankName;
+      dest.display = hit.bankName + ' ' + _mask(dest.accountNumber);
+    }
+    if (dest.rail === 'intasend_pesalink' || dest.rail === 'intasend_b2b') {
+      const v = await require('./intasend-send-money').validateAccount(INTASEND_PRIVATE_KEY.value(), dest);
+      if (v.status === 'mismatch') throw new HttpsError('invalid-argument', 'The payout provider says this account is not valid.');
+      dest.validation = { status: v.status, accountName: v.accountName || null, reason: v.reason || null };
+      if (v.status !== 'validated') requiresReview = true;   /* unverified beneficiary → REQUIRES_REVIEW at authorization */
+    }
     const refundOf = data.refundOfPledgeId ? String(data.refundOfPledgeId) : null;
     if (refundOf && !/^(PLG|CHK)_[A-Za-z0-9_-]{1,200}$/.test(refundOf)) throw new HttpsError('invalid-argument', 'Invalid donation.');
     const ref = fdb().collection('impactDisbursements').doc('DSB_' + requestId.toLowerCase());
@@ -820,7 +841,7 @@ exports.impactInitiateDisbursement = onCall(
       txn.create(ref, {
         id: ref.id, kind: refundOf ? 'donation_refund' : 'support', refundOfPledgeId: refundOf,
         campaignId: campaignId ? _san(campaignId, 128) : null, grantId: grantId ? String(grantId) : null,
-        beneficiaryName: name, destination: dest, amount: amt, currency: 'KES', description: purpose,
+        beneficiaryName: name, destination: dest, requiresReview, amount: amt, currency: 'KES', description: purpose,
         status: 'pending_approval', initiatedBy: uid, initiatedAt: _now(),
         approvedBy: null, authorizedBy: null, confirmedBy: null, paymentRef: null, trackingId: null,
         auditLog: [{ action: 'initiated', by: uid, at: new Date().toISOString() }], createdAt: _now(), updatedAt: _now(),
@@ -868,6 +889,9 @@ exports.impactAuthorizeDisbursement = onCall(
       const x = snap.data();
       if (x.status !== 'pending_authorization') throw new HttpsError('failed-precondition', 'Disbursement is not awaiting authorization (status: ' + x.status + ').');
       if (x.approvedBy === uid || x.initiatedBy === uid) throw new HttpsError('permission-denied', 'The authorizer must differ from the initiator and the approver.');
+      if (x.requiresReview && (request.data || {}).acknowledgeUnvalidated !== true) {
+        throw new HttpsError('failed-precondition', 'The provider could not validate this beneficiary. Review the details and confirm to proceed.', { code: 'REVIEW_REQUIRED' });
+      }
       const balRef = fdb().collection('impactBalance').doc('current');
       const b = await txn.get(balRef);
       const bal = b.exists ? b.data() : {};
@@ -879,13 +903,20 @@ exports.impactAuthorizeDisbursement = onCall(
       return x;
     });
     const rail = (d.destination && d.destination.rail) || 'intasend_b2c';
-    if (rail !== 'intasend_b2c') {
+    if (rail === 'manual') {
       return { ok: true, status: 'processing', rail, next: 'Pay outside SOKONI, then record the provider reference for a second admin to confirm.' };
     }
-    const phone = (d.destination && d.destination.phone) || _phone(d.beneficiaryPhone);
     let res;
     try {
-      res = await require('./finos-utils').intasendB2C(INTASEND_PRIVATE_KEY.value(), { phone, amountKES: d.amount, reference: id, remarks: 'SOKONI Foundation support' });
+      if (rail === 'intasend_b2c') {
+        const phone = (d.destination && d.destination.phone) || _phone(d.beneficiaryPhone);
+        res = await require('./finos-utils').intasendB2C(INTASEND_PRIVATE_KEY.value(), { phone, amountKES: d.amount, reference: id, remarks: 'SOKONI Foundation support' });
+      } else if (rail === 'intasend_b2b' || rail === 'intasend_pesalink') {
+        const r = await require('./intasend-send-money').sendMoney(INTASEND_PRIVATE_KEY.value(), d.destination, { amountKES: d.amount, name: d.beneficiaryName, narrative: 'SOKONI Foundation support' });
+        res = { tracking_id: r.trackingId };
+      } else {
+        throw Object.assign(new Error('unknown rail'), { gateway: { code: 'UNKNOWN_RAIL' } });
+      }
     } catch (e) {
       await _settle(ref, ['processing'], 'failed', { failureReason: 'Gateway refused: ' + _san((e.gateway && e.gateway.code) || e.message, 120), settledBy: uid });
       throw new HttpsError('unavailable', 'IntaSend did not accept the payout. Nothing was sent and the funds were released.');
@@ -894,6 +925,27 @@ exports.impactAuthorizeDisbursement = onCall(
     await ref.update({ trackingId, gatewayAcceptedAt: _now() });
     /* NOT completed: IntaSend accepted the request. Completion is confirmed by impactRefreshDisbursementStatus. */
     return { ok: true, status: 'processing', rail, trackingId };
+  }
+);
+
+/* 14a. Provider bank catalogue (PesaLink). Fetched from IntaSend and cached — never hard-coded. */
+exports.impactBankCodes = onCall(
+  { timeoutSeconds: 30, enforceAppCheck: true, secrets: [INTASEND_PRIVATE_KEY] },
+  async (request) => {
+    if (!_isAdmin(request.auth)) throw new HttpsError('permission-denied', 'Admin only.');
+    const ref = fdb().collection('intasendBankCodes').doc('ke');
+    const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : null);
+    if ((request.data || {}).action === 'refresh') {
+      let codes;
+      try { codes = await require('./intasend-send-money').bankCodes(INTASEND_PRIVATE_KEY.value()); }
+      catch (e) { throw new HttpsError('unavailable', 'IntaSend did not return the bank list. The previous list (if any) is kept.'); }
+      if (!codes.length) throw new HttpsError('unavailable', 'IntaSend returned an empty bank list. The previous list (if any) is kept.');
+      await ref.set({ codes, count: codes.length, fetchedAt: _now(), fetchedBy: request.auth.uid, source: 'intasend:/send-money/bank-codes/ke/' });
+      await fdb().collection('adminActions').add({ type: 'intasend_bank_codes_refresh', count: codes.length, adminUid: request.auth.uid, createdAt: _now() });
+    }
+    const s = await ref.get();
+    if (!s.exists) return { ok: true, loaded: false, codes: [] };
+    return { ok: true, loaded: true, codes: s.data().codes || [], fetchedAt: ms(s.data().fetchedAt) };
   }
 );
 

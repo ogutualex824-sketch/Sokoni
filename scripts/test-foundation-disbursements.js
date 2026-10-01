@@ -24,8 +24,15 @@ process.env.INTASEND_PRIVATE_KEY = 'test-only-not-a-secret';
 
 const B2C = { calls: [], mode: 'accept' };
 let STATUS = { status: 'Processing' };
+const SENT = [];
+let VALIDATE = { valid: true, account_name: 'ST MARY SCHOOL' };
+let BANKS = [{ bank_code: '01', bank_name: 'KCB Bank' }, { bank_code: '68', bank_name: 'Equity Bank' }];
+const resp = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body, text: async () => JSON.stringify(body) });
 global.fetch = async (url, opts) => {
   if (/send-money\/status/.test(url)) return { ok: true, json: async () => ({ transactions: [STATUS] }) };
+  if (/send-money\/bank-codes\/ke/.test(url)) return BANKS ? resp(200, BANKS) : resp(503, { detail: 'down' });
+  if (/send-money\/validate-account/.test(url)) return VALIDATE ? resp(200, VALIDATE) : resp(404, { detail: 'not supported' });
+  if (/send-money\/initiate/.test(url)) { const b = JSON.parse(opts.body); SENT.push(b); return resp(200, { tracking_id: 'TRK-SM' + SENT.length }); }
   throw new Error('unexpected fetch ' + url);
 };
 function setup() {
@@ -104,7 +111,7 @@ const ledger = (F) => [...F.db._store.keys()].filter((k) => k.startsWith('impact
   ck('D5 IntaSend reports Failed → failed, released, no debit', d5.ok && d5.v.status === 'failed' && (await bal(F)).reservedKES === 0 && ledger(F).length === 1, d5);
 
   /* E — manual rail */
-  const e0 = await run(M, 'impactInitiateDisbursement', 'adm1', { requestId: rid(8), amount: 3000, beneficiaryName: 'St. Mary School', description: 'Fees term 1', destinationType: 'PAYBILL', destination: { paybillNumber: '522522', accountRef: 'ADM-7781' } }, ADM);
+  const e0 = await run(M, 'impactInitiateDisbursement', 'adm1', { requestId: rid(8), amount: 3000, beneficiaryName: 'St. Mary School', description: 'Fees term 1', destinationType: 'PAYBILL', destination: { paybillNumber: '522522', accountRef: 'ADM-7781', rail: 'manual' } }, ADM);
   const E = 'DSB_' + rid(8);
   await run(M, 'impactApproveDisbursement', 'adm2', { disbursementId: E }, ADM);
   const e1 = await run(M, 'impactAuthorizeDisbursement', 'sup1', { disbursementId: E }, SUP);
@@ -118,7 +125,7 @@ const ledger = (F) => [...F.db._store.keys()].filter((k) => k.startsWith('impact
   ck('E3 a different admin confirms → debit once (balance 5,000), released; double confirm refused', e5.ok && !e6.ok && ledger(F).length === 2 && (await bal(F)).balance === 5000 && (await bal(F)).reservedKES === 0, { e5, e6, b: await bal(F) });
 
   /* F */
-  await run(M, 'impactInitiateDisbursement', 'adm1', { requestId: rid(9), amount: 400, beneficiaryName: 'x', description: 'y', destinationType: 'BANK', destination: { bankName: 'KCB', accountName: 'Jane W', accountNumber: '1234567890' } }, ADM);
+  await run(M, 'impactInitiateDisbursement', 'adm1', { requestId: rid(9), amount: 400, beneficiaryName: 'x', description: 'y', destinationType: 'BANK', destination: { bankName: 'KCB', accountName: 'Jane W', accountNumber: '1234567890', rail: 'manual' } }, ADM);
   const f1 = await run(M, 'impactCancelDisbursement', 'adm2', { disbursementId: 'DSB_' + rid(9), note: 'Duplicate request' }, ADM);
   const f2 = await run(M, 'impactCancelDisbursement', 'adm2', { disbursementId: E, note: 'too late' }, ADM);
   ck('F1 cancel before authorization works; a completed payout cannot be cancelled', f1.ok && !f2.ok && f2.code === 'failed-precondition');
@@ -128,6 +135,47 @@ const ledger = (F) => [...F.db._store.keys()].filter((k) => k.startsWith('impact
   const txt = JSON.stringify(f3.v);
   ck('F2 admin list masks destinations (no full phone / account / paybill account)', f3.ok && !/712345678|1234567890|ADM-7781/.test(txt) && /\*\*\*\*/.test(txt), txt.slice(0, 300));
   ck('F3 summary from aggregates (balance, available, counts); non-admin refused', f4.ok && f4.v.balance.balance === 5000 && f4.v.balance.available === 5000 && f4.v.disbursements.completed === 2 && f4.v.disbursements.failed === 2 && f5.code === 'permission-denied', f4.v);
+
+  /* I — automated IntaSend rails: PesaLink bank, M-PESA B2B Till / PayBill (contract UNPROVEN live) */
+  await F.db.collection('impactBalance').doc('current').set({ verifiedBalance: 50000, balance: 50000 }, { merge: true });
+  const i0 = await run(M, 'impactInitiateDisbursement', 'adm1', { requestId: rid(30), amount: 1000, beneficiaryName: 'Jane W', description: 'Rent support', destinationType: 'BANK', destination: { bankName: 'KCB', bankCode: '01', accountName: 'Jane W', accountNumber: '1234567890' } }, ADM);
+  ck('I1 bank payout refused until the provider bank list is loaded (never a hard-coded list)', !i0.ok && i0.code === 'failed-precondition' && /bank list/.test(i0.msg), i0);
+  const i1 = await run(M, 'impactBankCodes', 'adm1', { action: 'refresh' }, ADM);
+  const i1u = await run(M, 'impactBankCodes', 'user', { action: 'refresh' });
+  ck('I2 admin refreshes the catalogue from IntaSend (2 banks cached); non-admin refused', i1.ok && i1.v.codes.length === 2 && i1u.code === 'permission-denied', i1);
+  BANKS = null;
+  const i1b = await run(M, 'impactBankCodes', 'adm1', { action: 'refresh' }, ADM);
+  ck('I3 provider outage keeps the previous list (no empty overwrite)', !i1b.ok && i1b.code === 'unavailable' && (await F.db.collection('intasendBankCodes').doc('ke').get()).data().count === 2);
+  BANKS = [{ bank_code: '01', bank_name: 'KCB Bank' }];
+  const i2 = await run(M, 'impactInitiateDisbursement', 'adm1', { requestId: rid(31), amount: 1000, beneficiaryName: 'Jane W', description: 'Rent support', destinationType: 'BANK', destination: { bankName: 'Fake Bank', bankCode: '99', accountName: 'Jane W', accountNumber: '1234567890' } }, ADM);
+  ck('I4 a bank code the provider does not list → refused', !i2.ok && /not supported/.test(i2.msg), i2);
+  const i3 = await run(M, 'impactInitiateDisbursement', 'adm1', { requestId: rid(32), amount: 1000, beneficiaryName: 'Jane W', description: 'Rent support', destinationType: 'BANK', destination: { bankName: 'whatever', bankCode: '01', accountName: 'Jane W', accountNumber: '1234567890' } }, ADM);
+  const D3 = await dsb(F, 'DSB_' + rid(32));
+  ck('I5 validated bank beneficiary: PesaLink rail, bank name taken from the PROVIDER list, validation stored, no review needed',
+    i3.ok && D3.destination.rail === 'intasend_pesalink' && D3.destination.bankName === 'KCB Bank' && D3.destination.validation.status === 'validated' && D3.requiresReview === false, D3 && D3.destination);
+  await run(M, 'impactApproveDisbursement', 'adm2', { disbursementId: 'DSB_' + rid(32) }, ADM);
+  const sentBefore = SENT.length;
+  const i4 = await run(M, 'impactAuthorizeDisbursement', 'sup1', { disbursementId: 'DSB_' + rid(32) }, SUP);
+  const pl = SENT[SENT.length - 1];
+  ck('I6 authorize sends ONE PesaLink transfer (provider, bank_code, account, amount) and stays processing',
+    i4.ok && i4.v.status === 'processing' && SENT.length === sentBefore + 1 && pl.provider === 'PESALINK' && pl.transactions[0].bank_code === '01' && pl.transactions[0].account === '1234567890' && pl.transactions[0].amount === 1000, { i4, pl });
+  VALIDATE = null;
+  const i5 = await run(M, 'impactInitiateDisbursement', 'adm1', { requestId: rid(33), amount: 2500, beneficiaryName: 'St. Mary School', description: 'Fees', destinationType: 'PAYBILL', destination: { paybillNumber: '522522', accountRef: 'ADM-7781' } }, ADM);
+  const D5 = 'DSB_' + rid(33);
+  ck('I7 provider cannot validate the PayBill → created but flagged REQUIRES_REVIEW', i5.ok && (await dsb(F, D5)).requiresReview === true && (await dsb(F, D5)).destination.validation.status === 'unavailable', i5);
+  await run(M, 'impactApproveDisbursement', 'adm2', { disbursementId: D5 }, ADM);
+  const i6 = await run(M, 'impactAuthorizeDisbursement', 'sup1', { disbursementId: D5 }, SUP);
+  const i7 = await run(M, 'impactAuthorizeDisbursement', 'sup1', { disbursementId: D5, acknowledgeUnvalidated: true }, SUP);
+  const b2b = SENT[SENT.length - 1];
+  ck('I8 authorize refused without an explicit acknowledgement; with it, ONE M-PESA B2B PayBill transfer with account_reference',
+    !i6.ok && i6.code === 'failed-precondition' && i7.ok && b2b.provider === 'MPESA-B2B' && b2b.transactions[0].account_type === 'PayBill' && b2b.transactions[0].account_reference === 'ADM-7781', { i6, i7, b2b });
+  VALIDATE = { valid: false };
+  const i8 = await run(M, 'impactInitiateDisbursement', 'adm1', { requestId: rid(34), amount: 500, beneficiaryName: 'Shop', description: 'Stock', destinationType: 'TILL', destination: { tillNumber: '123456' } }, ADM);
+  ck('I9 provider says the Till is invalid → refused', !i8.ok && /not valid/.test(i8.msg), i8);
+  VALIDATE = { valid: true, account_name: 'MAMA SHOP' };
+  STATUS = { status: 'Completed', transaction_id: 'PL77' };
+  await run(M, 'impactRefreshDisbursementStatus', 'adm2', { disbursementId: 'DSB_' + rid(32) }, ADM);
+  ck('I10 PesaLink completion settles through the same path', (await dsb(F, 'DSB_' + rid(32))).status === 'completed');
 
   /* H — donation refund through the same chain */
   await F.db.collection('foundationDonations').doc('PLG_donor_x').set({ uid: 'donor', status: 'completed', amount: 1200, grossKES: 1200, feeKES: 30, programmeId: 'edu1', providerReference: 'INV9', receiptId: 'SKF-INV9' });
