@@ -658,7 +658,19 @@ input, select, textarea { background: var(--sur2); color: var(--txt); border-col
   padding: 24px;
   width: min(460px, 94vw);
   box-shadow: var(--shadow-md);
+  /* a modal taller than the phone used to be unscrollable (owner, 2026-10-01) */
+  max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
+/* the sale's items, listed above the amount in the cash / M-Pesa modals */
+.pay-items { margin: 0 0 12px; padding: 0 0 8px; border-bottom: 1px solid var(--border, rgba(255,255,255,.1)); }
+.pay-it { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: 13px; }
+.pay-it .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.pay-it small { display: block; font-size: 11px; opacity: .7; font-weight: 500; }
+.pay-it b { flex: 0 0 auto; }
 .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
 .modal-body  { font-size: 14px; line-height: 1.6; color: var(--muted); }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
@@ -3713,7 +3725,30 @@ const Checkout = (() => {
   }
 
   /* ── Modal helpers ── */
-  function openModal(id) { document.getElementById(id).classList.add('visible'); }
+  /* The cash and M-Pesa payment modals list the sale's items ABOVE the amount (owner, 2026-10-01: the cashier had
+     to close the modal to see what was being sold). Rendered when the modal opens, from the live cart, so the
+     markup itself is unchanged. Names are escaped: they come from the catalogue. */
+  function _payItemsEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+  function _renderPayItems(id) {
+    const modal = document.querySelector('#' + id + ' .modal');
+    if (!modal) return;
+    let box = modal.querySelector('.pay-items');
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'pay-items';
+      box.setAttribute('aria-label', 'Items in this sale');
+      const title = modal.querySelector('.modal-title');
+      if (title && title.nextSibling) modal.insertBefore(box, title.nextSibling); else modal.prepend(box);
+    }
+    box.innerHTML = (_s.items || []).map(i =>
+      '<div class="pay-it"><span class="n">' + _payItemsEsc(i.name || 'Item') +
+      '<small>' + Number(i.qty || 0) + ' × ' + _kes(i.unitPrice) + '</small></span>' +
+      '<b>' + _kes(Number(i.unitPrice || 0) * Number(i.qty || 0)) + '</b></div>').join('');
+  }
+  function openModal(id) {
+    if (id === 'cash-overlay' || id === 'mpesa-overlay') _renderPayItems(id);
+    document.getElementById(id).classList.add('visible');
+  }
   function closeModal(id) {
     document.getElementById(id).classList.remove('visible');
     /* Closing the shift-close wizard must always release the hard lock */
