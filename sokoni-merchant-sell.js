@@ -662,7 +662,7 @@
             var tier = l.priceTier || 'online';
             var tiers = l.tiers || { online: l.price };
             /* Owner layout (2026-10-01): a vertical column BESIDE the + / qty / − stepper, on its left, in the same
-               format — ONL on top, SHOP in the middle, WHOLE at the bottom. All three always render so the column
+               format — ONL on top, SHELF in the middle, WHOLE at the bottom. All three always render so the column
                never shifts; a tier the seller did not set is a disabled "—" cell (announced "not set"), never 0. */
             var tierCol = '<div class="msl-tiers" role="group" aria-label="Price for ' + esc(l.name || 'this product') + '">' +
               ['online', 'shop', 'wholesale'].map(function (t) {

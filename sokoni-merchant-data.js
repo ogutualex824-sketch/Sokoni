@@ -1349,8 +1349,8 @@
      server re-resolves every price from products/{id} and is the authority. An absent or out-of-order tier is
      NOT AVAILABLE — never 0, never "free", never silently another tier. */
   var TIER_MAX = 1000000000;
-  var TIER_LABEL = { online: 'Online', shop: 'Shop', wholesale: 'Wholesale' };
-  var TIER_SHORT = { online: 'ONL', shop: 'SHOP', wholesale: 'WHOLE' };
+  var TIER_LABEL = { online: 'Online', shop: 'Shelf', wholesale: 'Wholesale' };
+  var TIER_SHORT = { online: 'ONL', shop: 'SHELF', wholesale: 'WHOLE' };
   function _tierNum(v) { return (typeof v === 'number' && isFinite(v) && v > 0 && v <= TIER_MAX) ? v : null; }
   function tierPrices(product) {
     var p = product || {};
