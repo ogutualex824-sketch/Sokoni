@@ -493,7 +493,10 @@
     'landlord.html': 'landlord',
     'provider-dashboard.html': 'provider',
     'rider-dashboard.html':    'rider',
-    'financial-partner-dashboard.html': 'financial_partner',
+    /* financial-partner-dashboard.html is deliberately NOT routed here: its team members
+       (managers, officers) hold no financial_partner claim and are authorised server-side
+       through financialPartnerStaff, so a claim guard would bounce them. The page does its
+       own check and every callable re-authorises (sokoni-4d, 2026-10-01). */
   };
   /* Where an AUTHENTICATED-but-not-approved user is sent per role: the role's own
      application/authorization flow ("Buyer -> X -> X application"). Falls back to

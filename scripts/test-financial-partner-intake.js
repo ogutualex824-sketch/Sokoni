@@ -93,7 +93,7 @@ const GOOD = { institutionName: ' Mfano <b>Bank</b> Ltd ', institutionType: 'ban
   const RASRC = fs.readFileSync(path.join(ROOT, 'sokoni-role-authority.js'), 'utf8');
   ck('R1  financial_partner is a canonical client role', RA.CANONICAL_ROLES.indexOf('financial_partner') > -1);
   ck('R2  its workspace is financial-partner-dashboard.html', RA.WORKSPACE_HUBS && RA.WORKSPACE_HUBS.financial_partner === 'financial-partner-dashboard.html', RA.WORKSPACE_HUBS && RA.WORKSPACE_HUBS.financial_partner);
-  ck('R3  the dashboard page is guarded for the role', RA.WORKSPACE_ROUTES['financial-partner-dashboard.html'] === 'financial_partner');
+  ck('R3  the dashboard is NOT claim-guarded (staff hold no claim; the server authorises them)', !('financial-partner-dashboard.html' in RA.WORKSPACE_ROUTES));
   ck('R4  an unapproved user is sent to the financial intake', RASRC.indexOf("financial_partner: 'business-apply.html?offer=financial'") > -1);
   ck('R5  hubFor answers nothing for a role the account does not hold', RA.hubFor('financial_partner') === null);
   const AOS = fs.readFileSync(path.join(ROOT, 'sokoni-aos.js'), 'utf8');
