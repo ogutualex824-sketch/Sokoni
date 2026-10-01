@@ -15,7 +15,7 @@ const PRIVACY_URL = `${BASE_URL}/trust.html`;
 const TERMS_URL   = `${BASE_URL}/trust.html#terms`;
 const HELP_URL    = `${BASE_URL}/help.html`;
 const TRUST_URL   = `${BASE_URL}/trust.html#trust-center`;
-const UNSUB_URL   = `${BASE_URL}/profile.html#email-preferences`;
+const UNSUB_URL   = `${BASE_URL}/email-preferences`;   /* 2026-10-01: was /profile.html#email-preferences — a section that never existed */
 const YEAR        = new Date().getFullYear();
 
 /* ── XSS-safe escape ─────────────────────────────────────── */
