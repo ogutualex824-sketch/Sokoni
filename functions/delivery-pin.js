@@ -131,7 +131,7 @@ exports.deliveryPinOnAccept = onDocumentUpdated(
       if (!r.ok || r.action !== "issued") { await _audit({ event: "pin_not_issued_at_accept", deliveryRef: pkgId, orderId, reason: r.reason || r.action }); return; }
       await event.data.after.ref.set({ deliveryPinBinding: "order", deliveryVerificationStatus: "pending" }, { merge: true });
       const phone = await CP.resolveBuyerPhone(db, r.buyerUid, o);
-      const dv = await CP.deliverPin({ db, FV, orderId, version: r.version, pin: r.pin, phone, sendSms: require("./sokoni-at").atSendSMS, now });
+      const dv = await CP.deliverPin({ db, FV, orderId, version: r.version, pin: r.pin, phone, sendSms: require("./sokoni-at").atSendSMS, sendWhatsApp: CP.whatsAppSender(), now });
       await _audit({ event: "pin_issued", deliveryRef: pkgId, orderId, riderUid, method: "engine", version: r.version, delivered: dv.ok });
     } catch (e) {
       await _audit({ event: "pin_issue_error", deliveryRef: pkgId, orderId, error: String(e && e.message || e) });
