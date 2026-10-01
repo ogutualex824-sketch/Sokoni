@@ -141,9 +141,18 @@
        row so a two-line product name does not drag it downward. */
     '.msl-line{display:flex;align-items:flex-start;gap:11px;padding:11px 0;border-bottom:1px solid var(--line)}',
     /* price-tier chips (owner, 2026-10-01): compact, 32px tap target, selected = outline + ✓ (not colour alone) */
-    '.msl-tiers{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}',
-    '.msl-tier{min-height:32px;padding:4px 9px;border-radius:8px;border:1px solid var(--line);background:transparent;color:inherit;font:inherit;font-size:12px;font-weight:700;cursor:pointer}',
-    '.msl-tier.on{border:2px solid currentColor;font-weight:800}',
+    /* a column the same shape as the stepper beside it: ONL / SHOP / WHOLE, top to bottom */
+    '.msl-tiers{flex:0 0 auto;align-self:flex-start;display:flex;flex-direction:column;gap:2px;width:78px;',
+      'background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:12px;padding:2px;overflow:hidden}',
+    '.msl-tier{width:100%;min-height:36px;border:none;background:none;color:var(--txt);border-radius:8px;',
+      'font-family:inherit;font-size:11px;font-weight:800;letter-spacing:.02em;cursor:pointer;padding:3px 2px;',
+      'display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}',
+    '.msl-tier small{font-size:10px;font-weight:700;opacity:.8;margin-top:1px;white-space:nowrap}',
+    '.msl-tier+.msl-tier{border-top:1px solid var(--line);border-radius:0 0 8px 8px}',
+    '.msl-tier:active{background:rgba(255,255,255,.12)}',
+    '.msl-tier.on{color:var(--acc);background:rgba(255,255,255,.10);box-shadow:inset 0 0 0 2px var(--acc)}',
+    '.msl-tier.off{opacity:.35;cursor:not-allowed}',
+    '@media (max-width:360px){.msl-tiers{width:66px}.msl-tier small{font-size:9px}}',
     '.msl-line:last-child{border-bottom:none}',
     '.msl-line .info{flex:1;min-width:0}',
     '.msl-line .nm{font-size:13.5px;font-weight:700;overflow-wrap:anywhere}',
@@ -643,21 +652,27 @@
                tier is announced by aria-pressed and a ✓, never by colour alone. */
             var tier = l.priceTier || 'online';
             var tiers = l.tiers || { online: l.price };
-            var chips = ['online', 'shop', 'wholesale'].filter(function (t) { return tiers[t] !== null && tiers[t] !== undefined; });
-            var tierRow = chips.length > 1 ? '<div class="msl-tiers" role="group" aria-label="Price for ' + esc(l.name || 'this product') + '">' +
-              chips.map(function (t) {
-                var on = t === tier, label = md.TIER_LABEL[t];
+            /* Owner layout (2026-10-01): a vertical column BESIDE the + / qty / − stepper, on its left, in the same
+               format — ONL on top, SHOP in the middle, WHOLE at the bottom. All three always render so the column
+               never shifts; a tier the seller did not set is a disabled "—" cell (announced "not set"), never 0. */
+            var tierCol = '<div class="msl-tiers" role="group" aria-label="Price for ' + esc(l.name || 'this product') + '">' +
+              ['online', 'shop', 'wholesale'].map(function (t) {
+                var has = tiers[t] !== null && tiers[t] !== undefined, on = has && t === tier, label = md.TIER_LABEL[t];
+                if (!has) {
+                  return '<button type="button" class="msl-tier off" disabled aria-disabled="true"' +
+                    ' aria-label="' + label + ' price not set">' + md.TIER_SHORT[t] + '<small>—</small></button>';
+                }
                 return '<button type="button" class="msl-tier' + (on ? ' on' : '') + '" data-act="tier" data-t="' + t + '" data-i="' + i + '"' +
                   ' aria-pressed="' + (on ? 'true' : 'false') + '" aria-label="Use ' + label.toLowerCase() + ' price — ' + esc(md.formatKES(tiers[t])) + '">' +
-                  (on ? '✓ ' : '') + md.TIER_SHORT[t] + ' ' + esc(md.formatKES(tiers[t])) + '</button>';
-              }).join('') + '</div>' : '';
+                  (on ? '✓' : '') + md.TIER_SHORT[t] + '<small>' + esc(md.formatKES(tiers[t])) + '</small></button>';
+              }).join('') + '</div>';
             return '<div class="msl-line">' +
               '<div class="info"><div class="nm">' + esc(l.name || 'Product') + '</div>' +
                 '<div class="sub' + (w ? ' warn' : '') + '">' +
                   (w ? 'Only ' + w.available + ' in stock' :
                        (tier !== 'online' ? esc(md.TIER_LABEL[tier]) + ' price · ' : '') +
                        esc(md.formatKES(l.price)) + ' each · ' + esc(md.formatKES(l.price * l.qty))) +
-                '</div>' + tierRow + '</div>' +
+                '</div></div>' + tierCol +
               /* + ON TOP, − at the bottom. Only the ORDER and the styling change:
                  the data-act / data-i attributes are untouched, so inc, dec and the
                  typed-quantity path all run exactly the code they ran before. */
