@@ -332,11 +332,17 @@ const STORE_DATA_COLLECTIONS = ['products', 'orders', 'wallets', 'businessWallet
   ok('I6 the record the script writes is exactly what the gate accepts', OP.recordAuthorises(operatorRecord(chainNow, OPERATOR, new Date()), chainNow, OPERATOR));
 
   /* ── J. settlement / money code unchanged except two read-only seams ────── */
-  const gitDiff = (f) => { try { return execSync('git diff a545818 -- ' + f, { cwd: ROOT }).toString(); } catch (_) { return 'git-unavailable'; } };
+  const gitDiff = (f, base) => { try { return execSync('git diff ' + (base || 'a545818') + ' -- ' + f, { cwd: ROOT }).toString(); } catch (_) { return 'git-unavailable'; } };
+  /* wallet.js's base is the SERVING adminProcessPayout code: revision adminprocesspayout-00024-mih
+     (100% of traffic, pinned 2026-09-30 08:32Z), archive #1790695830866935, whose wallet.js has
+     sha256 f9ad984a…f979 — byte-identical to commit 45a837d's wallet.js. */
+  const SERVING_WALLET_SHA = 'f9ad984a15ea0d189690740a813d84ee27be5dd2feca0b07c175c585efd4f979';
+  const baseSha = (() => { try { return require('crypto').createHash('sha256').update(execSync('git show 45a837d:functions/wallet.js', { cwd: ROOT })).digest('hex'); } catch (_) { return null; } })();
+  ok('J0 the diff base 45a837d:functions/wallet.js IS the serving 00024-mih wallet.js (sha256 match)', baseSha === SERVING_WALLET_SHA, baseSha);
   ok('J1 order-settlement / settlement-engine / commission untouched vs a545818',
     ['functions/order-settlement.js', 'functions/settlement-engine.js', 'functions/commission.js'].every((f) => gitDiff(f) === ''));
   for (const f of ['functions/wallet.js', 'functions/wallet-engine.js']) {
-    const body = gitDiff(f).split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
+    const body = gitDiff(f, f === 'functions/wallet.js' ? '45a837d' : 'a545818').split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
     const removed = body.filter((l) => l.startsWith('-'));
     const addedCode = body.filter((l) => l.startsWith('+')).map((l) => l.slice(1)).join('\n')
       .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => l.trim()).filter(Boolean);
@@ -348,7 +354,7 @@ const STORE_DATA_COLLECTIONS = ['products', 'orders', 'wallets', 'businessWallet
     const expected = f === 'functions/wallet.js'
       ? ['await _assertStorePayoutActor(db, request, payout, rid);', 'exports._internal = Object.freeze({ payoutEvent: _payoutEvent, eatDay: _eatDay, getPayoutConfig: _getPayoutConfig });']
       : ['exports._internal = Object.freeze({ assertPinOk: _assertPinOk });'];
-    ok(`J ${f}: additive only vs a545818 (= LIVE) — ${f.endsWith('wallet.js') ? 'store guard + one call + seam' : 'one seam'}; nothing removed`,
+    ok(`J ${f}: additive only vs ${f === 'functions/wallet.js' ? 'the SERVING 00024-mih wallet.js (45a837d)' : 'a545818'} — ${f.endsWith('wallet.js') ? 'store guard + one call + seam' : 'one seam'}; nothing removed`,
       removed.length === 0 && JSON.stringify(rest) === JSON.stringify(expected) && (f !== 'functions/wallet.js' || gs >= 0), JSON.stringify({ removed: removed.length, rest }));
   }
   const wSrcJ = fs.readFileSync(path.join(FN, 'wallet.js'), 'utf8');
@@ -510,6 +516,11 @@ const STORE_DATA_COLLECTIONS = ['products', 'orders', 'wallets', 'businessWallet
   const rj = await apx(OPERATOR, OPTOK, { requestId: 'pout_store2', status: 'rejected', note: 'operator cancelled' }).catch((e) => ({ error: e.message }));
   ok('Q8 operator rejects a pending store request → rejected; funds returned to wallets/SOK-XX2338',
     rj.status === 'rejected' && DB._get('wallets', BIZ).balance === 1300 && DB._get('wallets', BIZ).pendingPayout === 0);
+  seedQ();
+  const pendBefore = JSON.stringify([DB._get('payoutRequests', 'pout_store2'), DB._get('wallets', BIZ)]);
+  const mp = await apx(OPERATOR, OPTOK, Object.assign({ requestId: 'pout_store2' }, PAID)).catch((e) => ({ refused: e.code }));
+  ok('Q8b 45a837d paid-state guard holds for the operator: Mark Paid on a PENDING store request has no money effect',
+    (mp.refused || mp.status !== 'settled_manually') && DB._get('payoutRequests', 'pout_store2').status === 'pending' && JSON.stringify([DB._get('payoutRequests', 'pout_store2'), DB._get('wallets', BIZ)]) === pendBefore, JSON.stringify(mp));
   rq2 = await refusal(() => apx(OPERATOR, {}, { requestId: 'pout_store2', status: 'approved' }));
   ok('Q9 the operator still needs the admin claim adminProcessPayout always required (no new authority path)', rq2 && rq2.code === 'permission-denied' && rq2.reason !== 'store-payout-operator-only');
 
