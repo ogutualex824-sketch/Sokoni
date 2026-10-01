@@ -244,9 +244,10 @@
   <h1>👥 Sokoni Community</h1>
   <p>Ask for recommendations · Discuss products · Share reviews · Connect with sellers</p>
   <div class="cm-stats-row">
-    <span><strong id="cmPostCount">0</strong> posts</span>
-    <span><strong id="cmMemberCount">500+</strong> members</span>
-    <span><strong id="cmTodayCount">0</strong> today</span>
+    <!-- C0 honesty: counts start UNKNOWN ("—") until the communityPosts snapshot lands; the
+         member count was a hard-coded figure with no canonical source, so it is not shown. -->
+    <span><strong id="cmPostCount">—</strong> posts</span>
+    <span><strong id="cmTodayCount">—</strong> today</span>
   </div>
 </div>
 
@@ -256,12 +257,12 @@
   <aside class="cm-sidebar">
     <div class="cm-sidebar-card">
       <div class="cm-sidebar-title">Browse by Type</div>
-      <button type="button" class="cm-type-btn active" onclick="filterType('all',this)">📋 All Posts <span class="cm-type-count" id="cnt-all">0</span></button>
-      <button type="button" class="cm-type-btn" onclick="filterType('question',this)">❓ Questions <span class="cm-type-count" id="cnt-question">0</span></button>
-      <button type="button" class="cm-type-btn" onclick="filterType('recommendation',this)">👍 Recommendations <span class="cm-type-count" id="cnt-recommendation">0</span></button>
-      <button type="button" class="cm-type-btn" onclick="filterType('review',this)">⭐ Reviews <span class="cm-type-count" id="cnt-review">0</span></button>
-      <button type="button" class="cm-type-btn" onclick="filterType('discussion',this)">💬 Discussions <span class="cm-type-count" id="cnt-discussion">0</span></button>
-      <button type="button" class="cm-type-btn" onclick="filterType('offer',this)">🏷️ Offers <span class="cm-type-count" id="cnt-offer">0</span></button>
+      <button type="button" class="cm-type-btn active" onclick="filterType('all',this)">📋 All Posts <span class="cm-type-count" id="cnt-all">—</span></button>
+      <button type="button" class="cm-type-btn" onclick="filterType('question',this)">❓ Questions <span class="cm-type-count" id="cnt-question">—</span></button>
+      <button type="button" class="cm-type-btn" onclick="filterType('recommendation',this)">👍 Recommendations <span class="cm-type-count" id="cnt-recommendation">—</span></button>
+      <button type="button" class="cm-type-btn" onclick="filterType('review',this)">⭐ Reviews <span class="cm-type-count" id="cnt-review">—</span></button>
+      <button type="button" class="cm-type-btn" onclick="filterType('discussion',this)">💬 Discussions <span class="cm-type-count" id="cnt-discussion">—</span></button>
+      <button type="button" class="cm-type-btn" onclick="filterType('offer',this)">🏷️ Offers <span class="cm-type-count" id="cnt-offer">—</span></button>
     </div>
 
     <div class="cm-sidebar-card">
@@ -271,7 +272,7 @@
 
     <div class="cm-sidebar-card" style="background:rgba(113,255,0,0.04);border-color:rgba(113,255,0,0.12);">
       <div style="font-size:13px;font-weight:800;color:white;margin-bottom:6px;">🏪 Sell on Sokoni</div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:12px;">Join 500+ sellers. List products, offer services, and grow your business.</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:12px;">List products, offer services, and grow your business.</div>
       <a data-sk-merchant-entry href="seller.html" style="display:block;padding:10px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);border-radius:10px;color:#71ff00;font-size:12px;font-weight:800;text-align:center;">Start Selling →</a>
     </div>
   </aside>
@@ -366,25 +367,15 @@ async function _subscribeFS(){
     const { collection, query, orderBy, onSnapshot } = await import(FS_URL);
     const q = query(collection(_db,'communityPosts'), orderBy('timestamp','desc'));
     _unsubPosts = onSnapshot(q, snap => {
-      if(snap.empty){ _seedFirestore(); return; }
-      posts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      posts = snap.empty ? [] : snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderFeed();
     }, err => { console.warn('[Community]', err.message); _showOffline(); });
   }catch(e){ console.warn('[Community]', e); _showOffline(); }
 }
 
-async function _seedFirestore(){
-  try{
-    const { collection, addDoc } = await import(FS_URL);
-    const seeds = [
-      { type:"question",       title:"Best phone under KES 15,000?",         body:"I'm looking for a budget Android phone with a good camera. Any recommendations from people who've bought from Sokoni?", author:"Wanjiku M.", authorUid:"seed", date:"28 May", product:"Phones & Electronics", likes:12, helpful:0, replies:[], timestamp:Date.now()-86400000*2 },
-      { type:"recommendation", title:"Kaspa Prints is amazing for branding!", body:"Ordered custom branded hoodies and they came out perfect. Super fast delivery to Nairobi. Highly recommend!", author:"Kevin O.", authorUid:"seed", date:"27 May", product:"Printing & Branding", likes:8, helpful:5, replies:[{author:"Kaspa Prints",text:"Thank you so much! We appreciate your kind words ❤️",time:"27 May"}], timestamp:Date.now()-86400000*3 },
-      { type:"review",         title:"Samsung A34 from Sokoni — 5 Stars!",    body:"Bought this from Sokoni last week. Arrived in 2 days, brand new sealed, genuine Samsung. The seller was very responsive. 100% would buy again.", author:"Brian K.", authorUid:"seed", date:"26 May", product:"Samsung A34", likes:15, helpful:7, stars:5, replies:[], timestamp:Date.now()-86400000*4 },
-      { type:"discussion",     title:"What payment methods do sellers prefer?",body:"I've noticed some sellers only want M-PESA while others accept card. Is there a way to negotiate or does Sokoni handle all payments?", author:"Amina F.", authorUid:"seed", date:"25 May", product:"", likes:4, helpful:0, replies:[], timestamp:Date.now()-86400000*5 },
-    ];
-    for(const s of seeds){ try{ await addDoc(collection(_db,'communityPosts'),s); }catch(e){} }
-  }catch(e){ console.warn('[Community seed]', e); }
-}
+/* C0 honesty: the seed-post writer is REMOVED. It wrote four invented posts on every empty
+   snapshot (demo data on a production path; refused by the served rules anyway). An empty feed
+   now renders the honest empty state from renderFeed(). */
 
 function _showOffline(){
   const feed = document.getElementById('cmFeed');
@@ -490,7 +481,11 @@ async function toggleReaction(id, field){
   try{
     const { doc, updateDoc, increment } = await import(FS_URL);
     await updateDoc(doc(_db,'communityPosts',id), { [field]: increment(done ? -1 : 1) });
-  }catch(e){ console.warn('[Community reaction]', e); }
+  }catch(e){
+    /* the write was refused: undo the local mark so the button does not claim a reaction that never landed */
+    if(done) localStorage.setItem(key,'1'); else localStorage.removeItem(key);
+    console.warn('[Community reaction]', e); _cmToast(_skWhy(e, 'Could not save your reaction.'), 'error');
+  }
 }
 
 function toggleReplies(id){
@@ -515,7 +510,7 @@ async function submitReply(id){
     input.value = "";
     const el = document.getElementById("replies-"+id);
     if(el) el.style.display = "block";
-  }catch(e){ console.warn('[Community reply]', e); }
+  }catch(e){ console.warn('[Community reply]', e); _cmToast(_skWhy(e, 'Could not send your reply.'), 'error'); }
 }
 
 /* ── DELETE → Firestore deleteDoc ── */
@@ -564,11 +559,14 @@ function renderFeed(){
 
   feed.innerHTML = filtered.map(p => {
     const meta   = TYPE_META[p.type] || TYPE_META.discussion;
-    const stars  = p.stars ? "★".repeat(p.stars)+"☆".repeat(5-p.stars) : "";
+    /* stars/likes/helpful are author-written: coerce to bounded numbers so a string never reaches the
+       markup and an out-of-range value cannot throw inside repeat() and blank the whole feed */
+    const starN  = Math.max(0, Math.min(5, Math.round(Number(p.stars) || 0)));
+    const stars  = starN ? "★".repeat(starN)+"☆".repeat(5-starN) : "";
     const isOwn  = user?.uid && p.authorUid && user.uid === p.authorUid;
     const likedKey   = localStorage.getItem("cmReacted_"+p.id+"_likes");
     const helpfulKey = localStorage.getItem("cmReacted_"+p.id+"_helpful");
-    const replies    = p.replies || [];
+    const replies    = Array.isArray(p.replies) ? p.replies.filter(r => r && typeof r === "object") : [];
     return `
     <div class="cm-post" id="post-${escapeHTML(p.id)}">
       <div class="cm-post-header">
@@ -587,10 +585,10 @@ function renderFeed(){
       ${p.bodyGuarded ? `<div style="font-size:10px;color:rgba(255,100,100,0.6);margin:4px 0 8px;display:flex;align-items:center;gap:5px;">🛡️ Contact info was hidden by Sokoni Guard · <a href="marketing.html" style="color:#fb923c;font-weight:700;text-decoration:none;">Boost to share contacts</a></div>` : ""}
       <div class="cm-post-actions">
         <button type="button" class="cm-action-btn ${likedKey?"liked":""}" data-pid="${escapeHTML(p.id)}" onclick="likePost(this.dataset.pid)">
-          ❤️ ${p.likes||0}
+          ❤️ ${Number(p.likes)||0}
         </button>
         <button type="button" class="cm-action-btn ${helpfulKey?"helpful":""}" data-pid="${escapeHTML(p.id)}" onclick="markHelpful(this.dataset.pid)">
-          👍 Helpful ${p.helpful||0}
+          👍 Helpful ${Number(p.helpful)||0}
         </button>
         <button type="button" class="cm-action-btn" data-pid="${escapeHTML(p.id)}" onclick="toggleReplies(this.dataset.pid)">
           💬 ${replies.length} repl${replies.length===1?"y":"ies"}
@@ -725,29 +723,19 @@ _initFS();
 </section>
 
 <script>
-var _demoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
-const DEMO_GROUPS = [
-  { id:'G001', type:'estate', emoji:'🏘️', name:'Karen / Langata Residents', desc:'Buy, sell and hire within Karen, Langata & South C. Vetted neighbours only.', members:342, color:'#71ff00', joined:false },
-  { id:'G002', type:'campus', emoji:'🎓', name:'UoN Students Marketplace', desc:'Books, laptops, rooms, food & services for University of Nairobi students.', members:1240, color:'#00d4ff', joined:false },
-  { id:'G003', type:'company', emoji:'🏢', name:'Nairobi CBD Business Network', desc:'CBD traders, shop owners & service providers. Bulk deals & B2B referrals.', members:215, color:'#a855f7', joined:false },
-  { id:'G004', type:'church', emoji:'⛪', name:'PCEA Nairobi Congregation', desc:'Church members buying, selling, hiring services and supporting one another.', members:480, color:'#fbbf24', joined:false },
-  { id:'G005', type:'sacco', emoji:'🏦', name:'Mwalimu SACCO Members', desc:'Teachers buying electronics, furniture, food & services with member discounts.', members:890, color:'#f97316', joined:false },
-  { id:'G006', type:'estate', emoji:'🏘️', name:'Westlands / Parklands Hub', desc:'Residential & commercial — food, services, repairs, household items.', members:567, color:'#10b981', joined:false },
-  { id:'G007', type:'campus', emoji:'🎓', name:'KU Marketplace', desc:'Kenyatta University — room swaps, textbooks, food vendors, part-time services.', members:780, color:'#00d4ff', joined:false },
-  { id:'G008', type:'sacco', emoji:'🏦', name:'M-Changa Investment Chama', desc:'Investment group members — shared resources, group buying power, assets.', members:120, color:'#f97316', joined:false },
-  { id:'G009', type:'sports', emoji:'⚽', name:'Nairobi Sunday Football League', desc:'Weekend matches, fitness challenges and tournaments across Nairobi parks.', members:634, color:'#22c55e', joined:false },
-  { id:'G010', type:'farming', emoji:'🌾', name:'Kenya Smallholder Farmers Hub', desc:'Share farming tips, sell produce, buy inputs and connect with buyers directly.', members:1120, color:'#86efac', joined:false },
-  { id:'G011', type:'cars', emoji:'🚗', name:'Nairobi Car Enthusiasts', desc:'Car reviews, service centre recommendations, buy/sell vehicles and spare parts.', members:445, color:'#f97316', joined:false },
-  { id:'G012', type:'property', emoji:'🏠', name:'Nairobi Property Investors', desc:'Listings, investment tips, rental agreements and construction insights.', members:876, color:'#a855f7', joined:false },
-  { id:'G013', type:'technology', emoji:'💻', name:'Kenya Tech & Innovation Hub', desc:'Startups, coding, digital products and Kenya tech ecosystem news & jobs.', members:2100, color:'#00aaff', joined:false },
-];
-
+/* C0 honesty: the group list is what the server returns (communityGroups) — nothing else.
+   Removed: the 13 DEMO_GROUPS (invented groups and member counts) and the localStorage
+   'ccGroups' copy, which showed a group as community content even when its write was refused.
+   Membership has no server store yet (join/leave was localStorage only), so the button saves the
+   group on THIS DEVICE and says so; the client-written `members` number is not displayed. */
 let _ccFilter = 'all';
 let _myGroups = [];
 let _fsGroups = [];  /* groups created by any user, from Firestore */
 let _fsGroupsUnsub = null;
+let _fsGroupsState = 'loading';   /* loading | ready | error — unknown is never rendered as "no groups" */
 
 try { _myGroups = JSON.parse(localStorage.getItem('ccMyGroups')||'[]'); } catch(e){}
+if (!Array.isArray(_myGroups)) _myGroups = [];
 
 function filterGroups(type, btn) {
   _ccFilter = type;
@@ -761,15 +749,11 @@ window.filterGroups = filterGroups;
 
 function renderCCGroups() {
   const grid = document.getElementById('ccGroupsGrid'); if (!grid) return;
-  let local = []; try { local = JSON.parse(localStorage.getItem('ccGroups')||'[]'); } catch(e){}
-  /* Merge: Firestore groups first, then localStorage, then demo fallbacks */
-  const allIds = new Set([..._fsGroups.map(g=>g.id||g._id), ...local.map(g=>g.id)]);
-  let list = [
-    ..._fsGroups.map(g=>({...g, id:g._id||g.id})),
-    ...local.filter(g => !_fsGroups.some(f=>(f._id||f.id)===g.id)),
-    ...(_demoAllowed?DEMO_GROUPS.filter(d => !allIds.has(d.id)):[]),
-  ];
+  if (_fsGroupsState === 'loading') { grid.innerHTML = `<div class="cm-empty" style="grid-column:1/-1"><p style="color:rgba(255,255,255,0.3);">Loading groups…</p></div>`; return; }
+  if (_fsGroupsState === 'error')   { grid.innerHTML = `<div class="cm-empty" style="grid-column:1/-1"><div class="cm-empty-icon">📶</div><p style="color:rgba(255,255,255,0.4);">Groups could not be loaded. Check your connection and refresh.</p></div>`; return; }
+  let list = _fsGroups.map(g=>({...g, id:g._id||g.id}));
   if (_ccFilter !== 'all') list = list.filter(g => g.type === _ccFilter);
+  if (!list.length) { grid.innerHTML = `<div class="cm-empty" style="grid-column:1/-1"><div class="cm-empty-icon">🏘️</div><p>No groups here yet — create the first one below.</p></div>`; return; }
   grid.innerHTML = list.map(g => {
     const isJoined = _myGroups.includes(g.id);
     return `<div class="cc-group-card" style="border-color:rgba(255,255,255,0.08);" onmouseover="this.style.borderColor='rgba(113,255,0,0.2)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
@@ -777,10 +761,10 @@ function renderCCGroups() {
       <div class="cc-group-name">${escapeHTML(g.name)}</div>
       <div class="cc-group-desc">${escapeHTML(g.desc)}</div>
       <div class="cc-group-meta">
-        <span class="cc-group-members">👥 ${Number(g.members+(isJoined?0:0)).toLocaleString()} members</span>
-        <button type="button" class="cc-join-btn" data-gid="${escapeHTML(g.id)}" onclick="joinGroup(this.dataset.gid)"
+        <span class="cc-group-members">${isJoined?'Saved on this device':''}</span>
+        <button type="button" class="cc-join-btn" data-gid="${escapeHTML(g.id)}" onclick="joinGroup(this.dataset.gid)" title="Group membership is not live yet — this saves the group on this device only"
           style="background:${isJoined?'rgba(34,197,94,0.1)':'rgba(113,255,0,0.1)'};border:1px solid ${isJoined?'rgba(34,197,94,0.25)':'rgba(113,255,0,0.25)'};color:${isJoined?'#4ade80':'#71ff00'};">
-          ${isJoined?'✓ Joined':'+ Join'}
+          ${isJoined?'★ Saved':'☆ Save'}
         </button>
       </div>
     </div>`;
@@ -790,40 +774,50 @@ function renderCCGroups() {
 function joinGroup(id) {
   if (!_myGroups.includes(id)) _myGroups.push(id);
   else _myGroups = _myGroups.filter(x=>x!==id);
-  localStorage.setItem('ccMyGroups', JSON.stringify(_myGroups));
+  try { localStorage.setItem('ccMyGroups', JSON.stringify(_myGroups)); } catch(e){}
   renderCCGroups();
 }
 window.joinGroup = joinGroup;
 
-function createGroup() {
+let _ccGroupBusy = false;
+async function createGroup() {
   const name  = (document.getElementById('ccGName')?.value||'').trim();
   const phone = (document.getElementById('ccGPhone')?.value||'').trim();
   const desc  = document.getElementById('ccGDesc')?.value||'';
   const type  = document.getElementById('ccGType')?.value||'other';
   const msgEl = document.getElementById('ccGMsg');
-  if (!name) { if(msgEl){msgEl.textContent='Please enter a group name';msgEl.style.color='#f97316';} return; }
+  const say = (t, c) => { if (msgEl) { msgEl.textContent = t; msgEl.style.color = c; } };
+  if (!name) { say('Please enter a group name', '#f97316'); return; }
+  const u = window.sokoniUser||(function(){try{return JSON.parse(localStorage.getItem('sokoniUser'));}catch(e){return null;}}());
+  if (!u || !(u.uid||u.email)) { say('Sign in to create a group.', '#f97316'); return; }
+  const db = window.firebaseDB;
+  if (!db) { say('Still connecting — please try again in a moment.', '#f97316'); return; }
+  if (_ccGroupBusy) return;
+  _ccGroupBusy = true;
   const typeEmojis = {estate:'🏘️',campus:'🎓',company:'🏢',church:'⛪',sacco:'🏦',sports:'⚽',farming:'🌾',cars:'🚗',property:'🏠',technology:'💻',other:'👥'};
   const g = { id:'G'+Date.now(), type, emoji:typeEmojis[type]||'👥', name, desc, members:1, color:'#71ff00', joined:true };
-  let local = []; try { local = JSON.parse(localStorage.getItem('ccGroups')||'[]'); } catch(e){}
-  local.unshift(g); localStorage.setItem('ccGroups', JSON.stringify(local.slice(0,20)));
-  _myGroups.push(g.id); localStorage.setItem('ccMyGroups', JSON.stringify(_myGroups));
-  if(msgEl){msgEl.innerHTML='✅ Group created! Share on WhatsApp to invite members.';msgEl.style.color='#71ff00';}
+  say('Creating group…', 'rgba(255,255,255,0.5)');
+  try {
+    /* Success is shown ONLY after the server accepted the write. The document shape is unchanged. */
+    const m = await import(FS_URL);
+    await m.setDoc(m.doc(db,'communityGroups',g.id), Object.assign({},g,{
+      createdBy: u.uid||u.email,
+      contactPhone: phone||null,
+      createdAt: m.serverTimestamp()
+    }));
+  } catch (e) {
+    console.warn('[Community group]', e);
+    say('We could not create your group. ' + _skWhy(e, 'Please try again.'), '#ff8080');
+    _ccGroupBusy = false;
+    return;
+  }
+  _ccGroupBusy = false;
+  if (!_myGroups.includes(g.id)) _myGroups.push(g.id);
+  try { localStorage.setItem('ccMyGroups', JSON.stringify(_myGroups)); } catch(e){}
+  say('✅ Group created.', '#71ff00');
   document.getElementById('ccGName').value='';document.getElementById('ccGDesc').value='';document.getElementById('ccGPhone').value='';
   renderCCGroups();
   if (phone) { const msg=`👥 Join my SOKONI Community Group: *${name}*\n\n${desc}\n\nJoin here: https://mysokoni.co.ke/community.html`; window.open(`https://wa.me/254${phone.replace(/^0/,'')}?text=${encodeURIComponent(msg)}`,'_blank'); }
-  /* Persist to Firestore so groups are discoverable across devices */
-  (function(){
-    const FS_URL='https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-    import(FS_URL).then(function(m){
-      const db=window.firebaseDB; if(!db) return;
-      const u=window.sokoniUser||(function(){try{return JSON.parse(localStorage.getItem('sokoniUser'));}catch(e){return null;}}());
-      m.setDoc(m.doc(db,'communityGroups',g.id), Object.assign({},g,{
-        createdBy: u ? u.uid||u.email : null,
-        contactPhone: phone||null,
-        createdAt: m.serverTimestamp()
-      }));
-    }).catch(function(){});
-  })();
 }
 window.createGroup = createGroup;
 
@@ -833,17 +827,18 @@ async function _initFsGroups() {
     const db = window.firebaseDB || await new Promise(res => {
       if (window.firebaseDB) return res(window.firebaseDB);
       const iv = setInterval(() => { if (window.firebaseDB) { clearInterval(iv); res(window.firebaseDB); }}, 300);
-      setTimeout(() => clearInterval(iv), 8000);
+      setTimeout(() => { clearInterval(iv); res(null); }, 8000);
     });
-    if (!db) return;
+    if (!db) { _fsGroupsState = 'error'; renderCCGroups(); return; }
     const { collection, query, orderBy, limit, onSnapshot } = await import(FS_URL);
     /* Single orderBy — no composite index needed; filter client-side if needed */
     const q = query(collection(db, 'communityGroups'), orderBy('createdAt', 'desc'), limit(100));
     _fsGroupsUnsub = onSnapshot(q, snap => {
       _fsGroups = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+      _fsGroupsState = 'ready';
       renderCCGroups();
-    }, () => {});
-  } catch(e) {}
+    }, (err) => { console.warn('[Community groups]', err && err.message); _fsGroupsState = 'error'; renderCCGroups(); });
+  } catch(e) { _fsGroupsState = 'error'; renderCCGroups(); }
 }
 
 renderCCGroups();
@@ -904,7 +899,7 @@ window.addEventListener('beforeunload', () => { if (_fsGroupsUnsub) _fsGroupsUns
 ══════════════════════════════════════════════════════ -->
 <section class="cc-groups-section">
   <div class="cc-section-h">🙋 Ask the Community</div>
-  <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:20px;line-height:1.7;">Looking for the best mechanic in Westlands? A trusted dentist near Karen? Ask the community — verified members respond.</p>
+  <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:20px;line-height:1.7;">Looking for the best mechanic in Westlands? A trusted dentist near Karen? Ask the community.</p>
 
   <div class="cc-create-form" style="margin-bottom:24px;">
     <textarea id="askQuestion" class="cc-input" rows="2" placeholder="e.g. Best mechanic near Westlands? Budget KES 5,000…" style="margin-bottom:10px;"></textarea>
@@ -932,7 +927,7 @@ window.addEventListener('beforeunload', () => { if (_fsGroupsUnsub) _fsGroupsUns
 ══════════════════════════════════════════════════════ -->
 <section class="cc-groups-section">
   <div class="cc-section-h">🏪 Business Pages</div>
-  <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:20px;line-height:1.7;">Follow verified Sokoni businesses to receive their latest deals, announcements and community posts in your feed.</p>
+  <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:20px;line-height:1.7;">Business pages for Sokoni sellers are coming to the community hub.</p>
 
   <div id="ccBizGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:24px;"></div>
 
@@ -947,7 +942,7 @@ window.addEventListener('beforeunload', () => { if (_fsGroupsUnsub) _fsGroupsUns
 <div id="cmReportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.87);z-index:300;align-items:flex-end;justify-content:center;">
   <div style="background:#0d0d0d;border:1px solid #222;border-radius:20px 20px 0 0;width:100%;max-width:500px;padding:24px;">
     <div style="font-size:16px;font-weight:900;color:white;margin-bottom:6px;">🚩 Report Content</div>
-    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:16px;">Our moderation team reviews reports within 24 hours.</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:16px;">Tell us what is wrong with this content.</div>
     <select id="cmReportReason" style="width:100%;background:#111;border:1px solid #222;border-radius:12px;padding:12px 14px;color:white;font-size:14px;font-family:inherit;margin-bottom:16px;outline:none;">
       <option value="spam">Spam or misleading information</option>
       <option value="inappropriate">Inappropriate or offensive content</option>
@@ -999,16 +994,15 @@ window.addEventListener('beforeunload', () => { if (_fsGroupsUnsub) _fsGroupsUns
 /* ═══════════════════════════════════════════════════════
    EVENTS
 ═══════════════════════════════════════════════════════ */
-const DEMO_EVENTS = [
-  { id:'EV001', title:'Westlands Community Market', category:'market', description:'Monthly market — fresh produce, handmade crafts, clothing and services.', eventDate:'2026-07-05', eventTime:'08:00', location:'Westlands Square, Nairobi', organizerName:'Westlands Community', rsvpCount:47 },
-  { id:'EV002', title:'Nairobi Tech Startup Meetup', category:'meetup', description:'Entrepreneurs, developers and investors connect. Pitch, network, learn.', eventDate:'2026-07-12', eventTime:'14:00', location:'Nairobi Garage, Ngong Road', organizerName:'Tech Nairobi', rsvpCount:123 },
-  { id:'EV003', title:'Farmer Training — Drip Irrigation', category:'training', description:'Learn modern irrigation. Free for Sokoni farming group members.', eventDate:'2026-07-19', eventTime:'09:00', location:'Thika Road Agricultural Centre', organizerName:'Sokoni Farming Hub', rsvpCount:34 },
-  { id:'EV004', title:'Karen Estate Football League Opener', category:'sports', description:'Season opener — 8 teams across 4 pitches. Open to Karen residents.', eventDate:'2026-07-26', eventTime:'07:00', location:'Karen Club Grounds', organizerName:'Karen Sports', rsvpCount:89 },
-];
-const EV_CAT_EMO = { market:'🛍️', meetup:'👥', training:'📚', sports:'⚽', entertainment:'🎵', cleanup:'🌿', other:'📋' };
-let _evFilter = 'upcoming';
-let _evRsvps = {}; try { _evRsvps = JSON.parse(localStorage.getItem('ccEvRsvps')||'{}'); } catch(e){}
-let _evLocal = []; try { _evLocal = JSON.parse(localStorage.getItem('ccEvLocal')||'[]'); } catch(e){}
+/* C0 honesty: community EVENTS were read back only from localStorage ('ccEvLocal') and the
+   invented DEMO_EVENTS — Firestore was never read, so an event one person created was invisible to
+   everyone else, and RSVP counts were invented (the RSVP update is refused by the served rules for
+   anyone but the organizer). There is no event approval gate yet, so this slice does NOT start
+   publishing client-written events: the section says plainly that events are not live, and an
+   event a member submits is saved (same communityEvents document as before) with the outcome
+   shown only after the write resolves. Publishing/approval is a later slice. */
+const _cmLiveUser = () => { try { return JSON.parse(localStorage.getItem('sokoniUser')); } catch(e) { return null; } };
+let _evBusy = false;
 
 window.toggleEvForm = function() {
   const f = document.getElementById('ccEvForm');
@@ -1016,7 +1010,6 @@ window.toggleEvForm = function() {
 };
 
 window.filterEvents = function(f, btn) {
-  _evFilter = f;
   document.querySelectorAll('#evFilterRow button:not([onclick*="toggleEvForm"])').forEach(b => {
     b.style.background='transparent'; b.style.borderColor='rgba(255,255,255,0.1)'; b.style.color='rgba(255,255,255,0.5)';
   });
@@ -1026,69 +1019,20 @@ window.filterEvents = function(f, btn) {
 
 function renderEvents() {
   const grid = document.getElementById('ccEventsGrid'); if(!grid) return;
-  let list = [..._evLocal, ...(_demoAllowed?DEMO_EVENTS.filter(d => !_evLocal.some(l=>l.id===d.id)):[])];
-  const today = new Date().toISOString().slice(0,10);
-  const weekEnd = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
-  if(_evFilter==='today') list = list.filter(e=>e.eventDate===today);
-  else if(_evFilter==='this_week') list = list.filter(e=>e.eventDate>=today&&e.eventDate<=weekEnd);
-  else list = list.filter(e=>e.eventDate>=today);
-  list.sort((a,b)=>a.eventDate.localeCompare(b.eventDate));
-  if(!list.length){ grid.innerHTML=`<div class="cm-empty" style="grid-column:1/-1"><div class="cm-empty-icon">📅</div><p>No events — be the first to create one!</p></div>`; return; }
-  grid.innerHTML = list.map(ev => {
-    const d = new Date(ev.eventDate+'T12:00:00');
-    const mon = d.toLocaleDateString('en-KE',{month:'short'}).toUpperCase();
-    const day = d.getDate();
-    const myR = _evRsvps[ev.id];
-    const emo = EV_CAT_EMO[ev.category]||'📋';
-    return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px;transition:border-color .2s;" onmouseover="this.style.borderColor='rgba(113,255,0,0.18)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.07)'">
-      <div style="display:flex;gap:14px;margin-bottom:12px;align-items:flex-start;">
-        <div style="text-align:center;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.15);border-radius:10px;padding:8px 12px;flex-shrink:0;">
-          <div style="font-size:9px;font-weight:900;color:#71ff00;text-transform:uppercase;">${mon}</div>
-          <div style="font-size:24px;font-weight:900;color:white;line-height:1;">${day}</div>
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:3px;">${emo} ${(ev.category||'event').replace('_',' ')}</div>
-          <div style="font-size:15px;font-weight:800;color:white;margin-bottom:4px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${ev.title}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.35);">📍 ${ev.location||'Nairobi'} · 🕐 ${ev.eventTime||'TBD'}</div>
-        </div>
-      </div>
-      ${ev.description?`<p style="font-size:12px;color:rgba(255,255,255,0.45);line-height:1.6;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${ev.description}</p>`:''}
-      <div style="font-size:11px;color:rgba(255,255,255,0.28);margin-bottom:14px;">By ${ev.organizerName||'Community'} · 👥 ${Number(ev.rsvpCount||0)+(myR==='going'?1:0)} going</div>
-      <div style="display:flex;gap:8px;">
-        <button type="button" onclick="rsvpEvent('${ev.id}','going')" style="flex:1;padding:9px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s;border:1px solid ${myR==='going'?'rgba(113,255,0,0.4)':'rgba(255,255,255,0.1)'};background:${myR==='going'?'rgba(113,255,0,0.12)':'transparent'};color:${myR==='going'?'#71ff00':'rgba(255,255,255,0.5)'};">✅ Going</button>
-        <button type="button" onclick="rsvpEvent('${ev.id}','interested')" style="flex:1;padding:9px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s;border:1px solid ${myR==='interested'?'rgba(0,170,255,0.4)':'rgba(255,255,255,0.1)'};background:${myR==='interested'?'rgba(0,170,255,0.08)':'transparent'};color:${myR==='interested'?'#00aaff':'rgba(255,255,255,0.5)'};">⭐ Interested</button>
-        <button type="button" onclick="shareEvWA('${encodeURIComponent(ev.title)}','${ev.eventDate}')" style="padding:9px 14px;border-radius:10px;font-size:14px;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#25d366;" title="Share on WhatsApp">💬</button>
-      </div>
-    </div>`;
-  }).join('');
+  grid.innerHTML = `<div class="cm-empty" style="grid-column:1/-1" data-cm-state="events-not-live"><div class="cm-empty-icon">📅</div><p>Community events are not live yet.<br><span style="font-size:12px;color:rgba(255,255,255,0.35);">You can submit an event — it is saved, but it is not shown here until community event publishing goes live.</span></p></div>`;
 }
-
-window.rsvpEvent = function(id, status) {
-  _evRsvps[id] = _evRsvps[id]===status ? null : status;
-  localStorage.setItem('ccEvRsvps', JSON.stringify(_evRsvps));
-  if(window.firebaseDB && status) {
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
-      const u = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
-      if(!u?.uid) return;
-      const upd = {}; upd['rsvps.'+u.uid] = _evRsvps[id]||null;
-      m.updateDoc(m.doc(window.firebaseDB,'communityEvents',id), upd).catch(()=>{});
-    }).catch(()=>{});
-  }
-  _addNotif('🎉 RSVP saved!', status==='going'?'You\'re going to this event.':'You\'re interested in this event.');
-  renderEvents();
-};
-
-window.shareEvWA = function(titleEnc, date) {
-  const t = decodeURIComponent(titleEnc);
-  window.open(`https://wa.me/?text=${encodeURIComponent(`📅 ${t} (${date}) — SOKONI Community\nhttps://mysokoni.co.ke/community.html`)}`, '_blank');
-};
 
 window.submitEvent = async function() {
   const title = (document.getElementById('evTitle')?.value||'').trim();
   const date  = document.getElementById('evDate')?.value;
   const msgEl = document.getElementById('evMsg');
-  if(!title||!date){ if(msgEl){ msgEl.textContent='Title and date are required'; msgEl.style.color='#f97316'; } return; }
-  const u = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
+  const say = (t, c) => { if (msgEl) { msgEl.textContent = t; msgEl.style.color = c; } };
+  if(!title||!date){ say('Title and date are required', '#f97316'); return; }
+  const u = _cmLiveUser();
+  if(!u?.uid){ say('Sign in to submit an event.', '#f97316'); return; }
+  if(!window.firebaseDB){ say('Still connecting — please try again in a moment.', '#f97316'); return; }
+  if(_evBusy) return;
+  _evBusy = true;
   const ev = {
     id: 'EV'+Date.now(),
     title,
@@ -1100,30 +1044,32 @@ window.submitEvent = async function() {
     organizerName: u?.name||'Community Member',
     rsvpCount: 0,
   };
-  _evLocal.unshift(ev);
-  localStorage.setItem('ccEvLocal', JSON.stringify(_evLocal.slice(0,10)));
-  if(window.firebaseDB) {
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
-      m.addDoc(m.collection(window.firebaseDB,'communityEvents'), Object.assign({},ev,{ organizerUid:u?.uid||null, status:'active', createdAt:m.serverTimestamp() })).catch(()=>{});
-    }).catch(()=>{});
+  say('Saving…', 'rgba(255,255,255,0.5)');
+  try {
+    const m = await import(FS_URL);
+    await m.addDoc(m.collection(window.firebaseDB,'communityEvents'), Object.assign({},ev,{ organizerUid:u.uid, status:'active', createdAt:m.serverTimestamp() }));
+  } catch(e) {
+    console.warn('[Community event]', e);
+    say('We could not save your event. ' + _skWhy(e, 'Please try again.'), '#ff8080');
+    _evBusy = false;
+    return;
   }
-  if(msgEl){ msgEl.innerHTML='✅ Event created! Invite your community via WhatsApp.'; msgEl.style.color='#71ff00'; }
+  _evBusy = false;
+  say('Event saved. It is not shown publicly yet — community events are not live.', '#71ff00');
   ['evTitle','evDesc','evDate','evTime','evLocation'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  setTimeout(()=>{ const f=document.getElementById('ccEvForm'); if(f) f.style.display='none'; },2000);
-  renderEvents();
 };
 
 renderEvents();
 
 /* ═══════════════════════════════════════════════════════
    ASK THE COMMUNITY / RECOMMENDATIONS
+   C0 honesty: questions were read back only from localStorage ('ccAskLocal') and the invented
+   DEMO_ASKS (fabricated people and answers); Firestore was never read and the response write is
+   refused by the served rules (it sends authorUid, the rule requires responderUid). The section now
+   says answers are not live; a question is still saved (same communityRecommendations document)
+   and the outcome is shown only after the write resolves.
 ═══════════════════════════════════════════════════════ */
-const DEMO_ASKS = [
-  { id:'ASK001', question:'Best pediatrician in Karen? My 4-year-old needs a routine check-up.', category:'healthcare', askerName:'Karen Parent', responses:[{author:'Mama Pendo',text:'Dr. Kamau at Karen Hospital is excellent — very patient with kids.'},{author:'James M.',text:'Aga Khan outpatient in Parklands — took my daughter twice, top quality.'}], ts:Date.now()-7200000 },
-  { id:'ASK002', question:'Looking for a reliable electrician for home wiring in Kilimani. Any recommendations?', category:'services', askerName:'Kilimani Resident', responses:[{author:'Moses W.',text:'Bright Sparks on Ngong Rd — licensed, affordable, prompt.'},{author:'Aisha K.',text:'James Electric — very professional, reasonable prices.'}], ts:Date.now()-28800000 },
-  { id:'ASK003', question:'Best nyama choma spot near South B for a family outing this weekend?', category:'food', askerName:'South B Family', responses:[{author:'Njoroge M.',text:'Mash Poa in South B itself is unbeatable for value!'},{author:'Patricia N.',text:'Carnivore is the classic — great for family groups.'}], ts:Date.now()-72000000 },
-];
-let _askLocal = []; try { _askLocal = JSON.parse(localStorage.getItem('ccAskLocal')||'[]'); } catch(e){}
+let _askBusy = false;
 
 function _timeAgo(ts) {
   const diff = (Date.now()-(ts||Date.now()))/1000;
@@ -1135,166 +1081,91 @@ function _timeAgo(ts) {
 
 function renderAsks() {
   const el = document.getElementById('ccAskList'); if(!el) return;
-  let list = [..._askLocal, ...(_demoAllowed?DEMO_ASKS.filter(d => !_askLocal.some(l=>l.id===d.id)):[])];
-  if(!list.length){ el.innerHTML=`<div class="cm-empty"><div class="cm-empty-icon">🙋</div><p>No questions yet — ask the community!</p></div>`; return; }
-  el.innerHTML = list.map(ask => `
-    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:18px;margin-bottom:14px;transition:border-color .2s;" onmouseover="this.style.borderColor='rgba(113,255,0,0.15)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.07)'">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-        <div style="width:30px;height:30px;border-radius:50%;background:rgba(0,170,255,0.12);border:1px solid rgba(0,170,255,0.2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#00aaff;flex-shrink:0;">${(ask.askerName||'?')[0].toUpperCase()}</div>
-        <span style="font-size:13px;font-weight:700;color:white;">${ask.askerName||'Community Member'}</span>
-        <span style="font-size:10px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.15);color:#00aaff;padding:2px 8px;border-radius:6px;">${(ask.category||'general')}</span>
-        <span style="margin-left:auto;font-size:10px;color:rgba(255,255,255,0.28);">${_timeAgo(ask.ts||ask.timestamp)}</span>
-      </div>
-      <div style="font-size:15px;font-weight:700;color:white;margin-bottom:10px;line-height:1.5;">🙋 ${ask.question}</div>
-      <div style="margin-bottom:10px;">
-        ${(ask.responses||[]).slice(0,3).map(r=>`
-          <div style="background:rgba(113,255,0,0.04);border:1px solid rgba(113,255,0,0.08);border-radius:10px;padding:10px 12px;margin-bottom:7px;">
-            <div style="font-size:11px;font-weight:700;color:#71ff00;margin-bottom:3px;">✅ ${r.author}</div>
-            <div style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.5;">${r.text}</div>
-          </div>`).join('')}
-      </div>
-      <div style="display:flex;gap:8px;">
-        <input id="resp-${ask.id}" placeholder="Your recommendation…" style="flex:1;padding:9px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:13px;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter')submitResponse('${ask.id}')">
-        <button type="button" onclick="submitResponse('${ask.id}')" style="padding:9px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);color:#71ff00;font-weight:700;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">Reply</button>
-      </div>
-    </div>`).join('');
+  el.innerHTML = `<div class="cm-empty" data-cm-state="asks-not-live"><div class="cm-empty-icon">🙋</div><p>Community answers are not live yet.<br><span style="font-size:12px;color:rgba(255,255,255,0.35);">You can ask a question — it is saved, but questions and answers are not shown here yet.</span></p></div>`;
 }
 
-window.submitAsk = function() {
+window.submitAsk = async function() {
   const question = (document.getElementById('askQuestion')?.value||'').trim();
   const category = document.getElementById('askCat')?.value;
   const msgEl    = document.getElementById('askMsg');
-  if(!question){ if(msgEl){ msgEl.textContent='Please write your question'; msgEl.style.color='#f97316'; } return; }
-  const u = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
+  const say = (t, c) => { if (msgEl) { msgEl.textContent = t; msgEl.style.color = c; } };
+  if(!question){ say('Please write your question', '#f97316'); return; }
+  const u = _cmLiveUser();
+  if(!u?.uid){ say('Sign in to ask the community.', '#f97316'); return; }
+  if(!window.firebaseDB){ say('Still connecting — please try again in a moment.', '#f97316'); return; }
+  if(_askBusy) return;
+  _askBusy = true;
   const ask = { id:'ASK'+Date.now(), question, category, askerName:u?.name||'Community Member', responses:[], ts:Date.now() };
-  _askLocal.unshift(ask);
-  localStorage.setItem('ccAskLocal', JSON.stringify(_askLocal.slice(0,10)));
-  if(window.firebaseDB) {
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
-      m.addDoc(m.collection(window.firebaseDB,'communityRecommendations'), Object.assign({},ask,{ askerUid:u?.uid||null, status:'active', createdAt:m.serverTimestamp() })).catch(()=>{});
-    }).catch(()=>{});
+  say('Saving…', 'rgba(255,255,255,0.5)');
+  try {
+    const m = await import(FS_URL);
+    await m.addDoc(m.collection(window.firebaseDB,'communityRecommendations'), Object.assign({},ask,{ askerUid:u.uid, status:'active', createdAt:m.serverTimestamp() }));
+  } catch(e) {
+    console.warn('[Community ask]', e);
+    say('We could not save your question. ' + _skWhy(e, 'Please try again.'), '#ff8080');
+    _askBusy = false;
+    return;
   }
-  if(msgEl){ msgEl.innerHTML='✅ Question posted! Community members will respond soon.'; msgEl.style.color='#71ff00'; }
+  _askBusy = false;
+  say('Question saved. It is not shown publicly yet — community answers are not live.', '#71ff00');
   const q = document.getElementById('askQuestion'); if(q) q.value='';
-  renderAsks();
-};
-
-window.submitResponse = function(askId) {
-  const inp = document.getElementById('resp-'+askId); if(!inp) return;
-  const text = inp.value.trim(); if(!text) return;
-  const u = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
-  const author = u?.name||'Community Member';
-  const local = _askLocal.find(a=>a.id===askId) || DEMO_ASKS.find(a=>a.id===askId);
-  if(local) (local.responses = local.responses||[]).push({author,text});
-  if(window.firebaseDB) {
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
-      m.addDoc(m.collection(window.firebaseDB,'communityRecResponses'), { recId:askId, authorUid:u?.uid||null, authorName:author, content:text, createdAt:m.serverTimestamp() }).catch(()=>{});
-      m.updateDoc(m.doc(window.firebaseDB,'communityRecommendations',askId), { responseCount:m.increment(1) }).catch(()=>{});
-    }).catch(()=>{});
-  }
-  inp.value='';
-  renderAsks();
 };
 
 renderAsks();
 
 /* ═══════════════════════════════════════════════════════
    BUSINESS PAGES
+   C0 honesty: this grid only ever rendered the invented DEMO_BIZ (fake businesses, follower
+   counts and "Verified" badges); in production it was an empty box. It now says so.
 ═══════════════════════════════════════════════════════ */
-const DEMO_BIZ = [
-  { id:'B001', name:'Mama Pendo Foods', category:'Food & Catering',     verified:true,  followers:1240, desc:'Authentic Kenyan cuisine — catering, meal prep, home delivery across Nairobi.', emoji:'🍽️' },
-  { id:'B002', name:'TechFix Kenya',    category:'Electronics & Repair', verified:true,  followers:890,  desc:'Laptops, phones, TVs repaired same-day. Certified engineers, warranty on all repairs.', emoji:'💻' },
-  { id:'B003', name:'Nairobi Properties Ltd', category:'Real Estate',   verified:true,  followers:567,  desc:'Affordable homes, rentals and commercial spaces across Greater Nairobi.', emoji:'🏠' },
-  { id:'B004', name:'Green Farm Organics', category:'Farming & Agriculture', verified:true, followers:445, desc:'Fresh farm produce delivered weekly. Subscription boxes, bulk orders for restaurants.', emoji:'🌿' },
-  { id:'B005', name:'Swift Auto Garage', category:'Automotive',         verified:false, followers:312,  desc:'Full service garage — oil changes, engine repair, tyres, body work. Westlands.', emoji:'🔧' },
-  { id:'B006', name:'Sokoni Legal Advisory', category:'Legal Services', verified:true,  followers:278,  desc:'Affordable legal consultations, contracts and property conveyancing. Licensed advocates.', emoji:'⚖️' },
-];
-let _bizFollows = {}; try { _bizFollows = JSON.parse(localStorage.getItem('ccBizFollows')||'{}'); } catch(e){}
-
 function renderBiz() {
   const grid = document.getElementById('ccBizGrid'); if(!grid) return;
-  grid.innerHTML = (_demoAllowed?DEMO_BIZ:[]).map(b => {
-    const isF = _bizFollows[b.id];
-    return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px;transition:border-color .2s;" onmouseover="this.style.borderColor='rgba(113,255,0,0.15)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.07)'">
-      <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;">
-        <div style="width:48px;height:48px;border-radius:12px;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${b.emoji}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-            <span style="font-size:14px;font-weight:800;color:white;">${b.name}</span>
-            ${b.verified?`<span style="font-size:10px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);color:#71ff00;padding:2px 7px;border-radius:6px;font-weight:800;">✓ Verified</span>`:''}
-          </div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px;">${b.category}</div>
-        </div>
-      </div>
-      <p style="font-size:12px;color:rgba(255,255,255,0.45);line-height:1.6;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${b.desc}</p>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-        <span style="font-size:11px;color:rgba(255,255,255,0.28);">👥 ${(b.followers+(isF?1:0)).toLocaleString()} followers</span>
-        <button type="button" onclick="followBiz('${b.id}')" style="padding:7px 18px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;border:1px solid ${isF?'rgba(113,255,0,0.3)':'rgba(255,255,255,0.1)'};background:${isF?'rgba(113,255,0,0.08)':'transparent'};color:${isF?'#71ff00':'rgba(255,255,255,0.5)'};">${isF?'✓ Following':'+ Follow'}</button>
-      </div>
-    </div>`;
-  }).join('');
+  grid.innerHTML = `<div class="cm-empty" style="grid-column:1/-1" data-cm-state="biz-not-live"><div class="cm-empty-icon">🏪</div><p>Business pages are not available here yet.</p></div>`;
 }
-
-window.followBiz = function(id) {
-  _bizFollows[id] = !_bizFollows[id];
-  localStorage.setItem('ccBizFollows', JSON.stringify(_bizFollows));
-  const biz = DEMO_BIZ.find(b=>b.id===id);
-  if(window.firebaseDB) {
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
-      const u = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
-      if(!u?.uid) return;
-      /* CANONICAL id + fields: follows/{uid}--{type}--{entityId} carrying
-         {uid,type,entityId,entityName}. This wrote type 'biz' in the doc ID but
-         'business' in the body, and used followerId/followingId — so the SAME
-         business followed from business.html produced a SECOND, different
-         document, and profile.html (which filters on `entityId`) never saw
-         either. One entity, one relationship, one field set. */
-      const followId = u.uid+'--business--'+String(id).replace(/[^a-zA-Z0-9]/g,'_');
-      if(_bizFollows[id]) {
-        m.setDoc(m.doc(window.firebaseDB,'follows',followId),{ uid:u.uid, type:'business', entityId:String(id), entityName:(biz&&biz.name)||'', createdAt:m.serverTimestamp() },{merge:true}).catch(()=>{});
-      } else {
-        m.deleteDoc(m.doc(window.firebaseDB,'follows',followId)).catch(()=>{});
-      }
-    }).catch(()=>{});
-  }
-  if(biz) _addNotif(_bizFollows[id]?`✅ Following ${biz.name}`:`Unfollowed ${biz.name}`, _bizFollows[id]?'You\'ll see their updates in your feed.':'');
-  renderBiz();
-};
 
 renderBiz();
 
 /* ═══════════════════════════════════════════════════════
    FOLLOW USERS
+   C0 honesty: "Following X" is announced only after the follows write resolved; a refused write
+   restores the previous state and says so.
 ═══════════════════════════════════════════════════════ */
-let _followedUsers = {}; try { _followedUsers = JSON.parse(localStorage.getItem('cmFollowedUsers')||'{}'); } catch(e){}
+let _followedUsers = {}; try { _followedUsers = JSON.parse(localStorage.getItem('cmFollowedUsers')||'{}') || {}; } catch(e){}
 
-window.toggleFollowUser = function(uid, name) {
+window.toggleFollowUser = async function(uid, name) {
   if(!uid) return;
-  _followedUsers[uid] = !_followedUsers[uid];
-  localStorage.setItem('cmFollowedUsers', JSON.stringify(_followedUsers));
-  if(window.firebaseDB) {
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
-      const me = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
-      if(!me?.uid || me.uid===uid) return;
-      /* Canonical THREE-segment id — this was {uid}--{otherUid}, which happens to
-         satisfy the rule regex but carries no `type`, so a user and a store with
-         colliding ids were indistinguishable and profile.html could not group
-         them. Everything followable is {uid}--{type}--{entityId}. */
-      const fid = me.uid+'--user--'+String(uid).replace(/[^a-zA-Z0-9]/g,'_');
-      if(_followedUsers[uid]) {
-        m.setDoc(m.doc(window.firebaseDB,'follows',fid),{ uid:me.uid, type:'user', entityId:String(uid), entityName:name||'', createdAt:m.serverTimestamp() },{merge:true}).catch(()=>{});
-      } else {
-        m.deleteDoc(m.doc(window.firebaseDB,'follows',fid)).catch(()=>{});
-      }
-    }).catch(()=>{});
+  const me = _cmLiveUser();
+  if(!me?.uid){ _cmToast('Sign in to follow people.', 'error'); return; }
+  if(me.uid===uid) return;
+  if(!window.firebaseDB){ _cmToast('Still connecting — please try again.', 'error'); return; }
+  const want = !_followedUsers[uid];
+  /* Canonical THREE-segment id — this was {uid}--{otherUid}, which happens to
+     satisfy the rule regex but carries no `type`, so a user and a store with
+     colliding ids were indistinguishable and profile.html could not group
+     them. Everything followable is {uid}--{type}--{entityId}. */
+  const fid = me.uid+'--user--'+String(uid).replace(/[^a-zA-Z0-9]/g,'_');
+  try {
+    const m = await import(FS_URL);
+    if(want) await m.setDoc(m.doc(window.firebaseDB,'follows',fid),{ uid:me.uid, type:'user', entityId:String(uid), entityName:name||'', createdAt:m.serverTimestamp() },{merge:true});
+    else     await m.deleteDoc(m.doc(window.firebaseDB,'follows',fid));
+  } catch(e) {
+    console.warn('[Community follow]', e);
+    _cmToast(_skWhy(e, want ? 'Could not follow right now.' : 'Could not unfollow right now.'), 'error');
+    return;
   }
-  _addNotif(_followedUsers[uid]?`👤 Following ${name}`:`Unfollowed ${name}`, _followedUsers[uid]?'You\'ll see their community posts.':'');
+  _followedUsers[uid] = want;
+  try { localStorage.setItem('cmFollowedUsers', JSON.stringify(_followedUsers)); } catch(e){}
+  _addNotif(want?`👤 Following ${name}`:`Unfollowed ${name}`, want?'You\'ll see their community posts.':'');
 };
 
 /* ═══════════════════════════════════════════════════════
    REPORT / MODERATION
+   C0 honesty: a success notice was shown unconditionally while the write was refused (the
+   served rule requires a `uid` field; the payload carries `reportedBy`) and the error swallowed.
+   The outcome shown is now the real one, and only after the write resolves. The payload is
+   unchanged — routing reports to the live trust-and-safety authority is a later slice.
 ═══════════════════════════════════════════════════════ */
-let _reportTarget = null, _reportType = null;
+let _reportTarget = null, _reportType = null, _reportBusy = false;
 
 window.openReport = function(id, type) {
   _reportTarget = id; _reportType = type;
@@ -1308,16 +1179,30 @@ window.closeReport = function() {
   _reportTarget = null; _reportType = null;
 };
 
-window.submitReport = function() {
+window.submitReport = async function() {
   const reason = document.getElementById('cmReportReason')?.value;
-  if(_reportTarget && window.firebaseDB) {
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
-      const u = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
-      m.addDoc(m.collection(window.firebaseDB,'communityReports'),{ targetId:_reportTarget, targetType:_reportType||'post', reason, reportedBy:u?.uid||'guest', status:'pending', createdAt:m.serverTimestamp() }).catch(()=>{});
-    }).catch(()=>{});
+  const target = _reportTarget, type = _reportType;
+  if(!target || _reportBusy) return;
+  const fail = (e) => {
+    if(e) console.warn('[Community report]', e);
+    _cmToast("We couldn't send your report.", 'error');
+    _addNotif("🚩 We couldn't send your report", 'Nothing was submitted. Please try again later.');
+  };
+  if(!window.firebaseDB){ closeReport(); fail(); return; }
+  _reportBusy = true;
+  try {
+    const m = await import(FS_URL);
+    const u = _cmLiveUser();
+    await m.addDoc(m.collection(window.firebaseDB,'communityReports'),{ targetId:target, targetType:type||'post', reason, reportedBy:u?.uid||'guest', status:'pending', createdAt:m.serverTimestamp() });
+  } catch(e) {
+    _reportBusy = false;
+    closeReport(); fail(e);
+    return;
   }
+  _reportBusy = false;
   closeReport();
-  _addNotif('🚩 Report submitted','Our moderation team will review within 24 hours.');
+  _cmToast('Report sent.');
+  _addNotif('🚩 Report sent', 'Thank you for flagging this content.');
 };
 
 /* ═══════════════════════════════════════════════════════
@@ -1347,7 +1232,7 @@ window.openNotifications = function() {
     const list = document.getElementById('cmNotifList');
     if(list) {
       list.innerHTML = _notifs.length
-        ? _notifs.map(n=>`<div style="padding:12px;border-radius:10px;margin-bottom:4px;background:#111;"><div style="font-size:13px;font-weight:700;color:white;margin-bottom:2px;">${n.title}</div>${n.body?`<div style="font-size:12px;color:rgba(255,255,255,0.4);">${n.body}</div>`:''}<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:4px;">${_timeAgo(n.ts)}</div></div>`).join('')
+        ? _notifs.map(n=>`<div style="padding:12px;border-radius:10px;margin-bottom:4px;background:#111;"><div style="font-size:13px;font-weight:700;color:white;margin-bottom:2px;">${escapeHTML(n.title)}</div>${n.body?`<div style="font-size:12px;color:rgba(255,255,255,0.4);">${escapeHTML(n.body)}</div>`:''}<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:4px;">${_timeAgo(n.ts)}</div></div>`).join('')
         : `<div style="padding:20px;text-align:center;color:rgba(255,255,255,0.3);font-size:13px;">No notifications yet</div>`;
     }
   }
