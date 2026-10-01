@@ -1,3 +1,12 @@
+## [2026-10-01] — createPaymentIntent purpose 'donation' (SOKONI Foundation)
+
+**Files:** `functions/payment-purposes.js`, `scripts/test-donation-intent.js`, `CHANGELOG.md`
+
+- A pledge (foundationDonations PLG_/CHK_) becomes its own intent. The amount is the pledge's; owner only; pledged only; whole KES 10–100,000 as a number; KES only.
+- The intent ref is `DON_<pledgeId>`: a retry replays it, and a paid pledge cannot be paid again.
+- Metadata is `{type:'donation', pledgeId, programmeId}`, with no seller.
+- Completed by webhookIntasend (foundation-donation-settle.js). Tests: 16/0 (base c6a2c49 fails 12). Not deployed.
+
 ## [2026-09-30] — Repair #1, Unit 1: createPaymentIntent learns product_order (server price, server seller) — built on live 7d115bc
 
 **Why.** The live online checkout was client-priced, and the buyer-supplied sellerUid decided which wallet was
