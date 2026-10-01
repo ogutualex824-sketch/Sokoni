@@ -195,9 +195,11 @@
         barcode: p.barcode || null, brand: p.brand || null, condition: p.condition || null, location: p.location || null,
         kebsCert: p.kebsCert || null, foodLicence: p.foodLicence || null, ownership: p.ownership || null,
         verificationStatus: p.verificationStatus || null, warranty: p.warranty || null,
-        /* Price tiers (2026-10-01): Online = price, Shop = shopPrice, Wholesale = wholesalePrice. An absent tier
-           maps to null ("not sold at this price"), never 0 — the editor shows it empty and never writes it back. */
-        shopPrice: (typeof p.shopPrice === 'number') ? p.shopPrice : null,
+        /* Price tiers (2026-10-01): Online = price, Shelf = shopPrice, Wholesale = wholesalePrice. An absent tier
+           maps to null ("not sold at this price"), never 0 — the editor shows it empty and never writes it back.
+           The SHELF price is PRIVATE (owner, 2026-10-01): it is never read from the public products/{id} doc —
+           withShelf() fills it from the merchant-only posProducts record (listShelfPrices). */
+        shopPrice: null,
         wholesalePrice: (typeof p.wholesalePrice === 'number') ? p.wholesalePrice : null,
         minWholesaleQty: (typeof p.minWholesaleQty === 'number') ? p.minWholesaleQty : null,
         deliveryCost: (typeof p.deliveryCost === 'number') ? p.deliveryCost : null,
@@ -1101,7 +1103,13 @@
   function idempotencyKey(o) {
     var scope = o.scope, cart = o.cart || [], token = o.saleToken;
     if (!token) throw new Error('merchant data: saleToken is required (one per sale attempt)');
-    var lines = cart.map(function (l) { return String(l.productId) + 'x' + Number(l.qty || 0); }).sort().join('|');
+    /* The PRICE TIER is part of the sale (2026-10-01): 2 × Coffee at SHELF is not the sale 2 × Coffee at ONLINE, so a
+       retry after a tier change must not resolve to the earlier attempt. Appended only for a non-online tier, so every
+       online-only cart keeps exactly the key it had before (an attempt persisted across a deploy still resumes). */
+    var lines = cart.map(function (l) {
+      var t = (l.priceTier && l.priceTier !== 'online') ? '@' + String(l.priceTier) : '';
+      return String(l.productId) + 'x' + Number(l.qty || 0) + t;
+    }).sort().join('|');
     var basis = scope.shopId + '::' + token + '::' + lines;
     /* Small, stable, dependency-free hash — this is a collision-resistant key
        for one shop's tills, not a security primitive. */
@@ -1228,8 +1236,59 @@
     return (isFinite(q) && q > 0) ? q : 0;
   }
 
+  /* ── The PRIVATE shelf price (owner, 2026-10-01: "make it truly private") ──────────────────────
+     products/{id} is public (`read: if true`), so the shelf price lives ONLY on posProducts/{id}, whose rules
+     allow read to `resource.data.sellerId == auth.uid` or an admin. The OWNER's device reads it here; a staff
+     device is refused by the rules, so it gets { readable:false } and asks the SERVER per line instead
+     (previewShelfPrice — the dry run, which proves the cashier for this shop first). Never a public read. */
+  var SHELF_COLLECTION = 'posProducts';
+  function shelfQuery(scope) {
+    if (!scope || !scope.ok || !scope.sellerUid) throw new Error('merchant data: a resolved shop scope is required');
+    return { collection: SHELF_COLLECTION, where: [['sellerId', '==', String(scope.sellerUid)]] };
+  }
+  /** @returns {Promise<{readable:true, map:Object<string,number>} | {readable:false}>} — never throws */
+  async function listShelfPrices(o) {
+    try {
+      var rows = await o.db.queryProducts(shelfQuery(o.scope));
+      var map = {};
+      (rows || []).forEach(function (r) {
+        if (r && r.id && String(r.sellerId || '') === String(o.scope.sellerUid) && _tierNum(r.shopPrice) !== null) map[String(r.id)] = r.shopPrice;
+      });
+      return { readable: true, map: map };
+    } catch (_) {
+      return { readable: false };   /* staff: the rules refuse the owner's private record — ask the server per line */
+    }
+  }
+  /** Product rows with the shelf price from the PRIVATE map. Unknown (staff) → shopPrice null + shelfPending. */
+  function withShelf(rows, shelf) {
+    var known = !!(shelf && shelf.readable);
+    return (rows || []).map(function (r) {
+      var v = known && shelf.map ? shelf.map[String(r.id)] : undefined;
+      return Object.assign({}, r, { shopPrice: (typeof v === 'number') ? v : null, shelfPending: !known });
+    });
+  }
+  /** Ask the server for one product's shelf price (dry run; the cashier is proven for this shop first).
+   *  @returns {Promise<number|null>} null = this product has no shelf price (or the check could not run). */
+  async function previewShelfPrice(o) {
+    var line = { productId: String(o.productId), name: o.name || '', qty: 1, price: 1, priceTier: 'shop' };
+    var r = await previewSale({ scope: o.scope, cart: [line], payments: [], saleToken: 'shelf_' + line.productId, callable: o.callable });
+    var it = r && r.ran && r.preview && Array.isArray(r.preview.items) ? r.preview.items[0] : null;
+    return (it && it.priceTier === 'shop' && _tierNum(it.unitPrice) !== null) ? it.unitPrice : null;
+  }
+  /** Record a server-previewed shelf price on a line (null = not available). Does NOT change the selected tier. */
+  function setLineShelf(cart, productId, price) {
+    return (cart || []).map(function (l) {
+      if (l.productId !== String(productId)) return Object.assign({}, l);
+      var tiers = Object.assign({}, l.tiers || {}, { shop: _tierNum(price) });
+      /* the server already applied the ordering rule; re-check so the screen never shows what it would refuse */
+      if (tiers.shop !== null && !(tiers.shop <= tiers.online)) tiers.shop = null;
+      if (tiers.shop !== null && tiers.wholesale != null && !(tiers.wholesale <= tiers.shop)) tiers.shop = null;
+      return Object.assign({}, l, { tiers: tiers, shelfPending: false });
+    });
+  }
+
   /* ── Price tiers (owner, 2026-10-01) ──────────────────────────────────
-     The seller sets up to three prices at upload: ONLINE (`price`), SHOP (`shopPrice`), WHOLESALE
+     The seller sets up to three prices at upload: ONLINE (`price`), SHELF (`shopPrice`, PRIVATE — see above), WHOLESALE
      (`wholesalePrice`). The cashier picks a CONFIGURED tier per line. This client copy mirrors the server rule
      (functions/shared/pos-price-tier.js) ONLY so the screen never offers a tier the server would refuse: the
      server re-resolves every price from products/{id} and is the authority. An absent or out-of-order tier is
@@ -1269,6 +1328,8 @@
       qty: q,
       /* carried for the on-screen stock warning only — the server re-reads canonical stock */
       knownStock: (typeof product.stock === 'number') ? product.stock : null,
+      /* staff device: the shelf price is private — the server is asked when the cashier taps SHELF */
+      shelfPending: product.shelfPending === true,
     });
     return out;
   }
@@ -1432,7 +1493,12 @@
     addToCart: addToCart,
     setLineQty: setLineQty,
     setLineTier: setLineTier,
+    setLineShelf: setLineShelf,
     tierPrices: tierPrices,
+    shelfQuery: shelfQuery,
+    listShelfPrices: listShelfPrices,
+    withShelf: withShelf,
+    previewShelfPrice: previewShelfPrice,
     TIER_LABEL: TIER_LABEL,
     TIER_SHORT: TIER_SHORT,
     removeLine: removeLine,

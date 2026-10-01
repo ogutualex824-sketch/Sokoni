@@ -62,7 +62,14 @@ ck('U-3', /if \(!has\) \{[\s\S]{0,200}disabled aria-disabled="true"[\s\S]{0,120}
 ck('U-6', /\['online', 'shop', 'wholesale'\]\.map\(/.test(sell) && /'<\/div><\/div>' \+ tierCol \+\s*\n?\s*\/\*[\s\S]{0,400}'<div class="msl-step">'/.test(sell), 'layout: ONL / SHOP / WHOLE column, top to bottom, directly LEFT of the + / qty / − stepper');
 ck('U-8', /var tierCol = l\.quick \? '' :/.test(sell), 'a Quick Charge line (cashier-priced, no tiers) gets NO tier column');
 ck('U-7', /'\.msl-tiers\{[^']*flex-direction:column/.test(sell) && /@media \(max-width:360px\)\{\.msl-tiers/.test(sell), 'the tier column is vertical and shrinks on small phones (responsive)');
-ck('U-4', /act === 'tier'[\s\S]{0,300}md\.setLineTier\([\s\S]{0,500}S\.preflight = null; clearToken\(\)/.test(sell), 'a tier change re-runs the pre-charge check and mints a new sale key');
+ck('U-4', /act === 'tier'[\s\S]{0,300}md\.setLineTier\([\s\S]{0,700}S\.preflight = null; paint\(\)/.test(sell)
+  && !/act === 'tier'\)\s*\{ var lt[\s\S]{0,700}clearToken\(\)/.test(sell), 'a tier change re-runs the pre-charge check and keeps the sale token (cleared only when a sale ends)');
+{ const base = md.addToCart([], A, 2); const k = (cart) => md.idempotencyKey({ scope: { ok: true, shopId: 'SHOP1' }, cart, saleToken: 'T1' });
+  const kShelf = k(md.setLineTier(base, 'A', 'shop')), kWh = k(md.setLineTier(base, 'A', 'wholesale'));
+  const legacy = (() => { const basis = 'SHOP1::T1::Ax2'; let h = 5381; for (let i = 0; i < basis.length; i++) h = ((h << 5) + h + basis.charCodeAt(i)) >>> 0; return h.toString(36); })();
+  ck('K-1', k(base) === k(md.addToCart([], A, 2)) && kShelf !== k(base) && kWh !== kShelf && kWh !== k(base),
+    'the sale key includes the tier: the same cart retried = the same key; a tier change = a different sale', { on: k(base), sh: kShelf, wh: kWh });
+  ck('K-2', k(base).slice(-legacy.length) === legacy, 'an online-only cart keeps EXACTLY its old key (a persisted attempt still resumes after the deploy)', { key: k(base), legacy }); }
 ck('U-5', !/location\.(href|assign|replace)|salescontrol/i.test((sell.match(/if \(act === 'dec'\)[\s\S]{0,260}/) || [''])[0]), 'minus never navigates (no location change, no Sales Control)');
 
 /* the payment sheet (owner, 2026-10-01): items shown ABOVE the money, and the sheet scrolls on phones */
@@ -71,5 +78,49 @@ const paySeg = payAt > 0 ? sell.slice(payAt, payAt + 4000) : '';
 ck('Y-1', /msl-pay-items[\s\S]*S\.cart\.map[\s\S]*msl-pay-it[\s\S]*Subtotal/.test(paySeg) && paySeg.indexOf('msl-pay-items') < paySeg.indexOf('Subtotal'), 'Take payment lists the sale items (qty × price, tier, line total) ABOVE the subtotal');
 ck('Y-2', /'\.msl-sh-b\{[^']*overflow-y:auto[^']*-webkit-overflow-scrolling:touch;'/.test(sell) && /overscroll-behavior:contain;touch-action:pan-y/.test(sell), 'the sheet body scrolls on iPhone (momentum, contained overscroll, vertical pan)');
 
-console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+/* THE SHELF PRICE IS PRIVATE (owner, 2026-10-01: "make it truly private"). products/{id} is public, so the shelf
+   price is read only from the merchant-only posProducts/{id}; a staff device (refused by the rules) asks the server. */
+(async () => {
+  const spec = []; const pub = [{ id: 'A', name: 'Coffee', price: 150, shopPrice: 140, wholesalePrice: 125, shopId: 'SHOP1', sellerUid: 'U1' }];
+  const dbOwner = { queryProducts: async (q) => { spec.push(q); return q.collection === 'posProducts'
+    ? [{ id: 'A', sellerId: 'U1', shopPrice: 140 }, { id: 'Z', sellerId: 'SOMEONE', shopPrice: 1 }] : pub; } };
+  const dbStaff = { queryProducts: async (q) => { if (q.collection === 'posProducts') throw new Error('Missing or insufficient permissions.'); return pub; } };
+  let rows = []; try { rows = await md.listProducts({ scope, db: dbOwner }); } catch (e) { rows = [{ err: e.message }]; }
+  ck('X-1', rows[0] && rows[0].shopPrice === null && rows[0].wholesalePrice === 125, 'a shopPrice on the PUBLIC product doc is never read (wholesale still is)', rows[0]);
+  let sh = null; try { sh = await md.listShelfPrices({ scope, db: dbOwner }); } catch (e) { sh = { err: e.message }; }
+  const q = spec.find((x) => x.collection === 'posProducts');
+  ck('X-2', sh && sh.readable === true && sh.map.A === 140 && !('Z' in sh.map) && q && JSON.stringify(q.where) === JSON.stringify([['sellerId', '==', 'U1']]),
+    'the OWNER reads shelf prices from posProducts filtered by their own sellerId (the field the rule checks); a foreign record is dropped', { sh, q });
+  const ownerRows = sh && sh.readable ? md.withShelf(rows, sh) : [];
+  const ol = ownerRows[0] ? md.addToCart([], ownerRows[0], 1)[0] : null;
+  ck('X-3', ol && ol.tiers.shop === 140 && ol.shelfPending === false, 'owner device: the cart line offers SHELF at the private price', ol);
+  let st = null; try { st = await md.listShelfPrices({ scope, db: dbStaff }); } catch (e) { st = { threw: e.message }; }
+  const sl = st ? md.addToCart([], md.withShelf(rows, st)[0], 1)[0] : null;
+  ck('X-4', st && st.readable === false && sl && sl.tiers.shop === null && sl.shelfPending === true && sl.price === 150,
+    'staff device: the rules refuse the private read → no shelf price is guessed; the line is marked to ASK the server', { st, sl });
+  /* the server preview (dry run) */
+  const sent = []; const callOk = async (payload) => { sent.push(payload); return { data: { dryRun: true, ok: false, items: [{ productId: 'A', unitPrice: 140, priceTier: 'shop' }], differences: [{ field: 'unitPrice' }] } }; };
+  let pv = null; try { pv = await md.previewShelfPrice({ scope, productId: 'A', name: 'Coffee', callable: callOk }); } catch (e) { pv = e.message; }
+  const pay = sent[0];
+  ck('X-5', pv === 140 && pay && pay.dryRun === true && pay.merchantId === 'SHOP1' && pay.items.length === 1 && pay.items[0].priceTier === 'shop' && pay.items[0].productId === 'A',
+    'staff tap on SHELF asks the server (dryRun, this shop, one shelf line) and gets the price', { pv, pay: pay && { d: pay.dryRun, m: pay.merchantId, it: pay.items } });
+  const callNone = async () => ({ data: { dryRun: true, ok: false, items: [], differences: [{ field: 'priceTier', error: 'tier_not_configured' }] } });
+  const callDown = async () => { throw new Error('unavailable'); };
+  const callWrong = async () => ({ data: { dryRun: true, ok: true, items: [{ productId: 'A', unitPrice: 140, priceTier: 'online' }] } });
+  const n1 = await md.previewShelfPrice({ scope, productId: 'A', callable: callNone });
+  const n2 = await md.previewShelfPrice({ scope, productId: 'A', callable: callDown });
+  const n3 = await md.previewShelfPrice({ scope, productId: 'A', callable: callWrong });
+  ck('X-6', n1 === null && n2 === null && n3 === null, 'no shelf price / the check failing / a non-shelf answer → null (never 0, never the online price)', [n1, n2, n3]);
+  let c = md.setLineShelf([sl], 'A', 140); let ct; try { ct = md.setLineTier(c, 'A', 'shop'); } catch (e) { ct = null; }
+  ck('X-7', ct && ct[0].priceTier === 'shop' && ct[0].price === 140 && ct[0].shelfPending === false, 'the previewed price becomes the SHELF tier for that line', ct && ct[0]);
+  let thr = false; try { md.setLineTier(md.setLineShelf([sl], 'A', null), 'A', 'shop'); } catch (e) { thr = true; }
+  const hi = md.setLineShelf([sl], 'A', 999)[0];
+  ck('X-8', thr && hi.tiers.shop === null, 'a missing or out-of-order previewed price is NOT offered (shelf above online refused)', hi.tiers);
+  /* the screen wiring */
+  ck('U-9', /Promise\.all\(\[md\.listProducts\([\s\S]{0,120}md\.listShelfPrices\(/.test(sell) && /S\.products = md\.withShelf\(res\[0\], S\.shelf\)/.test(sell) && /onProducts: function \(rows\) \{\s*S\.products = md\.withShelf\(rows, S\.shelf\)/.test(sell),
+    'Sell merges the private shelf prices into BOTH the first load and the live updates');
+  ck('U-10', /if \(t === 'shop' && !has && l\.shelfPending\)[\s\S]{0,400}aria-label="Check the shelf price"/.test(sell) && /md\.previewShelfPrice\(\{ scope: ctx\.scope, productId: pid, name: lp\.name, callable: ctx\.callSale \}\)/.test(sell),
+    'a staff device shows SHELF "?" and asks the server on tap (busy while asking)');
+  console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
+  process.exit(fail ? 1 : 0);
+})().catch((e) => { console.log('CRASH ' + (e && e.stack || e)); process.exit(2); });

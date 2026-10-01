@@ -109,13 +109,18 @@ const edit = async (extra, patch, opts) => {
   head('F - the field is carried');
   ck('F1 shopPrice is in the writer allowlist (money list, empty = absent)',
      /\['deliveryCost', 'shopPrice', 'wholesalePrice', 'minWholesaleQty'\]\.forEach/.test(SRC));
-  ck('F2 mapProducts maps shopPrice (absent -> null, never 0)',
-     /shopPrice: \(typeof p\.shopPrice === 'number'\) \? p\.shopPrice : null/.test(SRC));
+  /* Owner, 2026-10-01: the SHELF price is PRIVATE ("make it truly private"). products/{id} is public, so the row
+     mapping never reads it; withShelf() fills it from the merchant-only posProducts record. */
+  ck('F2 mapProducts NEVER reads shopPrice from the public doc (the private record is the source)',
+     /shopPrice: null,/.test(SRC) && !/shopPrice: \(typeof p\.shopPrice === 'number'\) \? p\.shopPrice : null/.test(SRC));
   const listed = await M.listProducts({ scope: SCOPE, db: adapter({ a: { shopId: 'shop_A', sellerUid: 'uid_A', name: 'x', price: 9, shopPrice: 8 },
                                                                      b: { shopId: 'shop_A', sellerUid: 'uid_A', name: 'y', price: 9 } }) });
   const rowA = (listed.rows || listed).find ? (listed.rows || listed).find((r) => r.id === 'a') : null;
   const rowB = (listed.rows || listed).find ? (listed.rows || listed).find((r) => r.id === 'b') : null;
-  ck('F3 a listed row carries the stored Shop price', !!rowA && rowA.shopPrice === 8, rowA && JSON.stringify(rowA.shopPrice));
+  const merged = (typeof M.withShelf === 'function') ? M.withShelf(listed.rows || listed, { readable: true, map: { a: 8 } }) : [];
+  const mA = merged.find ? merged.find((r) => r.id === 'a') : null;
+  ck('F3 a public shopPrice is NOT carried; the PRIVATE shelf price is (withShelf)', !!rowA && rowA.shopPrice === null && !!mA && mA.shopPrice === 8,
+     JSON.stringify({ public: rowA && rowA.shopPrice, private: mA && mA.shopPrice }));
   ck('F4 ...and an absent one as null (not 0)', !!rowB && rowB.shopPrice === null, rowB && JSON.stringify(rowB.shopPrice));
   ck('F5 MAX_PRICE is exported and positive', typeof M.MAX_PRICE === 'number' && M.MAX_PRICE > 0, M.MAX_PRICE);
 
