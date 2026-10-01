@@ -173,7 +173,31 @@
     'dispatch.html':            'driver',
     /* ─ Provider workspace ─ */
     'venue-booking.html':       'provider',
-    'venue-manager.html':       'provider'
+    'venue-manager.html':       'provider',
+    /* ─ Added 2026-10-01 (owner: "fix all") — operator pages that load the nav and had NO entry. They showed a
+         role sidebar only because the lookup never matched; classified from each page's own title + scoping. ─ */
+    'b2b-dashboard.html':        'seller',
+    'business-os.html':          'seller',
+    'food-dashboard.html':       'seller',
+    'inv-dashboard.html':        'seller',
+    'finance-budget.html':       'seller',      /* shop-scoped (shopId) merchant finance */
+    'finance-expenses.html':     'seller',
+    'finance-invoices.html':     'seller',
+    'finance-reconcile.html':    'seller',
+    'merchant.html':             'seller',
+    'merchant-v2.html':          'seller',
+    'pos-cash-manager.html':     'seller',
+    'pos-completeness.html':     'seller',
+    'pos-kds.html':              'seller',
+    'pos-live-floor.html':       'seller',
+    'pos-till-manager.html':     'seller',
+    'seller-fulfilment.html':    'seller',
+    'beta-dashboard.html':       'admin',
+    'growth-dashboard.html':     'admin',
+    'legal-admin.html':          'admin',
+    'revenue-dashboard.html':    'superAdmin',
+    'settlement-dashboard.html': 'superAdmin',
+    'rider-dashboard.html':      'rider'
   };
 
   /* SHOPPING PAGES ARE THE SHOPPER'S, WHATEVER THE ROLE (owner, 2026-10-01: "cart should only show cart").
@@ -183,16 +207,28 @@
      seller consoles stay one tap away in the profile menu. */
   var _CONSUMER_PAGES = ['index', 'cart', 'checkout', 'product', 'category', 'search', 'wishlist', 'my-orders',
     'track', 'success', 'services', 'food', 'property-hub', 'car-hub', 'healthcare', 'legal-hub', 'tech-hub',
-    'jobs', 'entertainment', 'notifications'];
+    'jobs', 'entertainment', 'notifications',
+    /* public / customer-account pages that look operator-ish by name */
+    'seller-public', 'subscriptions', 'my-subscriptions', 'trust'];
 
+  /* THE MAP IS NOW THE AUTHORITY (owner 2026-10-01, "fix all"). It never matched before: its keys carry '.html'
+     while _page is computed without it, so EVERY page fell through to "the user's role" — a super admin got the
+     Super Admin sidebar on the cart, the help page, everywhere. Now:
+       · shopping pages → buyer, whatever the role;
+       · a mapped workspace page → that workspace, only for a role entitled to it (everyone else: buyer);
+       · any other page → buyer for the three sidebar roles (seller / admin / superAdmin) — a sidebar appears
+         only on its own workspace pages. driver / rider / provider keep their role (they have no sidebar). */
   function _workspace() {
     var r      = _role();
     if (_CONSUMER_PAGES.indexOf(_page) > -1) return 'buyer';
-    var mapped = _WS_MAP[_page];
-    if (!mapped) return r;
+    var mapped = _WS_MAP[_page + '.html'] || _WS_MAP[_page];
+    if (!mapped) return (r === 'seller' || r === 'admin' || r === 'superAdmin') ? 'buyer' : r;
     if (mapped === 'superAdmin') return (r === 'superAdmin') ? 'superAdmin' : (r === 'admin' ? 'admin' : 'buyer');
     if (mapped === 'admin')      return (r === 'admin' || r === 'superAdmin') ? 'admin' : 'buyer';
     if (mapped === 'seller')     return (r === 'seller' || r === 'admin' || r === 'superAdmin') ? 'seller' : 'buyer';
+    if (mapped === 'driver' || mapped === 'rider')
+      return (r === 'driver' || r === 'rider' || r === 'admin' || r === 'superAdmin') ? mapped : 'buyer';
+    if (mapped === 'provider')   return (r === 'provider' || r === 'admin' || r === 'superAdmin') ? 'provider' : 'buyer';
     return mapped;
   }
 

@@ -1,3 +1,19 @@
+## [2026-10-01] — Navigation workspace map made authoritative (owner: "fix all")
+
+**Files:** `sokoni-nav-engine.js`, `scripts/test-cart-no-workspace-sidebar.js`, `CHANGELOG.md` · **Base:** afbaef3
+
+- **The map never matched:** its keys carried `.html` while `_page` has none, so every page used the visitor's role. The lookup now tries both.
+- **Unmapped pages:** for seller / admin / super admin, the buyer layout. A console sidebar appears only on that console's own pages.
+- **22 operator pages that load the nav and had no entry, now classified from their own titles and scoping:**
+  - finance-* (shop-scoped), POS floor / till / KDS / cash, food / b2b / inv dashboards, business-os, merchant(-v2), seller-fulfilment → seller;
+  - beta / growth / legal-admin → admin;
+  - revenue- and settlement-dashboard → superAdmin;
+  - rider-dashboard → rider.
+- **Public pages that only look operator-ish** (seller-public, subscriptions, my-subscriptions, trust) → buyer.
+- **Driver / rider / provider pages** now apply only to those roles (and ops staff). A shopper on venue-booking or driver no longer gets that console.
+- Pages that set `data-no-header` never run the engine and are unaffected.
+- **Tests:** cart-no-workspace-sidebar 11/0 (live fails 8); customer-nav 62/0; navigation 11/11; pos-setup-availability 14/0.
+
 ## [2026-10-01] — The cart (and every shopping page) shows the shopper layout, not the Super Admin sidebar
 
 **Files:** `sokoni-nav-engine.js`, `scripts/test-cart-no-workspace-sidebar.js`, `CHANGELOG.md` · **Base:** live `72dca56`
