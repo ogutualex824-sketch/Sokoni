@@ -130,7 +130,11 @@ exports.impactGetPublicDashboard = onCall(
     return {
       ok: true,
       balance: {
-        available:     bal.balance || 0,
+        /* VERIFIED money only (2026-10-01). balance − verifiedBalance is money RECORDED without provider proof:
+           shown as "requires reconciliation", never as donated or available. */
+        available:     Math.max(0, (Number(bal.verifiedBalance) || 0) - (Number(bal.reservedKES) || 0)),
+        verified:      Number(bal.verifiedBalance) || 0,
+        requiresReconciliation: Math.max(0, (Number(bal.balance) || 0) - (Number(bal.verifiedBalance) || 0)),
         totalReceived: bal.totalReceived || 0,
         totalDisbursed:bal.totalDisbursed || 0,
         totalFees:     bal.totalFees || 0,
@@ -754,7 +758,7 @@ async function _settle(ref, from, outcome, extra) {
         meta: { disbursementId: ref.id, rail: (d.destination && d.destination.rail) || 'intasend_b2c' },
       });
     }
-    txn.set(balRef, { reservedKES: _incr(-d.amount), lastUpdated: _now() }, { merge: true });
+    txn.set(balRef, { reservedKES: _incr(-d.amount), ...(outcome === 'completed' ? { verifiedBalance: _incr(-d.amount) } : {}), lastUpdated: _now() }, { merge: true });
     if (d.grantId && outcome !== 'completed') txn.set(fdb().collection('impactGrants').doc(d.grantId), { committedKES: _incr(-d.amount) }, { merge: true });
     if (d.grantId && outcome === 'completed') txn.set(fdb().collection('impactGrants').doc(d.grantId), { disbursedKES: _incr(d.amount), committedKES: _incr(-d.amount) }, { merge: true });
     txn.update(ref, { status: outcome, ...(outcome === 'completed' ? { completedAt: _now() } : { failedAt: _now() }), ...extra });
@@ -801,8 +805,8 @@ exports.impactInitiateDisbursement = onCall(
       }
       const balSnap = await txn.get(fdb().collection('impactBalance').doc('current'));
       const bal = balSnap.exists ? balSnap.data() : {};
-      const available = (bal.balance || 0) - (bal.reservedKES || 0);
-      if (amt > available) throw new HttpsError('failed-precondition', 'Insufficient available Foundation funds. Available: KES ' + Math.max(0, available).toLocaleString() + '.');
+      const available = (Number(bal.verifiedBalance) || 0) - (bal.reservedKES || 0);   /* VERIFIED money only (2026-10-01) */
+      if (amt > available) throw new HttpsError('failed-precondition', 'Insufficient VERIFIED Foundation funds. Verified available: KES ' + Math.max(0, available).toLocaleString() + '.');
       if (grantId) {
         if (!/^[A-Za-z0-9_-]{1,128}$/.test(String(grantId))) throw new HttpsError('invalid-argument', 'Invalid grant.');
         const gRef = fdb().collection('impactGrants').doc(String(grantId));
@@ -867,8 +871,8 @@ exports.impactAuthorizeDisbursement = onCall(
       const balRef = fdb().collection('impactBalance').doc('current');
       const b = await txn.get(balRef);
       const bal = b.exists ? b.data() : {};
-      const available = (bal.balance || 0) - (bal.reservedKES || 0);
-      if (x.amount > available) throw new HttpsError('failed-precondition', 'Insufficient available Foundation funds now (KES ' + Math.max(0, available).toLocaleString() + ').');
+      const available = (Number(bal.verifiedBalance) || 0) - (bal.reservedKES || 0);   /* VERIFIED money only (2026-10-01) */
+      if (x.amount > available) throw new HttpsError('failed-precondition', 'Insufficient VERIFIED Foundation funds now (KES ' + Math.max(0, available).toLocaleString() + ').');
       txn.set(balRef, { reservedKES: _incr(x.amount), lastUpdated: _now() }, { merge: true });
       txn.update(ref, { status: 'processing', authorizedBy: uid, authorizedAt: _now() });
       await _dsbAudit(txn, ref, { action: 'authorized', by: uid });
@@ -997,6 +1001,110 @@ exports.impactCancelDisbursement = onCall(
 );
 
 /* 14e. Admin views — donations and disbursements, bounded, donor contact never returned. */
+/* 14f. FOUNDATION RECONCILIATION (2026-10-01) — "recorded" vs "verified paid".
+   classify: scan foundationDonations; a 'completed' record WITHOUT provider evidence (providerReference + grossKES,
+   written only by the verified webhook) is marked reconciliation.state 'REQUIRES_RECONCILIATION' — status and
+   amount are NEVER rewritten. Snapshot → foundationReconciliation/current.
+   propose / confirm (two different admins): 'verify' (with the IntaSend reference) credits verifiedBalance;
+   'close' (no money arrived) posts an append-only 'adjustment' debit reversing the unbacked credit and unwinds
+   foundationStats / programme raised. Nothing is deleted. */
+exports.impactReconcileFoundation = onCall(
+  { timeoutSeconds: 120, enforceAppCheck: true },
+  async (request) => {
+    if (!_isAdmin(request.auth)) throw new HttpsError('permission-denied', 'Admin only.');
+    const uid = request.auth.uid;
+    const { action, donationId, providerReference, note } = request.data || {};
+    const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : null);
+    const evidence = (d) => !!(d.providerReference && (d.grossKES != null));
+    if (action === 'classify') {
+      const counts = { recorded: 0, verifiedPaid: 0, unverified: 0, failed: 0, refunded: 0, pledged: 0, review: 0, held: 0, duplicates: 0 };
+      const amounts = { recorded: 0, verifiedPaid: 0, unverified: 0 };
+      const seenOrders = {};
+      let last = null, marked = 0;
+      for (let page = 0; page < 20; page++) {
+        let q = fdb().collection('foundationDonations').orderBy('__name__').limit(500);
+        if (last) q = q.startAfter(last);
+        const snap = await q.get();
+        if (snap.empty) break;
+        const batch = fdb().batch();
+        let writes = 0;
+        for (const doc of snap.docs) {
+          const d = doc.data();
+          if (d.orderId) { seenOrders[d.orderId] = (seenOrders[d.orderId] || 0) + 1; if (seenOrders[d.orderId] === 2) counts.duplicates++; }
+          if (d.status === 'pledged') { counts.pledged++; continue; }
+          if (d.status === 'failed') { counts.failed++; continue; }
+          if (d.status === 'review') { counts.review++; counts.held++; continue; }
+          if (d.status === 'refunded' || d.status === 'partially_refunded') { counts.refunded++; continue; }
+          if (d.status === 'completed') {
+            counts.recorded++; amounts.recorded += Number(d.amount) || 0;
+            const rs = d.reconciliation && d.reconciliation.state;
+            if (evidence(d) || rs === 'VERIFIED_PAID') { counts.verifiedPaid++; amounts.verifiedPaid += Number(d.grossKES ?? d.amount) || 0; continue; }
+            if (rs === 'CLOSED_NO_PAYMENT') continue;
+            counts.unverified++; counts.held++; amounts.unverified += Number(d.amount) || 0;
+            if (!rs) { batch.update(doc.ref, { reconciliation: { state: 'REQUIRES_RECONCILIATION', classifiedAt: _now(), classifiedBy: uid } }); writes++; marked++; }
+          }
+        }
+        if (writes) await batch.commit();
+        last = snap.docs[snap.docs.length - 1];
+        if (snap.size < 500) break;
+      }
+      const balSnap = await fdb().collection('impactBalance').doc('current').get();
+      const b = balSnap.exists ? balSnap.data() : {};
+      const snapshot = { counts, amounts, newlyMarked: marked, balance: b.balance ?? null, verifiedBalance: b.verifiedBalance ?? null,
+        reservedKES: b.reservedKES ?? 0, totalDisbursed: b.totalDisbursed ?? null, computedAt: _now(), computedBy: uid };
+      await fdb().collection('foundationReconciliation').doc('current').set(snapshot);
+      await fdb().collection('adminActions').add({ type: 'foundation_reconciliation_classify', adminUid: uid, counts, createdAt: _now() });
+      return { ok: true, counts, amounts, newlyMarked: marked };
+    }
+    if (!/^(PLG|CHK)_[A-Za-z0-9_-]{1,200}$/.test(String(donationId || ''))) throw new HttpsError('invalid-argument', 'Invalid donation.');
+    const ref = fdb().collection('foundationDonations').doc(String(donationId));
+    if (action === 'propose_verify' || action === 'propose_close') {
+      const why = _san(note, 300);
+      const refNo = _san(providerReference, 80);
+      if (action === 'propose_verify' && (!refNo || refNo.length < 4)) throw new HttpsError('invalid-argument', 'Enter the IntaSend payment reference that proves the money arrived.');
+      if (action === 'propose_close' && !why) throw new HttpsError('invalid-argument', 'Say why this donation has no payment.');
+      await fdb().runTransaction(async (txn) => {
+        const s0 = await txn.get(ref);
+        if (!s0.exists) throw new HttpsError('not-found', 'Donation not found.');
+        const d = s0.data();
+        if (d.status !== 'completed' || !d.reconciliation || d.reconciliation.state !== 'REQUIRES_RECONCILIATION') throw new HttpsError('failed-precondition', 'This donation is not awaiting reconciliation.');
+        txn.update(ref, { 'reconciliation.proposal': { action: action === 'propose_verify' ? 'verify' : 'close', by: uid, providerReference: refNo || null, note: why || null, at: _now() } });
+        txn.set(fdb().collection('adminActions').doc(), { type: 'foundation_reconciliation_propose', donationId: ref.id, action, adminUid: uid, createdAt: _now() });
+      });
+      return { ok: true, state: 'PENDING_SECOND_REVIEW' };
+    }
+    if (action === 'confirm' || action === 'withdraw') {
+      const out = await fdb().runTransaction(async (txn) => {
+        const s0 = await txn.get(ref);
+        if (!s0.exists) throw new HttpsError('not-found', 'Donation not found.');
+        const d = s0.data();
+        const pr = d.reconciliation && d.reconciliation.proposal;
+        if (!pr || d.reconciliation.state !== 'REQUIRES_RECONCILIATION') throw new HttpsError('failed-precondition', 'Nothing awaiting a second review.');
+        if (action === 'withdraw') { txn.update(ref, { 'reconciliation.proposal': null }); return { state: 'REQUIRES_RECONCILIATION' }; }
+        if (pr.by === uid) throw new HttpsError('permission-denied', 'A different admin must confirm.');
+        const amt = Number(d.amount) || 0;
+        const balRef = fdb().collection('impactBalance').doc('current');
+        if (pr.action === 'verify') {
+          const bs = await txn.get(balRef);
+          txn.set(balRef, { verifiedBalance: _incr(amt), lastUpdated: _now() }, { merge: true });
+          txn.update(ref, { 'reconciliation.state': 'VERIFIED_PAID', 'reconciliation.providerReference': pr.providerReference, 'reconciliation.confirmedBy': uid, 'reconciliation.confirmedAt': _now() });
+          void bs;
+        } else {
+          await _writeLedgerEntry(txn, { type: 'adjustment', debit: amt, credit: 0, uid: d.uid || null, campaignId: d.programmeId || null,
+            description: 'Reconciliation: no payment for donation ' + ref.id + ' — reversing the recorded credit', meta: { reversalOf: ref.id, proposedBy: pr.by, confirmedBy: uid } });
+          txn.set(fdb().collection('foundationStats').doc('current'), { totalDonations: _incr(-amt), updatedAt: _now() }, { merge: true });
+          if (d.programmeId) txn.set(fdb().collection('impactCampaigns').doc(d.programmeId), { raised: _incr(-amt) }, { merge: true });
+          txn.update(ref, { 'reconciliation.state': 'CLOSED_NO_PAYMENT', 'reconciliation.confirmedBy': uid, 'reconciliation.confirmedAt': _now() });
+        }
+        txn.set(fdb().collection('adminActions').doc(), { type: 'foundation_reconciliation_confirm', donationId: ref.id, outcome: pr.action, proposedBy: pr.by, adminUid: uid, createdAt: _now() });
+        return { state: pr.action === 'verify' ? 'VERIFIED_PAID' : 'CLOSED_NO_PAYMENT' };
+      });
+      return { ok: true, ...out };
+    }
+    throw new HttpsError('invalid-argument', 'Unknown action.');
+  }
+);
+
 exports.impactAdminFoundationData = onCall(
   { timeoutSeconds: 30, enforceAppCheck: true },
   async (request) => {
@@ -1016,7 +1124,11 @@ exports.impactAdminFoundationData = onCall(
       ]);
       const b = balSnap && balSnap.exists ? balSnap.data() : null;
       return { ok: true,
-        balance: b ? { balance: b.balance ?? null, reserved: b.reservedKES ?? 0, available: b.balance == null ? null : b.balance - (b.reservedKES || 0), totalReceived: b.totalReceived ?? null, totalDisbursed: b.totalDisbursed ?? null, totalFees: b.totalFees ?? null } : null,
+        balance: b ? { recorded: b.balance ?? null, verified: b.verifiedBalance ?? 0, reserved: b.reservedKES ?? 0,
+          available: (Number(b.verifiedBalance) || 0) - (b.reservedKES || 0),
+          requiresReconciliation: b.balance == null ? null : Math.max(0, b.balance - (Number(b.verifiedBalance) || 0)),
+          balance: b.balance ?? null, totalReceived: b.totalReceived ?? null, totalDisbursed: b.totalDisbursed ?? null, totalFees: b.totalFees ?? null } : null,
+        reconciliation: await fdb().collection('foundationReconciliation').doc('current').get().then((x) => (x.exists ? { counts: x.data().counts, amounts: x.data().amounts, computedAt: ms(x.data().computedAt) } : null)).catch(() => null),
         donations: { completed, pledged, failed, review, refunded },
         disbursements: { pendingApproval: dPending, pendingAuthorization: dAuth, processing: dProc, awaitingConfirmation: dConf, completed: dDone, failed: dFail } };
     }
@@ -1024,7 +1136,8 @@ exports.impactAdminFoundationData = onCall(
     if (view === 'donations') {
       const allowed = ['pledged', 'completed', 'failed', 'review', 'refunded', 'partially_refunded'];
       let q = fdb().collection('foundationDonations');
-      if (status) { if (!allowed.includes(status)) throw new HttpsError('invalid-argument', 'Invalid status.'); q = q.where('status', '==', status); }
+      if (status === 'requires_reconciliation') q = q.where('reconciliation.state', '==', 'REQUIRES_RECONCILIATION');
+      else if (status) { if (!allowed.includes(status)) throw new HttpsError('invalid-argument', 'Invalid status.'); q = q.where('status', '==', status); }
       q = q.orderBy('createdAt', 'desc');
       if (cursor) { const c = await fdb().collection('foundationDonations').doc(String(cursor)).get(); if (c.exists) q = q.startAfter(c); }
       const s = await q.limit(size).get();
@@ -1032,7 +1145,9 @@ exports.impactAdminFoundationData = onCall(
         id: x.id, status: d.status, amount: d.amount, grossKES: d.grossKES ?? null, feeKES: d.feeKES ?? null, netKES: d.netKES ?? null, currency: d.currency || 'KES',
         destination: d.destination || null, programmeId: d.programmeId || null, purpose: d.purpose || null, method: d.method || null,
         donor: d.anonymous ? 'Anonymous' : (d.donorName || 'SOKONI User'), receiptId: d.receiptId || null, providerReference: d.providerReference || null,
-        orderId: d.orderId || null, refundDisbursementId: d.refundDisbursementId || null, refundedKES: d.refundedKES || 0, reviewReason: d.reviewReason || null,
+        orderId: d.orderId || null, reconciliation: d.reconciliation ? { state: d.reconciliation.state, proposal: d.reconciliation.proposal ? { action: d.reconciliation.proposal.action, by: d.reconciliation.proposal.by } : null } : null,
+        verified: !!(d.providerReference && d.grossKES != null) || (d.reconciliation && d.reconciliation.state === 'VERIFIED_PAID'),
+        refundDisbursementId: d.refundDisbursementId || null, refundedKES: d.refundedKES || 0, reviewReason: d.reviewReason || null,
         createdAt: ms(d.createdAt), completedAt: ms(d.completedAt) }; }) };
     }
     if (view === 'disbursements') {

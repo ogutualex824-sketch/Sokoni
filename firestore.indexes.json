@@ -6221,6 +6221,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "foundationDonations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "reconciliation.state",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [

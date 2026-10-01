@@ -11737,6 +11737,7 @@ exports.impactRefreshDisbursementStatus    = impact.impactRefreshDisbursementSta
 exports.impactRecordManualDisbursement     = impact.impactRecordManualDisbursement;
 exports.impactCancelDisbursement           = impact.impactCancelDisbursement;
 exports.impactAdminFoundationData          = impact.impactAdminFoundationData;
+exports.impactReconcileFoundation          = impact.impactReconcileFoundation;   /* recorded vs verified paid (2026-10-01) */
 exports.impactGetFinancialReport           = impact.impactGetFinancialReport;
 exports.impactAdminCorporateApprove        = impact.impactAdminCorporateApprove;
 exports.impactAdminGrantReview             = impact.impactAdminGrantReview;

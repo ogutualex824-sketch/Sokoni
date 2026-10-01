@@ -53,7 +53,7 @@ const ledger = (F) => [...F.db._store.keys()].filter((k) => k.startsWith('impact
   console.log('Foundation disbursements — three people, reserve, settle on confirmation\n');
   let F = setup();
   let M = load(path.join(FN, 'impact.js'));
-  await F.db.collection('impactBalance').doc('current').set({ balance: 10000, reservedKES: 0, totalReceived: 10000 });
+  await F.db.collection('impactBalance').doc('current').set({ balance: 10000, verifiedBalance: 10000, reservedKES: 0, totalReceived: 10000 });
   await F.db.collection('impactGrants').doc('g1').set({ status: 'approved', approvedAmount: 3000 });
 
   /* A */
