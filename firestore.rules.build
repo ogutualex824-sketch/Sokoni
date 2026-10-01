@@ -393,6 +393,8 @@ service cloud.firestore {
   || (isAuthed() && resource.data.sellerUid == request.auth.uid
   && uidUnchanged() && validOrderStatus()
   && !(request.resource.data.status in ['delivered','completed'])
+  && !(request.resource.data.status in ['paid','refunded','confirmed','processing','pending_payment',
+  'awaiting_confirmation','rider_assigned','rider_en_route','picked_up','in_transit'])
   && request.resource.data.diff(resource.data).affectedKeys()
   .hasOnly(['status','sellerNote','readyAt','trackingNo','updatedAt']))
   || (isAuthed() && resource.data.assignedDriverUid == request.auth.uid
@@ -651,9 +653,7 @@ service cloud.firestore {
   allow update: if isParticipant()
   && request.resource.data.diff(resource.data)
   .affectedKeys().hasOnly(['lastMessage','lastMessageAt','lastSenderId','unread']);
-  allow create: if isActive() && isAuthed()
-  && request.auth.uid in request.resource.data.participants
-  && request.resource.data.participants.size() <= 2;
+  allow create: if false;
   allow delete: if isAdmin();
   match /messages/{msgId} {
   function _conv() {
@@ -1388,14 +1388,15 @@ service cloud.firestore {
   allow delete: if isAdmin();
   }
   match /deliveryRiders/{riderId} {
-  allow read:   if isAuthed();
+  allow read:   if isAdmin() || (isAuthed() && request.auth.uid == riderId);
   allow create: if isAuthed() && request.auth.uid == riderId
   && !request.resource.data.keys().hasAny(['approved','verified','suspended','banned','status','role','isAdmin']);
   allow update: if isAdmin()
   || (isAuthed() && request.auth.uid == riderId
   && !request.resource.data.diff(resource.data)
   .affectedKeys()
-  .hasAny(['approved','verified','suspended','banned','status','role','isAdmin']));
+  .hasAny(['approved','verified','suspended','banned','status','role','isAdmin',
+  'rating','ratingCount','tripsCompleted','earnings','todayEarnings','weekEarnings']));
   allow delete: if isAdmin();
   }
   match /userLocations/{uid}/places/{placeId} {
@@ -3749,7 +3750,7 @@ service cloud.firestore {
   allow read:  if isAuthed() && resource.data.accountId == request.auth.uid;
   }
   match /accountProfiles/{profileId} {
-  allow read:  if true;
+  allow read:  if isAdmin() || (isAuthed() && resource.data.accountId == request.auth.uid);
   }
   match /accountSubscriptions/{subId} {
   allow read:  if isAdmin() || (isAuthed() && resource.data.accountId == request.auth.uid);
