@@ -12,6 +12,55 @@ time, and none uses document.write. The layout (sokoni-aa, bfef533) is untouched
 - Pre-existing, not changed here: the sidebar ticket-badge listener reads supportTickets at DOMContentLoaded, before the gate.
 - Pre-existing on the chain tip: test-home-logo-routing fails one check (three admin routers disagree); unrelated to this change.
 - Proof status: static 7/0 with two sabotages caught. Browser gate and 390/1280 timings: run node scripts/test-adminos-head-defer.js.
+## [2026-10-01] — community C0: stored-XSS port (431b5c7) + honesty fixes; hosting only; NOT deployed
+
+**Branch `hosting/community-hub-on-95425eb`** (descends from live `72dca56`; community.html and requests.html are
+byte-identical to live on the base, so every defect below was live). No server, rules, `firebase.json` or data-model
+change. Census: Community Hub read-only census 2026-10-01, sections 1, 3, 5 and 6.
+
+**Security — stored XSS.** The community.html hunks of `431b5c7` (slice/c4-convergence) are ported verbatim: post
+id/title/author/date/product/body, replies, trending, and group name/description/emoji go through the canonical
+`escapeHTML` (security.js), and handler arguments ride `data-*` attributes. The rest of `431b5c7` (fitness-hub,
+home-services, unboxing, reviews, `scripts/test-xss-community-hubs.js`, which needs `scripts/lib/xss-probe` — absent on
+this line) is NOT ported here. The full sink audit then covered every remaining innerHTML sink on both pages:
+- community.html: notification-panel title/body (they carry the author name from Follow) escaped; `likes`/`helpful`
+  coerced with `Number()`; `stars` clamped 0..5 (an out-of-range value threw in `repeat()` and blanked the whole feed);
+  `replies` must be an array of objects.
+- requests.html: request id/category, delivery id/role/status escaped with the page's existing `_esc`; every
+  `onclick="fn('${id}')"` (HTML-escaping does not protect a JS-string context) moved to `data-*`.
+
+**Honesty (CLAUDE.md UI Data Integrity).**
+- community.html: seed-post writer removed (an empty feed shows the empty state); hard-coded "500+ members" and "Join
+  500+ sellers" removed; counters start at `—` until the snapshot lands; DEMO_GROUPS / DEMO_EVENTS / DEMO_ASKS /
+  DEMO_BIZ and the demo gate removed; groups list = Firestore only, with loading / error / empty states (localStorage
+  `ccGroups` no longer shown as community content; the client-written `members` number is not shown; "Join" relabelled
+  "Save" — membership has no server store yet); group create, event submit, question submit, follow and report all
+  `await` their write and show success only after it resolves, a refusal shows the real outcome ("We couldn't send your
+  report"); events and "Ask the Community" (never read from Firestore) now say "not live yet" instead of rendering
+  localStorage/demo items; Business Pages (demo only) says "not available here yet"; the report modal no longer promises
+  a 24-hour review; reaction and reply failures are surfaced and a refused reaction is rolled back locally.
+- requests.html: the page stays usable as a device-local draft, and says so: "Requests are not published to sellers
+  yet", "Offers are not delivered to buyers yet", "Delivery requests are not sent to drivers yet". Removed: "Posted!
+  Sellers will respond", "Offer sent! The buyer will see it", the fake `tel:+254` / Chat links on offers, the self
+  "I Can Deliver This" / "Mark: Picked Up/In Transit/Delivered" flow (a status nobody performed), and order tracking from
+  the localStorage copy (now links to My Orders). Hero counters are labelled as this device's drafts.
+
+**Left for later slices (server/rules-coupled, NOT changed):** posts write `body` but the served rule requires
+`content` (every post is refused); reports carry `reportedBy` not `uid` (refused) and `communityReports` has no reader —
+route to the live `tsReportContent` instead; `communityRecResponses` sends `authorUid` not `responderUid` (refused; the
+UI is removed); RSVP refused for non-organizers; group `contactPhone` is world-readable PII; groups/events/asks have no
+approval gate and client-settable `status`/`members`; reactions are unlimited per user; replies carry no `authorUid`;
+requests have no server path (slice C4).
+
+**Tests.** `scripts/test-community-c0.js` (static) 25/0, including 11 negative controls that re-introduce one defect each;
+`COUNTERPROOF=95425eb` fails 13 of 14 checks on the pre-C0 base. `scripts/test-community-c0-browser.js` (hermetic page
+harness: hostile group/post/reply render as text with `window.__pwn` undefined, empty feed → empty state with no seed
+write, refused report → "We couldn't send your report", requests draft copy; negative control serves the page with the
+group-name escape removed and must set `__pwn`) — written, QUEUED (browser hold), not run. predeploy-syntax-gate run.
+
+**Files:** `community.html`, `requests.html`, `scripts/test-community-c0.js`, `scripts/test-community-c0-browser.js`,
+`CHANGELOG.md`. **Database:** none (document shapes unchanged; the seed writer no longer writes). **API:** none.
+**Security:** stored XSS closed on both pages. **Breaking:** none. **Deploy:** hosting only, not deployed.
 
 ## [2026-09-30] - BnB: category pill strip made phone-safe (snap-scroll chips, sort on its own row) — built, browser certification QUEUED, NOT deployed
 ## [2026-09-27] — Home: hub-card buttons stay inside the card at every width (Sokoni Eats "Become Rider") — UNCOMMITTED, NOT deployed
