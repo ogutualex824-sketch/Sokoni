@@ -1,3 +1,66 @@
+## [2026-10-01] - Three price tiers at upload: Online=price, Shop=shopPrice (new), Wholesale=wholesalePrice; absent = not available; wholesale ≤ shop ≤ online, wholesale < online; minWholesaleQty no longer required; server tier pricing at the till = the POS session's slice; NOT deployed
+
+**Branch `hosting/uploader-advanced-on-54b72cc`** (on top of the advanced uploader units A–C below; ships with them).
+Owner model agreed with the session that owns the server / till side (sokoni-70). No new pricing object — the
+existing fields are extended.
+
+**Model.** ONLINE = `price` (required, unchanged; marketplace, cart and checkout read it). SHOP = `shopPrice` (NEW,
+optional, the in-store price). WHOLESALE = `wholesalePrice` (existing, optional, the bulk price). An absent / empty
+tier = NOT AVAILABLE and is stored ABSENT: omitted on create; on edit, emptying a tier the product had deletes the
+field (`deleteField()`), never 0 and never a stored null. A tier the edit does not mention is never sent.
+
+**Writer (`sokoni-merchant-data.js`, the gate; the form mirrors it for messages).**
+- `shopPrice` added to the `_productFields` allowlist (money list: empty = absent) and to `mapProducts` (absent → null).
+- Each SET tier: finite, > 0, ≤ `MAX_PRICE`. **`MAX_PRICE` is NEW (KES 1,000,000,000)** — there was no upper bound on
+  this line (the rule's `validPrice` is `> 0` only); it also applies to `price` when a patch carries it.
+- Ordering over the EFFECTIVE tiers (on edit: stored ⊕ patch − cleared; checked only when the edit touches a tier, so a
+  legacy out-of-order record does not block a name fix): Wholesale < Online ("The Wholesale price must be lower than the
+  Online price — otherwise it is not a bulk deal."), Shop ≤ Online ("The Shop price cannot be higher than the Online
+  price."), Wholesale ≤ Shop ("The Wholesale price cannot be higher than the Shop price.").
+- `minWholesaleQty` kept (informational) but NO LONGER required: the "A bulk deal needs both a wholesale price and a
+  minimum quantity" coupling is DROPPED. Negative, non-integer, or < 2 still refused.
+- `updateProduct`: an explicit `null` / `''` for `shopPrice` / `wholesalePrice` / `minWholesaleQty` → `deleteFields`
+  on the adapter call; refused (`field-delete-unsupported`, zero writes) when the adapter does not declare
+  `supportsFieldDelete`. The Online price cannot be cleared (refused).
+- Mirrors: `productProjections` carries `shopPrice` + `wholesalePrice` on `posProducts/{id}` and
+  `tenants/{uid}/inventory_products/{id}` (absent tiers omitted). An edit that sets or clears a Shop / Wholesale tier
+  now UPDATES those two fields on both mirrors (`mode: 'update'`, a missing mirror is reported failed, never created
+  half-filled); the result carries `mirrors` / `complete` and the form says "the till has not picked up the new prices
+  yet" when incomplete. **Unchanged:** an edit to the Online `price` still does not reach the mirrors (pre-existing).
+
+**Adapter (`merchant-v2.html`).** `writeProduct` maps `deleteFields` to `deleteField()` (refuses an authority field and a
+delete on create); `writeMirror` with `mode: 'update'` uses `updateDoc`; `supportsFieldDelete: true`.
+
+**UI (`sokoni-merchant-products.js`).** The price row and the "Bulk deal" section are replaced by one **Prices** group:
+"Online — marketplace price" (required), "Shop — in-store price", "Wholesale — bulk price", each with an aria-hidden
+chip ONL / SHOP / WHOLE (the `<label>` text is the accessible name) and "Leave empty if not sold at this price"
+(`aria-describedby`); "Bulk from (units, optional)" keeps `minWholesaleQty`. 46px inputs. The live read-out keeps the
+`.pr-bulk-strip` / "not a discount" contract and adds the two ordering warnings. The phone-scroll / keyboard code is
+untouched. Listing Studio has no price input (unchanged).
+
+**Not touched (the POS session's slice):** `posCompleteCheckout`, `pos.js`, pos-checkout, the Sales Control overlay,
+`cart.js`, receipts. Which tier the till charges is server tier pricing at the till — NOT in this change.
+
+**Evidence (node-only).** test-price-tiers-writer (NEW) 76/0 — positive control: crashes on `f7afdef` (the coupling) ·
+test-uploader-writer-decisions 49/0 · test-merchant-product-writer 37/0 (2 unproven) · test-inventory-authority-boundary
+72/0 · test-merchant-v2-products-2b 59/0 (2 unproven) · test-merchant-products-native 23/0 ·
+test-merchant-products-wizard-photos 40/0 · test-merchant-v2-panels 20/0 · test-merchant-routes 65/0 ·
+test-mv2-1-sidebar 14/0 · test-inshell-chrome 30/0 · test-module-authorities 15/0 · test-listing-studio 63/0 ·
+test-products-detail-sheet 30/0 · test-merchant-adjust-stock 39/0 · test-product-schema 13/13 · gate-inventory-writers
+PASSED · `predeploy-syntax-gate`: 1853 JS files + 457 inline scripts parse cleanly. Expected partial unchanged: test-price-vocabulary 28/13 (Unit D). **No existing
+suite asserted the dropped coupling; none changed expectations.**
+**QUEUED (browser hold):** test-uploader-mobile-scroll, test-products-upload-form (its bulk-strip section 5 drives
+`#pf-price` / `#pf-wholesalePrice` / `#pf-minWholesaleQty`, all kept), test-merchant-v2-modules.
+
+**Files:** `sokoni-merchant-data.js`, `merchant-v2.html`, `sokoni-merchant-products.js`, `scripts/test-price-tiers-writer.js`.
+**Database:** new optional product field `shopPrice` (number > 0, absent when not sold in-store); `posProducts` and
+`inventory_products` gain optional `shopPrice` / `wholesalePrice`. No migration: absent = not available.
+**API:** none. **Security:** client writer only — Firestore rules do not validate the tiers or their ordering (a forged
+client write can store any number > 0 in `price`, anything in the others); the till must not trust the mirror for
+money — server tier pricing is the POS session's slice. **Breaking:** a wholesale price no longer needs a minimum
+quantity (relaxation). **Deployment:** hosting only; NOT deployed; ships with units B + C.
+
+---
 ## [2026-10-01] - Advanced uploader, units A–C, hosting only — live variant-stock rule kept; capability limits browser-enforced (server check queued); browser certification QUEUED; NOT deployed
 
 **Branch `hosting/uploader-advanced-on-54b72cc`, built on `54b72cc` (hosting chain tip, descends from live).** Built as
