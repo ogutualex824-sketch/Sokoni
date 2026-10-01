@@ -102,7 +102,11 @@ function loadHub(approved, mutate) {
   head('4 - the switch routes, and never falls back to Profile');
   const sw = PM.slice(PM.indexOf('window._skSwitchRole = async function'), PM.indexOf('function _skMirrorRoleLocally'));
   ck('the switch consults RA.hubFor', /hubFor\(role\)/.test(sw));
-  ck('no hardcoded profile destination in the switch', !/profile\.html/.test(sw));
+  /* Owner 2026-10-01: BUYER opens the profile; every other role opens its workspace. So profile.html may
+     appear in the switch ONLY as the buyer's destination — never as a fallback for any other role (the
+     original defect this row guarded: every switch landing on Profile). */
+  ck('profile.html only as the BUYER destination — never a fallback for another role',
+    (sw.match(/profile\.html/g) || []).length === 1 && /if \(hub && role === 'buyer'\) hub = 'profile\.html';/.test(sw));
   ck('skips navigation when already on the destination', /here\.toLowerCase\(\) !== hub\.toLowerCase\(\)/.test(sw));
   ck('still refuses a role the authority declined', /res\.ok !== true/.test(sw));
   ck('mirrors only AFTER the authority agreed',

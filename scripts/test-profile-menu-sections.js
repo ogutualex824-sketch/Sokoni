@@ -35,6 +35,10 @@ ck('S3 role rows switch via _skSwitchRole and keep data-sk-workspace', c.S3);
 ck('S4 "Business workspaces" is separate and only shown when the account has a business', c.S4);
 ck('S5 the mixed "Personal Account" row and "Switch Role" pills are gone', c.S5);
 ck('S6 every canonical role has a proper name and workspace', c.S6);
+/* Owner 2026-10-01: Buyer opens the profile; every other role opens its workspace. */
+const sw = SRC.slice(SRC.indexOf('window._skSwitchRole = async function'), SRC.indexOf('window._skSwitchRole = async function') + 6000);
+ck('S7 Buyer opens the PROFILE (row says "Opens My profile"; switch routes buyer → profile.html), others → hubFor()',
+  /buyer:\s*\{ i: '[^']+', l: 'Buyer',\s*w: 'My profile' \}/.test(SRC) && /if \(hub && role === 'buyer'\) hub = 'profile\.html';/.test(sw) && /RA2\.hubFor\(role\)/.test(sw));
 const bad1 = checks(SRC.replace('data-sk-section="roles"', 'data-sk-section="mixed"'));
 ck('N1 negative control: a renamed roles section is caught', bad1.S1 === false);
 const bad2 = checks(SRC.replace("health:   { i: '🩺', l: 'Healthcare',       w: 'Healthcare workspace' },", ''));

@@ -278,7 +278,7 @@
        administrative menu's convention, used by proofs to address the control). Switching goes
        through _skSwitchRole → SokoniRoleAuthority.setActiveRole → RA.hubFor() — unchanged. */
     const ROLE_UI = {
-      buyer:    { i: '🛍️', l: 'Buyer',            w: 'Marketplace' },
+      buyer:    { i: '🛍️', l: 'Buyer',            w: 'My profile' },
       seller:   { i: '🏪', l: 'Seller',           w: 'Merchant dashboard' },
       provider: { i: '🛠️', l: 'Service provider', w: 'Provider dashboard' },
       rider:    { i: '🛵', l: 'Rider',            w: 'Rider dashboard' },
@@ -574,7 +574,11 @@
        current page avoids a pointless reload (Buyer selected from Home). */
     try {
       var RA2 = window.SokoniRoleAuthority;
+      /* Owner 2026-10-01: in the role dropdown, BUYER opens the buyer's PROFILE; every other role
+         opens its workspace (hubFor). Only this menu's destination changes — RA.hubFor('buyer')
+         stays 'index.html' because the header logo reads it. */
       var hub = (RA2 && typeof RA2.hubFor === 'function') ? RA2.hubFor(role) : null;
+      if (hub && role === 'buyer') hub = 'profile.html';
       if (hub) {
         var here = (location.pathname.split('/').pop() || 'index.html');
         if (here.indexOf('.') < 0) here += '.html';      /* cleanUrls serves /merchant */
