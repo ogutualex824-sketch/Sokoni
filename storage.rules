@@ -225,6 +225,42 @@ service firebase.storage {
                     || request.resource.contentType == 'application/pdf');
     }
 
+    /* ── SOKONI Foundation media (2026-10-01) ─────────────────────────────────
+       Uploads are PRIVATE: nobody reads them through rules. A story's media becomes
+       public only as a server-made copy under foundation-published/ with a download
+       token, issued while the story is approved + published and deleted otherwise
+       (functions/foundation-content.js). The server also re-reads every object's type
+       and size and only accepts paths under the caller's own prefix — these rules are
+       the first gate, not the only one.
+       Rules OR across matching blocks: foundation-media/admin/x matches BOTH blocks
+       below, so the participant block refuses uid == 'admin' explicitly.          ── */
+    function foundationMediaOk() {
+      return notExecutable()
+          && ((request.resource.contentType.matches('image/(jpeg|png|webp)')
+                && request.resource.size < 15 * 1024 * 1024)
+           || (request.resource.contentType.matches('video/(mp4|webm|quicktime)')
+                && request.resource.size < 80 * 1024 * 1024));
+    }
+    match /foundation-media/{uid}/{filename} {
+      allow read:   if false;
+      allow create: if request.auth != null
+                    && uid != 'admin'
+                    && request.auth.uid == uid
+                    && foundationMediaOk();
+      allow update: if false;
+      allow delete: if request.auth != null && uid != 'admin' && request.auth.uid == uid;
+    }
+    match /foundation-media/admin/{filename} {
+      allow read:   if false;
+      allow create: if request.auth != null
+                    && (request.auth.token.admin == true || request.auth.token.superAdmin == true)
+                    && foundationMediaOk();
+      allow update, delete: if false;
+    }
+    match /foundation-published/{storyId}/{filename} {
+      allow read, write: if false;   /* admin SDK only; served by download token */
+    }
+
     /* ── Default: deny everything else ── */
     match /{allPaths=**} {
       allow read, write: if false;
