@@ -9,6 +9,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { writeAudit } = require('./pos-audit');
+const _PT = require('./shared/pos-price-tier');   /* price tiers + product ownership: the one server rule */
 /* The employment authority. Required at LOAD, deliberately: if this cannot be
    resolved the deploy fails loudly, instead of every till silently losing
    discount authorisation and the "Served by" line at the same moment. */
@@ -310,11 +311,14 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       const it = items[i], s = snaps[i];
       if (!s.exists) { differences.push({ productId: it.productId, error: 'not-found' }); continue; }
       const p = s.data();
-      const serverPrice = p.salePrice || p.price || 0;
+      /* Same tier rule as the real path (shared/pos-price-tier.js). */
+      const _t = _PT.resolveTierPrice(p, it.priceTier);
+      if (!_t.ok) { differences.push({ productId: it.productId, field: 'priceTier', error: _t.reason, tier: _t.tier }); continue; }
+      const serverPrice = _t.price;
       if (Math.abs(serverPrice - (it.unitPrice || 0)) > 1) {
         differences.push({ productId: it.productId, field: 'unitPrice', expected: it.unitPrice, canonical: serverPrice });
       }
-      enriched.push({ productId: it.productId, name: p.name, qty: it.qty || 1, unitPrice: serverPrice });
+      enriched.push({ productId: it.productId, name: p.name, qty: it.qty || 1, unitPrice: serverPrice, priceTier: _t.tier });
       serverSubtotal += serverPrice * (it.qty || 1);
       const from = Number(p.stock || 0), to = Math.max(0, from - (it.qty || 0));
       stockDeltas.push({ productId: it.productId, from, to, delta: to - from });
@@ -380,11 +384,23 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       const prodSnap = productSnaps[i];
       if (!prodSnap.exists) _e(`Product ${item.productId} not found`, 'not-found');
       const prod = prodSnap.data();
-      /* Price tolerance: allow minor rounding diff (≤1 KES per item) */
-      const serverPrice = prod.salePrice || prod.price || 0;
+      /* PRICE TIER (owner, 2026-10-01): the cashier picks a CONFIGURED tier — online (default), shop or
+         wholesale — and the SERVER resolves its price (shared/pos-price-tier.js). An unconfigured or unknown
+         tier is refused, never priced at 0 and never silently swapped for another tier. Price tolerance
+         unchanged: the device's unitPrice must match within 1 KES per item. */
+      const _tier = _PT.resolveTierPrice(prod, item.priceTier);
+      if (!_tier.ok) {
+        _e(_tier.reason === 'unsupported_tier'
+          ? `"${String(item.priceTier).slice(0, 20)}" is not a price tier. Use online, shop or wholesale.`
+          : `${_sanitize(prod.name)} has no ${_tier.tier} price set, so it cannot be sold at that price.`,
+          'failed-precondition');
+      }
+      const serverPrice = _tier.price;
       const diff = Math.abs(serverPrice - (item.unitPrice || 0));
       if (diff > 1) _e(`Price mismatch for ${prod.name}: expected ${serverPrice}, got ${item.unitPrice}`);
-      enrichedItems.push({ ...item, name: _sanitize(prod.name), unitPrice: serverPrice, categoryId: prod.category || prod.categoryId || null });
+      /* The tier is written AFTER the spread, so a client-sent label can never override the server's. */
+      enrichedItems.push({ ...item, name: _sanitize(prod.name), unitPrice: serverPrice, priceTier: _tier.tier,
+        priceTierLabel: _PT.LABEL[_tier.tier], categoryId: prod.category || prod.categoryId || null });
       serverSubtotal += serverPrice * (item.qty || 1);
     }
 
@@ -476,8 +492,8 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
        fix. */
     let _merchantProven = !!(_actor && _actor.ok);
     let _provenBy = _merchantProven ? 'shop_actor' : null;
+    let _canon = null;   /* hoisted: the product-ownership check below accepts either proven identity */
     if (!_merchantProven) {
-      let _canon = null;
       try {
         const _b = await db.collection('businesses').doc(String(merchantId)).get();
         if (_b.exists) _canon = String(merchantId);
@@ -500,6 +516,18 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     }
     if (!_merchantProven) {
       _e('You are not authorised to record a sale for this shop.', 'permission-denied');
+    }
+    /* ══ EVERY PRODUCT MUST BELONG TO THE PROVEN SHOP (owner, 2026-10-01) ═════════════
+       The products were read by id and never checked for ownership, so a till could sell — and decrement the
+       stock of — another shop's product. Checked here, only after the shop is PROVEN, against the identities
+       that proof established (the shop id and, for canonical staff, the business id). Legacy products without a
+       shopId match on sellerUid (the census form: shop id == owner uid). Refused before any stock or money
+       effect. */
+    for (let i = 0; i < productSnaps.length; i++) {
+      if (!_PT.productBelongsTo(productSnaps[i].data(), [merchantId, _canon])) {
+        _e('One of these products does not belong to this shop, so the sale was not completed. Nothing has been charged.',
+          'permission-denied');
+      }
     }
 
     /* ══ THE COMMISSION GATE ═════════════════════════════════════════════════

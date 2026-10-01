@@ -178,7 +178,9 @@ function reset() {
   CTL.membershipOk = false; CTL.liabilities = [];
   CTL.ledgerUnreadable = false; CTL.shopsUnreadable = false;
   DOCS.set('businesses/' + MERCHANT, { ownerId: 'SOMEONE_ELSE' });
-  DOCS.set('products/P1', { name: 'Rice', price: 100, stock: 50, trackInventory: true });
+  /* A real product always names its shop (rules require sellerUid on create); posCompleteCheckout now refuses a
+     product that does not belong to the proven shop, so the fixture carries the shop like production does. */
+  DOCS.set('products/P1', { name: 'Rice', price: 100, stock: 50, trackInventory: true, shopId: MERCHANT, sellerUid: MERCHANT });
 }
 
 const call = async (uid, over = {}) => {

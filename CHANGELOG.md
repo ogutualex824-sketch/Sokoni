@@ -1,3 +1,28 @@
+## 2026-10-01 — POS price tiers (online / shop / wholesale) + the till can only sell its own shop's products
+
+Base: live posCompleteCheckout source `ee37437`.
+
+- **Tiers (owner decision):**
+  - ONLINE = `price` (unchanged meaning: `salePrice || price`); SHOP = `shopPrice`; WHOLESALE = `wholesalePrice`.
+  - A cashier line may carry `priceTier`. The SERVER resolves its price (`functions/shared/pos-price-tier.js`).
+  - An unconfigured or unknown tier is REFUSED; it is never 0 and never silently swapped for another tier.
+  - The device price must match within 1 KES (unchanged).
+  - The sale and receipt lines record `priceTier` + `priceTierLabel` ("SHOP PRICE"…), written after the spread
+    so a client label can never override them. The receipt reuses the existing receipt authority.
+  - The dry run uses the same rule.
+- **Ownership:** every product must belong to the shop the caller was PROVEN to act for (`shopId`, or for
+  legacy products `sellerUid`, against the proven shop / canonical business id). It is checked right after the
+  merchant proof and before any stock or money effect. Live sold, and decremented, another shop's product;
+  the baseline test reproduces this.
+- **Tests:**
+  - scripts/test-pos-price-tiers.js 19/0 (the real posCompleteCheckout + the real merchant-identity); live
+    ee37437 fails 14 (other-shop sales succeed, fake tiers accepted, shop/wholesale impossible).
+  - The POS regression suites are identical to ee37437. confirmation-vocabulary is 36/2 on the base vs 38/0
+    here; those are pre-existing.
+  - test-pos-gate-behavioural: its P1 fixture now names its shop (real products always do).
+- No rules or API change; an optional new line field `priceTier`. Deploy: `--only functions:posCompleteCheckout`.
+- **Note:** the frozen POS convergence line (8183694 / 3357619) must carry this when it is ever ported.
+
 ## 2026-09-22 (150) — PayPal retired; IntaSend is the payment provider
 
 **Owner decision: SOKONI does not offer PayPal.** Hosting-side only. No Functions, no rules,
