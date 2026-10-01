@@ -2374,6 +2374,16 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         return m.fs.getDoc(m.fs.doc(window.firebaseDB, 'products', id));
       }).then(function (s) { return s.exists() ? s.data() : null; });
     },
+    /* THE SHELF PRICE'S ONLY HOME (owner-private, 2026-10-01). posProducts/{id} is readable by its owner
+       (resource.data.sellerId == auth.uid) and admins only (served rules f259c0b5), so the Shelf price never
+       touches the public products/{id}. null = no till copy; a permission error THROWS, and the writer reports
+       it as unreadable — never as "no Shelf price". One read per opened product, never per list row. */
+    getPosProduct: function (id) {
+      return sdk().then(function (m) {
+        if (!window.firebaseDB) throw new Error('The till copy cannot be read just now.');
+        return m.fs.getDoc(m.fs.doc(window.firebaseDB, 'posProducts', id));
+      }).then(function (s) { return s.exists() ? s.data() : null; });
+    },
     /* The Inventory + POS projections. `path` is an array so no caller ever
        assembles a collection string. A failure here is REPORTED by the writer,
        never swallowed — a product that did not reach the till must not be
