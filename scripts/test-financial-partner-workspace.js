@@ -170,6 +170,32 @@ const keys = (pre) => [...F.db._store.keys()].filter((k) => k.startsWith(pre));
   await F.db.collection('financialProviders').doc('saccoA').update({ listingStatus: 'approved' });
   ck('P7 a withdrawn listing closes the workspace (PARTNER_NOT_APPROVED, status reported)', !p5.ok && p5.det.code === 'PARTNER_NOT_APPROVED' && p5.det.listingStatus === 'withdrawn', p5);
 
+  /* R — Banking Hub directory + promotion (no money; admin decides; promotion ranks, never vouches) */
+  await F.db.collection('financialProviders').doc('bankQ').set({ name: 'Q Bank', institutionType: 'BANK', listingStatus: 'approved', services: ['LOANS'], licenceVerified: false });
+  await F.db.collection('financialProviders').doc('bankW').set({ name: 'W Bank (withdrawn)', institutionType: 'BANK', listingStatus: 'withdrawn' });
+  const r1 = await call(null, { op: 'publicDirectory', types: ['bank', 'SACCO'] });
+  const names = r1.ok ? r1.v.rows.map((x) => x.name) : [];
+  ck('R1 directory (signed out OK): approved BANK + SACCO only, withdrawn/pending hidden, every row "Listed by SOKONI"',
+    r1.ok && names.includes('Q Bank') && names.includes('SACCOA') && !names.some((n) => /withdrawn/.test(n)) && !names.includes('PEND') && r1.v.rows.every((x) => x.label === 'Listed by SOKONI' && !('licenceVerified' in x)), r1);
+  const r2 = await call(null, { op: 'publicDirectory', types: [] });
+  ck('R2 directory needs 1–10 known types', !r2.ok && r2.code === 'invalid-argument');
+  const r3 = await call('saccoA', { op: 'requestPromotion', placement: 'banking_hub_category', message: 'New savings product' });
+  const r4 = await call('staff1', { op: 'requestPromotion', placement: 'banking_hub_category' });
+  const r5 = await call('saccoA', { op: 'requestPromotion', placement: 'homepage_takeover' });
+  ck('R3 owner requests a promotion (pending, no money); officer cannot; unknown placement refused', r3.ok && r3.v.status === 'pending' && !r4.ok && r4.code === 'permission-denied' && !r5.ok, { r3, r4, r5 });
+  const r6 = await call('saccoA', { op: 'adminDecidePromotion', id: r3.v.id, verdict: 'granted', days: 30 });
+  const r7 = await call('admin1', { op: 'adminDecidePromotion', id: r3.v.id, verdict: 'granted', days: 365 }, { admin: true });
+  const r8 = await call('admin1', { op: 'adminDecidePromotion', id: r3.v.id, verdict: 'granted', days: 14 }, { admin: true });
+  const r9 = await call('admin1', { op: 'adminDecidePromotion', id: r3.v.id, verdict: 'granted', days: 14 }, { admin: true });
+  ck('R4 a partner cannot grant itself; >90 days refused; admin grants once (second grant refused)', !r6.ok && r6.code === 'permission-denied' && !r7.ok && r8.ok && r8.v.promotionId && !r9.ok && r9.code === 'failed-precondition', { r6, r7, r8, r9 });
+  const promoDoc = (await F.db.collection('financialPromotions').doc(r8.v.promotionId).get()).data();
+  const r10 = await call(null, { op: 'publicDirectory', types: ['BANK', 'SACCO'] });
+  const L2 = (await F.db.collection('financialProviders').doc('saccoA').get()).data();
+  ck('R5 granted promotion: paid:false, dated; listing shown FIRST and marked promoted; listingStatus/licenceVerified untouched',
+    promoDoc.paid === false && promoDoc.status === 'active' && r10.v.rows[0].partnerUid === 'saccoA' && r10.v.rows[0].promoted === true && r10.v.rows[0].label === 'Listed by SOKONI' && L2.listingStatus === 'approved' && L2.licenceVerified === false, { first: r10.v.rows[0], promoDoc });
+  const r11 = await call('saccoA', { op: 'listMyPromotions' });
+  ck('R6 partner sees its request (granted) and its live promotion', r11.ok && r11.v.requests[0].status === 'granted' && r11.v.promotions.length === 1, r11.v);
+
   /* H */
   const h1 = await call('saccoA', { op: 'getWorkspace' });
   ck('H1 counts are aggregates: 2 members, 2 active (one deleted), 3 new enquiries', h1.ok && h1.v.counts.members === 2 && h1.v.counts.activeMembers === 2 && h1.v.counts.newEnquiries === 3, h1.v && h1.v.counts);

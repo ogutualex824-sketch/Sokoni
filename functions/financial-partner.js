@@ -42,7 +42,7 @@ const OPTS = { region: 'us-central1', enforceAppCheck: true, timeoutSeconds: 60,
 /* ── Category model: the server decides which tools each kind of institution gets ───────────
    Keyed by the ONE institution-type enum, financial-partner-listing.js INSTITUTION_TYPES (sokoni-27,
    written by the approval lifecycle). A type added there without a row here gets the generic set. */
-const FULL = ['overview', 'registration', 'members', 'products', 'enquiries', 'team', 'profile'];
+const FULL = ['overview', 'registration', 'members', 'products', 'enquiries', 'promote', 'team', 'profile'];
 const CATEGORIES = {
   BANK: { label: 'Bank', regulators: ['Central Bank of Kenya (CBK)'], modules: FULL, memberLabel: 'Clients', productLabel: 'Products',
     productKinds: ['account', 'savings', 'loan', 'mortgage', 'card', 'business_banking', 'other'] },
@@ -54,7 +54,7 @@ const CATEGORIES = {
     productKinds: ['loan', 'group_loan', 'savings', 'asset_finance', 'other'] },
   INSURER: { label: 'Insurer', regulators: ['Insurance Regulatory Authority (IRA)'], modules: FULL, memberLabel: 'Policyholders', productLabel: 'Policies',
     productKinds: ['motor', 'health', 'life', 'property', 'travel', 'business', 'other'] },
-  FOREX: { label: 'Forex bureau', regulators: ['Central Bank of Kenya (CBK)'], modules: ['overview', 'registration', 'products', 'enquiries', 'team', 'profile'], memberLabel: 'Clients', productLabel: 'Rates',
+  FOREX: { label: 'Forex bureau', regulators: ['Central Bank of Kenya (CBK)'], modules: ['overview', 'registration', 'products', 'enquiries', 'promote', 'team', 'profile'], memberLabel: 'Clients', productLabel: 'Rates',
     productKinds: ['rate'] },
   ACCOUNTANT: { label: 'Accountant', regulators: ['ICPAK', 'KRA (tax agent)'], modules: FULL, memberLabel: 'Clients', productLabel: 'Services',
     productKinds: ['bookkeeping', 'tax_filing', 'audit', 'payroll', 'advisory', 'other'] },
@@ -75,7 +75,7 @@ const CATEGORIES = {
 const ROLE_OPS = {
   owner: '*',
   manager: ['getWorkspace', 'updateProfile', 'listMembers', 'addMember', 'importMembers', 'updateMember', 'deleteMember',
-    'listProducts', 'saveProduct', 'listEnquiries', 'updateEnquiry', 'listTeam'],
+    'listProducts', 'saveProduct', 'listEnquiries', 'updateEnquiry', 'listTeam', 'requestPromotion', 'listMyPromotions'],
   officer: ['getWorkspace', 'listMembers', 'addMember', 'updateMember', 'listEnquiries', 'updateEnquiry'],
 };
 
@@ -425,6 +425,80 @@ async function removeTeamMember(ctx, d) {
 }
 
 /* ── Public & member-of-the-public ops (no partner context) ─────────────────────────────────── */
+/* Banking Hub directory: approved listings only, bounded, server-side (does not depend on client rules).
+   Promotion RANKS, never vouches: a listing an admin promoted is marked promoted:true and shown first, but it
+   carries the same "Listed by SOKONI" label and licence wording as every other listing. */
+async function publicDirectory(req, d) {
+  await lim.limit(db(), admin, { bucket: 'fpDirectory', key: lim.clientKey(req.rawRequest), max: 240, windowSec: 600 });
+  const types = Array.isArray(d.types) ? [...new Set(d.types.map((t) => FPL._v.institutionType(t)).filter(Boolean))] : [];
+  if (!types.length || types.length > 10) bad('Choose between 1 and 10 institution types.');
+  let q = db().collection('financialProviders').where('listingStatus', '==', 'approved').where('institutionType', 'in', types).orderBy('name');
+  if (d.cursor) { if (!ID_RE.test(d.cursor)) bad('Invalid cursor.'); const c = await db().collection('financialProviders').doc(d.cursor).get(); if (c.exists) q = q.startAfter(c); }
+  const size = 24;
+  const [snap, promo] = await Promise.all([q.limit(size).get(), db().collection('financialPromotions').where('status', '==', 'active').limit(50).get().catch(() => null)]);
+  const nowMs = Date.now();
+  const promoted = new Set(promo ? promo.docs.map((x) => x.data()).filter((x) => (ms(x.endsAt) || 0) > nowMs && (ms(x.startsAt) || 0) <= nowMs).map((x) => x.partnerUid) : []);
+  const rows = snap.docs.map((doc) => { const x = doc.data(); return {
+    partnerUid: doc.id, name: x.name || null, institutionType: x.institutionType, services: Array.isArray(x.services) ? x.services : [],
+    county: x.county || null, website: x.website || null, description: x.description || null,
+    label: 'Listed by SOKONI', licenceClaimed: x.licenceClaimed || null, promoted: promoted.has(doc.id) }; });
+  rows.sort((a, b) => Number(b.promoted) - Number(a.promoted));
+  return { rows, next: snap.docs.length === size ? snap.docs[snap.docs.length - 1].id : null, promotionsReadable: !!promo };
+}
+
+/* A partner may ASK to be promoted inside SOKONI (Banking Hub placement, search). No money moves here: an
+   administrator decides, and a granted promotion is a dated, labelled placement (financialPromotions). Paid
+   promotion needs a FULFILLABLE payment purpose and owner pricing — not built (documented). */
+async function requestPromotion(ctx, d) {
+  const placement = oneOf(d.placement, ['banking_hub_category', 'banking_hub_search', 'foundation_partners'], 'placement');
+  const message = str(d.message, 300, 'Message');
+  await lim.limit(db(), admin, { bucket: 'fpPromoReq', key: lim.sha(ctx.partnerUid).slice(0, 32), max: 3, windowSec: 7 * 86400 });
+  const ref = db().collection('financialPromotionRequests').doc();
+  await ref.create({ partnerUid: ctx.partnerUid, placement, message, status: 'pending', requestedBy: ctx.uid, createdAt: ts() });
+  await audit(ctx, 'requestPromotion', ref.id);
+  return { ok: true, id: ref.id, status: 'pending' };
+}
+async function listMyPromotions(ctx) {
+  const [reqs, live] = await Promise.all([
+    db().collection('financialPromotionRequests').where('partnerUid', '==', ctx.partnerUid).limit(20).get(),
+    db().collection('financialPromotions').where('partnerUid', '==', ctx.partnerUid).limit(20).get(),
+  ]);
+  return {
+    requests: reqs.docs.map((x) => { const r = x.data(); return { id: x.id, placement: r.placement, status: r.status, note: r.note || null, createdAt: ms(r.createdAt) }; }),
+    promotions: live.docs.map((x) => { const r = x.data(); return { id: x.id, placement: r.placement, status: r.status, startsAt: ms(r.startsAt), endsAt: ms(r.endsAt) }; }),
+  };
+}
+async function adminListPromotionRequests(d) {
+  const status = oneOf(d.status || 'pending', ['pending', 'granted', 'declined'], 'status');
+  const s = await db().collection('financialPromotionRequests').where('status', '==', status).limit(100).get();
+  return { rows: s.docs.map((x) => { const r = x.data(); return { id: x.id, partnerUid: r.partnerUid, placement: r.placement, message: r.message || null, status: r.status, createdAt: ms(r.createdAt) }; }) };
+}
+async function adminDecidePromotion(req, d) {
+  if (!ID_RE.test(d.id || '')) bad('Invalid request.');
+  const verdict = oneOf(d.verdict, ['granted', 'declined'], 'verdict');
+  const days = verdict === 'granted' ? Number(d.days) : 0;
+  if (verdict === 'granted' && !(Number.isInteger(days) && days >= 1 && days <= 90)) bad('Promote for 1 to 90 days.');
+  const note = str(d.note, 300, 'Note');
+  const store = db(), ref = store.collection('financialPromotionRequests').doc(d.id);
+  let promoId = null;
+  await store.runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists || s.data().status !== 'pending') throw new HttpsError('failed-precondition', 'Already decided.');
+    const r = s.data();
+    const prov = await tx.get(store.collection('financialProviders').doc(r.partnerUid));
+    if (verdict === 'granted' && (!prov.exists || prov.data().listingStatus !== 'approved')) throw new HttpsError('failed-precondition', 'Only an approved listing can be promoted.');
+    tx.update(ref, { status: verdict, note, decidedBy: req.auth.uid, decidedAt: ts() });
+    if (verdict === 'granted') {
+      const pr = store.collection('financialPromotions').doc('PR_' + d.id);   /* one promotion per request */
+      tx.create(pr, { partnerUid: r.partnerUid, placement: r.placement, status: 'active', paid: false, requestId: d.id,
+        startsAt: admin.firestore.Timestamp.now(), endsAt: admin.firestore.Timestamp.fromMillis(Date.now() + days * 86400000), grantedBy: req.auth.uid, createdAt: ts() });
+      promoId = pr.id;
+    }
+    tx.set(store.collection('adminActions').doc(), { type: 'financial_partner_promotion', requestId: d.id, partnerUid: r.partnerUid, verdict, days, adminUid: req.auth.uid, at: ts() });
+  });
+  return { ok: true, status: verdict, promotionId: promoId };
+}
+
 async function publicProfile(req, d) {
   await lim.limit(db(), admin, { bucket: 'fpPublic', key: lim.clientKey(req.rawRequest), max: 120, windowSec: 600 });
   if (!ID_RE.test(d.partnerUid || '')) bad('Invalid partner.');
@@ -494,6 +568,7 @@ async function adminReviewRegistration(req, d) {
 const PARTNER_OPS = {
   getWorkspace, updateProfile, submitRegistration, listMembers, addMember, importMembers, updateMember, deleteMember,
   listProducts, saveProduct, listEnquiries, updateEnquiry, listTeam, addTeamMember, removeTeamMember,
+  requestPromotion, listMyPromotions,
 };
 const OWNER_ONLY = new Set(['submitRegistration', 'addTeamMember', 'removeTeamMember']);
 
@@ -502,6 +577,11 @@ async function handle(req) {
   const op = d.op;
   if (typeof op !== 'string') bad('"op" is required.');
   if (op === 'publicProfile') return publicProfile(req, d);
+  if (op === 'publicDirectory') return publicDirectory(req, d);
+  if (op === 'adminListPromotionRequests' || op === 'adminDecidePromotion') {
+    if (!isAdmin(req)) throw new HttpsError('permission-denied', 'Administrator access required.');
+    return op === 'adminListPromotionRequests' ? adminListPromotionRequests(d) : adminDecidePromotion(req, d);
+  }
   if (op === 'submitEnquiry') return submitEnquiry(req, d);
   if (op === 'adminListRegistrations' || op === 'adminReviewRegistration') {
     if (!isAdmin(req)) throw new HttpsError('permission-denied', 'Administrator access required.');

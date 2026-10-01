@@ -6279,6 +6279,24 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "financialProviders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "listingStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "institutionType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
