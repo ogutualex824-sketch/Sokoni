@@ -43,6 +43,10 @@ setDoc/addDoc (1 each). Live writers: `verificationSubmit`, `verificationDecide`
 
 1. **Ordering:** after sokoni-70's `e78b940` hosting is live (unboxing.html sends a clean payload; otherwise R0 refuses
    the live page's submissions).
+1b. **K13-A/B functions** (sokoni-27: `applicationDecide`/`Reconcile`/`Lifecycle`, 7df7817 + f66f2c1) live **before or
+   alongside** this release — K13-A's `applicationDecide` writes the decision record these rules defer to. sokoni-27
+   reviewed the applications port: **APPROVED** (2026-10-01). Invariants K13-A rests on — keep true in any later edit:
+   no rule matches `applicationDecisions` and there is **no catch-all match** (default-deny); `adminAudit` admin-read-only.
 2. **Compiled size:** NOT measured. `scripts/measure-rules-compiled-delta.js` creates `sizeprobe-*` rulesets/releases in
    the production project (guarded, self-cleaning) — needs explicit owner authorization.
 3. Re-fetch the live release immediately before; it must still be `b87c94e4` or the candidate is re-based.
