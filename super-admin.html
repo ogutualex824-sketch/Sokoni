@@ -421,6 +421,13 @@
     </button>
   </div>
 
+  <div class="nav-group">
+    <div class="nav-group-label">Trust &amp; Safety</div>
+    <button class="nav-item" data-section="trust" data-label="Trust reports" type="button" onclick="SA.nav('trust');_closeSidebar()">
+      <span class="nav-icon">&#x1F6A9;</span><span class="nav-label">Trust reports</span>
+    </button>
+  </div>
+
   <!-- ADMINOS WORKSPACES. LINKS, not a second implementation: AdminOS is the canonical
        admin workspace, so every one of its destinations that has no native Super Admin
        panel is reached here through its deep link (#section, or #section/tab for a
@@ -814,6 +821,18 @@
       </div>
     </section>
 
+    <!-- ══ SECTION: Trust reports (community C2, 2026-10-01) ══
+         The SAME queue AdminOS › Fraud & Trust › Reports Queue mounts (sokoni-trust-queues.js) on the ONE report
+         authority (tsGetReports / tsReviewReport). Not a copy that could disagree. -->
+    <section class="sa-panel" id="panel-trust" hidden>
+      <div class="panel-header">
+        <h2>&#x1F6A9; Trust reports</h2>
+        <p>Reports on listings and users. Reports are private: the seller sees only that a listing was reported and the
+           outcome, never who reported it. Upholding a product report can take the listing down.</p>
+      </div>
+      <div id="trustRoot"></div>
+    </section>
+
     <!-- ══ SECTION 6: Audit Log ══ -->
     <section class="sa-panel" id="panel-audit" hidden>
       <div class="panel-header">
@@ -1011,6 +1030,8 @@
     </div>
   </div>
 </div>
+<!-- the shared content-report queue (community C2) -->
+<script src="sokoni-trust-queues.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════
    SOKONI Super Admin Portal — Inline JS
@@ -1178,6 +1199,7 @@ const SA={
     else if(section==='emergency')this.loadEmergency();
     else if(section==='audit')this.loadAudit();
     else if(section==='broadcast')this.loadBroadcastHistory();
+    else if(section==='trust')this.loadTrustQueue();
   },
 
   // Sign Out ────────────────────────────────────────────────
@@ -1964,6 +1986,21 @@ const SA={
       document.getElementById('cg-broadcast-emergency').style.display='none';
       document.getElementById('saEmergencyMsg').value='';
     }catch(e){_toast('Error: '+e.message,'error');}
+  },
+
+  // ══ SECTION: Trust reports (sokoni-trust-queues.js, shared with AdminOS) ══
+  loadTrustQueue(){
+    const root=document.getElementById('trustRoot');
+    if(!root)return;
+    if(!window.SokoniTrustQueues){
+      root.innerHTML='<p style="color:var(--muted);font-size:13px" role="alert">The report queue did not load. '+
+        'Check that sokoni-trust-queues.js is served on this page.</p>';
+      return;
+    }
+    const fns=this._fns;
+    window.SokoniTrustQueues.mount(root,{
+      callable:(name)=>(payload)=>fns.httpsCallable(name)(payload).then(r=>r.data),
+      onToast:(m,k)=>_toast(m,k==='success'?'success':'info') });
   },
 
   // ══ SECTION 6: Audit Log ════════════════════════════════

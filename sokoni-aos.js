@@ -1686,31 +1686,41 @@ window.SokoniAOS = (() => {
     _toast("Receipt voided — audit trail recorded", "success");
   }
 
+  /* community C2 (2026-10-01): the Reports Queue is the shared trust queue (sokoni-trust-queues.js) — the SAME surface
+     super-admin.html › Trust reports mounts, on the ONE report authority (tsGetReports / tsReviewReport).
+     Defects closed: the old table rendered r.targetId (reports carry entityId — every row read "—"), its Action button
+     sent action:'action' (the server accepts approve|dismiss|escalate|… — it ALWAYS failed), and a failed read was
+     swallowed into "No pending reports" (unknown shown as zero). */
   async function viewReports() {
-    const data = await _call("tsGetReports", { status: "pending", limit: 20 }).catch(() => ({ reports: [] }));
-    const reports = data.reports || [];
-    _modal("Reports Queue", `<table class="aos-table"><thead><tr>
-        <th>Type</th><th>Target</th><th>Reason</th><th>Date</th><th>Actions</th>
-      </tr></thead><tbody>${reports.map(r => `<tr>
-        <td>${_esc(r.entityType||"—")}</td>
-        <td class="aos-muted">${_esc(r.targetId||"—")}</td>
-        <td>${_esc(r.reason||"—")}</td>
-        <td class="aos-muted">${_date(r.createdAt)}</td>
-        <td>
-          <button class="aos-btn-sm success" onclick="SokoniAOS.reviewReport('${r.id}','dismiss')">Dismiss</button>
-          <button class="aos-btn-sm danger"  onclick="SokoniAOS.reviewReport('${r.id}','action')">Action</button>
-        </td>
-      </tr>`).join("") || _emptyRow(5,"No pending reports")}</tbody></table>`);
+    _modal("Reports Queue", '<div id="aosTrustReports"></div>');
+    const box = document.querySelector("#aosModal .modal-box"); if (box) box.style.maxWidth = "980px";
+    _mountTrustQueue(document.getElementById("aosTrustReports"));
   }
 
-  async function reviewReport(id, action) {
+  function _mountTrustQueue(host) {
+    if (!host) return;
+    if (!window.SokoniTrustQueues) {
+      host.innerHTML = _emptyMsg("The report queue did not load — check that sokoni-trust-queues.js is served on this page.");
+      return;
+    }
+    window.SokoniTrustQueues.mount(host, {
+      callable: (name) => (payload) => _fn.httpsCallable(name)(payload).then((r) => r.data),
+      onToast: (m, k) => _toast(m, k === "success" ? "success" : "info") });
+  }
+
+  /* Kept for any caller of SokoniAOS.reviewReport: the server's action names only (approve | dismiss | escalate |
+     request_changes | archive | remove). */
+  async function reviewReport(id, action, hideProduct) {
+    let res;
     try {
-      await _call("tsReviewReport", { reportId: id, action });
+      res = await _call("tsReviewReport", { reportId: id, action, hideProduct: hideProduct === true });
     } catch (e) {
       _toast(_actionFailure(e, "Report review"), "error");
       return;
     }
-    _toast("Report " + action + "ed","success"); _closeModal(); _panelCache.fraud = false; _loadFraud();
+    const word = { approve: "upheld", dismiss: "dismissed", escalate: "escalated", request_changes: "returned for changes", archive: "archived", remove: "removed" }[action] || "updated";
+    _toast("Report " + word + (res && res.productHidden ? " — product taken down" : ""), "success");
+    _closeModal(); _panelCache.fraud = false; _loadFraud();
   }
 
   async function investigateAlert(id) {
