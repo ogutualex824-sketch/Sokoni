@@ -1,3 +1,11 @@
+## [2026-10-01] — Financial Partner Workspace: dashboard for approved banks, SACCOs, chamas, MFIs, insurers, forex bureaus, accountants (functions + hosting + indexes, NOT deployed)
+
+**Why (owner, 2026-10-01):** "make sure there are dashboards after approval with all equipment … in the sidebar so the banks, SACCOs can do their registration, add members and all — for all categories."
+**Files:** `functions/financial-partner.js` (new callable `financialPartnerDispatch`), `functions/index.js` (export), `financial-partner-dashboard.html` + `.js` (new page, self-updating via sw-register.js), `firestore.indexes.json` (+4 composite), `scripts/test-financial-partner-workspace.js` (31/0), `docs/FINANCIAL_PARTNER_WORKSPACE.md`.
+**Database:** new `financialPartners/{uid}` (+ members/products/team/audit), `financialPartnerStaff/{uid}`, `financialEnquiries/{id}` — server-only (no rules match = client deny). Reads `financialProviders/{uid}` (written by the approval lifecycle; never written here).
+**Security:** approval gate on every call; owner/manager/officer roles; registration self-declared → under_review only, admin-only verify (adminActions logged); member consent attested; phone-unique create(); no ID/DOB/balances stored; App Check; fail-closed limits on writes, enquiries, team adds, public profile; audit without PII.
+**Breaking:** none (new names). **Deploy:** indexes → function → hosting; needs the lifecycle slice live.
+
 ## [2026-10-01] — impactPledgeDonation: standalone Foundation pledge, created once (functions, NOT deployed)
 
 **Why:** owner decision (option b, 2026-10-01): a donation is its OWN IntaSend payment, completed only on IntaSend confirmation by the payment authority (sokoni-70's webhook unit). sokoni-aa's Foundation UI needs an order-less pledge to pay against. **New:** `impactPledgeDonation({amount, destination, requestId, anonymous?})` → `foundationDonations/PLG_<uid>_<requestId>` created once (create() on a deterministic id — a retried tap returns the same pledge); requestId UUID v4; KES 10–100,000; destination sanitised; durable fail-closed limit 20/h per user; status 'pledged'; NO ledger, balance or stats. Exported by name in index.js. `scripts/test-impact-checkout-pledge.js` 12/0 (incl. the original-code counterproof against c7e26b6 = live archive).
