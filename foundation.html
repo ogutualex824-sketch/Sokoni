@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI Foundation — Give, share your story, see where it goes</title>
+  <meta name="description" content="Support SOKONI Foundation programmes with M-Pesa, read stories from the community, and share how the Foundation helped you.">
+  <meta property="og:title" content="SOKONI Foundation">
+  <meta property="og:description" content="Give to SOKONI Foundation programmes and read stories from the community.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/logosokoni.png">
+  <meta name="theme-color" content="#0b0d10">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://us-central1-sokoni-aeb26.cloudfunctions.net" crossorigin>
+  <link rel="stylesheet" href="style.css">
+  <script src="security.js"></script>
+  <script type="module" src="firebase.js"></script>
+  <script type="module" src="sokoni-upload.js"></script>
+  <script src="sokoni-intasend.js" defer></script>
+  <script src="shared-header.js" defer></script>
+  <style>
+    :root{
+      --bg:#0b0d10; --card:#14181d; --card2:#1a1f26; --line:rgba(255,255,255,.09);
+      --ink:#e9eef5; --dim:rgba(233,238,245,.66); --faint:rgba(233,238,245,.45);
+      --ok:#3ddc84; --warn:#f5a524; --bad:#ff6b6b; --acc:#71ff00; --acc-d:#4fc200;
+      --r:16px;
+    }
+    *,*::before,*::after{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+    body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden;padding-bottom:96px}
+    a{color:var(--acc)}
+    :focus-visible{outline:3px solid var(--acc);outline-offset:2px;border-radius:6px}
+    .sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+    .skip{position:absolute;left:16px;top:-60px;background:var(--acc);color:#000;padding:10px 14px;border-radius:10px;font-weight:800;z-index:1000}
+    .skip:focus{top:12px}
+    .wrap{max-width:1080px;margin:0 auto;padding:0 16px}
+    section{padding:44px 0}
+    .eyebrow{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--acc);margin-bottom:8px}
+    h1{font-size:clamp(30px,7vw,52px);line-height:1.08;margin:0 0 14px;letter-spacing:-.02em}
+    h2{font-size:clamp(22px,4.6vw,32px);line-height:1.15;margin:0 0 10px;letter-spacing:-.01em}
+    h3{font-size:17px;margin:0 0 6px}
+    p{margin:0 0 12px}
+    .lead{color:var(--dim);font-size:16px;max-width:640px}
+    .muted{color:var(--faint);font-size:13px}
+
+    /* hero */
+    .hero{padding:56px 0 30px;background:radial-gradient(ellipse 70% 60% at 20% 0%,rgba(113,255,0,.10),transparent 70%)}
+    .hero-cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:12px 22px;border-radius:12px;border:1px solid var(--line);background:var(--card2);color:var(--ink);font:inherit;font-weight:800;cursor:pointer;text-decoration:none}
+    .btn:hover{border-color:rgba(255,255,255,.22)}
+    .btn[disabled]{opacity:.55;cursor:not-allowed}
+    .btn-acc{background:var(--acc);border-color:var(--acc);color:#071000}
+    .btn-acc:hover{background:#86ff2a}
+    .btn-sm{min-height:44px;padding:8px 14px;font-size:13px}
+    .btn-link{background:none;border:none;color:var(--acc);font:inherit;font-weight:700;cursor:pointer;padding:10px 0;min-height:44px;text-decoration:underline}
+    .why-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));margin-top:18px}
+    .why{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+    .why p{color:var(--dim);font-size:14px;margin:0}
+
+    /* wizard */
+    .card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px}
+    .wiz-steps{display:flex;gap:6px;list-style:none;padding:0;margin:0 0 18px}
+    .wiz-steps li{flex:1;height:4px;border-radius:4px;background:rgba(255,255,255,.1)}
+    .wiz-steps li.on{background:var(--acc)}
+    .wiz-step[hidden]{display:none}
+    .wiz-h{font-size:18px;font-weight:800;margin:0 0 4px}
+    .field{margin:14px 0}
+    .field label,.field .lbl{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+    .input,select,textarea{width:100%;min-height:48px;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:#0f1317;color:var(--ink);font:inherit;font-size:16px}
+    textarea{min-height:140px;resize:vertical}
+    .input:focus,select:focus,textarea:focus{border-color:var(--acc);outline:none;box-shadow:0 0 0 3px rgba(113,255,0,.2)}
+    .amount-row{display:flex;align-items:center;gap:8px}
+    .amount-row .cur{font-weight:800;color:var(--dim)}
+    .picks{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+    .pick{min-height:44px;padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:#0f1317;color:var(--ink);font:inherit;font-weight:700;cursor:pointer}
+    .pick[aria-pressed="true"]{border-color:var(--acc);color:var(--acc);background:rgba(113,255,0,.08)}
+    .err{color:var(--bad);font-size:13px;font-weight:600;min-height:1em;margin:6px 0 0}
+    .note{font-size:13px;color:var(--dim);background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0}
+    .check{display:flex;gap:10px;align-items:flex-start;min-height:44px;padding:6px 0;cursor:pointer}
+    .check input{width:22px;height:22px;flex-shrink:0;margin-top:1px;accent-color:var(--acc)}
+    .wiz-nav{display:flex;gap:10px;justify-content:space-between;margin-top:18px;flex-wrap:wrap}
+    .review{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:8px 0 4px;font-size:14px}
+    .review dt{color:var(--faint)} .review dd{margin:0;font-weight:700;word-break:break-word}
+    .status{margin-top:14px;padding:14px;border-radius:12px;border:1px solid var(--line);background:#0f1317;font-weight:600}
+    .status:empty{display:none}
+    .status.ok{border-color:rgba(61,220,132,.4);color:var(--ok)}
+    .status.bad{border-color:rgba(255,107,107,.4);color:var(--bad)}
+    .status.wait{border-color:rgba(245,165,36,.35);color:var(--warn)}
+    .resume{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+    .resume[hidden]{display:none}
+
+    /* stories */
+    .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))}
+    .story{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column}
+    .story-media{aspect-ratio:16/10;background:#0f1317;width:100%;object-fit:cover;display:block}
+    .story-body{padding:16px;display:flex;flex-direction:column;gap:6px;flex:1}
+    .tag{display:inline-block;align-self:flex-start;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;background:rgba(113,255,0,.1);color:var(--acc);text-transform:uppercase;letter-spacing:.05em}
+    .story-who{font-size:12.5px;color:var(--faint)}
+    .story-full{white-space:pre-line;color:var(--dim);font-size:14px}
+    .story-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:auto;padding-top:6px}
+    .empty{background:var(--card);border:1px dashed rgba(255,255,255,.18);border-radius:var(--r);padding:26px 18px;text-align:center}
+    .center{text-align:center;margin-top:16px}
+
+    /* testimonial */
+    .files{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:6px}
+    .files li{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#0f1317;border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:13px}
+    .files li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+    .mine{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-direction:column;gap:8px}
+    .mine li{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+    .pill{font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+
+    /* transparency */
+    .figs{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));margin-top:12px}
+    .fig{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+    .fig b{display:block;font-size:22px;color:var(--ink);margin-top:2px}
+    .badge-warn{display:inline-block;font-size:12px;font-weight:800;color:var(--warn);border:1px solid rgba(245,165,36,.4);border-radius:999px;padding:3px 10px}
+    .prog{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:8px}
+    .bar{height:8px;border-radius:8px;background:rgba(255,255,255,.08);overflow:hidden}
+    .bar i{display:block;height:100%;background:var(--acc)}
+    .links{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));margin-top:14px}
+    .links a{display:flex;align-items:center;min-height:56px;padding:14px 16px;border-radius:14px;background:var(--card);border:1px solid var(--line);color:var(--ink);text-decoration:none;font-weight:700}
+    .links a:hover{border-color:rgba(113,255,0,.4)}
+    @media (min-width:860px){
+      .donate-layout{display:grid;grid-template-columns:1fr 1.15fr;gap:28px;align-items:start}
+      .donate-layout .card{position:sticky;top:84px}
+    }
+  </style>
+</head>
+<body>
+<a class="skip" href="#donate">Skip to the donation form</a>
+
+<main id="main">
+  <!-- 1. WHY IT MATTERS -->
+  <header class="hero">
+    <div class="wrap">
+      <span class="eyebrow">SOKONI Foundation</span>
+      <h1>Small gifts, close to home.</h1>
+      <p class="lead">SOKONI Foundation supports people in the communities SOKONI serves — food, school costs, health needs, emergencies and ways to earn a living. You choose how much to give; we show you what happens next.</p>
+      <div class="hero-cta">
+        <a class="btn btn-acc" href="#donate">Donate with M-Pesa</a>
+        <a class="btn" href="#share">Share your story</a>
+      </div>
+    </div>
+  </header>
+
+  <section aria-labelledby="whyH">
+    <div class="wrap">
+      <h2 id="whyH">Why it matters</h2>
+      <div class="why-grid">
+        <div class="why"><h3>Your amount, your choice</h3><p>Give any amount from KES 10. We never round it up or change it.</p></div>
+        <div class="why"><h3>Confirmed, not assumed</h3><p>We only say thank you once M-Pesa confirms the payment, and you get a receipt number.</p></div>
+        <div class="why"><h3>Real voices</h3><p>Stories here come from people the Foundation supported. Our team reviews each one, with the person's consent, before it appears.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. DONATION WIZARD -->
+  <section id="donate" aria-labelledby="donateH">
+    <div class="wrap donate-layout">
+      <div>
+        <span class="eyebrow">Give</span>
+        <h2 id="donateH">Make a donation</h2>
+        <p class="lead">Four short steps. You pay on your phone with M-Pesa, and this page updates when the payment is confirmed.</p>
+        <p class="muted">A purpose is your preference; Foundation funds are unrestricted unless a programme says otherwise.</p>
+      </div>
+      <form class="card" id="donateForm" novalidate aria-describedby="donateStepLabel">
+        <ol class="wiz-steps" aria-hidden="true"><li></li><li></li><li></li><li></li></ol>
+        <p class="sr-only" id="donateStepLabel" aria-live="polite"></p>
+
+        <!-- step 1 -->
+        <fieldset class="wiz-step" data-step="1" style="border:0;padding:0;margin:0">
+          <legend class="wiz-h">How much would you like to give?</legend>
+          <div class="field">
+            <label for="fdAmount">Amount in Kenya shillings (KES 10 – 100,000)</label>
+            <div class="amount-row"><span class="cur" aria-hidden="true">KES</span>
+              <input class="input" id="fdAmount" name="amount" type="text" inputmode="numeric" autocomplete="off" aria-describedby="fdAmountErr" placeholder="Enter an amount">
+            </div>
+            <div class="picks" role="group" aria-label="Quick amounts">
+              <button type="button" class="pick" data-amount="100" aria-pressed="false">100</button>
+              <button type="button" class="pick" data-amount="500" aria-pressed="false">500</button>
+              <button type="button" class="pick" data-amount="1000" aria-pressed="false">1,000</button>
+              <button type="button" class="pick" data-amount="2500" aria-pressed="false">2,500</button>
+              <button type="button" class="pick" data-amount="5000" aria-pressed="false">5,000</button>
+            </div>
+            <p class="err" id="fdAmountErr" role="alert"></p>
+          </div>
+        </fieldset>
+
+        <!-- step 2 -->
+        <fieldset class="wiz-step" data-step="2" hidden style="border:0;padding:0;margin:0">
+          <legend class="wiz-h">Where should it go?</legend>
+          <div class="field">
+            <label for="fdProgramme">Programme (optional)</label>
+            <select id="fdProgramme" name="programmeId"><option value="">General Foundation fund</option></select>
+            <p class="muted" id="fdProgrammeNote" aria-live="polite">Loading programmes…</p>
+          </div>
+          <div class="field">
+            <label for="fdPurpose">Purpose (your preference)</label>
+            <select id="fdPurpose" name="purpose">
+              <option value="GENERAL_FOUNDATION">Wherever it is needed most</option>
+              <option value="FOOD_SUPPORT">Food support</option>
+              <option value="EDUCATION">Education</option>
+              <option value="HEALTH_SUPPORT">Health support</option>
+              <option value="EMERGENCY_SUPPORT">Emergency support</option>
+              <option value="COMMUNITY_SUPPORT">Community support</option>
+              <option value="LIVELIHOOD_SUPPORT">Livelihoods</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </div>
+          <p class="note">A purpose is your preference; Foundation funds are unrestricted unless a programme says otherwise.</p>
+        </fieldset>
+
+        <!-- step 3 -->
+        <fieldset class="wiz-step" data-step="3" hidden style="border:0;padding:0;margin:0">
+          <legend class="wiz-h">About you</legend>
+          <label class="check"><input type="checkbox" id="fdAnon" name="anonymous"><span>Give anonymously — don't show my name anywhere public.<br><span class="muted">We still need you signed in so we can send your receipt and handle any problem with the payment.</span></span></label>
+          <div class="note" id="fdAuthBox" aria-live="polite">Checking whether you're signed in…</div>
+        </fieldset>
+
+        <!-- step 4 -->
+        <fieldset class="wiz-step" data-step="4" hidden style="border:0;padding:0;margin:0">
+          <legend class="wiz-h">Review and pay</legend>
+          <dl class="review" id="fdReview"></dl>
+          <div class="field">
+            <label for="fdPhone">M-Pesa phone number</label>
+            <input class="input" id="fdPhone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="07XX XXX XXX" aria-describedby="fdPhoneErr">
+            <p class="err" id="fdPhoneErr" role="alert"></p>
+          </div>
+          <p class="muted">You'll get an M-Pesa prompt on this phone. Enter your PIN there — never share it with anyone.</p>
+        </fieldset>
+
+        <div class="status" id="fdStatus" role="status" aria-live="polite"></div>
+        <div class="wiz-nav">
+          <button type="button" class="btn" id="fdBack" hidden>Back</button>
+          <button type="button" class="btn btn-acc" id="fdNext">Continue</button>
+          <button type="button" class="btn" id="fdCheck" hidden>Check again</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- 3. STORIES & TESTIMONIALS -->
+  <section id="stories" aria-labelledby="storiesH">
+    <div class="wrap">
+      <span class="eyebrow">Stories</span>
+      <h2 id="storiesH">Stories from the community</h2>
+      <p class="lead">Told by the people involved, published with their consent.</p>
+      <div id="storyStatus" class="muted" role="status" aria-live="polite">Loading stories…</div>
+      <div class="grid" id="storyGrid"></div>
+      <div class="center"><button type="button" class="btn" id="storyMore" hidden>Load more stories</button></div>
+    </div>
+  </section>
+
+  <!-- 4. TESTIMONIAL WIZARD -->
+  <section id="share" aria-labelledby="shareH">
+    <div class="wrap">
+      <span class="eyebrow">Your voice</span>
+      <h2 id="shareH">How has SOKONI Foundation helped you?</h2>
+      <p class="lead">Tell us in your own words. Our team reviews every story before it appears, and nothing is published without your consent.</p>
+      <div class="note" id="tsAuthBox" aria-live="polite">Checking whether you're signed in…</div>
+      <form class="card" id="tsForm" novalidate hidden>
+        <div class="field"><label for="tsTitle">Title</label>
+          <input class="input" id="tsTitle" name="title" maxlength="120" required aria-describedby="tsTitleErr"><p class="err" id="tsTitleErr"></p></div>
+        <div class="field"><label for="tsBody">Your story</label>
+          <textarea id="tsBody" name="body" maxlength="5000" required aria-describedby="tsBodyHint tsBodyErr"></textarea>
+          <p class="muted" id="tsBodyHint">Up to 5,000 characters. Please don't include phone numbers, ID numbers or other private details.</p><p class="err" id="tsBodyErr"></p></div>
+        <div class="field"><label for="tsProgramme">Which programme was it? (optional)</label>
+          <select id="tsProgramme" name="programmeId"><option value="">I'm not sure / none</option></select></div>
+        <fieldset class="field" style="border:0;padding:0">
+          <legend class="lbl">How should we show your name?</legend>
+          <label class="check"><input type="radio" name="displayPreference" value="name" checked><span>Full name</span></label>
+          <label class="check"><input type="radio" name="displayPreference" value="first_name"><span>First name only</span></label>
+          <label class="check"><input type="radio" name="displayPreference" value="anonymous"><span>Anonymous</span></label>
+        </fieldset>
+        <div class="field" id="tsNameField"><label for="tsName">Your name</label>
+          <input class="input" id="tsName" name="displayName" maxlength="80" autocomplete="name"></div>
+        <div class="field"><label for="tsLocation">Town or county (optional)</label>
+          <input class="input" id="tsLocation" name="location" maxlength="60" placeholder="e.g. Kisumu" aria-describedby="tsLocHint"><p class="muted" id="tsLocHint">Town or county only — not your street or home.</p></div>
+        <div class="field"><label for="tsFiles">Photos or a video (optional)</label>
+          <input class="input" id="tsFiles" type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" aria-describedby="tsFilesHint tsFilesErr">
+          <p class="muted" id="tsFilesHint">Up to 4 files: photos (JPEG, PNG or WebP, up to 15 MB) and at most one video (MP4, WebM or MOV, up to 80 MB).</p>
+          <ul class="files" id="tsFileList"></ul><p class="err" id="tsFilesErr" role="alert"></p></div>
+        <fieldset class="field" style="border:0;padding:0">
+          <legend class="lbl">Your consent</legend>
+          <label class="check"><input type="checkbox" id="tsConsentPublish" name="consentPublish" required><span>I agree that SOKONI Foundation may publish this story after review. <b>(required)</b></span></label>
+          <label class="check"><input type="checkbox" id="tsConsentName" name="consentName"><span>Show my name with the story.</span></label>
+          <label class="check"><input type="checkbox" id="tsConsentMedia" name="consentMedia"><span>Show my photos/videos with the story.</span></label>
+          <p class="err" id="tsConsentErr"></p>
+        </fieldset>
+        <div class="status" id="tsStatus" role="status" aria-live="polite"></div>
+        <div class="wiz-nav">
+          <button type="submit" class="btn btn-acc" id="tsSubmit">Send my story for review</button>
+          <button type="button" class="btn" id="tsTextOnly" hidden>Send my story as text</button>
+        </div>
+      </form>
+      <div id="tsMineWrap" hidden>
+        <h3 style="margin-top:26px">My stories</h3>
+        <div id="tsMineStatus" class="muted" role="status" aria-live="polite"></div>
+        <ul class="mine" id="tsMine"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. TRANSPARENCY -->
+  <section id="transparency" aria-labelledby="trH">
+    <div class="wrap">
+      <span class="eyebrow">Transparency</span>
+      <h2 id="trH">Where the money stands</h2>
+      <p><span class="badge-warn">Foundation account — being reconciled</span></p>
+      <p class="muted">These figures come straight from the Foundation account. Some earlier entries are still being reconciled, so treat them as provisional, not audited. We never show who gave.</p>
+      <div class="figs" id="trFigs" aria-live="polite">
+        <div class="fig"><span class="muted">Available</span><b id="trAvail">—</b></div>
+        <div class="fig"><span class="muted">Received to date</span><b id="trRecv">—</b></div>
+        <div class="fig"><span class="muted">Paid out to date</span><b id="trOut">—</b></div>
+      </div>
+      <h3 style="margin-top:26px">Programmes</h3>
+      <p class="muted">"Raised" moves only when a donation is confirmed by M-Pesa.</p>
+      <div id="trProgStatus" class="muted" role="status" aria-live="polite">Loading programmes…</div>
+      <div class="grid" id="trProgs"></div>
+    </div>
+  </section>
+
+  <!-- 6. PARTNERS & CONTACT -->
+  <section id="partners" aria-labelledby="ptH">
+    <div class="wrap">
+      <span class="eyebrow">Partners</span>
+      <h2 id="ptH">Partner banks, SACCOs and advisers</h2>
+      <p class="lead">Financial institutions listed on SOKONI appear in the Banking Hub.</p>
+      <div class="links">
+        <a href="banking.html#saccos">SACCOs</a>
+        <a href="banking.html#accounts">Banks</a>
+        <a href="banking.html#microfinance">Microfinance</a>
+        <a href="banking.html#advisers">Accountants &amp; advisers</a>
+      </div>
+      <h2 style="margin-top:40px" id="ctH">Contact</h2>
+      <p class="lead">Questions about a donation, a receipt or a story? Reach our team through the contact page — include your receipt number if you have one.</p>
+      <a class="btn" href="contact.html">Contact SOKONI</a>
+    </div>
+  </section>
+</main>
+
+<button type="button" class="btn btn-acc resume" id="fdResume" hidden>Continue your donation</button>
+<nav class="bottom-nav" data-sokoni-nav></nav>
+
+<script src="foundation.js" defer></script>
+<script src="/sw-register.js" defer></script>
+</body>
+</html>
