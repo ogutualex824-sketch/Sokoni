@@ -53,9 +53,28 @@ async function run(M, uid, data) { try { return { ok: true, v: await M.impactChe
   const cBig = await run(M, 'buyerA', { amount: 100001, orderId: 'o1' });
   ck('C2 amount 0 is a no-op; over 100,000 is refused', c0.ok && c0.v.skipped === true && !cBig.ok && cBig.code === 'invalid-argument');
 
+  /* E — standalone Foundation pledge (impactPledgeDonation) */
+  const runP = async (uid, data) => { try { return { ok: true, v: await M.impactPledgeDonation.run({ auth: uid ? { uid, token: {} } : null, data }) }; } catch (e) { return { ok: false, code: e.code, msg: e.message }; } };
+  const rid = '3f2b8c1e-9a4d-4b6e-8f10-2c3d4e5f6a7b';
+  const e1 = await runP('donorA', { amount: 250, destination: 'Water', requestId: rid });
+  const e2 = await runP('donorA', { amount: 9999, destination: 'Other', requestId: rid });
+  const plg = (await F.db.collection('foundationDonations').doc('PLG_donorA_' + rid).get()).data();
+  ck('E1 standalone pledge: PLG_<uid>_<requestId>, status pledged, amount kept', e1.ok && e1.v.pledgeId === 'PLG_donorA_' + rid && plg && plg.status === 'pledged' && plg.amount === 250 && plg.orderId === null, { e1, plg });
+  ck('E2 a retried tap (same requestId) returns the SAME pledge — never a second one', e2.ok && e2.v.alreadyPledged === true && e2.v.amount === 250 && keys(F, 'foundationDonations/PLG_').length === 1, e2);
+  const e3 = await runP('donorA', { amount: 250, requestId: 'not-a-uuid' });
+  const e4 = await runP('donorA', { amount: 5, requestId: '4a2b8c1e-9a4d-4b6e-8f10-2c3d4e5f6a7b' });
+  const e5 = await runP('donorA', { amount: 100001, requestId: '5a2b8c1e-9a4d-4b6e-8f10-2c3d4e5f6a7b' });
+  const e6 = await runP(null, { amount: 250, requestId: '6a2b8c1e-9a4d-4b6e-8f10-2c3d4e5f6a7b' });
+  ck('E3 bad requestId / below KES 10 / above 100,000 / signed out → refused', !e3.ok && e3.code === 'invalid-argument' && !e4.ok && !e5.ok && !e6.ok && e6.code === 'unauthenticated', { e3, e4, e5, e6 });
+  ck('E4 still NO ledger, NO balance, NO stats after pledges', keys(F, 'impactLedger/').length === 0 && keys(F, 'impactBalance/').length === 0 && keys(F, 'foundationStats/').length === 0);
+  const origRT = F.db.runTransaction; F.db.runTransaction = async () => { throw new Error('contention'); };
+  const e7 = await runP('donorB', { amount: 300, requestId: '7a2b8c1e-9a4d-4b6e-8f10-2c3d4e5f6a7b' });
+  F.db.runTransaction = origRT;
+  ck('E5 rate limiter unavailable → refused (fail closed), no pledge written', !e7.ok && e7.code === 'unavailable' && keys(F, 'foundationDonations/PLG_donorB').length === 0, e7);
+
   /* D — counterproof on the original code */
   const orig = path.join(FN, '.orig-impact.js');
-  fs.writeFileSync(orig, require('child_process').execSync('git show HEAD:functions/impact.js', { cwd: ROOT }).toString());
+  fs.writeFileSync(orig, require('child_process').execSync('git show c7e26b6:functions/impact.js', { cwd: ROOT }).toString());
   try {
     F = setup();
     const O = load(orig);

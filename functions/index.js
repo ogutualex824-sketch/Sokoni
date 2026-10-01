@@ -11716,6 +11716,7 @@ const impact = require('./impact');
 exports.impactGetPublicDashboard           = impact.impactGetPublicDashboard;
 exports.impactGetUserProfile               = impact.impactGetUserProfile;
 exports.impactCheckoutDonate               = impact.impactCheckoutDonate;
+exports.impactPledgeDonation               = impact.impactPledgeDonation;   /* standalone Foundation pledge (2026-10-01) */
 exports.impactSetRoundUp                   = impact.impactSetRoundUp;
 exports.impactCorporateApply               = impact.impactCorporateApply;
 exports.impactGetBusinessScore             = impact.impactGetBusinessScore;

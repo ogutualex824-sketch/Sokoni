@@ -279,6 +279,55 @@ exports.impactCheckoutDonate = onCall(
   }
 );
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   3b. impactPledgeDonation — a standalone Foundation pledge (no order) — 2026-10-01
+   Owner decision (option b): a donation is its OWN IntaSend payment, completed only on
+   IntaSend's server confirmation (the webhook, owned by the payment authority). This callable
+   only records the PLEDGE that payment will be for:
+     foundationDonations/PLG_<uid>_<requestId>  status 'pledged'  — created ONCE (create() on a
+     deterministic id: a retried tap returns the same pledge, never a second one)
+   No ledger, no impactBalance, no foundationStats — those are written only when the payment is
+   confirmed. requestId is a client-generated UUID v4; amount and destination are validated here.
+═══════════════════════════════════════════════════════════════════════════ */
+const PLEDGE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+exports.impactPledgeDonation = onCall(
+  { timeoutSeconds: 20, enforceAppCheck: true },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+    const uid = request.auth.uid;
+    const { amount, destination, requestId, anonymous } = request.data || {};
+    if (typeof requestId !== 'string' || requestId.length > 36 || !PLEDGE_UUID_RE.test(requestId)) {
+      throw new HttpsError('invalid-argument', 'A valid requestId (UUID v4) is required.');
+    }
+    if (typeof amount !== 'number' && typeof amount !== 'string') throw new HttpsError('invalid-argument', 'Enter an amount.');
+    const amt = Math.round(Number(amount));
+    if (!Number.isFinite(amt) || amt < 10) throw new HttpsError('invalid-argument', 'The minimum donation is KES 10.');
+    if (amt > 100000) throw new HttpsError('invalid-argument', 'The maximum single donation is KES 100,000.');
+    const dest = _san(destination, 60) || 'General Foundation';
+
+    /* Durable, fail-closed limit: pledges are cheap to create and must not be spammable. */
+    await require('./shared/durable-limit').limit(fdb(), admin, { bucket: 'impactPledge', key: uid, max: 20, windowSec: 3600 });
+
+    const donId = 'PLG_' + uid + '_' + requestId.toLowerCase();
+    const ref = fdb().collection('foundationDonations').doc(donId);
+    let existing = null;
+    await fdb().runTransaction(async (txn) => {
+      const cur = await txn.get(ref);
+      if (cur.exists) { existing = cur.data(); return; }
+      txn.create(ref, {
+        id: donId, uid, requestId: requestId.toLowerCase(),
+        amount: amt, destination: dest, method: 'Foundation Pledge',
+        frequency: 'one-time', status: 'pledged', donorName: anonymous === true ? 'Anonymous' : 'SOKONI User',
+        anonymous: anonymous === true, orderId: null,
+        dateStr: new Date().toLocaleDateString('en-KE', { year: 'numeric', month: 'long', day: 'numeric' }),
+        createdAt: _now(), updatedAt: _now(),
+      });
+    });
+    if (existing && existing.uid !== uid) throw new HttpsError('permission-denied', 'This pledge is not yours.');
+    return { ok: true, pledgeId: donId, amount: existing ? existing.amount : amt, status: existing ? existing.status : 'pledged', alreadyPledged: !!existing };
+  }
+);
+
 /* ══════════════════════════════════════════════════════════
    4. impactSetRoundUp — enable / disable round-up
 ══════════════════════════════════════════════════════════ */

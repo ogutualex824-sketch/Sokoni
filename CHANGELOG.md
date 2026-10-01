@@ -1,3 +1,8 @@
+## [2026-10-01] — impactPledgeDonation: standalone Foundation pledge, created once (functions, NOT deployed)
+
+**Why:** owner decision (option b, 2026-10-01): a donation is its OWN IntaSend payment, completed only on IntaSend confirmation by the payment authority (sokoni-70's webhook unit). sokoni-aa's Foundation UI needs an order-less pledge to pay against. **New:** `impactPledgeDonation({amount, destination, requestId, anonymous?})` → `foundationDonations/PLG_<uid>_<requestId>` created once (create() on a deterministic id — a retried tap returns the same pledge); requestId UUID v4; KES 10–100,000; destination sanitised; durable fail-closed limit 20/h per user; status 'pledged'; NO ledger, balance or stats. Exported by name in index.js. `scripts/test-impact-checkout-pledge.js` 12/0 (incl. the original-code counterproof against c7e26b6 = live archive).
+**Deploy:** add `functions:impactPledgeDonation` to the security set (new name).
+
 ## [2026-10-01] — Checkout donations are pledges, never minted as completed (functions:impactCheckoutDonate, NOT deployed)
 
 **Why (PROVEN live: impactcheckoutdonate-00007-seh serves 100%, impact.js identical to this tree; found by sokoni-aa):** any signed-in user could record a 'completed' foundation donation, an impactLedger credit (+ impactBalance, which feeds impactDisbursements) and higher foundationStats for any amount 1–100,000, with no order or payment check.
