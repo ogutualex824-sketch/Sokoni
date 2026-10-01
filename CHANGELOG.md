@@ -1,3 +1,7 @@
+## [2026-10-01] — /email-preferences page; dead unsubscribe links repaired (hosting, NOT deployed)
+
+**Change:** new `email-preferences.html` (signed-in; reads the owner's emailPreferences; offers/newsletter default off, service switches, security always on; saves via `updateEmailPreferences` — "saved" only after the server confirms). `profile.html` redirects `#email-preferences` (the dead link in every footer already sent) to `/email-preferences`. `scripts/test-trust-integrity.js` §H (56/0). **Order:** after functions:updateEmailPreferences (hardened, 5b55e61) is live.
+
 ## [2026-10-01] — Operations Center: escaped failure reports, unknown is not green, 24-hour window (hosting, NOT deployed)
 
 **Why:** with getErrorLog now reading real client failure reports (port/password-reset-25m-on-shell-gate 8e29ab7), the page interpolated them RAW into innerHTML — a client-written message would execute in an administrator's browser; absent subsystem status rendered "● OK"; unknown stuck-payment / dead-letter counts rendered "Normal"/"Healthy".

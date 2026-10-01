@@ -142,5 +142,13 @@ ck('G4 the view asks for the last 24 h and shows the reference id', /cfErrorLog\
 ck('G5 unknown payment/event-bus metrics are not labelled Normal/Healthy', /!_known\(s\.payments\.stuck\) \? '<span>\? Unknown<\/span>'/.test(oc) && /!_known\(s\.eventBus\.dead_letter\)/.test(oc));
 ck('G6 ops-center self-updates (sw-register.js)', /src="\/sw-register\.js"/.test(oc));
 
+console.log('\nH. email preferences (hosting half of the unsubscribe fix)');
+const ep = src('email-preferences.html');
+ck('H1 /email-preferences exists, saves through updateEmailPreferences, self-updates', /sokoniCallable\('updateEmailPreferences'\)\(\{ prefs: prefs \}\)/.test(ep) && /src="sw-register\.js"/.test(ep));
+ck('H2 offers default OFF; security shown always-on and disabled', /marketing: false/.test(ep) && /<input type="checkbox" checked disabled><span>Security alerts/.test(ep));
+ck('H3 "saved" shown only after the server call resolves; failure says not saved', /\.then\(function \(\) \{[\s\S]{0,120}Your choices are saved/.test(ep) && /were not saved/.test(ep));
+ck('H4 every switch is labelled (label wraps the checkbox)', (ep.match(/<label class="row"><input type="checkbox"/g) || []).length === 6);
+ck('H5 old email links to profile.html#email-preferences are redirected to the real page', /location\.hash==="#email-preferences"\)location\.replace\("\/email-preferences"\)/.test(src('profile.html')));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Email choices — SOKONI</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Choose which emails SOKONI sends you.">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <meta name="theme-color" content="#71ff00">
+  <script src="security.js"></script>
+  <style>
+    :root { --bg:#050f05; --card:rgba(255,255,255,0.04); --line:rgba(255,255,255,0.14); --text:#f2f5f2; --sub:rgba(255,255,255,0.72); --brand:#71ff00; --err:#ff8a80; --ok:#9dff6b; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; padding:24px 16px; }
+    main { max-width:520px; margin:0 auto; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:24px 20px; }
+    h1 { font-size:1.35rem; margin:0 0 8px; }
+    p { color:var(--sub); line-height:1.6; margin:0 0 14px; font-size:.95rem; }
+    fieldset { border:1px solid var(--line); border-radius:12px; padding:8px 14px 12px; margin:14px 0; }
+    legend { font-weight:700; padding:0 6px; font-size:.9rem; }
+    label.row { display:flex; gap:12px; align-items:flex-start; padding:10px 0; min-height:44px; cursor:pointer; }
+    label.row input { width:22px; height:22px; margin-top:2px; flex-shrink:0; accent-color:#71ff00; }
+    .desc { display:block; color:var(--sub); font-size:.82rem; margin-top:2px; }
+    button { width:100%; margin-top:8px; min-height:48px; border:0; border-radius:12px; background:linear-gradient(135deg,#71ff00,#4fc800); color:#061006; font-weight:800; font-size:1rem; cursor:pointer; }
+    button[disabled] { opacity:.6; cursor:progress; }
+    input:focus-visible, button:focus-visible, a:focus-visible { outline:3px solid var(--brand); outline-offset:2px; }
+    .msg { margin-top:14px; padding:12px 14px; border-radius:12px; font-size:.92rem; display:none; }
+    .msg.err { display:block; background:rgba(255,82,82,0.1); border:1px solid rgba(255,138,128,0.5); color:var(--err); }
+    .msg.ok  { display:block; background:rgba(113,255,0,0.08); border:1px solid rgba(113,255,0,0.4); color:var(--ok); }
+    a { color:var(--brand); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Email choices</h1>
+  <p id="state" role="status" aria-live="polite">Checking your sign-in…</p>
+
+  <form id="prefsForm" style="display:none" novalidate>
+    <fieldset>
+      <legend>Offers and news</legend>
+      <label class="row"><input type="checkbox" id="pMarketing"><span>Offers and promotions from SOKONI<span class="desc">Off unless you turn it on. You can stop any time from the link in every offer email.</span></span></label>
+      <label class="row"><input type="checkbox" id="pNewsletter"><span>Newsletter<span class="desc">Occasional platform news.</span></span></label>
+    </fieldset>
+    <fieldset>
+      <legend>About your account and orders</legend>
+      <label class="row"><input type="checkbox" id="pOrders"><span>Orders and deliveries</span></label>
+      <label class="row"><input type="checkbox" id="pPayments"><span>Payments and receipts</span></label>
+      <label class="row"><input type="checkbox" id="pAccount"><span>Account notices</span></label>
+      <label class="row"><input type="checkbox" checked disabled><span>Security alerts<span class="desc">Always on — password changes and sign-in alerts protect your account.</span></span></label>
+    </fieldset>
+    <button id="saveBtn" type="submit">Save choices</button>
+    <div id="msg" class="msg" role="alert" aria-live="assertive"></div>
+  </form>
+  <p style="margin-top:16px;font-size:.85rem">Read how we use your data in our <a href="privacy.html">Privacy Policy</a>.</p>
+</main>
+
+<script type="module" src="firebase.js"></script>
+<script>
+(function () {
+  'use strict';
+  var FS = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+  var AU = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+  var ids = { marketing: 'pMarketing', newsletter: 'pNewsletter', orders: 'pOrders', payments: 'pPayments', account: 'pAccount' };
+  /* Defaults mirror the server: offers OFF until chosen; service mail ON. */
+  var defaults = { marketing: false, newsletter: false, orders: true, payments: true, account: true };
+  var state = document.getElementById('state'), form = document.getElementById('prefsForm'), msg = document.getElementById('msg'), btn = document.getElementById('saveBtn');
+  function show(kind, text) { msg.className = 'msg ' + kind; msg.textContent = text; }
+  function ready(cb) { var n = 0; (function w() { if (window.firebaseAuth && window.firebaseDB && typeof window.sokoniCallable === 'function') return cb(); if (++n > 100) { state.textContent = 'This page could not load. Please refresh.'; return; } setTimeout(w, 100); })(); }
+
+  ready(function () {
+    import(AU).then(function (A) {
+      A.onAuthStateChanged(window.firebaseAuth, function (user) {
+        if (!user) {
+          state.innerHTML = 'Please <a href="login.html?redirect=email-preferences.html">sign in</a> to manage your email choices.';
+          form.style.display = 'none';
+          return;
+        }
+        import(FS).then(function (F) {
+          return F.getDoc(F.doc(window.firebaseDB, 'emailPreferences', user.uid));
+        }).then(function (snap) {
+          var cur = Object.assign({}, defaults, snap && snap.exists() ? snap.data() : {});
+          Object.keys(ids).forEach(function (k) { document.getElementById(ids[k]).checked = cur[k] === true; });
+          state.textContent = 'Signed in as ' + (user.email || 'your account') + '.';
+          form.style.display = 'block';
+        }).catch(function () {
+          state.textContent = 'We could not read your current choices. Please refresh and try again.';
+        });
+      });
+    });
+  });
+
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var prefs = {};
+    Object.keys(ids).forEach(function (k) { prefs[k] = document.getElementById(ids[k]).checked; });
+    btn.disabled = true; btn.textContent = 'Saving…';
+    window.sokoniCallable('updateEmailPreferences')({ prefs: prefs }).then(function () {
+      btn.disabled = false; btn.textContent = 'Save choices';
+      show('ok', 'Your choices are saved.');
+    }).catch(function () {
+      btn.disabled = false; btn.textContent = 'Save choices';
+      show('err', 'Your choices were not saved. Check your connection and try again.');
+    });
+  });
+})();
+</script>
+<script src="sw-register.js" defer></script>
+</body>
+</html>
