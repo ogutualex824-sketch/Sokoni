@@ -43,8 +43,8 @@ const ledger = () => [...DOCS.keys()].filter((k) => k.indexOf('impactLedger/') =
   ck('C-1', r.outcome === 'completed' && p.status === 'completed' && p.receiptId === 'SKF-INVPLG_a' && typeof p.completedAt === 'number'
     && p.grossKES === 1000 && p.feeKES === 30 && p.netKES === 970 && p.providerReference === 'INVPLG_a', 'exact GROSS (= pledge = intent) → pledge completed with receiptId / completedAt / gross / fee / net', p);
   const L = DOCS.get('impactLedger/DON_INVPLG_a'), F = DOCS.get('impactLedger/DONFEE_INVPLG_a'), B = DOCS.get('impactBalance/current');
-  ck('C-2', L && L.type === 'donation' && L.credit === 1000 && L.balanceBefore === 5000 && L.balanceAfter === 6000 && F && F.type === 'fee' && F.debit === 30 && B.balance === 5970 && B.totalReceived === 1000 && B.totalFees === 30,
-    'ledger: +1000 donation credit, −30 IntaSend fee debit; balance 5000 → 5970 (what actually arrived)', { L, F, B });
+  ck('C-2', L && L.type === 'donation' && L.credit === 1000 && L.balanceBefore === 5000 && L.balanceAfter === 6000 && F && F.type === 'fee' && F.debit === 30 && B.balance === 5970 && B.totalReceived === 1000 && B.totalFees === 30 && B.verifiedBalance === 970,
+    'ledger: +1000 donation credit, −30 IntaSend fee debit; balance 5000 → 5970; verifiedBalance += 970 (the only spendable money)', { L, F, B });
   ck('C-3', DOCS.get('foundationStats/current').totalDonations === 1000 && DOCS.get('foundationStats/current').donationsCount === 1
     && DOCS.get('impactCampaigns/prog1').raised === 1200 && DOCS.get('impactCampaigns/prog1').donors === 3,
     'foundationStats + the programme: raised += GROSS (1000), donors += 1', { s: DOCS.get('foundationStats/current'), c: DOCS.get('impactCampaigns/prog1') });

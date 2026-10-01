@@ -113,7 +113,10 @@ async function settleDonationPayment(db, admin, o) {
         uid: null, campaignId: p.programmeId || null, orderId: null, paymentRef: providerRef,
         description: 'IntaSend charges on ' + receiptId, meta: { pledgeId, receiptId }, status: 'completed', createdAt: FV.serverTimestamp() });
     }
-    t.set(balRef, { balance: afterFee, totalReceived: FV.increment(gross), totalFees: FV.increment(charges), lastUpdated: FV.serverTimestamp() }, { merge: true });
+    /* verifiedBalance (sokoni-4d, 2026-10-01): the ONLY money Foundation payouts may spend — IntaSend-confirmed net.
+       Disbursement / refund code decrements it; available = verifiedBalance − reservedKES; a missing field = 0 = payouts
+       blocked (fail closed). Written ONLY here, in the same transaction as the credit it reflects. */
+    t.set(balRef, { balance: afterFee, verifiedBalance: FV.increment(gross - charges), totalReceived: FV.increment(gross), totalFees: FV.increment(charges), lastUpdated: FV.serverTimestamp() }, { merge: true });
     t.set(statsRef, { totalDonations: FV.increment(gross), donationsCount: FV.increment(1), updatedAt: FV.serverTimestamp() }, { merge: true });
     if (prog && prog.exists) t.set(progRef, { raised: FV.increment(gross), donors: FV.increment(1), updatedAt: FV.serverTimestamp() }, { merge: true });
     return { outcome: 'completed', receiptId, inactive };
