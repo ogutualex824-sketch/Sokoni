@@ -8926,7 +8926,6 @@ exports.webhookIntasend = onRequest(
               const _delDoc = db.collection("packageRequests").doc(_delRef);
               const _exists = await _delDoc.get();
               if (!_exists.exists) {
-                const _pin = String(Math.floor(1000 + Math.random() * 9000));
                 await _delDoc.set({
                   ref: _delRef, deliveryRef: _delRef, orderId: _pm.orderId, orderRef: apiRef,
                   buyerName:  _pm.buyerName || "", buyerPhone: payData.phone || "", buyerUid: payData.uid || null,
@@ -8950,11 +8949,11 @@ exports.webhookIntasend = onRequest(
                   source: "webhookIntasend",
                   createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
-                await db.collection("deliveryPins").doc(String(_pm.orderId)).set({
-                  orderId: String(_pm.orderId), deliveryRef: _delRef,
-                  proofPin: _pin, buyerUid: payData.uid || null,
-                  issuedAt: admin.firestore.FieldValue.serverTimestamp(),
-                }, { merge: true });
+                /* RETIRED 2026-10-01: a 4-digit Math.random `proofPin` was minted here and merged into deliveryPins. No
+                   hash of it was ever written, so it could never verify anything — while it sat beside the real PIN as
+                   a second, weaker "PIN" a fallback could surface. The buyer's ONE completion PIN is issued by the
+                   completion-PIN engine (shared/completion-pin.js) when the order becomes paid (onOrderStatusChange /
+                   onNewOrderCreated): 6 digits, crypto RNG, HMAC on the order, sealed for the buyer, 48 h. */
                 await db.collection("orders").doc(_pm.orderId).set({ deliveryRef: _delRef }, { merge: true });
               }
             } catch (dErr) {

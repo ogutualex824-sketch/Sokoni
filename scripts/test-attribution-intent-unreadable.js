@@ -28,6 +28,7 @@ const dbWith = (getImpl) => ({ collection: () => ({ doc: () => ({ get: getImpl }
   ck('A-4', /else if \(attribution\.intentReadFailed\) \{[\s\S]{0,900}commissionReviewQueue/.test(blk) && blk.indexOf('attribution.intentReadFailed') < blk.indexOf('_isBooking)'),
     'webhookIntasend withholds EVERY credit when the intent was unreadable, before the booking and seller branches');
   ck('A-5', !/type: "booking_earning"/.test(idx) && !/_\$\{apiRef\}_booking`/.test(idx), 'the payment-time booking credit (booking_earning) is gone from the webhook');
+  ck('A-6', !/Math\.floor\(1000 \+ Math\.random\(\) \* 9000\)/.test(idx) && !/proofPin: _pin/.test(idx), 'the webhook mints NO 4-digit Math.random proofPin (the one PIN is the engine\'s)');
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })();
