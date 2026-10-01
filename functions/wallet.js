@@ -1080,6 +1080,44 @@ exports.getPayoutHistory = onCall({ cors: true, enforceAppCheck: true }, async (
    lost the binding (a redeploy alone does not restore it on an update), so the Pay
    button failed. App Check + _requireAdmin remain the real auth — allUsers only lets
    the request REACH the code, exactly like adminOsDispatch. */
+/**
+ * SOKONI STORE payout guard (owner decision 2026-10-01) — store withdrawals are actioned
+ * by the store operator ONLY.
+ *
+ * A request is a STORE request when its sellerUid is the business the first-party chain
+ * resolves to (first-party-store-operator.resolveStoreChain: the one firstParty shop →
+ * its ownerId → that owner's one SOKONI_FIRST_PARTY_STORE business). The businessType
+ * label is only a cheap pre-filter so an ordinary payout costs one document read; the
+ * label alone never decides — a business carrying the label that the chain does NOT
+ * resolve to is not the store and passes as ordinary. If the label is present but the
+ * chain cannot be resolved at all, the request might be the store's, so it fails CLOSED.
+ *
+ * Ordinary payouts: returns without touching anything.
+ */
+async function _assertStorePayoutActor(db, request, payout, rid) {
+  const sellerUid = String((payout && payout.sellerUid) || '');
+  if (!sellerUid) return;
+  const bSnap = await db.collection('businesses').doc(sellerUid).get();
+  if (!bSnap.exists || (bSnap.data() || {}).businessType !== 'SOKONI_FIRST_PARTY_STORE') return;
+
+  const OP = require('./first-party-store-operator');
+  const chain = await OP.resolveStoreChain(db);
+  if (chain.ok && chain.businessId !== sellerUid) return;            /* labelled, but not the store */
+  const uid = request.auth && request.auth.uid;
+  if (chain.ok && await OP.isStoreOperatorFor(uid, chain.storeId, db)) return;
+
+  try {
+    await db.collection('firstPartyStoreAudit').add({
+      action: 'sokoniStore.payoutAction.refused', adminUid: uid || null, requestId: rid,
+      attemptedStatus: _san((request.data || {}).status, 30) || null, sellerUid,
+      reason: 'store-payout-operator-only', chainOk: chain.ok === true, createdAt: Timestamp.now(),
+    });
+  } catch (e) { console.error('[adminProcessPayout] store-guard audit write failed', e && e.message); }
+  console.warn('[adminProcessPayout] store payout action refused', { requestId: rid, uid: uid || null });
+  throw new HttpsError('permission-denied', 'Store withdrawals are approved by the store operator only.',
+    { reason: 'store-payout-operator-only' });
+}
+
 exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker: 'public', secrets: [INTASEND_KEY] }, async (request) => {
   _requireAuth(request);
   _requireAdmin(request);
@@ -1099,6 +1137,12 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker
   const reqSnap = await reqRef.get();
   if (!reqSnap.exists) throw new HttpsError('not-found', 'Payout request not found');
   const payout = reqSnap.data();
+
+  /* SOKONI STORE (owner decision 2026-10-01): a withdrawal from the store wallet is
+     approved, rejected or marked paid ONLY by the store's named operator. Every other
+     admin is refused here, before any branch below runs. Ordinary payouts pass through
+     unchanged — see _assertStorePayoutActor. */
+  await _assertStorePayoutActor(db, request, payout, rid);
 
   // ── PAID (manual mark, or fallback) ────────────────────────────────────────
   if (status === 'paid') {

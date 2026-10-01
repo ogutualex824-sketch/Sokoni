@@ -11470,6 +11470,8 @@ exports.sokoniStoreGetWallet       = _sokoniStore.sokoniStoreGetWallet;
 const _sokoniStorePayout = require('./first-party-store-payout');
 exports.sokoniStoreSetPayoutDestination = _sokoniStorePayout.sokoniStoreSetPayoutDestination;
 exports.sokoniStorePayoutRequest        = _sokoniStorePayout.sokoniStorePayoutRequest;
+exports.sokoniStoreListPayouts          = _sokoniStorePayout.sokoniStoreListPayouts;
+exports.sokoniStorePayoutIdentity       = _sokoniStorePayout.sokoniStorePayoutIdentity;
 
 /* ── MiniShop Campaign Engine v1.0 ──────────────────────────────────────── */
 const minishopCampaigns = require('./minishop-campaigns');

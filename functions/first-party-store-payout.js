@@ -247,6 +247,40 @@ _h.sokoniStorePayoutRequest = async (req, dbOverride) => {
            message: 'Submitted — under review. Funds arrive once an admin approves.' };
 };
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   STORE PAYOUT QUEUE — the operator's view of the store's withdrawals. Read-only; the
+   operator acts on them through the SAME adminProcessPayout every admin uses (which now
+   admits only the store operator for store requests). Not flag-gated: reading is safe.
+   ══════════════════════════════════════════════════════════════════════════════ */
+_h.sokoniStoreListPayouts = async (req, dbOverride) => {
+  const db = dbOverride || _db();
+  const gate = await OP.assertStoreOperator(req, db);
+  const snap = await db.collection('payoutRequests').where('sellerUid', '==', gate.businessId).limit(50).get();
+  const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : (v instanceof Date ? v.getTime() : null));
+  const payouts = snap.docs.map((d) => {
+    const x = d.data() || {};
+    return { id: d.id, amount: typeof x.amount === 'number' ? x.amount : null, status: x.status || null,
+             method: x.method || null, destinationLast3: last3(x.accountNumber), createdAt: ms(x.createdAt) };
+  }).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  return { ok: true, payouts };
+};
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   STORE PAYOUT IDENTITY — for the ADMIN payout queues (AdminOS / Super Admin), so they
+   can render store withdrawals read-only. Returns only the store's business id, resolved
+   by the chain (never the label). Admin/superAdmin claims required; nothing else is read.
+   ══════════════════════════════════════════════════════════════════════════════ */
+_h.sokoniStorePayoutIdentity = async (req, dbOverride) => {
+  const t = (req && req.auth && req.auth.token) || {};
+  if (!req || !req.auth || !req.auth.uid) throw _refuse('unauthenticated', 'unauthenticated', 'Sign in required.');
+  if (t.admin !== true && t.superAdmin !== true) throw _refuse('permission-denied', 'admin-only', 'Admin access required.');
+  const db = dbOverride || _db();
+  const chain = await OP.resolveStoreChain(db);
+  return chain.ok ? { ok: true, storeBusinessId: chain.businessId } : { ok: false, storeBusinessId: null, reason: chain.reason };
+};
+
+exports.sokoniStoreListPayouts         = onCall(OPTS, (req) => _h.sokoniStoreListPayouts(req));
+exports.sokoniStorePayoutIdentity      = onCall(OPTS, (req) => _h.sokoniStorePayoutIdentity(req));
 exports.sokoniStoreSetPayoutDestination = onCall(OPTS, (req) => _h.sokoniStoreSetPayoutDestination(req));
 exports.sokoniStorePayoutRequest        = onCall(OPTS, (req) => _h.sokoniStorePayoutRequest(req));
 
