@@ -409,6 +409,8 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
 <link rel="stylesheet" href="sokoni-admin-responsive.css">
 <!-- Failures view (shared with super-admin.html): client error log read through getErrorLog. -->
 <link rel="stylesheet" href="sokoni-admin-failures.css">
+<!-- Payout approvals view (shared with super-admin.html): adminListPendingSellerPayouts / adminApproveSellerPayout. -->
+<link rel="stylesheet" href="sokoni-admin-payout-approvals.css">
 </head>
 <body>
   <aside class="aos-sidebar" id="aosSidebar" aria-label="AdminOS sidebar">
@@ -449,6 +451,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       <button class="nav-item nav-child" data-section="comms" data-tab="push" data-label="Notifications" onclick="SokoniAOS.navigate('comms','push');_closeSidebar()"><span class="nav-icon">&#x1F514;</span><span class="nav-label">Notifications</span></button>
       <button class="nav-item" data-section="content" data-label="Content Management" onclick="SokoniAOS.navigate('content');_closeSidebar()"><span class="nav-icon">&#x1F4DD;</span><span class="nav-label">Content</span></button>
       <button class="nav-item" type="button" data-section="failures" data-label="Failures" onclick="SokoniAOS.navigate('failures');_closeSidebar()"><span class="nav-icon">&#x1F6A8;</span><span class="nav-label">Failures</span></button>
+      <button class="nav-item" type="button" data-section="payout-approvals" data-label="Payout approvals" onclick="SokoniAOS.navigate('payout-approvals');_closeSidebar()"><span class="nav-icon">&#x2705;</span><span class="nav-label">Payout approvals</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Intelligence</div>
@@ -751,6 +754,12 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
         <div id="failuresBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
+      <!-- Payout approvals: ONE module (sokoni-admin-payout-approvals.js) shared with super-admin.html.
+           Owner decision: a seller payout is marked ready only after an admin approves it. -->
+      <div class="aos-panel" id="panel-payout-approvals" hidden>
+        <div id="payoutApprovalsBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
       <!-- Hub Registry panel -->
       <div class="aos-panel" id="panel-hubs" hidden>
         <div class="panel-toolbar">
@@ -790,6 +799,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
 
     </div>
   </main>
+  <script src="sokoni-admin-payout-approvals.js"></script>
   <script src="sokoni-admin-failures.js"></script>
   <script src="sokoni-aos.js"></script>
   <script>

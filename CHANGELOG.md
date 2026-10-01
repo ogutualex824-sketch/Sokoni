@@ -1,3 +1,51 @@
+## [2026-10-01] - AdminOS + Super Admin: "Payout approvals" view — ONE shared module, built, browser certification QUEUED, NOT deployed
+
+**Branch `hosting/admin-failures-on-chain` (on top of the Failures view and `6f0a576`).** Static hosting only. Merged
+by sokoni-aa. **Reads `adminListPendingSellerPayouts` / `adminApproveSellerPayout` — deploy after those functions.**
+
+**Owner decision.** A seller payout may be marked ready only after an ADMIN approves it. This view is that approval
+surface; the server stays the authority.
+
+**Summary.**
+- `sokoni-admin-payout-approvals.js` exposes `window.SokoniAdminPayoutApprovals.mount(hostEl, {console, call})` — the
+  same layout-owner contract as Failures (AdminOS passes `_call`; Super Admin a wrapper over `_fns.httpsCallable`).
+  It reads `adminListPendingSellerPayouts({collection?, limit:100})` and renders per-collection evidence
+  (packageRequests / deliveries / orders), a collection filter, Refresh, a truncation note and a table (collection,
+  item id, status, short seller uid, amount, completed at, Approve) inside an `overflow-x:auto` scroller.
+- Evidence vocabulary, never collapsed: a collection named in `unreadable` reads **"Could not be read"** and the
+  headline never says "nothing pending" for it; `not-found`/`unavailable`/`internal` → **"Payout approvals not
+  available yet"**; list `permission-denied` → **"You do not have access"**; empty → **"No payouts awaiting
+  approval"**. `amountKES: null` → **"—"**, never 0.
+- Approve: an inline confirmation step (Super Admin has no `SK.dialog`, so one inline flow serves both consoles) with
+  a labelled optional note (`maxlength=300`). Confirm disables the row (and Refresh) while in flight; **"Approved"**
+  appears ONLY after `adminApproveSellerPayout` resolves with `ok:true`; `already:true` → **"Already approved"**; a
+  response without `ok:true` is not success. Errors carry their meaning: self-approval (permission-denied whose
+  message names self) → **"You cannot approve a payout to yourself"**; other permission-denied → no permission;
+  `failed-precondition` → **"Not delivered yet"**; not-deployed codes → not available yet.
+- All server strings rendered with `textContent`/`setAttribute` only. 44px targets at <=768px, visible focus,
+  `role="status"`/`aria-live` for headline and per-row results, Escape cancels the confirmation.
+- AdminOS: one `Payout approvals` button (icon + `.nav-label`, inline `onclick` like Failures) directly after Failures
+  in the Operations group, `#panel-payout-approvals`, `"payout-approvals"` registered in the EXISTING `_loadPanel`
+  router. Super Admin: one nav button after Failures (inline `SA.nav('payout-approvals')`), native
+  `#panel-payout-approvals`, `SA.nav` routing. No hash-on-load handler. Note: `_parseRoute` accepts `[a-z]+` only,
+  so `admin-os.html#payout-approvals` on load falls back to the dashboard (unchanged behaviour, by contract).
+
+**Files.** `sokoni-admin-payout-approvals.js` (new), `sokoni-admin-payout-approvals.css` (new), `admin-os.html`,
+`sokoni-aos.js`, `super-admin.html`, `scripts/test-admin-payout-approvals.js` (new), `CHANGELOG.md`.
+
+**Functions/rules/DB: none in this slice.** API: consumes the admin-only, App Check callables
+`adminListPendingSellerPayouts` and `adminApproveSellerPayout` (NOT deployed yet). Security: the only write is the
+server callable; no optimistic success; self-approval refused server-side and explained client-side. Breaking: none.
+
+**Evidence.** `node scripts/test-admin-payout-approvals.js` — 43/0 (vm + fake DOM, innerHTML serialised raw:
+malicious sellerUid/id inert, unreadable/partial wording, three not-deployed codes, empty, denied, malformed, null
+amount, filter + Refresh, confirmation required, in-flight disable + no double submit, success only after resolve,
+already, non-ok response, self-approval, non-admin, failed-precondition, unavailable; static wiring). Sabotage (temp
+copies outside the repo): success-before-resolve → 1 FAIL (exit 1); `h()` via innerHTML → 2 FAIL (exit 1).
+`test-admin-failures` 37/0, `test-admin-nav-context` 3/0, `after-superadmin-link-gating` 13/0,
+`verify-admin-markup` intact, `audit-duplicate-ids` 90 = baseline 90, no regression. **Pending:**
+`predeploy-syntax-gate.js` and browser suites (not run — low RAM, concurrent deploy).
+
 ## [2026-10-01] - AdminOS + Super Admin: "Failures" view (client error log) — ONE shared module, built, browser certification QUEUED, NOT deployed
 
 **Branch `hosting/admin-failures-on-chain`, built on `8a738e5` (`origin/hosting/chain-on-3e8dd53`).** Static hosting

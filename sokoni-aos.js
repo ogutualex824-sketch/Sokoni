@@ -228,6 +228,7 @@ window.SokoniAOS = (() => {
       hubs:          () => _loadHubs(),
       workflows:     () => _loadWorkflows(),
       failures:      () => _loadFailures(),
+      "payout-approvals": () => _loadPayoutApprovals(),
     };
     loaders[s]?.();
   }
@@ -2413,6 +2414,20 @@ window.SokoniAOS = (() => {
     }
     /* getErrorLog is not in _ADMIN_OS_OPS, so _call reaches it directly by name. */
     window.SokoniAdminFailures.mount(body, { console: "aos", call: (name, data) => _call(name, data) });
+  }
+
+  /* Payout approvals. ONE implementation (sokoni-admin-payout-approvals.js) shared with
+     super-admin.html. The server is the authority: the module shows "Approved" only after
+     adminApproveSellerPayout resolves. */
+  function _loadPayoutApprovals() {
+    const body = document.getElementById("payoutApprovalsBody");
+    if (!body) return;
+    if (!window.SokoniAdminPayoutApprovals) {
+      body.innerHTML = _emptyMsg("The Payout approvals module did not load. Reload the page to try again.");
+      return;
+    }
+    /* Neither callable is in _ADMIN_OS_OPS, so _call reaches them directly by name. */
+    window.SokoniAdminPayoutApprovals.mount(body, { console: "aos", call: (name, data) => _call(name, data) });
   }
 
   async function _loadHubs() {
