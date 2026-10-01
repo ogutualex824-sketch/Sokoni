@@ -8489,6 +8489,17 @@ exports.webhookIntasend = onRequest(
     if (["FAILED", "CANCELLED", "EXPIRED", "REJECTED", "TIMEOUT"].includes(state)) {
       /* SOKONI Foundation donation (owner 2026-10-01): a failed / abandoned donation marks its pledge 'failed' — never
          a credit. Handled in isolation via the server-minted intent (foundation-donation-settle.js). */
+      /* Financial partner plan / promotion purchase that did not complete → intent failed, nothing granted. */
+      const _ceFail = await require('./commercial-purchase-settle').settleCommercialPayment(db, admin, {
+        apiRef, intentRef: existing.intentRef || apiRef, state,
+        gross:    invoice.value    != null ? invoice.value    : req.body?.value,
+        currency: invoice.currency || req.body?.currency || null,
+        payerUid: existing.uid || null,
+      });
+      if (_ceFail) {
+        await payRef.update({ status: "FAILED", intasendState: state, updatedAt: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+        res.status(200).send("OK"); return;
+      }
       const _donFail = await require('./foundation-donation-settle').settleDonationPayment(db, admin, {
         apiRef, intentRef: existing.intentRef || apiRef, state,
         gross:    invoice.value    != null ? invoice.value    : req.body?.value,
@@ -8516,6 +8527,14 @@ exports.webhookIntasend = onRequest(
          pledge == intent) it completes the pledge and writes impactLedger / impactBalance / foundationStats / the
          programme's raised + donors in one transaction, idempotent on the provider reference; otherwise the pledge goes
          to 'review'. Either way it returns here — a donation never reaches wallet, commission or order code. */
+      /* Financial partner plan / promotion purchase (owner 2026-10-01): fulfilled ONLY by commercial-entitlements.js,
+         on the GROSS IntaSend confirmed, idempotent on the intent ref; never a wallet, commission or order effect. */
+      if (await require('./commercial-purchase-settle').settleCommercialPayment(db, admin, {
+        apiRef, intentRef: existing.intentRef || apiRef, state,
+        gross:    invoice.value    != null ? invoice.value    : req.body?.value,
+        currency: invoice.currency || req.body?.currency || null,
+        payerUid: existing.uid || null,
+      })) { res.status(200).send("OK"); return; }
       if (await require('./foundation-donation-settle').settleDonationPayment(db, admin, {
         apiRef, intentRef: existing.intentRef || apiRef, state,
         gross:    invoice.value    != null ? invoice.value    : req.body?.value,
