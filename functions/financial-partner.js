@@ -434,8 +434,10 @@ async function publicProfile(req, d) {
     partnerUid: d.partnerUid, name: p.name || null, institutionType: p.institutionType || null, county: p.county || null,
     profile: { description: p.description || null, services: Array.isArray(p.services) ? p.services : [], county: p.county || null, website: p.website || null, businessEmail: p.businessEmail || null, businessPhone: p.businessPhone || null,
       branches: (w.profile && Array.isArray(w.profile.branches)) ? w.profile.branches : [], hours: (w.profile && w.profile.hours) || null },
-    /* Only an administrator's verdict is shown as verified; everything else is self-declared. */
-    registration: reg.status === 'verified' ? { status: 'verified', regulator: reg.regulator, registrationNumber: reg.registrationNumber } : { status: 'self_declared', regulator: reg.regulator || null },
+    /* ALWAYS self-declared in public. An admin review is SOKONI checking paperwork, not a regulator
+       (CBK/SASRA/IRA/CMA) confirming a licence; showing it publicly as 'verified' would misrepresent it.
+       Whether to show a separate 'reviewed by SOKONI' marker is an OWNER decision (raised 2026-10-01). */
+    registration: { status: 'self_declared', regulator: reg.regulator || null },
     products: prods.docs.map(productRow),
   };
 }

@@ -117,7 +117,7 @@ const keys = (pre) => [...F.db._store.keys()].filter((k) => k.startsWith(pre));
   const d5 = await call('admin1', { op: 'adminListRegistrations' }, { admin: true });
   const d6 = await call('admin1', { op: 'adminReviewRegistration', partnerUid: 'saccoA', verdict: 'verified' }, { admin: true });
   const d7 = await call('anyone', { op: 'publicProfile', partnerUid: 'saccoA' });
-  ck('D3 partner cannot self-verify; admin lists the queue and verifies; public profile now verified', !d4.ok && d4.code === 'permission-denied' && d5.ok && d5.v.rows.length === 1 && d6.ok && d7.ok && d7.v.registration.status === 'verified' && keys('adminActions/').length === 1, { d4, d5, d6, d7: d7.v && d7.v.registration });
+  ck('D3 partner cannot self-verify; admin lists the queue and reviews; the PUBLIC profile still says self_declared (a paperwork review is not a licence confirmation)', !d4.ok && d4.code === 'permission-denied' && d5.ok && d5.v.rows.length === 1 && d6.ok && (await F.db.collection('financialPartners').doc('saccoA').get()).data().registration.status === 'verified' && d7.ok && d7.v.registration.status === 'self_declared' && !('registrationNumber' in d7.v.registration) && keys('adminActions/').length === 1, { d4, d5, d6, d7: d7.v && d7.v.registration });
   const d8 = await call('admin1', { op: 'adminReviewRegistration', partnerUid: 'saccoA', verdict: 'rejected', note: 'x' }, { admin: true });
   ck('D4 a second review of a decided registration is refused', !d8.ok && d8.code === 'failed-precondition', d8);
   const d9 = await call('anyone', { op: 'publicProfile', partnerUid: 'pend' });
