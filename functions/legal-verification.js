@@ -40,10 +40,14 @@
  * by default — no interval is invented here. Staleness is evaluated at READ time, so a verification
  * cannot silently stay current by nobody touching it.
  *
- * BOOKING/PAYMENT IS NOT CONNECTED IN THIS SLICE. An eligible advocate is linked to a canonical
- * providers/{uid} identity and a (inactive) consultation service, but the canonical booking gate
- * refuses every Legal booking (LEGAL_BOOKING_NOT_ENABLED) until the payment slice maps the legal
- * commission lane (provider-hub) and flips LEGAL_BOOKING_ENABLED — one reviewed change.
+ * BOOKING/PAYMENT — CONNECTED by Legal Hub L4 (owner brief 2026-10-03), the "one reviewed change" this header
+ * reserved: LEGAL_BOOKING_ENABLED flips, and the projection opens the canonical identity + consultation service
+ * ONLY while eligibility() holds. Money then runs on the shared rails and nowhere else:
+ *   bookingCreateService → providerBookings (server price) → createPaymentIntent (service_booking) → IntaSend →
+ *   verified webhook → paid_held → completion PIN → settleOnPinRelease → ONE calculateCommission → wallet.
+ * Commission lane: none added. provider-hub sends Legal down the generic provider lane = RATES.services 5%, which
+ * equals RATES.legal (agreed with sokoni-2f, commission authority); commission-config is untouched.
+ * The eligibility predicate itself is UNCHANGED (owner-locked b24b052).
  */
 const { HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
@@ -72,7 +76,7 @@ const EAT_MS = 3 * 3600 * 1000;   /* Africa/Nairobi, no DST */
 
 /* Legal booking through the canonical engine stays OFF until the payment slice. Read through
    module.exports so the flip is one reviewed edit (and a test can exercise the eligible branch). */
-const LEGAL_BOOKING_ENABLED = false;
+const LEGAL_BOOKING_ENABLED = true;   /* L4 2026-10-03 — gated per advocate by eligibility(); see header */
 function bookingEnabled() { return module.exports.LEGAL_BOOKING_ENABLED === true; }
 
 /* ── pure helpers ──────────────────────────────────────────────────────────────────────── */
@@ -231,17 +235,25 @@ function _project(txn, db, uid, lp, snaps, now, opts) {
       uid, providerId: uid, legalProviderId: uid, provisionedBy: PROV_BY,
       name: lp.name || '', businessName: lp.firmName || lp.name || '', category: 'legal', hubType: 'legal',
       status: pState, suspended: pState === 'suspended',
-      /* Not discoverable or bookable through the generic engine in this slice (payment not connected). */
-      searchable: false, isPublic: false, available: false, acceptsBookings: false,
+      /* L4: discoverable + bookable through the generic engine EXACTLY while the ONE predicate holds. A lapsed LSK
+         check, an admin suspension or a quarantine re-projects these to false (the booking gate refuses as well). */
+      searchable: el.bookable, isPublic: el.bookable, available: el.bookable, acceptsBookings: el.bookable,
+      entityType: lp.entityType === 'firm' ? 'firm' : 'advocate',
       legalVerification: { bookable: el.bookable, code: el.code },
       updatedAt: _ts(),
     }, prov ? {} : { createdAt: _ts() }), { merge: true });
+    /* The consultation rate card. Active only while eligible AND priced: a KES 0 consultation would be a booking
+       with nothing to pay and nothing to settle, so it stays off until the advocate sets a fee. */
+    const priceCents = Math.max(0, Math.round((Number(lp.consultationFee) || 0) * 100));
     if (!svcS.exists) {
       txn.set(db.collection('providerServices').doc('legal_consult_' + uid), {
-        providerId: uid, name: 'Legal consultation', category: 'legal', legalConsultation: true,
-        price: Math.max(0, Math.round((Number(lp.consultationFee) || 0) * 100)), currency: 'KES',
-        durationMins: 60, active: false, createdBy: PROV_BY, createdAt: _ts(), updatedAt: _ts(),
+        providerId: uid, name: 'Legal consultation', category: 'legal', legalConsultation: true, priceType: 'fixed',
+        price: priceCents, currency: 'KES',
+        durationMins: 60, active: el.bookable && priceCents > 0, createdBy: PROV_BY, createdAt: _ts(), updatedAt: _ts(),
       });
+    } else if ((svcS.data() || {}).createdBy === PROV_BY) {
+      txn.set(db.collection('providerServices').doc('legal_consult_' + uid),
+        { active: el.bookable && Number((svcS.data() || {}).price) > 0, updatedAt: _ts() }, { merge: true });
     }
   }
 
@@ -253,6 +265,7 @@ function _project(txn, db, uid, lp, snaps, now, opts) {
       name: lp.name || '', firm: lp.firmName || '', specialty: (lp.specializations || []).join(', '),
       practice: (lp.specializations || [])[0] || 'other', location: lp.county || lp.location || '', city: lp.county || '',
       description: _san(lp.bio, 300), languages: lp.languages || [], isOnline: lp.isOnline === true,
+      practiceAreas: require('./shared/legal-taxonomy').areasOfProfile(lp), entityType: lp.entityType === 'firm' ? 'firm' : 'advocate',
       sokoniVerified: true, lskVerified: pv.lskVerified, lskPractisingYear: pv.lskPractisingYear,
       projectedBy: PROV_BY, status: 'active', searchable: true, updatedAt: _ts(),
     });

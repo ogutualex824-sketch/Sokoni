@@ -225,15 +225,21 @@ async function seedAdv(uid, verification, over) {
   const gate = async (u) => (await AV.loadCalendar({ providerId: u })).bookable;
   for (const u of ['advA', 'advB', 'advC', 'advD', 'advE', 'advF', 'advH']) { const g = await gate(u); ck(`${u}: refused by the canonical availability authority even with provider flags forced bookable`, !g.ok && /^LEGAL_/.test(g.code), g.code); }
   ck('a self-declared "Lawyer" provider with no Legal record is not bookable', (await gate('lawyerX')).code === 'LEGAL_NOT_REGISTERED', (await gate('lawyerX')).code);
-  ck('the fully eligible advocate is refused too while Legal payment is not connected', (await gate('advG')).code === 'LEGAL_BOOKING_NOT_ENABLED', (await gate('advG')).code);
+  /* Legal Hub L4 (2026-10-03): payment is connected (canonical service_booking → IntaSend → PIN settlement), so the
+     reserved flip happened. The eligible advocate is now bookable; every non-eligible state above is still refused. */
+  ck('the fully eligible advocate is bookable now that Legal payment is connected (L4)', (await gate('advG')).ok === true, (await gate('advG')).code);
   ck('a plumber is unaffected (no Legal objection)', (await gate('plumb1')).ok === true, (await gate('plumb1')).code);
   LV.LEGAL_BOOKING_ENABLED = true;
   const opened = [];
   for (const u of Object.keys(matrix)) if ((await gate(u)).ok) opened.push(u);
-  LV.LEGAL_BOOKING_ENABLED = false;
+  LV.LEGAL_BOOKING_ENABLED = true;   /* L4: the shipped value */
   ck('with Legal booking switched on (payment slice), ONLY the fully eligible state reaches the booking path', opened.length === 1 && opened[0] === 'advG', opened);
-  ck('the consultation request refuses every non-eligible advocate and accepts the eligible one', await code(run(LH.bookLegalConsultation)(req('b1', { providerId: 'advA', dateTime: new Date(NOW + 2 * 86400000).toISOString(), matter: 'x', idempotencyKey: 'k1' }))) === 'not-found' &&
-    !!(await run(LH.bookLegalConsultation)(req('b1', { providerId: 'adv1', dateTime: new Date(NOW + 2 * 86400000).toISOString(), matter: 'x', idempotencyKey: 'k2' }))).consultationId);
+  /* L4: the money-less Legal-only engine is retired — it refuses EVERY advocate (eligible or not) and writes nothing;
+     consultations are canonical bookings (scripts/test-legal-booking-chain.js). */
+  const consultsBefore = (await db.collection('legalConsultations').get()).size;
+  ck('the retired consultation request refuses non-eligible AND eligible advocates and writes nothing (L4)', await code(run(LH.bookLegalConsultation)(req('b1', { providerId: 'advA', dateTime: new Date(NOW + 2 * 86400000).toISOString(), matter: 'x', idempotencyKey: 'k1' }))) === 'LEGAL_BOOKING_MOVED' &&
+    await code(run(LH.bookLegalConsultation)(req('b1', { providerId: 'adv1', dateTime: new Date(NOW + 2 * 86400000).toISOString(), matter: 'x', idempotencyKey: 'k2' }))) === 'LEGAL_BOOKING_MOVED' &&
+    (await db.collection('legalConsultations').get()).size === consultsBefore);
 
   say('\n── re-verification · suspension · identity conflicts ──');
   const rc = await H.legalAdminRequestRecheck(req('adm1', { uid: 'adv1', reason: 'New practising year' }, ADM));
@@ -256,7 +262,7 @@ async function seedAdv(uid, verification, over) {
   await db.doc('legalProviders/' + TMM).set({ providerId: TMM, uid: TMM, name: 'T.M.M & Partners Advocates', firmName: 'T.M.M & Partners Advocates', specializations: ['other'], licenseNumber: '', status: 'active', verified: false, rating: 0, onboardedBy: 'scripts/onboard-batch2.js' });
   await db.doc('lawyers/' + TMM).set({ name: 'T.M.M & Partners Advocates', status: 'active', verified: false, searchable: true, onboardedBy: 'scripts/onboard-batch2.js' });
   await db.doc('users/' + TMM).set({ hasLegalProfile: true });
-  ck('T.M.M is never listed, never profiled, never requestable (legacy "active" is not an approval)', !(await run(LH.getLegalProviders)(req(null, {}))).providers.some((p) => p.providerId === TMM) && await code(run(LH.getLegalProvider)(req(null, { providerId: TMM }))) === 'not-found' && await code(run(LH.bookLegalConsultation)(req('b1', { providerId: TMM, dateTime: new Date(NOW + 2 * 86400000).toISOString(), matter: 'x', idempotencyKey: 'k3' }))) === 'not-found');
+  ck('T.M.M is never listed, never profiled, never requestable (legacy "active" is not an approval)', !(await run(LH.getLegalProviders)(req(null, {}))).providers.some((p) => p.providerId === TMM) && await code(run(LH.getLegalProvider)(req(null, { providerId: TMM }))) === 'not-found' && await code(run(LH.bookLegalConsultation)(req('b1', { providerId: TMM, dateTime: new Date(NOW + 2 * 86400000).toISOString(), matter: 'x', idempotencyKey: 'k3' }))) === 'LEGAL_BOOKING_MOVED' && (await AV.loadCalendar({ providerId: TMM })).bookable.ok === false);
   ck('…never bookable at the canonical gate', (await LV.bookingGate(db, TMM, { category: 'legal' })) === 'LEGAL_ADMIN_PENDING');
   ck('…its legacy directory card never appears in site search (title requires the projection)', /col: 'lawyers'[\s\S]{0,400}title: d => \(d\.projectedBy === 'legal-verification' && d\.name\) \|\| ''/.test(fs.readFileSync(Path.join(ROOT, 'sokoni-firestore-search.js'), 'utf8')));
   const lst = await H.legalAdminList(req('adm1', {}, ADM));

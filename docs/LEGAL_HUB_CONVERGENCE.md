@@ -36,9 +36,9 @@ The owner locked verification on 2026-09-27 (`b24b052`, frozen). A provider is b
 | Law-firm application | none (free-text `firmName`) | same record, `entityType:'firm'`, typed `law_firm` | **FIXED L2** (server) |
 | Applicant profile / needs-info | no update path existed (registration stranded a provider) | `legalDispatch` ops `legalMyProfile` / `legalUpdateProfile` / `legalResubmitApplication` | **FIXED L2** (server) |
 | Approval / LSK | AdminOS `applicationDecide` + `legalAdmin*` ops | unchanged (frozen) | PRE-EXISTING, canonical |
-| Booking | `bookLegalConsultation` → `legalConsultations`; no money; bypasses `bookingGate` | `bookingCreateService` → `providerBookings` | OPEN (L4) |
+| Booking | `bookLegalConsultation` → `legalConsultations`; no money; bypassed `bookingGate` | `bookingCreateService` → `providerBookings` | **FIXED L4** (server): the old engine refuses (`LEGAL_BOOKING_MOVED`) and writes nothing |
 | Payment | none | `createPaymentIntent` → IntaSend | OPEN (L4) |
-| PIN / settlement / wallet | none for Legal; the shared pipeline is hub-agnostic | `settleOnPinRelease` → `_settlementWrites` | OPEN (L4, flag flip) |
+| PIN / settlement / wallet | none for Legal; the shared pipeline is hub-agnostic | `settleOnPinRelease` → `_settlementWrites` | **PROVEN L4** in-process: KES 5,000 → 250 commission → 4,750 to `wallets/{uid}`, once |
 | Commission | client-side 5% stored only in localStorage, plus an off-platform Paybill; the Firestore write is denied | generic `services` 5% lane (2f confirmed); no `commission-config` change | OPEN (L4: retire the client path) |
 | Availability | Pro Dashboard writes `availabilityStatus` (denied by rules) | `ent-availability` / `availability.js` callables | OPEN (L5) |
 | Reviews | `rateLegalProvider` on `legalConsultations` | `reputation.repSubmitReview` on a completed `providerBooking` | OPEN (L4) |
@@ -70,6 +70,34 @@ There is ONE identity record (`legalProviders/{uid}`) and ONE review item (`appl
 - **Public projection:**
   - An unrated provider gets `rating:null` (never 0, never a default 5).
   - It never carries the licence number or phone.
+
+## L4 — Legal consultation on the canonical rails (server)
+
+- `LEGAL_BOOKING_ENABLED = true`. This is the "one reviewed change" that b24b052's header reserved. The eligibility predicate is unchanged.
+- **The projection opens booking exactly while eligible.** `providers/{uid}` has `acceptsBookings / searchable / isPublic / available = eligibility().bookable`. The `legal_consult_{uid}` rate card is active only while eligible **and** priced (fee > 0). A lapsed LSK check, a suspension or a quarantine closes all of it.
+- **A fee edit** (`legalUpdateProfile`) re-prices the rate card server-side, in cents. It never opens booking by itself.
+- **Commission:** no Legal lane. The generic provider lane is `RATES.services` 5% (= `RATES.legal`). sokoni-2f agreed. `commission-config` is untouched.
+- **Retired:** `bookLegalConsultation` refuses with `LEGAL_BOOKING_MOVED` and writes nothing. The history reads stay.
+- **Proven** (`test-legal-booking-chain.js` 9/0, sabotage 5/5):
+  - approval alone stays closed;
+  - approval + LSK Active opens booking;
+  - the booking uses the server price, ignoring the client price;
+  - PIN settlement happens once, with a no-op on the second release;
+  - suspension closes it.
+- **Fixture, not proof:** `paid_held` stands in for the verified IntaSend webhook's effect. `createPaymentIntent(service_booking)` plus the webhook for a Legal booking is **UNPROVEN** here.
+- `test-legal-verification.js`: 3 rows moved from the old contract (booking closed; the money-less engine accepting eligible advocates) to the new one. The row count is unchanged (93 server rows pass).
+
+### Deploy set and order (when authorized)
+
+`legal-verification.js` is bundled by **providerDispatch** (via `ent-availability`, the booking gate), **adminOsDispatch** (LSK ops), **applicationLifecycle** (the approval projection) and the Legal callables. The flip takes effect only where the new file is deployed.
+
+1. **Functions:**
+   - providerDispatch, inside sokoni-5b's ONE provider-functions release (carries this file);
+   - adminOsDispatch, under the rebuild rule agreed with 5b (live archive + both hunks);
+   - applicationLifecycle;
+   - registerLegalProvider, getLegalProviders, getLegalProvider, bookLegalConsultation (now a refusal), legalDispatch.
+2. **Hosting L3, immediately after.** Live `legal-hub.html` still calls `bookLegalConsultation`. Between the two deploys it shows the honest "refresh and book again" refusal. Never ship hosting first: the new booking flow needs the flip.
+3. **Re-projection:** an advocate approved before L4 keeps `acceptsBookings:false` until the next projection (an LSK re-record or an admin decision). Re-project eligible advocates with `applicationReconcile` or a recorded re-check after deploy. Do not bulk-edit `providers`.
 
 ## Open — owner decisions
 

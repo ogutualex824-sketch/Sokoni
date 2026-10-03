@@ -1,3 +1,22 @@
+## [2026-10-03] — Legal Hub L4 (server): Legal consultations are canonical provider bookings (IntaSend → hold → PIN → one 5% → wallet) — NOT deployed
+
+- **functions/legal-verification.js:**
+  - `LEGAL_BOOKING_ENABLED = true`, the reserved one reviewed change. The eligibility predicate is unchanged.
+  - The projection sets providers/{uid} acceptsBookings / searchable / isPublic / available = eligibility().bookable.
+  - The legal_consult_{uid} rate card is active only while eligible and priced (priceType fixed).
+  - The lawyers card carries practiceAreas and entityType.
+- **functions/legal-hub.js:**
+  - bookLegalConsultation is RETIRED: it refuses with LEGAL_BOOKING_MOVED and writes nothing.
+  - legalUpdateProfile re-prices the consultation rate card on a fee change. All reads happen before writes in the txn.
+- **No commission change.** The generic provider lane is RATES.services 5%, agreed with sokoni-2f.
+- **Tests:**
+  - test-legal-booking-chain 9/0 (BASE=9cab901 fails); sabotage-legal-booking 5/5.
+  - test-legal-verification: 3 rows moved to the new contract; 93 server rows pass.
+  - test-legal-profile 14/0; test-booking-provider-gate 8/0.
+- **UNPROVEN:** createPaymentIntent + IntaSend webhook for a Legal booking (paid_held is a fixture here); browser; emulator.
+- **Deploy set:** providerDispatch (5b release), adminOsDispatch (rebuild rule), applicationLifecycle, and the Legal callables + legalDispatch, THEN hosting L3. Never hosting first. Then re-project eligible advocates.
+- **Breaking:** the live legal-hub.html booking button gets an honest refusal until hosting L3 ships.
+
 ## [2026-10-03] — Legal Hub L1 + L2 (server): ONE Legal taxonomy; lawyer vs law-firm applications; self-service profile and needs-info resubmit — NOT deployed
 
 - **functions/shared/legal-taxonomy.js (new):** THE taxonomy, six groups × five services exactly as the owner brief.

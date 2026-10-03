@@ -195,58 +195,14 @@ exports.getLegalProvider = onCall(CF_OPTS, async (req) => {
 });
 
 /* ── 5. bookLegalConsultation ── */
+/* RETIRED by Legal Hub L4 (2026-10-03). It wrote legalConsultations with NO payment, NO hold, NO PIN and NO
+   settlement, and it skipped the canonical booking gate. Legal consultations are now canonical provider bookings:
+   providerDispatch → bookingCreateService (providerId = the advocate, serviceId = legal_consult_{uid}) → IntaSend.
+   The export stays so a cached client gets a plain answer; it writes NOTHING. History (getMyLegalConsultations,
+   getProviderConsultations) stays readable. */
 exports.bookLegalConsultation = onCall(CF_OPTS, async (req) => {
-  const uid = requireAuth(req);
-  const { providerId, dateTime, matter, isOnline, idempotencyKey } = req.data;
-  if (!providerId || !dateTime || !matter || !idempotencyKey) {
-    throw new HttpsError('invalid-argument', 'providerId, dateTime, matter, idempotencyKey required');
-  }
-
-  if (new Date(dateTime) < new Date()) throw new HttpsError('invalid-argument', 'dateTime must be in the future');
-
-  /* ── IDEMPOTENT booking ──
-     Previously: read-then-batch. The idempotency guard was a get() at one point and a
-     batch.set() at another, and the consultation used an AUTO-ID .doc(). Two concurrent taps
-     (or a retry racing the first) could both read "not exists" and both create a consultation
-     with a DIFFERENT id — a duplicate booking, plus a double totalConsultations increment.
-
-     Now the consultation id is DERIVED from the idempotencyKey, so the same key can only ever
-     target one document, and the provider read + validation + create + increment + idempotency
-     marker all happen in ONE transaction whose existence check makes a repeat a no-op. (The
-     provider is read only inside the transaction — one Firestore read, not two.) */
-  const consultId  = 'lc_' + String(idempotencyKey).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 100);
-  const consultRef = db().collection('legalConsultations').doc(consultId);
-  const provRef    = db().collection('legalProviders').doc(providerId);
-  const idemRef    = db().collection('legalConsultIdempotency').doc(idempotencyKey);
-
-  const result = await db().runTransaction(async (t) => {
-    const [idemSnap, consultSnap, pSnap] = await Promise.all([
-      t.get(idemRef), t.get(consultRef), t.get(provRef),
-    ]);
-    if (idemSnap.exists) return { consultationId: idemSnap.data().consultationId, idempotent: true };
-    if (consultSnap.exists) return { consultationId: consultId, idempotent: true };
-    /* The ONE predicate — admin-approved AND LSK-verified AND current (CHANGELOG 220). */
-    if (!pSnap.exists || !LV.eligibility(pSnap.data(), Date.now()).bookable) throw new HttpsError('not-found', 'Provider not found');
-    const prov = pSnap.data();
-
-    t.set(consultRef, {
-      consultationId: consultId, clientUid: uid, providerId,
-      providerName: prov.name, firmName: prov.firmName,
-      specializations: prov.specializations,
-      dateTime: new Date(dateTime).toISOString(),
-      matter: san(matter, 2000), isOnline: Boolean(isOnline),
-      consultationFee: prov.consultationFee, currency: prov.currency,
-      status: 'pending', idempotencyKey,
-      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
-    });
-    t.update(provRef, {
-      totalConsultations: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp(),
-    });
-    t.set(idemRef, { consultationId: consultId, createdAt: FieldValue.serverTimestamp() });
-    return { consultationId: consultId, status: 'pending' };
-  });
-
-  return result;
+  requireAuth(req);
+  throw new HttpsError('failed-precondition', 'Legal consultations are booked and paid through SOKONI bookings now. Please refresh the page and book again. Nothing was charged or recorded.', { code: 'LEGAL_BOOKING_MOVED' });
 });
 
 /* ── 6. getMyLegalConsultations (client) ── */
@@ -409,11 +365,18 @@ _h.legalUpdateProfile = async (req) => {
   }
   const ref = db().collection('legalProviders').doc(uid);
   const out = await db().runTransaction(async (t) => {
-    const s = await t.get(ref);
+    const svcRef = db().collection('providerServices').doc('legal_consult_' + uid);
+    const [s, sv] = await Promise.all([t.get(ref), t.get(svcRef)]);
     if (!s.exists) throw new HttpsError('not-found', 'No Legal profile for this account. Register first.');
     const patch = _selfPatch(s.data(), d);
     if (!Object.keys(patch).length) throw new HttpsError('invalid-argument', 'Nothing to update.');
     t.update(ref, Object.assign({}, patch, { updatedAt: FieldValue.serverTimestamp() }));
+    /* The consultation rate card (server price authority) follows the fee, in cents. It is active again only while
+       the advocate is still eligible and priced — a self-service edit never opens booking on its own. */
+    if ('consultationFee' in patch && sv.exists && sv.data().createdBy === LV.PROV_BY) {
+      const cents = Math.round(patch.consultationFee * 100);
+      t.set(svcRef, { price: cents, active: LV.eligibility(s.data(), Date.now()).bookable && cents > 0, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    }
     return Object.keys(patch);
   });
   return { ok: true, updated: out };
