@@ -7682,15 +7682,53 @@ exports.webhookIntasend = onRequest(
            own merchant is credited instead, closing the gap where a PERMANENT
            Till QR's buyer-initiated payment would otherwise have credited the
            buyer's own wallet (docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md §5). */
-        const _isBooking = attribution.type === "booking" || attribution.type === "service-booking";
-        const _sellerId  = (_isBooking && attribution.providerId) ? attribution.providerId
-                         : (attribution.sellerUid || attribution.merchantUid || payData.uid);
+        /* ══ SECURITY CONVERGENCE (2026-10-03) — NO PAYER CREDIT, NO PLATFORM-REVENUE CREDIT ═════════════════════════
+           LIVE: the earner fell back to `payData.uid` — the account that CALLED initiateSTKPush. Census (every live
+           caller): no flow legitimately needs that fallback; every one that reached it credited the PAYER — buyer-
+           initiated platformBook / gateway / waConnect / bookNow-without-provider payments (fitness, digital, food,
+           bnb, legal, healthcare, property …) and, worse, PLATFORM REVENUE: subscription checkout, sub-engine renewals,
+           listing / marketing boosts, hub registration fees and admin featured listings — the fee came back to the
+           payer as withdrawable balance. Now:
+             · the earner is ONLY the attributed provider (booking) or seller / till merchant — never payData.uid;
+             · platform revenue never credits anyone: decided by the SERVER's intent purpose (paymentIntents/{ref}
+               .purpose), not only by the client's category label, so a client-sent sellerUid cannot turn a fee
+               back into a credit; an unreadable intent fails CLOSED (no credit);
+             · a payment with no earner is QUEUED for review (commissionReviewQueue/no_earner_{ref}, idempotent) — the
+               money stays with SOKONI until an administrator attributes it. Nothing here touches the payment's own
+               status, which is already settled above. */
+        let _intentPurpose = null, _intentUnreadable = false;
+        try {
+          const _ip = await db.collection("paymentIntents").doc(String(existing.intentRef || apiRef)).get();
+          if (_ip.exists) _intentPurpose = String((_ip.data() || {}).purpose || "") || null;
+        } catch (_) { _intentUnreadable = true; }
+        const _decision = require("./payment-attribution").walletCreditDecision({
+          attribution, category, intentPurpose: _intentPurpose, intentUnreadable: _intentUnreadable,
+          metaPurpose: payData.meta?.purpose, isSubscription: _isSubscription,
+        });
+        const _isPlatformRevenue = _decision.action === "skip_platform";
+        const _isBooking = _decision.action === "credit_booking";
+        const _sellerId  = _decision.earner;
         const _netCents = Math.round(Math.max(0, amount - sokoniCut) * 100);
+        const _queueNoEarner = async (why) => {
+          await db.collection("commissionReviewQueue").doc(`no_earner_${apiRef}`).set({
+            ref: apiRef, payerUid: payData.uid || null, amount, category, intentPurpose: _intentPurpose,
+            reason: why, attributionSource: attribution.source || null,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true }).catch(() => {});
+          await db.collection("payments").doc(apiRef).set({ walletCreditSkipped: why }, { merge: true }).catch(() => {});
+        };
 
-        if (_isSubscription) {
-          console.log(`[webhookIntasend] wallet credit skipped (subscription): ${apiRef}`);
-        } else if (!_sellerId || _netCents <= 0) {
-          console.warn(`[webhookIntasend] wallet credit skipped (no seller or zero net): ${apiRef}`);
+        if (_isPlatformRevenue) {
+          console.log(`[webhookIntasend] wallet credit skipped (platform revenue): ${apiRef}`, { purpose: _intentPurpose, category });
+          await db.collection("payments").doc(apiRef).set({ walletCreditSkipped: "platform_revenue" }, { merge: true }).catch(() => {});
+        } else if (_decision.reason === "intent_unreadable") {
+          console.warn(`[webhookIntasend] wallet credit WITHHELD (intent unreadable — fail closed): ${apiRef}`);
+          await _queueNoEarner("intent_unreadable");
+        } else if (!_sellerId) {
+          console.warn(`[webhookIntasend] wallet credit WITHHELD (no attributed earner — never the payer): ${apiRef}`);
+          await _queueNoEarner("no_earner");
+        } else if (_netCents <= 0) {
+          console.warn(`[webhookIntasend] wallet credit skipped (zero net): ${apiRef}`);
         } else if (_isBooking) {
           /* Booking earnings → the provider's WITHDRAWABLE wallet balance
              (wallets.balance, in SHILLINGS) — the exact field the wallet UI shows and

@@ -256,4 +256,33 @@ function assessProviderConfirmation(st, want) {
   return { ok: true, providerCents: cents };
 }
 
-module.exports = { mergeAttribution, resolveFinancialAttribution, decidePaidTransition, assessProductOrderPayment, assessProviderConfirmation, wouldFinalizeMarketplaceOrder, TERMINAL_INTENT_STATUSES, PAYABLE_ORDER_STATUSES };
+/* ══ SECURITY CONVERGENCE (2026-10-03) — who (if anyone) the webhook credits for a completed payment ═══════════════
+   PURE: no I/O, never throws. The webhook reads the intent's purpose and hands the facts here.
+   Returns { action: 'credit_booking' | 'credit_sale' | 'skip_platform' | 'withhold', earner, reason }.
+     · platform revenue (server intent purpose, or the subscription / boost / marketing / AI category or purpose labels)
+       → skip_platform: SOKONI's own revenue is never credited to anyone — least of all back to the payer;
+     · an unreadable intent → withhold (fail closed);
+     · a booking → its attributed providerId, else withhold;
+     · anything else → its attributed sellerUid / merchantUid (till), else withhold.
+   The PAYER (payData.uid) is NEVER an earner: the census of every live initiateSTKPush caller found no flow that
+   legitimately needs it, and every flow that reached it credited the person who paid. */
+const PLATFORM_PURPOSES = Object.freeze(['subscription', 'boost', 'marketing_boost', 'hub_registration', 'ai_subscription', 'ai_credits', 'featured_listing']);
+const PLATFORM_CATEGORIES = Object.freeze(['subscription', 'boost', 'marketing', 'advertising', 'ai_subscription', 'ai_credits']);
+function walletCreditDecision(f) {
+  const x = f || {};
+  const a = x.attribution || {};
+  const cat = String(x.category || '').toLowerCase();
+  const mp = String(x.metaPurpose || '').toLowerCase();
+  if (x.isSubscription === true || PLATFORM_PURPOSES.includes(String(x.intentPurpose || '')) || PLATFORM_CATEGORIES.includes(cat)
+      || mp === 'subscription' || mp === 'subscription_upgrade') {
+    return { action: 'skip_platform', earner: null, reason: 'platform_revenue' };
+  }
+  if (x.intentUnreadable === true) return { action: 'withhold', earner: null, reason: 'intent_unreadable' };
+  const isBooking = a.type === 'booking' || a.type === 'service-booking';
+  if (isBooking) return a.providerId ? { action: 'credit_booking', earner: String(a.providerId), reason: null } : { action: 'withhold', earner: null, reason: 'no_earner' };
+  const earner = a.sellerUid || a.merchantUid || null;
+  return earner ? { action: 'credit_sale', earner: String(earner), reason: null } : { action: 'withhold', earner: null, reason: 'no_earner' };
+}
+
+module.exports = { mergeAttribution, resolveFinancialAttribution, decidePaidTransition, assessProductOrderPayment, assessProviderConfirmation, wouldFinalizeMarketplaceOrder, TERMINAL_INTENT_STATUSES, PAYABLE_ORDER_STATUSES,
+  walletCreditDecision, PLATFORM_PURPOSES, PLATFORM_CATEGORIES };
