@@ -255,6 +255,8 @@ window.SokoniAOS = (() => {
       /* Integrations Control Center — self-contained in sokoni-integrations.js (read-only; its two server reads are the
          certified adminGetIntegrationStatus / adminGetGcpEvidence). A missing script says so, never an empty console. */
       integrations:  () => _loadIntegrations(),
+      /* Revenue Intelligence — self-contained in sokoni-revenue-intelligence.js (reads the canonical payments ledger). */
+      revenue:       () => _loadRevenue(),
     };
     loaders[s]?.();
   }
@@ -2411,6 +2413,18 @@ window.SokoniAOS = (() => {
     container.appendChild(t);
     setTimeout(() => t.classList.add("visible"), 10);
     setTimeout(() => { t.classList.remove("visible"); setTimeout(() => t.remove(), 300); }, 3000);
+  }
+
+  // ── Revenue Intelligence ─────────────────────────────────────────────────────
+  function _loadRevenue() {
+    const root = document.getElementById("revenueRoot");
+    if (!root) return;
+    if (!window.SokoniRevenue) {
+      root.innerHTML = _emptyMsg("The revenue module did not load. Check that " +
+        "sokoni-revenue-intelligence.js is served on this page.");
+      return;
+    }
+    window.SokoniRevenue.mount(root);
   }
 
   // ── Integrations Control Center ──────────────────────────────────────────────

@@ -772,6 +772,12 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
         </div>
       </div>
 
+      <!-- Revenue Intelligence (ported from feat/integrations-control-center; restyled to the owner design). Payment-rail
+           analytics from the canonical payments ledger — rail volume, not marketplace sales revenue or GMV. -->
+      <div class="aos-panel" id="panel-revenue" hidden>
+        <div id="revenueRoot"></div>
+      </div>
+
       <!-- Integrations Control Center (ported from feat/integrations-control-center c676f61; restyled to the owner design).
            Rendered by sokoni-integrations.js, which super-admin.html mounts from the same file. Every figure comes from a
            canonical source; where a source cannot be read it shows an em dash, never a zero. -->
@@ -804,6 +810,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
 <link rel="stylesheet" href="sokoni-mv2-skin.css">  <!-- merchant-v2 design language, scoped to .mv2s (Marketing panels) -->
   <script src="sokoni-aos-marketing.js"></script>
   <script src="sokoni-aos-legal.js"></script>
+  <script src="sokoni-revenue-intelligence.js"></script>
   <script src="sokoni-integration-catalogue.js"></script>
   <script src="sokoni-integrations.js"></script>
   <script src="sokoni-audit-center.js"></script>

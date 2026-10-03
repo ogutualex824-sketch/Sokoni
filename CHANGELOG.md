@@ -1,3 +1,17 @@
+## [2026-10-04] — Revenue Intelligence: ported to the hosting candidate and restyled to the owner design — NOT deployed
+
+- **Ported, not rewritten:** the EXISTING certified module came from feat/integrations-control-center byte-identical: sokoni-revenue-intelligence.js, tests/certify-revenue-intelligence.js, tests/sabotage-revenue-intelligence.js and docs/REVENUE_INTELLIGENCE.md. No second revenue page was written.
+- **Data honesty kept:** production `payments` are wallet top-ups / STK pushes, so the module labels figures "Rail volume" / "Gateway fees" / "Completed payments", never "Total Revenue" or GMV.
+  - Statuses are matched UPPERCASE (PENDING / COMPLETE / FAILED / CANCELLED).
+  - Unknown values show "—"; a measured zero shows 0.
+  - The design mock's "Total Revenue $87,546", AI insights, cohort retention and geography have NO canonical source, so they are not invented.
+- **Restyle:** ONE design layer is appended to the module's own `_styles()` (navy surfaces, purple accent, 14px cards, quiet headers), shared with Audit Logs / Security / Integrations. Markup is unchanged.
+- **admin-os.html / sokoni-aos.js / super-admin.html:** panel `panel-revenue` + loader + script in both consoles, as certified. The sidebar entries (`data-section="revenue"`) are requested from sokoni-5b, the sidebar owner.
+- **Tests:**
+  - certify-revenue-intelligence: 106 passed / 4 failed. The 4 failures are F2/F3 sidebar entry + router call, pending 5b; the source branch passes 110/0.
+  - Sabotage: 14 caught, 1 inert + 1 skipped (both the sidebar entry).
+  - NOT RUN: browser (memory floor).
+
 ## [2026-10-04] — Integrations Control Center: ported to the hosting candidate and restyled to the owner design — NOT deployed
 
 - **No new module:** the EXISTING certified console was ported from feat/integrations-control-center c676f61 byte-identical: sokoni-integrations.js, sokoni-integration-catalogue.js, sokoni-integration-governance.js, plus its suites scripts/test-integrations-console.js, tests/certify-integrations-console.js and tests/sabotage-integrations-console.js. No second integrations page was written.

@@ -826,6 +826,12 @@
       <div id="saAuditBody"><div class="sa-spinner"><div></div></div></div>
     </section>
 
+    <!-- ══ SECTION: Revenue Intelligence ══
+         Rendered by sokoni-revenue-intelligence.js, the same module admin-os.html mounts. -->
+    <section class="sa-panel" id="panel-revenue" hidden>
+      <div id="revenueRoot"></div>
+    </section>
+
     <!-- ══ SECTION: Integrations ══
          Rendered by sokoni-integrations.js, the same module admin-os.html mounts. -->
     <section class="sa-panel" id="panel-integrations" hidden>
@@ -1190,6 +1196,7 @@ const SA={
     else if(section==='emergency')this.loadEmergency();
     else if(section==='audit')this.loadAudit();
     else if(section==='integrations')this.loadIntegrations();
+    else if(section==='revenue')this.loadRevenue();
     else if(section==='broadcast')this.loadBroadcastHistory();
     else if(section==='legal')this.loadLegal();
     else if(section==='marketing')this.loadMarketing();
@@ -1990,6 +1997,18 @@ const SA={
     }catch(e){_toast('Error: '+e.message,'error');}
   },
 
+  // ══ SECTION: Revenue Intelligence ═══════════════════════
+  loadRevenue(){
+    const root=document.getElementById('revenueRoot');
+    if(!root)return;
+    if(!window.SokoniRevenue){
+      root.innerHTML='<p style="color:var(--muted);font-size:13px">The revenue module did not ' +
+        'load. Check that sokoni-revenue-intelligence.js is served on this page.</p>';
+      return;
+    }
+    window.SokoniRevenue.mount(root);
+  },
+
   // ══ SECTION: Integrations ═══════════════════════════════
   // The module reads its own canonical sources; this console passes it a mount point and nothing else.
   // A missing script is reported as a missing script, never as an empty integration list.
@@ -2163,6 +2182,7 @@ const SA={
 </script>
 <script src="sokoni-legal-taxonomy.js"></script>
 <link rel="stylesheet" href="sokoni-mv2-skin.css">  <!-- merchant-v2 design language, scoped to .mv2s (Marketing panels) -->
+<script src="sokoni-revenue-intelligence.js"></script>
 <script src="sokoni-integration-catalogue.js"></script>
 <script src="sokoni-integrations.js"></script>
 <script src="sokoni-audit-center.js"></script>   <!-- the ONE audit view (AdminOS + Super Admin) -->
