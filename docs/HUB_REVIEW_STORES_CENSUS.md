@@ -35,6 +35,28 @@ each one, who writes it, what the rules do with that exact payload, and what the
 Correction to a peer note: bnb, property and sports do **not** write `reviews`. Each hub's `fsWrite` maps the
 key to its own store (or to `applications`).
 
+## Classification (2026-10-03, owner's vocabulary)
+
+This is the state **in code**. Nothing is deployed, so live behaviour is still the "Findings" table above.
+
+| Store | Class | Writer → publication | Branch / SHA |
+|---|---|---|---|
+| `reviews` (product, seller) | **CONVERGED** | `submitReview` (server order check) → pending → AdminOS → approved | fix/review-authority-on-76436b1 @ 85a5fcf |
+| `reviews` (property, sports_venue) | **CONVERGED** (code) | pages → `submitReview` (server viewing / booking check) → pending → AdminOS → approved → `getReviews` | functions 51d3947; pages sokoni-f3 9476de3 |
+| `unboxingReviews` | **CONVERGED** (code) | `submitUnboxing` (server order check) → pending → AdminOS → approved → photos copied out of quarantine | 7ec04c5 + 51d3947; page 307b84e |
+| `providerReviews` | **DOMAIN-SPECIFIC BUT SERVER-AUTHORITATIVE** | `booking-service.js` CF, one per completed booking, published at once | moderation step open |
+| `entertainmentReviews` | **DOMAIN-SPECIFIC BUT SERVER-AUTHORITATIVE** | `rateEntertainmentContent` CF, no purchase check, published at once, **no page calls it** | moderation step open |
+| `legalConsultations.rating`, `healthAppointments.rating` | **DOMAIN-SPECIFIC BUT SERVER-AUTHORITATIVE** | `rateLegalProvider` / `rateHealthProvider` (completed, own, once) | review text has no moderation |
+| `entReviews` | **DEAD/UNUSED** | no page calls `EntHub.submitReview`. The writer self-published with `approved:true`, which the rules refuse. **Defused**: it now throws "not available yet". `listenReviews` reads only `approved == true`, which only an admin can set | this branch |
+| `bnbReviews` | **DEAD/UNUSED** | no caller, no rule block | rules lane closes it (1925aaa) |
+| `digitalReviews` | **DIRECT-CLIENT WRITE** | `digital.html` `addDoc`, any contract, self-published | open: needs a contract-completion authority |
+| `homeServiceReviews` | **DIRECT-CLIENT WRITE** (refused) | page payload lacks `uid`, so it's LOST | open: should become `providerReviews` |
+| `legalReviews` (fallback) | **DIRECT-CLIENT WRITE** (refused) | fallback payload lacks `lawyerId`, so it's LOST | open: remove the fallback |
+| `healthReviews`, `constructReviews` | **DIRECT-CLIENT WRITE** (dormant) | no page caller; rule still open | rules lane: CF-only |
+| `sportsReviews` | **DIRECT-CLIENT WRITE → retired** | page moved to `submitReview` (9476de3); rules close the store (1925aaa) | — |
+| property → `applications` | **DIRECT-CLIENT WRITE → retired** | page moved to `submitReview` (9476de3); rules refuse `category:'reviews'` (1925aaa) | — |
+| every row above | **UNPROVEN in the emulator** | `scripts/test-hub-review-rules.js` written, NOT run | needs ≥ 512 MB free |
+
 ## Classification → next slice (not started)
 
 1. **MIGRATE to `submitReview`, which needs target types beyond product | seller:**

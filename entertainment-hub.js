@@ -468,30 +468,16 @@ const EntHub = {
      REVIEWS
   ═══════════════════════════════════════════════════════════ */
 
-  async submitReview(data) {
-    const uid = _uid();
-    const u = _user();
-    const ref = await addDoc(collection(db, 'entReviews'), {
-      uid: uid || 'guest',
-      targetType: data.targetType,
-      targetId: data.targetId,
-      reviewerName: u.name || data.reviewerName || 'Anonymous',
-      rating: data.rating,
-      comment: data.comment || '',
-      approved: true,
-      createdAt: serverTimestamp(),
-    });
-    /* Update average rating on target */
-    const targetCol = data.targetType === 'artist' ? 'entArtists' : data.targetType === 'venue' ? 'entVenues' : 'entEvents';
-    const targetRef = doc(db, targetCol, data.targetId);
-    const targetSnap = await getDoc(targetRef);
-    if (targetSnap.exists()) {
-      const { rating: curRating = 0, reviewCount: curCount = 0 } = targetSnap.data();
-      const newCount = curCount + 1;
-      const newRating = ((curRating * curCount) + data.rating) / newCount;
-      await updateDoc(targetRef, { rating: newRating, reviewCount: newCount, updatedAt: serverTimestamp() });
-    }
-    return ref.id;
+  /* NOT AVAILABLE (sokoni-5b, 2026-10-03; docs/HUB_REVIEW_STORES_CENSUS.md). This used to write entReviews straight
+     from the browser marked approved:true (self-published, no booking or ticket check) and then recompute the
+     target's rating in the browser. The rules refuse that write (noAdminFields forbids `approved`), and no page calls
+     it. Entertainment reviews will go through the server review authority (submitReview → pending → AdminOS) once
+     the owner decides what makes a reviewer eligible (a ticket or booking). Until then it says so instead of
+     pretending; nothing is written. */
+  async submitReview() {
+    const e = new Error('Entertainment reviews are not available yet.');
+    e.code = 'unavailable'; e.reason = 'UNSUPPORTED_TARGET';
+    throw e;
   },
 
   listenReviews(targetId, callback, limitN = 20) {

@@ -1,3 +1,12 @@
+## [2026-10-03] — Entertainment review writer defused; hub review classification
+
+**Files:** `entertainment-hub.js`, `scripts/test-review-approval-ui.js`, `docs/HUB_REVIEW_STORES_CENSUS.md`, `CHANGELOG.md` · **Base:** live `72dca56`
+
+- **`EntHub.submitReview`:** no longer writes `entReviews` with `approved: true` (self-published, no ticket or booking check) and no longer recomputes the target's rating in the browser. No page called it, and the rules refused the write. It now throws "Entertainment reviews are not available yet" (`UNSUPPORTED_TARGET`) until the owner decides eligibility. `listenReviews` is unchanged: approved only.
+- **Census:** every hub store classified CONVERGED / DOMAIN-SPECIFIC BUT SERVER-AUTHORITATIVE / DIRECT-CLIENT WRITE / DEAD/UNUSED. The emulator proof is still **NOT RUN** (memory below 512 MB).
+- **Tests:** review-approval-ui 16/0 (live fails 16).
+- **Database / API / security:** no schema change. One self-publishing browser writer removed. **NOT DEPLOYED.**
+
 ## [2026-10-03] — Hub review stores census (no code change, nothing deployed)
 
 **Files:** `docs/HUB_REVIEW_STORES_CENSUS.md`, `scripts/test-hub-review-rules.js`, `CHANGELOG.md` · **Base:** live `72dca56`

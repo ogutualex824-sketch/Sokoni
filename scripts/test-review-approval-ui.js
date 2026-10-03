@@ -31,5 +31,10 @@ ck('U-5', /id="dropZone" hidden/.test(ub), 'the photo picker is hidden until pho
 const db = read('sokoni-db.js');
 ck('U-6', /query\(collection\(db, 'unboxingReviews'\), where\('status', '==', 'approved'\), limit\(100\)\)/.test(db), 'the public wall listener asks for APPROVED posts (the rules refuse an unconstrained query)');
 ck('U-7', /SokoniAOS\.reviewQueue\('\$\{_esc\(st\)\}', null, '\$\{k\}'\)/.test(aos) && /kind: _revState\.kind, reviewId: id/.test(aos) && /kind: kd, status: st/.test(aos), 'AdminOS switches Reviews | Unboxing; list and moderation carry the kind');
+/* ENTERTAINMENT (census 2026-10-03): the dead browser writer must never self-publish */
+const eh = code(read('entertainment-hub.js'));
+const ehSub = (eh.match(/async submitReview\([^)]*\) \{[\s\S]*?\n  \},/) || [''])[0];
+ck('E-1', ehSub && !/approved:\s*true/.test(ehSub) && !/addDoc\(collection\(db, 'entReviews'\)/.test(ehSub) && /not available yet/.test(ehSub),
+  'the entertainment review writer no longer self-publishes (approved:true) — it says reviews are not available yet');
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
