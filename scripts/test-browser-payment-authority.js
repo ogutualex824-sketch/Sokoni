@@ -45,22 +45,25 @@ const CHECKS = {
       && !/Total Paid|Paid via/.test(hU) && /Amount Due/.test(hU) && /Total Paid/.test(hV) && /Paid via/.test(hV);
   },
   F4: (s) => /paymentVerified:\s*_paid\b/.test(strip(s['checkout.html'])),
+  F5: (s) => { const b = (strip(s['sokoni-intasend.js']).match(/async function _recordCommission\([^)]*\)\s*\{[^}]*\}/) || [''])[0]; return b.length > 0 && !/bookingFees|setDoc|addDoc|collection\(/.test(b); },
 };
 const SABOTAGE = {
   F1: (s) => Object.assign({}, s, { 'sokoni-pay.js': s['sokoni-pay.js'].replace('saveRecords("sokoniBookingFees",r);\n}', 'saveRecords("sokoniBookingFees",r);\n  window.firebaseDB.collection(\'bookingFees\').doc(\'x\').set({});\n}') }),
   F2: (s) => Object.assign({}, s, { 'car-hub.html': s['car-hub.html'].replace('showFleetMsg("✅ Booking confirmed — M-Pesa request sent!");', 'showFleetMsg("✅ Booking confirmed — M-Pesa request sent!"); SokoniPay.saveFee({});') }),
   F3: (s) => Object.assign({}, s, { 'sokoni-invoice.js': s['sokoni-invoice.js'].replace("status: data.paymentVerified === true ? 'paid' : 'unconfirmed'", "status: 'paid'") }),
   F4: (s) => Object.assign({}, s, { 'checkout.html': s['checkout.html'].replace('paymentVerified: _paid,', '') }),
+  F5: (s) => Object.assign({}, s, { 'sokoni-intasend.js': s['sokoni-intasend.js'].replace('async function _recordCommission(ref, feeRecord) { void ref; void feeRecord; }', "async function _recordCommission(ref, feeRecord) { setDoc(doc(db, 'bookingFees', ref), feeRecord); }") }),
 };
 const LABELS = {
   F1: 'saveFee writes no Firestore fee record',
   F2: "car hub's no-payment booking records no fee or commission",
   F3: 'an invoice says PAID only with paymentVerified:true (executed builder + renderer)',
   F4: 'checkout passes its server-verified flag into the invoice',
+  F5: 'the IntaSend client writes no fee record after confirmation',
 };
 
 const SRC = {};
-for (const f of ['sokoni-pay.js', 'car-hub.html', 'sokoni-invoice.js', 'checkout.html']) SRC[f] = read(f).split('\r\n').join('\n');
+for (const f of ['sokoni-pay.js', 'car-hub.html', 'sokoni-invoice.js', 'checkout.html', 'sokoni-intasend.js']) SRC[f] = read(f).split('\r\n').join('\n');
 let pass = 0, fail = 0, caught = 0;
 console.log('\nBROWSER PAYMENT AUTHORITY — Gate 13\n');
 for (const k of Object.keys(CHECKS)) { const ok = CHECKS[k](SRC); console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + k + '  ' + LABELS[k]); ok ? pass++ : fail++; }

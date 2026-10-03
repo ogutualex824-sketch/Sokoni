@@ -171,28 +171,10 @@
   /* ══════════════════════════════════════════════════════════════
      COMMISSION RECORDING TO FIRESTORE  (replaces localStorage)
   ══════════════════════════════════════════════════════════════ */
-  async function _recordCommission(ref, feeRecord) {
-    const auth = window.firebaseAuth;
-    const db   = window.firebaseDB;
-    if (!auth?.currentUser || !db) return;
-
-    try {
-      const { doc, setDoc, serverTimestamp } = await import(
-        'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
-      );
-      await setDoc(doc(db, 'bookingFees', ref), {
-        ...feeRecord,
-        uid:       auth.currentUser.uid,
-        amount:    feeRecord.totalPaid || feeRecord.amount,
-        type:      'booking_fee',
-        savedAt:   serverTimestamp(),
-        source:    'intasend_confirmed',
-      });
-      log.log('Commission recorded for ref:', ref);
-    } catch (err) {
-      log.error('Commission record failed:', err.message);
-    }
-  }
+  /* 2026-10-03 (IntaSend convergence Gate 13): no longer writes bookingFees. A fee record authored by the browser is a
+     second, forgeable ledger (the rules candidate makes bookingFees create:false). Commission is recorded by the server
+     on the verified IntaSend payment (commissionLedger, written by the webhook). Kept as a no-op so callers are unchanged. */
+  async function _recordCommission(ref, feeRecord) { void ref; void feeRecord; }
 
   /* ══════════════════════════════════════════════════════════════
      MAIN: initiateSTKPush

@@ -18,9 +18,11 @@ record, which is an open rules item.
 | `landlord.html` IntaSend COMPLETE | browser event writes rent `paid:true` | Removed by B2 df1a4cb (no provider call at all) |
 | `car-hub.html` confirmBooking | booking takes NO payment, yet wrote an "auto-collected" commission and a paid booking fee | Fixed this commit |
 | `sokoni-pay.js` saveFee (callers: car hub, checkout, food, IntaSend client) | wrote `bookingFees/{ref}` to Firestore with a page-supplied amount; admin.html reads it as revenue | Fixed this commit: local display cache only |
+| `sokoni-intasend.js` _recordCommission | after the webhook-written payment doc, the browser wrote `bookingFees/{ref}` ("intasend_confirmed") itself | Fixed: no-op; the server ledger is the record |
+| `pos-checkout.html` gift card | `PosLoyalty.redeemGiftCard` debits IndexedDB only (the direct `giftCards` update is refused and the error swallowed), then sends `{method:'gift_card', amount: total}` to `posCompleteCheckout`, which never verifies non-M-Pesa/card tenders | **OPEN — BROWSER_AUTHORITY.** Server half (fail-closed tender allow-list; gift card redeemed inside the checkout transaction through one `giftCards` authority) = sokoni-5b, POS lane, owner decisions pending |
 | `sokoni-invoice.js` | every invoice said "Total Paid" / "Paid via M-Pesa", including unpaid bookings (27 callers) | Fixed this commit: PAID only with `paymentVerified:true`; checkout passes its server-verified flag |
 
-Test: `node scripts/test-browser-payment-authority.js` (4/0, 4/4 sabotages; the invoice check executes the real
+Test: `node scripts/test-browser-payment-authority.js` (5/0, 5/5 sabotages; the invoice check executes the real
 builder and renderer).
 
 ## Classification of the 64 writes
@@ -38,7 +40,8 @@ builder and renderer).
 
 | Item | Owner |
 |---|---|
-| `bookingFees` rule: client `create` must be `false` (server-only). Until then a signed-in user can still forge a fee record by direct write. | Rules release (owner to assign) |
+| `bookingFees` rule: client `create` must be `false`. **Done in the rules candidate** (sokoni-f3, after b778499 on rules/capability-decisions-on-f20be7d); live until that rules release ships. | Rules release |
+| `orders` create: `paymentStatus` limited to pending/unpaid/idle/pending_payment. **Done in the same rules candidate**; update branches were already closed. | Rules release |
 | `admin.html` (legacy) reads `bookingFees` and local ledgers as revenue. AdminOS is canonical; the legacy page should read the server `commissionLedger` or stop showing revenue. | Admin surfaces |
 | `sokoni-banking-pro.js` local "wallet" balance moved by a manual "mark paid" — local-only, but presented as a wallet. | Banking Hub (sokoni-2f) |
 | `financial-os.html:808` admin marks a manual bank payout `completed` from the browser. | Payouts lane (sokoni-2f) |

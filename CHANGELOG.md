@@ -1,3 +1,10 @@
+## [2026-10-03] - Gate 13 follow-up: IntaSend client no longer writes fee records; till gift card recorded as open — NOT deployed
+
+- sokoni-intasend.js _recordCommission: no longer writes bookingFees after confirmation (browser-written ledger; rules candidate
+  makes bookingFees create:false). test-browser-payment-authority 5/0, 5/5 sabotages.
+- Census: till gift card is BROWSER_AUTHORITY (server half with sokoni-5b, POS lane). Rules candidate closes bookingFees create and
+  orders paymentStatus at create.
+
 ## [2026-10-03] - Gate 13: the browser no longer authors payment facts — hosting, NOT deployed
 
 - sokoni-pay.js saveFee: no longer writes bookingFees to Firestore (any signed-in user could create a fee record with a page-supplied
