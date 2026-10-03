@@ -112,6 +112,21 @@ function aiTab() {
   return { honest: /No AI tools are listed on SOKONI yet/.test(els.aiGrid.innerHTML) && !/Fake AI/.test(els.aiGrid.innerHTML),
     noCount: els.aiCount.textContent === '', kass: /data-kass-open/.test(els.aiGrid.innerHTML) && /advice only/.test(els.aiGrid.innerHTML) };
 }
+/* slice 4U: devices come from the Marketplace (canonical catalogue + checkout); selling = the seller intake */
+function devicesTab() {
+  const vm = require('vm');
+  const th = fs.readFileSync(path.join(ROOT, 'tech-hub.html'), 'utf8');
+  const render = fnSrc(th, 'renderDevicesGrid'), sell = fnSrc(th, 'listDevice');
+  if (!render || !sell) return null;
+  const els = { devicesGrid: { innerHTML: '' }, sellDevMsg: { innerHTML: '', style: {} } };
+  const writes = [];
+  const ctx = { document: { getElementById: (id) => els[id] || null }, localStorage: { setItem: () => writes.push('ls'), getItem: () => '[]' },
+    _thFireWrite: (c) => writes.push(c) };
+  vm.createContext(ctx); vm.runInContext(render + '\n' + sell + '; renderDevicesGrid([]); listDevice();', ctx);
+  return { marketplace: /category\.html\?cat=electronics/.test(els.devicesGrid.innerHTML) && /category\.html\?cat=computers/.test(els.devicesGrid.innerHTML),
+    sellIsIntake: /offer\.html/.test(els.sellDevMsg.innerHTML) && !/Device listed/.test(els.sellDevMsg.innerHTML),
+    noClientWrite: writes.length === 0, feedRetired: !/collection\(getFirestore\(_a\),'techDevices'\)/.test(th) };
+}
 /* slice 2: tech-hub.html tabs + providers.html booking */
 function fnSrc(src, name) {
   const i = src.indexOf('function ' + name + '(');
@@ -283,6 +298,7 @@ function taxonomy(modSrc, hubSrc) {
   for (const [k, v] of Object.entries(taxonomy(MOD, rd('hub-register.js')))) ck('T9  taxonomy: ' + k, v);
   { const bw = badgeWeb(); if (!bw) ck('P5  badge predicate loads', false); else for (const [k, v] of Object.entries(bw)) ck('P5  web badge: ' + k, v); }
   { const ai = aiTab(); if (!ai) ck('P6  AI tab', false); else for (const [k, v] of Object.entries(ai)) ck('P6  AI tools tab: ' + k, v); }
+  { const dv = devicesTab(); if (!dv) ck('P7  devices tab', false); else for (const [k, v] of Object.entries(dv)) ck('P7  devices tab: ' + k, v); }
   console.log('\n  [sabotage]');
   const SAB = {
     T2: MOD.replace("'<span class=\"' + x + '-prov-rnum\">New on SOKONI</span>'", "'<span class=\"' + x + '-prov-rnum\">4.9 · 0 jobs</span>'"),

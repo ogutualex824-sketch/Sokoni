@@ -638,7 +638,8 @@ function filterDevices() {
   const q    = (document.getElementById('devSearch')?.value||'').toLowerCase();
   const cond = document.getElementById('devCondition')?.value||'';
   const cat  = document.getElementById('devCategory')?.value||'';
-  let local  = []; try { local = JSON.parse(localStorage.getItem('sokoniDevices'))||[]; } catch(e) {}
+  /* Tech Hub 4U (2026-10-03): browser-local "listed" devices are no longer shown — they existed on one device only. */
+  let local  = [];
   /* Merge: Firestore devices first, then localStorage, then demo fallbacks */
   const allIds = new Set([..._fsDevices.map(d=>d.id||d._id), ...local.map(d=>d.id)]);
   let list = [
@@ -665,7 +666,14 @@ window.filterByBrand = filterByBrand;
 
 function renderDevicesGrid(list) {
   const grid = document.getElementById('devicesGrid'); if (!grid) return;
-  if (!list.length) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:rgba(255,255,255,0.3);">No devices found</div>'; return; }
+  /* Tech Hub 4U: devices are SOKONI Marketplace products (approved sellers, canonical catalogue, the existing cart / checkout /
+     IntaSend). The old techDevices feed had no rules (every read and write was denied) and duplicated the catalogue. */
+  if (!list.length) {
+    const link = (cat, label) => '<a href="category.html?cat=' + cat + '" style="display:inline-block;margin:6px;padding:10px 16px;border-radius:10px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.25);color:#00d4ff;font-weight:700;text-decoration:none">' + label + ' →</a>';
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:rgba(255,255,255,0.6);font-size:13px;line-height:1.6">Phones, laptops and accessories are sold by approved sellers on the SOKONI Marketplace — with checkout and buyer protection.<br>'
+      + link('electronics', 'Phones & electronics') + link('computers', 'Laptops & computers') + '</div>';
+    return;
+  }
   const condLabel = { new:'Brand New', used:'Used', refurb:'Refurbished' };
   const condColor = { new:'rgba(34,197,94,0.12)', used:'rgba(249,115,22,0.1)', refurb:'rgba(59,130,246,0.1)' };
   grid.innerHTML = list.map(d => `
@@ -817,26 +825,11 @@ function renderTechAskFeed() {
 
 /* ── SELL DEVICE ── */
 function listDevice() {
-  const name  = (document.getElementById('sellDevName')?.value||'').trim();
-  const price = Number(document.getElementById('sellDevPrice')?.value||0);
-  const phone = (document.getElementById('sellDevPhone')?.value||'').trim();
+  /* Tech Hub 4U (2026-10-03). This wrote the device to localStorage + techDevices (no rules — always denied) and said
+     "✅ Device listed!" for a listing nobody else could ever see. Selling goods on SOKONI is a seller account: apply once
+     through the ONE intake (AdminOS reviews it), then list products in the Marketplace. */
   const msgEl = document.getElementById('sellDevMsg');
-  if (!name || !price || !phone) { if(msgEl) { msgEl.textContent='Fill device name, price and phone'; msgEl.style.color='#ff9800'; } return; }
-  const dev = {
-    id:'DEV'+Date.now(), name, price, phone,
-    brand: (document.getElementById('sellDevBrand')?.value||'other').toLowerCase(),
-    cat: document.getElementById('sellDevCat')?.value||'phone',
-    cond: document.getElementById('sellDevCond')?.value||'used',
-    loc: document.getElementById('sellDevLoc')?.value||'nairobi',
-    desc: document.getElementById('sellDevDesc')?.value||'',
-    emoji: {phone:'📱',laptop:'💻',tablet:'📟',accessory:'🎧',console:'🎮'}[document.getElementById('sellDevCat')?.value||'phone']||'📱',
-    os:'', ram:'', storage:'', battery:'', screen:'', camera:''
-  };
-  let local = []; try { local = JSON.parse(localStorage.getItem('sokoniDevices'))||[]; } catch(e) {}
-  local.unshift(dev); localStorage.setItem('sokoniDevices', JSON.stringify(local.slice(0,50)));
-  _thFireWrite('techDevices', { ...dev, status:'active' });
-  if(msgEl) { msgEl.innerHTML='✅ Device listed! <a href="javascript:void(0)" onclick="goThPanel(\'devices\',null)" style="color:#00d4ff;font-weight:700;">View Listings →</a>'; msgEl.style.color='#00d4ff'; }
-  ['sellDevName','sellDevPrice','sellDevPhone','sellDevDesc'].forEach(id => { const el=document.getElementById(id); if(el)el.value=''; });
+  if (msgEl) { msgEl.innerHTML = 'Devices are listed by approved SOKONI sellers. <a href="offer.html" style="color:#00d4ff;font-weight:700;">Apply to sell on SOKONI →</a>'; msgEl.style.color = 'rgba(255,255,255,0.75)'; }
 }
 window.listDevice = listDevice;
 
@@ -885,22 +878,7 @@ let _thDevicesUnsub = null;
 window.addEventListener('beforeunload', () => { if (_thDevicesUnsub) _thDevicesUnsub(); });
 
 /* ── FIRESTORE LISTENER — live device listings ── */
-async function _initFsDevices() {
-  if (_thDevicesUnsub) { _thDevicesUnsub(); _thDevicesUnsub = null; }
-  try {
-    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-    const {getFirestore,collection,query,where,orderBy,limit,onSnapshot}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
-    const _a=getApps().find(a=>a.name==="th-read")||initializeApp(_cfg,"th-read");
-    /* No where() + orderBy() compound — avoids composite index requirement.
-       Filter status active client-side after the snapshot arrives. */
-    const q=query(collection(getFirestore(_a),'techDevices'),orderBy('createdAt','desc'),limit(100));
-    _thDevicesUnsub = onSnapshot(q, snap=>{
-      _fsDevices=snap.docs.map(d=>({_id:d.id,...d.data()})).filter(d=>d.status==='active');
-      filterDevices();
-    }, ()=>{});
-  } catch(e){}
-}
+function _initFsDevices() { /* retired 2026-10-03 (Tech Hub 4U): techDevices has no rules (denied) and duplicated the Marketplace catalogue */ }
 
 /* ── IT SERVICES DATA ── */
 /* DEMO_IT removed 2026-10-03 (Tech Hub slice 2): demo providers with invented ratings; the tab lists the registry. */

@@ -147,7 +147,7 @@ const BASELINE = {
   'sokoni-b2b.js':             ['b2b-fs'],
   'sokoni-featured.js':        ['sokoni-featured'],
   'sokoni-recommendations.js': ['sk-recs'],
-  'tech-hub.html':             ['th-read', 'th-write'],
+  'tech-hub.html':             ['th-write'],
   'verification-admin.html':   ['sokoni-va'],
   'verification.html':         ['sokoni-verify'],
   'wholesale-portal.html':     ['wholesale-portal'],

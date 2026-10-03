@@ -1,3 +1,17 @@
+## [2026-10-03] - Tech Hub slice 4U: devices come from the Marketplace; selling a device = the seller intake — hosting, NOT deployed
+
+- **Census:**
+  - tech-hub.html Devices read `techDevices`, which has no rules block, so every read was denied (an empty feed in production) and it duplicated the
+    Marketplace catalogue. It also showed browser-local "listed" devices.
+  - Sell wrote localStorage + techDevices (always denied) and said "✅ Device listed!".
+- **Now:**
+  - Devices (production) links to the canonical Marketplace categories (category.html?cat=electronics / computers), with their checkout and buyer protection.
+  - Sell explains that devices are listed by approved sellers and links to the ONE intake (offer.html → AdminOS).
+  - The techDevices listener is retired and no device is written from the browser. Demo cards are unchanged for localhost.
+- **Tests:** test-tech-directory P7 (62/0); positive control, the pre-change page fails 3/4. test-secondary-firebase-apps 9/0 (tech-hub BASELINE → th-write only).
+- **Residue (other tabs / owners):** Ask Hub (techRequests), IT request (techITRequests, f3), Startups, Jobs still write from the browser to collections
+  without rules, so the submissions fail silently. Ask Hub → service leads; Jobs → the Work engine.
+
 ## [2026-10-03] - Tech Hub slice 4T: AI tools honestly represented; KASS is the one real (advisory) assistant — hosting, NOT deployed
 
 - **Audit:** tech-hub.html "AI Tools" listed DEMO_AI, invented third-party products (SnapBooks AI, ChatSoko, …) rendered only on localhost /
