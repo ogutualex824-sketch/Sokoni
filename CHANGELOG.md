@@ -382,6 +382,16 @@ status, B8 storefront never renders a `javascript:` link, B8b the known projecti
 `getMyMinishop`, `saveMinishopConfig`). **Security:** client-side link checks + storefront http(s) guard; permit
 uploads cannot start while gated. **Breaking:** none.
 
+## [2026-10-03] - Food Hub: an honest first-order line; the 50% WELCOME50 coupon removed from shipped code
+
+Hosting only (`food.html`, `sokoni-food.js`). **Not deployed.** Owner decision 2026-10-03, relayed by e3; confirmed with the owner before deploy.
+- **Banner:** the "50% OFF your first Sokoni Food order!" banner, already removed by the containment, is replaced by an honest line with no reward promise: **"Your first Sokoni Food order is coming soon"**.
+  - It switches to "Make your first order to start earning points" ONLY when food ordering AND server-awarded food points are both live.
+  - It is never a % discount.
+- **Coupon:** `{code:'WELCOME50', … '50% OFF first Sokoni Food order'}` is deleted from `SYSTEM_PROMOS`. No checkout ever applied it.
+- **Still there:** the other four codes in that list (FOOD20, FREEDELIVERY, FRIDAY200, SOKONI10) are the same kind of browser-only, never-applied promise. They are reported for an owner decision, not removed here.
+- **Tests:** `scripts/test-food-containment.js` 9/0 (FC-8 honest line, FC-9 coupon gone). Both rows fail on 2e5e33b.
+
 ## [2026-10-03] — Food Hub CONTAINMENT: no payment, no browser-written orders, nothing made-up shown as real
 
 **Files:** `food.html`, `food-menu.html`, `food-dashboard.html`, `scripts/test-food-containment.js` (new), `CHANGELOG.md` · **Base:** live `72dca56`
