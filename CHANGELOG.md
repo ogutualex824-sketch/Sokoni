@@ -1,3 +1,19 @@
+## [2026-10-03] - Home Services: My Bookings — the buyer's service bookings and booking PIN (bookings.html, NOT deployed)
+
+**Branch `hosting/home-services-on-rel`** from `f799841`. Full note: `docs/HOME_SERVICES_BOOKINGS.md`.
+
+- **bookings.html (new)**:
+  - lists providerBookings where customerUid == uid, grouped Upcoming / In progress / Completed / Cancelled;
+  - shows amounts in cents exactly as stored, and the payment state from paymentStatus;
+  - shows the buyer-protection **booking PIN** via serviceBookingPin (getMyBookingPin / renewBookingPin), only for paid_held bookings and only on request. The PIN is never stored.
+  - a provider's final-balance proposal is shown read-only, with **no accept or pay control** until 5b ships serviceBookingBalance;
+  - Message (in-app chat), Review (SokoniBookService.review), deep link ?b=<id>.
+- **my-bookings.html (new)**: redirects to bookings.html. Buyers' booking notifications from provider-ops.js linked to this page, which did not exist (404).
+- **Nav**: My Bookings is next to My Orders in shared-header.js, sokoni-profile-menu.js and the profile.html Bookings panel.
+- **Files**: bookings.html, my-bookings.html, shared-header.js, sokoni-profile-menu.js, profile.html, scripts/test-bookings-browser.js, docs/HOME_SERVICES_BOOKINGS.md.
+- **Database / API / rules changes**: none. The page reads under the existing providerBookings rule and makes no browser writes.
+- **Tests**: test-bookings-browser 42/0. The PIN-gate mutation is caught by 4 rows.
+
 ## [2026-10-03] - SOKONI Delivery Hub: the rider portal becomes a merchant-v2-style dashboard (driver.html, NOT deployed)
 
 **Branch `hosting/delivery-hub-dashboard-on-14ef233`**, on sokoni-e3's chain `14ef233` (contains live `72dca56`), and

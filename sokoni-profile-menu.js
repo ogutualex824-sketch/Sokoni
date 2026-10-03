@@ -451,6 +451,8 @@
         /* Orders left the BAR, not the product — this and the header drawer are now
            its entry points, because profile.html carried no link to it at all. */
         '<a class="sk-acct-link" href="my-orders.html" onclick="window._skCloseAcct()">📦 My Orders</a>' +
+        /* Service bookings + their booking PIN — owner 2026-10-03: Bookings, not Orders. */
+        '<a class="sk-acct-link" href="bookings.html" onclick="window._skCloseAcct()">📅 My Bookings</a>' +
         '<a class="sk-acct-link" href="notifications.html" onclick="window._skCloseAcct()">🔔 Notifications</a>' +
         '<a class="sk-acct-link" href="account-centre.html" onclick="window._skCloseAcct()">⚙️ Settings</a>' +
         '<a class="sk-acct-link" href="account-centre.html#security" onclick="window._skCloseAcct()">🛡️ Account &amp; Security</a>' +

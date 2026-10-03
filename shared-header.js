@@ -1620,6 +1620,8 @@
          link to my-orders.html, so "restructuring, not removal" would have been
          removal in practice. Measured before the tab was changed, not assumed. */
       { icon:'📦', label:'My Orders',      href:'my-orders.html' },
+      /* A service booking is not an order (owner 2026-10-03): its buyer-protection PIN lives in Bookings. */
+      { icon:'📅', label:'My Bookings',    href:'bookings.html' },
       { icon:'📍', label:'Track',          href:'track.html' },
       { icon:'👤', label:'Profile',        href:'profile.html' },
     ];
