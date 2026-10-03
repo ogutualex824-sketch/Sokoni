@@ -1,0 +1,5 @@
+{
+  "tree": "fix/payout-gate-p0-on-live",
+  "allow": ["requestSellerPayout", "processPayoutRetries", "processPendingPayouts", "autoScheduledPayouts", "initiateSellerPayout"],
+  "why": "wallet.js here = lineage A + the P0 gate; adminProcessPayout here LACKS 45a837d (the serving 00024-mih paid-state guard) — deploying it from this tree would roll that guard back"
+}
