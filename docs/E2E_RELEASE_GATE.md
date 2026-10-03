@@ -29,6 +29,7 @@ Status vocabulary: **observed** (evidence linked) · **built** (code + tests, no
 | H12 | Every proposed production function compared with its exact LIVE revision (archive diff) | each deployer | open | |
 | H13 | Active Firebase rules + active function revisions re-verified after every deploy | each deployer | open | |
 | H14 | Production smoke completes with no unexplained differences | f3 | open | |
+| H15 | Invoices: ONE canonical invoice per commercial transaction; payment truth only from a verified payment event; merchant references are claims; admin totals from the canonical store only | f3 + 5b + 2f | open | [[INVOICE_STORES_CENSUS]]. Built: rules 19e1ac6 (invoices server-write only), financeSprintDispatch claim fix 3df9c14 (not deployed). Open: the canonical-store decision; sasos client-paid hole; migration; adminInvoicesList scoped to the canonical source; server-side audited export. Invoices page HELD (owner). |
 
 ## 2 · Release matrix
 
