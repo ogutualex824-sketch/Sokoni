@@ -1714,6 +1714,15 @@ exports.applicationDecide = onCall(
          submitted → under_review → verified    (admin-only marks; NO projection, audited, like request_info)
          revoke = suspend + reviewStage 'revoked' — TERMINAL: nothing further can be decided on that application.
        "Active" is the applied projection (projectionStatus 'applied'), not a status. */
+    /* K13-A — SEPARATION OF DUTIES. An administrator never decides their OWN application: the approval authority
+       exists to be exercised over someone else's request. (Production evidence, 2026-09-28: an admin decided their
+       own driver applications.) Checked BEFORE the review-stage marks too: "verified" is shown to the applicant and to
+       AdminOS as a review fact, so staging one's own application is the same breach (b2, 2026-10-03). */
+    const applicantUid = snap.data().uid || null;
+    if (applicantUid && applicantUid === req.auth.uid) {
+      throw new HttpsError('permission-denied', 'An administrator cannot decide their own application.', { code: 'SELF_DECISION' });
+    }
+
     const cur = snap.data() || {};
     if (cur.reviewStage === 'revoked') {
       throw new HttpsError('failed-precondition', 'This application was revoked. A new application is required.', { reason: 'REVOKED_TERMINAL' });
@@ -1740,13 +1749,6 @@ exports.applicationDecide = onCall(
     const status = STATUS[decision];
     const actor = req.auth.uid;
 
-    /* K13-A — SEPARATION OF DUTIES. An administrator never decides their OWN application: the approval authority
-       exists to be exercised over someone else's request. (Production evidence, 2026-09-28: an admin decided their
-       own driver applications.) */
-    const applicantUid = snap.data().uid || null;
-    if (applicantUid && applicantUid === actor) {
-      throw new HttpsError('permission-denied', 'An administrator cannot decide their own application.', { code: 'SELF_DECISION' });
-    }
 
     /* the type's own decision fields (e.g. Marketing: only the categories the reviewer approved) */
     const _mkt = decision === 'approve' && AT0 ? AT0.T.decide(snap.data() || {}, req.data || {}) : {};

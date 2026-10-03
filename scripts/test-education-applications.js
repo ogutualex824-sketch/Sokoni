@@ -174,6 +174,13 @@ const provOf = () => Object.values(S().providers || {})[0] || null;
   DB = fakeDb(seed(mk({ category: 'school', status: 'approved', statusCanonical: 'approved', details: { registrationNo: 'MOE/1' } })));
   rs = await decideAs({ applicationId: 'APPE1', decision: 'mark_under_review' });
   ck('RS-8', rs.reason === 'ALREADY_DECIDED', 'a decided application cannot be moved back into review stages', rs);
+  /* RS-9 separation of duties reaches the review stages: an admin cannot stage their OWN application */
+  DB = fakeDb(seed(mk({ category: 'school', status: 'pending', statusCanonical: 'pending', decidedBy: null, details: { registrationNo: 'MOE/1' } })));
+  const SELF = { auth: { uid: UID, token: { admin: true } } };
+  const rs9a = await decideAs({ applicationId: 'APPE1', decision: 'mark_verified' }, SELF);
+  const rs9b = await decideAs({ applicationId: 'APPE1', decision: 'mark_under_review' }, SELF);
+  ck('RS-9', rs9a.err === 'permission-denied' && rs9b.err === 'permission-denied' && !S().applications.APPE1.reviewStage,
+    'an administrator cannot mark their OWN application under review / verified (K13-A separation of duties)', [rs9a, rs9b]);
 
   /* controls: non-education unchanged */
   DB = fakeDb(seed(mk({ category: 'plumbing', hub: 'service', details: {} })));
