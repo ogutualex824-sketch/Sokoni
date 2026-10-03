@@ -1119,16 +1119,16 @@ const SA={
     this._ausApi=window.SokoniAdminUsers.mount(root,{
       surface:'superadmin',
       /* adminSearchUsers / adminGetUser / adminUserStats live only inside adminOsDispatch (dispatch consolidation) */
-      call:(name,data)=>(['adminSearchUsers','adminGetUser','adminUserStats'].includes(name)
+      call:(name,data)=>(['adminSearchUsers','adminGetUser','adminUserStats','adminExportUsers'].includes(name)
         ? this._fns.httpsCallable('adminOsDispatch')(Object.assign({op:name},data||{}))
         : this._fns.httpsCallable(name)(data||{})).then(r=>r.data),
       roles:['buyer','seller','driver','provider','admin'],
-      canChangeRole:true, canSuspend:true,
+      canChangeRole:true, canSuspend:true, canExport:true,
       actions:{
         role:   {fn:'setUserRole',   payload:(uid,x)=>({uid,role:x.role})},
         /* live suspendUser (super-admin.js): { uid, suspend, reason } — disables / re-enables the Auth account */
-        suspend:{fn:'suspendUser',   payload:(uid,x)=>({uid,suspend:true,reason:x.reason})},
-        restore:{fn:'suspendUser',   payload:(uid)=>({uid,suspend:false,reason:'Restored from the Super Admin Users workspace'})},
+        suspend:{fn:'suspendUser',   payload:(uid,x)=>({uid,suspend:true,reason:x.reason,source:'super_admin'})},
+        restore:{fn:'suspendUser',   payload:(uid)=>({uid,suspend:false,reason:'Reinstated from Super Admin Users',source:'super_admin'})},
       },
     });
   },

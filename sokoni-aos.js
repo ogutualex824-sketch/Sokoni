@@ -142,6 +142,7 @@ window.SokoniAOS = (() => {
   // Admin-OS ops whitelist — routes through adminOsDispatch to reduce Cloud Run services
   const _ADMIN_OS_OPS = new Set([
     'adminUserStats',   /* Users workspace KPIs (server count() aggregates) */
+    'adminExportUsers', /* Users workspace export (super admin, audited) */
     'adminCreateSupportTicket','adminDeleteBanner','adminDeleteFaq',
     'adminGetAiStats','adminGetAnnouncements','adminGetAuditLogs','adminGetBanners',
     'adminGetBookings','adminGetCategories','adminGetDeliveryStats','adminGetDisputes',
@@ -356,8 +357,9 @@ window.SokoniAOS = (() => {
 
   // ── Users ────────────────────────────────────────────────────────────────────
   /* Users workspace (sokoni-admin-users.js, shared with super-admin.html). Data comes from the server only; actions use
-     THIS surface's existing authorities: role → adminUpdateUserRole, suspend / restore → tsBanUser (both super-admin-only
-     on the server, so the buttons are enabled only for a super admin). */
+     ONE suspension contract (owner 2026-10-04): suspend / restore → suspendUser — the same callable Super Admin uses
+     (Auth account disabled + sessions revoked + status + history + audit; super-admin-only on the server). Role →
+     adminUpdateUserRole (super-admin-only). Buttons are enabled only for a super admin; the server decides regardless. */
   let _ausApi = null;
   async function _loadUsers(query = "") {
     const root = document.getElementById("ausRootAos");
@@ -368,11 +370,11 @@ window.SokoniAOS = (() => {
         surface: "adminos",
         call: (name, data) => _call(name, data),
         roles: ["buyer", "seller", "provider", "driver", "moderator", "admin"],
-        canChangeRole: isSuper, canSuspend: isSuper,
+        canChangeRole: isSuper, canSuspend: isSuper, canExport: isSuper,
         actions: {
           role:    { fn: "adminUpdateUserRole", payload: (uid, x) => ({ uid, role: x.role }) },
-          suspend: { fn: "tsBanUser", payload: (uid, x) => ({ uid, action: "suspend", reason: x.reason }) },
-          restore: isSuper ? { fn: "tsBanUser", payload: (uid) => ({ uid, action: "restore" }) } : null,
+          suspend: { fn: "suspendUser", payload: (uid, x) => ({ uid, suspend: true, reason: x.reason, source: "adminos" }) },
+          restore: { fn: "suspendUser", payload: (uid) => ({ uid, suspend: false, reason: "Reinstated from AdminOS Users", source: "adminos" }) },
         },
       });
       if (query) _ausApi.search(query);
@@ -405,7 +407,10 @@ window.SokoniAOS = (() => {
     const action = currentStatus === "banned" ? "restore" : "ban";
     if (!(await SK.dialog.confirm(`${_titleCase(action)} this user?`, null, null, { title: `${_titleCase(action)} user`, variant: 'danger', confirmLabel: _titleCase(action) }))) return;
     try {
-      await _call("tsBanUser", { uid, action });   /* server reads uid (was userId: never worked) */
+      /* ONE suspension contract (owner 2026-10-04): suspendUser — Auth disabled + sessions revoked + status + audit */
+      const reason = action === "restore" ? "Reinstated from AdminOS" : (prompt("Reason for suspending this account (required):") || "").trim();
+      if (action !== "restore" && reason.length < 3) { _toast("A reason is required to suspend an account.", "error"); return; }
+      await _call("suspendUser", { uid, suspend: action !== "restore", reason, source: "adminos" });
     } catch (e) {
       _toast(_actionFailure(e, "Moderation action"), "error");
       return;

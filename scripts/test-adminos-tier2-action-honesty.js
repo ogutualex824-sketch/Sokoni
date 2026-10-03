@@ -56,7 +56,7 @@ function makeEnv(inject, toasts) {
     _loadFraud: () => {}, _loadSecurity: () => {}, _loadContent: () => {},
     _commsTab: () => {}, _contentTab: () => {}, _financialTab: () => {},
     _titleCase: (s) => String(s), _esc: (s) => String(s), _fmt: (s) => String(s),
-    prompt: () => 'x', confirm: () => true, alert: () => {},
+    prompt: () => 'x-test-reason', confirm: () => true, alert: () => {},   /* a reason must meet the server's 3-char minimum (canonical suspension) */
     document: {
       getElementById: () => el(), querySelector: () => el(), querySelectorAll: () => [],
       createElement: () => el(), body: el(),
@@ -100,7 +100,7 @@ function run(name, inject) {
 
 /* control fn, callable, claim fragment that must NOT appear on failure */
 const TARGETS = [
-  ['banUser',              'tsBanUser',                   'successfully'],
+  ['banUser',              'suspendUser',                 'successfully'],   /* ONE suspension contract (owner 2026-10-04) */
   ['changeRole',           'adminUpdateUserRole',         'Role updated'],
   ['updateProduct',        'adminUpdateProductStatus',    'Product status updated'],
   ['updateOrder',          'adminUpdateOrderStatus',      'Order updated'],

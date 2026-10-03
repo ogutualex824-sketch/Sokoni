@@ -150,54 +150,26 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
 /* ─────────────────────────────────────────────────────────────────────────
    4. tsBanUser — superAdmin: ban | suspend | restore user
 ──────────────────────────────────────────────────────────────────────────── */
+/* RETIRED as a separate suspension path (owner 2026-10-04): it wrote status only — the account could still sign in.
+   ban / suspend → the canonical contract (shared/account-suspension.js: Auth disabled + sessions revoked + status +
+   history + audit); restore → reinstate through the same contract. 'ban' and 'suspend' are one state: suspended.
+   durationDays was never enforced (no job read suspendedUntil) and is refused rather than silently ignored. */
 exports.tsBanUser = onCall(OPT, async (req) => {
-  _requireSuperAdmin(req);
-  const { uid: targetUid, action, reason, durationDays } = req.data;
-  if (!targetUid || !action || !reason) throw new Error('uid, action, reason required');
-  const validActions = ['ban', 'suspend', 'restore'];
-  if (!validActions.includes(action)) throw new Error('action must be ban|suspend|restore');
-
-  const db = getFirestore();
-  const userRef = db.collection('users').doc(targetUid);
-  const snap = await userRef.get();
-  if (!snap.exists) throw new Error('User not found');
-
-  const statusMap = { ban: 'banned', suspend: 'suspended', restore: 'active' };
-  const update = {
-    status: statusMap[action],
-    statusUpdatedAt: FieldValue.serverTimestamp(),
-    statusUpdatedBy: req.auth.uid,
-  };
-
-  if (action === 'ban') {
-    update.bannedAt = FieldValue.serverTimestamp();
-    update.bannedBy = req.auth.uid;
-    update.banReason = reason;
+  const { HttpsError } = require('firebase-functions/v2/https');
+  const { uid, action, reason, durationDays } = req.data || {};
+  if (!['ban', 'suspend', 'restore'].includes(action)) throw new HttpsError('invalid-argument', 'action must be ban|suspend|restore');
+  if (durationDays) throw new HttpsError('invalid-argument', 'Timed suspension is not supported; reinstate explicitly.');
+  try {
+    const r = await require('./shared/account-suspension').setSuspension({
+      db: getFirestore(), auth: require('firebase-admin/auth').getAuth(), serverTs: () => FieldValue.serverTimestamp(),
+      actor: req.auth ? { uid: req.auth.uid, superAdmin: req.auth.token && req.auth.token.superAdmin === true } : null,
+      uid, suspend: action !== 'restore', reason, source: 'trust_safety',
+    });
+    return Object.assign({ success: true, newStatus: r.suspended ? 'suspended' : 'active' }, r);
+  } catch (e) {
+    if (e && e.code && typeof e.code === 'string') throw new HttpsError(e.code, e.message);
+    throw e;
   }
-  if (action === 'suspend') {
-    update.suspendReason = reason;
-    update.suspendedUntil = durationDays
-      ? new Date(Date.now() + durationDays * 86400000)
-      : null;
-  }
-  if (action === 'restore') {
-    update.bannedAt = null;
-    update.banReason = null;
-    update.suspendedUntil = null;
-  }
-
-  await userRef.update(update);
-
-  await db.collection('trustSafetyAudit').add({
-    action: `user_${action}`,
-    entityId: targetUid,
-    entityType: 'user',
-    reason,
-    performedBy: req.auth.uid,
-    createdAt: FieldValue.serverTimestamp(),
-  });
-
-  return { success: true, newStatus: statusMap[action] };
 });
 
 /* ─────────────────────────────────────────────────────────────────────────

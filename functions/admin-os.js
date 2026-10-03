@@ -53,115 +53,181 @@ exports.adminGetPlatformOverview = onCall({ region: 'us-central1', maxInstances:
 /* ─────────────────────────────────────────────────────────────────────────
    User Management
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminSearchUsers = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminSearchUsers = async (req) => {
-  _requireAdmin(req);
-  const { query, role, status, limit: lim } = req.data;
+/* ══ USERS WORKSPACE — server authority (owner 2026-10-04) ══════════════════════════════════════════════════════════════
+   Every figure, page, filter, sort, export and security fact on the AdminOS / Super Admin Users screen comes from here.
+   Nothing is derived from a partial client list. A value the server cannot establish is returned as null with
+   *Available:false, and the UI renders "—". */
+const _USERS_MAX_PAGE = 50;
+const _ccOf = (u) => (u.customClaims && typeof u.customClaims === 'object') ? u.customClaims : {};
+const _userStatus = (u) => (u.suspended === true || u.status === 'suspended' || u.status === 'banned') ? 'suspended' : (u.status || 'active');
 
-  const db = getFirestore();
+/* Builds the authoritative query for role / status / sort. Returns { q, sortField, dir }. */
+function _usersQuery(db, { role, status, sort }) {
   let q = db.collection('users');
-  if (status) q = q.where('status', '==', status);
-  q = q.limit(Math.min(lim || 100, 300));
+  if (role) q = q.where('role', '==', String(role));
+  if (status === 'suspended') q = q.where('status', '==', 'suspended');
+  else if (status) q = q.where('status', '==', String(status));
+  const sortField = sort === 'name' ? 'displayName' : 'createdAt';
+  const dir = sort === 'name' ? 'asc' : 'desc';
+  return { q, sortField, dir };
+}
 
-  const snap = await q.get();
-  let users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-  // In-memory filters — no composite indexes needed
-  if (query) {
-    const ql = query.toLowerCase();
-    users = users.filter(u =>
-      (u.email || '').toLowerCase().includes(ql) ||
-      (u.displayName || '').toLowerCase().includes(ql) ||
-      (u.phone || '').includes(query) ||
-      u.id === query
-    );
-  }
-  if (role) users = users.filter(u => u.role === role || (u.roles || []).includes(role));
-
-  const page = users.slice(0, lim || 50);
-  /* Users workspace (2026-10-04): last sign-in comes from Firebase Auth — the authoritative record — never a
-     client-written presence field. Batched (100 per getUsers call); an Auth read failure leaves it null ("—"). */
-  const authById = {};
+/* Auth enrichment for a page of rows: last sign-in + sign-in enabled, from Firebase Auth (never a client presence field). */
+async function _authFacts(uids) {
+  const out = {}; let available = true;
   try {
     const auth = getAuth();
-    for (let i = 0; i < page.length; i += 100) {
-      const r = await auth.getUsers(page.slice(i, i + 100).map(u => ({ uid: u.id })));
-      for (const a of r.users) authById[a.uid] = a;
+    for (let i = 0; i < uids.length; i += 100) {
+      const r = await auth.getUsers(uids.slice(i, i + 100).map((uid) => ({ uid })));
+      for (const a of r.users) out[a.uid] = a;
     }
-  } catch (_) { /* leave lastSignIn null */ }
-  const cc = (u) => (u.customClaims && typeof u.customClaims === 'object') ? u.customClaims : {};
+  } catch (_) { available = false; }
+  return { byUid: out, available };
+}
+
+function _row(u, auth) {
+  const a = auth.byUid[u.id];
   return {
-    scanned: snap.size,
-    users: page.map(u => ({
-      id: u.id,
-      displayName: u.displayName || '',
-      email: u.email || '',
-      phone: u.phone || '',
-      role: u.role || 'buyer',
-      status: u.status || 'active',
-      suspended: u.suspended === true,
-      verified: u.verified || false,
-      createdAt: u.createdAt,
-      photoURL: typeof u.photoURL === 'string' && u.photoURL.startsWith('https://') ? u.photoURL : null,
-      team: cc(u).department || cc(u).teamId || null,
-      lastSignIn: authById[u.id] && authById[u.id].metadata.lastSignInTime ? Date.parse(authById[u.id].metadata.lastSignInTime) : null,
-      authDisabled: authById[u.id] ? authById[u.id].disabled === true : null,
-    })),
+    id: u.id, displayName: u.displayName || '', email: u.email || '', phone: u.phone || '', role: u.role || 'buyer',
+    status: _userStatus(u), verified: u.verified === true, createdAt: u.createdAt || null,
+    photoURL: typeof u.photoURL === 'string' && u.photoURL.startsWith('https://') ? u.photoURL : null,
+    team: _ccOf(u).department || _ccOf(u).teamId || null,
+    lastSignIn: a && a.metadata.lastSignInTime ? Date.parse(a.metadata.lastSignInTime) : null,
+    signInEnabled: a ? a.disabled !== true : null,
+    authAvailable: auth.available && !!a,
   };
+}
+
+/* adminSearchUsers — SERVER-SIDE pagination / filters / sort / search.
+   { pageSize<=50, cursor, role, status, sort:'joined'|'name', query } → { users, nextCursor, hasMore, total, totalAvailable }
+   Search: an email, phone or uid is an exact server lookup; any other text is a server prefix search on displayName.
+   Legacy users whose role lives only in a roles[] array are not matched by the role filter (documented, not hidden). */
+exports.adminSearchUsers = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminSearchUsers = async (req) => {
+  _requireAdmin(req);
+  const d = req.data || {};
+  const db = getFirestore();
+  const pageSize = Math.min(Math.max(parseInt(d.pageSize || d.limit || 10, 10) || 10, 1), _USERS_MAX_PAGE);
+  const query = String(d.query || '').trim().slice(0, 120);
+  const role = d.role ? String(d.role).slice(0, 40) : '';
+  const status = d.status ? String(d.status).slice(0, 20) : '';
+
+  if (query) {
+    let docs = [];
+    if (/^[^\s@]+@[^\s@]+$/.test(query)) {
+      const [a, b] = await Promise.all([db.collection('users').where('email', '==', query).limit(5).get(),
+        db.collection('users').where('email', '==', query.toLowerCase()).limit(5).get()]);
+      docs = [...a.docs, ...b.docs];
+    } else if (/^\+?\d{9,15}$/.test(query)) {
+      docs = (await db.collection('users').where('phone', '==', query).limit(5).get()).docs;
+    } else {
+      const byId = /^[A-Za-z0-9]{20,40}$/.test(query) ? await db.collection('users').doc(query).get() : null;
+      if (byId && byId.exists) docs = [byId];
+      else docs = (await db.collection('users').orderBy('displayName').startAt(query).endAt(query + '').limit(_USERS_MAX_PAGE).get()).docs;
+    }
+    const seen = new Set();
+    let rows = docs.filter((x) => x.exists && !seen.has(x.id) && seen.add(x.id)).map((x) => ({ id: x.id, ...x.data() }));
+    if (role) rows = rows.filter((u) => u.role === role);
+    if (status) rows = rows.filter((u) => _userStatus(u) === status);
+    const auth = await _authFacts(rows.map((u) => u.id));
+    return { users: rows.slice(0, _USERS_MAX_PAGE).map((u) => _row(u, auth)), nextCursor: null, hasMore: false, total: rows.length, totalAvailable: true, mode: 'search' };
+  }
+
+  const { q, sortField, dir } = _usersQuery(db, { role, status, sort: d.sort });
+  let pq = q.orderBy(sortField, dir).limit(pageSize + 1);
+  if (d.cursor) {
+    const cur = await db.collection('users').doc(String(d.cursor).slice(0, 128)).get();
+    if (cur.exists) pq = pq.startAfter(cur);
+  }
+  const [snap, total] = await Promise.all([pq.get(), q.count().get().then((r) => r.data().count).catch(() => null)]);
+  const docs = snap.docs.slice(0, pageSize);
+  const rows = docs.map((x) => ({ id: x.id, ...x.data() }));
+  const auth = await _authFacts(rows.map((u) => u.id));
+  return { users: rows.map((u) => _row(u, auth)), nextCursor: snap.docs.length > pageSize ? docs[docs.length - 1].id : null,
+    hasMore: snap.docs.length > pageSize, total, totalAvailable: total !== null, mode: 'list' };
 });
 
-/* ── adminUserStats — the Users workspace KPI cards (2026-10-04) ──────────────────────────────────
-   Server count() aggregates only; nothing is estimated in the browser. Two suspension
-   representations exist (tsBanUser writes status 'suspended'/'banned'; suspendUser writes
-   suspended:true and leaves status alone), so the suspended figure combines them without double
-   counting, and 'active' excludes accounts flagged suspended. */
+/* adminUserStats — KPI cards. count() aggregates only; each figure carries its own availability. */
 exports.adminUserStats = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminUserStats = async (req) => {
   _requireAdmin(req);
   const db = getFirestore();
   const users = db.collection('users');
-  const since30 = Timestamp.fromMillis(Date.now() - 30 * 86400000);
-  const c = (q) => q.count().get().then(r => r.data().count);
-  const [total, activeStatus, statusSuspended, flaggedActive, joinedLast30, flagged] = await Promise.all([
+  const now = Date.now();
+  const c = (q) => q.count().get().then((r) => r.data().count).catch(() => null);
+  const live = ['queued', 'sent', 'pending'];
+  const [totalUsers, activeStatus, statusSuspended, flaggedActive, joinedLast30, flagged, pendingInvites, expiringSoon] = await Promise.all([
     c(users),
     c(users.where('status', '==', 'active')),
     c(users.where('status', 'in', ['suspended', 'banned'])),
     c(users.where('suspended', '==', true).where('status', '==', 'active')),
-    c(users.where('createdAt', '>=', since30)),
-    users.where('suspended', '==', true).select('status').limit(1000).get(),
+    c(users.where('createdAt', '>=', Timestamp.fromMillis(now - 30 * 86400000))),
+    users.where('suspended', '==', true).select('status').limit(1000).get().catch(() => null),
+    c(db.collection('invitations').where('status', 'in', live).where('expiresAt', '>', Timestamp.fromMillis(now))),
+    c(db.collection('invitations').where('status', 'in', live).where('expiresAt', '>', Timestamp.fromMillis(now)).where('expiresAt', '<=', Timestamp.fromMillis(now + 72 * 3600000))),
   ]);
-  /* flagged suspended:true whose status is NOT already suspended/banned (incl. no status field) */
-  const flaggedOnly = flagged.docs.filter(d => !['suspended', 'banned'].includes(String((d.data() || {}).status || ''))).length;
+  const flaggedOnly = flagged ? flagged.docs.filter((x) => !['suspended', 'banned'].includes(String((x.data() || {}).status || ''))).length : null;
+  const suspendedUsers = statusSuspended === null || flaggedOnly === null ? null : statusSuspended + flaggedOnly;
+  const activeUsers = activeStatus === null || flaggedActive === null ? null : Math.max(0, activeStatus - flaggedActive);
   return {
-    total,
-    active: Math.max(0, activeStatus - flaggedActive),
-    suspended: statusSuspended + flaggedOnly,
-    suspendedExact: flagged.size < 1000,
-    joinedLast30,
-    computedAt: Date.now(),
+    totalUsers, activeUsers, suspendedUsers, pendingInvites, expiringSoon, joinedLast30,
+    available: { totalUsers: totalUsers !== null, activeUsers: activeUsers !== null, suspendedUsers: suspendedUsers !== null,
+      pendingInvites: pendingInvites !== null, expiringSoon: expiringSoon !== null, joinedLast30: joinedLast30 !== null },
+    suspendedExact: !!flagged && flagged.size < 1000,
+    computedAt: now,
   };
 });
 
+/* adminExportUsers — the ONLY export path (super admin). Same server filters as the list; only the displayed columns;
+   capped; every export is audited (who, filters, row count). The browser never assembles PII from its own state. */
+const _EXPORT_CAP = 5000;
+exports.adminExportUsers = onCall({ region: 'us-central1', maxInstances: 5, enforceAppCheck: true, timeoutSeconds: 120 }, exports._h.adminExportUsers = async (req) => {
+  _requireSuperAdmin(req);
+  const d = req.data || {};
+  const db = getFirestore();
+  const role = d.role ? String(d.role).slice(0, 40) : '';
+  const status = d.status ? String(d.status).slice(0, 20) : '';
+  const { q, sortField, dir } = _usersQuery(db, { role, status, sort: d.sort });
+  const rows = []; let last = null; let truncated = false;
+  while (rows.length < _EXPORT_CAP) {
+    let pq = q.orderBy(sortField, dir).limit(500);
+    if (last) pq = pq.startAfter(last);
+    const snap = await pq.get();
+    if (snap.empty) break;
+    for (const x of snap.docs) rows.push({ id: x.id, ...x.data() });
+    last = snap.docs[snap.docs.length - 1];
+    if (snap.size < 500) break;
+  }
+  if (rows.length > _EXPORT_CAP) { rows.length = _EXPORT_CAP; truncated = true; } else if (rows.length === _EXPORT_CAP) truncated = true;
+  const auth = await _authFacts(rows.map((u) => u.id));
+  const out = rows.map((u) => { const r = _row(u, auth); return { uid: r.id, name: r.displayName, email: r.email, phone: r.phone, role: r.role, status: r.status,
+    joined: r.createdAt && r.createdAt.toMillis ? r.createdAt.toMillis() : null, lastSignIn: r.lastSignIn }; });
+  await db.collection('adminAudit').add({ action: 'users_exported', performedBy: req.auth.uid, filters: { role: role || null, status: status || null, sort: d.sort || 'joined' },
+    rowCount: out.length, truncated, createdAt: FieldValue.serverTimestamp() });
+  return { rows: out, rowCount: out.length, truncated, columns: ['uid', 'name', 'email', 'phone', 'role', 'status', 'joined', 'lastSignIn'] };
+});
+
+/* adminGetUser — detail panel. Security facts straight from Auth; histories from the server's own records. No tokens,
+   password hashes, recovery codes or provider secrets are ever returned. */
 exports.adminGetUser = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetUser = async (req) => {
   _requireAdmin(req);
-  const { uid } = req.data;
+  const { uid } = req.data || {};
   if (!uid) throw new Error('uid required');
-
   const db = getFirestore();
   const auth = getAuth();
-
-  const [userSnap, authUser, reportsSnap, ordersSnap, walletSnap, subSnap] = await Promise.all([
+  const [userSnap, authUser, reportsSnap, ordersSnap, subSnap, suspSnap, auditSnap] = await Promise.all([
     db.collection('users').doc(uid).get(),
     auth.getUser(uid).catch(() => null),
     db.collection('reports').where('entityId', '==', uid).limit(10).get(),
     db.collection('orders').where('buyerId', '==', uid).limit(10).get(),
-    db.collection('wallets').doc(uid).get(),
     db.collection('subscriptions').where('uid', '==', uid).limit(5).get(),
+    db.collection('accountSuspensions').where('uid', '==', uid).limit(20).get().catch(() => null),
+    db.collection('adminAudit').where('targetUid', '==', uid).limit(30).get().catch(() => null),
   ]);
-
   if (!userSnap.exists) throw new Error('User not found');
   const u = userSnap.data();
-
+  const t = (v) => (v && v.toMillis ? v.toMillis() : (typeof v === 'number' ? v : null));
+  const audit = auditSnap ? auditSnap.docs.map((x) => x.data() || {}) : null;
   return {
-    profile: { id: uid, ...u },
+    profile: { id: uid, ...u, status: _userStatus(u) },
     authRecord: authUser ? {
       email: authUser.email,
       emailVerified: authUser.emailVerified,
@@ -169,11 +235,20 @@ exports.adminGetUser = onCall({ region: 'us-central1', maxInstances: 10, enforce
       lastSignIn: authUser.metadata.lastSignInTime,
       creationTime: authUser.metadata.creationTime,
       providerData: authUser.providerData.map(p => p.providerId),
-      /* Users workspace security panel (2026-10-04) — straight from Auth, never inferred */
       mfaEnrolled: authUser.multiFactor && Array.isArray(authUser.multiFactor.enrolledFactors) ? authUser.multiFactor.enrolledFactors.length : 0,
       tokensValidAfter: authUser.tokensValidAfterTime || null,
     } : null,
-    wallet: walletSnap.exists ? walletSnap.data() : null,
+    security: {
+      authAvailable: !!authUser,
+      accountStatus: _userStatus(u),
+      signInEnabled: authUser ? authUser.disabled !== true : null,
+      twoFactor: authUser ? ((authUser.multiFactor && (authUser.multiFactor.enrolledFactors || []).length) ? 'enabled' : 'not_enabled') : 'unavailable',
+      suspensionHistory: suspSnap ? suspSnap.docs.map((x) => { const e = x.data() || {}; return { action: e.action, actorUid: e.actorUid || null, reason: e.reason || null, source: e.source || null, at: t(e.at) }; })
+        .sort((a, b) => (b.at || 0) - (a.at || 0)) : null,
+      roleChanges: audit ? audit.filter((e) => /role/i.test(String(e.action || ''))).map((e) => ({ action: e.action, newRole: e.newRole || null, by: e.performedBy || null, at: t(e.createdAt) }))
+        .sort((a, b) => (b.at || 0) - (a.at || 0)) : null,
+      events: audit ? audit.map((e) => ({ action: e.action, by: e.performedBy || null, at: t(e.createdAt) })).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 20) : null,
+    },
     reportCount: reportsSnap.size,
     orderCount: ordersSnap.size,
     activeSubscriptions: subSnap.docs.map(d => ({ id: d.id, ...d.data() })),

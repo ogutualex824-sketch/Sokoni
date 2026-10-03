@@ -189,80 +189,22 @@ exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 
    Returns: { success: true, uid, suspended: boolean }
    Guard  : superAdmin only
 ═══════════════════════════════════════════════════════════════════════════════ */
+/* CANONICAL SUSPENSION (owner 2026-10-04): the ONE callable both AdminOS and Super Admin use. The contract lives in
+   shared/account-suspension.js — Auth account disabled + sessions revoked + status:'suspended' + one history + one audit
+   record; super-admin-only, server-side; no self-suspension; idempotent. Errors carry real HttpsError codes. */
 exports.suspendUser = onCall({ cors: true, region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (request) => {
-  _requireSuperAdmin(request);
-
-  const { uid, suspend, reason } = request.data || {};
-
-  // ── Validate input ──────────────────────────────────────────────────────────
-  if (!uid || typeof uid !== 'string' || uid.trim() === '') {
-    throw new Error('INVALID_ARGUMENT: uid is required');
-  }
-  if (typeof suspend !== 'boolean') {
-    throw new Error('INVALID_ARGUMENT: suspend must be a boolean');
-  }
-
-  const cleanUid    = uid.trim();
-  const cleanReason = reason ? _stripHtml(String(reason)).slice(0, 500) : null;
-
-  // ── Guard: superAdmin cannot suspend themselves ──────────────────────────────
-  if (cleanUid === request.auth.uid) {
-    throw new Error('INVALID_ARGUMENT: cannot suspend your own account');
-  }
-
-  // ── Verify target user exists ───────────────────────────────────────────────
-  let targetUser;
+  const { HttpsError } = require('firebase-functions/v2/https');
+  const d = request.data || {};
   try {
-    targetUser = await getAuth().getUser(cleanUid);
-  } catch (err) {
-    throw new Error(`NOT_FOUND: user ${cleanUid} does not exist`);
+    return await require('./shared/account-suspension').setSuspension({
+      db: getFirestore(), auth: getAuth(), serverTs: () => FieldValue.serverTimestamp(),
+      actor: request.auth ? { uid: request.auth.uid, superAdmin: request.auth.token && request.auth.token.superAdmin === true } : null,
+      uid: d.uid, suspend: d.suspend, reason: d.reason, source: typeof d.source === 'string' ? d.source : 'super_admin',
+    });
+  } catch (e) {
+    if (e && e.code && typeof e.code === 'string') throw new HttpsError(e.code, e.message);
+    throw e;
   }
-
-  // ── Guard: never suspend another superAdmin ─────────────────────────────────
-  if (targetUser.customClaims && targetUser.customClaims.superAdmin === true && suspend) {
-    throw new Error('PERMISSION_DENIED: cannot suspend a superAdmin account');
-  }
-
-  // ── Disable / enable in Firebase Auth ──────────────────────────────────────
-  await getAuth().updateUser(cleanUid, { disabled: suspend });
-
-  // ── Persist suspension state to Firestore ──────────────────────────────────
-  const db = getFirestore();
-  const updatePayload = suspend
-    ? {
-        suspended:       true,
-        suspendedAt:     FieldValue.serverTimestamp(),
-        suspendReason:   cleanReason,
-        suspendedBy:     request.auth.uid,
-        reinstatedAt:    null,
-        reinstatedBy:    null,
-      }
-    : {
-        suspended:       false,
-        suspendedAt:     null,
-        suspendReason:   null,
-        suspendedBy:     null,
-        reinstatedAt:    FieldValue.serverTimestamp(),
-        reinstatedBy:    request.auth.uid,
-      };
-
-  await db.collection('users').doc(cleanUid).set(updatePayload, { merge: true });
-
-  // ── Audit ───────────────────────────────────────────────────────────────────
-  await _auditLog({
-    actor:    request.auth.uid,
-    action:   suspend ? 'suspendUser' : 'reinstateUser',
-    resource: `users/${cleanUid}`,
-    details:  {
-      uid:    cleanUid,
-      email:  targetUser.email || null,
-      reason: cleanReason,
-      action: suspend ? 'suspended' : 'reinstated',
-    },
-    severity: 'high',
-  });
-
-  return { success: true, uid: cleanUid, suspended: suspend };
 });
 
 /* ═══════════════════════════════════════════════════════════════════════════════

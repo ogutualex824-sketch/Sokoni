@@ -5,21 +5,20 @@
    Users panel (the page keeps its own sidebar). Layout: header actions · four
    KPI cards · filter bar · bulk actions · table · right-hand detail drawer.
 
-   DATA INTEGRITY (CLAUDE.md "UI Data Integrity"): every figure comes from a
-   server callable. Nothing is computed from local state or invented:
-     list      adminSearchUsers          (server; admin-gated)
-     detail    adminGetUser              (server; profile + Auth record)
-     KPIs      adminUserStats            (server count() aggregates) — until it
-                                         is deployed every KPI renders "—"
-     invites   listInvitations           (server)
-   An unknown value renders "—", never 0 and never a guess. No percentage
-   "access bars", no fabricated teams: access is DERIVED from the user's role.
+   DATA INTEGRITY (CLAUDE.md "UI Data Integrity"): every figure, page, filter, sort
+   and export comes from the server; the browser never filters, sorts or counts a
+   partial list:
+     list      adminSearchUsers   server pagination (cursor) · role/status/sort/search
+     detail    adminGetUser       profile + Auth facts + suspension / role history
+     KPIs      adminUserStats     count() aggregates, each with its own availability
+     export    adminExportUsers   super admin only · same server filters · audited
+   A value the server marks unavailable renders "—", never 0 and never a guess.
+   No percentage "access bars", no fabricated teams: access derives from the role.
 
-   ACTIONS go through each surface's EXISTING server authority (config.actions);
-   this module adds no role or suspension path of its own:
-     admin-os.html     role → adminUpdateUserRole   suspend → tsBanUser
-     super-admin.html  role → setUserRole           suspend → suspendUser
-   Invite → inviteUser (server). Export = CSV of the rows the server returned.
+   SUSPENSION has ONE contract (owner 2026-10-04): both surfaces call suspendUser
+   (Auth account disabled + sessions revoked + status + history + audit; super-admin
+   only, enforced on the server). Role changes keep each surface's existing callable.
+   Invite → inviteUser (the server owns invited state, expiry, resend, acceptance).
    ============================================================================ */
 ;(function () {
   'use strict';
@@ -119,7 +118,7 @@
     if (!root || !config || typeof config.call !== 'function') throw new Error('SokoniAdminUsers.mount(root, {call, actions})');
     const cfg = Object.assign({ pageSize: 10, roles: ['buyer', 'seller', 'provider', 'driver', 'moderator', 'admin'], canChangeRole: true, canSuspend: true }, config);
     if (!document.getElementById('aus-style')) { const st = document.createElement('style'); st.id = 'aus-style'; st.textContent = CSS; document.head.appendChild(st); }
-    const S = { users: [], scanned: null, filter: { q: '', role: '', status: '' }, sort: 'joined', view: 'list', page: 1, sel: new Set(), stats: null, invites: null, loading: false, error: null };
+    const S = { users: [], total: null, cursors: [null], page: 1, nextCursor: null, hasMore: false, mode: 'list', filter: { q: '', role: '', status: '' }, sort: 'joined', view: 'list', sel: new Set(), stats: null, loading: false, error: null };
 
     root.innerHTML = `
 <div class="aus" data-surface="${esc(cfg.surface || '')}">
@@ -127,7 +126,7 @@
     <div><h2 class="aus-title">Users <span class="aus-badge" data-k="count">${DASH}</span></h2>
       <div class="aus-subtitle">Manage members, roles, and access across SOKONI.</div></div>
     <div class="aus-actions">
-      <button class="aus-btn" data-act="export" type="button">&#x2B73; Export</button>
+      <button class="aus-btn" data-act="export" type="button" ${cfg.canExport ? '' : 'disabled title="Export is restricted to super admins"'}>&#x2B73; Export</button>
       <button class="aus-btn primary" data-act="invite" type="button">&#xFF0B; Invite User</button>
     </div>
   </div>
@@ -140,8 +139,8 @@
   <div class="aus-bar" role="search">
     <label class="aus-search"><span aria-hidden="true">&#x1F50D;</span><input type="search" data-f="q" placeholder="Search by name, email, phone or UID" aria-label="Search users"></label>
     <select class="aus-sel" data-f="role" aria-label="Filter by role"><option value="">Role: All</option>${cfg.roles.concat(['superAdmin']).map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join('')}</select>
-    <select class="aus-sel" data-f="status" aria-label="Filter by status"><option value="">Status: All</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="banned">Banned</option><option value="inactive">Inactive</option><option value="pending">Pending</option></select>
-    <select class="aus-sel" data-f="sort" aria-label="Sort"><option value="joined">Sort by: Newest joined</option><option value="lastSignIn">Sort by: Last sign-in</option><option value="name">Sort by: Name</option></select>
+    <select class="aus-sel" data-f="status" aria-label="Filter by status"><option value="">Status: All</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="inactive">Inactive</option><option value="pending">Pending</option></select>
+    <select class="aus-sel" data-f="sort" aria-label="Sort"><option value="joined">Sort by: Newest joined</option><option value="name">Sort by: Name</option></select>
     <div class="aus-view"><button type="button" data-view="list" aria-pressed="true" aria-label="List view">&#x2630;</button><button type="button" data-view="grid" aria-pressed="false" aria-label="Grid view">&#x25A6;</button></div>
   </div>
   <div class="aus-bulk" data-k="bulk" hidden>
@@ -158,47 +157,37 @@
     /* ── data ── */
     async function loadStats() {
       try { S.stats = await cfg.call('adminUserStats', {}); } catch (_) { S.stats = null; }
-      try { const r = await cfg.call('listInvitations', { limit: 500 }); S.invites = r && Array.isArray(r.invitations) ? r.invitations : null; } catch (_) { S.invites = null; }
       renderKpis();
     }
-    async function loadUsers() {
+    /* SERVER pagination: the cursor stack lets the user page back without re-reading everything. reset=true on a filter change. */
+    async function loadUsers(reset) {
+      if (reset !== false) { S.cursors = [null]; S.page = 1; }
       S.loading = true; S.error = null; renderBody();
       try {
-        const r = await cfg.call('adminSearchUsers', { query: S.filter.q, role: S.filter.role, status: S.filter.status === 'suspended' ? '' : S.filter.status, limit: 300 });
+        const r = await cfg.call('adminSearchUsers', { query: S.filter.q, role: S.filter.role, status: S.filter.status, sort: S.sort, pageSize: cfg.pageSize, cursor: S.cursors[S.page - 1] });
         S.users = (r && Array.isArray(r.users)) ? r.users : [];
-        S.scanned = r && Number.isFinite(Number(r.scanned)) ? Number(r.scanned) : null;
+        S.total = r && r.totalAvailable && Number.isFinite(Number(r.total)) ? Number(r.total) : null;
+        S.nextCursor = r ? r.nextCursor || null : null; S.hasMore = !!(r && r.hasMore); S.mode = r && r.mode || 'list';
       } catch (e) { S.users = []; S.error = (e && e.message) || 'Could not load users.'; }
-      S.loading = false; S.page = 1; S.sel.clear(); renderBody(); renderBulk();
+      S.loading = false; S.sel.clear(); renderBody(); renderBulk();
     }
 
     /* ── KPIs: server aggregates only ── */
     function renderKpis() {
-      const st = S.stats;
-      setK('total', st ? num(st.total) : DASH);
-      setK('count', st ? num(st.total) : DASH);
-      setK('totalSub', st && Number.isFinite(Number(st.joinedLast30)) ? `<span class="aus-up">&#x2191; ${num(st.joinedLast30)}</span> joined in the last 30 days` : '&nbsp;');
-      setK('active', st ? num(st.active) : DASH);
-      setK('activeSub', st && Number(st.total) > 0 && Number.isFinite(Number(st.active)) ? `${Math.round(Number(st.active) / Number(st.total) * 100)}% of all users` : '&nbsp;');
-      setK('suspended', st ? num(st.suspended) : DASH);
-      setK('suspendedSub', st ? 'suspended or banned' : '&nbsp;');
-      if (S.invites) {
-        const now = Date.now();
-        const live = S.invites.filter((i) => i.status !== 'accepted' && !i.expired);
-        const soon = live.filter((i) => i.expiresAt && i.expiresAt - now < 72 * 3600 * 1000).length;
-        setK('invites', num(live.length) + (S.invites.length >= 500 ? '+' : ''));
-        setK('invitesSub', soon ? `<span class="aus-warn">&#x25CF; ${soon} expiring within 72h</span>` : 'none expiring soon');
-      } else { setK('invites', DASH); setK('invitesSub', '&nbsp;'); }
+      const st = S.stats, av = (k) => !!(st && st.available && st.available[k]);
+      setK('total', av('totalUsers') ? num(st.totalUsers) : DASH);
+      setK('count', av('totalUsers') ? num(st.totalUsers) : DASH);
+      setK('totalSub', av('joinedLast30') ? `<span class="aus-up">&#x2191; ${num(st.joinedLast30)}</span> joined in the last 30 days` : '&nbsp;');
+      setK('active', av('activeUsers') ? num(st.activeUsers) : DASH);
+      setK('activeSub', av('activeUsers') && av('totalUsers') && Number(st.totalUsers) > 0 ? `${Math.round(Number(st.activeUsers) / Number(st.totalUsers) * 100)}% of all users` : '&nbsp;');
+      setK('suspended', av('suspendedUsers') ? num(st.suspendedUsers) + (st.suspendedExact === false ? '+' : '') : DASH);
+      setK('suspendedSub', av('suspendedUsers') ? 'sign-in disabled' : '&nbsp;');
+      setK('invites', av('pendingInvites') ? num(st.pendingInvites) : DASH);
+      setK('invitesSub', av('expiringSoon') ? (Number(st.expiringSoon) > 0 ? `<span class="aus-warn">&#x25CF; ${num(st.expiringSoon)} expiring within 72h</span>` : 'none expiring soon') : '&nbsp;');
     }
 
     /* ── table / grid ── */
-    function visible() {
-      let list = S.users.slice();
-      if (S.filter.status) list = list.filter((u) => statusOf(u) === S.filter.status);
-      const key = S.sort;
-      list.sort((a, b) => key === 'name' ? String(a.displayName || a.email || '').localeCompare(String(b.displayName || b.email || ''))
-        : key === 'lastSignIn' ? (ms(b.lastSignIn) || 0) - (ms(a.lastSignIn) || 0) : (ms(b.createdAt) || 0) - (ms(a.createdAt) || 0));
-      return list;
-    }
+    function visible() { return S.users.slice(); }   /* the server filtered, sorted and paged this list */
     const statusPill = (s) => `<span class="aus-pill ${s === 'active' ? 'green' : s === 'pending' ? 'amber' : s === 'inactive' ? 'muted' : 'red'}">${esc(s.charAt(0).toUpperCase() + s.slice(1))}</span>`;
     const rolePill = (r) => `<span class="aus-pill ${r === 'superAdmin' || r === 'admin' ? 'violet' : r === 'moderator' ? 'amber' : 'blue'}">${esc(r || DASH)}</span>`;
     const av = (u) => `<span class="aus-av">${u.photoURL && /^https:\/\//.test(u.photoURL) ? `<img src="${esc(u.photoURL)}" alt="" loading="lazy">` : esc(initials(u.displayName, u.email))}</span>`;
@@ -209,10 +198,10 @@
       if (S.error) { body.innerHTML = `<div class="aus-empty">Couldn't load users &mdash; ${esc(S.error)} <br><button class="aus-btn" data-act="retry" type="button" style="margin-top:10px">Try again</button></div>`; return; }
       const list = visible();
       if (!list.length) { body.innerHTML = '<div class="aus-empty">No users match these filters.</div>'; return; }
-      const pages = Math.max(1, Math.ceil(list.length / cfg.pageSize)); if (S.page > pages) S.page = pages;
-      const slice = list.slice((S.page - 1) * cfg.pageSize, S.page * cfg.pageSize);
-      const foot = `<div class="aus-foot"><span>Showing ${(S.page - 1) * cfg.pageSize + 1}&ndash;${(S.page - 1) * cfg.pageSize + slice.length} of ${num(list.length)} loaded${S.scanned != null ? ` (server scanned ${num(S.scanned)})` : ''}</span>
-        <span class="aus-pages">${Array.from({ length: pages }, (_, i) => i + 1).filter((p) => p === 1 || p === pages || Math.abs(p - S.page) <= 2).map((p) => `<button type="button" data-page="${p}" ${p === S.page ? 'aria-current="page"' : ''}>${p}</button>`).join('')}</span></div>`;
+      const slice = list;
+      const from = S.mode === 'search' ? 1 : (S.page - 1) * cfg.pageSize + 1;
+      const foot = `<div class="aus-foot"><span>${S.mode === 'search' ? `${num(list.length)} match${list.length === 1 ? '' : 'es'}` : `Showing ${from}&ndash;${from + slice.length - 1} of ${S.total == null ? DASH : num(S.total)}`}</span>
+        <span class="aus-pages"><button type="button" data-page="prev" ${S.page > 1 ? '' : 'disabled'} aria-label="Previous page">&lsaquo;</button><button type="button" aria-current="page">${S.page}</button><button type="button" data-page="next" ${S.hasMore ? '' : 'disabled'} aria-label="Next page">&rsaquo;</button></span></div>`;
       if (S.view === 'grid') {
         body.innerHTML = `<div class="aus-grid">${slice.map((u) => { const s = statusOf(u), a = accessOf(u.role); return `<div class="aus-card" data-uid="${esc(u.id)}" tabindex="0" role="button" aria-label="Open ${esc(u.displayName || u.email || u.id)}">
           <div class="aus-user">${av(u)}<div style="min-width:0"><div class="aus-name">${esc(u.displayName || DASH)}</div><div class="aus-mail">${esc(u.email || u.phone || DASH)}</div></div></div>
@@ -220,7 +209,7 @@
           <div class="aus-kpi-sub" style="margin-top:8px">Last sign-in: ${esc(ago(ms(u.lastSignIn)))}</div></div>`; }).join('')}</div>${foot}`;
         return;
       }
-      const allOn = slice.every((u) => S.sel.has(u.id));
+      const allOn = slice.length > 0 && slice.every((u) => S.sel.has(u.id));
       body.innerHTML = `<table class="aus-table"><thead><tr>
         <th><input type="checkbox" class="aus-chk" data-act="selAll" aria-label="Select all on this page" ${allOn ? 'checked' : ''}></th>
         <th>User</th><th>Role</th><th>Team</th><th>Status</th><th>Last sign-in</th><th>Access</th><th><span class="sr-only" style="position:absolute;left:-9999px">Actions</span></th></tr></thead><tbody>
@@ -247,11 +236,13 @@
       document.addEventListener('keydown', escClose);
       let d = null; try { d = await cfg.call('adminGetUser', { uid }); } catch (e) { d = { error: (e && e.message) || 'unavailable' }; }
       if (!dr.isConnected) return;
-      const p = (d && d.profile) || u, ar = d && d.authRecord, s = statusOf(p), a = accessOf(p.role);
+      const p = (d && d.profile) || u, ar = d && d.authRecord, s = (d && d.security && d.security.accountStatus) || statusOf(p), a = accessOf(p.role);
       const claims = (p.customClaims && typeof p.customClaims === 'object') ? Object.keys(p.customClaims).filter((k) => p.customClaims[k] === true) : [];
       const providers = ar && Array.isArray(ar.providerData) ? ar.providerData : null;
       const sso = providers ? providers.filter((x) => x !== 'password' && x !== 'phone') : null;
-      const mfa = ar && Number.isFinite(Number(ar.mfaEnrolled)) ? Number(ar.mfaEnrolled) : null;
+      const sec = (d && d.security) || null;
+      const mfa = sec ? (sec.twoFactor === 'enabled' ? 1 : sec.twoFactor === 'not_enabled' ? 0 : null) : null;
+      const hist = (list, f) => (Array.isArray(list) ? (list.length ? list.slice(0, 8).map(f).join('') : '<div class="aus-kpi-sub">None recorded.</div>') : `<div class="aus-kpi-sub">${DASH}</div>`);
       const tab = (id, html) => `<section data-tab="${id}" ${id === 'overview' ? '' : 'hidden'}>${html}</section>`;
       dr.innerHTML = `<button class="aus-x" type="button" aria-label="Close">&times;</button>
         <div class="aus-dhead">${av(p)}<div style="min-width:0"><div class="aus-dname">${esc(p.displayName || DASH)}</div><div class="aus-mail">${esc(p.email || p.phone || DASH)}</div></div></div>
@@ -271,12 +262,16 @@
           <div class="aus-kv"><span>Two-factor authentication</span><span>${mfa == null ? DASH : mfa > 0 ? '<span class="aus-up">Enabled</span>' : 'Not enabled'}</span></div>
           <div class="aus-kv"><span>SSO sign-in</span><span>${sso == null ? DASH : sso.length ? esc(sso.join(', ')) : 'None'}</span></div>
           <div class="aus-kv"><span>Email verified</span><span>${ar ? (ar.emailVerified ? '<span class="aus-up">Yes</span>' : 'No') : DASH}</span></div>
-          <div class="aus-kv"><span>Sign-in disabled</span><span>${ar ? (ar.disabled ? '<span class="aus-warn">Yes</span>' : 'No') : DASH}</span></div>
-          <div class="aus-kv"><span>Sessions revoked at</span><span>${esc(ar && ar.tokensValidAfter ? fmtDate(ms(ar.tokensValidAfter)) : DASH)}</span></div>`)}
+          <div class="aus-kv"><span>Account status</span><span>${sec ? statusPill(sec.accountStatus || 'active') : DASH}</span></div>
+          <div class="aus-kv"><span>Sign-in</span><span>${sec && sec.signInEnabled != null ? (sec.signInEnabled ? 'Enabled' : '<span class="aus-warn">Disabled</span>') : DASH}</span></div>
+          <div class="aus-kv"><span>Sessions revoked at</span><span>${esc(ar && ar.tokensValidAfter ? fmtDate(ms(ar.tokensValidAfter)) : DASH)}</span></div>
+          <h3>Suspension history</h3>${hist(sec && sec.suspensionHistory, (h) => `<div class="aus-kv"><span>${esc(h.action)} ${h.reason ? '&mdash; ' + esc(h.reason) : ''}</span><span>${esc(fmtDate(h.at))}</span></div>`)}
+          <h3>Role changes</h3>${hist(sec && sec.roleChanges, (h) => `<div class="aus-kv"><span>${esc(h.newRole || h.action)}</span><span>${esc(fmtDate(h.at))}</span></div>`)}
+          <h3>Security events</h3>${hist(sec && sec.events, (h) => `<div class="aus-kv"><span>${esc(h.action)}</span><span>${esc(fmtDate(h.at))}</span></div>`)}`)}
         <div class="aus-chips" style="margin-top:22px">
           <button class="aus-btn" type="button" data-d="role" ${cfg.canChangeRole ? '' : 'disabled'}>&#x270E; Change role</button>
           ${s === 'suspended' || s === 'banned'
-            ? `<button class="aus-btn" type="button" data-d="restore" ${cfg.actions && cfg.actions.restore ? '' : 'disabled'}>Restore</button>`
+            ? `<button class="aus-btn" type="button" data-d="restore" ${cfg.canSuspend && cfg.actions && cfg.actions.restore ? '' : 'disabled'}>Restore</button>`
             : `<button class="aus-btn danger" type="button" data-d="suspend" ${cfg.canSuspend ? '' : 'disabled'}>Suspend</button>`}
         </div>`;
       dr.querySelector('.aus-x').addEventListener('click', close);
@@ -335,14 +330,22 @@
         const r = await cfg.call('inviteUser', { email, name: bg.querySelector('[data-name]').value.trim(), role: bg.querySelector('[data-irole]').value });
         loadStats(); return r && r.status === 'queued' ? 'Invitation sent.' : 'Invitation recorded.'; }, 'Send invite');
     }
-    function exportCsv() {
-      const list = visible(); if (!list.length) return;
-      const q = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
-      const rows = [['uid', 'name', 'email', 'phone', 'role', 'status', 'joined', 'last_sign_in']].concat(list.map((u) => [u.id, u.displayName, u.email, u.phone, u.role, statusOf(u),
-        ms(u.createdAt) ? new Date(ms(u.createdAt)).toISOString() : '', ms(u.lastSignIn) ? new Date(ms(u.lastSignIn)).toISOString() : '']));
-      const blob = new Blob(['﻿' + rows.map((r) => r.map(q).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `sokoni-users-${new Date().toISOString().slice(0, 10)}.csv`; document.body.appendChild(a); a.click();
-      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    /* EXPORT — server-side only (adminExportUsers: super admin, same filters, displayed columns, capped, AUDITED). */
+    async function exportCsv() {
+      if (!cfg.canExport) return;
+      const btn = root.querySelector('[data-act="export"]'); if (btn) { btn.disabled = true; btn.textContent = 'Exporting…'; }
+      try {
+        const r = await cfg.call('adminExportUsers', { role: S.filter.role, status: S.filter.status, sort: S.sort });
+        const cols = (r && r.columns) || [];
+        const q = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+        const iso = (t) => (t ? new Date(t).toISOString() : '');
+        const lines = [cols.join(',')].concat(((r && r.rows) || []).map((x) => cols.map((c) => q(c === 'joined' || c === 'lastSignIn' ? iso(x[c]) : x[c])).join(',')));
+        const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `sokoni-users-${new Date().toISOString().slice(0, 10)}.csv`; document.body.appendChild(a); a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+        if (r && r.truncated) alert('Export capped at ' + num(r.rowCount) + ' rows — narrow the filters for the rest.');
+      } catch (e) { alert('Export refused: ' + ((e && e.message) || 'failed')); }
+      if (btn) { btn.disabled = false; btn.innerHTML = '&#x2B73; Export'; }
     }
 
     /* ── events ── */
@@ -352,9 +355,9 @@
       const f = e.target.dataset.f;
       if (f === 'role') { S.filter.role = e.target.value; loadUsers(); }
       else if (f === 'status') { S.filter.status = e.target.value; loadUsers(); }
-      else if (f === 'sort') { S.sort = e.target.value; renderBody(); }
+      else if (f === 'sort') { S.sort = e.target.value; loadUsers(); }
       else if (e.target.dataset.sel) { e.target.checked ? S.sel.add(e.target.dataset.sel) : S.sel.delete(e.target.dataset.sel); renderBody(); renderBulk(); }
-      else if (e.target.dataset.act === 'selAll') { const list = visible().slice((S.page - 1) * cfg.pageSize, S.page * cfg.pageSize); list.forEach((u) => (e.target.checked ? S.sel.add(u.id) : S.sel.delete(u.id))); renderBody(); renderBulk(); }
+      else if (e.target.dataset.act === 'selAll') { visible().forEach((u) => (e.target.checked ? S.sel.add(u.id) : S.sel.delete(u.id))); renderBody(); renderBulk(); }
     });
     root.addEventListener('click', (e) => {
       const t = e.target.closest('button,[data-uid]'); if (!t) return;
@@ -366,7 +369,8 @@
       else if (t.dataset.act === 'bulkSuspend') suspendDialog([...S.sel]);
       else if (t.dataset.act === 'clearSel') { S.sel.clear(); renderBody(); renderBulk(); }
       else if (t.dataset.view) { S.view = t.dataset.view; root.querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-pressed', String(b === t))); renderBody(); }
-      else if (t.dataset.page) { S.page = Number(t.dataset.page); renderBody(); }
+      else if (t.dataset.page === 'next' && S.hasMore && S.nextCursor) { S.cursors[S.page] = S.nextCursor; S.page += 1; loadUsers(false); }
+      else if (t.dataset.page === 'prev' && S.page > 1) { S.page -= 1; loadUsers(false); }
       else if (t.dataset.open) openDrawer(t.dataset.open);
       else if (t.dataset.uid && !e.target.closest('input,.aus-more')) openDrawer(t.dataset.uid);
     });
@@ -375,6 +379,7 @@
     const api = {
       refresh() { loadUsers(); loadStats(); },
       search(q) { S.filter.q = String(q || ''); const i = root.querySelector('[data-f="q"]'); if (i) i.value = S.filter.q; loadUsers(); },
+      _cfg: cfg,
       _state: S, _visible: visible, _statusOf: statusOf, _accessOf: accessOf,
     };
     api.refresh();
