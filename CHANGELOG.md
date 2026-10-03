@@ -1,3 +1,15 @@
+## [2026-10-03] — AdminOS › Marketing (MK5b): review with category checkboxes on the ONE approval authority — NOT deployed
+
+- **sokoni-aos-marketing.js (new) + admin-os.html (nav item, panel, scripts) + sokoni-aos.js (_loadMarketing):**
+  - Tabs: Dashboard / Applications / Marketers / Services / Bookings, from the marketingDispatch admin reads.
+  - Review shows: submitted data, agency registration, portfolio, the SERVER decision record and the immutable audit history.
+  - Decisions go through applicationDecide only: mark under review / verified, request info, approve ONLY the ticked services (approvedCategories), reject, suspend, revoke (terminal; reason required).
+  - Leads, payments, receipts/wallets/commissions/settlements, reviews and audit link to the CANONICAL AdminOS sections; nothing is copied.
+  - The module writes no Firestore.
+- **Tests:** scripts/test-aos-marketing.js 9/0, SABOTAGE 6/6. The existing AdminOS suites are unchanged vs HEAD (admin-layouts 72/0, shell-final 53/0, authority-honesty 28/0, nav-coverage/sidebar pass; head-defer 22/4/1 and provider-lifecycle 4/1 fail identically at HEAD).
+- **Not run:** real browser (memory floor).
+- **Server dependency:** marketingDispatch admin reads (5b deploy tree, 21c1717 on top).
+
 ## [2026-10-03] — Marketing Hub web: review stages in the applicant's status (ONE engine reviewStage) — NOT deployed
 
 - **sokoni-marketing-hub.js:** while pending, the status card shows the server's reviewStage (submitted / under review / verified). Verified reads as a stage of review — never approved, no dashboard link. A revoked approval shows as terminal (no withdraw, no resubmit).

@@ -469,6 +469,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       <button class="nav-item" data-section="workflows" data-label="Workflow Center" onclick="SokoniAOS.navigate('workflows');_closeSidebar()"><span class="nav-icon">&#x267B;&#xFE0F;</span><span class="nav-label">Workflows</span></button>
       <button class="nav-item" data-section="audit" data-label="Audit Center" onclick="SokoniAOS.navigate('audit');_closeSidebar()"><span class="nav-icon">&#x1F4CB;</span><span class="nav-label">Audit</span></button>
       <button class="nav-item" data-section="legal" data-label="Legal Verification" onclick="SokoniAOS.navigate('legal');_closeSidebar()"><span class="nav-icon">&#x2696;</span><span class="nav-label">Legal Verification</span></button>
+      <button class="nav-item" data-section="marketing" data-label="Marketing" onclick="SokoniAOS.navigate('marketing');_closeSidebar()"><span class="nav-icon">&#x1F4E2;</span><span class="nav-label">Marketing</span></button>
       <button class="nav-item" data-section="security" data-label="Security" onclick="SokoniAOS.navigate('security');_closeSidebar()"><span class="nav-icon">&#x1F510;</span><span class="nav-label">Security</span></button>
     </div>
     <div class="nav-group">
@@ -750,6 +751,11 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
         <div class="panel-toolbar"><h2>Legal Verification</h2></div>
         <div id="legalBody"><div class="aos-spinner"><div></div></div></div>
       </div>
+      <!-- Marketing (MK5b): applications (review stages, approve ONLY the ticked categories via applicationDecide), marketers, services, bookings; money/reviews/audit link to the canonical sections. -->
+      <div class="aos-panel" id="panel-marketing" hidden>
+        <div class="panel-toolbar"><h2>Marketing</h2></div>
+        <div id="marketingBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
       <div class="aos-panel" id="panel-security" hidden>
         <div class="panel-toolbar"><h2>Security</h2></div>
         <div id="securityBody"><div class="aos-spinner"><div></div></div></div>
@@ -795,6 +801,8 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
     </div>
   </main>
   <script src="sokoni-legal-taxonomy.js"></script>
+  <script src="sokoni-marketing-taxonomy.js"></script>
+  <script src="sokoni-aos-marketing.js"></script>
   <script src="sokoni-aos-legal.js"></script>
   <script src="sokoni-aos.js"></script>
   <script>

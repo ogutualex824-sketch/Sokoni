@@ -248,6 +248,8 @@ window.SokoniAOS = (() => {
       security:      () => _loadSecurity(),
       /* Legal Verification — sokoni-aos-legal.js over functions/legal-verification.js (_adminH). Ported from b24b052. */
       legal:         () => _loadLegal(),
+      /* Marketing — sokoni-aos-marketing.js over marketingDispatch admin reads + applicationDecide (ONE approval authority). */
+      marketing:     () => _loadMarketing(),
       hubs:          () => _loadHubs(),
       workflows:     () => _loadWorkflows(),
     };
@@ -2120,6 +2122,17 @@ window.SokoniAOS = (() => {
     }
     try { window.SokoniAOSLegal.mount({ host: body, call: _call }); }
     catch (e) { body.innerHTML = "<p class='aos-muted'>Legal verification console failed to start: " + _esc(e && e.message) + "</p>"; }
+  }
+
+  async function _loadMarketing() {
+    const body = document.getElementById("marketingBody");
+    if (!body) return;
+    if (!(window.SokoniAOSMarketing && typeof window.SokoniAOSMarketing.mount === "function")) {
+      body.innerHTML = "<p class='aos-muted'>Marketing console (sokoni-aos-marketing.js) is not loaded.</p>";
+      return;
+    }
+    try { window.SokoniAOSMarketing.mount({ host: body, call: _call }); }
+    catch (e) { body.innerHTML = "<p class='aos-muted'>Marketing console failed to start: " + _esc(e && e.message) + "</p>"; }
   }
 
   async function _loadSecurity() {
