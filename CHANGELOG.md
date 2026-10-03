@@ -1,3 +1,27 @@
+## [2026-10-03] — Construction containment: no fabricated catalogue, clean cards → product page, no WhatsApp — hosting source, NOT deployed
+
+**Summary (owner decision 2026-10-03, "contain now"):** `construction.html` stops showing invented data and making
+promises nothing keeps.
+- **Removed:** the 30 hard-coded products and 10 suppliers (invented ratings and "verified" badges), the seeded "AI
+  price guide", and the fake "Order via M-PESA" flow, which took no money and built the invoice in the browser.
+- **WhatsApp and phone:** every WhatsApp and `tel:` hand-off is removed, including the hard-coded number 0722200000.
+- **Product cards:** they show real construction products from `/api/catalogue` (the server applies the discovery
+  gate; the visibility predicate is applied on the page). Each card is a plain link to `product.html?id=` with **no
+  buttons**. There is no badge from product data, ratings show only when real reviews exist, and a missing price shows
+  "—". A failed load is never shown as an empty catalogue.
+- **RFQ / bulk-quote forms:** they say quote requests are being upgraded and store nothing. They used to promise
+  supplier replies "within 2 hours" that nothing delivered.
+- **Dashboard:** the browser-summed "Total spend" now shows "—".
+- **Registration:** contractor and equipment registration goes to the ONE intake (HubRegister → applications →
+  AdminOS). The old write was refused by the rules while the page said "submitted".
+
+**Files:** `construction.html`, `scripts/test-construction-containment.js` (21/0, including functional rows that run the
+page's own script; mutants "button on card" → F3 and "WhatsApp link" → S1 fail).
+**Base:** sokoni-e3 chain `e81d80a` (keeps its WhatsApp → support-ticket change).
+**Security:** product names are HTML-escaped (they were interpolated raw). Open RFQs exposing name and phone publicly is
+a RULES fix, shipping separately.
+**Deploy:** hosting, after its tests and owner approval. NOT authorized.
+
 ## [2026-10-03] - setShopAvailability — Merchant V2 schedule saves through the server (no browser write; NOT deployed)
 
 **DEPLOY PRECONDITION (hard):** requires functions: setShopAvailability live (verify with a functions list before the hosting deploy).

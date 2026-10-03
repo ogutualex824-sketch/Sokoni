@@ -311,7 +311,7 @@
   <!--  Bulk Quote Form  -->
   <div class="cn-sec-h" style="margin-top:36px;" id="quoteSection">📋 Get a Bulk Quote</div>
   <div class="quote-form">
-    <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:18px;">Fill in your requirements and verified suppliers will send you competitive quotes within 2 hours.</p>
+    <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:18px;">Construction quote requests are being upgraded so suppliers actually receive them. Meanwhile, open a product and message its seller in SOKONI.</p>
     <div class="cn-grid2">
       <div>
         <label class="cn-label">Your Name *</label>
@@ -433,7 +433,7 @@
 <div id="cntabpanel-rfq" class="cn-tab-panel">
   <div class="cn-body">
     <div class="cn-sec-h" style="margin-top:8px;">📋 Request for Quotation (RFQ)</div>
-    <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:20px;">Post your project requirements — verified suppliers and contractors submit their best quotes within 2 hours.</p>
+    <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:20px;">Construction RFQs are being upgraded so suppliers and contractors actually receive them. Meanwhile, message sellers from their product pages.</p>
 
     <!-- New RFQ form -->
     <div class="quote-form" id="rfqForm">
@@ -784,158 +784,38 @@
       <option value="self">No — I'll collect</option>
     </select>
     <input type="text" id="cnOrderAddr" class="cn-input" placeholder="Delivery address / site location">
-    <button type="button" class="cn-modal-btn" onclick="submitOrder()">💳 Place Order via M-PESA</button>
+    <button type="button" class="cn-modal-btn" onclick="submitOrder()">Order on the product page</button>
     <div id="cnOrderMsg" style="font-size:12px;margin-top:8px;min-height:14px;text-align:center;"></div>
   </div>
 </div>
 
 <nav class="bottom-nav" role="navigation" aria-label="Main navigation" data-sokoni-nav></nav>
 
+<script src="sokoni-product-visibility.js"></script>
 <script>
 /* ————————————————— DATA ————————————————— */
-const PRODUCTS = [
-  /* CEMENT */
-  { id:"BM01", name:"Bamburi Cement — 50kg Bag", cat:"cement", emoji:"🏗️", bg:"linear-gradient(135deg,#1a1400,#2a2000)", price:680, unit:"bag", bulkPrice:"KES 660/bag (50+ bags)", rating:4.9, reviews:534, supplier:"Bamburi Cement Ltd", location:"nairobi", brand:"Bamburi", specs:["50kg bag","CEM II","32.5N grade","Nairobi stock"], inStock:true },
-  { id:"BM02", name:"Savannah Cement — 50kg Bag",  cat:"cement", emoji:"🏗️", bg:"linear-gradient(135deg,#1a1200,#2a1c00)", price:640, unit:"bag", bulkPrice:"KES 620/bag (100+ bags)", rating:4.7, reviews:312, supplier:"Savannah Cement KE", location:"nairobi", brand:"Savannah", specs:["50kg bag","Portland","42.5R grade"], inStock:true },
-  { id:"BM03", name:"East African Portland Cement", cat:"cement", emoji:"🏗️", bg:"linear-gradient(135deg,#180f00,#281800)", price:660, unit:"bag", bulkPrice:"KES 640/bag (50+ bags)", rating:4.8, reviews:445, supplier:"EAPCC Nairobi", location:"nairobi", brand:"EAPC", specs:["50kg bag","Blended","42.5N","KEBS certified"], inStock:true },
-  { id:"BM04", name:"Mombasa Cement — 50kg", cat:"cement", emoji:"🏗️", bg:"linear-gradient(135deg,#0f1a0f,#152a15)", price:650, unit:"bag", bulkPrice:"KES 630/bag (100+)", rating:4.7, reviews:201, supplier:"Coast Builders Supply", location:"mombasa", brand:"Mombasa Cement", specs:["50kg bag","CEM I","42.5N","Coast stock"], inStock:true },
-
-  /* STEEL */
-  { id:"BM05", name:"Y12 Steel Rebar — 12mm x 12m", cat:"steel", emoji:"🔩", bg:"linear-gradient(135deg,#101018,#181828)", price:850, unit:"bar", bulkPrice:"KES 800/bar (1 tonne+)", rating:4.8, reviews:288, supplier:"National Steel KE", location:"nairobi", brand:"National Steel", specs:["12mm dia","Grade 500","12m length","BS 4449"], inStock:true },
-  { id:"BM06", name:"Y16 Steel Rebar — 16mm x 12m", cat:"steel", emoji:"🔩", bg:"linear-gradient(135deg,#0f0f18,#15152a)", price:1550, unit:"bar", bulkPrice:"KES 1,480/bar (500kg+)", rating:4.9, reviews:176, supplier:"National Steel KE", location:"nairobi", brand:"National Steel", specs:["16mm dia","Grade 500","12m length","BS 4449"], inStock:true },
-  { id:"BM07", name:"Box Profile Roofing Sheet — Gauge 28", cat:"steel", emoji:"🏠", bg:"linear-gradient(135deg,#0a0f1a,#10182a)", price:1200, unit:"sheet", bulkPrice:"KES 1,100/sheet (50+)", rating:4.7, reviews:390, supplier:"Mabati Rolling Mills", location:"nairobi", brand:"Mabati", specs:["Gauge 28","3.6m length","Anti-rust coat","30yr warranty"], inStock:true },
-  { id:"BM08", name:"Iron Sheet — Corrugated Gauge 30", cat:"roofing", emoji:"🏠", bg:"linear-gradient(135deg,#0f1010,#1a1c1c)", price:980, unit:"sheet", bulkPrice:"KES 920/sheet (100+)", rating:4.6, reviews:412, supplier:"Mabati Rolling Mills", location:"nairobi", brand:"Mabati", specs:["Gauge 30","3m length","Pre-painted","Roof & cladding"], inStock:true },
-
-  /* TIMBER */
-  { id:"BM09", name:"Cypress Timber — 2x4 inch x 12ft", cat:"timber", emoji:"🪵", bg:"linear-gradient(135deg,#1a0c00,#2a1200)", price:280, unit:"piece", bulkPrice:"KES 260/pc (100+)", rating:4.7, reviews:198, supplier:"Gilgil Timber Merchants", location:"nakuru", brand:"Gilgil Timber", specs:["2x4 inch","12ft length","Kiln-dried","Cypress"], inStock:true },
-  { id:"BM10", name:"Hardboard / Plywood 18mm — 8x4ft", cat:"timber", emoji:"🪵", bg:"linear-gradient(135deg,#1a0900,#2a1000)", price:3200, unit:"sheet", bulkPrice:"KES 3,000/sheet (20+)", rating:4.8, reviews:134, supplier:"Pan African Timbers", location:"nairobi", brand:"Pan African", specs:["18mm thick","8x4ft","Grade A","Moisture resistant"], inStock:true },
-  { id:"BM11", name:"Cedar Timber — 2x6 inch x 12ft", cat:"timber", emoji:"🪵", bg:"linear-gradient(135deg,#150a00,#201000)", price:420, unit:"piece", bulkPrice:"KES 390/pc (100+)", rating:4.8, reviews:87, supplier:"Timau Timber KE", location:"nairobi", brand:"Timau", specs:["2x6 inch","12ft","Cedar","Treated"], inStock:true },
-
-  /* BRICKS & BLOCKS */
-  { id:"BM12", name:"Burnt Bricks — Standard (Each)", cat:"bricks", emoji:"🧱", bg:"linear-gradient(135deg,#1a0800,#2a1000)", price:18, unit:"brick", bulkPrice:"KES 16/brick (5,000+)", rating:4.6, reviews:445, supplier:"Kiambu Brickworks", location:"nairobi", brand:"Kiambu Bricks", specs:["230x110x76mm","Strength: 7N/mm²","KEBS certified","Nairobi delivery"], inStock:true },
-  { id:"BM13", name:"Hollow Block 6-inch (Each)", cat:"bricks", emoji:"🧱", bg:"linear-gradient(135deg,#100c00,#1c1200)", price:85, unit:"block", bulkPrice:"KES 78/block (1,000+)", rating:4.7, reviews:312, supplier:"Nairobi Block Suppliers", location:"nairobi", brand:"NBS", specs:["6 inch / 150mm","Hollow concrete","N5 class","Load-bearing rated"], inStock:true },
-  { id:"BM14", name:"Quarry Stone — Per Tonne", cat:"sand-gravel", emoji:"⛏️", bg:"linear-gradient(135deg,#0f0f0a,#1a1a10)", price:4500, unit:"tonne", bulkPrice:"KES 4,000/t (10t+)", rating:4.8, reviews:156, supplier:"Mlolongo Quarries", location:"nairobi", brand:"Mlolongo", specs:["20-40mm aggregate","Washed","Concrete grade","Delivery available"], inStock:true },
-  { id:"BM15", name:"River Sand — Per Tonne", cat:"sand-gravel", emoji:"⛏️", bg:"linear-gradient(135deg,#1a1500,#2a2000)", price:3800, unit:"tonne", bulkPrice:"KES 3,500/t (5t+)", rating:4.6, reviews:234, supplier:"Athi River Sand KE", location:"nairobi", brand:"ARS", specs:["Sharp sand","Masonry grade","Washed","Delivery 24hrs"], inStock:true },
-
-  /* TILES */
-  { id:"BM16", name:"Porcelain Floor Tiles 60x60cm", cat:"tiles", emoji:"🔲", bg:"linear-gradient(135deg,#0a0a10,#10101c)", price:1800, unit:"m²", bulkPrice:"KES 1,650/m² (100m²+)", rating:4.9, reviews:445, supplier:"Ramco Athi River", location:"nairobi", brand:"Ramco", specs:["60x60cm","R10 anti-slip","8mm thick","Box = 1.44m²"], inStock:true },
-  { id:"BM17", name:"Wall Tiles 30x45cm — Gloss White", cat:"tiles", emoji:"🔲", bg:"linear-gradient(135deg,#050505,#121212)", price:950, unit:"m²", bulkPrice:"KES 880/m² (50m²+)", rating:4.7, reviews:287, supplier:"Crown Paints Stores", location:"nairobi", brand:"Crown", specs:["30x45cm","Gloss white","6mm","Box = 1.35m²"], inStock:true },
-
-  /* PAINT */
-  { id:"BM18", name:"Crown Paints Emulsion — 20L", cat:"paint", emoji:"🎨", bg:"linear-gradient(135deg,#1a001a,#2a002a)", price:4800, unit:"tin", bulkPrice:"KES 4,500/tin (10+)", rating:4.9, reviews:678, supplier:"Crown Paints Kenya", location:"nairobi", brand:"Crown Paints", specs:["20L bucket","Interior emulsion","250m² coverage","50+ colours"], inStock:true },
-  { id:"BM19", name:"Duracoat Weathershield — 20L", cat:"paint", emoji:"🎨", bg:"linear-gradient(135deg,#001a1a,#002a2a)", price:6200, unit:"tin", bulkPrice:"KES 5,900/tin (10+)", rating:4.8, reviews:334, supplier:"Crown Paints Kenya", location:"nairobi", brand:"Duracoat", specs:["20L","Exterior weathershield","15yr durability","Mould-resistant"], inStock:true },
-
-  /* PLUMBING MATERIALS */
-  { id:"BM20", name:"PPR Pipe 20mm x 4m", cat:"plumbing-materials", emoji:"🔧", bg:"linear-gradient(135deg,#001a00,#002a00)", price:380, unit:"pipe", bulkPrice:"KES 350/pipe (50+)", rating:4.7, reviews:198, supplier:"Plumbers World KE", location:"nairobi", brand:"Wavin", specs:["20mm OD","4m length","PN20 rated","Hot & cold water"], inStock:true },
-  { id:"BM21", name:"uPVC Drainage Pipe 110mm x 3m", cat:"plumbing-materials", emoji:"🔧", bg:"linear-gradient(135deg,#001500,#002500)", price:1200, unit:"pipe", bulkPrice:"KES 1,100/pipe (20+)", rating:4.8, reviews:145, supplier:"Plumbers World KE", location:"nairobi", brand:"Boremaster", specs:["110mm ID","3m length","Class C","Drainage/sewer"], inStock:true },
-
-  /* ELECTRICAL MATERIALS */
-  { id:"BM22", name:"Conduit Pipe 20mm — 3m (10-pack)", cat:"electrical-materials", emoji:"⚡", bg:"linear-gradient(135deg,#001800,#002a00)", price:850, unit:"pack", bulkPrice:"KES 800/pack (10+)", rating:4.7, reviews:167, supplier:"Kenwest Cables", location:"nairobi", brand:"Kenwest", specs:["20mm","3m length","10 pipes/pack","Light duty"], inStock:true },
-  { id:"BM23", name:"2.5mm Twin & Earth Cable — 100m", cat:"electrical-materials", emoji:"⚡", bg:"linear-gradient(135deg,#0a001a,#15002a)", price:8500, unit:"roll", bulkPrice:"KES 8,000/roll (5+)", rating:4.9, reviews:289, supplier:"Kenwest Cables", location:"nairobi", brand:"Kenwest", specs:["2.5mm","100m roll","PVC insulated","IEC 60227"], inStock:true },
-
-  /* TOOLS */
-  { id:"BM24", name:"Angle Grinder 850W — 4.5 inch", cat:"construction-tools", emoji:"🔨", bg:"linear-gradient(135deg,#0a0a1a,#12122a)", price:4500, unit:"piece", bulkPrice:"KES 4,200/pc (5+)", rating:4.8, reviews:312, supplier:"Hardware World Nairobi", location:"nairobi", brand:"DeWalt", specs:["850W","4.5 inch disc","Variable speed","Safety guard"], inStock:true },
-  { id:"BM25", name:"Concrete Mixer 120L Electric", cat:"construction-tools", emoji:"⚙️", bg:"linear-gradient(135deg,#100a00,#1e1200)", price:28000, unit:"machine", bulkPrice:"KES 26,000 (2+ units)", rating:4.9, reviews:88, supplier:"Equipment World KE", location:"nairobi", brand:"Altrad", specs:["120L drum","1.1kW motor","Tipping drum","On wheels"], inStock:true },
-
-  /* PPE & SAFETY */
-  { id:"BM26", name:"Safety Helmet (Hard Hat) — Class B", cat:"safety-ppe", emoji:"⛑️", bg:"linear-gradient(135deg,#1a1500,#2a2200)", price:450, unit:"piece", bulkPrice:"KES 380/pc (50+)", rating:4.8, reviews:234, supplier:"SafetyFirst Kenya", location:"nairobi", brand:"JSP", specs:["Class B","EN 397","High-vis option","Adjustable"], inStock:true },
-  { id:"BM27", name:"Safety Boots Steel-Toe — Size 40-47", cat:"safety-ppe", emoji:"⛑️", bg:"linear-gradient(135deg,#0f0f00,#1a1a00)", price:2800, unit:"pair", bulkPrice:"KES 2,500/pair (20+)", rating:4.7, reviews:178, supplier:"SafetyFirst Kenya", location:"nairobi", brand:"Bata Industrials", specs:["Steel toe cap","Oil-resistant sole","EN ISO 20345","UK sizes 7–11"], inStock:true },
-
-  /* WINDOWS & DOORS */
-  { id:"BM28", name:"Aluminium Window 1.2x1.0m — Sliding", cat:"windows-doors", emoji:"🚪", bg:"linear-gradient(135deg,#0a0f1a,#10182a)", price:7500, unit:"piece", bulkPrice:"KES 7,000/pc (10+)", rating:4.8, reviews:145, supplier:"Alumex Kenya", location:"nairobi", brand:"Alumex", specs:["1.2x1.0m","Sliding type","6mm clear glass","Powder-coated"], inStock:true },
-  { id:"BM29", name:"Steel Security Door — 900x2100mm", cat:"windows-doors", emoji:"🚪", bg:"linear-gradient(135deg,#100a00,#1c1200)", price:18000, unit:"piece", bulkPrice:"KES 16,500/pc (5+)", rating:4.9, reviews:98, supplier:"Security Doors KE", location:"nairobi", brand:"Saferoom", specs:["900x2100mm","3-point lock","Anti-pick hinges","Powder-coated"], inStock:true },
-
-  /* ROOFING */
-  { id:"BM30", name:"Gerard Stone-Coated Roof Tile", cat:"roofing", emoji:"🏠", bg:"linear-gradient(135deg,#1a0a00,#2a1200)", price:850, unit:"m²", bulkPrice:"KES 800/m² (50m²+)", rating:4.9, reviews:267, supplier:"Gerard Roofing KE", location:"nairobi", brand:"Gerard", specs:["Stone-coated steel","50yr warranty","Wind resistant","All colours"], inStock:true },
-];
-
-const SUPPLIERS = [
-  { id:"S01", name:"Bamburi Cement Ltd", emoji:"🏗️", cats:["Cement","Aggregates"], location:"nairobi", area:"nairobi", rating:4.9, reviews:1200, phone:"0800720011", verified:true, bio:"Kenya's #1 cement brand. Nationwide distribution. Same-day dispatch for Nairobi orders." },
-  { id:"S02", name:"Mabati Rolling Mills", emoji:"🔩", cats:["Roofing Sheets","Steel Profiles","Box Profiles"], location:"nairobi", area:"nairobi", rating:4.8, reviews:890, phone:"0703720010", verified:true, bio:"East Africa's premier steel roofing manufacturer. Gauge 28–34, all profiles, nationwide delivery." },
-  { id:"S03", name:"Crown Paints Kenya", emoji:"🎨", cats:["Interior Paint","Exterior Paint","Primers","Varnish"], location:"nairobi", area:"nairobi", rating:4.9, reviews:1450, phone:"0704506000", verified:true, bio:"Kenya's leading paint brand since 1962. 200+ colours, technical support & applicator network." },
-  { id:"S04", name:"National Steel KE", emoji:"🔩", cats:["Steel Rebar","Structural Steel","Wire Mesh"], location:"nairobi", area:"nairobi", rating:4.8, reviews:567, phone:"0722203500", verified:true, bio:"Certified steel supplier. Y10–Y32 rebar, BRC mesh. Bulk deliveries countrywide." },
-  { id:"S05", name:"Ramco Athi River", emoji:"🔲", cats:["Floor Tiles","Wall Tiles","Sanitaryware"], location:"nairobi", area:"nairobi", rating:4.9, reviews:780, phone:"0737000000", verified:true, bio:"Kenya's largest tile importer and distributor. 500+ designs. Free delivery within Nairobi." },
-  { id:"S06", name:"Kiambu Brickworks", emoji:"🧱", cats:["Burnt Bricks","Concrete Blocks","Pavers"], location:"nairobi", area:"nairobi", rating:4.7, reviews:334, phone:"0712456789", verified:true, bio:"KEBS-certified brick manufacturer. 1M+ bricks monthly. Bulk orders direct from factory." },
-  { id:"S07", name:"Pan African Timbers", emoji:"🪵", cats:["Plywood","Hardboard","Timber","Poles"], location:"nairobi", area:"nairobi", rating:4.8, reviews:445, phone:"0722334455", verified:true, bio:"Premium timber importer. Cypress, cedar, pine. Kiln-dried. Cut-to-size service." },
-  { id:"S08", name:"Plumbers World KE", emoji:"🔧", cats:["PPR Pipes","uPVC","Fittings","Water Tanks"], location:"nairobi", area:"nairobi", rating:4.7, reviews:234, phone:"0733445566", verified:false, bio:"Full range plumbing materials. Wavin, Boremaster, Georg Fischer brands. Fast delivery." },
-  { id:"S09", name:"Coast Builders Supply", emoji:"🏗️", cats:["Cement","Steel","Roofing","General Hardware"], location:"mombasa", area:"mombasa", rating:4.8, reviews:312, phone:"0722567890", verified:true, bio:"Mombasa's one-stop building materials supplier. All brands, competitive prices, coast delivery." },
-  { id:"S10", name:"Kisumu Hardware Hub", emoji:"🔨", cats:["Tools","Cement","Steel","Tiles"], location:"kisumu", area:"kisumu", rating:4.7, reviews:198, phone:"0733678901", verified:true, bio:"Western Kenya's leading hardware supplier. All major brands in stock. Delivery across Lake region." },
-];
-
-const PRICE_GUIDE_BASE = [
-  { material:"Bamburi Cement 50kg",     unit:"Bag",   baseR:680,  baseW:640,  vol:"medium", sector:"cement"    },
-  { material:"Savannah Cement 50kg",    unit:"Bag",   baseR:640,  baseW:610,  vol:"low",    sector:"cement"    },
-  { material:"Y12 Steel Rebar (per bar)",unit:"Bar",  baseR:850,  baseW:800,  vol:"high",   sector:"steel"     },
-  { material:"Y16 Steel Rebar (per bar)",unit:"Bar",  baseR:1550, baseW:1450, vol:"high",   sector:"steel"     },
-  { material:"Corrugated Iron Sheet G30",unit:"Sheet",baseR:980,  baseW:920,  vol:"medium", sector:"steel"     },
-  { material:"Box Profile G28",          unit:"Sheet",baseR:1200, baseW:1100, vol:"low",    sector:"steel"     },
-  { material:"Burnt Bricks (standard)", unit:"Piece", baseR:18,   baseW:15,   vol:"low",    sector:"bricks"    },
-  { material:'Hollow Block 6"',          unit:"Piece",baseR:85,   baseW:75,   vol:"medium", sector:"bricks"    },
-  { material:"River Sand",               unit:"Tonne",baseR:3800, baseW:3400, vol:"high",   sector:"aggregate" },
-  { material:"Quarry Stone (20-40mm)",   unit:"Tonne",baseR:4500, baseW:4000, vol:"medium", sector:"aggregate" },
-  { material:"Crown Paints Emulsion 20L",unit:"Tin",  baseR:4800, baseW:4400, vol:"low",    sector:"paint"     },
-  { material:"Cypress Timber 2x4 12ft", unit:"Piece", baseR:280,  baseW:250,  vol:"medium", sector:"timber"    },
-  { material:"Porcelain Tiles 60x60",   unit:"m²",    baseR:1800, baseW:1600, vol:"low",    sector:"tiles"     },
-  { material:"PPR Pipe 20mm 4m",        unit:"Pipe",  baseR:380,  baseW:330,  vol:"low",    sector:"plumbing"  },
-  { material:"2.5mm T&E Cable 100m",    unit:"Roll",  baseR:8500, baseW:7800, vol:"high",   sector:"electrical"},
-];
-
-/* AI Market Intelligence — economic factor simulation */
-let PRICE_GUIDE = [];
-
-function computeAIMarketPrices(){
-  const now = new Date();
-  const dayOfYear = Math.floor((now - new Date(now.getFullYear(),0,0))/(1000*60*60*24));
-  const hour = now.getHours();
-
-  /* macro factors: inflation crawl (0.4% monthly), USD/KES drift, fuel cost */
-  const monthIdx = now.getFullYear()*12 + now.getMonth() - (2026*12 + 0);
-  const inflationMult = 1 + monthIdx * 0.004;
-
-  /* sector-specific AI demand signals (seeded on day so stable within a day) */
-  const seed = dayOfYear * 137 + hour * 7;
-  const rng = (offset) => {
-    const x = Math.sin(seed + offset) * 43758.5453;
-    return x - Math.floor(x);
-  };
-
-  /* seasonal demand: construction peaks Mar-May and Sep-Nov */
-  const month = now.getMonth();
-  const seasonalBoost = (month>=2&&month<=4)||(month>=8&&month<=10) ? 1.03 : 1.0;
-
-  PRICE_GUIDE = PRICE_GUIDE_BASE.map((item, i) => {
-    const volFactor = item.vol==="high" ? 0.06 : item.vol==="medium" ? 0.04 : 0.025;
-    const sectorDrift = {
-      steel: 1 + (rng(i*3+1)-0.48)*0.08,     /* steel: forex-sensitive */
-      cement: 1 + (rng(i*3+2)-0.5)*0.04,
-      timber: 1 + (rng(i*3+3)-0.52)*0.05,
-      aggregate: 1 + (rng(i*3+4)-0.47)*0.06, /* sand: fuel-cost sensitive */
-      paint: 1 + (rng(i*3+5)-0.5)*0.04,
-      tiles: 1 + (rng(i*3+6)-0.5)*0.04,
-      bricks: 1 + (rng(i*3+7)-0.5)*0.03,
-      plumbing: 1 + (rng(i*3+8)-0.5)*0.04,
-      electrical: 1 + (rng(i*3+9)-0.48)*0.06,
-    }[item.sector] || 1;
-
-    const dailyNoise = (rng(i*17+11)-0.5)*volFactor;
-    const mult = inflationMult * sectorDrift * seasonalBoost * (1 + dailyNoise);
-
-    const retail    = Math.round(item.baseR * mult / 5) * 5;
-    const wholesale = Math.round(item.baseW * mult / 5) * 5;
-
-    /* derive trend vs base */
-    const delta = (retail - item.baseR) / item.baseR;
-    const trend = delta > 0.015 ? "up" : delta < -0.015 ? "down" : "stable";
-
-    return { material:item.material, unit:item.unit, retail:`KES ${retail.toLocaleString()}`, wholesale:`KES ${wholesale.toLocaleString()}`, trend };
-  });
-
-  /* update timestamp label */
-  const el = document.getElementById("priceLastUpdated");
-  if(el){
-    const opts = {day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"};
-    el.textContent = `Last updated: ${now.toLocaleString("en-KE",opts)}`;
-  }
+/* CONTAINMENT (owner 2026-10-03): the 30 hard-coded products, 10 suppliers (invented ratings + "verified" badges) and
+   the seeded "AI price guide" are gone. Products come from the ONE server catalogue (/api/catalogue — Admin SDK, the
+   discovery gate and the visibility predicate already applied), filtered to construction categories. Unknown = empty
+   state, never an invented listing. */
+let PRODUCTS = [];
+let _catalogueState = 'loading';   /* loading | ready | error */
+const CONSTRUCTION_CATS = ['cement','steel','timber','roofing','bricks','tiles','paint','plumbing-materials','electrical-materials',
+  'windows-doors','construction-tools','sand-gravel','safety-ppe','construction','building-materials','hardware'];
+function _esc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function _okId(v){ return typeof v === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(v); }
+async function loadConstructionProducts(){
+  try {
+    const r = await fetch('/api/catalogue?limit=500', { cache: 'no-store' });
+    const j = r.ok ? await r.json() : null;
+    if (!j || !j.ok || !Array.isArray(j.products)) throw new Error('catalogue unavailable');
+    const vis = window.SokoniProductVisibility;
+    PRODUCTS = j.products.filter(p => p && _okId(p.id || p.productId)
+      && CONSTRUCTION_CATS.includes(String(p.category || p.subcategory || '').toLowerCase())
+      && (!vis || vis.isActiveProduct(p)));
+    _catalogueState = 'ready';
+  } catch (e) { PRODUCTS = []; _catalogueState = 'error'; }
+  filterProducts();
 }
 
 /* ————————————————— STATE ————————————————— */
@@ -946,39 +826,40 @@ let _constrRef = null;
 function filterProducts(){
   const q = (document.getElementById("cnSearch")?.value||"").toLowerCase();
   let list = PRODUCTS;
-  if(_activeCat) list = list.filter(p=>p.cat===_activeCat);
-  if(_activeLoc) list = list.filter(p=>p.location===_activeLoc||p.area===_activeLoc);
-  if(q) list = list.filter(p=>p.name.toLowerCase().includes(q)||p.brand.toLowerCase().includes(q)||(p.supplier||"").toLowerCase().includes(q));
+  if(_activeCat) list = list.filter(p=>String(p.category||'').toLowerCase()===_activeCat);
+  if(q) list = list.filter(p=>String(p.name||p.title||'').toLowerCase().includes(q)||String(p.shopName||p.sellerName||'').toLowerCase().includes(q));
 
   const label = document.getElementById("cnResultLabel");
-  if(label) label.textContent = `${_activeCat ? CAT_NAME[_activeCat]||_activeCat : "All Building Materials"} (${list.length} products)`;
+  if(label) label.textContent = (_activeCat ? CAT_NAME[_activeCat]||_activeCat : "All Building Materials") + (_catalogueState === 'ready' ? " (" + list.length + " products)" : "");
 
   const grid = document.getElementById("cnGrid");
   const empty = document.getElementById("cnEmpty");
+  if(_catalogueState === 'loading'){ grid.innerHTML = '<p style="color:rgba(255,255,255,0.4);padding:36px 0;text-align:center;">Loading building materials…</p>'; empty.style.display="none"; return; }
+  if(_catalogueState === 'error'){ grid.innerHTML = '<p style="color:rgba(255,255,255,0.5);padding:36px 0;text-align:center;">Could not load building materials right now. This is not an empty catalogue — <button type="button" class="cn-pill" onclick="loadConstructionProducts()">Try again</button></p>'; empty.style.display="none"; return; }
   if(!list.length){ grid.innerHTML=""; empty.style.display="block"; return; }
   empty.style.display="none";
 
-  grid.innerHTML = list.map((p)=>`
-    <div class="cn-card">
-      <div class="cn-card-img" style="background:${p.bg};">
-        <span class="cn-brand-badge">${p.brand}</span>
-        ${p.bulkPrice?`<span class="cn-bulk-badge">📦 Bulk</span>`:""}
-        <span style="font-size:60px;">${p.emoji}</span>
+  /* CLEAN CARD (owner 2026-10-03): image, title, seller, price, category — tap anywhere opens the product page.
+     No Order / Quote / WhatsApp / Call buttons on the card. No verified badge here: a seller badge must come from
+     server-verified state, never a product field. Ratings shown only when real reviews exist. */
+  grid.innerHTML = list.map((p)=>{
+    const id = p.id || p.productId;
+    const img = p.image || p.imageUrl || (Array.isArray(p.images) && p.images[0]) || '';
+    const price = Number(p.price);
+    const rc = Number(p.reviewCount || 0);
+    return `
+    <a class="cn-card" href="product.html?id=${encodeURIComponent(id)}" style="text-decoration:none;color:inherit;display:block;" aria-label="${_esc(p.name||p.title||'Product')}">
+      <div class="cn-card-img" style="background:rgba(255,255,255,0.03);">
+        ${/^https:\/\//.test(img) ? `<img src="${_esc(img)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;">` : '<span style="font-size:48px;">🧱</span>'}
       </div>
       <div class="cn-card-body">
-        <div class="cn-card-name">${p.name}</div>
-        <div class="cn-card-supplier">🏪 ${p.supplier} — 📍 ${p.location.charAt(0).toUpperCase()+p.location.slice(1)}</div>
-        <div class="cn-card-specs">${(p.specs||[]).slice(0,3).map(s=>`<span class="cn-spec">${s}</span>`).join("")}</div>
-        <div class="cn-price-row"><div class="cn-price">KES ${p.price.toLocaleString()}</div><div class="cn-price-unit">/ ${p.unit}</div></div>
-        ${p.bulkPrice?`<div class="cn-bulk-price">📦 Bulk: ${p.bulkPrice}</div>`:""}
-        <div class="cn-rating"><span class="star">⭐</span> ${p.rating} <span>(${p.reviews} reviews)</span></div>
-        <div class="cn-btns">
-          <button type="button" class="cn-btn-cart" onclick="openOrder('${p.id}')">🛒 Order Now</button>
-          <button type="button" class="cn-btn-quote" onclick="openQuoteFor('${p.name}')">📋 Quote</button>
-          <a class="cn-btn-wa" href="https://wa.me/254${p.phone||'722200000'}?text=${encodeURIComponent('Hi! I found '+p.name+' on SOKONI Construction Hub. I need a price quote for bulk order. Please advise.')}" target="_blank"><i class="fab fa-whatsapp"></i></a>
-        </div>
+        <div class="cn-card-name">${_esc(p.name||p.title||'Product')}</div>
+        <div class="cn-card-supplier">🏪 ${_esc(p.shopName||p.sellerName||p.storeName||'—')}${p.city||p.location ? ' — 📍 ' + _esc(p.city||p.location) : ''}</div>
+        <div class="cn-price-row"><div class="cn-price">${isFinite(price) && price > 0 ? 'KES ' + price.toLocaleString() : '—'}</div>${p.unit ? `<div class="cn-price-unit">/ ${_esc(p.unit)}</div>` : ''}</div>
+        ${rc > 0 && isFinite(Number(p.rating)) ? `<div class="cn-rating"><span class="star">⭐</span> ${_esc(Number(p.rating).toFixed(1))} <span>(${_esc(rc)} reviews)</span></div>` : ''}
+        <div class="cn-spec" style="display:inline-block;margin-top:6px;">${_esc(CAT_NAME[String(p.category||'').toLowerCase()] || p.category || 'Construction')}</div>
       </div>
-    </div>`).join("");
+    </a>`; }).join("");
 }
 
 const CAT_NAME = { cement:"Cement", steel:"Steel & Iron", timber:"Timber & Wood", roofing:"Roofing", bricks:"Bricks & Blocks", tiles:"Tiles & Flooring", paint:"Paint & Coatings", "plumbing-materials":"Plumbing Materials", "electrical-materials":"Electrical Materials", "windows-doors":"Windows & Doors", "construction-tools":"Tools & Equipment", "sand-gravel":"Sand, Gravel & Aggregates", "safety-ppe":"Safety Gear & PPE" };
@@ -1001,64 +882,27 @@ function filterLoc(loc, btn){
 
 /* ————————————————— PRICE TABLE ————————————————— */
 function renderPriceTable(){
+  /* CONTAINMENT: the "AI price guide" was generated from a day-of-year seed — fabricated figures. No live market price
+     feed exists, so the table says so instead of showing numbers. */
   const tb = document.getElementById("priceTable");
-  if(!tb) return;
-  computeAIMarketPrices();
-  tb.innerHTML = `<thead><tr>
-    <th>Material</th><th>Unit</th><th>Retail Price</th><th>Wholesale (Bulk)</th><th>AI Signal</th>
-  </tr></thead><tbody>` +
-  PRICE_GUIDE.map(r=>`<tr>
-    <td>${r.material}</td>
-    <td style="color:rgba(255,255,255,0.4);">${r.unit}</td>
-    <td class="price-val">${r.retail}</td>
-    <td style="color:#00c878;font-weight:700;">${r.wholesale}</td>
-    <td>${r.trend==="up"?'<span style="color:#ff9800;">📈 Rising</span>':r.trend==="down"?'<span style="color:#71ff00;">📉 Falling</span>':'<span style="color:rgba(255,255,255,0.4);">➡️ Stable</span>'}</td>
-  </tr>`).join("") + `</tbody>`;
+  if(tb) tb.innerHTML = '<tbody><tr><td style="color:rgba(255,255,255,0.5);padding:18px;">Live market prices are not available yet. Open a product to see the seller\'s current price.</td></tr></tbody>';
+  const el = document.getElementById("priceLastUpdated"); if(el) el.textContent = '';
 }
 
 /* ————————————————— SUPPLIERS ————————————————— */
 function renderSuppliers(){
+  /* CONTAINMENT: the 10 suppliers (invented ratings, "verified" badges, phone + WhatsApp) are gone. Real suppliers are
+     the shops behind real products — open a product to reach its seller's storefront and SOKONI Messages. */
   const grid = document.getElementById("suppliersGrid");
-  if(!grid) return;
-  grid.innerHTML = SUPPLIERS.map(s=>{
-    const stars = "⭐".repeat(Math.round(s.rating));
-    return `<div class="sup-card">
-      <div class="sup-top">
-        <div class="sup-avatar">${s.emoji}</div>
-        <div>
-          <div class="sup-name">${s.name} ${s.verified?`<span style="font-size:9px;background:rgba(0,200,120,0.12);color:#00c878;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,200,120,0.2);">✅ Verified</span>`:""}</div>
-          <div class="sup-location">📍 ${s.location.charAt(0).toUpperCase()+s.location.slice(1)}</div>
-          <div class="sup-stars">${stars} <span style="font-size:10px;color:rgba(255,255,255,0.35);">${s.rating} (${s.reviews})</span></div>
-        </div>
-      </div>
-      <div class="sup-cats">${(s.cats||[]).map(c=>`<span class="sup-cat">${c}</span>`).join("")}</div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:10px;line-height:1.5;">${s.bio}</div>
-      <div style="display:flex;gap:8px;">
-        <button type="button" class="sup-book-btn" style="flex:1;" onclick="contactSupplier('${s.id}')">📋 Get Quote</button>
-        <a href="tel:${s.phone}" style="padding:9px 12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:9px;color:#f59e0b;text-decoration:none;display:flex;align-items:center;">📞</a>
-        <a href="https://wa.me/254${s.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi '+s.name+'! I found you on SOKONI Construction Hub. Please send me a price list and availability.')}" target="_blank" style="padding:9px 12px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);border-radius:9px;color:#25d366;text-decoration:none;display:flex;align-items:center;"><i class="fab fa-whatsapp"></i></a>
-      </div>
-<div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);"><button type="button" onclick="window.SokoniSocial&&SokoniSocial.toggleFollow('con_${s.id}','${s.name.replace(/'/g,"\\'")}',this,'construction')" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">❤ Follow</button><button type="button" onclick="window.SokoniSocial&&SokoniSocial.openShareModal({id:'con_${s.id}',name:'${s.name.replace(/'/g,"\\'")}',category:'construction',type:'supplier'})" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:8px;font-size:12px;cursor:pointer;flex-shrink:0;">📣</button></div>
-    </div>`;
-  }).join("");
+  if(grid) grid.innerHTML = '<p style="color:rgba(255,255,255,0.45);padding:24px 0;text-align:center;">Verified construction suppliers will appear here once their storefronts are approved. Open any product to reach its seller.</p>';
 }
-
-function contactSupplier(id){
-  const s = SUPPLIERS.find(x=>x.id===id); if(!s) return;
-  if(typeof SokoniPay!=='undefined'){
-    SokoniPay.waConnect(s.phone, 'Hi '+s.name+'! I found you on SOKONI Construction Hub. Please send me your price list and availability for bulk materials.', {
-      providerName: s.name,
-      category: 'construction',
-      serviceDesc: 'Bulk materials quote — '+(s.cats||[]).join(', ')
-    });
-    return;
-  }
-  document.getElementById('quoteSection')?.scrollIntoView({behavior:'smooth'});
-}
+function contactSupplier(){ document.getElementById('cnGrid')?.scrollIntoView({behavior:'smooth'}); }
 
 /* ————————————————— ORDER MODAL ————————————————— */
 function openOrder(id){
-  _orderTarget = PRODUCTS.find(p=>p.id===id); if(!_orderTarget) return;
+  /* CONTAINMENT: ordering happens on the product page through the canonical checkout (IntaSend), never here. */
+  if(_okId(id)) { location.href = 'product.html?id=' + encodeURIComponent(id); return; }
+  _orderTarget = null; return;
   const p = _orderTarget;
   document.getElementById("cnModalTitle").textContent = p.name;
   document.getElementById("cnModalSub").textContent = `Supplier: ${p.supplier} — ${p.location}`;
@@ -1073,7 +917,7 @@ function openOrder(id){
   updateOrderTotal();
   _constrRef = "BM" + Date.now().toString().slice(-8);
   const _cnBtn = document.querySelector('#cnModal .cn-modal-btn');
-  if(_cnBtn){ _cnBtn.disabled = false; _cnBtn.textContent = '💳 Place Order via M-PESA'; }
+  if(_cnBtn){ _cnBtn.disabled = false; _cnBtn.textContent = 'Order on the product page'; }
   document.getElementById("cnModal").style.display = "flex";
 }
 function closeCnModal(){ document.getElementById("cnModal").style.display="none"; }
@@ -1086,45 +930,22 @@ function updateOrderTotal(){
 }
 
 function submitOrder(){
-  const btn = document.querySelector('#cnModal .cn-modal-btn');
-  if(btn){ btn.disabled = true; btn.textContent = '⏳ Processing...'; }
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('const_order',10,300000)){ if(btn){ btn.disabled = false; btn.textContent = '💳 Place Order via M-PESA'; } (window._skToast||alert)('Too many order attempts. Please wait 5 minutes.');return;}
-  const name = document.getElementById("cnOrderName").value.trim();
-  const phone = document.getElementById("cnOrderPhone").value.trim();
-  const qty = Number(document.getElementById("cnOrderQty").value||0);
-  const addr = document.getElementById("cnOrderAddr").value.trim();
+  /* CONTAINMENT: the old flow recorded an "order" with a browser-computed total, took NO payment and promised the
+     supplier would send M-PESA details. Orders now go through the product page's canonical checkout. */
   const msgEl = document.getElementById("cnOrderMsg");
-  if(!name||!phone||qty<1){ if(btn){ btn.disabled = false; btn.textContent = '💳 Place Order via M-PESA'; } msgEl.textContent="⚠️ Fill all required fields"; msgEl.style.color="#ff9800"; return; }
-  const ref = _constrRef || ("BM" + Date.now().toString().slice(-8));
-  const order = { ref, product:_orderTarget.name, supplier:_orderTarget.supplier, qty, unit:_orderTarget.unit, unitPrice:_orderTarget.price, total:_orderTarget.price*qty, clientName:name, phone, addr, delivery:document.getElementById("cnOrderDelivery").value, createdAt:_constrRef };
-  let orders=[]; try{orders=JSON.parse(localStorage.getItem("sokoniBuildOrders"))||[];}catch(e){}
-  orders.unshift(order); localStorage.setItem("sokoniBuildOrders",JSON.stringify(orders));
-  if(window.SokoniConstruct) SokoniConstruct.saveOrder({...order, orderType:'material', id:ref}).catch(e=>console.warn('[CN] order:',e.message));
-  if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'order',buyerName:name,buyerPhone:phone,items:[{name:_orderTarget.name,category:'Building Materials',qty:qty,price:_orderTarget.price}],subtotal:order.total,total:order.total,paymentMethod:'M-Pesa (Pending Confirmation)',paymentRef:ref,sellerName:_orderTarget.supplier,date:new Date().toISOString(),notes:addr});},700);
-  msgEl.innerHTML=`✅ Order placed! Ref: <strong style="color:#f59e0b;">${ref}</strong><br>The supplier will confirm &amp; send M-PESA payment details to ${phone} within 1 hour.`;
-  msgEl.style.color="#00c878";
-  _constrRef = null;
-  setTimeout(closeCnModal, 3500);
+  if(msgEl){ msgEl.textContent = 'Open the product page to order through SOKONI checkout.'; msgEl.style.color = '#ff9800'; }
 }
 
 function openQuoteFor(name){ document.getElementById("qMaterials").value = name+" — "; document.getElementById("quoteSection").scrollIntoView({behavior:"smooth"}); document.getElementById("qMaterials").focus(); }
 
 /* ————————————————— BULK QUOTE ————————————————— */
-function submitQuote(){
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('const_quote',10,300000)){(window._skToast||alert)('Too many quote attempts. Please wait 5 minutes.');return;}
-  const name = document.getElementById("qName").value.trim();
-  const phone = document.getElementById("qPhone").value.trim();
-  const loc = document.getElementById("qLocation").value.trim();
-  const mats = document.getElementById("qMaterials").value.trim();
-  const msgEl = document.getElementById("qMsg");
-  if(!name||!phone||!loc||!mats){ msgEl.textContent="⚠️ Fill all required fields"; msgEl.style.color="#ff9800"; return; }
-  const ref="QUOTE"+Date.now();
-  const quote={ref,name,phone,location:loc,projectType:document.getElementById("qProjectType").value,materials:mats,delivery:document.getElementById("qDelivery").value,budget:document.getElementById("qBudget").value,createdAt:Date.now()};
-  let quotes=[]; try{quotes=JSON.parse(localStorage.getItem("sokoniBuildQuotes"))||[];}catch(e){}
-  quotes.unshift(quote); localStorage.setItem("sokoniBuildQuotes",JSON.stringify(quotes));
-  if(window.SokoniConstruct) SokoniConstruct.saveRFQ({...quote, id:ref, rfqType:'materials'}).catch(e=>console.warn('[CN] rfq:',e.message));
-  msgEl.innerHTML=`✅ Quote request submitted! Ref: <strong style="color:#f59e0b;">${ref}</strong><br>Up to 3 verified suppliers will contact ${phone} within 2 hours with competitive quotes.`;
-  msgEl.style.color="#00c878";
+function submitQuote(){ _rfqNotYet('qMsg'); }
+/* CONTAINMENT: bulk-quote / RFQ submissions promised fast supplier responses but nothing dispatched
+   them, and open RFQs (with name + phone) were publicly readable. Construction RFQs move to SOKONI's RFQ authority in
+   the full build; until then the form is honest and stores nothing. */
+function _rfqNotYet(elId){
+  const msgEl = document.getElementById(elId);
+  if(msgEl){ msgEl.innerHTML = 'Construction quote requests are being upgraded so suppliers actually receive them. For now, open a product and use <b>Message</b> on its page to ask the seller directly.'; msgEl.style.color = '#ff9800'; }
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1202,7 +1023,6 @@ function renderContractors(){
       </div>
       <div class="ctr-actions" style="padding:0 16px 16px;">
         <button class="ctr-btn ctr-btn-book" onclick="bookContractor('${c.id}')">📅 Book Now</button>
-        <button class="ctr-btn ctr-btn-wa" onclick="waContractor('${c.phone}','${c.name}')">💬 WhatsApp</button>
       </div>
     </div>`).join('');
 }
@@ -1212,10 +1032,7 @@ function bookContractor(id){
   if(window.SokoniPay) SokoniPay.bookNow({service:'Contractor Booking',provider:c.name,amount:0,phone:c.phone});
   else location.href = 'support.html?topic=booking&ref=' + encodeURIComponent(c.name); /* in-app, never a WhatsApp/phone hand-off */
 }
-function waContractor(phone, name){
-  const msg = encodeURIComponent(`Hi ${name}, I found you on Sokoni Construction Hub and I'd like to discuss a project.`);
-  window.open(`https://wa.me/254${phone.replace(/^0/,'')}?text=${msg}`,'_blank');
-}
+function waContractor(){ /* CONTAINMENT: WhatsApp hand-off removed; contact happens in SOKONI Messages. */ }
 
 /* ════════════════════════════════════════════════════════════
    EQUIPMENT DATA
@@ -1275,24 +1092,7 @@ function bookEquipment(id){
 /* ════════════════════════════════════════════════════════════
    RFQ (TAB)
 ════════════════════════════════════════════════════════════ */
-function submitRFQ(){
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('cn_rfq',5,300000)){(window._skToast||alert)('Too many RFQ attempts.');return;}
-  const name=document.getElementById('rfqName').value.trim();
-  const phone=document.getElementById('rfqPhone').value.trim();
-  const type=document.getElementById('rfqType').value;
-  const loc=document.getElementById('rfqLocation').value.trim();
-  const desc=document.getElementById('rfqDesc').value.trim();
-  const msgEl=document.getElementById('rfqMsg');
-  if(!name||!phone||!type||!loc||!desc){msgEl.textContent='⚠️ Fill all required fields';msgEl.style.color='#ff9800';return;}
-  const ref='RFQ'+Date.now();
-  const rfq={ref,id:ref,name,phone,rfqType:type,location:loc,description:desc,budget:document.getElementById('rfqBudget').value,deadline:document.getElementById('rfqDeadline').value,preference:document.getElementById('rfqPref').value,createdAt:Date.now()};
-  let saved=[]; try{saved=JSON.parse(localStorage.getItem('sokoniRFQs'))||[];}catch(e){}
-  saved.unshift(rfq); localStorage.setItem('sokoniRFQs',JSON.stringify(saved));
-  if(window.SokoniConstruct) SokoniConstruct.saveRFQ(rfq).catch(e=>console.warn('[CN] RFQ:',e.message));
-  msgEl.innerHTML=`✅ RFQ Posted! Ref: <strong style="color:#f59e0b;">${ref}</strong><br>Verified suppliers will respond within 2 hours to ${phone}.`;
-  msgEl.style.color='#00c878';
-  document.getElementById('rfqForm').querySelectorAll('input,select,textarea').forEach(el=>{if(el.type!=='submit')el.value='';});
-}
+function submitRFQ(){ _rfqNotYet('rfqMsg'); }
 
 /* ════════════════════════════════════════════════════════════
    PROJECT MANAGEMENT
@@ -1343,26 +1143,16 @@ function setDashView(view, btn){
 }
 
 function loadDashboard(){
-  let orders=[]; try{orders=JSON.parse(localStorage.getItem('sokoniBuildOrders'))||[];}catch(e){}
+  /* CONTAINMENT: the dashboard summed browser-only "orders" (no payment ever taken) into "Total spend". No canonical
+     construction figures exist yet, so they render as "—", never a browser number. Projects stay the user's own list. */
   let projs=[]; try{projs=JSON.parse(localStorage.getItem('sokoniProjects'))||[];}catch(e){}
-  let rfqs=[]; try{rfqs=JSON.parse(localStorage.getItem('sokoniRFQs'))||[];}catch(e){}
-
   const activeProj = document.getElementById('dActiveProj'); if(activeProj) activeProj.textContent=projs.length;
-  const totalSpend = orders.reduce((s,o)=>s+(o.total||0),0);
-  const spendEl = document.getElementById('dTotalSpend'); if(spendEl) spendEl.textContent='KES '+totalSpend.toLocaleString();
-  const rfqEl = document.getElementById('dOpenRFQ'); if(rfqEl) rfqEl.textContent=rfqs.length;
-
+  const spendEl = document.getElementById('dTotalSpend'); if(spendEl) spendEl.textContent='—';
+  const rfqEl = document.getElementById('dOpenRFQ'); if(rfqEl) rfqEl.textContent='—';
   const ordersEl = document.getElementById('dashRecentOrders');
-  if(ordersEl){
-    if(!orders.length){ ordersEl.innerHTML='<div style="text-align:center;padding:36px 0;color:rgba(255,255,255,0.22);"><div style="font-size:36px;margin-bottom:8px;">📦</div><p style="font-size:12px;">No orders yet.</p></div>'; }
-    else ordersEl.innerHTML=orders.slice(0,3).map(o=>`<div class="dash-proj-card"><div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="font-size:13px;font-weight:800;color:white;">${o.product||o.ref}</span><span style="font-size:11px;color:#f59e0b;">KES ${(o.total||0).toLocaleString()}</span></div><div style="font-size:11px;color:rgba(255,255,255,0.38);">Ref: ${o.ref} · Qty: ${o.qty} ${o.unit||''}</div></div>`).join('');
-  }
-
+  if(ordersEl) ordersEl.innerHTML='<div style="text-align:center;padding:36px 0;color:rgba(255,255,255,0.4);"><p style="font-size:12px;">Your SOKONI orders are in <a href="orders.html" style="color:#f59e0b;">My Orders</a>.</p></div>';
   const rfqListEl = document.getElementById('dashMyRFQs');
-  if(rfqListEl){
-    if(!rfqs.length){ rfqListEl.innerHTML='<div style="text-align:center;padding:36px 0;color:rgba(255,255,255,0.22);"><div style="font-size:36px;margin-bottom:8px;">📋</div><p style="font-size:12px;">No RFQs yet.</p></div>'; }
-    else rfqListEl.innerHTML=rfqs.slice(0,3).map(r=>`<div class="dash-proj-card"><div style="font-size:13px;font-weight:800;color:white;margin-bottom:3px;">${r.rfqType||'RFQ'} — ${r.location}</div><div style="font-size:11px;color:rgba(255,255,255,0.38);">Ref: ${r.ref}</div></div>`).join('');
-  }
+  if(rfqListEl) rfqListEl.innerHTML='<div style="text-align:center;padding:36px 0;color:rgba(255,255,255,0.4);"><p style="font-size:12px;">Construction quote requests are being upgraded.</p></div>';
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1371,17 +1161,11 @@ function loadDashboard(){
 function openJoinContractorModal(){ document.getElementById('joinCtrModal').style.display='flex'; }
 function closeJoinCtrModal(){ document.getElementById('joinCtrModal').style.display='none'; }
 function submitContractorReg(){
-  const name=document.getElementById('ctrRegName').value.trim();
-  const phone=document.getElementById('ctrRegPhone').value.trim();
-  const type=document.getElementById('ctrRegType').value;
-  const city=document.getElementById('ctrRegCity').value;
-  const msgEl=document.getElementById('ctrRegMsg');
-  if(!name||!phone||!type||!city){msgEl.textContent='⚠️ Fill all required fields';msgEl.style.color='#ff9800';return;}
-  const reg={id:'CTR'+Date.now(),name,phone,type,city,experience:document.getElementById('ctrRegExp').value,bio:document.getElementById('ctrRegBio').value.trim(),status:'pending',createdAt:Date.now()};
-  if(window.SokoniConstruct) SokoniConstruct.saveContractor(reg).catch(e=>console.warn('[CN] ctr:',e.message));
-  msgEl.innerHTML=`✅ Registration submitted! We'll verify &amp; activate your profile within 24 hours.`;
-  msgEl.style.color='#00c878';
-  setTimeout(closeJoinCtrModal, 2500);
+  /* CONTAINMENT: the old registration was refused by the rules while the page said "submitted". Contractors apply
+     through the ONE SOKONI application (AdminOS reviews it). */
+  closeJoinCtrModal();
+  if(window.HubRegister && typeof HubRegister.open === 'function') HubRegister.open({ hub: 'construction', category: 'contractor' });
+  else location.href = 'business-apply.html?offer=services&category=contractor&label=' + encodeURIComponent('Contractor');
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1390,19 +1174,11 @@ function submitContractorReg(){
 function openListEquipmentModal(){ document.getElementById('listEqModal').style.display='flex'; }
 function closeListEqModal(){ document.getElementById('listEqModal').style.display='none'; }
 function submitEquipmentListing(){
-  const owner=document.getElementById('eqOwner').value.trim();
-  const phone=document.getElementById('eqPhone').value.trim();
-  const eqName=document.getElementById('eqNameInput').value.trim();
-  const cat=document.getElementById('eqCat').value;
-  const rate=document.getElementById('eqRate').value;
-  const loc=document.getElementById('eqLoc').value.trim();
-  const msgEl=document.getElementById('eqListMsg');
-  if(!owner||!phone||!eqName||!cat||!rate||!loc){msgEl.textContent='⚠️ Fill all required fields';msgEl.style.color='#ff9800';return;}
-  const listing={id:'EQ'+Date.now(),owner,phone,name:eqName,cat,rate:Number(rate),location:loc,specs:document.getElementById('eqSpecs').value.trim(),available:true,createdAt:Date.now()};
-  if(window.SokoniConstruct) SokoniConstruct.saveEquipment(listing).catch(e=>console.warn('[CN] eq:',e.message));
-  msgEl.innerHTML=`✅ Equipment listed! We'll review and activate within 24 hours.`;
-  msgEl.style.color='#00c878';
-  setTimeout(closeListEqModal, 2500);
+  /* CONTAINMENT: equipment listings were browser-written with no review queue. Equipment owners apply through the
+     ONE SOKONI application; listing + booking move to the server rental authority in the full build. */
+  closeListEqModal();
+  if(window.HubRegister && typeof HubRegister.open === 'function') HubRegister.open({ hub: 'construction', category: 'hardware' });
+  else location.href = 'business-apply.html?offer=products&category=hardware';
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1421,6 +1197,7 @@ if(urlTab){ cnShowTab(urlTab); }
 
 /* ————————————————— INIT ————————————————— */
 filterProducts();
+loadConstructionProducts();   /* real catalogue (containment 2026-10-03) */
 renderPriceTable();
 renderSuppliers();
 renderProjList();
