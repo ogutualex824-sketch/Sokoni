@@ -421,7 +421,7 @@ async function checkInHandler(req) {
               checkedInAt: now.toISOString(), title: m.title || null };
     });
     await _audit({ action: out.duplicate ? 'fitness_checkin_duplicate' : 'fitness_checkin', outcome: 'ok', membershipId, providerId,
-                   attendanceId: out.attendanceId, performedBy: uid, actorRole: scanner.actorRole, firstCheckIn: out.firstCheckIn, correlationId });
+                   attendanceId: out.attendanceId, performedBy: uid, actorRole: scanner.actorRole, method: 'qr', firstCheckIn: out.firstCheckIn, correlationId });
     if (out.firstCheckIn) {
       try {
         const rel = _hooks.release || ((id) => _settlement().releaseDueSlices(id));
