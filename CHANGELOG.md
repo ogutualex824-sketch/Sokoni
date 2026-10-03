@@ -1,3 +1,16 @@
+## [2026-10-03] — Hub review stores census (no code change, nothing deployed)
+
+**Files:** `docs/HUB_REVIEW_STORES_CENSUS.md`, `scripts/test-hub-review-rules.js`, `CHANGELOG.md` · **Base:** live `72dca56`
+
+- **Census of every hub review writer against its rule block:**
+  - **LOST:** entReviews (approved:true refused), homeServiceReviews (no uid), legalReviews fallback (no lawyerId), sportsReviews (no id / uid). The pages still say "thank you".
+  - **SELF-PUB:** digitalReviews (any contract), plus the dormant healthReviews / constructReviews browser paths.
+  - **MISFILED:** property reviews written into `applications`.
+  - **DEAD:** bnbReviews (no caller, no rule).
+  - **CF-only:** providerReviews, entertainmentReviews.
+- **Emulator proof:** 12 rows, written and syntax-checked; **NOT run** (free RAM below the 512 MB floor). The census is therefore not CLOSED.
+- **Database / API / security changes:** none. Ownership split with the rules lane recorded in the doc.
+
 ## [2026-10-03] — Review approval screens: AdminOS queue by status with every action + history; honest submit copy
 
 **Files:** `sokoni-aos.js`, `business.html`, `reviews.html`, `scripts/test-review-approval-ui.js`, `CHANGELOG.md` · **Base:** live `72dca56`
