@@ -89,8 +89,8 @@ const st = (w, m) => (w.modules[m] || {}).state;
   const W = {};
   for (const u of ['plumber', 'salon1', 'dj1', 'dj2', 'lawyer1', 'doc1', 'pharm1', 'pharm0', 'hotel1', 'shop1', 'unc1', 'pend1', 'susp1', 'nobody']) W[u] = await BW.workspaceFor(db, u);
 
-  ck('a plumber: provider-dashboard, quotes + calls AVAILABLE, booking PIN NOT_APPLICABLE, staff NOT_IMPLEMENTED, POS NOT_APPLICABLE',
-    W.plumber.route === 'provider-dashboard.html' && st(W.plumber, 'quotes') === S.AVAILABLE && st(W.plumber, 'calls') === S.AVAILABLE
+  ck('a plumber: provider-dashboard, quotes (rate cards) AVAILABLE + calls NOT_IMPLEMENTED (NOT_BUILT — no backing, 5b 10-03), booking PIN NOT_APPLICABLE, staff NOT_IMPLEMENTED, POS NOT_APPLICABLE',
+    W.plumber.route === 'provider-dashboard.html' && st(W.plumber, 'quotes') === S.AVAILABLE && st(W.plumber, 'calls') === S.NOT_IMPLEMENTED
     && st(W.plumber, 'bookingPin') === S.NOT_APPLICABLE && st(W.plumber, 'staff') === S.NOT_IMPLEMENTED && st(W.plumber, 'pos') === S.NOT_APPLICABLE, W.plumber.modules);
   ck('a salon: no quotes (NOT_APPLICABLE); products/inventory/POS NOT_IMPLEMENTED (identity deferred) — never exposed',
     st(W.salon1, 'quotes') === S.NOT_APPLICABLE && ['products', 'inventory', 'pos'].every((m) => st(W.salon1, m) === S.NOT_IMPLEMENTED));
@@ -101,9 +101,9 @@ const st = (w, m) => (w.modules[m] || {}).state;
     ['pos', 'products', 'inventory', 'quotes', 'bookingPin', 'calls'].every((m) => st(W.doc1, m) === S.NOT_APPLICABLE) && st(W.doc1, 'customers') === S.AVAILABLE, W.doc1.modules);
   ck('a pharmacy (Healthcare row): its shop modules exist in its matrix but the screens are deferred → NOT_IMPLEMENTED, with or without a plan',
     ['pos', 'products', 'inventory', 'delivery'].every((m) => st(W.pharm1, m) === S.NOT_IMPLEMENTED && st(W.pharm0, m) === S.NOT_IMPLEMENTED));
-  ck('a hotel: routed to the provider dashboard; rooms / enquiries / reviews AVAILABLE; stays NOT_IMPLEMENTED (STAY_ENGINE_PENDING), never minute slots',
+  ck('a hotel: routed to the provider dashboard; rooms / reviews AVAILABLE, enquiries NOT_IMPLEMENTED (NOT_BUILT); stays NOT_IMPLEMENTED (STAY_ENGINE_PENDING), never minute slots',
     W.hotel1.route === 'provider-dashboard.html' && W.hotel1.state === S.AVAILABLE && st(W.hotel1, 'services') === S.AVAILABLE
-    && st(W.hotel1, 'enquiries') === S.AVAILABLE && st(W.hotel1, 'reviews') === S.AVAILABLE
+    && st(W.hotel1, 'enquiries') === S.NOT_IMPLEMENTED && st(W.hotel1, 'reviews') === S.AVAILABLE
     && ['bookings', 'availability', 'calendar'].every((m) => st(W.hotel1, m) === S.NOT_IMPLEMENTED && W.hotel1.modules[m].reason === 'STAY_ENGINE_PENDING'), W.hotel1.modules);
   ck('a shop: routed to merchant-v2, whose own authority decides its modules', W.shop1.route === 'merchant-v2.html' && Object.values(W.shop1.modules).every((m) => m.state === S.NOT_APPLICABLE));
   ck('UNCLASSIFIED (approved, no category): PENDING_CLASSIFICATION, NO route — Overview + Settings only (R2: the grandfather clause is gone)',

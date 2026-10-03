@@ -22,6 +22,7 @@ const subCore                      = require('./subscription-core');
 const legal                        = require('./legal-agreements');
 const rc                           = require('./reservation-core');
 const { bookingEvent, TYPES }      = require('./booking-events');
+const TSP                          = require('./shared/tech-service-profile');
 
 const _db  = () => getFirestore();
 const _ts  = () => FieldValue.serverTimestamp();
@@ -165,9 +166,21 @@ _h.providerConfirmBooking = async (req) => {
 
 /* ── 2. providerDeclineBooking ───────────────────────────────────────────────
    pending → declined. Frees any calendar hold. */
+
+/* Work/Job Engine WE2 (sokoni-2f review): a milestone booking has no appointment (no startTs), so the cancel policy would
+   treat any cancel as "early" and FULL-REFUND held money even after the work was delivered. Once a milestone is paid
+   (paid_held), cancel / decline / no-show are refused — a dispute or partial refund goes through the canonical refund
+   REQUEST authority, never an automatic disbursement. */
+function _refuseHeldMilestone(data) {
+  if (data && data.kind === 'work_milestone' && data.paymentStatus === 'paid_held') {
+    throw new HttpsError('failed-precondition', 'This milestone is paid and held. Raise a dispute or refund request instead.', { code: 'WORK_MILESTONE_HELD' });
+  }
+}
+
 _h.providerDeclineBooking = async (req) => {
   const uid = _uid(req);
   const { ref, data } = await _ownBooking(uid, req.data?.bookingId);
+  _refuseHeldMilestone(data);
   if (['completed', 'cancelled', 'no_show'].includes(data.status)) {
     throw new HttpsError('failed-precondition', `Cannot decline a "${data.status}" booking.`);
   }
@@ -435,6 +448,7 @@ _h.providerCancelBooking = async (req) => {
     return { success: true, status: data.status, alreadyDone: true };
   }
   if (data.status === 'completed') throw new HttpsError('failed-precondition', 'A completed booking cannot be cancelled.');
+  _refuseHeldMilestone(data);
 
   /* 2026-10-01 audit (STOP S2): this was a blind batch after a stale read — a completion landing in
      between left the booking "cancelled" AND settled (customer told it was cancelled, no refund).
@@ -480,6 +494,7 @@ _h.providerMarkNoShow = async (req) => {
   const uid = _uid(req);
   const { ref, data } = await _ownBooking(uid, req.data?.bookingId);
   if (data.status === 'no_show') return { success: true, status: 'no_show', alreadyDone: true };
+  _refuseHeldMilestone(data);
   if (data.status !== 'confirmed') {
     throw new HttpsError('failed-precondition', `Only a confirmed booking can be marked no-show (is "${data.status}").`);
   }
@@ -600,6 +615,8 @@ _h.providerContactCustomer = async (req) => {
   if (!custUid) throw new HttpsError('failed-precondition', 'This booking has no linked customer account.');
   const uSnap = await _db().collection('users').doc(custUid).get();
   const u = uSnap.exists ? uSnap.data() : {};
+  /* Tech Hub 4M: every phone reveal is logged (who, whose, which booking) — server-written, never client-readable. */
+  await _db().collection('contactReveals').add({ bookingId: _san(req.data?.bookingId, 128), by: uid, byRole: 'provider', target: custUid, at: _ts() }).catch(() => {});
   /* Phone lives in `phoneNumber` ("+254…"), not `phone`. */
   return {
     success: true,
@@ -769,6 +786,44 @@ _h.providerGetPortfolio = async (req) => {
   return { portfolio: snap.exists ? snap.data() : null };
 };
 
+/* ── Tech service profile (Tech Hub slice 4b) ──────────────────────────────────
+   A service's devices / brands / repairs / service modes. The FIRST caller of business-workspace.assertModule: device
+   fields need the supportedDevices module AVAILABLE (an approved device-repair / electronics business), anything else
+   needs the services module AVAILABLE; every service mode must be a capability the provider was granted. Lazy require —
+   business-workspace is loaded beside this module by provider-dispatch. */
+async function _techProfile(uid, raw) {
+  if (raw === null) return null;                                   /* explicit clear */
+  const BW = require('./business-workspace');
+  const d = raw && typeof raw === 'object' ? raw : {};
+  const wantsDevice = ['deviceTypes', 'repairTypes', 'brands', 'models'].some((k) => Array.isArray(d[k]) && d[k].length);
+  const w = await BW.assertModule(_db(), uid, wantsDevice ? 'supportedDevices' : 'services', HttpsError);
+  try { return TSP.sanitizeProfile(d, w.serviceCapabilities || []); }
+  catch (e) {
+    if (e instanceof TSP.ProfileError) {
+      throw new HttpsError(e.code === 'BAD_VALUE' ? 'invalid-argument' : 'failed-precondition', e.message, { code: 'TECH_PROFILE_' + e.code });
+    }
+    throw e;
+  }
+}
+
+/* Marketing Hub MK4 — a marketing service is a providerServices doc whose category is a marketing taxonomy id the provider
+   is APPROVED for (providers/{uid}.marketingCategories, admin-approved subset). hub/serviceGroup/marketing are written by
+   the SERVER here; the request can never set them. Returns null for a non-marketing service (behaviour unchanged). */
+const MSVC = require('./shared/marketing-services');
+async function _marketingFields(uid, d, existing) {
+  if (!MSVC.isMarketing(d, existing)) return null;
+  const p = await _db().collection('providers').doc(uid).get();
+  /* SECURITY: the provider's own marketing fields are owner-writable on the served rules — the approved set comes from
+     the server decision record (shared/marketing-authority.js), intersected, fail closed. */
+  const MA = require('./shared/marketing-authority');
+  const auth = await MA.marketingAuthority(_db(), uid, p.exists ? p.data() : null);
+  try { return MSVC.shape(d, MA.effectiveProvider(p.exists ? p.data() : null, auth), existing); }
+  catch (e) {
+    if (e instanceof MSVC.MarketingServiceError) throw new HttpsError(e.code === 'MKT_SERVICE_NOT_APPROVED' ? 'permission-denied' : 'invalid-argument', e.message, { code: e.code });
+    throw e;
+  }
+}
+
 /* ── 10. providerAddService — enforces plan limits.listings ──────────────────
    Creates providerServices; a provider cannot exceed their subscription's
    listing cap (-1 = unlimited). This is the listings-limit enforcement point. */
@@ -778,6 +833,8 @@ _h.providerAddService = async (req) => {
   const d   = req.data || {};
   const name = _san(d.name, 200).trim();
   if (!name) throw new HttpsError('invalid-argument', 'Service name is required.');
+  const techProfile = d.techProfile !== undefined && d.techProfile !== null ? await _techProfile(uid, d.techProfile) : null;
+  const mkt = await _marketingFields(uid, d, null);
 
   const [subSnap, svcSnap] = await Promise.all([
     _db().collection('providerSubscriptions').doc(uid).get(),
@@ -797,6 +854,8 @@ _h.providerAddService = async (req) => {
     deposit: _cents(d.deposit),                  /* cents — upfront hold (collected in Phase E) */
     images:  _images(d.images),                  /* https URLs */
     durationMins: Math.max(0, Math.round(Number(d.durationMins ?? d.duration) || 0)),
+    ...(techProfile ? { techProfile } : {}),
+    ...(mkt || {}),                              /* marketing: server-written hub/category/serviceGroup/marketing */
     active: true,
     createdAt: _ts(), updatedAt: _ts(),
   });
@@ -851,6 +910,8 @@ _h.providerDuplicateService = async (req) => {
     priceType: s.priceType || 'quotation', price: Number(s.price) || 0, fee: Number(s.fee) || 0,
     deposit: Number(s.deposit) || 0, images: Array.isArray(s.images) ? s.images : [],
     durationMins: Math.max(0, Math.round(Number(s.durationMins) || 0)), active: true,
+    ...(s.techProfile ? { techProfile: await _techProfile(uid, s.techProfile) } : {}),
+    ...((await _marketingFields(uid, {}, s)) || {}),   /* a marketing copy is re-checked against the CURRENT approval */
     createdAt: _ts(), updatedAt: _ts(),
   });
   return { success: true, serviceId: ref.id };
@@ -971,6 +1032,12 @@ _h.providerUpdateService = async (req) => {
     patch.durationMins = Math.max(0, Math.round(Number(d.durationMins ?? d.duration) || 0));
   }
   if (d.active !== undefined)      patch.active      = d.active === true;
+  if (d.techProfile !== undefined) {
+    const tp = await _techProfile(uid, d.techProfile);
+    patch.techProfile = tp === null ? FieldValue.delete() : tp;
+  }
+  const mkt = await _marketingFields(uid, d, snap.data());
+  if (mkt) Object.assign(patch, mkt);           /* category re-validated against the CURRENT approval; hub stays marketing */
   await ref.update(patch);
   return { success: true };
 };
@@ -989,6 +1056,7 @@ _h.providerToggleService = async (req) => {
   if (cur.providerId !== uid) throw new HttpsError('permission-denied', 'Not your service.');
   if (cur.removedAt) throw new HttpsError('failed-precondition', 'This service was deleted.');
   const next = req.data?.active !== undefined ? (req.data.active === true) : !(cur.active !== false);
+  if (next && cur.hub === 'marketing') await _marketingFields(uid, {}, cur);   /* re-activating needs a CURRENT approval */
   await ref.update({ active: next, updatedAt: _ts() });
   return { success: true, active: next };
 };

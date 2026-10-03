@@ -25,12 +25,13 @@ function _union(v) { return admin.firestore.FieldValue.arrayUnion(v); }
 /* ── Transaction type → Firestore collection ──────────────────── */
 const TX_COLLECTIONS = {
   order:                    'orders',
-  service_booking:          'bookings',
+  service_lead:             'serviceLeads',       /* Tech slice 4F — a conversation before any booking hangs on the lead */
+  service_booking:          'providerBookings',   /* Tech slice 4L: bookingCreateService writes providerBookings; legacy service bookings in `bookings` stay reachable (TX_FALLBACK) */
   food_order:               'foodOrders',
   pharmacy_order:           'pharmacyOrders',
   property_inquiry:         'propertyInquiries',
   vehicle_inquiry:          'vehicleInquiries',
-  job_application:          'jobApplications',
+  job_application:          'jobApplications',  /* Jobs J4 (sokoni-f3 contract): the LIVE applyForJob doc, id `${jobId}_${seekerUid}` = the txId */
   freelancer_engagement:    'freelancerEngagements',
   event_booking:            'eventBookings',
   hotel_reservation:        'hotelReservations',
@@ -40,8 +41,21 @@ const TX_COLLECTIONS = {
   insurance_request:        'insuranceRequests',
   logistics_request:        'packageRequests',
   support_ticket:           'supportTickets',
-  rfq:                      'rfqs',
+  rfq:                      'rfqRecipients',     /* B2B RFQ (sokoni-f3 38ab5a8): ONE conversation per (rfq, supplier) — txId = rfqId__supplierBusinessId */
+  product_enquiry:          'contactRequests',
+  work_project:             'workProjects',      /* Work/Job Engine (WE1): a campaign / project conversation — txId = project id */   /* product "Contact seller" (sokoni-f3 contract): the ONE enquiry = lead record (df1a4cb) — txId = request id */
 };
+
+/* Older collections a transaction type may still live in, read in order after TX_COLLECTIONS (Tech slice 4L). */
+const TX_FALLBACK = { service_booking: ['bookings'] };
+async function _txSnap(db, type, id) {
+  for (const col of [TX_COLLECTIONS[type]].concat(TX_FALLBACK[type] || [])) {
+    if (!col) continue;
+    const snap = await db.collection(col).doc(id).get().catch(() => null);
+    if (snap && snap.exists) return { snap, col };
+  }
+  return { snap: null, col: TX_COLLECTIONS[type] };
+}
 
 /* ── Spam / fraud detection patterns ─────────────────────────── */
 const SPAM_PATTERNS = [
@@ -110,13 +124,21 @@ async function _sendFcm(token, title, body, data) {
 
    A transaction type ABSENT from this map cannot have its parties derived and is
    refused. Nine of the seventeen accepted types have no rules block at all. */
+/* Jobs J4: terminal application statuses (functions/jobs.js APP_TERMINAL, sokoni-f3 J1) and the post-terminal reply window. */
+const JOB_APP_TERMINAL = ['hired', 'rejected', 'withdrawn', 'offer_declined', 'closed'];
+const JOB_APP_REPLY_WINDOW_MS = 30 * 24 * 3600 * 1000;
+
 const PARTY_FIELDS = {
   order:               ['buyerId', 'buyerUid', 'uid', 'userId', 'sellerUid', 'assignedDriverUid'],
-  service_booking:     ['buyerId', 'uid', 'userId', 'ownerId', 'customerId', 'providerId'],
+  service_lead:        ['customerUid', 'providerId'],
+  service_booking:     ['customerUid', 'buyerId', 'uid', 'userId', 'ownerId', 'customerId', 'providerId'],   /* customerUid = the booking engine's customer field (4L) */
   food_order:          ['buyerUid', 'restaurantId'],
   property_inquiry:    ['uid'],
-  job_application:     ['uid'],
+  job_application:     ['seekerUid', 'employerUid'],   /* J4: the applicant + the employer of THAT application, set by the server in applyForJob */
   legal_consultation:  ['clientUid', 'providerId'],
+  rfq:                 ['buyerUid', 'supplierOwnerUid'],   /* rfqRecipients/{rfqId}__{supplierBusinessId}: the buyer account + the supplier business owner at delivery (account-scoped) */
+  product_enquiry:     ['buyerUid', 'sellerUid'],
+  work_project:        ['customerUid', 'providerUid'],      /* workProjects/{id}: the customer + the provider, both server-written */          /* contactRequests/{id}: the enquiring buyer + the product's seller (sellerUid bound to products/{productId} by rules) */
   logistics_request:   ['buyerUid', 'uid', 'sellerUid', 'assignedDriverId'],
   support_ticket:      ['uid'],
 };
@@ -135,6 +157,118 @@ function _partiesOf (transactionType, tx) {
   return out;
 }
 exports._PARTY_FIELDS = PARTY_FIELDS;
+
+/* product_enquiry (sokoni-f3 contract): the enquiry's seller must STILL be the product's seller. A product that was
+   transferred to another seller, or deleted, closes the thread for new messages — the old seller never keeps a channel
+   to a buyer about a product they no longer sell. Returns null when valid, else a refusal code. */
+async function _productEnquiryRefusal(db, enq) {
+  const pid = enq && typeof enq.productId === 'string' ? enq.productId : '';
+  if (!pid) return 'PRODUCT_ENQUIRY_NO_PRODUCT';
+  const p = await db.collection('products').doc(pid).get();
+  if (!p.exists) return 'PRODUCT_ENQUIRY_PRODUCT_GONE';
+  if ((p.data() || {}).sellerUid !== enq.sellerUid) return 'PRODUCT_ENQUIRY_SELLER_CHANGED';
+  if (enq.buyerUid === enq.sellerUid) return 'PRODUCT_ENQUIRY_SELF';
+  return null;
+}
+
+/* ══ SERVER-ANCHORED conversations (Sports, sokoni-2f contract adopted 2026-10-03) ═══════════════════════════════════
+   Group relationships whose membership CHANGES (a roster, a tournament's registered teams). Rules gate reads on
+   conversations.participants, so the list is RE-DERIVED from the canonical docs — never taken from a client, never a
+   one-time snapshot:
+     sports_team          teams/{id}: sportsTeamMembers status 'active' ∪ captainUid ∪ managerUids   (read + send)
+     sports_tournament    tournaments/{id}: organiser + captains/managers of 'registered' regs
+                          (announcement channel: ONLY the organiser sends — owner decision; captains read)
+     sports_registration  sportsTournamentRegs/{id}: organiser ↔ that team's LIVE captain + managers   (private)
+   Created ONLY by the server (ensureAnchoredConversation, called from sports.js); a client can open an existing one only
+   as a current participant. Archived parent / ended registration → status 'read_only' (history stays readable).
+   syncAnchoredParticipants re-derives and rewrites participants + the per-user index after every membership change;
+   sendMessage re-derives on every send, so a removed member is refused even before a sync lands. */
+const ANCHOR_CAP = 120;
+const _uniq = (a) => [...new Set(a.filter((x) => typeof x === 'string' && x))];
+async function _teamCrew(db, teamId) {
+  const t = await db.collection('teams').doc(String(teamId)).get();
+  if (!t.exists) return null;
+  const td = t.data() || {};
+  return { team: td, crew: _uniq([td.captainUid].concat(Array.isArray(td.managerUids) ? td.managerUids : [])) };
+}
+const ANCHORED = {
+  sports_team: async (db, teamId) => {
+    const tc = await _teamCrew(db, teamId); if (!tc) return null;
+    const ms = await db.collection('sportsTeamMembers').where('teamId', '==', String(teamId)).where('status', '==', 'active').limit(ANCHOR_CAP).get();
+    const parts = _uniq(ms.docs.map((d) => (d.data() || {}).uid).concat(tc.crew)).slice(0, ANCHOR_CAP);
+    return { participants: parts, senders: parts, readOnly: tc.team.status === 'archived', title: (tc.team.name || 'Team') + ' — team' };
+  },
+  sports_tournament: async (db, tid) => {
+    const ts = await db.collection('tournaments').doc(String(tid)).get(); if (!ts.exists) return null;
+    const td = ts.data() || {};
+    const regs = await db.collection('sportsTournamentRegs').where('tournamentId', '==', String(tid)).where('status', '==', 'registered').limit(ANCHOR_CAP).get();
+    let captains = [];
+    for (const r of regs.docs) { const tc = await _teamCrew(db, (r.data() || {}).teamId); if (tc) captains = captains.concat(tc.crew); }
+    const parts = _uniq([td.organiserUid].concat(captains)).slice(0, ANCHOR_CAP);
+    return { participants: parts, senders: _uniq([td.organiserUid])   /* OWNER 2026-10-03: announcements only — captains read, never reply (team ↔ organiser = sports_registration) */, readOnly: td.status === 'archived', title: (td.name || 'Tournament') + ' — announcements' };
+  },
+  sports_registration: async (db, regId) => {
+    const rs = await db.collection('sportsTournamentRegs').doc(String(regId)).get(); if (!rs.exists) return null;
+    const rd = rs.data() || {};
+    const ts = await db.collection('tournaments').doc(String(rd.tournamentId || '')).get(); if (!ts.exists) return null;
+    const td = ts.data() || {};
+    const tc = await _teamCrew(db, rd.teamId); if (!tc) return null;
+    const parts = _uniq([td.organiserUid].concat(tc.crew));
+    return { participants: parts, senders: parts, readOnly: rd.status !== 'registered' || td.status === 'archived', title: (td.name || 'Tournament') + ' — ' + (tc.team.name || 'team') };
+  },
+};
+exports._ANCHORED = ANCHORED;
+
+async function _names(db, uids) {
+  const out = {};
+  await Promise.all(uids.map(async (u) => { const s = await db.collection('users').doc(u).get().catch(() => null); const d = (s && s.exists && s.data()) || {}; out[u] = d.displayName || d.name || 'User'; }));
+  return out;
+}
+/** Create (or re-sync) the server-anchored conversation for a parent. Called by sports.js; never by a client. */
+async function ensureAnchoredConversation(type, parentId) {
+  const resolve = ANCHORED[type]; if (!resolve) throw new Error('not an anchored conversation type: ' + type);
+  const db = _db();
+  const d = await resolve(db, parentId); if (!d || !d.participants.length) return { ok: false, reason: 'no_parent_or_participants' };
+  const conversationId = type + '_' + String(parentId);
+  const ref = db.collection('conversations').doc(conversationId);
+  const names = await _names(db, d.participants);
+  let created = false;
+  await db.runTransaction(async (t) => {
+    const cur = await t.get(ref);
+    if (cur.exists) return;
+    created = true;
+    t.set(ref, { transactionType: type, transactionId: String(parentId), transactionTitle: d.title, participants: d.participants, participantNames: names,
+      participantAvatars: {}, status: d.readOnly ? 'read_only' : 'active', anchored: true, serverCreated: true, lastMessage: null, lastMessageAt: null,
+      unreadCounts: Object.fromEntries(d.participants.map((p) => [p, 0])), metadata: {}, moderationFlags: [], reportCount: 0,
+      readOnlyAt: d.readOnly ? _now() : null, createdAt: _now(), updatedAt: _now() });
+    for (const p of d.participants) t.set(db.collection('userConversations').doc(p).collection('items').doc(conversationId), { conversationId, transactionType: type, transactionId: String(parentId), title: d.title, lastMessageAt: null, lastMessageText: null, unread: 0, updatedAt: _now() });
+  });
+  if (!created) return syncAnchoredParticipants(type, parentId);
+  return { ok: true, conversationId, created: true, participants: d.participants };
+}
+/** Re-derive participants after a membership / registration / archive change; maintains the per-user index. */
+async function syncAnchoredParticipants(type, parentId) {
+  const resolve = ANCHORED[type]; if (!resolve) throw new Error('not an anchored conversation type: ' + type);
+  const db = _db();
+  const conversationId = type + '_' + String(parentId);
+  const ref = db.collection('conversations').doc(conversationId);
+  const d = await resolve(db, parentId);
+  const out = await db.runTransaction(async (t) => {
+    const cur = await t.get(ref);
+    if (!cur.exists) return { ok: false, reason: 'no_conversation' };
+    const before = (cur.data() || {}).participants || [];
+    const after = d ? d.participants : [];
+    const added = after.filter((u) => before.indexOf(u) < 0), removed = before.filter((u) => after.indexOf(u) < 0);
+    const ro = !d || d.readOnly;
+    t.update(ref, { participants: after, status: ro ? 'read_only' : ((cur.data() || {}).status === 'read_only' ? 'active' : (cur.data() || {}).status || 'active'), ...(ro ? { readOnlyAt: _now() } : {}), updatedAt: _now() });
+    for (const u of added) t.set(db.collection('userConversations').doc(u).collection('items').doc(conversationId), { conversationId, transactionType: type, transactionId: String(parentId), title: d ? d.title : '', lastMessageAt: null, lastMessageText: null, unread: 0, updatedAt: _now() });
+    for (const u of removed) t.delete(db.collection('userConversations').doc(u).collection('items').doc(conversationId));
+    return { ok: true, conversationId, added, removed, readOnly: ro };
+  });
+  return out;
+}
+exports.ensureAnchoredConversation = ensureAnchoredConversation;
+exports.syncAnchoredParticipants = syncAnchoredParticipants;
 exports._partiesOf = _partiesOf;
 
 exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, exports._h.createConversation = async (req) => {
@@ -150,6 +284,15 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
 
   if (!transactionType || !transactionId) {
     throw new HttpsError('invalid-argument', 'transactionType and transactionId are required');
+  }
+  if (ANCHORED[transactionType]) {
+    /* Server-anchored (Sports): a client may only OPEN an existing conversation, and only as a current participant. */
+    const aRef = _db().collection('conversations').doc(transactionType + '_' + String(transactionId));
+    const aSnap = await aRef.get();
+    if (!aSnap.exists) throw new HttpsError('failed-precondition', 'This conversation is created by SOKONI when the team or registration is approved.', { code: 'ANCHORED_SERVER_ONLY' });
+    const aParts = (aSnap.data() || {}).participants || [];
+    if (aParts.indexOf(uid) === -1) throw new HttpsError('permission-denied', 'Not a party to this conversation');
+    return { conversationId: aRef.id, existing: true };
   }
   if (!PARTY_FIELDS[transactionType]) {
     /* Accepted as an anchor, but its collection has no rules naming parties, so
@@ -170,22 +313,23 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
   const conversationId = `${transactionType}_${transactionId}`;
   const convRef        = db.collection('conversations').doc(conversationId);
 
-  /* Fast path: already exists */
+  /* Fast path: already exists AND was created by the server (serverCreated) AND the caller is in it.
+     SECURITY (2026-10-03): the served rules let a client CREATE a conversation (self in participants) until sokoni-f3's
+     lock (1225780) ships, and ids are deterministic — so a doc may have been PRE-CLAIMED by a non-party to lock the real
+     parties out. Anything not stamped serverCreated (every legacy conversation predates the stamp) is UNTRUSTED: it is
+     re-derived from the transaction below and repaired for a real party, never trusted and never used to refuse one.
+     Existence is still never acknowledged to a non-party (no oracle). */
   const existingSnap = await convRef.get();
   if (existingSnap.exists) {
-    /* Confirm the caller belongs BEFORE acknowledging existence. Returning
-       {existing:true} to a non-party would confirm that a given transaction has a
-       conversation — an existence oracle — which the previous code did. */
     const cur = existingSnap.data() || {};
-    if (!Array.isArray(cur.participants) || cur.participants.indexOf(uid) === -1) {
-      throw new HttpsError('permission-denied', 'Not a party to this transaction');
+    if (cur.serverCreated === true && Array.isArray(cur.participants) && cur.participants.indexOf(uid) !== -1) {
+      return { conversationId, existing: true };
     }
-    return { conversationId, existing: true };
   }
 
   /* Verify transaction exists */
-  const txSnap = await db.collection(TX_COLLECTIONS[transactionType]).doc(transactionId).get().catch(() => null);
-  if (!txSnap?.exists) throw new HttpsError('not-found', `Transaction ${transactionId} not found in ${TX_COLLECTIONS[transactionType]}`);
+  const { snap: txSnap } = await _txSnap(db, transactionType, transactionId);
+  if (!txSnap?.exists) throw new HttpsError('not-found', 'Transaction not found.');
 
   /* THE CHECK THAT WAS MISSING. Parties come from the transaction itself, and the
      caller must be one of them — being able to name yourself is not entitlement. */
@@ -195,6 +339,32 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
   }
   if (participantUids.indexOf(uid) === -1) {
     throw new HttpsError('permission-denied', 'Not a party to this transaction');
+  }
+  if (transactionType === 'product_enquiry') {
+    const why = await _productEnquiryRefusal(db, txSnap.data());
+    if (why) throw new HttpsError('failed-precondition', 'This enquiry can no longer be opened — the product has changed hands or was removed.', { code: why });
+  }
+
+  /* An existing but UNTRUSTED doc (pre-claimed, or legacy without the stamp): the caller is a REAL party (checked
+     above from the transaction) — repair it from the transaction instead of refusing them. Participants, names and the
+     per-user index are rewritten from server facts; the replaced list is kept for audit. Messages already in the
+     thread stay (the rules only ever showed them to the stored participants). */
+  if (existingSnap.exists) {
+    const repaired = await db.runTransaction(async (t) => {
+      const cur = (await t.get(convRef)).data() || {};
+      const before = Array.isArray(cur.participants) ? cur.participants : [];
+      const same = before.length === participantUids.length && before.every((p) => participantUids.indexOf(p) !== -1);
+      if (cur.serverCreated === true && same) return false;
+      const unread = {}; participantUids.forEach((p) => { unread[p] = (cur.unreadCounts && Number(cur.unreadCounts[p])) || 0; });
+      t.set(convRef, { transactionType, transactionId, participants: participantUids, unreadCounts: unread, serverCreated: true,
+        ...(same ? {} : { participantsReplacedFrom: before.slice(0, 10), repairedAt: _now() }), updatedAt: _now() }, { merge: true });
+      for (const p of before) if (participantUids.indexOf(p) === -1) t.delete(db.collection('userConversations').doc(p).collection('items').doc(conversationId));
+      for (const p of participantUids) t.set(db.collection('userConversations').doc(p).collection('items').doc(conversationId),
+        { conversationId, transactionType, transactionId, updatedAt: _now() }, { merge: true });
+      return !same;
+    });
+    if (repaired) logger.warn('[messages] untrusted conversation repaired from its transaction', { conversationId, transactionType });
+    return { conversationId, existing: true, repaired };
   }
 
   /* Fetch participant profiles */
@@ -220,6 +390,7 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
     isNew = true;
 
     t.set(convRef, {
+      serverCreated:     true,          /* the ONLY trusted creator (security 2026-10-03) */
       transactionType,
       transactionId,
       transactionTitle: title,
@@ -626,7 +797,7 @@ exports.getConversationContext = onCall({ region: REGION, timeoutSeconds: 20 }, 
   const col = TX_COLLECTIONS[conv.transactionType];
   if (!col || !conv.transactionId) return { context: conv.metadata || {} };
 
-  const txSnap = await db.collection(col).doc(conv.transactionId).get().catch(() => null);
+  const { snap: txSnap } = await _txSnap(db, conv.transactionType, conv.transactionId);
   if (!txSnap?.exists) return { context: conv.metadata || {} };
 
   const tx = txSnap.data();
@@ -856,6 +1027,49 @@ exports.sendMessage = onCall(
     }
     if (['closed', 'suspended', 'read_only'].includes(conv.status)) {
       throw new HttpsError('failed-precondition', `Conversation is ${conv.status}`);
+    }
+    /* Sports (server-anchored): re-derive from the canonical docs on EVERY send; the announcement channel lets only the
+       organiser send (owner decision). */
+    if (ANCHORED[conv.transactionType]) {
+      const d = await ANCHORED[conv.transactionType](db, conv.transactionId);
+      if (!d || d.participants.indexOf(req.auth.uid) === -1) throw new HttpsError('permission-denied', 'Not a party to this conversation');
+      if (d.readOnly) throw new HttpsError('failed-precondition', 'This conversation is read-only.', { code: 'ANCHORED_READ_ONLY' });
+      if (d.senders.indexOf(req.auth.uid) === -1) throw new HttpsError('permission-denied', 'Only the organiser can post in this announcement channel.', { code: 'ANCHORED_ANNOUNCE_ONLY' });
+    }
+    /* product_enquiry (sokoni-f3 contract): re-derive the parties from the contactRequests doc on EVERY send, and refuse
+       once the product's seller is no longer the enquiry's seller (transferred / deleted product). */
+    if (conv.transactionType === 'product_enquiry') {
+      const eSnap = await db.collection('contactRequests').doc(String(conv.transactionId || '')).get();
+      if (!eSnap.exists) throw new HttpsError('failed-precondition', 'This enquiry no longer exists.');
+      const enq = eSnap.data() || {};
+      if (enq.buyerUid !== req.auth.uid && enq.sellerUid !== req.auth.uid) throw new HttpsError('permission-denied', 'Not a party to this enquiry');
+      const why = await _productEnquiryRefusal(db, enq);
+      if (why) throw new HttpsError('failed-precondition', 'This product has changed hands or was removed. The conversation stays readable, but new messages are closed.', { code: why });
+    }
+    /* Work/Job Engine: every send re-derives the parties from the PROJECT doc (server-written customerUid / providerUid). */
+    if (conv.transactionType === 'work_project') {
+      const wSnap = await db.collection('workProjects').doc(String(conv.transactionId || '')).get();
+      if (!wSnap.exists) throw new HttpsError('failed-precondition', 'This project no longer exists.');
+      const wp = wSnap.data() || {};
+      if (wp.customerUid !== req.auth.uid && wp.providerUid !== req.auth.uid) throw new HttpsError('permission-denied', 'Not a party to this project');
+    }
+    /* Jobs J4 (owner hard security gate, via sokoni-f3): every send re-derives the parties from the APPLICATION doc —
+       never from the stored participant list or the request — and a terminal application (hired / rejected / withdrawn /
+       offer_declined / closed) keeps its history readable but takes new messages only for 30 days after it ended. */
+    if (conv.transactionType === 'job_application') {
+      const aSnap = await db.collection('jobApplications').doc(String(conv.transactionId || '')).get();
+      if (!aSnap.exists) throw new HttpsError('failed-precondition', 'This application no longer exists.');
+      const app = aSnap.data() || {};
+      if (app.seekerUid !== req.auth.uid && app.employerUid !== req.auth.uid) {
+        throw new HttpsError('permission-denied', 'Not a party to this application');
+      }
+      if (JOB_APP_TERMINAL.includes(app.status)) {
+        const t = app.terminalAt || app.updatedAt;
+        const ms = t && typeof t.toMillis === 'function' ? t.toMillis() : (Number(t) || Date.parse(t) || 0);
+        if (!ms || Date.now() - ms > JOB_APP_REPLY_WINDOW_MS) {
+          throw new HttpsError('failed-precondition', 'This application has ended. The conversation stays readable, but new messages are closed.', { code: 'JOB_APP_CLOSED' });
+        }
+      }
     }
 
     /* Server-resolve senderName so it cannot be forged by the client */

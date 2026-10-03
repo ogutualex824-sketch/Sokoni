@@ -1,3 +1,40 @@
+## [2026-10-03] — Work/Job Engine: customer acceptance on the SERVER's scope version + accepted-terms snapshot; customer "request changes"; terms + documents — NOT deployed
+
+- **functions/shared/work-engine.js:**
+  - `proposed → draft` is now also the CUSTOMER's "request changes";
+  - scope gains `terms`, `paymentTerms` and `documents` (https or a storage path under the project).
+- **functions/work-engine.js:**
+  - every scope edit bumps `scopeVersion`;
+  - acceptance requires `expectedScopeVersion` = the server's current version (missing / stale → WORK_SCOPE_CHANGED) — never browser totals;
+  - acceptance SNAPSHOTS the commercial terms in `acceptedScope.snapshot` (title, description, deliverables, dates, lines, milestones, terms, paymentTerms, documents) + scopeVersion + acceptedBy, so later approved changes move the live scope, never the accepted snapshot;
+  - a customer's request-changes needs a reason (≥5 chars) and records `changesRequested`;
+  - the project read returns scopeVersion / acceptedScope / changesRequested / cancelReason.
+- **Tests:** test-work-engine 15/0 (new W11 request changes + terms/documents; W12 version gate + snapshot; W13 snapshot immune to later changes), SABOTAGE 12/12. work-milestones 9/0.
+
+## [2026-10-03] — SECURITY: pre-claimed / legacy conversations are re-derived from the transaction, never trusted — NOT deployed
+
+- **The live hole:** the SERVED rules let any signed-in user create conversations/<id> (self in participants, ≤2), and ids are deterministic (service_booking_<id>, order_<id>, product_enquiry_<id> …). An attacker could pre-claim a transaction's conversation and lock the real parties out — or stay inside it with them.
+- **Layer 1, rules (sokoni-f3 1225780, P0 hotfix file):** `allow create: if false`. f3's census found the only two client creators in live hosting are dead code.
+- **Layer 2, this commit — functions/messages.js createConversation:**
+  - only a doc stamped `serverCreated:true` with the caller in it takes the fast path;
+  - anything else (pre-claimed, or legacy — all live conversations predate the stamp) is re-derived from the transaction;
+  - a real party's open REPAIRS it: participants / unread / per-user index rewritten from server facts, the replaced list kept as participantsReplacedFrom, repairedAt;
+  - a non-party is still refused with no existence oracle;
+  - every server creation (generic + ANCHORED) now stamps serverCreated.
+- **Tests:**
+  - scripts/test-messages-preclaim.js 5/0 (P1 repair of a pre-claim; P2 the attacker loses send + index; P3 stamped fast path / no oracle; P4 legacy stamped silently; P5 pre-claim WITH the real customer inside is still repaired), SABOTAGE 3/3;
+  - messages jobs 8/0, sports 8/0, product-enquiry 7/0, service-booking 7/0, work-engine 12/0;
+  - participant-authority 49/2: the same 2 rows as before; its idempotency fixture is now a stamped server conversation.
+- **Merge note:** this belongs in whichever messages.js copy wins the b2 / 2f merge.
+
+## [2026-10-03] — Marketing authority = a thin adapter over THE approval predicate (5b P0-C isAuthoritativelyApproved) — NOT deployed
+
+- **Owner rule:** Marketing consumes ONLY isAuthoritativelyApproved. No Marketing-local reading of approval.
+- **functions/shared/marketing-authority.js:** approval = isAuthoritativelyApproved(db, 'marketing_'+uid, {getUser}) (decision record, application, admin decider, not self-decided, not revoked, provider active, account not frozen). Categories = provider.marketingCategories ∩ the predicate's approvedCategories. Listing (marketingStatus / marketingListed) is listing state only. Fail closed on any refusal. The old local record read is removed.
+- **P0-C port (cherry-pick 78957b4 of 5b f85039a):** shared/approval-authority.js byte-identical; approvalStateFor uses it with NO adminAudit fallback (owner), so the SLICE 0 capability reader goes through the same predicate.
+- **Fixtures:** genuine marketers now carry applications/marketing_{uid} plus applicantUid on the record; the forgers still have neither.
+- **Tests:** p0-forged-approval 23/0, business-workspace 30/0, workspace-capability 51/0, marketing-services 13/0 (SABOTAGE 9/9, F1 re-pointed at the adapter's approval gate), work-engine 12/0 (SABOTAGE 9/9), work-milestones 9/0, service-leads 14/0.
+
 ## [2026-10-03] - P0-C: ONE approval authority, isAuthoritativelyApproved; no audit-log fallback
 
 Functions only (providerDispatch's `business-workspace.js` + new `functions/shared/approval-authority.js`). **Not deployed.**
@@ -13,6 +50,529 @@ Functions only (providerDispatch's `business-workspace.js` + new `functions/shar
 - **Migration (P0-H):** `scripts/infra/p0h-migrate-legacy-approvals.js`. It is a dry run by default. `--apply` runs only when the plan equals `--expect` exactly, and it uses `create()` (never overwrites). Prod dry run 2026-10-03: 5 to migrate, 4 to re-decide (2 self-decided, 2 with operator labels).
 - **Deploy order:** run the migration BEFORE this deploys. Otherwise the 5 legacy approvals lose their workspace.
 - **Tests:** `test-p0-forged-approval` 23/0 (F-3 flipped to the owner's rule; C-1..C-12 added). Sabotage caught 14/14. Workspace and shell-gate suites are green.
+## [2026-10-03] — Work/Job Engine WE2: milestone money on the canonical booking path (no new payment code) — NOT deployed
+
+- **Owner 2026-10-03 (AskUserQuestion):** Marketing campaign/project milestones settle at **10%**, like marketing, with no extra fee. Construction contractor milestones are 0%.
+- **functions/work-engine.js:**
+  - **workMilestoneDeliver** (provider only).
+  - **workPayMilestone** (customer only; project accepted/active):
+    - mints `providerBookings/wm_<project>_<milestone>_<attempt>` with kind 'work_milestone' and NO slot;
+    - price = the LOCKED milestone amount, fee 0;
+    - stamps workCommissionCategory from the project skin (marketing → marketing_services, construction → construction_service) and commissionRuleSnapshot from sokoni-2f's catalogue (provider-hub.commissionRuleFor);
+    - the client then pays through the canonical createPaymentIntent → IntaSend → webhook → paid_held → completion PIN → settlement → wallet → receipts path.
+  - Attempts: an open attempt is resumed, a lapsed/cancelled one allows `_n+1`, and a paid one blocks (WORK_MILESTONE_PAID).
+  - An unpriced lane is refused BEFORE minting (WORK_COMMISSION_UNPRICED), and so is a tree without the commercial selector (fail closed).
+- **functions/provider-ops.js:** a PAID work milestone cannot be cancelled (either side), declined or marked no-show into an automatic refund (WORK_MILESTONE_HELD). Disputes and partials go through the canonical refund request authority (sokoni-2f review item).
+- **Receipts (agreed with 2f):** kind 'service_booking', subtype 'work_milestone', links {workProjectId, milestoneId}.
+- **Tests:**
+  - scripts/test-work-milestones.js 9/0, run against sokoni-2f's REAL provider-hub.js + commission-config.js @ 0a949db (git show, not a fixture). SABOTAGE 6/6.
+  - NO_COMMERCIAL mode: the M8 fail-closed row passes.
+  - Regression: work-engine 12/0, marketing-services 13/0, service-leads 14/0, provider-suspend-restore 8/0, booking-contact 5/0.
+- **Deploy coupling:** work-engine + provider-ops + booking must ship on a tree carrying sokoni-2f's commercial-fn selector (0a949db or later). Otherwise milestone payments are refused (fail closed) — safe, but not usable.
+
+## [2026-10-03] — SECURITY: Marketing authority from the SERVER decision record (forged providers.marketing* refused) + workspace `marketing` flag — NOT deployed
+
+- **The hole:** the served rules let a provider write their own providers.marketingStatus / marketingListed / marketingCategories, and applications.marketingApprovedCategories. Every Marketing check trusted those fields. Same class as the P0 forged approval. Never live: Marketing is not deployed.
+- **Layer 1, rules (sokoni-f3 a408713):** all marketing* provider keys and the application decision keys are locked against owner create/update, in the P0 served-hotfix file and in the combined build.
+- **Layer 2, this commit — functions/shared/marketing-authority.js (new):**
+  - active = applicationDecisions/marketing_{uid}.status === 'approved' AND listing active;
+  - categories = provider.marketingCategories ∩ record.approvedCategories;
+  - FAIL CLOSED with no record, a non-approved record, or no approvedCategories.
+  - Used by provider-ops (service editor), booking-service (booking gate) and work-engine (campaign/project creation).
+- **business-workspace.js `businessWorkspace`:** returns `marketing` (boolean) + `marketingCategories`, server-computed. merchant-v2's provider session (sokoni-e3) reads this ONE flag, never providers fields.
+- **Depends on 5b:** the registry's marketing decide must write approvedCategories into applicationDecisions (requested). Until then no marketer is active on a tree that lacks it — fail closed, by design.
+- **Tests:**
+  - test-marketing-services 13/0 (new F1: self-written fields cannot list or be booked, claims cut to the record; WS: workspace flag) — SABOTAGE 9/9, including removing the record requirement.
+  - test-work-engine 12/0 (new W1f) — SABOTAGE 9/9.
+  - Regression: business-workspace 30/0, shell-approval-gate 21/0, shell-gate-mutations 9/0, workspace-capability 51/0, p0-forged-approval 11/0, candidate-shell-gate-compat 9/0, service-leads 14/0, tech-service-profile 18/0, service-capabilities 17/0, booking-contact 5/0, provider-suspend-restore 8/0, messages-product-enquiry 7/0.
+
+## [2026-10-03] — Work/Job Engine WE1: the ONE category-neutral core for campaigns / projects (Marketing first skin; Construction next) — NOT deployed
+
+- **Ownership:** sokoni-f3 grepped 615 branch tips and found no existing engine. b2 owns the core. The shape is agreed with f3: origin link, typed scope lines, change requests with a money delta, evidence, typed completion, a disabled fee hook, business provider.
+- **functions/shared/work-engine.js (pure):**
+  - STATES: draft → proposed → accepted → active ⇄ paused → completed → archived, plus cancelled.
+  - MOVES are per actor: only the customer accepts and completes; once work is active, only admin cancels.
+  - sanitizeScope / milestones; budget = Σ milestones.
+- **functions/work-engine.js — `workDispatch` (exported in index.js):**
+  - workCreate:
+    - origins: service_lead (from an ACCEPTED quote; idempotent per lead + quote version; parties from the lead) or direct (named customer); rfq is refused until Construction wires it to rfqDispatch;
+    - an optional providerBusinessId must be OWNED by the provider;
+    - the marketing skin requires an approved, listed marketer.
+  - workUpdateScope: draft only. Lines priced on the server (qty × rate); totals server-computed.
+  - workTransition: proposing requires total = the accepted quote and milestones = the total; acceptance locks the scope; completion is typed.
+  - workProposeChange / workDecideChange: provider proposes, ONLY the customer approves; an increase adds a delta milestone.
+  - workAddEvidence: https or a storage path under THIS project; author server-stamped.
+  - workGet / workListMine / workAdminList: party / admin reads.
+  - commercial.fee is READ from configuration (absent → not configured) and `charged:false` always. Campaign/project fees are unpriced.
+- **functions/messages.js:** new `work_project` transaction type on workProjects (customerUid / providerUid), with parties re-derived on every send.
+- **NOT in WE1:** milestone money. WE2 pays each milestone through the canonical booking → IntaSend → held → PIN → settlement path, with no new money path.
+- **Tests:** scripts/test-work-engine.js 11/0, SABOTAGE 9/9. Regression: messages jobs 8/0, sports 8/0, product-enquiry 7/0, service-booking 7/0.
+- **Rules (to f3):** workProjects is server-write only; read by parties + admin.
+- **Database:** new collection workProjects; single-field queries (parties array-contains, skin).
+
+## [2026-10-03] — P0 SECURITY (port of 5b 0cb93bd): workspace approvals need SERVER evidence — NOT deployed
+
+- **functions/shared/approval-remediation.js + functions/business-workspace.js:**
+  - an approval is valid only with applicationDecisions/{id} (status approved, same decidedBy) or the immutable adminAudit 'application_approve' row whose performedBy === decidedBy;
+  - providers.approvalDecision 'approve' becomes an artefact, not an approval.
+  - Closes the live forged self-approval: the applicant writes {status:'approved', decidedBy:<admin uid>} on their own application.
+- **Capability-line port:** the extra SLICE 0 `approvals` reader (the one that grants service capabilities) gets the SAME server-evidence predicate, so it cannot become a bypass.
+- **Fixtures:** test-service-capabilities, test-service-leads and test-tech-service-profile now write the applicationDecisions record that applicationDecide writes for an admin decision.
+- **Tests:** p0-forged-approval 11/0, shell-approval-gate 21/0, shell-gate-mutations 9/0, business-workspace 30/0, workspace-capability 51/0, service-capabilities 17/0, service-leads 14/0, tech-service-profile 18/0, marketing-services 11/0, marketing-hub 26/0, legal-projection 96/0, role-provisioning 57/0, messages-jobs/sports/product-enquiry 8/8/7, booking-contact 5/0, provider-suspend-restore 8/0.
+- **Live release:** ships from 5b's hotfix/approval-authority-on-c7e26b6 (owner: STRICT; legacy approvals without record or audit row are re-decided by an admin).
+
+## [2026-10-03] — Marketing Hub MK4 (server): services only in APPROVED categories, on the ONE provider-services authority; the booking snapshots the service so commission follows the BOOKED service — NOT deployed
+
+- **functions/shared/marketing-services.js (new, pure):**
+  - approvedFor(provider, category): the category must be ∈ providers/{uid}.marketingCategories (the admin-approved subset), with marketingStatus 'active' and marketingListed.
+  - shape(): server-writes hub 'marketing', the category, serviceGroup and marketing {pricingModel fixed|hourly|project|quote, deliverables, minPriceCents, leadTimeDays, serviceArea, remote, capabilities}.
+  - A project/quote-priced service can never be directly booked.
+  - bookingSnapshot(): serviceHub, serviceCategory, serviceSnapshot.
+- **functions/provider-ops.js:**
+  - providerAddService / providerUpdateService / providerDuplicateService / providerToggleService re-check the CURRENT approval for marketing services.
+  - Refusal codes: MKT_SERVICE_NOT_APPROVED, MKT_HUB_LOCKED, MKT_UNKNOWN_CATEGORY, MKT_PRICING_MODEL.
+  - Client-sent hub/marketing fields are never stored. Non-marketing services are unchanged.
+- **functions/booking-service.js:**
+  - A marketing booking requires the provider to STILL be approved for the service's category, and a quote-only service requires an accepted quote (MKT_QUOTE_ONLY).
+  - EVERY booking now snapshots serviceHub / serviceCategory / serviceSnapshot from the server's service record. This is the key 2f's settlement uses for the 10% marketing_services lane. hubType stays descriptive, as before.
+- **Tests:**
+  - scripts/test-marketing-services.js: 11/0, SABOTAGE 8/8. Covers approved-only, client cannot set hub, edit/re-activate re-checks, quote-only, request hubType/serviceCategory/price ignored, the same provider's cleaning booking stays cleaning, and a later rate/category change never rewrites the booking.
+  - Regression: service-leads 14/0, tech-service-profile 18/0, provider-suspend-restore 8/0, booking-contact 5/0, marketing-hub 26/0.
+- **Database:** new fields on providerServices (hub, serviceGroup, marketing) and providerBookings (serviceHub, serviceCategory, serviceSnapshot). No index changes.
+- **Deploy (when authorised):** providerDispatch (provider-ops) + the booking engine host. Port onto the serving lineage per the functions lineage gate.
+
+## [2026-10-03] — Messaging: product_enquiry conversations anchored on contactRequests (sokoni-f3 contract, Construction + every hub) — NOT deployed
+
+- **functions/messages.js:**
+  - `product_enquiry` → contactRequests (the ONE enquiry = lead record the product page's "Contact seller" writes, df1a4cb); PARTY_FIELDS ['buyerUid','sellerUid']; txId = request id.
+  - createConversation and EVERY sendMessage re-derive the parties from the enquiry doc. Both also refuse when products/{productId}.sellerUid no longer equals the enquiry's sellerUid, with these codes:
+    - PRODUCT_ENQUIRY_SELLER_CHANGED: the product was transferred;
+    - PRODUCT_ENQUIRY_PRODUCT_GONE: the product was deleted;
+    - PRODUCT_ENQUIRY_NO_PRODUCT;
+    - PRODUCT_ENQUIRY_SELF.
+  - History stays readable. No new collection (no productEnquiries).
+- **Tests:**
+  - scripts/test-messages-product-enquiry.js E0–E6 7/0, mutations 8/8 caught by name (wrong party, third party, request-supplied parties, forged stored list, changed seller, deleted product).
+  - Regression: messages-jobs 8/0, messages-sports 8/0, messages-service-booking 7/0.
+  - messages-participant-authority 49/2: the same 2 rows fail at HEAD df3d57f before this change.
+  - messages-history-scoping NOT RUN: it needs @firebase/rules-unit-testing / the emulator, and memory is below the floor.
+- **Security:** contactRequests create/transition rules are f3's combined candidate f9a5c45 (sellerUid bound to the product via get(), no self-enquiry, exact df1a4cb key set).
+- **Hosting (separate):** ?tx=product_enquiry allowlist + SokoniInbox.TX_TYPES + an "Open chat" button after a request is created.
+- **API:** new transactionType value. **Database:** none. **Breaking:** none.
+
+## [2026-10-03] — Marketing Hub MK1 + MK2 (server): one taxonomy, three separate application types, partial category approval through the shared AdminOS review — NOT deployed
+
+- **functions/shared/marketing-taxonomy.js (new):**
+  - THE Marketing taxonomy: the owner's 10 groups (Strategy, Digital, Content, Creative, Media, Advertising, PR, Creator, Events, Growth), 71 services, each with a buy model (booking | quote | project).
+  - APPLICATION_TYPES individual / agency / specialist (specialist = exactly one service).
+  - LEGACY_TO_AREA maps HubRegister's six marketing rows one-to-one (printing → nothing).
+- **sokoni-marketing-taxonomy.js:** generated browser copy (`node scripts/build-marketing-taxonomy.js --check`).
+- **functions/marketing-hub.js (new), `marketingDispatch` (one CF, exported in index.js):**
+  - marketingApply / marketingWithdraw / marketingMyStatus: server-validated type, categories, E.164 phone, https-only portfolio, agency registration + team size. The record is `applications/marketing_{uid}` with hub 'marketing' — never the generic business application. Resubmit only from info_requested / rejected / withdrawn.
+  - marketingDirectory / marketingProfile: a filtered view of APPROVED marketers only; the public card carries no phone or email.
+  - marketingAdminOverview: admin-only; every marketing application with type, categories and counts.
+- **functions/application-lifecycle.js:**
+  - applicationDecide accepts `approvedCategories` for a marketing application: it must be a non-empty subset of the request (MKT_NO_CATEGORY / MKT_CATEGORY_NOT_REQUESTED); declined categories are recorded.
+  - New projectMarketing writes the providers/{uid} marketing block (marketingType, marketingCategories = approved subset only, marketingGroups, marketingStatus, marketingListed).
+  - A rejected/suspended marketing application retracts ONLY the marketing block and never strips the provider claim, so an existing cleaning company keeps its cleaning listing.
+  - applicationList returns hub / marketingType / requestedCategories / approved categories / portfolio.
+- **Tests:**
+  - scripts/test-marketing-hub.js: 26/0; SABOTAGE=1 10/10 caught by name.
+  - Regression green: role-provisioning 57/0, legal-projection 96/0, role-vocabulary 66/0, provider-suspend-restore 8/0, provider-onboarding-intake 6/0, service-leads 14/0, messages-jobs 8/0, messages-sports 8/0.
+  - test-approval-provisioning P2 fails on business-bootstrap's missing `_ensureBusinessForOwner` export — this change does not touch that module, so it is not caused by it.
+  - scripts/lib/inmem-firestore.js gains `array-contains`.
+- **Database:** new fields on applications (hub, applicationType 'marketing', marketingType, requestedCategories, marketingApprovedCategories, marketingDeclinedCategories, agency) and on providers (marketing*). Directory uses single-field indexes only; no composite index.
+- **Security:**
+  - applicants cannot self-approve;
+  - admin-only decision and overview;
+  - no contact data in the public card.
+  - OPEN for f3: a client-written `applications` doc could claim hub 'marketing' (rules must refuse it); an admin still chooses the categories.
+- **Deploy (when authorised):** functions only — `marketingDispatch` (new) and `applicationLifecycle` / `applicationDecide` / `applicationList`. NEVER deploy applicationLifecycle from a hosting tree. Hosting (wizard, directory, dashboard, AdminOS panel) comes after.
+- **Breaking:** none.
+
+## [2026-10-03] — Sports: server-anchored conversations (team / tournament announcements / private registration) + coach capability (sokoni-2f contract, owner decisions) — NOT deployed
+
+- **functions/messages.js:**
+  - ANCHORED resolvers re-derive participants from teams / sportsTeamMembers / tournaments / sportsTournamentRegs:
+    - sports_team = active members ∪ captain ∪ managers;
+    - sports_tournament = ANNOUNCEMENTS ONLY: organiser sends, registered captains and managers read, and captains cannot reply (owner);
+    - sports_registration = PRIVATE organiser ↔ that team's live captain and managers.
+  - Exported server helpers ensureAnchoredConversation (server-only creation) and syncAnchoredParticipants (rewrites participants plus the per-user index; archive or an ended registration → read_only).
+  - createConversation never lets a client create one; it opens an existing one for current participants only. sendMessage re-derives on every send.
+- **functions/shared/service-capabilities.js:** coach → DIRECT_BOOKING + QUOTE_REQUEST. Sports and specialities are profile data.
+- **Tests:**
+  - test-messages-sports S1–S8 8/0, 5/5 mutations by name (server-only creation, removed-member refusal, announce-only, registration privacy, archive read-only).
+  - test-service-capabilities A-9 (17/0); test-business-workspace 30/0; test-messages-jobs 8/0; test-messages-service-booking 7/0.
+- **Deploy:** messages functions + the providerDispatch release (capabilities). sports.js (2f aee1ed8) calls the helpers behind a typeof guard.
+
+## [2026-10-03] — Jobs J4: job-application conversations (sokoni-f3 contract; owner hard security gate) — NOT deployed
+
+- **functions/messages.js:**
+  - job_application → jobApplications (the live applyForJob doc; txId = jobId_seekerUid). PARTY_FIELDS = seekerUid + employerUid (was uid, which live applications do not carry).
+  - sendMessage RE-DERIVES the parties from the application on every send, never trusting the stored list or the request.
+  - A terminal application (hired / rejected / withdrawn / offer_declined / closed) stays readable but takes new messages only for 30 days after it ended (terminalAt, else updatedAt).
+  - createConversation already derived participants server-side; f3's concern applied to an older line.
+- **Prod (read-only, positive-controlled):** 0 conversations exist (commissionLedger control = 12), so there is no old-shape job_application conversation and no migration.
+- **scripts/test-messages-jobs.js (new):** J0–J7, 8/0, 7/7 mutations each turning its named row red.
+  - J1: another applicant.
+  - J2: another employer.
+  - J3: seekerUid in the request.
+  - J4: employerUid in the request.
+  - J5: a different application with a forged participant list.
+  - J6: a third party.
+  - J7: the 30-day window.
+  - test-messages-service-booking 7/0.
+
+## [2026-10-03] — Legal Hub L9 (capability line): legal applications switch on quotes + direct booking — NOT deployed
+
+- **functions/shared/service-capabilities.js:** legal → QUOTE_REQUEST + DIRECT_BOOKING. Only a VALID AdminOS approval composes (self-decided or invalid ones are ignored). Booking or receiving leads still needs an active provider, which the Legal Verification Authority grants only with a current LSK check.
+- **Effect:** a verified lawyer can receive project requests and send quotes. An accepted quote becomes a canonical booking at the quoted amount, then IntaSend, hold, PIN and one 5%. This uses the service-leads engine (Tech 4F); no Legal quote system is built.
+- **Tests:** test-service-capabilities A-8 (16/0; BASE=ed7cde0 fails A-8), test-business-workspace 30/0, sabotage-service-capabilities 7/7.
+
+## [2026-10-03] — Messages: B2B RFQ conversations (for sokoni-f3 b2b-rfq 38ab5a8) — NOT deployed
+
+- **functions/messages.js:**
+  - TX_COLLECTIONS rfq → rfqRecipients (was rfqs). No rfq conversation could exist before, because PARTY_FIELDS lacked it and createConversation refused.
+  - PARTY_FIELDS rfq = buyerUid + supplierOwnerUid, account-scoped. txId = rfqId__supplierBusinessId, so there is ONE conversation per (rfq, supplier).
+- **Tests:** test-messages-service-booking M-7. The buyer and supplier owner share one conversation and another supplier is refused. 7/0; BASE=d580af8 fails M-7.
+- **Deploy unit:** createConversation / getConversationContext (messages.js). No rules change.
+
+## [2026-10-03] — Owner decision: service commission applies to the DISCOUNTED amount — release gate row C6 — NOT deployed
+
+- **Decision (owner, 2026-10-03):** when an offer discounts a service booking, SOKONI's 5 % is charged on what the buyer actually pays, not on the list price.
+  Example: a KES 1,000 service with a KES 200 offer means the buyer pays KES 800, commission is KES 40 and the provider gets KES 760. This matches the existing
+  events rule ("commission is applied on the discounted price").
+- **scripts/gate-service-commission.js:** new row C6 and mutation "commission charged on the pre-discount list price", which turns C6 red.
+  - On 2f 93f5f13: 6/0, 5/5 mutations caught.
+  - On this line: still RED (C1–C4 and C6), because settlement charges the 20 % plan rate here. The release tree must exit 0.
+- **Binding requirement for 4J (shopOffers, owned by sokoni-5b):** `_settlementMath` reads `booking.price`, so an applied offer MUST store the post-discount
+  payable as `booking.price` (or settlement must read the server-verified paid amount). A booking row proving that lands with 4J.
+- No code path changed. No database, API or security change.
+
+## [2026-10-03] — Tech Hub slice 4C (server, part): bookings record HOW they are delivered; Site visits / Remote support / Pickup & drop-off implemented — NOT deployed
+
+- **booking-service.js:** every booking stamps `serviceMode` from server facts only. In order: the customer's validated repairDetails, else the accepted quote's
+  serviceMode, else the service's single declared mode. It is never priced from.
+- **business-workspace MODULES:** remoteSupport, siteVisits and pickupDropoff are implemented:true. Each is the provider's own bookings filtered by serviceMode,
+  on the existing booking lifecycle (no new state machine).
+- **Still NOT_IMPLEMENTED (no authority exists, shown honestly):** supportTickets, networkProjects, cctvInstallations, posSupport, projects, diagnostics.
+- **Tests:** test-service-leads L-9b (14/0; BASE=25ef259 fails it). tech-service-profile 18/0, service-capabilities 15/0, business-workspace 30/0, sabotage 7/7.
+
+## [2026-10-03] — adminUpdateFeatureFlag can no longer switch a flag ON by omission or widen a staged rollout — NOT deployed
+
+- Reported by sokoni-2f, fixed by sokoni-b2. functions/admin-os.js adminUpdateFeatureFlag (super-admin) had three defects:
+  - it wrote `enabled: enabled ?? true`, so a call that omitted `enabled` turned a flag ON; featureFlags/fitness_membership_sales gates PAID memberships;
+  - it stored non-booleans ("true") verbatim;
+  - on every call it reset rolloutPct to 100 and cleared enabledForRoles, so a plain toggle widened a staged rollout to everyone.
+- Now `enabled` must be a boolean, and only the fields the caller sent are written. The AdminOS callers (sokoni-aos.js toggles) already pass an explicit boolean.
+- Test: test-feature-flag-update 4/0, executing the real handler. BASE=1f813e7 fails F-1 / F-2 / F-3.
+- Deploy unit: adminOsDispatch (+ standalone adminUpdateFeatureFlag if live). Lineage gate applies.
+
+## [2026-10-03] — Tech Hub slice 4Q (server): AdminOS sees service leads & quotes — NOT deployed
+
+- functions/admin-os.js `_h.adminGetServiceLeads`:
+  - admin-only, read-only;
+  - routed by adminOsDispatch (handler only, no new export / deploy target);
+  - filters by status or providerId;
+  - returns status, parties, the server-validated quote (amount, version, validity, mode), the bookingId, monetization (not_configured) and an
+    event count, plus open / converted / declined counts.
+- Test: test-service-leads L-12 (13/0).
+
+## [2026-10-03] — Tech Hub slice 4M (server): calling = a booking-bound, logged phone reveal — NOT deployed
+
+- **Census:** SOKONI has no voice / call-masking provider (Africa's Talking is used for SMS only; no Twilio). The only contact path was
+  provider-ops.providerContactCustomer: the provider of a booking gets the customer's raw phone, unlogged. Customer → provider calling did not exist.
+- **Privacy model (no external dependency invented):**
+  - before a booking, there is no phone at all; contact is in-app messaging on a service lead (4F);
+  - **customer → provider:** new providerDispatch op `bookingContactProvider`. Only the booking's own customer, only once the booking is PAID or CONFIRMED
+    (paid_held / settled / confirmed / in_progress / completed), so an unpaid hold reveals nothing and phones cannot be harvested;
+  - **provider → customer:** providerContactCustomer is unchanged in access (own booking only);
+  - every reveal, either direction, is written to `contactReveals` (server-only; no rules block, default deny).
+- **Tests:** test-booking-contact 5/0 (BASE=6168a5c: the op does not exist). leads 12/0, tech-service-profile 18/0, onboarding-intake 6/0.
+- **Not built:** number masking / call logging of actual calls (needs a voice provider; owner decision). Deploy unit: providerDispatch (5b's release).
+
+## [2026-10-03] — Tech Hub slice 4N (server): provider-onboarding publishes INTO the one application queue — NOT deployed
+
+- **OB-1 hotfix ported** (c853665 from hotfix/provider-publish-selfgrant, built from the deployed archive; owner held its deploy 09-28) onto the capability
+  line as faa2dd9. Publishing writes CONTENT; a first publish creates providers/{uid} CLOSED (pending_approval); the provider claim is granted only if
+  already approved; paid plans are not self-granted. test-provider-publish-hotfix 15/0 here.
+- **Executed proof of the live defect** (BASE=e5eb1d6, the live providerDispatch lineage): a brand-new user's publish becomes status:'active', searchable:true,
+  with no application. That includes the regulated titles the wizard offers (Doctor, Nurse, Dentist, Lawyer, Notary).
+- **4N:** providerPublish now creates / refreshes `applications/{uid}--provider` (the deterministic id business-apply uses) with role provider, the job title
+  (profession / categoryLabel) and the EXISTING intake business id it maps to (new shared/profession-intake.js: Network Engineer → networking,
+  Electrician → electrical, IT Support → it-support, …; every value must be a classified FROM_BUSINESS_ID key; regulated titles unmapped).
+  - A DECIDED application is never reopened or overwritten. The lifecycle trigger only normalises a pending application.
+  - AdminOS approval → provider active → capabilities from that application. The category STAMP onto providers.business remains sokoni-5b's.
+- **Data fix:** re-publishing no longer overwrites providers.rating / reviewCount / jobsCompleted with 0. They are seeded on first creation only.
+- **Tests:** test-provider-onboarding-intake 6/0 (BASE faa2dd9 and e5eb1d6 both fail 6/6). hotfix 15/0, suspend-restore 8/0, badge 8/0, leads 12/0,
+  business-workspace 30/0, service-capabilities 15/0.
+- **Owner-facing:** this closes the self-publish bypass that is LIVE today. Providers already self-published as active before this ships keep their status.
+  A read-only census of them (no application, status active) is recommended before release; no writes.
+- **Deploy unit:** providerDispatch, inside sokoni-5b's ONE release.
+
+## [2026-10-03] — Tech Hub slice 4P (server): the public Verified badge is a projection of admin-decided facets — NOT deployed
+## [2026-09-28] - HOTFIX: providerDispatch self-grant — publishing no longer activates a provider; paid plans are no longer self-granted
+
+**Functions only, one file, NOT deployed.** Branch `hotfix/provider-publish-selfgrant` is based on `de6888b`, whose
+functions tree is byte-identical to production's deployed `providerDispatch` archive (generation `1787386174474483`,
+md5 `6f155e8b5e0e`; 379/379 files). It is recorded in `docs/C4_PRODUCTION_BASELINE.md` on the convergence line
+(`4e9607b`). Deployment is a separate, pending authorization.
+
+**Why:** the read-only production baseline (2026-09-28) proved the deployed `providerPublish` is the version before the
+OB-1 fix.
+- Any non-suspended caller got `providers/{uid}` set `active` / searchable / public / bookable plus an unconditional
+  `provider` claim, with no application and no admin decision.
+- Re-publishing also restored a DEACTIVATED provider to `active`.
+- `providerActivateSubscription` set any PRICED plan `active` from an unverified, client-supplied `paymentRef`, which
+  also changed the provider's commission rate and limits.
+
+**Changed:** `functions/provider-onboarding.js` only, with exactly two behaviour changes, ported from `2f4fc20`:
+1. **OB-1 `providerPublish`:**
+   - publishing writes content only;
+   - a first publish creates the registry row CLOSED (`pending_approval`, not searchable / public / bookable /
+     available);
+   - an existing row's state is never written;
+   - the `provider` claim is minted only for an already-approved provider;
+   - `providerProfiles.searchable` follows approval.
+2. **Paid-plan refusal in `providerActivateSubscription`:** a priced plan cannot be activated from the client
+   (`failed-precondition`), whatever `paymentRef` is sent. `free_trial` stays self-serve.
+
+**Deliberately unchanged** (same bytes as production):
+- the suspended-listing refusal;
+- the legal-agreement role (OB-6);
+- the counter-reset behaviour;
+- the providerId fallback;
+- `providerGenerateQR` / `providerGetPublicProfile`;
+- K2 / K13, rules, and existing accounts.
+
+**Tests:** `scripts/test-provider-publish-hotfix.js` (outside the functions archive).
+- On the hotfix: **15/0**.
+- `COUNTERPROOF=1`, the deployed-identical source: **9 failures, exactly the defects**:
+  - A2–A5: self-activation plus claim;
+  - B1: a pending provider escalates;
+  - B2: a deactivated provider is restored;
+  - E2 ×3: starter / enterprise / professional self-granted.
+- Positive controls pass in both modes: approved republish + claim, suspended refused, free trial.
+
+**Sabotage:** 10/10 caught, with a byte-identical restore after every attack (standalone supervisor).
+
+**Archive proof:** the hotfix tree differs from the deployed archive in `provider-onboarding.js` only (378/379
+byte-identical, 0 missing).
+
+**Baseline vs pristine `de6888b`:** `audit-commission-paths`, `verify-commission-single-source` and `test-otp` pass in
+both. `verify-listing-limit-single-source` fails identically in both (pre-existing: 63 declarations). No script that can
+reach production was run.
+
+**Not covered:** accounts that were ALREADY self-activated, restored from deactivation, or self-granted a paid plan. A
+separately authorized read-only investigation will find them.
+
+**Deploy (pending authorization):** `firebase deploy --only functions:providerDispatch` from this worktree, then
+post-deploy verification. `providerDispatch` is outside CLAUDE.md's rebuild list, so the Artifact Registry risk must be
+accepted first.
+
+**Database / Rules / Breaking:** none.
+- Paid provider plans have no self-serve path until the verified-payment flow is wired; that was already the correct
+  state.
+
+## [2026-08-22] - Admin shortcut, Marketplace return, and the Health INTERNAL traced.
+
+**Census (10-03):**
+- No admin path granted `providers/{uid}.verified`; only scripts/onboard-providers.js ever set it, with no audit.
+- The canonical authority, `verificationDecide` / `verificationRevoke` (admin-only, transactional, adminLog, expiry), wrote `verifications.facets`,
+  and nothing connected those facets to the badge.
+- Search indexes trusted `providerVerified`, which the owner can write.
+- A verified listing could be renamed and keep the badge.
+- AdminOS counted `verificationStatus` on providerVerification, but the field written is `status`, so both counters were always 0.
+
+- **New** `functions/shared/provider-badge.js`:
+  - badge ⇔ the `identity` facet is active (approved, not expired, not revoked) — the meaning providers.html tells customers;
+  - snapshots `verifiedName`;
+  - `badgeValid()` shows the badge only while the listing still carries that name; `badgeState()` labels verified / re_review_required /
+    legacy / not_verified.
+- **verification-engine.js:** after every decision / revocation, projects {verified, verifiedFacets, verifiedName, verificationReviewRequired:false}
+  onto providers/{uid}. A projection failure is logged and returned (`providerBadge`), never silent.
+- **provider-onboarding.providerUpdateProfile:** renaming a verified listing sets verified:false + verificationReviewRequired:true
+  (re-verification). Phone / bio / category edits leave the badge alone.
+- **algolia-indexer + typesense-client:** provider.verified / providerVerified = badgeValid(data). `providerVerified` is no longer trusted.
+- **admin-os:** the pending counter reads providerVerification.status; the verified counter counts providers.verified == true (the projected badge).
+- **Tests:** test-provider-badge 8/0 (BASE=12a6519 fails 7/8). Mutation "no projection" turns V-3…V-6 red. search-eligibility 8/0,
+  suspend-restore 8/0, leads 12/0, business-workspace 30/0, service-capabilities 15/0.
+- **OPEN (rules release, handed to the rules owner):**
+  - verifications/{uid} create lets the owner forge approved facets / emailVerified / phoneVerified;
+  - providers update lets the owner set featured / providerVerified / isVerified / badges / rating / reviewCount / jobsCompleted and the new
+    verifiedFacets / verifiedName / verificationReviewRequired;
+  - services lets the owner set providerVerified.
+- **OPEN (owner):** legacy `verified:true` set by script (no facet, no audit) stays shown and is labelled `legacy` until an admin decision projects it.
+  providerSubmitVerification documents (providerVerification) still have no decider; the canonical path is verificationSubmit → verificationDecide.
+- **Deploy units:** verificationDecide, verificationRevoke (verification-engine.js); providerDispatch (provider-onboarding) in 5b's release;
+  adminOsDispatch (admin-os); algolia / typesense provider triggers. Lineage gate applies.
+
+## [2026-10-03] — RELEASE GATE: service-booking commission invariant (scripts/gate-service-commission.js) — RED on this line
+
+Owner rule (locked 10-03): KES 1,000 service → buyer pays 1,000 · SOKONI 5 % = 50 · provider 950 · one rate on every plan · once · ONE source.
+
+The gate runs the REAL finos-utils.calculateCommission with exactly the arguments the tree's settlement (provider-ops._settlementMath) builds,
+for a Free- and an Enterprise-plan provider, on an in-memory Firestore; then re-runs on deliberately broken copies.
+
+| Tree | Settlement path | KES 1,000 booking | Verdict |
+|---|---|---|---|
+| this line (13f74f3 → tip; = the LIVE providerDispatch lineage) | inline subscriptionRole:'provider' (compatibility mode) | KES 200 (20 %) for Free AND Enterprise (role default — the plan id is not mapped here) | **RED — release blocker** |
+| 2f commercial 93f5f13 | provider-hub.commissionArgsForHub | KES 50 / net 950, same on every plan; config = snapshot = 5 | GREEN; 4/4 mutations caught (14 %, ladder back, home_services 14, ladder republished) |
+
+**Release rule:** the ONE providerDispatch release (sokoni-5b) must carry 2f's commercial server changes. That means provider-hub.js commissionArgsForHub,
+commission-config RATES (services 5, home_services 5), subscription-core / finos-utils as on 93f5f13, and the provider-ops settlement call sites.
+This gate must be GREEN on the exact release tree. A providerDispatch deploy from this line as it stands would keep charging 20 %.
+**Not covered by the gate:** the buyer total / intent amount (bookingCreateService + createPaymentIntent) and providerServices.fee being ignored. Both are
+sokoni-5b's server change.
+
+## [2026-10-03] — Tech Hub slice 4K (server): public search excludes unapproved / suspended providers; reinstatement re-indexes in full — NOT deployed
+
+- **New** `functions/shared/provider-search-eligibility.js` — the ONE rule for the providers registry in search, the same one the directory
+  applies: indexable ⇔ status ∈ {active, approved} AND searchable !== false.
+- **Defect, live lineage:** applicationLifecycle retracts a suspended / refused provider with {status:'suspended', searchable:false} and relied on
+  "the existing update trigger" deleting it from search. But:
+  - **algolia-sync.js** had no providers rule, so a suspended provider STAYED searchable;
+  - **typesense-sync.js** indexed pending records and ignored searchable:false.
+  Both now apply the rule.
+- **algolia-sync.js:** a document leaving a skip state (reinstated / published) is re-added with a FULL upsert. It was a 'partial' update of
+  the changed fields onto an object that had been deleted.
+- **Test seams** (`_internal`) are NON-enumerable, so index.js's Object.assign never exports them as deploy targets.
+- **Tests:** test-provider-search-eligibility 8/0, firing the real algoliaSync_providers_* and ts_providers_* triggers.
+  - BASE=4ab4eb7 fails 6/8: a pending provider is indexed; a suspended, refused or retracted one stays in Algolia; reinstatement is partial.
+  - Unchanged: test-provider-suspend-restore 8/0, test-service-leads 12/0.
+- **Deploy units:** algoliaSync_providers_{create,update} and ts_providers_{onCreate,onUpdate}. Scoped deploys only; lineage gate applies.
+  The algolia-sync change to 'upsert on re-entry' is generic and affects every collection's update trigger when those are deployed.
+  After deploy, a one-off reconcile (algolia-reconcile / Typesense backfill) is needed to remove already-indexed suspended / pending
+  providers. Read-only check first.
+
+## [2026-10-03] — Tech Hub slice 4O (server): provider suspend / reinstate proven end to end; adminGetProviders honest — NOT deployed
+
+- **Suspend / reinstate already exist** — no new authority. AdminOS uses `applicationDecide` (suspend | approve), which writes adminAudit
+  and projects synchronously; projectProvider retracts (suspended, unsearchable, not bookable) or reinstates.
+- **Proven executed** (scripts/test-provider-suspend-restore.js 8/0):
+  - approve projects the provider + sourceApplicationId;
+  - a non-admin cannot decide;
+  - suspend is audited with admin + reason;
+  - a suspended provider has no workspace, no new leads, no bookings and no Tech services, and cannot re-publish itself;
+  - approve reinstates (searchable, workspace, leads).
+- **functions/admin-os.js adminGetProviders:**
+  - unknown rating / jobsCompleted → null (was a fabricated 0);
+  - `suspended` count added and no longer folded into `pending`;
+  - returns `sourceApplicationId` + `suspendedAt` so AdminOS can offer Suspend / Reinstate on the right application.
+  - BASE=906bd2f fails S-8 only.
+- **scripts/lib/inmem-firestore.js:** FieldValue arrayUnion / arrayRemove / increment are now resolved against the current value (the
+  decision path uses them); the auth stub has setCustomUserClaims. leads 12/0 and the others unchanged.
+- **Dependency (5b):** the approval-time category stamp. The test sets providers.business.category by hand after approval, because
+  this lineage's lifecycle does not stamp it.
+- **Deploy unit:** adminGetProviders (admin-os.js) — its own unit, not providerDispatch. Lineage gate applies.
+
+## [2026-10-03] — Tech Hub slice 4F (server): service leads & quotes — the ONE lead / quote authority — NOT deployed
+
+**Files:**
+- New: `functions/service-leads.js`, `docs/SERVICE_LEADS.md` (contract + state machine), `scripts/test-service-leads.js`, `scripts/lib/inmem-firestore.js` (shared harness, transactional writes buffered).
+- Changed: `functions/booking-service.js`, `functions/provider-dispatch.js`, `functions/business-workspace.js`, `functions/messages.js`; `scripts/test-service-capabilities.js` (B-8 row).
+
+- **serviceLeads/{id}**, server-written only (no rules block → default deny). States: created → viewed → quote_sent ⇄ clarification_requested
+  → quote_accepted → converted, plus declined / quote_declined / closed.
+- **providerDispatch ops:** leadCreate, leadListMine, leadListForProvider, leadMarkViewed, leadDecline, leadSendQuote, leadRespond, leadClose.
+  - The provider side needs the `leads` module AVAILABLE (now implemented, labelled "Leads & quotes"): an approved provider with QUOTE_REQUEST, not suspended.
+  - A quote's serviceMode must be a GRANTED capability.
+  - Limits: 3 open leads per customer per provider, 20 per customer per day.
+- **bookingCreateService({ leadId })** books an ACCEPTED, unexpired quote:
+  - at the QUOTED price (request amounts ignored);
+  - with pricingSnapshot.source 'quote';
+  - and the lead converts inside the booking transaction (read before writes).
+  - One conversion while the booking is live. An abandoned unpaid hold (expired / cancelled / released) frees the quote again.
+- **messages.js:** transaction type `service_lead` (parties customerUid + providerId). "Message provider" before any booking now has a transaction.
+- **Lead monetization NOT configured:** no lead fee exists in SOKONI. Every lead records `monetization.status: not_configured` and nothing is
+  charged. Charging needs an owner decision + a payment path.
+- **Tests:** test-service-leads 12/0 (BASE=95f2ef6: no lead authority).
+  - Mutations caught: "price from request" (L-7), "skip conversion" (L-7, L-8).
+  - test-service-capabilities 15/0 (B-8: leads switched on now AVAILABLE; LOCKED untouched), sabotage 7/7.
+  - business-workspace 30/0, tech-service-profile 18/0, messages-service-booking 6/0, messages-participant-authority 51/0.
+- **Release:** providerDispatch (5b's ONE release) + messagesDispatch (messages.js). Lineage gate applies.
+
+## [2026-10-03] — Tech Hub slice 4L (server): booking conversations reach the engine's providerBookings — NOT deployed
+
+- functions/messages.js:
+  - TX_COLLECTIONS.service_booking → `providerBookings` (bookingCreateService writes there). It used to be `bookings`, so
+    every engine booking answered "not found" and no customer / provider could open its conversation.
+  - Legacy service bookings in `bookings` stay reachable (TX_FALLBACK, read after the primary).
+  - PARTY_FIELDS.service_booking gains `customerUid` (the engine's customer field).
+  - getConversationContext reads the same way.
+  - The not-found error no longer names the collection.
+- Tests: test-messages-service-booking 6/0, executing the real createConversation / getConversationContext:
+  - customer and provider seated, a stranger refused, a legacy booking still opens, context read;
+  - BASE=5dc505e fails 5/6 ("not found in bookings").
+  - test-messages-participant-authority 51/0.
+- NOT built: booking-status system messages for engine bookings. onBookingStatusChanged watches `bookings/{id}`; a
+  providerBookings trigger is a NEW deploy unit and needs its own decision.
+- Deploy unit: messagesDispatch (+ the standalone createConversation / getConversationContext if live). NOT providerDispatch. The
+  functions lineage gate applies: diff each function's LIVE archive before release.
+
+## [2026-10-03] — Provider dashboard: modules with no backing are NOT_IMPLEMENTED (sokoni-5b decision) — NOT deployed
+
+- business-workspace MODULES: `enquiries` and `calls` were implemented:true with no collection, callable or screen behind them (census
+  10-03) → implemented:false, why NOT_BUILT. `quotes` IS the built rate-card editor (settings → services, Pricing Studio) → relabelled
+  "Rate cards" (was "Rate cards & quotes"); Tech slice 4F adds per-customer quotes. Applicability per category is unchanged.
+- Tests: test-business-workspace rows for plumber calls and hotel enquiries now expect NOT_IMPLEMENTED (30/0); test-tech-service-profile
+  B-11 (BASE=5c95390 fails it). Decision: sokoni-5b as file owner, 2026-10-03.
+- OPEN (release notes): plain non-tech services can be added before approval (only booking checks approval) — owner question via sokoni-5b.
+
+## [2026-10-03] — Tech Hub slice 4b (server): device-repair service profile + repair details, capability-gated — NOT deployed
+
+**Files:** `functions/shared/tech-service-profile.js` (new), `functions/provider-ops.js`, `functions/booking-service.js`,
+`functions/business-workspace.js`, `scripts/test-tech-service-profile.js` (new), `scripts/test-service-capabilities.js` (B-2 row).
+
+- **providerServices.techProfile** (new optional block): deviceTypes / repairTypes / brands (closed vocabularies — SOKONI had no device
+  taxonomy; built from the lists the Tech pages already showed), models (free text, max 30), serviceModes (WORKSHOP / ONSITE_SUPPORT /
+  FIELD_SERVICE / PICKUP_DROP_OFF / REMOTE_SUPPORT), turnaroundHours (provider estimate, 1–720), serviceArea. Validated by add / update /
+  duplicate:
+  - device fields need DEVICE_REPAIR or ELECTRONICS; every service mode must be a GRANTED capability;
+  - the workspace must be AVAILABLE (`assertModule`: supportedDevices for device fields, services otherwise);
+  - duplicate re-validates against today's capabilities; `techProfile: null` clears it. No price field — price stays on the service / rate card.
+- **providerBookings.repairDetails**: bookingCreateService requires the customer's device for a service with a device profile and checks
+  device / brand / repair / mode against what the service covers. Descriptive only — the server price is unchanged.
+- **Modules**: `repairs` (= the provider's bookings carrying repairDetails, on the EXISTING booking lifecycle / PIN completion / settlement —
+  no second repair state machine) and `supportedDevices` (the editor) are now implemented. `diagnostics` stays NOT_IMPLEMENTED.
+- **Tests**: test-tech-service-profile 17/0 (BASE=81cde54 fails 9 of 10 server rows: a pending / self-approved applicant could save anything,
+  on-site could be claimed). Mutations: "grant every capability" caught (B-4, B-5). "assertModule → plain workspace read" NOT caught — the
+  workspace composes NO capabilities when it is not AVAILABLE (pending, self-decided, suspended all verified), so the capability check
+  already refuses; assertModule is defence in depth. test-service-capabilities 15/0 (B-2 now asserts honesty on diagnostics), sabotage 7/7,
+  test-business-workspace 30/0, test-tech-taxonomy 8/0.
+- **Not changed / found**: plain (non-tech) services can still be added before approval (the pre-existing gap stays — approval is enforced
+  at booking); that is a cross-vertical decision.
+- Release: inside sokoni-5b's ONE providerDispatch release (provider-ops / booking-service / business-workspace are providerDispatch).
+
+## [2026-10-03] — Tech Hub slice 4a: Tech business ids classifiable + capable (functions, on 13f74f3) — NOT deployed
+
+**Files:** `functions/business-category.js`, `functions/shared/service-capabilities.js`, `scripts/test-tech-taxonomy.js` (new).
+
+- business-category FROM_BUSINESS_ID: `laptop-repair`, `computer-repair`, `electronics-repair`, `networking`, `pos-support` → `it_services`.
+  Before this, an APPROVED application for any of them classified to nothing, so workspaceFor answered PENDING_CLASSIFICATION
+  and the provider had no dashboard. They are services, never the goods-selling `electronics` seller category.
+- service-capabilities FROM_BUSINESS_ID: `electrical` (category `trades`) gets service-mode capabilities only: FIELD_SERVICE,
+  ONSITE_SUPPORT, QUOTE_REQUEST, DIRECT_BOOKING. No trade vertical capability is invented.
+- Tests: test-tech-taxonomy 8/0 (BASE=13f74f3 fails T1–T3, executed). test-service-capabilities 15/0, sabotage 7/7,
+  test-business-workspace 30/0 (= base).
+- Database / rules: none. API: workspaceFor returns a provider dashboard plus capabilities for these ids once approved.
+- Release: ships inside the ONE providerDispatch reconciliation release (sokoni-5b). Never a separate providerDispatch deploy.
+  The hosting half (hub-register.js CATS) is on hosting/techhub-on-chain. The approval-time category stamp (sokoni-5b) must
+  be live for an application's category to reach providers/{uid}.business.
+
+## [2026-10-03] — Slice 0: the ONE service-capability engine (Food Hub + Tech Hub), on the live providerDispatch lineage
+
+**Files:** `functions/shared/service-capabilities.js` (new), `functions/business-workspace.js`, `scripts/test-service-capabilities.js` (new), `scripts/sabotage-service-capabilities.js` (new), `docs/CAPABILITY_ENGINE.md` (new), `CHANGELOG.md` · **Base:** `95ff9e8` (live `c7e26b6`)
+
+- **What it does:** capabilities are derived from VALID approvals only (`decisionValidity`) and compose as a union across approvals.
+  - `workspaceFor` adds `serviceCapabilities` and `capabilitySources`.
+  - provider-dashboard gets 12 Tech Hub module keys (NOT_IMPLEMENTED `TECH_HUB_PENDING`).
+  - merchant-v2 gets `merchantModules` (menu / kitchen / drinks / catering, NOT_IMPLEMENTED `FOOD_HUB_PENDING`).
+  - A capability only switches on NOT_APPLICABLE modules and never overrides LOCKED / plan states.
+  - Holding states carry no capabilities.
+- **Fixed:** an approved food business routed to merchant-v2 met CATEGORY_CAPABILITY_DISAGREEMENT (restaurant is not one of SELLER_CATEGORIES). `laneOf` now follows the route table.
+- **Tests:** test-service-capabilities 15/0 (live base fails 7); sabotage 7/7 (+1 equivalent mutant); business-capabilities 46/0; shell-gate-mutations 9/0. Emulator suites NOT RUN (memory).
+- **Database / API:** no writes, no new collection; additive response fields. **Security:** capability can never come from a browser-selected category. **Not deployed.**
 
 ## [2026-10-01] — Booking PIN trio hardened: no second provider credit, no PIN bypass race, no completion-after-cancel, paid declines refunded, PIN encrypted at rest (functions:providerDispatch + serviceBookingPin + entBookingOnProviderBooking, NOT deployed)
 

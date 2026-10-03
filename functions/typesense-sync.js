@@ -61,6 +61,8 @@ function _shouldSkip(data, collection) {
   if (data._noIndex === true) return true;
   if (SKIP_STATUSES.has(data.status)) return true;
   if (collection === 'users' && data.private === true) return true;
+  /* Tech Hub 4K: same provider rule as algolia-sync — pending / refused / retracted (searchable:false) never indexed. */
+  if (collection === 'providers' && !require('./shared/provider-search-eligibility').isProviderIndexable(data)) return true;
   return false;
 }
 
@@ -165,4 +167,5 @@ const triggers = {
   ..._makeTriggers('properties',  { priority: 2 }),
 };
 
+Object.defineProperty(triggers, '_internal', { value: { _shouldSkip, _updateDecision }, enumerable: false });   /* test seam, not deployed */
 module.exports = triggers;

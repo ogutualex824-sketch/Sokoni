@@ -131,6 +131,13 @@ _h.bookingCreateService = async (req) => {
   if (svc.providerId !== providerId) throw new HttpsError('failed-precondition', 'Service does not belong to this provider.');
   if (svc.active === false) throw new HttpsError('failed-precondition', 'This service is not available.');
   const serviceName = _san(svc.name, 200);
+  /* Tech Hub slice 4b: a service with a device profile needs the customer's device (validated against what the
+     service covers). Repair details are descriptive — they never change the server price below. */
+  let repairDetails = null;
+  if (svc.techProfile) {
+    try { repairDetails = require('./shared/tech-service-profile').sanitizeRepairDetails(d.repairDetails, svc.techProfile); }
+    catch (e) { throw new HttpsError('invalid-argument', e.message, { code: 'REPAIR_DETAILS_' + (e.code || 'BAD_VALUE') }); }
+  }
   const fee         = Math.max(0, Math.round(Number(svc.fee) || 0));     /* cents — declared per-service fee (D3) */
 
   /* ── Canonical pricing (Slice B): the SERVER computes the authoritative total from the
@@ -145,8 +152,41 @@ _h.bookingCreateService = async (req) => {
     }) : [],
     durationMins: d.durationMins != null ? Math.max(0, Math.round(Number(d.durationMins) || 0)) : undefined,
   };
+  /* Tech Hub slice 4F: booking an ACCEPTED quote. The price is the quote's (service-leads.js validated it when the
+     provider sent it); the request carries only leadId. The lead converts inside this booking's transaction. */
+  const leadId = _san(d.leadId, 128) || null;
+  const leadCtx = leadId ? await require('./service-leads').quoteForBooking(db, { leadId, customerUid, providerId, serviceId }) : null;
+  /* Marketing Hub MK4: a marketing service is bookable only while the provider is STILL approved for its category, and a
+     quote-only service (project / quote pricing) is booked only from an accepted quote. The booking snapshots the
+     service's hub + category from the SERVER record — commission follows the booked service, never the provider and
+     never the request's hubType. */
+  const MSVC = require('./shared/marketing-services');
+  if (svc.hub === 'marketing') {
+    /* SECURITY: approval from the server decision record, never the provider's own (owner-writable) fields. */
+    const MA = require('./shared/marketing-authority');
+    const mAuth = await MA.marketingAuthority(db, providerId, prov);
+    if (!MSVC.approvedFor(MA.effectiveProvider(prov, mAuth), svc.category)) throw new HttpsError('failed-precondition', 'This marketing service is not currently approved on SOKONI.', { code: 'MKT_SERVICE_NOT_APPROVED' });
+    if (!leadCtx && !(svc.marketing && svc.marketing.capabilities && svc.marketing.capabilities.booking === true)) {
+      throw new HttpsError('failed-precondition', 'This service is priced by quote. Request a quote first.', { code: 'MKT_QUOTE_ONLY' });
+    }
+  }
+  const svcSnapshot = MSVC.bookingSnapshot(svc);
+  /* Tech Hub 4C: HOW the service is delivered, stamped on the booking from server facts only — the customer's validated
+     repair details, else the accepted quote, else the service's single declared mode. Drives the provider's Site visits /
+     Remote support / Pickup & drop-off views. Never priced from. */
+  const _modes = (svc.techProfile && Array.isArray(svc.techProfile.serviceModes)) ? svc.techProfile.serviceModes : [];
+  const serviceMode = (repairDetails && repairDetails.serviceMode)
+    || (leadCtx && leadCtx.quote && leadCtx.quote.serviceMode)
+    || (_modes.length === 1 ? _modes[0] : '') || '';
   let durationMins, price, deposit, pricingSnapshot = null;
-  if (svc.pricing && typeof svc.pricing === 'object') {
+  if (leadCtx) {
+    const q = leadCtx.quote;
+    durationMins = Math.max(15, Math.round(Number(q.durationMins) || Number(svc.durationMins) || 60));
+    price = Math.max(0, Math.round(Number(q.amountCents) || 0));
+    deposit = 0;
+    pricingSnapshot = { pricingVersion: 'quote@1', currency: 'KES', source: 'quote', leadId, quoteVersion: q.version || 1,
+      totalCents: price, depositCents: 0, breakdown: [{ type: 'quote', label: 'Accepted quote', amount: price }] };
+  } else if (svc.pricing && typeof svc.pricing === 'object') {
     const br = require('./service-pricing').computePrice(svc.pricing, selection, {
       date: date, startTime: startTime, durationMins: selection.durationMins, distanceKm: Number(d.distanceKm) || 0,
     });
@@ -200,6 +240,7 @@ _h.bookingCreateService = async (req) => {
   let outcome = null;
   await db.runTransaction(async (txn) => {
     outcome = null;
+    const leadSnap = leadCtx ? await txn.get(leadCtx.ref) : null;   /* read before any write (4F) */
     if (idemRef) { const i = await txn.get(idemRef); if (i.exists) { outcome = { bookingId: i.data().bookingId, idempotent: true }; return; } }
     const lock = await txn.get(slotLockRef);
     if (lock.exists) {
@@ -258,7 +299,11 @@ _h.bookingCreateService = async (req) => {
       status,                        /* server-authoritative */
       expiresAt: admin.firestore.Timestamp.fromMillis(holdExpiresMs),   /* pre-payment hold window; cleared on paid_held */
       note: _san(d.note, 300),
-      hubType: _san(d.hubType, 40) || 'services',
+      ...(repairDetails ? { repairDetails } : {}),
+      ...(leadCtx ? { leadId } : {}),
+      ...(serviceMode ? { serviceMode } : {}),
+      hubType: _san(d.hubType, 40) || 'services',   /* descriptive only (FinOS reads it); commission keys on serviceHub/serviceCategory below */
+      ...svcSnapshot,                /* serviceHub / serviceCategory / serviceSnapshot — the commission + history key */
       idempotencyKey,
       /* Provenance — which path/engine/rev priced & reserved this booking, so a
          record is reproducible and future engine/pricing revisions need no
@@ -271,6 +316,7 @@ _h.bookingCreateService = async (req) => {
     });
     txn.set(slotLockRef, { bookingId, providerId, customerUid, date, startTime, endTime, startTs, endTs, createdAt: _ts(), expiresAt: admin.firestore.Timestamp.fromMillis(holdExpiresMs) });
     if (idemRef) txn.set(idemRef, { bookingId, providerId, customerUid, createdAt: _ts() });
+    if (leadCtx) require('./service-leads').convertIn(txn, leadCtx.ref, leadSnap, bookingId, leadCtx.reuseFrom);
     const hev = bookingEvent({
       bookingId, type: TYPES.HELD, actor: 'customer', providerId, customerUid,
       previousStatus: null, newStatus: status, data: { expiresAt: holdExpiresMs, priceCents: price, serviceId },
@@ -312,6 +358,31 @@ _h.bookingCreateService = async (req) => {
   } catch (e) { /* ignore */ }
 
   return { success: true, bookingId: outcome.bookingId, status: outcome.status, price, expiresAt: outcome.expiresAt };
+};
+
+/* ── bookingContactProvider (Tech Hub 4M, 2026-10-03) ─────────────────────────────────────────────────────
+   The customer's side of calling, the mirror of provider-ops.providerContactCustomer. SOKONI has no voice / masking
+   provider, so calling is a booking-bound phone reveal:
+     · only the booking's OWN customer (customerUid) may ask;
+     · only once the booking is PAID or CONFIRMED (paid_held / settled, or status confirmed / in_progress / completed) —
+       an unpaid hold reveals nothing, so a phone number cannot be harvested by creating holds;
+     · every reveal is logged in contactReveals (server-written);
+     · before any booking there is no phone at all — the customer asks through a service lead (in-app messaging).
+   Returns the provider's registry phone (providers/{uid}.phone) or account phone. */
+_h.bookingContactProvider = async (req) => {
+  const uid = _uid(req);
+  const bookingId = _san((req.data || {}).bookingId, 128);
+  if (!bookingId) throw new HttpsError('invalid-argument', 'bookingId is required.');
+  const snap = await db.collection('providerBookings').doc(bookingId).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Booking not found.');
+  const b = snap.data();
+  if (b.customerUid !== uid) throw new HttpsError('permission-denied', 'Not your booking.');
+  const paid = ['paid_held', 'settled'].includes(b.paymentStatus) || ['confirmed', 'in_progress', 'completed'].includes(b.status);
+  if (!paid) throw new HttpsError('failed-precondition', 'You can call the provider once your booking is paid or confirmed. Until then, message them in SOKONI.');
+  const [pSnap, uSnap] = await Promise.all([db.collection('providers').doc(b.providerId).get(), db.collection('users').doc(b.providerId).get()]);
+  const phone = (pSnap.exists && pSnap.data().phone) || (uSnap.exists && uSnap.data().phoneNumber) || null;
+  await db.collection('contactReveals').add({ bookingId, by: uid, byRole: 'customer', target: b.providerId, at: _ts() }).catch(() => {});
+  return { success: true, provider: { name: (pSnap.exists && pSnap.data().name) || null, phone } };
 };
 
 /* ── bookingReleaseHold (P3) ──────────────────────────────────────────────────

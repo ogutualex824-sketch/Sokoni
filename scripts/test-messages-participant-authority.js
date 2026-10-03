@@ -204,7 +204,8 @@ const PKG_DOCS = { 'packageRequests/p1': PKG };
      !lookalike.ok && lookalike.code === 'permission-denied', lookalike.code);
 
   head('5 - idempotency and the existence oracle');
-  const existing = { 'orders/o1': ORDER, 'conversations/order_o1': { participants: [BUYER, SELLER, RIDER] } };
+  /* a SERVER-created conversation (serverCreated, 2026-10-03): re-opening writes nothing. An unstamped legacy doc is stamped once on first re-open — covered by test-messages-preclaim P4. */
+  const existing = { 'orders/o1': ORDER, 'conversations/order_o1': { participants: [BUYER, SELLER, RIDER], serverCreated: true } };
   const again = await call(BUYER, { transactionType: 'order', transactionId: 'o1' }, existing);
   ck('a party re-opening gets the SAME conversation, idempotently',
      again.ok && again.r.existing === true && again.r.conversationId === 'order_o1',

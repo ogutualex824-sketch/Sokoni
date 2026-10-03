@@ -968,7 +968,7 @@ const TRANSFORMERS = {
     tags:            _strArr(data.tags).slice(0, 25),
     providerId:      _str(data.providerId || data.sellerId || data.uid) || undefined,
     providerName:    _str(data.providerName || data.sellerName)         || undefined,
-    providerVerified:Boolean(data.verified || data.providerVerified)    || undefined,
+    providerVerified:require('./shared/provider-badge').badgeValid(data) || undefined,   /* 4P: projected badge only */
     rating:          _float(data.rating)       || undefined,
     reviewCount:     _int32(data.reviewCount)  || undefined,
     orderCount:      _int32(data.orderCount || data.bookingCount) || undefined,

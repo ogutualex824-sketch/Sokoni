@@ -525,6 +525,32 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     await _auth().setCustomUserClaims(uid, { ...(await _auth().getUser(uid)).customClaims, provider: true, providerId });
   }
 
+  /* ── Tech Hub 4N: the wizard submits an APPLICATION to the ONE review queue ─────────────────────────────────────
+     After OB-1 a first publish creates the registry row CLOSED (pending_approval) — but nothing put it in front of AdminOS,
+     so an onboarded provider could wait forever. Publishing now creates / refreshes applications/{uid}--provider (the
+     deterministic id business-apply uses), carrying the job title AND the existing intake business id it maps to
+     (shared/profession-intake.js), so approval → category → capabilities → dashboard. A DECIDED application is never
+     reopened or overwritten here (approved / rejected / suspended stay as AdminOS left them); only the descriptive fields
+     of a still-open one are refreshed. The lifecycle trigger only normalises a pending application — it grants nothing. */
+  {
+    const PI = require('./shared/profession-intake');
+    const appRef = _db().collection('applications').doc(uid + '--provider');
+    const appSnap = await appRef.get();
+    const prev = appSnap.exists ? appSnap.data() : null;
+    const OPEN = ['pending', 'draft', 'info_requested', 'submitted'];
+    if (!prev || OPEN.includes(String(prev.status || 'pending'))) {
+      const title = _san(draft.profile.subcategory || draft.profile.category, 100);
+      const businessId = PI.businessIdForProfession(draft.profile.subcategory) || PI.businessIdForProfession(draft.profile.category);
+      batch.set(appRef, {
+        uid, applicationId: uid + '--provider', role: 'provider', type: 'provider', source: 'provider-onboarding',
+        category: businessId || '', categoryLabel: title, profession: title,
+        name: _pubName, location: _pubLoc, city: _pubCity, providerId,
+        ...(prev ? {} : { status: 'pending', submittedAt: _ts() }),
+        updatedAt: _ts(),
+      }, { merge: true });
+    }
+  }
+
   await batch.commit();
   logger.info('[provider] profile published', { uid, providerId });
   /* the client is told the truth: published content is not approval (6a9dd40) */
@@ -586,6 +612,16 @@ exports._h.providerUpdateProfile = _h.providerUpdateProfile = async (req) => {
     if (updates.category) {
       mirror.category   = updates.category;
       mirror.categories = [updates.category, updates.subcategory].filter(Boolean);
+    }
+    /* Tech Hub 4P: the badge was granted to a NAME. Renaming a verified listing drops it until an admin re-decides
+       (re-verification); every other edit leaves it alone. Legacy flags (no verifiedName) are untouched here. */
+    if (updates.name) {
+      const cur = await _db().collection('providers').doc(uid).get().catch(() => null);
+      const p = cur && cur.exists ? cur.data() : null;
+      if (p && p.verified === true && p.verifiedName != null && p.verifiedName !== updates.name) {
+        mirror.verified = false;
+        mirror.verificationReviewRequired = true;
+      }
     }
     await _mirrorToRegistry(uid, mirror);
   }

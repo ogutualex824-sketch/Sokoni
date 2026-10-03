@@ -23,6 +23,7 @@
 
 const { onDocumentCreated, onDocumentUpdated, onDocumentDeleted } = require('firebase-functions/v2/firestore');
 const { enqueue } = require('./algolia-queue');
+const { isProviderIndexable } = require('./shared/provider-search-eligibility');   /* Tech Hub 4K */
 
 /* ── Skip guard ─────────────────────────────────────────────────────── */
 
@@ -34,6 +35,9 @@ function _shouldSkip(data, collection) {
   /* Bookable services: a paused (active:false) or removed service must not appear in search.
      Toggling active/removedAt fires the update trigger, which then deletes it from the index. */
   if (collection === 'providerServices' && (data.active === false || data.removedAt)) return true;
+  /* Tech Hub 4K: the provider registry is public only when approved (active | approved) and not retracted
+     (searchable:false). A suspension now transitions INTO a skip state → the update trigger deletes it. */
+  if (collection === 'providers' && !isProviderIndexable(data)) return true;
   return false;
 }
 
@@ -43,6 +47,8 @@ function _shouldSkipAfterUpdate(before, after, collection) {
   const wasSkip    = _shouldSkip(before, collection);
   if (nowSkip && !wasSkip) return 'delete';  // remove from index
   if (nowSkip && wasSkip)  return 'ignore';  // never was indexed
+  if (!nowSkip && wasSkip) return 'upsert';  // re-entering the index (reinstated / published): a FULL record, not a
+                                             // partial of the changed fields — the object was deleted (4K)
   return 'update';
 }
 
@@ -77,6 +83,10 @@ function _makeTriggers(col, { skipDraft = true } = {}) {
         if (action === 'ignore') return;
         if (action === 'delete') {
           await enqueue({ collection: col, docId, operation: 'delete' });
+          return;
+        }
+        if (action === 'upsert') {
+          await enqueue({ collection: col, docId, operation: 'upsert', data: after });
           return;
         }
 
@@ -176,4 +186,6 @@ const triggers = {
   ..._makeTriggers('vehicles'),
 };
 
+/* Test seam — NON-enumerable, so index.js's Object.assign(exports, …) never sees it as a function to deploy. */
+Object.defineProperty(triggers, '_internal', { value: { _shouldSkip, _shouldSkipAfterUpdate }, enumerable: false });
 module.exports = triggers;

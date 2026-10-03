@@ -672,7 +672,8 @@ const TRANSFORMERS = {
         id:       _str(data.providerId || data.sellerId || data.uid),
         name:     _str(data.providerName || data.sellerName || data.name),
         rating:   _num(data.providerRating || data.rating),
-        verified: Boolean(data.verified || data.providerVerified),
+        /* 4P: the server-projected badge only — `providerVerified` was owner-writable (rules) and is no longer trusted */
+        verified: require('./shared/provider-badge').badgeValid(data),
         avatar:   _str(data.providerAvatar || data.photoURL),
       },
       rating:        _num(data.rating),

@@ -68,6 +68,8 @@ const logger = require('firebase-functions/logger');
 /* Canonical role vocabulary (Roles Phase 1). The single definition of what an
    application may declare; see functions/role-vocabulary.js. */
 const VOCAB = require('./role-vocabulary');
+/* Marketing Hub MK2 — the ONE marketing taxonomy; approval activates only admin-approved categories. */
+const MKT = require('./shared/marketing-taxonomy');
 
 const REGION = 'us-central1';
 const _db = () => getFirestore();
@@ -479,6 +481,44 @@ async function projectProvider(db, app, uid, approved) {
 
   await ref.set(doc, { merge: true });
   return { collection: 'providers', id: uid, action: snap.exists ? 'updated' : 'created', providerId };
+}
+
+/**
+ * Marketing Hub MK2 — a marketing application (hub 'marketing', written ONLY by marketing-hub.js marketingApply) projects
+ * onto the SAME providers/{uid} record as every other service provider, plus its own marketing block:
+ *   marketingType        individual | agency | specialist (the applicant's declared type, server-validated at intake)
+ *   marketingCategories  ONLY the admin-approved subset of requestedCategories (applicationDecide approvedCategories) —
+ *                        a requested-but-unapproved category is never listed, never bookable
+ *   marketingStatus      the decision ('active' | 'rejected' | 'suspended')
+ * A NON-approval retracts ONLY the marketing block: an existing cleaning company that also applied as a marketer keeps its
+ * cleaning listing when the marketing application is rejected (projectProvider's retraction would suspend all of it).
+ */
+async function projectMarketing(db, app, uid, approved, status) {
+  const ref = db.collection('providers').doc(uid);
+  const snap = await ref.get();
+  const requested = MKT.normalizeCategories(app.requestedCategories, 30);
+  const approvedCats = MKT.normalizeCategories(app.marketingApprovedCategories, 30).filter((c) => requested.indexOf(c) >= 0);
+  if (!approved) {
+    if (!snap.exists) return { collection: 'providers', id: uid, action: 'marketing_noop_absent' };
+    await ref.set({ marketingStatus: status === 'rejected' ? 'rejected' : 'suspended', marketingCategories: [], marketingGroups: [],
+      marketingListed: false, marketingUpdatedAt: _ts(), updatedAt: _ts() }, { merge: true });
+    return { collection: 'providers', id: uid, action: 'marketing_retracted' };
+  }
+  if (!approvedCats.length) throw new Error('marketing approval has no approved categories');
+  let base = null;
+  if (!snap.exists) base = await projectProvider(db, app, uid, true);
+  await ref.set({
+    marketingType: MKT.APPLICATION_TYPES[app.marketingType] ? app.marketingType : 'individual',
+    marketingCategories: approvedCats,
+    marketingGroups: MKT.groupsOf(approvedCats),
+    marketingStatus: 'active',
+    marketingListed: true,
+    marketingApplicationId: app.applicationId || null,
+    marketingApprovedAt: _ts(),
+    marketingUpdatedAt: _ts(),
+    updatedAt: _ts(),
+  }, { merge: true });
+  return { collection: 'providers', id: uid, action: base ? 'marketing_created' : 'marketing_activated', categories: approvedCats };
 }
 
 /**
@@ -1021,6 +1061,8 @@ async function applyDecision(appId, app, opts = {}) {
       /* Both spellings reach the same projection: `rider` is the Phase 1
          declaration, `driver` the legacy application's word. */
       receipt.writes.push(await projectDriver(db, app, uid, approved));
+    } else if (app.hub === 'marketing' && app.applicationType === 'marketing') {
+      receipt.writes.push(await projectMarketing(db, app, uid, approved, status));
     } else if (role === 'legal') {
       /* legalProviders (authority) + lawyers (search projection), one commit.
          Returns TWO receipt entries, so push them individually. */
@@ -1038,7 +1080,10 @@ async function applyDecision(appId, app, opts = {}) {
     }
 
     /* A pending application must not grant anything; only a decision does. */
-    if (status === 'approved' || status === 'rejected' || status === 'suspended') {
+    /* A REJECTED/SUSPENDED marketing application never strips the provider claim — the same account may be an
+       approved provider for other services; only the marketing block was retracted above. */
+    const _mktRetract = app.hub === 'marketing' && app.applicationType === 'marketing' && !approved;
+    if ((status === 'approved' || status === 'rejected' || status === 'suspended') && !_mktRetract) {
       receipt.roleKey = await grantAccountRole(db, uid, role, approved);
     }
 
@@ -1168,7 +1213,22 @@ exports.applicationDecide = onCall(
     const status = STATUS[decision];
     const actor = req.auth.uid;
 
+    /* Marketing Hub MK2 — approval activates ONLY the categories the reviewer approved (a subset of the request). */
+    const _app0 = snap.data() || {};
+    const _mkt = {};
+    if (_app0.hub === 'marketing' && _app0.applicationType === 'marketing' && decision === 'approve') {
+      const requested = MKT.normalizeCategories(_app0.requestedCategories, 30);
+      const asked = (req.data || {}).approvedCategories;
+      const chosen = MKT.normalizeCategories(asked === undefined ? _app0.marketingApprovedCategories : asked, 30);
+      const outside = chosen.filter((c) => requested.indexOf(c) < 0);
+      if (outside.length) throw new HttpsError('invalid-argument', 'approvedCategories must be a subset of the requested categories.', { code: 'MKT_CATEGORY_NOT_REQUESTED', outside });
+      if (!chosen.length) throw new HttpsError('invalid-argument', 'Choose at least one category to approve.', { code: 'MKT_NO_CATEGORY' });
+      _mkt.marketingApprovedCategories = chosen;
+      _mkt.marketingDeclinedCategories = requested.filter((c) => chosen.indexOf(c) < 0);
+    }
+
     await ref.set({
+      ..._mkt,
       status,
       statusCanonical: canonStatus(status),
       reviewReason: _sanText(reason, 500) || null,
@@ -1293,6 +1353,13 @@ exports.applicationList = onCall(
         plate: a.plate || '',
         model: a.model || '',
         description: a.description || a.bio || '',
+        /* Marketing Hub MK2 — the reviewer sees the declared type and exactly which categories were asked for / approved. */
+        hub: a.hub || null,
+        applicationType: a.applicationType || null,
+        marketingType: a.marketingType || null,
+        requestedCategories: Array.isArray(a.requestedCategories) ? a.requestedCategories : [],
+        marketingApprovedCategories: Array.isArray(a.marketingApprovedCategories) ? a.marketingApprovedCategories : [],
+        portfolio: Array.isArray(a.portfolio) ? a.portfolio : [],
         /* Projection health — the difference between "approved" and "live". */
         projectionStatus: a.projectionStatus || (st === 'pending' ? 'n/a' : 'not_applied'),
         projectionError: a.projectionError || null,
@@ -1323,7 +1390,7 @@ exports.applicationList = onCall(
 /* Internals exported for unit tests and for the reconcile script. */
 exports._internal = {
   toE164KE, toLocalKE, splitLocation, resolveRole, canonStatus, normVehicle, _san, _sanText,
-  buildIntakePatch, applyDecision, projectProvider, projectDriver,
+  buildIntakePatch, applyDecision, projectProvider, projectDriver, projectMarketing,
   projectLegal, projectRoleProfile, LEGAL_SPECS, ROLE_PROFILES, DELEGATED_ROLES,
   INTAKE_VERSION, KE_COUNTIES,
 };

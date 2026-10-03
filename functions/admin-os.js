@@ -286,19 +286,27 @@ exports.adminGetFeatureFlags = onCall({ region: 'us-central1', maxInstances: 10,
 
 exports.adminUpdateFeatureFlag = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminUpdateFeatureFlag = async (req) => {
   _requireSuperAdmin(req);
-  const { key, enabled, rolloutPct, enabledForRoles, description } = req.data;
+  const { key, enabled, rolloutPct, enabledForRoles, description } = req.data || {};
   if (!key) throw new Error('key required');
+  /* 2026-10-03 (reported by sokoni-2f, fixed by sokoni-b2): `enabled ?? true` switched a flag ON whenever the field was
+     omitted (featureFlags/fitness_membership_sales gates PAID memberships), and every call reset rolloutPct to 100 and
+     cleared enabledForRoles — a plain on/off toggle widened a staged rollout. Now: `enabled` must be a boolean, and only
+     the fields the caller actually sent are written. */
+  if (typeof enabled !== 'boolean') {
+    const { HttpsError } = require('firebase-functions/v2/https');
+    throw new HttpsError('invalid-argument', 'enabled must be true or false.');
+  }
+  const patch = { key, enabled, updatedBy: req.auth.uid, updatedAt: FieldValue.serverTimestamp() };
+  if (rolloutPct !== undefined && rolloutPct !== null) {
+    const n = Number(rolloutPct);
+    if (!Number.isFinite(n)) { const { HttpsError } = require('firebase-functions/v2/https'); throw new HttpsError('invalid-argument', 'rolloutPct must be a number.'); }
+    patch.rolloutPct = Math.min(Math.max(n, 0), 100);
+  }
+  if (Array.isArray(enabledForRoles)) patch.enabledForRoles = enabledForRoles.map(String).slice(0, 50);
+  if (typeof description === 'string') patch.description = description.slice(0, 500);
 
   const db = getFirestore();
-  await db.collection('featureFlags').doc(key).set({
-    key,
-    enabled: enabled ?? true,
-    rolloutPct: Math.min(Math.max(rolloutPct ?? 100, 0), 100),
-    enabledForRoles: enabledForRoles || [],
-    description: description || '',
-    updatedBy: req.auth.uid,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  await db.collection('featureFlags').doc(key).set(patch, { merge: true });
 
   return { success: true };
 });
@@ -464,7 +472,7 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
     /* P1 command-center additions — all canonical counts, catch→0 (never fabricate). */
     db.collection('users').where('status', '==', 'active').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('businesses').where('status', '==', 'active').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
-    db.collection('providerVerification').where('verificationStatus', '==', 'pending_review').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('providerVerification').where('status', '==', 'pending_review').count()   /* 4P: the field providerSubmitVerification writes */.get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('applications').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('reviews').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
   ]);
@@ -561,7 +569,7 @@ exports.adminGetMerchantPipeline = onCall({ region: 'us-central1', maxInstances:
   const [applied, pending, verified, published, subscribed, active] = await Promise.all([
     db.collection('applications').count().get().catch(_c0),
     db.collection('applications').where('status', '==', 'pending').count().get().catch(_c0),
-    db.collection('providerVerification').where('verificationStatus', 'in', ['verified', 'approved']).count().get().catch(_c0),
+    db.collection('providers').where('verified', '==', true).count().get().catch(_c0),   /* 4P: the projected public badge (providerVerification had no decider) */
     db.collection('providers').where('status', 'in', ['active', 'approved']).count().get().catch(_c0),
     db.collection('providerSubscriptions').where('status', 'in', ['active', 'trialing']).count().get().catch(_c0),
     db.collection('providers').where('status', '==', 'active').count().get().catch(_c0),
@@ -837,14 +845,20 @@ exports.adminGetProviders = onCall({ region: 'us-central1', maxInstances: 10, en
   let items = (snap.docs || []).map(d => { const x = d.data() || {}; return {
     uid: d.id, name: x.name || x.businessName || '', email: x.email || '', category: x.category || '',
     location: x.location || '', status: x.status || '', verified: !!x.verified, available: !!x.available,
-    rating: x.rating || 0, jobsCompleted: x.jobsCompleted || 0, acceptsBookings: !!x.acceptsBookings,
+    /* Tech Hub 4O (2026-10-03): an absent rating / job count is UNKNOWN (null → the UI shows —), never a fabricated 0. */
+    rating: typeof x.rating === 'number' ? x.rating : null, jobsCompleted: typeof x.jobsCompleted === 'number' ? x.jobsCompleted : null,
+    acceptsBookings: !!x.acceptsBookings,
+    /* the application whose AdminOS decision (applicationDecide approve | suspend) governs this listing */
+    sourceApplicationId: x.sourceApplicationId || null, suspendedAt: _iso(x.suspendedAt),
     createdAt: _iso(x.createdAt), updatedAt: _iso(x.updatedAt), _ms: _ms(x.createdAt) }; });
   items.sort((a, b) => b._ms - a._ms);
   if (search) { const q = String(search).toLowerCase(); items = items.filter(p => (p.name || '').toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q)); }
   const active = items.filter(p => ['active', 'approved'].includes(String(p.status).toLowerCase())).length;
+  const suspended = items.filter(p => String(p.status).toLowerCase() === 'suspended').length;
   const verified = items.filter(p => p.verified).length;
   items.forEach(p => { delete p._ms; });
-  return _env('providers', items, { active, verified, pending: items.length - active });
+  /* pending used to be total − active, which counted SUSPENDED listings as pending (4O). */
+  return _env('providers', items, { active, verified, suspended, pending: items.length - active - suspended });
 });
 
 exports.adminGetServices = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetServices = async (req) => {
@@ -1028,6 +1042,33 @@ exports.adminUpdateProductStatus = onCall({ region: 'us-central1', maxInstances:
 /* ─────────────────────────────────────────────────────────────────────────
    Bookings
 ──────────────────────────────────────────────────────────────────────────── */
+/* Tech Hub 4Q (2026-10-03): AdminOS visibility of service leads & quotes (serviceLeads — server-written, no client read
+   path). Read-only and routed through adminOsDispatch (no new deploy target). The quote amount shown is the provider's
+   server-validated quote; monetization is what the lead recorded (not_configured — no lead fee exists). */
+exports._h.adminGetServiceLeads = async (req) => {
+  _requireAdmin(req);
+  const { status, providerId, limit: lim } = req.data || {};
+  const db = getFirestore();
+  const cap = Math.min(Number(lim) || 100, 300);
+  let q = db.collection('serviceLeads');
+  if (providerId) q = q.where('providerId', '==', String(providerId).slice(0, 128));
+  else if (status) q = q.where('status', '==', String(status).slice(0, 40));
+  const snap = await q.limit(cap).get().catch(() => ({ docs: [] }));
+  const items = (snap.docs || []).map((d) => {
+    const x = d.data() || {}; const qt = x.quote || null;
+    return {
+      id: d.id, status: x.status || '', customerUid: x.customerUid || '', providerId: x.providerId || '', serviceId: x.serviceId || null,
+      message: String(x.message || '').slice(0, 280),
+      quote: qt ? { amountCents: Number(qt.amountCents) || 0, version: qt.version || 1, validUntil: qt.validUntil || null, serviceMode: qt.serviceMode || '' } : null,
+      bookingId: x.bookingId || null, monetization: (x.monetization && x.monetization.status) || 'not_configured',
+      createdAtMs: Number(x.createdAtMs) || null, events: Array.isArray(x.history) ? x.history.length : 0,
+    };
+  }).sort((p, q2) => (q2.createdAtMs || 0) - (p.createdAtMs || 0));
+  const by = (st) => items.filter((i) => i.status === st).length;
+  return _env('serviceLeads', items, { open: items.filter((i) => ['created', 'viewed', 'quote_sent', 'clarification_requested', 'quote_accepted'].includes(i.status)).length,
+    converted: by('converted'), declined: by('declined') + by('quote_declined') });
+};
+
 exports.adminGetBookings = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetBookings = async (req) => {
   _requireAdmin(req);
   const { status, limit: lim } = req.data;

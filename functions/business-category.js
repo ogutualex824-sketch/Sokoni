@@ -91,6 +91,10 @@ const FROM_BUSINESS_ID = Object.freeze({
   'security-guard': 'service_business',
   'it-support': 'it_services', 'web-developer': 'it_services', software: 'it_services', 'app-developer': 'it_services',
   cctv: 'it_services', 'phone-repair': 'it_services', 'data-entry': 'it_services',
+  /* Tech Hub slice 4 (2026-10-03): repair / networking / POS-support ids registered in hub-register.js. Services, not
+     goods — never 'electronics' (a merchant-v2 SELLER category). Capabilities: shared/service-capabilities.js. */
+  'laptop-repair': 'it_services', 'computer-repair': 'it_services', 'electronics-repair': 'it_services',
+  networking: 'it_services', 'pos-support': 'it_services',
   salon: 'salon', spa: 'salon', 'nail-art': 'salon', makeup: 'salon', tatoo: 'salon',
   lawyer: 'lawyer', notary: 'lawyer',
   accounting: 'professional_services', 'tax-consultant': 'professional_services', architect: 'professional_services',

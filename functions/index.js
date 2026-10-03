@@ -11650,6 +11650,12 @@ exports.reviewCourse          = education.reviewCourse;
 exports.createCourse          = education.createCourse;
 exports.getMyEnrollments      = education.getMyEnrollments;
 exports.publishCourse         = education.publishCourse;
+exports.manageMyCourses       = education.manageMyCourses;
+/* Education (owner 2026-10-03): the learner profile + guardian links, and the ONE Education capability answer (E2). */
+exports.educationLearner      = require('./education-learner').educationLearner;
+exports.educationWorkspace    = require('./education-workspace').educationWorkspace;
+exports.educationEnterprise   = require('./education-enterprise').educationEnterprise;
+exports.manageMyProgrammes    = require('./education-programmes').manageMyProgrammes;
 
 /* ── QR Code System v1.0 ───────────────────────────────────────── */
 const qr = require('./qr');
@@ -12415,6 +12421,12 @@ exports.subscriptionsDispatch = subsCoreDisp.subscriptionsDispatch;
 /* ── Legal Agreements & Digital Acceptance — versioned, auditable → 1 CF ── */
 const legalDisp = require('./legal-dispatch');
 exports.legalDispatch = legalDisp.legalDispatch;
+
+/* ── Marketing Hub — application (individual / agency / specialist), directory, AdminOS overview → 1 CF ── */
+exports.marketingDispatch = require('./marketing-hub').marketingDispatch;
+
+/* ── Work/Job Engine (WE1) — category-neutral campaigns / projects (Marketing first, Construction next) → 1 CF ── */
+exports.workDispatch = require('./work-engine').workDispatch;
 /* ══════════════════════════════════════════════════════════════════════
    RC1 REPRODUCIBILITY FIX — recovered orphaned Cloud Functions.
    These were DEPLOYED and live but NOT exported here, so a full
