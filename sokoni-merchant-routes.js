@@ -535,6 +535,22 @@
       note:'Buying, receiving, warehousing and supplying between businesses - separate from ' +
            'customer Sales. Reads only: every figure comes from the merchant-scoped ' +
            'procurement engine, and approve/send/receive/pay keep their own authority gates.' },
+    /* PROVIDER rate cards (2026-10-03). The ONE generic editor (sokoni-merchant-ratecard.js)
+       over providerDispatch: providerListServices / providerUpdateService / providerToggleService /
+       providerAddService / providerUpdateServicePricing (owner-only, server-checked) and the
+       bookingPreviewPrice engine checkout uses. sessions:['provider'] ONLY — a merchant session
+       has no providerServices of its own — and GATED on module:services through its group, so
+       C2's rule holds: the UNGATED provider routes stay exactly home / messages / signout. */
+    { id:'rates', name:'Rates', icon:'🏷️', tier:'more',
+      kind:'native',
+      role:['provider'], ctx:[CTX.SELLER_UID],
+      sessions:['provider'],
+      mobile:true, desktop:true, activeKey:'rates',
+      note:'Native surface (sokoni-merchant-ratecard.js). Edits the signed-in provider\'s own ' +
+           'providerServices rate cards through providerDispatch; the save REPLACES the whole pricing ' +
+           'object, so the editor always sends the complete loaded object plus edits. Money is integer ' +
+           'cents. Read-only unless the businessWorkspace answer says editable === true. See ' +
+           'docs/RATE_CARD_EDITOR.md.' },
     { id:'pos-setup', name:'POS Setup', icon:'🖨️', tier:'more',
       kind:'page', src:'pos-printer-setup.html?shell=merchant',
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID],
@@ -580,6 +596,10 @@
     /* KRA Tax groups with Operations rather than Main: it is back-office compliance
        configured once alongside Devices and POS Setup, not a surface a merchant reads
        daily the way they read Reports. */
+    /* Provider SERVICES — gated on the server workspace answer's modules.services (AVAILABLE +
+       VALID_APPROVAL → 'module:services', sokoni-merchant-session.js). Fails closed. */
+    { key:'services',   label:'Services', requires:'module:services',
+      ids:['rates'] },
     { key:'operations', label:'Back office',
       ids:['kra-tax','devices','pos-setup'] },
     /* Marketing services (sokoni-b2): fails CLOSED unless the server granted 'marketing'. */

@@ -6,7 +6,7 @@
    promoting their own shop).
 
    ONE module, ten views (mkt-*), ONE store. Every read and write is an EXISTING server op — nothing new in the browser:
-     services / rates   sokoni-e3's ONE provider rate-card editor (SokoniMerchantRateCard) filtered to the APPROVED categories;
+     services / rates   NOT here — mkt-services / mkt-rates mount sokoni-e3's ONE rate-card editor directly (approved categories)
                         (the server re-checks the category against the APPROVED set on every write — 9319925 / e4f9b7d)
      leads / quotes     providerDispatch leadListForProvider · leadMarkViewed · leadDecline · leadSendQuote (the ONE lead engine)
      bookings           providerDispatch providerGetBookings
@@ -28,7 +28,8 @@
   const stat = (v, l, neutral) => '<div class="stat' + (neutral ? ' neutral' : '') + '"><b>' + esc(v) + '</b><small>' + esc(l) + '</small></div>';
   const card = (top, sub, extra) => '<div class="ord"><div class="ord-top">' + top + '</div>' + (sub ? '<div class="ord-sub">' + sub + '</div>' : '') + (extra || '') + '</div>';
   const SK = '<div class="sk"><div class="sk-line" style="width:60%"></div><div class="sk-line" style="width:35%"></div></div>';
-  const VIEWS = ['overview', 'services', 'rates', 'leads', 'quotes', 'bookings', 'campaigns', 'projects', 'earnings', 'verification'];
+  /* mkt-services / mkt-rates are NOT views of this module: they mount sokoni-e3's ONE rate-card editor directly. */
+  const VIEWS = ['overview', 'leads', 'quotes', 'bookings', 'campaigns', 'projects', 'earnings', 'verification'];
 
   function mount(host, ctx) {
     if (!host || !ctx) return null;
@@ -40,6 +41,10 @@
     const md = (op, data) => ctx.call('marketingDispatch', Object.assign({ op }, data || {}));
     const errText = (e) => (e && e.message) || 'The server did not answer.';
     let alive = true;
+    /* P0-F (sokoni-e3): actions only when the provider session's server decision is editable === true; otherwise every
+       view is READ-ONLY with the decision's own reason, and no mutating op is called. */
+    const canEdit = () => !!(ctx.editable && ctx.editable() === true);
+    const roNote = () => (canEdit() ? '' : '<div class="note"><b>Read-only.</b> ' + esc((ctx.readOnlyReason && ctx.readOnlyReason()) || 'Editing is not available for this account right now.') + '</div>');
     const paint = (html) => { if (alive) host.innerHTML = html; };
     const fail = (e) => paint('<div class="note err"><b>Could not load.</b> ' + esc(errText(e)) + ' This is not an empty list.</div>');
     const toast = (t) => { try { ctx.onToast && ctx.onToast(t); } catch (_) {} };
@@ -71,34 +76,9 @@
         + stat(earn ? earn.count : '—', 'Completed bookings', !earn || !earn.count) + '</div>'
         + '<div class="sec-t">Approved services</div><div class="badges">' + m.categories.map((c) => '<span class="tag">' + esc(lab(c)) + '</span>').join('') + '</div>'
         + '<div class="sec-t">Go to</div><div class="actions">'
-        + [['mkt-services', '🧾 Services'], ['mkt-leads', '📨 Leads'], ['mkt-bookings', '📅 Bookings'], ['mkt-campaigns', '📣 Campaigns'], ['mkt-projects', '📐 Projects'], ['mkt-earnings', '💰 Earnings']]
+        + [['mkt-services', '🧾 Services & rates'], ['mkt-leads', '📨 Leads'], ['mkt-bookings', '📅 Bookings'], ['mkt-campaigns', '📣 Campaigns'], ['mkt-projects', '📐 Projects'], ['mkt-earnings', '💰 Earnings']]
           .map(([r, l]) => (ctx.hasRoute(r) ? '<button type="button" class="act ghost" data-go="' + r + '">' + esc(l) + '</button>' : '')).join('') + '</div>'
         + '<div class="note">Payments are made through SOKONI (IntaSend), held until the customer enters the completion PIN, then released to your business wallet less the SOKONI commission. Nothing here moves money.</div>');
-    }
-
-    /* ── services / rate cards — ONE editor: sokoni-e3's generic provider rate-card module (SokoniMerchantRateCard), mounted
-       here filtered to the server's APPROVED marketing categories. This module keeps NO pricing form of its own. Until that
-       module is assembled into merchant-v2, the views show the services read-only with an honest notice. ── */
-    async function services(st, ratesOnly) {
-      paint('<div class="ord-list">' + SK + SK + '</div>');
-      const cats = st.marketer.categories;
-      const head = ratesOnly ? '<div class="greet"><b>Rate cards</b><small>A booking keeps the rate it was made at — changing a rate never changes an existing booking.</small></div>'
-        : '<div class="greet"><b>Services</b><small>You can list services ONLY in the categories SOKONI approved for you.</small></div>';
-      const RC = root.SokoniMerchantRateCard;
-      if (RC && typeof RC.mount === 'function') {
-        paint(head + '<div data-ratecard></div>');
-        host._rc = RC.mount(host.querySelector('[data-ratecard]'), { callable: ctx.callable, uid: ctx.uid, session: 'provider',
-          filter: { categories: cats.slice(), serviceKind: 'marketing' }, readOnly: false });
-        return;
-      }
-      const r = await pd('providerListServices');
-      const list = ((r && r.services) || []).filter((x) => x.hub === 'marketing' && !x.removedAt);
-      paint(head + '<div class="note" style="margin-top:0"><b>The service editor is being assembled into this dashboard.</b> Your services are shown read-only for now.</div>'
-        + (list.length ? '<div class="ord-list" style="margin-top:12px">' + list.map((x) => card(
-          '<span class="ord-id">' + esc(x.name) + '</span><span class="ord-amt">' + esc(x.price ? kes(x.price) : 'By quote') + '</span>',
-          '<span>' + esc(lab(x.category)) + '</span><span>' + esc((x.marketing && x.marketing.pricingModel) || '—') + '</span>' + (x.active === false ? badge('paused') : badge('active'))
-            + (cats.indexOf(x.category) < 0 ? '<span class="badge failed">category no longer approved</span>' : ''))).join('') + '</div>'
-          : state('🧾', 'No marketing services yet')));
     }
 
     async function bookings() {
@@ -121,7 +101,8 @@
       const accepted = ((leads && leads.leads) || []).filter((l) => l.status === 'quote_accepted');
       const noun = kind === 'campaign' ? 'campaign' : 'project';
       paint('<div class="greet"><b>' + (kind === 'campaign' ? 'Campaigns' : 'Projects') + '</b><small>Scope, milestones and approvals. The customer accepts the scope and approves every change; milestones are paid through SOKONI and released on the completion PIN.</small></div>'
-        + (accepted.length ? '<div class="sec-t">Accepted quotes you can turn into a ' + noun + '</div><div class="ord-list">' + accepted.map((l) => card(
+        + roNote()
+        + (accepted.length && canEdit() ? '<div class="sec-t">Accepted quotes you can turn into a ' + noun + '</div><div class="ord-list">' + accepted.map((l) => card(
           '<span class="ord-id">' + esc((l.quote && l.quote.description) || l.message || 'Accepted quote') + '</span><span class="ord-amt">' + esc(kes(l.quote && l.quote.amountCents)) + '</span>', '',
           '<div class="actions" style="margin-top:4px"><button type="button" class="act" data-work-create="' + esc(l.id) + '" data-kind="' + kind + '">Start ' + noun + '</button></div>')).join('') + '</div>' : '')
         + '<div class="sec-t">Your ' + noun + 's</div>'
@@ -141,13 +122,13 @@
         + '<div class="sec-t">Scope lines</div>' + ((sc.lines || []).length ? '<div class="ord-list">' + sc.lines.map((l) => card('<span class="ord-id">' + esc(l.description) + '</span><span class="ord-amt">' + esc(kes(l.amountCents)) + '</span>', '<span>' + esc(l.kind) + '</span><span>' + esc(l.qty + ' ' + l.unit + ' × ' + kes(l.rateCents)) + '</span>')).join('') + '</div>' : state('🧾', 'No scope lines yet'))
         + '<div class="sec-t">Milestones</div>' + ((sc.milestones || []).length ? '<div class="ord-list">' + sc.milestones.map((m) => card('<span class="ord-id">' + esc(m.title) + '</span><span class="ord-amt">' + esc(kes(m.amountCents)) + '</span>',
           badge(m.status || 'planned') + (m.payment && m.payment.bookingId ? '<span class="mono">' + esc(m.payment.bookingId) + '</span>' : ''),
-          (p.status === 'active' && (m.status || 'planned') === 'planned' ? '<div class="actions" style="margin-top:4px"><button type="button" class="act ghost" data-ms-deliver="' + esc(m.id) + '">Mark delivered</button></div>' : ''))).join('') + '</div>' : state('🏁', 'No milestones yet'))
-        + (draft ? '<div class="sec-t">Edit the proposal</div><form class="note" data-scope-form style="margin-top:0"><label class="fld">Title<input name="title" maxlength="160" value="' + esc(sc.title || '') + '"></label>'
+          (canEdit() && p.status === 'active' && (m.status || 'planned') === 'planned' ? '<div class="actions" style="margin-top:4px"><button type="button" class="act ghost" data-ms-deliver="' + esc(m.id) + '">Mark delivered</button></div>' : ''))).join('') + '</div>' : state('🏁', 'No milestones yet'))
+        + (draft && canEdit() ? '<div class="sec-t">Edit the proposal</div><form class="note" data-scope-form style="margin-top:0"><label class="fld">Title<input name="title" maxlength="160" value="' + esc(sc.title || '') + '"></label>'
           + '<label class="fld">Milestones — one per line: title | amount in KES<textarea name="milestones" rows="4">' + esc((sc.milestones || []).map((m) => m.title + ' | ' + (m.amountCents / 100)).join('\n')) + '</textarea></label>'
           + '<div class="msg" data-scope-msg role="alert"></div><div class="actions"><button type="submit" class="act">Save proposal</button></div></form>' : '')
         + ((p.changeRequests || []).length ? '<div class="sec-t">Change requests</div><div class="ord-list">' + p.changeRequests.map((c) => card('<span class="ord-id">' + esc(c.reason) + '</span><span class="ord-amt">' + esc((c.deltaCents >= 0 ? '+' : '') + kes(c.deltaCents)) + '</span>', badge(c.status === 'approved' ? 'accepted' : c.status === 'declined' ? 'declined' : 'pending'))).join('') + '</div>' : '')
         + '<div class="msg" data-work-msg role="alert"></div>'
-        + '<div class="actions">' + next.map(([to, l]) => '<button type="button" class="act" data-work-move="' + to + '">' + esc(l) + '</button>').join('')
+        + roNote() + '<div class="actions">' + (canEdit() ? next.map(([to, l]) => '<button type="button" class="act" data-work-move="' + to + '">' + esc(l) + '</button>').join('') : '')
         + '<a class="act ghost" href="messages.html?tx=work_project&txId=' + encodeURIComponent(p.id) + '">💬 Message customer</a></div>'
         + '<div class="note">The customer accepts the scope, approves changes and confirms completion from their side. A paid milestone cannot be cancelled into a refund — disputes go through SOKONI.</div>');
       host._wp = p;
@@ -167,7 +148,7 @@
         + (list.length ? '<div class="ord-list">' + list.map((l) => card(
           '<span class="ord-id">' + esc(l.message || 'Request') + '</span><span class="ord-amt">' + esc(l.quote && l.quote.amountCents ? kes(l.quote.amountCents) : '') + '</span>',
           '<span class="badge ' + tone(l.status) + '">' + esc(LEAD_LABEL[l.status] || l.status) + '</span>',
-          '<div class="actions" style="margin-top:4px">'
+          !canEdit() ? '<div class="actions" style="margin-top:4px"><a class="act ghost" href="messages.html?tx=service_lead&txId=' + encodeURIComponent(l.id) + '">💬 Messages</a></div>' : '<div class="actions" style="margin-top:4px">'
             + (l.status === 'created' ? '<button type="button" class="act ghost" data-lead-view="' + esc(l.id) + '">Mark opened</button>' : '')
             + (['created', 'viewed', 'clarification_requested', 'quote_declined'].indexOf(l.status) >= 0 ? '<button type="button" class="act" data-lead-quote="' + esc(l.id) + '">Send quote</button>' : '')
             + (['created', 'viewed', 'clarification_requested'].indexOf(l.status) >= 0 ? '<button type="button" class="act danger" data-lead-decline="' + esc(l.id) + '">Decline</button>' : '')
@@ -203,8 +184,6 @@
       const st = await gate(); if (!st || !alive) return;
       try {
         if (view === 'overview') return await overview(st);
-        if (view === 'services') return await services(st, false);
-        if (view === 'rates') return await services(st, true);
         if (view === 'leads' || view === 'quotes') return await leads(view);
         if (view === 'bookings') return await bookings();
         if (view === 'campaigns') return await work('campaign');
@@ -218,6 +197,7 @@
       const b = e.target.closest ? e.target.closest('button') : null; if (!b) return;
       const d = b.dataset;
       if (d.go) return ctx.go(d.go);
+      if ((d.leadView || d.leadDecline || d.leadQuote || d.workCreate || d.workMove || d.msDeliver) && !canEdit()) { toast('Read-only: editing is not available for this account right now.'); return; }
       if (d.leadView) { b.disabled = true; try { await pd('leadMarkViewed', { leadId: d.leadView }); await run(); } catch (er) { b.disabled = false; toast(errText(er)); } return; }
       if (d.leadDecline) { b.disabled = true; try { await pd('leadDecline', { leadId: d.leadDecline }); await run(); } catch (er) { b.disabled = false; toast(errText(er)); } return; }
       if (d.leadQuote) { const slot = host.querySelector('[data-quote-slot="' + d.leadQuote + '"]'); if (slot) slot.innerHTML = quoteForm(d.leadQuote); return; }
@@ -230,6 +210,7 @@
     }
     async function onSubmit(e) {
       const f = e.target;
+      if (f.matches && (f.matches('[data-quote-form]') || f.matches('[data-scope-form]')) && !canEdit()) { e.preventDefault(); toast('Read-only: editing is not available for this account right now.'); return; }
       if (f.matches && f.matches('[data-quote-form]')) {
         e.preventDefault();
         const qm = f.querySelector('[data-quote-msg]'), amountCents = toCents(f.elements.amount.value);

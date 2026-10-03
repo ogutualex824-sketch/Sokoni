@@ -215,6 +215,27 @@ relevant may rely on it — every operation behind a module is still refused by 
 `assertModule`). The `marketing` key exists only on b2's server line; until it deploys the key is absent and the
 marketing group stays hidden (fails closed).
 
+### Editable — `S.editable` from the SAME answer (P0-F, owner 2026-10-03)
+
+Owner invariant: application status is WORKFLOW, not authorization — every hub consumes ONE approval answer, and a
+deactivated / suspended / frozen owner is shown edit UIs **read-only** rather than offered saves the server/rules refuse.
+The one decision is `sokoni-edit-authority.js` (`SokoniEditAuthority.decide(answer, claims)`, pure), reached through
+`SokoniMerchantSession.editableOf`. Server contract: `approval.state` token **`'VALID_APPROVAL'`** (sokoni-5b `f85039a`,
+`shared/approval-remediation.js` `STATES.VALID`); `ownerState` + `editable` (sokoni-5b `1a5c9e5`, `ownerStateOf`).
+
+| Answer | `S.editable` |
+|---|---|
+| `editable === true` | editable — **wins** over the interim signals |
+| `editable` false / missing / non-boolean | **read-only**; reason from `ownerState`: frozen → "frozen by SOKONI", suspended → "suspended", deactivated → "deactivated — reactivate your account" (+ `action.href = /profile.html`), unknown → "status unknown", active-but-false → "your business status does not allow changes yet" |
+| old server (no `ownerState`) | interim reason: ID-token claim `deactivated === true` → deactivated; `approval.state !== 'VALID_APPROVAL'` → approval; otherwise "status unknown" — still read-only |
+| no answer / callable error / authority module missing | read-only, "status unknown" (fails closed) |
+
+`S.editable` is `{editable, readOnly, reasonCode, reason, ownerState, source, action}` (frozen) in a provider session,
+`null` outside one (the merchant session's authority is `merchantIdentity`). Modules read `SokoniShell.editable()`;
+framed modules receive a plain copy in the `session` postMessage. Every page shows the one sentence
+`SokoniEditAuthority.message(d)` = "Your account can’t make changes right now (<reason>)". Never derived from
+`application.status`, `adminApproved`, `approvedBy` or `verified`. Tests: rows E0–E20, controls X-e / X-f.
+
 ### Route key `sessions` (sokoni-merchant-routes.js)
 
 `sessions: ['merchant'] | ['provider'] | ['merchant','provider']` — **absent = `['merchant']`**, so every route that
@@ -227,6 +248,11 @@ non-empty array of `'merchant'|'provider'` without repeats. Provider-capable tod
 | `messages` | participant-scoped through `messagesDispatch`; ctx SELLER_UID only; the module refuses only `not_signed_in` and never reads `S.activeShopId`. |
 | `home` (exit) | leaving for the marketplace needs no shop. |
 | `signout` (exit) | every session must be able to end itself. |
+
+**Gated provider route (2026-10-03):** `rates` — `sessions:['provider']` ONLY, in group `services`
+(`requires:'module:services'`). The one generic rate-card editor, [[RATE_CARD_EDITOR]]. The rule "ungated provider
+routes are exactly home / messages / signout" is unchanged (test C2); `rates` is the only gated provider route (C2b)
+and the only provider-only route (C5b), so it never mounts in a merchant session.
 
 **Left merchant-only (gaps for b2/2f):** Payments/Financial Center (ledger is `sellerPayments`; wallet withdraw is
 `requestSellerPayout` + merchant entitlements — providers use `providerGetEarnings`/`providerRequestPayout`);

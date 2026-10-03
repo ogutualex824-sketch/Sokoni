@@ -697,6 +697,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-merchant-routes.js"></script>
 <!-- Provider session mapping (owner 2026-10-03: ONE shell for merchants AND providers).
      Pure: turns the server's businessWorkspace answer into S.capabilities. -->
+<!-- P0-F edit authority: the ONE read-only decision (answer.editable === true, else read-only). -->
+<script src="sokoni-edit-authority.js"></script>
 <script src="sokoni-merchant-session.js"></script>
 
 <!-- The NINE native surfaces v1 already implements, as modules. Nothing here is
@@ -771,6 +773,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-merchant-disputes-ui.js"></script>
 <script src="sokoni-merchant-messages.js"></script>
 <script src="sokoni-merchant-messages-ui.js"></script>
+<!-- Provider rate cards (#rates; b2 mounts the same module at mkt-rates). docs/RATE_CARD_EDITOR.md -->
+<script src="sokoni-merchant-ratecard.js"></script>
 <script src="sokoni-merchant-customers.js"></script>
 <script src="sokoni-merchant-customers-ui.js"></script>
 <script src="sokoni-merchant-store.js"></script>
@@ -1470,6 +1474,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     sessionNotice: null,     /* provider: the honest "isn't available yet — <reason>" line */
     providerName: null,      /* provider: display name from providers/{uid} (read-only) */
     providerError: null,     /* provider: why the providers/{uid} read failed, when it did */
+    /* provider: may this owner make changes? SokoniMerchantSession.editableOf(answer, claims) —
+       {editable, readOnly, reason, ownerState, action}. null outside a provider session (the
+       merchant session's authority is merchantIdentity). Modules read SokoniShell.editable(). */
+    editable: null,
   };
   /* NO CLIENT-SIDE CAPABILITY LIST, DELIBERATELY. An earlier draft mirrored
      ROLE_CAPABILITIES.owner here so the owner path could stay a single read.
@@ -1559,7 +1567,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
           /* A provider session ends with the account: its server-granted list must not
              outlive it. (The merchant path's fields are left exactly as they were.) */
           if (S.session === 'provider') { S.capabilities = []; }
-          S.session = null; S.workspace = null; S.sessionNotice = null; S.providerName = null;
+          S.session = null; S.workspace = null; S.sessionNotice = null; S.providerName = null; S.editable = null;
           _readyResolve(S); emit('session'); paintStatus();
         };
         if (everIn) return commitOut();          /* a real sign-out */
@@ -1729,6 +1737,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     var SMS = window.SokoniMerchantSession;
     S.session = 'provider';
     S.capabilities = [];
+    /* Fail closed until the answer lands: a provider session is read-only by default. */
+    S.editable = Object.freeze({ editable: false, readOnly: true, reasonCode: 'no_answer', reason: 'status unknown', ownerState: null, source: 'none', action: null });
     S.providerName = SMS ? SMS.providerDisplayName(snap.data() || {}) : null;
     S.providerError = null;
     if (!SMS) {
@@ -1736,14 +1746,24 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       S.sessionNotice = "Your provider workspace isn't available yet — the session module did not load. Reload the page.";
       return;
     }
-    var res;
+    var res, answer = null;
     try {
       var r = await _callable('providerDispatch')({ op: 'businessWorkspace' });
-      res = SMS.mapWorkspace(r && r.data);
+      answer = r && r.data;
+      res = SMS.mapWorkspace(answer);
     } catch (e) {
+      answer = null;
       var code = 'workspace-' + String((e && e.code) || 'unavailable').replace(/^functions\//, '');
       res = { ok: false, capabilities: [], reason: code, notice: SMS.notice(code), workspace: null };
     }
+    /* EDITABLE from the SAME answer (P0-F). The signed ID-token claims feed only the interim
+       reason on an old server; unreadable claims are null, never "not deactivated". */
+    var claims = null;
+    try {
+      var cu = m.authI && m.authI.currentUser;
+      if (cu && typeof cu.getIdTokenResult === 'function') claims = ((await cu.getIdTokenResult()) || {}).claims || null;
+    } catch (_) { claims = null; }
+    if (typeof SMS.editableOf === 'function') S.editable = SMS.editableOf(answer, claims);
     S.capabilities = res.capabilities.slice();
     S.workspace = res.workspace;
     S.sessionNotice = res.notice || null;
@@ -1954,8 +1974,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     });
   }
   function broadcastSession () {
+    var E = S.editable;
     var msg = { __sokoniShell: true, type: 'session', state: S.state,
-                uid: S.uid, sellerUid: S.sellerUid, activeShopId: S.activeShopId };
+                uid: S.uid, sellerUid: S.sellerUid, activeShopId: S.activeShopId,
+                /* P0-F: framed modules get the same edit decision (plain copy; null outside a provider session) */
+                editable: E ? { editable: E.editable === true, reason: E.reason || null, ownerState: E.ownerState || null,
+                                action: E.action ? { href: E.action.href, label: E.action.label } : null } : null };
     [].forEach.call(document.querySelectorAll('.panel iframe'), function (f) {
       try { f.contentWindow.postMessage(msg, location.origin); } catch (_) {}
     });
@@ -2623,9 +2647,19 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   /* ── MARKETING SERVICES ctx (sokoni-b2) ───────────────────────────────────────────
      Provider session only (routes sessions:['provider'], group requires:'marketing'). NO shop: every call is a server
      op keyed on auth.uid. The module re-asks the server (marketingMyStatus) before painting anything. */
+  /* P0-F (sokoni-e3): editable ONLY when the provider session's server decision is exactly editable === true. */
+  function _mktEditable () { var E = S.editable; return S.session === 'provider' && !!E && E.editable === true; }
+  function _mktRateCtx () {
+    var ok = _mktEditable(), E = S.editable;
+    return { callable: _callable, uid: S.uid, session: S.session,
+      filter: { categories: (S.workspace && Array.isArray(S.workspace.marketingCategories)) ? S.workspace.marketingCategories.slice() : [] },
+      editable: ok, readOnly: !ok, reason: ok ? null : ((E && E.reason) || null), onToast: toast };
+  }
   function _mktCtx (view) {
     return {
       view: view,
+      editable: function () { return _mktEditable(); },
+      readOnlyReason: function () { var E = S.editable; return (E && E.reason) || null; },
       uid: function () { return S.uid || null; },
       call: function (name, payload) { return _callable(name)(payload).then(function (r) { return (r && r.data) || r; }); },
       callable: _callable,
@@ -2785,9 +2819,23 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                         onOpenAvailability: function () { go('availability'); },
                         onToast: toast });
                     } }; } },
+    /* Provider rate cards. ctx is the RateCard contract (docs/RATE_CARD_EDITOR.md): the module
+       calls providerDispatch {op,...} through `callable`, and edits ONLY when the provider
+       session's P0-F decision is exactly editable === true — anything else (no answer yet,
+       false, malformed, a merchant session) mounts read-only with the decision's own reason. */
+    rates:      { global: 'SokoniMerchantRateCard',    ctx: function () {
+                    var E = S.editable, ok = S.session === 'provider' && !!E && E.editable === true;
+                    return {
+                    callable: _callable, uid: S.uid, session: S.session, filter: {},
+                    editable: ok, readOnly: !ok,
+                    reason: ok ? null : ((E && E.reason) || null),
+                    onToast: toast }; } },
+    /* Marketing services + rate cards mount sokoni-e3's ONE provider rate-card editor (docs/RATE_CARD_EDITOR.md) with the
+       exact RateCard ctx, filtered to the server's APPROVED marketing categories (businessWorkspace.marketingCategories —
+       empty ⇒ fails closed, nothing listed). Editable ONLY when the provider session's P0-F decision is editable === true. */
+    'mkt-services':     { global: 'SokoniMerchantRateCard', ctx: function () { return _mktRateCtx(); } },
+    'mkt-rates':        { global: 'SokoniMerchantRateCard', ctx: function () { return _mktRateCtx(); } },
     'mkt-overview':     { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('overview'); } },
-    'mkt-services':     { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('services'); } },
-    'mkt-rates':        { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('rates'); } },
     'mkt-leads':        { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('leads'); } },
     'mkt-quotes':       { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('quotes'); } },
     'mkt-bookings':     { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('bookings'); } },
@@ -4654,6 +4702,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 
   /* Public surface for modules and for the certification harness. */
   window.SokoniShell.session = S;
+  /* P0-F: the provider session's edit decision (frozen), or null outside a provider session.
+     A module MUST treat anything but {editable:true} as read-only. */
+  window.SokoniShell.editable = function () { return S.editable; };
   window.SokoniShell.merchantContext = merchantContext;
   window.SokoniShell.resolveMerchantContext = resolveMerchantContext;
   window.SokoniShell.devices = DEV;

@@ -1,3 +1,73 @@
+## [2026-10-03] — Marketing services × sokoni-e3's rate-card editor + P0-F read-only — NOT deployed
+
+- **Merged** sokoni-e3's hosting/provider-session-on-e81d80a @ 99ff58e: SokoniMerchantRateCard, the provider `rates` route (module:services), and sokoni-edit-authority.js.
+- **merchant-v2.html:**
+  - `mkt-services` and `mkt-rates` mount the ONE rate-card editor via `_mktRateCtx()`. That is e3's exact ctx, with filter.categories = businessWorkspace.marketingCategories (the server-approved set; empty ⇒ nothing, fail closed). There is no serviceKind (live services have none).
+  - The editor is editable ONLY when the provider session's P0-F decision is editable === true.
+  - `_mktCtx` gains editable() / readOnlyReason().
+- **sokoni-merchant-mktpro.js:**
+  - the interim services/rates views are REMOVED (one editor);
+  - leads / quotes / campaigns / projects actions render and run only when editable; otherwise the views are read-only with the server's reason, and every mutating handler refuses without calling the server.
+- **Merged contract tests (stricter wording kept):** C2b / C5b pin the gated and provider-only sets EXACTLY (rates=module:services + the ten mkt-*=marketing); new C2c; R3 pins e3's six headings + the gated 'Marketing services' group, and every requires: ∈ ['marketing','module:services'].
+- **Tests:** test-merchant-mktpro 9/0 (K3 the editor mapping + filter + gate; K8 read-only: no controls, forged click/submit call nothing), SABOTAGE 6/6; provider-session 101/0, mv2-1-sidebar 14/0, merchant-routes 65/0, merchant-ratecard 39/0.
+
+## [2026-10-03] - Provider rate-card editor — ONE generic module + merchant-v2 `#rates` (NOT deployed)
+
+**Hosting only.** No functions, rules, indexes or data changes. Built on the existing, LIVE providerDispatch ops
+(census: `functions/provider-ops.js` byte-identical to the live archive, sha256 `4cc1c0ae…`).
+
+- **New `sokoni-merchant-ratecard.js`** → `SokoniMerchantRateCard.mount(el, ctx)` with
+  `ctx = {callable, uid, session, filter:{categories?, serviceKind?}, readOnly?, editable?, reason?, onToast?}`.
+  Lists the provider's services (`providerListServices`), edits basic fields (`providerUpdateService`, changed fields
+  only), pauses/resumes (`providerToggleService`), adds (`providerAddService`), and edits the FULL advanced pricing
+  object (`providerUpdateServicePricing` — a REPLACE, so the editor always sends the complete loaded object + edits).
+  Money in KES → integer cents by string arithmetic; fractions of a cent refused. Preview via `bookingPreviewPrice`
+  (the checkout engine) — no browser price math. Server refusals shown verbatim. Read-only unless
+  `editable === true` and not `readOnly` (P0-F); writes re-check the rule. Note shown: "Changes apply to new bookings
+  only; existing bookings keep their price." Bookings are never read or written.
+- **Routes:** new `rates` (`sessions:['provider']`, kind native) in new MORE_GROUP `services`
+  (`requires:'module:services'`). Ungated provider routes stay exactly home/messages/signout.
+- **`merchant-v2.html`:** loads the module; `MODULES.rates` ctx = `editable` only from `S.editable.editable === true`
+  in a provider session. b2 mounts the same module at `mkt-rates` (exact ctx in `docs/RATE_CARD_EDITOR.md` §4.1).
+  sokoni-2f's `ent-rate-cards.js` is a separate entertainment system — not written to.
+- **Tests:** new `scripts/test-merchant-ratecard.js` 39/0 — runs the LIVE archive's real handlers (sanitiser, owner
+  check, plan cap, computePrice) over an in-memory Firestore; controls X-a partial payload → R2 red, X-b KES floats →
+  R3 red, X-c editable fails open → R7 red. `test-merchant-provider-session` 98/0 → 100/0 (C2 refined to UNGATED
+  provider routes; C5 refined to merchant routes; new C2b, C5b; S3 excludes provider-only routes);
+  `test-mv2-1-sidebar` 14/0 (R3 headings include Services); `test-merchant-routes` 65/0. Pre-existing, identical on a
+  HEAD export: test-merchant-capability 44/2 (rates now also listed in the two already-failing v1 counts),
+  test-merchant-shell-callables 18/1. Browser certification QUEUED (RAM floor).
+- **Security:** owner-only enforced server-side; client is UX only; all text escaped; read-only fails closed.
+  **Database / API / rules:** none. **Breaking:** none.
+- **Files:** `sokoni-merchant-ratecard.js` (new), `sokoni-merchant-routes.js`, `merchant-v2.html`,
+  `scripts/test-merchant-ratecard.js` (new), `scripts/test-merchant-provider-session.js`, `scripts/test-mv2-1-sidebar.js`,
+  `docs/RATE_CARD_EDITOR.md` (new), `docs/MERCHANT_V2_TARGET_ARCHITECTURE.md`, `CHANGELOG.md`.
+
+## [2026-10-03] - Merchant V2 provider session: S.editable (P0-F) + VALID token confirmed (NOT deployed)
+
+**Owner invariant (2026-10-03):** application status is WORKFLOW, not authorization; every hub consumes ONE approval
+answer. P0-F: deactivated / suspended / frozen owners get read-only edit UIs, never refused saves.
+**DEPLOY DEPENDENCY:** sokoni-5b `f85039a` (one approval authority) and `1a5c9e5` (`ownerState` + `editable` on the
+businessWorkspace answer). Until `1a5c9e5` is live the field is absent and every provider session is READ-ONLY
+(owner rule: anything other than `editable === true` is read-only) — by design, fail closed.
+
+- **VALID token confirmed:** `'VALID_APPROVAL'` in `sokoni-merchant-session.js` equals sokoni-5b `f85039a`
+  `STATES.VALID` — no change needed.
+- **New `sokoni-edit-authority.js`** (pure, shared byte-identical with the Construction and Fitness branches):
+  `decide(answer, claims)` → `{editable, readOnly, reasonCode, reason, ownerState, source, action}`; `message(d)`.
+- **`merchant-v2.html`:** `S.editable` computed in `resolveProviderSession` from the SAME single businessWorkspace
+  call plus the ID-token claims (`getIdTokenResult`; unreadable → null); read-only default until it lands; reset on
+  sign-out; exposed as `SokoniShell.editable()` and in the `session` postMessage. `SokoniMerchantSession.editableOf`.
+- **Tests:** `test-merchant-provider-session.js` 75/0 → 98/0: E0–E20 (every ownerState × editable missing/false/true,
+  interim claim/approval rows, editable-true override, no-answer/claims-unreadable/module-missing fail closed, merchant
+  session untouched) and negative controls X-e (missing editable treated as editable → E3 red), X-f (shell fails open
+  on a missing answer → E14 red). X-b sabotage marker updated to the new source line. Re-run: test-merchant-routes 65/0,
+  mv2-1-sidebar 14/0, v2-panels 20/0, entry 59/0, dashboard 117/0, greeting 34/0, and 24 more browser-free suites
+  unchanged; test-merchant-capability 44/2, test-merchant-shell-callables 18/1, products-2c-media — PRE-EXISTING,
+  identical on a HEAD export. Browser certification QUEUED (RAM floor).
+- **Database / API / rules / functions:** none (hosting only). **Security:** read-only fails closed; no client-writable
+  field is consulted. **Files:** `sokoni-edit-authority.js` (new), `sokoni-merchant-session.js`, `merchant-v2.html`,
+  `scripts/test-merchant-provider-session.js`, `docs/MERCHANT_V2_TARGET_ARCHITECTURE.md`, `CHANGELOG.md`.
 ## [2026-10-03] — merchant-v2 › Marketing services: the MARKETER workspace in provider mode (Marketing Hub MK6) — NOT deployed
 
 - **Owner:** provider mode in merchant-v2 (one shell for merchants and providers); dashboards copy merchant-v2 style. Built on sokoni-e3's provider-session shell (89f4d47).

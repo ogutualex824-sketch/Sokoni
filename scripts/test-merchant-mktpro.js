@@ -13,7 +13,8 @@ const ROOT = path.join(__dirname, '..');
 if (process.env.SABOTAGE) {
   const M = [
     ['K1', 'sokoni-merchant-mktpro.js', "      if (!(m && m.listed && (m.categories || []).length)) {", '      if (false) {'],
-    ['K3', 'sokoni-merchant-mktpro.js', "          filter: { categories: cats.slice(), serviceKind: 'marketing' }, readOnly: false });", "          filter: { serviceKind: 'marketing' }, readOnly: false });"],
+    ['K3', 'merchant-v2.html', "      filter: { categories: (S.workspace && Array.isArray(S.workspace.marketingCategories)) ? S.workspace.marketingCategories.slice() : [] },", "      filter: {},"],
+    ['K8', 'sokoni-merchant-mktpro.js', "    const canEdit = () => !!(ctx.editable && ctx.editable() === true);", '    const canEdit = () => true;'],
     ['K4', 'sokoni-merchant-mktpro.js', "          await pd('leadSendQuote', { leadId: f.dataset.lead, serviceId: f.elements.serviceId.value, amountCents,", "          await pd('leadSendQuote', { leadId: f.dataset.lead, serviceId: f.elements.serviceId.value, amountCents: f.elements.amount.value,"],
     ['K6', 'sokoni-merchant-routes.js', "    { key:'mktpro', label:'Marketing services', requires:'marketing',", "    { key:'mktpro', label:'Marketing services',"],
     ['K6b', 'sokoni-merchant-routes.js', "    { id:'mkt-earnings', name:'Earnings', icon:'💰', tier:'more',\n      kind:'native',\n      role:['seller','merchant'], ctx:[CTX.SELLER_UID],\n      sessions:['provider'],", "    { id:'mkt-earnings', name:'Earnings', icon:'💰', tier:'more',\n      kind:'native',\n      role:['seller','merchant'], ctx:[CTX.SELLER_UID],\n      sessions:['provider','merchant'],"],
@@ -51,14 +52,14 @@ function harness(answers) {
   vm.runInContext(fs.readFileSync(path.join(DIR, 'sokoni-marketing-taxonomy.js'), 'utf8'), ctx0);
   vm.runInContext(fs.readFileSync(path.join(DIR, 'sokoni-merchant-mktpro.js'), 'utf8'), ctx0);
   const call = async (name, payload) => { calls.push(Object.assign({ fn: name }, payload)); const k = name + ':' + payload.op; if (answers[k] instanceof Error) throw answers[k]; return typeof answers[k] === 'function' ? answers[k](payload) : (answers[k] || {}); };
-  return { G, calls, mount: (view, extra) => { const host = el('host'); const ui = G.SokoniMerchantMktPro.mount(host, Object.assign({ view, uid: () => 'mk', call, callable: (n) => (p) => call(n, p).then((d) => ({ data: d })), hasRoute: () => true, go: () => {}, onToast: () => {} }, extra || {})); return { host, ui }; } };
+  return { G, calls, mount: (view, extra) => { const host = el('host'); const ui = G.SokoniMerchantMktPro.mount(host, Object.assign({ view, uid: () => 'mk', call, editable: () => true, readOnlyReason: () => null, callable: (n) => (p) => call(n, p).then((d) => ({ data: d })), hasRoute: () => true, go: () => {}, onToast: () => {} }, extra || {})); return { host, ui }; } };
 }
 const APPROVED = { 'marketingDispatch:marketingMyStatus': { ok: true, application: { status: 'approved', reviewStage: 'approved', declinedCategories: ['seo'] }, marketer: { status: 'active', listed: true, marketingType: 'agency', categories: ['branding', 'logo-design'] } } };
 
 (async () => {
   /* K1: a non-marketer gets the honest gate and nothing else is called */
   let h = harness({ 'marketingDispatch:marketingMyStatus': { ok: true, application: { status: 'pending' }, marketer: null } });
-  let m = h.mount('services'); await flush();
+  let m = h.mount('leads'); await flush();
   ck('K1', /open once SOKONI approves you/.test(m.host.innerHTML) && h.calls.length === 1 && h.calls[0].op === 'marketingMyStatus',
     'not approved (server says so) → honest "opens once SOKONI approves you"; NO service / lead / booking call is made', h.calls.map((c) => c.op));
 
@@ -69,16 +70,15 @@ const APPROVED = { 'marketingDispatch:marketingMyStatus': { ok: true, applicatio
   ck('K2', /KES 500/.test(m.host.innerHTML) && /Branding/.test(m.host.innerHTML) && /Logo Design/.test(m.host.innerHTML) && /class="stat/.test(m.host.innerHTML),
     'overview: merchant-v2 stat tiles from providerGetEarnings + the approved services from the server', m.host.innerHTML.slice(0, 200));
 
-  /* K3: services mounts the ONE rate-card editor with the SERVER's approved categories */
-  h = harness(APPROVED);
-  let rc = null; h.G.SokoniMerchantRateCard = { mount: (elx, c) => { rc = c; return { destroy() {} }; } };
-  m = h.mount('services'); await flush();
-  ck('K3', rc && JSON.stringify(rc.filter.categories) === JSON.stringify(['branding', 'logo-design']) && rc.session === 'provider' && !/data-svc-form|<form/.test(m.host.innerHTML),
-    'services: mounts sokoni-e3\'s ONE rate-card editor filtered to the approved categories; no pricing form of its own', rc);
-  h = harness(Object.assign({}, APPROVED, { 'providerDispatch:providerListServices': { services: [{ id: 's1', name: 'Old', hub: 'marketing', category: 'seo', active: true, price: 100000 }] } }));
-  m = h.mount('rates'); await flush();
-  ck('K3b', /being assembled/.test(m.host.innerHTML) && /category no longer approved/.test(m.host.innerHTML) && !/<form/.test(m.host.innerHTML),
-    'without the editor: services read-only + honest notice; a service in a no-longer-approved category is flagged', m.host.innerHTML.slice(0, 200));
+  /* K3: mkt-services / mkt-rates mount sokoni-e3's ONE rate-card editor, filtered to the SERVER's approved categories, with the
+     P0-F editable gate (no own form in this module) */
+  const html0 = fs.readFileSync(path.join(DIR, 'merchant-v2.html'), 'utf8');
+  const rcCtx = html0.slice(html0.indexOf('function _mktRateCtx ()'), html0.indexOf('function _mktCtx (view)'));
+  ck('K3', /'mkt-services':\s+\{ global: 'SokoniMerchantRateCard', ctx: function \(\) \{ return _mktRateCtx\(\); \} \}/.test(html0)
+    && /'mkt-rates':\s+\{ global: 'SokoniMerchantRateCard', ctx: function \(\) \{ return _mktRateCtx\(\); \} \}/.test(html0)
+    && /S\.workspace\.marketingCategories\.slice\(\)/.test(rcCtx) && /editable: ok, readOnly: !ok/.test(rcCtx) && !/serviceKind/.test(rcCtx)
+    && !/async function services|data-svc-form/.test(fs.readFileSync(path.join(DIR, 'sokoni-merchant-mktpro.js'), 'utf8')),
+    'mkt-services / mkt-rates mount the ONE rate-card editor with the server-approved marketing categories (empty ⇒ nothing) and the P0-F editable gate; this module keeps no pricing form');
 
   /* K4: send quote → leadSendQuote, integer cents */
   h = harness(Object.assign({}, APPROVED, { 'providerDispatch:leadListForProvider': { leads: [{ id: 'L1', status: 'viewed', message: 'Need a logo' }] },
@@ -101,6 +101,19 @@ const APPROVED = { 'marketingDispatch:marketingMyStatus': { ok: true, applicatio
   const wc = h.calls.find((c) => c.op === 'workCreate');
   ck('K5b', wc && wc.skin === 'marketing' && wc.kind === 'campaign' && wc.originType === 'service_lead' && wc.leadId === 'L9' && !('customerUid' in wc) && !('totalCents' in wc),
     'a campaign starts from an ACCEPTED quote via workCreate (no client customer/total — the server derives both)', wc);
+
+  /* K8: P0-F read-only — no action controls, and every mutating handler refuses without calling the server */
+  h = harness(Object.assign({}, APPROVED, { 'providerDispatch:leadListForProvider': { leads: [{ id: 'L1', status: 'viewed', message: 'Need a logo' }] },
+    'providerDispatch:providerListServices': { services: [{ id: 's1', name: 'Logo', hub: 'marketing', category: 'logo-design', active: true }] } }));
+  m = h.mount('leads', { editable: () => false, readOnlyReason: () => 'Account frozen pending review' }); await flush();
+  const roHtml = m.host.innerHTML;
+  const bq = Object.assign(el('b'), { dataset: { leadDecline: 'L1' } });
+  for (const f of m.host.listeners.click || []) await f({ target: { closest: () => bq } });
+  const roForm = { matches: (x) => x === '[data-quote-form]', dataset: { lead: 'L1' }, elements: { amount: { value: '100' }, serviceId: { value: 's1' }, description: { value: '' }, validDays: { value: '7' } }, querySelector: () => el('qm') };
+  for (const f of m.host.listeners.submit || []) await f({ target: roForm, preventDefault() {} });
+  await flush();
+  ck('K8', !/data-lead-quote|data-lead-decline|data-lead-view/.test(roHtml) && /Messages/.test(roHtml) && !h.calls.some((c) => ['leadDecline', 'leadSendQuote', 'leadMarkViewed'].indexOf(c.op) >= 0),
+    'P0-F read-only: no Send quote / Decline / Mark opened controls, and a forged click or submit calls NO mutating op', { calls: h.calls.map((c) => c.op) });
 
   /* K6: registry */
   const G2 = { window: null }; G2.window = G2; vm.runInContext(fs.readFileSync(path.join(DIR, 'sokoni-merchant-routes.js'), 'utf8'), vm.createContext(G2));
