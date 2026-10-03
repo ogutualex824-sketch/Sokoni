@@ -24,6 +24,9 @@ for (const [page, pre] of [['admin-os.html', 'aos'], ['super-admin.html', 'sa']]
     page + ': its sidebar, logo header and footer are styled by the shell');
   ck(pre + '-4', /shared-header\.js|sw-register\.js/.test(H), page + ': still self-updates after deploys');
 }
+/* owner 2026-10-03: "admin-os.html and super-admin.html" — not admin.html (nor the legacy superadmin.html) */
+ck('X-1', ['admin.html', 'superadmin.html'].every((f) => read(f).replace(/\r/g, '') === live(f).replace(/\r/g, '')),
+  'SCOPE: only admin-os.html and super-admin.html change; admin.html and superadmin.html are byte-identical to live');
 ck('S-1', tok(CSS, 'adm-rail-w') === tok(MV2, 'rail-w') && tok(CSS, 'adm-rail-collapsed') === tok(MV2, 'rail-collapsed') && /--aos-sidebar-w:var\(--adm-rail-w\)/.test(CSS) && /--sidebar-w:var\(--adm-rail-w\)/.test(CSS),
   'SAME SIZE as merchant-v2 on BOTH pages: rail ' + tok(MV2, 'rail-w') + ', collapsed ' + tok(MV2, 'rail-collapsed'));
 ck('S-2', ['surface', 'line', 'txt', 'txt2', 'txt3', 'acc', 'acc-dim', 'acc-line'].every((n) => tok(CSS, 'adm-side-' + n) === tok(MV2, n)),
