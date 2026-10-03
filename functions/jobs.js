@@ -523,7 +523,7 @@ exports.closeJob = onCall(CF_OPTS, exports._h.closeJob = async (req) => {
       const app = s.exists ? s.data() : null;
       if (!app || !CLOSE_ON_JOB_CLOSE.includes(app.status)) return false;
       const version = (Number(app.statusVersion) || 0) + 1;
-      txn.update(d.ref, { status: 'closed', statusVersion: version, updatedAt: Timestamp.now() });
+      txn.update(d.ref, { status: 'closed', statusVersion: version, updatedAt: Timestamp.now(), terminalAt: Timestamp.now() });
       _eventInTxn(txn, d.ref, app, { from: app.status, to: 'closed', actorUid: uid, actorRole: 'employer', reason: 'vacancy closed' });
       _notifyInTxn(txn, db, { uid: app.seekerUid, id: 'jobapp_' + d.id + '_v' + version, type: 'job_application_status',
         title: 'Vacancy closed', body: 'The vacancy "' + title + '" has closed. Thank you for applying.', deepLink: '/jobs.html#applications' });
@@ -792,7 +792,8 @@ exports.updateApplicationStatus = onCall(CF_OPTS, exports._h.updateApplicationSt
         'An application that is "' + (STATUS_LABEL[app.status] || app.status) + '" cannot move to "' + (STATUS_LABEL[status] || status) + '".');
     }
     const next = version + 1;
-    txn.update(appRef, { status, statusVersion: next, updatedAt: Timestamp.now(),
+    /* terminalAt: when the application reached a final state — the messages window (sokoni-b2 J4) runs 30 days from it. */
+    txn.update(appRef, { status, statusVersion: next, updatedAt: Timestamp.now(), ...(APP_TERMINAL.includes(status) ? { terminalAt: Timestamp.now() } : {}),
       ...(status === 'rejected' ? { rejectionReason: cleanReason } : {}) });
     _eventInTxn(txn, appRef, app, { from: app.status, to: status, actorUid: uid, actorRole: 'employer', reason: cleanReason });
     const jt = _san(app.jobTitle, 100) || 'your application';
@@ -827,7 +828,7 @@ exports._h.withdrawApplication = async (req) => {
     }
     const next = (Number(app.statusVersion) || 1) + 1;
     const r = _san(reason, 500);
-    txn.update(appRef, { status: 'withdrawn', statusVersion: next, updatedAt: Timestamp.now() });
+    txn.update(appRef, { status: 'withdrawn', statusVersion: next, updatedAt: Timestamp.now(), terminalAt: Timestamp.now() });
     _eventInTxn(txn, appRef, app, { from: app.status, to: 'withdrawn', actorUid: uid, actorRole: 'applicant', reason: r });
     _notifyInTxn(txn, db, { uid: app.employerUid, id: 'jobapp_' + applicationId + '_v' + next, type: 'job_application_status',
       title: 'Application withdrawn', body: 'An applicant withdrew from "' + (_san(app.jobTitle, 100) || 'your vacancy') + '".', deepLink: '/jobs.html#employer' });
@@ -855,7 +856,7 @@ exports._h.respondToJobOffer = async (req) => {
     if (app.status !== 'offer') throw new HttpsError('failed-precondition', 'There is no open offer on this application.');
     const next = (Number(app.statusVersion) || 1) + 1;
     const r = _san(reason, 500);
-    txn.update(appRef, { status: to, statusVersion: next, updatedAt: Timestamp.now() });
+    txn.update(appRef, { status: to, statusVersion: next, updatedAt: Timestamp.now(), ...(APP_TERMINAL.includes(to) ? { terminalAt: Timestamp.now() } : {}) });
     _eventInTxn(txn, appRef, app, { from: 'offer', to, actorUid: uid, actorRole: 'applicant', reason: r });
     _notifyInTxn(txn, db, { uid: app.employerUid, id: 'jobapp_' + applicationId + '_v' + next, type: 'job_offer_response',
       title: accept ? 'Offer accepted' : 'Offer declined',

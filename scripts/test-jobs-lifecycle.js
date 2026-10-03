@@ -41,6 +41,7 @@ class HttpsError extends Error { constructor(code, m) { super(m); this.code = co
 /* ── mutants: copy jobs.js, apply a textual sabotage, load the copy ── */
 let src = fs.readFileSync(path.join(ROOT, 'functions', 'jobs.js'), 'utf8');
 const MUTANTS = {
+  no_terminal_at:     ['...(APP_TERMINAL.includes(status) ? { terminalAt: Timestamp.now() } : {}),', ''],
   any_transition:     ['const allowed = EMPLOYER_TRANSITIONS[app.status] || [];', 'const allowed = VALID_APP_STATUSES;'],
   no_owner_check:     ["if (app.employerUid !== uid) throw new HttpsError('permission-denied', 'Not your job application');", ''],
   getjob_leaks:       ["if (!_isActive(data) && !isOwner && !isAdmin) throw new HttpsError('not-found', 'Job not found');", ''],
@@ -195,6 +196,11 @@ const DESC = 'We need a reliable cashier for our Nairobi shop, weekday shifts.';
   ck('C5 a closed vacancy cannot be re-opened by extending its date', !r.ok && r.code === 'failed-precondition', r);
   r = await call('applyForJob', 'seek8', { jobId, coverLetter: 'Late application for the cashier job.' });
   ck('C6 nobody can apply to a closed vacancy', !r.ok && r.code === 'failed-precondition', r);
+
+  /* ── T: terminalAt (sokoni-b2 J4: messages stay open 30 days after it) ── */
+  ck('T1 terminalAt stamped on hired / rejected / withdrawn / offer_declined / closed', [appId, a2, a3, a4, jobId + '_seek5'].every((id) => app(id).terminalAt && app(id).terminalAt._ms > 0),
+    [appId, a2, a3, a4, jobId + '_seek5'].map((id) => [app(id).status, !!app(id).terminalAt]));
+  ck('T2 no terminalAt on a non-terminal application (interview in flight)', !app(jobId + '_seek7').terminalAt, app(jobId + '_seek7'));
 
   /* ── N: notification shape (what the in-app feed reads) ── */
   const n = notes('seek')[0] || {};
