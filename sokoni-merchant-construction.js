@@ -27,9 +27,22 @@
                   Old server (live today: no rentalOwnerListings) → the direct rentalProducts read is the
                   fallback, chosen ONLY on an "Unknown commerce operation" refusal; it has no rules yet,
                   so a refused read says "Rentals become visible once access rules ship".
-     Verification applications where uid == uid (owner-only read); the status shown is the
-                  application's own field. "Verified" appears ONLY when verified === true (an
-                  admin-only field under noAdminFields()).
+     Verification Owner invariant 2026-10-03: application status is WORKFLOW, not authorization.
+                  applications where uid == uid (owner-only read) are shown ONLY as "Application
+                  progress" text. "Approved" appears ONLY when the ONE approval answer —
+                  providerDispatch {op:'businessWorkspace'} (sokoni-5b f85039a, isAuthoritativelyApproved)
+                  — has approval.state === 'VALID_APPROVAL' AND modules.services.state === 'AVAILABLE'.
+                  'services' is the gate because no construction module key exists on the capability
+                  line (5b f85039a / 1a5c9e5): construction trades classify to quoted-service provider
+                  categories (5b cf44fc3) whose capability is the services module. Never from
+                  application.status, adminApproved, approvedBy or verified. One call per page load
+                  (the shell memoises it, shared by all ten views).
+     Read-only    P0-F: every edit control (lead moves + notes, equipment create / publish / pause,
+                  rental accept / decline / start / return / complete / cancel) renders DISABLED with
+                  "Your account can't make changes right now (<reason>)" unless the SAME answer says
+                  editable === true (sokoni-edit-authority.js; old server → interim claim/approval
+                  rule, still read-only). Staff are read-only: the answer describes the signed-in
+                  account, not the shop owner. Every action re-checks before it dispatches.
      Plans        subGetPlans({hubType:'construction'}) — only a plan the catalog prices for the
                   construction hub is shown; otherwise '—'.
      RFQs/Quotes  sokoni-f3's 'rfqs' route (rfqDispatch) when the shell has it; otherwise an
@@ -182,10 +195,49 @@
   function rentalActions (b) { var s = rentalStatus(b); return RENTAL_NEXT[s] ? RENTAL_NEXT[s].slice() : []; }
 
   /* ── VERIFICATION ── */
+  /* WORKFLOW words only — a status never says "approved" (owner invariant 2026-10-03). */
   var APP_LABEL = { pending: 'Submitted — awaiting review', info_requested: 'More information requested',
-    approved: 'Approved', rejected: 'Not approved', suspended: 'Suspended', withdrawn: 'Withdrawn' };
+    under_review: 'In review', approved: 'Review complete', rejected: 'Closed by review', suspended: 'On hold', withdrawn: 'Withdrawn' };
   function appLabel (a) { var s = String((a && a.status) || ''); return APP_LABEL[s] || (s ? titleCase(s) : '—'); }
-  function isVerified (a) { return !!a && a.verified === true; }
+
+  /* ── APPROVAL: the ONE server answer (never an application field) ── */
+  var VALID_APPROVAL = 'VALID_APPROVAL';
+  var APPROVAL_MODULE = 'services';
+  var APPROVAL_TEXT = {
+    PENDING_APPROVAL: 'Your application is with SOKONI for review.',
+    NO_APPROVAL: 'There is no SOKONI approval on record for this business.',
+    INVALID_LEGACY_APPROVAL: 'Your earlier approval has to be renewed — please reapply.',
+    REFUSED: 'SOKONI did not approve this business record.',
+    BUYER_ONLY: 'This account has no approved business on SOKONI.',
+    UNREADABLE: 'Your approval record could not be read just now.'
+  };
+  /* Pure: W = { answer, err } from businessWorkspace, or null while loading. */
+  function approvalOf (W) {
+    if (!W) return { kind: 'checking' };
+    if (W.err) return { kind: 'unreadable', code: String(W.err) };
+    var a = W.answer;
+    if (!a || typeof a !== 'object' || Array.isArray(a)) return { kind: 'unreadable', code: 'malformed' };
+    var ap = a.approval && typeof a.approval.state === 'string' ? a.approval.state : null;
+    var m = a.modules && typeof a.modules === 'object' ? a.modules[APPROVAL_MODULE] : null;
+    if (ap === VALID_APPROVAL && m && m.state === 'AVAILABLE') return { kind: 'approved' };
+    var why = (typeof a.message === 'string' && a.message.trim()) ? a.message.trim()
+      : (ap !== VALID_APPROVAL ? (APPROVAL_TEXT[ap] || 'SOKONI has not confirmed an approval for this business.')
+        : 'Construction services are not enabled for this business' + (m && m.state ? ' (' + titleCase(String(m.state).toLowerCase()) + ').' : '.'));
+    return { kind: 'not_approved', why: why, approvalState: ap };
+  }
+  /* Pure: the edit decision (sokoni-edit-authority.js) — fails CLOSED while loading / without the authority. */
+  var CHECKING_EDIT = Object.freeze({ editable: false, readOnly: true, reasonCode: 'checking', reason: 'checking your account', ownerState: null, source: 'none', action: null });
+  var STAFF_EDIT = Object.freeze({ editable: false, readOnly: true, reasonCode: 'staff', reason: 'the shop owner’s account status is not available to staff yet', ownerState: null, source: 'none', action: null });
+  function editOf (W, claims) {
+    if (!W) return CHECKING_EDIT;
+    var EA = global.SokoniEditAuthority;
+    if (!EA || typeof EA.decide !== 'function') return Object.freeze({ editable: false, readOnly: true, reasonCode: 'no_answer', reason: 'status unknown', ownerState: null, source: 'none', action: null });
+    return EA.decide(W.err ? null : W.answer, claims || null);
+  }
+  function editMessage (d) {
+    var EA = global.SokoniEditAuthority;
+    return EA && typeof EA.message === 'function' ? EA.message(d) : 'Your account can’t make changes right now (' + ((d && d.reason) || 'status unknown') + ')';
+  }
 
   /* ── escaping: the canonical escapeHTML (security.js), identical fallback ── */
   function esc (s) {
@@ -293,7 +345,8 @@
       STORE = { uid: uid, leads: null, leadsLoading: false, leadNotes: {},
                 equip: null, equipLoading: false, created: [],
                 rentals: null, rentalsLoading: false, rentalNotes: {}, listingNotes: {},
-                avail: {}, apps: null, appsLoading: false, plans: null, plansLoading: false };
+                avail: {}, apps: null, appsLoading: false, plans: null, plansLoading: false,
+                ws: null, wsLoading: false, claims: null };
     }
     return STORE;
   }
@@ -373,6 +426,28 @@
       }, function (e) { S.apps = { rows: null, err: errCode(e) || 'read-failed' }; })
         .then(function () { S.appsLoading = false; paintAll(); });
     }
+    /* THE approval + edit answer: ONE businessWorkspace call per page load (memoised by the shell, cached here). */
+    function loadWs (S, force) {
+      if (!S.uid || S.wsLoading || (S.ws && !force)) return Promise.resolve();
+      if (typeof c.readWorkspace !== 'function') { S.ws = { answer: null, err: 'not-wired' }; paintAll(); return Promise.resolve(); }
+      S.wsLoading = true;
+      var wsP = Promise.resolve().then(function () { return c.readWorkspace(!!force); }).then(function (a) {
+        return (a && typeof a === 'object' && !Array.isArray(a)) ? { answer: a, err: null } : { answer: null, err: 'malformed' };
+      }, function (e) { return { answer: null, err: errCode(e) || 'failed' }; });
+      var clP = typeof c.readClaims === 'function'
+        ? Promise.resolve().then(function () { return c.readClaims(); }).then(function (x) { return x && typeof x === 'object' ? x : null; }, function () { return null; })
+        : Promise.resolve(null);
+      return Promise.all([wsP, clP]).then(function (r) { S.ws = r[0]; S.claims = r[1]; })
+        .then(function () { S.wsLoading = false; paintAll(); });
+    }
+    function edit (S) { return isStaff() ? STAFF_EDIT : editOf(S.ws, S.claims); }
+    function canEdit (S) { return edit(S).editable === true; }
+    function dis (S) { return canEdit(S) ? '' : ' disabled aria-disabled="true"'; }
+    function roBanner (S) {
+      var d = edit(S); if (d.editable === true) return '';
+      return '<div class="cw-note warn" role="status" data-readonly="' + esc(d.reasonCode || 'unknown') + '">' + esc(editMessage(d)) +
+        (d.action && d.action.href ? ' <a href="' + esc(d.action.href) + '">' + esc(d.action.label || 'Open account') + '</a>' : '') + '</div>';
+    }
     function loadPlans (S) {
       if (S.plans || S.plansLoading || typeof c.callPlans !== 'function') return Promise.resolve();
       S.plansLoading = true;
@@ -383,6 +458,7 @@
     }
     function ensure (force) {
       var S = store(uid());
+      loadWs(S, force);
       if (view === 'overview') { loadLeads(S, force); loadRentals(S, force); loadEquip(S, force); loadPlans(S); }
       if (view === 'leads') loadLeads(S, force);
       if (view === 'equipment' || view === 'availability') { loadEquip(S, force); loadRentals(S, force); }
@@ -441,14 +517,14 @@
         (r.message ? '<div class="cw-msg">' + esc(r.message) + '</div>' : '<div class="cw-meta">No message</div>') +
         '<div class="cw-acts">' +
           acts.map(function (to) {
-            return '<button type="button" class="cw-btn' + (to === 'lost' ? ' dan' : (to === 'won' ? ' pri' : '')) + '" data-act="lead-move" data-id="' + esc(r.id) + '" data-to="' + esc(to) + '">' + esc(leadLabel(to)) + '</button>';
+            return '<button type="button" class="cw-btn' + (to === 'lost' ? ' dan' : (to === 'won' ? ' pri' : '')) + '" data-act="lead-move" data-id="' + esc(r.id) + '" data-to="' + esc(to) + '"' + dis(S) + '>' + esc(leadLabel(to)) + '</button>';
           }).join('') +
           (chat ? '<button type="button" class="cw-btn" data-act="lead-chat" data-id="' + esc(r.id) + '">Open chat</button>'
                 : '<button type="button" class="cw-btn" disabled aria-disabled="true">Chat coming</button>') +
         '</div>' +
         '<label class="cw-meta" style="display:grid;gap:4px;margin-top:8px">Private note (only you see it)' +
-          '<textarea rows="2" maxlength="' + NOTE_MAX + '" data-note="' + esc(r.id) + '">' + esc(r.sellerNote || '') + '</textarea></label>' +
-        '<div class="cw-acts"><button type="button" class="cw-btn" data-act="lead-note" data-id="' + esc(r.id) + '">Save note</button></div>' +
+          '<textarea rows="2" maxlength="' + NOTE_MAX + '" data-note="' + esc(r.id) + '"' + (canEdit(S) ? '' : ' disabled') + '>' + esc(r.sellerNote || '') + '</textarea></label>' +
+        '<div class="cw-acts"><button type="button" class="cw-btn" data-act="lead-note" data-id="' + esc(r.id) + '"' + dis(S) + '>Save note</button></div>' +
         note(n) + '</div>';
     }
     function vLeads (S) {
@@ -464,12 +540,13 @@
         return h + '<div class="cw-card">' + body + '<div class="cw-acts"><button type="button" class="cw-btn" data-act="reload">Try again</button></div></div>';
       }
       if (!L.rows.length) return h + '<div class="cw-card"><b>No leads yet</b><div class="cw-meta">When a buyer contacts you about one of your products, it appears here.</div></div>';
-      return h + (L.hasMore ? note({ kind: 'warn', text: 'Showing the first ' + LEADS_LIMIT + ' leads — more exist.' }) : '') +
+      return h + roBanner(S) + (L.hasMore ? note({ kind: 'warn', text: 'Showing the first ' + LEADS_LIMIT + ' leads — more exist.' }) : '') +
         L.rows.map(function (r) { return leadCard(S, r); }).join('');
     }
     function findLead (S, id) { return S.leads && S.leads.rows ? S.leads.rows.filter(function (r) { return r.id === id; })[0] || null : null; }
     function writeLead (S, id, payload, done) {
       if (!isId(id)) return Promise.resolve();
+      if (!canEdit(S)) { S.leadNotes[id] = { kind: 'err', text: editMessage(edit(S)) }; return Promise.resolve(paintAll()); }
       if (typeof c.writeLead !== 'function') { S.leadNotes[id] = { kind: 'err', text: 'Saving leads is not available here.' }; return Promise.resolve(paintAll()); }
       S.leadNotes[id] = { text: 'Saving…' }; paintAll();
       return Promise.resolve(c.writeLead(id, payload)).then(function () {
@@ -497,7 +574,7 @@
     }
     function vServices () {
       return head('Services') + '<div class="cw-card"><b>Construction services are not managed here yet</b>' +
-        '<div class="cw-meta">Contractor and trade services (building, welding, fabrication, site work) are listed through SOKONI’s provider services, which this workspace cannot open yet. Your approved application decides which services you may offer.</div>' +
+        '<div class="cw-meta">Contractor and trade services (building, welding, fabrication, site work) are listed through SOKONI’s provider services, which this workspace cannot open yet. SOKONI’s approval decides which services you may offer.</div>' +
         '<div class="cw-acts">' + goBtn(ROUTE_OF.verification, 'Application status') + '</div></div>';
     }
     function rfqReady () {
@@ -535,7 +612,7 @@
         var rate = RATE_FIELD[e.pricingType] ? e[RATE_FIELD[e.pricingType]] : null;
         var st = listingStatus(e), ln = S.listingNotes[e.id];
         var acts = (E.source === 'server' ? listingActions(e) : []).map(function (a) {
-          return '<button type="button" class="cw-btn' + (a === 'publish' ? ' pri' : '') + '" data-act="listing-' + a + '" data-id="' + esc(e.id) + '">' + (a === 'publish' ? 'Make available' : 'Pause') + '</button>';
+          return '<button type="button" class="cw-btn' + (a === 'publish' ? ' pri' : '') + '" data-act="listing-' + a + '" data-id="' + esc(e.id) + '"' + dis(S) + '>' + (a === 'publish' ? 'Make available' : 'Pause') + '</button>';
         }).join('');
         return '<div class="cw-card"><div class="cw-row"><b>' + esc(e.title || 'Equipment') + '</b><span class="cw-chip">' + esc(LISTING_LABEL[st] || titleCase(st || '—')) + '</span></div>' +
           '<div class="cw-meta">' + esc(titleCase(e.pricingType || '—')) + (typeof rate === 'number' ? ' · ' + esc(fmtKes(rate)) : '') +
@@ -544,7 +621,7 @@
           (acts ? '<div class="cw-acts">' + acts + '</div>' : '') + note(ln) + '</div>';
       }).join('');
     }
-    function equipForm () {
+    function equipForm (S) {
       var f = ui.form || {};
       function inp (k, label, type, extra) { return '<label>' + esc(label) + '<input data-f="' + k + '" type="' + (type || 'text') + '" value="' + esc(f[k] || '') + '"' + (extra || '') + '></label>'; }
       return '<div class="cw-card cw-form">' +
@@ -557,7 +634,7 @@
         '<div class="cw-two">' + inp('deposit', 'Deposit (KES)', 'number', ' min="0" inputmode="decimal"') + inp('minDuration', 'Minimum hire (units)', 'number', ' min="1"') + '</div>' +
         '<label>Terms<textarea data-f="terms" rows="2" maxlength="1000">' + esc(f.terms || '') + '</textarea></label>' +
         '<div class="cw-meta">SOKONI calculates every hire price from these rates. The listing is saved as a Draft; make it available when you are ready.</div>' +
-        '<div class="cw-acts"><button type="button" class="cw-btn pri" data-act="equip-create"' + (ui.busy ? ' disabled' : '') + '>Save listing</button>' +
+        '<div class="cw-acts"><button type="button" class="cw-btn pri" data-act="equip-create"' + (ui.busy ? ' disabled' : dis(S)) + '>Save listing</button>' +
         '<button type="button" class="cw-btn" data-act="equip-cancel">Cancel</button></div>' + note(ui.formNote) + '</div>';
     }
     function readForm () {
@@ -591,12 +668,14 @@
     function vEquipment (S) {
       var h = head('Equipment', 'Machines and tools you hire out.');
       if (!S.uid) return h + signedOut();
-      h += ui.form ? equipForm() : '<div class="cw-acts" style="margin:10px 0">' + (shopId() ? '<button type="button" class="cw-btn pri" data-act="equip-new">List equipment</button>' : '') + goBtn(ROUTE_OF.availability, 'Availability') + goBtn(ROUTE_OF.rentals, 'Rentals') + '</div>';
+      h += roBanner(S);
+      h += ui.form ? equipForm(S) : '<div class="cw-acts" style="margin:10px 0">' + (shopId() ? '<button type="button" class="cw-btn pri" data-act="equip-new"' + dis(S) + '>List equipment</button>' : '') + goBtn(ROUTE_OF.availability, 'Availability') + goBtn(ROUTE_OF.rentals, 'Rentals') + '</div>';
       if (S.created.length) h += '<div class="cw-card"><b>Listed in this session</b><div class="cw-meta">' + S.created.map(function (e) { return esc(e.title); }).join(' · ') + '</div><div class="cw-meta">Saved as a Draft. Renters cannot book it until you make it available.</div></div>';
       return h + equipListBlock(S);
     }
     function createEquip (S) {
       if (ui.busy) return Promise.resolve();
+      if (!canEdit(S)) { ui.formNote = { kind: 'err', text: editMessage(edit(S)) }; return Promise.resolve(paintAll()); }
       var sid = shopId();
       var r = equipPayload(readForm(), sid);
       ui.form = readForm();
@@ -616,6 +695,7 @@
     function listingOp (S, kind, id) {
       var e = (S.equip && S.equip.rows || []).filter(function (x) { return x.id === id; })[0];
       if (!e || listingActions(e).indexOf(kind) < 0) return Promise.resolve();
+      if (!canEdit(S)) { S.listingNotes[id] = { kind: 'err', text: editMessage(edit(S)) }; return Promise.resolve(paintAll()); }
       S.listingNotes[id] = { text: 'Working…' }; paintAll();
       return dispatch(kind === 'publish' ? 'rentalProductPublish' : 'rentalProductPause', { rentalProductId: id, shopId: shopId() }).then(function () {
         S.listingNotes[id] = { text: kind === 'publish' ? 'Available to renters.' : 'Paused. Renters cannot book it.' };
@@ -654,19 +734,19 @@
 
     /* ── RENTALS ── */
     function rentalCard (S, b) {
-      var acts = rentalActions(b), n = S.rentalNotes[b.id], pay = paymentText(b);
+      var acts = rentalActions(b), n = S.rentalNotes[b.id], pay = paymentText(b), D = dis(S);
       var btns = acts.map(function (a) {
         if (a === 'cancel') {
-          return ui.cancelAsk === b.id
+          return ui.cancelAsk === b.id && !D
             ? '<button type="button" class="cw-btn dan" data-act="rental-cancel" data-id="' + esc(b.id) + '">Confirm cancel</button><button type="button" class="cw-btn" data-act="rental-ask-no">Keep</button>'
-            : '<button type="button" class="cw-btn dan" data-act="rental-cancel-ask" data-id="' + esc(b.id) + '">Cancel</button>';
+            : '<button type="button" class="cw-btn dan" data-act="rental-cancel-ask" data-id="' + esc(b.id) + '"' + D + '>Cancel</button>';
         }
         if (a === 'decline') {
-          return ui.declineAsk === b.id ? '' : '<button type="button" class="cw-btn dan" data-act="rental-decline-ask" data-id="' + esc(b.id) + '">Decline</button>';
+          return ui.declineAsk === b.id && !D ? '' : '<button type="button" class="cw-btn dan" data-act="rental-decline-ask" data-id="' + esc(b.id) + '"' + D + '>Decline</button>';
         }
-        return '<button type="button" class="cw-btn' + (a === 'accept' || a === 'complete' ? ' pri' : '') + '" data-act="rental-' + a + '" data-id="' + esc(b.id) + '">' + esc(RENTAL_BTN[a]) + '</button>';
+        return '<button type="button" class="cw-btn' + (a === 'accept' || a === 'complete' ? ' pri' : '') + '" data-act="rental-' + a + '" data-id="' + esc(b.id) + '"' + D + '>' + esc(RENTAL_BTN[a]) + '</button>';
       }).join('');
-      var decline = ui.declineAsk === b.id
+      var decline = ui.declineAsk === b.id && !D
         ? '<label class="cw-meta" style="display:grid;gap:4px;margin-top:8px">Reason for declining (the renter sees it) *' +
           '<textarea rows="2" maxlength="500" data-decline-reason="' + esc(b.id) + '"></textarea></label>' +
           '<div class="cw-acts"><button type="button" class="cw-btn dan" data-act="rental-decline" data-id="' + esc(b.id) + '">Confirm decline</button>' +
@@ -692,12 +772,13 @@
         return h + '<div class="cw-card">' + body + '<div class="cw-acts"><button type="button" class="cw-btn" data-act="reload">Try again</button></div></div>';
       }
       if (!R.rows.length) return h + '<div class="cw-card"><b>No rental requests yet</b></div>';
-      return h + (R.capped ? note({ kind: 'warn', text: 'Showing ' + R.rows.length + ' requests — more may exist.' }) : '') +
+      return h + roBanner(S) + (R.capped ? note({ kind: 'warn', text: 'Showing ' + R.rows.length + ' requests — more may exist.' }) : '') +
         R.rows.map(function (b) { return rentalCard(S, b); }).join('');
     }
     function rentalOp (S, kind, id) {
       var b = (S.rentals && S.rentals.rows || []).filter(function (x) { return x.id === id; })[0];
       if (!b || rentalActions(b).indexOf(kind) < 0) return Promise.resolve();
+      if (!canEdit(S)) { ui.cancelAsk = null; ui.declineAsk = null; S.rentalNotes[id] = { kind: 'err', text: editMessage(edit(S)) }; return Promise.resolve(paintAll()); }
       var payload = kind === 'cancel' ? { bookingId: id } : { bookingId: id, shopId: shopId() };
       if (kind === 'decline') {
         var el = host.querySelector ? host.querySelector('[data-decline-reason="' + id + '"]') : null;
@@ -717,20 +798,33 @@
     }
 
     /* ── VERIFICATION ── */
+    /* The ONE approval answer. "Approved" only for VALID_APPROVAL + the services module AVAILABLE. */
+    function approvalCard (S) {
+      var A = approvalOf(S.ws), chip, body, retry = '';
+      if (A.kind === 'checking') { chip = 'Checking…'; body = 'SOKONI is checking your approval.'; }
+      else if (A.kind === 'unreadable') {
+        chip = '—'; body = 'Your approval could not be checked just now (' + A.code + '). Nothing is assumed.';
+        retry = '<div class="cw-acts"><button type="button" class="cw-btn" data-act="reload">Try again</button></div>';
+      }
+      else if (A.kind === 'approved') { chip = 'Approved'; body = 'SOKONI’s approval authority confirms this business may offer construction services.'; }
+      else { chip = 'Not approved yet'; body = A.why; }
+      return '<div class="cw-card" data-approval="' + esc(A.kind) + '"><div class="cw-row"><b>SOKONI approval</b><span class="cw-badge">' + esc(chip) + '</span></div>' +
+        '<div class="cw-meta">' + esc(body) + '</div>' + retry + '</div>';
+    }
     function vVerification (S) {
-      var h = head('Verification', 'Your Construction application, as SOKONI recorded it.');
+      var h = head('Verification', 'SOKONI’s approval for this business, and where your Construction application is in review.');
       if (!S.uid) return h + signedOut();
       if (isStaff()) return h + '<div class="cw-card"><b>Applications belong to the owner’s account</b><div class="cw-meta">Not shown to staff. This is not an empty list.</div></div>';
+      h += approvalCard(S) + '<h3>Application progress</h3>';
       var A = S.apps;
       if (!A) return h + loadingCard();
       if (A.err) return h + '<div class="cw-card"><b>Your application could not be loaded</b><div class="cw-meta">The request failed (' + esc(A.err) + '). Nothing is guessed here.</div><div class="cw-acts"><button type="button" class="cw-btn" data-act="reload">Try again</button></div></div>';
       if (!A.rows.length) return h + '<div class="cw-card"><b>No Construction application on this account</b><div class="cw-meta">Apply through SOKONI registration (Construction). SOKONI reviews each trade separately.</div></div>';
       return h + A.rows.map(function (a) {
-        return '<div class="cw-card"><div class="cw-row"><b>' + esc(a.categoryLabel || a.category || 'Construction') + '</b><span class="cw-chip">' + esc(appLabel(a)) + '</span>' +
-          (isVerified(a) ? '<span class="cw-badge">✓ Verified</span>' : '') + '</div>' +
+        return '<div class="cw-card"><div class="cw-row"><b>' + esc(a.categoryLabel || a.category || 'Construction') + '</b><span class="cw-chip">Application progress: ' + esc(appLabel(a)) + '</span></div>' +
           '<div class="cw-meta">Submitted ' + esc(fmtDate(a.createdAt || a.submittedAt)) + '</div>' +
           (a.reviewReason ? '<div class="cw-msg">' + esc(a.reviewReason) + '</div>' : '') + '</div>';
-      }).join('') + '<div class="cw-meta">The decision is SOKONI’s; this page only shows it. Registration numbers (NCA / EBK / BORAQS) are checked by SOKONI, not by this page.</div>' +
+      }).join('') + '<div class="cw-meta">Application progress is the review workflow only — it never means approved. Approval is shown above, from SOKONI’s approval authority. Registration numbers (NCA / EBK / BORAQS) are checked by SOKONI, not by this page.</div>' +
         '<div class="cw-acts">' + goBtn('verification', 'Identity checks') + '</div>';
     }
 
@@ -766,7 +860,7 @@
         case 'lead-chat':
           if (chatAvailable(c.window) && isId(id)) (c.window || global).SokoniInbox.openForTransaction(LEAD_TX, id);
           return;
-        case 'equip-new': ui.form = {}; ui.formNote = null; return render();
+        case 'equip-new': if (!canEdit(S)) return render(); ui.form = {}; ui.formNote = null; return render();
         case 'equip-cancel': ui.form = null; ui.formNote = null; return render();
         case 'equip-create': return createEquip(S);
         case 'rental-accept': return rentalOp(S, 'accept', id);
@@ -816,7 +910,7 @@
     _pure: { leadActions: leadActions, leadLabel: leadLabel, leadMovePayload: leadMovePayload, leadNotePayload: leadNotePayload,
              chatAvailable: chatAvailable, rentalActions: rentalActions, leadCounts: leadCounts, rentalCounts: rentalCounts,
              equipmentCount: equipmentCount, constructionPlans: constructionPlans, fmtCount: fmtCount, appLabel: appLabel,
-             isVerified: isVerified, esc: esc, LEAD_NEXT: LEAD_NEXT, LEAD_TERMINAL: LEAD_TERMINAL, routeFor: routeFor,
+             approvalOf: approvalOf, editOf: editOf, editMessage: editMessage, APPROVAL_MODULE: APPROVAL_MODULE, VALID_APPROVAL: VALID_APPROVAL, esc: esc, LEAD_NEXT: LEAD_NEXT, LEAD_TERMINAL: LEAD_TERMINAL, routeFor: routeFor,
              RULES_COPY: RULES_COPY, RENTAL_FLOW_COPY: RENTAL_FLOW_COPY, isUnknownOp: isUnknownOp, paymentText: paymentText,
              paymentMethodText: paymentMethodText, rentalStatus: rentalStatus, rentalLabel: rentalLabel, listingActions: listingActions,
              errMsg: errMsg, RENTAL_NEXT: RENTAL_NEXT, RENTAL_OP: RENTAL_OP }

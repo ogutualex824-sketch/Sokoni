@@ -756,6 +756,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-merchant-offers.js"></script>
 <script src="sokoni-merchant-supply.js"></script>
 <!-- Construction workspace: ten Construction-group routes, one module; reused sections link to existing routes. -->
+<!-- P0-F edit authority: the ONE read-only decision (answer.editable === true, else read-only). -->
+<script src="sokoni-edit-authority.js"></script>
 <script src="sokoni-merchant-construction.js"></script>
 <!-- MV2-2a: Chat with a supplier enters the existing in-app inbox, never a second chat system -->
 <script src="sokoni-inbox.js"></script>
@@ -2479,6 +2481,29 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       return m.fs.updateDoc(m.fs.doc(window.firebaseDB, 'contactRequests', id), d);
     });
   }
+  /* THE approval + edit answer for Construction: providerDispatch {op:'businessWorkspace'} through the shell's one
+     callable path (App Check). ONE call per page load per signed-in uid, shared by all ten con-* views; a failed call
+     is forgotten so "Try again" can ask once more. The module reads approval.state / modules / ownerState / editable
+     from it — never an application field. */
+  var _conWs = { uid: null, p: null };
+  function _conWorkspace (force) {
+    if (!S.uid) return Promise.reject({ code: 'unauthenticated' });
+    if (force || _conWs.uid !== S.uid || !_conWs.p) {
+      var u = S.uid;
+      _conWs.uid = u;
+      _conWs.p = _callable('providerDispatch')({ op: 'businessWorkspace' }).then(function (r) { return (r && r.data) || null; });
+      _conWs.p.catch(function () { if (_conWs.uid === u) _conWs.p = null; });
+    }
+    return _conWs.p;
+  }
+  /* Signed ID-token claims (interim read-only signal: deactivated === true). Unreadable → null, never {}. */
+  function _conClaims () {
+    return sdk().then(function (m) {
+      var cu = m.authI && m.authI.currentUser;
+      if (!cu || typeof cu.getIdTokenResult !== 'function') return null;
+      return cu.getIdTokenResult().then(function (r) { return (r && r.claims) || null; });
+    }).catch(function () { return null; });
+  }
   function _conCtx (view) {
     return {
       view: view,
@@ -2503,6 +2528,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       dispatch: function (payload) {
         return _callable('commerceDispatch')(payload).then(function (r) { return (r && r.data) || r; });
       },
+      readWorkspace: _conWorkspace,
+      readClaims: _conClaims,
       callPlans: function (payload) {
         return _callable('subGetPlans')(payload).then(function (r) { return (r && r.data) || r; });
       },
