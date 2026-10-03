@@ -2838,6 +2838,16 @@ html.sk-wallet-open,html.sk-wallet-open body{overflow:hidden}
         <div><div class="up-settings-row-label">Booking Reminders</div></div>
         <input type="checkbox" class="up-checkbox" id="notifBookings" checked>
       </div>
+      <!-- WhatsApp consent (2026-10-03): the ONE place a person agrees to SOKONI WhatsApp messages. Saved on the server
+           (whatsappConsent callable) for the number on this account; reply STOP on WhatsApp to opt out at any time. -->
+      <div class="up-settings-row" id="waConsentRow">
+        <div style="min-width:0">
+          <div class="up-settings-row-label">WhatsApp updates</div>
+          <div id="waConsentNote" style="font-size:11px;color:var(--text-muted,#9a9a9a);line-height:1.4;margin-top:2px">Order, payment, delivery and booking updates and one-time codes from SOKONI's official WhatsApp number. Reply STOP to opt out.</div>
+          <div id="waConsentState" aria-live="polite" style="font-size:11px;color:var(--text-muted,#9a9a9a);margin-top:2px">—</div>
+        </div>
+        <input type="checkbox" class="up-checkbox" id="waConsent" disabled aria-describedby="waConsentNote waConsentState" onchange="skWaConsentSet(this)">
+      </div>
     </div>
 
     <!-- Privacy -->
@@ -4431,6 +4441,7 @@ function loadWallet(){
 ══════════════════════════════════════════════════════════════ */
 function openSettings(){
   document.getElementById('settingsOverlay').classList.add('open');
+  try{ skWaConsentLoad(); }catch(_){}
   document.body.style.overflow = 'hidden';
 }
 
@@ -8180,6 +8191,47 @@ window.logoutUser = logoutUser;
   var idle = window.requestIdleCallback || function (f) { return setTimeout(f, 1200); };
   window.addEventListener('load', function () { idle(warm); });
   if (location.hash === '#wallet-open') { try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {} setTimeout(function () { show(true); }, 0); }
+})();
+</script>
+<script>
+/* WhatsApp consent (2026-10-03). The switch shows ONLY the server's answer: until it arrives it is disabled and
+   reads "—" (never a guessed on/off). Saving reverts the switch and says so if the server did not confirm. */
+(function(){
+  var busy = false;
+  async function call(data){
+    var mod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+    var r = await mod.httpsCallable(mod.getFunctions(undefined, 'us-central1'), 'whatsappConsent')(data);
+    return r.data;
+  }
+  function paint(st){
+    var cb = document.getElementById('waConsent'), el = document.getElementById('waConsentState');
+    if (!cb || !el) return;
+    if (!st) { cb.disabled = true; el.textContent = '—'; return; }
+    cb.checked = st.optIn === true;
+    cb.disabled = !st.hasPhone && !st.optIn;
+    el.textContent = !st.hasPhone ? 'Add your phone number to your profile to turn this on.'
+      : st.phoneChanged ? 'Your number changed — turn this on again to receive WhatsApp updates on ' + st.phoneMasked + '.'
+      : st.optIn ? 'On for ' + st.phoneMasked + '.' : 'Off.';
+  }
+  window.skWaConsentLoad = async function(){
+    if (busy) return;
+    try { var d = await call({ op: 'get' }); paint(d && d.state); }
+    catch (e) { paint(null); var el = document.getElementById('waConsentState'); if (el) el.textContent = 'Not available right now.'; }
+  };
+  window.skWaConsentSet = async function(cb){
+    if (busy) return;
+    var want = !!cb.checked; busy = true; cb.disabled = true;
+    var el = document.getElementById('waConsentState'); if (el) el.textContent = 'Saving…';
+    try {
+      var d = await call({ op: 'set', optIn: want });
+      paint(d && d.state);
+      (window._skToast || function(){})(want ? 'WhatsApp updates turned on.' : 'WhatsApp updates turned off.', 'success');
+    } catch (e) {
+      cb.checked = !want;
+      cb.disabled = false;
+      if (el) el.textContent = (e && e.code === 'functions/failed-precondition') ? 'Add your phone number to your profile first.' : 'Not saved — please try again.';
+    } finally { busy = false; }   /* paint() decides enabled/disabled on success */
+  };
 })();
 </script>
 </body>

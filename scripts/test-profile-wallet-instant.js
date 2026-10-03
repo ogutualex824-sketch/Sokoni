@@ -23,8 +23,13 @@ const swBlock = (s) => { s = s.replace(/\r/g, ''); const a = s.indexOf('<div cla
 ck('O3', 'the role switcher markup is byte-for-byte as in production', swBlock(P) === swBlock(live('profile.html')));
 /* everything else unchanged: removing the moved block + the added host must give back production */
 const strip = (s) => s.replace(/\r/g, '').replace(/<style id="skProfileWalletCss">[\s\S]*?<\/style>\n/, '').replace(/<script>\n\/\* In-profile wallet host[\s\S]*?<\/script>\n/, '')
-  .replace(/\n?\s*<!-- YOUR IDENTITIES[\s\S]*?<a href="super-admin\.html" id="superAdminLink"[\s\S]*?<\/a>\n\s*<\/div>\n\s*<\/div>\n/, '\n').replace(/\s+/g, ' ');
-ck('O4', 'apart from the moved card and the wallet host, profile.html is identical to production', strip(P) === strip(live('profile.html')));
+  .replace(/\n?\s*<!-- YOUR IDENTITIES[\s\S]*?<a href="super-admin\.html" id="superAdminLink"[\s\S]*?<\/a>\n\s*<\/div>\n\s*<\/div>\n/, '\n')
+  /* the WhatsApp consent switch (2026-10-03, scripts/test-profile-whatsapp-consent.js): its row, loader line, script */
+  .replace(/\n\s*<!-- WhatsApp consent \(2026-10-03\)[\s\S]*?onchange="skWaConsentSet\(this\)">\n\s*<\/div>/, '')
+  .replace(/\n  try\{ skWaConsentLoad\(\); \}catch\(_\)\{\}/, '')
+  .replace(/<script>\n\/\* WhatsApp consent \(2026-10-03\)[\s\S]*?<\/script>\n/, '')
+  .replace(/\s+/g, ' ');
+ck('O4', 'apart from the moved card, the wallet host and the WhatsApp consent switch, profile.html is identical to production', strip(P) === strip(live('profile.html')));
 
 /* in-profile wallet */
 ck('W1', 'every same-origin wallet link on the profile opens the in-profile wallet (one delegated handler; no navigation)',
