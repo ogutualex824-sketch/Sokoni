@@ -11,6 +11,14 @@
      NC-b  refundEligible set only on the 2nd scan → A9 first scan sets all three
      NC-c  client refundEligible accepted          → A16 client-supplied fields ignored
      NC-d  state decided on the pre-txn read       → A21 check-in vs refund-request race
+   FINAL RELEASE (staff, gym reads, notifications):
+     NC-e  staff business-match skipped (any business the caller works at) → S3 staff of business B refused for gym A
+     NC-f  workforce permission check skipped                               → S2 staff WITHOUT 'attendance' refused
+     NC-g  client providerId accepted by fitnessGymMemberships              → G1 owner sees own gym only
+     NC-h  duplicate-scan idempotency dropped                               → A10 duplicate scan is idempotent
+
+   workforce-identity.js is the REAL module (its firebase-admin firestore() is bound to the current fake db), so
+   _assertBusinessPermission itself decides every staff row.
 
    Run: NODE_PATH=<functions/node_modules> NODE_OPTIONS=--require <block-admin.js> node scripts/test-fitness-attendance.js
    ============================================================================ */
@@ -23,13 +31,17 @@ const FN = path.join(ROOT, 'functions');
 
 /* ── inert firebase-admin (wins over block-admin for the bare name) ── */
 const _prevLoad = Module._load;
+let CURRENT_DB = null;
+const DELEGATE_DB = { collection: (c) => { if (!CURRENT_DB) throw new Error('[suite] admin.firestore() with no fake db bound'); return CURRENT_DB.collection(c); },
+  runTransaction: (fn) => { if (!CURRENT_DB) throw new Error('[suite] no fake db'); return CURRENT_DB.runTransaction(fn); } };
+const INERT_AUTH = new Proxy({}, { get: (_, p) => (typeof p === 'symbol' || p === 'then' ? undefined : () => { throw new Error('[suite] real admin.auth().' + String(p) + ' called'); }) });
 const INERT_ADMIN = {
   apps: [1], initializeApp () {},
-  firestore: Object.assign(function () { throw new Error('[suite] real admin.firestore() called'); }, {
+  firestore: Object.assign(function () { return DELEGATE_DB; }, {
     FieldValue: { serverTimestamp: () => 'SERVER_TS', increment: (n) => ({ __inc: n }) },
     Timestamp: { now: () => ({ toDate: () => new Date(), toMillis: () => Date.now() }), fromDate: (d) => ({ toDate: () => d, toMillis: () => d.getTime() }) },
   }),
-  auth () { throw new Error('[suite] real admin.auth() called'); },
+  auth () { return INERT_AUTH; },
 };
 Module._load = function (req) { if (req === 'firebase-admin') return INERT_ADMIN; return _prevLoad.apply(this, arguments); };
 if (process.env.K_SERVICE || process.env.FUNCTION_TARGET) { console.error('refusing to run inside a Cloud Functions runtime'); process.exit(2); }
@@ -37,8 +49,20 @@ if (process.env.K_SERVICE || process.env.FUNCTION_TARGET) { console.error('refus
 const MS = require(path.join(FN, 'membership-settlement.js'));
 const FU = require(path.join(FN, 'finos-utils.js'));
 const EO = require(path.join(FN, 'event-ops.js'));
+const WFI = require(path.join(FN, 'workforce-identity.js'));
 const SRC_FILE = path.join(FN, 'fitness-attendance.js');
 const SRC = fs.readFileSync(SRC_FILE, 'utf8');
+const FG_FILE = path.join(FN, 'fitness-gym-memberships.js');
+const FG_SRC = fs.readFileSync(FG_FILE, 'utf8');
+/* the gym read module compiled against the FA instance under test (real or mutant) */
+function loadFG (FA, src, tag) {
+  const filename = path.join(FN, `fitness-gym-memberships.${tag || 'real'}.js`);
+  const m = new Module(filename, module);
+  m.filename = filename; m.paths = Module._nodeModulePaths(FN);
+  global.__FA_UNDER_TEST = FA;
+  m._compile((src || FG_SRC).replace("require('./fitness-attendance')", 'global.__FA_UNDER_TEST'), filename);
+  return m.exports;
+}
 
 function loadModule (src, tag) {
   if (!tag) return require(SRC_FILE);
@@ -65,10 +89,34 @@ function fakeDb (seed) {
   const col = (c) => ({
     doc: (id) => ref(c + '/' + id),
     add: async (v) => { const id = 'auto' + (++autoId); docs.set(c + '/' + id, apply(null, v)); return ref(c + '/' + id); },
-    where: (f, op, v) => ({ limit: () => ({ get: async () => {
-      const hits = [...docs.entries()].filter(([k, d]) => k.startsWith(c + '/') && k.split('/').length === c.split('/').length + 1 && d[f] != null && (op === '<=' ? d[f] <= v : d[f] === v));
+    where: (f, op, v) => query(c, {}).where(f, op, v),
+    orderBy: (f, dir) => query(c, {}).orderBy(f, dir),
+    limit: (n) => query(c, {}).limit(n),
+    get: () => query(c, {}).get(),
+  });
+  /* a small Firestore query: equality / in / <= filters, ONE orderBy (+ implicit doc-id tiebreak in the same direction),
+     startAfter(snapshot), limit. A missing orderBy field excludes the doc (Firestore semantics). */
+  const query = (c, q) => ({
+    where: (f, op, v) => query(c, Object.assign({}, q, { filters: (q.filters || []).concat([[f, op, v]]) })),
+    orderBy: (f, dir) => query(c, Object.assign({}, q, { order: [f, dir === 'desc' ? -1 : 1] })),
+    startAfter: (sn) => query(c, Object.assign({}, q, { after: sn })),
+    limit: (n) => query(c, Object.assign({}, q, { lim: n })),
+    get: async () => {
+      if (db.queries) db.queries.push({ c, q });
+      let hits = [...docs.entries()].filter(([k]) => k.startsWith(c + '/') && k.split('/').length === c.split('/').length + 1);
+      for (const [f, op, v] of q.filters || []) {
+        hits = hits.filter(([, d]) => d[f] != null && (op === '<=' ? d[f] <= v : op === 'in' ? v.includes(d[f]) : d[f] === v));
+      }
+      if (q.order) {
+        const [f, dir] = q.order;
+        hits = hits.filter(([, d]) => d[f] != null);
+        const key = ([k, d]) => [d[f], k];
+        hits.sort((a, b) => { const [x1, k1] = key(a); const [x2, k2] = key(b); return (x1 < x2 ? -1 : x1 > x2 ? 1 : k1 < k2 ? -1 : k1 > k2 ? 1 : 0) * dir; });
+        if (q.after) { const i = hits.findIndex(([k]) => k === c + '/' + q.after.id); hits = i >= 0 ? hits.slice(i + 1) : hits; }
+      }
+      if (q.lim != null) hits = hits.slice(0, q.lim);
       return { size: hits.length, empty: !hits.length, docs: hits.map(([k]) => snap(k)) };
-    } }) }),
+    },
   });
   const db = {
     _docs: docs, _inc: (n) => ({ [INC]: n }), collection: col, txAttempts: 0,
@@ -109,11 +157,19 @@ const mem = (over) => Object.assign({ providerId: 'gym_A', buyerUid: 'member_1',
 const seedBase = (over, extra) => Object.assign({
   [`providerMemberships/${MID}`]: mem(over),
   [`providerMemberships/${MID2}`]: mem({ buyerUid: 'member_2' }),
-  'providers/gym_A': { uid: 'gym_A' }, 'providers/gym_B': { uid: 'gym_B' },
-  'businesses/biz_A': { ownerId: 'gym_A' },
-  'workspaceMemberships/wm1': { uid: 'cashier_1', businessId: 'biz_A', status: 'active', role: 'cashier', permissions: ['pos', 'view_products', 'customers', 'refunds'] },
-  'workspaceMemberships/wm2': { uid: 'trainer_1', businessId: 'biz_A', status: 'active', role: 'trainer', permissions: ['bookings', 'customers'] },
+  'providers/gym_A': { uid: 'gym_A', status: 'active' }, 'providers/gym_B': { uid: 'gym_B', status: 'active' },
+  'businesses/biz_gymA': { ownerId: 'gym_A', merchantId: 'biz_gymA', status: 'active' },
+  'businesses/biz_gymB': { ownerId: 'gym_B', merchantId: 'biz_gymB', status: 'active' },
+  'workspaceMemberships/wm1': { uid: 'cashier_1', businessId: 'biz_gymA', status: 'active', role: 'cashier', permissions: ['pos', 'view_products', 'customers', 'refunds'] },
+  'workspaceMemberships/wm2': { uid: 'trainer_1', businessId: 'biz_gymA', status: 'active', role: 'trainer', permissions: ['bookings', 'customers'] },
+  'workspaceMemberships/wm3': { uid: 'desk_1', businessId: 'biz_gymA', status: 'active', role: 'receptionist', permissions: ['bookings', 'customers', 'attendance'] },
+  'workspaceMemberships/wm4': { uid: 'desk_B', businessId: 'biz_gymB', status: 'active', role: 'receptionist', permissions: ['attendance'] },
+  'workspaceMemberships/wm5': { uid: 'former_1', businessId: 'biz_gymA', status: 'revoked', role: 'receptionist', permissions: ['attendance'] },
+  'users/member_1': { displayName: 'Alex <b>M</b>', phone: '+254700000001', email: 'alex@example.com' },
 }, extra || {});
+/* the canonical link (server-written by approval provisioning — the docs' hand-off) */
+const LINKED = { 'providers/gym_A': { uid: 'gym_A', status: 'active', linkedBusinessId: 'biz_gymA' }, 'providers/gym_B': { uid: 'gym_B', status: 'active', linkedBusinessId: 'biz_gymB' } };
+const seedLinked = (over, extra) => seedBase(over, Object.assign({}, LINKED, extra || {}));
 const AUTH = (uid, token) => ({ uid, token: Object.assign({ uid }, token || {}) });
 const req = (uid, data, token) => ({ auth: uid ? AUTH(uid, token) : null, data });
 
@@ -122,11 +178,14 @@ function harness (FA, seed, opts) {
   const db = fakeDb(seed);
   let tsN = 0; let now = o.now || NOW;
   const releases = [];
+  const notices = [];
+  CURRENT_DB = db;
   FA._test.use({
     db, ts: () => 'TS#' + (++tsN), now: () => now, correlationId: () => 'cid-' + (tsN + 1),
     release: o.release || (async (id) => { releases.push(id); }), staffAuthority: o.staffAuthority || null,
+    wfi: null, moduleGate: o.moduleGate || null, notify: o.notify || (async (a) => { notices.push(a); }),
   });
-  return { db, releases, setNow: (d) => { now = d; }, get: (p) => db._docs.get(p) };
+  return { db, releases, notices, setNow: (d) => { now = d; }, get: (p) => db._docs.get(p) };
 }
 async function attempt (fn) { try { return { ok: true, r: await fn() }; } catch (e) { return { ok: false, e, reason: e && e.details && e.details.reason, code: e && e.code, msg: e && e.message }; } }
 const H = (FA) => FA._h;
@@ -199,12 +258,17 @@ async function matrix (FA) {
     const tok = await qr(FA, 'member_1');
     const c = await scan(FA, 'cashier_1', tok);
     const t = await scan(FA, 'trainer_1', tok);
-    ck('A7 unpermitted staff: cashier and trainer (active workspace members, no attendance permission) refused no_permission',
-      c.reason === 'no_permission' && t.reason === 'no_permission' && h.get(P).attendedSessions === 0, [c.reason, t.reason]); }
+    const hl = harness(FA, seedLinked());
+    const tok2 = await qr(FA, 'member_1');
+    const c2 = await scan(FA, 'cashier_1', tok2);
+    const t2 = await scan(FA, 'trainer_1', tok2);
+    ck('A7 unpermitted staff: cashier and trainer (active members, no attendance permission) refused no_permission — with or without a business link (link state is never told to them)',
+      c.reason === 'no_permission' && t.reason === 'no_permission' && c2.reason === 'no_permission' && t2.reason === 'no_permission'
+      && h.get(P).attendedSessions === 0 && hl.get(P).attendedSessions === 0, [c.reason, t.reason, c2.reason, t2.reason]); }
   { const h = harness(FA, seedBase(), { staffAuthority: async () => ({ allowed: false }) });
     const tok = await qr(FA, 'member_1');
     const c = await scan(FA, 'cashier_1', tok);
-    ck('A7b the staff seam is consulted and its denial holds (default: BLOCKED until a provider business identity exists)', c.reason === 'no_permission' && h.get(P).attendedSessions === 0, c.reason); }
+    ck('A7b the staff seam is consulted and its denial holds', c.reason === 'no_permission' && h.get(P).attendedSessions === 0, c.reason); }
 
   /* A8 self-scan */
   { const h = harness(FA, seedBase({}, { [`providerMemberships/${MID2}`]: mem({ buyerUid: 'gym_A' }) }));
@@ -383,10 +447,180 @@ async function matrix (FA) {
     ck("A21 check-in vs refund request interleaved inside the other's transaction: exactly one wins in both orders (never attended AND refunded)",
       i && ii, { i: { ci: ci.reason, rf, m1 }, ii: { ci2: ci2 && (ci2.r || ci2.reason), rf2, m2 } }); }
 
+  /* ── FINAL RELEASE: staff authorization matrix ── */
+  { const h = harness(FA, seedLinked());
+    const r = await scan(FA, 'desk_1', await qr(FA, 'member_1'));
+    const row = h.get(P + '/attendance/d_2026-03-20');
+    ck('S1 staff of the SAME business with explicit attendance permission (via workforce-identity) records attendance; ledger actor = staff',
+      r.ok && r.r.firstCheckIn === true && row && row.actorUid === 'desk_1' && row.actorRole === 'staff' && h.get(P).attendedSessions === 1, r.r || r.reason); }
+  { const h = harness(FA, seedLinked());
+    const r = await scan(FA, 'cashier_1', await qr(FA, 'member_1'));
+    const noMember = await scan(FA, 'stranger_1', await qr(FA, 'member_1'));
+    ck('S2 staff WITHOUT the attendance permission refused (cashier role defaults never include it); a non-member refused; nothing written',
+      r.reason === 'no_permission' && noMember.reason === 'no_permission' && h.get(P).attendedSessions === 0, [r.reason, noMember.reason]); }
+  { const h = harness(FA, seedLinked());
+    const r = await scan(FA, 'desk_B', await qr(FA, 'member_1'));
+    ck('S3 staff of business B (attendance at gym B) scanning a gym A member → refused; nothing written',
+      !r.ok && r.reason === 'no_permission' && h.get(P).attendedSessions === 0 && !h.db._docs.has(P + '/attendance/d_2026-03-20'), r.reason || r.r); }
+  { const cases = {
+      no_link: seedBase(),
+      mislinked_other_owner: seedBase({}, { 'providers/gym_A': { uid: 'gym_A', status: 'active', linkedBusinessId: 'biz_gymB' } }),
+      link_to_missing: seedBase({}, { 'providers/gym_A': { uid: 'gym_A', status: 'active', linkedBusinessId: 'biz_nowhere' } }),
+      business_inactive: seedLinked({}, { 'businesses/biz_gymA': { ownerId: 'gym_A', merchantId: 'biz_gymA', status: 'suspended' } }),
+      malformed: seedLinked({}, { 'businesses/biz_gymA': { ownerId: 'gym_A', merchantId: 'SOK-OTHER1' } }),
+    };
+    const got = {};
+    for (const [k, seed] of Object.entries(cases)) {
+      const h = harness(FA, seed);
+      const r = await scan(FA, 'desk_1', await qr(FA, 'member_1'));
+      got[k] = r.reason === 'business_link_missing' && h.get(P).attendedSessions === 0 ? 'ok' : (r.reason || 'ALLOWED');
+    }
+    const h = harness(FA, seedBase({}, { 'businesses/biz_gymA0': { ownerId: 'gym_A' } }));   /* an owned business exists, but NO link */
+    const inferred = await scan(FA, 'desk_1', await qr(FA, 'member_1'));
+    const res = await FA.resolveGymBusiness('gym_A');
+    ck('S4 no canonical link → BUSINESS_LINK_MISSING (never inferred from businesses.where(ownerId)); mislinked / missing / inactive / malformed business refused the same way',
+      Object.values(got).every((x) => x === 'ok') && inferred.reason === 'business_link_missing' && res.ok === false && res.reason === 'BUSINESS_LINK_MISSING' && h.get(P).attendedSessions === 0,
+      { got, inferred: inferred.reason, res }); }
+  { const h = harness(FA, seedLinked());
+    const r = await scan(FA, 'former_1', await qr(FA, 'member_1'));
+    ck('S5 a staff member whose workspace membership is no longer active (revoked) is refused, even with attendance in its permissions',
+      r.reason === 'no_permission' && h.get(P).attendedSessions === 0, r.reason); }
+  { const h = harness(FA, seedLinked({}, { 'providers/gym_A': { uid: 'gym_A', status: 'suspended', linkedBusinessId: 'biz_gymA' } }));
+    const tok = await qr(FA, 'member_1');
+    const o = await scan(FA, 'gym_A', tok);
+    const st = await scan(FA, 'desk_1', tok);
+    const real = await FA.moduleGate('gym_A');
+    const h2 = harness(FA, seedLinked(), { moduleGate: async () => ({ ok: false, reason: 'MODULE_NOT_AVAILABLE' }) });
+    const g = await scan(FA, 'gym_A', await qr(FA, 'member_1'));
+    ck('S6 gym gate: a suspended gym cannot record attendance (owner or staff → not_approved); a closed memberships module → module_unavailable; on this tree the real module gate is PENDING (no memberships key yet)',
+      o.reason === 'not_approved' && st.reason === 'not_approved' && g.reason === 'module_unavailable' && real.ok === true && real.state === 'pending'
+      && h.get(P).attendedSessions === 0 && h2.get(P).attendedSessions === 0, { o: o.reason, st: st.reason, g: g.reason, real }); }
+  { const ATT = WFI._assertBusinessPermission && require(path.join(FN, 'workforce-identity.js'));
+    const src = fs.readFileSync(path.join(FN, 'workforce-identity.js'), 'utf8');
+    const list = /const ALL_PERMISSIONS = \[([\s\S]*?)\];/.exec(src);
+    const roles = /const ROLE_PERMISSIONS = \{([\s\S]*?)\n\};/.exec(src);
+    ck('S7 workforce-identity: attendance is a canonical permission key and in NO role default (owner = ALL by definition)',
+      !!ATT && list && /'attendance'/.test(list[1]) && roles && !/attendance/.test(roles[1]), { inList: !!(list && /'attendance'/.test(list[1])) }); }
+
+  /* ── notifications ── */
+  { const h = harness(FA, seedLinked({ sessionsIncluded: 12 }));
+    const tok = await qr(FA, 'member_1');
+    const r1 = await scan(FA, 'gym_A', tok);
+    const dup = await scan(FA, 'gym_A', tok);
+    const r2 = await scan(FA, 'gym_A', tok, { sessionRef: 'evening' });
+    const n = h.notices;
+    ck('N1 member notified via notify.js on EACH recorded check-in (first one says it is no longer refundable), never on a duplicate scan; one dedupeKey per ledger row; no other recipient',
+      r1.ok && dup.ok && r2.ok && n.length === 2 && n.every((x) => x.uid === 'member_1' && x.type === 'booking_confirmed')
+      && /no longer be refunded/.test(n[0].body) && !/refunded/.test(n[1].body) && /Session 1 of 12/.test(n[0].body) && /Session 2 of 12/.test(n[1].body)
+      && n[0].dedupeKey === 'membership_checkin_mem_000001_d_2026-03-20' && n[1].dedupeKey === 'membership_checkin_mem_000001_s_evening', n); }
+  { const h = harness(FA, seedLinked(), { notify: async () => { throw new Error('notify down'); } });
+    const r = await scan(FA, 'gym_A', await qr(FA, 'member_1'));
+    ck('N2 a notification failure never fails the check-in (attendance already committed)', r.ok && h.get(P).attendedSessions === 1 && h.get(P).refundEligible === false, r.r || r.reason); }
+  { const h = harness(FA, seedLinked());
+    const r = await scan(FA, 'gym_A', await qr(FA, 'member_1'));
+    ck('N3 check-in response carries the server facts for the result card: member displayName (sanitised), title, checkedInAt, Unlimited (sessionsIncluded null) — no member uid/phone/email',
+      r.ok && r.r.member && r.r.member.displayName === 'Alex bM/b' && r.r.title === 'Gold 3-month' && r.r.checkedInAt === NOW.toISOString() && r.r.sessionsIncluded === null
+      && !/member_1|254700|example\.com/.test(JSON.stringify(r.r)), r.r || r.reason); }
+
+  /* ── gym reads (fitnessGymMemberships / fitnessGymMembership / fitnessScannerStatus) ── */
+  const FG = loadFG(FA, FG_SRC_UNDER_TEST, FA.__tag);
+  const L = (uid, data) => attempt(() => FG._h.gymMembershipsHandler(req(uid, data || {})));
+  const D = (uid, data) => attempt(() => FG._h.gymMembershipHandler(req(uid, data || {})));
+  const SS = (uid) => attempt(() => FG._h.scannerStatusHandler(req(uid, {})));
+  const gymSeed = (extra) => seedLinked({ createdAt: 'C002' }, Object.assign({
+    [`providerMemberships/${MID2}`]: mem({ buyerUid: 'member_2', createdAt: 'C001' }),
+    'providerMemberships/mem_B00001': mem({ providerId: 'gym_B', buyerUid: 'member_3', createdAt: 'C003' }),
+  }, extra || {}));
+  { const h = harness(FA, gymSeed());
+    const own = await L('gym_A');
+    const spoof = await L('gym_A', { providerId: 'gym_B', businessId: 'biz_gymB' });
+    const b = await L('gym_B');
+    ck('G1 owner sees ONLY its own gym (newest first); a client-supplied providerId / businessId is ignored; the other gym sees only its own',
+      own.ok && own.r.rows.map((x) => x.membershipId).join() === 'mem_000001,mem_000002' && spoof.ok && spoof.r.rows.map((x) => x.membershipId).join() === 'mem_000001,mem_000002'
+      && b.ok && b.r.rows.map((x) => x.membershipId).join() === 'mem_B00001' && own.r.nextCursor === null,
+      { own: own.r || own.reason, spoof: spoof.r ? spoof.r.rows.map((x) => x.membershipId) : spoof.msg, b: b.r ? b.r.rows.map((x) => x.membershipId) : b.msg }); }
+  { const h = harness(FA, gymSeed());
+    const other = await D('gym_B', { membershipId: MID });
+    const missing = await D('gym_A', { membershipId: 'mem_nothere' });
+    const stranger = await L('stranger_1');
+    const anon = await L(null);
+    ck('G2 another gym reading gym A\'s membership → not_found (indistinguishable from missing); a non-gym caller → permission-denied; anonymous → unauthenticated',
+      other.code === 'not-found' && missing.code === 'not-found' && stranger.code === 'permission-denied' && anon.code === 'unauthenticated', [other.code, missing.code, stranger.code, anon.code]); }
+  { const extra = {};
+    for (let i = 0; i < 60; i++) extra['providerMemberships/mem_p' + String(i).padStart(4, '0')] = mem({ buyerUid: 'member_x', createdAt: 'D' + String(i).padStart(3, '0') });
+    const h = harness(FA, gymSeed(extra));
+    h.db.queries = [];
+    const big = await L('gym_A', { limit: 500 });
+    const p1 = await L('gym_A', { limit: 2 });
+    const p2 = await L('gym_A', { limit: 2, cursor: p1.r && p1.r.nextCursor });
+    const badCursor = await L('gym_A', { cursor: 'mem_B00001' });
+    const zero = await L('gym_A', { limit: 0 });
+    const tab = await L('gym_A', { status: 'nope' });
+    const q = h.db.queries.find((x) => x.c === 'providerMemberships' && x.q.lim != null);
+    ck('G3 pagination bounded: limit capped at 50 (query asks ≤51); limit 2 pages newest-first with a cursor and no overlap; another gym\'s doc as cursor / limit 0 / unknown tab → invalid-argument',
+      big.ok && big.r.rows.length === 50 && !!big.r.nextCursor && q && q.q.lim === 51
+      && p1.ok && p1.r.rows.map((x) => x.membershipId).join() === 'mem_p0059,mem_p0058' && p2.ok && p2.r.rows.map((x) => x.membershipId).join() === 'mem_p0057,mem_p0056'
+      && badCursor.code === 'invalid-argument' && zero.code === 'invalid-argument' && tab.code === 'invalid-argument',
+      { big: big.r && big.r.rows.length, lim: q && q.q.lim, p1: p1.r && p1.r.rows.map((x) => x.membershipId), p2: p2.r && p2.r.rows.map((x) => x.membershipId), badCursor: badCursor.code, zero: zero.code }); }
+  { const h = harness(FA, gymSeed({
+      'providerMemberships/mem_cap001': mem({ buyerUid: 'member_1', sessionsIncluded: 12, attendedSessions: 3, voidedSessions: 1, createdAt: 'C010' }),
+      'providerMemberships/mem_unk001': mem({ buyerUid: 'member_1', attendedSessions: undefined, firstAttendedAt: '2026-02-01T00:00:00.000Z', createdAt: 'C011' }),
+      'providerMemberships/mem_pen001': mem({ buyerUid: 'member_1', status: 'pending_payment', paymentStatus: 'pending', attendedSessions: undefined, createdAt: 'C012' }),
+    }));
+    const r = await L('gym_A', { limit: 50 });
+    const by = Object.fromEntries((r.r ? r.r.rows : []).map((x) => [x.membershipId, x]));
+    const cap = by.mem_cap001 || {}; const unl = by[MID] || {}; const unk = by.mem_unk001 || {}; const pen = by.mem_pen001 || {};
+    ck('G4 remaining = sessionsIncluded − (attended − voided) when capped (12−(3−1)=10); uncapped → null ("Unlimited"); unknown attendance → null, never 0; pending → no start/end, refund not decided',
+      r.ok && cap.remaining === 10 && cap.sessionsIncluded === 12 && cap.attendedSessions === 3 && unl.remaining === null && unl.sessionsIncluded === null && unl.attendedSessions === 0
+      && unk.attendedSessions === null && unk.remaining === null && unk.refundEligible === null && pen.startAt === null && pen.endsAt === null && pen.attendedSessions === 0
+      && typeof unl.endsAt === 'string' && unl.startAt === START, { cap, unl, unk, pen }); }
+  { const h = harness(FA, gymSeed());
+    const r = await L('gym_A');
+    const j = JSON.stringify(r.r || {});
+    const row = r.r && r.r.rows[0];
+    ck('G5 member data minimised: displayName only (sanitised) — no member uid, phone or email anywhere in the response',
+      r.ok && row.member.displayName === 'Alex bM/b' && Object.keys(row.member).join() === 'displayName' && !/member_1|member_2|254700|example\.com|buyerUid/.test(j), row); }
+  { const hs = harness(FA, gymSeed());
+    const desk = await L('desk_1');
+    const cashier = await L('cashier_1');
+    const hu = harness(FA, seedBase());
+    const unlinked = await L('desk_1');
+    const hm = harness(FA, gymSeed({ 'workspaceMemberships/wm6': { uid: 'desk_1', businessId: 'biz_gymB', status: 'active', permissions: ['attendance'] } }));
+    const multi = await L('desk_1');
+    ck('G6 staff reads: attendance staff sees ITS gym; cashier → NO_PERMISSION; unlinked gym → BUSINESS_LINK_MISSING; staff at two gyms → MULTIPLE_GYMS (no client selector)',
+      desk.ok && desk.r.rows.map((x) => x.membershipId).join() === 'mem_000001,mem_000002' && cashier.reason === 'NO_PERMISSION' && unlinked.reason === 'BUSINESS_LINK_MISSING' && multi.reason === 'MULTIPLE_GYMS',
+      { desk: desk.r ? desk.r.rows.length : desk.reason, cashier: cashier.reason, unlinked: unlinked.reason, multi: multi.reason }); }
+  { const extra = {};
+    for (let i = 0; i < 105; i++) extra[`providerMemberships/${MID}/attendance/s_x${String(i).padStart(3, '0')}`] = { status: 'checked_in', checkedInAt: '2026-03-' + String(1 + (i % 19)).padStart(2, '0') + 'T0' + (i % 10) + ':00:00.000Z', method: 'qr', actorRole: 'owner', actorUid: 'gym_A', memberUid: 'member_1' };
+    extra['providerPayouts/mem_000001_m1'] = { providerId: 'gym_A', membershipId: MID, sourceType: 'membership', periodIndex: 1, gross: 200000, commission: 10000, net: 190000, status: 'settled', settledAt: '2026-03-20T07:30:00.000Z' };
+    extra['providerPayouts/mem_000001_m2'] = { providerId: 'gym_A', membershipId: MID, sourceType: 'membership', periodIndex: 2, gross: 200000, commission: 10000, net: 190000, status: 'settled', settledAt: '2026-03-20T07:30:00.000Z' };
+    extra['providerPayouts/forged_other'] = { providerId: 'gym_B', membershipId: MID, sourceType: 'membership', periodIndex: 3, gross: 1, commission: 0, net: 1, status: 'settled' };
+    extra['providerPayouts/booking_x'] = { providerId: 'gym_A', membershipId: MID, sourceType: 'booking', net: 5 };
+    const h = harness(FA, gymSeed(extra));
+    const d = await D('gym_A', { membershipId: MID });
+    const att = d.r ? d.r.attendance : [];
+    const sorted = att.every((a, i) => i === 0 || att[i - 1].checkedInAt >= a.checkedInAt);
+    ck('G7 detail: attendance ledger ≤100 newest-first (no actor/member uids), settlement = providerPayouts sourceType membership for THIS membership AND this gym only',
+      d.ok && att.length === 100 && sorted && d.r.attendanceTruncated === true && !/actorUid|memberUid|gym_A|member_1/.test(JSON.stringify(att))
+      && d.r.settlement.releases.map((x) => x.periodIndex).join() === '1,2' && d.r.settlement.netSettledCents === 380000 && d.r.membership.membershipId === MID,
+      { n: att.length, sorted, settlement: d.r && d.r.settlement }); }
+  { const results = {};
+    harness(FA, seedLinked()); results.owner = await SS('gym_A'); results.staff = await SS('desk_1'); results.cashier = await SS('cashier_1'); results.nobody = await SS('stranger_1'); results.anon = await SS(null);
+    harness(FA, seedBase()); results.unlinked = await SS('desk_1');
+    harness(FA, seedLinked({}, { 'providers/gym_A': { uid: 'gym_A', status: 'pending', linkedBusinessId: 'biz_gymA' } })); results.pending = await SS('gym_A');
+    harness(FA, seedLinked(), { moduleGate: async () => ({ ok: false, reason: 'MODULE_NOT_AVAILABLE' }) }); results.module = await SS('gym_A');
+    const v = (k) => (results[k].ok ? results[k].r : { code: results[k].code });
+    ck('SS1 scanner status from server facts: owner → canScan owner; attendance staff → canScan staff; NOT_APPROVED / BUSINESS_LINK_MISSING / NO_PERMISSION / MODULE_NOT_AVAILABLE with the real reason; anonymous refused',
+      v('owner').canScan === true && v('owner').role === 'owner' && v('staff').canScan === true && v('staff').role === 'staff'
+      && v('cashier').canScan === false && v('cashier').reason === 'NO_PERMISSION' && v('nobody').reason === 'NO_PERMISSION' && v('nobody').role === null
+      && v('unlinked').reason === 'BUSINESS_LINK_MISSING' && v('pending').reason === 'NOT_APPROVED' && v('pending').role === 'owner' && v('module').reason === 'MODULE_NOT_AVAILABLE'
+      && v('anon').code === 'unauthenticated', Object.fromEntries(Object.keys(results).map((k) => [k, v(k)]))); }
+
   return rows;
 }
 
 /* ── mutants (negative controls) ── */
+let FG_SRC_UNDER_TEST = null;
 const MUTANTS = [
   { tag: 'a', row: "A5 other gym's scanner refused other_gym — no membership data in the error, nothing written", what: 'gym-ownership check skipped',
     from: 'if (uid === m.providerId) {', to: 'if (true) {' },
@@ -397,18 +631,30 @@ const MUTANTS = [
     from: 'const patch = { attendedSessions: prior + 1,', to: "const patch = { ...(d.refundEligible !== undefined ? { refundEligible: d.refundEligible } : {}), attendedSessions: prior + 1," },
   { tag: 'd', row: "A21 check-in vs refund request interleaved inside the other's transaction: exactly one wins in both orders (never attended AND refunded)", what: 'state decided on the pre-transaction read (TOCTOU)',
     from: 'const refusal = checkInRefusal(m, now);\n      if (refusal) _refuse(refusal);\n      const prior', to: 'const refusal = checkInRefusal(m0, now);\n      if (refusal) _refuse(refusal);\n      const prior' },
+  { tag: 'e', row: 'S3 staff of business B (attendance at gym B) scanning a gym A member → refused; nothing written', what: 'staff business-match skipped',
+    from: 'const businessId = link.businessId;', to: 'const businessId = ((await _staffGyms(uid)).gyms[0] || {}).businessId || link.businessId;' },
+  { tag: 'f', row: 'S2 staff WITHOUT the attendance permission refused (cashier role defaults never include it); a non-member refused; nothing written', what: 'workforce permission check skipped',
+    from: 'await _wfi()._assertBusinessPermission(uid, businessId, ATTENDANCE_PERMISSION);', to: '/* permission check skipped */' },
+  { tag: 'g', row: 'G1 owner sees ONLY its own gym (newest first); a client-supplied providerId / businessId is ignored; the other gym sees only its own', what: 'client providerId accepted (fitness-gym-memberships.js)', file: 'fg',
+    from: 'const providerId = scope.providerId;', to: 'const providerId = String(d.providerId || scope.providerId);' },
+  { tag: 'h', row: 'A10 duplicate scan is idempotent: returns the existing result, attendedSessions unchanged, ledger and membership byte-identical', what: 'duplicate-scan idempotency dropped',
+    from: 'if (as.exists) {', to: 'if (false && as.exists) {' },
 ];
 
 (async () => {
   let fails = 0;
+  FG_SRC_UNDER_TEST = FG_SRC;
   const real = await matrix(loadModule(SRC));
   const names = Object.keys(real);
   for (const n of names) { console.log(`  ${real[n].ok ? 'PASS' : 'FAIL'}  ${n}${real[n].ok ? '' : '  -> ' + JSON.stringify(real[n].detail).slice(0, 400)}`); if (!real[n].ok) fails++; }
   console.log(`\n${names.length - fails} passed, ${fails} failed\n\nNegative controls:`);
   let ctlBad = 0;
   for (const mu of MUTANTS) {
-    if (!SRC.includes(mu.from)) { console.log(`  CONTROL BROKEN  NC-${mu.tag}: mutation anchor not found in source`); ctlBad++; continue; }
-    const rows = await matrix(loadModule(SRC.replace(mu.from, mu.to), 'mutant_' + mu.tag));
+    const base = mu.file === 'fg' ? FG_SRC : SRC;
+    if (!base.includes(mu.from)) { console.log(`  CONTROL BROKEN  NC-${mu.tag}: mutation anchor not found in source`); ctlBad++; continue; }
+    FG_SRC_UNDER_TEST = mu.file === 'fg' ? FG_SRC.replace(mu.from, mu.to) : FG_SRC;
+    const FAm = mu.file === 'fg' ? loadModule(SRC) : loadModule(SRC.replace(mu.from, mu.to), 'mutant_' + mu.tag);
+    const rows = await matrix(FAm);
     const named = rows[mu.row];
     const failed = Object.keys(rows).filter((k) => !rows[k].ok);
     const ok = named && named.ok === false;

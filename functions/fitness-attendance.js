@@ -18,7 +18,15 @@
    REUSE (scratchpad fitness-attendance-reuse.md, docs/FITNESS_MEMBERSHIP_ATTENDANCE.md):
      signing   event-ops.credentialHash (SOKONI_HMAC_KEY, the platform credential secret) with domain 'fitmem1|'
      owner     provider-ops convention: the gym IS providers/{uid}; scanner must be providerMemberships.providerId
-     staff     BLOCKED on BUSINESS_IDENTITY_PENDING (business-workspace `staff` module) — _staffAuthority denies
+     staff     workforce-identity._assertBusinessPermission(uid, <gym business>, 'attendance') — the existing
+               permission-keyed guard (never a third one). The gym's business is resolved SERVER-side from the canonical
+               link providers/{providerId}.linkedBusinessId, verified against businesses/{id}.ownerId; no link →
+               BUSINESS_LINK_MISSING (never inferred from businesses.where(ownerId), never from the client).
+               'attendance' has NO role default: cashier / trainer / receptionist never get it automatically.
+     gym gate  providers/{providerId} approved (active|approved, not suspended) + business-workspace.assertModule
+               'memberships' once sokoni-5b ships that module (until then the gate reports PENDING and the ownership
+               checks alone decide — docs/FITNESS_MEMBERSHIP_ATTENDANCE.md §Staff authorization)
+     notify    notify.js (the ONE sender; same convention as membership-settlement._notify), best-effort after commit
      admin     AdminOS predicate token.admin || token.superAdmin
      audit     adminAudit (AdminOS; rules: admin read, write false)
      period    membership-settlement.endsAt (one period computation)
@@ -58,10 +66,23 @@ const REASONS = Object.freeze({
   suspended: { code: 'failed-precondition', msg: 'This membership is suspended.' },
   not_covered: { code: 'failed-precondition', msg: 'This membership does not cover a session right now.' },
   entitlement_exhausted: { code: 'failed-precondition', msg: 'All sessions on this membership have been used.' },
+  business_link_missing: { code: 'failed-precondition', msg: "Staff attendance isn't set up for this gym yet. Ask the gym owner to scan." },
+  not_approved: { code: 'failed-precondition', msg: "This gym isn't approved to record attendance right now." },
+  module_unavailable: { code: 'failed-precondition', msg: "Memberships aren't enabled for this business." },
 });
 
+/* The workforce permission key that lets a staff member scan / view memberships for a gym. Registered in
+   workforce-identity ALL_PERMISSIONS with NO role default (owner decision: cashier/trainer/employee NOT automatic). */
+const ATTENDANCE_PERMISSION = 'attendance';
+const APPROVED_PROVIDER_STATES = Object.freeze(['active', 'approved']);   /* booking-service / fitness-membership-create */
+const MODULE_KEY = 'memberships';                                          /* business-workspace module (sokoni-5b) */
+/* Scanner-status reasons (contract): NOT_APPROVED | BUSINESS_LINK_MISSING | NO_PERMISSION; + MODULE_NOT_AVAILABLE once
+   the 'memberships' module gate is enforced, + MULTIPLE_GYMS for a staff member authorized at more than one gym. */
+const SCOPE = Object.freeze({ NOT_APPROVED: 'NOT_APPROVED', BUSINESS_LINK_MISSING: 'BUSINESS_LINK_MISSING', NO_PERMISSION: 'NO_PERMISSION',
+  MODULE_NOT_AVAILABLE: 'MODULE_NOT_AVAILABLE', MULTIPLE_GYMS: 'MULTIPLE_GYMS' });
+
 /* Overridable ONLY by the suite (in-memory Firestore; emulator proof is QUEUED). */
-const _hooks = { db: null, ts: null, now: null, release: null, staffAuthority: null, correlationId: null };
+const _hooks = { db: null, ts: null, now: null, release: null, staffAuthority: null, correlationId: null, wfi: null, moduleGate: null, notify: null };
 const _db = () => _hooks.db || admin.firestore();
 const _ts = () => (_hooks.ts ? _hooks.ts() : admin.firestore.FieldValue.serverTimestamp());
 const _now = () => (_hooks.now ? _hooks.now() : new Date());
@@ -136,28 +157,178 @@ function checkInRefusal(m, now) {
   return null;
 }
 
-/* ── scanner authorization (owner; staff BLOCKED) ─────────────────────────── */
-/* The staff seam. Default: DENY. Staff scanning needs a provider → business identity (business-workspace `staff`
-   is NOT_IMPLEMENTED: BUSINESS_IDENTITY_PENDING). When it lands this calls workforce-identity
-   _assertBusinessPermission(uid, businessId, 'attendance') — never a third guard, never a role default. */
+/* ── gym ↔ business linkage, staff authority, gym gate ───────────────────── */
+const _wfi = () => _hooks.wfi || require('./workforce-identity');
+const _str = (v) => (typeof v === 'string' ? v : '');
+
+/**
+ * The gym's canonical business id, resolved SERVER-side → { ok:true, businessId } | { ok:false, reason, detail }.
+ * The ONLY link read is providers/{providerId}.linkedBusinessId (server-written by approval provisioning — see the
+ * docs' hand-off; it does not exist on any lineage yet). It is accepted only if businesses/{id} exists, is owned by
+ * this provider (ownerId), is not malformed (merchantId, when present, equals the doc id — tenant-identity's rule)
+ * and is not inactive. NEVER inferred from businesses.where(ownerId == providerId): an owner may hold a shop, a
+ * delivery business and a gym, and picking one is inventing the bridge.
+ */
+async function resolveGymBusiness(providerId) {
+  const missing = (detail) => ({ ok: false, reason: SCOPE.BUSINESS_LINK_MISSING, detail });
+  if (!_str(providerId)) return missing('no_provider');
+  const p = await _db().collection('providers').doc(providerId).get();
+  if (!p.exists) return missing('no_provider');
+  const id = _str((p.data() || {}).linkedBusinessId);
+  if (!ID_RE.test(id)) return missing('no_link');
+  const b = await _db().collection('businesses').doc(id).get();
+  if (!b.exists) return missing('business_absent');
+  const bd = b.data() || {};
+  if (bd.ownerId !== providerId) return missing('owner_mismatch');
+  if (bd.merchantId && bd.merchantId !== id) return missing('malformed');
+  if (bd.status && bd.status !== 'active') return missing('inactive');
+  return { ok: true, businessId: id };
+}
+
+/**
+ * Staff authority for ONE gym: the caller must hold an ACTIVE workspace membership in THAT gym's business with the
+ * explicit 'attendance' permission — decided by workforce-identity._assertBusinessPermission (imported, never copied).
+ * → { allowed:true, role:'staff', businessId } | { allowed:false, reason }
+ */
 async function _staffAuthority(uid, providerId) {
   if (_hooks.staffAuthority) return _hooks.staffAuthority(uid, providerId);
-  return { allowed: false, blocked: 'STAFF_ATTENDANCE_BLOCKED_BUSINESS_IDENTITY_PENDING' };
+  const link = await resolveGymBusiness(providerId);
+  if (!link.ok) return { allowed: false, reason: SCOPE.BUSINESS_LINK_MISSING };
+  const businessId = link.businessId;
+  try {
+    await _wfi()._assertBusinessPermission(uid, businessId, ATTENDANCE_PERMISSION);
+  } catch (e) {
+    if (e && (e.code === 'permission-denied' || e.code === 'not-found')) return { allowed: false, reason: SCOPE.NO_PERMISSION };
+    throw e;
+  }
+  return { allowed: true, role: 'staff', businessId };
 }
+
+/** The 'memberships' module gate (sokoni-5b's capability engine). → { ok:true, state:'enforced'|'pending' } | { ok:false, reason } */
+async function moduleGate(providerId) {
+  if (_hooks.moduleGate) return _hooks.moduleGate(providerId);
+  const BW = require('./business-workspace');
+  /* PENDING until business-workspace.MODULES carries 'memberships' (hand-off text in the docs). assertModule on an
+     unknown key would refuse EVERY gym (WORKSPACE_MODULE_UNKNOWN), so the gate engages the day the key ships. */
+  if (!BW.MODULES || !Object.prototype.hasOwnProperty.call(BW.MODULES, MODULE_KEY) || typeof BW.assertModule !== 'function') return { ok: true, state: 'pending' };
+  try {
+    await BW.assertModule(_db(), providerId, MODULE_KEY, HttpsError);
+    return { ok: true, state: 'enforced' };
+  } catch (e) {
+    if (e instanceof HttpsError && e.code === 'failed-precondition') return { ok: false, reason: SCOPE.MODULE_NOT_AVAILABLE, detail: (e.details && e.details.code) || null };
+    throw e;
+  }
+}
+
+/** The gym itself may operate memberships: approved provider + module gate. → null | SCOPE reason */
+async function gymRefusal(providerId) {
+  const p = await _db().collection('providers').doc(String(providerId)).get();
+  const d = p.exists ? (p.data() || {}) : null;
+  if (!d || !APPROVED_PROVIDER_STATES.includes(String(d.status || '')) || d.suspended === true) return SCOPE.NOT_APPROVED;
+  const g = await moduleGate(String(providerId));
+  return g.ok ? null : SCOPE.MODULE_NOT_AVAILABLE;
+}
+const _gymRefusalCode = (r) => (r === SCOPE.NOT_APPROVED ? 'not_approved' : 'module_unavailable');
 
 /** → { actorRole } or throws. Distinguishes "another gym" from "no permission" without revealing either gym. */
 async function assertScanner(uid, m) {
+  let actorRole = null;
   if (uid === m.providerId) {
     if (uid === m.buyerUid) _refuse('self_scan');
-    return { actorRole: 'owner' };
+    actorRole = 'owner';
+  } else {
+    const staff = await _staffAuthority(uid, m.providerId);
+    if (staff && staff.allowed === true) {
+      if (uid === m.buyerUid) _refuse('self_scan');
+      actorRole = String(staff.role || 'staff');
+    } else {
+      const isProvider = (await _db().collection('providers').doc(String(uid)).get()).exists;
+      if (isProvider) _refuse('other_gym');
+      /* 'link missing' is told ONLY to someone who holds 'attendance' in a business this gym's owner owns — a stranger
+         or the member scanning their own code learns nothing about the gym's configuration. */
+      _refuse(staff && staff.reason === SCOPE.BUSINESS_LINK_MISSING && await _attendanceAtOwner(uid, m.providerId) ? 'business_link_missing' : 'no_permission');
+    }
   }
-  const staff = await _staffAuthority(uid, m.providerId);
-  if (staff && staff.allowed === true) {
-    if (uid === m.buyerUid) _refuse('self_scan');
-    return { actorRole: String(staff.role || 'staff') };
+  const gr = await gymRefusal(m.providerId);
+  if (gr) _refuse(_gymRefusalCode(gr));
+  return { actorRole };
+}
+
+/** Does the caller hold an ACTIVE 'attendance' membership in ANY business owned by ownerUid? (refusal wording only — never a grant) */
+async function _attendanceAtOwner(uid, ownerUid) {
+  const q = await _db().collection('workspaceMemberships').where('uid', '==', uid).where('status', '==', 'active').limit(10).get();
+  for (const d of q.docs) {
+    const w = d.data() || {};
+    if (!Array.isArray(w.permissions) || !w.permissions.includes(ATTENDANCE_PERMISSION) || !ID_RE.test(_str(w.businessId))) continue;
+    const b = await _db().collection('businesses').doc(w.businessId).get();
+    if (b.exists && (b.data() || {}).ownerId === ownerUid) return true;
   }
-  const isProvider = (await _db().collection('providers').doc(String(uid)).get()).exists;
-  _refuse(isProvider ? 'other_gym' : 'no_permission');
+  return false;
+}
+
+/**
+ * Staff discovery for the READ callables (which carry no gym in the request): the gyms whose business this caller is
+ * an active 'attendance' member of. Discovery only — authorization is still _staffAuthority (the workforce guard).
+ * Bounded: ≤10 memberships. → { gyms:[{providerId, businessId}], unlinked:boolean }
+ */
+async function _staffGyms(uid) {
+  const q = await _db().collection('workspaceMemberships').where('uid', '==', uid).where('status', '==', 'active').limit(10).get();
+  const gyms = []; let unlinked = false;
+  for (const d of q.docs) {
+    const w = d.data() || {};
+    if (!Array.isArray(w.permissions) || !w.permissions.includes(ATTENDANCE_PERMISSION) || !ID_RE.test(_str(w.businessId))) continue;
+    const b = await _db().collection('businesses').doc(w.businessId).get();
+    const owner = b.exists ? _str((b.data() || {}).ownerId) : '';
+    if (!owner) { unlinked = true; continue; }
+    const link = await resolveGymBusiness(owner);
+    if (link.ok && link.businessId === w.businessId) gyms.push({ providerId: owner, businessId: w.businessId });
+    else if (link.detail !== 'no_provider') unlinked = true;          /* a non-gym business is not a missing gym link */
+  }
+  return { gyms, unlinked };
+}
+
+/**
+ * Which gym may this caller READ / scan for? Never from the request. → { ok:true, providerId, role } | { ok:false, reason }
+ *   owner: providers/{uid} exists → that gym (an owner never reads another gym through a staff membership)
+ *   staff: exactly one gym from _staffGyms, re-authorized by _staffAuthority; several → MULTIPLE_GYMS (no selector
+ *          is accepted from the client — documented limitation)
+ * Then the gym gate (approved + 'memberships' module).
+ */
+async function resolveGymScope(uid) {
+  let providerId = null; let role = null;
+  const own = await _db().collection('providers').doc(String(uid)).get();
+  if (own.exists) { providerId = String(uid); role = 'owner'; } else {
+    const s = await _staffGyms(uid);
+    if (!s.gyms.length) return { ok: false, reason: s.unlinked ? SCOPE.BUSINESS_LINK_MISSING : SCOPE.NO_PERMISSION };
+    if (s.gyms.length > 1) return { ok: false, reason: SCOPE.MULTIPLE_GYMS };
+    const a = await _staffAuthority(uid, s.gyms[0].providerId);
+    if (!a || a.allowed !== true) return { ok: false, reason: (a && a.reason) || SCOPE.NO_PERMISSION };
+    providerId = s.gyms[0].providerId; role = 'staff';
+  }
+  const gr = await gymRefusal(providerId);
+  if (gr) return { ok: false, reason: gr, role };
+  return { ok: true, providerId, role };
+}
+
+/* ── member display name (the gym needs to recognise who is at the door; nothing else) ── */
+async function memberDisplayName(buyerUid) {
+  try {
+    const u = await _db().collection('users').doc(String(buyerUid)).get();
+    if (!u.exists) return null;
+    const d = u.data() || {};
+    const n = String(d.displayName || d.name || '').replace(/[<>"'`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    return n || null;
+  } catch (_) { return null; }
+}
+
+/* ── notifications (notify.js — the ONE sender; never throws into attendance) ── */
+async function _notify(args) {
+  try {
+    if (_hooks.notify) return await _hooks.notify(args);
+    if (_hooks.db) return null;
+    await require('./notify').notify(Object.assign({ awaitDelivery: false }, args)).catch(() => {});
+  } catch (_) { /* best-effort: the attendance is already committed */ }
+  return null;
 }
 
 /* ── audit (AdminOS adminAudit; never fails the operation) ────────────────── */
@@ -223,8 +394,10 @@ async function checkInHandler(req) {
       if (m.providerId !== m0.providerId || m.buyerUid !== m0.buyerUid) _refuse('wrong_member');
       if (as.exists) {                                         /* duplicate scan → the existing result, unchanged */
         const a = as.data();
+        const at = _date(a.checkedInAt);
         out = { duplicate: true, attendanceId: attId, status: a.status, firstCheckIn: false,
-                attendedSessions: Number(m.attendedSessions) || 0, sessionsIncluded: Number(m.sessionsIncluded) || null };
+                attendedSessions: Number(m.attendedSessions) || 0, sessionsIncluded: Number(m.sessionsIncluded) || null,
+                checkedInAt: at ? at.toISOString() : null, title: m.title || null };
         return;
       }
       const refusal = checkInRefusal(m, now);
@@ -240,7 +413,8 @@ async function checkInHandler(req) {
       else if (m.refundEligible !== false) patch.refundEligible = false;   /* heal toward "used"; never back */
       t.update(ref, patch);
       out = { duplicate: false, attendanceId: attId, status: 'checked_in', firstCheckIn: first,
-              attendedSessions: prior + 1, sessionsIncluded: Number(m.sessionsIncluded) || null };
+              attendedSessions: prior + 1, sessionsIncluded: Number(m.sessionsIncluded) || null,
+              checkedInAt: now.toISOString(), title: m.title || null };
     });
     await _audit({ action: out.duplicate ? 'fitness_checkin_duplicate' : 'fitness_checkin', outcome: 'ok', membershipId, providerId,
                    attendanceId: out.attendanceId, performedBy: uid, actorRole: scanner.actorRole, firstCheckIn: out.firstCheckIn, correlationId });
@@ -253,8 +427,20 @@ async function checkInHandler(req) {
         logger.error('[fitness-attendance] releaseDueSlices after first check-in failed', { membershipId, correlationId, err: (e && e.message) || 'Error' });
       }
     }
+    if (!out.duplicate) {
+      /* Member notice via notify.js, AFTER commit, once per ledger row (dedupeKey = the attendance id). Type
+         'booking_confirmed' = an existing registered commerce/orders type (2f's convention: reuse registered types;
+         a dedicated 'membership_attendance' type is a notify.js hand-off). No PII beyond the member's own plan title. */
+      const used = out.attendedSessions - (Number(m0.voidedSessions) || 0);
+      const of = out.sessionsIncluded ? `Session ${used} of ${out.sessionsIncluded}.` : 'Unlimited sessions.';
+      await _notify({ uid: m0.buyerUid, type: 'booking_confirmed', title: 'Attendance recorded ✅',
+        body: `Check-in recorded for ${String(out.title || 'your membership').slice(0, 80)}. ${of}`
+          + (out.firstCheckIn ? ' Your membership is now in use, so it can no longer be refunded.' : ''),
+        deepLink: '/fitness-hub.html', dedupeKey: `membership_checkin_${membershipId}_${out.attendanceId}` });
+    }
+    const memberName = await memberDisplayName(m0.buyerUid);
     logger.info('[fitness-attendance] check-in', { membershipId, providerId, attendanceId: out.attendanceId, duplicate: out.duplicate, first: out.firstCheckIn, correlationId });
-    return Object.assign({ ok: true, correlationId }, out);
+    return Object.assign({ ok: true, correlationId }, out, { member: { displayName: memberName } });
   } catch (e) {
     await _refusalAudit('fitness_checkin', req, { membershipId, providerId, correlationId }, e);
     if (e instanceof HttpsError) throw e;
@@ -357,6 +543,9 @@ const fitnessCorrectAttendance = onCall(OPTS, correctAttendanceHandler);
 module.exports = {
   fitnessMembershipQr, fitnessCheckIn, fitnessCompleteSession, fitnessCorrectAttendance,
   mintToken, verifyToken, checkInRefusal, attendanceIdFor, localDay, REASONS, TOKEN_TTL_MS, COL,
+  ATTENDANCE_PERMISSION, SCOPE, MODULE_KEY,
+  /* shared with fitness-gym-memberships.js (the gym read callables) — one authorization path, not two */
+  resolveGymBusiness, resolveGymScope, moduleGate, gymRefusal, memberDisplayName, _date, _db, _now,
   _h: { membershipQrHandler, checkInHandler, completeSessionHandler, correctAttendanceHandler },
   _test: { use: (h) => Object.assign(_hooks, h || {}) },
 };

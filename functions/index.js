@@ -13465,7 +13465,8 @@ exports.membershipRequestException = _membershipSettlement.membershipRequestExce
 /* ── Fitness membership attendance (owner 2026-10-03, OWNER POLICY #2; fitness-attendance.js; NOT deployed):
    server-authoritative QR check-in ledger. Check-in ≠ completion ≠ settlement; the first valid check-in locks refund
    eligibility (attendedSessions / firstAttendedAt / refundEligible:false). Corrections are ADMIN-only and never
-   reset the lock. Gym OWNER scans; staff scanning BLOCKED on BUSINESS_IDENTITY_PENDING. */
+   reset the lock. Gym OWNER scans; staff scan only with the explicit workforce 'attendance' permission in the gym's
+   LINKED business (providers.linkedBusinessId) — no link → BUSINESS_LINK_MISSING. */
 const _fitnessAttendance = require('./fitness-attendance');
 exports.fitnessMembershipQr      = _fitnessAttendance.fitnessMembershipQr;
 exports.fitnessCheckIn           = _fitnessAttendance.fitnessCheckIn;
@@ -13476,3 +13477,9 @@ exports.fitnessCorrectAttendance = _fitnessAttendance.fitnessCorrectAttendance;
    approved, active fitness_studio provider, and snapshots price/months onto providerMemberships (single-flight per
    buyer+service). The client then calls createPaymentIntent({purpose:'fitness_membership', membershipId}). */
 exports.fitnessCreateMembership  = require('./fitness-membership-create').fitnessCreateMembership;
+/* ── Fitness gym-side reads (contract FINAL RELEASE e3; NOT deployed): scoped to the caller's own gym (owner) or the ONE
+   gym they hold 'attendance' at (staff); never a client-supplied providerId. */
+const _fitnessGym = require('./fitness-gym-memberships');
+exports.fitnessGymMemberships    = _fitnessGym.fitnessGymMemberships;
+exports.fitnessGymMembership     = _fitnessGym.fitnessGymMembership;
+exports.fitnessScannerStatus     = _fitnessGym.fitnessScannerStatus;
