@@ -1,3 +1,7 @@
+> **RETIRED 2026-10-03.** Daraja was removed on the owner's order (SOKONI collects through IntaSend only). The code this
+> document describes no longer exists; the functions safety guard now asserts Daraja is absent. Kept as history. See
+> [[Payments]] and CHANGELOG 2026-10-03.
+
 # STK MSISDN safety — three fixes on the live lineage
 
 **Branch:** `fix/stk-msisdn-safety`, cut from live **`b223635`**
