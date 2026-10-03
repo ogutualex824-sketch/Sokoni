@@ -11656,6 +11656,7 @@ exports.educationLearner      = require('./education-learner').educationLearner;
 exports.educationWorkspace    = require('./education-workspace').educationWorkspace;
 exports.educationEnterprise   = require('./education-enterprise').educationEnterprise;
 exports.manageMyProgrammes    = require('./education-programmes').manageMyProgrammes;
+exports.courseLessons         = require('./education-lessons').courseLessons;
 
 /* ── QR Code System v1.0 ───────────────────────────────────────── */
 const qr = require('./qr');

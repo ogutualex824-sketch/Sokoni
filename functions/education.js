@@ -397,74 +397,16 @@ exports.getCourseProgress = onCall(CF_OPTS, async (request) => {
    – Recalculates progress % from course.lessonCount.
    – Sets completedAt on enrolment when 100% reached.
 ══════════════════════════════════════════════════════════════ */
+/* EDUCATION E2: progress is the ONE rule in education-lessons.recordProgress — real lessons of THIS course only (the live
+   version accepted ANY lessonId, so made-up ids pushed a learner to 100 % / completedAt), recomputed from the server's
+   lesson count, and a single certificate on completion. This callable keeps its name and shape for existing clients. */
 exports.updateCourseProgress = onCall(CF_OPTS, async (request) => {
-  const log = createLogger('updateCourseProgress');
-
   if (!request.auth) _deny('unauthenticated', 'Sign in to update progress');
-  const uid = request.auth.uid;
-
   const { courseId, lessonId, completed = true } = request.data || {};
   _req(courseId, 'courseId');
   _req(lessonId, 'lessonId');
-
-  const enrollRef   = db.collection('courseEnrollments').doc(_enrollId(uid, courseId));
-  const progressRef = db.collection('courseProgress').doc(_enrollId(uid, courseId));
-  const courseRef   = db.collection('courses').doc(courseId);
-
-  /* ── Parallel reads ─────────────────────────────────────── */
-  const [enrollSnap, progressSnap, courseSnap] = await Promise.all([
-    enrollRef.get(),
-    progressRef.get(),
-    courseRef.get(),
-  ]);
-
-  if (!enrollSnap.exists)  _deny('permission-denied', 'Not enrolled in this course');
-  if (!courseSnap.exists)  _deny('not-found', 'Course not found');
-
-  const lessonCount = Number(courseSnap.data().lessonCount || 1);
-  const now         = admin.firestore.Timestamp.now();
-
-  /* ── Build completed lessons array ─────────────────────── */
-  const existing = progressSnap.exists ? (progressSnap.data().completedLessons || []) : [];
-  let updatedLessons;
-  if (completed) {
-    updatedLessons = existing.includes(lessonId) ? existing : [...existing, lessonId];
-  } else {
-    updatedLessons = existing.filter(l => l !== lessonId);
-  }
-
-  const progress = Math.min(100, Math.round((updatedLessons.length / lessonCount) * 100));
-
-  /* ── Write progress doc ─────────────────────────────────── */
-  const progressUpdate = {
-    uid,
-    courseId,
-    currentLesson:    lessonId,
-    lastAccessedAt:   now,
-    lastAccessedAtMs: Date.now(),
-  };
-
-  if (completed) {
-    progressUpdate.completedLessons = FieldValue.arrayUnion(lessonId);
-  } else {
-    progressUpdate.completedLessons = FieldValue.arrayRemove(lessonId);
-  }
-
-  await progressRef.set(progressUpdate, { merge: true });
-
-  /* ── Update enrolment progress % ────────────────────────── */
-  const enrollUpdate = { progress, lastAccessedAt: now };
-  if (progress >= 100) {
-    enrollUpdate.completedAt = now;
-  }
-  await enrollRef.update(enrollUpdate);
-
-  const message = progress >= 100
-    ? 'Congratulations! You have completed this course.'
-    : `Progress updated: ${progress}% complete`;
-
-  log.info('progressUpdated', { uid, courseId, lessonId, progress });
-  return { progress, message };
+  const r = await require('./education-lessons')._internal.recordProgress(db, request.auth.uid, String(courseId), String(lessonId), completed !== false);
+  return { progress: r.progress, message: r.message, certificateId: r.certificateId || null };
 });
 
 
