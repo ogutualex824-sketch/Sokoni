@@ -419,7 +419,9 @@ exports.autoOnDisputeCreate = onDocumentCreated(
     }
 
     /* Small, clear-evidence disputes → auto-resolve */
-    const isSmall = amount <= (rule.autoResolveBelow || 1000);
+    /* OWNER DECISION 2026-10-03: a dispute opened through the widened buyer match carries autoResolveEligible:false —
+       it NEVER auto-resolves (no automatic buyer_wins refund); a human reviews it. Absent flag = legacy behaviour. */
+    const isSmall = dispute.autoResolveEligible !== false && amount <= (rule.autoResolveBelow || 1000);
     /* payments/{id} stores UPPERCASE ('COMPLETE' | 'PENDING' | 'FAILED') while
        this compared against lowercase 'completed', which matches neither — so
        paymentConfirmed was permanently false and the small-dispute auto-resolve

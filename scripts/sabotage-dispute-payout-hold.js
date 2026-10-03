@@ -8,6 +8,8 @@ const M = [
   ['hold not written', "    txn.update(db.collection('orders').doc(orderId), {", "    if (false) txn.update(db.collection('orders').doc(orderId), {", 'H-3'],
   ['hold never lifted', "        disputeOpen: false, hasDispute: false,", "", 'H-6'],
   ['re-open does not re-hold', "      await db.collection('orders').doc(orderId).update({ disputeStatus: action, disputeOpen: true, hasDispute: true })", "      await db.collection('orders').doc(orderId).update({ disputeStatus: action })", 'H-8'],
+  ['widened buyer auto-resolvable', "      autoResolveEligible: _legacyBuyer,", "      autoResolveEligible: true,", 'E-1'],
+  ['checkout buyer refused again', "  const isBuyer = _legacyBuyer || _widenedBuyer;", "  const isBuyer = _legacyBuyer;", 'E-1'],
 ];
 let c = 0;
 for (const [l, a, b, row] of M) {

@@ -57,6 +57,20 @@ const S = () => DB._store;
   r = await run('createDispute', 'stranger', { orderId: 'O1', reason: 'not_as_described', description: 'The item arrived broken and does not work at all.' });
   ck('H-10', r.err === 'permission-denied' && !S().orders.O1.disputeOpen, 'CONTROL: a stranger cannot open a dispute (and so cannot freeze a seller\'s payout)', r);
 
+  /* ── eligibility (owner 2026-10-03): the order's buyer on ANY canonical field; widened cases never auto-refund ── */
+  DB = fakeDb({ orders: { O2: { uid: 'buyerC', buyerUid: 'buyerC', sellerUid: 's1', status: 'delivered', deliveredAt: OLD, createdAt: OLD, total: 900, paymentVerified: true } } });
+  r = await run('createDispute', 'buyerC', { orderId: 'O2', reason: 'not_as_described', description: 'The item arrived broken and does not work at all.' });
+  const d2 = (S().disputes || {}).dp_O2 || {};
+  ck('E-1', !r.err && d2.autoResolveEligible === false && d2.buyerMatchedBy === 'checkout_buyer_field' && S().orders.O2.disputeOpen === true,
+    'a CHECKOUT buyer (uid / buyerUid) can now open a dispute — marked NOT auto-resolvable (no automatic refund)', { r, d2 });
+  DB = fakeDb(world());
+  r = await run('createDispute', 'buyer1', { orderId: 'O1', reason: 'not_as_described', description: 'The item arrived broken and does not work at all.' });
+  ck('E-2', !r.err && S().disputes.dp_O1.autoResolveEligible === true, 'a legacy-field buyer keeps the existing auto-resolution path (behaviour unchanged)', S().disputes.dp_O1);
+  const AE = process.env.BASE ? execSync('git show ' + process.env.BASE + ':functions/automation-engine.js', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 << 20 })
+    : fs.readFileSync(path.join(FN, 'automation-engine.js'), 'utf8');
+  ck('E-3', /const isSmall = dispute\.autoResolveEligible !== false && amount <= \(rule\.autoResolveBelow \|\| 1000\);/.test(AE),
+    'SOURCE-LEVEL: autoOnDisputeCreate never auto-resolves a dispute marked autoResolveEligible:false (runtime needs the AI secret — UNPROVEN at runtime)');
+
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH (no verdict): ' + (e && e.stack || e)); process.exit(2); });

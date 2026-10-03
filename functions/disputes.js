@@ -49,7 +49,13 @@ exports.createDispute = onCall({ enforceAppCheck: true }, async request => {
   const orderDoc = await db.collection('orders').doc(orderId).get();
   if (!orderDoc.exists) throw new HttpsError('not-found', 'Order not found');
   const order = orderDoc.data();
-  const isBuyer = order.buyerId === uid || order.userId === uid || order.customerId === uid;
+  /* OWNER DECISION 2026-10-03: the order's buyer may dispute, matched on ANY canonical buyer field. The legacy match
+     (buyerId / userId / customerId) refused every checkout order, which records the buyer as uid / buyerUid. A buyer
+     admitted ONLY through the newly accepted fields is marked autoResolveEligible:false, so autoOnDisputeCreate sends the
+     dispute to a human — the small-amount automatic refund stays OFF for the widened cases until reviewed (owner). */
+  const _legacyBuyer = order.buyerId === uid || order.userId === uid || order.customerId === uid;
+  const _widenedBuyer = !_legacyBuyer && (order.uid === uid || order.buyerUid === uid);
+  const isBuyer = _legacyBuyer || _widenedBuyer;
   if (!isBuyer) throw new HttpsError('permission-denied', 'This is not your order');
 
   // 30-day window from delivery (or creation if undelivered)
@@ -86,6 +92,9 @@ exports.createDispute = onCall({ enforceAppCheck: true }, async request => {
       description: _san(description.trim()),
       amount:   order.total || order.amount || 0,
       status:   'open',
+      /* only the legacy-matched buyer keeps the (pre-existing) auto-resolution path */
+      autoResolveEligible: _legacyBuyer,
+      buyerMatchedBy: _legacyBuyer ? 'legacy' : 'checkout_buyer_field',
       resolution:       null,
       resolutionAmount: null,
       evidence:         [],
