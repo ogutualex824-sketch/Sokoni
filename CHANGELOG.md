@@ -1,3 +1,14 @@
+## [2026-10-03] — P0-4: provider records lose self-written approval, commission, category and trust stamps
+
+**Files:** `firestore.rules.hotfix-jobs`, `firestore.rules`, `firestore.rules.build`, `scripts/zz-test-provider-approval-hotfix.js`, `CHANGELOG.md`.
+**Database changes:** none. **API changes:** none (server half: sokoni-5b `hotfix/approval-authority-on-c7e26b6` @ `7db4c76`).
+**Security:** on served `f259c0b5`, a provider could write `approvalDecision` (live providerDispatch trusts it with no admin
+check), `adminApproved`, `approvedAt/By`, `commissionRate`, a `business` category stamp and discovery/verification stamps. All
+of these are now locked on create AND owner update, and owner update calls `noAdminFields`. Profile edits (name, bio, phone,
+services, hours) are unchanged. **Breaking changes:** none — the client census found no page writing these keys.
+**Tests:** PA rows per key + refusal-overwrite / commission-0 / role / bio-control / admin-control — EMULATOR PENDING (RAM below the
+512 MB floor); not claimed passed. **Deployment:** NOT deployed. Ships in the f3 hotfix via the Rules REST API after the 2f search fix.
+
 ## [2026-09-29] — P0: orders rules close the rider-payout self-credit path (rules half)
 
 **Files:** `firestore.rules`, `firestore.rules.build`, `scripts/test-p0-rider-payout-rules.js`, `CHANGELOG.md`.
