@@ -1,3 +1,9 @@
+## [2026-10-03] - Applications: an admin cannot stage their own application either
+
+Functions only (`applicationDecide` in `functions/application-lifecycle.js`), NOT deployed. The K13-A SELF_DECISION refusal now runs
+before the `mark_under_review` / `mark_verified` review-stage marks, not only before decisions. The check was moved, not duplicated.
+Test: RS-9 in `scripts/test-education-applications.js` (34/0). No database, API or rules change.
+
 ## [2026-10-03] — Marketing AdminOS server reads (MK5a): review view + marketers / services / bookings — NOT deployed
 
 - **functions/marketing-hub.js** (all admin-only, read-only; the decision stays applicationDecide — ONE authority):
