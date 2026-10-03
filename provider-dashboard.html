@@ -297,6 +297,7 @@ a{color:var(--acc);text-decoration:none}
       <div class="sb-item" data-hc-module="leads" hidden aria-hidden="true" onclick="P.show('leads',this)"><span class="sb-icon">📨</span>Leads &amp; quotes</div>
       <div class="sb-item" data-hc-module="memberships" hidden aria-hidden="true" onclick="P.show('memberships',this)"><span class="sb-icon">🎫</span>Memberships</div>
       <!-- Education E2 (sokoni-5b): shown only when the business workspace answers eduCourses AVAILABLE (approved teacher / institution) -->
+      <div class="sb-item" data-hc-module="eduProgrammes" hidden aria-hidden="true" onclick="P.show('eduprogrammes',this)"><span class="sb-icon">🎓</span>Programmes</div>
       <div class="sb-item" data-hc-module="eduCourses" hidden aria-hidden="true" onclick="P.show('educourses',this)"><span class="sb-icon">📚</span>Courses</div>
       <div class="sb-item" data-hc-module="siteVisits" hidden aria-hidden="true" onclick="P.show('sitevisits',this)"><span class="sb-icon">📍</span>Site visits</div>
       <div class="sb-item" data-hc-module="remoteSupport" hidden aria-hidden="true" onclick="P.show('remotesupport',this)"><span class="sb-icon">🖥️</span>Remote support</div>
@@ -503,6 +504,12 @@ a{color:var(--acc);text-decoration:none}
     <div class="panel" id="panel-leads">
       <div class="pg-header"><div><div class="pg-title">Leads &amp; quotes</div><div style="font-size:12px;opacity:.65">Requests from customers. Reply in messages, send a quote; an accepted quote is booked and paid like any booking.</div></div></div>
       <div style="padding:14px 20px"><div id="ldList"></div></div>
+    </div>
+
+    <!-- ── Programmes (Education E2, institutions only) — manageMyProgrammes; module sokoni-education-programmes.js ── -->
+    <div class="panel" id="panel-eduprogrammes">
+      <div class="pg-header"><div><div class="pg-title">Programmes</div><div style="font-size:12px;opacity:.65">Group your courses into programmes. A programme goes live once it includes a published course.</div></div></div>
+      <div style="padding:14px 20px"><div id="eduProgrammesList"></div></div>
     </div>
 
     <!-- ── Courses (Education E2) — manageMyCourses / createCourse / publishCourse submit; module sokoni-education-courses.js ── -->
@@ -869,6 +876,7 @@ a{color:var(--acc);text-decoration:none}
 <script src="sokoni-receipts.js" defer></script>
 <script src="sokoni-fitness-memberships.js" defer></script>
 <script src="sokoni-education-courses.js" defer></script>
+<script src="sokoni-education-programmes.js" defer></script>
 <script src="sokoni-business-workspace.js" defer></script>
 <script src="sokoni-booking-resolution.js" defer></script>
 <script src="sokoni-pricing-studio.js" defer></script>
@@ -913,6 +921,7 @@ const P={
     if(id==='leads'&&window.SokoniLeads)SokoniLeads.mountProvider(_q('ldList'),{services:()=>(Sv._svc||[]).filter(x=>x.active!==false),caps:()=>((window.__sokoniWorkspace||{}).serviceCapabilities||[])});
     if(id==='memberships'&&window.SokoniFitnessMemberships)SokoniFitnessMemberships.mount(_q('mbList'));
     if(id==='educourses'&&window.SokoniEducationCourses)SokoniEducationCourses.mount(_q('eduCoursesList'));
+    if(id==='eduprogrammes'&&window.SokoniEducationProgrammes)SokoniEducationProgrammes.mount(_q('eduProgrammesList'));
     if(id==='receipts'&&window.SokoniReceipts)SokoniReceipts.mount(_q('rcProvList'),{role:'provider'});
   }
 };
