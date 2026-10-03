@@ -16,6 +16,8 @@ capability / PIN (5b) → live comparison per changed function → all tests inc
 | `intasendWebhook` | — | its own P0-4 lifecycle gate |
 | `processTypesenseQueue` | `fix/typesense-verified-badge-on-032e88e` (live 00023-yin) | already live from its own tree |
 | `bookingDispatch` | `fix/bookingdispatch-paymentid-fulltree` ae4f084 (f3's queue) | full-copy rebuild, closure == live except booking.js |
+| `applicationDecide`, `applicationReconcile`, `applicationLifecycle` | production (K13-A live) until 5b's stage (c) lands on r2 | r2's application-lifecycle.js has NO K13-A (_authoritativeDecision / SELF_DECISION absent) — deploying from r2 would reopen admin self-approval and status-only approval; refused by guard-r2-scope (G6) |
+| `sportsDispatch`, `sportsFixtureReminders` | — (owner hold) | Sports is held: NOT DEPLOYED from r2 unless the owner approves; refused by guard-r2-scope (G6) |
 | any function not listed in "Candidate scope" below | — | scoped deploys only; a function absent from this list is out of scope, not retired |
 
 `firebase deploy` WITHOUT `--only functions:<names>` is forbidden for this tree.

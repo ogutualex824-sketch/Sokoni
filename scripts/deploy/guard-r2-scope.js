@@ -8,7 +8,12 @@
      · any forbidden function     → every IntaSend webhook handler (5b ships them from their own tree), intasendWebhook
                                     (own P0-4 gate), processTypesenseQueue and bookingDispatch (own trees)
    Accept a deploy only when "R2 SCOPE GUARD: PASS" appears IN the deploy log. */
-const FORBIDDEN_EXACT = new Set(['webhookIntasend', 'intasendWebhook', 'processTypesenseQueue', 'bookingDispatch']);
+const FORBIDDEN_EXACT = new Set(['webhookIntasend', 'intasendWebhook', 'processTypesenseQueue', 'bookingDispatch',
+  /* r2's application-lifecycle.js LACKS K13-A, which production applicationDecide carries — deploying these from r2 would
+     reopen admin self-approval / status-only approval (b2 + 5b, 2026-10-04). Until stage (c) lands. */
+  'applicationDecide', 'applicationReconcile', 'applicationLifecycle',
+  /* Sports: held by the owner — never from r2 without an explicit owner approval. */
+  'sportsDispatch', 'sportsFixtureReminders']);
 const FORBIDDEN_RE = /webhook|intasend/i;
 
 function check(scope) {
