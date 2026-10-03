@@ -1,3 +1,15 @@
+## [2026-10-03] — Rental settlement wired: rentalComplete releases held money to the shop's BUSINESS wallet
+
+**Owner (2026-10-03, direct):** settlement allowed under the wallet freeze; the deposit goes back to the renter's M-PESA via IntaSend B2C.
+**Files:**
+- `functions/marketplace-extensions.js` (rentalComplete);
+- `functions/rental-settlement.js` (sokoni-5b, 4f8fed6);
+- `functions/business-wallet.js`, `settlement-destination.js`, `store-identity.js`, `tenant-identity.js`: byte-identical to release/merchant-launch-rc 8c9a763. The tenant-identity change is additive (optional db handle);
+- `scripts/test-rentals.js`.
+**Behaviour:** completion (returned → completed) quotes outside the txn, then settles INSIDE the same txn. Rent − commission → businessWallets/{businessId} in exact cents; deposit → rentalDepositRefunds REQUEST. Only for held money with the PIN verified. Owner = the shop owner (server), never the caller. A refused settlement still completes the rental, with settlementOutcome stamped and a review row; the money stays held. Refund-due rentals can't complete.
+**Known:** commission-config on this tree has NO construction_equipment_rental row, so every settlement currently refuses ('commission_unpriced'), which is safe. 2f's config (commercial-fn) differs by 632 lines and is NOT merged. The deposit B2C executor is not built (sokoni-5b next).
+**Tests:** test-rentals 55/0, 13 mutants caught (incl. settle_outside_txn, settle_owner_from_caller, complete_refund_due); test-rental-settlement 24/0; test-rental-pin 33/0; DE-2 12/0 vs live.
+**Deployment:** NOT deployed.
 ## [2026-10-03] - Rental deposit refunds: the executor for rentalDepositRefunds (IntaSend refund rail → renter's M-PESA)
 
 Functions only (`functions/rental-deposit-refunds.js`). **Not deployed; not wired to a trigger yet.**

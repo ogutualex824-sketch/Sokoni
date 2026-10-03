@@ -33,7 +33,10 @@ class HttpsError extends Error { constructor(code, m) { super(m); this.code = co
 let src = fs.readFileSync(path.join(ROOT, 'functions', 'marketplace-extensions.js'), 'utf8');
 const MUT = {
   owner_by_ownerId_only: ["if (shop.ownerId === auth.uid || (!('ownerId' in shop) && shopId === auth.uid)) return shop;", "if (shop.ownerId === auth.uid) return shop;"],
-  complete_status_blind:  ["_rentalTransition(req, { from: ['returned'], to: 'completed',", "_rentalTransition(req, { from: ['requested', 'pending', 'accepted', 'active', 'cancelled', 'declined', 'returned'], to: 'completed',"],
+  complete_status_blind:  ["    if (b.status !== 'returned') throw new HttpsError('failed-precondition', 'A ' + b.status + ' booking cannot be completed.');", ""],
+  settle_outside_txn:     ["    plan.apply(t);\n  });", "  });\n  plan.apply({ update: () => {}, set: () => {}, create: () => {} });"],
+  settle_owner_from_caller: ["plan = await RS.settleRentalBooking(t, _db(), { bookingId: String(bookingId), booking: b, ownerUid,", "plan = await RS.settleRentalBooking(t, _db(), { bookingId: String(bookingId), booking: b, ownerUid: req.auth.uid,"],
+  complete_refund_due:    ["    if (b.paymentStatus === 'refund_due') throw new HttpsError('failed-precondition', RENTAL_REFUND_DUE_MSG);\n    /* phase 2", "    /* phase 2"],
   paid_cancel_flip:       ["    if (b.status === 'paid_held') throw new HttpsError(", "    if (false) throw new HttpsError("],
   start_before_paid:      ["_rentalTransition(req, { from: ['paid_held'], to: 'active',", "_rentalTransition(req, { from: ['accepted', 'paid_held'], to: 'active',"],
   overlap_unchecked:      ["    if (conflict) throw new HttpsError('failed-precondition', 'Those dates are already booked.');", ""],
@@ -47,12 +50,20 @@ const M = process.env.RENTAL_MUTANT;
 if (M) { const m = MUT[M]; if (!m || src.split(m[0]).length !== 2) { console.error('mutant anchor missing: ' + M); process.exit(2); } src = src.replace(m[0], m[1]); console.log('MUTANT ' + M); }
 const tmp = path.join(os.tmpdir(), 'mx-under-test-' + process.pid + '.js'); fs.writeFileSync(tmp, src);
 const PIN = { calls: [], verify: async (a) => { PIN.calls.push(a); return a.pin === '4321' ? { ok: true } : { ok: false, reason: a.pin ? 'That PIN does not match this booking.' : 'Ask the renter for their rental PIN.' }; } };
+const BW_STUB = { _bw: true }, SD_STUB = { _sd: true };
+const RS = { quotes: [], settles: [], next: { ok: true },
+  quoteRentalSettlement: async (db, a) => { RS.quotes.push(a); return { ok: true, q: 1 }; },
+  settleRentalBooking: async (txn, db, a) => { RS.settles.push(a); const n = RS.next;
+    return Object.assign({}, n, { apply: (tx) => tx.set(db.collection('zzSettleApplied').doc(a.bookingId), { ok: !!n.ok, reason: n.reason || null }) }); } };
 const _load = Module._load;
 Module._load = function (req) {
   if (req === 'firebase-functions/v2/https') return { onCall: (o, f) => f, onRequest: (o, f) => f, HttpsError };
   if (req === 'firebase-functions/v2/scheduler') return { onSchedule: (o, f) => f };
   if (req === 'firebase-admin') return { firestore: firestoreFn };
   if (req === './booking-pin-core') return PIN;
+  if (req === './rental-settlement') return RS;
+  if (req === './business-wallet') return BW_STUB;
+  if (req === './settlement-destination') return SD_STUB;
   return _load.apply(this, arguments);
 };
 const X = require(tmp); fs.unlinkSync(tmp);
@@ -175,6 +186,26 @@ const day = (n) => new Date(Date.now() + n * 86400000).toISOString();
   ck('RP4 a booking of ANOTHER shop is refused before any PIN check', !r.ok && r.code === 'permission-denied' && store.get('rentalBookings/rpD').status === 'return_pending', r);
   r = await call('rentalConfirmReturn', 'stranger', { bookingId: b1, shopId: 'ownerU', pin: '4321' });
   ck('RP5 a stranger cannot confirm a return even with the right PIN', !r.ok && r.code === 'permission-denied', r);
+
+  /* S — settlement call contract */
+  const lastS = RS.settles.find((s) => s.bookingId === b1) || {};
+  const lastQ = RS.quotes[0] || {};
+  ck('S1 completing a HELD, PIN-verified rental quotes with the business-wallet deps injected (BW + SD)', lastQ.deps && lastQ.deps.BW === BW_STUB && lastQ.deps.SD === SD_STUB && lastQ.booking && lastQ.booking.paymentStatus === 'held', lastQ);
+  ck('S2 the settlement is asked with owner = SHOP OWNER (server-resolved), actor = caller, and the quote', lastS.ownerUid === 'ownerU' && lastS.actorUid === 'ownerU' && lastS.quote && lastS.quote.q === 1 && lastS.booking.returnPinVerified === true, lastS);
+  ck('S3 its writes land in the SAME transaction as the completion (applied, outcome stamped released)', store.has('zzSettleApplied/' + b1) && store.get('rentalBookings/' + b1).settlementOutcome === 'released', store.get('rentalBookings/' + b1));
+  mk('sU', { status: 'returned', paymentStatus: 'unpaid' });
+  const nq = RS.quotes.length;
+  r = await call('rentalComplete', 'ownerU', { bookingId: 'sU', shopId: 'ownerU' });
+  ck('S4 an UNPAID legacy rental completes with NO quote (nothing held to settle)', r.ok && RS.quotes.length === nq && store.get('rentalBookings/sU').status === 'completed', r);
+  mk('sR', { status: 'returned', paymentStatus: 'held', returnPinVerified: true });
+  RS.next = { ok: false, reason: 'commission_unpriced' };
+  r = await call('rentalComplete', 'staffU', { bookingId: 'sR', shopId: 'ownerU' });
+  const sS = RS.settles.find((s) => s.bookingId === 'sR') || {};
+  ck('S5a a STAFF completion still settles to the SHOP OWNER (owner never taken from the caller)', sS.ownerUid === 'ownerU' && sS.actorUid === 'staffU', sS);
+  ck('S5 a REFUSED settlement still completes the rental, stamps the reason, applies only its review row', r.ok && r.r.settlement === 'commission_unpriced' && store.get('rentalBookings/sR').settlementOutcome === 'commission_unpriced' && store.get('zzSettleApplied/sR').ok === false, r);
+  RS.next = { ok: true };
+  r = await call('rentalComplete', 'ownerU', { bookingId: 'sR', shopId: 'ownerU' });
+  ck('S6 completing again is a no-op (no second settlement call)', r.ok && r.r.unchanged === true && RS.settles.filter((s) => s.bookingId === 'sR').length === 1, r);
 
   /* RD — refund_due (sokoni-5b webhook: paid after the rental stopped being payable) */
   mk('rdA', { status: 'active', paymentStatus: 'refund_due' });
