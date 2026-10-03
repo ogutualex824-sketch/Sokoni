@@ -55,6 +55,7 @@ const EW = require(Path.join(FN, 'education-workspace.js'));
   ck('X-2 an UNVERIFIED learner: live classes / tutoring / messages LOCKED (AGE_OR_GUARDIAN_REQUIRED); profile + courses AVAILABLE',
     A.kid.learner.access.interactive === false && ['liveClasses', 'tutoring', 'messages'].every((k) => A.kid.learner.modules[k].state === 'LOCKED' && A.kid.learner.modules[k].reason === 'AGE_OR_GUARDIAN_REQUIRED')
       && A.kid.learner.modules.profile.state === 'AVAILABLE' && A.kid.learner.modules.courses.state === 'AVAILABLE', A.kid.learner.modules);
+  ck('X-2b Certificates is AVAILABLE to every learner (courseLessons myCertificates / verify are built)', A.kid.learner.modules.certificates.state === 'AVAILABLE' && A.adult.learner.modules.certificates.state === 'AVAILABLE');
   ck('X-3 a VERIFIED adult: those modules are not LOCKED (unbuilt ones stay NOT_IMPLEMENTED — never faked)', ['liveClasses', 'tutoring', 'messages'].every((k) => A.adult.learner.modules[k].state === 'NOT_IMPLEMENTED'), A.adult.learner.modules);
   ck('X-4 a TEACHER: the teacher dashboard on provider-dashboard, educationType teacher, ONLY teacher modules', dash(A.teach1).includes('teacher:AVAILABLE') && A.teach1.provider.educationType === 'teacher'
     && Object.keys(A.teach1.provider.modules).sort().join() === 'eduClasses,eduCourses,eduLearners,eduLessons', A.teach1.provider);

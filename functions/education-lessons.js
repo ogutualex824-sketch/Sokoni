@@ -161,13 +161,30 @@ async function recordProgress(db, uid, courseId, lessonId, completed) {
 
 async function handle(req) {
   const uid = req.auth && req.auth.uid;
-  if (!uid) _deny('unauthenticated', 'Sign in to continue.');
   const d = req.data || {};
+  /* certificate VERIFICATION is public (a verifier need not hold a SOKONI account) — the ONLY op allowed signed out,
+     and it returns only the privacy-minimal fields below */
+  if (!uid && d.op !== 'verifyCertificate') _deny('unauthenticated', 'Sign in to continue.');
   const db = _db();
   const courseId = _str(d.courseId, 128);
   const courseRef = courseId ? db.collection('courses').doc(courseId) : null;
 
   /* ── learner side ── */
+  /* the learner's OWN view of a course: published outline + their lesson states + progress + their certificate —
+     one server answer, so the viewer never assembles access from raw records */
+  if (d.op === 'learnerCourse') {
+    const [c, e, p, cert] = await Promise.all([courseRef.get(), db.collection('courseEnrollments').doc(enrollId(uid, courseId)).get(),
+      db.collection('courseProgress').doc(enrollId(uid, courseId)).get(), db.collection('learnerCertificates').doc(enrollId(uid, courseId)).get()]);
+    if (!c.exists || c.data().status !== 'published') _deny('not-found', 'Course not available');
+    const isEntitled = entitled(e);
+    const states = (p.exists && p.data().lessonStates) || {};
+    const done = new Set((p.exists && p.data().completedLessons) || []);
+    const lessons = (await _lessonsOf(db, courseId)).filter(isLive).map((l) => Object.assign(outlineOf(l), {
+      state: done.has(l.lessonId) ? 'completed' : (states[l.lessonId.replace(/[.~*/[]]/g, '_')] || {}).state || 'not_started',
+      locked: !(isEntitled || l.freePreview === true) }));
+    return { ok: true, course: { courseId, title: c.data().title || null }, enrolled: isEntitled, progress: isEntitled ? Number((e.data() || {}).progress) || 0 : null,
+      lessons, certificate: cert.exists ? { serial: cert.data().serial, status: cert.data().status || 'issued' } : null };
+  }
   if (d.op === 'outline') {
     const c = await courseRef.get();
     if (!c.exists || (c.data().status !== 'published' && c.data().instructorUid !== uid)) _deny('not-found', 'Course not available');
