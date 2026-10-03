@@ -231,7 +231,12 @@ service cloud.firestore {
      create AND update; the owner keeps every unrelated profile edit. (The fuller trust lock rides the combined release.) */
   function providerApprovalKeys() {
   return ['status','verified','suspended','approved','approvalDecision','approvedBy','approvedAt','adminApproved','commissionRate',
-  'business','education','discovery','_noIndex','marketingApprovedCategories','marketingDeclinedCategories'];
+  'business','education','discovery','_noIndex','marketingApprovedCategories','marketingDeclinedCategories',
+  /* 2026-10-03 sokoni-5b (server half hotfix/approval-authority-on-c7e26b6 @ 7db4c76): discovery / booking / identity /
+     verification stamps — server-written only */
+  'marketingStatus','marketingCategories','searchable','isPublic','acceptsBookings','providerId',
+  'verification','verificationStatus','verifiedFacets','verifiedName','verificationReviewRequired','verificationProjectedAt',
+  'legalVerification','provisionedBy'];
   }
   match /providers/{providerId} {
   allow read:   if resource.data.status == 'active' || resource.data.status == 'approved'

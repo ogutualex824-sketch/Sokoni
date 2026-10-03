@@ -237,7 +237,8 @@ service cloud.firestore {
   'category','linkedBusinessId',
   'healthcare','legalProviderId','provisionedBy','legalVerification',
   'approvalDecision','approvedBy','adminApproved','commissionRate','education','discovery','_noIndex',
-  'marketingApprovedCategories','marketingDeclinedCategories'];
+  'marketingApprovedCategories','marketingDeclinedCategories',
+  'marketingStatus','marketingCategories','isPublic','acceptsBookings','providerId','verification','verificationStatus'];
   }
   allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
   && (!request.resource.data.keys().hasAny(['status'])

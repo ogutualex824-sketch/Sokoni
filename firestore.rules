@@ -271,7 +271,9 @@ service cloud.firestore {
   /* 2026-10-03 sokoni-5b / sokoni-e3 (served f259c0b5): approvalDecision is trusted by live providerDispatch approval-remediation
      with no admin check; an owner could write {decision:'approve', source:'admin_decision'} or overwrite an admin's refuse. */
   'approvalDecision','approvedBy','adminApproved','commissionRate','education','discovery','_noIndex',
-  'marketingApprovedCategories','marketingDeclinedCategories'];
+  'marketingApprovedCategories','marketingDeclinedCategories',
+  /* 2026-10-03 sokoni-5b (7db4c76): discovery / booking / identity / verification stamps */
+  'marketingStatus','marketingCategories','isPublic','acceptsBookings','providerId','verification','verificationStatus'];
   }
   allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
   && (!request.resource.data.keys().hasAny(['status'])

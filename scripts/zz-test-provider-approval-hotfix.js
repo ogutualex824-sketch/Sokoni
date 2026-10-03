@@ -14,6 +14,9 @@ const LOCKED = {
   approvalDecision: { decision: 'approve', source: 'admin_decision' }, approvedBy: 'admin1', approvedAt: 1, adminApproved: true,
   commissionRate: 0, business: { category: 'it_services' }, education: { tier: 'verified' }, discovery: { boost: 99 }, _noIndex: false,
   marketingApprovedCategories: ['all'], marketingDeclinedCategories: [], status: 'active', verified: true, approved: true, suspended: false,
+  /* sokoni-5b 7db4c76 */
+  marketingStatus: 'approved', marketingCategories: ['all'], searchable: true, isPublic: true, acceptsBookings: true, providerId: 'other',
+  verification: { level: 'verified' }, verificationStatus: 'verified', legalVerification: { ok: true }, provisionedBy: 'legal-verification',
 };
 (async () => {
   const file = process.env.RULES_FILE || 'firestore.rules.hotfix-jobs';
