@@ -27,6 +27,8 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await denies('CV-C5', 'a party cannot rewrite participants', updateDoc(doc(cust, 'conversations/service_booking_b1'), { participants: ['cust', 'atk'] }));
   await allows('CV-P1', 'CONTROL: a party reads the conversation', getDoc(doc(cust, 'conversations/service_booking_b1')));
   await allows('CV-P2', 'CONTROL: a party updates lastMessage / unread', updateDoc(doc(cust, 'conversations/service_booking_b1'), { lastMessage: 'hi', unread: { prov: 1 } }));
+  await denies('CV-C6', 'a party cannot stamp serverCreated (b2 fast-path marker)', updateDoc(doc(cust, 'conversations/service_booking_b1'), { serverCreated: true }));
+  await denies('CV-C7', 'a party cannot clear serverCreated on a server doc', updateDoc(doc(cust, 'conversations/service_booking_b1'), { serverCreated: false, lastMessage: 'x' }));
   await denies('CV-P3', 'a stranger cannot read it', getDoc(doc(str, 'conversations/service_booking_b1')));
   await env.cleanup();
   console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
