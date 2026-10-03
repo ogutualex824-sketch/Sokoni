@@ -106,6 +106,7 @@ const isAdmin = async (u) => !!(CLAIMS[u] && (CLAIMS[u].admin || CLAIMS[u].super
   let pb = (data['providers/u_barber1'] || {}).business || {};
   let dc = data['applicationDecisions/ADM_u_barber1'] || {};
   ck('H1-1 admit stamps providers.business {salon, source admin, setBy, applicationId} IN the approval transaction', r.ok && pb.category === 'salon' && pb.source === 'admin' && pb.setBy === 'admin1' && pb.applicationId === 'ADM_u_barber1' && r.category === 'salon', pb);
+  ck('H1-1b the capability is activated in the same txn: approvedAt (protected evidence) + sourceApplicationId on the provider', data['providers/u_barber1'].approvedAt === 'TS' && data['providers/u_barber1'].sourceApplicationId === 'ADM_u_barber1', data['providers/u_barber1']);
   ck('H1-2 the decision record carries businessCategory + approvedCategories — the authority answers a CATEGORY-scoped question', dc.businessCategory === 'salon' && (await AUTH.isAuthoritativelyApproved(db, 'ADM_u_barber1', { isAdmin, category: 'salon' })).approved && !(await AUTH.isAuthoritativelyApproved(db, 'ADM_u_barber1', { isAdmin, category: 'artist_creator' })).approved, dc);
   const aud2 = Object.values(data).find((v) => v && v.action === 'application_admit_existing') || {};
   ck('H1-3 the audit row records the category before → after', aud2.before && aud2.before.business === null && aud2.after && aud2.after.business && aud2.after.business.category === 'salon', aud2);

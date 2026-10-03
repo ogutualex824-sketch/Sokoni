@@ -1798,7 +1798,9 @@ exports.applicationAdmitExistingProvider = onCall(
         reason, category, businessCategory: category, approvedCategories: [category], source: 'admin_existing_provider', decidedAt: at });
       /* H1 — the category is stamped in THIS transaction (the record is already live) */
       const stamp = { category, source: 'admin', setBy: req.auth.uid, setAt: at, applicationId: appId };
-      t.update(recRef, { business: stamp, updatedAt: at });
+      /* … and the CAPABILITY is activated in it: business-scope reads protected approval evidence (approvedAt), which a live-by-
+         status record without it lacks (CAPABILITY_CONFLICT). An existing approvedAt is history and is kept. */
+      t.update(recRef, Object.assign({ business: stamp, sourceApplicationId: appId, updatedAt: at }, rec.approvedAt ? {} : { approvedAt: at }));
       let provisioned = false;
       if (role === 'provider' && profSnap && !profSnap.exists) {
         t.create(profRef, { uid, providerId: rec.providerId || null, status: 'active', name: _sanText(rec.name || rec.businessName || '', 120),
