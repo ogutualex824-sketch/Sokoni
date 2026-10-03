@@ -272,10 +272,64 @@ exports._h.providerSelectPlan = _h.providerSelectPlan = async (req) => {
 /* ── 4. providerActivateSubscription ─────────────────────────────────────────── */
 exports._h.providerActivateSubscription = _h.providerActivateSubscription = async (req) => {
   const uid = _uid(req);
-  const { plan, billingCycle, paymentRef } = req.data || {};
+  /* `paymentRef` is DELIBERATELY NOT DESTRUCTURED. It used to be read here and stored as
+     `paymentMethod`, which made a caller-supplied string look like a payment record. */
+  const { plan, billingCycle } = req.data || {};
   if (!plan || !PLANS[plan]) throw new HttpsError('invalid-argument', 'Invalid plan.');
 
   const p   = PLANS[plan];
+
+  /* ══ A PRICED PLAN CANNOT BE ACTIVATED FROM THE CLIENT (B9.31 21F-2b.2-PROVIDER-SELFGRANT)
+     This handler is reachable through providerDispatch, whose only gate is authentication:
+     _uid(req) checks that SOMEBODY is signed in and nothing else. It then took `plan` and
+     `paymentRef` from the request, verified NEITHER, and wrote status:'active' together with
+     the plan's commissionRate and limits.
+
+     So any authenticated caller could name `enterprise` — KES 9,999/month — supply any string
+     as paymentRef, and receive it for nothing. The rate is not cosmetic: it lands on
+     providerSubscriptions/{uid}, subscription-core resolves it, and provider-ops charges every
+     booking with it. The self-grant moved the caller's own commission from 20% to 5%.
+
+     THE FIX IS NOT A BETTER paymentRef CHECK. A reference the client supplies can never be
+     proof of payment, however it is validated — the platform's own entitlement-engine says so
+     in its header, naming "bookings trust a client-supplied paymentId" as one of the defects
+     it exists to fix. Money becomes capability only through a server-verified payment.
+
+     A plan is self-serve ONLY IF IT IS FREE UNDER EVERY BILLING CYCLE. Testing just the
+     requested cycle would let `billingCycle:'yearly'` through on a plan whose `yearly` is
+     absent or zero while its `monthly` is not — the same shape of hole in a new place.
+
+     free_trial stays self-serve because it costs nothing: there is no payment to verify, so
+     there is nothing to forge, and onboarding keeps working.
+
+     PAID PROVIDER PLANS HAVE NO ROUTE TODAY, and that is stated rather than papered over.
+     Refusing here removes the only one that existed, and it was the insecure one. The
+     entitlement engine's `subscription` purpose is NOT it: its VALID_PLANS are
+     free/starter/pro/business and it writes subscriptions/{uid} — the seller ladder, a
+     different vocabulary in a different collection. Wiring the provider ladder through the
+     intent flow is 21F-2b.2-PROVIDER-PAID-PLAN-ROUTE, deliberately out of this gate's scope.
+     Until then a provider upgrades through support rather than by asserting it. ══════════ */
+  const _monthly = Math.max(0, Math.round(Number(p.monthly) || 0));
+  const _yearly  = Math.max(0, Math.round(Number(p.yearly) || 0));
+  if (_monthly > 0 || _yearly > 0) {
+    logger.warn('[provider] refused unverified paid activation', {
+      uid, plan, billingCycle: billingCycle || null,
+      hadPaymentRef: !!(req.data && req.data.paymentRef),
+    });
+    throw new HttpsError('failed-precondition',
+      'A paid plan cannot be activated from the client. Contact support to upgrade — '
+      + 'a provider subscription is activated only after a server-verified payment.');
+  }
+
+  /* A reference asserted for a plan that costs nothing is a claim about a payment that does
+     not exist. It is REFUSED rather than ignored: silently dropping it would let a caller
+     believe it had supplied something this server acted on. */
+  if (req.data && typeof req.data.paymentRef === 'string' && req.data.paymentRef.trim()) {
+    throw new HttpsError('invalid-argument',
+      'A payment reference is not accepted here. This plan is free, and a paid plan is '
+      + 'activated only after a server-verified payment.');
+  }
+
   const now = new Date();
   const renewalDate = plan === 'free_trial'
     ? new Date(now.getTime() + p.trialDays * 86400000)
@@ -291,7 +345,10 @@ exports._h.providerActivateSubscription = _h.providerActivateSubscription = asyn
   batch.set(_db().collection('providerSubscriptions').doc(uid), {
     uid, subscriptionId: subId, plan, billingCycle, status: plan === 'free_trial' ? 'trialing' : 'active',
     price, renewalDate: renewalDate.toISOString(), expiryDate: renewalDate.toISOString(),
-    paymentMethod: paymentRef || null, trialStatus: plan === 'free_trial' ? 'active' : null,
+    /* NULL, and it cannot be otherwise: the only plans that reach this write are free, so
+       there is no payment and therefore no payment method. It was `paymentRef || null` — a
+       caller-supplied string recorded as though the platform had observed a payment. */
+    paymentMethod: null, trialStatus: plan === 'free_trial' ? 'active' : null,
     features: p.features, commissionRate: p.commissionRate, limits: p.limits,
     createdAt: _ts(), updatedAt: _ts(),
   }, { merge: true });
@@ -340,6 +397,18 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
       'This provider listing is suspended. Contact support to be reinstated.');
   }
 
+  /* ── PUBLISH WRITES CONTENT. THE APPLICATION LIFECYCLE OWNS PUBLIC STATE. (hotfix, OB-1 from 2f4fc20) ──
+     Completing the self-service wizard wrote providers/{uid} with status:'active',
+     searchable:true, acceptsBookings:true and minted claims.provider — with no
+     application, no admin decision and no audit record: a second authority path into
+     the canonical registry. Publishing may only ever write CONTENT. The fields that make
+     a provider publicly discoverable and bookable — status, searchable, isPublic,
+     acceptsBookings, available — are written by projectProvider() when an administrator
+     approves the application, and by nothing else. `approved` excludes a suspended or
+     deactivated provider, so re-running the wizard cannot restore them. */
+  const _regCur  = pubSnap.exists ? (pubSnap.data() || {}) : {};
+  const approved = pubSnap.exists && ['active', 'approved'].includes(_regCur.status);
+
   const providerId = d.providerId || await _genProviderId();
   /* /provider/{providerId} has no hosting rewrite — firebase.json routes
      /shop, /@, /card and /pay, but not /provider — so every QR code and
@@ -366,7 +435,9 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     bookingConfig: draft.bookings || {},
     notifications: draft.notifications || { sms: true, email: true, push: true },
     qrCode: qrData, rating: 0, reviewCount: 0, bookingCount: 0,
-    featured: false, verified: false, searchable: true,
+    featured: false, verified: false,
+    /* `searchable` on the onboarding projection: approval decides it, never publishing. */
+    searchable: approved,
     updatedAt: _ts(),
   }, { merge: true });
 
@@ -402,11 +473,18 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     location:    _pubLoc,
     city:        _pubCity,
     skills:      _pubSkills,
-    status:      'active',
-    searchable:  true,
-    isPublic:    true,
-    acceptsBookings: true,
-    available:   true,
+    /* THE STATE FIELDS — written on FIRST CREATION ONLY, and then closed. If the registry
+       row already exists, publishing writes no state at all: the lifecycle owns it and
+       merge:true leaves whatever it set (an approved provider stays active; a suspended
+       or deactivated one stays so). A first publish creates the row explicitly closed —
+       booking-service refuses `pending_approval` (ACTIVE_PROVIDER_STATES). */
+    ...(pubSnap.exists ? {} : {
+      status:          'pending_approval',
+      searchable:      false,
+      isPublic:        false,
+      acceptsBookings: false,
+      available:       false,
+    }),
     /* Index inline — do NOT rely on the create-only indexProviderCreate trigger,
        which never fires on a re-publish of an existing doc. */
     nameLower:       _pubName ? _pubName.toLowerCase() : '',
@@ -439,8 +517,13 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     uid, ...(draft.notifications || { sms: true, email: true, push: true }), updatedAt: _ts(),
   }, { merge: true });
 
-  // Set custom auth claim
-  await _auth().setCustomUserClaims(uid, { ...(await _auth().getUser(uid)).customClaims, provider: true, providerId });
+  /* Custom auth claim — ONLY for an already-approved provider. Minting `provider: true`
+     here was the second half of the bypass. `grantAccountRole` (applicationDecide →
+     applicationLifecycle) is the one writer of that claim; for an approved provider this
+     is idempotent and re-stamps providerId, for everyone else claims are left untouched. */
+  if (approved) {
+    await _auth().setCustomUserClaims(uid, { ...(await _auth().getUser(uid)).customClaims, provider: true, providerId });
+  }
 
   await batch.commit();
   logger.info('[provider] profile published', { uid, providerId });
