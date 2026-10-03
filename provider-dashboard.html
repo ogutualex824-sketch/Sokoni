@@ -295,6 +295,7 @@ a{color:var(--acc);text-decoration:none}
       <div class="sb-item" onclick="P.show('bookings',this)"><span class="sb-icon">📅</span>Bookings</div>
       <div class="sb-item" data-hc-module="repairs" hidden aria-hidden="true" onclick="P.show('repairs',this)"><span class="sb-icon">🔧</span>Repairs</div>
       <div class="sb-item" data-hc-module="leads" hidden aria-hidden="true" onclick="P.show('leads',this)"><span class="sb-icon">📨</span>Leads &amp; quotes</div>
+      <div class="sb-item" data-hc-module="memberships" hidden aria-hidden="true" onclick="P.show('memberships',this)"><span class="sb-icon">🎫</span>Memberships</div>
       <div class="sb-item" data-hc-module="siteVisits" hidden aria-hidden="true" onclick="P.show('sitevisits',this)"><span class="sb-icon">📍</span>Site visits</div>
       <div class="sb-item" data-hc-module="remoteSupport" hidden aria-hidden="true" onclick="P.show('remotesupport',this)"><span class="sb-icon">🖥️</span>Remote support</div>
       <div class="sb-item" data-hc-module="pickupDropoff" hidden aria-hidden="true" onclick="P.show('pickupdropoff',this)"><span class="sb-icon">🚚</span>Pickup &amp; drop-off</div>
@@ -499,6 +500,12 @@ a{color:var(--acc);text-decoration:none}
     <div class="panel" id="panel-leads">
       <div class="pg-header"><div><div class="pg-title">Leads &amp; quotes</div><div style="font-size:12px;opacity:.65">Requests from customers. Reply in messages, send a quote; an accepted quote is booked and paid like any booking.</div></div></div>
       <div style="padding:14px 20px"><div id="ldList"></div></div>
+    </div>
+
+    <!-- ── Memberships (Fitness) — providerMemberships via fitnessGymMemberships / fitnessCheckIn; module sokoni-fitness-memberships.js ── -->
+    <div class="panel" id="panel-memberships">
+      <div class="pg-header"><div><div class="pg-title">Memberships</div><div style="font-size:12px;opacity:.65">Members, attendance and check-in. Attendance is recorded only when SOKONI confirms a scan.</div></div></div>
+      <div style="padding:14px 20px"><div id="mbList"></div></div>
     </div>
 
     <!-- ── Delivery-mode views (Tech Hub 4C) — bookings by booking.serviceMode; lifecycle stays in Bookings ── -->
@@ -841,6 +848,7 @@ a{color:var(--acc);text-decoration:none}
 <!-- shell gate: the dashboard is a projection of the server workspace authority (providerDispatch businessWorkspace); a held account is sent to /complete-application -->
 <script src="sokoni-tech-service-editor.js" defer></script>
 <script src="sokoni-leads.js" defer></script>
+<script src="sokoni-fitness-memberships.js" defer></script>
 <script src="sokoni-business-workspace.js" defer></script>
 <script src="sokoni-booking-resolution.js" defer></script>
 <script src="sokoni-pricing-studio.js" defer></script>
@@ -883,6 +891,7 @@ const P={
     if(window.SokoniTechEditor&&id==='remotesupport')SokoniTechEditor.loadModeJobs('remoteSupport','rsList');
     if(window.SokoniTechEditor&&id==='pickupdropoff')SokoniTechEditor.loadModeJobs('pickupDropoff','pdList');
     if(id==='leads'&&window.SokoniLeads)SokoniLeads.mountProvider(_q('ldList'),{services:()=>(Sv._svc||[]).filter(x=>x.active!==false),caps:()=>((window.__sokoniWorkspace||{}).serviceCapabilities||[])});
+    if(id==='memberships'&&window.SokoniFitnessMemberships)SokoniFitnessMemberships.mount(_q('mbList'));
   }
 };
 

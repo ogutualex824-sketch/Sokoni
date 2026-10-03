@@ -1,3 +1,9 @@
+## [2026-10-03] — Fitness Memberships wired into the provider dashboard (e3 d70eca5 exact diff) — NOT deployed
+
+- **provider-dashboard.html:** adds a Memberships sidebar item, hidden behind data-hc-module="memberships" (fail closed); panel-memberships with mbList; a P.show mount line; and the sokoni-fitness-memberships.js script.
+- The module itself comes from sokoni-e3 hosting/fitness-memberships-on-31f5844 @ d70eca5, and the hosting assembly must merge it. It writes offers ONLY through providerDispatch provider*Service.
+- **Tests:** test-tech-service-editor MB1 passes (17/0 overall). Sabotage "item shown without the module gate" turns MB1 red.
+
 ## [2026-10-03] - Tech Hub slice 4C (hosting, part): Site visits / Remote support / Pickup & drop-off views — hosting, NOT deployed
 
 - provider-dashboard.html: three sidebar items and panels (data-hc-module siteVisits / remoteSupport / pickupDropoff, hidden until the server says AVAILABLE).

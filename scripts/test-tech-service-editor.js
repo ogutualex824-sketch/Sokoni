@@ -176,6 +176,19 @@ const SRC = read('sokoni-tech-service-editor.js');
     'Site visits / Remote support / Pickup views filter by booking.serviceMode, escape customer text, start hidden and load on open');
 }
 
+/* MB1 — e3 Fitness Memberships wiring (d70eca5 exact diff): gated by module, panel present, mounts on open, module script loaded */
+const mbWired = (pd) => /data-hc-module="memberships" hidden aria-hidden="true" onclick="P\.show\('memberships',this\)"/.test(pd)
+  && pd.includes('id="panel-memberships"') && pd.includes('id="mbList"')
+  && pd.includes("if(id==='memberships'&&window.SokoniFitnessMemberships)SokoniFitnessMemberships.mount(_q('mbList'));")
+  && pd.includes('<script src="sokoni-fitness-memberships.js" defer></script>');
+{
+  const pd = read('provider-dashboard.html');
+  ck('MB1', mbWired(pd), 'Memberships item starts hidden behind data-hc-module, panel + mount line + module script present');
+  const ungated = pd.replace('data-hc-module="memberships" hidden aria-hidden="true"', 'data-hc-module="memberships"');
+  const caught = ungated !== pd && !mbWired(ungated);
+  console.log('  [sabotage] ' + (caught ? 'CAUGHT' : 'MISSED') + '  Memberships item shown without the module gate → MB1'); if (!caught) fail++;
+}
+
 /* T10 — vocabulary parity with the server authority */
 {
   const serverFile = path.join(TECH_FN, 'functions', 'shared', 'tech-service-profile.js');
