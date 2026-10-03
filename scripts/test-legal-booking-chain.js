@@ -69,8 +69,7 @@ console.log('\nLegal Hub L4 — Legal consultation on the canonical booking + se
   ck('C5', s2 && s2.skipped && s2.credited === undefined, 'a second PIN release is a no-op — no double commission, no double credit', s2);
 
   /* C10 — Legal rate cards name a taxonomy practice area; only a server-classified lawyer may set one (L6) */
-  /* fixture: an unlimited plan — the free plan's 1 active service is already the auto consultation card (OPEN owner decision, docs) */
-  DOCS.set('providerSubscriptions/adv', { limits: { listings: -1 } }); DOCS.set('providerSubscriptions/plumb', { limits: { listings: -1 } });
+  /* NO plan fixture (owner 10-03 + 2f 965c46d): on the FREE plan, the SOKONI-created consultation card does not count, so the advocate's own first rate card is allowed. */
   DOCS.set('providers/plumb', { status: 'active', category: 'plumbing', business: { category: 'plumbing', source: 'application' } });
   const sA = await call(PO._h.providerAddService, 'adv', { name: 'Term sheet review', price: 1500000, priceType: 'fixed', durationMins: 90, legalArea: 'term-sheets' });
   const sB = await call(PO._h.providerAddService, 'adv', { name: 'Bogus', price: 1000, legalArea: 'astrology' });
@@ -83,6 +82,7 @@ console.log('\nLegal Hub L4 — Legal consultation on the canonical booking + se
     && sC.det && sC.det.code === 'LEGAL_AREA_NOT_LEGAL_PROVIDER' && before === after && !!sD.ok && DOCS.get('providerServices/' + sA.ok.serviceId).legalArea === undefined,
     'Legal rate card carries a taxonomy practice area; unknown area refused; a non-Legal provider cannot claim one (nothing written); null clears it', { sA, sB: sB.det, sC: sC.det, sD });
   /* C11 — a specialist area on a rate card only once SOKONI confirmed it (owner 10-03) */
+  DOCS.set('providerSubscriptions/adv', { limits: { listings: -1 } });   /* fixture: a plan allowing a second advocate-created card */
   await call(require(path.join(FN, 'legal-dispatch.js')).legalDispatch.run.bind(null), 'adv', { op: 'legalUpdateProfile', specialistAreas: ['tax-law'] });
   const t1 = await call(PO._h.providerAddService, 'adv', { name: 'Tax dispute', price: 800000, priceType: 'fixed', legalArea: 'tax-law' });
   await call(LV._adminH.legalAdminConfirmSpecialist, 'admin1', { uid: 'adv', area: 'tax-law', confirm: true, reason: 'Verified tax practice' }, { admin: true });
