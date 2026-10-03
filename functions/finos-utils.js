@@ -638,7 +638,9 @@ async function calculateCommission(db, opts) {
        excludes it, but the floor policy is stated by the rate resolver rather than inferred
        here, so the arithmetic never has to reason about whether an advertised 0% should
        become KES 10. Advertising 0% and charging a minimum is a dispute merchants would win. */
-    if (effectiveRate > 0 && !usingSubRate && !skipMinimum && !mktFloorExempt) {
+    /* A floor-exempt fixed lane (fitness bookings, commission-config.FIXED_RATE_FLOOR_EXEMPT) is its stated rate exactly. */
+    const fixedFloorExempt = fixedCategory && CC.isFloorExemptFixedCategory(category);
+    if (effectiveRate > 0 && !usingSubRate && !skipMinimum && !mktFloorExempt && !fixedFloorExempt) {
       commissionCents = Math.max(commissionCents, CC.MIN_COMMISSION_KES * 100);
     }
     if (fixedKES) commissionCents += fixedKES * 100;

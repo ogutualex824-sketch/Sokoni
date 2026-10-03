@@ -87,6 +87,10 @@
       "pct": 5,
       "fixedKES": 0
     },
+    "fitness": {
+      "pct": 5,
+      "fixedKES": 0
+    },
     "education": {
       "pct": 15,
       "fixedKES": 0
@@ -134,7 +138,10 @@
     "restaurant": "food_delivery",
     "food": "food_delivery",
     "insurance": "services",
-    "fitness": "services",
+    "gym": "fitness",
+    "fitness_hub": "fitness",
+    "fitness-hub": "fitness",
+    "personal_training": "fitness",
     "car-rental": "car_rental",
     "car_hire": "car_rental",
     "car-hire": "car_rental",

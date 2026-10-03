@@ -384,3 +384,28 @@ Owner approval for Unit 3 (P0-4) · the four Gate B items (§9) · the `terms.ht
 **Open.**
 - No `fitness_*` plans exist. Add them to `sub-billing.js` PLANS (with an owner-set price) and they appear automatically.
 - `adminSubCreatePlan` / `adminSubUpdatePlan` overrides stored in Firestore are not read here. That is the same static table as `subGetPlans`.
+
+## 12 · Fitness bookings — 5% per booking (owner, 2026-10-03)
+
+**Decision (verbatim):** "5% commission per booking fo the bookings". Given with the Fitness Hub business model the same day.
+
+**Authority:** `functions/commission-config.js`.
+- `RATES.fitness = {pct: 5, fixedKES: 0}`.
+- `fitness` was an alias of `services`. It is now its own row and a **fixed-rate category** (`FIXED_RATE_CATEGORIES = ['pos', 'fitness']`).
+- The provider plan ladder (20/15/10/7/5), `commissionRules` and `revenueConfig` are bypassed and recorded (`fixedRateCategory`, `overrideIgnored`).
+- **No KES 10 floor** (`FIXED_RATE_FLOOR_EXEMPT = ['fitness']`): provider bookings never had one, and the owner set 5% per booking. A KES 100 session pays KES 5.
+- POS keeps its floor.
+- Aliases: `gym`, `fitness_hub`, `fitness-hub`, `personal_training`.
+- The browser snapshot (`sokoni-commission-rates.js`) was regenerated.
+
+**Scope.** The rate covers paid fitness BOOKINGS: sessions, classes, consultations, packages and Quick Pay. It does not cover:
+- booking fees
+- memberships
+- marketing
+- Marketplace equipment and clothing (existing marketplace commission)
+
+**A caller must price with `category: 'fitness'`.** A fitness booking sent as `services` takes the provider ladder. Wiring this is the Fitness lane's job (sokoni-e3).
+
+**Tests:** `test-pos-fixed-rate-bypass.js` 27/0 (+F1–F4); sabotage (floor exemption removed) → F3 FAIL. `test-commission-schedule.js` 25/0.
+
+**Status:** NOT deployed. It ships with this branch's functions slice, together with every function that bundles commission-config / finos-utils.

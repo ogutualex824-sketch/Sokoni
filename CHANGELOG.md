@@ -1,3 +1,9 @@
+## 2026-10-03 — Fitness bookings 5% per booking (owner decision; NOT deployed)
+
+- **Rate:** commission-config RATES.fitness 5%, now a fixed-rate category (bypasses the provider plan ladder and overrides) with no KES 10 floor.
+- **Aliases:** gym, fitness_hub, fitness-hub, personal_training.
+- **Files:** functions/commission-config.js, functions/finos-utils.js (floor-exempt fixed lane), sokoni-commission-rates.js (regenerated), scripts/test-pos-fixed-rate-bypass.js (+F1–F4, 27/0).
+
 ## 2026-10-03 — Hub plan entitlements in the ONE catalogue (NOT deployed)
 
 - **Fix:** paid restaurant / hotel / pharmacy / driver / property / recruiter / freelancer / car-dealer / buyer plans no longer resolve to the seller FREE allowance.

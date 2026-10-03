@@ -86,6 +86,11 @@ const RATES = {
   /* POS / Till / Quick Charge: its own key, so it can never follow the marketplace rate through an alias. Same 5%
      as before; its 48-hour settlement term is preserved in index.js _is48hCommission. */
   pos:              { pct: 5,   fixedKES: 0,    _was: 'owner schedule 2026-09-28: POS / Till / Quick Charge 5% (unchanged; was via ALIASES.pos -> marketplace)' },
+  /* Fitness Hub bookings (owner 2026-10-03: "5% commission per booking for the bookings"). Its own key and a FIXED-RATE
+     category (below): a fitness booking is 5% on every provider plan — the provider ladder (Free 20% … Enterprise 5%)
+     and admin overrides do not apply. Covers paid sessions, classes, consultations, packages and Quick Pay bookings.
+     Booking FEES, memberships, marketing and Marketplace equipment/clothing are separate products, not this row. */
+  fitness:          { pct: 5,   fixedKES: 0,    _was: 'owner 2026-10-03: fitness bookings 5% per booking (was ALIASES.fitness -> services 5%, then the provider plan ladder 20–5%)' },
   education:        { pct: 15,  fixedKES: 0,    _was: 'category only' },
   jobs:             { pct: 15,  fixedKES: 0,    _was: 'category only' },
   classifieds:      { pct: 8,   fixedKES: 0,    _was: 'category only' },
@@ -135,7 +140,9 @@ const ALIASES = {
      subscriber). No new rate: it prices exactly as `subscriptions`. */
   healthcare_subscription: 'subscriptions',
   restaurant: 'food_delivery', food: 'food_delivery',
-  insurance: 'services', fitness: 'services',
+  insurance: 'services',
+  /* fitness: its own fixed-rate row since 2026-10-03 (was an alias of services) */
+  gym: 'fitness', fitness_hub: 'fitness', 'fitness-hub': 'fitness', personal_training: 'fitness',
   'car-rental': 'car_rental', car_hire: 'car_rental', 'car-hire': 'car_rental',
   pharmacy: 'healthcare_products',
   property_agent: 'property',
@@ -336,7 +343,17 @@ function resolveRate(key) {
    The 2026-09-06 production lineage carried this guard. The 09-28 restructure kept the flat lane
    (POS_PLAN_RATES) but dropped the guard, which left POS ladder-exempt yet override-able through
    the finos-utils chain. Restored 2026-09-30 — docs/COMMERCIAL_CONVERGENCE_2026-09-30.md. */
-const FIXED_RATE_CATEGORIES = Object.freeze(['pos']);
+/* 'fitness' added 2026-10-03 (owner: 5% per booking). Same absolute semantics as POS: RATES.fitness and nothing else. */
+const FIXED_RATE_CATEGORIES = Object.freeze(['pos', 'fitness']);
+
+/* Fixed lanes that carry NO platform minimum. Fitness is a provider BOOKING lane, and provider bookings never had the
+   KES 10 floor (finos-utils: "a KES 20 booking at 20% charged KES 4"); the owner set "5% commission per booking", so a
+   KES 100 session pays KES 5, not KES 10. POS keeps its floor (POS_PLAN_RATES.floorExempt false) — unchanged. */
+const FIXED_RATE_FLOOR_EXEMPT = Object.freeze(['fitness']);
+function isFloorExemptFixedCategory(key) {
+  const r = resolveRate(key);
+  return r.matched === true && FIXED_RATE_FLOOR_EXEMPT.indexOf(r.category) !== -1;
+}
 
 /* Accepts a hub id, an alias, or a category, and resolves it the same way resolveRate does,
    so a caller passing hubId 'pos' and a caller passing category 'till' get the same answer. */
@@ -728,6 +745,8 @@ module.exports = {
   resolveRate,
   listCategories,
   isFixedRateCategory,
+  isFloorExemptFixedCategory,
+  FIXED_RATE_FLOOR_EXEMPT,
   FIXED_RATE_CATEGORIES,
   resolveProviderRate,
   PROVIDER_PLAN_RATES: Object.freeze(PROVIDER_PLAN_RATES),

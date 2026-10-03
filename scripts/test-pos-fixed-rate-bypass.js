@@ -80,7 +80,8 @@ const RULE = { id: 'rule_seller_all', entityId: 'seller_A', category: 'all', rat
   console.log('POS fixed-rate bypass — decision exercised through finos-utils.calculateCommission\n');
 
   /* S1 — the authority states the decision */
-  ck('S1  FIXED_RATE_CATEGORIES is exactly [pos]', JSON.stringify(CC.FIXED_RATE_CATEGORIES) === '["pos"]', CC.FIXED_RATE_CATEGORIES);
+  /* Exactly the OWNER-DECIDED fixed lanes: pos (2026-09-06/26/28) and fitness (2026-10-03, "5% commission per booking"). */
+  ck('S1  FIXED_RATE_CATEGORIES is exactly the owner-decided lanes [pos, fitness]', JSON.stringify(CC.FIXED_RATE_CATEGORIES) === '["pos","fitness"]', CC.FIXED_RATE_CATEGORIES);
   ck('S1  isFixedRateCategory: pos / till / quick_charge true; marketplace / product / services false',
      ['pos', 'till', 'quick_charge', 'quickcharge'].every(CC.isFixedRateCategory)
      && !['marketplace', 'product', 'services', 'hub', 'default', 'no_such'].some(CC.isFixedRateCategory));
@@ -151,6 +152,31 @@ const RULE = { id: 'rule_seller_all', entityId: 'seller_A', category: 'all', rat
        hub.pct === 17 && CC.resolveRate('logistics').pct === 17 && CC.resolveRate('driver').pct === 17, hub);
     let DQ = null; try { DQ = require(path.join(ROOT, 'functions', 'delivery-quote-authority')); } catch (_) {}
     ck('S8  the floor equals delivery-quote-authority.SHARE_MIN_PCT (one number, two places, kept equal)', DQ && DQ.SHARE_MIN_PCT === hub.pct, DQ && { SHARE_MIN_PCT: DQ.SHARE_MIN_PCT });
+  }
+
+  /* ── FITNESS (owner 2026-10-03: "5% commission per booking for the bookings") ── same lane semantics as POS,
+     plus NO platform minimum (provider bookings never had one). */
+  ck('F1  RATES.fitness is 5% flat; gym / fitness-hub / personal_training resolve to it; services is NOT fixed',
+     CC.RATES.fitness.pct === 5 && CC.RATES.fitness.fixedKES === 0 && ['fitness', 'gym', 'fitness-hub', 'personal_training'].every(CC.isFixedRateCategory) && !CC.isFixedRateCategory('services'));
+  {
+    const db = makeDb({ rule: RULE });
+    const r = await FU.calculateCommission(db, { orderAmountCents: 150000, category: 'fitness', sellerId: 'seller_A', subscriptionRole: 'provider' });
+    ck('F2  KES 1,500 fitness booking with rule 1% + revenueConfig 1% + provider plan: KES 75 (5%), bypass recorded',
+       r.commissionCents === 7500 && r.effectiveRate === 5 && r.fixedRateCategory === true && r.overrideIgnored === true && !/subscription/.test(r.pricingSource), r);
+    ck('F2  revenueConfig not read for fitness', !db._reads.revenueConfig.some((id) => /^(seller_|hub_|global$)/.test(id)), db._reads);
+  }
+  {
+    const db = makeDb({ rule: null });
+    const r = await FU.calculateCommission(db, { orderAmountCents: 10000, category: 'fitness', sellerId: 'trainer_A' });
+    ck('F3  KES 100 fitness session: exactly KES 5 (5%) — no KES 10 floor', r.commissionCents === 500, r);
+    const g = await FU.calculateCommission(makeDb({ rule: null }), { orderAmountCents: 200000, category: 'gym', sellerId: 'gym_B' });
+    ck('F3  alias "gym" KES 2,000 → KES 100, category fitness', g.commissionCents === 10000 && g.category === 'fitness', g);
+  }
+  {
+    const r = await FU.calculateCommission(makeDb({ rule: RULE }), { orderAmountCents: 1000000, category: 'services', sellerId: 'svc_C' });
+    ck('F4  control: a generic "services" booking still honours the admin rule (1%) — fitness is scoped, not global', r.commissionCents === 10000 && r.fixedRateCategory === false, r);
+    const p = await FU.calculateCommission(makeDb({ rule: null }), { orderAmountCents: 10000, category: 'pos', sellerId: 'seller_A' });
+    ck('F4  control: POS keeps its KES 10 floor (only fitness is floor-exempt)', p.commissionCents === CC.MIN_COMMISSION_KES * 100, p);
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);
