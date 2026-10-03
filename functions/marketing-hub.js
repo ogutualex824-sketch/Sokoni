@@ -128,7 +128,7 @@ const _h = {
         location: county, city: county, phone, phoneNumber: phone, email: _s(req.auth.token && req.auth.token.email, 200),
         portfolio: _urls(d.portfolio), yearsExperience: _int(d.yearsExperience, 0, 60),
         ...(agency ? { agency } : {}),
-        status: 'pending', marketingStage: 'submitted',
+        status: 'pending', reviewStage: 'submitted', reviewStageAt: _ts(),
         marketingApprovedCategories: FV().delete(), marketingDeclinedCategories: FV().delete(),
         decisionAppliedFor: FV().delete(), reviewReason: c && st === 'info_requested' ? (c.reviewReason || null) : null,
         submittedAt: _ts(), receivedAt: _ts(), updatedAt: _ts(),
@@ -148,7 +148,7 @@ const _h = {
       if (!cur.exists) throw new HttpsError('not-found', 'No Marketing application.');
       const st = String(cur.data().status || 'pending');
       if (LIVE.indexOf(st) < 0 && st !== 'info_requested') throw new HttpsError('failed-precondition', 'Only an application under review can be withdrawn.', { code: 'MKT_NOT_LIVE' });
-      t.set(ref, { status: 'withdrawn', marketingStage: 'withdrawn', withdrawnAt: _ts(), updatedAt: _ts() }, { merge: true });
+      t.set(ref, { status: 'withdrawn', reviewStage: 'withdrawn', reviewStageAt: _ts(), withdrawnAt: _ts(), updatedAt: _ts() }, { merge: true });
     });
     return { ok: true, status: 'withdrawn' };
   },
@@ -162,7 +162,7 @@ const _h = {
     return {
       ok: true,
       application: app ? {
-        status: app.status || 'pending', marketingType: app.marketingType || null, requestedCategories: app.requestedCategories || [],
+        status: app.status || 'pending', reviewStage: app.reviewStage || null, marketingType: app.marketingType || null, requestedCategories: app.requestedCategories || [],
         approvedCategories: app.marketingApprovedCategories || [], declinedCategories: app.marketingDeclinedCategories || [],
         reviewReason: app.status === 'info_requested' || app.status === 'rejected' ? (app.reviewReason || null) : null,
         name: app.name || '', description: app.description || '', county: app.city || '', phone: app.phone || '', portfolio: app.portfolio || [],
@@ -184,7 +184,7 @@ const _h = {
       db().collection('providers').where('marketingListed', '==', true).limit(1000).get(),
     ]);
     const items = apps.docs.map((x) => { const a = x.data(); return {
-      id: x.id, uid: a.uid || null, name: a.name || '', status: a.status || 'pending', marketingType: a.marketingType || null,
+      id: x.id, uid: a.uid || null, name: a.name || '', status: a.status || 'pending', reviewStage: a.reviewStage || null, marketingType: a.marketingType || null,
       requestedCategories: a.requestedCategories || [], approvedCategories: a.marketingApprovedCategories || [],
       county: a.city || '', phone: a.phone || '', email: a.email || '', portfolio: a.portfolio || [], description: a.description || '',
       agency: a.agency || null, yearsExperience: a.yearsExperience == null ? null : a.yearsExperience,

@@ -1,3 +1,13 @@
+## [2026-10-03] — Marketing: intake stamps reviewStage on the ONE application engine (5b 5fec96f) — NOT deployed
+
+- **functions/marketing-hub.js:**
+  - marketingApply writes reviewStage 'submitted' (Draft stays client-side); marketingWithdraw writes 'withdrawn'.
+  - marketingMyStatus and marketingAdminOverview return reviewStage, so the applicant and AdminOS see submitted → under_review → verified → approved / revoked.
+  - A revoked application (status suspended, reviewStage revoked) cannot be resubmitted (MKT_LOCKED).
+- **Tests:**
+  - test-marketing-hub 29/0 (new RS1–RS3: intake stage; verified ≠ approved, nothing listed; revoked is terminal and unlisted); SABOTAGE 10/10.
+  - education-applications 33/0, food-gate1 28/0, role-provisioning 57/0, k13b 8/0.
+
 ## [2026-10-03] — Marketing Hub MK1 + MK2 (server): one taxonomy, three separate application types, partial category approval through the shared AdminOS review — NOT deployed
 
 - **functions/shared/marketing-taxonomy.js (new):**

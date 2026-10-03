@@ -24,7 +24,7 @@ if (process.env.SABOTAGE) {
     /* S1 removes BOTH layers (retraction empties the categories AND the card filter checks listed/status). */
     ['S1', 'marketing-hub.js', "p.marketingListed === true && p.marketingStatus === 'active' &&", 'true &&',
       'application-lifecycle.js', 'marketingCategories: [], marketingGroups: [],\n      marketingListed: false,', 'marketingListed: false,'],
-    ['A7', 'marketing-hub.js', "status: 'pending', marketingStage: 'submitted',", "status: d.status || 'pending', marketingStage: 'submitted',"],
+    ['A7', 'marketing-hub.js', "status: 'pending', reviewStage: 'submitted',", "status: d.status || 'pending', reviewStage: 'submitted',"],
     ['O1', 'marketing-hub.js', 'async marketingAdminOverview(req) {\n    _admin(req);', 'async marketingAdminOverview(req) {'],
   ];
   let caught = 0;
@@ -166,6 +166,21 @@ const BASE_APP = { name: 'Achieng Creative', description: 'Brand identity and so
   rr = await D('marketingApply', 'u5', Object.assign({ marketingType: 'specialist', categories: ['seo'], portfolio: ['https://example.com/seo-case'] }, BASE_APP));
   ck('W2', ms.ok && ms.ok.application.status === 'info_requested' && ms.ok.application.reviewReason === 'Add an SEO case study' && rr.ok && rr.ok.resubmitted,
     'NEEDS-INFO: the applicant sees the reviewer\'s request and can resubmit', [ms, rr]);
+
+  /* ── RS: review sub-states on the ONE engine (5b 5fec96f) ── */
+  ck('RS1', (DOCS.get('applications/marketing_u5') || {}).reviewStage === 'submitted', 'intake (and resubmission) stamps reviewStage "submitted"', DOCS.get('applications/marketing_u5'));
+  r = await decide('admin1', { applicationId: 'marketing_u5', decision: 'mark_under_review' }, ADM);
+  const rs2 = await D('marketingMyStatus', 'u5');
+  r = await decide('admin1', { applicationId: 'marketing_u5', decision: 'mark_verified' }, ADM);
+  const rs3 = await D('marketingMyStatus', 'u5');
+  ck('RS2', rs2.ok && rs2.ok.application.reviewStage === 'under_review' && rs3.ok.application.reviewStage === 'verified' && rs3.ok.application.status === 'pending'
+    && !(DOCS.get('providers/u5') || {}).marketingListed, 'under review → verified is visible to the applicant; verified is NOT approved (nothing listed)', [rs2, rs3]);
+  r = await decide('admin1', { applicationId: 'marketing_u5', decision: 'approve', approvedCategories: ['seo'] }, ADM);
+  r = await decide('admin1', { applicationId: 'marketing_u5', decision: 'revoke', reason: 'Fake portfolio confirmed' }, ADM);
+  rr = await D('marketingApply', 'u5', Object.assign({ marketingType: 'specialist', categories: ['seo'] }, BASE_APP));
+  const rd = await D('marketingDirectory', null, { category: 'seo' });
+  ck('RS3', r.ok && (DOCS.get('applications/marketing_u5') || {}).reviewStage === 'revoked' && rr.det && rr.det.code === 'MKT_LOCKED' && rd.ok && rd.ok.items.length === 0,
+    'REVOKED is terminal: unlisted, and the applicant cannot resubmit', [r, rr, rd && rd.ok]);
 
   /* ── M / O: own status, AdminOS overview ── */
   const m1 = await D('marketingMyStatus', 'u1');
