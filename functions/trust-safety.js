@@ -141,6 +141,15 @@ function _reportDocId(uid, entityType, entityId) {
 function _opaqueRef(id) {
   return crypto.createHash('sha256').update(String(id)).digest('hex').slice(0, 16);
 }
+/* AN UNLINKABLE REFERENCE (2026-10-03, privacy fix). _opaqueRef is a hash of a known-shape id: for a report id
+   ({reporterUid}_{type}_{entityId}) anyone who knows the entity and a list of candidate uids (uids are public elsewhere —
+   e.g. authorUid on approved reviews) can recompute it and name the reporter. So nothing a NON-admin can read may carry
+   _opaqueRef(reportId). Where a reference must be visible outside the server — the hold on a world-readable product,
+   the ref a seller sees on a report about their listing — it is RANDOM, generated once, and stored on the report
+   (server-only) so the server can find it again. It is never recomputed from anything. */
+function _newRef() {
+  return crypto.randomBytes(12).toString('base64url');
+}
 
 /* THE STATE MAPPING — the one place the stored report status meets the shared moderation state machine
    (pending → approved(=upheld) | rejected(=dismissed) | changes_requested | archived | removed).
@@ -260,8 +269,9 @@ function _iso(ts) {
 
    THE HOLD IS PUBLIC-SAFE. `products/{id}` is world-readable (rules: read if true), so `moderationHold` carries NO
    reporter-derived value and no moderator identity: the report id embeds the reporter's uid, and the reason would tell
-   the public "this seller was reported for X". The hold stores only an opaque ref (sha256 prefix of the report id),
-   the correlation id, the time and the visibility before it. Who decided and why lives in the report and in
+   the public "this seller was reported for X". The hold stores only an opaque ref — RANDOM since
+   2026-10-03 (_newRef, kept on the report as holdRef; it was a sha256 prefix of the report id, which anyone holding a
+   list of candidate uids could recompute) — the correlation id, the time and the visibility before it. Who decided and why lives in the report and in
    `trustSafetyAudit` (both server-only). A hold written by the pre-2026-10-02 code (reportId) is still recognised —
    none exists in production (C2/C3 never deployed; the live trust-safety.js never writes products).
 
@@ -275,13 +285,22 @@ function _iso(ts) {
    exactly those rows back to `active`. The public reader (sokoni-featured.js) shows status=='active' only.
    ═════════════════════════════════════════════════════════════════════════ */
 const PROMO_PAUSED = 'paused_by_moderation';
-function _holdOwnedBy(hold, ids) {
-  if (!hold) return null;
-  for (const id of ids) {
-    if (!id) continue;
-    if ((hold.ref && hold.ref === _opaqueRef(id)) || (hold.reportId && hold.reportId === id)) return id;
+/* WHICH REPORT OWNS THE HOLD: the one whose stored report.holdRef equals hold.ref. Nothing is recomputed: the ref is
+   random (_newRef) and lives on the report. candidates = [{id, holdRef}]. */
+function _holdOwnedBy(hold, candidates) {
+  if (!hold || typeof hold.ref !== 'string' || !hold.ref) return null;
+  for (const c of candidates || []) {
+    if (c && c.id && typeof c.holdRef === 'string' && c.holdRef && c.holdRef === hold.ref) return c.id;
   }
   return null;
+}
+/* A hold written before the random ref (a sha256(reportId) prefix, or the pre-2026-10-02 reportId) has no report that
+   stores its ref. It is NOT matched by recomputing the hash (that is the guess this fix removes): a restore is refused
+   with LEGACY_HOLD_NO_HOLDREF and the listing is restored by hand after review. None exists in production. */
+function _isLegacyHold(hold, candidates) {
+  if (!hold) return false;
+  if (hold.reportId || typeof hold.ref !== 'string' || !hold.ref) return true;
+  return /^[0-9a-f]{16}$/.test(hold.ref) && !(candidates || []).some((c) => c && c.holdRef === hold.ref);
 }
 /* Reads (transaction-safe: all reads, no writes) the enforcement that is NOT this moderation hold. */
 async function _otherEnforcement(tx, db, p) {
@@ -396,6 +415,7 @@ exports.tsReportContent = onCall(OPT_REPORT, async (req) => {
       evidenceUrls,
       context,
       reportedBy: uid,   /* administrators only — never returned to a seller */
+      publicRef: _newRef(),   /* the ref a seller may see: random, unlinkable to the reporter (2026-10-03) */
       status: 'pending',
       severity,
       createdAt: FieldValue.serverTimestamp(),
@@ -601,7 +621,9 @@ async function _myListingReports(req) {
     const r = d.data() || {}; const c = r.context || {};
     const moderationState = _stateOf(r.status || 'pending');
     return {
-      ref: _opaqueRef(d.id),
+      /* the seller gets the report's RANDOM publicRef, never _opaqueRef(report id): that hash names the reporter to anyone
+         who can list candidate uids. A report filed before publicRef existed shows no ref (the seller UI renders none). */
+      ref: r.publicRef || null,
       entityType: r.entityType || null, entityId: r.entityId || null,
       productName: c.productName || null, reasonCode: r.reasonCode || null, reason: r.reason || null,
       moderationState,
@@ -625,7 +647,7 @@ async function _myListingReports(req) {
     const moderationState = _stateOf(r.status || 'pending');
     if (moderationState === 'removed') return;
     reports.push({
-      ref: _opaqueRef(d.id),
+      ref: r.publicRef || null,
       entityType: r.entityType, subject: 'review_on_your_listing',
       listingType: c.listingType || null, listingId: c.listingId || null,
       /* a seller cannot change somebody else's review: 'needs information' is still under review to them */
@@ -744,7 +766,10 @@ exports.tsGetReportCase = onCall(OPT, async (req) => {
     : [];
 
   if (product && product.moderationHold) {
-    product.moderationHold.reportId = _holdOwnedBy(product.moderationHold, reports.map((r) => r.id)) || product.moderationHold.reportId || null;
+    /* owner = the report on this listing whose stored holdRef is the hold's ref (never recomputed from a report id) */
+    const cands = sib.docs.map((d) => ({ id: d.id, holdRef: (d.data() || {}).holdRef || null }));
+    product.moderationHold.reportId = _holdOwnedBy(product.moderationHold, cands);
+    product.moderationHold.legacy = !product.moderationHold.reportId && _isLegacyHold(product.moderationHold, cands);
     delete product.moderationHold.ref;
   }
   const heldByThis = !!(product && product.moderationHold && product.moderationHold.reportId === reportId);
@@ -917,6 +942,7 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
     /* ── writes ── */
     const now = FieldValue.serverTimestamp();
     let promotionsChanged = 0;
+    let holdRef = null;             /* the hold this decision created or released — its random ref, never derived */
     if (hide) {
       if (!psnap || !psnap.exists) enforcement = 'product_missing';
       else {
@@ -925,7 +951,7 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
         if (p.isVisible === false && p.moderationHold) enforcement = 'already_hidden';
         else {
           enforcement = 'listing_hidden';
-          const holdRef = _opaqueRef(reportId);
+          holdRef = _newRef();      /* stored on the report (patch below) — the only way back to this hold */
           tx.set(pref, { isVisible: false, moderationHold: { active: true, ref: holdRef, at: now, correlationId,
             previousIsVisible: p.isVisible !== false }, updatedAt: now }, { merge: true });
           /* paid placement never bypasses moderation: pause it (status only — financial history untouched) */
@@ -940,10 +966,14 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
       const p = psnap && psnap.exists ? (psnap.data() || {}) : null;
       const hold = p && p.moderationHold;
       if (!hold) throw new HttpsError('failed-precondition', 'This listing is not held by moderation; there is nothing to restore.');
-      const owners = [reportId].concat(siblings.map((s) => s.id));
+      const owners = [{ id: reportId, holdRef: report.holdRef || null }].concat(siblings.map((s) => ({ id: s.id, holdRef: s.r.holdRef || null })));
       const ownerId = _holdOwnedBy(hold, owners);
+      if (!ownerId && _isLegacyHold(hold, owners)) {
+        throw new HttpsError('failed-precondition', 'This take-down was recorded before hold references were stored on reports, so it cannot be matched '
+          + 'to a report safely. Restore the listing manually after review.', { reason: 'LEGACY_HOLD_NO_HOLDREF' });
+      }
       if (!ownerId) {
-        throw new HttpsError('failed-precondition', 'The listing is held by a different report. Restore it by deciding that report.');
+        throw new HttpsError('failed-precondition', 'The listing is held by a different report. Restore it by deciding that report.', { reason: 'HELD_BY_OTHER_REPORT' });
       }
       if (other.length) {
         throw new HttpsError('failed-precondition', 'This listing cannot be restored: another enforcement still applies ('
@@ -954,7 +984,9 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
         : (holder.context && typeof holder.context.isVisible === 'boolean' ? holder.context.isVisible : null);
       if (prior === null) throw new HttpsError('failed-precondition', 'The visibility of this listing before the hold is not recorded; it cannot be restored automatically.');
       enforcement = 'listing_restored';
-      const ref0 = hold.ref || _opaqueRef(ownerId);
+      const ref0 = hold.ref;           /* === the owner's report.holdRef (matched above) */
+      holdRef = ref0;
+      /* the hold is DELETED (FieldValue.delete) — never rewritten as {active:false}: the sale paths read its EXISTENCE */
       tx.set(pref, { isVisible: prior, moderationHold: FieldValue.delete(),
         moderationReleased: { ref: ref0, at: now, correlationId, restoredVisibility: prior }, updatedAt: now }, { merge: true });
       for (const d of promos) {
@@ -985,6 +1017,7 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
         Object.assign(patch, { status: newStatus, reviewedBy: uid, reviewedAt: now, resolution });
         if (internalNote) patch.internalNote = internalNote;
         if (productHidden) patch.productHidden = true;
+        if (primary && enforcement === 'listing_hidden' && holdRef) patch.holdRef = holdRef;
         if (enforcement === 'listing_restored') patch.productHidden = false;
         /* the review outcome is recorded on the PRIMARY report only — it is the one whose decision removed the review */
         if (primary && reviewResult) {
@@ -1015,6 +1048,8 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
         enforcement: isAssign ? 'none' : enforcement,
         review: primary && reviewResult ? { kind: target.type, from: reviewResult.from || null, to: reviewResult.status || null,
           unchanged: reviewResult.unchanged === true, missing: reviewResult.missing === true } : null,
+        /* the hold, by its RANDOM ref only (created by a hide, released by a restore) */
+        holdRef: primary && (enforcement === 'listing_hidden' || enforcement === 'listing_restored') ? holdRef : null,
         promotions: primary && promotionsChanged ? { changed: promotionsChanged, to: enforcement === 'listing_hidden' ? PROMO_PAUSED : 'resumed' } : null,
         resolution: isAssign ? '' : resolution,
         internalNote: internalNote || null,
@@ -1183,7 +1218,7 @@ async function _notifyRestore(db, head, correlationId) {
 exports._reportModel = { REPORT_ENTITY_TYPES, REPORT_REASONS, REVIEW_REPORT_REASONS, REVIEW_EXCERPT_MAX, REPORT_STATE, REPORT_ACTIONS, REPORT_TRANSITIONS,
   REPORT_DETAIL_MAX, REPORT_DETAIL_MIN_WHEN_REQUIRED, OPEN_STATUSES, QUEUE_STATUS_STORED, ASSIGN_ACTIONS, MODERATION_TARGETS,
   SELLER_RESPONSE, PROMO_PAUSED, LISTING_ACTIONS: Object.freeze(['restore']), queueStatusOf: _queueStatusOf, sellerStatusOf: _sellerStatusOf, allowedActions: _allowedActions,
-  holdOwnedBy: _holdOwnedBy, opaqueRef: _opaqueRef };
+  holdOwnedBy: _holdOwnedBy, isLegacyHold: _isLegacyHold, opaqueRef: _opaqueRef, newRef: _newRef };
 exports._setNotifier = (fn) => { _notifier = fn || null; };
 
 /* ─────────────────────────────────────────────────────────────────────────

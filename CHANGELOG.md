@@ -1,3 +1,74 @@
+## [2026-10-03] - PRIVACY: take-down hold reference is unlinkable to the reporter (server) — NOT deployed
+
+**NOT DEPLOYED.** This fixes a privacy defect in the take-down slice (`c85621d`), which is also not deployed. No hold
+exists in production, so nothing needs a backfill.
+
+### The defect
+- `products/{id}` is world-readable. Its `moderationHold.ref` was `sha256(reportId)[:16]`.
+- `reportId` is `{reporterUid}_product_{productId}`, and reporter uids are public elsewhere (for example `authorUid` on
+  approved reviews). Anyone could hash candidate uids against the hold and name the reporter.
+- The seller's `tsGetReports scope:'mine'` rows carried the same hash as `ref`, so the listing's seller could do the same.
+
+### The fix (functions/trust-safety.js)
+- **New `_newRef()`** = `crypto.randomBytes(12).toString('base64url')`. It is never recomputed from anything.
+- **Take-down:** the hold's `ref` is a fresh random ref. The primary report stores it as `holdRef` (reports are
+  server-only). Paused promotions carry it as `pausedByRef`.
+- **Every lookup reads `report.holdRef`.** Nothing recomputes `sha16(reportId)` any more:
+  - `_holdOwnedBy(hold, [{id, holdRef}])` replaces `_holdOwnedBy(hold, ids)`.
+  - Restore and dismiss + `restoreListing` match the hold through the report's (or a sibling's) `holdRef`.
+  - The case view (`listingHeldByThisReport`, `moderationHold.reportId`) and the "upheld report that owns the hold"
+    check use the same match.
+  - The release record (`moderationReleased.ref`) and the promotion resume (`pausedByRef`) use the hold's stored ref.
+- **Audit rows:** hide and restore rows carry `holdRef` (the random ref only).
+- **Seller rows:** `ref` is the report's random `publicRef`, written by `tsReportContent` at filing. A report filed
+  before this has no `publicRef`, so its seller row shows `ref: null` (the seller UI does not render a ref).
+- **Restore still DELETES the hold** with `FieldValue.delete()`. It never writes `{active:false}`, as agreed with the
+  sale-guard owner (sokoni-5b). The sale paths read only whether the hold exists.
+- **A legacy hold is refused, never guessed.** A hold has no report storing its ref when it has a `sha16` ref or a
+  pre-10-02 `reportId`. Restoring it is refused with `failed-precondition` and `reason: LEGACY_HOLD_NO_HOLDREF`. The
+  case view marks it `legacy:true` and offers no restore.
+  - A ref that matches no candidate is refused with `reason: HELD_BY_OTHER_REPORT`.
+
+### Not changed
+- `trustSafetyAudit` document ids (`rpt_<sha16(reportId)>_rN`) and `reportRef` stay as they were. That collection is
+  server-only and already stores `reportId`, so they add no linkage.
+
+### Tests
+- **New `scripts/test-hold-ref-privacy.js`: 9/0.** Rows H1–H7 and Z1. Z1 checks the tripwires: firebase-admin and
+  notify.js throw on require, and neither was loaded.
+  - The ref is not derivable: it is not `sha16(reportId)`, and reportId plus every candidate uid gives no match under 8
+    hash shapes. A second take-down by the same report gets a different ref.
+  - Restore finds the hold through `holdRef` and deletes it.
+  - A mismatched ref is refused, and a legacy hold is refused.
+- **Failure injection 5/5 caught:**
+
+  | Fault | Caught by |
+  | --- | --- |
+  | ref-is-sha16 | H1 |
+  | restore-writes-inactive | H4 |
+  | lookup-recomputes-sha16 | H6 |
+  | seller-ref-sha16 | H3 |
+  | holdref-not-stored | H1 |
+
+- **Re-anchored, not deleted:** assertions that pinned the sha16 shape now assert `ref === report.holdRef`, a
+  base64url shape, and `ref !== sha16(reportId)`. They are:
+  - test-takedown-enforcement L3 and R3
+  - test-report-authority AD2
+  - test-moderation-queue D1 and D10
+  - the SB3 sabotage anchor in test-moderation-queue
+
+### Database
+- **`reports`** gains `holdRef` (at take-down) and `publicRef` (at filing).
+- **`trustSafetyAudit`** rows gain `holdRef`.
+- **The `products.moderationHold.ref` shape changes:** 16 base64url characters, random.
+
+### API / security
+- **API:** for sellers, `tsGetReports scope:'mine'` `ref` is now random, or null for older reports.
+- **Restore errors:** they now carry `details.reason`.
+- **Security:** this closes reporter de-anonymisation from the public product document and from the seller's report
+  list.
+- **Breaking:** none for callers.
+
 ## [2026-10-03] - REVIEW + UNBOXING as REPORT targets (server) — NOT deployed
 
 **NOT DEPLOYED.** Review + unboxing are report targets, through sokoni-5b's shared module `85a5fcf` (byte-identical, sha256

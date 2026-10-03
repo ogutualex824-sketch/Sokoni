@@ -306,7 +306,10 @@ let TS, VIS, AS, TSY, AQ, TQ, SS, AR, GW, MS, PMS, MX, KASS, TREND;
   const up = await tryv(TS.tsReviewReport(as('adm1', { reportId: rep.reportId, action: 'approve', hideProduct: true, resolution: 'Counterfeit confirmed', internalNote: 'brand check' }, ADMIN)));
   const held = await get('products/' + P);
   ck('L3 AdminOS upholds + takes down through the canonical authority: isVisible:false + moderationHold, report upheld, audited',
-    up.enforcement === 'listing_hidden' && held.isVisible === false && held.moderationHold && held.moderationHold.ref === opaque(rep.reportId)
+    up.enforcement === 'listing_hidden' && held.isVisible === false && held.moderationHold
+      /* re-anchored 2026-10-03 (hold-ref privacy fix): the ref is RANDOM, stored on the report as holdRef — never sha16(reportId) */
+      && /^[A-Za-z0-9_-]{16}$/.test(String(held.moderationHold.ref)) && held.moderationHold.ref === (await get('reports/' + rep.reportId)).holdRef
+      && held.moderationHold.ref !== opaque(rep.reportId)
       && (await get('reports/' + rep.reportId)).status === 'actioned'
       && (await db.collection('trustSafetyAudit').get()).docs.some((d) => d.data().reportId === rep.reportId && d.data().enforcement === 'listing_hidden'), { up, held });
   ck('PR1 the public product document carries NO reporter-derived value and no moderator identity (no reportId / by / reason on the hold)',
@@ -384,7 +387,7 @@ let TS, VIS, AS, TSY, AQ, TQ, SS, AR, GW, MS, PMS, MX, KASS, TREND;
   const pR = await get('products/' + P);
   ck('R3 Super Admin restore: canonical state restored (isVisible back to the recorded value, hold removed, public-safe release record), report stays upheld',
     restored.enforcement === 'listing_restored' && pR.isVisible === true && pR.moderationHold === undefined && pR.moderationReleased
-      && pR.moderationReleased.ref === opaque(rep.reportId) && pR.moderationReleased.by === undefined && (await get('reports/' + rep.reportId)).status === 'actioned'
+      && pR.moderationReleased.ref === held.moderationHold.ref && pR.moderationReleased.ref !== opaque(rep.reportId) && pR.moderationReleased.by === undefined && (await get('reports/' + rep.reportId)).status === 'actioned'
       && (await get('reports/' + rep.reportId)).productHidden === false, { restored, pR });
   const restAud = (await db.collection('trustSafetyAudit').get()).docs.map((d) => d.data()).filter((a) => a.reportId === rep.reportId && a.action === 'listing_restored');
   ck('R4 restore is audited (actor, role, previous/new, note) and the seller is told through the notification authority (no reporter identity)',

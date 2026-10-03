@@ -38,8 +38,8 @@ const SABOTAGES = {
     from: /const newStatus = \(isAssign \|\| isRestore\) \? null : REPORT_ACTIONS\[action\];/,
     to: "const newStatus = (isAssign || isRestore) ? null : ({ upheld: 'actioned' }[data.status] || data.status || REPORT_ACTIONS[action]);" },
   'remove-reporter-privacy':    { file: 'trust-safety.js', catch: 'SB3',
-    from: /      ref: _opaqueRef\(d\.id\),\n      entityType: r\.entityType \|\| null, entityId: r\.entityId \|\| null,\n      productName: c\.productName/,
-    to: '      ref: _opaqueRef(d.id), reportedBy: r.reportedBy, detail: r.detail,\n      entityType: r.entityType || null, entityId: r.entityId || null,\n      productName: c.productName' },
+    from: /      ref: r\.publicRef \|\| null,\n      entityType: r\.entityType \|\| null, entityId: r\.entityId \|\| null,\n      productName: c\.productName/,
+    to: '      ref: r.publicRef || null, reportedBy: r.reportedBy, detail: r.detail,\n      entityType: r.entityType || null, entityId: r.entityId || null,\n      productName: c.productName' },
   'bypass-product-ownership':   { file: 'trust-safety.js', catch: 'SB9',
     from: /sellerUid: p\.sellerUid \|\| p\.sellerId \|\| null,\n      shopId: p\.shopId \|\| null,\n      price:/,
     to: 'sellerUid: d.sellerUid || p.sellerUid || p.sellerId || null,\n      shopId: p.shopId || null,\n      price:' },
@@ -253,7 +253,8 @@ const audits = async (pred) => (await db.collection('trustSafetyAudit').get()).d
   const r0 = await get('reports/' + ids[0]);
   ck('D1 UPHOLD + take-down goes through the canonical listing authority: products/pA isVisible:false + moderationHold, report upheld, enforcement listing_hidden',
     up.moderationState === 'approved' && up.queueStatus === 'upheld' && up.enforcement === 'listing_hidden' && pA.isVisible === false && pA.moderationHold
-      && pA.moderationHold.ref === crypto.createHash('sha256').update(String(ids[0])).digest('hex').slice(0, 16)
+      && pA.moderationHold.ref === r0.holdRef && /^[A-Za-z0-9_-]{16}$/.test(String(pA.moderationHold.ref))
+      && pA.moderationHold.ref !== crypto.createHash('sha256').update(String(ids[0])).digest('hex').slice(0, 16)
       && pA.moderationHold.reportId === undefined && pA.moderationHold.by === undefined && pA.moderationHold.reason === undefined && r0.status === 'actioned' && r0.productHidden === true
       && !(await get('hiddenProducts/pA')) && pA.moderated === undefined, { up, hold: pA.moderationHold, vis: pA.isVisible });
 
@@ -333,7 +334,7 @@ const audits = async (pred) => (await db.collection('trustSafetyAudit').get()).d
   const relAud = await audits((a) => a.reportId === ids[0] && a.enforcement === 'listing_restored');
   ck('D10 RESTORE is explicit and canonical: only the report that owns the hold may release it (another report refused); dismissing it with restoreListing puts back the recorded visibility, removes the hold, audits it',
     caseHeld.listingHeldByThisReport === true && notOwner === 'failed-precondition' && (await get('reports/' + fresh.reportId)).status === 'pending'
-      && okRev.enforcement === 'listing_restored' && pA5.isVisible === true && pA5.moderationHold === undefined && pA5.moderationReleased && pA5.moderationReleased.ref === crypto.createHash('sha256').update(String(ids[0])).digest('hex').slice(0, 16) && pA5.moderationReleased.by === undefined
+      && okRev.enforcement === 'listing_restored' && pA5.isVisible === true && pA5.moderationHold === undefined && pA5.moderationReleased && pA5.moderationReleased.ref === pA.moderationHold.ref && pA5.moderationReleased.ref !== crypto.createHash('sha256').update(String(ids[0])).digest('hex').slice(0, 16) && pA5.moderationReleased.by === undefined
       && (await get('reports/' + ids[0])).productHidden === false && relAud.length === 1, { notOwner, okRev, pA5 });
 
   say('\n── E: enforcement on discovery ──');
