@@ -278,7 +278,8 @@ window.CarHubPro = (function(){
       inStock:true, description:'Heavy-duty polyurethane engine mounts. Reduces vibration. Set of 2.' },
   ];
 
-  const FINANCE_PARTNERS = [
+  /* 2026-10-03 Car Hub C1b: invented firms (bank rates / phones / ratings). Demo only (localhost or sokoniDemoData) — production shows none. */
+  const FINANCE_PARTNERS = !_demoAllowed ? [] : [
     { name:'KCB Bank', logo:'🏦', rate:'12.5%', rateNum:12.5, maxLoan:'KES 10M', minDown:'20%', maxTerm:'72 months', phone:'0711087000' },
     { name:'Equity Bank', logo:'🟢', rate:'13%', rateNum:13, maxLoan:'KES 8M', minDown:'15%', maxTerm:'60 months', phone:'0763000000' },
     { name:'Co-op Bank', logo:'🤝', rate:'13.5%', rateNum:13.5, maxLoan:'KES 6M', minDown:'20%', maxTerm:'60 months', phone:'0703027000' },
@@ -286,14 +287,16 @@ window.CarHubPro = (function(){
     { name:'Absa Kenya', logo:'🔴', rate:'14.5%', rateNum:14.5, maxLoan:'KES 7M', minDown:'20%', maxTerm:'60 months', phone:'0709081000' },
   ];
 
-  const INSPECTION_CENTERS = [
+  /* 2026-10-03 Car Hub C1b: invented firms (bank rates / phones / ratings). Demo only (localhost or sokoniDemoData) — production shows none. */
+  const INSPECTION_CENTERS = !_demoAllowed ? [] : [
     { name:'NTSA Vehicle Inspection', location:'Embakasi, Nairobi', phone:'0709932000', official:true, types:['NTSA Annual Inspection','Fitness Certificate'], fee:'KES 700–1,200' },
     { name:'AA Kenya Inspection', location:'Upper Hill, Nairobi', phone:'0722202020', official:false, types:['Pre-Purchase Inspection','Mechanical Inspection'], fee:'KES 3,500–8,000' },
     { name:'AutoCheck Kenya', location:'Westlands, Nairobi', phone:'0712999888', official:false, types:['Pre-Purchase Inspection','Comprehensive Diagnostic'], fee:'KES 4,000–10,000' },
     { name:'CarScan Pro', location:'Karen, Nairobi', phone:'0733100200', official:false, types:['Pre-Purchase Inspection','Safety Check'], fee:'KES 2,500–6,000' },
   ];
 
-  const TRANSPORT_PROVIDERS = [
+  /* 2026-10-03 Car Hub C1b: invented firms (bank rates / phones / ratings). Demo only (localhost or sokoniDemoData) — production shows none. */
+  const TRANSPORT_PROVIDERS = !_demoAllowed ? [] : [
     { name:'SafeCargo Transporters', phone:'0712111000', covered:'Nationwide', pricePerKm:50, minCharge:8000, types:['Open Carrier','Flatbed','Enclosed'], rating:4.7 },
     { name:'Kenya Auto Movers', phone:'0722222100', covered:'East Africa', pricePerKm:45, minCharge:7500, types:['Open Carrier','Flatbed'], rating:4.5 },
     { name:'ExpressHaul Kenya', phone:'0733333200', covered:'Nationwide', pricePerKm:55, minCharge:9000, types:['Enclosed','Flatbed'], rating:4.8 },

@@ -55,8 +55,8 @@ Bare labels such as `car`, `car-hub`, `vehicle`, `mechanic`, `garage`, `inspecti
 | Slice | Scope | Status |
 |---|---|---|
 | **C1a** | car-rental.html + mechanics.html containment (registry, booking engine, leads, HubRegister; fakes and client money removed) | **built** (this commit) |
-| C1b | car-hub.html containment: confirmBooking fee/commission (b2 `2ddaee5` wording); no DL self-approval; no simulated "live" GPS; tracking plans "not available yet"; CarHubPro fakes removed; SOS → critical support ticket; finance/inspection/transport "not available yet" until providers and authorities exist | next |
-| C2 | Rules: `trackingSubscriptions` server-only (combined rules line) | queued |
+| C1b | car-hub.html containment via `carhub-containment.js` (loaded last) + 3 inline guards: confirmBooking fee/commission removed (b2 `2ddaee5` text); rent → car-rental.html; no DL self-approval; simulated GPS stopped ("not available"); tracking plan prices removed / not purchasable; CarHubPro fake firms demo-only; SOS → critical support ticket; transport → support ticket; finance / inspection / estimates → "not available yet"; list car / mechanic / parts → HubRegister | **built** (static 42/0; browser test written, NOT run: memory 281 MB) |
+| C2 | Rules: `trackingSubscriptions` admin-only (combined rules line `75229d4`) | **built**, EMULATOR PENDING |
 | C3 | Applications + capabilities: car ids in HubRegister / role mapping / `service-capabilities.FROM_BUSINESS_ID` (copy b2 `81cde54`), on the capability tip; AdminOS approval provisions providers | queued (needs b2/5b coordination) |
 | C4 | Vehicle sale on `vehicle-hub.js` (moderated publish, seller cannot set status; `vehicles` KES 2,000) | queued (functions) |
 | C5 | AdminOS Car Hub section (Slice C1 nav hierarchy) + Super Admin visibility | queued |

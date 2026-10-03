@@ -1727,7 +1727,7 @@ body{padding-bottom:70px;}
       <!-- Basic -->
       <div class="trk-plan-card">
         <div class="trk-plan-name">🚗 Basic</div>
-        <div class="trk-plan-price">KES 299<span style="font-size:13px;color:rgba(255,255,255,0.4);font-weight:600;">/month</span></div>
+        <div class="trk-plan-price" title="Tracking plans are not available yet">—<span style="font-size:13px;color:rgba(255,255,255,0.4);font-weight:600;">/month</span></div>
         <div class="trk-plan-sub">For individuals with 1 vehicle</div>
         <div class="trk-plan-feat">
           <span>✅ 1 vehicle</span>
@@ -1745,7 +1745,7 @@ body{padding-bottom:70px;}
       <div class="trk-plan-card featured">
         <div style="display:inline-flex;align-items:center;gap:5px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);border-radius:999px;padding:3px 10px;font-size:10px;font-weight:800;color:#71ff00;margin-bottom:10px;">MOST POPULAR</div>
         <div class="trk-plan-name">🚀 Pro</div>
-        <div class="trk-plan-price">KES 799<span style="font-size:13px;color:rgba(255,255,255,0.4);font-weight:600;">/month</span></div>
+        <div class="trk-plan-price" title="Tracking plans are not available yet">—<span style="font-size:13px;color:rgba(255,255,255,0.4);font-weight:600;">/month</span></div>
         <div class="trk-plan-sub">For families and small fleets — up to 5 vehicles</div>
         <div class="trk-plan-feat">
           <span>✅ Up to 5 vehicles</span>
@@ -1764,7 +1764,7 @@ body{padding-bottom:70px;}
       <!-- Fleet -->
       <div class="trk-plan-card">
         <div class="trk-plan-name">🏢 Fleet</div>
-        <div class="trk-plan-price">KES 2,499<span style="font-size:13px;color:rgba(255,255,255,0.4);font-weight:600;">/month</span></div>
+        <div class="trk-plan-price" title="Tracking plans are not available yet">—<span style="font-size:13px;color:rgba(255,255,255,0.4);font-weight:600;">/month</span></div>
         <div class="trk-plan-sub">Unlimited vehicles · Full fleet management</div>
         <div class="trk-plan-feat">
           <span>✅ Unlimited vehicles</span>
@@ -2571,13 +2571,9 @@ function confirmBooking(){
     showFleetMsg("✅ Booking "+bid+" recorded on SOKONI");
     setTimeout(()=>{closeOverlay("bookingOverlay");showTab("bookings",null);renderBookings();filterCars();},3000);
   });
-  /* Record SOKONI commission (12% car-rental rate) */
-  if(typeof SokoniPay !== 'undefined' && SokoniPay.saveCommission){
-    var _cPct =SokoniCommission.pct('car-rental');
-    var _cCut = Math.round(total * _cPct / 100);
-    SokoniPay.saveCommission({ref:bid,providerName:c.owner||'Car Owner',category:'car-rental',commissionPct:_cPct,sokoniCut:_cCut,providerNet:total-_cCut,serviceTotal:total,status:'auto_collected',note:'Car rental booking',createdAt:Date.now()});
-    SokoniPay.saveFee&&SokoniPay.saveFee({ref:bid,providerName:c.owner||'Car Owner',category:'car-rental',totalPaid:total,sokoniCut:_cCut,providerNet:total-_cCut,commissionPct:_cPct,phone:phone,providerPhone:c.ownerPhone||'',serviceDesc:c.make+' '+c.model+' rental',status:'paid',paymentType:'car_rental',createdAt:Date.now()});
-  }
+  /* No fee or commission is recorded here (2026-10-03). This booking takes NO payment, so the
+     "auto-collected" commission and the paid booking fee written from this point were fabricated
+     financial records. Commission is recorded by the server on a verified IntaSend payment. */
   if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'rental',buyerName:name,buyerPhone:phone,items:[{name:c.make+' '+c.model+' ('+c.plate+') Rental',category:'Car Rental',qty:days,price:dp},{name:'Security Deposit',category:'Deposit',qty:1,price:c.deposit||0}].concat(ins?[{name:'Insurance',category:'Insurance',qty:days,price:500}]:[]),subtotal:dp*days+(ins?500*days:0),total:total,paymentMethod:'M-Pesa',paymentRef:bid,sellerName:'SOKONI Car Hub',date:new Date().toISOString(),notes:'Pickup: '+p+' | Return: '+r});},1000);
 }
 
@@ -2910,6 +2906,8 @@ function updateMapMarkers(){
 }
 
 function startLiveTracking(){
+  /* 2026-10-03 Car Hub C1b: this moved markers with Math.random() and called it a live map. No real positions exist here. */
+  return;
   if(trackingInterval)clearInterval(trackingInterval);
   trackingInterval=setInterval(()=>{
     const cars=getCars();let avgSpd=0,movCnt=0;
@@ -3267,6 +3265,12 @@ function _jitter(lat,lng,km){
 }
 
 window.initMap = function(){
+  /* 2026-10-03 Car Hub C1b: the fleet map drew this browser's localStorage cars at jittered positions and animated them
+     with Math.random() as "LIVE". SOKONI shows a vehicle position only from a registered tracking device (📡 Track). */
+  var _mapEl = document.getElementById('fleetMap'), _ld = document.getElementById('fleetMapLoading');
+  if (_ld) _ld.style.display = 'none';
+  if (_mapEl) _mapEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;min-height:220px;padding:20px;text-align:center;color:rgba(255,255,255,0.6);font-size:13px;line-height:1.5;">Live vehicle location is not available here.<br>SOKONI shows a position only from a registered tracking device — see 📡 Track.</div>';
+  return;
   var mapEl = document.getElementById('fleetMap');
   if(!mapEl) return;
 
@@ -3489,6 +3493,7 @@ function _drawFleet(){
 }
 
 function _animateRented(){
+  return;   /* 2026-10-03 Car Hub C1b: random movement of "rented" cars — removed */
   _fleetMarkers.forEach(function(m){
     if(m._carData && m._carData.status==='rented'){
       var cur = m.getLatLng();
@@ -4935,6 +4940,8 @@ function _chFailed(el,topic,ref){
     <button onclick="HubRegister.open({hub:'car', category:'mechanic'})" style="padding:10px 24px;background:#facc15;border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
   </div>
   <script defer src="hub-register.js"></script>
+  <!-- Car Hub C1b containment (2026-10-03): re-points every money / approval / record entry point at its authority. LAST. -->
+  <script defer src="carhub-containment.js"></script>
   <script defer src="kass-widget.js"></script>
   <!-- Enterprise v2.0: core stack -->
   <script defer src="sokoni-event-bus.js"></script>
