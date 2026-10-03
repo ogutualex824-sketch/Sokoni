@@ -21,7 +21,7 @@ const ENTERPRISE_MODULES = Object.freeze(['employees', 'training', 'programmes',
 const LEARNER_MODULES = Object.freeze(['overview', 'myLearning', 'discover', 'courses', 'liveClasses', 'tutoring', 'bookings',
   'certificates', 'messages', 'receipts', 'profile', 'settings']);
 /* What exists today for a learner. Everything else is an E2 build: NOT_IMPLEMENTED, never shown as working. */
-const LEARNER_BUILT = Object.freeze(['overview', 'myLearning', 'discover', 'courses', 'profile']);
+const LEARNER_BUILT = Object.freeze(['overview', 'myLearning', 'discover', 'courses', 'certificates', 'profile']);   /* certificates: courseLessons myCertificates + verify (E2 lessons slice) */
 /* Interactive learner modules additionally need learnerAccess().interactive (E1 owner rule). */
 const LEARNER_INTERACTIVE = Object.freeze(['liveClasses', 'tutoring', 'messages']);
 /* What exists today for a company (E2 enterprise slice: consent-based training assignments, education-enterprise.js). */
