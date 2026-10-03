@@ -461,6 +461,63 @@
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID],
       mobile:true, desktop:true, activeKey:'pos-setup' },
 
+    /* ── JOBS EMPLOYER WORKSPACE (J5 hosting, 2026-10-03) ─────────────────────────────
+       Owner layout: Overview | Jobs | Applications | Candidates | Interviews | Offers |
+       Messages | Company | Wallet | Products | Analytics — routes in the shell, NOT a second
+       dashboard. All eleven mount ONE module (sokoni-merchant-jobs.js) with a view key and
+       share one store. Server: functions/jobs.js via servicesDispatch (ffa2c47 applications,
+       a515270 moderation); the only non-callable read is the employer's own jobs
+       (employerUid == uid). ctx is SELLER_UID ALONE: an employer is uid-keyed today
+       (jobs.employerUid = the poster's uid); business-keyed employers are a later server slice.
+       Ids are jobs-prefixed because products / messages / analytics / offers already exist as
+       shop routes; names say "Job…" where they would otherwise collide in the palette.
+       Interviews and Offers are filtered application views (no separate authority);
+       Candidates are derived from applications (no candidate database). */
+    { id:'jobs-overview', name:'Jobs Overview', icon:'🧭', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'jobs-overview' },
+    { id:'jobs', name:'Jobs', icon:'💼', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'jobs' },
+    { id:'jobs-applications', name:'Applications', icon:'📥', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'jobs-applications' },
+    { id:'jobs-candidates', name:'Candidates', icon:'🧑‍💼', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'jobs-candidates' },
+    { id:'jobs-interviews', name:'Interviews', icon:'🗓️', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'jobs-interviews' },
+    { id:'jobs-offers', name:'Job Offers', icon:'🤝', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'jobs-offers' },
+    { id:'jobs-messages', name:'Job Messages', icon:'💬', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'jobs-messages' },
+    { id:'jobs-company', name:'Company', icon:'🏢', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'jobs-company' },
+    { id:'jobs-wallet', name:'Jobs Wallet', icon:'👛', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'jobs-wallet' },
+    { id:'jobs-products', name:'Jobs Products', icon:'🧩', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'jobs-products' },
+    { id:'jobs-analytics', name:'Jobs Analytics', icon:'📊', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'jobs-analytics' },
+
 
   ];
 
@@ -502,7 +559,11 @@
        configured once alongside Devices and POS Setup, not a surface a merchant reads
        daily the way they read Reports. */
     { key:'operations', label:'Back office',
-      ids:['kra-tax','devices','pos-setup'] }
+      ids:['kra-tax','devices','pos-setup'] },
+    /* Jobs employer workspace (J5). Its own heading: hiring is a separate operational system
+       from selling, and eleven rows would bury Growth if they were folded into it. */
+    { key:'jobs',       label:'Jobs',
+      ids:['jobs-overview','jobs','jobs-applications','jobs-candidates','jobs-interviews','jobs-offers','jobs-messages','jobs-company','jobs-wallet','jobs-products','jobs-analytics'] }
   ];
 
   /* ── ROUTE ACTION CHIPS ─────────────────────────────────────────────────────────

@@ -755,6 +755,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-promotion-model.js"></script>
 <script src="sokoni-merchant-offers.js"></script>
 <script src="sokoni-merchant-supply.js"></script>
+<!-- Jobs employer workspace (J5): eleven Jobs-group routes, one module, servicesDispatch only. -->
+<script src="sokoni-merchant-jobs.js"></script>
 <!-- MV2-2a: Chat with a supplier enters the existing in-app inbox, never a second chat system -->
 <script src="sokoni-inbox.js"></script>
 <script src="sokoni-merchant-staff.js"></script>
@@ -2404,6 +2406,27 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     }
     return window.SokoniMerchantData.resolveScope({ uid: S.uid, activeShopId: S.activeShopId });
   }
+  /* Jobs ctx. NOT _ctx/_scope: an employer is the signed-in uid (jobs.employerUid), not a shop.
+     companyName mirrors createJob's own source (shops/{uid}.name || shopName) and is shown only
+     when the active shop IS shops/{uid}; anything else is unknown, rendered as a dash.
+     role is the SERVER-resolved servedBy role (merchantIdentity); a staff login is told hiring
+     runs from the owner's account rather than posting vacancies under its own uid. */
+  function _jobsCtx (view) {
+    return {
+      view: view,
+      uid: function () { return S.uid || null; },
+      role: function () { return S.servedBy ? (S.servedBy.role || null) : null; },
+      companyName: function () { return (S.uid && S.activeShopId === S.uid) ? _shopName() : null; },
+      dispatch: _callable('servicesDispatch'),
+      readMyJobs: function () {
+        var u = S.uid;
+        if (!u) return Promise.resolve([]);
+        return _q({ collection: 'jobs', where: [['employerUid', '==', u]], limit: 50 }, 'Your vacancies are not available yet.');
+      },
+      go: go,
+      onToast: toast
+    };
+  }
   function _scopeKey (s) { return (s && s.ok) ? s.shopId : ('!' + ((s && s.reason) || 'unknown')); }
   function _shopName () { return (S.shop && (S.shop.name || S.shop.shopName)) || null; }
 
@@ -2609,6 +2632,20 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                     callStats: _callable('etimsGetSellerStats'), callInvoice: _callable('etimsGenerateInvoice'),
                     callBulk: _callable('etimsBulkGenerate'), callResubmit: _callable('etimsResubmitInvoice'),
                     onToast: toast }; } },
+    /* JOBS — the employer workspace (J5). One module, eleven views, one shared store.
+       Every write is servicesDispatch through _callable (the App Check path); the one read
+       is the employer's OWN vacancies, which the rules allow in any status. */
+    'jobs-overview': { global: 'SokoniMerchantJobs', ctx: function () { return _jobsCtx('overview'); } },
+    'jobs': { global: 'SokoniMerchantJobs', ctx: function () { return _jobsCtx('jobs'); } },
+    'jobs-applications': { global: 'SokoniMerchantJobs', ctx: function () { return _jobsCtx('applications'); } },
+    'jobs-candidates': { global: 'SokoniMerchantJobs', ctx: function () { return _jobsCtx('candidates'); } },
+    'jobs-interviews': { global: 'SokoniMerchantJobs', ctx: function () { return _jobsCtx('interviews'); } },
+    'jobs-offers': { global: 'SokoniMerchantJobs', ctx: function () { return _jobsCtx('offers'); } },
+    'jobs-messages': { global: 'SokoniMerchantJobs', ctx: function () { return _jobsCtx('messages'); } },
+    'jobs-company': { global: 'SokoniMerchantJobs', ctx: function () { return _jobsCtx('company'); } },
+    'jobs-wallet': { global: 'SokoniMerchantJobs', ctx: function () { return _jobsCtx('wallet'); } },
+    'jobs-products': { global: 'SokoniMerchantJobs', ctx: function () { return _jobsCtx('products'); } },
+    'jobs-analytics': { global: 'SokoniMerchantJobs', ctx: function () { return _jobsCtx('analytics'); } },
   };
   var _mounted = {};   /* id -> { ui, shopKey } */
 
