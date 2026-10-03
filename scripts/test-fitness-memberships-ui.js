@@ -21,6 +21,13 @@
  *   (d) read settlement as an array                   → G-11
  *   (e) map SALES_DISABLED to a generic error         → M-SALES
  *   (f) report "Saved" without checking serviceKind   → OF-SAVE
+ *   (i) read-only fails OPEN when editable is missing (old server)   → RO-OLD
+ *   (j) read-only fails OPEN when the edit authority is not loaded    → RO-3
+ *   (k) visibility from an approval field (adminApproved) not modules → G-1b
+ *
+ * P0-F READ-ONLY rows (owner 2026-10-03): RO-1 every ownerState × editable true/false/missing, RO-OLD interim rule
+ * (claim deactivated / approval not VALID_APPROVAL), RO-OVR editable true overrides interim, RO-2 every offer write and
+ * check-in refuses before calling the server, RO-3 authority missing, RO-4 a later answer flips read-only in place.
  *
  *   node scripts/test-fitness-memberships-ui.js
  * Exit: 0 = no FAIL and every control detected (UNPROVEN rows are printed, not hidden) · 1 = a failure · 2 = harness error
@@ -30,6 +37,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm'), { execFile
 const ROOT = path.join(__dirname, '..');
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const GYM = read('sokoni-fitness-memberships.js'), MEMBER = read('sokoni-fitness-member.js'), PAGE = read('fitness-memberships.html');
+const EDIT = read('sokoni-edit-authority.js');
 const HUB = read('fitness-hub.html');
 const FX_PATH = 'scripts/fixtures/fitness-api-fixtures.json';
 const FX = JSON.parse(read(FX_PATH));
@@ -86,6 +94,7 @@ function env(opts) {
   });
   const fst = { collection: (p) => query(p, []), doc: (p) => docRef(p), batch: W('batch'), runTransaction: W('runTransaction') };
   const user = opts.user === null ? null : { uid: 'GYM_UID_1', phoneNumber: '+254712345678' };
+  if (user && opts.claims !== undefined) user.getIdTokenResult = () => (opts.claims === 'throw' ? Promise.reject(new Error('token')) : Promise.resolve({ claims: opts.claims }));
   const ctx = {
     console: { log() {}, warn() {}, error() {}, info() {} }, Math, Date, JSON, String, Number, Array, Object, Promise, Error, Intl, encodeURIComponent, URLSearchParams,
     setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
@@ -102,13 +111,15 @@ function env(opts) {
   vm.createContext(ctx);
   return { ctx, doc, spy };
 }
-const AVAILABLE = { state: 'AVAILABLE', modules: { memberships: { state: 'AVAILABLE' } } };
+/* the businessWorkspace answer: approval (5b f85039a) + ownerState/editable (5b 1a5c9e5) */
+const AVAILABLE = { state: 'AVAILABLE', approval: { state: 'VALID_APPROVAL' }, ownerState: 'active', editable: true, modules: { memberships: { state: 'AVAILABLE' } } };
+const WSX = (extra, drop) => { const w = Object.assign(clone(AVAILABLE), extra || {}); (drop || []).forEach((k) => { delete w[k]; }); return w; };
 const H = (s) => s.replace(/&#x2F;/g, '/').replace(/&#x27;/g, "'").replace(/&amp;/g, '&');   /* read escaped HTML as text */
 
 async function suite(src) {
   const rows = [];
   const ck = (id, ok, m, got) => rows.push({ id, ok: ok === 'UNPROVEN' ? 'UNPROVEN' : !!ok, m, got: ok === true || got === undefined ? '' : String(got).slice(0, 260) });
-  const load = (e, member) => { vm.runInContext(src.gym, e.ctx, { timeout: 3000 }); if (member) vm.runInContext(src.member, e.ctx, { timeout: 3000 }); };
+  const load = (e, member, noEdit) => { if (!noEdit) vm.runInContext(EDIT, e.ctx, { timeout: 3000 }); vm.runInContext(src.gym, e.ctx, { timeout: 3000 }); if (member) vm.runInContext(src.member, e.ctx, { timeout: 3000 }); };
 
   /* ── FX-SYNC: the fixture copy is the functions lane's file ── */
   {
@@ -374,6 +385,103 @@ async function suite(src) {
   g.doc.dispatch('sokoni:workspace', { state: 'AVAILABLE', modules: { leads: { state: 'AVAILABLE' } } });
   ck('G-13', gel.innerHTML === '' && gel.hidden === true, 'a later workspace answer without \'memberships\' unmounts the module (fail closed)', gel.innerHTML.slice(0, 80));
 
+  /* ── G-1b visibility = modules state ONLY (never an approval / application field) ── */
+  {
+    const vb = [];
+    for (const [label, ws, want] of [
+      ['memberships AVAILABLE, approval PENDING (visible; read-only decides edits)', WSX({ approval: { state: 'PENDING_APPROVAL' } }), true],
+      ['memberships LOCKED + adminApproved/approvedBy/verified/status approved', WSX({ modules: { memberships: { state: 'LOCKED' } }, adminApproved: true, approvedBy: 'admin1', verified: true, status: 'approved' }), false],
+      ['no modules, approval VALID', WSX({}, ['modules']), false]]) {
+      const e = env({ workspace: ws, callables: { fitnessScannerStatus: () => FX.fitnessScannerStatus.owner, fitnessGymMemberships: () => ({ rows: [], nextCursor: null }) } });
+      load(e); const el = mkEl('div', e.doc); const r = e.ctx.SokoniFitnessMemberships.mount(el); await flush();
+      if (r !== want) vb.push(label + '→' + r);
+    }
+    const code = src.gym.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    ck('G-1b', vb.length === 0 && !/adminApproved|approvedBy|\.verified\b|applicationStatus|collection\('applications'\)/.test(code),
+      'visibility is modules.memberships.state ONLY: approval / application fields neither open nor close it; the module source reads no adminApproved / approvedBy / verified / applications', vb.join(' | '));
+    const sc = (code.match(/fitnessScannerStatus/g) || []).length;
+    ck('G-SCAN', sc === 1 && /S\.scanStatus = s \|\| \{ canScan: false \}/.test(code) && !/scanStatus[^;\n]*(offers|renderOffers|moduleAvailable)/.test(code),
+      'fitnessScannerStatus is called in ONE place and its answer feeds only the scan button (applyScanGate)', sc);
+  }
+
+  /* ── RO read-only (P0-F) ── */
+  const roMount = async (ws, extra) => {
+    const e = env(Object.assign({ workspace: ws, callables: {
+      fitnessScannerStatus: () => FX.fitnessScannerStatus.owner, fitnessGymMemberships: () => ({ rows: [], nextCursor: null }),
+      fitnessCheckIn: () => FX.fitnessCheckIn.success_first, providerDispatch: () => ({ success: true, serviceId: 'SVC_X' }) },
+      firestore: { providerServices: () => [{ id: 'SVC_OLD', data: { providerId: 'GYM_UID_1', name: 'Monthly', price: 500000, serviceKind: 'membership', periodCount: 1, periodUnit: 'month', active: true } }] } }, extra || {}));
+    load(e, false, extra && extra.noEdit); const el = mkEl('div', e.doc); e.ctx.SokoniFitnessMemberships.mount(el); await flush(20);
+    const T2 = e.ctx.SokoniFitnessMemberships._t, u = T2.state.ui;
+    const offerBtns = [...u.offers.innerHTML.matchAll(/<button type="button"([^>]*data-sfm-act="offer-[^"]*"[^>]*)>/g)].map((m) => m[1]);
+    const reason = (H(u.offers.innerHTML).match(/Your account can’t make changes right now \((.+?)\)(?=\s|<|$)/) || [])[1] || null;
+    const scanReason = (H(u.note.innerHTML).match(/Your account can’t make changes right now \((.+?)\)(?=\s|<|$)/) || [])[1] || null;
+    return { e, T2, u, offerBtns, reason, scanReason, scanCalled: e.spy.calls.some((c) => c.name === 'fitnessScannerStatus'),
+      ro: offerBtns.length >= 3 && offerBtns.every((a) => /disabled/.test(a)) && u.scan.disabled === true,
+      rw: offerBtns.length >= 3 && offerBtns.every((a) => !/disabled/.test(a)) && u.scan.disabled === false };
+  };
+  {
+    const M1 = [
+      ['active · editable true', WSX(), null],
+      ['active · editable false', WSX({ editable: false }), 'your business status does not allow changes yet'],
+      ['deactivated · false', WSX({ ownerState: 'deactivated', editable: false }), 'deactivated — reactivate your account'],
+      ['suspended · false', WSX({ ownerState: 'suspended', editable: false }), 'suspended'],
+      ['frozen · false', WSX({ ownerState: 'frozen', editable: false }), 'frozen by SOKONI'],
+      ['unknown · false', WSX({ ownerState: 'unknown', editable: false }), 'status unknown'],
+      ['suspended · editable missing', WSX({ ownerState: 'suspended' }, ['editable']), 'suspended'],
+      ['active · editable "true" (string)', WSX({ editable: 'true' }), 'your business status does not allow changes yet'],
+    ];
+    const bad = [];
+    for (const [label, ws, want] of M1) {
+      const r = await roMount(ws, { claims: {} });
+      const ok = want === null ? (r.rw && r.reason === null && r.scanCalled) : (r.ro && r.reason === want && r.scanReason === want && !r.scanCalled);
+      if (!ok) bad.push(label + '→' + JSON.stringify({ ro: r.ro, rw: r.rw, reason: r.reason, scan: r.scanReason, called: r.scanCalled, n: r.offerBtns.length }));
+    }
+    ck('RO-1', bad.length === 0, 'every ownerState (active/deactivated/suspended/frozen/unknown) × editable true/false/missing/"true": only editable === true enables the offer editor and the scanner; otherwise both disabled with "Your account can’t make changes right now (<reason>)" and NO scanner call', bad.join(' | '));
+    const dz = await roMount(WSX({ ownerState: 'deactivated', editable: false }), { claims: {} });
+    ck('RO-1b', /href="\/profile\.html"/.test(H(dz.u.offers.innerHTML)) && /Reactivate your account/.test(dz.u.note.innerHTML), 'deactivated → a link to the account page to reactivate (offers + scanner note)', dz.u.offers.innerHTML.slice(0, 300));
+  }
+  async function rowRO_OLD (srcOverride) {
+    const save = src.gym; if (srcOverride) src.gym = srcOverride;
+    try {
+      const a = await roMount(WSX({}, ['ownerState', 'editable']), { claims: { deactivated: true } });
+      const b = await roMount(WSX({ approval: { state: 'PENDING_APPROVAL' } }, ['ownerState', 'editable']), { claims: {} });
+      const c = await roMount(WSX({}, ['ownerState', 'editable']), { claims: {} });
+      return a.ro && a.reason === 'deactivated — reactivate your account' && b.ro && /approval is not valid \(PENDING_APPROVAL\)/.test(b.reason || '') && c.ro && c.reason === 'status unknown';
+    } finally { src.gym = save; }
+  }
+  ck('RO-OLD', await rowRO_OLD(), 'OLD server (no ownerState/editable): claim deactivated → read-only "deactivated"; approval PENDING_APPROVAL → read-only naming it; clean picture → still read-only "status unknown" (only editable === true enables)');
+  {
+    const r = await roMount(WSX({ approval: { state: 'PENDING_APPROVAL' }, ownerState: 'active', editable: true }), { claims: { deactivated: true } });
+    ck('RO-OVR', r.rw && r.reason === null, 'editable === true OVERRIDES the interim signals (claim deactivated + approval PENDING) — editor and scanner enabled', JSON.stringify({ ro: r.ro, reason: r.reason }));
+  }
+  {
+    const r = await roMount(WSX({ ownerState: 'frozen', editable: false }), { claims: {} });
+    const T2 = r.T2, before = r.e.spy.calls.length;
+    await T2.act('offer-add'); await T2.act('offer-default', 'monthly'); await T2.act('offer-edit', 'SVC_OLD'); await T2.act('offer-pause', 'SVC_OLD'); await T2.act('offer-activate', 'SVC_OLD');
+    T2.state.ed = { serviceId: null, name: 'X', priceKes: 100, periodUnit: 'month', periodCount: 1 };
+    const sv = await T2.saveOffer({ name: 'X', priceKes: '100', periodUnit: 'month', periodCount: 1 });
+    const tg = await T2.toggleOffer('SVC_OLD', false);
+    T2.state.canScan = true; await T2.openScanner(); await T2.submitToken('fm1.a.b'); await flush();
+    const after = r.e.spy.calls.slice(before).map((c) => c.name).filter((n) => n === 'providerDispatch' || n === 'fitnessCheckIn');
+    ck('RO-2', after.length === 0 && sv === false && tg === false && T2.state.ed === null && r.u.scanBox.hidden === true && /frozen by SOKONI/.test(H(r.u.result.innerHTML)) && /frozen by SOKONI/.test(H(r.u.offers.innerHTML)),
+      'read-only: offer add/default/edit/save/pause/activate and scan/check-in all refuse BEFORE any server call, with the reason', JSON.stringify({ after, sv, tg }));
+  }
+  async function rowRO3 (srcOverride) {
+    const save = src.gym; if (srcOverride) src.gym = srcOverride;
+    try { const r = await roMount(WSX(), { claims: {}, noEdit: true }); return r.ro && r.reason === 'status unknown' && !r.scanCalled; } finally { src.gym = save; }
+  }
+  ck('RO-3', await rowRO3(), 'edit authority not loaded → READ-ONLY even when the answer says editable (fails closed)');
+  {
+    const r = await roMount(WSX(), { claims: {} });
+    const was = r.rw;
+    r.e.doc.dispatch('sokoni:workspace', WSX({ ownerState: 'suspended', editable: false })); await flush(20);
+    const nowRo = r.u.scan.disabled === true && /suspended/.test(H(r.u.offers.innerHTML)) && r.e.ctx.SokoniFitnessMemberships._t.state.mounted === true;
+    const calls0 = r.e.spy.calls.filter((c) => c.name === 'fitnessScannerStatus').length;
+    r.e.doc.dispatch('sokoni:workspace', WSX()); await flush(20);
+    const back = r.u.scan.disabled === false && !/can’t make changes/.test(H(r.u.offers.innerHTML)) && r.e.spy.calls.filter((c) => c.name === 'fitnessScannerStatus').length === calls0 + 1;
+    ck('RO-4', was && nowRo && back, 'a later sokoni:workspace answer flips read-only IN PLACE (module stays mounted) and back; the scanner is re-asked only when editable', JSON.stringify({ was, nowRo, back }));
+  }
+
   /* ── member page (synthetic 2f-shaped providerMemberships docs, read under rules) ── */
   const M = {
     act0: { providerId: 'P1', buyerUid: 'GYM_UID_1', title: 'Gold ' + XSS, status: 'active', paymentStatus: 'paid_held', attendedSessions: 0, refundEligible: true, priceCents: 350000, periodCount: 1, periodUnit: 'month', startAt: '2026-10-01T06:00:00Z', endsAt: '2026-11-01T06:00:00Z' },
@@ -529,6 +637,10 @@ async function suite(src) {
     ['f', 'report "Saved" without checking serviceKind', 'OF-SAVE', (s) => ({ gym: rp(s.gym, 'function savedAsMembership(doc, sent) {\n    return !!(', 'function savedAsMembership(doc, sent) {\n    return !!doc || !!('), member: s.member })],
     ['g', 'cleanup also removes an EXISTING service (new-only guard dropped)', 'OF-EDIT-KEEP', (s) => ({ gym: rp(s.gym, '        if (!ed.serviceId) {\n          return call(\'providerDispatch\', { op: \'providerRemoveService\'', '        if (true) {\n          return call(\'providerDispatch\', { op: \'providerRemoveService\''), member: s.member })],
     ['h', 'cleanup failure reported as clean', 'OF-RMFAIL', (s) => ({ gym: rp(s.gym, "could not be removed — archive it in Services before customers can book it.'); return false;", "'); offerMsg(NOT_ENABLED + ' Nothing was published.'); return false;"), member: s.member })],
+    ['i', 'read-only fails OPEN when editable is missing (old server)', 'RO-OLD', (s) => ({ gym: rp(s.gym, "return EA.decide(w && typeof w === 'object' && !Array.isArray(w) ? w : null, S.claims);",
+      "if (w && typeof w === 'object' && !('editable' in w)) return { editable: true, readOnly: false, reason: null }; return EA.decide(w && typeof w === 'object' && !Array.isArray(w) ? w : null, S.claims);"), member: s.member })],
+    ['j', 'read-only fails OPEN when the edit authority is not loaded', 'RO-3', (s) => ({ gym: rp(s.gym, "if (!EA || typeof EA.decide !== 'function') return NO_EDIT;", "if (!EA || typeof EA.decide !== 'function') return { editable: true, readOnly: false, reason: null };"), member: s.member })],
+    ['k', 'visibility from an approval field (adminApproved) instead of modules', 'G-1b', (s) => ({ gym: rp(s.gym, "return !!(m && m.state === 'AVAILABLE');", "return !!(m && m.state === 'AVAILABLE') || !!(w && w.adminApproved === true);"), member: s.member })],
   ];
   let ctlBad = 0;
   console.log('\nNegative controls (each must FAIL its named row):');

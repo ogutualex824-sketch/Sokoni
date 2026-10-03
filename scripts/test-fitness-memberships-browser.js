@@ -33,7 +33,7 @@ const TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.css': '
 const HARNESS = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
   '<style>:root{--bg:#050505;--surf:#0d0d0d;--surf2:#141414;--border:#1a1a1a;--acc:#71ff00;--text:#e8e8e8;--sub:#888}html,body{background:var(--bg);color:var(--text);margin:0;overflow-x:hidden}</style>' +
   '<script src="security.js"></script></head><body><div class="panel" id="panel-memberships"><div style="padding:14px 16px"><div id="mbList"></div></div></div>' +
-  '<script src="sokoni-fitness-memberships.js"></script></body></html>';
+  '<script src="sokoni-edit-authority.js"></script><script src="sokoni-fitness-memberships.js"></script></body></html>';
 const server = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split('?')[0]);
   if (u === '/__fitness-gym-harness.html') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end(HARNESS); }
@@ -109,7 +109,7 @@ const OFFERS = [{ id: 'svc_gold3', data: { name: 'Gold 3-month', price: 600000, 
       let t = await open(vp, '/__fitness-gym-harness.html', { workspace: { state: 'AVAILABLE', modules: { leads: { state: 'AVAILABLE' } } }, callables: {} });
       const hidden = await t.page.evaluate(() => { const ok = SokoniFitnessMemberships.mount(document.getElementById('mbList')); return { ok, html: document.getElementById('mbList').innerHTML, calls: window.__calls.length }; });
       await t.ctx.close();
-      t = await open(vp, '/__fitness-gym-harness.html', { workspace: { state: 'AVAILABLE', modules: { memberships: { state: 'AVAILABLE' } } },
+      t = await open(vp, '/__fitness-gym-harness.html', { workspace: { state: 'AVAILABLE', approval: { state: 'VALID_APPROVAL' }, ownerState: 'active', editable: true, modules: { memberships: { state: 'AVAILABLE' } } },
         callables: { fitnessScannerStatus: { data: { canScan: true, role: 'owner' } }, fitnessGymMemberships: { data: { rows: ROWS } }, fitnessCheckIn: { delayMs: 600, data: OK_CHECKIN } } });
       await t.page.evaluate(() => SokoniFitnessMemberships.mount(document.getElementById('mbList')));
       await t.page.waitForTimeout(300);
@@ -131,7 +131,7 @@ const OFFERS = [{ id: 'svc_gold3', data: { name: 'Gold 3-month', price: 600000, 
       ck('FMB10 offer editor: owner defaults with savings (7/13/20%), Monthly 5,000 pre-filled; no horizontal scroll', /Save 7%/.test(ed.txt) && /Save 13%/.test(ed.txt) && /Save 20%/.test(ed.txt)
         && ed.price === '5000' && await noScroll(t.page), ed);
       await t.ctx.close();
-      t = await open(vp, '/__fitness-gym-harness.html', { workspace: { state: 'AVAILABLE', modules: { memberships: { state: 'AVAILABLE' } } },
+      t = await open(vp, '/__fitness-gym-harness.html', { workspace: { state: 'AVAILABLE', approval: { state: 'VALID_APPROVAL' }, ownerState: 'active', editable: true, modules: { memberships: { state: 'AVAILABLE' } } },
         callables: { fitnessScannerStatus: { data: { canScan: false, reason: 'BUSINESS_LINK_MISSING' } }, fitnessGymMemberships: { data: { rows: [] } } } });
       await t.page.evaluate(() => SokoniFitnessMemberships.mount(document.getElementById('mbList')));
       await t.page.waitForTimeout(300);
