@@ -346,3 +346,41 @@ Method: download each function's live source archive (they vanish from GCS), tak
 
 ### 10.6 Still open before Gate C can close
 Owner approval for Unit 3 (P0-4) · the four Gate B items (§9) · the `terms.html` / `legal-hub.html` VAT-treatment contradiction (hosting blocker) · handler-level diff for the two held functions.
+
+## 11 · Hub plan entitlements — every vertical in the ONE catalogue (2026-10-03)
+
+**Defect.**
+- `subscription-catalog.js` knew only the seller and AI plans, plus the generic ids.
+- Every other `sub-billing.js` plan resolved to the seller **FREE** allowance when paid: restaurant_*, hotel_*, pharmacy_*, driver_*, property_*, recruiter_*, freelancer_*, car_dealer_* and buyer_premium.
+- Reported by sokoni-5b (Food Gate 5). Fitness (sokoni-e3) waits on the same contract.
+
+**Contract** (`functions/subscription-catalog.js`; prices, tiers and limits stay in `sub-billing.js` PLANS, so there is no second table):
+
+| Export | Answer |
+|---|---|
+| `hubPlan(id)` | `{planId, billingHubType, hubType, tier, name, isActive, features}`, or null for seller / provider / generic ids |
+| `hubPlansOf(hubType)` | the hub's active plans, cheapest first. Accepts the vertical (`food`) or the billing name (`restaurant`) |
+| `entitlementFor(sub).hub` | that plan. A lapsed plan becomes **the hub's free plan** (a known state), with `subscribedPlanId` kept. The seller fields are unchanged |
+| `requireFeature(sub, {hubType, feature, capability?, needed?})` | `{allowed:true, limit, tier, planId}`, or `{allowed:false, reason:'upgrade_required', upgradeRequired:{capability, feature, hubType, currentTier, currentLimit, minTier, minPlanId}}` |
+
+**Rules.**
+- `minPlanId` is the cheapest ACTIVE plan of that hub that satisfies the feature. It is null when no plan offers it.
+- `-1` means unlimited. `needed` is compared with the limit.
+- An unknown feature, hub or capability is **refused with a reason**.
+- Another hub's plan grants nothing.
+- No subscription means the hub's free plan.
+
+**Hubs and capabilities.**
+- `HUB_VERTICAL = {restaurant: 'food'}`. Only verticals the capability engine defines are mapped; the other hubs keep their billing name.
+- Capabilities (FOOD_MENU, KITCHEN, DRINKS, CATERING, BAKERY, from `shared/service-capabilities.js` on feat/capability-engine-on-c7e26b6 @ 13f74f3) are **not** plan features. The caller names the capability whose feature it is gating. It is validated against the engine when present and echoed in `upgradeRequired`. Nothing is granted here.
+
+**Tests.**
+- `scripts/test-hub-plan-entitlements.js`: 17/0.
+- Sabotage (hub lookup disabled): 7 FAIL.
+- `catalogue-canonical-migration` 47/0; `commercial-facts-invariants` 24/0.
+
+**Status.** NOT deployed. It ships with this branch's functions slice. Callers wire it in themselves: Food Gate 5 (sokoni-5b), Fitness (sokoni-e3).
+
+**Open.**
+- No `fitness_*` plans exist. Add them to `sub-billing.js` PLANS (with an owner-set price) and they appear automatically.
+- `adminSubCreatePlan` / `adminSubUpdatePlan` overrides stored in Firestore are not read here. That is the same static table as `subGetPlans`.

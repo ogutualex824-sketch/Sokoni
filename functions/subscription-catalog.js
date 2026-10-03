@@ -237,7 +237,7 @@ function unmappedPlanIds(ids, expectFree) {
     const key = String(id || '').trim();
     if (free.has(key.toLowerCase())) return false;
     const canonical = PLANS[key.toUpperCase()] ? key.toUpperCase() : ALIASES[key.toLowerCase()];
-    return !canonical;
+    return !canonical && !hubPlan(key);
   });
 }
 
@@ -297,10 +297,104 @@ function entitlementFor(subscription) {
        consumer can log which generation it resolved. During a migration that is
        the difference between "the dashboard is wrong" and "the dashboard
        resolved v1 while upload resolved v2". */
+    /* HUB entitlement (2026-10-03). Restaurant, hotel, pharmacy, driver, property, recruiter, freelancer,
+       car-dealer and buyer plans live in sub-billing.js PLANS and used to fall straight through to the seller
+       FREE allowance above — a paid Restaurant Pro read as FREE. null when the plan is not a hub plan. */
+    hub:                hubEntitlementFor(sub, entitled),
     catalogVersion:     CATALOG_VERSION,
     source:             'subscription-catalog',
     resolvedAt:         new Date().toISOString(),
   };
+}
+
+/* ══ HUB PLANS (2026-10-03) ═══════════════════════════════════════════════════════════════════════════════
+   ONE catalogue for every vertical. Prices, tiers and feature limits stay where they are configured —
+   sub-billing.js PLANS (no second table). This layer answers the two questions a gate asks:
+     hubEntitlementFor(subscription)            → what this hub plan grants (or the hub's FREE plan when lapsed)
+     requireFeature(subscription, {hubType, feature, capability?, needed?})
+                                                → { allowed:true, limit } | { allowed:false, upgradeRequired }
+   upgradeRequired = { capability, feature, hubType, currentTier, minTier, minPlanId } — computed from the real
+   plan table (the cheapest ACTIVE plan of that hub that satisfies the feature), never invented. minPlanId null
+   means no plan offers it. An unknown feature is REFUSED (reason 'unknown_feature'), never silently allowed.
+
+   CAPABILITIES are not plan features. FOOD_MENU / KITCHEN / DRINKS / CATERING / BAKERY
+   (functions/shared/service-capabilities.js, feat/capability-engine-on-c7e26b6) say what a business IS, from its
+   business type; plans say how much of it may be used. The caller names the capability whose feature it is
+   gating; it is validated against that engine when present and echoed in upgradeRequired so merchant-v2 can show
+   "Kitchen — upgrade to Restaurant Pro for KDS". No capability is ever granted here.
+
+   Plans that are NOT hub plans here: seller_* (the catalogue's own seller path above), provider plans
+   (PROVIDER_PLAN_RATES — commission, refused when unknown) and the generic ids business/pro/starter/enterprise. */
+const _NOT_HUB = Object.freeze(new Set(['seller', 'service_provider', 'enterprise']));
+/* billing hub → the capability engine's vertical, ONLY where that vertical exists. The rest keep their billing
+   name until their vertical is defined — no guessed mapping. */
+const HUB_VERTICAL = Object.freeze({ restaurant: 'food' });
+const _ENTITLED = ['active', 'trialing', 'trial', 'grace'];
+function _hubPlans() {
+  try { return require('./sub-billing').PLANS || {}; } catch (_) { return {}; }   /* lazy: keeps this module light */
+}
+function _verticalOf(billingHub) { return HUB_VERTICAL[billingHub] || billingHub; }
+function _view(pl) {
+  return { planId: pl.id, billingHubType: pl.hubType, hubType: _verticalOf(pl.hubType), tier: pl.tier,
+           name: pl.name, isActive: pl.isActive !== false, features: Object.assign({}, pl.features || {}) };
+}
+/** hubPlan(planId) — the hub plan behind an id, or null (seller/provider/generic ids are not hub plans). */
+function hubPlan(planId) {
+  const pl = _hubPlans()[String(planId || '').trim()];
+  if (!pl || !pl.hubType || _NOT_HUB.has(pl.hubType)) return null;
+  return _view(pl);
+}
+/** Active plans of one hub (accepts the vertical — 'food' — or the billing name — 'restaurant'), cheapest first. */
+function hubPlansOf(hubType) {
+  const want = String(hubType || '');
+  return Object.values(_hubPlans())
+    .filter((pl) => pl && pl.hubType && !_NOT_HUB.has(pl.hubType) && pl.isActive !== false && (pl.hubType === want || _verticalOf(pl.hubType) === want))
+    .sort((a, b) => ((a.price && a.price.monthly) || 0) - ((b.price && b.price.monthly) || 0))
+    .map(_view);
+}
+/** The plan a lapsed / absent subscription falls back to inside a hub: that hub's free plan (a KNOWN state). */
+function _hubFree(hubType) { return hubPlansOf(hubType).find((v) => v.tier === 'free') || null; }
+function hubEntitlementFor(subscription, entitledArg) {
+  const sub = subscription || {};
+  const hp = hubPlan(sub.plan || sub.planId || sub.tier);
+  if (!hp) return null;
+  const entitled = typeof entitledArg === 'boolean' ? entitledArg : _ENTITLED.includes(String(sub.status || 'none').toLowerCase());
+  const eff = entitled ? hp : (_hubFree(hp.billingHubType) || Object.assign({}, hp, { tier: 'free', features: {} }));
+  return Object.assign({}, eff, { subscribedPlanId: hp.planId, entitled });
+}
+function _satisfies(features, feature, needed) {
+  if (!features || !(feature in features)) return null;          /* not defined on this plan */
+  const v = features[feature];
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v === -1 || (needed == null ? v > 0 : Number(needed) <= v);
+  return !!v;
+}
+function _capabilityOk(capability) {
+  if (capability == null) return true;
+  try { return require('./shared/service-capabilities').isCapability(capability); }
+  catch (_) { return /^[A-Z][A-Z_]+$/.test(String(capability)); }  /* engine on another branch: shape check only */
+}
+/**
+ * requireFeature(subscription, { hubType, feature, capability, needed })
+ * subscription: the hub subscription doc (plan/planId + status), or null for "no subscription".
+ */
+function requireFeature(subscription, opts) {
+  const o = opts || {};
+  const hubType = String(o.hubType || '');
+  const plans = hubPlansOf(hubType);
+  if (!plans.length) return { allowed: false, reason: 'unknown_hub', hubType };
+  if (!_capabilityOk(o.capability)) return { allowed: false, reason: 'unknown_capability', capability: o.capability };
+  if (!plans.some((v) => o.feature in v.features)) return { allowed: false, reason: 'unknown_feature', feature: o.feature, hubType };
+  let ent = hubEntitlementFor(subscription);
+  /* a subscription to ANOTHER hub's plan grants nothing here; no subscription = this hub's free plan */
+  if (!ent || (ent.billingHubType !== plans[0].billingHubType)) ent = Object.assign({}, _hubFree(hubType) || { tier: 'free', features: {} }, { entitled: false });
+  const ok = _satisfies(ent.features, o.feature, o.needed);
+  if (ok === true) return { allowed: true, limit: ent.features[o.feature], tier: ent.tier, planId: ent.planId || null };
+  const min = plans.find((v) => _satisfies(v.features, o.feature, o.needed) === true) || null;
+  return { allowed: false, reason: 'upgrade_required', upgradeRequired: {
+    capability: o.capability || null, feature: o.feature, hubType: plans[0].hubType,
+    currentTier: ent.tier || 'free', currentLimit: ent.features ? ent.features[o.feature] : undefined,
+    minTier: min ? min.tier : null, minPlanId: min ? min.planId : null } };
 }
 
 /** Convenience for the one question most callers actually ask. */
@@ -310,4 +404,5 @@ function listingLimitFor(subscription) {
 
 module.exports = { PLANS, ALIASES, KNOWN_PLAN_IDS, LIFECYCLE, STATUS_ALIASES,
                    lifecycleOf, isEntitled, resolve, entitlementFor,
-                   listingLimitFor, unmappedPlanIds };
+                   listingLimitFor, unmappedPlanIds,
+                   hubPlan, hubPlansOf, hubEntitlementFor, requireFeature, HUB_VERTICAL };

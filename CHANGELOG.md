@@ -1,3 +1,13 @@
+## 2026-10-03 — Hub plan entitlements in the ONE catalogue (NOT deployed)
+
+- **Fix:** paid restaurant / hotel / pharmacy / driver / property / recruiter / freelancer / car-dealer / buyer plans no longer resolve to the seller FREE allowance.
+- **New in functions/subscription-catalog.js:** hubPlan, hubPlansOf, hubEntitlementFor (entitlementFor().hub) and requireFeature.
+- **Gate answer:** requireFeature returns allowed (with limit) or upgradeRequired {capability, feature, minTier, minPlanId}, computed from sub-billing.js PLANS.
+- **Hub mapping:** restaurant → hubType 'food'.
+- **Capabilities:** keys are validated against the capability engine when present; nothing is granted.
+- **Tests:** scripts/test-hub-plan-entitlements.js 17/0 (sabotage 7 FAIL).
+- **Database / rules / API:** none (pure catalogue functions).
+
 ## [2026-09-30] — Service bookings: PIN YAKO NI BOOKING YAKO releases held money to the provider business wallet; every service booking is an order — LOCAL, NOT DEPLOYED (`convergence/commercial-fn-on-ef1e992`)
 
 **Files:** `functions/entertainment-bookings.js` (envelope + PIN for every paid service booking; orders/{bookingId} mirror type service_booking with escrow; buyer PIN read + provider verify handlers), `functions/provider-ops.js` (`settleOnPinRelease`; a held booking completes only with the PIN), **new** `functions/service-booking-pin.js` (`serviceBookingPin`), `functions/index.js` (+ export), **new** `scripts/test-service-booking-pin-e2e.js` (emulator 14/0), `scripts/test-entertainment-bookings.js` (contract: PIN releases and completes; 95/0), `scripts/test-healthcare-payment-convergence.js` (stub interface; 40/0), **new** `docs/SERVICE_BOOKING_PIN_2026-09-30.md`.
