@@ -336,47 +336,25 @@ async function _processFOSTransaction(txId, { payRef, netAmount, provider, check
   }
 
   const netCents = tx.amountCents - commissionCents;
-  /* R1 rounding (approved design 1fb5fac): the seller's withdrawable is whole shillings;
-     the sub-shilling remainder of the seller net is platform-retained and RECORDED (never
-     silently dropped) — commissionLedger carries it, so value is conserved exactly:
-       buyerPaid(cents) = sellerShillings*100 + commissionCents + remainderCents. */
-  const netShillings   = Math.floor(netCents / 100);
-  const remainderCents = netCents - netShillings * 100;   // 0..99, platform-retained, recorded
-  const FV = admin.firestore.FieldValue;
 
-  const settleResult = await fsdb.runTransaction(async (txn) => {
-    /* ── ALL READS FIRST (Firestore requires reads before writes) ──────────────
-       In-transaction idempotency re-read (independent-review MANDATORY amendment): a
-       replay whose outer finosIdempotency guard was bypassed must NOT re-increment
-       `balance` (FV.increment is not idempotent). Re-read status inside the txn and no-op
-       if already settled — mirrors order-settlement.js and the F2 fix. */
-    const freshTx = await txn.get(txRef);
-    if (!freshTx.exists || freshTx.data().status === 'COMPLETED') return { settled: false };
-
-    /* seller wallet read for debt-recovery (order-settlement.js contract) */
-    const walletRef = fsdb.collection('wallets').doc(tx.sellerUid);
-    const wSnap     = await txn.get(walletRef);
-    const debt          = wSnap.exists ? Math.max(0, Number(wSnap.data().refundRecoveryDebt) || 0) : 0;
-    const appliedToDebt = Math.min(debt, netShillings);
-    const withdrawable  = netShillings - appliedToDebt;
-
-    /* ── THEN ALL WRITES ──────────────────────────────────────────────────────*/
-    /* 1 — fosTransaction → COMPLETED */
+  await fsdb.runTransaction(async (txn) => {
+    /* Update fosTransaction */
     txn.update(txRef, {
       status:          'COMPLETED',
       commissionCents,
       commissionRate,
       netCents,
-      remainderCents,
       checkoutId:      checkoutId || tx.checkoutId,
       completedAt:     now(),
       updatedAt:       now(),
     });
 
-    /* 2 — mark the SOURCE document paid. Nothing on this path ever did: the reserved
-       wallets/__platform__ write (removed below) rolled the whole transaction back, so a
-       paid legal consultation looked unpaid to both client and advocate forever.
-       The link is metadata.consultationId, stamped at initiation. */
+    /* Mark the SOURCE document paid.
+     *
+     * Nothing on this path ever did. fosSecureWebhook updated `payments`, `fosTransactions`
+     * and `wallets` — but the thing the user actually booked stayed `pending` forever, so a
+     * paid legal consultation still looked unpaid to both the client and the advocate.
+     * The link is metadata.consultationId, stamped at initiation. */
     const consultId = tx.metadata && tx.metadata.consultationId;
     if (consultId) {
       txn.set(fsdb.collection('legalConsultations').doc(consultId), {
@@ -389,61 +367,22 @@ async function _processFOSTransaction(txId, { payRef, netAmount, provider, check
       }, { merge: true });
     }
 
-    /* 3 — credit the ONE authoritative withdrawable wallet: wallets/{uid}.balance
-       (SHILLINGS), debt-recovery first — exactly the order-settlement.js contract, so the
-       FROZEN payout/read side (requestSellerPayout / getWalletBalance) reads it natively.
-       (The old code credited wallets/{uid}.availableCents — a field nothing withdrawable/
-       displayable/sweepable ever read, so the money was orphaned.) */
+    /* Credit seller wallet */
+    const walletRef = fsdb.collection('wallets').doc(tx.sellerUid);
     txn.set(walletRef, {
-      balance:            FV.increment(withdrawable),
-      refundRecoveryDebt: FV.increment(-appliedToDebt),
-      updatedAt:          now(),
+      availableCents: admin.firestore.FieldValue.increment(netCents),
+      lifetimeCents:  admin.firestore.FieldValue.increment(netCents),
+      updatedAt:      now(),
     }, { merge: true });
 
-    /* 4 — deterministic wallet transaction (idempotent doc id; a replay overwrites). */
-    txn.set(fsdb.collection('walletTransactions').doc(`fos_${txId}_settle`), {
-      uid: tx.sellerUid, type: 'fos_settlement',
-      amount: withdrawable, appliedToDebt, grossCredit: netShillings,
-      currency: 'KES', sourceType: 'fos', sourceId: txId, payRef,
-      grossCents: tx.amountCents, commissionCents, netCents, remainderCents,
-      createdAt: now(),
-    });
-
-    /* 5 — platform commission on the CANONICAL commission rail (commissionLedger), NOT a
-       wallet doc. Deterministic id + auto_collected (not re-invoiced). Includes the
-       retained remainder so platform revenue is exact. */
-    const platformCents = commissionCents + remainderCents;
-    txn.set(fsdb.collection('commissionLedger').doc(`fos_${txId}`), {
-      ref: payRef, source: 'fos', txId,
-      uid: tx.sellerUid, sellerUid: tx.sellerUid, category: tx.hubType,
-      commissionCents, remainderCents,
-      sokoniCut:    platformCents / 100,
-      serviceTotal: tx.amountCents / 100,
-      status:       'auto_collected',
-      confirmedAt:  now(),
-      createdAt:    now(),
+    /* Credit platform commission wallet */
+    const platformRef = fsdb.collection('wallets').doc('__platform__');
+    txn.set(platformRef, {
+      availableCents: admin.firestore.FieldValue.increment(commissionCents),
+      lifetimeCents:  admin.firestore.FieldValue.increment(commissionCents),
+      updatedAt:      now(),
     }, { merge: true });
-
-    /* 6 — balanced double-entry ledger (cents), same schema as order-settlement.js:
-       GROSS_COLLECTION → seller net (whole shillings) + platform (commission + remainder).
-       (netCents - remainderCents) + (commissionCents + remainderCents) = amountCents. */
-    txn.set(fsdb.collection('ledger').doc(`fos_${txId}_seller`), {
-      entryType: 'fos_settlement', debitAccount: 'GROSS_COLLECTION',
-      creditAccount: `seller:${tx.sellerUid}`, amountCents: netCents - remainderCents,
-      sourceType: 'fos', sourceId: txId, createdAt: now(),
-    });
-    txn.set(fsdb.collection('ledger').doc(`fos_${txId}_commission`), {
-      entryType: 'fos_commission', debitAccount: 'GROSS_COLLECTION',
-      creditAccount: 'PLATFORM_REVENUE', amountCents: platformCents,
-      sourceType: 'fos', sourceId: txId, createdAt: now(),
-    });
-
-    /* NO wallets/__platform__ write (Firestore-reserved id → the whole txn rolled back). */
-    return { settled: true, withdrawable, appliedToDebt };
   });
-
-  /* Replay no-op (already settled, in-txn guard) — do not re-notify / re-audit. */
-  if (!settleResult || !settleResult.settled) return;
 
   /* Notify buyer and seller */
   await _notify(tx.buyerUid, 'payment_confirmed', {
@@ -584,26 +523,12 @@ exports.fosSubmitRefund = onCall(
 
       const fsdb = db();
       await fsdb.runTransaction(async (txn) => {
-        /* READS FIRST: debit the AUTHORITATIVE withdrawable rail wallets/{uid}.balance
-           (SHILLINGS), with refund-recovery for any shortfall (order-settlement contract).
-           The old code decremented wallets/{uid}.availableCents — a field the withdrawable
-           rail never reads, so a refund did not reduce the seller's withdrawable at all. */
-        let fromBalance = 0, toDebt = 0;
-        if (tx.sellerUid) {
-          const wSnap = await txn.get(fsdb.collection('wallets').doc(tx.sellerUid));
-          const bal   = wSnap.exists ? Math.max(0, Number(wSnap.data().balance) || 0) : 0;
-          const refundShillings = Math.round(amountCents / 100);  /* explicit; no implicit floor */
-          fromBalance = Math.min(bal, refundShillings);
-          toDebt      = refundShillings - fromBalance;
-        }
-        /* WRITES */
         txn.update(refundRef, { status: 'processed', refundId: result.refundId, processedAt: now(), updatedAt: now() });
         if (tx.sellerUid) {
           txn.set(fsdb.collection('wallets').doc(tx.sellerUid), {
-            balance:            admin.firestore.FieldValue.increment(-fromBalance),
-            refundRecoveryDebt: admin.firestore.FieldValue.increment(toDebt),
-            refundedCents:      admin.firestore.FieldValue.increment(amountCents),
-            updatedAt:          now(),
+            availableCents: admin.firestore.FieldValue.increment(-amountCents),
+            refundedCents:  admin.firestore.FieldValue.increment(amountCents),
+            updatedAt:      now(),
           }, { merge: true });
         }
         if (txId) {
@@ -703,17 +628,6 @@ exports.fosApproveRefund = onCall(
     /* Finalize: atomically update refund record + seller wallet + linked transaction */
     const refundRef = fsdb.collection('fosRefundQueue').doc(refundId);
     await fsdb.runTransaction(async (txn) => {
-      /* READS FIRST: debit the authoritative wallets/{uid}.balance (SHILLINGS) with
-         refund-recovery for any shortfall — the old path decremented availableCents, a
-         field the withdrawable rail never reads. */
-      let fromBalance = 0, toDebt = 0;
-      if (refund.sellerUid) {
-        const wSnap = await txn.get(fsdb.collection('wallets').doc(refund.sellerUid));
-        const bal   = wSnap.exists ? Math.max(0, Number(wSnap.data().balance) || 0) : 0;
-        const refundShillings = Math.round(refund.amountCents / 100);  /* explicit; no implicit floor */
-        fromBalance = Math.min(bal, refundShillings);
-        toDebt      = refundShillings - fromBalance;
-      }
       txn.update(refundRef, {
         status:      'processed',
         refundId:    result.refundId,
@@ -723,11 +637,11 @@ exports.fosApproveRefund = onCall(
       });
 
       if (refund.sellerUid) {
-        txn.set(fsdb.collection('wallets').doc(refund.sellerUid), {
-          balance:            admin.firestore.FieldValue.increment(-fromBalance),
-          refundRecoveryDebt: admin.firestore.FieldValue.increment(toDebt),
-          refundedCents:      admin.firestore.FieldValue.increment(refund.amountCents),
-          updatedAt:          now(),
+        const walletRef = fsdb.collection('wallets').doc(refund.sellerUid);
+        txn.set(walletRef, {
+          availableCents: admin.firestore.FieldValue.increment(-refund.amountCents),
+          refundedCents:  admin.firestore.FieldValue.increment(refund.amountCents),
+          updatedAt:      now(),
         }, { merge: true });
       }
 
@@ -917,20 +831,15 @@ exports.fosExportReport = onCall(
     }
 
     if (reportType === 'wallets') {
-      /* D3 correctness: order by / read the AUTHORITATIVE withdrawable `balance` (shillings).
-         `lifetimeCents`/`availableCents` are retired (never written now); ordering by a field
-         no wallet has would return an EMPTY report, and `availableKES` would read 0 for
-         everyone. Lifetime-earnings aggregation is a canonical-source (walletTransactions/
-         ledger) rollup deferred to F7 — not read from the retired wallet field here. */
-      const snap = await fsdb.collection('wallets').orderBy('balance', 'desc').limit(rowCount).get();
+      const snap = await fsdb.collection('wallets').orderBy('lifetimeCents', 'desc').limit(rowCount).get();
       snap.forEach(d => {
         const w = d.data();
         rows.push({
           uid:           d.id,
-          availableKES:  (w.balance || 0),               /* authoritative withdrawable (shillings) */
+          availableKES:  (w.availableCents || 0) / 100,
           pendingKES:    (w.pendingCents   || 0) / 100,
           heldKES:       (w.heldCents      || 0) / 100,
-          lifetimeKES:   null,                            /* pending F7 lifetime rollup (was retired lifetimeCents) */
+          lifetimeKES:   (w.lifetimeCents  || 0) / 100,
           refundedKES:   (w.refundedCents  || 0) / 100,
         });
       });
@@ -1067,11 +976,8 @@ exports.fosGetAdminConsole = onCall(
         .limit(20)
         .get(),
 
-      /* Platform revenue — canonical commissionLedger sum. The old wallets/__platform__ read
-         used a Firestore-reserved id and always returned null → a fabricated 0 KPI. */
-      fsdb.collection('commissionLedger')
-        .aggregate({ total: admin.firestore.AggregateField.sum('sokoniCut') })
-        .get().catch(() => null),
+      /* Platform wallet */
+      fsdb.collection('wallets').doc('__platform__').get().catch(() => null),
     ]);
 
     /* Aggregate today */
@@ -1093,7 +999,7 @@ exports.fosGetAdminConsole = onCall(
     });
 
     const kes = (c) => Math.round(c / 100);
-    const platformRevenueKES = Math.round(walletSnap?.data()?.total || 0);  /* sokoniCut is KES */
+    const platformWallet = walletSnap?.data() || {};
 
     return {
       kpis: {
@@ -1103,7 +1009,7 @@ exports.fosGetAdminConsole = onCall(
         weekRevenueKES:      kes(weekRevCents),
         weekCommissionKES:   kes(weekCommCents),
         weekTransactions:    weekTxCount,
-        platformBalanceKES:  platformRevenueKES,
+        platformBalanceKES:  kes(platformWallet.availableCents || 0),
       },
       queues: {
         pendingRefunds:  pendingRefunds.size,
