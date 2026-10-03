@@ -40,6 +40,10 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await allows('AS-10', 'SERVER unsuspension (Admin SDK) restores writes', updateDoc(doc(act, 'providers/act'), { bio: 'reinstated' }));
   await denies('AS-3b', 'an ordinary admin writes ban fields (banReason / bannedBy / bannedAt / suspendedUntil) from the browser', updateDoc(doc(adm, 'users/act'), { banReason: 'x', bannedBy: 'adm', bannedAt: 1, suspendedUntil: 2 }));
   await denies('AS-3c', 'a banned user clears its own ban fields', updateDoc(doc(env.authenticatedContext('ban').firestore(), 'users/ban'), { banReason: null, bannedAt: null }));
+  await denies('AS-11', 'self-edit role = super_admin is refused (noSelfGrant)', updateDoc(doc(act, 'users/act'), { role: 'super_admin' }));
+  await denies('AS-12', 'an ORDINARY admin sets another user\'s role = super_admin from the browser (setUserRole only)', updateDoc(doc(adm, 'users/act'), { role: 'super_admin' }));
+  await denies('AS-13', 'self-edit roles[] adds admin (rolesUnchanged)', updateDoc(doc(act, 'users/act'), { roles: ['buyer', 'admin'] }));
+  await denies('AS-14', 'create with role admin is refused', setDoc(doc(env.authenticatedContext('newu4').firestore(), 'users/newu4'), { uid: 'newu4', role: 'admin' }));
   await denies('AS-4', 'the owner forges a reinstatement record', updateDoc(doc(sus, 'users/sus'), { reinstatedAt: 1, reinstatedBy: 'sus' }));
   await denies('AS-5', 'create with status suspended / with suspension fields is refused', setDoc(doc(newu, 'users/newu'), { uid: 'newu', status: 'suspended' }));
   await denies('AS-6', 'an active owner fakes a role-update stamp', updateDoc(doc(act, 'users/act'), { roleUpdatedAt: 1, roleUpdatedBy: 'act' }));

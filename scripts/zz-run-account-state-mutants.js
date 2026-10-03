@@ -3,6 +3,7 @@
    MUST make its named rows fail. Needs the Firestore emulator (FIRESTORE_PORT) — RAM-gated like every emulator suite.
      M1 field lock removed  (accountStateUnchanged / accountStateCreateOk → true)   → AS-1 / AS-1b / AS-2 / AS-3 / AS-5 must FAIL
      M2 session check removed (accountNotSuspended → true)                          → AS-7 / AS-7b / AS-8 / AS-9 must FAIL
+     M4 (break D) the role guard removed (role out of noSelfGrant; rolesUnchanged → true)  → AS-11 / 12 / 13 / 14 must FAIL
      M3 (break C) only the 'banned' value removed from the predicate                → AS-7b must FAIL */
 'use strict';
 const fs = require('fs'), path = require('path'), { spawnSync } = require('child_process');
@@ -12,6 +13,8 @@ const swap = (s, fn) => { const i = s.indexOf('function ' + fn + '() {'); if (i 
 const M = { M1: { rules: swap(swap(src, 'accountStateUnchanged'), 'accountStateCreateOk'), must: ['AS-1', 'AS-1b', 'AS-2', 'AS-3', 'AS-3b', 'AS-3c', 'AS-5'] },
             M2: { rules: swap(src, 'accountNotSuspended'), must: ['AS-7', 'AS-7b', 'AS-8', 'AS-9'] },
             /* break C (owner): remove ONLY the legacy 'banned' value from the predicate → the legacy-banned row must fail */
+            /* break D (2f, owner attack list 'role = super_admin'): the ROLE guard removed — 'role' out of noSelfGrant and rolesUnchanged → true */
+            M4: { rules: (() => { let r = src; const n = r.split("'permissions','role',").length - 1; if (n !== 2) throw new Error('anchor role x' + n); r = r.split("'permissions','role',").join("'permissions',"); return swap(r, 'rolesUnchanged'); })(), must: ['AS-11', 'AS-12', 'AS-13', 'AS-14'] },
             M3: { rules: (() => { const a = "in ['suspended', 'banned']"; if (src.split(a).length !== 2) throw new Error('anchor banned'); return src.replace(a, "in ['suspended']"); })(), must: ['AS-7b'] } };
 let bad = 0;
 for (const [name, m] of Object.entries(M)) {
