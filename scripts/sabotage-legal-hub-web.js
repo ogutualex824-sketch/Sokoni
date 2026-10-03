@@ -20,6 +20,8 @@ const M = [
   ['dashboard writes availability from the browser again', 'provider-dashboard.html', "  async _close(date,label){if(!this._ref())throw new Error('Sign in required');await _avCall('addAvailabilityOverride',{date:date,closed:true,label:String(label).slice(0,80)});},", "  async _close(date,label){const r=this._ref();await r.collection('overrides').doc(date).set({date,closed:true});},", 'AV1W'],
   ['provider receipt view leaks the client account id', 'sokoni-receipts.js', "prov ? 'SOKONI customer' : (r.counterpartyName || '—')", "prov ? (r.clientUid || '—') : (r.counterpartyName || '—')", 'RC1'],
   ['receipt view invents a method when IntaSend reported none', 'sokoni-receipts.js', "['Payment method', r.method || '—'],", "['Payment method', r.method || 'M-PESA'],", 'RC1'],
+  ['directory filters specialist areas on the REQUESTED list', 'legal-hub.html', "else if (c.indexOf('spec:') === 0) lawyers = lawyers.filter(l => (l.specialistAreas||[]).includes(c.slice(5)));", "else if (c.indexOf('spec:') === 0) lawyers = lawyers;", 'SPW1'],
+  ['firm storefront shows the self-declared team', 'legal-profile.html', "(p.entityType === 'firm' ? '<div class=\"card\"><h2>Our advocates</h2>' + ((p.team || []).length", "(p.entityType === 'firm' ? '<div class=\"card\"><h2>Our advocates</h2>' + ((p.teamDeclared || p.team || []).length", 'FMW1'],
 ];
 let caught = 0, missed = 0;
 for (const [name, file, a, b, row] of M) {

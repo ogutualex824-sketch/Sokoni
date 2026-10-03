@@ -1,3 +1,18 @@
+## [2026-10-03] — Legal Hub L10/L11 (hosting): specialist areas and individually verified firm teams on the web — NOT deployed
+
+- **legal-hub.html:**
+  - The wizard REQUESTS specialist areas (criminal / immigration / tax), confirmed only by SOKONI.
+  - Directory chips filter on server-CONFIRMED specialist areas.
+  - In the status card: specialist confirmed/requested, firm member management (accept / decline / remove, each member showing whether they are individually verified), and "ask to join a firm" / "leave" for advocates.
+- **legal-profile.html:**
+  - Shows "Specialist — confirmed by SOKONI" chips.
+  - A firm storefront lists "Our advocates" from the server team only (accepted AND individually verified), never the declared team.
+  - A member's storefront links its firm.
+- **sokoni-aos-legal.js:** "3 · Specialist practice areas" with Confirm / Revoke (reason required; legalAdminConfirmSpecialist, audited). The ops whitelist is extended.
+- **sokoni-legal-taxonomy.js:** regenerated (carries SPECIALIST).
+- **Tests:** test-legal-hub-web SPW1 + FMW1 (21/0); sabotage-legal-hub-web 17/17.
+- **Server:** feat/legal-hub-on-9cab901 a08a749 (L10) + 858c885 (L11).
+
 ## [2026-10-03] — Receipt screens: buyer (receipts.html) and provider (Finance → Receipts) on myTransactionReceipts — NOT deployed
 
 - **sokoni-receipts.js (new):** ONE read-only renderer.

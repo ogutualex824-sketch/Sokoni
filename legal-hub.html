@@ -822,6 +822,8 @@
       <div class="lh-section">
         <div class="lh-section-title">📚 Practice areas * <span style="font-weight:400;opacity:.6;font-size:11px;">(up to 12)</span></div>
         <div id="lhAreaPicker"></div>
+        <div class="lh-label" style="margin-top:10px;">Specialist areas <span style="opacity:.6;font-weight:400;">(SOKONI confirms each before it shows on your profile)</span></div>
+        <div id="lhSpecPicker"></div>
       </div>
 
       <div class="lh-section">
@@ -1380,6 +1382,7 @@ async function _loadLawyersFs(){
         name:         p.entityType === 'firm' ? (p.firmName || p.name || '') : (p.name || ''),
         firm:         p.entityType === 'firm' ? '' : (p.firmName || ''),
         practiceAreas: areas,
+        specialistAreas: p.specialistAreas || [],
         practiceGroups: p.practiceGroups || (LT ? [...new Set(areas.map(a => LT.groupOf(a)).filter(Boolean))] : []),
         skills:       _lhAreaLabels(areas),
         spec:         _lhAreaLabels(areas).slice(0, 2).join(' · ') || '',
@@ -1519,7 +1522,8 @@ function _lhRenderGroupBar(){
   const bar = document.getElementById('lawFilterBar');
   if (!bar || !LT || bar.dataset.built) return;
   bar.dataset.built = '1';
-  bar.insertAdjacentHTML('beforeend', LT.GROUPS.map(g => `<button type="button" class="lc-filter-btn" onclick="filterLawyers('group:${g.id}',this)">${lhEsc(g.icon + ' ' + g.label)}</button>`).join(''));
+  bar.insertAdjacentHTML('beforeend', LT.GROUPS.map(g => `<button type="button" class="lc-filter-btn" onclick="filterLawyers('group:${g.id}',this)">${lhEsc(g.icon + ' ' + g.label)}</button>`).join('')
+    + (LT.SPECIALIST || []).map(x => `<button type="button" class="lc-filter-btn" onclick="filterLawyers('spec:${x.id}',this)">${lhEsc(x.icon + ' ' + x.label)}</button>`).join(''));
 }
 
 /* Pane search input  syncs to hero search and re-renders from cache */
@@ -1570,6 +1574,7 @@ async function renderLawyers(){
     if (c === 'firm:') lawyers = lawyers.filter(l => l.entityType === 'firm');
     else if (c.indexOf('group:') === 0) lawyers = lawyers.filter(l => (l.practiceGroups||[]).includes(c.slice(6)));
     else if (c.indexOf('area:') === 0) lawyers = lawyers.filter(l => (l.practiceAreas||[]).includes(c.slice(5)));
+    else if (c.indexOf('spec:') === 0) lawyers = lawyers.filter(l => (l.specialistAreas||[]).includes(c.slice(5)));   /* confirmed-only, server side */
     else lawyers = [];   /* an unknown filter shows nothing, never everyone */
   }
 
@@ -3186,6 +3191,13 @@ window.heroSearchLawyers = heroSearchLawyers;
    profile facts only — identity and verification are protected server-side). No localStorage application copies. */
 let _lhRegType = 'advocate';
 const _lhSel = new Set();
+const _lhSpec = new Set();   /* L10: requested specialist areas (criminal / immigration / tax) — confirmed only by AdminOS */
+function lhRenderSpecPicker(hostId, sel){
+  const host = document.getElementById(hostId || 'lhSpecPicker'); if (!host || !LT || !LT.SPECIALIST) return;
+  const S = sel || _lhSpec;
+  host.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + LT.SPECIALIST.map(x => `<button type="button" class="lc-filter-btn${S.has(x.id)?' active-lf':''}" aria-pressed="${S.has(x.id)}" data-spec="${x.id}">${lhEsc(x.icon+' '+x.label)}</button>`).join('') + '</div>';
+  host.onclick = (e) => { const b = e.target.closest('[data-spec]'); if (!b) return; const id = b.getAttribute('data-spec'); if (S.has(id)) S.delete(id); else S.add(id); b.classList.toggle('active-lf', S.has(id)); b.setAttribute('aria-pressed', String(S.has(id))); };
+}
 function lhRegSetType(t){
   _lhRegType = t === 'firm' ? 'firm' : 'advocate';
   const a = document.getElementById('lhTypeAdv'), f = document.getElementById('lhTypeFirm');
@@ -3223,14 +3235,14 @@ async function registerLawyer(){
   const v = (id) => (document.getElementById(id)?.value || '').trim();
   const name = v('lhName'), p105 = v('lhP105'), county = v('lhCounty'), bio = v('lhBio');
   if (!name || !p105 || !county || !bio) return _lhMsg('Please fill in your name, LSK practising number, county and profile.');
-  if (!_lhSel.size) return _lhMsg('Choose at least one practice area.');
+  if (!_lhSel.size && !_lhSpec.size) return _lhMsg('Choose at least one practice area.');
   if (_lhRegType === 'firm' && !v('lhFirmName')) return _lhMsg('Enter the firm name.');
   if (!document.getElementById('lhDecl')?.checked) return _lhMsg('Please confirm the declaration.');
   await _lhAuthReady();
   if (!window._sokoniUser?.uid) return _lhMsg('Please <a href="login.html?redirect=' + encodeURIComponent(location.pathname + '#register') + '" style="color:#71ff00;font-weight:800;">sign in</a> to apply — your application is linked to your SOKONI account.');
   const data = {
     entityType: _lhRegType, name, licenseNumber: p105, county, bio, phone: v('lhPhone'),
-    practiceAreas: [..._lhSel], consultationFee: Number(v('lhFee')) || 0, yearsOfExperience: Number(v('lhYears')) || 0,
+    practiceAreas: [..._lhSel], specialistAreas: [..._lhSpec], consultationFee: Number(v('lhFee')) || 0, yearsOfExperience: Number(v('lhYears')) || 0,
     languages: v('lhLangs').split(',').map(x => x.trim()).filter(Boolean).slice(0, 5), isOnline: !!document.getElementById('lhOnline')?.checked,
   };
   if (_lhRegType === 'firm') Object.assign(data, { firmName: v('lhFirmName'), firmRegistrationNumber: v('lhFirmReg'), representativeRole: v('lhRepRole'),
@@ -3255,7 +3267,7 @@ const _LH_STATUS = {
 async function checkExistingApp(){
   const card = document.getElementById('lhStatusCard'), wrap = document.getElementById('lhRegWrap');
   if (!card || !wrap) return;
-  lhRenderAreaPicker();
+  lhRenderAreaPicker(); lhRenderSpecPicker();
   await _lhAuthReady();
   if (!window._sokoniUser?.uid) { card.hidden = true; wrap.hidden = false; return; }
   let r = null;
@@ -3287,10 +3299,16 @@ async function checkExistingApp(){
     <div class="lh-grid2"><div><label class="lh-label" for="lhEdFee">Consultation fee (KES)</label><input id="lhEdFee" type="number" min="0" step="100" class="lh-input" value="${p.consultationFee != null ? lhEsc(p.consultationFee) : ''}"></div>
     <div><label class="lh-label" for="lhEdCounty">County</label><input id="lhEdCounty" class="lh-input" value="${lhEsc(p.county || '')}"></div></div>
     <div class="lh-label">Practice areas</div><div id="lhEdAreas"></div>
+    <div class="lh-label" style="margin-top:8px;">Specialist areas — confirmed: ${lhEsc(((p.specialistConfirmed||[]).map(x => LT ? LT.label(x) : x)).join(', ') || '—')}</div><div id="lhEdSpec"></div>
+    ${p.entityType === 'firm' ? '<div class="lh-label" style="margin-top:12px;">Advocates at your firm</div><div id="lhFirmMembers" style="font-size:12px;">Loading…</div>'
+      : '<div class="lh-label" style="margin-top:12px;">Your law firm</div><div style="display:flex;gap:6px;flex-wrap:wrap;"><input id="lhJoinFirm" class="lh-input" style="margin:0;max-width:280px" placeholder="Firm profile link or ID"><button type="button" class="lc-filter-btn" onclick="lhJoinFirm()">Ask to join</button><button type="button" class="lc-filter-btn" onclick="lhLeaveFirm()">Leave firm</button></div><div id="lhJoinMsg" style="font-size:12px;margin-top:4px;"></div>'}
     <button type="button" class="lc-filter-btn active-lf" style="padding:12px 18px;margin-top:8px;" onclick="lhSaveProfile()">Save profile</button>
     <div id="lhEdMsg" role="status" style="font-size:12px;margin-top:8px;"></div></div>`;
   window._lhEdSel = new Set(p.practiceAreas || []);
   lhRenderAreaPicker('lhEdAreas', window._lhEdSel);
+  window._lhEdSpec = new Set(p.specialistRequested || []);
+  lhRenderSpecPicker('lhEdSpec', window._lhEdSpec);
+  if (p.entityType === 'firm') lhLoadFirmMembers();
 }
 async function lhResubmit(){
   const note = (document.getElementById('lhResNote')?.value || '').trim();
@@ -3301,12 +3319,43 @@ async function lhResubmit(){
 async function lhSaveProfile(){
   const m = document.getElementById('lhEdMsg');
   const fee = document.getElementById('lhEdFee')?.value;
-  const data = { op: 'legalUpdateProfile', bio: document.getElementById('lhEdBio')?.value || '', county: document.getElementById('lhEdCounty')?.value || '', practiceAreas: [...(window._lhEdSel || [])] };
+  const data = { op: 'legalUpdateProfile', bio: document.getElementById('lhEdBio')?.value || '', county: document.getElementById('lhEdCounty')?.value || '', practiceAreas: [...(window._lhEdSel || [])], specialistAreas: [...(window._lhEdSpec || [])] };
   if (fee !== '' && fee != null) data.consultationFee = Number(fee);
   if (m) { m.textContent = 'Saving…'; m.style.color = '#c8ff80'; }
   try { await _lhCallCF('legalDispatch', data); if (m) { m.textContent = 'Saved.'; m.style.color = '#71ff00'; } _fsLawyersCache = null; }
   catch (e) { if (m) { m.textContent = ((e && e.message) || 'Could not save.') + ' Nothing was changed.'; m.style.color = '#ff9800'; } }
 }
+/* L11 — firm membership. Each advocate keeps their OWN verified record; the firm accepts; the public team lists only
+   individually verified members. Nothing here makes anyone bookable. */
+async function lhLoadFirmMembers(){
+  const host = document.getElementById('lhFirmMembers'); if (!host) return;
+  try {
+    const r = await _lhCallCF('legalDispatch', { op: 'legalFirmMembers' });
+    const m = (r && r.members) || [];
+    host.innerHTML = m.length ? m.map(x => `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0;"><strong>${lhEsc(x.name || x.uid)}</strong>
+      <span class="lc-skill">${lhEsc(x.status || '—')}</span><span class="lc-skill">${x.individuallyVerified ? '✅ individually verified' : '⏳ not individually verified — not listed'}</span>
+      ${x.status === 'requested' ? `<button type="button" class="lc-filter-btn" onclick="lhDecideMember('${lhEsc(x.uid)}','accept')">Accept</button><button type="button" class="lc-filter-btn" onclick="lhDecideMember('${lhEsc(x.uid)}','decline')">Decline</button>` : ''}
+      ${x.status === 'accepted' ? `<button type="button" class="lc-filter-btn" onclick="lhDecideMember('${lhEsc(x.uid)}','remove')">Remove</button>` : ''}</div>`).join('')
+      : 'No advocates have asked to join yet. Each advocate applies as a Lawyer (verified individually), then asks to join your firm.';
+  } catch (e) { host.textContent = 'Members could not load just now — this is not an empty list.'; }
+}
+async function lhDecideMember(uid, decision){
+  try { await _lhCallCF('legalDispatch', { op: 'legalFirmDecideMember', memberUid: uid, decision }); lhLoadFirmMembers(); }
+  catch (e) { alert(((e && e.message) || 'Could not update.') + ' Nothing was changed.'); }
+}
+async function lhJoinFirm(){
+  const raw = (document.getElementById('lhJoinFirm')?.value || '').trim(); const m = document.getElementById('lhJoinMsg');
+  const id = (raw.match(/[?&]id=([A-Za-z0-9_-]+)/) || [])[1] || raw;
+  if (!/^[A-Za-z0-9_-]{6,128}$/.test(id)) { if (m) m.textContent = 'Paste the firm\'s SOKONI profile link or ID.'; return; }
+  try { await _lhCallCF('legalDispatch', { op: 'legalRequestFirmMembership', firmUid: id }); if (m) m.textContent = 'Request sent — the firm decides. You stay individually verified.'; }
+  catch (e) { if (m) m.textContent = ((e && e.message) || 'Could not send.') + ' Nothing was changed.'; }
+}
+async function lhLeaveFirm(){
+  const m = document.getElementById('lhJoinMsg');
+  try { await _lhCallCF('legalDispatch', { op: 'legalLeaveFirm' }); if (m) m.textContent = 'You have left the firm.'; }
+  catch (e) { if (m) m.textContent = ((e && e.message) || 'Could not leave.') + ' Nothing was changed.'; }
+}
+window.lhDecideMember = lhDecideMember; window.lhJoinFirm = lhJoinFirm; window.lhLeaveFirm = lhLeaveFirm;
 function clearExistingApp(){ checkExistingApp(); }
 window.registerLawyer = registerLawyer; window.clearExistingApp = clearExistingApp; window.lhRegSetType = lhRegSetType;
 window.lhAddOffice = lhAddOffice; window.lhAddMember = lhAddMember; window.lhResubmit = lhResubmit; window.lhSaveProfile = lhSaveProfile;

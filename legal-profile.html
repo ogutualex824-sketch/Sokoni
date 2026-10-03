@@ -143,12 +143,16 @@
     root.innerHTML =
       '<section class="hero"><div class="hero-row"><div class="avatar" aria-hidden="true">' + esc(initials(title)) + '</div><div style="min-width:0">' +
         '<h1 class="name">' + esc(title) + '</h1>' +
-        '<div class="sub">' + esc(firm ? 'Law firm' + (p.name ? ' · responsible advocate ' + p.name : '') : 'Advocate' + (p.firmName ? ' · ' + p.firmName : '')) + (p.county ? ' · ' + esc(p.county) : '') + '</div>' +
+        '<div class="sub">' + esc(firm ? 'Law firm' + (p.name ? ' · responsible advocate ' + p.name : '') : 'Advocate' + (p.memberOf ? '' : (p.firmName ? ' · ' + p.firmName : ''))) + (p.memberOf ? ' · <a href="legal-profile.html?id=' + encodeURIComponent(p.memberOf.firmUid) + '">' + esc(p.memberOf.firmName) + '</a>' : '') + (p.county ? ' · ' + esc(p.county) : '') + '</div>' +
         '<div class="chips">' + verified.join('') + rating + (p.isOnline ? '<span class="chip">Online consultations</span>' : '') + '</div>' +
       '</div></div></section>' +
       '<div class="grid"><div style="display:grid;gap:16px">' +
         (p.bio ? '<div class="card"><h2>About</h2><p style="margin:0;white-space:pre-line">' + esc(p.bio) + '</p></div>' : '') +
-        '<div class="card"><h2>Practice areas</h2>' + areasHtml(p) + '</div>' +
+        '<div class="card"><h2>Practice areas</h2>' + areasHtml(p) +
+          ((p.specialistAreas || []).length && T ? '<div style="margin-top:12px"><div class="area-g">Specialist — confirmed by SOKONI</div><div class="chips" style="margin-top:0">' + p.specialistAreas.map(function (x) { return '<span class="chip gold">' + esc(T.label(x)) + '</span>'; }).join('') + '</div></div>' : '') + '</div>' +
+        (p.entityType === 'firm' ? '<div class="card"><h2>Our advocates</h2>' + ((p.team || []).length
+          ? p.team.map(function (m) { return '<div class="svc"><div><a class="svc-name" href="legal-profile.html?id=' + encodeURIComponent(m.providerId) + '">' + esc(m.name) + '</a><div class="svc-meta">' + esc((m.practiceAreas || []).map(function (a) { return T ? T.label(a) : a; }).join(' · ')) + '</div></div>' + (m.lskVerified ? '<span class="chip gold">⚖ LSK' + (m.lskPractisingYear ? ' ' + esc(m.lskPractisingYear) : '') + '</span>' : '') + '</div>'; }).join('')
+          : '<p class="muted">Advocates appear here once each one is individually verified by SOKONI and the LSK, and accepted by the firm.</p>') + '</div>' : '') +
         '<div class="card"><h2>Services &amp; rates</h2><div id="svcList">' + servicesHtml(SERVICES) + '</div>' +
           '<p class="muted" style="margin-top:12px">Prices are set by SOKONI\'s server from the advocate\'s published rate card. You pay through SOKONI (IntaSend); the advocate is paid after you confirm the service with your completion PIN.</p></div>' +
         offices +

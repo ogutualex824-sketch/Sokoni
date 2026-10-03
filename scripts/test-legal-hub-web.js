@@ -147,6 +147,18 @@ const run = async (cat) => { ctx._activeLawCat = cat; await ctx.renderLawyers();
     && pd.includes("if(id==='receipts'&&window.SokoniReceipts)SokoniReceipts.mount(_q('rcProvList'),{role:'provider'});") && pd.includes('<script src="sokoni-receipts.js" defer></script>')
     && rcJs.includes("httpsCallable('myTransactionReceipts')") && !/\.set\(|\.update\(|\.add\(|localStorage|sokoni-invoice/.test(rcJs) && html.includes('href="receipts.html"'),
     'buyer receipts page (self-updating) + provider Finance → Receipts read ONLY myTransactionReceipts (caller-scoped); write nothing; no localStorage invoice module; linked from My legal bookings');
+  /* SPW / FMW — specialist areas (L10) + individually verified firm teams (L11) on the web */
+  ctx._fsLawyersCache = [Object.assign({}, A, { specialistAreas: ['criminal-law'] }), F];
+  const specHits = await run('spec:criminal-law'), specNone = await run('spec:tax-law');
+  const reg2 = strip(slice(html, 'registerLawyer') || '');
+  ck('SPW1', JSON.stringify(specHits) === '["advA1234"]' && JSON.stringify(specNone) === '[]' && /specialistAreas: \[\.\.\._lhSpec\]/.test(reg2)
+    && prof.includes("Specialist — confirmed by SOKONI") && prof.includes('(p.specialistAreas || []).length')
+    && aos.includes("call('legalAdminConfirmSpecialist', { uid: current, area: b.dataset.spec, confirm, reason })") && aos.includes("'legalAdminConfirmSpecialist']"),
+    'specialist areas: the wizard REQUESTS them; the directory filters on server-CONFIRMED areas only; the storefront shows only confirmed ones; AdminOS confirms/revokes with a reason (audited op)', { specHits, specNone });
+  ck('FMW1', prof.includes("(p.team || []).length") && !/teamDeclared/.test(prof) && prof.includes('individually verified by SOKONI and the LSK')
+    && html.includes("op: 'legalFirmMembers'") && html.includes("op: 'legalFirmDecideMember', memberUid: uid, decision") && html.includes("op: 'legalRequestFirmMembership', firmUid: id")
+    && html.includes('not individually verified — not listed'),
+    'firm storefront lists ONLY the server team (accepted + individually verified), never the declared team; firms accept/decline/remove; advocates ask to join and stay individually verified');
   done();
 })();
 function done() { console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed'); console.log('NOT proven here: a real browser render (memory floor) and a live booking.'); process.exit(fail ? 1 : 0); }

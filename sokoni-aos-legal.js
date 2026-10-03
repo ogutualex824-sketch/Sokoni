@@ -103,6 +103,12 @@
           <p><button type="button" class="aos-btn aos-btn-ghost" data-lsk-auto>Check via authorized LSK integration</button>
              <button type="button" class="aos-btn aos-btn-ghost" data-recheck>Request re-verification</button></p>
 
+          <h4>3 · Specialist practice areas <span class="aos-muted">(criminal · immigration · tax — public only once confirmed here)</span></h4>
+          ${(a.specialistRequested || []).length ? '<div class="aos-filters" style="flex-wrap:wrap">' + (a.specialistRequested || []).map((sp) => {
+              const on = (a.specialistConfirmed || []).indexOf(sp) > -1;
+              return `<span>${chip(sp)} ${on ? chip('CONFIRMED', '#71ff00') : chip('requested')} <button type="button" class="aos-btn${on ? ' aos-btn-ghost' : ''}" data-spec="${esc(sp)}" data-spec-confirm="${on ? '0' : '1'}">${on ? 'Revoke' : 'Confirm'}</button></span>`;
+            }).join(' ') + '</div>' : '<p class="aos-muted">No specialist area requested.</p>'}
+
           <h4>Audit history</h4>
           ${table(['When', 'Actor', 'Action', 'Previous', 'Next', 'Reason / evidence'], (g.events || []).map((e) => `<tr><td>${when(e.atMs)}</td><td class="aos-mono">${esc(e.actor || '—')}</td><td>${esc(e.action)}</td>
             <td>${esc(typeof e.previous === 'object' && e.previous ? (e.previous.status || '') + (e.previous.practiceStatus ? ' · ' + e.previous.practiceStatus : '') : (e.previous || '—'))}</td>
@@ -144,6 +150,11 @@
         ask(b.textContent, (reason) => act(() => call('applicationDecide', { applicationId: b.dataset.app, decision: b.dataset.decide, reason }), 'Decision recorded (audited).'));
         return;
       }
+      if (b.dataset.spec) {
+        const confirm = b.dataset.specConfirm === '1';
+        ask((confirm ? 'Confirm ' : 'Revoke ') + b.dataset.spec, (reason) => act(() => call('legalAdminConfirmSpecialist', { uid: current, area: b.dataset.spec, confirm, reason }), (confirm ? 'Specialist area confirmed' : 'Specialist area revoked') + ' (audited).'));
+        return;
+      }
       if (b.hasAttribute('data-open-review')) { act(() => call('legalAdminOpenReview', { uid: current }), 'Application opened for review.'); return; }
       if (b.hasAttribute('data-recheck')) { ask('Request re-verification', (reason) => act(() => call('legalAdminRequestRecheck', { uid: current, reason }), 'Re-verification requested — not bookable until a new check is recorded.')); return; }
       if (b.hasAttribute('data-lsk-auto')) {
@@ -157,6 +168,6 @@
     return true;
   }
 
-  const OPS = ['legalAdminList', 'legalAdminGet', 'legalAdminRecordLsk', 'legalAdminRunLskCheck', 'legalAdminRequestRecheck', 'legalAdminOpenReview'];
+  const OPS = ['legalAdminList', 'legalAdminGet', 'legalAdminRecordLsk', 'legalAdminRunLskCheck', 'legalAdminRequestRecheck', 'legalAdminOpenReview', 'legalAdminConfirmSpecialist'];
   root.SokoniAOSLegal = { mount, OPS };
 }(typeof window !== 'undefined' ? window : globalThis));
