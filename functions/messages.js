@@ -31,7 +31,7 @@ const TX_COLLECTIONS = {
   pharmacy_order:           'pharmacyOrders',
   property_inquiry:         'propertyInquiries',
   vehicle_inquiry:          'vehicleInquiries',
-  job_application:          'jobApplications',
+  job_application:          'jobApplications',  /* Jobs J4 (sokoni-f3 contract): the LIVE applyForJob doc, id `${jobId}_${seekerUid}` = the txId */
   freelancer_engagement:    'freelancerEngagements',
   event_booking:            'eventBookings',
   hotel_reservation:        'hotelReservations',
@@ -122,13 +122,17 @@ async function _sendFcm(token, title, body, data) {
 
    A transaction type ABSENT from this map cannot have its parties derived and is
    refused. Nine of the seventeen accepted types have no rules block at all. */
+/* Jobs J4: terminal application statuses (functions/jobs.js APP_TERMINAL, sokoni-f3 J1) and the post-terminal reply window. */
+const JOB_APP_TERMINAL = ['hired', 'rejected', 'withdrawn', 'offer_declined', 'closed'];
+const JOB_APP_REPLY_WINDOW_MS = 30 * 24 * 3600 * 1000;
+
 const PARTY_FIELDS = {
   order:               ['buyerId', 'buyerUid', 'uid', 'userId', 'sellerUid', 'assignedDriverUid'],
   service_lead:        ['customerUid', 'providerId'],
   service_booking:     ['customerUid', 'buyerId', 'uid', 'userId', 'ownerId', 'customerId', 'providerId'],   /* customerUid = the booking engine's customer field (4L) */
   food_order:          ['buyerUid', 'restaurantId'],
   property_inquiry:    ['uid'],
-  job_application:     ['uid'],
+  job_application:     ['seekerUid', 'employerUid'],   /* J4: the applicant + the employer of THAT application, set by the server in applyForJob */
   legal_consultation:  ['clientUid', 'providerId'],
   rfq:                 ['buyerUid', 'supplierOwnerUid'],   /* rfqRecipients/{rfqId}__{supplierBusinessId}: the buyer account + the supplier business owner at delivery (account-scoped) */
   logistics_request:   ['buyerUid', 'uid', 'sellerUid', 'assignedDriverId'],
@@ -870,6 +874,24 @@ exports.sendMessage = onCall(
     }
     if (['closed', 'suspended', 'read_only'].includes(conv.status)) {
       throw new HttpsError('failed-precondition', `Conversation is ${conv.status}`);
+    }
+    /* Jobs J4 (owner hard security gate, via sokoni-f3): every send re-derives the parties from the APPLICATION doc —
+       never from the stored participant list or the request — and a terminal application (hired / rejected / withdrawn /
+       offer_declined / closed) keeps its history readable but takes new messages only for 30 days after it ended. */
+    if (conv.transactionType === 'job_application') {
+      const aSnap = await db.collection('jobApplications').doc(String(conv.transactionId || '')).get();
+      if (!aSnap.exists) throw new HttpsError('failed-precondition', 'This application no longer exists.');
+      const app = aSnap.data() || {};
+      if (app.seekerUid !== req.auth.uid && app.employerUid !== req.auth.uid) {
+        throw new HttpsError('permission-denied', 'Not a party to this application');
+      }
+      if (JOB_APP_TERMINAL.includes(app.status)) {
+        const t = app.terminalAt || app.updatedAt;
+        const ms = t && typeof t.toMillis === 'function' ? t.toMillis() : (Number(t) || Date.parse(t) || 0);
+        if (!ms || Date.now() - ms > JOB_APP_REPLY_WINDOW_MS) {
+          throw new HttpsError('failed-precondition', 'This application has ended. The conversation stays readable, but new messages are closed.', { code: 'JOB_APP_CLOSED' });
+        }
+      }
     }
 
     /* Server-resolve senderName so it cannot be forged by the client */

@@ -1,3 +1,21 @@
+## [2026-10-03] — Jobs J4: job-application conversations (sokoni-f3 contract; owner hard security gate) — NOT deployed
+
+- **functions/messages.js:**
+  - job_application → jobApplications (the live applyForJob doc; txId = jobId_seekerUid). PARTY_FIELDS = seekerUid + employerUid (was uid, which live applications do not carry).
+  - sendMessage RE-DERIVES the parties from the application on every send, never trusting the stored list or the request.
+  - A terminal application (hired / rejected / withdrawn / offer_declined / closed) stays readable but takes new messages only for 30 days after it ended (terminalAt, else updatedAt).
+  - createConversation already derived participants server-side; f3's concern applied to an older line.
+- **Prod (read-only, positive-controlled):** 0 conversations exist (commissionLedger control = 12), so there is no old-shape job_application conversation and no migration.
+- **scripts/test-messages-jobs.js (new):** J0–J7, 8/0, 7/7 mutations each turning its named row red.
+  - J1: another applicant.
+  - J2: another employer.
+  - J3: seekerUid in the request.
+  - J4: employerUid in the request.
+  - J5: a different application with a forged participant list.
+  - J6: a third party.
+  - J7: the 30-day window.
+  - test-messages-service-booking 7/0.
+
 ## [2026-10-03] — Legal Hub L9 (capability line): legal applications switch on quotes + direct booking — NOT deployed
 
 - **functions/shared/service-capabilities.js:** legal → QUOTE_REQUEST + DIRECT_BOOKING. Only a VALID AdminOS approval composes (self-decided or invalid ones are ignored). Booking or receiving leads still needs an active provider, which the Legal Verification Authority grants only with a current LSK check.
