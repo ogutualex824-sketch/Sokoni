@@ -1,3 +1,43 @@
+## [2026-10-03] — Procurement: purchase-order VAT is never inferred (supplier's own status; unknown ⇒ no VAT) — functions source, NOT deployed
+
+Before: `functions/procurement.js` held `VAT_RATE = 0.16`; `createPurchaseOrder` set `vatAmount = subtotal × 0.16` and
+`vatRate: 16` on EVERY purchase order, and the PO email and PDF printed "VAT (16%)" whenever no rate was stored. That is
+the move `docs/VAT_POLICY_2026-09-30.md` forbids ("Nothing here turns 'KRA's general rate is 16%' into '16% on every SOKONI
+transaction'"). A supplier→merchant supply follows the SUPPLIER's own VAT status (`etimsProfiles/{uid}.vatStatus`).
+
+**Files:**
+- `functions/procurement.js`: `VAT_RATE` removed. `_resolveSupplierVat(supplier)` reads, server-side only,
+  `procSuppliers.supplierBusinessId → businesses/{id}.ownerId → etimsProfiles/{ownerUid}` (status `active`); recognised
+  statuses registered / zero_rated / exempt, anything else (external supplier, no profile, inactive, unrecognised, read
+  failure) → `unknown`. `_poVatFor` maps registered → engine rate (`etims-tax-engine` `DEFAULTS.vatRate`, category A),
+  zero_rated → 0 (B), exempt → 0 with no rate (C), unknown → `vatAmount: null`, `vatRate: null`, `total = subtotal`. Every
+  new PO stores `vatBasis` (`supplier_registered` | `supplier_zero_rated` | `supplier_exempt` | `unknown_supplier_status`;
+  `declared_on_quote` is written by `functions/rfq.js`), `vatCategory`, `vatStatusReason`. `createPurchaseOrder` returns
+  the same `{poId, poNumber, subtotal, vatAmount, total}` (`vatAmount` may be **null**) plus `vatRate`, `vatBasis`.
+  Readers: `getPurchaseOrder` / `listPurchaseOrders` / `getInboundSupplyOrders` project `vatRate`, `vatBasis`,
+  `deliveryFee`; `createSupplierInvoice` takes VAT from the supplier's invoice (`vatSource: 'supplier_invoice'`), refuses a
+  non-numeric/negative VAT, and matches a VAT-unknown PO net of VAT (`poMatchedOn: 'net_of_vat'`: invoice amount vs PO
+  subtotal); `getProcurementDashboard` adds `openPOs.vatUnknownCount`. PO email uses the shared presentation.
+- `functions/po-pdf.js`: `poVatPresentation(po)` (exported) — renders the VAT the PO records, never a default: unknown →
+  "VAT: per supplier's tax invoice" + "Excludes VAT" note; zero-rated / exempt labelled; `declared_on_quote` →
+  "VAT (n%, as quoted)" + Delivery line; legacy (no `vatBasis`) → as stored.
+- `sokoni-merchant-supply.js` (hosting): the post-placement message words the server's `vatBasis` instead of always
+  "including VAT". Computes nothing.
+- `scripts/test-procurement-vat-not-inferred.js` (new, hermetic): 18 named rows on the real module + in-memory Firestore,
+  incl. an RFQ-shaped `declared_on_quote` PO through get/list/inbound/approve/PDF/email/invoice and a legacy 16% PO.
+  Controls: (a) restore the 16% inference, (b) treat unknown as registered — each fails `UNKNOWN_EXTERNAL` (+6–8 rows).
+- `scripts/test-procurement.js`, `scripts/test-supply-integration-slice-m.js`: the rows that PINNED `subtotal * VAT_RATE`
+  (i.e. certified the defect) now pin the supplier-status resolution.
+- `docs/SUPPLY_A_TO_M_RELEASE_RECORD.md`: VAT basis table + reader census.
+
+**Database changes:** new PO fields `vatBasis`, `vatCategory`, `vatStatusReason`; `vatAmount`/`vatRate` may be null;
+supplier invoices gain `vatSource`, `poMatchedOn`. **No migration** — existing POs (vatRate 16, no `vatBasis`) are legacy
+and rendered as stored.
+**API changes:** `createPurchaseOrder` `vatAmount` nullable (+`vatRate`, `vatBasis`); PO projections gain `vatRate`,
+`vatBasis`, `deliveryFee`; dashboard gains `openPOs.vatUnknownCount`.
+**Security:** VAT status read server-side only; payload VAT fields ignored. **Breaking:** clients that treat
+`vatAmount` as always numeric must render null as unknown.
+
 ## [2026-10-03] — Parcel rail: IntaSend Gate 12 (method from provider) + WRONG_CURRENCY + Gate 15 matrix — functions source, NOT deployed
 
 Owner brief Gates 12 and 15 applied to `confirmParcelPayment`. Before: the claim, the payment and the receipt recorded

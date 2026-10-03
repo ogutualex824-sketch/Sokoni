@@ -29,6 +29,56 @@ function esc(s) {
     .replace(/[^\x20-\x7E]/g, '');
 }
 
+
+/* ── VAT presentation ─────────────────────────────────────────────────────────────
+   ONE function, shared by this PDF and the PO email, that renders the VAT a purchase
+   order RECORDS — it never decides VAT and never defaults a rate. (Until 2026-10-03 both
+   printed "VAT (16%)" whenever vatRate was absent; docs/VAT_POLICY_2026-09-30.md: code
+   never infers VAT.)
+
+   po.vatBasis vocabulary (functions/procurement.js VAT_BASIS):
+     supplier_registered     VAT at the rate stored on the PO
+     supplier_zero_rated     zero-rated supply, VAT 0
+     supplier_exempt         exempt supply, no VAT line
+     unknown_supplier_status SOKONI does not know the supplier's VAT status: no VAT figure;
+                             the supplier's own tax invoice states it
+     declared_on_quote       RFQ path (functions/rfq.js): the supplier declared the rate
+                             on its quote; printed as stored
+     (absent)                LEGACY PO written before 2026-10-03: printed AS STORED (it is
+                             what that PO said), with a rate only if one was stored
+   A null/absent vatAmount is UNKNOWN on every basis and is never printed as KES 0.
+   Labels are ASCII: the PDF's WinAnsi encoding drops anything else. */
+function poVatPresentation(po) {
+  po = po || {};
+  const basis   = po.vatBasis || null;
+  const amt     = po.vatAmount;
+  const known   = amt != null && amt !== '' && isFinite(Number(amt));
+  const rate    = po.vatRate != null && po.vatRate !== '' && isFinite(Number(po.vatRate))
+    ? Number(po.vatRate) : null;
+  const fee     = po.deliveryFee != null && isFinite(Number(po.deliveryFee)) && Number(po.deliveryFee) > 0
+    ? Number(po.deliveryFee) : null;
+  const UNKNOWN = { vatLabel: "VAT: per supplier's tax invoice", vatShowAmount: false,
+                    totalNote: "Excludes VAT - VAT as stated on the supplier's tax invoice",
+                    vatKnown: false, deliveryFee: fee };
+
+  if (basis === 'unknown_supplier_status' || !known) return UNKNOWN;
+  if (basis === 'supplier_exempt') {
+    return { vatLabel: 'VAT: exempt supply - no VAT', vatShowAmount: false, totalNote: null,
+             vatKnown: true, deliveryFee: fee };
+  }
+  if (basis === 'supplier_zero_rated') {
+    return { vatLabel: 'VAT (zero-rated, 0%)', vatShowAmount: true, totalNote: null,
+             vatKnown: true, deliveryFee: fee };
+  }
+  if (basis === 'declared_on_quote') {
+    return { vatLabel: rate != null ? 'VAT (' + rate + '%, as quoted)' : 'VAT (as quoted)',
+             vatShowAmount: true, totalNote: null, vatKnown: true, deliveryFee: fee };
+  }
+  /* supplier_registered, or a legacy document with no basis: the stored rate, or none. */
+  return { vatLabel: rate != null ? 'VAT (' + rate + '%)' : 'VAT', vatShowAmount: true,
+           totalNote: null, vatKnown: true, deliveryFee: fee };
+}
+
 const money = n => 'KES ' + Number(n || 0).toLocaleString('en-KE', {
   minimumFractionDigits: 2, maximumFractionDigits: 2,
 });
@@ -51,6 +101,7 @@ function wrap(s, width) {
  * buildPoPdf(po, supplier, buyer) → Buffer
  *
  * po:       { poNumber, createdAt, expectedDelivery, items[], subtotal, vatAmount, total,
+ *             vatRate, vatBasis, deliveryFee (see poVatPresentation),
  *             notes, paymentTerms, deliveryLocation }
  * supplier: { name, contactName, email, phone, address, kraPin }
  * buyer:    { name, email, phone, address, kraPin }   — the merchant
@@ -159,10 +210,21 @@ function buildPoPdf(po, supplier = {}, buyer = {}) {
   /* ── Totals ── */
   const tx = R - 200, tv = R - 90;
   text('F1', 9.5, tx, y, 'Subtotal', 0.4);       text('F1', 9.5, tv, y, money(po.subtotal)); y -= 14;
-  const vatPct = po.vatRate != null ? po.vatRate : 16;
-  text('F1', 9.5, tx, y, `VAT (${vatPct}%)`, 0.4); text('F1', 9.5, tv, y, money(po.vatAmount)); y -= 16;
+  /* VAT is printed exactly as the PO RECORDS it — never defaulted. See poVatPresentation. */
+  const vp = poVatPresentation(po);
+  if (vp.vatShowAmount) {
+    text('F1', 9.5, tx, y, vp.vatLabel, 0.4); text('F1', 9.5, tv, y, money(po.vatAmount)); y -= 14;
+  } else {
+    text('F1', 9.5, tx, y, vp.vatLabel, 0.4); y -= 14;
+  }
+  if (vp.deliveryFee != null) {
+    text('F1', 9.5, tx, y, 'Delivery', 0.4); text('F1', 9.5, tv, y, money(vp.deliveryFee)); y -= 14;
+  }
+  y -= 2;
   box(tx - 8, y - 6, (R - tx) + 8, 20, 0.94);
-  text('F2', 11, tx, y, 'GRAND TOTAL');           text('F2', 11, tv, y, money(po.total)); y -= 30;
+  text('F2', 11, tx, y, 'GRAND TOTAL');           text('F2', 11, tv, y, money(po.total)); y -= 14;
+  if (vp.totalNote) { text('F1', 8, tx, y, vp.totalNote, 0.45); y -= 12; }
+  y -= 16;
 
   /* ── Notes / terms ── */
   if (po.notes) {
@@ -217,4 +279,4 @@ function buildPoPdf(po, supplier = {}, buyer = {}) {
   return Buffer.from(pdf, 'latin1');
 }
 
-module.exports = { buildPoPdf };
+module.exports = { buildPoPdf, poVatPresentation };

@@ -131,8 +131,11 @@ console.log('\nProcurement — the Purchase Order chain\n');
 
 /* ── 6. Server owns the money. Client figures are never trusted. ────────────── */
 {
-  /const subtotal\s*=\s*\+cleanItems\.reduce/.test(procC) && /vatAmount\s*=\s*\+\(subtotal \* VAT_RATE\)/.test(procC)
-    ? ok('subtotal and VAT are computed SERVER-side (client totals are not trusted)')
+  /* 2026-10-03: this row used to REQUIRE `subtotal * VAT_RATE` — it certified the 16%
+     inference as correct. VAT now follows the supplier's own status, resolved server-side;
+     scripts/test-procurement-vat-not-inferred.js proves the behaviour. */
+  /const subtotal\s*=\s*\+cleanItems\.reduce/.test(procC) && /_poVatFor\(subtotal,\s*await _resolveSupplierVat\(supplier\)\)/.test(procC)
+    ? ok('subtotal and VAT are computed SERVER-side from the supplier\'s own VAT status (client totals are not trusted)')
     : bad('totals are not computed server-side — a client could dictate the value of a purchase order');
 
   /poNumber\s*=\s*`PO-\$\{year\}-/.test(proc)

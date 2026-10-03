@@ -698,7 +698,9 @@ function callOp (proc, op, a, d) {
     })());
     check('PRESERVED: createPurchaseOrder still computes its own financials',
       /const subtotal  = \+cleanItems\.reduce/.test(PROC) &&
-      /const vatAmount = \+\(subtotal \* VAT_RATE\)/.test(PROC));
+      /* 2026-10-03: VAT is the supplier's own status, resolved server-side — no longer the
+         16% inference this row used to pin (test-procurement-vat-not-inferred.js). */
+      /_poVatFor\(subtotal, await _resolveSupplierVat\(supplier\)\)/.test(PROC));
   }
 
   console.log('\n  ' + pass + '/' + (pass + fail) + ' checks passed  ·  ' + sabotageOk + '/' + sabotage + ' sabotage catches');

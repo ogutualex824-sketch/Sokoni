@@ -116,6 +116,16 @@
     return n.toLocaleString('en-KE');
   }
   function text (v) { return (v === null || v === undefined || v === '') ? NEUTRAL : esc(v); }
+  /* How the server-reported total relates to VAT. The engine never infers VAT: it follows the
+     supplier's own status (vatBasis), and when that is unknown the total EXCLUDES VAT. This
+     only words the server's basis — it computes nothing. Absent basis = an older engine. */
+  function vatPhrase (basis) {
+    if (basis === 'unknown_supplier_status') return ' excluding VAT (VAT as stated on the supplier’s tax invoice)';
+    if (basis === 'supplier_exempt')         return ' (VAT-exempt supply)';
+    if (basis === 'supplier_zero_rated')     return ' (zero-rated supply, VAT 0%)';
+    if (basis === 'supplier_registered')     return ' including VAT';
+    return '';
+  }
 
   function stateBlock (icon, title, detail, tone) {
     return '<div class="state" data-supply-state="' + esc(tone || 'info') + '">' +
@@ -614,7 +624,7 @@
           : '') +
         '<p class="sup-note">The estimate multiplies your quantities by the supplier’s ' +
         'published wholesale prices. It is NOT the order total: the purchase order total, ' +
-        'including VAT, is calculated by the procurement engine when the order is placed, ' +
+        'with VAT as it applies to this supplier, is calculated by the procurement engine when the order is placed, ' +
         'and only that figure is authoritative. Placing this order creates a supplier ' +
         'relationship with that business if you do not already have one.</p>';
     }
@@ -899,8 +909,8 @@
           main.innerHTML = '<h2 class="sup-h2">Purchase order placed</h2>' +
             stateBlock('✅', text(po && po.poNumber),
               'Placed with ' + (placed.supplierName || 'the supplier') + '. ' +
-              'Total ' + money(po && po.total) + ' including VAT, as calculated by the ' +
-              'procurement engine.', 'ok') +
+              'Total ' + money(po && po.total) + vatPhrase(po && po.vatBasis) +
+              ', as calculated by the procurement engine.', 'ok') +
             '<p class="sup-note">The order is raised, not sent. Approval and sending are ' +
             'separate authorised actions with their own gates — open Purchase Orders to ' +
             'continue.</p>' +

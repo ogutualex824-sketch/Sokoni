@@ -32,7 +32,7 @@
    Security posture:
      - enforceAppCheck on all CFs
      - Role checks (manager/admin) on mutating operations
-     - Server-side VAT calculation (client figures never trusted)
+     - Server-side VAT from the SUPPLIER's own status, never inferred (client figures never trusted)
      - Idempotency guard: paidAt field prevents double-payment
      - Deterministic poId via sha256 prevents duplicate POs on retry
      - No internal stack traces returned to callers
@@ -55,7 +55,9 @@ const { assertMerchantAccess } = require('./merchant-authority');
 const { _assertBusinessPermission } = require('./workforce-identity');
 const { resolveMerchantIdForOwner, REASON: TENANT_REASON } = require('./tenant-identity');
 const notify                  = require('./notify');
-const { buildPoPdf }          = require('./po-pdf');
+const { buildPoPdf, poVatPresentation } = require('./po-pdf');
+/* The canonical VAT engine — its rate and category codes, never a private literal rate. */
+const TaxEngine               = require('./etims-tax-engine');
 
 const db = admin.firestore();
 const F  = admin.firestore.FieldValue;
@@ -85,6 +87,9 @@ function _poEmailHtml(po, poId, supplier, merchant) {
   }).join('');
 
   const due = po.expectedDelivery ? new Date(po.expectedDelivery).toDateString() : 'To be confirmed';
+  /* The same VAT presentation the PDF uses — the email and the PDF can never disagree, and
+     neither defaults a rate (see po-pdf.js poVatPresentation). */
+  const vp  = poVatPresentation(po);
 
   return `<!doctype html><html><body style="margin:0;background:#f5f6f7;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
 <div style="max-width:640px;margin:0 auto;padding:24px">
@@ -109,10 +114,13 @@ function _poEmailHtml(po, poId, supplier, merchant) {
     <table style="width:100%;font-size:13px;margin-top:10px">
       <tr><td style="text-align:right;color:#666;padding:3px 8px">Subtotal</td>
           <td style="text-align:right;width:130px;padding:3px 8px">${_ksh(po.subtotal)}</td></tr>
-      <tr><td style="text-align:right;color:#666;padding:3px 8px">VAT (${po.vatRate != null ? po.vatRate : 16}%)</td>
-          <td style="text-align:right;padding:3px 8px">${_ksh(po.vatAmount)}</td></tr>
+      <tr><td style="text-align:right;color:#666;padding:3px 8px">${_esc(vp.vatLabel)}</td>
+          <td style="text-align:right;padding:3px 8px">${vp.vatShowAmount ? _ksh(po.vatAmount) : ''}</td></tr>
+      ${vp.deliveryFee != null ? `<tr><td style="text-align:right;color:#666;padding:3px 8px">Delivery</td>
+          <td style="text-align:right;padding:3px 8px">${_ksh(vp.deliveryFee)}</td></tr>` : ''}
       <tr><td style="text-align:right;font-weight:800;padding:8px;border-top:2px solid #111">Grand Total</td>
           <td style="text-align:right;font-weight:800;padding:8px;border-top:2px solid #111">${_ksh(po.total)}</td></tr>
+      ${vp.totalNote ? `<tr><td colspan="2" style="text-align:right;color:#888;font-size:11px;padding:3px 8px">${_esc(vp.totalNote)}</td></tr>` : ''}
     </table>
     <p style="font-size:13px;color:#555;margin-top:18px">
       <strong>Expected delivery:</strong> ${_esc(due)}<br>
@@ -137,7 +145,36 @@ const OPT    = {
 };
 
 /* ── Constants ────────────────────────────────────────────────── */
-const VAT_RATE             = 0.16;          // Kenya standard VAT
+/* VAT — NEVER INFERRED (2026-10-03; docs/VAT_POLICY_2026-09-30.md).
+   This file used to hold a hard-coded 16% constant and charge it on every purchase order, i.e. it
+   turned "KRA's general rate is 16%" into "16% on every supplier". A supplier→merchant
+   supply follows the SUPPLIER's own VAT status, which SOKONI models per business owner in
+   etimsProfiles/{uid}.vatStatus. Resolved server-side in _resolveSupplierVat; anything it
+   cannot resolve produces NO VAT figure (vatAmount null) and the supplier's own tax
+   invoice states it. The rate comes from the canonical engine (etims-tax-engine
+   DEFAULTS.vatRate), never from a literal here.
+
+   vatBasis is written on every PO createPurchaseOrder creates. 'declared_on_quote' is
+   written by functions/rfq.js (RFQ-accepted POs, supplier-declared rate on the quote) and
+   is listed here so the vocabulary has ONE home; readers accept every value below plus
+   ABSENT (legacy POs written before 2026-10-03, which carry vatRate 16 and are rendered
+   exactly as stored — that is what those POs said). */
+const VAT_BASIS = Object.freeze({
+  REGISTERED: 'supplier_registered',
+  ZERO_RATED: 'supplier_zero_rated',
+  EXEMPT:     'supplier_exempt',
+  UNKNOWN:    'unknown_supplier_status',
+  QUOTE:      'declared_on_quote',
+});
+/* Only these spellings of etimsProfiles.vatStatus are accepted as a STATUS. The engine's
+   own vatCategoryFor maps anything unrecognised to exempt (right for an eTIMS invoice
+   SOKONI issues, wrong here: "unknown" is not "exempt"), so it is consulted only after a
+   status has been recognised. */
+const _VAT_STATUS_ALIASES = Object.freeze({
+  registered: 'registered', standard: 'registered', vat: 'registered',
+  zero_rated: 'zero_rated', zero: 'zero_rated',
+  exempt:     'exempt',
+});
 const SAFETY_BUFFER        = 1.2;           // 20 % buffer on reorder qty
 const FORECAST_DAYS        = 30;            // usage lookback window
 const MAX_SUPPLIER_NAME    = 200;
@@ -1228,7 +1265,9 @@ const getInboundSupplyOrders = onCall(OPT, async (request) => {
     return {
       poId: p.poId, poNumber: p.poNumber, status: p.status,
       buyerBusinessId: p.buyerBusinessId || p.merchantId || null,
-      items: p.items, subtotal: p.subtotal, vatAmount: p.vatAmount, total: p.total,
+      items: p.items, subtotal: p.subtotal, vatAmount: p.vatAmount ?? null, total: p.total,
+      /* VAT as the PO records it: vatAmount null = UNKNOWN (never 0); vatBasis null = legacy. */
+      vatRate: p.vatRate ?? null, vatBasis: p.vatBasis || null, deliveryFee: p.deliveryFee ?? null,
       expectedDelivery: p.expectedDelivery || null,
       sentAt: p.sentAt || null, createdAt: p.createdAt || null,
     };
@@ -1346,6 +1385,7 @@ const listPurchaseOrders = onCall(OPT, async (request) => {
       buyerBusinessId: d.buyerBusinessId || d.merchantId || null,
       itemCount: Array.isArray(d.items) ? d.items.length : 0,
       subtotal: d.subtotal ?? null, vatAmount: d.vatAmount ?? null, total: d.total ?? null,
+      vatRate: d.vatRate ?? null, vatBasis: d.vatBasis || null, deliveryFee: d.deliveryFee ?? null,
       expectedDelivery: d.expectedDelivery || null, approvedAt: d.approvedAt || null,
       sentAt: d.sentAt || null, delivery: d.delivery || null, createdAt: d.createdAt || null,
     }),
@@ -1417,6 +1457,84 @@ const listStockMovements = onCall(OPT, async (request) => {
   });
 });
 /* ════════════════════════════════════════════════════════════════
+   VAT resolution for a purchase order — the SUPPLIER's status, server-side
+════════════════════════════════════════════════════════════════ */
+/**
+ * Resolve a procSuppliers record's VAT status. Every input is a server read:
+ *   procSuppliers.supplierBusinessId  (verified at link time by _assertSuppliesEnabled)
+ *     → businesses/{id}.ownerId        (the canonical owner)
+ *     → etimsProfiles/{ownerUid}       (status 'active', vatStatus as registered with eTIMS)
+ * Returns { vatStatus: 'registered'|'zero_rated'|'exempt'|'unknown', reason }.
+ * An external supplier (no SOKONI business), a missing/inactive profile, an unrecognised
+ * vatStatus, or an unreadable document all resolve 'unknown' — never a default. A read
+ * failure does not block the order: unknown VAT is the safe outcome (no figure is
+ * produced), and the supplier's invoice states the VAT.
+ */
+async function _resolveSupplierVat(supplier) {
+  const bizId = supplier && supplier.supplierBusinessId;
+  if (!bizId || typeof bizId !== 'string' || bizId.includes('/')) {
+    return { vatStatus: 'unknown', reason: 'external_supplier' };
+  }
+  try {
+    const bSnap = await db.collection('businesses').doc(bizId).get();
+    if (!bSnap.exists) return { vatStatus: 'unknown', reason: 'supplier_business_missing' };
+    const ownerUid = (bSnap.data() || {}).ownerId;
+    if (!ownerUid || typeof ownerUid !== 'string' || ownerUid.includes('/')) {
+      return { vatStatus: 'unknown', reason: 'supplier_business_has_no_owner' };
+    }
+    const pSnap = await db.collection('etimsProfiles').doc(ownerUid).get();
+    if (!pSnap.exists) return { vatStatus: 'unknown', reason: 'no_etims_profile' };
+    const prof = pSnap.data() || {};
+    if (prof.status !== 'active') return { vatStatus: 'unknown', reason: 'etims_profile_not_active' };
+    const vatStatus = _VAT_STATUS_ALIASES[String(prof.vatStatus || '').toLowerCase()];
+    if (!vatStatus) return { vatStatus: 'unknown', reason: 'unrecognised_vat_status' };
+    return { vatStatus, reason: 'etims_profile' };
+  } catch (e) {
+    logger.warn('procurement: supplier VAT status unreadable; VAT left unknown', {
+      supplierBusinessId: bizId, error: e && e.message,
+    });
+    return { vatStatus: 'unknown', reason: 'profile_unreadable' };
+  }
+}
+
+/**
+ * The PO's VAT figures for a resolved status. Line costs are NET (VAT-exclusive) — the
+ * treatment POs have always had; the rate is the engine's, not a literal.
+ *   registered → category A, VAT = subtotal × engine rate
+ *   zero_rated → category B, VAT 0, rate 0
+ *   exempt     → category C, VAT 0, no rate (no VAT line)
+ *   unknown    → no category, vatAmount null, vatRate null, total = subtotal
+ */
+function _poVatFor(subtotal, resolved) {
+  const status = resolved && resolved.vatStatus;
+  const reason = (resolved && resolved.reason) || null;
+  const cat = (s) => TaxEngine.vatCategoryFor(s);
+  if (status === 'registered') {
+    const rate      = TaxEngine.DEFAULTS.vatRate;
+    const vatAmount = TaxEngine.r2(subtotal * rate);
+    return { vatBasis: VAT_BASIS.REGISTERED, vatCategory: cat('registered'),
+             vatRate: Math.round(rate * 10000) / 100, vatAmount,
+             total: TaxEngine.r2(subtotal + vatAmount), reason };
+  }
+  if (status === 'zero_rated') {
+    return { vatBasis: VAT_BASIS.ZERO_RATED, vatCategory: cat('zero_rated'),
+             vatRate: 0, vatAmount: 0, total: subtotal, reason };
+  }
+  if (status === 'exempt') {
+    return { vatBasis: VAT_BASIS.EXEMPT, vatCategory: cat('exempt'),
+             vatRate: null, vatAmount: 0, total: subtotal, reason };
+  }
+  return { vatBasis: VAT_BASIS.UNKNOWN, vatCategory: null,
+           vatRate: null, vatAmount: null, total: subtotal, reason: reason || 'unresolved' };
+}
+
+/** True when a PO records a VAT figure (any basis, including legacy). */
+function _poVatKnown(po) {
+  const v = po && po.vatAmount;
+  return v != null && v !== '' && isFinite(Number(v));
+}
+
+/* ════════════════════════════════════════════════════════════════
    2. createPurchaseOrder
    Draft a purchase order against a supplier.
 ════════════════════════════════════════════════════════════════ */
@@ -1448,10 +1566,12 @@ const createPurchaseOrder = onCall(OPT, async (request) => {
   /* Validate and enrich items */
   const cleanItems = _validateItems(items);
 
-  /* Server-side financials — never trust client figures */
+  /* Server-side financials — never trust client figures. VAT follows the SUPPLIER's own
+     VAT status, read server-side off the supplier record's verified business link; it is
+     never taken from the payload and never assumed (unknown ⇒ vatAmount null). */
   const subtotal  = +cleanItems.reduce((s, it) => s + it.totalCost, 0).toFixed(2);
-  const vatAmount = +(subtotal * VAT_RATE).toFixed(2);
-  const total     = +(subtotal + vatAmount).toFixed(2);
+  const vat       = _poVatFor(subtotal, await _resolveSupplierVat(supplier));
+  const { vatAmount, total } = vat;
 
   /* Deterministic PO ID prevents duplicates on client retry */
   const seed  = `${merchantId}|${supplierId}|${Date.now()}`;
@@ -1509,7 +1629,10 @@ const createPurchaseOrder = onCall(OPT, async (request) => {
     subtotal,
     vatAmount,
     total,
-    vatRate:          Math.round(VAT_RATE * 100),
+    vatRate:          vat.vatRate,       /* percent; null when unknown or exempt */
+    vatBasis:         vat.vatBasis,
+    vatCategory:      vat.vatCategory,   /* engine category A/B/C; null when unknown */
+    vatStatusReason:  vat.reason,        /* why the status resolved as it did (no PII) */
     status:           'draft',
     notes:            _san(notes, MAX_NOTE_LEN),
     expectedDelivery: expectedDelivery ? new Date(expectedDelivery) : null,
@@ -1526,7 +1649,10 @@ const createPurchaseOrder = onCall(OPT, async (request) => {
   await _audit(uid, 'po_created', poId, { merchantId, supplierId, total });
   logger.info('procurement.createPurchaseOrder', { poId, merchantId, total });
 
-  return { poId, poNumber, subtotal, vatAmount, total };
+  /* Shape unchanged for existing callers; vatAmount is null when the supplier's VAT status
+     is unknown (then total === subtotal, excluding VAT). vatRate/vatBasis are additive. */
+  return { poId, poNumber, subtotal, vatAmount, total,
+           vatRate: vat.vatRate, vatBasis: vat.vatBasis };
 });
 
 /* ════════════════════════════════════════════════════════════════
@@ -1556,8 +1682,11 @@ const getPurchaseOrder = onCall(OPT, async (request) => {
     supplierName:       po.supplierName || null,
     items:              po.items || [],
     subtotal:           po.subtotal,
-    vatAmount:          po.vatAmount,
+    vatAmount:          po.vatAmount ?? null,   /* null = UNKNOWN, never 0 */
     total:              po.total,
+    vatRate:            po.vatRate ?? null,
+    vatBasis:           po.vatBasis || null,    /* null = legacy PO (pre-2026-10-03) */
+    deliveryFee:        po.deliveryFee ?? null,
     expectedDelivery:   po.expectedDelivery || null,
     approvedAt:         po.approvedAt || null,
     sentAt:             po.sentAt || null,
@@ -1994,18 +2123,38 @@ const createSupplierInvoice = onCall(OPT, async (request) => {
   }
 
   /* Validate amounts */
+  /* VAT on a supplier invoice is the figure printed on the SUPPLIER'S TAX INVOICE — the
+     supplier's own declaration. Nothing here computes a rate. (Absent = 0, the behaviour
+     this function always had; a non-numeric or negative figure is now refused rather than
+     turning the total into NaN.) */
   const invAmount    = _posNum(amount, 'Invoice amount');
-  const invVat       = Number(vatAmount ?? 0);
+  const invVat       = (vatAmount == null || vatAmount === '') ? 0 : Number(vatAmount);
+  if (!isFinite(invVat) || invVat < 0) {
+    _err("vatAmount must be a non-negative number, as stated on the supplier's tax invoice.");
+  }
   const invTotal     = +(invAmount + invVat).toFixed(2);
 
   /* Warn if invoice total deviates from PO total by more than 5% */
   /* A zero-total PO made this NaN, and `NaN > 0.05` is false — so the tolerance check
-     silently passed for any invoice amount. Guarded explicitly. */
-  const poTotal = Number(po.total) || 0;
-  if (poTotal <= 0) _err('Cannot invoice against a purchase order with no total.');
-  const deviation = Math.abs(invTotal - poTotal) / poTotal;
+     silently passed for any invoice amount. Guarded explicitly.
+
+     When the PO records NO VAT figure (vatBasis 'unknown_supplier_status'), its total is
+     the net subtotal, so the invoice is matched NET OF VAT (invoice amount vs PO
+     subtotal). Comparing a VAT-inclusive invoice to a net PO total would reject every
+     invoice from a VAT-registered supplier — or, worse, invite someone to "fix" it by
+     putting 16% back on the PO. Every other PO (known basis, RFQ quote, legacy 16%) is
+     matched total-to-total as before. */
+  const poVatKnown = _poVatKnown(po);
+  const matchedOn  = poVatKnown ? 'total' : 'net_of_vat';
+  const invCompare = poVatKnown ? invTotal : invAmount;
+  const poCompare  = poVatKnown ? (Number(po.total) || 0)
+                                : (Number(po.subtotal != null ? po.subtotal : po.total) || 0);
+  if (poCompare <= 0) _err('Cannot invoice against a purchase order with no total.');
+  const deviation = Math.abs(invCompare - poCompare) / poCompare;
   if (deviation > 0.05) {
-    _err(`Invoice total KES ${invTotal.toLocaleString()} deviates more than 5% from PO total KES ${poTotal.toLocaleString()}. Raise a dispute with the supplier.`);
+    _err(poVatKnown
+      ? `Invoice total KES ${invTotal.toLocaleString()} deviates more than 5% from PO total KES ${poCompare.toLocaleString()}. Raise a dispute with the supplier.`
+      : `Invoice amount before VAT KES ${invAmount.toLocaleString()} deviates more than 5% from the PO subtotal KES ${poCompare.toLocaleString()}. Raise a dispute with the supplier.`);
   }
 
   /* ── WHICH GRNs MAY BE REFERENCED ────────────────────────────────────────────────
@@ -2045,6 +2194,8 @@ const createSupplierInvoice = onCall(OPT, async (request) => {
     dueDate:        dueDate ? new Date(dueDate) : null,
     amount:         invAmount,
     vatAmount:      invVat,
+    vatSource:      'supplier_invoice',   /* the supplier's declaration, never computed */
+    poMatchedOn:    matchedOn,            /* 'total' | 'net_of_vat' (PO VAT unknown) */
     total:          invTotal,
     status:         'pending',
     paidAt:         null,
@@ -2471,8 +2622,16 @@ const getProcurementDashboard = onCall(OPT, async (request) => {
   ]);
 
   /* Aggregate open POs */
+  /* A PO whose VAT is unknown carries total = subtotal (net). Its value is real but
+     excludes VAT, so the count of such POs is reported alongside rather than hidden in
+     the sum. */
   let openPOsValue = 0;
-  openPOsSnap.forEach(d => { openPOsValue += d.data().total ?? 0; });
+  let openPOsVatUnknown = 0;
+  openPOsSnap.forEach(d => {
+    const po = d.data();
+    openPOsValue += po.total ?? 0;
+    if (!_poVatKnown(po)) openPOsVatUnknown++;
+  });
 
   /* Pending invoices total */
   let pendingInvoicesTotal = 0;
@@ -2516,7 +2675,9 @@ const getProcurementDashboard = onCall(OPT, async (request) => {
 
   return {
     merchantId,
-    openPOs:              { count: openPOsSnap.size,         totalValue: +openPOsValue.toFixed(2) },
+    openPOs:              { count: openPOsSnap.size,         totalValue: +openPOsValue.toFixed(2),
+                            /* POs in totalValue counted net: VAT not known to SOKONI */
+                            vatUnknownCount: openPOsVatUnknown },
     pendingApproval:      { count: pendingApprovalSnap.size },
     goodsToReceive:       { count: goodsToReceiveSnap.size },
     pendingInvoices:      { count: pendingInvoicesSnap.size, totalValue: +pendingInvoicesTotal.toFixed(2) },
@@ -2669,6 +2830,12 @@ module.exports = {
   _DISCOVERABLE_SUPPLY_FIELDS: DISCOVERABLE_SUPPLY_FIELDS,
   _projectDiscoverable,
   _assertActiveBusinessAudience,
+  _loadSupplyingBusiness,
+  _VAT_BASIS: VAT_BASIS,
+  _resolveSupplierVat,
+  _poVatFor,
+  _poVatKnown,
+  _poEmailHtml,
   _CATALOGUE_FIELDS: CATALOGUE_FIELDS,
   _CATALOGUE_SCAN: CATALOGUE_SCAN,
   _isCatalogueEntry,

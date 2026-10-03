@@ -80,6 +80,8 @@ Find Suppliers → Supplier Business → Supply Catalogue → Draft
 * **Placing an order is not sending an order.** Approval and sending keep their own authority gates.
 * **The pre-submission figure is an estimate and is labelled one.** Subtotal, VAT and total are
   computed server-side; after placement only the server's figures are displayed.
+* **VAT is never inferred (2026-10-03).** A PO's VAT follows the SUPPLIER's own VAT status; an
+  unknown status produces no VAT figure. See [Purchase-order VAT basis](#purchase-order-vat-basis-2026-10-03).
 * **A SOKONI business is a canonical counterparty.** It is never relabelled by a buyer and never
   duplicated as a second supplier identity.
 * **Discovery consent and supply participation are separate.** A supplier can trade with
@@ -88,6 +90,54 @@ Find Suppliers → Supplier Business → Supply Catalogue → Draft
   ever manufactured; an unknown renders as a dash, never as zero.
 
 ---
+
+### Purchase-order VAT basis (2026-10-03)
+
+**Defect closed (source; NOT deployed).** `functions/procurement.js` held `VAT_RATE = 0.16` and
+`createPurchaseOrder` charged it on every PO; the PO email and `po-pdf.js` printed "VAT (16%)"
+whenever no rate was stored. That turned "KRA's general rate is 16%" into "16% on every supplier" —
+forbidden by [[VAT_POLICY_2026-09-30]] (`origin/convergence/commercial-fn-on-ef1e992`): *code never
+infers VAT; unresolved ⇒ no VAT*. A supplier→merchant supply follows the **supplier's** own status,
+already modelled per owner in `etimsProfiles/{uid}.vatStatus`.
+
+**Resolution (server-side only, `_resolveSupplierVat`).** `procSuppliers.supplierBusinessId` (verified
+at link time) → `businesses/{id}.ownerId` → `etimsProfiles/{ownerUid}` with `status: 'active'`. The rate
+and A/B/C category come from `etims-tax-engine` (`DEFAULTS.vatRate`, `vatCategoryFor`) — no literal. The
+engine's own fallback (unrecognised → exempt) is deliberately NOT used: unknown is not exempt. Payload
+`vatRate`/`vatAmount`/`total`/`vatBasis` are ignored. Line costs are net (VAT-exclusive), as before.
+
+| `vatBasis` | written by | when | `vatAmount` | `vatRate` | category | `total` | PDF / email label |
+|---|---|---|---|---|---|---|---|
+| `supplier_registered` | createPurchaseOrder | profile active, `vatStatus` registered | subtotal × engine rate | 16 (engine) | A | subtotal + VAT | `VAT (16%)` |
+| `supplier_zero_rated` | createPurchaseOrder | `vatStatus` zero_rated | 0 | 0 | B | subtotal | `VAT (zero-rated, 0%)` |
+| `supplier_exempt` | createPurchaseOrder | `vatStatus` exempt | 0 | null | C | subtotal | `VAT: exempt supply - no VAT` (no amount) |
+| `unknown_supplier_status` | createPurchaseOrder | external supplier · business/owner missing · no profile · profile not active · unrecognised status · read failure | **null** | null | null | **subtotal (excl. VAT)** | `VAT: per supplier's tax invoice` + "Excludes VAT" note |
+| `declared_on_quote` | `functions/rfq.js` (RFQ accept, own transaction) | supplier declared 0 or 16 on its quote | as quoted | as quoted | — | as quoted (+ `deliveryFee`) | `VAT (16%, as quoted)` / `VAT (0%, as quoted)` + `Delivery` line |
+| *(absent)* — **legacy** | pre-2026-10-03 createPurchaseOrder | every existing PO | as stored (16% inferred) | 16 | — | as stored | rendered **as stored** (`VAT (16%)`); no migration |
+
+`vatStatusReason` records why (e.g. `external_supplier`, `no_etims_profile`) — no PII.
+
+**Readers (census).**
+* `createPurchaseOrder` return — shape kept `{poId, poNumber, subtotal, vatAmount, total}`; `vatAmount`
+  may be **null**; `vatRate` and `vatBasis` added.
+* `getPurchaseOrder`, `listPurchaseOrders`, `getInboundSupplyOrders` — project `vatAmount` (null = unknown),
+  `vatRate`, `vatBasis` (null = legacy), `deliveryFee`.
+* `_poEmailHtml` + `po-pdf.js` — one shared `poVatPresentation(po)`; never defaults a rate; a null
+  `vatAmount` is never printed as KES 0.
+* `approvePurchaseOrder`, `sendPurchaseOrder` — read `po.total` for audit only; unchanged.
+* `receiveGoods` / GRN — no VAT; unchanged.
+* `createSupplierInvoice` — invoice VAT is the **supplier's tax invoice** figure (`vatSource:
+  'supplier_invoice'`); non-numeric/negative refused. Tolerance: PO with a VAT figure → invoice total vs
+  PO total (unchanged); PO with VAT unknown → invoice amount **before VAT** vs PO subtotal
+  (`poMatchedOn: 'net_of_vat'`), otherwise every VAT-registered supplier's invoice would deviate >5%.
+* `approveAndPayInvoice`, ledger — use the invoice's `total`; unchanged.
+* `getProcurementDashboard` — `openPOs.totalValue` sums `total` (net for unknown-VAT POs) and now
+  reports `openPOs.vatUnknownCount`.
+* Client `sokoni-merchant-supply.js` — post-placement text words the server's `vatBasis`
+  ("excluding VAT …" for unknown) instead of always "including VAT"; computes nothing.
+
+Proof: `scripts/test-procurement-vat-not-inferred.js` — 18 named rows; controls (a) restore the 16%
+inference and (b) treat unknown as registered each fail `UNKNOWN_EXTERNAL` (and others).
 
 ## What is NOT proven, and must not be claimed
 
