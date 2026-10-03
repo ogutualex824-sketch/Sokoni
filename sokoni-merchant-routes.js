@@ -461,6 +461,34 @@
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID],
       mobile:true, desktop:true, activeKey:'pos-setup' },
 
+    /* ── SPORTS WORKSPACE (owner 2026-10-03; 2f) ──────────────────────────────────────
+       Owner: "make MerchantV2 the canonical shell and inject a Sports navigation configuration". Five routes mount ONE
+       module (sokoni-merchant-sports.js) with a view key. Server: functions/sports.js via sportsDispatch (commercial-fn).
+       Role-aware INSIDE each view from the server's me.overview (roles derived from real team membership / organised
+       tournaments) — never a browser-claimed role. Messages, venues, receipts, wallet and products are the existing
+       surfaces, linked, not rebuilt. Ids are sports-prefixed (no collision with shop routes). APPENDED after Jobs at
+       assembly (Jobs merges first — e3). */
+    { id:'sports-overview', name:'Sports Overview', icon:'🏅', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'sports-overview' },
+    { id:'sports-team', name:'My Team', icon:'👥', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'sports-team' },
+    { id:'sports-fixtures', name:'Fixtures', icon:'📅', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'sports-fixtures' },
+    { id:'sports-tournaments', name:'Tournaments', icon:'🏆', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'sports-tournaments' },
+    { id:'sports-organise', name:'Organise', icon:'🗂️', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'sports-organise' },
+
 
   ];
 
@@ -502,7 +530,10 @@
        configured once alongside Devices and POS Setup, not a surface a merchant reads
        daily the way they read Reports. */
     { key:'operations', label:'Back office',
-      ids:['kra-tax','devices','pos-setup'] }
+      ids:['kra-tax','devices','pos-setup'] },
+    /* Sports workspace (owner 2026-10-03). Its own heading — appended LAST (after Jobs at assembly). */
+    { key:'sports',     label:'Sports',
+      ids:['sports-overview','sports-team','sports-fixtures','sports-tournaments','sports-organise'] }
   ];
 
   /* ── ROUTE ACTION CHIPS ─────────────────────────────────────────────────────────

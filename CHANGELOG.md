@@ -1,3 +1,9 @@
+## 2026-10-03 — Merchant-v2 Sports workspace: five Sports-group routes, one module, sportsDispatch only, role-aware from the server (NOT deployed)
+
+- **Files:** sokoni-merchant-sports.js (new); sokoni-merchant-routes.js (5 routes + Sports group, appended last); merchant-v2.html (MODULES + script); scripts/test-mv2-1-sidebar.js R3 (+Sports).
+- **Tests:** test-merchant-sports 10/0, merchant-routes 65/0, mv2-1-sidebar 14/0, merchant-v2-panels 20/0.
+- **Release order:** ships with/after commercial-fn sportsDispatch (968904e+); Jobs merges first at assembly.
+
 ## [2026-10-03] - setShopAvailability — Merchant V2 schedule saves through the server (no browser write; NOT deployed)
 
 **DEPLOY PRECONDITION (hard):** requires functions: setShopAvailability live (verify with a functions list before the hosting deploy).

@@ -749,6 +749,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <link rel="stylesheet" href="sokoni-merchant-dashboard.css">
 <link rel="stylesheet" href="sokoni-merchant-offers.css">
 <script src="sokoni-merchant-dashboard.js"></script>
+<!-- Sports workspace (owner 2026-10-03): five Sports-group routes, one module, sportsDispatch only. -->
+<script src="sokoni-merchant-sports.js"></script>
 <script src="sokoni-merchant-sell.js"></script>
 <script src="sokoni-merchant-inventory-ui.js"></script>
 <!-- B1. The offer ARITHMETIC lives in the model; the studio only edits it. -->
@@ -2461,7 +2463,17 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      asynchronously and can change when the merchant switches branch, so "already
      mounted" is not grounds to reuse: if the shop differs, tear down and rebuild
      rather than refreshing a surface that would query the previous shop's data. */
+  /* Sports ctx (owner 2026-10-03): the signed-in uid, the App Check callable path to sportsDispatch, navigation. */
+  function _sportsCtx (view) {
+    return { view: view, uid: function () { return S.uid || null; }, dispatch: _callable('sportsDispatch'), go: go, onToast: toast };
+  }
   var MODULES = {
+    /* SPORTS — five views of ONE module; every call is sportsDispatch through _callable. */
+    'sports-overview':    { global: 'SokoniMerchantSports', ctx: function () { return _sportsCtx('overview'); } },
+    'sports-team':        { global: 'SokoniMerchantSports', ctx: function () { return _sportsCtx('team'); } },
+    'sports-fixtures':    { global: 'SokoniMerchantSports', ctx: function () { return _sportsCtx('fixtures'); } },
+    'sports-tournaments': { global: 'SokoniMerchantSports', ctx: function () { return _sportsCtx('tournaments'); } },
+    'sports-organise':    { global: 'SokoniMerchantSports', ctx: function () { return _sportsCtx('organise'); } },
     sell:       { global: 'SokoniMerchantSell',        ctx: _ctx },
     /* Products — native as of this commit; it was kind:'seller' and opened the legacy
        shell in an iframe. Same ctx shape the module was certified against, taken rather
