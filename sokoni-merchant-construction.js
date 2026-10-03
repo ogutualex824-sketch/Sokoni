@@ -31,7 +31,10 @@
                   applications where uid == uid (owner-only read) are shown ONLY as "Application
                   progress" text. "Approved" appears ONLY when the ONE approval answer —
                   providerDispatch {op:'businessWorkspace'} (sokoni-5b f85039a, isAuthoritativelyApproved)
-                  — has approval.state === 'VALID_APPROVAL' AND modules.services.state === 'AVAILABLE'.
+                  — has approval.state === 'VALID_APPROVAL' AND, by the SERVER's answer.lane:
+                    services (trades)          → modules.services.state === 'AVAILABLE' too;
+                    products (materials supplier, OWN_WORKSPACE) → VALID_APPROVAL alone;
+                    unknown / absent lane      → "—" (fails closed). Never the browser's category.
                   'services' is the gate because no construction module key exists on the capability
                   line (5b f85039a / 1a5c9e5): construction trades classify to quoted-service provider
                   categories (5b cf44fc3) whose capability is the services module. Never from
@@ -218,12 +221,21 @@
     var a = W.answer;
     if (!a || typeof a !== 'object' || Array.isArray(a)) return { kind: 'unreadable', code: 'malformed' };
     var ap = a.approval && typeof a.approval.state === 'string' ? a.approval.state : null;
-    var m = a.modules && typeof a.modules === 'object' ? a.modules[APPROVAL_MODULE] : null;
-    if (ap === VALID_APPROVAL && m && m.state === 'AVAILABLE') return { kind: 'approved' };
-    var why = (typeof a.message === 'string' && a.message.trim()) ? a.message.trim()
-      : (ap !== VALID_APPROVAL ? (APPROVAL_TEXT[ap] || 'SOKONI has not confirmed an approval for this business.')
-        : 'Construction services are not enabled for this business' + (m && m.state ? ' (' + titleCase(String(m.state).toLowerCase()) + ').' : '.'));
-    return { kind: 'not_approved', why: why, approvalState: ap };
+    var msg = (typeof a.message === 'string' && a.message.trim()) ? a.message.trim() : null;
+    /* No valid approval → not approved, whatever the lane (nothing is guessed: the authority said no). */
+    if (ap !== VALID_APPROVAL) return { kind: 'not_approved', why: msg || APPROVAL_TEXT[ap] || 'SOKONI has not confirmed an approval for this business.', approvalState: ap };
+    /* VALID: the LANE decides what else is needed — read ONLY from the server answer (answer.lane, business-workspace.js
+       laneOf over the server category; sokoni-5b, owner of approval, 2026-10-03). Never the browser's category or an
+       application field. */
+    var lane = a.lane;
+    if (lane === 'products') return { kind: 'approved', lane: lane };   /* materials supplier: OWN_WORKSPACE has no services module by design */
+    if (lane === 'services') {
+      var m = a.modules && typeof a.modules === 'object' ? a.modules[APPROVAL_MODULE] : null;
+      if (m && m.state === 'AVAILABLE') return { kind: 'approved', lane: lane };
+      return { kind: 'not_approved', lane: lane, approvalState: ap, why: msg ||
+        'Construction services are not enabled for this business' + (m && m.state ? ' (' + titleCase(String(m.state).toLowerCase()) + ').' : '.') };
+    }
+    return { kind: 'unreadable', code: 'unknown-lane' };   /* unknown / absent lane fails CLOSED to "—" */
   }
   /* Pure: the edit decision (sokoni-edit-authority.js) — fails CLOSED while loading / without the authority. */
   var CHECKING_EDIT = Object.freeze({ editable: false, readOnly: true, reasonCode: 'checking', reason: 'checking your account', ownerState: null, source: 'none', action: null });

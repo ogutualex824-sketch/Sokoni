@@ -45,6 +45,9 @@
           N9 "Approved" derived from applications.status      → V1   (control a)
           N10 read-only fails OPEN on a missing answer        → RO6  (control b)
           N11 a badge from verified === true                  → V3
+          N12 lane decided from applications.category         → VL1
+     VL lane (sokoni-5b 2026-10-03): from the SERVER answer.lane only — products (supplier, OWN_WORKSPACE) → VALID alone;
+        services (trade) → VALID + services AVAILABLE; unknown / absent lane → "—"
    node scripts/test-merchant-construction-workspace.js */
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm'), Module = require('module');
@@ -243,7 +246,7 @@ async function change (host, attr, value) { await host._h.change({ target: { get
 const EMPTY = async (p) => (p.op === 'rentalOwnerListings' ? { listings: [], hasMore: false } : { bookings: [] });
 const lead = (id, status, extra) => Object.assign({ id, buyerUid: 'buyer-' + id, sellerUid: 'owner1', productId: 'p-' + id, productName: 'Cement 50kg', buyerName: 'Wanjiru', message: 'Need 40 bags', createdAt: { seconds: 1790000000 + id.length }, status }, extra || {});
 /* businessWorkspace answers (sokoni-5b f85039a approval + 1a5c9e5 ownerState/editable) */
-const WS = (extra) => Object.assign({ found: true, state: 'AVAILABLE', approval: { state: 'VALID_APPROVAL' }, ownerState: 'active', editable: true,
+const WS = (extra) => Object.assign({ found: true, state: 'AVAILABLE', lane: 'services', approval: { state: 'VALID_APPROVAL' }, ownerState: 'active', editable: true,
   modules: { overview: { state: 'AVAILABLE' }, services: { state: 'AVAILABLE' }, quotes: { state: 'AVAILABLE' } } }, extra || {});
 const OLD_WS = (extra) => { const a = WS(extra); delete a.ownerState; delete a.editable; return a; };
 function mkCtx (V, view, over) {
@@ -530,6 +533,22 @@ async function suite (src, log) {
   ck('V6', 'pure approvalOf: only VALID_APPROVAL + services AVAILABLE; module key is "services"; token "VALID_APPROVAL"', M._pure.APPROVAL_MODULE === 'services' && M._pure.VALID_APPROVAL === 'VALID_APPROVAL' &&
     M._pure.approvalOf({ answer: WS() }).kind === 'approved' && M._pure.approvalOf({ answer: WS({ approval: { state: 'valid_approval' } }) }).kind === 'not_approved' &&
     M._pure.approvalOf({ answer: { status: 'approved', verified: true, adminApproved: true, approvedBy: 'x', modules: { services: { state: 'AVAILABLE' } } } }).kind === 'not_approved' && M._pure.approvalOf(null).kind === 'checking', null);
+  /* ── VL: the lane comes from the SERVER answer (sokoni-5b, 2026-10-03) ── */
+  const SUPPLIER = (extra) => WS(Object.assign({ lane: 'products', category: 'hardware', modules: { overview: { state: 'NOT_APPLICABLE', reason: 'OWN_WORKSPACE' }, services: { state: 'NOT_APPLICABLE', reason: 'OWN_WORKSPACE' } } }, extra || {}));
+  const tradeApp = [{ id: 'A7', uid: 'owner1', hub: 'construction', category: 'construction-contractor', categoryLabel: 'Contractor / Builder', status: 'approved', createdAt: 1790000000000 }];
+  const supApp = [{ id: 'A8', uid: 'owner1', hub: 'construction', category: 'construction-materials', categoryLabel: 'Building materials', status: 'approved', createdAt: 1790000000000 }];
+  t = await mountView(V, 'verification', { apps: tradeApp, ws: SUPPLIER() });
+  ck('VL1', 'materials SUPPLIER (answer.lane products, OWN_WORKSPACE modules) with VALID_APPROVAL → Approved without a services module (even though the application says a trade)', JSON.stringify(chipOf(t.host)) === '["approved","Approved"]', chipOf(t.host));
+  t = await mountView(V, 'verification', { apps: supApp, ws: SUPPLIER({ approval: { state: 'NO_APPROVAL' } }) });
+  ck('VL2', 'supplier with NO_APPROVAL → not approved', chipOf(t.host)[0] === 'not_approved' && !/\bApproved\b/.test(text(t.host)), chipOf(t.host));
+  t = await mountView(V, 'verification', { apps: supApp, ws: WS({ lane: 'services', modules: { overview: { state: 'AVAILABLE' }, services: { state: 'LOCKED' } } }) });
+  ck('VL3', 'TRADE (answer.lane services) with VALID but services not AVAILABLE → not approved (even though the application says materials)', chipOf(t.host)[0] === 'not_approved' && /not enabled/.test(text(t.host)), chipOf(t.host));
+  const unk = [];
+  for (const [n, ws] of [['absent', (() => { const a = WS(); delete a.lane; return a; })()], ['null', WS({ lane: null })], ['"both"', WS({ lane: 'both' })], ['"Products"', WS({ lane: 'Products' })]]) {
+    t = await mountView(V, 'verification', { apps: supApp, ws });
+    if (JSON.stringify(chipOf(t.host)) !== '["unreadable","—"]') unk.push(n + '→' + JSON.stringify(chipOf(t.host)));
+  }
+  ck('VL4', 'unknown / absent lane with VALID_APPROVAL → "—" (fails closed), never Approved', unk.length === 0, unk);
   V.SokoniMerchantConstruction._reset();
   { const host1 = mkHost(), host2 = mkHost(), host3 = mkHost(); const m1 = mkCtx(V, 'verification', { apps }); const m2 = Object.assign({}, m1.ctx, { view: 'leads' }); const m3 = Object.assign({}, m1.ctx, { view: 'rentals' });
     M.mount(host1, m1.ctx); await flush(); M.mount(host2, m2); await flush(); M.mount(host3, m3); await flush();
@@ -644,6 +663,7 @@ async function suite (src, log) {
     ['N4', "'0' rendered for an unknown count", 'O1', ["isFinite(n)) ? String(n) + (partial ? '+' : '') : '—'; }", "isFinite(n)) ? String(n) + (partial ? '+' : '') : '0'; }"]],
     ['N9', '"Approved" derived from applications.status (control a)', 'V1', ["      h += approvalCard(S) + '<h3>Application progress</h3>';", "      h += ((S.apps && S.apps.rows || []).some(function (a) { return a.status === 'approved'; }) ? '<div class=\"cw-card\" data-approval=\"approved\"><div class=\"cw-row\"><b>SOKONI approval</b><span class=\"cw-badge\">Approved</span></div></div>' : approvalCard(S)) + '<h3>Application progress</h3>';"]],
     ['N10', 'read-only fails OPEN on a missing answer (control b)', 'RO6', ["    return EA.decide(W.err ? null : W.answer, claims || null);", "    if (W.err) return { editable: true, readOnly: false }; return EA.decide(W.answer, claims || null);"]],
+    ['N12', 'lane decided from applications.category (browser) instead of answer.lane', 'VL1', ["    var lane = a.lane;", "    var lane = (STORE && STORE.apps && STORE.apps.rows || []).some(function (x) { return /materials|supplier/.test(String(x.category || '')); }) ? 'products' : (a.lane ? 'services' : null);"]],
     ['N11', 'a badge from verified === true', 'V3', ["<span class=\"cw-chip\">Application progress: ' + esc(appLabel(a)) + '</span></div>' +", "<span class=\"cw-chip\">Application progress: ' + esc(appLabel(a)) + '</span>' + (a.verified === true ? '<span class=\"cw-badge\">✓ Verified</span>' : '') + '</div>' +"]]
   ];
   let caught = 0;
