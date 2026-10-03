@@ -635,3 +635,61 @@ Attendance notifications are sokoni-e3's.
 - **UNPROVEN:** emulator and browser runs (RAM about 270 MB, below the 512 MB floor).
 - **BLOCKED:** the live webhook hook (sokoni-5b's port, after their P0 + REVIEW slices).
 - **Not mine:** QR, scanner, staff/business linkage, attendance, access rules, AdminOS/Super Admin screens (sokoni-e3).
+
+### 13.5 · User-ready gap closure, money side (2026-10-03): prices, short passes, one sales predicate, terms
+
+**Owner decisions (asked and answered):**
+- The Fitness price list is "Defaults gyms can edit". Each gym publishes its own offer, and the member pays the offer price as snapshotted at creation.
+- Daily / Weekly passes pay "At first visit or expiry", as one slice.
+
+**What changed:**
+- **Default catalogue (one place):** `functions/shared/fitness-offer-defaults.js` → Daily 500, Weekly 1,500, Monthly 5,000, 3 Months 14,000, 6 Months 26,000, Annual 48,000 (KES, stored in cents). `withSavings()` computes 3M 7% / 6M 13% / Annual 20% from the same list. The gym offer editor (sokoni-e3) pre-fills from it; nothing charges from it.
+- **Short passes:** `membership-settlement.slicesOf` accepts `periodUnit 'day' | 'week'` as ONE slice ending at the pass end (subscription-period.addDays, the one period copy). The hold-until-first-check-in, refund-lock and expiry rules are unchanged.
+- **One sales predicate:** `functions/shared/fitness-sales-switch.js` `salesEnabled(db)` (boolean `true` only; 'true', 1, missing or a read error → off). It is used by the payment purpose. sokoni-e3's `fitnessCreateMembership` should import it rather than keep its own copy.
+- **`seller-terms.html` "How commission is collected"** is replaced with the owner's wording, widened to seller, gym or provider: "SOKONI may deduct the applicable platform commission and other disclosed transaction charges from amounts payable to the seller, gym or provider … determined by the applicable pricing, commission, payment and refund rules, including the rates set out above". The old claim "the seller receives the full sale amount … invoiced separately" is gone.
+- **`opportunity.html`:** the mechanic perk "No commission on direct bookings" became "One flat commission per booking — the same on every plan" (no hardcoded number).
+- **Left alone:** `launch-readiness.html` (admin-only tip "90-day zero commission") is not a customer promise. It is flagged, not edited.
+
+**Tests:** `test-membership-settlement` 77/0 (+D1–D7 catalogue / short passes; F1 runtime predicate matrix; F2 single copy). 8 mutants each detected. commission-schedule 25/0.
+
+**Authority map (Fitness memberships):**
+
+| Concern | Authority | Owner |
+|---|---|---|
+| Offer prices (defaults) | `shared/fitness-offer-defaults.js` | 2f |
+| Published offer | `providerServices` kind 'membership' | e3 |
+| Membership creation + price snapshot + `payBy` | `fitness-membership-create.js` | e3 |
+| Sales switch | `shared/fitness-sales-switch.js` (flag written by AdminOS `adminUpdateFeatureFlag`) | 2f predicate / AdminOS writer |
+| Payment intent | `payment-purposes.fitness_membership` | 2f |
+| Webhook hold | `membership-settlement.holdMembershipPayment` via webhookIntasend's early intent read | 2f code / 5b live port |
+| Attendance / QR / staff / entitlements | `fitness-attendance.js` | e3 |
+| Refund request / decision / exception / execution | `membership-settlement` | 2f |
+| Monthly / expiry payouts | `membership-settlement.releaseDueSlices` + daily sweep | 2f |
+| Commission | `commission-config` RATES.fitness 5% fixed (`provider-hub` for bookings) | 2f |
+| Wallets / ledger | existing `wallets` / `walletTransactions` / `providerPayouts` / `users.walletBalance` + `ledger` | existing |
+| Notifications | `notify.js` (money: 2f; attendance: e3) | existing |
+| Rules / AdminOS / Super Admin screens | e3 rules lane / e3 AdminOS view; `adminUpdateFeatureFlag` = AdminOS | e3 / AdminOS |
+
+No duplicate authority was found on the money side.
+
+**Acceptance matrix (money side; full GREEN needs e3's half + emulator/browser):**
+
+| Area | Current authority | Test | Result | Evidence | Status |
+|---|---|---|---|---|---|
+| Server-priced payment, held | purpose + hold | P1, P8 | pass | test-membership-settlement | PROVEN (unit) |
+| Mismatch → review, no activation | hold | P3–P7, N6 | pass | same | PROVEN (unit) |
+| 5-min expiry / late payment | hold + payBy | L1–L6, S3 | pass | same | PROVEN (unit) |
+| First visit locks refund | refundDecision/isUsed | M8 ×3, M8b | pass | same | PROVEN (unit) |
+| Refund request → second person → execution | requestRefund / decideRefund | R1–R7, M7 | pass | same | PROVEN (unit) |
+| Refund atomic under failure | decideRefund txn | A1–A5 | pass | same | PROVEN (unit) |
+| Exception refund | requestException | X1–X6, N7 | pass | same | PROVEN (unit) |
+| Payout freeze / months not reversed | releaseDueSlices | M7b, R4, R7, X4 | pass | same | PROVEN (unit) |
+| Monthly / expiry / short-pass payouts, once | releaseDueSlices | M4–M6, M5b, D5–D7 | pass | same | PROVEN (unit) |
+| Notifications from committed state | `_notify` after commit | N1–N9, L3, A3 | pass | same | PROVEN (unit) |
+| Sales switch fail-closed | fitness-sales-switch | F1, F2 | pass | same | PROVEN (unit) |
+| Pricing single source | fitness-offer-defaults | D1–D3 | pass | same | PROVEN (unit) |
+| Commission 5% | commission-config | M4b, pos-fixed-rate | pass | suites | PROVEN (unit) |
+| Live webhook hook | webhookIntasend (5b lineage) | — | — | port requested | BLOCKED (5b) |
+| Rules / emulator | e3 rules lane | — | — | RAM 297 MB < 512 | BLOCKED (memory) |
+| Browser flows (member / gym / AdminOS) | e3 screens | — | — | RAM | BLOCKED (memory) |
+| Webhook suite | creator-callback | 4 FAIL | pre-existing | identical on HEAD | PRE-EXISTING FAILURE |

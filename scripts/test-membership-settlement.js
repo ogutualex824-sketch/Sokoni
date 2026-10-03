@@ -105,8 +105,8 @@ const D = (s) => new Date(s);
   const s = MS.slicesOf(mem({ priceCents: 100000, periodCount: 3 }));
   ck('M1 slices are integers summing exactly to the price (33,333 / 33,333 / 33,334 cents)', s.map((x) => x.amountCents).join() === '33333,33333,33334' && s.reduce((a, x) => a + x.amountCents, 0) === 100000);
   ck('M2 months fall due at calendar month ends (Feb 15, Mar 15, Apr 15)', s.map((x) => x.dueAt.toISOString().slice(0, 10)).join() === '2026-02-15,2026-03-15,2026-04-15', s.map((x) => x.dueAt));
-  let bad = 0; for (const o of [{ priceCents: 1.5 }, { periodCount: 0 }, { startAt: null }, { periodUnit: 'week' }]) { try { MS.slicesOf(mem(o)); } catch (_) { bad++; } }
-  ck('M2b invalid records refused (fractional cents, 0 periods, no start, undecided period unit)', bad === 4);
+  let bad = 0; for (const o of [{ priceCents: 1.5 }, { periodCount: 0 }, { startAt: null }, { periodUnit: 'year' }]) { try { MS.slicesOf(mem(o)); } catch (_) { bad++; } }
+  ck('M2b invalid records refused (fractional cents, 0 periods, no start, undecided period unit year)', bad === 4);
 
   const used = { attendedSessions: 1, firstAttendedAt: '2026-01-20T07:00:00Z', refundEligible: false };
   const bal = (db) => (db._docs.get('wallets/gym_A') || {}).balance || 0;
@@ -349,13 +349,41 @@ const D = (s) => new Date(s);
   r = await MS.decideRefund('mem_000001', { by: 'admin_9', decision: 'approve' });
   ck('A5 the admin retries → refund completes once (KES 6,000), notifications sent now', r.ok && db._docs.get('users/member_1').walletBalance === 6000 && NOTES.some((n) => n.type === 'refund_processed'), r);
 
-  /* ══ F: SALES SWITCH (defence in depth; runtime proof = emulator run, UNPROVEN offline) ══ */
+  /* ══ F: SALES SWITCH — the ONE predicate (shared/fitness-sales-switch.js), exercised for real ══ */
+  const SW = require(path.join(ROOT, 'functions/shared/fitness-sales-switch.js'));
+  const flagDb = (v, throws) => ({ collection: () => ({ doc: () => ({ get: async () => { if (throws) throw new Error('read failed'); return v === undefined ? { exists: false, data: () => undefined } : { exists: true, data: () => v }; } }) }) });
+  const sw = await Promise.all([SW.salesEnabled(flagDb({ enabled: true })), SW.salesEnabled(flagDb({ enabled: 'true' })), SW.salesEnabled(flagDb({ enabled: 1 })),
+    SW.salesEnabled(flagDb({})), SW.salesEnabled(flagDb(undefined)), SW.salesEnabled(flagDb({ enabled: true }, true))]);
+  ck('F1 only boolean true opens sales: true→on; "true", 1, missing field, missing doc, READ ERROR → off', sw.join() === 'true,false,false,false,false,false', sw);
   const pp2 = require('fs').readFileSync(path.join(ROOT, 'functions/payment-purposes.js'), 'utf8');
   const fm = pp2.slice(pp2.indexOf('fitness_membership: {'), pp2.indexOf('fitness_membership: {') + 3000);
-  ck('F1 the purpose refuses unless featureFlags/fitness_membership_sales.enabled === true (SALES_DISABLED), BEFORE reading the membership',
-    /doc\('fitness_membership_sales'\)/.test(fm) && /enabled === true/.test(fm) && /code: 'SALES_DISABLED'/.test(fm)
-    && fm.indexOf("doc('fitness_membership_sales')") < fm.indexOf("collection('providerMemberships')"));
-  ck('F2 a flag read error FAILS CLOSED (salesOpen stays false)', /catch \(_\) \{ salesOpen = false; \}/.test(fm));
+  ck('F2 the purpose uses THAT predicate (no second copy) and refuses SALES_DISABLED before reading the membership',
+    /require\('\.\/shared\/fitness-sales-switch'\)\.salesEnabled\(db\(\)\)/.test(fm) && /code: 'SALES_DISABLED'/.test(fm) && !/collection('featureFlags')/.test(fm)
+    && fm.indexOf('fitness-sales-switch') < fm.indexOf("collection('providerMemberships')"));
+
+  /* ══ D: SHORT PASSES + DEFAULT OFFER CATALOGUE (owner 2026-10-03) ══ */
+  const DFT = require(path.join(ROOT, 'functions/shared/fitness-offer-defaults.js'));
+  const prices = DFT.OFFER_DEFAULTS.map((o) => o.label + '=' + o.priceCents / 100).join(', ');
+  ck('D1 the ONE default catalogue: Daily 500, Weekly 1,500, Monthly 5,000, 3 Months 14,000, 6 Months 26,000, Annual 48,000 (KES)',
+    prices === 'Daily Pass=500, Weekly Pass=1500, Monthly=5000, 3 Months=14000, 6 Months=26000, Annual=48000', prices);
+  const sv = DFT.withSavings();
+  ck('D2 savings are COMPUTED from the same list (3M 7%, 6M 13%, Annual 20%), never typed; single passes show none',
+    sv.find((o) => o.key === 'quarter').savingPct === 7 && sv.find((o) => o.key === 'half').savingPct === 13 && sv.find((o) => o.key === 'annual').savingPct === 20 && sv.find((o) => o.key === 'daily').savingPct === null, sv.map((o) => o.key + ':' + o.savingPct));
+  ck('D3 every default is a valid settlement shape (slices sum exactly to its price)',
+    DFT.OFFER_DEFAULTS.every((o) => { const sl = MS.slicesOf({ priceCents: o.priceCents, periodCount: o.periodCount, periodUnit: o.periodUnit, startAt: START }); return sl.reduce((a, x) => a + x.amountCents, 0) === o.priceCents; }));
+  const day = MS.slicesOf({ priceCents: 50000, periodCount: 1, periodUnit: 'day', startAt: START });
+  const wk = MS.slicesOf({ priceCents: 150000, periodCount: 1, periodUnit: 'week', startAt: START });
+  ck('D4 Daily and Weekly passes are ONE slice each, due at the end of the pass (Jan 16 / Jan 22)',
+    day.length === 1 && day[0].dueAt.toISOString().slice(0, 10) === '2026-01-16' && wk.length === 1 && wk[0].dueAt.toISOString().slice(0, 10) === '2026-01-22', [day, wk]);
+  db = setup({ priceCents: 150000, periodCount: 1, periodUnit: 'week' });
+  r = await MS.releaseDueSlices('mem_000001', { now: D('2026-01-18T06:00:00Z'), deps });
+  ck('D5 weekly pass, unused, mid-week → held (refundable), gym unpaid', r.released === 0 && bal(db) === 0, r);
+  db = setup({ priceCents: 150000, periodCount: 1, periodUnit: 'week', attendedSessions: 1, firstAttendedAt: '2026-01-16T07:00:00Z', refundEligible: false });
+  r = await MS.releaseDueSlices('mem_000001', { now: D('2026-01-22T09:30:00Z'), deps });
+  ck('D6 weekly pass, used → paid at the end of the week: KES 1,425 (1,500 − 5%)', r.released === 1 && bal(db) === 1425, r);
+  db = setup({ priceCents: 50000, periodCount: 1, periodUnit: 'day' });
+  r = await MS.releaseDueSlices('mem_000001', { now: D('2026-01-16T09:30:00Z'), deps });
+  ck('D7 daily pass never used → paid to the gym at expiry (KES 475), trigger expired_unused', r.released === 1 && r.trigger === 'expired_unused' && bal(db) === 475, r);
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

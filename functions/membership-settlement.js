@@ -94,8 +94,15 @@ function slicesOf(m) {
   if (!Number.isInteger(price) || price < 0) throw Object.assign(new Error('priceCents must be a non-negative integer'), { code: 'invalid_membership' });
   if (!Number.isInteger(n) || n < 1 || n > 60) throw Object.assign(new Error('periodCount must be 1..60'), { code: 'invalid_membership' });
   if (!start) throw Object.assign(new Error('startAt missing'), { code: 'invalid_membership' });
-  if ((m.periodUnit || 'month') !== 'month') throw Object.assign(new Error('only monthly periods are decided'), { code: 'invalid_membership' });
-  const { periodEnd } = require('./subscription-period');
+  const unit = m.periodUnit || 'month';
+  const { periodEnd, addDays } = require('./subscription-period');
+  /* SHORT PASSES (owner 2026-10-03): a day or week pass is ONE slice covering the whole pass — held until the first
+     check-in (refundable before), then paid; never used → paid at expiry. periodCount = the number of days / weeks. */
+  if (unit === 'day' || unit === 'week') {
+    if (n > (unit === 'day' ? 31 : 8)) throw Object.assign(new Error('pass too long for a ' + unit + ' unit'), { code: 'invalid_membership' });
+    return [{ index: 0, amountCents: price, startsAt: start, dueAt: addDays(start, n * (unit === 'day' ? 1 : 7)) }];
+  }
+  if (unit !== 'month') throw Object.assign(new Error('period unit must be day | week | month'), { code: 'invalid_membership' });
   const base = Math.floor(price / n);
   const out = [];
   let from = start;

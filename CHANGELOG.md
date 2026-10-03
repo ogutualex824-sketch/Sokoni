@@ -1,3 +1,9 @@
+## 2026-10-03 — Fitness: default price catalogue (gyms edit), day/week passes, one sales-switch predicate, seller-terms commission wording, earn-page copy (NOT deployed)
+
+- **New files:** functions/shared/fitness-offer-defaults.js, functions/shared/fitness-sales-switch.js.
+- **Changed:** membership-settlement (day/week single-slice), payment-purposes (shared predicate), seller-terms.html (owner wording), opportunity.html.
+- **Tests:** test-membership-settlement 77/0; 8 mutants detected.
+
 ## 2026-10-03 — Memberships: a late payment never resurrects an expired membership (refunded to wallet); refund atomicity proven under failure; sales-switch check (NOT deployed)
 
 - **Changes:** membership-settlement (late-payment branch); payment-purposes (featureFlags/fitness_membership_sales gate).

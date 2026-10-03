@@ -311,9 +311,8 @@ const PURPOSES = {
       /* SALES SWITCH (defence in depth with fitnessCreateMembership): featureFlags/fitness_membership_sales.enabled must be
          EXACTLY true (admin-written via AdminOS adminUpdateFeatureFlag, default OFF). A membership created before the flag
          was turned off, or by any other path, cannot be paid while sales are off. A read error FAILS CLOSED. */
-      let salesOpen = false;
-      try { const f = await db().collection('featureFlags').doc('fitness_membership_sales').get(); salesOpen = f.exists && f.data().enabled === true; }
-      catch (_) { salesOpen = false; }
+      /* The ONE predicate (shared/fitness-sales-switch.js), also used by fitnessCreateMembership. */
+      const salesOpen = await require('./shared/fitness-sales-switch').salesEnabled(db());
       if (!salesOpen) fail('failed-precondition', 'Membership sales are not open yet.', { code: 'SALES_DISABLED' });
       const snap = await db().collection('providerMemberships').doc(membershipId).get();
       if (!snap.exists) fail('not-found', 'Membership not found.');
