@@ -1,3 +1,9 @@
+## 2026-10-03 — AdminOS Finance → Receipts: read-only, audited receipt search + Super Admin retry (NOT deployed)
+
+- **Files:** sokoni-aos-receipts.js (new); admin-os.html (nav + panel + script).
+- **Test:** test-aos-receipts 8/0.
+- **Release order:** ships with/after the commercial-fn receipt callables.
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
