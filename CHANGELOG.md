@@ -1,3 +1,11 @@
+## 2026-10-04 — Users workspace: two LIVE-ONLY behaviours restored in functions/admin-os.js (b2 live comparison BLOCKER) (NOT deployed)
+
+- **Summary:** In 82dd1d0, my adminGetUser rewrite dropped two live behaviours. The live comparison (b2) found both. (1) The AdminOS Authority Core pilot (`_adminCapabilityAllows` + `exports._adminCapabilityAllows` + the `audit.read` check in adminGetAuditLogs) is restored VERBATIM from the live adminOsDispatch archive. An explicit `adminPermissions/{uid}.capabilities.audit.read === false` again DENIES audit logs. Without the fix, deploying would have re-granted audit-log access to every admin whose access was revoked. (2) adminGetUser again reads `wallets/{uid}` and returns `wallet`.
+- **Remaining live diff (accounted for):** the import line (adds Timestamp), the users block rewrite (intended; drops the legacy roles[] matching), and one blank line. Nothing else.
+- **Files:** functions/admin-os.js, scripts/test-admin-users-workspace.js (U13, U14).
+- **Tests:** test-admin-users-workspace 14/0. Mutant (pilot check forced to allow) → U13 FAILS. test-account-suspension 13/0; tier2 147/0.
+- **Database / API / breaking:** none (restores live behaviour). **Security:** prevents a privilege re-grant on deploy.
+
 ## 2026-10-04 — Existing-session window: sensitive admin callables re-check the canonical account state (NOT deployed)
 
 - **Owner:** a ≤1 h already-issued token must not keep acting after suspension — rules (f3: field lock + accountNotSuspended) AND server checks, not either alone.

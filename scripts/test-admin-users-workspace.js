@@ -12,6 +12,7 @@ require('./lib/net-firewall').install();
      U6  client module: every template interpolation of user-controlled data goes through esc() (or a helper that does)
      U7  client module: no fabricated metric — KPI/count sources are only adminUserStats / listInvitations; unknown → "—"
      U9-U12 SERVER pagination (cursor) · server role/status filters · server sort · export (super admin, displayed columns, filtered, audited)
+     U13 live-only audit.read capability pilot carried (explicit false denies) · U14 adminGetUser returns the wallet (live)
      U8  both pages mount the workspace in their Users panel (sidebars untouched) with THEIR existing action authorities
    NODE_PATH=<functions/node_modules> node scripts/test-admin-users-workspace.js */
 const path = require('path'), fs = require('fs'), Module = require('module');
@@ -97,6 +98,16 @@ const now = Date.now(), recent = { _ms: now - 2 * 86400000 }, old = { _ms: now -
     && ex.rows.every((r) => Object.keys(r).join() === ex.columns.join()) && exAudit.length === 1 && exAudit[0][1].rowCount === ex.rows.length && exAudit[0][1].filters.role === 'buyer' && audits0 === 0,
     'EXPORT: ordinary admin refused; super admin gets ONLY the displayed columns, filters applied server-side, one audit record with filters + row count', { n: ex.rows.length, cols: ex.columns, audit: exAudit.length });
 
+  /* LIVE-ONLY controls carried verbatim (b2 live comparison 2026-10-04) */
+  DOCS.set('adminAudit/l1', { action: 'x', createdAt: { toDate: () => new Date(0) } });
+  DOCS.set('adminPermissions/revoked', { capabilities: { audit: { read: false } } });
+  let al1 = null; try { await AO._h.adminGetAuditLogs({ auth: { uid: 'revoked', token: { admin: true } }, data: {} }); al1 = 'allowed'; } catch (e) { al1 = e.code || e.message; }
+  let al2 = null; try { const r = await AO._h.adminGetAuditLogs({ auth: { uid: 'plain', token: { admin: true } }, data: {} }); al2 = Array.isArray(r.logs) ? 'allowed' : 'bad'; } catch (e) { al2 = e.code || e.message; }
+  ck('U13', al1 === 'permission-denied' && al2 === 'allowed' && typeof AO._adminCapabilityAllows === 'function',
+    'AdminOS Authority Core pilot (live, 05df4c9): explicit audit.read=false DENIES audit logs; no override → coarse admin governs', [al1, al2]);
+  DOCS.set('wallets/u1', { balance: 4200 });
+  const gw = await AO._h.adminGetUser({ ...ADMIN, data: { uid: 'u1' } });
+  ck('U14', gw.wallet && gw.wallet.balance === 4200, 'adminGetUser still returns the wallet (live behaviour restored)', gw.wallet);
   /* client module (no DOM needed for these rows) */
   const src = fs.readFileSync(path.join(ROOT, 'sokoni-admin-users.js'), 'utf8');
   const sb = { window: {}, document: {} }; require('vm').runInNewContext(src, sb);
