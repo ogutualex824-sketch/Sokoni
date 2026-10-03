@@ -70,7 +70,9 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
   ck('W6  support.html: ?topic=&ref=&desc= prefill exists (Support buttons arrive with context; sos → critical)', /q\.get\('topic'\)/.test(sup) && /q\.get\('desc'\)/.test(sup) && /pr\.value = 'critical'/.test(sup), null);
   const d = read('delivery.html');
   ck('W7  delivery.html: no Book-via-WhatsApp, no SOKONI_WA, no wa.me; Support link present; share is native/copy', !/bookDeliveryWA|SOKONI_WA|wa\.me/.test(d) && /support\.html\?topic=parcel/.test(d) && /navigator\.share/.test(d), null);
-  const drv = read('driver.html');
+  /* 2026-10-03: driver.html is now the Delivery Hub shell; its rider UI (support rows included) lives in
+     sokoni-rider-hub.js. The W8 contract is checked across both files. */
+  const drv = read('driver.html') + (fs.existsSync(path.join(ROOT, 'sokoni-rider-hub.js')) ? '\n' + read('sokoni-rider-hub.js') : '');
   ck('W8  driver.html: rider support row → support.html?topic=delivery (tel kept), no WhatsApp support button', /support\.html\?topic=delivery/.test(drv) && !/wa\.me\/254705726803\?text=Hi%20Sokoni%20Driver%20Support/.test(drv), null);
   const dt = read('delivery-tracking.html');
   /* dtShareWA is a SHARE of the tracking link (distribution, owner-allowed class) — the only wa.me permitted here. */

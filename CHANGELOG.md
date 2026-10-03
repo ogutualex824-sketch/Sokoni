@@ -1,3 +1,31 @@
+## [2026-10-03] - SOKONI Delivery Hub: the rider portal becomes a merchant-v2-style dashboard (driver.html, NOT deployed)
+
+**Branch `hosting/delivery-hub-dashboard-on-14ef233`**, on sokoni-e3's chain `14ef233` (contains live `72dca56`), and
+carrying sokoni-4d's payout-safety fix `6f0a576` (cherry-picked as `f2d5f81`). Full note: `docs/DELIVERY_HUB_DASHBOARD.md`.
+
+- **driver.html**: same URL and role guard. It now has a sidebar (desktop), a drawer and bottom nav (phone), and 16 sections:
+  - Overview, Rider Drive, Available, My Deliveries, Live Map;
+  - Earnings, Wallet, Performance, Fuel (EPRA);
+  - Categories, Application, Documents;
+  - Notifications, Messages, Support, Settings.
+- **One module, `sokoni-rider-hub.js`**. It reuses the existing authorities: riderPresence, /api/available-deliveries +
+  claimAvailableDelivery, the packageRequests and orders lifecycles, completeDeliveryWithPin / completeParcelWithPin,
+  handleFailedDelivery (newly wired), respondToDispatch, walletTransactions delivery_earning, wallets, payouts,
+  sysConfig/fuelPrices, applications (read only) and CATEGORY_CONFIG. It adds no new delivery authority.
+- **Removed** (owner): the legacy DeliveryHub `deliveries` pipeline (it showed the PIN to the rider and accepted a wrong
+  PIN), insurance / referral / "8 PM payout" copy, the localStorage driver record, the browser claimable-orders list,
+  random distances and the hard-coded 88%. Tiers and bonuses are kept as "Not available yet".
+- **Honest state**: unknown shows "—" / "Not available yet", errors offer Retry, success only after the server's ok,
+  every server value is escaped, no PIN is ever displayed, and support and chat are in-app (no WhatsApp).
+- **Tests**:
+  - test-delivery-hub-browser 51/0, sabotage 8/8.
+  - test-delivery-completion-path 33/0, test-delivery-pin-unreachable 66/0, test-rider-navigation 25/0 and slice-B W8
+    are retargeted to the module with the same contracts; they still pass in legacy mode.
+  - Syntax gate clean; CSP pass.
+- **DB / rules / functions**: none changed. Expects `completeParcelWithPin` (sokoni-e3, not live) for parcel jobs.
+- **Breaking**: none for live data. Old in-page anchors such as `#myDeliveries` are replaced by `#/section`; email links
+  `#documents` / `#earnings` still work.
+
 ## [2026-10-01] - AdminOS: head scripts deferred, admin gate order unchanged — static 7/0, browser proof QUEUED (RAM), NOT deployed
 
 admin-os.html loaded six classic scripts in <head> (security, sokoni-cart, sokoni-permissions, sokoni-role-authority,

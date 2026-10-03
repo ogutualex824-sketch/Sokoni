@@ -50,17 +50,26 @@ const head = (t) => console.log('\n── ' + t + ' ──');
 /* Isolate the function body so assertions cannot be satisfied by unrelated code
    elsewhere in a 200 KB page — the whole point is what THIS path does. */
 const START = DRIVER.indexOf('window._ordDeliver = async function');
-const BODY = START > -1 ? DRIVER.slice(START, DRIVER.indexOf('\nwindow.', START + 10)) : '';
+/* 2026-10-03: the Delivery Hub rewrite moved rider completion out of driver.html into ONE function,
+   complete(j, btn), in sokoni-rider-hub.js, shared by the packageRequest AND the order surface. Same
+   contract, new location: HUB mode checks the identical properties against that function. */
+const HUB_SRC = fs.existsSync(path.join(ROOT, 'sokoni-rider-hub.js')) ? fs.readFileSync(path.join(ROOT, 'sokoni-rider-hub.js'), 'utf8') : '';
+const HUB = START < 0 && /<script type="module" src="sokoni-rider-hub\.js">/.test(DRIVER) && HUB_SRC.length > 0;
+const HSTART = HUB ? HUB_SRC.indexOf('async function complete (j, btn)') : -1;
+const BODY = START > -1 ? DRIVER.slice(START, DRIVER.indexOf('\nwindow.', START + 10))
+  : (HSTART > -1 ? HUB_SRC.slice(HSTART, HUB_SRC.indexOf('\nasync function ', HSTART + 10)) : '');
+const CALL_HELPER = HUB ? HUB_SRC.slice(HUB_SRC.indexOf('function callable (name)'), HUB_SRC.indexOf('async function fs ()')) : '';
+if (HUB) console.log('  (HUB mode: completion lives in sokoni-rider-hub.js complete())');
 
 (async () => {
 
   /* ══ 1 · the converted path ══ */
   head('1 · _ordDeliver goes through the authoritative callable');
-  ck('_ordDeliver still exists', START > -1);
+  ck('_ordDeliver still exists', START > -1 || HSTART > -1, HUB ? 'as complete() in sokoni-rider-hub.js' : undefined);
   ck('it obtains the order\'s deliveryRef', /deliveryRef/.test(BODY));
   ck('it calls completeDeliveryWithPin',
-     /httpsCallable\('completeDeliveryWithPin'\)/.test(BODY));
-  ck('...passing { deliveryRef, pin }', /\{\s*deliveryRef:\s*dRef,\s*pin:\s*otp\s*\}/.test(BODY));
+     HUB ? /'completeDeliveryWithPin'/.test(BODY) : /httpsCallable\('completeDeliveryWithPin'\)/.test(BODY));
+  ck('...passing { deliveryRef, pin }', HUB ? /\{\s*deliveryRef:\s*dRef,\s*pin\s*\}/.test(BODY) : /\{\s*deliveryRef:\s*dRef,\s*pin:\s*otp\s*\}/.test(BODY));
   ck('it no longer calls riderDelivered', !/riderDelivered/.test(BODY));
 
   /* ══ 2 · the client-trust shape is gone ══ */
@@ -89,24 +98,36 @@ const BODY = START > -1 ? DRIVER.slice(START, DRIVER.indexOf('\nwindow.', START 
   ck('...and the PIN check happens BEFORE the callable',
      BODY.indexOf('4,8') < BODY.indexOf('completeDeliveryWithPin'));
   ck('a missing callable is reported, not worked around',
-     /Cannot reach the server/.test(BODY));
+     HUB ? (/Cannot reach SOKONI/.test(CALL_HELPER) && /if \(!fn\) throw/.test(CALL_HELPER) && /await call\(/.test(BODY)) : /Cannot reach the server/.test(BODY));
 
   /* ══ 4 · the server decides ══ */
   head('4 · the server\'s verdict is what the rider sees');
-  ck('a non-ok response is treated as failure', /if\s*\(!_ok\)/.test(BODY));
+  const OKCHK = HUB ? 'if (!res || !res.ok)' : 'if (!_ok)';
+  ck('a non-ok response is treated as failure', BODY.indexOf(OKCHK) > -1);
   ck('the server error message is surfaced verbatim',
      /e\.message\s*\|\|\s*e\.code/.test(BODY) || /\(e && \(e\.message \|\| e\.code\)\)/.test(BODY));
   ck('a wrong PIN cannot produce a success toast',
-     BODY.indexOf('Delivered!') > BODY.indexOf('if (!_ok)'));
+     HUB ? BODY.indexOf('confirmed by SOKONI') > BODY.indexOf(OKCHK) : BODY.indexOf('Delivered!') > BODY.indexOf('if (!_ok)'));
   ck('an already-completed delivery is reported honestly',
      /alreadyDelivered/.test(BODY));
   ck('the local earnings mirror runs only after _ok',
-     BODY.indexOf('drv.earnings') > BODY.indexOf('if (!_ok)'));
+     HUB ? BODY.indexOf('loadLedger()') > BODY.indexOf(OKCHK) : BODY.indexOf('drv.earnings') > BODY.indexOf('if (!_ok)'),
+     HUB ? 'HUB: earnings re-read from the server ledger only after ok (no local mirror)' : undefined);
 
   /* ══ 5 · nothing else moved ══ */
   head('5 · the rest of the delivery surface is untouched');
   ck('buyerConfirmDelivery is still the buyer\'s fallback',
      /buyerConfirmDelivery/.test(fs.readFileSync(path.join(ROOT, 'functions', 'delivery-complete.js'), 'utf8')));
+  if (HUB) {
+    ck('the packageRequest surface still uses the callable',
+       /case 'in_transit':[\s\S]{0,600}data-act="complete"/.test(HUB_SRC) && (HUB_SRC.match(/'completeDeliveryWithPin'/g) || []).length === 1,
+       'HUB: one shared complete() for packageRequest + order; ' + (HUB_SRC.match(/'completeDeliveryWithPin'/g) || []).length + ' call site');
+    [['_ordAccept', 'riderAccept'], ['_ordPickedUp', 'riderPickedUp'], ['_ordInTransit', 'riderInTransit']].forEach(([f, m]) => {
+      ck(f + ' (en-route status, pays nobody) is unchanged', HUB_SRC.indexOf("ordStep(j, '" + m + "'") > -1, 'HUB: ordStep(j, ' + m + ')');
+    });
+    ck('riderInTransit still transitions through SokoniOrders',
+       HUB_SRC.indexOf('await SokoniOrders[fn](j.oId, uid())') > -1 && HUB_SRC.indexOf("ordStep(j, 'riderInTransit'") > -1);
+  } else {
   ck('the packageRequest surface still uses the callable',
      (DRIVER.match(/httpsCallable\('completeDeliveryWithPin'\)/g) || []).length === 2,
      (DRIVER.match(/httpsCallable\('completeDeliveryWithPin'\)/g) || []).length + ' call sites');
@@ -115,6 +136,7 @@ const BODY = START > -1 ? DRIVER.slice(START, DRIVER.indexOf('\nwindow.', START 
   });
   ck('riderInTransit still transitions through SokoniOrders',
      /SokoniOrders\.riderInTransit/.test(DRIVER));
+  }
 
   /* ══ 6 · legacy functions retained, but now uncalled ══ */
   head('6 · riderDelivered is retained and has no caller');

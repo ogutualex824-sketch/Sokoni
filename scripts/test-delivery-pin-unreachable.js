@@ -257,25 +257,34 @@ console.log('\n3. Rider client');
   ck('3.2 the client-side PIN comparison is gone',
     !/otp !== String\(ordSnap\.proofPin\)/.test(DRIVER),
     'a comparison in the rider\'s own browser was never an authorisation');
+  /* 2026-10-03: the Delivery Hub rewrite moved the rider client into sokoni-rider-hub.js (driver.html is now a
+     shell that loads it). HUB mode checks the SAME contracts against that module: boardList() is the board render,
+     pollBoard() maps 401/403/409, fromPkg() is the claimed-delivery view. */
+  const HUB_RAW = SRC('sokoni-rider-hub.js');
+  const HUB = !/function _renderNotice/.test(DRIVER) && /src="sokoni-rider-hub\.js"/.test(SRC('driver.html')) && HUB_RAW.length > 0;
+  const HUBC = HUB ? code(HUB_RAW) : '';
+  if (HUB) console.log('  (HUB mode: rider client lives in sokoni-rider-hub.js)');
+  if (HUB) ck('3.1h the hub renders no PIN from any payload', !/\.proofPin|\.deliveryPin\b/.test(HUBC));
   ck('3.3 the available-deliveries fetch sends a bearer token',
-    /Authorization.*Bearer/.test(DRIVER));
+    HUB ? /available-deliveries[\s\S]{0,200}Authorization: 'Bearer '/.test(HUBC) : /Authorization.*Bearer/.test(DRIVER));
   ck('3.4 a 401/403 is shown as a refusal, not as "no work available"',
-    /_renderNotice/.test(DRIVER));
+    HUB ? (/r\.status === 403\) S\.board = \{ state: 'refused'/.test(HUBC) && /b\.state === 'refused'\) return empty\('🔒', 'Your rider account is not cleared/.test(HUBC)) : /_renderNotice/.test(DRIVER));
   /* Scoped to the AVAILABLE-DELIVERIES board only. driver.html also renders
      CLAIMED deliveries elsewhere, and an assigned rider legitimately needs the
      street address and the customer's phone to complete the job — that render
      reads a different source and must keep them. Banning the fields file-wide
      would have "passed" by breaking real deliveries. */
-  const boardStart = DRIVER.indexOf('function _renderNotice');
-  const boardEnd = DRIVER.indexOf('function _start()', boardStart);
-  const BOARD = boardStart > 0 && boardEnd > boardStart ? DRIVER.slice(boardStart, boardEnd) : '';
+  const BSRC = HUB ? HUBC : DRIVER;
+  const boardStart = HUB ? BSRC.indexOf('function boardList (limit)') : DRIVER.indexOf('function _renderNotice');
+  const boardEnd = HUB ? BSRC.indexOf('const TABS = ', boardStart) : DRIVER.indexOf('function _start()', boardStart);
+  const BOARD = boardStart > 0 && boardEnd > boardStart ? BSRC.slice(boardStart, boardEnd) : '';
   ck('3.5a the available-deliveries board render was located', BOARD.length > 400);
   ck('3.5 the board renders the coarse area, not a street address',
     /d\.deliveryArea/.test(BOARD) && !/d\.deliveryAddress/.test(BOARD));
   ck('3.6 ...and no buyer phone or name on an unclaimed job',
     !/d\.buyerPhone/.test(BOARD) && !/d\.buyerName/.test(BOARD));
   ck('3.7 the CLAIMED-delivery view still has what an assigned rider needs',
-    /req\.deliveryAddress/.test(DRIVER) && /req\.buyerPhone|_buyerPhone/.test(DRIVER),
+    HUB ? (/drop: r\.deliveryAddress/.test(HUBC) && /phone: r\.buyerPhone/.test(HUBC)) : (/req\.deliveryAddress/.test(DRIVER) && /req\.buyerPhone|_buyerPhone/.test(DRIVER)),
     'the fix must not blind a rider who is actually on the job');
 }
 

@@ -37,27 +37,34 @@ const navFns = read('functions/navigation.js');
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/<!--[\s\S]*?-->/g, ' ');
 const dCode = strip(driver);
 const nCode = strip(riderNav);
+/* 2026-10-03: the Delivery Hub rewrite moved the rider cards into sokoni-rider-hub.js (driver.html is a shell).
+   HUB mode checks the SAME navigation contracts there: driveCard() renders the control, fromPkg()/fromOrder()
+   derive each card's destination from its own record via navOf(), the 'nav' click handler opens Maps. */
+const HUB = !/window\._drvNavigate/.test(dCode) && /src="sokoni-rider-hub\.js"/.test(driver);
+const hCode = HUB ? strip(read('sokoni-rider-hub.js')) : '';
+if (HUB) console.log('  (HUB mode: rider cards live in sokoni-rider-hub.js)');
 
 console.log('\nRIDER MAP / NAVIGATION — destination binding and authorization\n');
 
 head('1 · the accepted-delivery card offers navigation');
 ck('active delivery card renders a Navigate control',
-   /onclick="window\._drvNavigate\(/.test(dCode), 'window._drvNavigate handler');
+   HUB ? /data-act="nav" data-dest="\$\{esc\(nav \|\| ''\)\}"/.test(hCode) : /onclick="window\._drvNavigate\(/.test(dCode), HUB ? 'HUB: driveCard data-act="nav"' : 'window._drvNavigate handler');
 ck('the control is rendered inside the ACTIVE delivery branch (not always)',
-   /activeStatus\[req\.status\]/.test(dCode));
-ck('_drvNavigate is defined', /window\._drvNavigate\s*=\s*function/.test(dCode));
+   HUB ? /const jobs = \[S\.pkgJob, S\.orderJob\]\.filter\(Boolean\)[\s\S]{0,700}jobs\.map\(driveCard\)/.test(hCode) : /activeStatus\[req\.status\]/.test(dCode));
+ck('_drvNavigate is defined', HUB ? /case 'nav': \{ const d = b\.dataset\.dest;/.test(hCode) : /window\._drvNavigate\s*=\s*function/.test(dCode));
 
 head('2 · the destination comes from THAT order');
 /* Seller until picked up, buyer once in transit — read off the request object per card,
    never from a module-level variable that the previous card could have left behind. */
 ck('destination is read from the per-order request object',
-   /req\.deliveryCoords/.test(dCode) && /req\.pickupCoords/.test(dCode),
-   'req.deliveryCoords / req.pickupCoords');
+   HUB ? (/pickNav: navOf\(r\.pickupCoords, r\.pickupAddress\)/.test(hCode) && /dropNav: navOf\(r\.deliveryCoords, r\.deliveryAddress\)/.test(hCode))
+       : (/req\.deliveryCoords/.test(dCode) && /req\.pickupCoords/.test(dCode)),
+   HUB ? 'HUB: navOf(r.pickupCoords|r.deliveryCoords, address)' : 'req.deliveryCoords / req.pickupCoords');
 ck('stage decides seller vs buyer destination',
-   /req\.status === 'in_transit'[\s\S]{0,160}deliveryAddress/.test(dCode) ||
-   /in_transit[\s\S]{0,200}_dc\.lat/.test(dCode));
+   HUB ? /const nav = j\.status === 'in_transit' \|\| j\.status === 'picked_up' \? j\.dropNav : j\.pickNav;/.test(hCode)
+       : (/req\.status === 'in_transit'[\s\S]{0,160}deliveryAddress/.test(dCode) || /in_transit[\s\S]{0,200}_dc\.lat/.test(dCode)));
 ck('the destination is passed as an ARGUMENT, not read from shared state',
-   /_drvNavigate\('\$\{_navDest\}'\)/.test(dCode) || /_drvNavigate\(\s*encodedDest/.test(dCode));
+   HUB ? /const d = b\.dataset\.dest;/.test(hCode) : (/_drvNavigate\('\$\{_navDest\}'\)/.test(dCode) || /_drvNavigate\(\s*encodedDest/.test(dCode)));
 /* A destination held in a module-scope variable is exactly how delivery A's marker
    survives onto delivery B. */
 ck('no module-scope destination variable is reused across cards',
@@ -65,14 +72,16 @@ ck('no module-scope destination variable is reused across cards',
 
 head('3 · missing or invalid coordinates must not fabricate a location');
 ck('empty destination is refused rather than navigated',
-   /if \(!encodedDest\)[\s\S]{0,120}return/.test(dCode));
-ck('the refusal tells the rider why', /No destination location yet/.test(driver));
+   HUB ? /if \(!d\) \{ toast\('No destination location yet\.', true\); break; \}/.test(hCode) : /if \(!encodedDest\)[\s\S]{0,120}return/.test(dCode));
+ck('the refusal tells the rider why', /No destination location yet/.test(HUB ? hCode : driver));
 ck('no 0,0 fallback anywhere in the navigate path',
    !/destination=0,0|lat:\s*0\s*,\s*lng:\s*0/.test(dCode));
 /* Falling back to the saved ADDRESS is legitimate — the maps provider geocodes it — and
    is not a fabricated coordinate. */
 ck('address fallback is used instead of inventing coordinates',
-   /deliveryAddress \|\| ''/.test(dCode) || /pickupAddress \|\| ''/.test(dCode));
+   HUB ? /function navOf \(c, addr\) \{ if \(c && num\(c\.lat\) !== null && num\(c\.lng\) !== null\) return c\.lat \+ ',' \+ c\.lng; return addr \|\| ''; \}/.test(hCode)
+       : (/deliveryAddress \|\| ''/.test(dCode) || /pickupAddress \|\| ''/.test(dCode)));
+if (HUB) ck('no 0,0 fallback in the hub navigate path', !/destination=0,0|lat:\s*0\s*,\s*lng:\s*0/.test(hCode));
 
 head('4 · SECURITY — the rider cannot supply their own destination');
 ck('rider-nav.html reads NO destination from the URL',
@@ -92,16 +101,16 @@ head('5 · switching orders changes the destination');
 /* Each card computes _navDest in its own render scope from its own `req`, so the value
    cannot survive from a previous delivery. This is the structural guarantee behind
    "delivery A's marker must not remain on delivery B". */
-const navDestDecls = (dCode.match(/const _navDest\s*=/g) || []).length;
+const navDestDecls = HUB ? (hCode.match(/function driveCard \(j\) \{[\s\S]{0,120}const nav = /g) || []).length : (dCode.match(/const _navDest\s*=/g) || []).length;
 ck('_navDest is declared per render, with const (no cross-card leakage)',
-   navDestDecls >= 1 && !/^\s*var\s+_navDest/m.test(dCode), navDestDecls + ' declaration(s)');
-ck('_navRaw is derived per card from that card\'s req', /const _navRaw\s*=/.test(dCode));
+   navDestDecls >= 1 && !/^\s*var\s+_navDest/m.test(dCode), navDestDecls + ' declaration(s)' + (HUB ? ' (HUB: const nav inside driveCard)' : ''));
+ck('_navRaw is derived per card from that card\'s req', HUB ? /function fromPkg \(r\)[\s\S]{0,900}pickNav: navOf\(r\./.test(hCode) : /const _navRaw\s*=/.test(dCode));
 
 head('6 · the shell is not disturbed');
 /* Adding rider navigation must not reintroduce the double-shell: driver.html and
    rider-nav.html are standalone rider surfaces, not merchant-embedded modules. */
 ck('rider-nav.html does not mount the merchant shell', !/mshell|sokoni-merchant-routes/.test(nCode));
-ck('driver.html does not mount the merchant shell', !/mshell|sokoni-merchant-routes/.test(dCode));
+ck('driver.html does not mount the merchant shell', !/mshell|sokoni-merchant-routes/.test(dCode + hCode));
 ck('rider-nav.html declares a mobile viewport',
    /name="viewport"[^>]*width=device-width/.test(riderNav));
 ck('the navigate control does not open a second app window for in-app nav',
