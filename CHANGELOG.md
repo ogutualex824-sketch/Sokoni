@@ -1,3 +1,38 @@
+## [2026-10-03] - Copied-image placeholders for orders/receipts/carts while a product's media is held — NOT deployed
+
+**NOT DEPLOYED.** When moderation holds a product, its photo files go private and their download token is withdrawn
+until the product is restored. Orders, invoices, checkout summaries and the POS customer display COPY the image URL at
+sale or cart time, so those copies 404 while the product is held. Every renderer of a copied URL now shows the neutral
+placeholder `assets/default-product.png` (the `cart.js:153` pattern, `this.onerror=null` loop guard included). It shows
+no broken-image icon, hides nothing, and adds no text.
+
+- **Summary:**
+  - **checkout.html** (order summary item): the existing fallback gains `this.onerror=null`, so a failing placeholder
+    cannot loop.
+  - **customer-display.html** (POS customer-facing display): hide-on-error replaced with the placeholder. The emoji
+    path for an item with no image is unchanged.
+  - **invoice.html** (invoice item row): hide-on-error replaced with the placeholder.
+  - **cart.js:153:** already correct, unchanged.
+- **Security (invoice.html):**
+  - The item image was interpolated into `innerHTML` unescaped, and order items are client-supplied. That made it an
+    attribute-injection (stored XSS) vector.
+  - It now uses checkout's `safeImg` scheme guard (`https?://`, `assets/`, `data:image/`, otherwise the placeholder)
+    plus entity escaping.
+  - The item name and category in the same row are now escaped as well.
+- **Files:**
+  - Changed: checkout.html, customer-display.html, invoice.html.
+  - New: scripts/test-copied-image-placeholders.js (static), scripts/test-copied-image-placeholders-browser.js
+    (browser cert, QUEUED, not run).
+- **Database / API changes:** none.
+- **Breaking changes:** none.
+- **Tests:**
+  - Static suite: 18/18 on this tree; 5 FAIL against `541736b` copies (positive control).
+  - Static suite negative control: stripping a fallback fails and names the file:line.
+  - Static suite XSS row: `x" onerror="window.__pwn=1` creates no attribute.
+  - Syntax gate passed.
+- **Follow-up:** `assets/default-product.png` is about 1.0 MB, which is heavy for a fallback. Replacing it with a small
+  asset is a separate slice.
+
 ## [2026-10-03] - REVIEW + UNBOXING as REPORT targets (hosting) — NOT deployed
 
 **NOT DEPLOYED.** Review and unboxing reviews are now report targets. The functions half goes through sokoni-5b's
