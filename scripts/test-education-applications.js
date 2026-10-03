@@ -137,6 +137,19 @@ const provOf = () => Object.values(S().providers || {})[0] || null;
   err = null; try { await AD.run({ auth: { uid: ADMIN, token: { admin: true } }, data: { applicationId: 'APPE1', decision: 'request_info', reason: 'Send your MoE registration number' } }); } catch (x) { err = x; }
   ck('D-2', !err && S().applications.APPE1.status === 'info_requested', 'CONTROL: the reviewer can still REQUEST INFO (the change-request path)', err && err.message);
 
+  /* ONE applicant-type authority (owner 2026-10-03): Education and Marketing are entries of one list, never two copies */
+  const REG = LC.APPLICANT_TYPES || [];
+  ck('U-1', REG.map((x) => x.key).join() === 'education,marketing' && typeof LC.applicantTypeOf === 'function', 'one registry holds every applicant type (education, marketing)', REG.map((x) => x.key));
+  const eduT = LC.applicantTypeOf ? LC.applicantTypeOf(mk({ category: 'school' })) : null;
+  const mktT = LC.applicantTypeOf ? LC.applicantTypeOf({ hub: 'marketing', applicationType: 'marketing', marketingType: 'agency', category: 'school' }) : null;
+  ck('U-2', eduT && eduT.T.key === 'education' && eduT.m.type === 'institution' && mktT && mktT.T.key === 'education',
+    'the FIRST matching type wins deterministically — an application can never be claimed by two types (a marketing app carrying an education category id stays education)', [eduT && eduT.m, mktT && mktT.T.key]);
+  const mkt2 = LC.applicantTypeOf ? LC.applicantTypeOf({ hub: 'marketing', applicationType: 'marketing', marketingType: 'agency', category: 'seo' }) : null;
+  ck('U-3', mkt2 && mkt2.T.key === 'marketing' && mkt2.m.type === 'agency' && LC.applicantTypeOf({ hub: 'service', category: 'plumbing' }) === null, 'a marketing app resolves to marketing; an untyped hub resolves to none (normal role dispatch)');
+  const src = require('fs').readFileSync(path.join(FN, 'application-lifecycle.js'), 'utf8');
+  ck('U-4', !/educationTypeOf\(snap\.data\(\)\)/.test(src) && !/_mktRetract/.test(src) && !/app\.hub === 'marketing' && app\.applicationType === 'marketing'\) \{/.test(src),
+    'no per-hub branches remain in applyDecision / applicationDecide — both consult the registry');
+
   /* controls: non-education unchanged */
   DB = fakeDb(seed(mk({ category: 'plumbing', hub: 'service', details: {} })));
   r = await LC.applyDecision('APPE1', mk({ category: 'plumbing', hub: 'service', details: {} }), { decidedBy: ADMIN });

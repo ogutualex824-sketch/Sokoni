@@ -15,8 +15,9 @@ if (process.env.SABOTAGE) {
   const M = [
     ['D2', 'application-lifecycle.js', 'if (outside.length) throw', 'if (false) throw'],
     ['D4', 'application-lifecycle.js', 'marketingCategories: approvedCats,', 'marketingCategories: requested,'],
-    ['R1', 'application-lifecycle.js', "} else if (app.hub === 'marketing' && app.applicationType === 'marketing') {", "} else if (false) {"],
-    ['R2', 'application-lifecycle.js', "const _mktRetract = app.hub === 'marketing' && app.applicationType === 'marketing' && !approved;", 'const _mktRetract = false;'],
+    /* R1 / R2 anchors follow the ONE applicant-type registry (5b, 2026-10-03): the marketing entry's projection + role rule */
+    ['R1', 'application-lifecycle.js', "project: () => (db, app, uid, approved, status) => projectMarketing(db, app, uid, approved, status),", "project: () => null,"],
+    ['R2', 'application-lifecycle.js', "grantsRole: (m, approved) => approved,", 'grantsRole: () => true,'],
     ['L1', 'marketing-hub.js', 'uid: id, name: _s(p.name, 160),', 'uid: id, phone: p.phone, name: _s(p.name, 160),'],
     ['A2', 'shared/marketing-taxonomy.js', "specialist: { label: 'Specialist (one service)', minCategories: 1, maxCategories: 1 }", "specialist: { label: 'Specialist (one service)', minCategories: 1, maxCategories: 12 }"],
     ['A6', 'marketing-hub.js', 'if (c && LIVE.indexOf(st) >= 0) throw', 'if (false) throw'],

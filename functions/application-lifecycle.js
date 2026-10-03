@@ -1228,6 +1228,68 @@ async function grantAccountRole(db, uid, role, approved) {
   return key;
 }
 
+/* ══ THE ONE APPLICANT-TYPE AUTHORITY (owner 2026-10-03: "one server-owned application capability — Application →
+   applicant type/category → requirements → verification → approval → capabilities"; Education and Marketing are TYPES
+   of it, never two competing copies). Each entry answers, from SERVER-read application fields only:
+     match(app)            → the applicant type, or null (not this hub)
+     role(m)               → the role this type provisions, or null = keep the resolved role
+     missing(app, m)       → the declared requirements still absent (approval is refused until empty)
+     decide(app, data)     → extra fields applicationDecide records with an APPROVE (e.g. the categories approved), or throws
+     project               → the type's own projection, or null = the normal role dispatch
+     grantsRole(m, ok)     → whether the account role / claim is granted or revoked by this decision
+     after(db, receipt, m) → what the type stamps once projected
+     stamp(m)              → fields recorded on the application
+     incompleteCode        → the refusal code applicationDecide returns
+   applyDecision and applicationDecide consult ONLY this list; a new hub adds an entry, not a branch. */
+const APPLICANT_TYPES = Object.freeze([
+  Object.freeze({
+    key: 'education',
+    match: (app) => { const t = educationTypeOf(app); return t ? { type: t } : null; },
+    role: (m) => (m.type === 'enterprise' ? 'education_enterprise' : 'provider'),
+    missing: (app, m) => educationMissing(app, m.type),
+    decide: () => ({}),
+    project: (m) => (m.type === 'enterprise' ? (db, app, uid, approved) => projectEducationEnterprise(db, app, uid, approved) : null),
+    grantsRole: (m) => m.type !== 'enterprise',
+    after: async (db, receipt, m) => {
+      if (m.type === 'enterprise') return;
+      for (const w of receipt.writes) {
+        if (w && w.collection === 'providers' && w.id) {
+          await db.collection('providers').doc(String(w.id)).set({ education: { type: m.type, setAt: _ts() } }, { merge: true });
+        }
+      }
+    },
+    stamp: (m) => ({ educationType: m.type }),
+    incompleteCode: 'EDUCATION_APPLICATION_INCOMPLETE',
+  }),
+  Object.freeze({
+    key: 'marketing',
+    match: (app) => (app && app.hub === 'marketing' && app.applicationType === 'marketing' ? { type: app.marketingType || 'individual' } : null),
+    role: () => null,
+    missing: () => [],
+    /* Marketing Hub MK2 — approval activates ONLY the categories the reviewer approved (a subset of the request). */
+    decide: (app, data) => {
+      const requested = MKT.normalizeCategories(app.requestedCategories, 30);
+      const asked = (data || {}).approvedCategories;
+      const chosen = MKT.normalizeCategories(asked === undefined ? app.marketingApprovedCategories : asked, 30);
+      const outside = chosen.filter((c) => requested.indexOf(c) < 0);
+      if (outside.length) throw new HttpsError('invalid-argument', 'approvedCategories must be a subset of the requested categories.', { code: 'MKT_CATEGORY_NOT_REQUESTED', outside });
+      if (!chosen.length) throw new HttpsError('invalid-argument', 'Choose at least one category to approve.', { code: 'MKT_NO_CATEGORY' });
+      return { marketingApprovedCategories: chosen, marketingDeclinedCategories: requested.filter((c) => chosen.indexOf(c) < 0) };
+    },
+    project: () => (db, app, uid, approved, status) => projectMarketing(db, app, uid, approved, status),
+    /* A REJECTED/SUSPENDED marketing application never strips the provider claim — the same account may be an
+       approved provider for other services; only the marketing block was retracted. */
+    grantsRole: (m, approved) => approved,
+    after: async () => {},
+    stamp: () => ({}),
+    incompleteCode: 'MARKETING_APPLICATION_INCOMPLETE',
+  }),
+]);
+function applicantTypeOf(app) {
+  for (const T of APPLICANT_TYPES) { const m = T.match(app || {}); if (m) return { T, m }; }
+  return null;
+}
+
 /**
  * Apply a decision. Returns a receipt describing exactly what was written —
  * the dashboards show it, and `applicationReconcile` returns it so a repair run
@@ -1243,13 +1305,15 @@ async function applyDecision(appId, app, opts = {}) {
   const _resolved = resolveRole(app);
   /* A category-decided seller (Gate 1) also outranks a stored `app.role`: applications already in the queue were
      stamped `provider` at intake, before this rule existed, and must be decided by it. */
-  const eduType = educationTypeOf(app);
-  /* EDUCATION E1: an education application's role comes from its TYPE — teacher / institution are providers; an
-     enterprise is a buyer record with no account role. A declared requestedRole cannot move it elsewhere. */
-  const role = eduType ? (eduType === 'enterprise' ? 'education_enterprise' : 'provider')
-    : _resolved.by === 'explicit' || _resolved.by === 'explicit-alias' || /\+category$/.test(_resolved.by)
+  /* THE applicant-type authority: a typed application's role comes from its TYPE (e.g. Education teacher / institution
+     → provider, enterprise → a buyer record with no account role); a declared requestedRole cannot move it elsewhere. */
+  const AT = applicantTypeOf(app);
+  const eduType = AT && AT.T.key === 'education' ? AT.m.type : null;
+  const typedRole = AT ? AT.T.role(AT.m) : null;
+  const role = typedRole
+    || (_resolved.by === 'explicit' || _resolved.by === 'explicit-alias' || /\+category$/.test(_resolved.by)
       ? _resolved.role
-      : (app.role || _resolved.role);
+      : (app.role || _resolved.role));
   const uid = app.uid;
 
   if (!uid) {
@@ -1296,33 +1360,33 @@ async function applyDecision(appId, app, opts = {}) {
     return { ok: false, reason: 'unknown_role', appId, requestedRole: bad };
   }
 
-  if (eduType && approved) {
-    const missing = educationMissing(app, eduType);
+  if (AT && approved) {
+    const missing = AT.T.missing(app, AT.m);
     if (missing.length) {
       await db.collection('applications').doc(appId).set({
-        educationType: eduType,
+        ...AT.T.stamp(AT.m),
+        applicantType: AT.T.key + ':' + AT.m.type,
         projectionStatus: 'blocked_incomplete',
         projectionError: 'Approval needs: ' + missing.join('; ') + '. Nothing was provisioned — request the information instead.',
         missing,
         decisionAppliedFor: status,
         decisionAppliedAt: _ts(),
       }, { merge: true });
-      logger.warn('[appLifecycle] education approval incomplete — nothing provisioned', { appId, eduType, missing });
-      return { ok: false, reason: 'incomplete', appId, educationType: eduType, missing };
+      logger.warn('[appLifecycle] approval incomplete — nothing provisioned', { appId, applicantType: AT.T.key, type: AT.m.type, missing });
+      return { ok: false, reason: 'incomplete', appId, applicantType: AT.T.key, ...(eduType ? { educationType: eduType } : {}), missing };
     }
   }
 
   const receipt = { appId, uid, role, status, writes: [] };
 
   try {
-    if (role === 'education_enterprise') {
-      receipt.writes.push(await projectEducationEnterprise(db, app, uid, approved));
+    const typedProject = AT ? AT.T.project(AT.m) : null;
+    if (typedProject) {
+      receipt.writes.push(await typedProject(db, app, uid, approved, status));
     } else if (role === 'driver' || role === 'rider') {
       /* Both spellings reach the same projection: `rider` is the Phase 1
          declaration, `driver` the legacy application's word. */
       receipt.writes.push(await projectDriver(db, app, uid, approved));
-    } else if (app.hub === 'marketing' && app.applicationType === 'marketing') {
-      receipt.writes.push(await projectMarketing(db, app, uid, approved, status));
     } else if (role === 'legal') {
       /* legalProviders (authority) + lawyers (search projection), one commit.
          Returns TWO receipt entries, so push them individually. */
@@ -1343,20 +1407,14 @@ async function applyDecision(appId, app, opts = {}) {
       receipt.writes.push(await projectProvider(db, app, uid, approved));
     }
 
-    /* EDUCATION E1: a teacher / institution provider record carries its type (the E2 dashboards read it). */
-    if (eduType && eduType !== 'enterprise') {
-      for (const w of receipt.writes) {
-        if (w && w.collection === 'providers' && w.id) {
-          await db.collection('providers').doc(String(w.id)).set({ education: { type: eduType, setAt: _ts() } }, { merge: true });
-        }
-      }
-    }
+    /* the type stamps what it owns once projected (e.g. a teacher / institution provider record carries its type) */
+    if (AT) await AT.T.after(db, receipt, AT.m);
 
     /* A pending application must not grant anything; only a decision does. An enterprise BUYER gets no account role. */
     /* A REJECTED/SUSPENDED marketing application never strips the provider claim — the same account may be an
        approved provider for other services; only the marketing block was retracted above. */
-    const _mktRetract = app.hub === 'marketing' && app.applicationType === 'marketing' && !approved;
-    if (role !== 'education_enterprise' && !_mktRetract && (status === 'approved' || status === 'rejected' || status === 'suspended')) {
+    const typeGrantsRole = AT ? AT.T.grantsRole(AT.m, approved) : true;
+    if (typeGrantsRole && (status === 'approved' || status === 'rejected' || status === 'suspended')) {
       receipt.roleKey = await grantAccountRole(db, uid, role, approved);
     }
 
@@ -1371,7 +1429,7 @@ async function applyDecision(appId, app, opts = {}) {
          `app.role` (approval-remediation.decisionValidity), so an application filed `provider` at intake and decided
          as a seller (Gate 1) must say so, or its own approval reads as approving another role. */
       ...(role && app.role !== role ? { role, roleResolvedBy: eduType ? 'education:' + eduType : _resolved.by } : {}),
-      ...(eduType ? { educationType: eduType, missing: FieldValue.delete() } : {}),
+      ...(AT ? Object.assign({ applicantType: AT.T.key + ':' + AT.m.type, missing: FieldValue.delete() }, AT.T.stamp(AT.m)) : {}),
       ...(opts.decidedBy ? { decidedBy: opts.decidedBy } : {}),
     }, { merge: true });
 
@@ -1641,12 +1699,12 @@ exports.applicationDecide = onCall(
 
     /* EDUCATION E1: approving an education application that lacks the documents its type requires is refused before
        anything is written — the reviewer uses "request info" instead. */
-    if (decision === 'approve') {
-      const eduType = educationTypeOf(snap.data());
-      const missing = eduType ? educationMissing(snap.data(), eduType) : [];
+    const AT0 = applicantTypeOf(snap.data());
+    if (decision === 'approve' && AT0) {
+      const missing = AT0.T.missing(snap.data(), AT0.m);
       if (missing.length) {
         throw new HttpsError('failed-precondition', 'This application cannot be approved yet. Missing: ' + missing.join('; ') + '.',
-          { reason: 'EDUCATION_APPLICATION_INCOMPLETE', educationType: eduType, missing });
+          Object.assign({ reason: AT0.T.incompleteCode, applicantType: AT0.T.key, missing }, AT0.T.key === 'education' ? { educationType: AT0.m.type } : {}));
       }
     }
 
@@ -1654,19 +1712,8 @@ exports.applicationDecide = onCall(
     const status = STATUS[decision];
     const actor = req.auth.uid;
 
-    /* Marketing Hub MK2 — approval activates ONLY the categories the reviewer approved (a subset of the request). */
-    const _app0 = snap.data() || {};
-    const _mkt = {};
-    if (_app0.hub === 'marketing' && _app0.applicationType === 'marketing' && decision === 'approve') {
-      const requested = MKT.normalizeCategories(_app0.requestedCategories, 30);
-      const asked = (req.data || {}).approvedCategories;
-      const chosen = MKT.normalizeCategories(asked === undefined ? _app0.marketingApprovedCategories : asked, 30);
-      const outside = chosen.filter((c) => requested.indexOf(c) < 0);
-      if (outside.length) throw new HttpsError('invalid-argument', 'approvedCategories must be a subset of the requested categories.', { code: 'MKT_CATEGORY_NOT_REQUESTED', outside });
-      if (!chosen.length) throw new HttpsError('invalid-argument', 'Choose at least one category to approve.', { code: 'MKT_NO_CATEGORY' });
-      _mkt.marketingApprovedCategories = chosen;
-      _mkt.marketingDeclinedCategories = requested.filter((c) => chosen.indexOf(c) < 0);
-    }
+    /* the type's own decision fields (e.g. Marketing: only the categories the reviewer approved) */
+    const _mkt = decision === 'approve' && AT0 ? AT0.T.decide(snap.data() || {}, req.data || {}) : {};
 
     await ref.set({
       ..._mkt,
@@ -1834,5 +1881,5 @@ exports._internal = {
   buildIntakePatch, applyDecision, projectProvider, projectDriver, projectMarketing,
   projectLegal, projectRoleProfile, LEGAL_SPECS, ROLE_PROFILES, DELEGATED_ROLES, projectSeller, MERCHANT_CATEGORIES,
   INTAKE_VERSION, KE_COUNTIES,
-  EDUCATION_TYPES, EDUCATION_REQUIRED, educationTypeOf, educationMissing, projectEducationEnterprise,
+  EDUCATION_TYPES, EDUCATION_REQUIRED, educationTypeOf, educationMissing, projectEducationEnterprise, APPLICANT_TYPES, applicantTypeOf,
 };
