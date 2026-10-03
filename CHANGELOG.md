@@ -1,3 +1,25 @@
+## 2026-10-04 — `invoice` payment purpose + invoice receipts for the canonical invoice (H15; for sokoni-f3 / sokoni-5b) (NOT deployed)
+
+- **What:**
+  - createPaymentIntent can mint an intent for a canonical invoice (`purpose: 'invoice'`, `invoiceId`).
+  - The amount is read on the SERVER from invoices/{id}.balanceCents and must equal totalCents − paidCents; a client amount is ignored.
+  - Payable: modelVersion 1 + source, status issued | partially_paid, KES only, **source 'manual' only**. order / booking / quote invoices pay through their own purpose (paying the invoice too would double-charge); commission / subscription invoices are platform bills.
+  - Metadata carries invoiceId, invoiceNumber, payee (shop owner, business wallet) and a commission snapshot.
+  - ONE open intent per balance: ref INV-<id>-<balanceCents>. The same payer replays; another payer is refused while it is open; expired / cancelled / stale attempts are stepped past (-r1..-r9); a paid one means "just received".
+  - `invoice` is self-settling: no generic seller credit at payment time; 5b allocates via invoice-allocation.applyVerifiedPayment.
+  - transaction-receipts gains kind `invoice`: ONE receipt per verified PAYMENT (sourceId = payment ref, links.invoiceId). Partial payments get their own receipts. This deviates from the requested invoice_<invoiceId>, which would swallow a second partial payment as a replay.
+  - shared/invoice-model.js is carried byte-identical from f3 91ad504.
+- **Owner decisions needed — the purpose REFUSES until they are made:**
+  1. **Platform fee for invoice payments:** no `merchant_invoice` rate exists, so the engine refuses (category_unpriced) and NO intent is minted. There is no default rate.
+  2. **Payer:** canonical invoices name the customer only by name / email / phone (no clientUid). Today any signed-in payer except the issuing merchant may pay; when clientUid is set, only that customer.
+  3. **Order / booking / quote / commission invoices:** stay unpayable here unless decided otherwise.
+- **Files:** functions/payment-purposes.js, functions/shared/self-settling-purposes.js, functions/transaction-receipts.js, functions/shared/invoice-model.js (new, verbatim), scripts/test-invoice-purpose.js (new).
+- **API:** createPaymentIntent purpose `invoice`; receipt kind `invoice`; receipt links accept invoiceId. **DB:** paymentIntents INV-* refs; transactionReceipts invoice_*. **Security:** server-priced, payer and issuer checks, fail-closed fee.
+- **Tests:**
+  - test-invoice-purpose 11/0, with 10/10 mutants killed: status, consistency, source, named customer, self-pay, default rate, payer lock, expired step, self-settling, receipt kind.
+  - Regressions green: payment-intents 12/0, rental 15/0, rfq 9/0, transaction-receipts 22/0, receipt-contract 132/0, documents 49/0, number-authority 58/0, convergence 19/0.
+- **Pre-existing, NOT from this change:** verify-receipt-naming ratchet fails on this branch at HEAD (112 vs baseline 109; this diff adds 0 uses). Flagged for triage.
+
 ## 2026-10-04 — r2 deploy guard: explicit ALLOW-list + Users security unit refused (b2) (NOT deployed)
 
 - **Why (b2 live comparison):** r2 lacks live-only behaviour in functions no deny-list named.

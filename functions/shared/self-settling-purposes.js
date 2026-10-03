@@ -19,7 +19,8 @@
 /* fitness_membership (2026-10-03): HELD by membership-settlement, released monthly after first attendance — never a seller credit. */
 /* vehicle_boost (2026-10-03): SOKONI revenue, fulfilled by vehicle-boosts.fulfilVehicleBoost — never a seller credit. */
 /* rental_booking (2026-10-03): HELD until the shop completes the rental; deposit refundable, commission on rent only — never a payment-time seller credit. */
-const SELF_SETTLING_PURPOSES = Object.freeze(new Set(['film_access', 'event_ticket', 'venue_booking', 'fitness_membership', 'vehicle_boost', 'b2b_lead_invoice', 'rfq_quote', 'rental_booking']));
+/* invoice (2026-10-04): allocated by invoice-allocation.applyVerifiedPayment from the verified webhook (5b) and settled through the one settlement path with the intent's snapshot — never a payment-time seller credit. */
+const SELF_SETTLING_PURPOSES = Object.freeze(new Set(['film_access', 'event_ticket', 'venue_booking', 'fitness_membership', 'vehicle_boost', 'b2b_lead_invoice', 'rfq_quote', 'rental_booking', 'invoice']));
 
 function isSelfSettling(purposeOrType) {
   return SELF_SETTLING_PURPOSES.has(String(purposeOrType || ''));
