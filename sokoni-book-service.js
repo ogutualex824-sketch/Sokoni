@@ -380,6 +380,7 @@
         title(st.tone === 'warn' ? 'Booking update' : 'Booking confirmed');
         body(`<div class="sbs-state">${st.label}</div>
           <div class="sbs-note" style="text-align:center">${esc(_ctx.serviceName || '')}${b.date ? ' · ' + esc(b.date) + ' ' + esc(b.startTime || '') : ''}</div>
+          ${_ctx.bookingId && b.status !== 'cancelled' ? '<a class="sbs-btn" style="display:block;text-align:center;text-decoration:none;background:#1f1f1f;color:#eee;margin-bottom:8px" href="messages.html?tx=service_booking&txId=' + encodeURIComponent(_ctx.bookingId) + '">💬 Message the provider</a>' : ''}
           <button class="sbs-btn" onclick="SokoniBookService.close()">Done</button>`);
         if (b.paymentStatus === 'paid_held' || b.paymentStatus === 'settled' || b.status === 'cancelled') sessionStorage.removeItem(K);
       }

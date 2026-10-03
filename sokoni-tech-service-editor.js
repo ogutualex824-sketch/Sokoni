@@ -110,7 +110,8 @@
       + '<div style="font-size:13px;opacity:.8;margin-top:4px">' + esc(dev || 'Device not stated') + (rd.repairType ? ' — ' + esc(REPAIR_TYPES[rd.repairType] || rd.repairType) : '') + '</div>'
       + (rd.problem ? '<div style="font-size:13px;margin-top:4px">“' + esc(rd.problem) + '”</div>' : '')
       + '<div style="font-size:12px;opacity:.65;margin-top:4px">' + esc(b.customerName || 'Customer') + ' · ' + esc(when(b)) + (rd.serviceMode ? ' · ' + esc(MODE_LABEL[rd.serviceMode] || rd.serviceMode) : '') + '</div>'
-      + '<div style="margin-top:8px"><button type="button" class="btn btn-s" data-tech-repair-open="' + esc(b.id) + '">Manage in Bookings</button></div></div>';
+      + '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-s" data-tech-repair-open="' + esc(b.id) + '">Manage in Bookings</button>'
+      + '<button type="button" class="btn btn-s" data-tech-repair-msg="' + esc(b.id) + '">💬 Message customer</button></div></div>';
   }
   function loadRepairs() {
     var box = document.getElementById('rpList');
@@ -134,6 +135,13 @@
   if (typeof document !== 'undefined' && document.addEventListener) {
     document.addEventListener('sokoni:workspace', function (e) { onWorkspace(e && e.detail); });
     document.addEventListener('click', function (e) {
+      var mb = e.target && e.target.closest ? e.target.closest('[data-tech-repair-msg]') : null;
+      if (mb) {   /* Tech slice 4L — the booking's own conversation; the server checks the provider is its party */
+        var bid = mb.getAttribute('data-tech-repair-msg');
+        if (G.SokoniInbox && typeof G.SokoniInbox.openForTransaction === 'function') G.SokoniInbox.openForTransaction('service_booking', bid);
+        else G.location.href = 'messages.html?tx=service_booking&txId=' + encodeURIComponent(bid);
+        return;
+      }
       var b = e.target && e.target.closest ? e.target.closest('[data-tech-repair-open]') : null;
       if (!b) return;
       var id = b.getAttribute('data-tech-repair-open');

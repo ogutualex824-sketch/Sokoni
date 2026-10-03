@@ -93,6 +93,20 @@ const SRC = read('sokoni-tech-service-editor.js');
     'booking flow: the device step sends repairDetails with the booking request, never an amount');
 }
 
+/* L — slice 4L: conversations open from the booking (transaction), never from a bare uid */
+{
+  const mh = read('messages.html'), ib = read('sokoni-inbox.js'), bs = read('sokoni-book-service.js');
+  const { api } = loadEditor(SRC);
+  const row = api._internal.repairRow({ id: 'bk9', service: 'Screen', status: 'pending', repairDetails: { deviceType: 'phone' } });
+  const has = (src, str) => src.indexOf(str) > -1;
+  ck('L1', has(mh, 'function _openFromTransaction(){') && has(mh, 'SokoniChat.createConversation(t,id,null,{})') && has(mh, 'if(!_openFromTransaction())_noticeFromUrl();')
+    && has(mh, "['service_booking','order'].indexOf(t)===-1"),
+    'messages.html opens ?tx=service_booking&txId= through the server (createConversation), allow-listed types only');
+  ck('L2', has(ib, 'SokoniInbox.openForTransaction = function(type, id)') && has(row, 'data-tech-repair-msg="bk9"')
+    && has(bs, "messages.html?tx=service_booking&txId=' + encodeURIComponent(_ctx.bookingId)"),
+    'Repairs "Message customer" and the booking view "Message the provider" open the BOOKING conversation');
+}
+
 /* T10 — vocabulary parity with the server authority */
 {
   const serverFile = path.join(TECH_FN, 'functions', 'shared', 'tech-service-profile.js');

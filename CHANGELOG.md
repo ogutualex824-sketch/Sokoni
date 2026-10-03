@@ -1,3 +1,23 @@
+## [2026-10-03] - Tech Hub slice 4L (hosting): message the other party of a booking, inside SOKONI — hosting, NOT deployed
+
+- messages.html:
+  - `?tx=service_booking|order&txId=…` opens that transaction's conversation through the server (createConversation via
+    messagesDispatch, which derives the parties and refuses a non-party).
+  - It used to only handle `?with=<uid>`, where it showed "Direct messaging isn't available yet". That notice remains
+    for the bare-uid entry, because conversations are transaction-bound by design (no off-platform hand-offs).
+- sokoni-inbox.js: `SokoniInbox.openForTransaction(type, id)` (allow-listed types).
+- Repairs rows: "💬 Message customer". Booking status view (sokoni-book-service.js): "💬 Message the provider". Both
+  open the BOOKING's conversation.
+- Server half: feat/tech-taxonomy-on-13f74f3 @ 95f2ef6 (service_booking → providerBookings + customerUid; legacy
+  `bookings` kept).
+- Still open:
+  - "Message" on a directory card BEFORE any booking has no transaction to hang on. It becomes an enquiry / lead
+    conversation in slice 4F.
+  - Until then it lands on the honest notice above.
+- Tests: test-tech-service-editor 10/0 (L1, L2), test-tech-directory 50/0, role-authority 155/0, customer-nav 62/0,
+  admin-nav-context 3/0, mv2-2a-supply 15/0. test-messages-premium 6/6 failing, identical with the committed
+  messages.html (pre-existing browser-fixture failures).
+
 ## [2026-10-03] - Tech Hub slice 4b (hosting): device-repair service editor, Repairs view, booking device step — hosting, NOT deployed
 
 - **sokoni-tech-service-editor.js** (new):

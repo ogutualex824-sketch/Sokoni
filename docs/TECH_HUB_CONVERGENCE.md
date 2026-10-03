@@ -99,7 +99,7 @@ category stamp (sokoni-5b) is required for any of this to reach `providers/{uid}
 | Provider sees repair requests | Repairs panel = providerGetBookings with repairDetails | built (fake-DOM test); browser UNRUN |
 | Confirm / complete / settle | existing Bookings + booking PIN + `_disburseHeldFunds` | existing (not re-proven here) |
 | Diagnostics module | — | NOT_IMPLEMENTED (no screen) |
-| Message the customer about a repair | messages.js maps service_booking → `bookings` (wrong; engine writes providerBookings); messages.html ignores ctx | **BROKEN — slice 4L** |
+| Message the customer / provider about a booking | messages.js service_booking → providerBookings (+ legacy `bookings`), customerUid party; messages.html `?tx=&txId=` | **fixed 4L** (server 95f2ef6, hosting); pre-booking "Message" → 4F enquiry |
 
 ## Category matrix (honest)
 

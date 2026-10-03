@@ -231,7 +231,7 @@ function _boot(){
     if(!user){ UID=null; _teardown(); _setList('unauth'); return; }
     UID=user.uid;
     _subscribe();
-    _noticeFromUrl();
+    if(!_openFromTransaction())_noticeFromUrl();
     var want=_params.get('id');
     if(want)_openThread(want);
   });
@@ -377,6 +377,25 @@ function _noticeFromUrl(){
   n.innerHTML='<b>Direct messaging isn’t available yet.</b> Conversations'+(name?' with '+esc(name):'')+
     ' start from an order, a booking or an enquiry with them — once one exists it appears here.';
   n.hidden=false;
+}
+
+/* ── Transaction entry: messages.html?tx=service_booking&txId=… (SokoniInbox.openForTransaction, Tech slice 4L).
+   The server opens (or returns) the conversation for that transaction and refuses anyone who is not a party. ── */
+function _openFromTransaction(){
+  var t=_params.get('tx'), id=_params.get('txId');
+  if(!t||!id)return false;
+  var n=$('notice');
+  if(['service_booking','order'].indexOf(t)===-1){ n.innerHTML='<b>This conversation can’t be opened from here.</b>'; n.hidden=false; return true; }
+  n.innerHTML='Opening the conversation…'; n.hidden=false;
+  SokoniChat.createConversation(t,id,null,{}).then(function(r){
+    n.hidden=true;
+    if(r&&r.conversationId)_openThread(r.conversationId);
+  }).catch(function(e){
+    var c=e&&e.code||'';
+    n.innerHTML='<b>'+(c.indexOf('permission-denied')>-1?'You are not part of this booking.':c.indexOf('not-found')>-1?'That booking could not be found.':'The conversation could not be opened just now — please try again.')+'</b>';
+    n.hidden=false;
+  });
+  return true;
 }
 
 /* ── THREAD PANE — the same engine calls as chat.html ── */
