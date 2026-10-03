@@ -74,6 +74,17 @@ const SF = read('sokoni-food.js');
 const FOOD_VISIBLE = FOOD.replace(/<!--[\s\S]*?-->/g, '');
 ck('FC-8', /Your first Sokoni Food order is coming soon/.test(FOOD_VISIBLE) && !/\d+\s*%\s*OFF/i.test(FOOD_VISIBLE) && !/earning points/i.test(FOOD_VISIBLE),
   'the first-order line is honest: coming soon, no % discount, no points promise yet');
-ck('FC-9', !/WELCOME50|50% OFF first/.test(SF), 'the WELCOME50 50% coupon is removed from sokoni-food.js');
+ck('FC-9', !/WELCOME50|50% OFF first/.test(SF.replace(/\/\*[\s\S]*?\*\//g, '')), 'the WELCOME50 50% coupon is removed from sokoni-food.js');
+/* owner 2026-10-03: NO client-side promo code ships; validatePromo grants nothing (EXECUTED) */
+const SF_CODE = SF.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+const fsb = { window: {}, document: { addEventListener() {}, getElementById() { return null; }, querySelector() { return null; }, querySelectorAll() { return []; } },
+  localStorage: { getItem() { return null; }, setItem() {}, removeItem() {} }, console: { log() {}, warn() {}, error() {} }, setTimeout() {}, setInterval() {} };
+fsb.window.localStorage = fsb.localStorage; fsb.window.document = fsb.document;
+let SFX = null; try { vm.runInNewContext(SF, fsb); SFX = fsb.window.SokoniFood; } catch (e) { SFX = { err: String(e && e.message) }; }
+const OLD_CODES = ['WELCOME50', 'FOOD20', 'FREEDELIVERY', 'FRIDAY200', 'SOKONI10'];
+ck('FC-10', !/\b(FOOD20|FREEDELIVERY|FRIDAY200|SOKONI10|WELCOME50)\b/.test(SF_CODE) && !/food_vendor_promos/.test(SF_CODE) && SFX && Array.isArray(SFX.SYSTEM_PROMOS) && SFX.SYSTEM_PROMOS.length === 0,
+  'no promo code ships in sokoni-food.js (SYSTEM_PROMOS is empty; vendor localStorage promos are not read)', SFX && (SFX.err || JSON.stringify(SFX.SYSTEM_PROMOS)));
+ck('FC-11', SFX && typeof SFX.validatePromo === 'function' && OLD_CODES.every((c) => { const r = SFX.validatePromo(c, 100000); return r && r.valid === false && !r.discount; }),
+  'EXECUTED: validatePromo grants NOTHING for every old code (no client-side discount can be resurrected)', SFX && (SFX.err || JSON.stringify(SFX.validatePromo && SFX.validatePromo('FOOD20', 100000))));
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -382,6 +382,14 @@ status, B8 storefront never renders a `javascript:` link, B8b the known projecti
 `getMyMinishop`, `saveMinishopConfig`). **Security:** client-side link checks + storefront http(s) guard; permit
 uploads cannot start while gated. **Breaking:** none.
 
+## [2026-10-03] - Food Hub: no client-side promo code ships; validatePromo grants nothing
+
+Hosting only (`sokoni-food.js`). **Not deployed.** Owner decision 2026-10-03 (relayed by e3; confirm before deploy).
+- **Removed:** FOOD20, FREEDELIVERY, FRIDAY200 and SOKONI10 are gone (WELCOME50 went in ba471ac). `SYSTEM_PROMOS` is now an empty frozen array, and vendor promos are no longer read from localStorage.
+- **validatePromo:** it stays exported, so callers don't crash, but it always answers "no promotions".
+- **Where promotions live:** only the server-side offer engine (shopOffers), which checkout honours.
+- **Tests:** `test-food-containment` 11/0. FC-10 (no code ships) and FC-11 (EXECUTED: every old code grants nothing) both fail on ba471ac, where FOOD20 granted 20%.
+
 ## [2026-10-03] - Food Hub: an honest first-order line; the 50% WELCOME50 coupon removed from shipped code
 
 Hosting only (`food.html`, `sokoni-food.js`). **Not deployed.** Owner decision 2026-10-03, relayed by e3; confirmed with the owner before deploy.
