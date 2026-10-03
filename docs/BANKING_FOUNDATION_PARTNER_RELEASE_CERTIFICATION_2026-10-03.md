@@ -252,4 +252,31 @@ Every commit was staged file by file after `git status --short`; no stash, reset
 
 **Deploys:** none yet — free memory 180–395 MB (< 512 MB floor) and sokoni-b2 holds the slot. Foundation gate goes first when RAM allows: lineage diff of each live archive, then `impactCheckoutDonate` (stops false completion) + pledge/status reads, then sokoni-5b's donation intent + webhook, then verify verifiedBalance = 0 and a KES 10 end-to-end donation.
 
+## 13. Owner assignment 2026-10-03 — SmartPOS server completion (separate P0 gate, NOT part of Foundation)
+
+| Field | Value |
+|---|---|
+| OWNER | **POS workstream** |
+| AUTHORITY | `posCompleteCheckout` |
+| FILE / SEAM | `functions/pos-zero-friction.js` |
+| PRIORITY | **P0 payment-integrity** |
+| DEPENDENCY | IntaSend confirmed payment record (`posPaymentStatus/{ref}`, written only by the webhook) |
+| STATUS | **OPEN — owner assigned** |
+
+**Invariant.** A SmartPOS sale completes ONLY after the server verifies a confirmed IntaSend payment bound to the merchant, the amount, the payment reference and the sale key. Inventory, receipt and settlement happen only after that. Every other case fails closed: missing, unconfirmed, wrong merchant, wrong amount, wrong reference, or replayed.
+
+**Acceptance tests (minimum):**
+- SP-01 confirmed IntaSend payment → sale completes
+- SP-02 missing payment record → refused
+- SP-03 unconfirmed payment → refused
+- SP-04 wrong merchant → refused
+- SP-05 wrong amount → refused
+- SP-06 wrong payment reference → refused
+- SP-07 wrong sale key → refused
+- SP-08 replayed payment → no second completion
+- SP-09 fake / SIMULATED reference → refused
+- SP-10 browser says success but provider record absent → refused
+
+**Boundaries.** The POS owner does not modify the webhook security repair or the Foundation payout work. The browser-side SmartPOS fix (99e1177 / 863f0f6) is **not** the complete repair until this server gate is proven.
+
 **NOT DEPLOYED. FOUNDATION BALANCE NOT TRUSTED UNTIL RECONCILIATION/FIX IS LIVE. ALL REGISTRATIONS/APPLICATIONS REQUIRE ADMINOS APPROVAL.**
