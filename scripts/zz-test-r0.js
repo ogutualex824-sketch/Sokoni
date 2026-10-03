@@ -46,6 +46,7 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
     /* 2026-10-03: submissions are written by submitUnboxing (Admin SDK), seeded here the same way */
     await setDoc(doc(d, 'unboxingReviews/UBR-2'), { uid: 'mallory', rating: 4, product: 'Cake', comment: 'nice', status: 'pending' });
     for (const c of ['reviewModerationLog', 'reviewRateLimits', 'smsSendAudit', 'deliveryPinLog']) await setDoc(doc(d, c + '/x'), { v: 1 });
+    await setDoc(doc(d, 'sportsReviews/legacy'), { targetId: 'v1', rating: 4, body: 'old', uid: 'alice' });
   });
   const anon = env.unauthenticatedContext().firestore();
   const alice = env.authenticatedContext('alice').firestore();
@@ -104,6 +105,18 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
     await denies('L-' + c + '-ar', c + ': admin-claimed read', getDoc(doc(admin, c + '/x')));
     await denies('L-' + c + '-w', c + ': admin-claimed write', setDoc(doc(admin, c + '/y'), { v: 1 }));
   }
+
+  console.log('[H] hub reviews — server-submitted only (owner 2026-10-03)');
+  await denies('H-1', 'sports-venue page payload straight to sportsReviews (even WITH uid) — self-publish closed',
+    setDoc(doc(mallory, 'sportsReviews/sr1'), { targetId: 'v1', targetType: 'venue', author: 'M', rating: 5, body: 'great venue', uid: 'mallory', ts: 1 }));
+  await denies('H-2', 'bnbReviews direct write (no rule — default deny)', setDoc(doc(mallory, 'bnbReviews/b1'), { targetId: 'h1', rating: 5, uid: 'mallory' }));
+  await denies('H-3', 'property review MISFILED as an application (category:reviews) is refused',
+    setDoc(doc(mallory, 'applications/APP-rv'), { uid: 'mallory', category: 'reviews', name: 'Anonymous', rating: 5, comment: 'nice flat' }));
+  await allows('H-3c', 'inverting control: a genuine undecided application is still accepted',
+    setDoc(doc(mallory, 'applications/APP-ok'), { uid: 'mallory', category: 'seller', businessName: 'M Shop', status: 'pending' }));
+  await denies('H-4', 'forged approved review straight to reviews (targetType property)',
+    setDoc(doc(mallory, 'reviews/mallory_property_L1'), { authorUid: 'mallory', targetType: 'property', targetId: 'L1', rating: 5, status: 'approved' }));
+  await allows('H-5', 'public can still read an existing legacy sportsReviews doc', getDoc(doc(anon, 'sportsReviews/legacy')));
 
   console.log('[C] controls — server-only neighbours unchanged');
   await denies('C-1', 'browser writes ratingsSummary', setDoc(doc(mallory, 'ratingsSummary/p1'), { avg: 5, count: 999 }));

@@ -227,7 +227,11 @@ service cloud.firestore {
   allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
   }
   match /applications/{appId} {
-  allow create: if claimsOwner() && noAdminFields() && appNoDecision();
+  /* 2026-10-03: a REVIEW is not an application. sokoni-property.js addReview filed property reviews here as
+     category:'reviews' (free-typed name, no moderation, junk in the applications queue). Reviews go to
+     submitReview (reviews/{uid_property_id}, pending → AdminOS). Refused here so the misfile cannot recur. */
+  allow create: if claimsOwner() && noAdminFields() && appNoDecision()
+  && request.resource.data.get('category', '') != 'reviews';
   allow read:   if isAdmin() || isOwner();
   /* priorDecisions: not even an administrator's raw client write may touch it (capability candidate 1). */
   allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['priorDecisions']))
@@ -788,14 +792,13 @@ service cloud.firestore {
   allow delete: if isAdmin()
   || (isAuthed() && resource.data.uid == request.auth.uid);
   }
+  /* 2026-10-03: sports venue reviews are server-submitted — submitReview({targetType:'sports_venue'}) writes
+     reviews/{uid_sports_venue_id} PENDING for the AdminOS queue; eligibility = the caller's own
+     sportsVenueBookings for that venue (owner decision). This legacy store published on create with no
+     moderation (read:true), so no browser write may reach it any more. Read kept for existing docs. */
   match /sportsReviews/{reviewId} {
   allow read:   if true;
-  allow create: if claimsOwner()
-  && request.resource.data.keys().hasAll(
-  ['targetId','targetType','author','rating','body','uid','ts'])
-  && request.resource.data.rating >= 1
-  && request.resource.data.rating <= 5
-  && request.resource.data.body.size() <= 2000;
+  allow create, update: if false;
   allow delete: if isAdmin();
   }
   match /sportsPosts/{postId} {

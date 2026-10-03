@@ -216,7 +216,8 @@ service cloud.firestore {
   allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
   }
   match /applications/{appId} {
-  allow create: if claimsOwner() && noAdminFields() && appNoDecision();
+  allow create: if claimsOwner() && noAdminFields() && appNoDecision()
+  && request.resource.data.get('category', '') != 'reviews';
   allow read:   if isAdmin() || isOwner();
   allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['priorDecisions']))
   || (isOwner() && claimsOwner() && noAdminFields() && appUndecided() && appNoDecision());
@@ -758,12 +759,7 @@ service cloud.firestore {
   }
   match /sportsReviews/{reviewId} {
   allow read:   if true;
-  allow create: if claimsOwner()
-  && request.resource.data.keys().hasAll(
-  ['targetId','targetType','author','rating','body','uid','ts'])
-  && request.resource.data.rating >= 1
-  && request.resource.data.rating <= 5
-  && request.resource.data.body.size() <= 2000;
+  allow create, update: if false;
   allow delete: if isAdmin();
   }
   match /sportsPosts/{postId} {

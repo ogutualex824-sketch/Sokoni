@@ -225,6 +225,34 @@ service firebase.storage {
                     || request.resource.contentType == 'application/pdf');
     }
 
+    /* ── Unboxing photos — QUARANTINE, then publish (owner 2026-10-03) ──────────
+       A buyer's photo is private until AdminOS approves the unboxing post:
+         1. browser uploads to unboxing-pending/{uid}/{file}: only that signed-in uid,
+            safe image types only (no SVG), under 8 MB; readable by the owner and
+            admins only; never public.
+         2. submitUnboxing (Admin SDK) accepts media ONLY under the caller's own
+            unboxing-pending/{uid}/ path.
+         3. adminModerateReview (kind 'unboxing', approve) copies the file to
+            unboxing/{uid}/{file} with the Admin SDK. That public path is never
+            browser-writable, so nothing reaches the public before approval.
+       Reject leaves the pending file private. A browser can never "publish" media. */
+    match /unboxing-pending/{uid}/{filename} {
+      allow read:   if request.auth != null
+                    && (request.auth.uid == uid
+                        || request.auth.token.get('admin', false) == true
+                        || request.auth.token.get('superAdmin', false) == true);
+      allow create: if request.auth != null
+                    && request.auth.uid == uid
+                    && safeImageOnly()
+                    && request.resource.size < 8 * 1024 * 1024;
+      allow update: if false;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+    match /unboxing/{uid}/{filename} {
+      allow read:  if true;
+      allow write: if false;
+    }
+
     /* ── Default: deny everything else ── */
     match /{allPaths=**} {
       allow read, write: if false;
