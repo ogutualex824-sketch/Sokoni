@@ -456,6 +456,15 @@
       note:'Buying, receiving, warehousing and supplying between businesses - separate from ' +
            'customer Sales. Reads only: every figure comes from the merchant-scoped ' +
            'procurement engine, and approve/send/receive/pay keep their own authority gates.' },
+    /* B2B RFQs (sokoni-f3, 2026-10-03): request quotations from suppliers and quote on requests received. Server
+       authority functions/rfq.js (rfqDispatch); an accepted quote becomes a Supply purchase order. Business-keyed like
+       Supply (merchantContext), never the shop scope. */
+    { id:'rfqs', name:'RFQs & Quotes', icon:'📋', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'rfqs',
+      note:'B2B requests for quotation: My RFQs, New RFQ, RFQs Received, Receive RFQs (paid-lead consent). Every ' +
+           'state change is rfqDispatch; prices, VAT and leads are the server\'s.' },
     { id:'pos-setup', name:'POS Setup', icon:'🖨️', tier:'more',
       kind:'page', src:'pos-printer-setup.html?shell=merchant',
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID],
@@ -495,7 +504,7 @@
     /* Owner taxonomy: Suppliers sit under Commerce, beside Products / Inventory / Analytics
        (which are primary-tier rows). */
     { key:'commerce',   label:'Commerce',
-      ids:['supply'] },
+      ids:['supply','rfqs'] },
     { key:'growth',     label:'Growth',
       ids:['marketing','offers','flash-sale','stories','customers'] },
     /* KRA Tax groups with Operations rather than Main: it is back-office compliance

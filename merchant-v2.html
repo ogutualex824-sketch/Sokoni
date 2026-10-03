@@ -755,6 +755,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-promotion-model.js"></script>
 <script src="sokoni-merchant-offers.js"></script>
 <script src="sokoni-merchant-supply.js"></script>
+<script src="sokoni-merchant-rfq.js"></script>
 <!-- MV2-2a: Chat with a supplier enters the existing in-app inbox, never a second chat system -->
 <script src="sokoni-inbox.js"></script>
 <script src="sokoni-merchant-staff.js"></script>
@@ -2500,6 +2501,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
        exists to prevent. It receives the resolver too, so the workspace can complete a
        business selection when the owner has more than one. */
     supply:     { global: 'SokoniMerchantSupply',      ctx: function () { return {
+                    merchantContext: merchantContext,
+                    resolveMerchantContext: resolveMerchantContext,
+                    callable: _callable,
+                  }; } },
+    /* B2B RFQs (sokoni-f3) — same business-keyed ctx as Supply, for the same reason. */
+    rfqs:       { global: 'SokoniMerchantRfq',         ctx: function () { return {
                     merchantContext: merchantContext,
                     resolveMerchantContext: resolveMerchantContext,
                     callable: _callable,
