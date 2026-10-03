@@ -1,3 +1,15 @@
+## 2026-10-04 — Stage (c) rulings: record-only reconcile, discovery HELD, health delegated (NOT deployed)
+
+- **Reconcile is RECORD-ONLY** (b2 ruling; owner "ONE approval authority, NO legacy fallback"): `_authoritativeDecision` no longer accepts an adminAudit row as a decision — a status with no `applicationDecisions` record is refused (`NO_DECISION_RECORD`). P0-H already migrated the 5 legacy approvals. K13-A B4 now asserts the refusal; a mutant re-adding the fallback turns B4 and the entertainment-readiness reconcile row red (verified).
+- **shop-discovery-gate A1** asserts the owner rule "approved ≠ discoverable": approval stamps the C1 category and holds discovery (`discovery:'HELD'`, `_noIndex:true`, never searchable/isPublic) on shops, sellers and businesses.
+- **healthcare-admin-approval C/D retargeted** to production: a health approval grants the role (canonical `health` + legacy `provider` claim) and DELEGATES — no providers/{uid}, no healthProviders write, receipt records the delegation. Mutant loader shims now derived from the module's requires.
+- **OPEN — owner decisions needed (rows left red, not certified):**
+  1. **No code releases a HELD shop.** Algolia skips `_noIndex` records and nothing clears the hold, so every newly approved seller would stay out of search; meanwhile `shopEligibility` ignores HELD. Production has no HELD yet (cbbce0c never deployed).
+  2. **No path activates an approved healthcare provider on this line.** The lifecycle delegates (production), but r2 retired `approveHealthProvider` (CHANGELOG 222) in favour of ADR-014's projection, which is not shipping. healthcare-admin-authority "preserved" and healthcare-category stamping rows stay red until this is decided.
+- **Files:** functions/application-lifecycle.js, scripts/test-k13a-decision-authority.js, scripts/test-entertainment-readiness.js, scripts/test-shop-discovery-gate.js, scripts/test-healthcare-admin-approval.js.
+- **Tests:** k13a 11/0, k13b 8/0, decision-authority 21/0, entertainment-readiness 45/0, shop-discovery-gate 17/0, healthcare-admin-approval 64/0; full lifecycle sweep otherwise unchanged.
+- **Database / API:** none. **Security:** an audit row can no longer re-project an application.
+
 ## 2026-10-04 — Stage (c): ONE application lifecycle on the r2 commercial base (NOT deployed)
 
 - **Rule (b2, agreed):** decision AUTHORITY = 5b's lifecycle (K13-A/K13-B decision record, SELF_DECISION, H1 category frozen on the decision, review stages, admit op, applicant types); COMMERCIAL acceptance = r2 (agreement before approval, seller_free trial, Till, business wallet, C1 lane); role resolution = union (requestedRole → r2 DECLARED_TYPES → legacy keywords → category upgrade).

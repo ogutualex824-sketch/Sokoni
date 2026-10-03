@@ -2046,7 +2046,7 @@ exports.applicationDecide = onCall(
     /* K13-A — THE SERVER DECISION RECORD, written BEFORE the application is touched. `applicationDecisions/{appId}`
        has no client rule (default deny), so it is the one record of a decision that a browser cannot author; the
        application's own `status` / `decidedBy` are applicant-writable on the served rules and are therefore never
-       sufficient on their own (see _authoritativeDecision). One document per application = the CURRENT decision;
+       sufficient on their own (see _authoritativeDecision — record-only). One document per application = the CURRENT decision;
        the full history stays in adminAudit. */
     await db.collection(DECISIONS).doc(String(applicationId)).set({
       applicationId: String(applicationId), appId: String(applicationId), decidedAtMs: Date.now(),
@@ -2106,10 +2106,11 @@ exports.applicationDecide = onCall(
    used to project whatever status it found, attributed to the admin who ran it — so an applicant who set
    status:'approved' was approved by the next "reconcile all" sweep (K13b). A stored status is authoritative only when
    an ADMINISTRATOR who is NOT the applicant decided exactly that status, evidenced by:
-     1. the server decision record applicationDecisions/{appId} (written by applicationDecide, client-unwritable), or
-     2. for decisions made before that record existed, an adminAudit row `application_<decision>` for this application.
-   Nothing else — not the application's own fields, not an operator label — makes a decision reconcilable. */
-const _DECISION_OF = { approved: 'approve', active: 'approve', verified: 'approve', rejected: 'reject', suspended: 'suspend' };
+     the server decision record applicationDecisions/{appId} (written by applicationDecide, client-unwritable).
+   RECORD-ONLY (owner: ONE approval authority, NO legacy fallback; ruling b2 2026-10-04). The adminAudit fallback that
+   used to accept a pre-record decision is GONE — P0-H migrated the 5 legacy approvals into decision records (2026-10-03),
+   exactly as P0-C removed the same fallback from the workspace. Nothing else — not the application's own fields, not an
+   audit row, not an operator label — makes a decision reconcilable. */
 async function _isAdminUid(uid, cache) {
   if (!uid || typeof uid !== 'string') return false;
   if (cache && Object.prototype.hasOwnProperty.call(cache, uid)) return cache[uid];
@@ -2130,14 +2131,7 @@ async function _authoritativeDecision(db, appId, app, cache) {
     /* A record exists: it IS the current decision. A stored status that disagrees with it is not authoritative. */
     return (r.status === status && await acceptable(r.decidedBy)) ? { ok: true, by: r.decidedBy, evidence: 'decision_record' } : { ok: false };
   }
-  const decision = _DECISION_OF[status];
-  if (!decision) return { ok: false };
-  const audits = await db.collection('adminAudit').where('applicationId', '==', String(appId)).limit(50).get();
-  for (const a of audits.docs) {
-    const d = a.data() || {};
-    if (d.action === `application_${decision}` && await acceptable(d.performedBy)) return { ok: true, by: d.performedBy, evidence: 'admin_audit' };
-  }
-  return { ok: false };
+  return { ok: false, reason: 'NO_DECISION_RECORD' };   /* no record → not a decision (record-only) */
 }
 
 /* Re-run the projection for an application whose registry record is missing or
