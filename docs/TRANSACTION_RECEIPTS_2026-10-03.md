@@ -110,3 +110,41 @@ Every call is made **after** the money step has committed, wrapped in `safely(db
 - R7: bad input.
 - R8: scoping.
 - R9: never-throw queue.
+
+## Convergence step 2 (owner brief, 2026-10-03)
+
+**Decisions recorded**
+- **One authority:** `transaction-receipts.js` is the single platform receipt authority. A receipt never decides who owns money; the payment/webhook and the ledger do.
+- **Old recorder retired:** `financial-engine.recordConfirmedPayment` now refuses and logs (`{ok:false, reason:'retired'}`). Its body is unreachable until its accounting model is redesigned. It is never connected to receipts.
+- **Paid Education stays OFF:** the `enrolment` kind is reserved only. Paid enrolment stays shut (E1) until its IntaSend/webhook path is certified.
+- **Electronics:** no receipt until its commerce flow exists.
+
+**Model additions**
+- **`links`** (`quoteId`, `bookingId`, `orderId`, `purchaseOrderId`, `settlementId`): a Legal quote receipt references both the quote and the booking.
+- **`b2b_order` kind and deductions:** a release may carry `deductions: [{kind:'lead_fee_recovery', amountCents, ref}]`, tracked as `deductionsCents`. It is never `platformFeeCents`.
+  - Example: gross 500,000, commission 0, lead-fee recovery 696, supplier 499,304.
+- **Balanced releases:** a release must satisfy fee + provider share + deductions = amount released, otherwise it is refused (`unbalanced_release`).
+  - For service bookings: `providerNetCents` = `providerPayouts.settlementCents`, `platformFeeCents` = commission, amount = held.
+
+**Retry and admin**
+- **`safely(db, label, fn, replay)`** queues `{op, args}`. `retryFailures` replays it (callable `adminRetryReceiptFailures` for Super Admin, audited; plus a sweep every 6 hours). Deterministic ids mean a retry can only produce one receipt or event.
+- **`adminSearchReceipts`:** search by receiptNo, paymentRef, sourceId or party. Returns header plus immutable events. Every access is audited (`adminAudit`, `receipt_view`). It is read-only; nothing rewrites history.
+
+**Numbering:** `financial-engine._nextNumber` now shares one in-flight block reservation per instance. A burst on a cold instance previously had every caller reserve a block at once; they contended until transactions failed. The base fails the burst test; the fix passes. Numbers are unique and ascending, the series resets each year, and gaps are allowed.
+
+**Payment method:** the commercial line's `webhookIntasend` carries 5b's `providerMethod` byte for byte. The Quick Charge receipt, the IntaSend order receipt, the merchant receipt and the marketplace order now record it, with null meaning not reported (`test-webhook-provider-method-commercial.js` 3/0).
+
+**Reconciliation:** `receipt-reconciliation.js` (daily, 04:30 EAT) records exceptions and never corrects them.
+- **Checks:** `missing_receipt`, `orphan_receipt`, `paid_mismatch`, `release_missing`, `provider_share_mismatch`, `refund_mismatch`.
+- **Storage:** exceptions go to `receiptReconciliationExceptions`, one document per check and source, with `firstSeenAt` kept.
+- **Scope:** service bookings first. Other kinds join as their hooks land. Wallet-movement-without-ledger checks belong to the wallet authority (Financial Core; wallet.js frozen) and are not done here.
+
+**Tests:** `scripts/test-receipts-convergence.js` 14/0 (L1, B1–B3, Q1a–d, A1, N1, C1a–c, X1). `test-transaction-receipts` 13/0, `test-financial-engine` 21/0.
+
+**Release order (owner):**
+- **A:** foundation. Do not ship any UI alone that implies receipts exist.
+- **B:** integrations (b2: bookings and quotes; B2B release via 5b's hook; method capture).
+- **C:** buyer, provider and AdminOS UI.
+- **D:** reconciliation.
+- **E:** certification (at least 512 MB free, emulator, real IntaSend test payment and webhook, release, refund, duplicate webhook, receipt retry).
+- **F:** production, functions first.
