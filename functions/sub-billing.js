@@ -117,8 +117,38 @@ const PLANS = {
   /* ── CAR DEALERS ── */
   car_dealer_free:   { id:'car_dealer_free',   hubType:'car_dealer',   tier:'free',       name:'Car Dealer Free',   price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ listings_limit:5,    photos_per_listing:5, featured_listings:0, analytics:false }},
-  car_dealer_pro:    { id:'car_dealer_pro',    hubType:'car_dealer',   tier:'pro',        name:'Car Dealer Pro',    price:{monthly:249900,  annual:2499000  }, trial:{days:3}, grace:{days:5},  isActive:true,
-    features:{ listings_limit:-1,   photos_per_listing:20,featured_listings:5, analytics:true,  team_members:5, ai_assistant:true, vehicle_history:true }},
+  /* Owner 2026-10-03 (via sokoni-f3) — Car Hub dealer plans, MONTHLY (annual unpriced → annual billing refused).
+     listings_limit = active vehicle listings; featured_credits_monthly = featured placements included per month;
+     in_app_leads = buyer enquiries arrive in SOKONI messaging (owner rule: no WhatsApp hand-offs).
+     car_dealer_pro is REUSED for the new Pro (KES 5,000): 0 production subscriptions held the old KES 2,499 Pro
+     (read-only count 2026-10-03, positive control: subscriptions total 7). Prices are editable without a deploy via
+     AdminOS adminSubUpdatePlan (subscriptionPlans/{id} overrides, read at payment time). */
+  car_dealer_starter:   { id:'car_dealer_starter', hubType:'car_dealer', tier:'starter', name:'Car Dealer Starter', price:{monthly:150000, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{listings_limit:10,featured_credits_monthly:2,in_app_leads:true} },
+  car_dealer_growth:    { id:'car_dealer_growth', hubType:'car_dealer', tier:'growth', name:'Car Dealer Growth', price:{monthly:300000, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{listings_limit:30,featured_credits_monthly:5,in_app_leads:true} },
+  car_dealer_pro:       { id:'car_dealer_pro', hubType:'car_dealer', tier:'pro', name:'Car Dealer Pro', price:{monthly:500000, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{listings_limit:75,featured_credits_monthly:10,in_app_leads:true} },
+  car_dealer_business:  { id:'car_dealer_business', hubType:'car_dealer', tier:'business', name:'Car Dealer Business', price:{monthly:800000, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{listings_limit:150,featured_credits_monthly:20,in_app_leads:true} },
+  car_dealer_enterprise:{ id:'car_dealer_enterprise', hubType:'car_dealer', tier:'enterprise', name:'Car Dealer Enterprise', price:{monthly:1500000, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{listings_limit:300,featured_credits_monthly:40,in_app_leads:true} },
+
+  /* ── VEHICLE TRACKING (owner 2026-10-03, via sokoni-f3), MONTHLY. vehicle_limit = tracked vehicles. The entry plan
+     includes location + trip history + vehicle status; the owner set no further per-tier features, so none are
+     invented — Standard / Pro differ by price only until the owner says otherwise. ── */
+  tracking_basic:       { id:'tracking_basic', hubType:'vehicle_tracking', tier:'basic', name:'Tracking Basic', price:{monthly:30000, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{vehicle_limit:1,location_tracking:true,trip_history:true,vehicle_status:true} },
+  tracking_standard:    { id:'tracking_standard', hubType:'vehicle_tracking', tier:'standard', name:'Tracking Standard', price:{monthly:50000, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{vehicle_limit:1,location_tracking:true,trip_history:true,vehicle_status:true} },
+  tracking_pro:         { id:'tracking_pro', hubType:'vehicle_tracking', tier:'pro', name:'Tracking Pro', price:{monthly:80000, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{vehicle_limit:1,location_tracking:true,trip_history:true,vehicle_status:true} },
+  tracking_fleet5:      { id:'tracking_fleet5', hubType:'vehicle_tracking', tier:'fleet5', name:'Fleet 5', price:{monthly:200000, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{vehicle_limit:5,location_tracking:true,trip_history:true,vehicle_status:true} },
+  tracking_fleet10:     { id:'tracking_fleet10', hubType:'vehicle_tracking', tier:'fleet10', name:'Fleet 10', price:{monthly:350000, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{vehicle_limit:10,location_tracking:true,trip_history:true,vehicle_status:true} },
+  tracking_fleet25:     { id:'tracking_fleet25', hubType:'vehicle_tracking', tier:'fleet25', name:'Fleet 25', price:{monthly:750000, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{vehicle_limit:25,location_tracking:true,trip_history:true,vehicle_status:true} },
 
   /* ── FREELANCERS ── */
   freelancer_free:   { id:'freelancer_free',   hubType:'freelancer',   tier:'free',       name:'Freelancer Free',   price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,

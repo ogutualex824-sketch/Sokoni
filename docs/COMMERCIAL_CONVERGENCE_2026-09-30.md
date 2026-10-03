@@ -706,3 +706,57 @@ No duplicate authority was found on the money side.
   - 48h 87/0 · invoice 52/0 · lane separation 22/0 (2 UNPROVEN, pre-existing) · settlement authority 53/0 · healthcare plan 16/0 · KASS 7/0 · POS lane 92/0 · POS rail 80/0 · subscription classification 21/0 · single-source verify PASS · schedule 25/0 · fixed-rate 32/0 · ladder 38/0 · pos-sale 78/0
   - `commission-balance-ui`: 2 FAIL, **pre-existing**. Identical on 6be1561, before today; these are page / callable checks, not rates.
 - **Sales switch.** `shared/fitness-sales-switch` logs `FLAG_UNREADABLE` (warn) on a read error and still fails closed (sokoni-e3's suggestion).
+
+## 15 · Car Hub paid products (owner 2026-10-03, via sokoni-f3): one catalogue, configurable prices
+
+**Plans** live in `sub-billing.js` PLANS and are read by `subscription-catalog`. They are monthly only (annual unpriced, so annual billing is refused). Prices are editable without a deploy through AdminOS `adminSubUpdatePlan` (`subscriptionPlans/{id}` overrides, read by `createPaymentIntent` at payment time).
+
+- **Dealer plans** (`hubType 'car_dealer'`):
+
+  | Plan | KES / month | Listings | Featured credits / month |
+  |---|---|---|---|
+  | Free (kept) | 0 | — | — |
+  | Starter | 1,500 | 10 | 2 |
+  | Growth | 3,000 | 30 | 5 |
+  | Pro | 5,000 | 75 | 10 |
+  | Business | 8,000 | 150 | 20 |
+  | Enterprise | 15,000 | 300 | 40 |
+
+  Every paid tier has `in_app_leads` (no WhatsApp hand-offs). The `car_dealer_pro` id is reused for the new Pro; production held 0 subscriptions on the old KES 2,499 Pro (read-only count, positive control: subscriptions total 7).
+- **Vehicle tracking** (`hubType 'vehicle_tracking'`):
+
+  | Plan | KES / month | Vehicles |
+  |---|---|---|
+  | Basic | 300 | 1 |
+  | Standard | 500 | 1 |
+  | Pro | 800 | 1 |
+  | Fleet5 | 2,000 | 5 |
+  | Fleet10 | 3,500 | 10 |
+  | Fleet25 | 7,500 | 25 |
+
+  Every tier has location + trip history + vehicle status. No further per-tier features are invented: Standard and Pro differ by price until the owner says otherwise.
+- **Entitlement names for Car Hub:**
+  - `listings_limit`, `featured_credits_monthly`, `in_app_leads` (`car_dealer`)
+  - `vehicle_limit`, `location_tracking`, `trip_history`, `vehicle_status` (`vehicle_tracking`)
+
+  Gates call `requireFeature(sub, {hubType, feature, needed})`.
+- **Payment:** the existing subscription path, `createPaymentIntent({planId, billingCycle:'monthly'})` → `reconcilePaidIntent`. No new purpose.
+
+**Boosts** (`functions/vehicle-boosts.js`):
+- **Seed prices:** Quick 24h 50 · Standard 3d 100 · Featured 7d 200 · Premium 14d 350 · Top Spotlight 30d 600 · bundles 5×7d 800, 10×7d 1,500, 20×7d 2,500.
+- **Overrides:** an override in `revenueConfig/vehicle_boosts.prices` is set via `adminSetVehicleBoostPrices` (Super Admin only, whole KES 1–100,000, audited in `adminAudit`). An invalid override is ignored and the seed stands. `vehicleBoostCatalogue` is the read.
+- **Purpose** `vehicle_boost` (resourceType `vehicleBoost`) is priced from the catalogue, never the request. It is **self-settling**.
+- **Fulfilment:** the webhook fulfils on the existing early intent read (`fulfilVehicleBoost`, idempotent on the payment ref).
+  - A single boost writes `listingBoosts/{ref}` (listing, placement, startsAt, endsAt).
+  - A bundle writes `boostCredits/{uid}.credits7d` + `boostCreditLedger`.
+  - `consumeBoostCredit` turns one credit into a 7-day boost. Car Hub must verify listing ownership first.
+
+**Finding:** the pre-existing generic `boost` purpose (marketplace listings, prices hard-coded) has **no fulfilment anywhere**. Paid boosts activate nothing. It is left as-is, flagged.
+
+**Not mine / open:**
+- sokoni-5b ports the webhook hook (same shape as the membership hold).
+- Car Hub reads `listingBoosts` for placement and consumes credits.
+- Vehicle sale stays 2% with no trigger.
+- Subscription ≠ sale commission.
+
+**Tests:** `scripts/test-carhub-catalogue.js` 16/0. hub-plan-entitlements 17/0 (all new plan ids resolve; none to FREE by accident). membership 77/0, schedule 25/0. creator-callback still has only its 4 pre-existing failures.

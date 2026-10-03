@@ -648,6 +648,23 @@ const PURPOSES = {
       };
     },
   },
+  /* ── Car Hub vehicle boosts (owner 2026-10-03) — priced from vehicle-boosts.catalogue (code seed + AdminOS override),
+     never from the request. A single boost needs the listing; a bundle buys 7-day credits for the buyer's account. ── */
+  vehicle_boost: {
+    resourceType: 'vehicleBoost',
+    async price(uid, data) {
+      const p = await require('./vehicle-boosts').priceFor(db(), data.boostKey || data.key);
+      if (!p) fail('invalid-argument', 'Unknown vehicle boost.');
+      const listingId = String(data.listingId || '').trim();
+      if (!p.bundle && !/^[A-Za-z0-9_-]{4,128}$/.test(listingId)) fail('invalid-argument', 'Choose the vehicle listing to boost.');
+      return {
+        amountCents: p.kes * 100, currency: 'KES', resourceType: 'vehicleBoost',
+        resourceId: p.bundle ? uid : listingId,
+        metadata: { boostKey: p.key, days: p.ms / 86400000, count: p.count, bundle: !!p.bundle, priceSource: p.source },
+      };
+    },
+  },
+
   marketing_boost: {
     resourceType: 'marketingBoost',
     async price(uid, data) {

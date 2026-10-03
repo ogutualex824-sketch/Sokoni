@@ -17,7 +17,8 @@
  * wrote the payment. Purpose is read from the server-minted INTENT, never from client meta.
  */
 /* fitness_membership (2026-10-03): HELD by membership-settlement, released monthly after first attendance — never a seller credit. */
-const SELF_SETTLING_PURPOSES = Object.freeze(new Set(['film_access', 'event_ticket', 'venue_booking', 'fitness_membership']));
+/* vehicle_boost (2026-10-03): SOKONI revenue, fulfilled by vehicle-boosts.fulfilVehicleBoost — never a seller credit. */
+const SELF_SETTLING_PURPOSES = Object.freeze(new Set(['film_access', 'event_ticket', 'venue_booking', 'fitness_membership', 'vehicle_boost']));
 
 function isSelfSettling(purposeOrType) {
   return SELF_SETTLING_PURPOSES.has(String(purposeOrType || ''));

@@ -1,3 +1,9 @@
+## 2026-10-03 — Car Hub paid products: dealer + tracking plans, configurable vehicle boosts (NOT deployed)
+
+- **Plans:** sub-billing PLANS (car_dealer_* tiers, tracking_*), prices editable via adminSubUpdatePlan.
+- **Boosts:** functions/vehicle-boosts.js (vehicle_boost purpose, self-settling, webhook fulfilment, Super Admin price override); exports vehicleBoostCatalogue + adminSetVehicleBoostPrices.
+- **Tests:** test-carhub-catalogue 16/0.
+
 ## 2026-10-03 — Car Hub vehicle sales 2% of the sale price (owner, via sokoni-f3; no live trigger yet); commission suites swept (NOT deployed)
 
 - **Changes:** commission-config vehicles; seller-terms row; snapshot regenerated.

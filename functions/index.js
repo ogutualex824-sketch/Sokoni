@@ -8026,6 +8026,18 @@ exports.webhookIntasend = onRequest(
         /* Membership payment (owner 2026-10-03): HELD by SOKONI, never credited here — membership-settlement releases
            it monthly after the first attendance. Decided on THIS read (no extra intent read); fitness_membership is also
            self-settling, so if this read fails the SECOND exit below still refuses any seller credit. */
+        /* Car Hub vehicle boost (owner 2026-10-03): activated only by this VERIFIED payment; idempotent on the ref. */
+        if (_fiSnap.exists && _fiSnap.data().resourceType === 'vehicleBoost') {
+          try {
+            const _vb = require('./vehicle-boosts');
+            await _vb.fulfilVehicleBoost(db, _fiSnap.data(), apiRef, {
+              inc: (n) => admin.firestore.FieldValue.increment(n),
+              tsFromDate: (d) => admin.firestore.Timestamp.fromDate(d) });
+          } catch (vbErr) {
+            if (!(vbErr && (vbErr.code === 6 || vbErr.code === 'already-exists'))) logger.error('[webhookIntasend] vehicle boost fulfilment failed', { ref: apiRef, err: vbErr && vbErr.message });
+          }
+          res.status(200).send("OK"); return;
+        }
         if (_fiSnap.exists && _fiSnap.data().resourceType === 'providerMembership') {
           await require('./membership-settlement').holdMembershipPayment(db, admin, apiRef, existing.intentRef, amount);
           res.status(200).send("OK"); return;
@@ -13461,3 +13473,8 @@ exports.membershipReleaseSweep = _membershipSettlement.membershipReleaseSweep;
 exports.membershipRequestRefund = _membershipSettlement.membershipRequestRefund;
 exports.membershipDecideRefund     = _membershipSettlement.membershipDecideRefund;
 exports.membershipRequestException = _membershipSettlement.membershipRequestException;
+
+/* ── Car Hub vehicle boosts (owner 2026-10-03): catalogue (public read) + Super Admin price override. ── */
+const _vehicleBoosts = require('./vehicle-boosts');
+exports.vehicleBoostCatalogue      = _vehicleBoosts.vehicleBoostCatalogue;
+exports.adminSetVehicleBoostPrices = _vehicleBoosts.adminSetVehicleBoostPrices;
