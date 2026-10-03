@@ -1563,6 +1563,13 @@
       (products.length ? '<div class="av-list">' + products.map(function (p, i) {
         var b = BADGE[p._state] || BADGE.unavailable;
         var paused = (p.isVisible === false || p.status === 'archived');
+        /* takedown enforcement (2026-10-02): a listing held by SOKONI moderation is shown as TAKEN DOWN with no
+           switch — the seller cannot restore it (the rules refuse it); the route is Disputes › Reports. */
+        if (p.moderationHold != null) {
+          return '<div class="av-row"><span class="av-pname">' + _ordEsc(p.name || p.title || 'Product') + '</span>' +
+            '<span class="av-rowright"><span class="av-badge bad">Taken down by SOKONI</span>' +
+            '<a class="av-ptoggle off" href="merchant-v2.html#disputes" title="See the report outcome in Disputes › Reports">Details</a></span></div>';
+        }
         return '<div class="av-row"><span class="av-pname">' + _ordEsc(p.name || p.title || 'Product') + '</span>' +
           '<span class="av-rowright"><span class="av-badge ' + b[0] + '">' + b[1] + (p._state === 'low' || p._state === 'out' ? ' · ' + Number(p.stock || 0) : '') + '</span>' +
           '<button type="button" class="av-ptoggle ' + (paused ? 'off' : 'on') + '" ' + (_avState.busy ? 'disabled' : '') + ' onclick="__avToggleProduct(' + i + ')" title="' + (paused ? 'Make available' : 'Pause') + '">' + (paused ? 'Paused' : 'Live') + '</button></span></div>';
@@ -1582,7 +1589,9 @@
     AvailabilityService.setShop(patch).then(function () { _avDone('Saved'); }).catch(_avFail);
   };
   window.__avToggleProduct = function (i) {
-    var p = _avState.products[i]; if (!p || !_avGuard()) return;
+    var p = _avState.products[i]; if (!p) return;
+    if (p.moderationHold != null) { if (window.SokoniNotify) SokoniNotify.error('This listing was taken down by SOKONI moderation and cannot be switched on here. See Disputes › Reports.'); return; }
+    if (!_avGuard()) return;
     var paused = (p.isVisible === false || p.status === 'archived');
     AvailabilityService.setProductAvailability(p.id, paused /* currently paused → make available */).then(function () { _avDone(paused ? 'Product available' : 'Product paused'); }).catch(_avFail);
   };

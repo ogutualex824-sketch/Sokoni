@@ -1140,6 +1140,15 @@ async function _stLoadFirestore(uid) {
     if (!pSnap.empty) {
       var fsProds = [];
       pSnap.forEach(function(d) { fsProds.push(Object.assign({ id: d.id }, d.data())); });
+      /* takedown enforcement (2026-10-02) — DEFENCE IN DEPTH, NOT THE AUTHORITY: a public products LIST query cannot be
+         gated by the rules (rules are not filters; most legacy products carry no isVisible field to query on), so this
+         storefront drops what the canonical listing predicate says is not public (moderation hold, hidden, archived …).
+         The server gates (search, API, shop page, KASS) and the indexes are the authority. */
+      fsProds = fsProds.filter(function (p) {
+        var S = window.SokoniSellability;
+        if (S && typeof S.isPubliclyListed === 'function') return S.isPubliclyListed(p);
+        return p.moderationHold == null && p.isVisible !== false && ['deleted','removed','hidden','draft','archived','banned','suspended','paused','inactive','rejected','unpublished'].indexOf(String(p.status || '').toLowerCase()) === -1;
+      });
 
       /* Recover the shop's identity from its own goods when no shop document
          was readable. Every product carries the seller's businessName /

@@ -63,11 +63,15 @@ if(_urlId && String(product && product.id) !== String(_urlId)){
         /* Every source failed. Replace the skeleton with an accurate message. */
         try{
             var _denied = _prdLoadError === 'permission-denied';
+            /* Takedown enforcement (2026-10-02): the rules candidate refuses a single-document read of a product under
+               a moderation hold (only its seller and admins may read it). permission-denied can therefore mean "not
+               available to the public" as well as a transient App Check failure — the page cannot tell which, so it
+               says neither "missing" nor "our fault": a neutral UNAVAILABLE, never the reason. */
             var _msg = _denied
-                ? 'We couldn’t load this product'
+                ? 'This product isn’t available right now'
                 : 'Product Not Found &#128546;';
             var _sub = _denied
-                ? 'This is a temporary problem on our side, not a missing product. Please try again, or browse from the home page.'
+                ? 'It may no longer be listed, or this may be a temporary problem. Please try again later, or browse from the home page.'
                 : 'This item may have been removed or is no longer available.';
             var _c = document.getElementById('productPageContainer');
             if(_c) _c.innerHTML =
@@ -143,9 +147,22 @@ if(_urlId && product && String(product.id) === String(_urlId)){
             }
             try{ sessionStorage.removeItem(_guardKey); }catch(_){}   /* converged */
         }catch(e){
-            /* Offline or denied — the cached render stays. Better a slightly old
-               page than a blank one; the missing-product branch above is the only
-               case that must override the cache. */
+            /* Offline — the cached render stays (better a slightly old page than a blank one).
+               DENIED is different since the takedown rules (2026-10-02): the canonical record now refuses a public
+               read of a product under a moderation hold, so a cached copy must NOT keep rendering it as live. Fail
+               closed to the neutral unavailable state (it may also be a transient refusal; the page says so). */
+            if (e && e.code === 'permission-denied') {
+                try{ localStorage.removeItem('selectedProduct'); }catch(_){}
+                var _c3 = document.getElementById('productPageContainer');
+                if(_c3) _c3.innerHTML =
+                    '<div style="text-align:center;padding:80px 24px;">'
+                  + '<h1 style="color:white;font-size:20px;margin:0 0 10px;">This product isn’t available right now</h1>'
+                  + '<p style="color:rgba(255,255,255,0.45);font-size:13px;line-height:1.6;max-width:320px;margin:0 auto 22px;">It may no longer be listed, or this may be a temporary problem. Please try again later.</p>'
+                  + '<a href="category.html?cat=all" style="display:inline-block;padding:12px 26px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;border-radius:12px;text-decoration:none;font-size:13px;">Browse Products</a>'
+                  + '</div>';
+                var _sk3 = document.getElementById('productSkeleton'); if(_sk3) _sk3.remove();
+                return;
+            }
             try{ console.warn('[product] revalidation skipped:', (e && e.code) || (e && e.message)); }catch(_){}
         }
     })();
