@@ -1177,11 +1177,10 @@ body.adm-light .adm-sec-h{color:#111;}
           <div class="adm-sec-h" style="margin-top:16px;">Pending Facilities</div><div id="hcFacGrid"></div>
         </div>
         <div id="svc-sub-carhub" style="display:none;">
-          <div class="adm-stats" id="carStats"></div>
-          <div class="adm-sec-h" style="margin-top:12px;">Car Bookings</div>
-          <div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Customer</th><th>Car</th><th>Pick-Up</th><th>Return</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="carBookingsBody"></tbody></table></div>
-          <div class="adm-sec-h" style="margin-top:16px;">DL / NTSA Queue</div>
-          <div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Name</th><th>Service</th><th>ID No.</th><th>Phone</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody id="dlQueueBody"></tbody></table></div>
+          <!-- Car Hub C5 (2026-10-03): server-backed — vehicle listings awaiting review (moderateVehicleListing) and pending Car Hub
+             applications (the ONE applicationDecide path). The old tables read browser localStorage (sokoniCarBookings /
+             sokoniDLQueue / sokoniCarFleet) and "approved" nothing on any server. -->
+        <div id="carHubAdmin"></div>
         </div>
         <div id="svc-sub-sports" style="display:none;">
           <div class="adm-stats" id="sportsStats"></div>
@@ -1962,23 +1961,10 @@ body.adm-light .adm-sec-h{color:#111;}
 
       <!-- ═══ CAR HUB ═══ -->
       <div id="adm-pane-carhub" class="adm-pane">
-        <div class="adm-stats" id="carStats"></div>
-        <div class="adm-sec-h" style="margin-top:8px;">🚙 Car Rental Bookings</div>
-        <div class="adm-table-wrap">
-          <table class="adm-table">
-            <thead><tr><th>Customer</th><th>Car</th><th>Pickup Date</th><th>Return Date</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody id="carBookingsBody"></tbody>
-          </table>
-        </div>
-        <div class="adm-sec-h" style="margin-top:16px;">📋 DL / NTSA Queue</div>
-        <div class="adm-table-wrap">
-          <table class="adm-table">
-            <thead><tr><th>Name</th><th>ID No.</th><th>Service</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody id="dlQueueBody"></tbody>
-          </table>
-        </div>
-        <div class="adm-sec-h" style="margin-top:16px;">🚗 Fleet Management</div>
-        <div id="carFleetGrid"></div>
+        <!-- Car Hub C5 (2026-10-03): server-backed — vehicle listings awaiting review (moderateVehicleListing) and pending Car Hub
+             applications (the ONE applicationDecide path). The old tables read browser localStorage (sokoniCarBookings /
+             sokoniDLQueue / sokoniCarFleet) and "approved" nothing on any server. -->
+        <div id="carHubAdminPane"></div>
       </div>
 
       <!-- ═══ SPORTS ═══ -->
@@ -5918,54 +5904,68 @@ function removeLocalHcFac(localId){
 /* ════════════════════════════════
    CAR HUB
 ════════════════════════════════ */
+/* Car Hub C5 — the AdminOS Car Hub area. Reads and decides ONLY through server authorities:
+     · applications/{id} with hub 'car' (D.apps, the same list the Applications pane decides through applicationDecide)
+     · vehicle listings awaiting review: listVehicleReviewQueue → moderateVehicleListing (approve / reject / suspend /
+       restore; a reason is required to reject or suspend; the server writes adminAudit)
+   Every value is escaped; ids travel by index into the fetched list, never interpolated into inline JS. */
+var _carQueue = [], _carQueueState = 'idle';
 function renderCarHub(){
-  document.getElementById('carStats').innerHTML=
-    statBox('🚙','b-blue',D.carBookings.length,'Car Bookings')+
-    statBox('📋','b-yellow',D.dlQueue.length,'DL Queue')+
-    statBox('🚗','b-purple',D.carFleet.length,'Fleet Size')+
-    statBox('⏳','b-red',D.carBookings.filter(function(b){return b.status==='pending';}).length,'Pending');
-  var body=document.getElementById('carBookingsBody'); if(!body) return;
-  if(!D.carBookings.length){ body.innerHTML=emptyRow(7,'🚙','No car bookings'); }
-  else body.innerHTML=D.carBookings.map(function(b,i){
-    var sc={pending:'b-yellow',confirmed:'b-green',active:'b-blue',completed:'b-green',cancelled:'b-red'}[b.status||'pending']||'b-yellow';
-    return '<tr>'
-      +'<td>'+h(b.customerName||b.name||'—')+'</td>'
-      +'<td>'+h(b.carName||b.car||b.vehicle||'—')+'</td>'
-      +'<td>'+h(b.pickupDate||b.startDate||'—')+'</td>'
-      +'<td>'+h(b.returnDate||b.endDate||'—')+'</td>'
-      +'<td>KES '+fmt(b.total||b.amount||0)+'</td>'
-      +'<td><span class="badge '+sc+'">'+h(b.status||'pending')+'</span></td>'
-      +'<td style="white-space:nowrap;">'
-        +'<button class="adm-btn-sm adm-btn-green" onclick="confirmCarBooking('+i+')">✅</button> '
-        +'<button class="adm-btn-sm adm-btn-red" onclick="deleteItem(D.carBookings,'+i+',\'sokoniCarBookings\',renderCarHub)">🗑️</button>'
-      +'</td></tr>';
-  }).join('');
-  var dl=document.getElementById('dlQueueBody'); if(!dl) return;
-  if(!D.dlQueue.length){ dl.innerHTML=emptyRow(6,'📋','No DL/NTSA queue items'); }
-  else dl.innerHTML=D.dlQueue.map(function(q,i){
-    var sc={pending:'b-yellow',processing:'b-blue',completed:'b-green',rejected:'b-red'}[q.status||'pending']||'b-yellow';
-    return '<tr>'
-      +'<td>'+h(q.name||q.fullName||'—')+'</td>'
-      +'<td>'+h(q.idNumber||q.nationalId||'—')+'</td>'
-      +'<td><span class="badge b-blue">'+h(q.service||q.type||'—')+'</span></td>'
-      +'<td>'+h((q.date||q.submittedAt||'').substring(0,10))+'</td>'
-      +'<td><span class="badge '+sc+'">'+h(q.status||'pending')+'</span></td>'
-      +'<td><button class="adm-btn-sm adm-btn-green" onclick="processDL('+i+')">✅ Process</button></td>'
-      +'</tr>';
-  }).join('');
-  var fg=document.getElementById('carFleetGrid'); if(!fg) return;
-  if(!D.carFleet.length){ fg.innerHTML=empty('🚗','No fleet registered'); return; }
-  fg.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">'
-    +D.carFleet.map(function(c,i){
-      return '<div class="adm-card" style="padding:12px;">'
-        +'<div class="adm-card-name">'+h(c.name||c.model||'Car '+(i+1))+'</div>'
-        +'<div class="adm-card-sub">🏷️ '+h(c.plate||'—')+' · '+h(c.type||'sedan')+' · KES '+fmt(c.pricePerDay||0)+'/day</div>'
-        +'<div style="margin-top:8px;"><span class="badge '+(c.available?'b-green':'b-red')+'">'+( c.available?'Available':'Booked')+'</span></div>'
-        +'</div>';
-    }).join('')+'</div>';
+  var targets = ['carHubAdmin', 'carHubAdminPane'].map(function(id){ return document.getElementById(id); }).filter(Boolean);
+  if(!targets.length) return;
+  var carApps = (D.apps||[]).filter(function(a){ return String(a.hub||'')==='car' && String(a.status||'pending').toLowerCase()==='pending'; });
+  var qHtml;
+  if(_carQueueState==='loading' || _carQueueState==='idle') qHtml = '<div class="adm-card-sub" style="padding:14px;">Loading vehicle listings awaiting review…</div>';
+  else if(_carQueueState==='error') qHtml = '<div style="padding:14px;color:#ff8c42;">Could not load the vehicle review queue (the server answered with an error). This is not an empty queue. <button class="adm-btn-sm" onclick="loadCarQueue()">Retry</button></div>';
+  else if(!_carQueue.length) qHtml = emptyRow ? '<div class="adm-card-sub" style="padding:14px;">No vehicle listings awaiting review.</div>' : '';
+  else qHtml = '<div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Vehicle</th><th>Price</th><th>Location</th><th>Seller (uid)</th><th>Declared</th><th>Actions</th></tr></thead><tbody>'
+    + _carQueue.map(function(v,i){
+        var decl = [v.condition, v.mileageKm ? fmt(v.mileageKm)+' km' : '', v.hasLogbook ? 'logbook (declared)' : '', v.importDutyPaid ? 'duty paid (declared)' : ''].filter(Boolean).join(' · ');
+        return '<tr><td>'+h((v.year||'')+' '+(v.make||'')+' '+(v.model||''))+(v.description?'<div class="adm-card-sub">'+h(String(v.description).slice(0,160))+'</div>':'')+'</td>'
+          +'<td>'+h(v.currency||'KES')+' '+fmt(v.price||0)+'</td><td>'+h(v.county||v.location||'—')+'</td>'
+          +'<td style="font-family:monospace;font-size:11px;">'+h(String(v.sellerUid||'').slice(0,12))+'…</td><td class="adm-card-sub">'+h(decl||'—')+'</td>'
+          +'<td style="white-space:nowrap;"><button class="adm-btn-sm adm-btn-green" onclick="moderateCarListing('+i+',\'approve\')">✅ Approve</button> '
+          +'<button class="adm-btn-sm adm-btn-red" onclick="moderateCarListing('+i+',\'reject\')">❌ Reject</button></td></tr>';
+      }).join('') + '</tbody></table></div>';
+  var html = '<div class="adm-stats">'
+      + statBox('🚗','b-yellow',_carQueueState==='ready'?_carQueue.length:'—','Listings awaiting review')
+      + statBox('📬','b-blue',carApps.length,'Car Hub applications pending')
+    + '</div>'
+    + '<div class="adm-sec-h" style="margin-top:8px;">📬 Car Hub applications</div>'
+    + '<div class="adm-card" style="padding:12px;">'+(carApps.length
+        ? carApps.slice(0,8).map(function(a){ return '<div style="padding:4px 0;">'+h(a.name||'—')+' — <span class="adm-card-sub">'+h(a.categoryLabel||a.category||'')+'</span></div>'; }).join('')
+          + '<button class="adm-btn-sm adm-btn-green" style="margin-top:8px;" onclick="showPane(\'businesses\',document.getElementById(\'sb-businesses\'));setTimeout(function(){bizSubTab(\'applications\');},60)">Review in Applications →</button>'
+        : '<div class="adm-card-sub">No pending Car Hub applications. Approvals are decided in Applications (applicationDecide).</div>')+'</div>'
+    + '<div class="adm-sec-h" style="margin-top:16px;">🚗 Vehicle listings awaiting review</div>' + qHtml
+    + '<div class="adm-sec-h" style="margin-top:16px;">🛑 Suspend or restore a live listing</div>'
+    + '<div class="adm-card" style="padding:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
+      + '<input class="adm-input" id="carModId" placeholder="Listing ID" style="flex:1;min-width:180px;" maxlength="128">'
+      + '<button class="adm-btn-sm adm-btn-red" onclick="moderateCarListingById(\'suspend\')">Suspend</button>'
+      + '<button class="adm-btn-sm adm-btn-green" onclick="moderateCarListingById(\'restore\')">Restore</button></div>'
+    + '<div class="adm-card-sub" style="margin-top:12px;">Rentals, mechanic and inspection bookings run on the booking engine (providerBookings) and appear in Services → Bookings. Driving-licence / NTSA results are never issued by SOKONI.</div>';
+  targets.forEach(function(t){ t.innerHTML = html; });
+  if(_carQueueState==='idle') loadCarQueue();
 }
-function confirmCarBooking(i){ D.carBookings[i].status='confirmed'; localStorage.setItem('sokoniCarBookings',JSON.stringify(D.carBookings)); renderCarHub(); toast('✅ Booking confirmed'); }
-function processDL(i){ D.dlQueue[i].status='processing'; localStorage.setItem('sokoniDLQueue',JSON.stringify(D.dlQueue)); renderCarHub(); toast('DL application processing'); }
+function loadCarQueue(){
+  if(!window.sokoniCallable){ _carQueueState='error'; renderCarHub(); return; }
+  _carQueueState='loading';
+  window.sokoniCallable('listVehicleReviewQueue')({}).then(function(r){
+    var d=(r&&r.data)||r||{}; _carQueue=Array.isArray(d.listings)?d.listings:[]; _carQueueState='ready'; renderCarHub();
+  }).catch(function(){ _carQueueState='error'; renderCarHub(); });
+}
+function _carModerate(listingId, decision){
+  if(!/^[A-Za-z0-9_-]{1,128}$/.test(String(listingId||''))){ toast('Enter a valid listing ID','error'); return; }
+  var reason='';
+  if(decision==='reject'||decision==='suspend'){ reason=(window.prompt('Reason (shown to the seller):')||'').trim(); if(!reason){ toast('A reason is required','error'); return; } }
+  if(!window.sokoniCallable){ toast('Callable bridge unavailable — reload','error'); return; }
+  window.sokoniCallable('moderateVehicleListing')({ listingId: listingId, decision: decision, reason: reason||undefined }).then(function(r){
+    var d=(r&&r.data)||r||{}; toast('Listing '+decision+'d → '+(d.status||'updated'),'success'); loadCarQueue();
+  }).catch(function(e){ toast((e&&e.message)||'Could not '+decision+' the listing','error'); });
+}
+function moderateCarListing(i, decision){ var v=_carQueue[i]; if(v) _carModerate(v.listingId, decision); }
+function moderateCarListingById(decision){ var el=document.getElementById('carModId'); _carModerate(el?String(el.value).trim():'', decision); }
+/* confirmCarBooking / processDL retired 2026-10-03 (Car Hub C5): they wrote browser localStorage only and decided nothing. */
+
 
 /* ════════════════════════════════
    SPORTS HUB
@@ -7656,7 +7656,7 @@ window.loadSupportQueue = loadSupportQueue;
   };
   window.ordSubTab  = function(tab, btn) { _subTabSwitch('ord',  tab, btn); };
   window.rideSubTab = function(tab, btn) { _subTabSwitch('ride', tab, btn); };
-  window.svcSubTab  = function(tab, btn) { _subTabSwitch('svc',  tab, btn); };
+  window.svcSubTab  = function(tab, btn) { _subTabSwitch('svc',  tab, btn); if (tab === 'carhub' && typeof renderCarHub === 'function') renderCarHub(); };
   window.finSubTab  = function(tab, btn) { _subTabSwitch('fin',  tab, btn); };
 
   /* Announcement modal */

@@ -96,6 +96,17 @@ ck('V6 seller declarations are never shown as verified (no "verified" badge in t
 ck('V7 car-hub routes Buy & Sell to SokoniVehicles (browse / sell) and mounts My vehicle listings', /G\.submitCarForSale = function \(\) \{ if \(G\.SokoniVehicles\) return G\.SokoniVehicles\.sell\(\);/.test(CC) && /G\.renderBuySellGrid = function \(\) \{ if \(G\.SokoniVehicles\) return G\.SokoniVehicles\.browse\(\); \}/.test(CC) && /id="skVehMine"/.test(CC));
 ck('V8 the "verified sellers" claim and the WhatsApp phone field are gone from Buy & Sell', !/from verified sellers/.test(CH) && !/id="bsPhone" placeholder="07XX/.test(CH));
 
+console.log('\n── D: AdminOS Car Hub area (C5) ──');
+const AD2 = read('admin.html'), ad2 = strip(AD2);
+const rch = fnBody(ad2, 'renderCarHub');
+ck('D1 Car Hub admin reads the server review queue (listVehicleReviewQueue) and decides via moderateVehicleListing', /sokoniCallable\('listVehicleReviewQueue'\)/.test(ad2) && /sokoniCallable\('moderateVehicleListing'\)/.test(ad2));
+ck('D2 reject / suspend require a reason; listing ids validated; actions by index, never id-in-onclick', /if\(decision==='reject'\|\|decision==='suspend'\)\{ reason=/.test(ad2) && /moderateCarListing\('\+i\+',\\'approve\\'\)/.test(AD2) && /\^\[A-Za-z0-9_-\]\{1,128\}\$/.test(fnBody(ad2, '_carModerate')));
+ck('D3 Car Hub applications are decided in the ONE Applications pane (applicationDecide), not here', /Review in Applications/.test(rch) && !/sokoniCallable\('applicationDecide'\)|approveApp\(/.test(rch));
+ck('D4 the localStorage car tables / DL queue / confirmCarBooking / processDL are gone (they decided nothing)', !/function confirmCarBooking|function processDL|localStorage\.setItem\('sokoniDLQueue'|localStorage\.setItem\('sokoniCarBookings'/.test(ad2) && !/carBookingsBody|dlQueueBody/.test(AD2));
+ck('D5 unknown ≠ empty: queue load error says "not an empty queue"; count shows — until loaded', /This is not an empty queue/.test(rch) && /_carQueueState==='ready'\?_carQueue\.length:'—'/.test(rch));
+ck('D6 Services → Car Hub sub-tab renders the area (it showed static markup only)', /if \(tab === 'carhub' && typeof renderCarHub === 'function'\) renderCarHub\(\);/.test(AD2));
+ck('D7 every value escaped through h() in the renderer', (rch.match(/h\(/g) || []).length >= 8);
+
 console.log('\n── Z: negative controls (f799841) ──');
 const OCR = old('car-rental.html'), OMC = old('mechanics.html');
 ck('Z1 the old car-rental really had hard-coded cars and a browser STK path (R3/R4 not vacuous)', /const CARS = \[/.test(OCR) && /SokoniMpesa|waConnect/.test(OCR));
