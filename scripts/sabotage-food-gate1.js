@@ -28,7 +28,8 @@ const M = [
   ['shopId sanitising not refusing', `  if (rawShop && !isPlaceholderShopId(rawShop) && !/^[A-Za-z0-9_-]{1,128}$/.test(rawShop)) {`, `  if (false) {`],
   ['admin classification overwritten', `  const adminSet = !!(priorB && priorB.source === 'admin');`, `  const adminSet = false;`],
   ['reinstatement does not restore', `    if (!d || d.suspendedBy !== 'application_lifecycle') return {};`, `    return {};`],
-  ['application role not stamped', `      ...(role && app.role !== role ? { role, roleResolvedBy: _resolved.by } : {}),`, ``],
+  /* anchor follows Education E1 (2cdc1b3), which extended this line with the education type */
+  ['application role not stamped', `      ...(role && app.role !== role ? { role, roleResolvedBy: eduType ? 'education:' + eduType : _resolved.by } : {}),`, ``],
   ['category role ignored at decision', `|| /\\+category$/.test(_resolved.by)`, ``],
   ['seller delegated again', `    } else if (role === 'seller') {`, `    } else if (role === 'seller-x') {`],
   ['suspension leaves seller discoverable', `      batch.set(ref, Object.assign({ status: 'suspended', searchable: false, isPublic: false,`, `      batch.set(ref, Object.assign({ status: 'suspended',`],
