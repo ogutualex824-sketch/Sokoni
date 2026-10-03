@@ -19,6 +19,11 @@
           X-b  'marketing' derived from client providers fields -> row S6 fails
           X-c  group gate fails OPEN on error                   -> row G4 fails
           X-d  'marketing' granted for a truthy non-boolean      -> row M3 fails
+          X-e  edit authority treats a MISSING editable as editable -> row E3 fails
+          X-f  shell fails OPEN when the workspace answer is missing -> row E14 fails
+     E  editable  P0-F (owner 2026-10-03): sokoni-edit-authority.js decide() matrix (every
+                  ownerState × editable missing/false/true, interim claim/approval rule) and
+                  S.editable in the REAL resolveProviderSession
 
    No browser, no emulator, no network. node scripts/test-merchant-provider-session.js
    ══════════════════════════════════════════════════════════════════════════════ */
@@ -36,6 +41,7 @@ const ck = (l, ok, got) => {
 const SHELL_SRC = read('merchant-v2.html');
 const ROUTES_SRC = read('sokoni-merchant-routes.js');
 const SESSION_SRC = read('sokoni-merchant-session.js');
+const EDIT_SRC = read('sokoni-edit-authority.js');
 
 function slice (src, from, to) {
   const a = src.indexOf(from); const b = src.indexOf(to, a + 1);
@@ -49,8 +55,14 @@ function loadContract (src) {
   vm.runInContext(src || ROUTES_SRC, c, { filename: 'routes.js' });
   return c.SokoniMerchantRoutes;
 }
-function loadSessionModule (src) {
+function loadEditAuthority (src) {
   const c = { console }; c.window = c; vm.createContext(c);
+  vm.runInContext(src || EDIT_SRC, c, { filename: 'edit-authority.js' });
+  return c.SokoniEditAuthority;
+}
+function loadSessionModule (src, opts) {
+  const c = { console }; c.window = c; vm.createContext(c);
+  if (!(opts && opts.noEditAuthority)) vm.runInContext((opts && opts.editSrc) || EDIT_SRC, c, { filename: 'edit-authority.js' });
   vm.runInContext(src || SESSION_SRC, c, { filename: 'session.js' });
   return c.SokoniMerchantSession;
 }
@@ -100,7 +112,7 @@ function shellHarness (opts) {
   const o = opts || {};
   const shell = o.shellSrc || SHELL_SRC;
   const CONTRACT = o.contract || loadContract();
-  const SMS = o.noSessionModule ? undefined : loadSessionModule(o.sessionSrc);
+  const SMS = o.noSessionModule ? undefined : loadSessionModule(o.sessionSrc, { noEditAuthority: o.noEditAuthority, editSrc: o.editSrc });
   const docs = o.docs || {};
   const log = { reads: [], calls: [], rendered: [], framed: [], refused: [], exits: [], toasts: [] };
   const doc = fakeDoc();
@@ -135,7 +147,10 @@ function shellHarness (opts) {
     history: { pushState (s, t, h) { ctx.location.hash = h; }, replaceState (s, t, h) { ctx.location.hash = h; } },
     setTimeout: (fn) => { fn(); return 0; }, clearTimeout () {}, Promise,
     CONTRACT, S, log, _callable,
-    sdk: async () => ({ fs: fsApi, db: {} }),
+    sdk: async () => ({ fs: fsApi, db: {}, authI: o.claims === undefined ? null : { currentUser: { getIdTokenResult: async () => {
+      if (o.claims === 'throw') throw new Error('token');
+      return { claims: o.claims };
+    } } } }),
     resolveMerchantContext: async () => null,
     byId: {}, panels: {}, current: null, content: doc.ids.content, titleEl: { textContent: '' },
     setActive () {}, openDrawer () {},
@@ -403,7 +418,7 @@ const holdingAnswer = (extra) => Object.assign({
   console.log('\nX  negative controls (each sabotage must turn its named row red)');
   const sabA = SHELL_SRC.replace("var sess = S.session === 'provider' ? 'provider' : null;", 'var sess = null;');
   ck('X-a sabotage: provider session mounts merchant-only routes → N3 goes red', sabA !== SHELL_SRC && (await rowN3(sabA)).length > 0, null);
-  const sabB = SHELL_SRC.replace('res = SMS.mapWorkspace(r && r.data);', "res = SMS.mapWorkspace(r && r.data); if ((snap.data() || {}).marketing) res.capabilities.push('marketing');");
+  const sabB = SHELL_SRC.replace('res = SMS.mapWorkspace(answer);', "res = SMS.mapWorkspace(answer); if ((snap.data() || {}).marketing) res.capabilities.push('marketing');");
   ck('X-b sabotage: "marketing" derived from client providers fields → S6 goes red', sabB !== SHELL_SRC && (await rowS6(sabB)) === false, null);
   /* can() answering "yes" when the capability list is absent/errored = a gate that fails open.
      (Removing only the sidebar's own group check is NOT enough to open it — mountable() asks the
@@ -414,6 +429,78 @@ const holdingAnswer = (extra) => Object.assign({
   const sabD = SESSION_SRC.replace('if (a.marketing === true) add(\'marketing\');', 'if (a.marketing) add(\'marketing\');');
   const Md = loadSessionModule(sabD);
   ck('X-d sabotage: truthy (not strict) marketing → M3 goes red', sabD !== SESSION_SRC && nonBool.some(([, a]) => Md.mapWorkspace(a).capabilities.includes('marketing')), null);
+
+  /* ════ E — EDITABLE (P0-F) ════ */
+  console.log('\nE  editable: only answer.editable === true is editable');
+  const EA = loadEditAuthority();
+  const dec = (a, c) => EA.decide(a, c);
+  const valid = { approval: { state: 'VALID_APPROVAL' } };
+  ck('E0  the VALID token this client checks is exactly sokoni-5b f85039a\'s STATES.VALID ("VALID_APPROVAL")', EA.VALID_APPROVAL === 'VALID_APPROVAL' && M.VALID_APPROVAL === 'VALID_APPROVAL', EA.VALID_APPROVAL);
+  const tbl = [
+    ['active',      true,      true,  null],
+    ['active',      false,     false, 'your business status does not allow changes yet'],
+    ['active',      undefined, false, 'your business status does not allow changes yet'],
+    ['deactivated', false,     false, 'deactivated — reactivate your account'],
+    ['deactivated', undefined, false, 'deactivated — reactivate your account'],
+    ['suspended',   false,     false, 'suspended'],
+    ['suspended',   undefined, false, 'suspended'],
+    ['frozen',      false,     false, 'frozen by SOKONI'],
+    ['frozen',      undefined, false, 'frozen by SOKONI'],
+    ['unknown',     false,     false, 'status unknown'],
+    ['unknown',     undefined, false, 'status unknown'],
+  ];
+  const tblBad = tbl.filter(([os, ed, want, why]) => { const a = Object.assign({ ownerState: os }, valid); if (ed !== undefined) a.editable = ed; const d = dec(a, {}); return d.editable !== want || d.readOnly === want || d.reason !== why; });
+  ck('E1  ownerState × editable matrix (active/deactivated/suspended/frozen/unknown × false/missing; active × true)', tblBad.length === 0, tblBad);
+  ck('E2  editable === true wins for every ownerState the server pairs with it (server already folded the state in)', dec(Object.assign({ ownerState: 'active', editable: true }, valid)).editable === true, null);
+  function rowE3 (src) { const E = loadEditAuthority(src); return E.decide(Object.assign({}, valid), {}).editable === false && E.decide(Object.assign({}, valid), {}).reason === 'status unknown'; }
+  ck('E3  editable MISSING on an old server with VALID approval and no deactivated claim → READ-ONLY, "status unknown"', rowE3(), dec(Object.assign({}, valid), {}));
+  const nb = [['"true"', 'true'], ['1', 1], ['{}', {}], ['null', null]].filter(([, v]) => dec(Object.assign({ editable: v }, valid), {}).editable !== false).map(([n]) => n);
+  ck('E4  a non-boolean editable ("true", 1, {}, null) is NOT editable', nb.length === 0, nb);
+  const e5 = dec(Object.assign({}, valid), { deactivated: true });
+  ck('E5  interim: claim deactivated === true (no ownerState) → read-only, deactivated, with the reactivate link', e5.readOnly && e5.reasonCode === 'deactivated' && e5.action && e5.action.href === '/profile.html', e5);
+  const e6 = dec({ approval: { state: 'INVALID_LEGACY_APPROVAL' } }, {});
+  ck('E6  interim: approval not VALID_APPROVAL → read-only naming the approval state', e6.readOnly && e6.reasonCode === 'approval' && /INVALID_LEGACY_APPROVAL/.test(e6.reason), e6);
+  ck('E7  interim: approval block missing → read-only', dec({}, {}).readOnly === true, dec({}, {}));
+  const e8 = dec({ editable: true, ownerState: 'active', approval: { state: 'PENDING_APPROVAL' } }, { deactivated: true });
+  ck('E8  editable === true OVERRIDES the interim signals (claim deactivated, approval not valid)', e8.editable === true && e8.readOnly === false, e8);
+  ck('E9  editable false OVERRIDES a clean interim picture (VALID approval, no claim)', dec(Object.assign({ editable: false, ownerState: 'suspended' }, valid), {}).readOnly === true, null);
+  ck('E10 no answer (null / array / string) → read-only, "status unknown" (fails closed)', [null, [], 'x', undefined].every((a) => dec(a, {}).readOnly && dec(a, {}).reason === 'status unknown'), null);
+  ck('E11 an ownerState this client does not know → read-only "status unknown"', dec(Object.assign({ ownerState: 'paused' }, valid), {}).reason === 'status unknown', dec(Object.assign({ ownerState: 'paused' }, valid), {}));
+  ck('E12 the one message: "Your account can’t make changes right now (<reason>)"', EA.message(dec(Object.assign({ ownerState: 'frozen', editable: false }, valid))) === 'Your account can\u2019t make changes right now (frozen by SOKONI)', EA.message(dec({ ownerState: 'frozen' })));
+  ck('E13 decide() never reads approval from the application (status/adminApproved/approvedBy/verified are ignored)', dec({ status: 'approved', adminApproved: true, approvedBy: 'admin', verified: true }, {}).readOnly === true, null);
+
+  async function rowE14 (shellSrc) {
+    const hh = shellHarness({ shellSrc, claims: {}, docs: { 'providers/u1': { name: 'P' } },
+      callables: { providerDispatch: () => { const e = new Error('down'); e.code = 'functions/unavailable'; throw e; } } });
+    await hh.api.resolveShop();
+    return !!hh.S.editable && hh.S.editable.editable === false && hh.S.editable.readOnly === true;
+  }
+  ck('E14 shell: businessWorkspace fails → S.editable read-only (fails closed)', await rowE14(), null);
+  h = shellHarness({ claims: {}, docs: { 'providers/u1': { name: 'P' } }, callables: { providerDispatch: () => ({ data: routedAnswer({ ownerState: 'active', editable: true }) }) } });
+  await h.api.resolveShop();
+  ck('E15 shell: answer editable true → S.editable.editable true; ONE businessWorkspace call feeds both capabilities and editable', h.S.editable.editable === true && bwCalls(h).length === 1 && h.S.capabilities.includes('module:messages'), h.S.editable);
+  h = shellHarness({ claims: {}, docs: { 'providers/u1': { name: 'P' } }, callables: { providerDispatch: () => ({ data: routedAnswer({ ownerState: 'deactivated', editable: false }) }) } });
+  await h.api.resolveShop();
+  ck('E16 shell: ownerState deactivated → read-only with the reactivate action', h.S.editable.readOnly && h.S.editable.action && h.S.editable.action.href === '/profile.html', h.S.editable);
+  h = shellHarness({ claims: { deactivated: true }, docs: { 'providers/u1': { name: 'P' } }, callables: { providerDispatch: () => ({ data: routedAnswer() }) } });
+  await h.api.resolveShop();
+  ck('E17 shell: OLD server (no editable) + ID-token claim deactivated → read-only, reason deactivated (claims read from the token)', h.S.editable.readOnly && h.S.editable.reasonCode === 'deactivated', h.S.editable);
+  h = shellHarness({ claims: 'throw', docs: { 'providers/u1': { name: 'P' } }, callables: { providerDispatch: () => ({ data: routedAnswer() }) } });
+  await h.api.resolveShop();
+  ck('E18 shell: claims unreadable + old server → read-only (never "not deactivated" by default)', h.S.editable.readOnly === true, h.S.editable);
+  h = shellHarness({ noEditAuthority: true, claims: {}, docs: { 'providers/u1': { name: 'P' } }, callables: { providerDispatch: () => ({ data: routedAnswer({ editable: true, ownerState: 'active' }) }) } });
+  await h.api.resolveShop();
+  ck('E19 shell: edit-authority module missing → read-only even when the server says editable', h.S.editable.readOnly === true, h.S.editable);
+  h = shellHarness({ docs: { 'shops/u1': { name: 'S' } }, callables: { merchantIdentity } });
+  await h.api.resolveShop();
+  ck('E20 merchant session: S.editable stays null (not this authority\'s question; merchantIdentity governs)', h.S.editable === null || h.S.editable === undefined, h.S.editable);
+
+  console.log('\nX  negative controls (P0-F)');
+  const sabE = EDIT_SRC.replace('if (a.editable === true) {', 'if (a.editable !== false) {');
+  ck('X-e sabotage: missing editable treated as editable → E3 goes red', sabE !== EDIT_SRC && rowE3(sabE) === false, null);
+  const sabF = SHELL_SRC.replace('if (typeof SMS.editableOf === \'function\') S.editable = SMS.editableOf(answer, claims);',
+    'S.editable = answer ? SMS.editableOf(answer, claims) : { editable: true, readOnly: false };');
+  ck('X-f sabotage: shell fails OPEN on a missing answer → E14 goes red', sabF !== SHELL_SRC && (await rowE14(sabF)) === false, null);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
