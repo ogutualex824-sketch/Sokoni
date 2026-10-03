@@ -215,6 +215,30 @@ const ITEMS = [{ name: 'Cement 50kg', qty: 100, unit: 'bag', targetPriceKES: 700
   ck('G3 a hub with no configured price REFUSES the RFQ (no unpriced lead, no default)', !r.ok && r.code === 'failed-precondition' && /not open/.test(r.msg), r);
   global.__leadsStub = null;
 
+  console.log('\n── K: commission category stamp + enquiry → RFQ event (sokoni-2f) ──');
+  /* G1 left bizSupA with categories ['cement'] */
+  r = await callT('uInd', {}, { op: 'create', buyerType: 'individual', items: [{ name: 'Cement', qty: 50 }], supplierBusinessIds: ['bizSupA'], deliveryLocation: 'Rongai' });
+  const kId = r.r.rfqId;
+  await call('uSupA', { op: 'quote', rfqId: kId, lines: [{ name: 'Cement', qty: 50, unitPriceKES: 700 }], vatRate: 16, validDays: 5 });
+  r = await callT('uInd', {}, { op: 'respond', buyerType: 'individual', rfqId: kId, supplierBusinessId: 'bizSupA', action: 'accept' });
+  ck('K1 accepting a materials supplier\'s quote stamps commissionCategory building-materials (server-side)', r.ok && (store.get('rfqs/' + kId) || {}).commissionCategory === 'building-materials', store.get('rfqs/' + kId));
+  store.set('businesses/bizSupB', Object.assign({}, store.get('businesses/bizSupB'), { supply: Object.assign({}, (store.get('businesses/bizSupB') || {}).supply, { categories: ['stationery'] }) }));
+  r = await callT('uInd', {}, { op: 'create', buyerType: 'individual', items: [{ name: 'Paper', qty: 5 }], supplierBusinessIds: ['bizSupB'], deliveryLocation: 'Rongai' });
+  const k2 = r.r.rfqId;
+  await call('uSupB', { op: 'quote', rfqId: k2, lines: [{ name: 'Paper', qty: 5, unitPriceKES: 100 }], vatRate: 0, validDays: 5 });
+  r = await callT('uInd', {}, { op: 'respond', buyerType: 'individual', rfqId: k2, supplierBusinessId: 'bizSupB', action: 'accept' });
+  ck('K2 an unrecognised category REFUSES the acceptance (no default commission, fail closed)', !r.ok && r.code === 'failed-precondition' && (store.get('rfqs/' + k2) || {}).status === 'submitted', r);
+  store.set('users/uInd2', { displayName: 'Second Buyer', phoneVerified: true });   /* uInd has used its 5 RFQs/day cap above */
+  store.set('contactRequests/cq1', { buyerUid: 'uInd2', sellerUid: 'uSupA', productId: 'p1', status: 'pending' });
+  r = await callT('uInd2', {}, { op: 'create', buyerType: 'individual', items: [{ name: 'Cement', qty: 10 }], supplierBusinessIds: ['bizSupA', 'bizSupB'], deliveryLocation: 'Ngong', fromContactRequestId: 'cq1' });
+  const k3 = r.ok ? r.r.rfqId : 'x';
+  ck('K3 the enquiry\'s supplier keeps the enquiry\'s commercial event (cq_<id>); the other gets its own', (store.get('b2bLeads/' + k3 + '__bizSupA') || {}).commercialEventId === 'cq_cq1'
+    && (store.get('b2bLeads/' + k3 + '__bizSupB') || {}).commercialEventId === 'rfq_' + k3 + '__bizSupB', [store.get('b2bLeads/' + k3 + '__bizSupA'), store.get('b2bLeads/' + k3 + '__bizSupB')]);
+  r = await callT('uOther', { phone_number: '+254700000002' }, { op: 'create', buyerType: 'individual', items: [{ name: 'Cement', qty: 10 }], supplierBusinessIds: ['bizSupA'], deliveryLocation: 'Ngong', fromContactRequestId: 'cq1' });
+  ck('K4 someone else\'s enquiry cannot be attached (not-found)', !r.ok && r.code === 'not-found', r);
+  r = await callT('uInd2', {}, { op: 'create', buyerType: 'individual', items: [{ name: 'Cement', qty: 10 }], supplierBusinessIds: ['bizSupB'], deliveryLocation: 'Ngong', fromContactRequestId: 'cq1' });
+  ck('K5 an enquiry to a different seller cannot be attached (refused for the MISMATCH, not consent)', !r.ok && r.code === 'failed-precondition' && /different seller/.test(r.msg), r);
+
   console.log('\n── N: notifications ──');
   ck('N1 rfq_received → each recipient owner (uSupA, uSupB) once per RFQ', notes.filter((n) => n.type === 'rfq_received' && n.data.rfqId === rfqId).map((n) => n.uid).sort().join() === 'uSupA,uSupB');
   ck('N2 rfq_quoted → the buyer who created it', notes.some((n) => n.type === 'rfq_quoted' && n.uid === 'uBuyer'));

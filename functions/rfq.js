@@ -110,6 +110,25 @@ function hubFor(category, supplierCats) {
   return cats.some(function (c) { return CONSTRUCTION_CATS.indexOf(c) !== -1; }) ? 'construction' : 'b2b';
 }
 
+/* Commission category for an individual's accepted quote (sokoni-2f rfq_quote purpose: stamped HERE, server-side, never
+   inferred by the payment purpose). Materials → marketplace 15%; contractor / service work → construction_service 0%
+   (owner: subscription + lead fee); equipment → the rental row. From the RFQ category, else the supplier's own
+   categories. Nothing recognisable → null and the acceptance is refused (fail closed, never a default). */
+const SERVICE_CATS = ['contractor', 'construction', 'construction-company', 'welding-fabrication', 'construction-services', 'construction-transport', 'construction-architect'];
+const MATERIAL_CATS = ['cement','steel','timber','roofing','bricks','tiles','paint','plumbing-materials','electrical-materials','windows-doors',
+  'construction-tools','sand-gravel','safety-ppe','building-materials','hardware'];
+function commissionCategoryFor(rfqCategory, supplierCats) {
+  const pick = function (c) { c = String(c || '').toLowerCase();
+    if (c === 'equipment-rental') return 'equipment-rental';
+    if (SERVICE_CATS.indexOf(c) !== -1) return 'construction_service';
+    if (MATERIAL_CATS.indexOf(c) !== -1) return 'building-materials';
+    return null; };
+  const fromRfq = pick(rfqCategory); if (fromRfq) return fromRfq;
+  const found = (supplierCats || []).map(pick).filter(Boolean);
+  if (found.indexOf('building-materials') !== -1) return 'building-materials';
+  return found[0] || null;
+}
+
 function cleanItems(items) {
   if (!Array.isArray(items) || !items.length) err('Add at least one item to your RFQ.');
   if (items.length > MAX_ITEMS) err('An RFQ can list at most ' + MAX_ITEMS + ' items.');
@@ -182,6 +201,19 @@ H.create = async function (request) {
     if (!suppliers.length) err('No supplier on SOKONI is accepting RFQs in that category yet. Try another category or send it to a specific supplier.', 'failed-precondition');
   } else err('Choose at least one supplier, or send an open RFQ by category.');
 
+  /* An RFQ that grows out of a product-page enquiry (contactRequests) reuses that enquiry's commercial event for the
+     supplier it was sent to, so the lead can never be billed twice. Verified on the server: the enquiry is the caller's
+     and its seller owns one of the RFQ's suppliers. */
+  let cqEvent = null;
+  if (d.fromContactRequestId != null) {
+    if (!isId(String(d.fromContactRequestId))) err('fromContactRequestId is not valid.');
+    const cq = await db().collection('contactRequests').doc(String(d.fromContactRequestId)).get();
+    const cqd = cq.exists ? (cq.data() || {}) : null;
+    if (!cqd || cqd.buyerUid !== request.auth.uid) err('That enquiry was not found.', 'not-found');
+    const match = suppliers.find(function (x) { return x.ownerUid && x.ownerUid === cqd.sellerUid; });
+    if (!match) err('That enquiry was sent to a different seller than this RFQ.', 'failed-precondition');
+    cqEvent = { supplierId: match.id, id: 'cq_' + String(d.fromContactRequestId) };
+  }
   const ref = db().collection('rfqs').doc();
   const rfqId = ref.id, now = Date.now(), month = ym();
   const rfqCategory = mode === 'open' ? san(d.open.category, 60).toLowerCase() : null;
@@ -231,7 +263,9 @@ H.create = async function (request) {
       /* business buyers keep the decided B2B lead rule; the construction hub applies to individual RFQs (owner 10-03) */
       const hub = hubOf(x);
       const leadId = rid(rfqId, x.id);
-      const commercialEventId = 'rfq_' + leadId;   /* one event per (rfq, supplier): a fan-out RFQ is N events, one per supplier */
+      /* one event per (rfq, supplier): a fan-out RFQ is N events — except the supplier an earlier enquiry reached, which
+         keeps that enquiry's event ('cq_<id>') */
+      const commercialEventId = cqEvent && cqEvent.supplierId === x.id ? cqEvent.id : 'rfq_' + leadId;
       t.create(db().collection('b2bLeads').doc(leadId), { supplierBusinessId: x.id, supplierOwnerUid: x.ownerUid, rfqId,
         buyerBusinessId: buyerId, buyerType: buyer.buyerType, hub, tier: 'standard', commercialEventId,
         month, source: 'rfq', consentAcceptsLeadsAt: x.acceptsLeadsAt, ...(priceByHub[hub] || {}), createdAt: F.serverTimestamp() });
@@ -408,6 +442,9 @@ H.respond = async function (request) {
     if (d.expectedVersion != null && Number(d.expectedVersion) !== Number(quote.version)) err('The supplier updated this quotation — review the new version first.', 'aborted');
 
     if (buyer.buyerType === 'individual') {
+      const supSnap = await t.get(db().collection('businesses').doc(d.supplierBusinessId));
+      const commissionCategory = commissionCategoryFor(rfq.category, ((supSnap.exists ? supSnap.data() : {}).supply || {}).categories);
+      if (!commissionCategory) err('This supplier\'s category is not configured for SOKONI checkout yet — message the supplier or contact SOKONI support.', 'failed-precondition');
       /* INDIVIDUAL (owner 2026-10-03): an accepted quote becomes a NORMAL SOKONI order (canonical checkout → IntaSend →
          Shop Riders → 15% materials commission → supplier wallet → receipt). Until checkout accepts a quote reference,
          the acceptance is recorded with an immutable price snapshot and the buyer is told checkout is next — no
@@ -416,7 +453,7 @@ H.respond = async function (request) {
         totalKES: quote.totalKES, version: quote.version, supplierBusinessId: d.supplierBusinessId, supplierName: quote.supplierName || 'Supplier' };
       t.update(qRef, { status: 'accepted', acceptedAt: F.serverTimestamp(), checkout: 'pending' });
       t.update(recRef, { status: 'accepted' });
-      t.update(rfqRef, { status: 'accepted', acceptedSupplierBusinessId: d.supplierBusinessId, acceptedQuote: snap, checkout: 'pending', acceptedAt: F.serverTimestamp() });
+      t.update(rfqRef, { status: 'accepted', acceptedSupplierBusinessId: d.supplierBusinessId, acceptedQuote: snap, checkout: 'pending', commissionCategory, acceptedAt: F.serverTimestamp() });
       return { poId: null, checkout: 'pending', supplierOwnerUid: rec.data().supplierOwnerUid, recipientIds: rfq.recipientIds || [], title: rfq.title, totalKES: quote.totalKES };
     }
     /* the buyer's link to this supplier in the procurement authority (procSuppliers) — reuse, or create once */
