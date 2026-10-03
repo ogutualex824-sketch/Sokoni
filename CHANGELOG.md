@@ -1,3 +1,10 @@
+## 2026-10-04 — Legacy banned production census (read-only) — 0 accounts
+
+- **Run 2026-10-03T23:22Z against sokoni-aeb26** with `scripts/census-legacy-banned.js` (read-only; positive control: the same query shape on status=="active" returned 1).
+- **Result:** the users collection has 87 docs. status=="banned": **0**, so there is nothing that can still sign in, holds a role or claim, or has a non-zero wallet or an open payout. Suspended accounts with no readable suspendedUntil: **0**.
+- **Meaning:** no legacy ban needs migration today. The rules and server still treat "banned" as locked, for any record written before the server deploy (the old tsBanUser / tsReviewReport stay live until then). **Re-run immediately before the server deploy.**
+- **Files:** scripts/census-legacy-banned.js (new). No database, API or security change.
+
 ## 2026-10-04 — Users security release: ONE account-lock contract (suspension · ban · 14-day auto-expiry), ONE role authority (live Authority Core), reconciliation deploy guard (NOT deployed)
 
 - **Owner rulings (relayed by b2, 10-04):**
