@@ -122,6 +122,16 @@ const click = async (dataset, opts) => {
     'marketingApply carries type + categories + details and NO status / approval / verification field', ap);
   ck('W5b', /Under review/.test(ELS.mhMine.innerHTML) && ELS.mhWizard.innerHTML === '', 'only AFTER the server answered: "Under review" status replaces the wizard', ELS.mhMine.innerHTML.slice(0, 160));
 
+  /* review sub-stages (ONE engine reviewStage): verified is shown as a stage of PENDING, never as approved; revoked is terminal */
+  H.S.me = { ok: true, application: { status: 'pending', reviewStage: 'verified', marketingType: 'individual', requestedCategories: ['seo'] } }; H.renderMine();
+  const verifiedHtml = ELS.mhMine.innerHTML;
+  H.S.me = { ok: true, application: { status: 'suspended', reviewStage: 'revoked', marketingType: 'individual', requestedCategories: ['seo'] } }; H.renderMine();
+  const revokedHtml = ELS.mhMine.innerHTML;
+  ck('W10', /Under review/.test(verifiedHtml) && /details are verified/.test(verifiedHtml) && !/Approved/.test(verifiedHtml) && !/Open my dashboard/.test(verifiedHtml)
+    && /Approval revoked/.test(revokedHtml) && /cannot be resubmitted/.test(revokedHtml) && !/data-withdraw/.test(revokedHtml),
+    'review stages: "verified" reads as a stage of review (no dashboard link); "revoked" is terminal (no withdraw / resubmit)', { verifiedHtml: verifiedHtml.slice(0, 200), revokedHtml: revokedHtml.slice(0, 200) });
+  H.S.me = { ok: true, application: { status: 'pending', marketingType: 'individual', requestedCategories: ['seo', 'branding'] } }; H.renderMine();
+
   /* profile actions */
   await click({ quote: 'm1', name: 'Achieng' }); await click({ book: 'm1', name: 'Achieng' });
   ck('W7', opened.leads.length === 1 && opened.leads[0].providerId === 'm1' && opened.book.length === 1 && opened.book[0].providerId === 'm1',

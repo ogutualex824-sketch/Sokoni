@@ -27,7 +27,11 @@
     withdrawn: ['↩︎ Withdrawn', 'You withdrew this application. You can apply again at any time.'],
     approved: ['✅ Approved', 'You are an approved SOKONI marketer.'],
     suspended: ['⛔ Suspended', 'Your marketing listing is suspended. Contact SOKONI support.'],
+    revoked: ['⛔ Approval revoked', 'SOKONI revoked this approval. It cannot be resubmitted — contact SOKONI support.'],
   };
+  /* Review sub-stages from the ONE application engine (reviewStage; status stays canonical). Verified is NOT approved. */
+  var STAGE_TEXT = { submitted: 'Submitted — waiting for a reviewer.', under_review: 'A reviewer is checking your application now.',
+    verified: 'Your details are verified. SOKONI is deciding which services to approve.' };
   var S = { group: '', category: '', type: '', q: '', me: null, wiz: { step: 0, type: '', cats: [] } };
 
   async function ready() {
@@ -132,10 +136,11 @@
     var el = $('mhMine'); if (!el) return;
     var me = S.me;
     if (!me || me.error || !me.application) { el.innerHTML = me && me.error ? '<div class="mh-note err">' + esc(me.error) + '</div>' : ''; return; }
-    var a = me.application, st = (me.marketer && me.marketer.status === 'suspended') ? 'suspended' : a.status;
+    var a = me.application, st = a.reviewStage === 'revoked' ? 'revoked' : (me.marketer && me.marketer.status === 'suspended') ? 'suspended' : a.status;
     var t = STATUS_TEXT[st] || ['⏳ ' + st, ''];
     var lab = function (ids) { return (ids || []).map(function (c) { return '<span class="mh-tag">' + esc(T().label(c)) + '</span>'; }).join(''); };
     var html = '<div class="mh-status"><div class="mh-status-head">' + esc(t[0]) + ' · ' + esc(TYPE_LABEL[a.marketingType] || '') + '</div><p>' + esc(t[1]) + '</p>';
+    if (st === 'pending' && STAGE_TEXT[a.reviewStage]) html += '<div class="mh-note"><b>Stage:</b> ' + esc(STAGE_TEXT[a.reviewStage]) + '</div>';
     if (a.reviewReason) html += '<div class="mh-note"><b>Reviewer:</b> ' + esc(a.reviewReason) + '</div>';
     if (st === 'approved') {
       html += '<div class="mh-sec-label">Approved services</div><div class="mh-tags">' + lab(a.approvedCategories) + '</div>';

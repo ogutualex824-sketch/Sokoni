@@ -1,3 +1,9 @@
+## [2026-10-03] — Marketing Hub web: review stages in the applicant's status (ONE engine reviewStage) — NOT deployed
+
+- **sokoni-marketing-hub.js:** while pending, the status card shows the server's reviewStage (submitted / under review / verified). Verified reads as a stage of review — never approved, no dashboard link. A revoked approval shows as terminal (no withdraw, no resubmit).
+- **Tests:** test-marketing-hub-web 13/0 (new W10; deliberate break → red); SABOTAGE 8/8.
+- **Server dependency:** reviewStage from marketingDispatch on 5b's tree (8833725 on top of 5fec96f).
+
 ## [2026-10-03] — Marketing Hub MK3 (web): a real directory of approved marketers + the separate Marketing application — NOT deployed
 
 - **marketing-hub.html** rebuilt. Removed:
