@@ -1,3 +1,13 @@
+## 2026-10-03 — WhatsApp: consent + STOP + webhook export restored (NOT deployed); production values are Meta's TEST account
+
+- **New:** `functions/whatsapp-consent.js` (callable `whatsappConsent`). It is the one writer of WhatsApp consent, and the consent is tied to the account's own number.
+- **Audit:** every change is logged in `whatsappConsentEvents`.
+- **notify():** WhatsApp now requires consent for the CURRENT number.
+- **webhookWhatsapp:** a STOP reply opts the sender out. The export is restored in index.js.
+- **Production check:** phone = Meta Test Number; WABA = Test account (review REJECTED); 0/18 templates present. Owner action is listed in docs/WHATSAPP_PRODUCTION.md.
+- **Database:** `users.whatsappOptInPhone`, `whatsappConsentAt`, `whatsappConsentVersion`, `whatsappConsentSource`, `whatsappOptOutAt`; new server-only collection `whatsappConsentEvents`. No rules change.
+- **Tests:** consent 14/0, notify 34/0, webhook 28/0, sender 31/0, trace 17/0.
+
 ## 2026-10-03 — WhatsApp inside the ONE notification sender + AdminOS delivery trace (branch `functions/whatsapp-channel-on-9894df2`, NOT deployed)
 
 **What changed.** `notify()` (functions/notify.js) now tries WhatsApp **at the moment it would have sent an SMS, and

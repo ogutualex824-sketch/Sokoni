@@ -146,7 +146,9 @@ function normalise (payload) {
           timestamp: msg.timestamp || null,
           phoneNumberId: meta.phone_number_id || null,
           wabaId: entry.id || null,
-          /* deliberately NO message body — see the note above */
+          /* deliberately NO message body — see the note above. Only a BOOLEAN derived from it: did the
+             person reply STOP? (Meta requires honouring opt-out; the words themselves are not kept.) */
+          optOut: msg.type === 'text' && require('./whatsapp-consent').isStopText(msg.text && msg.text.body),
         });
       });
       (v.statuses || []).forEach((st) => {
@@ -233,12 +235,23 @@ async function handleRequest (req, deps) {
     }
   }
 
+  /* STOP → opt-out (whatsapp-consent.js). Idempotent there: a Meta retry finds the account already opted out
+     and writes nothing. Failures are counted, never a non-200 (a retry cannot fix them). */
+  const optedOut = { matched: 0, changed: 0, failed: 0 };
+  if (d.optOut) {
+    for (const ev of n.events) {
+      if (ev.kind !== 'message' || ev.optOut !== true || !ev.from) continue;
+      try { const r = await d.optOut(ev.from); optedOut.matched += r.matched || 0; optedOut.changed += r.changed || 0; }
+      catch (_) { optedOut.failed++; }
+    }
+  }
+
   /* 200 EVENT_RECEIVED even with nothing to record. A non-200 makes Cloud API
      retry the same batch, and a batch we understood but had no rows for is not
      a failure. A storage failure is reported in the result and logged; it is
      deliberately NOT a non-200, because retrying will not fix a validation
      problem and would loop for ever. */
-  return { status: 200, body: 'EVENT_RECEIVED', reason: 'ok', events: n.events.length, recorded, advanced };
+  return { status: 200, body: 'EVENT_RECEIVED', reason: 'ok', events: n.events.length, recorded, advanced, optedOut };
 }
 
 function _header (req, name) {
@@ -287,14 +300,8 @@ function firestoreStore () {
    without it, which is why the certification exercises handleRequest directly
    rather than a paraphrase.
 
-   NOT EXPORTED FROM functions/index.js, AND THAT IS DELIBERATE.
-   `defineSecret` binds a secret at deploy time, and neither WHATSAPP_VERIFY_TOKEN
-   nor WHATSAPP_APP_SECRET exists in Secret Manager yet. Wiring this into
-   index.js today would make the NEXT functions deploy fail — for every agent
-   working this repository, on a lane that has nothing to do with WhatsApp.
-   Because index.js does not require this module, nothing here executes and
-   nothing is bound; shipping it is two lines in index.js once the secrets are
-   provisioned. */
+   EXPORTED from functions/index.js as webhookWhatsapp (live since 2026-09-30, da47bb6). Both secrets exist
+   in Secret Manager; the earlier "not exported until provisioned" note is history. */
 let _onRequest, _defineSecret;
 function _fnDeps () {
   if (!_onRequest) {
@@ -356,6 +363,7 @@ function buildFunction () {
           appSecret:   APPSEC.value(),
           store:       firestoreStore(),
           sends:       require('./whatsapp-sender').firestoreSends(),
+          optOut:      (from) => { const c = require('./whatsapp-consent'); return c.optOutByPhone(from, c.adminDeps()); },
         });
       } catch (e) {
         /* A crash must not read as an accepted event. 500 makes Cloud API

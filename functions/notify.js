@@ -368,7 +368,8 @@ async function sendPush(uid, payload) {
    { ok, messageId, error }. Gates, in order:
      1. the type maps to an APPROVED template (shared/whatsapp-notify-map.js)
      2. the function was deployed WITH the WhatsApp secrets (else NOT_CONFIGURED)
-     3. the account consented: users/{uid}.whatsappOptIn === true (Meta requires
+     3. the account consented — users/{uid}.whatsappOptIn === true AND whatsappOptInPhone is its current
+        phoneNumber (written only by whatsapp-consent.js) (Meta requires
         opt-in for business-initiated messages; it also means a number that is
         not on WhatsApp is not tried, so an OTP is not lost to a late 'failed')
      4. the recipient is the account's OWN verified users/{uid}.phoneNumber —
@@ -393,6 +394,11 @@ async function _whatsappChannel({ uid, type, vars, key }, deps) {
     if (!u || u.whatsappOptIn !== true) return { ok: false, messageId: null, error: 'NO_CONSENT' };
     const to = typeof u.phoneNumber === 'string' ? u.phoneNumber : '';
     if (!to) return { ok: false, messageId: null, error: 'NO_PHONE' };
+    /* Consent belongs to the NUMBER it was given for (whatsapp-consent.js records whatsappOptInPhone).
+       A changed phoneNumber — or a flag set without the consent record — has agreed to nothing. */
+    if (!u.whatsappOptInPhone || wa.normalisePhone(u.whatsappOptInPhone) !== wa.normalisePhone(to)) {
+      return { ok: false, messageId: null, error: 'NO_CONSENT' };
+    }
     const pick = _waMap.resolve(type, vars, _waMap.displayName(u));
     return await wa.sendTemplate(
       { to, template: pick.template, params: pick.params, uid, ref: key },

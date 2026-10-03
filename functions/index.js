@@ -11347,7 +11347,16 @@ exports.onPosTransactionMpesaRef = posMpesaRefs.onPosTransactionMpesaRef;
 
 /* ── Facebook / Meta Data Deletion Callback + Data Rights ───────────── */
 const fbDeletion = require('./facebook-data-deletion');
-exports.facebookDataDeletion           = fbDeletion.facebookDataDeletion;
+
+/* ── WHATSAPP CLOUD API — INBOUND RECEIVER ────────────────────────────────
+   Named webhookWhatsapp to match webhookIntasend / webhookMpesa / webhookStripe.
+   The LIVE function (deployed 2026-09-30 from da47bb6) carries exactly this export; this branch lost it in the
+   rebase onto 9894df2, so a scoped `--only functions:webhookWhatsapp` from here would have found no such function.
+   invoker:"public" is set inside buildFunction(): without it Cloud Run rejects Meta with 403 before any signature
+   check runs. Secrets WHATSAPP_VERIFY_TOKEN + WHATSAPP_APP_SECRET exist in Secret Manager (names only). */
+const whatsappWebhook = require('./whatsapp-webhook');
+exports.webhookWhatsapp = whatsappWebhook.buildFunction();
+exports.facebookDataDeletion          = fbDeletion.facebookDataDeletion;
 exports.submitDataRightsRequest        = fbDeletion.submitDataRightsRequest;
 exports.adminGetDataDeletionRequest    = fbDeletion.adminGetDataDeletionRequest;
 exports.adminUpdateDataDeletionStatus  = fbDeletion.adminUpdateDataDeletionStatus;

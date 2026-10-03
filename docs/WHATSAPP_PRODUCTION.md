@@ -120,3 +120,54 @@ in-app, then push, then SMS (forced for critical types, otherwise a fallback whe
 5. Hosting: the AdminOS tab ships with the hosting unit.
 6. End-to-end test: six real messages to a consenting owner number. Each is proven by
    `whatsappSends/{wamid}.status == 'delivered'`, not by "it showed up".
+
+## Production values check + consent closure (2026-10-03, sokoni-2f)
+
+**Are the production values the owner's real WhatsApp? NO.** A read-only Graph check (values never printed) of the
+five Secret Manager secrets in sokoni-aeb26 (latest versions 06:03–06:05Z today):
+
+| What | Observed |
+|---|---|
+| Phone number | Meta **Test Number** (+1 555…), `code_verification=NOT_VERIFIED`, display name **DECLINED** |
+| WABA | **"Test WhatsApp Business Account"**, review **REJECTED**, business verification **not_verified** |
+| Number belongs to that WABA | yes (the token now loads the WABA; the earlier "error 100" is gone) |
+| SOKONI templates | **0 of 18** present (the WABA holds only Meta's sample `jaspers_market_*` + `hello_world`) |
+
+So a production send would go from Meta's test number, can reach only allow-listed testers, and every SOKONI
+template would be refused (no such template). **Owner-only, on the Meta side:** add + verify the real SOKONI
+number in the real (business-verified) WABA, create the 18 templates above with exactly those names, then
+replace `WHATSAPP_PHONE_NUMBER_ID` / `WHATSAPP_WABA_ID` / `WHATSAPP_ACCESS_TOKEN` (permanent system-user token)
+with the real values, and register the webhook URL + verify token in the app. Re-run the check afterwards.
+
+**Closed in code (NOT deployed):**
+- `webhookWhatsapp` export restored in `functions/index.js`. This branch had lost it in the rebase, so a scoped deploy
+  would have found no such function. It is identical to the live export (da47bb6).
+- **Consent** — `functions/whatsapp-consent.js`, callable `whatsappConsent` (`op:'get'|'set'`):
+  - It is the ONE writer of `users/{uid}.whatsappOptIn`, and acts on the caller's own account only.
+  - The phone number is read on the server, not from the browser.
+  - It stores `whatsappOptInPhone`, the consent version and the server time.
+  - Every change is audited in `whatsappConsentEvents` (masked number). A no-op writes nothing.
+- **notify() gate tightened:** a send needs `whatsappOptIn === true` AND `whatsappOptInPhone` equal to the current
+  `phoneNumber`. A self-written flag, or a changed number, is refused as `NO_CONSENT`.
+- **STOP:**
+  - An inbound signed message reading stop / unsubscribe / cancel / acha / sitisha opts out every account on that number.
+  - The words are not stored; only a boolean is.
+  - An unsigned request changes nothing.
+- **UI:** Profile → Settings → "WhatsApp updates" switch (hosting branch `hosting/profile-wallet-instant-on-72dca56`).
+  It shows only the server's answer ("—" until then).
+
+**Tests:**
+- test-whatsapp-consent 14/0 (new); test-whatsapp-notify 34/0 (+C3b, C3c); test-whatsapp-webhook 28/0 (was 27/1);
+  test-whatsapp-sender 31/0; test-admin-whatsapp-trace 17/0.
+- Sabotage: phone-match removed → C3b/C3c FAIL; STOP wiring removed → S4 FAIL; NO_PHONE removed → K4 FAIL.
+
+**Deploy additions** (still one slot, after sokoni-5b's webhookIntasend and the Foundation trio, memory gate ≥512 MB):
+- `--only functions:whatsappConsent` (new).
+- Then `webhookWhatsapp` (STOP + status advance).
+- notify's tightened gate rides with each notify-bundling function's own deploy.
+- `093fd4f` (Daraja removal) is cherry-picked first.
+
+**Still OPEN:**
+- Live `notifySend` lets a non-admin pass `phone` + a critical `type` (SMS to any number). This is a separate slice.
+- Firestore rules still let a user write `whatsappOptIn` on their own doc. Harmless now, because the gate also needs
+  the server-written number. Lock it in the combined rules candidate.

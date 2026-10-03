@@ -67,7 +67,8 @@ function fakeGraph (reply) {
 const okReply = (n) => ({ ok: true, status: 200, json: async () => ({ messages: [{ id: 'wamid.N' + n }] }) });
 const metaRefuses = () => ({ ok: false, status: 400, json: async () => ({ error: { code: 131030, message: 'Recipient not in allowed list' } }) });
 const CFG = { accessToken: 'tok_TEST', phoneNumberId: '1234567890' };
-const USER = { displayName: 'Akinyi Otieno', phoneNumber: '+254712345678', whatsappOptIn: true };
+/* 2026-10-03: consent is the record whatsapp-consent.js writes — the flag AND the number it was given for. */
+const USER = { displayName: 'Akinyi Otieno', phoneNumber: '+254712345678', whatsappOptIn: true, whatsappOptInPhone: '254712345678' };
 
 (async () => {
   const logs = []; const orig = { warn: console.warn, error: console.error, info: console.info, debug: console.debug };
@@ -98,6 +99,10 @@ const USER = { displayName: 'Akinyi Otieno', phoneNumber: '+254712345678', whats
   ck('C2 secrets not deployed → NOT_CONFIGURED, no Graph call, user not even read', r.error === 'NOT_CONFIGURED' && g.calls.length === 0 && reads === 0, r);
   r = await N._whatsappChannel({ uid: 'u1', type: 'otp', vars: { code: PIN }, key: 'k' }, { config: CFG, fetch: g, store, readUser: async () => ({ ...USER, whatsappOptIn: undefined }) });
   ck('C3 no consent (whatsappOptIn !== true) → NO_CONSENT, no Graph call', r.error === 'NO_CONSENT' && g.calls.length === 0, r);
+  r = await N._whatsappChannel({ uid: 'u1', type: 'otp', vars: { code: PIN }, key: 'k' }, { config: CFG, fetch: g, store, readUser: async () => ({ ...USER, whatsappOptInPhone: undefined }) });
+  ck('C3b flag set WITHOUT the consent record (e.g. a self-written whatsappOptIn) → NO_CONSENT, no Graph call', r.error === 'NO_CONSENT' && g.calls.length === 0, r);
+  r = await N._whatsappChannel({ uid: 'u1', type: 'otp', vars: { code: PIN }, key: 'k' }, { config: CFG, fetch: g, store, readUser: async () => ({ ...USER, phoneNumber: '+254799000111' }) });
+  ck('C3c phone changed since consent → NO_CONSENT (the new number agreed to nothing), no Graph call', r.error === 'NO_CONSENT' && g.calls.length === 0, r);
   r = await N._whatsappChannel({ uid: 'u1', type: 'otp', vars: { code: PIN }, key: 'k' }, { config: CFG, fetch: g, store, readUser: async () => ({ ...USER, phoneNumber: '' }) });
   ck('C4 no verified phone → NO_PHONE, no Graph call', r.error === 'NO_PHONE' && g.calls.length === 0, r);
   r = await N._whatsappChannel({ uid: 'u1', type: 'payment_success', vars: { amount: 'USD 12', ref: 'R1' }, key: 'k' }, { config: CFG, fetch: g, store, readUser });
