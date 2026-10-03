@@ -67,6 +67,12 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await denies('ED-T5', 'a client lists trainingInvites', getDocs(collection(owner, 'trainingInvites')));
   await denies('ED-T6', 'a client mints a trainingInvite', setDoc(doc(other, 'trainingInvites/FAKE1'), { companyUid: 'other' }));
   await allows('ED-T7', 'admin reads trainingInvites / trainingAssignments', Promise.all([getDoc(doc(admin, 'trainingInvites/INV42')), getDoc(doc(admin, 'trainingAssignments/t1'))]));
+  // institution programmes (written only by manageMyProgrammes)
+  await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'programmes/p1'), { institutionUid: 'owner', title: 'Diploma' }); });
+  await denies('ED-P1', 'the owning institution reads its programme raw (the callable serves it)', getDoc(doc(owner, 'programmes/p1')));
+  await denies('ED-P2', 'another institution reads the programme raw', getDoc(doc(other, 'programmes/p1')));
+  await denies('ED-P3', 'a client writes a programme', setDoc(doc(owner, 'programmes/p2'), { institutionUid: 'owner', title: 'Self-published' }));
+  await allows('ED-P4', 'admin reads a programme', getDoc(doc(admin, 'programmes/p1')));
   await env.cleanup();
   console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('HARNESS ERROR (not a rules result):', e.message); process.exit(2); });

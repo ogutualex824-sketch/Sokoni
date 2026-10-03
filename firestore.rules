@@ -2042,6 +2042,12 @@ service cloud.firestore {
   allow read:  if isAdmin();
   allow write: if false;
   }
+  /* (sokoni-5b Education, institution programmes; feat/education-workspace-on-d377b28 @ 1822cb0) written only by the
+     manageMyProgrammes callable, which also serves the owner; public display will come through a server read. */
+  match /programmes/{id} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
   function isPosOwner() {
   return isAuthed() && resource.data.sellerId == request.auth.uid;
   }
