@@ -560,8 +560,16 @@ window.SokoniEducation = (() => {
         <input id="eduGuardianConfirmCode" class="edu-input" maxlength="8" placeholder="Learner's 8-character code" aria-label="Learner's guardian code" style="text-transform:uppercase">
         <button class="btn btn-outline btn-sm" onclick="SokoniEducation.confirmGuardianCode()">Link to this learner</button>
         <div id="eduGuardedList" aria-live="polite"></div>
+      </div>
+      <div class="edu-subsection">
+        <h4>Training from your employer</h4>
+        <p class="edu-muted">Got a code from your company? Enter it to join their training. Your company sees only your name — never your profile or other learning. You can leave at any time.</p>
+        <input id="eduCompanyCode" class="edu-input" maxlength="10" placeholder="10-character company code" aria-label="Company training code" style="text-transform:uppercase">
+        <button class="btn btn-outline btn-sm" onclick="SokoniEducation.joinCompany()">Join company training</button>
+        <div id="eduMyCompanies" aria-live="polite"></div>
       </div>`;
     loadGuardedLearners().catch(() => {});
+    loadMyCompanies().catch(() => {});
   }
 
   async function saveLearnerProfile() {
@@ -631,6 +639,42 @@ window.SokoniEducation = (() => {
         : '';
     } catch (_) {
       box.innerHTML = '';
+    }
+  }
+
+  /* ── Company training (Education E2): consent-based — the learner redeems their employer's code; the server decides ── */
+  async function joinCompany() {
+    const el = document.getElementById('eduCompanyCode');
+    const code = el ? String(el.value || '').trim().toUpperCase() : '';
+    try {
+      const res = await _callable('educationEnterprise')({ op: 'joinCompany', code });
+      if (res && res.data && res.data.ok) { toast('You joined ' + (res.data.companyName || 'the company') + "'s training.", 'success'); if (el) el.value = ''; await loadMyCompanies(); }
+    } catch (err) {
+      toast(err.message || 'Could not join.', 'error');
+    }
+  }
+
+  async function loadMyCompanies() {
+    const box = document.getElementById('eduMyCompanies');
+    if (!box) return;
+    try {
+      const res = await _callable('educationEnterprise')({ op: 'myCompanies' });
+      const list = (res && res.data && res.data.companies) || [];
+      box.innerHTML = list.length
+        ? '<ul>' + list.map((c) => `<li>${_esc(c.companyName || '—')} <button class="btn btn-sm" data-assignment-id="${_esc(c.assignmentId)}" onclick="SokoniEducation.leaveCompany(this.dataset.assignmentId)">Leave</button></li>`).join('') + '</ul>'
+        : '';
+    } catch (_) {
+      box.innerHTML = '';
+    }
+  }
+
+  async function leaveCompany(assignmentId) {
+    try {
+      await _callable('educationEnterprise')({ op: 'leaveCompany', assignmentId });
+      toast('You left the company training.', 'success');
+      await loadMyCompanies();
+    } catch (err) {
+      toast(err.message || 'Could not leave.', 'error');
     }
   }
 
@@ -1265,6 +1309,8 @@ window.SokoniEducation = (() => {
     requestGuardianCode,
     confirmGuardianCode,
     revokeGuardian,
+    joinCompany,
+    leaveCompany,
   };
 
 })();
