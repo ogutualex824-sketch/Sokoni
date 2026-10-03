@@ -940,13 +940,11 @@ function submitITRequest() {
   const timeline=document.getElementById('itsTimeline')?.value||'';
   const desc=document.getElementById('itsDesc')?.value||'';
   const msg=`🖥️ *SOKONI Tech Hub — IT Service Request*\n\nRef: ${ref}\n👤 ${name}${company?' ('+company+')':''}\n📞 ${phone}\n🛠️ Service: ${svc}\n💰 Budget: ${budget}\n⏱️ Timeline: ${timeline}\n${desc?'\n📝 '+desc:''}\n\nPlease get back to me. Thank you!`;
-  _thPending(msgEl);
-  /* IT service request → support ticket (owner 2026-09-30); "recorded" only once the techITRequests write resolved. */
-  _thFireWrite('techITRequests',{ref,name,phone,company,service:svc,budget,timeline,desc,hub:'tech-hub'}).then(function(ok){
-    if(!ok){ _thFailed(msgEl,'request',ref); return; }
-    if(msgEl){msgEl.innerHTML=`✅ Request recorded on SOKONI. Ref: <strong>${_esc(ref)}</strong> — opening SOKONI Support…`;msgEl.style.color='#818cf8';}
-    setTimeout(function(){ location.href = 'support.html?topic=request&desc=' + encodeURIComponent(msg); }, 600);
-  });
+  /* IT service request → support ticket (owner 2026-09-30). 2026-10-03: the techITRequests browser write carried no uid, so
+     the rule refused every one and _thFailed stopped the visitor BEFORE the ticket — the request was lost. The support
+     ticket (supportTickets, server-written) is the record; no browser write, no "recorded" claim before it. */
+  if(msgEl){msgEl.textContent='Opening SOKONI Support with your request…';msgEl.style.color='#818cf8';}
+  location.href = 'support.html?topic=request&desc=' + encodeURIComponent(msg);
 }
 window.submitITRequest = submitITRequest;
 
