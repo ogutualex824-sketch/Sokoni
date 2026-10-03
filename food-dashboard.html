@@ -632,7 +632,16 @@ function timeSince(ts) {
   return Math.floor(m / 60) + 'h ago';
 }
 
-init();
+/* CONTAINMENT (owner 2026-10-03): this dashboard showed every signed-in user a made-up restaurant ("Jambo Burgers"),
+   invented analytics and browser-only menus. It is closed until restaurant tools arrive in the SOKONI business dashboard. */
+(function _foodPortalClosed(){
+  [...document.body.children].forEach(function(el){ if (el.tagName !== 'SCRIPT' && el.tagName !== 'NAV') el.style.display = 'none'; });
+  var n = document.getElementById('dashRestaurantName'); if (n) n.textContent = 'Restaurant tools';
+  var t = document.getElementById('openStatusToggle'); if (t) t.style.display = 'none';
+  var box = document.createElement('div');
+  box.innerHTML = "<div class=\"food-opening-soon\" style=\"max-width:560px;margin:28px auto;padding:26px 22px;text-align:center;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.22);border-radius:20px;\">\n  <div style=\"font-size:34px;margin-bottom:8px;\">🍽️</div>\n  <div style=\"font-size:18px;font-weight:900;color:white;margin-bottom:8px;\">Restaurant tools are moving to your SOKONI business dashboard</div>\n  <div style=\"font-size:13px;color:rgba(255,255,255,0.6);line-height:1.6;margin-bottom:16px;\">Menus, orders, kitchen, POS, receipts, staff and your business wallet are being rebuilt as part of the SOKONI business dashboard. Apply to list your food business and you will be set up there once approved.</div>\n  <a href=\"food.html\" style=\"display:inline-block;padding:12px 24px;background:#f97316;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;text-decoration:none;\">🚀 Apply on the Food Hub page</a>\n</div>";
+  document.body.insertBefore(box, document.querySelector('nav').nextSibling);
+})();
 </script>
 <script src="analytics.js" defer></script>
 <script src="sw-register.js" defer></script>
@@ -642,63 +651,7 @@ init();
 <script defer src="sokoni-gateway.js"></script>
 <script defer src="sokoni-service-mesh.js"></script>
 
-<script type="module">
-import { db, auth } from './firebase.js';
-import {
-  collection, doc, setDoc, onSnapshot, query, where,
-  orderBy, limit, serverTimestamp, updateDoc
-} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-
-let _uid = null;
-onAuthStateChanged(auth, u => { _uid = u ? u.uid : null; });
-
-/* ── Live order feed for this restaurant ── */
-let _fdOrdersUnsub = null;
-const rid = new URLSearchParams(window.location.search).get('id') || 'jambo-burgers';
-try {
-  _fdOrdersUnsub = onSnapshot(
-    query(collection(db,'foodOrders'), where('restaurantId','==',rid), orderBy('placedAt','desc'), limit(100)),
-    snap => {
-      if (snap.empty) return;
-      const live = snap.docs.map(d => ({...d.data(), id:d.id}));
-      /* Merge into SokoniFood so renderOrders() picks them up */
-      live.forEach(o => {
-        const existing = SokoniFood._orders || [];
-        const idx = existing.findIndex(x => x.id === o.id);
-        if (idx > -1) existing[idx] = o; else existing.unshift(o);
-        SokoniFood._orders = existing;
-      });
-      if (typeof _vendorOrders !== 'undefined') {
-        window._vendorOrders = live;
-        if (typeof renderOrders === 'function') renderOrders();
-        if (typeof renderAnalytics === 'function') renderAnalytics();
-      }
-    }
-  );
-} catch(e) { console.warn('[FoodDash] Firestore feed failed:', e); }
-window.addEventListener('beforeunload', () => { if (_fdOrdersUnsub) _fdOrdersUnsub(); });
-
-/* ── Update order status in Firestore ── */
-window._advOrderFS = async function(orderId, status) {
-  try {
-    await updateDoc(doc(db,'foodOrders',orderId), {
-      status,
-      updatedAt: serverTimestamp(),
-      statusHistory: [] /* updated server-side via CF in future */
-    });
-  } catch(e) {}
-};
-
-/* ── Save menu to Firestore ── */
-window._updateFoodMenuFS = async function(restaurantId, menu) {
-  try {
-    await setDoc(doc(db,'foodMenus',restaurantId), {
-      ...menu, restaurantId, updatedAt: serverTimestamp()
-    }, {merge:true});
-  } catch(e) {}
-};
-</script>
+<!-- CONTAINMENT (owner 2026-10-03): the foodOrders listener and the browser foodOrders / foodMenus writers are REMOVED. -->
 </body>
 </html>
 

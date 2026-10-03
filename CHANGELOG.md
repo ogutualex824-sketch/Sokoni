@@ -1,3 +1,23 @@
+## [2026-10-03] — Food Hub CONTAINMENT: no payment, no browser-written orders, nothing made-up shown as real
+
+**Files:** `food.html`, `food-menu.html`, `food-dashboard.html`, `scripts/test-food-containment.js` (new), `CHANGELOG.md` · **Base:** live `72dca56`
+
+- **Live defect (census 2026-10-03):** the Food Hub took real IntaSend M-Pesa payments for 16 made-up restaurants (hard-coded names, phones, ratings, "Open Now"). Checkout charged a 50% deposit and recorded 100% as paid. The browser wrote the `foodOrders` document itself. The "Restaurant Portal" showed every signed-in user a made-up "Jambo Burgers" dashboard with invented analytics.
+- **Owner 2026-10-03:** contain now and deploy right after the webhook security fix; the real Food Hub replaces this later.
+- **`food-menu.html`:**
+  - no made-up restaurant is rendered; the page says ordering opens soon;
+  - `openCheckout()` / `placeOrder()` start no payment;
+  - the browser `foodOrders` writer is removed.
+- **`food.html`:** no made-up vendor grid or featured list, no invented "16+ / 30 min / 24/7" stats, and no first-order promo that checkout never applied. The real application route (`HubRegister`, hub `food`) stays.
+- **`food-dashboard.html`:**
+  - closed with an honest notice that restaurant tools are moving to the SOKONI business dashboard;
+  - the `foodOrders` listener and the `foodOrders` / `foodMenus` browser writers are removed.
+- **Tests:**
+  - food-containment 7/0 (live fails 6/7; FC-1 executes the menu script and sees live `platformBook` fire);
+  - cart suites 22 / 68 / 44 / 43 / 30 pass;
+  - `test-cart-universal`'s 2 failures are pre-existing (identical without this change).
+- **Security:** removes a browser payment + order path. **No server or rules change.** The `foodOrders` rules are tightened in the Food Hub programme.
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
