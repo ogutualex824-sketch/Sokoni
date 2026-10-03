@@ -200,4 +200,21 @@ function commissionArgsForHub(hub) {
   return { category: 'services', hubId: 'provider', skipMinimum: true };
 }
 
-module.exports = { resolveProviderHub, resolveProviderClassification, classifyDecidedApplication, commissionArgsForHub, isCoachApplication, ROLE_TO_HUB, DEFAULT_HUB };
+/* ── Per-BOOKING lane (marketing, owner 2026-10-03; field contract with sokoni-b2 9319925) ──────────────────────────────
+   Marketing is decided from the BOOKING's own server snapshot, never the provider's current approval and never the client
+   hubType: lane = marketing_services iff booking.serviceHub === 'marketing' AND serviceCategory is a taxonomy id
+   (shared/marketing-taxonomy.js, byte-identical with b2's line). Approval was checked by bookingCreateService at booking time;
+   a later category change must NOT rewrite a historical booking's commission. A 'marketing' booking whose category is missing
+   or unknown is REFUSED (category_unpriced) — never the 5 % services default. Every other booking → commissionArgsForHub. */
+function commissionArgsForBooking(booking) {
+  const b = booking || {};
+  if (b.serviceHub === 'marketing') {
+    if (require('./shared/marketing-taxonomy').isArea(String(b.serviceCategory || ''))) {
+      return { category: 'marketing_services', hubId: 'marketing', skipMinimum: true };
+    }
+    const e = new Error('This marketing service has no priced category.'); e.code = 'category_unpriced'; throw e;
+  }
+  return commissionArgsForHub(b.commissionHub);
+}
+
+module.exports = { resolveProviderHub, resolveProviderClassification, classifyDecidedApplication, commissionArgsForHub, commissionArgsForBooking, isCoachApplication, ROLE_TO_HUB, DEFAULT_HUB };

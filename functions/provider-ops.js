@@ -151,7 +151,7 @@ async function _disburseHeldFunds(data, ref, opts) {
        a healthcare no-show must not be charged the plan rate a healthcare completion isn't. */
     const fc = await calculateCommission(_db(), { orderAmountCents: forfeitC,
       sellerId: data.providerId,
-      ...require('./provider-hub').commissionArgsForHub(data.commissionHub) });
+      ...require('./provider-hub').commissionArgsForBooking(data) });   /* marketing lane from the booking snapshot (b2 9319925) */
     forfeitCommissionC = fc.commissionCents || 0;
   }
   const providerNetC     = Math.max(0, forfeitC - forfeitCommissionC);
@@ -301,7 +301,7 @@ async function _settlementMath(uid, ref, data) {
     const comm = await calculateCommission(_db(), {
       orderAmountCents: gross,
       sellerId:         uid,
-      ...require('./provider-hub').commissionArgsForHub(data.commissionHub),
+      ...require('./provider-hub').commissionArgsForBooking(data),   /* marketing lane from the booking snapshot (b2 9319925) */
     });
 
     const commission = comm.commissionCents;

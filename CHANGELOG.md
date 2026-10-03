@@ -1,3 +1,10 @@
+## 2026-10-03 — Marketing commission lane at provider settlement, from the booking snapshot (NOT deployed)
+
+- **Change:** provider-hub.commissionArgsForBooking(booking): `serviceHub === 'marketing'` AND `serviceCategory` ∈ marketing taxonomy → marketing_services (10%); a marketing booking with a missing/unknown category → REFUSED `category_unpriced`; everything else → commissionArgsForHub(commissionHub), unchanged. Both provider-ops call sites (completion + forfeited deposit) use it. Reads ONLY the booking's server snapshot (b2 9319925) — never providers.marketingCategories at settlement, never client hubType; a later category change cannot rewrite a historical booking.
+- **Files:** functions/provider-hub.js, functions/provider-ops.js, scripts/test-marketing-commercial.js (MK6–MK9).
+- **Depends on:** b2's feat/tech-taxonomy-on-13f74f3 @ 9319925 (booking snapshot fields) shipping in the same functions release; until then serviceHub is absent → existing lane.
+- **Tests:** marketing 9/0, entertainment 98/0, healthcare-payment 40/0, legal-cap 9/0, workspace-gates 24/0, plan-ladder 38/0. commercial-facts 3b fails identically at baseline (pre-existing, plan-ladder retirement).
+
 ## 2026-10-03 — Venue defect B: commission ledger re-priced with the settlement on a partial refund (NOT deployed)
 
 - **Bug:** onVenueRefundProcessed (partial refund) re-priced venueSettlements on the kept fee but left commissionLedger/ven_<ref> at the FULL-gross commission, which _release then marked collected — SOKONI revenue overstated (e.g. 500 recorded instead of 100 on a 10,000 booking with 2,000 kept). A replay after release fell through to engine.revoke (false refund_after_release exception).

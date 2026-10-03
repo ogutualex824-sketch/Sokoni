@@ -5,6 +5,7 @@
      MK2  marketing_services is a FLAT booking lane (no plan moves it); the real engine charges KES 1,000 on a KES 10,000 sale
      MK3  plans: marketing_free 0 / professional 1,499 / agency 4,999, monthly; entitlement keys agreed with b2
      MK4  requireFeature: Free has no campaign tools → Professional; 11th campaign on Professional → Agency
+     MK6-9 settlement lane from the BOOKING snapshot: serviceHub marketing + taxonomy id → 10%; unknown → refused; else unchanged
      MK5  shared/marketing-taxonomy.js is byte-identical to sokoni-b2's d5d81d6 copy (one taxonomy, two lines)
    NODE_PATH=<functions/node_modules> node scripts/test-marketing-commercial.js */
 const path = require('path'), Module = require('module'), cp = require('child_process'), fs = require('fs');
@@ -34,6 +35,20 @@ const db = { collection: () => ({ doc: () => ({ async get () { return { exists: 
   ck('MK4 Free → Professional for campaign tools; 11th campaign on Professional → Agency', a.upgradeRequired.minPlanId === 'marketing_professional' && b.upgradeRequired.minPlanId === 'marketing_agency');
   let theirs = null; try { theirs = cp.execSync('git show d5d81d6:functions/shared/marketing-taxonomy.js', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString(); } catch (_) {}
   ck('MK5 shared/marketing-taxonomy.js byte-identical to b2\'s d5d81d6', theirs !== null && theirs === fs.readFileSync(path.join(FN, 'shared/marketing-taxonomy.js'), 'utf8'));
+  /* per-booking lane at settlement (b2 9319925 field contract) */
+  const PH = require(path.join(FN, 'provider-hub.js'));
+  const args = (b) => { try { return PH.commissionArgsForBooking(b); } catch (e) { return { refused: e.code }; } };
+  const mk = args({ serviceHub: 'marketing', serviceCategory: 'brand-strategy', commissionHub: 'provider', hubType: 'cleaning' });
+  const mc = await FU.calculateCommission(db, { orderAmountCents: 1000000, sellerId: 'P1', ...mk });
+  ck('MK6 booking.serviceHub marketing + taxonomy category → marketing_services: KES 10,000 → KES 1,000 (client hubType ignored)', mk.category === 'marketing_services' && mc.commissionCents === 100000, mk);
+  ck('MK7 serviceHub marketing with a missing / unknown category → REFUSED category_unpriced (never the 5 % default)',
+    args({ serviceHub: 'marketing' }).refused === 'category_unpriced' && args({ serviceHub: 'marketing', serviceCategory: 'house-cleaning' }).refused === 'category_unpriced');
+  const nonMk = args({ serviceHub: null, serviceCategory: 'brand-strategy', commissionHub: 'provider' });
+  ck('MK8 a taxonomy-looking category WITHOUT serviceHub marketing keeps the existing lane (services 5 %); other hubs unchanged',
+    nonMk.category === 'services' && args({ commissionHub: 'healthcare' }).category === 'healthcare' && args({ commissionHub: 'sports_coaching' }).category === 'sports_coaching');
+  const src = fs.readFileSync(path.join(FN, 'provider-ops.js'), 'utf8');
+  ck('MK9 BOTH provider-ops commission call sites (completion + forfeited deposit) use the per-booking selector; none left on commissionArgsForHub',
+    (src.match(/commissionArgsForBooking\(data\)/g) || []).length === 2 && !/commissionArgsForHub\(/.test(src));
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e && e.stack); process.exit(1); });
