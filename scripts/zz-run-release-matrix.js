@@ -88,7 +88,7 @@ const ROWS = [
 ];
 /* SERVER rows — UNIT level (sokoni-5b's scripts/test-review-authority.js, fakes, pinned commit). This is not an
    emulator or live proof; it is reported as "PASS (unit)" so it can never be mistaken for one. */
-const SERVER_REF = process.env.REVIEW_AUTHORITY_REF || '51d3947';
+const SERVER_REF = process.env.REVIEW_AUTHORITY_REF || 'e8609fb';
 let _rvDir = null;
 try {
   const dir = _rvDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rv5b-'));
@@ -102,6 +102,7 @@ const SERVER_ROWS = [
   ['P-03 forged identity/name ignored', /PASS H-1 .*authorUid\/name ignored/],
   ['S-01 qualifying booking + submitReview → pending', /PASS H-4 /],
   ['S-02 booking for another venue → refused', /PASS H-5 /],
+  ['S-04 venue review: forged reviewer identity/status ignored', /PASS H-4b /],
   ['U-01 authorized submitUnboxing → pending', /PASS U-1 /],
   ['U-02 unauthorized submitUnboxing (other order / unpaid / wrong line)', /PASS U-2 [\s\S]*PASS U-3 [\s\S]*PASS U-4 /],
   ['U-08 AdminOS approval copies the photo (server sets the URL)', /PASS U-7b /],
@@ -109,8 +110,10 @@ const SERVER_ROWS = [
   ['A-01 review starts pending', /PASS R-1 [\s\S]*PASS H-8 /],
   ['A-02 unauthorized / self / seller / agent / venue-owner approval refused', /PASS M-1 [\s\S]*PASS S-1 [\s\S]*PASS S-2 [\s\S]*PASS H-9 [\s\S]*PASS H-9b /],
   ['A-03 AdminOS approval publishes', /PASS M-3 [\s\S]*PASS H-10 [\s\S]*PASS U-7 /],
+  ['A-04 explicit reject does not publish (review)', /PASS A-04 /],
+  ['A-04u explicit reject does not publish (unboxing photo)', /PASS A-04u /],
 ];
-const NOT_RUN = ['S-04 (no venue forged-reviewer row)', 'A-04 (no explicit reject-does-not-publish row)'];
+const NOT_RUN = [];
 
 let bad = 0;
 console.log('\nSUITES');
