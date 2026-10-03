@@ -177,7 +177,7 @@ const OWNMAT = (u, c) => 'course-materials/' + u + '/' + c + '/notes.pdf';
   ck('G-5b a draft lesson cannot be completed (it is not part of the learner\'s course)', r.reason === 'LESSON_NOT_IN_COURSE', r);
   await db.doc('learnerProfiles/learner1').set({ displayName: 'Wanjiru Achieng' });
   const serial = (certs.learner1_c1 || {}).serial || 'SOK-EDU-FFFFFFFFFF';
-  r = await call('anyone', { op: 'verifyCertificate', serial });
+  r = await call(null, { op: 'verifyCertificate', serial });   /* PUBLIC: no account needed */
   ck('C-1 a certificate is VERIFIED by its serial on the server: status, course, provider, issuer, date — holder as INITIALS only (learners may be minors)',
     r.found === true && r.status === 'issued' && r.courseTitle === 'Algebra' && r.holderInitials === 'W. A.' && !JSON.stringify(r).includes('learner1') && !JSON.stringify(r).includes('Wanjiru'), r);
   r = await call('anyone', { op: 'verifyCertificate', serial: 'SOK-EDU-0000000000' });
@@ -191,6 +191,14 @@ const OWNMAT = (u, c) => 'course-materials/' + u + '/' + c + '/notes.pdf';
   r = await call('learner1', { op: 'complete', courseId: 'c1', lessonId: L3 });
   ck('N-1 issuing the certificate sends ONE education_certificate_issued notification (the ONE notify feed)', NOTES.filter((n) => n.type === 'education_certificate_issued' && n.uid === 'learner1').length === 1, NOTES);
   ck('G-6 a replayed completion issues no second certificate', Object.keys(await all('learnerCertificates')).length === 1 && r.certificateId === 'learner1_c1', r);
+  r = await call('learner1', { op: 'learnerCourse', courseId: 'c1' });
+  ck('V-2 learnerCourse: the learner OWN published outline with per-lesson states, progress and certificate — drafts never listed',
+    r.ok && r.enrolled === true && r.progress === 100 && r.lessons.every((x) => x.state === 'completed' && x.locked === false) && !r.lessons.some((x) => x.lessonId === LDRAFT) && r.certificate && /^SOK-EDU-/.test(r.certificate.serial), r);
+  r = await call('learner7', { op: 'learnerCourse', courseId: 'c1' });
+  ck('V-3 a NOT-enrolled learner sees the outline with gated lessons LOCKED (free preview unlocked), no progress, no certificate',
+    r.ok && r.enrolled === false && r.progress === null && r.certificate === null && r.lessons.some((x) => x.locked === true) && r.lessons.filter((x) => x.freePreview).every((x) => x.locked === false), r);
+  r = await call(null, { op: 'learnerCourse', courseId: 'c1' });
+  ck('V-4 signed out: only verifyCertificate is allowed — everything else needs sign-in', r.err === 'unauthenticated', r);
   r = await call('learner1', { op: 'myCertificates' });
   ck('G-7 the learner lists their certificates', r.certificates.length === 1 && r.certificates[0].courseTitle === 'Algebra', r);
   r = await call('learner2', { op: 'myCertificates' });
