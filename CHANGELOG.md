@@ -1,3 +1,50 @@
+## [2026-10-02] - RULES CANDIDATE: takedown enforcement on the SERVED ruleset f259c0b5 — NOT released
+
+**NOT RELEASED — QUEUED — MACHINE BELOW 512 MB MEMORY FLOOR.** Built from the served source fetched read-only from the
+Rules API on 2026-10-02:
+- release `cloud.firestore` → `f259c0b5-0a9e-49c5-8578-a628a40d946c`, updateTime 2026-10-01T00:27:37Z;
+- 158,619 B, sha256 `78d938fd…`;
+- stored here as `firestore.rules.served-f259c0b5`.
+
+The builder `scripts/build-takedown-rules-candidate.js` refuses any other input. Every hunk must apply exactly once, and
+`products`, `reports` and `fraudAlerts` must each end with ONE match block.
+
+**Hunks**
+- **T0** — new helper `noModerationWrite()`.
+- **T1** — a create cannot carry `moderationHold` or `moderationReleased`.
+- **T2** — on update, `moderationHold` and `moderationReleased` are server-only for EVERY client. While a hold exists:
+  - no client may change isVisible, visible, hidden, status, active, isActive, published, moderationStatus, deleted or isDeleted;
+  - a seller may still edit name, price, stock and the other commerce fields;
+  - the seller cannot delete the product (delete + re-create would restore it).
+
+  With NO hold, the seller's availability switch is unchanged.
+- **T5** — `products` read is split:
+  - `list` stays public;
+  - `get` of a held product is limited to its seller and admins.
+- **T3** — `reports` write → false. Every write goes through a callable.
+- **T4** — the two depth-2 `fraudAlerts` blocks (served lines 930 and 2876) collapse to one:
+  - `create: false`;
+  - `read, update: isModerator()`;
+  - `delete: isAdmin()`.
+
+**Who loses access**
+- Signed-in non-moderators lose fraudAlerts create (no live caller).
+- Admin clients lose:
+  - direct `reports` writes;
+  - writes to hold fields;
+  - writes to enforcement fields on HELD products.
+- The public loses `get` of HELD products.
+- Sellers lose deleting HELD products and changing their enforcement fields.
+
+**Size**
+- Source is 159,142 B (+523 B).
+- Compiled size is UNMEASURED (it needs a sizeprobe release, which is a production write).
+
+**Not yet done**
+- The tree's `firestore.rules` source is NOT changed. Port T0–T5 into it before any `build-firestore-rules.js` release.
+- `scripts/test-takedown-rules.js` (K1–K15, plus the served control C1–C4; localhost / `demo-` only; refuses a non-local
+  host) is written but **NOT RUN — QUEUED**.
+
 ## [2026-10-01] - AdminOS: head scripts deferred, admin gate order unchanged — static 7/0, browser proof QUEUED (RAM), NOT deployed
 
 admin-os.html loaded six classic scripts in <head> (security, sokoni-cart, sokoni-permissions, sokoni-role-authority,
