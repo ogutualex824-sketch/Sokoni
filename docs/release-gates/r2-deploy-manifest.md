@@ -12,7 +12,7 @@ capability / PIN (5b) → live comparison per changed function → all tests inc
 ## Never deployed from r2
 | function | ships from | why |
 |---|---|---|
-| `webhookIntasend` (and every IntaSend webhook handler) | 5b — #2 `f26c80a` (`fix/webhook-no-payer-credit-on-7428465`, ff of `cd2482b`), then #4 `f0fca5c` (`feat/webhook-rental-hold-on-73c5e5e`) | r2 lacks `shared/commission-category-source.js` and `rental-payment-hold.js`; deploying it from r2 would roll back the server-side commission-category fix, the rental hold and the rental receipt |
+| `webhookIntasend` (and every IntaSend webhook handler) | 5b — #2 `f26c80a` (`fix/webhook-no-payer-credit-on-7428465`, ff of `cd2482b`), then #4 `f0fca5c` (`feat/webhook-rental-hold-on-73c5e5e`) | 5b owns the webhook release (its Layer-B handler rows must run green on 5b's tree first). r2 carries a merged copy only so it holds no stale webhook; the guard refuses deploying it from r2 |
 | `intasendWebhook` | — | its own P0-4 lifecycle gate |
 | `processTypesenseQueue` | `fix/typesense-verified-badge-on-032e88e` (live 00023-yin) | already live from its own tree |
 | `bookingDispatch` | `fix/bookingdispatch-paymentid-fulltree` ae4f084 (f3's queue) | full-copy rebuild, closure == live except booking.js |
