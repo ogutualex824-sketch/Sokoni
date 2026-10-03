@@ -15,9 +15,10 @@
      L  leads: legal buttons per status (owner matrix, a subset of the f9a5c45 rules leadNext) · labels · move / note
         payloads exactly {status, respondedAt?} / {sellerNote} · shell writer refuses any other shape · chat gated on
         SokoniInbox.TX_TYPES at runtime · permission-denied / staff / failure copy · exact hasMore · failed write
-     R  rentals (REAL handlers): buttons per booking status · no pay step, unpriced copy · rules-pending copy on a
-        permission-denied read · rentalList refusal (owner without shops.ownerId) is not an empty list · create payload
-        + validation · confirm / availability / cancel through the handlers
+     R  rentals (REAL handlers of sokoni-f3's fix 74672f3, read from git; OLD = this tree / live): owner resolution
+        without shops.ownerId · buttons per booking status (active: complete only) · Unpaid copy, never M-Pesa · no pay step
+        · Equipment from rentalOwnerListings (hasMore → 'first 200 — more exist', N+) · the direct read ONLY on an
+        'Unknown commerce operation' refusal · HttpsError reasons verbatim · create / confirm / availability / seller cancel
      H  honest: Projects (Work engine) · RFQs / Quotes (B2B release, or the rfqs route when present) · Services ·
         Verification (status as recorded; "Verified" only when verified === true; staff)
      S  safety: no wa.me / tel: / mailto: / WhatsApp · escaping · no Firestore write API in the module · dispatch ops
@@ -29,6 +30,7 @@
           N2 an extra field in the lead move payload           → L3
           N3 a pay button on a rental                          → R2
           N4 '0' rendered for an unknown count                 → O1
+          N5 the direct read used although the op exists       → R10
    node scripts/test-merchant-construction-workspace.js */
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm'), Module = require('module');
@@ -55,9 +57,17 @@ const OWNER_MATRIX = {
   won: [], lost: [], cancelled: [], expired: []
 };
 
-/* ══ in-memory Firestore + the REAL rental handlers ══ */
+/* ══ in-memory Firestore + the REAL rental handlers ══
+   NEW = sokoni-f3's rentals fix, functions/rentals-on-53100ff @ 74672f3 (NOT deployed), read from the shared object store.
+   OLD = this tree's functions/marketplace-extensions.js (== the live commerceDispatch archive): no rentalOwnerListings.
+   A missing NEW source FAILS the run (fail closed) — the fixtures are never hand-written. */
+const F3_RENTALS_REF = process.env.RENTALS_REF || '74672f3';
+let NEW_SRC = null;
+try { NEW_SRC = require('child_process').execFileSync('git', ['-C', ROOT, 'show', F3_RENTALS_REF + ':functions/marketplace-extensions.js'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (_) { NEW_SRC = null; }
+const OLD_SRC = read('functions/marketplace-extensions.js');
+class HttpsError extends Error { constructor (code, m) { super(m); this.code = code; this.httpErrorCode = { canonicalName: code }; } }
 function mkAdmin () {
-  const data = {}; let seq = 0, clock = Date.parse('2026-10-03T08:00:00Z');
+  const data = {}; let seq = 0, clock = Date.now() - 3600000;
   const TS = (ms) => ({ __ts: ms, toDate: () => new Date(ms), toMillis: () => ms });
   const SERVER = { __server: true }, INC = (n) => ({ __inc: n });
   const resolve = (v, prev) => (v === SERVER ? TS(clock++) : (v && v.__inc != null ? ((prev || 0) + v.__inc) : v));
@@ -67,6 +77,7 @@ function mkAdmin () {
       id,
       async get () { const d = coll(c)[id]; return { exists: !!d, id, data: () => (d ? Object.assign({}, d) : undefined) }; },
       async set (v) { const o = {}; for (const k of Object.keys(v)) o[k] = resolve(v[k]); coll(c)[id] = o; },
+      async create (v) { if (coll(c)[id]) throw new Error('ALREADY_EXISTS'); return this.set(v); },
       async update (v) { const d = coll(c)[id]; if (!d) throw new Error('NOT_FOUND'); for (const k of Object.keys(v)) d[k] = resolve(v[k], d[k]); }
     };
   }
@@ -77,26 +88,35 @@ function mkAdmin () {
       async get () {
         let rows = Object.entries(coll(c)).filter(([, d]) => filters.every(([f, , v]) => d[f] === v));
         if (lim) rows = rows.slice(0, lim);
-        return { empty: !rows.length, docs: rows.map(([id, d]) => ({ id, data: () => Object.assign({}, d) })) };
+        return { empty: !rows.length, size: rows.length, docs: rows.map(([id, d]) => ({ id, data: () => Object.assign({}, d) })) };
       }
     };
   }
-  const db = { collection: (c) => Object.assign(query(c, [], 0), { doc: (id) => docRef(c, id || ('id' + (++seq))) }) };
+  const db = {
+    collection: (c) => Object.assign(query(c, [], 0), { doc: (id) => docRef(c, id || ('id' + (++seq))) }),
+    async runTransaction (fn) {
+      const w = [];
+      const out = await fn({ get: (r) => r.get(), set: (r, d) => w.push(() => r.set(d)), update: (r, d) => w.push(() => r.update(d)), create: (r, d) => w.push(() => r.create(d)) });
+      for (const x of w) await x();
+      return out;
+    }
+  };
   const firestore = () => db;
   firestore.FieldValue = { serverTimestamp: () => SERVER, increment: INC };
   firestore.Timestamp = { fromDate: (d) => TS(d.getTime()) };
   return { admin: { firestore }, data, TS };
 }
-function loadHandlers (adminStub) {
-  const file = path.join(ROOT, 'functions', 'marketplace-extensions.js');
+function loadHandlers (adminStub, src) {
+  const tmp = path.join(require('os').tmpdir(), 'cw-mx-' + process.pid + '-' + Math.random().toString(36).slice(2) + '.js');
+  fs.writeFileSync(tmp, src);
   const orig = Module._load;
   Module._load = function (req, parent, isMain) {
     if (req === 'firebase-admin') return adminStub;
-    if (req === 'firebase-functions/v2/https') return { onCall: (o, h) => h, onRequest: (o, h) => h };
+    if (req === 'firebase-functions/v2/https') return { onCall: (o, h) => h, onRequest: (o, h) => h, HttpsError };
     if (req === 'firebase-functions/v2/scheduler') return { onSchedule: (o, h) => h };
     return orig.apply(this, arguments);
   };
-  try { delete require.cache[require.resolve(file)]; return require(file)._h; } finally { Module._load = orig; }
+  try { return require(tmp)._h; } finally { Module._load = orig; try { fs.unlinkSync(tmp); } catch (_) {} }
 }
 /* callable wire: Timestamps → {_seconds,_nanoseconds}, as the Functions SDK encodes them */
 function wire (v) {
@@ -107,37 +127,44 @@ function wire (v) {
   }
   return v;
 }
-const RENTAL_OPS = ['rentalProductCreate', 'rentalGetAvailability', 'rentalList', 'rentalConfirm', 'rentalComplete', 'rentalCancel'];
+const RENTAL_OPS = ['rentalOwnerListings', 'rentalProductCreate', 'rentalGetAvailability', 'rentalList', 'rentalConfirm', 'rentalComplete', 'rentalCancel'];
+/* commerceDispatch, reproduced: unknown op → not-found "Unknown commerce operation"; HttpsError passes through with its
+   reason; a plain Error becomes internal "Operation failed unexpectedly." The client sees code 'functions/<code>'. */
 function mkServer (opts) {
   const o = opts || {};
-  const A = mkAdmin(); const H = loadHandlers(A.admin);
+  const A = mkAdmin(); const H = loadHandlers(A.admin, o.old ? OLD_SRC : NEW_SRC);
   const OWNER = 'owner1', SHOP = 'owner1';
-  /* shops/{uid}: ownerId present only when the fixture asks (the identity model has none). */
-  A.data.shops = { [SHOP]: Object.assign({ name: 'Mjengo Hardware' }, o.noOwnerId ? {} : { ownerId: OWNER }) };
+  /* shops/{uid}: the identity model carries no ownerId (owner = doc id). */
+  A.data.shops = { [SHOP]: Object.assign({ name: 'Mjengo Hardware' }, o.ownerId ? { ownerId: o.ownerId } : {}) };
   const calls = [];
   async function dispatch (payload) {
     calls.push(JSON.parse(JSON.stringify(payload)));
     const op = payload.op, h = H[op];
-    if (!h) { const e = new Error('Unknown commerce operation'); e.code = 'functions/not-found'; throw e; }
+    if (!h) { const e = new Error('Unknown commerce operation: "' + op + '". Valid ops: ' + Object.keys(H).sort().join(', ')); e.code = 'functions/not-found'; throw e; }
     try { return wire(await h({ auth: { uid: o.caller || OWNER, token: {} }, data: payload })); }
-    catch (err) { if (err && err.httpErrorCode) throw err; const e = new Error('Operation failed unexpectedly.'); e.code = 'functions/internal'; e.cause = err.message; throw e; }
+    catch (err) {
+      if (err && err.httpErrorCode) { const e = new Error(err.message); e.code = 'functions/' + err.code; throw e; }
+      const e = new Error('Operation failed unexpectedly.'); e.code = 'functions/internal'; e.cause = err && err.message; throw e;
+    }
   }
   return { A, H, dispatch, calls, OWNER, SHOP };
 }
+const day = (n) => new Date(Date.now() + n * 86400000).toISOString();
 async function seedRentals (srv) {
-  /* seeded THROUGH the real handlers: one equipment item, then buyer bookings */
-  const r = await srv.H.rentalProductCreate({ auth: { uid: srv.OWNER, token: {} }, data: { shopId: srv.SHOP, title: 'Concrete mixer 350L', pricingType: 'daily', dailyRate: 3500, deposit: 5000 } });
+  /* seeded THROUGH the real handlers: one equipment item, then renter bookings */
+  const as = (uid) => ({ uid, token: { name: 'Renter ' + uid } });
+  const r = await srv.H.rentalProductCreate({ auth: as(srv.OWNER), data: { shopId: srv.SHOP, title: 'Concrete mixer 350L', pricingType: 'daily', dailyRate: 3500, deposit: 5000 } });
   const pid = r.rentalProductId;
-  const book = (uid, s, e) => srv.H.rentalBook({ auth: { uid, token: { name: 'Buyer ' + uid } }, data: { rentalProductId: pid, startDate: s, endDate: e, durationUnit: 'daily' } });
-  const b1 = await book('b1', '2026-10-10T00:00:00Z', '2026-10-12T00:00:00Z');
-  const b2 = await book('b2', '2026-10-13T00:00:00Z', '2026-10-14T00:00:00Z');
-  const b3 = await book('b3', '2026-10-20T00:00:00Z', '2026-10-21T00:00:00Z');
-  const b4 = await book('b4', '2026-11-01T00:00:00Z', '2026-11-02T00:00:00Z');
-  await srv.H.rentalConfirm({ auth: { uid: srv.OWNER, token: {} }, data: { bookingId: b2.bookingId, shopId: srv.SHOP } });
-  await srv.H.rentalConfirm({ auth: { uid: srv.OWNER, token: {} }, data: { bookingId: b3.bookingId, shopId: srv.SHOP } });
-  await srv.H.rentalComplete({ auth: { uid: srv.OWNER, token: {} }, data: { bookingId: b3.bookingId, shopId: srv.SHOP } });
-  await srv.H.rentalCancel({ auth: { uid: 'b4', token: {} }, data: { bookingId: b4.bookingId } });
-  return { pid, pending: b1.bookingId, confirmed: b2.bookingId, completed: b3.bookingId, cancelled: b4.bookingId, price1: b1.totalAmount };
+  const book = (uid, s, e) => srv.H.rentalBook({ auth: as(uid), data: { rentalProductId: pid, startDate: day(s), endDate: day(e), durationUnit: 'daily' } });
+  const b1 = await book('b1', 10, 12), b2 = await book('b2', 13, 14), b3 = await book('b3', 20, 21), b4 = await book('b4', 30, 31), b5 = await book('b5', 40, 41), b6 = await book('b6', 50, 51);
+  await srv.H.rentalConfirm({ auth: as(srv.OWNER), data: { bookingId: b2.bookingId, shopId: srv.SHOP } });
+  await srv.H.rentalConfirm({ auth: as(srv.OWNER), data: { bookingId: b3.bookingId, shopId: srv.SHOP } });
+  await srv.H.rentalComplete({ auth: as(srv.OWNER), data: { bookingId: b3.bookingId, shopId: srv.SHOP } });
+  await srv.H.rentalCancel({ auth: as('b4'), data: { bookingId: b4.bookingId } });
+  await srv.H.rentalConfirm({ auth: as(srv.OWNER), data: { bookingId: b5.bookingId, shopId: srv.SHOP } });
+  srv.A.data.rentalBookings[b5.bookingId].status = 'active';   /* no handler sets 'active' yet; the legal-state table includes it */
+  return { pid, pending: b1.bookingId, confirmed: b2.bookingId, completed: b3.bookingId, cancelled: b4.bookingId, active: b5.bookingId,
+           stale: b6.bookingId, price1: b1.totalAmount, paymentStatus: b1.paymentStatus };
 }
 
 /* ══ the module in a VM ══ */
@@ -171,10 +198,12 @@ async function click (host, pred) {
 }
 async function change (host, attr, value) { await host._h.change({ target: { getAttribute: (n) => (n === attr ? '1' : null), value } }); await flush(); }
 
+/* an empty but WORKING fixed server: no listings, no bookings */
+const EMPTY = async (p) => (p.op === 'rentalOwnerListings' ? { listings: [], hasMore: false } : { bookings: [] });
 const lead = (id, status, extra) => Object.assign({ id, buyerUid: 'buyer-' + id, sellerUid: 'owner1', productId: 'p-' + id, productName: 'Cement 50kg', buyerName: 'Wanjiru', message: 'Need 40 bags', createdAt: { seconds: 1790000000 + id.length }, status }, extra || {});
 function mkCtx (V, view, over) {
   const o = over || {};
-  const rec = { writes: [], readLeads: 0, go: [], chat: [] };
+  const rec = { writes: [], readLeads: 0, readEquipment: 0, go: [], chat: [] };
   const win = { SokoniInbox: o.inbox === undefined ? undefined : o.inbox };
   const ctx = {
     view, window: win,
@@ -183,7 +212,7 @@ function mkCtx (V, view, over) {
     shopId: () => (o.shopId === undefined ? 'owner1' : o.shopId),
     readLeads: (lim) => { rec.readLeads++; rec.leadLimit = lim; return o.leadsErr ? Promise.reject(o.leadsErr) : Promise.resolve(JSON.parse(JSON.stringify(o.leads || []))); },
     writeLead: (id, p) => { rec.writes.push({ id, p, keys: Object.keys(p), respondedIsToken: p.respondedAt === V.SokoniMerchantConstruction.SERVER_TIME }); return o.writeErr ? Promise.reject(o.writeErr) : Promise.resolve(); },
-    readEquipment: () => (o.equipErr ? Promise.reject(o.equipErr) : Promise.resolve(o.equip || [])),
+    readEquipment: () => { rec.readEquipment++; return o.equipErr ? Promise.reject(o.equipErr) : Promise.resolve(o.equip || []); },
     readApplications: () => (o.appsErr ? Promise.reject(o.appsErr) : Promise.resolve(o.apps || [])),
     dispatch: o.dispatch || (() => Promise.reject({ code: 'functions/internal' })),
     callPlans: () => (o.plansErr ? Promise.reject(o.plansErr) : Promise.resolve({ plans: o.plans || [] })),
@@ -211,14 +240,14 @@ async function suite (src, log) {
   let t = await mountView(V, 'overview', { leadsErr: { code: 'permission-denied' }, equipErr: { code: 'permission-denied' }, dispatch: () => Promise.reject({ code: 'functions/internal' }) });
   let tiles = [...t.host.innerHTML.matchAll(/<div class="cw-tile"><b>([^<]*)<\/b><small>([^<]*)<\/small>/g)].map((m) => [dec(m[1]), m[2]]);
   ck('O1', 'unknown counts render — (refused leads / equipment, failed rentals), never 0', tiles.length === 4 && tiles.every((x) => x[0] === '—'), tiles);
-  t = await mountView(V, 'overview', { role: 'cashier', equip: [], dispatch: async () => ({ bookings: [] }) });
+  t = await mountView(V, 'overview', { role: 'cashier', equip: [], dispatch: EMPTY });
   tiles = [...t.host.innerHTML.matchAll(/<div class="cw-tile"><b>([^<]*)<\/b><small>([^<]*)<\/small>/g)].map((m) => [dec(m[1]), m[2]]);
   ck('O1', 'staff: lead tiles — (not read), canonical empty rentals / equipment are 0', tiles[0][0] === '—' && tiles[1][0] === '—' && tiles[2][0] === '0' && tiles[3][0] === '0' && t.rec.readLeads === 0, tiles);
-  t = await mountView(V, 'overview', { leads: [], equip: [], dispatch: async () => ({ bookings: [] }) });
+  t = await mountView(V, 'overview', { leads: [], equip: [], dispatch: EMPTY });
   tiles = [...t.host.innerHTML.matchAll(/<div class="cw-tile"><b>([^<]*)<\/b>/g)].map((m) => dec(m[1]));
   ck('O2', 'a real loaded zero renders 0', tiles.join(',') === '0,0,0,0', tiles);
   const many = Array.from({ length: 201 }, (_, i) => lead('L' + i, i % 2 ? 'pending' : 'quote_sent'));
-  t = await mountView(V, 'overview', { leads: many, equip: [], dispatch: async () => ({ bookings: [] }) });
+  t = await mountView(V, 'overview', { leads: many, equip: [], dispatch: EMPTY });
   tiles = [...t.host.innerHTML.matchAll(/<div class="cw-tile"><b>([^<]*)<\/b>/g)].map((m) => dec(m[1]));
   ck('O3', 'capped leads (201 read for a 200 page): counts are lower bounds N+, banner shown, query asked limit+1', tiles[0] === '100+' && tiles[1] === '200+' && /at least that many/.test(text(t.host)) && t.rec.leadLimit === 201, { tiles, lim: t.rec.leadLimit });
   const goes = buttons(t.host).filter((b) => 'data-go-route' in b).map((b) => b['data-go-route']);
@@ -228,11 +257,11 @@ async function suite (src, log) {
   ck('O4', 'contractor layout is the owner\'s 18 sections in order', contractor.join('|') === 'Overview|Storefront|Services|Products|Projects|RFQs|Leads|Quotes|Orders|Customers|Messages|Delivery|Equipment|Marketing|Wallet|Subscription|Verification|Staff', contractor);
   const reused = Object.values(M.REUSED);
   ck('O5', 'reused sections link to EXISTING non-construction routes (shop, products, inventory, orders, customers, messages, deliveries, marketing, payments, plan, staff)', reused.length === 11 && reused.every((id) => routes.get(id) && !/^con-/.test(id)), reused);
-  t = await mountView(V, 'overview', { leads: [], plans: [{ id: 'seller_pro', hubType: 'seller', price: { monthly: 999 } }, { id: 'ent', hubType: 'enterprise', price: { monthly: 5000 } }], dispatch: async () => ({ bookings: [] }) });
+  t = await mountView(V, 'overview', { leads: [], plans: [{ id: 'seller_pro', hubType: 'seller', price: { monthly: 999 } }, { id: 'ent', hubType: 'enterprise', price: { monthly: 5000 } }], dispatch: EMPTY });
   ck('O6', 'plans: none priced for construction → "Construction plans: —" (seller / enterprise plans not shown as construction prices)', /Construction plans: — \(SOKONI has not priced/.test(text(t.host)) && !/999|5,000/.test(text(t.host)), text(t.host).slice(-400));
-  t = await mountView(V, 'overview', { leads: [], plans: [{ id: 'con_basic', name: 'Builder Basic', hubType: 'construction', price: { monthly: 1500 } }], dispatch: async () => ({ bookings: [] }) });
+  t = await mountView(V, 'overview', { leads: [], plans: [{ id: 'con_basic', name: 'Builder Basic', hubType: 'construction', price: { monthly: 1500 } }], dispatch: EMPTY });
   ck('O6', 'plans: a construction-priced catalog entry is shown with its server price', /Builder Basic KES 1,500\/month/.test(text(t.host)), text(t.host).slice(-300));
-  t = await mountView(V, 'overview', { leads: [], plansErr: { code: 'internal' }, dispatch: async () => ({ bookings: [] }) });
+  t = await mountView(V, 'overview', { leads: [], plansErr: { code: 'internal' }, dispatch: EMPTY });
   ck('O6', 'plans: catalog failure → —', /Construction plans: —/.test(text(t.host)), null);
   const tx = text(t.host);
   ck('O7', 'fees copy: materials 15% marketplace, services 0%, featured / lead / rental / plans unpriced and OFF, release not live', /materials[^.]*15%/.test(tx) && /construction services — 0%/.test(tx) && /not priced and are switched OFF/.test(tx) && /not yet live/.test(tx), null);
@@ -299,18 +328,38 @@ async function suite (src, log) {
   await click(t.host, (b) => b['data-to'] === 'qualified');
   ck('L8', 'refused write → error note, status unchanged (buttons still those of New)', /refused this \(permission\)/.test(text(t.host)) && buttons(t.host).filter((b) => b['data-act'] === 'lead-move').map((b) => b['data-to']).join(',') === 'responded,qualified,lost', text(t.host));
 
-  /* ── R (real handlers) ── */
+  /* ── R (REAL handlers: NEW = f3 74672f3, OLD = live/tree) ── */
+  ck('R0', 'f3 rentals source ' + F3_RENTALS_REF + ' is readable (fail closed: no hand-written fixtures)', !!NEW_SRC && /rentalOwnerListings/.test(NEW_SRC), F3_RENTALS_REF);
   let srv = mkServer(); let ids = await seedRentals(srv);
   t = await mountView(V, 'rentals', { dispatch: srv.dispatch });
   const btnFor = (id) => buttons(t.host).filter((x) => x['data-id'] === id).map((x) => x['data-act']);
-  ck('R1', 'real rentalList: pending → Confirm + Cancel; confirmed → Mark returned + Cancel; completed / cancelled → none', btnFor(ids.pending).join(',') === 'rental-confirm,rental-cancel-ask' && btnFor(ids.confirmed).join(',') === 'rental-complete,rental-cancel-ask' && !btnFor(ids.completed).length && !btnFor(ids.cancelled).length, { p: btnFor(ids.pending), c: btnFor(ids.confirmed) });
-  ck('R1', 'server-calculated hire price shown as such, "Not paid through SOKONI"', new RegExp('calculated by SOKONI: KES ' + ids.price1.toLocaleString('en-KE')).test(text(t.host)) && /Not paid through SOKONI/.test(text(t.host)), ids.price1);
+  ck('R1', 'rentalList (owner, shops/{uid} has NO ownerId): pending → Confirm + Cancel; confirmed → Mark returned + Cancel; active → Mark returned only; completed / cancelled → none',
+    btnFor(ids.pending).join(',') === 'rental-confirm,rental-cancel-ask' && btnFor(ids.confirmed).join(',') === 'rental-complete,rental-cancel-ask' &&
+    btnFor(ids.active).join(',') === 'rental-complete' && !btnFor(ids.completed).length && !btnFor(ids.cancelled).length,
+    { p: btnFor(ids.pending), c: btnFor(ids.confirmed), a: btnFor(ids.active) });
+  ck('R1', 'rentalBook returns paymentStatus unpaid; the card says "Unpaid — paid rentals open once SOKONI sets rental pricing" with the server price', ids.paymentStatus === 'unpaid' && text(t.host).includes(M._pure.UNPAID_COPY) && new RegExp('calculated by SOKONI: KES ' + ids.price1.toLocaleString('en-KE')).test(text(t.host)), ids.paymentStatus);
+  ck('R1', 'never "M-Pesa": the stored paymentMethod is not rendered', !/m-?pesa/i.test(text(t.host)) && Object.values(srv.A.data.rentalBookings).every((b) => b.paymentMethod === 'none'), null);
   const noPay = (h) => !buttons(h).some((x) => /\bpay\b|m-?pesa|checkout|deposit now/i.test(x.__text + ' ' + (x['data-act'] || '')));
-  let rentalsHost = t.host;
-  t = await mountView(V, 'equipment', { dispatch: srv.dispatch, equipErr: { code: 'permission-denied' } });
+  const rentalsHost = t.host;
+  t = await mountView(V, 'equipment', { dispatch: srv.dispatch });
   ck('R2', 'no pay step anywhere on Rentals / Equipment, and the unpriced copy is shown on both', noPay(rentalsHost) && noPay(t.host) && text(rentalsHost).includes(M._pure.UNPRICED_COPY) && text(t.host).includes(M._pure.UNPRICED_COPY), buttons(rentalsHost).map((x) => x.__text));
-  ck('R3', 'equipment read permission-denied → "Rentals become visible once access rules ship", not an empty list', text(t.host).includes(M._pure.RULES_COPY) && !/No equipment listed yet/.test(text(t.host)), text(t.host));
+  ck('R10', 'Equipment comes from rentalOwnerListings {op, shopId}; the direct rentalProducts read is NOT used on a server that knows the op', srv.calls.some((x) => x.op === 'rentalOwnerListings' && x.shopId === 'owner1' && Object.keys(x).length === 2) && t.rec.readEquipment === 0 && /Concrete mixer 350L/.test(text(t.host)), { reads: t.rec.readEquipment });
+  /* hasMore: 201 listings through the real op */
+  const srvBig = mkServer();
+  for (let i = 0; i < 201; i++) await srvBig.H.rentalProductCreate({ auth: { uid: 'owner1', token: {} }, data: { shopId: 'owner1', title: 'Item ' + i, pricingType: 'daily', dailyRate: 100 + i } });
+  t = await mountView(V, 'equipment', { dispatch: srvBig.dispatch });
+  ck('R10', 'hasMore from the real op (201 listings): 200 shown + "Showing the first 200 — more exist"', /Showing the first 200 — more exist/.test(text(t.host)) && (text(t.host).match(/Item \d+/g) || []).length === 200, null);
+  t = await mountView(V, 'overview', { dispatch: srvBig.dispatch, leads: [] });
+  const eqTile = [...t.host.innerHTML.matchAll(/<div class="cw-tile"><b>([^<]*)<\/b><small>([^<]*)<\/small>/g)].map((m) => [dec(m[1]), m[2]]).find((x) => x[1] === 'Equipment listed');
+  ck('R10', 'Overview equipment tile from a hasMore list is "200+"', eqTile && eqTile[0] === '200+', eqTile);
+  /* OLD server (live today): unknown op → fallback direct read; refused → rules copy */
+  const srvOld = mkServer({ old: true, ownerId: 'owner1' });
+  t = await mountView(V, 'equipment', { dispatch: srvOld.dispatch, equipErr: { code: 'permission-denied' } });
+  ck('R3', 'old server ("Unknown commerce operation") → the direct read is the fallback; refused → "Rentals become visible once access rules ship", not an empty list', t.rec.readEquipment === 1 && text(t.host).includes(M._pure.RULES_COPY) && !/No equipment listed yet/.test(text(t.host)), { reads: t.rec.readEquipment });
+  t = await mountView(V, 'equipment', { dispatch: () => Promise.reject(Object.assign(new Error('You do not manage this shop.'), { code: 'functions/permission-denied' })) });
+  ck('R3', 'any other refusal does NOT fall back: the server reason verbatim, no direct read, no rules copy', t.rec.readEquipment === 0 && /You do not manage this shop\./.test(text(t.host)) && !text(t.host).includes(M._pure.RULES_COPY), { reads: t.rec.readEquipment });
   /* create through the REAL handler */
+  t = await mountView(V, 'equipment', { dispatch: srv.dispatch });
   await click(t.host, (x) => x['data-act'] === 'equip-new');
   Object.assign(t.host.vals, { 'f:title': 'Tower scaffold', 'f:pricingType': 'daily', 'f:dailyRate': '', 'f:deposit': '2000' });
   let before = srv.calls.length;
@@ -320,31 +369,37 @@ async function suite (src, log) {
   await click(t.host, (x) => x['data-act'] === 'equip-create');
   const createCall = srv.calls.filter((x) => x.op === 'rentalProductCreate').pop();
   const stored = Object.values(srv.A.data.rentalProducts).find((p) => p.title === 'Tower scaffold');
-  ck('R5', 'create payload = {op, shopId, title, pricingType, dailyRate, deposit} and the REAL handler stores it under the shop', createCall && Object.keys(createCall).sort().join(',') === 'dailyRate,deposit,op,pricingType,shopId,title' && createCall.dailyRate === 1800 && stored && stored.shopId === 'owner1' && stored.status === 'active', { createCall, stored: !!stored });
-  ck('R5', 'the new listing is shown for the session with the not-visible-to-buyers caveat', /Listed in this session/.test(text(t.host)) && /Tower scaffold/.test(text(t.host)) && /cannot see rental listings until access rules ship/.test(text(t.host)), null);
+  ck('R5', 'create payload = {op, shopId, title, pricingType, dailyRate, deposit}; the REAL handler stores it under the shop', createCall && Object.keys(createCall).sort().join(',') === 'dailyRate,deposit,op,pricingType,shopId,title' && createCall.dailyRate === 1800 && stored && stored.shopId === 'owner1' && stored.status === 'active', { createCall, stored: !!stored });
+  ck('R5', 'after create the list reloads from rentalOwnerListings and shows the new item', /Tower scaffold/.test(text(t.host)) && srv.calls.filter((x) => x.op === 'rentalOwnerListings').length >= 2, null);
   /* confirm via the real handler */
   t = await mountView(V, 'rentals', { dispatch: srv.dispatch });
   await click(t.host, (x) => x['data-act'] === 'rental-confirm' && x['data-id'] === ids.pending);
   const conf = srv.calls.filter((x) => x.op === 'rentalConfirm').pop();
   ck('R7', 'Confirm sends {op:rentalConfirm, bookingId, shopId}; the real handler moves it to confirmed and the list reloads', conf && Object.keys(conf).sort().join(',') === 'bookingId,op,shopId' && srv.A.data.rentalBookings[ids.pending].status === 'confirmed' && btnFor(ids.pending).join(',') === 'rental-complete,rental-cancel-ask', conf);
   /* availability via the real handler */
-  t = await mountView(V, 'availability', { dispatch: srv.dispatch, equipErr: { code: 'permission-denied' } });
+  t = await mountView(V, 'availability', { dispatch: srv.dispatch });
   await change(t.host, 'data-pick', ids.pid);
-  ck('R8', 'Availability: real rentalGetAvailability periods for the item (pending + confirmed), with the 200-booking caveat', /Taken periods/.test(text(t.host)) && (text(t.host).match(/→/g) || []).length === 2 && /most recent 200 bookings/.test(text(t.host)), text(t.host));
-  /* cancel: two-step; real handler checks token.shopId (no such claim) → refused as internal */
+  ck('R8', 'Availability: real rentalGetAvailability periods (pending + confirmed + active), with the 200-booking caveat', /Taken periods/.test(text(t.host)) && (text(t.host).match(/→/g) || []).length === 4 && /most recent 200 bookings/.test(text(t.host)), (text(t.host).match(/→/g) || []).length);
+  /* seller cancel through the shop authority */
   t = await mountView(V, 'rentals', { dispatch: srv.dispatch });
   before = srv.calls.length;
   await click(t.host, (x) => x['data-act'] === 'rental-cancel-ask' && x['data-id'] === ids.confirmed);
   ck('R9', 'Cancel is two-step (ask, then confirm) — no call on the first tap', srv.calls.length === before && buttons(t.host).some((x) => x['data-act'] === 'rental-cancel'), null);
   await click(t.host, (x) => x['data-act'] === 'rental-cancel');
   const can = srv.calls.filter((x) => x.op === 'rentalCancel').pop();
-  ck('R9', 'Cancel sends {op, bookingId}; the real handler refuses a seller without a shopId claim and the page says nothing changed', can && Object.keys(can).sort().join(',') === 'bookingId,op' && srv.A.data.rentalBookings[ids.confirmed].status === 'confirmed' && /could not complete this \(internal\)\. Nothing was changed/.test(text(t.host)), can);
-  /* rentalList refused for an owner whose shop has no ownerId (the identity model) */
-  const srv2 = mkServer({ noOwnerId: true });
-  t = await mountView(V, 'rentals', { dispatch: srv2.dispatch });
-  ck('R4', 'real handler refuses an owner whose shops/{uid} has no ownerId → "could not be loaded … not an empty list"', /Rental requests could not be loaded/.test(text(t.host)) && /not an empty list/.test(text(t.host)) && !/No rental requests yet/.test(text(t.host)), text(t.host));
-  t = await mountView(V, 'rentals', { dispatch: () => Promise.reject({ code: 'permission-denied' }) });
-  ck('R4', 'permission-denied → the rules-pending copy', text(t.host).includes(M._pure.RULES_COPY), text(t.host));
+  ck('R9', 'seller Cancel sends {op, bookingId}; the real handler cancels through the shop authority (cancelledByRole seller); the card closes', can && Object.keys(can).sort().join(',') === 'bookingId,op' && srv.A.data.rentalBookings[ids.confirmed].status === 'cancelled' && srv.A.data.rentalBookings[ids.confirmed].cancelledByRole === 'seller' && !btnFor(ids.confirmed).length, can);
+  /* verbatim HttpsError reasons: the renter cancels while the page still shows the request as pending */
+  t = await mountView(V, 'rentals', { dispatch: srv.dispatch });
+  await srv.H.rentalCancel({ auth: { uid: 'b6', token: {} }, data: { bookingId: ids.stale } });
+  await click(t.host, (x) => x['data-act'] === 'rental-confirm' && x['data-id'] === ids.stale);
+  ck('R11', 'a server refusal is shown VERBATIM ("A cancelled booking cannot be confirmed.") — no "internal" substitute', /A cancelled booking cannot be confirmed\. Nothing was changed\./.test(text(t.host)) && !/\(internal\)/.test(text(t.host)), text(t.host).slice(0, 600));
+  /* owner without ownerId: allowed on the fixed server; refused on the old one (reason shown, not an empty list) */
+  const srvOld2 = mkServer({ old: true });
+  t = await mountView(V, 'rentals', { dispatch: srvOld2.dispatch });
+  ck('R4', 'old server refuses an owner without shops.ownerId → its message verbatim + "not an empty list"', /Rental requests could not be loaded/.test(text(t.host)) && /Operation failed unexpectedly\./.test(text(t.host)) && /not an empty list/.test(text(t.host)) && !/No rental requests yet/.test(text(t.host)), text(t.host));
+  const srvStranger = mkServer({ caller: 'stranger' });
+  t = await mountView(V, 'rentals', { dispatch: srvStranger.dispatch });
+  ck('R4', 'fixed server refuses a non-manager with its reason verbatim ("You do not manage this shop.")', /You do not manage this shop\./.test(text(t.host)) && /not an empty list/.test(text(t.host)), text(t.host));
 
   /* ── H ── */
   t = await mountView(V, 'projects', {});
@@ -387,8 +442,8 @@ async function suite (src, log) {
   const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   ck('S1', 'no wa.me / whatsapp / tel: / mailto: / sms: in the module', !/wa\.me|whatsapp|tel:|mailto:|sms:/i.test(code), null);
   ck('S3', 'no Firestore write API, no browser storage in the module (the only write is ctx.writeLead)', !/\b(setDoc|updateDoc|addDoc|deleteDoc|writeBatch|runTransaction)\b|localStorage|sessionStorage|indexedDB/.test(code), null);
-  const ops = [...new Set(srv.calls.concat(srv2.calls).map((x) => x.op))];
-  ck('S4', 'dispatch ops used ⊆ the six seller rental ops; never rentalBook', ops.every((o) => RENTAL_OPS.includes(o)) && !/rentalBook\b/.test(code), ops);
+  const ops = [...new Set(srv.calls.concat(srvOld.calls, srvBig.calls).map((x) => x.op))];
+  ck('S4', 'dispatch ops used ⊆ the seven seller rental ops (incl. rentalOwnerListings); never rentalBook', ops.every((o) => RENTAL_OPS.includes(o)) && !/rentalBook\b/.test(code), ops);
 
   /* ── G ── */
   const con = routes.ROUTES.filter((r) => /^con-/.test(r.id));
@@ -415,6 +470,7 @@ async function suite (src, log) {
     ['N1', 'illegal lead button (pending → won)', 'L1', ["pending:         ['responded', 'qualified', 'lost'],", "pending:         ['responded', 'qualified', 'lost', 'won'],"]],
     ['N2', 'extra field in the lead move payload', 'L3', ["var p = { status: to };", "var p = { status: to, updatedAt: 1 };"]],
     ['N3', 'a pay button on a rental', 'R2', ["return '<div class=\"cw-card\"><div class=\"cw-row\"><b>' + esc(b.customerName", "btns += '<button type=\"button\" class=\"cw-btn pri\" data-act=\"rental-pay\">Pay with M-PESA</button>'; return '<div class=\"cw-card\"><div class=\"cw-row\"><b>' + esc(b.customerName"]],
+    ['N5', 'direct rentalProducts read used although rentalOwnerListings exists', 'R10', ["return dispatch('rentalOwnerListings', { shopId: sid }).then(", "return Promise.reject({ code: 'functions/not-found', message: 'Unknown commerce operation' }).then("]],
     ['N4', "'0' rendered for an unknown count", 'O1', ["isFinite(n)) ? String(n) + (partial ? '+' : '') : '—'; }", "isFinite(n)) ? String(n) + (partial ? '+' : '') : '0'; }"]]
   ];
   let caught = 0;
