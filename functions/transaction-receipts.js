@@ -197,6 +197,20 @@ async function receiptsFor(db, uid, opts) {
     if (seen.has(doc.id)) continue; seen.add(doc.id);
     out.push(Object.assign({ receiptId: doc.id, role: (doc.data() || {}).clientUid === String(uid) ? 'client' : 'provider' }, doc.data()));
   }
+  /* HISTORY (owner field list): each receipt's own immutable events, scoped exactly like the header — only receipts the
+     caller is party to reach this point. Capped at 50 per receipt, oldest first; a projection, never the raw doc. */
+  await Promise.all(out.map(async (r) => {
+    const ev = await db.collection(RECEIPTS).doc(r.receiptId).collection('events').limit(50).get();
+    r.events = ev.docs.map((d) => {
+      const e = d.data() || {};
+      const at = e.at && e.at.toMillis ? e.at.toMillis() : (e.at || null);
+      return Object.assign({ type: e.type, amountCents: e.amountCents, at },
+        e.platformFeeCents != null ? { platformFeeCents: e.platformFeeCents } : {},
+        e.providerNetCents != null ? { providerNetCents: e.providerNetCents } : {},
+        e.reason ? { reason: e.reason } : {}, e.milestoneId ? { milestoneId: e.milestoneId } : {},
+        Array.isArray(e.deductions) && e.deductions.length ? { deductions: e.deductions.map((x) => ({ kind: x.kind, amountCents: x.amountCents })) } : {});
+    }).sort((a, b) => String(a.at || '').localeCompare(String(b.at || '')));
+  }));
   return out;
 }
 

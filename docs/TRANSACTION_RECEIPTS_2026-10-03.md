@@ -73,7 +73,7 @@ It is **not** a tax invoice:
 - timestamps → `issuedAt` / `updatedAt` / event `at`
 - refund/adjustment history → `events`
 
-**Read:** the callable `myTransactionReceipts` returns the caller's receipts, as client or as provider. It is scoped on the server; there is no client rule access.
+**Read:** the callable `myTransactionReceipts` returns the caller's receipts, as client or as provider, each with its own immutable `events` history (capped at 50, oldest first; a projection, not the raw document). It is scoped on the server; there is no client rule access.
 
 ## Hook contract (sokoni-b2 builds the provider-booking hooks on this)
 

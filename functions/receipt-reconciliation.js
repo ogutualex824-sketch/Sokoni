@@ -5,7 +5,9 @@
    not a write. A receipt never decides who owns money — the payment / webhook and the ledger do.
 
    Checks (service bookings first — the flow whose hooks land first; other kinds join as their hooks land). Added 2026-10-03:
-     receipt_without_payment · invalid_history · history_total_mismatch · release_without_hold · duplicate_payment_ref.
+     receipt_without_payment · invalid_history · history_total_mismatch · release_without_hold · duplicate_payment_ref ·
+     hold_without_payment · wallet_mismatch · quote_link_mismatch · duplicate_receipt (quote-originated bookings are
+     receipted under the QUOTE: kind quote, links.bookingId).
      missing_receipt        a paid booking (paid_held / settled / refunded*) has no receipt
      orphan_receipt         a receipt whose booking does not exist
      paid_mismatch          receipt.paidCents ≠ booking.heldAmount (the verified amount)
@@ -32,9 +34,31 @@ async function reconcileServiceBookings(db, opts) {
     const snap = await db.collection('providerBookings').where('paymentStatus', '==', st).limit(lim).get();
     for (const b of snap.docs) {
       const bk = b.data() || {};
-      const r = await db.collection(RECEIPTS).doc('service_booking_' + b.id).get();
+      /* hold_without_payment: a booking marked paid/held must cite a CONFIRMED payment. */
+      if (bk.paymentRef) {
+        const [pay, intent] = await Promise.all([
+          db.collection('payments').doc(String(bk.paymentRef)).get(),
+          db.collection('paymentIntents').doc(String(bk.paymentRef)).get(),
+        ]);
+        const confirmed = (pay.exists && String((pay.data() || {}).status || '').toUpperCase() === 'COMPLETE') || (intent.exists && (intent.data() || {}).status === 'paid');
+        if (!confirmed) flag('hold_without_payment', b.id, 'confirmed payment ' + bk.paymentRef, null);
+      } else {
+        flag('hold_without_payment', b.id, 'a paymentRef', null);
+      }
+      /* The receipt is the booking's own — OR, for a booking that came from an accepted Legal/Tech quote, the QUOTE's
+         receipt (kind 'quote', links.bookingId == this booking). */
+      let r = await db.collection(RECEIPTS).doc('service_booking_' + b.id).get();
+      if (!r.exists) {
+        const qs = await db.collection(RECEIPTS).where('links.bookingId', '==', b.id).limit(2).get();
+        if (qs.docs.length > 1) flag('duplicate_receipt', b.id, 1, qs.docs.map((d) => d.id));
+        r = qs.docs[0] || r;
+      }
       if (!r.exists) { flag('missing_receipt', b.id, 'receipt', null); continue; }
       const rc = r.data() || {};
+      /* quote_link_mismatch: a quote receipt must name THIS booking's buyer and provider. */
+      if (rc.kind === 'quote' && ((bk.customerUid && rc.clientUid !== bk.customerUid) || (bk.providerId && rc.counterpartyId !== bk.providerId))) {
+        flag('quote_link_mismatch', b.id, { clientUid: bk.customerUid || null, providerId: bk.providerId || null }, { clientUid: rc.clientUid, counterpartyId: rc.counterpartyId });
+      }
       const held = Number(bk.heldAmount);
       if (Number.isFinite(held) && held > 0 && rc.paidCents !== held) flag('paid_mismatch', b.id, held, rc.paidCents);
       if (st === 'settled') {
@@ -42,6 +66,12 @@ async function reconcileServiceBookings(db, opts) {
         const po = await db.collection('providerPayouts').doc(b.id).get();
         const sc = po.exists ? Number((po.data() || {}).settlementCents) : NaN;
         if (Number.isFinite(sc) && rc.providerNetCents !== sc) flag('provider_share_mismatch', b.id, sc, rc.providerNetCents);
+        /* wallet_mismatch: a payout that says it credited a wallet must point at a wallet transaction that exists. */
+        const pd = po.exists ? (po.data() || {}) : {};
+        if (pd.walletCredited === true) {
+          const wt = pd.walletTxnId ? await db.collection('walletTransactions').doc(String(pd.walletTxnId)).get() : { exists: false };
+          if (!wt.exists) flag('wallet_mismatch', b.id, 'walletTransactions/' + (pd.walletTxnId || '?'), null);
+        }
       }
       const rf = Number(bk.refundedCents) || 0;
       if ((rc.refundedCents || 0) !== rf) flag('refund_mismatch', b.id, rf, rc.refundedCents || 0);

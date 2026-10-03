@@ -30,7 +30,7 @@ function fakeDb (opts) {
   const coll = (c) => ({ doc: (id) => ref(c + '/' + id), add: async (v) => { const id = 'a' + (++auto); docs.set(c + '/' + id, clone(v)); return { id }; },
     where: (f, op, v) => q(c, [[f, v]]), limit: () => q(c, []), get: () => q(c, []).get() });
   const q = (c, filters) => ({ where: (f, op, v) => q(c, filters.concat([[f, v]])), limit: () => q(c, filters),
-    get: async () => { const rows = [...docs.keys()].filter((k) => k.startsWith(c + '/') && k.split('/').length === c.split('/').length + 1 && filters.every(([f, v]) => (docs.get(k) || {})[f] === v)); return { docs: rows.map(snap) }; } });
+    get: async () => { const rows = [...docs.keys()].filter((k) => k.startsWith(c + '/') && k.split('/').length === c.split('/').length + 1 && filters.every(([f, v]) => f.split('.').reduce((x, part) => (x == null ? x : x[part]), docs.get(k) || {}) === v)); return { docs: rows.map(snap) }; } });
   return { _docs: docs, collection: coll,
     async runTransaction (fn) {
       if (o.failTxn && o.failTxn()) throw new Error('simulated outage');
@@ -151,7 +151,7 @@ const deps = { nextNumber: async (k) => 'SKN-' + k + '-2026-' + String(++SEQ).pa
   put('providerBookings/b4', { paymentStatus: 'refunded', heldAmount: 300000, refundedCents: 300000 });
   rcpt('b4', { paidCents: 300000, heldCents: 300000 });                                                                              /* refund mismatch */
   rcpt('gone', { paidCents: 100, heldCents: 100 });                                                                                  /* orphan */
-  put('providerBookings/b5', { paymentStatus: 'settled', heldAmount: 300000 });
+  put('providerBookings/b5', { paymentStatus: 'settled', heldAmount: 300000, paymentRef: 'P_b5' });
   rcpt('b5', { paidCents: 300000, releasedCents: 300000, providerNetCents: 285000 }, [['paid', 300000], ['released', 300000]]);      /* CLEAN */
   put('providerPayouts/b5', { settlementCents: 285000 });
   const snapBefore = JSON.stringify([...db._docs].filter(([k]) => !k.startsWith('receiptReconciliationExceptions/')));
@@ -167,6 +167,30 @@ const deps = { nextNumber: async (k) => 'SKN-' + k + '-2026-' + String(++SEQ).pa
   await RR.reconcileServiceBookings(db, { now: () => t0 });
   ck('C1c a recurring exception stays ONE doc, keeps firstSeenAt, updates lastSeenAt',
     JSON.stringify(ex('missing_receipt_b1').firstSeenAt) === JSON.stringify(new Date('2026-10-03T00:00:00Z')) && JSON.stringify(ex('missing_receipt_b1').lastSeenAt) === JSON.stringify(t0));
+
+  /* C3 — quote-originated bookings, hold without payment, wallet mismatch */
+  db = fakeDb();
+  const p3 = (k, v) => db._docs.set(k, v);
+  p3('payments/PQ', { status: 'COMPLETE' });
+  p3('providerBookings/bq1', { paymentStatus: 'paid_held', heldAmount: 2000000, paymentRef: 'PQ', customerUid: 'c1', providerId: 'firm1' });
+  p3('transactionReceipts/quote_q1', { kind: 'quote', sourceId: 'q1', paymentRef: 'PQ', clientUid: 'c1', counterpartyId: 'firm1', links: { quoteId: 'q1', bookingId: 'bq1' },
+    paidCents: 2000000, heldCents: 2000000, refundedCents: 0, releasedCents: 0 });
+  p3('transactionReceipts/quote_q1/events/paid_0', { type: 'paid', amountCents: 2000000 });
+  p3('payments/PQ2', { status: 'COMPLETE' });
+  p3('providerBookings/bq2', { paymentStatus: 'paid_held', heldAmount: 2000000, paymentRef: 'PQ2', customerUid: 'c2', providerId: 'firm1' });
+  p3('transactionReceipts/quote_q2', { kind: 'quote', sourceId: 'q2', paymentRef: 'PQ2', clientUid: 'SOMEONE_ELSE', counterpartyId: 'firm1', links: { quoteId: 'q2', bookingId: 'bq2' },
+    paidCents: 2000000, heldCents: 2000000, refundedCents: 0, releasedCents: 0 });
+  p3('providerBookings/bh', { paymentStatus: 'paid_held', heldAmount: 300000, paymentRef: 'P_FAKE' });              /* no confirmed payment */
+  p3('payments/PW', { status: 'COMPLETE' });
+  p3('providerBookings/bw', { paymentStatus: 'settled', heldAmount: 300000, paymentRef: 'PW' });
+  p3('transactionReceipts/service_booking_bw', { kind: 'service_booking', sourceId: 'bw', paymentRef: 'PW', paidCents: 300000, heldCents: 0, releasedCents: 300000, providerNetCents: 285000, refundedCents: 0 });
+  p3('providerPayouts/bw', { settlementCents: 285000, walletCredited: true, walletTxnId: 'wt_missing' });
+  await RR.reconcileServiceBookings(db, { now: () => new Date('2026-10-06T00:00:00Z') });
+  const ex3 = (k) => !!db._docs.get('receiptReconciliationExceptions/' + k);
+  ck('C3a a booking paid through an accepted QUOTE is receipted under the quote → no false missing_receipt', !ex3('missing_receipt_bq1') && !ex3('quote_link_mismatch_bq1'));
+  ck('C3b a quote receipt naming another buyer → quote_link_mismatch', ex3('quote_link_mismatch_bq2'));
+  ck('C3c paid/held with no confirmed payment → hold_without_payment', ex3('hold_without_payment_bh'));
+  ck('C3d payout says wallet credited but the wallet transaction is missing → wallet_mismatch', ex3('wallet_mismatch_bw'));
 
   /* C2 — the deliberate anomalies added to the daily check */
   db = fakeDb();

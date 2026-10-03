@@ -1,3 +1,9 @@
+## 2026-10-03 — Receipts: buyer/provider history + reconciliation for quote-originated bookings, holds without payment, wallet mismatches (NOT deployed)
+
+- **History:** myTransactionReceipts returns each receipt's own events (b2's request).
+- **Reconciliation:** finds the quote receipt for quote-paid bookings (no false missing_receipt); adds hold_without_payment, wallet_mismatch, quote_link_mismatch, duplicate_receipt.
+- **Tests:** test-receipts-convergence 19/0 (quote-lookup mutant caught), transaction-receipts 14/0.
+
 ## 2026-10-03 — Receipt reconciliation: receipt without payment, duplicate payment ref, invalid history, history≠events, release without hold (NOT deployed)
 
 - **Test:** test-receipts-convergence 15/0 (C2 injects each anomaly).

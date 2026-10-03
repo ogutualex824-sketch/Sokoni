@@ -26,7 +26,7 @@ function fakeDb () {
   const snap = (p) => { const v = clone(docs.get(p)); return { id: p.split('/').pop(), exists: v !== undefined, data: () => v }; };
   const ref = (p) => ({ path: p, id: p.split('/').pop(), get: async () => snap(p), collection: (c) => coll(p + '/' + c) });
   const coll = (c) => ({ doc: (id) => ref(c + '/' + id), add: async (v) => { const id = 'a' + (++auto); docs.set(c + '/' + id, clone(v)); return { id }; },
-    where: (f, op, v) => q(c, [[f, v]]) });
+    where: (f, op, v) => q(c, [[f, v]]), limit: () => q(c, []), get: () => q(c, []).get() });
   const q = (c, filters) => ({ where: (f, op, v) => q(c, filters.concat([[f, v]])), limit: () => q(c, filters),
     get: async () => { const rows = [...docs.keys()].filter((k) => k.startsWith(c + '/') && k.split('/').length === c.split('/').length + 1 && filters.every(([f, v]) => (docs.get(k) || {})[f] === v)); return { docs: rows.map(snap) }; } });
   return { _docs: docs, collection: coll,
@@ -106,6 +106,9 @@ const events = (db, id) => [...db._docs.keys()].filter((k) => k.startsWith('tran
   const none = await TR.receiptsFor(db, 'stranger');
   ck('R8 receiptsFor: client role for the buyer, provider role for the advocate, nothing for a stranger',
     mine.length === 1 && mine[0].role === 'client' && prov.length === 1 && prov[0].role === 'provider' && none.length === 0);
+  ck('R8b HISTORY: the caller\'s receipts carry their own events (projection: type, amount, at), nothing for a stranger',
+    Array.isArray(mine[0].events) && mine[0].events.length === 1 && mine[0].events[0].type === 'paid' && mine[0].events[0].amountCents === 300000
+    && !('opKey' in mine[0].events[0]) && prov[0].events.length === 1, mine[0].events);
 
   r = await TR.safely(db, 'paid:bkX', async () => { throw new Error('boom'); });
   ck('R9 safely(): a failing writer is queued (transactionReceiptFailures) and does not throw', r.ok === false && [...db._docs.keys()].some((k) => k.startsWith('transactionReceiptFailures/')));
