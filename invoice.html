@@ -10,10 +10,10 @@
 <script type="module" src="sokoni-init.js"></script>
 <script src="auth-guard.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>SOKONI — Invoice</title>
-  <meta name="description" content="View and print your SOKONI order invoice.">
-  <meta property="og:title" content="SOKONI — Invoice">
-  <meta property="og:description" content="View, download or print your SOKONI order invoice.">
+  <title>SOKONI — Order summary</title>
+  <meta name="description" content="View and print a summary of your SOKONI order.">
+  <meta property="og:title" content="SOKONI — Order summary">
+  <meta property="og:description" content="View, download or print a summary of your SOKONI order.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/logosokoni.png">
   <link rel="stylesheet" href="/assets/vendor/fontawesome/6.5.1/css/all.min.css">
   <style>
@@ -95,9 +95,11 @@
       color:white;
     }
 
-    .ribbon-paid{ background:#22a000; }
+    .ribbon-progress{ background:#22a000; }
     .ribbon-processing{ background:#e07000; }
     .ribbon-placed{ background:#0066cc; }
+    .ribbon-unknown{ background:#555; }
+    .inv-disclaimer{ font-size:11px; color:rgba(255,255,255,0.7); margin-top:6px; font-weight:700; }
 
     /* Body */
     .inv-body{ padding:32px 40px; }
@@ -259,18 +261,17 @@
 
 <div class="no-print">
   <div class="inv-topbar">
-    <div class="inv-topbar-title">🧾 Invoice Generator</div>
+    <div class="inv-topbar-title">🧾 Order summary</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
       <a href="track.html" class="inv-action-btn btn-back">← Orders</a>
-      <a href="seller.html#tax-section" class="inv-action-btn btn-back" style="text-decoration:none;">🧾 Tax Dashboard</a>
-      <button type="button" class="inv-action-btn btn-download" onclick="downloadInvoice()">⬇️ Download Invoice</button>
-      <button type="button" class="inv-action-btn btn-print" onclick="window.print()">🖨️ Print / Save PDF (KRA)</button>
+      <button type="button" class="inv-action-btn btn-download" onclick="downloadInvoice()">⬇️ Download summary</button>
+      <button type="button" class="inv-action-btn btn-print" onclick="window.print()">🖨️ Print / Save PDF</button>
     </div>
   </div>
 
   <!-- Order Picker -->
   <div class="order-picker" id="orderPicker">
-    <h3>🧾 Select an order to generate invoice</h3>
+    <h3>🧾 Select an order to view its summary</h3>
     <div class="order-picker-list" id="orderPickerList"></div>
   </div>
 </div>
@@ -289,31 +290,30 @@
       </div>
     </div>
     <div class="inv-invoice-label">
-      <h1>INVOICE</h1>
-      <p>Issue Date: <span id="invDate"></span></p>
+      <h1>ORDER SUMMARY</h1>
+      <div class="inv-disclaimer" id="invDisclaimer">Order summary — not a KRA eTIMS tax invoice.</div>
+      <p>Order date: <span id="invDate">—</span></p>
       <div class="inv-id" id="invId"></div>
     </div>
   </div>
 
-  <div class="inv-status-ribbon" id="invRibbon">PAID</div>
+  <div class="inv-status-ribbon ribbon-unknown" id="invRibbon">STATUS UNKNOWN</div>
 
   <div class="inv-body">
 
     <div class="inv-parties">
       <div>
-        <div class="inv-party-label">Bill To</div>
-        <div class="inv-party-name" id="invBuyerName">Customer</div>
-        <div class="inv-party-detail" id="invBuyerDetail"></div>
+        <div class="inv-party-label">Buyer</div>
+        <div class="inv-party-name" id="invBuyerName">—</div>
+        <div class="inv-party-detail" id="invBuyerDetail">—</div>
       </div>
       <div>
-        <div class="inv-party-label">Sold By</div>
-        <div class="inv-party-name">Sokoni Marketplace</div>
+        <div class="inv-party-label">Seller</div>
+        <div class="inv-party-name" id="invSellerName">—</div>
         <div class="inv-party-detail">
-          <span id="invSellerName">Verified Seller</span><br>
-          info@sokoni.co.ke Â· +254 705 726 803<br>
-          Nairobi, Kenya<br>
-          KRA PIN: <span id="invSellerKraPin" style="font-weight:700;color:#22a000;">—</span><br>
-          <span style="font-size:10px;background:rgba(34,160,0,0.12);color:#22a000;padding:1px 6px;border-radius:4px;font-weight:700;border:1px solid rgba(34,160,0,0.25);">KRA TAX INVOICE</span>
+          Sold via Sokoni Marketplace<br>
+          info@sokoni.co.ke &middot; +254 705 726 803<br>
+          Nairobi, Kenya
         </div>
       </div>
     </div>
@@ -340,9 +340,9 @@
 
     <!-- Payment -->
     <div style="margin-top:20px;padding:14px;background:var(--sur2);border:1px solid var(--bor);border-radius:10px;font-size:12px;color:var(--sub);">
-      <strong style="color:var(--txt);">Payment Method:</strong> <span id="invPayMethod">M-PESA</span> &nbsp;Â·&nbsp;
-      <strong style="color:var(--txt);">Status:</strong> <span style="color:#22a000;font-weight:800;">PAID</span> &nbsp;Â·&nbsp;
-      <strong style="color:var(--txt);">Reference:</strong> <span id="invRef"></span>
+      <strong style="color:var(--txt);">Payment method:</strong> <span id="invPayMethod">—</span> &nbsp;&middot;&nbsp;
+      <strong style="color:var(--txt);">Order status:</strong> <span id="invStatusText" style="font-weight:800;">STATUS UNKNOWN</span> &nbsp;&middot;&nbsp;
+      <strong style="color:var(--txt);">Order ID:</strong> <span id="invRef">—</span>
     </div>
   </div>
 
@@ -373,17 +373,36 @@ if(!orders.length){
     <div class="order-picker-item">
       <div>
         <div class="opi-id">${_pickEsc(o.id)}</div>
-        <div class="opi-date">${_pickEsc(o.date)}</div>
+        <div class="opi-date">${_pickEsc(o.date || "—")}</div>
       </div>
-      <div class="opi-total">KES ${Number(o.total).toLocaleString()}</div>
-      <button type="button" class="opi-btn" data-order-id="${_pickEsc(o.id)}" onclick="generateInvoice(this.dataset.orderId)">Generate →</button>
+      <div class="opi-total">${typeof o.total === "number" && isFinite(o.total) ? "KES " + o.total.toLocaleString() : "—"}</div>
+      <button type="button" class="opi-btn" data-order-id="${_pickEsc(o.id)}" onclick="generateInvoice(this.dataset.orderId)">View →</button>
     </div>
   `).join("");
 }
 
-/* Check URL param */
-const urlId = new URLSearchParams(window.location.search).get("order");
-if(urlId) generateInvoice(urlId);
+/* HONEST ORDER SUMMARY (owner decision 2026-10-03).
+   This page is an order summary, NOT a KRA eTIMS tax invoice. It shows only facts the stored
+   order record carries; anything the record does not carry renders "—". It never infers VAT,
+   never prints a KRA PIN / ETR serial / tax tag, never states a fee or payout the record does
+   not hold, never sums items into a total, and never claims a payment was received.
+   INTERIM DATA SOURCE: the browser's localStorage "sokoniOrders" copy (owner's interim decision).
+   Rebuilding on server order data plus real eTIMS invoices is a separate, later slice. */
+const _INV_DASH = "—";
+const _invNum = v => typeof v === "number" && isFinite(v);
+const _invKes = v => _invNum(v) ? "KES " + v.toLocaleString() : _INV_DASH;
+const _invStr = v => (typeof v === "string" && v.trim()) ? v.trim() : "";
+/* Known statuses map to neutral progress labels. None of them states that money was received;
+   anything else is "STATUS UNKNOWN", never a guess. */
+const _INV_STATUS = {
+  pending_payment:  { label:"AWAITING PAYMENT",  cls:"ribbon-unknown" },
+  placed:           { label:"ORDER PLACED",      cls:"ribbon-placed" },
+  processing:       { label:"PROCESSING",        cls:"ribbon-processing" },
+  shipped:          { label:"SHIPPED",           cls:"ribbon-progress" },
+  out_for_delivery: { label:"OUT FOR DELIVERY",  cls:"ribbon-progress" },
+  delivered:        { label:"DELIVERED",         cls:"ribbon-progress" }
+};
+const _INV_STATUS_UNKNOWN = { label:"STATUS UNKNOWN", cls:"ribbon-unknown" };
 
 function generateInvoice(orderId){
   const o = orders.find(x => x.id === orderId);
@@ -392,26 +411,33 @@ function generateInvoice(orderId){
   document.getElementById("orderPicker").style.display = "none";
   document.getElementById("invoiceEl").style.display = "block";
 
-  document.getElementById("invDate").textContent = o.date || new Date().toLocaleDateString("en-KE",{day:"numeric",month:"long",year:"numeric"});
-  document.getElementById("invId").textContent = "Invoice #" + o.id;
+  document.getElementById("invDate").textContent = _invStr(o.date) || _INV_DASH;
+  document.getElementById("invId").textContent = "Order #" + o.id;
   document.getElementById("invRef").textContent = o.id;
-  document.getElementById("invBuyerName").textContent = o.name || "Valued Customer";
-  document.getElementById("invBuyerDetail").textContent = (o.address||"") + (o.phone ? "\n" + o.phone : "");
-  document.getElementById("invSellerName").textContent = (o.items&&o.items[0]&&o.items[0].sellerName) || "Sokoni Seller";
-  document.getElementById("invPayMethod").textContent = (o.method||"M-PESA").toUpperCase();
-  const kraPin = localStorage.getItem("kraPinSaved") || "—";
-  const kraEl  = document.getElementById("invSellerKraPin");
-  if(kraEl) kraEl.textContent = kraPin;
+
+  const buyerName = _invStr(o.name) || _invStr(o.buyerName);
+  const buyerAddr = _invStr(o.address) || _invStr(o.deliveryAddress);
+  const buyerPhone = _invStr(o.phone) || _invStr(o.buyerPhone);
+  document.getElementById("invBuyerName").textContent = buyerName || _INV_DASH;
+  document.getElementById("invBuyerDetail").textContent = [buyerAddr, buyerPhone].filter(Boolean).join(" · ") || _INV_DASH;
+
+  const items = Array.isArray(o.items) ? o.items : [];
+  const sellerName = _invStr(items[0] && items[0].sellerName) || _invStr(o.sellerName);
+  document.getElementById("invSellerName").textContent = sellerName || _INV_DASH;
+
+  const method = _invStr(o.method);
+  document.getElementById("invPayMethod").textContent = method ? method.toUpperCase() : _INV_DASH;
 
   /* Status ribbon */
+  const st = Object.prototype.hasOwnProperty.call(_INV_STATUS, o.status) ? _INV_STATUS[o.status] : _INV_STATUS_UNKNOWN;
   const ribbon = document.getElementById("invRibbon");
-  const statusMap = { processing:"PROCESSING — PAYMENT RECEIVED", shipped:"SHIPPED", out_for_delivery:"OUT FOR DELIVERY", delivered:"DELIVERED & PAID", placed:"ORDER PLACED" };
-  const ribbonClass= { processing:"ribbon-processing", shipped:"ribbon-paid", out_for_delivery:"ribbon-paid", delivered:"ribbon-paid", placed:"ribbon-placed" };
-  ribbon.textContent = statusMap[o.status] || "PAID";
-  ribbon.className = "inv-status-ribbon " + (ribbonClass[o.status]||"ribbon-paid");
+  ribbon.textContent = st.label;
+  ribbon.className = "inv-status-ribbon " + st.cls;
+  const stText = document.getElementById("invStatusText");
+  if(stText) stText.textContent = st.label;
 
-  /* Items */
-  const items = o.items || [];
+  /* Items: price and quantity exactly as the record carries them. A line total is shown only
+     when both are numbers; nothing is assumed (no default quantity of 1). */
   /* Order item fields are copied at sale time and may be client-supplied:
      escape before innerHTML, and only allow known-safe image schemes (same
      guard as checkout.html safeImg). A held product's photo 404s -> placeholder. */
@@ -425,53 +451,31 @@ function generateInvoice(orderId){
         <span class="inv-item-name">${_invEsc(p.name)}</span>
       </td>
       <td style="color:#888;">${_invEsc(p.category||"—")}</td>
-      <td>KES ${Number(p.price).toLocaleString()}</td>
-      <td>1</td>
-      <td>KES ${Number(p.price).toLocaleString()}</td>
+      <td>${typeof p.price === "number" && isFinite(p.price) ? "KES " + p.price.toLocaleString() : "—"}</td>
+      <td>${typeof (p.qty ?? p.quantity) === "number" && isFinite(p.qty ?? p.quantity) ? _invEsc(p.qty ?? p.quantity) : "—"}</td>
+      <td>${typeof p.price === "number" && isFinite(p.price) && typeof (p.qty ?? p.quantity) === "number" && isFinite(p.qty ?? p.quantity) ? "KES " + (p.price * (p.qty ?? p.quantity)).toLocaleString() : "—"}</td>
     </tr>
   `).join("") : `<tr><td colspan="6" style="color:#999;text-align:center;padding:20px;">No items</td></tr>`;
 
-  /* ── KRA-Compliant VAT Totals ── */
-  const grossTotal   = Number(o.total) || items.reduce((s,p)=>s+Number(p.price),0);
-  const vatRate      = 0.16;
-  const vatExcl      = Math.round(grossTotal / (1 + vatRate));
-  const vatAmount    = grossTotal - vatExcl;
-  const commission   = Math.round(grossTotal * (SokoniCommission.pct("marketplace") / 100));
-  const sellerPayout = grossTotal - commission;
+  /* Totals: only what the record holds. No VAT split, no platform fee, no seller payout, and
+     the total is never reconstructed from item prices. */
   document.getElementById("invTotalsBox").innerHTML = `
-    <div class="inv-total-row"><span class="inv-total-label">Subtotal (VAT Excl.)</span><span class="inv-total-val">KES ${vatExcl.toLocaleString()}</span></div>
-    <div class="inv-total-row"><span class="inv-total-label" style="color:#e07000;">VAT @ 16%</span><span class="inv-total-val" style="color:#e07000;">KES ${vatAmount.toLocaleString()}</span></div>
-    <div class="inv-total-row"><span class="inv-total-label">Delivery</span><span class="inv-total-val">FREE</span></div>
-    <div class="inv-total-row"><span class="inv-total-label">Sokoni Platform Fee (12%)</span><span class="inv-total-val">KES ${commission.toLocaleString()}</span></div>
-    <div class="inv-total-row grand"><span class="inv-total-label">TOTAL (VAT Incl.)</span><span class="inv-grand-val">KES ${grossTotal.toLocaleString()}</span></div>
-    <div style="margin-top:10px;padding:10px 14px;background:#f0fff0;border:1px solid #c8e6c9;border-radius:8px;font-size:11px;color:#2e7d32;line-height:1.7;">
-      <strong>KRA Tax Invoice</strong><br>
-      VAT Reg. No.: <strong>${kraPin}</strong><br>
-      Seller KRA PIN: <strong>${kraPin}</strong><br>
-      ETR Serial: <strong>SKN-ETR-${o.id}</strong><br>
-      Taxable Amount: KES ${vatExcl.toLocaleString()} | VAT Amount: KES ${vatAmount.toLocaleString()}
-    </div>
-    <div style="margin-top:8px;font-size:11px;color:#888;">Seller net payout: KES ${sellerPayout.toLocaleString()} (after 12% platform fee)</div>
+    <div class="inv-total-row"><span class="inv-total-label">Delivery fee</span><span class="inv-total-val">${_invEsc(_invKes(o.deliveryFee))}</span></div>
+    <div class="inv-total-row grand"><span class="inv-total-label">Order total</span><span class="inv-grand-val">${_invEsc(_invKes(o.total))}</span></div>
   `;
-
-  /* Inject KRA fields into header area if not already there */
-  const invLabel = document.querySelector(".inv-invoice-label");
-  if(invLabel && !document.getElementById("invKraTag")){
-    const tag = document.createElement("div");
-    tag.id = "invKraTag";
-    tag.style.cssText = "margin-top:8px;font-size:10px;color:rgba(113,255,0,0.8);font-weight:700;letter-spacing:1px;text-transform:uppercase;";
-    tag.textContent = "KRA TAX INVOICE";
-    invLabel.appendChild(tag);
-  }
 }
+
+/* Check URL param (after the summary constants above are initialised) */
+const urlId = new URLSearchParams(window.location.search).get("order");
+if(urlId) generateInvoice(urlId);
 
 function downloadInvoice(){
   const shell = document.getElementById("invoiceEl");
   if(!shell || shell.style.display === "none"){
-    (window._skToast||alert)("Generate an invoice first by selecting an order.");
+    (window._skToast||alert)("Select an order first to view its summary.");
     return;
   }
-  const content = `<!DOCTYPE html><html data-require-auth="true"><head><meta charset="UTF-8"><title>SOKONI Tax Invoice</title>
+  const content = `<!DOCTYPE html><html data-require-auth="true"><head><meta charset="UTF-8"><title>SOKONI Order summary</title>
   <style>
     @media print { .no-print{display:none!important;} body{background:#fff!important;} .invoice-shell{box-shadow:none!important;} }
     *{margin:0;padding:0;box-sizing:border-box;}
@@ -496,7 +500,7 @@ ${shell.outerHTML}<script>window.onload=()=>{setTimeout(()=>window.print(),400);
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
   a.href = url;
-  a.download = "sokoni-tax-invoice.html";
+  a.download = "sokoni-order-summary.html";
   document.body.appendChild(a); a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
@@ -504,7 +508,7 @@ ${shell.outerHTML}<script>window.onload=()=>{setTimeout(()=>window.print(),400);
 
 function printInvoice(){
   const shell = document.getElementById("invoiceEl");
-  if(!shell || shell.style.display === "none"){ (window._skToast||alert)("Generate an invoice first."); return; }
+  if(!shell || shell.style.display === "none"){ (window._skToast||alert)("Select an order first."); return; }
   window.print();
 }
 
