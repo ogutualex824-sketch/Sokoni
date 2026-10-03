@@ -90,6 +90,12 @@ const TYPES = {
   booking_paid:         { priority: 'commerce',  category: 'orders',   smsTemplate: null },
   booking_refund:       { priority: 'commerce',  category: 'payments', smsTemplate: null },
   booking_released:     { priority: 'commerce',  category: 'orders',   smsTemplate: null },
+  /* Education (sokoni-5b, 2026-10-03) — course review + certificates land in the ONE notifications feed (Messages →
+     Notifications); no Education message store. In-app / push only. */
+  education_review_submitted: { priority: 'commerce', category: 'education', smsTemplate: null },
+  education_review_approved:  { priority: 'commerce', category: 'education', smsTemplate: null },
+  education_review_rejected:  { priority: 'commerce', category: 'education', smsTemplate: null },
+  education_certificate_issued: { priority: 'commerce', category: 'education', smsTemplate: null },
   wallet_credit:        { priority: 'commerce',  category: 'wallet',   smsTemplate: 'wallet_credit' },
   order_placed:         { priority: 'commerce',  category: 'orders',   smsTemplate: 'order_placed' },
   order_accepted:       { priority: 'commerce',  category: 'orders',   smsTemplate: 'order_accepted' },
