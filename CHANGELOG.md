@@ -1,3 +1,13 @@
+## [2026-10-03] — Service providers land on the provider dashboard, not the product-seller hub
+
+**Owner:** "make sure Shave 'n' Trims … even DJ Bambi have the correct equipped dashboard."
+**Bug (LIVE 72dca56):** `sokoni-nav-engine.js` mapped the `provider` role to `seller.html` in the Back map (`_BACK`) and the role switcher (`_ROLE_META`). seller.html is the PRODUCT seller hub (Products · Orders · POS · Delivery Hub), and as a seller-mapped page it resolves a provider as a BUYER. A barber or DJ following the nav got the wrong workspace and the wrong tools.
+**Fix:** both targets → `provider-dashboard.html` (Services · Calendar · Bookings · Wallet · Customers · Reviews · Rate Cards · Availability).
+**Files:** `sokoni-nav-engine.js`, `scripts/test-provider-nav-home.js`, `CHANGELOG.md`.
+**Tests:** test-provider-nav-home 5/0 (SABOTAGE restores seller.html → 5 fail); test-navigation 11 checks PASS; test-customer-nav 62/0.
+**Not fixed here (data / authority, needs the owner):** Shave 'n' Trims and DJ Bvmbxno ("DJ Bambi") have NO application and NO admin decision. Their `status: active` was written directly, so under the canonical approval rule neither has a valid approval or a server-stamped category. Categories per business-category.js: barber → `salon`, dj → `artist_creator`.
+**Breaking changes:** none. **Database / API:** none. **Deployment:** NOT deployed; hosting, built on the live commit 72dca56, for the b2 hosting assembly.
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;

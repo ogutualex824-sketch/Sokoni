@@ -328,7 +328,9 @@
     superAdmin: 'super-admin.html',
     driver:     'driver.html',
     rider:      'driver.html',
-    provider:   'seller.html',
+    /* a SERVICE provider's workspace is the provider dashboard (Services · Calendar · Bookings · Wallet · Customers ·
+       Reviews), never the product-seller hub (owner 2026-10-03: barbers, DJs etc. get their own equipped dashboard) */
+    provider:   'provider-dashboard.html',
     buyer:      'index.html'
   };
 
@@ -347,7 +349,7 @@
     seller:     { i:'🏪',  l:'Seller',      h:'seller.html' },
     driver:     { i:'🚗',  l:'Driver',      h:'driver.html' },
     rider:      { i:'🛵',  l:'Rider',       h:'driver.html' },
-    provider:   { i:'🛠️', l:'Provider',    h:'seller.html' },
+    provider:   { i:'🛠️', l:'Provider',    h:'provider-dashboard.html' },
     admin:      { i:'⚙️', l:'Admin',       h:'admin-os.html' },
     superAdmin: { i:'👑',  l:'Super Admin', h:'super-admin.html' }
   };
