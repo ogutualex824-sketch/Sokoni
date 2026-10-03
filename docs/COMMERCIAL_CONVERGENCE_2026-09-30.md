@@ -512,3 +512,25 @@ The money-side gaps from the owner's "MEMBERSHIP FULL END-TO-END GREEN" brief:
 - `provider-onboarding.html` PLANS `c:'20%'…'5%'`
 - `provider-dashboard.html` "Commission rate: X%" from `sub.commissionRate`
 These must show the canonical rate (`SokoniCommission.pct('services')` = 5%) for every plan. The "Leads/month" items are plan limits, not fees, and stay.
+
+### 14.1 · Reversal after settlement + snapshot cleanup (2026-10-03, later)
+
+**Reversal.** Owner, via sokoni-f3 / sokoni-5b: "a service-booking refund AFTER settlement must claw back through the canonical ledger, reversing the provider allocation and SOKONI's 5%, with no second commission".
+
+Built `provider-ops.reverseServiceSettlement(bookingId, {decision:'refund_full', actor, reason})`; sokoni-5b owns the trigger. It writes:
+- `providerPayouts/{id}_reversal`, negating gross / commission / net, with the original row marked `reversed`
+- a provider business wallet debit of exactly `netShillingsCredited`, with a deterministic walletTransaction
+- a buyer refund of what the booking paid (price + fee snapshot) to the SOKONI wallet, plus a deterministic ledger row
+- booking → `refunded_after_settlement`
+
+It only reverses settled bookings, full reversals only (partial is not decided), and a replay reverses nothing twice. If the provider already withdrew, the balance goes negative and `clawbackShortfallShillings` is recorded. Payouts are refused while the balance is below the amount, and later settlements repay it. **That debt policy needs owner confirmation.**
+
+**Tests:** `scripts/test-service-settlement-reversal.js` 7/0.
+
+**Snapshot** (sokoni-b2's findings):
+- `home_services` 14% → **5%** (owner: every service booking).
+- The browser snapshot no longer publishes `PROVIDER_PLAN_PCT` / `providerPct()`, which would have advertised a commission nobody is charged.
+- New `providerBookingPct()` = `RATES.services`.
+- `test-provider-plan-ladder` F1 is inverted accordingly (38/0). `test-commission-schedule` S1 home services = 5 (25/0).
+
+**Open:** `car_rental` (16%) is a vehicle hire on the car hub, not a provider service booking. It is left as-is pending the owner.

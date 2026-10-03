@@ -1,3 +1,10 @@
+## 2026-10-03 — Refund after settlement reverses the ledger; home services 5%; snapshot stops publishing the plan ladder (NOT deployed)
+
+- **Reversal:** provider-ops.reverseServiceSettlement — negates the payout row, debits the provider wallet (a shortfall becomes debt), refunds the buyer to the SOKONI wallet.
+- **Rates:** RATES.home_services 5%.
+- **Snapshot:** sokoni-commission-rates.js regenerated without PROVIDER_PLAN_PCT/providerPct, with a new providerBookingPct().
+- **Tests:** service-settlement-reversal 7/0, provider-plan-ladder 38/0, commission-schedule 25/0.
+
 ## 2026-10-03 — Every service booking: flat 5% paid by the provider, replacing the plan ladder (owner; NOT deployed)
 
 - **Change:** provider-hub.commissionArgsForHub — generic bookings use RATES.services 5% with no subscriptionRole and no floor; the fitness hub uses its fixed lane.

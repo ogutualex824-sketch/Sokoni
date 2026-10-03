@@ -144,9 +144,10 @@ const SB   = require(path.join(ROOT, 'functions', 'sub-billing'));
     global.window = {};
     require(path.join(ROOT, 'sokoni-commission-rates.js'));
     const S = global.window.SokoniCommission;
-    ck('F1 snapshot providerPct: every known id, the alias, no plan -> server values; retired / unknown -> null',
-       Object.entries(want).every(([k, v]) => S.providerPct(k) === v) && S.providerPct('free_trial') === 20 && S.providerPct(null) === 20
-       && S.providerPct('provider_pro') === null && S.providerPct('provider_basic') === null && S.providerPct('nonsense') === null, S.PROVIDER_PLAN_PCT);
+    /* owner 2026-10-03: every service booking pays a flat 5 % — the browser snapshot must NOT publish a plan ladder (it
+       would advertise a commission nobody is charged); it exposes the one booking rate instead. */
+    ck('F1 snapshot publishes NO provider plan ladder; providerBookingPct() = RATES.services (5 %)',
+       !('providerPct' in S) && !('PROVIDER_PLAN_PCT' in S) && typeof S.providerBookingPct === 'function' && S.providerBookingPct() === CC.RATES.services.pct && CC.RATES.services.pct === 5, Object.keys(S).join(','));
   }
 
   console.log('\nNC. negative control (must FAIL)');

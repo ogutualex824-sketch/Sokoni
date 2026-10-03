@@ -58,7 +58,7 @@ const SPEC = [
   ['BnB / hotel bookings',        ['hotel', 'bnb'],                              15, 0],
   ['Healthcare bookings',         ['healthcare'],                                12, 0],
   ['Healthcare product sales',    ['pharmacy', 'healthcare_products'],           15, 0],
-  ['Home services',               ['home_services'],                             14, 0],
+  ['Home services',               ['home_services'],                              5, 0],   /* owner 2026-10-03: every service booking 5% (was 14%) */
   ['Car rental',                  ['car-rental', 'car_rental'],                  16, 0],
   ['Entertainment bookings',      ['entertainment_bookings'],                     5, 0],
   ['Legal bookings',              ['legal'],                                      5, 0],

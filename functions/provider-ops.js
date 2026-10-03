@@ -442,6 +442,77 @@ async function settleOnPinRelease(bookingId, actorUid) {
   return out;
 }
 
+/* ── REVERSAL AFTER SETTLEMENT (owner 2026-10-03, relayed by sokoni-f3 / sokoni-5b) ─────────────────────────────
+   "A service-booking refund AFTER settlement must claw back through the canonical ledger, reversing the provider
+   allocation and SOKONI's 5%, with no second commission." The TRIGGER (a refund decision on a settled booking) is
+   sokoni-5b's; these are the reversal ENTRIES, mirroring _settlementWrites exactly:
+     • providerPayouts/{bookingId}_reversal — the original row negated (gross, commission, net, settlementCents), so
+       every AdminOS / FinOS aggregate nets SOKONI's commission back out; the original row is marked reversed
+     • the provider's BUSINESS wallet is debited exactly what settlement credited (netShillingsCredited) + a
+       deterministic walletTransactions row. If the provider already withdrew it, the balance goes NEGATIVE and the
+       shortfall is recorded (clawbackShortfallShillings): requestSellerPayout refuses any payout while the balance is
+       below the amount, and the next settlements repay it (pending owner confirmation of that debt policy)
+     • the buyer is refunded to the canonical held-money destination (users/{uid}.walletBalance + a deterministic
+       ledger row) — the amount the booking actually paid (price + fee snapshot)
+     • booking → paymentStatus 'refunded_after_settlement'
+   FULL reversals only (partial refunds after settlement are not decided). Idempotent: the reversal row is create()d. */
+async function reverseServiceSettlement(bookingId, opts) {
+  const o = opts || {};
+  /* deps: the suite injects an in-memory Firestore; production uses the module's own helpers. */
+  const d = o.deps || {};
+  const DB = d.db ? () => d.db : _db, TS = d.ts || _ts, INC = d.inc || _inc;
+  const ref = DB().collection('providerBookings').doc(String(bookingId));
+  const payRef = DB().collection('providerPayouts').doc(String(bookingId));
+  const revRef = DB().collection('providerPayouts').doc(`${bookingId}_reversal`);
+  if (o.decision !== 'refund_full') return { ok: false, code: 'decision_not_supported', reason: 'Only a full refund after settlement is decided.' };
+  let out = null;
+  await DB().runTransaction(async (t) => {
+    const [bSnap, pSnap, rSnap] = await Promise.all([t.get(ref), t.get(payRef), t.get(revRef)]);
+    if (rSnap.exists) { out = { ok: true, alreadyReversed: true }; return; }
+    if (!bSnap.exists) { out = { ok: false, code: 'missing', reason: 'Booking not found.' }; return; }
+    const b = bSnap.data();
+    if (b.paymentStatus !== 'settled') { out = { ok: false, code: 'not_settled', reason: 'Only a settled booking can be reversed; before settlement the held money is refunded, not reversed.' }; return; }
+    if (!pSnap.exists) { out = { ok: false, code: 'no_settlement_row', reason: 'No settlement record exists to reverse.' }; return; }
+    const p = pSnap.data();
+    if (p.status !== 'settled' || p.providerId !== b.providerId) { out = { ok: false, code: 'settlement_mismatch', reason: 'The settlement record does not match this booking.' }; return; }
+    const debit = Math.max(0, Number(p.netShillingsCredited) || 0);
+    const paidCents = Math.max(0, Math.round(Number(b.heldAmount) || ((Number(b.price) || 0) + (Number(b.fee) || 0))));
+    const refundShillings = Math.floor(paidCents / 100);
+    const walRef = DB().collection('wallets').doc(b.providerId);
+    const wSnap = await t.get(walRef);
+    const balBefore = wSnap.exists ? (Number(wSnap.data().balance) || 0) : 0;
+    const shortfall = Math.max(0, debit - Math.max(0, balBefore));
+    t.create(revRef, {
+      providerId: b.providerId, bookingId: ref.id, sourceType: 'booking', sourceId: ref.id, kind: 'reversal', reverses: payRef.id,
+      gross: -(Number(p.gross) || 0), commission: -(Number(p.commission) || 0), net: -(Number(p.net) || 0),
+      fee: -(Number(p.fee) || 0), settlementCents: -(Number(p.settlementCents) || 0), amount: -(Number(p.amount) || 0),
+      currency: 'KES', status: 'reversed', walletDebitedShillings: debit, clawbackShortfallShillings: shortfall,
+      reason: String(o.reason || '').slice(0, 300), actor: o.actor || null, createdAt: TS(),
+    });
+    t.update(payRef, { status: 'reversed', reversedAt: TS(), reversalId: revRef.id });
+    if (debit >= 1) {
+      t.set(walRef, { balance: INC(-debit), updatedAt: TS() }, { merge: true });
+      t.set(DB().collection('walletTransactions').doc(`${b.providerId}_${ref.id}_bookingreverse`), {
+        uid: b.providerId, type: 'booking_reversal', amount: -debit, bookingId: ref.id, sourceType: 'booking', sourceId: ref.id,
+        description: `Refund reversal — ${_san(b.service || 'service booking', 120)}`, clawbackShortfallShillings: shortfall,
+        status: 'completed', createdAt: TS(),
+      });
+    }
+    if (refundShillings >= 1 && b.customerUid) {
+      t.set(DB().collection('users').doc(b.customerUid), { walletBalance: INC(refundShillings) }, { merge: true });
+      t.create(DB().collection('ledger').doc(`${b.customerUid}_${ref.id}_booking_refund_after_settlement`), {
+        uid: b.customerUid, type: 'booking_refund', credit: refundShillings, bookingId: ref.id, afterSettlement: true,
+        actor: o.actor || null, createdAt: TS(),
+      });
+    }
+    t.update(ref, { paymentStatus: 'refunded_after_settlement', refundedCents: paidCents, reversedAt: TS(), updatedAt: TS() });
+    out = { ok: true, reversed: true, providerDebitShillings: debit, clawbackShortfallShillings: shortfall, buyerRefundShillings: refundShillings,
+            commissionReversedCents: Number(p.commission) || 0 };
+  });
+  if (out && out.reversed) logger.info('reverseServiceSettlement', { bookingId, actor: o.actor || null, debit: out.providerDebitShillings, shortfall: out.clawbackShortfallShillings });
+  return out;
+}
+
 _h.providerCompleteBooking = async (req) => {
   const uid = _uid(req);
   await legal.assertLegalCompliance(uid, 'provider'); // receive settlement — dark-launched
@@ -1114,4 +1185,4 @@ _h.providerToggleService = async (req) => {
 
 /* _disburseHeldFunds + _slotLockRef are reused by the booking resolution engine (Step 3 refund):
    the ONE place booking money moves, and the canonical slot-lock ref. No behavior change. */
-module.exports = { _h, _disburseHeldFunds, _slotLockRef, settleOnShowUp, settleOnPinRelease };   /* rebind: every export must be listed here */
+module.exports = { _h, _disburseHeldFunds, _slotLockRef, settleOnShowUp, settleOnPinRelease, reverseServiceSettlement };   /* rebind: every export must be listed here */
