@@ -1,3 +1,22 @@
+## [2026-10-03] — Jobs Board J1: application state machine + vacancy hardening — functions source, NOT deployed
+
+**Summary:** `functions/jobs.js` (served via `servicesDispatch`) gets a server-enforced application lifecycle:
+pending → reviewing → shortlisted → interview → offer → offer_accepted → hired, with terminal rejected / withdrawn /
+offer_declined / closed. Each change is one transaction with an audit event and an in-app notification. New ops:
+`withdrawApplication`, `respondToJobOffer`, `getApplicationHistory`. The `freelance-gig` type is added (owner).
+Live defects fixed: empty error messages, raw client expiry, unvalidated salary, `getJob` leaking closed jobs, the
+employer's own views counted, an employer applying to its own vacancy, and non-https CV links.
+
+**Files:** `functions/jobs.js`, `scripts/test-jobs-lifecycle.js` (52/0; six mutants each caught by named rows),
+`docs/JOBS_BOARD_CONVERGENCE.md`.
+**Database:** `jobApplications` gains `statusVersion`, `jobTitle` / `companyName` / `jobType` snapshots and
+`rejectionReason`; new subcollection `jobApplications/{id}/events`; writes to `notifications` (in-app).
+**API:** new servicesDispatch ops listed above. `updateApplicationStatus` takes `reason` and `expectedVersion` and refuses
+illegal transitions. `updateJob` accepts `expiresInDays`.
+**Breaking:** the employer UI must send a reason on rejection and can only hire after the applicant accepts. Ship the
+J5 hosting together.
+**Deploy:** scoped servicesDispatch only, after the functions lineage gate. NOT authorized yet. The rules hotfix ships first.
+
 ## [2026-10-03] — Procurement: purchase-order VAT is never inferred (supplier's own status; unknown ⇒ no VAT) — functions source, NOT deployed
 
 Before: `functions/procurement.js` held `VAT_RATE = 0.16`; `createPurchaseOrder` set `vatAmount = subtotal × 0.16` and

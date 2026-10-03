@@ -33,7 +33,9 @@ function _san(s, max = 500) {
   return s == null ? '' : String(s).replace(/<[^>]*>/g, '').trim().slice(0, max);
 }
 
-const VALID_TYPES = ['full-time', 'part-time', 'contract', 'internship', 'remote'];
+/* 'freelance-gig' (owner 2026-10-03): freelance gigs moved from digital.html are a job TYPE on this one board — the
+   same application → interview → offer → hired chain, 0% commission (commission-config RATES.jobs). */
+const VALID_TYPES = ['full-time', 'part-time', 'contract', 'internship', 'remote', 'freelance-gig'];
 
 const VALID_CATEGORIES = [
   'technology', 'finance', 'healthcare', 'education', 'retail',
@@ -41,7 +43,95 @@ const VALID_CATEGORIES = [
   'admin', 'other',
 ];
 
-const VALID_APP_STATUSES = ['reviewing', 'shortlisted', 'rejected', 'hired'];
+/* ─── Application state machine (owner 2026-10-03) ─────────────────────────────────────────────────────────────
+   Stored values (kept compatible with live data: 'pending' = Submitted, 'reviewing' = Under Review):
+     pending → reviewing → shortlisted → interview → offer → offer_accepted → hired
+   Terminal: rejected · withdrawn · offer_declined · closed · hired.
+   The SERVER decides every transition; the UI is never the authorization layer. Each change is written in ONE
+   transaction with: the new status, statusVersion+1, an audit event (jobApplications/{id}/events), and an in-app
+   notification to the other party (same document shape notify.js writes to 'notifications'). A legacy document
+   whose status the live free-form update left as 'hired' / 'rejected' is terminal here. */
+const APP_TERMINAL = ['hired', 'rejected', 'withdrawn', 'offer_declined', 'closed'];
+const EMPLOYER_TRANSITIONS = {
+  pending:        ['reviewing', 'shortlisted', 'rejected'],
+  reviewing:      ['shortlisted', 'rejected'],
+  shortlisted:    ['interview', 'rejected'],
+  interview:      ['offer', 'rejected'],
+  offer:          ['rejected'],              /* the employer may withdraw an unanswered offer, with a reason */
+  offer_accepted: ['hired'],
+};
+const APPLICANT_WITHDRAWABLE = ['pending', 'reviewing', 'shortlisted', 'interview', 'offer'];
+/* Closing a vacancy closes only the early-stage applications; in-flight interviews / offers stay with the employer. */
+const CLOSE_ON_JOB_CLOSE = ['pending', 'reviewing', 'shortlisted'];
+const VALID_APP_STATUSES = Object.keys(EMPLOYER_TRANSITIONS).reduce((a, k) => a.concat(EMPLOYER_TRANSITIONS[k]), [])
+  .filter((v, i, a) => a.indexOf(v) === i);
+const REASON_REQUIRED = ['rejected'];
+const STATUS_LABEL = {
+  pending: 'Submitted', reviewing: 'Under review', shortlisted: 'Shortlisted', interview: 'Interview',
+  offer: 'Offer made', offer_accepted: 'Offer accepted', hired: 'Hired', rejected: 'Not selected',
+  withdrawn: 'Withdrawn', offer_declined: 'Offer declined', closed: 'Vacancy closed',
+};
+const MAX_EXPIRY_DAYS = 90;
+const ID_RE = /^[A-Za-z0-9_-]{1,200}$/;
+
+function _err(code, msg) { return new HttpsError(code, msg); }
+
+/** Salary: optional, whole KES 0..100,000,000, and min ≤ max when both are given. */
+function _salary(min, max) {
+  const conv = (v, name) => {
+    if (v == null || v === '') return null;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0 || n > 100000000) throw _err('invalid-argument', name + ' must be a whole amount in KES between 0 and 100,000,000');
+    return Math.round(n);
+  };
+  const lo = conv(min, 'salaryMin'), hi = conv(max, 'salaryMax');
+  if (lo != null && hi != null && lo > hi) throw _err('invalid-argument', 'salaryMin cannot be greater than salaryMax');
+  return { salaryMin: lo, salaryMax: hi };
+}
+
+/** Expiry: 1..MAX_EXPIRY_DAYS days from now. Accepts expiresInDays (preferred) or an expiresAt date (ms / ISO). */
+function _expiry(expiresInDays, expiresAt) {
+  let ms;
+  if (expiresInDays != null && expiresInDays !== '') {
+    const d = Math.floor(Number(expiresInDays));
+    if (!Number.isFinite(d) || d < 1 || d > MAX_EXPIRY_DAYS) throw _err('invalid-argument', 'A vacancy can stay open for 1 to ' + MAX_EXPIRY_DAYS + ' days');
+    ms = Date.now() + d * 86_400_000;
+  } else {
+    ms = typeof expiresAt === 'number' ? expiresAt : Date.parse(String(expiresAt || ''));
+    if (!Number.isFinite(ms) || ms <= Date.now() || ms > Date.now() + MAX_EXPIRY_DAYS * 86_400_000) {
+      throw _err('invalid-argument', 'The closing date must be in the future and within ' + MAX_EXPIRY_DAYS + ' days');
+    }
+  }
+  return Timestamp.fromMillis(ms);
+}
+
+/** A CV link must be https (never javascript:/data:). */
+function _httpsUrl(v, max = 500) {
+  if (v == null || v === '') return null;
+  const s = _san(v, max);
+  let u; try { u = new URL(s); } catch (_) { throw _err('invalid-argument', 'The CV link must be a full https:// address'); }
+  if (u.protocol !== 'https:') throw _err('invalid-argument', 'The CV link must be a full https:// address');
+  return u.toString();
+}
+
+/** In-app notification in the notify.js document shape, written inside the caller's transaction. Deterministic id:
+    a retried transition re-writes the same document instead of notifying twice. */
+function _notifyInTxn(txn, db, { uid, id, type, title, body, deepLink }) {
+  if (!uid) return;
+  txn.set(db.collection('notifications').doc(id), {
+    userId: uid, targetUid: uid, type, category: 'jobs', priority: 'commerce',
+    title, body, image: null, deepLink: deepLink || null, group: 'jobs', read: false,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+}
+
+function _eventInTxn(txn, appRef, app, { from, to, actorUid, actorRole, reason }) {
+  txn.set(appRef.collection('events').doc(), {
+    from: from || null, to, actorUid, actorRole, reason: reason || null,
+    jobId: app.jobId, employerUid: app.employerUid, seekerUid: app.seekerUid,
+    at: FieldValue.serverTimestamp(),
+  });
+}
 
 /** Fields safe to return in public job listings (no employerUid). */
 function _publicJobFields(id, data) {
@@ -106,16 +196,17 @@ exports.createJob = onCall(CF_OPTS, exports._h.createJob = async (req) => {
   }
 
   if (!VALID_TYPES.includes(type)) {
-    throw new HttpsError('invalid-argument', );
+    throw new HttpsError('invalid-argument', 'type must be one of: ' + VALID_TYPES.join(', '));
   }
 
   if (!VALID_CATEGORIES.includes(category)) {
-    throw new HttpsError('invalid-argument', );
+    throw new HttpsError('invalid-argument', 'category must be one of: ' + VALID_CATEGORIES.join(', '));
   }
 
   const cleanLocation     = _san(location, 200);
   const cleanRequirements = _san(requirements, 3000);
-  const days              = Number(expiresInDays) || 30;
+  const salary            = _salary(salaryMin, salaryMax);
+  const expiresAt         = _expiry(expiresInDays == null || expiresInDays === '' ? 30 : expiresInDays);
 
   // â”€â”€ Resolve company name â”€â”€
   let companyName = 'Company';
@@ -135,13 +226,13 @@ exports.createJob = onCall(CF_OPTS, exports._h.createJob = async (req) => {
     category,
     type,
     location:         cleanLocation,
-    salaryMin:        salaryMin != null ? Number(salaryMin) : null,
-    salaryMax:        salaryMax != null ? Number(salaryMax) : null,
+    salaryMin:        salary.salaryMin,
+    salaryMax:        salary.salaryMax,
     salaryCurrency:   'KES',
     status:           'active',
     featured:         false,
     postedAt:         Timestamp.now(),
-    expiresAt:        Timestamp.fromMillis(Date.now() + days * 86_400_000),
+    expiresAt,
     viewCount:        0,
     applicationCount: 0,
   };
@@ -166,8 +257,9 @@ exports.updateJob = onCall(CF_OPTS, exports._h.updateJob = async (req) => {
   if (!jobSnap.exists) throw new HttpsError('not-found', 'Job not found');
   if (jobSnap.data().employerUid !== uid) throw new HttpsError('permission-denied', 'Not your job');
 
-  const ALLOWED = ['title', 'description', 'requirements', 'category', 'type', 'location', 'salaryMin', 'salaryMax', 'expiresAt'];
+  const ALLOWED = ['title', 'description', 'requirements', 'category', 'type', 'location', 'salaryMin', 'salaryMax', 'expiresAt', 'expiresInDays'];
   const update  = {};
+  const current = jobSnap.data();
 
   for (const key of ALLOWED) {
     if (!(key in raw)) continue;
@@ -184,23 +276,28 @@ exports.updateJob = onCall(CF_OPTS, exports._h.updateJob = async (req) => {
       update.requirements = _san(raw.requirements, 3000);
     } else if (key === 'category') {
       if (!VALID_CATEGORIES.includes(raw.category)) {
-        throw new HttpsError('invalid-argument', );
+        throw new HttpsError('invalid-argument', 'category must be one of: ' + VALID_CATEGORIES.join(', '));
       }
       update.category = raw.category;
     } else if (key === 'type') {
       if (!VALID_TYPES.includes(raw.type)) {
-        throw new HttpsError('invalid-argument', );
+        throw new HttpsError('invalid-argument', 'type must be one of: ' + VALID_TYPES.join(', '));
       }
       update.type = raw.type;
     } else if (key === 'location') {
       update.location = _san(raw.location, 200);
-    } else if (key === 'salaryMin') {
-      update.salaryMin = raw.salaryMin != null ? Number(raw.salaryMin) : null;
-    } else if (key === 'salaryMax') {
-      update.salaryMax = raw.salaryMax != null ? Number(raw.salaryMax) : null;
-    } else if (key === 'expiresAt') {
-      update.expiresAt = raw.expiresAt;
+    } else if (key === 'expiresAt' || key === 'expiresInDays') {
+      /* Was stored RAW from the client — any type, any date (a vacancy could be kept open for ever). */
+      update.expiresAt = _expiry(raw.expiresInDays, raw.expiresAt);
     }
+  }
+  if ('salaryMin' in raw || 'salaryMax' in raw) {
+    /* Validated together against the stored counterpart, so min ≤ max always holds. */
+    const s = _salary('salaryMin' in raw ? raw.salaryMin : current.salaryMin, 'salaryMax' in raw ? raw.salaryMax : current.salaryMax);
+    update.salaryMin = s.salaryMin; update.salaryMax = s.salaryMax;
+  }
+  if (current.status === 'closed' && update.expiresAt) {
+    throw new HttpsError('failed-precondition', 'This vacancy is closed. Post a new vacancy instead of re-opening it.');
   }
 
   if (Object.keys(update).length === 0) throw new HttpsError('invalid-argument', 'No valid fields to update');
@@ -224,8 +321,29 @@ exports.closeJob = onCall(CF_OPTS, exports._h.closeJob = async (req) => {
   if (!jobSnap.exists) throw new HttpsError('not-found', 'Job not found');
   if (jobSnap.data().employerUid !== uid) throw new HttpsError('permission-denied', 'Not your job');
 
-  await jobRef.update({ status: 'closed' });
-  return { success: true };
+  await jobRef.update({ status: 'closed', closedAt: Timestamp.now() });
+
+  /* Close the early-stage applications (owner state 'Closed') so applicants are told, each in its own transaction that
+     re-reads the status — a concurrent employer transition is never overwritten. Idempotent: a re-run finds them closed. */
+  const appsSnap = await db.collection('jobApplications').where('jobId', '==', jobId).limit(300).get();
+  const title = _san(jobSnap.data().title, 100);
+  let closedApplications = 0;
+  for (const d of appsSnap.docs) {
+    if (!CLOSE_ON_JOB_CLOSE.includes((d.data() || {}).status)) continue;
+    const done = await db.runTransaction(async (txn) => {
+      const s = await txn.get(d.ref);
+      const app = s.exists ? s.data() : null;
+      if (!app || !CLOSE_ON_JOB_CLOSE.includes(app.status)) return false;
+      const version = (Number(app.statusVersion) || 0) + 1;
+      txn.update(d.ref, { status: 'closed', statusVersion: version, updatedAt: Timestamp.now() });
+      _eventInTxn(txn, d.ref, app, { from: app.status, to: 'closed', actorUid: uid, actorRole: 'employer', reason: 'vacancy closed' });
+      _notifyInTxn(txn, db, { uid: app.seekerUid, id: 'jobapp_' + d.id + '_v' + version, type: 'job_application_status',
+        title: 'Vacancy closed', body: 'The vacancy "' + title + '" has closed. Thank you for applying.', deepLink: '/jobs.html#applications' });
+      return true;
+    });
+    if (done) closedApplications++;
+  }
+  return { success: true, closedApplications };
 });
 
 // â”€â”€â”€ 4. listJobs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -287,14 +405,21 @@ exports.getJob = onCall(CF_OPTS, exports._h.getJob = async (req) => {
 
   if (!jobId) throw new HttpsError('invalid-argument', 'jobId required');
 
+  if (!ID_RE.test(String(jobId))) throw new HttpsError('invalid-argument', 'jobId is not valid');
   const jobRef  = db.collection('jobs').doc(jobId);
   const jobSnap = await jobRef.get();
   if (!jobSnap.exists) throw new HttpsError('not-found', 'Job not found');
 
-  // Increment viewCount atomically (fire-and-forget is fine)
-  jobRef.update({ viewCount: FieldValue.increment(1) }).catch(() => {});
+  const data    = jobSnap.data();
+  const isOwner = !!uid && data.employerUid === uid;
+  const isAdmin = !!(req.auth?.token?.admin || req.auth?.token?.superAdmin);
+  /* A job that is not publicly open (closed / expired / any non-active state) is visible only to its employer and to
+     admins; everyone else gets the same not-found as a missing job, so its existence is not disclosed either. */
+  if (!_isActive(data) && !isOwner && !isAdmin) throw new HttpsError('not-found', 'Job not found');
 
-  const data   = jobSnap.data();
+  // Count public views only (the employer reloading their own vacancy is not a view).
+  if (!isOwner && !isAdmin) jobRef.update({ viewCount: FieldValue.increment(1) }).catch(() => {});
+
   const result = {
     job: {
       ...{
@@ -323,11 +448,13 @@ exports.applyForJob = onCall(CF_OPTS, exports._h.applyForJob = async (req) => {
 
   const { jobId, coverLetter, cvUrl } = req.data || {};
   if (!jobId) throw new HttpsError('invalid-argument', 'jobId required');
+  if (!ID_RE.test(String(jobId))) throw new HttpsError('invalid-argument', 'jobId is not valid');
 
   const cleanCover = _san(coverLetter, 2000);
   if (!cleanCover || cleanCover.length < 20) {
     throw new HttpsError('invalid-argument', 'coverLetter must be 20-2000 characters');
   }
+  const cleanCv = _httpsUrl(cvUrl);
 
   // Idempotency via deterministic doc ID
   const applicationId = `${jobId}_${uid}`;
@@ -346,21 +473,30 @@ exports.applyForJob = onCall(CF_OPTS, exports._h.applyForJob = async (req) => {
     if (!jobSnap.exists) throw new HttpsError('not-found', 'Job not found');
     jobData = jobSnap.data();
     if (!_isActive(jobData)) throw new HttpsError('failed-precondition', 'This job is no longer accepting applications');
+    if (jobData.employerUid === uid) throw new HttpsError('failed-precondition', 'You cannot apply to your own vacancy');
 
     const now = Timestamp.now();
     const application = {
       jobId,
-      seekerUid:   uid,
-      employerUid: jobData.employerUid,
-      coverLetter: cleanCover,
-      cvUrl:       cvUrl ? _san(cvUrl, 500) : null,
-      status:      'pending',
-      appliedAt:   now,
-      updatedAt:   now,
+      seekerUid:     uid,
+      employerUid:   jobData.employerUid,
+      /* Snapshot of the vacancy at the time of applying — the record stays meaningful if the job is edited later. */
+      jobTitle:      _san(jobData.title, 100),
+      companyName:   _san(jobData.companyName, 200),
+      jobType:       jobData.type || null,
+      coverLetter:   cleanCover,
+      cvUrl:         cleanCv,
+      status:        'pending',
+      statusVersion: 1,
+      appliedAt:     now,
+      updatedAt:     now,
     };
 
     txn.set(appRef, application);
     txn.update(jobRef, { applicationCount: FieldValue.increment(1) });
+    _eventInTxn(txn, appRef, application, { from: null, to: 'pending', actorUid: uid, actorRole: 'applicant' });
+    _notifyInTxn(txn, db, { uid: jobData.employerUid, id: 'jobapp_' + applicationId + '_v1', type: 'job_application_received',
+      title: 'New application', body: 'Someone applied for "' + application.jobTitle + '".', deepLink: '/jobs.html#employer' });
   });
 
   if (isReplay) return { alreadyApplied: true, applicationId };
@@ -419,6 +555,8 @@ exports.getJobApplications = onCall(CF_OPTS, exports._h.getJobApplications = asy
     coverLetter:   app.coverLetter,
     cvUrl:         app.cvUrl,
     status:        app.status,
+    statusLabel:   STATUS_LABEL[app.status] || app.status,
+    statusVersion: Number(app.statusVersion) || 1,
     appliedAt:     app.appliedAt,
     updatedAt:     app.updatedAt,
     seekerProfile: profileMap[app.seekerUid] || null,
@@ -437,22 +575,129 @@ exports.updateApplicationStatus = onCall(CF_OPTS, exports._h.updateApplicationSt
   const uid = req.auth.uid;
   const db  = getFirestore();
 
-  const { applicationId, status } = req.data || {};
-  if (!applicationId) throw new HttpsError('invalid-argument', 'applicationId required');
+  const { applicationId, status, reason, expectedVersion } = req.data || {};
+  if (!applicationId || !ID_RE.test(String(applicationId))) throw new HttpsError('invalid-argument', 'applicationId required');
   if (!VALID_APP_STATUSES.includes(status)) {
-    throw new HttpsError('invalid-argument', );
+    throw new HttpsError('invalid-argument', 'status must be one of: ' + VALID_APP_STATUSES.join(', '));
+  }
+  const cleanReason = _san(reason, 500);
+  if (REASON_REQUIRED.includes(status) && cleanReason.length < 3) {
+    throw new HttpsError('invalid-argument', 'Give the applicant a short reason (at least 3 characters).');
   }
 
-  const appRef  = db.collection('jobApplications').doc(applicationId);
-  const appSnap = await appRef.get();
-  if (!appSnap.exists) throw new HttpsError('not-found', 'Application not found');
-
-  const appData = appSnap.data();
-  if (appData.employerUid !== uid) throw new HttpsError('permission-denied', 'Not your job application');
-
-  await appRef.update({ status, updatedAt: Timestamp.now() });
-  return { success: true };
+  const appRef = db.collection('jobApplications').doc(applicationId);
+  /* ONE transaction: re-read, ownership, legal transition from the CURRENT state, optimistic version, audit event,
+     applicant notification. Two employer tabs cannot both move the same application. */
+  const out = await db.runTransaction(async (txn) => {
+    const appSnap = await txn.get(appRef);
+    if (!appSnap.exists) throw new HttpsError('not-found', 'Application not found');
+    const app = appSnap.data();
+    if (app.employerUid !== uid) throw new HttpsError('permission-denied', 'Not your job application');
+    const version = Number(app.statusVersion) || 1;
+    if (expectedVersion != null && Number(expectedVersion) !== version) {
+      throw new HttpsError('aborted', 'This application was updated elsewhere. Reload and try again.');
+    }
+    if (app.status === status) return { unchanged: true, status, statusVersion: version };
+    const allowed = EMPLOYER_TRANSITIONS[app.status] || [];
+    if (!allowed.includes(status)) {
+      throw new HttpsError('failed-precondition',
+        'An application that is "' + (STATUS_LABEL[app.status] || app.status) + '" cannot move to "' + (STATUS_LABEL[status] || status) + '".');
+    }
+    const next = version + 1;
+    txn.update(appRef, { status, statusVersion: next, updatedAt: Timestamp.now(),
+      ...(status === 'rejected' ? { rejectionReason: cleanReason } : {}) });
+    _eventInTxn(txn, appRef, app, { from: app.status, to: status, actorUid: uid, actorRole: 'employer', reason: cleanReason });
+    const jt = _san(app.jobTitle, 100) || 'your application';
+    const body = status === 'offer' ? 'You have an offer for "' + jt + '". Open your applications to accept or decline.'
+      : status === 'rejected' ? 'Your application for "' + jt + '" was not selected.' + (cleanReason ? ' ' + cleanReason : '')
+      : status === 'hired' ? 'Congratulations — you are hired for "' + jt + '".'
+      : 'Your application for "' + jt + '" is now: ' + STATUS_LABEL[status] + '.';
+    _notifyInTxn(txn, db, { uid: app.seekerUid, id: 'jobapp_' + applicationId + '_v' + next,
+      type: status === 'offer' ? 'job_offer' : 'job_application_status', title: STATUS_LABEL[status], body, deepLink: '/jobs.html#applications' });
+    return { status, statusVersion: next };
+  });
+  return { success: true, ...out };
 });
+
+// ─── 8b. withdrawApplication (applicant) ─────────────────────────────────────────────────────────────────────
+
+exports._h.withdrawApplication = async (req) => {
+  _requireAuth(req);
+  const uid = req.auth.uid;
+  const db  = getFirestore();
+  const { applicationId, reason } = req.data || {};
+  if (!applicationId || !ID_RE.test(String(applicationId))) throw new HttpsError('invalid-argument', 'applicationId required');
+  const appRef = db.collection('jobApplications').doc(applicationId);
+  return db.runTransaction(async (txn) => {
+    const s = await txn.get(appRef);
+    if (!s.exists) throw new HttpsError('not-found', 'Application not found');
+    const app = s.data();
+    if (app.seekerUid !== uid) throw new HttpsError('permission-denied', 'Not your application');
+    if (app.status === 'withdrawn') return { success: true, unchanged: true, status: 'withdrawn' };
+    if (!APPLICANT_WITHDRAWABLE.includes(app.status)) {
+      throw new HttpsError('failed-precondition', 'An application that is "' + (STATUS_LABEL[app.status] || app.status) + '" can no longer be withdrawn.');
+    }
+    const next = (Number(app.statusVersion) || 1) + 1;
+    const r = _san(reason, 500);
+    txn.update(appRef, { status: 'withdrawn', statusVersion: next, updatedAt: Timestamp.now() });
+    _eventInTxn(txn, appRef, app, { from: app.status, to: 'withdrawn', actorUid: uid, actorRole: 'applicant', reason: r });
+    _notifyInTxn(txn, db, { uid: app.employerUid, id: 'jobapp_' + applicationId + '_v' + next, type: 'job_application_status',
+      title: 'Application withdrawn', body: 'An applicant withdrew from "' + (_san(app.jobTitle, 100) || 'your vacancy') + '".', deepLink: '/jobs.html#employer' });
+    return { success: true, status: 'withdrawn', statusVersion: next };
+  });
+};
+
+// ─── 8c. respondToJobOffer (applicant: accept | decline) ─────────────────────────────────────────────────────
+
+exports._h.respondToJobOffer = async (req) => {
+  _requireAuth(req);
+  const uid = req.auth.uid;
+  const db  = getFirestore();
+  const { applicationId, accept, reason } = req.data || {};
+  if (!applicationId || !ID_RE.test(String(applicationId))) throw new HttpsError('invalid-argument', 'applicationId required');
+  if (typeof accept !== 'boolean') throw new HttpsError('invalid-argument', 'accept must be true or false');
+  const to = accept ? 'offer_accepted' : 'offer_declined';
+  const appRef = db.collection('jobApplications').doc(applicationId);
+  return db.runTransaction(async (txn) => {
+    const s = await txn.get(appRef);
+    if (!s.exists) throw new HttpsError('not-found', 'Application not found');
+    const app = s.data();
+    if (app.seekerUid !== uid) throw new HttpsError('permission-denied', 'Not your application');
+    if (app.status === to) return { success: true, unchanged: true, status: to };
+    if (app.status !== 'offer') throw new HttpsError('failed-precondition', 'There is no open offer on this application.');
+    const next = (Number(app.statusVersion) || 1) + 1;
+    const r = _san(reason, 500);
+    txn.update(appRef, { status: to, statusVersion: next, updatedAt: Timestamp.now() });
+    _eventInTxn(txn, appRef, app, { from: 'offer', to, actorUid: uid, actorRole: 'applicant', reason: r });
+    _notifyInTxn(txn, db, { uid: app.employerUid, id: 'jobapp_' + applicationId + '_v' + next, type: 'job_offer_response',
+      title: accept ? 'Offer accepted' : 'Offer declined',
+      body: 'The applicant ' + (accept ? 'accepted' : 'declined') + ' your offer for "' + (_san(app.jobTitle, 100) || 'your vacancy') + '".' + (accept ? ' Mark them hired to complete it.' : ''),
+      deepLink: '/jobs.html#employer' });
+    return { success: true, status: to, statusVersion: next };
+  });
+};
+
+// ─── 8d. getApplicationHistory (applicant, employer or admin) ────────────────────────────────────────────────
+
+exports._h.getApplicationHistory = async (req) => {
+  _requireAuth(req);
+  const uid = req.auth.uid;
+  const db  = getFirestore();
+  const { applicationId } = req.data || {};
+  if (!applicationId || !ID_RE.test(String(applicationId))) throw new HttpsError('invalid-argument', 'applicationId required');
+  const appRef = db.collection('jobApplications').doc(applicationId);
+  const s = await appRef.get();
+  if (!s.exists) throw new HttpsError('not-found', 'Application not found');
+  const app = s.data();
+  const isAdmin = !!(req.auth.token?.admin || req.auth.token?.superAdmin);
+  if (app.seekerUid !== uid && app.employerUid !== uid && !isAdmin) throw new HttpsError('permission-denied', 'Not your application');
+  const ev = await appRef.collection('events').limit(100).get();
+  const events = ev.docs.map((d) => d.data())
+    .map((e) => ({ from: e.from, to: e.to, label: STATUS_LABEL[e.to] || e.to, actorRole: e.actorRole, reason: e.reason || null,
+      at: e.at && e.at.toMillis ? e.at.toMillis() : null }))
+    .sort((a, b) => (a.at || 0) - (b.at || 0));
+  return { applicationId, status: app.status, label: STATUS_LABEL[app.status] || app.status, statusVersion: Number(app.statusVersion) || 1, events };
+};
 
 // â”€â”€â”€ 9. getMyApplications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -498,6 +743,11 @@ exports.getMyApplications = onCall(CF_OPTS, exports._h.getMyApplications = async
     coverLetter: app.coverLetter,
     cvUrl:       app.cvUrl,
     status:      app.status,
+    statusLabel: STATUS_LABEL[app.status] || app.status,
+    statusVersion: Number(app.statusVersion) || 1,
+    /* what the applicant may do now (the server re-checks on the call) */
+    canWithdraw: APPLICANT_WITHDRAWABLE.includes(app.status),
+    canRespondToOffer: app.status === 'offer',
     appliedAt:   app.appliedAt,
     updatedAt:   app.updatedAt,
     job:         jobMap[app.jobId] || null,
