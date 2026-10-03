@@ -45,6 +45,8 @@ const DEDUCTION_KINDS = Object.freeze(['lead_fee_recovery']);
 /* A SUBTYPE narrows a kind without forking it: a Work/Job Engine milestone IS a providerBookings doc, so it stays kind
    'service_booking' (reconciliation keeps matching service_booking_<bookingId>) and carries subtype 'work_milestone'. */
 const SUBTYPES = Object.freeze(['work_milestone']);
+/* Fields a client (buyer) never sees on their own receipt — the provider's commercial terms with SOKONI. */
+const PROVIDER_ONLY = Object.freeze(['platformFeeCents', 'providerNetCents', 'deductionsCents', 'deductions']);
 const TAX = Object.freeze(['provider_fiscal_invoice', 'not_vat_registered', 'unknown']);
 const ID_RE = /^[A-Za-z0-9_-]{1,160}$/;
 const _int = (n) => (Number.isInteger(n) && n >= 0 ? n : null);
@@ -216,7 +218,12 @@ async function receiptsFor(db, uid, opts) {
   const seen = new Set(); const out = [];
   for (const doc of asClient.docs.concat(asCounterparty.docs)) {
     if (seen.has(doc.id)) continue; seen.add(doc.id);
-    out.push(Object.assign({ receiptId: doc.id, role: (doc.data() || {}).clientUid === String(uid) ? 'client' : 'provider' }, doc.data()));
+    const role = (doc.data() || {}).clientUid === String(uid) ? 'client' : 'provider';
+    const row = Object.assign({ receiptId: doc.id, role }, doc.data());
+    /* PROVIDER-ONLY financials (owner 2026-10-03): the platform fee, the provider's net and settlement deductions are the
+       provider's business — a CLIENT's view of the same receipt never carries them (header or history). */
+    if (role === 'client') PROVIDER_ONLY.forEach((k) => { delete row[k]; });
+    out.push(row);
   }
   /* HISTORY (owner field list): each receipt's own immutable events, scoped exactly like the header — only receipts the
      caller is party to reach this point. Capped at 50 per receipt, oldest first; a projection, never the raw doc. */
@@ -225,11 +232,12 @@ async function receiptsFor(db, uid, opts) {
     r.events = ev.docs.map((d) => {
       const e = d.data() || {};
       const at = e.at && e.at.toMillis ? e.at.toMillis() : (e.at || null);
+      const prov = r.role === 'provider';
       return Object.assign({ type: e.type, amountCents: e.amountCents, at },
-        e.platformFeeCents != null ? { platformFeeCents: e.platformFeeCents } : {},
-        e.providerNetCents != null ? { providerNetCents: e.providerNetCents } : {},
+        prov && e.platformFeeCents != null ? { platformFeeCents: e.platformFeeCents } : {},
+        prov && e.providerNetCents != null ? { providerNetCents: e.providerNetCents } : {},
         e.reason ? { reason: e.reason } : {}, e.milestoneId ? { milestoneId: e.milestoneId } : {},
-        Array.isArray(e.deductions) && e.deductions.length ? { deductions: e.deductions.map((x) => ({ kind: x.kind, amountCents: x.amountCents })) } : {});
+        prov && Array.isArray(e.deductions) && e.deductions.length ? { deductions: e.deductions.map((x) => ({ kind: x.kind, amountCents: x.amountCents })) } : {});
     }).sort((a, b) => String(a.at || '').localeCompare(String(b.at || '')));
   }));
   const ms = (r) => (r.issuedAt && r.issuedAt.toMillis ? r.issuedAt.toMillis() : (r.issuedAt instanceof Date ? r.issuedAt.getTime() : Date.parse(r.issuedAt || '') || 0));
@@ -294,5 +302,5 @@ let myTransactionReceipts, adminSearchReceipts, adminRetryReceiptFailures, retry
   });
 }
 
-module.exports = { RECEIPTS, FAILURES, KINDS, SUBTYPES, TAX, DEDUCTION_KINDS, receiptIdFor, recordPaid, recordEvent, safely, retryFailures, receiptsFor, adminSearch,
+module.exports = { RECEIPTS, FAILURES, KINDS, SUBTYPES, PROVIDER_ONLY, TAX, DEDUCTION_KINDS, receiptIdFor, recordPaid, recordEvent, safely, retryFailures, receiptsFor, adminSearch,
   myTransactionReceipts, adminSearchReceipts, adminRetryReceiptFailures, retryReceiptFailuresSweep, _statusOf };

@@ -132,6 +132,26 @@ const events = (db, id) => [...db._docs.keys()].filter((k) => k.startsWith('tran
   ck('R12 role filter: provider → only counterparty receipts; client → only own purchases; omitted → both',
     both.length === 2 && provR.length === 1 && provR[0].sourceId === 'bkB' && provR[0].role === 'provider' && cli.length === 1 && cli[0].sourceId === 'bkA', { both: both.length, prov: provR.map((r) => r.sourceId), cli: cli.map((r) => r.sourceId) });
 
+  /* owner 2026-10-03 isolation + immutability */
+  db = fakeDb();
+  await TR.recordPaid(db, paid({ sourceId: 'iso1', paymentRef: 'API_I1', clientUid: 'custA', counterpartyId: 'provA', method: 'M-PESA' }), deps);
+  await TR.recordPaid(db, paid({ sourceId: 'iso2', paymentRef: 'API_I2', clientUid: 'custB', counterpartyId: 'provB' }), deps);
+  await TR.recordEvent(db, 'service_booking_iso1', { type: 'released', opKey: 'rel1', amountCents: 300000, platformFeeCents: 30000, providerNetCents: 270000 }, deps);
+  await TR.recordEvent(db, 'service_booking_iso1', { type: 'refunded', opKey: 'ref1', amountCents: 50000, reason: 'partial refund' }, deps);
+  const pa = await TR.receiptsFor(db, 'provA', { role: 'provider' }), pb = await TR.receiptsFor(db, 'provB', { role: 'provider' }), ca = await TR.receiptsFor(db, 'custA', {});
+  ck('R13 provider A sees only A\'s receipts; provider B only B\'s (no cross-read)', pa.length === 1 && pa[0].sourceId === 'iso1' && pb.length === 1 && pb[0].sourceId === 'iso2');
+  const leak = (r) => ['platformFeeCents', 'providerNetCents', 'deductionsCents', 'deductions'].some((k) => k in r) || (r.events || []).some((e) => 'platformFeeCents' in e || 'providerNetCents' in e || 'deductions' in e);
+  ck('R14 the CUSTOMER\'s view carries no provider-only financials (header or history); the provider\'s view does',
+    ca.length === 1 && ca[0].role === 'client' && !leak(ca[0]) && 'platformFeeCents' in pa[0] && pa[0].events.some((e) => e.platformFeeCents === 30000), { client: ca[0] && Object.keys(ca[0]), events: ca[0] && ca[0].events });
+  ck('R15 refund / adjustment relationships stay visible to both parties (event history with reason)',
+    pa[0].events.some((e) => e.type === 'refunded' && e.amountCents === 50000 && e.reason) && ca[0].events.some((e) => e.type === 'refunded' && e.amountCents === 50000));
+  const before = JSON.stringify(db._docs.get('transactionReceipts/service_booking_iso1'));
+  const rr = await TR.recordPaid(db, paid({ sourceId: 'iso1', paymentRef: 'API_I1', clientUid: 'mallory', counterpartyId: 'mallory', paidCents: 1, method: 'CASH' }), deps);
+  ck('R16 IMMUTABLE: a second recordPaid for the same source (different amount / parties / method) is a replay and changes nothing',
+    rr.ok && rr.replay === true && JSON.stringify(db._docs.get('transactionReceipts/service_booking_iso1')) === before);
+  ck('R17 the method is the one the verified payment reported (M-PESA), and a receipt with no reported method stays null (UI "—")',
+    pa[0].method === 'M-PESA' && pb[0].method === 'M-PESA' && (await (async () => { const d2 = fakeDb(); await TR.recordPaid(d2, paid({ sourceId: 'nm', paymentRef: 'API_NM', method: null }), deps); return d2._docs.get('transactionReceipts/service_booking_nm').method === null; })()));
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e && e.stack); process.exit(1); });

@@ -1,3 +1,10 @@
+## 2026-10-03 — Receipts: customer view carries no provider-only financials; isolation + immutability proven (NOT deployed)
+
+- **Change:** receiptsFor strips PROVIDER_ONLY (platformFeeCents, providerNetCents, deductionsCents, deductions) from a CLIENT's view of a receipt — header and event history; the provider's view keeps them.
+- **Files:** functions/transaction-receipts.js, scripts/test-transaction-receipts.js (R13–R17).
+- **Evidence:** R13 provider A↔B isolation; R14 customer sees no provider-only figures; R15 refund/adjustment events visible to both; R16 a second recordPaid (other amount/parties/method) is a replay that changes nothing; R17 method = the verified payment's, null when not reported. Served ruleset (fetched 2026-10-03): no client write rule on transactionReceipts, walletTransactions, providerPayouts, payoutRequests, providerBookings, rentalBookings; wallets create:false / update admin-only; platformConfig super-admin only.
+- **Tests:** transaction-receipts 22/0.
+
 ## 2026-10-03 — Withdrawals OFF server-side; old provider payout route hard-retired (NOT deployed)
 
 - **Owner rule:** keep withdrawals off; a direct call must not withdraw; the old provider-payout route stays dead.
