@@ -510,8 +510,46 @@ exports.rentalConfirmReturn = onCall({ enforceAppCheck: true }, exports._h.renta
 });
 /* Completion requires RETURNED (owner: never pending / cancelled / declined / expired → completed). Settlement is the
    payment authority's release on 'completed' (ONE settlement path). */
-exports.rentalComplete = onCall({ enforceAppCheck: true }, exports._h.rentalComplete = (req) =>
-  _rentalTransition(req, { from: ['returned'], to: 'completed', extra: (r) => ({ completedAt: _ts(), completedBy: r.auth.uid, completionNotes: String((r.data || {}).notes || '').slice(0, 1000) }) }));
+/* SETTLEMENT (owner 2026-10-03: allowed under the wallet freeze). ONE settlement module, sokoni-5b's rental-settlement.js:
+   rent − commission → the SHOP's BUSINESS wallet (businessWallets/{businessId}, the marketplace settlement primitive),
+   exact cents; the deposit → a B2C refund REQUEST to the renter's M-PESA. It runs in THIS transaction, and only for money
+   that is held with the renter's PIN verified at return. Anything it cannot prove → a review row, money stays held —
+   the rental still completes (the equipment is back; the money question goes to AdminOS, never silently resolved). */
+const _rentalSettlement = () => require('./rental-settlement');
+exports.rentalComplete = onCall({ enforceAppCheck: true }, exports._h.rentalComplete = async (req) => {
+  const { bookingId, shopId, notes } = req.data || {};
+  await _assertSeller(req.auth, shopId);
+  if (!bookingId) throw new HttpsError('invalid-argument', 'bookingId is required.');
+  const ref = _db().collection('rentalBookings').doc(String(bookingId));
+  const pre = await ref.get();
+  if (!pre.exists) throw new HttpsError('not-found', 'Booking not found.');
+  const b0 = pre.data();
+  if (b0.shopId !== shopId) throw new HttpsError('permission-denied', 'That booking belongs to another shop.');
+  if (b0.status === 'completed') return { success: true, unchanged: true, status: 'completed' };
+  const RS = _rentalSettlement();
+  /* phase 1, OUTSIDE the txn (the commission engine reads config); only when there is held money to settle */
+  const quote = b0.paymentStatus === 'held'
+    ? await RS.quoteRentalSettlement(_db(), { booking: b0, deps: { BW: require('./business-wallet'), SD: require('./settlement-destination') } })
+    : null;
+  const ownerUid = await _shopOwnerUid(shopId);
+  let plan = null;
+  await _db().runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Booking not found.');
+    const b = snap.data();
+    if (b.shopId !== shopId) throw new HttpsError('permission-denied', 'That booking belongs to another shop.');
+    /* Completion requires RETURNED (owner: never pending / cancelled / declined / expired → completed) */
+    if (b.status !== 'returned') throw new HttpsError('failed-precondition', 'A ' + b.status + ' booking cannot be completed.');
+    if (b.paymentStatus === 'refund_due') throw new HttpsError('failed-precondition', RENTAL_REFUND_DUE_MSG);
+    /* phase 2: the module's READS, before any write here */
+    plan = await RS.settleRentalBooking(t, _db(), { bookingId: String(bookingId), booking: b, ownerUid, actorUid: req.auth.uid, quote, FieldValue: _fv() });
+    t.update(ref, { status: 'completed', completedAt: _ts(), completedBy: req.auth.uid, completionNotes: String(notes || '').slice(0, 1000),
+      settlementOutcome: plan.ok ? 'released' : plan.reason });
+    t.update(_db().collection('rentalProducts').doc(b.rentalProductId), { bookingCount: _fv().increment(1) });
+    plan.apply(t);
+  });
+  return { success: true, status: 'completed', settlement: plan.ok ? 'released' : plan.reason };
+});
 
 /* Renter reports the return (active → return_pending). */
 exports.rentalReportReturn = onCall({ enforceAppCheck: true }, exports._h.rentalReportReturn = async (req) => {
