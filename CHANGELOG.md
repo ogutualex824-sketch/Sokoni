@@ -4,12 +4,12 @@
   - Legacy specializations map one-to-one only. criminal_law, immigration and tax_law map to nothing (owner decision).
 - **sokoni-legal-taxonomy.js (new, GENERATED):** built by scripts/build-legal-taxonomy.js (--check detects a stale copy). Hosting takes it WHOLE.
 - **functions/legal-hub.js:**
-  - registerLegalProvider takes  advocate|firm and canonical . A firm needs firmName; its offices and declared team are stored, and the team stays unverified.
+  - registerLegalProvider takes `entityType` advocate|firm and canonical `practiceAreas`. A firm needs firmName; its offices and declared team are stored, and the team stays unverified.
   - The application is stamped applicationType lawyer|law_firm with practice groups for AdminOS.
   - Legacy specializations are still accepted.
   - getLegalProviders filters by practiceArea / practiceGroup / entityType. An unknown id returns nothing.
   - The public view gives rating:null when unrated (no default 5) and no licence number or phone.
-  - New  ops: legalMyProfile, legalUpdateProfile (protected identity and verification fields are refused and nothing changes), legalResubmitApplication (only info_requested → pending), legalTaxonomy.
+  - New `_h` ops: legalMyProfile, legalUpdateProfile (protected identity and verification fields are refused and nothing changes), legalResubmitApplication (only info_requested → pending), legalTaxonomy.
 - **functions/legal-dispatch.js:** routes legal-hub._h alongside the agreement ops. No new Cloud Function.
 - **docs/LEGAL_HUB_CONVERGENCE.md (new):** Phase 0 authority map, the L1/L2 design, owner decisions and the slice plan.
 - **Tests:**
