@@ -199,7 +199,8 @@ Both AdminOS and Super Admin use the same shared modules (no `admin.html`):
 | Public / partner pages: partner page / foundation page / intake / app-review UI / checkout / earn chain | 30/0 · 55/0 · 35/0 · 16/0 · 58/58 · 75/0 | B4, C1, 6e, R5, F9b-d |
 | test-functions-hooks-execute / test-hosting-ignores-rules | 8/0 · 33/0 | — |
 | **UNPROVEN** | Storage rules emulator suite (19 cases) **not run** (RAM) · any real-browser run · IntaSend sandbox for PesaLink/B2B/validate/status · media worker in Cloud | |
-| **REVIEW** | partner/promotion refund writer · Homepage Spotlight rendering · POS `pos.js` SIMULATED_ fallback (POS lane) | |
+| **REVIEW** | partner/promotion refund writer · Homepage Spotlight rendering | |
+| **CLOSED IN CODE (peer, owner-ordered)** | POS `pos.js` SIMULATED_ fallback removed by sokoni-b2 (hosting/intasend-card-wizard-on-72dca56 @ a436e12, NOT deployed); proper routing via sokoni-pos-stk.js owed on the union | |
 
 ## 10. Git report (all pushed to origin)
 
@@ -213,7 +214,10 @@ Both AdminOS and Super Admin use the same shared modules (no `admin.html`):
 
 Every commit was staged file by file after `git status --short`; no stash, reset or foreign staging.
 
-## 11. Deployment report (one deploy at a time; named scopes only; RAM ≥ 512 MB; live-archive diff per function first; never a bare `--only functions` — there are now 2 codebases)
+## 11. Deployment report
+
+**PRECONDITION (2026-10-03):** both functions trees still export the 5 retired Daraja functions; sokoni-b2's rewritten guard-functions-safety (chore/remove-daraja-code-on-6e7bfe2 @ 093fd4f) BLOCKS such trees. Merge 093fd4f into `feat/financial-partner-workspace-on-9012d90` and `feat/foundation-on-3a38f35` (re-run every suite) before step 1 / step 3.
+ (one deploy at a time; named scopes only; RAM ≥ 512 MB; live-archive diff per function first; never a bare `--only functions` — there are now 2 codebases)
 1. **Partner tree** (`feat/financial-partner-workspace-on-9012d90`):
    - sokoni-27's `applicationLifecycle` first (owner authorization)
    - indexes
