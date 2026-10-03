@@ -1,3 +1,15 @@
+## [2026-10-04] — Invoice money authority: a merchant "Mark Paid" is a PAYMENT CLAIM, never paid
+
+**Owner (2026-10-04):** a merchant-entered reference must never change payment truth. Record it as a claim ("Payment reference submitted — awaiting verification"); only a verified payment event may make an invoice paid.
+**Live hole:** `financeSprintDispatch` (00006-vov, gen 1787386169391458) op `invoiceMarkPaid` wrote `status:'paid', paidAt, paidBy, paymentRef` on the word of any shop owner or employee.
+**Fix:** the same op (kept for existing clients) plus an honest alias `invoiceSubmitPaymentClaim` now create `invoicePaymentClaims/{sha256(invoiceId|reference)}` {status:'unverified', reference, method, amountClaimed, claimedBy} with `create()` (one claim per reference), and stamp only `invoices/{id}.paymentClaim` for display. Status, balance, paidAt, paidBy and paymentRef are never written. No financial effect.
+**Baseline:** commit ab83c47 restores the 4 modules where origin/main differed (commission-config, finos-utils, settlement-engine, settlement-executor) to the LIVE bytes, so the 13-module financeSprintDispatch closure equals production and this diff is the fix only.
+**Files:** `functions/finance-os-sprint43.js`, `scripts/test-invoice-payment-claim.js`.
+**Tests:** test-invoice-payment-claim 8/0 (SABOTAGE: the old status:'paid' body → C1/C2/C3/C7 fail).
+**Pairs with:** rules 19e1ac6 (invoices server-write only; claims default-deny).
+**Known, not fixed here (flagged):** `_assertShop` accepts `users.role == 'admin'` (a profile field, not the admin claim) as shop access; `sasosCreateInvoice` creates invoices already `paid` from a client reference; `createSupplierInvoice` has no visible PO-ownership check.
+**Deployment:** NOT deployed. Scoped `--only functions:financeSprintDispatch` from THIS tree only (it carries the live settlement modules). The hosting page text (finance-invoices.html) ships with the invoices hosting unit.
+
 ## [2026-09-01] — fix(adminos): admin-os.js lineage convergence to production 252ff65 + pilot (UNMERGED / UNDEPLOYED)
 
 Reconciles `functions/admin-os.js` on main (`9d42fa9`) back to the **proven deployed source** of the

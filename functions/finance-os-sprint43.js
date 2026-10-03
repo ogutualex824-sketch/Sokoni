@@ -767,24 +767,44 @@ exports.invoiceSend = onCall({ ..._CALL, secrets: [SENDGRID_KEY] }, exports._h.i
   return { success: true };
 });
 
-exports.invoiceMarkPaid = onCall(_CALL, exports._h.invoiceMarkPaid = async (req) => {
+/* ── PAYMENT CLAIM, NEVER "PAID" (owner 2026-10-04: invoice money authority) ─────────────────────────────────────
+   A merchant-entered reference ("customer says they paid via XYZ") is a CLAIM, not proof. This handler used to write
+   status:'paid' / paidAt / paidBy / paymentRef from the merchant's word. It now:
+     · records invoicePaymentClaims/{deterministic id} {status:'unverified', reference, method, amountClaimed?, claimedBy}
+       — create(), so the same reference on the same invoice is one claim (a retry is a no-op);
+     · stamps invoices/{id}.paymentClaim (a summary for display) — and NEVER status, balance, paidAt, paidBy or paymentRef;
+     · has NO financial effect: no wallet, commission, receipt, settlement or revenue reads a claim.
+   Only a VERIFIED payment event (the payment authority) may move an invoice to paid. The op name invoiceMarkPaid is kept
+   so existing clients keep working; invoiceSubmitPaymentClaim is the honest name for the same handler. */
+const CLAIM_METHODS = ['mpesa', 'bank', 'cash', 'card', 'cheque', 'other'];
+async function _submitPaymentClaim(req) {
   const uid = _uid(req);
-  const { shopId, invoiceId, paymentRef, paymentMethod } = req.data;
+  const { shopId, invoiceId, paymentRef, paymentMethod, amount } = req.data || {};
   await _assertShop(uid, shopId);
-  await _db().runTransaction(async tx => {
-    const ref  = _db().collection('invoices').doc(invoiceId);
-    const snap = await tx.get(ref);
+  if (!invoiceId || typeof invoiceId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(invoiceId)) throw new Error('invoiceId required');
+  const reference = String(paymentRef == null ? '' : paymentRef).trim().replace(/[\u0000-\u001f]/g, '').slice(0, 64);
+  if (reference.length < 3) throw new Error('a payment reference is required');
+  const method = CLAIM_METHODS.includes(paymentMethod) ? paymentMethod : 'other';
+  const amountClaimed = amount === undefined || amount === null || amount === '' ? null : Number(amount);
+  if (amountClaimed !== null && !(Number.isFinite(amountClaimed) && amountClaimed > 0)) throw new Error('amount must be a positive number');
+  const claimId = require('crypto').createHash('sha256').update(invoiceId + '|' + reference.toLowerCase()).digest('hex').slice(0, 40);
+  const invRef = _db().collection('invoices').doc(invoiceId);
+  const claimRef = _db().collection('invoicePaymentClaims').doc(claimId);
+  return _db().runTransaction(async (tx) => {
+    const [snap, cSnap] = await Promise.all([tx.get(invRef), tx.get(claimRef)]);
     if (!snap.exists || snap.data().shopId !== shopId) throw new Error('invoice not found');
-    if (snap.data().status === 'paid') throw new Error('already paid');
-    if (snap.data().status === 'void') throw new Error('invoice is voided');
-    tx.update(ref, {
-      status: 'paid', paidAt: _ts(), paidBy: uid,
-      paymentRef: paymentRef || null,
-      paymentMethod: paymentMethod || 'mpesa', updatedAt: _ts(),
-    });
+    const inv = snap.data();
+    if (inv.status === 'void') throw new Error('invoice is voided');
+    if (amountClaimed !== null && Number.isFinite(Number(inv.total)) && amountClaimed > Number(inv.total)) throw new Error('amount exceeds the invoice total');
+    if (cSnap.exists) return { success: true, claimed: true, verified: false, claimId, status: cSnap.data().status || 'unverified', replay: true, message: 'Payment reference already submitted — awaiting verification' };
+    tx.create(claimRef, { claimId, invoiceId, shopId, reference, method, amountClaimed, currency: inv.currency || 'KES',
+      invoiceTotal: Number.isFinite(Number(inv.total)) ? Number(inv.total) : null, status: 'unverified', claimedBy: uid, createdAt: _ts() });
+    tx.update(invRef, { paymentClaim: { status: 'unverified', claimId, reference, method, amountClaimed, by: uid, at: _ts() }, updatedAt: _ts() });
+    return { success: true, claimed: true, verified: false, claimId, status: 'unverified', message: 'Payment reference submitted — awaiting verification' };
   });
-  return { success: true };
-});
+}
+exports.invoiceMarkPaid = onCall(_CALL, exports._h.invoiceMarkPaid = _submitPaymentClaim);
+exports._h.invoiceSubmitPaymentClaim = _submitPaymentClaim;
 
 exports.invoiceVoid = onCall(_CALL, exports._h.invoiceVoid = async (req) => {
   const uid = _uid(req);
