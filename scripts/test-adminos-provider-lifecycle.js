@@ -41,6 +41,15 @@ ck('A-3', /_call\("applicationDecide", \{ applicationId, decision, reason/.test(
   'the action calls the applicationDecide callable (approve | suspend only, reason required to suspend); nothing is written client-side');
 ck('A-4', /\n\s+providerDecide,/.test(SRC), 'SokoniAOS exposes providerDecide');
 
+/* A-5 Tech Hub 4Q: AdminOS Services shows leads & quotes */
+{
+  const ld = fnSrc(SRC, '_loadServiceLeads');
+  const whitelist = (SRC.match(/_ADMIN_OS_OPS = new Set\(\[[\s\S]*?\]\)/) || [''])[0];
+  ck('A-5', whitelist.includes("'adminGetServiceLeads'") && ld.includes('_call("adminGetServiceLeads"') && ld.includes('_esc(l.message')
+    && ld.includes(': "—"') && fnSrc(SRC, '_loadServices').includes('_loadServiceLeads(body)'),
+    'AdminOS Services lists leads & quotes from adminGetServiceLeads (dispatch-whitelisted), escaped, unknowns as —');
+}
+
 /* sabotage: the fabricated zero comes back */
 {
   const bad = SRC.replace('${typeof p.rating === "number" ? p.rating.toFixed(1) + " ⭐" : "—"}', '${(p.rating||0).toFixed(1)} ⭐');

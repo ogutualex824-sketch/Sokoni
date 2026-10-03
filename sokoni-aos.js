@@ -259,7 +259,7 @@ window.SokoniAOS = (() => {
     'adminGetBookings','adminGetCategories','adminGetDeliveryStats','adminGetDisputes',
     'adminGetExecutiveDashboard','adminGetFaqs','adminGetFeatureFlags','adminGetFinance','adminGetFraudAlerts',
     'adminGetMerchantPipeline','adminGetOrders','aosGetPendingPayouts','adminGetPlatformOverview','adminGetPlatformSettings',
-    'adminGetPayments','adminGetPosDevices','adminGetProducts','adminGetProviders','adminGetRecentNotifications','adminGetReviews','adminGetServices',
+    'adminGetPayments','adminGetPosDevices','adminGetProducts','adminGetProviders','adminGetServiceLeads','adminGetRecentNotifications','adminGetReviews','adminGetServices',
     'adminGetSearchStats','adminGetSupportTickets','adminGetSystemHealth','adminGetUser',
     'aosResolveDispute','adminResolveSupportTicket','adminSaveAnnouncement','adminSaveBanner',
     'adminSearchUsers','adminSendPushNotification','adminUpdateFeatureFlag','adminUpdateOrderStatus',
@@ -690,8 +690,40 @@ window.SokoniAOS = (() => {
       body.innerHTML = rows.length
         ? `<table class="aos-table"><thead><tr><th>Name</th><th>Category</th><th>Location</th><th>Status</th><th>Jobs</th><th>Rating</th><th>Actions</th></tr></thead><tbody>${rows.join("")}</tbody></table>`
         : _emptyMsg("No providers found");
+      _loadServiceLeads(body);   /* Tech Hub 4Q */
     } catch (e) {
       body.innerHTML = _emptyMsg("Couldn't load providers.") + '<div style="text-align:center;margin-top:8px"><button class="aos-btn-sm" onclick="SokoniAOS.navigate(\'services\')">Try again</button></div>';
+    }
+  }
+
+  /* Tech Hub 4Q (2026-10-03): service leads & quotes (serviceLeads) under the providers table — read-only, from
+     adminGetServiceLeads. Amounts are the provider's server-validated quote; unknowns render "—". */
+  async function _loadServiceLeads(afterEl) {
+    let box = document.getElementById("serviceLeadsBody");
+    if (!box && afterEl && afterEl.parentNode) {
+      box = document.createElement("div"); box.id = "serviceLeadsBody"; box.style.marginTop = "18px";
+      afterEl.parentNode.insertBefore(box, afterEl.nextSibling);
+    }
+    if (!box) return;
+    box.innerHTML = '<div class="aos-muted" style="margin-bottom:6px;font-weight:700">Leads &amp; quotes</div>' + _spinner();
+    try {
+      const d = await _call("adminGetServiceLeads", { limit: 100 });
+      const items = d.items || [];
+      const kes = (c) => (typeof c === "number" ? "KES " + _fmt(Math.round(c / 100)) : "—");
+      const rows = items.map(l => `<tr>
+          <td class="aos-muted">${_esc(String(l.id).slice(-6))}</td>
+          <td><span class="status-badge st-${_esc(l.status)}">${_esc(String(l.status || "—").replace(/_/g, " "))}</span></td>
+          <td class="aos-muted">${_esc(l.providerId || "—")}</td>
+          <td>${_esc(l.message || "")}</td>
+          <td>${l.quote ? kes(l.quote.amountCents) + " · v" + _esc(l.quote.version) : "—"}</td>
+          <td class="aos-muted">${l.bookingId ? _esc(String(l.bookingId).slice(-8)) : "—"}</td>
+          <td class="aos-muted">${_esc(l.monetization === "not_configured" ? "no lead fee" : l.monetization)}</td>
+        </tr>`);
+      box.innerHTML = '<div class="aos-muted" style="margin-bottom:6px;font-weight:700">Leads &amp; quotes · ' + _esc(String(d.open || 0)) + ' open · ' + _esc(String(d.converted || 0)) + ' booked</div>'
+        + (rows.length ? `<table class="aos-table"><thead><tr><th>Lead</th><th>Status</th><th>Provider</th><th>Request</th><th>Quote</th><th>Booking</th><th>Fee</th></tr></thead><tbody>${rows.join("")}</tbody></table>`
+          : _emptyMsg("No service leads yet"));
+    } catch (e) {
+      box.innerHTML = _emptyMsg("Couldn't load service leads.");
     }
   }
 

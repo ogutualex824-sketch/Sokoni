@@ -1,3 +1,10 @@
+## [2026-10-03] - Tech Hub slice 4Q (hosting): AdminOS Services shows leads & quotes — hosting, NOT deployed
+
+- sokoni-aos.js: below the providers table, a read-only "Leads & quotes" table from adminGetServiceLeads (added to the adminOsDispatch whitelist).
+  It shows lead, status, provider, request (escaped), the server quote (amount + version), booking link and fee ("no lead fee"). Unknowns render "—".
+- Server half: feat/tech-taxonomy-on-13f74f3 @ 1f813e7.
+- Test: test-adminos-provider-lifecycle A-5 (5/0). AdminOS tier1 59/0, tier2 147/0, authority-honesty 28/0.
+
 ## [2026-10-03] - Tech Hub slice 4M (hosting): call buttons on the booking-bound reveal — hosting, NOT deployed
 
 - sokoni-book-service.js: the booking status view shows "📞 Call the provider" only once the booking is paid / confirmed. It asks bookingContactProvider
