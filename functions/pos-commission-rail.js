@@ -328,17 +328,17 @@ async function readOutstanding(db, merchantUid) {
  * screen reads. It never writes.
  */
 /* SECOND REASON, SAME LOCK (owner 2026-10-03): a B2B lead invoice unpaid for more than 2 days closes the same till.
-   Producer: b2b-leads.leadInvoiceGate (keyed on the same uid = billToUid). It is NOT a second lock — it is one more
+   Producer: shared/lead-invoice-gate.evaluate (= b2b-leads.leadInvoiceGate; keyed on billToUid). It is NOT a second lock — it is one more
    reason inside this one gate, with its own `leadInvoice` block so the screen shows its own card.
    Enforcement waits for a certified lead-invoice Pay Now (the P0 principle): until LEAD_INVOICE_GATE_ENFORCED is
    switched on in that certified unit, it is evaluated and displayed only. Once enforced, an UNREADABLE lead state
    closes the gate (fail closed) exactly as an unreadable commission ledger does. */
 const LEAD_INVOICE_GATE_ENFORCED = false;
 async function _leadInvoiceReason(db, merchantUid, nowMs) {
-  let BL;
-  try { BL = require('./b2b-leads'); } catch (_) { return { available: false, state: 'not_assembled' }; }
+  /* shared/lead-invoice-gate.js is carried byte-identical on this line and the commercial line (no optional require). */
+  const LIG = require('./shared/lead-invoice-gate');
   try {
-    const g = await BL.leadInvoiceGate(db, merchantUid, nowMs);
+    const g = await LIG.evaluate(db, merchantUid, nowMs);
     return Object.assign({ available: true, state: g.overdue ? 'overdue' : 'clear' }, g, { enforce: LEAD_INVOICE_GATE_ENFORCED });
   } catch (_) { return { available: false, state: 'unreadable' }; }
 }
@@ -354,7 +354,7 @@ async function evaluateMerchantGate(db, merchantUid, nowMs) {
     /* `closed` is the answer to "may I trade?" — false means go. */
     closed: gate.closed || leadCloses,
     closedBy: gate.closed ? 'pos_commission' : (leadCloses ? 'lead_invoice' : null),
-    /* Its own card: state 'overdue' | 'clear' | 'unreadable' | 'not_assembled'; enforce false = shown, not blocking. */
+    /* Its own card: state 'overdue' | 'clear' | 'unreadable'; enforce false = shown, not blocking. */
     leadInvoice,
     today: gate.today,
     overdue: gate.overdue,
