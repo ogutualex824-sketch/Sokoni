@@ -33,7 +33,7 @@
     onLoginEvent:             fn('onLoginEvent'),
 
     /* Payments */
-    darajaSTKCallback:        fn('darajaSTKCallback'),
+    /* darajaSTKCallback removed 2026-10-03: the function was deleted from production (Daraja retired; IntaSend only). */
     intasendWebhook:          fn('intasendWebhook'),
     initiateRefund:           fn('initiateRefund'),
 

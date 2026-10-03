@@ -1,3 +1,18 @@
+## [2026-10-03] - Payments pages: Daraja setup console removed (owner: IntaSend only) — hosting, NOT deployed
+
+The four Daraja Cloud Functions were deleted from production today. The pages that told merchants to set up Daraja, copy the
+darajaSTKCallback URL into the Safaricom portal, or call sendTestSTKPush / validateDarajaCredentials are removed.
+
+- payments.html: Setup wizard and AI Help tabs removed (both taught Daraja onboarding); Settings keeps the business name and states
+  that SOKONI collects M-Pesa and card through IntaSend with no merchant setup. Overview and History are kept. Fixes an overview
+  defect: a seller with no shopSettings document threw on a Daraja field and the page then skipped every stat. 1414 -> ~630 lines.
+- seller.html: the unreachable Daraja / Paybill settings window and its script removed (272 lines; its save threw on an undeclared
+  variable). sokoni-endpoints.js: darajaSTKCallback entry removed. sokoni-dev-mock.js: Daraja stubs removed.
+- scripts/test-daraja-leftovers.js (new, 9/0; fails on the old payments.html): no unlisted hosting file may reference Daraja.
+  PENDING, with owners: sokoni-mpesa.js + hub call sites (need server-priced IntaSend purposes), till.html / merchant-v2.html /
+  pos.js / pos.html / pos-printer-setup.html (till and POS owners).
+- Suites green: 19 static suites reading these files (auth transitions 100/100, role authority 155/0, seller dashboard, receipts, products).
+
 ## [2026-10-03] - BnB: a stay is never confirmed without a payment — hosting, NOT deployed
 
 On live, BnB "Confirm Booking" tried the retired Daraja engine (its server function is not deployed) and on any failure, or when
