@@ -73,6 +73,8 @@ function makeDb() {
         async get(ref) { return ref.get(); },
         set(ref, v) { writes.push([ref._key, v, false]); },
         update(ref, v) { writes.push([ref._key, v, true]); },
+        /* real Firestore transactions have create() (fails if the doc exists); the shared restore writes its ledger row with it */
+        create(ref, v) { if (DOCS.has(ref._key)) { const e = new Error('ALREADY_EXISTS'); e.code = 6; throw e; } writes.push([ref._key, v, false]); },
       };
       const out = await fn(txn);
       /* Simulate the refund write failing AFTER the approval was already consumed by its
@@ -171,7 +173,8 @@ console.log('\nPART A — nothing breaks for callers that present no approval\n'
   ck('A2  ...the refund is recorded', !!rec);
   ck('A3  ...and approvalId is null — honest, not unknown',
     DOCS.get(rec).approvalId === null, String(DOCS.get(rec).approvalId));
-  ck('A4  ...stock is returned', (DOCS.get('products/P1').stock || {}).__inc === 2,
+  /* 2026-10-03: the shared restore writes the absolute result read in-transaction (5 + 2), not an increment sentinel. */
+  ck('A4  ...stock is returned', DOCS.get('products/P1').stock === 7,
     JSON.stringify(DOCS.get('products/P1').stock));
 }
 

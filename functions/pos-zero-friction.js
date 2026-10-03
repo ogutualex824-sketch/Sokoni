@@ -14,6 +14,7 @@ const _PSE = require('./shared/product-sale-eligibility');   /* owner 2026-10-03
    resolved the deploy fails loudly, instead of every till silently losing
    discount authorisation and the "Served by" line at the same moment. */
 const { resolveActor } = require('./merchant-identity')._internal;
+const PSR = require('./pos-stock-restore');   /* the ONE server restock (refund + void), owner 2026-10-03 */
 /* Canonical employee authority + the ownerUid -> merchantId resolver. Neither adds a
    store; both are the already-canonical engines. */
 const { _assertBusinessPermission } = require('./workforce-identity');
@@ -1759,6 +1760,89 @@ async function _assertRefundAuthority(auth, merchantId) {
   _e('You do not belong to this merchant', 'permission-denied');
 }
 
+/* ════════════════════════════════════════════════════════════════
+   posVoidSale — void a completed till sale and return its stock, ON APPROVAL, exactly once (owner 2026-10-03, via
+   sokoni-5b; ported in shape from the certified B9.34 rail on slice/realtime-control-plane).
+
+   AUTHORITY = the APPROVAL. A cashier may ASK (createApprovalRequest type 'void', bound to the sale); a manager/owner
+   reviews it; only a presented, approved, unexpired, unspent 'void' approval bound to THIS sale lets this run. The
+   executing caller must still belong to the shop with `sell` (resolveActor), so a stranger holding an approval id
+   cannot spend it. The approval is CONSUMED INSIDE the same transaction as the restore, so a failure leaves both
+   untouched, and the approval id IS the operation id: a retry of the same void is an idempotent no-op; a different
+   approval against an already-void sale is refused (it would return the stock twice).
+
+   ZERO MONEY. A void moves no money and no entitlement: it touches the sale, products, stockMovements and the
+   approval — never gift cards, loyalty, wallets or tickets — so it cannot recreate anything the buyer consumed.
+   A refunded sale cannot be voided; a voided sale cannot be refunded (posProcessRefund re-checks in its transaction).
+════════════════════════════════════════════════════════════════ */
+exports.posVoidSale = onCall(cfgHeavy, async ({ data, auth }) => {
+  const { saleId, merchantId, approvalId, reason } = data || {};
+  if (!auth || !auth.uid) _e('Authentication required', 'unauthenticated');
+  if (!saleId)     _e('saleId required');
+  if (!merchantId) _e('merchantId required');
+  if (!approvalId) _e('A manager must approve this void first.', 'failed-precondition');
+  if (!reason)     _e('void reason required');
+
+  const actor = await resolveActor(auth.uid, String(merchantId));
+  if (!actor || !actor.ok || !(actor.capabilities || []).includes('sell')) {
+    _e('You do not work at this shop.', 'permission-denied');
+  }
+  const actorUid = auth.uid;
+  const { _approvals } = require('./pos-staff-ops');
+  const saleRef = db.collection('posRetailSales').doc(_sanitize(String(saleId)));
+  const opId = 'void_' + _sanitize(String(approvalId));
+  let restock = [];
+  let idempotent = false;
+
+  await db.runTransaction(async (txn) => {
+    restock = []; idempotent = false;
+    /* ── EVERY READ ── */
+    const saleSnap = await txn.get(saleRef);
+    if (!saleSnap.exists) _e('Sale not found', 'not-found');
+    const sale = saleSnap.data() || {};
+    if (sale.merchantId !== merchantId) _e('Unauthorized', 'permission-denied');
+    if (sale.status === 'voided') {
+      if (sale.voidApprovalId === String(approvalId)) { idempotent = true; return; }
+      _e('That sale has already been voided.', 'failed-precondition');
+    }
+    if (sale.status === 'refunded') _e('A refunded sale cannot be voided. The money has already gone back.', 'failed-precondition');
+    if (sale.status !== 'completed') _e('Only a completed sale can be voided.', 'failed-precondition');
+
+    const lines = PSR.allLines(sale);
+    if (!lines.length) _e('That sale records no line items, so its stock cannot be restored.', 'failed-precondition');
+    if (lines.some((l) => !l.productId)) {
+      _e('That sale does not identify its products, so voiding it would leave the stock short.', 'failed-precondition');
+    }
+    const prodRefs = lines.map((l) => db.collection('products').doc(l.productId));
+    const prodSnaps = await Promise.all(prodRefs.map((r) => txn.get(r)));
+    const missing = lines.filter((l, i) => !prodSnaps[i].exists).map((l) => l.productId);
+    if (missing.length) _e('A product on that sale no longer exists, so its stock cannot be returned.', 'failed-precondition');
+
+    /* ── THE APPROVAL: read + spent here, after the reads, before the writes ── */
+    await _approvals.consume(String(approvalId), {
+      sellerId: String(merchantId), type: 'void', binding: { saleId: String(saleId) }, consumerUid: actorUid,
+    }, txn);
+
+    /* ── EVERY WRITE ── */
+    restock = PSR.writeRestore(txn, { db, FieldValue, opId, kind: 'void', actorUid, reason, saleId: String(saleId), shopId: merchantId },
+      lines, prodRefs, prodSnaps);
+    txn.update(saleRef, {
+      status: 'voided', voidedAt: FieldValue.serverTimestamp(), voidedBy: actorUid,
+      voidReason: _sanitize(String(reason)).slice(0, 500), voidApprovalId: String(approvalId),
+      voidStockRestored: restock.filter((r) => r.restored).length,
+    });
+  });
+
+  if (!idempotent) {
+    writeAudit(db, {
+      action: 'pos.void', actorUid, actorRole: (actor.servedBy && actor.servedBy.role) || null, branchId: 'default',
+      objectType: 'order', objectId: String(saleId), before: { status: 'completed' }, after: { status: 'voided' },
+      delta: 0, reason: reason || null, metadata: { merchantId, approvalId, restock },
+    });
+  }
+  return { saleId: String(saleId), status: 'voided', restock, idempotent };
+});
+
 exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
   const { saleId, items, reason, refundMethod = 'cash', merchantId, idempotencyKey } = data || {};
   if (!saleId)        _e('saleId required');
@@ -1773,7 +1857,10 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
   if (!saleSnap.exists) _e('Sale not found', 'not-found');
   const sale = saleSnap.data();
   if (sale.merchantId !== merchantId) _e('Unauthorized', 'permission-denied');
-  if (sale.status === 'refunded') _e('Sale already fully refunded');
+  /* A replay of the refund that already closed this sale falls through to the transaction, which answers it as an
+     idempotent no-op; any OTHER refund of a refunded sale is refused here (and again, authoritatively, in the txn). */
+  const _replayId = 'rf_' + String(idempotencyKey || saleId || '').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 100);
+  if (sale.status === 'refunded' && sale.refundId !== _replayId) _e('Sale already fully refunded');
 
   /* ── MANAGER APPROVAL — the first mutation that actually SPENDS one ──────────────────
      `_consumeApproval` (pos-staff-ops.js) has been complete for weeks — transactional,
@@ -1832,61 +1919,51 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
   const refundRef = db.collection('posRefunds').doc(refundId);
 
   let refundTotal = 0;
+  let restock = [];
   const alreadyDone = await db.runTransaction(async txn => {
-    /* ── ALL READS FIRST ──
-       The original read each product INSIDE the write loop (txn.get after txn.update), which
-       Firestore rejects — every multi-item refund threw at runtime. */
-    const prodRefs = items.map(it => db.collection('products').doc(it.productId));   /* canonical — symmetric with sale deduction */
-    const [refundSnap, ...prodSnaps] = await Promise.all([
+    /* ── ALL READS FIRST — including the SALE, re-read here ──
+       The status check above runs outside this transaction, and the refund id comes from the caller's key, so two
+       refunds sent with DIFFERENT keys could both pass it and return the stock twice. The authoritative check is this
+       in-transaction read: a sale is refunded once. (Owner 2026-10-03: stock comes back exactly once, on approval.) */
+    const prodRefs = items.map(it => db.collection('products').doc(String(it.productId)));   /* canonical — symmetric with sale deduction */
+    const [refundSnap, saleNow, ...prodSnaps] = await Promise.all([
       txn.get(refundRef),
+      txn.get(saleRef),
       ...prodRefs.map(r => txn.get(r)),
     ]);
 
     if (refundSnap.exists) return true;            // idempotent replay — change nothing
+    const cur = (saleNow.exists && saleNow.data()) || {};
+    if (cur.merchantId !== merchantId) _e('Unauthorized', 'permission-denied');
+    if (cur.status === 'refunded') _e('Sale already fully refunded', 'failed-precondition');
+    if (cur.status === 'voided') _e('A voided sale cannot be refunded.', 'failed-precondition');
 
-    refundTotal = 0;
-    /* Validate against the original sale BEFORE writing anything. */
-    const plan = items.map((refItem, idx) => {
-      const orig = sale.items.find(i => i.productId === refItem.productId);
-      if (!orig) throw new Error('Item ' + refItem.productId + ' not in original sale');
-      const qty = Number(refItem.qty);
-      if (!Number.isFinite(qty) || qty <= 0) throw new Error('Refund qty must be positive');
-      if (qty > orig.qty) throw new Error('Cannot refund more than sold');
-      refundTotal += orig.unitPrice * qty;
-      return { qty, orig, snap: prodSnaps[idx], ref: prodRefs[idx] };
-    });
+    /* Validate against the original sale BEFORE writing anything (quantities requested, prices from the sale). */
+    let plan;
+    try { plan = PSR.planLines(cur, items); } catch (err) { _e(err.message, 'invalid-argument'); }
+    refundTotal = Math.round(plan.reduce((t, l) => t + l.unitPrice * l.qty, 0) * 100) / 100;
 
-    /* ── WRITES ── */
-    plan.forEach(pItem => {
-      if (pItem.snap.exists && pItem.snap.data().trackInventory !== false) {
-        txn.update(pItem.ref, {
-          stock:            FieldValue.increment(pItem.qty),   /* return canonical stock */
-          inventoryVersion: FieldValue.increment(1),
-          sold:             FieldValue.increment(-pItem.qty),
-          totalUnitsSold:   FieldValue.increment(-pItem.qty),
-          totalRevenue:     FieldValue.increment(-(pItem.orig.unitPrice * pItem.qty)),
-          updatedAt:        FieldValue.serverTimestamp(),
-        });
-      }
-    });
+    /* ── WRITES ── the stock leg is the shared restore: metered lines only, one ledger row per line (create()). */
+    restock = PSR.writeRestore(txn, {
+      db, FieldValue, opId: refundId, kind: 'refund', actorUid: managerId, reason, saleId, shopId: merchantId,
+    }, plan, prodRefs, prodSnaps);
 
     txn.set(refundRef, {
       id:          refundId,
       saleId,
       merchantId:  _sanitize(merchantId),
-      items:       plan.map(x => ({ productId: x.orig.productId, qty: x.qty })),
+      items:       plan.map(x => ({ productId: x.productId, qty: x.qty })),
       refundTotal,
       refundMethod,
       reason:      _sanitize(reason),
       processedBy: managerId,
-      /* WHO AUTHORISED IT, when an approval was presented. Recorded on the refund itself so
-         a reconciliation can answer "who agreed to this?" without joining two collections,
-         and so a refund taken on direct manager authority is visibly distinguishable from
-         one taken under two-person control. Null is honest: it means nobody approved it
-         separately, not that the approver is unknown. */
+      /* WHO AUTHORISED IT, when an approval was presented. Null is honest: it means nobody approved it separately
+         (the manager/owner refunding is the approval), not that the approver is unknown. */
       approvalId:  approvalReceipt ? approvalReceipt.approvalId : null,
       approvedBy:  approvalReceipt ? (approvalReceipt.reviewedBy || null) : null,
       requestedBy: approvalReceipt ? (approvalReceipt.requestedBy || null) : null,
+      stockRestored: restock.filter(r => r.restored).map(r => ({ productId: r.productId, qty: r.qty })),
+      stockNotRestored: restock.filter(r => !r.restored).map(r => ({ productId: r.productId, qty: r.qty, reason: r.reason })),
       createdAt:   FieldValue.serverTimestamp(),
     });
     txn.update(saleRef, { status: 'refunded', refundId, refundedAt: FieldValue.serverTimestamp() });
@@ -1910,7 +1987,7 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
     });
   }
 
-  return { refundId, refundTotal, idempotent: alreadyDone };
+  return { refundId, refundTotal, idempotent: alreadyDone, restock };
 });
 
 /* ════════════════════════════════════════════════════════════════

@@ -114,7 +114,8 @@ head('3. SALES -> INVENTORY (canonical products/{id})');
 ck('TILL deducts canonical products.stock', /stock:\s*FieldValue\.increment\(-\(item\.qty/.test(ZF));
 ck('TILL bumps inventoryVersion',           /inventoryVersion:\s*FieldValue\.increment\(1\)/.test(ZF));
 ck('DISPATCH deducts canonical products.stock', /stock:\s*admin\.firestore\.FieldValue\.increment\(-stockItems/.test(RE));
-ck('TILL refund restores stock',            /stock:\s*FieldValue\.increment\(pItem\.qty\)/.test(ZF));
+/* 2026-10-03: the till refund (and void) restore through the ONE shared restore, pos-stock-restore.writeRestore. */
+ck('TILL refund restores stock',            /PSR\.writeRestore\(/.test(ZF) && /stock:\s+after,/.test(fs.readFileSync(path.join(ROOT, 'functions', 'pos-stock-restore.js'), 'utf8')));
 ck('BOTH lineages share ONE stock field — inventory IS converged',
    /collection\('products'\)/.test(ZF) && /collection\('products'\)/.test(RE));
 

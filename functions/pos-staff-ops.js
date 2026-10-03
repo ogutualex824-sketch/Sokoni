@@ -957,13 +957,15 @@ function _buildBinding(type, requestData) {
 
    NOTHING CONSUMES ONE YET. Each protected mutation adopting this is its own slice,
    and manager approval is not enforceable end-to-end until they do. */
-async function _consumeApproval(approvalId, expected) {
+/* `txn` (optional, 2026-10-03): consume INSIDE the caller's transaction, so spending the approval commits atomically
+   with the operation it authorises (posVoidSale). Same checks in both modes — one function, never a second copy. */
+async function _consumeApproval(approvalId, expected, txn) {
   if (!approvalId || typeof approvalId !== 'string')
     throw new HttpsError('invalid-argument', 'approvalId is required');
   const exp = expected || {};
   const ref = db.collection('posApprovals').doc(approvalId);
 
-  return db.runTransaction(async (txn) => {
+  const body = async (txn) => {
     const snap = await txn.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'Approval not found');
     const a = snap.data();
@@ -1004,7 +1006,8 @@ async function _consumeApproval(approvalId, expected) {
       approvalId, sellerId: a.sellerId, type: a.type, binding: stored,
       reviewedBy: a.reviewedBy || null, requestedBy: a.requestedBy || null,
     };
-  });
+  };
+  return txn ? body(txn) : db.runTransaction(body);
 }
 
 /* Exposed as an OBJECT, following the `_h` precedent, so the Functions loader sees

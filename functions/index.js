@@ -11223,6 +11223,7 @@ exports.merchantTillTakings = require("./merchant-till-takings").makeMerchantTil
 exports.posValidateCoupon      = posZF.posValidateCoupon;
 exports.posLookupCustomer      = posZF.posLookupCustomer;
 exports.posProcessRefund       = posZF.posProcessRefund;
+exports.posVoidSale            = posZF.posVoidSale;   /* owner 2026-10-03: void restores stock only on a consumed approval */
 exports.posLogReprint          = posZF.posLogReprint;
 exports.posGetQueueMetrics     = posZF.posGetQueueMetrics;
 exports.posCleanupIdempotency  = posZF.posCleanupIdempotency;

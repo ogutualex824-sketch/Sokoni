@@ -264,8 +264,12 @@ const CONSUMERS = fs.readdirSync(path.join(ROOT, 'functions'))
            src.indexOf('_approvals.consume') > -1 ||
            /\.consume\(\s*[A-Za-z_$]/.test(src);
   });
-ck('approval consumption call sites remain ZERO', CONSUMERS.length === 0,
-   CONSUMERS.length ? CONSUMERS.join(', ') : 'none — checked both the private name and the exported alias');
+/* Amended 2026-10-03 (owner decision (b), via sokoni-5b): approvals ARE spent — by the two EXECUTION rails only,
+   posProcessRefund and posVoidSale, both in pos-zero-friction.js. The property this guards is unchanged: no
+   approval-creation or approval-review file spends one. (The base refund already consumed via a destructured
+   `consume(` this regex missed, so "ZERO" was a stale claim.) */
+ck('approval consumption call sites = the execution rails ONLY (pos-zero-friction.js)', CONSUMERS.length === 1 && CONSUMERS[0] === 'pos-zero-friction.js',
+   CONSUMERS.length ? CONSUMERS.join(', ') : 'none');
 ck('the words never claim execution',
    P.COPY.approved[1] === 'Approved by manager' &&
    PAR_CODE.indexOf('Refund completed') === -1 &&

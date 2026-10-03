@@ -1,3 +1,11 @@
+## 2026-10-03 — POS restock on approval: refunds/voids restore stock on the server, exactly once, ledgered (NOT deployed)
+
+- **Refund:** posProcessRefund re-reads the sale in its transaction (closes the different-key double restock), restores through the new pos-stock-restore.js (stockMovements row via create(); unmetered never given a count).
+- **Void:** new posVoidSale (approval consumed in-transaction; zero money; no entitlement touched).
+- **Approvals:** _consumeApproval gains an optional txn mode.
+- **Tests:** test-pos-restock-on-approval 16/0 (3 mutants caught); refund-gate, cashier-approval and ecosystem assertions amended.
+- **Doc:** docs/POS_RESTOCK_ON_APPROVAL_2026-10-03.md
+
 ## [2026-10-03] — Till gift card: the server authorises and completes a gift-card payment (owner P0, GC-01…GC-20) — server half
 
 **Files:** `functions/pos-zero-friction.js`, `scripts/test-pos-gate-behavioural.js`, `scripts/test-pos-payment-gate-unit.js` (POS-15a expected set, agreed with sokoni-2f), `scripts/sabotage-pos-giftcard.js`, `CHANGELOG.md` · **Base:** `7f3c724` (on `e534623`)
