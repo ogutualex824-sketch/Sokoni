@@ -63,6 +63,13 @@ th{font-size:12px;color:var(--sub);font-weight:600}
 .state{padding:48px 16px;text-align:center}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--surf2);border:1px solid var(--border);padding:10px 16px;border-radius:8px;z-index:20;max-width:calc(100% - 32px)}
 .toast.err{border-color:var(--err);color:var(--err)}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.plan-card{display:flex;flex-direction:column;gap:6px}
+.plan-card .v{font-size:20px}
+.plan-card ul{margin:4px 0 0 18px;font-size:12px;color:var(--sub)}
+.plan-card.current{border-color:var(--acc)}
+.pay-status{margin-top:12px;font-size:13px;min-height:1.5em}
+.pay-status.ok{color:var(--acc)}.pay-status.err{color:var(--err)}.pay-status.wait{color:var(--warn)}
 @media (max-width:860px){
   .shell{flex-direction:column}
   .sidebar{width:100%;border-right:0;border-bottom:1px solid var(--border)}
@@ -91,6 +98,8 @@ th{font-size:12px;color:var(--sub);font-weight:600}
   </main>
 </div>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<!-- The existing IntaSend helper (plan / promotion purchases): amount and ref always come from createPaymentIntent. -->
+<script src="sokoni-intasend.js" defer></script>
 <script src="financial-partner-dashboard.js" defer></script>
 <script src="/sw-register.js" defer></script>
 </body>
