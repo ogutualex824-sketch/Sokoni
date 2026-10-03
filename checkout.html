@@ -601,6 +601,21 @@
 
     .card-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 
+    /* Card wizard steps (2026-10-03) */
+    .cw-steps{ list-style:none; display:flex; gap:6px; margin:4px 0 16px; padding:0; }
+    .cw-step{ flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; font-size:11px; font-weight:700;
+      color:rgba(255,255,255,0.4); text-align:center; }
+    .cw-dot{ width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+      border:1.5px solid rgba(255,255,255,0.18); font-size:12px; font-weight:900; }
+    .cw-step.is-active{ color:#00aaff; }
+    .cw-step.is-active .cw-dot{ border-color:#00aaff; background:rgba(0,170,255,0.12); color:#00aaff; }
+    .cw-step.is-done{ color:rgba(113,255,0,0.85); }
+    .cw-step.is-done .cw-dot{ border-color:#71ff00; background:rgba(113,255,0,0.12); color:#71ff00; }
+    .cw-body{ font-size:13px; line-height:1.6; color:rgba(255,255,255,0.75); background:rgba(255,255,255,0.03);
+      border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px 14px; margin-bottom:14px; min-height:44px; }
+    .cw-note{ font-size:11px; line-height:1.55; color:rgba(255,255,255,0.45); margin:12px 0 0; }
+    body.light-mode .cw-body{ background:#f6f7f9; border-color:rgba(0,0,0,0.08); color:#333; }
+    body.light-mode .cw-note, body.light-mode .cw-step{ color:#666; }
     .card-pay-btn{
       width:100%;
       padding:17px;
@@ -1460,45 +1475,33 @@
   </div>
 </div>
 
-<!-- CARD PAYMENT MODAL -->
-<div class="card-overlay" id="cardOverlay">
+<!-- CARD PAYMENT WIZARD (2026-10-03). There are deliberately NO card fields here: the card number, expiry and CVV
+     are typed into IntaSend's own secure form (step 2), never into SOKONI. -->
+<div class="card-overlay" id="cardOverlay" role="dialog" aria-modal="true" aria-labelledby="cardWizTitle">
   <div class="card-modal-box">
-    <button type="button" class="card-close-btn" onclick="closeModal('card')">✕</button>
-    <div class="card-modal-title">Card Payment</div>
-    <div class="card-modal-sub">Your card details are encrypted and secure</div>
+    <button type="button" class="card-close-btn" onclick="closeModal('card')" aria-label="Close card payment">✕</button>
+    <div class="card-modal-title" id="cardWizTitle">Pay by card</div>
+    <div class="card-modal-sub">Visa or Mastercard, through IntaSend’s secure card form</div>
 
-    <!-- Card Visual -->
-    <div class="card-visual">
-      <div class="card-chip">💳</div>
-      <div class="card-num-display" id="cardNumDisplay">•••• •••• •••• ••••</div>
-      <div class="card-bottom-row">
-        <div>
-          <div class="card-label-small">Card Holder</div>
-          <div class="card-val" id="cardNameDisplay">YOUR NAME</div>
-        </div>
-        <div>
-          <div class="card-label-small">Expires</div>
-          <div class="card-val" id="cardExpDisplay">MM/YY</div>
-        </div>
-        <div class="card-brand-logos">
-          <span>💳</span>
-        </div>
-      </div>
+    <ol class="cw-steps" id="cardSteps" aria-label="Card payment steps">
+      <li class="cw-step is-active" data-step="1" aria-current="step"><span class="cw-dot">1</span><span>Review</span></li>
+      <li class="cw-step" data-step="2"><span class="cw-dot">2</span><span>Card details</span></li>
+      <li class="cw-step" data-step="3"><span class="cw-dot">3</span><span>Confirmation</span></li>
+    </ol>
+    <div class="cw-body" id="cardWizBody" role="status" aria-live="polite">
+      Check the amount, then continue. IntaSend’s secure form opens for your card details.
     </div>
 
-    <input class="card-input" type="text" id="cardName" placeholder="Cardholder Name" oninput="updateCardDisplay()" maxlength="26">
-    <input class="card-input" type="text" id="cardNum" placeholder="Card Number (16 digits)" oninput="formatCardNum()" maxlength="19">
-    <div class="card-row">
-      <input class="card-input" type="text" id="cardExp" placeholder="MM / YY" oninput="formatCardExp()" maxlength="7">
-      <input class="card-input" type="text" id="cardCvv" placeholder="CVV" maxlength="4" style="letter-spacing:4px;">
-    </div>
     <div class="card-amount-badge" style="background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);border-radius:12px;padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
-      <span style="color:rgba(255,255,255,0.5);font-size:13px;">Charge amount</span>
+      <span style="color:rgba(255,255,255,0.5);font-size:13px;" id="cardAmountLabel">Amount</span>
       <span style="color:#00aaff;font-size:18px;font-weight:900;" id="cardAmountDisplay">KES 0</span>
     </div>
-    <button type="button" class="card-pay-btn" onclick="processCardPayment()">
-      🔒 Pay Securely
+    <button type="button" class="card-pay-btn" id="cardPayBtn" onclick="sendStkPush('card')">
+      🔒 Continue to secure card form
     </button>
+    <p class="cw-note">
+      SOKONI never sees your card number. Your order is placed only after our server confirms the payment with IntaSend.
+    </p>
 
     <!-- Canonical trust badge — card modal (compact, no cap label) -->
     <div data-sokoni-trust-badge data-label="false" data-max="300" style="margin-top:16px;"></div>
@@ -1927,7 +1930,16 @@ checkInstallment();
         api_ref;
      3. confirmation through webhookIntasend — never the browser.
    Until all three hold, M-Pesa is the honest answer. */
-const UNINTEGRATED_PAYMENTS = ["airtel","tkash","equity","mtn","ecocash","chipper","card"];
+/* 2026-10-03: CARD IS INTEGRATED, on the same server-verified path as M-Pesa (owner: "implement IntaSend; the card
+   checkout should show the wizard where you fill card details"). The three conditions above are met this way:
+     1. the amount is the server's: createCheckoutSession prices the cart, exactly as for M-Pesa;
+     2. card details are typed into IntaSend's OWN secure form (the inline SDK pop-up). SOKONI never renders a card
+        field, so no card number, expiry or CVV ever touches this page (PCI scope stays with IntaSend);
+     3. the order exists only after verifyIntasendPayment confirms the invoice with IntaSend server-to-server
+        (state COMPLETE, amount >= the session total, one-use session). The browser's COMPLETE event proves nothing.
+   Whether card is ENABLED on the SOKONI IntaSend account is an account setting: if it is not, IntaSend's form will
+   not offer card and the buyer is told so — nothing is charged and no order is placed. */
+const UNINTEGRATED_PAYMENTS = ["airtel","tkash","equity","mtn","ecocash","chipper"];
 
 function selectPayment(method){
   if (UNINTEGRATED_PAYMENTS.includes(method)) {
@@ -2210,11 +2222,10 @@ function openModal(type){
     document.getElementById("bankOverlay").classList.add("open");
     setTimeout(()=>{ document.getElementById("bankTransRef").focus(); }, 200);
   } else if(type === "card") {
-    const el = document.getElementById("cardAmountDisplay");
-    if(el) el.textContent = "KES " + orderTotal.toLocaleString();
+    _cardStep(0);
     const overlay = document.getElementById("cardOverlay");
     if(overlay) overlay.classList.add("open");
-    setTimeout(()=>{ document.getElementById("cardName")?.focus(); }, 200);
+    setTimeout(()=>{ document.getElementById("cardPayBtn")?.focus(); }, 200);
   } else if(type === "paypal") {
     const el = document.getElementById("paypalAmountDisplay");
     if(el) el.textContent = "KES " + orderTotal.toLocaleString();
@@ -2230,6 +2241,7 @@ function closeModal(type){
   const overlay = document.getElementById(type + "Overlay");
   if(overlay) overlay.classList.remove("open");
   if(type === "mpesa") resetStkSteps();
+  if(type === "card") { const b = document.getElementById("cardPayBtn"); if (b && !b.dataset.busy) { b.disabled = false; } }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -2292,33 +2304,48 @@ const INTASEND_LIVE = (window.SOKONI_CONFIG && window.SOKONI_CONFIG.intasendLive
 /* ============================
    M-PESA STK PUSH — IntaSend
 ============================ */
-async function sendStkPush(){
+async function sendStkPush(method){
+  /* ONE server-verified IntaSend path for M-Pesa AND card (2026-10-03). The differences are confined to: no
+     phone requirement for card, the wizard instead of the STK steps, IntaSend's card form instead of an STK
+     prompt, and the method recorded on the order. Pricing (createCheckoutSession) and confirmation
+     (verifyIntasendPayment, server-to-server with IntaSend) are identical. */
+  const _card = method === 'card';
+  const _stepTo = (n) => (_card ? _cardStep(n === 1 ? 1 : n === 2 ? 2 : 3) : activateStkStep(n));
+  const _stepReset = () => (_card ? _cardStep(0) : resetStkSteps());
   /* Rate-limit STK pushes: max 3 per 2 minutes — prevents accidental double-charges */
   if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('stk_push', 3, 120000)){
     showPushToast("⚠️ Please Wait", "Too many payment requests. Wait 2 minutes.", "orange");
     return;
   }
-  const num = document.getElementById("mpesaNumber").value.trim();
-  if(!num || num.length < 9){ showPushToast("❌ Invalid Number", "Enter a valid M-PESA phone number", "orange"); return; }
-  if(typeof SokoniSecurity !== 'undefined'){
-    const {valid} = SokoniSecurity.PaymentSecurity.normaliseMpesaPhone(num);
-    if(!valid){ showPushToast("❌ Invalid Number", "Enter a valid Safaricom/Airtel number", "orange"); return; }
+  /* Card needs no phone. M-Pesa keeps its validation exactly as before. */
+  const num = _card ? "" : document.getElementById("mpesaNumber").value.trim();
+  if(!_card){
+    if(!num || num.length < 9){ showPushToast("❌ Invalid Number", "Enter a valid M-PESA phone number", "orange"); return; }
+    if(typeof SokoniSecurity !== 'undefined'){
+      const {valid} = SokoniSecurity.PaymentSecurity.normaliseMpesaPhone(num);
+      if(!valid){ showPushToast("❌ Invalid Number", "Enter a valid Safaricom/Airtel number", "orange"); return; }
+    }
   }
 
   if(!INTASEND_PUBLIC_KEY){
+    if(_card){
+      /* No processor configured: fail closed. Never simulate a card payment. */
+      showPushToast("Card payment unavailable", "Card payments are not available right now. You have NOT been charged. Please use M-Pesa.", "orange");
+      return;
+    }
     _runDemoStkPush(num);
     return;
   }
 
-  const btn   = document.getElementById("mpesaPushBtn");
-  const steps = document.getElementById("stkSteps");
+  const btn   = document.getElementById(_card ? "cardPayBtn" : "mpesaPushBtn");
+  const steps = document.getElementById(_card ? "cardSteps" : "stkSteps");
   btn.disabled = true;
   btn.innerHTML = '⏳ Verifying cart...';
   steps.style.display = "flex";
 
   if("Notification" in window && Notification.permission === "default") Notification.requestPermission();
 
-  const phone     = num.replace(/^0/, "254").replace(/^\+/, "");
+  const phone     = num ? num.replace(/^0/, "254").replace(/^\+/, "") : "";
   const user      = JSON.parse(localStorage.getItem("sokoniUser")||"null");
   const fullName  = document.getElementById("coName")?.value.trim() || "Customer";
   const [fName, ...lParts] = fullName.split(" ");
@@ -2481,16 +2508,16 @@ async function sendStkPush(){
     return;
   }
 
-  activateStkStep(1);
-  btn.innerHTML = '⏳ Connecting to M-PESA...';
-  showPushToast("📲 Connecting", "Sending STK Push to 0" + phone.slice(3), "green");
+  _stepTo(1);
+  btn.innerHTML = _card ? '⏳ Opening secure card form…' : '⏳ Connecting to M-PESA...';
+  if (!_card) showPushToast("📲 Connecting", "Sending STK Push to 0" + phone.slice(3), "green");
 
   new window.IntaSend({
     publicAPIKey: INTASEND_PUBLIC_KEY,
     live: INTASEND_LIVE
   })
   .on("COMPLETE", async result => {
-    activateStkStep(3);
+    _stepTo(3);
 
     /* IntaSend's COMPLETE event fired, so the money very likely DID move — but this
        event is raised by the SDK in the CUSTOMER'S BROWSER, and there is no server
@@ -2509,10 +2536,10 @@ async function sendStkPush(){
       btn.innerHTML = '⏳ Confirming…';
       showPushToast(
         "Confirming your payment",
-        "We’ve received your M-Pesa request and are confirming it. Your order will be released the moment payment is verified.",
+        (_card ? "We’ve received your card payment request" : "We’ve received your M-Pesa request") + " and are confirming it. Your order will be released the moment payment is verified.",
         "green"
       );
-      saveAndRedirect(result.tracking_id || phone, "mpesa", null, null, false);
+      saveAndRedirect(result.tracking_id || phone || apiRef, _card ? "card" : "mpesa", null, null, false);
       console.warn("[checkout] SOKONI_FUNCTIONS_URL unset — order saved as pending_payment, not paid.");
       return;
     }
@@ -2554,8 +2581,8 @@ async function sendStkPush(){
         btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
         btn.style.color = "black";
         showPushToast("✅ Payment Verified", "KES " + orderTotal.toLocaleString() + " confirmed by server.", "green");
-        if(Notification.permission === "granted") new Notification("✅ SOKONI — Payment Confirmed", {body:"KES "+orderTotal.toLocaleString()+" received via M-PESA!", icon:"assets/sokoni logoo.jpeg"});
-        saveAndRedirect(result.tracking_id || phone, "mpesa", verifyData.orderId, verifyData.verificationToken);
+        if(Notification.permission === "granted") new Notification("✅ SOKONI — Payment Confirmed", {body:"KES "+orderTotal.toLocaleString()+" received via " + (_card ? "card" : "M-PESA") + "!", icon:"assets/sokoni logoo.jpeg"});
+        saveAndRedirect(result.tracking_id || phone || apiRef, _card ? "card" : "mpesa", verifyData.orderId, verifyData.verificationToken);
       } else {
         showPushToast("❌ Verification Failed", (verifyData.error || "Payment could not be verified.") + " Support ref: " + apiRef, "orange");
         btn.innerHTML = '⚠️ Verification Failed — Contact Support';
@@ -2573,13 +2600,13 @@ async function sendStkPush(){
     }
   })
   .on("IN-PROGRESS", () => {
-    activateStkStep(2);
+    _stepTo(2);
     btn.innerHTML = '⏰ Waiting for PIN...';
-    showPushToast("📱 Check Your Phone", "A pop-up appeared on your phone — enter your M-PESA PIN", "green");
+    if (!_card) showPushToast("📱 Check Your Phone", "A pop-up appeared on your phone — enter your M-PESA PIN", "green");
   })
   .on("FAILED", err => {
     showPushToast("❌ Payment Failed", (err?.message || err?.detail || "Please retry"), "orange");
-    resetStkSteps();
+    _stepReset();
     btn.disabled = false;
     btn.innerHTML = '🔄 Retry Payment';
   })
@@ -2590,7 +2617,8 @@ async function sendStkPush(){
        server figure (serverTotal), before ever falling back to a client total. */
     amount:       stkAmount ?? _serverTotalOverride ?? orderTotal,
     currency:     "KES",
-    phone_number: phone,
+    /* Card: IntaSend's own secure form collects the card. M-Pesa: the STK prompt goes to this number. */
+    ...(_card ? { method: "CARD-PAYMENT" } : { phone_number: phone }),
     email:        user?.email || "",
     first_name:   fName || "Customer",
     last_name:    lParts.join(" ") || fName || "User",
@@ -2649,122 +2677,40 @@ function resetStkSteps(){
 }
 
 /* ============================
-   CARD PAYMENT FLOW
+   CARD PAYMENT WIZARD (2026-10-03)
+   The old flow rendered card number / expiry / CVV inputs on THIS page and read them in JavaScript. Removed:
+   card data must only ever be typed into IntaSend's own secure form. Payment runs through sendStkPush('card').
 ============================ */
-function formatCardNum(){
-  const el = document.getElementById("cardNum");
-  let v = el.value.replace(/\D/g,"").substring(0,16);
-  el.value = v.replace(/(.{4})/g,"$1 ").trim();
-  const display = v.padEnd(16,"•").replace(/(.{4})/g,"$1 ").trim();
-  document.getElementById("cardNumDisplay").textContent = display;
-}
-
-function formatCardExp(){
-  const el = document.getElementById("cardExp");
-  let v = el.value.replace(/\D/g,"");
-  if(v.length >= 2) v = v.substring(0,2) + " / " + v.substring(2,4);
-  el.value = v;
-  document.getElementById("cardExpDisplay").textContent = el.value || "MM/YY";
-}
-
-function updateCardDisplay(){
-  const name = document.getElementById("cardName").value.toUpperCase() || "YOUR NAME";
-  document.getElementById("cardNameDisplay").textContent = name.substring(0,20);
-}
-
-function processCardPayment(){
-  const name   = (document.getElementById("cardName")?.value || "").trim();
-  const num    = (document.getElementById("cardNum")?.value  || "").replace(/\s/g,"");
-  const expRaw = (document.getElementById("cardExp")?.value  || "").replace(/\s/g,"");
-  const cvv    = (document.getElementById("cardCvv")?.value  || "").trim();
-
-  if(!name){ showPushToast("❌ Missing","Enter cardholder name","orange"); return; }
-  if(!/^\d{13,19}$/.test(num)){ showPushToast("❌ Invalid","Enter a valid card number","orange"); return; }
-  if(!/^\d{2}\/?\d{2}$/.test(expRaw)){ showPushToast("❌ Invalid","Enter expiry as MM/YY","orange"); return; }
-  if(!/^\d{3,4}$/.test(cvv)){ showPushToast("❌ Invalid","Enter 3 or 4 digit CVV","orange"); return; }
-
-  const btn = document.querySelector(".card-pay-btn");
-  if(btn){ btn.disabled = true; btn.textContent = "⏳ Processing..."; }
-
-  /* Explicit SDK check. This path already failed closed via the catch below (the TypeError from
-     `new window.IntaSend` fell through to _cardFallback, which charges nothing and places no
-     order — correct behaviour). Checking directly is still better: it does not rely on an
-     exception for control flow, and it keeps the reason visible if the catch is ever narrowed. */
-  if(INTASEND_PUBLIC_KEY && typeof window.IntaSend !== 'function'){
-    _cardFallback(num, btn);
-    return;
-  }
-
-  if(INTASEND_PUBLIC_KEY){
-    /* IntaSend hosted card checkout — open IntaSend's secure page */
-    try{
-      const IPayInstance = new window.IntaSend({
-        publicAPIKey: INTASEND_PUBLIC_KEY,
-        live: INTASEND_LIVE
-      });
-      IPayInstance.on("COMPLETE", (res)=>{
-        closeModal("card");
-        /* NOT VERIFIED. This used to pass paymentVerified=true on the strength of
-           an event raised by the SDK in the CUSTOMER'S OWN BROWSER — trivially
-           forgeable from a console, and the platform shipped goods on it.
-
-           `card` is in UNINTEGRATED_PAYMENTS so this handler is unreachable
-           today; the false below is the second lock. If someone re-enables the
-           tile before the server-side session exists, the worst case is an
-           order stuck awaiting confirmation — recoverable — rather than a free
-           order, which is not. Same reasoning as the M-Pesa COMPLETE handler. */
-        saveAndRedirect(res.tracking_id || ("CRD-"+Date.now()), "card", null, null, false);
-        showPushToast(
-          "Confirming your payment",
-          "We’ve received your card payment and are confirming it. Your order will be released the moment payment is verified.",
-          "green"
-        );
-      });
-      IPayInstance.on("FAILED", ()=>{
-        showPushToast("❌ Card Declined","Payment failed. Check card details and try again.","orange");
-        if(btn){ btn.disabled=false; btn.textContent="🔒 Pay Securely"; }
-      });
-      IPayInstance.charge({
-        amount: orderTotal,
-        currency:"KES",
-        email: document.getElementById("coName")?.value || "buyer@sokoni.co.ke",
-        description:"SOKONI Order"
-      });
-    }catch(e){
-      /* IntaSend not loaded — graceful fallback */
-      _cardFallback(num, btn);
-    }
-  } else {
-    _cardFallback(num, btn);
+const _CARD_STEP_TEXT = {
+  0: "Check the amount, then continue. IntaSend’s secure form opens for your card details.",
+  1: "Opening IntaSend’s secure card form…",
+  2: "Enter your card details in IntaSend’s secure form. Keep this page open.",
+  3: "Confirming your payment with IntaSend. Your order is placed only after our server confirms it.",
+};
+function _cardStep(n){
+  const steps = document.querySelectorAll("#cardSteps .cw-step");
+  const active = n <= 0 ? 1 : n;
+  steps.forEach((li) => {
+    const k = Number(li.dataset.step);
+    li.classList.toggle("is-active", k === active);
+    li.classList.toggle("is-done", k < active);
+    if (k === active) li.setAttribute("aria-current", "step"); else li.removeAttribute("aria-current");
+  });
+  const body = document.getElementById("cardWizBody");
+  if (body) body.textContent = _CARD_STEP_TEXT[n <= 0 ? 0 : n] || "";
+  if (n <= 0) {
+    /* The figure shown is the server's once a session exists; before that it is the estimate the page shows. */
+    const amt = document.getElementById("cardAmountDisplay");
+    const lbl = document.getElementById("cardAmountLabel");
+    const known = typeof _serverTotalOverride === "number" && _serverTotalOverride > 0;
+    if (amt) amt.textContent = "KES " + Number(known ? _serverTotalOverride : orderTotal).toLocaleString();
+    if (lbl) lbl.textContent = known ? "Amount" : "Amount (confirmed when you continue)";
+    const b = document.getElementById("cardPayBtn");
+    if (b) { b.disabled = false; b.innerHTML = "🔒 Continue to secure card form"; }
   }
 }
-
-/* SECURITY — P0 FIX. This used to read, verbatim:
-
-       // Demo/sandbox mode: simulate approval then save order
-       setTimeout(() => {
-         showPushToast("✅ Card Approved", "Payment confirmed · Card ending " + last4);
-         saveAndRedirect("CRD-" + last4 + ..., "card");     // ← order marked PAID
-       }, 1800);
-
-   It is reached whenever the IntaSend SDK fails to construct or fails to load —
-   a blocked CDN request, an ad-blocker, a flaky connection. All routine. So a
-   shopper whose script request was blocked was shown "✅ Card Approved" and had a
-   real, PAID order written for them. No card was ever charged.
-
-   A payment fallback must fail CLOSED. There is no safe way to approve a card
-   payment without a payment processor, and "the processor didn't load" is the
-   single most likely moment for someone to be defrauded — or for an honest
-   customer to be handed goods the seller is never paid for. */
-function _cardFallback(num, btn){
-  closeModal("card");
-  if(btn){ btn.disabled = false; btn.textContent = "🔒 Pay Securely"; }
-  showPushToast(
-    "Card payment unavailable",
-    "We couldn’t reach our card processor. Your card has NOT been charged and no order was placed — please try M-Pesa.",
-    "orange"
-  );
-}
+/* Kept for any external caller: the card now pays through the shared, server-verified path. */
+function processCardPayment(){ return sendStkPush('card'); }
 
 /* ============================
    PAYPAL FLOW
@@ -3600,9 +3546,6 @@ window.toggleLiveTrack = toggleLiveTrack;
 window.openModal = openModal;
 window.closeModal = closeModal;
 window.sendStkPush = sendStkPush;
-window.formatCardNum = formatCardNum;
-window.formatCardExp = formatCardExp;
-window.updateCardDisplay = updateCardDisplay;
 window.processCardPayment = processCardPayment;
 window.processPaypalPayment = processPaypalPayment;
 </script>

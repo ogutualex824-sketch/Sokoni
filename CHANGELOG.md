@@ -1,3 +1,19 @@
+## [2026-10-03] - Checkout: card payment through IntaSend's secure form, server-verified — hosting, NOT deployed
+
+Owner: "implement IntaSend; the card checkout should show the wizard where you fill card details". Card was disabled because the old
+flow priced in the browser and marked orders paid on a browser event. It now runs on the SAME server-verified path as M-Pesa:
+createCheckoutSession prices the cart, IntaSend's own pop-up form collects the card (method CARD-PAYMENT), and the order exists only
+after verifyIntasendPayment confirms the invoice with IntaSend server-to-server (state COMPLETE, amount >= session total, one-use).
+
+- Files: checkout.html (card tile enabled; three-step wizard Review / Card details / Confirmation; sendStkPush(method) shared by
+  M-Pesa and card; raw card-number/expiry/CVV fields and their helpers REMOVED), scripts/test-checkout-card-wizard.js (new, 12/0, 12/12 sabotages).
+- Security: no card data is ever typed into or read by a SOKONI page (PCI scope stays with IntaSend); no client-priced charge();
+  card fails closed when the processor key is absent; payment-integrity suite still 19/19.
+- API / database: none. Known server follow-up: verifyIntasendPayment records paymentMethod "mpesa" for every order; a card
+  order will be labelled mpesa until that function records IntaSend's provider. Refund routing does not read the label.
+- Not proven: a real card payment in a browser, and whether card is ENABLED on the SOKONI IntaSend account (account setting;
+  the live capability probe creates real invoices and needs owner consent).
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
