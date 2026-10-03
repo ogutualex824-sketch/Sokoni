@@ -42,7 +42,8 @@ const TX_COLLECTIONS = {
   logistics_request:        'packageRequests',
   support_ticket:           'supportTickets',
   rfq:                      'rfqRecipients',     /* B2B RFQ (sokoni-f3 38ab5a8): ONE conversation per (rfq, supplier) — txId = rfqId__supplierBusinessId */
-  product_enquiry:          'contactRequests',   /* product "Contact seller" (sokoni-f3 contract): the ONE enquiry = lead record (df1a4cb) — txId = request id */
+  product_enquiry:          'contactRequests',
+  work_project:             'workProjects',      /* Work/Job Engine (WE1): a campaign / project conversation — txId = project id */   /* product "Contact seller" (sokoni-f3 contract): the ONE enquiry = lead record (df1a4cb) — txId = request id */
 };
 
 /* Older collections a transaction type may still live in, read in order after TX_COLLECTIONS (Tech slice 4L). */
@@ -136,7 +137,8 @@ const PARTY_FIELDS = {
   job_application:     ['seekerUid', 'employerUid'],   /* J4: the applicant + the employer of THAT application, set by the server in applyForJob */
   legal_consultation:  ['clientUid', 'providerId'],
   rfq:                 ['buyerUid', 'supplierOwnerUid'],   /* rfqRecipients/{rfqId}__{supplierBusinessId}: the buyer account + the supplier business owner at delivery (account-scoped) */
-  product_enquiry:     ['buyerUid', 'sellerUid'],          /* contactRequests/{id}: the enquiring buyer + the product's seller (sellerUid bound to products/{productId} by rules) */
+  product_enquiry:     ['buyerUid', 'sellerUid'],
+  work_project:        ['customerUid', 'providerUid'],      /* workProjects/{id}: the customer + the provider, both server-written */          /* contactRequests/{id}: the enquiring buyer + the product's seller (sellerUid bound to products/{productId} by rules) */
   logistics_request:   ['buyerUid', 'uid', 'sellerUid', 'assignedDriverId'],
   support_ticket:      ['uid'],
 };
@@ -1019,6 +1021,13 @@ exports.sendMessage = onCall(
       if (enq.buyerUid !== req.auth.uid && enq.sellerUid !== req.auth.uid) throw new HttpsError('permission-denied', 'Not a party to this enquiry');
       const why = await _productEnquiryRefusal(db, enq);
       if (why) throw new HttpsError('failed-precondition', 'This product has changed hands or was removed. The conversation stays readable, but new messages are closed.', { code: why });
+    }
+    /* Work/Job Engine: every send re-derives the parties from the PROJECT doc (server-written customerUid / providerUid). */
+    if (conv.transactionType === 'work_project') {
+      const wSnap = await db.collection('workProjects').doc(String(conv.transactionId || '')).get();
+      if (!wSnap.exists) throw new HttpsError('failed-precondition', 'This project no longer exists.');
+      const wp = wSnap.data() || {};
+      if (wp.customerUid !== req.auth.uid && wp.providerUid !== req.auth.uid) throw new HttpsError('permission-denied', 'Not a party to this project');
     }
     /* Jobs J4 (owner hard security gate, via sokoni-f3): every send re-derives the parties from the APPLICATION doc —
        never from the stored participant list or the request — and a terminal application (hired / rejected / withdrawn /

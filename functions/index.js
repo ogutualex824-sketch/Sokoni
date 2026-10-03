@@ -12419,6 +12419,9 @@ exports.legalDispatch = legalDisp.legalDispatch;
 
 /* ── Marketing Hub — application (individual / agency / specialist), directory, AdminOS overview → 1 CF ── */
 exports.marketingDispatch = require('./marketing-hub').marketingDispatch;
+
+/* ── Work/Job Engine (WE1) — category-neutral campaigns / projects (Marketing first, Construction next) → 1 CF ── */
+exports.workDispatch = require('./work-engine').workDispatch;
 /* ══════════════════════════════════════════════════════════════════════
    RC1 REPRODUCIBILITY FIX — recovered orphaned Cloud Functions.
    These were DEPLOYED and live but NOT exported here, so a full

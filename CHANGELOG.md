@@ -1,3 +1,27 @@
+## [2026-10-03] — Work/Job Engine WE1: the ONE category-neutral core for campaigns / projects (Marketing first skin; Construction next) — NOT deployed
+
+- **Ownership:** sokoni-f3 grepped 615 branch tips and found no existing engine. b2 owns the core. The shape is agreed with f3: origin link, typed scope lines, change requests with a money delta, evidence, typed completion, a disabled fee hook, business provider.
+- **functions/shared/work-engine.js (pure):**
+  - STATES: draft → proposed → accepted → active ⇄ paused → completed → archived, plus cancelled.
+  - MOVES are per actor: only the customer accepts and completes; once work is active, only admin cancels.
+  - sanitizeScope / milestones; budget = Σ milestones.
+- **functions/work-engine.js — `workDispatch` (exported in index.js):**
+  - workCreate:
+    - origins: service_lead (from an ACCEPTED quote; idempotent per lead + quote version; parties from the lead) or direct (named customer); rfq is refused until Construction wires it to rfqDispatch;
+    - an optional providerBusinessId must be OWNED by the provider;
+    - the marketing skin requires an approved, listed marketer.
+  - workUpdateScope: draft only. Lines priced on the server (qty × rate); totals server-computed.
+  - workTransition: proposing requires total = the accepted quote and milestones = the total; acceptance locks the scope; completion is typed.
+  - workProposeChange / workDecideChange: provider proposes, ONLY the customer approves; an increase adds a delta milestone.
+  - workAddEvidence: https or a storage path under THIS project; author server-stamped.
+  - workGet / workListMine / workAdminList: party / admin reads.
+  - commercial.fee is READ from configuration (absent → not configured) and `charged:false` always. Campaign/project fees are unpriced.
+- **functions/messages.js:** new `work_project` transaction type on workProjects (customerUid / providerUid), with parties re-derived on every send.
+- **NOT in WE1:** milestone money. WE2 pays each milestone through the canonical booking → IntaSend → held → PIN → settlement path, with no new money path.
+- **Tests:** scripts/test-work-engine.js 11/0, SABOTAGE 9/9. Regression: messages jobs 8/0, sports 8/0, product-enquiry 7/0, service-booking 7/0.
+- **Rules (to f3):** workProjects is server-write only; read by parties + admin.
+- **Database:** new collection workProjects; single-field queries (parties array-contains, skin).
+
 ## [2026-10-03] — P0 SECURITY (port of 5b 0cb93bd): workspace approvals need SERVER evidence — NOT deployed
 
 - **functions/shared/approval-remediation.js + functions/business-workspace.js:**
