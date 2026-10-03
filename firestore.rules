@@ -87,7 +87,8 @@ service cloud.firestore {
      Decision keys = K13-C's seven + the capability line's agreement-verification pair and priorDecisions. */
   function appNoDecision() {
   let d = request.resource.data;
-  let dk = ['decidedBy','decidedAt','decisionAppliedFor','projectionStatus','blockedFor','statusCanonical','reviewReason',
+  /* reviewedBy / reviewedAt added 2026-10-03 (sokoni-e3 finding): reviewer identity is server-written, never the applicant's. */
+  let dk = ['decidedBy','decidedAt','reviewedBy','reviewedAt','decisionAppliedFor','projectionStatus','blockedFor','statusCanonical','reviewReason',
   'agreementVerifiedAt','agreementVerifiedVersion','priorDecisions'];
   return (resource == null ? !d.keys().hasAny(dk) : !d.diff(resource.data).affectedKeys().hasAny(dk))
   && (!d.keys().hasAny(['status']) || (d.status is string && !(d.status.lower() in ['approved','active','accepted','verified','rejected','declined','denied','suspended','revoked','banned','disabled'])));

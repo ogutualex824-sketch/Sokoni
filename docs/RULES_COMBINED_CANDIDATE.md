@@ -295,3 +295,13 @@ when `status == 'active'`, or by the lister (`createdBy`) or an admin. `rentalBo
 false. Rows RN-1–RN-8 are in `zz-test-contact-requests-rules.js`. **EMULATOR PENDING.** Paid rentals stay closed: rental
 commission is UNPRICED (2f refuses `category_unpriced`) until the owner sets it.
 9. (later) `courseReviews/{id}` admin read, write false (5b @ 8a3e22b). Rows ED-R1–R3. **EMULATOR PENDING.**
+
+## 2026-10-03: application decision fields (sokoni-e3 finding, served f259c0b5)
+
+Served: an applicant's `applications` update checks only `noAdminFields()`, which omits `status`, `decidedBy`, `decidedAt`
+and `reviewedBy`. So an applicant can mark their own application approved and forge the decider. The combined
+candidate already closes this with `appNoDecision()` (no decided status or decision metadata on create or update) and
+`appUndecided()` (no owner edit after a decision). The gap that remained: `reviewedBy` / `reviewedAt` were not in the
+decision list, and they are now. Suite `scripts/zz-test-applications-reviewer.js` (AR-1–8). **EMULATOR PENDING.**
+Whether any LIVE consumer acts on a forged status is sokoni-5b's question (applicationLifecycle); e3's Construction
+Verification view already trusts only `verified === true`.

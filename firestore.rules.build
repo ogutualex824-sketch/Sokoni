@@ -79,7 +79,7 @@ service cloud.firestore {
   }
   function appNoDecision() {
   let d = request.resource.data;
-  let dk = ['decidedBy','decidedAt','decisionAppliedFor','projectionStatus','blockedFor','statusCanonical','reviewReason',
+  let dk = ['decidedBy','decidedAt','reviewedBy','reviewedAt','decisionAppliedFor','projectionStatus','blockedFor','statusCanonical','reviewReason',
   'agreementVerifiedAt','agreementVerifiedVersion','priorDecisions'];
   return (resource == null ? !d.keys().hasAny(dk) : !d.diff(resource.data).affectedKeys().hasAny(dk))
   && (!d.keys().hasAny(['status']) || (d.status is string && !(d.status.lower() in ['approved','active','accepted','verified','rejected','declined','denied','suspended','revoked','banned','disabled'])));
