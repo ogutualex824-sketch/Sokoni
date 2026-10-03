@@ -82,7 +82,7 @@ const call = async (fn, uid, data) => { try { return { ok: true, r: await fn({ a
   const wallet = (await db.collection('wallets').doc(PROVIDER).get()).data() || {};
   const payout = (await db.collection('providerPayouts').doc(BID).get()).data() || {};
   const buyer = (await db.collection('users').doc(BUYER).get()).data() || {};
-  const ratePct = CC.resolveProviderRate(null).pct;              /* no provider plan = Free (20%) */
+  const ratePct = CC.resolveRate('services').pct;                 /* owner 2026-10-03: every service booking flat 5 % (RATES.services), plan ladder retired for bookings */
   const commissionC = Math.round(200000 * ratePct / 100);
   const netKES = Math.floor((200000 - commissionC) / 100);
   ck('D1 completed via PIN: booking status completed, paymentStatus settled, trigger pin_release', good.ok && good.r.viaPin && b3.status === 'completed' && b3.paymentStatus === 'settled' && b3.settledTrigger === 'pin_release', { good, status: b3.status, ps: b3.paymentStatus, trig: b3.settledTrigger });

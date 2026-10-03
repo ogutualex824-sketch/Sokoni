@@ -1,3 +1,9 @@
+## 2026-10-03 — Every service booking: flat 5% paid by the provider, replacing the plan ladder (owner; NOT deployed)
+
+- **Change:** provider-hub.commissionArgsForHub — generic bookings use RATES.services 5% with no subscriptionRole and no floor; the fitness hub uses its fixed lane.
+- **Tests:** updated to the decision (healthcare-payment-convergence 40/0, entertainment-bookings 95/0, e2e PIN expectation).
+- **UI follow-up:** stale plan-rate copy in provider-onboarding / provider-dashboard, handed to sokoni-b2.
+
 ## 2026-10-03 — Membership payment intake + refund approval/execution + AdminOS exception (NOT deployed)
 
 - **Payment:** purpose fitness_membership; webhook holdMembershipPayment, on the existing intent read; fitness_membership is self-settling.

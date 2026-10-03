@@ -489,3 +489,26 @@ The money-side gaps from the owner's "MEMBERSHIP FULL END-TO-END GREEN" brief:
 - Rules for buyer / gym reads (sokoni-e3's rules lane).
 - Attendance / check-in (sokoni-e3).
 - Gym, member and AdminOS screens (sokoni-e3).
+
+## 14 · Service bookings: flat 5% for every provider, replacing the plan ladder (owner, 2026-10-03)
+
+**Decision.** Relayed via sokoni-f3, then asked and answered directly ("Yes, flat 5% for all"): "SOKONI takes 5% of the service amount, PAID BY THE PROVIDER (deducted at settlement). The buyer pays the service amount only. Charged once per booking, from commercial config … No lead, registration, listing, withdrawal or messaging fees."
+
+**Change** (one place: `provider-hub.commissionArgsForHub`, the settlement inputs for every provider booking):
+- The generic path now prices from `RATES.services` (5%). It no longer passes `subscriptionRole`, which made the plan rate absolute (Free 20 / Starter 15 / Pro 10 / Business 7 / Enterprise 5).
+- There is no KES 10 floor (this lane never had one).
+- An admin may still adjust the rate through `commissionRules` / `revenueConfig(hub_provider)`, like every category.
+- The `fitness` hub routes to its fixed 5% lane.
+- Healthcare and entertainment are unchanged (already 5%).
+- `PROVIDER_PLAN_RATES` stays in place, but service bookings no longer read it. Plans unlock features only.
+
+**Tests updated to the decision:**
+- `test-healthcare-payment-convergence` B5/B6/B8/C10 → 40/0
+- `test-entertainment-bookings` → 95/0
+- the e2e PIN test expects 5% (emulator: UNPROVEN)
+- `provider-plan-ladder` 38/0 and `commission-schedule` 25/0 are unaffected
+
+**UI still claiming plan rates** (sokoni-b2's lane):
+- `provider-onboarding.html` PLANS `c:'20%'…'5%'`
+- `provider-dashboard.html` "Commission rate: X%" from `sub.commissionRate`
+These must show the canonical rate (`SokoniCommission.pct('services')` = 5%) for every plan. The "Leads/month" items are plan limits, not fees, and stay.

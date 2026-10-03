@@ -697,6 +697,10 @@ function categoryForHub(hub) {
    ZERO production subscriptions. They resolve fail-closed to 20% and are flagged
    (`legacyUnmapped`) so a sale on them is visible; an owner mapping is required before either
    is sold again — see docs/COMMERCIAL_CONVERGENCE_2026-09-30.md. */
+/* 2026-10-03 (owner): SERVICE BOOKINGS NO LONGER USE THIS TABLE — every service booking pays a flat 5 % (RATES.services /
+   the fitness, healthcare and entertainment lanes), deducted from the provider at settlement; provider-hub.commissionArgsForHub
+   no longer passes subscriptionRole. Kept (and still tested) only for any non-booking caller that names a provider plan; plans
+   now unlock FEATURES (subscription-catalog), not a commission rate. */
 const PROVIDER_PLAN_RATES = {
   provider_free: { pct: 20, floorExempt: true },   /* Free Trial     */
   starter:       { pct: 15, floorExempt: true },   /* Starter        */

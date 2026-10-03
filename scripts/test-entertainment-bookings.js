@@ -87,7 +87,7 @@ const h = (op, uid, data = {}, token) => EB._h[op]({ ...who(uid, token), data })
   const CC = require(Path.join(FN, 'commission-config.js'));
   /* owner schedule 2026-09-28: entertainment bookings 5 %, other service bookings 5 % — distinct KEYS even at the same rate */
   ck('the lane is 5 % (RATES.entertainment_bookings), its own key apart from generic services', CC.resolveRate('entertainment_bookings').pct === 5 && CC.resolveRate('entertainment_bookings').category === 'entertainment_bookings' && CC.resolveRate('services').category === 'services');
-  ck('settlement args: entertainment → 5 % category, NO plan-rate override', JSON.stringify(PH.commissionArgsForHub('entertainment')) === JSON.stringify({ category: 'entertainment_bookings', hubId: 'entertainment', skipMinimum: true }) && PH.commissionArgsForHub('provider').subscriptionRole === 'provider');
+  ck('settlement args: entertainment → 5 % category, NO plan-rate override', JSON.stringify(PH.commissionArgsForHub('entertainment')) === JSON.stringify({ category: 'entertainment_bookings', hubId: 'entertainment', skipMinimum: true }) && PH.commissionArgsForHub('provider').subscriptionRole === undefined && PH.commissionArgsForHub('provider').category === 'services');   /* owner 2026-10-03: every service booking flat 5 % — no plan-rate override anywhere */
   const bsSrc = fs.readFileSync(Path.join(FN, 'booking-service.js'), 'utf8');
   ck('booking creation stamps entClass server-side next to commissionHub', /entClass: entClass \|\| null,/.test(bsSrc) && /resolveProviderClassification\(db, providerId\)/.test(bsSrc));
 
