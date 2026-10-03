@@ -326,6 +326,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
 <!-- Sidebar in the merchant-v2.html shell style (same size, fixed, header/footer pinned, menu scrolls).
      STYLE ONLY, loaded last so it wins; no markup or behaviour change (owner 2026-10-03). -->
 <link rel="stylesheet" href="admin-sidebar-shell.css">
+<link rel="stylesheet" href="sokoni-finance-center.css">
 </head>
 <body>
   <aside class="aos-sidebar" id="aosSidebar">
@@ -508,18 +509,8 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       </div>
 
       <div class="aos-panel" id="panel-financial" hidden>
-        <div class="panel-toolbar"><h2>Financial Center</h2><a class="aos-btn" href="finos.html">&#x1F3E6; FinOS</a><a class="aos-btn" href="financial-os.html">&#x1F4C4; Financial OS</a></div>
-        <div class="tab-bar">
-          <button class="tab-btn active" data-tab="payments" onclick="SokoniAOS.financialTab('payments')">Revenue</button>
-          <button class="tab-btn" data-tab="commissions" onclick="SokoniAOS.financialTab('commissions')">Commissions</button>
-          <button class="tab-btn" data-tab="payouts" onclick="SokoniAOS.financialTab('payouts')">Payouts</button>
-          <button class="tab-btn" data-tab="disputes" onclick="SokoniAOS.financialTab('disputes')">Disputes</button>
-          <button class="tab-btn" data-tab="refunds" onclick="SokoniAOS.financialTab('refunds')">Refunds</button>
-          <button class="tab-btn" data-tab="wallet" onclick="SokoniAOS.financialTab('wallet')">Wallet Ops</button>
-          <button class="tab-btn" data-tab="escrow" onclick="SokoniAOS.financialTab('escrow')">Escrow</button>
-          <button class="tab-btn" data-tab="report" onclick="SokoniAOS.financialTab('report')">Report</button>
-        </div>
-        <div id="finBody"><div class="aos-spinner"><div></div></div></div>
+        <!-- Finance Center (owner 2026-10-04): header, tabs, KPIs, tables and the detail drawer are rendered by sokoni-finance-center.js -->
+        <div id="finBody" class="sfc"><div class="aos-spinner"><div></div></div></div>
       </div>
 
       <!-- Bookings (P2b) — canonical providerBookings via adminGetBookings -->
@@ -534,11 +525,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
 
       <!-- Payments (P2b) — collections via adminGetPayments -->
       <div class="aos-panel" id="panel-payments" hidden>
-        <div class="panel-toolbar">
-          <h2>Payments</h2>
-          <select onchange="SokoniAOS.loadPayments(this.value)"><option value="">All</option><option value="complete">Complete</option><option value="pending">Pending</option><option value="failed">Failed</option></select>
-        </div>
-        <div id="paymentsBody"><div class="aos-spinner"><div></div></div></div>
+        <div id="paymentsBody" class="sfc"><div class="aos-spinner"><div></div></div></div>
       </div>
 
       <div class="aos-panel" id="panel-support" hidden>
@@ -687,6 +674,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
 
     </div>
   </main>
+  <script src="sokoni-finance-center.js"></script>
   <script src="sokoni-aos.js"></script>
   <script>
     function _openSidebar()  { document.getElementById("aosSidebar").classList.add("open"); }

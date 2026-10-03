@@ -18,8 +18,13 @@ const LINK_NEW = '<link rel="stylesheet" href="sokoni-admin-responsive.css">\n<!
 for (const [page, pre] of [['admin-os.html', 'aos'], ['super-admin.html', 'sa']]) {
   const H = read(page), head = H.slice(0, H.indexOf('</head>'));
   const links = [...head.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)].map((m) => m[1]);
-  ck(pre + '-1', links[links.length - 1] === 'admin-sidebar-shell.css', page + ': the shell stylesheet is the LAST stylesheet in <head>', links.join(','));
-  ck(pre + '-2', H.replace(/\r/g, '') === live(page).replace(/\r/g, '').replace(LINK, LINK_NEW), page + ': STYLE ONLY — differs from live 72dca56 by exactly the one <link> (no markup, nav item or control changed)');
+  /* (2026-10-04) the Finance Center stylesheet now follows it; it is scoped to .sfc, so order relative to it is irrelevant —
+     what matters is that the shell wins over the page's own styles and the responsive module. */
+  ck(pre + '-1', links.indexOf('admin-sidebar-shell.css') > links.indexOf('sokoni-admin-responsive.css') && links.indexOf('admin-sidebar-shell.css') > Math.max(links.indexOf('sokoni-tokens.css'), -1) && links.slice(links.indexOf('admin-sidebar-shell.css') + 1).every((l) => l === 'sokoni-finance-center.css'),
+    page + ': the shell stylesheet loads after the page styles and the responsive module (only the .sfc-scoped Finance Center may follow)', links.join(','));
+  const asideOf = (h) => h.slice(h.indexOf('<aside class="' + pre + '-sidebar"'), h.indexOf('</aside>', h.indexOf('<aside class="' + pre + '-sidebar"')));
+  ck(pre + '-2', asideOf(H).replace(/\r/g, '') === asideOf(live(page)).replace(/\r/g, '') && asideOf(H).length > 200 && H.replace(/\r/g, '').includes(LINK_NEW.split('\n</head>')[0].split('\n').pop()),
+    page + ': SIDEBAR STYLE ONLY — the sidebar markup (every nav item and control) is byte-identical to live 72dca56; the shell <link> is present');
   ck(pre + '-3', new RegExp('\\.' + pre + '-sidebar[,)]').test(CSS) && new RegExp('\\.' + pre + '-sidebar-footer').test(CSS) && new RegExp('\\.' + pre + '-logo').test(CSS),
     page + ': its sidebar, logo header and footer are styled by the shell');
   ck(pre + '-4', /shared-header\.js|sw-register\.js/.test(H), page + ': still self-updates after deploys');

@@ -1,3 +1,25 @@
+## [2026-10-04] - Finance Center: every financial record view in AdminOS + Super Admin in one dashboard layout
+
+Hosting only. New `sokoni-finance-center.js` + `sokoni-finance-center.css` (scoped `.sfc`). `admin-os.html` (Financial + Payments panels), `sokoni-aos.js` (`_financialTab`, `_loadPayments`) and `super-admin.html` (Financial Oversight) are rewired. **Not deployed.** Owner request with an invoice-dashboard reference; both pages keep their own sidebar.
+- **Layout:**
+  - a page header with actions;
+  - status tabs with counts;
+  - KPI tiles;
+  - an aging summary (pending payouts);
+  - a records table with search and status pills;
+  - a right-hand detail drawer holding each record's actions.
+- **Same data, same actions:**
+  - Every view uses the SAME server calls as live (getAdminRevenueReport, getCommissionLedger, aosGetPendingPayouts, adminGetDisputes, adminGetWalletOperations, finosGetEscrowAccounts, adminGetFinance, adminGetExecutiveDashboard, adminGetPayments, getMerchantFinancials, adminGetPendingPayouts, adminPayoutOps).
+  - Every existing action (mark commission paid, approve / reject / approve-all payouts, dispute outcomes, refund decisions, escrow release, CSV export, SA payout approve / mark paid / reject) is the same function, now in the drawer.
+  - No new money-moving call.
+- **UI data integrity fixes:**
+  - An unknown figure renders **—** (the old financial views rendered `_fmt(x||0)`, i.e. 0).
+  - **Super Admin's revenue chart drew a hard-coded placeholder pattern when real data was missing** (invented revenue). It now shows "No daily revenue data yet".
+  - Tables state row counts ("in this list") and never sum a partial page into a total.
+  - **Receipts** has no admin listing endpoint, and the tab says so instead of inventing rows.
+- **Security:** actions are real functions through one delegated handler (no `onclick` built from record ids), and all record text is escaped.
+- **Tests:** `scripts/test-finance-center.js` 23/0. It executes the module and the SA chart, checks both pages against live 72dca56, and the sabotage run caught 5/5. `test-adminos-sidebar-style` 16/0 (rows re-scoped: the sidebar markup stays byte-identical to live). The rendered browser check is OWED (memory floor).
+
 ## [2026-10-03] - Admin + Super Admin sidebars in the merchant-v2 style: same size, fixed, header/footer pinned, menu scrolls
 
 Hosting only. New `admin-sidebar-shell.css`, linked LAST in `admin-os.html` and `super-admin.html`. **Style only, not deployed.**

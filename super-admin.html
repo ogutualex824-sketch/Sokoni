@@ -308,6 +308,8 @@
 <!-- Sidebar in the merchant-v2.html shell style (same size, fixed, header/footer pinned, menu scrolls).
      STYLE ONLY, loaded last so it wins; no markup or behaviour change (owner 2026-10-03). -->
 <link rel="stylesheet" href="admin-sidebar-shell.css">
+<link rel="stylesheet" href="sokoni-finance-center.css">
+<script src="sokoni-finance-center.js" defer></script>
 </head>
 <body>
 
@@ -529,49 +531,34 @@
 
     <!-- ══ SECTION 3: Financial Oversight ══ -->
     <section class="sa-panel" id="panel-financial" hidden>
-      <div class="panel-header">
-        <h2>&#x1F4B0; Financial Oversight</h2>
-        <p>Platform-wide revenue, commissions, payouts, and wallet balances.</p>
-      </div>
+      <div class="sfc">
+        <div class="sfc-head"><div><div class="sfc-title"><span class="sfc-dot"></span>Financial Oversight</div>
+          <div class="sfc-sub">Platform-wide revenue, commissions, payouts and wallet balances. A figure the server did not return shows —.</div></div>
+          <div class="sfc-actions"><button type="button" class="sfc-btn" onclick="SA.loadFinancial()">&#x1F504; Refresh</button></div></div>
 
-      <div class="fin-kpi-grid" id="saFinancialKpis">
-        <div class="sa-spinner"><div></div></div>
-      </div>
+        <div id="saFinancialKpis"><div class="sa-spinner"><div></div></div></div>
 
-      <div class="chart-section">
-        <h3>Daily Revenue — Last 14 Days</h3>
-        <div id="saRevenueChart" style="overflow-x:auto;padding-bottom:4px">
-          <div class="bar-chart" id="saRevenueChartBars">
-            <!-- Bars inserted by JS -->
-          </div>
+        <div class="sfc-card">
+          <div class="sfc-card-h"><b>Daily Revenue — Last 14 Days</b><small id="saRevenueChartNote"></small></div>
+          <div id="saRevenueChart" style="overflow-x:auto;padding-bottom:4px"><div class="bar-chart" id="saRevenueChartBars"></div></div>
         </div>
-      </div>
 
-      <div class="sa-card">
-        <h3>Payout Operations <button class="sa-btn-sm" onclick="SA.loadPayoutOps()" style="float:right">Refresh</button></h3>
-        <div id="saPayoutOps">
-          <div class="sa-spinner"><div></div></div>
+        <div class="sfc-card">
+          <div class="sfc-card-h"><b>Payout Operations</b><button type="button" class="sfc-btn sm" onclick="SA.loadPayoutOps()">Refresh</button></div>
+          <div id="saPayoutOps"><div class="sa-spinner"><div></div></div></div>
         </div>
-      </div>
 
-      <div class="sa-card">
-        <h3>Pending Payout Requests</h3>
-        <div id="saPayoutsList">
-          <div class="sa-spinner"><div></div></div>
+        <div class="sfc-card">
+          <div class="sfc-card-h"><b>Pending Payout Requests</b></div>
+          <div id="saPayoutsList"><div class="sa-spinner"><div></div></div></div>
         </div>
-      </div>
 
-      <div class="sa-card">
-        <h3>Commission Rates by Category</h3>
-        <div class="table-wrap">
-          <table class="sa-table">
-            <thead>
-              <tr><th>Category</th><th>Rate</th><th>Type</th></tr>
-            </thead>
-            <tbody id="saCommissionRates">
-              <tr><td colspan="3" class="empty-cell">Loading&hellip;</td></tr>
-            </tbody>
-          </table>
+        <div class="sfc-card">
+          <div class="sfc-card-h"><b>Commission Rates by Category</b><small>platformConfig/commissions</small></div>
+          <div class="sfc-scroll"><table class="sfc-table" style="min-width:0">
+            <thead><tr><th>Category</th><th>Rate</th><th>Type</th></tr></thead>
+            <tbody id="saCommissionRates"><tr><td colspan="3"><div class="sfc-empty">Loading&hellip;</div></td></tr></tbody>
+          </table></div>
         </div>
       </div>
     </section>
@@ -1411,22 +1398,23 @@ const SA={
     try{
       const fn=this._fns.httpsCallable('getMerchantFinancials');
       const res=await fn({context:'admin'});
-      financials=res.data||{};
+      financials=res.data||{};financials.__src='getMerchantFinancials';
     }catch(_){
       try{
         const doc=await this._db.collection('platformConfig').doc('analytics').get();
-        if(doc.exists)financials=doc.data();
+        if(doc.exists){financials=doc.data();financials.__src='analytics snapshot (fallback)';}
       }catch(__){financials={};}
     }
 
-    kpiEl.innerHTML=`
-      <div class="fin-kpi accent"><span>Platform Revenue</span><strong>${_esc(_fmtMoney(financials.totalRevenue||financials.platformRevenue))}</strong></div>
-      <div class="fin-kpi success"><span>Commissions Earned</span><strong>${_esc(_fmtMoney(financials.commissionsEarned||financials.commissions))}</strong></div>
-      <div class="fin-kpi warn"><span>Payouts Pending</span><strong>${_esc(_fmtMoney(financials.pendingPayouts||financials.payoutsPending))}</strong></div>
-      <div class="fin-kpi"><span>Wallet Balances Total</span><strong>${_esc(_fmtMoney(financials.totalWalletBalance||financials.walletTotal))}</strong></div>
-    `;
+    const FC=window.SokoniFinanceCenter;
+    const val=(...k)=>{for(const x of k){if(typeof financials[x]==='number'&&isFinite(financials[x]))return financials[x];}return null;};
+    kpiEl.innerHTML=FC?FC.kpis([
+      {label:'Platform Revenue',value:FC.kes(val('totalRevenue','platformRevenue')),tone:'violet',icon:'&#x1F4B0;',sub:financials.__src||null},
+      {label:'Commissions Earned',value:FC.kes(val('commissionsEarned','commissions')),tone:'green',icon:'&#x1F4C8;'},
+      {label:'Payouts Pending',value:FC.kes(val('pendingPayouts','payoutsPending')),tone:'amber',icon:'&#x23F3;'},
+      {label:'Wallet Balances Total',value:FC.kes(val('totalWalletBalance','walletTotal')),tone:'teal',icon:'&#x1F45B;'},
+    ]):'<p class="sfc-sub">Finance Center failed to load. Refresh the page.</p>';
 
-    // Revenue chart — dummy 14-day data (replace with real data from Firestore if available)
     this._renderRevenueChart(financials.dailyRevenue||null);
 
     // Payout operations + pending payouts
@@ -1440,13 +1428,16 @@ const SA={
   _renderRevenueChart(data){
     const barsEl=document.getElementById('saRevenueChartBars');
     const days=14;
-    let values;
-    if(Array.isArray(data)&&data.length>=days){
-      values=data.slice(-days);
-    }else{
-      // Deterministic placeholder pattern
-      values=[12,18,22,15,28,35,30,42,38,50,45,60,55,70].map(v=>v*1000);
+    /* UI DATA INTEGRITY (owner rule): no placeholder bars. The old code drew a hard-coded pattern when real data was
+       missing — invented revenue presented as a chart. Unknown → a neutral empty state. */
+    const note=document.getElementById('saRevenueChartNote');
+    const values=Array.isArray(data)?data.slice(-days).map(v=>(typeof v==='number'&&isFinite(v))?v:(v&&typeof v.amount==='number'?v.amount:null)):null;
+    if(!values||values.length<days||values.some(v=>v==null)){
+      barsEl.innerHTML='<div class="sfc-empty" style="width:100%">No daily revenue data yet.</div>';
+      if(note)note.textContent='';
+      return;
     }
+    if(note)note.textContent='from getMerchantFinancials.dailyRevenue';
     const maxV=Math.max(...values,1);
     const labels=[];
     for(let i=days-1;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);labels.push(d.toLocaleDateString('en-KE',{day:'2-digit',month:'short'}));}
@@ -1465,29 +1456,23 @@ const SA={
       const fn=this._fns.httpsCallable('adminGetPendingPayouts');
       const res=await fn({});
       const payouts=(res.data&&res.data.payouts)||[];
-      if(!payouts.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No pending payouts.</p>';return;}
-      el.innerHTML=`
-        <div class="table-wrap">
-          <table class="sa-table">
-            <thead><tr><th>Seller</th><th>Amount</th><th>Method</th><th>Requested</th><th>Actions</th></tr></thead>
-            <tbody>
-              ${payouts.map(p=>`
-                <tr>
-                  <td>${_esc(p.sellerName||p.sellerId||'—')}</td>
-                  <td>${_esc(_fmtMoney(p.amount))}</td>
-                  <td>${_esc(p.method||'—')}</td>
-                  <td style="font-size:11px;color:var(--muted)">${_esc(_fmtDate(p.createdAt))}</td>
-                  <td>
-                    <button class="sa-btn-sm success" onclick="SA.processPayout('${_esc(p.id||p.payoutId)}','approve')">Approve</button>
-                    <button class="sa-btn-sm" onclick="SA.processPayout('${_esc(p.id||p.payoutId)}','paid')">Mark Paid</button>
-                    <button class="sa-btn-sm danger" onclick="SA.processPayout('${_esc(p.id||p.payoutId)}','reject')">Reject</button>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      `;
+      const FC=window.SokoniFinanceCenter;
+      if(!FC){el.innerHTML='<p class="sfc-sub">Finance Center failed to load.</p>';return;}
+      const pid=(p)=>String(p.id||p.payoutId||'');
+      const ag=FC.ageBuckets(payouts,(p)=>p.createdAt);
+      el.innerHTML=(payouts.length?FC.aging({title:'Pending payouts by age',subtitle:'How long each listed request has waited',note:ag.known+' of '+payouts.length+' listed requests dated',buckets:ag.buckets}):'')
+        +FC.table({title:'payout requests',rows:payouts,empty:'No pending payouts.',
+          searchText:(p)=>[p.sellerName,p.sellerId,p.method].join(' '),
+          columns:[
+            {label:'Seller',render:(p)=>FC.esc(p.sellerName||p.sellerId||'—')},
+            {label:'Amount',align:'r',render:(p)=>FC.kes(typeof p.amount==='number'?p.amount:null)},
+            {label:'Method',render:(p)=>FC.esc(p.method||'—')},
+            {label:'Requested',render:(p)=>FC.date(p.createdAt)},
+            {label:'Status',render:(p)=>FC.pill(p.status||'pending')},
+          ],
+          detail:(p)=>({title:'Payout request',status:p.status||'pending',subtitle:FC.date(p.createdAt),
+            fields:[['Seller',FC.esc(p.sellerName||p.sellerId)],['Amount',FC.kes(typeof p.amount==='number'?p.amount:null)],['Method',FC.esc(p.method)],['Requested',FC.date(p.createdAt)],['Reference',FC.esc(pid(p))]],
+            actions:[{label:'Approve',tone:'success',run:()=>SA.processPayout(pid(p),'approve')},{label:'Mark Paid',run:()=>SA.processPayout(pid(p),'paid')},{label:'Reject',tone:'danger',run:()=>SA.processPayout(pid(p),'reject')}]})});
     }catch(e){
       el.innerHTML='<p style="color:var(--muted);font-size:13px">Could not load payouts: '+_esc(e.message)+'</p>';
     }
@@ -1502,40 +1487,27 @@ const SA={
       const res=await fn({});
       const d=res.data||{};const c=d.counts||{};
       const ago=(iso)=>{if(!iso)return '—';const m=Math.round((Date.now()-new Date(iso).getTime())/60000);return m<1?'just now':(m<60?m+'m ago':Math.round(m/60)+'h ago');};
-      const kpi=(label,val,cls)=>`<div class="fin-kpi ${cls||''}"><span>${label}</span><strong>${val}</strong></div>`;
-      const rows=(list,tag)=>!list||!list.length?'':`
-        <div style="margin-top:10px"><div style="font-size:12px;color:var(--muted);margin-bottom:4px">${tag}</div>
-        <div class="table-wrap"><table class="sa-table"><thead><tr><th>ID</th><th>Amount</th><th>Dest</th><th>Retries</th><th>Webhook</th><th></th></tr></thead><tbody>
-        ${list.map(p=>`<tr>
-          <td style="font-size:10px">${_esc(p.id)}</td>
-          <td>${_esc(_fmtMoney(p.amount))}</td>
-          <td style="font-size:11px">${_esc(p.destinationMasked||'—')}</td>
-          <td>${p.retryCount||0}</td>
-          <td style="font-size:11px">${_esc(p.lastWebhookState||'—')}</td>
-          <td>
-            <button class="sa-btn-sm" onclick="SA.processPayout('${_esc(p.id)}','paid')">Mark Paid</button>
-            <button class="sa-btn-sm danger" onclick="SA.processPayout('${_esc(p.id)}','reject')">Reject</button>
-          </td>
-        </tr>`).join('')}
-        </tbody></table></div></div>`;
-      el.innerHTML=`
-        <div class="fin-kpi-grid">
-          ${kpi('Processing',c.processing||0)}
-          ${kpi('Retrying',c.retrying||0,(c.retrying?'warn':''))}
-          ${kpi('Failed',c.failed||0,(c.failed?'danger':''))}
-          ${kpi('Reconcile exceptions',c.reconcileExceptions||0,(c.reconcileExceptions?'danger':''))}
-          ${kpi('Pending review',c.pending||0)}
-          ${kpi('Max retry count',d.maxRetryCount||0)}
-        </div>
-        <div style="font-size:12px;color:var(--muted);margin-top:8px">
-          Oldest processing: <strong style="color:var(--text)">${ago(d.oldestProcessingAt)}</strong> ·
-          Last webhook received: <strong style="color:var(--text)">${ago(d.lastWebhookAt)}</strong>
-        </div>
-        ${rows((d.lists||{}).needsReview,'⚠️ Reconciliation exceptions (need review)')}
-        ${rows((d.lists||{}).retrying,'🔁 Retrying')}
-        ${rows((d.lists||{}).processing,'⏳ Processing (awaiting webhook)')}
-        ${rows((d.lists||{}).failed,'✕ Failed')}
-      `;
+      const FC=window.SokoniFinanceCenter;
+      const n=(v)=>(typeof v==='number'&&isFinite(v))?FC.num(v):null;
+      const tbl=(list,title)=>!list||!list.length?'':'<div class="sfc-card-h" style="margin-top:14px"><b style="font-size:13px">'+FC.esc(title)+'</b></div>'+FC.table({title:'payouts',rows:list,
+          columns:[{label:'ID',mono:true,render:(p)=>FC.esc(String(p.id||'').slice(0,14))},{label:'Amount',align:'r',render:(p)=>FC.kes(typeof p.amount==='number'?p.amount:null)},
+                   {label:'Destination',render:(p)=>FC.esc(p.destinationMasked||'—')},{label:'Retries',align:'r',render:(p)=>FC.num(typeof p.retryCount==='number'?p.retryCount:null)},{label:'Webhook',render:(p)=>FC.pill(p.lastWebhookState||'—')}],
+          detail:(p)=>({title:'Payout '+String(p.id||'').slice(0,14),status:p.lastWebhookState||null,
+            fields:[['ID',FC.esc(p.id)],['Amount',FC.kes(typeof p.amount==='number'?p.amount:null)],['Destination',FC.esc(p.destinationMasked)],['Retries',FC.num(typeof p.retryCount==='number'?p.retryCount:null)],['Webhook state',FC.esc(p.lastWebhookState)]],
+            actions:[{label:'Mark Paid',run:()=>SA.processPayout(String(p.id),'paid')},{label:'Reject',tone:'danger',run:()=>SA.processPayout(String(p.id),'reject')}]})});
+      el.innerHTML=FC.kpis([
+          {label:'Processing',value:n(c.processing),tone:'blue',icon:'&#x23F3;'},
+          {label:'Retrying',value:n(c.retrying),tone:'amber',icon:'&#x1F501;'},
+          {label:'Failed',value:n(c.failed),tone:'red',icon:'&#x26A0;'},
+          {label:'Reconcile exceptions',value:n(c.reconcileExceptions),tone:'red',icon:'&#x2696;'},
+          {label:'Pending review',value:n(c.pending),tone:'violet',icon:'&#x1F50E;'},
+          {label:'Max retry count',value:n(d.maxRetryCount),tone:'teal',icon:'#'},
+        ])
+        +'<div class="sfc-note">Oldest processing: <b>'+FC.esc(ago(d.oldestProcessingAt))+'</b> · Last webhook received: <b>'+FC.esc(ago(d.lastWebhookAt))+'</b></div>'
+        +tbl((d.lists||{}).needsReview,'Reconciliation exceptions (need review)')
+        +tbl((d.lists||{}).retrying,'Retrying')
+        +tbl((d.lists||{}).processing,'Processing (awaiting webhook)')
+        +tbl((d.lists||{}).failed,'Failed');
     }catch(e){
       el.innerHTML='<p style="color:var(--muted);font-size:13px">Could not load payout ops: '+_esc(e.message)+'</p>';
     }
@@ -1570,7 +1542,7 @@ const SA={
       const data=doc.exists?doc.data():{};
       const entries=Object.entries(data);
       if(!entries.length){
-        tb.innerHTML='<tr><td colspan="3" class="empty-cell">No commission data found.</td></tr>';
+        tb.innerHTML='<tr><td colspan="3"><div class="sfc-empty">No commission data found.</div></td></tr>';
         return;
       }
       tb.innerHTML=entries.map(([cat,val])=>{

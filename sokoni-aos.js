@@ -611,23 +611,40 @@ window.SokoniAOS = (() => {
 
   // ── Payments — collections (canonical `payments` via adminGetPayments) ────────
   async function _loadPayments(status) {
+    /* FINANCE CENTER layout (owner 2026-10-04): same adminGetPayments call; status tabs count the rows in THIS list. */
+    const F = window.SokoniFinanceCenter;
     const body = document.getElementById("paymentsBody");
     if (!body) return;
+    body.classList.add("sfc");
     body.innerHTML = _spinner();
     try {
       const data = await _call("adminGetPayments", { limit: 100 });
-      let items = data.payments || data.items || data.rows || [];
-      if (status) items = items.filter(p => String(p.status || "").toLowerCase() === status);
-      const rows = items.map(p => `<tr>
-          <td class="aos-muted" style="font-family:monospace;font-size:.74rem">${_esc(String(p.id||"").slice(0,12))}</td>
-          <td>KES ${_fmt(Math.round(p.amount||0))}</td>
-          <td><span class="status-badge st-${_esc(String(p.status||"").toLowerCase())}">${_esc(p.status||"—")}</span></td>
-          <td>${_esc(p.sellerName||"—")}</td>
-          <td class="aos-muted">${_esc(p.mpesaCode||"—")}</td>
-        </tr>`);
-      body.innerHTML = rows.length
-        ? `<table class="aos-table"><thead><tr><th>Ref</th><th>Amount</th><th>Status</th><th>Seller</th><th>M-Pesa Ref</th></tr></thead><tbody>${rows.join("")}</tbody></table>`
-        : _emptyMsg("No payments found");
+      const all = data.payments || data.items || data.rows || [];
+      const st = (p) => String(p.status || "").toLowerCase();
+      const want = String(status || "").toLowerCase();
+      const items = want ? all.filter(p => st(p) === want) : all;
+      if (!F) { body.innerHTML = _emptyMsg("Finance Center failed to load. Refresh the page."); return; }
+      F.onTab("aosPay", (k) => _loadPayments(k === "all" ? "" : k));
+      const cnt = (k) => all.filter(p => st(p) === k).length;
+      body.innerHTML = F.header({ title: "Payments", subtitle: "IntaSend-confirmed payment records (latest 100)." })
+        + F.tabs([{ key: "all", label: "All", count: all.length }, { key: "complete", label: "Complete", count: cnt("complete") },
+                  { key: "pending", label: "Pending", count: cnt("pending") }, { key: "failed", label: "Failed", count: cnt("failed") },
+                  { key: "review", label: "Review", count: cnt("review") }], want || "all", "aosPay")
+        + F.table({ title: "payments", rows: items, empty: "No payments found",
+          searchText: p => [p.id, p.sellerName, p.mpesaCode, p.status, p.providerMethod].join(" "),
+          columns: [
+            { label: "Ref", mono: true, render: p => F.esc(String(p.id || "").slice(0, 14)) },
+            { label: "Seller", render: p => F.esc(p.sellerName || "—") },
+            { label: "Amount", align: "r", render: p => F.kes(typeof p.amount === "number" ? p.amount : null) },
+            { label: "Method", render: p => F.esc(p.providerMethod || p.method || "—") },
+            { label: "Status", render: p => F.pill(p.status || "—") },
+            { label: "M-Pesa ref", render: p => F.esc(p.mpesaCode || "—") },
+          ],
+          footNote: "Counts are rows in this list (latest 100), not platform totals.",
+          detail: p => ({ title: "Payment " + String(p.id || "").slice(0, 14), status: p.status || null,
+            fields: [["Reference", F.esc(p.id)], ["Amount", F.kes(typeof p.amount === "number" ? p.amount : null)], ["Seller", F.esc(p.sellerName)],
+                     ["Method", F.esc(p.providerMethod || p.method)], ["M-Pesa ref", F.esc(p.mpesaCode)], ["Created", F.date(p.createdAt)]],
+            note: "Payment truth is the verified IntaSend webhook; this view only reads it.", actions: [] }) });
     } catch (e) {
       body.innerHTML = _emptyMsg("Couldn't load payments.") + '<div style="text-align:center;margin-top:8px"><button class="aos-btn-sm" onclick="SokoniAOS.navigate(\'payments\')">Try again</button></div>';
     }
@@ -669,159 +686,167 @@ window.SokoniAOS = (() => {
   // ── Financial ─────────────────────────────────────────────────────────────────
   async function _loadFinancial() { _financialTab("payments"); }
 
+  /* ── FINANCE CENTER (owner 2026-10-04): every financial record view in one layout — KPI tiles, status tabs, aging,
+     records table with status pills, right-hand detail drawer (sokoni-finance-center.js). SAME callables and SAME
+     actions as before; only the layout changed. A figure the server did not return renders "—", never 0. ── */
+  const _FIN_TABS = [
+    { key: "payments", label: "Revenue" }, { key: "commissions", label: "Commissions" }, { key: "payouts", label: "Payouts" },
+    { key: "disputes", label: "Disputes" }, { key: "refunds", label: "Refunds" }, { key: "wallet", label: "Wallet Ops" },
+    { key: "escrow", label: "Escrow" }, { key: "receipts", label: "Receipts" }, { key: "report", label: "Report" },
+  ];
+  let _finCount = {};
+  function _finShell(tab, inner) {
+    const F = window.SokoniFinanceCenter;
+    return F.header({ title: "Financial Center", subtitle: "Revenue, commissions, payouts, disputes, refunds, wallet and escrow — one view.",
+      actionsHtml: '<a class="sfc-btn" href="finos.html">&#x1F3E6; FinOS</a><a class="sfc-btn" href="financial-os.html">&#x1F4C4; Financial OS</a>' })
+      + F.tabs(_FIN_TABS.map(t => Object.assign({}, t, { count: _finCount[t.key] })), tab, "aosFin") + inner;
+  }
   async function _financialTab(tab) {
-    document.querySelectorAll("#panel-financial .tab-btn").forEach(b =>
-      b.classList.toggle("active", b.dataset.tab === tab));
+    const F = window.SokoniFinanceCenter;
     const body = document.getElementById("finBody");
     if (!body) return;
-    body.innerHTML = _spinner();
+    if (!F) { body.innerHTML = _emptyMsg("Finance Center failed to load. Refresh the page."); return; }
+    F.onTab("aosFin", (k) => _financialTab(k));
+    body.classList.add("sfc");
+    body.innerHTML = _finShell(tab, _spinner());
+    const show = (inner) => { body.innerHTML = _finShell(tab, inner); };
+    const A = window.SokoniAOS;
     try {
       if (tab === "payments") {
         const data = await _call("getAdminRevenueReport", { days: 7 });
-        const r = data.report || data;
-        body.innerHTML = `<div class="fin-stats">
-          <div class="fin-stat"><span>7-Day Revenue</span><strong>KES ${_fmt(r.totalRevenue||0)}</strong></div>
-          <div class="fin-stat"><span>Platform Commission</span><strong>KES ${_fmt(r.totalCommission||0)}</strong></div>
-          <div class="fin-stat"><span>Refunds Issued</span><strong>KES ${_fmt(r.totalRefunds||0)}</strong></div>
-          <div class="fin-stat"><span>Gross Margin</span><strong>${((r.margin||0)*100).toFixed(1)}%</strong></div>
-        </div>
-        ${r.revenueByDay ? `<div class="chart-wrap"><canvas id="finChart" height="180"></canvas></div>` : ""}`;
+        const r = data.report || data || {};
+        show(F.kpis([
+          { label: "7-Day Revenue", value: F.kes(r.totalRevenue), tone: "violet", icon: "&#x1F4B0;", sub: "getAdminRevenueReport" },
+          { label: "Platform Commission", value: F.kes(r.totalCommission), tone: "green", icon: "&#x1F4C8;" },
+          { label: "Refunds Issued", value: F.kes(r.totalRefunds), tone: "red", icon: "&#x21A9;" },
+          { label: "Gross Margin", value: F.pct(r.margin), tone: "teal", icon: "%" },
+        ]) + (r.revenueByDay ? '<div class="sfc-card"><div class="sfc-card-h"><b>Revenue by day</b><small>last 7 days</small></div><canvas id="finChart" height="180"></canvas></div>' : ""));
         if (r.revenueByDay) _drawLineChart("finChart", r.revenueByDay, "KES");
       } else if (tab === "commissions") {
-        const data = await _call("getCommissionLedger", { limit: 30 });
-        const items = data.entries || [];
-        body.innerHTML = items.length ? `<table class="aos-table"><thead><tr>
-            <th>Seller</th><th>Order</th><th>Gross</th><th>Commission</th><th>Net</th><th>Status</th><th>Actions</th>
-          </tr></thead><tbody>${items.map(c => `<tr>
-            <td>${_esc(c.sellerName||c.sellerUid||"—")}</td>
-            <td class="aos-mono">${(c.orderId||"—").slice(0,8)}</td>
-            <td>KES ${_fmt(c.grossAmount||0)}</td>
-            <td>KES ${_fmt(c.commissionAmount||0)}</td>
-            <td>KES ${_fmt(c.netAmount||0)}</td>
-            <td><span class="status-badge st-${c.status||"pending"}">${c.status||"pending"}</span></td>
-            <td>${c.status!=="paid"?`<button class="aos-btn-sm success" onclick="SokoniAOS.markCommPaid('${c.id}')">Mark Paid</button>`:"—"}</td>
-          </tr>`).join("")}</tbody></table>` : _emptyMsg("No commission entries");
+        const items = ((await _call("getCommissionLedger", { limit: 30 })) || {}).entries || [];
+        _finCount.commissions = items.length;
+        show(F.table({ title: "commissions", rows: items, empty: "No commission entries",
+          searchText: c => [c.sellerName, c.sellerUid, c.orderId, c.status].join(" "),
+          columns: [
+            { label: "Order", mono: true, render: c => F.esc((c.orderId || "—").slice(0, 10)) },
+            { label: "Seller", render: c => F.esc(c.sellerName || c.sellerUid || "—") },
+            { label: "Gross", align: "r", render: c => F.kes(c.grossAmount) },
+            { label: "Commission", align: "r", render: c => F.kes(c.commissionAmount) },
+            { label: "Net", align: "r", render: c => F.kes(c.netAmount) },
+            { label: "Status", render: c => F.pill(c.status || "pending") },
+          ],
+          detail: c => ({ title: "Commission " + String(c.orderId || c.id || "").slice(0, 12), status: c.status || "pending",
+            fields: [["Order", F.esc(c.orderId)], ["Seller", F.esc(c.sellerName || c.sellerUid)], ["Gross", F.kes(c.grossAmount)], ["Commission", F.kes(c.commissionAmount)], ["Net to seller", F.kes(c.netAmount)], ["Recorded", F.date(c.createdAt)]],
+            actions: c.status !== "paid" ? [{ label: "Mark Paid", tone: "success", run: () => A.markCommPaid(c.id) }] : [] }) }));
       } else if (tab === "payouts") {
-        const data = await _call("aosGetPendingPayouts");
-        const payouts = data.payouts || [];
-        body.innerHTML = payouts.length ? `<div class="payout-actions">
-          <button class="aos-btn success" onclick="SokoniAOS.approveAllPayouts()">Approve All (${payouts.length})</button>
-        </div>
-        <table class="aos-table"><thead><tr>
-            <th>Seller</th><th>Amount</th><th>Bank</th><th>Requested</th><th>Actions</th>
-          </tr></thead><tbody>${payouts.map(p => `<tr>
-            <td>${_esc(p.sellerName||p.uid||"—")}</td>
-            <td>KES ${_fmt(p.amount||0)}</td>
-            <td class="aos-muted">${_esc(p.bankName||"—")}</td>
-            <td class="aos-muted">${_date(p.requestedAt)}</td>
-            <td>
-              <button class="aos-btn-sm success" onclick="SokoniAOS.approvePayout('${p.id}')">Approve</button>
-              <button class="aos-btn-sm danger" onclick="SokoniAOS.rejectPayout('${p.id}')">Reject</button>
-            </td>
-          </tr>`).join("")}</tbody></table>` : _emptyMsg("No pending payouts");
+        const payouts = ((await _call("aosGetPendingPayouts")) || {}).payouts || [];
+        _finCount.payouts = payouts.length;
+        const ag = F.ageBuckets(payouts, p => p.requestedAt);
+        show((payouts.length ? '<div class="sfc-actions" style="margin-bottom:12px"><button type="button" class="sfc-btn success" id="aosApproveAllPayouts">Approve All (' + payouts.length + ')</button></div>' : "")
+          + (payouts.length ? F.aging({ title: "Pending payouts by age", subtitle: "How long each listed request has waited", note: ag.known + " of " + payouts.length + " listed requests dated", buckets: ag.buckets }) : "")
+          + F.table({ title: "payouts", rows: payouts, empty: "No pending payouts",
+            searchText: p => [p.sellerName, p.uid, p.bankName].join(" "),
+            columns: [
+              { label: "Seller", render: p => F.esc(p.sellerName || p.uid || "—") },
+              { label: "Amount", align: "r", render: p => F.kes(p.amount) },
+              { label: "Bank", render: p => F.esc(p.bankName || "—") },
+              { label: "Requested", render: p => F.date(p.requestedAt) },
+              { label: "Status", render: () => F.pill("pending") },
+            ],
+            detail: p => ({ title: "Payout request", status: "pending", subtitle: F.date(p.requestedAt),
+              fields: [["Seller", F.esc(p.sellerName || p.uid)], ["Amount", F.kes(p.amount)], ["Bank", F.esc(p.bankName)], ["Requested", F.date(p.requestedAt)]],
+              actions: [{ label: "Approve", tone: "success", run: () => A.approvePayout(p.id) }, { label: "Reject", tone: "danger", run: () => A.rejectPayout(p.id) }] }) }));
+        const all = document.getElementById("aosApproveAllPayouts"); if (all) all.onclick = () => A.approveAllPayouts();
       } else if (tab === "disputes") {
-        const data = await _call("adminGetDisputes", { status: "open", limit: 30 });
-        const disputes = data.disputes || [];
-        body.innerHTML = disputes.length ? `<table class="aos-table"><thead><tr>
-            <th>ID</th><th>Buyer</th><th>Seller</th><th>Amount</th><th>Reason</th><th>Date</th><th>Actions</th>
-          </tr></thead><tbody>${disputes.map(d => `<tr>
-            <td class="aos-mono">${d.id?.slice(0,8)||"—"}</td>
-            <td>${_esc(d.buyerName||"—")}</td>
-            <td>${_esc(d.sellerName||"—")}</td>
-            <td>KES ${_fmt(d.amount||0)}</td>
-            <td class="aos-muted">${_esc(d.reason||"—")}</td>
-            <td class="aos-muted">${_date(d.createdAt)}</td>
-            <td>
-              <button class="aos-btn-sm success" onclick="SokoniAOS.resolveDispute('${d.id}','buyer')">Buyer Wins</button>
-              <button class="aos-btn-sm warning" onclick="SokoniAOS.resolveDispute('${d.id}','seller')">Seller Wins</button>
-            </td>
-          </tr>`).join("")}</tbody></table>` : _emptyMsg("No open disputes");
+        const disputes = ((await _call("adminGetDisputes", { status: "open", limit: 30 })) || {}).disputes || [];
+        _finCount.disputes = disputes.length;
+        show(F.table({ title: "disputes", rows: disputes, empty: "No open disputes",
+          searchText: d => [d.id, d.buyerName, d.sellerName, d.reason].join(" "),
+          columns: [
+            { label: "Dispute", mono: true, render: d => F.esc((d.id || "—").slice(0, 10)) },
+            { label: "Buyer", render: d => F.esc(d.buyerName || "—") },
+            { label: "Seller", render: d => F.esc(d.sellerName || "—") },
+            { label: "Amount", align: "r", render: d => F.kes(d.amount) },
+            { label: "Reason", render: d => F.esc(d.reason || "—") },
+            { label: "Opened", render: d => F.date(d.createdAt) },
+          ],
+          detail: d => ({ title: "Dispute " + String(d.id || "").slice(0, 10), status: d.status || "open",
+            fields: [["Buyer", F.esc(d.buyerName)], ["Seller", F.esc(d.sellerName)], ["Amount", F.kes(d.amount)], ["Reason", F.esc(d.reason)], ["Opened", F.date(d.createdAt)]],
+            actions: [{ label: "Buyer Wins", tone: "success", run: () => A.resolveDispute(d.id, "buyer") }, { label: "Seller Wins", run: () => A.resolveDispute(d.id, "seller") }] }) }));
       } else if (tab === "refunds") {
-        const snap = await _db.collection("refundRequests").where("status","==","pending")
-          .orderBy("createdAt","desc").limit(30).get().catch(() => null);
-        const refunds = snap ? snap.docs.map(d => ({id: d.id, ...d.data()})) : [];
-        body.innerHTML = refunds.length ? `<table class="aos-table"><thead><tr>
-            <th>Order</th><th>Buyer</th><th>Amount</th><th>Reason</th><th>Date</th><th>Actions</th>
-          </tr></thead><tbody>${refunds.map(r => `<tr>
-            <td class="aos-mono">${(r.orderId||"—").slice(0,8)}</td>
-            <td>${_esc(r.buyerName||r.buyerUid||"—")}</td>
-            <td>KES ${_fmt(r.amount||0)}</td>
-            <td class="aos-muted">${_esc(r.reason||"—")}</td>
-            <td class="aos-muted">${_date(r.createdAt)}</td>
-            <td>
-              <button class="aos-btn-sm success" onclick="SokoniAOS.processRefund('${r.id}','approved')">Approve</button>
-              <button class="aos-btn-sm danger" onclick="SokoniAOS.processRefund('${r.id}','rejected')">Reject</button>
-            </td>
-          </tr>`).join("")}</tbody></table>` : _emptyMsg("No pending refund requests");
+        const snap = await _db.collection("refundRequests").where("status", "==", "pending").orderBy("createdAt", "desc").limit(30).get().catch(() => null);
+        const refunds = snap ? snap.docs.map(d => ({ id: d.id, ...d.data() })) : [];
+        _finCount.refunds = refunds.length;
+        show(F.table({ title: "refund requests", rows: refunds, empty: snap ? "No pending refund requests" : "Refund requests could not be read",
+          searchText: r => [r.orderId, r.buyerName, r.buyerUid, r.reason].join(" "),
+          columns: [
+            { label: "Order", mono: true, render: r => F.esc((r.orderId || "—").slice(0, 10)) },
+            { label: "Buyer", render: r => F.esc(r.buyerName || r.buyerUid || "—") },
+            { label: "Amount", align: "r", render: r => F.kes(r.amount) },
+            { label: "Reason", render: r => F.esc(r.reason || "—") },
+            { label: "Requested", render: r => F.date(r.createdAt) },
+            { label: "Status", render: r => F.pill(r.status || "pending") },
+          ],
+          detail: r => ({ title: "Refund request", status: r.status || "pending",
+            fields: [["Order", F.esc(r.orderId)], ["Buyer", F.esc(r.buyerName || r.buyerUid)], ["Amount", F.kes(r.amount)], ["Reason", F.esc(r.reason)], ["Requested", F.date(r.createdAt)]],
+            actions: [{ label: "Approve", tone: "success", run: () => A.processRefund(r.id, "approved") }, { label: "Reject", tone: "danger", run: () => A.processRefund(r.id, "rejected") }] }) }));
       } else if (tab === "wallet") {
-        const data = await _call("adminGetWalletOperations", { limit: 30 }).catch(() => ({ operations: [] }));
-        const ops = data.operations || data.transactions || [];
-        body.innerHTML = ops.length ? `<table class="aos-table"><thead><tr>
-            <th>User</th><th>Type</th><th>Amount</th><th>Balance After</th><th>Date</th>
-          </tr></thead><tbody>${ops.map(o => `<tr>
-            <td>${_esc(o.userName||o.uid||"—")}</td>
-            <td><span class="audit-action">${_esc(o.type||"—")}</span></td>
-            <td style="color:${(o.amount||0)>0?"var(--aos-success)":"var(--aos-danger)"}">KES ${_fmt(Math.abs(o.amount||0))}</td>
-            <td>KES ${_fmt(o.balanceAfter||0)}</td>
-            <td class="aos-muted">${_date(o.createdAt)}</td>
-          </tr>`).join("")}</tbody></table>` : _emptyMsg("No wallet operations found");
+        const data = await _call("adminGetWalletOperations", { limit: 30 }).catch(() => null);
+        const ops = data ? (data.operations || data.transactions || []) : [];
+        _finCount.wallet = ops.length;
+        show(F.table({ title: "wallet operations", rows: ops, empty: data ? "No wallet operations found" : "Wallet operations could not be read",
+          searchText: o => [o.userName, o.uid, o.type].join(" "),
+          columns: [
+            { label: "User", render: o => F.esc(o.userName || o.uid || "—") },
+            { label: "Type", render: o => F.pill(o.type || "—") },
+            { label: "Amount", align: "r", render: o => '<span class="' + ((o.amount || 0) > 0 ? "pos" : "neg") + '">' + F.kes(typeof o.amount === "number" ? Math.abs(o.amount) : null) + "</span>" },
+            { label: "Balance after", align: "r", render: o => F.kes(o.balanceAfter) },
+            { label: "Date", render: o => F.date(o.createdAt) },
+          ],
+          detail: o => ({ title: "Wallet operation", status: o.type || null,
+            fields: [["User", F.esc(o.userName || o.uid)], ["Type", F.esc(o.type)], ["Amount", F.kes(o.amount)], ["Balance after", F.kes(o.balanceAfter)], ["Date", F.date(o.createdAt)]], actions: [] }) }));
       } else if (tab === "escrow") {
-        const data = await _call("finosGetEscrowAccounts", { status: "held", limit: 30 }).catch(() => ({ accounts: [] }));
-        const accounts = data.accounts || data.escrows || [];
-        body.innerHTML = accounts.length ? `<table class="aos-table"><thead><tr>
-            <th>Order</th><th>Buyer</th><th>Seller</th><th>Amount</th><th>Status</th><th>Held Since</th><th>Actions</th>
-          </tr></thead><tbody>${accounts.map(a => `<tr>
-            <td class="aos-mono">${(a.orderId||"—").slice(0,8)}</td>
-            <td>${_esc(a.buyerName||"—")}</td>
-            <td>${_esc(a.sellerName||"—")}</td>
-            <td>KES ${_fmt(a.amount||0)}</td>
-            <td><span class="status-badge st-${a.status||"held"}">${a.status||"held"}</span></td>
-            <td class="aos-muted">${_date(a.createdAt)}</td>
-            <td><button class="aos-btn-sm success" onclick="SokoniAOS.releaseEscrow('${a.id}')">Release</button></td>
-          </tr>`).join("")}</tbody></table>` : _emptyMsg("No held escrow funds");
+        const data = await _call("finosGetEscrowAccounts", { status: "held", limit: 30 }).catch(() => null);
+        const accounts = data ? (data.accounts || data.escrows || []) : [];
+        _finCount.escrow = accounts.length;
+        show(F.table({ title: "escrow", rows: accounts, empty: data ? "No held escrow funds" : "Escrow accounts could not be read",
+          searchText: a => [a.orderId, a.buyerName, a.sellerName].join(" "),
+          columns: [
+            { label: "Order", mono: true, render: a => F.esc((a.orderId || "—").slice(0, 10)) },
+            { label: "Buyer", render: a => F.esc(a.buyerName || "—") },
+            { label: "Seller", render: a => F.esc(a.sellerName || "—") },
+            { label: "Amount", align: "r", render: a => F.kes(a.amount) },
+            { label: "Status", render: a => F.pill(a.status || "held") },
+            { label: "Held since", render: a => F.date(a.createdAt) },
+          ],
+          detail: a => ({ title: "Escrow " + String(a.orderId || a.id || "").slice(0, 10), status: a.status || "held",
+            fields: [["Order", F.esc(a.orderId)], ["Buyer", F.esc(a.buyerName)], ["Seller", F.esc(a.sellerName)], ["Amount", F.kes(a.amount)], ["Held since", F.date(a.createdAt)]],
+            actions: [{ label: "Release", tone: "success", run: () => A.releaseEscrow(a.id) }] }) }));
+      } else if (tab === "receipts") {
+        /* Receipts (transactionReceipts) have NO administrator read endpoint yet — the user-scoped myTransactionReceipts is
+           not an admin listing. Stated, never faked. */
+        show('<div class="sfc-card"><div class="sfc-card-h"><b>Receipts</b><small>not available yet</small></div><div class="sfc-sub">Platform receipts are recorded per payment (transactionReceipts), but there is no administrator listing endpoint yet. Nothing is shown rather than a partial or invented list.</div></div>');
       } else if (tab === "report") {
-        /* Executive report — reconciled from adminGetFinance (canonical 30-day) +
-           adminGetExecutiveDashboard (booking stats). No recomputation, no raw JSON. */
-        const [finR, execR] = await Promise.all([
-          _call("adminGetFinance").catch(() => ({})),
-          _call("adminGetExecutiveDashboard").catch(() => ({})),
-        ]);
+        const [finR, execR] = await Promise.all([_call("adminGetFinance").catch(() => ({})), _call("adminGetExecutiveDashboard").catch(() => ({}))]);
         const rec = (finR && finR.reconciliation) || {};
         const x = execR || {};
-        const row = (l, v) => `<div class="rep-row"><span>${l}</span><strong>${v}</strong></div>`;
-        body.innerHTML = `
-          <div style="display:flex;gap:8px;margin-bottom:16px">
-            <button class="aos-btn" onclick="SokoniAOS.financialTab('report')">&#x1F504; Refresh</button>
-            <button class="aos-btn" onclick="SokoniAOS.exportFinancialReport()">&#x1F4E5; Export CSV</button>
-          </div>
-          <div class="rep-card"><div class="rep-h">Executive Summary &middot; 30-day</div>
-            ${row("GMV (gross revenue)", _kes(rec.grossRevenue))}
-            ${row("Net Platform Revenue", _kes(rec.netPlatformRevenue))}
-            ${row("Wallet Float (liability)", _kes(rec.walletFloat))}
-            ${row("Pending Withdrawals", _kes(rec.pendingWithdrawals))}
-          </div>
-          <div class="rep-card"><div class="rep-h">Revenue Breakdown</div>
-            ${row("Product / Merchant Revenue", _kes(rec.productRevenue))}
-            ${row("Service / Provider Revenue", _kes(rec.serviceRevenue))}
-            ${row("Total Commission", _kes(rec.commission))}
-            ${row("&mdash; Product Commission", _kes(rec.productCommission))}
-            ${row("&mdash; Service Commission", _kes(rec.serviceCommission))}
-            ${row("Gateway Fees (absorbed)", _kes(rec.gatewayFees))}
-            ${row("Refunds", _kes(rec.refunds))}
-          </div>
-          <div class="rep-card"><div class="rep-h">Withdrawals &amp; Settlement</div>
-            ${row("Pending Withdrawals", _kes(rec.pendingWithdrawals))}
-            ${row("Completed Withdrawals", _kes(rec.completedWithdrawals))}
-          </div>
-          <div class="rep-card"><div class="rep-h">Booking Statistics</div>
-            ${row("Total Service Bookings", _fmt(x.totalServiceBookings || 0))}
-            ${row("Active Bookings", _fmt(x.activeServiceBookings || 0))}
-            ${row("Bookings Today", _fmt(x.serviceBookingsToday || 0))}
-            ${row("Total Product Orders", _fmt(x.totalOrders || 0))}
-          </div>
-          <div style="font-size:.72rem;color:var(--aos-sub);margin-top:8px">Reconciled from adminGetFinance (canonical 30-day window) &mdash; no recomputation.</div>`;
+        const sec = (title, fields) => '<div class="sfc-card"><div class="sfc-card-h"><b>' + title + '</b></div><dl class="sfc-dl">' + fields.map(([l, v]) => '<dt>' + l + '</dt><dd>' + v + '</dd>').join("") + '</dl></div>';
+        show('<div class="sfc-actions" style="margin-bottom:12px"><button type="button" class="sfc-btn" id="aosFinRefresh">&#x1F504; Refresh</button><button type="button" class="sfc-btn" id="aosFinExport">&#x1F4E5; Export CSV</button></div>'
+          + F.kpis([
+            { label: "GMV (30-day)", value: F.kes(rec.grossRevenue), tone: "violet", icon: "&#x1F4B0;" },
+            { label: "Net Platform Revenue", value: F.kes(rec.netPlatformRevenue), tone: "green", icon: "&#x1F4C8;" },
+            { label: "Wallet Float (liability)", value: F.kes(rec.walletFloat), tone: "amber", icon: "&#x1F45B;" },
+            { label: "Pending Withdrawals", value: F.kes(rec.pendingWithdrawals), tone: "red", icon: "&#x23F3;" },
+          ])
+          + sec("Revenue Breakdown", [["Product / Merchant Revenue", F.kes(rec.productRevenue)], ["Service / Provider Revenue", F.kes(rec.serviceRevenue)], ["Total Commission", F.kes(rec.commission)],
+            ["&mdash; Product Commission", F.kes(rec.productCommission)], ["&mdash; Service Commission", F.kes(rec.serviceCommission)], ["Gateway Fees (absorbed)", F.kes(rec.gatewayFees)], ["Refunds", F.kes(rec.refunds)]])
+          + sec("Withdrawals &amp; Settlement", [["Pending Withdrawals", F.kes(rec.pendingWithdrawals)], ["Completed Withdrawals", F.kes(rec.completedWithdrawals)]])
+          + sec("Booking Statistics", [["Total Service Bookings", F.num(x.totalServiceBookings)], ["Active Bookings", F.num(x.activeServiceBookings)], ["Bookings Today", F.num(x.serviceBookingsToday)], ["Total Product Orders", F.num(x.totalOrders)]])
+          + '<div class="sfc-note">Reconciled from adminGetFinance (canonical 30-day window) — no recomputation. A figure the server did not return shows —.</div>');
+        const rf = document.getElementById("aosFinRefresh"); if (rf) rf.onclick = () => _financialTab("report");
+        const ex = document.getElementById("aosFinExport"); if (ex) ex.onclick = () => A.exportFinancialReport();
       }
-    } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
+    } catch (e) { show(_emptyMsg("Couldn't load this view: " + (e && e.message ? e.message : "error"))); }
   }
 
   async function releaseEscrow(id) {
