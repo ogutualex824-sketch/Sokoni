@@ -1,3 +1,13 @@
+## [2026-10-03] — Marketing AdminOS server reads (MK5a): review view + marketers / services / bookings — NOT deployed
+
+- **functions/marketing-hub.js** (all admin-only, read-only; the decision stays applicationDecide — ONE authority):
+  - marketingAdminApplication: submitted data, requested / approved / declined categories, the SERVER decision record (applicationDecisions) and the immutable adminAudit history;
+  - marketingAdminProviders: by type;
+  - marketingAdminServices: providerServices with hub 'marketing';
+  - marketingAdminBookings: providerBookings whose server snapshot serviceHub is 'marketing'.
+- **Tests:** test-marketing-hub 31/0 + **1 BLOCKED (O2r)**: this tree's applicationDecide writes NO applicationDecisions record, because K13-A 7df7817 — the LIVE applicationDecide lineage — is not merged here. The suite exits 2 while anything is BLOCKED. SABOTAGE 10/10.
+- **DEPLOY BLOCKER (raised to 5b):** applicationDecide / applicationReconcile must not ship from this tree until K13-A is merged. Otherwise the live self-decision refusal and the decision record regress.
+
 ## [2026-10-03] — Marketing: intake stamps reviewStage on the ONE application engine (5b 5fec96f) — NOT deployed
 
 - **functions/marketing-hub.js:**

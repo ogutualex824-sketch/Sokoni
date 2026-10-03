@@ -62,7 +62,9 @@ let pass = 0, fail = 0;
 const ck = (id, ok, m, got) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + ' ' + id + ' ' + m + (ok || got === undefined ? '' : '   [got ' + JSON.stringify(got).slice(0, 300) + ']')); ok ? pass++ : fail++; };
 const { DOCS, CLAIMS } = H;
 const ADM = { admin: true };
-const done = () => { console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed'); process.exit(fail ? 1 : 0); };
+let nBlocked = 0;
+const blocked = (id, why) => { console.log('  BLOCKED ' + id + ' ' + why); nBlocked++; };
+const done = () => { console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed' + (nBlocked ? ', ' + nBlocked + ' BLOCKED' : '')); process.exit(fail ? 1 : nBlocked ? 2 : 0); };
 console.log('\nMarketing Hub MK1/MK2 — taxonomy, application types, partial approval, directory\n');
 
 const OWNER_GROUPS = ['strategy', 'digital', 'content', 'creative', 'media', 'advertising', 'pr', 'creator', 'events', 'growth'];
@@ -190,6 +192,29 @@ const BASE_APP = { name: 'Achieng Creative', description: 'Brand identity and so
   const ro = await D('marketingAdminOverview', 'admin1', {}, ADM);
   ck('O1', r.code === 'permission-denied' && ro.ok && ro.ok.items.length === 4 && ro.ok.counts.byType.agency === 1 && ro.ok.counts.byType.specialist === 1,
     'AdminOS Marketing overview: admin-only; every marketing application with its type', [r, ro && ro.ok && ro.ok.counts]);
+
+  /* ── O2–O4: AdminOS review + lists (read-only; the decision stays applicationDecide) ── */
+  r = await D('marketingAdminApplication', 'u1', { applicationId: 'marketing_u1' }, {});
+  const ra = await D('marketingAdminApplication', 'admin1', { applicationId: 'marketing_u1' }, ADM);
+  const rb = await D('marketingAdminApplication', 'admin1', { applicationId: 'applications/../x' }, ADM);
+  const A = ra.ok || {};
+  ck('O2', r.code === 'permission-denied' && rb.code === 'invalid-argument' && A.application && A.application.marketingType === 'individual'
+    && JSON.stringify(A.application.requestedCategories) === JSON.stringify(['branding', 'seo', 'logo-design']) && A.application.portfolio.length === 1
+    && A.history.some((h) => /approve/.test(h.action)) && A.history.some((h) => /suspend/.test(h.action)),
+    'review view: admin-only; submitted data + requested categories + the immutable audit history (approve → suspend)', { r, rb, A });
+  /* The SERVER decision record is written by applicationDecide only on the K13-A lineage (7df7817, live). A tree without
+     K13-A cannot pass this row — reported BLOCKED (never PASS) until K13-A is merged into the deploy tree. */
+  if (A.decisionRecord && A.decisionRecord.decidedBy === 'admin1') ck('O2r', A.decisionRecord.status === 'suspended', 'the review view shows the SERVER decision record (current = suspended by admin1)', A.decisionRecord);
+  else blocked('O2r', 'applicationDecide on this tree writes no applicationDecisions record (K13-A 7df7817 missing) — the review view shows decisionRecord null');
+  DOCS.set('providerServices/svcA', { providerId: 'u1', name: 'Logo sprint', category: 'logo-design', serviceGroup: 'creative', hub: 'marketing', price: 1500000, active: true, marketing: { pricingModel: 'fixed', capabilities: { booking: true } } });
+  DOCS.set('providerServices/svcB', { providerId: 'u2', name: 'Deep clean', category: 'cleaning', price: 300000, active: true });
+  DOCS.set('providerBookings/bkA', { providerId: 'u1', customerUid: 'c1', service: 'Logo sprint', serviceHub: 'marketing', serviceCategory: 'logo-design', price: 1500000, status: 'confirmed', paymentStatus: 'paid_held' });
+  DOCS.set('providerBookings/bkB', { providerId: 'u2', customerUid: 'c1', service: 'Deep clean', serviceHub: null, serviceCategory: 'cleaning', price: 300000 });
+  const lp = await D('marketingAdminProviders', 'admin1', {}, ADM), ls2 = await D('marketingAdminServices', 'admin1', {}, ADM), lb = await D('marketingAdminBookings', 'admin1', {}, ADM);
+  const deny = await Promise.all(['marketingAdminProviders', 'marketingAdminServices', 'marketingAdminBookings'].map((op) => D(op, 'u1', {}, {})));
+  ck('O3', deny.every((x) => x.code === 'permission-denied') && lp.ok && lp.ok.items.some((i) => i.uid === 'u1' && i.marketingStatus === 'suspended') && lp.ok.items.some((i) => i.uid === 'u2' && i.marketingStatus === 'rejected')
+    && ls2.ok && ls2.ok.items.length === 1 && ls2.ok.items[0].id === 'svcA' && lb.ok && lb.ok.items.length === 1 && lb.ok.items[0].id === 'bkA' && lb.ok.items[0].paymentStatus === 'paid_held',
+    'marketers / services / bookings lists: admin-only; ONLY marketing records (a cleaning service or booking never appears)', { lp: lp.ok, ls2: ls2.ok, lb: lb.ok, deny });
 
   /* ── Z: dispatcher ── */
   r = await D('constructor', 'u1');

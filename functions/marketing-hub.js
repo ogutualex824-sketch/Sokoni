@@ -196,6 +196,85 @@ const _h = {
     live.docs.forEach((x) => { const p = x.data(); if (!_listed(p)) return; (p.marketingCategories || []).forEach((c) => { byCategory[c] = (byCategory[c] || 0) + 1; }); });
     return { ok: true, items, counts: { byStatus, byType, byCategory, listed: live.docs.filter((x) => _listed(x.data())).length } };
   },
+
+  /** One application for review: what was submitted, the server decision record, the immutable review history (adminAudit)
+   *  and the live provider marketing block. Read-only — the decision itself is applicationDecide (ONE authority). */
+  async marketingAdminApplication(req) {
+    _admin(req);
+    const id = _s((req.data || {}).applicationId, 160);
+    if (!/^marketing_[A-Za-z0-9_-]{1,128}$/.test(id)) throw new HttpsError('invalid-argument', 'A marketing applicationId is required.');
+    const [a, rec, aud] = await Promise.all([
+      db().collection('applications').doc(id).get(),
+      db().collection('applicationDecisions').doc(id).get(),
+      db().collection('adminAudit').where('applicationId', '==', id).limit(100).get(),
+    ]);
+    if (!a.exists) throw new HttpsError('not-found', 'Application not found.');
+    const app = a.data() || {};
+    const p = app.uid ? await db().collection('providers').doc(String(app.uid)).get() : null;
+    const pr = p && p.exists ? p.data() : null;
+    const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : (typeof v === 'number' ? v : null));
+    return {
+      ok: true,
+      application: {
+        id, uid: app.uid || null, status: app.status || 'pending', reviewStage: app.reviewStage || null, marketingType: app.marketingType || null,
+        name: app.name || '', description: app.description || '', county: app.city || '', phone: app.phone || '', email: app.email || '',
+        portfolio: Array.isArray(app.portfolio) ? app.portfolio : [], yearsExperience: app.yearsExperience == null ? null : app.yearsExperience,
+        agency: app.agency || null, requestedCategories: app.requestedCategories || [], approvedCategories: app.marketingApprovedCategories || [],
+        declinedCategories: app.marketingDeclinedCategories || [], reviewReason: app.reviewReason || null, resubmissions: app.resubmissions || 0,
+        projectionStatus: app.projectionStatus || null, projectionError: app.projectionError || null,
+        receivedAtMs: ms(app.receivedAt), decidedAtMs: ms(app.decidedAt),
+      },
+      /* the AUTHORITATIVE decision (server-written by applicationDecide) — the application doc itself is only the request */
+      decisionRecord: rec.exists ? { status: (rec.data() || {}).status || null, decidedBy: (rec.data() || {}).decidedBy || null, atMs: ms((rec.data() || {}).decidedAt || (rec.data() || {}).createdAt) } : null,
+      history: aud.docs.map((x) => { const d = x.data() || {}; return { action: d.action || '', by: d.performedBy || null, reason: d.reason || null, atMs: ms(d.createdAt) }; })
+        .sort((x, y) => (x.atMs || 0) - (y.atMs || 0)),
+      marketer: pr && pr.marketingStatus ? { status: pr.marketingStatus, listed: _listed(pr), categories: pr.marketingCategories || [], providerStatus: pr.status || null } : null,
+    };
+  },
+
+  /** Marketers (approved marketing providers), by type / status. */
+  async marketingAdminProviders(req) {
+    _admin(req);
+    const d = req.data || {};
+    const type = MKT.APPLICATION_TYPES[d.type] ? d.type : null;
+    const snap = await db().collection('providers').where('marketingStatus', 'in', ['active', 'suspended', 'rejected']).limit(500).get();
+    let items = snap.docs.map((x) => { const p = x.data() || {}; return {
+      uid: x.id, name: _s(p.name, 160), marketingType: p.marketingType || null, marketingStatus: p.marketingStatus || null, listed: _listed(p),
+      categories: p.marketingCategories || [], city: _s(p.city, 100), providerStatus: p.status || null,
+      rating: typeof p.rating === 'number' ? p.rating : null, reviewCount: typeof p.reviewCount === 'number' ? p.reviewCount : 0, jobsCompleted: typeof p.jobsCompleted === 'number' ? p.jobsCompleted : 0,
+    }; });
+    if (type) items = items.filter((i) => i.marketingType === type);
+    return { ok: true, items };
+  },
+
+  /** Marketing services (providerServices hub 'marketing'), optionally by category or provider. */
+  async marketingAdminServices(req) {
+    _admin(req);
+    const d = req.data || {};
+    let q = db().collection('providerServices');
+    q = MKT.isArea(d.category) ? q.where('category', '==', d.category) : q.where('hub', '==', 'marketing');
+    const snap = await q.limit(500).get();
+    const pid = _s(d.providerId, 128);
+    const items = snap.docs.map((x) => ({ id: x.id, d: x.data() || {} })).filter((x) => x.d.hub === 'marketing' && (!pid || x.d.providerId === pid)).map((x) => ({
+      id: x.id, providerId: x.d.providerId || null, name: _s(x.d.name, 200), category: x.d.category || null, serviceGroup: x.d.serviceGroup || null,
+      active: x.d.active !== false && !x.d.removedAt, pricingModel: (x.d.marketing && x.d.marketing.pricingModel) || null,
+      priceCents: Math.round(Number(x.d.price) || 0), capabilities: (x.d.marketing && x.d.marketing.capabilities) || {},
+    }));
+    return { ok: true, items };
+  },
+
+  /** Marketing bookings (providerBookings whose SERVER snapshot says serviceHub 'marketing'): money state for review. */
+  async marketingAdminBookings(req) {
+    _admin(req);
+    const snap = await db().collection('providerBookings').where('serviceHub', '==', 'marketing').limit(300).get();
+    const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : null);
+    const items = snap.docs.map((x) => { const b = x.data() || {}; return {
+      id: x.id, providerId: b.providerId || null, customerUid: b.customerUid || null, service: _s(b.service, 200), serviceCategory: b.serviceCategory || null,
+      priceCents: Math.round(Number(b.price) || 0), status: b.status || null, paymentStatus: b.paymentStatus || null,
+      commissionCents: typeof b.commission === 'number' ? b.commission : null, leadId: b.leadId || null, createdAtMs: ms(b.createdAt),
+    }; }).sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+    return { ok: true, items };
+  },
 };
 
 exports._h = _h;
