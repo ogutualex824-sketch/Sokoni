@@ -96,7 +96,7 @@
       "fixedKES": 0
     },
     "jobs": {
-      "pct": 15,
+      "pct": 0,
       "fixedKES": 0
     },
     "classifieds": {
@@ -161,6 +161,8 @@
     "sports": "events",
     "freelancer": "jobs",
     "freelance": "jobs",
+    "gig": "jobs",
+    "gigs": "jobs",
     "logistics": "hub",
     "delivery": "hub",
     "driver": "hub",

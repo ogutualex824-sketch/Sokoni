@@ -831,3 +831,15 @@ No duplicate authority was found on the money side.
 - **Plan discounts:** education is added to `FLAT_BOOKING_CATEGORIES`, so no plan moves it.
 - **Plans:** education plans arrive from 5b with the owner's prices (`hubType 'education'`).
 - **Snapshot:** client snapshot rebuilt.
+
+## 19 · Jobs: 0% commission (owner 2026-10-03, via sokoni-f3) · Legal free-plan cap (owner 2026-10-03)
+
+**Jobs**
+- **Rate:** `RATES.jobs` is 0% (was 15%, "category only", never owner-set). It is a FIXED, floor-exempt lane, so no override, plan or KES 10 minimum applies.
+- **Aliases:** `freelance`, `freelancer`, `gig` and `gigs` resolve to it. There is deliberately no bare `job` alias, because the work engine's "job" is a service job.
+- **Earning model:** applications are free. SOKONI earns from Jobs only through employer products (subscriptions, paid/featured listings, promotion, enterprise). These are built **unpriced** and switched off until the owner sets prices; f3 sends catalogue rows then.
+
+**Legal free plan:** the consultation card that SOKONI's legal-verification projection creates does not count toward the active-service cap.
+- **Scope:** exactly `providerServices/legal_consult_{uid}` with `createdBy 'legal-verification'`, in `provider-ops` add, duplicate and re-activation.
+- **Copies:** a duplicate of the card counts like any other service.
+- **Test:** `scripts/test-legal-auto-card-cap.js` 9/0.

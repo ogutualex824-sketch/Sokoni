@@ -98,7 +98,11 @@ const RATES = {
   fitness:          { pct: 5,   fixedKES: 0,    _was: 'owner 2026-10-03: fitness bookings 5% per booking (was ALIASES.fitness -> services 5%, then the provider plan ladder 20–5%)' },
   /* Owner 2026-10-03 (via sokoni-5b): 5% per sale, paid by the teacher / institution, never added on top for the learner — the Home Services model. */
   education:        { pct: 5,   fixedKES: 0,    _was: "15% 'category only' (never owner-set)" },
-  jobs:             { pct: 15,  fixedKES: 0,    _was: 'category only' },
+  /* Owner 2026-10-03 (via sokoni-f3): Jobs carries NO commission — applications are free; SOKONI earns only from employer
+     products (subscriptions, paid/featured listings, promotion, enterprise). Freelance gigs are a job type on the one
+     board, also 0%. An explicit FIXED, floor-exempt 0% row, so nothing falls through to the 5% default and no override
+     can turn it into a percentage. */
+  jobs:             { pct: 0,   fixedKES: 0,    _was: "15% 'category only' (never owner-set)" },
   classifieds:      { pct: 8,   fixedKES: 0,    _was: 'category only' },
   hub:              { pct: 17,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: SOKONI delivery share 17–25% per quote, settled by delivery-quote-authority.js (SHARE_MIN_PCT 17 / SHARE_MAX_PCT 25); this row is the FLOOR for a consumer that resolves by category, never the per-delivery share (was 12% / 88% rider)' },
 
@@ -161,7 +165,7 @@ const ALIASES = {
   bnb: 'hotel',
   car_dealer: 'vehicles', car_hub: 'vehicles',
   entertainment: 'events', sports: 'events',
-  freelancer: 'jobs', freelance: 'jobs',
+  freelancer: 'jobs', freelance: 'jobs', gig: 'jobs', gigs: 'jobs',   /* no bare 'job' alias: the work engine's 'job' is a service job, never this 0% lane */
   logistics: 'hub', delivery: 'hub', driver: 'hub',
   digital: 'digital_products', ai_services: 'digital_products',
 };
@@ -367,12 +371,12 @@ function resolveRate(key) {
    the finos-utils chain. Restored 2026-09-30 — docs/COMMERCIAL_CONVERGENCE_2026-09-30.md. */
 /* 'fitness' added 2026-10-03 (owner: 5% per booking). Same absolute semantics as POS: RATES.fitness and nothing else. */
 /* 'b2b_order' added 2026-10-03 (owner: lead model, no commission on wholesale orders). */
-const FIXED_RATE_CATEGORIES = Object.freeze(['pos', 'fitness', 'b2b_order']);
+const FIXED_RATE_CATEGORIES = Object.freeze(['pos', 'fitness', 'b2b_order', 'jobs']);   /* jobs: owner 2026-10-03, 0% */
 
 /* Fixed lanes that carry NO platform minimum. Fitness is a provider BOOKING lane, and provider bookings never had the
    KES 10 floor (finos-utils: "a KES 20 booking at 20% charged KES 4"); the owner set "5% commission per booking", so a
    KES 100 session pays KES 5, not KES 10. POS keeps its floor (POS_PLAN_RATES.floorExempt false) — unchanged. */
-const FIXED_RATE_FLOOR_EXEMPT = Object.freeze(['fitness', 'b2b_order']);
+const FIXED_RATE_FLOOR_EXEMPT = Object.freeze(['fitness', 'b2b_order', 'jobs']);
 function isFloorExemptFixedCategory(key) {
   const r = resolveRate(key);
   return r.matched === true && FIXED_RATE_FLOOR_EXEMPT.indexOf(r.category) !== -1;

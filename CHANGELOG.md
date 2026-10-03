@@ -1,3 +1,7 @@
+## 2026-10-03 — Jobs commission 0% (fixed lane; freelance/gig aliases) (NOT deployed)
+
+- **Change:** commission-config RATES.jobs 0%, FIXED + floor-exempt; client snapshot rebuilt; schedule/5pct suites amended.
+
 ## 2026-10-03 — Legal free plan: the auto consultation card does not count toward the service cap (owner decision; NOT deployed)
 
 - **Change:** provider-ops add/duplicate/toggle exclude exactly providerServices/legal_consult_{uid} with createdBy 'legal-verification' from the active-service count.
