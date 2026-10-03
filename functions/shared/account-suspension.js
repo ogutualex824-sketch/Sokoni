@@ -40,6 +40,8 @@ async function setSuspension(o) {
   const reason = clean(o.reason, 500);
   if (o.suspend && reason.length < 3) fail('invalid-argument', 'A reason is required to suspend an account.');
   if (uid === actor.uid) fail('failed-precondition', 'You cannot suspend or reinstate your own account.');
+  /* the actor's OWN canonical account must be active — a suspended admin's still-valid token cannot act (owner 2026-10-04) */
+  try { await require('./account-state').assertAccountActive(db, actor.uid); } catch (e) { fail(e.code || 'permission-denied', e.message); }
   const source = clean(o.source || 'unknown', 40);
 
   let target;

@@ -1,3 +1,10 @@
+## 2026-10-04 — Existing-session window: sensitive admin callables re-check the canonical account state (NOT deployed)
+
+- **Owner:** a ≤1 h already-issued token must not keep acting after suspension — rules (f3: field lock + accountNotSuspended) AND server checks, not either alone.
+- **Change:** new `functions/shared/account-state.js` (`assertAccountActive`: users/{uid} suspended → permission-denied; unreadable → unavailable, fails closed). Applied to: every AdminOS operation (adminOsDispatch entry), setUserRole, and the suspension core's ACTOR.
+- **Files:** functions/shared/account-state.js (new), functions/admin-os-dispatch.js, functions/super-admin.js, functions/shared/account-suspension.js, scripts/test-account-suspension.js (S10–S13).
+- **Tests:** account-suspension 13/0 (mutant: dispatcher check removed → S11/S13 FAIL).
+
 ## 2026-10-04 — ONE suspension contract (sign-in disabling) for AdminOS + Super Admin; Users workspace server-authoritative (NOT deployed)
 
 - **Owner decision:** Super Admin's sign-in-disabling suspension is canonical; AdminOS's status-only path is removed.

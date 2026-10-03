@@ -104,6 +104,9 @@ async function _auditLog({ actor, action, resource, details, severity }) {
 ═══════════════════════════════════════════════════════════════════════════════ */
 exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (request) => {
   _requireSuperAdmin(request);
+  /* a suspended super admin's still-valid token cannot change roles (owner 2026-10-04) */
+  try { await require('./shared/account-state').assertAccountActive(getFirestore(), request.auth.uid); }
+  catch (e) { const { HttpsError } = require('firebase-functions/v2/https'); throw new HttpsError(e.code || 'permission-denied', e.message); }
   /* HIGH-06: throttle a money/privilege endpoint. Throws resource-exhausted. */
   await checkRateLimit(request, 'admin');
 

@@ -35,5 +35,11 @@ exports.adminOsDispatch = onCall(_OPTS, async (req) => {
   if (!handler) {
     throw new HttpsError('not-found', `Unknown admin-os operation: "${op}". Valid ops: ${Object.keys(adminOs._h).sort().join(', ')}`);
   }
+  /* A SUSPENDED admin's already-issued ID token (valid ≤1 h after suspension) must not keep operating AdminOS
+     (owner 2026-10-04) — re-check the canonical account record before any admin operation. Fails closed. */
+  if (req.auth && req.auth.uid) {
+    try { await require('./shared/account-state').assertAccountActive(require('firebase-admin/firestore').getFirestore(), req.auth.uid); }
+    catch (e) { throw new HttpsError(e.code || 'permission-denied', e.message); }
+  }
   return handler(req);
 });

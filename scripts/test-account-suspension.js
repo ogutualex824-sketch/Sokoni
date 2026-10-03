@@ -11,6 +11,7 @@
      S8  CONTRACT: the exact payload each UI sends ({uid, suspend, reason, source}) passes the server schema; the OLD AdminOS
          field name ({userId}) and a missing reason are refused with explicit codes (no silent no-op)
      S9  a super admin account cannot be suspended; an unknown uid → not-found
+     S10-S13 existing-session window: a suspended actor (still-valid token) is refused by suspendUser, every AdminOS op and setUserRole; unreadable → fails closed
    node scripts/test-account-suspension.js */
 require('./lib/net-firewall').install();
 const path = require('path'), fs = require('fs'), Module = require('module');
@@ -19,8 +20,11 @@ let pass = 0, fail = 0;
 const ck = (id, ok, m, got) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + ' ' + id + ' ' + m + (ok || got === undefined ? '' : '   [got ' + JSON.stringify(got).slice(0, 280) + ']')); ok ? pass++ : fail++; };
 /* fake Firestore + Auth */
 const DOCS = new Map(); let AUTO = 0;
-const coll = (c) => ({
-  doc: (id) => ({ get: async () => ({ exists: DOCS.has(c + '/' + id), data: () => DOCS.get(c + '/' + id) && { ...DOCS.get(c + '/' + id) } }),
+const emptyQ = () => ({ where: () => emptyQ(), orderBy: () => emptyQ(), limit: () => emptyQ(), startAfter: () => emptyQ(), select: () => emptyQ(),
+  count: () => ({ get: async () => ({ data: () => ({ count: 0 }) }) }), get: async () => ({ size: 0, empty: true, docs: [] }) });
+let UNREADABLE = false;
+const coll = (c) => Object.assign(emptyQ(), {
+  doc: (id) => ({ get: async () => { if (UNREADABLE && c === 'users') throw new Error('UNAVAILABLE'); return { exists: DOCS.has(c + '/' + id), data: () => DOCS.get(c + '/' + id) && { ...DOCS.get(c + '/' + id) } }; },
     set: async (v, o) => { DOCS.set(c + '/' + id, o && o.merge ? Object.assign({}, DOCS.get(c + '/' + id) || {}, v) : { ...v }); },
     update: async (v) => { DOCS.set(c + '/' + id, Object.assign({}, DOCS.get(c + '/' + id) || {}, v)); } }),
   add: async (v) => { DOCS.set(c + '/a' + (++AUTO), { ...v }); return { id: 'a' + AUTO }; },
@@ -43,6 +47,7 @@ Module.prototype.require = function (id) {
   return orig.apply(this, arguments);
 };
 const SA = require(path.join(FN, 'super-admin.js'));
+const AOD = require(path.join(FN, 'admin-os-dispatch.js'));
 const TS = require(path.join(FN, 'trust-safety.js'));
 const call = async (fn, uid, token, data) => { try { return { ok: true, r: await fn({ auth: uid ? { uid, token } : null, data }) }; } catch (e) { return { ok: false, code: e.code, msg: e.message }; } };
 const SUPER = { superAdmin: true }, ADMIN = { admin: true };
@@ -92,6 +97,18 @@ const state = (u) => ({ status: (DOCS.get('users/' + u) || {}).status, suspended
   const i1 = await call(SA.suspendUser, 'mod1', SUPER, { uid: 'boss', suspend: true, reason: 'nope' });
   const i2 = await call(SA.suspendUser, 'mod1', SUPER, { uid: 'ghost', suspend: true, reason: 'nope' });
   ck('S9', i1.code === 'permission-denied' && i2.code === 'not-found' && state('boss').disabled === false, 'a super admin cannot be suspended; unknown uid → not-found', [i1.code, i2.code]);
+  /* EXISTING-SESSION WINDOW (owner 2026-10-04): a suspended actor's still-valid token cannot act */
+  seed(); DOCS.set('users/sa2', { status: 'suspended', suspended: true }); AUTHS.set('sa2', { uid: 'sa2', disabled: true, customClaims: { superAdmin: true } });
+  const j1 = await call(SA.suspendUser, 'sa2', SUPER, { uid: 't1', suspend: true, reason: 'from a revoked session' });
+  ck('S10', !j1.ok && j1.code === 'permission-denied' && state('t1').disabled === false, 'a SUSPENDED super admin (token still valid) cannot suspend anyone', j1);
+  DOCS.set('users/adm', { status: 'suspended' });
+  const j2 = await call(AOD.adminOsDispatch, 'adm', ADMIN, { op: 'adminSearchUsers', pageSize: 10 });
+  const j2b = await call(AOD.adminOsDispatch, 'mod', ADMIN, { op: 'adminSearchUsers', pageSize: 10 });
+  ck('S11', !j2.ok && j2.code === 'permission-denied' && j2b.ok, 'every AdminOS op re-checks the caller: a suspended admin is refused, an active admin passes', [j2.code, j2b.ok]);
+  const j3 = await call(SA.setUserRole, 'sa2', SUPER, { uid: 't1', role: 'seller' });
+  ck('S12', !j3.ok && j3.code === 'permission-denied', 'a suspended super admin cannot change roles (setUserRole)', j3);
+  UNREADABLE = true; const j4 = await call(AOD.adminOsDispatch, 'mod', ADMIN, { op: 'adminSearchUsers', pageSize: 10 }); UNREADABLE = false;
+  ck('S13', !j4.ok && j4.code === 'unavailable', 'an unreadable account record FAILS CLOSED for admin operations', j4);
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e && e.stack); process.exit(1); });
