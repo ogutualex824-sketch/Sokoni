@@ -1,3 +1,17 @@
+## [2026-10-03] — Review approval screens: AdminOS queue by status with every action + history; honest submit copy
+
+**Files:** `sokoni-aos.js`, `business.html`, `reviews.html`, `scripts/test-review-approval-ui.js`, `CHANGELOG.md` · **Base:** live `72dca56`
+
+- **AdminOS review queue:**
+  - status tabs (pending · flagged · approved · changes requested · rejected · archived · removed), a Next-page cursor, and target / author / order / photo / flag / note context;
+  - the server's actions offered by state (approve / reject / request changes / archive / remove / restore), with a reason required for reject, remove and request-changes;
+  - a History view (adminGetReviewHistory);
+  - a failed load now SAYS it failed (it used to render "No reviews pending").
+- **business.html:** says the review is awaiting approval, not published.
+- **reviews.html:** its device-only testimonial no longer claims "Review submitted!".
+- **Tests:** review-approval-ui 8/0 (live fails 8); admin-kpi-source 8/8.
+- **Depends on functions:** review authority f060cd9 + adminOsDispatch 12d6eb6. Ship AFTER them. Not deployed.
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;

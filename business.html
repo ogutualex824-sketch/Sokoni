@@ -1396,7 +1396,7 @@ window.bizSubmitReview = async function () {
     const mod  = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
     const fns  = mod.getFunctions(window.firebaseApp, 'us-central1');
     const call = mod.httpsCallable(fns, 'submitReview');
-    await call({
+    const _res = await call({
       targetId:   BIZ_ID,
       targetType: 'seller',
       targetName: (_biz && (_biz.name || _biz.businessName)) || '',
@@ -1404,9 +1404,11 @@ window.bizSubmitReview = async function () {
       body:       comment,
     });
 
-    showToast('Review submitted — thank you!');
+    /* Every review is approved in AdminOS before it is public (owner 2026-10-01) — never claim "published". */
+    const _pending = !(_res && _res.data && _res.data.status === 'approved');
+    showToast(_pending ? 'Thanks — your review will appear once it is approved.' : 'Review published — thank you!');
     document.getElementById('revFormWrap').innerHTML =
-      '<div class="biz-auth-notice">Thanks for your review!</div>';
+      '<div class="biz-auth-notice">' + (_pending ? 'Thanks! Your review is awaiting approval and will appear here once approved.' : 'Thanks for your review!') + '</div>';
     loadReviews();
   } catch (e) {
     /* The CF speaks in specific failures — surface them instead of a generic

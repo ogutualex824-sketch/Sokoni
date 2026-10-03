@@ -367,7 +367,9 @@ function submitReview(){
   selectedStar = 0; updateStars(0);
   document.getElementById("reviewComment").value = "";
   if(targetEl) targetEl.value = "";
-  showNotif("Review submitted! Thank you ⭐","success");
+  /* UI data integrity (owner rule): this testimonial is kept on THIS device only — it is not sent to SOKONI, so it
+     must not be presented as submitted. Product and seller reviews go through the product / shop page. */
+  showNotif("Saved on this device only. To review a product or seller, use its page — reviews there are checked and published by SOKONI.","info");
   renderReviews(); updatePlatformStats();
   try { if(typeof window.onSokoniReview==='function') window.onSokoniReview(); } catch(e){}
 }

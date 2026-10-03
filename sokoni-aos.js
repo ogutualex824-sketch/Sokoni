@@ -146,7 +146,7 @@ window.SokoniAOS = (() => {
     'adminGetBookings','adminGetCategories','adminGetDeliveryStats','adminGetDisputes',
     'adminGetExecutiveDashboard','adminGetFaqs','adminGetFeatureFlags','adminGetFinance','adminGetFraudAlerts',
     'adminGetMerchantPipeline','adminGetOrders','aosGetPendingPayouts','adminGetPlatformOverview','adminGetPlatformSettings',
-    'adminGetPayments','adminGetPosDevices','adminGetProducts','adminGetProviders','adminGetRecentNotifications','adminGetReviews','adminGetServices',
+    'adminGetPayments','adminGetPosDevices','adminGetProducts','adminGetProviders','adminGetRecentNotifications','adminGetReviews','adminGetReviewHistory','adminGetServices',
     'adminGetSearchStats','adminGetSupportTickets','adminGetSystemHealth','adminGetUser',
     'aosResolveDispute','adminResolveSupportTicket','adminSaveAnnouncement','adminSaveBanner',
     'adminSearchUsers','adminSendPushNotification','adminUpdateFeatureFlag','adminUpdateOrderStatus',
@@ -485,21 +485,38 @@ window.SokoniAOS = (() => {
         </div>
       </div>`;
     } else if (tab === "reviews") {
-      const data = await _call("adminGetReviews", { status: "pending", limit: 30 }).catch(() => ({ reviews: [] }));
+      /* THE REVIEW APPROVAL QUEUE (owner 2026-10-01: every review approved here before it is public). One canonical
+         record (reviews/{id}); the server owns every transition (adminModerateReview) and the history. A failed load
+         says so — it is never shown as an empty queue. */
+      const st = _revState.status, cur = _revState.cursor;
+      let data;
+      try { data = await _call("adminGetReviews", { status: st, limit: 30, cursor: cur || undefined }); }
+      catch (e) { body.innerHTML = _emptyMsg("Couldn't load the review queue — " + _esc(_actionFailure(e, "Review queue"))); return; }
       const reviews = data.reviews || [];
-      body.innerHTML = reviews.length ? `<div class="review-list">${reviews.map(r => `
+      const tabs = ["pending","flagged","approved","changes_requested","rejected","archived","removed"].map(s =>
+        `<button class="tab-btn${s === st ? " active" : ""}" aria-pressed="${s === st}" onclick="SokoniAOS.reviewQueue('${s}')">${_esc(s.replace("_"," "))}</button>`).join("");
+      const ACTIONS = { approve:["pending","flagged","changes_requested","rejected","archived"], reject:["pending","flagged","changes_requested","approved"],
+        request_changes:["pending","flagged"], archive:["pending","flagged","approved","rejected","changes_requested"],
+        remove:["pending","flagged","approved","rejected","changes_requested","archived"], restore:["archived","removed"] };
+      const LABEL = { approve:"Approve", reject:"Reject", request_changes:"Request changes", archive:"Archive", remove:"Remove", restore:"Restore" };
+      const btns = (r) => Object.keys(ACTIONS).filter(k => ACTIONS[k].includes(r.status || "pending")).map(k =>
+        `<button class="aos-btn-sm${k === "approve" ? " success" : (k === "remove" || k === "reject") ? " danger" : ""}" onclick="SokoniAOS.moderateReview('${_esc(r.id)}','${k}')">${LABEL[k]}</button>`).join("");
+      body.innerHTML = `<div class="tab-bar" role="group" aria-label="Review status">${tabs}</div>` + (reviews.length ? `<div class="review-list">${reviews.map(r => `
         <div class="review-item">
           <div class="review-header">
             <strong>${"⭐".repeat(r.rating||0)}</strong>
-            <span class="aos-muted">${_esc(r.targetId||"—")}</span>
+            <span class="aos-muted">${_esc(r.targetType||"—")} · ${_esc(r.targetName||r.targetId||"—")}</span>
             <time class="aos-muted">${_date(r.createdAt)}</time>
           </div>
+          ${r.title ? `<p><strong>${_esc(r.title)}</strong></p>` : ""}
           <p>${_esc(r.body||r.text||"—")}</p>
-          <div class="review-actions">
-            <button class="aos-btn-sm success" onclick="SokoniAOS.moderateReview('${r.id}','approve')">Approve</button>
-            <button class="aos-btn-sm danger"  onclick="SokoniAOS.moderateReview('${r.id}','reject')">Reject</button>
+          <p class="aos-muted" style="font-size:.75rem">Author ${_esc(String(r.authorUid||"—").slice(0,10))} · order ${_esc(r.orderId||"—")} · ${(r.images||[]).length} photo(s)${r.flags ? " · " + _fmt(r.flags) + " flag(s)" : ""}${r.moderationNote ? " · note: " + _esc(r.moderationNote) : ""}</p>
+          <div class="review-actions">${btns(r)}
+            <button class="aos-btn-sm" onclick="SokoniAOS.reviewHistory('${_esc(r.id)}')">History</button>
           </div>
-        </div>`).join("")}</div>` : _emptyMsg("No reviews pending moderation");
+          <div class="aos-muted" id="revhist-${_esc(r.id)}" style="font-size:.75rem"></div>
+        </div>`).join("")}</div>` : _emptyMsg("No " + _esc(st.replace("_"," ")) + " reviews"))
+        + (data.nextCursor ? `<div style="text-align:center;margin-top:8px"><button class="aos-btn-sm" onclick="SokoniAOS.reviewQueue('${_esc(st)}','${_esc(data.nextCursor)}')">Next page</button></div>` : "");
     }
   }
 
@@ -527,14 +544,31 @@ window.SokoniAOS = (() => {
     _marketplaceTab("orders");
   }
 
-  async function moderateReview(id, action) {
+  const _revState = { status: "pending", cursor: null };
+  function reviewQueue(status, cursor) { _revState.status = status || "pending"; _revState.cursor = cursor || null; _marketplaceTab("reviews"); }
+  async function reviewHistory(id) {
+    const box = document.getElementById("revhist-" + id); if (!box) return;
+    box.textContent = "Loading history…";
     try {
-      await _call("adminModerateReview", { reviewId: id, action });
+      const d = await _call("adminGetReviewHistory", { reviewId: id });
+      box.innerHTML = (d.history || []).map(h => _esc((h.at || "").replace("T", " ").slice(0, 16) + " · " + (h.action || "") + " · " + (h.from || "—") + " → " + (h.to || "") + " · " + String(h.actorUid || "").slice(0, 10) + (h.note ? " · " + h.note : ""))).join("<br>") || "No history recorded.";
+    } catch (e) { box.textContent = "History unavailable — " + _actionFailure(e, "Review history"); }
+  }
+  async function moderateReview(id, action) {
+    /* A note is required where the author / audit needs the reason. The server validates the transition. */
+    let note = "";
+    if (action === "reject" || action === "remove" || action === "request_changes") {
+      note = prompt(action === "request_changes" ? "What should the author change?" : "Reason (kept in the moderation history):") || "";
+      if (!note.trim()) { _toast("A reason is required for this action.", "error"); return; }
+    }
+    let res;
+    try {
+      res = await _call("adminModerateReview", { reviewId: id, action, note });
     } catch (e) {
       _toast(_actionFailure(e, "Review moderation"), "error");
       return;
     }
-    _toast("Review " + action + "d", "success");
+    _toast(res && res.unchanged ? "No change — the review is already " + res.status : "Review is now " + String((res && res.status) || action).replace("_", " "), "success");
     _marketplaceTab("reviews");
   }
 
@@ -2492,6 +2526,8 @@ window.SokoniAOS = (() => {
     updateProduct,
     updateOrder,
     moderateReview,
+    reviewQueue,
+    reviewHistory,
     editCategory,
     addCategory,
     editFaq:             (id) => { const q = prompt("Question:"); const a = prompt("Answer:"); if(q&&a) _call("adminUpsertFaq",{id,question:q,answer:a}).then(()=>{ _toast("FAQ updated","success"); _panelCache.content=false; _contentTab("faqs"); }); },
