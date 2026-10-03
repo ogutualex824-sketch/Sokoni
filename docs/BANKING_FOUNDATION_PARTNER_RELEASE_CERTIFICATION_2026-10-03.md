@@ -312,6 +312,8 @@ Checklist:
 - [ ] real POS browser proof
 - [ ] production revision
 
+**Owner ruling 2026-10-03 (asked directly, conflict with a reported decision in another session):** manual till M-PESA codes (`mpesa_till_manual`) are **REFUSED** at SmartPOS — a manual code cannot complete a sale; cash or a confirmed IntaSend M-PESA/card payment only. `gift_card` joins the tender list only together with sokoni-5b's atomic server redeem (built on e534623); the takedown `saleBlock()` (8b60947) is ported onto the same line.
+
 **B. Finance OS payout (sokoni-finance-os)** — `hosting/finos-payout-authority-on-72dca56` @ ea6493e.
 
 Facts (read-only):
