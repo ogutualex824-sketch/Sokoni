@@ -242,7 +242,9 @@ service cloud.firestore {
   'healthcare','legalProviderId','provisionedBy','legalVerification',
   'approvalDecision','approvedBy','adminApproved','commissionRate','education','discovery','_noIndex',
   'marketingApprovedCategories','marketingDeclinedCategories',
-  'marketingStatus','marketingCategories','isPublic','acceptsBookings','providerId','verification','verificationStatus',
+  'marketingStatus','marketingCategories',
+  'marketingListed','marketingGroups','marketingType','marketingApplicationId','marketingApprovedAt','marketingUpdatedAt',
+  'isPublic','acceptsBookings','providerId','verification','verificationStatus',
   'preDeactivationStatus','deactivated','deactivatedBy'];
   }
   allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()

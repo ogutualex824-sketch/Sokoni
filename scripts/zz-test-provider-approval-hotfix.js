@@ -17,6 +17,7 @@ const LOCKED = {
   /* sokoni-5b 7db4c76 */
   marketingStatus: 'approved', marketingCategories: ['all'], searchable: true, isPublic: true, acceptsBookings: true, providerId: 'other',
   verification: { level: 'verified' }, verificationStatus: 'verified', legalVerification: { ok: true }, provisionedBy: 'legal-verification',
+  marketingListed: true, marketingGroups: ['all'], marketingType: 'agency', marketingApplicationId: 'a1', marketingApprovedAt: 1, marketingUpdatedAt: 1,
   preDeactivationStatus: 'active', deactivated: false, deactivatedBy: 'self',
 };
 (async () => {

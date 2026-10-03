@@ -234,7 +234,10 @@ service cloud.firestore {
   'business','education','discovery','_noIndex','marketingApprovedCategories','marketingDeclinedCategories',
   /* 2026-10-03 sokoni-5b (server half hotfix/approval-authority-on-c7e26b6 @ 7db4c76): discovery / booking / identity /
      verification stamps — server-written only */
-  'marketingStatus','marketingCategories','searchable','isPublic','acceptsBookings','providerId',
+  'marketingStatus','marketingCategories',
+  /* sokoni-b2 Marketing projection stamps (server-written by the approval projection) */
+  'marketingListed','marketingGroups','marketingType','marketingApplicationId','marketingApprovedAt','marketingUpdatedAt',
+  'searchable','isPublic','acceptsBookings','providerId',
   'verification','verificationStatus','verifiedFacets','verifiedName','verificationReviewRequired','verificationProjectedAt',
   'legalVerification','provisionedBy',
   /* sokoni-5b P0-3 census: accountReactivate restores status from preDeactivationStatus (default active) — self-activation */
