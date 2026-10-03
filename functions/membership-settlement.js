@@ -59,7 +59,17 @@ const admin = require('firebase-admin');
 const COL = 'providerMemberships';
 const HELD = Object.freeze(['paid_held', 'partially_released']);
 /* Overridable ONLY by the suite (in-memory Firestore; the emulator is not required to prove the arithmetic). */
-const _hooks = { db: null, ts: null, inc: null, tsFromDate: null };
+const _hooks = { db: null, ts: null, inc: null, tsFromDate: null, now: null, notify: null };
+const _now = () => (_hooks.now ? _hooks.now() : new Date());
+/* Notifications through the ONE sender (notify.js); the suite may capture them. Never throws into money paths. */
+async function _notify(args) {
+  try {
+    if (_hooks.notify) return _hooks.notify(args);
+    if (_hooks.db) return null;
+    await require('./notify').notify(Object.assign({ awaitDelivery: false }, args)).catch(() => {});
+  } catch (_) { /* optional */ }
+  return null;
+}
 const _db = () => _hooks.db || admin.firestore();
 const _ts = () => (_hooks.ts ? _hooks.ts() : admin.firestore.FieldValue.serverTimestamp());
 const _inc = (n) => (_hooks.inc ? _hooks.inc(n) : admin.firestore.FieldValue.increment(n));
@@ -218,7 +228,14 @@ async function releaseDueSlices(membershipId, opts) {
     _event(t, ref, 'settlement_released', { months: priced.map((p) => p.slice.index), releasedCents, trigger });
     out = { released: priced.length, releasedCents, credited, trigger };
   });
-  if (out && out.released) logger.info('membership release', { membershipId, providerId: m.providerId, released: out.released, releasedCents: out.releasedCents, trigger: out.trigger });
+  if (out && out.released) {
+    logger.info('membership release', { membershipId, providerId: m.providerId, released: out.released, releasedCents: out.releasedCents, trigger: out.trigger });
+    await _notify({ uid: m.providerId, type: 'wallet_credit', title: 'Membership earnings released 💰', body: `${out.released} month${out.released === 1 ? '' : 's'} of ${m.title || 'a membership'} settled to your business wallet (KES ${out.credited.toLocaleString()} after SOKONI's commission).`, dedupeKey: `membership_settle_${membershipId}_${(Number(m.releasedPeriods) || 0) + out.released}` });
+    const all = slicesOf(m);
+    if ((Number(m.releasedPeriods) || 0) + out.released >= all.length) {
+      await _notify({ uid: m.buyerUid, type: 'subscription_expired', title: 'Membership ended', body: `Your ${m.title || 'membership'} has reached its end date.`, dedupeKey: `membership_ended_${membershipId}` });
+    }
+  }
   return out;
 }
 
@@ -246,6 +263,11 @@ async function requestRefund(membershipId, opts) {
     out = { ok: true, refundRequestedCents: dec.amountCents };
   });
   logger.info('membership refund request', { membershipId, by: o.by || null, ok: out && out.ok, code: out && out.code });
+  if (out && out.ok) {
+    const m = (await ref.get()).data() || {};
+    await _notify({ uid: m.buyerUid, type: 'booking_refund', title: 'Refund request received', body: `We received your refund request for ${m.title || 'your membership'}. A SOKONI reviewer will decide it.`, dedupeKey: `membership_refund_req_${membershipId}` });
+    await _notify({ uid: m.providerId, type: 'booking_refund', title: 'Membership refund requested', body: `A member who has not attended asked for a refund of ${m.title || 'a membership'}. Payouts are paused until SOKONI decides.`, dedupeKey: `membership_refund_req_gym_${membershipId}` });
+  }
   return out;
 }
 
@@ -283,8 +305,14 @@ async function holdMembershipPayment(db, adminSdk, apiRef, intentRef, amountKES)
         _event(t, ref, 'payment_review', { apiRef, paidCents, expectedCents: m.priceCents, reason: !bound ? 'intent_binding' : 'amount_mismatch' });
         return 'review';
       }
-      t.update(ref, Object.assign({ paymentStatus: 'paid_held', paymentRef: apiRef, paidAt: _ts(), heldCents: paidCents, updatedAt: _ts() },
-        initialSettlementFields(m)));
+      /* The months run from PAYMENT, not from when the record was created: a membership created on the 1st and paid
+         on the 9th starts on the 9th. A deliberately later start (startAt in the future) is kept. */
+      const now = _now();
+      const chosen = _date(m.startAt);
+      const start = chosen && chosen.getTime() > now.getTime() ? chosen : now;
+      const eff = Object.assign({}, m, { startAt: start });
+      t.update(ref, Object.assign({ paymentStatus: 'paid_held', paymentRef: apiRef, paidAt: _ts(), heldCents: paidCents, updatedAt: _ts(),
+        startAt: _tsFromDate(start), requestedStartAt: m.startAt || null }, initialSettlementFields(eff)));
       _event(t, ref, 'payment_held', { apiRef, heldCents: paidCents });
       return 'held';
     });
@@ -295,15 +323,10 @@ async function holdMembershipPayment(db, adminSdk, apiRef, intentRef, amountKES)
   if (outcome === 'held' || outcome === 'review') {
     await D.collection('paymentIntents').doc(intentRef || apiRef).set({ status: outcome === 'held' ? 'paid' : 'review', paidRef: apiRef, paidAt: _ts() }, { merge: true }).catch(() => {});
   }
-  if (outcome === 'held' && !_hooks.db) {
-    try {
-      const { notify } = require('./notify');
-      const m = (await ref.get()).data() || {};
-      await notify({ uid: m.buyerUid, type: 'subscription_activated', title: 'Membership active ✅', body: `Your ${m.title || 'membership'} is paid and active. Ref ${apiRef}.`,
-        dedupeKey: `membership_active_${apiRef}`, awaitDelivery: false }).catch(() => {});
-      await notify({ uid: m.providerId, type: 'booking_new', title: 'New membership 🏋️', body: `A member has paid for ${m.title || 'a membership'}. The money is held by SOKONI and released monthly after their first visit.`,
-        deepLink: '/provider-dashboard.html', dedupeKey: `membership_new_${apiRef}`, awaitDelivery: false }).catch(() => {});
-    } catch (_) { /* notify optional */ }
+  if (outcome === 'held') {
+    const m = (await ref.get()).data() || {};
+    await _notify({ uid: m.buyerUid, type: 'subscription_activated', title: 'Membership active ✅', body: `Payment confirmed — your ${m.title || 'membership'} is active. Ref ${apiRef}.`, dedupeKey: `membership_active_${apiRef}` });
+    await _notify({ uid: m.providerId, type: 'booking_new', title: 'New membership 🏋️', body: `A member has paid for ${m.title || 'a membership'}. SOKONI holds the money and releases it monthly after their first visit.`, deepLink: '/provider-dashboard.html', dedupeKey: `membership_new_${apiRef}` });
   }
   logger.info('[membership] payment ' + outcome, { apiRef, membershipId: intent.resourceId });
   return true;
@@ -384,7 +407,7 @@ async function decideRefund(membershipId, opts) {
     out = { ok: true, state: 'refunded', amountCents: amount, walletCreditShillings: shillings };
     notifyArgs = { uid: m.buyerUid, type: 'refund_processed', title: 'Membership refunded ↩', body: `KES ${shillings.toLocaleString()} has been returned to your SOKONI wallet.` };
   });
-  if (notifyArgs && !_hooks.db) { try { await require('./notify').notify(Object.assign({ dedupeKey: `membership_refund_${membershipId}_${out.state}`, awaitDelivery: false }, notifyArgs)).catch(() => {}); } catch (_) {} }
+  if (notifyArgs) await _notify(Object.assign({ dedupeKey: `membership_refund_${membershipId}_${out.state}` }, notifyArgs));
   logger.info('[membership] refund decision', { membershipId, by: o.by || null, decision: o.decision, ok: out && out.ok, code: out && out.code });
   return out;
 }

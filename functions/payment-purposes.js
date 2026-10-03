@@ -313,6 +313,10 @@ const PURPOSES = {
       const m = snap.data();
       if (m.buyerUid !== uid) fail('permission-denied', 'Not your membership.');
       if (m.paymentStatus !== 'pending' || m.status !== 'pending_payment') fail('already-exists', 'This membership is already paid or closed.');
+      /* An abandoned unpaid membership is not payable forever: the creation path sets payBy (its own TTL); after it a new
+         membership must be started (the price snapshot may be stale). A payment already in flight is still honoured. */
+      const payBy = m.payBy && (m.payBy.toMillis ? m.payBy.toMillis() : new Date(m.payBy).getTime());
+      if (payBy && Date.now() > payBy) fail('failed-precondition', 'This membership offer has expired. Please start again.');
       const cents = Number(m.priceCents);
       if (!Number.isInteger(cents) || cents <= 0) fail('failed-precondition', 'Membership has no payable amount.');
       if (!m.providerId) fail('failed-precondition', 'Membership has no provider.');

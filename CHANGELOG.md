@@ -1,3 +1,8 @@
+## 2026-10-03 — Memberships: start at payment, pay-by deadline, member + gym notifications (NOT deployed)
+
+- **Changes:** membership-settlement (startAt = payment time unless a later start was chosen; notifications via notify.js); payment-purposes payBy check.
+- **Tests:** test-membership-settlement 53/0; mutants still detected.
+
 ## 2026-10-03 — Refund after settlement reverses the ledger; home services 5%; snapshot stops publishing the plan ladder (NOT deployed)
 
 - **Reversal:** provider-ops.reverseServiceSettlement — negates the payout row, debits the provider wallet (a shortfall becomes debt), refunds the buyer to the SOKONI wallet.

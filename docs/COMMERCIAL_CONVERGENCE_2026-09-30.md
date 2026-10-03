@@ -534,3 +534,12 @@ It only reverses settled bookings, full reversals only (partial is not decided),
 - `test-provider-plan-ladder` F1 is inverted accordingly (38/0). `test-commission-schedule` S1 home services = 5 (25/0).
 
 **Open:** `car_rental` (16%) is a vehicle hire on the car hub, not a provider service booking. It is left as-is pending the owner.
+
+### 13.2 · Start at payment, pay-by, notifications (2026-10-03, later; gaps found with sokoni-e3)
+
+- **Start at payment.** The months run from PAYMENT, not from record creation. A future `startAt` chosen by the creation path is kept, and `requestedStartAt` preserves the original.
+- **Pay-by.** `payment-purposes.fitness_membership` refuses a new intent once `payBy` (set by the creation path's TTL) has passed. A payment already in flight is still honoured.
+- **Notifications.** All go through the one sender (`notify.js`, existing types, no WhatsApp):
+  - member: payment confirmed / active (`subscription_activated`), refund request received, refund declined with reason, refunded (`refund_processed`), membership ended (`subscription_expired`)
+  - gym: new membership (`booking_new`), refund requested, earnings released (`wallet_credit`)
+- **Tests:** 53/0 (+S1–S3, N1–N5). The 5 mutants were re-run and each is still detected.
