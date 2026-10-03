@@ -68,6 +68,8 @@ const ROWS = [
   ['P-04c inverting: a genuine application still accepted', 'zz-test-r0', /PASS\s+H-3c /],
   ['P-03 forged approved review straight to reviews', 'zz-test-r0', /PASS\s+H-4 /],
   ['S-03 direct sportsReviews write', 'zz-test-r0', /PASS\s+H-1 /],
+  ['P-02f browser forges a viewing to become review-eligible', 'zz-test-r0', /PASS\s+H-6 /],
+  ['P-02c inverting: buyer reads own server-written viewing', 'zz-test-r0', /PASS\s+H-6c /],
   ['B-xx direct bnbReviews write', 'zz-test-r0', /PASS\s+H-2 /],
   ['U-xx direct unboxingReviews create (browser)', 'zz-test-r0', /PASS\s+U-2 /],
   ['U-03 pending photo: owner read', 'unboxing-storage', /PASS\s+R-1 /],
