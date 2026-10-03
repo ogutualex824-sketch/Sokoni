@@ -1,3 +1,110 @@
+## [2026-10-03] - GATE 11: public create-order API prices from the server, and its orders are not payable (server) — NOT deployed
+
+**NOT DEPLOYED.** This closes INTASEND convergence brief §Gate 11 on `sokoniAPIGateway` `POST /api/v1/orders`.
+**Deploy delta:** `sokoniAPIGateway` is added to this tree's deploy list (it already carried the take-down
+`_visiblePage` gate). No other function changes.
+
+### The defect
+`_handleCreateOrder`:
+- built the items from the caller's `unitPrice` and set `subtotal` to the client price × quantity
+- never read `products/{id}`
+- had no take-down check and stored no seller
+
+### The repair (functions/api-gateway.js `_handleCreateOrder`)
+- **Input:** only `productId` and `quantity` are read. The quantity must be a whole number from 1 to 99, otherwise
+  400 (it is not clamped). The caller's `unitPrice`, `name`, `shopId`, `sellerUid`, `subtotal`, `total`, `amount`,
+  `status`, `paymentVerified`, references and `buyerId` are all ignored.
+- **Sale eligibility:** `shared/product-sale-eligibility.js` `saleBlock()` refuses a product under `moderationHold`,
+  even when `isVisible` was set back to true.
+  - The module is copied byte-identical from sokoni-5b's `b5d0541` (sha256 `1d34747d00b527df`).
+  - The refusal is 409 with the same wording as any unavailable product, so no moderation metadata reaches a public
+    caller.
+- **Pricing authority:** `payment-purposes.js` `validateOrderLines`, the function that createPaymentIntent's
+  `product_order` pricer uses. It resolves the product, the unit price (`salePrice || price`, recorded as
+  `priceBasis`), availability, stock and the quantity cap. Its errors map to 400/409 with its own buyer-safe message.
+- **Seller:** `products/{id}.sellerUid` only. The order is refused when:
+  - the cart spans more than one seller (the `product_order` intent pays one seller)
+  - a product has no seller
+  - the buyer is the seller (this guards against self-credit)
+- **Status:** the order is `status:'pending_payment'`, `paymentStatus:'pending'`. This is the repo's existing
+  pre-payment status: `onNewOrderCreated` and `emailOnOrderCreated` fail closed on it, and `fulfilment-lifecycle` maps
+  it to pending.
+  - The order also carries `payment:{payable:false, intentRequired:true, intentId:null, purpose:'product_order',
+    nextStep:'createPaymentIntent'}`.
+  - It has NO `total`, `amount`, `amountCents` or `orderTotal`. So `settleOrder` `_grossCents`, finos, disputes and
+    fulfilment-scan cannot read a payable figure from it.
+- **Pricing record:** `pricing:{source, subtotal, discount:{applied:false}, tax:{computed:false} (VAT never
+  inferred), fees:{deliveryFee:null, computedBy:'createPaymentIntent'}, payable:null}`.
+- **Response:** `payable:false`, `nextStep:{call:'createPaymentIntent', purpose:'product_order', orderId}`. The message
+  says the amount to pay is the intent's `amountCents`, never this subtotal.
+- **Currency:** fixed to KES on the server. A caller naming another currency gets 400 `orders/unsupported-currency`.
+- **Idempotency:** optional `clientOrderId` (`/^[A-Za-z0-9_-]{8,64}$/`). The doc id is `gw_` + sha256(uid:key)[:28],
+  written with `create()`.
+  - The same buyer with the same cart gets the same order back (200, `replayed:true`).
+  - The same key with a different cart gets 409 `orders/idempotency-conflict`.
+  - Another buyer with the same key gets their own order.
+- **Unchanged:** the take-down `_visiblePage` gates on `/products` and `/search`. The `gateway-no-filter` sabotage in
+  test-takedown-enforcement still anchors and is caught.
+
+### Lineage decision — payment-purposes.js was NOT replaced
+- This tree's `payment-purposes.js` (sha `3ed2b1f883279f13`) differs from `b5d0541`'s (sha `9ec28cab…`). `b5d0541`
+  has **no `pos_till_sale` and no `healthcare_subscription`**: `sokoni-till.js` and the Healthcare activation in this
+  tree depend on both. Copying it over would break both purposes for any later deploy from this tree.
+- `validateOrderLines` itself was proven identical. `b5d0541`'s function (sha `464b62913cb5acf5`) with its 4-line
+  `saleBlock` insertion removed is byte-equal to this tree's function (sha `c944cf66651187b7`).
+- The gateway therefore calls this tree's unedited `validateOrderLines`, and applies the same `saleBlock` module
+  itself. Row G_PIN pins the eligibility module, the whole `payment-purposes.js` file, and the `validateOrderLines`
+  text.
+- When the lineages converge, the eligibility check simply runs twice.
+
+### Tests: `scripts/test-gateway-order-authority.js` 17/0
+- It drives the REAL gateway pipeline and the REAL `payment-purposes.js` on the fake Firestore.
+- **Tripwires (row Z1):** the real firebase-admin package is unloadable (resolution throws) and the bare id gets a
+  stub. notify.js throws.
+- **Counterproof:** `COUNTERPROOF=1` runs the pre-repair gateway `7170b0f`, which fails 13 of 17 rows.
+- **Failure injection 6/6 caught:**
+
+  | Fault | Caught by |
+  | --- | --- |
+  | trust-client-unitprice | INVALID_AMOUNT |
+  | skip-eligibility | G_HELD |
+  | payable-on-create | VALID_PAYMENT |
+  | trust-client-seller | G_SELLER |
+  | no-idempotency | DUPLICATE_CALLBACK |
+  | currency-from-client | WRONG_CURRENCY |
+
+- **Gate 15 rows, each with id / expected / observed / result / mutation / database / money / order / ledger.** The
+  suite prints them as a table.
+  - Proven at the gateway: VALID_PAYMENT, INVALID_AMOUNT, MISSING_PAYMENT, WRONG_CURRENCY, and the gateway analogues
+    of DUPLICATE_CALLBACK and REPLAY_CALLBACK (a duplicate POST and a replayed key).
+  - Proven at the gateway, with the provider/intent part delegated: PARTIAL_PAYMENT, WRONG_ORDER, WRONG_BUYER,
+    UNVERIFIED_PAYMENT, FAKE_REFERENCE, BROWSER_SUCCESS_WITHOUT_PROVIDER. The gateway part is proven here. The
+    provider/intent part is **delegated to createPaymentIntent / webhookIntasend (owner sokoni-5b), proven there**: the
+    gateway mints no payment and binds no reference.
+  - Extra rows: G_PIN, G_SELLER, G_HELD, G_INPUT, Z1.
+
+### Files
+- **Changed:** `functions/api-gateway.js`
+- **New:**
+  - `functions/shared/product-sale-eligibility.js` (sokoni-5b's, byte-identical)
+  - `scripts/test-gateway-order-authority.js`
+
+### Database
+- Gateway `orders` now carry `sellerUid`, `buyerUid`, `paymentStatus`, `pricing`, `payment`, `clientOrderId` and
+  `requestFingerprint`.
+- `items[]` = `{productId, name, shopId, sellerUid, quantity, unitPrice, priceBasis, lineTotal}`, all from the server.
+
+### API
+- **New:** `clientOrderId` and `currency` are accepted. The response gains `payable`, `replayed`, `items` and
+  `nextStep`.
+- **New refusals:** 409 `orders/product-unavailable | multiple-sellers | no-seller | own-product |
+  idempotency-conflict`, and 400 `orders/invalid-quantity | unsupported-currency | invalid-client-order-id`.
+- **Breaking:** a caller relying on its own `unitPrice` now gets server prices. No hosting page calls this endpoint.
+
+### Security
+- Caller prices, seller, buyer and payment state can no longer enter an order.
+- A gateway order cannot become payable except through createPaymentIntent re-pricing from products.
+
 ## [2026-10-03] - PRIVACY: take-down hold reference is unlinkable to the reporter (server) — NOT deployed
 
 **NOT DEPLOYED.** This fixes a privacy defect in the take-down slice (`c85621d`), which is also not deployed. No hold

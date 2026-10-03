@@ -505,66 +505,81 @@ async function _handleSearch(req, res, opts) {
 /**
  * POST /api/v1/orders — inline order creation (auth required).
  *
+ * GATE 11 (2026-10-03, INTASEND convergence brief §Gate 11): SERVER ECONOMICS ONLY.
+ *
  * Body shape:
- *   items           {Array}  — [{ productId, shopId, name, quantity, unitPrice }]
+ *   items           {Array}  — [{ productId, quantity }]   (any unitPrice / name / shopId / sellerUid is IGNORED)
  *   deliveryAddress {object} — { street, city, county, lat?, lng? }
- *   paymentMethod   {string} — 'mpesa' | 'card' | 'wallet'
+ *   paymentMethod   {string} — 'mpesa' | 'card' | 'wallet'   (a preference only — it makes nothing payable)
+ *   clientOrderId   {string} — optional idempotency key, /^[A-Za-z0-9_-]{8,64}$/ — the same key from the same buyer
+ *                              returns the SAME order (never a second one)
+ *   currency        {string} — optional; anything other than 'KES' is refused
  *   note            {string} — optional buyer note (max 500 chars)
  *
- * Creates a Firestore order document with status 'pending_payment'.
- * Payment confirmation must flow through the checkout / payment-orchestrator
- * callable — this endpoint only records the buyer's intent.
+ * The server resolves everything that has money in it, from products/{id}, through the ONE pricing authority
+ * (payment-purposes.js validateOrderLines — the function createPaymentIntent's product_order pricer uses):
+ * product, seller (products/{id}.sellerUid — never the caller's), unit price (salePrice || price), quantity, availability,
+ * stock. The shared sale-eligibility rule (shared/product-sale-eligibility.js) refuses a product SOKONI has taken down,
+ * with the same wording as any unavailable product (no moderation metadata leaks to a public caller).
+ *
+ * NOT PAYABLE. The order is stored as 'pending_payment' (the repo's pre-payment order status — onNewOrderCreated,
+ * emailOnOrderCreated and fulfilment-lifecycle all treat it as unpaid and fail closed) with payment.payable:false and
+ * NO total / amount / amountCents field, so nothing that reads an order's total (settleOrder's _grossCents, finos,
+ * disputes, fulfilment-scan) can treat it as money. The ONLY way to pay is createPaymentIntent (purpose product_order),
+ * which re-prices from products; the payable amount is THAT intent's amountCents, never a figure stored here.
  *
  * @param {object} req   — Express request (gateway-augmented)
  * @param {object} opts  — { version, requestId, startTime, auth }
  * @param {object} res   — Express response
  */
+const GW_ORDER_MAX_ITEMS = 50;
+const GW_ORDER_MAX_QTY = 99;                  /* validateOrderLines' own cap — refused here rather than silently clamped */
+const GW_ORDER_CURRENCY = 'KES';
 async function _handleCreateOrder(req, res, opts) {
   const { version, requestId, startTime, auth } = opts;
   const firestore = db();
   const body      = req.body || {};
+  const meta      = { version, requestId, startTime };
 
   /* ── Input validation ───────────────────────────────────────── */
   if (!Array.isArray(body.items) || body.items.length === 0) {
-    return _error(res, 400, 'orders/invalid-items',
-      '"items" must be a non-empty array.',
-      { version, requestId, startTime }
-    );
+    return _error(res, 400, 'orders/invalid-items', '"items" must be a non-empty array.', meta);
   }
-  if (body.items.length > 50) {
-    return _error(res, 400, 'orders/too-many-items',
-      '"items" must contain 50 or fewer entries.',
-      { version, requestId, startTime }
-    );
+  if (body.items.length > GW_ORDER_MAX_ITEMS) {
+    return _error(res, 400, 'orders/too-many-items', `"items" must contain ${GW_ORDER_MAX_ITEMS} or fewer entries.`, meta);
   }
   if (!body.deliveryAddress || typeof body.deliveryAddress !== 'object') {
-    return _error(res, 400, 'orders/missing-address',
-      '"deliveryAddress" object is required.',
-      { version, requestId, startTime }
-    );
+    return _error(res, 400, 'orders/missing-address', '"deliveryAddress" object is required.', meta);
   }
   const VALID_PAYMENT_METHODS = new Set(['mpesa', 'card', 'wallet']);
   if (!VALID_PAYMENT_METHODS.has(body.paymentMethod)) {
     return _error(res, 400, 'orders/invalid-payment-method',
-      `"paymentMethod" must be one of: ${[...VALID_PAYMENT_METHODS].join(', ')}.`,
-      { version, requestId, startTime }
-    );
+      `"paymentMethod" must be one of: ${[...VALID_PAYMENT_METHODS].join(', ')}.`, meta);
+  }
+  /* The currency is FIXED server-side. A caller naming another one is refused, never converted or stored. */
+  if (body.currency !== undefined && body.currency !== null && String(body.currency).toUpperCase() !== GW_ORDER_CURRENCY) {
+    return _error(res, 400, 'orders/unsupported-currency', `Only ${GW_ORDER_CURRENCY} is supported.`, meta);
+  }
+  let clientOrderId = null;
+  if (body.clientOrderId !== undefined && body.clientOrderId !== null) {
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(String(body.clientOrderId))) {
+      return _error(res, 400, 'orders/invalid-client-order-id', '"clientOrderId" must be 8–64 characters of A–Z, a–z, 0–9, _ or -.', meta);
+    }
+    clientOrderId = String(body.clientOrderId);
   }
 
-  /* ── Sanitize items ─────────────────────────────────────────── */
-  const items = body.items.map(item => ({
-    productId:  String(item.productId  || '').slice(0, 128),
-    shopId:     String(item.shopId     || '').slice(0, 128),
-    name:       String(item.name       || '').replace(/[<>"']/g, '').slice(0, 256),
-    quantity:   Math.max(1, Math.floor(Number(item.quantity)  || 1)),
-    unitPrice:  Math.max(0, Number(item.unitPrice) || 0),
-  })).filter(i => i.productId);
-
-  if (items.length === 0) {
-    return _error(res, 400, 'orders/invalid-items',
-      'No valid items found. Each item must have a "productId".',
-      { version, requestId, startTime }
-    );
+  /* ── Requested lines: product + quantity ONLY. A caller's unitPrice / name / shopId / sellerUid is never read. ── */
+  const wanted = [];
+  for (const item of body.items) {
+    const productId = String((item && item.productId) || '').trim().slice(0, 128);
+    if (!productId || !/^[A-Za-z0-9_-]+$/.test(productId)) {
+      return _error(res, 400, 'orders/invalid-items', 'Each item must have a valid "productId".', meta);
+    }
+    const q = item.quantity === undefined ? 1 : Number(item.quantity);
+    if (!Number.isInteger(q) || q < 1 || q > GW_ORDER_MAX_QTY) {
+      return _error(res, 400, 'orders/invalid-quantity', `"quantity" must be a whole number from 1 to ${GW_ORDER_MAX_QTY}.`, meta);
+    }
+    wanted.push({ productId, qty: q });
   }
 
   /* ── Sanitize delivery address ──────────────────────────────── */
@@ -573,64 +588,143 @@ async function _handleCreateOrder(req, res, opts) {
     city:   String(body.deliveryAddress.city   || '').slice(0, 128),
     county: String(body.deliveryAddress.county || '').slice(0, 128),
   };
-  if (typeof body.deliveryAddress.lat === 'number' && isFinite(body.deliveryAddress.lat)) {
-    addr.lat = body.deliveryAddress.lat;
-  }
-  if (typeof body.deliveryAddress.lng === 'number' && isFinite(body.deliveryAddress.lng)) {
-    addr.lng = body.deliveryAddress.lng;
-  }
+  if (typeof body.deliveryAddress.lat === 'number' && isFinite(body.deliveryAddress.lat)) addr.lat = body.deliveryAddress.lat;
+  if (typeof body.deliveryAddress.lng === 'number' && isFinite(body.deliveryAddress.lng)) addr.lng = body.deliveryAddress.lng;
 
-  /* ── Compute totals ─────────────────────────────────────────── */
-  const subtotal = items.reduce((sum, i) => sum + (i.unitPrice * i.quantity), 0);
-
-  /* ── Write order document ───────────────────────────────────── */
   try {
-    const orderRef = firestore.collection('orders').doc();
+    /* ── 1. sale eligibility: the ONE takedown rule the till and the online checkout obey ── */
+    const eligibility = require('./shared/product-sale-eligibility');
+    const ids = [...new Set(wanted.map((w) => w.productId))];
+    const snaps = await firestore.getAll(...ids.map((id) => firestore.collection('products').doc(id)));
+    const prods = {};
+    for (const s of snaps) {
+      if (!s.exists) return _error(res, 409, 'orders/product-unavailable', `Product ${s.id} is no longer available.`, meta);
+      const p = s.data() || {};
+      if (eligibility.saleBlock(p)) {
+        /* same wording as any unavailable product: a public caller learns nothing about moderation */
+        logger.info('[gateway] order refused: product not sellable', { requestId, productId: s.id, reason: 'sale_block' });
+        return _error(res, 409, 'orders/product-unavailable', `${String(p.name || s.id).slice(0, 120)} is not currently available.`, meta);
+      }
+      prods[s.id] = p;
+    }
+
+    /* ── 2. price: the ONE pricing authority (createPaymentIntent product_order uses the same function) ── */
+    let priced;
+    try {
+      priced = await require('./payment-purposes').validateOrderLines(auth.uid, wanted.map((w) => ({ productId: w.productId, qty: w.qty })));
+    } catch (e) {
+      if (e && (e.code === 'failed-precondition' || e.code === 'invalid-argument')) {
+        return _error(res, e.code === 'invalid-argument' ? 400 : 409, 'orders/' + (e.code === 'invalid-argument' ? 'invalid-items' : 'product-unavailable'),
+          String(e.message || 'An item in this order is not available.').slice(0, 200), meta);
+      }
+      throw e;
+    }
+    const lines = priced.lines;
+
+    /* ── 3. seller: from products/{id} ONLY; one seller per order (the product_order intent pays one seller) ── */
+    const sellers = [...new Set(lines.map((l) => l.sellerUid).filter(Boolean))];
+    if (!sellers.length) return _error(res, 409, 'orders/no-seller', 'These products have no seller on record and cannot be ordered.', meta);
+    if (sellers.length > 1) return _error(res, 409, 'orders/multiple-sellers', 'An order can contain products from one shop only. Order from one shop at a time.', meta);
+    const sellerUid = sellers[0];
+    if (sellerUid === auth.uid) return _error(res, 409, 'orders/own-product', 'You cannot order your own products.', meta);
+
+    const items = lines.map((l) => {
+      const p = prods[l.productId] || {};
+      return {
+        productId: l.productId,
+        name:      String(p.name || '').replace(/[<>"']/g, '').slice(0, 256),
+        shopId:    p.shopId ? String(p.shopId).slice(0, 128) : null,
+        sellerUid: l.sellerUid,
+        quantity:  l.qty,
+        unitPrice: l.unitPrice,                                  /* server: salePrice || price */
+        priceBasis: Number(p.salePrice) ? 'salePrice' : 'price', /* the price tier the authority used */
+        lineTotal: Math.round(l.unitPrice * l.qty * 100) / 100,
+      };
+    });
+    const subtotal = priced.subtotal;
+
+    /* ── 4. the order: server economics, NOT payable ── */
+    const fingerprint = crypto.createHash('sha256').update(JSON.stringify(wanted.map((w) => [w.productId, w.qty]))).digest('hex').slice(0, 32);
+    const orderRef = clientOrderId
+      ? firestore.collection('orders').doc('gw_' + crypto.createHash('sha256').update(auth.uid + ':' + clientOrderId).digest('hex').slice(0, 28))
+      : firestore.collection('orders').doc();
     const orderDoc = {
       orderId:         orderRef.id,
       buyerId:         auth.uid,
+      buyerUid:        auth.uid,
+      sellerUid,
       status:          'pending_payment',
+      paymentStatus:   'pending',
       items,
       subtotal,
-      currency:        'KES',
+      currency:        GW_ORDER_CURRENCY,
+      /* NO total / amount / amountCents: the payable figure exists only on the payment intent */
+      pricing: {
+        source:   'server:payment-purposes.validateOrderLines',
+        subtotal,
+        discount: { applied: false, note: 'no discount is applied at order creation; createPaymentIntent prices the payment' },
+        tax:      { computed: false, note: 'VAT is never inferred; listed prices are used as-is' },
+        fees:     { deliveryFee: null, computedBy: 'createPaymentIntent' },
+        payable:  null,
+      },
+      payment: {
+        payable:        false,
+        intentRequired: true,
+        intentId:       null,
+        purpose:        'product_order',
+        nextStep:       'createPaymentIntent',
+      },
       deliveryAddress: addr,
       paymentMethod:   body.paymentMethod,
-      note:            typeof body.note === 'string'
-        ? body.note.replace(/[<>"']/g, '').slice(0, 500)
-        : null,
+      note:            typeof body.note === 'string' ? body.note.replace(/[<>"']/g, '').slice(0, 500) : null,
       source:          'api-gateway',
+      clientOrderId:   clientOrderId,
+      requestFingerprint: fingerprint,
       requestId,
       createdAt:       FieldValue.serverTimestamp(),
       updatedAt:       FieldValue.serverTimestamp(),
     };
 
-    await orderRef.set(orderDoc);
+    let replayed = false;
+    try {
+      await orderRef.create(orderDoc);
+    } catch (e) {
+      const exists = e && (e.code === 6 || e.code === 'already-exists' || /ALREADY_EXISTS/i.test(String(e.message)));
+      if (!exists || !clientOrderId) throw e;
+      /* the SAME buyer + clientOrderId: return the order already recorded — never a second one */
+      const prev = await orderRef.get();
+      const pd = prev.exists ? (prev.data() || {}) : {};
+      if (pd.buyerId !== auth.uid || pd.requestFingerprint !== fingerprint) {
+        return _error(res, 409, 'orders/idempotency-conflict', 'This clientOrderId was already used for a different order.', meta);
+      }
+      replayed = true;
+      orderDoc.items = pd.items; orderDoc.subtotal = pd.subtotal; orderDoc.status = pd.status; orderDoc.paymentMethod = pd.paymentMethod;
+    }
 
-    logger.info('[gateway] order created', {
-      requestId,
-      orderId: orderRef.id,
-      buyerId: auth.uid,
-      itemCount: items.length,
+    logger.info('[gateway] order recorded (not payable until a payment intent exists)', {
+      requestId, orderId: orderRef.id, buyerId: auth.uid, itemCount: items.length, replayed,
     });
 
     return _success(res,
       {
         orderId:       orderRef.id,
-        status:        'pending_payment',
-        itemCount:     items.length,
-        subtotal,
-        currency:      'KES',
-        paymentMethod: body.paymentMethod,
-        message:       'Order created. Complete payment via the checkout flow to confirm.',
+        status:        orderDoc.status,
+        payable:       false,
+        replayed,
+        itemCount:     orderDoc.items.length,
+        items:         orderDoc.items.map((i) => ({ productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice })),
+        subtotal:      orderDoc.subtotal,
+        currency:      GW_ORDER_CURRENCY,
+        paymentMethod: orderDoc.paymentMethod,
+        nextStep:      { call: 'createPaymentIntent', purpose: 'product_order', orderId: orderRef.id },
+        message:       'Order recorded with server prices. It is NOT payable yet: call createPaymentIntent (purpose product_order) — '
+          + 'the amount to pay is that intent\'s amountCents, never this subtotal.',
       },
-      { version, requestId, startTime, status: 201, cacheControl: 'no-store' }
+      { version, requestId, startTime, status: replayed ? 200 : 201, cacheControl: 'no-store' }
     );
   } catch (err) {
     logger.error('[gateway] order creation failed', { requestId, error: err.message });
-    return _error(res, 500, 'gateway/internal-error',
-      'Failed to create order. Please try again.',
-      { version, requestId, startTime }
-    );
+    return _error(res, 500, 'gateway/internal-error', 'Failed to create order. Please try again.', meta);
   }
 }
 
