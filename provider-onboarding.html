@@ -234,11 +234,11 @@ a{color:var(--acc);text-decoration:none}
 const COUNTIES=['Nairobi','Mombasa','Kwale','Kilifi','Tana River','Lamu','Taita-Taveta','Garissa','Wajir','Mandera','Marsabit','Isiolo','Meru','Tharaka-Nithi','Embu','Kitui','Machakos','Makueni','Nyandarua','Nyeri','Kirinyaga',"Murang'a",'Kiambu','Turkana','West Pokot','Samburu','Trans-Nzoia','Uasin Gishu','Elgeyo-Marakwet','Nandi','Baringo','Laikipia','Nakuru','Narok','Kajiado','Kericho','Bomet','Kakamega','Vihiga','Bungoma','Busia','Siaya','Kisumu','Homa Bay','Migori','Kisii','Nyamira'];
 const PCATS={'Home Services':['Electrician','Plumber','Carpenter','Painter','Welder','Cleaner','Gardener','Pest Control','Appliance Repair','HVAC','Mover'],'Security':['Security Guard','CCTV Installation','Access Control'],'Education':['Tutor','Private Teacher','Skills Trainer','Music Teacher','Language Teacher'],'Creative & Media':['Photographer','Videographer','Graphic Designer','Content Creator','DJ','MC'],'Technology':['Software Developer','Web Designer','IT Support','Network Engineer','Data Analyst'],'Business Services':['Marketing Agency','PR Consultant','Business Consultant','Accountant','Bookkeeper'],'Legal':['Lawyer','Legal Consultant','Notary'],'Healthcare':['Doctor','Nurse','Clinical Officer','Dentist','Therapist','Physiotherapist','Nutritionist'],'Beauty & Wellness':['Salon','Barber','Makeup Artist','Nail Technician','Spa Therapist'],'Fashion & Textiles':['Tailor','Fashion Designer','Laundry Service','Dry Cleaner'],'Construction & Design':['Architect','Interior Designer','Structural Engineer','Quantity Surveyor'],'Events':['Event Planner','Caterer','Decorator','Sound Engineer','Lighting Technician'],'Logistics':['Delivery Service','Courier','Freight Agent'],'Freelance':['Virtual Assistant','Copywriter','Translator','Research Analyst','Data Entry']};
 const PLANS=[
-  {t:'free_trial',l:'Free Trial',p:'Free',py:'Free',c:'20%',pop:0,lim:'1 listing',ft:['5 Leads/month','Basic profile','Customer messaging']},
-  {t:'starter',l:'Starter',p:'KSh 999',py:'KSh 9,590',c:'15%',pop:0,lim:'3 listings',ft:['20 Leads/month','Calendar','Verified badge','Invoices']},
-  {t:'professional',l:'Professional',p:'KSh 2,499',py:'KSh 23,990',c:'10%',pop:1,lim:'10 listings',ft:['AI Matching','Portfolio showcase','Priority in search','Analytics dashboard','Staff seats: 3']},
-  {t:'business',l:'Business',p:'KSh 4,999',py:'KSh 47,990',c:'7%',pop:0,lim:'25 listings',ft:['Featured placement','Unlimited leads','Custom packages','Priority support','Staff seats: 10']},
-  {t:'enterprise',l:'Enterprise',p:'KSh 9,999',py:'KSh 95,990',c:'5%',pop:0,lim:'Unlimited',ft:['White-label option','API access','Dedicated manager','SLA guarantee','Staff seats: unlimited']}
+  {t:'free_trial',l:'Free Trial',p:'Free',py:'Free',pop:0,lim:'1 listing',ft:['5 Leads/month','Basic profile','Customer messaging']},
+  {t:'starter',l:'Starter',p:'KSh 999',py:'KSh 9,590',pop:0,lim:'3 listings',ft:['20 Leads/month','Calendar','Verified badge','Invoices']},
+  {t:'professional',l:'Professional',p:'KSh 2,499',py:'KSh 23,990',pop:1,lim:'10 listings',ft:['AI Matching','Portfolio showcase','Priority in search','Analytics dashboard','Staff seats: 3']},
+  {t:'business',l:'Business',p:'KSh 4,999',py:'KSh 47,990',pop:0,lim:'25 listings',ft:['Featured placement','Unlimited leads','Custom packages','Priority support','Staff seats: 10']},
+  {t:'enterprise',l:'Enterprise',p:'KSh 9,999',py:'KSh 95,990',pop:0,lim:'Unlimited',ft:['White-label option','API access','Dedicated manager','SLA guarantee','Staff seats: unlimited']}
 ];
 
 /* ── Steps (14, auth handled separately) ──────────────────────────── */
@@ -602,7 +602,8 @@ function sPricing(d){
 function sSub(d){
   return`<div class="sh">Choose Your Plan</div><p class="ss">Start free for 14 days, upgrade anytime. Cancel whenever.</p>
   <div class="btog"><button class="btg on" id="btMo" onclick="W.billing('monthly')">Monthly</button><button class="btg" id="btYr" onclick="W.billing('yearly')">Yearly <span style="font-size:.6rem;background:var(--acc);color:#000;padding:1px 5px;border-radius:99px;margin-left:3px">20% off</span></button></div>
-  <div class="pgrid">${PLANS.map(p=>`<div class="pc${W._t===p.t?' sel':''}" onclick="W.plan('${p.t}',this)">${p.pop?'<div class="ppop">POPULAR</div>':''}<div class="pn">${p.l}</div><div class="pp" id="pp_${p.t}">${p.p}/month</div><div class="pcom">${p.c} commission</div><div style="font-size:.7rem;color:var(--sub);margin-bottom:5px">${p.lim}</div><ul class="pft">${p.ft.map(f=>`<li>${f}</li>`).join('')}</ul><div class="pyr" id="pyr_${p.t}"></div></div>`).join('')}</div>`;
+  <div class="pcom" style="margin:0 0 10px">SOKONI commission: one rate on every plan, paid from your payout at settlement — customers pay your price only.</div>
+  <div class="pgrid">${PLANS.map(p=>`<div class="pc${W._t===p.t?' sel':''}" onclick="W.plan('${p.t}',this)">${p.pop?'<div class="ppop">POPULAR</div>':''}<div class="pn">${p.l}</div><div class="pp" id="pp_${p.t}">${p.p}/month</div><div style="font-size:.7rem;color:var(--sub);margin-bottom:5px">${p.lim}</div><ul class="pft">${p.ft.map(f=>`<li>${f}</li>`).join('')}</ul><div class="pyr" id="pyr_${p.t}"></div></div>`).join('')}</div>`;
 }
 
 /* Step 8: Verification */

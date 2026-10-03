@@ -114,6 +114,13 @@ const SRC = read('sokoni-tech-service-editor.js');
     'the service editor has no booking-fee field, the save sends no fee, and the commission note names no invented rate');
 }
 
+/* F2 — owner decision 2026-10-03: one flat service commission replaces the plan ladder — no per-plan rate is advertised */
+{
+  const po = read('provider-onboarding.html'), pd = read('provider-dashboard.html');
+  ck('F2', !/c:'(20|15|10|7|5)%'/.test(po) && po.indexOf('${p.c} commission') === -1 && pd.indexOf('sub.commissionRate') === -1 && /one rate on every plan/.test(po) && /one rate on every plan/.test(pd),
+    'onboarding plans and the dashboard plan card advertise no per-plan commission (no stale 20/15/10/7/5% ladder, no legacy plan rate)');
+}
+
 /* T10 — vocabulary parity with the server authority */
 {
   const serverFile = path.join(TECH_FN, 'functions', 'shared', 'tech-service-profile.js');

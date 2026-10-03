@@ -1,3 +1,15 @@
+## [2026-10-03] - Provider onboarding + dashboard: no per-plan commission advertised (flat service commission) — hosting, NOT deployed
+
+- Owner decision 2026-10-03 (relayed by sokoni-2f; server commercial-fn @ 21969e0): one flat, provider-paid commission on every service booking
+  replaces the plan ladder. Plans differ by features / limits only.
+- provider-onboarding.html: each plan card advertised its own rate (20% / 15% / 10% / 7% / 5%). The per-plan `c:` values and the card line are
+  removed; one line above the grid says the commission is one rate on every plan, paid from the payout at settlement.
+- provider-dashboard.html: the plan card read the plan's legacy `commissionRate` ("Commission rate: N%"). It now carries the same neutral line.
+- **No number is shown on purpose:** the canonical client snapshot on this lineage (sokoni-commission-rates.js) still says services 15.
+  Rendering it would advertise a false 15%. The number appears once the regenerated snapshot (2f) or 5b's workspace
+  `commercial.bookingCommissionRate` ships.
+- Test: test-tech-service-editor F2 (12/0). role-authority 155/0, role-entry-convergence 15/15, test-otp PASS.
+
 ## [2026-10-03] - Provider dashboard: no provider-declared booking fee (owner fee model) — hosting, NOT deployed
 
 - Owner decision 2026-10-03 (confirmed to sokoni-5b directly):
