@@ -64,7 +64,8 @@ const APPROVED_AT = '2026-09-01T00:00:00.000Z';
 const reset = () => DOCS.clear();
 const provider = (uid, category) => { DOCS.set('providers/' + uid, { status: 'active', approvedAt: APPROVED_AT, searchable: true, business: { category, source: 'application' } }); DOCS.set('users/' + uid, { role: 'provider' }); };
 const seller = (uid) => DOCS.set('sellers/' + uid, { status: 'active', active: true, approvedAt: APPROVED_AT });
-const app = (id, uid, category, role, status, decidedBy) => DOCS.set('applications/' + id, { uid, category, role, status, decidedBy: decidedBy === undefined ? 'admin1' : decidedBy });
+/* P0 (5b 0cb93bd): an admin decision also writes the server record applicationDecide writes — the application doc alone is a request. */
+const app = (id, uid, category, role, status, decidedBy) => { const by = decidedBy === undefined ? 'admin1' : decidedBy; DOCS.set('applications/' + id, { uid, category, role, status, decidedBy: by }); if (by === 'admin1') DOCS.set('applicationDecisions/' + id, { status: status === 'approved' ? 'approved' : status, decidedBy: by }); };
 let BW = null, loadErr = null;
 try { BW = require(path.join(FN, 'business-workspace.js')); } catch (e) { loadErr = e.message; }
 (async () => {
