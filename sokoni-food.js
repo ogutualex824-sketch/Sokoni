@@ -266,26 +266,15 @@ window.SokoniFood = (function () {
     }
   });
 
-  /* ══ PROMO CODES ══ */
-  const SYSTEM_PROMOS = [
-    {code:'FOOD20',type:'percent',value:20,max:300,minOrder:800,uses:10,desc:'20% OFF any food order'},
-    {code:'FREEDELIVERY',type:'delivery',value:200,max:200,minOrder:600,uses:5,desc:'Free delivery on your order'},
-    {code:'FRIDAY200',type:'flat',value:200,max:200,minOrder:1000,uses:3,desc:'KES 200 OFF every Friday'},
-    {code:'SOKONI10',type:'percent',value:10,max:150,minOrder:400,uses:20,desc:'10% OFF – Sokoni member discount'},
-  ];
+  /* ══ PROMO CODES — none (owner 2026-10-03) ══
+     The browser never grants a discount. The old SYSTEM_PROMOS (WELCOME50, FOOD20, FREEDELIVERY, FRIDAY200, SOKONI10) and
+     vendor promos read from localStorage were never applied by any checkout — shipped promises with nothing behind them.
+     Real food promotions go through the ONE server-side offer engine (shopOffers), which checkout actually honours.
+     validatePromo stays exported (callers must not crash) but always answers 'no promotions'. */
+  const SYSTEM_PROMOS = Object.freeze([]);
 
-  function validatePromo(code, subtotal){
-    const all=[...SYSTEM_PROMOS,...lsArr('food_vendor_promos')];
-    const promo=all.find(p=>p.code.toUpperCase()===code.toUpperCase());
-    if(!promo) return {valid:false,error:'Invalid promo code'};
-    if(subtotal<promo.minOrder) return {valid:false,error:`Minimum order KES ${fmt(promo.minOrder)} required`};
-    const used=Number(lsGet('promo_used_'+code.toLowerCase())||0);
-    if(used>=promo.uses) return {valid:false,error:'Promo code limit reached'};
-    let discount=0;
-    if(promo.type==='percent') discount=Math.min(subtotal*promo.value/100,promo.max);
-    else if(promo.type==='flat') discount=promo.value;
-    else if(promo.type==='delivery') discount=Math.min(promo.value,promo.max);
-    return {valid:true,promo,discount:Math.round(discount)};
+  function validatePromo(_code, _subtotal){
+    return {valid:false,error:'Promo codes are not available here. Offers are applied automatically at checkout.'};
   }
 
   function usePromo(code){
