@@ -1,3 +1,9 @@
+## [2026-10-03] — Marketing reads use THE approval predicate (adapter over 5b P0-C isAuthoritativelyApproved) — NOT deployed
+
+- **functions/shared/approval-authority.js:** byte-identical copy of 5b f85039a (the ONE predicate).
+- **functions/shared/marketing-authority.js:** the thin adapter (identical to capability line 61def5d). The directory / profile / status / admin reads in marketing-hub.js now take approval ONLY from isAuthoritativelyApproved; categories = listing ∩ the predicate's approvedCategories.
+- **Tests:** test-marketing-hub 36/0 (real applicationDecide flow), SABOTAGE 11/11 (LF re-pointed at the adapter); k13a 11/0, k13b 8/0, education-applications 34/0, role-provisioning 57/0, food-gate1 28/0.
+
 ## [2026-10-03] — SECURITY: Marketing directory / profile / status / AdminOS reads use the server decision record (5b deb598e) — NOT deployed
 
 - **functions/shared/marketing-authority.js** (same module as the capability line e4f9b7d) + **functions/marketing-hub.js**:

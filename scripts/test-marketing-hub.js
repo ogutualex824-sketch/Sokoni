@@ -26,7 +26,7 @@ if (process.env.SABOTAGE) {
     ['S1', 'marketing-hub.js', "out[x.id] = await MA.marketingAuthority(db(), x.id, x.data() || null);", "out[x.id] = { active: true, categories: (x.data() || {}).marketingCategories || [] };",
       'application-lifecycle.js', 'marketingCategories: [], marketingGroups: [],\n      marketingListed: false,', 'marketingListed: false,'],
     /* LF: the authority trusts the provider's own fields when there is no decision record */
-    ['LF', 'shared/marketing-authority.js', "  if (!r) return { active: false, categories: [], type: null, why: 'no_decision_record' };", "  if (!r) return { active: (provider || {}).marketingStatus === 'active', categories: (provider || {}).marketingCategories || [], type: null, why: 'forged' };"],
+    ['LF', 'shared/marketing-authority.js', "  if (!v.approved) return { active: false, categories: [], type: null, why: v.reason || 'NOT_APPROVED' };", "  if (!v.approved) return { active: p.marketingStatus === 'active', categories: p.marketingCategories || [], type: null, why: 'forged' };"],
     ['A7', 'marketing-hub.js', "status: 'pending', reviewStage: 'submitted',", "status: d.status || 'pending', reviewStage: 'submitted',"],
     ['O1', 'marketing-hub.js', 'async marketingAdminOverview(req) {\n    _admin(req);', 'async marketingAdminOverview(req) {'],
   ];
