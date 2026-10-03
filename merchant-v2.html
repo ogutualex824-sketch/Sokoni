@@ -755,6 +755,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-promotion-model.js"></script>
 <script src="sokoni-merchant-offers.js"></script>
 <script src="sokoni-merchant-supply.js"></script>
+<!-- Construction workspace: ten Construction-group routes, one module; reused sections link to existing routes. -->
+<script src="sokoni-merchant-construction.js"></script>
 <!-- MV2-2a: Chat with a supplier enters the existing in-app inbox, never a second chat system -->
 <script src="sokoni-inbox.js"></script>
 <script src="sokoni-merchant-staff.js"></script>
@@ -2452,6 +2454,64 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     };
   }
 
+  /* ── CONSTRUCTION ctx ───────────────────────────────────────────────────────────
+     NOT _ctx/_scope: leads are addressed to the signed-in ACCOUNT (contactRequests.sellerUid
+     == auth.uid — the identity the rule checks), applications to the uid, and the rental ops
+     take the active shop id, which commerceDispatch re-checks server-side (_assertSeller).
+     role is the SERVER-resolved servedBy role (merchantIdentity); staff are told leads and
+     applications belong to the owner instead of seeing an empty list. */
+  var _CON_LEAD_KEYS = ['status', 'respondedAt', 'sellerNote'];
+  function _conWriteLead (id, payload) {
+    /* THE one browser write of the workspace. Exactly the keys the contactRequests rule's
+       affectedKeys().hasOnly(...) allows; anything else is refused HERE before any network.
+       respondedAt is only ever the module's SERVER_TIME token, swapped for serverTimestamp(). */
+    var C = window.SokoniMerchantConstruction;
+    if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) return Promise.reject(new Error('lead-id'));
+    var keys = Object.keys(payload || {});
+    if (!keys.length || keys.some(function (k) { return _CON_LEAD_KEYS.indexOf(k) < 0; })) return Promise.reject(new Error('lead-update-shape'));
+    if ('respondedAt' in payload && (!C || payload.respondedAt !== C.SERVER_TIME)) return Promise.reject(new Error('lead-update-shape'));
+    return sdk().then(function (m) {
+      if (!window.firebaseDB) throw new Error('Leads are not available yet.');
+      var d = {};
+      if ('status' in payload) d.status = String(payload.status);
+      if ('respondedAt' in payload) d.respondedAt = m.fs.serverTimestamp();
+      if ('sellerNote' in payload) d.sellerNote = String(payload.sellerNote).slice(0, 500);
+      return m.fs.updateDoc(m.fs.doc(window.firebaseDB, 'contactRequests', id), d);
+    });
+  }
+  function _conCtx (view) {
+    return {
+      view: view,
+      uid: function () { return S.uid || null; },
+      role: function () { return S.servedBy ? (S.servedBy.role || null) : null; },
+      shopId: function () { return S.activeShopId || null; },
+      readLeads: function (limit) {
+        if (!S.uid) return Promise.resolve([]);
+        return _q({ collection: 'contactRequests', where: [['sellerUid', '==', S.uid]], limit: limit }, 'Leads are not available yet.');
+      },
+      writeLead: _conWriteLead,
+      readEquipment: function (limit) {
+        if (!S.activeShopId) return Promise.resolve([]);
+        return _q({ collection: 'rentalProducts', where: [['shopId', '==', S.activeShopId]], limit: limit }, 'Equipment is not available yet.');
+      },
+      readApplications: function () {
+        if (!S.uid) return Promise.resolve([]);
+        return _q({ collection: 'applications', where: [['uid', '==', S.uid]], limit: 50 }, 'Applications are not available yet.');
+      },
+      dispatch: function (payload) {
+        return _callable('commerceDispatch')(payload).then(function (r) { return (r && r.data) || r; });
+      },
+      callPlans: function (payload) {
+        return _callable('subGetPlans')(payload).then(function (r) { return (r && r.data) || r; });
+      },
+      hasRoute: function (id) { return !!byId[id]; },
+      hasModule: function (g) { return !!(window[g] && typeof window[g].mount === 'function'); },
+      window: window,
+      go: go,
+      onToast: toast
+    };
+  }
+
   /* ══ PORTED NATIVE SURFACES ═══════════════════════════════════════════════
      One table instead of nine near-identical render functions. Each entry names the
      global the module publishes and builds the context that module expects — taken
@@ -2609,6 +2669,19 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                     callStats: _callable('etimsGetSellerStats'), callInvoice: _callable('etimsGenerateInvoice'),
                     callBulk: _callable('etimsBulkGenerate'), callResubmit: _callable('etimsResubmitInvoice'),
                     onToast: toast }; } },
+    /* CONSTRUCTION — one module, ten views, one shared store (sokoni-merchant-construction.js).
+       Reused sections (Products, Orders, Delivery, Wallet, Plan, Marketing, Customers, Staff,
+       Storefront, Inventory, Messages) are links from its Overview to their existing routes. */
+    'con-overview':     { global: 'SokoniMerchantConstruction', ctx: function () { return _conCtx('overview'); } },
+    'con-leads':        { global: 'SokoniMerchantConstruction', ctx: function () { return _conCtx('leads'); } },
+    'con-projects':     { global: 'SokoniMerchantConstruction', ctx: function () { return _conCtx('projects'); } },
+    'con-rfqs':         { global: 'SokoniMerchantConstruction', ctx: function () { return _conCtx('rfqs'); } },
+    'con-quotes':       { global: 'SokoniMerchantConstruction', ctx: function () { return _conCtx('quotes'); } },
+    'con-services':     { global: 'SokoniMerchantConstruction', ctx: function () { return _conCtx('services'); } },
+    'con-equipment':    { global: 'SokoniMerchantConstruction', ctx: function () { return _conCtx('equipment'); } },
+    'con-availability': { global: 'SokoniMerchantConstruction', ctx: function () { return _conCtx('availability'); } },
+    'con-rentals':      { global: 'SokoniMerchantConstruction', ctx: function () { return _conCtx('rentals'); } },
+    'con-verification': { global: 'SokoniMerchantConstruction', ctx: function () { return _conCtx('verification'); } },
   };
   var _mounted = {};   /* id -> { ui, shopKey } */
 

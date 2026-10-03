@@ -461,6 +461,63 @@
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID],
       mobile:true, desktop:true, activeKey:'pos-setup' },
 
+    /* ── CONSTRUCTION WORKSPACE (hosting, 2026-10-03) ─────────────────────────────────
+       Owner layout via sokoni-f3 (docs/CONSTRUCTION_HUB_CONVERGENCE.md): contractor / supplier /
+       equipment rental. All ten con-* routes mount ONE module (sokoni-merchant-construction.js)
+       with a view key and share one store. Sections merchant-v2 already has (Storefront,
+       Products, Inventory, Orders, Customers, Messages, Delivery, Marketing, Wallet,
+       Subscription, Staff) are NOT routes here: the module's Overview links to the existing
+       routes, so no module exists twice. Ids are con-prefixed because availability /
+       verification already exist as shop routes with different meanings.
+       Leads = contactRequests (seller lifecycle, combined rules f9a5c45). Equipment /
+       Availability / Rentals = commerceDispatch rental ops (no payment: rental commission is
+       unpriced). Projects = the unbuilt Work engine (honest entry). RFQs / Quotes = sokoni-f3's
+       'rfqs' route when present, else an honest B2B-release entry. */
+    { id:'con-overview', name:'Construction', icon:'🏗️', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'con-overview' },
+    { id:'con-leads', name:'Leads', icon:'📨', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'con-leads',
+      note:'Buyer enquiries (contactRequests where sellerUid == uid). The only browser write is ' +
+           'updateDoc {status, respondedAt?, sellerNote?} along the f9a5c45 seller lifecycle.' },
+    { id:'con-projects', name:'Projects', icon:'📐', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'con-projects' },
+    { id:'con-rfqs', name:'Construction RFQs', icon:'📋', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'con-rfqs' },
+    { id:'con-quotes', name:'Quotes', icon:'🧮', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'con-quotes' },
+    { id:'con-services', name:'Construction Services', icon:'👷', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'con-services' },
+    { id:'con-equipment', name:'Equipment', icon:'🚜', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'con-equipment' },
+    { id:'con-availability', name:'Equipment Availability', icon:'📅', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'con-availability' },
+    { id:'con-rentals', name:'Rentals', icon:'🔑', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'con-rentals',
+      note:'commerceDispatch rentalList / rentalConfirm / rentalComplete / rentalCancel. No pay step: ' +
+           'rental commission is unpriced and no rental payment purpose exists.' },
+    { id:'con-verification', name:'Construction Application', icon:'🪪', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      mobile:true, desktop:true, activeKey:'con-verification' },
+
 
   ];
 
@@ -502,7 +559,11 @@
        configured once alongside Devices and POS Setup, not a surface a merchant reads
        daily the way they read Reports. */
     { key:'operations', label:'Back office',
-      ids:['kra-tax','devices','pos-setup'] }
+      ids:['kra-tax','devices','pos-setup'] },
+    /* Construction workspace (2026-10-03). APPENDED LAST, after where the Jobs / Sports /
+       Marketing groups land in assembly, so merging the hubs is append-only. */
+    { key:'construction', label:'Construction',
+      ids:['con-overview','con-leads','con-projects','con-rfqs','con-quotes','con-services','con-equipment','con-availability','con-rentals','con-verification'] }
   ];
 
   /* ── ROUTE ACTION CHIPS ─────────────────────────────────────────────────────────
