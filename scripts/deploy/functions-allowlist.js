@@ -13,7 +13,7 @@
    inventoryTransferSubtype is already exported and would ship unverified.
 
    USAGE
-     node scripts/deploy/functions-allowlist.js darajaSTKPush [more…]
+     node scripts/deploy/functions-allowlist.js initiateSTKPush [more…]
      node scripts/deploy/functions-allowlist.js --changed       (infer from git)
 
    Exits non-zero if any requested function is BLOCKED. Prints the command; it

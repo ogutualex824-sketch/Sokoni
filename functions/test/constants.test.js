@@ -37,7 +37,7 @@ describe('Financial constants', () => {
     expect(C.MIN_PAYOUT_KES).toBeGreaterThan(0);
   });
 
-  test('MAX_STK_AMOUNT_KES is 150,000 (Daraja limit)', () => {
+  test('MAX_STK_AMOUNT_KES is 150,000 (M-Pesa per-transaction limit)', () => {
     expect(C.MAX_STK_AMOUNT_KES).toBe(150_000);
   });
 

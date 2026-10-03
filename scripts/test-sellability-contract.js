@@ -157,11 +157,15 @@ for (const [file, label] of SURFACES) {
      /_availability\.clampQty\(qty, prod, shopState\[prod\.sellerUid\]\)/.test(idx));
   ck('createCheckoutSession: no re-derived `stock <= 0` OOS rule',
      !/const isOos\s*=\s*prod\.outOfStock === true/.test(idx));
-  ck('darajaSTKPush: canonical listability added (not replaced — still stricter)',
-     /!_availability\.isPubliclyListed\(p\)/.test(idx) && /p\.status !== "active"/.test(idx));
+  /* darajaSTKPush (and its pricing block) was removed 2026-10-03 — Daraja retired, IntaSend only. The checkout
+     price authority is createCheckoutSession, asserted below. */
+  ck('darajaSTKPush is gone (retired rail cannot price anything)', !/exports\.darajaSTKPush\s*=/.test(idx));
 
   /* Safeguards that predate this slice and must survive it. */
-  ck('checkout still discards the client amount', /discarded outright/.test(read('functions/index.js')));
+  /* Stronger than discarding a client amount: the session function never reads one. */
+  ck('checkout never reads a client amount (createCheckoutSession destructures no amount)',
+     /exports\.createCheckoutSession[\s\S]{0,600}?const \{ cartItems, deliveryFee, promoCode, redeemLoyalty, fulfillmentType \} = request\.data/.test(idx)
+       && !/exports\.createCheckoutSession[\s\S]{0,600}?const \{[^}]*\bamount\b[^}]*\} = request\.data/.test(idx));
   ck('checkout still rejects a cross-seller cart', /another seller/.test(idx));
   ck('checkout still enforces the fulfilment channel', /fulfillmentAllowed\(/.test(idx));
   ck('stock deduction is still floored at zero', /Math\.max\(0, cur - dec\)/.test(idx));

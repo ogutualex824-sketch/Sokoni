@@ -68,9 +68,8 @@ deploy_batch 1 "Auth & Admin Claims" \
 # ──────────────────────────────────────────────────────────────
 deploy_batch 2 "Payments & Webhooks" \
   createCheckoutSession verifyIntasendPayment verifyPaymentStatus \
-  darajaSTKPush darajaSTKCallback validateDarajaCredentials sendTestSTKPush \
   initiateSTKPush intasendWebhook cancelPayment \
-  webhookIntasend webhookMpesa webhookStripe webhookSmartpos replayWebhookDLQ webhookHealth \
+  webhookIntasend webhookStripe webhookSmartpos replayWebhookDLQ webhookHealth \
   releaseEscrow initiateRefund getSettlementReport initiateSellerPayout getLedgerBalance \
   expireOldEscrows cleanupIdempotencyStore processSettlementQueue getPaymentAuditTrail
 

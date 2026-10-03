@@ -1,3 +1,23 @@
+## [2026-10-03] - Payments: Daraja code removed from functions (owner order: IntaSend only) — functions source, NOT deployed
+
+The four live Daraja functions were deleted from production earlier today. This removes the code, so no deploy from this lineage
+can recreate them (an unscoped functions deploy creates every export).
+
+- functions/index.js: darajaSTKPush, darajaSTKCallback, validateDarajaCredentials, sendTestSTKPush, webhookMpesa and the C2B exports
+  removed, with their helpers (_darajaToken, SAFARICOM_CALLBACK_IPS, _DARAJA_SANDBOX_SELLER_UIDS, _DARAJA_IPS, _normalizeMsisdn, _c2b)
+  — about 1,000 lines, removed by AST (Babel); no remaining reference to any removed name. functions/mpesa-c2b.js deleted.
+- mpesa_daraja removed from pos-zero-friction CONFIRMABLE, settlement-routing METHODS and settlement-providers defaults.
+- scripts/deploy/guard-functions-safety.js (predeploy hook) REWRITTEN: it protected the Daraja STK path; it now BLOCKS any functions
+  module that exports a Daraja function, calls a Safaricom API, reads Daraja config or requires the C2B module, and keeps the
+  productionAuthorized check. Every detector is proved on a planted sample; it blocks the unmodified tree on all five checks.
+- Tests: test-payment-authority, test-daraja-sandbox-lane, test-stk-msisdn-safety RETIRED (they exercised the removed code).
+  test-sellability-contract now asserts darajaSTKPush is gone and that createCheckoutSession reads no client amount (74/0; the
+  amount check fails when an amount is planted). functions/test/webhook.test.js: the self-contained Daraja parser block removed (61/61 jest).
+- scripts/batch_deploy.sh: Daraja names removed from the payments batch.
+- docs/STK_MSISDN_SAFETY.md, docs/SANDBOX_CALLBACK_LANE.md marked RETIRED.
+- Gates green on this tree: functions safety guard, commission single source, delivery engine sync, payout gate.
+- Other lineages still export Daraja (sok-parcel-fn2, sok-reports-fn, the deploy tree sok-home2): apply this commit there.
+
 ## [2026-10-01] — environment-preflight no longer blocks a release on its OWN deploy chain (scripts only)
 
 **Why (observed on the union hosting deploy, 06:4xZ):** inside `firebase deploy --only hosting` the chain is firebase → cross-env-shell → predeploy-browser-suites.js → preflight. Only {pid, ppid} were excluded, so the wrapper (its command line names predeploy-browser-suites.js) and the running deploy were reported as a PEER runner and a PEER deploy; the gate printed RELEASE BLOCKED and ran no suite (nothing uploaded; live unchanged).

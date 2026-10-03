@@ -39,7 +39,7 @@ function _assertAdmin(req) {
 }
 
 /* Payment methods under migration control. */
-const METHODS = ['intasend', 'mpesa_daraja', 'card', 'wallet', 'smartpos', 'qr', 'subscription', 'bank'];
+const METHODS = ['intasend', 'card', 'wallet', 'smartpos', 'qr', 'subscription', 'bank'];   /* mpesa_daraja removed 2026-10-03 */
 const MODES   = ['legacy', 'shadow', 'mor'];
 
 /* Safe defaults — everything legacy, rollout 0%, empty allowlist. */
