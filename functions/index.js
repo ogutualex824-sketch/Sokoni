@@ -720,7 +720,7 @@ async function executeTool(name, input) {
         /* The tax report assumed a flat 10% take. The platform has never charged 10% on
            marketplace orders — it charges 3% — so this analytic overstated commission revenue
            by more than 3x. Rate now comes from the single config. */
-        const COMMISSION = COMMISSION_CONFIG.RATES.default.pct / 100;
+        const COMMISSION = COMMISSION_CONFIG.resolveRate('marketplace').pct / 100;   /* marketplace orders — the generic default row is gone (owner 2026-10-03) */
         const period = input.period || "month";
 
         /* ── Year path: aggregate pre-built daily FinOS snapshots (avoids full orders scan) ── */
@@ -4249,7 +4249,20 @@ exports.onSellerPaymentCreated = onDocumentCreated(
     if (!sellerUid || !amount || Number(amount) <= 0) return;
 
     const grossAmount = Number(amount);
-    const { pct, fixedKES, commissionKES, totalOwed, audit } = await _resolveCommission(sellerUid, hub, grossAmount);
+    let _rc;
+    try { _rc = await _resolveCommission(sellerUid, hub, grossAmount); }
+    catch (e) {
+      if (e && (e.code === 'category_unpriced' || e.code === 'category_restricted')) {
+        /* Post-payment: never invent a rate, never reject — record it for review (idempotent per payment). */
+        await db.collection('commissionReviewQueue').doc('seller_payment_' + event.params.paymentId).set({
+          ref: event.params.paymentId, sellerUid, amount: grossAmount, hub, reason: e.code, restrictedClass: e.restrictedClass || null,
+          source: 'onSellerPaymentCreated', createdAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        console.warn('[onSellerPaymentCreated] commission unresolved — flagged for review', { paymentId: event.params.paymentId, reason: e.code });
+        return;
+      }
+      throw e;
+    }
+    const { pct, fixedKES, commissionKES, totalOwed, audit } = _rc;
     const paymentId = event.params.paymentId;
     const period    = new Date().toISOString().slice(0, 7); // "2026-06"
 

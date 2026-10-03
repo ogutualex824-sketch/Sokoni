@@ -1,3 +1,11 @@
+## 2026-10-03 — Owner category rules, restricted categories, NO generic 5% default (NOT deployed)
+
+- **Owner decisions (via b2):** fashion/furniture/books/appliances/beauty/shoes → marketplace 15%; cars → vehicles (2%, vehicle sales only; car_rental stays 5%); laundry / hair-beauty → services 5%; dj → entertainment bookings; vape / alcohol / tobacco / adult → REFUSED; no recognized transaction silently gets 5%.
+- **Change:** commission-config: the `default` row is REMOVED; resolveRate(unknown) → {matched:false, pct:null}; restricted → {restricted:true}. New `shared/restricted-categories.js` (explicit classes vape/tobacco/alcohol/adult, aliases, token-level match that fails closed on ambiguity; never mapped to a commission row). finos-utils.calculateCommission throws `category_restricted` / `category_unpriced` (before payment = refused). onSellerPaymentCreated (after payment) FLAGS to commissionReviewQueue instead of inventing a rate. Tax analytic reads the marketplace row. Client rate file: unknown → null ("—"); snapshot regenerated.
+- **Files:** functions/commission-config.js, functions/shared/restricted-categories.js (new), functions/finos-utils.js, functions/index.js, scripts/build-commission-snapshot.js, sokoni-commission-rates.js, scripts/test-commission-categories-owner.js (C1–C8).
+- **Breaking:** an unknown category is refused before payment (was 5%). Census: every KASS / commercial-policy key resolves explicitly.
+- **Tests:** categories-owner 8/0; battery unchanged vs baseline (5 suites fail identically before/after: commercial-facts 3b, 48h-destinations 3, balance-ui 2, entertainment-registry 1, kass-page-boundary 1).
+
 ## 2026-10-03 — ONE withdrawal gate for every money mover, incl. the scheduled payout jobs (NOT deployed)
 
 - **Change:** new `shared/withdrawal-gate.js` (`platformConfig/withdrawals.enabled === true` opens; absent / non-boolean / unreadable → closed). Honoured by wallet.requestSellerPayout, wallet.processPayoutRetries, finos.processPendingPayouts (every 30 min B2C of pending payouts), automation-engine.autoScheduledPayouts (6-hourly pending → processing + 'expect M-Pesa'), index.initiateSellerPayout (admin arbitrary-amount B2C). wallet.reconcilePayouts (inspect/flag only) is NOT gated. Found by sokoni-b2.
