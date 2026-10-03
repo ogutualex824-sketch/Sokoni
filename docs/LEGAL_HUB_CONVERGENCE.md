@@ -195,3 +195,19 @@ Every service of the six groups is the same row, because Legal providers and ser
    - registerLegalProvider, getLegalProviders, getLegalProvider, bookLegalConsultation (refusal), legalDispatch.
 3. **Re-project eligible advocates.** Use an LSK re-record or `applicationReconcile`. No bulk edits.
 4. **The combined Hosting release.** It includes `hosting/legal-hub-on-38d2d60`. Never ship it before step 1.
+
+
+## Owner decisions applied (2026-10-03, second pass)
+
+| Decision | State | Where / evidence |
+|---|---|---|
+| Invoices/receipts required, platform-wide | **IMPLEMENTED on server + screens; runtime UNPROVEN** | 2f receipts contract v2 (65e85d1, bb341b1). Booking hooks 8c99f62 (C12–C17, driving the REAL webhook hold). Buyer receipts.html + provider Finance → Receipts (hosting a726c0d, RC1–RC2). AdminOS receipts = 2f d38a79a |
+| All enabled IntaSend methods, server-returned; webhook is the authority | **PARTIAL** | the method IntaSend reports is recorded (5b 525fd9f → receipt.method, "—" when null). A server-returned enabled-methods list and the Legal checkout proof are **BLOCKED** (2f IntaSend convergence; emulator below the memory floor) |
+| Criminal / immigration / tax as separately configured services | **IMPLEMENTED** | L10 a08a749: SPECIALIST list, request → AdminOS confirm (audited), confirmed-only public, rate cards only once confirmed (SP0–SP3, C11) |
+| Verify each advocate individually | **IMPLEMENTED** | L11 858c885: firm team = accepted AND individually eligible members (FM1–FM4) |
+| Milestones not this release; model ready | **DESIGNED** | receipt events reserve milestoneId (2f); one quote = one booking = one payment |
+| Free plan: auto consultation not counted | **IMPLEMENTED** | 2f 965c46d (cherry-picked 0649fc2); C10 runs on the FREE plan |
+| Availability server-authoritative | **IMPLEMENTED for the provider dashboard; rules HELD** | hosting 547bf51 (AV1W); server proof AV1–AV3 (3 independent overlap layers). Rules deny-hunk HELD by f3 until e3 ports the Merchant V2 shop schedule to kasshop.setShopAvailability (2f decision) |
+| Security rules / emulator | **BLOCKED** | f3 combined rules; memory floor |
+
+**Legal Hub remains NOT USER-READY.** The emulator, the browser runs and the real IntaSend Legal checkout proof have not run.
