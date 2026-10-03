@@ -39,6 +39,10 @@ const ALL_PERMISSIONS = [
   'view_products','manage_products','pos','inventory','refunds','discounts',
   'finance','payroll','reports','customers','bookings','drivers','deliveries',
   'branches','users','analytics','settings',
+  /* Fitness memberships (sokoni-e3, 2026-10-03): scan member QR + view the gym's memberships. Granted EXPLICITLY per
+     member — deliberately in NO role default below (owner: cashier / trainer / employee are NOT automatic). The
+     'owner' role is ALL_PERMISSIONS by definition, and a business owner passes _assertBusinessPermission anyway. */
+  'attendance',
 ];
 
 /** Default permissions by role */
