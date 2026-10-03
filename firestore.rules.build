@@ -1886,6 +1886,14 @@ service cloud.firestore {
   allow read:  if isAdmin();
   allow write: if false;
   }
+  match /trainingInvites/{code} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /trainingAssignments/{id} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
   function isPosOwner() {
   return isAuthed() && resource.data.sellerId == request.auth.uid;
   }

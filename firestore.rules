@@ -2031,6 +2031,17 @@ service cloud.firestore {
   allow read:  if isAdmin();
   allow write: if false;
   }
+  /* (sokoni-5b Education, company staff training; feat/education-workspace-on-d377b28 @ 70cb7e0) written only by the
+     educationEnterprise callable. A company only ever receives display name + its own label through the callable —
+     never profile, age, guardian or contact — so neither side reads these raw. */
+  match /trainingInvites/{code} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /trainingAssignments/{id} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
   function isPosOwner() {
   return isAuthed() && resource.data.sellerId == request.auth.uid;
   }

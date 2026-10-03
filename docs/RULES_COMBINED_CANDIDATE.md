@@ -242,3 +242,6 @@ through `myTransactionReceipts` (scoped to the caller) and `adminSearchReceipts`
 applied; the explicit blocks make the owner's "customer reads another customer's receipt → reject" provable. A client
 pre-creating a `b2bLeadRecoveries` op header would make a settlement replay as "already done" and skip the deduction;
 RC-8 covers that. Rows RC-1–RC-10 are in `zz-test-b2b-leads-rules.js`. **EMULATOR PENDING.**
+4. (later) `trainingInvites/{code}` and `trainingAssignments/{id}`: admin read only, write false. Written by the
+   `educationEnterprise` callable (5b @ 70cb7e0). A company receives only display name + its own label through the
+   callable. Rows ED-T1–T7. **EMULATOR PENDING.**

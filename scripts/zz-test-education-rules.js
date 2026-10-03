@@ -7,7 +7,7 @@
 'use strict';
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
 const fs = require('fs'), path = require('path');
-const { doc, getDoc, setDoc, updateDoc, deleteDoc } = require('firebase/firestore');
+const { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } = require('firebase/firestore');
 let pass = 0, fail = 0;
 const ck = (id, ok, m, d) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + '  ' + id + '  ' + m + (ok || !d ? '' : '   [' + String(d).slice(0, 90) + ']')); ok ? pass++ : fail++; };
 const allows = async (id, m, p) => { try { await assertSucceeds(p); ck(id, true, m); } catch (e) { ck(id, false, m, e.message); } };
@@ -55,6 +55,18 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await denies('ED-L9', 'a client reads educationAudit', getDoc(doc(ent, 'educationAudit/a1')));
   await denies('ED-L10', 'a client writes educationAudit', setDoc(doc(ent, 'educationAudit/a2'), { action: 'x' }));
   await allows('ED-L11', 'admin reads guardianLinks / guardianCodes / educationAudit', Promise.all([getDoc(doc(admin, 'guardianLinks/L1')), getDoc(doc(admin, 'guardianCodes/ABC123')), getDoc(doc(admin, 'educationAudit/a1'))]));
+  // company staff training (written only by the educationEnterprise callable)
+  await env.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'trainingInvites/INV42'), { companyUid: 'other', label: 'Cashiers' });
+    await setDoc(doc(c.firestore(), 'trainingAssignments/t1'), { companyUid: 'other', learnerUid: 'ent', courseId: 'c1' });
+  });
+  await denies('ED-T1', 'a company reads a trainingAssignment raw (would expose the learner)', getDoc(doc(other, 'trainingAssignments/t1')));
+  await denies('ED-T2', 'the learner reads the trainingAssignment raw', getDoc(doc(ent, 'trainingAssignments/t1')));
+  await denies('ED-T3', 'a client writes a trainingAssignment', setDoc(doc(other, 'trainingAssignments/t2'), { companyUid: 'other', learnerUid: 'ent' }));
+  await denies('ED-T4', 'a client reads a trainingInvite (code harvesting)', getDoc(doc(owner, 'trainingInvites/INV42')));
+  await denies('ED-T5', 'a client lists trainingInvites', getDocs(collection(owner, 'trainingInvites')));
+  await denies('ED-T6', 'a client mints a trainingInvite', setDoc(doc(other, 'trainingInvites/FAKE1'), { companyUid: 'other' }));
+  await allows('ED-T7', 'admin reads trainingInvites / trainingAssignments', Promise.all([getDoc(doc(admin, 'trainingInvites/INV42')), getDoc(doc(admin, 'trainingAssignments/t1'))]));
   await env.cleanup();
   console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('HARNESS ERROR (not a rules result):', e.message); process.exit(2); });
