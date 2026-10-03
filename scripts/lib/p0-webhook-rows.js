@@ -64,4 +64,13 @@ module.exports = async function rows(H, { ck, unp }) {
     ck('B-10', p1.status === 'COMPLETE' && o1.status === 'paid' && o1.paymentVerified === true && moneyCount() === m1 && (H.get('products', 'p10k') || {}).stock === stock1,
       'VALID KES 10,000 + IntaSend-confirmed KES 10,000 → PAID + verified; the duplicate callback changes nothing', { p1, o1 });
   }
+
+  /* B-11 / B-12 RECEIPTS (2f 2026-10-03): the method IntaSend reports is stored raw on payments/{ref}; absent → null */
+  seed('ORD-PM1'); confirm('ORD-PM1', 10000);
+  await H.invoke(cb({ api_ref: 'ORD-PM1', provider: 'CARD-PAYMENT' }));
+  ck('B-11', (H.get('payments', 'ORD-PM1') || {}).providerMethod === 'CARD-PAYMENT', 'a card payment records providerMethod CARD-PAYMENT (never "M-PESA")', H.get('payments', 'ORD-PM1'));
+  seed('ORD-PM2'); const noProv = cb({ api_ref: 'ORD-PM2', value: 1 }); delete noProv.provider;
+  await H.invoke(noProv);
+  const pm2 = H.get('payments', 'ORD-PM2') || {};
+  ck('B-12', pm2.status === 'REVIEW' && pm2.providerMethod === null, 'a callback with NO provider records providerMethod null — on the REVIEW park too', pm2);
 };

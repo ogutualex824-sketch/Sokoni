@@ -7337,6 +7337,16 @@ exports.webhookIntasend = onRequest(
     const apiRef     = invoice.api_ref         || req.body?.api_ref;
     const checkoutId = invoice.id              || req.body?.invoice_id;
     const amount     = Number(invoice.net_amount || invoice.amount || req.body?.net_amount || req.body?.value || 0);
+    /* RECEIPTS (2f request, 2026-10-03): the payment METHOD as IntaSend reports it — the collection event's top-level
+       `provider` (developers.intasend.com/docs/payment-collection-events: M-PESA, CARD-PAYMENT, APPLE-PAY, GOOGLE-PAY,
+       PESALINK …). Stored RAW (trimmed, capped, control characters stripped) as payments/{ref}.providerMethod; ABSENT IS
+       NULL — never a guessed "M-PESA". Receipts read this field; nothing decides money on it. */
+    const providerMethod = (() => {
+      const v = invoice.provider !== undefined ? invoice.provider : req.body?.provider;
+      if (v === undefined || v === null) return null;
+      const t = String(v).replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 40);
+      return t || null;
+    })();
     /* B2C send-money identifies the transfer by tracking_id/file_id, NOT api_ref. The
        api_ref guard is DEFERRED to after B2C settlement (below), else B2C confirmations
        are dropped and the payout sticks at 'processing'. */
@@ -7422,6 +7432,7 @@ exports.webhookIntasend = onRequest(
           reviewReason:      reason,
           intasendState:     state,
           confirmedAmount:   amount,
+          providerMethod,
           updatedAt:         admin.firestore.FieldValue.serverTimestamp(),
           webhookReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, extra || {}));
@@ -7497,6 +7508,7 @@ exports.webhookIntasend = onRequest(
         status:            fsStatus,
         intasendState:     state,
         confirmedAmount:   amount,
+        providerMethod,
         updatedAt:         admin.firestore.FieldValue.serverTimestamp(),
         webhookReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -7507,6 +7519,12 @@ exports.webhookIntasend = onRequest(
       console.log(`[webhookIntasend] Already processed (raced): ${apiRef}`);
       res.status(200).send("OK");
       return;
+    }
+    /* The intent carries the same method for receipt readers that start from it. Merge-only, best-effort: it never
+       touches the intent's status, and a failure here must not undo a payment that is already recorded. */
+    if (providerMethod && existing.intentRef) {
+      await db.collection("paymentIntents").doc(String(existing.intentRef)).set({ providerMethod }, { merge: true })
+        .catch((e) => logger.warn("[webhookIntasend] providerMethod not mirrored to intent", { ref: apiRef, err: String(e && e.message || e) }));
     }
 
     /* Terminal NON-payment for a service booking → release the held slot immediately

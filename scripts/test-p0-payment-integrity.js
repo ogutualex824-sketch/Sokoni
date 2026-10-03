@@ -93,7 +93,7 @@ ck('W-04', /require\("\.\/shared\/intasend-status"\)/.test(body) && fs.existsSyn
   let H = null, harnessErr = null;
   try { H = require('./lib/p0-webhook-harness.js')(WH, NM); } catch (e) { harnessErr = e && e.message; }
   if (!H || !H.ready) {
-    ['B-01', 'B-02', 'B-03', 'B-04', 'B-05', 'B-06', 'B-07', 'B-08', 'B-09', 'B-10'].forEach((id) => unp(id, 'handler row', 'harness: ' + String(harnessErr || (H && H.error) || 'not ready').slice(0, 120)));
+    ['B-01', 'B-02', 'B-03', 'B-04', 'B-05', 'B-06', 'B-07', 'B-08', 'B-09', 'B-10', 'B-11', 'B-12'].forEach((id) => unp(id, 'handler row', 'harness: ' + String(harnessErr || (H && H.error) || 'not ready').slice(0, 120)));
   } else {
     await require('./lib/p0-webhook-rows.js')(H, { ck, unp });
   }
