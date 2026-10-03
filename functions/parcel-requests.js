@@ -25,8 +25,10 @@
      · checkout → IntaSend hosted checkout URL: M-Pesa, card, bank, Airtel
                   (api_ref = parcelId, redirect back to delivery.html)
    The browser never reports "paid". confirmParcelPayment asks IntaSend's
-   collection API, requires api_ref === parcelId, state COMPLETE and amount ≥ fee,
-   and claims the invoice with create() so a replay cannot pay twice.
+   collection API, requires api_ref === parcelId, currency KES, state COMPLETE and
+   amount ≥ fee, and claims the invoice with create() so a replay cannot pay twice.
+   The recorded `method` is IntaSend's provider (mpesa | card | … | unknown); the
+   sender's route is kept separately as `channel` ('stk' | 'checkout').
 
    PRICING — the catalogue below carries the browser's figures VERBATIM so the
    move to the server changes the architecture, not anyone's price. The owner
@@ -179,6 +181,32 @@ function _defaultTransport() {
     let data = null; try { data = await res.json(); } catch (_) { data = null; }
     return { status: res.status, data };
   };
+}
+
+/* ── Payment METHOD from the PROVIDER (IntaSend convergence Gate 12, 2026-10-03) ───────────
+   The method a parcel was paid with is what IntaSend's collection record reports, never the
+   route the sender picked in the UI ('checkout' is a channel; the card or M-Pesa behind it is the
+   method). The five mapping lines below are COPIED from 5aa7711 (functions/index.js:2792-2796,
+   verifyIntasendPayment) — byte-identical apart from indentation; their sha256 (whitespace-
+   trimmed lines joined by LF) is pinned in scripts/test-parcel-payment-gate15.js and compared
+   against `git show 5aa7711:functions/index.js`. Change them in both places or neither.
+   `payment` is IntaSend's record. An absent provider is 'unknown' — never assumed. */
+function _methodFromProvider(payment) {
+  payment = payment || {};
+  const _providerRaw = String(payment.provider || payment.method || "").trim().toUpperCase();
+  const _paymentMethod = _providerRaw === "M-PESA" || _providerRaw === "MPESA" ? "mpesa"
+    : _providerRaw === "CARD-PAYMENT" || _providerRaw === "CARD" ? "card"
+    : _providerRaw ? _providerRaw.toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 32) || "unknown"
+    : "unknown";
+  return { method: _paymentMethod, providerRaw: _providerRaw || null };
+}
+
+/* The sender's INITIATION ROUTE — kept, but as `channel`, never as the method.
+   payParcelRequest's 'mpesa' route is an STK push; 'checkout' is IntaSend hosted checkout. */
+function _channelOf(pay) {
+  const p = pay || {};
+  if (p.channel === 'stk' || p.channel === 'checkout') return p.channel;
+  return p.method === 'mpesa' ? 'stk' : p.method === 'checkout' ? 'checkout' : null;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -372,7 +400,7 @@ function makeParcelRequests(deps) {
       }
       const inv = (r.data && r.data.invoice) || {};
       const invoiceId = inv.invoice_id || null, checkoutId = r.data && (r.data.id || r.data.checkout_id) || null;
-      await ref.update({ payment: { state: 'pending', method: 'mpesa', invoiceId, checkoutId, trackingId: null, phone, paidAmount: null, paidAt: null, initiatedAt: FV.serverTimestamp() }, updatedAt: FV.serverTimestamp() });
+      await ref.update({ payment: { state: 'pending', method: 'mpesa', channel: 'stk', invoiceId, checkoutId, trackingId: null, phone, paidAmount: null, paidAt: null, initiatedAt: FV.serverTimestamp() }, updatedAt: FV.serverTimestamp() });
       return { ok: true, state: 'pending', method: 'mpesa', invoiceId, checkoutId };
     }
 
@@ -388,7 +416,7 @@ function makeParcelRequests(deps) {
       console.error('[payParcelRequest] checkout rejected', { status: r.status, body: r.data, parcelId, amount });
       throw new HttpsError('internal', (r.data && r.data.detail) || 'Could not open the payment page. Try again.');
     }
-    await ref.update({ payment: { state: 'pending', method: 'checkout', invoiceId: null, checkoutId: r.data.id || null, trackingId: null, checkoutUrl: r.data.url, paidAmount: null, paidAt: null, initiatedAt: FV.serverTimestamp() }, updatedAt: FV.serverTimestamp() });
+    await ref.update({ payment: { state: 'pending', method: 'checkout', channel: 'checkout', invoiceId: null, checkoutId: r.data.id || null, trackingId: null, checkoutUrl: r.data.url, paidAmount: null, paidAt: null, initiatedAt: FV.serverTimestamp() }, updatedAt: FV.serverTimestamp() });
     return { ok: true, state: 'pending', method: 'checkout', checkoutId: r.data.id || null, url: r.data.url };
   }));
 
@@ -422,6 +450,13 @@ function makeParcelRequests(deps) {
     const rec = results.find((x) => x && String(x.api_ref || '') === parcelId && (!handle || x.invoice_id === handle || x.tracking_id === handle || x.checkout_id === handle))
              || results.find((x) => x && String(x.api_ref || '') === parcelId);
     if (!rec) return { ok: false, state: 'not_found' };
+    /* WRONG_CURRENCY (Gate 15, 2026-10-03): the fee is KES; a record in another currency — or one
+       that does not state its currency — cannot be compared with it. Refused BEFORE any write. */
+    const currency = String(rec.currency == null ? '' : rec.currency).trim().toUpperCase();
+    if (currency !== 'KES') {
+      console.error('[confirmParcelPayment] wrong currency', { parcelId, currency: currency || null });
+      throw new HttpsError('failed-precondition', 'This payment is not in KES. Contact support.');
+    }
     const state = String(rec.state || '').toUpperCase();
     if (state !== 'COMPLETE') {
       const failed = ['FAILED', 'CANCELLED', 'EXPIRED', 'REJECTED', 'TIMEOUT'].includes(state);
@@ -434,6 +469,8 @@ function makeParcelRequests(deps) {
       throw new HttpsError('failed-precondition', 'The amount paid does not cover this parcel. Contact support.');
     }
     const invoiceId = String(rec.invoice_id || rec.tracking_id || rec.id || handle || parcelId);
+    const { method } = _methodFromProvider(rec);   // Gate 12: what IntaSend says, never the UI route
+    const channel = _channelOf(pay);               // the route the sender chose: 'stk' | 'checkout'
     const claimRef = db.collection('parcelPayments').doc(invoiceId);
     const jobRef = db.collection('packageRequests').doc(p.jobId || (JOB_PREFIX + parcelId));
     await db.runTransaction(async (t) => {
@@ -441,23 +478,23 @@ function makeParcelRequests(deps) {
       const cur = ps.data() || {};
       if ((cur.payment || {}).state === 'paid') return;
       if (cs.exists && (cs.data() || {}).parcelId !== parcelId) throw new HttpsError('failed-precondition', 'That payment already paid for a different parcel.');
-      if (!cs.exists) t.create(claimRef, { parcelId, uid: cur.uid, invoiceId, apiRef: parcelId, amount: paid, method: pay.method || rec.provider || null, mpesaReference: rec.mpesa_reference || null, gateway: 'intasend', claimedAt: FV.serverTimestamp() });
+      if (!cs.exists) t.create(claimRef, { parcelId, uid: cur.uid, invoiceId, apiRef: parcelId, amount: paid, currency, method, channel, mpesaReference: rec.mpesa_reference || null, gateway: 'intasend', claimedAt: FV.serverTimestamp() });
       t.update(ref, {
         status: 'awaiting_rider',
-        payment: Object.assign({}, cur.payment || {}, { state: 'paid', invoiceId, trackingId: rec.tracking_id || null, paidAmount: paid, paidAt: FV.serverTimestamp(), mpesaReference: rec.mpesa_reference || null, provider: rec.provider || null }),
+        payment: Object.assign({}, cur.payment || {}, { state: 'paid', method, channel, invoiceId, trackingId: rec.tracking_id || null, paidAmount: paid, paidAt: FV.serverTimestamp(), mpesaReference: rec.mpesa_reference || null, provider: rec.provider || null }),
         updatedAt: FV.serverTimestamp(),
       });
       t.set(jobRef, {
         status: 'awaiting_rider', paymentState: 'paid', paidAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp(),
         /* In-app receipt (owner 2026-09-30): what was paid, how, when, under which gateway
            reference — on the record BOTH ends can read. Never a phone, never the PIN. */
-        receipt: { receiptNo: invoiceId, amount: paid, currency: cur.currency || 'KES', method: pay.method || rec.provider || null,
+        receipt: { receiptNo: invoiceId, amount: paid, currency: cur.currency || 'KES', method, channel,
                    provider: rec.provider || null, mpesaReference: rec.mpesa_reference || null, gateway: 'intasend',
                    paidAt: FV.serverTimestamp(), breakdown: cur.breakdown || null, catalogueVersion: cur.catalogueVersion || null },
         timeline: FV.arrayUnion({ status: 'awaiting_rider', at: new Date().toISOString(), by: 'server' }),
       }, { merge: true });
     });
-    return { ok: true, state: 'paid', amount: paid, receipt: { receiptNo: invoiceId, amount: paid, method: pay.method || rec.provider || null, mpesaReference: rec.mpesa_reference || null, paidAt: new Date().toISOString() } };
+    return { ok: true, state: 'paid', amount: paid, receipt: { receiptNo: invoiceId, amount: paid, method, channel, mpesaReference: rec.mpesa_reference || null, paidAt: new Date().toISOString() } };
   }));
 
   /* ── 5. getMyParcelPin — the sender re-reads the PIN (server record, owner only) ── */
@@ -513,5 +550,5 @@ module.exports = {
   quote, publicCatalogue, activeCatalogue, catalogueFor,
   CATALOGUES, ACTIVE_VERSION, QUOTE_TTL_MS, JOB_PREFIX, PIN_MAX_ATTEMPTS,
   resolveRecipient,
-  _internal: { _haversineKm, _validLatLng, _areaOf, _phone, _samePin, _phoneSpellings },
+  _internal: { _haversineKm, _validLatLng, _areaOf, _phone, _samePin, _phoneSpellings, _methodFromProvider, _channelOf },
 };

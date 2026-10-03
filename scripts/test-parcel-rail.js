@@ -199,17 +199,17 @@ const codeOf = async (p) => { try { const r = await p; return { ok: true, r }; }
   ck('P6  unknown method refused', !e.ok && e.code === 'invalid-argument', e);
 
   console.log('\n── confirmParcelPayment: IntaSend is asked; api_ref, state and amount must all agree ──');
-  gateway.collection = { status: 200, data: { results: [{ invoice_id: 'INV1', api_ref: parcelId, state: 'PENDING', value: String(TOTAL) + '.00' }] } };
+  gateway.collection = { status: 200, data: { results: [{ invoice_id: 'INV1', api_ref: parcelId, currency: 'KES', state: 'PENDING', value: String(TOTAL) + '.00' }] } };
   r = await call(P.confirmParcelPayment, 'sender', { parcelId });
   ck('F1  PENDING at the gateway → not paid', r.ok === false && r.state === 'pending', r);
-  gateway.collection = { status: 200, data: { results: [{ invoice_id: 'INV1', api_ref: 'someone-else', state: 'COMPLETE', value: String(TOTAL) + '.00' }] } };
+  gateway.collection = { status: 200, data: { results: [{ invoice_id: 'INV1', api_ref: 'someone-else', currency: 'KES', state: 'COMPLETE', value: String(TOTAL) + '.00' }] } };
   r = await call(P.confirmParcelPayment, 'sender', { parcelId });
   ck('F2  a COMPLETE payment for a DIFFERENT api_ref does not pay this parcel', r.ok === false && r.state === 'not_found', r);
-  gateway.collection = { status: 200, data: { results: [{ invoice_id: 'INV1', api_ref: parcelId, state: 'COMPLETE', value: '100.00' }] } };
+  gateway.collection = { status: 200, data: { results: [{ invoice_id: 'INV1', api_ref: parcelId, currency: 'KES', state: 'COMPLETE', value: '100.00' }] } };
   e = await codeOf(call(P.confirmParcelPayment, 'sender', { parcelId }));
   ck('F3  a short payment (100 < total) is refused, not rounded up', !e.ok && e.code === 'failed-precondition', e);
   ck('F3b … and the parcel is still unpaid', (await db.collection('parcelRequests').doc(parcelId).get()).data().payment.state === 'pending', null);
-  gateway.collection = { status: 200, data: { results: [{ invoice_id: 'INV1', api_ref: parcelId, state: 'COMPLETE', value: String(TOTAL) + '.00', mpesa_reference: 'QX1ABC', provider: 'M-PESA' }] } };
+  gateway.collection = { status: 200, data: { results: [{ invoice_id: 'INV1', api_ref: parcelId, currency: 'KES', state: 'COMPLETE', value: String(TOTAL) + '.00', mpesa_reference: 'QX1ABC', provider: 'M-PESA' }] } };
   e = await codeOf(call(P.confirmParcelPayment, 'thief', { parcelId }));
   ck('F4  a stranger cannot confirm', !e.ok && e.code === 'permission-denied', e);
   r = await call(P.confirmParcelPayment, 'sender', { parcelId });
@@ -218,13 +218,14 @@ const codeOf = async (p) => { try { const r = await p; return { ok: true, r }; }
   const claimDoc = (await db.collection('parcelPayments').doc('INV1').get()).data();
   ck('F5  COMPLETE + api_ref + amount → PAID: record awaiting_rider, job awaiting_rider, invoice claimed', r.ok && r.state === 'paid' && prec.payment.state === 'paid' && prec.status === 'awaiting_rider' && job.status === 'awaiting_rider' && job.paymentState === 'paid' && claimDoc && claimDoc.parcelId === parcelId, { r, pay: prec.payment, job: job.status, claimDoc });
   ck('F5b in-app receipt on the job: number, amount, method, M-PESA ref, paid-at timestamp, breakdown', job.receipt && job.receipt.receiptNo === 'INV1' && job.receipt.amount === TOTAL && job.receipt.mpesaReference === 'QX1ABC' && job.receipt.paidAt && job.receipt.breakdown && job.receipt.breakdown.total === TOTAL && job.paidAt, job.receipt);
+  ck('F5c Gate 12: method is IntaSend\'s provider (M-PESA → mpesa), the hosted-checkout route is kept as channel — on payment, claim and receipt', prec.payment.method === 'mpesa' && prec.payment.channel === 'checkout' && claimDoc.method === 'mpesa' && claimDoc.channel === 'checkout' && claimDoc.currency === 'KES' && job.receipt.method === 'mpesa' && job.receipt.channel === 'checkout', { pay: prec.payment, claimDoc, receipt: job.receipt });
   r = await call(P.confirmParcelPayment, 'sender', { parcelId });
   ck('F6  confirming again is a no-op (alreadyPaid)', r.ok && r.alreadyPaid === true, r);
   /* one invoice, one parcel: a second parcel pointing at INV1 must be refused */
   r = await call(P.getParcelQuote, 'sender', { vehicleType: 'boda', pickup: PK, dropoff: DR });
   r = await call(P.createParcelRequest, 'sender', Object.assign({}, form, { quoteId: r.quoteId }));
   const parcel2 = r.parcelId, job2 = r.deliveryRef;
-  gateway.collection = { status: 200, data: { results: [{ invoice_id: 'INV1', api_ref: parcel2, state: 'COMPLETE', value: '9999.00' }] } };
+  gateway.collection = { status: 200, data: { results: [{ invoice_id: 'INV1', api_ref: parcel2, currency: 'KES', state: 'COMPLETE', value: '9999.00' }] } };
   e = await codeOf(call(P.confirmParcelPayment, 'sender', { parcelId: parcel2 }));
   ck('F7  the same invoice cannot pay a second parcel (claim is create(), not set())', !e.ok && e.code === 'failed-precondition', e);
   ck('F7b … second parcel still unpaid', (await db.collection('parcelRequests').doc(parcel2).get()).data().payment.state === 'unpaid', null);

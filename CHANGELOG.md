@@ -1,3 +1,38 @@
+## [2026-10-03] — Parcel rail: IntaSend Gate 12 (method from provider) + WRONG_CURRENCY + Gate 15 matrix — functions source, NOT deployed
+
+Owner brief Gates 12 and 15 applied to `confirmParcelPayment`. Before: the claim, the payment and the receipt recorded
+`method = pay.method || rec.provider`, i.e. the UI-chosen route — a hosted-checkout CARD payment was recorded as
+`'checkout'`, and an M-PESA payment through checkout likewise. No currency was checked.
+
+**Files:**
+- `functions/parcel-requests.js`:
+  - `_methodFromProvider(rec)`: the five mapping lines COPIED from 5aa7711 (`functions/index.js:2792-2796`,
+    verifyIntasendPayment): M-PESA/MPESA → `mpesa`, CARD-PAYMENT/CARD → `card`, other → sanitised lowercase, absent →
+    `unknown`. sha256 of the trimmed lines `4d9f44ca…8f29d78`, pinned and compared against `git show 5aa7711`.
+  - `method` (provider-derived) and `channel` (`'stk' | 'checkout'`, the sender's initiation route) now written on
+    `parcelRequests.payment`, the `parcelPayments` claim, the `packageRequests` receipt and the response receipt.
+    `payParcelRequest` also writes `channel` at initiation (additive; the pending `method` value is unchanged).
+  - WRONG_CURRENCY: an IntaSend record whose `currency` is not `KES` (or is absent) is refused `failed-precondition`
+    BEFORE any write. The claim also records `currency`.
+  - Unchanged: amount ≥ fee, api_ref === parcelId, state COMPLETE, the create()-claimed invoice, the admin path.
+- `scripts/test-parcel-payment-gate15.js` (new): executes the real module on an in-memory Firestore (optimistic
+  transactions, strict create()) + fake IntaSend transport. 17 rows (VALID_PAYMENT, INVALID_AMOUNT, PARTIAL_PAYMENT,
+  WRONG_ORDER, WRONG_BUYER, MISSING_PAYMENT, UNVERIFIED_PAYMENT (+FAILED), DUPLICATE_CALLBACK (2 concurrent + 1),
+  REPLAY_CALLBACK, FAKE_REFERENCE, BROWSER_SUCCESS_WITHOUT_PROVIDER, WRONG_CURRENCY (+MISSING), METHOD_CARD, METHOD_ABSENT,
+  METHOD_MPESA_STK), each with expected/observed and database/money/order/ledger effect from a store diff. 17/17,
+  provenance 13/13. Failure injection on temp copies: revert to `pay.method` → METHOD_CARD, METHOD_ABSENT (and
+  VALID_PAYMENT) fail; drop the currency check → WRONG_CURRENCY (+MISSING) fail; drop the create() claim → REPLAY_CALLBACK
+  fails. 3/3 caught.
+- `scripts/test-parcel-rail.js` (emulator suite, not run here): fake collection records carry `currency: 'KES'`; new F5c
+  asserts method `mpesa` + channel `checkout` on payment, claim and receipt.
+
+**Database changes:** new fields `channel` (payment, claim, receipt), `currency` (claim); `method` now means the
+provider's method. No migration: already-paid parcels keep their old `method` value.
+**API changes:** `confirmParcelPayment` response receipt gains `channel`; `method` is provider-derived; new refusal
+`failed-precondition` "This payment is not in KES".
+**Security:** closes UI-derived method recording (Gate 12) and an un-currency-checked amount comparison.
+**Deployment:** functions `confirmParcelPayment`, `payParcelRequest` — scoped deploy only, owner-authorised; NOT deployed.
+
 ## [2026-10-03] — Test safety: two suites that could reach PRODUCTION made safe (parcel-rail emulator-only guard; B2 §2 hermetic)
 
 Context: on 2026-10-01 a test wrote to production through application-default credentials on this machine, and on
