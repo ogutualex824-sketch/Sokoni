@@ -10,7 +10,9 @@
 
      { found, state, reason, message, label, category, route,
        modules: { <key>: { state:'AVAILABLE'|'LOCKED'|…, reason } },
-       approval: { state:'VALID_APPROVAL'|… },
+       approval: { state:'VALID_APPROVAL'|… },   ← exact token, sokoni-5b f85039a
+       ownerState: 'active'|'deactivated'|'suspended'|'frozen'|'unknown',   ← sokoni-5b 1a5c9e5
+       editable: boolean,             ← sokoni-5b 1a5c9e5; ONLY === true is editable (editableOf)
        serviceCapabilities: [...],
        marketing: boolean,            ← sokoni-b2, e4f9b7d (server decision record ∩ listing)
        marketingCategories: [ids],
@@ -132,7 +134,19 @@
     return n || null;
   }
 
-  var API = { mapWorkspace: mapWorkspace, notice: notice, reasonText: reasonText,
+  /* EDITABLE (P0-F, owner 2026-10-03) — from the SAME answer, through the one edit authority
+     (sokoni-edit-authority.js). Anything other than answer.editable === true is read-only;
+     a missing authority module fails CLOSED (read-only, "status unknown"). */
+  function editableOf (answer, claims) {
+    var EA = global.SokoniEditAuthority;
+    if (!EA || typeof EA.decide !== 'function') {
+      return Object.freeze({ editable: false, readOnly: true, reasonCode: 'no_answer', reason: 'status unknown',
+        ownerState: null, source: 'none', action: null });
+    }
+    return EA.decide(answer, claims);
+  }
+
+  var API = { mapWorkspace: mapWorkspace, notice: notice, reasonText: reasonText, editableOf: editableOf,
               providerDisplayName: providerDisplayName, VALID_APPROVAL: VALID_APPROVAL };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   global.SokoniMerchantSession = API;
