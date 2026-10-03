@@ -72,6 +72,7 @@
 <script src="sokoni-pay.js" defer></script>
 <script src="sokoni-book-service.js" defer></script>
 <script src="sokoni-inbox.js" defer></script>
+<script src="sokoni-leads.js" defer></script>
 <script src="sw-register.js" defer></script>
 <script>
 (function () {
@@ -155,6 +156,8 @@
         '<div class="card"><h2>Book</h2><div class="actions">' +
           '<button type="button" class="btn btn-gold" id="bookMain">Book a consultation</button>' +
           '<p class="muted" style="margin:0">Pick a time from this advocate\'s live availability. Messaging opens once you have a booking.</p>' +
+          '<button type="button" class="btn btn-ghost" id="quoteMain">Request a quote for a larger matter</button>' +
+          '<p class="muted" style="margin:0">Company work, contracts, due diligence or a dispute: describe it, and the advocate replies in SOKONI with a quote. If you accept, you book and pay that quoted amount through SOKONI — held until you confirm with your completion PIN.</p>' +
         '</div></div>' +
         '<div class="card"><h2>Details</h2><dl class="kv">' +
           '<dt>Consultation</dt><dd>' + (p.consultationFee ? esc('KES ' + Number(p.consultationFee).toLocaleString()) : '—') + '</dd>' +
@@ -181,6 +184,13 @@
     if (e.target.closest('#bookMain') || e.target.closest('#stickyBookBtn')) {
       var consult = (SERVICES || []).filter(function (s) { return s.legalConsultation; })[0];
       book(consult ? consult.id : null); return;
+    }
+    if (e.target.closest('#quoteMain')) {
+      /* Legal Hub L9: the canonical leads → quote → booking engine (providerDispatch lead*); never a Legal quote system. */
+      if (!window.SokoniLeads) { toast('Quote requests are loading — try again in a moment.'); return; }
+      var nm = P.entityType === 'firm' ? (P.firmName || P.name) : P.name;
+      SokoniLeads.ask({ providerId: id, providerName: nm, placeholder: 'e.g. Register a company with three directors and draft a shareholders\' agreement — scope, fee and timeline?' });
+      return;
     }
     if (e.target.closest('#shareBtn')) {
       /* Shares the PUBLIC profile link only — never a booking, matter or payment detail. */

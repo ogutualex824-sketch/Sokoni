@@ -1,3 +1,12 @@
+## [2026-10-03] — Legal Hub L9 (hosting): quotes for larger legal matters via the canonical leads engine — NOT deployed
+
+- **legal-profile.html:** a "Request a quote for a larger matter" button runs SokoniLeads.ask (providerDispatch leadCreate) with a Legal placeholder. If the client accepts the quote, they book and pay that amount through SokoniBookService: held until the PIN, one 5%.
+- **legal-hub.html / sokoni-legal-account.js:** "My quote requests" under My bookings (SokoniLeads.mountMine: accept / decline / ask / book / message).
+- **sokoni-leads.js:** ask() takes an optional, escaped placeholder. Shared with Tech; test-service-leads-web 11/0.
+- **Server:** capability line d377b28 (legal → QUOTE_REQUEST + DIRECT_BOOKING).
+- **Tests:** test-legal-hub-web Q1 (16/0), sabotage 12/12.
+- **Still NOT BUILT:** milestone billing for multi-stage matters (one quote = one booking = one payment).
+
 ## [2026-10-03] — Legal Hub L8 (hosting): Super Admin Legal Hub view (read-only) — NOT deployed
 
 - **super-admin.html:**

@@ -45,7 +45,7 @@
     if (!signedIn()) { G.location.href = 'login.html?next=' + encodeURIComponent(G.location.pathname + G.location.search); return; }
     var m = modal('<div style="font-weight:800;font-size:16px;margin-bottom:4px">Ask ' + esc(o.providerName || 'the provider') + '</div>'
       + '<div style="opacity:.7;font-size:12px">Describe what you need. The provider can reply in SOKONI messages and send you a quote.</div>'
-      + '<textarea id="skLeadMsg" rows="4" maxlength="1000" style="' + inputCss + '" placeholder="e.g. My Samsung A54 screen is cracked — how much and how long?"></textarea>'
+      + '<textarea id="skLeadMsg" rows="4" maxlength="1000" style="' + inputCss + '" placeholder="' + esc(o.placeholder || 'e.g. My Samsung A54 screen is cracked — how much and how long?') + '"></textarea>'
       + '<div id="skLeadErr" style="color:#ff6b6b;font-size:12px;min-height:16px"></div>'
       + '<div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" data-lead-x style="' + btn2Css + '">Cancel</button><button type="button" id="skLeadSend" style="' + btnCss + '">Send request</button></div>');
     m.querySelector('#skLeadSend').addEventListener('click', function () {

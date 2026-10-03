@@ -94,7 +94,12 @@
     } catch (err) { if (out) out.textContent = (err && err.message) || 'Could not fetch your PIN just now.'; }
   });
 
-  W.renderAppointments = function () { return mountBookings('lhMyBookings'); };
+  W.renderAppointments = function () {
+    /* L9: the client's quote requests (leads → quote → booking) render with the canonical SokoniLeads module. */
+    var q = document.getElementById('lhMyQuotes');
+    if (q) { if (W.SokoniLeads && typeof W.SokoniLeads.mountMine === 'function') { try { W.SokoniLeads.mountMine(q); } catch (_) { q.textContent = 'Quote requests could not load — please refresh.'; } } else q.textContent = 'Quote requests are loading — refresh in a moment.'; }
+    return mountBookings('lhMyBookings');
+  };
   W.renderClientDashboard = function () { return mountBookings('lhDashBookings'); };
   W.renderMyLegalCompletions = function () {};   /* the completion tab is now an explanation; nothing is logged by hand */
   W.initProDashboard = function () { if (typeof W.checkExistingApp === 'function') { var h = document.getElementById('lhProStatus'); if (h) h.textContent = ''; } };

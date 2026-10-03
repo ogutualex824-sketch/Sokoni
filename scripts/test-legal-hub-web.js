@@ -119,6 +119,11 @@ const run = async (cat) => { ctx._activeLawCat = cat; await ctx.renderLawyers();
     && saFn.includes("rows.filter(a=>a.eligibility&&a.eligibility.bookable)") && saFn.includes('This is not an empty registry.')
     && sa.indexOf('sokoni-legal-taxonomy.js') > -1,
     'Super Admin Legal: read-only registry + practice-area coverage from the SAME server read model (legalAdminList); no decisions or money fields; coverage counts bookable providers only; a failed load is not an empty registry');
+  const leadsJs = read('sokoni-leads.js');
+  ck('Q1', prof.includes("SokoniLeads.ask({ providerId: id, providerName: nm, placeholder:") && prof.includes('<script src="sokoni-leads.js" defer></script>')
+    && acct.includes("W.SokoniLeads.mountMine(q)") && html.includes('id="lhMyQuotes"') && html.includes('<script src="sokoni-leads.js" defer></script>')
+    && leadsJs.includes("esc(o.placeholder || ") && !/legalQuote|legalProject|legalInvoice/.test(prof + acct),
+    'large matters: storefront "Request a quote" → the canonical leads engine; the client sees quotes in My bookings (mountMine); placeholder escaped; no Legal quote/invoice system');
   done();
 })();
 function done() { console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed'); console.log('NOT proven here: a real browser render (memory floor) and a live booking.'); process.exit(fail ? 1 : 0); }
