@@ -73,6 +73,16 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await denies('ED-P2', 'another institution reads the programme raw', getDoc(doc(other, 'programmes/p1')));
   await denies('ED-P3', 'a client writes a programme', setDoc(doc(owner, 'programmes/p2'), { institutionUid: 'owner', title: 'Self-published' }));
   await allows('ED-P4', 'admin reads a programme', getDoc(doc(admin, 'programmes/p1')));
+  // lessons + certificates (courseLessons callable)
+  await env.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'courseLessons/l1'), { courseId: 'c1', body: 'paid lesson content' });
+    await setDoc(doc(c.firestore(), 'learnerCertificates/cert1'), { uid: 'ent', courseId: 'c1' });
+  });
+  await denies('ED-C1', 'a learner reads a lesson raw (paid content bypass; callable only)', getDoc(doc(ent, 'courseLessons/l1')));
+  await denies('ED-C2', 'a client writes a lesson', setDoc(doc(owner, 'courseLessons/l2'), { courseId: 'c1' }));
+  await allows('ED-C3', 'the learner reads their own certificate', getDoc(doc(ent, 'learnerCertificates/cert1')));
+  await denies('ED-C4', 'another user reads the certificate', getDoc(doc(other, 'learnerCertificates/cert1')));
+  await denies('ED-C5', 'a learner mints a certificate', setDoc(doc(ent, 'learnerCertificates/cert2'), { uid: 'ent', courseId: 'c9' }));
   await env.cleanup();
   console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('HARNESS ERROR (not a rules result):', e.message); process.exit(2); });

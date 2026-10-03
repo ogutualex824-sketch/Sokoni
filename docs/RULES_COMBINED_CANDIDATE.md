@@ -247,3 +247,6 @@ RC-8 covers that. Rows RC-1–RC-10 are in `zz-test-b2b-leads-rules.js`. **EMULA
    callable. Rows ED-T1–T7. **EMULATOR PENDING.**
 5. (later) `programmes/{id}`: admin read only, write false. Written by `manageMyProgrammes` (5b @ 1822cb0), which also
    serves the owner; public display comes through a server read. Rows ED-P1–P4. **EMULATOR PENDING.**
+6. (later) `courseLessons/{id}` admin read only; `learnerCertificates/{id}` admin or owner (`uid`) read; both write
+   false. Written by the `courseLessons` callable (5b @ 36cc6d8), which serves lessons only to enrolled learners, free
+   previews or the owner. Rows ED-C1–C5. **EMULATOR PENDING.**

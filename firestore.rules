@@ -2048,6 +2048,16 @@ service cloud.firestore {
   allow read:  if isAdmin();
   allow write: if false;
   }
+  /* (sokoni-5b Education, lessons + certificates; feat/education-workspace-on-d377b28 @ 36cc6d8) written only by the
+     courseLessons callable. Lesson content is served only through it (enrolled / free preview / owner). */
+  match /courseLessons/{id} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /learnerCertificates/{id} {
+  allow read:  if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+  allow write: if false;
+  }
   function isPosOwner() {
   return isAuthed() && resource.data.sellerId == request.auth.uid;
   }

@@ -1898,6 +1898,14 @@ service cloud.firestore {
   allow read:  if isAdmin();
   allow write: if false;
   }
+  match /courseLessons/{id} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /learnerCertificates/{id} {
+  allow read:  if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+  allow write: if false;
+  }
   function isPosOwner() {
   return isAuthed() && resource.data.sellerId == request.auth.uid;
   }
