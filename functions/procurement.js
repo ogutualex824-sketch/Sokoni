@@ -539,7 +539,10 @@ const resolveMerchantContext = onCall(OPT, async (request) => {
 const SUPPLY_MUTABLE = ['enabled', 'displayName', 'categories', 'minOrderValue',
                         'leadDays', 'deliveryAreas', 'notes',
                         /* Discovery consent — SEPARATE from participation. See below. */
-                        'discoverable'];
+                        'discoverable',
+                        /* Lead consent — SEPARATE again: receiving an RFQ costs the supplier a fee
+                           (owner 2026-10-03: KES 200 + VAT per RFQ received, invoiced monthly). */
+                        'acceptsLeads'];
 
 /**
  * Resolve the business a caller may declare supply participation FOR.
@@ -603,6 +606,14 @@ const setSupplyParticipation = onCall(OPT, async (request) => {
          counterparty it already knows without appearing to strangers, so this is its own
          explicit boolean and is never inferred from `enabled`. Opt-in: absent means false. */
       case 'discoverable': patch['supply.discoverable'] = v === true; break;
+      /* Being listed is not agreeing to be CHARGED. Each RFQ a supplier receives carries a lead
+         fee, so receiving RFQs is its own explicit boolean — never inferred from `enabled` or
+         `discoverable`, and only a real boolean counts (a string "true" is refused, not coerced). */
+      case 'acceptsLeads': {
+        if (typeof v !== 'boolean') _err('supply.acceptsLeads must be a boolean — lead consent is explicit, never inferred.');
+        patch['supply.acceptsLeads'] = v;
+        break;
+      }
       case 'displayName': patch['supply.displayName'] = _san(v, 150); break;
       case 'notes':       patch['supply.notes'] = _san(v, 500); break;
       case 'categories': {
@@ -642,13 +653,22 @@ const setSupplyParticipation = onCall(OPT, async (request) => {
      merchant would have no reason to think a second switch was still on. */
   if (supply.enabled === false) {
     patch['supply.discoverable'] = false;
+    /* …and lead consent with it: a business that stopped supplying must not keep being charged. */
+    patch['supply.acceptsLeads'] = false;
   }
+  /* Lead consent is a consent to be billed, so its moment is recorded and audited on its own. */
+  if (patch['supply.acceptsLeads'] === true) patch['supply.acceptsLeadsAt'] = F.serverTimestamp();
 
   await db.collection('businesses').doc(businessId).update(patch);
 
   await _audit(uid, supply.enabled ? 'supply_enabled' : 'supply_disabled', businessId, {
     businessId, fields: Object.keys(patch),
   });
+  if (Object.prototype.hasOwnProperty.call(patch, 'supply.acceptsLeads')) {
+    await _audit(uid, patch['supply.acceptsLeads'] ? 'supply_leads_accepted' : 'supply_leads_withdrawn', businessId, {
+      businessId, acceptsLeads: patch['supply.acceptsLeads'], cause: supply.enabled === false ? 'supply_disabled' : 'explicit',
+    });
+  }
   logger.info('procurement.setSupplyParticipation', { businessId, enabled: supply.enabled });
   return { businessId, enabled: supply.enabled === true };
 });
@@ -722,6 +742,9 @@ function _projectDiscoverable(id, d) {
   DISCOVERABLE_SUPPLY_FIELDS.forEach(function (f) {
     supOut[f] = sup[f] === undefined ? null : sup[f];
   });
+  /* Strict boolean, never null: buyers must be able to tell "accepts RFQs" from "does not",
+     and absent consent is "does not" (opt-in). */
+  supOut.acceptsLeads = sup.acceptsLeads === true;
   out.supply = supOut;
   /* Deliberately absent and never added by omission: phone, email, address, rating,
      products, moq, apiPublicKey, pairingToken, ownerId, adminUids, status. */

@@ -262,6 +262,29 @@ const ids = (r) => (r.value.suppliers || []).map((x) => x.businessId).sort();
   check('absent means false — opt-in, since the query requires === true',
     /\.where\('supply\.discoverable', '==', true\)/.test(PROC));
 
+  /* §6b LEAD consent (owner 2026-10-03: each RFQ a supplier RECEIVES carries a KES 200 + VAT lead
+     fee) — being listed is not agreeing to be charged, so acceptsLeads is its own explicit boolean. */
+  console.log('\n§6b lead consent is explicit, separate and withdrawn with supply');
+  check('acceptsLeads is on the supply allowlist', proc._SUPPLY_MUTABLE.indexOf('acceptsLeads') !== -1);
+  check('acceptsLeads accepts ONLY a real boolean (a string "true" is refused, not coerced)',
+    /case 'acceptsLeads': \{\s*\n\s*if \(typeof v !== 'boolean'\) _err\(/.test(PROC));
+  check('acceptsLeads is NEVER inferred from enabled or discoverable',
+    !/supply\.acceptsLeads'\] = .*(supply\.enabled|supply\.discoverable|v === true)/.test(PROC));
+  sab('the detector would catch lead consent inferred from discovery',
+    /supply\.acceptsLeads'\] = .*(supply\.enabled|supply\.discoverable|v === true)/.test("patch['supply.acceptsLeads'] = patch['supply.discoverable'];"));
+  check('disabling supply withdraws lead consent too (no charges after leaving supply)',
+    /if \(supply\.enabled === false\) \{[^}]*patch\['supply\.acceptsLeads'\] = false;/.test(PROC));
+  check('granting lead consent stamps its moment (acceptsLeadsAt) and audits it separately',
+    /patch\['supply\.acceptsLeads'\] === true\) patch\['supply\.acceptsLeadsAt'\]/.test(PROC) &&
+    /'supply_leads_accepted' : 'supply_leads_withdrawn'/.test(PROC));
+  {
+    const rowAbsent = proc._projectDiscoverable('X', { supply: { enabled: true, discoverable: true } });
+    const rowOn = proc._projectDiscoverable('Y', { supply: { enabled: true, discoverable: true, acceptsLeads: true } });
+    const rowStr = proc._projectDiscoverable('Z', { supply: { enabled: true, discoverable: true, acceptsLeads: 'true' } });
+    check('buyers see a STRICT boolean: absent → false, true → true, a stray string → false (never null)',
+      rowAbsent.supply.acceptsLeads === false && rowOn.supply.acceptsLeads === true && rowStr.supply.acceptsLeads === false);
+  }
+
   /* ══════════════════════════════════════════════════════════
      §7 wiring + scope
   ══════════════════════════════════════════════════════════ */
