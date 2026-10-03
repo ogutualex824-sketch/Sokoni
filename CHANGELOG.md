@@ -1,3 +1,9 @@
+## 2026-10-03 — Legal free plan: the auto consultation card does not count toward the service cap (owner decision; NOT deployed)
+
+- **Change:** provider-ops add/duplicate/toggle exclude exactly providerServices/legal_consult_{uid} with createdBy 'legal-verification' from the active-service count.
+- **Test:** scripts/test-legal-auto-card-cap.js 9/0 (base fails C1).
+
+## 2026-10-03 — B2B lead invoice recovery (settlement deduction + Pay Now + overdue gate predicate) and Education 5% (NOT deployed)
 ## [2026-10-03] — Legal Hub L10 (server): specialist practice areas (criminal, immigration, tax) — separately configured, admin-confirmed — NOT deployed
 
 - **Owner decision (10-03):** add criminal law, immigration and tax as separately configured services with their own eligibility, not appended to the 30.
