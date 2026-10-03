@@ -1,3 +1,9 @@
+## 2026-10-03 — Construction quote orders: commission snapshot captured at payment start (NOT deployed)
+
+- **Change:** the rfq_quote pricer captures the commission rate ONCE (real engine, server-stamped category) on the quote's LINES and puts `commissionSnapshot` + `passThroughCents` (VAT + delivery) on the intent metadata. 5b's hold/settlement path settles through shared/settlement-authority with heldAmountCents = the verified payment — the same engine as bookings and rentals.
+- **Files:** functions/payment-purposes.js, scripts/test-rfq-quote-purpose.js (Q6–Q7).
+- **Tests:** rfq_quote 9/0 (materials 15% on lines only; contractor 0%).
+
 ## 2026-10-03 — Rentals: commission snapshot captured at payment start; rental_booking receipt kind (NOT deployed)
 
 - **Change:** the rental_booking pricer captures the 10% construction_equipment_rental rate ONCE (real engine) when the renter starts payment and stamps `commissionSnapshot` (base rent_only_deposit_excluded) on rentalBookings/{id} AND the intent metadata; a retry keeps the stamp. Settlement (f3 1746639 / 5b 4f8fed6) uses `shared/settlement-authority.settle({heldAmountCents, passThroughCents: depositCents, commissionSnapshot})` — it needs NO commission table of its own, so commerceDispatch never forks commission-config. transaction-receipts KINDS += `rental_booking` (5b).

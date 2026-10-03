@@ -6,6 +6,7 @@
      Q3  refused: another user · a business buyer · not accepted / already paid · inconsistent lines / VAT / total · no
          server-stamped commissionCategory · supplier unknown · paying your own quote
      Q4  metadata carries payee (supplier owner), commissionCategory, VAT as declared
+     Q6/Q7 commission snapshot on the intent: lines only (VAT + delivery pass through); contractor 0%
      Q5  rfq_quote is self-settling (no generic credit at payment time — 5b's hold path settles it)
    NODE_PATH=<functions/node_modules> node scripts/test-rfq-quote-purpose.js */
 const path = require('path'), Module = require('module');
@@ -14,7 +15,8 @@ let pass = 0, fail = 0;
 const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (ok || d === undefined ? '' : '  -> ' + JSON.stringify(d).slice(0, 220))); ok ? pass++ : fail++; };
 class HttpsError extends Error { constructor (code, message) { super(message); this.code = code; } }
 let DOCS = {};
-const db = { collection: (c) => ({ doc: (id) => ({ get: async () => { const d = DOCS[c + '/' + id]; return { exists: !!d, data: () => d && JSON.parse(JSON.stringify(d)) }; } }) }) };
+const emptyQ = () => ({ where: () => emptyQ(), orderBy: () => emptyQ(), limit: () => emptyQ(), get: async () => ({ empty: true, docs: [], size: 0, forEach () {} }) });
+const db = { collection: (c) => Object.assign(emptyQ(), { doc: (id) => ({ get: async () => { const d = DOCS[c + '/' + id]; return { exists: !!d, data: () => d && JSON.parse(JSON.stringify(d)) }; } }) }) };
 const orig = Module.prototype.require;
 Module.prototype.require = function (id) {
   if (id === 'firebase-admin/firestore') return { getFirestore: () => db, FieldPath: { documentId: () => '__name__' } };
@@ -61,6 +63,15 @@ function reset (over, quoteOver) {
   reset({ commissionCategory: 'equipment-rental' }, { vatRate: 0, vatKES: 0, totalKES: 11500 });
   x = await price('buyer1', { rfqId: 'RFQ0001' });
   ck('Q3c an equipment-rental quote is accepted and carries equipment-rental (→ 10% row)', x.ok && x.r.metadata.commissionCategory === 'equipment-rental');
+  reset(); x = await price('buyer1', { rfqId: 'RFQ0001' });
+  const cs = x.ok && x.r.metadata.commissionSnapshot;
+  const SA = require(path.join(FN, 'shared/settlement-authority.js'));
+  const st = cs && SA.settle({ heldAmountCents: x.r.amountCents, passThroughCents: x.r.metadata.passThroughCents, commissionSnapshot: cs });
+  ck('Q6 materials quote: 15% snapshot on the LINES (11,000) captured on the intent; VAT 1,760 + delivery 500 pass through → commission 1,650, supplier 9,350 + 2,260',
+    cs && cs.commissionRate === 15 && cs.capturedOnCents === 1100000 && x.r.metadata.passThroughCents === 226000 && st.baseCents === 1100000 && st.commissionCents === 165000 && st.settleCents === 1100000 - 165000 + 226000, { cs, st });
+  reset({ commissionCategory: 'construction_service' }, { vatRate: 0, vatKES: 0, totalKES: 11500 });
+  x = await price('buyer1', { rfqId: 'RFQ0001' });
+  ck('Q7 contractor quote: 0% snapshot (contractor work, owner-confirmed)', x.ok && x.r.metadata.commissionSnapshot.commissionRate === 0);
   ck('Q5 rfq_quote is self-settling (5b\'s hold path settles; no generic credit at payment)', SS.isSelfSettling('rfq_quote'));
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

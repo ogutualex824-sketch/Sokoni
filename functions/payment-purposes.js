@@ -293,11 +293,21 @@ const PURPOSES = {
       if (!payee) fail('failed-precondition', 'The supplier is not available for payment.');
       if (payee === uid) fail('failed-precondition', 'You cannot pay your own quote.');
       const version = Number.isInteger(q.version) ? q.version : 1;
+      /* COMMISSION SNAPSHOT (owner 2026-10-03): captured at the moment the buyer commits to pay, on the quote's LINES only —
+         VAT and delivery pass through, never commissioned. The server-written intent carries it; settlement (5b's hold path,
+         shared/settlement-authority.js) uses it with heldAmountCents = the verified payment and passThroughCents = VAT +
+         delivery. A later catalogue change never touches this order. */
+      const subCents = Math.round(sub * 100);
+      const comm = await require('./finos-utils').calculateCommission(db(), { orderAmountCents: Math.max(1, subCents), sellerId: payee, category: cat });
+      const commissionSnapshot = require('./shared/settlement-authority').snapshotFrom(comm, {
+        policyVersion: require('./commission-config').COMMISSION_POLICY_VERSION, commissionBase: 'quote_lines_ex_vat_ex_delivery', capturedOnCents: subCents });
+      if (!commissionSnapshot) fail('failed-precondition', 'The platform fee for this quote could not be captured. Please try again.');
       return {
         amountCents: Math.round(total * 100), currency: 'KES', resourceType: 'rfqQuote', resourceId: rfqId,
         preferredRef: ('RFQ-' + rfqId + '-v' + version).slice(0, 128),
         metadata: { rfqId, quoteVersion: version, supplierBusinessId: bizId, sellerUid: payee, commissionCategory: cat,
-          vatBasis: 'declared_on_quote', vatRate, vatKES: kes(q.vatKES), subtotalKES: sub, deliveryFeeKES: kes(q.deliveryFeeKES || 0) },
+          vatBasis: 'declared_on_quote', vatRate, vatKES: kes(q.vatKES), subtotalKES: sub, deliveryFeeKES: kes(q.deliveryFeeKES || 0),
+          commissionSnapshot, passThroughCents: Math.round((kes(q.vatKES) + kes(q.deliveryFeeKES || 0)) * 100) },
       };
     },
   },
