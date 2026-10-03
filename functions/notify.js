@@ -361,9 +361,53 @@ async function sendPush(uid, payload) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   WHATSAPP CHANNEL (owner 2026-10-01) — the one place notify() reaches Meta.
+   ─────────────────────────────────────────────────────────────────────────
+   Returns null when the type never goes by WhatsApp (caller keeps today's
+   behaviour, no channel row), else whatsapp-sender's true state
+   { ok, messageId, error }. Gates, in order:
+     1. the type maps to an APPROVED template (shared/whatsapp-notify-map.js)
+     2. the function was deployed WITH the WhatsApp secrets (else NOT_CONFIGURED)
+     3. the account consented: users/{uid}.whatsappOptIn === true (Meta requires
+        opt-in for business-initiated messages; it also means a number that is
+        not on WhatsApp is not tried, so an OTP is not lost to a late 'failed')
+     4. the recipient is the account's OWN verified users/{uid}.phoneNumber —
+        never the caller's `phone` override
+   Template parameters (an OTP included) go to Meta only: never logged, never
+   in notifyLog, never in whatsappSends. Nothing here throws into notify().
+═════════════════════════════════════════════════════════════════════════ */
+const _waMap = require('./shared/whatsapp-notify-map');
+
+async function _whatsappChannel({ uid, type, vars, key }, deps) {
+  try {
+    const wa = require('./whatsapp-sender');
+    const d = deps || {};
+    const cfg = d.config || wa.configFromEnv();
+    if (!_waMap.MAP[type]) return null;
+    if (!cfg.accessToken || !cfg.phoneNumberId) return { ok: false, messageId: null, error: 'NOT_CONFIGURED' };
+    const readUser = d.readUser || (async (id) => {
+      const s = await db().collection('users').doc(id).get();
+      return s.exists ? (s.data() || {}) : null;
+    });
+    const u = await readUser(uid);
+    if (!u || u.whatsappOptIn !== true) return { ok: false, messageId: null, error: 'NO_CONSENT' };
+    const to = typeof u.phoneNumber === 'string' ? u.phoneNumber : '';
+    if (!to) return { ok: false, messageId: null, error: 'NO_PHONE' };
+    const pick = _waMap.resolve(type, vars, _waMap.displayName(u));
+    return await wa.sendTemplate(
+      { to, template: pick.template, params: pick.params, uid, ref: key },
+      { ...cfg, fetch: d.fetch, store: d.store || wa.firestoreSends() });
+  } catch (err) {
+    /* Name of the error class only — never the message, which could echo a parameter. */
+    logger.error('[notify] whatsapp channel error', { type, error: (err && err.name) || 'Error' });
+    return { ok: false, messageId: null, error: 'INTERNAL' };
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    notify() — the ONE entry point
 ═════════════════════════════════════════════════════════════════════════ */
-async function notify({ uid, type, title, body, vars = {}, phone, email, image, deepLink, group, dedupeKey, data, awaitDelivery = true, anchorType, anchorId }) {
+async function notify({ uid, type, title, body, vars = {}, phone, email, image, deepLink, group, dedupeKey, data, awaitDelivery = true, anchorType, anchorId, whatsapp }) {
   const t = TYPES[type];
   if (!t) throw new HttpsError('invalid-argument', `Unknown notification type "${type}".`);
   if (!uid) throw new HttpsError('invalid-argument', 'uid is required.');
@@ -477,7 +521,23 @@ async function notify({ uid, type, title, body, vars = {}, phone, email, image, 
   /* SMS — forced for critical; for commerce ONLY as a fallback when push could not
      land. Sending both by default would spam the user and burn credit for nothing. */
   const wantSms = ch.sms || (ch.smsFallback && !pushOk);
-  if (wantSms && t.smsTemplate) {
+
+  /* WHATSAPP — tried at the moment the SMS would be sent, and only then. Accepted by Meta → the SMS
+     is not sent (never both). Anything else — not configured, no consent, a parameter that does not
+     fit the approved template, Meta refusing — leaves the SMS path below exactly as it was. */
+  let waAccepted = false;
+  if (wantSms && t.smsTemplate && whatsapp !== false) {
+    const w = await _whatsappChannel({ uid, type, vars, key });
+    if (w) {
+      waAccepted = w.ok === true;
+      result.channels.whatsapp = waAccepted ? 'accepted' : `failed:${w.error || 'UNKNOWN'}`;
+      if (waAccepted) result.whatsappMessageId = w.messageId;
+    }
+  }
+
+  if (waAccepted) {
+    result.channels.sms = 'not_needed_whatsapp_accepted';
+  } else if (wantSms && t.smsTemplate) {
     /* RESOLVE THE RECIPIENT, exactly as push and email already do.
        `phone` is a caller OVERRIDE, not the only source. Push reads
        users/{uid} for its tokens; email falls back to the Auth address when the
@@ -608,7 +668,9 @@ exports.notifySend = onCall(
         throw new HttpsError('permission-denied', 'Cannot notify another user.');
       }
     }
-    return notify({ ...request.data, uid: target || caller });
+    /* whatsapp:false AFTER the spread: a browser can never put a message on WhatsApp — its title,
+       vars and type are client-chosen, and WhatsApp carries only server-chosen template content. */
+    return notify({ ...request.data, uid: target || caller, whatsapp: false });
   }
 );
 
@@ -846,3 +908,4 @@ module.exports.CATEGORIES = CATEGORIES;
 module.exports.resolveChannels = resolveChannels;
 module.exports.inQuietHours = inQuietHours;
 module.exports.defaultPrefs = defaultPrefs;
+module.exports._whatsappChannel = _whatsappChannel;   /* exported for the suite (scripts/test-whatsapp-notify.js) */

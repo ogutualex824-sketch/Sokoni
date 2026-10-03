@@ -1,3 +1,48 @@
+## 2026-10-03 — WhatsApp inside the ONE notification sender + AdminOS delivery trace (branch `functions/whatsapp-channel-on-9894df2`, NOT deployed)
+
+**What changed.** `notify()` (functions/notify.js) now tries WhatsApp **at the moment it would have sent an SMS, and
+only then**. If Meta accepts the message, the SMS is not sent: one message, never both, and a PIN is never delivered
+twice. In every other case the SMS path runs exactly as before: not configured, no consent, a parameter that doesn't
+fit the approved template, or Meta refusing. Related: [[WHATSAPP_PRODUCTION]] · [[Notifications]].
+
+- **Lineage.** The canonical authority is `notify()`. Live `notifySend` serves notify.js `bf6d703` (731 lines, 09-09).
+  `webhookWhatsapp` and this branch carry `096490f` (848 lines), a strict superset. The change lands on `096490f`.
+  Each function that calls `notify()` bundles its own copy, so a function only gets WhatsApp when it is redeployed
+  from this lineage **and** declares the WhatsApp secrets.
+- **Gates, in order** (`_whatsappChannel`):
+  1. the type maps to an approved template (`functions/shared/whatsapp-notify-map.js`, 9 types, only types that
+     already have an SMS);
+  2. secrets are present (otherwise `NOT_CONFIGURED`);
+  3. the account has consented: `users/{uid}.whatsappOptIn === true` (Meta requires opt-in);
+  4. the recipient is the account's own `phoneNumber`, never a caller-supplied phone.
+- **The browser can't reach WhatsApp.** `notifySend` passes `whatsapp:false` after the spread.
+- **Parameters come from the SMS vars the caller already passes.** A non-KES amount is refused (`BAD_PARAM`) and the
+  message falls back to SMS. Nothing is ever reinterpreted.
+- **Correlation.** `whatsappSends/{wamid}` now records `ref` (the `notifyLog` key) and `channel: 'WHATSAPP'`.
+  `notifyLog/{key}.channels.whatsapp` records `accepted` or `failed:<CODE>`. Template parameters are never stored
+  or logged.
+- **AdminOS.** New read-only op `adminListWhatsappSends` (`functions/admin-notification-trace.js`), merged into the
+  one `adminOsDispatch` registry. It requires the admin/superAdmin claim and returns a field whitelist only.
+  The UI is a WhatsApp tab in the Comms panel, in the hosting unit (`sokoni-aos.js` + `admin-os.html`).
+
+**Tests:**
+- `test-whatsapp-notify` 32/0, sabotage 6/6
+- `test-admin-whatsapp-trace` 17/0, sabotage 2/2
+- `test-whatsapp-sender` 31/0, sabotage 4/4 (X2 widened to the two named new fields)
+- parent vs candidate identical: `test-notify` 26, `test-notify-booking-types` 9/0, `test-notify-sms-recipient` 14/0
+  (harness binds the two new names), `test-sms` 11, `test-whatsapp-webhook` 27/1 (the 1 is the known
+  index-export check)
+
+**Database:** `whatsappSends` gains `ref` and `channel`. New consent field `users/{uid}.whatsappOptIn`. Nothing
+writes it yet; the capture UI is a follow-up. **Rules:** none (`whatsappSends` stays default-deny).
+**API:** new admin op `adminListWhatsappSends`.
+**Security:** closes the browser → WhatsApp path. A separate finding is out of scope here: live `notifySend` lets a
+signed-in non-admin pass `phone` and a critical `type`, so SMS can go to an arbitrary number with
+caller-chosen text. That needs its own slice.
+**Breaking:** none. With the secrets absent, behaviour is identical.
+**UNPROVEN:** production sending. `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` and `WHATSAPP_WABA_ID` are
+missing, and Meta has never called the live `webhookWhatsapp`.
+
 ## 2026-09-29 — WhatsApp slice 1: the inbound receiver, signed and inert until configured (branch `feat/integrations-control-center`, NOT deployed)
 
 Owner decision 09-29: the 09-27 directive is **superseded for API-integrated WhatsApp only**. `wa.me` hand-offs

@@ -19,7 +19,9 @@ const REGION = 'us-central1';
 const adminOs = (() => {
   const base = require('./admin-os');
   const trace = require('./admin-commission-trace');
-  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h) });
+  /* Read-only WhatsApp delivery trace (whatsappSends) — same guard, same registry. */
+  const notifyTrace = require('./admin-notification-trace');
+  return Object.assign({}, base, { _h: Object.assign({}, base._h, trace._h, notifyTrace._h) });
 })();
 
 const _OPTS = {

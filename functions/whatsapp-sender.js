@@ -56,7 +56,7 @@ function buildPayload (to, name, def, params) {
 }
 
 /**
- * sendTemplate({ to, template, params, uid }, deps) → { ok, messageId, error }
+ * sendTemplate({ to, template, params, uid, ref }, deps) → { ok, messageId, error }
  * deps: { fetch, accessToken, phoneNumberId, store?, now? }   (injectable: the suite exercises THIS function)
  */
 async function sendTemplate (msg, deps) {
@@ -94,6 +94,8 @@ async function sendTemplate (msg, deps) {
       await d.store.createSend(wamid, {
         template: m.template, category: def.category, secret: !!def.secret,
         toMasked: maskPhone(to), uid: m.uid ? String(m.uid).slice(0, 128) : null,
+        /* Correlation: business event → notification (notifyLog/{ref}) → this provider message. */
+        ref: m.ref ? String(m.ref).slice(0, 200) : null, channel: 'WHATSAPP',
         status: 'accepted', acceptedAt: (d.now ? d.now() : new Date()).toISOString(),
       });
     } catch (_) { /* the message WAS accepted by Meta — a bookkeeping failure must not report it as failed */ }

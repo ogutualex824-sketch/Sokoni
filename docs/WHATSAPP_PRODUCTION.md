@@ -1,6 +1,7 @@
 # WhatsApp Cloud API — production setup and the SOKONI sender
 
-**Status:** sender + status webhook BUILT and certified (31/0, sabotage 4/4), **not deployed**. Branch
+**Status (2026-10-03):** sender, status webhook, the `notify()` channel and the AdminOS trace are BUILT and certified,
+**not deployed**. Production is **UNPROVEN**: see [Production gate](#production-gate-2026-10-03). Branch
 `functions/whatsapp-channel-on-9894df2`. Related: [[WHATSAPP_CLOUD_API_CENSUS]] · [[Notifications]] · [[Completion PIN]]
 
 ## Owner decision (2026-10-01)
@@ -60,11 +61,62 @@ Language `en`. Variables in order. Suggested wording — edit freely, keep the v
    `firebase functions:secrets:set WHATSAPP_ACCESS_TOKEN` · `WHATSAPP_PHONE_NUMBER_ID` · `WHATSAPP_VERIFY_TOKEN` · `WHATSAPP_APP_SECRET`.
 7. Point the app's webhook to the deployed `whatsappWebhook` URL with the verify token; subscribe to `messages`.
 
-## Deploy (after the secrets exist; one functions slot; scoped)
-Export `whatsappWebhook` (buildFunction) from `functions/index.js`; wire the WhatsApp channel into `notify.js` on the
-LIVE notify lineage (pinned candidate — the functions source lineages differ). Then the end-to-end test: six real
-messages to the owner's phone, each proven by `whatsappSends/{wamid}.status == 'delivered'`, not by "it showed up".
+## The notify() channel (2026-10-03)
+Live authority: `notify()` in `functions/notify.js`. Callers declare a TYPE, and the engine picks the channels:
+in-app, then push, then SMS (forced for critical types, otherwise a fallback when push fails), then email.
 
-## Not done here
-`notify.js` channel wiring (needs the live lineage + secrets) · AdminOS view of `whatsappSends` · rules: no client
-match for `whatsappSends` (default deny — keep it that way).
+- **WhatsApp replaces an SMS, never adds one.** It is tried only where an SMS would have been sent. If Meta accepts,
+  `channels.sms = 'not_needed_whatsapp_accepted'`. Any other result leaves the SMS path unchanged.
+- **Type → template** (`functions/shared/whatsapp-notify-map.js`, parameters taken from the SMS vars the caller
+  already passes):
+
+| notify type | template | params ← vars |
+|---|---|---|
+| otp · phone_verification · payment_verification | `otp_code` | code |
+| order_placed | `order_confirmation` | name, orderId, total |
+| payment_success | `payment_received` | name, amount, ref |
+| payment_failed | `payment_failed` | name, ref |
+| refund_processed | `refund_processed` | name, orderId, amount |
+| order_dispatched | `delivery_started` | name, orderId |
+| order_delivered | `order_completed` | name, orderId |
+
+  `name` is the account's display name, read on the server. Every other type (password_reset, wallet_*, bookings,
+  promotions, …) keeps today's behaviour. Booking and invoice templates are not reached from `notify()`, because
+  those events have no SMS today.
+- **Gates:**
+  1. a mapped type;
+  2. secrets present (otherwise `NOT_CONFIGURED`);
+  3. **consent**: `users/{uid}.whatsappOptIn === true`;
+  4. the recipient is the account's own `phoneNumber`, never a caller-supplied phone.
+
+  `notifySend` (the browser) forces `whatsapp:false`.
+- **Correlation:** event → `notifyLog/{key}` (`channels.whatsapp`) → `whatsappSends/{wamid}` (`ref = key`,
+  `channel: 'WHATSAPP'`) → status webhook.
+- **Completion PIN:** sokoni-70's `shared/completion-pin.js` uses `makeSender()` directly, with its own SMS fallback.
+  That module is not on this lineage.
+- **AdminOS:** Comms → WhatsApp tab → `adminListWhatsappSends` through `adminOsDispatch`. It is read-only and needs
+  the admin claim. It shows: template, masked number, Meta id, status, accepted/sent/delivered/read/failed times,
+  error code, notification key.
+
+## Production gate (2026-10-03)
+| Item | State |
+|---|---|
+| `WHATSAPP_VERIFY_TOKEN` · `WHATSAPP_APP_SECRET` | configured |
+| `WHATSAPP_ACCESS_TOKEN` · `WHATSAPP_PHONE_NUMBER_ID` · `WHATSAPP_WABA_ID` | **missing** (owner sets them in Secret Manager) |
+| `webhookWhatsapp` | live at `https://webhookwhatsapp-o3jpu5wacq-uc.a.run.app` (da47bb6), **Meta has never called it** |
+| Send-status advance (e39c367) | built, not deployed |
+| `notify()` channel / AdminOS op | built, not deployed |
+| Consent capture UI (`whatsappOptIn`) | **not built** |
+| Six-message DELIVERED proof | **not run** |
+
+## Deploy order (one functions slot, scoped `--only`, memory gate ≥512 MB)
+1. The owner stores `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_PHONE_NUMBER_ID`.
+2. `webhookWhatsapp`: pinned live archive + the e39c367 delta. Then set the callback URL + verify token in Meta and
+   confirm verification **in Meta's dashboard**.
+3. `adminOsDispatch`: pinned live archive + `admin-notification-trace.js` + the registry line.
+4. The `notify()` callers that should carry WhatsApp: each is redeployed from its **own** live archive, with this
+   notify.js hunk + `whatsapp-sender.js` + the two shared modules, and declares both secrets. A function that does not
+   declare them stays `NOT_CONFIGURED` and uses SMS.
+5. Hosting: the AdminOS tab ships with the hosting unit.
+6. End-to-end test: six real messages to a consenting owner number. Each is proven by
+   `whatsappSends/{wamid}.status == 'delivered'`, not by "it showed up".

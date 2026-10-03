@@ -74,8 +74,8 @@ const PIN = '483920';
   const sr = await W.sendTemplate({ to: '0712345678', template: 'completion_pin', params: { code: PIN }, uid: 'buyer1' }, Object.assign({ fetch: g, store: sstore }, CFG));
   const rec = sstore._docs[sr.messageId];
   ck('X1 the PIN went to Meta (body + button)', JSON.stringify(g.calls[0].body).split(PIN).length - 1 === 2);
-  ck('X2 the PIN is NOT in the send record (metadata only: template, category, secret, masked number, uid, status, time)', rec && JSON.stringify(rec).indexOf(PIN) === -1
-    && Object.keys(rec).sort().join(',') === 'acceptedAt,category,secret,status,template,toMasked,uid' && rec.secret === true, rec);
+  ck('X2 the PIN is NOT in the send record (metadata only: template, category, secret, masked number, uid, notification ref, channel, status, time)', rec && JSON.stringify(rec).indexOf(PIN) === -1
+    && Object.keys(rec).sort().join(',') === 'acceptedAt,category,channel,ref,secret,status,template,toMasked,uid' && rec.secret === true && rec.channel === 'WHATSAPP', rec);
   ck('X3 the PIN is in NO console line', logs.every((l) => l.indexOf(PIN) === -1), logs.length);
   ck('X4 the full number is in no record', JSON.stringify(sstore._docs).indexOf('254712345678') === -1);
 

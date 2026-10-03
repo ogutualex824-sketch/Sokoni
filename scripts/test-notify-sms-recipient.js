@@ -103,12 +103,17 @@ async function run({ phone, userDoc }) {
   const t = { smsTemplate: 'order_placed' };
   const pushOk = false, uid = 'u1', key = 'k1', vars = {}, title = 'T', body = 'B';
 
+  /* The WhatsApp step (2026-10-01) sits inside this block, before the SMS. whatsapp:false is the
+     path every caller had before it, so this suite keeps measuring the SMS recipient alone; the
+     channel itself is covered by scripts/test-whatsapp-notify.js. It must not be reached here. */
+  const whatsapp = false;
+  const _whatsappChannel = async () => { throw new Error('WhatsApp reached with whatsapp:false'); };
   const fn = new Function(
     'ch', 't', 'pushOk', 'phone', 'uid', 'key', 'vars', 'title', 'body',
-    'sms', 'db', 'result',
+    'sms', 'db', 'result', 'whatsapp', '_whatsappChannel',
     '"use strict"; return (async () => {\n' + block + '\n})();'
   );
-  await fn(ch, t, pushOk, phone, uid, key, vars, title, body, sms, db, result);
+  await fn(ch, t, pushOk, phone, uid, key, vars, title, body, sms, db, result, whatsapp, _whatsappChannel);
   return { enqueued, result };
 }
 
