@@ -1,3 +1,26 @@
+## [2026-10-03] — Property and sports-venue reviews through the one review authority; unboxing photo quarantine
+
+**Files:** `functions/reviews.js`, `scripts/test-review-authority.js`, `scripts/sabotage-review-authority.js`, `CHANGELOG.md` · **Base:** `85a5fcf` (on the live lineage `76436b1`)
+
+- **Hub reviews (owner 2026-10-03):** `submitReview({targetType:'property'|'sports_venue', targetId, rating, body})`.
+  - **Eligibility:** found by the SERVER. Property: `propertyViewings` where `buyerUid` = caller and `listingId` = target. Venue: `sportsVenueBookings` where `uid` = caller and `venueId` = target. A cancelled record never counts.
+  - **Body:** 10–2000 characters. The display name comes from the server; the browser's author and name fields are ignored.
+  - **Status:** always `pending`.
+  - **Storage key:** the stored `targetId` is `<type>_<id>`, with the bare id in `hubTargetId`. A listing and a product with the same id can never mix; the summary lands on `ratingsSummary/<type>_<id>`.
+  - **Reads:** `getReviews({targetType, targetId})` returns approved reviews only.
+  - **Moderation:** the listing's agent or the venue's owner cannot moderate its reviews, even with an admin claim.
+  - **Refusal reasons:** NOT_ELIGIBLE / DUPLICATE / RATE_LIMITED / UNSUPPORTED_TARGET / BAD_BODY.
+- **Stated limit:** under the served rules a browser can still create `propertyViewings` (a duplicate match block) and `sportsVenueBookings`. Eligibility therefore narrows who can submit; the publication control is AdminOS approval. This was reported to the rules lane.
+- **Unboxing photos (owner 2026-10-03):**
+  - `submitUnboxing` accepts only the caller's own `unboxing-pending/{uid}/` uploads.
+  - Approve copies them to the public `unboxing/{uid}/` path and the server sets `publicImages`.
+  - A failed copy approves the post WITH NO photos and records `photoCopyFailed`.
+  - Leaving approved deletes the public copies.
+  - A stored record naming another user's file never publishes it.
+- **Tests:** review-authority 48/0 (`85a5fcf` fails 29). Sabotage 10/10 caught, each by its named row.
+- **Database:** new review fields `hubTargetId` and `eligibility`; unboxing fields `publicImages`, `publicImagePaths` and `photoCopyFailed`. No new index: hub eligibility uses two equalities, and reads reuse the existing (targetId, status, createdAt) query.
+- **Deploy order:** these functions → storage rules (rules lane `1925aaa`) → pages that upload photos. The hub pages (`9476de3`) need these functions live first. **NOT DEPLOYED.**
+
 ## [2026-10-03] — The review authority: every review is approved in AdminOS before it is public
 
 **Files:** `functions/reviews.js`, `scripts/test-review-authority.js`, `CHANGELOG.md` · **Base:** `76436b1` = the LIVE archive of submitReview / getReviews / flagReview / markReviewHelpful / adminModerateReview (provenance audit 2026-10-01: 0 files differ, 0 missing)

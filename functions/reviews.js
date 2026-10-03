@@ -74,7 +74,7 @@ async function _checkReviewRateLimit(uid, action, limit) {
     }, { merge: true });
     allowed = true;
   });
-  if (!allowed) throw new HttpsError("resource-exhausted", `Daily limit reached for ${action}. Try again tomorrow.`);
+  if (!allowed) throw new HttpsError("resource-exhausted", `Daily limit reached for ${action}. Try again tomorrow.`, { reason: "RATE_LIMITED" });
 }
 
 /** Check user is not banned and account is old enough */
@@ -125,7 +125,36 @@ async function _recalcSummary(targetId) {
      · product.html keys the widget "product_<id>" while product.js reads the bare id — a split rating key;
      · adminModerateReview had no state machine, no history and no self-interest check.
    The browser may REQUEST a review. The server decides identity, eligibility, target, duplicate and status. */
-const REVIEW_TYPES = Object.freeze(['product', 'seller']);            /* other domains review through their own stores */
+const REVIEW_TYPES = Object.freeze(['product', 'seller', 'property', 'sports_venue']);
+/* HUB TYPES (owner 2026-10-03): property listings and sports venues review through THIS authority — same reviews
+   collection, same pending → AdminOS → approved path. Their ids live in other namespaces than products (a listing
+   "L1" and a product "L1" are different things), so a hub review STORES targetId = "<type>_<id>" and the bare id in
+   hubTargetId. Every existing reader, ratingsSummary/{targetId} and the shared moderation module then work unchanged
+   and can never mix a hub target with a product. Product / seller keep the bare id. */
+const HUB_TYPES = Object.freeze(['property', 'sports_venue']);
+const _isHub = (t) => HUB_TYPES.includes(t);
+const _targetKey = (t, id) => t + '_' + id;
+/* Eligibility = a SERVER-RECORDED viewing / booking in the caller's name for that target, not cancelled (owner
+   2026-10-03). STATED LIMIT: under the served rules a browser can still create propertyViewings (a duplicate match
+   block) and sportsVenueBookings (claimsOwner), so this check narrows who can submit; it is not proof of a visit.
+   The control that decides publication is AdminOS approval — every hub review is created PENDING. */
+const HUB_ELIGIBILITY = Object.freeze({
+  property:     { collection: 'propertyViewings',    who: 'buyerUid', what: 'listingId' },
+  sports_venue: { collection: 'sportsVenueBookings', who: 'uid',      what: 'venueId' },
+});
+async function _eligibleHubRecord(db, uid, targetType, targetId) {
+  const a = HUB_ELIGIBILITY[targetType];
+  if (!a) return null;
+  /* two equalities only — served by single-field indexes, no composite index to deploy */
+  const snap = await db.collection(a.collection).where(a.who, '==', uid).where(a.what, '==', targetId).limit(20).get();
+  const hit = snap.docs.find((d) => { const st = String((d.data() || {}).status || '').toLowerCase(); return st !== 'cancelled' && st !== 'canceled'; });
+  return hit ? a.collection + '/' + hit.id : null;
+}
+/* Who owns a hub target — they may not moderate reviews of it (self-interest). */
+const HUB_OWNER = Object.freeze({
+  property:     { collection: 'propertyListings', field: 'agentUid' },
+  sports_venue: { collection: 'sportsVenues',     field: 'uid' },
+});
 /** "product_abc" → "abc" for a product target (the live widget's prefix); never a name; the BARE id is identity. */
 function _canonTarget(targetType, targetId) {
   let id = String(targetId || '').trim();
@@ -166,8 +195,13 @@ exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
     throw new HttpsError("invalid-argument", "Rating must be 1-5.");
   }
   if (body && typeof body === "string" && body.trim().length < 10) {
-    throw new HttpsError("invalid-argument", "Review body must be at least 10 characters.");
+    throw new HttpsError("invalid-argument", "Review body must be at least 10 characters.", { reason: "BAD_BODY" });
   }
+  const hub = _isHub(targetType);
+  if (hub && (typeof body !== "string" || body.trim().length < 10 || body.trim().length > 2000)) {
+    throw new HttpsError("invalid-argument", "Write between 10 and 2000 characters.", { reason: "BAD_BODY" });
+  }
+  const storeTarget = hub ? _targetKey(targetType, targetId) : targetId;
 
   // Security checks — rate limit (3/day) + ban + account age
   await Promise.all([
@@ -177,17 +211,20 @@ exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
 
   const db = _db();
 
-  // One review per user per target (legacy random-id docs included)
+  // One review per user per target (legacy random-id docs included; hub targets by their namespaced key)
   const existing = await db.collection("reviews")
-    .where("targetId", "==", targetId)
+    .where("targetId", "==", storeTarget)
     .where("authorUid", "==", uid)
     .limit(1).get();
   if (!existing.empty) throw new HttpsError("already-exists", "You have already reviewed this.", { reason: "DUPLICATE" });
 
-  // ELIGIBILITY — the server finds the qualifying order itself (a client orderId is never the authority)
-  const eligibleOrderId = await _eligibleOrder(db, uid, targetType, targetId);
-  if (!eligibleOrderId) {
-    throw new HttpsError("failed-precondition", "You can review this after an order for it has been delivered.", { reason: "NOT_ELIGIBLE" });
+  // ELIGIBILITY — the server finds the qualifying record itself (a client orderId / bookingId is never the authority)
+  const eligibleOrderId = hub ? null : await _eligibleOrder(db, uid, targetType, targetId);
+  const eligibleRecord  = hub ? await _eligibleHubRecord(db, uid, targetType, targetId) : null;
+  if (!eligibleOrderId && !eligibleRecord) {
+    throw new HttpsError("failed-precondition", hub
+      ? (targetType === "property" ? "You can review a property after you have booked a viewing of it." : "You can review a venue after you have booked it.")
+      : "You can review this after an order for it has been delivered.", { reason: "NOT_ELIGIBLE" });
   }
 
   const cleanTitle = _sanitize(title, 120);
@@ -199,25 +236,32 @@ exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
   /* PENDING ALWAYS — published only by adminModerateReview 'approve'. Deterministic id → create() is the
      one-per-person-per-target claim even under a double tap. */
   const reviewRef = db.collection("reviews").doc(uid + "_" + targetType + "_" + targetId);
-  await reviewRef.create({
-    targetId,
+  const doc = {
+    targetId: storeTarget,
     targetType,
     targetName: _sanitize(targetName, 120),
     authorUid:  uid,
     rating,
     title:   cleanTitle,
     body:    cleanBody,
-    images:  safeImages,
+    images:  hub ? [] : safeImages,          /* hub reviews: text only — no photo path exists for them */
     orderId: eligibleOrderId,
     helpful: 0,
     flags:   0,
     status:  "pending",
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  };
+  if (hub) { doc.hubTargetId = targetId; doc.eligibility = eligibleRecord; }
+  try {
+    await reviewRef.create(doc);
+  } catch (e) {
+    if (e && (e.code === 6 || /already exists/i.test(e.message || ""))) throw new HttpsError("already-exists", "You have already reviewed this.", { reason: "DUPLICATE" });
+    throw e;
+  }
 
   await db.collection("reviewModerationLog").add({ reviewId: reviewRef.id, from: null, to: "pending", action: "submit",
-    actorUid: uid, targetId, targetType, at: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+    actorUid: uid, targetId: storeTarget, targetType, at: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {});
   return { reviewId: reviewRef.id, status: "pending" };
 });
 
@@ -228,7 +272,44 @@ exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
    order's own lines (a client productId must be one of them); photos must be the caller's own Storage uploads
    (unboxing/{uid}/…); one post per buyer per product; ALWAYS pending. Moderation is adminModerateReview kind
    'unboxing' (the same state machine + history). The wall reads approved posts only (rules R0). */
-const UNBOX_MEDIA_RE = (uid) => new RegExp('^https://firebasestorage\\.googleapis\\.com/v0/b/[^/]+/o/unboxing%2F' + uid.replace(/[^A-Za-z0-9_-]/g, '') + '%2F[^?#]+(\\?|$)');
+/* PHOTO QUARANTINE (owner 2026-10-03): the browser uploads to unboxing-pending/{uid}/ (owner + admin read only).
+   Only an AdminOS APPROVE copies a photo to the public unboxing/{uid}/ path (never browser-writable). */
+const UNBOX_MEDIA_RE = (uid) => new RegExp('^https://firebasestorage\\.googleapis\\.com/v0/b/[^/]+/o/unboxing-pending%2F' + uid.replace(/[^A-Za-z0-9_-]/g, '') + '%2F[A-Za-z0-9._-]{1,120}(\\?|$)');
+/** "https://…/o/unboxing-pending%2F<uid>%2F<file>?…" → { bucket, uid, file } or null (same grammar as UNBOX_MEDIA_RE) */
+function _pendingObject(url) {
+  const m = /^https:\/\/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/unboxing-pending%2F([A-Za-z0-9_-]{1,128})%2F([A-Za-z0-9._-]{1,120})(\?|$)/.exec(String(url || ''));
+  return m ? { bucket: m[1], uid: m[2], file: m[3] } : null;
+}
+const _publicUrl = (bucket, uid, file) => 'https://firebasestorage.googleapis.com/v0/b/' + bucket + '/o/' + encodeURIComponent('unboxing/' + uid + '/' + file) + '?alt=media';
+/** After APPROVE: copy each quarantined photo to unboxing/{uid}/ and record publicImages. A post whose copy fails is
+ *  approved WITHOUT photos (publicImages []), never with a private or half-copied set. Leaving APPROVED deletes the
+ *  public copies. storage is injected (admin.storage()) so the path is testable. */
+async function _syncUnboxingPhotos(db, storage, id, nowApproved) {
+  const ref = db.collection("unboxingReviews").doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return { copied: 0 };
+  const r = snap.data() || {};
+  if (nowApproved) {
+    const out = [];
+    for (const u of (Array.isArray(r.images) ? r.images : [])) {
+      const o = _pendingObject(u);
+      if (!o || o.uid !== String(r.uid || '')) continue;               /* never another user's file */
+      try {
+        await storage.bucket(o.bucket).file('unboxing-pending/' + o.uid + '/' + o.file).copy(storage.bucket(o.bucket).file('unboxing/' + o.uid + '/' + o.file));
+        out.push({ url: _publicUrl(o.bucket, o.uid, o.file), path: 'unboxing/' + o.uid + '/' + o.file, bucket: o.bucket });
+      } catch (e) { console.error('[unboxing] photo copy failed', id, e && e.code); return await ref.update({ publicImages: [], photoCopyFailed: true }).then(() => ({ copied: 0, failed: true })); }
+    }
+    await ref.update({ publicImages: out.map((x) => x.url), publicImagePaths: out.map((x) => x.bucket + '/' + x.path), photoCopyFailed: false });
+    return { copied: out.length };
+  }
+  const paths = Array.isArray(r.publicImagePaths) ? r.publicImagePaths : [];
+  for (const bp of paths) {
+    const i = bp.indexOf('/');
+    await storage.bucket(bp.slice(0, i)).file(bp.slice(i + 1)).delete().catch(() => {});
+  }
+  if (paths.length || (Array.isArray(r.publicImages) && r.publicImages.length)) await ref.update({ publicImages: [], publicImagePaths: [] });
+  return { removed: paths.length };
+}
 exports.submitUnboxing = onCall({ region: "us-central1" }, async (req) => {
   const uid = _requireAuth(req);
   const d = req.data || {};
@@ -277,14 +358,17 @@ exports.submitUnboxing = onCall({ region: "us-central1" }, async (req) => {
   return { id: ref.id, status: "pending" };
 });
 
-exports._reviewAuthority = { REVIEW_TYPES, _canonTarget, _eligibleOrder, UNBOX_MEDIA_RE };
+exports._reviewAuthority = { REVIEW_TYPES, HUB_TYPES, _canonTarget, _eligibleOrder, _eligibleHubRecord, _targetKey, UNBOX_MEDIA_RE, _pendingObject, _syncUnboxingPhotos };
 
 // ── getReviews ────────────────────────────────────────────────────────────────
 exports.getReviews = onCall({ region: "us-central1" }, async (req) => {
   const { sort = "recent", limit: lim = 20, startAfter } = req.data || {};
   /* the same canonical key the writer uses: the live product widget asks for "product_<id>" */
   const rawTarget = String((req.data || {}).targetId || "");
-  const targetId = rawTarget.replace(/^(product|seller)_/, "");
+  const reqType = String((req.data || {}).targetType || "");
+  const targetId = _isHub(reqType)
+    ? (/^[A-Za-z0-9_-]{1,128}$/.test(_canonTarget(reqType, rawTarget)) ? _targetKey(reqType, _canonTarget(reqType, rawTarget)) : "")
+    : rawTarget.replace(/^(product|seller)_/, "");
   if (!targetId) throw new HttpsError("invalid-argument", "targetId required.");
 
   const safeLimit = Math.min(50, Math.max(1, Number(lim) || 20));
@@ -430,13 +514,34 @@ exports.adminModerateReview = onCall({ region: "us-central1" }, async (req) => {
   const db = _db();
   let res;
   try {
-    res = await db.runTransaction((tx) => RM.transitionReview(tx, { db, FieldValue: admin.firestore.FieldValue, kind,
-      reviewId: d.reviewId, action: d.action, actorUid: req.auth.uid, note: d.note, source: 'admin' }));
+    res = await db.runTransaction(async (tx) => {
+      /* Hub targets: the shared module knows product / seller owners only, so the hub owner's self-interest block is
+         read here, in the SAME transaction, before the module's own reads and writes. */
+      if (kind === "review" && /^[A-Za-z0-9_-]{1,200}$/.test(String(d.reviewId || ""))) {
+        const rs = await tx.get(db.collection("reviews").doc(String(d.reviewId)));
+        const r = rs.exists ? (rs.data() || {}) : {};
+        if (_isHub(r.targetType) && r.hubTargetId) {
+          const o = HUB_OWNER[r.targetType];
+          const os = await tx.get(db.collection(o.collection).doc(String(r.hubTargetId)));
+          if (os.exists && String((os.data() || {})[o.field] || "") === req.auth.uid) {
+            throw new RM.ModerationError("permission-denied", "SELF_INTEREST", "You cannot moderate a review of your own listing.");
+          }
+        }
+      }
+      return RM.transitionReview(tx, { db, FieldValue: admin.firestore.FieldValue, kind,
+        reviewId: d.reviewId, action: d.action, actorUid: req.auth.uid, note: d.note, source: 'admin' });
+    });
   } catch (e) {
     if (e instanceof RM.ModerationError) throw new HttpsError(e.code, e.message, { reason: e.reason });
     throw e;
   }
-  // Publication follows the authoritative state: the summary counts APPROVED reviews only
+  // Publication follows the authoritative state: the summary counts APPROVED reviews only (a hub target's stored
+  // targetId is its namespaced key, so its summary lands on ratingsSummary/<type>_<id>, never on a product's)
   if (!res.unchanged && res.targetId && kind === "review") await RM.recomputeRatingsSummary(db, admin.firestore.FieldValue, res.targetId);
-  return { status: res.status, unchanged: res.unchanged };
+  // Unboxing photos are published (copied out of quarantine) only on APPROVE, and withdrawn on leaving APPROVED
+  let photos;
+  if (!res.unchanged && kind === "unboxing" && (res.status === "approved" || res.from === "approved")) {
+    photos = await _syncUnboxingPhotos(db, admin.storage(), String(d.reviewId), res.status === "approved");
+  }
+  return { status: res.status, unchanged: res.unchanged, photos };
 });
