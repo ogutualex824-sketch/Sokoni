@@ -876,7 +876,7 @@ No duplicate authority was found on the money side.
 
 | Row | Rate | Aliases | Notes |
 |---|---|---|---|
-| `sports_venue_bookings` | 5% | `sports_venue`, `venue_booking` | in `FLAT_BOOKING_CATEGORIES` |
+| `sports_venue_bookings` | 5% | `sports_venue` (never bare `venue_booking`: that is the general venue purpose) | in `FLAT_BOOKING_CATEGORIES` |
 | `sports_coaching` | 5% | `coaching`, `coach_booking` | in `FLAT_BOOKING_CATEGORIES` |
 | `sports_tournament_entry` | 5% | `tournament_entry`, `tournament` | not a booking |
 

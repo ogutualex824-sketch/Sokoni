@@ -176,7 +176,6 @@
     "entertainment": "events",
     "sports": "events",
     "sports_venue": "sports_venue_bookings",
-    "venue_booking": "sports_venue_bookings",
     "coaching": "sports_coaching",
     "coach_booking": "sports_coaching",
     "tournament_entry": "sports_tournament_entry",

@@ -176,7 +176,9 @@ const ALIASES = {
   /* 'sports' stays → events: a sports EVENT TICKET is an event ticket. Sports server code never passes bare 'sports' — it
      names sports_venue_bookings / sports_coaching / sports_tournament_entry explicitly (test-sports-commercial S3). */
   entertainment: 'events', sports: 'events',
-  sports_venue: 'sports_venue_bookings', venue_booking: 'sports_venue_bookings', coaching: 'sports_coaching', coach_booking: 'sports_coaching',
+  /* no bare 'venue_booking' alias: that is the GENERAL venue-booking purpose (venue-booking.js / venue-payments.js, events
+     venues), never Sports. */
+  sports_venue: 'sports_venue_bookings', coaching: 'sports_coaching', coach_booking: 'sports_coaching',
   tournament_entry: 'sports_tournament_entry', tournament: 'sports_tournament_entry',
   /* Electronics retail (owner 2026-10-03). Device accessories are ELECTRONICS taxonomy, never fashion accessories. */
   phones: 'electronics', phone: 'electronics', smartphones: 'electronics', laptops: 'electronics', laptop: 'electronics',

@@ -23,7 +23,7 @@ const FU = require(path.join(FN, 'finos-utils.js'));
 Module.prototype.require = orig;
 
 (async () => {
-  const rows = { sports_venue: 'sports_venue_bookings', venue_booking: 'sports_venue_bookings', coaching: 'sports_coaching', coach_booking: 'sports_coaching',
+  const rows = { sports_venue: 'sports_venue_bookings', coaching: 'sports_coaching', coach_booking: 'sports_coaching',
     tournament_entry: 'sports_tournament_entry', tournament: 'sports_tournament_entry' };
   ck('S1 explicit Sports rows at 5% (matched, never the default)', Object.entries(rows).every(([k, cat]) => { const r = CC.resolveRate(k); return r.matched && r.category === cat && r.pct === 5; }));
   ck('S2a venue bookings + coaching are FLAT bookings; tournament entry is not', CC.FLAT_BOOKING_CATEGORIES.includes('sports_venue_bookings') && CC.FLAT_BOOKING_CATEGORIES.includes('sports_coaching') && !CC.FLAT_BOOKING_CATEGORIES.includes('sports_tournament_entry'));
@@ -33,6 +33,7 @@ Module.prototype.require = orig;
     { cents: c.commissionCents, rate: c.effectiveRate, pv: c.policyVersion });
   const sportsFiles = fs.readdirSync(FN).filter((f) => /^sports.*\.js$/.test(f));
   const bare = sportsFiles.filter((f) => /category:\s*['"]sports['"]/.test(fs.readFileSync(path.join(FN, f), 'utf8')));
+  ck('S1b bare "venue_booking" (the general venue purpose) is NOT a Sports alias', CC.resolveRate('venue_booking').category !== 'sports_venue_bookings');
   ck('S3 bare "sports" = events (event ticket); no Sports server file prices with bare "sports"', CC.resolveRate('sports').category === 'events' && bare.length === 0, bare);
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
