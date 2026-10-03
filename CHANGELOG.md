@@ -1,3 +1,23 @@
+## [2026-10-03] - Construction workspace on sokoni-f3's owner rental lifecycle (bb8634d) — listing Draft/Available/Paused, full seller booking lifecycle, payment from status only (hosting only; NOT deployed)
+
+- **Listings:** create → Draft; "Make available" (`rentalProductPublish`) and "Pause" (`rentalProductPause`); Draft / Paused say
+  renters cannot book them. List still via `rentalOwnerListings`.
+- **Bookings:** seller buttons ONLY per status: requested → Accept (`rentalAccept`, alias `rentalConfirm` on an old server) / Decline
+  (`rentalDecline`, reason required, two taps) / Cancel; accepted & payment_pending → Cancel; paid_held → Start hire; active &
+  return_pending → Confirm return; returned → Complete; terminal none. Legacy pending = requested, confirmed = accepted. NO Cancel on
+  paid_held; a race shows the server's refund-policy text verbatim. `rentalReportReturn` (renter) is not a seller button.
+- **Payment:** "Awaiting payment" / "Paid — held by SOKONI" from STATUS only (written only by 2f rental_booking + 5b webhook); never
+  from paymentStatus / paidAt / paymentMethod. Payment method "—" until the webhook sets it; never a default. Rental is priced on 2f's
+  line (64da94c, construction_equipment_rental 10% of the hire, not the deposit) → the "paid rentals open once…" copy is removed,
+  replaced by the accept → pay → held → released-on-completion flow; fees card lists the 10% (release, not yet live).
+- **Errors:** HttpsError messages verbatim.
+- **Tests:** `test-merchant-construction-workspace` 52/0 (44 rows + 8/8 controls) on fixtures from RUNNING bb8634d's handlers; new
+  controls N6 Cancel on paid_held → R14, N7 "Paid" from a non-status field → R12, N8 M-PESA default → R13.
+- **Files:** `sokoni-merchant-construction.js`, `scripts/test-merchant-construction-workspace.js`, `docs/CONSTRUCTION_WORKSPACE.md`.
+  No database / rules / API changes here.
+- **Release:** f3 bb8634d with or before this hosting change; 2f rental_booking (64da94c) + 5b webhook for the paid states. Nothing
+  deploys without the owner.
+
 ## [2026-10-03] - Construction workspace consumes sokoni-f3's rentals fix (74672f3) — rentalOwnerListings, verbatim reasons, Unpaid, seller cancel (hosting only; NOT deployed)
 
 - **Equipment** reads commerceDispatch `rentalOwnerListings {shopId}` → `{listings, hasMore}`; `hasMore` → "Showing the first 200 —

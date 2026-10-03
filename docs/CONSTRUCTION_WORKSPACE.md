@@ -128,67 +128,78 @@ When the two lines are assembled, they must end up as one enquiries surface:
 
 ### Server contract consumed
 
-The page is built against **sokoni-f3's rentals fix**: `functions/rentals-on-53100ff` @ `74672f3`, on top of DE-2
-Build B `53100ff`. It is **NOT deployed**. Production still serves the old `marketplace-extensions.js`, which is
-byte-identical to this tree's copy and to the live `commerceDispatch` archive.
+The page is built against **sokoni-f3's owner rental lifecycle**: `functions/rentals-on-53100ff` @ `bb8634d`, which sits
+on the earlier fix `74672f3` and on DE-2 Build B `53100ff`. It is **NOT deployed**. Production still serves the old
+`marketplace-extensions.js`, which is byte-identical to this tree's copy and to the live `commerceDispatch` archive.
 
-| Op | Input | Returns |
+**Listings** move `draft` → `active` (shown as "Available") ⇄ `paused`. A draft or paused listing cannot be booked.
+
+| Op | Input | Effect / returns |
 |---|---|---|
-| `rentalOwnerListings` (new) | `{shopId}` | `{listings:[{id, …rentalProducts fields}], hasMore}`: every status, newest first, capped at 200, owner / staff / admin shop authority |
-| `rentalProductCreate` | `{shopId, title, pricingType ∈ hourly/daily/weekly/monthly/flexible, hourlyRate?, dailyRate?, weeklyRate?, monthlyRate?, deposit?, minDuration?, maxDuration?, terms?, description?, category?}` | `{rentalProductId}` |
-| `rentalGetAvailability` | `{rentalProductId}` | `{unavailablePeriods:[{start,end}]}` (pending, confirmed and active bookings among the last 200) |
-| `rentalList` | `{shopId}` | `{bookings[]}`, at most 100 |
-| `rentalConfirm` | `{bookingId, shopId}` | `{success, status}`; legal only from pending, in one transaction |
-| `rentalComplete` | `{bookingId, shopId}` | `{success, status}`; legal only from confirmed or active |
-| `rentalCancel` | `{bookingId, reason?}` | `{success, status}`; the renter, or a seller through the shop authority; not from active or completed |
+| `rentalOwnerListings` | `{shopId}` | `{listings, hasMore}`: every status, newest first, capped at 200 |
+| `rentalProductCreate` | `{shopId, title, pricingType, rates, deposit?, minDuration?, …}` | `{rentalProductId, status:'draft'}` |
+| `rentalProductPublish` | `{rentalProductId, shopId}` | draft or paused → active |
+| `rentalProductPause` | `{rentalProductId, shopId}` | active → paused |
 
-`rentalBook` (buyer side, not called here) now writes `paymentMethod: 'none'` and `paymentStatus: 'unpaid'`, and returns
-`paymentStatus`. Errors are `HttpsError`s carrying a reason, which the client receives as `functions/<code>` with the
-message.
+**Bookings** follow: requested → accepted or declined → payment_pending → paid_held → active → return_pending → returned
+→ completed.
 
-### What the page does
+- Terminal states are declined, cancelled and refunded.
+- Legacy documents: `pending` means requested, and `confirmed` means accepted.
 
-- **Equipment** comes from `rentalOwnerListings`.
-  - The direct read of `rentalProducts where shopId == activeShopId` is a fallback **only** when the server answers
-    not-found "Unknown commerce operation". That is the old server, live today. It is detected the same way the Jobs
-    workspace detects an unknown op.
-  - Any other refusal is shown with its reason. It never falls back.
-  - On the fallback, a `permission-denied` read shows "Rentals become visible once access rules ship", not an empty list.
-  - When `hasMore` is true, the page shows "Showing the first 200 — more exist" and the Overview tile becomes `200+`.
-- **Booking buttons** match the server's legal states:
+The seller page offers **only** these buttons:
 
-  | Status | Buttons |
-  |---|---|
-  | pending | Confirm, Cancel |
-  | confirmed | Mark returned, Cancel |
-  | active | Mark returned |
-  | completed, cancelled | none |
+| Status | Seller buttons | Op |
+|---|---|---|
+| requested (legacy pending) | Accept · Decline (reason required, two taps) · Cancel | `rentalAccept` (falls back to the alias `rentalConfirm` on an old server) · `rentalDecline {bookingId, shopId, reason}` · `rentalCancel {bookingId}` |
+| accepted (legacy confirmed), payment_pending | Cancel (two taps) | `rentalCancel` |
+| paid_held | Start hire | `rentalStart` |
+| active, return_pending | Confirm return | `rentalConfirmReturn` |
+| returned | Complete | `rentalComplete` |
+| completed, declined, cancelled, refunded | none | none |
 
-  Cancel takes two taps. The seller's cancel goes through the shop authority.
-- **Payment:**
-  - an unpaid booking shows "Unpaid — paid rentals open once SOKONI sets rental pricing";
-  - `paymentMethod` is never rendered, so the page never says "M-Pesa";
-  - the old server's bookings carry no `paymentStatus` and show "Not paid through SOKONI".
-- **No pay step.** "Paid rentals open once SOKONI sets rental pricing" is always shown. Rental commission is unpriced, so
-  `calculateCommission` refuses `category_unpriced`.
-- **Errors** are shown **verbatim**, for example "A cancelled booking cannot be confirmed." followed by "Nothing was
-  changed." The old "internal" special-casing is gone.
-  - Lead writes, which are Firestore rule decisions with no reason text, still read "SOKONI refused this (permission)".
+**Cancel is never offered on paid_held.** A paid cancellation falls under SOKONI's refund policy. If the money is held
+while the page still shows Cancel, the server's refusal is shown verbatim: "This rental is paid. Cancelling it is
+handled under SOKONI's refund policy…".
 
-### Server gaps: status after f3 74672f3
+**`rentalReportReturn` belongs to the renter.** It is not a seller button.
 
-1. **Owner resolution without `shops.ownerId`: fixed.** The suite runs f3's handlers with no `ownerId` (R1). The old
-   server's refusal is shown verbatim (R4).
-2. **Seller cancel: fixed.** It now goes through the shop authority (R9).
-3. **`rentalComplete` status check: fixed.** The page and the server agree on confirmed / active.
-4. **`HttpsError` reasons: fixed** for the booking ops (R11).
-   - `rentalProductCreate`'s own field checks still throw plain `Error`s, which reach the client as "Operation failed
-     unexpectedly." The page validates those fields first.
-5. **Rules for `rentalProducts` and `rentalBookings`: still open**, on f3's combined rules line. The only browser read
-   that needs them is the old-server fallback.
-6. **Owner list op: added** (`rentalOwnerListings`).
-7. **Fake payment method: fixed** (`'none'` / `'unpaid'`).
-8. **`active`: no handler sets it yet.** The suite seeds it directly to prove the button table.
+### Payment
+
+- **Only the payment authority writes `payment_pending` and `paid_held`.** That authority is 2f's `rental_booking`
+  purpose plus the 5b webhook.
+- **Labels come from the status alone:**
+  - payment_pending shows "Awaiting payment";
+  - paid_held shows "Paid — held by SOKONI".
+- **Other fields are ignored for "paid".** `paymentStatus`, `paidAt` and `paymentMethod` never make a booking read as
+  paid (R12; negative control N7).
+- **Payment method** is shown as "—" until the webhook sets it. rentalBook's `'none'` is a placeholder, not a method. The
+  page never supplies a default (R13; negative control N8).
+- **Rental payment is priced on 2f's commercial line.** On `convergence/commercial-fn-on-ef1e992` @ `64da94c`
+  (not deployed), the `rental_booking` purpose takes commission `construction_equipment_rental` at 10% of the hire,
+  never the deposit.
+  - So the old "paid rentals open once SOKONI sets rental pricing" copy is **removed**.
+  - In its place the page explains the flow: "After you accept, SOKONI asks the renter to pay. SOKONI holds the payment
+    and releases it to you when the rental is completed."
+  - The fees card lists "equipment rental — 10% of the hire, never the deposit". The card is labelled as the commission
+    release, not yet live.
+- **The seller page has no pay step.**
+
+### Equipment list source and errors
+
+- **Source:** the list comes from `rentalOwnerListings`. When `hasMore` is true, the page shows "Showing the first 200 —
+  more exist" and the Overview tile shows `200+`.
+- **Fallback:** the direct `rentalProducts` read is used only when the server answers "Unknown commerce operation" (the
+  old server). A refusal on that read shows "Rentals become visible once access rules ship".
+- **Errors** (`HttpsError`) are shown verbatim, followed by "Nothing was changed."
+
+### Open server items (sokoni-f3, 5b, 2f)
+
+- **`active` has no writer except `rentalStart`.** For tests, payment_pending, paid_held and refunded are written
+  directly to the store, the way the payment authority would write them.
+- **`rentalProducts` and `rentalBookings` rules are still on f3's combined rules line.** Only the old-server fallback
+  read needs them.
+- **The webhook must write `paymentMethod`** on paid_held. Until it does, the page shows "—".
 
 ## Verification
 
@@ -227,11 +238,11 @@ The page reads `applications where uid == S.uid` (owner-only read) and keeps onl
 
 ## Tests
 
-`scripts/test-merchant-construction-workspace.js` passes **43/0**: 38 rows plus 5 of 5 negative controls caught. It runs
+`scripts/test-merchant-construction-workspace.js` passes **52/0**: 44 rows plus 8 of 8 negative controls caught. It runs
 in a node VM. The rental fixtures come from **running the real handlers** over an in-memory Firestore, with the
 dispatcher's error wrapping reproduced:
 
-- **NEW** is f3's `74672f3` source, read with `git show` (`RENTALS_REF` overrides it). If that source is missing, the run
+- **NEW** is f3's `bb8634d` source (the owner rental lifecycle), read with `git show` (`RENTALS_REF` overrides it). If that source is missing, the run
   fails closed.
 - **OLD** is this tree's copy, which equals live.
 
@@ -242,9 +253,9 @@ dispatcher's error wrapping reproduced:
 |---|---|
 | O | Unknown shows `—`, loaded zero shows `0`, capped shows `N+`; three layouts; every section resolves; reused routes exist; plan price only from a construction-priced entry; fees copy |
 | L | Legal lead buttons per status (owner matrix ⊆ rules `leadNext`); labels; exact payloads; shell writer refusals; chat runtime gate; permission, staff and failure copy; exact `hasMore`; refused write |
-| R | f3 handlers: owner without `ownerId` served; buttons per status (active: complete only); Unpaid copy, never M-Pesa; no pay step; Equipment via `rentalOwnerListings` (`hasMore` → "first 200 — more exist", `200+`); direct read only on an unknown-op answer; reasons verbatim; create, confirm, availability and seller cancel |
+| R | f3 bb8634d handlers: every booking state produced by the real handlers (payment-authority states written as that authority would); seller button matrix incl. legacy pending/confirmed; payment from STATUS only; method "—" until the webhook sets it; no Cancel on paid_held, refund-policy refusal verbatim; decline reason required; Accept → rentalConfirm alias on an old server; Start / Confirm return / Complete / seller Cancel; listing Draft / Available / Paused + publish / pause; Equipment via rentalOwnerListings (hasMore); direct read only on an unknown-op answer; reasons verbatim |
 | H | Projects, RFQs, Quotes and Services are honest; Verification never claims "Verified" without `verified === true` |
-| S | No `wa.me`, `tel:` or `mailto:`; escaping; no Firestore write API or browser storage in the module; dispatch ops limited to the seven seller rental ops |
+| S | No `wa.me`, `tel:` or `mailto:`; escaping; no Firestore write API or browser storage in the module; dispatch ops limited to the seller rental ops (never rentalBook / rentalReportReturn) |
 | G | Ten `con-*` routes; Construction group last; `validate()` clean; `MODULES` wiring; no duplicate module ids; script tag |
 
 Each negative control is a mutant that must fail its named row:
@@ -256,6 +267,9 @@ Each negative control is a mutant that must fail its named row:
 | N3 | A pay button on a rental | R2 |
 | N4 | `0` rendered for an unknown count | O1 |
 | N5 | Direct `rentalProducts` read used although `rentalOwnerListings` exists | R10 |
+| N6 | Cancel offered on paid_held | R14 |
+| N7 | "Paid" derived from a non-status field (`paymentStatus`) | R12 |
+| N8 | An M-PESA default payment method | R13 |
 
 Re-run on this branch:
 
@@ -299,8 +313,9 @@ owner.
 | Intake **98589b6** (`hosting/construction-intake-on-d824b58`) and containment **3a8f366** | sokoni-f3 | Construction applications existing to show |
 | `product_enquiry` TX (`74c9d50`, server d5d81d6) and df1a4cb contact flow | sokoni-b2 | "Open chat"; leads being created at all |
 | Commission line: materials 15%, construction_service 0%, unpriced layers OFF | sokoni-2f | The fees copy becoming live fact |
-| f3 rentals fix `74672f3` (`functions/rentals-on-53100ff`, on DE-2 Build B `53100ff`): **ship with or before this hosting change**; the old server still works through the fallback, but real owners are refused | sokoni-f3 | Rentals working for real owners |
-| Rental rules, rental IntaSend purpose and pricing | sokoni-f3 / 5b / 2f | The fallback read; paid rentals |
+| f3 owner rental lifecycle `bb8634d` (`functions/rentals-on-53100ff`, on `74672f3` / DE-2 Build B `53100ff`): **ship with or before this hosting change**. The old server still works through the fallbacks, but real owners are refused | sokoni-f3 | Rentals working for real owners |
+| 2f `rental_booking` purpose + commission 10% (`64da94c`), 5b webhook (paid_held + paymentMethod) | sokoni-2f / 5b | Awaiting payment / Paid — held states existing at all |
+| Rental rules | sokoni-f3 | The old-server fallback read |
 | Server role or module answer (contractor / supplier / rental) | sokoni-5b | Per-role sections in place of all three |
 | RFQ module `sokoni-merchant-rfq.js` (`hosting/b2b-on-7b5171e`) | sokoni-f3 | RFQs and Quotes linking to `rfqs` |
 | SOKONI Work engine | owner programme | Projects |
