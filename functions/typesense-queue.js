@@ -269,25 +269,36 @@ async function _processGroup(ts, tsCollection, operation, items, succeeded, fail
     return;
   }
 
-  /* upsert / create → JSONL batch */
-  const tsEntry = Object.values(COLLECTION_MAP).find(m => m.collection === tsCollection);
-  const results = await ts.importDocuments(
-    tsCollection,
-    items
-      .map(item => {
-        try {
-          const doc = tsEntry?.transformer?.(item.docId, item.data || {});
-          return doc ? { ...doc, id: item.docId } : null;
-        } catch (_) { return null; }
-      })
-      .filter(Boolean),
-    'upsert'
-  );
+  /* upsert / create → JSONL batch
+     J3 (2026-10-03): the transformer is resolved PER ITEM from its SOURCE
+     collection (item.collection), not from the first COLLECTION_MAP entry that
+     targets this tsCollection. Several sources share sokoni_jobs, so the old
+     lookup applied the digitalJobs mapper to canonical jobs. A source that is no
+     longer mapped (digitalJobs / digitalGigs items queued by an older trigger
+     build) resolves to no transformer and is excluded, never indexed.
+     Each item is transformed ONCE: the jobs mapper depends on the clock
+     (expiresAt), so a second call could disagree with the first and shift the
+     result-to-item alignment below. */
+  const docs = items.map(item => {
+    const entry = COLLECTION_MAP[item.collection];
+    if (!entry || entry.collection !== tsCollection || !entry.transformer) return null;
+    try {
+      const doc = entry.transformer(item.docId, item.data || {});
+      return doc ? { ...doc, id: item.docId } : null;
+    } catch (err) {
+      failed.set(item.ref.id, `transform error: ${err.message || String(err)}`);
+      return undefined; /* undefined = failed (above); null = intentionally excluded */
+    }
+  });
+  const toImport = docs.filter(Boolean);
+  const results  = toImport.length ? await ts.importDocuments(tsCollection, toImport, 'upsert') : [];
 
   /* Map results back to items by position */
   let resultIdx = 0;
-  for (const item of items) {
-    const doc = tsEntry?.transformer?.(item.docId, item.data || {});
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const doc  = docs[i];
+    if (doc === undefined) continue;                      /* transform failed — already recorded */
     if (!doc) { succeeded.add(item.ref.id); continue; } /* null = intentionally excluded */
     const res = results[resultIdx++];
     if (res && res.success === false) {

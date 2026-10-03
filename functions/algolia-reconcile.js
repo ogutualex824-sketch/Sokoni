@@ -130,7 +130,8 @@ const algoliaReconcile = onSchedule(
       { collection: 'events',      index: 'sokoni_events',     transformer: TRANSFORMERS.events     },
       { collection: 'properties',  index: 'sokoni_properties', transformer: TRANSFORMERS.properties },
       { collection: 'cars',        index: 'sokoni_vehicles',   transformer: TRANSFORMERS.cars       },
-      { collection: 'digitalJobs', index: 'sokoni_jobs',       transformer: TRANSFORMERS.digitalJobs },
+      /* J3 (2026-10-03): canonical jobs, not the retired digitalJobs feed */
+      { collection: 'jobs',        index: 'sokoni_jobs',       transformer: TRANSFORMERS.jobs        },
     ];
 
     const report = {

@@ -490,14 +490,14 @@ const SAMPLE_JOB = {
     assert.ok(COLLECTION_INDEX_MAP.events, 'events must be mapped');
   });
 
-  await test('jobs and digitalJobs share the same Algolia index', async () => {
-    assert.ok(COLLECTION_INDEX_MAP.jobs,        'jobs must be mapped');
-    assert.ok(COLLECTION_INDEX_MAP.digitalJobs, 'digitalJobs must be mapped');
-    assert.equal(
-      COLLECTION_INDEX_MAP.jobs.index,
-      COLLECTION_INDEX_MAP.digitalJobs.index,
-      'jobs and digitalJobs must share the same Algolia index'
-    );
+  /* J3 (2026-10-03): contract changed — only canonical `jobs` feeds sokoni_jobs.
+     digitalJobs (browser-written, unmoderated) must NOT be mapped any more.
+     Full J3 coverage: scripts/test-jobs-search-mapping.js. */
+  await test('only canonical jobs feeds sokoni_jobs (digitalJobs unmapped)', async () => {
+    assert.ok(COLLECTION_INDEX_MAP.jobs, 'jobs must be mapped');
+    assert.equal(COLLECTION_INDEX_MAP.jobs.index, 'sokoni_jobs');
+    assert.equal(COLLECTION_INDEX_MAP.digitalJobs, undefined, 'digitalJobs must not be mapped');
+    assert.equal(COLLECTION_INDEX_MAP.gs__digitalJobs, undefined, 'gs__digitalJobs must not be mapped');
   });
 
   await test('foods collection maps to the products index', async () => {

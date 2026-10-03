@@ -168,29 +168,12 @@ const COLLECTION_REGISTRY = {
     hasTrigger:          false,
   },
 
-  digitalJobs: {
-    algoliaIndex:        'sokoni_jobs',
-    typesenseCollection: 'sokoni_jobs',
-    priority:            PRIORITY.NORMAL,
-    adminOnly:           false,
-    firestoreCollection: 'digitalJobs',
-    searchableFields:    ['title', 'company', 'description', 'skills'],
-    facetFields:         ['category', 'jobType', 'remote', 'experience'],
-    engine:              'both',
-    hasTrigger:          false,
-  },
-
-  digitalGigs: {
-    algoliaIndex:        'sokoni_jobs',
-    typesenseCollection: 'sokoni_jobs',
-    priority:            PRIORITY.NORMAL,
-    adminOnly:           false,
-    firestoreCollection: 'digitalGigs',
-    searchableFields:    ['title', 'company', 'description', 'skills'],
-    facetFields:         ['category', 'jobType', 'remote'],
-    engine:              'typesense',
-    hasTrigger:          false,
-  },
+  /* J3 (2026-10-03): digitalJobs and digitalGigs are REMOVED from the registry.
+     They are browser-written, unmoderated and carry fake money; freelance gigs
+     are now the canonical job type 'freelance-gig' in `jobs`. Neither engine maps
+     them any more (typesense-client COLLECTION_MAP, algolia-indexer
+     COLLECTION_INDEX_MAP), so repair / full-reindex must not iterate them.
+     Their triggers remain registered (inert); retirement is owner-gated. */
 
   jobs: {
     algoliaIndex:        'sokoni_jobs',
@@ -198,8 +181,9 @@ const COLLECTION_REGISTRY = {
     priority:            PRIORITY.NORMAL,
     adminOnly:           false,
     firestoreCollection: 'jobs',
-    searchableFields:    ['title', 'company', 'description', 'skills'],
-    facetFields:         ['category', 'jobType', 'remote', 'experience'],
+    /* J3: canonical jobs.js field names (was company / jobType / skills / experience) */
+    searchableFields:    ['title', 'companyName', 'description', 'requirements'],
+    facetFields:         ['category', 'type', 'remote', 'featured'],
     engine:              'both',
     hasTrigger:          false,
   },

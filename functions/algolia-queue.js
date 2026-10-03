@@ -289,9 +289,14 @@ async function _processGroup(algolia, db, groupKey, entries) {
         else await _markDone(db, item.queueId);
       } else {
         const mapping = COLLECTION_INDEX_MAP[item.collection];
-        if (!mapping) continue;
+        /* J3 (2026-10-03): an unmapped source (e.g. digitalJobs items queued by an
+           older trigger build) or a null transform (e.g. a job that is no longer
+           public) is "intentionally excluded" — mark it done, as the partial path
+           already does, instead of leaving it stranded in 'processing'. */
+        if (!mapping) { await _markDone(db, item.queueId); continue; }
         const obj = mapping.transformer(item.docId, item.data || {});
         if (obj) transformed.push({ item, obj, isPartial: false });
+        else await _markDone(db, item.queueId);
       }
     } catch (err) {
       console.error(`[AlgoliaQueue] Transform error for ${item.queueId}:`, err.message);

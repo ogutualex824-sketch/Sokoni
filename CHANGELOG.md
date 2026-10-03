@@ -1,3 +1,42 @@
+## 2026-10-03 — Jobs Board J3: search reads canonical job fields; closed/expired jobs leave search
+
+**Branch `functions/jobs-search-on-032e88e` · NOT DEPLOYED · deploy NOT authorized.**
+
+**Summary.** Typesense, Algolia (+ replicas, + global shadow) and KASS `search_jobs` now map the
+canonical `jobs/{id}` fields (`companyName`, `type`, `featured`, `postedAt`, `expiresAt`,
+`salaryMin/Max/Currency`). One predicate (`functions/jobs-search-eligibility.js`) admits only
+`status === 'active'` and not expired; a status change to `closed` (or any non-active status)
+enqueues a delete. `employerUid` is never indexed (allow-list mappers). `digitalJobs` /
+`digitalGigs` no longer feed `sokoni_jobs` (unmapped; processors drop legacy queue items); their
+triggers stay registered and inert pending owner-gated retirement. Base `032e88e` (live
+`processTypesenseQueue`) + `fc7f2e6` (verbatim live 09-09 search files). Details:
+`docs/JOBS_SEARCH_J3.md`.
+
+**Files.** `functions/jobs-search-eligibility.js` (new), `typesense-sync.js`, `typesense-client.js`,
+`typesense-queue.js`, `algolia-sync.js`, `algolia-indexer.js`, `algolia-queue.js`,
+`algolia-admin.js`, `algolia-reconcile.js`, `search-sync.js`, `index.js` (KASS), 
+`functions/test/algolia-sync.test.js`, `scripts/test-jobs-search-mapping.js` (new),
+`docs/JOBS_SEARCH_J3.md` (new).
+
+**Database changes.** None (no Firestore schema or rules change; Typesense schema unchanged —
+legacy alias fields still written).
+**API changes.** None breaking. KASS `search_jobs` returns real company/salary and no expired
+jobs; its `type` input accepts `freelance` → `freelance-gig`. Algolia `sokoni_jobs` settings/replicas
+rank on canonical fields once `algoliaSetupIndexes` is redeployed and run.
+**Security.** Closed/expired jobs no longer publicly searchable; `employerUid` allow-listed out;
+unmoderated browser-written gig data no longer indexed into `sokoni_jobs`.
+**Breaking changes.** None.
+**Tests.** `test-jobs-search-mapping` 23/23, mutants 7/7 killed; `algolia-sync.test` 78/0;
+`test-search-pipeline` 15/0; `test-typesense-dlq-undefined-ref` 7/0; batch-isolation and
+variant-parity pass.
+**Known limitation.** Expiry without a write needs the J2 sweep (not built). Old gig records
+already indexed remain until the owner-gated orphan purge.
+**Deploy.** Scoped per function, each after its live-archive lineage gate, under the AR notice:
+`processTypesenseQueue`, `processAlgoliaQueue`, `ts_jobs_onCreate/onUpdate/onDelete`,
+`algoliaSync_jobs_create/update/delete`, `kass` (own index.js gate); optional
+`algoliaSetupIndexes`, reconcile/reindex functions; owner-gated `typesenseDeleteOrphans`,
+`algoliaDeleteOrphans`. NOT authorized.
+
 ## 2026-09-21 (126) — The repair arrived from outside the workstream
 
 **Documentation · commit `1a8401b` · NO GCP MUTATION BY THIS WORKSTREAM · NOT DEPLOYED.**

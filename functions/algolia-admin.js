@@ -367,20 +367,22 @@ const INDEX_SETTINGS = {
   sokoni_vehicles_newest:     { customRanking: ['desc(createdAt)', 'desc(isFeatured)'] },
   sokoni_vehicles_year_desc:  { customRanking: ['desc(year)',    'desc(isFeatured)'] },
 
+  /* J3 (2026-10-03): canonical job fields (algolia-indexer TRANSFORMERS.jobs).
+     Before J3 these named createdAt / isFeatured / deadline / jobType / salary.*,
+     none of which a canonical jobs/{id} document carries. */
   sokoni_jobs: {
-    searchableAttributes: ['title', 'company', 'description', 'unordered(skills)', 'unordered(tags)', 'category'],
+    searchableAttributes: ['title', 'companyName', 'description', 'requirements', 'category', 'location'],
     attributesForFaceting: [
       'filterOnly(status)',
       'searchable(category)',
-      'jobType',
+      'type',
       'remote',
-      'experience',
-      'education',
-      'location.city',
-      'location.county',
+      'featured',
+      'searchable(location)',
+      'salaryCurrency',
     ],
-    numericAttributesForFiltering: ['salary.min', 'salary.max', 'deadline', 'createdAt', 'applicationCount'],
-    customRanking: ['desc(isFeatured)', 'desc(featuredLevel)', 'asc(deadline)', 'desc(_popularityScore)'],
+    numericAttributesForFiltering: ['salaryMin', 'salaryMax', 'postedAt', 'expiresAt'],
+    customRanking: ['desc(featured)', 'desc(postedAt)'],
     typoTolerance:         true,
     ignorePlurals:         true,
     enablePersonalization: true,
@@ -390,8 +392,8 @@ const INDEX_SETTINGS = {
     replicas: ['sokoni_jobs_newest', 'sokoni_jobs_deadline'],
   },
 
-  sokoni_jobs_newest:   { customRanking: ['desc(createdAt)', 'desc(isFeatured)'] },
-  sokoni_jobs_deadline: { customRanking: ['asc(deadline)',   'desc(isFeatured)'] },
+  sokoni_jobs_newest:   { customRanking: ['desc(postedAt)',  'desc(featured)'] },  /* J3: was createdAt/isFeatured */
+  sokoni_jobs_deadline: { customRanking: ['asc(expiresAt)',  'desc(featured)'] },  /* J3: was deadline/isFeatured  */
 
   sokoni_users: {
     searchableAttributes: ['displayName', 'username', 'bio', 'unordered(skills)', 'unordered(tags)'],
@@ -1019,7 +1021,11 @@ const algoliaDeleteOrphans = onSchedule(
       sokoni_events:      ['events'],
       sokoni_properties:  ['properties'],
       sokoni_vehicles:    ['cars', 'vehicles'],
-      sokoni_jobs:        ['digitalJobs', 'jobs'],
+      /* J3 (2026-10-03): only canonical jobs feed sokoni_jobs. digitalJobs
+         records still in the index are therefore orphans and are removed by
+         this sweep — deploying algoliaDeleteOrphans from this tree is the
+         owner-gated purge step, not part of the field-mapping deploy. */
+      sokoni_jobs:        ['jobs'],
     };
 
     let totalDeleted = 0;

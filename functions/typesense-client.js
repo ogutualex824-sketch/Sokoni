@@ -21,6 +21,7 @@
 const https  = require('https');
 const http   = require('http');
 const crypto = require('crypto');
+const { isPubliclySearchableJob } = require('./jobs-search-eligibility');
 
 /* ═══════════════════════════════════════════════════════════════════
    CONNECTION POOL — one keep-alive Agent per physical node
@@ -1090,6 +1091,49 @@ const TRANSFORMERS = {
     ..._scores(data, { orderW: 3, viewW: 1, reviewW: 0 }),
   }),
 
+  /* J3 (2026-10-03) — canonical `jobs/{id}` (functions/jobs.js) → sokoni_jobs.
+     An ALLOW-LIST: employerUid and every other private field are never copied.
+     Returns null (= "intentionally excluded" to the queue processor) unless the
+     job is publicly searchable: status 'active' and not expired.
+     Canonical names are indexed as-is (companyName, type, featured, postedAt,
+     expiresAt, salaryCurrency). The legacy names the LIVE sokoni_jobs schema
+     declares (company, jobType, isFeatured, createdAt, deadline) are filled from
+     the canonical fields so faceting/sorting keeps working without recreating
+     the Typesense collection. `location` is a geopoint in the schema, so the
+     job's free-text location goes to `locationText`, never `location`. */
+  jobs: (id, data) => {
+    if (!isPubliclySearchableJob(data)) return null;
+    const companyName = _str(data.companyName) || undefined;
+    const type        = _str(data.type) || undefined;
+    const featured    = data.featured === true;
+    const postedAt    = _unix(data.postedAt);
+    const expiresAt   = _unix(data.expiresAt) || undefined;
+    return _strip({
+      id,
+      title:          _str(data.title),
+      companyName,
+      description:    _trunc(_str(data.description), 600),
+      requirements:   _trunc(_str(data.requirements), 600) || undefined,
+      category:       _str(data.category) || undefined,
+      type,
+      remote:         type === 'remote' || undefined,
+      locationText:   _str(data.location) || undefined,
+      salaryMin:      _float(data.salaryMin) || undefined,
+      salaryMax:      _float(data.salaryMax) || undefined,
+      salaryCurrency: _str(data.salaryCurrency, 'KES'),
+      featured,
+      postedAt,
+      expiresAt,
+      status:         'active',
+      /* schema-declared legacy aliases (same values, see note above) */
+      company:        companyName,
+      jobType:        type,
+      isFeatured:     featured || undefined,
+      createdAt:      postedAt,  /* default_sorting_field: must be present */
+      deadline:       expiresAt,
+    });
+  },
+
   bnbListings: (id, data) => _strip({
     id,
     name:          _str(data.name || data.title || data.propertyName),
@@ -1324,9 +1368,12 @@ const COLLECTION_MAP = {
   propertyListings: { collection: 'sokoni_properties',    transformer: TRANSFORMERS.properties    },
   properties:       { collection: 'sokoni_properties',    transformer: TRANSFORMERS.properties    },
   cars:             { collection: 'sokoni_vehicles',      transformer: TRANSFORMERS.cars          },
-  digitalJobs:      { collection: 'sokoni_jobs',          transformer: TRANSFORMERS.digitalJobs   },
-  digitalGigs:      { collection: 'sokoni_jobs',          transformer: TRANSFORMERS.digitalJobs   },
-  jobs:             { collection: 'sokoni_jobs',          transformer: TRANSFORMERS.digitalJobs   },
+  /* J3 (2026-10-03): only canonical `jobs` feeds sokoni_jobs. digitalJobs and
+     digitalGigs (browser-written, unmoderated, fake money) are deliberately
+     UNMAPPED: enqueue() ignores them and the processor excludes any of their
+     items still queued by an older trigger build. TRANSFORMERS.digitalJobs is
+     kept for reference only. */
+  jobs:             { collection: 'sokoni_jobs',          transformer: TRANSFORMERS.jobs          },
   bnbListings:      { collection: 'sokoni_hotels',        transformer: TRANSFORMERS.bnbListings   },
   hotels:           { collection: 'sokoni_hotels',        transformer: TRANSFORMERS.bnbListings   },
   fitness_clubs:    { collection: 'sokoni_sports',        transformer: TRANSFORMERS.services      },

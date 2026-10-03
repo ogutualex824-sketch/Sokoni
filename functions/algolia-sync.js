@@ -23,12 +23,16 @@
 
 const { onDocumentCreated, onDocumentUpdated, onDocumentDeleted } = require('firebase-functions/v2/firestore');
 const { enqueue } = require('./algolia-queue');
+const { isPubliclySearchableJob } = require('./jobs-search-eligibility');
 
 /* ── Skip guard ─────────────────────────────────────────────────────── */
 
 function _shouldSkip(data, collection) {
   if (!data) return true;
   if (data._noIndex === true) return true;
+  /* J3: canonical jobs — public only when status === 'active' and not expired.
+     Before J3 only draft/deleted were skipped, so a closed job stayed searchable. */
+  if (collection === 'jobs') return !isPubliclySearchableJob(data);
   if (data.status === 'draft' || data.status === 'deleted') return true;
   if (collection === 'users' && (data.private === true || data.status === 'banned')) return true;
   /* Bookable services: a paused (active:false) or removed service must not appear in search.
@@ -41,6 +45,9 @@ function _shouldSkipAfterUpdate(before, after, collection) {
   /* If the document transitioned INTO a skip state, delete from index */
   const nowSkip    = _shouldSkip(after, collection);
   const wasSkip    = _shouldSkip(before, collection);
+  /* J3: a non-public job is ALWAYS deleted (idempotent). 'before' may have been
+     active-but-expired and therefore still indexed until the J2 sweep exists. */
+  if (collection === 'jobs' && nowSkip) return 'delete';
   if (nowSkip && !wasSkip) return 'delete';  // remove from index
   if (nowSkip && wasSkip)  return 'ignore';  // never was indexed
   return 'update';
@@ -120,6 +127,10 @@ const triggers = {
   ..._makeTriggers('events'),
   ..._makeTriggers('properties'),
   ..._makeTriggers('cars'),
+  /* J3 (2026-10-03): digitalJobs is browser-written and unmoderated. It is no
+     longer in algolia-indexer COLLECTION_INDEX_MAP, so enqueue() returns before
+     writing and these triggers are inert. Kept registered so a scoped deploy
+     changes nothing else; retirement is an owner-gated decision. */
   ..._makeTriggers('digitalJobs'),
   ..._makeTriggers('jobs'),
   ..._makeTriggers('users'),
@@ -177,3 +188,9 @@ const triggers = {
 };
 
 module.exports = triggers;
+
+/* Test seam for scripts/test-jobs-search-mapping.js. Non-enumerable, so
+   Object.assign(exports, algoliaSync) in index.js never exports it. */
+Object.defineProperty(module.exports, '_test', {
+  value: { _shouldSkip, _shouldSkipAfterUpdate }, enumerable: false,
+});

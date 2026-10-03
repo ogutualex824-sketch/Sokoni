@@ -21,8 +21,8 @@
  *  events          → sokoni_events
  *  propertyListings→ sokoni_properties
  *  cars            → sokoni_vehicles
- *  digitalJobs     → sokoni_jobs
- *  digitalGigs     → sokoni_jobs
+ *  digitalJobs     → (none since J3 — unmapped; triggers inert, retirement owner-gated)
+ *  digitalGigs     → (none since J3 — unmapped; triggers inert, retirement owner-gated)
  *  bnbListings     → sokoni_hotels
  *  fitness_clubs   → sokoni_sports
  *  fitness_classes → sokoni_sports
@@ -51,6 +51,7 @@ const {
 } = require('firebase-functions/v2/firestore');
 
 const { enqueue, PRIORITY } = require('./typesense-queue');
+const { isPubliclySearchableJob } = require('./jobs-search-eligibility');
 
 /* ── Skip predicates ─────────────────────────────────────────────── */
 
@@ -59,6 +60,10 @@ const SKIP_STATUSES = new Set(['draft', 'deleted', 'banned', 'spam', 'suspended'
 function _shouldSkip(data, collection) {
   if (!data) return true;
   if (data._noIndex === true) return true;
+  /* J3: canonical jobs are public ONLY when status === 'active' and not expired.
+     SKIP_STATUSES has no 'closed', so before J3 a closed job stayed searchable.
+     The allow-list predicate covers every non-active status, present and future. */
+  if (collection === 'jobs') return !isPubliclySearchableJob(data);
   if (SKIP_STATUSES.has(data.status)) return true;
   if (collection === 'users' && data.private === true) return true;
   return false;
@@ -68,6 +73,10 @@ function _shouldSkip(data, collection) {
 function _updateDecision(before, after, collection) {
   const wasSkipped = _shouldSkip(before, collection);
   const isSkipped  = _shouldSkip(after,  collection);
+  /* J3: a non-public job is ALWAYS deleted (idempotent — the processor treats a
+     404 as done). 'before' may have been active-but-expired and so still indexed
+     (no expiry sweep yet): "was skipped too" must not mean "nothing to remove". */
+  if (collection === 'jobs' && isSkipped) return 'delete';
   if (isSkipped && !wasSkipped) return 'delete';  /* became non-indexable */
   if (isSkipped &&  wasSkipped) return 'ignore';  /* was and remains non-indexable */
   return 'upsert';
@@ -136,6 +145,11 @@ const triggers = {
   ..._makeTriggers('events'),
   ..._makeTriggers('propertyListings'),
   ..._makeTriggers('cars'),
+  /* J3 (2026-10-03): digitalJobs / digitalGigs are browser-written and
+     unmoderated. They are no longer in typesense-client COLLECTION_MAP, so
+     enqueue() returns before writing and these six triggers are inert. Kept
+     registered so a scoped deploy changes nothing else; retiring them is an
+     owner-gated decision. */
   ..._makeTriggers('digitalJobs'),
   ..._makeTriggers('digitalGigs'),
   ..._makeTriggers('users'),
@@ -166,3 +180,9 @@ const triggers = {
 };
 
 module.exports = triggers;
+
+/* Test seam for scripts/test-jobs-search-mapping.js. Non-enumerable, so the
+   Firebase CLI never sees it as a Cloud Function export. */
+Object.defineProperty(module.exports, '_test', {
+  value: { _shouldSkip, _updateDecision }, enumerable: false,
+});

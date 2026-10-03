@@ -15,6 +15,7 @@
 
 const https  = require('https');
 const crypto = require('crypto');
+const { isPubliclySearchableJob } = require('./jobs-search-eligibility');
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ALGOLIA HTTP CLIENT
@@ -904,6 +905,51 @@ const TRANSFORMERS = {
     _popularityScore: Math.log1p(_num(data.applicationCount) * 3 + _num(data.viewCount)),
   }),
 
+  /* J3 (2026-10-03) — canonical `jobs/{id}` (functions/jobs.js) → sokoni_jobs.
+     An ALLOW-LIST: employerUid and every other private field are never copied
+     (no `poster.id` either — the digitalJobs mapper above derives one from
+     posterId/uid). Returns null unless the job is publicly searchable: status
+     'active' and not expired. Canonical names are the ranking/replica fields
+     (featured, postedAt, expiresAt, type — see algolia-admin INDEX_SETTINGS).
+     company / jobType / isFeatured / createdAt / deadline are kept as read-only
+     aliases for existing hit renderers and the algolia-settings.js profile. */
+  jobs: (id, data) => {
+    if (!isPubliclySearchableJob(data)) return null;
+    const title       = _str(data.title);
+    const companyName = _str(data.companyName);
+    const type        = _str(data.type);
+    const featured    = data.featured === true;
+    const postedAt    = _unix(data.postedAt);
+    const expiresAt   = _unix(data.expiresAt);
+    return {
+      objectID:       id,
+      title,
+      titleLower:     title.toLowerCase(),
+      companyName,
+      description:    _truncate(_str(data.description), 600),
+      requirements:   _truncate(_str(data.requirements), 600),
+      category:       _str(data.category),
+      type,
+      remote:         type === 'remote',
+      location:       _str(data.location),
+      salaryMin:      _num(data.salaryMin),
+      salaryMax:      _num(data.salaryMax),
+      salaryCurrency: _str(data.salaryCurrency, 'KES'),
+      featured,
+      postedAt,
+      expiresAt,
+      hub:            'jobs',
+      status:         'active',
+      updatedAt:      _unix(data.updatedAt),
+      /* legacy read-only aliases (same values) */
+      company:        companyName,
+      jobType:        type,
+      isFeatured:     featured,
+      createdAt:      postedAt,
+      deadline:       expiresAt,
+    };
+  },
+
   /* ── Users (public profiles) ────────────────────────────────────────── */
   users: (id, data) => {
     /* Never index private accounts or banned users */
@@ -1223,8 +1269,11 @@ const COLLECTION_INDEX_MAP = {
   providerProfiles: { index: 'sokoni_services',  transformer: TRANSFORMERS.services,    globalSearch: true  },
 
   /* ── Jobs ── */
-  jobs:        { index: 'sokoni_jobs',      transformer: TRANSFORMERS.digitalJobs, globalSearch: true  },
-  digitalJobs: { index: 'sokoni_jobs',      transformer: TRANSFORMERS.digitalJobs, globalSearch: true  },
+  /* J3 (2026-10-03): only canonical `jobs` feeds sokoni_jobs (and its
+     global_search shadow). digitalJobs — browser-written, unmoderated — is
+     deliberately UNMAPPED: enqueue() ignores it and processAlgoliaQueue marks any
+     of its items still queued by an older trigger build done without indexing. */
+  jobs:        { index: 'sokoni_jobs',      transformer: TRANSFORMERS.jobs,        globalSearch: true  },
 
   /* ── Vehicles ── */
   cars:        { index: 'sokoni_vehicles',  transformer: TRANSFORMERS.cars,        globalSearch: true  },
@@ -1284,7 +1333,7 @@ const COLLECTION_INDEX_MAP = {
   'gs__services':    { index: 'sokoni_global', transformer: _globalTransformer('services'),    globalSearch: false },
   'gs__providers':   { index: 'sokoni_global', transformer: _globalTransformer('providers'),   globalSearch: false },
   'gs__jobs':        { index: 'sokoni_global', transformer: _globalTransformer('jobs'),        globalSearch: false },
-  'gs__digitalJobs': { index: 'sokoni_global', transformer: _globalTransformer('digitalJobs'), globalSearch: false },
+  /* 'gs__digitalJobs' removed in J3 — see the jobs note in the primary map. */
   'gs__cars':        { index: 'sokoni_global', transformer: _globalTransformer('cars'),        globalSearch: false },
   'gs__vehicles':    { index: 'sokoni_global', transformer: _globalTransformer('vehicles'),    globalSearch: false },
   'gs__properties':  { index: 'sokoni_global', transformer: _globalTransformer('properties'),  globalSearch: false },

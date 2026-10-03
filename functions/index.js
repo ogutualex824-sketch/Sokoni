@@ -1139,7 +1139,7 @@ const _CHAT_TOOLS = [
       properties: {
         query:    { type: "string", description: "Job title or skills e.g. 'software engineer', 'sales', 'driver'" },
         location: { type: "string", description: "City or 'remote'" },
-        type:     { type: "string", description: "full-time, part-time, freelance, remote, internship" },
+        type:     { type: "string", description: "full-time, part-time, contract, internship, remote, freelance-gig" },
       },
     },
   },
@@ -1431,23 +1431,10 @@ async function _execChatTool(name, input, ctx) {
     }
 
     if (name === "search_jobs") {
-      const { query = "", location, type: t } = input;
-      let q = db.collection("jobs").where("status", "==", "active").limit(10);
-      if (location && location !== "remote") q = q.where("location", "==", location);
-      if (t) q = q.where("type", "==", t);
-      const snap = await q.get().catch(() => ({ docs: [] }));
-      const rows = snap.docs.filter(d => {
-        if (!query) return true;
-        const ql = query.toLowerCase();
-        return (d.data().title || "").toLowerCase().includes(ql) || (d.data().description || "").toLowerCase().includes(ql);
-      }).slice(0, 6);
-      if (!rows.length) {
-        ctx.addAction({ label: "Browse Jobs", url: "jobs.html" });
-        return { found: 0, message: "No jobs found. Browse all listings on SOKONI Jobs." };
-      }
-      rows.forEach(d => { const r = d.data(); ctx.addResult({ type:"job", id:d.id, name:r.title, company:r.company, location:r.location, salary:r.salary, jobType:r.type, url:`jobs.html?id=${d.id}` }); });
-      ctx.addAction({ label: "Browse all Jobs", url: "jobs.html" });
-      return { found: rows.length, jobs: rows.map(d => ({ title:d.data().title, company:d.data().company, location:d.data().location, salary:d.data().salary||"Negotiable", type:d.data().type })) };
+      /* J3 (2026-10-03): canonical jobs.js fields. Before J3 this read
+         company / salary, which a canonical job never carries (companyName,
+         salaryMin/salaryMax/salaryCurrency), and showed expired jobs. */
+      return require("./jobs-search-eligibility").kassSearchJobs({ db, input, ctx });
     }
 
     /* ══════════════════════════════════════════════════════════════════════════
