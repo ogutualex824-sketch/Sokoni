@@ -2805,7 +2805,8 @@ service cloud.firestore {
      public rental page could never load. Active listings are public; a booking is readable by its renter (shop owners
      read theirs through rentalList, which asserts the seller). */
   match /rentalProducts/{id} {
-  allow read:  if resource.data.status == 'active' || isAdmin() || (isAuthed() && resource.data.createdBy == request.auth.uid);
+  /* shopId == caller: the shop identity model keys a shop by its owner uid (shops/{uid}); e3's workspace lists the owner's own listings directly */
+  allow read:  if resource.data.status == 'active' || isAdmin() || (isAuthed() && (resource.data.createdBy == request.auth.uid || resource.data.shopId == request.auth.uid));
   allow write: if false;
   }
   match /rentalBookings/{id} {

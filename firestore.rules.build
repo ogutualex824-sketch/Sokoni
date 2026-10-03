@@ -2636,7 +2636,7 @@ service cloud.firestore {
   };
   }
   match /rentalProducts/{id} {
-  allow read:  if resource.data.status == 'active' || isAdmin() || (isAuthed() && resource.data.createdBy == request.auth.uid);
+  allow read:  if resource.data.status == 'active' || isAdmin() || (isAuthed() && (resource.data.createdBy == request.auth.uid || resource.data.shopId == request.auth.uid));
   allow write: if false;
   }
   match /rentalBookings/{id} {

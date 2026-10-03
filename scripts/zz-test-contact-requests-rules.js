@@ -60,6 +60,9 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await allows('RN-1', 'the public reads an ACTIVE rental listing (the rental page can load)', getDoc(doc(anon, 'rentalProducts/rp1')));
   await denies('RN-2', 'the public reads a non-active rental listing', getDoc(doc(anon, 'rentalProducts/rp2')));
   await allows('RN-3', 'the lister reads their own non-active listing', getDoc(doc(seller, 'rentalProducts/rp2')));
+  await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'rentalProducts/rp4'), { shopId: 'buyer', createdBy: 'staff1', title: 'Shop-owned paused', status: 'paused' }); });
+  await allows('RN-3b', 'the shop owner (shopId == uid) reads a paused listing a staff member created', getDoc(doc(buyer, 'rentalProducts/rp4')));
+  await denies('RN-3c', 'another user reads that paused listing', getDoc(doc(other, 'rentalProducts/rp4')));
   await denies('RN-4', 'a client writes a rental listing (server-only: price + seller assert)', setDoc(doc(seller, 'rentalProducts/rp3'), { shopId: 'shopS', dailyRate: 1, status: 'active' }));
   await denies('RN-5', 'the renter edits their booking total / status', updateDoc(doc(buyer, 'rentalBookings/rb1'), { totalAmount: 1, status: 'confirmed' }));
   await allows('RN-6', 'the renter reads their booking', getDoc(doc(buyer, 'rentalBookings/rb1')));
