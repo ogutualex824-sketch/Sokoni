@@ -58,6 +58,9 @@ function reset (over, quoteOver) {
   reset({ commissionCategory: 'construction_service' }, { vatRate: 0, vatKES: 0, totalKES: 11500 });
   x = await price('buyer1', { rfqId: 'RFQ0001' });
   ck('Q3b a contractor quote (construction_service, VAT 0) prices at 11,500', x.ok && x.r.amountCents === 1150000 && x.r.metadata.commissionCategory === 'construction_service');
+  reset({ commissionCategory: 'equipment-rental' }, { vatRate: 0, vatKES: 0, totalKES: 11500 });
+  x = await price('buyer1', { rfqId: 'RFQ0001' });
+  ck('Q3c an equipment-rental quote is accepted and carries equipment-rental (→ 10% row)', x.ok && x.r.metadata.commissionCategory === 'equipment-rental');
   ck('Q5 rfq_quote is self-settling (5b\'s hold path settles; no generic credit at payment)', SS.isSelfSettling('rfq_quote'));
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

@@ -57,6 +57,8 @@ const SPEC = [
   ['Sports tournament entry',     ['sports_tournament_entry', 'tournament'],      5, 0],   /* owner 2026-10-03 */
   ['Construction materials',      ['cement', 'steel', 'timber', 'hardware'],     15, 0],   /* owner 2026-10-03: marketplace */
   ['Construction contractor work', ['contractor', 'welding', 'fabrication'],     0, 0],   /* owner 2026-10-03: subscription + per-lead fee */
+  ['Marketing services',          ['marketing_services', 'brand-strategy', 'marketing'], 10, 0],   /* owner 2026-10-03 */
+  ['Construction equipment rental', ['equipment-rental', 'plant-hire'],          10, 0],   /* owner 2026-10-03 */
   ['Jobs (incl. freelance / gig)', ['jobs', 'freelance', 'freelancer', 'gig'],     0, 0],   /* owner 2026-10-03: 0%, employer products only */
   ['Food ordered online',         ['food_delivery', 'food', 'restaurant'],       15, 0],
   ['Digital products',            ['digital_products', 'digital'],               10, 0],

@@ -111,9 +111,18 @@ const RATES = {
      • Equipment rental / featured placement / delivery margin: products exist but are UNPRICED and OFF → their rows are in
        UNPRICED_CATEGORIES and the engine REFUSES to price them (never a silent 0% and never the 5% default). */
   construction_service:          { pct: 0, fixedKES: 0, _was: 'new 2026-10-03 — owner: subscription + per-lead fee, no % of contract value' },
-  construction_equipment_rental: { pct: 0, fixedKES: 0, _was: 'new 2026-10-03 — owner: unpriced, OFF (refused by the engine)' },
+  construction_equipment_rental: { pct: 10, fixedKES: 0, _was: 'owner 2026-10-03 (Super Admin update via f3): 10% — was unpriced/refused' },
   construction_featured:         { pct: 0, fixedKES: 0, _was: 'new 2026-10-03 — owner: unpriced, OFF (refused by the engine)' },
-  construction_delivery_margin:  { pct: 0, fixedKES: 0, _was: 'new 2026-10-03 — owner: unpriced, OFF (refused by the engine)' },
+  construction_delivery_margin:  { pct: 0, fixedKES: 0, _was: 'new 2026-10-03 — owner: 10% configured but DISABLED (refused by the engine)' },
+  /* 1.5% project fee: CONFIGURED but GATED. It conflicts with the owner's standing "no % of contract value" for contractors and
+     may only ever apply to a SOKONI-managed milestone/escrow project payment — which does not exist (the Work engine is unbuilt).
+     So it stays in UNPRICED_CATEGORIES (refused) until that purpose exists AND the owner re-confirms. Never construction_service,
+     bookings, leads or subscriptions. */
+  construction_project_fee:      { pct: 1.5, fixedKES: 0, _was: 'owner 2026-10-03: 1.5% on managed milestone/escrow payments only — GATED (refused) until that purpose exists + owner re-confirms' },
+  /* MARKETING (owner 2026-10-03, via sokoni-b2): 10% per marketing service sale, a FLAT booking lane (no plan moves it). Every
+     taxonomy id (shared/marketing-taxonomy.js, byte-identical with b2's line) aliases here. Eligibility per booking (the id is
+     in provider.marketingCategories AND marketingStatus 'active') is enforced at settlement; otherwise refused. */
+  marketing_services:            { pct: 10, fixedKES: 0, _was: 'new 2026-10-03 — owner: 10% marketing commission' },
   electronics:      { pct: 15,  fixedKES: 0,    _was: 'no row — fell to the 5% default (phones / laptops / electronics labels)' },
   education:        { pct: 5,   fixedKES: 0,    _was: "15% 'category only' (never owner-set)" },
   /* Owner 2026-10-03 (via sokoni-f3): Jobs carries NO commission — applications are free; SOKONI earns only from employer
@@ -210,13 +219,18 @@ const ALIASES = {
   digital: 'digital_products', ai_services: 'digital_products',
 };
 
+/* Marketing taxonomy ids → marketing_services (generated from the ONE taxonomy, never a second hand-kept list). An id that
+   already names something else is NOT overridden (none do today — asserted by test-marketing-commercial). */
+for (const id of require('./shared/marketing-taxonomy').AREA_IDS) { if (!RATES[id] && !ALIASES[id]) ALIASES[id] = 'marketing_services'; }
+ALIASES.marketing = ALIASES.marketing || 'marketing_services';
+
 /* Minimum commission on any non-zero-rated transaction, so a KES 20 sale does not cost more
  * to process than it earns. Was hardcoded as `const minKES = 10` inside index.js. */
 const MIN_COMMISSION_KES = 10;
 
 /* The commercial policy version a commission was priced under — recorded on every ledger row with the resolved category,
    so "order → category → policy version → commission → seller net" is reproducible. Bump on ANY rate/alias change. */
-const COMMISSION_POLICY_VERSION = '2026-10-03.construction';
+const COMMISSION_POLICY_VERSION = '2026-10-03.marketing';
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
    SUBSCRIPTION PLAN ADJUSTMENTS — CAPABILITY SHIPPED, POLICY OFF
@@ -287,7 +301,7 @@ const PLAN_ADJUSTMENTS_DOC = 'plan_adjustments';   /* revenueConfig/plan_adjustm
    must never move these rates — not the provider ladder, and not a seller-plan discount (features.commission_discount_pct
    / revenueConfig/plan_adjustments) if that rollout is ever switched on. finos-utils skips the plan step for them and
    records planSkipped 'flat_booking_rate'. */
-const FLAT_BOOKING_CATEGORIES = Object.freeze(['services', 'home_services', 'car_rental', 'healthcare', 'entertainment_bookings', 'fitness', 'education', 'sports_venue_bookings', 'sports_coaching']);   /* sports bookings: owner 2026-10-03 */   /* education: owner 2026-10-03, flat 5% */
+const FLAT_BOOKING_CATEGORIES = Object.freeze(['services', 'home_services', 'car_rental', 'healthcare', 'entertainment_bookings', 'fitness', 'education', 'sports_venue_bookings', 'sports_coaching', 'marketing_services']);   /* marketing: owner 2026-10-03 */   /* sports bookings: owner 2026-10-03 */   /* education: owner 2026-10-03, flat 5% */
 function isFlatBookingCategory(key) {
   const r = resolveRate(key);
   return r.matched === true && FLAT_BOOKING_CATEGORIES.indexOf(r.category) !== -1;
@@ -424,7 +438,7 @@ const FIXED_RATE_FLOOR_EXEMPT = Object.freeze(['fitness', 'b2b_order', 'jobs', '
 
 /* UNPRICED products (owner 2026-10-03): they exist so nothing falls to the default, but they are OFF until the owner sets a
    price. finos-utils.calculateCommission REFUSES them (code 'category_unpriced') — a payment for one must not proceed. */
-const UNPRICED_CATEGORIES = Object.freeze(['construction_equipment_rental', 'construction_featured', 'construction_delivery_margin']);
+const UNPRICED_CATEGORIES = Object.freeze(['construction_featured', 'construction_delivery_margin', 'construction_project_fee']);   /* rental priced 10% 2026-10-03; featured refused until a fulfilling product exists */
 function isUnpricedCategory(key) {
   const r = resolveRate(key);
   return r.matched === true && UNPRICED_CATEGORIES.indexOf(r.category) !== -1;

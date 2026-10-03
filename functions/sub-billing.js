@@ -58,6 +58,25 @@ const PLANS = {
   electronics_enterprise: { id:'electronics_enterprise', hubType:'electronics', tier:'enterprise', name:'Electronics Enterprise', price:{monthly:749900, annual:7499000 }, trial:{days:30}, grace:{days:7}, isActive:true,
     features:{ listings_limit:-1,  photos_per_listing:20, featured_listings:-1,analytics:true,  bulk_import:true,  priority_support:true,  ai_assistant:true,  team_members:-1,storage_gb:100,badge_verified:true, api_access:true, custom_domain:true, dedicated_account_manager:true }},
 
+  /* ── CONSTRUCTION PROVIDERS (owner 2026-10-03, via sokoni-f3): Free / Professional KES 1,499 / Business KES 4,999, monthly.
+     Owner: "starting values, all Super-Admin configurable" — the numeric limits below are STARTING values, editable through
+     adminSubUpdatePlan (subscriptionPlans/{id} overrides); the owner described tiers, not numbers. ── */
+  construction_free:        { id:'construction_free', hubType:'construction', tier:'free', name:'Construction Free', price:{monthly:0, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{storefronts:1,services_limit:5,portfolio_limit:5,leads:true,messaging:true,quotations:false,crm:false,analytics:false,invoicing:false,team_seats:1,projects:false,rfqs:false,project_management:false,marketing_tools:false,priority_support:false} },
+  construction_professional:{ id:'construction_professional', hubType:'construction', tier:'professional', name:'Construction Professional', price:{monthly:149900, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{storefronts:1,services_limit:25,portfolio_limit:50,leads:true,messaging:true,quotations:true,crm:true,analytics:true,invoicing:true,team_seats:1,projects:false,rfqs:false,project_management:false,marketing_tools:false,priority_support:false} },
+  construction_business:    { id:'construction_business', hubType:'construction', tier:'business', name:'Construction Business', price:{monthly:499900, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{storefronts:1,services_limit:-1,portfolio_limit:-1,leads:true,messaging:true,quotations:true,crm:true,analytics:true,invoicing:true,team_seats:10,projects:true,rfqs:true,project_management:true,marketing_tools:true,priority_support:true} },
+
+  /* ── MARKETING PROVIDERS (owner 2026-10-03, via sokoni-b2): Free / Professional KES 1,499 / Agency KES 4,999, monthly.
+     Limits are STARTING values, configurable (adminSubUpdatePlan). Keys agreed with b2. ── */
+  marketing_free:           { id:'marketing_free', hubType:'marketing', tier:'free', name:'Marketing Free', price:{monthly:0, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{services_limit:3,portfolio_limit:5,team_seats:1,campaigns_limit:0,advanced_leads:false,quotations:false,invoicing:false,campaign_tools:false,client_management:false,reporting:false} },
+  marketing_professional:   { id:'marketing_professional', hubType:'marketing', tier:'professional', name:'Marketing Professional', price:{monthly:149900, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{services_limit:15,portfolio_limit:30,team_seats:1,campaigns_limit:10,advanced_leads:true,quotations:true,invoicing:true,campaign_tools:true,client_management:false,reporting:false} },
+  marketing_agency:         { id:'marketing_agency', hubType:'marketing', tier:'agency', name:'Marketing Agency', price:{monthly:499900, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
+    features:{services_limit:-1,portfolio_limit:-1,team_seats:10,campaigns_limit:-1,advanced_leads:true,quotations:true,invoicing:true,campaign_tools:true,client_management:true,reporting:true} },
+
   /* ── SELLERS ── */
   seller_free:       { id:'seller_free',       hubType:'seller',       tier:'free',       name:'Seller Free',       price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ listings_limit:10,   photos_per_listing:3,  featured_listings:0, analytics:false, bulk_import:false, priority_support:false, ai_assistant:false, team_members:1, storage_gb:1,  badge_verified:false }},

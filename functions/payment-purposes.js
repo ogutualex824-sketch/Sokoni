@@ -284,7 +284,7 @@ const PURPOSES = {
       if (![0, 16].includes(vatRate) || Math.abs(kes(q.vatKES) - kes(sub * vatRate / 100)) > 0.01) fail('failed-precondition', 'The quote VAT is inconsistent. Ask the supplier to re-quote.');
       const total = kes(sub + kes(q.vatKES) + kes(q.deliveryFeeKES || 0));
       if (kes(q.totalKES) !== total || !(total >= 1)) fail('failed-precondition', 'The quote total is inconsistent. Ask the supplier to re-quote.');
-      const ALLOWED = ['building-materials', 'construction_service'];
+      const ALLOWED = ['building-materials', 'construction_service', 'equipment-rental'];   /* equipment-rental → construction_equipment_rental 10% */
       const cat = String(r.commissionCategory || '');
       if (!ALLOWED.includes(cat)) fail('failed-precondition', 'This quote has no commission category on record.');
       const bizId = String(q.supplierBusinessId || '');

@@ -908,3 +908,23 @@ No duplicate authority was found on the money side.
 - **One event → one fee:** `leadClaimWrite(t, db, {commercialEventId, hub, leadId, supplierBusinessId})` does `create()` of `leadClaims/{commercialEventId}` in the SAME transaction as the lead row. A contactRequest that becomes an RFQ reuses the same id, so a second fee is impossible.
 - **Month end:** each lead is billed at its snapshot or its hub price; one invoice per supplier-month whose description names each hub.
 - **Tests:** `scripts/test-lead-ledger-hubs.js` 7/0. lead-fee 24/0 and lead-recovery 21/0 are unchanged (backward compatible).
+
+## 24 · Construction + Marketing catalogue (owner prices 2026-10-03, via sokoni-f3 / sokoni-b2)
+
+**Construction:**
+- **Plans:** `construction_free` 0 · `construction_professional` KES 1,499 · `construction_business` KES 4,999 (monthly, hubType 'construction').
+- **Plan limits:** STARTING values, configurable through `adminSubUpdatePlan`. The owner described tiers, not numbers.
+- **Equipment rental:** 10% (`construction_equipment_rental`; aliases `equipment-rental` / `equipment_rental` / `plant-hire`). Priced, no longer refused.
+- **Refused (`category_unpriced`):**
+  - `construction_featured`: until a FULFILLING product exists. Charging with no fulfilment is the generic-boost defect; prices 500/week, premium 1,500/week, 4,000/month are recorded for that product.
+  - `construction_delivery_margin`: the owner kept it disabled.
+  - `construction_project_fee` 1.5%: configured, GATED until a SOKONI-managed milestone/escrow purpose exists AND the owner re-confirms the conflict with "no % of contract value".
+- **`rfq_quote`:** also accepts the server-stamped `equipment-rental`.
+
+**Marketing:**
+- **Rate:** `marketing_services` 10%, a FLAT booking lane. All 71 ids of `shared/marketing-taxonomy.js` alias to it; the aliases are generated from the taxonomy (byte-identical with b2's d5d81d6) and none collides.
+- **Plans:** `marketing_free` 0 · `marketing_professional` 1,499 · `marketing_agency` 4,999 (monthly). Keys: services_limit, portfolio_limit, team_seats, campaigns_limit, advanced_leads, quotations, invoicing, campaign_tools, client_management, reporting (starting values, configurable).
+- **Still to build:** per-booking marketing eligibility at settlement (charge `marketing_services` only when the booked service's taxonomy id ∈ `provider.marketingCategories` AND `marketingStatus 'active'`; otherwise refuse).
+- **Lead / campaign / project fees:** unpriced.
+
+**Tests:** marketing-commercial 5/0, construction-commercial 8/0, rfq-quote-purpose 7/0, schedule 34/0. Commission sweep green; commercial-facts 3b already failed on base.

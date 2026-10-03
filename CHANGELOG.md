@@ -1,3 +1,7 @@
+## 2026-10-03 — Construction + Marketing catalogue: plans, rental 10%, marketing 10% over the one taxonomy, gated project fee (NOT deployed)
+
+- **Tests:** test-marketing-commercial 5/0, test-construction-commercial 8/0, test-rfq-quote-purpose 7/0.
+
 ## 2026-10-03 — rfq_quote payment purpose (accepted RFQ quote → normal order; createPaymentIntent half) (NOT deployed)
 
 - **Change:** priced only from rfqs/{id}.acceptedQuote; one live intent per (rfq, quote version); server-stamped commissionCategory; VAT as declared; self-settling (5b's webhook holds + creates the order).

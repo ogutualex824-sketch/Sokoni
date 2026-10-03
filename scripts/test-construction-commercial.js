@@ -34,10 +34,13 @@ const db = { collection: (n) => ({ doc: (id) => ({ async get () { const d = ovDo
   const c = await FU.calculateCommission(db, { orderAmountCents: 10000000, category: 'welding', sellerId: 'S1' });
   ck('K3 real engine: KES 100,000 welding contract → 0 commission despite 12% / 9% overrides (no % of contract value)', c.commissionCents === 0, { cents: c.commissionCents, rate: c.effectiveRate });
   const refusedCodes = [];
-  for (const k of ['equipment-rental', 'plant-hire', 'construction_featured', 'construction_delivery_margin']) {
+  for (const k of ['construction_featured', 'construction_delivery_margin', 'construction_project_fee']) {
     try { await FU.calculateCommission(db, { orderAmountCents: 500000, category: k, sellerId: 'S1' }); refusedCodes.push('PRICED:' + k); } catch (e) { refusedCodes.push(e.code); }
   }
-  ck('K4 equipment rental / featured / delivery margin are REFUSED (category_unpriced), never 0% or default', refusedCodes.every((x) => x === 'category_unpriced'), refusedCodes);
+  ck('K4 featured / delivery margin / project fee are REFUSED (category_unpriced), never 0% or default', refusedCodes.every((x) => x === 'category_unpriced'), refusedCodes);
+  const rent = await FU.calculateCommission(db, { orderAmountCents: 1000000, category: 'plant-hire', sellerId: 'S9' });
+  ck('K7 equipment rental is now priced at 10% (owner Super Admin update): KES 10,000 → KES 1,000', rent.commissionCents === 100000 && rent.effectiveRate === 10, { cents: rent.commissionCents });
+  ck('K8 the 1.5% project fee is CONFIGURED (row 1.5%) but GATED (refused) — it can never touch construction_service', CC.resolveRate('construction_project_fee').pct === 1.5 && CC.isUnpricedCategory('construction_project_fee') && !CC.isUnpricedCategory('construction_service'));
   ck('K5 no bare service / job / architect alias; services 5%, jobs 0% unchanged', !CC.resolveRate('architect').matched && !CC.resolveRate('service').matched && !CC.resolveRate('job').matched && CC.resolveRate('services').pct === 5 && CC.resolveRate('jobs').pct === 0);
   const m = await FU.calculateCommission(db, { orderAmountCents: 1000000, category: 'cement', sellerId: 'S2' });
   ck('K6 real engine: KES 10,000 cement → KES 1,500 (15%)', m.commissionCents === 150000 && m.effectiveRate === 15, { cents: m.commissionCents, rate: m.effectiveRate });
