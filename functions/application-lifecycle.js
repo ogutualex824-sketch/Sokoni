@@ -191,6 +191,67 @@ function splitLocation(raw) {
    lane: when the role resolved to `provider` and that category is a merchant-v2 category (the seller categories +
    restaurant), the role is `seller`. Only `provider` is ever re-filed; every other declared role stands. Recorded as
    `<by>+category` so a reviewer sees that the category, not the declaration, decided it. */
+/* ══ EDUCATION E1 (owner decisions 2026-10-03) — four applicant types through the ONE application framework ═════════
+   The type is decided HERE from the intake category id, never from a client-sent field:
+     · teacher      — an individual tutor / private teacher ('tutor');
+     · institution  — a school, college, training centre or e-learning business ('school', 'online-course');
+     · enterprise   — a COMPANY BUYING TRAINING for its staff ('education-enterprise'). It is a verified BUYER: it gets
+                      an educationEnterprises/{uid} record and NO provider listing, NO account role, NO claim;
+     · learner      — NOT an application: an instant self-service profile (owner decision), never routed here.
+   Teacher and institution approvals provision a provider exactly as before (education dashboards are E2) and stamp
+   the type on the application and the provider record. An approval is REFUSED until the documents the type requires
+   are declared (AdminOS verifies them): applicationDecide refuses up front, and applyDecision refuses again for any
+   other path, provisioning nothing either way. "Request info" is the change-request path. */
+const EDUCATION_TYPES = Object.freeze({
+  tutor: 'teacher', school: 'institution', 'online-course': 'institution', 'education-enterprise': 'enterprise',
+});
+const EDUCATION_REQUIRED = Object.freeze({
+  teacher:     [['subjects', 'Subjects you teach']],
+  institution: [['registrationNo', 'Registration / accreditation number']],
+  enterprise:  [['companyRegNo', 'Company registration number'], ['kraPin', 'KRA PIN']],
+});
+const KRA_PIN = /^[AP]\d{9}[A-Z]$/;
+function educationTypeOf(app) {
+  const id = String((app && app.category) || '').trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(EDUCATION_TYPES, id) ? EDUCATION_TYPES[id] : null;
+}
+/* → the labels of what an approval still needs (empty = complete). Reads applications/{id}.details only. */
+function educationMissing(app, type) {
+  const d = app && app.details && typeof app.details === 'object' ? app.details : {};
+  const miss = [];
+  for (const [k, label] of EDUCATION_REQUIRED[type] || []) if (!String(d[k] || '').trim()) miss.push(label);
+  if (type === 'enterprise' && String(d.kraPin || '').trim() && !KRA_PIN.test(String(d.kraPin).trim().toUpperCase())) {
+    miss.push('A valid KRA PIN (11 characters, e.g. P051234567X)');
+  }
+  return miss;
+}
+/* The verified enterprise BUYER. Server-only collection; idempotent (re-approval converges on one document). */
+async function projectEducationEnterprise(db, app, uid, approved) {
+  const ref = db.collection('educationEnterprises').doc(uid);
+  if (!approved) {
+    await ref.set({ ownerUid: uid, status: 'inactive', approved: false, updatedAt: _ts() }, { merge: true });
+    return { collection: 'educationEnterprises', id: uid, action: 'retracted' };
+  }
+  const d = app.details && typeof app.details === 'object' ? app.details : {};
+  const snap = await ref.get();
+  await ref.set({
+    ownerUid: uid,
+    companyName: _san(app.name || app.businessName || '', 140),
+    companyRegNo: _san(d.companyRegNo || '', 40),
+    kraPin: _san(String(d.kraPin || '').trim().toUpperCase(), 11),
+    staffSeats: Number.isFinite(Number(d.staffSeats)) ? Math.max(0, Math.floor(Number(d.staffSeats))) : null,
+    trainingNeeds: _sanText(d.trainingNeeds || '', 300),
+    phone: app.phoneNumber || app.phone || null,
+    location: _san(app.location || '', 120),
+    status: 'active', approved: true, approvedAt: _ts(),
+    sourceCollection: 'applications', sourceId: app.applicationId || null,
+    _noIndex: true,
+    updatedAt: _ts(),
+    ...(snap.exists ? {} : { createdAt: _ts() }),
+  }, { merge: true });
+  return { collection: 'educationEnterprises', id: uid, action: snap.exists ? 'updated' : 'created' };
+}
+
 const MERCHANT_CATEGORIES = Object.freeze(['restaurant']);
 function _merchantCategoryOf(app) {
   const BCAT = require('./business-category');
@@ -1142,9 +1203,13 @@ async function applyDecision(appId, app, opts = {}) {
   const _resolved = resolveRole(app);
   /* A category-decided seller (Gate 1) also outranks a stored `app.role`: applications already in the queue were
      stamped `provider` at intake, before this rule existed, and must be decided by it. */
-  const role = _resolved.by === 'explicit' || _resolved.by === 'explicit-alias' || /\+category$/.test(_resolved.by)
-    ? _resolved.role
-    : (app.role || _resolved.role);
+  const eduType = educationTypeOf(app);
+  /* EDUCATION E1: an education application's role comes from its TYPE — teacher / institution are providers; an
+     enterprise is a buyer record with no account role. A declared requestedRole cannot move it elsewhere. */
+  const role = eduType ? (eduType === 'enterprise' ? 'education_enterprise' : 'provider')
+    : _resolved.by === 'explicit' || _resolved.by === 'explicit-alias' || /\+category$/.test(_resolved.by)
+      ? _resolved.role
+      : (app.role || _resolved.role);
   const uid = app.uid;
 
   if (!uid) {
@@ -1191,10 +1256,28 @@ async function applyDecision(appId, app, opts = {}) {
     return { ok: false, reason: 'unknown_role', appId, requestedRole: bad };
   }
 
+  if (eduType && approved) {
+    const missing = educationMissing(app, eduType);
+    if (missing.length) {
+      await db.collection('applications').doc(appId).set({
+        educationType: eduType,
+        projectionStatus: 'blocked_incomplete',
+        projectionError: 'Approval needs: ' + missing.join('; ') + '. Nothing was provisioned — request the information instead.',
+        missing,
+        decisionAppliedFor: status,
+        decisionAppliedAt: _ts(),
+      }, { merge: true });
+      logger.warn('[appLifecycle] education approval incomplete — nothing provisioned', { appId, eduType, missing });
+      return { ok: false, reason: 'incomplete', appId, educationType: eduType, missing };
+    }
+  }
+
   const receipt = { appId, uid, role, status, writes: [] };
 
   try {
-    if (role === 'driver' || role === 'rider') {
+    if (role === 'education_enterprise') {
+      receipt.writes.push(await projectEducationEnterprise(db, app, uid, approved));
+    } else if (role === 'driver' || role === 'rider') {
       /* Both spellings reach the same projection: `rider` is the Phase 1
          declaration, `driver` the legacy application's word. */
       receipt.writes.push(await projectDriver(db, app, uid, approved));
@@ -1218,8 +1301,17 @@ async function applyDecision(appId, app, opts = {}) {
       receipt.writes.push(await projectProvider(db, app, uid, approved));
     }
 
-    /* A pending application must not grant anything; only a decision does. */
-    if (status === 'approved' || status === 'rejected' || status === 'suspended') {
+    /* EDUCATION E1: a teacher / institution provider record carries its type (the E2 dashboards read it). */
+    if (eduType && eduType !== 'enterprise') {
+      for (const w of receipt.writes) {
+        if (w && w.collection === 'providers' && w.id) {
+          await db.collection('providers').doc(String(w.id)).set({ education: { type: eduType, setAt: _ts() } }, { merge: true });
+        }
+      }
+    }
+
+    /* A pending application must not grant anything; only a decision does. An enterprise BUYER gets no account role. */
+    if (role !== 'education_enterprise' && (status === 'approved' || status === 'rejected' || status === 'suspended')) {
       receipt.roleKey = await grantAccountRole(db, uid, role, approved);
     }
 
@@ -1233,7 +1325,8 @@ async function applyDecision(appId, app, opts = {}) {
       /* The role this decision APPLIED, stamped on the application: the workspace authority judges the approval by
          `app.role` (approval-remediation.decisionValidity), so an application filed `provider` at intake and decided
          as a seller (Gate 1) must say so, or its own approval reads as approving another role. */
-      ...(role && app.role !== role ? { role, roleResolvedBy: _resolved.by } : {}),
+      ...(role && app.role !== role ? { role, roleResolvedBy: eduType ? 'education:' + eduType : _resolved.by } : {}),
+      ...(eduType ? { educationType: eduType, missing: FieldValue.delete() } : {}),
       ...(opts.decidedBy ? { decidedBy: opts.decidedBy } : {}),
     }, { merge: true });
 
@@ -1288,7 +1381,11 @@ async function applyDecision(appId, app, opts = {}) {
           title: 'You are approved on SOKONI',
           /* Approval provisions a seller; it does not publish one (Gate 1 — approved ≠ discoverable). The message
              says what is true, not that customers can already find a shop. */
-          body: role === 'driver'
+          body: role === 'education_enterprise'
+            ? `${app.name || 'Your organisation'} is verified on SOKONI Education. You can now arrange training for your staff.`
+            : eduType
+              ? `${app.name || 'Your application'} is approved on SOKONI Education. Your workspace is ready — set it up before learners can find you.`
+              : role === 'driver'
             ? 'Your rider application is approved. Open the SOKONI driver app and go online to start receiving deliveries.'
             : (role === 'seller' || role === 'merchant')
               ? `${app.name || 'Your business'} is approved on SOKONI. Your business workspace is ready — set it up before customers can find you.`
@@ -1497,6 +1594,17 @@ exports.applicationDecide = onCall(
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'Application not found.');
 
+    /* EDUCATION E1: approving an education application that lacks the documents its type requires is refused before
+       anything is written — the reviewer uses "request info" instead. */
+    if (decision === 'approve') {
+      const eduType = educationTypeOf(snap.data());
+      const missing = eduType ? educationMissing(snap.data(), eduType) : [];
+      if (missing.length) {
+        throw new HttpsError('failed-precondition', 'This application cannot be approved yet. Missing: ' + missing.join('; ') + '.',
+          { reason: 'EDUCATION_APPLICATION_INCOMPLETE', educationType: eduType, missing });
+      }
+    }
+
     const STATUS = { approve: 'approved', reject: 'rejected', suspend: 'suspended', request_info: 'info_requested' };
     const status = STATUS[decision];
     const actor = req.auth.uid;
@@ -1659,4 +1767,5 @@ exports._internal = {
   buildIntakePatch, applyDecision, projectProvider, projectDriver,
   projectLegal, projectRoleProfile, LEGAL_SPECS, ROLE_PROFILES, DELEGATED_ROLES, projectSeller, MERCHANT_CATEGORIES,
   INTAKE_VERSION, KE_COUNTIES,
+  EDUCATION_TYPES, EDUCATION_REQUIRED, educationTypeOf, educationMissing, projectEducationEnterprise,
 };
