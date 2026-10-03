@@ -1,3 +1,55 @@
+## 2026-10-04 — Users security release: ONE account-lock contract (suspension · ban · 14-day auto-expiry), ONE role authority (live Authority Core), reconciliation deploy guard (NOT deployed)
+
+- **Owner rulings (relayed by b2, 10-04):**
+  - a ban stays distinct from a suspension, with the same Auth lockout, and is never timed;
+  - every suspension lasts 14 days (server-fixed), then is auto-reinstated through the same contract;
+  - a reason is mandatory server-side;
+  - audit visibility: auditLog + trustSafetyAudit;
+  - setUserRole carries the live Authority Core line for line;
+  - a mechanical deploy guard;
+  - the release order is fixed.
+- **Blockers closed** (from b2's live comparison):
+  - **setUserRole** — rebuilt from the SERVING archive (setUserRole-1788256990847659). authority-control-events.js is byte-identical to live. The remaining diff is (a) the named handler, (b) the reason in the audit, (c) the actor account-state check, plus the suspendUser wrapper.
+  - **suspendUser** — writes the live auditLog entry (severity high) again.
+  - **tsBanUser** — trustSafetyAudit written again; reason mandatory again; ban distinct.
+- **Found and fixed:**
+  - **adminUpdateUserRole** (AdminOS role path, LIVE) overwrote the claims with `{[role]: true, ...additional}` — every unrelated claim destroyed, permsVersion dropped, superAdmin without admin. It now delegates to the same Authority Core; additionalClaims is refused. AdminOS role changes call setUserRole.
+  - **tsReviewReport banUser** (LIVE) wrote `status:'banned'` directly, with no Auth lockout and no records. It now goes through the contract, and BEFORE the report closes.
+  - **Lift ordering:** Auth was re-enabled before the exactly-once claim, and any claim error was read as "already lifted". Now the claim runs first, only ALREADY_EXISTS means "lost the race", and anything else aborts before Auth.
+- **Files:**
+  - server: functions/shared/account-suspension.js, functions/account-suspension-expiry.js (new: expireSuspensions, hourly), functions/authority-control-events.js (new, verbatim live), functions/super-admin.js, functions/trust-safety.js, functions/admin-os.js, functions/index.js;
+  - UI: sokoni-admin-users.js, sokoni-aos.js, super-admin.html, trust-safety.html;
+  - config and guard: firestore.indexes.json, firebase.json (+1 line: guard first), deploy-scope.json (new), scripts/deploy/guard-tree-scope.js and deploy-scoped.js (new);
+  - docs: docs/ACCOUNT_LOCK_AND_ROLE_AUTHORITY.md (new);
+  - tests: scripts/test-account-suspension.js, test-suspension-expiry.js (new), test-set-user-role.js (new), test-deploy-reconciliation-guard.js (new), test-admin-users-workspace.js.
+- **Database:**
+  - users gain `suspendedUntil` (suspension only) and `banReason` / `bannedBy` / `bannedAt` (ban);
+  - new collections `suspensionLifts` (exactly-once lift claims) and `suspensionExpiryFlags` (fail-closed flags);
+  - every lock record carries `eventId` + `resultingState`;
+  - new index users(status ASC, suspendedUntil ASC).
+- **API:**
+  - suspendUser accepts `kind` ('suspend' | 'ban') and refuses `durationDays`; a reason is required to lift too; it returns `success`, `eventId` and `resultingState`;
+  - tsBanUser gains the `unban` action; `restore` no longer lifts a ban;
+  - adminUpdateUserRole refuses `additionalClaims`;
+  - new scheduled function expireSuspensions.
+- **Breaking:**
+  - lifting now requires a reason (both UIs prompt for one);
+  - the Trust & Safety duration field is removed;
+  - existing suspensions without `suspendedUntil` are never auto-lifted (they are flagged instead).
+- **Tests:**
+  - test-account-suspension 22/0 (9/9 mutants killed);
+  - test-suspension-expiry 9/0 (6/6, including concurrent runs → one lift);
+  - test-set-user-role 9/0 (7/7);
+  - test-deploy-reconciliation-guard 10/0 (3/3);
+  - test-admin-users-workspace 14/0;
+  - tier2 147/0.
+- **NOT yet evidence:**
+  - the rules emulator suites and deliberate breaks (f3, memory-gated);
+  - browser E2E at ≥700 MB;
+  - the production census of legacy banned accounts;
+  - the live comparison for tsReviewReport and expireSuspensions.
+  Nothing is deployed. The guard refuses every function in this unit until b2 records the reconciliation for the exact commit.
+
 ## 2026-10-04 — Users workspace: two LIVE-ONLY behaviours restored in functions/admin-os.js (b2 live comparison BLOCKER) (NOT deployed)
 
 - **Summary:** In 82dd1d0, my adminGetUser rewrite dropped two live behaviours. The live comparison (b2) found both. (1) The AdminOS Authority Core pilot (`_adminCapabilityAllows` + `exports._adminCapabilityAllows` + the `audit.read` check in adminGetAuditLogs) is restored VERBATIM from the live adminOsDispatch archive. An explicit `adminPermissions/{uid}.capabilities.audit.read === false` again DENIES audit logs. Without the fix, deploying would have re-granted audit-log access to every admin whose access was revoked. (2) adminGetUser again reads `wallets/{uid}` and returns `wallet`.

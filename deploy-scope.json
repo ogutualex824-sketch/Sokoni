@@ -1,0 +1,7 @@
+{
+  "tree": "hosting/adminos-receipts-on-72dca56",
+  "allow": ["adminOsDispatch", "setUserRole", "suspendUser", "tsBanUser", "tsReviewReport", "expireSuspensions"],
+  "reconciliationRequired": ["adminOsDispatch", "setUserRole", "suspendUser", "tsBanUser", "tsReviewReport", "expireSuspensions"],
+  "reconciled": {},
+  "why": "Users security release (owner 2026-10-04). Each function's live generation differs from this tree by reviewed, intended changes only; a function ships ONLY after b2's live-vs-candidate comparison is recorded here for the exact candidate commit. expireSuspensions is NEW (no live generation): record live as \"none (new function)\" once its closure is compared. Release order: f3 rules → rules emulator + deliberate breaks → live comparison → deploy rules → verify → deploy server → verify → hosting → smoke."
+}
