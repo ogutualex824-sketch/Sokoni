@@ -115,6 +115,7 @@
       refunded:  'Refunded'
     };
     var CLOSED = { cancelled:1, declined:1, no_show:1, expired:1 };
+    var CANCELLABLE = { pending:1, requested:1, confirmed:1 };   /* not started; the server re-checks */
 
     function groupOf(b){
       var st = b.status || '';
@@ -181,6 +182,16 @@
       var acts = '';
       if (!CLOSED[b.status]) acts += '<a class="bk-btn" href="chat.html?tx=service_booking&amp;txId=' + encodeURIComponent(b.id) + '">&#128172; Message provider</a>';
       if (b.status === 'completed') acts += '<button class="bk-btn pri" data-act="review" data-id="' + esc(b.id) + '">&#11088; Review</button>';
+      /* Owner 2026-10-03 refund/dispute rules:
+         · before the service starts → cancel through the booking authority (providerCancelBooking); the server applies the
+           booking's cancellation policy and moves held money (_disburseHeldFunds). This page states no refund amount.
+         · provider-affected booking (resolution ACTION_REQUIRED) → full refund through customerRequestRefund.
+         · in progress / completed → never an automatic refund: a reviewed request (support ticket with the booking ref).
+           createDispute accepts ORDERS only today, so a booking dispute is a server gap — not imitated here. */
+      var res = b.resolution && b.resolution.status;
+      if (res === 'ACTION_REQUIRED' && b.paymentStatus === 'paid_held') acts += '<button class="bk-btn" data-act="affected-refund" data-id="' + esc(b.id) + '">&#8617; Get a full refund</button>';
+      else if (CANCELLABLE[b.status] && !S.busy['c' + b.id]) acts += '<button class="bk-btn" data-act="cancel" data-id="' + esc(b.id) + '">Cancel booking</button>';
+      if (b.status === 'in_progress' || b.status === 'completed') acts += '<a class="bk-btn" href="support.html?topic=booking&amp;ref=' + encodeURIComponent(b.id) + '&amp;desc=' + encodeURIComponent('Problem with SOKONI booking ' + b.id + ': ') + '">&#9888; Report a problem</a>';
       if (b.providerId) acts += '<a class="bk-btn" href="provider-profile.html?id=' + encodeURIComponent(b.providerId) + '">View provider</a>';
       return '<article class="bk-card" data-booking="' + esc(b.id) + '">' +
         '<div class="bk-head"><div><div class="bk-svc">' + esc(b.service || 'Service booking') + '</div>' +
@@ -234,6 +245,20 @@
         else S.pins[id] = { unavailable: pinErr(e) };
       }).then(function () { S.busy[id] = false; render(); });
     }
+    /* Server ops on providerDispatch. Success copy only after the server answered; the booking's own snapshot then
+       re-renders the real status/paymentStatus (nothing is set locally). */
+    function askOp(id, op, okMsg){
+      if (S.busy['c' + id]) return;
+      S.busy['c' + id] = true; render();
+      window.firebase.functions().httpsCallable('providerDispatch')({ op: op, bookingId: id }).then(function (r) {
+        var d = r && r.data || {};
+        toast(d.inProgress ? 'Already in progress — this updates automatically.' : d.alreadyDone ? 'This booking was already closed.' : okMsg);
+      }).catch(function (e) {
+        var code = String((e && e.code) || '').replace(/^functions\//, '');
+        toast(code === 'not-found' || code === 'unavailable' || code === 'internal' ? 'This is not available right now — your booking has not changed. Try again later or contact Support.'
+          : (code === 'failed-precondition' || code === 'permission-denied') && e.message ? e.message : 'Could not complete that — your booking has not changed.');
+      }).then(function () { S.busy['c' + id] = false; render(); });
+    }
     function toast(m){ var t = document.getElementById('bkMsg'); if (!t) return; t.textContent = m; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(function () { t.hidden = true; }, 5000); }
 
     list.addEventListener('click', function (e) {
@@ -243,6 +268,14 @@
       if (act === 'pin') askPin(id, 'getMyBookingPin');
       else if (act === 'pin-renew') askPin(id, 'renewBookingPin');
       else if (act === 'pin-hide') { delete S.pins[id]; render(); }
+      else if (act === 'cancel') {
+        if (!confirm('Cancel this booking?\n\nAny refund follows this booking\'s cancellation policy and is decided by SOKONI — you will see the outcome here.')) return;
+        askOp(id, 'providerCancelBooking', 'Booking cancelled. Any refund follows the cancellation policy and appears under Payment.');
+      }
+      else if (act === 'affected-refund') {
+        if (!confirm('The provider cannot keep this booking. Cancel it and get a full refund?')) return;
+        askOp(id, 'customerRequestRefund', 'Refund started — the booking is cancelled and your payment is being returned.');
+      }
       else if (act === 'review') {
         if (window.SokoniBookService && typeof window.SokoniBookService.review === 'function') window.SokoniBookService.review({ bookingId: id });
         else toast('Reviews are loading — try again in a moment.');

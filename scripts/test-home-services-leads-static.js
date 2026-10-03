@@ -51,10 +51,19 @@ ck('M2 …and falls back to the booking\'s stored price, nothing else', /return 
 ck('M3 no fee / commission arithmetic in the page (no 0.05, 1.05, 5%, rate ×)', !/0\.05|1\.05|\*\s*rate|commissionRate\s*\*|5\s*%/.test(bk));
 ck('M4 the card renders total(b) for "Booking total"', /Booking total<\/span><span class="v">' \+ total\(b\)/.test(BK));
 
+console.log('\n── R: refunds / cancellation (owner 2026-10-03) ──');
+ck('R1 Cancel goes to the booking authority providerDispatch providerCancelBooking (server applies the policy)', /askOp\(id, 'providerCancelBooking'/.test(BK) && /httpsCallable\('providerDispatch'\)\(\{ op: op, bookingId: id \}\)/.test(BK));
+ck('R2 Cancel is offered only before the service starts (pending / requested / confirmed)', /var CANCELLABLE = \{ pending:1, requested:1, confirmed:1 \}/.test(BK));
+ck('R3 provider-affected booking → customerRequestRefund (full refund, server-decided)', /askOp\(id, 'customerRequestRefund'/.test(BK) && /res === 'ACTION_REQUIRED' && b\.paymentStatus === 'paid_held'/.test(BK));
+ck('R4 in progress / completed → a reviewed request (support ticket with the booking ref), never an automatic refund', /b\.status === 'in_progress' \|\| b\.status === 'completed'\) acts \+= '<a class="bk-btn" href="support\.html\?topic=booking&amp;ref='/.test(BK));
+ck('R5 the page never writes refunded / cancelled / a refund amount itself', !/paymentStatus\s*[:=]\s*'refunded'|status\s*[:=]\s*'cancelled'|refundCents\s*[:=]/.test(bk));
+ck('R6 no createDispute call with a booking (orders only today — a booking dispute is a server gap, not imitated)', !/createDispute/.test(bk));
+ck('R7 success copy only after the server answered (inside .then of the callable)', /\.then\(function \(r\) \{\s*var d = r && r\.data \|\| \{\};\s*toast\(/.test(BK));
+
 console.log('\n── Z: negative controls ──');
-const parent = (f) => cp.execSync('git show HEAD:' + f, { cwd: ROOT, encoding: 'utf8' });
+const parent = (f) => cp.execSync('git show 56c173d:' + f, { cwd: ROOT, encoding: 'utf8' });
 let PH = ''; try { PH = parent('home-services.html'); } catch (e) {}
-ck('Z1 the parent really wrote homeServiceQuotes through _hsFireWrite (W1/W2 are not vacuous)', /_hsFireWrite\('homeServiceQuotes'/.test(PH));
-ck('Z2 the parent really collected a phone for quotes (W4 is not vacuous)', /id="qtPhone"/.test(PH));
+ck('Z1 the pre-convergence merge 56c173d really wrote homeServiceQuotes through _hsFireWrite (W1/W2 are not vacuous)', /_hsFireWrite\('homeServiceQuotes'/.test(PH));
+ck('Z2 56c173d really collected a phone for quotes (W4 is not vacuous)', /id="qtPhone"/.test(PH));
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

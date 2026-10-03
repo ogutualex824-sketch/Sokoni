@@ -138,8 +138,8 @@ const HUBS = [
     ck('F6 both pages still self-update (sw-register.js)', [PL, CL].every((x) => /sw-register\.js/.test(x)));
 
     console.log('\n── Z: negative controls ──');
-    ck('Z1 the git parent of plumbing.html really had the fabricated plumbers F1 rejects', /PipePro/.test(require('child_process').execSync('git show HEAD:plumbing.html', { cwd: ROOT, encoding: 'utf8' })));
-    ck('Z2 the git parent of cleaning.html really wrote homeServiceBookings (F4 is not vacuous)', /homeServiceBookings/.test(require('child_process').execSync('git show HEAD:cleaning.html', { cwd: ROOT, encoding: 'utf8' })));
+    ck('Z1 f799841 plumbing.html really had the fabricated plumbers F1 rejects', /PipePro/.test(require('child_process').execSync('git show f799841:plumbing.html', { cwd: ROOT, encoding: 'utf8' })));
+    ck('Z2 f799841 cleaning.html really wrote homeServiceBookings (F4 is not vacuous)', /addDoc\(collection\(getFirestore\(_a\),'homeServiceBookings'\)/.test(require('child_process').execSync('git show f799841:cleaning.html', { cwd: ROOT, encoding: 'utf8' })));
   } finally { await browser.close(); srv.close(); }
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

@@ -95,3 +95,17 @@ Branch `hosting/home-services-leads-on-a7a00e7`: my `9b48b06` merged with sokoni
 Tests: `test-home-services-leads-static` 19/0. A mutation that adds 5% to the buyer's total fails M2 and M3. `test-secondary-firebase-apps` 9/0.
 
 **Deferred** (free memory 340–407 MB, below the 512 MB floor): the browser suites `test-bookings-browser`, `test-home-services-hubs-browser` and `test-compact-premium-cards` on this merged branch. They are **UNPROVEN on this branch** until they've been re-run.
+
+## Refunds, cancellation and disputes in My Bookings (owner rules, 2026-10-03)
+
+| Booking state | Buyer action | Server authority |
+|---|---|---|
+| pending / requested / confirmed (not started) | **Cancel booking** | `providerDispatch providerCancelBooking`. The server applies the booking's cancellation policy and moves held money through `_disburseHeldFunds`. The page states no refund amount and waits for the server's answer. |
+| provider-affected (`resolution.status = ACTION_REQUIRED`, paid_held) | **Get a full refund** | `providerDispatch customerRequestRefund` (booking resolution engine, full refund). |
+| in_progress / completed | **Report a problem** | Support ticket with the booking reference: a request a person reviews. Never an automatic refund. |
+
+**Server gaps** (5b / owner; not imitated in the UI):
+
+- `createDispute` accepts **orders only**, because it reads `orders/{id}`. There is no service-booking dispute yet, and nothing holds settlement while a dispute is open.
+- After settlement, a refund needs the canonical clawback through the ledger. That is not built for bookings.
+- When a booking is fully refunded before settlement, the 5% must not be recognised as revenue. 5b's settlement must enforce this.

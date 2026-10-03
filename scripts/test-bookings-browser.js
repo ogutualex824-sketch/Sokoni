@@ -188,6 +188,31 @@ const BASE = { signedIn: true, cols: { providerBookings: BOOKINGS }, docs: { 'pr
     ck('A6 my-bookings.html (the 404 the server notifications link to) → bookings.html, query kept', /\/bookings\.html\?b=bkDone$/.test(h.page.url()), h.page.url());
     await h.ctx.close();
 
+    console.log('\n── C: cancel / refund (owner 2026-10-03) ──');
+    h = await open(browser, base, { ...BASE, callable: { providerDispatch: "(d) => ({ success: true, status: 'cancelled' })" } });
+    h.page.on('dialog', (d) => d.accept());
+    ck('C1 an upcoming booking offers Cancel; the completed one does not', !!(await h.page.$('[data-act="cancel"][data-id="bkUp1"]')) && !(await h.page.$('[data-act="cancel"][data-id="bkDone"]')));
+    await h.page.click('[data-act="cancel"][data-id="bkUp1"]'); await h.page.waitForTimeout(150);
+    t = await T(h.page);
+    ck('C2 Cancel → providerDispatch {op:providerCancelBooking, bookingId} (server applies the policy)', t.calls.some((c) => c.name === 'providerDispatch' && c.data.op === 'providerCancelBooking' && c.data.bookingId === 'bkUp1'), t.calls);
+    ck('C3 the page states no refund amount and does not mark the booking cancelled itself', !/KES [\d,]+ refund/i.test(await txt(h.page, '#bkList')) && (await T(h.page)).cols.providerBookings.find((b) => b.id === 'bkUp1').status === 'confirmed');
+    await tab(h.page, 'completed');
+    ck('C4 completed booking: "Report a problem" → support ticket with the booking ref (a reviewed request), no Cancel', !!(await h.page.$('a[href^="support.html?topic=booking&ref=bkDone"]')) && !(await h.page.$('[data-act="cancel"]')));
+    await h.ctx.close();
+    const AFFECTED = BOOKINGS.map((b) => b.id === 'bkUp1' ? { ...b, resolution: { status: 'ACTION_REQUIRED' } } : b);
+    h = await open(browser, base, { ...BASE, cols: { providerBookings: AFFECTED }, callable: { providerDispatch: "() => ({ ok: true, status: 'CANCELLED' })" } });
+    h.page.on('dialog', (d) => d.accept());
+    ck('C5 provider-affected paid booking offers "Get a full refund" instead of Cancel', !!(await h.page.$('[data-act="affected-refund"][data-id="bkUp1"]')) && !(await h.page.$('[data-act="cancel"][data-id="bkUp1"]')));
+    await h.page.click('[data-act="affected-refund"]'); await h.page.waitForTimeout(150);
+    t = await T(h.page);
+    ck('C6 → providerDispatch {op:customerRequestRefund, bookingId}', t.calls.some((c) => c.name === 'providerDispatch' && c.data.op === 'customerRequestRefund' && c.data.bookingId === 'bkUp1'), t.calls);
+    await h.ctx.close();
+    h = await open(browser, base, BASE);   /* no providerDispatch stub → not-found */
+    h.page.on('dialog', (d) => d.accept());
+    await h.page.click('[data-act="cancel"][data-id="bkUp1"]'); await h.page.waitForTimeout(150);
+    ck('C7 cancel callable unavailable → "not available … your booking has not changed" (no false success)', /not available right now — your booking has not changed/.test(await txt(h.page, '#bkMsg')));
+    await h.ctx.close();
+
     console.log('\n── N: navigation + static ──');
     const SH = fs.readFileSync(path.join(ROOT, 'shared-header.js'), 'utf8');
     const PM = fs.readFileSync(path.join(ROOT, 'sokoni-profile-menu.js'), 'utf8');

@@ -8,7 +8,15 @@
 - **Files**: home-services.html, bookings.html, scripts/test-home-services-leads-static.js (19/0), scripts/test-secondary-firebase-apps.js (hs-write baseline removed; 9/0), docs/HOME_SERVICES_BOOKINGS.md.
 - **Database / API / rules changes**: none in this commit (the browser no longer writes homeServiceQuotes/homeServiceRequests).
 - **cleaning.html / plumbing.html**: 💬 now opens SokoniLeads.ask (a lead the provider can reply to and quote) instead of a bare pre-booking chat; it falls back to in-app chat when the lead module is absent, never WhatsApp. test-home-services-hubs-browser gains M1 (ask) and M2 (fallback); NOT yet run.
-- **Deferred**: browser suites below the 512 MB memory floor are UNPROVEN on this branch.
+- **bookings.html refunds/cancellation** (owner rules 10-03):
+  - before the service starts → Cancel = providerDispatch providerCancelBooking (the server applies the cancellation policy and moves held money);
+  - provider-affected booking → Get a full refund = customerRequestRefund;
+  - in progress / completed → Report a problem = support ticket with the booking ref (a reviewed request, never automatic).
+  - The page writes no refunded/cancelled state and states no refund amount. createDispute accepts ORDERS only, so a booking dispute is a SERVER GAP (5b).
+- **Tests**:
+  - test-bookings-browser 49/0 (C1–C7 new), run at 715 MB free.
+  - test-home-services-leads-static 26/0 (R1–R7 new; Z pinned to 56c173d). The R2 mutation (cancel allowed after completion) is caught.
+  - test-home-services-hubs-browser: 31 page rows PASS (incl. M1 ask / M2 fallback) in a run that started at 318 MB, BELOW the floor (procedural breach, noted). Its stale Z1/Z2 controls are now pinned to f799841 and pass statically. A full re-run at ≥512 MB is pending.
 
 ## [2026-10-03] - Home Services: My Bookings — the buyer's service bookings and booking PIN (bookings.html, NOT deployed)
 
