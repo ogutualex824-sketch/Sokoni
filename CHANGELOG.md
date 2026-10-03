@@ -1,3 +1,10 @@
+## 2026-10-03 — Membership settlement: held until first attendance, then monthly; refund only with zero attendance (NOT deployed)
+
+- **New:** functions/membership-settlement.js (membershipReleaseSweep, membershipRequestRefund, initialSettlementFields). One more trigger on the provider settlement, at the 5% fitness lane.
+- **Database:** providerMemberships/{id} settlement fields plus a releases/{index} claim; providerPayouts / wallets / walletTransactions rows (existing shapes).
+- **Rules:** none (server-only).
+- **Tests:** scripts/test-membership-settlement.js 23/0 (sabotage 5 FAIL).
+
 ## 2026-10-03 — Fitness bookings 5% per booking (owner decision; NOT deployed)
 
 - **Rate:** commission-config RATES.fitness 5%, now a fixed-rate category (bypasses the provider plan ladder and overrides) with no KES 10 floor.

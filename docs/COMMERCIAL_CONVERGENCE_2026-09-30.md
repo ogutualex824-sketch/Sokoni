@@ -409,3 +409,41 @@ Owner approval for Unit 3 (P0-4) · the four Gate B items (§9) · the `terms.ht
 **Tests:** `test-pos-fixed-rate-bypass.js` 27/0 (+F1–F4); sabotage (floor exemption removed) → F3 FAIL. `test-commission-schedule.js` 25/0.
 
 **Status:** NOT deployed. It ships with this branch's functions slice, together with every function that bundles commission-config / finos-utils.
+
+## 13 · Membership settlement — hold until first attendance, then monthly (owner, 2026-10-03)
+
+**Decisions (owner, 2026-10-03):**
+- Memberships and packages pay the same 5% as fitness bookings.
+- "IF ATTENDED_SESSIONS = 0 → membership may be refundable … IF ATTENDED_SESSIONS >= 1 → membership becomes NON-REFUNDABLE".
+- "VALID QR CHECK-IN → … NORMAL REFUND ELIGIBILITY LOCKED".
+- "DO NOT automatically calculate a proportional refund after the member attends".
+- "Attendance QR scanning is NOT a payment".
+- **Payout (owner's choice):**
+  - Hold everything until the first attendance.
+  - Then release every month already passed at once, and monthly after that.
+  - If the member never attended and the membership ended → the gym is settled at expiry.
+- Supersedes the earlier "unused part refunded on cancel" answer.
+
+**Authority:** `functions/membership-settlement.js` on `providerMemberships/{id}`.
+- It is one more trigger on the provider settlement: same engine, same `providerPayouts`, same wallet / `walletTransactions` shape.
+- Each month is claimed with `create()` at `providerMemberships/{id}/releases/{index}`.
+- `membershipReleaseSweep` runs daily at 06:00 Africa/Nairobi.
+- `membershipRequestRefund` (callable) is for the buyer or an admin.
+- `initialSettlementFields(m)` is for the payment webhook.
+- It READS the Fitness lane's attendance fields (`attendedSessions`, `firstAttendedAt`, `refundEligible`; any one means used) and never writes them.
+
+**Refund.** A refund is a REQUEST only:
+- zero attendance, before the end, once
+- it freezes releases
+- nothing is paid out
+- `refundRequests` is never written
+
+Execution belongs to the canonical refund authority (B9.31), which is **not built**. The AdminOS exception path is the same.
+
+**Tests:** `scripts/test-membership-settlement.js` 23/0. Sabotage (hold-until-used and the used-lock removed) → 5 FAIL.
+
+**Open / blocked:**
+- The webhook purpose and hold for memberships (sokoni-5b) is not built.
+- Rules: `providerMemberships` has no client rules (default deny). Buyer and gym read access is the Fitness lane's.
+- The refund execution authority is not built.
+- Emulator / runtime proof is UNPROVEN (memory floor).

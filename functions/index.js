@@ -13446,3 +13446,9 @@ exports.serviceBookingPin           = require('./service-booking-pin').serviceBo
 const _venuePay = require('./venue-payments');
 exports.venueOnBookingPayment       = _venuePay.venueOnBookingPayment;           // trigger: payments/{id}
 exports.venuePaymentSweep           = _venuePay.venuePaymentSweep;               // schedule: 15 min
+
+/* ── Membership settlement (owner 2026-10-03): membership money HELD until the first attendance (refundable), then
+   released to the provider monthly; never attended + ended → settled at expiry; refund = REQUEST, zero attendance only. */
+const _membershipSettlement = require('./membership-settlement');
+exports.membershipReleaseSweep = _membershipSettlement.membershipReleaseSweep;
+exports.membershipRequestRefund = _membershipSettlement.membershipRequestRefund;
