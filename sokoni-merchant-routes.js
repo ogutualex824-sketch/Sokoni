@@ -45,6 +45,23 @@
     ROLE:       'role'         /* resolved role from users/{uid}.roles         */
   };
 
+  /* ── SESSIONS — which kind of business session may MOUNT a route ────────────────
+     Owner decision 2026-10-03: ONE shell for merchants AND service providers.
+       merchant  the signed-in account resolved a shop (owner or employee) — the session
+                 this shell has always had.
+       provider  no shop, but providers/{uid} exists and the server workspace authority
+                 (providerDispatch businessWorkspace) answered for it.
+     A route declares `sessions:[...]`. ABSENT means ['merchant'] — so every route that
+     predates provider mode stays merchant-only WITHOUT being edited, and POS, the till,
+     inventory, devices and staff can never mount for a provider by omission. Opting a
+     route in is an explicit, reviewable edit on that route.
+     See docs/MERCHANT_V2_TARGET_ARCHITECTURE.md § Session model. */
+  var SESSIONS = ['merchant','provider'];
+  var DEFAULT_SESSIONS = ['merchant'];
+  function sessionsOf (r) {
+    return (r && Array.isArray(r.sessions)) ? r.sessions : DEFAULT_SESSIONS;
+  }
+
   /* Every merchant destination. Order within `primary` IS the sidebar order. */
   var ROUTES = [
     /* ── PRIMARY: the founder's canonical merchant sidebar ─────────────────── */
@@ -233,6 +250,10 @@
     { id:'messages', name:'Messages', icon:'💬', tier:'primary',
       kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      /* PROVIDER-CAPABLE (2026-10-03): PARTICIPANT-scoped through messagesDispatch, ctx is
+         SELLER_UID alone, and the module refuses only 'not_signed_in' — it never reads
+         S.activeShopId. Inspected, not assumed: sokoni-merchant-messages-ui.js load(). */
+      sessions:['merchant','provider'],
       mobile:true, desktop:true, activeKey:'messages',
       note:'Native surface (sokoni-merchant-messages-ui.js) through the deployed messagesDispatch ' +
            'router — the individual handlers are not re-exported, the router is, and it routes into ' +
@@ -284,6 +305,7 @@
     { id:'home', name:'Home', icon:'🏠', tier:'hidden',
       kind:'exit', href:'/',
       role:['seller','merchant'], ctx:[],
+      sessions:['merchant','provider'],   /* leaving for the marketplace needs no shop */
       mobile:true, desktop:true, activeKey:'home',
       note:'Leaves the shell entirely (full-page navigation to the marketplace home). NEVER ' +
            'express this as kind:page — iframing index.html would boot the customer application ' +
@@ -330,6 +352,7 @@
     { id:'signout', name:'Sign out', icon:'↩', tier:'hidden',
       kind:'exit', href:'/login', next:'/merchant-v2', terminatesSession:true,
       role:['seller','merchant','cashier'], ctx:[],
+      sessions:['merchant','provider'],   /* every session must be able to end itself */
       mobile:true, desktop:true, activeKey:'signout',
       note:'Leaves the shell AND ends the session. The shell must await the auth sign-out ' +
            'before navigating. `next` is consumed by auth.js, which reads ?next= through ' +
@@ -786,6 +809,21 @@
       }
       if (r.kind === 'native' && (r.src || r.sec || r.tab))
         errs.push(at + ': native route must not declare src/sec/tab');
+      /* sessions — optional; when declared it is a non-empty list drawn ONLY from SESSIONS,
+         without repeats. A typo ('providers') would otherwise make a route silently
+         unmountable, and a junk value must never be read as a permission. */
+      if (r.sessions != null) {
+        if (!Array.isArray(r.sessions) || !r.sessions.length)
+          errs.push(at + ': sessions must be a non-empty array when declared');
+        else {
+          var sSeen = {};
+          r.sessions.forEach(function (s) {
+            if (SESSIONS.indexOf(s) < 0) errs.push(at + ': invalid session "' + s + '" (allowed: ' + SESSIONS.join('|') + ')');
+            if (sSeen[s]) errs.push(at + ': session "' + s + '" listed twice');
+            sSeen[s] = true;
+          });
+        }
+      }
     });
 
     BOTTOM_NAV.forEach(function (b) {
@@ -825,6 +863,11 @@
     MORE_GROUPS.forEach(function (g) {
       if (!g.key)   errs.push('a more-group has no key');
       if (!g.label) errs.push('more-group "' + g.key + '" has no label');
+      /* requires — optional capability gate on the WHOLE group. A gate that is not a
+         non-empty string cannot be evaluated, and an unevaluable gate must never be
+         mistaken for an open one. */
+      if (g.requires != null && (typeof g.requires !== 'string' || !g.requires.trim()))
+        errs.push('more-group "' + g.key + '": requires must be a non-empty capability string when declared');
       (g.ids || []).forEach(function (id) {
         if (!byId[id]) errs.push('more-group "' + g.key + '" lists unknown route "' + id + '"');
         else if (byId[id].tier !== 'more')
@@ -837,6 +880,21 @@
     ROUTES.forEach(function (r) {
       if (r.tier === 'more' && !grouped[r.id])
         errs.push('route "' + r.id + '" is tier:more but in no MORE_GROUPS group — it would have no sidebar position');
+    });
+
+    /* A route behind a gated group must not ALSO be reachable ungated elsewhere — a second
+       projection would be a hole in the gate. Group membership is already exclusive (above)
+       and a gated route is tier:'more', so it is never in PRIMARY_ORDER; the remaining
+       projections are the bottom nav and the Settings hub links. */
+    var gatedBy = {};
+    MORE_GROUPS.forEach(function (g) {
+      if (g.requires != null) (g.ids || []).forEach(function (id) { gatedBy[id] = g.key; });
+    });
+    BOTTOM_NAV.forEach(function (b) {
+      if (gatedBy[b.id]) errs.push('bottom nav "' + b.id + '" exposes a route of gated group "' + gatedBy[b.id] + '" without its gate');
+    });
+    (byId.settings && byId.settings.links || []).forEach(function (l) {
+      if (gatedBy[l]) errs.push('settings hub links to "' + l + '", a route of gated group "' + gatedBy[l] + '", without its gate');
     });
 
     /* ── ACTION CHIPS ────────────────────────────────────────────────────────────
@@ -924,10 +982,45 @@
     moreGroups: function () {
       return MORE_GROUPS.map(function (g) {
         return {
-          key: g.key, label: g.label,
+          key: g.key, label: g.label, requires: g.requires || null,
           routes: g.ids.map(function (id) { return byId[id]; }).filter(Boolean)
         };
       });
+    },
+    SESSIONS: SESSIONS,
+    /* The sessions a route may mount in (the ['merchant'] default made explicit). */
+    sessionsOf: function (id) {
+      var r = byId[id] || byId[ALIASES[id]];
+      return r ? sessionsOf(r).slice() : [];
+    },
+    /* The capability a route's group requires, or null when its group is ungated. */
+    groupRequires: function (id) {
+      var rid = this.resolve(id); if (!rid) return null;
+      for (var i = 0; i < MORE_GROUPS.length; i++) {
+        var g = MORE_GROUPS[i];
+        if (g.requires != null && (g.ids || []).indexOf(rid) > -1) return g.requires;
+      }
+      return null;
+    },
+    /* THE MOUNT DECISION, pure. Returns null when `id` may mount in `session` for a holder
+       of the capabilities `can` answers for; otherwise the reason:
+         'unknown-route' | 'session:<session>' | 'requires:<capability>'
+       FAILS CLOSED: a missing or throwing `can`, or one answering anything but `true`, is
+       "no capability"; an unrecognised session is refused, never treated as merchant.
+       A null/undefined session means no provider session was resolved — the merchant
+       behaviour this shell has always had (resolving, merchant, and the no-shop state). */
+    mountRefusal: function (id, session, can) {
+      var rid = this.resolve(id); if (!rid) return 'unknown-route';
+      var sess = session == null ? 'merchant' : session;
+      if (SESSIONS.indexOf(sess) < 0) return 'session:' + sess;
+      if (sessionsOf(byId[rid]).indexOf(sess) < 0) return 'session:' + sess;
+      var req = this.groupRequires(rid);
+      if (req != null) {
+        var ok = false;
+        try { ok = typeof can === 'function' && can(req) === true; } catch (_) { ok = false; }
+        if (!ok) return 'requires:' + req;
+      }
+      return null;
     },
     ACTIONS: ACTIONS,
     ACTION_OWNERS: ACTION_OWNERS,

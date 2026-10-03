@@ -695,6 +695,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script defer src="sokoni-universal-printer.js"></script>
 <script defer src="sokoni-pos-print-service.js"></script>
 <script src="sokoni-merchant-routes.js"></script>
+<!-- Provider session mapping (owner 2026-10-03: ONE shell for merchants AND providers).
+     Pure: turns the server's businessWorkspace answer into S.capabilities. -->
+<script src="sokoni-merchant-session.js"></script>
 
 <!-- The NINE native surfaces v1 already implements, as modules. Nothing here is
      rewritten: each exposes the same mount(host, ctx) / destroy() contract that
@@ -849,24 +852,43 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      Nothing here lists a route by hand. Add a route to the contract and it appears;
      remove one and its button disappears with it. That is what makes "every button
      has a destination" structural rather than a thing to remember. */
+  /* ── SESSION + GROUP GATE (owner 2026-10-03) ──────────────────────────────
+     The ONE mount decision for every projection (sidebar, bottom nav, palette) AND for
+     go(). It is the contract's pure mountRefusal(): a route mounts only in the sessions
+     it declares (absent = merchant only), and a route in a `requires` group only when
+     can(requires) is true. Until a PROVIDER session is resolved the session passed is
+     null, which the contract treats as the merchant shell this has always been — so a
+     merchant session, a resolving session and the no-shop state are unchanged.
+     A contract without mountRefusal (a stale cached file) fails CLOSED for providers. */
+  function mountRefusal (id) {
+    var sess = S.session === 'provider' ? 'provider' : null;
+    if (typeof CONTRACT.mountRefusal !== 'function') return sess ? 'session:provider' : null;
+    return CONTRACT.mountRefusal(id, sess, can);
+  }
+  function mountable (r) { return !!r && !mountRefusal(r.id); }
+
   function buildSidebar () {
     var nav = document.getElementById('side-nav');
     var frag = document.createDocumentFragment();
 
-    CONTRACT.primary().forEach(function (r) { frag.appendChild(navItem(r)); });
+    CONTRACT.primary().filter(mountable).forEach(function (r) { frag.appendChild(navItem(r)); });
 
     (typeof CONTRACT.moreGroups === 'function' ? CONTRACT.moreGroups() : []).forEach(function (g) {
+      /* GROUP GATE — fails closed: no capabilities (resolving, refused, error) → hidden. */
+      if (g.requires != null && !can(g.requires)) return;
+      var rs = (g.routes || g.items || []).filter(mountable);
+      if (!rs.length) return;   /* a heading over nothing is not navigation */
       var h = document.createElement('div');
       h.className = 'side-group';
       h.textContent = g.label || g.key || 'More';
       frag.appendChild(h);
-      (g.routes || g.items || []).forEach(function (r) { frag.appendChild(navItem(r)); });
+      rs.forEach(function (r) { frag.appendChild(navItem(r)); });
     });
     nav.appendChild(frag);
 
     /* The exit lives in the footer, visually separated, because it is the ONE control
        that leaves the application. */
-    var exit = CONTRACT.ROUTES.filter(function (r) { return r.kind === 'exit'; })[0];
+    var exit = CONTRACT.ROUTES.filter(function (r) { return r.kind === 'exit' && mountable(r); })[0];
     if (exit) {
       var f = document.getElementById('side-foot');
       var h2 = document.createElement('div');
@@ -890,13 +912,39 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 
   function buildBottomNav () {
     var el = document.getElementById('bnav');
-    CONTRACT.BOTTOM_NAV.forEach(function (b) {
+    CONTRACT.BOTTOM_NAV.filter(function (b) { return b.id === '__more' || !mountRefusal(b.id); }).forEach(function (b) {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.dataset.route = b.id;
       btn.innerHTML = '<span class="ico">' + b.icon + '</span><span>' + b.label + '</span>';
       el.appendChild(btn);
     });
+  }
+
+  /* RE-PROJECTION. The nav is built at boot, before the session is known; a provider
+     session, or capabilities that open a gated group, change what may mount. The
+     projection is re-derived on every session event but the DOM is rebuilt ONLY when the
+     set of mountable routes actually changed — so a merchant session, whose projection
+     is the one built at boot, never has its nav touched. */
+  var _navSig = null;
+  function navSignature () {
+    return (S.session === 'provider' ? 'P|' : 'M|') +
+      CONTRACT.ROUTES.filter(mountable).map(function (r) { return r.id; }).join(',');
+  }
+  function projectNav () {
+    var sig = navSignature();
+    if (sig === _navSig) return false;
+    var first = _navSig === null;
+    _navSig = sig;
+    if (!first) {
+      ['side-nav', 'side-foot', 'bnav'].forEach(function (k) {
+        var el = document.getElementById(k); if (el) el.innerHTML = '';
+      });
+    }
+    buildSidebar();
+    buildBottomNav();
+    if (current) setActive(current);
+    return !first;
   }
 
   /* ── DRAWER + COLLAPSE ────────────────────────────────────────────────────
@@ -966,7 +1014,15 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     _wirePrinterChip();
 
     /* Identity — the third chip now reports the REAL session, not a fixed label. */
-    if (S.state === 'in') {
+    if (S.state === 'in' && S.session === 'provider') {
+      /* PROVIDER: no shop exists, so nothing here may claim one. Name from providers/{uid}
+         or the account email — never a placeholder; the sub-line is the server's own
+         category label when it sent one. */
+      setDot('st-role', S.capabilities.length ? 'ok' : 'warn');
+      text('st-user', merchantDisplayName() || S.email || '—');
+      text('shop-name', merchantDisplayName() || S.email || '—');
+      text('shop-sub', 'Service provider' + (S.workspace && S.workspace.label ? ' · ' + S.workspace.label : ''));
+    } else if (S.state === 'in') {
       setDot('st-role', 'ok');
       text('st-user', merchantDisplayName() || S.email || 'Merchant');
       text('shop-name', (S.shop && (S.shop.name || S.shop.shopName)) || 'SOKONI');
@@ -1197,6 +1253,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
          of a page we are leaving and Back bounces forever
        · each user navigation PUSHES history so Back/Forward walk real routes */
   var booted = false;
+  /* Provider landing bookkeeping: was the first route the shell DEFAULT (no hash asked
+     for), and how many navigations have happened since. */
+  var _bootImplicit = false, _navCount = 0;
 
   /* ── THE ONLY NAVIGATION IN THIS SHELL ────────────────────────────────────────
      Every way out of /merchant goes through here, and here refuses anything that is
@@ -1240,12 +1299,19 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   }
 
   function go (id) {
+    _navCount++;
     var rid = CONTRACT.resolve(id);
     if (!rid) {
       console.error('[merchant-v2] unknown route "' + id + '" — not in the contract. Refused.');
       return;
     }
     var m = byId[rid];
+
+    /* SESSION + GROUP GATE. A route this session may not mount is REFUSED with a named
+       reason — never substituted with another destination. */
+    var why = mountRefusal(rid);
+    if (why) { refuseRoute(rid, why); return; }
+    _refused = null;
 
     if (m.kind === 'exit') { leaveShell(rid); return; }
 
@@ -1294,6 +1360,39 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     if (m.kind === 'seller') { showOnly(framePanel('seller:' + (m.sec || ''), 'seller.html' + (m.sec ? '#' + m.sec : ''), m.name)); return; }
     if (m.kind === 'page')   { showOnly(framePanel('page:' + rid, m.src, m.name)); return; }
   }
+  /* The refusal is a PANEL, not a toast and not a redirect: the merchant/provider asked
+     for a destination, so they are told plainly that it is not part of this workspace
+     and why. Nothing else mounts in its place. Exits are refused the same way — a
+     provider never leaves through a merchant-only exit. */
+  var _refused = null;   /* { id, why } — re-evaluated when the session changes */
+  function refuseRoute (rid, why) {
+    var m = byId[rid] || {};
+    console.warn('[merchant-v2] route "' + rid + '" refused — ' + why);
+    if (m.kind === 'exit') { toast((m.name || rid) + ' is not available in this workspace.'); return; }
+    _refused = { id: rid, why: why };
+    current = rid;
+    titleEl.textContent = m.name || rid;
+    setActive(rid);
+    openDrawer(false);
+    if (location.hash.replace('#', '') !== rid) {
+      if (booted) history.pushState({ r: rid }, '', '#' + rid);
+      else        history.replaceState({ r: rid }, '', '#' + rid);
+    }
+    booted = true;
+    var p = nativePanel('__refused');
+    var cap = /^requires:/.test(why) ? why.slice(9) : null;
+    var msg = cap
+      ? 'This needs the <b>' + esc(cap) + '</b> capability on your account, and SOKONI has not granted it ' +
+        (S.state === 'resolving' ? 'yet — your account is still being checked.' : 'to this account.')
+      : (S.session === 'provider'
+          ? 'This is a shop tool. Your account is open as a <b>service provider</b>, and provider workspaces do not include it.'
+          : 'This is not part of this workspace.');
+    p.innerHTML = '<div class="state" data-refused="' + esc(rid) + '" data-why="' + esc(why) + '">' +
+      '<span class="ico">🔒</span><b>' + esc(m.name || rid) + ' is not available here</b>' +
+      '<small>' + msg + '</small></div>';
+    showOnly(p);
+  }
+
   window.__mgo = go;
   window.SokoniShell = window.SokoniShell || {};
   window.SokoniShell.go = go;
@@ -1358,6 +1457,16 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
        can write, and never inferred from "is signed in". An owner gets the owner
        set; an employee gets exactly what their employment role grants. */
     capabilities: [], servedBy: null,
+    /* SESSION KIND (owner 2026-10-03: ONE shell for merchants AND providers).
+       null       not (yet) a provider session — the merchant shell, unchanged
+       'merchant' a shop resolved and merchantIdentity answered
+       'provider' no shop, providers/{uid} exists; capabilities come ONLY from the
+                  server's businessWorkspace answer (sokoni-merchant-session.js) */
+    session: null,
+    workspace: null,         /* provider: frozen projection of the server answer (read-only) */
+    sessionNotice: null,     /* provider: the honest "isn't available yet — <reason>" line */
+    providerName: null,      /* provider: display name from providers/{uid} (read-only) */
+    providerError: null,     /* provider: why the providers/{uid} read failed, when it did */
   };
   /* NO CLIENT-SIDE CAPABILITY LIST, DELIBERATELY. An earlier draft mirrored
      ROLE_CAPABILITIES.owner here so the owner path could stay a single read.
@@ -1383,6 +1492,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   function merchantDisplayName () {
     var s = S.shop || {};
     var n = String(s.name || s.shopName || '').trim();
+    /* A provider has no shop: the providers/{uid} display name, or null (never a placeholder). */
+    if (!n && S.session === 'provider') return S.providerName || null;
     return n || null;
   }
 
@@ -1442,6 +1553,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         if (graceTimer) clearTimeout(graceTimer);
         var commitOut = function () {
           S.state = 'out'; S.uid = S.sellerUid = S.activeShopId = null; S.shop = null; S.email = null;
+          /* A provider session ends with the account: its server-granted list must not
+             outlive it. (The merchant path's fields are left exactly as they were.) */
+          if (S.session === 'provider') { S.capabilities = []; }
+          S.session = null; S.workspace = null; S.sessionNotice = null; S.providerName = null;
           _readyResolve(S); emit('session'); paintStatus();
         };
         if (everIn) return commitOut();          /* a real sign-out */
@@ -1531,7 +1646,14 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
           } catch (_) { /* absent or unreadable — falls through to no-shop */ }
         }
 
-        if (!shopId) { S.shopError = 'no-shop-document'; return; }
+        if (!shopId) {
+          S.shopError = 'no-shop-document';
+          /* NO SHOP → maybe a PROVIDER. A shop always wins (owner or employee resolved
+             above never reaches here); without a providers/{uid} doc this returns having
+             changed nothing, which is the no-shop state exactly as before. */
+          await resolveProviderSession(m);
+          return;
+        }
 
         /* ── STEP 2: AUTHORITY — what may this account DO there? ──────────────
            ONE source of truth, for owners and employees alike. The client may
@@ -1561,6 +1683,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
           S.capabilities = d.capabilities;
           S.servedBy = d.servedBy || null;
           S.shopError = null;
+          S.session = 'merchant';
           /* Business identity is resolved SEPARATELY and may legitimately fail while the shop
              resolves fine - they are different identifier spaces. A failure here must never
              invalidate the shop session. */
@@ -1579,6 +1702,48 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       }
     }
     console.warn('[merchant-v2] could not resolve shops/' + S.uid + ': ' + S.shopError);
+  }
+
+  /* ── PROVIDER SESSION (owner decision 2026-10-03) ────────────────────────────────
+     Reached ONLY when no shop resolved. providers/{uid} is read to learn WHETHER this
+     account is a provider and its display name — nothing else. Its fields are writable
+     by their owner and are therefore never a source of capability: every capability
+     comes from the server's providerDispatch {op:'businessWorkspace'} answer, through the
+     shell's one callable path (App Check attested), mapped by SokoniMerchantSession.
+     One call per resolution. Refused / malformed / unavailable → capabilities stay [],
+     and the session carries an honest notice naming the server's reason.
+
+     DEPLOY DEPENDENCY: the approval half of that answer is trustworthy only once
+     sokoni-5b's P0 (approval needs SERVER evidence, 0cb93bd / 7db4c76) is live; the
+     `marketing` key exists only on sokoni-b2's server line (e4f9b7d). Until then an
+     absent key grants nothing — the mapping fails closed. */
+  async function resolveProviderSession (m) {
+    var snap;
+    try { snap = await m.fs.getDoc(m.fs.doc(m.db, 'providers', S.uid)); }
+    catch (e) { S.providerError = 'providers-' + ((e && e.code) || 'read-failed'); return; }
+    if (!snap || !snap.exists()) return;          /* not a provider: the no-shop state, unchanged */
+
+    var SMS = window.SokoniMerchantSession;
+    S.session = 'provider';
+    S.capabilities = [];
+    S.providerName = SMS ? SMS.providerDisplayName(snap.data() || {}) : null;
+    S.providerError = null;
+    if (!SMS) {
+      S.workspace = null;
+      S.sessionNotice = "Your provider workspace isn't available yet — the session module did not load. Reload the page.";
+      return;
+    }
+    var res;
+    try {
+      var r = await _callable('providerDispatch')({ op: 'businessWorkspace' });
+      res = SMS.mapWorkspace(r && r.data);
+    } catch (e) {
+      var code = 'workspace-' + String((e && e.code) || 'unavailable').replace(/^functions\//, '');
+      res = { ok: false, capabilities: [], reason: code, notice: SMS.notice(code), workspace: null };
+    }
+    S.capabilities = res.capabilities.slice();
+    S.workspace = res.workspace;
+    S.sessionNotice = res.notice || null;
   }
 
   /* ── MERCHANT (business) CONTEXT ─────────────────────────────────────────────────
@@ -4289,7 +4454,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      resolver, so a route added to the contract appears in all four at once. */
   var PAL = { open: false, q: '', sel: 0, items: [] };
   function palItems () {
-    var out = CONTRACT.ROUTES.filter(function (r) { return r.kind !== 'exit'; }).map(function (r) {
+    var out = CONTRACT.ROUTES.filter(function (r) { return r.kind !== 'exit' && mountable(r); }).map(function (r) {
       return { label: 'Go to ' + (r.name || r.id), icon: r.icon || '•', route: r.id };
     });
     var exit = CONTRACT.ROUTES.filter(function (r) { return r.kind === 'exit'; })[0];
@@ -4356,6 +4521,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   /* ── BOOT ─────────────────────────────────────────────────────────────────*/
   buildSidebar();
   buildBottomNav();
+  _navSig = navSignature();   /* the boot projection; re-projected only if the session changes it */
   loadDevices();
   paintStatus();
 
@@ -4377,9 +4543,41 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      Cheap and idempotent: when the key is unchanged renderModule refreshes in
      place rather than remounting, so a settled session does not churn the
      surface the merchant is using. */
+  /* ── SESSION PROJECTION — registered FIRST, so the re-render listeners below see the
+     route this session may actually show. A merchant session's projection equals the one
+     built at boot, so for a merchant this changes nothing in the DOM. */
+  _listeners.session.push(function () {
+    try {
+      projectNav();
+      paintSessionNotice();
+      if (!current) return;
+      /* A refusal made before the session landed (e.g. a gated deep link while
+         capabilities were still []) is re-evaluated: now permitted → it mounts;
+         still refused → the message is refreshed with the settled reason. */
+      if (_refused) {
+        var rid = _refused.id, why = mountRefusal(rid);
+        if (!why) { _refused = null; go(rid); }
+        else if (S.state !== 'resolving') refuseRoute(rid, why);
+        return;
+      }
+      var whyCur = mountRefusal(current);
+      if (!whyCur) return;
+      /* The provider session landed on a route it may not mount. If that route was the
+         shell's own DEFAULT (no hash was asked for), land on the provider's first
+         sidebar destination — a default is not a request. An explicit request is
+         refused, never substituted. */
+      if (S.session === 'provider' && _bootImplicit && _navCount <= 1) {
+        var land = providerLanding();
+        if (land) { booted = false; go(land); return; }
+      }
+      refuseRoute(current, whyCur);
+    } catch (e) { console.error('[merchant-v2] session projection failed', e); }
+  });
+
   _listeners.session.push(function () {
     try {
       if (!current) return;
+      if (mountRefusal(current)) return;   /* never render a route this session may not mount */
       var m = byId[current];
       if (!m || m.kind !== 'native') return;
       renderNative(current);
@@ -4388,15 +4586,43 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 
   _listeners.session.push(function () {
     loadDevices(); paintStatus(); broadcastSession();
-    if (S.state === 'in') autoConnectPrinter();
+    /* Printers are shop hardware: a provider session never reconnects one. */
+    if (S.state === 'in' && S.session !== 'provider') autoConnectPrinter();
     /* A surface rendered while auth was still resolving must refresh once it lands,
        or a signed-in merchant keeps staring at "not signed in". */
     if (current === 'orders' && S.state === 'in') { ORD.rows = null; renderOrders(nativePanel('orders')); }
     /* Same reason for the Dashboard: it is the FIRST surface a merchant sees, so it is
        routinely painted before shops/{uid} has resolved. Without this the greeting would
        stay permanently nameless for the whole session even once the name is known. */
-    if (current === 'dashboard' && S.state === 'in') renderDashboard(nativePanel('dashboard'));
+    if (current === 'dashboard' && S.state === 'in' && !mountRefusal('dashboard')) renderDashboard(nativePanel('dashboard'));
   });
+
+  /* The provider's landing: the first mountable, in-shell destination in sidebar order. */
+  function providerLanding () {
+    var order = CONTRACT.primary().slice();
+    (typeof CONTRACT.moreGroups === 'function' ? CONTRACT.moreGroups() : []).forEach(function (g) {
+      order = order.concat(g.routes || []);
+    });
+    var hit = order.filter(function (r) { return r && r.kind !== 'exit' && mountable(r); })[0];
+    return hit ? hit.id : null;
+  }
+
+  /* The honest provider notice. Shown above every surface while the provider session
+     carries one (no workspace yet, or a held workspace); absent otherwise. */
+  function paintSessionNotice () {
+    var el = document.getElementById('session-notice');
+    var show = S.session === 'provider' && !!S.sessionNotice;
+    if (!show) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'session-notice';
+      el.className = 'note';
+      el.setAttribute('role', 'status');
+      el.style.margin = '10px 16px 0';
+      content.parentNode.insertBefore(el, content);
+    }
+    el.textContent = S.sessionNotice;
+  }
 
   /* Public surface for modules and for the certification harness. */
   window.SokoniShell.session = S;
@@ -4412,6 +4638,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     if (id && id !== current) go(id);
   });
 
+  _bootImplicit = !CONTRACT.resolve(location.hash.replace('#', ''));
   var boot = CONTRACT.resolve(location.hash.replace('#', '')) || 'dashboard';
   /* Never boot straight into the exit: a stale "#home" would bounce the merchant out
      of the application before it had finished opening. */
