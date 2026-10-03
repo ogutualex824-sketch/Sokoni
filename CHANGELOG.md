@@ -1,3 +1,35 @@
+## [2026-10-03] - FOOD HUB GATE 2: Menu + Drinks + Kitchen (NOT deployed)
+
+Record: `docs/FOOD_HUB_GATE2.md` (authority map, findings, Gate 3 handoff). Food Hub is NOT user-ready.
+
+**Server** — `feat/food-gate2-menu-on-5dc505e`:
+- New callable `foodMenu` (`functions/food-menu.js`). Menu items ARE canonical `products/{id}`; a drink is the same product in a drinks section.
+- Gates: `merchant-identity.resolveActor` (owner and manager edit, cashier sets availability) and `workspaceFor(owner)` module states.
+- The product limit is checked before create. It never writes stock, salePrice, wholesale or approval fields.
+- Archive is the sellability tombstone. Availability writes the canonical `outOfStock` flag.
+- The public op projects only published items from eligible, approved food shops.
+- `service-capabilities`: menu and drinks are `implemented:true`; kitchen stays NOT_IMPLEMENTED (FOOD_ORDERS_PENDING).
+
+**Hosting:**
+- `hosting/food-gate2-merchant-ui-on-fbdcd33`: merchant-v2 Menu / Drinks / Kitchen (`sokoni-merchant-food.js`) in a Food business group, hidden until the server says so.
+- `hosting/food-gate2-public-menu-on-df0ddbd`: `food-menu.html?shop=` shows the real published menu, read-only.
+
+**Database:**
+- `shops.menu.sections` (server-written).
+- `products.menu {sectionId, kind, sortOrder, availability, availableAgainAt, prepMinutes}`, `products.variants`, `products.source 'food_menu'`.
+- No migration.
+
+**API:** new callable `foodMenu`.
+
+**Security:** server ownership, role and module gates; strings escaped. Findings 1-7 are listed in the record (rules on products and orders, `store.html` XSS, hard delete, the `foodMenus` rule, fake KDS pages).
+
+**Tests:**
+- food-menu 47/0 (sabotage 16/16);
+- merchant-food-ui 19/0 (7/7);
+- public-menu 12/0 (4/4);
+- capability, workspace, routes and containment suites green, except merchant-capability's 2 pre-existing failures.
+- Browser and emulator suites are UNPROVEN (memory floor).
+
 ## [2026-10-03] — Provider dashboard: modules with no backing are NOT_IMPLEMENTED (sokoni-5b decision) — NOT deployed
 
 - business-workspace MODULES: `enquiries` and `calls` were implemented:true with no collection, callable or screen behind them (census
