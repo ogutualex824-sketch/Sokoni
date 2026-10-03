@@ -38,7 +38,13 @@ for (const [id, o, m] of [
   ['P-5', { intentPurpose: 'hub_registration', category: 'default' }, 'hub registration fee (no category)'],
   ['P-6', { category: 'advertising', attribution: { type: 'booking' } }, 'bookNow used as an advertising fee'],
   ['P-7', { isSubscription: true }, 'the existing subscription category'],
+  ['P-8', { intentPurpose: 'vehicle_boost', category: 'default', attribution: { sellerUid: 'dealer1' } }, 'vehicle boost (2f 10-03) — even WITH a client-sent sellerUid'],
 ]) { r = dec(o); ck(id, r.action === 'skip_platform' && r.earner === null, 'PLATFORM REVENUE is never credited: ' + m, r); }
+/* provider / supplier money is NOT platform revenue (2f 10-03): never skip_platform, never the payer */
+r = dec({ intentPurpose: 'fitness_membership', attribution: { sellerUid: 'gym1' } });
+ck('N-1', r.action === 'credit_sale' && r.earner === 'gym1', 'fitness_membership is the PROVIDER\'s money: never classed as SOKONI revenue', r);
+r = dec({ intentPurpose: 'b2b_order' });
+ck('N-2', r.action === 'withhold' && r.earner === null && r.reason === 'no_earner', 'an unattributed b2b_order (supplier money) is WITHHELD for review — not platform revenue, not the payer', r);
 r = dec({ intentUnreadable: true, attribution: { sellerUid: 'seller1' } });
 ck('U-1', r.action === 'withhold' && r.reason === 'intent_unreadable', 'an unreadable intent fails CLOSED (no credit, queued)', r);
 r = dec({ category: 'pos_checkout' });

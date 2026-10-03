@@ -266,7 +266,10 @@ function assessProviderConfirmation(st, want) {
      · anything else → its attributed sellerUid / merchantUid (till), else withhold.
    The PAYER (payData.uid) is NEVER an earner: the census of every live initiateSTKPush caller found no flow that
    legitimately needs it, and every flow that reached it credited the person who paid. */
-const PLATFORM_PURPOSES = Object.freeze(['subscription', 'boost', 'marketing_boost', 'hub_registration', 'ai_subscription', 'ai_credits', 'featured_listing']);
+const PLATFORM_PURPOSES = Object.freeze(['subscription', 'boost', 'marketing_boost', 'hub_registration', 'ai_subscription', 'ai_credits', 'featured_listing',
+  /* 2f 10-03: vehicle_boost self-settles earlier; listed here as belt-and-braces. NEVER add fitness_membership or b2b_order —
+     those are the PROVIDER's / SUPPLIER's money (held), not SOKONI's; unattributed they fall to withhold + review. */
+  'vehicle_boost']);
 const PLATFORM_CATEGORIES = Object.freeze(['subscription', 'boost', 'marketing', 'advertising', 'ai_subscription', 'ai_credits']);
 function walletCreditDecision(f) {
   const x = f || {};
