@@ -91,9 +91,11 @@ const deps = { calculateCommission: (_db, o) => FU.calculateCommission(emptyDb, 
 const START = '2026-01-15T09:00:00.000Z';
 const mem = (over) => Object.assign({ providerId: 'gym_A', buyerUid: 'member_1', priceCents: 600000, periodCount: 3, periodUnit: 'month',
   startAt: START, category: 'fitness', title: 'Gold 3-month', paymentStatus: 'paid_held', status: 'active', releasedPeriods: 0, releasedCents: 0 }, over || {});
+const NOTES = [];
 function setup (over) {
   const db = fakeDb({ 'providerMemberships/mem_000001': mem(over) });
-  MS._test.use({ db, ts: () => 'TS', inc: db._inc, tsFromDate: (d) => d.toISOString() });
+  NOTES.length = 0;
+  MS._test.use({ db, ts: () => 'TS', inc: db._inc, tsFromDate: (d) => d.toISOString(), now: () => new Date(START), notify: (a) => { NOTES.push(a); return null; } });
   return db;
 }
 const D = (s) => new Date(s);
@@ -256,6 +258,40 @@ const D = (s) => new Date(s);
   ck('X5 audit trail: settlement_released → refund_exception_requested → refund_executed', evs.join(',') === 'settlement_released,refund_exception_requested,refund_executed', evs);
   const src2 = require('fs').readFileSync(path.join(ROOT, 'functions/membership-settlement.js'), 'utf8');
   ck('X6 no client path writes refundRequests; decide/exception callables are admin-gated', !/collection\('refundRequests'\)/.test(src2) && /membershipDecideRefund = onCall[\s\S]{0,300}_admin\(req\)/.test(src2) && /membershipRequestException = onCall[\s\S]{0,300}_admin\(req\)/.test(src2));
+
+  /* ══ S: START AT PAYMENT ══ */
+  db = setupPay({ startAt: '2026-01-01T09:00:00.000Z' });                 /* created on the 1st … */
+  MS._test.use({ now: () => new Date('2026-01-09T12:00:00.000Z') });      /* … paid on the 9th */
+  await MS.holdMembershipPayment(null, null, 'API_S1', 'int_1', 6000);
+  let ms1 = db._docs.get('providerMemberships/mem_000001');
+  ck('S1 months run from PAYMENT (Jan 9), not creation (Jan 1): first release Feb 9; requestedStartAt kept',
+    String(ms1.startAt).startsWith('2026-01-09') && String(ms1.nextReleaseAt).startsWith('2026-02-09') && ms1.requestedStartAt === '2026-01-01T09:00:00.000Z', ms1);
+  db = setupPay({ startAt: '2026-03-01T06:00:00.000Z' });                 /* a deliberately LATER start */
+  MS._test.use({ now: () => new Date('2026-01-09T12:00:00.000Z') });
+  await MS.holdMembershipPayment(null, null, 'API_S2', 'int_1', 6000);
+  ms1 = db._docs.get('providerMemberships/mem_000001');
+  ck('S2 a chosen future start (Mar 1) is kept: first release Apr 1', String(ms1.startAt).startsWith('2026-03-01') && String(ms1.nextReleaseAt).startsWith('2026-04-01'), ms1);
+  const ppSrc = require('fs').readFileSync(path.join(ROOT, 'functions/payment-purposes.js'), 'utf8');
+  ck('S3 an abandoned unpaid membership past payBy cannot mint a new intent', /fitness_membership[\s\S]{0,2500}payBy && Date\.now\(\) > payBy\) fail\('failed-precondition', 'This membership offer has expired/.test(ppSrc));
+
+  /* ══ N: NOTIFICATIONS (existing notify.js sender, no WhatsApp) ══ */
+  db = setupPay();
+  await MS.holdMembershipPayment(null, null, 'API_N1', 'int_1', 6000);
+  ck('N1 payment held → member "Membership active" (payment confirmed) + gym "New membership"',
+    NOTES.some((n) => n.uid === 'member_1' && n.type === 'subscription_activated') && NOTES.some((n) => n.uid === 'gym_A' && n.type === 'booking_new'), NOTES.map((n) => n.uid + ':' + n.type));
+  db = setup(); await MS.requestRefund('mem_000001', { by: 'member_1', now: D('2026-01-25T10:00:00Z') });
+  ck('N2 refund requested → member "Refund request received" + gym "Membership refund requested"',
+    NOTES.some((n) => n.uid === 'member_1' && /received/.test(n.title)) && NOTES.some((n) => n.uid === 'gym_A' && /refund requested/i.test(n.title)), NOTES.map((n) => n.title));
+  db = setup({ paymentRef: 'API_1' }); await MS.requestRefund('mem_000001', { by: 'member_1', now: D('2026-01-25T10:00:00Z') }); NOTES.length = 0;
+  await MS.decideRefund('mem_000001', { by: 'admin_9', decision: 'approve' });
+  ck('N3 refund approved + executed → member "Membership refunded" (refund_processed)', NOTES.some((n) => n.uid === 'member_1' && n.type === 'refund_processed'), NOTES);
+  db = setup({ paymentRef: 'API_1' }); await MS.requestRefund('mem_000001', { by: 'member_1', now: D('2026-01-25T10:00:00Z') }); NOTES.length = 0;
+  await MS.decideRefund('mem_000001', { by: 'admin_9', decision: 'reject', reason: 'outside window' });
+  ck('N4 refund rejected → member told, with the reason', NOTES.some((n) => n.uid === 'member_1' && /declined/.test(n.title) && /outside window/.test(n.body)), NOTES);
+  db = setup(used); NOTES.length = 0;
+  await MS.releaseDueSlices('mem_000001', { now: D('2026-04-16T06:00:00Z'), deps });
+  ck('N5 settlement → gym "Membership earnings released"; last month → member "Membership ended"',
+    NOTES.some((n) => n.uid === 'gym_A' && n.type === 'wallet_credit') && NOTES.some((n) => n.uid === 'member_1' && n.type === 'subscription_expired'), NOTES.map((n) => n.uid + ':' + n.type));
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

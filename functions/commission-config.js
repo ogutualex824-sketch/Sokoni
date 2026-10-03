@@ -79,7 +79,7 @@ const RATES = {
 
   /* ── no hub counterpart, so no conflict: the existing category rate stands ── */
   services:         { pct: 5,   fixedKES: 0,    _was: 'owner schedule 2026-09-28: other service bookings 5% (was 15%)' },
-  home_services:    { pct: 14,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: home services 14% (was 15% via services)' },
+  home_services:    { pct: 5,   fixedKES: 0,    _was: 'owner 2026-10-03: every service booking 5% (was 14%, owner schedule 2026-09-28)' },
   /* Car rental is a BOOKING of a vehicle — distinct from a vehicle SALE (`vehicles`, KES 2,000 flat). The car hub
      and car-rental pages already send category/hub 'car-rental'; before this it matched nothing and fell to default. */
   car_rental:       { pct: 16,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: car rental 16% (was unmatched → default 5%)' },
@@ -697,6 +697,10 @@ function categoryForHub(hub) {
    ZERO production subscriptions. They resolve fail-closed to 20% and are flagged
    (`legacyUnmapped`) so a sale on them is visible; an owner mapping is required before either
    is sold again — see docs/COMMERCIAL_CONVERGENCE_2026-09-30.md. */
+/* 2026-10-03 (owner): SERVICE BOOKINGS NO LONGER USE THIS TABLE — every service booking pays a flat 5 % (RATES.services /
+   the fitness, healthcare and entertainment lanes), deducted from the provider at settlement; provider-hub.commissionArgsForHub
+   no longer passes subscriptionRole. Kept (and still tested) only for any non-booking caller that names a provider plan; plans
+   now unlock FEATURES (subscription-catalog), not a commission rate. */
 const PROVIDER_PLAN_RATES = {
   provider_free: { pct: 20, floorExempt: true },   /* Free Trial     */
   starter:       { pct: 15, floorExempt: true },   /* Starter        */

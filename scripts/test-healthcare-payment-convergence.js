@@ -368,14 +368,16 @@ async function partB() {
     healthSmall ? healthSmall.commission + ' cents (floor would be 1000)' : 'no payout');
 
   const generic = await commissionFor('provider');
-  ck('B5   a NON-healthcare booking still pays the plan rate (unchanged)',
-    !!generic && generic.commission === 2000, generic ? generic.commission + ' cents of ' + GROSS : 'no payout');
+  /* OWNER 2026-10-03: every service booking pays a flat 5 % of the service amount, replacing the plan ladder
+     ("Yes, flat 5% for all"). The generic path is now RATES.services (5 %), never the 20 % Free-plan rate. */
+  ck('B5   a NON-healthcare booking pays the flat 5 % (owner 2026-10-03), NOT the 20 % plan rate',
+    !!generic && generic.commission === Math.round(GROSS * 5 / 100), generic ? generic.commission + ' cents of ' + GROSS : 'no payout');
 
   /* Back-compat: bookings created before this gate carry no commissionHub at all. They must
      price exactly as they did yesterday — an absent field must never fall to the cheaper rate. */
   const legacy = await commissionFor(undefined);
-  ck('B6   a legacy booking with NO commissionHub pays the plan rate',
-    !!legacy && legacy.commission === 2000, legacy ? legacy.commission + ' cents' : 'no payout');
+  ck('B6   a legacy booking with NO commissionHub pays the same flat 5 % (never a cheaper or a plan rate)',
+    !!legacy && legacy.commission === Math.round(GROSS * 5 / 100), legacy ? legacy.commission + ' cents' : 'no payout');
 
   /* The rate must track the hub, not the plan: an Enterprise provider already pays 5% on the
      generic path, so pinning PLAN_RATE elsewhere proves healthcare is not coincidentally right. */
@@ -384,8 +386,8 @@ async function partB() {
   ck(`B7   healthcare stays ${HC_PCT}% when the plan rate is 7%`,
     !!health7 && health7.commission === Math.round(GROSS * HC_PCT / 100), health7 ? health7.commission + ' cents' : 'no payout');
   const generic7 = await commissionFor('provider');
-  ck('B8   generic follows the plan rate to 7%',
-    !!generic7 && generic7.commission === 700, generic7 ? generic7.commission + ' cents' : 'no payout');
+  ck('B8   generic IGNORES the plan rate (7 % plan) — still the flat 5 %',
+    !!generic7 && generic7.commission === Math.round(GROSS * 5 / 100), generic7 ? generic7.commission + ' cents' : 'no payout');
   PLAN_RATE = 0.20;
 }
 
@@ -446,8 +448,8 @@ async function partC() {
   ck('C8   healthcare args omit subscriptionRole (plan rate must not outrank 5%)', hArgs.subscriptionRole === undefined);
   ck('C9   healthcare args pass skipMinimum (the floor never applied to bookings)', hArgs.skipMinimum === true);
   const gArgs = hub.commissionArgsForHub('provider');
-  ck('C10  generic args are byte-identical to the pre-gate call',
-    gArgs.category === 'services' && gArgs.hubId === 'provider' && gArgs.subscriptionRole === 'provider' && gArgs.skipMinimum === undefined,
+  ck('C10  generic args: services table, NO subscriptionRole (flat 5 %, owner 2026-10-03), no floor',
+    gArgs.category === 'services' && gArgs.hubId === 'provider' && gArgs.subscriptionRole === undefined && gArgs.skipMinimum === true,
     JSON.stringify(gArgs));
 }
 

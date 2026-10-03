@@ -174,7 +174,17 @@ function commissionArgsForHub(hub) {
   if (String(hub || '') === 'entertainment') {
     return { category: 'entertainment_bookings', hubId: 'entertainment', skipMinimum: true };
   }
-  return { category: 'services', hubId: 'provider', subscriptionRole: 'provider' };
+  /* Fitness bookings / memberships: the fixed 5 % fitness lane (commission-config FIXED_RATE_CATEGORIES, floor-exempt). */
+  if (String(hub || '') === 'fitness') {
+    return { category: 'fitness', hubId: 'fitness', skipMinimum: true };
+  }
+  /* EVERY OTHER SERVICE BOOKING — owner 2026-10-03: "SOKONI takes 5% of the service amount, paid by the provider
+     (deducted at settlement) … charged once per booking, from commercial config", and it REPLACES the plan ladder
+     (asked and answered: "Yes, flat 5% for all"). So NO subscriptionRole (which made the plan rate — Free 20 % …
+     Enterprise 5 % — absolute) and no KES 10 floor (this lane never had one). The rate is RATES.services (5 %); an
+     admin can still adjust it through commissionRules / revenueConfig(hub_provider) like every other category.
+     Plans now unlock features only (subscription-catalog), never a commission rate. */
+  return { category: 'services', hubId: 'provider', skipMinimum: true };
 }
 
 module.exports = { resolveProviderHub, resolveProviderClassification, classifyDecidedApplication, commissionArgsForHub, ROLE_TO_HUB, DEFAULT_HUB };

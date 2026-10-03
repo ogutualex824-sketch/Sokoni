@@ -489,3 +489,57 @@ The money-side gaps from the owner's "MEMBERSHIP FULL END-TO-END GREEN" brief:
 - Rules for buyer / gym reads (sokoni-e3's rules lane).
 - Attendance / check-in (sokoni-e3).
 - Gym, member and AdminOS screens (sokoni-e3).
+
+## 14 · Service bookings: flat 5% for every provider, replacing the plan ladder (owner, 2026-10-03)
+
+**Decision.** Relayed via sokoni-f3, then asked and answered directly ("Yes, flat 5% for all"): "SOKONI takes 5% of the service amount, PAID BY THE PROVIDER (deducted at settlement). The buyer pays the service amount only. Charged once per booking, from commercial config … No lead, registration, listing, withdrawal or messaging fees."
+
+**Change** (one place: `provider-hub.commissionArgsForHub`, the settlement inputs for every provider booking):
+- The generic path now prices from `RATES.services` (5%). It no longer passes `subscriptionRole`, which made the plan rate absolute (Free 20 / Starter 15 / Pro 10 / Business 7 / Enterprise 5).
+- There is no KES 10 floor (this lane never had one).
+- An admin may still adjust the rate through `commissionRules` / `revenueConfig(hub_provider)`, like every category.
+- The `fitness` hub routes to its fixed 5% lane.
+- Healthcare and entertainment are unchanged (already 5%).
+- `PROVIDER_PLAN_RATES` stays in place, but service bookings no longer read it. Plans unlock features only.
+
+**Tests updated to the decision:**
+- `test-healthcare-payment-convergence` B5/B6/B8/C10 → 40/0
+- `test-entertainment-bookings` → 95/0
+- the e2e PIN test expects 5% (emulator: UNPROVEN)
+- `provider-plan-ladder` 38/0 and `commission-schedule` 25/0 are unaffected
+
+**UI still claiming plan rates** (sokoni-b2's lane):
+- `provider-onboarding.html` PLANS `c:'20%'…'5%'`
+- `provider-dashboard.html` "Commission rate: X%" from `sub.commissionRate`
+These must show the canonical rate (`SokoniCommission.pct('services')` = 5%) for every plan. The "Leads/month" items are plan limits, not fees, and stay.
+
+### 14.1 · Reversal after settlement + snapshot cleanup (2026-10-03, later)
+
+**Reversal.** Owner, via sokoni-f3 / sokoni-5b: "a service-booking refund AFTER settlement must claw back through the canonical ledger, reversing the provider allocation and SOKONI's 5%, with no second commission".
+
+Built `provider-ops.reverseServiceSettlement(bookingId, {decision:'refund_full', actor, reason})`; sokoni-5b owns the trigger. It writes:
+- `providerPayouts/{id}_reversal`, negating gross / commission / net, with the original row marked `reversed`
+- a provider business wallet debit of exactly `netShillingsCredited`, with a deterministic walletTransaction
+- a buyer refund of what the booking paid (price + fee snapshot) to the SOKONI wallet, plus a deterministic ledger row
+- booking → `refunded_after_settlement`
+
+It only reverses settled bookings, full reversals only (partial is not decided), and a replay reverses nothing twice. If the provider already withdrew, the balance goes negative and `clawbackShortfallShillings` is recorded. Payouts are refused while the balance is below the amount, and later settlements repay it. **That debt policy needs owner confirmation.**
+
+**Tests:** `scripts/test-service-settlement-reversal.js` 7/0.
+
+**Snapshot** (sokoni-b2's findings):
+- `home_services` 14% → **5%** (owner: every service booking).
+- The browser snapshot no longer publishes `PROVIDER_PLAN_PCT` / `providerPct()`, which would have advertised a commission nobody is charged.
+- New `providerBookingPct()` = `RATES.services`.
+- `test-provider-plan-ladder` F1 is inverted accordingly (38/0). `test-commission-schedule` S1 home services = 5 (25/0).
+
+**Open:** `car_rental` (16%) is a vehicle hire on the car hub, not a provider service booking. It is left as-is pending the owner.
+
+### 13.2 · Start at payment, pay-by, notifications (2026-10-03, later; gaps found with sokoni-e3)
+
+- **Start at payment.** The months run from PAYMENT, not from record creation. A future `startAt` chosen by the creation path is kept, and `requestedStartAt` preserves the original.
+- **Pay-by.** `payment-purposes.fitness_membership` refuses a new intent once `payBy` (set by the creation path's TTL) has passed. A payment already in flight is still honoured.
+- **Notifications.** All go through the one sender (`notify.js`, existing types, no WhatsApp):
+  - member: payment confirmed / active (`subscription_activated`), refund request received, refund declined with reason, refunded (`refund_processed`), membership ended (`subscription_expired`)
+  - gym: new membership (`booking_new`), refund requested, earnings released (`wallet_credit`)
+- **Tests:** 53/0 (+S1–S3, N1–N5). The 5 mutants were re-run and each is still detected.
