@@ -11303,6 +11303,7 @@ exports.getReviews           = reviews.getReviews;
 exports.flagReview           = reviews.flagReview;
 exports.markReviewHelpful    = reviews.markReviewHelpful;
 exports.adminModerateReview  = reviews.adminModerateReview;
+exports.submitUnboxing       = reviews.submitUnboxing;     /* owner 2026-10-03: unboxing is server-submitted, AdminOS-approved */
 
 /* ── Booking Domain Dispatcher — booking + venue-booking + availability → 1 Cloud Run ── */
 /* DISPATCH CONSOLIDATION: 45 onCall CFs → 1 bookingDispatch + 3 scheduled + 1 onRequest */

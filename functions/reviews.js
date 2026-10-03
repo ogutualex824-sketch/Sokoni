@@ -221,7 +221,63 @@ exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
   return { reviewId: reviewRef.id, status: "pending" };
 });
 
-exports._reviewAuthority = { REVIEW_TYPES, _canonTarget, _eligibleOrder };
+/* ══ UNBOXING — server-side approval (owner 2026-10-01/03: approved in AdminOS before public; approve / decline /
+   archive / delete) ═════════════════════════════════════════════════════════════════════════════════════════════
+   The live Unboxing Wall wrote unboxingReviews straight from the browser with no moderation. Now the browser asks;
+   this callable decides: the order is the CALLER's, paid, delivered/completed; the product is resolved from the
+   order's own lines (a client productId must be one of them); photos must be the caller's own Storage uploads
+   (unboxing/{uid}/…); one post per buyer per product; ALWAYS pending. Moderation is adminModerateReview kind
+   'unboxing' (the same state machine + history). The wall reads approved posts only (rules R0). */
+const UNBOX_MEDIA_RE = (uid) => new RegExp('^https://firebasestorage\\.googleapis\\.com/v0/b/[^/]+/o/unboxing%2F' + uid.replace(/[^A-Za-z0-9_-]/g, '') + '%2F[^?#]+(\\?|$)');
+exports.submitUnboxing = onCall({ region: "us-central1" }, async (req) => {
+  const uid = _requireAuth(req);
+  const d = req.data || {};
+  const orderId = String(d.orderId || '').trim();
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(orderId)) throw new HttpsError("invalid-argument", "Choose the order you are unboxing.", { reason: "ORDER_REQUIRED" });
+  const rating = Number(d.rating);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw new HttpsError("invalid-argument", "Rating must be 1-5.");
+  const comment = _sanitize(d.comment, 2000);
+  if (comment.length < 10) throw new HttpsError("invalid-argument", "Tell buyers a little more (at least 10 characters).");
+  const re = UNBOX_MEDIA_RE(uid);
+  const imgs = Array.isArray(d.images) ? d.images : [];
+  if (imgs.length > 4 || imgs.some((u) => typeof u !== 'string' || !re.test(u))) {
+    throw new HttpsError("invalid-argument", "Photos must be your own uploads (up to 4).", { reason: "BAD_MEDIA" });
+  }
+  await Promise.all([_checkReviewRateLimit(uid, "unboxing", 3), _assertReviewEligible(uid)]);
+  const db = _db();
+  const oSnap = await db.collection("orders").doc(orderId).get();
+  const o = oSnap.exists ? (oSnap.data() || {}) : null;
+  const buyer = o && (o.buyerUid || o.uid || o.userId);
+  if (!o || buyer !== uid) throw new HttpsError("permission-denied", "That order is not yours.", { reason: "NOT_YOUR_ORDER" });
+  if (o.paymentVerified !== true || !["delivered", "completed"].includes(String(o.status || ""))) {
+    throw new HttpsError("failed-precondition", "You can share an unboxing once the order has been delivered.", { reason: "NOT_ELIGIBLE" });
+  }
+  const lines = Array.isArray(o.items) ? o.items : [];
+  const want = d.productId ? String(d.productId) : null;
+  const line = want ? lines.find((it) => String((it && (it.productId || it.id)) || '') === want) : lines[0];
+  if (!line) throw new HttpsError("failed-precondition", "That product is not in this order.", { reason: "PRODUCT_NOT_IN_ORDER" });
+  const productId = String(line.productId || line.id || '');
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(productId)) throw new HttpsError("failed-precondition", "That order line has no product.");
+  const pSnap = await db.collection("products").doc(productId).get().catch(() => null);
+  const prod = pSnap && pSnap.exists ? (pSnap.data() || {}) : {};
+  const ref = db.collection("unboxingReviews").doc(uid + "_" + productId);
+  try {
+    await ref.create({
+      uid, orderId, productId, rating, comment, images: imgs,
+      product: _sanitize(prod.name || line.name || '', 120), sellerUid: prod.sellerUid || o.sellerUid || null,
+      category: _sanitize(d.category || prod.category || '', 40), verifiedPurchase: true,
+      status: "pending", createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    if (e && (e.code === 6 || /already exists/i.test(e.message || ''))) throw new HttpsError("already-exists", "You have already shared an unboxing for this product.", { reason: "DUPLICATE" });
+    throw e;
+  }
+  await db.collection("reviewModerationLog").add({ reviewId: ref.id, kind: "unboxing", from: null, to: "pending", action: "submit",
+    actorUid: uid, targetId: productId, targetType: "product", at: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+  return { id: ref.id, status: "pending" };
+});
+
+exports._reviewAuthority = { REVIEW_TYPES, _canonTarget, _eligibleOrder, UNBOX_MEDIA_RE };
 
 // ── getReviews ────────────────────────────────────────────────────────────────
 exports.getReviews = onCall({ region: "us-central1" }, async (req) => {
@@ -367,6 +423,9 @@ exports.markReviewHelpful = onCall({ region: "us-central1" }, async (req) => {
 exports.adminModerateReview = onCall({ region: "us-central1" }, async (req) => {
   if (!_isAdmin(req)) throw new HttpsError("permission-denied", "Admins only.");
   const { reviewId, action, note } = req.data || {};
+  /* kind: 'review' (reviews/{id}) | 'unboxing' (unboxingReviews/{id}) — the same state machine and history */
+  const kind = (req.data || {}).kind === 'unboxing' ? 'unboxing' : 'review';
+  const COLL = kind === 'unboxing' ? 'unboxingReviews' : 'reviews';
   if (!reviewId || typeof reviewId !== "string" || !/^[A-Za-z0-9_-]{1,200}$/.test(reviewId)) throw new HttpsError("invalid-argument", "reviewId required.");
   /* The shared moderation vocabulary (one with the report queue): pending → approved | rejected |
      changes_requested | archived | removed. 'flagged' (legacy) moderates like pending. Restore = back to pending. */
@@ -381,16 +440,17 @@ exports.adminModerateReview = onCall({ region: "us-central1" }, async (req) => {
   if (!T) throw new HttpsError("invalid-argument", "Invalid action.");
 
   const db  = _db();
-  const ref = db.collection("reviews").doc(reviewId);
+  const ref = db.collection(COLL).doc(reviewId);
   const actor = req.auth.uid;
   const res = await db.runTransaction(async (tx) => {
     const doc = await tx.get(ref);
     if (!doc.exists) throw new HttpsError("not-found", "Review not found.");
     const r = doc.data() || {};
-    if (r.authorUid === actor) throw new HttpsError("permission-denied", "You cannot moderate your own review.", { reason: "SELF_REVIEW" });
+    if ((r.authorUid || r.uid) === actor) throw new HttpsError("permission-denied", "You cannot moderate your own review.", { reason: "SELF_REVIEW" });
     /* self-interest: an admin who owns the reviewed target */
     let owner = null;
-    if (r.targetType === "seller") owner = r.targetId;
+    if (kind === "unboxing") owner = r.sellerUid || null;
+    else if (r.targetType === "seller") owner = r.targetId;
     else if (r.targetType === "product") {
       const p = await tx.get(db.collection("products").doc(String(r.targetId)));
       owner = p.exists ? (p.data().sellerUid || p.data().sellerId || p.data().shopId || null) : null;
@@ -406,13 +466,13 @@ exports.adminModerateReview = onCall({ region: "us-central1" }, async (req) => {
       moderatedAt:     admin.firestore.FieldValue.serverTimestamp(),
       updatedAt:       admin.firestore.FieldValue.serverTimestamp(),
     });
-    tx.set(db.collection("reviewModerationLog").doc(), { reviewId, from, to: T.to, action, actorUid: actor,
+    tx.set(db.collection("reviewModerationLog").doc(), { reviewId, kind, from, to: T.to, action, actorUid: actor,
       note: _sanitize(note || "", 500), targetId: r.targetId || null, targetType: r.targetType || null,
       at: admin.firestore.FieldValue.serverTimestamp() });
     return { status: T.to, unchanged: false, targetId: r.targetId };
   });
 
   // Publication follows the authoritative state: the summary counts APPROVED reviews only
-  if (!res.unchanged && res.targetId) await _recalcSummary(res.targetId);
+  if (!res.unchanged && res.targetId && kind === "review") await _recalcSummary(res.targetId);
   return { status: res.status, unchanged: res.unchanged };
 });

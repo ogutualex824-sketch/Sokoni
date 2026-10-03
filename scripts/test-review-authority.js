@@ -89,6 +89,37 @@ const ADM = { admin: true };
   DOCS.set('reviews/x_product_p2', { authorUid: 'buyer', targetType: 'product', targetId: 'p2', status: 'pending', rating: 1 });
   r = await call(RV.adminModerateReview, 'adminSeller', { reviewId: 'x_product_p2', action: 'reject' }, ADM);
   ck('S-2', !r.ok && r.reason === 'SELF_INTEREST', 'an admin who SELLS the product cannot moderate its reviews', r);
+  /* ── UNBOXING: server-side approval (owner 2026-10-01/03) ── */
+  if (RV.submitUnboxing) {
+    const _clr = () => [...DOCS.keys()].filter((k) => k.indexOf('reviewRateLimits/') === 0).forEach((k) => DOCS.delete(k));
+    const IMG = 'https://firebasestorage.googleapis.com/v0/b/sk.appspot.com/o/unboxing%2Fbuyer%2Fbox1.webp?alt=media';
+    DOCS.delete('reviewRateLimits/buyer_unboxing_' + new Date().toISOString().slice(0, 10));
+    _clr(); let u = await call(RV.submitUnboxing, 'buyer', { orderId: 'o1', productId: 'p1', rating: 5, comment: 'Arrived sealed and exactly as pictured', images: [IMG], status: 'approved', approved: true });
+    const ud = DOCS.get('unboxingReviews/buyer_p1');
+    ck('U-1', u.ok && u.r.status === 'pending' && ud && ud.status === 'pending' && ud.verifiedPurchase === true && ud.orderId === 'o1' && ud.sellerUid === 'seller1',
+      'an unboxing post is PENDING on submit (browser approved/status ignored), tied to the verified order and product', { u, ud });
+    _clr(); u = await call(RV.submitUnboxing, 'stranger', { orderId: 'o1', productId: 'p1', rating: 5, comment: 'not my order but posting anyway' });
+    ck('U-2', !u.ok && u.reason === 'NOT_YOUR_ORDER', 'someone else\'s order cannot be unboxed', u);
+    _clr(); u = await call(RV.submitUnboxing, 'stranger', { orderId: 'o2', productId: 'p1', rating: 5, comment: 'unpaid order unboxing attempt' });
+    ck('U-3', !u.ok && u.reason === 'NOT_ELIGIBLE', 'an unpaid / undelivered order is not eligible', u);
+    _clr(); u = await call(RV.submitUnboxing, 'buyer', { orderId: 'o1', productId: 'pX', rating: 5, comment: 'a product that was never in this order' });
+    ck('U-4', !u.ok && u.reason === 'PRODUCT_NOT_IN_ORDER', 'the product must be one of the order\'s own lines', u);
+    _clr(); u = await call(RV.submitUnboxing, 'buyer', { orderId: 'o1', productId: 'p2', rating: 5, comment: 'photos hosted somewhere else entirely', images: ['https://evil.example/x.jpg'] });
+    _clr(); const u2 = await call(RV.submitUnboxing, 'buyer', { orderId: 'o1', productId: 'p2', rating: 5, comment: 'someone else\'s storage upload here', images: [IMG.replace('unboxing%2Fbuyer', 'unboxing%2Fstranger')] });
+    ck('U-5', !u.ok && u.reason === 'BAD_MEDIA' && !u2.ok && u2.reason === 'BAD_MEDIA', 'photos must be the caller\'s OWN unboxing uploads', [u.reason, u2.reason]);
+    _clr(); u = await call(RV.submitUnboxing, 'buyer', { orderId: 'o1', productId: 'p1', rating: 4, comment: 'second unboxing for the same product' });
+    ck('U-6', !u.ok && u.reason === 'DUPLICATE', 'one unboxing per buyer per product', u);
+    u = await call(RV.adminModerateReview, 'admin1', { kind: 'unboxing', reviewId: 'buyer_p1', action: 'approve' }, ADM);
+    const uh = [...DOCS.values()].filter((v) => v && v.reviewId === 'buyer_p1' && v.kind === 'unboxing').map((v) => v.from + '→' + v.to);
+    ck('U-7', u.ok && DOCS.get('unboxingReviews/buyer_p1').status === 'approved' && uh.join(',') === 'null→pending,pending→approved', 'an ADMIN approves the unboxing (same state machine + history)', { u, uh });
+    u = await call(RV.adminModerateReview, 'seller1', { kind: 'unboxing', reviewId: 'buyer_p1', action: 'remove', note: 'x' }, ADM);
+    ck('U-8', !u.ok && u.reason === 'SELF_INTEREST', 'the product\'s SELLER cannot moderate its unboxing posts', u);
+    u = await call(RV.adminModerateReview, 'buyer', { kind: 'unboxing', reviewId: 'buyer_p1', action: 'archive' }, ADM);
+    ck('U-9', !u.ok && u.reason === 'SELF_REVIEW', 'the author cannot moderate their own unboxing', u);
+    u = await call(RV.adminModerateReview, 'stranger', { kind: 'unboxing', reviewId: 'buyer_p1', action: 'remove' });
+    ck('U-10', !u.ok && u.code === 'permission-denied' && DOCS.get('unboxingReviews/buyer_p1').status === 'approved', 'a non-admin cannot moderate', u);
+  } else { ck('U-0', false, 'submitUnboxing exists'); }
+
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH ' + (e && e.stack || e)); process.exit(2); });
