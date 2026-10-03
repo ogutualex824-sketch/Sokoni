@@ -1,3 +1,10 @@
+## [2026-10-03] — Super Admin › Marketing Hub (MK5c): platform read-only view over the ONE read model — NOT deployed
+
+- **super-admin.html:** a Marketing Hub nav item and panel. SA.loadMarketing reads the SAME marketingDispatch admin reads as AdminOS: pipeline by status/type, marketers, coverage counted from ACTIVE services per category across the 10 groups / 71 services, and bookings with their server money state.
+- Decisions stay in AdminOS › Marketing (applicationDecide). Commission (marketing_services 10%) and plans live in the ONE commercial catalogue (Config). The panel has no editable field and is not a second approval database.
+- A failed read says "not an empty hub" and never renders zeros.
+- **Tests:** scripts/test-sa-marketing.js 7/0 (deliberate breaks for escaping and inactive-service counting go red); admin-layouts 72/0, legal-hub-web 21/0, authority-honesty 28/0, nav suites pass.
+
 ## [2026-10-03] — AdminOS › Marketing (MK5b): review with category checkboxes on the ONE approval authority — NOT deployed
 
 - **sokoni-aos-marketing.js (new) + admin-os.html (nav item, panel, scripts) + sokoni-aos.js (_loadMarketing):**

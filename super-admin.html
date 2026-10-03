@@ -419,6 +419,9 @@
     <button class="nav-item" data-section="legal" data-label="Legal Hub" type="button" onclick="SA.nav('legal');_closeSidebar()">
       <span class="nav-icon">&#x2696;</span><span class="nav-label">Legal Hub</span>
     </button>
+    <button class="nav-item" data-section="marketing" data-label="Marketing Hub" type="button" onclick="SA.nav('marketing');_closeSidebar()">
+      <span class="nav-icon">&#x1F4E3;</span><span class="nav-label">Marketing Hub</span>
+    </button>
     <button class="nav-item" data-section="secrets" data-label="Secrets Checklist" type="button" onclick="SA.nav('secrets');_closeSidebar()">
       <span class="nav-icon">&#x1F511;</span><span class="nav-label">Secrets Checklist</span>
     </button>
@@ -926,6 +929,21 @@
       <div class="sa-card"><h3 style="margin:0 0 10px;font-size:14px">Practice-area coverage <span style="font-weight:400;opacity:.6;font-size:12px">(bookable providers per service — from the registry above)</span></h3><div id="saLegalCoverage"></div></div>
     </section>
 
+    <!-- Marketing Hub (MK5c): platform-level READ-ONLY view over the SAME server read model AdminOS uses (marketingDispatch
+         admin reads, admin-claim checked). Decisions stay in AdminOS › Marketing (applicationDecide). Commission (marketing_services
+         10%) and plans (Free / Professional / Agency) live in the ONE commercial catalogue — configured under Config, never here.
+         No money field is editable on this page. -->
+    <section class="sa-panel" id="panel-marketing" hidden>
+      <div class="panel-header">
+        <h2>&#x1F4E3; Marketing Hub</h2>
+        <p>Applications, marketers, services and bookings across the platform. Decisions are taken in <a href="admin-os.html#marketing" style="color:#c8ff80">AdminOS › Marketing</a>; commission and plans are the commercial catalogue (Config).</p>
+      </div>
+      <div class="sa-card"><h3 style="margin:0 0 10px;font-size:14px">Pipeline</h3><div id="saMktPipeline"><div class="spinner"></div></div></div>
+      <div class="sa-card"><h3 style="margin:0 0 10px;font-size:14px">Marketers</h3><div id="saMktMarketers"></div></div>
+      <div class="sa-card"><h3 style="margin:0 0 10px;font-size:14px">Coverage <span style="font-weight:400;opacity:.6;font-size:12px">(active marketing services per category — counted from the services the server returned)</span></h3><div id="saMktCoverage"></div></div>
+      <div class="sa-card"><h3 style="margin:0 0 10px;font-size:14px">Bookings &amp; money state</h3><div id="saMktBookings"></div></div>
+    </section>
+
     <section class="sa-panel" id="panel-secrets" hidden>
       <div class="panel-header">
         <h2>&#x1F511; Secrets Checklist</h2>
@@ -1200,6 +1218,7 @@ const SA={
     else if(section==='audit')this.loadAudit();
     else if(section==='broadcast')this.loadBroadcastHistory();
     else if(section==='legal')this.loadLegal();
+    else if(section==='marketing')this.loadMarketing();
   },
 
   // ══ Legal Hub (L8) — read-only; the one read model is legalAdminList (adminOsDispatch, admin-claim checked) ══
@@ -1220,6 +1239,28 @@ const SA={
     /* Coverage is COUNTED from the registry rows the server returned (bookable only) — a real 0 means none, never a guess. */
     const n={};rows.filter(a=>a.eligibility&&a.eligibility.bookable).forEach(a=>(a.practiceAreas||[]).forEach(x=>{n[x]=(n[x]||0)+1}));
     cov.innerHTML=T.GROUPS.map(g=>'<div style="margin-bottom:10px"><div style="font-weight:700;font-size:12px;margin-bottom:4px">'+esc(g.icon+' '+g.label)+'</div><div style="display:flex;flex-wrap:wrap;gap:6px">'+g.services.map(x=>'<span style="font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.12);'+(n[x.id]?'':'opacity:.55')+'">'+esc(x.label)+' · '+(n[x.id]||0)+'</span>').join('')+'</div></div>').join('');
+  },
+
+  // ══ Marketing Hub (MK5c) — read-only; ONE read model (marketingDispatch admin reads); decisions in AdminOS › Marketing ══
+  async loadMarketing(){
+    const pipe=document.getElementById('saMktPipeline'),mk=document.getElementById('saMktMarketers'),cov=document.getElementById('saMktCoverage'),bk=document.getElementById('saMktBookings');if(!pipe)return;
+    const esc=(v)=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const T=window.SokoniMarketingTaxonomy||null,lab=(c)=>(T&&T.label(c))||c,TYPE={individual:'Individual',agency:'Agency',specialist:'Specialist'};
+    const kes=(c)=>c==null?'—':'KES '+(Math.round(Number(c)||0)/100).toLocaleString('en-KE');
+    const call=(op)=>this._fns.httpsCallable('marketingDispatch')({op}).then(r=>r.data||{});
+    pipe.innerHTML='<div class="spinner"></div>';mk.innerHTML='';cov.innerHTML='';bk.innerHTML='';
+    let o,p,sv,b;
+    try{[o,p,sv,b]=await Promise.all([call('marketingAdminOverview'),call('marketingAdminProviders'),call('marketingAdminServices'),call('marketingAdminBookings')]);}
+    catch(e){pipe.innerHTML='<p style="opacity:.7">The Marketing read model could not be loaded ('+esc((e&&e.message)||'error')+'). This is not an empty hub.</p>';return}
+    const c=o.counts||{},kv=(x)=>Object.keys(x||{}).map(k=>'<span style="font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.12);margin:0 6px 6px 0;display:inline-block">'+esc(k)+' · '+esc(x[k])+'</span>').join('')||'<span style="opacity:.6">none yet</span>';
+    pipe.innerHTML='<div><b>Listed marketers:</b> '+esc(c.listed==null?'—':c.listed)+'</div><div style="margin-top:6px"><b>By status:</b> '+kv(c.byStatus)+'</div><div><b>By type:</b> '+kv(c.byType)+'</div>';
+    const ms=p.items||[];
+    mk.innerHTML=ms.length?'<div style="overflow-x:auto"><table class="sa-table"><thead><tr><th>Name</th><th>Type</th><th>Marketing</th><th>Listed</th><th>Approved services</th><th>Rating</th></tr></thead><tbody>'+ms.map(m=>'<tr><td>'+esc(m.name)+'</td><td>'+esc(TYPE[m.marketingType]||'—')+'</td><td>'+esc(m.marketingStatus||'—')+'</td><td>'+(m.listed?'✅':'—')+'</td><td style="font-size:12px;opacity:.8">'+esc((m.categories||[]).map(lab).join(', ')||'—')+'</td><td>'+(m.reviewCount>0&&m.rating!=null?esc(m.rating.toFixed(1)+' ('+m.reviewCount+')'):'No reviews yet')+'</td></tr>').join('')+'</tbody></table></div>':'<p style="opacity:.7">No marketers yet.</p>';
+    if(!T){cov.innerHTML='<p style="opacity:.7">Taxonomy not loaded — coverage unavailable.</p>';}
+    else{const n={};(sv.items||[]).filter(x=>x.active).forEach(x=>{n[x.category]=(n[x.category]||0)+1});
+      cov.innerHTML=T.GROUPS.map(g=>'<div style="margin-bottom:10px"><div style="font-weight:700;font-size:12px;margin-bottom:4px">'+esc(g.icon+' '+g.label)+'</div><div style="display:flex;flex-wrap:wrap;gap:6px">'+g.services.map(x=>'<span style="font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.12);'+(n[x.id]?'':'opacity:.55')+'">'+esc(x.label)+' · '+(n[x.id]||0)+'</span>').join('')+'</div></div>').join('');}
+    const bs=b.items||[];
+    bk.innerHTML=bs.length?'<div style="overflow-x:auto"><table class="sa-table"><thead><tr><th>Booking</th><th>Service</th><th>Price</th><th>Status</th><th>Payment</th><th>Commission</th></tr></thead><tbody>'+bs.map(x=>'<tr><td style="font-family:monospace;font-size:11px">'+esc(x.id)+'</td><td>'+esc(x.service)+' <span style="opacity:.6;font-size:11px">'+esc(lab(x.serviceCategory))+'</span></td><td>'+esc(kes(x.priceCents))+'</td><td>'+esc(x.status||'—')+'</td><td>'+esc(x.paymentStatus||'—')+'</td><td>'+esc(x.commissionCents==null?'On completion':kes(x.commissionCents))+'</td></tr>').join('')+'</tbody></table></div>':'<p style="opacity:.7">No marketing bookings yet.</p>';
   },
 
   // Sign Out ────────────────────────────────────────────────
@@ -2170,7 +2211,8 @@ const SA={
   })();
 })();
 </script>
-<script src="sokoni-legal-taxonomy.js"></script>   <!-- Legal Hub L8: the ONE Legal taxonomy (generated) -->
+<script src="sokoni-legal-taxonomy.js"></script>
+<script src="sokoni-marketing-taxonomy.js"></script>   <!-- Marketing Hub MK5c: the ONE Marketing taxonomy (generated) -->   <!-- Legal Hub L8: the ONE Legal taxonomy (generated) -->
 <script src="sokoni-commission-rates.js"></script>   <!-- Tech Hub 4R: the canonical, generated commission snapshot (read-only view) -->
 </body>
 </html>
