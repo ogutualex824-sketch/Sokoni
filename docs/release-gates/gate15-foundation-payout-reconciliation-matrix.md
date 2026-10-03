@@ -32,3 +32,10 @@ Suites:
 - the real IntaSend sandbox/live responses for PESALINK, MPESA-B2B, validate-account, bank-codes and send-money status
 - Firestore emulator semantics (the fake is not the emulator)
 - production revision proof (Gate 16): not deployed
+
+## Gate 13 items routed to this lane (classified 2026-10-03)
+
+| Item | What it does | Classification | Money effect | Disposition |
+|---|---|---|---|---|
+| `sokoni-banking-pro.js` markInvoicePaid / "wallet" | Moves a browser-local localStorage "balance". The live banking.html (72dca56) loads it and presents it as a wallet. | **BROWSER-FABRICATED MONEY STATE: DISPLAY ONLY.** No server write, no IntaSend, no ledger. It still misleads users. | none on any ledger (misleading UI) | **Closed in code:** `hosting/banking-foundation-on-f13a912` stops loading it; banking-hub.js replaces the panes; test-foundation-page B1 asserts it is not loaded. **Live until that hosting deploys.** The file is still listed in service-worker.js precache (inert once no page loads it). Delete the file in a later cleanup; service-worker caching is not to be hand-edited. |
+| `financial-os.html:808` `_approveBankPayoutDirect` | Admin browser writes `payouts/{id}` `{status:'completed', bankRef}` directly through the client SDK. | **BROWSER-AUTHORED MONEY STATE: REAL RECORD.** One admin's click marks a wallet payout completed. The server does not verify it, no second admin is involved, and no provider evidence is required. | marks a seller/wallet payout completed (FinOS / wallet lane, `payouts` collection). **Not Foundation money.** | **OUT OF THIS LANE** (wallet / FinOS payouts; adminProcessPayout guard 45a837d is live by traffic pin; Wallet FROZEN). Recommended repair, owner to assign: route it through the existing server payout authority (adminProcessPayout or the manual-rail pattern: record reference → a different admin confirms), and add a rules denial on client `payouts.status` writes in the rules unit. Status: **OPEN, unassigned.** |
