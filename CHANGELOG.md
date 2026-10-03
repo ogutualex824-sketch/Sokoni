@@ -1,3 +1,29 @@
+## [2026-10-03] - Merchant V2 provider session: S.editable (P0-F) + VALID token confirmed (NOT deployed)
+
+**Owner invariant (2026-10-03):** application status is WORKFLOW, not authorization; every hub consumes ONE approval
+answer. P0-F: deactivated / suspended / frozen owners get read-only edit UIs, never refused saves.
+**DEPLOY DEPENDENCY:** sokoni-5b `f85039a` (one approval authority) and `1a5c9e5` (`ownerState` + `editable` on the
+businessWorkspace answer). Until `1a5c9e5` is live the field is absent and every provider session is READ-ONLY
+(owner rule: anything other than `editable === true` is read-only) — by design, fail closed.
+
+- **VALID token confirmed:** `'VALID_APPROVAL'` in `sokoni-merchant-session.js` equals sokoni-5b `f85039a`
+  `STATES.VALID` — no change needed.
+- **New `sokoni-edit-authority.js`** (pure, shared byte-identical with the Construction and Fitness branches):
+  `decide(answer, claims)` → `{editable, readOnly, reasonCode, reason, ownerState, source, action}`; `message(d)`.
+- **`merchant-v2.html`:** `S.editable` computed in `resolveProviderSession` from the SAME single businessWorkspace
+  call plus the ID-token claims (`getIdTokenResult`; unreadable → null); read-only default until it lands; reset on
+  sign-out; exposed as `SokoniShell.editable()` and in the `session` postMessage. `SokoniMerchantSession.editableOf`.
+- **Tests:** `test-merchant-provider-session.js` 75/0 → 98/0: E0–E20 (every ownerState × editable missing/false/true,
+  interim claim/approval rows, editable-true override, no-answer/claims-unreadable/module-missing fail closed, merchant
+  session untouched) and negative controls X-e (missing editable treated as editable → E3 red), X-f (shell fails open
+  on a missing answer → E14 red). X-b sabotage marker updated to the new source line. Re-run: test-merchant-routes 65/0,
+  mv2-1-sidebar 14/0, v2-panels 20/0, entry 59/0, dashboard 117/0, greeting 34/0, and 24 more browser-free suites
+  unchanged; test-merchant-capability 44/2, test-merchant-shell-callables 18/1, products-2c-media — PRE-EXISTING,
+  identical on a HEAD export. Browser certification QUEUED (RAM floor).
+- **Database / API / rules / functions:** none (hosting only). **Security:** read-only fails closed; no client-writable
+  field is consulted. **Files:** `sokoni-edit-authority.js` (new), `sokoni-merchant-session.js`, `merchant-v2.html`,
+  `scripts/test-merchant-provider-session.js`, `docs/MERCHANT_V2_TARGET_ARCHITECTURE.md`, `CHANGELOG.md`.
+
 ## [2026-10-03] - Merchant V2 provider session + group gate — one shell for merchants AND providers (SHELL half; NOT deployed)
 
 **Owner decision (2026-10-03, via sokoni-b2): "Provider mode in merchant-v2".** This is the shell half; the Marketing
