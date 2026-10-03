@@ -63,6 +63,13 @@ inside blocks those suites do not exercise). **Rollback for this release = f259c
 3b. **foodMenus closed (sokoni-5b security convergence):** `allow read, write: if false`. Ship only AFTER the Food
    containment hosting (`2e5e33b`, removes food-dashboard.html's only writer) is live. Suite
    `scripts/zz-test-food-menus-rules.js` FM-1..FM-8 + control — **EMULATOR PENDING**.
+3c. **products authority, phase 1 (sokoni-5b security convergence):** no browser create; the owner cannot change
+   price / sale / wholesale / status / visibility / shop / owner / moderation / rating fields; no owner hard delete.
+   Ship only AFTER (i) `merchantProduct` (feat/security-product-authority-on-c8a3e6c) is LIVE and (ii) the client
+   migration hosting (hosting/security-product-client-on-32c16ee: merchant-v2, inventory pages, merchant.html
+   availability, seller-wiring retired) is LIVE — otherwise product saves are denied. Stock stays owner-writable until
+   phase 2 (after POS convergence, sokoni-2f). Suite `scripts/zz-test-products-authority-rules.js` PA-1..PA-14 —
+   **EMULATOR PENDING**.
 4. Release only `firestore:rules` (and verify `releases/cloud.firestore` → the new ruleset id afterwards — a scoped
    `--only firestore:rules` deploy can fail open), then run live probes (forged-badge create denied, anonymous job
    create denied, an applicant's own pending application still writable).

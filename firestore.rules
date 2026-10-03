@@ -668,24 +668,31 @@ service cloud.firestore {
   && !(d.get('imageUrl', '') is string     && d.get('imageUrl', '').matches('data:.*'))
   && !(d.get('thumbnailUrl', '') is string && d.get('thumbnailUrl', '').matches('data:.*'));
   }
+  /* SECURITY CONVERGENCE (sokoni-5b, 2026-10-03) — PRODUCTS, phase 1. The server authority merchantProduct
+     (functions/merchant-product.js) is the ONLY creator and the only writer of price, publication and ownership;
+     merchant-v2, the inventory pages and merchant.html availability call it. So a browser:
+       · creates nothing (merchantProduct creates);
+       · as the owner, cannot change price / sale / wholesale price, status / visibility, shop / owner, or any
+         moderation, rating or seller-identity field;
+       · never hard-deletes (archive is merchantProduct's tombstone; admins keep delete).
+     STOCK (stock / sold / inventoryVersion / lastStockSource) stays owner-writable in THIS phase: the legacy till's
+     browser stock sync (pos.js _posSyncCanonicalStock) is live and correct today (sokoni-2f). It is locked in phase 2,
+     after POS sales route through posCompleteCheckout. Admin raw writes are unchanged. */
   match /products/{productId} {
   allow read:   if true;
-  allow create: if isActive() && isAuthed() && isSeller()
-  && request.resource.data.sellerUid == request.auth.uid
-  && validPrice('price')
-  && noAdminFields()
-  && noBase64Image()
-  && withinProductLimit();
+  allow create: if false;
   allow update: if isAdmin()
   || (isAuthed() && isSeller()
   && resource.data.sellerUid == request.auth.uid
   && !request.resource.data.diff(resource.data)
   .affectedKeys()
-  .hasAny(['sellerUid'])
+  .hasAny(['sellerUid', 'sellerId', 'uid', 'shopId', 'price', 'salePrice', 'wholesalePrice', 'wholesaleEnabled',
+           'minOrderQty', 'maxOrderQty', 'status', 'isVisible', 'visible', 'active', 'approvalStatus', 'rejectionReason',
+           'qualityFlag', 'qualityFlagReason', 'qualityFlaggedAt', 'rating', 'reviews', 'reviewCount', 'sellerName',
+           'archivedAt', 'archivedBy', 'source'])
   && noAdminFields()
   && noBase64Image());
-  allow delete: if isAdmin()
-  || (isAuthed() && isSeller() && resource.data.sellerUid == request.auth.uid);
+  allow delete: if isAdmin();
   }
   match /listings/{listingId} {
   allow read:   if true;
