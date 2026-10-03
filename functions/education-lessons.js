@@ -94,11 +94,16 @@ function lessonFields(d, ownerUid, courseId) {
   return out;
 }
 
+async function _notify(n) {
+  try { await require('./notify').notify(Object.assign({ awaitDelivery: false }, n)); } catch (_) { /* a notification never undoes the write */ }
+}
+
 async function _assertEducator(db, uid) {
   const BW = require('./business-workspace');
   try { await BW.assertModule(db, uid, 'eduCourses', HttpsError); }
   catch (_) { _deny('permission-denied', 'Only an approved SOKONI teacher or institution can manage lessons.', 'NOT_AN_APPROVED_EDUCATOR'); }
 }
+/* learners always get the APPROVED order; a live-course reorder waits in course.pendingLessonOrder until review */
 async function _lessonsOf(db, courseId) {
   const q = await db.collection('courseLessons').where('courseId', '==', String(courseId)).limit(MAX_LESSONS + 1).get();
   return q.docs.map((x) => Object.assign({ lessonId: x.id }, x.data())).sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -141,15 +146,16 @@ async function recordProgress(db, uid, courseId, lessonId, completed) {
     t.set(progressRef, { uid, courseId: String(courseId), completedLessons: done, currentLesson: String(lessonId), lastAccessedAt: _ts(), lastAccessedAtMs: Date.now() }, { merge: true });
     t.update(progressRef, { [stateKey]: { state: completed ? 'completed' : 'in_progress', startedAtMs: prevState.startedAtMs || Date.now(), completedAtMs: completed ? Date.now() : null } });
     t.update(enrollRef, Object.assign({ progress, lastAccessedAt: _ts() }, progress >= 100 ? { completedAt: _ts() } : {}));
-    let certificateId = cert.exists ? cert.id : null;
+    let certificateId = cert.exists ? cert.id : null; let certificateIssued = false;
     if (progress >= 100 && !cert.exists) {
       t.create(certRef, { uid, courseId: String(courseId), courseTitle: c.data().title || null, ownerUid: c.data().instructorUid || null,
         providerName: prov && prov.exists ? (prov.data().name || prov.data().businessName || null) : null,
         issuer: 'SOKONI Education', kind: 'self_paced_completion', status: 'issued',
         serial: 'SOK-EDU-' + crypto.randomBytes(5).toString('hex').toUpperCase(), issuedAt: _ts(), issuedAtMs: Date.now(), _noIndex: true });
       certificateId = certRef.id;
+      certificateIssued = true;
     }
-    return { progress, certificateId, message: progress >= 100 ? 'Congratulations! You have completed this course.' : `Progress updated: ${progress}% complete` };
+    return { progress, certificateId, certificateIssued, message: progress >= 100 ? 'Congratulations! You have completed this course.' : `Progress updated: ${progress}% complete` };
   });
 }
 
@@ -189,13 +195,27 @@ async function handle(req) {
       });
     }
     const x = l.data();
+    if (d.version === 'pending') {
+      /* the OWNER's preview of what is waiting for review — never available to a learner, never a learner-access link */
+      if (!owner) _deny('permission-denied', 'Only the course owner can preview pending changes.', 'NOT_COURSE_OWNER');
+      const pend = x.pendingRevision || (x.stagedForReview ? x : null);
+      if (!pend) _deny('not-found', 'This lesson has no pending change.', 'NO_PENDING');
+      const pUrl = pend.materialPath ? await signedMaterialUrl(pend.materialPath) : null;
+      return { ok: true, preview: 'pending', notice: 'Previewing pending changes — learners cannot see these changes yet.',
+        lesson: { lessonId: l.id, title: pend.title, kind: pend.kind, description: pend.description || null, body: pend.body || null, videoUrl: pend.videoUrl || null,
+          materialUrl: pUrl, materialExpiresInMinutes: pUrl ? 15 : null, freePreview: pend.freePreview === true } };
+    }
     /* minted ONLY after the entitlement check above; expires in 15 minutes */
     const materialUrl = x.materialPath ? await signedMaterialUrl(x.materialPath) : null;
-    return { ok: true, lesson: { lessonId: l.id, title: x.title, kind: x.kind, body: x.body || null, videoUrl: x.videoUrl || null, materialUrl, materialExpiresInMinutes: materialUrl ? 15 : null, freePreview: x.freePreview === true },
+    return { ok: true, ...(owner ? { preview: 'published' } : {}), lesson: { lessonId: l.id, title: x.title, kind: x.kind, body: x.body || null, videoUrl: x.videoUrl || null, materialUrl, materialExpiresInMinutes: materialUrl ? 15 : null, freePreview: x.freePreview === true },
       /* the OWNER also previews a change waiting for review; a learner never receives it */
       ...(owner && x.pendingRevision ? { pendingRevision: Object.assign({}, x.pendingRevision, { materialPath: undefined }) } : {}) };
   }
-  if (d.op === 'complete') return Object.assign({ ok: true }, await recordProgress(db, uid, courseId, _str(d.lessonId, 128), d.completed !== false));
+  if (d.op === 'complete') {
+    const r = await recordProgress(db, uid, courseId, _str(d.lessonId, 128), d.completed !== false);
+    if (r.certificateIssued) await _notify({ uid, type: 'education_certificate_issued', title: 'Certificate issued', body: 'Congratulations — your certificate is ready in My learning.', dedupeKey: 'edu_cert_' + r.certificateId, data: { courseId, certificateId: r.certificateId } });
+    return Object.assign({ ok: true }, r);
+  }
   if (d.op === 'myCertificates') {
     const q = await db.collection('learnerCertificates').where('uid', '==', uid).limit(100).get();
     return { ok: true, certificates: q.docs.map((x) => ({ certificateId: x.id, courseTitle: x.data().courseTitle || null, serial: x.data().serial, kind: x.data().kind,
@@ -232,6 +252,25 @@ async function handle(req) {
     return { ok: true, status: 'revoked' };
   }
 
+  /* ── AdminOS → Education → Course Reviews ── */
+  if (d.op === 'reviewQueue' || d.op === 'reviewDetail') {
+    const isAdmin = !!(req.auth.token && (req.auth.token.admin === true || req.auth.token.superAdmin === true));
+    if (!isAdmin) _deny('permission-denied', 'Administrator access required.', 'ADMIN_REQUIRED');
+    if (d.op === 'reviewQueue') {
+      const q = await db.collection('courseReviews').where('status', '==', 'pending').limit(100).get();
+      return { ok: true, reviews: q.docs.map((x) => Object.assign({ reviewId: x.id }, x.data())) };
+    }
+    const c = await courseRef.get();
+    if (!c.exists) _deny('not-found', 'Course not found');
+    const lessons = await _lessonsOf(db, courseId);
+    const view = (l) => ({ title: l.title, description: l.description || null, kind: l.kind, durationMinutes: l.durationMinutes || null, body: l.body || null,
+      videoUrl: l.videoUrl || null, materialPath: l.materialPath || null, freePreview: l.freePreview === true });
+    return { ok: true, course: { courseId, title: c.data().title, ownerUid: c.data().instructorUid, revisionPending: c.data().revisionPending === true,
+      approvedOrder: lessons.map((l) => l.lessonId), proposedOrder: c.data().pendingLessonOrder || null },
+      lessons: lessons.map((l) => ({ lessonId: l.lessonId, status: l.status, version: l.version || 1, stagedForReview: l.stagedForReview === true,
+        published: l.status === 'published' ? view(l) : null, proposed: l.pendingRevision ? Object.assign(view(l), l.pendingRevision) : (l.stagedForReview ? view(l) : null) })) };
+  }
+
   /* ── course revision review (admin) — owner decision 2026-10-03: changes to a PUBLISHED course are re-reviewed ── */
   if (d.op === 'reviewRevision') {
     const isAdmin = !!(req.auth.token && (req.auth.token.admin === true || req.auth.token.superAdmin === true));
@@ -256,14 +295,22 @@ async function handle(req) {
           t.update(ref, { stagedForReview: false, pendingRevision: FieldValue.delete(), reviewNote: note, updatedAt: _ts() });
         }
       }
-      t.update(courseRef, { revisionPending: false, revisionReviewedAt: _ts(), revisionReviewedBy: uid, ...(decision === 'reject' ? { revisionNote: note } : { revisionNote: FieldValue.delete() }) });
+      const pOrder = Array.isArray(c.data().pendingLessonOrder) ? c.data().pendingLessonOrder : null;
+      if (decision === 'approve' && pOrder) pOrder.forEach((id, i) => { if (lessons.some((l) => l.lessonId === id)) t.update(db.collection('courseLessons').doc(id), { order: i + 1 }); });
+      t.update(courseRef, { revisionPending: false, revisionReviewedAt: _ts(), revisionReviewedBy: uid, pendingLessonOrder: FieldValue.delete(),
+        ...(decision === 'reject' ? { revisionNote: note } : { revisionNote: FieldValue.delete() }) });
+      if (c.data().revisionReviewId) t.update(db.collection('courseReviews').doc(String(c.data().revisionReviewId)), { status: decision === 'approve' ? 'approved' : 'rejected', reviewedBy: uid, reviewedAt: _ts(), note });
       t.set(db.collection('educationAudit').doc(), { action: 'course_revision_' + decision, courseId, by: uid, lessons: staged.map((l) => l.lessonId), note, at: _ts() });
     });
+    const owner = (await courseRef.get()).data().instructorUid;
+    await _notify(decision === 'approve'
+      ? { uid: owner, type: 'education_review_approved', title: 'Course changes approved', body: 'Your course changes were approved and are now live.', dedupeKey: 'edu_rev_ok_' + courseId + '_' + Date.now(), data: { courseId } }
+      : { uid: owner, type: 'education_review_rejected', title: 'Course changes not approved', body: 'Your course changes were not approved. Reason: ' + note, dedupeKey: 'edu_rev_no_' + courseId + '_' + Date.now(), data: { courseId } });
     return { ok: true, decision, lessons: staged.length };
   }
 
   /* ── authoring (own course; DRAFT freely, PUBLISHED through re-review) ── */
-  if (!['list', 'save', 'remove', 'reorder', 'setLessonStatus', 'submitRevision'].includes(d.op)) _deny('invalid-argument', 'Unknown operation.', 'OP_UNKNOWN');
+  if (!['list', 'save', 'remove', 'reorder', 'setLessonStatus', 'submitRevision', 'revisionSummary'].includes(d.op)) _deny('invalid-argument', 'Unknown operation.', 'OP_UNKNOWN');
   await _assertEducator(db, uid);
   const c0 = await courseRef.get();
   if (!c0.exists || c0.data().instructorUid !== uid) _deny('permission-denied', 'not course owner', 'NOT_COURSE_OWNER');
@@ -335,15 +382,32 @@ async function handle(req) {
     });
     return { ok: true, reviewRequired: liveCourse && to === 'published' };
   }
+  /* the change set, as the teacher sees it before submitting */
+  const summaryOf = () => {
+    const staged = lessons.filter((l) => l.stagedForReview === true);
+    return {
+      newLessons: staged.filter((l) => !l.pendingRevision && l.status === 'draft').length,
+      editedLessons: staged.filter((l) => !!l.pendingRevision).length,
+      republished: staged.filter((l) => !l.pendingRevision && l.status === 'unpublished').length,
+      reordered: Array.isArray(c0.data().pendingLessonOrder),
+      materialsChanged: staged.filter((l) => (l.pendingRevision ? (l.pendingRevision.materialPath || null) !== (l.materialPath || null) : !!l.materialPath)).length,
+    };
+  };
+  if (d.op === 'revisionSummary') return { ok: true, live: liveCourse, summary: summaryOf() };
   if (d.op === 'submitRevision') {
     if (!liveCourse) _deny('failed-precondition', 'Submit a draft course with "Submit for review" instead.', 'NOT_PUBLISHED');
-    if (!lessons.some((l) => l.stagedForReview === true)) _deny('failed-precondition', 'There are no lesson changes to submit.', 'NOTHING_STAGED');
+    const summary = summaryOf();
+    if (!lessons.some((l) => l.stagedForReview === true) && !summary.reordered) _deny('failed-precondition', 'There are no lesson changes to submit.', 'NOTHING_STAGED');
+    const reviewRef = db.collection('courseReviews').doc();
     await db.runTransaction(async (t) => {
       if (!sameCourseState(await t.get(courseRef))) STALE();
-      t.update(courseRef, { revisionPending: true, revisionSubmittedAt: _ts(), revisionNote: FieldValue.delete() });
-      t.set(db.collection('educationAudit').doc(), { action: 'course_revision_submit', courseId, by: uid, at: _ts() });
+      /* freeze: no further changes until reviewed (REVISION_IN_REVIEW); one review item for AdminOS */
+      t.update(courseRef, { revisionPending: true, revisionSubmittedAt: _ts(), revisionSubmittedBy: uid, revisionReviewId: reviewRef.id, revisionNote: FieldValue.delete() });
+      t.set(reviewRef, { courseId, courseTitle: c0.data().title || null, ownerUid: uid, submittedBy: uid, submittedAt: _ts(), status: 'pending', summary });
+      t.set(db.collection('educationAudit').doc(), { action: 'course_revision_submit', courseId, reviewId: reviewRef.id, by: uid, summary, at: _ts() });
     });
-    return { ok: true, revisionPending: true };
+    await _notify({ uid, type: 'education_review_submitted', title: 'Changes submitted for review', body: 'Your course changes were submitted for review.', dedupeKey: 'edu_rev_sub_' + reviewRef.id, data: { courseId, reviewId: reviewRef.id } });
+    return { ok: true, revisionPending: true, reviewId: reviewRef.id, summary };
   }
   if (d.op === 'remove') {
     const id = _str(d.lessonId, 128); const l = find(id);
@@ -360,6 +424,14 @@ async function handle(req) {
   const order = Array.isArray(d.order) ? d.order.map((x) => _str(x, 128)) : [];
   const own = lessons.map((l) => l.lessonId);
   if (order.length !== own.length || new Set(order).size !== order.length || !order.every((x) => own.includes(x))) _deny('invalid-argument', 'The new order must list each lesson of this course once.', 'ORDER_INVALID');
+  if (liveCourse) {
+    /* a live course's learner-visible order changes only through review */
+    await db.runTransaction(async (t) => {
+      if (!sameCourseState(await t.get(courseRef))) STALE();
+      t.update(courseRef, { pendingLessonOrder: order, updatedAt: _ts() });
+    });
+    return { ok: true, reviewRequired: true };
+  }
   const batch = db.batch();
   order.forEach((id, i) => batch.update(db.collection('courseLessons').doc(id), { order: i + 1, updatedAt: _ts() }));
   await batch.commit();

@@ -40,6 +40,9 @@ stub('firebase-admin/storage', { getStorage: () => ({ bucket: () => ({ file: (p)
   getMetadata: async () => [OBJ[p] ? { contentType: OBJ[p].contentType, size: String(OBJ[p].size) } : {}],
   download: async () => [OBJ[p] ? OBJ[p].head : Buffer.alloc(0)],
   getSignedUrl: async (o) => { SIGNED.push({ p, o }); return ['https://signed.example/' + encodeURIComponent(p) + '?exp=' + o.expires]; } }) }) }) });
+/* the ONE notify entry point, recorded (Messages → Notifications) */
+const NOTES = [];
+stub('./notify', { notify: async (n) => { NOTES.push(n); return { ok: true }; } });
 const LS = require(Path.join(FN, 'education-lessons.js'));
 const EDU = require(Path.join(FN, 'education.js'));
 const call = async (uid, data, token) => { try { return await LS.courseLessons.run({ auth: uid ? { uid, token: token || {} } : null, data }); } catch (e) { return { err: e.code || 'error', reason: (e.details && e.details.reason) || e.message }; } };
@@ -179,6 +182,7 @@ const OWNMAT = (u, c) => 'course-materials/' + u + '/' + c + '/notes.pdf';
   ck('C-4 an admin revokes with a reason (audited); verification then says REVOKED', r.status === 'revoked' && rv.status === 'revoked' && /misconduct/.test(rv.revokedReason || '')
     && Object.values(await all('educationAudit')).some((x) => x.action === 'certificate_revoked'), rv);
   r = await call('learner1', { op: 'complete', courseId: 'c1', lessonId: L3 });
+  ck('N-1 issuing the certificate sends ONE education_certificate_issued notification (the ONE notify feed)', NOTES.filter((n) => n.type === 'education_certificate_issued' && n.uid === 'learner1').length === 1, NOTES);
   ck('G-6 a replayed completion issues no second certificate', Object.keys(await all('learnerCertificates')).length === 1 && r.certificateId === 'learner1_c1', r);
   r = await call('learner1', { op: 'myCertificates' });
   ck('G-7 the learner lists their certificates', r.certificates.length === 1 && r.certificates[0].courseTitle === 'Algebra', r);
@@ -201,8 +205,30 @@ const OWNMAT = (u, c) => 'course-materials/' + u + '/' + c + '/notes.pdf';
   ck('R-3 the staged new lesson is NOT in the learner outline before review', !r.lessons.some((x) => x.lessonId === LLATE), r);
   r = await call('teach1', { op: 'remove', courseId: 'c1', lessonId: L1 });
   ck('R-4 a PUBLISHED lesson of a live course cannot be deleted (unpublish first)', r.reason === 'UNPUBLISH_FIRST', r);
+  const prePreview = await call('teach1', { op: 'content', courseId: 'c1', lessonId: L2, version: 'pending' });
+  ck('S-0 the OWNER previews the PENDING version, clearly labelled', prePreview.ok && prePreview.preview === 'pending' && /learners cannot see these changes yet/.test(prePreview.notice) && prePreview.lesson.title === 'Video (edited)', prePreview);
+  r = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L2, version: 'pending' });
+  ck('S-0b a learner asking for the pending version is refused (the preview is never a learner-access route)', r.reason === 'NOT_COURSE_OWNER', r);
+  r = await call('teach1', { op: 'reorder', courseId: 'c1', order: [L2, L1, L3, LDRAFT, LLATE] });
+  const out0 = await call('learner1', { op: 'outline', courseId: 'c1' });
+  ck('S-1 a LIVE-course reorder is a pending change — learners keep the approved order', r.reviewRequired === true && Array.isArray((await all('courses')).c1.pendingLessonOrder) && out0.lessons[0].lessonId === L3, [r, out0.lessons.map((x) => x.title)]);
+  r = await call('teach1', { op: 'revisionSummary', courseId: 'c1' });
+  ck('S-2 the teacher sees the change summary before submitting (1 new, 1 edited, reordered)', r.ok && r.summary.newLessons === 1 && r.summary.editedLessons === 1 && r.summary.reordered === true, r);
+  NOTES.length = 0;
   r = await call('teach1', { op: 'submitRevision', courseId: 'c1' });
-  ck('R-5 the teacher submits the changes for review', r.ok && (await all('courses')).c1.revisionPending === true, r);
+  const rev = (await all('courseReviews'))[r.reviewId] || {};
+  ck('R-5 the teacher submits: the course is frozen, ONE review item is created for AdminOS (submitter + summary), the teacher is notified',
+    r.ok && (await all('courses')).c1.revisionPending === true && rev.status === 'pending' && rev.submittedBy === 'teach1' && rev.summary && rev.summary.editedLessons === 1
+      && NOTES.some((n) => n.type === 'education_review_submitted' && n.uid === 'teach1'), [r, rev, NOTES]);
+  const REVIEW_ID = r.reviewId;
+  r = await call('teach1', { op: 'reviewQueue' });
+  ck('S-3 the review queue is admin-only', r.reason === 'ADMIN_REQUIRED', r);
+  r = await call('admin1', { op: 'reviewQueue' }, { admin: true });
+  ck('S-4 AdminOS lists the pending course review', r.ok && r.reviews.some((x) => x.reviewId === REVIEW_ID && x.courseId === 'c1'), r);
+  r = await call('admin1', { op: 'reviewDetail', courseId: 'c1' }, { admin: true });
+  const dl = (r.lessons || []).find((x) => x.lessonId === L2) || {};
+  ck('S-5 the reviewer sees ORIGINAL vs PROPOSED (lesson fields and the order)', r.ok && dl.published && /v=abc/.test(dl.published.videoUrl) && dl.proposed && /v=NEW/.test(dl.proposed.videoUrl)
+    && r.course.proposedOrder && r.course.proposedOrder[0] === L2 && r.course.approvedOrder[0] === L3, [dl, r.course]);
   r = await call('teach1', { op: 'save', courseId: 'c1', lessonId: L2, lesson: { title: 'Sneaky', kind: 'text', body: 'x' } });
   ck('R-6 while in review, no further changes are accepted', r.reason === 'REVISION_IN_REVIEW', r);
   r = await call('teach1', { op: 'reviewRevision', courseId: 'c1', decision: 'approve' });
@@ -214,6 +240,8 @@ const OWNMAT = (u, c) => 'course-materials/' + u + '/' + c + '/notes.pdf';
   const late = (await all('courseLessons'))[LLATE];
   const out = await call('learner1', { op: 'outline', courseId: 'c1' });
   const lr2 = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L2 });
+  ck('S-6 approval applies the reviewed ORDER, closes the review item and notifies the teacher', (await all('courseLessons'))[L2].order === 1 && (await all('courseReviews'))[REVIEW_ID].status === 'approved'
+    && NOTES.some((n) => n.type === 'education_review_approved' && n.uid === 'teach1'), [(await all('courseReviews'))[REVIEW_ID]]);
   ck('R-9 admin APPROVES: the edit goes live, the staged lesson is published, the course leaves review (audited)',
     r.ok && lv.title === 'Video (edited)' && !lv.pendingRevision && late.status === 'published' && !late.stagedForReview && (await all('courses')).c1.revisionPending === false
       && out.lessons.some((x) => x.lessonId === LLATE) && /v=NEW/.test(lr2.lesson.videoUrl) && Object.values(await all('educationAudit')).some((x) => x.action === 'course_revision_approve'), [r, lv, late]);
@@ -224,6 +252,7 @@ const OWNMAT = (u, c) => 'course-materials/' + u + '/' + c + '/notes.pdf';
   ck('R-11 REPUBLISHING goes through review (staged, still hidden)', r.reviewRequired === true && (await all('courseLessons'))[LLATE].status === 'unpublished' && (await all('courseLessons'))[LLATE].stagedForReview === true, r);
   await call('teach1', { op: 'submitRevision', courseId: 'c1' });
   r = await call('admin1', { op: 'reviewRevision', courseId: 'c1', decision: 'reject', note: 'Add an outline first' }, { admin: true });
+  ck('S-7 a rejection notifies the teacher WITH the reason', NOTES.some((n) => n.type === 'education_review_rejected' && /Add an outline first/.test(n.body)), NOTES.map((n) => n.type));
   ck('R-12 a REJECTED revision changes nothing for learners and returns the note', r.ok && (await all('courseLessons'))[LLATE].status === 'unpublished' && !(await all('courseLessons'))[LLATE].stagedForReview
     && (await all('courses')).c1.revisionNote === 'Add an outline first' && (await all('courses')).c1.revisionPending === false, (await all('courses')).c1);
   r = await call('teach2', { op: 'submitRevision', courseId: 'c1' });
