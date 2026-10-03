@@ -1,3 +1,9 @@
+## 2026-10-03 — Car Hub vehicle sales 2% of the sale price (owner, via sokoni-f3; no live trigger yet); commission suites swept (NOT deployed)
+
+- **Changes:** commission-config vehicles; seller-terms row; snapshot regenerated.
+- **Tests:** agreement suite updated (healthcare 5, vehicles 2%); fitness-sales-switch now warns on an unreadable flag.
+- **Tests:** commission-schedule 25/0, 5pct-agreement 62/0, membership 77/0.
+
 ## 2026-10-03 — Fitness: default price catalogue (gyms edit), day/week passes, one sales-switch predicate, seller-terms commission wording, earn-page copy (NOT deployed)
 
 - **New files:** functions/shared/fitness-offer-defaults.js, functions/shared/fitness-sales-switch.js.

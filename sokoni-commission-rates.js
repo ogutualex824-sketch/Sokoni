@@ -32,8 +32,8 @@
       "fixedKES": 5000
     },
     "vehicles": {
-      "pct": 0,
-      "fixedKES": 2000
+      "pct": 2,
+      "fixedKES": 0
     },
     "healthcare": {
       "pct": 5,

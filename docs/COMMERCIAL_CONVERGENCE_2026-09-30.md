@@ -693,3 +693,16 @@ No duplicate authority was found on the money side.
 | Rules / emulator | e3 rules lane | — | — | RAM 297 MB < 512 | BLOCKED (memory) |
 | Browser flows (member / gym / AdminOS) | e3 screens | — | — | RAM | BLOCKED (memory) |
 | Webhook suite | creator-callback | 4 FAIL | pre-existing | identical on HEAD | PRE-EXISTING FAILURE |
+
+### 14.4 · Car Hub vehicle sales 2% (owner 2026-10-03, via sokoni-f3) + regression sweep
+
+- **Rate.** `RATES.vehicles` changes from KES 2,000 flat to **2% of the sale price** (fixedKES 0), deducted from the seller's settlement. Aliases `car_hub` / `car_dealer` follow it.
+  - Launch is marketplace-first, with no online vehicle checkout, so the rate has **no live trigger** until an online sale path exists.
+  - Listings are free. Dealer plans and featured listings are unpriced (owner) and are not seeded.
+  - Subscription ≠ sale commission: never both on one economic event unless the owner says so.
+- **`seller-terms.html` row:** "2% of the sale price, deducted from the seller's settlement when the sale is completed through SOKONI". The snapshot is regenerated.
+- **Missed regression, now fixed.** `test-commission-5pct-agreement` had pinned healthcare at 12% since 03ecbe9; I had not run that suite then. Its table now reflects the 2026-10-03 amendments (healthcare 5, vehicles 2%): 62/0.
+- **Full commission sweep:**
+  - 48h 87/0 · invoice 52/0 · lane separation 22/0 (2 UNPROVEN, pre-existing) · settlement authority 53/0 · healthcare plan 16/0 · KASS 7/0 · POS lane 92/0 · POS rail 80/0 · subscription classification 21/0 · single-source verify PASS · schedule 25/0 · fixed-rate 32/0 · ladder 38/0 · pos-sale 78/0
+  - `commission-balance-ui`: 2 FAIL, **pre-existing**. Identical on 6be1561, before today; these are page / callable checks, not rates.
+- **Sales switch.** `shared/fitness-sales-switch` logs `FLAG_UNREADABLE` (warn) on a read error and still fails closed (sokoni-e3's suggestion).

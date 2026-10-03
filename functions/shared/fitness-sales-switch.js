@@ -13,7 +13,9 @@ async function salesEnabled(db) {
   try {
     const snap = await db.collection('featureFlags').doc(FLAG_DOC).get();
     return !!(snap && snap.exists && snap.data() && snap.data().enabled === true);
-  } catch (_) {
+  } catch (e) {
+    /* Still OFF (fail closed) — but say so, so ops can tell "flag unreadable" from "flag off". */
+    try { require('firebase-functions/logger').warn('[fitness-sales-switch] FLAG_UNREADABLE — treating sales as OFF', { error: (e && e.message) || 'Error' }); } catch (_) { /* no logger offline */ }
     return false;
   }
 }

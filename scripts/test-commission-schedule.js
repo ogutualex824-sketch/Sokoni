@@ -64,7 +64,7 @@ const SPEC = [
   ['Legal bookings',              ['legal'],                                      5, 0],
   ['Other service bookings',      ['services', 'fitness', 'insurance'],           5, 0],
   ['Education',                   ['education'],                                 15, 0],
-  ['Car Hub vehicle sales (flat)', ['vehicles', 'car_hub', 'car_dealer'],         0, 2000],
+  ['Car Hub vehicle sales (2%)',  ['vehicles', 'car_hub', 'car_dealer'],         2, 0],   /* owner 2026-10-03: 2% of the sale price (was KES 2,000 flat) */
   ["SOKONI's own plans",          ['subscriptions', 'subscription'],            100, 0],
 ];
 
@@ -119,8 +119,8 @@ const SPEC = [
         }
       }
       Module._load = orig;
-      ck('S6  calculateCommission charges the schedule end-to-end (KES 1,000: POS 50, online 150, car rental 50, BnB 150, healthcare 50; a KES 1.8M vehicle KES 2,000)',
-        out.pos === 5000 && out.product === 15000 && out['car-rental'] === 5000 && out.hotel === 15000 && out.healthcare === 5000 && out.vehicles === 200000, err || out);
+      ck('S6  calculateCommission charges the schedule end-to-end (KES 1,000: POS 50, online 150, car rental 50, BnB 150, healthcare 50; a KES 1.8M vehicle KES 36,000 at 2%)',
+        out.pos === 5000 && out.product === 15000 && out['car-rental'] === 5000 && out.hotel === 15000 && out.healthcare === 5000 && out.vehicles === 3600000, err || out);
     }
   } finally { L.rm(); }
 
@@ -141,7 +141,7 @@ const SPEC = [
   if (/SOKONI_COMMISSION_RATE\s*=\s*0\.02/.test(page('landlord.html'))) stale.push('landlord.html: 2% commission on rent');
   if (/Keep up to 95%/.test(page('digital-esoko.html'))) stale.push('digital-esoko.html: keep up to 95%');
   const terms = page('seller-terms.html');
-  const want = [['Online product sales', '15%'], ['POS / Till / Quick Charge', '5%'], ['Food ordered online', '15%'], ['Event tickets', '5%'], ['BnB / hotel bookings', '15%'], ['Healthcare bookings', '5%'], ['Healthcare product sales', '15%'], ['Car Hub vehicle sales', 'KES 2,000']];
+  const want = [['Online product sales', '15%'], ['POS / Till / Quick Charge', '5%'], ['Food ordered online', '15%'], ['Event tickets', '5%'], ['BnB / hotel bookings', '15%'], ['Healthcare bookings', '5%'], ['Healthcare product sales', '15%'], ['Car Hub vehicle sales', '2%']];
   for (const [row, rate] of want) { const re = new RegExp('<strong>' + row.replace(/[/()]/g, '\\$&') + '[^<]*</strong>[^\\n]*?<td>' + rate.replace(/[,.%]/g, '\\$&')); if (!re.test(terms)) stale.push('seller-terms.html: ' + row + ' ≠ ' + rate); }
   if (/<td>Pro<\/td><td><strong>5%<\/strong>/.test(terms)) stale.push('seller-terms.html: retired plan ladder');
   ck('S8  seller-facing pages state the schedule (legal, invoice, terms, entertainment terms, digital, landlord)', stale.length === 0, stale);
