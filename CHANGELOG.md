@@ -1,3 +1,11 @@
+## [2026-10-03] — AdminOS: admit an EXISTING live provider/seller that has no application
+
+**Owner decision (2026-10-03):** an admin approves Shave 'n' Trims and DJ Bambi now. Both went live with no application and no admin decision, so the strict approval authority would switch their dashboards off.
+**What:** the AdminOS user detail (provider / seller accounts only) gets "Admit existing …". It collects the category and an audit reason, confirms, then calls `applicationAdmitExistingProvider` (sokoni-5b, `feat/education-applications-on-cbbce0c` @ 4da5b61). That callable is the authority: admin + second factor, never the owner, no existing application, and one txn writing application + applicationDecisions + adminAudit; providerProfiles is provisioned only if absent. This screen decides nothing. Success is shown only on the server's `ok:true`, and a refusal shows the server's reason.
+**Files:** `sokoni-aos.js`, `scripts/test-adminos-admit-existing.js`.
+**Tests:** test-adminos-admit-existing 9/0 (SABOTAGE: success without ok → A4 fails); AdminOS honesty suites 28/0, 59/0, 147/0; test-provider-nav-home 5/0.
+**Depends on:** a scoped deploy of `applicationAdmitExistingProvider` BEFORE this hosting ships. Until then the button returns the server's not-found error, which is honest. **Deployment:** NOT deployed.
+
 ## [2026-10-03] — Service providers land on the provider dashboard, not the product-seller hub
 
 **Owner:** "make sure Shave 'n' Trims … even DJ Bambi have the correct equipped dashboard."

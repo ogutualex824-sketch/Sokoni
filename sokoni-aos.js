@@ -400,7 +400,59 @@ window.SokoniAOS = (() => {
         <div><strong>Wallet</strong><span>KES ${_fmt(u.walletBalance||0)}</span></div>
         <div><strong>Verified</strong><span>${u.emailVerified?"✅":"❌"}</span></div>
       </div>
+      ${(u.role === "provider" || u.role === "seller") ? `
+      <div class="aos-admit-existing" style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)">
+        <p style="font-size:12px;opacity:.75;margin:0 0 8px">Live ${_esc(u.role)} with no application? Record an admin approval so the canonical approval authority recognises it.</p>
+        <button class="aos-btn-sm" onclick="SokoniAOS.admitExistingProvider('${_esc(u.uid||uid)}','${_esc(u.role)}')">Admit existing ${_esc(u.role)}…</button>
+      </div>` : ""}
     `);
+  }
+
+  /* ── Admit an EXISTING live provider / seller that has no application (owner 2026-10-03) ─────────────────────
+     Server authority: applicationAdmitExistingProvider (sokoni-5b). It requires admin/superAdmin + a satisfied second
+     factor, refuses the record's own owner, refuses an account that already has an application, writes the server
+     application + applicationDecisions + adminAudit in ONE transaction, and provisions providerProfiles only when
+     absent. This screen only collects the admin's decision and shows the server's answer — it decides nothing. */
+  async function admitExistingProvider(uid, role) {
+    _modal("Admit existing " + role, `
+      <div class="aos-form">
+        <label style="display:block;font-size:12px;margin-bottom:4px">Business category (the server validates it)</label>
+        <input id="admitCategory" class="aos-input" list="admitCategoryList" placeholder="e.g. salon, artist_creator" autocomplete="off" style="width:100%">
+        <datalist id="admitCategoryList">
+          <option value="salon">Salon / Barber / Spa</option>
+          <option value="artist_creator">Artist / Creator (DJ, MC, band, photographer)</option>
+        </datalist>
+        <label style="display:block;font-size:12px;margin:10px 0 4px">Reason (recorded in the audit trail)</label>
+        <textarea id="admitReason" class="aos-input" rows="3" maxlength="500" style="width:100%" placeholder="Why this live account is approved"></textarea>
+        <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+          <button class="aos-btn-sm" onclick="SokoniAOS.closeModal()">Cancel</button>
+          <button class="aos-btn-sm success" id="admitSubmit" onclick="SokoniAOS.submitAdmitExisting('${_esc(uid)}','${_esc(role)}')">Record approval</button>
+        </div>
+        <p id="admitResult" style="font-size:12px;margin-top:8px" role="status" aria-live="polite"></p>
+      </div>`);
+  }
+
+  async function submitAdmitExisting(uid, role) {
+    const category = String((document.getElementById("admitCategory") || {}).value || "").trim();
+    const reason = String((document.getElementById("admitReason") || {}).value || "").trim();
+    const out = document.getElementById("admitResult");
+    if (!category) { if (out) out.textContent = "Choose the business category."; return; }
+    if (reason.length < 5) { if (out) out.textContent = "Give a reason of at least 5 characters — it is the audit record."; return; }
+    if (!(await SK.dialog.confirm("This records an administrator approval for an account that is already live. It is audited and cannot be made by the account's owner.", null, null, { title: "Approve this existing " + role + "?", variant: "danger", confirmLabel: "Record approval" }))) return;
+    const btn = document.getElementById("admitSubmit");
+    if (btn) btn.disabled = true;
+    let r;
+    try {
+      r = await _call("applicationAdmitExistingProvider", { uid, role, category, reason });
+    } catch (e) {
+      if (btn) btn.disabled = false;
+      if (out) out.textContent = _actionFailure(e, "Approval");
+      return;
+    }
+    /* success ONLY on the server's own answer */
+    if (out) out.textContent = r && r.ok === true && r.applicationId ? ("Recorded: " + r.applicationId + (r.replay ? " (already admitted — nothing changed)" : "") + (r.providerProfileProvisioned ? " · dashboard profile created" : "")) : "The server did not confirm the approval.";
+    if (r && r.ok === true && r.applicationId) { _toast("Approval recorded", "success"); _panelCache.users = false; }
+    else if (btn) btn.disabled = false;
   }
 
   async function banUser(uid, currentStatus) {
@@ -2485,6 +2537,8 @@ window.SokoniAOS = (() => {
     // Users
     loadUsers:           _loadUsers,
     viewUser,
+    admitExistingProvider,
+    submitAdmitExisting,
     banUser,
     changeRole,
     // Marketplace
