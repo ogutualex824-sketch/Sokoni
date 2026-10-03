@@ -174,3 +174,17 @@ The owner could write their own `plan` / `vehicleLimit` (sokoni-tracking.js `sav
 - Delivered / completed and the payment states stay server-only.
 - Census (5b): no live UI writes order status directly.
 - Suite `scripts/zz-test-orders-status-rules.js` (OR-S1..7, OR-R1..8). **EMULATOR PENDING.** Baseline f259c0b5: OR-S1 and OR-R1..4 must fail there.
+
+## 2026-10-03: B2B RFQ / lead ledger server-only (sokoni-f3 rfq.js + sokoni-2f b2b-leads.js)
+
+- `b2bLeads`, `b2bLeadMonths`, `rfqs`, `rfqRecipients`, `rfqQuotes`: `write: false`, `read: isAdmin()`.
+  Default deny already covered the writes; these blocks make it explicit and give AdminOS read.
+  Suppliers read their lead statement through the `b2bLeadStatement` callable (2f `df1b281`), never the raw rows,
+  because those carry `buyerBusinessId`. Buyers and suppliers reach RFQs only through `rfqDispatch`.
+- `revenueConfig/{configId}`: write is now `isAdmin() && configId != "b2b_leads"`. The lead price has ONE writer, the
+  validated and audited `adminSetB2bLeadPrice` callable. Admin reads are unchanged; a non-admin never matched `b2b_leads`.
+- No recursive wildcard exists in the source, so no other block can OR-grant these paths.
+- Index (2f): `b2bLeadStatement` queries `b2bLeads` by `supplierOwnerUid ==` and `month ==` (equality only), so it
+  merges single-field indexes. Add a `(supplierOwnerUid, month)` composite only if prod asks for one.
+- Suite `scripts/zz-test-b2b-leads-rules.js` (BL-L*, BL-M*, BL-P*, BL-R*, plus control BL-P4). **EMULATOR PENDING** (host
+  memory is below the 512 MB floor). Baseline f259c0b5: BL-P1 must fail there.

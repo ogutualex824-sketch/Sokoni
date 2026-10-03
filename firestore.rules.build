@@ -1445,7 +1445,27 @@ service cloud.firestore {
   || (isAuthed() && configId == ("seller_" + request.auth.uid))
   || (isAuthed() && configId == "global")
   || (isAuthed() && configId.matches("hub_.*"));
-  allow write: if isAdmin();
+  allow write: if isAdmin() && configId != "b2b_leads";
+  }
+  match /b2bLeads/{leadId} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /b2bLeadMonths/{claimId} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /rfqs/{rfqId} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /rfqRecipients/{recipientId} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /rfqQuotes/{quoteId} {
+  allow read:  if isAdmin();
+  allow write: if false;
   }
   match /subscriptionPlans/{planId} {
   allow read:  if true;

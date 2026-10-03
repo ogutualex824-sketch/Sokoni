@@ -1548,7 +1548,32 @@ service cloud.firestore {
   || (isAuthed() && configId == ("seller_" + request.auth.uid))
   || (isAuthed() && configId == "global")
   || (isAuthed() && configId.matches("hub_.*"));
-  allow write: if isAdmin();
+  /* b2b_leads (the KES-per-lead price) has ONE writer: the adminSetB2bLeadPrice callable (validated +
+     audited, sokoni-2f b2b-leads.js). A direct admin client write would bypass both. */
+  allow write: if isAdmin() && configId != "b2b_leads";
+  }
+  /* B2B RFQ / lead ledger (sokoni-f3 rfq.js writes; sokoni-2f b2b-leads.js invoices). Server-only writes.
+     b2bLeads rows carry buyerBusinessId, so suppliers read their own statement through the
+     b2bLeadStatement callable, never the raw rows. b2bLeadMonths are invoice claim docs: admin read only. */
+  match /b2bLeads/{leadId} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /b2bLeadMonths/{claimId} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /rfqs/{rfqId} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /rfqRecipients/{recipientId} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /rfqQuotes/{quoteId} {
+  allow read:  if isAdmin();
+  allow write: if false;
   }
   match /subscriptionPlans/{planId} {
   allow read:  if true;
