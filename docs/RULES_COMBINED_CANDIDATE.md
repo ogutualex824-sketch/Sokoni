@@ -217,3 +217,15 @@ write false. Server writer: bookingDispatch availability callables (b2 feat/lega
   it with an A2 router (8d127ab). Until the owner or the assembly picks one, denying the writes breaks that page.
   b2 is asking 2f who owns the shop-availability choice. Apply only once that is resolved, with an emulator suite and a
   served baseline.
+
+## 2026-10-03: Education (sokoni-5b hunks)
+
+1. `education/{docId}`: `create, update, delete: false` (admins included); read unchanged. An orphan collection: no
+   writer in any lineage, but three live triggers (`ts_education_*`) index every write into Typesense
+   `sokoni_education`, so client writes were a search-injection path. Trigger deletion and the index purge are separate
+   owner-gated steps (5b).
+2. `educationEnterprises/{uid}`: read admin or owner; write false. Written by `applicationLifecycle`
+   (5b feat/education-applications-on-cbbce0c @ 2cdc1b3).
+
+Suite `scripts/zz-test-education-rules.js` (ED-W*, ED-R*, ED-E*). **EMULATOR PENDING.** Baseline f259c0b5: ED-W1/W2/W3
+must fail there.

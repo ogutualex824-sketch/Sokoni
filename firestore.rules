@@ -1978,25 +1978,17 @@ service cloud.firestore {
   match /education/{docId} {
   allow read:   if resource.data.active == true || isAdmin()
   || (isAuthed() && resource.data.uid == request.auth.uid);
-  allow create: if isAuthed()
-  && request.resource.data.uid == request.auth.uid
-  && request.resource.data.name is string
-  && request.resource.data.name.size() > 0
-  && request.resource.data.name.size() <= 120
-  && request.resource.data.category is string
-  && request.resource.data.description is string
-  && request.resource.data.description.size() <= 3000
-  && !('featured' in request.resource.data)
-  && !('active'   in request.resource.data)
-  && !('verified' in request.resource.data);
-  allow update: if isAdmin()
-  || (isAuthed()
-  && resource.data.uid == request.auth.uid
-  && resource.data.uid == request.resource.data.uid
-  && !('featured' in request.resource.data)
-  && !('verified' in request.resource.data)
-  && !('active'   in request.resource.data));
-  allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+  /* (sokoni-5b Education, 2026-10-03) ORPHAN collection closed to clients: no client or server writer exists in any
+     lineage, yet three LIVE triggers (ts_education_onCreate/onUpdate/onDelete) push every write into Typesense
+     sokoni_education, which search reads, so client writes were a search-injection path. Read stays as served, so any
+     legacy doc remains readable by its owner / admin. Trigger deletion + index purge are separate owner-gated steps. */
+  allow create, update, delete: if false;
+  }
+  /* (sokoni-5b Education E1) enterprise education applicants; written only by applicationLifecycle
+     (feat/education-applications-on-cbbce0c @ 2cdc1b3). */
+  match /educationEnterprises/{uid} {
+  allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+  allow write: if false;
   }
   function isPosOwner() {
   return isAuthed() && resource.data.sellerId == request.auth.uid;

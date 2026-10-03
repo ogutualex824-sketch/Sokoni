@@ -1846,25 +1846,11 @@ service cloud.firestore {
   match /education/{docId} {
   allow read:   if resource.data.active == true || isAdmin()
   || (isAuthed() && resource.data.uid == request.auth.uid);
-  allow create: if isAuthed()
-  && request.resource.data.uid == request.auth.uid
-  && request.resource.data.name is string
-  && request.resource.data.name.size() > 0
-  && request.resource.data.name.size() <= 120
-  && request.resource.data.category is string
-  && request.resource.data.description is string
-  && request.resource.data.description.size() <= 3000
-  && !('featured' in request.resource.data)
-  && !('active'   in request.resource.data)
-  && !('verified' in request.resource.data);
-  allow update: if isAdmin()
-  || (isAuthed()
-  && resource.data.uid == request.auth.uid
-  && resource.data.uid == request.resource.data.uid
-  && !('featured' in request.resource.data)
-  && !('verified' in request.resource.data)
-  && !('active'   in request.resource.data));
-  allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+  allow create, update, delete: if false;
+  }
+  match /educationEnterprises/{uid} {
+  allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+  allow write: if false;
   }
   function isPosOwner() {
   return isAuthed() && resource.data.sellerId == request.auth.uid;
