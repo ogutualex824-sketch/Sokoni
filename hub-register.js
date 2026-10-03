@@ -143,6 +143,8 @@
     { id:'other',            label:'Other / General Business',         hub:'other',         emoji:'🏢' },
   ];
 
+  /* Marketing Hub MK3 — these rows open the Marketing application (marketing-hub.html#become). */
+  var MARKETING_APPLY_IDS = ['graphic-design', 'social-media', 'advertising', 'pr-firm', 'content-creator'];
   function _esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
@@ -385,6 +387,10 @@
     if (msgEl) { msgEl.textContent = 'Saving…'; msgEl.style.color = 'rgba(255,255,255,0.4)'; }
 
     var catObj = CATS.find(function (c) { return c.id === cat; }) || { label: cat, emoji: '🏢', hub: 'other' };
+    /* Marketing Hub MK3: a marketer applies through the SEPARATE Marketing application (individual / agency / specialist,
+       reviewed service by service) — never this generic business application. Printing/signage is a business, not a
+       marketing service, and stays here. */
+    if (MARKETING_APPLY_IDS.indexOf(cat) >= 0) { window.location.href = 'marketing-hub.html#become'; return; }
     var user = null;
     try { user = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (e) {}
 
@@ -488,6 +494,7 @@
   /* ── Public API ──────────────────────────────────────────── */
   window.HubRegister = {
     open: function (cfg) {
+      if (cfg && (cfg.hub === 'marketing' || MARKETING_APPLY_IDS.indexOf(cfg.category) >= 0)) { window.location.href = 'marketing-hub.html#become'; return; }
       _injectStyles();
       _injectModal();
       _renderForm(cfg || {});

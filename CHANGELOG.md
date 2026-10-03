@@ -1,3 +1,27 @@
+## [2026-10-03] — Marketing Hub MK3 (web): a real directory of approved marketers + the separate Marketing application — NOT deployed
+
+- **marketing-hub.html** rebuilt. Removed:
+  - the 12 seeded agencies (sokoni-marketing.js is no longer loaded; the file stays only because the service worker pre-caches it);
+  - the invented stats (120+ / 1,200+ / 4.8★);
+  - the dead Get Quote / Post a Project writes that showed fake success;
+  - chat buttons pointing at fake uids;
+  - the generic HubRegister.
+- **sokoni-marketing-hub.js (new):**
+  - Directory = `marketingDispatch` marketingDirectory: approved marketers only, filtered server-side by the 10 groups / 71 services / type / search. Honest empty state; "No reviews yet" instead of an invented rating.
+  - Profile = marketingProfile: approved services, https portfolio. Request a quote → SokoniLeads.ask (leadCreate, the ONE lead/quote engine). Book → SokoniBookService.open (bookingCreateService → IntaSend → held → PIN → business wallet).
+  - "Become a marketer" wizard: Type (individual / agency / specialist — separate from the business application) → Services (per-type limits; specialist = one) → Details (agency: registration number + team size) → Review → marketingApply. It sends no status / approval / verification field.
+  - My status = marketingMyStatus: under review / needs info with the reviewer's note + resubmit / approved vs declined services + dashboard link / withdraw.
+  - Nothing says "submitted" before the server answers.
+- **sokoni-marketing-taxonomy.js:** the generated browser copy from functions/shared/marketing-taxonomy.js (source-hash b2aee484fa5a3052).
+- **hub-register.js:** the five marketing rows (graphic-design, social-media, advertising, pr-firm, content-creator) and `HubRegister.open({hub:'marketing'})` now go to marketing-hub.html#become. Printing/signage stays a business application.
+- **Tests:**
+  - scripts/test-marketing-hub-web.js: 12/0; SABOTAGE=1 8/8 caught by name.
+  - agreement-acknowledge 21/0, merchant-templates 32/0, tech-directory 62/0 (11/11), premium-catalogue-billing pass.
+  - test-overlays: the same 2 failures as at HEAD; the hardcoded-overlay count goes DOWN 221 → 220.
+- **Not run:** a real browser render (memory floor).
+- **Server dependency:** marketingDispatch (5b's deploy tree feat/education-applications-on-cbbce0c). Deploy order: functions → hosting.
+- **Security:** escaped output, delegated listeners (no inline handlers), https-only portfolio links with rel=noopener noreferrer nofollow, no localStorage.
+
 ## [2026-10-03] — Messages: ?tx=job_application opens the Jobs conversation (for sokoni-f3 J4/J5) — NOT deployed
 
 - **messages.html / sokoni-inbox.js:** job_application joins the allowlist, with Jobs-specific refusal wording. The txId is the application id (jobId_seekerUid).
