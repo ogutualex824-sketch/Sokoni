@@ -1,3 +1,37 @@
+## [2026-10-03] — Payments: Daraja removal PORTED from 093fd4f onto this (a545818 / 7091029) lineage — functions source, NOT deployed
+
+Owner brief Gate 2: "copy, do not merge, the approved removal". A cherry-pick of 093fd4f conflicts in 9 files here, so the
+removal was hand-ported: each hunk read in 093fd4f and the same block removed from THIS tree's content. Nothing from the
+other lineage was imported except the stricter guard (byte-identical).
+
+**Files:**
+- `functions/index.js`: exports `darajaSTKCallback`, `webhookMpesa`, `mpesaC2BValidation`, `mpesaC2BConfirmation` removed, with
+  helpers `_normalizeMsisdn`, `SAFARICOM_CALLBACK_IPS`, `_DARAJA_SANDBOX_SELLER_UIDS` (the `process.env.DARAJA_*` read), `_DARAJA_IPS`,
+  `_c2b`, their header comments, the orphaned retired-`_darajaToken` note and the orphaned `validateDarajaCredentials` header.
+  (`darajaSTKPush`, `_darajaToken`, `validateDarajaCredentials`, `sendTestSTKPush` were already absent on this lineage — 548e15d.)
+  All 1,877 surviving top-level statements are byte-identical (AST compare), including `initiateSTKPush`, `webhookIntasend`,
+  `getMpesaReconciliationSummary`, `claimPosMpesaReference`, `onPosTransactionMpesaRef`.
+- `functions/mpesa-c2b.js` deleted.
+- `functions/pos-zero-friction.js` (`mpesa_daraja` out of `CONFIRMABLE`, comment), `functions/settlement-providers.js`,
+  `functions/settlement-routing.js` (`mpesa_daraja` out of the method tables), `functions/shared/constants.js` and
+  `functions/test/constants.test.js` (comment/test title), `functions/test/webhook.test.js` (Daraja parser block) — same edits as 093fd4f.
+- `scripts/deploy/guard-functions-safety.js` — NEW here, byte-identical to 093fd4f (blob 68da325). Not wired into firebase.json.
+- `scripts/test-daraja-sandbox-lane.js`, `scripts/test-payment-authority.js` retired (they exercised removed code;
+  test-payment-authority already failed at HEAD — darajaSTKPush was gone). `scripts/batch_deploy.sh`: Daraja names removed.
+- Not ported (absent here): docs/SANDBOX_CALLBACK_LANE.md, docs/STK_MSISDN_SAFETY.md, scripts/test-sellability-contract.js,
+  scripts/test-stk-msisdn-safety.js. `scripts/deploy/functions-allowlist.js` already used `initiateSTKPush` — no change.
+
+**Database changes:** none. **API changes:** four HTTP endpoints no longer exist in source (already deleted in production
+2026-10-03); a deploy from this tree can no longer recreate them. **Security:** removes unauthenticated, IP-allowlisted Safaricom
+endpoints from the deploy unit. Note: `posCompleteCheckout` skips confirmation for any method not in `CONFIRMABLE` (pre-existing,
+fail-open for unknown methods); after this change `mpesa_daraja` falls into that set — follow-up, own commit.
+**Breaking:** none for the parcel (8) / procurement (12) deploy units — their modules' require closures touch no changed file.
+
+**Checks:** guard-functions-safety PASS (BLOCKED 4 at HEAD); AST: 0 references to removed names across 425 functions files,
+0 new unbound identifiers, 0 newly orphaned bindings; require-closure, commission single source, delivery engine sync PASS;
+jest webhook+constants 61/61; procurement suites hermetic PASS (test-supply-relationship-b2 not hermetic — see commit).
+intasend-only-gate (c01f317): functions/ CLEAN; whole tree NOT CLEAN on hosting files only (pos.html, seller.html,
+sokoni-endpoints.js, bnb.html, landlord.html) — outside this functions slice.
 ## [2026-10-03] - verifyIntasendPayment records the payment method IntaSend reports (Gates 8/12) — functions, NOT deployed
 
 Built on 5a0935e, whose verifyIntasendPayment is byte-identical to the live archive (sha256 prefix 4d67b6a1f472). The order write
