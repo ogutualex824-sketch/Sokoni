@@ -1,3 +1,12 @@
+## [2026-10-03] — sokoni-intasend.js: a second purchase in the same session works
+
+**Files:** `sokoni-intasend.js`, `scripts/test-intasend-client-lock.js`, `CHANGELOG.md` · **Base:** live `72dca56` · reported by sokoni-2f
+
+- **Defect:** the double-submit lock was released only by waitForConfirmation / cancelPayment. A page that tracks confirmation itself (plans, promotions, donations) got "Another payment is already in progress" on the next purchase until a reload. A call without an options object threw.
+- **Fix:** the lock guards the push REQUEST only (released in `finally`). The per-ref idempotency key still stops a duplicate push for the same payment, and a second payment is still refused while a push is in flight. `options = options || {}` in initiateSTKPush and waitForConfirmation.
+- **Flagged, not changed:** waitForConfirmation writes a commission record from the browser (`_recordCommission`). That is a client-authority issue and gets its own slice.
+- **Tests:** intasend-client-lock 4/0 (live fails 4). Not deployed.
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;

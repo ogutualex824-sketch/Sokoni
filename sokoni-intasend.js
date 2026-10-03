@@ -200,6 +200,7 @@
      Returns the receipt object on success, throws on failure.
   ══════════════════════════════════════════════════════════════ */
   async function initiateSTKPush(phone, amount, ref, options) {
+    options = options || {};   /* a call with no options object must not throw */
     const auth = window.firebaseAuth;
 
     /* Auth guard */
@@ -274,9 +275,14 @@
       return { checkoutId: result.checkoutId };
 
     } catch (err) {
-      _activePayment = null;
       _clearIdempotencyKey(ref);
       throw err;
+    } finally {
+      /* The double-submit lock guards the PUSH REQUEST only. It used to be released solely by waitForConfirmation /
+         cancelPayment, so a page that tracks confirmation itself (plans, promotions, donations) could never start a
+         second purchase in the same session ("Another payment is already in progress" until reload). The per-ref
+         idempotency key above still prevents a duplicate push for the SAME payment. */
+      _activePayment = null;
     }
   }
 
@@ -287,6 +293,7 @@
      Resolves with receipt on success, rejects on failure/timeout.
   ══════════════════════════════════════════════════════════════ */
   async function waitForConfirmation(ref, options, onStatus) {
+    options = options || {};
     try {
       const paymentData = await _waitForPaymentConfirmation(ref, onStatus);
 
