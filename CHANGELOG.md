@@ -1,3 +1,23 @@
+## [2026-10-03] — Tech Hub slice 4K (server): public search excludes unapproved / suspended providers; reinstatement re-indexes in full — NOT deployed
+
+- **New** `functions/shared/provider-search-eligibility.js` — the ONE rule for the providers registry in search, the same one the directory
+  applies: indexable ⇔ status ∈ {active, approved} AND searchable !== false.
+- **Defect, live lineage:** applicationLifecycle retracts a suspended / refused provider with {status:'suspended', searchable:false} and relied on
+  "the existing update trigger" deleting it from search. But:
+  - **algolia-sync.js** had no providers rule, so a suspended provider STAYED searchable;
+  - **typesense-sync.js** indexed pending records and ignored searchable:false.
+  Both now apply the rule.
+- **algolia-sync.js:** a document leaving a skip state (reinstated / published) is re-added with a FULL upsert. It was a 'partial' update of
+  the changed fields onto an object that had been deleted.
+- **Test seams** (`_internal`) are NON-enumerable, so index.js's Object.assign never exports them as deploy targets.
+- **Tests:** test-provider-search-eligibility 8/0, firing the real algoliaSync_providers_* and ts_providers_* triggers.
+  - BASE=4ab4eb7 fails 6/8: a pending provider is indexed; a suspended, refused or retracted one stays in Algolia; reinstatement is partial.
+  - Unchanged: test-provider-suspend-restore 8/0, test-service-leads 12/0.
+- **Deploy units:** algoliaSync_providers_{create,update} and ts_providers_{onCreate,onUpdate}. Scoped deploys only; lineage gate applies.
+  The algolia-sync change to 'upsert on re-entry' is generic and affects every collection's update trigger when those are deployed.
+  After deploy, a one-off reconcile (algolia-reconcile / Typesense backfill) is needed to remove already-indexed suspended / pending
+  providers. Read-only check first.
+
 ## [2026-10-03] — Tech Hub slice 4O (server): provider suspend / reinstate proven end to end; adminGetProviders honest — NOT deployed
 
 - **Suspend / reinstate already exist** — no new authority. AdminOS uses `applicationDecide` (suspend | approve), which writes adminAudit
