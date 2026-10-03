@@ -6,6 +6,7 @@
      ARTIST   a performer booking (providerBookings)  ref = BK-ART-YYYY-NNNNNN
      SERVICE  an Entertainment service booking        ref = BK-SVC-YYYY-NNNNNN
      VENUE    a venue booking (bookings, booking core) ref = BK-VEN-YYYY-NNNNNN
+     RENTAL   an equipment rental (rentalBookings)     ref = BK-RNT-YYYY-NNNNNN  — the PIN protects the RETURN
 
    The source engines stay the authority for their own records (price, slot, status); the identity
    is an ENVELOPE that references the source and adds what no engine had: a human reference, a
@@ -21,19 +22,20 @@
    ═══════════════════════════════════════════════════════════════════════════════════════════ */
 'use strict';
 
-const CATEGORY = Object.freeze({ EVENT: 'EVENT', ARTIST: 'ARTIST', SERVICE: 'SERVICE', VENUE: 'VENUE' });
-const REF_PREFIX = Object.freeze({ ARTIST: 'BK-ART', SERVICE: 'BK-SVC', VENUE: 'BK-VEN' });
-const REF_RE = /^BK-(ART|SVC|VEN)-\d{4}-\d{6}$/;
+const CATEGORY = Object.freeze({ EVENT: 'EVENT', ARTIST: 'ARTIST', SERVICE: 'SERVICE', VENUE: 'VENUE', RENTAL: 'RENTAL' });
+const REF_PREFIX = Object.freeze({ ARTIST: 'BK-ART', SERVICE: 'BK-SVC', VENUE: 'BK-VEN', RENTAL: 'BK-RNT' });
+const REF_RE = /^BK-(ART|SVC|VEN|RNT)-\d{4}-\d{6}$/;
 const SOURCES = Object.freeze({
   eventOrders: { key: 'evt', category: CATEGORY.EVENT },
   providerBookings: { key: 'svc', category: null },          /* ARTIST or SERVICE, from the classification */
   bookings: { key: 'ven', category: CATEGORY.VENUE },
+  rentalBookings: { key: 'rnt', category: CATEGORY.RENTAL },  /* owner 2026-10-03: ONE PIN, at RETURN */
 });
 const PHRASE = Object.freeze({
   EVENT: 'PIN YAKO NI TICKET YAKO',
   BOOKING: 'PIN YAKO NI BOOKING YAKO',
 });
-const TITLE = Object.freeze({ EVENT: 'Event booking', ARTIST: 'Artist booking', SERVICE: 'Service booking', VENUE: 'Venue booking' });
+const TITLE = Object.freeze({ EVENT: 'Event booking', ARTIST: 'Artist booking', SERVICE: 'Service booking', VENUE: 'Venue booking', RENTAL: 'Equipment rental' });
 
 const STATUS = Object.freeze({
   PENDING: 'PENDING', CONFIRMED: 'CONFIRMED', IN_PROGRESS: 'IN_PROGRESS', COMPLETED: 'COMPLETED',
@@ -99,6 +101,14 @@ function statusOf(sourceCollection, d) {
     if (s === 'expired') return STATUS.EXPIRED;
     return STATUS.PENDING;
   }
+  if (sourceCollection === 'rentalBookings') {
+    /* rental lifecycle (marketplace-extensions): the PIN is used at RETURN, so active / return_pending are IN_PROGRESS and
+       returned / completed are COMPLETED. Legacy pending = requested, confirmed = accepted. refunded = CANCELLED (the
+       money went back). Unknown → PENDING. */
+    return ({ requested: 'PENDING', pending: 'PENDING', accepted: 'PENDING', confirmed: 'PENDING', payment_pending: 'PENDING',
+      paid_held: 'CONFIRMED', active: 'IN_PROGRESS', return_pending: 'IN_PROGRESS', returned: 'COMPLETED', completed: 'COMPLETED',
+      declined: 'DECLINED', cancelled: 'CANCELLED', refunded: 'CANCELLED' })[s] || STATUS.PENDING;
+  }
   if (sourceCollection === 'bookings') {
     return ({ pending: 'PENDING', confirmed: 'CONFIRMED', active: 'IN_PROGRESS', completed: 'COMPLETED', cancelled: 'CANCELLED', no_show: 'NO_SHOW', rejected: 'DECLINED' })[s] || STATUS.PENDING;
   }
@@ -116,6 +126,11 @@ function paymentOf(sourceCollection, d) {
   }
   if (sourceCollection === 'providerBookings') {
     return ({ paid_held: 'CONFIRMED', settled: 'CONFIRMED', refunded: 'REFUNDED', pending: 'PROCESSING' })[String(d.paymentStatus || 'pending')] || PAYMENT.PROCESSING;
+  }
+  if (sourceCollection === 'rentalBookings') {
+    /* written ONLY by the payment authority (verified IntaSend webhook): held → released | refunded. 'unpaid' and anything
+       unknown is PROCESSING — never CONFIRMED without the canonical held state. */
+    return ({ held: 'CONFIRMED', released: 'CONFIRMED', refunded: 'REFUNDED' })[String(d.paymentStatus || '')] || PAYMENT.PROCESSING;
   }
   /* venue booking core: payment is verified server-side (paymentStatus 'paid') or not required */
   const ps = String(d.paymentStatus || '');

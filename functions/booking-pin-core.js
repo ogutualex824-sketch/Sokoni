@@ -46,7 +46,9 @@ function _window(env) {
   const startMs = Number(w.startMs) || null;
   const endMs = Number(w.endMs) || startMs;
   const issuedAtMs = Number(env.pin && env.pin.issuedAtMs) || 0;
-  const opensAtMs = startMs ? startMs - PIN_OPENS_BEFORE_MS : 0;
+  const src = env.source && env.source.collection && Object.prototype.hasOwnProperty.call(SOURCE, env.source.collection) ? SOURCE[env.source.collection] : null;
+  const opensBefore = src ? src.opensBeforeMs : PIN_OPENS_BEFORE_MS;   /* a rental return can come early: no opening gate */
+  const opensAtMs = startMs && opensBefore ? startMs - opensBefore : 0;
   const expiresAtMs = Math.max(endMs ? endMs + PIN_TTL_MS : 0, issuedAtMs ? issuedAtMs + PIN_TTL_MS : 0) || null;
   return { opensAtMs, expiresAtMs };
 }
@@ -95,17 +97,76 @@ async function _audit(action, uid, envId, detail) {
   await _db().collection(COL.AUDIT).add({ action, performedBy: uid || 'system', envId: envId || null, detail: detail || null, createdAt: FieldValue.serverTimestamp() }).catch(() => {});
 }
 
+/* ── 0. SOURCE ADAPTERS — the ONLY per-source code (sokoni-5b review, 2026-10-03) ──────────────────────────────
+   One PIN authority for every held-money booking. Everything below (hash, encryption at rest, references, attempt
+   limits, renewals, buyer re-view) is shared; a source supplies only who the parties are, what is held, and when.
+   providerUid always comes from SERVER data (the source record, or the shop it names) — never from a client field.
+     providerBookings  the service booking (unchanged behaviour: these adapters reproduce the original code exactly)
+     rentalBookings    an equipment rental (owner 2026-10-03): ONE PIN at RETURN. The renter gives it when the equipment
+                       comes back; the seller enters it in rentalConfirmReturn (return_pending → returned), which releases
+                       the held money. Hand-over stays a seller action. A return can come early, so no "too early" gate. */
+const SOURCE = Object.freeze({
+  providerBookings: Object.freeze({
+    held: (b) => HELD_OR_SETTLED.includes(String(b.paymentStatus || '')),
+    heldUnreleased: (b) => b.paymentStatus === 'paid_held',
+    providerUid: async (_txn, b) => b.providerId || null,
+    buyerUid: (b) => b.customerUid || null,
+    category: (b) => (b.entClass === ID.CATEGORY.ARTIST ? ID.CATEGORY.ARTIST : ID.CATEGORY.SERVICE),
+    providerKind: (category) => (category === ID.CATEGORY.ARTIST ? 'artist' : 'service_provider'),
+    when: (b) => ({ startMs: _ms(b.startTs) || _ms(b.scheduledAt), endMs: _ms(b.endTs) }),
+    amountCents: (b) => (Number(b.price) || 0) + (Number(b.fee) || 0),
+    title: (b) => b.service || 'Service',
+    location: (b) => b.address || b.location || null,
+    detail: (b) => (b.durationMins ? `${b.durationMins} min` : null),
+    opensBeforeMs: PIN_OPENS_BEFORE_MS,
+  }),
+  rentalBookings: Object.freeze({
+    held: (b) => ['held', 'released'].includes(String(b.paymentStatus || '')),
+    heldUnreleased: (b) => b.paymentStatus === 'held',
+    /* the renting shop's owner, read from shops/{shopId} — the same identity model as marketplace-extensions
+       _assertSeller (ownerId, or a legacy shop with no ownerId whose id IS the owner's uid). Missing shop → null. */
+    providerUid: async (txn, b) => {
+      if (!b.shopId || !/^[A-Za-z0-9_-]{1,128}$/.test(String(b.shopId))) return null;
+      const s = await txn.get(_db().collection('shops').doc(String(b.shopId)));
+      if (!s.exists) return null;
+      const shop = s.data() || {};
+      return 'ownerId' in shop ? (shop.ownerId || null) : String(b.shopId);
+    },
+    buyerUid: (b) => b.buyerId || null,
+    category: () => ID.CATEGORY.RENTAL,
+    providerKind: () => 'rental_shop',
+    when: (b) => ({ startMs: _ms(b.startDate), endMs: _ms(b.endDate) }),
+    /* informational only (money never moves here): the held amount if the payment authority recorded it */
+    amountCents: (b) => (Number.isFinite(Number(b.heldAmountCents)) && b.heldAmountCents != null
+      ? Math.round(Number(b.heldAmountCents))
+      : Math.round(((Number(b.totalAmount) || 0) + (Number(b.depositAmount) || 0)) * 100)),
+    title: (b) => String(b.rentalTitle || 'Equipment rental').slice(0, 150),
+    location: () => null,
+    detail: (b) => (b.durationUnit ? String(b.durationUnit) : null),
+    opensBeforeMs: null,
+    requireProvider: true,
+  }),
+});
+function _source(name) {
+  const s = Object.prototype.hasOwnProperty.call(SOURCE, name) ? SOURCE[name] : null;
+  if (!s) fail('invalid-argument', 'Unknown booking type.');
+  return s;
+}
+
 /* ── 1. issue the PIN once the payment is HELD (trigger) ───────────────────────────────── */
-async function issueForBooking(bookingId, b) {
-  if (!b || !HELD_OR_SETTLED.includes(String(b.paymentStatus || ''))) return { skipped: 'not_paid' };
+async function issueFor(source, bookingId, b) {
+  const A = _source(source);
+  if (!b || !A.held(b)) return { skipped: 'not_paid' };
   const db = _db();
-  const envId = ID.envIdFor('providerBookings', bookingId);
+  const envId = ID.envIdFor(source, bookingId);
   const envRef = db.collection(COL.ENV).doc(envId);
-  let created = false;
+  let created = false, skipped = null;
   await db.runTransaction(async (txn) => {
     const cur = await txn.get(envRef);
-    if (cur.exists) { txn.update(envRef, { when: { startMs: _ms(b.startTs) || _ms(b.scheduledAt), endMs: _ms(b.endTs) }, status: ID.statusOf('providerBookings', b), payment: { state: ID.paymentOf('providerBookings', b), paymentRef: b.paymentRef || null, amountCents: (Number(b.price) || 0) + (Number(b.fee) || 0) }, updatedAt: FieldValue.serverTimestamp() }); return; }
-    const category = b.entClass === ID.CATEGORY.ARTIST ? ID.CATEGORY.ARTIST : ID.CATEGORY.SERVICE;
+    const providerUid = await A.providerUid(txn, b);
+    if (cur.exists) { txn.update(envRef, { when: A.when(b), status: ID.statusOf(source, b), payment: { state: ID.paymentOf(source, b), paymentRef: b.paymentRef || null, amountCents: A.amountCents(b) }, updatedAt: FieldValue.serverTimestamp() }); return; }
+    if (A.requireProvider && !providerUid) { skipped = 'no_provider'; return; }   /* fail closed: no PIN that no one could verify */
+    const category = A.category(b);
     const year = new Date(_now()).getUTCFullYear();
     let bookingRef = null;
     for (let i = 0; i < 8 && !bookingRef; i++) {
@@ -115,22 +176,39 @@ async function issueForBooking(bookingId, b) {
     if (!bookingRef) fail('resource-exhausted', 'Could not allocate a booking reference — try again.');
     const pin = String(_randInt(10000)).padStart(4, '0');
     txn.create(envRef, {
-      envId, bookingRef, category, source: { collection: 'providerBookings', id: bookingId },
-      buyerUid: b.customerUid || null, providerUid: b.providerId || null, providerKind: category === ID.CATEGORY.ARTIST ? 'artist' : 'service_provider',
-      title: b.service || 'Service', providerName: null, location: b.address || b.location || null, detail: b.durationMins ? `${b.durationMins} min` : null,
-      when: { startMs: _ms(b.startTs) || _ms(b.scheduledAt), endMs: _ms(b.endTs) }, status: ID.statusOf('providerBookings', b),
-      payment: { state: ID.paymentOf('providerBookings', b), paymentRef: b.paymentRef || null, amountCents: (Number(b.price) || 0) + (Number(b.fee) || 0) },
+      envId, bookingRef, category, source: { collection: source, id: bookingId },
+      buyerUid: A.buyerUid(b), providerUid, providerKind: A.providerKind(category),
+      title: A.title(b), providerName: null, location: A.location(b), detail: A.detail(b),
+      when: A.when(b), status: ID.statusOf(source, b),
+      payment: { state: ID.paymentOf(source, b), paymentRef: b.paymentRef || null, amountCents: A.amountCents(b) },
       refund: { state: 'NONE' }, ticketNumbers: null, quantity: null,
       pin: { hash: _pinHash(envId, pin), issuedAt: FieldValue.serverTimestamp(), issuedAtMs: _now(), renewals: 0 },
       verification: { state: 'NOT_VERIFIED' }, conversationId: null, issuedBy: 'booking-pin-core',
       createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), version: 1,
     });
     txn.create(db.collection(COL.REFS).doc(bookingRef), { envId, createdAt: FieldValue.serverTimestamp() });
-    txn.create(db.collection(COL.SECRETS).doc(envId), { envId, bookingRef, pinEnc: _encPin(envId, pin), buyerUid: b.customerUid || null, createdAt: FieldValue.serverTimestamp() });
+    txn.create(db.collection(COL.SECRETS).doc(envId), { envId, bookingRef, pinEnc: _encPin(envId, pin), buyerUid: A.buyerUid(b), createdAt: FieldValue.serverTimestamp() });
     created = true;
   });
-  if (created) await _audit('booking_pin_issued', 'system', envId, { bookingId });
+  if (skipped) { logger.warn('[bookingPin] not issued', { source, bookingId, skipped }); return { envId, created: false, skipped }; }
+  if (created) await _audit('booking_pin_issued', 'system', envId, source === 'providerBookings' ? { bookingId } : { source, bookingId });
   return { envId, created };
+}
+const issueForBooking = (bookingId, b) => issueFor('providerBookings', bookingId, b);
+
+/* A non-held write (cancel, refund, completion) keeps an EXISTING envelope's status / payment current, so the
+   terminal checks in verify / renew see it. Never creates an envelope. Used by the rental trigger (rental-pin.js). */
+async function syncEnvelope(source, bookingId, b) {
+  const A = _source(source);
+  const ref = _db().collection(COL.ENV).doc(ID.envIdFor(source, bookingId));
+  const s = await ref.get();
+  if (!s.exists) return { skipped: 'no_envelope' };
+  await ref.update({ status: ID.statusOf(source, b), payment: { state: ID.paymentOf(source, b), paymentRef: b.paymentRef || null, amountCents: A.amountCents(b) }, updatedAt: FieldValue.serverTimestamp() });
+  return { synced: true };
+}
+async function onSourceWritten(source, bookingId, after) {
+  if (!after) return { skipped: 'deleted' };
+  return _source(source).held(after) ? issueFor(source, bookingId, after) : syncEnvelope(source, bookingId, after);
 }
 
 /* ── 2. orders/{bookingId} mirror — a service booking IS an order ──────────────────────── */
@@ -208,40 +286,74 @@ async function _charge(envId, uid, failed) {
   });
 }
 
-/* ── 4. the release gate: called by providerCompleteBooking for a HELD booking ──────────── */
-async function verifyForCompletion({ bookingId, providerUid, pin }) {
-  const envId = ID.envIdFor('providerBookings', bookingId);
+/* Per-source wording. providerBookings strings are the original ones, unchanged. */
+const COPY = Object.freeze({
+  providerBookings: Object.freeze({
+    none: 'This booking has no PIN yet — it is issued when the customer\'s payment is held by SOKONI.',
+    early: 'Too early — the booking PIN works from 2 hours before the booking starts. Complete the booking after the service.',
+    expired: 'This PIN has expired. Ask the customer to open the booking and tap "Get a new PIN" — the payment stays safely held until then.',
+    ask: 'This booking was paid to SOKONI and is held. Ask the customer for their booking PIN — PIN YAKO NI BOOKING YAKO — and enter it to complete the service and release the payment.',
+    closed: 'This booking can no longer be completed.',
+  }),
+  rentalBookings: Object.freeze({
+    none: 'This rental has no PIN yet — it is issued when the renter\'s payment is held by SOKONI.',
+    early: 'Too early for this rental\'s PIN.',
+    expired: 'This PIN has expired. Ask the renter to open the rental and tap "Get a new PIN" — the payment stays safely held until then.',
+    ask: 'This rental was paid to SOKONI and is held. When the equipment is back, ask the renter for their rental PIN — PIN YAKO NI BOOKING YAKO — and enter it to confirm the return and release the payment.',
+    closed: 'This rental can no longer be returned with a PIN.',
+  }),
+});
+
+/* ── 4. the release gate ─────────────────────────────────────────────────────────────────────────────────────
+   providerBookings: called by providerCompleteBooking for a HELD booking. rentalBookings: called by
+   rentalConfirmReturn (return_pending → returned) for a HELD rental, AFTER the caller's own seller check.
+   providerUid = the provider of record (server-resolved by the caller); actorUid = who is typing the PIN
+   (a shop employee may confirm a return) — attempt limits are charged to the actor. */
+async function verify({ source, bookingId, providerUid, actorUid, pin }) {
+  const C = COPY[source] || COPY.providerBookings;
+  _source(source);
+  const actor = actorUid || providerUid;
+  const envId = ID.envIdFor(source, bookingId);
   const ref = _db().collection(COL.ENV).doc(envId);
   const s = await ref.get();
-  if (!s.exists) return { ok: false, reason: 'This booking has no PIN yet — it is issued when the customer\'s payment is held by SOKONI.' };
+  if (!s.exists) return { ok: false, reason: C.none };
   const env = s.data();
-  if (env.providerUid !== providerUid) return { ok: false, reason: 'Not your booking.' };
+  if (!providerUid || env.providerUid !== providerUid) return { ok: false, reason: 'Not your booking.' };
   if (env.verification && env.verification.state === 'VERIFIED') return { ok: true, alreadyVerified: true };   /* a retry after a partial failure */
   const win = _window(env);
   const nowMs = _now();
-  if (win.opensAtMs && nowMs < win.opensAtMs) return { ok: false, reason: 'Too early — the booking PIN works from 2 hours before the booking starts. Complete the booking after the service.' };
-  if (win.expiresAtMs && nowMs > win.expiresAtMs) return { ok: false, reason: 'This PIN has expired. Ask the customer to open the booking and tap "Get a new PIN" — the payment stays safely held until then.' };
+  if (win.opensAtMs && nowMs < win.opensAtMs) return { ok: false, reason: C.early };
+  if (win.expiresAtMs && nowMs > win.expiresAtMs) return { ok: false, reason: C.expired };
   const p = ID.normalizePin(pin);
-  if (!p) return { ok: false, reason: 'This booking was paid to SOKONI and is held. Ask the customer for their booking PIN — PIN YAKO NI BOOKING YAKO — and enter it to complete the service and release the payment.' };
-  const pre = await _charge(envId, providerUid, false);
+  if (!p) return { ok: false, reason: C.ask };
+  const pre = await _charge(envId, actor, false);
   if (pre.locked) return { ok: false, reason: 'Too many wrong PINs. Wait a few minutes before trying again.' };
   const want = env.pin && env.pin.hash, got = _pinHash(envId, p);
   const match = !!want && !!got && want.length === got.length && crypto.timingSafeEqual(Buffer.from(want), Buffer.from(got));
   if (!match) {
-    await _charge(envId, providerUid, true);
-    await _audit('booking_pin_failed', providerUid, envId, { bookingId });
+    await _charge(envId, actor, true);
+    await _audit('booking_pin_failed', actor, envId, source === 'providerBookings' ? { bookingId } : { source, bookingId });
     return { ok: false, reason: 'That PIN does not match this booking.' };
   }
   const done = await _db().runTransaction(async (txn) => {
     const cur = (await txn.get(ref)).data();
     if (cur.verification && cur.verification.state === 'VERIFIED') return true;
     if (ID.TERMINAL && ID.TERMINAL.has && ID.TERMINAL.has(cur.status)) return false;
-    txn.update(ref, { verification: { state: 'VERIFIED', at: FieldValue.serverTimestamp(), by: providerUid }, updatedAt: FieldValue.serverTimestamp() });
+    txn.update(ref, { verification: { state: 'VERIFIED', at: FieldValue.serverTimestamp(), by: actor }, updatedAt: FieldValue.serverTimestamp() });
     return true;
   });
-  if (!done) return { ok: false, reason: 'This booking can no longer be completed.' };
-  await _audit('booking_pin_verified', providerUid, envId, { bookingId });
+  if (!done) return { ok: false, reason: C.closed };
+  await _audit('booking_pin_verified', actor, envId, source === 'providerBookings' ? { bookingId } : { source, bookingId });
   return { ok: true, bookingRef: env.bookingRef };
+}
+const verifyForCompletion = ({ bookingId, providerUid, pin }) => verify({ source: 'providerBookings', bookingId, providerUid, pin });
+
+/* The buyer names which kind of booking (default: a service booking, as before). Only known sources. */
+function _reqSource(req) {
+  const raw = (req.data || {}).source;
+  const source = raw == null || raw === '' ? 'providerBookings' : String(raw);
+  _source(source);
+  return source;
 }
 
 /* ── 5. buyer reads their PIN ──────────────────────────────────────────────────────────── */
@@ -249,7 +361,8 @@ async function customerGetBookingPin(req) {
   if (!req.auth || !req.auth.uid) fail('unauthenticated', 'Sign in required.');
   const bookingId = String((req.data || {}).bookingId || '').trim();
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(bookingId)) fail('invalid-argument', 'bookingId is required.');
-  const envId = ID.envIdFor('providerBookings', bookingId);
+  const source = _reqSource(req);
+  const envId = ID.envIdFor(source, bookingId);
   const s = await _db().collection(COL.ENV).doc(envId).get();
   if (!s.exists) return { issued: false, reason: 'not_yet_issued', phrase: ID.PHRASE.BOOKING };
   const env = s.data();
@@ -274,10 +387,12 @@ async function customerRenewBookingPin(req) {
   const uid = req.auth.uid;
   const bookingId = String((req.data || {}).bookingId || '').trim();
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(bookingId)) fail('invalid-argument', 'bookingId is required.');
+  const source = _reqSource(req);
+  const A = SOURCE[source];
   const db = _db();
-  const envId = ID.envIdFor('providerBookings', bookingId);
+  const envId = ID.envIdFor(source, bookingId);
   const envRef = db.collection(COL.ENV).doc(envId);
-  const bRef = db.collection('providerBookings').doc(bookingId);
+  const bRef = db.collection(source).doc(bookingId);
   const pin = String(_randInt(10000)).padStart(4, '0');
   const out = await db.runTransaction(async (txn) => {
     const [es, bs] = await Promise.all([txn.get(envRef), txn.get(bRef)]);
@@ -285,21 +400,21 @@ async function customerRenewBookingPin(req) {
     const env = es.data();
     if (env.buyerUid !== uid) fail('permission-denied', 'This booking is not yours.');
     const b = bs.exists ? bs.data() : {};
-    if (b.paymentStatus !== 'paid_held') fail('failed-precondition', 'Only a booking whose payment is still held can get a new PIN.');
+    if (!A.heldUnreleased(b)) fail('failed-precondition', 'Only a booking whose payment is still held can get a new PIN.');
     if (env.verification && env.verification.state === 'VERIFIED') fail('failed-precondition', 'This booking\'s PIN has already been used.');
-    if (ID.TERMINAL && ID.TERMINAL.has && ID.TERMINAL.has(ID.statusOf('providerBookings', b))) fail('failed-precondition', 'This booking is closed.');
-    const win = _window({ ...env, when: { startMs: _ms(b.startTs) || _ms(b.scheduledAt), endMs: _ms(b.endTs) } });
+    if (ID.TERMINAL && ID.TERMINAL.has && ID.TERMINAL.has(ID.statusOf(source, b))) fail('failed-precondition', 'This booking is closed.');
+    const win = _window({ ...env, when: A.when(b) });
     const nowMs = _now();
     const expired = !!(win.expiresAtMs && nowMs > win.expiresAtMs);
     if (!expired && win.opensAtMs && nowMs < win.opensAtMs) fail('failed-precondition', 'You can get a new PIN from 2 hours before your booking starts.');
     const renewals = Number(env.pin && env.pin.renewals) || 0;
     if (renewals >= MAX_RENEWALS) fail('resource-exhausted', 'This booking has reached its PIN renewal limit — contact SOKONI support.');
     txn.update(envRef, { pin: { hash: _pinHash(envId, pin), issuedAt: FieldValue.serverTimestamp(), issuedAtMs: nowMs, renewals: renewals + 1 },
-      when: { startMs: _ms(b.startTs) || _ms(b.scheduledAt), endMs: _ms(b.endTs) }, updatedAt: FieldValue.serverTimestamp() });
+      when: A.when(b), updatedAt: FieldValue.serverTimestamp() });
     txn.set(db.collection(COL.SECRETS).doc(envId), { pinEnc: _encPin(envId, pin), pin: FieldValue.delete(), renewedAt: FieldValue.serverTimestamp() }, { merge: true });
     return { renewals: renewals + 1, expiresAtMs: nowMs + PIN_TTL_MS, bookingRef: env.bookingRef };
   });
-  await _audit('booking_pin_renewed', uid, envId, { bookingId, renewals: out.renewals });
+  await _audit('booking_pin_renewed', uid, envId, source === 'providerBookings' ? { bookingId, renewals: out.renewals } : { source, bookingId, renewals: out.renewals });
   return { issued: true, pin, bookingRef: out.bookingRef, phrase: ID.PHRASE.BOOKING, expiresAtMs: Math.max(out.expiresAtMs, 0), renewalsLeft: MAX_RENEWALS - out.renewals };
 }
 
@@ -323,4 +438,9 @@ exports.entBookingOnProviderBooking = onDocumentWritten({ document: 'providerBoo
 });
 
 exports.SOKONI_HMAC_KEY = SOKONI_HMAC_KEY;
-exports._internal = { _encPin, _decPin, issueForBooking, mirrorServiceOrder, onBookingWritten, verifyForCompletion, customerGetBookingPin, customerRenewBookingPin, COL, PIN_TTL_MS, MAX_RENEWALS, _setClock: (fn) => { _now = fn || (() => Date.now()); } };
+/* source-neutral surface (rental-pin.js trigger; marketplace-extensions rentalConfirmReturn) */
+exports.issueFor = issueFor;
+exports.verify = verify;
+exports.onSourceWritten = onSourceWritten;
+exports.SOURCES = Object.freeze(Object.keys(SOURCE));
+exports._internal = { _encPin, _decPin, issueForBooking, issueFor, syncEnvelope, onSourceWritten, mirrorServiceOrder, onBookingWritten, verifyForCompletion, verify, customerGetBookingPin, customerRenewBookingPin, SOURCE, COL, PIN_TTL_MS, MAX_RENEWALS, _setClock: (fn) => { _now = fn || (() => Date.now()); } };
