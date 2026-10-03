@@ -1,3 +1,13 @@
+## [2026-10-03] - Construction Verification: lane-aware approval from the server's answer.lane (sokoni-5b ruling; NOT deployed)
+
+- Approved iff `approval.state === 'VALID_APPROVAL'` and, by `answer.lane` (server `laneOf`): `services` (trades) also needs
+  `modules.services` AVAILABLE; `products` (materials suppliers, `OWN_WORKSPACE`) needs VALID alone; an unknown/absent lane
+  shows `—`. Never from the browser's category or application fields.
+- Tests 71/0 → 76/0: rows VL1 (supplier VALID → Approved), VL2 (supplier NO_APPROVAL → not), VL3 (trade VALID, services
+  LOCKED → not), VL4 (absent/null/"both"/"Products" lane → `—`); control N12 (lane from applications.category → VL1).
+- Files: `sokoni-merchant-construction.js`, `scripts/test-merchant-construction-workspace.js`, `docs/CONSTRUCTION_WORKSPACE.md`.
+  DB / API / rules: none.
+
 ## [2026-10-03] - Construction: approval from the ONE authority + read-only mode (P0-F) (hosting only; NOT deployed)
 
 **Owner invariant (2026-10-03):** application status is WORKFLOW, not authorization. **DEPENDENCY:** sokoni-5b `f85039a`

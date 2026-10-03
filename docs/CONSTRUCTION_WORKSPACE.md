@@ -209,12 +209,21 @@ interpretation, no fallback.
 
 - **SOKONI approval** comes only from `providerDispatch {op:'businessWorkspace'}` (sokoni-5b `f85039a`, whose
   `approval.state` is derived by `shared/approval-authority.js isAuthoritativelyApproved`). The page shows **Approved**
-  only when `approval.state === 'VALID_APPROVAL'` **and** `modules.services.state === 'AVAILABLE'`.
+  only when `approval.state === 'VALID_APPROVAL'` and, by the **server's** `answer.lane` (business-workspace.js
+  `laneOf` over the server category, set on every answer; sokoni-5b ruling 2026-10-03):
+
+  | `answer.lane` | Approved iff |
+  |---|---|
+  | `services` (trades, quoted-service) | VALID_APPROVAL **and** `modules.services.state === 'AVAILABLE'` |
+  | `products` (materials supplier, `OWN_WORKSPACE` modules) | VALID_APPROVAL **alone** — no module key by design |
+  | absent / null / anything else | `—` (fails closed) |
+
+  The lane is never decided from the browser's category or an application field (control N12). A non-VALID approval is
+  "Not approved yet" whatever the lane.
   - **Why `services`:** neither `f85039a` nor the capability line (`1a5c9e5`) has a construction module key.
     Construction trades classify to existing quoted-service provider categories (5b `cf44fc3`: trades /
     service_business / professional_services), whose capability is the `services` module. Swap the one constant
-    `APPROVAL_MODULE` if 5b adds a construction key. A materials supplier (products lane) gets `OWN_WORKSPACE` modules
-    and therefore "Not approved yet" here — honest, fail closed; its approval is the shop's.
+    `APPROVAL_MODULE` if 5b adds a construction key. It applies to the services lane only.
   - Otherwise: "Not approved yet" with the server's message or the plain words for the approval state
     (PENDING / NO / INVALID_LEGACY / REFUSED / BUYER_ONLY / UNREADABLE). A failed or malformed answer shows `—` with
     the reason and a retry — never a guess.
@@ -272,9 +281,9 @@ Construction edits are read-only for everyone (owner rule) — the hosting chang
 
 ## Tests
 
-`scripts/test-merchant-construction-workspace.js` passes **71/0**: 60 rows plus 11 of 11 negative controls caught
+`scripts/test-merchant-construction-workspace.js` passes **76/0**: 64 rows plus 12 of 12 negative controls caught
 (N9 "Approved" from applications.status → V1; N10 read-only fails open on a missing answer → RO6; N11 a badge from
-`verified === true` → V3). It runs
+`verified === true` → V3; N12 lane from applications.category → VL1). It runs
 in a node VM. The rental fixtures come from **running the real handlers** over an in-memory Firestore, with the
 dispatcher's error wrapping reproduced:
 
@@ -292,6 +301,7 @@ dispatcher's error wrapping reproduced:
 | R | f3 bb8634d handlers: every booking state produced by the real handlers (payment-authority states written as that authority would); seller button matrix incl. legacy pending/confirmed; payment from STATUS only; method "—" until the webhook sets it; no Cancel on paid_held, refund-policy refusal verbatim; decline reason required; Accept → rentalConfirm alias on an old server; Start / Confirm return / Complete / seller Cancel; listing Draft / Available / Paused + publish / pause; Equipment via rentalOwnerListings (hasMore); direct read only on an unknown-op answer; reasons verbatim |
 | H | Projects, RFQs, Quotes and Services are honest; staff Verification copy |
 | V | Status is "Application progress" only; Approved only for VALID_APPROVAL + services AVAILABLE; verified/adminApproved/approvedBy/status alone → not approved; failed/malformed/unwired answer → `—`; one businessWorkspace call per page load (module + shell memo) |
+| VL | Lane from `answer.lane` only: supplier VALID → Approved; supplier NO_APPROVAL → not; trade VALID + services unavailable → not; unknown/absent lane → `—` |
 | RO | Claim deactivated; approval not valid; editable false (frozen); editable true overrides interim; every ownerState × editable true/false/missing/"true"; missing answer fails closed; staff; figures untouched |
 | S | No `wa.me`, `tel:` or `mailto:`; escaping; no Firestore write API or browser storage in the module; dispatch ops limited to the seller rental ops (never rentalBook / rentalReportReturn) |
 | G | Ten `con-*` routes; Construction group last; `validate()` clean; `MODULES` wiring; no duplicate module ids; script tag |
