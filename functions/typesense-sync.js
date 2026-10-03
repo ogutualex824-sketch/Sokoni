@@ -65,6 +65,8 @@ function _shouldSkip(data, collection) {
      discoverable (/api/catalogue and checkout already refuse it). Going hidden fires the update trigger, which then
      deletes it from the index; becoming visible again re-adds it. */
   if (collection === 'products' && data.isVisible === false) return true;
+  /* takedown enforcement (2026-10-02): a moderation hold keeps it out even if a stray writer ever re-set isVisible. */
+  if (collection === 'products' && data.moderationHold != null) return true;
   if (collection === 'users' && data.private === true) return true;
   return false;
 }

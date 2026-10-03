@@ -74,6 +74,12 @@ function _makeClient(adminKey) {
 ════════════════════════════════════════════════════════════════════ */
 
 async function enqueue({ collection, docId, operation, data, beforeData, priority }) {
+  /* TAKEDOWN ENFORCEMENT (2026-10-02): EVERY enqueuer — sync triggers, backfills, the scheduled reconcilers, repair
+     tools — funnels through here. A product that is hidden (isVisible:false) or held by moderation is never (re)indexed:
+     an upsert of it becomes a delete, so a reconcile/backfill can never quietly undo a take-down in Typesense. */
+  if (collection === 'products' && operation !== 'delete' && data && (data.isVisible === false || data.moderationHold != null)) {
+    operation = 'delete'; data = null; beforeData = null;
+  }
   const db      = getFirestore();
   const tsEntry = COLLECTION_MAP[collection];
   if (!tsEntry) return; /* not a mapped collection */
@@ -304,15 +310,15 @@ async function _handleFailure(db, item, errorMsg) {
   const attempts = (item.attempts || 0) + 1;
   if (attempts >= MAX_ATTEMPTS) {
     /* Move to DLQ */
-    await db.collection(DLQ_COL).doc(item.ref.id).set({
-      ...item,
+    const { ref, ...rest } = item;
+    await db.collection(DLQ_COL).doc(ref.id).set({
+      ...rest,
       status:    'failed',
       failedAt:  Date.now(),
       lastError: errorMsg,
       attempts,
-      ref:       undefined,
     });
-    await item.ref.delete();
+    await ref.delete();
     return;
   }
   const delayMs  = (RETRY_DELAYS[attempts] || 600) * 1000;

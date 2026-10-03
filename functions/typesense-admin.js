@@ -193,6 +193,9 @@ exports.typesenseBackfill = onCall(
 
       const docs = [];
       for (const doc of snap.docs) {
+        /* takedown enforcement (2026-10-02): a hidden or moderation-held product is never imported */
+        const _d = doc.data() || {};
+        if (firestoreCollection === 'products' && (_d.isVisible === false || _d.moderationHold != null)) continue;
         try {
           const transformed = transformer(doc.id, doc.data());
           if (transformed) docs.push({ ...transformed, id: doc.id });

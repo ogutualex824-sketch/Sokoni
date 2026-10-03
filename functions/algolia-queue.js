@@ -81,6 +81,12 @@ function _now() { return admin.firestore.FieldValue.serverTimestamp(); }
 ══════════════════════════════════════════════════════════════════════ */
 
 async function enqueue({ collection, docId, operation, data = null, beforeData = null }) {
+  /* TAKEDOWN ENFORCEMENT (2026-10-02): EVERY enqueuer — sync triggers, backfills, the scheduled reconcilers, repair
+     tools — funnels through here. A product that is hidden (isVisible:false) or held by moderation is never (re)indexed:
+     an upsert of it becomes a delete, so a reconcile/backfill can never quietly undo a take-down in Algolia. */
+  if (collection === 'products' && operation !== 'delete' && data && (data.isVisible === false || data.moderationHold != null)) {
+    operation = 'delete'; data = null; beforeData = null;
+  }
   const mapping = COLLECTION_INDEX_MAP[collection];
   if (!mapping) return; // collection not indexed
 
