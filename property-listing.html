@@ -83,6 +83,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 </head>
 <body>
 <script src="splash.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-hub-reviews.js"></script>
 <script src="sokoni-property.js"></script>
 
 <nav class="fn">
@@ -116,13 +118,25 @@ function init() {
   }
   renderProp();
   updateSaveBtn();
+  _loadPropReviews();
 }
+/* Approved reviews come from the server (getReviews). Until they arrive the section says "Loading",
+   and a failed read says "unavailable" — never "No reviews yet", which would be an invented fact. */
+let _rvState = 'loading';
+async function _loadPropReviews(){
+  _rvState = 'loading';
+  const r = await P.loadReviews(_prop.id);
+  _rvState = r && r.ok ? 'ok' : 'failed';
+  renderProp();
+}
+function _esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
 function renderProp() {
   const p = _prop;
   const st = P.PROPERTY_STATUS[p.status]||{label:p.status,icon:'🏠',color:'white'};
   const agent = P.getAgentById(p.agentId)||{name:p.agentName||'Agent',icon:'🏢',phone:'—',rating:4.5,reviews:0,listings:0};
-  const reviews = P.getReviews(p.id);
+  const reviews = P.getReviews(p.id) || [];
+  const rvKnown = _rvState === 'ok';
   document.getElementById('fnTitle').textContent = p.title;
   const imgs = p.images||[p.icon||'🏠'];
 
@@ -193,15 +207,16 @@ function renderProp() {
 
     <div class="pl-section">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <div class="pl-sh" style="margin:0;">⭐ Reviews (${reviews.length})</div>
+        <div class="pl-sh" style="margin:0;">⭐ Reviews (${rvKnown?reviews.length:'—'})</div>
         <button onclick="openReview()" style="padding:6px 12px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:8px;color:#f59e0b;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">+ Write Review</button>
       </div>
-      ${reviews.length?reviews.slice(0,3).map(r=>`
+      ${!rvKnown?`<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:12px;">${_rvState==='failed'?'Reviews are unavailable right now.':'Loading reviews…'}</div>`
+        :reviews.length?reviews.slice(0,3).map(r=>`
       <div class="pl-review">
-        <div style="display:flex;justify-content:space-between;"><div class="pl-review-name">${r.name||'Reviewer'}</div><div>${P.starsHTML(r.rating)}</div></div>
-        <div class="pl-review-text">${r.comment||''}</div>
-        <div style="font-size:10px;color:rgba(255,255,255,0.2);margin-top:4px;">${P.timeSince(r.ts)}</div>
-      </div>`).join(''):'<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:12px;">No reviews yet. Be the first!</div>'}
+        <div style="display:flex;justify-content:space-between;"><div class="pl-review-name">${_esc(r.authorName||'SOKONI customer')}</div><div>${P.starsHTML(Number(r.rating)||0)}</div></div>
+        <div class="pl-review-text">${_esc(r.body)}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.2);margin-top:4px;">${r.createdAt?_esc(P.timeSince(Date.parse(r.createdAt))):''}</div>
+      </div>`).join(''):'<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:12px;">No approved reviews yet.</div>'}
     </div>
 
     <div class="pl-sh">🏘️ Similar Properties</div>
@@ -244,11 +259,18 @@ function openViewing() {
 }
 window.openViewing=openViewing;
 
-function submitViewing() {
+/* Server-first (owner 2026-10-03): the request exists only once scheduleViewing recorded it. */
+async function submitViewing() {
   const name=document.getElementById('vName').value.trim();const phone=document.getElementById('vPhone').value.trim();const date=document.getElementById('vDate').value;
   if(!name||!phone||!date){(window._skToast||alert)('Please fill all required fields.');return;}
-  P.requestViewing({propertyId:_prop.id,propertyTitle:_prop.title,agentId:_prop.agentId,agentName:_prop.agentName||'Agent',name,phone,email:document.getElementById('vEmail').value,date,time:document.getElementById('vTime').value,notes:document.getElementById('vNotes').value});
-  closeModal();(window._skToast||alert)(`✅ Viewing request submitted!\n\nDate: ${date}\nThe agent will confirm within 24 hours.`);
+  const btn=document.querySelector('#plModalContent .pl-submit'); if(btn){btn.disabled=true;btn.textContent='Sending…';}
+  const r=await P.scheduleServerViewing({propertyId:_prop.id,propertyTitle:_prop.title,agentId:_prop.agentId,agentName:_prop.agentName||'Agent',name,phone,email:document.getElementById('vEmail').value,date,time:document.getElementById('vTime').value,notes:document.getElementById('vNotes').value});
+  if(btn){btn.disabled=false;btn.textContent='📅 Submit Viewing Request';}
+  if(!r.ok){(window._skToast||alert)(r.message);return;}
+  closeModal();(window._skToast||alert)(`✅ Viewing request recorded.
+
+Date: ${date}
+The agent will confirm it.`);
 }
 window.submitViewing=submitViewing;
 
@@ -276,11 +298,12 @@ window.submitInquiry=submitInquiry;
 function openReview() {
   document.getElementById('plModalContent').innerHTML=`
     <div style="font-size:16px;font-weight:900;margin-bottom:14px;display:flex;justify-content:space-between;">⭐ Write a Review<span onclick="closeModal()" style="cursor:pointer;color:rgba(255,255,255,0.4);">✕</span></div>
-    <label class="pl-label">Your Name</label><input class="pl-input" id="rvName" placeholder="Your name">
+    <p style="font-size:12px;color:rgba(255,255,255,0.5);margin:0 0 12px;">Reviews are open to customers who requested a viewing of this listing. Every review is checked by our moderators before it appears.</p>
     <label class="pl-label">Rating</label>
     <div style="display:flex;gap:8px;margin-bottom:12px;font-size:28px;">${[1,2,3,4,5].map(i=>`<span style="cursor:pointer;color:rgba(255,255,255,0.2);" onclick="setRvRating(${i})" id="rvStar${i}">★</span>`).join('')}</div>
     <label class="pl-label">Review</label><textarea class="pl-input" id="rvComment" rows="4" placeholder="Share your experience..."></textarea>
-    <button class="pl-submit" onclick="submitReview()">⭐ Submit Review</button>`;
+    <div id="rvMsg" role="status" aria-live="polite" style="font-size:12px;margin:0 0 10px;min-height:0;"></div>
+    <button class="pl-submit" id="rvSubmitBtn" onclick="submitReview()">⭐ Submit Review</button>`;
   document.getElementById('plModal').classList.add('open');
   _rvRating=0;
 }
@@ -288,7 +311,19 @@ window.openReview=openReview;
 let _rvRating=0;
 function setRvRating(n){_rvRating=n;for(let i=1;i<=5;i++){const s=document.getElementById('rvStar'+i);if(s)s.style.color=i<=n?'#f59e0b':'rgba(255,255,255,0.2)';}}
 window.setRvRating=setRvRating;
-function submitReview(){const name=document.getElementById('rvName').value.trim()||'Anonymous';const comment=document.getElementById('rvComment').value.trim();if(!_rvRating||!comment){(window._skToast||alert)('Please select a rating and write a review.');return;}P.addReview(_prop.id,'property',{name,rating:_rvRating,comment});closeModal();(window._skToast||alert)('✅ Review submitted!');renderProp();}
+/* Honest outcome only: "received" ONLY when the server confirmed a pending review. A refusal stays on
+   screen with its reason (not eligible, already reviewed, sign in…). */
+async function submitReview(){
+  const comment=document.getElementById('rvComment').value.trim();
+  const out=document.getElementById('rvMsg'), btn=document.getElementById('rvSubmitBtn');
+  const show=(t,ok)=>{if(out){out.textContent=t;out.style.color=ok?'#10b981':'#f87171';}};
+  if(!_rvRating){show('Please choose a rating.',false);return;}
+  if(btn){btn.disabled=true;btn.textContent='Sending…';}
+  const r=await P.addReview(_prop.id,'property',{rating:_rvRating,comment});
+  if(btn){btn.disabled=false;btn.textContent='⭐ Submit Review';}
+  if(!r||!r.ok){show((r&&r.message)||'We could not send your review. Please try again.',false);return;}
+  closeModal();(window._skToast||alert)('Review received — it will appear once a moderator approves it.');
+}
 window.submitReview=submitReview;
 
 function calcMortgage() {

@@ -176,6 +176,34 @@ function requestViewing(data) {
   return viewing;
 }
 
+/* 2026-10-03 (owner): a viewing request is RECORDED ON THE SERVER — servicesDispatch op scheduleViewing →
+   propertyViewings/{listingId_uid_date} (idempotent per buyer+listing+date). That record is what makes a
+   buyer eligible to review the listing. The device-local copy (requestViewing) is written only AFTER the
+   server confirms, so the existing dashboards keep working without ever showing an unconfirmed request.
+   Resolves { ok:true, viewingId } or { ok:false, message } — never a fake "submitted". */
+async function scheduleServerViewing(data) {
+  const d = data || {};
+  if (!d.propertyId || !d.date) return { ok:false, message:'Please choose a date.' };
+  try {
+    if (typeof window.waitForFirebaseReady === 'function') await Promise.race([window.waitForFirebaseReady(), new Promise(r => setTimeout(r, 8000))]);
+    if (!(window.firebaseAuth && window.firebaseAuth.currentUser)) return { ok:false, message:'Sign in to request a viewing.' };
+    if (!window.firebaseApp) return { ok:false, message:'Viewing requests are unavailable right now. Please try again.' };
+    const mod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+    const res = await mod.httpsCallable(mod.getFunctions(window.firebaseApp, 'us-central1'), 'servicesDispatch')({
+      op:'scheduleViewing', listingId:String(d.propertyId), preferredDate:String(d.date),
+      preferredTime:String(d.time||'').slice(0,20), notes:String(d.notes||'').slice(0,500) });
+    const viewingId = res && res.data && res.data.viewingId;
+    if (!viewingId) return { ok:false, message:'We could not confirm your viewing request. Please try again.' };
+    requestViewing({ ...d, serverViewingId: viewingId });
+    return { ok:true, viewingId };
+  } catch (e) {
+    const c = String((e && e.code) || '').replace(/^functions\//, '');
+    if (c === 'not-found') return { ok:false, message:'This listing is not open for viewing requests on SOKONI.' };
+    if (c === 'unauthenticated') return { ok:false, message:'Sign in to request a viewing.' };
+    return { ok:false, message:'Viewing requests are unavailable right now. Please try again.' };
+  }
+}
+
 function getViewings(propId) {
   const all = JSON.parse(localStorage.getItem('prop_viewings')||'[]');
   return propId ? all.filter(v=>v.propertyId===propId) : all;
@@ -242,20 +270,28 @@ function getAgents(filter) {
 function getAgentById(id) { return AGENTS.find(a=>a.id===id)||fsRead('agents').find(a=>a.id===id); }
 
 /* ══ REVIEWS ══ */
+/* 2026-10-03 (owner): reviews are REQUESTED from the server — submitReview → pending → AdminOS → approved.
+   This used to save a device-local copy and file the review into the APPLICATIONS collection
+   (fsWrite → SokoniDB.saveApplication, category 'reviews'): never public, never moderated, junk in the
+   applications queue. Only property LISTINGS are reviewable (eligibility = your viewing of that listing). */
 function addReview(targetId, targetType, data) {
-  const key='prop_reviews_'+targetId;
-  const arr=JSON.parse(localStorage.getItem(key)||'[]');
-  arr.unshift({id:'RV'+Date.now(),...data,targetId,targetType,ts:Date.now(),uid:uid()});
-  localStorage.setItem(key,JSON.stringify(arr.slice(0,50)));
-  fsWrite('reviews',{targetId,targetType,...data,ts:Date.now()});
+  if (targetType !== 'property') return Promise.resolve({ ok:false, reason:'UNSUPPORTED_TARGET', message:'Reviews are not available here yet.' });
+  if (!window.SokoniHubReviews) return Promise.resolve({ ok:false, reason:'UNAVAILABLE', message:'Reviews are unavailable right now. Please try again.' });
+  return window.SokoniHubReviews.submit({ targetType:'property', targetId, rating:(data||{}).rating, body:(data||{}).comment });
 }
-
-function getReviews(targetId) { return JSON.parse(localStorage.getItem('prop_reviews_'+targetId)||'[]'); }
-
-function getAvgRating(targetId, baseRating) {
-  const arr=getReviews(targetId);
-  if(!arr.length) return baseRating||4.5;
-  return (arr.reduce((s,r)=>s+r.rating,0)/arr.length).toFixed(1);
+/* Approved reviews, loaded from the server per listing. undefined = not loaded yet / failed (render "—"). */
+const _rvCache = {};
+async function loadReviews(targetId) {
+  if (!window.SokoniHubReviews) return { ok:false };
+  const r = await window.SokoniHubReviews.load('property', targetId);
+  if (r.ok) _rvCache[targetId] = r.reviews;
+  return r;
+}
+function getReviews(targetId) { return _rvCache[targetId]; }
+function getAvgRating(targetId) {
+  const arr = _rvCache[targetId];
+  const avg = arr && window.SokoniHubReviews ? window.SokoniHubReviews.average(arr) : null;
+  return avg == null ? null : avg.toFixed(1);
 }
 
 /* ══ FINANCE REQUESTS ══ */
@@ -333,7 +369,7 @@ window.SokoniProperty = {
   sendInquiry, getInquiries, updateInquiryStatus,
   saveProperty, getSavedProperties, isSaved,
   getAgents, getAgentById,
-  addReview, getReviews, getAvgRating,
+  addReview, loadReviews, getReviews, getAvgRating, scheduleServerViewing,
   submitFinanceRequest, getFinanceRequests,
   submitLegalRequest,
   addNotification, getNotifications, markNotifRead, getUnreadCount,

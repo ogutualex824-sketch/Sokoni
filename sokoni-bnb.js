@@ -176,14 +176,12 @@ function getHosts(filter) {
 function getHostById(id){ return HOSTS.find(h=>h.id===id)||fsRead('hosts').find(h=>h.id===id); }
 
 /* ── REVIEWS ── */
-function addReview(targetId, data) {
-  const key='bnb_reviews_'+targetId; const arr=JSON.parse(localStorage.getItem(key)||'[]');
-  arr.unshift({id:'RV'+Date.now(),...data,targetId,ts:Date.now(),uid:uid()});
-  localStorage.setItem(key,JSON.stringify(arr.slice(0,50)));
-  fsWrite('reviews',{targetId,...data,ts:Date.now()});
-}
-function getReviews(targetId){ return JSON.parse(localStorage.getItem('bnb_reviews_'+targetId)||'[]'); }
-function getAvgRating(targetId, base){ const arr=getReviews(targetId); if(!arr.length)return base||4.5; return (arr.reduce((s,r)=>s+r.rating,0)/arr.length).toFixed(1); }
+/* 2026-10-03: no browser review writes. This wrote a device-local review plus a Firestore write to bnbReviews
+   (no rule → always refused), and no page ever called it. BnB reviews do not exist until a BnB stay is a
+   server-recorded booking with a review authority; until then the honest answer is "not available". */
+function addReview() { return Promise.resolve({ ok:false, reason:'UNSUPPORTED_TARGET', message:'Reviews are not available here yet.' }); }
+function getReviews() { return []; }
+function getAvgRating(targetId, base) { return base == null ? null : base; }
 
 /* ── NOTIFICATIONS ── */
 function addNotification(data) {

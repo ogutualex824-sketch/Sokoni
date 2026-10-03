@@ -219,6 +219,33 @@ function bookVenue(data){
   addNotification({type:'venue',title:'Venue Booked',body:`Booking for ${bk.date} (${slotRange}) submitted. Ref: ${bk.ref}`,ref:bk.ref});
   return bk;
 }
+/* 2026-10-03 (owner): a venue booking REQUEST is recorded on the server — sportsVenueBookings/{id}, written
+   with the signed-in uid (rules: claimsOwner + required keys). That record is what makes the booker eligible to
+   review the venue. bookVenue above wrote through window.firebase (compat), which venue pages never loaded, so
+   no booking ever reached the server. The local copy is written only AFTER the server accepted the request.
+   No payment is taken here. Resolves { ok:true, booking } or { ok:false, message }. */
+async function recordServerVenueBooking(data){
+  const d=data||{};
+  try{
+    if(typeof window.waitForFirebaseReady==='function') await Promise.race([window.waitForFirebaseReady(),new Promise(r=>setTimeout(r,8000))]);
+    const user=window.firebaseAuth&&window.firebaseAuth.currentUser;
+    if(!user) return {ok:false,message:'Sign in to request a booking.'};
+    if(!window.firebaseDB) return {ok:false,message:'Bookings are unavailable right now. Please try again.'};
+    const fsm=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    const id=genId('VB');
+    const rec={ venueId:String(d.venueId), date:String(d.date), slots:(d.slots||[]).map(String).slice(0,24),
+      name:String(d.name||'').slice(0,100), phone:String(d.phone||'').slice(0,20), uid:user.uid, status:'pending',
+      createdAt:fsm.serverTimestamp(), sport:String(d.sport||'').slice(0,40), players:String(d.players||'').slice(0,10),
+      notes:String(d.notes||'').slice(0,500) };
+    await fsm.setDoc(fsm.doc(window.firebaseDB,'sportsVenueBookings',id),rec);
+    const bk={id,...d,status:'pending',createdAt:Date.now(),uid:user.uid,ref:id};
+    const arr=JSON.parse(localStorage.getItem('spt_venue_bookings')||'[]'); arr.unshift(bk);
+    localStorage.setItem('spt_venue_bookings',JSON.stringify(arr.slice(0,200)));
+    return {ok:true,booking:bk};
+  }catch(e){
+    return {ok:false,message:(e&&e.code==='permission-denied')?'This booking request was refused. Please check your details and try again.':'Bookings are unavailable right now. Please try again.'};
+  }
+}
 function getVenueBookings(venueId){ const all=JSON.parse(localStorage.getItem('spt_venue_bookings')||'[]'); return venueId?all.filter(b=>b.venueId===venueId):all; }
 function getUserVenueBookings(){ return JSON.parse(localStorage.getItem('spt_venue_bookings')||'[]').filter(b=>b.uid===uid()); }
 /* Returns an array of booked hour strings (e.g. ['09:00','10:00']) for a given venue+date */
@@ -283,13 +310,24 @@ function likePost(postId){
 }
 
 /* ══ REVIEWS ══ */
+/* 2026-10-03 (owner): venue reviews are REQUESTED from the server — submitReview({targetType:'sports_venue'})
+   → pending → AdminOS → approved. This used to keep a device-local copy and write sportsReviews directly,
+   which the rules refused (payload had no uid) while the page still said "posted" — the review was lost.
+   Eligibility = your own venue booking for that venue. */
 function addReview(targetId,targetType,data){
-  const key='spt_rv_'+targetId; const arr=JSON.parse(localStorage.getItem(key)||'[]');
-  arr.unshift({id:'RV'+Date.now(),...data,targetId,targetType,ts:Date.now(),uid:uid()});
-  localStorage.setItem(key,JSON.stringify(arr.slice(0,30))); fsWrite('reviews',{targetId,targetType,...data,ts:Date.now()});
+  if(targetType!=='venue') return Promise.resolve({ok:false,reason:'UNSUPPORTED_TARGET',message:'Reviews are not available here yet.'});
+  if(!window.SokoniHubReviews) return Promise.resolve({ok:false,reason:'UNAVAILABLE',message:'Reviews are unavailable right now. Please try again.'});
+  return window.SokoniHubReviews.submit({targetType:'sports_venue',targetId,rating:(data||{}).rating,body:(data||{}).body});
 }
-function getReviews(targetId){ return JSON.parse(localStorage.getItem('spt_rv_'+targetId)||'[]'); }
-function getAvgRating(targetId,base){ const arr=getReviews(targetId); if(!arr.length)return base||4.5; return (arr.reduce((s,r)=>s+r.rating,0)/arr.length).toFixed(1); }
+const _rvCache={};
+async function loadReviews(targetId){
+  if(!window.SokoniHubReviews) return {ok:false};
+  const r=await window.SokoniHubReviews.load('sports_venue',targetId);
+  if(r.ok) _rvCache[targetId]=r.reviews;
+  return r;
+}
+function getReviews(targetId){ return _rvCache[targetId]; }
+function getAvgRating(targetId){ const arr=_rvCache[targetId]; const avg=arr&&window.SokoniHubReviews?window.SokoniHubReviews.average(arr):null; return avg==null?null:avg.toFixed(1); }
 
 /* ══ SAVED ══ */
 function saveItem(type,id){ const key='spt_saved_'+type+'_'+uid(); const arr=JSON.parse(localStorage.getItem(key)||'[]'); if(arr.includes(id)){localStorage.setItem(key,JSON.stringify(arr.filter(x=>x!==id)));return false;} arr.unshift(id);localStorage.setItem(key,JSON.stringify(arr.slice(0,100)));return true; }
@@ -339,7 +377,7 @@ window.SokoniSports = {
   getTournaments, getTournamentById, registerForTournament, getFixtures, getStandings,
   getMarketplace, createOrder,
   getPosts, createPost, likePost,
-  addReview, getReviews, getAvgRating,
+  addReview, loadReviews, getReviews, getAvgRating, recordServerVenueBooking,
   saveItem, isSaved,
   addNotification, getNotifications, markNotifRead, getUnreadCount,
   syncUserDataFromFirestore,

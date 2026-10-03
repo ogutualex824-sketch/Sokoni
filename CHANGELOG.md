@@ -1,3 +1,24 @@
+## [2026-10-03] - Hub reviews onto the ONE server authority: property + sports venue (BnB refuses honestly); server-first viewings and venue bookings
+
+**Branch `hosting/hub-reviews-on-72dca56`, on live `72dca56`. NOT deployed.** Full note: `docs/HUB_REVIEWS_CONVERGENCE.md`.
+
+- **Fixed:** property reviews were filed into the **applications** collection. Sports reviews and venue bookings
+  never reached the server (pages used the compat SDK they never loaded). BnB `addReview` was dead code. All three
+  showed false success and device-only lists.
+- **Now:** a new shared helper, `sokoni-hub-reviews.js`, calls `submitReview({targetType:'property'|'sports_venue',
+  targetId, rating, body})`. Reviews go pending into the AdminOS queue, and the pages read approved reviews only
+  through `getReviews`. Success is shown only on a server-confirmed pending review. All values are escaped. The free-typed name field is removed.
+- **Eligibility (owner):** a server viewing (`servicesDispatch scheduleViewing`) or a server venue booking
+  (`sportsVenueBookings`, signed-in uid). Both are now recorded server-first; the local copy is written only after confirmation.
+- **Agent reviews:** not available, and the seed rating/count is shown as "—". BnB reviews: not available.
+- **Files:** `sokoni-hub-reviews.js` (new), `sokoni-property.js`, `sokoni-sports.js`, `sokoni-bnb.js`,
+  `property-listing.html`, `property-agent.html`, `sports-venue.html`, `scripts/test-hub-review-clients.js`, docs.
+- **DB / rules:** none in this tree. The companion rules (sportsReviews closed; applications refuses `category:'reviews'`;
+  unboxing quarantine storage) are in `rules/capability-decisions-on-f20be7d` @ `1925aaa` and **ship last**.
+- **Depends on:** sokoni-5b's `submitReview` property/sports_venue adapters. The live 09-09 version rejects these types,
+  so these pages say "unavailable" until those functions are deployed.
+- **Tests:** test-hub-review-clients 31/0, sabotage 7/7. Related suites identical to live. Browser/live NOT run.
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;

@@ -64,6 +64,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 </head>
 <body>
 <script src="splash.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-hub-reviews.js"></script>
 <script src="sokoni-property.js"></script>
 
 <nav class="fn">
@@ -95,9 +97,10 @@ function init() {
 
 function renderPage() {
   const a = _agent;
-  const avgRating = P.getAvgRating(a.id, a.rating);
+  /* 2026-10-03: agent reviews are not available — only property LISTINGS are reviewable (owner: eligibility is a
+     viewing of that listing). The seed rating/review count was never a real figure, so it is not shown. */
   const listings = P.getListings({}).filter(p=>p.agentId===a.id);
-  const reviews = P.getReviews(a.id);
+  const reviews = [];
 
   document.getElementById('agBody').innerHTML = `
     <!-- PROFILE -->
@@ -106,11 +109,11 @@ function renderPage() {
       <div class="ag-name">${a.name}</div>
       ${a.verified?'<div style="font-size:11px;font-weight:700;color:#22c55e;margin-bottom:6px;">✅ Verified Agent</div>':''}
       <div class="ag-location">📍 ${a.location}</div>
-      <div style="font-size:13px;margin-bottom:10px;">${P.starsHTML(avgRating)} <strong style="color:#f59e0b;">${avgRating}</strong> <span style="color:rgba(255,255,255,0.3);">(${reviews.length + a.reviews} reviews)</span></div>
+      <div style="font-size:13px;margin-bottom:10px;"><strong style="color:#f59e0b;">—</strong> <span style="color:rgba(255,255,255,0.3);">(agent reviews not available yet)</span></div>
       <div class="ag-stats">
         <div class="ag-stat"><div class="ag-stat-num">${listings.length || a.listings}</div><div class="ag-stat-lbl">Listings</div></div>
         <div class="ag-stat"><div class="ag-stat-num">${a.yearsExp}</div><div class="ag-stat-lbl">Yrs Exp</div></div>
-        <div class="ag-stat"><div class="ag-stat-num">${reviews.length + a.reviews}</div><div class="ag-stat-lbl">Reviews</div></div>
+        <div class="ag-stat"><div class="ag-stat-num">—</div><div class="ag-stat-lbl">Reviews</div></div>
       </div>
       <div class="ag-bio">${a.bio||''}</div>
       ${a.specialties?.length?`<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:14px;">${a.specialties.map(s=>`<span style="font-size:11px;padding:4px 10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:6px;color:#10b981;">${s}</span>`).join('')}</div>`:''}
@@ -125,7 +128,7 @@ function renderPage() {
     <!-- TABS -->
     <div class="ag-tabs">
       <button class="ag-tab ${_activeTab==='listings'?'active':''}" onclick="switchTab('listings')">🏠 Listings (${listings.length||a.listings})</button>
-      <button class="ag-tab ${_activeTab==='reviews'?'active':''}" onclick="switchTab('reviews')">⭐ Reviews (${reviews.length})</button>
+      <button class="ag-tab ${_activeTab==='reviews'?'active':''}" onclick="switchTab('reviews')">⭐ Reviews</button>
       <button class="ag-tab ${_activeTab==='about'?'active':''}" onclick="switchTab('about')">ℹ️ About</button>
     </div>
 
@@ -203,7 +206,7 @@ function renderTab(tab, listings, reviews) {
 function switchTab(tab) {
   _activeTab = tab;
   const listings = P.getListings({}).filter(p=>p.agentId===_agent.id);
-  const reviews = P.getReviews(_agent.id);
+  const reviews = [];
   document.querySelectorAll('.ag-tab').forEach(t=>{t.classList.toggle('active',t.textContent.toLowerCase().includes(tab));});
   document.getElementById('agTabContent').innerHTML = renderTab(tab, listings, reviews);
 }
@@ -228,22 +231,16 @@ function sendContact() {
 }
 window.sendContact=sendContact;
 
+/* 2026-10-03: no browser review writes. Agent reviews have no eligibility authority yet, so the form explains
+   that honestly instead of "submitting" into the applications collection as it used to. */
 function openReviewModal() {
   document.getElementById('agModalContent').innerHTML = `
-    <div style="font-size:16px;font-weight:900;margin-bottom:14px;display:flex;justify-content:space-between;">⭐ Review Agent<span onclick="closeModal()" style="cursor:pointer;color:rgba(255,255,255,0.4);">✕</span></div>
-    <label class="ag-label">Your Name</label><input class="ag-input" id="rvName" placeholder="Your name">
-    <label class="ag-label">Rating</label>
-    <div style="display:flex;gap:8px;margin-bottom:12px;font-size:28px;">${[1,2,3,4,5].map(i=>`<span style="cursor:pointer;color:rgba(255,255,255,0.2);" onclick="setRvRating(${i})" id="rvStar${i}">★</span>`).join('')}</div>
-    <label class="ag-label">Review</label><textarea class="ag-input" id="rvComment" rows="4" placeholder="Share your experience working with this agent..."></textarea>
-    <button class="ag-submit" onclick="submitReview()">⭐ Submit Review</button>`;
+    <div style="font-size:16px;font-weight:900;margin-bottom:14px;display:flex;justify-content:space-between;">⭐ Review Agent<span onclick="closeModal()" role="button" aria-label="Close" style="cursor:pointer;color:rgba(255,255,255,0.4);">✕</span></div>
+    <p style="font-size:13px;color:rgba(255,255,255,0.6);line-height:1.6;margin:0;">Agent reviews are not available yet. You can review a property listing after requesting a viewing of it.</p>`;
   document.getElementById('agModal').classList.add('open');
-  _rvRating=0;
 }
 window.openReviewModal=openReviewModal;
-let _rvRating=0;
-function setRvRating(n){_rvRating=n;for(let i=1;i<=5;i++){const s=document.getElementById('rvStar'+i);if(s)s.style.color=i<=n?'#f59e0b':'rgba(255,255,255,0.2)';}}
-window.setRvRating=setRvRating;
-function submitReview(){const name=document.getElementById('rvName').value.trim()||'Anonymous';const comment=document.getElementById('rvComment').value.trim();if(!_rvRating||!comment){(window._skToast||alert)('Please select a rating and write a review.');return;}P.addReview(_agent.id,'agent',{name,rating:_rvRating,comment});closeModal();(window._skToast||alert)('✅ Review submitted!');renderPage();}
+function submitReview(){ return false; }
 window.submitReview=submitReview;
 
 function closeModal(){document.getElementById('agModal').classList.remove('open');}
