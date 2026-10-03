@@ -1,3 +1,13 @@
+## [2026-10-03] — Messages: ?tx=job_application opens the Jobs conversation (for sokoni-f3 J4/J5) — NOT deployed
+
+- **messages.html / sokoni-inbox.js:** job_application joins the allowlist, with Jobs-specific refusal wording. The txId is the application id (jobId_seekerUid).
+- **Server:** sok-techfn 8aaa868 (parties from the application, send-time re-derivation, 30-day window).
+- **Tests:** test-tech-service-editor L1, 17/0.
+
+## [2026-10-03] — Home: "Digital & eSoko" card → Tech Hub services copy (downloads retired by the owner, via sokoni-e3) — NOT deployed
+
+- **index.html:** the card linking tech-hub.html no longer advertises eBooks, courses, software or instant downloads (retired). It now reads Tech Hub: repair, IT support, networking, POS support by SOKONI-approved technicians. Copy only; the link is unchanged. Device retail stays on category.html (sokoni-e3 digital containment ab9e5e1).
+
 ## [2026-10-03] — Messages: ?tx=rfq opens the B2B RFQ conversation (for sokoni-f3) — NOT deployed
 
 - **messages.html:** _openFromTransaction accepts rfq, with RFQ-specific refusal wording.
