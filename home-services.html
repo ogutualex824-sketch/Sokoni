@@ -194,62 +194,53 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0805;color:white;
 
 <!-- GET QUOTES PANEL -->
 <div id="hspanel-quotes" class="hs-panel">
+  <!-- 2026-10-03 (f3, on b2 4F): the quote form wrote homeServiceQuotes from a second Firebase app, kept a localStorage
+       "Quote Requests Near You" feed, collected a phone number and promised "up to 5 providers respond" — no provider ever
+       received it. A quote request now goes to a provider through the ONE lead authority (providerDispatch leadCreate,
+       sokoni-leads.js): the provider replies in SOKONI Messages and may send a quote; the customer accepts or declines it;
+       an accepted quote is booked at the quoted price, taken server-side. Sending one request to many providers at once
+       does not exist on the server, so the page does not offer it. -->
   <div class="hs-body" style="max-width:700px;">
     <div style="padding-top:12px;margin-bottom:22px;">
-      <div style="font-size:22px;font-weight:900;color:white;margin-bottom:5px;">💰 Get Multiple Quotes</div>
-      <div style="font-size:13px;color:rgba(255,255,255,0.4);">Post your job once — up to 5 providers respond with their best price</div>
+      <div style="font-size:22px;font-weight:900;color:white;margin-bottom:5px;">💰 Request a Quote</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.4);">Choose the service, then ask a provider. They reply in SOKONI Messages and can send you a quote — you accept or decline it before anything is booked or paid.</div>
     </div>
     <div style="background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.14);border-radius:20px;padding:24px;margin-bottom:20px;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div>
-          <label class="hs-label">Service Needed *</label>
-          <select id="qtService" class="hs-input">
+      <label class="hs-label" for="qtService">Service Needed *</label>
+      <select id="qtService" class="hs-input">
             <option value="">Select type</option>
             <option>🔧 Plumbing</option><option>⚡ Electrical</option><option>🧹 Cleaning</option>
             <option>🎨 Painting</option><option>📦 Moving</option><option>🪟 Carpentry</option>
             <option>🌿 Gardening</option><option>❄️ AC / Appliance</option><option>🧰 Handyman</option>
-          </select>
-          <label class="hs-label">Location *</label>
-          <input type="text" id="qtLocation" class="hs-input" placeholder="e.g. Westlands, Nairobi">
-        </div>
-        <div>
-          <label class="hs-label">Your Phone *</label>
-          <input type="tel" id="qtPhone" class="hs-input" placeholder="07XXXXXXXX">
-          <label class="hs-label">Budget (optional)</label>
-          <input type="text" id="qtBudget" class="hs-input" placeholder="e.g. KES 2,000–5,000">
-        </div>
-      </div>
-      <label class="hs-label">Job Description *</label>
-      <textarea id="qtDesc" class="hs-input" style="min-height:80px;resize:vertical;" placeholder="Describe the work needed in detail. The more detail, the better the quotes you'll receive."></textarea>
-      <button type="button" onclick="requestQuotes()" style="width:100%;padding:14px;background:linear-gradient(135deg,#f59e0b,#fbbf24);border:none;border-radius:12px;color:#0a0805;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">📢 Request Quotes from Providers</button>
-      <div id="qtMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+      </select>
+      <button type="button" onclick="requestQuotes()" style="width:100%;padding:14px;background:linear-gradient(135deg,#f59e0b,#fbbf24);border:none;border-radius:12px;color:#0a0805;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🔍 Find providers to ask</button>
+      <div id="qtMsg" role="status" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-top:6px;">On a provider, tap 💬 to describe your job. To ask several providers, ask each one.</div>
     </div>
-    <!-- Quotes feed -->
-    <div class="hs-section-h">📥 Quote Requests Near You</div>
-    <div id="hsQuotesFeed" style="display:flex;flex-direction:column;gap:10px;"></div>
+    <div class="hs-section-h">📥 My requests &amp; quotes</div>
+    <a href="service-requests.html" style="display:block;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;color:#f59e0b;font-weight:800;text-decoration:none;">Open my service requests — replies, quotes, accept / decline, book ›</a>
   </div>
 </div>
 
 <!-- ASK HUB PANEL -->
 <div id="hspanel-askhub" class="hs-panel">
+  <!-- 2026-10-03 (f3): "Ask the Hub" posted to localStorage + homeServiceRequests (second Firebase app) and rendered a
+       public feed with phone numbers that only this browser could see. Asking now goes to a chosen provider through
+       the lead authority, privately; nothing is published. -->
   <div class="hs-body" style="max-width:800px;">
     <div style="text-align:center;padding:20px 0 16px;">
       <div style="font-size:40px;margin-bottom:10px;">💬</div>
-      <h2 style="font-size:20px;font-weight:900;margin-bottom:6px;">Ask the Home Services Hub</h2>
-      <p style="font-size:13px;color:rgba(255,255,255,0.4);">Post your home problem — plumbers, electricians and handymen respond</p>
+      <h2 style="font-size:20px;font-weight:900;margin-bottom:6px;">Ask a Home Services Provider</h2>
+      <p style="font-size:13px;color:rgba(255,255,255,0.4);">Pick the kind of help you need, then ask a provider directly — privately, in SOKONI.</p>
     </div>
-    <div style="background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.14);border-radius:20px;padding:22px;margin-bottom:20px;">
-      <textarea id="hsAskText" placeholder="e.g. My electricity keeps tripping at night. Happens when I turn on the water heater. Need an electrician in Langata this weekend…" style="width:100%;padding:13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;min-height:80px;resize:vertical;outline:none;font-family:inherit;"></textarea>
-      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-        <select id="hsAskType" style="flex:1;min-width:120px;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.8);font-size:16px;outline:none;font-family:inherit;">
-          <option>Plumbing</option><option>Electrical</option><option>Cleaning</option><option>Painting</option>
-          <option>Moving</option><option>Carpentry</option><option>Appliance Repair</option><option>Handyman</option>
-        </select>
-        <input type="tel" id="hsAskPhone" placeholder="Your phone" style="flex:1;min-width:120px;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
-        <button type="button" onclick="postHsRequest()" style="padding:10px 20px;background:linear-gradient(135deg,#f59e0b,#fbbf24);border:none;border-radius:10px;color:#0a0805;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;">📢 Post</button>
-      </div>
+    <div style="background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.14);border-radius:20px;padding:22px;margin-bottom:20px;display:flex;gap:8px;flex-wrap:wrap;">
+      <label for="hsAskType" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">Kind of help</label>
+      <select id="hsAskType" style="flex:1;min-width:160px;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.8);font-size:16px;outline:none;font-family:inherit;">
+        <option>Plumbing</option><option>Electrical</option><option>Cleaning</option><option>Painting</option>
+        <option>Moving</option><option>Carpentry</option><option>Appliance Repair</option><option>Handyman</option>
+      </select>
+      <button type="button" onclick="postHsRequest()" style="padding:10px 20px;background:linear-gradient(135deg,#f59e0b,#fbbf24);border:none;border-radius:10px;color:#0a0805;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;">Find a provider to ask</button>
     </div>
-    <div id="hsAskFeed" style="display:flex;flex-direction:column;gap:10px;"></div>
   </div>
 </div>
 
@@ -432,79 +423,33 @@ function bookHomeService(){
 }
 window.bookHomeService=bookHomeService;
 
+function _hsTypeKeyFor(label){
+  const l=String(label||'').toLowerCase().replace(/[^a-z ]/g,' ');
+  const hit=HS_TYPES.find(t=>l.indexOf(t.label.toLowerCase())>-1||l.indexOf(t.key)>-1)
+    ||(/appliance|ac\b/.test(l)?HS_TYPES.find(t=>t.key==='appliance'):null);
+  return hit?hit.key:'all';
+}
+/* Quote request → choose a provider → SokoniLeads.ask (providerDispatch leadCreate) from the directory's 💬.
+   Nothing is written here and nothing says "sent" — the lead module says so once the server created the lead. */
 function requestQuotes(){
   const service=document.getElementById('qtService')?.value||'';
-  const loc=(document.getElementById('qtLocation')?.value||'').trim();
-  const phone=(document.getElementById('qtPhone')?.value||'').trim();
-  const desc=(document.getElementById('qtDesc')?.value||'').trim();
   const msgEl=document.getElementById('qtMsg');
-  if(!service||!loc||!phone||!desc){if(msgEl){msgEl.textContent='Please fill all fields';msgEl.style.color='#f97316';}return;}
-  let quotes=[];try{quotes=JSON.parse(localStorage.getItem('hsQuoteRequests')||'[]');}catch(e){}
-  const budget=document.getElementById('qtBudget')?.value||'';
-  quotes.unshift({id:'QT'+Date.now(),service,loc,phone,desc,budget,ts:Date.now()});
-  localStorage.setItem('hsQuoteRequests',JSON.stringify(quotes.slice(0,30)));
-  const msg=`💰 *SOKONI Home Services — Quote Request*\n\n🔧 Service: ${service}\n📍 Location: ${loc}\n📞 Contact: ${phone}${budget?'\n💰 Budget: '+budget:''}\n\n📝 ${desc}\n\nPlease send your best quote!`;
-  _hsPending(msgEl);
-  renderQuotesFeed();
-  /* Quote request → support ticket (owner 2026-09-30); "recorded" only once the homeServiceQuotes write resolved. */
-  _hsFireWrite('homeServiceQuotes',{service,location:loc,phone,description:desc,budget,status:'open'}).then(function(ok){
-    if(!ok){ _hsFailed(msgEl,'quote'); return; }
-    if(msgEl){msgEl.innerHTML='✅ Quote request recorded — opening SOKONI Support…';msgEl.style.color='#f59e0b';}
-    setTimeout(function(){ location.href = 'support.html?topic=quote&desc=' + encodeURIComponent(msg); }, 600);
-  });
+  if(!service){if(msgEl){msgEl.textContent='Choose the service you need.';msgEl.style.color='#f97316';}return;}
+  goFindType(_hsTypeKeyFor(service));
+  showHsToast('Tap 💬 on a provider to ask for a quote');
 }
 window.requestQuotes=requestQuotes;
 
-function renderQuotesFeed(){
-  const feed=document.getElementById('hsQuotesFeed');if(!feed)return;
-  let quotes=[];try{quotes=JSON.parse(localStorage.getItem('hsQuoteRequests')||'[]');}catch(e){}
-  if(!quotes.length){feed.innerHTML='<div style="text-align:center;padding:30px;color:rgba(255,255,255,0.3);font-size:13px;">No quote requests yet</div>';return;}
-  const ago=ts=>{const s=Math.floor((Date.now()-ts)/1000);return s<60?'just now':s<3600?Math.floor(s/60)+'m ago':Math.floor(s/3600)+'h ago';};
-  feed.innerHTML=quotes.slice(0,6).map(q=>`
-    <div style="padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;">
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
-        <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;font-weight:700;">${q.service}</span>
-        <span style="font-size:11px;color:rgba(255,255,255,0.3);">📍 ${q.loc}</span>
-        <span style="margin-left:auto;font-size:10px;color:rgba(255,255,255,0.3);">${ago(q.ts)}</span>
-      </div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.65);">${q.desc.slice(0,120)}${q.desc.length>120?'…':''}</div>
-      ${q.budget?`<div style="font-size:11px;color:#f59e0b;margin-top:4px;">Budget: ${q.budget}</div>`:''}
-    </div>`).join('');
-}
+/* The customer's requests and quotes live on service-requests.html (SokoniLeads.mountMine) — one list, not a copy. */
+function renderQuotesFeed(){}
 
 function postHsRequest(){
-  const text=(document.getElementById('hsAskText')?.value||'').trim();
-  const type=document.getElementById('hsAskType')?.value||'';
-  const phone=document.getElementById('hsAskPhone')?.value||'';
-  if(!text){showHsToast('Please describe your issue');return;}
-  let reqs=[];try{reqs=JSON.parse(localStorage.getItem('askHub_homeservices')||'[]');}catch(e){}
-  reqs.unshift({id:'HSR'+Date.now(),text,type,phone,ts:Date.now()});
-  localStorage.setItem('askHub_homeservices',JSON.stringify(reqs.slice(0,30)));
-  document.getElementById('hsAskText').value='';
-  document.getElementById('hsAskPhone').value='';
-  renderHsAskFeed();
-  showHsToast('Saving…');
-  _hsFireWrite('homeServiceRequests',{text,serviceType:type||'General',phone,status:'open'}).then(function(ok){
-    showHsToast(ok ? 'Posted to Home Services Hub' : 'Couldn\'t save — please try again or contact Support.');
-  });
+  goFindType(_hsTypeKeyFor(document.getElementById('hsAskType')?.value||''));
+  showHsToast('Tap 💬 on a provider to ask your question');
 }
 window.postHsRequest=postHsRequest;
 
-function renderHsAskFeed(){
-  const feed=document.getElementById('hsAskFeed');if(!feed)return;
-  let reqs=[];try{reqs=JSON.parse(localStorage.getItem('askHub_homeservices')||'[]');}catch(e){}
-  if(!reqs.length){feed.innerHTML='<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">No requests yet</div>';return;}
-  const ago=ts=>{const s=Math.floor((Date.now()-ts)/1000);return s<60?'just now':s<3600?Math.floor(s/60)+'m ago':Math.floor(s/3600)+'h ago';};
-  feed.innerHTML=reqs.slice(0,8).map(r=>`
-    <div style="padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;">
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-        <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.18);color:#f59e0b;font-weight:700;">${r.type}</span>
-        <span style="font-size:11px;color:rgba(255,255,255,0.3);">${ago(r.ts)}</span>
-      </div>
-      <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.5;">${r.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-    </div>`).join('');
-}
-
+function renderHsAskFeed(){}
 function registerProvider(){
   /* 2026-10-03 (Tech Hub slices 2b + 3). Registration went to SOKONI's WhatsApp and into a homeServiceProviders record
      nobody reviewed, with a preset 5.0 rating. It now opens HubRegister — the ONE intake AdminOS reviews. */
@@ -554,29 +499,8 @@ window.addEventListener('beforeunload', () => { if (_hsProvidersUnsub) _hsProvid
 /* ── FIRESTORE LISTENER — live provider listings ── */
 function _initFsProviders(){ /* retired 2026-10-03 (Tech Hub slice 2b): homeServiceProviders is not the provider registry */ }
 
-/* ── FIRESTORE WRITE ──
-   Resolves true ONLY when addDoc resolved (Firestore acknowledged the write);
-   false on any failure. Never rejects. Callers must not say "recorded /
-   booked / registered" unless it resolved true (CLAUDE.md "UI Data Integrity"). */
-async function _hsFireWrite(coll, data) {
-  try {
-    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-    const {getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
-    const _a=getApps().find(a=>a.name==="hs-write")||initializeApp(_cfg,"hs-write");
-    await addDoc(collection(getFirestore(_a),coll),{...data,createdAt:serverTimestamp()});
-    return true;
-  } catch(e){ try{ console.warn('[HomeServices] write failed:',coll,e&&e.code||''); }catch(_){} return false; }
-}
-window._hsFireWrite=_hsFireWrite;
-/* Shared honest-state copy for _hsFireWrite callers. */
-function _hsPending(el){ if(el){ el.textContent='Saving…'; el.style.color='rgba(255,255,255,0.6)'; } }
-function _hsFailed(el,topic,ref){
-  var href='support.html?topic='+encodeURIComponent(topic||'request')+(ref?'&ref='+encodeURIComponent(ref):'');
-  if(el){ el.innerHTML='⚠️ Couldn\'t save — please try again or <a href="'+href+'" style="color:#f97316;">contact Support</a>.'; el.style.color='#f97316'; }
-  else showHsToast('Couldn\'t save — please try again or contact Support.');
-}
-
+/* _hsFireWrite (second Firebase app "hs-write", browser addDoc to homeServiceBookings/Quotes/Requests/Providers/Reviews)
+   retired 2026-10-03: every caller now goes through a server authority (booking engine, leads, HubRegister, reviews). */
 /* ── CONTACT PROVIDER (lead fee tracking) ── */
 function contactProvider(id, name) {
   /* 2026-10-03 (Tech Hub slice 2b): wrote a KES 30 "lead fee" from the browser (homeServiceLeads) and opened wa.me.
@@ -647,6 +571,7 @@ const HS_TYPE_MAP={
 <script src="firebase.js" type="module"></script>
 <script src="sokoni-providers.js" defer></script>
 <script src="sokoni-book-service.js" defer></script>
+<script src="sokoni-leads.js" defer></script>
 <script src="sokoni-inbox.js" defer></script>
 <script src="sokoni-tech-directory.js" defer></script>
 <script src="sw-register.js" defer></script>

@@ -83,6 +83,14 @@
     function ms(t){ if (!t) return null; if (typeof t === 'number') return t; if (t.toMillis) return t.toMillis(); var s = t.seconds != null ? t.seconds : t._seconds; return s != null ? s * 1000 : null; }
     /* Amounts are integer CENTS on the booking (server-authoritative). Shown as stored; unknown → —. */
     function kes(c){ var n = Number(c); return (c == null || !isFinite(n)) ? '—' : 'KES ' + (n / 100).toLocaleString('en-KE', { maximumFractionDigits: 2 }); }
+    /* What the buyer pays. Owner 2026-10-03: SOKONI's 5% is paid by the PROVIDER, so the buyer total is the service amount.
+       Server field pricing.customerTotalKES (5b contract) when present; otherwise the booking's own stored price (cents).
+       Never computed here — no fee, commission or total is derived in the browser. */
+    function total(b){
+      var t = b.pricing && b.pricing.customerTotalKES;
+      if (t != null && isFinite(Number(t))) return 'KES ' + Number(t).toLocaleString('en-KE', { maximumFractionDigits: 2 });
+      return kes(b.price);
+    }
     function when(b){
       var t = ms(b.startTs) || ms(b.scheduledAt);
       if (!t) return esc(b.date || '—') + (b.startTime ? ' · ' + esc(b.startTime) : '');
@@ -179,7 +187,7 @@
         '<div class="bk-sub">' + esc(provName) + ' · ' + when(b) + '</div></div>' +
         '<span class="bk-badge" style="background:' + st.c + '22;color:' + st.c + ';border:1px solid ' + st.c + '55">' + esc(st.l) + '</span></div>' +
         '<div class="bk-rows">' +
-          '<div class="bk-row"><span class="k">Booking total</span><span class="v">' + kes(b.price) + '</span></div>' +
+          '<div class="bk-row"><span class="k">Booking total</span><span class="v">' + total(b) + '</span></div>' +
           (b.deposit ? '<div class="bk-row"><span class="k">Booking fee / deposit</span><span class="v">' + kes(b.deposit) + '</span></div>' : '') +
           '<div class="bk-row"><span class="k">Payment</span><span class="v">' + esc(pay) + '</span></div>' +
           (hold ? '<div class="bk-row"><span class="k">Hold</span><span class="v">' + esc(hold) + '</span></div>' : '') +

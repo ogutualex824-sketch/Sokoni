@@ -68,3 +68,30 @@ Tests: `test-home-services-hubs-browser` 30/0. Mutation check: removing the plum
 - `test-secondary-firebase-apps` no longer lists the removed `cln-write` / `plm-write` entries in its baseline.
 
 Results match the parent commit. The failures that remain exist there too: no Playwright path in the worktree, b2's `elc-write` baseline entry, and no emulator.
+
+## Quote requests on the one lead authority + the owner's fee model (2026-10-03)
+
+Branch `hosting/home-services-leads-on-a7a00e7`: my `9b48b06` merged with sokoni-b2's `hosting/techhub-on-chain` @ `a7a00e7` (merge `56c173d`, resolved per hunk). That merge puts b2's lead authority in this branch's history: [[SERVICE_LEADS]], `sokoni-leads.js`, `service-requests.html`.
+
+**home-services.html**
+
+- **Request a Quote:** the buyer picks the service, then sees matching providers. Tapping 💬 on a provider opens `SokoniLeads.ask`, which calls `providerDispatch leadCreate`. The provider replies in SOKONI Messages and can send a quote. The buyer accepts or declines it on `service-requests.html`; an accepted quote is booked through `SokoniBookService.open({…, leadId})`, with the price taken from the quote on the server.
+- **Removed:**
+  - the `homeServiceQuotes` / `homeServiceRequests` writes from a second Firebase app (`hs-write`);
+  - the localStorage "Quote Requests Near You" and "Ask the Hub" feeds, which only the poster's browser could see;
+  - the phone-number fields;
+  - the "up to 5 providers respond" promise;
+  - `_hsFireWrite` itself, which had no callers left. Its `test-secondary-firebase-apps` baseline entry is gone too.
+- **Not offered:** sending one request to many providers at once. The server doesn't support it, so the page tells the buyer to ask each provider instead.
+
+**Fee model (owner, 2026-10-03; full record in [[project_home_services_monetization]]):**
+
+- SOKONI takes **5% of the service amount, paid by the provider** and deducted at settlement. It is charged once per booking and comes from commercial configuration.
+- The buyer pays the service or quote amount only.
+- Leads are free: no lead, listing, registration, withdrawal or messaging fees.
+- The server change belongs to sokoni-5b (booking engine, settlement, `service_booking_balance`). Its contract fields: `pricing.{providerServiceAmountKES, customerTotalKES, sokoniCommissionKES, sokoniPlatformFeeKES, commissionRate, configVersion}` and `settlement.{paymentCostsKES, providerSettlementKES, sokoniRevenueKES, settledAt}`.
+- `bookings.html` shows the buyer total from `pricing.customerTotalKES`, falling back to the booking's stored price. It does no fee arithmetic.
+
+Tests: `test-home-services-leads-static` 19/0. A mutation that adds 5% to the buyer's total fails M2 and M3. `test-secondary-firebase-apps` 9/0.
+
+**Deferred** (free memory 340–407 MB, below the 512 MB floor): the browser suites `test-bookings-browser`, `test-home-services-hubs-browser` and `test-compact-premium-cards` on this merged branch. They are **UNPROVEN on this branch** until they've been re-run.

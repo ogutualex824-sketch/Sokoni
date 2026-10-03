@@ -1,3 +1,14 @@
+## [2026-10-03] - Home Services: quote requests go through the one lead authority (b2 4F); owner fee model recorded (NOT deployed)
+
+**Branch hosting/home-services-leads-on-a7a00e7** (merge 56c173d of f3 9b48b06 + b2 a7a00e7, resolved per hunk). Full note: docs/HOME_SERVICES_BOOKINGS.md.
+
+- **home-services.html**: Request a Quote / Ask the Hub now route the buyer to a provider, whose 💬 opens SokoniLeads.ask (providerDispatch leadCreate). The customer's requests and quotes are on service-requests.html. Removed: homeServiceQuotes/homeServiceRequests second-app writes (hs-write), localStorage feeds, phone fields, the "up to 5 providers" promise, and _hsFireWrite.
+- **bookings.html**: the buyer total reads the server field pricing.customerTotalKES (5b contract), falling back to the stored price. No fee arithmetic in the browser.
+- **Owner fee model**: SOKONI 5% of the service amount, paid by the PROVIDER at settlement, once per booking, from commercial config; leads free; no lead/listing/registration/withdrawal/messaging fees. The server change is owned by sokoni-5b.
+- **Files**: home-services.html, bookings.html, scripts/test-home-services-leads-static.js (19/0), scripts/test-secondary-firebase-apps.js (hs-write baseline removed; 9/0), docs/HOME_SERVICES_BOOKINGS.md.
+- **Database / API / rules changes**: none in this commit (the browser no longer writes homeServiceQuotes/homeServiceRequests).
+- **Deferred**: browser suites below the 512 MB memory floor are UNPROVEN on this branch.
+
 ## [2026-10-03] - Home Services: My Bookings — the buyer's service bookings and booking PIN (bookings.html, NOT deployed)
 
 **Branch `hosting/home-services-on-rel`** from `f799841`. Full note: `docs/HOME_SERVICES_BOOKINGS.md`.
