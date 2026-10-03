@@ -1,3 +1,41 @@
+## [2026-10-04] - Platform Health "over time" chart draws the server's daily snapshots (hosting; NOT deployed)
+
+Owner decision 2026-10-04. Pairs with functions branch `feat/platform-health-history-on-669e5ba` (`031fea8`), which
+records `platformHealthHistory/{date}` daily and returns `getPlatformHealthScores.history`.
+
+**What changed in `platform-health-view.js`:**
+- `SERIES_FIELD = 'history'`. No delta is drawn (`COMPARISON_FIELD` stays null).
+- **Over-time card:**
+  - an Overall line chart on a fixed 0–100 axis, with per-point tooltips;
+  - five per-dimension small multiples;
+  - a data table, with `—` for unknown.
+- **Gaps:** null values and days with no snapshot are gaps, never 0 and never interpolated.
+- **KPI sparklines:** drawn from history only, and only when a dimension has at least 2 readings.
+- **Empty state:** `history` `[]`, absent or `null` shows "Trend history starts after the first daily snapshot".
+
+**Other files:**
+- `platform-health.html`: chart CSS (theme tokens only, no fixed width over 288px, no chart library). The card
+  subtitle is now "Daily snapshots".
+- `scripts/test-platform-health-page.js`: 104 rows (was 87).
+  - New history rows: every plotted value traces to a history fixture.
+  - Nulls and missing days are gaps.
+  - `[]`, absent and `null` each give the empty state.
+  - New negative control (c): plotting nulls as 0 makes the row "history: nulls are gaps, not zeros" FAIL.
+  - Control (a) now uses a fabricated `{date,v}` series.
+- `docs/PLATFORM_HEALTH_HISTORY.md` (new).
+
+**API:** reads the new `history` field and nothing else new. Before the functions deploy the field is absent, so the
+page shows its honest empty state and is safe to ship in any order.
+
+**Security:** all server values are escaped; no client cache is used.
+
+**Breaking changes:** none.
+
+**Deploy order (NOT done):**
+1. Functions (`platformHealthSnapshot` + `getPlatformHealthScores`, from the 669e5ba lineage).
+2. Rules matcher `platformHealthHistory` (f3).
+3. This hosting change.
+
 ## [2026-10-04] - Platform Health redesigned to the owner's reference layout — every figure from the server, no invented trend (hosting only; NOT deployed)
 
 Built on `55dd827` (the loading fix). Dark dashboard per the owner's reference: header row (title, subtitle, status pill,

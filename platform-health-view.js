@@ -37,15 +37,16 @@
        totalScore}], allCandidates, recommendation, evidenceSignals:{activeSellerCount,
        cartToPaidRate,jobSearchCount,loyaltyMentions,walletMentions}, computedAt }
 
-   NEITHER RESPONSE CARRIES A TIME SERIES OR A PREVIOUS VALUE. Scores are computed on
-   demand from live reads and are not stored (no history collection is written). The
-   other live health callables were checked: getPlatformHealth (operations-center.js)
-   returns current subsystem counts, platformHealth (index.js onRequest) is a liveness
-   ping — neither has a score history. Therefore (redesign 2026-10-04):
-     * KPI cards draw NO sparkline and NO delta. sparkHtml / deltaHtml render only when
-       SERIES_FIELD / COMPARISON_FIELD name a field the server actually returns — both
-       are null today. Name the field here the day the server ships one.
-     * The "over time" card is an honest empty state.
+   TIME SERIES (2026-10-04, owner decision): the serving f4422b4 archive stored no
+   history. The functions branch feat/platform-health-history-on-669e5ba adds
+   platformHealthSnapshot (daily, 03:00 Africa/Nairobi → platformHealthHistory/{date})
+   and getPlatformHealthScores.history = [{date, overall, dimensions{5}}], oldest first,
+   ≤90. Therefore:
+     * SERIES_FIELD = 'history'. KPI sparklines and the "over time" card draw ONLY from
+       it; null values and days with no snapshot are gaps, never 0.
+     * history [] / absent (server not yet deployed) / null (read failed) → the honest
+       empty state "Trend history starts after the first daily snapshot".
+     * COMPARISON_FIELD stays null: no delta is drawn.
      * The overall weights (30/25/25/15/5) are the server formula's constants, not
        response fields, so no donut of "share of overall" is drawn — a donut of five
        independent 0–100 scores would imply they sum to a whole. A bar list of the
@@ -63,9 +64,10 @@
   var DASH = '—';
   var DEFAULT_TIMEOUT_MS = 45000;
 
-  /* Field names of a server-returned history / comparison value. null = the server
-     returns none (serving archive f4422b4). Do not point these at a client cache. */
-  var SERIES_FIELD = null;
+  /* SERIES_FIELD: the top-level daily-history array getPlatformHealthScores returns
+     (functions branch feat/platform-health-history-on-669e5ba). COMPARISON_FIELD: none —
+     no delta is drawn. Never point either at a client cache. */
+  var SERIES_FIELD = 'history';
   var COMPARISON_FIELD = null;
 
   /* Icons: decorative line glyphs, 24×24, aria-hidden. */
@@ -225,26 +227,108 @@
     return '<time datetime="' + esc(t.toISOString()) + '">' + esc(txt) + '</time>';
   }
 
-  /* ── series / comparison: rendered ONLY from server fields (none exist today) ───── */
+  /* ── series / comparison: rendered ONLY from server fields ───────────────────────
+     SERIES_FIELD names the top-level array getPlatformHealthScores returns:
+       history: [{ date:'YYYY-MM-DD', overall:number|null,
+                   dimensions:{ marketplace|seller|buyer|operational|cost: number|null } }]
+     one entry per daily snapshot (platformHealthSnapshot, 03:00 Africa/Nairobi), oldest
+     first, ≤90. A null value and a day with no snapshot are both GAPS in the line — never
+     0, never interpolated. history [] / absent / null → the honest empty state. */
 
-  function seriesOf(x) {
-    return SERIES_FIELD && x && Array.isArray(x[SERIES_FIELD]) ? x[SERIES_FIELD] : null;
+  var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  var DAY_MS = 86400000;
+  function dayNum(date) { return Math.round(Date.parse(date + 'T00:00:00Z') / DAY_MS); }
+
+  /* Points for one key ('overall' or a dimension key): [{date, v:number|null}], by date. */
+  function seriesOf(d, key) {
+    var h = SERIES_FIELD && d && Array.isArray(d[SERIES_FIELD]) ? d[SERIES_FIELD] : null;
+    if (!h) return null;
+    var pts = [];
+    h.forEach(function (e) {
+      if (!e || typeof e !== 'object' || typeof e.date !== 'string' || !DATE_RE.test(e.date)) return;
+      var raw = key === 'overall' ? e.overall : (e.dimensions && typeof e.dimensions === 'object' ? e.dimensions[key] : null);
+      pts.push({ date: e.date, v: isNum(raw) ? raw : null });
+    });
+    pts.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    return pts;
+  }
+  function entryOn(d, date) {
+    var h = SERIES_FIELD && d && Array.isArray(d[SERIES_FIELD]) ? d[SERIES_FIELD] : [];
+    for (var i = 0; i < h.length; i++) if (h[i] && h[i].date === date) return h[i];
+    return null;
   }
   function comparisonOf(x) {
     return COMPARISON_FIELD && x ? x[COMPARISON_FIELD] : null;
   }
+  function knownCount(series) {
+    return Array.isArray(series) ? series.filter(function (p) { return p && isNum(p.v); }).length : 0;
+  }
+  /* A sparkline needs two measured points; a lone reading is shown as a value, not a line. */
   function validSeries(series) {
-    return Array.isArray(series) && series.length >= 2 && series.every(isNum);
+    return knownCount(series) >= 2;
+  }
+  /* Split into runs of consecutive measured days. A null, or a missing day between two
+     snapshots, ends the run: the line breaks rather than bridging an unmeasured day. */
+  function segments(series) {
+    var out = [], cur = [], prevDay = null;
+    (series || []).forEach(function (p) {
+      var dn = dayNum(p.date);
+      if (!isNum(p.v) || (prevDay != null && dn - prevDay > 1)) { if (cur.length) out.push(cur); cur = []; }
+      if (isNum(p.v)) cur.push(p);
+      prevDay = dn;
+    });
+    if (cur.length) out.push(cur);
+    return out;
+  }
+  /* SVG geometry: x by calendar day across the series' date span, y on the fixed 0–100
+     score scale (one axis, never rescaled to the data). */
+  function plot(series, w, h, pad) {
+    var first = dayNum(series[0].date), last = dayNum(series[series.length - 1].date);
+    var span = Math.max(1, last - first);
+    var single = last === first;
+    function x(p) { return single ? w / 2 : pad + ((dayNum(p.date) - first) / span) * (w - 2 * pad); }
+    function y(v) { return pad + (1 - Math.max(0, Math.min(100, v)) / 100) * (h - 2 * pad); }
+    return { x: x, y: y };
+  }
+  function lineSvg(series, opts) {
+    var w = opts.w, h = opts.h, pad = opts.pad;
+    var g = plot(series, w, h, pad);
+    var segs = segments(series);
+    var parts = [];
+    if (opts.grid) {
+      [0, 50, 100].forEach(function (v) {
+        var gy = g.y(v).toFixed(1);
+        parts.push('<line class="ph-grid" x1="' + pad + '" x2="' + (w - pad) + '" y1="' + gy + '" y2="' + gy + '"/>');
+      });
+    }
+    segs.forEach(function (seg) {
+      if (seg.length > 1) {
+        parts.push('<polyline points="' + seg.map(function (p) {
+          return g.x(p).toFixed(1) + ',' + g.y(p.v).toFixed(1);
+        }).join(' ') + '"/>');
+      }
+    });
+    if (opts.markers) {
+      series.forEach(function (p) {
+        if (!isNum(p.v)) return;
+        var cx = g.x(p).toFixed(1), cy = g.y(p.v).toFixed(1);
+        parts.push('<g class="ph-pt"><circle class="ph-hit" cx="' + cx + '" cy="' + cy + '" r="9"/>' +
+          '<circle class="ph-dotm" cx="' + cx + '" cy="' + cy + '" r="3.5"/>' +
+          '<title>' + esc(p.date) + ': ' + esc(fmtScore(p.v)) + '</title></g>');
+      });
+    } else {
+      /* an isolated reading still shows as a dot, so a lone day is not invisible */
+      segs.forEach(function (seg) {
+        if (seg.length === 1) parts.push('<circle class="ph-dotm" cx="' + g.x(seg[0]).toFixed(1) +
+          '" cy="' + g.y(seg[0].v).toFixed(1) + '" r="2"/>');
+      });
+    }
+    return parts.join('');
   }
   function sparkHtml(series) {
     if (!validSeries(series)) return '';
-    var w = 100, h = 28, n = series.length;
-    var pts = series.map(function (v, i) {
-      var y = h - (Math.max(0, Math.min(100, v)) / 100) * h;
-      return (i * (w / (n - 1))).toFixed(1) + ',' + y.toFixed(1);
-    }).join(' ');
-    return '<svg class="ph-spark" viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="Score history: ' +
-      esc(series.join(', ')) + '"><polyline points="' + pts + '"/></svg>';
+    return '<svg class="ph-spark" viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="Daily score history">' +
+      lineSvg(series, { w: 100, h: 28, pad: 2 }) + '</svg>';
   }
   function deltaHtml(x) {
     var prev = comparisonOf(x);
@@ -254,9 +338,59 @@
     return '<span class="ph-delta ' + dir + '">' + (diff > 0 ? '+' : '') + diff + ' vs previous</span>';
   }
 
+  function latestKnown(series) {
+    for (var i = (series ? series.length : 0) - 1; i >= 0; i--) if (isNum(series[i].v)) return series[i];
+    return null;
+  }
+
+  /* "Over time" card: Overall as its own single-series chart on the 0–100 axis, then the
+     five dimensions as small multiples — each a single-series chart named by its title, so
+     identity never rests on colour. A table of the same values follows. */
+  function trendHtml(d) {
+    var overall = seriesOf(d, 'overall');
+    var anyKnown = !!overall && (knownCount(overall) > 0 ||
+      CARDS.some(function (c) { return knownCount(seriesOf(d, c.key)) > 0; }));
+    if (!anyKnown) {
+      return '<div class="ph-trend-empty" role="status"><strong>Trend history starts after the first daily snapshot</strong>' +
+        '<p>The health service records one reading per day, early each morning (Nairobi time). Until a reading has been ' +
+        'recorded there is nothing to plot, so no line is drawn.</p></div>';
+    }
+    var first = overall[0].date, last = overall[overall.length - 1].date;
+    var lk = latestKnown(overall);
+    var html = '<div class="ph-trend-chart" data-series="overall">' +
+      '<div class="ph-trend-head"><span class="ph-trend-name">Overall</span><span class="ph-trend-last">' +
+      (lk ? esc(fmtScore(lk.v)) + ' <small>on ' + esc(lk.date) + '</small>' : DASH) + '</span></div>' +
+      '<div class="ph-trend-plot"><div class="ph-axis" aria-hidden="true"><span>100</span><span>50</span><span>0</span></div>' +
+      '<svg class="ph-trend-svg overall" viewBox="0 0 600 180" role="img" aria-label="Overall health score by day, ' +
+      esc(first) + ' to ' + esc(last) + '. Gaps are days with no reading.">' +
+      (knownCount(overall) ? lineSvg(overall, { w: 600, h: 180, pad: 10, grid: true, markers: true }) : '') + '</svg></div>' +
+      '<div class="ph-trend-range"><span>' + esc(first) + '</span><span>' + esc(last) + '</span></div></div>';
+    html += '<div class="ph-multiples">' + CARDS.map(function (c) {
+      var s = seriesOf(d, c.key);
+      var l = latestKnown(s);
+      return '<div class="ph-mini ' + c.tone + '" data-series="' + esc(c.key) + '"><div class="ph-trend-head">' +
+        '<span class="ph-trend-name">' + esc(c.label) + '</span><span class="ph-trend-last">' +
+        (l ? esc(fmtScore(l.v)) : DASH) + '</span></div>' +
+        (knownCount(s) ? '<svg class="ph-trend-svg mini" viewBox="0 0 200 60" role="img" aria-label="' + esc(c.label) +
+          ' by day. Gaps are days with no reading.">' + lineSvg(s, { w: 200, h: 60, pad: 5, grid: true, markers: true }) + '</svg>'
+          : '<p class="ph-mini-empty">No reading recorded</p>') + '</div>';
+    }).join('') + '</div>';
+    /* table view: the same values, newest first, — for unknown */
+    html += '<details class="ph-trend-table"><summary>Show data table</summary><div class="ph-table-wrap"><table>' +
+      '<thead><tr><th scope="col">Date</th><th scope="col">Overall</th>' +
+      CARDS.map(function (c) { return '<th scope="col">' + esc(c.label) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      overall.slice().reverse().map(function (p) {
+        var e = entryOn(d, p.date);
+        var dims = e && e.dimensions && typeof e.dimensions === 'object' ? e.dimensions : {};
+        return '<tr><th scope="row">' + esc(p.date) + '</th><td>' + fmtScore(p.v) + '</td>' +
+          CARDS.map(function (c) { return '<td>' + fmtScore(isNum(dims[c.key]) ? dims[c.key] : null) + '</td>'; }).join('') + '</tr>';
+      }).join('') + '</tbody></table></div></details>';
+    return html;
+  }
+
   /* ── page blocks ─────────────────────────────────────────────────────────────── */
 
-  function kpiCardHtml(card, x) {
+  function kpiCardHtml(card, x, d) {
     var known = !!x && isNum(x.score);
     var note;
     if (x && x.failed) {
@@ -268,7 +402,7 @@
       note = '<span class="ph-kpi-note">' + (known && x.grade ? 'Grade ' + esc(x.grade) + ' · ' : '') +
         card.weight + '% of overall' + (x.dataComplete === false ? ' · inputs incomplete' : '') + '</span>';
     }
-    var spark = sparkHtml(seriesOf(x));
+    var spark = sparkHtml(seriesOf(d, card.key));
     return '<article class="ph-kpi" data-kpi="' + esc(card.id) + '" data-known="' + known + '">' +
       '<div class="ph-kpi-top"><span class="ph-tile ' + card.tone + '">' + icon(card.id) + '</span>' +
       '<h3 class="ph-kpi-label">' + esc(card.label) + '</h3></div>' +
@@ -277,17 +411,6 @@
       (known ? '<span class="ph-dot" style="background:' + scoreColor(x.score) + '" aria-hidden="true"></span>' : '') +
       '</div>' + deltaHtml(x) + note + (spark ? '<div class="ph-kpi-spark">' + spark + '</div>' : '') +
       '</article>';
-  }
-
-  function trendHtml(d) {
-    var series = seriesOf(d && d.overall);
-    if (validSeries(series)) {
-      return '<div class="ph-trend-chart">' + sparkHtml(series) + '</div>';
-    }
-    return '<div class="ph-trend-empty" role="status"><strong>Trend history isn\'t recorded yet</strong>' +
-      '<p>Scores are computed on demand from live Firestore reads each time this page loads. ' +
-      'The health service does not store past readings, so there is no series to plot — ' +
-      'each refresh replaces the previous reading.</p></div>';
   }
 
   /* Bar list, not a donut: the response has no "share of overall" field (see header). */
@@ -550,7 +673,7 @@
     var area = el(doc, 'alerts-area');
     if (area) { area.innerHTML = alerts; area.style.display = alerts ? 'flex' : 'none'; }
 
-    setHtml(doc, 'kpi-grid', CARDS.map(function (c) { return kpiCardHtml(c, dimension(d, c.key)); }).join(''));
+    setHtml(doc, 'kpi-grid', CARDS.map(function (c) { return kpiCardHtml(c, dimension(d, c.key), d); }).join(''));
     setHtml(doc, 'trend-area', trendHtml(d));
     setHtml(doc, 'breakdown-area', breakdownHtml(d));
     setHtml(doc, 'scores-grid', CARDS.map(function (c) { return cardHtml(c, dimension(d, c.key)); }).join(''));
@@ -627,6 +750,7 @@
     isAdminClaims: isAdminClaims, backLink: backLink, withTimeout: withTimeout, describeError: describeError,
     hasHealthData: hasHealthData, overallView: overallView, cardHtml: cardHtml, kpiCardHtml: kpiCardHtml,
     trendHtml: trendHtml, breakdownHtml: breakdownHtml, sparkHtml: sparkHtml, deltaHtml: deltaHtml,
+    seriesOf: seriesOf, segments: segments, SERIES_FIELD: SERIES_FIELD,
     prioritiesList: prioritiesList, prioritiesHtml: prioritiesHtml, signalsHtml: signalsHtml,
     sourcesHtml: sourcesHtml,
     chips: chips, chipsHtml: chipsHtml,

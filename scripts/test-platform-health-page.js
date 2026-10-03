@@ -14,6 +14,12 @@
    States: success · empty · partial (withheld overall) · permission-denied · internal ·
    hang → timeout · priorities-only failure · Retry.
 
+   HISTORY (2026-10-04): getPlatformHealthScores.history = daily snapshots
+   [{date, overall, dimensions{5}}] (functions branch feat/platform-health-history-on-669e5ba).
+   The over-time chart and KPI sparklines draw ONLY from it; every plotted value must trace
+   to a history fixture entry for that series and date; nulls and missing days are gaps.
+   Control (c): a mutant that plots null as 0 must fail "history: nulls are gaps, not zeros".
+
    NEGATIVE CONTROL: the same rows are run against a mutant whose fmtScore renders an
    unknown as "0". The control passes only if the row named
    "unknown overall renders — (never 0)" FAILS on the mutant — proving the suite can see
@@ -131,12 +137,49 @@ const STATIC_NUMBERS = new Set(['30', '25', '15', '5', '100']);
 function renderedText(doc) {
   return DYNAMIC.map((id) => doc.els[id].textContent + ' ' + doc.els[id].innerHTML).join(' ')
     .replace(/<time\b[^>]*>[\s\S]*?<\/time>/g, ' ')
+    /* the chart's y-axis ticks are the fixed 0–100 score scale — asserted by their own row */
+    .replace(/<div class="ph-axis"[^>]*>[\s\S]*?<\/div>/g, ' ')
     .replace(/<[^>]*>/g, ' ')
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 }
 function untraced(doc, ...fixtures) {
   const ok = fixtureNumbers(...fixtures);
   return (renderedText(doc).match(/\d+(?:\.\d+)?/g) || []).filter((n) => !ok.has(n) && !STATIC_NUMBERS.has(n));
+}
+/* Daily history fixture. 09-29: overall null (operational failed). 10-01: no snapshot.
+   Seller is null on every day (never measured) → no seller line, no seller spark. */
+const HDAY = (date, overall, m, b, o, c) => ({ date, overall, dimensions: { marketplace: m, seller: null, buyer: b, operational: o, cost: c } });
+const HISTORY = [
+  HDAY('2026-09-27', 61, 52, 77, 88, 55),
+  HDAY('2026-09-28', 63, 54, 78, 89, 55),
+  HDAY('2026-09-29', null, 56, 79, null, 55),
+  HDAY('2026-09-30', 66, 58, 80, 91, 55),
+  HDAY('2026-10-02', 70, 62, 82, 93, 55),
+  HDAY('2026-10-03', 72, 64, 81, 90, 55),
+];
+const HIST = Object.assign(JSON.parse(JSON.stringify(SUCCESS)), { history: HISTORY });
+/* Every point a chart draws: from <title>date: value</title> and from polyline vertices
+   mapped back through the 0–100 scale. Returns [{series, date|null, v}]. */
+function plotted(trendHtml) {
+  const out = [];
+  const blocks = trendHtml.split(/data-series="/).slice(1);
+  blocks.forEach((b) => {
+    const series = b.slice(0, b.indexOf('"'));
+    const svg = (b.match(/<svg class="ph-trend-svg[^"]*" viewBox="0 0 (\d+) (\d+)"[\s\S]*?<\/svg>/) || []);
+    if (!svg[0]) return;
+    const h = +svg[2], pad = series === 'overall' ? 10 : 5;
+    [...svg[0].matchAll(/<title>(\d{4}-\d{2}-\d{2}): ([^<]*)<\/title>/g)].forEach((m) => out.push({ series, date: m[1], v: m[2], kind: 'marker' }));
+    [...svg[0].matchAll(/<polyline points="([^"]*)"/g)].forEach((m) => m[1].split(' ').forEach((pt) => {
+      const y = +pt.split(',')[1];
+      out.push({ series, date: null, v: Math.round((1 - (y - pad) / (h - 2 * pad)) * 1000) / 10, kind: 'vertex' });
+    }));
+  });
+  return out;
+}
+function traces(p, hist) {
+  const val = (e) => (p.series === 'overall' ? e.overall : e.dimensions[p.series]);
+  if (p.kind === 'marker') return hist.some((e) => e.date === p.date && typeof val(e) === 'number' && String(Math.round(val(e))) === p.v);
+  return hist.some((e) => typeof val(e) === 'number' && Math.abs(val(e) - p.v) < 0.6);
 }
 const FORBIDDEN = /Nexora|Publish|Save draft|Schedule|Upgrade to Pro|Slack|Export|99\.8%|\$/;
 
@@ -217,7 +260,7 @@ async function suite(V, tag) {
   row('kpi: five dimension cards with server scores', V.CARDS.every((c) => kpi.includes('data-kpi="' + c.id + '"'))
     && ['64', '70', '81', '90', '55'].every((s) => kpi.includes('>' + s + '<')));
   row('no sparkline/trend rendered when no series', !/<polyline|ph-spark|ph-trend-chart/.test(kpi + doc.els['trend-area'].innerHTML)
-    && doc.els['trend-area'].innerHTML.includes("Trend history isn't recorded yet"));
+    && doc.els['trend-area'].innerHTML.includes('Trend history starts after the first daily snapshot'));
   row('no delta rendered when server returns no comparison', !/ph-delta|vs previous|[▲▼]/.test(kpi));
   const seen = renderedText(doc).match(/\d+(?:\.\d+)?/g) || [];
   row('tracer positive control: the walk sees the rendered numbers', ['72', '64', '18', '12.5', '192'].every((n) => seen.includes(n)), seen.join(','));
@@ -243,6 +286,39 @@ async function suite(V, tag) {
   row('refresh: re-calls getPlatformHealthScores and re-renders', again === 'data' && rc === 2);
   const ld = fakeDoc(); V.renderLoading(ld);
   row('refresh disabled while loading; panel shows —', ld.els['refresh-btn'].disabled === true && ld.els['panel-budget'].textContent === DASH && ld.els['status-pill'].textContent === 'Loading');
+
+  /* ── history: the chart draws only from getPlatformHealthScores.history ── */
+  row('history: the view reads the server field "history"', V.SERIES_FIELD === 'history');
+  ({ doc, state } = await run(V, () => Promise.resolve({ data: HIST })));
+  const tr = doc.els['trend-area'].innerHTML;
+  row('history: chart renders Overall + the five dimensions as small multiples', /data-series="overall"/.test(tr)
+    && V.CARDS.every((c) => tr.includes('data-series="' + c.key + '"')) && /<polyline/.test(tr) && !/ph-trend-empty/.test(tr));
+  const pts = plotted(tr);
+  const bad = pts.filter((p) => !traces(p, HISTORY));
+  row('history: every plotted value traces to a history fixture entry', pts.length > 20 && bad.length === 0,
+    bad.slice(0, 4).map((p) => p.series + '@' + (p.date || 'vertex') + '=' + p.v).join(' '));
+  const ovBlock = tr.slice(tr.indexOf('data-series="overall"'), tr.indexOf('class="ph-multiples"'));
+  const ovPolys = (ovBlock.match(/<polyline/g) || []).length;
+  row('history: nulls are gaps, not zeros', !/<title>2026-09-29: /.test(ovBlock) && !pts.some((p) => p.series === 'overall' && p.v === 0)
+    && ovPolys === 2 && /<title>2026-09-30: 66<\/title>/.test(ovBlock), 'overall polylines=' + ovPolys);
+  row('history: a missing day breaks the line (no bridge over 2026-10-01)', ovPolys === 2
+    && !pts.some((p) => p.series === 'overall' && p.kind === 'marker' && p.date === '2026-10-01'));
+  row('history: never-measured dimension draws no line and says so', /data-series="seller"[\s\S]*?No reading recorded/.test(tr)
+    && !pts.some((p) => p.series === 'seller'));
+  row('history: table shows — for unknown, values otherwise', /<th scope="row">2026-09-29<\/th><td>—<\/td>/.test(tr)
+    && /<th scope="row">2026-10-03<\/th><td>72<\/td>/.test(tr));
+  row('history: y-axis is the fixed 0–100 scale', /<div class="ph-axis" aria-hidden="true"><span>100<\/span><span>50<\/span><span>0<\/span><\/div>/.test(tr));
+  const hk = doc.els['kpi-grid'].innerHTML;
+  row('history: KPI sparklines only where history has ≥2 readings', /data-kpi="marketplace"[\s\S]*?ph-spark/.test(hk)
+    && !/data-kpi="seller"[^]*?<\/article>/.exec(hk)[0].includes('ph-spark'));
+  row('every rendered number traces to a fixture field (history)', untraced(doc, HIST, PRIORITIES).length === 0, untraced(doc, HIST, PRIORITIES).join(','));
+  row('history: no delta drawn (no comparison field)', !/ph-delta|vs previous/.test(hk));
+  for (const [label, h] of [['[]', []], ['absent', undefined], ['null', null]]) {
+    const dd = JSON.parse(JSON.stringify(SUCCESS)); if (h !== undefined) dd.history = h;
+    ({ doc, state } = await run(V, () => Promise.resolve({ data: dd })));
+    row('history ' + label + ': honest empty state, no line', doc.els['trend-area'].innerHTML.includes('Trend history starts after the first daily snapshot')
+      && !/<polyline|ph-spark/.test(doc.els['trend-area'].innerHTML + doc.els['kpi-grid'].innerHTML));
+  }
 
   const NULLSIG = JSON.parse(JSON.stringify(PRIORITIES)); NULLSIG.evidenceSignals.cartToPaidRate = null;
   ({ doc, state } = await run(V, () => Promise.resolve({ data: SUCCESS }), () => Promise.resolve({ data: NULLSIG })));
@@ -341,7 +417,7 @@ async function suite(V, tag) {
   console.log('\nNegative control (a) — placeholder sparkline when no series');
   const SPARK_FROM = "if (!validSeries(series)) return '';";
   ck('control (a): anchor present once', VIEW_SRC.split(SPARK_FROM).length === 2);
-  const mutA = loadView(VIEW_SRC.replace(SPARK_FROM, 'if (!validSeries(series)) series = [50, 50];'));
+  const mutA = loadView(VIEW_SRC.replace(SPARK_FROM, "if (!validSeries(series)) series = [{ date: '2026-10-01', v: 50 }, { date: '2026-10-02', v: 50 }];"));
   const arows = await suite(mutA, 'mutant');
   ck('control (a): row "no sparkline/trend rendered when no series" FAILS', arows['no sparkline/trend rendered when no series'] === false);
   ck('control (a): unrelated rows still pass (targeted)', arows['success: overall shows server score 72 + grade'] === true);
@@ -354,6 +430,15 @@ async function suite(V, tag) {
   ck('control (b): row "no delta rendered when server returns no comparison" FAILS', brows['no delta rendered when server returns no comparison'] === false);
   ck('control (b): row "every rendered number traces to a fixture field (success)" FAILS', brows['every rendered number traces to a fixture field (success)'] === false);
   ck('control (b): unrelated rows still pass (targeted)', brows['success: overall shows server score 72 + grade'] === true);
+
+  console.log('\nNegative control (c) — history nulls plotted as 0');
+  const NULL_FROM = 'pts.push({ date: e.date, v: isNum(raw) ? raw : null });';
+  ck('control (c): anchor present once', VIEW_SRC.split(NULL_FROM).length === 2);
+  const mutC = loadView(VIEW_SRC.replace(NULL_FROM, 'pts.push({ date: e.date, v: isNum(raw) ? raw : 0 });'));
+  const crows = await suite(mutC, 'mutant');
+  ck('control (c): row "history: nulls are gaps, not zeros" FAILS', crows['history: nulls are gaps, not zeros'] === false);
+  ck('control (c): unrelated rows still pass (targeted)', crows['success: overall shows server score 72 + grade'] === true
+    && crows['history: chart renders Overall + the five dimensions as small multiples'] === true);
 
   console.log('\nNegative control — mutant renders unknown as 0');
   const MUT_FROM = 'function fmtScore(v) { return isNum(v) ? String(Math.round(v)) : DASH; }';
