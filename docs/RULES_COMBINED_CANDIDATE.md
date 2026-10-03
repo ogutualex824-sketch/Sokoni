@@ -250,3 +250,11 @@ RC-8 covers that. Rows RC-1–RC-10 are in `zz-test-b2b-leads-rules.js`. **EMULA
 6. (later) `courseLessons/{id}` admin read only; `learnerCertificates/{id}` admin or owner (`uid`) read; both write
    false. Written by the `courseLessons` callable (5b @ 36cc6d8), which serves lessons only to enrolled learners, free
    previews or the owner. Rows ED-C1–C5. **EMULATOR PENDING.**
+7. **storage.rules** (5b): `learner-photos/{uid}/{file}` (learners may be minors) is owner/admin read only, with owner
+   write of a safe image < 2 MB matching a strict file-name pattern. `course-materials/{ownerUid}/{courseId}/{file}` is
+   owner/admin read only (paid content; learners read only through the courseLessons 15-minute signed URL), with writes
+   limited to the instructor of a DRAFT course through a `firestore.get` cross-service check. That check needs the
+   Storage service agent's Firestore access in production; without it those writes fail CLOSED. OOXML office types are
+   allowed and contentType is client-declared, so the server should verify file type. The callables store paths, never
+   download URLs. Suite `scripts/zz-test-education-storage.js` (ES-P1–9, ES-M1–8; needs the storage + firestore
+   emulators). **EMULATOR PENDING.**

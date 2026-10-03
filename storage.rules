@@ -254,6 +254,39 @@ service firebase.storage {
     }
 
     /* ── Default: deny everything else ── */
+    // ── Education (sokoni-5b, 2026-10-03). The callables store STORAGE PATHS, never download URLs (a download token
+    //    opens a file for anyone holding the link, whatever these rules say).
+    // Learner photos — learners may be MINORS: owner + admin read ONLY (never public, never "any authed").
+    // Teachers / companies get no access (the callables never return a photo to them).
+    match /learner-photos/{uid}/{file} {
+      allow read:           if request.auth != null && (request.auth.uid == uid || request.auth.token.admin == true || request.auth.token.superAdmin == true);
+      allow create, update: if request.auth != null && request.auth.uid == uid
+                            && safeImageOnly()
+                            && request.resource.size < 2 * 1024 * 1024
+                            && file.matches('^[A-Za-z0-9][A-Za-z0-9._-]{0,80}\\.(jpg|jpeg|png|webp)$');
+      allow delete:         if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Course materials — paid content, NOT world-readable. Learners read them ONLY through the courseLessons 'content'
+    // op's 15-minute signed URL (enrolment / free-preview / owner checked server-side). Write = the course's instructor
+    // while the course is a DRAFT. The firestore.get() cross-service check needs the Storage service agent's Firestore
+    // access ("Cloud Storage for Firebase can access Firestore"); without it these writes are DENIED (fail closed).
+    // Office (OOXML) types pass notExecutable(); contentType is client-declared, so the server should verify file type.
+    match /course-materials/{ownerUid}/{courseId}/{file} {
+      allow read:           if request.auth != null && (request.auth.uid == ownerUid || request.auth.token.admin == true || request.auth.token.superAdmin == true);
+      allow create, update: if request.auth != null && request.auth.uid == ownerUid
+                            && notExecutable()
+                            && (request.resource.contentType in ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'text/plain',
+                                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])
+                            && request.resource.size < 25 * 1024 * 1024
+                            && firestore.get(/databases/(default)/documents/courses/$(courseId)).data.instructorUid == request.auth.uid
+                            && firestore.get(/databases/(default)/documents/courses/$(courseId)).data.status == 'draft';
+      allow delete:         if request.auth != null && request.auth.uid == ownerUid
+                            && firestore.get(/databases/(default)/documents/courses/$(courseId)).data.status == 'draft';
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
