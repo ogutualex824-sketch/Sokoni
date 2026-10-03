@@ -19,6 +19,8 @@
        srcset-ready). Loaded early so window.renderProductImage exists before the
        grid renders. -->
   <script src="sokoni-image.js"></script>
+  <!-- SECURITY 2026-10-03: the ONE public-listing predicate (byte-identical to functions/shared/sellability.js). -->
+  <script src="sokoni-sellability.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Store — SOKONI</title>
   <meta name="description" content="Browse SOKONI store — thousands of products from verified Kenyan sellers.">
@@ -401,7 +403,7 @@
    Buttons carry the product id only — serialising a product into a data attribute would
    mean HTML-escaping user-supplied names for no benefit. */
 function stActionRows (id, name) {
-  var i = String(id).replace(/"/g, '&quot;');
+  var i = String(id == null ? '' : id).replace(/[<>"'&]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '&': '&amp;' }[c]; });
   var n = String(name || '').replace(/[<>"&]/g, function (c) {
     return { '<': '&lt;', '>': '&gt;', '"': '&quot;', '&': '&amp;' }[c];
   });
@@ -547,7 +549,20 @@ document.addEventListener('click', function (ev) {
 </div>
 
 <script>
-const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const _esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+/* SECURITY 2026-10-03 — every shop/product/review value is merchant- or buyer-written (shops, sellers, products,
+   localStorage fed from other sellers' products). Text goes through _esc; URLs through _safeUrl, which admits only
+   https:, http: and same-site paths (never javascript:, data:, vbscript:), then escapes for the attribute. */
+const _safeUrl = (u, fallback) => {
+  const v = String(u == null ? '' : u).trim();
+  if (/^https?:\/\/[^\s"'<>`]+$/i.test(v) || /^\/(?!\/)[^\s"'<>`]*$/.test(v) || /^[A-Za-z0-9_.-]+\/[^\s"'<>`:]*$/.test(v)) return _esc(v);
+  return fallback == null ? '' : _esc(fallback);
+};
+const _img = u => _safeUrl(u, 'assets/default-product.png');
+const _pid = id => encodeURIComponent(String(id == null ? '' : id));
+/* DRAFTS NEVER RENDER: the canonical predicate decides (draft / archived / removed / hidden / suspended … are not
+   listable). If the module failed to load, NOTHING is listed — fail closed, never "show everything". */
+const _listable = p => !!(window.SokoniSellability && typeof SokoniSellability.isPubliclyListed === 'function' && SokoniSellability.isPubliclyListed(p));
 (function(){
   const params    = new URLSearchParams(window.location.search);
   const storeId   = params.get("id") || "";           /* Firebase seller UID */
@@ -563,6 +578,7 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
 
   /* Match store by name, seller UID, or owner name */
   const products = allProducts.filter(p => {
+    if (!_listable(p)) return false;
     const sn = p.sellerName || "Sokoni Seller";
     const su = p.sellerUid  || p.sellerId || "";
     return sn === storeParm || su === storeParm || su === storeId ||
@@ -594,7 +610,7 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
   /* Logo */
   const logoWrap = document.getElementById("stLogoWrap");
   if(store?.logo){
-    logoWrap.innerHTML = `<img loading="lazy" src="${store.logo}" alt="${displayName}">`;
+    logoWrap.innerHTML = `<img loading="lazy" src="${_img(store.logo)}" alt="${_esc(displayName)}">`;
   } else {
     logoWrap.textContent = displayName.substring(0,2).toUpperCase();
   }
@@ -624,12 +640,12 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
   const contacts = [];
   if(store?.phone){
     contacts.push(`<a href="https://wa.me/${store.phone.replace(/\D/g,'')}" target="_blank" class="st-contact-btn st-wa"><i class="fab fa-whatsapp"></i> WhatsApp</a>`);
-    contacts.push(`<a href="tel:${store.phone}" class="st-contact-btn st-call">📞 Call</a>`);
+    contacts.push(`<a href="tel:${String(store.phone).replace(/[^0-9+]/g,'')}" class="st-contact-btn st-call">📞 Call</a>`);
   }
-  if(store?.email)     contacts.push(`<a href="mailto:${store.email}" class="st-contact-btn st-mail">📧 Email</a>`);
-  if(store?.instagram) contacts.push(`<a href="https://instagram.com/${store.instagram.replace('@','')}" target="_blank" class="st-contact-btn st-ig"><i class="fab fa-instagram"></i> ${store.instagram}</a>`);
+  if(store?.email && /^[^\s@"'<>]+@[^\s@"'<>]+\.[^\s@"'<>]+$/.test(store.email)) contacts.push(`<a href="mailto:${_esc(store.email)}" class="st-contact-btn st-mail">📧 Email</a>`);
+  if(store?.instagram) { const _ig = String(store.instagram).replace(/^@/,'').replace(/[^A-Za-z0-9._]/g,''); if (_ig) contacts.push(`<a href="https://instagram.com/${_ig}" target="_blank" rel="noopener noreferrer" class="st-contact-btn st-ig"><i class="fab fa-instagram"></i> @${_ig}</a>`); }
   contacts.push(`<a href="messages.html" class="st-contact-btn st-dm">💬 Message Seller</a>`);
-  if(store?.website)   contacts.push(`<a href="${store.website}" target="_blank" class="st-contact-btn st-web"><i class="fas fa-globe"></i> Website</a>`);
+  if(store?.website && /^https?:\/\//i.test(String(store.website).trim())) contacts.push(`<a href="${_safeUrl(store.website)}" target="_blank" rel="noopener noreferrer" class="st-contact-btn st-web"><i class="fas fa-globe"></i> Website</a>`);
 
   if(contacts.length){ ctInner.innerHTML = contacts.join(""); ctBar.style.display = "block"; }
 
@@ -701,7 +717,7 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
   } else {
     gridEl.innerHTML = products.map(p=>{
       const wsTag = p.wholesalePrice
-        ? `<div class="st-wholesale-tag">🏷️ Bulk: KES ${Number(p.wholesalePrice).toLocaleString()} (min ${p.minWholesaleQty})</div>`
+        ? `<div class="st-wholesale-tag">🏷️ Bulk: KES ${Number(p.wholesalePrice).toLocaleString()} (min ${Number(p.minWholesaleQty)||1})</div>`
         : "";
       /* THE ACTION ROWS ARE SIBLINGS OF THE LINK, NOT CHILDREN OF IT.
          This card used to be one <a>, so a button placed inside would follow the href on
@@ -721,12 +737,12 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
          would need HTML-escaping a JSON blob containing user-supplied names — an
          injection surface for no benefit, when the row is already in memory. */
       return `<div class="st-product-card">
-        <a class="st-product-link" href="product.html?id=${p.id}">
+        <a class="st-product-link" href="product.html?id=${_pid(p.id)}">
           ${window.renderProductImage
             ? renderProductImage({ product: p, alt: p.name, wrap: false })
-            : `<img src="${(window.pickProductImage?pickProductImage(p):p.image)||'assets/default-product.png'}" alt="${p.name}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/default-product.png'">`}
+            : `<img src="${_img((window.pickProductImage?pickProductImage(p):p.image)||'assets/default-product.png')}" alt="${_esc(p.name)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/default-product.png'">`}
           <div class="st-product-info">
-            <div class="st-product-name">${p.name}</div>
+            <div class="st-product-name">${_esc(p.name)}</div>
             <div class="st-product-price">KES ${Number(p.price).toLocaleString()}</div>
             ${wsTag}
           </div>
@@ -758,24 +774,24 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
       ${ratings.slice(0,20).map(r=>{
         const rAvg = r.avgScore||r.stars||0;
         const dims = [
-          r.delivery     ? `🚚 ${r.delivery}`     : "",
-          r.responseTime ? `⚡ ${r.responseTime}` : "",
-          r.returns      ? `🔄 ${r.returns}`      : "",
-          r.satisfaction ? `😊 ${r.satisfaction}` : "",
+          r.delivery     ? `🚚 ${_esc(r.delivery)}`     : "",
+          r.responseTime ? `⚡ ${_esc(r.responseTime)}` : "",
+          r.returns      ? `🔄 ${_esc(r.returns)}`      : "",
+          r.satisfaction ? `😊 ${_esc(r.satisfaction)}` : "",
         ].filter(Boolean);
         return `<div class="st-review-card">
           <div class="st-review-top">
             <div class="st-reviewer">
-              <div class="st-reviewer-av">${(r.buyerName||"A")[0].toUpperCase()}</div>
+              <div class="st-reviewer-av">${_esc(String(r.buyerName||"A")[0].toUpperCase())}</div>
               <div>
-                <div class="st-reviewer-name">${r.buyerName||"Anonymous"}</div>
-                <div class="st-reviewer-meta">${r.date||""} · Order ${r.orderId||""}</div>
+                <div class="st-reviewer-name">${_esc(r.buyerName||"Anonymous")}</div>
+                <div class="st-reviewer-meta">${_esc(r.date||"")} · Order ${_esc(r.orderId||"")}</div>
               </div>
             </div>
-            <div class="st-review-stars">${"★".repeat(Math.round(rAvg))}${"☆".repeat(5-Math.round(rAvg))} <span style="font-size:12px;color:rgba(255,255,255,0.4);">${rAvg}</span></div>
+            <div class="st-review-stars">${"★".repeat(Math.max(0,Math.min(5,Math.round(Number(rAvg)||0))))}${"☆".repeat(5-Math.max(0,Math.min(5,Math.round(Number(rAvg)||0))))} <span style="font-size:12px;color:rgba(255,255,255,0.4);">${_esc(rAvg)}</span></div>
           </div>
           ${dims.length ? `<div class="st-review-dims">${dims.map(d=>`<span class="st-dim-badge">${d}</span>`).join("")}</div>` : ""}
-          ${r.comment ? `<div class="st-review-comment">"${r.comment}"</div>` : ""}
+          ${r.comment ? `<div class="st-review-comment">"${_esc(r.comment)}"</div>` : ""}
         </div>`;
       }).join("")}
     `;
@@ -932,7 +948,7 @@ function stRenderHours(shopData) {
       + '<span class="st-hour-day' + (isToday ? " today" : "") + '">'
       + dayNames[i].slice(0, 3) + pill
       + "</span>"
-      + '<span class="' + (isClosed ? "st-hour-closed" : "st-hour-time") + '">' + h + "</span>"
+      + '<span class="' + (isClosed ? "st-hour-closed" : "st-hour-time") + '">' + _esc(h) + "</span>"
       + "</div>";
   }).join("");
 }
@@ -1005,19 +1021,19 @@ function stRenderCollections(prods) {
         return '<div>'
           + '<div class="st-collection-hd">'
           + '<div class="st-collection-dot"></div>'
-          + '<span class="st-collection-name">' + cat + '</span>'
+          + '<span class="st-collection-name">' + _esc(cat) + '</span>'
           + '<span class="st-collection-count">' + byCat[cat].length + ' item' + (byCat[cat].length !== 1 ? 's' : '') + '</span>'
           + '</div>'
           + '<div class="st-collection-grid">'
           + items.map(function(p) {
-              var img  = (window.pickProductImage ? pickProductImage(p) : p.image) || "assets/default-product.png";
-              var name = (p.name || "").replace(/</g, "&lt;");
-              return '<div class="st-product-card">' + '<a class="st-product-link" href="product.html?id=' + p.id + '">'
+              var img  = _img((window.pickProductImage ? pickProductImage(p) : p.image) || "assets/default-product.png");
+              var name = _esc(p.name || "");
+              return '<div class="st-product-card">' + '<a class="st-product-link" href="product.html?id=' + _pid(p.id) + '">'
                 + '<img src="' + img + '" alt="' + name + '" loading="lazy" onerror="this.src=\'assets/default-product.png\'">'
                 + '<div class="st-product-info">'
                 + '<div class="st-product-name">' + name + '</div>'
                 + '<div class="st-product-price">KES ' + Number(p.price || 0).toLocaleString() + '</div>'
-                + '</div></a>' + stActionRows(p.id, name) + '</div>';
+                + '</div></a>' + stActionRows(p.id, p.name) + '</div>';
             }).join("")
           + '</div></div>';
       }).join("")
@@ -1065,7 +1081,7 @@ async function _stLoadFirestore(uid) {
     }
     if (sd.logo || sd.logoUrl) {
       var lw = document.getElementById("stLogoWrap");
-      if (lw) lw.innerHTML = '<img src="' + (sd.logo || sd.logoUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
+      if (lw) lw.innerHTML = '<img src="' + _img(sd.logo || sd.logoUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
     }
     /* ── Branch selection ──────────────────────────────────────────────
        store.html?id=<uid>&branch=<branchId> opens one branch as its own
@@ -1131,7 +1147,7 @@ async function _stLoadFirestore(uid) {
     var pSnap  = await getDocs(pQuery);
     if (!pSnap.empty) {
       var fsProds = [];
-      pSnap.forEach(function(d) { fsProds.push(Object.assign({ id: d.id }, d.data())); });
+      pSnap.forEach(function(d) { var _p = Object.assign({ id: d.id }, d.data()); if (_listable(_p)) fsProds.push(_p); });
 
       /* Recover the shop's identity from its own goods when no shop document
          was readable. Every product carries the seller's businessName /
@@ -1155,7 +1171,7 @@ async function _stLoadFirestore(uid) {
         var dlw = document.getElementById("stLogoWrap");
         var dimg = (window.pickProductImage ? pickProductImage(pd) : null) || pd.image || (Array.isArray(pd.images) ? pd.images[0] : null);
         if (dlw && dimg && !dlw.querySelector("img")) {
-          dlw.innerHTML = '<img src="' + dimg + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
+          dlw.innerHTML = '<img src="' + _img(dimg) + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
         }
       }
 
@@ -1168,13 +1184,13 @@ async function _stLoadFirestore(uid) {
           grid.innerHTML = fsProds.map(function(p) {
             var ws = p.wholesalePrice
               ? '<div class="st-wholesale-tag">🏷️ Bulk: KES ' + Number(p.wholesalePrice).toLocaleString()
-                + ' (min ' + p.minWholesaleQty + ')</div>' : "";
-            return '<div class="st-product-card">' + '<a class="st-product-link" href="product.html?id=' + p.id + '">'
-              + '<img src="' + (p.image || "assets/default-product.png") + '" alt="' + (p.name||"").replace(/</g,"&lt;") + '" loading="lazy">'
+                + ' (min ' + (Number(p.minWholesaleQty)||1) + ')</div>' : "";
+            return '<div class="st-product-card">' + '<a class="st-product-link" href="product.html?id=' + _pid(p.id) + '">'
+              + '<img src="' + _img(p.image || "assets/default-product.png") + '" alt="' + _esc(p.name||"") + '" loading="lazy">'
               + '<div class="st-product-info">'
-              + '<div class="st-product-name">' + (p.name||"").replace(/</g,"&lt;") + '</div>'
+              + '<div class="st-product-name">' + _esc(p.name||"") + '</div>'
               + '<div class="st-product-price">KES ' + Number(p.price||0).toLocaleString() + '</div>'
-              + ws + '</div></a>' + stActionRows(p.id, name) + '</div>';
+              + ws + '</div></a>' + stActionRows(p.id, p.name) + '</div>';
           }).join("");
         }
       }
