@@ -78,7 +78,9 @@
   var INTERVIEW_VIEW = ['interview'];
   var OFFER_VIEW = ['offer', 'offer_accepted', 'offer_declined'];
   var JOBS_LIMIT = 50;      /* direct-read fallback limit (shell _q) */
-  var LIST_LIMIT = 200;     /* listMyJobs server limit (be4e1b7) */
+  var LIST_LIMIT = 200;     /* listMyJobs server limit (be4e1b7); runtime value from jobsCapabilities.listCaps */
+  var APPS_LIMIT = 500;     /* getEmployerApplications server limit; runtime value from listCaps */
+  var PER_JOB_LIMIT = 100;  /* getJobApplications (old-server fallback) limit */
   var J2_OPS = ['createJob', 'updateJob', 'closeJob', 'submitJob', 'pauseJob', 'resumeJob'];
   var CONFLICT_MSG = 'This application changed — reload';
   /* J4 (sokoni-b2, server 8aaa868): a conversation exists per TRANSACTION and the server derives its parties
@@ -119,8 +121,9 @@
     try { return new Date(m).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }); }
     catch (_) { return new Date(m).toISOString().slice(0, 10); }
   }
-  /* A count the page does not know is '—'. A real, loaded zero is '0'. */
-  function fmtCount (n) { return (typeof n === 'number' && isFinite(n)) ? String(n) : '—'; }
+  /* A count the page does not know is '—'. A real, loaded zero is '0'. A count from a list the server says
+     continues (hasMore) is a LOWER BOUND and is shown as 'N+', never as an exact total. */
+  function fmtCount (n, partial) { return (typeof n === 'number' && isFinite(n)) ? String(n) + (partial ? '+' : '') : '—'; }
   function fmtKes (n) { return (typeof n === 'number' && isFinite(n)) ? 'KES ' + n.toLocaleString('en-KE') : null; }
   function salaryText (j) {
     var lo = fmtKes(j.salaryMin), hi = fmtKes(j.salaryMax);
@@ -128,11 +131,25 @@
     return lo ? 'From ' + lo : hi ? 'Up to ' + hi : 'Salary not stated';
   }
   function expired (j, now) { var e = ms(j.expiresAt); return e != null && e < now; }
-  function jobStatusLabel (j) {
+  /* LABELS (d922713): jobsCapabilities.jobStateLabels / applicationStateLabels are the runtime source. The copied
+     JOB_LABEL / APP_LABEL tables are used ONLY on the old-server path (J1 / a515270 return no labels) — never to
+     paper over a status a current server did not label; that status is shown as stored. */
+  function labelSet (caps, kind) {
+    var k = kind === 'job' ? 'jobStateLabels' : 'applicationStateLabels';
+    if (caps && caps[k] && typeof caps[k] === 'object') return { map: caps[k], source: 'server' };
+    return { map: kind === 'job' ? JOB_LABEL : APP_LABEL, source: 'fallback' };
+  }
+  function jobStatusLabel (j, caps) {
     if (!j || !j.status) return '—';
     if (j.status === 'closed' && j.closedReason === 'expired') return 'Closed — expired';
-    if (typeof j.statusLabel === 'string' && j.statusLabel) return j.statusLabel;   /* listMyJobs: the server's label */
-    return JOB_LABEL[j.status] || String(j.status);   /* an unknown status is shown as stored, never relabelled */
+    var L = labelSet(caps, 'job');
+    if (L.source === 'server') return L.map[j.status] || (typeof j.statusLabel === 'string' && j.statusLabel) || String(j.status);
+    return (typeof j.statusLabel === 'string' && j.statusLabel) || L.map[j.status] || String(j.status);
+  }
+  function appStatusLabel (status, caps, given) {
+    var L = labelSet(caps, 'app');
+    if (L.source === 'server') return L.map[status] || given || String(status);
+    return given || L.map[status] || String(status);
   }
   /* The dispatcher's "unknown op" refusal (services-dispatch.js: not-found 'Unknown services operation'). */
   function isUnknownOp (e) {
@@ -199,12 +216,13 @@
     return null;
   }
 
-  /* Counts, from what was loaded. Every unknown is null → rendered '—'. */
+  /* Counts, from what was loaded. Every unknown is null → rendered '—'. jobsPartial / appsPartial mark lower
+     bounds (the server said more exist, or a fallback list hit its limit). */
   function counts (S, now) {
     var c = { jobs: null, open: null, draft: null, pending_review: null, changes_requested: null, paused: null,
               closed: null, featured: null, apps: null, byStatus: null, candidates: null,
-              truncated: !!S.jobsTrunc, appsComplete: false };
-    if (!Array.isArray(S.jobs) || S.jobsTrunc) return c;
+              truncated: !!S.jobsTrunc, jobsPartial: !!S.jobsTrunc, appsPartial: !!(S.jobsTrunc || S.appsMore), appsComplete: false };
+    if (!Array.isArray(S.jobs)) return c;
     c.jobs = S.jobs.length;
     ['draft', 'pending_review', 'changes_requested', 'paused', 'closed'].forEach(function (k) {
       c[k] = S.jobs.filter(function (j) { return j.status === k; }).length;
@@ -231,7 +249,7 @@
   var SUBS = [];
   function store (uid) {
     if (!STORE || STORE.uid !== uid) {
-      STORE = { uid: uid, caps: null, listOp: null, empAppsOp: null, jobsVia: null, jobsLimit: JOBS_LIMIT, jobs: null, jobsErr: null, jobsTrunc: false, jobsP: null,
+      STORE = { uid: uid, caps: null, listOp: null, empAppsOp: null, jobsVia: null, jobsLimit: JOBS_LIMIT, appsMore: false, appsShown: null, jobs: null, jobsErr: null, jobsTrunc: false, jobsP: null,
                 ops: null, opsErr: null, opsP: null, apps: {}, appsP: null, hist: {}, notes: {}, jobNotes: {}, jobFilter: '' };
     }
     return STORE;
@@ -310,6 +328,10 @@
       }).then(function () { S.opsP = null; notify(); });
       return S.opsP;
     }
+    function capOf (S, op, dflt) {
+      var lc = S.caps && S.caps.listCaps; var v = lc && Number(lc[op]);
+      return v > 0 ? v : dflt;
+    }
     function sortJobs (rows) { return rows.sort(function (a, b) { return (ms(b.postedAt) || 0) - (ms(a.postedAt) || 0); }); }
     function directRead (S) {
       if (typeof c.readMyJobs !== 'function') return Promise.reject(new Error('Your vacancies cannot be read in this shell.'));
@@ -326,7 +348,10 @@
         if (!d || !Array.isArray(d.jobs)) throw new Error('The server returned no vacancy list.');
         /* listMyJobs carries jobId (the public field set); the screen keys on id. */
         S.jobs = sortJobs(d.jobs.filter(Boolean).map(function (j) { return Object.assign({}, j, { id: j.id || j.jobId }); }));
-        S.jobsTrunc = d.jobs.length >= LIST_LIMIT; S.jobsLimit = LIST_LIMIT; S.jobsVia = 'listMyJobs'; S.listOp = 'known';
+        var cap = capOf(S, 'listMyJobs', LIST_LIMIT);
+        /* d922713: hasMore is exact (limit+1). A be4e1b7 server sends none — then a full page MAY continue. */
+        S.jobsTrunc = typeof d.hasMore === 'boolean' ? d.hasMore : d.jobs.length >= cap;
+        S.jobsLimit = typeof d.hasMore === 'boolean' ? d.jobs.length : cap; S.jobsVia = 'listMyJobs'; S.listOp = 'known';
       }, function (e) {
         if (isUnknownOp(e)) { S.listOp = 'unknown'; return directRead(S); }   /* old server only */
         throw e;
@@ -338,8 +363,10 @@
     function loadAppsFor (S, jobId) {
       return call('getJobApplications', { jobId: jobId }).then(function (d) {
         var list = (d && Array.isArray(d.applications)) ? d.applications : null;
-        S.apps[jobId] = list ? { list: list.map(function (a) { return Object.assign({ jobId: jobId }, a); }), err: null }
+        S.apps[jobId] = list ? { list: list.map(function (a) { return Object.assign({ jobId: jobId }, a); }), err: null, full: list.length >= PER_JOB_LIMIT }
                              : { list: null, err: 'The server returned no application list.' };
+        /* old server: getJobApplications caps at 100 per vacancy and says nothing more */
+        S.appsMore = Object.keys(S.apps).some(function (k) { return S.apps[k] && S.apps[k].full; });
       }, function (e) { S.apps[jobId] = { list: null, err: errMsg(e) }; });
     }
     /* ONE scoped query for every application to this employer (be4e1b7). Every loaded vacancy gets a list —
@@ -351,6 +378,8 @@
         (S.jobs || []).forEach(function (j) { by[j.id] = []; });
         d.applications.forEach(function (a) { if (a && a.jobId) (by[a.jobId] = by[a.jobId] || []).push(a); });
         S.apps = {}; Object.keys(by).forEach(function (k) { S.apps[k] = { list: by[k], err: null }; });
+        S.appsMore = typeof d.hasMore === 'boolean' ? d.hasMore : d.applications.length >= capOf(S, 'getEmployerApplications', APPS_LIMIT);
+        S.appsShown = d.applications.length;
         S.empAppsOp = 'known';
       }).then(null, function (e) {
         if (isUnknownOp(e)) { S.empAppsOp = 'unknown'; return null; }
@@ -394,13 +423,22 @@
     /* ── rendering ── */
     function head (title, sub) { return '<h2>' + esc(title) + '</h2>' + (sub ? '<p class="jw-sub">' + esc(sub) + '</p>' : ''); }
     function note (n) { return n ? '<div class="jw-note ' + esc(n.kind || '') + '" role="status">' + esc(n.text) + '</div>' : ''; }
-    function tile (label, n) { return '<div class="jw-tile"><b>' + esc(fmtCount(n)) + '</b><small>' + esc(label) + '</small></div>'; }
+    function tile (label, n, partial) { return '<div class="jw-tile"' + (partial && n != null ? ' data-partial="1"' : '') + '><b>' + esc(fmtCount(n, partial)) + '</b><small>' + esc(label) + '</small></div>'; }
+    function moreBanner (S) {
+      var out = '';
+      if (S.jobsTrunc && Array.isArray(S.jobs)) out += '<div class="jw-note" data-more="jobs">Showing the first ' + esc(String(S.jobs.length)) + ' vacancies — more exist. Counts marked + are at least that many.</div>';
+      if (S.appsMore) out += '<div class="jw-note" data-more="apps">Showing the first ' + esc(String(S.appsShown != null ? S.appsShown : allApps(S).length)) + ' applications — more exist. Counts marked + are at least that many.</div>';
+      return out;
+    }
+    function JL (j) { return jobStatusLabel(j, store(uid()).caps); }
+    function AL (st, given) { return appStatusLabel(st, store(uid()).caps, given); }
     function loadingOr (S) {
       if (S.jobsErr) return '<div class="jw-note err">' + esc(S.jobsErr) + ' <button class="jw-btn" type="button" data-act="reload">Try again</button></div>';
       if (!Array.isArray(S.jobs)) return '<p class="jw-sub">Loading your vacancies…</p>';
       return null;
     }
     function jobTitle (S, id, fallback) { var j = (S.jobs || []).filter(function (x) { return x.id === id; })[0]; return j ? j.title : (fallback || null); }
+    function appStates () { var S = store(uid()); return (S.caps && Array.isArray(S.caps.applicationStates)) ? S.caps.applicationStates : APP_STATUSES; }
     function transitions (S) { return (S.caps && validCaps(S.caps)) ? S.caps.employerTransitions : null; }
 
     function render () {
@@ -425,12 +463,12 @@
       var by = function (k) { return c0.appsComplete ? b[k] : null; };
       return head('Jobs overview', 'Your vacancies and the applications they have received. Counts come only from what this page loaded.') +
         (w || '') +
-        (c0.truncated ? '<div class="jw-note">You have more than ' + JOBS_LIMIT + ' vacancies; totals are not shown rather than a partial count.</div>' : '') +
-        '<div class="jw-tiles">' + tile('Published vacancies', c0.open) + tile('Pending review', c0.pending_review) +
-          tile('Drafts', c0.draft) + tile('Changes requested', c0.changes_requested) + '</div>' +
-        '<div class="jw-tiles">' + tile('Applications', c0.apps) + tile('New (submitted)', by('pending')) +
-          tile('Interviews', by('interview')) + tile('Offers open', by('offer')) + '</div>' +
-        (Array.isArray(S.jobs) && !c0.appsComplete && !c0.truncated ? '<p class="jw-sub">' + (S.appsP ? 'Loading applications…' : 'Some applications could not be loaded, so application counts are not shown.') + '</p>' : '') +
+        moreBanner(S) +
+        '<div class="jw-tiles">' + tile('Published vacancies', c0.open, c0.jobsPartial) + tile('Pending review', c0.pending_review, c0.jobsPartial) +
+          tile('Drafts', c0.draft, c0.jobsPartial) + tile('Changes requested', c0.changes_requested, c0.jobsPartial) + '</div>' +
+        '<div class="jw-tiles">' + tile('Applications', c0.apps, c0.appsPartial) + tile('New (submitted)', by('pending'), c0.appsPartial) +
+          tile('Interviews', by('interview'), c0.appsPartial) + tile('Offers open', by('offer'), c0.appsPartial) + '</div>' +
+        (Array.isArray(S.jobs) && !c0.appsComplete ? '<p class="jw-sub">' + (S.appsP ? 'Loading applications…' : 'Some applications could not be loaded, so application counts are not shown.') + '</p>' : '') +
         '<div class="jw-acts"><button class="jw-btn pri" type="button" data-go="jobs">Manage vacancies</button>' +
         '<button class="jw-btn" type="button" data-go="applications">Review applications</button></div>';
     }
@@ -498,7 +536,7 @@
           '<button class="jw-btn" type="button" data-act="close-cancel">Keep it open</button></div></div>' : '';
       return '<div class="jw-card" data-jobcard="' + esc(j.id) + '">' +
         '<div class="jw-row"><b>' + esc(j.title || 'Untitled vacancy') + '</b>' +
-          '<span class="jw-chip" data-status="' + esc(j.status) + '">' + esc(jobStatusLabel(j)) + '</span>' +
+          '<span class="jw-chip" data-status="' + esc(j.status) + '">' + esc(JL(j)) + '</span>' +
           (j.featured === true ? '<span class="jw-badge" data-badge="featured">Featured</span>' : '') + '</div>' +
         '<div class="jw-meta">' + esc(TYPE_LABEL[j.type] || j.type || '—') + ' · ' + esc(j.location || 'Location not stated') + ' · ' + esc(salaryText(j)) + '</div>' +
         '<div class="jw-meta">Closes ' + esc(fmtDate(j.expiresAt)) + (j.status === 'active' && expired(j, now()) ? ' (closing date passed)' : '') +
@@ -512,9 +550,9 @@
       var editing = ui.editId ? (S.jobs || []).filter(function (j) { return j.id === ui.editId; })[0] : null;
       return head('Jobs', 'Your vacancies. SOKONI reviews each vacancy before it is published; featured placement is set by SOKONI.') +
         (ui.form ? formHtml(S, editing) : '<div class="jw-acts" style="margin-bottom:12px"><button class="jw-btn pri" type="button" data-act="new">New vacancy</button></div>') +
-        (S.jobNotes.__new ? note(S.jobNotes.__new) : '') +
+        (S.jobNotes.__new ? note(S.jobNotes.__new) : '') + moreBanner({ jobsTrunc: S.jobsTrunc, jobs: S.jobs, appsMore: false }) +
         (w || (S.jobs.length ? S.jobs.map(function (j) { return jobCard(S, j); }).join('') +
-          (S.jobsTrunc ? '<p class="jw-sub">Showing your ' + JOBS_LIMIT + ' most recent vacancies.</p>' : '')
+          ''
           : '<p class="jw-sub">No vacancies yet.</p>'));
     }
 
@@ -535,7 +573,7 @@
             return '<li>' + esc(e.label || e.to) + ' · ' + esc(e.actorRole || '') + (e.at ? ' · ' + esc(fmtDate(e.at)) : '') + (e.reason ? ' — ' + esc(e.reason) : '') + '</li>';
           }).join('') + '</ol>') : '';
       return '<div class="jw-card" data-appcard="' + esc(a.id) + '">' +
-        '<div class="jw-row"><b>' + esc(p.name || 'Applicant') + '</b><span class="jw-chip" data-status="' + esc(a.status) + '">' + esc(a.statusLabel || APP_LABEL[a.status] || a.status) + '</span></div>' +
+        '<div class="jw-row"><b>' + esc(p.name || 'Applicant') + '</b><span class="jw-chip" data-status="' + esc(a.status) + '">' + esc(AL(a.status, a.statusLabel)) + '</span></div>' +
         '<div class="jw-meta">' + (p.headline ? esc(p.headline) + ' · ' : '') + esc(jobTitle(S, a.jobId, a.jobTitle) || 'Vacancy') + ' · Applied ' + esc(fmtDate(a.appliedAt)) + '</div>' +
         (a.coverLetter ? '<details><summary>Cover letter</summary><p>' + esc(a.coverLetter) + '</p></details>' : '') +
         note(n) +
@@ -561,8 +599,8 @@
         ? '<div class="jw-two" style="margin-bottom:10px"><label class="jw-sub">Vacancy<select class="jw-reason" data-filter="job"><option value="">All vacancies</option>' +
             (S.jobs || []).map(function (j) { return '<option value="' + esc(j.id) + '"' + (S.jobFilter === j.id ? ' selected' : '') + '>' + esc(j.title) + '</option>'; }).join('') + '</select></label>' +
           '<label class="jw-sub">Stage<select class="jw-reason" data-filter="status"><option value="">All stages</option>' +
-            APP_STATUSES.map(function (s) { return '<option value="' + esc(s) + '"' + (ui.statusFilter === s ? ' selected' : '') + '>' + esc(APP_LABEL[s]) + '</option>'; }).join('') + '</select></label></div>' : '';
-      return head(title, sub) + filters +
+            appStates().map(function (s) { return '<option value="' + esc(s) + '"' + (ui.statusFilter === s ? ' selected' : '') + '>' + esc(AL(s)) + '</option>'; }).join('') + '</select></label></div>' : '';
+      return head(title, sub) + moreBanner({ jobsTrunc: false, appsMore: S.appsMore, appsShown: S.appsShown, jobs: S.jobs, apps: S.apps }) + filters +
         (failed.length ? '<div class="jw-note err">Applications for ' + failed.length + ' vacanc' + (failed.length === 1 ? 'y' : 'ies') + ' could not be loaded (' + esc(S.apps[failed[0].id].err) + '). <button class="jw-btn" type="button" data-act="reload">Try again</button></div>' : '') +
         (pending ? '<p class="jw-sub">Loading applications…</p>' : '') +
         (list.length ? list.map(function (a) { return appCard(S, a); }).join('') : (pending ? '' : '<p class="jw-sub">Nothing here yet.</p>'));
@@ -579,7 +617,7 @@
           return '<div class="jw-card"><div class="jw-row"><b>' + esc(p.name || 'Applicant') + '</b>' + (p.location ? '<span class="jw-chip">' + esc(p.location) + '</span>' : '') + '</div>' +
             (p.headline ? '<div class="jw-meta">' + esc(p.headline) + '</div>' : '') +
             (Array.isArray(p.skills) && p.skills.length ? '<div class="jw-meta">Skills: ' + esc(p.skills.slice(0, 12).join(', ')) + '</div>' : '') +
-            '<div class="jw-meta">' + x.apps.map(function (a) { return esc(jobTitle(S, a.jobId, a.jobTitle) || 'Vacancy') + ' — ' + esc(a.statusLabel || APP_LABEL[a.status] || a.status); }).join('<br>') + '</div></div>';
+            '<div class="jw-meta">' + x.apps.map(function (a) { return esc(jobTitle(S, a.jobId, a.jobTitle) || 'Vacancy') + ' — ' + esc(AL(a.status, a.statusLabel)); }).join('<br>') + '</div></div>';
         }).join('') : '<p class="jw-sub">' + ((S.jobs || []).some(function (j) { return !S.apps[j.id]; }) ? 'Loading applications…' : 'No applicants yet.') + '</p>');
     }
 
@@ -612,12 +650,14 @@
       var rows = (S.jobs || []).map(function (j) {
         var a = S.apps[j.id], list = a && Array.isArray(a.list) ? a.list : null;
         var n = function (st) { return list ? list.filter(function (x) { return st.indexOf(x.status) >= 0; }).length : null; };
-        return '<tr><td>' + esc(j.title) + '<br><span class="jw-meta">' + esc(jobStatusLabel(j)) + '</span></td><td>' + esc(fmtCount(j.viewCount)) + '</td><td>' + esc(fmtCount(j.applicationCount)) +
-          '</td><td>' + esc(fmtCount(n(['interview']))) + '</td><td>' + esc(fmtCount(n(['offer', 'offer_accepted']))) + '</td><td>' + esc(fmtCount(n(['hired']))) + '</td></tr>';
+        var pp = c0.appsPartial;
+        return '<tr><td>' + esc(j.title) + '<br><span class="jw-meta">' + esc(JL(j)) + '</span></td><td>' + esc(fmtCount(j.viewCount)) + '</td><td>' + esc(fmtCount(j.applicationCount)) +
+          '</td><td>' + esc(fmtCount(n(['interview']), pp)) + '</td><td>' + esc(fmtCount(n(['offer', 'offer_accepted']), pp)) + '</td><td>' + esc(fmtCount(n(['hired']), pp)) + '</td></tr>';
       }).join('');
       var funnel = ['pending', 'reviewing', 'shortlisted', 'interview', 'offer', 'offer_accepted', 'hired', 'rejected', 'withdrawn', 'offer_declined', 'closed'];
       return head('Analytics', 'From your vacancies and the applications this page loaded. Views and application totals are the server\'s counters.') +
-        '<div class="jw-tiles">' + funnel.map(function (k) { return tile(APP_LABEL[k], c0.appsComplete ? b[k] : null); }).join('') + '</div>' +
+        moreBanner(S) +
+        '<div class="jw-tiles">' + funnel.map(function (k) { return tile(AL(k), c0.appsComplete ? b[k] : null, c0.appsPartial); }).join('') + '</div>' +
         (rows ? '<div class="jw-scroll"><table class="jw-tbl"><thead><tr><th>Vacancy</th><th>Views</th><th>Applications</th><th>Interview</th><th>Offer</th><th>Hired</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<p class="jw-sub">No vacancies yet.</p>');
     }
 
@@ -652,7 +692,7 @@
       ui.busy = true; ui.formNote = { text: 'Saving…' }; render();
       return call('createJob', payload).then(function (d) {
         var st = d && d.job && d.job.status;
-        S.jobNotes.__new = { text: 'Saved. "' + ((d && d.job && d.job.title) || f.title) + '" is now: ' + jobStatusLabel({ status: st }) + '.' };
+        S.jobNotes.__new = { text: 'Saved. "' + ((d && d.job && d.job.title) || f.title) + '" is now: ' + JL({ status: st }) + '.' };
         ui.form = null; ui.formNote = null; toast('Vacancy saved');
         return loadJobs(S, true);
       }, function (e) { ui.formNote = { kind: 'err', text: errMsg(e) }; })
@@ -678,7 +718,7 @@
       return call('updateJob', Object.assign({ jobId: job.id }, changes)).then(function (d) {
         S.jobNotes[job.id] = (d && d.backToReview === true)
           ? { kind: 'warn', text: 'Saved. The vacancy went back to review and is hidden until SOKONI approves it.' }
-          : { text: 'Saved.' + (d && d.status ? ' Status: ' + jobStatusLabel({ status: d.status }) + '.' : '') };
+          : { text: 'Saved.' + (d && d.status ? ' Status: ' + JL({ status: d.status }) + '.' : '') };
         ui.form = null; ui.editId = null; ui.confirmReview = false; ui.formNote = null;
         return loadJobs(S, true);
       }, function (e) { ui.formNote = { kind: 'err', text: errMsg(e) }; })
@@ -688,7 +728,7 @@
     function jobOp (S, op, jobId) {
       S.jobNotes[jobId] = { text: 'Working…' }; render();
       return call(op, { jobId: jobId }).then(function (d) {
-        S.jobNotes[jobId] = { text: 'Done. Status: ' + jobStatusLabel({ status: d && d.status }) + '.' };
+        S.jobNotes[jobId] = { text: 'Done. Status: ' + JL({ status: d && d.status }) + '.' };
         return loadJobs(S, true);
       }, function (e) { S.jobNotes[jobId] = { kind: 'err', text: errMsg(e) }; }).then(render);
     }
@@ -716,7 +756,7 @@
       }
       S.notes[appId] = { text: 'Saving…' }; render();
       return call('updateApplicationStatus', payload).then(function (d) {
-        S.notes[appId] = { text: 'Moved to ' + (APP_LABEL[(d && d.status) || to] || to) + '. The applicant was told.' };
+        S.notes[appId] = { text: 'Moved to ' + AL((d && d.status) || to) + '. The applicant was told.' };
         delete S.hist[appId];
         return refreshApps(S, a.jobId);
       }, function (e) {
@@ -795,7 +835,7 @@
     mount: mount, VIEWS: VIEWS, ROUTE_OF: ROUTE_OF,
     _reset: function () { STORE = null; SUBS.length = 0; },
     _pure: { jobActions: jobActions, appActions: appActions, needsReReview: needsReReview, counts: counts, fmtCount: fmtCount,
-             parseOps: parseOps, modeOf: modeOf, isUnknownOp: isUnknownOp, validCaps: validCaps, jobStatusLabel: jobStatusLabel, validateJob: validateJob, isConflict: isConflict,
+             parseOps: parseOps, modeOf: modeOf, appStatusLabel: appStatusLabel, labelSet: labelSet, isUnknownOp: isUnknownOp, validCaps: validCaps, jobStatusLabel: jobStatusLabel, validateJob: validateJob, isConflict: isConflict,
              esc: esc, ms: ms, EMPLOYER_TRANSITIONS: EMPLOYER_TRANSITIONS, JOB_LABEL: JOB_LABEL, CONFLICT_MSG: CONFLICT_MSG,
              TX_TYPE: TX_TYPE, messageUrl: messageUrl, openApplicationChat: openApplicationChat }
   };
