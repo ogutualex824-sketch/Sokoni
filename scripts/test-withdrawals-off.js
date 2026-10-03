@@ -7,6 +7,8 @@
      W3  providerRequestPayout (old provider-payout route) refuses unconditionally (PAYOUT_ROUTE_RETIRED) and marks nothing
      W4  the three older initiators (requestWithdrawal, finosRequestBankPayout, requestPayout) still throw RETIRED before any
          money statement in this tree (static: first statement after auth is the throw)
+     W5  DIRECT provider calls to requestWithdrawal / finosRequestBankPayout / requestPayout / approveWithdrawal → refused, wallet untouched
+     W6  initiateSellerPayout refuses non-admins as its first statement
    NODE_PATH=<functions/node_modules> node scripts/test-withdrawals-off.js */
 const path = require('path'), fs = require('fs');
 const FN = path.join(path.resolve(__dirname, '..'), 'functions');
@@ -55,6 +57,25 @@ const ck = (id, ok, m, got) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + ' '
     return [n, t > 0 && (money < 0 || t < money)];
   });
   ck('W4', heads.every(([, ok]) => ok), 'older initiators still throw RETIRED before any money statement', heads);
+
+  /* W5 DIRECT server calls, as a PROVIDER, to every other payout route (owner: the disabled UI is not evidence) */
+  H.reset();
+  DOCS.set('wallets/prov1', { balance: 100000, withdrawableBalance: 10000000, availableBalance: 10000000 });
+  const direct = [];
+  for (const [file, name, data] of [['commission.js', 'requestWithdrawal', { amountCents: 500000, method: 'mpesa', phone: '254700000000' }],
+    ['finos-router.js', 'finosRequestBankPayout', { amountCents: 500000, bankCode: '01', accountNumber: '123' }],
+    ['finos.js', 'requestPayout', { amountCents: 500000, method: 'mpesa', phone: '254700000000' }],
+    ['commission.js', 'approveWithdrawal', { withdrawalId: 'w1' }]]) {
+    let mod; try { mod = require(path.join(FN, file)); } catch (e) { direct.push([name, 'LOAD_FAIL ' + e.message.slice(0, 60)]); continue; }
+    const r = await call((req) => mod[name].run(req), 'prov1', data);
+    direct.push([name, r.ok ? 'MOVED_OR_ACCEPTED' : r.code, DOCS.get('wallets/prov1').balance === 100000 && DOCS.get('wallets/prov1').withdrawableBalance === 10000000]);
+  }
+  ck('W5', direct.length === 4 && direct.every(([, code, untouched]) => (code === 'failed-precondition' || code === 'permission-denied') && untouched === true),
+    'direct provider calls: requestWithdrawal / finosRequestBankPayout / requestPayout REFUSED (retired), approveWithdrawal REFUSED (admin-only); no wallet field moved', direct);
+  const idx = fs.readFileSync(path.join(FN, 'index.js'), 'utf8'); const i = idx.indexOf('exports.initiateSellerPayout = onCall');
+  const head = idx.slice(i, i + 400);
+  ck('W6', /if \(!request\.auth \|\| !request\.auth\.token \|\| !request\.auth\.token\.admin\)\s*\{\s*throw new HttpsError\("permission-denied"/.test(head),
+    'initiateSellerPayout: the FIRST statement refuses any non-admin caller (index.js is not loaded in-process; static on the exact guard)');
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e && e.stack); process.exit(1); });
