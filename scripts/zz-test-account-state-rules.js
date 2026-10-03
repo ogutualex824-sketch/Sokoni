@@ -18,6 +18,8 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await env.withSecurityRulesDisabled(async (c) => {
     await setDoc(doc(c.firestore(), 'users/sus'), { uid: 'sus', displayName: 'S', status: 'suspended', suspended: true, suspendReason: 'fraud', roles: ['buyer'] });
     await setDoc(doc(c.firestore(), 'users/act'), { uid: 'act', displayName: 'A', status: 'active', roles: ['buyer'] });
+    await setDoc(doc(c.firestore(), 'users/ban'), { uid: 'ban', displayName: 'B', status: 'banned', roles: ['buyer'] });
+    await setDoc(doc(c.firestore(), 'providers/ban'), { uid: 'ban', name: 'Ban Co', status: 'active' });
     await setDoc(doc(c.firestore(), 'providers/sus'), { uid: 'sus', name: 'Sus Co', status: 'active' });
     await setDoc(doc(c.firestore(), 'providers/act'), { uid: 'act', name: 'Act Co', status: 'active' });
     await setDoc(doc(c.firestore(), 'users/rider1'), { uid: 'rider1', displayName: 'R', status: 'active', roles: ['buyer', 'rider'] });
@@ -29,6 +31,7 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await denies('AS-3', 'an admin writes suspendReason / suspendedBy directly', updateDoc(doc(adm, 'users/sus'), { suspendReason: 'forged', suspendedBy: 'adm' }));
   await denies('AS-1b', 'a suspended owner clears its own suspended flag', updateDoc(doc(sus, 'users/sus'), { suspended: false }));
   await denies('AS-7', 'EXISTING SESSION: a suspended account (users doc suspended, token still valid, no deactivated claim) cannot make a sensitive write — its provider profile', updateDoc(doc(sus, 'providers/sus'), { bio: 'still here' }));
+  await denies('AS-7b', 'EXISTING SESSION: a LEGACY banned account (status banned from tsBanUser, Auth not disabled) cannot make a sensitive write', updateDoc(doc(env.authenticatedContext('ban').firestore(), 'providers/ban'), { bio: 'still selling' }));
   await denies('AS-8', 'EXISTING SESSION: a suspended account cannot edit its own users profile either', updateDoc(doc(sus, 'users/sus'), { displayName: 'New name' }));
   await allows('AS-P5', 'CONTROL: an ACTIVE account makes the same provider write', updateDoc(doc(act, 'providers/act'), { bio: 'open for business' }));
   await env.withSecurityRulesDisabled(async (c) => { await updateDoc(doc(c.firestore(), 'users/act'), { status: 'suspended', suspended: true, suspendedBy: 'superadmin', suspensionSource: 'suspendUser' }); });
