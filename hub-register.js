@@ -88,8 +88,15 @@
     /* Technology */
     { id:'web-developer',    label:'Web Developer / Designer',         hub:'tech',          emoji:'💻' },
     { id:'app-developer',    label:'App Developer (iOS/Android)',      hub:'tech',          emoji:'📱' },
-    { id:'it-support',       label:'IT Support / Networking',          hub:'tech',          emoji:'🔌' },
-    { id:'phone-repair',     label:'Phone Repair / Electronics',       hub:'tech',          emoji:'📱' },
+    { id:'it-support',       label:'IT Support',                       hub:'tech',          emoji:'🔌' },
+    { id:'phone-repair',     label:'Phone & Tablet Repair',            hub:'tech',          emoji:'📱' },
+    /* Tech Hub slice 4 (2026-10-03): each id is classified server-side (business-category → it_services) and maps to
+       capabilities (shared/service-capabilities.js); the selection is a REQUEST — AdminOS approval grants them. */
+    { id:'laptop-repair',    label:'Laptop Repair',                    hub:'tech',          emoji:'💻' },
+    { id:'computer-repair',  label:'Computer / Desktop Repair',        hub:'tech',          emoji:'🖥️' },
+    { id:'electronics-repair', label:'Electronics Repair (TV, audio, appliances)', hub:'tech', emoji:'📺' },
+    { id:'networking',       label:'Networking / Wi-Fi Installation',  hub:'tech',          emoji:'📶' },
+    { id:'pos-support',      label:'POS & Business Tech Support',      hub:'tech',          emoji:'🧾' },
     { id:'cctv',             label:'CCTV / Security Systems',          hub:'tech',          emoji:'📷' },
     { id:'software',         label:'Software / SaaS Company',          hub:'tech',          emoji:'💾' },
     { id:'data-entry',       label:'Data Entry / Virtual Assistant',   hub:'tech',          emoji:'📊' },

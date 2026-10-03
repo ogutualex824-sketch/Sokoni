@@ -177,6 +177,7 @@
 <script src="sokoni-pay.js" defer></script>
 <script src="sokoni-book-service.js" defer></script>
 <script src="sokoni-inbox.js" defer></script>
+<script src="sokoni-leads.js" defer></script>
 <script src="nav-active.js" defer></script>
 <script src="sw-register.js" defer></script>
 <script>
@@ -329,15 +330,11 @@
   }
 
   function chat() {
-    if (window.SokoniInbox && _p) {
-      SokoniInbox.openChat({
-        otherUid: _p.uid, otherName: _p.name,
-        type: 'customer-provider',
-        context: _p.categoryLabel + ' · SOKONI Services',
-      });
-    } else {
-      location.href = 'messages.html';
-    }
+    /* Tech Hub slice 4F: conversations hang on a transaction. Before any booking, asking the provider creates the
+       service lead (server-written) and opens its conversation; openChat with a bare uid could only show a notice. */
+    if (!_p) return;
+    if (window.SokoniLeads) { SokoniLeads.ask({ providerId: _p.uid || uid, providerName: _p.name }); return; }
+    location.href = 'messages.html';
   }
 
   function book() {
@@ -354,30 +351,9 @@
        pick service + slot → bookingCreateService → payment intent → STK → paid_held).
        The legacy SokoniPay.bookNow path below stays as a fallback until WS4 retires it. */
     if (window.SokoniBookService) { SokoniBookService.open({ providerId: uid, providerName: _p.name }); return; }
-    if (typeof window.SokoniPay !== 'undefined' && SokoniPay.bookNow) {
-      /* bookNow runs its own gateway modal and confirmation, then fires this
-         callback with a reference. It does NOT navigate — the previous
-         location.href='bookings.html' was both unnecessary and a 404. */
-      SokoniPay.bookNow({
-        providerName: _p.name,
-        category: _p.category || 'default',
-        serviceDesc: (_p.skills || []).slice(0, 2).join(', ') || 'Professional Service',
-        providerPhone: _p.phone || '',
-        providerId: uid,   /* provider's uid (from the URL) — links the booking + notifies them */
-      }, function (ref) {
-        var msg = '✅ Booking request sent to ' + _p.name +
-                  (ref ? '\nRef: ' + ref : '') + '\n' + _p.name.split(' ')[0] +
-                  ' will confirm shortly.';
-        (window._skToast || window.alert)(msg);
-      });
-    } else {
-      /* SokoniPay unavailable (script blocked / slow). Fall back to a real
-         contact path, never a dead page: message in-app, or SOKONI Support
-         (never a WhatsApp hand-off — owner 2026-09-30). */
-      if (window.SokoniInbox && SokoniInbox.openChat) { chat(); return; }
-      location.href = 'support.html?topic=booking&ref=' + encodeURIComponent(uid || '') +
-        '&desc=' + encodeURIComponent('I would like to book ' + (_p.name || 'this provider') + ' on SOKONI.');
-    }
+    /* 2026-10-03 (Tech Hub slice 4F): the SokoniPay.bookNow fallback (pay-time provider credit — STOPPED by owner decision)
+       and the wa.me hand-off are retired. If the booking engine has not loaded, say so; never leave SOKONI. */
+    (window._skToast || window.alert)('Booking is still loading — please try again in a moment.');
   }
 
   function load() {

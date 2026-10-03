@@ -74,6 +74,15 @@ SokoniInbox.openChat = function(params) {
   window.location.href = 'messages.html?' + q.toString();
 };
 
+// ── Open the conversation of a TRANSACTION (Tech Hub slice 4L) ──────────────
+/* Conversations exist only per transaction; the server (createConversation) derives the parties from it and refuses a
+   caller who is not one. This only navigates — messages.html asks the server. Types with a working party map only. */
+SokoniInbox.TX_TYPES = ['service_booking', 'service_lead', 'order'];   /* service_lead: Tech slice 4F */
+SokoniInbox.openForTransaction = function(type, id) {
+  if (SokoniInbox.TX_TYPES.indexOf(type) === -1 || !id) { window.location.href = 'messages.html'; return; }
+  window.location.href = 'messages.html?' + new URLSearchParams({ tx: type, txId: String(id) }).toString();
+};
+
 // ── Create or open conversation in Firestore ──────────────────
 /* RETIRED (ported from f890075, CHANGELOG 230): conversations are created only by the server
    (createConversation derives the parties from the transaction). A client-written conversation

@@ -108,8 +108,24 @@
     'home-repairs':['home-repairs', 'handyman', 'plumbing', 'electrical'],
     entertainment: ['entertainment', 'mc', 'dj', 'live-band', 'comedian', 'dancer'],
     beauty:        ['beauty', 'hair-beauty'],
-    tech:          ['phone-repair', 'computer-repair', 'electronics-repair'],
+    /* Tech Hub (2026-10-03). DISPLAY GROUPING ONLY — category is provider-settable free text and is never a
+       pricing input (see functions/provider-hub.js). Labels and ids both appear on approved records. */
+    tech:          ['phone-repair', 'phone repair', 'computer-repair', 'electronics-repair', 'device-repair',
+                    'it-support', 'it support', 'it repair', 'network', 'networking', 'network engineer', 'cctv',
+                    'cctv installation', 'software', 'pos-support', 'pos support', 'smart-home', 'web-developer',
+                    'app-developer', 'appliance repair', 'laptop-repair', 'laptop repair',
+                    'electronics repair'],
+    'phone-repair':['phone-repair', 'phone repair', 'device-repair', 'electronics-repair', 'screen-repair'],
+    electrical:    ['electrical', 'electrician', 'electrical work', 'electrical-work'],
     health:        ['healthcare', 'clinic', 'pharmacy', 'home-doctor'],
+    /* Home Services (2026-10-03, Tech Hub slice 2b). DISPLAY GROUPING ONLY, same rule as tech. */
+    'home-services':['home-repairs', 'handyman', 'plumbing', 'plumber', 'electrical', 'electrician', 'cleaning',
+                    'housekeeping', 'laundry', 'painting', 'painter', 'moving', 'movers', 'carpentry', 'carpenter',
+                    'gardening', 'appliance', 'appliance-repair', 'appliance repair', 'security'],
+    'home-interiors':['carpentry', 'carpenter', 'painting', 'painter', 'interiors'],
+    plumbing:      ['plumbing', 'plumber'],
+    appliance:     ['appliance', 'appliance-repair', 'appliance repair', 'ac repair'],
+    moving:        ['moving', 'movers', 'moving-packing'],
   };
 
   /* Display labels. A provider carries its own categoryLabel; this is the

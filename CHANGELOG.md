@@ -43,6 +43,173 @@ carrying sokoni-4d's payout-safety fix `6f0a576` (cherry-picked as `f2d5f81`). F
 - **DB / rules / functions**: none changed. Expects `completeParcelWithPin` (sokoni-e3, not live) for parcel jobs.
 - **Breaking**: none for live data. Old in-page anchors such as `#myDeliveries` are replaced by `#/section`; email links
   `#documents` / `#earnings` still work.
+## [2026-10-03] - Tech Hub slice 4F (hosting): ask a provider, get a quote, book it — hosting, NOT deployed
+
+- **sokoni-leads.js** (new) over the server authority (functions/service-leads.js, feat/tech-taxonomy-on-13f74f3 @ 906bd2f):
+  - `ask()` → leadCreate, then opens the lead's conversation. Nothing says "sent" before the server answers.
+  - `mountMine()` (customer): quotes with accept / ask a question / decline / close; **Book a time** only after acceptance,
+    through SokoniBookService with the leadId.
+  - `mountProvider()` (provider): send / re-send a quote for one of their services, within granted modes; decline; message.
+- **Customer entry points:**
+  - directory card "Message" (sokoni-tech-directory.js) and storefront "Message" (provider-profile.html) now ASK the
+    provider. They used to land on "direct messaging isn't available".
+  - Storefront: the retired SokoniPay.bookNow fallback (pay-time credit STOPPED) and its wa.me hand-off are removed.
+- **service-requests.html** (new, sign-in required, self-updating via sw-register.js): the customer's requests and quotes.
+  Linked from the Tech Hub repair panel.
+- **provider-dashboard.html**: "Leads & quotes" sidebar item + panel (`data-hc-module="leads"`, hidden until the server
+  says AVAILABLE).
+- **sokoni-book-service.js**: `open({ leadId })` skips options / device and sends only the leadId. The quoted price is
+  applied by bookingCreateService.
+- **messages.html / sokoni-inbox.js**: `service_lead` is an allowed transaction type.
+- **Pages loading the module:** phone-repair, electrical, tech-hub, providers, provider-profile, provider-dashboard,
+  service-requests.
+- **Tests:**
+  - test-service-leads-web 11/0. The sabotage "Book on an unaccepted quote" turns row W1 red.
+  - test-tech-service-editor 10/0 (L1 allow-list updated), test-tech-directory 50/0, role-authority 155/0, customer-nav 62/0.
+  - Browser run UNRUN (memory floor).
+- **Lead monetization:** not configured (server records it). Nothing is charged for a lead.
+
+## [2026-10-03] - Tech Hub slice 4L (hosting): message the other party of a booking, inside SOKONI — hosting, NOT deployed
+
+- messages.html:
+  - `?tx=service_booking|order&txId=…` opens that transaction's conversation through the server (createConversation via
+    messagesDispatch, which derives the parties and refuses a non-party).
+  - It used to only handle `?with=<uid>`, where it showed "Direct messaging isn't available yet". That notice remains
+    for the bare-uid entry, because conversations are transaction-bound by design (no off-platform hand-offs).
+- sokoni-inbox.js: `SokoniInbox.openForTransaction(type, id)` (allow-listed types).
+- Repairs rows: "💬 Message customer". Booking status view (sokoni-book-service.js): "💬 Message the provider". Both
+  open the BOOKING's conversation.
+- Server half: feat/tech-taxonomy-on-13f74f3 @ 95f2ef6 (service_booking → providerBookings + customerUid; legacy
+  `bookings` kept).
+- Still open:
+  - "Message" on a directory card BEFORE any booking has no transaction to hang on. It becomes an enquiry / lead
+    conversation in slice 4F.
+  - Until then it lands on the honest notice above.
+- Tests: test-tech-service-editor 10/0 (L1, L2), test-tech-directory 50/0, role-authority 155/0, customer-nav 62/0,
+  admin-nav-context 3/0, mv2-2a-supply 15/0. test-messages-premium 6/6 failing, identical with the committed
+  messages.html (pre-existing browser-fixture failures).
+
+## [2026-10-03] - Tech Hub slice 4b (hosting): device-repair service editor, Repairs view, booking device step — hosting, NOT deployed
+
+- **sokoni-tech-service-editor.js** (new):
+  - Adds a "Tech service details" fieldset to the provider-dashboard service editor. It renders only when the server
+    workspace grants a Tech capability, offers only the GRANTED service modes, and shows device / repair / brand / model
+    fields only for DEVICE_REPAIR or ELECTRONICS.
+  - It sends `techProfile`, which the server validates (feat/tech-taxonomy-on-13f74f3 @ 5c95390). A business with no
+    Tech capability sends nothing.
+  - **Repairs** panel: the provider's own bookings that carry repairDetails (providerGetBookings). Each row links to
+    Bookings, where confirm / PIN completion / settlement already live. No second lifecycle.
+- **sokoni-business-workspace.js**: new `[data-hc-module]` attribute, keyed by MODULE.
+  - The old `[data-hc-section]` lookup used the section name, which never matched ratecards / bookingpin /
+    supporteddevices.
+  - Marked elements start hidden and stay hidden without a workspace answer (fail closed).
+  - The answer is shared via `window.__sokoniWorkspace` and a `sokoni:workspace` event, with no second call.
+- **provider-dashboard.html**: Repairs sidebar item (`data-hc-module="repairs"`, hidden) + panel; the editor's fill / save
+  hooks; script tag. Existing sections unchanged.
+- **sokoni-book-service.js**: a service with a device profile asks for device / brand / model / repair / mode / problem
+  before options or payment, and sends `repairDetails` with bookingCreateService. Never an amount; the server re-validates.
+- Tests:
+  - test-tech-service-editor: 8/0, sabotage caught. It uses a minimal fake DOM; T10 checks the vocabularies are
+    identical to the server validator.
+  - test-tech-directory 50/0, role-authority 155/0, convergence-server 14/14, role-entry-convergence 15/15.
+  - UNRUN (memory below the 512 MB floor): test-complete-application-browser and any real browser render of the
+    dashboard / booking modal.
+- Database / rules: none (server half adds the fields). Security: client fields are advisory; the server checks the
+  capability, the workspace and the vocabulary.
+
+## [2026-10-03] - Tech Hub slice 4a (hosting): every Tech business id is registrable — hosting, NOT deployed
+
+- hub-register.js CATS (the ONE intake) adds `laptop-repair`, `computer-repair`, `electronics-repair`, `networking`,
+  `pos-support` (hub `tech`). The labels for `it-support` (was "IT Support / Networking") and `phone-repair` (was "Phone
+  Repair / Electronics") now name one thing each.
+- The selection is a REQUEST. The server classifies each id (business-category → `it_services`) and maps capabilities
+  (shared/service-capabilities.js). Both are on `feat/tech-taxonomy-on-13f74f3` @ 81cde54, which ships inside sokoni-5b's
+  ONE providerDispatch release. AdminOS approval is what grants them.
+- sokoni-tech-directory.js INTAKE_CAT: networking now opens its own id (was folded into it-support). The new repair / POS
+  ids map 1:1. sokoni-providers.js tech display group gains laptop repair.
+- Tests: test-tech-directory 50/0, 11/11 sabotages. New T9: every intake id exists in hub-register, and every server
+  Tech id is registrable (positive control: the pre-slice CATS fails all three). Other suites: premium-catalogue-billing
+  32/32, agreement-acknowledge 21/0, merchant-templates 32/0. test-overlays fails 2, identical on base.
+- Database / API / rules: none here (server half: see 81cde54).
+
+## [2026-10-03] - Tech Hub slice 3: one registration intake; services.html self-listing retired — hosting, NOT deployed
+
+- Correction to slices 1–2b: their "register" links pointed at `business-apply.html`, which nothing else links to.
+  sokoni-f3's be46c94 (owner-confirmed 2026-10-01) makes `HubRegister.open` (offer.html) the ONE intake. Every Tech /
+  Home register entry now uses it:
+  - `SokoniTechDirectory.apply(category, hub)` maps directory groups to an EXISTING HubRegister CATS id (networking →
+    it-support, gardening → landscaping, appliance → ac-repair, …). An unknown group opens the intake unselected; it
+    never invents a category. Without hub-register.js loaded, it goes to offer.html.
+  - The pages use it via `data-tech-act="apply"`: phone-repair / electrical CTAs (incl. their `provider.html?cat=` links),
+    the tech-hub tab empty states, and home-services registerProvider.
+- services.html registerProvider wrote `providers/{id}` from the browser "so they appear in listings immediately", plus a
+  PRV-id application and a localStorage profile, then opened the legacy provider.html — a public listing with no AdminOS
+  decision. It now opens the ONE intake. Listing happens only after AdminOS approval (applicationLifecycle → providers).
+- Tests: test-tech-directory 47/0, 10/10 sabotages (T8 intake mapping + fallback, P4 services.html no self-listing).
+  compact-cards 43/4 (= base). customer-nav 62/0, role-switch-routing 50/0.
+- Database / API / rules: none. Security: removes a browser self-listing path to the public provider registry. Rules
+  still permit some provider self-writes — slice 5 (rules release).
+- NOT changed (cross-hub, listed): provider.html is still the legal role's workspace route (auth.js) and a `?cat=` intake
+  for about 15 hubs, so retiring it is a role-routing change outside Tech Hub. services.html "Get Spotlighted" (paid
+  spotlight) still links it.
+
+## [2026-10-03] - Tech Hub slice 2b: Home Services and services.html fallbacks on the service engine — hosting, NOT deployed
+
+- home-services.html:
+  - "Book" messaged SOKONI's own WhatsApp number, said "✅ Booked!", wrote `homeServiceBookings` from the browser and issued
+    a KES 0 invoice. It now sends the visitor to pick a provider and book through SokoniBookService.
+  - Find listed a self-registered `homeServiceProviders` feed (preset 5.0 rating) plus localStorage and demo entries. It now
+    lists approved `providers/{uid}` through sokoni-tech-directory.js, using new Home display groups in sokoni-providers.js.
+  - Contact wrote a KES 30 "lead fee" from the browser (`homeServiceLeads`) and opened wa.me. It now opens in-app chat.
+  - Register went to WhatsApp. It now goes to business-apply.
+  - Anonymous reviews without a booking are no longer written.
+  - My Jobs pointed at local-only records. It now points to Profile → Bookings.
+  - wa.me links are removed from the quote / ask feeds.
+- services.html:
+  - The SokoniPay.bookNow fallback is retired; the storefront is the fallback.
+  - submitBooking no longer writes localStorage / SokoniDB.saveBooking or invents a provider reply.
+  - Client / provider "My bookings / Jobs" localStorage trackers, including a fake provider "confirm", are replaced by
+    pointers to Profile → Bookings and the provider dashboard.
+  - The service-listing WhatsApp hand-off now goes to `product.html?id=`.
+  - The WhatsApp social icon is removed from provider cards.
+- sokoni-tech-directory.js: the Book icon is 📩, matching the compact premium card contract. electrical / phone-repair drop
+  their dead `.pg-wa-btn` CSS.
+- Tests:
+  - test-tech-directory: 43/0, 9/9 sabotages.
+  - test-compact-premium-cards: its electrical / phone-repair static check now reads the shared directory card (same
+    contract; sabotage-checked). It is 43/4, the 4 browser failures identical on the base 14ef233.
+- Database / API / rules: none. Security: removes client writes to booking / lead / review collections and every wa.me
+  hand-off on these pages.
+- Residue (own slices): `homeServiceQuotes` / `homeServiceRequests` client writes stay until the lead / quote authority
+  (slice 7). The quote → support-ticket path is the owner's 2026-09-30 decision.
+
+## [2026-10-03] - Tech Hub slice 2a: Tech Hub technicians / IT tabs and providers.html book on the service engine — hosting, NOT deployed
+
+- tech-hub.html: the Technicians and IT Services tabs listed DEMO_TECHS / DEMO_IT (invented ratings, wa.me links). They now mount
+  sokoni-tech-directory.js on the registry (speciality / IT pill -> category group, display only). The repair form wrote `techRepairs`
+  from the browser and said "Booking recorded" for a request no technician owned; it now sends the visitor to the repair technicians
+  list to book through the engine (no lead/quote authority exists yet — slice 7). Replaced functions: filterTechs, renderTechsGrid,
+  filterITServices, bookRepair.
+- providers.html: confirmBooking wrote `providerBookings` from the browser with status "Confirmed" and toasted "Booking confirmed!" — no
+  price, slot, payment or provider acceptance. Book now opens SokoniBookService (server price, slot lock, IntaSend, webhook); with the
+  engine absent it falls back to the provider's storefront. No client booking write remains.
+- Tests: scripts/test-tech-directory.js 31/0, 7/7 sabotages (adds tech-hub + providers behaviour checks).
+- Database / API / rules: none. Security: removes a client write to a canonical collection and a fabricated confirmation.
+- Still open on tech-hub.html (own slices): device listings auto-activate from the browser (`techDevices`); Ask Hub hands off to wa.me.
+  The freelancers / startups / courses / jobs / AI / device demo arrays render only on localhost or with the sokoniDemoData flag.
+
+## [2026-10-03] - Tech Hub slice 1: phone repair and electrical list real providers on the service engine — hosting, NOT deployed
+
+Both pages listed HARDCODED providers with invented ratings, job counts and verified badges, "booked" by WhatsApp hand-off or localStorage
+with a KES 0 invoice ("recorded in SOKONI" when nothing reached SOKONI), and showed invented customer reviews. They now list approved
+providers from providers/{uid} through the new sokoni-tech-directory.js: Book -> SokoniBookService (bookingCreateService, server price,
+slot lock, IntaSend); Message -> in-app chat; ratings / jobs only when real; an unreachable registry is never shown as empty.
+
+- Files: sokoni-tech-directory.js (new), phone-repair.html, electrical.html, sokoni-providers.js (Tech display grouping only — category is
+  never a pricing input), scripts/test-tech-directory.js (new, 21/0, 5/5 sabotages), docs/TECH_HUB_CONVERGENCE.md (authority map + plan).
+- "List my business" now opens business-apply (the one application primitive AdminOS reviews), not hub-register's random-id write.
+- Pre-existing, unrelated: test-secondary-firebase-apps fails identically on the base (stale electrical BASELINE entry).
+- Not proven: real browser render and a real booking (needs a browser run and an approved provider with services).
 
 ## [2026-10-01] - AdminOS: head scripts deferred, admin gate order unchanged — static 7/0, browser proof QUEUED (RAM), NOT deployed
 

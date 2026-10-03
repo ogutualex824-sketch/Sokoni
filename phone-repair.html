@@ -87,7 +87,6 @@
     .pg-prov-rate{font-size:15px;font-weight:900;color:#3b82f6;}
     .pg-prov-rate small{font-size:10px;font-weight:400;color:rgba(255,255,255,0.35);}
     .pg-book-btn{padding:8px 16px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:white;font-weight:900;border:none;border-radius:9px;cursor:pointer;font-size:12px;font-family:inherit;}
-    .pg-wa-btn{padding:8px 12px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:9px;font-size:12px;font-weight:700;text-decoration:none;display:flex;align-items:center;gap:5px;}
     .pg-verified-badge{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:800;color:#3b82f6;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);padding:2px 7px;border-radius:999px;}
     .pg-avail-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.6);}
     .pg-pricing{padding:0 20px 24px;}
@@ -191,7 +190,7 @@
 </div>
 
 <div class="pg-pricing">
-  <div class="pg-section-title"><h2>💰 Price Guide</h2><span></span><span style="font-size:10px;color:rgba(255,255,255,0.25);">Typical Nairobi rates</span></div>
+  <div class="pg-section-title"><h2>💰 Price Guide</h2><span></span><span style="font-size:10px;color:rgba(255,255,255,0.25);">Guide only — the provider confirms your price when you book</span></div>
   <div class="pg-price-table">
     <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">📺</span>Samsung Screen Replace</div><div class="pg-price-range">KES 2,000 – 8,000</div></div>
     <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">📺</span>iPhone Screen Replace</div><div class="pg-price-range">KES 3,500 – 15,000</div></div>
@@ -204,15 +203,7 @@
   <p style="font-size:10px;color:rgba(255,255,255,0.22);margin-top:8px;padding:0 4px;">* Prices vary by phone model and fault severity.</p>
 </div>
 
-<div class="pg-reviews">
-  <div class="pg-section-title"><h2>⭐ What Customers Say</h2><span></span></div>
-  <div class="pg-review-grid">
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Dropped my iPhone 13 and shattered screen. TechFix replaced it in 2 hours. Looks brand new. Highly recommend."</div><div class="pg-review-author">Lisa N. — Westlands</div></div>
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Samsung galaxy battery was dying in 3 hours. NewTech swapped it same day, KES 1,200. Works perfectly now."</div><div class="pg-review-author">Brian K. — Kasarani</div></div>
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★☆</div><div class="pg-review-text">"Water damage almost killed my Tecno. They dried it out and recovered all my photos. Total miracle."</div><div class="pg-review-author">Mary W. — Mombasa</div></div>
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Fast, honest and affordable. Called at 10am, phone collected, fixed and delivered back by 4pm. Superb."</div><div class="pg-review-author">David O. — Nairobi</div></div>
-  </div>
-</div>
+<!-- Customer reviews of the former hardcoded providers removed (2026-10-03): they were invented. Real reviews appear on each provider's profile. -->
 
 <div style="padding:0 20px 24px;">
   <div style="background:linear-gradient(135deg,rgba(59,130,246,0.1),rgba(30,80,180,0.07));border:1px solid rgba(59,130,246,0.22);border-radius:20px;padding:24px 20px;text-align:center;">
@@ -227,64 +218,34 @@
   <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
     <span style="font-size:40px;flex-shrink:0;">📱</span>
     <div style="flex:1;"><div style="font-size:15px;font-weight:900;margin-bottom:3px;">Are You a Phone Repair Tech?</div><div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5;">Join SOKONI — get daily repair requests, manage bookings and grow your repair business.</div></div>
-    <a href="provider.html?cat=phone-repair" style="flex-shrink:0;padding:10px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:10px;text-decoration:none;font-size:12px;font-weight:800;">Join as Provider →</a>
-  </div>
-</div>
-
-<div class="pg-modal-overlay" id="pgModalOverlay" onclick="if(event.target===this)closeBooking()">
-  <div class="pg-modal">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-      <h2>📱 Book Phone Repair</h2>
-      <button type="button" class="pg-modal-close" onclick="closeBooking()">✕</button>
-    </div>
-    <div class="pg-modal-sub" id="pgModalSub">Fill in the details and a technician will confirm within 30 minutes.</div>
-    <label class="pg-label">Repair Type</label>
-    <div class="pg-chips" id="pgChips">
-      <span class="pg-chip sel" data-svc="Screen Repair" onclick="this.classList.toggle('sel')">📺 Screen</span>
-      <span class="pg-chip" data-svc="Battery Replace" onclick="this.classList.toggle('sel')">🔋 Battery</span>
-      <span class="pg-chip" data-svc="Charging Port" onclick="this.classList.toggle('sel')">🔌 Charging Port</span>
-      <span class="pg-chip" data-svc="Software / OS" onclick="this.classList.toggle('sel')">💾 Software</span>
-      <span class="pg-chip" data-svc="Water Damage" onclick="this.classList.toggle('sel')">💧 Water Damage</span>
-      <span class="pg-chip" data-svc="Data Recovery" onclick="this.classList.toggle('sel')">📂 Data Recovery</span>
-    </div>
-    <label class="pg-label">Phone Brand & Model</label>
-    <input class="pg-input" type="text" id="pgDevice" placeholder="e.g. Samsung Galaxy A54, iPhone 13, Tecno Camon">
-    <label class="pg-label">Your Name</label>
-    <input class="pg-input" type="text" id="pgName" placeholder="e.g. John Kamau">
-    <label class="pg-label">Phone Number</label>
-    <input class="pg-input" type="tel" id="pgPhone" placeholder="07XXXXXXXX">
-    <label class="pg-label">Your Location</label>
-    <input class="pg-input" type="text" id="pgAddress" placeholder="e.g. Westlands, Nairobi">
-    <label class="pg-label">Fault Description (optional)</label>
-    <textarea class="pg-input" id="pgNotes" rows="2" placeholder="e.g. Screen cracked top left, touch still works..." style="resize:none;"></textarea>
-    <button type="button" class="pg-submit-btn" onclick="submitBooking()">📋 Confirm Booking</button>
-    <a href="support.html?topic=booking" class="sk-support-cta" style="display:block;text-align:center;margin-top:8px;padding:11px;border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;text-decoration:none;background:rgba(113,255,0,0.05);">🛟 Need help? Contact Support</a>
-    <div class="pg-modal-msg" id="pgModalMsg"></div>
+    <a href="offer.html" data-tech-act="apply" data-cat="phone-repair" style="flex-shrink:0;padding:10px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:10px;text-decoration:none;font-size:12px;font-weight:800;">Join as Provider →</a>
   </div>
 </div>
 
 <nav class="bottom-nav" role="navigation" aria-label="Main navigation" data-sokoni-nav></nav>
 
 <script>
-const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-const PROVIDERS=[
-  {id:'PR01',name:'TechFix Kenya',emoji:'📱',location:'nairobi',locationLabel:'Nairobi (Westlands / CBD)',rate:'KES 2,500',rateType:'per repair',rating:4.9,jobs:850,phone:'0711200101',verified:true,available:true,skills:['iPhone','Samsung','All Brands','Screen','Battery','Motherboard'],bio:'Apple & Samsung specialist — 7 yrs Westlands. Original parts. 90-day warranty on all repairs.',type:['screen','battery','charging','water']},
-  {id:'PR02',name:'NewTech Repairs',emoji:'🔧',location:'nairobi',locationLabel:'Nairobi CBD / River Road',rate:'KES 1,500',rateType:'per repair',rating:4.8,jobs:620,phone:'0722200202',verified:true,available:true,skills:['All Android','iPhone','Data Recovery','Software','Charging Port'],bio:'Budget-friendly repairs — 5 yrs CBD. Fast turnaround. All local & import brands.',type:['screen','battery','software','data','charging']},
-  {id:'PR03',name:'SmartFix Mombasa',emoji:'🌊',location:'mombasa',locationLabel:'Mombasa Town / Nyali',rate:'KES 2,000',rateType:'per repair',rating:4.7,jobs:310,phone:'0733200303',verified:true,available:true,skills:['Samsung','Tecno','Infinix','iPhone','Water Damage'],bio:'Coastal phone specialist — 4 yrs Mombasa. Doorstep pickup available. Water damage expert.',type:['screen','water','battery','software']},
-  {id:'PR04',name:'GadgetDoc Nairobi',emoji:'💊',location:'nairobi',locationLabel:'Nairobi (Eastlands / Umoja)',rate:'KES 1,200',rateType:'per repair',rating:4.8,jobs:480,phone:'0744200404',verified:true,available:true,skills:['Budget Phones','Tablets','Data Recovery','Software Flash','Charging Port'],bio:'Affordable repairs Eastlands — 6 yrs. Tecno, Itel, Infinix specialist. Fast collection & delivery.',type:['screen','battery','data','software','charging']},
-  {id:'PR05',name:'iRepair Kenya',emoji:'🍎',location:'nairobi',locationLabel:'Nairobi (Kilimani / Hurlingham)',rate:'KES 4,000',rateType:'per repair',rating:4.9,jobs:290,phone:'0755200505',verified:true,available:false,skills:['iPhone Specialist','MacBook','iPad','Apple Watch','Original Parts Only'],bio:'Apple-only specialist. Original Apple parts. iCloud unlocking. MacBook screen & keyboard repairs.',type:['screen','battery','water','software']},
-];
-let activeType='',activeLoc='',selectedProv=null;
-function renderProviders(){const q=(document.getElementById('pgSearch')?.value||'').toLowerCase();let list=[...PROVIDERS];if(activeType)list=list.filter(p=>p.type.includes(activeType));if(activeLoc)list=list.filter(p=>p.location===activeLoc);if(q)list=list.filter(p=>p.name.toLowerCase().includes(q)||p.bio.toLowerCase().includes(q)||p.skills.some(s=>s.toLowerCase().includes(q)));const grid=document.getElementById('pgProviderGrid');const cnt=document.getElementById('pgProvCount');if(cnt)cnt.textContent=list.length+' providers found';if(!list.length){grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:rgba(255,255,255,0.28);"><div style="font-size:40px;margin-bottom:10px;">🔍</div><div style="font-size:13px;">No technicians found.<br><button type="button" onclick="clearFilters();" style="color:#3b82f6;font-weight:700;background:none;border:none;cursor:pointer;font-size:inherit;padding:0;font-family:inherit;">Clear filters →</button></div></div>`;return;}grid.innerHTML=list.map(p=>`<div class="pg-provider-card"><div class="pg-prov-top"><div class="pg-prov-avatar">${p.emoji}</div><div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;"><div class="pg-prov-name">${p.name}</div>${p.verified?'<span class="pg-verified-badge">✓ Verified</span>':''}</div><div class="pg-prov-loc"><i class="fas fa-map-marker-alt" style="color:#3b82f6;font-size:9px;"></i> ${p.locationLabel}</div><div class="pg-prov-rating"><span class="pg-prov-stars">${'★'.repeat(Math.floor(p.rating))}${'☆'.repeat(5-Math.floor(p.rating))}</span><span class="pg-prov-rnum">${p.rating} · ${p.jobs}+ jobs</span>${p.available?'<span class="pg-avail-dot"></span><span style="font-size:9px;color:#22c55e;font-weight:700;">Available</span>':'<span style="font-size:9px;color:rgba(255,255,255,0.3);">Unavailable</span>'}</div></div></div><div class="pg-prov-bio">"${p.bio}"</div><div class="pg-prov-skills">${p.skills.map(s=>`<span class="pg-prov-skill">${s}</span>`).join('')}</div><div class="pg-prov-foot"><div class="pg-prov-rate">${p.rate} <small>${p.rateType}</small></div><div style="display:flex;gap:6px;align-items:center;"><button type="button" class="pg-ico" aria-label="Book ${p.name}" title="Book" onclick="openBookingFor('${p.id}','${p.name}')">📩</button></div></div></div>`).join('');}
+/* 2026-10-03 (Tech Hub convergence, slice 1). This page listed HARDCODED providers with invented ratings, job counts
+   and "verified" badges, and "booked" by WhatsApp hand-off / localStorage with a KES 0 invoice — "recorded in SOKONI"
+   when nothing reached SOKONI. It now lists approved providers from the canonical registry (providers/{uid}) through
+   SokoniTechDirectory: Book → SokoniBookService (server price, slot lock, IntaSend), Message → in-app chat. */
+let activeType='',activeLoc='',_techMounted=false;
+const _TECH = {
+  grid: 'pgProviderGrid', count: 'pgProvCount', category: 'phone-repair', prefix: 'pg', noun: 'technician',
+  search: () => document.getElementById('pgSearch')?.value || '',
+  type: () => activeType, location: () => activeLoc,
+};
+function renderProviders(){
+  if (!window.SokoniTechDirectory) return;
+  if (!_techMounted) { _techMounted = true; SokoniTechDirectory.mount(_TECH); } else { SokoniTechDirectory.refresh(); }
+}
 function filterByType(type,el){activeType=type;document.querySelectorAll('.pg-type-card').forEach(c=>c.classList.remove('active'));if(el)el.classList.add('active');renderProviders();}
 function filterByLoc(loc,btn){activeLoc=loc;document.querySelectorAll('.pg-filter-pill').forEach(p=>p.classList.remove('active'));if(btn)btn.classList.add('active');renderProviders();}
-function clearFilters(){activeType='';activeLoc='';document.querySelectorAll('.pg-type-card').forEach(c=>c.classList.remove('active'));document.querySelectorAll('.pg-filter-pill').forEach(p=>p.classList.remove('active'));document.querySelector('.pg-filter-pill')?.classList.add('active');document.getElementById('pgSearch').value='';renderProviders();}
-function openBooking(){selectedProv=null;document.getElementById('pgModalSub').textContent='Fill in the details and a technician will confirm within 30 minutes.';document.getElementById('pgModalOverlay').classList.add('open');document.body.style.overflow='hidden';}
-function openBookingFor(id,name){selectedProv=PROVIDERS.find(p=>p.id===id);document.getElementById('pgModalSub').textContent=`Booking with: ${selectedProv?.emoji||''} ${name}`;document.getElementById('pgModalOverlay').classList.add('open');document.body.style.overflow='hidden';}
-function closeBooking(){document.getElementById('pgModalOverlay').classList.remove('open');document.body.style.overflow='';document.getElementById('pgModalMsg').textContent='';}
-function submitBooking(){if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('phone_book',10,300000)){if(msgEl){msgEl.textContent='⚠️ Too many attempts. Wait 5 min.';msgEl.style.color='#ff9800';}return;};const name=document.getElementById('pgName')?.value.trim();const phone=document.getElementById('pgPhone')?.value.trim();const device=document.getElementById('pgDevice')?.value.trim();const address=document.getElementById('pgAddress')?.value.trim();const notes=document.getElementById('pgNotes')?.value.trim();const msgEl=document.getElementById('pgModalMsg');const services=[...document.querySelectorAll('#pgChips .pg-chip.sel')].map(c=>c.dataset.svc).join(', ');if(!name||!phone||!address){if(msgEl){msgEl.textContent='⚠️ Please fill name, phone and location.';msgEl.style.color='#ff6b6b';}return;}const id='PHN'+Date.now().toString().slice(-7);const msg=`Hi${selectedProv?' '+selectedProv.name:''}! I found you on SOKONI and need phone repair.\n\n📋 Booking ID: ${id}\n👤 Name: ${name}\n📞 Phone: ${phone}\n📱 Device: ${device||'Not specified'}\n🔧 Issue: ${services||'General Repair'}\n📍 Location: ${address}\n${notes?'📝 Notes: '+notes+'\n':''}\nPlease confirm. Thank you!`;(typeof SokoniPay!=='undefined'&&SokoniPay.waConnect?SokoniPay.waConnect('254'+(selectedProv?.phone||'0705726803').replace(/^0/,'').replace(/\D/g,''),msg,{providerName:selectedProv?.name||'SOKONI Technicians',category:'phone-repair',serviceDesc:services||'General Repair'}):void 0 /* no WhatsApp hand-off (owner 2026-09-30) */);let _bks=[];try{_bks=JSON.parse(localStorage.getItem('sokoniBookings')||'[]');}catch(e){}; _bks.unshift({id,type:'phone-repair',service:services||'Phone Repair',device:device,name,phone,address,notes,provider:selectedProv?.name||'Any Technician',status:'requested',createdAt:new Date().toISOString()}); localStorage.setItem('sokoniBookings',JSON.stringify(_bks.slice(0,100))); if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:(services||'Phone Repair')+(device?' — '+device:''),category:'Tech Repair',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'WhatsApp Booking',paymentRef:id,sellerName:selectedProv?.name||'SOKONI Technicians',date:new Date().toISOString(),notes:address});},700); if(msgEl){msgEl.innerHTML=`✅ Booking <strong style="color:#3b82f6;">${_esc(id)}</strong> recorded in SOKONI.`;msgEl.style.color='#22c55e';}setTimeout(closeBooking,3000);}
-window.openBooking=openBooking;window.openBookingFor=openBookingFor;window.closeBooking=closeBooking;window.submitBooking=submitBooking;
-renderProviders();
+function clearFilters(){activeType='';activeLoc='';document.querySelectorAll('.pg-type-card').forEach(c=>c.classList.remove('active'));document.querySelectorAll('.pg-filter-pill').forEach(p=>p.classList.remove('active'));const first=document.querySelector('.pg-filter-pill');if(first)first.classList.add('active');renderProviders();}
+/* "Book Now" with no provider chosen: booking needs a provider and a service, so take the visitor to the list. */
+function openBooking(){const el=document.getElementById('providers');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
+window.openBooking=openBooking;window.filterByType=filterByType;window.filterByLoc=filterByLoc;window.clearFilters=clearFilters;window.renderProviders=renderProviders;
+document.addEventListener('DOMContentLoaded', renderProviders);
 </script>
 <script src="scroll-top.js" defer></script>
 <script src="seo.js" defer></script>
@@ -296,6 +257,13 @@ renderProviders();
 <script src="sokoni-pay.js"></script>
 <script src="sokoni-intasend.js" defer></script>
 <script src="sokoni-ui-extras.js" defer></script>
+<!-- Canonical service engine (Tech Hub slice 1) -->
+<script src="firebase.js" type="module"></script>
+<script src="sokoni-providers.js" defer></script>
+<script src="sokoni-book-service.js" defer></script>
+<script src="sokoni-leads.js" defer></script>
+<script src="sokoni-inbox.js" defer></script>
+<script src="sokoni-tech-directory.js" defer></script>
   <script src="sw-register.js" defer></script>
 <script>
 /* Nav state init */
@@ -313,7 +281,7 @@ renderProviders();
   <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:22px 20px;text-align:center;margin-top:0;">
     <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a </div>
     <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
-    <button onclick="HubRegister.open({hub:'tech', category:'phone-repair'})" style="padding:12px 28px;background:#c8ff80;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
+    <button type="button" data-tech-act="apply" data-cat="phone-repair" style="padding:12px 28px;background:#c8ff80;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
   </div>
   <script defer src="hub-register.js"></script>
   <script defer src="kass-widget.js"></script>
