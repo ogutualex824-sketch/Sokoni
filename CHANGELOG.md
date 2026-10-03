@@ -1,3 +1,12 @@
+## [2026-10-03] — Legal Hub Phase 28: provider activation gate at booking creation PROVEN (pre-existing, two independent layers) — NOT deployed
+
+- **Finding:** the audit claim that bookingCreateService does not check provider status is STALE on this lineage (and on live 72dca56). It refuses unless providers/{uid}.status is active|approved and acceptsBookings !== false (booking-service.js). ent-availability.loadCalendar refuses again (SUSPENDED / NOT_APPROVED / NOT_ACCEPTING, plus the Legal Verification Authority bookingGate).
+- **scripts/test-booking-provider-gate.js (new):** 8/0 on the real handler across categories (generic, it_services, legal). Rows: active is bookable, suspended / never-published / not-accepting / pending are refused with no booking written, reinstated is bookable again, and an unverified lawyer is refused.
+  - Removing one layer leaves the other refusing (HOLDS).
+  - Removing both turns G2 red (CAUGHT). Ignoring acceptsBookings in both turns G4 red (CAUGHT).
+- **scripts/lib/inmem-firestore.js:** the shared in-memory harness, copied from the Tech Hub line (b2).
+- No code path changed. No database, API or security change.
+
 ## 2026-10-03 — Car Hub vehicle sales 2% of the sale price (owner, via sokoni-f3; no live trigger yet); commission suites swept (NOT deployed)
 
 - **Changes:** commission-config vehicles; seller-terms row; snapshot regenerated.
