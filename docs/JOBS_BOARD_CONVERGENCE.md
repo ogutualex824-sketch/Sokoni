@@ -152,7 +152,7 @@ The fix is on the hotfix candidate `33b2ae4` and the combined candidate `94ea7c6
 | AdminOS Jobs + candidate pages | hosting/jobs-adminos-on-72dca56 @ a3de2ef | aos 17/0, pages 21/0 |
 | Employer workspace (sokoni-e3) | hosting/jobs-employer-on-bc9a48c @ 04c0d19 | 56/0 incl. 14 negative controls |
 | Jobs messages (sokoni-b2) | messages.js feat/tech-taxonomy-on-13f74f3 @ 8aaa868 + hosting 4ef3301 / a51215b (must carry job_application in SokoniInbox TX_TYPES) | 8/0, 7/7 mutations |
-| Search J3 | f3 background agent (in progress) | — |
+| Search J3 | functions/jobs-search-on-032e88e @ 86d45b3 (parity fc7f2e6; base 032e88e = live processTypesenseQueue) | 23/23, 7 mutants killed |
 
 Deferred: a cursor / page op beyond `hasMore` (listMyJobs 200, getEmployerApplications 500); business-keyed employers
 (businessId + staff roles); CV upload; interviews as first-class records; employer verification; paid products
