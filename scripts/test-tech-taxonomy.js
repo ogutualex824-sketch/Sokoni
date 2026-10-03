@@ -22,7 +22,10 @@ const SC = require(path.join(FN, 'shared', 'service-capabilities.js'));
 const TECH_IDS = Object.keys(SC.FROM_BUSINESS_ID).filter((id) => SC.FROM_BUSINESS_ID[id].some((c) => ['tech', 'service'].includes(SC.CAPABILITIES[c].vertical)));
 
 /* T1 — classifiable: an approved application for each id gets ONE category (else workspaceFor = PENDING_CLASSIFICATION) */
-const unclassified = TECH_IDS.map((id) => [id, BC.categoryFromApplication({ category: id, role: 'provider' }, 'provider')]).filter(([, r]) => !r.category);
+/* an id whose applications carry a DEDICATED role (legal → role 'legal', classified via ROLE_CATEGORY → lawyer) is classified
+   with that role — the way the real application arrives (Legal L9 added 'legal' to the capability map). */
+const ROLE_OF_ID = { legal: 'legal' };
+const unclassified = TECH_IDS.map((id) => [id, BC.categoryFromApplication({ category: id, role: ROLE_OF_ID[id] || 'provider' }, ROLE_OF_ID[id] || 'provider')]).filter(([, r]) => !r.category);
 ck('T1', unclassified.length === 0, 'every Tech business id classifies to a category at approval (no PENDING_CLASSIFICATION dashboard)', unclassified.map(([id, r]) => id + ':' + r.reason));
 
 /* T2 — repair / networking / POS support are SERVICES, never the goods-selling `electronics` merchant category */
