@@ -41,7 +41,8 @@ if (!SC) { ck('A-0', false, 'shared/service-capabilities.js exists'); } else {
   }
   { /* A-9 — Sports coach: a valid coach approval → direct booking + quotes; nothing sports-vertical invented */
     const C1 = SC.compose([V('coach_u1', 'coach')]);
-    ck('A-9', JSON.stringify(C1.capabilities) === JSON.stringify(['DIRECT_BOOKING', 'QUOTE_REQUEST']) && !SC.isCapability('SPORTS_COACHING'), 'Sports coach: a VALID coach approval switches on bookings + quotes only (no unbuilt coaching module)', C1);
+    /* RELEASE CANDIDATE: the Sports coach capability (8437ad0) is HELD by the owner — a coach approval grants NOTHING here. */
+    ck('A-9', JSON.stringify(C1.capabilities) === '[]' && !SC.isCapability('SPORTS_COACHING'), 'Sports coach HELD: a coach approval switches on nothing in this release candidate', C1.capabilities);
   }
   ck('A-5', Object.values(SC.FROM_BUSINESS_ID).every((caps) => caps.every(SC.isCapability)) && Object.keys(SC.MODULES_OF).every(SC.isCapability),
     'every mapped capability and every module rule names a real capability');

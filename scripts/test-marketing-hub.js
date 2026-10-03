@@ -15,15 +15,19 @@ if (process.env.SABOTAGE) {
   const M = [
     ['D2', 'application-lifecycle.js', 'if (outside.length) throw', 'if (false) throw'],
     ['D4', 'application-lifecycle.js', 'marketingCategories: approvedCats,', 'marketingCategories: requested,'],
-    ['R1', 'application-lifecycle.js', "} else if (app.hub === 'marketing' && app.applicationType === 'marketing') {", "} else if (false) {"],
-    ['R2', 'application-lifecycle.js', "const _mktRetract = app.hub === 'marketing' && app.applicationType === 'marketing' && !approved;", 'const _mktRetract = false;'],
+    /* R1 / R2 anchors follow the ONE applicant-type registry (5b, 2026-10-03): the marketing entry's projection + role rule */
+    ['R1', 'application-lifecycle.js', "project: () => (db, app, uid, approved, status) => projectMarketing(db, app, uid, approved, status),", "project: () => null,"],
+    ['R2', 'application-lifecycle.js', "grantsRole: (m, approved) => approved,", 'grantsRole: () => true,'],
     ['L1', 'marketing-hub.js', 'uid: id, name: _s(p.name, 160),', 'uid: id, phone: p.phone, name: _s(p.name, 160),'],
     ['A2', 'shared/marketing-taxonomy.js', "specialist: { label: 'Specialist (one service)', minCategories: 1, maxCategories: 1 }", "specialist: { label: 'Specialist (one service)', minCategories: 1, maxCategories: 12 }"],
     ['A6', 'marketing-hub.js', 'if (c && LIVE.indexOf(st) >= 0) throw', 'if (false) throw'],
     /* S1 removes BOTH layers (retraction empties the categories AND the card filter checks listed/status). */
-    ['S1', 'marketing-hub.js', "p.marketingListed === true && p.marketingStatus === 'active' &&", 'true &&',
+    /* S1: listing ignores the authority AND the retraction keeps the categories — a suspended marketer stays listed */
+    ['S1', 'marketing-hub.js', "out[x.id] = await MA.marketingAuthority(db(), x.id, x.data() || null);", "out[x.id] = { active: true, categories: (x.data() || {}).marketingCategories || [] };",
       'application-lifecycle.js', 'marketingCategories: [], marketingGroups: [],\n      marketingListed: false,', 'marketingListed: false,'],
-    ['A7', 'marketing-hub.js', "status: 'pending', marketingStage: 'submitted',", "status: d.status || 'pending', marketingStage: 'submitted',"],
+    /* LF: the authority trusts the provider's own fields when there is no decision record */
+    ['LF', 'shared/marketing-authority.js', "  if (!v.approved) return { active: false, categories: [], type: null, why: v.reason || 'NOT_APPROVED' };", "  if (!v.approved) return { active: p.marketingStatus === 'active', categories: p.marketingCategories || [], type: null, why: 'forged' };"],
+    ['A7', 'marketing-hub.js', "status: 'pending', reviewStage: 'submitted',", "status: d.status || 'pending', reviewStage: 'submitted',"],
     ['O1', 'marketing-hub.js', 'async marketingAdminOverview(req) {\n    _admin(req);', 'async marketingAdminOverview(req) {'],
   ];
   let caught = 0;
@@ -61,7 +65,9 @@ let pass = 0, fail = 0;
 const ck = (id, ok, m, got) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + ' ' + id + ' ' + m + (ok || got === undefined ? '' : '   [got ' + JSON.stringify(got).slice(0, 300) + ']')); ok ? pass++ : fail++; };
 const { DOCS, CLAIMS } = H;
 const ADM = { admin: true };
-const done = () => { console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed'); process.exit(fail ? 1 : 0); };
+let nBlocked = 0;
+const blocked = (id, why) => { console.log('  BLOCKED ' + id + ' ' + why); nBlocked++; };
+const done = () => { console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed' + (nBlocked ? ', ' + nBlocked + ' BLOCKED' : '')); process.exit(fail ? 1 : nBlocked ? 2 : 0); };
 console.log('\nMarketing Hub MK1/MK2 — taxonomy, application types, partial approval, directory\n');
 
 const OWNER_GROUPS = ['strategy', 'digital', 'content', 'creative', 'media', 'advertising', 'pr', 'creator', 'events', 'growth'];
@@ -129,6 +135,9 @@ const BASE_APP = { name: 'Achieng Creative', description: 'Brand identity and so
     && JSON.stringify(p1.marketingGroups) === JSON.stringify(['creative']) && p1.status === 'active' && JSON.stringify(a1b.marketingDeclinedCategories) === JSON.stringify(['seo'])
     && (CLAIMS.get('u1') || {}).provider === true,
     'approval activates ONLY the approved subset (seo declined, recorded), provider record live, provider claim granted', { p1, a1b });
+  const rec1 = DOCS.get('applicationDecisions/marketing_u1') || {};
+  ck('DR1', rec1.status === 'approved' && JSON.stringify(rec1.approvedCategories) === JSON.stringify(['branding', 'logo-design']),
+    'the SERVER decision record carries the approved category subset (the application copy is applicant-writable)', rec1);
 
   /* ── L: directory = filtered view of approved marketers ── */
   r = await D('marketingDirectory', null, { category: 'branding' });
@@ -140,6 +149,16 @@ const BASE_APP = { name: 'Achieng Creative', description: 'Brand identity and so
   const rn = await D('marketingProfile', null, { uid: 'u4' });
   ck('L2', r.ok && r.ok.profile.name === 'Achieng Creative' && rn.code === 'not-found', 'public profile for a listed marketer; an unapproved applicant is not-found', [r, rn]);
 
+  /* ── LF: SECURITY — self-written providers.marketing* (owner-writable on the served rules) is never listed ── */
+  DOCS.set('providers/forger', { uid: 'forger', name: 'Forged Agency', status: 'active', isPublic: true, marketingStatus: 'active', marketingListed: true, marketingCategories: ['branding', 'seo'], marketingGroups: ['creative', 'digital'] });
+  /* u1 is approved for branding + logo-design only; a self-added 'seo' on its OWN doc must not appear */
+  DOCS.set('providers/u1', Object.assign(DOCS.get('providers/u1'), { marketingCategories: ['branding', 'logo-design', 'seo'] }));
+  const lfB = await D('marketingDirectory', null, { category: 'branding' }), lfS = await D('marketingDirectory', null, { category: 'seo' }), lfP = await D('marketingProfile', null, { uid: 'forger' });
+  ck('LF', lfB.ok && lfB.ok.items.length === 1 && lfB.ok.items[0].uid === 'u1' && lfB.ok.items[0].categories.indexOf('seo') < 0 && lfS.ok && lfS.ok.items.length === 0 && lfP.code === 'not-found',
+    'SECURITY: a provider with self-written marketing fields and no decision record is never listed; a self-added category is never shown (the record decides)', { b: lfB.ok, s: lfS.ok, p: lfP.code });
+  DOCS.delete('providers/forger');
+  DOCS.set('providers/u1', Object.assign(DOCS.get('providers/u1'), { marketingCategories: ['branding', 'logo-design'] }));
+
   /* ── R: a marketing decision never touches the applicant's other services ── */
   DOCS.set('providers/u2', { uid: 'u2', name: 'Kasindi Cleaning', category: 'cleaning', categories: ['cleaning'], status: 'active', isPublic: true, searchable: true, acceptsBookings: true });
   CLAIMS.set('u2', { provider: true });
@@ -149,11 +168,15 @@ const BASE_APP = { name: 'Achieng Creative', description: 'Brand identity and so
   ck('R1', r.ok && p2.status === 'active' && p2.acceptsBookings === true && p2.category === 'cleaning' && p2.marketingStatus === 'rejected' && p2.marketingListed === false,
     'REJECTING a cleaning company\'s marketing application leaves its cleaning listing live; only the marketing block is retracted', p2);
   ck('R2', (CLAIMS.get('u2') || {}).provider === true, 'the rejected marketing application does not strip the existing provider claim', CLAIMS.get('u2'));
+  const rec2 = DOCS.get('applicationDecisions/marketing_u2') || {};
+  ck('DR2', rec2.status === 'rejected' && Array.isArray(rec2.approvedCategories) && rec2.approvedCategories.length === 0, 'a REJECT writes approvedCategories [] on the server record', rec2);
 
   /* ── S: suspension unlists the marketer ── */
   r = await decide('admin1', { applicationId: 'marketing_u1', decision: 'suspend', reason: 'complaint' }, ADM);
   const ls = await D('marketingDirectory', null, { category: 'branding' });
   ck('S1', r.ok && (DOCS.get('providers/u1') || {}).marketingListed === false && ls.ok && ls.ok.items.length === 0, 'a suspended marketer disappears from the directory', ls);
+  const rec3 = DOCS.get('applicationDecisions/marketing_u1') || {};
+  ck('DR3', rec3.status === 'suspended' && Array.isArray(rec3.approvedCategories) && rec3.approvedCategories.length === 0, 'a SUSPEND clears approvedCategories on the server record (record = the current decision)', rec3);
 
   /* ── W: withdraw / needs-info / resubmit ── */
   r = await D('marketingWithdraw', 'u4');
@@ -166,6 +189,21 @@ const BASE_APP = { name: 'Achieng Creative', description: 'Brand identity and so
   ck('W2', ms.ok && ms.ok.application.status === 'info_requested' && ms.ok.application.reviewReason === 'Add an SEO case study' && rr.ok && rr.ok.resubmitted,
     'NEEDS-INFO: the applicant sees the reviewer\'s request and can resubmit', [ms, rr]);
 
+  /* ── RS: review sub-states on the ONE engine (5b 5fec96f) ── */
+  ck('RS1', (DOCS.get('applications/marketing_u5') || {}).reviewStage === 'submitted', 'intake (and resubmission) stamps reviewStage "submitted"', DOCS.get('applications/marketing_u5'));
+  r = await decide('admin1', { applicationId: 'marketing_u5', decision: 'mark_under_review' }, ADM);
+  const rs2 = await D('marketingMyStatus', 'u5');
+  r = await decide('admin1', { applicationId: 'marketing_u5', decision: 'mark_verified' }, ADM);
+  const rs3 = await D('marketingMyStatus', 'u5');
+  ck('RS2', rs2.ok && rs2.ok.application.reviewStage === 'under_review' && rs3.ok.application.reviewStage === 'verified' && rs3.ok.application.status === 'pending'
+    && !(DOCS.get('providers/u5') || {}).marketingListed, 'under review → verified is visible to the applicant; verified is NOT approved (nothing listed)', [rs2, rs3]);
+  r = await decide('admin1', { applicationId: 'marketing_u5', decision: 'approve', approvedCategories: ['seo'] }, ADM);
+  r = await decide('admin1', { applicationId: 'marketing_u5', decision: 'revoke', reason: 'Fake portfolio confirmed' }, ADM);
+  rr = await D('marketingApply', 'u5', Object.assign({ marketingType: 'specialist', categories: ['seo'] }, BASE_APP));
+  const rd = await D('marketingDirectory', null, { category: 'seo' });
+  ck('RS3', r.ok && (DOCS.get('applications/marketing_u5') || {}).reviewStage === 'revoked' && rr.det && rr.det.code === 'MKT_LOCKED' && rd.ok && rd.ok.items.length === 0,
+    'REVOKED is terminal: unlisted, and the applicant cannot resubmit', [r, rr, rd && rd.ok]);
+
   /* ── M / O: own status, AdminOS overview ── */
   const m1 = await D('marketingMyStatus', 'u1');
   ck('M1', m1.ok && JSON.stringify(m1.ok.application.approvedCategories) === JSON.stringify(['branding', 'logo-design']) && JSON.stringify(m1.ok.application.declinedCategories) === JSON.stringify(['seo'])
@@ -174,6 +212,29 @@ const BASE_APP = { name: 'Achieng Creative', description: 'Brand identity and so
   const ro = await D('marketingAdminOverview', 'admin1', {}, ADM);
   ck('O1', r.code === 'permission-denied' && ro.ok && ro.ok.items.length === 4 && ro.ok.counts.byType.agency === 1 && ro.ok.counts.byType.specialist === 1,
     'AdminOS Marketing overview: admin-only; every marketing application with its type', [r, ro && ro.ok && ro.ok.counts]);
+
+  /* ── O2–O4: AdminOS review + lists (read-only; the decision stays applicationDecide) ── */
+  r = await D('marketingAdminApplication', 'u1', { applicationId: 'marketing_u1' }, {});
+  const ra = await D('marketingAdminApplication', 'admin1', { applicationId: 'marketing_u1' }, ADM);
+  const rb = await D('marketingAdminApplication', 'admin1', { applicationId: 'applications/../x' }, ADM);
+  const A = ra.ok || {};
+  ck('O2', r.code === 'permission-denied' && rb.code === 'invalid-argument' && A.application && A.application.marketingType === 'individual'
+    && JSON.stringify(A.application.requestedCategories) === JSON.stringify(['branding', 'seo', 'logo-design']) && A.application.portfolio.length === 1
+    && A.history.some((h) => /approve/.test(h.action)) && A.history.some((h) => /suspend/.test(h.action)),
+    'review view: admin-only; submitted data + requested categories + the immutable audit history (approve → suspend)', { r, rb, A });
+  /* The SERVER decision record is written by applicationDecide only on the K13-A lineage (7df7817, live). A tree without
+     K13-A cannot pass this row — reported BLOCKED (never PASS) until K13-A is merged into the deploy tree. */
+  if (A.decisionRecord && A.decisionRecord.decidedBy === 'admin1') ck('O2r', A.decisionRecord.status === 'suspended', 'the review view shows the SERVER decision record (current = suspended by admin1)', A.decisionRecord);
+  else blocked('O2r', 'applicationDecide on this tree writes no applicationDecisions record (K13-A 7df7817 missing) — the review view shows decisionRecord null');
+  DOCS.set('providerServices/svcA', { providerId: 'u1', name: 'Logo sprint', category: 'logo-design', serviceGroup: 'creative', hub: 'marketing', price: 1500000, active: true, marketing: { pricingModel: 'fixed', capabilities: { booking: true } } });
+  DOCS.set('providerServices/svcB', { providerId: 'u2', name: 'Deep clean', category: 'cleaning', price: 300000, active: true });
+  DOCS.set('providerBookings/bkA', { providerId: 'u1', customerUid: 'c1', service: 'Logo sprint', serviceHub: 'marketing', serviceCategory: 'logo-design', price: 1500000, status: 'confirmed', paymentStatus: 'paid_held' });
+  DOCS.set('providerBookings/bkB', { providerId: 'u2', customerUid: 'c1', service: 'Deep clean', serviceHub: null, serviceCategory: 'cleaning', price: 300000 });
+  const lp = await D('marketingAdminProviders', 'admin1', {}, ADM), ls2 = await D('marketingAdminServices', 'admin1', {}, ADM), lb = await D('marketingAdminBookings', 'admin1', {}, ADM);
+  const deny = await Promise.all(['marketingAdminProviders', 'marketingAdminServices', 'marketingAdminBookings'].map((op) => D(op, 'u1', {}, {})));
+  ck('O3', deny.every((x) => x.code === 'permission-denied') && lp.ok && lp.ok.items.some((i) => i.uid === 'u1' && i.marketingStatus === 'suspended') && lp.ok.items.some((i) => i.uid === 'u2' && i.marketingStatus === 'rejected')
+    && ls2.ok && ls2.ok.items.length === 1 && ls2.ok.items[0].id === 'svcA' && lb.ok && lb.ok.items.length === 1 && lb.ok.items[0].id === 'bkA' && lb.ok.items[0].paymentStatus === 'paid_held',
+    'marketers / services / bookings lists: admin-only; ONLY marketing records (a cleaning service or booking never appears)', { lp: lp.ok, ls2: ls2.ok, lb: lb.ok, deny });
 
   /* ── Z: dispatcher ── */
   r = await D('constructor', 'u1');

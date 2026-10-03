@@ -1,3 +1,27 @@
+## [2026-10-03] — release/marketing-functions: candidate stage 1 (NOT deployed)
+
+- **Anchor:** release/providerdispatch-p0-combined @ 451acee — the providerDispatch revision that ships: c7e26b6 + the booking-PIN port + the P0 hotfixes (5b).
+- **Merged:** the capability line (feat/tech-taxonomy-on-13f74f3 @ 6a05c9b). Four conflicts resolved at the stricter rule:
+  - provider-ops: the milestone guard + the anchor's no_show condition;
+  - business-workspace: Slice 0 + the server-evidence approvals reader;
+  - provider-onboarding: the anchor's stricter plan refusal / registry id;
+  - CHANGELOG.
+- **Lifecycle tree** (5b feat/education-applications-on-cbbce0c @ c4be6af, the ONE lifecycle deploy tree): application-lifecycle.js (K13-A decision record + self-decision refusal, registry, review stages, Marketing approvedCategories), marketing-hub.js, business-category.js, education-learner.js, and their suites.
+- **HELD out of this candidate** (owner holds, not deleted from the capability line):
+  - Sports messaging + the coach capability (8437ad0): SPORTS_MESSAGING_ENABLED=false (ANCHORED empty) and the coach capability line removed. test-messages-sports is removed from the candidate; test-service-capabilities A-9 asserts that coach grants nothing.
+  - Tech Hub 4N application-on-publish: provider-onboarding.js is BYTE-IDENTICAL to 451acee (the combined release owns providerPublish — test-provider-selfgrant-closed). test-provider-onboarding-intake is removed from the candidate.
+- **Fixes found by the assembly:** test-tech-taxonomy T1 classifies a dedicated-role id (legal → ROLE_CATEGORY lawyer) with that role (also on the capability line).
+- **Green on the candidate:**
+  - provider-selfgrant-closed 43/0, provider-publish-gate 19/0, provider-publish-hotfix 15/0;
+  - booking-pin-at-rest 8/0, booking-pin-race 10/0;
+  - p0-forged-approval 23/0, shell-approval-gate 21/0, shell-gate-mutations 9/0, business-workspace 30/0, workspace-capability 51/0, candidate-shell-gate-compat 9/0, business-capabilities 46/0;
+  - k13a 11/0, k13b 8/0, education-applications 34/0, food-gate1 28/0, education-learner 31/0, education-capability / courses / enterprise / programmes / workspace;
+  - legal-projection 96/0, role-provisioning 57/0, role-vocabulary 66/0, marketing-hub 36/0, marketing-services 13/0, work-engine 15/0, work-milestones 9/0;
+  - service-leads 14/0, service-capabilities 17/0, tech-service-profile 18/0, tech-taxonomy 8/0, provider-suspend-restore 8/0, provider-badge 8/0, booking-contact 5/0, service-order-mirror-inert 3/0;
+  - messages: jobs 8/0, preclaim 5/0, product-enquiry 7/0, service-booking 7/0; participant-authority 49/2 (the same 2 rows as on every line).
+- **Not run:** browser suites and test-merchant-deep-switch (memory floor); emulator suites.
+- **Next:** sokoni-2f's money files (provider-ops base with MK4 ported, provider-hub, commission-config, transaction-receipts, booking-receipts, the Daraja removal), the messages.js merge, then the golden path + gate-service-commission on this tree.
+
 ## [2026-10-03] — Work/Job Engine: customer acceptance on the SERVER's scope version + accepted-terms snapshot; customer "request changes"; terms + documents — NOT deployed
 
 - **functions/shared/work-engine.js:**

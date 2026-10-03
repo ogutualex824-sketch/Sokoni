@@ -191,7 +191,11 @@ async function _teamCrew(db, teamId) {
   const td = t.data() || {};
   return { team: td, crew: _uniq([td.captainUid].concat(Array.isArray(td.managerUids) ? td.managerUids : [])) };
 }
-const ANCHORED = {
+/* OWNER HOLD (2026-10-03, via sokoni-5b): Sports messaging (8437ad0) is NOT approved for release until verified. In this
+   release candidate the Sports conversation types are DISABLED: ANCHORED is empty, so createConversation refuses them
+   ("not yet available") and nothing can be created or opened. Flip only with the owner's approval. */
+const SPORTS_MESSAGING_ENABLED = false;
+const _ANCHORED_SPORTS = {
   sports_team: async (db, teamId) => {
     const tc = await _teamCrew(db, teamId); if (!tc) return null;
     const ms = await db.collection('sportsTeamMembers').where('teamId', '==', String(teamId)).where('status', '==', 'active').limit(ANCHOR_CAP).get();
@@ -217,6 +221,7 @@ const ANCHORED = {
     return { participants: parts, senders: parts, readOnly: rd.status !== 'registered' || td.status === 'archived', title: (td.name || 'Tournament') + ' — ' + (tc.team.name || 'team') };
   },
 };
+const ANCHORED = SPORTS_MESSAGING_ENABLED ? _ANCHORED_SPORTS : {};
 exports._ANCHORED = ANCHORED;
 
 async function _names(db, uids) {

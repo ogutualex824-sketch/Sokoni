@@ -313,7 +313,8 @@ const APP = {
   head('11 · legal is no longer a silent delegate');
   ck('legal is NOT in DELEGATED_ROLES any more', !('legal' in LC.DELEGATED_ROLES),
      Object.keys(LC.DELEGATED_ROLES).join(','));
-  ck('seller is still delegated (its own onboarding owns it)', LC.DELEGATED_ROLES.seller === 'sellers');
+  /* Food Hub Gate 1 (2026-10-03): seller GRADUATED like legal — projectSeller provisions it (test-food-gate1-approval.js). */
+  ck('seller is no longer delegated (projectSeller provisions it)', !('seller' in LC.DELEGATED_ROLES) && typeof LC.projectSeller === 'function');
   ck('health is still delegated (its own registry owns it)', LC.DELEGATED_ROLES.health === 'healthProviders');
   ck('legal did NOT become a generic role profile', !('legal' in LC.ROLE_PROFILES));
   const SRC = fs.readFileSync(path.join(ROOT, 'functions', 'application-lifecycle.js'), 'utf8');

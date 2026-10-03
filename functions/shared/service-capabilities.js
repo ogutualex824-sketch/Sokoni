@@ -75,10 +75,7 @@ const FROM_BUSINESS_ID = Object.freeze({
      still needs the Legal Verification Authority (admin + current LSK): leadCreate / bookingCreateService refuse a
      provider that is not active. No Legal vertical capability is invented. */
   'legal':              ['QUOTE_REQUEST', 'DIRECT_BOOKING'],
-  /* Sports coaches (sokoni-2f, agreed 2026-10-03): application category 'coach' (business-category → service_business).
-     Direct booking + quotes for programmes. Sports and specialities are PROFILE data; no SPORTS_COACHING capability
-     until its dashboard module exists (nothing shows NOT_BUILT). */
-  'coach':              ['DIRECT_BOOKING', 'QUOTE_REQUEST'],
+  /* Sports coach capability (8437ad0) HELD by the owner until Sports is verified — not in this release candidate. */
   'restaurant':         ['FOOD_MENU', 'KITCHEN', 'DRINKS'],
   'fast-food':          ['FOOD_MENU', 'KITCHEN', 'DRINKS'],
   'cafe':               ['FOOD_MENU', 'KITCHEN', 'DRINKS'],
