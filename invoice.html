@@ -363,17 +363,20 @@
 const orders = JSON.parse(localStorage.getItem("sokoniOrders")||"[]");
 const listEl = document.getElementById("orderPickerList");
 
+/* Order ids and dates come from stored order records: escape for HTML, and pass the id to the
+   handler through a data attribute — an HTML escape does not protect a JS-string context. */
+const _pickEsc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c]);
 if(!orders.length){
   listEl.innerHTML = `<div style="color:rgba(255,255,255,0.35);font-size:13px;">No orders found. Place an order first.</div>`;
 } else {
   listEl.innerHTML = orders.map(o=>`
     <div class="order-picker-item">
       <div>
-        <div class="opi-id">${o.id}</div>
-        <div class="opi-date">${o.date}</div>
+        <div class="opi-id">${_pickEsc(o.id)}</div>
+        <div class="opi-date">${_pickEsc(o.date)}</div>
       </div>
       <div class="opi-total">KES ${Number(o.total).toLocaleString()}</div>
-      <button type="button" class="opi-btn" onclick="generateInvoice('${o.id}')">Generate →</button>
+      <button type="button" class="opi-btn" data-order-id="${_pickEsc(o.id)}" onclick="generateInvoice(this.dataset.orderId)">Generate →</button>
     </div>
   `).join("");
 }
