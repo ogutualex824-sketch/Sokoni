@@ -69,9 +69,11 @@ const USER = (uid) => ({ auth: { uid, token: {} } });
   ck('every mapped value is a real category', [...Object.values(BC.FROM_BUSINESS_ID), ...Object.values(BC.FROM_PROFESSION)].every((c) => c === null || BC.isCategory(c)));
   /* Owner, 2026-09-28: car-rental / clubs / B2B map to existing categories; only licensed finance and "other" stay
      for AdminOS to classify by hand (ADMIN_REVIEW_ONLY). */
-  ck('the deliberately-unclassified (ADMIN REVIEW ONLY) ids are exactly: forex, other, sacco',
-    Object.keys(BC.FROM_BUSINESS_ID).filter((k) => BC.FROM_BUSINESS_ID[k] === null).sort().join() === 'forex,other,sacco'
-    && BC.ADMIN_REVIEW_ONLY.slice().sort().join() === 'forex,other,sacco');
+  /* car-finance added by Car Hub C3 (sokoni-f3, 2026-10-03): lenders / brokers are licensed financial services, so
+     AdminOS classifies them — the same rule as forex and sacco. Carried in stage (c), 2026-10-04. */
+  ck('the deliberately-unclassified (ADMIN REVIEW ONLY) ids are exactly: car-finance, forex, other, sacco',
+    Object.keys(BC.FROM_BUSINESS_ID).filter((k) => BC.FROM_BUSINESS_ID[k] === null).sort().join() === 'car-finance,forex,other,sacco'
+    && BC.ADMIN_REVIEW_ONLY.slice().sort().join() === 'car-finance,forex,other,sacco');
   /* 2026-09-28 (owner, shop discovery stage 2: "extend the category registry deliberately"): wholesaler / importer are
      now `wholesale`; manufacturer stays retail_store (no category names it). Specified in test-shop-writer-authority C2. */
   ck('owner mappings: car-rental → auto_services; clubs → service_business; wholesaler / importer → wholesale; manufacturer → retail_store',

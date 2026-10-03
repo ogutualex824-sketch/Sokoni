@@ -128,9 +128,13 @@ function loadLifecycle(sourceOverride) {
        mutant fails to LOAD and the mutation reports as "not detected" for the
        wrong reason. */
     /* business-category: projectSeller stamps the server C1 category since 2026-09-28 (the shop discovery gate) */
-    for (const sibling of ['role-authority', 'seller-trial', 'business-category']) {
-      fs.writeFileSync(path.join(path.dirname(file), `${sibling}.js`),
-        `module.exports = require(${JSON.stringify(path.join(FUNCTIONS_DIR, `${sibling}.js`))});`);
+    /* Stage (c) 2026-10-04: the list is DERIVED from the source's own relative requires (a hand list went stale the
+       moment the union added role-vocabulary and shared/marketing-taxonomy). */
+    const siblings = [...new Set([...sourceOverride.matchAll(/require\('\.\/([^']+)'\)/g)].map((m) => m[1]))];
+    for (const sibling of siblings) {
+      const shim = path.join(path.dirname(file), `${sibling}.js`);
+      fs.mkdirSync(path.dirname(shim), { recursive: true });
+      fs.writeFileSync(shim, `module.exports = require(${JSON.stringify(path.join(FUNCTIONS_DIR, `${sibling}.js`))});`);
     }
   }
   delete require.cache[require.resolve(file)];
@@ -288,7 +292,8 @@ async function partC() {
     },
     {
       label: 'M3  the server decision record is not required (claims-only, the pre-2026-09-27 guard)',
-      src: src.replace(/  if \(!rec\) return \{ ok: false, reason: 'no server decision record[^\n]*\n  if \(rec\.status !== canonStatus\(after\.status\) \|\| rec\.decidedBy !== by\) \{/, '  if (false) {'),
+      /* the union's decisionAuthority reads the record inline: skip the existence + match checks entirely */
+      src: src.replace(/    if \(!rec\.exists\) return \{ ok: false, reason: 'no server decision record[^\n]*\n    const r = rec\.data\(\) \|\| \{\};\n    if \(r\.status !== canonStatus\(after\.status\) \|\| r\.decidedBy !== by\) \{/, '    if (false) {'),
     },
     {
       label: 'M2  the guard trusts decidedBy without reading its claims',

@@ -38,6 +38,7 @@ stub('firebase-admin/firestore', { getFirestore: () => db, FieldValue: F.FieldVa
 stub('firebase-admin', { apps: [{}], initializeApp: () => ({}), app: () => ({}), firestore: Object.assign(() => db, { FieldValue: F.FieldValue, Timestamp: F.Timestamp, FieldPath: F.FieldPath }), auth: () => ({}) });
 const PLANS = {};
 stub('./subscription-core', { resolveSubscription: async (uid) => (PLANS[uid] ? Object.assign({ found: true }, PLANS[uid]) : { found: false }) });
+const AF = require('./lib/approval-fixture'); AF.stubAdminAuth(stub); AF.autoApproveOnWrite(db); /* stage (c): the ONE approval authority (P0-C) needs the admin decision approvedAt implies */
 
 const BW = require(Path.join(FN, 'business-workspace.js'));
 const BC = require(Path.join(FN, 'business-category.js'));
@@ -47,7 +48,7 @@ let pass = 0, fail = 0;
 const ck = (l, ok, d) => { say('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== undefined && d !== '' ? '   [' + String(typeof d === 'object' ? JSON.stringify(d) : d).slice(0, 180) + ']' : '')); ok ? pass++ : fail++; };
 const codeOf = async (p) => { try { await p; return null; } catch (e) { return (e.details && e.details.code) || e.code || e.message; } };
 const HE = class extends Error { constructor(c, m, d) { super(m); this.code = c; this.details = d; } };
-const seed = (uid, doc) => db.doc('providers/' + uid).set(Object.assign({ name: uid, status: 'active' }, doc));
+const seed = (uid, doc) => db.doc('providers/' + uid).set(Object.assign({ name: uid, status: 'active', approvedAt: 1 /* the producer always stamps approvedAt */ }, doc));
 const biz = (category) => ({ business: { category, source: 'application', lane: { hub: 'provider', entClass: null } } });
 const st = (w, m) => (w.modules[m] || {}).state;
 
