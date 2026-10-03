@@ -3499,58 +3499,6 @@ exports.onNewOrderCreated = onDocumentCreated(
      7. POS listens real-time and auto-confirms the sale
 ============================================================ */
 
-/* ── Helper: Daraja request timestamp ──────────────────────────────────────
-   Daraja's `Timestamp` field is YYYYMMDDHHmmss in EAST AFRICA TIME, and the
-   SAME value is hashed into `Password` = base64(ShortCode + PassKey + Timestamp).
-   So a timestamp in the wrong zone does not merely look odd — it produces a
-   password Safaricom cannot reproduce, and the request is refused.
-
-   This was `new Date().toISOString()`, which is ALWAYS UTC. Kenya is UTC+3, so
-   every SOKONI STK request carried a timestamp three hours behind Daraja's
-   clock and was rejected with ResultCode 2001, "The initiator information is
-   invalid" — an error that points at credentials and sent us auditing the
-   passkey, the consumer key/secret and the Daraja app, all of which were
-   correct.
-
-   EVIDENCE (2026-08-25, sandbox, checkout ws_CO_250820262212318708374149):
-   SOKONI generated the STK timestamp in UTC (20260825191232) while the
-   successful Daraja simulator establishes the expected sandbox request
-   behaviour; Daraja's own CheckoutRequestID for the same call embeds
-   25082026221231 (22:12:31). The resulting 3-hour timestamp mismatch is
-   consistent with the 2001 initiator error. The simulator succeeds because
-   Daraja builds the password itself and never uses ours.
-
-   EAT observes no daylight saving, so a fixed +3h offset is correct year-round
-   and needs no timezone dependency. One helper, three call sites — the previous
-   shape had the same expression copy-pasted, which is how two of them could
-   have been fixed and the third left silently broken. */
-const DARAJA_UTC_OFFSET_MS = 3 * 60 * 60 * 1000;   /* Africa/Nairobi, no DST */
-function _darajaTimestamp(now) {
-  return new Date((now === undefined ? Date.now() : now) + DARAJA_UTC_OFFSET_MS)
-    .toISOString().replace(/\D/g, "").slice(0, 14);
-}
-
-/* ── Helper: canonical Kenyan MSISDN ───────────────────────────────────────────
-   Returns 254XXXXXXXXX, or NULL when the input is not a well-formed Kenyan mobile
-   number. Callers MUST refuse on null rather than send it onward.
-
-   Replaces `.replace(/^0/, "254")`, which rewrites only the FIRST zero — so an
-   international-prefixed 00254712345678 became 2540254712345678, sixteen digits,
-   and darajaSTKPush handed it to Daraja anyway. The same expression is copy-pasted
-   in 8 further modules (dispatch, finos, finos-utils, impact, payment-orchestrator,
-   pos-qr, sub-engine x2). Those are payout and dispatch paths and are deliberately
-   NOT touched by this change — converging them belongs in its own release. */
-function _normalizeMsisdn(raw) {
-  let d = String(raw === undefined || raw === null ? '' : raw).replace(/\D/g, '');
-  if (d.startsWith('00')) d = d.slice(2);              /* 00254… international */
-  if (!d.startsWith('254')) {
-    if (d.startsWith('0')) d = '254' + d.slice(1);     /* 07…, 01… national    */
-    else if (/^[17]\d{8}$/.test(d)) d = '254' + d;   /* bare 7…, 1…          */
-  }
-  /* Kenyan mobile ranges are 2547XXXXXXXX and 2541XXXXXXXX — exactly 12 digits. */
-  return /^254[17]\d{8}$/.test(d) ? d : null;
-}
-
 /* ── Helper: get Daraja OAuth access token ── */
 async function _darajaToken(consumerKey, consumerSecret, env) {
   const base = env === "production"
@@ -3829,16 +3777,12 @@ exports.darajaSTKPush = onCall(
     const { token, base } = await _darajaToken(darajaConsumerKey, darajaConsumerSecret, darajaEnv);
 
     /* Build STK push password: base64(ShortCode + PassKey + Timestamp) */
-    const timestamp = _darajaTimestamp();
+    const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
     const password  = Buffer.from(`${darajaShortCode}${darajaPassKey}${timestamp}`).toString("base64");
 
     /* Normalise phone to 254XXXXXXXXX */
-    /* Normalise, and REFUSE anything that is not a Kenyan mobile number. This
-       path previously prepended "254" to whatever arrived and sent it. */
-    const normPhone = _normalizeMsisdn(phone);
-    if (!normPhone) {
-      throw new HttpsError("invalid-argument", "A valid Kenyan phone number is required (07XXXXXXXX).");
-    }
+    let normPhone = String(phone).replace(/\D/g, "").replace(/^0/, "254").replace(/^\+/, "");
+    if (!normPhone.startsWith("254")) normPhone = "254" + normPhone;
 
     const callbackUrl = "https://us-central1-sokoni-aeb26.cloudfunctions.net/darajaSTKCallback";
 
@@ -4014,32 +3958,6 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
         ? items
         : (exists && Array.isArray(o.items) ? o.items : []);
 
-      /* ── SINGLE-SHOP CHECKOUT INVARIANT — defence in depth ────────────────
-         createPaymentIntent already rejects a cart spanning sellers, and it
-         does so before any money moves. This assertion is NOT redundant: this
-         function is the boundary that actually WRITES the order, and an
-         invariant enforced only upstream of the writer is one refactor away
-         from being unenforced. Legacy callers, replays and future paths all
-         arrive here.
-
-         Lines carrying no sellerUid are not treated as a violation — the
-         darajaSTKPush/POS path legitimately supplies operator-keyed items with
-         no catalogue linkage, and failing those would take working tills
-         offline. Only a genuine DISAGREEMENT between two known sellers is
-         refused. See docs/CHECKOUT_CONTRACT.md. */
-      const _lineSellers = [...new Set(
-        lines.map((l) => l && (l.sellerUid || l.sellerId)).filter(Boolean)
-      )];
-      if (_lineSellers.length > 1) {
-        console.error('[_finalizeMarketplacePayment] REFUSED: order lines span sellers', {
-          orderId, sellers: _lineSellers,
-        });
-        throw new Error(
-          'Order lines span multiple sellers (' + _lineSellers.join(', ') +
-          ') — refusing to write a multi-shop order.'
-        );
-      }
-
       /* All reads before any write. */
       const stockReads = [];
       for (const line of lines) {
@@ -4052,21 +3970,6 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
       }
 
       const paidFields = {
-        /* ── ORDER CHANNEL — server-authored, never inferred ─────────────────
-           Marks this as an ONLINE order (shop/checkout), as opposed to a POS
-           till sale, which lives in posRetailSales.
-
-           Written HERE because this is the Admin-SDK path that owns the order
-           once money is confirmed — the client createOrder() in
-           sokoni-orders.js is documented as not called by checkout, so a
-           client-set channel would be both unreliable and forgeable.
-
-           It exists so downstream automation can DECIDE rather than ASSUME.
-           "Everything in `orders` is online" happens to be true today; an
-           automation that prints receipts on that assumption would start
-           printing the first time another order type lands in the collection.
-           An explicit discriminator makes that impossible. */
-        channel:          "online",
         status:           "paid",
         paymentStatus:    "paid",
         paymentVerified:  true,
@@ -4183,23 +4086,6 @@ const SAFARICOM_CALLBACK_IPS = new Set([
   "196.201.214.208","196.201.213.109","196.201.213.115","196.201.214.202",
 ]);
 
-/* ── Sandbox callback lane — INERT unless explicitly configured ────────────────
-   Empty set ⇒ the lane does not exist: the callback rejects an untrusted IP
-   without reading Firestore, exactly as it did before. That is the production
-   configuration. It is set only for the duration of a sandbox certification run
-   and removed afterwards.
-
-   TWO conditions, not one. `posPayments.env` is copied from
-   shopSettings/{sellerUid}.darajaEnv, and firestore.rules lets a seller write
-   their OWN shopSettings — so `env === "sandbox"` is a SELLER-FORGEABLE claim.
-   Trusting it alone would let any merchant mark their live payments sandbox and
-   make them forge-completable by anyone who learns the CheckoutRequestID.
-   Pinning to UIDs fixed at deploy time is what makes the claim safe to act on. */
-const _DARAJA_SANDBOX_SELLER_UIDS = new Set(
-  String(process.env.DARAJA_SANDBOX_SELLER_UIDS || "")
-    .split(",").map((s) => s.trim()).filter(Boolean)
-);
-
 /* ── darajaSTKCallback — Safaricom posts payment result here ── */
 exports.darajaSTKCallback = onRequest(
   { timeoutSeconds: 30, invoker: "public" },
@@ -4211,14 +4097,7 @@ exports.darajaSTKCallback = onRequest(
       /* Validate origin IP against Safaricom's published callback IP list.
          In development (non-prod) we allow bypass so ngrok tunnels work. */
       const callerIp = (req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
-      const ipTrusted = process.env.NODE_ENV === "development"
-                     || SAFARICOM_CALLBACK_IPS.has(callerIp);
-
-      /* Untrusted IP and no sandbox lane configured — reject before touching
-         Firestore, exactly as before. Staying read-free on this branch also keeps
-         a public endpoint from being an amplifier for unauthenticated reads:
-         without it, anyone could force a document read per request. */
-      if (!ipTrusted && _DARAJA_SANDBOX_SELLER_UIDS.size === 0) {
+      if (process.env.NODE_ENV !== "development" && !SAFARICOM_CALLBACK_IPS.has(callerIp)) {
         console.warn(`[darajaSTKCallback] Rejected request from unexpected IP: ${callerIp}`);
         db.collection("auditLogs").add({
           type: "stk_callback_ip_rejected", ip: callerIp,
@@ -4230,12 +4109,7 @@ exports.darajaSTKCallback = onRequest(
       const body = req.body?.Body?.stkCallback;
       if (!body) return;
 
-      const checkoutId = String(body.CheckoutRequestID || "");
-      /* A caller-supplied document id containing "/" addresses a different
-         Firestore path entirely, and an empty one throws. Both become reachable
-         by an untrusted caller once the sandbox lane is open, so validate the id
-         before it is handed to .doc(). */
-      if (!checkoutId || checkoutId.length > 200 || checkoutId.includes("/")) return;
+      const checkoutId = body.CheckoutRequestID;
       const resultCode = body.ResultCode;
       const resultDesc = body.ResultDesc;
 
@@ -4247,32 +4121,6 @@ exports.darajaSTKCallback = onRequest(
         return;
       }
       const payData = paySnap.data();
-
-      /* Sandbox lane: an untrusted IP may settle ONLY a row that is explicitly
-         sandbox AND belongs to an explicitly enrolled sandbox seller. Anything
-         else is rejected on exactly the terms that applied before this lane
-         existed — same log line, same audit type. */
-      if (!ipTrusted) {
-        if (payData.env !== "sandbox"
-            || !_DARAJA_SANDBOX_SELLER_UIDS.has(payData.sellerUid)) {
-          console.warn(`[darajaSTKCallback] Rejected request from unexpected IP: ${callerIp}`);
-          db.collection("auditLogs").add({
-            type: "stk_callback_ip_rejected", ip: callerIp, checkoutId,
-            ts: admin.firestore.FieldValue.serverTimestamp(),
-          }).catch(() => {});
-          return;
-        }
-        console.warn(`[darajaSTKCallback] SANDBOX callback accepted from ${callerIp} for ${checkoutId}`);
-        db.collection("auditLogs").add({
-          type: "stk_callback_sandbox_accepted", ip: callerIp, checkoutId,
-          sellerUid: payData.sellerUid,
-          ts: admin.firestore.FieldValue.serverTimestamp(),
-        }).catch(() => {});
-      }
-      /* Sandbox money is not money. Read once here, used below to keep test
-         payments out of the seller-credit and financial-reporting paths. */
-      const _isSandbox = payData.env === "sandbox" || payData.isTest === true;
-
       if (payData.status === "completed" || payData.status === "failed") {
         console.log(`[darajaSTKCallback] Already processed: ${checkoutId} (${payData.status})`);
         return;
@@ -4352,19 +4200,8 @@ exports.darajaSTKCallback = onRequest(
           phone:       paidPhone          || payData.phone,
           mpesaCode:   mpesaCode          || null,
           sellerName:  payData.sellerName || null,
-          /* Carried across from the posPayments row. onSellerPaymentCreated already
-             has `if (!data || data.isTest) return;` but this record never copied the
-             flag, so that guard was unreachable from this path and a KES 1 test
-             booked a real commission. Propagating it is what arms the guard. */
-          isTest:      _isSandbox,
           description: payData.description || null,
           status:      "completed",
-          /* Carried across from the posPayments row. sendTestSTKPush has always
-             stamped isTest there, but this record never copied it — so the
-             `if (data.isTest) return;` guard in onSellerPaymentCreated was
-             unreachable from this path and a KES 1 test booked a real
-             commission. Propagating the flag is what arms that guard. */
-          isTest:      _isSandbox,
           createdAt:   ts,
         };
         /* Deterministic ID — one credit per STK checkout request; idempotent by construction. */
@@ -4488,32 +4325,6 @@ exports.darajaSTKCallback = onRequest(
         }
       }
 
-      /* ── Payment-destination verification ─────────────────────────────────
-         A destination-test STK is the ONLY way a merchant Till/PayBill reaches
-         VERIFIED, and this callback is the only place that transition happens.
-         Deliberately server-side and callback-driven: an STK request being
-         ACCEPTED proves nothing — the customer may never enter a PIN — so
-         "the browser said it worked" can never activate a destination.
-
-         confirmVerified() performs the atomic swap (promote pending, retire the
-         old destination into history) and refuses if the CheckoutRequestID does
-         not match the test that was started. A failed result marks only the
-         ATTEMPT failed, leaving any existing verified destination collecting. */
-      if (payData.hub === "destination_test" && payData.sellerUid) {
-        try {
-          const _pd = require("./payment-destinations");
-          if (resultCode === 0) {
-            const r = await _pd.confirmVerified(payData.sellerUid, checkoutId);
-            console.log(`[destination] verify ${payData.sellerUid} swapped=${r.swapped} ${r.reason || ""}`);
-          } else {
-            await _pd.markFailed(payData.sellerUid, resultDesc);
-            console.log(`[destination] test FAILED ${payData.sellerUid}: ${resultDesc}`);
-          }
-        } catch (_dErr) {
-          console.error("[destination] verification threw:", _dErr && _dErr.message);
-        }
-      }
-
       /* Audit log */
       db.collection("auditLogs").add({
         type:       "mpesa_callback",
@@ -4552,11 +4363,7 @@ exports.darajaSTKCallback = onRequest(
         }
       } catch (_tlErr) { /* observability must never fail a payment */ }
 
-      /* Sandbox money is not money. A sandbox row records a payment that never
-         moved, so booking paperwork against it would put fabricated figures into
-         production financial reporting — the UI Data Integrity rule, in the
-         ledger rather than on screen. */
-      if (resultCode === 0 && !_isSandbox) {
+      if (resultCode === 0) {
         try {
           const _fin = require("./financial-engine");
           await _fin.recordConfirmedPayment({
@@ -4680,7 +4487,7 @@ exports.validateDarajaCredentials = onCall(
     try {
       const { token, base } = await _darajaToken(darajaConsumerKey, darajaConsumerSecret, darajaEnv);
       /* Also verify timestamp/password generation */
-      const timestamp = _darajaTimestamp();
+      const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
       Buffer.from(`${darajaShortCode}${darajaPassKey}${timestamp}`).toString("base64");
       await db.collection("auditLogs").add({
         action: "validateDarajaCredentials",
@@ -4712,8 +4519,8 @@ exports.sendTestSTKPush = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
     const uid   = request.auth.uid;
-    const phone = _normalizeMsisdn(request.data?.phone);
-    if (!phone) {
+    const phone = String(request.data?.phone || "").replace(/\D/g, "").replace(/^0/, "254").replace(/^\+/, "");
+    if (!phone.startsWith("254") || phone.length !== 12) {
       throw new HttpsError("invalid-argument", "Valid Kenyan phone number required (07XXXXXXXX).");
     }
 
@@ -4733,16 +4540,8 @@ exports.sendTestSTKPush = onCall(
     const cfg = snap.data();
 
     /* Verify the phone matches the seller's registered phone or their shop settings phone */
-    /* FAIL CLOSED. This guard was gated on the stored phone normalising to 12
-       digits, so a seller with no phone — or an unparseable one — skipped it
-       entirely and could send a live KES 1 push to ANY handset. An ownership
-       check that cannot be evaluated must refuse. */
-    const sellerPhone = _normalizeMsisdn(cfg.phone || cfg.ownerPhone);
-    if (!sellerPhone) {
-      throw new HttpsError("failed-precondition",
-        "Add a valid phone number to your shop profile before sending a test push.");
-    }
-    if (phone !== sellerPhone) {
+    const sellerPhone = String(cfg.phone || cfg.ownerPhone || "").replace(/\D/g, "").replace(/^0/, "254").replace(/^\+/, "");
+    if (sellerPhone && sellerPhone.length === 12 && phone !== sellerPhone) {
       throw new HttpsError("permission-denied", "Test pushes can only be sent to your own registered phone number.");
     }
 
@@ -4753,7 +4552,7 @@ exports.sendTestSTKPush = onCall(
     }
 
     const { token, base } = await _darajaToken(darajaConsumerKey, darajaConsumerSecret, darajaEnv);
-    const timestamp = _darajaTimestamp();
+    const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
     const password  = Buffer.from(`${darajaShortCode}${darajaPassKey}${timestamp}`).toString("base64");
     const checkoutId = "TEST_" + uid.slice(0, 8) + "_" + Date.now();
     const callbackUrl = "https://us-central1-sokoni-aeb26.cloudfunctions.net/darajaSTKCallback";
@@ -4771,20 +4570,8 @@ exports.sendTestSTKPush = onCall(
         PartyB: darajaShortCode,
         PhoneNumber: phone,
         CallBackURL: callbackUrl,
-        /* Daraja caps TransactionDesc at ~13 characters and rejects non-ASCII.
-           The previous value was 27 characters and carried an em dash, so this
-           call could be refused on FORMAT while the real darajaSTKPush (which
-           slices to 13) went through.
-
-           This function is the KES 1 live test a merchant runs to prove their
-           own shortcode and passkey are bound to each other -- the one check
-           validateDarajaCredentials cannot make, because it only requests an
-           OAuth token and never sends the password anywhere. A format refusal
-           here reads to the merchant as "bad credentials" and would send them
-           hunting a problem that does not exist. Keep both fields short and
-           ASCII so a failure means what it says. */
         AccountReference: "SOKONI-TEST",
-        TransactionDesc: "SOKONI Test",
+        TransactionDesc: "SOKONI Payment Test — 1 KES",
       }),
     });
     const stkData = await stkRes.json();
@@ -4897,35 +4684,6 @@ async function _resolveCommission(sellerUid, hub, grossAmount) {
   };
 }
 
-/* ── 48-hour per-sale commission: which hubs it governs ────────────────────
-   ONLY marketplace product sales. Every other hub keeps monthly invoicing, and
-   subscriptions/advertising are contractual charges that were never per-sale
-   commission at all — sweeping them into a 48-hour deadline would invent a
-   payment obligation nobody agreed to.
-
-   Resolved through commission-config's own alias table rather than a second
-   list of hub names, so "pos", "shopping", "b2b", "product" and "products" all
-   land here exactly as they do for pricing. One vocabulary, one answer. */
-const COMMISSION_DUE_HOURS      = 48;
-const COMMISSION_REMINDER_HOURS = 46;   /* 2 hours before the deadline */
-function _is48hCommission(hub) {
-  try {
-    /* MARKETPLACE ONLY. P1 named `pos` here to preserve billing while it changed only the
-       rate; P4 removed it, because POS/Till has left the 48-hour architecture entirely —
-       onSellerPaymentCreated now skips POS before reaching this, and POS commission is a
-       receivable collected under the 07:00 business-day gate.
-
-       Kept as an explicit equality rather than a negation: a future hub must be added
-       DELIBERATELY to the 48-hour model, never inherit it by failing to be excluded. */
-    return require("./commission-config").categoryForHub(hub) === "marketplace";
-  } catch (_e) {
-    /* Config unreadable — fall back to MONTHLY, the pre-existing behaviour.
-       Failing closed here means "bill it the old way", never "start a 48-hour
-       clock nobody can see". */
-    return false;
-  }
-}
-
 /* ── Auto-record commission when a seller payment is confirmed ── */
 exports.onSellerPaymentCreated = onDocumentCreated(
   "sellerPayments/{paymentId}",
@@ -4935,36 +4693,6 @@ exports.onSellerPaymentCreated = onDocumentCreated(
 
     const { sellerUid, amount, hub = "marketplace", orderId, mpesaCode } = data;
     if (!sellerUid || !amount || Number(amount) <= 0) return;
-
-    /* ── POS/TILL DOES NOT ACCRUE HERE (P4) ────────────────────────────────────
-       A POS/Till sale paid by M-Pesa reached this trigger with hub:'pos' — pos.js and
-       sokoni-merchant-sell.js both call darajaSTKPush({hub:'pos'}), whose callback writes
-       sellerPayments — while posCompleteCheckout independently accrued the SAME sale into
-       `ledger` as pos_commission_receivable. One till sale therefore accrued 5% TWICE, in
-       two stores, owned by two different collection systems: commissionLedger under the
-       48-hour model, and ledger under the receivable model.
-
-       The idempotency below only protects against REDELIVERY of one sellerPayments
-       document. It cannot see the parallel accrual, so it never caught this.
-
-       POS/Till commission is owned by the receivable rail: the seller holds the cash and
-       owes a receivable, collected under the 07:00 business-day gate
-       (pos-business-day-gate.js). This trigger is the MARKETPLACE rail. Skipping POS here
-       removes the duplicate and is what retires POS/Till from the 48-hour architecture.
-
-       Resolved through commission-config rather than a string list, so `pos` and any future
-       alias of it answer the same way pricing does. One vocabulary, one answer. */
-    try {
-      if (require("./commission-config").categoryForHub(hub) === "pos") {
-        console.log("[commission] POS/Till sale " + event.params.paymentId +
-                    " skipped: commission is accrued as a receivable by posCompleteCheckout" +
-                    " and collected under the 07:00 business-day gate.");
-        return;
-      }
-    } catch (_e) {
-      /* Config unreadable: fall through to the marketplace path rather than silently
-         dropping a commission accrual. Failing closed here means "still bill it". */
-    }
 
     const grossAmount = Number(amount);
     const { pct, fixedKES, commissionKES, totalOwed, audit } = await _resolveCommission(sellerUid, hub, grossAmount);
@@ -5030,36 +4758,6 @@ exports.onSellerPaymentCreated = onDocumentCreated(
         status: "pending",
         invoiceId: null,
         period,
-
-        /* ── BILLING MODEL — the migration cutoff, and the ONLY thing that
-              decides which collection system owns this row ──────────────────
-           Marketplace per-sale commission moved from MONTHLY invoicing to a
-           48-hour receivable. Both systems read commissionLedger, so a row that
-           did not say which model it belongs to would be billed twice: once by
-           generateMonthlyInvoices and once by the 48-hour sweep.
-
-           The cutoff is FIELD PRESENCE AT CREATION, deliberately not a date
-           comparison. Every row written before this change has no
-           `billingModel` and no `dueAt`:
-             • generateMonthlyInvoices skips only PER_SALE_48H, so historical
-               rows keep their monthly treatment untouched;
-             • the 48-hour sweep requires billingModel === PER_SALE_48H, so a
-               historical pending row can NEVER acquire a deadline or be judged
-               overdue retroactively.
-           A date cutoff would have done exactly that to every old pending row
-           the moment it shipped. */
-        billingModel: _is48hCommission(hub) ? "PER_SALE_48H" : "MONTHLY",
-        /* Absolute deadline, stamped once at creation and never recomputed —
-           a receivable whose due date can move is not a receivable. */
-        dueAt: _is48hCommission(hub)
-          ? admin.firestore.Timestamp.fromMillis(Date.now() + COMMISSION_DUE_HOURS * 3600000)
-          : null,
-        collectionStatus: _is48hCommission(hub) ? "DUE" : null,
-        penaltyKES: 0,
-        totalOutstanding: _is48hCommission(hub) ? totalOwed : null,
-        paidAt: null,
-        reminderSentAt: null,
-
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
@@ -5501,31 +5199,13 @@ exports.generateMonthlyInvoices = onSchedule(
       .where("period", "==", period)
       .get();
 
-    /* Group by seller.
-
-       ── DOUBLE-BILLING GUARD ────────────────────────────────────────────────
-       This query selects on status+period only — it has no hub or category
-       filter, so before this guard it swept up EVERY pending row including the
-       marketplace commissions now owned by the 48-hour receivable. A seller
-       would have been billed for the same sale twice: once here on the 1st of
-       the month, once by the 48-hour sweep.
-
-       Filtered in code rather than in the query on purpose. A Firestore
-       `where('billingModel','!=','PER_SALE_48H')` EXCLUDES documents where the
-       field is absent — which is every historical row — so the query form would
-       have silently stopped invoicing all pre-migration commission. Field
-       presence is the cutoff, and absent means MONTHLY. */
+    /* Group by seller */
     const bySellerMap = {};
-    let _skipped48h = 0;
     snap.forEach(d => {
       const data = d.data();
-      if (data.billingModel === "PER_SALE_48H") { _skipped48h++; return; }
       if (!bySellerMap[data.sellerUid]) bySellerMap[data.sellerUid] = [];
       bySellerMap[data.sellerUid].push({ id: d.id, ...data });
     });
-    if (_skipped48h) {
-      console.log(`[revenue] ${_skipped48h} marketplace row(s) skipped — owned by the 48-hour receivable, not monthly invoicing.`);
-    }
 
     const batch  = db.batch();
     let invoiceCount = 0;
@@ -6014,11 +5694,7 @@ exports.onDeliveryStatusChange = onDocumentUpdated(
 ══════════════════════════════════════════════════════════════════════ */
 
 const PLATFORM_ROLES = ["moderator","support","driverCoordinator","financeReviewer","contentManager"];
-/* The ONE shopEmployees contract — canonical key, corroborated reads, staff
-   management. Every authority that asks "does this uid work at this shop?" must
-   go through it, so the writer and the readers can never drift apart again. */
-const _shopEmployees = require('./shop-employees');
-const SHOP_ROLES     = _shopEmployees.SHOP_ROLES;
+const SHOP_ROLES     = ["cashier","manager","inventory","support"];
 /* One invitation engine for every entry point — see functions/invitations-core.js. */
 const invitationsCore = require("./invitations-core");
 
@@ -6119,17 +5795,7 @@ exports.removePlatformEmployee = onCall({}, async (request) => {
   return { success: true };
 });
 
-/* ── Create shop-employee invite ───────────────────────────────────────
-   An invite must name the SHOP the person is being invited to, not merely the
-   account inviting them. It previously recorded only `shopOwnerId`, which is why
-   the accepted record had no shop to be keyed by — the root of the shopEmployees
-   key divergence the 2D-2 census found.
-
-   `shopId` is optional for backward compatibility with existing callers
-   (seller.js sends none). When absent it is RESOLVED from Firestore by looking up
-   a shop this account owns, and the resolved document's own id is used. That is a
-   lookup, not a fallback: an account owning no shop is refused, and the uid is
-   never used as a shop id. */
+/* ── Create shop-employee invite (any authenticated seller) ────────── */
 exports.inviteShopEmployee = onCall({}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
@@ -6138,16 +5804,6 @@ exports.inviteShopEmployee = onCall({}, async (request) => {
   const shopName = (request.data.shopName || "My Shop").slice(0, 80);
   if (!email || !role)            throw new HttpsError("invalid-argument", "email and role are required.");
   if (!SHOP_ROLES.includes(role)) throw new HttpsError("invalid-argument", "Invalid role: " + role);
-
-  let shopId = request.data.shopId ? String(request.data.shopId).slice(0, 200) : null;
-  if (!shopId) {
-    shopId = await _shopEmployees.resolveOwnedShopId(request.auth.uid);
-    if (!shopId) throw new HttpsError("failed-precondition",
-      "This account does not own a shop yet, so there is no team to invite anyone to.");
-  }
-  /* The caller must own the shop they are staffing — verified against the shop
-     document, never taken from the request. */
-  await _shopEmployees.assertShopOwner(request.auth.uid, shopId);
 
   /* Rate limit: max 20 invites per seller per 24 hours */
   const oneDayAgo = new Date(Date.now() - 86400000);
@@ -6163,7 +5819,6 @@ exports.inviteShopEmployee = onCall({}, async (request) => {
     token,
     email,
     role,
-    shopId,
     shopOwnerId: request.auth.uid,
     shopName,
     invitedBy: request.auth.uid,
@@ -6171,7 +5826,7 @@ exports.inviteShopEmployee = onCall({}, async (request) => {
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 7 * 86400000))
   });
-  return { token, shopId };
+  return { token };
 });
 
 /* ── Accept shop invite (called after new user creates account) ────── */
@@ -6194,26 +5849,11 @@ exports.acceptShopInvite = onCall({}, async (request) => {
     throw new HttpsError("permission-denied",
       "This invite was sent to " + data.email + ". Please sign in with that email address.");
 
-  /* The invite must name a shop. Invites created before the shopId convergence
-     have none, and an accepted record with no shop cannot be keyed canonically —
-     so it is refused rather than written somewhere a reader will never look.
-     The owner simply re-issues the invite; nothing is silently half-created. */
-  if (!data.shopId) {
-    throw new HttpsError("failed-precondition",
-      "This invite was created before shops were named on invites. Ask the shop owner to send a new one.");
-  }
-
-  /* CANONICAL KEY — shopEmployees/{shopId}_{uid}. This is the id every reader
-     (analytics-engine, merchantAdjustStock, listShopEmployees) looks up. Writing
-     the bare {uid} here is what made accepted employees invisible platform-wide.
-     `shopId` and `shopOwnerId` are both stored so a reader can CORROBORATE the
-     record against the shop document instead of trusting its existence. */
-  await db.collection("shopEmployees").doc(_shopEmployees.employeeDocId(data.shopId, request.auth.uid)).set({
+  await db.collection("shopEmployees").doc(request.auth.uid).set({
     uid: request.auth.uid,
     email: data.email,
     name: request.auth.token.name || "",
     role: data.role,
-    shopId: data.shopId,
     shopOwnerId: data.shopOwnerId,
     shopName: data.shopName,
     active: true,
@@ -6227,7 +5867,6 @@ exports.acceptShopInvite = onCall({}, async (request) => {
   const protectedRoles = ["seller","admin","superAdmin","moderator","driver","provider"];
   const userUpdate = {
     employeeRole: data.role,
-    employeeShopId: data.shopId,     /* which SHOP, not merely whose account */
     shopOwnerId: data.shopOwnerId,
     shopName: data.shopName,
     joinedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -6263,138 +5902,6 @@ exports.revokeShopInvite = onCall({}, async (request) => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════
-   SHOP TEAM — the three reads/writes the Staff surface needs.
-
-   The merchant shell called listShopEmployees, listShopInvites and
-   removeShopEmployee. NONE of the three existed, so Staff 404'd on the first
-   call and the client SDK reported it as the opaque code "internal" — which
-   told neither the merchant nor the log anything at all.
-
-   OWNERSHIP IS THE CALLER'S TOKEN, NEVER THE PAYLOAD. The client sends a
-   shopId for its own bookkeeping and it is deliberately ignored here: every
-   query binds shopOwnerId to request.auth.uid, so a forged shopId can only
-   ever return the caller's own team.
-   ══════════════════════════════════════════════════════════════════════ */
-
-/* merchant-identity.js decides employment from `status`, treating an ABSENT
-   status as active for records that predate the field. Revocation must therefore
-   write status, not only `active` — setting active:false alone would leave the
-   authorisation path untouched while the UI showed the person as removed. */
-const _SHOP_EMP_REVOKED = "revoked";
-function _shopEmpActive(e) {
-  const st = String((e && e.status) || "").toLowerCase();
-  if (!st) return e && e.active !== false;
-  return ["active", "approved", "enabled"].indexOf(st) > -1;
-}
-function _ms(v) {
-  try {
-    if (!v) return null;
-    if (typeof v.toMillis === "function") return v.toMillis();
-    if (v instanceof Date) return v.getTime();
-    if (typeof v === "number") return v;
-  } catch (_) {}
-  return null;
-}
-
-exports.listShopEmployees = onCall({}, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  const owner = request.auth.uid;
-
-  const snap = await db.collection("shopEmployees")
-    .where("shopOwnerId", "==", owner)
-    .limit(200).get();
-
-  const employees = snap.docs.map((d) => {
-    const e = d.data() || {};
-    return {
-      uid:      d.id,
-      name:     e.name  || "",
-      email:    e.email || "",
-      role:     e.role  || null,
-      shopName: e.shopName || null,
-      active:   _shopEmpActive(e),
-      status:   e.status || null,
-      joinedAt: _ms(e.joinedAt),
-    };
-  }).filter((e) => e.active);   /* a revoked record is not a team member */
-
-  return { shopId: owner, employees, count: employees.length };
-});
-
-exports.listShopInvites = onCall({}, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  const owner = request.auth.uid;
-
-  const snap = await db.collection("shopInvites")
-    .where("shopOwnerId", "==", owner)
-    .where("status", "==", "pending")
-    .limit(100).get();
-
-  const now = Date.now();
-  let staleCount = 0;
-  const invites = snap.docs.map((d) => {
-    const v = d.data() || {};
-    const expiresAt = _ms(v.expiresAt);
-    /* An expired invite is still PENDING in the record — acceptShopInvite is what
-       refuses it. Reporting the count separately lets the surface say so instead of
-       showing a live-looking link that cannot be accepted. */
-    const expired = expiresAt !== null && expiresAt < now;
-    if (expired) staleCount++;
-    return {
-      token:     d.id,
-      email:     v.email || "",
-      role:      v.role  || null,
-      status:    v.status || "pending",
-      expired:   expired,
-      createdAt: _ms(v.createdAt),
-      expiresAt: expiresAt,
-    };
-  });
-
-  return { shopId: owner, invites, count: invites.length, staleCount };
-});
-
-exports.removeShopEmployee = onCall({}, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  const owner = request.auth.uid;
-  const uid = String((request.data && request.data.uid) || "").trim();
-  if (!uid) throw new HttpsError("invalid-argument", "uid is required.");
-
-  const ref  = db.collection("shopEmployees").doc(uid);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError("not-found", "That person is not on your team.");
-  if ((snap.data() || {}).shopOwnerId !== owner) {
-    throw new HttpsError("permission-denied", "You can only remove your own team members.");
-  }
-
-  /* status is what merchant-identity.js reads, so it is what actually revokes the
-     authorisation. active:false is kept in step for anything reading that instead. */
-  await ref.update({
-    status:    _SHOP_EMP_REVOKED,
-    active:    false,
-    removedAt: admin.firestore.FieldValue.serverTimestamp(),
-    removedBy: owner,
-  });
-
-  /* The employment POINTERS on the user are cleared, so nothing still reads as
-     "works at this shop". `role` is deliberately NOT touched: demoting an account
-     is a role decision owned by the role authority, and a shop owner removing a
-     cashier must not be able to change what that person is on the platform.
-     Best-effort — the revocation above is the authoritative half. */
-  try {
-    await db.collection("users").doc(uid).set({
-      employeeRole: admin.firestore.FieldValue.delete(),
-      shopOwnerId:  admin.firestore.FieldValue.delete(),
-      shopName:     admin.firestore.FieldValue.delete(),
-    }, { merge: true });
-  } catch (e) {
-    logger.warn("[removeShopEmployee] pointer cleanup failed", { uid, err: e.message });
-  }
-
-  return { success: true, uid };
-});
-
-/* ══════════════════════════════════════════════════════════════════════
    PDQ TERMINAL PAYMENT CLOUD ADAPTER
    Called by pos-terminals.js CloudAdapter when a Cloud-connected
    terminal (e.g. Yoco, SumUp, iKhokha) is used for card payments.
@@ -6403,18 +5910,7 @@ exports.removeShopEmployee = onCall({}, async (request) => {
 ══════════════════════════════════════════════════════════════════════ */
 
 /* Initiate a card payment on a Cloud-connected terminal */
-/* RETIRED — superseded by pos-terminal-live.js, which provides the full set
-   (initiate, poll, cancel, reverse, settleBatch, capabilities, health, batch
-   report, event webhook). These two are 2026-era inline implementations with a
-   DIFFERENT tenancy check: they compare businesses.uid, while the canonical
-   guard everywhere else uses ownerId — so they are not merely older, they ask a
-   different question of the same document.
-
-   Census: zero callers in the repo and NO Cloud Run service in Cloud Monitoring,
-   i.e. never invoked. De-exported rather than deleted: the body is left intact
-   and inert so the change is reversible by restoring one word, and so no
-   surrounding line is disturbed in a 12,000-line file. */
-const _retired_posInitiateTerminalPaymentV1 = onCall({ timeoutSeconds: 30 }, async (request) => {
+exports.posInitiateTerminalPaymentV1 = onCall({ timeoutSeconds: 30 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
   const { terminalId, bizId, amount, currency = "KES", reference } = request.data || {};
@@ -6490,7 +5986,7 @@ exports.posPollTerminalPayment = onCall({ timeoutSeconds: 15 }, async (request) 
 });
 
 /* Cancel a pending terminal payment (v1 legacy — superseded by posTerminalLive) */
-const _retired_posCancelTerminalPaymentV1 = onCall({ timeoutSeconds: 15 }, async (request) => {
+exports.posCancelTerminalPaymentV1 = onCall({ timeoutSeconds: 15 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
   const { paymentId, bizId } = request.data || {};
@@ -6806,29 +6302,7 @@ exports.initiateSTKPush = onCall(
         const intent = intentSnap.data() || {};
         const expected = Math.round(Number(intent.amount));
 
-        /* ══ Q8 EXCEPTION — dynamic SOKONI Till QR ═══════════════════════════
-           The ownership check below assumes the payer IS the intent's own
-           owner — true for subscriptions/checkout/bookings, where the buyer
-           mints their own intent before paying. It does NOT hold for a
-           dynamic Till QR: the intent is created by the CASHIER (Q5's
-           pos_till_sale cart-mode requires callerUid === till.merchantUid),
-           but the person who must push the STK request and receive the
-           prompt is the WALK-UP BUYER scanning the QR — a different uid, by
-           design, every time.
-
-           canInitiateStkForIntent (functions/sokoni-qr-authority.js) is the
-           ONE place this exception is decided, certified in isolation. It is
-           narrow: true only for a pos_till_sale intent whose money-routing
-           is ALREADY fully locked to the Till's own merchant
-           (metadata.merchantUid, Q6-hardened) — the caller's identity has
-           zero influence on who gets credited (attribution never falls back
-           to payData.uid when merchantUid is populated) or what is charged
-           (the amount-match check immediately below is UNCONDITIONAL and
-           untouched — it still refuses any mismatch). Every other purpose's
-           ownership check is enforced exactly as before. */
-        const _stkOwnerOk = !intent.uid || intent.uid === request.auth.uid
-          || require('./sokoni-qr-authority').canInitiateStkForIntent(intent);
-        if (!_stkOwnerOk) {
+        if (intent.uid && intent.uid !== request.auth.uid) {
           logger.error("[STK] intent ownership mismatch", {
             ref, intentUid: intent.uid, caller: request.auth.uid,
           });
@@ -7245,18 +6719,6 @@ exports.intasendWebhook = onRequest(
       res.status(200).send("OK");
       return;
     }
-
-    /* POS/Till IntaSend collection (P5). Placed with the other api_ref-prefix
-       handlers and BEFORE the generic payments/{ref} path, exactly as the wallet top-up
-       is: a postill_ reference has no payments/{ref} document and would otherwise fall
-       through and be dropped. Returns true when it owns the reference. */
-    try {
-      const _posPay = require("./pos-intasend-initiation");
-      if (await _posPay.finalizeFromWebhook(db, apiRef, state, amount)) {
-        res.status(200).send("OK");
-        return;
-      }
-    } catch (e) { console.error("[intasendWebhook] POS/Till finalize error:", e.message); }
 
     const payRef = db.collection("payments").doc(apiRef);
     const snap   = await payRef.get();
@@ -8386,18 +7848,6 @@ exports.webhookIntasend = onRequest(
       return;
     }
 
-    /* POS/Till IntaSend collection (P5). Placed with the other api_ref-prefix
-       handlers and BEFORE the generic payments/{ref} path, exactly as the wallet top-up
-       is: a postill_ reference has no payments/{ref} document and would otherwise fall
-       through and be dropped. Returns true when it owns the reference. */
-    try {
-      const _posPay = require("./pos-intasend-initiation");
-      if (await _posPay.finalizeFromWebhook(db, apiRef, state, amount)) {
-        res.status(200).send("OK");
-        return;
-      }
-    } catch (e) { console.error("[webhookIntasend] POS/Till finalize error:", e.message); }
-
     const payRef = db.collection("payments").doc(apiRef);
     const snap   = await payRef.get();
     if (!snap.exists) { res.status(200).send("OK"); return; }
@@ -8445,77 +7895,6 @@ exports.webhookIntasend = onRequest(
          the provider is credited only by Phase C settlement at completion. Handled in
          isolation via the server-minted intent; skips all commission/credit/creation. */
       if (await _holdServiceBookingPayment(db, admin, apiRef, existing.intentRef, amount)) { res.status(200).send("OK"); return; }
-
-      /* ══ D1 FIX (Q6) — financial attribution, resolved ONCE ═════════════════════════
-         Everything below that used to read payData.meta directly for WHO gets
-         paid or WHAT resource is finalised now reads `attribution` instead.
-         Prefers paymentIntents/{intentRef}.metadata (server-derived) when an
-         intent exists; falls back to payData.meta UNCHANGED when it does not,
-         so a not-yet-migrated caller (D2) keeps working exactly as today.
-         Till-identity fields are the one hard floor: never sourced from
-         payData.meta, intent present or not. See
-         docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md, docs/PAYMENT_AUTHORITY_DEFECTS_LOG.md D1.
-         `category` (commission RATE lookup) is deliberately UNCHANGED/out of
-         scope — see that doc §2 for the live-evidence reason. ═════════════════ */
-      const { resolveFinancialAttribution } = require("./payment-attribution");
-      const attribution = await resolveFinancialAttribution(db, {
-        intentRef: existing.intentRef || apiRef,
-        legacyMeta: payData.meta || {},
-      });
-      if (attribution.source === "legacy_meta") {
-        logger.warn("WEBHOOK_NO_INTENT_AUTHORITY", {
-          ref: apiRef, uid: payData.uid,
-          note: "no paymentIntents record — financial attribution sourced from client-supplied meta (caller not yet migrated)",
-        });
-      }
-
-      /* ══ Q7 — POS paid-state: paymentIntents/{ref} itself transitions to
-         'paid'. Scoped to Till sales ONLY (attribution.sokoniTillId truthy) —
-         see docs/POS_QR_PAID_STATE_INTEGRATION.md §4 for why this is
-         deliberately not generalised to every purpose in this slice, and §3
-         for why this — NOT posRetailSales/posSales/retailSettlements — is
-         the correct, uncontested target: those collections are under
-         active, ratified, gated governance (docs/
-         POS_SETTLEMENT_CONVERGENCE_DESIGN.md) this slice must not preempt.
-         Never fails the webhook — the money-moving effects above/below stand
-         regardless of whether this observability transition succeeds. ══ */
-      if (attribution.sokoniTillId) {
-        try {
-          const { decidePaidTransition } = require("./payment-attribution");
-          const _intentRef2 = existing.intentRef || apiRef;
-          const _iSnap2 = await db.collection("paymentIntents").doc(_intentRef2).get();
-          const _decision = decidePaidTransition({
-            intent: _iSnap2.exists ? _iSnap2.data() : null,
-            confirmedAmount: amount,
-            isTillSale: true,
-          });
-          if (_decision.action === "mark_paid") {
-            await db.collection("paymentIntents").doc(_intentRef2).update({
-              status: "paid",
-              paidAt: admin.firestore.FieldValue.serverTimestamp(),
-              paymentRef: apiRef,
-            });
-            logger.info("[webhookIntasend] Till sale PAID", { ref: apiRef, intentRef: _intentRef2, sokoniTillId: attribution.sokoniTillId });
-          } else if (_decision.action === "flag_mismatch") {
-            logger.error("POS_TILL_AMOUNT_MISMATCH — intent left unpaid", {
-              ref: apiRef, intentRef: _intentRef2,
-              intentAmount: _iSnap2.exists ? _iSnap2.data().amount : null,
-              confirmedAmount: amount,
-            });
-            await db.collection("commissionReviewQueue").add({
-              ref: apiRef, reason: "pos_till_amount_mismatch",
-              intentAmount: _iSnap2.exists ? _iSnap2.data().amount : null,
-              confirmedAmount: amount,
-              createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            }).catch(() => {});
-          }
-        } catch (paidTransitionErr) {
-          logger.error("[webhookIntasend] Till PAID transition failed (recoverable)", {
-            ref: apiRef, err: paidTransitionErr && paidTransitionErr.message,
-          });
-        }
-      }
-
       const category = payData.meta?.category || "default";
       let sokoniCut = 0, commissionPct = 0;
       try {
@@ -8592,18 +7971,10 @@ exports.webhookIntasend = onRequest(
            For a BUYER-INITIATED marketplace checkout the earner is neither: payData.uid
            is the BUYER, and the seller to credit is carried in meta.sellerUid (set by the
            checkout when it calls initiateSTKPush). POS and other flows where uid already
-           IS the seller set no meta.sellerUid, so they keep payData.uid unchanged.
-
-           D1 FIX (Q6): sourced from `attribution` (intent-derived when an intent
-           exists, else byte-identical to the old payData.meta reads — see
-           functions/payment-attribution.js). `attribution.merchantUid` is the
-           new fallback: a pos_till_sale intent (Q5) has no sellerUid — the Till's
-           own merchant is credited instead, closing the gap where a PERMANENT
-           Till QR's buyer-initiated payment would otherwise have credited the
-           buyer's own wallet (docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md §5). */
-        const _isBooking = attribution.type === "booking" || attribution.type === "service-booking";
-        const _sellerId  = (_isBooking && attribution.providerId) ? attribution.providerId
-                         : (attribution.sellerUid || attribution.merchantUid || payData.uid);
+           IS the seller set no meta.sellerUid, so they keep payData.uid unchanged. */
+        const _isBooking = payData.meta?.type === "booking";
+        const _sellerId  = (_isBooking && payData.meta?.providerId) ? payData.meta.providerId
+                         : (payData.meta?.sellerUid || payData.uid);
         const _netCents = Math.round(Math.max(0, amount - sokoniCut) * 100);
 
         if (_isSubscription) {
@@ -8691,21 +8062,7 @@ exports.webhookIntasend = onRequest(
          already credited above — a settlement sweep must not double-credit.
          Idempotent via the order's inventoryApplied flag; never fails the webhook. */
       try {
-        /* D1 FIX (Q6): sellerUid/orderId/items shadowed with the resolved
-           attribution (intent-derived when available) so every read below
-           (_finalizeMarketplacePayment, posReceipts, clickAndCollect, delivery
-           dispatch, notifications) gets the authoritative value with no
-           further changes. Every OTHER field (hub, sellerName, buyerName,
-           address, fulfillmentType, serviceDesc) is deliberately still read
-           from payData.meta, unchanged — see
-           docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md §3 for why those stay in
-           scope for a later slice rather than this one. */
-        const _pm  = {
-          ...(payData.meta || {}),
-          sellerUid: attribution.sellerUid || (payData.meta || {}).sellerUid,
-          orderId:   attribution.orderId   || (payData.meta || {}).orderId,
-          items:     (attribution.items && attribution.items.length) ? attribution.items : (payData.meta || {}).items,
-        };
+        const _pm  = payData.meta || {};
         const _cat = String(_pm.category || "").toLowerCase();
         const _isProductPay = !!_pm.orderId
           && _pm.type !== "booking"
@@ -8906,20 +8263,9 @@ exports.webhookIntasend = onRequest(
          bookNow only collects payment; the booking itself MUST be created here,
          server-side, because the customer's payment wizard may be closed before
          this webhook arrives (money taken, but no confirmation — the reported bug).
-         Idempotent: keyed by the payment ref. Additive — no money flow changed.
-
-         D1 FIX (Q6): type/providerId shadowed with `attribution` when
-         present. Confirmed (docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md §4) this
-         branch is already unreachable for any booking with a service_booking
-         intent — holdServiceBookingPayment (above, line ~8150) returns early
-         for those. Fixed anyway for consistency/defence in depth; the legacy
-         `type==='booking'` string (no intent) is unaffected. */
+         Idempotent: keyed by the payment ref. Additive — no money flow changed. */
       try {
-        const m = {
-          ...(payData.meta || {}),
-          type:       attribution.type       || (payData.meta || {}).type,
-          providerId: attribution.providerId || (payData.meta || {}).providerId,
-        };
+        const m = payData.meta || {};
         if (m.type === "booking") {
           const bookingRef = db.collection("bookings").doc(apiRef);
           const created = await db.runTransaction(async (txn) => {
@@ -11765,7 +11111,6 @@ exports.onMessageCreated              = _messagesMod.onMessageCreated;
 exports.moderateMessage               = _messagesMod.moderateMessage;
 exports.archiveCompletedConversations = _messagesMod.archiveCompletedConversations;
 exports.cleanupChatStorage            = _messagesMod.cleanupChatStorage;
-exports.expireOldChatMessages         = _messagesMod.expireOldChatMessages;
 exports.onOrderStatusChanged          = _messagesMod.onOrderStatusChanged;
 exports.onBookingStatusChanged        = _messagesMod.onBookingStatusChanged;
 /* Re-exported BY NAME, like every other trigger here: a trigger that is not
@@ -11776,22 +11121,14 @@ exports.onFoodOrderStatusChanged      = _messagesMod.onFoodOrderStatusChanged;
 
 /* ══════════════════════════════════════════════════════════════════
    SOKONI SmartPOS Retail Cloud Functions  v2.0
-   4 Cloud Functions: marketplace stock sync, SMS/email receipts,
-   daily low-stock alert, order→POS inventory.
+   5 Cloud Functions: marketplace stock sync, SMS/email receipts,
+   purchase order email, daily low-stock alert, order→POS inventory.
 ══════════════════════════════════════════════════════════════════ */
 const posRetail = require("./pos-retail");
 
 exports.posSyncToMarketplace       = posRetail.posSyncToMarketplace;
 exports.sendPOSReceipt             = posRetail.sendPOSReceipt;
-/* posSendPurchaseOrder — RETIRED 2026-09-03, see docs/adr/ADR-018-legacy-retirement-graph.md.
-   Was posRetail.sendPurchaseOrder: zero code-level callers anywhere in the
-   repo, and zero Cloud Logging invocation entries for the underlying Cloud
-   Run service across the full ~30-day retention window (control query
-   against poscompletecheckout returned 122 entries the same window, proving
-   the logging pipe was not silently empty). Superseded by the structurally
-   complete procurement.sendPurchaseOrder below, which stays live and is NOT
-   part of this retirement — its own zero production traffic in the same
-   window is a separate, still-open lifecycle-use question. */
+exports.posSendPurchaseOrder       = posRetail.sendPurchaseOrder;
 exports.posLowStockAlert           = posRetail.posLowStockAlert;
 exports.posMarketplaceOrderSync    = posRetail.posMarketplaceOrderSync;
 
@@ -11809,9 +11146,6 @@ exports.previewCommission         = commission.previewCommission;
 exports.getCommissionConfig       = commission.getCommissionConfig;
 exports.getSellerEarningsReport   = commission.getSellerEarningsReport;
 exports.getAdminRevenueByHub      = commission.getAdminRevenueByHub;
-/* ONE door in front of the thirteen above. They remain exported as
-   compatibility wrappers until the census proves nobody still calls them. */
-exports.commissionDispatch        = commission.commissionDispatch;
 
 /* ══════════════════════════════════════════════════════════════════
    Subscription & Billing Engine  v1.0
@@ -11994,35 +11328,6 @@ exports.posLogReprint          = posZF.posLogReprint;
 exports.posGetQueueMetrics     = posZF.posGetQueueMetrics;
 exports.posCleanupIdempotency  = posZF.posCleanupIdempotency;
 exports.posCheckPaymentStatus  = posZF.posCheckPaymentStatus;
-
-/* ── Shop checkout mode (projection of resolveActiveDestination) ───── */
-const checkoutMode = require('./checkout-mode');
-exports.getShopCheckoutMode = checkoutMode.getShopCheckoutMode;
-
-/* ── Multi-shop checkout quote (server-authoritative; Rail B) ──────────
-   Coupled pair: this forwarding line + functions/multishop-checkout-quote.js
-   must ship together, or the functions load fails. Reuses the canonical
-   product_order validator + the shared delivery engine; no new money authority. */
-exports.createMultiShopCheckoutQuote = require('./multishop-checkout-quote').createMultiShopCheckoutQuote;
-
-/* ── Atomic order claim (multi-employee POS distribution) ──────────── */
-const orderClaim = require('./order-claim');
-exports.claimOrder         = orderClaim.claimOrder;
-exports.releaseOrderClaim  = orderClaim.releaseOrderClaim;
-
-/* ── Manual-Till order lifecycle (fail-closed on §4.1-4.3 policy) ───── */
-const manualTill = require('./manual-till-orders');
-exports.createManualTillOrder    = manualTill.createManualTillOrder;
-exports.attestManualTillPayment  = manualTill.attestManualTillPayment;
-
-/* ── 48-hour commission invoice (fail-closed on VAT policy) ─────────── */
-const commissionInvoice = require('./commission-invoice');
-exports.issueCommissionInvoice = commissionInvoice.issueCommissionInvoice;
-
-/* ── Manual M-PESA Till reference claims ────────────────────────────── */
-const posMpesaRefs = require('./pos-mpesa-refs');
-exports.claimPosMpesaReference   = posMpesaRefs.claimPosMpesaReference;
-exports.onPosTransactionMpesaRef = posMpesaRefs.onPosTransactionMpesaRef;
 
 /* ── Facebook / Meta Data Deletion Callback + Data Rights ───────────── */
 const fbDeletion = require('./facebook-data-deletion');
@@ -12231,15 +11536,6 @@ exports.getMyDeliveryPin          = _deliveryPin.getMyDeliveryPin;
 const _deliveryComplete = require("./delivery-complete");
 exports.completeDeliveryWithPin   = _deliveryComplete.completeDeliveryWithPin;
 exports.buyerConfirmDelivery      = _deliveryComplete.buyerConfirmDelivery;
-
-/* SELLER HANDOVER — a second, independent PIN stage (pickup, not delivery). Does not
-   touch deliveryPinOnAccept/completeDeliveryWithPin above. See
-   docs/SELLER_AUTHORIZE_HANDOVER_DESIGN.md. New Cloud Functions must be re-exported by
-   name here or they are not deployed. */
-const _sellerHandover = require("./seller-handover");
-exports.sellerAuthorizeHandover   = _sellerHandover.sellerAuthorizeHandover;
-exports.getMyPickupPin            = _sellerHandover.getMyPickupPin;
-exports.completePickupWithPin     = _sellerHandover.completePickupWithPin;
 // v2.0 additions
 exports.navGenerateDeliveryOTP    = navigation.navGenerateDeliveryOTP;
 exports.navGetRiderDashboard      = navigation.navGetRiderDashboard;
@@ -12533,18 +11829,6 @@ exports.cancelPOSPaymentQR      = posQr.cancelPOSPaymentQR;
 exports.refundPOSPayment        = posQr.refundPOSPayment;
 exports.getPOSPaymentHistory    = posQr.getPOSPaymentHistory;
 
-/* ── SOKONI Till / QR payment layer (Q5 of the Till/QR gate) ──────
-   Permanent + dynamic QR, resolved server-side, minting financial intents
-   ONLY through the existing createPaymentIntent -> pos_till_sale registry
-   entry. See docs/SOKONI_TILL_QR_IMPLEMENTATION.md. */
-const sokoniTill = require('./sokoni-till');
-exports.mintSokoniTill          = sokoniTill.mintSokoniTill;
-exports.setSokoniTillStatus     = sokoniTill.setSokoniTillStatus;
-exports.mintDynamicSokoniQR     = sokoniTill.mintDynamicSokoniQR;
-exports.resolveSokoniQR         = sokoniTill.resolveSokoniQR;
-exports.getMySokoniTill         = sokoniTill.getMySokoniTill;
-exports.getSokoniTillActivity   = sokoniTill.getSokoniTillActivity;
-
 /* ── Redis Infrastructure Layer v1.0 ───────────────────────────── */
 /* DISPATCH CONSOLIDATION: 28 onCall CFs → 1 redisDispatch + 2 scheduled.
    Clients route all redis ops via sokoni-redis.js: redisDispatch({op:'redisXxx',...data}). */
@@ -12723,21 +12007,8 @@ exports.rateLegalProvider        = legalHub.rateLegalProvider;
 
 /* ── Procurement Engine v1.0 ────────────────────────────────────────────── */
 const procurement = require('./procurement');
-exports.resolveMerchantContext           = procurement.resolveMerchantContext;
-exports.listSuppliers                    = procurement.listSuppliers;
-exports.listPurchaseOrders               = procurement.listPurchaseOrders;
-exports.listGRNs                         = procurement.listGRNs;
-exports.listSupplierInvoices             = procurement.listSupplierInvoices;
-exports.listWarehouseStock               = procurement.listWarehouseStock;
-exports.listStockMovements               = procurement.listStockMovements;
 exports.addSupplier                      = procurement.addSupplier;
-exports.updateSupplier                   = procurement.updateSupplier;
-exports.setSupplyParticipation           = procurement.setSupplyParticipation;
-exports.findSuppliers                    = procurement.findSuppliers;
-exports.getSupplyCatalogue               = procurement.getSupplyCatalogue;
-exports.getInboundSupplyOrders           = procurement.getInboundSupplyOrders;
 exports.createPurchaseOrder              = procurement.createPurchaseOrder;
-exports.getPurchaseOrder                 = procurement.getPurchaseOrder;
 exports.approvePurchaseOrder             = procurement.approvePurchaseOrder;
 exports.sendPurchaseOrder                = procurement.sendPurchaseOrder;
 exports.receiveGoods                     = procurement.receiveGoods;
@@ -12836,21 +12107,6 @@ exports.validateDeviceAccess      = bootstrap.validateDeviceAccess;
 /* ── Device Manager v1.0 ────────────────────────────────────────────────── */
 const deviceMgr = require('./device-manager');
 exports.registerDevice            = deviceMgr.registerDevice;
-exports.registerPrinterHost       = deviceMgr.registerPrinterHost;
-exports.getPrinterHostStatus      = deviceMgr.getPrinterHostStatus;
-
-/* ── Durable print lifecycle ─────────────────────────────────────────────────
-   PENDING -> CLAIMED -> PRINTING -> PRINTED, with FAILED -> PENDING retry. The claim is a
-   server transaction so one sale cannot become two physical receipts across a reload, a
-   duplicate realtime event or a reconnect. A new Cloud Function that index.js does not
-   re-export by name is never deployed. */
-const printIntents = require('./print-intents');
-exports.createPrintIntent         = printIntents.createPrintIntent;
-exports.claimPrintJob             = printIntents.claimPrintJob;
-exports.advancePrintJob           = printIntents.advancePrintJob;
-/* Firestore trigger: the sale document is the commit signal, so a print intent can never be
-   created before the sale itself has landed. */
-exports.onPosSaleCompleted        = printIntents.onPosSaleCompleted;
 exports.deviceHeartbeat           = deviceMgr.deviceHeartbeat;
 exports.lockDevice                = deviceMgr.lockDevice;
 exports.unlockDevice              = deviceMgr.unlockDevice;
@@ -13452,19 +12708,6 @@ const _c2b = require("./mpesa-c2b");
 exports.mpesaC2BValidation   = _c2b.mpesaC2BValidation;
 exports.mpesaC2BConfirmation = _c2b.mpesaC2BConfirmation;
 
-/* ── Merchant payment destinations (functions/payment-destinations.js) ──
-   Re-exported BY NAME, per the deploy contract: a function that is not named
-   here is not deployed, however complete its module is. */
-const _pdest = require("./payment-destinations");
-exports.getPaymentDestination  = _pdest.getPaymentDestination;
-exports.savePaymentDestination = _pdest.savePaymentDestination;
-
-/* ── 48-hour commission receivable (functions/commission-collection.js) ── */
-const _ccol = require("./commission-collection");
-exports.sweepCommissionDue   = _ccol.sweepCommissionDue;
-exports.getCommissionBalance = _ccol.getCommissionBalance;
-exports.getSellerRestriction = _ccol.getSellerRestriction;
-
 /* ── Healthcare hub (functions/healthcare-hub.js) ──
    These 15 callables existed in the repo but were never required or
    re-exported here, so none were deployed. That left appointments with no valid
@@ -13546,28 +12789,3 @@ exports.applicationLifecycle  = _appLife.applicationLifecycle;   // trigger: app
 exports.applicationDecide     = _appLife.applicationDecide;      // onCall (admin)
 exports.applicationReconcile  = _appLife.applicationReconcile;   // onCall (admin) — drift repair
 exports.applicationList       = _appLife.applicationList;        // onCall (admin) — one canonical read
-
-/* ── POS COMMISSION RECEIVABLE COLLECTION ──────────────────────────────────────
-   The till rail accrued 5% as `pos_commission_receivable` and NOTHING ever read it —
-   no consumer, no scheduled job. These close that loop. The accrual itself is
-   untouched: calculateCommission and _postSaleFinancials stay exactly as they are.
-
-   FAILS CLOSED. No approved seller-collection rail exists yet (mpesa-c2b is inbound
-   only; IntaSend B2C is a PAYOUT rail and would pay sellers 5% daily instead of
-   collecting), so the registry ships empty and the daily job records
-   `blocked_no_rail` and moves NO money until an operator configures one. */
-const _posComm = require("./pos-commission-collection");
-
-/* ── 07:00 daily business-day gate (P3) ──
-   Enforced server-side inside posCompleteCheckout; these callables let a till ASK and
-   SETTLE. P4 retires the 48-hour mechanism above. */
-const _posGate = require("./pos-business-day-gate");
-
-/* ── POS/Till IntaSend initiation (P5). ADDITIVE: Daraja stays operational until P6/P7. */
-const _posIntasend = require("./pos-intasend-initiation");
-exports.posInitiateIntasendPayment = _posIntasend.posInitiateIntasendPayment;
-exports.posGetBusinessDayGate         = _posGate.posGetBusinessDayGate;
-exports.posOpenBusinessDay            = _posGate.posOpenBusinessDay;
-exports.posSettleCommissionFromWallet = _posGate.posSettleCommissionFromWallet;
-exports.posCommissionDailyCollection = _posComm.posCommissionDailyCollection; // onSchedule 06:00 EAT
-exports.posCommissionReconcile       = _posComm.posCommissionReconcile;       // onCall (admin) — read-only

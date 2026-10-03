@@ -319,20 +319,25 @@ exports.getExecutiveDashboard = onCall(_CF, async (req) => {
 
   // ── Inventory Health (lightweight version — full detail in getInventoryHealthScore) ──
 
-  /* The posBatches expiring sub-query was retired (ADR-018c): posBatches has never held a
-     document in either database, and this query filtered on expiresAt/consumed — fields no
-     posBatches writer has ever produced. It contributed a constant 0 to the score while
-     implying the figure was measured. Low stock is a live query and is retained. */
-  let inventoryHealth = { score: null, lowStockCount: 0 };
+  let inventoryHealth = { score: null, lowStockCount: 0, expiringCount: 0 };
   try {
     const lowStockSnap = await db.collection('sellers').doc(sid).collection('products')
       .where('stock', '<=', 10)
       .limit(200)
       .get();
 
-    const lowStockCount = lowStockSnap.size;
-    const score = Math.max(0, 100 - (lowStockCount * 10));
-    inventoryHealth = { score, lowStockCount };
+    const now30 = new Date(); now30.setDate(now30.getDate() + 30);
+    const expiringSnap = await db.collection('posBatches')
+      .where('sellerId', '==', sid)
+      .where('expiresAt', '<=', now30.toISOString().slice(0, 10))
+      .where('consumed', '==', false)
+      .limit(200)
+      .get();
+
+    const lowStockCount  = lowStockSnap.size;
+    const expiringCount  = expiringSnap.size;
+    const score = Math.max(0, 100 - (lowStockCount * 10) - (expiringCount * 2));
+    inventoryHealth = { score, lowStockCount, expiringCount };
   } catch (_) { /* non-fatal */ }
 
   // ── Alerts ─────────────────────────────────────────────────────────────────
@@ -343,6 +348,9 @@ exports.getExecutiveDashboard = onCall(_CF, async (req) => {
   }
   if (inventoryHealth.lowStockCount > 5) {
     alerts.push({ type: 'warning', message: `${inventoryHealth.lowStockCount} products with low stock` });
+  }
+  if (inventoryHealth.expiringCount > 0) {
+    alerts.push({ type: 'info', message: `${inventoryHealth.expiringCount} batches expiring within 30 days` });
   }
   if (currentAvgBasket < _r2(priorRevenue / (priorTxns || 1)) * 0.85) {
     alerts.push({ type: 'info', message: 'Average basket size trending down vs prior period' });
@@ -615,7 +623,7 @@ exports.getRevenueTrend = onCall(_CF, async (req) => {
  *   sellerId {string}
  *
  * Output:
- *   { score, grade, stockoutEvents, overstockItems, turnoverRate, generatedAt }
+ *   { score, grade, stockoutEvents, overstockItems, expiringCount, expiringValue, turnoverRate, generatedAt }
  */
 exports.getInventoryHealthScore = onCall(_CF, async (req) => {
   const auth = _requireAuth(req);
@@ -654,11 +662,29 @@ exports.getInventoryHealthScore = onCall(_CF, async (req) => {
     }
   }
 
-  /* Expiring-batch reporting retired (ADR-018c). This queried posBatches on
-     expiresAt/consumed — fields the real writer (receivePurchaseOrder) has never written,
-     against a collection that is empty in both the (default) and sokoni-ops databases. It
-     always yielded 0 and presented that as a measurement. posBatches itself, its rule, its
-     writer and the scheduled batchExpiryAlertSweep are all deliberately PRESERVED. */
+  // Expiring batches (< 30 days)
+  const now30 = new Date(); now30.setDate(now30.getDate() + 30);
+  const expiring30Iso = now30.toISOString().slice(0, 10);
+
+  let expiringCount = 0;
+  let expiringValue = 0;
+
+  try {
+    const batchSnap = await db.collection('posBatches')
+      .where('sellerId', '==', sid)
+      .where('expiresAt', '<=', expiring30Iso)
+      .where('consumed', '==', false)
+      .limit(500)
+      .get();
+
+    expiringCount = batchSnap.size;
+    for (const bd of batchSnap.docs) {
+      const bdata = bd.data();
+      const remainingQty  = _num(bdata.remainingQty || bdata.quantity, 0);
+      const costPrice     = _num(bdata.costPrice || bdata.unitCost, 0);
+      expiringValue += remainingQty * costPrice;
+    }
+  } catch (_) { /* posBatches may not exist yet — gracefully degrade */ }
 
   // Turnover rate: last 30-day sales / avg stock
   let turnoverRate = 0;
@@ -685,7 +711,7 @@ exports.getInventoryHealthScore = onCall(_CF, async (req) => {
   } catch (_) { /* gracefully degrade */ }
 
   // Compute score
-  const penalties = (stockoutEvents * 10) + (overstockItems * 5);
+  const penalties = (stockoutEvents * 10) + (overstockItems * 5) + (expiringCount * 2);
   const score     = Math.max(0, Math.min(100, 100 - penalties));
 
   // Grade
@@ -700,7 +726,8 @@ exports.getInventoryHealthScore = onCall(_CF, async (req) => {
     grade,
     stockoutEvents,
     overstockItems,
-
+    expiringCount,
+    expiringValue: _r2(expiringValue),
     turnoverRate,
     productCount,
     generatedAt: new Date().toISOString(),

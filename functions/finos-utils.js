@@ -467,30 +467,12 @@ async function calculateCommission(db, opts) {
   }
 
   const base = CC.resolveRate(category);
-
-  /* ── FIXED-RATE CATEGORIES: a universal commercial rule, immune to per-seller pricing ──
-   * POS/Till is 5% for every business, every sale, with no seller-plan exceptions. That is
-   * only true if NOTHING can modulate it, so a fixed category bypasses all four override
-   * layers: commissionRules, revenueConfig/{seller_*,hub_*,global}, the subscription
-   * absolute-rate compatibility mode, and the plan adjustment step below.
-   *
-   * Note this deliberately ignores `rule` and `rcPct` even when one matched — an admin
-   * writing revenueConfig/seller_<uid> must not be able to quietly exempt one merchant from
-   * a universal rule. The bypass is recorded on the result so the ledger shows WHY the
-   * override did not apply, rather than silently discarding it.
-   *
-   * MIN_COMMISSION_KES still applies: the floor is a separate concern. */
-  const fixedCategory = CC.isFixedRateCategory(category);
-  const overrideIgnored = fixedCategory && (!!rule || rcPct !== null || subRatePct !== null);
-
   let commissionCents;
-  let effectiveRate = fixedCategory ? base.pct
-                    : (rule ? rule.rate
+  let effectiveRate = rule ? rule.rate
                     : (rcPct !== null ? rcPct
-                    : (subRatePct !== null ? subRatePct : base.pct)));
-  /* Flat fees: a revenueConfig override wins, else the config's own fixedKES (e.g. vehicles).
-     A fixed category takes its own fixedKES only — same reasoning as the rate. */
-  const fixedKES = fixedCategory ? (base.fixedKES || 0) : (rcFixedKES || base.fixedKES || 0);
+                    : (subRatePct !== null ? subRatePct : base.pct));
+  /* Flat fees: a revenueConfig override wins, else the config's own fixedKES (e.g. vehicles). */
+  const fixedKES = rcFixedKES || base.fixedKES || 0;
   /* True when the plan rate is the authority for this booking — used below to keep the
      platform minimum off a flow that never had one. */
   const usingSubRate = (!rule && rcPct === null && subRatePct !== null);
@@ -518,11 +500,7 @@ async function calculateCommission(db, opts) {
      Phase 1 costs one cached config read and nothing else. */
   const planCfg = await _planAdjustmentOverrides(db);
 
-  if (fixedCategory) {
-    /* Checked BEFORE the rollout switch so the reason recorded is the real one: even with
-       plan discounts fully enabled, a fixed-rate category is never discounted. */
-    planSkipped = 'fixed_rate_category';
-  } else if (!CC.planRolloutEnabled(planCfg)) {
+  if (!CC.planRolloutEnabled(planCfg)) {
     planSkipped = 'rollout_disabled';
   } else if (sellerId && !(rule && rule.type === 'fixed')) {
     const sub = await _resolveSellerPlan(sellerId);
@@ -618,27 +596,16 @@ async function calculateCommission(db, opts) {
        over this function instead of a second engine with its own table and its own arithmetic. */
     fixedKES,
     category:   base.category,
-    /* A fixed-rate category reports the fixed authority, NOT the override it ignored.
-       Reporting `commission_rule` for a sale that was priced by the universal POS/Till rule
-       would make the ledger say a rule set the price when it did not — the exact kind of
-       unreproducible settlement this breakdown exists to prevent. */
-    ruleId:     fixedCategory ? 'fixed_rate_category' : (rule ? rule.id : 'default'),
-    ruleSource: fixedCategory ? 'fixed_rate_category'
-              : (rule ? (rule.entityId ? 'entity_specific' : rule.category)
+    ruleId:     rule ? rule.id : 'default',
+    ruleSource: rule ? (rule.entityId ? 'entity_specific' : rule.category)
               : (rcPct !== null ? 'revenue_config'
-              : (usingSubRate ? 'subscription_plan_rate' : 'default_table'))),
+              : (usingSubRate ? 'subscription_plan_rate' : 'default_table')),
     /* Which authority actually priced this transaction. Written to the ledger so a settlement
        can be explained years later without re-deriving it. */
-    pricingSource: fixedCategory ? 'fixed_rate_category (universal rule, overrides bypassed)'
-                 : (rule ? 'commission_rule'
+    pricingSource: rule ? 'commission_rule'
                  : (rcPct !== null ? 'revenue_config'
                  : (usingSubRate ? 'subscription_plan_rate (compatibility mode)'
-                 : 'category_default'))),
-    /* True when an override existed and was deliberately not applied. Recorded rather than
-       discarded, so an operator can see their revenueConfig/commissionRules entry had no
-       effect instead of wondering why the rate did not move. */
-    fixedRateCategory: fixedCategory,
-    overrideIgnored:   overrideIgnored,
+                 : 'category_default')),
 
     /* ── AUDIT BREAKDOWN ────────────────────────────────────────────────────────────────
      * Written verbatim into commissionLedger and shown verbatim to the seller, so a

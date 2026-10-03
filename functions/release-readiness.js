@@ -1520,11 +1520,8 @@ async function _runDomainCheck(domainId, merchantId) {
         if (total === 0) {
           return { passed: true, score: 80, notes: 'No posProducts found for merchant — skipping inventory check.' };
         }
-        /* merchantId-scoped, so only posUpsertProduct's documents can match — its
-           stock field is `stockQty`, never `qty`/`quantity`. See
-           docs/POSPRODUCTS_MIGRATION_GRAPH.md. */
         const invalid = snap.docs.filter(d => {
-          const qty = d.data().stockQty ?? 0;
+          const qty = d.data().qty ?? d.data().quantity ?? 0;
           return qty < 0;
         }).length;
         const score   = Math.round(((total - invalid) / total) * 100);
@@ -1858,7 +1855,3 @@ module.exports = {
   runProductionCertification,
   getCertificationHistory,
 };
-
-/* Exposed for the test suite, same convention as delivery-complete.js's exports._h —
-   so the test can exercise the real domain-check logic without a live emulator. */
-module.exports._h = { _runDomainCheck };

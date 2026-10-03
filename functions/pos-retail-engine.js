@@ -13,7 +13,6 @@
  */
 
 const { onCall, HttpsError }  = require('firebase-functions/v2/https');
-const _custScope = require('./pos-customer-scope');
 const { onSchedule }          = require('firebase-functions/v2/scheduler');
 const { defineSecret }        = require('firebase-functions/params');
 const admin                   = require('firebase-admin');
@@ -106,21 +105,19 @@ function _calcPoints(amount) { return Math.floor(amount / 10); }
  * CF: getPOSCustomer — look up by phone or customerId
  * Returns customer profile + loyalty status
  */
-/* The second unscoped read path, closed the same way as posLookupCustomer: this
-   also looked a customer up by phone across the whole collection. */
 exports.getPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.getPOSCustomer = async (req) => {
-  const auth = _adminOrSeller(req);
+  _adminOrSeller(req);
   const { phone, customerId } = req.data || {};
-  const owner = _custScope.resolveOwner(auth, req.data && req.data.sellerId);
-  const fdb = admin.firestore();
 
   let snap;
   if (customerId) {
-    snap = await _custScope.getOwned(fdb, owner, _san(customerId, 40));
+    snap = await admin.firestore().collection('posCustomers').doc(_san(customerId, 40)).get();
   } else if (phone) {
     const normalized = _normalizePhone(phone);
     if (!normalized) throw new HttpsError('invalid-argument', 'Invalid phone number');
-    snap = await _custScope.findOwned(fdb, owner, 'phone', normalized);
+    const q = await admin.firestore().collection('posCustomers')
+      .where('phone', '==', normalized).limit(1).get();
+    snap = q.empty ? null : q.docs[0];
   } else {
     throw new HttpsError('invalid-argument', 'phone or customerId required');
   }
@@ -135,59 +132,41 @@ exports.getPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.getPOSCust
 /**
  * CF: upsertPOSCustomer — create or update customer profile
  */
-/* The WRITE-SIDE twin of the disclosure, and the reason this is a data-model fix
-   rather than a query fix.
-
-   The "existing customer" lookup was collection-wide by phone, so a second
-   merchant upserting a phone number already on file UPDATED THE FIRST
-   MERCHANT'S customer document — one record shared between two businesses, with
-   the later name and email overwriting the earlier. And nothing on the create
-   path recorded an owner at all, which is why no reader could filter by one.
-
-   Both halves are fixed here: the lookup is scoped to the caller, and every
-   create is stamped with the resolved owner so the record can be filtered from
-   now on. A legacy record with no owner is invisible to this lookup, so the next
-   upsert creates a correctly-owned one — the path heals forward without a
-   backfill, at the cost of the old record's history. */
 exports.upsertPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.upsertPOSCustomer = async (req) => {
-  const auth = _adminOrSeller(req);
+  _adminOrSeller(req);
   const { customerId, phone, name, email } = req.data || {};
-  const owner = _custScope.resolveOwner(auth, req.data && req.data.sellerId);
-  const fdb = admin.firestore();
 
   const normalized = _normalizePhone(phone);
   if (!normalized) throw new HttpsError('invalid-argument', 'Invalid phone number');
 
-  /* Look up an existing customer OF THIS MERCHANT by phone. */
-  const existingDoc = await _custScope.findOwned(fdb, owner, 'phone', normalized);
+  /* Look up existing by phone */
+  const existing = await admin.firestore().collection('posCustomers')
+    .where('phone', '==', normalized).limit(1).get();
 
-  const docRef = existingDoc
-    ? existingDoc.ref
+  const docRef = !existing.empty
+    ? existing.docs[0].ref
     : (customerId
-        ? fdb.collection('posCustomers').doc(_san(customerId, 40))
-        : fdb.collection('posCustomers').doc());
+        ? admin.firestore().collection('posCustomers').doc(_san(customerId, 40))
+        : admin.firestore().collection('posCustomers').doc());
 
   const payload = {
     phone:         normalized,
-    name:          name ? _san(name, 100)  : (!existingDoc ? 'Guest Customer' : admin.firestore.FieldValue.delete()),
+    name:          name ? _san(name, 100)  : (existing.empty ? 'Guest Customer' : admin.firestore.FieldValue.delete()),
     email:         email ? _san(email, 200) : admin.firestore.FieldValue.delete(),
     updatedAt:     now(),
   };
 
-  if (!existingDoc) {
-    /* New customer — stamped with its owner, so it can be scoped ever after. */
+  if (existing.empty) {
+    /* New customer */
     await docRef.set({
       ...payload,
-      ..._custScope.ownerStamp(owner),
       loyaltyPoints: 0,
       totalSpend:    0,
       visitCount:    0,
       createdAt:     now(),
     });
   } else {
-    /* An existing record keeps its owner; re-stamping repairs one created before
-       the owner field existed but reached here through a composite id. */
-    await docRef.update({ ...payload, ..._custScope.ownerStamp(owner) });
+    await docRef.update(payload);
   }
 
   const snap = await docRef.get();

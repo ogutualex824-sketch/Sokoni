@@ -42,12 +42,7 @@
  * where the platform charges a flat listing/transaction fee instead of a percentage. */
 const RATES = {
   /* ── conflicts resolved to the HUB rate (the rate actually charged, and advertised) ── */
-  /* 5% per completed marketplace sale — the canonical commercial rule, set 2026-08-25.
-     Subject to MIN_COMMISSION_KES below, which dominates small sales: a KES 97 order
-     is charged KES 10 (10.3%), not KES 4.85. Any seller-facing copy that says a flat
-     "5%" without the minimum is inaccurate under ~KES 200; legal.html and
-     seller-terms.html disclose both. */
-  marketplace:      { pct: 5,   fixedKES: 0,    _was: 'hub 3% / category 10%; raised 3->5 on 2026-08-25' },
+  marketplace:      { pct: 3,   fixedKES: 0,    _was: 'hub 3% / category 10%' },
   food_delivery:    { pct: 5,   fixedKES: 0,    _was: 'hub restaurant 5% / category 8%' },
   property:         { pct: 2,   fixedKES: 0,    _was: 'hub 2% / category 3%' },
   vehicles:         { pct: 0,   fixedKES: 2000, _was: 'hub flat KES 2000 / category 5%' },
@@ -56,25 +51,6 @@ const RATES = {
   events:           { pct: 5,   fixedKES: 0,    _was: 'hub entertainment 5% / category 10%' },
   hotel:            { pct: 5,   fixedKES: 0,    _was: 'hub bnb 5%' },
   digital_products: { pct: 10,  fixedKES: 0,    _was: 'hub digital 10% / category 20%' },
-
-  /* ── POS / TILL — universal 5%, fixed, per completed sale ────────────────────────────
-   * THE canonical POS/Till commercial rule, set 2026-09-06. Every business using SOKONI
-   * POS or Till pays 5% of every completed sale — every merchant, every item, whether the
-   * business is acting as a merchant or as a supplier. No seller-plan exceptions.
-   *
-   * WHY IT IS ITS OWN CATEGORY RATHER THAN AN ALIAS.
-   * Until 2026-09-06 this was `pos: 'marketplace'` in ALIASES, so POS inherited the
-   * marketplace rate. Both happened to be 5%, so it looked correct — but it was 5% BY
-   * COINCIDENCE, not by rule. The moment marketplace moves to the seller-plan ladder
-   * (FREE 15 / STARTER 10 / GROWTH 5 / ENTERPRISE 0), an aliased POS would have followed it
-   * and a FREE merchant's till sale would have jumped to 15%. Separating them is what makes
-   * "marketplace and POS/Till do not cross-contaminate" structural instead of aspirational.
-   *
-   * FIXED means fixed: see FIXED_RATE_CATEGORIES below. commissionRules, revenueConfig
-   * overrides, subscription plan rates and plan adjustments are all bypassed for this
-   * category, because "applies to every business, without exception" is not enforceable
-   * while any per-seller override can still reach it. */
-  pos:              { pct: 5,   fixedKES: 0,    _was: "ALIAS pos->marketplace until 2026-09-06; now its own fixed universal rule" },
 
   /* ── rates that were buried inside hub Cloud Functions as bare literals ──
    * These were never in any table. They were `const platformFeeRate = 0.03;` sitting in the
@@ -109,19 +85,7 @@ const RATES = {
  * used different vocabularies for the same hubs. Both vocabularies resolve here, so no caller
  * has to know which one it holds. */
 const ALIASES = {
-  /* `product` is what checkout.html and the IntaSend webhook actually send as the
-     category (`payData.meta?.category || "default"`). It matched nothing in RATES and
-     nothing here, so every real sale resolved through RATES.default — 5% by accident.
-     Verified 2026-08-25: all 11 live commissionLedger rows carry category "product"
-     and commissionPct 5, written by webhookIntasend. Left unmapped, the rate would have
-     silently CHANGED the moment anyone "corrected" the string to "marketplace".
-     Mapping it deliberately is what makes the 5% intentional rather than incidental. */
-  product: 'marketplace', products: 'marketplace',
-  /* `pos` DELIBERATELY NOT ALIASED TO MARKETPLACE — see the `pos` entry in RATES.
-     It was `pos: 'marketplace'` until 2026-09-06, which made every POS/Till sale inherit
-     whatever the marketplace rate happened to be. That is exactly the coupling the
-     universal POS/Till rule forbids. */
-  shopping: 'marketplace', b2b: 'marketplace',
+  shopping: 'marketplace', pos: 'marketplace', b2b: 'marketplace',
   restaurant: 'food_delivery', food: 'food_delivery',
   home_services: 'services', insurance: 'services', fitness: 'services',
   pharmacy: 'healthcare',
@@ -320,36 +284,10 @@ function categoryForHub(hub) {
   return resolveRate(hub).category;
 }
 
-/* ── FIXED-RATE CATEGORIES ────────────────────────────────────────────────────────────────
- * Categories whose rate is a universal commercial rule and must NOT be modulated per seller.
- *
- * For these, calculateCommission() bypasses every override layer — commissionRules,
- * revenueConfig/{seller_*,hub_*,global}, the subscription absolute-rate compatibility mode,
- * and the plan adjustment step — and charges the rate defined here, exactly.
- *
- * This is a deliberately small and deliberately awkward power. It exists because
- * "5% for every business, without exception" is a COMMERCIAL INVARIANT, and an invariant that
- * any admin-written `revenueConfig/seller_<uid>` doc can quietly break is not an invariant.
- * Adding a category here removes an operator's ability to price it per seller, so it should
- * be done only for rules that are genuinely universal.
- *
- * It does NOT bypass MIN_COMMISSION_KES — the floor is a separate concern and still applies,
- * exactly as it does to marketplace sales. */
-const FIXED_RATE_CATEGORIES = Object.freeze(['pos']);
-
-/* Accepts a hub id, an alias, or a category, and resolves it the same way resolveRate does,
-   so a caller passing hubId 'pos' and a caller passing category 'pos' get the same answer. */
-function isFixedRateCategory(key) {
-  const r = resolveRate(key);
-  return r.matched === true && FIXED_RATE_CATEGORIES.indexOf(r.category) !== -1;
-}
-
 module.exports = {
   resolveRate,
   listCategories,
   categoryForHub,
-  isFixedRateCategory,
-  FIXED_RATE_CATEGORIES,
   MIN_COMMISSION_KES,
   PLAN_ADJUSTMENTS_DOC,
   applyPlanAdjustment,

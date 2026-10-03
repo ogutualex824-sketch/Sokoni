@@ -715,41 +715,15 @@ exports.followShop = onCall(
     }
 
     const db         = _db();
-    const shopRef     = db.collection('shops').doc(shopId);
     const followerRef = db.collection('shopFollowers').doc(`${shopId}_${uid}`);
     const configRef   = db.collection('minishopConfig').doc(shopId);
 
     const { following, followerCount } = await db.runTransaction(async tx => {
-      /* ── The shop must EXIST before anything is written ───────────────────
-         This ran without any existence check, and then merge-wrote
-         minishopConfig/{shopId}. A merge to a missing document CREATES it, so
-         any authenticated caller could conjure publicly-readable storefront
-         config documents for shop ids nobody owns — a write-authority defect,
-         not merely a stray counter.
-
-         The read is inside the transaction so the check cannot be raced by a
-         shop being deleted between verification and write. */
-      const [shopSnap, followerSnap, configSnap] = await Promise.all([
-        tx.get(shopRef),
+      const [followerSnap, configSnap] = await Promise.all([
         tx.get(followerRef),
         tx.get(configRef),
       ]);
 
-      if (!shopSnap.exists) {
-        throw new HttpsError('not-found', 'Shop not found.');
-      }
-
-      /* ── The RELATIONSHIP is the authority; the counter is derived ─────────
-         shopFollowers/{shopId}_{uid} is the fact. followerCount is a cache of
-         it, maintained in the same transaction that changes the fact, so the
-         two cannot diverge through this path.
-
-         They previously could diverge through a DIFFERENT path:
-         firestore.rules allowed a client to delete the follow document
-         directly, while this function decides idempotency by reading that same
-         document. Delete it and follow again and the counter rose a second
-         time — an unbounded inflation loop from one account, against any shop.
-         The rule is now CF-only, so the relationship is only ever changed here. */
       const alreadyFollowing = followerSnap.exists;
       const currentCount     = configSnap.exists ? (configSnap.data().followerCount || 0) : 0;
 
@@ -766,15 +740,12 @@ exports.followShop = onCall(
 
       if (!follow && alreadyFollowing) {
         tx.delete(followerRef);
-        /* Floored at zero: a counter that predates the relationship being
-           authoritative could otherwise be driven negative by an unfollow. */
         const newCount = Math.max(0, currentCount - 1);
         tx.set(configRef, { followerCount: newCount, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
         return { following: false, followerCount: newCount };
       }
 
-      /* No change — idempotent. A repeated follow does NOT increment, because
-         the relationship already exists and the relationship is the authority. */
+      // No change — idempotent
       return { following: alreadyFollowing, followerCount: currentCount };
     });
 

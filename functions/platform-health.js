@@ -17,6 +17,15 @@
  *
  * All queries use single-field auto-indexes only — no new composite
  * indexes required.
+ *
+ * That claim was WRONG for two queries and cost a production outage of this
+ * callable. `.orderBy("__name__", "desc")` is NOT covered by the automatic
+ * single-field indexes; both instances threw 9 FAILED_PRECONDITION on every call,
+ * and Promise.all turned that into a bare INTERNAL for the whole endpoint.
+ *
+ * Both now read date-keyed documents directly via getAll(), so the claim above is
+ * true again — by construction rather than by assertion. Before adding an ordered
+ * query here, check whether the collection is date-keyed; if it is, compute the keys.
  */
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
@@ -281,10 +290,33 @@ async function _operationalHealth(db) {
   const upSnaps = snaps.filter(d => d.status === "ok" || d.status === "degraded").length;
   const uptimePct = totalSnaps > 0 ? (upSnaps / totalSnaps) * 100 : null;
 
-  /* Payment success from last 7 available ops_reports */
-  const opsSnap = await db.collection("ops_reports")
-    .orderBy("__name__", "desc").limit(7).get();
-  const payRates = opsSnap.docs
+  /* Payment success from the last 7 ops_reports.
+     ── THIS IS THE QUERY THAT RETURNED INTERNAL ────────────────────────────────
+     It was:  db.collection("ops_reports").orderBy("__name__", "desc").limit(7)
+
+     Cloud Functions log, verbatim:
+         9 FAILED_PRECONDITION: The query requires an index.
+         .../collectionGroups/ops_reports/indexes/_ ... __name__
+
+     A DESCENDING order on __name__ is not covered by the automatic single-field
+     indexes, so this threw on every call. Promise.all rejected, firebase-functions
+     converted the non-HttpsError into INTERNAL, and the operator saw a generic
+     server fault for what was a missing index in one dimension.
+
+     Fixed WITHOUT adding an index. ops_reports is keyed by YYYY-MM-DD (see
+     scheduled-reports.js, which writes .doc(today)), so the last seven keys are
+     computable rather than discoverable — exactly what _marketplaceHealth above
+     already does for today/yesterday. getAll is one round trip, reads at most seven
+     documents instead of scanning, and consumes none of the index budget, which the
+     cost dimension itself reports as 192/200. */
+  const dayKeys = [];
+  for (let i = 0; i < 7; i++) {
+    dayKeys.push(new Date(Date.now() - i * 86400000).toISOString().slice(0, 10));
+  }
+  const opsDocs = await db.getAll(
+    ...dayKeys.map(k => db.collection("ops_reports").doc(k)));
+  const payRates = opsDocs
+    .filter(d => d.exists)
     .map(d => d.data().paymentSuccessRate)
     .filter(r => typeof r === "number");
   const avgPayRate = payRates.length > 0
@@ -378,16 +410,43 @@ exports.getPlatformHealthScores = onCall(
     requireAdmin(request);
     const db = getFirestore();
 
-    const [marketplace, seller, buyer, operational, cost] = await Promise.all([
+    /* ── ONE FAILING DIMENSION MUST NOT ERASE THE OTHER FOUR ──────────────────
+       This was Promise.all, so the missing ops_reports index above rejected the
+       whole call and every dimension came back as a single word: INTERNAL. The
+       operator could not tell a denial from a crash from one broken query, and the
+       file's own comment had already predicted exactly that.
+
+       allSettled attributes the failure instead. A dimension that throws returns
+       score: null with the reason attached — NOT a zero. A zero is a measurement
+       that says "this is bad"; the truth is "this is unknown", and the two must not
+       render the same. */
+    const NAMES = ["marketplace", "seller", "buyer", "operational", "cost"];
+    const settled = await Promise.allSettled([
       _marketplaceHealth(db),
       _sellerSuccess(db),
       _buyerSatisfaction(db),
       _operationalHealth(db),
       _costEfficiency(),
     ]);
+    const [marketplace, seller, buyer, operational, cost] = settled.map((r, i) => {
+      if (r.status === "fulfilled") return r.value;
+      const err = r.reason || {};
+      console.error(`[platform-health] dimension ${NAMES[i]} failed:`, err);
+      return {
+        score: null, grade: null, dimensions: [], dataComplete: false,
+        failed: true,
+        /* code + message, so the operator sees FAILED_PRECONDITION and the index
+           link rather than a generic fault. */
+        error: { code: err.code != null ? String(err.code) : "unknown",
+                 message: String(err.message || err).slice(0, 400) },
+      };
+    });
+    const failedDimensions = NAMES.filter((_, i) => settled[i].status === "rejected");
 
-    /* Weighted overall score */
-    const overall = clamp(
+    /* Weighted overall score — WITHHELD, not approximated, when any dimension is
+       unknown. Computing it with a null would coerce to 0 and publish a confidently
+       wrong number; dropping the weight would silently re-scale the scale. */
+    const overall = failedDimensions.length ? null : clamp(
       marketplace.score  * 0.30 +
       seller.score       * 0.25 +
       buyer.score        * 0.25 +
@@ -396,17 +455,29 @@ exports.getPlatformHealthScores = onCall(
     );
 
     /* Surface actionable alerts */
+    /* A failed dimension has score null, and null < 60 is TRUE in JavaScript — so
+       without this guard a missing index would have raised "Marketplace health is
+       below 60", inviting someone to go and fix a marketplace that was never
+       measured. An unknown score raises no threshold alert; it raises an explicit
+       one saying the dimension could not be computed. */
     const alerts = [];
-    if (marketplace.score < 60) alerts.push({ severity: "high",   area: "Marketplace",   message: "Marketplace health is below 60 — review listing quality and seller activation" });
-    if (seller.score      < 60) alerts.push({ severity: "high",   area: "Sellers",       message: "Seller success score is low — run getSellerPerformanceSummary and contact underperforming sellers" });
-    if (buyer.score       < 60) alerts.push({ severity: "high",   area: "Buyers",        message: "Buyer satisfaction is low — check open bugs in /admin-feedback immediately" });
-    if (operational.score < 75) alerts.push({ severity: "medium", area: "Operations",    message: "Operational health needs attention — review reliability-center.html" });
-    if (cost.score        < 60) alerts.push({ severity: "medium", area: "Cost",          message: "Cost efficiency pressure — see docs/COST_GOVERNANCE.md" });
-    if (operational.score >= 90 && overall >= 80)
+    const known = (d) => typeof d.score === "number";
+    failedDimensions.forEach((n) => alerts.push({
+      severity: "high", area: "Diagnostics",
+      message: `The ${n} dimension could not be computed — see the failure detail on that dimension.`,
+    }));
+    if (known(marketplace) && marketplace.score < 60) alerts.push({ severity: "high",   area: "Marketplace",   message: "Marketplace health is below 60 — review listing quality and seller activation" });
+    if (known(seller) && seller.score < 60) alerts.push({ severity: "high",   area: "Sellers",       message: "Seller success score is low — run getSellerPerformanceSummary and contact underperforming sellers" });
+    if (known(buyer) && buyer.score < 60) alerts.push({ severity: "high",   area: "Buyers",        message: "Buyer satisfaction is low — check open bugs in /admin-feedback immediately" });
+    if (known(operational) && operational.score < 75) alerts.push({ severity: "medium", area: "Operations",    message: "Operational health needs attention — review reliability-center.html" });
+    if (known(cost) && cost.score < 60) alerts.push({ severity: "medium", area: "Cost",          message: "Cost efficiency pressure — see docs/COST_GOVERNANCE.md" });
+    if (known(operational) && operational.score >= 90 && overall != null && overall >= 80)
       alerts.push({ severity: "info", area: "Platform", message: "Platform is operating well — focus on evidence-gated growth initiatives" });
 
     return {
-      overall:     { score: overall, grade: grade(overall) },
+      overall: overall == null
+        ? { score: null, grade: null, unavailable: true, failedDimensions }
+        : { score: overall, grade: grade(overall) },
       marketplace,
       seller,
       buyer,
@@ -433,7 +504,19 @@ exports.getTopBusinessPriorities = onCall(
     /* Gather evidence signals in parallel */
     const [sellerPerf, funnelSnap, jobSearchSnap, featureReqSnap] = await Promise.all([
       db.collection("sellerPerformance").limit(200).get(),
-      db.collection("funnelStats").orderBy("__name__", "desc").limit(30).get(),
+      /* Same missing-index defect as _operationalHealth, in the callable next door.
+         It had not been reported only because getPlatformHealthScores is hit first.
+         funnelStats is keyed by YYYY-MM-DD too (conversion-analytics.js writes
+         .doc(today)), so the last 30 keys are computed rather than ordered. */
+      (async () => {
+        const keys = [];
+        for (let i = 0; i < 30; i++) {
+          keys.push(new Date(Date.now() - i * 86400000).toISOString().slice(0, 10));
+        }
+        const docs = await db.getAll(
+          ...keys.map(k => db.collection("funnelStats").doc(k)));
+        return { docs: docs.filter(d => d.exists), size: docs.filter(d => d.exists).length };
+      })(),
       db.collection("searchQueryLog")
         .where("noResult", "==", false).limit(200).get(),
       db.collection("feedback")

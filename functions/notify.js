@@ -661,62 +661,29 @@ async function advanceOrder({ orderId, stage, uid, phone, title, body, image, de
   if (idx === undefined) throw new HttpsError('invalid-argument', 'Unknown order stage: ' + stage);
 
   const ref  = db().collection('orders').doc(String(orderId));
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Order not found.');
 
-  /* ── THE MONOTONIC GUARD IS NOW ATOMIC WITH THE WRITE ──────────────────────
-     This was a plain `await ref.get()`, a stage comparison, then a plain
-     `await ref.update()` — the read-modify-write hole that `order-claim.js` names in
-     its own header ("two cashiers can both advance the same order today") and that the
-     provenance trace verified as TRUE. order-claim gave CLAIMING a concurrency
-     boundary; the status transition itself never had one.
+  const order   = snap.data() || {};
+  const current = STAGE_INDEX[order.timelineStage];
+  const at      = (current === undefined) ? -1 : current;
 
-     What two concurrent callers could do, both reading the same `timelineStage`:
-       - both pass `idx <= at` and both write, appending TWO timeline entries for one
-         stage (arrayUnion dedupes on exact equality, and `at: Date.now()` differs);
-       - advance to DIFFERENT stages and let the later write win, moving the timeline
-         BACKWARDS — the monotonic invariant this function exists to enforce;
-       - both see `status === 'paid'` on the `accepted` milestone and both set
-         'confirmed', double-firing onOrderStatusChange and so rider auto-assignment.
+  if (idx <= at) return { ok: true, unchanged: true, stage: order.timelineStage };
 
-     Fixed by moving read + guard + write into ONE transaction, so Firestore serialises
-     the conflicting writes: one commits, the rest retry, re-read the advanced stage and
-     fall into the `idx <= at` branch as an ordinary `unchanged` result.
+  const st  = ORDER_TIMELINE[idx];
+  const who = uid || order.uid || order.buyerId;
 
-     NOTIFICATIONS STAY OUTSIDE THE TRANSACTION, DELIBERATELY. A transaction body can be
-     retried, and a push sent from inside a retried body is sent again. The transaction
-     therefore performs no side effect but the write, and returns what the caller needs
-     to notify AFTER it has committed. */
-  const outcome = await db().runTransaction(async (txn) => {
-    const snap = await txn.get(ref);
-    if (!snap.exists) throw new HttpsError('not-found', 'Order not found.');
-
-    const order   = snap.data() || {};
-    const current = STAGE_INDEX[order.timelineStage];
-    const at      = (current === undefined) ? -1 : current;
-
-    /* The loser of a race lands here on retry: already at or past the target stage. */
-    if (idx <= at) return { advanced: false, stage: order.timelineStage };
-
-    const st = ORDER_TIMELINE[idx];
-
-    /* Blocker A fix — the 'accepted' milestone (Seller Accepted) also sets order.status to
-       'confirmed', which is what onOrderStatusChange watches to fire rider auto-assignment.
-       Previously advanceOrder moved only the timeline, so a paid order never became 'confirmed'
-       and dispatch never triggered. Guarded on status==='paid' so we never regress a later status. */
-    const _statusPatch = (st.key === 'accepted' && order.status === 'paid') ? { status: 'confirmed', confirmedAt: admin.firestore.FieldValue.serverTimestamp() } : {};
-    txn.update(ref, Object.assign({
-      timelineStage: st.key,
-      timelineIndex: idx,
-      timeline: admin.firestore.FieldValue.arrayUnion({ key: st.key, label: st.label, at: Date.now() }),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, _statusPatch));
-
-    return { advanced: true, st, who: uid || order.uid || order.buyerId };
-  });
-
-  if (!outcome.advanced) return { ok: true, unchanged: true, stage: outcome.stage };
-
-  const st  = outcome.st;
-  const who = outcome.who;
+  /* Blocker A fix — the 'accepted' milestone (Seller Accepted) also sets order.status to
+     'confirmed', which is what onOrderStatusChange watches to fire rider auto-assignment.
+     Previously advanceOrder moved only the timeline, so a paid order never became 'confirmed'
+     and dispatch never triggered. Guarded on status==='paid' so we never regress a later status. */
+  const _statusPatch = (st.key === 'accepted' && order.status === 'paid') ? { status: 'confirmed', confirmedAt: admin.firestore.FieldValue.serverTimestamp() } : {};
+  await ref.update(Object.assign({
+    timelineStage: st.key,
+    timelineIndex: idx,
+    timeline: admin.firestore.FieldValue.arrayUnion({ key: st.key, label: st.label, at: Date.now() }),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, _statusPatch));
 
   let notified = null;
   if (st.type && who) {
@@ -739,47 +706,11 @@ async function advanceOrder({ orderId, stage, uid, phone, title, body, image, de
 }
 
 /* Callable form. Only the seller/rider/admin side advances an order, so this
-   requires auth; the buyer's client only ever READS the timeline.
-
-   That sentence was true as a description and false as an implementation: the
-   check was `request.auth.uid` existing, and nothing more. Any signed-in account
-   could name any orderId and advance a stranger's order — and because the
-   `accepted` stage sets status 'confirmed', which onOrderStatusChange watches to
-   fire rider auto-assignment, that meant pushing someone else's order into
-   dispatch and putting a real rider on the road.
-
-   Authorisation now happens BEFORE advanceOrder() is reached, so a refused call
-   performs no read-modify-write on the order at all: the order document, its
-   status, and every downstream trigger are untouched.
-
-   advanceOrder() itself is deliberately NOT changed. It is the trusted internal
-   primitive; the callable is the boundary where an untrusted caller appears. */
-const _orderAuth = require('./order-advance-authority');
-const _shopEmployees = require('./shop-employees');
-
+   requires auth; the buyer's client only ever READS the timeline. */
 exports.orderAdvance = onCall(
   { region: REGION, secrets: sokoniAt.secrets },
   async (request) => {
     if (!(request.auth && request.auth.uid)) throw new HttpsError('unauthenticated', 'Sign in required.');
-    const uid = request.auth.uid;
-    const { orderId, stage } = request.data || {};
-    if (!orderId) throw new HttpsError('invalid-argument', 'orderId is required.');
-    if (!stage)   throw new HttpsError('invalid-argument', 'stage is required.');
-
-    const snap = await db().collection('orders').doc(String(orderId)).get();
-    if (!snap.exists) throw new HttpsError('not-found', 'Order not found.');
-
-    /* WHO is this caller to THIS order, then MAY that actor set THIS stage.
-       Two questions, asked separately — collapsing them is how the original
-       hole existed. */
-    await _orderAuth.authorise({
-      order: snap.data() || {},
-      uid,
-      claims: request.auth.token || {},
-      stage,
-      shopAccess: _shopEmployees.assertShopAccess,
-    });
-
     return advanceOrder(request.data || {});
   }
 );
