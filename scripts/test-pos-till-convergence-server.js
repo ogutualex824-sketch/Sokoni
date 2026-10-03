@@ -207,7 +207,7 @@ async function stk(ref, o) {
       const aT = await tryPay([{ method: 'mpesa_till_manual', amount: 100, ref: 'QK12AB34CD' }], 100, 'T1');
       const aB = await tryPay([{ method: 'bank', amount: 100 }], 100, 'T2');
       const aG = await tryPay([{ method: 'gift_card', amount: 100 }], 100, 'T3');
-      ok(!a15.r.ok && /only settle an M-PESA payment/.test(a15.r.msg) && !aT.r.ok && !aB.r.ok && !aG.r.ok && /cannot settle a sale/.test(aB.r.msg)
+      ok(!a15.r.ok && /only settle an M-PESA payment/.test(a15.r.msg) && !aT.r.ok && !aB.r.ok && !aG.r.ok && /cannot settle a sale|cannot be accepted at the till/.test(aB.r.msg)   /* the earlier 6b _TENDERS loop may refuse first */
         && (await salesByKey(a15.key)) + (await salesByKey(aT.key)) + (await salesByKey(aB.key)) + (await salesByKey(aG.key)) === 0,
         'POS-15', 'an M-PESA prompt used as card, manual till code, bank and gift card → refused (closed tender list)', [a15.r.msg, aT.r.msg, aB.r.msg, aG.r.msg]); }
     /* POS-12 / POS-14: replay the POS-01 payment on another sale */
