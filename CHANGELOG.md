@@ -1,3 +1,19 @@
+## 2026-10-03 — AdminOS: WhatsApp delivery tab (hosting half; NOT deployed)
+
+Comms → **WhatsApp** tab in `admin-os.html` / `sokoni-aos.js`. It reads `adminListWhatsappSends` through the one
+`adminOsDispatch` (functions half: `3699b4e` on `functions/whatsapp-channel-on-9894df2`).
+
+- Read-only. Each row shows: channel, template, masked number, Meta message id, status, and the accepted / sent /
+  delivered / read / failed times, error code and notification key.
+- Filters: status, and either a message id or a notification key.
+- The page says that **accepted ≠ delivered**.
+- If the backend op is not deployed, the tab says "trace unavailable". It never shows an empty or zero list.
+- All values are escaped. No codes or PINs are ever shown (the server returns a whitelist).
+- Files: `admin-os.html` (+1 tab button), `sokoni-aos.js` (+ops whitelist entry, tab renderer, `whatsappTraceFilter`).
+- DB/rules: none. Render check 6/0 (escaping, neutral states).
+
+**Deploy order:** functions op first. Until then the tab shows "unavailable". Related: [[WHATSAPP_PRODUCTION]].
+
 ## [2026-10-01] - Register my business: one entry (/offer.html), one intake (hub-register), provider lands on its dashboard — built, tested, NOT deployed
 
 **Branch `hosting/register-routing-on-b2`, on `df1a4cb`.** Hosting only. Owner ask: "Register my business" always

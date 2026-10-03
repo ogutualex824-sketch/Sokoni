@@ -240,6 +240,7 @@ window.SokoniAOS = (() => {
     'adminGetMerchantPipeline','adminGetOrders','aosGetPendingPayouts','adminGetPlatformOverview','adminGetPlatformSettings',
     'adminGetPayments','adminGetPosDevices','adminGetProducts','adminGetProviders','adminGetRecentNotifications','adminGetReviews','adminGetServices',
     'adminGetSearchStats','adminGetSupportTickets','adminGetSystemHealth','adminGetUser',
+    'adminListWhatsappSends',
     'aosResolveDispute','adminResolveSupportTicket','adminSaveAnnouncement','adminSaveBanner',
     'adminSearchUsers','adminSendPushNotification','adminUpdateFeatureFlag','adminUpdateOrderStatus',
     'adminUpdatePlatformSettings','adminUpdateProductStatus','adminUpdateUserRole',
@@ -1150,6 +1151,8 @@ window.SokoniAOS = (() => {
           <p style="color:var(--aos-muted);font-size:11px;margin:8px 0">Requires SENDGRID_API_KEY configured in Secret Manager.</p>
           <button class="aos-btn success" style="margin-top:6px" onclick="SokoniAOS.sendEmailBlast()">&#x1F4E8; Send Email Blast</button>
         </div>`;
+    } else if (tab === "whatsapp") {
+      await _renderWhatsappTrace(body);
     } else if (tab === "sms") {
       body.innerHTML = `
         <div class="compose-form">
@@ -1163,6 +1166,60 @@ window.SokoniAOS = (() => {
           <button class="aos-btn success" onclick="SokoniAOS.sendSMSBlast()">&#x1F4AC; Send SMS Broadcast</button>
         </div>`;
     }
+  }
+
+  /* WhatsApp delivery trace — READ-ONLY (functions/admin-notification-trace.js via adminOsDispatch).
+     Meta's own status words, unaltered: "accepted" means Meta took the request, it is NOT delivery.
+     No template parameters ever reach this view (the server never stores them, and returns a whitelist).
+     If the backend op is unavailable the panel says so — it never renders an empty list as "0 sent". */
+  function _waTime(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return isNaN(d) ? "—" : d.toLocaleString("en-KE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+  async function _renderWhatsappTrace(body, filters) {
+    const f = filters || {};
+    const st = ["", "accepted", "sent", "delivered", "read", "failed"];
+    const form = `
+      <div class="compose-form">
+        <h3>&#x1F4AC; WhatsApp delivery</h3>
+        <p style="color:var(--aos-muted);font-size:12px;margin:0 0 10px">Each message SOKONI sent through the WhatsApp Cloud API and the status Meta reported back.
+          <strong>accepted</strong> = Meta took the request; only <strong>delivered</strong> / <strong>read</strong> mean it reached the phone. Codes and PINs are never shown.</p>
+        <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:10px">
+          <select id="waStatus" aria-label="Status">${st.map(v => `<option value="${v}"${v === (f.status || "") ? " selected" : ""}>${v || "Any status"}</option>`).join("")}</select>
+          <input type="text" id="waQuery" aria-label="Message ID or notification key" placeholder="Meta message ID (wamid…) or notification key" value="${_esc(f.messageId || f.ref || "")}">
+          <button class="aos-btn" onclick="SokoniAOS.whatsappTraceFilter()">Filter</button>
+        </div>
+      </div>`;
+    body.innerHTML = form + _spinner();
+    let r;
+    try {
+      r = await _call("adminListWhatsappSends", Object.assign({ limit: 100 }, f));
+    } catch (e) {
+      body.innerHTML = form + `<div class="dash-section"><p class="aos-muted">WhatsApp delivery trace unavailable &mdash; ${_esc((e && e.message) || "backend not reachable")}.</p></div>`;
+      return;
+    }
+    const rows = (r && r.sends) || [];
+    const cell = (v) => `<td>${_esc(v == null || v === "" ? "—" : v)}</td>`;
+    body.innerHTML = form + `<div class="dash-section"><h3>Messages ${rows.length ? "(" + rows.length + ")" : ""}</h3>${rows.length ? `
+      <div style="overflow-x:auto"><table class="aos-table"><thead><tr>
+        <th>Channel</th><th>Template</th><th>To</th><th>Meta message ID</th><th>Status</th>
+        <th>Accepted</th><th>Sent</th><th>Delivered</th><th>Read</th><th>Failed</th><th>Error</th><th>Notification</th>
+      </tr></thead><tbody>${rows.map(x => `<tr>
+        ${cell(x.channel)}${cell(x.template)}${cell(x.toMasked)}<td style="font-family:monospace;font-size:11px;word-break:break-all">${_esc(x.messageId)}</td>${cell(x.status)}
+        ${cell(_waTime(x.acceptedAt))}${cell(_waTime(x.sentAt))}${cell(_waTime(x.deliveredAt))}${cell(_waTime(x.readAt))}${cell(_waTime(x.failedAt))}${cell(x.errorCode)}
+        <td style="font-size:11px;word-break:break-all">${_esc(x.ref || "—")}</td></tr>`).join("")}</tbody></table></div>`
+      : `<p class="aos-muted">${r && r.found === false ? "No WhatsApp message with that ID." : "No WhatsApp messages match."}</p>`}</div>`;
+  }
+  function whatsappTraceFilter() {
+    const body = document.getElementById("commsBody");
+    if (!body) return;
+    const status = document.getElementById("waStatus")?.value || "";
+    const q = (document.getElementById("waQuery")?.value || "").trim();
+    const f = {};
+    if (status) f.status = status;
+    if (q) { if (/^wamid./.test(q)) f.messageId = q; else f.ref = q; }
+    _renderWhatsappTrace(body, f);
   }
 
   async function sendTestEmail() {
@@ -2654,6 +2711,7 @@ window.SokoniAOS = (() => {
     exportFinancialReport,
     // Communications
     commsTab:            _commsTab,
+    whatsappTraceFilter,
     sendTestEmail:       sendTestEmail,
     sendEmailBlast,
     sendSMSBlast,
