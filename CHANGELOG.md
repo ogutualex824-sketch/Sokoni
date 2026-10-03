@@ -1,3 +1,10 @@
+## [2026-10-03] — SmartPOS M-PESA on the canonical IntaSend POS rail (hosting, NOT deployed)
+
+**Why (owner-authorized 2026-10-03):** pos.html "Send M-PESA Request" called darajaSTKPush (never deployed) and, failing that, invented a SIMULATED_ checkout and completed the sale — a sale with no payment. sokoni-b2 replaced it with a refusal floor (a436e12); this replaces the refusal with the EXISTING authoritative flow, not a new POS payment system.
+**Change:** `pos.js` sendSTK → `SokoniPosStk` (posInitiateIntasendPayment → posCheckPaymentStatus, the record only the IntaSend webhook writes); the sale completes ONLY on server status 'completed' (payment.complete carries paymentRef + provider ref); failed / cancelled / expired / 2-minute timeout → nothing completed ("Do NOT hand over goods"); no Firebase / helper / sign-in → refused, no simulated fallback. Split sales now prompt for the M-PESA portion only, and the split wrapper undoes itself when the payment does not complete (it used to leak split metadata into the next sale). `sokoni-pos-stk.js` copied byte-identical from the union (2ce33af); `pos.html` loads it before pos.js.
+**Tests:** scripts/test-pos-mpesa-intasend.js 9/0 (executes the real sendSTK; sabotages caught: complete-on-pending → A+C, invented SIMULATED_ ref → F1); scripts/test-daraja-leftovers.js 19/0 (D5 updated from "no payment function" to "IntaSend POS rail only").
+**Open (POS lane):** server-side, posCompleteCheckout should itself require a completed posPaymentStatus for method mpesa (the client gate is not a server guarantee).
+
 ## [2026-10-03] - Hosting: Daraja code removed — engine retired, POS fake payment removed, credential forms gone — NOT deployed
 
 Owner order "remove daraja code" (IntaSend only).

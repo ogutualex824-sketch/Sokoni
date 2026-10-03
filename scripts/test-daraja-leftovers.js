@@ -51,9 +51,16 @@ for (const f of ['payments.html', 'seller.html', 'sokoni-endpoints.js', 'sokoni-
 /* Behaviour the cleanup must keep (comment-stripped source). */
 {
   const pos = strip(fs.readFileSync(path.join(ROOT, 'pos.js'), 'utf8'));
-  const send = (pos.match(/async sendSTK\(\)\s*\{[\s\S]*?\n    \},/) || [''])[0];
-  ck('D5  POS sendSTK calls no payment function and never invents a checkout id',
-     send.length > 0 && !/httpsCallable|SIMULATED_|payment\.complete/.test(send) && /Nothing was charged/.test(send));
+  const send = (pos.match(/async sendSTK\([^)]*\)\s*\{[\s\S]*?\n    \},/) || [''])[0];
+  /* 2026-10-03 (owner-authorized, sokoni-2f): the refusal floor is replaced by the canonical IntaSend POS rail.
+     sendSTK may ONLY use SokoniPosStk (posInitiateIntasendPayment + posCheckPaymentStatus); never a direct
+     httpsCallable, never Daraja, never an invented checkout id, and it completes the sale only on the SERVER's
+     'completed' status. Behaviour is executed by scripts/test-pos-mpesa-intasend.js. */
+  ck('D5  POS sendSTK uses only the IntaSend POS rail and never invents a checkout id',
+     send.length > 0 && !/httpsCallable|SIMULATED_|darajaSTKPush|verifyPaymentStatus/.test(send)
+     && /SokoniPosStk/.test(send) && /S\.callStk\(factory\)/.test(send) && /S\.callVerify\(factory\)/.test(send)
+     && /st === 'completed'[\s\S]*payment\.complete\(/.test(send) && (send.match(/payment\.complete\(/g) || []).length === 1
+     && /Nothing was charged/.test(send));
   ck('D6  POS never completes a sale on a simulated M-PESA confirmation', !/SIMULATED_|mpesaRef\s*=\s*'SIM'/.test(pos));
   ck('D7  POS collects no Safaricom API keys', !/mpesa-ck|mpesa-cs|mpesa-passkey|cfg-mpesa-ck|cfg-mpesa-passkey/.test(pos + strip(fs.readFileSync(path.join(ROOT, 'pos.html'), 'utf8'))));
   const eng = strip(fs.readFileSync(path.join(ROOT, 'sokoni-mpesa.js'), 'utf8'));

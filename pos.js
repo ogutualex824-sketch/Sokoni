@@ -1808,30 +1808,87 @@ const SPos = (function () {
 
   const mpesa = {
 
-    async sendSTK() {
+    /* M-PESA on the canonical IntaSend POS rail (owner-authorized 2026-10-03; replaces sokoni-b2's refusal floor).
+       Request:  SokoniPosStk.callStk  → posInitiateIntasendPayment (server mints the postill_ reference, raises ONE
+                 prompt per attempt, refuses a shop the cashier cannot act for).
+       Confirm:  SokoniPosStk.callVerify → posCheckPaymentStatus, which reads the payment record ONLY the IntaSend
+                 webhook writes. The sale completes ONLY on status 'completed'. There is NO simulated path: no
+                 Firebase / no helper / no confirmation → nothing is charged and nothing is completed.
+       amountOverride: the M-PESA portion of a split sale (the customer is prompted for that amount, not the total).
+       Resolves { ok:true } once the sale is completed, { ok:false } on failure / timeout / cancel. */
+    async sendSTK(amountOverride) {
       const phone  = _v('mpesa-phone').replace(/\s/g, '');
-      const total  = cart.getTotal();
-
-      if (!phone || phone.length < 9) { toast('Enter valid phone number', 'error'); return; }
-
-      const cleanPhone = phone.startsWith('0') ? '254' + phone.slice(1) : phone.startsWith('+') ? phone.slice(1) : phone;
-
-      /* RETIRED 2026-10-03 (owner: IntaSend only). This sent the prompt through darajaSTKPush, a Daraja
-         function that is not deployed, and when no Firebase app was present it invented a checkout id
-         ('SIMULATED_…') and "confirmed" it after three polls, completing an M-Pesa sale nobody paid.
-         The M-Pesa prompt is not available on this screen; the manual till payment (customer pays the
-         till number, cashier records the confirmation code) and cash remain. */
-      void cleanPhone; void total;
-      const res = document.getElementById('mpesa-result');
-      if (res) {
-        res.style.display = 'block';
-        res.style.background = 'rgba(239,68,68,0.1)';
-        res.style.color = 'var(--red)';
-        res.textContent = 'M-PESA prompts are not available on this screen. Ask the customer to pay your till number and record the confirmation code, or take cash. Nothing was charged.';
-      }
+      const total  = Number(amountOverride) > 0 ? Number(amountOverride) : cart.getTotal();
+      const resEl  = () => document.getElementById('mpesa-result');
       const sendBtn = document.getElementById('mpesa-send-btn');
-      if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '📱 Send M-PESA Request'; }
-      toast('M-PESA prompts are not available here — nothing was charged', 'error');
+      const show = (ok, text) => { const r = resEl(); if (!r) return; r.style.display = 'block'; r.style.background = ok ? 'rgba(0,168,78,0.1)' : 'rgba(239,68,68,0.1)'; r.style.color = ok ? '#00a84e' : 'var(--red)'; r.textContent = text; };
+      const resetBtn = () => { if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '📱 Send M-PESA Request'; } };
+
+      if (!phone || phone.length < 9) { toast('Enter valid phone number', 'error'); return { ok: false }; }
+      if (!(total > 0)) { toast('Nothing to charge', 'error'); return { ok: false }; }
+      const cleanPhone = phone.startsWith('0') ? '254' + phone.slice(1) : phone.startsWith('+') ? phone.slice(1) : phone;
+      const merchantId = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || (window.currentUser && window.currentUser.uid) || '';
+      const S = window.SokoniPosStk, factory = window.sokoniCallable;
+      const callStk = S && typeof factory === 'function' ? S.callStk(factory) : null;
+      const callVerify = S && typeof factory === 'function' ? S.callVerify(factory) : null;
+      if (!callStk || !callVerify || !merchantId) {
+        show(false, 'M-PESA prompts are not available right now (not signed in or offline). Ask the customer to pay your till number and record the confirmation code, or take cash. Nothing was charged.');
+        resetBtn();
+        return { ok: false };
+      }
+      if (state.mpesaPollTimer) { clearInterval(state.mpesaPollTimer); state.mpesaPollTimer = null; }
+      if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Sending…'; }
+      _setMpesaStep(1, 'active');
+      let ref;
+      try {
+        const r = await callStk({ sellerUid: merchantId, phone: cleanPhone, amount: Math.ceil(total), description: 'SOKONI SmartPOS Sale' });
+        ref = r && r.data && r.data.ref;
+        if (!ref) throw new Error('The payment request did not return a reference.');
+      } catch (e) {
+        _setMpesaStep(1, 'failed');
+        show(false, 'Could not send the M-PESA prompt: ' + String((e && e.message) || 'unknown error') + ' Nothing was charged.');
+        resetBtn();
+        return { ok: false };
+      }
+      state.mpesaCheckoutId = ref;
+      _setMpesaStep(1, 'done');
+      _setMpesaStep(2, 'active');
+      show(true, 'Prompt sent. Waiting for the customer to enter their M-PESA PIN…');
+
+      return await new Promise((resolve) => {
+        let attempts = 0, busy = false;
+        const stop = () => { if (state.mpesaPollTimer) { clearInterval(state.mpesaPollTimer); state.mpesaPollTimer = null; } };
+        state.mpesaPollTimer = setInterval(async () => {
+          if (busy) return;
+          if (state.mpesaCheckoutId !== ref) { stop(); resolve({ ok: false }); return; }   /* cancelled or replaced */
+          attempts++;
+          if (attempts > 24) {   /* ~2 minutes */
+            stop(); _setMpesaStep(2, 'failed'); _setMpesaStep(3, 'failed');
+            show(false, 'No confirmation from M-PESA yet. Do NOT hand over goods. Check the customer\'s M-PESA message, or try again.');
+            resetBtn(); resolve({ ok: false }); return;
+          }
+          busy = true;
+          try {
+            const v = await callVerify({ checkoutId: ref });
+            const st = String((v && v.data && v.data.status) || 'pending').toLowerCase();
+            if (st === 'completed') {
+              stop(); _setMpesaStep(2, 'done'); _setMpesaStep(3, 'done');
+              const mpesaRef = (v.data && v.data.transactionRef) || ref;
+              show(true, '✓ M-PESA confirmed by the payment provider. Ref: ' + mpesaRef);
+              setTimeout(async () => {
+                modal.close('mpesa-modal');
+                await payment.complete({ method: 'mpesa', amountPaid: total, change: 0, mpesaRef, mpesaPhone: cleanPhone, paymentRef: ref, paymentRail: 'intasend_pos' });
+                resolve({ ok: true });
+              }, 1200);
+            } else if (st === 'failed' || st === 'cancelled' || st === 'expired') {
+              stop(); _setMpesaStep(2, 'failed'); _setMpesaStep(3, 'failed');
+              show(false, 'M-PESA payment ' + st + ((v.data && v.data.reason) ? ' (' + v.data.reason + ')' : '') + '. Nothing was charged. Try again or take cash.');
+              resetBtn(); resolve({ ok: false });
+            }
+          } catch (_) { /* transient read error: keep polling until the timeout */ }
+          finally { busy = false; }
+        }, 5000);
+      });
     },
 
     cancelSTK() {
@@ -4173,7 +4230,9 @@ const SPos = (function () {
           splitMpesa: payInfo.amountPaid || mpesaPortion,
         });
       };
-      return origSendSTK();
+      const r = await origSendSTK(mpesaPortion);
+      if (!r || !r.ok) payment.complete = origComplete;   /* failed / timed out: the next sale must not inherit split metadata */
+      return r;
     };
   })();
 
