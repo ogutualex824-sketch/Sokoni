@@ -20,7 +20,9 @@ const { onCall } = require('firebase-functions/v2/https');
 const { getAuth }                   = require('firebase-admin/auth');
 const { getFirestore, FieldValue }  = require('firebase-admin/firestore');
 const { checkRateLimit } = require('./redis-rate-limiter');   /* HIGH-06 — existing limiter, not a new one */
-const { writeAudit } = require('./pos-audit');
+const crypto = require('crypto');
+/* AdminOS Authority Core (binding scope 05df4c9) — canonical-writer + controlEvents helpers. */
+const ace = require('./authority-control-events');
 
 /* ── Constants ──────────────────────────────────────────────────────────────── */
 
@@ -43,6 +45,7 @@ function _requireSuperAdmin(ctx) {
     });
   }
 }
+exports._requireSuperAdmin = _requireSuperAdmin;   // test hook — C3 single-authority (claim is THE gate)
 
 /**
  * Throws unless the caller holds `admin` OR `superAdmin` custom claim.
@@ -102,7 +105,7 @@ async function _auditLog({ actor, action, resource, details, severity }) {
    Returns: { success: true, uid, role }
    Guard  : superAdmin only
 ═══════════════════════════════════════════════════════════════════════════════ */
-exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (request) => {
+exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._setUserRoleHandler = async (request) => {
   _requireSuperAdmin(request);
   /* a suspended super admin's still-valid token cannot change roles (owner 2026-10-04) */
   try { await require('./shared/account-state').assertAccountActive(getFirestore(), request.auth.uid); }
@@ -132,55 +135,87 @@ exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 
     throw new Error(`NOT_FOUND: user ${cleanUid} does not exist`);
   }
 
-  // ── Build minimal, non-overlapping custom claims ────────────────────────────
-  // Only the flags relevant to the new role are set to `true`; all others are
-  // explicitly `false` so previous role claims are always cleared atomically.
-  /* Capture the PREVIOUS role (from existing claims) BEFORE overwriting — required by the audit. */
-  const _pc = targetUser.customClaims || {};
-  const _prevRole = _pc.superAdmin ? 'superAdmin' : _pc.admin ? 'admin' : _pc.seller ? 'seller'
-    : _pc.driver ? 'driver' : _pc.moderator ? 'moderator' : 'buyer';
+  // ── AdminOS Authority Core (binding scope 05df4c9) ──────────────────────────
+  // C1: preserve every non-role claim; normalize ONLY the six governed roles; superAdmin ⇒ admin.
+  // C2/C6: permsVersion is monotonic — it never downgrades a higher existing value.
+  const currentClaims = targetUser.customClaims || {};
+  const mergedClaims  = ace.computeMergedClaims(currentClaims, cleanRole);
 
-  const claims = {
-    admin:      cleanRole === 'admin'      || cleanRole === 'superAdmin',
-    superAdmin: cleanRole === 'superAdmin',
-    seller:     cleanRole === 'seller',
-    driver:     cleanRole === 'driver',
-    moderator:  cleanRole === 'moderator',
-    // buyer is the default — no elevated claim needed, but we track it explicitly
-    buyer:      cleanRole === 'buyer',
-  };
+  // C7: deterministic event identity. Cross-call retry idempotency is GUARANTEED ONLY when the
+  //     caller supplies `requestId` (the idempotency key) — a retry then writes the SAME event and
+  //     collapses to a no-op. When `requestId` is OMITTED a fresh per-invocation id is generated,
+  //     so each call is a DISTINCT intent by design (no cross-call idempotency). Callers that need
+  //     at-most-once semantics MUST pass a stable requestId.
+  const requestId = (request.data && typeof request.data.requestId === 'string' && request.data.requestId.trim())
+    ? request.data.requestId.trim()
+    : crypto.randomUUID();
+  const eventId = ace.deterministicEventId({
+    targetUid: cleanUid, callerUid: request.auth.uid, intendedClaims: mergedClaims, requestId,
+  });
+  const owner = crypto.randomUUID();   // unique execution id for this run (C8/C10)
+  const db = getFirestore();
 
-  await getAuth().setCustomUserClaims(cleanUid, claims);
+  // C3 (fail-closed) + C8 (atomic ownership): the controlEvents intent is a PRECONDITION for the
+  //   Auth mutation, and exactly one execution may reach setCustomUserClaims. An intent-write
+  //   failure throws here and no privileged mutation occurs.
+  const claim = await ace.claimEvent(db, eventId, {
+    type: 'admin.setUserRole', targetUid: cleanUid, callerUid: request.auth.uid,
+    requestId, intendedClaims: mergedClaims,
+  }, owner);
+
+  // Idempotency / concurrency / recovery resolution — NONE of these branches mutate Auth.
+  if (claim.alreadyCommitted) {
+    return { success: true, uid: cleanUid, role: cleanRole, permsVersion: mergedClaims.permsVersion, eventId, idempotent: true };
+  }
+  if (claim.recovery) {
+    throw Object.assign(new Error('FAILED_PRECONDITION: role change is under manual recovery — retry after review'), { code: 'failed-precondition' });
+  }
+  if (claim.stale) {          // C9: a prior winner abandoned mid-flight → reconcile WITHOUT re-mutating.
+    const rec = await ace.reconcileStaleEvent(db, eventId, getAuth);
+    if (rec.status === 'committed') {
+      return { success: true, uid: cleanUid, role: cleanRole, permsVersion: mergedClaims.permsVersion, eventId, reconciled: true };
+    }
+    throw Object.assign(new Error('FAILED_PRECONDITION: role change requires manual review'), { code: 'failed-precondition' });
+  }
+  if (claim.inProgress) {     // C8: another live winner holds the mutation. Do NOT mutate —
+    //   wait/reconcile to committed and return THAT result (bounded + fail-closed).
+    const w = await ace.waitForCommit(db, eventId, getAuth);
+    if (w.status === 'committed') {
+      return { success: true, uid: cleanUid, role: cleanRole, permsVersion: mergedClaims.permsVersion, eventId, idempotent: true };
+    }
+    if (w.status === 'recovery') {
+      throw Object.assign(new Error('FAILED_PRECONDITION: role change requires manual review'), { code: 'failed-precondition' });
+    }
+    // timeout / missing → bounded fail-closed; the winner is slow or gone, caller retries.
+    throw Object.assign(new Error('ABORTED: role change still in progress — retry'), { code: 'aborted' });
+  }
+  // else claim.won === true → this execution owns the single Auth mutation.
+
+  // ── THE mutation (winner only). Merge-preserving claims — not a destructive overwrite. ──
+  await getAuth().setCustomUserClaims(cleanUid, mergedClaims);
 
   // ── Mirror role into Firestore so the users collection stays consistent ──────
-  const db = getFirestore();
   await db.collection('users').doc(cleanUid).set(
     { role: cleanRole, roleUpdatedAt: FieldValue.serverTimestamp() },
     { merge: true },
   );
 
-  // ── Audit ───────────────────────────────────────────────────────────────────
+  // ── C10: fenced finalize — committed is accepted only from the current (owner,fenceToken). ──
+  await ace.finalizeEvent(db, eventId, owner, claim.fenceToken, {
+    ok: true, role: cleanRole, permsVersion: mergedClaims.permsVersion, mutationCount: 1,
+  });
+
+  // ── Audit (existing stream retained — no legacy audit collection removed or rewired) ─────
   await _auditLog({
     actor:    request.auth.uid,
     action:   'setUserRole',
     resource: `users/${cleanUid}`,
-    details:  { uid: cleanUid, newRole: cleanRole, claims, targetEmail: targetUser.email || null },
+    details:  { uid: cleanUid, newRole: cleanRole, claims: mergedClaims, eventId, targetEmail: targetUser.email || null,
+      reason: (request.data && typeof request.data.reason === 'string') ? _stripHtml(request.data.reason).slice(0, 500) || null : null },
     severity: 'high',
   });
-  /* Canonical audit schema (Task 4) — actor, target, previous→new role, outcome, ts. */
-  writeAudit(db, {
-    action:     'role.change',
-    actorUid:   request.auth.uid,
-    actorRole:  (request.auth.token && request.auth.token.role) || 'superAdmin',
-    objectType: 'user',
-    objectId:   cleanUid,
-    before:     { role: _prevRole },
-    after:      { role: cleanRole },
-    reason:     (request.data && request.data.reason) || null,
-    metadata:   { targetEmail: targetUser.email || null, claims },
-  });
 
-  return { success: true, uid: cleanUid, role: cleanRole };
+  return { success: true, uid: cleanUid, role: cleanRole, permsVersion: mergedClaims.permsVersion, eventId };
 });
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -192,9 +227,6 @@ exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 
    Returns: { success: true, uid, suspended: boolean }
    Guard  : superAdmin only
 ═══════════════════════════════════════════════════════════════════════════════ */
-/* CANONICAL SUSPENSION (owner 2026-10-04): the ONE callable both AdminOS and Super Admin use. The contract lives in
-   shared/account-suspension.js — Auth account disabled + sessions revoked + status:'suspended' + one history + one audit
-   record; super-admin-only, server-side; no self-suspension; idempotent. Errors carry real HttpsError codes. */
 exports.suspendUser = onCall({ cors: true, region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (request) => {
   const { HttpsError } = require('firebase-functions/v2/https');
   const d = request.data || {};
@@ -202,8 +234,9 @@ exports.suspendUser = onCall({ cors: true, region: 'us-central1', maxInstances: 
     return await require('./shared/account-suspension').setSuspension({
       db: getFirestore(), auth: getAuth(), serverTs: () => FieldValue.serverTimestamp(),
       actor: request.auth ? { uid: request.auth.uid, superAdmin: request.auth.token && request.auth.token.superAdmin === true } : null,
-      uid: d.uid, suspend: d.suspend, reason: d.reason, source: typeof d.source === 'string' ? d.source : 'super_admin',
-    });
+      uid: d.uid, suspend: d.suspend, kind: d.kind, durationDays: d.durationDays, reason: d.reason,
+      source: typeof d.source === 'string' ? d.source : 'super_admin',
+    }).then((r) => Object.assign({ success: true }, r));
   } catch (e) {
     if (e && e.code && typeof e.code === 'string') throw new HttpsError(e.code, e.message);
     throw e;

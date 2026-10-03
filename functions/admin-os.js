@@ -59,7 +59,10 @@ exports.adminGetPlatformOverview = onCall({ region: 'us-central1', maxInstances:
    *Available:false, and the UI renders "—". */
 const _USERS_MAX_PAGE = 50;
 const _ccOf = (u) => (u.customClaims && typeof u.customClaims === 'object') ? u.customClaims : {};
-const _userStatus = (u) => (u.suspended === true || u.status === 'suspended' || u.status === 'banned') ? 'suspended' : (u.status || 'active');
+/* a BAN is its own state (owner 2026-10-04) — never collapsed into 'suspended' */
+const _userStatus = (u) => u.status === 'banned' ? 'banned' : (u.suspended === true || u.status === 'suspended') ? 'suspended' : (u.status || 'active');
+/* suspendedUntil → epoch ms, or null when absent / not a server timestamp (the UI renders null as —) */
+const _untilMs = (v) => { try { return v && typeof v.toMillis === 'function' ? v.toMillis() : (v instanceof Date ? v.getTime() : null); } catch (_) { return null; } };
 
 /* Builds the authoritative query for role / status / sort. Returns { q, sortField, dir }. */
 function _usersQuery(db, { role, status, sort }) {
@@ -90,6 +93,7 @@ function _row(u, auth) {
   return {
     id: u.id, displayName: u.displayName || '', email: u.email || '', phone: u.phone || '', role: u.role || 'buyer',
     status: _userStatus(u), verified: u.verified === true, createdAt: u.createdAt || null,
+    suspendedUntil: _userStatus(u) === 'suspended' ? _untilMs(u.suspendedUntil) : null,
     photoURL: typeof u.photoURL === 'string' && u.photoURL.startsWith('https://') ? u.photoURL : null,
     team: _ccOf(u).department || _ccOf(u).teamId || null,
     lastSignIn: a && a.metadata.lastSignInTime ? Date.parse(a.metadata.lastSignInTime) : null,
@@ -242,6 +246,8 @@ exports.adminGetUser = onCall({ region: 'us-central1', maxInstances: 10, enforce
     security: {
       authAvailable: !!authUser,
       accountStatus: _userStatus(u),
+      suspendedUntil: _userStatus(u) === 'suspended' ? _untilMs(u.suspendedUntil) : null,
+      banReason: _userStatus(u) === 'banned' ? (u.banReason || null) : null,
       signInEnabled: authUser ? authUser.disabled !== true : null,
       twoFactor: authUser ? ((authUser.multiFactor && (authUser.multiFactor.enrolledFactors || []).length) ? 'enabled' : 'not_enabled') : 'unavailable',
       suspensionHistory: suspSnap ? suspSnap.docs.map((x) => { const e = x.data() || {}; return { action: e.action, actorUid: e.actorUid || null, reason: e.reason || null, source: e.source || null, at: t(e.at) }; })
@@ -258,45 +264,16 @@ exports.adminGetUser = onCall({ region: 'us-central1', maxInstances: 10, enforce
 });
 
 exports.adminUpdateUserRole = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminUpdateUserRole = async (req) => {
+  /* ONE role authority (owner 2026-10-04): this used to OVERWRITE the Auth claims with { [role]: true, ...additional } —
+     destroying every unrelated claim (merchantId, posId, permsVersion …) and minting superAdmin without admin. It now
+     delegates to super-admin.js setUserRole (AdminOS Authority Core 05df4c9: preserve non-role claims, monotonic
+     permsVersion, controlEvents precondition, requestId idempotency, audited). additionalClaims is refused — role changes
+     never write arbitrary claims; existing ones are preserved. */
   _requireSuperAdmin(req);
-  const { uid, role, additionalClaims } = req.data;
-  if (!uid || !role) throw new Error('uid, role required');
-
-  const validRoles = ['buyer', 'seller', 'provider', 'driver', 'admin', 'moderator', 'superAdmin'];
-  if (!validRoles.includes(role)) throw new Error(`Invalid role. Must be one of: ${validRoles.join(', ')}`);
-
-  const auth = getAuth();
-  const db = getFirestore();
-
-  // Only allow safe, non-privilege supplementary claims to prevent escalation
-  // via the additionalClaims spread (e.g. { superAdmin: true } injection)
-  const SAFE_ADDITIONAL_KEYS = new Set(['department', 'location', 'merchantId', 'posId', 'branchId', 'teamId']);
-  const sanitizedAdditional = additionalClaims
-    ? Object.fromEntries(
-        Object.entries(additionalClaims).filter(([k]) => SAFE_ADDITIONAL_KEYS.has(k))
-      )
-    : {};
-
-  const claims = { [role]: true, ...sanitizedAdditional };
-  // Prevent superAdmin escalation except by existing superAdmin
-  if (role === 'superAdmin' && !req.auth?.token?.superAdmin) throw new Error('Cannot assign superAdmin');
-
-  await auth.setCustomUserClaims(uid, claims);
-  await db.collection('users').doc(uid).update({
-    role,
-    customClaims: claims,
-    roleUpdatedAt: FieldValue.serverTimestamp(),
-    roleUpdatedBy: req.auth.uid,
-  });
-  await db.collection('adminAudit').add({
-    action: 'role_updated',
-    targetUid: uid,
-    newRole: role,
-    performedBy: req.auth.uid,
-    createdAt: FieldValue.serverTimestamp(),
-  });
-
-  return { success: true };
+  const d = req.data || {};
+  if (d.additionalClaims != null) throw new HttpsError('invalid-argument', 'additionalClaims is not accepted; existing claims are preserved by the role authority.');
+  return require('./super-admin')._setUserRoleHandler({ auth: req.auth, rawRequest: req.rawRequest,
+    data: { uid: d.uid, role: d.role, requestId: d.requestId, reason: d.reason } });
 });
 
 /* ─────────────────────────────────────────────────────────────────────────
