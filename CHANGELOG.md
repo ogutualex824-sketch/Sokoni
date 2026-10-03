@@ -1,3 +1,37 @@
+## [2026-10-03] - Construction workspace in merchant-v2 — Leads, Equipment & Rentals, honest Projects/RFQs/Services, application status (hosting only; NOT deployed)
+
+- **Summary:** ten `con-*` routes in a new **Construction** sidebar group, appended LAST (assembly order chain → Jobs →
+  Sports → Construction; R3 after assembly `…|Back office|Jobs|Sports|Construction`). One module
+  `sokoni-merchant-construction.js`; owner layout (contractor 18 sections / supplier 5 / equipment rental 3) via sokoni-f3.
+  Storefront, Products, Inventory, Orders, Customers, Messages, Delivery, Marketing, Wallet, Subscription and Staff LINK to
+  their existing routes — no duplicated module. Role variants: no server answer on this tree → all three layouts shown
+  (5b MODULES hand-off); never inferred from a category.
+- **Leads:** `contactRequests where sellerUid == uid` (limit 201 → exact "more exist"); buttons follow the owner matrix
+  (subset of f9a5c45 `leadNext()`); the ONLY browser write is `updateDoc` with exactly `{status, respondedAt?
+  (serverTimestamp), sellerNote?}`, enforced in the module AND the shell writer `_conWriteLead`. "Open chat" only when
+  `SokoniInbox.TX_TYPES` has `product_enquiry` (b2 74c9d50), else disabled "Chat coming". No wa.me / tel: / mailto:.
+  df1a4cb's "Buyer enquiries" sheet is NOT on this tree — at assembly route it to `con-leads` (one surface).
+- **Equipment & rentals:** commerceDispatch `rentalProductCreate / rentalGetAvailability / rentalList / rentalConfirm /
+  rentalComplete / rentalCancel` (marketplace-extensions.js identical to the live archive). No pay step: "Paid rentals open
+  once SOKONI sets rental pricing." Refused reads say "Rentals become visible once access rules ship".
+  Server gaps (f3): `_assertSeller` checks `shops.ownerId` (absent in the identity model); `rentalCancel` needs a
+  `token.shopId` claim nobody mints; `rentalComplete` has no status check; errors reach the client as `internal`.
+- **Honest entries:** Projects (Work engine unbuilt), RFQs/Quotes (B2B release; link to f3's `rfqs` route when present),
+  Services (provider surface not reachable). Verification = `applications` status as recorded; "Verified" only when
+  `verified === true` (finding: applicant can rewrite `status` under current rules).
+- **Commercial:** materials 15% / construction services 0% shown as release terms (not yet live); featured, lead fee,
+  rental and plans unpriced + OFF; plan prices only from `subGetPlans({hubType:'construction'})`, else "—".
+- **Files:** `sokoni-merchant-construction.js` (new), `sokoni-merchant-routes.js`, `merchant-v2.html`,
+  `scripts/test-merchant-construction-workspace.js` (new), `scripts/test-mv2-1-sidebar.js` (R3),
+  `docs/CONSTRUCTION_WORKSPACE.md` (new).
+- **Database / API / security changes:** none server-side. One client write path (lead status/note) already permitted by
+  rules; shape-locked in two layers.
+- **Tests:** construction workspace 39/0 (35 rows + 4/4 negative controls: illegal lead button, extra update field, rental
+  pay button, 0-for-unknown); test-merchant-routes 65/0; test-mv2-1-sidebar 14/0; test-merchant-v2-panels 20/0.
+  Browser certification QUEUED (not run).
+- **Release dependencies:** f3 combined rules f9a5c45 + rental rules; f3 intake 98589b6; b2 product_enquiry TX; 2f
+  commission line. Nothing deploys without the owner.
+
 ## [2026-10-03] - setShopAvailability — Merchant V2 schedule saves through the server (no browser write; NOT deployed)
 
 **DEPLOY PRECONDITION (hard):** requires functions: setShopAvailability live (verify with a functions list before the hosting deploy).
