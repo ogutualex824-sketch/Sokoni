@@ -117,12 +117,12 @@ Every tech category shares the same rails. They differ only in the capabilities 
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | phone-repair · laptop-repair · computer-repair | P (HubRegister + provider-onboarding → applications) | P (applicationDecide) | **D 5b** | P | P repairs, supportedDevices, leads; B UI | P device profile | B (badge P) | P | P (+ repairDetails) | D (existing IntaSend engine, not re-proven) | **D 5b port — live line settles 20 %** | P | P | existing engine | P suspend / reinstate, leads view | B read-only rates |
 | electronics-repair | P | P | **D 5b** | P | P repairs, supportedDevices, leads | P | B | P | P | D | **D 5b** | P | P | existing | P | B |
-| it-support | P | P | **D 5b** | P | P leads, bookings; supportTickets / remoteSupport / siteVisits NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
-| networking | P | P | **D 5b** | P | P leads; networkProjects / siteVisits NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
-| cctv | P | P | **D 5b** | P | P leads; cctvInstallations / siteVisits NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
-| pos-support | P | P | **D 5b** | P | P leads; posSupport NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
-| web-developer · software · app-developer · data-entry | P | P | **D 5b** | P | P leads; projects / remoteSupport NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
-| electrical | P | P | **D 5b** | P (service modes) | P leads, bookings; siteVisits NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
+| it-support | P | P | **D 5b** | P | P leads, bookings, remoteSupport, siteVisits (4C); supportTickets NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
+| networking | P | P | **D 5b** | P | P leads, siteVisits (4C); networkProjects NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
+| cctv | P | P | **D 5b** | P | P leads, siteVisits (4C); cctvInstallations NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
+| pos-support | P | P | **D 5b** | P | P leads, siteVisits, remoteSupport (4C); posSupport NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
+| web-developer · software · app-developer · data-entry | P | P | **D 5b** | P | P leads, remoteSupport (4C); projects NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
+| electrical | P | P | **D 5b** | P (service modes) | P leads, bookings, siteVisits (4C) | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
 
 No category is registration-only. Each one can apply, be approved, list, take leads, quote, book, message and call.
 
