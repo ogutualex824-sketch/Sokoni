@@ -166,3 +166,11 @@ Suite: `scripts/zz-test-provider-trust.js` (PT-R1/R2, PT-C*, PT-D-* one row per 
 The owner could write their own `plan` / `vehicleLimit` (sokoni-tracking.js `saveSubscription`), which meant free self-activation of paid tracking tiers. Now `allow write: if isAdmin()`; owner read is unchanged. No server writer exists yet: a plan activates only through a verified IntaSend payment plus canonical subscription activation (sub-billing, Car Hub C6). The Car Hub page stops calling `saveSubscription` (C1b). Suite `scripts/zz-test-tracking-subscription.js` (TS-*), **EMULATOR PENDING**. Baseline f259c0b5: the TS-D rows must fail there.
 
 **Provider trust lock, extended (sokoni-5b census, 2026-10-03):** `providerTrustKeys()` now also refuses `healthcare`, `legalProviderId`, `provisionedBy` and `legalVerification` on owner create and update. Without them, `business-category.categoryOf()`'s fallbacks let an unstamped approved provider self-classify as a clinic or lawyer, and flip the `!!p.healthcare` boundary that `bizAdminClassify` relies on. PT-D rows were added for each key. **EMULATOR PENDING.**
+
+## 2026-10-03: orders status allow-lists (sokoni-5b security slice; edited by f3, the hunk owner)
+
+- **Seller:** the deny-list let a seller set `cancelled` / `pending` from any status, so a paid order could be cancelled with no refund. Now an allow-list. Status unchanged (notes / tracking) is allowed. Otherwise only `cancelled` from `pending` / `pending_payment`, or `shipped` / `out_for_delivery` from a paid or accepted state.
+- **Assigned rider:** only `delivered` / `completed` were denied. Now status unchanged is allowed. Otherwise only `picked_up` / `in_transit` / `out_for_delivery` from a rider stage.
+- Delivered / completed and the payment states stay server-only.
+- Census (5b): no live UI writes order status directly.
+- Suite `scripts/zz-test-orders-status-rules.js` (OR-S1..7, OR-R1..8). **EMULATOR PENDING.** Baseline f259c0b5: OR-S1 and OR-R1..4 must fail there.

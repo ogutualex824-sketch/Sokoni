@@ -436,18 +436,27 @@ service cloud.firestore {
   .hasOnly(['status','cancelReason','updatedAt','review']))
   || (isAuthed() && resource.data.sellerUid == request.auth.uid
   && uidUnchanged() && validOrderStatus()
-  // P0 2026-09-29: a seller never marks an order delivered/completed — that is delivery proof,
-  // produced only by completeDeliveryWithPin / buyerConfirmDelivery (rider payout fired on it).
-  && !(request.resource.data.status in ['delivered','completed'])
-  /* sokoni-4d census 2026-10-01: nor any payment or dispatch state — those are written by the payment webhook /
-     orderAdvance / delivery authorities, never by a seller's raw client write. */
-  && !(request.resource.data.status in ['paid','refunded','confirmed','processing','pending_payment',
-  'awaiting_confirmation','rider_assigned','rider_en_route','picked_up','in_transit'])
+  /* 2026-10-03 sokoni-5b security slice (orders): the deny-list (P0 2026-09-29 delivered/completed; 4d census payment &
+     dispatch states) still let a seller set 'cancelled' / 'pending' from ANY status — a PAID order cancelled with no
+     refund. Now an ALLOW-LIST: status unchanged (notes / tracking only), or
+       cancelled            only from unpaid pending / pending_payment (a paid cancellation = the refund programme, server)
+       shipped / out_for_delivery only from a paid / accepted order.
+     delivered / completed stay server-only (completeDeliveryWithPin / buyerConfirmDelivery); payment states are the
+     webhook's. Census: no live UI writes order status directly. */
+  && (request.resource.data.status == resource.data.status
+  || (request.resource.data.status == 'cancelled' && resource.data.status in ['pending','pending_payment'])
+  || (request.resource.data.status in ['shipped','out_for_delivery']
+  && resource.data.status in ['paid','confirmed','processing','accepted','ready_for_pickup','awaiting_rider']))
   && request.resource.data.diff(resource.data).affectedKeys()
   .hasOnly(['status','sellerNote','readyAt','trackingNo','updatedAt']))
   || (isAuthed() && resource.data.assignedDriverUid == request.auth.uid
   && uidUnchanged() && validOrderStatus()
-  && !(request.resource.data.status in ['delivered','completed'])
+  /* 2026-10-03 sokoni-5b security slice: only delivered/completed were denied, so the assigned rider could set paid,
+     refunded, confirmed, cancelled, pending_payment… Now: status unchanged, or picked_up / in_transit / out_for_delivery
+     from a rider stage only. Delivery stays completeDeliveryWithPin / buyerConfirmDelivery (server). */
+  && (request.resource.data.status == resource.data.status
+  || (request.resource.data.status in ['picked_up','in_transit','out_for_delivery']
+  && resource.data.status in ['rider_assigned','rider_en_route','picked_up','in_transit','out_for_delivery']))
   && request.resource.data.diff(resource.data).affectedKeys()
   .hasOnly(['status','driverNote','updatedAt','pickedUpAt','etaMin']));
   allow delete: if isAdmin();
