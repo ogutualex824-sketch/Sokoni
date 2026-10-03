@@ -91,8 +91,10 @@ const OWNMAT = (u, c) => 'course-materials/' + u + '/' + c + '/notes.pdf';
 
   /* publish, then learner access */
   await db.doc('courses/c1').set({ status: 'published' }, { merge: true });
-  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Late', kind: 'text' } });
-  ck('A-9 lessons of a PUBLISHED course cannot be changed (unpublish / review first)', r.reason === 'NOT_A_DRAFT', r);
+  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Late', kind: 'text', status: 'published' } });
+  const LLATE = r.lessonId;
+  ck('A-9 OWNER RULE: a lesson added to a PUBLISHED course is saved as a DRAFT staged for review (publish is not immediate)',
+    r.ok && r.reviewRequired === true && (await all('courseLessons'))[LLATE].status === 'draft' && (await all('courseLessons'))[LLATE].stagedForReview === true, [r, (await all('courseLessons'))[LLATE]]);
   r = await call('learner1', { op: 'outline', courseId: 'c1' });
   ck('L-1 anyone sees a published course\'s outline (titles / kinds / preview flags / description / duration) — PUBLISHED lessons only, never bodies or links',
     r.ok && r.lessons.length === 3 && !r.lessons.some((x) => x.lessonId === LDRAFT) && !JSON.stringify(r).includes('Welcome') && !JSON.stringify(r).includes('youtube') && r.lessons.some((x) => x.durationMinutes === 10), r);
@@ -187,6 +189,45 @@ const OWNMAT = (u, c) => 'course-materials/' + u + '/' + c + '/notes.pdf';
   r = await legacy('learner1', { courseId: 'legacy', lessonId: 'lesson_1' });
   const r2 = await legacy('learner1', { courseId: 'legacy', lessonId: 'lesson_3' });
   ck('G-9 a legacy course (no real lessons) accepts only lesson_1…lesson_{lessonCount}', r.progress === 50 && r2.reason === 'LESSON_NOT_IN_COURSE', [r, r2]);
+  /* ── OWNER RULE 2026-10-03: changes to a PUBLISHED course are re-reviewed ── */
+  r = await call('teach1', { op: 'save', courseId: 'c1', lessonId: L2, lesson: { title: 'Video (edited)', kind: 'video', status: 'published', videoUrl: 'https://www.youtube.com/watch?v=NEW' } });
+  let lv = (await all('courseLessons'))[L2];
+  const lr = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L2 });
+  ck('R-1 editing a PUBLISHED lesson stores a pending revision — learners keep the REVIEWED version', r.ok && lv.title === 'Video' && /v=abc/.test(lv.videoUrl) && lv.pendingRevision && lv.pendingRevision.title === 'Video (edited)'
+    && lr.ok && /v=abc/.test(lr.lesson.videoUrl) && !lr.pendingRevision, [lv, lr]);
+  const op = await call('teach1', { op: 'content', courseId: 'c1', lessonId: L2 });
+  ck('R-2 the OWNER previews the pending change; a learner never receives it', op.ok && op.pendingRevision && op.pendingRevision.title === 'Video (edited)', op);
+  r = await call('learner1', { op: 'outline', courseId: 'c1' });
+  ck('R-3 the staged new lesson is NOT in the learner outline before review', !r.lessons.some((x) => x.lessonId === LLATE), r);
+  r = await call('teach1', { op: 'remove', courseId: 'c1', lessonId: L1 });
+  ck('R-4 a PUBLISHED lesson of a live course cannot be deleted (unpublish first)', r.reason === 'UNPUBLISH_FIRST', r);
+  r = await call('teach1', { op: 'submitRevision', courseId: 'c1' });
+  ck('R-5 the teacher submits the changes for review', r.ok && (await all('courses')).c1.revisionPending === true, r);
+  r = await call('teach1', { op: 'save', courseId: 'c1', lessonId: L2, lesson: { title: 'Sneaky', kind: 'text', body: 'x' } });
+  ck('R-6 while in review, no further changes are accepted', r.reason === 'REVISION_IN_REVIEW', r);
+  r = await call('teach1', { op: 'reviewRevision', courseId: 'c1', decision: 'approve' });
+  ck('R-7 a teacher cannot approve their own revision', r.reason === 'ADMIN_REQUIRED', r);
+  r = await call('admin1', { op: 'reviewRevision', courseId: 'c1', decision: 'reject' }, { admin: true });
+  ck('R-8 a rejection needs a reason', r.reason === 'NOTE_REQUIRED', r);
+  r = await call('admin1', { op: 'reviewRevision', courseId: 'c1', decision: 'approve' }, { admin: true });
+  lv = (await all('courseLessons'))[L2];
+  const late = (await all('courseLessons'))[LLATE];
+  const out = await call('learner1', { op: 'outline', courseId: 'c1' });
+  const lr2 = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L2 });
+  ck('R-9 admin APPROVES: the edit goes live, the staged lesson is published, the course leaves review (audited)',
+    r.ok && lv.title === 'Video (edited)' && !lv.pendingRevision && late.status === 'published' && !late.stagedForReview && (await all('courses')).c1.revisionPending === false
+      && out.lessons.some((x) => x.lessonId === LLATE) && /v=NEW/.test(lr2.lesson.videoUrl) && Object.values(await all('educationAudit')).some((x) => x.action === 'course_revision_approve'), [r, lv, late]);
+  r = await call('teach1', { op: 'setLessonStatus', courseId: 'c1', lessonId: LLATE, status: 'unpublished' });
+  const hidden = await call('learner1', { op: 'content', courseId: 'c1', lessonId: LLATE });
+  ck('R-10 UNPUBLISHING is immediate — learners lose the lesson at once', r.ok && (await all('courseLessons'))[LLATE].status === 'unpublished' && hidden.reason === 'LESSON_UNKNOWN', [r, hidden]);
+  r = await call('teach1', { op: 'setLessonStatus', courseId: 'c1', lessonId: LLATE, status: 'published' });
+  ck('R-11 REPUBLISHING goes through review (staged, still hidden)', r.reviewRequired === true && (await all('courseLessons'))[LLATE].status === 'unpublished' && (await all('courseLessons'))[LLATE].stagedForReview === true, r);
+  await call('teach1', { op: 'submitRevision', courseId: 'c1' });
+  r = await call('admin1', { op: 'reviewRevision', courseId: 'c1', decision: 'reject', note: 'Add an outline first' }, { admin: true });
+  ck('R-12 a REJECTED revision changes nothing for learners and returns the note', r.ok && (await all('courseLessons'))[LLATE].status === 'unpublished' && !(await all('courseLessons'))[LLATE].stagedForReview
+    && (await all('courses')).c1.revisionNote === 'Add an outline first' && (await all('courses')).c1.revisionPending === false, (await all('courses')).c1);
+  r = await call('teach2', { op: 'submitRevision', courseId: 'c1' });
+  ck('R-13 another teacher cannot submit / stage this course\'s revision', r.reason === 'NOT_COURSE_OWNER', r);
   say('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { say('CRASH (no verdict): ' + (e && e.stack || e)); process.exit(2); });

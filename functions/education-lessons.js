@@ -106,7 +106,7 @@ async function _lessonsOf(db, courseId) {
 const outlineOf = (l) => ({ lessonId: l.lessonId, title: l.title, kind: l.kind, order: l.order || 0, freePreview: l.freePreview === true,
   description: l.description || null, durationMinutes: l.durationMinutes || null });
 /* a learner only ever sees / opens / completes PUBLISHED lessons (a draft lesson inside a published course stays hidden) */
-const isLive = (l) => l.status !== 'draft';
+const isLive = (l) => l.status === 'published';   /* draft / unpublished / staged lessons are never a learner's */
 /* ENTITLEMENT = an ACTIVE enrolment: none of cancelled / refunded / expired, and not past expiresAtMs */
 function entitled(e) {
   if (!e || !e.exists) return false;
@@ -191,7 +191,9 @@ async function handle(req) {
     const x = l.data();
     /* minted ONLY after the entitlement check above; expires in 15 minutes */
     const materialUrl = x.materialPath ? await signedMaterialUrl(x.materialPath) : null;
-    return { ok: true, lesson: { lessonId: l.id, title: x.title, kind: x.kind, body: x.body || null, videoUrl: x.videoUrl || null, materialUrl, materialExpiresInMinutes: materialUrl ? 15 : null, freePreview: x.freePreview === true } };
+    return { ok: true, lesson: { lessonId: l.id, title: x.title, kind: x.kind, body: x.body || null, videoUrl: x.videoUrl || null, materialUrl, materialExpiresInMinutes: materialUrl ? 15 : null, freePreview: x.freePreview === true },
+      /* the OWNER also previews a change waiting for review; a learner never receives it */
+      ...(owner && x.pendingRevision ? { pendingRevision: Object.assign({}, x.pendingRevision, { materialPath: undefined }) } : {}) };
   }
   if (d.op === 'complete') return Object.assign({ ok: true }, await recordProgress(db, uid, courseId, _str(d.lessonId, 128), d.completed !== false));
   if (d.op === 'myCertificates') {
@@ -230,44 +232,131 @@ async function handle(req) {
     return { ok: true, status: 'revoked' };
   }
 
-  /* ── authoring (own DRAFT courses only) ── */
-  if (!['list', 'save', 'remove', 'reorder'].includes(d.op)) _deny('invalid-argument', 'Unknown operation.', 'OP_UNKNOWN');
+  /* ── course revision review (admin) — owner decision 2026-10-03: changes to a PUBLISHED course are re-reviewed ── */
+  if (d.op === 'reviewRevision') {
+    const isAdmin = !!(req.auth.token && (req.auth.token.admin === true || req.auth.token.superAdmin === true));
+    if (!isAdmin) _deny('permission-denied', 'Administrator access required.', 'ADMIN_REQUIRED');
+    const decision = d.decision === 'approve' ? 'approve' : d.decision === 'reject' ? 'reject' : _deny('invalid-argument', 'decision must be approve or reject.', 'DECISION_INVALID');
+    const note = _str(d.note, 500) || null;
+    if (decision === 'reject' && !note) _deny('invalid-argument', 'Give the teacher a reason.', 'NOTE_REQUIRED');
+    const lessons = await _lessonsOf(db, courseId);
+    const staged = lessons.filter((l) => l.stagedForReview === true);
+    await db.runTransaction(async (t) => {
+      const c = await t.get(courseRef);
+      if (!c.exists || c.data().revisionPending !== true) _deny('failed-precondition', 'This course has no changes waiting for review.', 'NO_REVISION');
+      const curs = [];
+      for (const l of staged) curs.push([l, await t.get(db.collection('courseLessons').doc(l.lessonId))]);
+      for (const [l, snap] of curs) {
+        const ref = db.collection('courseLessons').doc(l.lessonId);
+        const x = snap.data() || {};
+        if (decision === 'approve') {
+          const live = x.pendingRevision ? Object.assign({}, x.pendingRevision, { status: 'published' }) : { status: 'published' };
+          t.update(ref, Object.assign(live, { stagedForReview: false, pendingRevision: FieldValue.delete(), reviewedAt: _ts(), reviewedBy: uid, updatedAt: _ts() }));
+        } else {
+          t.update(ref, { stagedForReview: false, pendingRevision: FieldValue.delete(), reviewNote: note, updatedAt: _ts() });
+        }
+      }
+      t.update(courseRef, { revisionPending: false, revisionReviewedAt: _ts(), revisionReviewedBy: uid, ...(decision === 'reject' ? { revisionNote: note } : { revisionNote: FieldValue.delete() }) });
+      t.set(db.collection('educationAudit').doc(), { action: 'course_revision_' + decision, courseId, by: uid, lessons: staged.map((l) => l.lessonId), note, at: _ts() });
+    });
+    return { ok: true, decision, lessons: staged.length };
+  }
+
+  /* ── authoring (own course; DRAFT freely, PUBLISHED through re-review) ── */
+  if (!['list', 'save', 'remove', 'reorder', 'setLessonStatus', 'submitRevision'].includes(d.op)) _deny('invalid-argument', 'Unknown operation.', 'OP_UNKNOWN');
   await _assertEducator(db, uid);
   const c0 = await courseRef.get();
   if (!c0.exists || c0.data().instructorUid !== uid) _deny('permission-denied', 'not course owner', 'NOT_COURSE_OWNER');
-  if (d.op === 'list') return { ok: true, lessons: (await _lessonsOf(db, courseId)).map((l) => Object.assign(outlineOf(l), { body: l.body || null, videoUrl: l.videoUrl || null, materialPath: l.materialPath || null })) };
-  if (c0.data().status !== 'draft') _deny('failed-precondition', 'Lessons can be changed only while the course is a draft.', 'NOT_A_DRAFT');
+  if (d.op === 'list') return { ok: true, revisionPending: c0.data().revisionPending === true, revisionNote: c0.data().revisionNote || null,
+    lessons: (await _lessonsOf(db, courseId)).map((l) => Object.assign(outlineOf(l), { status: l.status, version: l.version || 1, stagedForReview: l.stagedForReview === true,
+      hasPendingRevision: !!l.pendingRevision, reviewNote: l.reviewNote || null, body: l.body || null, videoUrl: l.videoUrl || null, materialPath: l.materialPath || null })) };
+  const cs = c0.data().status;
+  if (cs !== 'draft' && cs !== 'published') _deny('failed-precondition', 'This course is waiting for SOKONI review; lessons can be changed once it is reviewed.', 'COURSE_IN_REVIEW');
+  const liveCourse = cs === 'published';
+  if (liveCourse && c0.data().revisionPending === true) _deny('failed-precondition', 'Your changes are waiting for SOKONI review.', 'REVISION_IN_REVIEW');
   const lessons = await _lessonsOf(db, courseId);
+  const find = (id) => lessons.find((l) => l.lessonId === id);
+  /* the course must still be in the state this request was decided on */
+  const sameCourseState = (cur) => cur.exists && cur.data().instructorUid === uid && cur.data().status === cs && cur.data().revisionPending !== true;
+  const STALE = () => _deny('failed-precondition', 'The course changed — reload and try again.', 'COURSE_CHANGED');
 
   if (d.op === 'save') {
     const f = lessonFields(d.lesson || {}, uid, courseId);
+    const wantsPublish = f.status === 'published';
     const existingId = _str(d.lessonId, 128);
-    if (existingId && !lessons.some((l) => l.lessonId === existingId)) _deny('not-found', 'Lesson not found', 'LESSON_UNKNOWN');
+    const prev = existingId ? find(existingId) : null;
+    if (existingId && !prev) _deny('not-found', 'Lesson not found', 'LESSON_UNKNOWN');
     if (!existingId && lessons.length >= MAX_LESSONS) _deny('failed-precondition', 'A course can have at most ' + MAX_LESSONS + ' lessons.', 'TOO_MANY_LESSONS');
     const ref = existingId ? db.collection('courseLessons').doc(existingId) : db.collection('courseLessons').doc();
+    const version = (prev ? Number(prev.version || 0) : 0) + 1;
     await db.runTransaction(async (t) => {
-      const cur = await t.get(courseRef);
-      if (!cur.exists || cur.data().instructorUid !== uid || cur.data().status !== 'draft') _deny('failed-precondition', 'Lessons can be changed only while the course is a draft.', 'NOT_A_DRAFT');
-      const prevVersion = existingId ? Number((lessons.find((l) => l.lessonId === existingId) || {}).version || 0) : 0;
-      if (existingId) t.update(ref, Object.assign({}, f, { version: prevVersion + 1, updatedAt: _ts() }));
-      else t.set(ref, Object.assign({}, f, { courseId, ownerUid: uid, order: lessons.length + 1, version: 1, createdAt: _ts(), updatedAt: _ts() }));
-      t.create(db.collection('courseLessonHistory').doc(ref.id + '_v' + (prevVersion + 1)), Object.assign({}, f, { lessonId: ref.id, courseId, ownerUid: uid, version: prevVersion + 1, savedAt: _ts() }));
-      t.update(courseRef, { lessonCount: existingId ? lessons.length : lessons.length + 1, updatedAt: _ts() });
+      if (!sameCourseState(await t.get(courseRef))) STALE();
+      let mode;
+      if (!liveCourse) {
+        /* DRAFT course: the lesson is written as given (the whole course is reviewed on submit) */
+        mode = 'live';
+        if (prev) t.update(ref, Object.assign({}, f, { version, updatedAt: _ts() }));
+        else t.set(ref, Object.assign({}, f, { courseId, ownerUid: uid, order: lessons.length + 1, version, createdAt: _ts(), updatedAt: _ts() }));
+      } else if (prev && prev.status === 'published') {
+        /* PUBLISHED lesson of a PUBLISHED course: learners keep the reviewed version; the change is a pending revision */
+        mode = 'proposal';
+        const proposal = Object.assign({}, f); delete proposal.status;
+        t.update(ref, { pendingRevision: proposal, stagedForReview: true, version, updatedAt: _ts() });
+      } else {
+        /* new / draft / unpublished lesson of a PUBLISHED course: saved as a DRAFT; "publish" stages it for review */
+        mode = 'staged';
+        const live = Object.assign({}, f, { status: prev && prev.status === 'unpublished' ? 'unpublished' : 'draft', stagedForReview: wantsPublish, version, updatedAt: _ts() });
+        if (prev) t.update(ref, live);
+        else t.set(ref, Object.assign(live, { courseId, ownerUid: uid, order: lessons.length + 1, createdAt: _ts() }));
+      }
+      t.create(db.collection('courseLessonHistory').doc(ref.id + '_v' + version), Object.assign({}, f, { lessonId: ref.id, courseId, ownerUid: uid, version, mode, savedAt: _ts() }));
+      t.update(courseRef, { lessonCount: prev ? lessons.length : lessons.length + 1, updatedAt: _ts() });
     });
-    return { ok: true, lessonId: ref.id };
+    return { ok: true, lessonId: ref.id, reviewRequired: liveCourse };
+  }
+  if (d.op === 'setLessonStatus') {
+    const id = _str(d.lessonId, 128); const l = find(id);
+    if (!l) _deny('not-found', 'Lesson not found', 'LESSON_UNKNOWN');
+    const to = d.status;
+    if (!['published', 'unpublished', 'draft'].includes(to)) _deny('invalid-argument', 'status must be published, unpublished or draft.', 'STATUS_INVALID');
+    await db.runTransaction(async (t) => {
+      if (!sameCourseState(await t.get(courseRef))) STALE();
+      const ref = db.collection('courseLessons').doc(id);
+      if (!liveCourse) t.update(ref, { status: to === 'unpublished' ? 'draft' : to, updatedAt: _ts() });
+      else if (to === 'unpublished') {
+        /* hiding content from learners is never risky: immediate */
+        if (l.status !== 'published') _deny('failed-precondition', 'Only a published lesson can be unpublished.', 'NOT_PUBLISHED');
+        t.update(ref, { status: 'unpublished', updatedAt: _ts() });
+      } else if (to === 'published') {
+        /* (re)publishing in a live course goes through review */
+        t.update(ref, { stagedForReview: true, updatedAt: _ts() });
+      } else t.update(ref, { stagedForReview: false, updatedAt: _ts() });
+      t.set(db.collection('educationAudit').doc(), { action: 'lesson_status_' + to, courseId, lessonId: id, by: uid, live: liveCourse, at: _ts() });
+    });
+    return { ok: true, reviewRequired: liveCourse && to === 'published' };
+  }
+  if (d.op === 'submitRevision') {
+    if (!liveCourse) _deny('failed-precondition', 'Submit a draft course with "Submit for review" instead.', 'NOT_PUBLISHED');
+    if (!lessons.some((l) => l.stagedForReview === true)) _deny('failed-precondition', 'There are no lesson changes to submit.', 'NOTHING_STAGED');
+    await db.runTransaction(async (t) => {
+      if (!sameCourseState(await t.get(courseRef))) STALE();
+      t.update(courseRef, { revisionPending: true, revisionSubmittedAt: _ts(), revisionNote: FieldValue.delete() });
+      t.set(db.collection('educationAudit').doc(), { action: 'course_revision_submit', courseId, by: uid, at: _ts() });
+    });
+    return { ok: true, revisionPending: true };
   }
   if (d.op === 'remove') {
-    const id = _str(d.lessonId, 128);
-    if (!lessons.some((l) => l.lessonId === id)) _deny('not-found', 'Lesson not found', 'LESSON_UNKNOWN');
+    const id = _str(d.lessonId, 128); const l = find(id);
+    if (!l) _deny('not-found', 'Lesson not found', 'LESSON_UNKNOWN');
+    if (liveCourse && l.status === 'published') _deny('failed-precondition', 'Unpublish this lesson before removing it.', 'UNPUBLISH_FIRST');
     await db.runTransaction(async (t) => {
-      const cur = await t.get(courseRef);
-      if (!cur.exists || cur.data().status !== 'draft') _deny('failed-precondition', 'Lessons can be changed only while the course is a draft.', 'NOT_A_DRAFT');
+      if (!sameCourseState(await t.get(courseRef))) STALE();
       t.delete(db.collection('courseLessons').doc(id));
       t.update(courseRef, { lessonCount: Math.max(1, lessons.length - 1), updatedAt: _ts() });
     });
     return { ok: true };
   }
-  /* reorder: exactly the course's own lesson ids, each once */
+  /* reorder: exactly the course's own lesson ids, each once (order only — never content) */
   const order = Array.isArray(d.order) ? d.order.map((x) => _str(x, 128)) : [];
   const own = lessons.map((l) => l.lessonId);
   if (order.length !== own.length || new Set(order).size !== order.length || !order.every((x) => own.includes(x))) _deny('invalid-argument', 'The new order must list each lesson of this course once.', 'ORDER_INVALID');
