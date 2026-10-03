@@ -51,7 +51,16 @@ const VAT_RATES = [0, 16];           /* declared by the supplier on the quote */
 
 function err(message, code) { throw new HttpsError(code || 'invalid-argument', message); }
 function san(s, max) { return s == null ? '' : String(s).replace(/<[^>]*>/g, '').trim().slice(0, max || 300); }
-function ym(d) { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+/* The lead month is Africa/Nairobi (EAT, UTC+3, no DST) — the monthly lead invoice (sokoni-2f b2b-leads.js) bills by
+   EAT month, so a lead at 01:30 EAT on the 1st belongs to the NEW month even though it is still the old month in UTC.
+   b2b-leads.monthOf is the authority when that module is in the tree; this fallback computes the identical value. */
+function leadsMod() { try { return require('./b2b-leads'); } catch (e) { return null; } }
+function ym(d) {
+  const L = leadsMod();
+  if (L && typeof L.monthOf === 'function') return L.monthOf(d || new Date());
+  const t = new Date((d ? d.getTime() : Date.now()) + 3 * 3600000);
+  return t.getUTCFullYear() + '-' + String(t.getUTCMonth() + 1).padStart(2, '0');
+}
 function isId(v) { return typeof v === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(v); }
 const rid = (rfqId, supplierId) => rfqId + '__' + supplierId;
 
@@ -140,6 +149,11 @@ H.create = async function (request) {
 
   const ref = db().collection('rfqs').doc();
   const rfqId = ref.id, now = Date.now(), month = ym();
+  /* Price SNAPSHOT for each lead ({priceKES, priceSource}) from the commercial authority, read BEFORE the delivery
+     transaction (sokoni-2f): a mid-month price change then applies only to later leads. Absent module → {} and the
+     invoice prices the row at billing time (flagged unsnapshotted) — still billed, never invented here. */
+  let leadPrice = {};
+  try { const L = leadsMod(); if (L && typeof L.leadFields === 'function') leadPrice = (await L.leadFields(db())) || {}; } catch (e) { leadPrice = {}; }
   /* DELIVERY IS ONE TRANSACTION (sokoni-e3, 2026-10-03): each supplier's consent is RE-READ inside it, so a supplier
      who withdrew acceptsLeads between selection and delivery is never billed. The lead row records acceptsLeadsAt —
      the evidence of consent the monthly invoice relies on. A supplier whose consent vanished is dropped; if none remain
@@ -163,7 +177,7 @@ H.create = async function (request) {
         buyerBusinessId: buyerId, buyerUid: request.auth.uid, title, status: 'received', receivedAt: F.serverTimestamp(), receivedAtMs: now });
       /* ONE lead per (rfq, supplier) — the monthly lead invoice (commercial authority) reads this; no price here. */
       t.create(db().collection('b2bLeads').doc(rid(rfqId, x.id)), { supplierBusinessId: x.id, supplierOwnerUid: x.ownerUid, rfqId,
-        buyerBusinessId: buyerId, month, source: 'rfq', consentAcceptsLeadsAt: x.acceptsLeadsAt, createdAt: F.serverTimestamp() });
+        buyerBusinessId: buyerId, month, source: 'rfq', consentAcceptsLeadsAt: x.acceptsLeadsAt, ...leadPrice, createdAt: F.serverTimestamp() });
     }
     return ok;
   });
@@ -341,7 +355,7 @@ H.respond = async function (request) {
       poId, poNumber: 'RFQ-' + d.rfqId.slice(0, 8).toUpperCase(), merchantId: buyerId, supplierId, supplierName: quote.supplierName || 'Supplier',
       buyerBusinessId: buyerId, supplierBusinessId: d.supplierBusinessId,
       items: quote.lines.map(function (l, i) { return { productId: 'rfq_line_' + (i + 1), sku: '', name: l.name, qty: l.qty, unitCost: l.unitPriceKES, totalCost: l.lineTotalKES }; }),
-      subtotal: quote.subtotalKES, vatAmount: quote.vatKES, vatRate: quote.vatRate, vatBasis: 'declared_on_quote', deliveryFee: quote.deliveryFeeKES, total: quote.totalKES,
+      subtotal: quote.subtotalKES, vatAmount: quote.vatKES, vatRate: quote.vatRate, vatBasis: 'declared_on_quote', commissionCategory: 'b2b_order',   /* 2f 92ae79c: fixed 0% lane, floor-exempt */ deliveryFee: quote.deliveryFeeKES, total: quote.totalKES,
       source: { kind: 'rfq', rfqId: d.rfqId, quoteVersion: quote.version },
       status: 'draft', paymentStatus: 'unpaid',   /* held payment through SOKONI = separate purpose (sokoni-5b) */
       notes: 'From RFQ "' + san(rfq.title, 100) + '"', createdBy: request.auth.uid, createdAt: F.serverTimestamp(), updatedAt: F.serverTimestamp() });
@@ -387,3 +401,4 @@ exports.rfqDispatch = onCall(OPT, async function (request) {
   return H[op](request);
 });
 exports._h = H;
+exports._ym = ym;   /* certification: the EAT lead month */

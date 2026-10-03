@@ -48,6 +48,7 @@ Module._load = function (req) {
   if (req === 'firebase-functions/v2/https') return { onCall: (o, h) => h, HttpsError };
   if (req === './procurement') return procStub;
   if (req === './notify') return { notify: async (n) => { notes.push(n); } };
+  if (req === './b2b-leads') { if (!global.__leadsStub) { const e = new Error('Cannot find module'); e.code = 'MODULE_NOT_FOUND'; throw e; } return global.__leadsStub; }
   return _load.apply(this, arguments);
 };
 const RFQ = require(path.join(ROOT, 'functions', 'rfq.js'));   /* stubs stay installed: rfq.js requires ./procurement and ./notify lazily */
@@ -91,7 +92,7 @@ const ITEMS = [{ name: 'Cement 50kg', qty: 100, unit: 'bag', targetPriceKES: 700
   const rfqId = openR.r.rfqId;
   const leads = [...store.entries()].filter(([k]) => k.startsWith('b2bLeads/' + rfqId + '__'));
   ck('L1 exactly one lead per recipient, with supplier, rfq, buyer and month', leads.length === 2 && leads.every(([, v]) => v.rfqId === rfqId && v.buyerBusinessId === 'bizBuyer' && /^\d{4}-\d{2}$/.test(v.month)), leads.map((x) => x[1]));
-  ck('L2 no price / amount written on a lead (the commercial authority prices the monthly invoice)', leads.every(([, v]) => !('priceKES' in v) && !('amount' in v)));
+  ck('L2 without the commercial module no price is written on a lead (the invoice prices it at billing time)', leads.every(([, v]) => !('priceKES' in v) && !('amount' in v)));
   ck('L3 each lead records the supplier\'s consent evidence (consentAcceptsLeadsAt from supply.acceptsLeadsAt)', leads.every(([k, v]) => 'consentAcceptsLeadsAt' in v) && leads.find(([k]) => k.endsWith('__bizSupA'))[1].consentAcceptsLeadsAt === 'T-A', leads.map((x) => x[1].consentAcceptsLeadsAt));
   /* RACE: consent withdrawn between selection and the delivery transaction → that supplier is not billed */
   const realTxn = db.runTransaction;
@@ -100,6 +101,15 @@ const ITEMS = [{ name: 'Cement 50kg', qty: 100, unit: 'bag', targetPriceKES: 700
   const raceLeads = r.ok ? [...store.keys()].filter((k) => k.startsWith('b2bLeads/' + r.r.rfqId + '__')) : [];
   ck('C7 a supplier who withdraws consent mid-delivery is NOT delivered or billed (only A gets the lead)', r.ok && raceLeads.length === 1 && raceLeads[0].endsWith('__bizSupA') && r.r.recipients.length === 1, { r, raceLeads });
   const bB = store.get('businesses/bizSupB'); store.set('businesses/bizSupB', Object.assign({}, bB, { supply: Object.assign({}, bB.supply, { acceptsLeads: true }) }));
+
+  /* with the commercial authority present: the price SNAPSHOT is spread into each lead row (sokoni-2f contract) */
+  global.__leadsStub = { monthOf: (d) => 'EAT-' + d.getUTCFullYear(), leadFields: async () => ({ priceKES: 200, priceSource: 'default' }) };
+  r = await call('uBuyer', { op: 'create', items: ITEMS, supplierBusinessIds: ['bizSupA'], deliveryLocation: 'Kiambu' });
+  const snapLead = r.ok && store.get('b2bLeads/' + r.r.rfqId + '__bizSupA');
+  ck('L4 with b2b-leads present: each lead carries the price snapshot {priceKES 200, priceSource} and the authority\'s monthOf', !!snapLead && snapLead.priceKES === 200 && snapLead.priceSource === 'default' && /^EAT-/.test(snapLead.month), snapLead);
+  global.__leadsStub = null;
+  ck('L5 fallback lead month is EAT: 2026-09-30 22:30 UTC (= 01:30 EAT on 1 Oct) → 2026-10', RFQ._ym(new Date(Date.UTC(2026, 8, 30, 22, 30))) === '2026-10', RFQ._ym(new Date(Date.UTC(2026, 8, 30, 22, 30))));
+  ck('L6 …and 2026-09-30 20:59 UTC (= 23:59 EAT) → 2026-09', RFQ._ym(new Date(Date.UTC(2026, 8, 30, 20, 59))) === '2026-09');
 
   console.log('\n── V / Q: supplier side ──');
   r = await call('uStranger', { op: 'get', rfqId });
@@ -130,7 +140,7 @@ const ITEMS = [{ name: 'Cement 50kg', qty: 100, unit: 'bag', targetPriceKES: 700
   r = await call('uBuyer', { op: 'respond', rfqId, supplierBusinessId: 'bizSupA', action: 'accept', expectedVersion: 2 });
   ck('R3 the buyer accepts v2 → a purchase order id', r.ok && /^po_rfq_/.test(r.r.poId), r);
   const po = r.ok && store.get('procPurchaseOrders/' + r.r.poId);
-  ck('R4 ONE canonical procPurchaseOrders doc priced from the quote: total 80,880, VAT 16 from the quote, source rfq, unpaid draft', !!po && po.total === 80880 && po.vatRate === 16 && po.vatBasis === 'declared_on_quote' && po.source.kind === 'rfq' && po.status === 'draft' && po.paymentStatus === 'unpaid' && po.buyerBusinessId === 'bizBuyer' && po.supplierBusinessId === 'bizSupA', po);
+  ck('R4 ONE canonical procPurchaseOrders doc priced from the quote: total 80,880, VAT 16 from the quote, source rfq, unpaid draft', !!po && po.total === 80880 && po.vatRate === 16 && po.vatBasis === 'declared_on_quote' && po.commissionCategory === 'b2b_order' && po.source.kind === 'rfq' && po.status === 'draft' && po.paymentStatus === 'unpaid' && po.buyerBusinessId === 'bizBuyer' && po.supplierBusinessId === 'bizSupA', po);
   const link = [...store.entries()].find(([k, v]) => k.startsWith('procSuppliers/') && v.merchantId === 'bizBuyer' && v.supplierBusinessId === 'bizSupA');
   ck('R5 the buyer\'s supplier link exists in the procurement authority (procSuppliers, createdVia rfq) and the PO points at it', !!link && po.supplierId === link[1].supplierId, link && link[1]);
   ck('R6 RFQ converted; A accepted; B closed', store.get('rfqs/' + rfqId).status === 'converted' && store.get('rfqRecipients/' + rfqId + '__bizSupA').status === 'accepted' && store.get('rfqRecipients/' + rfqId + '__bizSupB').status === 'closed');
