@@ -15,7 +15,10 @@
      L  leads: legal buttons per status (owner matrix, a subset of the f9a5c45 rules leadNext) · labels · move / note
         payloads exactly {status, respondedAt?} / {sellerNote} · shell writer refuses any other shape · chat gated on
         SokoniInbox.TX_TYPES at runtime · permission-denied / staff / failure copy · exact hasMore · failed write
-     R  rentals (REAL handlers of sokoni-f3's fix 74672f3, read from git; OLD = this tree / live): owner resolution
+     R  rentals (REAL handlers of sokoni-f3's owner lifecycle bb8634d, read from git; OLD = this tree / live): full seller
+        button matrix incl. legacy pending/confirmed · payment from STATUS only · method '—' until the webhook sets it ·
+        no Cancel on paid_held (refund-policy text verbatim) · decline reason required · listing Draft / Available / Paused
+        + publish / pause · earlier rows:: owner resolution
         without shops.ownerId · buttons per booking status (active: complete only) · Unpaid copy, never M-Pesa · no pay step
         · Equipment from rentalOwnerListings (hasMore → 'first 200 — more exist', N+) · the direct read ONLY on an
         'Unknown commerce operation' refusal · HttpsError reasons verbatim · create / confirm / availability / seller cancel
@@ -31,6 +34,9 @@
           N3 a pay button on a rental                          → R2
           N4 '0' rendered for an unknown count                 → O1
           N5 the direct read used although the op exists       → R10
+          N6 Cancel offered on paid_held                      → R14
+          N7 "Paid" derived from a non-status field           → R12
+          N8 an M-PESA default payment method                 → R13
    node scripts/test-merchant-construction-workspace.js */
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm'), Module = require('module');
@@ -58,10 +64,10 @@ const OWNER_MATRIX = {
 };
 
 /* ══ in-memory Firestore + the REAL rental handlers ══
-   NEW = sokoni-f3's rentals fix, functions/rentals-on-53100ff @ 74672f3 (NOT deployed), read from the shared object store.
+   NEW = sokoni-f3's owner rental lifecycle, functions/rentals-on-53100ff @ bb8634d (NOT deployed), read from the shared object store.
    OLD = this tree's functions/marketplace-extensions.js (== the live commerceDispatch archive): no rentalOwnerListings.
    A missing NEW source FAILS the run (fail closed) — the fixtures are never hand-written. */
-const F3_RENTALS_REF = process.env.RENTALS_REF || '74672f3';
+const F3_RENTALS_REF = process.env.RENTALS_REF || 'bb8634d';
 let NEW_SRC = null;
 try { NEW_SRC = require('child_process').execFileSync('git', ['-C', ROOT, 'show', F3_RENTALS_REF + ':functions/marketplace-extensions.js'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (_) { NEW_SRC = null; }
 const OLD_SRC = read('functions/marketplace-extensions.js');
@@ -127,7 +133,8 @@ function wire (v) {
   }
   return v;
 }
-const RENTAL_OPS = ['rentalOwnerListings', 'rentalProductCreate', 'rentalGetAvailability', 'rentalList', 'rentalConfirm', 'rentalComplete', 'rentalCancel'];
+const RENTAL_OPS = ['rentalOwnerListings', 'rentalProductCreate', 'rentalProductPublish', 'rentalProductPause', 'rentalGetAvailability', 'rentalList',
+  'rentalAccept', 'rentalConfirm', 'rentalDecline', 'rentalStart', 'rentalConfirmReturn', 'rentalComplete', 'rentalCancel'];
 /* commerceDispatch, reproduced: unknown op → not-found "Unknown commerce operation"; HttpsError passes through with its
    reason; a plain Error becomes internal "Operation failed unexpectedly." The client sees code 'functions/<code>'. */
 function mkServer (opts) {
@@ -150,21 +157,42 @@ function mkServer (opts) {
   return { A, H, dispatch, calls, OWNER, SHOP };
 }
 const day = (n) => new Date(Date.now() + n * 86400000).toISOString();
+/* Every booking state, reached through the REAL bb8634d handlers wherever a handler exists. payment_pending / paid_held
+   (and refunded) are written in production ONLY by the payment authority (2f rental_booking purpose + 5b webhook), which
+   is not in this module — so those writes are applied to the store directly, exactly as that authority would, and the
+   paid_held webhook write carries the IntaSend-reported method on ONE booking only. Legacy 'pending' / 'confirmed'
+   documents are planted as old servers wrote them. */
 async function seedRentals (srv) {
-  /* seeded THROUGH the real handlers: one equipment item, then renter bookings */
   const as = (uid) => ({ uid, token: { name: 'Renter ' + uid } });
-  const r = await srv.H.rentalProductCreate({ auth: as(srv.OWNER), data: { shopId: srv.SHOP, title: 'Concrete mixer 350L', pricingType: 'daily', dailyRate: 3500, deposit: 5000 } });
+  const own = as(srv.OWNER), S = srv.SHOP, H = srv.H, B = () => srv.A.data.rentalBookings;
+  const r = await H.rentalProductCreate({ auth: own, data: { shopId: S, title: 'Concrete mixer 350L', pricingType: 'daily', dailyRate: 3500, deposit: 5000 } });
   const pid = r.rentalProductId;
-  const book = (uid, s, e) => srv.H.rentalBook({ auth: as(uid), data: { rentalProductId: pid, startDate: day(s), endDate: day(e), durationUnit: 'daily' } });
-  const b1 = await book('b1', 10, 12), b2 = await book('b2', 13, 14), b3 = await book('b3', 20, 21), b4 = await book('b4', 30, 31), b5 = await book('b5', 40, 41), b6 = await book('b6', 50, 51);
-  await srv.H.rentalConfirm({ auth: as(srv.OWNER), data: { bookingId: b2.bookingId, shopId: srv.SHOP } });
-  await srv.H.rentalConfirm({ auth: as(srv.OWNER), data: { bookingId: b3.bookingId, shopId: srv.SHOP } });
-  await srv.H.rentalComplete({ auth: as(srv.OWNER), data: { bookingId: b3.bookingId, shopId: srv.SHOP } });
-  await srv.H.rentalCancel({ auth: as('b4'), data: { bookingId: b4.bookingId } });
-  await srv.H.rentalConfirm({ auth: as(srv.OWNER), data: { bookingId: b5.bookingId, shopId: srv.SHOP } });
-  srv.A.data.rentalBookings[b5.bookingId].status = 'active';   /* no handler sets 'active' yet; the legal-state table includes it */
-  return { pid, pending: b1.bookingId, confirmed: b2.bookingId, completed: b3.bookingId, cancelled: b4.bookingId, active: b5.bookingId,
-           stale: b6.bookingId, price1: b1.totalAmount, paymentStatus: b1.paymentStatus };
+  const draftRefusal = await H.rentalBook({ auth: as('early'), data: { rentalProductId: pid, startDate: day(2), endDate: day(3), durationUnit: 'daily' } }).then(() => null, (e) => e.message);
+  await H.rentalProductPublish({ auth: own, data: { rentalProductId: pid, shopId: S } });
+  let slot = 5;
+  const book = async (uid) => { const s = slot; slot += 3; return (await H.rentalBook({ auth: as(uid), data: { rentalProductId: pid, startDate: day(s), endDate: day(s + 2), durationUnit: 'daily' } })).bookingId; };
+  const tr = (op, bookingId, extra) => H[op]({ auth: own, data: Object.assign({ bookingId, shopId: S }, extra || {}) });
+  const ids = { pid, draftRefusal };
+  ids.requested = await book('r1');
+  ids.accepted = await book('r2'); await tr('rentalAccept', ids.accepted);
+  ids.payment_pending = await book('r3'); await tr('rentalAccept', ids.payment_pending); B()[ids.payment_pending].status = 'payment_pending';
+  ids.paid_held = await book('r4'); await tr('rentalAccept', ids.paid_held); Object.assign(B()[ids.paid_held], { status: 'paid_held', paymentStatus: 'held' });
+  ids.paid_held_m = await book('r5'); await tr('rentalAccept', ids.paid_held_m); Object.assign(B()[ids.paid_held_m], { status: 'paid_held', paymentStatus: 'held', paymentMethod: 'MPESA' });
+  ids.active = await book('r6'); await tr('rentalAccept', ids.active); Object.assign(B()[ids.active], { status: 'paid_held', paymentStatus: 'held' }); await tr('rentalStart', ids.active);
+  ids.return_pending = await book('r7'); await tr('rentalAccept', ids.return_pending); Object.assign(B()[ids.return_pending], { status: 'paid_held', paymentStatus: 'held' }); await tr('rentalStart', ids.return_pending);
+  await H.rentalReportReturn({ auth: as('r7'), data: { bookingId: ids.return_pending } });
+  ids.returned = await book('r8'); await tr('rentalAccept', ids.returned); Object.assign(B()[ids.returned], { status: 'paid_held', paymentStatus: 'held' }); await tr('rentalStart', ids.returned); await tr('rentalConfirmReturn', ids.returned);
+  ids.completed = await book('r9'); await tr('rentalAccept', ids.completed); Object.assign(B()[ids.completed], { status: 'paid_held', paymentStatus: 'held' }); await tr('rentalStart', ids.completed); await tr('rentalConfirmReturn', ids.completed); await tr('rentalComplete', ids.completed);
+  ids.declined = await book('r10'); await tr('rentalDecline', ids.declined, { reason: 'Machine in service' });
+  ids.cancelled = await book('r11'); await H.rentalCancel({ auth: as('r11'), data: { bookingId: ids.cancelled } });
+  ids.refunded = await book('r12'); B()[ids.refunded].status = 'refunded';
+  ids.legacy_pending = await book('r13'); B()[ids.legacy_pending].status = 'pending';
+  ids.legacy_confirmed = await book('r14'); B()[ids.legacy_confirmed].status = 'confirmed';
+  ids.forged = await book('r15'); Object.assign(B()[ids.forged], { paymentStatus: 'paid', paidAt: Date.now(), paymentMethod: 'none' });   /* requested; a non-status "paid" field */
+  ids.stale = await book('r16');
+  ids.race = await book('r17'); await tr('rentalAccept', ids.race); B()[ids.race].status = 'payment_pending';
+  ids.price1 = B()[ids.requested].totalAmount;
+  return ids;
 }
 
 /* ══ the module in a VM ══ */
@@ -180,7 +208,10 @@ function attrs (tag) { const o = {}; for (const m of tag.matchAll(/([a-zA-Z-]+)(
 function mkHost () {
   return { innerHTML: '', _h: {}, vals: {}, ownerDocument: null,
     addEventListener (t, f) { this._h[t] = f; }, removeEventListener () {},
-    querySelector (sel) { const m = /^\[data-note="(.+)"\]$/.exec(sel); if (!m || !this.innerHTML.includes('data-note="' + m[1] + '"')) return null; return { value: this.vals['note:' + m[1]] != null ? this.vals['note:' + m[1]] : '' }; },
+    querySelector (sel) {
+      const m = /^\[data-(note|decline-reason)="(.+)"\]$/.exec(sel); if (!m || !this.innerHTML.includes('data-' + m[1] + '="' + m[2] + '"')) return null;
+      const k = (m[1] === 'note' ? 'note:' : 'decline:') + m[2]; return { value: this.vals[k] != null ? this.vals[k] : '' };
+    },
     querySelectorAll (sel) {
       if (sel !== '[data-f]') return [];
       const out = [];
@@ -264,7 +295,7 @@ async function suite (src, log) {
   t = await mountView(V, 'overview', { leads: [], plansErr: { code: 'internal' }, dispatch: EMPTY });
   ck('O6', 'plans: catalog failure → —', /Construction plans: —/.test(text(t.host)), null);
   const tx = text(t.host);
-  ck('O7', 'fees copy: materials 15% marketplace, services 0%, featured / lead / rental / plans unpriced and OFF, release not live', /materials[^.]*15%/.test(tx) && /construction services — 0%/.test(tx) && /not priced and are switched OFF/.test(tx) && /not yet live/.test(tx), null);
+  ck('O7', 'fees copy: materials 15% marketplace, services 0%, equipment rental 10% of the hire (2f line), featured / lead / plans unpriced and OFF, release not live', /materials[^.]*15%/.test(tx) && /construction services — 0%/.test(tx) && /equipment rental — 10% of the hire, never the deposit/.test(tx) && /lead fees and construction plans are not priced and are switched OFF/.test(tx) && /not yet live/.test(tx), null);
 
   /* ── L ── */
   const statuses = Object.keys(OWNER_MATRIX);
@@ -328,38 +359,48 @@ async function suite (src, log) {
   await click(t.host, (b) => b['data-to'] === 'qualified');
   ck('L8', 'refused write → error note, status unchanged (buttons still those of New)', /refused this \(permission\)/.test(text(t.host)) && buttons(t.host).filter((b) => b['data-act'] === 'lead-move').map((b) => b['data-to']).join(',') === 'responded,qualified,lost', text(t.host));
 
-  /* ── R (REAL handlers: NEW = f3 74672f3, OLD = live/tree) ── */
-  ck('R0', 'f3 rentals source ' + F3_RENTALS_REF + ' is readable (fail closed: no hand-written fixtures)', !!NEW_SRC && /rentalOwnerListings/.test(NEW_SRC), F3_RENTALS_REF);
+  /* ── R (REAL handlers: NEW = f3 bb8634d, OLD = live/tree) ── */
+  ck('R0', 'f3 rentals source ' + F3_RENTALS_REF + ' is readable and carries the owner lifecycle (fail closed: no hand-written fixtures)', !!NEW_SRC && /rentalProductPublish/.test(NEW_SRC) && /rentalConfirmReturn/.test(NEW_SRC), F3_RENTALS_REF);
   let srv = mkServer(); let ids = await seedRentals(srv);
   t = await mountView(V, 'rentals', { dispatch: srv.dispatch });
-  const btnFor = (id) => buttons(t.host).filter((x) => x['data-id'] === id).map((x) => x['data-act']);
-  ck('R1', 'rentalList (owner, shops/{uid} has NO ownerId): pending → Confirm + Cancel; confirmed → Mark returned + Cancel; active → Mark returned only; completed / cancelled → none',
-    btnFor(ids.pending).join(',') === 'rental-confirm,rental-cancel-ask' && btnFor(ids.confirmed).join(',') === 'rental-complete,rental-cancel-ask' &&
-    btnFor(ids.active).join(',') === 'rental-complete' && !btnFor(ids.completed).length && !btnFor(ids.cancelled).length,
-    { p: btnFor(ids.pending), c: btnFor(ids.confirmed), a: btnFor(ids.active) });
-  ck('R1', 'rentalBook returns paymentStatus unpaid; the card says "Unpaid — paid rentals open once SOKONI sets rental pricing" with the server price', ids.paymentStatus === 'unpaid' && text(t.host).includes(M._pure.UNPAID_COPY) && new RegExp('calculated by SOKONI: KES ' + ids.price1.toLocaleString('en-KE')).test(text(t.host)), ids.paymentStatus);
-  ck('R1', 'never "M-Pesa": the stored paymentMethod is not rendered', !/m-?pesa/i.test(text(t.host)) && Object.values(srv.A.data.rentalBookings).every((b) => b.paymentMethod === 'none'), null);
+  const btnFor = (id) => buttons(t.host).filter((x) => x['data-id'] === id).map((x) => x['data-act']).join(',');
+  const MATRIX = {
+    requested: 'rental-accept,rental-decline-ask,rental-cancel-ask', accepted: 'rental-cancel-ask', payment_pending: 'rental-cancel-ask',
+    paid_held: 'rental-start', paid_held_m: 'rental-start', active: 'rental-confirm-return', return_pending: 'rental-confirm-return',
+    returned: 'rental-complete', completed: '', declined: '', cancelled: '', refunded: '',
+    legacy_pending: 'rental-accept,rental-decline-ask,rental-cancel-ask', legacy_confirmed: 'rental-cancel-ask'
+  };
+  const gotM = {}; for (const k of Object.keys(MATRIX)) gotM[k] = btnFor(ids[k]);
+  const stored = (k) => srv.A.data.rentalBookings[ids[k]].status;
+  ck('R1', 'every state was produced by the real handlers / payment-authority writes (requested … completed, declined, cancelled, refunded, legacy)', stored('requested') === 'requested' && stored('accepted') === 'accepted' && stored('active') === 'active' && stored('return_pending') === 'return_pending' && stored('returned') === 'returned' && stored('completed') === 'completed' && stored('declined') === 'declined' && stored('cancelled') === 'cancelled', Object.keys(MATRIX).map((k) => k + '=' + stored(k)));
+  ck('R1', 'seller buttons per status — ONLY the owner matrix (legacy pending = requested, confirmed = accepted)', Object.keys(MATRIX).every((k) => gotM[k] === MATRIX[k]), gotM);
+  const badge = (id) => { const m = new RegExp('data-id="' + id + '"').exec(t.host.innerHTML); const i = t.host.innerHTML.lastIndexOf('cw-badge">', m ? m.index : 0); return i < 0 ? null : dec(t.host.innerHTML.slice(i + 10, t.host.innerHTML.indexOf('<', i + 10))); };
+  ck('R1', 'labels from status: legacy pending → Requested, legacy confirmed → Accepted, payment_pending → Awaiting payment, paid_held → Paid — held by SOKONI', M._pure.rentalLabel({ status: 'pending' }) === 'Requested' && M._pure.rentalLabel({ status: 'confirmed' }) === 'Accepted' && M._pure.rentalLabel({ status: 'payment_pending' }) === 'Awaiting payment' && M._pure.rentalLabel({ status: 'paid_held' }) === 'Paid — held by SOKONI' && M._pure.rentalLabel({ status: 'return_pending' }) === 'Return reported', null);
+  /* payment from STATUS only */
+  const card = (id) => { const h = t.host.innerHTML; const ix = h.indexOf('data-id="' + id + '"'); const st = h.lastIndexOf('<div class="cw-card">', ix); const en = h.indexOf('<div class="cw-card">', ix); return dec(h.slice(st, en < 0 ? undefined : en).replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' '); };
+  const cardOf = (k) => { const h = t.host.innerHTML; const name = 'Renter ' + srv.A.data.rentalBookings[ids[k]].buyerId; const ix = h.indexOf('<b>' + name + '</b>'); const en = h.indexOf('<div class="cw-card">', ix); return dec(h.slice(ix, en < 0 ? undefined : en).replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' '); };
+  ck('R12', 'payment line from STATUS only: payment_pending "Awaiting payment", paid_held "Paid — held by SOKONI"', /Payment: Awaiting payment/.test(cardOf('payment_pending')) && /Payment: Paid — held by SOKONI/.test(cardOf('paid_held')), { pp: cardOf('payment_pending'), ph: cardOf('paid_held') });
+  ck('R12', 'a requested booking carrying paymentStatus "paid" + paidAt (non-status fields) is NOT shown as paid; neither are accepted / completed', !/Paid/.test(cardOf('forged')) && !/Paid/.test(cardOf('accepted')) && !/Payment:/.test(cardOf('completed')), { forged: cardOf('forged') });
+  ck('R13', 'payment method: "—" until the webhook sets it (rentalBook\'s "none" is not a method); the webhook-reported method is shown as given', /Payment method: —/.test(cardOf('paid_held')) && /Payment method: —/.test(cardOf('requested')) && /Payment method: MPESA/.test(cardOf('paid_held_m')), { ph: cardOf('paid_held'), m: cardOf('paid_held_m') });
+  ck('R13', 'no M-Pesa default anywhere except the one webhook-set booking', (text(t.host).match(/m-?pesa/ig) || []).length === 1, (text(t.host).match(/m-?pesa/ig) || []));
+  ck('R14', 'NO Cancel on paid_held (paid → refund policy, never a status flip)', !/cancel/.test(btnFor(ids.paid_held)) && !/cancel/.test(btnFor(ids.paid_held_m)), { ph: btnFor(ids.paid_held) });
   const noPay = (h) => !buttons(h).some((x) => /\bpay\b|m-?pesa|checkout|deposit now/i.test(x.__text + ' ' + (x['data-act'] || '')));
-  const rentalsHost = t.host;
+  ck('R2', 'no pay step on Rentals (the renter pays via SOKONI; the seller page never charges), and the flow copy is shown; the old "paid rentals open once…" copy is gone', noPay(t.host) && text(t.host).includes(M._pure.RENTAL_FLOW_COPY) && !/paid rentals open once/i.test(text(t.host)), buttons(t.host).map((x) => x.__text));
+  /* race: page shows payment_pending (Cancel offered); the webhook holds the money; the seller's Cancel gets the refund-policy text */
+  srv.A.data.rentalBookings[ids.race].status = 'paid_held';
+  await click(t.host, (x) => x['data-act'] === 'rental-cancel-ask' && x['data-id'] === ids.race);
+  await click(t.host, (x) => x['data-act'] === 'rental-cancel' && x['data-id'] === ids.race);
+  ck('R14', 'paid while on screen → the server\'s refund-policy refusal is shown verbatim and nothing changes', /This rental is paid\. Cancelling it is handled under SOKONI's refund policy/.test(text(t.host)) && srv.A.data.rentalBookings[ids.race].status === 'paid_held', text(t.host).slice(0, 300));
+  /* Equipment: listings via rentalOwnerListings, Draft / Available / Paused + publish / pause through the real handlers */
   t = await mountView(V, 'equipment', { dispatch: srv.dispatch });
-  ck('R2', 'no pay step anywhere on Rentals / Equipment, and the unpriced copy is shown on both', noPay(rentalsHost) && noPay(t.host) && text(rentalsHost).includes(M._pure.UNPRICED_COPY) && text(t.host).includes(M._pure.UNPRICED_COPY), buttons(rentalsHost).map((x) => x.__text));
-  ck('R10', 'Equipment comes from rentalOwnerListings {op, shopId}; the direct rentalProducts read is NOT used on a server that knows the op', srv.calls.some((x) => x.op === 'rentalOwnerListings' && x.shopId === 'owner1' && Object.keys(x).length === 2) && t.rec.readEquipment === 0 && /Concrete mixer 350L/.test(text(t.host)), { reads: t.rec.readEquipment });
-  /* hasMore: 201 listings through the real op */
-  const srvBig = mkServer();
-  for (let i = 0; i < 201; i++) await srvBig.H.rentalProductCreate({ auth: { uid: 'owner1', token: {} }, data: { shopId: 'owner1', title: 'Item ' + i, pricingType: 'daily', dailyRate: 100 + i } });
-  t = await mountView(V, 'equipment', { dispatch: srvBig.dispatch });
-  ck('R10', 'hasMore from the real op (201 listings): 200 shown + "Showing the first 200 — more exist"', /Showing the first 200 — more exist/.test(text(t.host)) && (text(t.host).match(/Item \d+/g) || []).length === 200, null);
-  t = await mountView(V, 'overview', { dispatch: srvBig.dispatch, leads: [] });
-  const eqTile = [...t.host.innerHTML.matchAll(/<div class="cw-tile"><b>([^<]*)<\/b><small>([^<]*)<\/small>/g)].map((m) => [dec(m[1]), m[2]]).find((x) => x[1] === 'Equipment listed');
-  ck('R10', 'Overview equipment tile from a hasMore list is "200+"', eqTile && eqTile[0] === '200+', eqTile);
-  /* OLD server (live today): unknown op → fallback direct read; refused → rules copy */
-  const srvOld = mkServer({ old: true, ownerId: 'owner1' });
-  t = await mountView(V, 'equipment', { dispatch: srvOld.dispatch, equipErr: { code: 'permission-denied' } });
-  ck('R3', 'old server ("Unknown commerce operation") → the direct read is the fallback; refused → "Rentals become visible once access rules ship", not an empty list', t.rec.readEquipment === 1 && text(t.host).includes(M._pure.RULES_COPY) && !/No equipment listed yet/.test(text(t.host)), { reads: t.rec.readEquipment });
-  t = await mountView(V, 'equipment', { dispatch: () => Promise.reject(Object.assign(new Error('You do not manage this shop.'), { code: 'functions/permission-denied' })) });
-  ck('R3', 'any other refusal does NOT fall back: the server reason verbatim, no direct read, no rules copy', t.rec.readEquipment === 0 && /You do not manage this shop\./.test(text(t.host)) && !text(t.host).includes(M._pure.RULES_COPY), { reads: t.rec.readEquipment });
-  /* create through the REAL handler */
-  t = await mountView(V, 'equipment', { dispatch: srv.dispatch });
+  ck('R10', 'Equipment comes from rentalOwnerListings {op, shopId}; the direct read is NOT used on a server that knows the op', srv.calls.some((x) => x.op === 'rentalOwnerListings' && x.shopId === 'owner1' && Object.keys(x).length === 2) && t.rec.readEquipment === 0 && /Concrete mixer 350L/.test(text(t.host)), { reads: t.rec.readEquipment });
+  ck('R17', 'a draft listing cannot be booked (real rentalBook refusal) — published listing shows "Available" + Pause', ids.draftRefusal === 'That equipment is not available for rent.' && /Available/.test(text(t.host)) && buttons(t.host).some((x) => x['data-act'] === 'listing-pause' && x['data-id'] === ids.pid), ids.draftRefusal);
+  await click(t.host, (x) => x['data-act'] === 'listing-pause' && x['data-id'] === ids.pid);
+  const pauseCall = srv.calls.filter((x) => x.op === 'rentalProductPause').pop();
+  ck('R17', 'Pause sends {op, rentalProductId, shopId}; the real handler pauses; the card shows Paused, "cannot book", Make available', pauseCall && Object.keys(pauseCall).sort().join(',') === 'op,rentalProductId,shopId' && srv.A.data.rentalProducts[ids.pid].status === 'paused' && /Paused/.test(text(t.host)) && /cannot book a paused listing/.test(text(t.host)) && buttons(t.host).some((x) => x['data-act'] === 'listing-publish'), pauseCall);
+  await click(t.host, (x) => x['data-act'] === 'listing-publish' && x['data-id'] === ids.pid);
+  ck('R17', 'Make available → rentalProductPublish; paused → active (Available)', srv.calls.some((x) => x.op === 'rentalProductPublish') && srv.A.data.rentalProducts[ids.pid].status === 'active' && buttons(t.host).some((x) => x['data-act'] === 'listing-pause'), null);
+  /* create through the REAL handler → draft */
   await click(t.host, (x) => x['data-act'] === 'equip-new');
   Object.assign(t.host.vals, { 'f:title': 'Tower scaffold', 'f:pricingType': 'daily', 'f:dailyRate': '', 'f:deposit': '2000' });
   let before = srv.calls.length;
@@ -368,35 +409,64 @@ async function suite (src, log) {
   t.host.vals['f:dailyRate'] = '1800';
   await click(t.host, (x) => x['data-act'] === 'equip-create');
   const createCall = srv.calls.filter((x) => x.op === 'rentalProductCreate').pop();
-  const stored = Object.values(srv.A.data.rentalProducts).find((p) => p.title === 'Tower scaffold');
-  ck('R5', 'create payload = {op, shopId, title, pricingType, dailyRate, deposit}; the REAL handler stores it under the shop', createCall && Object.keys(createCall).sort().join(',') === 'dailyRate,deposit,op,pricingType,shopId,title' && createCall.dailyRate === 1800 && stored && stored.shopId === 'owner1' && stored.status === 'active', { createCall, stored: !!stored });
-  ck('R5', 'after create the list reloads from rentalOwnerListings and shows the new item', /Tower scaffold/.test(text(t.host)) && srv.calls.filter((x) => x.op === 'rentalOwnerListings').length >= 2, null);
-  /* confirm via the real handler */
+  const made = Object.entries(srv.A.data.rentalProducts).find(([, p]) => p.title === 'Tower scaffold');
+  ck('R5', 'create payload = {op, shopId, title, pricingType, dailyRate, deposit}; the REAL handler stores a DRAFT under the shop', createCall && Object.keys(createCall).sort().join(',') === 'dailyRate,deposit,op,pricingType,shopId,title' && made && made[1].shopId === 'owner1' && made[1].status === 'draft', { createCall, status: made && made[1].status });
+  ck('R5', 'after create the list reloads and shows the new item as Draft with "Make available"', /Tower scaffold/.test(text(t.host)) && buttons(t.host).some((x) => x['data-act'] === 'listing-publish' && x['data-id'] === made[0]), null);
+  /* hasMore through the real op */
+  const srvBig = mkServer();
+  for (let i = 0; i < 201; i++) await srvBig.H.rentalProductCreate({ auth: { uid: 'owner1', token: {} }, data: { shopId: 'owner1', title: 'Item ' + i, pricingType: 'daily', dailyRate: 100 + i } });
+  t = await mountView(V, 'equipment', { dispatch: srvBig.dispatch });
+  ck('R10', 'hasMore from the real op (201 listings): 200 shown + "Showing the first 200 — more exist"', /Showing the first 200 — more exist/.test(text(t.host)) && (text(t.host).match(/Item \d+/g) || []).length === 200, null);
+  t = await mountView(V, 'overview', { dispatch: srvBig.dispatch, leads: [] });
+  const eqTile = [...t.host.innerHTML.matchAll(/<div class="cw-tile"><b>([^<]*)<\/b><small>([^<]*)<\/small>/g)].map((m) => [dec(m[1]), m[2]]).find((x) => x[1] === 'Equipment listed');
+  ck('R10', 'Overview equipment tile from a hasMore list is "200+"', eqTile && eqTile[0] === '200+', eqTile);
+  /* OLD server (live today) */
+  const srvOld = mkServer({ old: true, ownerId: 'owner1' });
+  t = await mountView(V, 'equipment', { dispatch: srvOld.dispatch, equipErr: { code: 'permission-denied' } });
+  ck('R3', 'old server ("Unknown commerce operation") → the direct read is the fallback; refused → "Rentals become visible once access rules ship", not an empty list', t.rec.readEquipment === 1 && text(t.host).includes(M._pure.RULES_COPY) && !/No equipment listed yet/.test(text(t.host)), { reads: t.rec.readEquipment });
+  t = await mountView(V, 'equipment', { dispatch: () => Promise.reject(Object.assign(new Error('You do not manage this shop.'), { code: 'functions/permission-denied' })) });
+  ck('R3', 'any other refusal does NOT fall back: the server reason verbatim, no direct read, no rules copy', t.rec.readEquipment === 0 && /You do not manage this shop\./.test(text(t.host)) && !text(t.host).includes(M._pure.RULES_COPY), { reads: t.rec.readEquipment });
+  await srvOld.H.rentalProductCreate({ auth: { uid: 'owner1', token: {} }, data: { shopId: 'owner1', title: 'Old mixer', pricingType: 'daily', dailyRate: 3000 } });
+  const oldPid = Object.keys(srvOld.A.data.rentalProducts)[0];
+  const oldB = await srvOld.H.rentalBook({ auth: { uid: 'x1', token: {} }, data: { rentalProductId: oldPid, startDate: day(3), endDate: day(4), durationUnit: 'daily' } });
+  t = await mountView(V, 'rentals', { dispatch: srvOld.dispatch });
+  await click(t.host, (x) => x['data-act'] === 'rental-accept' && x['data-id'] === oldB.bookingId);
+  ck('R7', 'old server: Accept tries rentalAccept, gets "Unknown commerce operation", uses the alias rentalConfirm; legacy pending → confirmed, shown as Accepted', srvOld.calls.map((x) => x.op).join(',').includes('rentalAccept,rentalConfirm') && srvOld.A.data.rentalBookings[oldB.bookingId].status === 'confirmed' && /Accepted/.test(text(t.host)), srvOld.calls.map((x) => x.op));
+  /* accept / decline / start / confirm-return / complete / cancel through bb8634d */
   t = await mountView(V, 'rentals', { dispatch: srv.dispatch });
-  await click(t.host, (x) => x['data-act'] === 'rental-confirm' && x['data-id'] === ids.pending);
-  const conf = srv.calls.filter((x) => x.op === 'rentalConfirm').pop();
-  ck('R7', 'Confirm sends {op:rentalConfirm, bookingId, shopId}; the real handler moves it to confirmed and the list reloads', conf && Object.keys(conf).sort().join(',') === 'bookingId,op,shopId' && srv.A.data.rentalBookings[ids.pending].status === 'confirmed' && btnFor(ids.pending).join(',') === 'rental-complete,rental-cancel-ask', conf);
+  await click(t.host, (x) => x['data-act'] === 'rental-accept' && x['data-id'] === ids.requested);
+  const acc = srv.calls.filter((x) => x.op === 'rentalAccept').pop();
+  ck('R7', 'Accept sends {op:rentalAccept, bookingId, shopId}; requested → accepted; the card now offers only Cancel', acc && Object.keys(acc).sort().join(',') === 'bookingId,op,shopId' && stored('requested') === 'accepted' && btnFor(ids.requested) === 'rental-cancel-ask', acc);
+  before = srv.calls.length;
+  await click(t.host, (x) => x['data-act'] === 'rental-decline-ask' && x['data-id'] === ids.legacy_pending);
+  await click(t.host, (x) => x['data-act'] === 'rental-decline' && x['data-id'] === ids.legacy_pending);
+  ck('R15', 'Decline is two-step and a reason is REQUIRED: empty reason → no server call, a message', srv.calls.length === before && /Give the renter a reason before declining/.test(text(t.host)), srv.calls.slice(before));
+  t.host.vals['decline:' + ids.legacy_pending] = 'Booked for maintenance';
+  await click(t.host, (x) => x['data-act'] === 'rental-decline' && x['data-id'] === ids.legacy_pending);
+  const decl = srv.calls.filter((x) => x.op === 'rentalDecline').pop();
+  ck('R15', 'Decline sends {op:rentalDecline, bookingId, shopId, reason}; legacy pending → declined with the reason stored', decl && Object.keys(decl).sort().join(',') === 'bookingId,op,reason,shopId' && decl.reason === 'Booked for maintenance' && stored('legacy_pending') === 'declined' && srv.A.data.rentalBookings[ids.legacy_pending].declineReason === 'Booked for maintenance', decl);
+  await click(t.host, (x) => x['data-act'] === 'rental-start' && x['data-id'] === ids.paid_held);
+  await click(t.host, (x) => x['data-act'] === 'rental-confirm-return' && x['data-id'] === ids.return_pending);
+  await click(t.host, (x) => x['data-act'] === 'rental-complete' && x['data-id'] === ids.returned);
+  ck('R16', 'Start hire (paid_held → active), Confirm return (return_pending → returned), Complete (returned → completed) through the real handlers', stored('paid_held') === 'active' && stored('return_pending') === 'returned' && stored('returned') === 'completed' && ['rentalStart', 'rentalConfirmReturn', 'rentalComplete'].every((op) => srv.calls.some((x) => x.op === op && x.shopId === 'owner1')), [stored('paid_held'), stored('return_pending'), stored('returned')]);
+  await click(t.host, (x) => x['data-act'] === 'rental-cancel-ask' && x['data-id'] === ids.accepted);
+  before = srv.calls.length;
+  ck('R9', 'Cancel is two-step (ask, then confirm)', buttons(t.host).some((x) => x['data-act'] === 'rental-cancel' && x['data-id'] === ids.accepted), null);
+  await click(t.host, (x) => x['data-act'] === 'rental-cancel' && x['data-id'] === ids.accepted);
+  const can = srv.calls.filter((x) => x.op === 'rentalCancel').pop();
+  ck('R9', 'seller Cancel (unpaid) sends {op, bookingId}; accepted → cancelled by the seller through the shop authority', can && Object.keys(can).sort().join(',') === 'bookingId,op' && stored('accepted') === 'cancelled' && srv.A.data.rentalBookings[ids.accepted].cancelledByRole === 'seller', can);
+  /* verbatim HttpsError: the renter cancels while the page still shows the request */
+  await srv.H.rentalCancel({ auth: { uid: 'r16', token: {} }, data: { bookingId: ids.stale } });
+  await click(t.host, (x) => x['data-act'] === 'rental-accept' && x['data-id'] === ids.stale);
+  ck('R11', 'a server refusal is shown VERBATIM ("A cancelled booking cannot be accepted.") — no "internal" substitute', /A cancelled booking cannot be accepted\. Nothing was changed\./.test(text(t.host)) && !/\(internal\)/.test(text(t.host)), null);
   /* availability via the real handler */
   t = await mountView(V, 'availability', { dispatch: srv.dispatch });
   await change(t.host, 'data-pick', ids.pid);
-  ck('R8', 'Availability: real rentalGetAvailability periods (pending + confirmed + active), with the 200-booking caveat', /Taken periods/.test(text(t.host)) && (text(t.host).match(/→/g) || []).length === 4 && /most recent 200 bookings/.test(text(t.host)), (text(t.host).match(/→/g) || []).length);
-  /* seller cancel through the shop authority */
-  t = await mountView(V, 'rentals', { dispatch: srv.dispatch });
-  before = srv.calls.length;
-  await click(t.host, (x) => x['data-act'] === 'rental-cancel-ask' && x['data-id'] === ids.confirmed);
-  ck('R9', 'Cancel is two-step (ask, then confirm) — no call on the first tap', srv.calls.length === before && buttons(t.host).some((x) => x['data-act'] === 'rental-cancel'), null);
-  await click(t.host, (x) => x['data-act'] === 'rental-cancel');
-  const can = srv.calls.filter((x) => x.op === 'rentalCancel').pop();
-  ck('R9', 'seller Cancel sends {op, bookingId}; the real handler cancels through the shop authority (cancelledByRole seller); the card closes', can && Object.keys(can).sort().join(',') === 'bookingId,op' && srv.A.data.rentalBookings[ids.confirmed].status === 'cancelled' && srv.A.data.rentalBookings[ids.confirmed].cancelledByRole === 'seller' && !btnFor(ids.confirmed).length, can);
-  /* verbatim HttpsError reasons: the renter cancels while the page still shows the request as pending */
-  t = await mountView(V, 'rentals', { dispatch: srv.dispatch });
-  await srv.H.rentalCancel({ auth: { uid: 'b6', token: {} }, data: { bookingId: ids.stale } });
-  await click(t.host, (x) => x['data-act'] === 'rental-confirm' && x['data-id'] === ids.stale);
-  ck('R11', 'a server refusal is shown VERBATIM ("A cancelled booking cannot be confirmed.") — no "internal" substitute', /A cancelled booking cannot be confirmed\. Nothing was changed\./.test(text(t.host)) && !/\(internal\)/.test(text(t.host)), text(t.host).slice(0, 600));
-  /* owner without ownerId: allowed on the fixed server; refused on the old one (reason shown, not an empty list) */
+  ck('R8', 'Availability: real rentalGetAvailability periods (the server\'s blocking states), with the 200-booking caveat', /Taken periods/.test(text(t.host)) && (text(t.host).match(/→/g) || []).length >= 3 && /most recent 200 bookings/.test(text(t.host)), (text(t.host).match(/→/g) || []).length);
+  /* owner resolution */
   const srvOld2 = mkServer({ old: true });
   t = await mountView(V, 'rentals', { dispatch: srvOld2.dispatch });
-  ck('R4', 'old server refuses an owner without shops.ownerId → its message verbatim + "not an empty list"', /Rental requests could not be loaded/.test(text(t.host)) && /Operation failed unexpectedly\./.test(text(t.host)) && /not an empty list/.test(text(t.host)) && !/No rental requests yet/.test(text(t.host)), text(t.host));
+  ck('R4', 'old server refuses an owner without shops.ownerId → its message verbatim + "not an empty list"', /Rental requests could not be loaded/.test(text(t.host)) && /Operation failed unexpectedly\./.test(text(t.host)) && /not an empty list/.test(text(t.host)), text(t.host));
   const srvStranger = mkServer({ caller: 'stranger' });
   t = await mountView(V, 'rentals', { dispatch: srvStranger.dispatch });
   ck('R4', 'fixed server refuses a non-manager with its reason verbatim ("You do not manage this shop.")', /You do not manage this shop\./.test(text(t.host)) && /not an empty list/.test(text(t.host)), text(t.host));
@@ -443,7 +513,7 @@ async function suite (src, log) {
   ck('S1', 'no wa.me / whatsapp / tel: / mailto: / sms: in the module', !/wa\.me|whatsapp|tel:|mailto:|sms:/i.test(code), null);
   ck('S3', 'no Firestore write API, no browser storage in the module (the only write is ctx.writeLead)', !/\b(setDoc|updateDoc|addDoc|deleteDoc|writeBatch|runTransaction)\b|localStorage|sessionStorage|indexedDB/.test(code), null);
   const ops = [...new Set(srv.calls.concat(srvOld.calls, srvBig.calls).map((x) => x.op))];
-  ck('S4', 'dispatch ops used ⊆ the seven seller rental ops (incl. rentalOwnerListings); never rentalBook', ops.every((o) => RENTAL_OPS.includes(o)) && !/rentalBook\b/.test(code), ops);
+  ck('S4', 'dispatch ops used ⊆ the seller rental ops (listing + booking lifecycle); never rentalBook / rentalReportReturn (renter-only)', ops.every((o) => RENTAL_OPS.includes(o)) && !/rentalBook\b|rentalReportReturn/.test(code), ops);
 
   /* ── G ── */
   const con = routes.ROUTES.filter((r) => /^con-/.test(r.id));
@@ -471,6 +541,9 @@ async function suite (src, log) {
     ['N2', 'extra field in the lead move payload', 'L3', ["var p = { status: to };", "var p = { status: to, updatedAt: 1 };"]],
     ['N3', 'a pay button on a rental', 'R2', ["return '<div class=\"cw-card\"><div class=\"cw-row\"><b>' + esc(b.customerName", "btns += '<button type=\"button\" class=\"cw-btn pri\" data-act=\"rental-pay\">Pay with M-PESA</button>'; return '<div class=\"cw-card\"><div class=\"cw-row\"><b>' + esc(b.customerName"]],
     ['N5', 'direct rentalProducts read used although rentalOwnerListings exists', 'R10', ["return dispatch('rentalOwnerListings', { shopId: sid }).then(", "return Promise.reject({ code: 'functions/not-found', message: 'Unknown commerce operation' }).then("]],
+    ['N6', 'Cancel offered on paid_held', 'R14', ["paid_held: ['start'],", "paid_held: ['start', 'cancel'],"]],
+    ['N7', '"Paid" derived from a non-status field (paymentStatus)', 'R12', ["    var s = rentalStatus(b);\n    if (s === 'payment_pending') return 'Awaiting payment';", "    var s = rentalStatus(b);\n    if (b && b.paymentStatus === 'paid') return 'Paid — held by SOKONI';\n    if (s === 'payment_pending') return 'Awaiting payment';"]],
+    ['N8', 'an M-PESA default payment method', 'R13', ["return (m && m.toLowerCase() !== 'none') ? m : '—';", "return (m && m.toLowerCase() !== 'none') ? m : 'M-PESA';"]],
     ['N4', "'0' rendered for an unknown count", 'O1', ["isFinite(n)) ? String(n) + (partial ? '+' : '') : '—'; }", "isFinite(n)) ? String(n) + (partial ? '+' : '') : '0'; }"]]
   ];
   let caught = 0;
