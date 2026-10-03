@@ -627,7 +627,10 @@ const TRANSFORMERS = {
     orderCount:     _num(data.orderCount),
     followerCount:  _num(data.followerCount),
     productCount:   _num(data.productCount),
-    verified:       Boolean(data.verified || data.isVerified),
+    /* Admin-granted `verified` only — `isVerified` is client-writable on the
+       source documents (sellers/stores/businesses/restaurants) and must never
+       reach the index as a trust signal. */
+    verified:       data.verified === true,
     badge:          _str(data.badge),
     featuredLevel:  _num(data.featuredLevel),
     tags:           _arr(data.tags).slice(0, 20),

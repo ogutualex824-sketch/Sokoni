@@ -151,6 +151,17 @@ const triggers = {
   ..._makeTriggers('entVenues'),
   ..._makeTriggers('propertyListings'),
   ..._makeTriggers('bnbListings'),
+  /* Roles Phase 2. The approval-provisioned landlord profile — the landlord
+     THEMSELVES, as distinct from propertyListings, which are their assets.
+     `mechanics` is already registered above, so uid-keyed mechanic profiles are
+     covered without a second entry.
+     tenantProfiles is deliberately ABSENT: a rental tenant is personal data and
+     is never publicly searchable. It also carries `_noIndex: true`, so it would
+     be skipped even if some future edit added it here by mistake.
+     Rider profiles are likewise absent — drivers/{uid} is admin-or-self by
+     design and dispatch reads it directly, so a public rider directory is a
+     privacy decision nobody has taken. */
+  ..._makeTriggers('landlordProfiles'),
 
   /* ── Production aliases — Firestore collection names → Algolia index names ──
      Each also automatically fans out to global_search via enqueue() in queue.js.
