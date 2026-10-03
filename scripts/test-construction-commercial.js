@@ -28,7 +28,8 @@ const db = { collection: (n) => ({ doc: (id) => ({ async get () { const d = ovDo
 (async () => {
   const mats = ['cement', 'steel', 'timber', 'roofing', 'bricks', 'tiles', 'paint', 'plumbing-materials', 'electrical-materials', 'windows-doors', 'construction-tools', 'sand-gravel', 'safety-ppe', 'building-materials', 'hardware', 'construction'];
   ck('K1 every material label → marketplace 15% (matched)', mats.every((k) => { const r = CC.resolveRate(k); return r.matched && r.category === 'marketplace' && r.pct === 15; }), mats.filter((k) => CC.resolveRate(k).category !== 'marketplace'));
-  const svc = ['contractor', 'welding', 'fabrication', 'electrical-contractor', 'plumbing-contractor', 'construction-contractor', 'construction_service'];
+  const svc = ['contractor', 'welding', 'fabrication', 'electrical-contractor', 'plumbing-contractor', 'construction-contractor', 'construction_service',
+    'welding-fabrication', 'construction-company', 'construction-services', 'construction-transport'];
   ck('K2 contractor work → construction_service 0%, fixed + floor-exempt', svc.every((k) => { const r = CC.resolveRate(k); return r.category === 'construction_service' && r.pct === 0 && CC.isFixedRateCategory(k) && CC.isFloorExemptFixedCategory(k); }));
   const c = await FU.calculateCommission(db, { orderAmountCents: 10000000, category: 'welding', sellerId: 'S1' });
   ck('K3 real engine: KES 100,000 welding contract → 0 commission despite 12% / 9% overrides (no % of contract value)', c.commissionCents === 0, { cents: c.commissionCents, rate: c.effectiveRate });
@@ -37,7 +38,7 @@ const db = { collection: (n) => ({ doc: (id) => ({ async get () { const d = ovDo
     try { await FU.calculateCommission(db, { orderAmountCents: 500000, category: k, sellerId: 'S1' }); refusedCodes.push('PRICED:' + k); } catch (e) { refusedCodes.push(e.code); }
   }
   ck('K4 equipment rental / featured / delivery margin are REFUSED (category_unpriced), never 0% or default', refusedCodes.every((x) => x === 'category_unpriced'), refusedCodes);
-  ck('K5 no bare service / job alias; services 5%, jobs 0% unchanged', !CC.resolveRate('service').matched && !CC.resolveRate('job').matched && CC.resolveRate('services').pct === 5 && CC.resolveRate('jobs').pct === 0);
+  ck('K5 no bare service / job / architect alias; services 5%, jobs 0% unchanged', !CC.resolveRate('architect').matched && !CC.resolveRate('service').matched && !CC.resolveRate('job').matched && CC.resolveRate('services').pct === 5 && CC.resolveRate('jobs').pct === 0);
   const m = await FU.calculateCommission(db, { orderAmountCents: 1000000, category: 'cement', sellerId: 'S2' });
   ck('K6 real engine: KES 10,000 cement → KES 1,500 (15%)', m.commissionCents === 150000 && m.effectiveRate === 15, { cents: m.commissionCents, rate: m.effectiveRate });
   console.log(`\n${pass} passed, ${fail} failed`);

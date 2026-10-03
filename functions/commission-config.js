@@ -200,6 +200,10 @@ const ALIASES = {
   hardware: 'marketplace', construction: 'marketplace',
   contractor: 'construction_service', welding: 'construction_service', fabrication: 'construction_service',
   'electrical-contractor': 'construction_service', 'plumbing-contractor': 'construction_service', 'construction-contractor': 'construction_service',
+  /* f3's ONE-intake ids (hosting/construction-intake-on-d824b58 @ fcf56f6). Bare 'architect' is deliberately NOT mapped: business-category.js
+     classifies it as professional_services — use a namespaced intake id (e.g. 'construction-architect'). */
+  'welding-fabrication': 'construction_service', 'construction-company': 'construction_service', 'construction-services': 'construction_service',
+  'construction-transport': 'construction_service',
   'equipment-rental': 'construction_equipment_rental', equipment_rental: 'construction_equipment_rental', 'plant-hire': 'construction_equipment_rental',
   freelancer: 'jobs', freelance: 'jobs', gig: 'jobs', gigs: 'jobs',   /* no bare 'job' alias: the work engine's 'job' is a service job, never this 0% lane */
   logistics: 'hub', delivery: 'hub', driver: 'hub',
