@@ -1,3 +1,19 @@
+## [2026-10-03] — Food Hub S1: the old Restaurant Portal leaves navigation; food businesses enter through the server's workspace answer
+
+**Files:** `sokoni-food-entry.js` (new), `services.html`, `index.html`, `food.html`, `food-dashboard.html`, `scripts/test-food-s1-entry.js` (new), `CHANGELOG.md` · **Base:** `2e5e33b` (containment, on live `72dca56`)
+
+- **Removed from normal navigation:** the "Restaurant Portal" pill and card (Services), "Sell Food" → old portal (home) and "Restaurant Login" (Food Hub). They are replaced by one entry that ASKS `providerDispatch {op:'businessWorkspace'}` and follows the answer:
+  - approved food business → `/merchant-v2`;
+  - applicant → the server's status message;
+  - re-application → the page the server names;
+  - no business → the food application (`HubRegister`, hub food);
+  - another business type → its own workspace;
+  - a failed call → an honest error.
+- **No browser-chosen category routes anyone.** `food-dashboard.html` (still addressable) hands off to the entry.
+- **Tests:** food-s1-entry 14/0 (base 2e5e33b fails 11); food-containment 7/0.
+- **Server dependencies (not in this change):** approved food businesses reach merchant-v2 once Slice 0 (`13f74f3`, restaurant lane) and the approval-time category stamp are live. Until then the server answers honestly ("confirming what kind of business you are").
+- **Not deployed;** ships after the containment, in the combined hosting release.
+
 ## [2026-10-03] — Food Hub CONTAINMENT: no payment, no browser-written orders, nothing made-up shown as real
 
 **Files:** `food.html`, `food-menu.html`, `food-dashboard.html`, `scripts/test-food-containment.js` (new), `CHANGELOG.md` · **Base:** live `72dca56`

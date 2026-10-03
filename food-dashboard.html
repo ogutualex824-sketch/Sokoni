@@ -141,6 +141,9 @@ body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:var(--bg);co
 </style>
 </head>
 <body>
+<script>/* Food Hub S1: the old Restaurant Portal is retired from navigation; food businesses enter through the server-routed
+   entry on the Food Hub page (approved → merchant-v2, applicant → status, no business → apply). */
+try { location.replace('/food.html#food-business'); } catch (_) {}</script>
 <script src="splash.js"></script>
 <!-- Required: the analytics block below calls SokoniCommission.pct("food_delivery").
      Without this the page threw "SokoniCommission is not defined" and the whole

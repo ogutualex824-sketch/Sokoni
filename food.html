@@ -117,7 +117,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 <nav class="fn">
   <a href="/"><img loading="lazy" src="assets/sokoni-logo-dark.png" class="fn-logo" alt="SOKONI"></a>
   <div class="fn-right">
-    <a href="food-dashboard.html" class="fn-dash-btn">🍴 Restaurant Login</a>
+    <a href="#" class="fn-dash-btn" data-food-entry>🍴 Food business</a>
     <a href="cart.html" class="fn-cart-btn">
       🛒 Cart
       <span class="food-cart-badge" id="cartBadge"></span>
@@ -298,5 +298,6 @@ if(_urlCat&&SokoniFood.CATEGORIES.find(c=>c.id===_urlCat)) setCat(_urlCat);
   <script defer src="sokoni-observability.js"></script>
   <script defer src="sokoni-gateway.js"></script>
   <script src="sokoni-availability.js" defer></script>
+<script defer src="sokoni-food-entry.js"></script>
 </body>
 </html>

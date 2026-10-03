@@ -906,7 +906,7 @@
             style="padding:7px 13px;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.25);color:#f97316;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🍔 Fast Food</button>
           <button type="button" onclick="event.stopPropagation();location.href='food.html?cat=grocery'"
             style="padding:7px 13px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);color:#3b82f6;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🛒 Grocery</button>
-          <button type="button" onclick="event.stopPropagation();location.href='food-dashboard.html'"
+          <button type="button" data-food-entry onclick="event.stopPropagation();if(window.SokoniFoodEntry)SokoniFoodEntry.open();"
             style="padding:7px 13px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.22);color:#f59e0b;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🏪 Sell Food</button>
           <button type="button" onclick="event.stopPropagation();location.href='food-rider.html'"
             style="padding:7px 13px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.22);color:#a855f7;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🛵 Become Rider</button>
@@ -4283,6 +4283,7 @@ document.addEventListener('DOMContentLoaded', function() {
        Inspiq) that the homepage never references at first paint. Loads on idle
        OR first interaction, whichever comes first. See sokoni-lazy.js. -->
   <script src="sokoni-lazy.js" defer data-lazy="sokoni-pay.js,sokoni-recommendations.js,inspiq.js"></script>
+<script defer src="sokoni-food-entry.js"></script>
 </body>
 
 </html>
