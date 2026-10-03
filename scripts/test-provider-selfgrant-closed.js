@@ -231,11 +231,11 @@ head('6 - SCOPE: publication, verification, history and wallet are untouched');
        providerPublish is OWNED by the authorised c853665 (provider self-publish gate), which ships in the same release —
        so it is compared to c853665's providerPublish, not to the pre-repair copy. Every other handler keeps the
        original comparison. A stray providerPublish edit beyond c853665 still fails this row. */
-    const PUBLISH_BASE = 'c853665';
+    const PUBLISH_BASE = '89745dd';   /* the combined P0 release merge (c853665 + 6a9dd40 publish semantics) */
     const publishBase = show(PUBLISH_BASE);
     ck('the authorised providerPublish base (' + PUBLISH_BASE + ') is readable', !!publishBase);
     ck('providerPublish is byte-identical to the authorised ' + PUBLISH_BASE + ' (the publish gate) — nothing else changed it',
-      !!publishBase && F.stripComments(handlerRaw(publishBase, 'providerPublish')) === F.stripComments(handlerRaw(SRC, 'providerPublish')), 'c853665 owns providerPublish');
+      !!publishBase && F.stripComments(handlerRaw(publishBase, 'providerPublish')) === F.stripComments(handlerRaw(SRC, 'providerPublish')), 'the combined release owns providerPublish');
     for (const h of ['providerSubmitVerification', 'providerGetPublicProfile']) {
       ck(h + ' is byte-identical to before this gate', same(h),
         'Gate 2, Gate 4 and the verification gate own those');
