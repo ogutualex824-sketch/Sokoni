@@ -764,6 +764,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <!-- Marketing services (sokoni-b2 MK6): the marketer workspace + the ONE Marketing taxonomy (generated) -->
 <script src="sokoni-marketing-taxonomy.js"></script>
 <script src="sokoni-merchant-mktpro.js"></script>
+<!-- Provider money (sokoni-b2): Payments / Receipts / Plan — the provider view of the ONE Financial Center authority -->
+<script src="sokoni-merchant-provider-money.js"></script>
 <script src="sokoni-inbox.js"></script>
 <script src="sokoni-merchant-staff.js"></script>
 <script src="sokoni-merchant-team.js"></script>
@@ -2835,6 +2837,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
        empty ⇒ fails closed, nothing listed). Editable ONLY when the provider session's P0-F decision is editable === true. */
     'mkt-services':     { global: 'SokoniMerchantRateCard', ctx: function () { return _mktRateCtx(); } },
     'mkt-rates':        { global: 'SokoniMerchantRateCard', ctx: function () { return _mktRateCtx(); } },
+    'prov-payments':    { global: 'SokoniMerchantProviderMoney', ctx: function () { return _mktCtx('payments'); } },
+    'prov-receipts':    { global: 'SokoniMerchantProviderMoney', ctx: function () { return _mktCtx('receipts'); } },
+    'prov-plan':        { global: 'SokoniMerchantProviderMoney', ctx: function () { return _mktCtx('plan'); } },
     'mkt-overview':     { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('overview'); } },
     'mkt-leads':        { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('leads'); } },
     'mkt-quotes':       { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('quotes'); } },

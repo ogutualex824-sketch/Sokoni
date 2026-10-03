@@ -1,3 +1,13 @@
+## [2026-10-03] — merchant-v2 PROVIDER money: Payments · Receipts · Plan (the provider view of the ONE Financial Center) — NOT deployed
+
+- **sokoni-merchant-provider-money.js (new)** — every figure is a server read (sokoni-2f commercial-fn f1ce058):
+  - **Payments** = providerLedger: Available / Held (paid_held bookings) / Gross / SOKONI commission / Net / Refunds / Adjustments / Settled, the ledger entries with booking / order refs, payout history and payout eligibility. Unreadable → "—" with the reason, never KES 0. Truncation is stated.
+  - **WITHDRAW is DISABLED** ("Withdraw — coming soon"). The canonical wallet withdrawal is frozen and server-refused (2f kill-switch). providerRequestPayout / requestSellerPayout are never called.
+  - **Receipts** = myTransactionReceipts {role:'provider'}, newest first with an older-page cursor: receipt no, kind / subtype, the method IntaSend reported ("—" if none), commission, net, booking / project links.
+  - **Plan** = subGetPlans {hubType:'marketing'} (cents) + subGetStatus (no paid sub ⇒ Free). Upgrade = createPaymentIntent {planId, billingCycle:'monthly', phone} → the verified webhook activates. No amount is sent, nothing is unlocked by the page, and an upgrade needs P0-F editable.
+- **Routes (provider-only, GATED per sokoni-e3 C2):** prov-payments + prov-receipts in 'Business' (requires module:earnings); prov-plan in 'Plan' (requires module:subscription). validate() is clean. The known-capability list and C2b / C5b exact sets are extended.
+- **Tests:** scripts/test-merchant-provider-money.js 7/0, SABOTAGE 5/5. provider-session 101/0, mv2-1-sidebar 14/0, merchant-routes 65/0, mktpro 9/0, ratecard 39/0.
+
 ## [2026-10-03] — Marketing services × sokoni-e3's rate-card editor + P0-F read-only — NOT deployed
 
 - **Merged** sokoni-e3's hosting/provider-session-on-e81d80a @ 99ff58e: SokoniMerchantRateCard, the provider `rates` route (module:services), and sokoni-edit-authority.js.

@@ -405,6 +405,24 @@
       role:['seller','merchant'], ctx:[CTX.SELLER_UID],
       sessions:['provider'],
       mobile:true, desktop:true, activeKey:'mkt-verification' },
+    /* ── PROVIDER MONEY (sokoni-b2, 2026-10-03) — the PROVIDER view of the ONE Financial Center business wallet, receipts and
+       plan (sokoni-2f providerLedger / myTransactionReceipts role:'provider' / subGetPlans + createPaymentIntent). Provider
+       session only, GATED (sokoni-e3 C2): Business requires 'module:earnings', Plan requires 'module:subscription'. */
+    { id:'prov-payments', name:'Payments', icon:'💳', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      sessions:['provider'],
+      mobile:true, desktop:true, activeKey:'prov-payments' },
+    { id:'prov-receipts', name:'Receipts', icon:'🧾', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      sessions:['provider'],
+      mobile:true, desktop:true, activeKey:'prov-receipts' },
+    { id:'prov-plan', name:'Plan', icon:'📦', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      sessions:['provider'],
+      mobile:true, desktop:true, activeKey:'prov-plan' },
     { id:'signout', name:'Sign out', icon:'↩', tier:'hidden',
       kind:'exit', href:'/login', next:'/merchant-v2', terminatesSession:true,
       role:['seller','merchant','cashier'], ctx:[],
@@ -602,6 +620,11 @@
       ids:['rates'] },
     { key:'operations', label:'Back office',
       ids:['kra-tax','devices','pos-setup'] },
+    /* Provider money (sokoni-b2): fail CLOSED unless the server granted the earnings / subscription module. */
+    { key:'provbusiness', label:'Business', requires:'module:earnings',
+      ids:['prov-payments','prov-receipts'] },
+    { key:'provplan', label:'Plan', requires:'module:subscription',
+      ids:['prov-plan'] },
     /* Marketing services (sokoni-b2): fails CLOSED unless the server granted 'marketing'. */
     { key:'mktpro', label:'Marketing services', requires:'marketing',
       ids:['mkt-overview','mkt-services','mkt-rates','mkt-leads','mkt-quotes','mkt-bookings','mkt-campaigns','mkt-projects','mkt-earnings','mkt-verification'] }

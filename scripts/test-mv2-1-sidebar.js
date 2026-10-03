@@ -34,9 +34,10 @@ const sales = groups.find((g) => g.key === 'sales');
    Neither renders for a merchant session (session + group gate). Every requires: must be a KNOWN capability (a typo would
    hide a group forever). */
 ck('R3  Sales group exists and holds sales-control; headings are Sales / Operations / Commerce / Growth / Services / Back office (+ the gated Marketing services group); every requires: is a known capability', !!sales && sales.ids.includes('sales-control')
-  && groups.filter((g) => g.requires !== 'marketing').map((g) => g.label).join('|') === 'Sales|Operations|Commerce|Growth|Services|Back office'
+  && groups.filter((g) => ['marketing', 'module:earnings', 'module:subscription'].indexOf(g.requires) < 0).map((g) => g.label).join('|') === 'Sales|Operations|Commerce|Growth|Services|Back office'
+  && groups.filter((g) => g.requires === 'module:earnings').map((g) => g.label).join('|') === 'Business' && groups.filter((g) => g.requires === 'module:subscription').map((g) => g.label).join('|') === 'Plan'
   && groups.filter((g) => g.requires === 'marketing').map((g) => g.label).join('|') === 'Marketing services'
-  && groups.filter((g) => g.requires).every((g) => ['marketing', 'module:services'].indexOf(g.requires) >= 0), groups.map((g) => g.label + (g.requires ? '[' + g.requires + ']' : '')));
+  && groups.filter((g) => g.requires).every((g) => ['marketing', 'module:services', 'module:earnings', 'module:subscription'].indexOf(g.requires) >= 0), groups.map((g) => g.label + (g.requires ? '[' + g.requires + ']' : '')));
 const more = C.ROUTES.filter((x) => x.tier === 'more').map((x) => x.id).sort();
 const grouped = groups.flatMap((g) => g.ids).sort();
 ck('R4  every more-tier route is in exactly one group and vice versa', JSON.stringify(more) === JSON.stringify(grouped), { more, grouped });
