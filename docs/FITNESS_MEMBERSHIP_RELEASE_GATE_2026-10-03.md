@@ -29,7 +29,7 @@
 
 **Disposition:** the fail-open default is **REPAIRED IN CODE** (25ef259) and must ship in the same release; until then it is BLOCKED (b2 deploy). sokoni-e3's AdminOS fitness switch screen is **not on any branch yet** (UNPROVEN). Today the only writer is the generic AdminOS flag editor (`sokoni-aos.js updateFlag`), which sends an explicit boolean.
 
-**Open:** `fitness-membership-create.js` keeps its own strict copy of the predicate. It agrees with `shared/fitness-sales-switch.js`, but it is a second copy; sokoni-e3 has been asked to import the shared one.
+**Closed (d5fbd37):** `fitness-membership-create.js` imports `shared/fitness-sales-switch.js`, and its own copy is deleted (C19 asserts a single read site). An unreadable flag now logs `FLAG_UNREADABLE` (warn) and stays OFF.
 
 ## Release matrix
 
@@ -40,9 +40,9 @@
 | Fixed / flat lanes | 2f | test-pos-fixed-rate-bypass | 32/0 | integration tree | PROVEN (unit) |
 | Hub plans | 2f | test-hub-plan-entitlements | 17/0 | integration tree | PROVEN (unit) |
 | Refund after settlement | 2f | test-service-settlement-reversal | 7/0 | integration tree | PROVEN (unit) |
-| Attendance / QR / staff | e3 | test-fitness-attendance | 47/0 | integration tree | PROVEN (unit) |
-| Creation + snapshot + payBy + flag | e3 | test-fitness-membership-create | 18/0 | integration tree | PROVEN (unit) |
-| Offer module | e3 | test-membership-offer-module | 6/0 | integration tree | PROVEN (unit) |
+| Attendance / QR / staff | e3 | test-fitness-attendance | 48/0 | integration tree | PROVEN (unit) |
+| Creation + snapshot + payBy + flag (shared predicate, single read site) | e3 | test-fitness-membership-create | 23/0 | integration tree | PROVEN (unit) |
+| Offer module (day/week/month limits = slicesOf; all 6 defaults valid) | e3 | test-membership-offer-module | 8/0 | integration tree | PROVEN (unit) |
 | Feature switch writer | b2 | test-feature-flag-update | 4/0 | integration tree + 25ef259 | PROVEN (unit) |
 | Healthcare / entertainment / events | various | suites | 40/0 · 95/0 · 111/0 | integration tree | PROVEN (unit) |
 | Provider plan table | 2f | test-provider-plan-ladder | 38/0 | integration tree | PROVEN (unit) |
@@ -58,3 +58,9 @@
 2. sokoni-e3 imports `shared/fitness-sales-switch` and pre-fills its offer editor from `shared/fitness-offer-defaults`.
 3. sokoni-5b ports the hold into the live webhook and runs creator-callback + test-membership-settlement on its tree.
 4. One release set, scoped deploy targets only, after the owner's explicit approval.
+
+## Update (later 2026-10-03)
+- Re-merged sokoni-e3's `d5fbd37` and commercial `9cab901` (vehicle sales 2%; agreement suite amended; switch warning). Only CHANGELOG conflicted, with both sides kept.
+- The offline suite set is all green on the integration tip, plus `test-commission-5pct-agreement` 62/0. creator-callback still shows the same 4 pre-existing failures.
+- Still UNPROVEN: the gym offer editor pre-fill and the AdminOS fitness screen (sokoni-e3's hosting branch, in progress).
+- Still BLOCKED: emulator / browser (RAM) and the live webhook (sokoni-5b).
