@@ -66,7 +66,7 @@ function fakeDb (seed) {
       const t = {
         get: async (r) => { const d = docs.get(r.path); reads.set(r.path, JSON.stringify(d === undefined ? null : d)); return { exists: !!d, data: () => (d ? JSON.parse(JSON.stringify(d)) : undefined) }; },
         create: (r, v) => writes.push(() => { if (docs.has(r.path)) { const e = new Error('ALREADY_EXISTS'); e.code = 6; throw e; } docs.set(r.path, apply(null, v)); }),
-        set: (r, v, o) => writes.push(() => docs.set(r.path, apply(o && o.merge ? docs.get(r.path) : null, v))),
+        set: (r, v, o) => writes.push(() => { if (db._failOn && r.path.startsWith(db._failOn)) { throw new Error('INJECTED_COMMIT_FAILURE on ' + r.path); } docs.set(r.path, apply(o && o.merge ? docs.get(r.path) : null, v)); }),
         update: (r, v) => writes.push(() => { if (!docs.has(r.path)) throw new Error('NOT_FOUND'); docs.set(r.path, apply(docs.get(r.path), v)); }),
       };
       const out = await fn(t);
@@ -105,8 +105,8 @@ const D = (s) => new Date(s);
   const s = MS.slicesOf(mem({ priceCents: 100000, periodCount: 3 }));
   ck('M1 slices are integers summing exactly to the price (33,333 / 33,333 / 33,334 cents)', s.map((x) => x.amountCents).join() === '33333,33333,33334' && s.reduce((a, x) => a + x.amountCents, 0) === 100000);
   ck('M2 months fall due at calendar month ends (Feb 15, Mar 15, Apr 15)', s.map((x) => x.dueAt.toISOString().slice(0, 10)).join() === '2026-02-15,2026-03-15,2026-04-15', s.map((x) => x.dueAt));
-  let bad = 0; for (const o of [{ priceCents: 1.5 }, { periodCount: 0 }, { startAt: null }, { periodUnit: 'week' }]) { try { MS.slicesOf(mem(o)); } catch (_) { bad++; } }
-  ck('M2b invalid records refused (fractional cents, 0 periods, no start, undecided period unit)', bad === 4);
+  let bad = 0; for (const o of [{ priceCents: 1.5 }, { periodCount: 0 }, { startAt: null }, { periodUnit: 'year' }]) { try { MS.slicesOf(mem(o)); } catch (_) { bad++; } }
+  ck('M2b invalid records refused (fractional cents, 0 periods, no start, undecided period unit year)', bad === 4);
 
   const used = { attendedSessions: 1, firstAttendedAt: '2026-01-20T07:00:00Z', refundEligible: false };
   const bal = (db) => (db._docs.get('wallets/gym_A') || {}).balance || 0;
@@ -292,6 +292,98 @@ const D = (s) => new Date(s);
   await MS.releaseDueSlices('mem_000001', { now: D('2026-04-16T06:00:00Z'), deps });
   ck('N5 settlement → gym "Membership earnings released"; last month → member "Membership ended"',
     NOTES.some((n) => n.uid === 'gym_A' && n.type === 'wallet_credit') && NOTES.some((n) => n.uid === 'member_1' && n.type === 'subscription_expired'), NOTES.map((n) => n.uid + ':' + n.type));
+
+  /* ══ N6–N9: notifications sokoni-e3's brief audit found missing ══ */
+  db = setupPay(); NOTES.length = 0;
+  await MS.holdMembershipPayment(null, null, 'API_N6', 'int_1', 600);   /* wrong amount → review */
+  ck('N6 payment parked for review → member "Payment under review" (not "active")',
+    NOTES.some((n) => n.uid === 'member_1' && n.title === 'Payment under review') && !NOTES.some((n) => n.type === 'subscription_activated'), NOTES.map((n) => n.title));
+  db = setup(Object.assign({ paymentRef: 'API_1' }, used)); NOTES.length = 0;
+  await MS.requestException('mem_000001', { by: 'admin_1', reason: 'Member relocated — documents on file' });
+  ck('N7 exception filed → member "Refund review opened" + gym "Membership refund under review"',
+    NOTES.some((n) => n.uid === 'member_1' && /review opened/.test(n.title)) && NOTES.some((n) => n.uid === 'gym_A' && /under review/.test(n.title)), NOTES.map((n) => n.uid + ':' + n.title));
+  NOTES.length = 0;
+  await MS.decideRefund('mem_000001', { by: 'admin_2', decision: 'approve' });
+  ck('N8 refund executed → member "Membership refunded" AND gym "Membership refunded" (remaining payouts cancelled)',
+    NOTES.some((n) => n.uid === 'member_1' && n.type === 'refund_processed') && NOTES.some((n) => n.uid === 'gym_A' && n.title === 'Membership refunded'), NOTES.map((n) => n.uid + ':' + n.title));
+  const srcN = require('fs').readFileSync(path.join(ROOT, 'functions/membership-settlement.js'), 'utf8');
+  ck('N9 a failed refund execution is an ops-visible structured error (REFUND_EXECUTION_FAILED) and tells the admin nothing changed',
+    /logger\.error\('\[membership\] REFUND_EXECUTION_FAILED'/.test(srcN) && /nothing was changed/.test(srcN));
+
+  /* ══ L: LATE PAYMENT vs FIVE-MINUTE UNPAID EXPIRY (the race) ══ */
+  const PAYBY = '2026-01-15T09:05:00.000Z';                                   /* creation 09:00 + 5 min */
+  db = setupPay({ payBy: PAYBY }); NOTES.length = 0;
+  MS._test.use({ now: () => new Date('2026-01-15T09:04:59.000Z') });          /* 1 s before payBy */
+  await MS.holdMembershipPayment(null, null, 'API_L1', 'int_1', 6000);
+  ck('L1 boundary: payment 1 s BEFORE payBy → held + active', db._docs.get('providerMemberships/mem_000001').paymentStatus === 'paid_held');
+  db = setupPay({ payBy: PAYBY }); NOTES.length = 0;
+  MS._test.use({ now: () => new Date('2026-01-15T09:05:01.000Z') });          /* 1 s after */
+  await MS.holdMembershipPayment(null, null, 'API_L2', 'int_1', 6000);
+  const ml = db._docs.get('providerMemberships/mem_000001');
+  ck('L2 payment 1 s AFTER payBy → NOT resurrected: refunded_late + expired, KES 6,000 back to the buyer wallet, ledger row',
+    ml.paymentStatus === 'refunded_late' && ml.status === 'expired' && db._docs.get('users/member_1').walletBalance === 6000 && db._docs.has('ledger/member_1_API_L2_membership_latepay_refund') && !ml.nextReleaseAt, ml);
+  ck('L3 the member is told "Payment refunded" — and NEVER "Membership active"', NOTES.some((n) => n.title === 'Payment refunded ↩') && !NOTES.some((n) => n.type === 'subscription_activated'), NOTES.map((n) => n.title));
+  await MS.holdMembershipPayment(null, null, 'API_L2', 'int_1', 6000);
+  ck('L4 the late callback replayed → no second refund (still KES 6,000)', db._docs.get('users/member_1').walletBalance === 6000);
+  db = setupPay({ status: 'expired' });
+  MS._test.use({ now: () => new Date('2026-01-15T09:01:00.000Z') });
+  await MS.holdMembershipPayment(null, null, 'API_L5', 'int_1', 6000);
+  ck('L5 an explicitly expired record is not resurrected either (refunded_late)', db._docs.get('providerMemberships/mem_000001').paymentStatus === 'refunded_late');
+  r = await MS.releaseDueSlices('mem_000001', { now: D('2026-05-01T06:00:00Z'), deps });
+  ck('L6 a late-refunded membership never settles to the gym', r.skipped && bal(db) === 0, r);
+
+  /* ══ A: REFUND ATOMICITY under a real commit failure ══ */
+  db = setup({ paymentRef: 'API_1' });
+  await MS.requestRefund('mem_000001', { by: 'member_1', now: D('2026-01-25T10:00:00Z') });
+  NOTES.length = 0; db._failOn = 'users/';                                     /* the wallet credit write fails at commit */
+  let threw = null;
+  try { await MS.decideRefund('mem_000001', { by: 'admin_9', decision: 'approve' }); } catch (e) { threw = e.message; }
+  db._failOn = null;
+  const ma = db._docs.get('providerMemberships/mem_000001');
+  ck('A1 the wallet write fails → the decision THROWS (the callable turns it into "nothing was changed, please retry")', !!threw && /INJECTED_COMMIT_FAILURE/.test(threw), threw);
+  ck('A2 NOTHING changed: refund still "requested", no ledger row, no wallet, membership still refund_requested',
+    ma.refund.state === 'requested' && ma.status === 'refund_requested' && !db._docs.has('ledger/member_1_mem_000001_membership_refund') && !db._docs.has('users/member_1'), { refund: ma.refund, status: ma.status });
+  ck('A3 no false "refund paid" notification to the member or the gym', !NOTES.some((n) => n.type === 'refund_processed' || n.title === 'Membership refunded'), NOTES);
+  r = await MS.releaseDueSlices('mem_000001', { now: D('2026-04-16T06:00:00Z'), deps });
+  ck('A4 a failed refund does not cancel or release payouts: still frozen, gym unpaid', r.skipped && bal(db) === 0, r);
+  r = await MS.decideRefund('mem_000001', { by: 'admin_9', decision: 'approve' });
+  ck('A5 the admin retries → refund completes once (KES 6,000), notifications sent now', r.ok && db._docs.get('users/member_1').walletBalance === 6000 && NOTES.some((n) => n.type === 'refund_processed'), r);
+
+  /* ══ F: SALES SWITCH — the ONE predicate (shared/fitness-sales-switch.js), exercised for real ══ */
+  const SW = require(path.join(ROOT, 'functions/shared/fitness-sales-switch.js'));
+  const flagDb = (v, throws) => ({ collection: () => ({ doc: () => ({ get: async () => { if (throws) throw new Error('read failed'); return v === undefined ? { exists: false, data: () => undefined } : { exists: true, data: () => v }; } }) }) });
+  const sw = await Promise.all([SW.salesEnabled(flagDb({ enabled: true })), SW.salesEnabled(flagDb({ enabled: 'true' })), SW.salesEnabled(flagDb({ enabled: 1 })),
+    SW.salesEnabled(flagDb({})), SW.salesEnabled(flagDb(undefined)), SW.salesEnabled(flagDb({ enabled: true }, true))]);
+  ck('F1 only boolean true opens sales: true→on; "true", 1, missing field, missing doc, READ ERROR → off', sw.join() === 'true,false,false,false,false,false', sw);
+  const pp2 = require('fs').readFileSync(path.join(ROOT, 'functions/payment-purposes.js'), 'utf8');
+  const fm = pp2.slice(pp2.indexOf('fitness_membership: {'), pp2.indexOf('fitness_membership: {') + 3000);
+  ck('F2 the purpose uses THAT predicate (no second copy) and refuses SALES_DISABLED before reading the membership',
+    /require\('\.\/shared\/fitness-sales-switch'\)\.salesEnabled\(db\(\)\)/.test(fm) && /code: 'SALES_DISABLED'/.test(fm) && !/collection('featureFlags')/.test(fm)
+    && fm.indexOf('fitness-sales-switch') < fm.indexOf("collection('providerMemberships')"));
+
+  /* ══ D: SHORT PASSES + DEFAULT OFFER CATALOGUE (owner 2026-10-03) ══ */
+  const DFT = require(path.join(ROOT, 'functions/shared/fitness-offer-defaults.js'));
+  const prices = DFT.OFFER_DEFAULTS.map((o) => o.label + '=' + o.priceCents / 100).join(', ');
+  ck('D1 the ONE default catalogue: Daily 500, Weekly 1,500, Monthly 5,000, 3 Months 14,000, 6 Months 26,000, Annual 48,000 (KES)',
+    prices === 'Daily Pass=500, Weekly Pass=1500, Monthly=5000, 3 Months=14000, 6 Months=26000, Annual=48000', prices);
+  const sv = DFT.withSavings();
+  ck('D2 savings are COMPUTED from the same list (3M 7%, 6M 13%, Annual 20%), never typed; single passes show none',
+    sv.find((o) => o.key === 'quarter').savingPct === 7 && sv.find((o) => o.key === 'half').savingPct === 13 && sv.find((o) => o.key === 'annual').savingPct === 20 && sv.find((o) => o.key === 'daily').savingPct === null, sv.map((o) => o.key + ':' + o.savingPct));
+  ck('D3 every default is a valid settlement shape (slices sum exactly to its price)',
+    DFT.OFFER_DEFAULTS.every((o) => { const sl = MS.slicesOf({ priceCents: o.priceCents, periodCount: o.periodCount, periodUnit: o.periodUnit, startAt: START }); return sl.reduce((a, x) => a + x.amountCents, 0) === o.priceCents; }));
+  const day = MS.slicesOf({ priceCents: 50000, periodCount: 1, periodUnit: 'day', startAt: START });
+  const wk = MS.slicesOf({ priceCents: 150000, periodCount: 1, periodUnit: 'week', startAt: START });
+  ck('D4 Daily and Weekly passes are ONE slice each, due at the end of the pass (Jan 16 / Jan 22)',
+    day.length === 1 && day[0].dueAt.toISOString().slice(0, 10) === '2026-01-16' && wk.length === 1 && wk[0].dueAt.toISOString().slice(0, 10) === '2026-01-22', [day, wk]);
+  db = setup({ priceCents: 150000, periodCount: 1, periodUnit: 'week' });
+  r = await MS.releaseDueSlices('mem_000001', { now: D('2026-01-18T06:00:00Z'), deps });
+  ck('D5 weekly pass, unused, mid-week → held (refundable), gym unpaid', r.released === 0 && bal(db) === 0, r);
+  db = setup({ priceCents: 150000, periodCount: 1, periodUnit: 'week', attendedSessions: 1, firstAttendedAt: '2026-01-16T07:00:00Z', refundEligible: false });
+  r = await MS.releaseDueSlices('mem_000001', { now: D('2026-01-22T09:30:00Z'), deps });
+  ck('D6 weekly pass, used → paid at the end of the week: KES 1,425 (1,500 − 5%)', r.released === 1 && bal(db) === 1425, r);
+  db = setup({ priceCents: 50000, periodCount: 1, periodUnit: 'day' });
+  r = await MS.releaseDueSlices('mem_000001', { now: D('2026-01-16T09:30:00Z'), deps });
+  ck('D7 daily pass never used → paid to the gym at expiry (KES 475), trigger expired_unused', r.released === 1 && r.trigger === 'expired_unused' && bal(db) === 475, r);
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

@@ -38,7 +38,9 @@
    PAYMENT (owner 2026-10-03: money side owns intake): payment-purposes 'fitness_membership' prices the membership from
    THIS record (never the browser), bound to the buyer; the verified webhook calls holdMembershipPayment, which checks
    the intent → membership binding, the amount (provider-confirmed KES == priceCents) and replay, then marks it
-   paid_held + active. A mismatch is parked as 'payment_review' — never activated.
+   paid_held + active. A mismatch is parked as 'payment_review' — never activated. A payment landing AFTER payBy (or on an
+   expired record) never resurrects it: it is refunded to the buyer's SOKONI wallet (paymentStatus 'refunded_late'),
+   exactly as a late booking payment is.
 
    REFUND (B9.31): request → a SECOND authorized actor decides → execution. Requested only with zero attendance, before
    the end, once (requestRefund) — or as an explicit AdminOS EXCEPTION (requestException: admin, reason required,
@@ -92,8 +94,15 @@ function slicesOf(m) {
   if (!Number.isInteger(price) || price < 0) throw Object.assign(new Error('priceCents must be a non-negative integer'), { code: 'invalid_membership' });
   if (!Number.isInteger(n) || n < 1 || n > 60) throw Object.assign(new Error('periodCount must be 1..60'), { code: 'invalid_membership' });
   if (!start) throw Object.assign(new Error('startAt missing'), { code: 'invalid_membership' });
-  if ((m.periodUnit || 'month') !== 'month') throw Object.assign(new Error('only monthly periods are decided'), { code: 'invalid_membership' });
-  const { periodEnd } = require('./subscription-period');
+  const unit = m.periodUnit || 'month';
+  const { periodEnd, addDays } = require('./subscription-period');
+  /* SHORT PASSES (owner 2026-10-03): a day or week pass is ONE slice covering the whole pass — held until the first
+     check-in (refundable before), then paid; never used → paid at expiry. periodCount = the number of days / weeks. */
+  if (unit === 'day' || unit === 'week') {
+    if (n > (unit === 'day' ? 31 : 8)) throw Object.assign(new Error('pass too long for a ' + unit + ' unit'), { code: 'invalid_membership' });
+    return [{ index: 0, amountCents: price, startsAt: start, dueAt: addDays(start, n * (unit === 'day' ? 1 : 7)) }];
+  }
+  if (unit !== 'month') throw Object.assign(new Error('period unit must be day | week | month'), { code: 'invalid_membership' });
   const base = Math.floor(price / n);
   const out = [];
   let from = start;
@@ -297,6 +306,27 @@ async function holdMembershipPayment(db, adminSdk, apiRef, intentRef, amountKES)
       if (!snap.exists) return 'no-membership';
       const m = snap.data();
       if (m.paymentStatus && m.paymentStatus !== 'pending') return 'noop';                     /* replay / already handled */
+      /* LATE PAYMENT (owner 2026-10-03: a stale callback "MUST NOT silently resurrect" an expired unpaid membership).
+         The canonical answer is the one the booking hold already gives a payment that lands on a dead booking
+         (booking-payment-sweep.holdServiceBookingPayment): do NOT activate; return the money to the buyer's SOKONI
+         wallet with a deterministic ledger row, mark the record, tell the member. Expired = the creation path's payBy
+         has passed, or the record was explicitly expired. */
+      const nowL = _now();
+      const payByMs = m.payBy ? (_date(m.payBy) || new Date(0)).getTime() : null;
+      if (m.status === 'expired' || (payByMs !== null && nowL.getTime() > payByMs)) {
+        const paidL = Math.max(0, Math.round((Number(amountKES) || 0) * 100));
+        const shillingsL = Math.floor(paidL / 100);
+        if (shillingsL >= 1 && m.buyerUid) {
+          t.set(D.collection('users').doc(m.buyerUid), { walletBalance: _inc(shillingsL) }, { merge: true });
+          t.create(D.collection('ledger').doc(`${m.buyerUid}_${apiRef}_membership_latepay_refund`), {
+            uid: m.buyerUid, type: 'membership_refund', credit: shillingsL, membershipId: ref.id, paymentRef: apiRef,
+            reason: 'paid_after_expiry', createdAt: _ts() });
+        }
+        t.update(ref, { paymentStatus: 'refunded_late', status: 'expired', paymentRef: apiRef, refundedCents: paidL,
+                        refundReason: 'paid_after_expiry', updatedAt: _ts() });
+        _event(t, ref, 'payment_late_refunded', { apiRef, paidCents: paidL, shillings: shillingsL });
+        return 'late_refunded';
+      }
       const paidCents = Math.round((Number(amountKES) || 0) * 100);
       const bound = intent.uid === m.buyerUid && (intent.currency || 'KES') === 'KES' && Number(intent.amountCents) === Number(m.priceCents);
       if (!bound || paidCents !== Number(m.priceCents)) {
@@ -320,8 +350,17 @@ async function holdMembershipPayment(db, adminSdk, apiRef, intentRef, amountKES)
     logger.error('[membership] hold failed (recoverable, payment stands)', { apiRef, error: (e && e.message) || 'Error' });
     return true;
   }
-  if (outcome === 'held' || outcome === 'review') {
-    await D.collection('paymentIntents').doc(intentRef || apiRef).set({ status: outcome === 'held' ? 'paid' : 'review', paidRef: apiRef, paidAt: _ts() }, { merge: true }).catch(() => {});
+  if (outcome === 'held' || outcome === 'review' || outcome === 'late_refunded') {
+    const st = outcome === 'held' ? 'paid' : outcome === 'review' ? 'review' : 'refunded';
+    await D.collection('paymentIntents').doc(intentRef || apiRef).set({ status: st, paidRef: apiRef, paidAt: _ts() }, { merge: true }).catch(() => {});
+  }
+  if (outcome === 'late_refunded') {
+    const m = (await ref.get()).data() || {};
+    await _notify({ uid: m.buyerUid, type: 'booking_refund', title: 'Payment refunded ↩', body: `Your payment for ${m.title || 'a membership'} arrived after the offer expired, so the membership was not started and the money is back in your SOKONI wallet. Ref ${apiRef}.`, dedupeKey: `membership_latepay_${apiRef}` });
+  }
+  if (outcome === 'review') {
+    const m = (await ref.get()).data() || {};
+    await _notify({ uid: m.buyerUid, type: 'payment_failed', title: 'Payment under review', body: `We received a payment for ${m.title || 'your membership'} that we need to check before activating it. Ref ${apiRef}. Our team will follow up — you have not been charged twice.`, dedupeKey: `membership_review_${apiRef}` });
   }
   if (outcome === 'held') {
     const m = (await ref.get()).data() || {};
@@ -356,8 +395,13 @@ async function requestException(membershipId, opts) {
                 attendedSessionsAtRequest: Number(m.attendedSessions) || 0, used: isUsed(m),
                 requestedBy: o.by || null, requestedAt: _ts(), previousPaymentStatus: m.paymentStatus } });
     _event(t, ref, 'refund_exception_requested', { by: o.by || null, amountCents: remaining, reason: reason.slice(0, 500), attendedSessionsSeen: Number(m.attendedSessions) || 0 });
-    out = { ok: true, refundRequestedCents: remaining, exception: true };
+    out = { ok: true, refundRequestedCents: remaining, exception: true, buyerUid: m.buyerUid, providerId: m.providerId, title: m.title || null };
   });
+  if (out && out.ok) {
+    await _notify({ uid: out.buyerUid, type: 'booking_refund', title: 'Refund review opened', body: `SOKONI opened a review of a possible refund for ${out.title || 'your membership'}. A second reviewer will decide it.`, dedupeKey: `membership_exception_${membershipId}` });
+    await _notify({ uid: out.providerId, type: 'booking_refund', title: 'Membership refund under review', body: `SOKONI is reviewing an exceptional refund for ${out.title || 'a membership'}. Remaining payouts are paused until it is decided.`, dedupeKey: `membership_exception_gym_${membershipId}` });
+    delete out.buyerUid; delete out.providerId; delete out.title;
+  }
   return out;
 }
 
@@ -369,7 +413,7 @@ async function decideRefund(membershipId, opts) {
   const o = opts || {};
   if (!['approve', 'reject'].includes(o.decision)) return { ok: false, code: 'bad_decision', reason: 'Decision must be approve or reject.' };
   const ref = _db().collection(COL).doc(String(membershipId));
-  let out = null, notifyArgs = null;
+  let out = null, notifyArgs = null, gymNotice = null;
   await _db().runTransaction(async (t) => {
     const snap = await t.get(ref);
     const m = snap.exists ? snap.data() : null;
@@ -406,8 +450,10 @@ async function decideRefund(membershipId, opts) {
     _event(t, ref, 'refund_executed', { by: o.by, amountCents: amount, shillings, exception: r.exception === true, destination: 'sokoni_wallet' });
     out = { ok: true, state: 'refunded', amountCents: amount, walletCreditShillings: shillings };
     notifyArgs = { uid: m.buyerUid, type: 'refund_processed', title: 'Membership refunded ↩', body: `KES ${shillings.toLocaleString()} has been returned to your SOKONI wallet.` };
+    gymNotice = { uid: m.providerId, type: 'booking_refund', title: 'Membership refunded', body: `${m.title || 'A membership'} was refunded to the member after review. Its remaining payouts are cancelled; months already settled to you are unaffected.` };
   });
   if (notifyArgs) await _notify(Object.assign({ dedupeKey: `membership_refund_${membershipId}_${out.state}` }, notifyArgs));
+  if (gymNotice) await _notify(Object.assign({ dedupeKey: `membership_refund_gym_${membershipId}` }, gymNotice));
   logger.info('[membership] refund decision', { membershipId, by: o.by || null, decision: o.decision, ok: out && out.ok, code: out && out.code });
   return out;
 }
@@ -449,7 +495,14 @@ const _idOf = (req) => { const id = String((req.data && req.data.membershipId) |
 const membershipDecideRefund = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
   if (!_admin(req)) throw new HttpsError('permission-denied', 'Only an authorized administrator can decide refunds.');
-  const r = await decideRefund(_idOf(req), { by: req.auth.uid, decision: req.data && req.data.decision, reason: req.data && req.data.reason });
+  let r;
+  try { r = await decideRefund(_idOf(req), { by: req.auth.uid, decision: req.data && req.data.decision, reason: req.data && req.data.reason }); }
+  catch (e) {
+    /* The wallet credit is inside the decision transaction — a failure leaves NOTHING half-done (no credit, no state change).
+       It is surfaced to the deciding admin and as a structured ops error; there is no admin recipient list to notify. */
+    logger.error('[membership] REFUND_EXECUTION_FAILED', { membershipId: req.data && req.data.membershipId, by: req.auth.uid, error: (e && e.message) || 'Error' });
+    throw new HttpsError('internal', 'The refund could not be executed; nothing was changed. Please retry.');
+  }
   if (!r || !r.ok) throw new HttpsError('failed-precondition', (r && r.reason) || 'Not possible.', { code: r && r.code });
   return r;
 });

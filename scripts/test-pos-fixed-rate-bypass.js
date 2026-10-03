@@ -30,7 +30,7 @@ const ck = (label, ok, detail) => {
 };
 
 /* ── stub Firestore: offers a matching commissionRule AND revenueConfig overrides ─────── */
-function makeDb({ rule, sellerPct = 1, globalPct = 1 } = {}) {
+function makeDb({ rule, sellerPct = 1, globalPct = 1, planAdj = false } = {}) {
   const reads = { revenueConfig: [], commissionRules: 0 };
   const snap = (exists, data) => ({ exists, data: () => data, id: data && data.id });
   return {
@@ -54,7 +54,7 @@ function makeDb({ rule, sellerPct = 1, globalPct = 1 } = {}) {
             return {
               async get() {
                 reads.revenueConfig.push(id);
-                if (id === 'plan_adjustments') return snap(false, null);
+                if (id === 'plan_adjustments') return planAdj ? snap(true, { enabled: true }) : snap(false, null);
                 if (id.startsWith('seller_')) return sellerPct == null ? snap(false, null) : snap(true, { commissionPct: sellerPct });
                 if (id === 'global')          return globalPct == null ? snap(false, null) : snap(true, { defaultCommissionPct: globalPct });
                 return snap(false, null);
@@ -178,6 +178,16 @@ const RULE = { id: 'rule_seller_all', entityId: 'seller_A', category: 'all', rat
     const p = await FU.calculateCommission(makeDb({ rule: null }), { orderAmountCents: 10000, category: 'pos', sellerId: 'seller_A' });
     ck('F4  control: POS keeps its KES 10 floor (only fitness is floor-exempt)', p.commissionCents === CC.MIN_COMMISSION_KES * 100, p);
   }
+
+  /* ── FLAT SERVICE BOOKINGS (owner 2026-10-03): no plan may move them, even with plan discounts switched ON ── */
+  ck('B1  every service-booking category is flat (services, home services, car rental, healthcare, entertainment, fitness); marketplace is not',
+     ['services', 'home_services', 'car-rental', 'healthcare', 'entertainment_bookings', 'fitness', 'gym'].every(CC.isFlatBookingCategory) && !['marketplace', 'product', 'pos'].some(CC.isFlatBookingCategory));
+  for (const cat of ['services', 'home_services', 'healthcare', 'car-rental']) {
+    const r = await FU.calculateCommission(makeDb({ rule: null, sellerPct: null, globalPct: null, planAdj: true }), { orderAmountCents: 100000, category: cat, sellerId: 'prov_X', skipMinimum: true });
+    ck('B2  ' + cat + ' with plan discounts ROLLED OUT: still KES 50 (5%), planSkipped flat_booking_rate', r.commissionCents === 5000 && r.planSkipped === 'flat_booking_rate' && r.planApplied !== true, r);
+  }
+  /* B3 control is B1's negative half (marketplace / product / pos are NOT flat). A runtime marketplace call with the rollout
+     ON would reach the real Subscription Engine (Firestore) — not available offline, so it is not exercised here. */
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

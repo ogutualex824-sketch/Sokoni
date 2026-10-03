@@ -308,6 +308,12 @@ const PURPOSES = {
     async price(uid, data) {
       const membershipId = String(data.membershipId || '').trim();
       if (!/^[A-Za-z0-9_-]{6,128}$/.test(membershipId)) fail('invalid-argument', 'membershipId is required.');
+      /* SALES SWITCH (defence in depth with fitnessCreateMembership): featureFlags/fitness_membership_sales.enabled must be
+         EXACTLY true (admin-written via AdminOS adminUpdateFeatureFlag, default OFF). A membership created before the flag
+         was turned off, or by any other path, cannot be paid while sales are off. A read error FAILS CLOSED. */
+      /* The ONE predicate (shared/fitness-sales-switch.js), also used by fitnessCreateMembership. */
+      const salesOpen = await require('./shared/fitness-sales-switch').salesEnabled(db());
+      if (!salesOpen) fail('failed-precondition', 'Membership sales are not open yet.', { code: 'SALES_DISABLED' });
       const snap = await db().collection('providerMemberships').doc(membershipId).get();
       if (!snap.exists) fail('not-found', 'Membership not found.');
       const m = snap.data();

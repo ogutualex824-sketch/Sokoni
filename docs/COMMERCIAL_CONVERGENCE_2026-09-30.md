@@ -499,7 +499,7 @@ The money-side gaps from the owner's "MEMBERSHIP FULL END-TO-END GREEN" brief:
 - There is no KES 10 floor (this lane never had one).
 - An admin may still adjust the rate through `commissionRules` / `revenueConfig(hub_provider)`, like every category.
 - The `fitness` hub routes to its fixed 5% lane.
-- Healthcare and entertainment are unchanged (already 5%).
+- Entertainment is unchanged (already 5%). **Correction (same day):** healthcare BOOKINGS are 12% (owner schedule 2026-09-28), NOT 5% as first written here; the owner then CONFIRMED healthcare bookings are 5% too ("Yes, 5% for healthcare too") — see §14.2.
 - `PROVIDER_PLAN_RATES` stays in place, but service bookings no longer read it. Plans unlock features only.
 
 **Tests updated to the decision:**
@@ -543,3 +543,153 @@ It only reverses settled bookings, full reversals only (partial is not decided),
   - member: payment confirmed / active (`subscription_activated`), refund request received, refund declined with reason, refunded (`refund_processed`), membership ended (`subscription_expired`)
   - gym: new membership (`booking_new`), refund requested, earnings released (`wallet_credit`)
 - **Tests:** 53/0 (+S1–S3, N1–N5). The 5 mutants were re-run and each is still detected.
+
+### 14.2 · Owner answers: clawback debt, car rental, healthcare (2026-10-03, later)
+
+- **Clawback shortfall:** "Provider owes it".
+  - The reversal's negative balance is the policy; it is repaid from later settlements, and payouts are refused until then.
+  - `reverseServiceSettlement` comment updated: confirmed.
+- **Car rental:** 16% → **5%** ("Make it 5%").
+- **Healthcare bookings:** 12% → **5%** ("Yes, 5% for healthcare too"). Healthcare PRODUCT sales stay at 15% (not a booking).
+- **`seller-terms.html` fee table:**
+  - Healthcare bookings 5%.
+  - "Service bookings (home services, fitness, car rental and all other services): 5% of the service amount, deducted from the provider's payout at settlement — the same on every plan".
+  - **Flag for the owner (legal wording, not edited):** the paragraph "How commission is collected … SOKONI does not deduct commission from the customer's payment" describes marketplace sales. Held service bookings and memberships ARE settled net of commission by SOKONI. The owner or an adviser should reword it.
+- **Cleanup** (sokoni-b2's finding):
+  - The dead `provider-ops._commissionRate()` plan lookup is removed.
+  - The `_settlementMath` comment now states the flat 5%.
+- **Snapshot** regenerated: services / home_services / car_rental / healthcare all 5.
+- **Tests:** commission-schedule 25/0 (S1, S6, S8 updated), healthcare-payment-convergence 40/0, healthcare-subscription-foundation 120/0, provider-plan-ladder 38/0, entertainment 95/0, reversal 7/0, membership 53/0.
+
+### 14.3 · No plan may move a service booking (2026-10-03, sokoni-b2's census finding)
+
+- **Finding.** `sub-billing.js` provider plans still carry `features.commission_pct`, and seller plans carry `commission_discount_pct`.
+  - `commission_pct` has NO reader; it appears only in comments in commission-config and money-authority.
+  - `commission_discount_pct` IS read by `finos-utils._resolveSellerPlan` in the plan-adjustment step. That step is off today (`revenueConfig/plan_adjustments.enabled` absent → `rollout_disabled`). If switched on, it could discount a provider's service booking below 5%: a ladder by the back door.
+- **Fix.**
+  - `commission-config.FLAT_BOOKING_CATEGORIES` = services, home_services, car_rental, healthcare, entertainment_bookings, fitness. `isFlatBookingCategory()` follows aliases.
+  - In `finos-utils` the plan step stands down for them, recording `planSkipped: 'flat_booking_rate'`, before any subscription lookup.
+- **Tests.** `test-pos-fixed-rate-bypass` B1–B2 (32/0), with plan discounts switched ON: services / home_services / healthcare / car-rental all stay KES 50 on KES 1,000.
+  - Sabotage (services dropped from the list) → B1 and B2 FAIL.
+  - Marketplace / product / POS are not flat (B1).
+
+### 13.3 · Remaining notifications (2026-10-03, sokoni-e3's brief audit)
+
+- **Member:** "Payment under review" when a payment is parked (`payment_failed` type, with wording that makes clear there is no double charge).
+- **Exception filed:** member "Refund review opened" + gym "Membership refund under review".
+- **Refund executed:** the gym is now told too ("Membership refunded", remaining payouts cancelled).
+- **Ops:** a failed refund execution leaves nothing half-done (the wallet credit is inside the decision transaction). It returns "nothing was changed" to the deciding admin and logs `REFUND_EXECUTION_FAILED` as a structured error for monitoring. No admin recipient list exists to notify, and none is invented.
+- **Tests:** 57/0 (+N6–N9); mutants re-run, all detected.
+
+### 13.4 · Integration closure on the money side (2026-10-03, "MEMBERSHIP FINAL INTEGRATION")
+
+**Late payment vs the five-minute unpaid expiry.**
+- A payment landing after `payBy`, or on a record with `status 'expired'`, is NEVER activated.
+- Like a late booking payment (`booking-payment-sweep`), it is refunded to the buyer's SOKONI wallet: deterministic ledger row `{buyer}_{apiRef}_membership_latepay_refund` via `create()`, then `paymentStatus 'refunded_late'`, `status 'expired'`, intent `'refunded'`, and member notice "Payment refunded".
+- A replay refunds nothing twice, and the gym is never settled.
+- Tests L1–L6 cover the 1-second boundary on both sides.
+
+**Refund atomicity under a real failure.** An injected commit failure on the wallet write (A1–A5) leaves nothing changed:
+- refund still `requested`
+- no ledger row, no wallet credit
+- no "refund paid" notice to the member or the gym
+- payouts still frozen
+The callable answers "nothing was changed, please retry" and logs `REFUND_EXECUTION_FAILED`. A retry completes the refund exactly once.
+
+**Sales switch** (defence in depth with sokoni-e3's `fitnessCreateMembership`). The `fitness_membership` purpose refuses unless `featureFlags/fitness_membership_sales.enabled === true` (`SALES_DISABLED`). The check runs before the membership is read, and a read error fails closed (F1–F2 are static; runtime proof needs the emulator).
+
+**Mutants** (`scratchpad ms-mutants.js`, 8). Each newly fails a named row:
+
+| Breakage | Failing rows |
+|---|---|
+| hold-until-first-visit | M3 |
+| refund lock | M8 ×3 + M8b |
+| payment binding | P3 / P4 / P5 (+1) |
+| approval attendance re-check | R6 |
+| settlement idempotency | M5b |
+| late-payment guard | L2 / L3 |
+| refund approval separation | R1 / R1b / X3 (+) |
+| refund atomicity (wallet credit outside the transaction) | A2 (+) |
+
+**Notification matrix (money side).** All go through `notify.js`; none are triggered by browser state.
+
+| Event | Authority (server function) | Recipient(s) | Condition |
+|---|---|---|---|
+| Payment confirmed / membership active | `holdMembershipPayment` | member | verified intent, buyer, amount and currency match, before `payBy` |
+| New membership | `holdMembershipPayment` | gym | same |
+| Payment under review | `holdMembershipPayment` | member | intent / amount binding mismatch |
+| Payment refunded (late) | `holdMembershipPayment` | member | payment after `payBy` / on an expired record |
+| Refund request received | `requestRefund` | member + gym | zero attendance, before the end, once |
+| Exception refund opened | `requestException` | member + gym | admin, written reason, held balance > 0 |
+| Refund declined (with reason) | `decideRefund` (reject) | member | second admin |
+| Membership refunded | `decideRefund` (approve) | member + gym | transaction COMMITTED (never on failure) |
+| Earnings released | `releaseDueSlices` | gym | ≥1 month released |
+| Membership ended | `releaseDueSlices` | member | last month released |
+
+Attendance notifications are sokoni-e3's.
+
+**Tests:** `test-membership-settlement` 70/0. Regressions: creator-callback only its 4 pre-existing FAILs, entertainment 95/0, events 111/0, schedule 25/0, fixed-rate 32/0, reversal 7/0.
+
+**Money-side status against the owner's 36 GREEN criteria.**
+- **PROVEN at unit level (in-memory Firestore):** 2–4, 11, 14–27 (money parts).
+- **UNPROVEN:** emulator and browser runs (RAM about 270 MB, below the 512 MB floor).
+- **BLOCKED:** the live webhook hook (sokoni-5b's port, after their P0 + REVIEW slices).
+- **Not mine:** QR, scanner, staff/business linkage, attendance, access rules, AdminOS/Super Admin screens (sokoni-e3).
+
+### 13.5 · User-ready gap closure, money side (2026-10-03): prices, short passes, one sales predicate, terms
+
+**Owner decisions (asked and answered):**
+- The Fitness price list is "Defaults gyms can edit". Each gym publishes its own offer, and the member pays the offer price as snapshotted at creation.
+- Daily / Weekly passes pay "At first visit or expiry", as one slice.
+
+**What changed:**
+- **Default catalogue (one place):** `functions/shared/fitness-offer-defaults.js` → Daily 500, Weekly 1,500, Monthly 5,000, 3 Months 14,000, 6 Months 26,000, Annual 48,000 (KES, stored in cents). `withSavings()` computes 3M 7% / 6M 13% / Annual 20% from the same list. The gym offer editor (sokoni-e3) pre-fills from it; nothing charges from it.
+- **Short passes:** `membership-settlement.slicesOf` accepts `periodUnit 'day' | 'week'` as ONE slice ending at the pass end (subscription-period.addDays, the one period copy). The hold-until-first-check-in, refund-lock and expiry rules are unchanged.
+- **One sales predicate:** `functions/shared/fitness-sales-switch.js` `salesEnabled(db)` (boolean `true` only; 'true', 1, missing or a read error → off). It is used by the payment purpose. sokoni-e3's `fitnessCreateMembership` should import it rather than keep its own copy.
+- **`seller-terms.html` "How commission is collected"** is replaced with the owner's wording, widened to seller, gym or provider: "SOKONI may deduct the applicable platform commission and other disclosed transaction charges from amounts payable to the seller, gym or provider … determined by the applicable pricing, commission, payment and refund rules, including the rates set out above". The old claim "the seller receives the full sale amount … invoiced separately" is gone.
+- **`opportunity.html`:** the mechanic perk "No commission on direct bookings" became "One flat commission per booking — the same on every plan" (no hardcoded number).
+- **Left alone:** `launch-readiness.html` (admin-only tip "90-day zero commission") is not a customer promise. It is flagged, not edited.
+
+**Tests:** `test-membership-settlement` 77/0 (+D1–D7 catalogue / short passes; F1 runtime predicate matrix; F2 single copy). 8 mutants each detected. commission-schedule 25/0.
+
+**Authority map (Fitness memberships):**
+
+| Concern | Authority | Owner |
+|---|---|---|
+| Offer prices (defaults) | `shared/fitness-offer-defaults.js` | 2f |
+| Published offer | `providerServices` kind 'membership' | e3 |
+| Membership creation + price snapshot + `payBy` | `fitness-membership-create.js` | e3 |
+| Sales switch | `shared/fitness-sales-switch.js` (flag written by AdminOS `adminUpdateFeatureFlag`) | 2f predicate / AdminOS writer |
+| Payment intent | `payment-purposes.fitness_membership` | 2f |
+| Webhook hold | `membership-settlement.holdMembershipPayment` via webhookIntasend's early intent read | 2f code / 5b live port |
+| Attendance / QR / staff / entitlements | `fitness-attendance.js` | e3 |
+| Refund request / decision / exception / execution | `membership-settlement` | 2f |
+| Monthly / expiry payouts | `membership-settlement.releaseDueSlices` + daily sweep | 2f |
+| Commission | `commission-config` RATES.fitness 5% fixed (`provider-hub` for bookings) | 2f |
+| Wallets / ledger | existing `wallets` / `walletTransactions` / `providerPayouts` / `users.walletBalance` + `ledger` | existing |
+| Notifications | `notify.js` (money: 2f; attendance: e3) | existing |
+| Rules / AdminOS / Super Admin screens | e3 rules lane / e3 AdminOS view; `adminUpdateFeatureFlag` = AdminOS | e3 / AdminOS |
+
+No duplicate authority was found on the money side.
+
+**Acceptance matrix (money side; full GREEN needs e3's half + emulator/browser):**
+
+| Area | Current authority | Test | Result | Evidence | Status |
+|---|---|---|---|---|---|
+| Server-priced payment, held | purpose + hold | P1, P8 | pass | test-membership-settlement | PROVEN (unit) |
+| Mismatch → review, no activation | hold | P3–P7, N6 | pass | same | PROVEN (unit) |
+| 5-min expiry / late payment | hold + payBy | L1–L6, S3 | pass | same | PROVEN (unit) |
+| First visit locks refund | refundDecision/isUsed | M8 ×3, M8b | pass | same | PROVEN (unit) |
+| Refund request → second person → execution | requestRefund / decideRefund | R1–R7, M7 | pass | same | PROVEN (unit) |
+| Refund atomic under failure | decideRefund txn | A1–A5 | pass | same | PROVEN (unit) |
+| Exception refund | requestException | X1–X6, N7 | pass | same | PROVEN (unit) |
+| Payout freeze / months not reversed | releaseDueSlices | M7b, R4, R7, X4 | pass | same | PROVEN (unit) |
+| Monthly / expiry / short-pass payouts, once | releaseDueSlices | M4–M6, M5b, D5–D7 | pass | same | PROVEN (unit) |
+| Notifications from committed state | `_notify` after commit | N1–N9, L3, A3 | pass | same | PROVEN (unit) |
+| Sales switch fail-closed | fitness-sales-switch | F1, F2 | pass | same | PROVEN (unit) |
+| Pricing single source | fitness-offer-defaults | D1–D3 | pass | same | PROVEN (unit) |
+| Commission 5% | commission-config | M4b, pos-fixed-rate | pass | suites | PROVEN (unit) |
+| Live webhook hook | webhookIntasend (5b lineage) | — | — | port requested | BLOCKED (5b) |
+| Rules / emulator | e3 rules lane | — | — | RAM 297 MB < 512 | BLOCKED (memory) |
+| Browser flows (member / gym / AdminOS) | e3 screens | — | — | RAM | BLOCKED (memory) |
+| Webhook suite | creator-callback | 4 FAIL | pre-existing | identical on HEAD | PRE-EXISTING FAILURE |

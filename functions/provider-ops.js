@@ -85,10 +85,6 @@ async function _serviceCapFor(uid) {
   return Number.isFinite(n) ? n : _SERVICE_FLOOR;
 }
 
-async function _commissionRate(uid) {
-  return subCore.getCommissionRate(uid, { role: 'provider' });
-}
-
 /* Load a booking and assert the caller owns it. Returns {ref, data}. */
 async function _ownBooking(uid, bookingId) {
   const id = _san(bookingId, 128);
@@ -278,17 +274,11 @@ async function _settlementMath(uid, ref, data) {
      * commissionRules, revenueConfig overrides, promotional/holiday campaigns, plan adjustments
      * and the audit trail. It was the last money path on the platform outside the engine.
      *
-     * PRICING IS UNCHANGED. `subscriptionRole: 'provider'` puts the engine in compatibility
-     * mode, where it consumes the provider's own plan rate through the SAME
-     * subscription-core.getCommissionRate() call this code used to make. Free Trial 20%,
-     * Starter 15%, Professional 10%, Business 7%, Enterprise 5% — exactly as before.
-     * Migrating to the engine's flat `services` rate would have charged an Enterprise provider
-     * 15% instead of 5%; that is a commercial decision, and it is not taken here.
-     *
-     * What the provider GAINS: commissionRules and revenueConfig now reach these bookings for
-     * the first time, so the platform can price, discount or run a commission holiday for
-     * providers without a deploy. An operator retires compatibility mode by writing
-     * revenueConfig/hub_provider — no code change. */
+     * PRICING (owner 2026-10-03): every service booking pays a FLAT 5 % of the service amount, deducted from the
+     * provider at settlement, on EVERY plan — the plan ladder (20/15/10/7/5) is retired for bookings and must not be
+     * reconnected. The inputs come from provider-hub.commissionArgsForHub (services / fitness / healthcare /
+     * entertainment — all 5 %, no subscriptionRole, no KES 10 floor). The former `_commissionRate()` plan lookup is
+     * removed. commissionRules / revenueConfig(hub_provider) can still adjust the rate, like any category. */
     const { calculateCommission } = require('./finos-utils');
     /* ── WHICH inputs, per hub (ADR-015) ──────────────────────────────────────────────────
      * Healthcare bookings are priced at the approved 5% from the SAME canonical table
@@ -451,7 +441,7 @@ async function settleOnPinRelease(bookingId, actorUid) {
      • the provider's BUSINESS wallet is debited exactly what settlement credited (netShillingsCredited) + a
        deterministic walletTransactions row. If the provider already withdrew it, the balance goes NEGATIVE and the
        shortfall is recorded (clawbackShortfallShillings): requestSellerPayout refuses any payout while the balance is
-       below the amount, and the next settlements repay it (pending owner confirmation of that debt policy)
+       below the amount, and the next settlements repay it (owner CONFIRMED 2026-10-03: "Provider owes it")
      • the buyer is refunded to the canonical held-money destination (users/{uid}.walletBalance + a deterministic
        ledger row) — the amount the booking actually paid (price + fee snapshot)
      • booking → paymentStatus 'refunded_after_settlement'

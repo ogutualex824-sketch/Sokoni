@@ -146,6 +146,32 @@ Emulator: QUEUED (memory floor).
 - **Tests:** scripts/test-fitness-attendance.js 28/0, negative controls 4/4 caught. test-membership-settlement 45/0 on 57fe896. Emulator proof QUEUED.
 - **Docs:** docs/FITNESS_MEMBERSHIP_ATTENDANCE.md.
 - **Breaking:** none.
+## 2026-10-03 — Fitness: default price catalogue (gyms edit), day/week passes, one sales-switch predicate, seller-terms commission wording, earn-page copy (NOT deployed)
+
+- **New files:** functions/shared/fitness-offer-defaults.js, functions/shared/fitness-sales-switch.js.
+- **Changed:** membership-settlement (day/week single-slice), payment-purposes (shared predicate), seller-terms.html (owner wording), opportunity.html.
+- **Tests:** test-membership-settlement 77/0; 8 mutants detected.
+
+## 2026-10-03 — Memberships: a late payment never resurrects an expired membership (refunded to wallet); refund atomicity proven under failure; sales-switch check (NOT deployed)
+
+- **Changes:** membership-settlement (late-payment branch); payment-purposes (featureFlags/fitness_membership_sales gate).
+- **Tests:** test-membership-settlement 70/0 (+L1-L6, A1-A5, F1-F2); 8 mutants each detected.
+
+## 2026-10-03 — Membership notifications completed: payment under review, exception filed, gym told of refunds, ops error on failed execution (NOT deployed)
+
+- **Tests:** test-membership-settlement 57/0.
+
+## 2026-10-03 — No subscription plan may discount or surcharge a service booking (NOT deployed)
+
+- **Change:** commission-config FLAT_BOOKING_CATEGORIES; finos-utils plan step skips them (planSkipped flat_booking_rate).
+- **Tests:** pos-fixed-rate-bypass 32/0 (B1-B2 with plan discounts enabled); sabotage detected.
+
+## 2026-10-03 — Car rental + healthcare bookings 5%; clawback debt policy confirmed; seller-terms fee table updated (NOT deployed)
+
+- **Rates:** commission-config car_rental 16→5 and healthcare 12→5; snapshot regenerated.
+- **Cleanup:** provider-ops dead _commissionRate removed; comments updated.
+- **Terms:** seller-terms.html fee rows updated (the legal 'how commission is collected' paragraph is flagged for the owner, not edited).
+- **Tests:** commission-schedule 25/0.
 
 ## 2026-10-03 — Memberships: start at payment, pay-by deadline, member + gym notifications (NOT deployed)
 

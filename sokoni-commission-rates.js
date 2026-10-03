@@ -36,7 +36,7 @@
       "fixedKES": 2000
     },
     "healthcare": {
-      "pct": 12,
+      "pct": 5,
       "fixedKES": 0
     },
     "healthcare_products": {
@@ -80,7 +80,7 @@
       "fixedKES": 0
     },
     "car_rental": {
-      "pct": 16,
+      "pct": 5,
       "fixedKES": 0
     },
     "pos": {
