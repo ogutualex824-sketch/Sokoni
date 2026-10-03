@@ -293,6 +293,23 @@ const D = (s) => new Date(s);
   ck('N5 settlement → gym "Membership earnings released"; last month → member "Membership ended"',
     NOTES.some((n) => n.uid === 'gym_A' && n.type === 'wallet_credit') && NOTES.some((n) => n.uid === 'member_1' && n.type === 'subscription_expired'), NOTES.map((n) => n.uid + ':' + n.type));
 
+  /* ══ N6–N9: notifications sokoni-e3's brief audit found missing ══ */
+  db = setupPay(); NOTES.length = 0;
+  await MS.holdMembershipPayment(null, null, 'API_N6', 'int_1', 600);   /* wrong amount → review */
+  ck('N6 payment parked for review → member "Payment under review" (not "active")',
+    NOTES.some((n) => n.uid === 'member_1' && n.title === 'Payment under review') && !NOTES.some((n) => n.type === 'subscription_activated'), NOTES.map((n) => n.title));
+  db = setup(Object.assign({ paymentRef: 'API_1' }, used)); NOTES.length = 0;
+  await MS.requestException('mem_000001', { by: 'admin_1', reason: 'Member relocated — documents on file' });
+  ck('N7 exception filed → member "Refund review opened" + gym "Membership refund under review"',
+    NOTES.some((n) => n.uid === 'member_1' && /review opened/.test(n.title)) && NOTES.some((n) => n.uid === 'gym_A' && /under review/.test(n.title)), NOTES.map((n) => n.uid + ':' + n.title));
+  NOTES.length = 0;
+  await MS.decideRefund('mem_000001', { by: 'admin_2', decision: 'approve' });
+  ck('N8 refund executed → member "Membership refunded" AND gym "Membership refunded" (remaining payouts cancelled)',
+    NOTES.some((n) => n.uid === 'member_1' && n.type === 'refund_processed') && NOTES.some((n) => n.uid === 'gym_A' && n.title === 'Membership refunded'), NOTES.map((n) => n.uid + ':' + n.title));
+  const srcN = require('fs').readFileSync(path.join(ROOT, 'functions/membership-settlement.js'), 'utf8');
+  ck('N9 a failed refund execution is an ops-visible structured error (REFUND_EXECUTION_FAILED) and tells the admin nothing changed',
+    /logger\.error\('\[membership\] REFUND_EXECUTION_FAILED'/.test(srcN) && /nothing was changed/.test(srcN));
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e && e.stack); process.exit(1); });

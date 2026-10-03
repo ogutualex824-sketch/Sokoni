@@ -572,3 +572,11 @@ It only reverses settled bookings, full reversals only (partial is not decided),
 - **Tests.** `test-pos-fixed-rate-bypass` B1–B2 (32/0), with plan discounts switched ON: services / home_services / healthcare / car-rental all stay KES 50 on KES 1,000.
   - Sabotage (services dropped from the list) → B1 and B2 FAIL.
   - Marketplace / product / POS are not flat (B1).
+
+### 13.3 · Remaining notifications (2026-10-03, sokoni-e3's brief audit)
+
+- **Member:** "Payment under review" when a payment is parked (`payment_failed` type, with wording that makes clear there is no double charge).
+- **Exception filed:** member "Refund review opened" + gym "Membership refund under review".
+- **Refund executed:** the gym is now told too ("Membership refunded", remaining payouts cancelled).
+- **Ops:** a failed refund execution leaves nothing half-done (the wallet credit is inside the decision transaction). It returns "nothing was changed" to the deciding admin and logs `REFUND_EXECUTION_FAILED` as a structured error for monitoring. No admin recipient list exists to notify, and none is invented.
+- **Tests:** 57/0 (+N6–N9); mutants re-run, all detected.

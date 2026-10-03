@@ -1,3 +1,7 @@
+## 2026-10-03 — Membership notifications completed: payment under review, exception filed, gym told of refunds, ops error on failed execution (NOT deployed)
+
+- **Tests:** test-membership-settlement 57/0.
+
 ## 2026-10-03 — No subscription plan may discount or surcharge a service booking (NOT deployed)
 
 - **Change:** commission-config FLAT_BOOKING_CATEGORIES; finos-utils plan step skips them (planSkipped flat_booking_rate).
