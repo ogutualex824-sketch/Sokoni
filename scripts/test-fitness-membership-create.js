@@ -54,6 +54,9 @@ const MS = require(path.join(FN, 'membership-settlement.js'));
 const FA = require(path.join(FN, 'fitness-attendance.js'));
 const SRC_FILE = path.join(FN, 'fitness-membership-create.js');
 const SRC = fs.readFileSync(SRC_FILE, 'utf8');
+const OFFER_FILE = path.join(FN, 'shared', 'membership-offer.js');
+const OFFER_SRC = fs.readFileSync(OFFER_FILE, 'utf8');
+const DEFAULTS = require(path.join(FN, 'shared', 'fitness-offer-defaults.js'));   /* 2f's file — read, never mutated */
 const SWITCH = require(path.join(FN, 'shared', 'fitness-sales-switch.js'));   /* 2f's file — read, never mutated */
 const PP_FILE = path.join(FN, 'payment-purposes.js');
 const PP_SRC = fs.readFileSync(PP_FILE, 'utf8');
@@ -146,7 +149,8 @@ function harness (FMC, seed, opts) {
 async function attempt (fn) { try { return { ok: true, r: await fn() }; } catch (e) { return { ok: false, e, reason: e && e.details && e.details.reason, code: e && e.code, msg: e && e.message }; } }
 const create = (FMC, uid, data) => attempt(() => FMC._h.createMembershipHandler(req(uid, data)));
 
-async function matrix (FMC, PP) {
+async function matrix (FMC, PP, OFF) {
+  const OF = OFF || OFFER;      /* the membership-offer module under test for C21/C22 (an 'offer' mutant swaps it) */
   const rows = {};
   const ck = (name, ok, detail) => { rows[name] = { ok: !!ok, detail }; };
 
@@ -180,9 +184,14 @@ async function matrix (FMC, PP) {
       const r = await create(FMC, 'member_1', { serviceId: SVC });
       out.push([pc, r.reason, h.mems().length]);
     }
-    const hu = harness(FMC, seedBase({ periodUnit: 'week' })); const unit = await create(FMC, 'member_1', { serviceId: SVC });
-    ck('C4 periodCount 0 / 61 / 2.5 / "3" / null / -1 / NaN → bad_period; periodUnit week → bad_unit; nothing written',
-      out.every((x) => x[1] === 'bad_period' && x[2] === 0) && unit.reason === 'bad_unit' && hu.mems().length === 0, { out, unit: unit.reason }); }
+    const units = [];
+    for (const pu of ['year', 'Week', '', 'toString', 7]) {
+      const hu = harness(FMC, seedBase({ periodUnit: pu })); const r = await create(FMC, 'member_1', { serviceId: SVC }); units.push([pu, r.reason, hu.mems().length]);
+    }
+    const hw = harness(FMC, seedBase({ periodUnit: 'week', periodCount: 3 })); const w3 = await create(FMC, 'member_1', { serviceId: SVC });
+    ck('C4 periodCount 0 / 61 / 2.5 / "3" / null / -1 / NaN → bad_period; periodUnit year / Week / "" / toString / 7 → bad_unit; nothing written on refusal; week×3 is a valid 3-week pass',
+      out.every((x) => x[1] === 'bad_period' && x[2] === 0) && units.every((x) => x[1] === 'bad_unit' && x[2] === 0) && w3.ok && hw.mems().length === 1 && hw.get(hw.mems()[0]).periodUnit === 'week' && hw.get(hw.mems()[0]).periodCount === 3,
+      { out, units, w3: w3.r || w3.reason }); }
 
   /* C5 */
   { const out = [];
@@ -325,6 +334,63 @@ async function matrix (FMC, PP) {
       && u1.reason === 'bad_price' && u2.ok && u3.ok && u3p.priceType === 'fixed' && dup.ok && dupOut.serviceKind === 'membership' && dupOut.periodCount === 3,
       { c1, c2: c2.v, c3: c3.v, c4: c4.v, c5: c5.v, u1, u2, u3p, dupOut }); }
 
+  /* C14b — writer hook with short units: week×1 create keeps the unit; week×9 refused; an edit that switches the unit is
+     re-validated against the NEW unit's bound; a duplicate keeps the unit; an update that omits periodUnit keeps it */
+  { const mk = (d) => { const out = { providerId: 'gym_A', name: 'Pass', priceType: 'quotation', price: Math.max(0, Math.round(Number(d.price) || 0)), active: true, createdAt: 'T' }; return { out, v: OFFER.applyToServiceWrite('create', d, null, out) }; };
+    const wk = mk({ price: 150000, serviceKind: 'membership', periodUnit: 'week', periodCount: 1 });
+    const w9 = mk({ price: 150000, serviceKind: 'membership', periodUnit: 'week', periodCount: 9 });
+    const yr = mk({ price: 150000, serviceKind: 'membership', periodUnit: 'year', periodCount: 1 });
+    const cur = Object.assign({}, wk.out);
+    const keepP = { price: 200000 }; const keep = OFFER.applyToServiceWrite('update', { price: 200000 }, cur, keepP);
+    const toDayP = { periodUnit: 'day', periodCount: 40 }; const toDay = OFFER.applyToServiceWrite('update', { periodUnit: 'day', periodCount: 40 }, cur, toDayP);
+    const toMonP = { periodUnit: 'month', periodCount: 12 }; const toMon = OFFER.applyToServiceWrite('update', { periodUnit: 'month', periodCount: 12 }, cur, toMonP);
+    const dupOut = { providerId: 'gym_A', name: 'Pass (copy)', price: cur.price, active: true, createdAt: 'T' };
+    const dup = OFFER.applyToServiceWrite('duplicate', null, cur, dupOut);
+    ck('C14b writer hook short units: week×1 kept; week×9 / unit year refused; update without unit keeps week; switch to day×40 refused, to month×12 accepted; duplicate keeps week',
+      wk.v.ok && wk.out.periodUnit === 'week' && wk.out.periodCount === 1 && OFFER.validateMembershipOffer(wk.out).ok
+      && w9.v.reason === 'bad_period' && yr.v.reason === 'bad_unit' && keep.ok && keepP.periodUnit === 'week'
+      && toDay.reason === 'bad_period' && toMon.ok && toMonP.periodUnit === 'month' && dup.ok && dupOut.periodUnit === 'week' && dupOut.periodCount === 1,
+      { wk, w9: w9.v, yr: yr.v, keepP, toDay, toMonP, dupOut }); }
+
+  /* C20 — the membership snapshots periodUnit FROM THE OFFER (day / week passes; no hard-coded 'month') */
+  { const got = {};
+    for (const [unit, price] of [['day', 50000], ['week', 150000], ['month', 500000]]) {
+      const h = harness(FMC, seedBase({ periodUnit: unit, periodCount: 1, price, name: unit + ' pass' }));
+      const r = await create(FMC, 'member_1', { serviceId: SVC, periodUnit: 'month' });          /* client unit ignored */
+      const m = h.mems().length === 1 ? h.get(h.mems()[0]) : null;
+      got[unit] = r.ok && m && m.periodUnit === unit && m.periodCount === 1 && m.priceCents === price && r.r.periodUnit === unit
+        && MS.slicesOf(m).length === 1 ? 'ok' : { r: r.r || r.reason, m };
+    }
+    const hl = harness(FMC, seedBase({ periodUnit: undefined, periodCount: 3 })); const legacy = await create(FMC, 'member_1', { serviceId: SVC });
+    ck("C20 membership snapshots the offer's periodUnit (day / week / month; client value ignored); one settlement slice for day×1 / week×1 / month×1; an offer with no periodUnit stays month",
+      Object.values(got).every((x) => x === 'ok') && legacy.ok && hl.get(hl.mems()[0]).periodUnit === 'month', { got, legacy: legacy.r || legacy.reason }); }
+
+  /* C21 — per-unit bounds are EXACTLY membership-settlement.slicesOf's: n = limit accepted by both, n + 1 refused by both */
+  { const res = {};
+    for (const unit of ['day', 'week', 'month']) {
+      const lim = OF.PERIOD_LIMITS[unit];
+      const at = (n) => ({ v: OF.validateMembershipOffer(offer({ periodUnit: unit, periodCount: n })).ok,
+        s: (() => { try { MS.slicesOf({ priceCents: 600000, periodCount: n, periodUnit: unit, startAt: NOW.toISOString() }); return true; } catch (_) { return false; } })() });
+      res[unit] = { lim, atLim: at(lim), over: at(lim + 1), one: at(1) };
+    }
+    const expected = { day: 31, week: 8, month: 60 };
+    ck('C21 offer bounds = settlement bounds per unit (day 31, week 8, month 60): limit accepted by validator AND slicesOf, limit+1 refused by both, 1 accepted by both',
+      Object.keys(expected).every((u) => res[u].lim === expected[u] && res[u].atLim.v && res[u].atLim.s && !res[u].over.v && !res[u].over.s && res[u].one.v && res[u].one.s)
+      && Object.keys(OF.PERIOD_LIMITS).sort().join() === 'day,month,week', res); }
+
+  /* C22 — every SOKONI default (2f's shared/fitness-offer-defaults.js) is a valid offer when published as a service */
+  { const res = DEFAULTS.OFFER_DEFAULTS.map((d) => {
+      const v = OF.validateMembershipOffer(offer({ name: d.label, price: d.priceCents, periodUnit: d.periodUnit, periodCount: d.periodCount }));
+      return { key: d.key, ok: v.ok && v.priceCents === d.priceCents && v.periodUnit === d.periodUnit && v.periodCount === d.periodCount, reason: v.reason };
+    });
+    /* shilling rule probe: a default-shaped offer with a cents remainder must be refused by the same module */
+    const centsProbe = OF.validateMembershipOffer(offer({ price: 50050, periodUnit: 'day', periodCount: 1 })).reason;
+    const sav = DEFAULTS.withSavings();
+    ck('C22 all six OFFER_DEFAULTS (Daily 500 / Weekly 1,500 / Monthly 5,000 / 3M 14,000 / 6M 26,000 / Annual 48,000) validate as published offers (whole shillings, in range, unit bounds); a cents remainder is still refused; withSavings computes',
+      res.length === 6 && res.every((x) => x.ok) && DEFAULTS.OFFER_DEFAULTS.map((d) => d.priceCents / 100).join() === '500,1500,5000,14000,26000,48000'
+      && centsProbe === 'bad_price' && sav.length === 6 && sav.find((x) => x.key === 'annual').savingPct === 20 && sav.find((x) => x.key === 'daily').savingPct === null,
+      { res, centsProbe, sav }); }
+
   /* C15 — payBy (2f df88d4b S3: the purpose refuses a NEW intent once payBy has passed; this path must set it) */
   { const h = harness(FMC, seedBase());
     const r = await create(FMC, 'member_1', { serviceId: SVC, payBy: '2099-01-01T00:00:00.000Z' });
@@ -428,6 +494,14 @@ const MUTANTS = [
     from: '&& now.getTime() < _ms(prior.m.payBy)) {', to: ') {' },
   { tag: 'f', row: 'C15', what: 'payBy not written', file: 'fmc',
     from: 'startAt: _tsFromDate(now), payBy: _tsFromDate(new Date(now.getTime() + PAY_BY_MS)),', to: 'startAt: _tsFromDate(now),' },
+  { tag: 'k', row: 'C20', what: "periodUnit hard-coded 'month' at creation (the pre-2026-10-03 behaviour)", file: 'fmc',
+    from: 'periodUnit: offer.periodUnit, startAt:', to: "periodUnit: 'month', startAt:" },
+  { tag: 'l', row: 'C21', what: 'week bound widened beyond settlement (8 → 52)', file: 'offer',
+    from: 'Object.freeze({ day: 31, week: 8, month: 60 })', to: 'Object.freeze({ day: 31, week: 52, month: 60 })' },
+  { tag: 'm', row: 'C22', what: "'day' unit dropped from the offer module (Daily Pass default unpublishable)", file: 'offer',
+    from: 'Object.freeze({ day: 31, week: 8, month: 60 })', to: 'Object.freeze({ week: 8, month: 60 })' },
+  { tag: 'n', row: 'C22', what: 'shilling rule loosened to cents (price % 100 check removed)', file: 'offer',
+    from: ' || p % 100 !== 0) return no(', to: ') return no(' },
   { tag: 'g', row: 'C18', what: 'sales-flag check removed', file: 'fmc',
     from: "if (!(await salesEnabled(_db()))) throw new HttpsError(", to: "if (false && !(await salesEnabled(_db()))) throw new HttpsError(" },
   { tag: 'h', row: 'C18', what: 'call site drops the db handle (shared predicate then always reads OFF — sales can never open)', file: 'fmc',
@@ -450,11 +524,12 @@ const MUTANTS = [
   console.log(`\n${names.length - fails} passed, ${fails} failed\n\nNegative controls:`);
   let ctlBad = 0;
   for (const mu of MUTANTS) {
-    const base = mu.file === 'pp' ? PP_SRC : SRC;
+    const base = mu.file === 'pp' ? PP_SRC : (mu.file === 'offer' ? OFFER_SRC : SRC);
     if (!base.includes(mu.from)) { console.log(`  CONTROL BROKEN  NC-${mu.tag}: mutation anchor not found in source`); ctlBad++; continue; }
     const fmc = mu.file === 'fmc' ? compile(SRC_FILE, SRC.replace(mu.from, mu.to), 'mutant_' + mu.tag) : realFMC;
     const pp = mu.file === 'pp' ? compile(PP_FILE, PP_SRC.replace(mu.from, mu.to), 'mutant_' + mu.tag) : realPP;
-    const rows = (mu.row === 'C18' || mu.row === 'C19') ? await flagRows(fmc) : await matrix(fmc, pp);
+    const off = mu.file === 'offer' ? compile(OFFER_FILE, OFFER_SRC.replace(mu.from, mu.to), 'mutant_' + mu.tag) : OFFER;
+    const rows = (mu.row === 'C18' || mu.row === 'C19') ? await flagRows(fmc) : await matrix(fmc, pp, off);
     const named = rows[ROW(rows, mu.row)];
     const failed = Object.keys(rows).filter((k) => !rows[k].ok);
     const ok = named && named.ok === false;
