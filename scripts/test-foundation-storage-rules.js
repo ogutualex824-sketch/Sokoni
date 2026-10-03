@@ -54,6 +54,7 @@ const bytes = (n) => new Uint8Array(n);
   await check('15 an admin video over 80 MB is refused', assertFails(up(adm, 'foundation-media/admin/huge.mp4', 80 * 1024 * 1024 + 1, 'video/mp4')));
   await check('16 nobody (even admin) writes foundation-published/', assertFails(up(adm, 'foundation-published/S_1/0.jpg', 100, 'image/jpeg')));
   await check('17 nobody reads foundation-published/ through rules', assertFails(user.ref('foundation-published/S_1/0.jpg').getMetadata()));
+  await check('17b nobody writes or reads media-worker derivatives (foundation-processed/)', assertFails(up(adm, 'foundation-processed/u1/a.jpg/1/main.webp', 100, 'image/webp')));
   await check('18 unchanged live path: community-media owner upload still works', assertSucceeds(up(user, 'community-media/u1/p.jpg', 1000, 'image/jpeg')));
   await check('19 unchanged default: an unknown path is still denied', assertFails(up(user, 'random/u1/p.jpg', 1000, 'image/jpeg')));
 

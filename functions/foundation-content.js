@@ -103,7 +103,7 @@ async function media(paths, prefix) {
     const type = MEDIA.image.types.includes(ct) ? 'image' : (MEDIA.video.types.includes(ct) ? 'video' : null);
     if (!type) bad('Only JPEG, PNG or WebP photos and MP4, WebM or MOV videos are accepted.');
     if (!(size > 0) || size > MEDIA[type].max) bad(type === 'video' ? 'Videos must be 80 MB or smaller.' : 'Photos must be 15 MB or smaller.');
-    out.push({ path: p, type, contentType: ct, size });
+    out.push({ path: p, type, contentType: ct, size, mediaId: mediaIdOf(p) });
   }
   if (out.filter((m) => m.type === 'video').length > 1) bad('Attach at most one video.');
   return out;
@@ -112,21 +112,57 @@ async function media(paths, prefix) {
 /* Public media is a COPY at a neutral path (foundation-published/{storyId}/{n}) — the participant's upload path
    carries their uid and must never appear in a public URL. Publishing creates the copy + a download token;
    revoking deletes the copy, so an old URL stops working. */
-async function setTokens(items, on, storyId) {
+/* Server-side processing (media-worker codebase, foundationMediaProcess): every upload is quarantined,
+   probe-validated, transcoded/compressed with a thumbnail, and recorded in foundationMedia/{mediaId} as
+   UPLOADED | PROCESSING | READY | FAILED | REJECTED — written ONLY by the worker. Public content consumes ONLY
+   READY derivatives; the original upload is never published. */
+const mediaIdOf = (sourcePath) => crypto.createHash('sha256').update(String(sourcePath)).digest('hex').slice(0, 32);
+async function processingStates(items) {
+  const list = items || [];
+  if (!list.length) return [];
+  const refs = list.map((m) => db().collection('foundationMedia').doc(m.mediaId || mediaIdOf(m.path)));
+  const snaps = await db().getAll(...refs);
+  return snaps.map((x) => (x.exists ? x.data() : null));
+}
+async function requireReady(items) {
+  const recs = await processingStates(items);
+  const out = [];
+  for (let i = 0; i < recs.length; i++) {
+    const r = recs[i], m = items[i];
+    const st = r ? r.state : 'UPLOADED';
+    if (st === 'REJECTED' || st === 'FAILED') throw new HttpsError('failed-precondition', 'A media file was ' + (st === 'REJECTED' ? 'rejected' : 'not processed') + ' (' + String((r.error && r.error.reason) || st).slice(0, 60) + '). Remove it or upload it again.', { code: 'MEDIA_' + st });
+    if (st !== 'READY' || !r.derivatives || !r.derivatives.main || r.kind !== m.type) throw new HttpsError('failed-precondition', 'Media is still processing. Try publishing again in a few minutes.', { code: 'MEDIA_NOT_READY' });
+    out.push(r.derivatives);
+  }
+  return out;
+}
+async function setTokens(items, on, storyId, derivs) {
   const bucket = admin.storage().bucket();
   const res = [];
   for (let i = 0; i < (items || []).length; i++) {
     const m = items[i];
     try {
       if (on) {
-        const pub = m.publicPath || ('foundation-published/' + storyId + '/' + i + '-' + crypto.randomBytes(6).toString('hex'));
+        const dv = derivs && derivs[i];
+        if (!dv || !dv.main) throw new Error('no READY derivative');
+        const stem = 'foundation-published/' + storyId + '/' + i + '-' + crypto.randomBytes(6).toString('hex');
+        const pub = m.publicPath || (stem + (dv.main.contentType === 'video/mp4' ? '.mp4' : '.webp'));
         const token = m.token || crypto.randomUUID();
-        if (!m.publicPath) await bucket.file(m.path).copy(bucket.file(pub));
-        await bucket.file(pub).setMetadata({ metadata: { firebaseStorageDownloadTokens: token }, contentType: m.contentType });
-        res.push({ ...m, publicPath: pub, token });
+        if (!m.publicPath) await bucket.file(dv.main.path).copy(bucket.file(pub));
+        await bucket.file(pub).setMetadata({ metadata: { firebaseStorageDownloadTokens: token }, contentType: dv.main.contentType });
+        let thumb = m.thumb || null;
+        if (!thumb && dv.thumb) {
+          const tp = stem + '-thumb.jpg', tt = crypto.randomUUID();
+          await bucket.file(dv.thumb.path).copy(bucket.file(tp));
+          await bucket.file(tp).setMetadata({ metadata: { firebaseStorageDownloadTokens: tt }, contentType: 'image/jpeg' });
+          thumb = { publicPath: tp, token: tt };
+        }
+        res.push({ ...m, publicPath: pub, token, publishedContentType: dv.main.contentType, thumb });
       } else {
-        if (m.publicPath) { try { await bucket.file(m.publicPath).delete(); } catch (e) { if (!/No such object|not found|404/i.test(e.message || '')) throw e; } }
-        const { token, publicPath, ...rest } = m; res.push(rest);
+        for (const pth of [m.publicPath, m.thumb && m.thumb.publicPath]) {
+          if (pth) { try { await bucket.file(pth).delete(); } catch (e) { if (!/No such object|not found|404/i.test(e.message || '')) throw e; } }
+        }
+        const { token, publicPath, thumb, publishedContentType, ...rest } = m; res.push(rest);
       }
     } catch (e) {
       logger.warn('[foundation-content] media publish/revoke failed', { story: storyId, on, err: e.message });
@@ -155,7 +191,7 @@ function publicRow(id, s, bucketName) {
     id, kind: s.kind, title: s.title, excerpt: s.excerpt, body: s.body,
     name: name || (isT ? 'A SOKONI Foundation beneficiary' : null),
     location: subj.location || null, programmeId: s.programmeId || null,
-    media: mediaOk ? (s.media || []).filter((m) => m.token).map((m) => ({ type: m.type, url: url(m), thumbUrl: m.thumb && m.thumb.token ? url(m.thumb) : null })) : [],
+    media: mediaOk ? (s.media || []).filter((m) => m.token && m.publicPath).map((m) => ({ type: m.type, contentType: m.publishedContentType || null, url: url(m), thumbUrl: m.thumb && m.thumb.token ? url(m.thumb) : null })) : [],
     publishedAt: ms(s.publishAt),
   };
 }
@@ -309,7 +345,8 @@ async function adminPublish(req, d) {
   let at = Date.now();
   if (d.publishAt != null) { at = Number(d.publishAt); if (!Number.isFinite(at) || at < Date.now() - 60000 || at > Date.now() + 90 * 86400000) bad('Schedule within the next 90 days.'); }
   const showMedia = x.kind !== 'testimonial' || (x.consent && x.consent.showMedia === true);
-  const withTokens = showMedia ? await setTokens(x.media, true, d.id) : x.media;
+  const derivs = showMedia ? await requireReady(x.media) : null;   /* refuses unless every item is READY */
+  const withTokens = showMedia ? await setTokens(x.media, true, d.id, derivs) : x.media;
   await db().runTransaction(async (tx) => {
     const s = await tx.get(ref);
     if (!s.exists || s.data().moderation.status !== 'approved') throw new HttpsError('failed-precondition', 'The story is no longer approved.');
@@ -335,10 +372,11 @@ async function adminList(req, d) {
   if (d.status) q = q.where('moderation.status', '==', STATES.includes(d.status) ? d.status : bad('Invalid status.'));
   if (d.kind) q = q.where('kind', '==', ['story', 'testimonial'].includes(d.kind) ? d.kind : bad('Invalid kind.'));
   const s = await q.orderBy('updatedAt', 'desc').limit(50).get();
-  return { rows: s.docs.map((doc) => { const x = doc.data(); return {
+  const states = await Promise.all(s.docs.map((doc) => processingStates(doc.data().media).catch(() => [])));
+  return { rows: s.docs.map((doc, di) => { const x = doc.data(); return {
     id: doc.id, kind: x.kind, title: x.title, excerpt: x.excerpt, programmeId: x.programmeId || null,
     status: x.moderation.status, note: x.moderation.note || null, published: x.moderation.status === 'approved' && !!x.publishAt && ms(x.publishAt) <= Date.now(),
-    scheduledFor: ms(x.publishAt), destinations: x.destinations || [], media: (x.media || []).map((m) => ({ type: m.type, size: m.size, path: m.path })),
+    scheduledFor: ms(x.publishAt), destinations: x.destinations || [], media: (x.media || []).map((m, mi) => ({ type: m.type, size: m.size, path: m.path, processing: (states[di][mi] && states[di][mi].state) || 'UPLOADED', reason: (states[di][mi] && states[di][mi].error && states[di][mi].error.reason) || null })),
     consent: x.kind === 'testimonial' ? { publish: !!(x.consent || {}).publish, showName: !!(x.consent || {}).showName, showMedia: !!(x.consent || {}).showMedia } : null,
     displayName: (x.subject || {}).displayName || null, createdBy: x.createdBy, updatedAt: ms(x.updatedAt) }; }) };
 }
@@ -389,7 +427,7 @@ async function guard(before, after) {
   await setTokens(all, false, null);
   return { revoked: all.length, clearDoc: revokeNow.length > 0 };
 }
-const stripTokens = (list) => (list || []).map((m) => { const { token, publicPath, ...rest } = m; return rest; });
+const stripTokens = (list) => (list || []).map((m) => { const { token, publicPath, thumb, publishedContentType, ...rest } = m; return rest; });
 exports.foundationStoryMediaGuard = onDocumentWritten({ document: COL + '/{id}', region: 'us-central1' }, async (event) => {
   const before = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
   const after = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
@@ -399,4 +437,4 @@ exports.foundationStoryMediaGuard = onDocumentWritten({ document: COL + '/{id}',
   }
   if (r.revoked) logger.info('[foundation-content] media tokens revoked', { id: event.params.id, count: r.revoked });
 });
-exports._test = { handle, guard, stripTokens, publicRow, DECISIONS };
+exports._test = { handle, guard, stripTokens, publicRow, DECISIONS, mediaIdOf };

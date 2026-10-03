@@ -257,6 +257,10 @@ service firebase.storage {
                     && foundationMediaOk();
       allow update, delete: if false;
     }
+    /* media-worker derivatives (foundationMediaProcess) — admin SDK only; never served directly */
+    match /foundation-processed/{owner}/{file}/{generation}/{name} {
+      allow read, write: if false;
+    }
     match /foundation-published/{storyId}/{filename} {
       allow read, write: if false;   /* admin SDK only; served by download token */
     }

@@ -19,8 +19,9 @@ const { makeFakeFirestore } = require('./lib/fake-firestore-txn');
 let pass = 0, fail = 0;
 const ck = (l, ok, d) => { if (ok) { pass++; console.log('  PASS  ' + l); } else { fail++; console.log('  FAIL  ' + l + (d !== undefined ? '  -> ' + JSON.stringify(d).slice(0, 400) : '')); } };
 
-let now = Date.parse('2026-10-01T10:00:00Z');
-const F = makeFakeFirestore({ clock: () => now });
+let now = Date.now();   /* publish stamps the real clock */
+const T0 = Date.now();
+const F = makeFakeFirestore({ clock: () => now + (Date.now() - T0) });   /* moves with real time + the test's manual jumps */
 const OBJECTS = {};   /* path → { contentType, size, token } */
 const bucket = {
   name: 'sokoni-aeb26.appspot.com',
@@ -44,6 +45,16 @@ async function call(uid, data, token = {}) {
 }
 const ADM = { admin: true };
 const uuid = (n) => '00000000-0000-4000-8000-' + String(n).padStart(12, '0');
+/* simulate the media-worker codebase: READY record + derivatives under foundation-processed/ */
+async function markMedia(srcPath, state, reason) {
+  const sub = srcPath.replace(/^foundation-media\//, '');
+  const video = /\.(mp4|webm|mov)$/.test(srcPath);
+  const main = 'foundation-processed/' + sub + '/1/main.' + (video ? 'mp4' : 'webp'), thumb = 'foundation-processed/' + sub + '/1/thumb.jpg';
+  if (state === 'READY') { OBJECTS[main] = { contentType: video ? 'video/mp4' : 'image/webp', size: 1000 }; OBJECTS[thumb] = { contentType: 'image/jpeg', size: 100 }; }
+  await F.db.collection('foundationMedia').doc(M._test.mediaIdOf(srcPath)).set({ sourcePath: srcPath, state, kind: video ? 'video' : 'image',
+    derivatives: state === 'READY' ? { main: { path: main, contentType: video ? 'video/mp4' : 'image/webp' }, thumb: { path: thumb, contentType: 'image/jpeg' } } : null,
+    error: reason ? { reason } : null });
+}
 const pubCopies = () => Object.keys(OBJECTS).filter((k) => k.startsWith('foundation-published/'));
 const tid = (uid, rid) => 'T_' + require('crypto').createHash('sha256').update(uid + '|' + rid).digest('hex').slice(0, 28);
 const story = async (id) => (await F.db.collection('foundationStories').doc(id).get()).data();
@@ -111,11 +122,24 @@ async function writeAndGuard(id, fn) {
   ck('C5 testimonial approved; transitions + adminActions audit written', c6.ok && trans.length >= 2 && [...F.db._store.keys()].filter((k) => k.startsWith('adminActions/')).length === 2, trans);
 
   /* D */
+  const mg0 = await call('adm2', { op: 'adminPublish', id: T }, ADM);
+  await markMedia('foundation-media/u1/photo.jpg', 'READY');
+  await markMedia('foundation-media/u1/clip.mp4', 'PROCESSING');
+  const mg1 = await call('adm2', { op: 'adminPublish', id: T }, ADM);
+  await markMedia('foundation-media/u1/clip.mp4', 'REJECTED', 'unsupported_codec');
+  const mg2 = await call('adm2', { op: 'adminPublish', id: T }, ADM);
+  ck('M1 publish REFUSED while media has no processing record / is PROCESSING / was REJECTED (reason shown); nothing made public',
+    !mg0.ok && /still processing/.test(mg0.msg) && !mg1.ok && /still processing/.test(mg1.msg) && !mg2.ok && /rejected \(unsupported_codec\)/.test(mg2.msg) && pubCopies().length === 0, { mg0, mg1, mg2 });
+  const ml = await call('adm2', { op: 'adminList', kind: 'testimonial' }, ADM);
+  const mrow = ml.v.rows.find((r) => r.id === T);
+  ck('M2 admin list shows each item\'s processing state and reason', mrow && mrow.media[0].processing === 'READY' && mrow.media[1].processing === 'REJECTED' && mrow.media[1].reason === 'unsupported_codec', mrow && mrow.media);
+  await markMedia('foundation-media/u1/clip.mp4', 'READY');
   const d1 = await call('adm2', { op: 'adminPublish', id: T }, ADM);
+  ck('M3 publish copies the READY DERIVATIVES (main + thumb), never the original upload', d1.ok && pubCopies().length === 4 && pubCopies().every((k) => String(OBJECTS[k].copyOf).startsWith('foundation-processed/u1/')) && !pubCopies().some((k) => String(OBJECTS[k].copyOf).startsWith('foundation-media/')), pubCopies().map((k) => OBJECTS[k].copyOf));
   const pub = await call('anyone', { op: 'listPublished', destination: 'donation_wizard' });
   const row = pub.v && pub.v.rows.find((r) => r.id === T);
   ck('D1 published testimonial appears below the donation wizard with tokened media + first name only',
-    d1.ok && row && row.name === 'Akinyi' && row.media.length === 2 && /token=/.test(row.media[0].url) && /foundation-published%2F/.test(row.media[0].url) && pubCopies().length === 2 && !OBJECTS['foundation-media/u1/photo.jpg'].token, row);
+    d1.ok && row && row.name === 'Akinyi' && row.media.length === 2 && /token=/.test(row.media[0].url) && /foundation-published%2F/.test(row.media[0].url) && !!row.media[0].thumbUrl && row.media[1].contentType === 'video/mp4' && !OBJECTS['foundation-media/u1/photo.jpg'].token, row);
   ck('G1 public row has no uid (not even inside a media URL), consent, moderation or storage path', row && !/(^|[^a-z])u1([^0-9]|$)/.test(JSON.stringify(row)) && !('submittedBy' in row) && !('consent' in row) && !('moderation' in row) && !row.media.some((m) => 'path' in m), row);
   /* second testimonial: showMedia false, anonymous */
   OBJECTS['foundation-media/u3/p.jpg'] = { contentType: 'image/png', size: 1000 };
@@ -125,7 +149,8 @@ async function writeAndGuard(id, fn) {
   await call('adm1', { op: 'adminPublish', id: T3 }, ADM);
   const pub2 = await call('anyone', { op: 'listPublished' });
   const r3 = pub2.v.rows.find((r) => r.id === T3);
-  ck('D2 consent.showMedia=false → no media and no token issued; anonymous → neutral name', r3 && r3.media.length === 0 && !pubCopies().some((k) => OBJECTS[k].copyOf === 'foundation-media/u3/p.jpg') && r3.name === 'A SOKONI Foundation beneficiary', r3);
+  ck('D2 consent.showMedia=false → no media and no token issued; anonymous → neutral name', r3 && r3.media.length === 0 && !pubCopies().some((k) => String(OBJECTS[k].copyOf).startsWith('foundation-processed/u3/')) && r3.name === 'A SOKONI Foundation beneficiary', r3);
+  await markMedia('foundation-media/admin/visit.jpg', 'READY');
   const d3 = await call('adm1', { op: 'adminPublish', id: S, publishAt: now + 86400000 }, ADM);
   const pub3 = await call('anyone', { op: 'listPublished' });
   ck('D3 a story scheduled for tomorrow is not public yet', d3.ok && !pub3.v.rows.some((r) => r.id === S));
@@ -143,20 +168,21 @@ async function writeAndGuard(id, fn) {
 
   /* E */
   await writeAndGuard(T, () => call('adm2', { op: 'adminDecide', id: T, action: 'archive' }, ADM));
-  ck('E1 archive → off the public list AND download tokens revoked', !(await call('anyone', { op: 'listPublished' })).v.rows.some((r) => r.id === T) && !pubCopies().some((k) => String(OBJECTS[k].copyOf).startsWith('foundation-media/u1/')) && (await story(T)).media.every((m) => !m.token && !m.publicPath));
+  ck('E1 archive → off the public list AND download tokens revoked', !(await call('anyone', { op: 'listPublished' })).v.rows.some((r) => r.id === T) && !pubCopies().some((k) => String(OBJECTS[k].copyOf).startsWith('foundation-processed/u1/')) && (await story(T)).media.every((m) => !m.token && !m.publicPath));
   await writeAndGuard(S, () => call('adm1', { op: 'adminUnpublish', id: S }, ADM));
-  ck('E2 unpublish → published copy deleted', !pubCopies().some((k) => OBJECTS[k].copyOf === 'foundation-media/admin/visit.jpg'));
+  ck('E2 unpublish → published copy deleted', !pubCopies().some((k) => String(OBJECTS[k].copyOf).startsWith('foundation-processed/admin/visit.jpg/')));
   /* consent withdrawal on a live one */
   await call('adm2', { op: 'adminDecide', id: S, action: 'archive' }, ADM);
   OBJECTS['foundation-media/u4/v.mp4'] = { contentType: 'video/webm', size: 5000 };
   await call('u4', { op: 'submitTestimonial', requestId: uuid(4), title: 'Grateful', body: 'Thanks.', displayName: 'Juma', displayPreference: 'name', consent: { publish: true, showName: true, showMedia: true }, media: ['foundation-media/u4/v.mp4'] });
   const T4 = tid('u4', uuid(4));
   await call('adm1', { op: 'adminDecide', id: T4, action: 'approve' }, ADM);
+  await markMedia('foundation-media/u4/v.mp4', 'READY');
   await call('adm1', { op: 'adminPublish', id: T4 }, ADM);
-  const live = pubCopies().some((k) => OBJECTS[k].copyOf === 'foundation-media/u4/v.mp4');
+  const live = pubCopies().some((k) => String(OBJECTS[k].copyOf).startsWith('foundation-processed/u4/v.mp4/'));
   const e3x = await call('u1', { op: 'withdrawMine', id: T4 });
   await writeAndGuard(T4, () => call('u4', { op: 'withdrawMine', id: T4 }));
-  ck('E3 only the participant can withdraw; withdrawal archives, unpublishes and revokes media', live && e3x.code === 'not-found' && (await story(T4)).moderation.status === 'archived' && (await story(T4)).consent.publish === false && !pubCopies().some((k) => OBJECTS[k].copyOf === 'foundation-media/u4/v.mp4'), { e3x, s: (await story(T4)).moderation });
+  ck('E3 only the participant can withdraw; withdrawal archives, unpublishes and revokes media', live && e3x.code === 'not-found' && (await story(T4)).moderation.status === 'archived' && (await story(T4)).consent.publish === false && !pubCopies().some((k) => String(OBJECTS[k].copyOf).startsWith('foundation-processed/u4/v.mp4/')), { e3x, s: (await story(T4)).moderation });
   OBJECTS['foundation-published/zz/0'] = { contentType: 'image/jpeg', size: 1 };
   const g = await M._test.guard({ media: [{ path: 'foundation-media/admin/visit.jpg', publicPath: 'foundation-published/zz/0', token: 'x' }] }, { moderation: { status: 'approved' }, publishAt: 1, kind: 'story', media: [] });
   ck('E4 a media item removed from a live story has its public copy deleted', g.revoked === 1 && !OBJECTS['foundation-published/zz/0']);
