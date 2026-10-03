@@ -19,6 +19,7 @@ if (process.env.SABOTAGE) {
     ['A6', 'sokoni-audit-center.js', "      if (S.state === 'error') return '<div class=\"sac-tablewrap\"><div class=\"sac-state\" role=\"alert\"><b>We couldn’t load the audit log just now.</b>", "      if (S.state === 'error') return '<div class=\"sac-tablewrap\"><div class=\"sac-state\" role=\"alert\"><b>0 events.</b>"],
     ['A7', 'sokoni-audit-center.js', "  function csvCell(v) { var s = String(v == null ? '' : v); if (/^[=+\\-@\\t\\r]/.test(s)) s = \"'\" + s;", "  function csvCell(v) { var s = String(v == null ? '' : v);"],
     ['A8', 'sokoni-audit-center.js', "      return { ip: has(function (e) { return e.ip || e.location; }),", "      return { ip: true || has(function (e) { return e.ip || e.location; }),"],
+    ['A12', 'sokoni-audit-center.js', "    if (typeof host.__sacOff === 'function') host.__sacOff();", ''],
     ['A10', 'sokoni-aos.js', '    { key: "payment",  label: "Payment trail",   op: "getPaymentAuditTrail" },\n', ''],
   ];
   let caught = 0;
@@ -50,7 +51,7 @@ function makeDoc() {
   return doc;
 }
 function makeHost(doc) {
-  return { innerHTML: '', ownerDocument: doc, L: {}, addEventListener(t, f) { (this.L[t] = this.L[t] || []).push(f); }, querySelector: () => null };
+  return { innerHTML: '', ownerDocument: doc, L: {}, addEventListener(t, f) { (this.L[t] = this.L[t] || []).push(f); }, removeEventListener(t, f) { this.L[t] = (this.L[t] || []).filter((x) => x !== f); }, querySelector: () => null };
 }
 /* a fake event target: closest(sel) answers for [attr] selectors from a dataset-like map */
 function target(attrs, extra) {
@@ -149,11 +150,20 @@ const SECURITY = [   /* auditLog-shaped (Super Admin) — severity, ip, userAgen
   /* A10 wiring: both pages mount the view with their own server-authorised feeds; old table code is gone */
   const AOS = fs.readFileSync(path.join(DIR, 'sokoni-aos.js'), 'utf8'), AOH = fs.readFileSync(path.join(DIR, 'admin-os.html'), 'utf8'), SAH = fs.readFileSync(path.join(DIR, 'super-admin.html'), 'utf8');
   const ops = ['adminGetAuditLogs', 'getPaymentAuditTrail', 'eccGetAuditLog', 'platformGetEventLog'];
-  ck('A10', ops.every((o) => AOS.indexOf('op: "' + o + '"') >= 0) && /SokoniAuditCenter\.mount\(body/.test(AOS) && /<script src="sokoni-audit-center\.js"><\/script>\s*<script src="sokoni-aos\.js">/.test(AOH)
+  ck('A10', ops.every((o) => AOS.indexOf('op: "' + o + '"') >= 0) && /SokoniAuditCenter\.mount\(body/.test(AOS) && AOH.indexOf('<script src="sokoni-audit-center.js"></script>') >= 0 && AOH.indexOf('<script src="sokoni-audit-center.js"></script>') < AOH.indexOf('<script src="sokoni-aos.js"></script>')
     && /id="panel-audit"[\s\S]{0,40}hidden>\s*<div id="auditBody">/.test(AOH)
     && /collection\('auditLog'\)\.where\('severity','in',\['high','critical'\]\)\.orderBy\('timestamp','desc'\)\.limit\(limit\)/.test(SAH) && /SokoniAuditCenter\.mount\(host/.test(SAH) && /<script src="sokoni-audit-center\.js"><\/script>/.test(SAH)
     && !/saAuditSevFilter|saAuditTable/.test(SAH),
     'AdminOS mounts the view with its 4 server feeds; Super Admin with its auditLog high+critical read; the old tables / filters are gone');
+
+  /* A12 remount on the same host (navigating back to the panel) retires the old instance: one listener set */
+  {
+    const AC = loadModule(), doc = makeDoc(), host = makeHost(doc);
+    AC.mount(host, { feeds: [{ key: 'admin', label: 'Admin actions', load: async () => ADMIN }] }); await flush();
+    AC.mount(host, { feeds: [{ key: 'admin', label: 'Admin actions', load: async () => ADMIN }] }); await flush();
+    const counts = ['click', 'keydown', 'input', 'change'].map((t) => (host.L[t] || []).length);
+    ck('A12', counts.every((n) => n === 1), 'a second mount on the same host leaves exactly one click / keydown / input / change listener (no double actions)', counts);
+  }
 
   /* A11 the sidebar / nav / <head> are untouched (another agent owns the sidebar) */
   const at = (rev, f) => { try { return cp.execSync('git show ' + rev + ':' + f, { cwd: GITROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).replace(/\r\n/g, '\n'); } catch (_) { return null; } };

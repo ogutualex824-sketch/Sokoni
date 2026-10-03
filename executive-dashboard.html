@@ -1378,35 +1378,38 @@ async function loadOverviewTab() {
   // getSecurityScorecard
   try {
     const sec   = await callCF('getSecurityScorecard');
-    const score = Number(sec.overall || sec.score || 0);
-    const grade = String(sec.grade || '?');
-    const col   = colorForScore(score);
+    /* totalScore = MEASURED dimensions only; null = not measurable — never 0 or an invented number */
+    const score = sec.totalScore == null ? null : Number(sec.totalScore);
+    const grade = sec.grade ? String(sec.grade).replace(/\s*\(.*\)/, '') : '—';
+    const col   = score == null ? '#30363d' : colorForScore(score);
 
-    _setText('ov-score', String(score));
+    _setText('ov-score', score == null ? '—' : String(score));
     _setColor('ov-score', col);
-    _setText('ov-score-grade', 'Grade: ' + grade);
+    _setText('ov-score-grade', 'Grade: ' + grade + (score == null ? '' : ' · measured only'));
     _setCSSVar('ov-score-card', '--kpi-color', col);
 
-    // Health subsystems
+    // Health subsystems — only the Security Layer has a measured source here; the others have no health
+    // endpoint yet, so they show "—" (they used to show invented 92–99%).
     const subsystems = [
-      { name: 'Commerce & Marketplace', pct: 98 },
-      { name: 'SmartPOS Engine',        pct: 96 },
-      { name: 'Payment Processing',     pct: 99 },
-      { name: 'AI Services',            pct: 94 },
+      { name: 'Commerce & Marketplace', pct: null },
+      { name: 'SmartPOS Engine',        pct: null },
+      { name: 'Payment Processing',     pct: null },
+      { name: 'AI Services',            pct: null },
       { name: 'Security Layer',         pct: score },
-      { name: 'Operations & Jobs',      pct: 92 },
+      { name: 'Operations & Jobs',      pct: null },
     ];
     const listEl = document.getElementById('platform-health-list');
     if (listEl) {
       listEl.innerHTML = subsystems.map(s => {
-        const c = colorForScore(s.pct);
+        const known = s.pct != null;
+        const c = known ? colorForScore(s.pct) : '#30363d';
         return `<div class="subsystem-row">
           <span class="status-dot" style="background:${escHtml(c)}"></span>
           <span class="subsystem-name">${escHtml(s.name)}</span>
           <div class="subsystem-bar-wrap">
-            <div class="subsystem-bar" style="width:${s.pct}%;background:${escHtml(c)}"></div>
+            <div class="subsystem-bar" style="width:${known ? s.pct : 0}%;background:${escHtml(c)}"></div>
           </div>
-          <span class="subsystem-pct">${s.pct}%</span>
+          <span class="subsystem-pct">${known ? s.pct + '%' : '—'}</span>
         </div>`;
       }).join('');
     }
@@ -1840,57 +1843,35 @@ async function loadSecurityTab() {
   // getSecurityScorecard
   try {
     const sec   = await callCF('getSecurityScorecard');
-    const score = Number(sec.overall || sec.score || 0);
-    const grade = String(sec.grade || '?');
-    const col   = colorForScore(score);
+    const score = sec.totalScore == null ? null : Number(sec.totalScore);   /* measured dimensions only */
+    const grade = sec.grade ? String(sec.grade).replace(/\s*\(.*\)/, '') : '—';
+    const col   = score == null ? '#30363d' : colorForScore(score);
 
-    _setText('sec-score-big',  String(score));
+    _setText('sec-score-big',  score == null ? '—' : String(score));
     _setColor('sec-score-big', col);
     _setText('sec-grade', grade);
-    _setText('sec-score-card', String(score));
+    _setText('sec-score-card', score == null ? '—' : String(score));
     _setColor('sec-score-card', col);
 
-    drawScoreRing('security-ring-canvas', score, col);
+    drawScoreRing('security-ring-canvas', score == null ? 0 : score, col);
 
     // Domain bars
     const domainsEl = document.getElementById('sec-domains-list');
     if (domainsEl) {
-      const domains = sec.domains || {};
-      const entries = Object.entries(domains);
-      if (entries.length > 0) {
-        domainsEl.innerHTML = entries.slice(0, 6).map(([name, val]) => {
-          const v = Number(val);
-          return `<div class="progress-row">
+      /* the scorecard's MEASURED dimensions (declared / unmeasurable ones are not scores and are not drawn as bars) */
+      const dims = (Array.isArray(sec.dimensions) ? sec.dimensions : []).filter(d => d.basis === 'measured' && d.score != null);
+      domainsEl.innerHTML = dims.length ? dims.slice(0, 6).map(d => {
+        const v = Math.round(d.score / d.maxScore * 100);
+        return `<div class="progress-row">
             <div class="progress-label">
-              <span>${escHtml(name)}</span>
+              <span>${escHtml(d.name)}</span>
               <span class="fw-600" style="color:${escHtml(colorForScore(v))}">${escHtml(String(v))}</span>
             </div>
             <div class="progress-bar-wrap">
               <div class="progress-bar" style="width:${v}%;background:${escHtml(colorForScore(v))}"></div>
             </div>
           </div>`;
-        }).join('');
-      } else {
-        // Fallback static domains
-        domainsEl.innerHTML = [
-          { name: 'Authentication',  v: 95 },
-          { name: 'Authorization',   v: 90 },
-          { name: 'Data Protection', v: 88 },
-          { name: 'Fraud Prevention',v: 78 },
-          { name: 'Audit Logging',   v: 92 },
-          { name: 'Encryption',      v: 96 },
-        ].map(d =>
-          `<div class="progress-row">
-            <div class="progress-label">
-              <span>${escHtml(d.name)}</span>
-              <span class="fw-600" style="color:${escHtml(colorForScore(d.v))}">${d.v}</span>
-            </div>
-            <div class="progress-bar-wrap">
-              <div class="progress-bar" style="width:${d.v}%;background:${escHtml(colorForScore(d.v))}"></div>
-            </div>
-          </div>`
-        ).join('');
-      }
+      }).join('') : '<div class="progress-row"><div class="progress-label"><span>No measured security dimensions available.</span></div></div>';
     }
   } catch (err) {
     console.warn('[getSecurityScorecard]', err.message);

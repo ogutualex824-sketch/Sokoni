@@ -2114,85 +2114,24 @@ window.SokoniAOS = (() => {
     catch (e) { body.innerHTML = "<p class='aos-muted'>Marketing console failed to start: " + _esc(e && e.message) + "</p>"; }
   }
 
-  async function _loadSecurity() {
+  /* The ONE Security view (sokoni-aos-security.js). Super Admin reaches it through admin-os.html#security (Slice C2).
+     Its actions are THIS file's existing handlers (confirm → act → toast → reload on success) — no second copy. */
+  let _secView = null;
+  function _loadSecurity() {
     const body = document.getElementById("securityBody");
     if (!body) return;
-    body.innerHTML = _spinner();
-    try {
-      const snap = await _db.collection("activeSessions")
-        .orderBy("lastActive","desc").limit(30).get().catch(() => null);
-      const sessions = snap ? snap.docs.map(d => ({id:d.id,...d.data()})) : [];
-
-      const pendings = await _db.collection("approvalRequests").where("status","==","pending")
-        .orderBy("createdAt","desc").limit(20).get().catch(() => null);
-      const approvals = pendings ? pendings.docs.map(d => ({id:d.id,...d.data()})) : [];
-
-      body.innerHTML = `
-        <div class="security-grid">
-          <section>
-            <h3>Active Sessions (${sessions.length})</h3>
-            <table class="aos-table"><thead><tr>
-                <th>User</th><th>IP</th><th>Device</th><th>Last Active</th><th>Actions</th>
-              </tr></thead><tbody>${sessions.map(s => `<tr>
-                <td>${_esc(s.email||s.uid||"—")}</td>
-                <td class="aos-muted aos-mono">${_esc(s.ip||"—")}</td>
-                <td class="aos-muted">${_esc(s.device||"—")}</td>
-                <td class="aos-muted">${_ago(s.lastActive)}</td>
-                <td><button class="aos-btn-sm danger" onclick="SokoniAOS.revokeSession('${s.id}')">Revoke</button></td>
-              </tr>`).join("") || _emptyRow(5,"No active sessions tracked")}</tbody></table>
-          </section>
-          <section>
-            <h3>Pending Approvals (${approvals.length})</h3>
-            ${approvals.length ? `<table class="aos-table"><thead><tr>
-                <th>Type</th><th>Requested By</th><th>Details</th><th>Date</th><th>Actions</th>
-              </tr></thead><tbody>${approvals.map(a => `<tr>
-                <td><span class="audit-action">${_esc(a.type||"—")}</span></td>
-                <td>${_esc(a.requestedByEmail||a.requestedBy||"—")}</td>
-                <td class="aos-muted">${_esc(a.description||"—")}</td>
-                <td class="aos-muted">${_date(a.createdAt)}</td>
-                <td>
-                  <button class="aos-btn-sm success" onclick="SokoniAOS.approveRequest('${a.id}')">Approve</button>
-                  <button class="aos-btn-sm danger" onclick="SokoniAOS.rejectRequest('${a.id}')">Reject</button>
-                </td>
-              </tr>`).join("")}</tbody></table>` : "<p class='aos-muted'>No pending approvals.</p>"}
-          </section>
-          <section style="grid-column:1/-1">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-              <h3>Security Tools</h3>
-              <button class="aos-btn danger" onclick="SokoniAOS.revokeAllSessions()">&#x26A0;&#xFE0F; Revoke All Sessions</button>
-            </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
-              <a class="aos-btn" href="security-center.html" target="_blank">&#x1F6E1;&#xFE0F; Security Center</a>
-              <a class="aos-btn" href="security-zero-trust-dashboard.html" target="_blank">&#x1F510; Zero Trust Dashboard</a>
-              <button class="aos-btn" onclick="SokoniAOS.loadSecurityEvents()">&#x1F50D; Load Security Events</button>
-            </div>
-            <h3 style="margin-bottom:10px;font-size:14px">Recent Security Events</h3>
-            <div id="securityEventsBody">${_spinner()}</div>
-          </section>
-        </div>`;
-      _loadSecurityEvents();
-    } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
+    if (!(window.SokoniAOSSecurity && typeof window.SokoniAOSSecurity.mount === "function")) {
+      body.innerHTML = _emptyMsg("The security view (sokoni-aos-security.js) is not loaded.");
+      return;
+    }
+    _secView = window.SokoniAOSSecurity.mount(body, {
+      call: _call, db: _db,
+      actions: { revokeSession, revokeAllSessions, approveRequest, rejectRequest, openAudit: () => _navigate("audit") },
+      links: [{ href: "security-center.html", label: "Security Center" }, { href: "security-zero-trust-dashboard.html", label: "Zero Trust Dashboard" }],
+    });
   }
-
-  async function _loadSecurityEvents() {
-    const el = document.getElementById("securityEventsBody");
-    if (!el) return;
-    const snap = await _db.collection("securityEvents")
-      .orderBy("createdAt","desc").limit(20).get().catch(() => null);
-    if (!snap) { el.innerHTML = "<p class='aos-muted'>Security events collection not available.</p>"; return; }
-    el.innerHTML = snap.empty ? "<p class='aos-muted'>No recent security events.</p>"
-      : `<table class="aos-table"><thead><tr>
-          <th>Event</th><th>User</th><th>IP</th><th>Time</th>
-        </tr></thead><tbody>${snap.docs.map(d => {
-          const e = d.data();
-          return `<tr>
-            <td><span class="audit-action">${_esc(e.type||e.event||"—")}</span></td>
-            <td class="aos-muted">${_esc(e.email||e.uid||"system")}</td>
-            <td class="aos-mono aos-muted">${_esc(e.ip||"—")}</td>
-            <td class="aos-muted">${_ago(e.createdAt)}</td>
-          </tr>`;
-        }).join("")}</tbody></table>`;
-  }
+  /* kept for callers of the old API: refreshes the security view */
+  function _loadSecurityEvents() { if (_secView) _secView.reload(); else _loadSecurity(); }
 
   /* A refused read or write must never be rendered as an ABSENCE. "permission-denied"
      means this console could not SEE or CHANGE the record — not that there is nothing

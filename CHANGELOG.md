@@ -1,3 +1,27 @@
+## [2026-10-04] — AdminOS Security: ONE redesigned Security view (owner design); invented security numbers removed — NOT deployed
+
+- **sokoni-aos-security.js (new):** the ONE Security view.
+  - **Where it appears:** AdminOS #security. Super Admin reaches it through `admin-os.html#security` (Slice C2), so there is no second Security panel.
+  - **Layout:** posture / MFA / alerts / incidents tiles; tabs Overview · Sessions · Events · Alerts · Approvals · Posture; a side column with the alert in focus and remediation steps.
+  - **Sources, all admin-only:** getSecurityScorecard (measured-only score, coverage, MFA, privileged by role, criticalIssues), `activeSessions`, `securityEvents`, open `securityAlerts`, pending `approvalRequests`, adminGetAuditLogs (security-relevant actions picked by whole words of the action name, and labelled as such).
+  - **Unknowns:** an unknown value is "—", and a refused source is "Not available … not an empty list".
+  - **Actions:** revoke, revoke all, approve and reject call AdminOS's EXISTING handlers (confirm → act → toast → reload). There is no second copy.
+- **sokoni-audit-center.js:** exports `injectCss`, the one shared admin stylesheet reused by the Security view. Both views now retire their previous listeners on remount, so a click can never act twice.
+- **security-center.html:**
+  - **Score:** it read `r.overall || 86`, but the server sends `totalScore`, so the page ALWAYS showed 86. It now shows the measured-only score (or "—") and every dimension with its basis.
+  - **Removed:** the hard-coded domain list (A/90…), the fixed PCI 85 / GDPR 80 / ISO 75 compliance block, and a dozen unknown→0 renders. These now use one `num()` / `pctOf()` helper that gives "—".
+- **executive-dashboard.html:**
+  - Security score and grade are measured-only ("—" when unknown), and the static domain fallback is gone.
+  - Subsystems with no health source show "—" instead of invented 92–99%.
+- **Pairs with:** functions fix 6841dfd on feat/tech-taxonomy-on-13f74f3. The scorecard is measured-only, MFA is counted correctly, and AdminOS admin claims are accepted. Ship functions BEFORE hosting, otherwise the Security view shows "Not available" for the scorecard.
+- **Sidebar / nav / `<head>`:** untouched. test-audit-center A11 asserts this.
+- **Tests:**
+  - scripts/test-aos-security.js 11/0, SABOTAGE 6/6.
+  - test-audit-center 13/0, SABOTAGE 8/8.
+  - Page suites green: tier1 59/0, tier2 147/0, authority-honesty 28/0, aos-marketing 10/0, sa-marketing 8/0 and others.
+  - test-adminos-provider-lifecycle A-5 is pre-existing (it fails identically on base).
+  - NOT RUN: browser suites (memory floor).
+
 ## [2026-10-03] — AdminOS + Super Admin: ONE redesigned Audit Logs view (owner design) — NOT deployed
 
 - **sokoni-audit-center.js (new):** the ONE audit view, used by both pages. It renders only and never reads Firestore itself or writes.

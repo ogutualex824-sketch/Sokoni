@@ -370,7 +370,10 @@
     }
     function copy(text) { try { if (G.navigator && G.navigator.clipboard) return G.navigator.clipboard.writeText(text); } catch (_) {} return Promise.resolve(); }
 
-    host.addEventListener('click', function (ev) {
+    /* one listener set per host: a remount (navigating back to the panel) retires the previous instance */
+    if (typeof host.__sacOff === 'function') host.__sacOff();
+    var L = {};
+    host.addEventListener('click', L.click = function (ev) {
       var t = ev.target, c = t && t.closest ? t : null; if (!c) return;
       var row = c.closest('[data-sac-row]'), act = c.closest('[data-sac-act]'), chip = c.closest('[data-sac-chip]'), pg = c.closest('[data-sac-page]'), tab = c.closest('[data-sac-tab]');
       if (chip) { var k = chip.getAttribute('data-sac-chip'); if (k === 'date') { S.from = ''; S.to = ''; } else S[k] = ''; S.page = 1; render(); return; }
@@ -391,16 +394,16 @@
       }
       if (row) { S.sel = S.rows[Number(row.getAttribute('data-sac-row'))] || null; S.tab = 'overview'; render(); }
     });
-    host.addEventListener('keydown', function (ev) {
+    host.addEventListener('keydown', L.keydown = function (ev) {
       var t = ev.target;
       if ((ev.key === 'Enter' || ev.key === ' ') && t && t.getAttribute && t.getAttribute('data-sac-row') != null) { ev.preventDefault(); S.sel = S.rows[Number(t.getAttribute('data-sac-row'))] || null; S.tab = 'overview'; render(); }
       else if (ev.key === 'Escape' && S.sel) { S.sel = null; render(); }
     });
-    host.addEventListener('input', function (ev) {
+    host.addEventListener('input', L.input = function (ev) {
       var k = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-sac');
       if (k === 'q') { S.q = String(ev.target.value || '').slice(0, 200); S.page = 1; render(); }
     });
-    host.addEventListener('change', function (ev) {
+    host.addEventListener('change', L.change = function (ev) {
       var k = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-sac');
       if (!k || k === 'q') return;
       var v = String(ev.target.value || '');
@@ -411,9 +414,11 @@
       S.page = 1; render();
     });
 
+    host.__sacOff = function () { S.seq = -1e9; Object.keys(L).forEach(function (k) { if (host.removeEventListener) host.removeEventListener(k, L[k]); }); };
     load();
     return { reload: load, exportCsv: exportCsv, _state: S };
   }
 
-  G.SokoniAuditCenter = { mount: mount, _internal: { normalize: normalize, device: device, csvCell: csvCell, toMs: toMs } };
+  /* injectCss: the shared admin-view stylesheet (.sac-*), reused by sokoni-aos-security.js — one design system, no copy */
+  G.SokoniAuditCenter = { mount: mount, injectCss: injectCss, esc: esc, _internal: { normalize: normalize, device: device, csvCell: csvCell, toMs: toMs } };
 }(typeof window !== 'undefined' ? window : globalThis));

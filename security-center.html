@@ -955,14 +955,14 @@
         callCF('getSecurityScorecard')
       ]);
 
-      const score = scorecard.overall || 86;
-      document.getElementById('threatScore').textContent = fraudReport.compositeScore || 0;
+      document.getElementById('threatScore').textContent = num(fraudReport.compositeScore);
       document.getElementById('threatScore').className = 'metric-val ' +
         (fraudReport.compositeScore > 70 ? 'c-red' : fraudReport.compositeScore > 40 ? 'c-orange' : 'c-green');
 
-      document.getElementById('activeAlerts').textContent = fraudReport.openAlerts || 0;
-      document.getElementById('blockedToday').textContent = ztStatus.deniedRequests || 0;
-      document.getElementById('mfaCoverage').textContent = (scorecard.mfaCoverage || 0) + '%';
+      document.getElementById('activeAlerts').textContent = num(fraudReport.openAlerts);
+      document.getElementById('blockedToday').textContent = num(ztStatus.deniedRequests);
+      /* MFA adoption of PRIVILEGED users, measured by the scorecard (getSecurityScorecard.mfa) */
+      document.getElementById('mfaCoverage').textContent = scorecard && scorecard.mfa ? pctOf(scorecard.mfa.rate) : '—';
 
       // ZT Policy Status
       const ztEl = document.getElementById('ztPolicyStatus');
@@ -1270,7 +1270,7 @@
         ${ok ? '✓ Integrity Verified' : '✗ Tampering Detected'}
       </div>
       <div style="font-size:12px;color:var(--text2);margin-top:8px">
-        Checked ${r.checked||0} events · ${r.tampered||0} hash mismatches found
+        Checked ${num(r.checked)} events · ${num(r.tampered)} hash mismatches found
       </div>
       ${r.details ? `<pre style="font-size:11px;color:var(--text2);margin-top:8px">${escHtml(JSON.stringify(r.details, null, 2))}</pre>` : ''}`;
     } catch (e) { body.innerHTML = '<div class="c-red">Error: ' + escHtml(e.message) + '</div>'; }
@@ -1291,62 +1291,31 @@
   async function loadScorecard() {
     try {
       const r = await callCF('getSecurityScorecard');
-      const score = r.overall || 86;
+      /* totalScore = MEASURED dimensions only (null when nothing could be measured) — never a default */
+      const score = r.totalScore;
+      document.getElementById('scoreRingVal').innerHTML = (score == null ? '—' : score) + '<small>/ 100 measured</small>';
+      document.getElementById('scoreRing').style.setProperty('--pct', score == null ? 0 : score);
+      document.getElementById('scoreGrade').textContent = r.grade ? String(r.grade).replace(/\s*\(.*\)/, '') : '—';
 
-      document.getElementById('scoreRingVal').innerHTML = score + '<small>/ 100</small>';
-      document.getElementById('scoreRing').style.setProperty('--pct', score);
-      document.getElementById('scoreGrade').textContent = score >= 90 ? 'A' : score >= 80 ? 'B+' : score >= 70 ? 'B' : score >= 60 ? 'C' : 'D';
-
-      const domains = r.domains || [];
+      const BASIS = { measured: 'Measured', declared: 'Declared — not measured', unreadable: 'Could not measure', no_data: 'No data yet' };
       const domEl = document.getElementById('domainList');
-      domEl.innerHTML = domains.map(d => {
-        const pct = Math.round(d.score / d.max * 100);
-        const gradeClass = d.grade === 'A' ? 'grade-a' : d.grade === 'B' || d.grade === 'B+' ? 'grade-b' : 'grade-c';
-        return `<div class="domain-row">
+      const dims = Array.isArray(r.dimensions) ? r.dimensions : [];
+      domEl.innerHTML = dims.length ? dims.map(d => {
+        const measured = d.basis === 'measured' && d.score != null;
+        const pct = measured ? Math.round(d.score / d.maxScore * 100) : 0;
+        return `<div class="domain-row" title="${escHtml(d.notes || '')}">
           <div class="domain-name" style="font-size:11px">${escHtml(d.name)}</div>
           <div class="domain-bar"><div class="domain-bar-fill" style="width:${pct}%;background:${pct>=80?'var(--green)':pct>=60?'var(--yellow)':'var(--red)'}"></div></div>
-          <div class="domain-grade ${gradeClass}">${escHtml(d.grade||'B')}</div>
+          <div style="font-size:11px;color:var(--text2);white-space:nowrap">${measured ? escHtml(d.score + '/' + d.maxScore) : escHtml(BASIS[d.basis] || '—')}</div>
         </div>`;
-      }).join('') || buildStaticDomains();
+      }).join('') : '<div class="empty">No scorecard dimensions returned.</div>';
 
-      // Compliance
+      /* Compliance is graded by getComplianceReport (super admin; measured dimensions only) — never shown as fixed numbers */
       const compEl = document.getElementById('complianceStatus');
-      const comp = r.compliance || {};
-      compEl.innerHTML = [
-        { name: 'PCI-DSS', score: 85, status: 'Partial' },
-        { name: 'GDPR',    score: 80, status: 'Partial' },
-        { name: 'ISO 27001', score: 75, status: 'Partial' }
-      ].map(c => `
-        <div class="domain-row">
-          <div class="domain-name">${c.name}</div>
-          <div class="domain-bar"><div class="domain-bar-fill" style="width:${c.score}%;background:var(--blue)"></div></div>
-          <div style="font-size:11px;color:var(--text2)">${c.score}%</div>
-        </div>`).join('');
+      compEl.innerHTML = '<div class="empty">Compliance is not scored on this page. A super admin can generate a report (getComplianceReport) — controls are graded only from measured dimensions; declared ones are listed as gaps.</div>';
     } catch (e) {
-      document.getElementById('domainList').innerHTML = buildStaticDomains();
+      document.getElementById('domainList').innerHTML = '<div class="empty">Could not load the security scorecard' + (e && e.message ? ': ' + escHtml(e.message) : '') + '. This is not a passing score.</div>';
     }
-  }
-
-  function buildStaticDomains() {
-    const domains = [
-      { name: 'Zero Trust Engine', grade: 'A', pct: 90 },
-      { name: 'Identity (MFA + Passkeys)', grade: 'A', pct: 90 },
-      { name: 'Fraud Detection', grade: 'A', pct: 90 },
-      { name: 'Audit System', grade: 'A', pct: 90 },
-      { name: 'AI Security', grade: 'A', pct: 90 },
-      { name: 'Database Security', grade: 'A', pct: 90 },
-      { name: 'Web Security', grade: 'A', pct: 90 },
-      { name: 'Incident Response', grade: 'A', pct: 90 },
-      { name: 'Payment Security', grade: 'A', pct: 90 },
-      { name: 'DevSecOps', grade: 'B', pct: 70 },
-      { name: 'Redis Security', grade: 'B', pct: 70 },
-      { name: 'Supply Chain', grade: 'B', pct: 70 },
-    ];
-    return domains.map(d => `<div class="domain-row">
-      <div class="domain-name" style="font-size:11px">${d.name}</div>
-      <div class="domain-bar"><div class="domain-bar-fill" style="width:${d.pct}%;background:${d.grade==='A'?'var(--green)':'var(--blue)'}"></div></div>
-      <div class="domain-grade ${d.grade==='A'?'grade-a':'grade-b'}">${d.grade}</div>
-    </div>`).join('');
   }
 
   async function runSecScan() {
@@ -1390,7 +1359,7 @@
         </div>
         <div class="domain-row">
           <div class="domain-name">Backup Codes</div>
-          <div class="metric-delta up">${mfa.backupCodesRemaining||0} remaining</div>
+          <div class="metric-delta up">${num(mfa.backupCodesRemaining)} remaining</div>
         </div>
         <div class="domain-row">
           <div class="domain-name">Last Verified</div>
@@ -1403,7 +1372,7 @@
         ? '<div class="empty">No trusted devices</div>'
         : devs.map(d => `<div class="domain-row">
             <div class="domain-name" style="font-size:11px">${escHtml(d.name||d.deviceId?.slice(0,12)||'Device')}</div>
-            <div class="metric-delta ${d.trusted?'up':'down'}">${(d.trustScore*100||0).toFixed(0)}%</div>
+            <div class="metric-delta ${d.trusted?'up':'down'}">${pctOf(d.trustScore)}</div>
             <button class="btn-sm danger" onclick="removeDevice('${d.deviceId}')">Remove</button>
           </div>`).join('');
     } catch (e) { console.error(e); }
@@ -1418,7 +1387,7 @@
       const r = await callCF('getRiskProfile', { userId });
       const p = r.profile || {};
       el.innerHTML = `<table class="data-table">
-        <tr><th>Risk Score</th><td><span class="metric-val c-${p.riskScore>70?'red':p.riskScore>40?'orange':'green'}" style="font-size:20px">${p.riskScore||0}</span>/100</td></tr>
+        <tr><th>Risk Score</th><td><span class="metric-val c-${p.riskScore>70?'red':p.riskScore>40?'orange':'green'}" style="font-size:20px">${num(p.riskScore)}</span>/100</td></tr>
         <tr><th>Level</th><td><span class="sev sev-${p.riskLevel||'low'}">${(p.riskLevel||'low').toUpperCase()}</span></td></tr>
         <tr><th>Last Updated</th><td>${fmtTs(p.updatedAt)}</td></tr>
         <tr><th>Factors</th><td><pre style="font-size:11px">${escHtml(JSON.stringify(p.factors||{}, null, 2))}</pre></td></tr>
@@ -1618,7 +1587,7 @@
       el.innerHTML = devs.length === 0 ? '<div class="empty">No devices registered</div>'
         : devs.map(d => `<div class="domain-row">
             <div class="domain-name" style="font-size:11px">${escHtml(d.deviceId?.slice(0,16)||'—')}…</div>
-            <div style="font-size:11px;color:var(--text2)">Trust: ${(d.trustScore*100||0).toFixed(0)}%</div>
+            <div style="font-size:11px;color:var(--text2)">Trust: ${pctOf(d.trustScore)}</div>
           </div>`).join('');
     } catch (e) { el.innerHTML = `<div class="c-red">Error: ${escHtml(e.message)}</div>`; }
   }
@@ -1661,10 +1630,10 @@
         </tbody>
       </table>`;
 
-      document.getElementById('injBlocked').textContent  = r.stats?.injectionBlocked  || 0;
-      document.getElementById('piiScrubbed').textContent = r.stats?.piiScrubbed        || 0;
-      document.getElementById('aiBlocked').textContent   = r.stats?.blocked            || 0;
-      document.getElementById('abuseReports').textContent = r.stats?.abuseReports      || 0;
+      document.getElementById('injBlocked').textContent  = num(r.stats?.injectionBlocked);
+      document.getElementById('piiScrubbed').textContent = num(r.stats?.piiScrubbed);
+      document.getElementById('aiBlocked').textContent   = num(r.stats?.blocked);
+      document.getElementById('abuseReports').textContent = num(r.stats?.abuseReports);
     } catch (e) { el.innerHTML = '<div class="empty">Error: ' + escHtml(e.message) + '</div>'; }
   }
 
@@ -1677,7 +1646,7 @@
       const r = await callCF('getAIRateLimitStatus', { userId });
       const rl = r.rateLimit || {};
       el.innerHTML = `
-        <div class="domain-row"><div class="domain-name">Calls this hour</div><div>${rl.callsThisHour||0} / ${rl.limit||'—'}</div></div>
+        <div class="domain-row"><div class="domain-name">Calls this hour</div><div>${num(rl.callsThisHour)} / ${num(rl.limit)}</div></div>
         <div class="domain-row"><div class="domain-name">Status</div><div class="metric-delta ${rl.blocked?'down':'up'}">${rl.blocked?'BLOCKED':'OK'}</div></div>
         <div class="domain-row"><div class="domain-name">Role limit</div><div>${rl.roleLimit||'—'} calls/hr</div></div>`;
     } catch (e) { el.innerHTML = '<div class="c-red">Error: ' + escHtml(e.message) + '</div>'; }
@@ -1728,6 +1697,10 @@
   /* ─────────────────────────────────────────────────
      HELPERS
   ───────────────────────────────────────────────── */
+  /* an UNKNOWN figure renders "—", never 0; a real canonical 0 still shows 0 */
+  function num(v) { return (v === null || v === undefined || v === '' || Number.isNaN(Number(v))) ? '—' : String(v); }
+  function pctOf(x) { return (x === null || x === undefined || Number.isNaN(Number(x))) ? '—' : Math.round(Number(x) * 100) + '%'; }
+
   function escHtml(s) {
     if (s == null) return '';
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
