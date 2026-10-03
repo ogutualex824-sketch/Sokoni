@@ -47,6 +47,13 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
     await setDoc(doc(d, 'unboxingReviews/UBR-2'), { uid: 'mallory', rating: 4, product: 'Cake', comment: 'nice', status: 'pending' });
     for (const c of ['reviewModerationLog', 'reviewRateLimits', 'smsSendAudit', 'deliveryPinLog']) await setDoc(doc(d, c + '/x'), { v: 1 });
     await setDoc(doc(d, 'sportsReviews/legacy'), { targetId: 'v1', rating: 4, body: 'old', uid: 'alice' });
+    /* D-04 / D-09 fixtures: one job per actor path so each row starts from a known status. */
+    const job = (status) => ({ uid: 'alice', buyerUid: 'alice', sellerUid: 'sel1', assignedDriverId: 'rider1', orderId: 'o9', status, deliveryAddress: 'Kilimani', buyerPhone: '0712000000' });
+    await setDoc(doc(d, 'packageRequests/pkRider'), job('driver_assigned'));
+    await setDoc(doc(d, 'packageRequests/pkRiderBad'), job('in_transit'));
+    await setDoc(doc(d, 'packageRequests/pkSeller'), job('order_placed'));
+    await setDoc(doc(d, 'packageRequests/pkBuyer'), job('delivered'));
+    await setDoc(doc(d, 'packageRequests/pkOther'), { ...job('in_transit'), assignedDriverId: 'rider2' });
     await setDoc(doc(d, 'propertyViewings/L1_alice_2026-10-04'), { listingId: 'L1', buyerUid: 'alice', agentUid: 'ag1', status: 'requested' });
   });
   const anon = env.unauthenticatedContext().firestore();
@@ -131,6 +138,34 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await allows('M-1d', 'inverting control: a normal pending order (paymentStatus pending) is still created',
     setDoc(doc(mallory, 'orders/o-ok'), { uid: 'mallory', buyerUid: 'mallory', items: [], total: 500, status: 'pending', paymentStatus: 'pending' }));
   await denies('M-2', 'browser mints a bookingFees record for itself', setDoc(doc(mallory, 'bookingFees/f1'), { uid: 'mallory', amount: 5000, type: 'booking_fee' }));
+
+  console.log('[K] D-04 / D-09 — packageRequests: each party moves only its own stage; delivered is server-only');
+  const rider1 = env.authenticatedContext('rider1').firestore();
+  const sel1 = env.authenticatedContext('sel1').firestore();
+  await denies('K-1', 'D-04 assigned rider writes status "delivered" (no PIN)', updateDoc(doc(rider1, 'packageRequests/pkRiderBad'), { status: 'delivered' }));
+  await denies('K-2', 'D-04 assigned rider writes deliveredAt / payoutDue', updateDoc(doc(rider1, 'packageRequests/pkRiderBad'), { deliveredAt: '2026-10-03T10:00:00Z', payoutDue: true }));
+  await denies('K-2b', 'D-04 assigned rider writes "buyer_confirmed" (another party\'s stage)', updateDoc(doc(rider1, 'packageRequests/pkRiderBad'), { status: 'buyer_confirmed' }));
+  await allows('K-3', 'inverting: assigned rider accepts (status driver_accepted + acceptedAt)', updateDoc(doc(rider1, 'packageRequests/pkRider'), { status: 'driver_accepted', acceptedAt: '2026-10-03T09:00:00Z' }));
+  await allows('K-4', 'inverting: rider at the seller (driver_at_seller + arrivedAtSellerAt)', updateDoc(doc(rider1, 'packageRequests/pkRider'), { status: 'driver_at_seller', arrivedAtSellerAt: '2026-10-03T09:10:00Z' }));
+  await allows('K-5', 'inverting: rider picked up (in_transit + pickedUpAt)', updateDoc(doc(rider1, 'packageRequests/pkRider'), { status: 'in_transit', pickedUpAt: '2026-10-03T09:20:00Z' }));
+  await allows('K-5b', 'no regression: rider position update (valid GPS, status unchanged)', updateDoc(doc(rider1, 'packageRequests/pkRider'), { driverLat: -1.29, driverLng: 36.82 }));
+  await allows('K-5c', 'no regression: rider note (driverNote) — what the Delivery Hub problem report writes', updateDoc(doc(rider1, 'packageRequests/pkRider'), { driverNote: 'gate locked' }));
+  await denies('K-6', 'seller writes "delivered"', updateDoc(doc(sel1, 'packageRequests/pkSeller'), { status: 'delivered' }));
+  await allows('K-6b', 'inverting: seller marks ready_for_pickup', updateDoc(doc(sel1, 'packageRequests/pkSeller'), { status: 'ready_for_pickup', readyAt: '2026-10-03T08:00:00Z' }));
+  await denies('K-7', 'buyer writes "in_transit" (the rider\'s stage)', updateDoc(doc(alice, 'packageRequests/pkBuyer'), { status: 'in_transit' }));
+  await allows('K-7b', 'inverting: buyer confirms receipt (buyer_confirmed + buyerConfirmedAt)', updateDoc(doc(alice, 'packageRequests/pkBuyer'), { status: 'buyer_confirmed', buyerConfirmedAt: '2026-10-03T11:00:00Z' }));
+  await denies('K-8', 'a non-party changes a job\'s status', updateDoc(doc(mallory, 'packageRequests/pkSeller'), { status: 'cancelled' }));
+  await denies('K-8b', 'cross-rider: rider1 updates rider2\'s job', updateDoc(doc(rider1, 'packageRequests/pkOther'), { status: 'in_transit', driverNote: 'x' }));
+  await denies('K-8c', 'cross-rider: rider1 reads rider2\'s job (customer address/phone)', getDoc(doc(rider1, 'packageRequests/pkOther')));
+  await allows('K-8d', 'inverting: rider1 reads the job assigned to them', getDoc(doc(rider1, 'packageRequests/pkRider')));
+  await denies('K-8e', 'legacy old-client "Pass" (assignedDriverId:null) stays refused — a rider cannot unassign', updateDoc(doc(rider1, 'packageRequests/pkRider'), { status: 'ready_for_pickup', assignedDriverId: null }));
+  const clean = { uid: 'mallory', buyerUid: 'mallory', sellerUid: 'sel1', orderId: 'oM', status: 'order_placed', deliveryAddress: 'Westlands', items: [], deliveryFee: 150, driverNet: 120, category: 'marketplace' };
+  await denies('K-9', 'D-09 create a job pre-assigned to a rider', setDoc(doc(mallory, 'packageRequests/c1'), { ...clean, assignedDriverId: 'rider1' }));
+  await denies('K-9b', 'D-09 create a job already "delivered"', setDoc(doc(mallory, 'packageRequests/c2'), { ...clean, status: 'delivered' }));
+  await denies('K-9c', 'D-09 create a job carrying payoutDue / sellerPayoutReady', setDoc(doc(mallory, 'packageRequests/c3'), { ...clean, payoutDue: true, sellerPayoutReady: true }));
+  await denies('K-9d', 'D-09 create a job carrying a PIN hash (deliveryPinHash)', setDoc(doc(mallory, 'packageRequests/c4'), { ...clean, deliveryPinHash: 'abc' }));
+  await denies('K-9e', 'D-09 create a job in ANOTHER buyer\'s name', setDoc(doc(mallory, 'packageRequests/c5'), { ...clean, buyerUid: 'alice' }));
+  await allows('K-9f', 'inverting: the checkout payload (order_placed, own buyerUid, pricing) is still accepted', setDoc(doc(mallory, 'packageRequests/c6'), clean));
 
   console.log('[C] controls — server-only neighbours unchanged');
   await denies('C-1', 'browser writes ratingsSummary', setDoc(doc(mallory, 'ratingsSummary/p1'), { avg: 5, count: 999 }));

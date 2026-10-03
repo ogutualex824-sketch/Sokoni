@@ -1303,8 +1303,30 @@ service cloud.firestore {
   'startedAt','completedAt','driverLocation']));
   allow delete: if isAdmin();
   }
+  /* D-04 / D-09 (owner-authorized 2026-10-03). Census of every client writer (driver.html → sokoni-rider-hub.js,
+     delivery-tracking.html, seller.html, delivery-hub.js, checkout's sokoni-delivery.js):
+       create  — checkout only: status 'order_placed', parties/locations/items/pricing; never an assignment,
+                 PIN, proof or payout field.                                                    (D-09)
+       buyer   — 'buyer_confirmed', 'cancelled'
+       seller  — 'ready_for_pickup'
+       rider   — 'driver_accepted', 'driver_at_seller', 'in_transit'
+       'delivered' is written ONLY by the server (completeDeliveryWithPin / completeParcelWithPin, Admin SDK).
+     Before this, an assigned rider could write ANY status plus deliveredAt / payoutDue (a delivery "completed"
+     without the buyer's PIN), and a create could carry any field (a forged, pre-assigned or pre-paid job). The
+     only client that wrote 'delivered' (sokoni-delivery.js driverDelivered) has no caller.
+     NOT changed here (separate, ordered follow-up): the buyer branch still lists sellerPayoutReady, because live
+     sokoni-delivery.js writes it until the hosting release carrying 6f0a576 is out; removing it first would break
+     the buyer's confirm-receipt write. */
   match /packageRequests/{pkgId} {
-  allow create: if claimsOwner();
+  allow create: if claimsOwner()
+  && (!request.resource.data.keys().hasAny(['status']) || request.resource.data.status == 'order_placed')
+  && (!request.resource.data.keys().hasAny(['buyerUid']) || request.resource.data.buyerUid == request.auth.uid)
+  && !request.resource.data.keys().hasAny([
+  'assignedDriverId','assignedDriverUid','assignedRiderId','riderId','driverId',
+  'deliveredAt','deliveryAuthorizedBy','deliveryAuthorizedActor',
+  'deliveryPinHash','deliveryPinIssued','deliveryPinIssuedAt',
+  'payoutDue','sellerPayoutReady','paymentVerified','buyerConfirmedAt',
+  'riderEarning','proofPhotoUrl','proofNote']);
   allow read:   if isAdmin()
   || (isAuthed() && resource.data.uid              == request.auth.uid)
   || (isAuthed() && resource.data.buyerUid         == request.auth.uid)
@@ -1315,21 +1337,27 @@ service cloud.firestore {
   && request.resource.data.diff(resource.data)
   .affectedKeys().hasOnly(['status','cancelReason','confirmedAt',
   'buyerConfirmedAt','sellerPayoutReady',
-  'timeline','_lastTimelineEntry','updatedAt']))
+  'timeline','_lastTimelineEntry','updatedAt'])
+  && (request.resource.data.get('status', null) == resource.data.get('status', null)
+  || request.resource.data.status in ['buyer_confirmed','cancelled']))
   || (isAuthed() && resource.data.sellerUid == request.auth.uid
   && uidUnchanged()
   && request.resource.data.diff(resource.data)
   .affectedKeys().hasOnly(['status','sellerNote','readyAt',
-  'timeline','_lastTimelineEntry','updatedAt']))
+  'timeline','_lastTimelineEntry','updatedAt'])
+  && (request.resource.data.get('status', null) == resource.data.get('status', null)
+  || request.resource.data.status == 'ready_for_pickup'))
   || (isAuthed() && resource.data.assignedDriverId == request.auth.uid
   && uidUnchanged()
   && request.resource.data.diff(resource.data)
   .affectedKeys().hasOnly(['status','driverNote','updatedAt',
-  'pickedUpAt','deliveredAt','arrivedAtSellerAt',
-  'acceptedAt','etaMin','payoutDue','proofNote',
+  'pickedUpAt','arrivedAtSellerAt',
+  'acceptedAt','etaMin','proofNote',
   'driverLat','driverLng','driverSpeed',
   'driverLocUpdatedAt',
   'timeline','_lastTimelineEntry'])
+  && (request.resource.data.get('status', null) == resource.data.get('status', null)
+  || request.resource.data.status in ['driver_accepted','driver_at_seller','in_transit'])
   && (!request.resource.data.keys().hasAny(['driverLat','driverLng'])
   || _validGPS(request.resource.data.driverLat, request.resource.data.driverLng)));
   allow delete: if isAdmin();

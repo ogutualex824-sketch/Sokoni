@@ -1246,7 +1246,15 @@ service cloud.firestore {
   allow delete: if isAdmin();
   }
   match /packageRequests/{pkgId} {
-  allow create: if claimsOwner();
+  allow create: if claimsOwner()
+  && (!request.resource.data.keys().hasAny(['status']) || request.resource.data.status == 'order_placed')
+  && (!request.resource.data.keys().hasAny(['buyerUid']) || request.resource.data.buyerUid == request.auth.uid)
+  && !request.resource.data.keys().hasAny([
+  'assignedDriverId','assignedDriverUid','assignedRiderId','riderId','driverId',
+  'deliveredAt','deliveryAuthorizedBy','deliveryAuthorizedActor',
+  'deliveryPinHash','deliveryPinIssued','deliveryPinIssuedAt',
+  'payoutDue','sellerPayoutReady','paymentVerified','buyerConfirmedAt',
+  'riderEarning','proofPhotoUrl','proofNote']);
   allow read:   if isAdmin()
   || (isAuthed() && resource.data.uid              == request.auth.uid)
   || (isAuthed() && resource.data.buyerUid         == request.auth.uid)
@@ -1257,21 +1265,27 @@ service cloud.firestore {
   && request.resource.data.diff(resource.data)
   .affectedKeys().hasOnly(['status','cancelReason','confirmedAt',
   'buyerConfirmedAt','sellerPayoutReady',
-  'timeline','_lastTimelineEntry','updatedAt']))
+  'timeline','_lastTimelineEntry','updatedAt'])
+  && (request.resource.data.get('status', null) == resource.data.get('status', null)
+  || request.resource.data.status in ['buyer_confirmed','cancelled']))
   || (isAuthed() && resource.data.sellerUid == request.auth.uid
   && uidUnchanged()
   && request.resource.data.diff(resource.data)
   .affectedKeys().hasOnly(['status','sellerNote','readyAt',
-  'timeline','_lastTimelineEntry','updatedAt']))
+  'timeline','_lastTimelineEntry','updatedAt'])
+  && (request.resource.data.get('status', null) == resource.data.get('status', null)
+  || request.resource.data.status == 'ready_for_pickup'))
   || (isAuthed() && resource.data.assignedDriverId == request.auth.uid
   && uidUnchanged()
   && request.resource.data.diff(resource.data)
   .affectedKeys().hasOnly(['status','driverNote','updatedAt',
-  'pickedUpAt','deliveredAt','arrivedAtSellerAt',
-  'acceptedAt','etaMin','payoutDue','proofNote',
+  'pickedUpAt','arrivedAtSellerAt',
+  'acceptedAt','etaMin','proofNote',
   'driverLat','driverLng','driverSpeed',
   'driverLocUpdatedAt',
   'timeline','_lastTimelineEntry'])
+  && (request.resource.data.get('status', null) == resource.data.get('status', null)
+  || request.resource.data.status in ['driver_accepted','driver_at_seller','in_transit'])
   && (!request.resource.data.keys().hasAny(['driverLat','driverLng'])
   || _validGPS(request.resource.data.driverLat, request.resource.data.driverLng)));
   allow delete: if isAdmin();
