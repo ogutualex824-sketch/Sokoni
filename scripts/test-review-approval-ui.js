@@ -10,7 +10,7 @@ const ck = (id, ok, m) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + ' ' + id
 console.log('\nReview approval UI   ' + (process.env.BASE ? 'BASE=' + process.env.BASE : 'this tree') + '\n');
 const aos = code(read('sokoni-aos.js'));
 const panel = (aos.match(/\} else if \(tab === "reviews"\) \{[\s\S]*?\n    \}\n  \}/) || [''])[0];
-ck('A-1', /_call\("adminGetReviews", \{ status: st, limit: 30, cursor:/.test(panel), 'the AdminOS queue loads by STATUS with a cursor (pending by default)');
+ck('A-1', /_call\("adminGetReviews", \{ kind: kd, status: st, limit: 30, cursor:/.test(panel), 'the AdminOS queue loads by STATUS with a cursor (pending by default)');
 ck('A-2', /catch \(e\) \{ body\.innerHTML = _emptyMsg\("Couldn't load the review queue/.test(panel) && !/\.catch\(\(\) => \(\{ reviews: \[\] \}\)\)/.test(panel), 'a failed load says so — never a fake "no reviews pending"');
 ck('A-3', ['approve', 'reject', 'request_changes', 'archive', 'remove', 'restore'].every((k) => panel.indexOf(k + ':') > 0 || panel.indexOf(k + ':[') > 0), 'every server action (approve / reject / request changes / archive / remove / restore) is offered by state');
 ck('A-4', /SokoniAOS\.reviewHistory\(/.test(panel) && /'adminGetReviewHistory'/.test(aos) && /_call\("adminGetReviewHistory"/.test(aos), 'each review\'s moderation history opens from the queue (routed via adminOsDispatch)');
@@ -30,6 +30,6 @@ ck('U-4', /will appear once SOKONI approves it/.test(ubc) && !/Review posted!/.t
 ck('U-5', /id="dropZone" hidden/.test(ub), 'the photo picker is hidden until photos can actually be uploaded');
 const db = read('sokoni-db.js');
 ck('U-6', /query\(collection\(db, 'unboxingReviews'\), where\('status', '==', 'approved'\), limit\(100\)\)/.test(db), 'the public wall listener asks for APPROVED posts (the rules refuse an unconstrained query)');
-ck('U-7', /SokoniAOS\.reviewQueue\([^)]*'\$\{k\}'\)/.test(aos) && /kind: _revState\.kind, reviewId: id/.test(aos) && /kind: kd, status: st/.test(aos), 'AdminOS switches Reviews | Unboxing; list and moderation carry the kind');
+ck('U-7', /SokoniAOS\.reviewQueue\('\$\{_esc\(st\)\}', null, '\$\{k\}'\)/.test(aos) && /kind: _revState\.kind, reviewId: id/.test(aos) && /kind: kd, status: st/.test(aos), 'AdminOS switches Reviews | Unboxing; list and moderation carry the kind');
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
