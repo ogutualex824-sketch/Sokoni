@@ -2,14 +2,17 @@
    fail." Builds two mutant rule files from RULES_FILE and runs zz-test-account-state-rules.js against each; each mutant
    MUST make its named rows fail. Needs the Firestore emulator (FIRESTORE_PORT) — RAM-gated like every emulator suite.
      M1 field lock removed  (accountStateUnchanged / accountStateCreateOk → true)   → AS-1 / AS-1b / AS-2 / AS-3 / AS-5 must FAIL
-     M2 session check removed (accountNotSuspended → true)                          → AS-7 / AS-7b / AS-8 / AS-9 must FAIL */
+     M2 session check removed (accountNotSuspended → true)                          → AS-7 / AS-7b / AS-8 / AS-9 must FAIL
+     M3 (break C) only the 'banned' value removed from the predicate                → AS-7b must FAIL */
 'use strict';
 const fs = require('fs'), path = require('path'), { spawnSync } = require('child_process');
 const base = process.env.RULES_FILE || 'firestore.rules.hotfix-jobs';
 const src = fs.readFileSync(path.resolve(__dirname, '..', base), 'utf8');
 const swap = (s, fn) => { const i = s.indexOf('function ' + fn + '() {'); if (i < 0) throw new Error('anchor ' + fn); const j = s.indexOf('\n  }', i); return s.slice(0, i) + 'function ' + fn + '() {\n  return true;' + s.slice(j); };
-const M = { M1: { rules: swap(swap(src, 'accountStateUnchanged'), 'accountStateCreateOk'), must: ['AS-1', 'AS-1b', 'AS-2', 'AS-3', 'AS-5'] },
-            M2: { rules: swap(src, 'accountNotSuspended'), must: ['AS-7', 'AS-7b', 'AS-8', 'AS-9'] } };
+const M = { M1: { rules: swap(swap(src, 'accountStateUnchanged'), 'accountStateCreateOk'), must: ['AS-1', 'AS-1b', 'AS-2', 'AS-3', 'AS-3b', 'AS-3c', 'AS-5'] },
+            M2: { rules: swap(src, 'accountNotSuspended'), must: ['AS-7', 'AS-7b', 'AS-8', 'AS-9'] },
+            /* break C (owner): remove ONLY the legacy 'banned' value from the predicate → the legacy-banned row must fail */
+            M3: { rules: (() => { const a = "in ['suspended', 'banned']"; if (src.split(a).length !== 2) throw new Error('anchor banned'); return src.replace(a, "in ['suspended']"); })(), must: ['AS-7b'] } };
 let bad = 0;
 for (const [name, m] of Object.entries(M)) {
   const tmp = 'zz-mutant-' + name + '.rules'; fs.writeFileSync(path.resolve(__dirname, '..', tmp), m.rules);

@@ -199,7 +199,8 @@ service cloud.firestore {
   }
   function accountStateKeys() {
   return ['status','suspended','suspendedAt','suspendReason','suspendedBy','suspensionPriorStatus','suspensionSource',
-  'reinstatedAt','reinstatedBy','customClaims','roleUpdatedAt','roleUpdatedBy'];
+  'reinstatedAt','reinstatedBy','customClaims','roleUpdatedAt','roleUpdatedBy',
+  'suspendedUntil','banReason','bannedBy','bannedAt'];
   }
   function accountStateCreateOk() {
   return !request.resource.data.keys().hasAny(accountStateKeys().removeAll(['status']))

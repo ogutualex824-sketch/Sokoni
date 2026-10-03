@@ -225,7 +225,9 @@ service cloud.firestore {
      Census (sokoni-2f): the three live client users writes (driver.html ×2, sokoni-chat-engine.js) touch none of them. */
   function accountStateKeys() {
   return ['status','suspended','suspendedAt','suspendReason','suspendedBy','suspensionPriorStatus','suspensionSource',
-  'reinstatedAt','reinstatedBy','customClaims','roleUpdatedAt','roleUpdatedBy'];
+  'reinstatedAt','reinstatedBy','customClaims','roleUpdatedAt','roleUpdatedBy',
+  /* sokoni-2f setSuspension contract (aosr 1e02dcd): 14-day suspension + permanent ban fields */
+  'suspendedUntil','banReason','bannedBy','bannedAt'];
   }
   function accountStateCreateOk() {
   return !request.resource.data.keys().hasAny(accountStateKeys().removeAll(['status']))
