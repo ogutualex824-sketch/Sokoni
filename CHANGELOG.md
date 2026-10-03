@@ -1,3 +1,18 @@
+## [2026-10-04] — Integrations Control Center: ported to the hosting candidate and restyled to the owner design — NOT deployed
+
+- **No new module:** the EXISTING certified console was ported from feat/integrations-control-center c676f61 byte-identical: sokoni-integrations.js, sokoni-integration-catalogue.js, sokoni-integration-governance.js, plus its suites scripts/test-integrations-console.js, tests/certify-integrations-console.js and tests/sabotage-integrations-console.js. No second integrations page was written.
+- **Restyle (sokoni-integrations.js):** ONE design layer is appended at the end of the module's own `_styles()`. It sets the navy surfaces, purple accent, 14px cards and quiet headers shared with the redesigned Audit Logs and Security views. The markup is unchanged, so certification still asserts the same rendered output.
+- **admin-os.html / sokoni-aos.js:** the panel `panel-integrations` (one `integrationsRoot`), the `integrations` loader on the panel map, and the catalogue and console scripts.
+- **super-admin.html:** the same module, with panel, lazy-load branch, `SA.loadIntegrations()` and scripts. As certified, one module is mounted by two consoles.
+- **Sidebar entries NOT added:** the sidebars are owned by sokoni-5b (hosting/adminos-sidebar-style-on-72dca56). The nav buttons (`data-section="integrations"`, routed through `SokoniAOS.navigate` / `SA.nav`) are requested from 5b. Until then the panel is reachable at admin-os.html#integrations.
+- **Not ported:** sokoni-gcp-admin.js, the GCP write surface. It is a separate, blocked unit.
+- **Server:** the console's two certified read ops, `adminGetIntegrationStatus` and `adminGetGcpEvidence` (adminOsDispatch), are NOT in the live adminOsDispatch lineage (09-09). Until a functions unit ships them, those panels show their certified "could not read" state, never zeros. The catalogue and Firestore-read panels work.
+- **Tests:**
+  - scripts/test-integrations-console.js 133/0.
+  - certify-integrations-console: 6 failing rows. E1 and E2 (4 rows) are the sidebar entries, pending 5b. D5 (2 rows) fails IDENTICALLY on the source branch, so it is pre-existing.
+  - Sabotage: 40 caught, 1 inert (S7, which removes the SA sidebar entry: there is nothing to remove yet).
+  - NOT RUN: browser (memory floor).
+
 ## [2026-10-04] — AdminOS Security: ONE redesigned Security view (owner design); invented security numbers removed — NOT deployed
 
 - **sokoni-aos-security.js (new):** the ONE Security view.

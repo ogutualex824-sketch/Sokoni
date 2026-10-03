@@ -826,6 +826,12 @@
       <div id="saAuditBody"><div class="sa-spinner"><div></div></div></div>
     </section>
 
+    <!-- ══ SECTION: Integrations ══
+         Rendered by sokoni-integrations.js, the same module admin-os.html mounts. -->
+    <section class="sa-panel" id="panel-integrations" hidden>
+      <div id="integrationsRoot"></div>
+    </section>
+
     <!-- ══ SECTION 7: Platform Broadcast ══ -->
     <section class="sa-panel" id="panel-broadcast" hidden>
       <div class="panel-header">
@@ -1183,6 +1189,7 @@ const SA={
     else if(section==='config')this.loadConfig();
     else if(section==='emergency')this.loadEmergency();
     else if(section==='audit')this.loadAudit();
+    else if(section==='integrations')this.loadIntegrations();
     else if(section==='broadcast')this.loadBroadcastHistory();
     else if(section==='legal')this.loadLegal();
     else if(section==='marketing')this.loadMarketing();
@@ -1983,6 +1990,20 @@ const SA={
     }catch(e){_toast('Error: '+e.message,'error');}
   },
 
+  // ══ SECTION: Integrations ═══════════════════════════════
+  // The module reads its own canonical sources; this console passes it a mount point and nothing else.
+  // A missing script is reported as a missing script, never as an empty integration list.
+  loadIntegrations(){
+    const root=document.getElementById('integrationsRoot');
+    if(!root)return;
+    if(!window.SokoniIntegrations){
+      root.innerHTML='<p style="color:var(--muted);font-size:13px">The integrations module did not ' +
+        'load. Check that sokoni-integrations.js is served on this page.</p>';
+      return;
+    }
+    window.SokoniIntegrations.mount(root);
+  },
+
   // ══ SECTION 6: Audit Log ════════════════════════════════
   /* The ONE audit view (sokoni-audit-center.js) over auditLog — high + critical, newest first (admin-only in the served
      rules). It counts only what it loaded, shows "—" for anything a record does not carry, and never writes. */
@@ -2142,6 +2163,8 @@ const SA={
 </script>
 <script src="sokoni-legal-taxonomy.js"></script>
 <link rel="stylesheet" href="sokoni-mv2-skin.css">  <!-- merchant-v2 design language, scoped to .mv2s (Marketing panels) -->
+<script src="sokoni-integration-catalogue.js"></script>
+<script src="sokoni-integrations.js"></script>
 <script src="sokoni-audit-center.js"></script>   <!-- the ONE audit view (AdminOS + Super Admin) -->
 <script src="sokoni-marketing-taxonomy.js"></script>   <!-- Marketing Hub MK5c: the ONE Marketing taxonomy (generated) -->   <!-- Legal Hub L8: the ONE Legal taxonomy (generated) -->
 <script src="sokoni-commission-rates.js"></script>   <!-- Tech Hub 4R: the canonical, generated commission snapshot (read-only view) -->

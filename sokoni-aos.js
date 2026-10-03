@@ -252,6 +252,9 @@ window.SokoniAOS = (() => {
       marketing:     () => _loadMarketing(),
       hubs:          () => _loadHubs(),
       workflows:     () => _loadWorkflows(),
+      /* Integrations Control Center — self-contained in sokoni-integrations.js (read-only; its two server reads are the
+         certified adminGetIntegrationStatus / adminGetGcpEvidence). A missing script says so, never an empty console. */
+      integrations:  () => _loadIntegrations(),
     };
     loaders[s]?.();
   }
@@ -2408,6 +2411,18 @@ window.SokoniAOS = (() => {
     container.appendChild(t);
     setTimeout(() => t.classList.add("visible"), 10);
     setTimeout(() => { t.classList.remove("visible"); setTimeout(() => t.remove(), 300); }, 3000);
+  }
+
+  // ── Integrations Control Center ──────────────────────────────────────────────
+  function _loadIntegrations() {
+    const root = document.getElementById("integrationsRoot");
+    if (!root) return;
+    if (!window.SokoniIntegrations) {
+      root.innerHTML = _emptyMsg("The integrations module did not load. Check that " +
+        "sokoni-integrations.js is served on this page.");
+      return;
+    }
+    window.SokoniIntegrations.mount(root);
   }
 
   // ── Hub Registry ─────────────────────────────────────────────────────────────
