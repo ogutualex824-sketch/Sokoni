@@ -11005,6 +11005,10 @@ const authDispatcher = require('./auth-dispatch');
 exports.authDispatch = authDispatcher.authDispatch;
 const servicesDisp         = require('./services-dispatch');
 exports.servicesDispatch    = servicesDisp.servicesDispatch;
+/* Jobs J2 (sokoni-f3, 2026-10-03): hourly expiry sweep — closes Published / Paused vacancies past their closing date so
+   they leave listings and search. Idempotent (each job re-read in its own transaction). NEW function: deploy with J2. */
+exports.jobsExpirySweep = onSchedule({ schedule: 'every 60 minutes', timeZone: 'Africa/Nairobi', region: 'us-central1', maxInstances: 1 },
+  async () => { const { getFirestore } = require('firebase-admin/firestore'); return require('./jobs').sweepExpiredJobs(getFirestore()); });
 
 /* merchant-success: all 17 onCall — fully consolidated */
 

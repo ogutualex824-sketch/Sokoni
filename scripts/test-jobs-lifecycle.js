@@ -68,8 +68,11 @@ const DESC = 'We need a reliable cashier for our Nairobi shop, weekday shifts.';
   console.log('\nJobs J1 — lifecycle + hardening' + (M ? '  [' + M + ']' : '') + '\n');
   /* ── V: vacancy validation ── */
   let r = await call('createJob', 'emp', { title: 'Cashier', description: DESC, category: 'retail', type: 'full-time', location: 'Nairobi', salaryMin: 20000, salaryMax: 30000 });
-  ck('V1 employer posts a vacancy (active, featured false, server counters)', r.ok && store.get('jobs/' + r.r.jobId).status === 'active' && store.get('jobs/' + r.r.jobId).featured === false, r);
+  ck('V1 employer posts a vacancy (J2: a DRAFT, featured false, server counters)', r.ok && store.get('jobs/' + r.r.jobId).status === 'draft' && store.get('jobs/' + r.r.jobId).featured === false, r);
   const jobId = r.ok ? r.r.jobId : 'x';
+  /* J2: published only through submit + admin approval */
+  await call('submitJob', 'emp', { jobId }); await call('adminModerateJob', 'adm', { jobId, action: 'approve' }, { admin: true });
+  ck('V1b submitted + admin-approved vacancy is Published (active)', store.get('jobs/' + jobId).status === 'active', store.get('jobs/' + jobId));
   r = await call('createJob', 'emp', { title: 'Cashier', description: DESC, category: 'retail', type: 'nonsense' });
   ck('V2 bad type refused WITH a message (was an empty HttpsError)', !r.ok && r.code === 'invalid-argument' && /type must be one of/.test(r.msg), r);
   r = await call('createJob', 'emp', { title: 'Gig', description: DESC, category: 'technology', type: 'freelance-gig' });

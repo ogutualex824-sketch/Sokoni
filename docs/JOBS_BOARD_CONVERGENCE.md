@@ -75,6 +75,44 @@ a module with its own live lineage. Push and SMS come once `notify.js` is cleare
 **Tests:** `scripts/test-jobs-lifecycle.js` passes 52/0. Six sabotages each fail named rows:
 any-transition, owner check, getJob leak, raw expiry, audit event, hire without acceptance.
 
+## J2 — moderation (backend; ships ATOMICALLY with AdminOS Jobs)
+
+```
+draft → pending_review → active (= Published) → paused → closed → archived
+pending_review → changes_requested → (employer edits + resubmits) → pending_review
+pending_review | changes_requested → rejected
+```
+
+**Employer:** `createJob` creates a **draft**, or goes to `pending_review` with `submit:true`. It never creates
+`active`. Other employer ops: `submitJob`, `pauseJob`, and `resumeJob` (only if previously approved and not expired).
+Editing title, description, requirements, type or category on a Published or Paused vacancy sends it **back to review**,
+which blocks bait-and-switch. Salary, location and closing-date edits stay live. Rejected and archived vacancies cannot
+be edited.
+
+**Admin (`adminModerateJob`):** approve, request_changes, reject, pause, restore, close, archive, feature, unfeature.
+- A reason is **required** for request_changes, reject, pause and close; the employer is told why.
+- `restore` works only on a vacancy that was previously approved and has not expired.
+- **Featured is its own attribute.** Only a Published vacancy can be featured, and any vacancy that leaves Published is
+  unfeatured.
+- Every action writes `jobs/{id}/moderation` and `adminAudit` (hub `jobs`), and sends an in-app notification to
+  the employer.
+
+**AdminOS reads:**
+- `adminListJobs {status}`: the queue, including the employer and the full text.
+- `adminGetJob`: the vacancy with its applications, counts by status and the moderation trail ("opening a job shows
+  its applications").
+
+**Expiry:** the `jobsExpirySweep` scheduled function (new, hourly, maxInstances 1) closes Published and Paused vacancies
+past their closing date (`closedReason: 'expired'`, unfeatured, trail row). It is idempotent, and is what removes
+expired jobs from search (J3 drops non-active jobs from the index).
+
+**Tests:** `scripts/test-jobs-moderation.js` passes 42/0. Seven sabotages each fail named rows: employer publishes,
+admin check removed, reason optional, no re-review, restore unapproved, feature anything, sweep no-op. J1 is updated for
+the submit-and-approve flow (53/0), and its six sabotages are still caught.
+
+**Release:** J2 ships ATOMICALLY with the AdminOS Jobs section. Turning on review before the admin UI exists would stop
+every vacancy from publishing. The deploy adds `jobsExpirySweep` alongside `servicesDispatch`.
+
 ## Live rule holes (verified on served f259c0b5)
 
 1. Client job create/update.

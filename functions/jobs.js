@@ -229,7 +229,9 @@ exports.createJob = onCall(CF_OPTS, exports._h.createJob = async (req) => {
     salaryMin:        salary.salaryMin,
     salaryMax:        salary.salaryMax,
     salaryCurrency:   'KES',
-    status:           'active',
+    /* J2 moderation (owner 2026-10-03): a vacancy is never published by its employer. It starts as a draft, or goes
+       straight to review when submitted; an admin approves it to 'active' (= Published). */
+    status:           req.data && req.data.submit === true ? 'pending_review' : 'draft',
     featured:         false,
     postedAt:         Timestamp.now(),
     expiresAt,
@@ -299,12 +301,198 @@ exports.updateJob = onCall(CF_OPTS, exports._h.updateJob = async (req) => {
   if (current.status === 'closed' && update.expiresAt) {
     throw new HttpsError('failed-precondition', 'This vacancy is closed. Post a new vacancy instead of re-opening it.');
   }
+  if (['archived', 'rejected'].includes(current.status)) {
+    throw new HttpsError('failed-precondition', 'This vacancy can no longer be edited.');
+  }
+  /* J2: changing what candidates READ on a published (or paused) vacancy sends it back to review — otherwise an
+     approved listing could be swapped for different content (bait-and-switch). Salary, location and the closing date
+     stay editable without review. */
+  const REVIEWED = ['title', 'description', 'requirements', 'type', 'category'];
+  if (['active', 'paused'].includes(current.status) && REVIEWED.some((k) => k in update)) {
+    update.status = 'pending_review';
+    update.moderationReason = null;
+    update.resubmittedAt = Timestamp.now();
+  }
 
   if (Object.keys(update).length === 0) throw new HttpsError('invalid-argument', 'No valid fields to update');
 
   await jobRef.update(update);
-  return { success: true };
+  return { success: true, status: update.status || current.status, backToReview: update.status === 'pending_review' };
 });
+
+// ─── 2b. J2 moderation — employer: submit / pause / resume ───────────────────────────────────────────────────
+/* Job lifecycle (owner 2026-10-03), stored values:
+     draft → pending_review → active (= Published) → paused → closed → archived
+     pending_review → changes_requested → (employer edits) → pending_review ;  pending_review → rejected
+   The employer never sets 'active'. Every change: one transaction re-reading the job, an audit row in
+   jobs/{id}/moderation, and (for admin decisions) an in-app notification to the employer. */
+const JOB_LABEL = { draft: 'Draft', pending_review: 'Pending review', changes_requested: 'Changes requested', active: 'Published',
+  paused: 'Paused', closed: 'Closed', archived: 'Archived', rejected: 'Rejected' };
+
+function _jobEventInTxn(txn, jobRef, { from, to, action, actorUid, actorRole, reason }) {
+  txn.set(jobRef.collection('moderation').doc(), { from: from || null, to: to || null, action, actorUid, actorRole,
+    reason: reason || null, at: FieldValue.serverTimestamp() });
+}
+
+async function _employerJobTransition(req, { from, to, action }) {
+  _requireAuth(req);
+  const uid = req.auth.uid;
+  const db  = getFirestore();
+  const { jobId } = req.data || {};
+  if (!jobId || !ID_RE.test(String(jobId))) throw new HttpsError('invalid-argument', 'jobId required');
+  const jobRef = db.collection('jobs').doc(jobId);
+  return db.runTransaction(async (txn) => {
+    const s = await txn.get(jobRef);
+    if (!s.exists) throw new HttpsError('not-found', 'Job not found');
+    const job = s.data();
+    if (job.employerUid !== uid) throw new HttpsError('permission-denied', 'Not your job');
+    if (job.status === to) return { success: true, unchanged: true, status: to };
+    if (!from.includes(job.status)) {
+      throw new HttpsError('failed-precondition', 'A vacancy that is "' + (JOB_LABEL[job.status] || job.status) + '" cannot be ' + action + '.');
+    }
+    if (action === 'resumed') {
+      if (!job.approvedAt) throw new HttpsError('failed-precondition', 'This vacancy has not been approved yet.');
+      if (job.expiresAt && job.expiresAt.toMillis() < Date.now()) throw new HttpsError('failed-precondition', 'This vacancy has expired. Update its closing date first.');
+    }
+    txn.update(jobRef, { status: to, ...(to === 'pending_review' ? { submittedAt: Timestamp.now(), moderationReason: null } : {}) });
+    _jobEventInTxn(txn, jobRef, { from: job.status, to, action, actorUid: uid, actorRole: 'employer' });
+    return { success: true, status: to };
+  });
+}
+
+exports._h.submitJob = (req) => _employerJobTransition(req, { from: ['draft', 'changes_requested'], to: 'pending_review', action: 'submitted' });
+exports._h.pauseJob  = (req) => _employerJobTransition(req, { from: ['active'], to: 'paused', action: 'paused' });
+exports._h.resumeJob = (req) => _employerJobTransition(req, { from: ['paused'], to: 'active', action: 'resumed' });
+
+// ─── 2c. J2 moderation — admin ───────────────────────────────────────────────────────────────────────────────
+/* One audited admin entry point. Reason is required for reject / request_changes / pause / close (the employer is told
+   why). 'restore' returns a paused / closed vacancy to Published only if it was approved before and is not expired.
+   Featuring is a separate attribute and is allowed only on a Published vacancy. Every action also writes adminAudit. */
+const ADMIN_ACTIONS = {
+  approve:         { from: ['pending_review'], to: 'active' },
+  request_changes: { from: ['pending_review', 'active', 'paused'], to: 'changes_requested', reason: true },
+  reject:          { from: ['pending_review', 'changes_requested'], to: 'rejected', reason: true },
+  pause:           { from: ['active'], to: 'paused', reason: true },
+  restore:         { from: ['paused', 'closed'], to: 'active' },
+  close:           { from: ['draft', 'pending_review', 'changes_requested', 'active', 'paused'], to: 'closed', reason: true },
+  archive:         { from: ['closed', 'rejected'], to: 'archived' },
+  feature:         { from: ['active'], featured: true },
+  unfeature:       { from: ['active', 'paused', 'closed', 'archived', 'rejected', 'changes_requested'], featured: false },
+};
+
+exports._h.adminModerateJob = async (req) => {
+  _requireAuth(req);
+  _requireAdmin(req);
+  const uid = req.auth.uid;
+  const db  = getFirestore();
+  const { jobId, action, reason } = req.data || {};
+  if (!jobId || !ID_RE.test(String(jobId))) throw new HttpsError('invalid-argument', 'jobId required');
+  const spec = ADMIN_ACTIONS[action];
+  if (!spec) throw new HttpsError('invalid-argument', 'action must be one of: ' + Object.keys(ADMIN_ACTIONS).join(', '));
+  const cleanReason = _san(reason, 500);
+  if (spec.reason && cleanReason.length < 3) throw new HttpsError('invalid-argument', 'Give the employer a reason (at least 3 characters).');
+  const jobRef = db.collection('jobs').doc(jobId);
+  const out = await db.runTransaction(async (txn) => {
+    const s = await txn.get(jobRef);
+    if (!s.exists) throw new HttpsError('not-found', 'Job not found');
+    const job = s.data();
+    if (!spec.from.includes(job.status)) {
+      throw new HttpsError('failed-precondition', 'Cannot ' + action.replace('_', ' ') + ' a vacancy that is "' + (JOB_LABEL[job.status] || job.status) + '".');
+    }
+    if ('featured' in spec) {
+      if (job.featured === spec.featured) return { unchanged: true, status: job.status, featured: job.featured };
+      txn.update(jobRef, { featured: spec.featured, featuredAt: spec.featured ? Timestamp.now() : null, featuredBy: spec.featured ? uid : null });
+      _jobEventInTxn(txn, jobRef, { from: job.status, to: job.status, action, actorUid: uid, actorRole: 'admin', reason: cleanReason });
+      txn.set(db.collection('adminAudit').doc(), { action: 'job_' + action, hub: 'jobs', jobId, by: uid, reason: cleanReason || null, createdAt: FieldValue.serverTimestamp() });
+      return { status: job.status, featured: spec.featured };
+    }
+    if (action === 'restore') {
+      if (!job.approvedAt) throw new HttpsError('failed-precondition', 'This vacancy was never approved; review it instead.');
+      if (job.expiresAt && job.expiresAt.toMillis() < Date.now()) throw new HttpsError('failed-precondition', 'This vacancy has expired; it cannot be restored.');
+    }
+    const upd = { status: spec.to, moderationReason: spec.reason ? cleanReason : null, moderatedBy: uid, moderatedAt: Timestamp.now() };
+    if (action === 'approve') upd.approvedAt = Timestamp.now();
+    if (spec.to !== 'active') { upd.featured = false; }   /* a vacancy that leaves Published is never left featured */
+    txn.update(jobRef, upd);
+    _jobEventInTxn(txn, jobRef, { from: job.status, to: spec.to, action, actorUid: uid, actorRole: 'admin', reason: cleanReason });
+    txn.set(db.collection('adminAudit').doc(), { action: 'job_' + action, hub: 'jobs', jobId, from: job.status, to: spec.to, by: uid, reason: cleanReason || null, createdAt: FieldValue.serverTimestamp() });
+    const title = _san(job.title, 100);
+    const msg = { approve: 'Your vacancy "' + title + '" is now published.',
+      request_changes: 'Changes requested on "' + title + '": ' + cleanReason,
+      reject: 'Your vacancy "' + title + '" was not approved: ' + cleanReason,
+      pause: 'Your vacancy "' + title + '" was paused by SOKONI: ' + cleanReason,
+      restore: 'Your vacancy "' + title + '" is published again.',
+      close: 'Your vacancy "' + title + '" was closed by SOKONI: ' + cleanReason,
+      archive: null }[action];
+    if (msg) _notifyInTxn(txn, db, { uid: job.employerUid, id: 'jobmod_' + jobId + '_' + action + '_' + Date.now(), type: 'job_moderation',
+      title: 'Vacancy ' + (JOB_LABEL[spec.to] || spec.to).toLowerCase(), body: msg, deepLink: '/merchant-v2.html#jobs' });
+    return { status: spec.to };
+  });
+  return { success: true, ...out };
+};
+
+/** AdminOS queue / lists. Single-field query on status (no composite index), newest first, capped. */
+exports._h.adminListJobs = async (req) => {
+  _requireAuth(req);
+  _requireAdmin(req);
+  const db = getFirestore();
+  const { status = 'pending_review', limit = 50 } = req.data || {};
+  if (!JOB_LABEL[status]) throw new HttpsError('invalid-argument', 'status must be one of: ' + Object.keys(JOB_LABEL).join(', '));
+  const n = Math.min(Math.max(Number(limit) || 50, 1), 200);
+  const snap = await db.collection('jobs').where('status', '==', status).limit(n).get();
+  const jobs = snap.docs.map((d) => { const j = d.data();
+    return { ..._publicJobFields(d.id, j), statusLabel: JOB_LABEL[j.status] || j.status, employerUid: j.employerUid,
+      description: j.description, requirements: j.requirements, moderationReason: j.moderationReason || null,
+      submittedAt: j.submittedAt || null, approvedAt: j.approvedAt || null }; })
+    .sort((a, b) => ((b.submittedAt && b.submittedAt.toMillis ? b.submittedAt.toMillis() : 0) - (a.submittedAt && a.submittedAt.toMillis ? a.submittedAt.toMillis() : 0)));
+  return { status, jobs };
+};
+
+/** AdminOS: one vacancy with its applications summary and moderation trail ("opening a job shows its applications"). */
+exports._h.adminGetJob = async (req) => {
+  _requireAuth(req);
+  _requireAdmin(req);
+  const db = getFirestore();
+  const { jobId } = req.data || {};
+  if (!jobId || !ID_RE.test(String(jobId))) throw new HttpsError('invalid-argument', 'jobId required');
+  const ref = db.collection('jobs').doc(jobId);
+  const s = await ref.get();
+  if (!s.exists) throw new HttpsError('not-found', 'Job not found');
+  const j = s.data();
+  const [apps, mod] = await Promise.all([db.collection('jobApplications').where('jobId', '==', jobId).limit(300).get(), ref.collection('moderation').limit(100).get()]);
+  const byStatus = {};
+  const applications = apps.docs.map((d) => { const a = d.data(); byStatus[a.status] = (byStatus[a.status] || 0) + 1;
+    return { id: d.id, seekerUid: a.seekerUid, status: a.status, statusLabel: STATUS_LABEL[a.status] || a.status, appliedAt: a.appliedAt || null }; });
+  const trail = mod.docs.map((d) => d.data()).map((e) => ({ from: e.from, to: e.to, action: e.action, actorRole: e.actorRole, reason: e.reason || null,
+    at: e.at && e.at.toMillis ? e.at.toMillis() : null })).sort((a, b) => (a.at || 0) - (b.at || 0));
+  return { job: { ..._publicJobFields(jobId, j), statusLabel: JOB_LABEL[j.status] || j.status, employerUid: j.employerUid, description: j.description,
+    requirements: j.requirements, moderationReason: j.moderationReason || null }, applicationCounts: byStatus, applications, trail };
+};
+
+/** Expiry: closes Published / Paused vacancies whose closing date passed, so they leave search (the index removes
+    non-active jobs) and listings. Idempotent; capped per run. Exported as a scheduled function in index.js. */
+async function sweepExpiredJobs(db, nowMs) {
+  const now = Number(nowMs) || Date.now();
+  let closed = 0;
+  for (const status of ['active', 'paused']) {
+    const snap = await db.collection('jobs').where('status', '==', status).limit(300).get();
+    for (const d of snap.docs) {
+      const j = d.data();
+      if (!(j.expiresAt && j.expiresAt.toMillis() < now)) continue;
+      const done = await db.runTransaction(async (txn) => {
+        const s = await txn.get(d.ref);
+        const x = s.exists ? s.data() : null;
+        if (!x || !['active', 'paused'].includes(x.status) || !(x.expiresAt && x.expiresAt.toMillis() < now)) return false;
+        txn.update(d.ref, { status: 'closed', closedAt: Timestamp.now(), closedReason: 'expired', featured: false });
+        _jobEventInTxn(txn, d.ref, { from: x.status, to: 'closed', action: 'expired', actorUid: 'system', actorRole: 'system' });
+        return true;
+      });
+      if (done) closed++;
+    }
+  }
+  return { closed };
+}
+exports.sweepExpiredJobs = sweepExpiredJobs;
 
 // â”€â”€â”€ 3. closeJob â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 

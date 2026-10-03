@@ -1,3 +1,17 @@
+## [2026-10-03] — Jobs Board J2: moderation backend + expiry sweep — functions source, NOT deployed
+
+**Summary:** Vacancies are never published by their employer. Lifecycle: draft → pending_review → active (Published) →
+paused → closed → archived, plus changes_requested and rejected. New servicesDispatch ops: `submitJob`, `pauseJob`,
+`resumeJob`, `adminModerateJob` (audited; reason required for request_changes / reject / pause / close; featured is a
+separate attribute), `adminListJobs`, `adminGetJob`. Content edits on a Published vacancy return it to review. New
+scheduled function `jobsExpirySweep` (hourly).
+**Files:** `functions/jobs.js`, `functions/index.js` (jobsExpirySweep), `scripts/test-jobs-moderation.js` (42/0, 7
+mutants), `scripts/test-jobs-lifecycle.js` (53/0), `docs/JOBS_BOARD_CONVERGENCE.md`.
+**Database:** `jobs` gains approvedAt, moderationReason, moderatedBy/At, submittedAt, resubmittedAt, featuredAt/By,
+closedAt, closedReason; new subcollection `jobs/{id}/moderation`; writes `adminAudit` and `notifications`.
+**Breaking:** `createJob` no longer returns an active job. Ship with AdminOS Jobs and the updated pages.
+**Deploy:** servicesDispatch + jobsExpirySweep, after the lineage gate. NOT authorized.
+
 ## [2026-10-03] — Jobs Board J1: application state machine + vacancy hardening — functions source, NOT deployed
 
 **Summary:** `functions/jobs.js` (served via `servicesDispatch`) gets a server-enforced application lifecycle:
