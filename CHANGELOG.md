@@ -321,6 +321,63 @@ uploads cannot start while gated. **Breaking:** none.
   - `test-cart-universal`'s 2 failures are pre-existing (identical without this change).
 - **Security:** removes a browser payment + order path. **No server or rules change.** The `foodOrders` rules are tightened in the Food Hub programme.
 
+## [2026-10-03] - Fitness Hub CONTAINMENT (F0): the Fitness Hub takes no payment, makes no booking, writes no listing and shows nothing made-up as real
+
+**Branch `hosting/fitness-containment-on-72dca56`, built on live hosting `72dca56`. Hosting only. NOT deployed.**
+It follows the Food Hub containment pattern (`2e5e33b`). Owner rules 2026-10-03 apply, and so do owner decisions O-7 (community features move to
+the one Community Hub), O-2 (existing user-created fitness docs are hidden and kept) and O-6 (both register entry points stay).
+
+**What was live on `fitness-hub.html`:**
+
+- Every Book / Day pass / Nutritionist / Event / Connect / class-fee button started a client-priced payment through `SokoniPay.platformBook`, `gateway` or `waConnect`. The amount came from a public user-written `fitness_classes` doc, from localStorage or from a hard-coded deposit map. No intent was minted, and the live webhook credits such a payment to the payer.
+- `makeBooking` reported "Booking confirmed!" without any payment when SokoniPay was absent.
+- The browser wrote `fitness_bookings {status:'confirmed'}`.
+- There were about 12 wa.me hand-offs.
+- DEMO gyms, coaches, classes, nutritionists, clubs, challenges and events, with invented ratings and member counts, could be switched on by any user through a localStorage flag.
+- The "120+ Gyms Listed / 47 Counties" stats were invented.
+- `saveGymProfile` self-stamped `rating:5.0` and reported "published to the hub".
+- User-written class and club fields went into innerHTML unescaped, with the fee unquoted in an onclick. That is stored XSS.
+
+**Now:**
+
+- **Listings.** Gyms, Coaches, Classes and Nutrition show "Listings appear here once approved providers publish them", plus "Online booking for fitness is coming — not available yet".
+- **Book.** The tab states that online booking is not available yet. It has no form and no calendar.
+- **Register entry points.** "Register My Gym / Studio" (`HubRegister.open({hub:'fitness',category:'gym'})`) and "Register as Coach / Trainer" (`category:'nutrition'`) are unchanged.
+- **My Gym** points to the intake and to `provider-dashboard.html`. The local dashboard, the check-ins, "Share on WhatsApp", "Sell Memberships Online" and the marketing link are gone.
+- **Equipment** links to the marketplace at `category.html?cat=sports`. The second catalogue is gone.
+- **Community, Workouts and Ask Hub** link to `community.html` (O-7). No fitness-local feed, club, challenge, event or Ask Hub write or render remains.
+- **Progress** (user-private) is kept, now with `escapeHTML` and data-* handler arguments. The two badges that only booking or club-joining could earn are dropped.
+- **Firestore.** The only Firestore traffic left is the user's own `fitness_progress/{uid}`.
+- **Scripts.** `sokoni-pay.js` and `sokoni-intasend.js` stay loaded **only** for HubRegister's paid-plan path, which uses a server-minted `createPaymentIntent`. The page itself calls no SokoniPay method.
+
+**Files:** `fitness-hub.html`, `scripts/test-fitness-containment.js` (new), `scripts/test-fitness-containment-browser.js` (new, queued and not run), `CHANGELOG.md`.
+
+**Database:** none. No production reads or writes were made.
+
+- The existing `fitness_classes`, `fitness_clubs`, `fitness_bookings`, `fitness_equipment`, `fitness_gyms`, `fitness_requests`, `fitness_challenges`, `fitness_checkins` and `fitness_community_posts` docs are no longer rendered or written by this page. Their records are kept (O-2).
+- Rules hardening is a separate slice, F0-R. Until it ships, a direct client can still create these docs, and the live `ts_fitness_*` triggers still index them into Typesense.
+
+**API:** none.
+
+**Security:**
+
+- Removes client-priced payments that the live webhook could credit to the payer.
+- Removes the stored-XSS sinks (the fitness part of `431b5c7`, now moot because no user-written class or club is rendered; Progress is escaped).
+- Removes fake confirmations, browser-minted `confirmed` bookings and every WhatsApp hand-off.
+
+**Breaking:**
+
+- Users lose the fitness-local workouts feed, Ask Hub, clubs, challenges, events, gym dashboard and local booking calendar. These were unbacked or unmoderated.
+- Records of past "confirmed" bookings that were held in localStorage or `fitness_bookings` are no longer shown. They were browser-minted, not server-confirmed.
+
+**Tests:**
+
+- `node scripts/test-fitness-containment.js` gives 14/0.
+- `BASE=72dca56` gives 2/12, and a temp copy of the live file gives the same result. Only the two CONTROL rows pass there.
+- `node scripts/predeploy-syntax-gate.js` passed: 1798 JS files and 453 inline blocks parse. Each of the page's three inline scripts also passes `node --check`.
+
+**Deploy:** hosting, queued after the webhook P0. Every later hosting candidate must carry it.
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
