@@ -193,6 +193,18 @@
     var m = b && typeof b.paymentMethod === 'string' ? b.paymentMethod.trim() : '';
     return (m && m.toLowerCase() !== 'none') ? m : '—';
   }
+  /* RETURN PIN (sokoni-f3 bebc922, ONE PIN at RETURN on booking-pin-core): when the payment authority HOLDS the renter's
+     money (paymentStatus 'held'), rentalConfirmReturn requires the renter's 4-digit PIN. The seller only TYPES it; the
+     page never reads, renders or stores a PIN (the renter's own view is serviceBookingPin in the buyer's booking panel,
+     sokoni-b2). The server is the authority: the client checks only that 4 digits were typed. */
+  function pinRequired (b) { return !!b && b.paymentStatus === 'held'; }
+  function pinLine (b) {
+    var s = rentalStatus(b);
+    if (s === 'requested' || s === 'accepted' || s === 'payment_pending') return 'Return PIN: PIN arrives when the renter\u2019s payment is held.';
+    if (pinRequired(b) && s === 'paid_held') return 'Return PIN: the renter gives it to you when the equipment comes back (after hand-over).';
+    if (pinRequired(b) && (s === 'active' || s === 'return_pending')) return 'Return PIN: ask the renter for their PIN when the equipment is back.';
+    return null;
+  }
   function listingStatus (e) { return String((e && e.status) || ''); }
   function listingActions (e) { var s = listingStatus(e); return LISTING_NEXT[s] ? LISTING_NEXT[s].slice() : []; }
   function rentalActions (b) { var s = rentalStatus(b); return RENTAL_NEXT[s] ? RENTAL_NEXT[s].slice() : []; }
@@ -756,8 +768,15 @@
         if (a === 'decline') {
           return ui.declineAsk === b.id && !D ? '' : '<button type="button" class="cw-btn dan" data-act="rental-decline-ask" data-id="' + esc(b.id) + '"' + D + '>Decline</button>';
         }
+        if (a === 'confirm-return' && pinRequired(b)) {
+          /* No value attribute, ever: the field starts empty on every render, and a PIN is never written into markup. */
+          return '<label class="cw-meta" style="display:grid;gap:4px;flex-basis:100%">Renter\u2019s return PIN (4 digits)' +
+            '<input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" spellcheck="false" data-return-pin="' + esc(b.id) + '" aria-label="Renter\u2019s 4-digit return PIN"' + D + '></label>' +
+            '<button type="button" class="cw-btn pri" data-act="rental-confirm-return" data-id="' + esc(b.id) + '"' + D + '>Confirm return</button>';
+        }
         return '<button type="button" class="cw-btn' + (a === 'accept' || a === 'complete' ? ' pri' : '') + '" data-act="rental-' + a + '" data-id="' + esc(b.id) + '"' + D + '>' + esc(RENTAL_BTN[a]) + '</button>';
       }).join('');
+      var pl = pinLine(b);
       var decline = ui.declineAsk === b.id && !D
         ? '<label class="cw-meta" style="display:grid;gap:4px;margin-top:8px">Reason for declining (the renter sees it) *' +
           '<textarea rows="2" maxlength="500" data-decline-reason="' + esc(b.id) + '"></textarea></label>' +
@@ -769,6 +788,7 @@
         '<div class="cw-meta">Hire price calculated by SOKONI: ' + esc(fmtKes(b.totalAmount)) + (typeof b.depositAmount === 'number' && b.depositAmount > 0 ? ' · deposit ' + esc(fmtKes(b.depositAmount)) : '') + '.</div>' +
         (pay ? '<div class="cw-meta">Payment: ' + esc(pay) + '</div>' : '') +
         '<div class="cw-meta">Payment method: ' + esc(paymentMethodText(b)) + '</div>' +
+        (pl ? '<div class="cw-meta">' + esc(pl) + '</div>' : '') +
         (b.notes ? '<div class="cw-msg">' + esc(b.notes) + '</div>' : '') +
         (btns ? '<div class="cw-acts">' + btns + '</div>' : '') + decline + note(n) + '</div>';
     }
@@ -798,15 +818,24 @@
         if (!reason) { S.rentalNotes[id] = { kind: 'err', text: 'Give the renter a reason before declining.' }; return Promise.resolve(paintAll()); }
         payload.reason = reason.slice(0, 500);
       }
+      if (kind === 'confirm-return' && pinRequired(b)) {
+        var pe = host.querySelector ? host.querySelector('[data-return-pin="' + id + '"]') : null;
+        var pin = pe ? String(pe.value == null ? '' : pe.value).trim() : '';
+        if (pe) pe.value = '';
+        if (!/^\d{4}$/.test(pin)) { S.rentalNotes[id] = { kind: 'err', text: 'Enter the renter\u2019s 4-digit PIN.' }; return Promise.resolve(paintAll()); }
+        payload.pin = pin;   /* sent once, never kept: not in S, not in ui, never logged */
+      }
       ui.cancelAsk = null; ui.declineAsk = null;
       S.rentalNotes[id] = { text: 'Working…' }; paintAll();
       var run = dispatch(RENTAL_OP[kind], payload);
       /* rentalAccept is new in bb8634d; an older server knows only its alias rentalConfirm. */
       if (kind === 'accept') run = run.catch(function (e) { if (isUnknownOp(e)) return dispatch('rentalConfirm', payload); throw e; });
+      function clearPin () { var x = host.querySelector ? host.querySelector('[data-return-pin="' + id + '"]') : null; if (x) x.value = ''; }
       return run.then(function () {
+        clearPin(); delete payload.pin;
         S.rentalNotes[id] = { text: RENTAL_DONE[kind] };
         return loadRentals(S, true);
-      }, function (e) { S.rentalNotes[id] = { kind: 'err', text: errMsg(e) }; }).then(paintAll);
+      }, function (e) { clearPin(); delete payload.pin; S.rentalNotes[id] = { kind: 'err', text: errMsg(e) }; }).then(paintAll);
     }
 
     /* ── VERIFICATION ── */
