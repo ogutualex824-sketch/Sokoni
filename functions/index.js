@@ -11742,6 +11742,12 @@ exports.commerceDispatch = commerceDispatcher.commerceDispatch;
    Exported ONCE. Deploy scoped (--only functions:rentalPinOnRentalBooking) only after the providerDispatch booking-PIN
    release is live and the rental webhook path exists (sokoni-5b). */
 exports.rentalPinOnRentalBooking = require("./rental-pin").rentalPinOnRentalBooking;
+/* Rental deposit refunds (5b 2026-10-03): executor trigger, scheduled reconcile, and the audited B2C-minimum setter.
+   Exported ONCE each. The refunds hold until refundPolicy/b2c.minCents is set AND the repaired payment-adapters (1af3029) is on this tree. */
+const _rentalDepositJobs = require("./rental-deposit-refund-jobs");
+exports.rentalDepositRefundOnCreate  = _rentalDepositJobs.rentalDepositRefundOnCreate;
+exports.rentalDepositRefundReconcile = _rentalDepositJobs.rentalDepositRefundReconcile;
+exports.adminSetRefundPolicy         = _rentalDepositJobs.adminSetRefundPolicy;
 /* ── Auth Dispatcher — email verification challenge (issue / verify / status) ──
    Separate from commerceDispatch on purpose: authentication is a different blast radius,
    and keeping it apart keeps its rate limits, secrets and failure modes separable. Only
