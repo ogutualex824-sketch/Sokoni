@@ -249,6 +249,11 @@ non-empty array of `'merchant'|'provider'` without repeats. Provider-capable tod
 | `home` (exit) | leaving for the marketplace needs no shop. |
 | `signout` (exit) | every session must be able to end itself. |
 
+**Gated provider route (2026-10-03):** `rates` — `sessions:['provider']` ONLY, in group `services`
+(`requires:'module:services'`). The one generic rate-card editor, [[RATE_CARD_EDITOR]]. The rule "ungated provider
+routes are exactly home / messages / signout" is unchanged (test C2); `rates` is the only gated provider route (C2b)
+and the only provider-only route (C5b), so it never mounts in a merchant session.
+
 **Left merchant-only (gaps for b2/2f):** Payments/Financial Center (ledger is `sellerPayments`; wallet withdraw is
 `requestSellerPayout` + merchant entitlements — providers use `providerGetEarnings`/`providerRequestPayout`);
 Plan (`plans.html` = merchant `subGetStatus/subActivate`; providers use `providerSelectPlan`); Settings (a shop hub:

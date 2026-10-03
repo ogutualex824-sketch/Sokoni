@@ -1,3 +1,35 @@
+## [2026-10-03] - Provider rate-card editor — ONE generic module + merchant-v2 `#rates` (NOT deployed)
+
+**Hosting only.** No functions, rules, indexes or data changes. Built on the existing, LIVE providerDispatch ops
+(census: `functions/provider-ops.js` byte-identical to the live archive, sha256 `4cc1c0ae…`).
+
+- **New `sokoni-merchant-ratecard.js`** → `SokoniMerchantRateCard.mount(el, ctx)` with
+  `ctx = {callable, uid, session, filter:{categories?, serviceKind?}, readOnly?, editable?, reason?, onToast?}`.
+  Lists the provider's services (`providerListServices`), edits basic fields (`providerUpdateService`, changed fields
+  only), pauses/resumes (`providerToggleService`), adds (`providerAddService`), and edits the FULL advanced pricing
+  object (`providerUpdateServicePricing` — a REPLACE, so the editor always sends the complete loaded object + edits).
+  Money in KES → integer cents by string arithmetic; fractions of a cent refused. Preview via `bookingPreviewPrice`
+  (the checkout engine) — no browser price math. Server refusals shown verbatim. Read-only unless
+  `editable === true` and not `readOnly` (P0-F); writes re-check the rule. Note shown: "Changes apply to new bookings
+  only; existing bookings keep their price." Bookings are never read or written.
+- **Routes:** new `rates` (`sessions:['provider']`, kind native) in new MORE_GROUP `services`
+  (`requires:'module:services'`). Ungated provider routes stay exactly home/messages/signout.
+- **`merchant-v2.html`:** loads the module; `MODULES.rates` ctx = `editable` only from `S.editable.editable === true`
+  in a provider session. b2 mounts the same module at `mkt-rates` (exact ctx in `docs/RATE_CARD_EDITOR.md` §4.1).
+  sokoni-2f's `ent-rate-cards.js` is a separate entertainment system — not written to.
+- **Tests:** new `scripts/test-merchant-ratecard.js` 39/0 — runs the LIVE archive's real handlers (sanitiser, owner
+  check, plan cap, computePrice) over an in-memory Firestore; controls X-a partial payload → R2 red, X-b KES floats →
+  R3 red, X-c editable fails open → R7 red. `test-merchant-provider-session` 98/0 → 100/0 (C2 refined to UNGATED
+  provider routes; C5 refined to merchant routes; new C2b, C5b; S3 excludes provider-only routes);
+  `test-mv2-1-sidebar` 14/0 (R3 headings include Services); `test-merchant-routes` 65/0. Pre-existing, identical on a
+  HEAD export: test-merchant-capability 44/2 (rates now also listed in the two already-failing v1 counts),
+  test-merchant-shell-callables 18/1. Browser certification QUEUED (RAM floor).
+- **Security:** owner-only enforced server-side; client is UX only; all text escaped; read-only fails closed.
+  **Database / API / rules:** none. **Breaking:** none.
+- **Files:** `sokoni-merchant-ratecard.js` (new), `sokoni-merchant-routes.js`, `merchant-v2.html`,
+  `scripts/test-merchant-ratecard.js` (new), `scripts/test-merchant-provider-session.js`, `scripts/test-mv2-1-sidebar.js`,
+  `docs/RATE_CARD_EDITOR.md` (new), `docs/MERCHANT_V2_TARGET_ARCHITECTURE.md`, `CHANGELOG.md`.
+
 ## [2026-10-03] - Merchant V2 provider session: S.editable (P0-F) + VALID token confirmed (NOT deployed)
 
 **Owner invariant (2026-10-03):** application status is WORKFLOW, not authorization; every hub consumes ONE approval
