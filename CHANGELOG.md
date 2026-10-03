@@ -1,3 +1,43 @@
+## [2026-10-03] — AdminOS + Super Admin: Foundation reconciliation + rails, partner review/licence, "Partner plans & promotions" (hosting, NOT deployed)
+
+**Branch `hosting/admin-failures-on-chain`.** Static hosting only; every callable below is NOT deployed, so each surface
+says "not available yet" with evidence **unreadable** — never "none", never 0. Contracts: FOUNDATION_CONTRACT +
+ADDENDUM 2026-10-03, read against `impact.js` (feat/foundation-on-3a38f35 @ 8aedd10) and `financial-partner.js` (@ a64296e).
+
+**Summary.**
+1. **Foundation** (`sokoni-admin-foundation.js`) — Overview money: *Recorded (not proof of payment)*, *Verified paid*,
+   *Requires reconciliation*, *Reserved*, *Available (verified)* (the server's verified − reserved; never recomputed),
+   with reconciliation counts/amounts; tiles open the filtered list; banner **"Payouts can only use verified money."**
+   while anything is unverified, unclassified or unknown. Reconciliation tab: *Classify records*; per held donation
+   *Propose verified* (IntaSend reference; IntaSend's own refusal shown verbatim), *Propose closed — no payment*
+   (note), *Confirm* / *Withdraw proposal* only when a proposal exists (server refuses the proposer); a verify
+   proposal IntaSend did not confirm needs the tick "IntaSend could not be reached; I checked this payment in the
+   IntaSend dashboard" → `acknowledgeUnchecked:true`. Evidence labels "Confirmed by IntaSend" / "Confirmed manually
+   (IntaSend unreachable)". "Closing posts an adjustment that reverses the recorded credit; nothing is deleted."
+   Send support: rails *IntaSend M-PESA* / *IntaSend M-PESA B2B (Till/PayBill)* / *IntaSend PesaLink (bank)* /
+   *Manual* ("Pay manually outside SOKONI" → `destination.rail='manual'`); PesaLink bank picker from
+   `impactBankCodes` (+ "Refresh bank list from IntaSend"; automated BANK disabled until loaded); validation status /
+   account name / requiresReview on rows; Authorize on requiresReview needs "I reviewed the beneficiary details" →
+   `acknowledgeUnvalidated:true`. `isManualRail` now follows the server's `rail`. Stories: per-media processing state;
+   Publish/Schedule disabled with a reason unless every item is READY (server still decides).
+2. **Partner registrations** — verdicts Approve / Needs information / Reject (`approved|needs_information|rejected`,
+   note unless approving); filters add approved / needs_information; *Revoke review* (note) → `adminRevokeReview`;
+   *Record licence check* → `adminRecordLicenceCheck` ("Register URL or register name + reference — not an uploaded
+   document"). Approve grants "Registration reviewed by SOKONI"; licence checks are separate.
+3. **NEW `sokoni-admin-commercial.js`** — key `commercial`, nav "Partner plans & promotions", both consoles: tabs
+   Entitlements / Campaigns / Fulfilments (`adminListCommercial`), *Stop campaign* (reason) → `adminStopCampaign`,
+   Promotion requests (`adminListPromotionRequests` / `adminDecidePromotion`) — **moved out of the Foundation module**
+   (one place). Catalogue/prices read-only (commercial-entitlements.js). Amounts "KES n" or "—".
+
+**Security.** textContent/setAttribute only; results only after `ok:true`; both acknowledgement flags are sent only
+from an explicit per-row tick; separation of duties stays server-side.
+**Files.** `sokoni-admin-foundation.js`, `sokoni-admin-foundation.css`, `sokoni-admin-partner-registrations.js`,
+`sokoni-admin-commercial.js` (new), `admin-os.html`, `sokoni-aos.js`, `super-admin.html`,
+`scripts/test-admin-foundation.js` (125/0), `scripts/test-admin-partner-registrations.js` (34/0),
+`scripts/test-admin-commercial.js` (new, 36/0), `CHANGELOG.md`.
+**Functions / rules / DB / API: none changed here.** **Breaking:** partner review now sends verdict `approved`
+(server accepts the legacy `verified` too); the Foundation "Partner promotions" tab is gone (now in the commercial module).
+
 ## [2026-10-01] — AdminOS + Super Admin: "SOKONI Foundation" workspace (hosting, NOT deployed)
 
 **Branch `hosting/admin-failures-on-chain`.** Static hosting only. **Reads callables that are NOT deployed yet** (all but
