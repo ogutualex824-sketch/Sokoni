@@ -102,13 +102,13 @@ const MODULES = Object.freeze({
   diagnostics:       { label: 'Diagnostics',         section: 'diagnostics',       implemented: false, why: 'TECH_HUB_PENDING' },
   supportedDevices:  { label: 'Supported devices',   section: 'supporteddevices',  implemented: true },
   supportTickets:    { label: 'Support tickets',     section: 'supporttickets',    implemented: false, why: 'TECH_HUB_PENDING' },
-  remoteSupport:     { label: 'Remote support',      section: 'remotesupport',     implemented: false, why: 'TECH_HUB_PENDING' },
-  siteVisits:        { label: 'Site visits',         section: 'sitevisits',        implemented: false, why: 'TECH_HUB_PENDING' },
+  remoteSupport:     { label: 'Remote support',      section: 'remotesupport',     implemented: true }   /* Tech 4C: the provider's bookings by booking.serviceMode */,
+  siteVisits:        { label: 'Site visits',         section: 'sitevisits',        implemented: true }   /* Tech 4C: the provider's bookings by booking.serviceMode */,
   networkProjects:   { label: 'Network projects',    section: 'networkprojects',   implemented: false, why: 'TECH_HUB_PENDING' },
   cctvInstallations: { label: 'CCTV installations',  section: 'cctvinstallations', implemented: false, why: 'TECH_HUB_PENDING' },
   posSupport:        { label: 'POS support',         section: 'possupport',        implemented: false, why: 'TECH_HUB_PENDING' },
   projects:          { label: 'Projects',            section: 'projects',          implemented: false, why: 'TECH_HUB_PENDING' },
-  pickupDropoff:     { label: 'Pickup & drop-off',   section: 'pickupdropoff',     implemented: false, why: 'TECH_HUB_PENDING' },
+  pickupDropoff:     { label: 'Pickup & drop-off',   section: 'pickupdropoff',     implemented: true }   /* Tech 4C: the provider's bookings by booking.serviceMode */,
 });
 Object.values(MODULES).forEach((m) => Object.freeze(m));   /* each entry too — no caller can flip `implemented` */
 const MODULE_KEYS = Object.freeze(Object.keys(MODULES));

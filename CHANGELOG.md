@@ -1,3 +1,12 @@
+## [2026-10-03] — Tech Hub slice 4C (server, part): bookings record HOW they are delivered; Site visits / Remote support / Pickup & drop-off implemented — NOT deployed
+
+- **booking-service.js:** every booking stamps `serviceMode` from server facts only. In order: the customer's validated repairDetails, else the accepted quote's
+  serviceMode, else the service's single declared mode. It is never priced from.
+- **business-workspace MODULES:** remoteSupport, siteVisits and pickupDropoff are implemented:true. Each is the provider's own bookings filtered by serviceMode,
+  on the existing booking lifecycle (no new state machine).
+- **Still NOT_IMPLEMENTED (no authority exists, shown honestly):** supportTickets, networkProjects, cctvInstallations, posSupport, projects, diagnostics.
+- **Tests:** test-service-leads L-9b (14/0; BASE=25ef259 fails it). tech-service-profile 18/0, service-capabilities 15/0, business-workspace 30/0, sabotage 7/7.
+
 ## [2026-10-03] — adminUpdateFeatureFlag can no longer switch a flag ON by omission or widen a staged rollout — NOT deployed
 
 - Reported by sokoni-2f, fixed by sokoni-b2. functions/admin-os.js adminUpdateFeatureFlag (super-admin) had three defects:

@@ -102,6 +102,10 @@ const tomorrow = () => new Date(Date.now() + 2 * 86400000).toISOString().slice(0
   r = await call(BS.bookingCreateService, 'cust', { providerId: 'prov', serviceId: 's1', date: tomorrow(), startTime: '15:00', leadId: lid });
   ck('L-9', !!(r.ok && lead(lid).bookingId === r.ok.bookingId && lead(lid).bookingId !== bkId), 'an abandoned unpaid hold does not strand the accepted quote — it can be booked again', r.code ? r : lead(lid));
 
+  /* L-9b Tech 4C: the booking records HOW it is delivered, from the accepted quote (server fact, not the request) */
+  { const bkDoc = DOCS.get('providerBookings/' + lead(lid).bookingId) || {};
+    ck('L-9b', bkDoc.serviceMode === 'WORKSHOP', "a quote booking carries the quote's service mode (drives Site visits / Remote / Pickup views)", bkDoc.serviceMode); }
+
   /* L-10 a conversation hangs on the lead before any booking */
   seed();
   r = await call(L.leadCreate, 'cust', { providerId: 'prov', message: 'Do you fix Samsung TVs?' });

@@ -156,6 +156,13 @@ _h.bookingCreateService = async (req) => {
      provider sent it); the request carries only leadId. The lead converts inside this booking's transaction. */
   const leadId = _san(d.leadId, 128) || null;
   const leadCtx = leadId ? await require('./service-leads').quoteForBooking(db, { leadId, customerUid, providerId, serviceId }) : null;
+  /* Tech Hub 4C: HOW the service is delivered, stamped on the booking from server facts only — the customer's validated
+     repair details, else the accepted quote, else the service's single declared mode. Drives the provider's Site visits /
+     Remote support / Pickup & drop-off views. Never priced from. */
+  const _modes = (svc.techProfile && Array.isArray(svc.techProfile.serviceModes)) ? svc.techProfile.serviceModes : [];
+  const serviceMode = (repairDetails && repairDetails.serviceMode)
+    || (leadCtx && leadCtx.quote && leadCtx.quote.serviceMode)
+    || (_modes.length === 1 ? _modes[0] : '') || '';
   let durationMins, price, deposit, pricingSnapshot = null;
   if (leadCtx) {
     const q = leadCtx.quote;
@@ -279,6 +286,7 @@ _h.bookingCreateService = async (req) => {
       note: _san(d.note, 300),
       ...(repairDetails ? { repairDetails } : {}),
       ...(leadCtx ? { leadId } : {}),
+      ...(serviceMode ? { serviceMode } : {}),
       hubType: _san(d.hubType, 40) || 'services',
       idempotencyKey,
       /* Provenance — which path/engine/rev priced & reserved this booking, so a
