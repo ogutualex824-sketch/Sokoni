@@ -162,9 +162,9 @@ Functions deployment. Production deployment requires separate authorization.
 | # | Control | Owner |
 |---|---|---|
 | 1 | IntaSend webhook — KES 1 → KES 10,000 attack | sokoni-5b (Gates 5/9/10) |
-| 2 | SmartPOS electronic payment — server completion requires a confirmed payment | POS workstream (sokoni-5b POS lane) |
-| 3 | Finance OS seller payout — the browser cannot mark a payout completed | sokoni-b2 (taken; owner may reassign) |
-| 4 | Till / POS checkout gift card — the browser cannot declare or redeem payment | sokoni-5b POS lane (this brief) |
+| 2 | SmartPOS electronic payment — server completion requires a confirmed payment | sokoni-2f (owner-directed) — `fix/pos-server-payment-gate-on-3357619` @ e534623: settles on the provider-confirmed amount, KES only, closed tender list {cash, mpesa, card, wallet}, STK settles mpesa only; unit 17/0, 3 sabotages; emulator POS-01..15 not run (RAM) |
+| 3 | Finance OS seller payout — the browser cannot mark a payout completed | sokoni-2f (owner-directed) — `hosting/finos-payout-authority-on-72dca56` @ ea6493e: browser write and form removed, routes to AdminOS → adminProcessPayout; live rules already deny the client write; 6/0 |
+| 4 | Till / POS checkout gift card — the browser cannot declare or redeem payment | sokoni-5b POS lane (this brief). **Must build on e534623**, which already refuses `gift_card` (closed tender list) — the gift-card authority is added to that same `posCompleteCheckout`, not a second branch of it |
 
 The fee-record and browser-paid repairs are separate completed code changes (2ddaee5, 2f80fab) and are not reopened.
 
