@@ -749,6 +749,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <link rel="stylesheet" href="sokoni-merchant-dashboard.css">
 <link rel="stylesheet" href="sokoni-merchant-offers.css">
 <script src="sokoni-merchant-dashboard.js"></script>
+<script src="sokoni-pos-stk.js"></script>   <!-- M-PESA on the IntaSend POS rail (posInitiateIntasendPayment) -->
 <script src="sokoni-merchant-sell.js"></script>
 <script src="sokoni-merchant-inventory-ui.js"></script>
 <!-- B1. The offer ARITHMETIC lives in the model; the studio only edits it. -->
@@ -2420,8 +2421,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
          been paid: darajaSTKPush cannot report success, and verifyPaymentStatus
          cannot cause a charge. The record they meet on is written by the Daraja
          callback, which this client cannot reach at all. */
-      callStk: _callable('darajaSTKPush'),
-      callVerify: _callable('verifyPaymentStatus'),
+      /* 2026-10-01: darajaSTKPush is not deployed — every push failed as "internal". IntaSend POS rail. */
+      callStk: (window.SokoniPosStk ? window.SokoniPosStk.callStk(_callable) : null),
+      callVerify: (window.SokoniPosStk ? window.SokoniPosStk.callVerify(_callable) : null),
       onToast: toast,
       onPrint: function (job) {
         /* Routed through the shell's device layer, so a receipt printed from Sell uses

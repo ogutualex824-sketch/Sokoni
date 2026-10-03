@@ -13,6 +13,7 @@
      through SokoniCart; without this tag the pip cannot render a count. -->
 <script src="sokoni-cart.js"></script>
 <script src="shared-header.js"></script>
+<script src="sokoni-pos-stk.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>SOKONI SmartPOS — Checkout</title>
 <style>
@@ -2456,50 +2457,28 @@ const Checkout = (() => {
     _setState('PAYMENT');
 
     try {
-      if (window.SokoniPay) {
-        /* SokoniPay handles the push and calls onSuccess/onFail automatically */
-        SokoniPay.platformBook({
-          providerName:   _s.merchantId,
-          category:       'pos_checkout',
-          serviceDesc:    `POS Sale — ${_s.items.length} item(s)`,
-          totalAmount:    totals.total,
-          depositPct:     100,
-          providerPhone:  phone,
-          bookingDetails: { saleItems: _s.items.length, cashierId: _s.cashierId },
-          onSuccess: ref => {
-            _clearMpesaCountdown();
-            statusEl.className = 'mpesa-status success visible';
-            statusEl.textContent = '✅ Payment received';
-            _setState('CONFIRMING');
-            setTimeout(() => {
-              closeModal('mpesa-overlay');
-              _finalize('mpesa', [{ method:'mpesa', amount: totals.total, ref }], totals);
-            }, 800);
-          },
-          onFail: errMsg => {
-            _clearMpesaCountdown();
-            _showMpesaRecovery(errMsg || 'STK push was not completed');
-          },
-        });
-        /* Start the 90-second countdown regardless — UX progress indicator */
-        _startMpesaCountdown(90, () => {
-          if (_s.currentState === 'PAYMENT') {
-            _showMpesaRecovery('M-Pesa request timed out (90 seconds)');
-          }
-        });
-      } else {
-        /* Direct CF path — send STK, then poll posCheckPaymentStatus */
-        const sendFn = firebase.functions().httpsCallable('posSendMpesa');
-        const sent   = await sendFn({ phone, amount: totals.total, merchantId: _s.merchantId });
-        const ref    = sent?.data?.ref || '';
-
-        statusEl.className = 'mpesa-status pending visible';
-        statusEl.innerHTML = '<span class="mpesa-spinner">⏳</span> Waiting for customer to approve on their phone…';
-        actionRow.style.display = 'none';
-
-        _startMpesaCountdown(90, () => _showMpesaRecovery('M-Pesa request timed out (90 seconds)'));
-        _startMpesaPoll(ref, phone, totals);
+      /* 2026-10-01 — ONE rail for a till sale: posInitiateIntasendPayment.
+         posSendMpesa is not deployed (every push failed as "internal"), and the SokoniPay branch
+         booked a till sale as a platform booking — the wrong rail for money the shop is owed.
+         One key per sale attempt: a resend after a failure/timeout raises a new prompt; a
+         duplicate of the same attempt returns the same postill_ reference. The sale is finalised
+         ONLY when posCheckPaymentStatus reports the IntaSend webhook's confirmation. */
+      if (!_s.mpesaAttemptKey) _s.mpesaAttemptKey = (window.SokoniPosStk ? window.SokoniPosStk._attemptKey(_s.merchantId) : ('till_' + _s.merchantId + '_' + Date.now()));
+      const initFn = firebase.functions().httpsCallable('posInitiateIntasendPayment');
+      const sent   = await initFn({ merchantId: _s.merchantId, idempotencyKey: _s.mpesaAttemptKey, phone,
+                                    amountKES: totals.total, narrative: 'POS sale' });
+      const ref    = (sent && sent.data && sent.data.ref) || '';
+      if (!ref || (sent.data.state === 'failed')) {
+        _s.mpesaAttemptKey = null;                 /* this attempt is over — the next send is a new one */
+        throw new Error((sent && sent.data && sent.data.error) || 'M-Pesa did not accept the payment request. Try again.');
       }
+
+      statusEl.className = 'mpesa-status pending visible';
+      statusEl.innerHTML = '<span class="mpesa-spinner">⏳</span> Waiting for customer to approve on their phone…';
+      actionRow.style.display = 'none';
+
+      _startMpesaCountdown(90, () => { _s.mpesaAttemptKey = null; _showMpesaRecovery('M-Pesa request timed out (90 seconds)'); });
+      _startMpesaPoll(ref, phone, totals);
     } catch (err) {
       _clearMpesaCountdown();
       _showMpesaRecovery(err.message || 'Failed to send M-Pesa request');
@@ -2556,10 +2535,12 @@ const Checkout = (() => {
           _setState('CONFIRMING');
           setTimeout(() => {
             closeModal('mpesa-overlay');
-            _finalize('mpesa', [{ method:'mpesa', amount: totals.total, ref: res.data.transactionRef || ref, phone }], totals);
+            _s.mpesaAttemptKey = null;
+            _finalize('mpesa', [{ method:'mpesa', amount: totals.total, ref, phone }], totals);   /* the postill_ reference the server confirmed */
           }, 800);
         } else if (res.data?.status === 'failed') {
           _clearMpesaCountdown();
+          _s.mpesaAttemptKey = null;
           _showMpesaRecovery(res.data.reason || 'Customer cancelled the payment');
         }
         /* 'pending' → keep polling */

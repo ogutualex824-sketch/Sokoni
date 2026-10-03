@@ -106,6 +106,7 @@
 <script src="sokoni-receipt-id.js" defer></script>
 <script src="sokoni-receipt.js" defer></script>
 <script src="sokoni-merchant-data.js" defer></script>
+<script src="sokoni-pos-stk.js" defer></script>   <!-- M-PESA on the IntaSend POS rail (posInitiateIntasendPayment) -->
 <script src="sokoni-merchant-sell.js" defer></script>
 <script src="sokoni-pos-context.js" defer></script>
 
@@ -454,8 +455,11 @@
            cannot report success, verifyPaymentStatus cannot cause a charge, and
            the record they meet on is written by the Daraja callback, which this
            client cannot reach at all. */
-        callStk: (window.sokoniCallable ? window.sokoniCallable('darajaSTKPush') : null),
-        callVerify: (window.sokoniCallable ? window.sokoniCallable('verifyPaymentStatus') : null),
+        /* 2026-10-01: darajaSTKPush is not deployed (Daraja outbound retired), so every push failed as
+           "internal". The live rail is posInitiateIntasendPayment + posCheckPaymentStatus; sokoni-pos-stk.js
+           translates the engine's two calls onto it. Request and confirmation stay separate calls. */
+        callStk: (window.sokoniCallable && window.SokoniPosStk ? window.SokoniPosStk.callStk(window.sokoniCallable) : null),
+        callVerify: (window.sokoniCallable && window.SokoniPosStk ? window.SokoniPosStk.callVerify(window.sokoniCallable) : null),
         onToast: function (t) { sub(String(t || '')); },
         onPrint: function () { return Promise.resolve(); }
       });
@@ -618,5 +622,7 @@
   } else { setTimeout(WANT ? diag : run, 50); }
 }());
 </script>
+<!-- Self-update: without this a cashier device keeps serving the till it cached before a deploy (CLAUDE.md PWA rule). -->
+<script src="/sw-register.js" defer></script>
 </body>
 </html>
