@@ -1,3 +1,11 @@
+## [2026-10-03] — Finance OS: no browser authority over seller payouts (sokoni-finance-os, owner P0; hosting, NOT deployed)
+
+**Problem:** financial-os.html let one admin's browser write payouts/{id}.status = completed with no server check, no second admin, no provider evidence.
+**Findings (read-only, production):** payouts holds **0** documents — it is the RETIRED FinOS ledger (requestPayout and finosRequestBankPayout both refuse). The live ruleset f259c0b5 has ONE read-only payouts match and no catch-all, so the client write was already DENIED — a dead, misleading control rather than a working exploit. Real seller payouts are payoutRequests (7) via the wallet authority adminProcessPayout (Mark-Paid guard 45a837d live by traffic pin).
+**Change:** removed the Mark-as-Completed form, the per-row Approve button and both client write functions; the card now sends admins to AdminOS → Payments and states completion = provider confirmation.
+**Tests:** scripts/test-finos-payout-authority.js 6/0 (FO-13 also green against the live ruleset); the live page fails FO-01, FO-01b and FO-x.
+**Open (wallet authority, FROZEN engine — owner decision):** manual Mark Paid is single-admin attestation (settled_manually), not provider confirmation or a second admin; webhook COMPLETED/REVERSED on rejected/failed payouts can release/credit twice (project payout guard census).
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;

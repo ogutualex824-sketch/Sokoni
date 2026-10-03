@@ -392,12 +392,15 @@ a{color:inherit;text-decoration:none}
             </div>
           </div>
           <div class="card">
-            <div class="card-hd"><span class="card-title">Approve Bank Payout</span></div>
+            <div class="card-hd"><span class="card-title">Seller payouts</span></div>
             <div class="card-body">
-              <p style="font-size:11px;color:var(--sub);margin-bottom:10px">Bank transfer payouts require manual confirmation after processing in your bank portal.</p>
-              <div class="fg"><label class="fl">Payout ID</label><input type="text" class="fi" id="bank-payout-id" placeholder="Payout document ID"></div>
-              <div class="fg"><label class="fl">Bank Reference</label><input type="text" class="fi" id="bank-ref" placeholder="Bank transaction reference"></div>
-              <button class="btn btn-g" onclick="_approveBankPayout()">Mark as Completed</button>
+              <!-- 2026-10-03 (owner P0, sokoni-finance-os): this card let ONE admin's browser write payouts/{id}.status = 'completed'
+                   with no server check, no second admin and no provider evidence. That collection is the RETIRED FinOS ledger
+                   (both of its creators, requestPayout / finosRequestBankPayout, now refuse; production holds 0 documents) and
+                   the live rules already deny the write. Seller payouts are processed ONLY by the wallet payout authority
+                   (adminProcessPayout, AdminOS → Payments); a payout is completed only when the provider confirms it. -->
+              <p style="font-size:12px;color:var(--sub);margin-bottom:10px;line-height:1.5">Seller payouts are processed in <strong>AdminOS → Payments</strong> by the wallet payout authority. A payout is marked completed only when the payment provider confirms it — never from this page.</p>
+              <a class="btn btn-g" href="admin-os.html#payments">Open AdminOS Payments</a>
             </div>
           </div>
           <div class="card">
@@ -792,22 +795,13 @@ window._loadPayouts=function(){
         '<td><span class="badge '+(p.method==='bank_transfer'?'bp':'bb')+'">'+_esc(p.method||'?')+'</span></td>'+
         '<td>'+_payoutStatusBadge(p.status)+'</td>'+
         '<td style="font-size:11px;color:var(--sub)">'+_relTime(p.createdAt)+'</td>'+
-        '<td>'+(p.method==='bank_transfer'&&p.status==='pending_review'?'<button class="btn btn-g btn-sm" onclick="_quickApprovePayout(\''+p.id+'\')">Approve</button>':'')+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+(p.status==='pending_review'?'Process in AdminOS → Payments':'—')+'</td>'+
       '</tr>';
     }).join('');
   }).catch(function(e){document.getElementById('payoutsTbl').innerHTML='<tr><td colspan="9" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
 };
-window._quickApprovePayout=function(payoutId){
-  var ref=prompt('Bank transfer reference:');
-  if(!ref)return;
-  document.getElementById('bank-payout-id').value=payoutId;
-  document.getElementById('bank-ref').value=ref;
-  _approveBankPayoutDirect(payoutId,ref);
-};
-function _approveBankPayoutDirect(payoutId,bankRef){
-  _fs().collection('payouts').doc(payoutId).update({status:'completed',bankRef,completedAt:firebase.firestore.FieldValue.serverTimestamp()})
-  .then(function(){_toast('Bank payout marked completed','green');_loadPayouts();}).catch(function(e){_toast(e.message,'red');});
-}
+/* Removed 2026-10-03 (owner P0): _quickApprovePayout / _approveBankPayoutDirect wrote payouts/{id}.status='completed'
+   from the browser. Payout completion belongs to the server payout authority and the provider's confirmation only. */
 
 /* ── Refunds ── */
 function _loadRefunds(){
@@ -990,12 +984,6 @@ window._reverseLedger=async function(){
   if(!(await SK.dialog.confirm('Reverse ledger entry '+id+'? This is an emergency action.', null, null, { title: 'Reverse ledger entry', variant: 'danger', confirmLabel: 'Reverse' })))return;
   _cf('reverseTransaction')({ledgerId:id,reason})
   .then(function(){_toast('Ledger entry reversed','green');}).catch(function(e){_toast(e.message,'red');});
-};
-window._approveBankPayout=function(){
-  var id=(document.getElementById('bank-payout-id').value||'').trim();
-  var ref=(document.getElementById('bank-ref').value||'').trim();
-  if(!id||!ref)return _toast('Payout ID and bank reference required','red');
-  _approveBankPayoutDirect(id,ref);
 };
 window._generateReceipt=function(){
   var txn=(document.getElementById('rec-txn').value||'').trim();
