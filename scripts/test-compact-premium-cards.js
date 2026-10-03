@@ -150,7 +150,8 @@ Object.keys(PG).filter((f) => TECH_DIR_PAGES.indexOf(f) < 0).forEach((f) => {
      /class="pg-ico"[^>]*>📩</.test(body)
      /* the same openBookingFor handler: inline, or (plumbing.html, 2026-10-03) one delegated listener reading the
         escaped data-pg-book attribute — no provider value is interpolated into inline JS */
-     && (/openBookingFor\(/.test(body) || (/data-pg-book="/.test(body) && /openBookingFor\(book\.getAttribute\('data-pg-book'\)/.test(PG[f])))
+     && (/openBookingFor\(/.test(body) || (/data-pg-book="/.test(body) && /openBookingFor\(book\.getAttribute\('data-pg-book'\)/.test(PG[f]))
+         || (/data-cr-book="/.test(body) && /openBookingFor\(book\.getAttribute\('data-cr-book'\)/.test(PG[f])))
      && !/toggleFollow/.test(body) && violations(body).length === 0, violations(body));
 });
 /* shop cards */

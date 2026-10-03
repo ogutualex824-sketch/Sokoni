@@ -105,6 +105,9 @@
   var CATEGORY_ALIASES = {
     cleaning:      ['cleaning', 'laundry', 'housekeeping'],
     laundry:       ['laundry', 'mamafua', 'cleaning'],
+    /* Car Hub (2026-10-03): car rental providers are filed under several spellings across intakes. */
+    'car-rental':  ['car-rental', 'car_rental', 'car-hire', 'car_hire'],
+    mechanic:      ['mechanic', 'mechanics', 'garage', 'auto_services', 'auto-repair'],
     'home-repairs':['home-repairs', 'handyman', 'plumbing', 'electrical'],
     entertainment: ['entertainment', 'mc', 'dj', 'live-band', 'comedian', 'dancer'],
     beauty:        ['beauty', 'hair-beauty'],

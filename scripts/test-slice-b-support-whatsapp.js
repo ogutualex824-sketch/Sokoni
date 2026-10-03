@@ -96,7 +96,9 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
   const remaining = Object.keys(HUB).map((f) => f + '=' + (read(f).match(/wa\.me/g) || []).length).join(' ');
   console.log('      remaining wa.me (legacy: contact chips, registrations, share): ' + remaining);
   const req = [['car-hub.html', 'SOKONI Roadside SOS', "location.href = 'support.html?topic=sos"], ['car-hub.html', 'Vehicle Transport Request', "location.href = 'support.html?topic=request"],
-    ['mechanics.html', 'SOKONI ROADSIDE SOS', "location.href = 'support.html?topic=sos"], ['home-services.html', 'Quote Request*', "location.href = 'support.html?topic=quote"], ['tech-hub.html', 'IT Service Request', "location.href = 'support.html?topic=request"]];
+    ['mechanics.html', 'SOKONI ROADSIDE SOS', "location.href = 'support.html?topic=sos"], /* home-services quote: superseded 2026-10-03 (f3 6b2a0a9) — a quote request now goes to a chosen provider through
+       the ONE lead authority (SokoniLeads / providerDispatch leadCreate), no longer a support ticket. Still in SOKONI. */
+    ['home-services.html', 'function requestQuotes(){', "goFindType(_hsTypeKeyFor("], ['tech-hub.html', 'IT Service Request', "location.href = 'support.html?topic=request"]];
   ck('W11 request-shaped hops (SOS ×2, transport, quote, IT request) now open a support ticket with the details prefilled', req.every(([f, near, to]) => { const t = read(f); const i = t.indexOf(near); return i > 0 && t.slice(i, i + 1200).includes(to); }), null);
 
   /* ── W12+ Slice B2 (owner 2026-09-30): WhatsApp is ONLY for OTP, invoices and marketing. Every

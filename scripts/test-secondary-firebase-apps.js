@@ -120,7 +120,6 @@ const BASELINE = {
   'b2b.html':                  ['b2b-fee'],
   'business-os.html':          ['bos-load', 'bos-sync'],
   'car-hub.html':              ['ch-rt', 'ch-write'],
-  'car-rental.html':           ['cr-write'],
   'commerce-os.html':          ['commerce-os'],
   'developer-portal.html':     ['developer-portal'],
   'digital.html':              ['dh-wd'],

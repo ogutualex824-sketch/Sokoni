@@ -162,8 +162,8 @@
     <button type="button" class="mc-search-btn" onclick="applyFilters()">🔍 Search</button>
   </div>
   <div class="mc-stats">
-    <div class="mc-stat"><strong id="statMechs"></strong> Verified Mechanics</div>
-    <div class="mc-stat"><strong id="statGarages"></strong> Garages</div>
+    <div class="mc-stat"><strong id="statMechs">—</strong> Verified Mechanics</div>
+    <div class="mc-stat"><strong id="statGarages">—</strong> Garages</div>
     <div class="mc-stat"><strong>M-Pesa</strong> Accepted</div>
     <div class="mc-stat"><strong>24/7</strong> Roadside Help</div>
   </div>
@@ -192,111 +192,24 @@
   </div>
   <div class="mc-grid" id="mechGrid"></div>
 
-  <!-- REGISTER YOUR GARAGE -->
+  <!-- REGISTER YOUR GARAGE — 2026-10-03 (Car Hub containment): the old form wrote mechanics/{MCH…} from the browser with
+       rating 5.0 and no owner uid (refused by the rules) and then announced "now live". Listing now goes through the ONE
+       application intake (HubRegister → applications → AdminOS review → approval provisions mechanics/{uid}). -->
   <div class="mc-register" id="registerSection">
     <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">🏪 List Your Garage or Mechanic Service</div>
-    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:20px;">Get discovered by thousands of car owners. Free listing  get booking requests on SOKONI instantly.</div>
-
-    <div class="mc-register-g">
-      <div>
-        <label class="mc-label">Garage / Business Name *</label>
-        <input type="text" id="rgName" class="mc-input" placeholder="e.g. Kamau Auto Garage">
-        <label class="mc-label">Your Phone (WhatsApp) *</label>
-        <input type="tel" id="rgPhone" class="mc-input" placeholder="07XXXXXXXX">
-        <label class="mc-label">Location / Area *</label>
-        <select id="rgLoc" class="mc-input">
-          <option value="nairobi">Nairobi</option>
-          <option value="mombasa">Mombasa</option>
-          <option value="kisumu">Kisumu</option>
-          <option value="nakuru">Nakuru</option>
-          <option value="eldoret">Eldoret</option>
-          <option value="thika">Thika</option>
-          <option value="nyeri">Nyeri</option>
-          <option value="meru">Meru</option>
-          <option value="embu">Embu</option>
-          <option value="machakos">Machakos</option>
-          <option value="naivasha">Naivasha</option>
-          <option value="nanyuki">Nanyuki</option>
-          <option value="kisii">Kisii</option>
-          <option value="kericho">Kericho</option>
-          <option value="kakamega">Kakamega</option>
-          <option value="kitale">Kitale</option>
-          <option value="bungoma">Bungoma</option>
-          <option value="malindi">Malindi</option>
-          <option value="mobile">Mobile / Come to Customer</option>
-        </select>
-        <label class="mc-label">Specific Area / Street</label>
-        <input type="text" id="rgArea" class="mc-input" placeholder="e.g. Industrial Area, Kirinyaga Rd">
-      </div>
-      <div>
-        <label class="mc-label">Type *</label>
-        <select id="rgType" class="mc-input">
-          <option value="garage">🔧 Garage / Workshop</option>
-          <option value="mobile">🔧 Mobile Mechanic</option>
-          <option value="bodyshop">🎨 Body Shop</option>
-          <option value="dealer">🔍 Dealer Service Centre</option>
-          <option value="tyre">🔄 Tyre Shop</option>
-          <option value="electrician">⚡ Auto Electrician</option>
-        </select>
-        <label class="mc-label">Primary Specialisation *</label>
-        <select id="rgSpec" class="mc-input">
-          <option value="general">🔧 General Repair</option>
-          <option value="electrical">⚡ Auto Electrical</option>
-          <option value="tyres">🔄 Tyres &amp; Alignment</option>
-          <option value="bodywork">🎨 Body Work &amp; Paint</option>
-          <option value="diagnosis">🔍 Computer Diagnostics</option>
-          <option value="aircon">❄️ Air Conditioning</option>
-          <option value="transmission">⚙️ Gearbox &amp; Transmission</option>
-          <option value="4x4">🛻 4x4 &amp; Offroad</option>
-          <option value="mobile">🔧 Mobile / Roadside</option>
-        </select>
-        <label class="mc-label">Years of Experience *</label>
-        <input type="number" id="rgYears" class="mc-input" placeholder="e.g. 10" min="1">
-        <label class="mc-label">Consultation / Labour Rate (KES/hr)</label>
-        <input type="number" id="rgRate" class="mc-input" placeholder="e.g. 1500">
-      </div>
-    </div>
-
-    <label class="mc-label">Services Offered (comma-separated)</label>
-    <input type="text" id="rgServices" class="mc-input" placeholder="e.g. Engine overhaul, Brake pads, Oil change, Suspension, Wheel alignment⬦">
-
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer;"><input type="checkbox" id="ftDiag" style="accent-color:#f97316;"> 🔍 OBD Diagnostics</label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer;"><input type="checkbox" id="ftMpesa" style="accent-color:#f97316;"> 💳 M-Pesa Accepted</label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer;"><input type="checkbox" id="ftWarranty" style="accent-color:#f97316;"> ✅ Parts Warranty</label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer;"><input type="checkbox" id="ft247" style="accent-color:#f97316;"> ⏰ 24/7 Emergency</label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer;"><input type="checkbox" id="ftTow" style="accent-color:#f97316;"> 🚗 Towing Service</label>
-    </div>
-
-    <label class="mc-label">About Your Garage / Bio</label>
-    <textarea id="rgBio" class="mc-input" style="min-height:72px;resize:vertical;" placeholder="Briefly describe your garage, experience, brands you service, what makes you stand out⬦"></textarea>
-
-    <button type="button" onclick="registerGarage()" style="width:100%;padding:14px;background:linear-gradient(135deg,#f97316,#ea580c);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;">🏪 List My Garage on SOKONI</button>
-    <div id="rgMsg" style="margin-top:10px;font-size:12px;min-height:14px;"></div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:16px;">Apply once. SOKONI reviews your application; once approved you appear here and customers can book you in SOKONI.</div>
+    <button type="button" onclick="registerGarage()" style="width:100%;padding:14px;background:linear-gradient(135deg,#f97316,#ea580c);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-family:inherit;font-size:14px;">Apply to list your garage</button>
   </div>
 </div>
 
-<!-- ASK THE HUB -->
+<!-- ASK A MECHANIC — 2026-10-03: the "Ask the Hub / LIVE REQUESTS" box saved to localStorage with a phone number and
+     rendered a feed only this browser could see. Asking now goes to a chosen mechanic, privately, as a lead
+     (providerDispatch leadCreate): they reply in SOKONI Messages and can send a quote. -->
 <section style="max-width:1200px;margin:0 auto;padding:0 18px 28px;">
   <div style="background:linear-gradient(135deg,rgba(249,115,22,0.07),rgba(234,88,12,0.04));border:1px solid rgba(249,115,22,0.2);border-radius:20px;padding:24px;">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-      <span style="font-size:26px;">🔧</span>
-      <div>
-        <div style="font-size:15px;font-weight:900;color:white;">Ask the Mechanics Hub</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Post a job request � mechanics near you respond directly</div>
-      </div>
-      <span style="margin-left:auto;font-size:10px;padding:3px 10px;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.25);border-radius:6px;color:#f97316;font-weight:800;">LIVE REQUESTS</span>
-    </div>
-    <textarea id="askHubText" placeholder="e.g. Need a mechanic in Lang'ata, my Subaru Forester won't start. Looking for someone with OBD diagnostics..." style="width:100%;padding:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;min-height:80px;resize:vertical;outline:none;font-family:inherit;transition:border-color .2s;" onfocus="this.style.borderColor='rgba(249,115,22,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'"></textarea>
-    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-      <select id="askHubLoc" style="flex:1;min-width:130px;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.8);font-size:16px;outline:none;font-family:inherit;">
-        <option value="">📍 Any Location</option>
-        <option>Nairobi</option><option>Mombasa</option><option>Kisumu</option><option>Nakuru</option><option>Eldoret</option><option>Thika</option>
-      </select>
-      <input type="tel" id="askHubPhone" placeholder="Your phone (07...)" style="flex:1;min-width:130px;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
-      <button type="button" onclick="postAskHub('mechanics')" style="padding:10px 20px;background:linear-gradient(135deg,#f97316,#ea580c);border:none;border-radius:10px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;">📡 Broadcast Request</button>
-    </div>
-    <div id="askHubFeed" style="margin-top:18px;display:flex;flex-direction:column;gap:10px;"></div>
+    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">🔧 Ask a Mechanic</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:12px;">Tap 💬 on a mechanic above to describe the problem. They reply in SOKONI Messages and can send you a quote — you accept it before anything is booked or paid. Your requests and quotes are in <a href="service-requests.html" style="color:#f97316;font-weight:700;">My service requests</a>.</div>
+    <button type="button" onclick="document.getElementById('mechGrid').scrollIntoView({behavior:'smooth',block:'start'})" style="padding:10px 20px;background:linear-gradient(135deg,#f97316,#ea580c);border:none;border-radius:10px;color:white;font-weight:900;font-family:inherit;cursor:pointer;">Choose a mechanic</button>
   </div>
 </section>
 
@@ -341,41 +254,17 @@
   </div>
   <div class="mc-grid" id="partsGrid"></div>
   <div style="text-align:center;margin-top:16px;">
-    <button type="button" onclick="toggleSellPartsForm()" style="padding:11px 24px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.22);border-radius:12px;color:#f97316;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">+ Sell a Part</button>
-  </div>
-  <div id="sellPartsForm" style="display:none;margin-top:16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:20px;">
-    <div style="font-size:13px;font-weight:800;color:white;margin-bottom:14px;">List a Part for Sale</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <input type="text" id="partName" class="mc-input" placeholder="Part name (e.g. Brake Pads)">
-      <input type="text" id="partFitment" class="mc-input" placeholder="Fits (e.g. Toyota Prado 2012-2019)">
-      <input type="number" id="partPrice" class="mc-input" placeholder="Price (KES)">
-      <select id="partCond" class="mc-input"><option value="new">Brand New</option><option value="used">Used</option><option value="refurb">Refurbished</option></select>
-      <input type="tel" id="partPhone" class="mc-input" placeholder="Your phone (WhatsApp)">
-      <select id="partLoc" class="mc-input">
-        <option value="nairobi">Nairobi</option><option value="mombasa">Mombasa</option><option value="kisumu">Kisumu</option><option value="nakuru">Nakuru</option><option value="eldoret">Eldoret</option>
-      </select>
-    </div>
-    <button type="button" onclick="listPart()" style="width:100%;padding:12px;background:linear-gradient(135deg,#f97316,#ea580c);border:none;border-radius:11px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;margin-top:12px;">List Part for Sale</button>
-    <div id="partMsg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
+    <button type="button" onclick="listPart()" style="padding:11px 24px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.22);border-radius:12px;color:#f97316;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">Sell auto parts on SOKONI — apply</button>
   </div>
 </section>
 
-<!-- REPAIR TRACKER -->
+<!-- REPAIR TRACKER — 2026-10-03: looked up localStorage "bookings" by a browser-made ref. Real bookings, their status,
+     payment and booking PIN are in My Bookings (providerBookings, server-written). -->
 <section style="max-width:1200px;margin:0 auto;padding:0 18px 28px;">
   <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:24px;">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
-      <span style="font-size:24px;">🔧</span>
-      <div>
-        <div style="font-size:15px;font-weight:900;color:white;">Repair Tracker</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Track the status of your ongoing repair or service</div>
-      </div>
-    </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <input type="text" id="trackJobRef" placeholder="Enter Booking Ref (e.g. MCH123456)" style="flex:1;min-width:200px;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;">
-      <button type="button" onclick="trackRepair()" style="padding:12px 20px;background:linear-gradient(135deg,#f97316,#ea580c);border:none;border-radius:11px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🔍 Track</button>
-    </div>
-    <div id="trackResult" style="margin-top:16px;"></div>
-    <div id="activeRepairs" style="margin-top:16px;"></div>
+    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">🔧 Your repairs</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:12px;">Your bookings, their status, payment and booking PIN are in My Bookings.</div>
+    <a href="bookings.html" style="display:inline-block;padding:12px 20px;background:linear-gradient(135deg,#f97316,#ea580c);border-radius:11px;color:white;font-weight:900;font-size:13px;text-decoration:none;">Open My Bookings</a>
   </div>
 </section>
 
@@ -541,14 +430,15 @@ async function loadMechs(){
 
   if(!_fsCache){const fs=await _loadFs(); if(fs!==null) _fsCache=fs;}
 
+  /* The registry only (mechanics/{uid}, projected on approval). The old merge of localStorage "listings" showed this
+     browser's never-saved registrations as live garages. Demo rows stay localhost / opt-in only. */
   const fsIds=new Set((_fsCache||[]).map(m=>m.id));
-  let local=[]; try{local=JSON.parse(localStorage.getItem("sokoniMechanics"))||[];}catch(e){}
-  _all=[...(_fsCache||[]),...local.filter(m=>!fsIds.has(m.id)),...(_demoAllowed?DEMO_MECHS.filter(d=>!fsIds.has(d.id)&&!local.some(l=>l.id===d.id)):[])];
+  _all=[...(_fsCache||[]),...(_demoAllowed?DEMO_MECHS.filter(d=>!fsIds.has(d.id)):[])];
 
   const verified=_all.filter(m=>m.verified).length;
   const garages =_all.filter(m=>m.type==="garage"||m.type==="bodyshop"||m.type==="dealer"||m.type==="tyre"||m.type==="electrician").length;
   const s=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-  s("statMechs",verified+"+"); s("statGarages",garages+"+");
+  if(_fsCache!==null){ s("statMechs",String(verified)); s("statGarages",String(garages)); }
 
   applyFilters();
 }
@@ -583,172 +473,74 @@ function renderGrid(){
   const grid=document.getElementById("mechGrid");
   if(!grid) return;
   if(!_filtered.length){
-    grid.innerHTML=`<div class="mc-empty"><div style="font-size:48px;margin-bottom:14px;">🔧</div><p style="margin-bottom:14px;">No mechanics found for this filter.</p><button type="button" onclick="document.getElementById('srchMech').value='';document.getElementById('srchLoc').value='';filterMechs('all',document.querySelector('.mc-pill'))" style="padding:10px 20px;background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.25);color:#f97316;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;">Reset</button></div>`;
+    grid.innerHTML=_fsCache===null&&!_all.length
+      ? '<div class="mc-empty"><div style="font-size:48px;margin-bottom:14px;">⚠️</div><p>Could not load mechanics — this is a connection problem, not an empty list.</p><button type="button" onclick="location.reload()" class="mc-book-btn" style="max-width:200px;margin:0 auto;">Retry</button></div>'
+      : '<div class="mc-empty"><div style="font-size:48px;margin-bottom:14px;">🔧</div><p style="margin-bottom:14px;">No mechanics found'+(_activeCat!=="all"||(document.getElementById("srchMech")?.value||"")?' for this filter':' yet')+'.</p></div>';
     return;
   }
+  const e=safeHtml;
   grid.innerHTML=_filtered.map(m=>{
-    const stars="★".repeat(Math.round(m.rating||5))+"☆".repeat(5-Math.round(m.rating||5));
-    const feats=(m.features||[]).map(f=>`<span class="mc-service-tag ${f==="mpesa"?"cert":f==="warranty"?"cert":""}">${FEAT_LBL[f]||f}</span>`).join("");
-    const svcs=(m.services||[]).slice(0,4).map(s=>`<span class="mc-service-tag">${s}</span>`).join("");
-    return `<div class="mc-card">
-      <div class="mc-card-top">
-        <div class="mc-avatar">${m.emoji||"🔧"}</div>
-        <div style="flex:1;min-width:0;">
-          <div class="mc-name">${m.name} ${m.verified?`<span style="font-size:8px;background:rgba(113,255,0,0.1);color:#71ff00;padding:1px 5px;border-radius:3px;border:1px solid rgba(113,255,0,0.2);">✓ Verified</span>`:""}</div>
-          <div class="mc-type">${TYPE_LBL[m.type]||m.type}</div>
-          <div class="mc-loc">📍 ${m.area||m.location}</div>
-        </div>
-      </div>
-      <div class="mc-rating"><span class="stars">${stars}</span><span>${m.rating||"5.0"}</span><span></span><span>${m.jobs||0} jobs</span><span></span><span>${m.years||1} yrs exp</span></div>
-      <div class="mc-services">${feats}${svcs}</div>
-      ${m.bio?`<div class="mc-bio">"${m.bio.substring(0,90)}${m.bio.length>90?"⬦":""}"</div>`:""}
-      <div class="mc-meta">
-        ${m.rate?`<span class="mc-meta-chip"> KES ${Number(m.rate).toLocaleString()}/hr</span>`:""}
-        <span class="mc-meta-chip">📍 ${(m.location||"Kenya").charAt(0).toUpperCase()+(m.location||"Kenya").slice(1)}</span>
-      </div>
-      <div class="mc-actions">
-        <button type="button" class="mc-book-btn" onclick="openBookMech('${m.id}')">📅 Book Now</button>
-        ${m.phone?`<a href="tel:${m.phone}" class="mc-call-btn">📞</a>`:""}
-      <div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);"><button type="button" onclick="window.SokoniSocial&&SokoniSocial.toggleFollow('mech_'+(m.id||m.name),m.name||"Mechanic",this,'mechanic')" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">❤ Follow</button><button type="button" onclick="window.SokoniSocial&&SokoniSocial.openShareModal({id:'mech_'+m.id,name:m.name||"Mechanic",category:'Mechanic',type:'mechanic'})" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:8px;font-size:12px;cursor:pointer;flex-shrink:0;">📣</button></div>
-    </div>`;
+    /* Ratings, job counts and years only where the record carries them — the old card printed 5★, "0 jobs" and
+       "1 yrs exp" for every new listing. Every value is escaped (stored-XSS: name / bio / services were raw). */
+    const r=typeof m.rating==="number"&&m.rating>0?m.rating:null;
+    const ratingHtml=r?'<span class="stars">'+"★".repeat(Math.round(r))+"☆".repeat(5-Math.round(r))+'</span><span>'+r.toFixed(1)+'</span>'+(m.jobs?'<span>'+Number(m.jobs)+' jobs</span>':''):'<span style="color:rgba(255,255,255,0.45);">New on SOKONI</span>';
+    const feats=(m.features||[]).map(f=>'<span class="mc-service-tag">'+e(FEAT_LBL[f]||f)+'</span>').join("");
+    const svcs=(m.services||[]).slice(0,4).map(x=>'<span class="mc-service-tag">'+e(x)+'</span>').join("");
+    const uid=_mechUid(m);
+    return '<div class="mc-card">'+
+      '<div class="mc-card-top"><div class="mc-avatar">'+e(m.emoji||"🔧")+'</div><div style="flex:1;min-width:0;">'+
+        '<div class="mc-name">'+e(m.name||"Mechanic")+(m.verified===true?' <span style="font-size:8px;background:rgba(113,255,0,0.1);color:#71ff00;padding:1px 5px;border-radius:3px;border:1px solid rgba(113,255,0,0.2);">✓ Verified</span>':'')+'</div>'+
+        '<div class="mc-type">'+e(TYPE_LBL[m.type]||m.type||"")+'</div>'+
+        ((m.area||m.location)?'<div class="mc-loc">📍 '+e(m.area||m.location)+'</div>':'')+
+      '</div></div>'+
+      '<div class="mc-rating">'+ratingHtml+(m.years?'<span>'+Number(m.years)+' yrs exp</span>':'')+'</div>'+
+      '<div class="mc-services">'+feats+svcs+'</div>'+
+      (m.bio?'<div class="mc-bio">"'+e(String(m.bio).substring(0,90))+(String(m.bio).length>90?'…':'')+'"</div>':'')+
+      '<div class="mc-meta">'+(m.rate?'<span class="mc-meta-chip">KES '+Number(m.rate).toLocaleString()+'/hr</span>':'')+'</div>'+
+      '<div class="mc-actions">'+
+        (uid?'<button type="button" class="mc-book-btn" data-mc-book="'+e(uid)+'" data-mc-name="'+e(m.name||"")+'">📅 Book</button>'+
+             '<button type="button" class="mc-call-btn" aria-label="Ask '+e(m.name||"this mechanic")+' in SOKONI" title="Ask in SOKONI" data-mc-ask="'+e(uid)+'" data-mc-name="'+e(m.name||"")+'">💬</button>'
+            :'<span style="font-size:11px;color:rgba(255,255,255,0.4);">Not yet bookable in SOKONI</span>')+
+      '</div></div>';
   }).join("");
 }
-
-/* """""""""""""""""""""""""""""""
+/* A bookable mechanic is an approved account: mechanics/{uid} (doc id = Auth uid) or an explicit uid field. Browser-made
+   ids (MCH…, demo M…) are not accounts and are never offered a booking. */
+function _mechUid(m){ const u=m&&(m.uid||m.id); return (typeof u==="string"&&/^[A-Za-z0-9_-]{20,128}$/.test(u))?u:""; }
+document.addEventListener("click",function(ev){
+  const t=ev.target&&ev.target.closest?ev.target:null; if(!t) return;
+  const b=t.closest("[data-mc-book]"), a=t.closest("[data-mc-ask]");
+  if(b){ openBookMech(b.getAttribute("data-mc-book"), b.getAttribute("data-mc-name")); return; }
+  if(a){
+    const uid=a.getAttribute("data-mc-ask"), nm=a.getAttribute("data-mc-name");
+    if(window.SokoniLeads&&SokoniLeads.ask) SokoniLeads.ask({providerId:uid,providerName:nm});
+    else if(window.SokoniInbox&&SokoniInbox.openChat) SokoniInbox.openChat({otherUid:uid,otherName:nm,type:"customer-provider",context:"Mechanics · SOKONI"});
+    else location.href="messages.html";
+  }
+});
+/* """"""""""""""""""""""""""""
    BOOKING MODAL
 """"""""""""""""""""""""""""""" */
 let _activeMech=null;
-function openBookMech(id){
-  _activeMech=_all.find(m=>m.id===id); if(!_activeMech) return;
-  const m=_activeMech;
-  const today=new Date().toISOString().slice(0,10);
-  document.getElementById("mechModalTitle").textContent=`Book  ${m.name}`;
-  document.getElementById("mechModalBody").innerHTML=`
-    <div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:12px;margin-bottom:16px;">
-      <div style="font-size:36px;">${m.emoji||"x"}</div>
-      <div>
-        <div style="font-size:14px;font-weight:800;color:white;">${m.name}</div>
-        <div style="font-size:11px;color:#f97316;font-weight:700;">${TYPE_LBL[m.type]||m.type}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);">📍 ${m.area||m.location}</div>
-        ${m.rate?`<div style="font-size:13px;font-weight:900;color:#f97316;margin-top:2px;">KES ${Number(m.rate).toLocaleString()}/hr</div>`:""}
-      </div>
-    </div>
-    <label class="mc-label">Your Name *</label>
-    <input type="text" id="bkMName" class="mc-input" placeholder="Full name">
-    <label class="mc-label">Your Phone *</label>
-    <input type="tel" id="bkMPhone" class="mc-input" placeholder="07XXXXXXXX">
-    <label class="mc-label">Job / Problem Description *</label>
-    <select id="bkMService" class="mc-input">
-      <option value="">-- Select service --</option>
-      ${(m.services||[]).map(s=>`<option value="${s}">${s}</option>`).join("")}
-      <option value="Other / Not listed">Other / Not listed</option>
-    </select>
-    <label class="mc-label">Describe the Problem</label>
-    <textarea id="bkMDesc" class="mc-input" style="min-height:64px;resize:vertical;" placeholder="e.g. Car won't start, strange noise from front left, engine warning light on⬦"></textarea>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-      <div><label class="mc-label">Preferred Date</label><input type="date" id="bkMDate" class="mc-input" min="${today}" value="${today}"></div>
-      <div><label class="mc-label">Preferred Time</label>
-        <select id="bkMTime" class="mc-input">
-          <option>Morning (7am12pm)</option>
-          <option>Afternoon (12pm5pm)</option>
-          <option>Evening (5pm8pm)</option>
-          <option>ASAP / Flexible</option>
-        </select>
-      </div>
-    </div>
-    <label class="mc-label">Your Location (for mobile mechanic)</label>
-    <input type="text" id="bkMLoc" class="mc-input" placeholder="e.g. Kilimani, near Junction Mall">
-    <button type="button" onclick="confirmMechBooking('${m.id}')" style="width:100%;padding:14px;background:linear-gradient(135deg,#f97316,#ea580c);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-bottom:8px;">📋 Send Booking</button>
-    <a href="support.html?topic=booking" class="sk-support-cta" style="display:block;text-align:center;margin-top:8px;padding:11px;border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;text-decoration:none;background:rgba(113,255,0,0.05);">🛟 Need help? Contact Support</a>
-    <button type="button" onclick="closeMechModal()" style="width:100%;padding:11px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.4);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button>
-    <div id="bkMMsg" style="margin-top:10px;font-size:12px;min-height:14px;"></div>`;
-  document.getElementById("mechOverlay").style.display="flex";
-  document.body.style.overflow="hidden";
+/* 2026-10-03: the old modal saved a "booking" to localStorage, issued a KES 0 invoice, handed off through
+   SokoniPay.waConnect with category 'plumbing', and said "Booking recorded". A booking is now made by the ONE engine
+   (SokoniBookService: bookingCreateService → createPaymentIntent(service_booking) → IntaSend → held → booking PIN;
+   SOKONI's 5% comes out of the provider's settlement, server-side). */
+function openBookMech(uid,name){
+  if(!/^[A-Za-z0-9_-]{20,128}$/.test(String(uid||""))) return;
+  if(window.SokoniBookService&&typeof SokoniBookService.open==="function"){ SokoniBookService.open({providerId:String(uid),providerName:name||""}); return; }
+  showMechToast("Booking is still loading — please try again in a moment.");
 }
-
-function confirmMechBooking(id){
-  const name=document.getElementById("bkMName")?.value.trim();
-  const phone=document.getElementById("bkMPhone")?.value.trim();
-  const svc=document.getElementById("bkMService")?.value;
-  const desc=document.getElementById("bkMDesc")?.value.trim();
-  const date=document.getElementById("bkMDate")?.value;
-  const time=document.getElementById("bkMTime")?.value;
-  const loc=document.getElementById("bkMLoc")?.value.trim();
-  const msgEl=document.getElementById("bkMMsg");
-  if(!name||!phone||!svc){if(msgEl){msgEl.textContent="a️ Fill your name, phone and select a service";msgEl.style.color="#ff9800";}return;}
-  const m=_all.find(x=>x.id===id); if(!m) return;
-  const ref="MCH"+Date.now().toString().slice(-6);
-  const wa=m.phone?m.phone.replace(/^0/,"254").replace(/\D/g,""):"";
-  let bks=[]; try{bks=JSON.parse(localStorage.getItem("sokoniMechBookings"))||[];}catch(e){}
-  bks.unshift({ref,mechId:id,mechName:m.name,name,phone,svc,desc,date,time,loc,status:"sent",createdAt:Date.now()});
-  localStorage.setItem("sokoniMechBookings",JSON.stringify(bks));
-  if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:svc,category:'Mechanic',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'WhatsApp Booking',paymentRef:ref,sellerName:m.name,date:new Date().toISOString(),notes:loc||''});},700);
-  if(!wa){if(msgEl){msgEl.textContent="a️ Contact not available";msgEl.style.color="#ff9800";}return;}
-  const plainMsg=`🔧 *SOKONI Mechanics  Booking Request*\n\n👤 Client: ${name}\n📞 Phone: ${phone}\n🔧 Service: ${svc}\n📅 Date: ${date||"Flexible"}  ${time}\n${loc?`📍 Location: ${loc}\n`:""}\n${desc?`x Problem:\n${desc}\n\n`:""}`+`Please confirm this booking. Thank you! 🙏`;
-  if(typeof SokoniPay!=='undefined'){
-    try{
-      closeMechModal();
-      SokoniPay.waConnect(m.phone, plainMsg, {
-        providerName: m.name,
-        category: 'plumbing',
-        serviceDesc: svc+'  '+m.name
-      });
-      return;
-    }catch(e){}
-  }
-  const msg=encodeURIComponent(`🔧 *SOKONI Mechanics  Booking Request*\n\nRef: ${ref}\n\n`+plainMsg);
-  if(msgEl){msgEl.innerHTML=`✅ Booking recorded in SOKONI. Ref: <strong>${safeHtml(ref)}</strong>`;msgEl.style.color="#71ff00";}
-  /* no WhatsApp hand-off (owner 2026-09-30) */
-  void msg; setTimeout(closeMechModal,2000);
-}
-
-function closeMechModal(){
-  document.getElementById("mechOverlay").style.display="none";
-  document.body.style.overflow="";
-}
-window.openBookMech=openBookMech; window.confirmMechBooking=confirmMechBooking; window.closeMechModal=closeMechModal;
+function closeMechModal(){ const o=document.getElementById("mechOverlay"); if(o) o.style.display="none"; document.body.style.overflow=""; }
+window.openBookMech=openBookMech; window.closeMechModal=closeMechModal;
 
 /* """""""""""""""""""""""""""""""
    REGISTER GARAGE
 """"""""""""""""""""""""""""""" */
-async function registerGarage(){
-  const name=document.getElementById("rgName")?.value.trim();
-  const phone=document.getElementById("rgPhone")?.value.trim();
-  const years=Number(document.getElementById("rgYears")?.value||0);
-  const msgEl=document.getElementById("rgMsg");
-  if(!name||!phone||!years){if(msgEl){msgEl.textContent="a️ Fill all required fields";msgEl.style.color="#ff9800";}return;}
-
-  const features=[];
-  if(document.getElementById("ftDiag")?.checked)    features.push("diag");
-  if(document.getElementById("ftMpesa")?.checked)   features.push("mpesa");
-  if(document.getElementById("ftWarranty")?.checked) features.push("warranty");
-  if(document.getElementById("ft247")?.checked)     features.push("247");
-  if(document.getElementById("ftTow")?.checked)     features.push("tow");
-
-  const typeEmoji={garage:"🔧",mobile:"🔧",bodyshop:"🎨",dealer:"🔍",tyre:"🔄",electrician:"⚡"};
-  const garage={
-    id:"MCH"+Date.now(),name,phone,
-    type:document.getElementById("rgType")?.value||"garage",
-    spec:document.getElementById("rgSpec")?.value||"general",
-    location:document.getElementById("rgLoc")?.value||"nairobi",
-    area:document.getElementById("rgArea")?.value.trim()||"",
-    years,rate:Number(document.getElementById("rgRate")?.value||0)||null,
-    services:(document.getElementById("rgServices")?.value||"").split(",").map(s=>s.trim()).filter(Boolean),
-    features,bio:document.getElementById("rgBio")?.value.trim()||"",
-    rating:5.0,jobs:0,verified:false,
-    emoji:typeEmoji[document.getElementById("rgType")?.value||"garage"]||"🔧",
-    createdAt:Date.now()
-  };
-
-  let local=[]; try{local=JSON.parse(localStorage.getItem("sokoniMechanics"))||[];}catch(e){}
-  local.unshift(garage); localStorage.setItem("sokoniMechanics",JSON.stringify(local));
-  if(msgEl){msgEl.textContent="Saving listing⬦";msgEl.style.color="#c8ff80";}
-  const saved=await _saveFs(garage); _fsCache=null;
-  if(msgEl){msgEl.innerHTML=saved?`✅ <strong>${safeHtml(garage.name)}</strong> is now live on SOKONI Mechanics! Customers can find and book you.`:`✅ Listing saved locally. Will sync when connection is restored.`;msgEl.style.color="#71ff00";}
-  ["rgName","rgPhone","rgArea","rgYears","rgRate","rgServices","rgBio"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
-  ["ftDiag","ftMpesa","ftWarranty","ft247","ftTow"].forEach(id=>{const el=document.getElementById(id);if(el)el.checked=false;});
-  await loadMechs();
-  window.scrollTo({top:0,behavior:"smooth"});
+function registerGarage(){
+  /* HubRegister → applications (auth required) → AdminOS → applicationDecide → mechanics/{uid}. */
+  if(window.HubRegister&&typeof HubRegister.open==="function"){ HubRegister.open({hub:'car',category:'mechanic'}); return; }
+  showMechToast("The application form is still loading — please try again in a moment.");
 }
 window.registerGarage=registerGarage;
 
@@ -759,37 +551,8 @@ loadMechs();
 ============================================================= */
 let _sosType = '';
 
-function postAskHub(hub) {
-  const text = (document.getElementById('askHubText')?.value || '').trim();
-  const loc  = document.getElementById('askHubLoc')?.value || '';
-  const phone= (document.getElementById('askHubPhone')?.value || '').trim();
-  if (!text) { showMechToast('Please describe what you need'); return; }
-  const key = 'askHub_' + hub;
-  let reqs = []; try { reqs = JSON.parse(localStorage.getItem(key)) || []; } catch(e) {}
-  reqs.unshift({ id:'REQ'+Date.now(), text, loc: loc||'Any Location', phone, ts: Date.now() });
-  localStorage.setItem(key, JSON.stringify(reqs.slice(0,30)));
-  document.getElementById('askHubText').value = '';
-  document.getElementById('askHubPhone').value = '';
-  renderAskHubFeed(hub);
-  showMechToast('Request broadcast to mechanics near you!');
-}
-
-function renderAskHubFeed(hub) {
-  const feed = document.getElementById('askHubFeed'); if (!feed) return;
-  let reqs = []; try { reqs = JSON.parse(localStorage.getItem('askHub_'+hub)) || []; } catch(e) {}
-  if (!reqs.length) { feed.innerHTML = ''; return; }
-  feed.innerHTML = '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Recent Requests</div>' +
-    reqs.slice(0,5).map(r => `
-      <div style="padding:12px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-          <div style="width:26px;height:26px;border-radius:7px;background:rgba(249,115,22,0.12);display:flex;align-items:center;justify-content:center;font-size:12px;">🔧</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.4);">📍 ${r.loc} � ${mechTimeAgo(r.ts)}</div>
-          <div style="margin-left:auto;font-size:9px;padding:2px 7px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:4px;color:#4ade80;font-weight:700;">OPEN</div>
-        </div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.75);line-height:1.5;">${safeHtml(r.text)}</div>
-        ${r.phone ? `<div style="margin-top:8px;"><a href="support.html?topic=request&ref=${encodeURIComponent(r.id||'')}&desc=${encodeURIComponent('I can help with this SOKONI mechanics request: '+r.text)}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);border-radius:8px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a></div>` : ''}
-      </div>`).join('');
-}
+function postAskHub(){ document.getElementById('mechGrid')?.scrollIntoView({behavior:'smooth',block:'start'}); }
+function renderAskHubFeed(){}
 
 function mechTimeAgo(ts) {
   const s = Math.floor((Date.now()-ts)/1000);
@@ -859,8 +622,9 @@ const DEMO_PARTS = [
 ];
 
 function loadParts() {
-  let custom = []; try { custom = JSON.parse(localStorage.getItem('sokoniParts')) || []; } catch(e) {}
-  return [...custom, ...(_demoAllowed?DEMO_PARTS.filter(d => !custom.some(c => c.id === d.id)):[])];
+  /* 2026-10-03: "listed" parts lived only in this browser's localStorage. No parts authority exists here yet, so the grid
+     is empty in production (demo rows localhost / opt-in only) and selling goes through the auto-parts application. */
+  return _demoAllowed ? DEMO_PARTS.slice() : [];
 }
 
 function filterParts() {
@@ -874,7 +638,7 @@ function filterParts() {
 
 function renderPartsGrid(parts) {
   const grid = document.getElementById('partsGrid'); if (!grid) return;
-  if (!parts.length) { grid.innerHTML = '<div class="mc-empty"><div style="font-size:40px;margin-bottom:10px;">🔩</div><div>No parts found</div></div>'; return; }
+  if (!parts.length) { grid.innerHTML = '<div class="mc-empty"><div style="font-size:40px;margin-bottom:10px;">🔩</div><div>No parts listed on SOKONI yet.</div></div>'; return; }
   const condLabel = { new:'Brand New', used:'Used', refurb:'Refurbished' };
   const condColor = { new:'rgba(34,197,94,0.12)', used:'rgba(249,115,22,0.1)', refurb:'rgba(59,130,246,0.1)' };
   grid.innerHTML = parts.map(p => `
@@ -898,24 +662,10 @@ function renderPartsGrid(parts) {
     </div>`).join('');
 }
 
-function toggleSellPartsForm() {
-  const f = document.getElementById('sellPartsForm');
-  if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
-}
-
+function toggleSellPartsForm() { listPart(); }
 function listPart() {
-  const name  = (document.getElementById('partName')?.value||'').trim();
-  const fits  = (document.getElementById('partFitment')?.value||'').trim();
-  const price = Number(document.getElementById('partPrice')?.value||0);
-  const phone = (document.getElementById('partPhone')?.value||'').trim();
-  const msgEl = document.getElementById('partMsg');
-  if (!name || !price || !phone) { if(msgEl) { msgEl.textContent='Fill name, price and phone'; msgEl.style.color='#ff9800'; } return; }
-  const part = { id:'PT'+Date.now(), name, fits, price, phone, cond: document.getElementById('partCond')?.value||'new', loc: document.getElementById('partLoc')?.value||'nairobi', seller:'Private Seller' };
-  let local = []; try { local = JSON.parse(localStorage.getItem('sokoniParts'))||[]; } catch(e) {}
-  local.unshift(part); localStorage.setItem('sokoniParts', JSON.stringify(local));
-  filterParts();
-  toggleSellPartsForm();
-  showMechToast('Part listed successfully!');
+  if (window.HubRegister && typeof HubRegister.open === 'function') { HubRegister.open({ hub: 'car', category: 'auto-parts' }); return; }
+  showMechToast('The application form is still loading — please try again in a moment.');
 }
 window.toggleSellPartsForm = toggleSellPartsForm;
 window.listPart = listPart;
@@ -923,43 +673,9 @@ window.listPart = listPart;
 /* =============================================================
    REPAIR TRACKER
 ============================================================= */
-function trackRepair() {
-  const ref = (document.getElementById('trackJobRef')?.value||'').trim().toUpperCase();
-  const res = document.getElementById('trackResult');
-  if (!ref) { if(res) res.innerHTML = '<div style="color:#ff9800;font-size:12px;">Enter a booking reference</div>'; return; }
-  let bks = []; try { bks = JSON.parse(localStorage.getItem('sokoniMechBookings'))||[]; } catch(e) {}
-  const b = bks.find(x => (x.ref||'').toUpperCase() === ref);
-  if (!b) { if(res) res.innerHTML = `<div style="padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;font-size:12px;color:rgba(255,255,255,0.5);">No booking found for <strong style="color:white;">${safeHtml(ref)}</strong>. Check the ref sent via WhatsApp.</div>`; return; }
-  const statusMap = { sent:'📤 Sent', confirmed:'✅ Confirmed', in_progress:'🔧 In Progress', done:'✅ Complete', cancelled:'❌ Cancelled' };
-  const statusColor = { sent:'#f97316', confirmed:'#22c55e', in_progress:'#3b82f6', done:'#22c55e', cancelled:'#ef4444' };
-  if(res) res.innerHTML = `
-    <div style="padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-        <div style="font-size:13px;font-weight:900;color:white;">${safeHtml(b.mechName||'Mechanic')}</div>
-        <div style="font-size:11px;padding:3px 10px;border-radius:6px;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.2);color:${statusColor[b.status]||'#f97316'};font-weight:700;">${statusMap[b.status]||'Sent'}</div>
-      </div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:4px;">Service: <span style="color:rgba(255,255,255,0.8);">${safeHtml(b.svc||'')}</span></div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:4px;">Date: <span style="color:rgba(255,255,255,0.8);">${b.date||'Flexible'}</span></div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.3);">Ref: ${safeHtml(b.ref)}</div>
-    </div>`;
-}
+function trackRepair() { location.href = 'bookings.html'; }
 window.trackRepair = trackRepair;
-
-function loadActiveRepairs() {
-  const el = document.getElementById('activeRepairs'); if(!el) return;
-  let bks = []; try { bks = JSON.parse(localStorage.getItem('sokoniMechBookings'))||[]; } catch(e) {}
-  const active = bks.filter(b => b.status !== 'done' && b.status !== 'cancelled').slice(0,3);
-  if (!active.length) return;
-  el.innerHTML = '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Your Active Bookings</div>' +
-    active.map(b => `<div style="padding:10px 14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;margin-bottom:6px;display:flex;align-items:center;gap:10px;">
-      <span style="font-size:20px;">🔧</span>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.8);">${safeHtml(b.mechName||'Mechanic')}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);">${safeHtml(b.svc||'')} � ${b.date||'Flexible'}</div>
-      </div>
-      <div style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(249,115,22,0.1);color:#f97316;font-weight:700;">${b.ref||''}</div>
-    </div>`).join('');
-}
+function loadActiveRepairs() {}
 
 /* =============================================================
    SERVICE REMINDERS
@@ -1013,16 +729,17 @@ filterParts();
 loadActiveRepairs();
 renderReminders();
 </script>
-<script src="sokoni-commission-rates.js"></script>
-<script src="sokoni-pay.js"></script>
-<script src="sokoni-intasend.js" defer></script>
 <script src="seo.js" defer></script>
 <script src="nav-active.js" defer></script>
 <script src="analytics.js" defer></script>
 <script src="scroll-memory.js" defer></script>
 <script src="scroll-top.js" defer></script>
 <script src="sokoni-config.js" defer></script>
-<script src="sokoni-invoice.js"></script><script src="sokoni-ui-extras.js" defer></script>
+<script src="sokoni-ui-extras.js" defer></script>
+<script src="firebase.js" type="module"></script>
+<script src="sokoni-book-service.js" defer></script>
+<script src="sokoni-leads.js" defer></script>
+<script src="sokoni-inbox.js" defer></script>
   <script src="sw-register.js" defer></script>
 <script>
 /* Nav state init */

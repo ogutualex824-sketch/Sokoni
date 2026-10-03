@@ -1,3 +1,24 @@
+## [2026-10-03] - Car Hub C1a: car rental + mechanics contained onto the provider registry, booking engine and lead/intake authorities (NOT deployed)
+
+**Branch hosting/carhub-containment-on-adb5f4d.** Plan + authority map: docs/CAR_HUB_CONVERGENCE.md.
+
+- **car-rental.html**:
+  - real rental providers (SokoniProviders car-rental) replace 7 hard-coded cars;
+  - 📩 = SokoniBookService (booking engine → IntaSend → held → booking PIN; SOKONI 5% provider-paid server-side); 💬 = SokoniLeads.ask.
+  - Removed: the browser STK push with a browser amount/reference and no provider, the false "deposit confirmed / provider notified", the carRentals second-app write, invented stats/price guide/reviews, "insurance included".
+- **mechanics.html**:
+  - listing escaped (stored XSS) with no invented 5★/jobs/years and no raw tel:;
+  - 📅 Book = SokoniBookService for an approved account; 💬 = SokoniLeads.ask;
+  - register garage / sell parts = HubRegister (applications → AdminOS); repairs → My Bookings.
+  - Removed: the localStorage booking + waConnect(category 'plumbing') + "Booking recorded", the mechanics/{MCH…} write + "now live", the local parts market, the ask-hub broadcast and the local repair tracker.
+- **sokoni-providers.js**: category aliases car-rental (car_rental, car-hire) and mechanic (garage, auto_services).
+- **Tests**:
+  - test-carhub-containment-static 28/0 (raw-tel mutation caught).
+  - test-compact-premium-cards retargeted (delegated handler).
+  - test-secondary-firebase-apps cr-write baseline removed (9/0).
+  - test-slice-b-support-whatsapp W11 home-services row → lead path. W10 (electrical/phone-repair) pre-existing.
+- **Database / API / rules changes**: none (the pages stop writing carRentals/mechanics/localStorage records).
+
 ## [2026-10-03] - Home Services: quote requests go through the one lead authority (b2 4F); owner fee model recorded (NOT deployed)
 
 **Branch hosting/home-services-leads-on-a7a00e7** (merge 56c173d of f3 9b48b06 + b2 a7a00e7, resolved per hunk). Full note: docs/HOME_SERVICES_BOOKINGS.md.
