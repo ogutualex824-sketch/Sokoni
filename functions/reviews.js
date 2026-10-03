@@ -422,57 +422,21 @@ exports.markReviewHelpful = onCall({ region: "us-central1" }, async (req) => {
 // ── adminModerateReview ───────────────────────────────────────────────────────
 exports.adminModerateReview = onCall({ region: "us-central1" }, async (req) => {
   if (!_isAdmin(req)) throw new HttpsError("permission-denied", "Admins only.");
-  const { reviewId, action, note } = req.data || {};
-  /* kind: 'review' (reviews/{id}) | 'unboxing' (unboxingReviews/{id}) — the same state machine and history */
-  const kind = (req.data || {}).kind === 'unboxing' ? 'unboxing' : 'review';
-  const COLL = kind === 'unboxing' ? 'unboxingReviews' : 'reviews';
-  if (!reviewId || typeof reviewId !== "string" || !/^[A-Za-z0-9_-]{1,200}$/.test(reviewId)) throw new HttpsError("invalid-argument", "reviewId required.");
-  /* The shared moderation vocabulary (one with the report queue): pending → approved | rejected |
-     changes_requested | archived | removed. 'flagged' (legacy) moderates like pending. Restore = back to pending. */
-  const T = {
-    approve:         { to: "approved",          from: ["pending", "flagged", "changes_requested", "rejected", "archived"] },
-    reject:          { to: "rejected",          from: ["pending", "flagged", "changes_requested", "approved"] },
-    request_changes: { to: "changes_requested", from: ["pending", "flagged"] },
-    archive:         { to: "archived",          from: ["pending", "flagged", "approved", "rejected", "changes_requested"] },
-    remove:          { to: "removed",           from: ["pending", "flagged", "approved", "rejected", "changes_requested", "archived"] },
-    restore:         { to: "pending",           from: ["archived", "removed"] },
-  }[action];
-  if (!T) throw new HttpsError("invalid-argument", "Invalid action.");
-
-  const db  = _db();
-  const ref = db.collection(COLL).doc(reviewId);
-  const actor = req.auth.uid;
-  const res = await db.runTransaction(async (tx) => {
-    const doc = await tx.get(ref);
-    if (!doc.exists) throw new HttpsError("not-found", "Review not found.");
-    const r = doc.data() || {};
-    if ((r.authorUid || r.uid) === actor) throw new HttpsError("permission-denied", "You cannot moderate your own review.", { reason: "SELF_REVIEW" });
-    /* self-interest: an admin who owns the reviewed target */
-    let owner = null;
-    if (kind === "unboxing") owner = r.sellerUid || null;
-    else if (r.targetType === "seller") owner = r.targetId;
-    else if (r.targetType === "product") {
-      const p = await tx.get(db.collection("products").doc(String(r.targetId)));
-      owner = p.exists ? (p.data().sellerUid || p.data().sellerId || p.data().shopId || null) : null;
-    }
-    if (owner && String(owner) === actor) throw new HttpsError("permission-denied", "You cannot moderate a review of your own listing.", { reason: "SELF_INTEREST" });
-    const from = String(r.status || "pending");
-    if (from === T.to) return { status: from, unchanged: true, targetId: r.targetId };          /* idempotent: no second decision */
-    if (!T.from.includes(from)) throw new HttpsError("failed-precondition", "That action is not allowed on a " + from + " review.", { reason: "BAD_TRANSITION" });
-    tx.update(ref, {
-      status:          T.to,
-      moderationNote:  _sanitize(note || "", 500),
-      moderatedBy:     actor,
-      moderatedAt:     admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt:       admin.firestore.FieldValue.serverTimestamp(),
-    });
-    tx.set(db.collection("reviewModerationLog").doc(), { reviewId, kind, from, to: T.to, action, actorUid: actor,
-      note: _sanitize(note || "", 500), targetId: r.targetId || null, targetType: r.targetType || null,
-      at: admin.firestore.FieldValue.serverTimestamp() });
-    return { status: T.to, unchanged: false, targetId: r.targetId };
-  });
-
+  /* The transition lives in ONE module (shared/review-moderation.js) that the report authority also uses, so
+     AdminOS approval and an upheld report about a review cannot drift into two writers. */
+  const RM = require("./shared/review-moderation");
+  const d = req.data || {};
+  const kind = d.kind === 'unboxing' ? 'unboxing' : 'review';
+  const db = _db();
+  let res;
+  try {
+    res = await db.runTransaction((tx) => RM.transitionReview(tx, { db, FieldValue: admin.firestore.FieldValue, kind,
+      reviewId: d.reviewId, action: d.action, actorUid: req.auth.uid, note: d.note, source: 'admin' }));
+  } catch (e) {
+    if (e instanceof RM.ModerationError) throw new HttpsError(e.code, e.message, { reason: e.reason });
+    throw e;
+  }
   // Publication follows the authoritative state: the summary counts APPROVED reviews only
-  if (!res.unchanged && res.targetId && kind === "review") await _recalcSummary(res.targetId);
+  if (!res.unchanged && res.targetId && kind === "review") await RM.recomputeRatingsSummary(db, admin.firestore.FieldValue, res.targetId);
   return { status: res.status, unchanged: res.unchanged };
 });
