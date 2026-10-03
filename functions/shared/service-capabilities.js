@@ -105,9 +105,12 @@ const MODULES_OF = Object.freeze({
 /* merchant-v2 modules a capability can switch on. `implemented:false` → NOT_IMPLEMENTED with the reason, never shown
    as working. Flipped to true only by the slice that ships the working screen and its server authority. */
 const MERCHANT_MODULES = Object.freeze({
-  menu:     { label: 'Menu',     implemented: false, why: 'FOOD_HUB_PENDING' },
-  kitchen:  { label: 'Kitchen',  implemented: false, why: 'FOOD_HUB_PENDING' },
-  drinks:   { label: 'Drinks',   implemented: false, why: 'FOOD_HUB_PENDING' },
+  /* Food Hub Gate 2 (2026-10-03): Menu + Drinks ship with their server authority (functions/food-menu.js, callable
+     foodMenu). Kitchen stays NOT_IMPLEMENTED until food orders exist (Gate 3): a kitchen screen with no orders and no
+     server status authority would be a fake working state. */
+  menu:     { label: 'Menu',     implemented: true },
+  kitchen:  { label: 'Kitchen',  implemented: false, why: 'FOOD_ORDERS_PENDING' },
+  drinks:   { label: 'Drinks',   implemented: true },
   catering: { label: 'Catering', implemented: false, why: 'FOOD_HUB_PENDING' },
 });
 Object.values(MERCHANT_MODULES).forEach((m) => Object.freeze(m));

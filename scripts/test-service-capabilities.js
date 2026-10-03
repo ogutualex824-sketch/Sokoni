@@ -89,8 +89,13 @@ try { BW = require(path.join(FN, 'business-workspace.js')); } catch (e) { loadEr
   app('ap7', 'f1', 'restaurant', 'seller', 'approved'); app('ap8', 'f1', 'catering', 'seller', 'approved');
   w = await BW.workspaceFor(db, 'f1', OPTS);
   const mm = w.merchantModules || {};
-  ck('B-6', w.route === 'merchant-v2.html' && ['menu', 'kitchen', 'drinks', 'catering'].every((k) => mm[k] && mm[k].state === 'NOT_IMPLEMENTED' && mm[k].reason === 'FOOD_HUB_PENDING'),
-    'an APPROVED food business (restaurant + catering) routes to merchant-v2 with menu / kitchen / drinks / catering, NOT_IMPLEMENTED until built', { route: w.route, state: w.state, reason: w.reason, mm, caps: w.serviceCapabilities });
+  /* Food Hub Gate 2 (2026-10-03): Menu + Drinks shipped with their server authority (food-menu.js) → AVAILABLE. Kitchen
+     waits for food orders (FOOD_ORDERS_PENDING) and Catering for its own slice — both still NOT_IMPLEMENTED, never shown
+     as working. The honesty invariant is unchanged: a module is AVAILABLE only once it is built. */
+  ck('B-6', w.route === 'merchant-v2.html' && ['menu', 'drinks'].every((k) => mm[k] && mm[k].state === 'AVAILABLE')
+      && mm.kitchen && mm.kitchen.state === 'NOT_IMPLEMENTED' && mm.kitchen.reason === 'FOOD_ORDERS_PENDING'
+      && mm.catering && mm.catering.state === 'NOT_IMPLEMENTED' && mm.catering.reason === 'FOOD_HUB_PENDING',
+    'an APPROVED food business (restaurant + catering) routes to merchant-v2: menu + drinks AVAILABLE (built); kitchen / catering NOT_IMPLEMENTED until built', { route: w.route, state: w.state, reason: w.reason, mm, caps: w.serviceCapabilities });
   /* B-7 a browser-written category on the provider record without any approval opens nothing */
   reset(); DOCS.set('providers/x1', { status: 'pending', business: { category: 'it_services', source: 'browser' } }); DOCS.set('users/x1', { role: 'buyer' });
   w = await BW.workspaceFor(db, 'x1', OPTS);

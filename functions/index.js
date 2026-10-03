@@ -10265,6 +10265,10 @@ exports.previewEmailTemplate = onCall({ cors: ["https://mysokoni.co.ke", "https:
 const merchantInventory = require("./merchant-inventory");
 exports.merchantAdjustStock          = merchantInventory.merchantAdjustStock;
 
+/* Food Hub Gate 2 (2026-10-03) — the Menu / Drinks authority. Menu items ARE canonical products/{id}; see
+   food-menu.js. Exported by name (a new function must be, or a deploy never registers it). */
+exports.foodMenu                     = require("./food-menu").foodMenu;
+
 const inventoryEngine = require("./inventory-engine");
 exports.inventoryAdjustStock         = inventoryEngine.inventoryAdjustStock;
 exports.inventoryReserveStock        = inventoryEngine.inventoryReserveStock;
