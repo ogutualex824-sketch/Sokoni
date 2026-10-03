@@ -683,9 +683,9 @@ window.SokoniAOS = (() => {
           <td class="aos-muted">${_esc(p.category||"—")}</td>
           <td>${_esc(p.location||"—")}</td>
           <td><span class="status-badge st-${_esc(p.status||"—")}">${_esc(p.status||"—")}${p.verified?" ✓":""}</span></td>
-          <td>${_fmt(p.jobsCompleted||0)}</td>
-          <td>${(p.rating||0).toFixed(1)} ⭐</td>
-          <td><button class="aos-btn-sm" onclick="SokoniAOS.viewUser('${_esc(p.uid)}')">View</button></td>
+          <td>${typeof p.jobsCompleted === "number" ? _fmt(p.jobsCompleted) : "—"}</td>
+          <td>${typeof p.rating === "number" ? p.rating.toFixed(1) + " ⭐" : "—"}</td>
+          <td><button class="aos-btn-sm" onclick="SokoniAOS.viewUser('${_esc(p.uid)}')">View</button>${_providerLifecycleBtn(p)}</td>
         </tr>`);
       body.innerHTML = rows.length
         ? `<table class="aos-table"><thead><tr><th>Name</th><th>Category</th><th>Location</th><th>Status</th><th>Jobs</th><th>Rating</th><th>Actions</th></tr></thead><tbody>${rows.join("")}</tbody></table>`
@@ -693,6 +693,31 @@ window.SokoniAOS = (() => {
     } catch (e) {
       body.innerHTML = _emptyMsg("Couldn't load providers.") + '<div style="text-align:center;margin-top:8px"><button class="aos-btn-sm" onclick="SokoniAOS.navigate(\'services\')">Try again</button></div>';
     }
+  }
+
+  /* Tech Hub 4O (2026-10-03): Suspend / Reinstate a provider through the EXISTING authority — applicationDecide on the
+     application that governs the listing (adminGetProviders.sourceApplicationId). The server audits it and retracts /
+     re-projects the listing; this page writes nothing. Unknown ratings / job counts render "—", never 0. */
+  function _providerLifecycleBtn(p) {
+    if (!p.sourceApplicationId) return ' <span class="aos-muted" title="No linked application — decide it from Applications">—</span>';
+    const st = String(p.status || "").toLowerCase();
+    if (st === "suspended") return ` <button class="aos-btn-sm success" onclick="SokoniAOS.providerDecide('${_esc(p.sourceApplicationId)}','approve','${_esc(p.name || "")}')">Reinstate</button>`;
+    if (st === "active" || st === "approved") return ` <button class="aos-btn-sm danger" onclick="SokoniAOS.providerDecide('${_esc(p.sourceApplicationId)}','suspend','${_esc(p.name || "")}')">Suspend</button>`;
+    return "";
+  }
+  async function providerDecide(applicationId, decision, name) {
+    if (["approve", "suspend"].indexOf(decision) === -1 || !applicationId) return;
+    const reason = prompt((decision === "suspend" ? "Suspend " : "Reinstate ") + (name || "this provider") + " — reason (recorded in the audit log):", "");
+    if (reason === null) return;
+    if (decision === "suspend" && !String(reason).trim()) { _toast("A reason is required to suspend.", "error"); return; }
+    try {
+      await _call("applicationDecide", { applicationId, decision, reason: String(reason).trim() });
+    } catch (e) {
+      _toast(_actionFailure(e, decision === "suspend" ? "Suspend" : "Reinstate"), "error");
+      return;
+    }
+    _toast(decision === "suspend" ? "Provider suspended" : "Provider reinstated", "success");
+    _loadServices();
   }
 
   // ── Bookings (canonical providerBookings via adminGetBookings) ───────────────
@@ -2611,6 +2636,7 @@ window.SokoniAOS = (() => {
     updateProduct,
     updateOrder,
     moderateReview,
+    providerDecide,   /* Tech Hub 4O */
     editCategory,
     addCategory,
     editFaq:             (id) => { const q = prompt("Question:"); const a = prompt("Answer:"); if(q&&a) _call("adminUpsertFaq",{id,question:q,answer:a}).then(()=>{ _toast("FAQ updated","success"); _panelCache.content=false; _contentTab("faqs"); }); },

@@ -1,3 +1,19 @@
+## [2026-10-03] - Tech Hub slice 4O (hosting): AdminOS can suspend / reinstate a provider — hosting, NOT deployed
+
+- sokoni-aos.js, Services → providers table:
+  - **Suspend** (active) and **Reinstate** (suspended) call `applicationDecide` on the listing's `sourceApplicationId`. That
+    is the existing, audited authority, which retracts / re-projects the listing.
+  - A reason is required to suspend. With no linked application, there is no action ("—").
+  - The page writes nothing.
+- The same table rendered an unknown rating as "0.0 ⭐" and unknown jobs as "0". Both now render "—", per the UI data
+  integrity rule.
+- Server half: feat/tech-taxonomy-on-13f74f3 @ 4ab4eb7. adminGetProviders returns null for unknowns plus
+  sourceApplicationId. Its deploy unit is adminOsDispatch.
+- Tests:
+  - test-adminos-provider-lifecycle 4/0 (+ sabotage turns A-1 red).
+  - AdminOS suites: tier1 59/0, tier2 147/0, authority-honesty 28/0, bulk-payout 14/0, route-parse 6/0, ticket-badge 4/0.
+  - test-adminos-head-defer 22/4/1-unproven, identical with the committed sokoni-aos.js (pre-existing).
+
 ## [2026-10-03] - Tech Hub slice 4F (hosting): ask a provider, get a quote, book it — hosting, NOT deployed
 
 - **sokoni-leads.js** (new) over the server authority (functions/service-leads.js, feat/tech-taxonomy-on-13f74f3 @ 906bd2f):

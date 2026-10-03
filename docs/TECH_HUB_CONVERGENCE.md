@@ -5,7 +5,7 @@ payment / booking / wallet / review / chat authority, no WhatsApp, AdminOS-gated
 dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]], [[Payments]], [[AdminOS]],
 [[IntaSend Convergence Brief]]. Strategy: no new hubs — Digital Hub folds into Tech Hub.
 
-**Status: slices 1, 2a, 2b, 3, 4a, 4b, 4L and 4F built and tested; nothing deployed.**
+**Status: slices 1, 2a, 2b, 3, 4a, 4b, 4L, 4F and 4O built and tested; nothing deployed.**
 
 ## Authority map (census 2026-10-03)
 
@@ -24,7 +24,7 @@ dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]]
 | Search | `providerSearchProviders` (`providerProfiles`) vs directory (`providers`) | drift |
 | Storefront | `provider-profile.html?uid=` | exists; not linked from nav |
 | Provider dashboard | `provider-dashboard.html` + `sokoni-business-workspace.js` (`businessWorkspace` op) | exists; nothing tech-specific; capability engine = sokoni-5b's slice 0 (one engine) |
-| AdminOS | applications (Super Admin / admin / moderation pages), `adminGetProviders` read-only, reviews moderation, bookings read, disputes | no provider suspend / restore / verify |
+| AdminOS | applications, providers table with **Suspend / Reinstate via applicationDecide** (4O), reviews moderation, bookings read, disputes | suspend/reinstate **built 4O**; verify (badge authority) open |
 | Takedown / report | sokoni-e3's report authority (products only) | provider entityType not yet added |
 
 ## Fake / static / duplicate surfaces found
