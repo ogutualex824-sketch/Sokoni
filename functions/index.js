@@ -13003,6 +13003,7 @@ exports.b2bLeadStatement       = _b2bLeads.b2bLeadStatement;
 
 /* ── Platform-wide transaction receipts (owner 2026-10-03): the caller's own payment receipts. ── */
 exports.myTransactionReceipts = require('./transaction-receipts').myTransactionReceipts;
+exports.providerLedger = require('./provider-ledger').providerLedger;   /* provider money screens (b2): read-only projection of wallet + held bookings + receipts + payouts */
 exports.adminSearchReceipts       = require('./transaction-receipts').adminSearchReceipts;       /* AdminOS read, audited */
 exports.adminRetryReceiptFailures = require('./transaction-receipts').adminRetryReceiptFailures; /* Super Admin, audited */
 exports.retryReceiptFailuresSweep = require('./transaction-receipts').retryReceiptFailuresSweep;

@@ -6617,6 +6617,34 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "transactionReceipts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "clientUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "issuedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "transactionReceipts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "counterpartyId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "issuedAt",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [

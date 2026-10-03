@@ -1,3 +1,10 @@
+## 2026-10-03 — Provider money reads for merchant-v2 provider screens: providerLedger + receipts role filter (NOT deployed)
+
+- **Change:** new read-only callable `providerLedger` (functions/provider-ledger.js): available = wallets/{uid}.balance; pending = providerBookings paid_held (with work milestone links); totals = the caller's PROVIDER transactionReceipts (gross / platform fee / net / refunded / deductions / released / held, bounded window reported); entries = walletTransactions newest first with booking/order/payment links; payouts = payoutRequests history; server-stated payout eligibility (min KES 100) naming the frozen request path. Unreadable source → null + reason, never 0; writes nothing. `myTransactionReceipts` accepts `role: 'client'|'provider'` + `before` cursor, newest first (index fallback to the old unordered read).
+- **Files:** functions/provider-ledger.js (new), functions/index.js (export), functions/transaction-receipts.js, firestore.indexes.json (transactionReceipts clientUid/counterpartyId + issuedAt desc), scripts/test-provider-ledger.js (L1–L7), scripts/test-transaction-receipts.js (R12).
+- **DB:** two composite indexes (deploy with the indexes). **API:** new callable providerLedger; myTransactionReceipts optional params. **Security:** caller-scoped, App Check, no other party's data (L6). wallet.js untouched (frozen).
+- **Tests:** provider-ledger 7/0, transaction-receipts 17/0.
+
 ## 2026-10-03 — Work/Job Engine milestones on the commercial line: paid-milestone refund guard + receipt subtype (NOT deployed)
 ## [2026-10-03] - Payments: Daraja code removed from functions (owner order: IntaSend only) — functions source, NOT deployed
 

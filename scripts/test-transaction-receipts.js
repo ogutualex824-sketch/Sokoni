@@ -28,6 +28,7 @@ function fakeDb () {
   const coll = (c) => ({ doc: (id) => ref(c + '/' + id), add: async (v) => { const id = 'a' + (++auto); docs.set(c + '/' + id, clone(v)); return { id }; },
     where: (f, op, v) => q(c, [[f, v]]), limit: () => q(c, []), get: () => q(c, []).get() });
   const q = (c, filters) => ({ where: (f, op, v) => q(c, filters.concat([[f, v]])), limit: () => q(c, filters),
+    orderBy: () => q(c, filters), startAfter: () => q(c, filters),   /* order is asserted on receiptsFor's own newest-first merge */
     get: async () => { const rows = [...docs.keys()].filter((k) => k.startsWith(c + '/') && k.split('/').length === c.split('/').length + 1 && filters.every(([f, v]) => (docs.get(k) || {})[f] === v)); return { docs: rows.map(snap) }; } });
   return { _docs: docs, collection: coll,
     async runTransaction (fn) {
@@ -122,6 +123,14 @@ const events = (db, id) => [...db._docs.keys()].filter((k) => k.startsWith('tran
     r.ok && wm && wm.kind === 'service_booking' && wm.subtype === 'work_milestone' && wm.links.workProjectId === 'P1' && wm.links.milestoneId === 'm1' && !('evil' in wm.links), wm && { subtype: wm.subtype, links: wm.links });
   r = await TR.recordPaid(db, paid({ sourceId: 'bk9', paymentRef: 'API_9', subtype: 'made_up' }), deps);
   ck('R11 an unknown subtype is recorded as null (allowlist), an ordinary receipt has subtype null', db._docs.get('transactionReceipts/service_booking_bk9').subtype === null);
+
+  /* role filter (b2: provider money screens) */
+  db = fakeDb();
+  await TR.recordPaid(db, paid({ sourceId: 'bkA', paymentRef: 'API_A', clientUid: 'p1', counterpartyId: 'x' }), deps);   /* p1 as CLIENT */
+  await TR.recordPaid(db, paid({ sourceId: 'bkB', paymentRef: 'API_B', clientUid: 'y', counterpartyId: 'p1' }), deps);   /* p1 as PROVIDER */
+  const both = await TR.receiptsFor(db, 'p1', {}), provR = await TR.receiptsFor(db, 'p1', { role: 'provider' }), cli = await TR.receiptsFor(db, 'p1', { role: 'client' });
+  ck('R12 role filter: provider → only counterparty receipts; client → only own purchases; omitted → both',
+    both.length === 2 && provR.length === 1 && provR[0].sourceId === 'bkB' && provR[0].role === 'provider' && cli.length === 1 && cli[0].sourceId === 'bkA', { both: both.length, prov: provR.map((r) => r.sourceId), cli: cli.map((r) => r.sourceId) });
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

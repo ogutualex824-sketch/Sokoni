@@ -190,11 +190,28 @@ async function retryFailures(db, deps, limit) {
 }
 
 /** The caller's own receipts (client or counterparty). Server-scoped read; header + position + events. */
+/* opts.role: 'client' | 'provider' | (omitted = both). opts.before: issuedAt millis cursor (next page = the oldest issuedAt
+   of the previous page). Newest first via (party, issuedAt desc) — composite indexes in firestore.indexes.json. If an index
+   is not yet built the read FALLS BACK to the unordered single-field query (old behaviour) rather than failing the screen. */
+async function _partyQuery(db, field, uid, lim, before) {
+  let q = db.collection(RECEIPTS).where(field, '==', String(uid));
+  try {
+    q = q.orderBy('issuedAt', 'desc');
+    if (Number(before) > 0) q = q.startAfter(new Date(Number(before)));
+    return await q.limit(lim).get();
+  } catch (e) {
+    if (!/index|FAILED_PRECONDITION/i.test(String(e && (e.code || '') + ' ' + (e.message || '')))) throw e;
+    return db.collection(RECEIPTS).where(field, '==', String(uid)).limit(lim).get();
+  }
+}
 async function receiptsFor(db, uid, opts) {
-  const lim = Math.min(Math.max(Number(opts && opts.limit) || 20, 1), 50);
+  const o = opts || {};
+  const lim = Math.min(Math.max(Number(o.limit) || 20, 1), 50);
+  const role = o.role === 'client' || o.role === 'provider' ? o.role : null;
+  const empty = { docs: [] };
   const [asClient, asCounterparty] = await Promise.all([
-    db.collection(RECEIPTS).where('clientUid', '==', String(uid)).limit(lim).get(),
-    db.collection(RECEIPTS).where('counterpartyId', '==', String(uid)).limit(lim).get(),
+    role === 'provider' ? empty : _partyQuery(db, 'clientUid', uid, lim, o.before),
+    role === 'client' ? empty : _partyQuery(db, 'counterpartyId', uid, lim, o.before),
   ]);
   const seen = new Set(); const out = [];
   for (const doc of asClient.docs.concat(asCounterparty.docs)) {
@@ -215,7 +232,8 @@ async function receiptsFor(db, uid, opts) {
         Array.isArray(e.deductions) && e.deductions.length ? { deductions: e.deductions.map((x) => ({ kind: x.kind, amountCents: x.amountCents })) } : {});
     }).sort((a, b) => String(a.at || '').localeCompare(String(b.at || '')));
   }));
-  return out;
+  const ms = (r) => (r.issuedAt && r.issuedAt.toMillis ? r.issuedAt.toMillis() : (r.issuedAt instanceof Date ? r.issuedAt.getTime() : Date.parse(r.issuedAt || '') || 0));
+  return out.sort((x, y) => ms(y) - ms(x)).slice(0, lim);
 }
 
 /** Admin search by receipt number, payment reference, source id or party uid. Returns header + position + events. */
