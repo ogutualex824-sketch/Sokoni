@@ -464,7 +464,7 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
     /* P1 command-center additions — all canonical counts, catch→0 (never fabricate). */
     db.collection('users').where('status', '==', 'active').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('businesses').where('status', '==', 'active').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
-    db.collection('providerVerification').where('verificationStatus', '==', 'pending_review').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('providerVerification').where('status', '==', 'pending_review').count()   /* 4P: the field providerSubmitVerification writes */.get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('applications').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('reviews').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
   ]);
@@ -561,7 +561,7 @@ exports.adminGetMerchantPipeline = onCall({ region: 'us-central1', maxInstances:
   const [applied, pending, verified, published, subscribed, active] = await Promise.all([
     db.collection('applications').count().get().catch(_c0),
     db.collection('applications').where('status', '==', 'pending').count().get().catch(_c0),
-    db.collection('providerVerification').where('verificationStatus', 'in', ['verified', 'approved']).count().get().catch(_c0),
+    db.collection('providers').where('verified', '==', true).count().get().catch(_c0),   /* 4P: the projected public badge (providerVerification had no decider) */
     db.collection('providers').where('status', 'in', ['active', 'approved']).count().get().catch(_c0),
     db.collection('providerSubscriptions').where('status', 'in', ['active', 'trialing']).count().get().catch(_c0),
     db.collection('providers').where('status', '==', 'active').count().get().catch(_c0),

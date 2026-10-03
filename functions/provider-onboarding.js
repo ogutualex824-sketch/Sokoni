@@ -502,6 +502,16 @@ exports._h.providerUpdateProfile = _h.providerUpdateProfile = async (req) => {
       mirror.category   = updates.category;
       mirror.categories = [updates.category, updates.subcategory].filter(Boolean);
     }
+    /* Tech Hub 4P: the badge was granted to a NAME. Renaming a verified listing drops it until an admin re-decides
+       (re-verification); every other edit leaves it alone. Legacy flags (no verifiedName) are untouched here. */
+    if (updates.name) {
+      const cur = await _db().collection('providers').doc(uid).get().catch(() => null);
+      const p = cur && cur.exists ? cur.data() : null;
+      if (p && p.verified === true && p.verifiedName != null && p.verifiedName !== updates.name) {
+        mirror.verified = false;
+        mirror.verificationReviewRequired = true;
+      }
+    }
     await _mirrorToRegistry(uid, mirror);
   }
 

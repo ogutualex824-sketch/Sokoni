@@ -1,3 +1,36 @@
+## [2026-10-03] — Tech Hub slice 4P (server): the public Verified badge is a projection of admin-decided facets — NOT deployed
+
+**Census (10-03):**
+- No admin path granted `providers/{uid}.verified`; only scripts/onboard-providers.js ever set it, with no audit.
+- The canonical authority, `verificationDecide` / `verificationRevoke` (admin-only, transactional, adminLog, expiry), wrote `verifications.facets`,
+  and nothing connected those facets to the badge.
+- Search indexes trusted `providerVerified`, which the owner can write.
+- A verified listing could be renamed and keep the badge.
+- AdminOS counted `verificationStatus` on providerVerification, but the field written is `status`, so both counters were always 0.
+
+- **New** `functions/shared/provider-badge.js`:
+  - badge ⇔ the `identity` facet is active (approved, not expired, not revoked) — the meaning providers.html tells customers;
+  - snapshots `verifiedName`;
+  - `badgeValid()` shows the badge only while the listing still carries that name; `badgeState()` labels verified / re_review_required /
+    legacy / not_verified.
+- **verification-engine.js:** after every decision / revocation, projects {verified, verifiedFacets, verifiedName, verificationReviewRequired:false}
+  onto providers/{uid}. A projection failure is logged and returned (`providerBadge`), never silent.
+- **provider-onboarding.providerUpdateProfile:** renaming a verified listing sets verified:false + verificationReviewRequired:true
+  (re-verification). Phone / bio / category edits leave the badge alone.
+- **algolia-indexer + typesense-client:** provider.verified / providerVerified = badgeValid(data). `providerVerified` is no longer trusted.
+- **admin-os:** the pending counter reads providerVerification.status; the verified counter counts providers.verified == true (the projected badge).
+- **Tests:** test-provider-badge 8/0 (BASE=12a6519 fails 7/8). Mutation "no projection" turns V-3…V-6 red. search-eligibility 8/0,
+  suspend-restore 8/0, leads 12/0, business-workspace 30/0, service-capabilities 15/0.
+- **OPEN (rules release, handed to the rules owner):**
+  - verifications/{uid} create lets the owner forge approved facets / emailVerified / phoneVerified;
+  - providers update lets the owner set featured / providerVerified / isVerified / badges / rating / reviewCount / jobsCompleted and the new
+    verifiedFacets / verifiedName / verificationReviewRequired;
+  - services lets the owner set providerVerified.
+- **OPEN (owner):** legacy `verified:true` set by script (no facet, no audit) stays shown and is labelled `legacy` until an admin decision projects it.
+  providerSubmitVerification documents (providerVerification) still have no decider; the canonical path is verificationSubmit → verificationDecide.
+- **Deploy units:** verificationDecide, verificationRevoke (verification-engine.js); providerDispatch (provider-onboarding) in 5b's release;
+  adminOsDispatch (admin-os); algolia / typesense provider triggers. Lineage gate applies.
+
 ## [2026-10-03] — RELEASE GATE: service-booking commission invariant (scripts/gate-service-commission.js) — RED on this line
 
 Owner rule (locked 10-03): KES 1,000 service → buyer pays 1,000 · SOKONI 5 % = 50 · provider 950 · one rate on every plan · once · ONE source.

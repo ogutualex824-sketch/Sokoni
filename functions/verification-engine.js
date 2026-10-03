@@ -31,6 +31,25 @@ const FieldValue = admin.firestore.FieldValue;
 const Timestamp  = admin.firestore.Timestamp;
 
 const V = require('./verification-vocabulary');
+const BADGE = require('./shared/provider-badge');   /* Tech Hub 4P */
+
+/* ── Tech Hub 4P: project the public provider badge from the canonical facets ──────────────────────────
+   providers/{uid}.verified had NO admin grant path (only a one-off script wrote it). The badge is now a projection of
+   verifications/{uid}.facets, recomputed after every admin decision / revocation (shared/provider-badge.js). No providers
+   doc → nothing to project. Runs after the decision commit; a failure is logged and returned (the decision stands, the
+   badge is recomputed on the next decision), never swallowed silently. */
+async function _projectProviderBadge(uid) {
+  try {
+    const [vSnap, pSnap] = await Promise.all([db.collection('verifications').doc(uid).get(), db.collection('providers').doc(uid).get()]);
+    if (!pSnap.exists) return 'no_provider';
+    const b = BADGE.computeBadge(vSnap.exists ? vSnap.data() : {}, pSnap.data(), Date.now());
+    await db.collection('providers').doc(uid).set(Object.assign(b, { verificationProjectedAt: FieldValue.serverTimestamp() }), { merge: true });
+    return b.verified ? 'verified' : 'not_verified';
+  } catch (e) {
+    logger.error('[verification] provider badge projection failed', { uid, error: e && e.message });
+    return 'projection_failed';
+  }
+}
 
 const REGION = 'us-central1';
 const OPEN_STATES = ['pending'];
@@ -243,6 +262,7 @@ exports.verificationDecide = onCall({ region: REGION }, async (req) => {
   });
 
   logger.info('[verification] decided', { requestId, decision, ...result });
+  if (result && result.uid && !result.unchanged) result.providerBadge = await _projectProviderBadge(result.uid);
   return result;
 });
 
@@ -304,5 +324,6 @@ exports.verificationRevoke = onCall({ region: REGION }, async (req) => {
   });
 
   logger.info('[verification] revoked', { uid, facet, adminUid });
+  if (result && result.uid && !result.unchanged) result.providerBadge = await _projectProviderBadge(result.uid);
   return result;
 });
