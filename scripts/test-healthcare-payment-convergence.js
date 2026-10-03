@@ -329,7 +329,7 @@ async function partB() {
     return makeDb({
       'providerBookings/BK1': {
         providerId: PROV, customerUid: CUST, paymentStatus: 'paid_held',
-        price: gross, fee: 0, deposit: gross, service: 'Consultation',
+        price: gross, fee: 0, heldAmount: gross, deposit: gross, service: 'Consultation',   /* a real hold persists heldAmount (owner 2026-10-03) */
         startTs: Date.now() + 3600000,            /* < 24h away → late cancel forfeits deposit */
         ...(hub === undefined ? {} : { commissionHub: hub }),
       },

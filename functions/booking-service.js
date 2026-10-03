@@ -276,6 +276,13 @@ _h.bookingCreateService = async (req) => {
   /* Entertainment class (ARTIST / SERVICE), resolved and stamped the same way — the booking identity
      (entertainment-bookings.js) reads it; null for every non-Entertainment provider. */
   const entClass = _cls.entClass;
+  /* Commission snapshot — captured now, stamped on the booking, consumed unchanged at settlement (never re-priced). */
+  let commissionSnapshot;
+  try { commissionSnapshot = await require('./provider-hub').commissionSnapshotFor(db, providerId, { commissionHub }, price); }
+  catch (e) {
+    if (e && (e.code === 'category_unpriced' || e.code === 'commission_snapshot_failed')) throw new HttpsError('failed-precondition', 'This service cannot be booked yet — its platform fee is not configured.', { code: 'COMMISSION_UNPRICED' });
+    throw e;
+  }
 
   let outcome = null;
   await db.runTransaction(async (txn) => {
@@ -375,6 +382,7 @@ _h.bookingCreateService = async (req) => {
       note: _san(d.note, 300),
       hubType: _san(d.hubType, 40) || 'services',   /* CLIENT-SUPPLIED, descriptive only — never price on this */
       commissionHub,                                /* SERVER-RESOLVED, immutable — the settlement rate selector */
+      commissionSnapshot: Object.assign({}, commissionSnapshot, { capturedOnCents: finalPrice }),   /* owner 2026-10-03: settlement uses THIS rate, never today's */
       entClass: entClass || null,                   /* SERVER-RESOLVED, immutable — ARTIST / SERVICE / null */
       idempotencyKey,
       /* Provenance — which path/engine/rev priced & reserved this booking, so a

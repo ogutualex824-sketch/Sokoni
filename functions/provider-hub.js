@@ -245,4 +245,19 @@ function commissionRuleFor(bookingLike) {
     fixed: CC.isFixedRateCategory(args.category) === true, refused: null };
 }
 
-module.exports = { resolveProviderHub, resolveProviderClassification, classifyDecidedApplication, commissionArgsForHub, commissionArgsForBooking, commissionRuleFor, WORK_MILESTONE_CATEGORIES, isCoachApplication, ROLE_TO_HUB, DEFAULT_HUB };
+/* COMMISSION SNAPSHOT (owner 2026-10-03): captured ONCE when the booking / accepted commercial transaction is created and
+   stamped on it as { commissionRate, commissionRuleId, commissionBase, ... }. It runs the REAL engine at that moment (so an
+   admin commissionRule / revenueConfig adjustment in force then is captured) and freezes the effective rate. Settlement uses
+   ONLY this stamp (shared/settlement-authority.js) — a later catalogue, category or rate change never touches an existing
+   booking. An unpriced lane throws category_unpriced: the transaction is refused before anything is held. */
+async function commissionSnapshotFor(db, sellerId, bookingLike, priceCents) {
+  const args = commissionArgsForBooking(bookingLike);   /* throws category_unpriced */
+  const cents = Math.max(1, Math.round(Number(priceCents) || 0));
+  const comm = await require('./finos-utils').calculateCommission(db, { orderAmountCents: cents, sellerId: String(sellerId), ...args });
+  const snap = require('./shared/settlement-authority').snapshotFrom(comm, {
+    policyVersion: require('./commission-config').COMMISSION_POLICY_VERSION, commissionBase: 'service_price', capturedOnCents: cents });
+  if (!snap) { const e = new Error('The commission rate could not be captured.'); e.code = 'commission_snapshot_failed'; throw e; }
+  return snap;
+}
+
+module.exports = { commissionSnapshotFor, resolveProviderHub, resolveProviderClassification, classifyDecidedApplication, commissionArgsForHub, commissionArgsForBooking, commissionRuleFor, WORK_MILESTONE_CATEGORIES, isCoachApplication, ROLE_TO_HUB, DEFAULT_HUB };

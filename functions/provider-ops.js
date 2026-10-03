@@ -128,10 +128,14 @@ function _slotLockRef(providerId, b) {
    deposit forfeited + remainder refunded; customer ≥24h → full refund. */
 async function _disburseHeldFunds(data, ref, opts) {
   if (data.paymentStatus !== 'paid_held') return null;      /* unpaid → no money to move */
-  const priceC   = Math.max(0, Math.round(Number(data.price) || 0));
   const feeC     = Math.max(0, Math.round(Number(data.fee) || 0));
+  /* Owner 2026-10-03: refunds/forfeits move the money actually HELD (booking.heldAmount, else the verified payment) —
+     never price + fee. Unknown held amount → refuse rather than guess (money stays held, support resolves). */
+  let heldC = Math.round(Number(data.heldAmount));
+  if (!(heldC > 0)) heldC = await _verifiedHeldCents(data);
+  if (!(heldC > 0)) throw new HttpsError('failed-precondition', 'This booking cannot be refunded automatically: the held amount is not on record. Support has been notified.', { code: 'HELD_AMOUNT_UNKNOWN' });
+  const priceC   = Math.max(0, heldC - Math.min(feeC, heldC));
   const depositC = Math.min(priceC, Math.max(0, Math.round(Number(data.deposit) || 0)));
-  const heldC    = priceC + feeC;
 
   let refundC = 0, forfeitC = 0;
   if (opts.isNoShow) { forfeitC = depositC; refundC = heldC - depositC; }  /* no-show → deposit forfeited (checked FIRST) */
@@ -149,10 +153,15 @@ async function _disburseHeldFunds(data, ref, opts) {
     /* Same engine, same table; the hub the booking was CREATED under selects the inputs
        (ADR-015). A forfeited deposit is priced exactly like the completion it replaces —
        a healthcare no-show must not be charged the plan rate a healthcare completion isn't. */
-    const fc = await calculateCommission(_db(), { orderAmountCents: forfeitC,
-      sellerId: data.providerId,
-      ...require('./provider-hub').commissionArgsForBooking(data) });   /* marketing lane from the booking snapshot (b2 9319925) */
-    forfeitCommissionC = fc.commissionCents || 0;
+    /* the booking's captured rate when present (owner 2026-10-03); legacy bookings price once through the engine */
+    const fs_ = require('./shared/settlement-authority').settle({ heldAmountCents: forfeitC, passThroughCents: 0, commissionSnapshot: data.commissionSnapshot });
+    if (fs_.ok && !fs_.needsLegacy) forfeitCommissionC = fs_.commissionCents;
+    else {
+      const fc = await calculateCommission(_db(), { orderAmountCents: forfeitC,
+        sellerId: data.providerId,
+        ...require('./provider-hub').commissionArgsForBooking(data) });   /* marketing lane from the booking snapshot (b2 9319925) */
+      forfeitCommissionC = fc.commissionCents || 0;
+    }
   }
   const providerNetC     = Math.max(0, forfeitC - forfeitCommissionC);
   const refundShillings  = Math.floor(refundC / 100);
@@ -286,35 +295,56 @@ _h.providerDeclineBooking = async (req) => {
    The commission, amounts and ledger writes providerCompleteBooking always made, factored out so the
    Entertainment show-up settlement (a verified booking PIN — owner decision 2026-09-27) uses the SAME
    engine call and the SAME writes, never a copy. */
-async function _settlementMath(uid, ref, data) {
-    const gross = Math.max(0, Math.round(Number(data.price) || 0)); // cents
+/* Held amount for a booking held before booking.heldAmount was persisted: the VERIFIED payment for its paymentRef
+   (payments/{ref} status COMPLETE, amount in KES). Anything else → 0 → settlement refuses (HELD_AMOUNT_UNKNOWN). */
+async function _verifiedHeldCents(data) {
+  const ref = String(data.paymentRef || data.paymentId || '');
+  if (!ref) return 0;
+  try {
+    const p = await _db().collection('payments').doc(ref).get();
+    const d = p.exists ? p.data() : null;
+    if (!d || String(d.status || '').toUpperCase() !== 'COMPLETE') return 0;
+    const cents = Math.round(Number(d.amountCents) || Number(d.amount) * 100);
+    return Number.isFinite(cents) && cents > 0 ? cents : 0;
+  } catch (_) { return 0; }
+}
 
-    /* ── COMMISSION: the ONE engine ────────────────────────────────────────────────────────
-     * This used to compute commission itself:
-     *     const rate = await _commissionRate(uid);          // subscription-core, a fraction
-     *     const commission = Math.round(gross * rate);
-     * That bypassed the Commission Engine entirely, so provider bookings ignored
-     * commissionRules, revenueConfig overrides, promotional/holiday campaigns, plan adjustments
-     * and the audit trail. It was the last money path on the platform outside the engine.
-     *
-     * PRICING (owner 2026-10-03): every service booking pays a FLAT 5 % of the service amount, deducted from the
-     * provider at settlement, on EVERY plan — the plan ladder (20/15/10/7/5) is retired for bookings and must not be
-     * reconnected. The inputs come from provider-hub.commissionArgsForHub (services / fitness / healthcare /
-     * entertainment — all 5 %, no subscriptionRole, no KES 10 floor). The former `_commissionRate()` plan lookup is
-     * removed. commissionRules / revenueConfig(hub_provider) can still adjust the rate, like any category. */
+async function _settlementMath(uid, ref, data) {
+    /* ── SETTLEMENT AUTHORITY (owner 2026-10-03) — shared/settlement-authority.js ─────────────────────────────────────
+     * Base = the amount SOKONI actually HOLDS (booking.heldAmount, persisted at hold time from the VERIFIED payment) minus
+     * the pass-through fee — never booking.price, the current service price, a provider-entered or edited amount. Commission
+     * = the booking's commissionSnapshot rate (captured at booking), never today's catalogue. Before snapshots existed a
+     * booking has none: it is priced ONCE here through the engine and the record says so (commissionSource). A held booking
+     * whose held amount is not on record is NOT settled (HELD_AMOUNT_UNKNOWN) — money stays held, nothing is guessed.
+     * The marketing / milestone lanes (b2 9319925 / WE2) are selected inside commissionArgsForBooking for legacy pricing. */
+    const SA = require('./shared/settlement-authority');
     const { calculateCommission } = require('./finos-utils');
-    /* ── WHICH inputs, per hub (ADR-015) ──────────────────────────────────────────────────
-     * Healthcare bookings are priced at the approved 5% from the SAME canonical table
-     * (commission-config.RATES.healthcare); every other provider booking keeps the plan rate
-     * through compatibility mode, byte-identical to before. The selection lives in
-     * provider-hub.commissionArgsForHub so this call site and the forfeited-deposit one above
-     * cannot drift, and `commissionHub` is the server-resolved snapshot taken at booking
-     * creation — never the client-supplied `hubType`, and never the provider's own category. */
-    const comm = await calculateCommission(_db(), {
-      orderAmountCents: gross,
-      sellerId:         uid,
-      ...require('./provider-hub').commissionArgsForBooking(data),   /* marketing lane from the booking snapshot (b2 9319925) */
-    });
+    const feeCents = Math.max(0, Math.round(Number(data.fee) || 0));
+    const _snapComm = (sres, heldSource) => ({ commissionCents: sres.commissionCents, effectiveRate: sres.rate, baseRate: sres.rate,
+      pricingSource: 'booking_snapshot', ruleId: sres.ruleId, ruleSource: 'commissionSnapshot', category: (data.commissionSnapshot || {}).category || null,
+      planId: null, planName: null, planAdjustment: null, adjustmentType: null, planApplied: false, reason: 'booking_snapshot',
+      calculatedAt: new Date().toISOString(), engineVersion: (data.commissionSnapshot || {}).policyVersion || null,
+      commissionSource: 'booking_snapshot', heldSource });
+    const _legacyComm = async (cents, heldSource) => {
+      const c = await calculateCommission(_db(), { orderAmountCents: cents, sellerId: uid, ...require('./provider-hub').commissionArgsForBooking(data) });
+      return Object.assign({ planId: null, planName: null, planAdjustment: null, adjustmentType: null, planApplied: false }, c,
+        { commissionSource: 'legacy_recomputed_no_snapshot', heldSource });
+    };
+    let gross, comm;
+    if (data.paymentStatus === 'paid_held') {
+      let heldCents = Math.round(Number(data.heldAmount));
+      let heldSource = 'booking.heldAmount';
+      if (!(heldCents > 0)) { heldCents = await _verifiedHeldCents(data); heldSource = 'verified_payment'; }
+      const sres = SA.settle({ heldAmountCents: heldCents, passThroughCents: feeCents, commissionSnapshot: data.commissionSnapshot });
+      if (!sres.ok) throw new HttpsError('failed-precondition', 'This booking cannot be settled yet: the held amount is not on record. Support has been notified.', { code: 'HELD_AMOUNT_UNKNOWN', reason: sres.reason });
+      gross = sres.baseCents;
+      comm = sres.needsLegacy ? await _legacyComm(gross, heldSource) : _snapComm(sres, heldSource);
+    } else {
+      /* Unpaid completion: a RECORD only (no money moves) — priced on the snapshot when present. */
+      gross = Math.max(0, Math.round(Number(data.price) || 0));
+      const sres = gross > 0 ? SA.settle({ heldAmountCents: gross + feeCents, passThroughCents: feeCents, commissionSnapshot: data.commissionSnapshot }) : null;
+      comm = sres && sres.ok && !sres.needsLegacy ? _snapComm(sres, 'unpaid_record') : await _legacyComm(gross, 'unpaid_record');
+    }
 
     const commission = comm.commissionCents;
     const net        = gross - commission;
@@ -341,7 +371,6 @@ async function _settlementMath(uid, ref, data) {
        PRICE only; the booking fee passes through to the provider (decision a). Both come
        from the booking's OWN immutable snapshot (data.price / data.fee) — settlement never
        re-reads the current providerServices record (contract: snapshot-only settlement). */
-    const feeCents        = Math.max(0, Math.round(Number(data.fee) || 0));
     const settleCents     = net + feeCents;
     const settleShillings = Math.floor(settleCents / 100);
     const remainderCents  = settleCents - settleShillings * 100;

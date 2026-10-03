@@ -94,7 +94,7 @@ const h = (op, uid, data = {}, token) => EB._h[op]({ ...who(uid, token), data })
   /* ═══ ARTIST booking ═══ */
   say('\n── artist booking identity ──');
   const pb = { providerId: 'djK', customerUid: 'buyer1', customerName: 'Achieng', service: 'Wedding DJ set', status: 'confirmed', paymentStatus: 'paid_held', paymentRef: 'PAYART1',
-    price: 2000000, fee: 0, commissionHub: 'entertainment', entClass: 'ARTIST', startTs: NOW + 48 * H, endTs: NOW + 52 * H, durationMins: 240 };
+    price: 2000000, fee: 0, heldAmount: 2000000, commissionHub: 'entertainment', entClass: 'ARTIST', startTs: NOW + 48 * H, endTs: NOW + 52 * H, durationMins: 240 };
   await db.doc('providerBookings/pbA').set(pb);
   const r = await EB.onSourceWritten('providerBookings', 'pbA', pb);
   const env = await get('entBookings/svc_pbA');
@@ -256,7 +256,7 @@ const h = (op, uid, data = {}, token) => EB._h[op]({ ...who(uid, token), data })
   /* ═══ money guards ═══ */
   say('\n── money guards ──');
   const PO = require(Path.join(FN, 'provider-ops.js'));
-  await db.doc('providerBookings/pbD').set({ providerId: 'djK', customerUid: 'buyer1', status: 'confirmed', paymentStatus: 'paid_held', price: 500000, fee: 0, deposit: 0, startTs: NOW + 96 * H, commissionHub: 'entertainment', entClass: 'ARTIST' });
+  await db.doc('providerBookings/pbD').set({ providerId: 'djK', customerUid: 'buyer1', status: 'confirmed', paymentStatus: 'paid_held', price: 500000, fee: 0, heldAmount: 500000, deposit: 0, startTs: NOW + 96 * H, commissionHub: 'entertainment', entClass: 'ARTIST' });
   const bal0 = ((await get('users/buyer1')) || {}).walletBalance || 0;
   await PO._h.providerDeclineBooking({ ...who('djK'), data: { bookingId: 'pbD', reason: 'double booked' } });
   ck('a provider DECLINING a paid booking refunds the customer in full (the money was stuck)', (await get('providerBookings/pbD')).paymentStatus === 'refunded' && ((await get('users/buyer1')).walletBalance - bal0) === 5000);
