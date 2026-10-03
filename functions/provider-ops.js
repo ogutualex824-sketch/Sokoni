@@ -22,6 +22,7 @@ const subCore                      = require('./subscription-core');
 const legal                        = require('./legal-agreements');
 const rc                           = require('./reservation-core');
 const { bookingEvent, TYPES }      = require('./booking-events');
+const TSP                          = require('./shared/tech-service-profile');
 
 const _db  = () => getFirestore();
 const _ts  = () => FieldValue.serverTimestamp();
@@ -272,17 +273,20 @@ _h.providerDeclineBooking = async (req) => {
   const uid = _uid(req);
   const { ref, data } = await _ownBooking(uid, req.data?.bookingId);
   _refuseHeldMilestone(data);
-  if (['completed', 'cancelled'].includes(data.status)) {
+  if (['completed', 'cancelled', 'no_show'].includes(data.status)) {
     throw new HttpsError('failed-precondition', `Cannot decline a "${data.status}" booking.`);
   }
-  /* 2026-09-27 (availability convergence): one transaction — the status is re-read, and the slot is
-     released through the availability authority in the SAME commit that makes the booking terminal. */
+  if (data.status === 'declined') return { success: true, status: 'declined', alreadyDone: true };
+  /* 2026-09-27 (availability convergence) + 2026-10-01 audit (STOP S4, anchor 451acee): decline is ONE transaction that
+     re-reads the status and releases the slot through the availability authority in the same commit. */
   await _terminalTransition(ref, { status: 'declined', declinedAt: _ts(), updatedAt: _ts(), declineReason: _san(req.data?.reason, 300) || null },
     (cur) => { if (['completed', 'cancelled', 'declined', 'no_show'].includes(cur.status)) throw new HttpsError('failed-precondition', `Cannot decline a "${cur.status}" booking.`); });
-  /* 2026-09-27: a DECLINED paid booking kept the customer's held money — nothing released it. A
-     provider decline is a provider cancellation: full refund through the same disbursement the
-     cancel path uses (idempotent on paymentStatus 'paid_held'). */
-  if (data.paymentStatus === 'paid_held') await _disburseHeldFunds(data, ref, { by: 'provider', isNoShow: false });
+  /* A DECLINED paid booking returns the held money exactly as a provider cancel does (full refund via _disburseHeldFunds —
+     no new money path). Recoverable: a failure is logged; the money stays held, never lost. */
+  if (data.paymentStatus === 'paid_held') {
+    try { await _disburseHeldFunds(data, ref, { by: 'provider', isNoShow: false }); }
+    catch (e) { logger.error('disburse-on-decline failed (recoverable)', { bookingId: ref.id, err: e.message }); }
+  }
   return { success: true, status: 'declined' };
 };
 
@@ -560,18 +564,14 @@ _h.providerCompleteBooking = async (req) => {
   await legal.assertLegalCompliance(uid, 'provider'); // receive settlement — dark-launched
   const { ref, data } = await _ownBooking(uid, req.data?.bookingId);
   if (data.status === 'completed') return { success: true, status: 'completed', alreadyDone: true };
-  /* A HELD payment is released only by the customer's booking PIN (PIN YAKO NI BOOKING YAKO).
-     Completing without it would either strand the money or pay before the customer agreed the
-     service happened; neither is allowed. The PIN path settles and completes together. */
+  /* PIN YAKO NI BOOKING YAKO (owner 2026-09-30): a booking the customer PAID is held by SOKONI and is
+     completed — and the money released to the provider's business wallet below — only with the
+     customer's booking PIN, which they give after the service. booking-pin-core.js */
+  let viaPin = false;
   if (data.paymentStatus === 'paid_held') {
-    const pin = String(req.data?.pin == null ? '' : req.data.pin).trim();
-    if (!pin) {
-      throw new HttpsError('failed-precondition',
-        'This booking was paid to SOKONI and is held. Ask the customer for their booking PIN — PIN YAKO NI BOOKING YAKO — and enter it to complete the service and release the payment.');
-    }
-    const r = await require('./entertainment-bookings')._h.providerVerifyBookingPin({ auth: req.auth, data: { bookingId: ref.id, pin } });
-    if (!r || !r.verified) throw new HttpsError('failed-precondition', (r && r.reason) || 'That PIN does not match this booking.');
-    return { success: true, status: 'completed', viaPin: true, settled: !!r.settled, bookingRef: r.bookingRef || null };
+    const v = await require('./booking-pin-core')._internal.verifyForCompletion({ bookingId: ref.id, providerUid: uid, pin: req.data?.pin });
+    if (!v.ok) throw new HttpsError('failed-precondition', v.reason);
+    viaPin = true;
   }
   if (!['confirmed', 'in_progress', 'pending'].includes(data.status)) {
     throw new HttpsError('failed-precondition', `Cannot complete a "${data.status}" booking.`);
@@ -587,6 +587,18 @@ _h.providerCompleteBooking = async (req) => {
     const cur = bSnap.data();
     if (cur.status === 'completed') { result = { alreadyDone: true }; return; }
     if (cur.providerId !== uid) throw new HttpsError('permission-denied', 'Not your booking.');
+    /* Status re-checked INSIDE the txn (2026-10-01 audit, STOP S2, anchor 451acee): a cancel landing between the pre-read and
+       this txn must not be overwritten by "completed" and credited. */
+    if (!['confirmed', 'in_progress', 'pending'].includes(cur.status)) {
+      throw new HttpsError('failed-precondition', `Cannot complete a "${cur.status}" booking.`);
+    }
+    /* PIN INSIDE THE TXN (2026-10-01, anchor 451acee): if the payment landed between the pre-read and this txn, the txn sees
+       paid_held — held funds are released only when the envelope says the customer's PIN was VERIFIED. */
+    if (cur.paymentStatus === 'paid_held') {
+      const envSnap = await t.get(_db().collection('entBookings').doc(require('./shared/ent-booking-identity').envIdFor('providerBookings', ref.id)));
+      const vstate = envSnap.exists && envSnap.data().verification ? envSnap.data().verification.state : null;
+      if (vstate !== 'VERIFIED') throw new HttpsError('failed-precondition', "The customer's booking PIN is required to complete a paid booking.");
+    }
     /* §3.2 — completed is terminal; release the slot lock (harmless no-op if absent). */
     const lockRef = _slotLockRef(uid, cur);
     if (lockRef) t.delete(lockRef);
@@ -602,7 +614,7 @@ _h.providerCompleteBooking = async (req) => {
 
   if (result && result.alreadyDone) return { success: true, status: 'completed', alreadyDone: true };
   logger.info('providerCompleteBooking', { uid, bookingId: ref.id, gross, commission, net, fee: feeCents, creditedShillings: result.credited, held: result.held, remainderCents: result.remainderCents });
-  return { success: true, status: 'completed', gross, commission, net, fee: feeCents, settlementCents: settleCents, held: result.held, creditedShillings: result.credited, remainderCents: result.remainderCents, settledAtShowUp: !!result.settledAtShowUp };
+  return { success: true, status: 'completed', viaPin, gross, commission, net, fee: feeCents, settlementCents: settleCents, held: result.held, creditedShillings: result.credited, remainderCents: result.remainderCents, settledAtShowUp: !!result.settledAtShowUp };
 };
 
 /* ============================================================================
@@ -816,6 +828,8 @@ _h.providerContactCustomer = async (req) => {
   if (!custUid) throw new HttpsError('failed-precondition', 'This booking has no linked customer account.');
   const uSnap = await _db().collection('users').doc(custUid).get();
   const u = uSnap.exists ? uSnap.data() : {};
+  /* Tech Hub 4M: every phone reveal is logged (who, whose, which booking) — server-written, never client-readable. */
+  await _db().collection('contactReveals').add({ bookingId: _san(req.data?.bookingId, 128), by: uid, byRole: 'provider', target: custUid, at: _ts() }).catch(() => {});
   /* Phone lives in `phoneNumber` ("+254…"), not `phone`. */
   return {
     success: true,
@@ -983,6 +997,44 @@ _h.providerGetPortfolio = async (req) => {
   return { portfolio: snap.exists ? snap.data() : null };
 };
 
+/* ── Tech service profile (Tech Hub slice 4b) ──────────────────────────────────
+   A service's devices / brands / repairs / service modes. The FIRST caller of business-workspace.assertModule: device
+   fields need the supportedDevices module AVAILABLE (an approved device-repair / electronics business), anything else
+   needs the services module AVAILABLE; every service mode must be a capability the provider was granted. Lazy require —
+   business-workspace is loaded beside this module by provider-dispatch. */
+async function _techProfile(uid, raw) {
+  if (raw === null) return null;                                   /* explicit clear */
+  const BW = require('./business-workspace');
+  const d = raw && typeof raw === 'object' ? raw : {};
+  const wantsDevice = ['deviceTypes', 'repairTypes', 'brands', 'models'].some((k) => Array.isArray(d[k]) && d[k].length);
+  const w = await BW.assertModule(_db(), uid, wantsDevice ? 'supportedDevices' : 'services', HttpsError);
+  try { return TSP.sanitizeProfile(d, w.serviceCapabilities || []); }
+  catch (e) {
+    if (e instanceof TSP.ProfileError) {
+      throw new HttpsError(e.code === 'BAD_VALUE' ? 'invalid-argument' : 'failed-precondition', e.message, { code: 'TECH_PROFILE_' + e.code });
+    }
+    throw e;
+  }
+}
+
+/* Marketing Hub MK4 — a marketing service is a providerServices doc whose category is a marketing taxonomy id the provider
+   is APPROVED for (providers/{uid}.marketingCategories, admin-approved subset). hub/serviceGroup/marketing are written by
+   the SERVER here; the request can never set them. Returns null for a non-marketing service (behaviour unchanged). */
+const MSVC = require('./shared/marketing-services');
+async function _marketingFields(uid, d, existing) {
+  if (!MSVC.isMarketing(d, existing)) return null;
+  const p = await _db().collection('providers').doc(uid).get();
+  /* SECURITY: the provider's own marketing fields are owner-writable on the served rules — the approved set comes from
+     the server decision record (shared/marketing-authority.js), intersected, fail closed. */
+  const MA = require('./shared/marketing-authority');
+  const auth = await MA.marketingAuthority(_db(), uid, p.exists ? p.data() : null);
+  try { return MSVC.shape(d, MA.effectiveProvider(p.exists ? p.data() : null, auth), existing); }
+  catch (e) {
+    if (e instanceof MSVC.MarketingServiceError) throw new HttpsError(e.code === 'MKT_SERVICE_NOT_APPROVED' ? 'permission-denied' : 'invalid-argument', e.message, { code: e.code });
+    throw e;
+  }
+}
+
 /* ── 10. providerAddService — enforces plan limits.listings ──────────────────
    Creates providerServices; a provider cannot exceed their subscription's
    listing cap (-1 = unlimited). This is the listings-limit enforcement point. */
@@ -992,6 +1044,8 @@ _h.providerAddService = async (req) => {
   const d   = req.data || {};
   const name = _san(d.name, 200).trim();
   if (!name) throw new HttpsError('invalid-argument', 'Service name is required.');
+  const techProfile = d.techProfile !== undefined && d.techProfile !== null ? await _techProfile(uid, d.techProfile) : null;
+  const mkt = await _marketingFields(uid, d, null);
 
   const [svcSnap, cap] = await Promise.all([
     _db().collection('providerServices').where('providerId', '==', uid).limit(200).get(),
@@ -1010,6 +1064,8 @@ _h.providerAddService = async (req) => {
     deposit: _cents(d.deposit),                  /* cents — upfront hold (collected in Phase E) */
     images:  _images(d.images),                  /* https URLs */
     durationMins: Math.max(0, Math.round(Number(d.durationMins ?? d.duration) || 0)),
+    ...(techProfile ? { techProfile } : {}),
+    ...(mkt || {}),                              /* marketing: server-written hub/category/serviceGroup/marketing */
     active: true,
     createdAt: _ts(), updatedAt: _ts(),
   });
@@ -1063,6 +1119,8 @@ _h.providerDuplicateService = async (req) => {
     priceType: s.priceType || 'quotation', price: Number(s.price) || 0, fee: Number(s.fee) || 0,
     deposit: Number(s.deposit) || 0, images: Array.isArray(s.images) ? s.images : [],
     durationMins: Math.max(0, Math.round(Number(s.durationMins) || 0)), active: true,
+    ...(s.techProfile ? { techProfile: await _techProfile(uid, s.techProfile) } : {}),
+    ...((await _marketingFields(uid, {}, s)) || {}),   /* a marketing copy is re-checked against the CURRENT approval */
     createdAt: _ts(), updatedAt: _ts(),
   });
   return { success: true, serviceId: ref.id };
@@ -1183,6 +1241,12 @@ _h.providerUpdateService = async (req) => {
     patch.durationMins = Math.max(0, Math.round(Number(d.durationMins ?? d.duration) || 0));
   }
   if (d.active !== undefined)      patch.active      = d.active === true;
+  if (d.techProfile !== undefined) {
+    const tp = await _techProfile(uid, d.techProfile);
+    patch.techProfile = tp === null ? FieldValue.delete() : tp;
+  }
+  const mkt = await _marketingFields(uid, d, snap.data());
+  if (mkt) Object.assign(patch, mkt);           /* category re-validated against the CURRENT approval; hub stays marketing */
   await ref.update(patch);
   return { success: true };
 };
@@ -1214,6 +1278,7 @@ _h.providerToggleService = async (req) => {
         `Your plan allows ${cap} active service${cap === 1 ? '' : 's'}. Deactivate another, or upgrade.`);
     }
   }
+  if (next && cur.hub === 'marketing') await _marketingFields(uid, {}, cur);   /* re-activating needs a CURRENT approval */
   await ref.update({ active: next, updatedAt: _ts() });
   return { success: true, active: next };
 };
