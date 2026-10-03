@@ -12,6 +12,7 @@ the merchant-v2 screens, AdminOS, and emulator/browser proof have all passed.
 | Topic | Decision |
 |---|---|
 | Earning | **Lead fee, KES 200 + 16% VAT per RFQ a supplier RECEIVES**, invoiced monthly. VAT comes from the tax engine and is never hard-coded. |
+| Lead-fee VAT basis | The owner chose "Add 16% VAT" directly (2026-10-03, AskUserQuestion), so VAT on the lead fee is an **owner decision, not an inference**. The rate and categorisation remain the tax engine's, and the wider commission-VAT question (`docs/VAT_POLICY_2026-09-30.md`) stays open with the owner and their tax adviser. If the adviser rules otherwise, only the commercial authority changes; the UI renders `b2bLeadPrice`. |
 | Wholesale orders | **0% commission, permanently** (`b2b_order` lane, fixed and floor-exempt). |
 | Payment | The accepted quote is paid **through SOKONI (IntaSend), held until delivery**, then settled to the supplier's business wallet. |
 | Lead invoice recovery | **Deducted from the supplier's settlement** of a buyer-paid B2B order at release. The buyer's amount is never reduced. |

@@ -7,7 +7,8 @@
  * nothing ever wrote.
  *
  * OWNER DECISIONS (2026-10-03, asked directly):
- *   · SOKONI earns a LEAD FEE — KES 200 + 16% VAT per RFQ a supplier RECEIVES, invoiced monthly; NO % on orders.
+ *   · SOKONI earns a LEAD FEE per RFQ a supplier RECEIVES (owner: KES 200 default, admin-configurable; VAT added per
+ *     owner decision, rate from the tax engine — both owned by b2b-leads.js), invoiced monthly; NO % on orders.
  *     This module records one lead per (rfq, supplier) in b2bLeads (idempotent). It does not price or invoice it:
  *     the rate and the monthly SOKONI → supplier invoice belong to the commercial authority (sokoni-2f).
  *   · An accepted quotation becomes an order paid THROUGH SOKONI, held until delivery, settled to the supplier's
