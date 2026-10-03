@@ -43,6 +43,7 @@ const CAPS = require('./shared/business-capabilities');
    approved?" — derived by shared/approval-remediation.js from the same evidence the remediation census used, never from
    a role, a claim or a status alone. Only VALID_APPROVAL proceeds to the category/capability routing below. */
 const REM = require('./shared/approval-remediation');
+const AUTH = require('./shared/approval-authority');
 const CLEANUP = require('./shared/cleanup-claimed-ids.json');
 const CLEANUP_IDS = new Set(CLEANUP.ids);
 
@@ -303,19 +304,16 @@ async function approvalStateFor(db, uid, opts) {
     /* resolve every decider ONCE, then hand the derivation a synchronous predicate */
     const deciders = [...new Set(applications.map((a) => (typeof a.decidedBy === 'string' ? a.decidedBy.trim() : '')).filter(Boolean))];
     const adminMap = {}; for (const d of deciders) adminMap[d] = await isAdminAsync(d);
-    /* P0 2026-10-03 — SERVER evidence for every application that claims approval: applicationDecisions/{id} (written ONLY by
-       applicationDecide; no client rule) or the immutable adminAudit 'application_approve' row it writes (covers decisions
-       made before applicationDecisions existed). Both must name the same decidedBy. Unreadable → not decided (fail closed). */
+    /* P0-C 2026-10-03 (owner) — THE approval authority: shared/approval-authority.isAuthoritativelyApproved. Application status is
+       workflow, never authorisation; there is NO adminAudit / status / approvalDecision fallback (P0-H reconciles legacy
+       audit evidence into decision records ONCE). A decision the authority holds back only for the provider's current state
+       (PROVIDER_INACTIVE / ACCOUNT_FROZEN) is still the authoritative decision — the derivation applies that hold itself. */
     const serverDecided = {};   /* a plain map — this module performs NO writes (the gate suites assert it) */
     for (const a of applications) {
-      const by = typeof a.decidedBy === 'string' ? a.decidedBy.trim() : '';
-      if (!by || String(a.statusCanonical || a.status || '').toLowerCase() !== 'approved' && !['active', 'accepted', 'verified'].includes(String(a.status || '').toLowerCase())) continue;
-      try {
-        const rec = await db.collection('applicationDecisions').doc(String(a.id)).get();
-        if (rec.exists && String((rec.data() || {}).status || '') === 'approved' && (rec.data() || {}).decidedBy === by) { serverDecided[a.id] = true; continue; }
-        const aud = await db.collection('adminAudit').where('applicationId', '==', String(a.id)).limit(20).get();
-        if (aud.docs.some((x) => (x.data() || {}).action === 'application_approve' && (x.data() || {}).performedBy === by)) serverDecided[a.id] = true;
-      } catch (_) { /* unreadable evidence is no evidence */ }
+      const st = String(a.statusCanonical || a.status || '').toLowerCase();
+      if (st !== 'approved' && !['active', 'accepted', 'verified'].includes(String(a.status || '').toLowerCase())) continue;
+      const v = await AUTH.isAuthoritativelyApproved(db, String(a.id), { isAdmin: isAdminAsync, application: a });
+      if (v.approved || v.reason === 'PROVIDER_INACTIVE' || v.reason === 'ACCOUNT_FROZEN') serverDecided[a.id] = true;
     }
     let claims = o.claims || null;
     if (!claims) { try { const me = await getUser(String(uid)); claims = Object.keys((me && me.customClaims) || {}).filter((k) => me.customClaims[k] === true); } catch (_) { claims = []; } }
