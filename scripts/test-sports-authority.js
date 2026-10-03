@@ -175,6 +175,13 @@ const refused = (x, code) => x.ok === false && (!code || x.code === code);
   ck('X8 organiser corrects + resolves → audit history keeps submit/dispute/correction/confirm; standings reflect 1-2',
     x.ok && db._docs.get('sportsFixtures/' + G).history.filter((h) => /^result_/.test(h.event)).length === 4 && db._docs.get('tournaments/' + TR).standings[g0.awayTeamId].pts === 3);
 
+  /* ── AdminOS queue ── */
+  await call(A('capQ'), { op: 'team.register', name: 'Queue FC', sport: 'football', submit: true });
+  const q = await call(A('admin1', true), { op: 'admin.queue' });
+  ck('Q1 admin.queue lists submitted teams (projection, no contact fields); a non-admin is refused',
+    q.ok && q.r.teams.some((t) => t.name === 'Queue FC' && t.status === 'submitted') && q.r.teams.every((t) => !('phone' in t) && !('email' in t))
+    && refused(await call(A('capQ'), { op: 'admin.queue' }), 'permission-denied'));
+
   /* ── dispatch guard + pure helper ── */
   ck('D1 unauthenticated / unknown op refused', refused(await call(null, { op: 'team.register', name: 'X', sport: 'f' }), 'unauthenticated') && refused(await call(A('u'), { op: 'team.delete' }), 'invalid-argument'));
   const rr = S.roundRobin(['a', 'b', 'c']);

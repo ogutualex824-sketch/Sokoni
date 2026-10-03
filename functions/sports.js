@@ -499,6 +499,22 @@ async function resultDispute (db, uid, data, deps) {
   return { ok: true, status: 'disputed' };
 }
 
+/* ── ADMIN QUEUE (AdminOS → Sports) ───────────────────────────────────────────── */
+/** Teams awaiting a decision and tournaments awaiting review. A projection — never contact details. */
+async function adminQueue (db) {
+  const pick = (d, keys) => Object.assign({ id: d.id }, ...keys.map((k) => ({ [k]: (d.data() || {})[k] === undefined ? null : d.data()[k] })));
+  const [teams, sub, rev] = await Promise.all([
+    db.collection('teams').where('status', '==', 'submitted').limit(100).get(),
+    db.collection('tournaments').where('status', '==', 'submitted').limit(100).get(),
+    db.collection('tournaments').where('status', '==', 'under_review').limit(100).get(),
+  ]);
+  return {
+    ok: true,
+    teams: (teams.docs || []).map((d) => pick(d, ['name', 'sport', 'category', 'county', 'ownerUid', 'captainUid', 'status'])),
+    tournaments: (sub.docs || []).concat(rev.docs || []).map((d) => pick(d, ['name', 'sport', 'category', 'organiserUid', 'capacity', 'entryFeeKES', 'regOpensAt', 'regClosesAt', 'startsAt', 'status'])),
+  };
+}
+
 /* ── MATCH REMINDERS ───────────────────────────────────────────────────────────── */
 /* Reminders hang off THE fixture record. Every RUN_EVERY_MS the job finds fixtures whose start falls inside a reminder
    window and notifies the active members of both teams. The dedupeKey names fixture + window + person + startsAt, so a
@@ -548,6 +564,7 @@ const OPS = {
   'result.submit': (db, a, d, deps) => resultSubmit(db, a.uid, d, deps),
   'result.confirm': (db, a, d, deps) => resultConfirm(db, a.uid, d, deps),
   'result.dispute': (db, a, d, deps) => resultDispute(db, a.uid, d, deps),
+  'admin.queue': (db, a) => { if (!a.admin) fail('permission-denied', 'Admins only.'); return adminQueue(db); },
   'admin.teamDecide': (db, a, d, deps) => { if (!a.admin) fail('permission-denied', 'Admins only.'); return adminTeamDecide(db, a.uid, d, deps); },
   'admin.tournamentDecide': (db, a, d, deps) => { if (!a.admin) fail('permission-denied', 'Admins only.'); return adminTournamentDecide(db, a.uid, d, deps); },
 };
