@@ -48,5 +48,10 @@ ok('T1', /'freelance-gig'/.test(js) && /'freelance-gig':'Freelance \/ Gig'/.test
 ok('T2', /<script src="\/sw-register\.js" defer><\/script>\s*<\/body>/.test(jobs) && /<script src="\/sw-register\.js" defer><\/script>\s*<\/body>/.test(post), 'both pages self-update after deploys (sw-register.js)');
 ok('T3', !/wa\.me|whatsapp/i.test(js + jobs + post), 'no WhatsApp hand-offs');
 ok('T4', /function _esc\(s\)/.test(js) && !/innerHTML = [^;]*app\.rejectionReason(?![^;]*_esc)/.test(js), 'rejection reasons are escaped before rendering');
+/* M — Jobs messages (sokoni-b2 J4): parties are derived by the server from the application */
+const mi = js.indexOf('function messageApp');
+ok('M1', /window\.SokoniInbox\.openForTransaction\('job_application', applicationId\)/.test(js) && /\/messages\.html\?tx=job_application&txId=/.test(js), 'Message opens the job_application conversation, with the messages.html fallback');
+ok('M2', /SokoniJobs\.messageApp\('\$\{appId\}'\)">💬 Message employer/.test(js) && /SokoniJobs\.messageApp\('\$\{id\}'\)">💬 Message applicant/.test(js), 'Message employer (candidate) and Message applicant (employer) buttons');
+ok('M3', mi > 0 && !/participant|seekerUid|employerUid/.test(js.slice(mi, mi + 500)), 'the page sends only the application id, never participant ids');
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

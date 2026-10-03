@@ -739,6 +739,7 @@ window.SokoniJobs = (() => {
           app.canRespondToOffer ? `<button type="button" class="btn-sm btn-primary" onclick="SokoniJobs.respondToOffer('${appId}', true)">Accept offer</button>
             <button type="button" class="btn-sm" onclick="SokoniJobs.respondToOffer('${appId}', false)">Decline</button>` : '',
           app.canWithdraw ? `<button type="button" class="btn-sm" onclick="SokoniJobs.withdrawApp('${appId}')">Withdraw</button>` : '',
+          `<button type="button" class="btn-sm" onclick="SokoniJobs.messageApp('${appId}')">💬 Message employer</button>`,
           `<button type="button" class="btn-sm" onclick="SokoniJobs.showAppHistory('${appId}')" aria-expanded="false">History</button>`,
         ].join(' ');
         const reason = app.status === 'rejected' && app.rejectionReason ? `<div class="my-app-reason">${_esc(app.rejectionReason)}</div>` : '';
@@ -790,6 +791,14 @@ window.SokoniJobs = (() => {
       toast(accept ? 'Offer accepted — the employer has been told.' : 'Offer declined.', 'success');
       _loadMyApplications();
     } catch (err) { toast(err.message || 'Could not send your response.', 'error'); }
+  }
+
+  /* Jobs conversation (sokoni-b2 J4): the server derives BOTH parties from the application (seekerUid / employerUid);
+     the page only names the application; the conversation stays inside SOKONI. */
+  function messageApp(applicationId) {
+    if (!applicationId || !/^[A-Za-z0-9_-]{1,200}$/.test(String(applicationId))) return;
+    if (window.SokoniInbox && typeof window.SokoniInbox.openForTransaction === 'function') { window.SokoniInbox.openForTransaction('job_application', applicationId); return; }
+    window.location.href = '/messages.html?tx=job_application&txId=' + encodeURIComponent(applicationId);
   }
 
   async function showAppHistory(applicationId) {
@@ -1236,6 +1245,7 @@ window.SokoniJobs = (() => {
           </a>
         </div>` : ''}
 
+        <div style="margin:8px 0"><button type="button" class="btn btn-sm" onclick="SokoniJobs.messageApp('${id}')">💬 Message applicant</button></div>
         <div class="app-status-row">
           <label class="status-label">Application Status</label>
           <div class="status-controls">
@@ -1316,6 +1326,7 @@ window.SokoniJobs = (() => {
     withdrawApp,
     respondToOffer,
     showAppHistory,
+    messageApp,
     // Employer page
     postJob,
     loadMyJobs,
