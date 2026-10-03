@@ -1,3 +1,10 @@
+## 2026-10-03 — Car rental + healthcare bookings 5%; clawback debt policy confirmed; seller-terms fee table updated (NOT deployed)
+
+- **Rates:** commission-config car_rental 16→5 and healthcare 12→5; snapshot regenerated.
+- **Cleanup:** provider-ops dead _commissionRate removed; comments updated.
+- **Terms:** seller-terms.html fee rows updated (the legal 'how commission is collected' paragraph is flagged for the owner, not edited).
+- **Tests:** commission-schedule 25/0.
+
 ## 2026-10-03 — Memberships: start at payment, pay-by deadline, member + gym notifications (NOT deployed)
 
 - **Changes:** membership-settlement (startAt = payment time unless a later start was chosen; notifications via notify.js); payment-purposes payBy check.

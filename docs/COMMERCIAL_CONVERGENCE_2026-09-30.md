@@ -499,7 +499,7 @@ The money-side gaps from the owner's "MEMBERSHIP FULL END-TO-END GREEN" brief:
 - There is no KES 10 floor (this lane never had one).
 - An admin may still adjust the rate through `commissionRules` / `revenueConfig(hub_provider)`, like every category.
 - The `fitness` hub routes to its fixed 5% lane.
-- Healthcare and entertainment are unchanged (already 5%).
+- Entertainment is unchanged (already 5%). **Correction (same day):** healthcare BOOKINGS are 12% (owner schedule 2026-09-28), NOT 5% as first written here; the owner then CONFIRMED healthcare bookings are 5% too ("Yes, 5% for healthcare too") — see §14.2.
 - `PROVIDER_PLAN_RATES` stays in place, but service bookings no longer read it. Plans unlock features only.
 
 **Tests updated to the decision:**
@@ -543,3 +543,20 @@ It only reverses settled bookings, full reversals only (partial is not decided),
   - member: payment confirmed / active (`subscription_activated`), refund request received, refund declined with reason, refunded (`refund_processed`), membership ended (`subscription_expired`)
   - gym: new membership (`booking_new`), refund requested, earnings released (`wallet_credit`)
 - **Tests:** 53/0 (+S1–S3, N1–N5). The 5 mutants were re-run and each is still detected.
+
+### 14.2 · Owner answers: clawback debt, car rental, healthcare (2026-10-03, later)
+
+- **Clawback shortfall:** "Provider owes it".
+  - The reversal's negative balance is the policy; it is repaid from later settlements, and payouts are refused until then.
+  - `reverseServiceSettlement` comment updated: confirmed.
+- **Car rental:** 16% → **5%** ("Make it 5%").
+- **Healthcare bookings:** 12% → **5%** ("Yes, 5% for healthcare too"). Healthcare PRODUCT sales stay at 15% (not a booking).
+- **`seller-terms.html` fee table:**
+  - Healthcare bookings 5%.
+  - "Service bookings (home services, fitness, car rental and all other services): 5% of the service amount, deducted from the provider's payout at settlement — the same on every plan".
+  - **Flag for the owner (legal wording, not edited):** the paragraph "How commission is collected … SOKONI does not deduct commission from the customer's payment" describes marketplace sales. Held service bookings and memberships ARE settled net of commission by SOKONI. The owner or an adviser should reword it.
+- **Cleanup** (sokoni-b2's finding):
+  - The dead `provider-ops._commissionRate()` plan lookup is removed.
+  - The `_settlementMath` comment now states the flat 5%.
+- **Snapshot** regenerated: services / home_services / car_rental / healthcare all 5.
+- **Tests:** commission-schedule 25/0 (S1, S6, S8 updated), healthcare-payment-convergence 40/0, healthcare-subscription-foundation 120/0, provider-plan-ladder 38/0, entertainment 95/0, reversal 7/0, membership 53/0.

@@ -55,7 +55,7 @@ const RATES = {
   food_delivery:    { pct: 15,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: food ordered online 15% (was 5%)' },
   property:         { pct: 0,   fixedKES: 5000, _was: 'owner schedule 2026-09-28: property KES 5,000 flat (was hub 2% / category 3%)' },
   vehicles:         { pct: 0,   fixedKES: 2000, _was: 'hub flat KES 2000 / category 5%' },
-  healthcare:       { pct: 12,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: healthcare BOOKINGS 12% (was 5%)' },
+  healthcare:       { pct: 5,   fixedKES: 0,    _was: 'owner 2026-10-03: every service booking 5%, healthcare included (was 12%, owner schedule 2026-09-28)' },
   /* Healthcare PRODUCT sales price as merchant online sales (owner: "same as merchant"). `pharmacy` — the only
      product-selling healthcare vocabulary in the codebase — resolves here instead of to healthcare bookings. */
   healthcare_products: { pct: 15, fixedKES: 0, _was: 'owner schedule 2026-09-28: healthcare product sales 15% (pharmacy was 5% via healthcare)' },
@@ -82,7 +82,7 @@ const RATES = {
   home_services:    { pct: 5,   fixedKES: 0,    _was: 'owner 2026-10-03: every service booking 5% (was 14%, owner schedule 2026-09-28)' },
   /* Car rental is a BOOKING of a vehicle — distinct from a vehicle SALE (`vehicles`, KES 2,000 flat). The car hub
      and car-rental pages already send category/hub 'car-rental'; before this it matched nothing and fell to default. */
-  car_rental:       { pct: 16,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: car rental 16% (was unmatched → default 5%)' },
+  car_rental:       { pct: 5,   fixedKES: 0,    _was: 'owner 2026-10-03: car rental 5% like every service booking (was 16%, owner schedule 2026-09-28)' },
   /* POS / Till / Quick Charge: its own key, so it can never follow the marketplace rate through an alias. Same 5%
      as before; its 48-hour settlement term is preserved in index.js _is48hCommission. */
   pos:              { pct: 5,   fixedKES: 0,    _was: 'owner schedule 2026-09-28: POS / Till / Quick Charge 5% (unchanged; was via ALIASES.pos -> marketplace)' },
