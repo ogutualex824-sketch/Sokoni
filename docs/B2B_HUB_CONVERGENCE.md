@@ -93,3 +93,26 @@ Run `node scripts/check-b2b-functions-assembly.js <functionsDir>` on any combine
 merchant-v2 product writer drops `wholesalePrice` / `minWholesaleQty`; Bulk Order / Enquire wiring; supplier
 storefront; `b2b*.html` redirects; AdminOS B2B area; staff roles (extend the one guard); KEBS/KRA fields;
 browser + emulator proof.
+
+## Completion gate (owner, 2026-10-03) — nothing deploys before every step passes
+
+1. `cd67847` (RFQ authority on the e3 VAT fix `ca55f8b`).
+2. 2f: settlement-side lead-fee deduction, supplier lead-invoice Pay Now, and the overdue / till-gate predicate.
+3. 5b: held B2B payment. The buyer's payment stays held until the qualifying delivery / goods-receipt event, then is released through the server-authoritative settlement path.
+4. RFQ + VAT + pricing regression on the assembled tree (`check-b2b-functions-assembly.js` first).
+5. Sabotage: deliberately break the settlement and held-payment protections; each break must fail a named test.
+6. Ledger / settlement idempotency (retry, partial, refund/void replay, repeated delivery callback).
+7. AdminOS / Super Admin visibility of lead → invoice → deduction → settlement.
+8. Fresh production-code comparison (live archives) for every function in the release.
+9. Only then is deployment considered, with explicit owner authorization.
+
+**Money-flow proof required (end to end):**
+buyer pays the full B2B amount → IntaSend confirms → funds HELD → delivery / goods receipt confirmed → supplier
+settlement calculated → outstanding eligible lead fee recovered from the supplier settlement → separate lead-fee
+deduction ledger entry → remainder credited to the supplier business wallet.
+Fixture: buyer pays KES 500,000, the supplier owes KES 696 → the buyer is charged 500,000; the settlement is 499,304;
+696 is recorded separately as lead-fee recovery.
+
+**Protected production data:** POS sale `mkHDKSm1oeIC1E4uXGXc` (the owner's id, 10-03), and `mkHDKSm1oeIC1E4uXGXa`
+(the id in earlier POS-void records). Both are protected: never modify, void, refund, migrate or use either as a
+test fixture. Neither id substitutes for the other.
