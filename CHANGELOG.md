@@ -1,3 +1,11 @@
+## 2026-10-03 — rental_booking payment purpose (equipment rental; createPaymentIntent half) (NOT deployed)
+
+- **Change:** `createPaymentIntent({purpose:'rental_booking', bookingId})` priced only from the server-only `rentalBookings/{id}` snapshot written by f3's rentalBook: payer = buyerId, status `confirmed`, paymentStatus `unpaid`; amount = totalAmount + depositAmount; commission base = rent only (`construction_equipment_rental` 10%), deposit carried as `depositCents` + `depositRefundable`; payee = shops/{shopId}.ownerId else shopId, business wallet; preferredRef `RENT-<bookingId>`; added to SELF_SETTLING_PURPOSES (held; 5b's webhook settles at completion).
+- **Files:** functions/payment-purposes.js, functions/shared/self-settling-purposes.js, scripts/test-rental-booking-purpose.js.
+- **DB:** none new (reads rentalBookings, shops). **API:** new purpose value. **Security:** non-renter / unconfirmed / paid / own-equipment refused; client amount ignored.
+- **Open (not this commit):** webhook hold + settle (5b); rentalCancel of a PAID booking must refund (f3/5b) — today it would cancel without one.
+- **Tests:** test-rental-booking-purpose 8/0; rfq_quote 7/0, b2b-lead-recovery 21/0, carhub 16/0, entertainment 95/0, event-settlement 111/0.
+
 ## 2026-10-03 — Construction OFF items stored CONFIGURED BUT DISABLED, never as zero (owner FINAL rules via f3) (NOT deployed)
 
 - **Change:** featured (KES 500/wk), premium featured (NEW row: 1,500/wk, 4,000/mo), delivery margin (10%) and project fee (1.5%) now carry `{configured:true, enabled:false, effectiveFrom:null}` + their real amount/rate + a "Configured but disabled — …" label; no stored 0. `UNPRICED_CATEGORIES` is now DERIVED from `enabled === false` (the engine still refuses each with `category_unpriced`). `resolveRate` returns `enabled:false` for such rows; the client snapshot (`sokoni-commission-rates.js`, regenerated) carries `enabled` too so no page renders an OFF fee as active. Qualified lead KES 500 stays unused (every lead standard).

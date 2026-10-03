@@ -302,6 +302,43 @@ const PURPOSES = {
     },
   },
 
+  /* ── Equipment rental booking (contract with sokoni-f3, 2026-10-03; rentalBook in marketplace-extensions.js) ──
+     Priced ONLY from rentalBookings/{bookingId}, a server-only document (no client rule): totalAmount was computed by rentalBook
+     from rentalProducts rates inside its transaction and is the booking's IMMUTABLE snapshot — a later rate change never
+     re-prices a booking. Payer must be the renter (buyerId); the shop must have CONFIRMED it; paymentStatus unpaid.
+     amount = totalAmount + depositAmount. Commission (construction_equipment_rental, 10%) is on totalAmount ONLY — the deposit
+     is the renter's money, held and refundable, never revenue (commissionBaseCents / depositCents carry the split).
+     Payee = the shop owner (shops/{shopId}.ownerId, else shopId IS the owner uid — f3's shop identity model).
+     Self-settling: the webhook HOLDS and settles at completion through the one settlement path (5b); ONE intent per booking. */
+  rental_booking: {
+    resourceType: 'rentalBooking',
+    async price(uid, data) {
+      const bookingId = String(data.bookingId || '').trim();
+      if (!/^[A-Za-z0-9_-]{6,128}$/.test(bookingId)) fail('invalid-argument', 'bookingId is required.');
+      const snap = await db().collection('rentalBookings').doc(bookingId).get();
+      if (!snap.exists) fail('not-found', 'Rental booking not found.');
+      const b = snap.data() || {};
+      if (b.buyerId !== uid) fail('permission-denied', 'Only the renter who made this booking can pay it.');
+      if (b.paymentStatus !== 'unpaid') fail('already-exists', 'This rental is already paid or closed.');
+      if (b.status !== 'confirmed') fail('failed-precondition', b.status === 'pending' ? 'The shop has not confirmed this rental yet.' : 'This rental can no longer be paid.');
+      const rentCents = Math.round(Number(b.totalAmount) * 100), depositCents = Math.round(Number(b.depositAmount || 0) * 100);
+      if (!Number.isFinite(rentCents) || rentCents <= 0) fail('failed-precondition', 'This rental has no payable amount.');
+      if (!Number.isFinite(depositCents) || depositCents < 0) fail('failed-precondition', 'This rental deposit is inconsistent.');
+      const shopId = String(b.shopId || '');
+      if (!shopId) fail('failed-precondition', 'This rental has no shop to settle to.');
+      const shop = await db().collection('shops').doc(shopId).get();
+      const owner = shop.exists && (shop.data() || {}).ownerId ? String(shop.data().ownerId) : shopId;
+      if (owner === uid) fail('failed-precondition', 'You cannot pay for your own equipment.');
+      return {
+        amountCents: rentCents + depositCents, currency: 'KES', resourceType: 'rentalBooking', resourceId: bookingId,
+        preferredRef: ('RENT-' + bookingId).slice(0, 128),
+        metadata: { type: 'rental_booking', bookingId, rentalProductId: b.rentalProductId || null, shopId, sellerUid: owner,
+          payeeWallet: 'business', commissionCategory: 'construction_equipment_rental',
+          commissionBaseCents: rentCents, depositCents, depositRefundable: true, durationUnit: b.durationUnit || null },
+      };
+    },
+  },
+
   venue_booking: {
     resourceType: 'venueBooking',
     price: (uid, data) => require('./venue-payments').priceVenueBooking(uid, data),
