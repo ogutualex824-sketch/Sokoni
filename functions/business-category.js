@@ -123,6 +123,11 @@ const FROM_BUSINESS_ID = Object.freeze({
   'car-dealer': 'auto_services', 'vehicle-inspection': 'auto_services', 'towing-roadside': 'auto_services',
   'fleet-operator': 'auto_services', 'vehicle-transport': 'auto_services', 'vehicle-tracking': 'auto_services',
   'ntsa-agent': 'professional_services',
+  /* CONSTRUCTION convergence (sokoni-f3, 2026-10-03): the construction trades registrable in hub-register.js, mapped to
+     EXISTING categories (owner 2026-09-28: map, don't add). Materials suppliers stay 'hardware' (goods → merchant-v2).
+     The architect id is namespaced: bare 'architect' already maps to professional_services above. */
+  'construction-company': 'trades', 'welding-fabrication': 'trades', 'construction-services': 'trades',
+  'construction-transport': 'service_business', 'equipment-rental': 'service_business', 'construction-architect': 'professional_services',
   'football-club': 'service_business', basketball: 'service_business',  /* clubs / academies: bookable services */
   /* B2B suppliers sell goods → merchant-v2. A wholesaler and an importer are distribution (the `wholesale` category,
      2026-09-28); a manufacturer is left `retail_store` — no category names it and one is not guessed. */

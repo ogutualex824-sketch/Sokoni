@@ -85,6 +85,16 @@ const FROM_BUSINESS_ID = Object.freeze({
   'ntsa-agent':         ['QUOTE_REQUEST', 'DIRECT_BOOKING'],
   'insurance-auto':     ['QUOTE_REQUEST'],
   'driving-school':     ['DIRECT_BOOKING'],
+  /* CONSTRUCTION (sokoni-f3, 2026-10-03): service-mode capabilities ONLY (the electrical / Car Hub pattern) — no
+     construction vertical capability is invented; projects arrive with the ONE Work engine. 'hardware' (materials) is
+     a goods seller on merchant-v2 and gets none. Contractor work is quote-led (owner: subscription + lead fee, 0%). */
+  'contractor':             ['FIELD_SERVICE', 'ONSITE_SUPPORT', 'QUOTE_REQUEST'],
+  'construction-company':   ['FIELD_SERVICE', 'ONSITE_SUPPORT', 'QUOTE_REQUEST'],
+  'welding-fabrication':    ['WORKSHOP', 'FIELD_SERVICE', 'QUOTE_REQUEST', 'DIRECT_BOOKING'],
+  'construction-services':  ['FIELD_SERVICE', 'ONSITE_SUPPORT', 'QUOTE_REQUEST', 'DIRECT_BOOKING'],
+  'construction-transport': ['PICKUP_DROP_OFF', 'QUOTE_REQUEST', 'DIRECT_BOOKING'],
+  'equipment-rental':       ['QUOTE_REQUEST', 'DIRECT_BOOKING'],
+  'construction-architect': ['QUOTE_REQUEST', 'DIRECT_BOOKING'],
   'restaurant':         ['FOOD_MENU', 'KITCHEN', 'DRINKS'],
   'fast-food':          ['FOOD_MENU', 'KITCHEN', 'DRINKS'],
   'cafe':               ['FOOD_MENU', 'KITCHEN', 'DRINKS'],
