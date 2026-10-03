@@ -166,9 +166,21 @@ _h.providerConfirmBooking = async (req) => {
 
 /* ── 2. providerDeclineBooking ───────────────────────────────────────────────
    pending → declined. Frees any calendar hold. */
+
+/* Work/Job Engine WE2 (sokoni-2f review): a milestone booking has no appointment (no startTs), so the cancel policy would
+   treat any cancel as "early" and FULL-REFUND held money even after the work was delivered. Once a milestone is paid
+   (paid_held), cancel / decline / no-show are refused — a dispute or partial refund goes through the canonical refund
+   REQUEST authority, never an automatic disbursement. */
+function _refuseHeldMilestone(data) {
+  if (data && data.kind === 'work_milestone' && data.paymentStatus === 'paid_held') {
+    throw new HttpsError('failed-precondition', 'This milestone is paid and held. Raise a dispute or refund request instead.', { code: 'WORK_MILESTONE_HELD' });
+  }
+}
+
 _h.providerDeclineBooking = async (req) => {
   const uid = _uid(req);
   const { ref, data } = await _ownBooking(uid, req.data?.bookingId);
+  _refuseHeldMilestone(data);
   if (['completed', 'cancelled'].includes(data.status)) {
     throw new HttpsError('failed-precondition', `Cannot decline a "${data.status}" booking.`);
   }
@@ -396,6 +408,7 @@ _h.providerCancelBooking = async (req) => {
     return { success: true, status: data.status, alreadyDone: true };
   }
   if (data.status === 'completed') throw new HttpsError('failed-precondition', 'A completed booking cannot be cancelled.');
+  _refuseHeldMilestone(data);
 
   const batch = _db().batch();
   batch.update(ref, {
@@ -431,6 +444,7 @@ _h.providerMarkNoShow = async (req) => {
   const uid = _uid(req);
   const { ref, data } = await _ownBooking(uid, req.data?.bookingId);
   if (data.status === 'no_show') return { success: true, status: 'no_show', alreadyDone: true };
+  _refuseHeldMilestone(data);
   if (data.status !== 'confirmed') {
     throw new HttpsError('failed-precondition', `Only a confirmed booking can be marked no-show (is "${data.status}").`);
   }

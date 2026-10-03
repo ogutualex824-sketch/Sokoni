@@ -1,3 +1,23 @@
+## [2026-10-03] — Work/Job Engine WE2: milestone money on the canonical booking path (no new payment code) — NOT deployed
+
+- **Owner 2026-10-03 (AskUserQuestion):** Marketing campaign/project milestones settle at **10%**, like marketing, with no extra fee. Construction contractor milestones are 0%.
+- **functions/work-engine.js:**
+  - **workMilestoneDeliver** (provider only).
+  - **workPayMilestone** (customer only; project accepted/active):
+    - mints `providerBookings/wm_<project>_<milestone>_<attempt>` with kind 'work_milestone' and NO slot;
+    - price = the LOCKED milestone amount, fee 0;
+    - stamps workCommissionCategory from the project skin (marketing → marketing_services, construction → construction_service) and commissionRuleSnapshot from sokoni-2f's catalogue (provider-hub.commissionRuleFor);
+    - the client then pays through the canonical createPaymentIntent → IntaSend → webhook → paid_held → completion PIN → settlement → wallet → receipts path.
+  - Attempts: an open attempt is resumed, a lapsed/cancelled one allows `_n+1`, and a paid one blocks (WORK_MILESTONE_PAID).
+  - An unpriced lane is refused BEFORE minting (WORK_COMMISSION_UNPRICED), and so is a tree without the commercial selector (fail closed).
+- **functions/provider-ops.js:** a PAID work milestone cannot be cancelled (either side), declined or marked no-show into an automatic refund (WORK_MILESTONE_HELD). Disputes and partials go through the canonical refund request authority (sokoni-2f review item).
+- **Receipts (agreed with 2f):** kind 'service_booking', subtype 'work_milestone', links {workProjectId, milestoneId}.
+- **Tests:**
+  - scripts/test-work-milestones.js 9/0, run against sokoni-2f's REAL provider-hub.js + commission-config.js @ 0a949db (git show, not a fixture). SABOTAGE 6/6.
+  - NO_COMMERCIAL mode: the M8 fail-closed row passes.
+  - Regression: work-engine 12/0, marketing-services 13/0, service-leads 14/0, provider-suspend-restore 8/0, booking-contact 5/0.
+- **Deploy coupling:** work-engine + provider-ops + booking must ship on a tree carrying sokoni-2f's commercial-fn selector (0a949db or later). Otherwise milestone payments are refused (fail closed) — safe, but not usable.
+
 ## [2026-10-03] — SECURITY: Marketing authority from the SERVER decision record (forged providers.marketing* refused) + workspace `marketing` flag — NOT deployed
 
 - **The hole:** the served rules let a provider write their own providers.marketingStatus / marketingListed / marketingCategories, and applications.marketingApprovedCategories. Every Marketing check trusted those fields. Same class as the P0 forged approval. Never live: Marketing is not deployed.

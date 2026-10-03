@@ -33,6 +33,17 @@ const _ts = () => admin.firestore.FieldValue.serverTimestamp();
 const LINE_KINDS = ['material', 'labour', 'equipment', 'other'];
 const EVIDENCE_TYPES = ['photo', 'inspection', 'note', 'checklist'];
 const COMPLETION_KINDS = ['delivered', 'practical_completion', 'handover'];
+/* WE2: the commission category a milestone booking is STAMPED with at mint time, from the project skin (owner 2026-10-03:
+   marketing milestones settle like marketing, 10%; construction contractor work 0%). The RATE is the catalogue's
+   (provider-hub.commissionRuleFor, sokoni-2f) — this map only names the lane; an unlisted skin has no lane → refused. */
+const SKIN_COMMISSION = Object.freeze({ marketing: 'marketing_services', construction: 'construction_service' });
+const MILESTONE_HOLD_MS = 15 * 60 * 1000;   /* same pre-payment window as a service booking */
+function _ruleFor(bookingLike) {
+  /* fail CLOSED when the commercial selector is not on this tree: never mint a payment that settlement would refuse */
+  let PH = null; try { PH = require('./provider-hub'); } catch (_) { PH = null; }
+  if (!PH || typeof PH.commissionRuleFor !== 'function') return { refused: 'commission_selector_unavailable' };
+  return PH.commissionRuleFor(bookingLike);
+}
 
 function _uid(req) { if (!req.auth || !req.auth.uid) throw new HttpsError('unauthenticated', 'Sign in to continue.'); return req.auth.uid; }
 const _isAdmin = (req) => !!(req.auth && req.auth.token && (req.auth.token.admin === true || req.auth.token.superAdmin === true));
@@ -261,6 +272,77 @@ const _h = {
     const item = { milestoneId: mId || null, type, ref: raw || null, note: note || null, by: req.auth.uid, actor, atMs: Date.now() };
     await ref.update({ evidence: ev.concat([item]), updatedAt: _ts() });
     return { ok: true };
+  },
+
+  /** Provider marks a milestone delivered (evidence via workAddEvidence). The customer's completion PIN releases the money. */
+  async workMilestoneDeliver(req) {
+    const d = req.data || {};
+    const { ref, p } = await _load(d.projectId);
+    if (_actor(req, p, false) !== 'provider') throw new HttpsError('permission-denied', 'Only the provider delivers a milestone.');
+    if (p.status !== 'active') throw new HttpsError('failed-precondition', 'The project must be active.', { code: 'WORK_NOT_ACTIVE' });
+    const sc = Object.assign({}, p.scope), ms = (sc.milestones || []).slice();
+    const i = ms.findIndex((m) => m.id === _s(d.milestoneId, 40));
+    if (i < 0) throw new HttpsError('not-found', 'Milestone not found.');
+    if (['planned', 'in_progress'].indexOf(ms[i].status || 'planned') < 0) throw new HttpsError('failed-precondition', 'This milestone was already delivered.', { code: 'WORK_MILESTONE_STATE' });
+    ms[i] = Object.assign({}, ms[i], { status: 'delivered', deliveredAtMs: Date.now() });
+    sc.milestones = ms;
+    await ref.update({ scope: sc, updatedAt: _ts(), history: (p.history || []).concat([_ev('provider', req.auth.uid, 'milestone_delivered', { milestoneId: ms[i].id })]).slice(-100) });
+    return { ok: true };
+  },
+
+  /** Customer pays a milestone: mints a providerBookings doc (kind 'work_milestone', NO slot) priced from the LOCKED milestone
+   *  snapshot, stamped with the commission lane + the catalogue rule snapshot. The client then pays it through the canonical
+   *  createPaymentIntent → IntaSend → webhook → paid_held → completion PIN → settlement → wallet → receipts path. Attempts:
+   *  a pending, unexpired attempt is RESUMED; a lapsed / cancelled one allows a new attempt (…_n+1); a paid one blocks. */
+  async workPayMilestone(req) {
+    const d = req.data || {};
+    const { ref, p } = await _load(d.projectId);
+    if (_actor(req, p, false) !== 'customer') throw new HttpsError('permission-denied', 'Only the customer pays a milestone.', { code: 'WORK_PAY_CUSTOMER_ONLY' });
+    if (['active', 'accepted'].indexOf(p.status) < 0) throw new HttpsError('failed-precondition', 'Milestones are paid once the scope is accepted.', { code: 'WORK_NOT_PAYABLE' });
+    const mId = _s(d.milestoneId, 40);
+    const m = (((p.scope || {}).milestones) || []).find((x) => x.id === mId);
+    if (!m) throw new HttpsError('not-found', 'Milestone not found.');
+    const amount = Math.round(Number(m.amountCents) || 0);
+    if (!(amount > 0)) throw new HttpsError('failed-precondition', 'This milestone has no amount.', { code: 'WORK_MILESTONE_AMOUNT' });
+    const category = SKIN_COMMISSION[p.skin] || '';
+    const rule = _ruleFor({ kind: 'work_milestone', workCommissionCategory: category });
+    if (rule.refused) throw new HttpsError('failed-precondition', 'Payments for this kind of project are not priced on SOKONI yet.', { code: 'WORK_COMMISSION_UNPRICED', reason: rule.refused });
+    const out = await db().runTransaction(async (t) => {
+      const cur = (await t.get(ref)).data() || {};
+      const ms = ((cur.scope || {}).milestones || []).slice();
+      const i = ms.findIndex((x) => x.id === mId);
+      if (i < 0) throw new HttpsError('not-found', 'Milestone not found.');
+      if (Math.round(Number(ms[i].amountCents) || 0) !== amount) throw new HttpsError('aborted', 'The milestone changed. Reload and try again.', { code: 'WORK_STALE' });
+      const pay = ms[i].payment || { attempt: 0, bookingId: null };
+      if (pay.bookingId) {
+        const prev = await t.get(db().collection('providerBookings').doc(pay.bookingId));
+        const b = prev.exists ? prev.data() : null;
+        if (b && ['paid_held', 'settled', 'released'].indexOf(b.paymentStatus) >= 0) throw new HttpsError('failed-precondition', 'This milestone is already paid.', { code: 'WORK_MILESTONE_PAID' });
+        const exp = b && b.expiresAt && (typeof b.expiresAt.toMillis === 'function' ? b.expiresAt.toMillis() : Number(b.expiresAt));
+        const dead = !b || ['cancelled', 'expired', 'declined'].indexOf(b.status) >= 0 || (b.paymentStatus === 'pending' && exp && exp < Date.now());
+        if (!dead) return { bookingId: pay.bookingId, resumed: true };
+      }
+      const attempt = (pay.attempt || 0) + 1;
+      const bookingId = 'wm_' + ref.id + '_' + mId + '_' + attempt;
+      const bRef = db().collection('providerBookings').doc(bookingId);
+      t.set(bRef, {
+        kind: 'work_milestone', workProjectId: ref.id, milestoneId: mId,
+        providerId: cur.providerUid, customerUid: cur.customerUid,
+        service: _s(m.title, 200) || 'Milestone', price: amount, fee: 0, deposit: 0, currency: 'KES',
+        serviceHub: cur.skin === 'marketing' ? 'marketing' : (cur.skin || null), serviceCategory: null,
+        serviceSnapshot: { name: _s(m.title, 200), hub: cur.skin || null, workProjectId: ref.id, milestoneId: mId, kind: cur.kind || null },
+        workCommissionCategory: category,
+        commissionRuleSnapshot: { category: rule.category, pct: rule.pct, basis: rule.basis, catalogueVersion: rule.catalogueVersion || null, fixed: rule.fixed === true },
+        paymentStatus: 'pending', status: 'confirmed',
+        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + MILESTONE_HOLD_MS),
+        idempotencyKey: ref.id + ':' + mId + ':' + attempt, bookingSource: 'work-milestone', createdAt: _ts(), updatedAt: _ts(),
+      });
+      ms[i] = Object.assign({}, ms[i], { payment: { attempt, bookingId } });
+      t.update(ref, { 'scope': Object.assign({}, cur.scope, { milestones: ms }), updatedAt: _ts(),
+        history: (cur.history || []).concat([_ev('customer', req.auth.uid, 'milestone_payment_started', { milestoneId: mId, bookingId })]).slice(-100) });
+      return { bookingId, resumed: false };
+    });
+    return { ok: true, bookingId: out.bookingId, resumed: out.resumed, amountCents: amount };
   },
 
   async workGet(req) {
