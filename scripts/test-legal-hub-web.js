@@ -112,6 +112,13 @@ const run = async (cat) => { ctx._activeLawCat = cat; await ctx.renderLawyers();
   ck('PD1', pd.includes("_isLawyer(){return !!(window.__sokoniWorkspace&&window.__sokoniWorkspace.category==='lawyer'&&window.SokoniLegalTaxonomy)}") && pd.includes("if(this._isLawyer()){const la=_q('svLegalArea').value;data.legalArea=la||null}")
     && pd.includes('id="svLegalAreaWrap" hidden') && pd.includes('<script src="sokoni-legal-taxonomy.js" defer></script>') && pd.includes('T.GROUPS.map(g=>'),
     'provider dashboard: Legal practice-area picker only for a server-classified lawyer workspace, options from the taxonomy, sent as legalArea (server re-validates)');
+  const sa = read('super-admin.html');
+  const saFn = (sa.split('async loadLegal(){')[1] || '').split('\n  },')[0];
+  ck('SA1', sa.includes("data-section=\"legal\"") && sa.includes('id="panel-legal"') && sa.includes("else if(section==='legal')this.loadLegal();")
+    && saFn.includes("httpsCallable('adminOsDispatch')(Object.assign({op:'legalAdminList',view}") && !/applicationDecide|legalAdminRecordLsk|set\(|update\(|wallet|balance/.test(saFn)
+    && saFn.includes("rows.filter(a=>a.eligibility&&a.eligibility.bookable)") && saFn.includes('This is not an empty registry.')
+    && sa.indexOf('sokoni-legal-taxonomy.js') > -1,
+    'Super Admin Legal: read-only registry + practice-area coverage from the SAME server read model (legalAdminList); no decisions or money fields; coverage counts bookable providers only; a failed load is not an empty registry');
   done();
 })();
 function done() { console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed'); console.log('NOT proven here: a real browser render (memory floor) and a live booking.'); process.exit(fail ? 1 : 0); }

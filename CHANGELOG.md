@@ -1,3 +1,14 @@
+## [2026-10-03] — Legal Hub L8 (hosting): Super Admin Legal Hub view (read-only) — NOT deployed
+
+- **super-admin.html:**
+  - New Legal Hub section: the lawyer and law-firm registry (type and bookable filters), SOKONI and LSK state, and practice areas.
+  - Practice-area coverage: bookable providers per taxonomy service, counted from the registry rows the server returned. A real 0 is shown as 0.
+  - Reads the SAME server read model as AdminOS (adminOsDispatch legalAdminList). No decisions, no money fields; actions link to AdminOS › Legal Verification / Applications.
+  - Loads sokoni-legal-taxonomy.js.
+- **Tests:**
+  - test-legal-hub-web SA1 (15/0); sabotage-legal-hub-web 12/12.
+  - audit-duplicate-ids / audit-orphan-panels / audit-admin-localstorage match base (line shift only).
+
 ## [2026-10-03] — Legal Hub L6 (hosting): provider dashboard rate cards carry a Legal practice area — NOT deployed
 
 - **provider-dashboard.html:**

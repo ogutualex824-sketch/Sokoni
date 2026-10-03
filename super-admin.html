@@ -416,6 +416,9 @@
     <button class="nav-item" data-section="broadcast" data-label="Platform Broadcast" type="button" onclick="SA.nav('broadcast');_closeSidebar()">
       <span class="nav-icon">&#x1F4E2;</span><span class="nav-label">Platform Broadcast</span>
     </button>
+    <button class="nav-item" data-section="legal" data-label="Legal Hub" type="button" onclick="SA.nav('legal');_closeSidebar()">
+      <span class="nav-icon">&#x2696;</span><span class="nav-label">Legal Hub</span>
+    </button>
     <button class="nav-item" data-section="secrets" data-label="Secrets Checklist" type="button" onclick="SA.nav('secrets');_closeSidebar()">
       <span class="nav-icon">&#x1F511;</span><span class="nav-label">Secrets Checklist</span>
     </button>
@@ -905,6 +908,24 @@
     </section>
 
     <!-- ══ SECTION 8: Secrets Checklist ══ -->
+    <!-- Legal Hub (L8): platform-level READ-ONLY view over the SAME server read model AdminOS uses
+         (adminOsDispatch legalAdminList). Decisions stay where they are authorised: applications in AdminOS /
+         Applications (applicationDecide), LSK evidence in AdminOS › Legal Verification. No money field is editable here. -->
+    <section class="sa-panel" id="panel-legal" hidden>
+      <div class="panel-header">
+        <h2>&#x2696; Legal Hub</h2>
+        <p>Lawyer and law-firm registry, verification state and practice-area coverage. Decisions are taken in <a href="admin-os.html#legal" style="color:#c8ff80">AdminOS › Legal Verification</a> and Applications.</p>
+      </div>
+      <div class="sa-card">
+        <label style="font-size:12px;margin-right:10px">Type
+          <select id="saLegalType" onchange="SA.loadLegal()"><option value="">Lawyers &amp; law firms</option><option value="advocate">Lawyers</option><option value="firm">Law firms</option></select></label>
+        <label style="font-size:12px">Show
+          <select id="saLegalView" onchange="SA.loadLegal()"><option value="all">All</option><option value="bookable">Bookable</option><option value="pending">Not yet bookable</option></select></label>
+      </div>
+      <div class="sa-card"><h3 style="margin:0 0 10px;font-size:14px">Registry</h3><div id="saLegalRegistry"><div class="spinner"></div></div></div>
+      <div class="sa-card"><h3 style="margin:0 0 10px;font-size:14px">Practice-area coverage <span style="font-weight:400;opacity:.6;font-size:12px">(bookable providers per service — from the registry above)</span></h3><div id="saLegalCoverage"></div></div>
+    </section>
+
     <section class="sa-panel" id="panel-secrets" hidden>
       <div class="panel-header">
         <h2>&#x1F511; Secrets Checklist</h2>
@@ -1178,6 +1199,27 @@ const SA={
     else if(section==='emergency')this.loadEmergency();
     else if(section==='audit')this.loadAudit();
     else if(section==='broadcast')this.loadBroadcastHistory();
+    else if(section==='legal')this.loadLegal();
+  },
+
+  // ══ Legal Hub (L8) — read-only; the one read model is legalAdminList (adminOsDispatch, admin-claim checked) ══
+  async loadLegal(){
+    const reg=document.getElementById('saLegalRegistry'),cov=document.getElementById('saLegalCoverage');if(!reg)return;
+    const esc=(v)=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const T=window.SokoniLegalTaxonomy||null;
+    const type=(document.getElementById('saLegalType')||{}).value||'',view=(document.getElementById('saLegalView')||{}).value||'all';
+    reg.innerHTML='<div class="spinner"></div>';if(cov)cov.innerHTML='';
+    let r;
+    try{r=(await this._fns.httpsCallable('adminOsDispatch')(Object.assign({op:'legalAdminList',view},type?{entityType:type}:{}))).data||{};}
+    catch(e){reg.innerHTML='<p style="opacity:.7">The Legal registry could not be loaded ('+esc((e&&e.message)||'error')+'). This is not an empty registry.</p>';return}
+    const rows=r.advocates||[];
+    if(!rows.length){reg.innerHTML='<p style="opacity:.7">No Legal providers match.</p>';}
+    else reg.innerHTML='<div style="overflow-x:auto"><table class="sa-table"><thead><tr><th>Name</th><th>Type</th><th>Practice areas</th><th>SOKONI</th><th>LSK</th><th>Bookable</th></tr></thead><tbody>'+rows.map(a=>'<tr><td>'+esc(a.entityType==='firm'?(a.firmName||a.name):a.name)+(a.entityType==='firm'?'<div style="opacity:.6;font-size:11px">responsible advocate: '+esc(a.name)+'</div>':'')+'</td><td>'+(a.entityType==='firm'?'Law firm':'Lawyer')+'</td><td style="font-size:12px;opacity:.8">'+esc((a.practiceAreas||[]).map(x=>(T&&T.label(x))||x).join(', ')||'—')+'</td><td>'+esc(a.admin||'—')+'</td><td>'+esc((a.lsk&&a.lsk.status)||'—')+(a.lsk&&a.lsk.stale?' (stale)':'')+'</td><td>'+(a.eligibility&&a.eligibility.bookable?'✅':'—')+'</td></tr>').join('')+'</tbody></table></div>';
+    if(!cov)return;
+    if(!T){cov.innerHTML='<p style="opacity:.7">Taxonomy not loaded — coverage unavailable.</p>';return}
+    /* Coverage is COUNTED from the registry rows the server returned (bookable only) — a real 0 means none, never a guess. */
+    const n={};rows.filter(a=>a.eligibility&&a.eligibility.bookable).forEach(a=>(a.practiceAreas||[]).forEach(x=>{n[x]=(n[x]||0)+1}));
+    cov.innerHTML=T.GROUPS.map(g=>'<div style="margin-bottom:10px"><div style="font-weight:700;font-size:12px;margin-bottom:4px">'+esc(g.icon+' '+g.label)+'</div><div style="display:flex;flex-wrap:wrap;gap:6px">'+g.services.map(x=>'<span style="font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.12);'+(n[x.id]?'':'opacity:.55')+'">'+esc(x.label)+' · '+(n[x.id]||0)+'</span>').join('')+'</div></div>').join('');
   },
 
   // Sign Out ────────────────────────────────────────────────
@@ -2128,6 +2170,7 @@ const SA={
   })();
 })();
 </script>
+<script src="sokoni-legal-taxonomy.js"></script>   <!-- Legal Hub L8: the ONE Legal taxonomy (generated) -->
 <script src="sokoni-commission-rates.js"></script>   <!-- Tech Hub 4R: the canonical, generated commission snapshot (read-only view) -->
 </body>
 </html>
