@@ -1,3 +1,17 @@
+## [2026-10-03] - applicationAdmitExistingProvider: an admin approves an already-live provider/seller that has no application
+
+Functions only (new callable in `functions/application-lifecycle.js`, exported once in index.js). **Not deployed.** Owner decision 2026-10-03 (direct, and relayed by f3).
+- **Why:** some live providers and sellers were made active directly by onboarding scripts (DJ Bambi, Shave 'n' Trims, King Bruce, Maina Groceries). They have no application and no decision record, so the strict approval authority (P0-C) treats them as unapproved. P0-H can't migrate them (no audit evidence), and re-deciding needs an application.
+- **What it does:** `applicationAdmitExistingProvider {uid, role: provider|seller, category, reason}`.
+  - Access: admin or superAdmin with a satisfied second factor, and never the record's owner (SELF_DECISION).
+  - Preconditions: the record must exist and be active/approved with NO application. A reason and a category are required.
+  - Writes, in ONE transaction: `applications/ADM_<uid>` (source `admin_existing_provider`, approved), its `applicationDecisions` record (applicationDecide's fields) and an immutable adminAudit row (before → after).
+  - It is idempotent. Existing applications and decisions are never touched.
+  - Provider: `providerProfiles/{uid}` is provisioned from the server's providers record ONLY when absent, so provider-dashboard loads for Shave 'n' Trims. It is never overwritten (DJ Bambi).
+  - Status, discoverability and lane are not changed. The category is recorded on the application; stamping `business.category` stays with AdminOS bizAdminClassify.
+- **Deploy order:** it must deploy AND an admin must run it for the accounts the owner names BEFORE providerDispatch 451acee (strict predicate). The AdminOS button is still owed.
+- **Tests:** `scripts/test-admit-existing-provider.js` 15/0, run on the real handler and checked against the real isAuthoritativelyApproved. Sabotage caught 9/9. k13a, k13b, education-applications, marketing-hub, role-provisioning, legal-projection, food-gate1 and education-learner are all green.
+
 ## [2026-10-03] — Marketing reads use THE approval predicate (adapter over 5b P0-C isAuthoritativelyApproved) — NOT deployed
 
 - **functions/shared/approval-authority.js:** byte-identical copy of 5b f85039a (the ONE predicate).

@@ -1682,6 +1682,89 @@ function _requireAdmin(req) {
   }
 }
 
+
+/* ══ ADMIT AN EXISTING PROVIDER (owner 2026-10-03, direct: "Build admin approve op") ═════════════════════════════════
+   Some live providers / sellers were made active DIRECTLY (onboarding scripts) — no application, no decision record — so
+   the ONE approval authority (shared/approval-authority.isAuthoritativelyApproved) rightly treats them as unapproved.
+   This is the audited, one-time way an ADMINISTRATOR approves such an existing record:
+     • admin / superAdmin with a satisfied second factor (same rule as index.js assertMFA); never the record's owner;
+     • the record must already exist and be live (providers or sellers status active/approved) with NO application;
+     • ONE transaction: create applications/ADM_<uid> (source 'admin_existing_provider', status approved) + its
+       applicationDecisions record (the same fields applicationDecide writes) + an immutable adminAudit row;
+     • idempotent: a second call finds the record and changes nothing; an existing application/decision is never touched;
+     • provider only: providerProfiles/{uid} is provisioned from the server's providers record when ABSENT (so
+       provider-dashboard loads), never overwritten when present;
+     • status, discoverability and the commercial lane are NOT changed. The category is RECORDED on the application;
+       stamping business.category stays with AdminOS bizAdminClassify (the one category writer). */
+const ADMIT_ROLES = Object.freeze({ provider: 'providers', seller: 'sellers' });
+function _mfaSatisfied(token) {
+  if (process.env.MFA_REQUIRED === 'false') return true;   /* dev only, same switch as index.js */
+  return !!(token && token.firebase && (token.firebase.sign_in_second_factor || (token.firebase.sign_in_attributes && token.firebase.sign_in_attributes.second_factor)));
+}
+
+exports.applicationAdmitExistingProvider = onCall(
+  { region: REGION, maxInstances: 5, enforceAppCheck: true },
+  async (req) => {
+    _requireAdmin(req);
+    if (!_mfaSatisfied(req.auth.token)) throw new HttpsError('unauthenticated', 'Administrator two-factor sign-in is required for this action.', { reason: 'MFA_REQUIRED' });
+    const d = req.data || {};
+    const uid = typeof d.uid === 'string' ? d.uid.trim() : '';
+    const role = typeof d.role === 'string' ? d.role : 'provider';
+    const category = _sanText(d.category, 60).toLowerCase();
+    const reason = _sanText(d.reason, 500);
+    if (!/^[A-Za-z0-9_-]{6,128}$/.test(uid)) throw new HttpsError('invalid-argument', '"uid" is required.');
+    if (!ADMIT_ROLES[role]) throw new HttpsError('invalid-argument', 'role must be provider | seller.');
+    if (!category || !/^[a-z0-9_-]{2,60}$/.test(category)) throw new HttpsError('invalid-argument', 'A category is required.', { reason: 'CATEGORY_REQUIRED' });
+    if (reason.length < 5) throw new HttpsError('invalid-argument', 'Give a reason for this approval.', { reason: 'REASON_REQUIRED' });
+    if (uid === req.auth.uid) throw new HttpsError('permission-denied', 'An administrator cannot approve their own business.', { code: 'SELF_DECISION' });
+
+    const db = _db();
+    const appId = 'ADM_' + uid;
+    const appRef = db.collection('applications').doc(appId);
+    const decRef = db.collection('applicationDecisions').doc(appId);
+    const recRef = db.collection(ADMIT_ROLES[role]).doc(uid);
+    const profRef = db.collection('providerProfiles').doc(uid);
+    const out = await db.runTransaction(async (t) => {
+      /* ALL READS FIRST */
+      const [appSnap, decSnap, recSnap, profSnap, others] = await Promise.all([
+        t.get(appRef), t.get(decRef), t.get(recRef), role === 'provider' ? t.get(profRef) : Promise.resolve(null),
+        t.get(db.collection('applications').where('uid', '==', uid).limit(5)),
+      ]);
+      if (appSnap.exists || decSnap.exists) return { ok: true, applicationId: appId, replay: true };
+      if (!recSnap.exists) throw new HttpsError('not-found', 'No ' + role + ' record exists for this account.', { reason: 'NO_RECORD' });
+      const rec = recSnap.data() || {};
+      if (!['active', 'approved'].includes(String(rec.status || ''))) {
+        throw new HttpsError('failed-precondition', 'Only a live ' + role + ' can be admitted this way (status is ' + (rec.status || 'missing') + ').', { reason: 'NOT_LIVE' });
+      }
+      if (others.docs.some((x) => x.id !== appId)) {
+        throw new HttpsError('failed-precondition', 'This account already has an application — decide it in Applications instead.', { reason: 'HAS_APPLICATION' });
+      }
+      const at = _ts();
+      t.create(appRef, {
+        applicationId: appId, uid, role, hub: role === 'provider' ? 'services' : 'marketplace', category,
+        source: 'admin_existing_provider', status: 'approved', statusCanonical: 'approved',
+        decidedBy: req.auth.uid, decidedAt: at, reviewReason: reason, createdAt: at, updatedAt: at,
+        projectionStatus: 'not_required', note: 'Admitted by an administrator: the business was already live with no application.',
+      });
+      t.create(decRef, { applicationId: appId, status: 'approved', decision: 'approve', decidedBy: req.auth.uid, applicantUid: uid,
+        reason, category, source: 'admin_existing_provider', decidedAt: at });
+      let provisioned = false;
+      if (role === 'provider' && profSnap && !profSnap.exists) {
+        t.create(profRef, { uid, providerId: rec.providerId || null, status: 'active', name: _sanText(rec.name || rec.businessName || '', 120),
+          category: _sanText(rec.category || category, 100), bio: _sanText(rec.bio || '', 2000), rating: Number(rec.rating) || 0,
+          reviewCount: Number(rec.reviewCount) || 0, bookingCount: Number(rec.bookingCount) || 0,
+          provisionedBy: 'admin_existing_provider', provisionedAt: at, updatedAt: at });
+        provisioned = true;
+      }
+      t.create(db.collection('adminAudit').doc(), { action: 'application_admit_existing', applicationId: appId, targetUid: uid, role, category,
+        performedBy: req.auth.uid, reason, before: { application: null, decision: null, providerProfile: role === 'provider' ? (profSnap && profSnap.exists ? 'present' : 'absent') : 'n/a' },
+        after: { application: 'approved', decision: 'approved', providerProfile: provisioned ? 'provisioned' : (role === 'provider' ? 'unchanged' : 'n/a') }, createdAt: at });
+      return { ok: true, applicationId: appId, replay: false, providerProfileProvisioned: provisioned };
+    });
+    return out;
+  }
+);
+
 exports.applicationDecide = onCall(
   { region: REGION, maxInstances: 10, enforceAppCheck: true },
   async (req) => {
