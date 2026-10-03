@@ -5,7 +5,7 @@ payment / booking / wallet / review / chat authority, no WhatsApp, AdminOS-gated
 dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]], [[Payments]], [[AdminOS]],
 [[IntaSend Convergence Brief]]. Strategy: no new hubs — Digital Hub folds into Tech Hub.
 
-**Status: slices 1, 2a, 2b, 3, 4a, 4b, 4L, 4F and 4O built and tested; nothing deployed.**
+**Status: slices 1–3, 4a, 4b, 4F, 4K, 4L, 4M, 4N, 4O, 4P, 4Q, 4R, 4T, 4U built and tested; 4J blocked on sokoni-5b; capability screens (4C) partly NOT_IMPLEMENTED; NOTHING DEPLOYED. See the status board.**
 
 ## Authority map (census 2026-10-03)
 
@@ -101,13 +101,106 @@ category stamp (sokoni-5b) is required for any of this to reach `providers/{uid}
 | Diagnostics module | — | NOT_IMPLEMENTED (no screen) |
 | Message the customer / provider about a booking | messages.js service_booking → providerBookings (+ legacy `bookings`), customerUid party; messages.html `?tx=&txId=` | **fixed 4L** (server 95f2ef6, hosting); pre-booking "Message" → 4F enquiry |
 
-## Category matrix (honest)
+## Category matrix — slice 4Z (2026-10-03, from the repository taxonomy; NOTHING DEPLOYED)
 
-| Category | Application | Approval | Dashboard | Storefront | Listing | Booking | Payment | Commission | Chat | Reviews | AdminOS |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| Phone / device repair | yes | yes | generic | yes | **slice 1** | engine | engine | plan rate | in-app | engine | read-only |
-| Electrical | yes | yes | generic | yes | **slice 1** | engine | engine | plan rate | in-app | engine | read-only |
-| IT support / networking / CCTV / POS support | yes (free text) | yes | generic | yes | **slice 2a** | engine once listed | engine | plan rate | in-app | engine | read-only |
+Legend:
+- **P** proven by an executed test on this branch (real handlers, in-memory Firestore / vm);
+- **B** built, static or fake-DOM tested only;
+- **D** depends on another owner (named);
+- **—** not built.
 
-"Engine" = the canonical service engine is available once the provider is approved and has services; none of it is
-proven end to end in a browser on this branch yet.
+Browser / emulator evidence is **UNRUN** for every cell; memory was below the 512 MB floor all day.
+
+Every tech category shares the same rails. They differ only in the capabilities their intake id maps to (see "Tech taxonomy" above).
+
+| Category (intake id) | Application | Approval | Category stamp | Capability | Dashboard modules | Service editor | Storefront | Lead / quote | Booking | Payment | Commission | Message | Call | Review | AdminOS | Super Admin |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| phone-repair · laptop-repair · computer-repair | P (HubRegister + provider-onboarding → applications) | P (applicationDecide) | **D 5b** | P | P repairs, supportedDevices, leads; B UI | P device profile | B (badge P) | P | P (+ repairDetails) | D (existing IntaSend engine, not re-proven) | **D 5b port — live line settles 20 %** | P | P | existing engine | P suspend / reinstate, leads view | B read-only rates |
+| electronics-repair | P | P | **D 5b** | P | P repairs, supportedDevices, leads | P | B | P | P | D | **D 5b** | P | P | existing | P | B |
+| it-support | P | P | **D 5b** | P | P leads, bookings; supportTickets / remoteSupport / siteVisits NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
+| networking | P | P | **D 5b** | P | P leads; networkProjects / siteVisits NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
+| cctv | P | P | **D 5b** | P | P leads; cctvInstallations / siteVisits NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
+| pos-support | P | P | **D 5b** | P | P leads; posSupport NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
+| web-developer · software · app-developer · data-entry | P | P | **D 5b** | P | P leads; projects / remoteSupport NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
+| electrical | P | P | **D 5b** | P (service modes) | P leads, bookings; siteVisits NOT_IMPLEMENTED | P modes | B | P | P | D | **D 5b** | P | P | existing | P | B |
+
+No category is registration-only. Each one can apply, be approved, list, take leads, quote, book, message and call.
+
+The capability-specific screens marked NOT_IMPLEMENTED are shown honestly (not as working) until their screens and server ops ship. They are the remaining 4C work.
+
+## Status board
+
+**PROVEN (executed):**
+
+| Area | What is proven | Test |
+|---|---|---|
+| Capabilities | composition from valid approvals only | test-tech-taxonomy, test-service-capabilities |
+| Device / service profile | capability-gated; repairDetails validated | test-tech-service-profile 18/0 |
+| Leads and quotes | lifecycle; quote → booking at the quoted price; one conversion; no lead fee | test-service-leads 13/0 |
+| Booking messaging | providerBookings + customerUid | test-messages-service-booking 6/0 |
+| Suspend / reinstate | full cycle | test-provider-suspend-restore 8/0 |
+| Search eligibility | both pipelines | test-provider-search-eligibility 8/0 |
+| Verified badge | projection from admin facets; re-verify on rename | test-provider-badge 8/0 |
+| Onboarding | intake into the one queue; OB-1 | test-provider-onboarding-intake 6/0, publish hotfix 15/0 |
+| Calling | booking-bound, logged reveal | test-booking-contact 5/0 |
+| Commission gate | invariant | gate-service-commission (GREEN on 2f's line, RED here) |
+| Feature flags | fail-closed | test-feature-flag-update 4/0 |
+
+**FIXED (were defects):**
+- **Fake surfaces:** fake providers, WhatsApp bookings, client booking / lead-fee / review writes, the KES 0 invoice, and the fake "Booking confirmed".
+- **Self-publish bypass (live P0):** ported OB-1 plus the application write.
+- **Search:** suspended providers stayed in Algolia; Typesense indexed pending providers.
+- **Verified badge:** had no admin grant path, and the owner could forge it via providerVerified.
+- **Fake AdminOS signals:** "0.0 ⭐" for unknown ratings, and enquiries / calls marked AVAILABLE with nothing behind them.
+- **Commission UI:**
+  - the provider booking-fee field;
+  - per-plan commission copy;
+  - the commission keys on plans.html;
+  - Super Admin editing a document no server reads.
+- **Feature flags:** an omitted `enabled` switched a flag ON.
+- **Messaging:** "Message" dead-ended.
+- **Tech Hub pages:** demo AI and device feeds now show honest empty states.
+
+**PRE-EXISTING (not caused here):**
+- test-compact-premium-cards: 4 browser fails;
+- test-adminos-head-defer: 4 fails;
+- test-messages-premium: 6 fails;
+- test-overlays: 2 fails.
+
+**UNPROVEN:**
+- every browser / emulator suite — test-admin-layouts reported 1 inconclusive failure while starved at 35 MB free;
+- a live booking → IntaSend → completion → settlement run;
+- the rules patch (applied on f3 a6e7b31; emulator pending).
+
+**BLOCKED (owner named):**
+
+| Item | Owner |
+|---|---|
+| Approval-time category stamp | sokoni-5b |
+| Settlement 5 % port (gate must pass on the release tree) | sokoni-5b |
+| Buyer total / providerServices.fee ignored | sokoni-5b |
+| Offers (shopOffers service scope) | sokoni-5b, Food Gate 4 |
+| Commission on discounted amounts | owner decision |
+| Provider-trust rules emulator proof | sokoni-f3 |
+| Voice masking | owner decision (needs a voice provider) |
+
+**NOT BUILT:**
+- capability-specific screens (supportTickets, remoteSupport, siteVisits, networkProjects, cctvInstallations, posSupport, projects, diagnostics, pickupDropoff);
+- booking-status system messages for providerBookings (needs a new trigger);
+- AdminOS: lead moderation actions and a verification-history view (verification-admin.html already exists);
+- Ask Hub / Startups / Jobs browser writes on tech-hub (residue, other owners).
+
+## Release order (when unblocked)
+
+1. sokoni-5b's ONE providerDispatch release. It carries:
+   - 5b's own changes: booking PIN, discovery, capability engine, category stamp, the ported 2f commercial settlement;
+   - this line, feat/tech-taxonomy-on-13f74f3: 81cde54 → 25ef259 and later.
+
+   It must pass `TREE=<release> node scripts/gate-service-commission.js`. It must also pass test-provider-publish-hotfix, test-provider-onboarding-intake and test-service-leads.
+2. messagesDispatch (messages.js: service_booking / service_lead).
+3. adminOsDispatch. It MUST carry 25ef259 (feature flag) and 4ab4eb7 / 1f813e7 (adminGetProviders, adminGetServiceLeads).
+4. verificationDecide / verificationRevoke (badge projection).
+5. Algolia / Typesense provider triggers (scoped), then a read-only check plus a one-off reconcile.
+6. The rules release (f3 a6e7b31, provider-trust keys) after emulator proof.
+7. The combined hosting release from live (hosting/techhub-on-chain merged per the assembly manifest, services.html three-way, generated snapshot from 2f).
+8. After each step, verify live with a cache-buster or the function revision. Run every UNRUN browser / emulator suite above the memory floor before step 7.
