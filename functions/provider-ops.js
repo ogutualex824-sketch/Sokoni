@@ -62,6 +62,17 @@ function _uid(req) {
  */
 const _SERVICE_FLOOR = 1;                 /* unchanged: a provider with no subscription gets 1 */
 
+/* OWNER 2026-10-03 (Legal free plan): the consultation card SOKONI creates for a verified advocate
+   (legal-verification projection: providerServices/legal_consult_{uid}, createdBy 'legal-verification') does NOT
+   count toward the plan's active-service cap — SOKONI made it, not the advocate, so a free-plan lawyer can still list
+   one service of their own. Exactly that one document is exempt: id AND createdBy must both match, providerServices
+   is server-write-only in rules, and no callable writes createdBy, so the exemption cannot be claimed by a provider. */
+const _AUTO_LEGAL_BY = 'legal-verification';
+function _isAutoLegalCard(doc, uid) {
+  const d = (doc && typeof doc.data === 'function' ? doc.data() : null) || {};
+  return !!doc && doc.id === 'legal_consult_' + uid && d.createdBy === _AUTO_LEGAL_BY;
+}
+
 async function _serviceCapFor(uid) {
   let hub = 'provider';
   try {
@@ -952,7 +963,7 @@ _h.providerAddService = async (req) => {
     _db().collection('providerServices').where('providerId', '==', uid).limit(200).get(),
     _serviceCapFor(uid),
   ]);
-  const activeCount = svcSnap.docs.filter((d) => d.data().active !== false).length;
+  const activeCount = svcSnap.docs.filter((d) => d.data().active !== false && !_isAutoLegalCard(d, uid)).length;
   if (cap !== -1 && activeCount >= cap) {
     throw new HttpsError('resource-exhausted',
       `Your plan allows ${cap} active service${cap === 1 ? '' : 's'}. Upgrade to add more.`);
@@ -1008,7 +1019,7 @@ _h.providerDuplicateService = async (req) => {
   if (!srcSnap.exists) throw new HttpsError('not-found', 'Service not found.');
   const s = srcSnap.data();
   if (s.providerId !== uid) throw new HttpsError('permission-denied', 'Not your service.');
-  const activeCount = listSnap.docs.filter((d) => d.data().active !== false).length;
+  const activeCount = listSnap.docs.filter((d) => d.data().active !== false && !_isAutoLegalCard(d, uid)).length;
   if (cap !== -1 && activeCount >= cap) {
     throw new HttpsError('resource-exhausted', `Your plan allows ${cap} active service${cap === 1 ? '' : 's'}. Upgrade or delete one to duplicate.`);
   }
@@ -1158,12 +1169,12 @@ _h.providerToggleService = async (req) => {
   const next = req.data?.active !== undefined ? (req.data.active === true) : !(cur.active !== false);
   /* RE-ACTIVATING counts against the plan's service cap exactly as adding does (CHANGELOG 239): toggling a
      deactivated service back on skipped the cap, so a plan's limit could be exceeded one toggle at a time. */
-  if (next === true && cur.active === false) {
+  if (next === true && cur.active === false && !_isAutoLegalCard(snap, uid)) {
     const [svcSnap, cap] = await Promise.all([
       _db().collection('providerServices').where('providerId', '==', uid).limit(200).get(),
       _serviceCapFor(uid),
     ]);
-    const activeCount = svcSnap.docs.filter((x) => x.id !== id && x.data().active !== false && !x.data().removedAt).length;
+    const activeCount = svcSnap.docs.filter((x) => x.id !== id && x.data().active !== false && !x.data().removedAt && !_isAutoLegalCard(x, uid)).length;
     if (cap !== -1 && activeCount >= cap) {
       throw new HttpsError('resource-exhausted',
         `Your plan allows ${cap} active service${cap === 1 ? '' : 's'}. Deactivate another, or upgrade.`);
