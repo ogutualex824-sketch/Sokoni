@@ -109,3 +109,11 @@ Tests: `test-home-services-leads-static` 19/0. A mutation that adds 5% to the bu
 - `createDispute` accepts **orders only**, because it reads `orders/{id}`. There is no service-booking dispute yet, and nothing holds settlement while a dispute is open.
 - After settlement, a refund needs the canonical clawback through the ledger. That is not built for bookings.
 - When a booking is fully refunded before settlement, the 5% must not be recognised as revenue. 5b's settlement must enforce this.
+
+## Provider-side fee and commission copy (sokoni-b2, `hosting/techhub-on-chain`, NOT deployed)
+
+- `e7e62bc`: the services editor no longer has the "Booking fee (KSh)" field (svFee), and its save payload sends no `fee`. Existing `providerServices.fee` values remain as unread data; sokoni-5b's server change ignores them.
+- `cda9b03`: provider onboarding no longer shows the 20/15/10/7/5% per-plan ladder; the dashboard's legacy plan `commissionRate` is gone.
+- `770466d`: both pages show the single rate from the generated snapshot (`sokoni-commission-rates.js`, from 2f's `21969e0`, services = 5), with a neutral fallback that shows no number.
+
+**Caveat:** that snapshot still lists `"home_services": 14` and the plan ladder (flagged to 2f). Pages must use `pct('services')`, never `pct('home_services')`, until it's regenerated. The Home Services pages on this branch read no commission rate at all.
