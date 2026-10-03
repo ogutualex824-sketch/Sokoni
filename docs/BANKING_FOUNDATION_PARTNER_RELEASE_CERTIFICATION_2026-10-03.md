@@ -279,4 +279,76 @@ Every commit was staged file by file after `git status --short`; no stash, reset
 
 **Boundaries.** The POS owner does not modify the webhook security repair or the Foundation payout work. The browser-side SmartPOS fix (99e1177 / 863f0f6) is **not** the complete repair until this server gate is proven.
 
+## 14. Finance + POS money-integrity repair (owner P0, 2026-10-03) — built, NOT deployed
+
+Lanes: **sokoni-pos** (SmartPOS server) and **sokoni-finance-os** (Finance OS payouts), worked by this session at the owner's instruction ("you fix it"); kept on separate branches, never folded into Foundation.
+
+**C. SmartPOS server payment (sokoni-pos)** — `fix/pos-server-payment-gate-on-3357619` @ e534623, on the certified POS line (3357619, which descends from live ee37437; it already required an IntaSend intent and webhook status for the same shop and sale key, plus a spent-once claim).
+
+Gaps closed:
+- **Partial payment:** the live webhook marks a POS prompt `completed` without comparing the paid amount to the requested amount. The gate now settles on the **provider-confirmed** amount (`confirmedAmountKES`); if that is absent, the sale is refused.
+- **Currency:** KES only.
+- **Closed tender list** {cash, mpesa, card, wallet}: `bank`, `mpesa_till_manual`, `gift_card` etc. used to count toward the tendered total unproven.
+- **STK prompts:** an STK prompt can only settle an `mpesa` line.
+
+Evidence:
+- `test-pos-payment-gate-unit.js` 17/0: 3 sabotages caught, and the base fails 5.
+- POS-01…POS-15 added to the emulator suite — **NOT RUN** (512 MB gate).
+- certify-pos-payment-ownership: 40 pass, plus 5 T5 failures that are identical on the base (pre-existing).
+
+Checklist:
+- [x] server authority identified
+- [x] payment record required
+- [x] sale binding
+- [x] merchant binding
+- [x] provider amount
+- [x] KES
+- [x] verified IntaSend state
+- [x] no SIMULATED reference
+- [x] no browser-only success
+- [x] replay
+- [x] duplicate callback (terminal guard in the webhook)
+- [ ] emulator proof
+- [ ] real POS browser proof
+- [ ] production revision
+
+**B. Finance OS payout (sokoni-finance-os)** — `hosting/finos-payout-authority-on-72dca56` @ ea6493e.
+
+Facts (read-only):
+- `payouts` is the retired FinOS ledger: **0 docs**; both of its creators refuse.
+- The live ruleset f259c0b5 already DENIES client writes to it (one read-only match, no catch-all).
+- Real payouts are `payoutRequests` (7) via `adminProcessPayout`.
+
+The browser completion write, its form and the row button are removed. The page points to AdminOS → Payments.
+
+Evidence: `test-finos-payout-authority.js` 6/0 (FO-13 is also green against the live ruleset); the live page fails 3.
+
+Checklist:
+- [x] existing payout authority identified
+- [x] browser completion write removed
+- [x] direct Firestore completion denied (live rules)
+- [x] wrong seller / amount / destination: payoutRequests are server-owned (read-only rules)
+- [ ] emulator proof
+- [ ] browser proof
+- [ ] production revision
+
+**OPEN, owner decision** (wallet engine is FROZEN):
+- manual Mark Paid is single-admin attestation (`settled_manually`), not provider confirmation or a second admin (FO-04/05)
+- webhook COMPLETED/REVERSED on rejected/failed payouts can release or credit twice (FO-06/09)
+
+**A. Banking Hub fake wallet** — `hosting/banking-foundation-on-f13a912` @ 5e7e2a9.
+- `sokoni-banking-pro.js` is deleted and loaded by no page.
+- No browser-stored balance.
+- Balances link to wallet.html / financial-os.html.
+- service-worker.js is untouched (the entry is in the never-read PRECACHE_STATIC).
+- Evidence: `test-banking-no-fake-wallet.js` 5/0 (the live tree fails A1).
+
+Checklist:
+- [x] fake wallet removed
+- [x] no local balance authority
+- [x] no browser-created transaction
+- [x] authoritative source identified
+- [x] empty state (no balance shown)
+- [ ] reload/device and browser mutation proof (real browser)
+
 **NOT DEPLOYED. FOUNDATION BALANCE NOT TRUSTED UNTIL RECONCILIATION/FIX IS LIVE. ALL REGISTRATIONS/APPLICATIONS REQUIRE ADMINOS APPROVAL.**
