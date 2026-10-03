@@ -25,6 +25,10 @@
      D  detection + reads: jobsCapabilities drives buttons (no op-list probe) · be4e1b7 = one listMyJobs + one
         getEmployerApplications, no direct read · a515270 = op-list hint, direct read, per-vacancy reads · unknown
         capabilities without an op list → J1 · transport failure → withheld
+     P  partial lists (d922713 hasMore, exact limit+1): "Showing the first N — more exist" banner and every derived
+        count marked "N+" in Overview / Analytics; no '+' and no banner when hasMore is false
+     T  labels: jobsCapabilities jobStateLabels / applicationStateLabels at runtime; the copied tables only on the
+        old-server path (a515270 / ffa2c47), tested separately
      S  safety: no Firestore writes, no wa.me / WhatsApp / mailto hand-off, escaping of every server string
      R  registry + shell: 11 routes in the Jobs group, validate() clean, module wiring, mobile CSS
      N  negative controls — each mutant must FAIL its named row:
@@ -39,15 +43,18 @@
           N9 the id not encoded in the fallback URL → M2
           N10 Resume on a SOKONI pause (pausedByRole ignored) → J8
           N11 the jobsCapabilities transitions table ignored  → D1
+          N12 an exact count shown while hasMore is true      → P1
+          N13 the copied label table used on a current server → T2
    node scripts/test-merchant-jobs-workspace.js */
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const FX = JSON.parse(read('scripts/fixtures/jobs-workspace-server.json'));
-/* V2 = the contract (be4e1b7: jobsCapabilities, listMyJobs, getEmployerApplications, pausedByRole);
-   VA = a515270 (J2 without those ops — the old-server fallback); V1 = ffa2c47 (J1). */
-const V2 = FX.versions.be4e1b7, VA = FX.versions.a515270, V1 = FX.versions.ffa2c47;
+/* V2 = the contract (d922713: jobsCapabilities with state labels + listCaps, listMyJobs / getEmployerApplications with
+   exact hasMore, pausedByRole); VA = a515270 (J2 without those ops — the old-server fallback); V1 = ffa2c47 (J1). */
+const V2 = FX.versions.d922713, VB = FX.versions.be4e1b7, VA = FX.versions.a515270, V1 = FX.versions.ffa2c47;
+const BIG = V2.big;
 const APP_LOADS = ['getEmployerApplications', 'getJobApplications'];
 const NOW = FX.generatedAtMs + 60000;
 const SRC = read('sokoni-merchant-jobs.js');
@@ -403,6 +410,12 @@ ROWS.D3 = { label: 'D3  old server (a515270): jobsCapabilities / listMyJobs / ge
   return { ok: n('__directRead') === 1 && n('getJobApplications') === defaultJobs(VA).length && cards === VA.responses.getJobApplications.applications.length &&
     labels.includes('Save draft') && labels.includes('Submit for review') && !labels.includes('Post vacancy'), got: { calls: s.calls.map((c) => c.op), cards, labels } };
 } };
+ROWS.D5 = { label: 'D5  be4e1b7 (no hasMore field, no labels/listCaps in capabilities) still works: exact counts below the cap, labels from listMyJobs.statusLabel', fn: async (M) => {
+  const s = mkServer(VB); const o = await mountView(M, 'overview', s); const t = tilesOf(o.host);
+  const j = await mountView(M, 'jobs', mkServer(VB));
+  const chip = dec((/data-status="active">([^<]*)</.exec(j.host.innerHTML) || [])[1] || '');
+  return { ok: !('jobStateLabels' in VB.responses.jobsCapabilities) && !('hasMore' in VB.responses.listMyJobs) && Object.values(t).every((v) => /^\d+$/.test(v)) && chip === 'Published' && !/data-more=/.test(o.host.innerHTML), got: { t, chip } };
+} };
 ROWS.D4 = { label: 'D4  jobsCapabilities unknown and NO op list in the refusal → assume J1 ("Post vacancy"); a transport failure is NOT unknown → form withheld', fn: async (M) => {
   const s = mkServer(VA, { jobsCapabilities: () => Object.assign(new Error('Unknown services operation: "jobsCapabilities".'), { code: 'functions/not-found', __err: true }) });
   const { host } = await mountView(M, 'jobs', s);
@@ -425,6 +438,61 @@ ROWS.J8 = { label: 'J8  Resume follows pausedByRole: SOKONI pause (pausedByRole 
   await click(host, (b) => b['data-act'] === 'resume-job' && b['data-job'] === emp.id);
   const verbatim = dec(jobCard(host, emp.id)).includes(V2.errors.err_resume_admin_paused.message) && /Only SOKONI can restore it\./.test(V2.errors.err_resume_admin_paused.message);
   return { ok: !a && e && verbatim, got: { adminResume: a, employerResume: e, verbatim } };
+} };
+const tilesOf = (host) => Object.fromEntries([...host.innerHTML.matchAll(/<div class="jw-tile"[^>]*><b>([^<]*)<\/b><small>([^<]*)<\/small>/g)].map((m) => [dec(m[2]), dec(m[1])]));
+ROWS.P1 = { label: 'P1  listMyJobs hasMore:true (real d922713 handler, 201 vacancies → 200 + hasMore) → "Showing the first 200 vacancies — more exist" and every vacancy count is "N+", never exact', fn: async (M) => {
+  const s = mkServer(V2, { listMyJobs: () => clone(BIG.listMyJobs), getEmployerApplications: () => ({ applications: [], hasMore: false }) });
+  const o = await mountView(M, 'overview', s); const t = tilesOf(o.host);
+  const j = await mountView(M, 'jobs', s);
+  const banner = (h) => dec(h.innerHTML).includes('Showing the first 200 vacancies — more exist');
+  const jobTiles = ['Published vacancies', 'Pending review', 'Drafts', 'Changes requested'].map((k) => t[k]);
+  const plain = await mountView(M, 'overview', mkServer(V2)); const tp = tilesOf(plain.host);
+  return { ok: BIG.listMyJobs.hasMore === true && BIG.listMyJobs.jobs.length === 200 && banner(o.host) && banner(j.host) &&
+    t.Drafts === '200+' && jobTiles.every((v) => /^\d+\+$/.test(v)) && Object.values(tp).every((v) => !/\+/.test(v)) && !banner(plain.host) && !/data-more=/.test(plain.host.innerHTML),
+    got: { t, tp } };
+} };
+ROWS.P2 = { label: 'P2  getEmployerApplications hasMore:true (real handler, 501 applications → 500 + hasMore) → "Showing the first 500 applications — more exist"; Overview + Analytics application counts are "N+"', fn: async (M) => {
+  const s = mkServer(V2, { listMyJobs: () => clone(BIG.busyListMyJobs), getEmployerApplications: () => clone(BIG.getEmployerApplications) });
+  const o = await mountView(M, 'overview', s); const t = tilesOf(o.host);
+  const a = await mountView(M, 'analytics', s); const ta = tilesOf(a.host);
+  const ap = await mountView(M, 'applications', s);
+  const banner = (h) => dec(h.innerHTML).includes('Showing the first 500 applications — more exist');
+  const cells = [...a.host.innerHTML.matchAll(/<\/td><td>([^<]*)<\/td><td>([^<]*)<\/td><td>([^<]*)<\/td><\/tr>/g)].flatMap((m) => [m[1], m[2], m[3]]);
+  return { ok: BIG.getEmployerApplications.hasMore === true && BIG.getEmployerApplications.applications.length === 500 && banner(o.host) && banner(a.host) && banner(ap.host) &&
+    t.Applications === '500+' && t['New (submitted)'] === '500+' && Object.values(ta).every((v) => /^\d+\+$/.test(v)) && cells.length > 0 && cells.every((v) => /^\d+\+$/.test(v)),
+    got: { t, ta, cells } };
+} };
+ROWS.T1 = { label: 'T1  labels come from jobsCapabilities at runtime: server jobStateLabels / applicationStateLabels (changed) are what the chips, filter and tiles show', fn: async (M) => {
+  const caps = clone(V2.responses.jobsCapabilities);
+  caps.jobStateLabels = Object.assign({}, caps.jobStateLabels, { active: 'Live now' });
+  caps.applicationStateLabels = Object.assign({}, caps.applicationStateLabels, { interview: 'Interview stage' });
+  const s = mkServer(V2, { jobsCapabilities: () => caps, listMyJobs: () => ({ hasMore: false, jobs: clone(V2.responses.listMyJobs.jobs).map((j) => Object.assign(j, { statusLabel: 'IGNORED' })) }) });
+  const j = await mountView(M, 'jobs', s);
+  const a = await mountView(M, 'applications', s);
+  const an = await mountView(M, 'analytics', s);
+  const chip = (id) => dec((/data-status="[^"]*">([^<]*)</.exec(jobCard(j.host, id)) || [])[1] || '');
+  const appChip = dec((/data-status="interview">([^<]*)</.exec(a.host.innerHTML) || [])[1] || '');
+  return { ok: chip(V2.jobs.featured_active.id) === 'Live now' && appChip === 'Interview stage' && a.host.innerHTML.includes('>Interview stage</option>') &&
+    'Interview stage' in tilesOf(an.host) && !j.host.innerHTML.includes('IGNORED'), got: { c: chip(V2.jobs.featured_active.id), appChip } };
+} };
+ROWS.T2 = { label: 'T2  a current server that leaves a state unlabelled gets the RAW state, not the copied table (the copy is old-server only)', fn: async (M) => {
+  const caps = clone(V2.responses.jobsCapabilities);
+  delete caps.jobStateLabels.paused; delete caps.applicationStateLabels.offer;
+  const s = mkServer(V2, { jobsCapabilities: () => caps, listMyJobs: () => ({ hasMore: false, jobs: clone(V2.responses.listMyJobs.jobs).map((x) => Object.assign(x, { statusLabel: undefined })) }),
+    getEmployerApplications: () => ({ hasMore: false, applications: clone(V2.responses.getEmployerApplications.applications).map((x) => Object.assign(x, { statusLabel: undefined })) }) });
+  const j = await mountView(M, 'jobs', s); const a = await mountView(M, 'applications', s);
+  const chip = dec((/data-status="paused">([^<]*)</.exec(j.host.innerHTML) || [])[1] || '');
+  const appChip = dec((/data-status="offer">([^<]*)</.exec(a.host.innerHTML) || [])[1] || '');
+  return { ok: chip === 'paused' && appChip === 'offer', got: { chip, appChip } };
+} };
+ROWS.T3 = { label: 'T3  old-server path (a515270 / ffa2c47: no labels from the server) uses the copied tables: Published / Interview / Not selected', fn: async (M) => {
+  const out = [];
+  for (const V of [VA, V1]) {
+    const j = await mountView(M, 'jobs', mkServer(V)); const a = await mountView(M, 'applications', mkServer(V));
+    out.push({ sha: V.sha, job: dec((/data-status="active">([^<]*)</.exec(j.host.innerHTML) || [])[1] || ''), app: dec((/data-status="interview">([^<]*)</.exec(a.host.innerHTML) || [])[1] || ''),
+      rej: dec((/data-status="rejected">([^<]*)</.exec(a.host.innerHTML) || [])[1] || ''), caps: !!V.responses.jobsCapabilities });
+  }
+  return { ok: out.every((x) => !x.caps && x.job === 'Published' && x.app === 'Interview' && x.rej === 'Not selected'), got: out };
 } };
 ROWS.H3 = { label: 'H3  unknown counts render "—", never 0: applications unloadable → every application tile "—"; an EMPTY account → canonical "0"', fn: async (M) => {
   const s = mkServer(V2, { getJobApplications: () => Object.assign(new Error('Operation failed unexpectedly.'), { code: 'functions/internal', __err: true }) });
@@ -515,7 +583,9 @@ ROWS.R3 = { label: 'R3  mobile-first: no fixed width over 390px, grids use minma
     ['N1 illegal transition button shown (runtime path)', 'A1', "return (app && Array.isArray(t[app.status])) ? t[app.status].slice() : [];", "return (app && Array.isArray(t[app.status])) ? t[app.status].concat(['hired']) : [];"],
     ['N1b illegal transition in the fallback table', 'A1b', "pending:        ['reviewing', 'shortlisted', 'rejected'],", "pending:        ['reviewing', 'shortlisted', 'rejected', 'hired'],"],
     ['N2 expectedVersion omitted', 'A3', 'var payload = { applicationId: appId, status: to, expectedVersion: v };', 'var payload = { applicationId: appId, status: to };'],
-    ['N3 0 rendered for an unknown count', 'H3', "return (typeof n === 'number' && isFinite(n)) ? String(n) : '—';", "return (typeof n === 'number' && isFinite(n)) ? String(n) : '0';"],
+    ['N3 0 rendered for an unknown count', 'H3', "? String(n) + (partial ? '+' : '') : '—';", "? String(n) + (partial ? '+' : '') : '0';"],
+    ['N12 an exact count shown while hasMore is true', 'P1', "? String(n) + (partial ? '+' : '') : '—';", "? String(n) : '—';"],
+    ['N13 copied labels used on a current server', 'T2', "if (caps && caps[k] && typeof caps[k] === 'object') return { map: caps[k], source: 'server' };", ""],
     ['N4 a "Publish" button', 'J2', '>Save draft</button>', '>Publish</button>'],
     ['N6 moderationReason rendered raw', 'S3', "esc(j.moderationReason) + '</div>' : '';", "j.moderationReason + '</div>' : '';"],
     ['N7 a seekerUid sent to openForTransaction', 'M1', 'inbox.openForTransaction(TX_TYPE, String(applicationId));', "inbox.openForTransaction(TX_TYPE, String(applicationId), { seekerUid: 'seeker-secret' });"],

@@ -5,7 +5,8 @@
    functions branch functions/jobs-on-ca55f8b. That file is NOT in this tree, so the fixtures are produced by running
    the REAL handlers of two server commits in memory and recording exactly what they returned:
 
-     be4e1b7  J2 + jobsCapabilities / listMyJobs / getEmployerApplications / pausedByRole (the contract this page is built against)
+     d922713  be4e1b7 + hasMore on listMyJobs / getEmployerApplications, jobStateLabels / applicationStateLabels / listCaps (the contract)
+     be4e1b7  J2 + jobsCapabilities / listMyJobs / getEmployerApplications / pausedByRole (no hasMore, no labels in capabilities)
      a515270  J2 moderation without those ops (old-server fallback: op-list hint, direct read, per-vacancy applications)
      ffa2c47  J1 application state machine (the J1 fallback)
 
@@ -169,6 +170,17 @@ async function build (sha, j2) {
   rec('jobsCapabilities', await call('jobsCapabilities', null, {}));
   rec('listMyJobs', await call('listMyJobs', 'emp', {}));
   rec('getEmployerApplications', await call('getEmployerApplications', 'emp', {}));
+  /* d922713 hasMore: an employer with 201 vacancies (limit+1) and one with 501 applications, through the REAL
+     handlers. Recorded only where the server sends hasMore. */
+  if (H.J._h.jobsCapabilities && (await H.J._h.jobsCapabilities()).listCaps) {
+    for (let i = 0; i < 201; i++) await call('createJob', 'many', Object.assign({}, BASE, { title: 'Vacancy ' + i }));
+    out.big = { listMyJobs: wire((await call('listMyJobs', 'many', {})).r) };
+    const bj = (await call('createJob', 'busy', Object.assign({}, BASE, { submit: true, title: 'Busy vacancy' }))).r.jobId;
+    await call('adminModerateJob', 'adm', { jobId: bj, action: 'approve' }, ADM);
+    for (let i = 0; i < 501; i++) await call('applyForJob', 'ap' + i, { jobId: bj, coverLetter: COVER, cvUrl: 'https://cv.example/ap' + i });
+    out.big.busyListMyJobs = wire((await call('listMyJobs', 'busy', {})).r);
+    out.big.getEmployerApplications = wire((await call('getEmployerApplications', 'busy', {})).r);
+  }
   rec('closeJob', await call('closeJob', 'emp', { jobId: live }));
   out.jobs.closed = jobDoc(live);
   rec('getJobApplications_afterClose', await call('getJobApplications', 'emp', { jobId: live }));
@@ -177,10 +189,10 @@ async function build (sha, j2) {
 
 (async () => {
   const fixtures = { generatedAtMs: Date.now(), generator: 'scripts/gen-jobs-workspace-fixtures.js', versions: {} };
-  for (const [sha, j2] of [['be4e1b7', true], ['a515270', true], ['ffa2c47', false]]) {
+  for (const [sha, j2] of [['d922713', true], ['be4e1b7', true], ['a515270', true], ['ffa2c47', false]]) {
     fixtures.versions[sha] = await build(sha, j2);
   }
   const dir = path.join(ROOT, 'scripts', 'fixtures'); fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'jobs-workspace-server.json'), JSON.stringify(fixtures, null, 1) + '\n');
+  fs.writeFileSync(path.join(dir, 'jobs-workspace-server.json'), JSON.stringify(fixtures) + '\n');
   console.log('wrote scripts/fixtures/jobs-workspace-server.json', Object.keys(fixtures.versions).map((k) => k + ':' + Object.keys(fixtures.versions[k].responses).length + 'r/' + Object.keys(fixtures.versions[k].errors).length + 'e').join(' '));
 })().catch((e) => { console.error(e); process.exit(1); });
