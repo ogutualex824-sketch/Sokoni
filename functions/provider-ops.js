@@ -675,21 +675,12 @@ _h.providerGetEarnings = async (req) => {
 
 /* ── 5. providerRequestPayout ────────────────────────────────────────────────
    Moves all pending earnings to "requested" (settled by the payout scheduler). */
+/* RETIRED (owner 2026-10-03): settlement credits the business wallet and marks providerPayouts 'settled', so this route
+   has nothing to pay — but it would still batch-mark any stray 'pending' row as requested. It refuses unconditionally so
+   no screen can resurrect it; withdrawals go through the wallet path only, which is itself switched OFF. */
 _h.providerRequestPayout = async (req) => {
-  const uid = _uid(req);
-  await legal.assertLegalCompliance(uid, 'provider'); // dark-launched; no-op until enabled
-  const snap = await _db().collection('providerPayouts')
-    .where('providerId', '==', uid).limit(600).get();
-  const pending = snap.docs.filter((d) => d.data().status === 'pending');
-  if (!pending.length) throw new HttpsError('failed-precondition', 'No pending earnings to pay out.');
-
-  const reference = `PO-${uid.slice(0, 6).toUpperCase()}-${new Date().toISOString().slice(0, 10)}`;
-  let total = 0;
-  const batch = _db().batch();
-  pending.forEach((d) => { total += d.data().net || 0;
-    batch.update(d.ref, { status: 'requested', payoutRef: reference, requestedAt: _ts() }); });
-  await batch.commit();
-  return { success: true, reference, amount: total, count: pending.length, currency: 'KES' };
+  _uid(req);
+  throw new HttpsError('failed-precondition', 'This payout route is retired. Earnings are in your SOKONI wallet.', { code: 'PAYOUT_ROUTE_RETIRED' });
 };
 
 /* ── 6. providerGetReviews ───────────────────────────────────────────────────
