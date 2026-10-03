@@ -1618,6 +1618,8 @@ const SA={
         +'<td><b>'+_esc(a.name||'—')+'</b>'
           +(a.categoryLabel||a.category?'<div style="font-size:10px;color:var(--muted)">'+_esc(a.categoryLabel||a.category)+'</div>':'')
           +(a.vehicleType?'<div style="font-size:10px;color:var(--muted)">'+_esc(a.vehicleType)+(a.plate?' '+_esc(a.plate):'')+'</div>':'')
+          /* Car Hub C3 (2026-10-03): the applicant's category-specific answers (applications.details) — declarations to verify. */
+          +((a.details&&typeof a.details==='object'&&Object.keys(a.details).length)?'<div style="font-size:10px;color:var(--muted);max-width:340px">'+Object.keys(a.details).slice(0,8).map(function(k){return _esc(k)+': '+_esc(String(a.details[k]).slice(0,80));}).join(' · ')+' <span style="color:#fbbf24">(declared)</span></div>':'')
           +(a.uid?'':'<div style="font-size:10px;color:#ff8c42">no account linked</div>')+'</td>'
         +'<td>'+(ROLE[a.role]||_esc(a.role||'—'))+'</td>'
         +'<td style="font-size:12px">'+contact+'</td>'
