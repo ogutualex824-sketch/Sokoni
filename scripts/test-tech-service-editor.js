@@ -143,6 +143,16 @@ const SRC = read('sokoni-tech-service-editor.js');
     'with the generated snapshot (byte-identical to 03ecbe9) the line shows its services rate; without it, no number', { withS, without, hash });
 }
 
+/* F4 — plans.html never advertises a plan commission rate or discount (owner 2026-10-03: one flat service commission) */
+{
+  const pl = read('plans.html');
+  const line = (pl.match(/const featureKeys = [^\n]*/) || [''])[0];
+  let keys = null;
+  try { keys = new Function('features', line + '; return featureKeys;')({ services_limit: 20, leads_per_month: 30, commission_pct: 10, commission_discount_pct: 5, calendar: true }); } catch (_) { keys = null; }
+  ck('F4', Array.isArray(keys) && !keys.some((k) => /^commission/.test(k)) && keys.includes('services_limit') && !/Commission discount/.test(pl),
+    'a provider plan carrying legacy commission_pct / commission_discount_pct renders neither (features and limits only)', keys);
+}
+
 /* T10 — vocabulary parity with the server authority */
 {
   const serverFile = path.join(TECH_FN, 'functions', 'shared', 'tech-service-profile.js');

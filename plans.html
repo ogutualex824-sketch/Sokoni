@@ -214,7 +214,7 @@ const FEATURE_LABELS = {
   listings_limit:'Listings', photos_per_listing:'Photos/listing', featured_listings:'Featured listings',
   analytics:'Analytics', bulk_import:'Bulk import', priority_support:'Priority support',
   ai_assistant:'AI Assistant', team_members:'Team members', storage_gb:'Storage (GB)',
-  commission_discount_pct:'Commission discount (%)', badge_verified:'Verified badge',
+  badge_verified:'Verified badge',
   api_access:'API access', custom_domain:'Custom domain', dedicated_account_manager:'Account manager',
   online_booking:'Online booking', services_limit:'Services', calendar:'Booking calendar',
   priority_listing:'Priority listing', menu_items:'Menu items', online_ordering:'Online ordering',
@@ -341,7 +341,10 @@ function renderPlans() {
     const isCurrent = curSub?.planId === plan.id && ['active','trialing','grace'].includes(curSub?.status);
     const trialDays = plan.trial?.days || 0;
     const features = plan.features || {};
-    const featureKeys = Object.keys(features).slice(0, 8);
+    /* 2026-10-03 (owner): ONE flat service commission, deducted at settlement, replaces any plan-based rate or discount —
+       plans differ by features / limits only. Legacy plan data still carries commission_pct (provider plans 10/7/4) and
+       commission_discount_pct; showing them would advertise a rate SOKONI no longer charges. Not plan features: never shown. */
+    const featureKeys = Object.keys(features).filter(k => !/^commission(_|$)/.test(k)).slice(0, 8);
 
     const priceHtml = isFree
       ? `<div class="plan-price free-price">Free</div>`

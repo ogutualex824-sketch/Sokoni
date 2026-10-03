@@ -1,3 +1,14 @@
+## [2026-10-03] - plans.html never advertises a plan commission rate or discount — hosting, NOT deployed
+
+- Owner 2026-10-03: one flat service commission, deducted at settlement, replaces every plan-based rate. Plans differ by features / limits only.
+- plans.html rendered the first 8 plan feature keys. Provider plans from sub-billing.js list services_limit, leads_per_month and **commission_pct**
+  (10 / 7 / 4), so each provider plan card read "commission pct: 10", a rate SOKONI no longer charges. commission_discount_pct was labelled
+  "Commission discount (%)". Every commission* key is now filtered out of the feature list, and that label is removed.
+- Display only. The plan / subscription authority is untouched (it has no active owner). 2f proved commission_pct has no server reader, and closed the
+  commission_discount_pct server path on commercial-fn 07ba2fd, which 5b carries in the providerDispatch port.
+- Test: test-tech-service-editor F4 (14/0). Positive control: the pre-change plans.html fails F4. checkout-journey 57/0/2u, paid-trial-boundary 25/0/3u,
+  plans-hub-scope 14/0. test-merchant-visual-gate (browser) UNRUN — memory floor.
+
 ## [2026-10-03] - Tech Hub slice 4P (hosting): the web Verified badge uses the server predicate — hosting, NOT deployed
 
 - sokoni-providers.js normalize: `verified` = the server-projected badge (functions/shared/provider-badge.js badgeValid). It is shown only while
