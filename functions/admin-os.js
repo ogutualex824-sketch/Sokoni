@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue, FieldPath } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 
 function _requireAdmin(req) {
@@ -1119,15 +1119,43 @@ exports.adminResolveDispute = onCall({ region: 'us-central1', maxInstances: 10, 
 ──────────────────────────────────────────────────────────────────────────── */
 exports.adminGetReviews = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetReviews = async (req) => {
   _requireAdmin(req);
-  const { flagged, limit: lim } = req.data;
+  /* THE REVIEW APPROVAL QUEUE (owner 2026-10-01: every review approved in AdminOS before it is public).
+     This used to ignore `status` and filter on a `flagged` boolean no writer sets, so the "Review Queue" listed the
+     30 newest reviews of EVERY status and the pending count read 0. Now: the shared moderation vocabulary, bounded,
+     cursor-paginated by document id (one equality + __name__ → no composite index), newest-first within the page.
+     `flagged:true` maps to the status flagReview actually writes ('flagged'). */
+  const STATES = ['pending', 'flagged', 'approved', 'rejected', 'changes_requested', 'archived', 'removed'];
+  const d = req.data || {};
+  const status = d.flagged === true ? 'flagged' : (STATES.includes(d.status) ? d.status : 'pending');
+  const lim = Math.min(Math.max(1, Number(d.limit) || 50), 100);
   const db = getFirestore();
-  const q = flagged
-    ? db.collection('reviews').where('flagged', '==', true).limit(Math.min(lim || 50, 200))
-    : db.collection('reviews').orderBy('createdAt', 'desc').limit(Math.min(lim || 50, 200));
-  const snap = await q.get().catch(() => ({ docs: [] }));
-  const rows = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null }));
-  return { reviews: rows, items: rows, count: rows.length };
+  let q = db.collection('reviews').where('status', '==', status).orderBy(FieldPath.documentId()).limit(lim + 1);
+  if (typeof d.cursor === 'string' && /^[A-Za-z0-9_-]{1,200}$/.test(d.cursor)) q = q.startAfter(d.cursor);
+  const snap = await q.get();
+  const page = snap.docs.slice(0, lim);
+  const rows = page.map(x => { const v = x.data() || {}; return {
+    id: x.id, status: v.status || null, rating: v.rating || null, title: v.title || '', body: v.body || '',
+    images: Array.isArray(v.images) ? v.images.slice(0, 5) : [], targetType: v.targetType || null, targetId: v.targetId || null,
+    targetName: v.targetName || null, authorUid: v.authorUid || null, orderId: v.orderId || null, flags: v.flags || 0,
+    moderatedBy: v.moderatedBy || null, moderationNote: v.moderationNote || null,
+    createdAt: v.createdAt?.toDate?.()?.toISOString() || null, moderatedAt: v.moderatedAt?.toDate?.()?.toISOString() || null,
+  }; }).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  const nextCursor = snap.docs.length > lim ? page[page.length - 1].id : null;
+  return { reviews: rows, items: rows, count: rows.length, status, nextCursor };
 });
+
+/* The moderation history of one review (reviews.js writes reviewModerationLog on every transition). Admin only;
+   bounded; single-field equality (auto-indexed). Routed through adminOsDispatch — no new deployed function. */
+exports._h.adminGetReviewHistory = async (req) => {
+  _requireAdmin(req);
+  const id = String((req.data || {}).reviewId || '');
+  if (!/^[A-Za-z0-9_-]{1,200}$/.test(id)) throw new HttpsError('invalid-argument', 'reviewId required.');
+  const snap = await getFirestore().collection('reviewModerationLog').where('reviewId', '==', id).limit(100).get();
+  const rows = snap.docs.map(x => { const v = x.data() || {}; return { from: v.from || null, to: v.to || null, action: v.action || null,
+    actorUid: v.actorUid || null, note: v.note || null, at: v.at?.toDate?.()?.toISOString() || null }; })
+    .sort((a, b) => String(a.at || '').localeCompare(String(b.at || '')));
+  return { reviewId: id, history: rows };
+};
 
 /* RETIRED: adminRemoveReview — zero callers; duplicated review moderation. The one
    canonical review op is `reviews.adminModerateReview` (approve/reject/restore +

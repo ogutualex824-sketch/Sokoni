@@ -1,3 +1,12 @@
+## [2026-10-03] — AdminOS review approval queue: pending by default, paginated, with history
+
+**Files:** `functions/admin-os.js`, `scripts/test-adminos-review-queue.js`, `CHANGELOG.md` · **Base:** `18cfe7f` = the live adminosdispatch-00025-muh archive (0 files differ)
+
+- adminGetReviews ignored `status` (listing every review) and filtered a `flagged` boolean nobody writes. It now uses the shared vocabulary (default pending).
+- It is bounded (≤100) and cursor-paginated by doc id (no composite index). `flagged:true` maps to status 'flagged'.
+- New dispatcher op `adminGetReviewHistory` reads reviewModerationLog (written by reviews.js on every transition). It is admin-only and adds no new deployed function.
+- Tests: 7/0 (live fails 5). Deploy: `--only functions:adminOsDispatch` from this tree, after the review functions. Not deployed.
+
 ## [2026-09-01] — fix(adminos): admin-os.js lineage convergence to production 252ff65 + pilot (UNMERGED / UNDEPLOYED)
 
 Reconciles `functions/admin-os.js` on main (`9d42fa9`) back to the **proven deployed source** of the
