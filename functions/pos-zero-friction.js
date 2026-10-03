@@ -976,9 +976,16 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
        exceed it, because there is no mechanism to hand back change on a card
        or an M-PESA payment. */
     const _pay = Array.isArray(payments) ? payments : [];
+    /* 2026-10-03 (owner P0, sokoni-pos): a CLOSED tender list. Every method the server cannot settle was
+       counted toward the tendered total with no confirmation at all (e.g. 'bank', 'mpesa_till_manual',
+       'gift_card') — a sale could complete on a payment nobody proved. Cash is the drawer's; M-PESA and card
+       are confirmed below; wallet is debited inside the transaction. Anything else is refused. */
+    const SERVER_TENDERS = { cash: 1, mpesa: 1, card: 1, wallet: 1 };
     for (const p of _pay) {
       const a = Number(p && p.amount);
       if (!isFinite(a) || a <= 0) _e('Every payment needs a positive amount');
+      const m = String((p && p.method) || '').toLowerCase();
+      if (!SERVER_TENDERS[m]) _e('This payment method (' + (m || 'none') + ') cannot settle a sale. Take cash or a confirmed M-PESA / card payment.');
     }
     const tendered = _round2(_pay.reduce((s, p) => s + Number(p.amount || 0), 0));
     if (tendered + 1 < authoritativeTotal) {
@@ -1021,6 +1028,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
          rail below, unchanged. */
       const _own = require('./shared/pos-payment-ownership');
       const _stk = _own.isStkRef(ref);
+      if (_stk && method !== 'mpesa') _e('An M-PESA prompt can only settle an M-PESA payment.');
       let pay = null;
       if (!_stk) {
         const paySnap = await db.collection('posPayments').doc(ref).get();

@@ -185,8 +185,16 @@ function assertConfirmableStk(intent, status, actor) {
         ? 'The customer\'s M-PESA payment did not go through. Nothing was completed; try again.'
         : 'The customer has not completed this M-PESA payment yet. Wait for their confirmation.');
   }
-  const cents = Number(intent.amountCents);
-  return { ok: true, rail: 'stk', owner, amount: Number.isFinite(cents) ? cents / 100 : null };
+  /* 2026-10-03 (owner P0, sokoni-pos): currency is KES, and the amount that may settle a sale is what the
+     PROVIDER confirmed (posPaymentStatus.confirmedAmountKES, written by the webhook from IntaSend's own figure) —
+     never the amount the till REQUESTED. The live webhook marks 'completed' without comparing the two, so using
+     intent.amountCents let a partial payment settle a full sale. No provider figure → amount null → the caller
+     refuses ("did not report an amount"). */
+  if (intent.currency != null && String(intent.currency).toUpperCase() !== 'KES') {
+    return refuse('wrong_currency', 'That payment was not made in Kenya shillings, so it cannot settle this sale.');
+  }
+  const confirmed = status && status.confirmedAmountKES != null ? Number(status.confirmedAmountKES) : NaN;
+  return { ok: true, rail: 'stk', owner, amount: Number.isFinite(confirmed) ? confirmed : null };
 }
 
 module.exports = { assertConfirmable, assertConfirmableStk, isStkRef, classifyRail, ownerOf, QR_PAID, QR_STATUSES, STK_PREFIX };
