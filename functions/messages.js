@@ -238,7 +238,7 @@ async function ensureAnchoredConversation(type, parentId) {
     if (cur.exists) return;
     created = true;
     t.set(ref, { transactionType: type, transactionId: String(parentId), transactionTitle: d.title, participants: d.participants, participantNames: names,
-      participantAvatars: {}, status: d.readOnly ? 'read_only' : 'active', anchored: true, lastMessage: null, lastMessageAt: null,
+      participantAvatars: {}, status: d.readOnly ? 'read_only' : 'active', anchored: true, serverCreated: true, lastMessage: null, lastMessageAt: null,
       unreadCounts: Object.fromEntries(d.participants.map((p) => [p, 0])), metadata: {}, moderationFlags: [], reportCount: 0,
       readOnlyAt: d.readOnly ? _now() : null, createdAt: _now(), updatedAt: _now() });
     for (const p of d.participants) t.set(db.collection('userConversations').doc(p).collection('items').doc(conversationId), { conversationId, transactionType: type, transactionId: String(parentId), title: d.title, lastMessageAt: null, lastMessageText: null, unread: 0, updatedAt: _now() });
@@ -313,17 +313,18 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
   const conversationId = `${transactionType}_${transactionId}`;
   const convRef        = db.collection('conversations').doc(conversationId);
 
-  /* Fast path: already exists */
+  /* Fast path: already exists AND was created by the server (serverCreated) AND the caller is in it.
+     SECURITY (2026-10-03): the served rules let a client CREATE a conversation (self in participants) until sokoni-f3's
+     lock (1225780) ships, and ids are deterministic — so a doc may have been PRE-CLAIMED by a non-party to lock the real
+     parties out. Anything not stamped serverCreated (every legacy conversation predates the stamp) is UNTRUSTED: it is
+     re-derived from the transaction below and repaired for a real party, never trusted and never used to refuse one.
+     Existence is still never acknowledged to a non-party (no oracle). */
   const existingSnap = await convRef.get();
   if (existingSnap.exists) {
-    /* Confirm the caller belongs BEFORE acknowledging existence. Returning
-       {existing:true} to a non-party would confirm that a given transaction has a
-       conversation — an existence oracle — which the previous code did. */
     const cur = existingSnap.data() || {};
-    if (!Array.isArray(cur.participants) || cur.participants.indexOf(uid) === -1) {
-      throw new HttpsError('permission-denied', 'Not a party to this transaction');
+    if (cur.serverCreated === true && Array.isArray(cur.participants) && cur.participants.indexOf(uid) !== -1) {
+      return { conversationId, existing: true };
     }
-    return { conversationId, existing: true };
   }
 
   /* Verify transaction exists */
@@ -342,6 +343,28 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
   if (transactionType === 'product_enquiry') {
     const why = await _productEnquiryRefusal(db, txSnap.data());
     if (why) throw new HttpsError('failed-precondition', 'This enquiry can no longer be opened — the product has changed hands or was removed.', { code: why });
+  }
+
+  /* An existing but UNTRUSTED doc (pre-claimed, or legacy without the stamp): the caller is a REAL party (checked
+     above from the transaction) — repair it from the transaction instead of refusing them. Participants, names and the
+     per-user index are rewritten from server facts; the replaced list is kept for audit. Messages already in the
+     thread stay (the rules only ever showed them to the stored participants). */
+  if (existingSnap.exists) {
+    const repaired = await db.runTransaction(async (t) => {
+      const cur = (await t.get(convRef)).data() || {};
+      const before = Array.isArray(cur.participants) ? cur.participants : [];
+      const same = before.length === participantUids.length && before.every((p) => participantUids.indexOf(p) !== -1);
+      if (cur.serverCreated === true && same) return false;
+      const unread = {}; participantUids.forEach((p) => { unread[p] = (cur.unreadCounts && Number(cur.unreadCounts[p])) || 0; });
+      t.set(convRef, { transactionType, transactionId, participants: participantUids, unreadCounts: unread, serverCreated: true,
+        ...(same ? {} : { participantsReplacedFrom: before.slice(0, 10), repairedAt: _now() }), updatedAt: _now() }, { merge: true });
+      for (const p of before) if (participantUids.indexOf(p) === -1) t.delete(db.collection('userConversations').doc(p).collection('items').doc(conversationId));
+      for (const p of participantUids) t.set(db.collection('userConversations').doc(p).collection('items').doc(conversationId),
+        { conversationId, transactionType, transactionId, updatedAt: _now() }, { merge: true });
+      return !same;
+    });
+    if (repaired) logger.warn('[messages] untrusted conversation repaired from its transaction', { conversationId, transactionType });
+    return { conversationId, existing: true, repaired };
   }
 
   /* Fetch participant profiles */
@@ -367,6 +390,7 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
     isNew = true;
 
     t.set(convRef, {
+      serverCreated:     true,          /* the ONLY trusted creator (security 2026-10-03) */
       transactionType,
       transactionId,
       transactionTitle: title,

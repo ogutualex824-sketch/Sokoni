@@ -1,3 +1,19 @@
+## [2026-10-03] — SECURITY: pre-claimed / legacy conversations are re-derived from the transaction, never trusted — NOT deployed
+
+- **The live hole:** the SERVED rules let any signed-in user create conversations/<id> (self in participants, ≤2), and ids are deterministic (service_booking_<id>, order_<id>, product_enquiry_<id> …). An attacker could pre-claim a transaction's conversation and lock the real parties out — or stay inside it with them.
+- **Layer 1, rules (sokoni-f3 1225780, P0 hotfix file):** `allow create: if false`. f3's census found the only two client creators in live hosting are dead code.
+- **Layer 2, this commit — functions/messages.js createConversation:**
+  - only a doc stamped `serverCreated:true` with the caller in it takes the fast path;
+  - anything else (pre-claimed, or legacy — all live conversations predate the stamp) is re-derived from the transaction;
+  - a real party's open REPAIRS it: participants / unread / per-user index rewritten from server facts, the replaced list kept as participantsReplacedFrom, repairedAt;
+  - a non-party is still refused with no existence oracle;
+  - every server creation (generic + ANCHORED) now stamps serverCreated.
+- **Tests:**
+  - scripts/test-messages-preclaim.js 5/0 (P1 repair of a pre-claim; P2 the attacker loses send + index; P3 stamped fast path / no oracle; P4 legacy stamped silently; P5 pre-claim WITH the real customer inside is still repaired), SABOTAGE 3/3;
+  - messages jobs 8/0, sports 8/0, product-enquiry 7/0, service-booking 7/0, work-engine 12/0;
+  - participant-authority 49/2: the same 2 rows as before; its idempotency fixture is now a stamped server conversation.
+- **Merge note:** this belongs in whichever messages.js copy wins the b2 / 2f merge.
+
 ## [2026-10-03] — Marketing authority = a thin adapter over THE approval predicate (5b P0-C isAuthoritativelyApproved) — NOT deployed
 
 - **Owner rule:** Marketing consumes ONLY isAuthoritativelyApproved. No Marketing-local reading of approval.
