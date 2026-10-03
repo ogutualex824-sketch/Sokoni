@@ -1,3 +1,28 @@
+## 2026-10-03 — Public Sports pages read the server authority; every seed array, fake success and client Firestore write removed (owner brief; NOT deployed)
+
+- **Summary:** `sokoni-sports.js` no longer carries TEAMS / PLAYERS / COACHES / VENUES / TOURNAMENTS / FIXTURES_SEED /
+  STANDINGS_SEED / MARKETPLACE_ITEMS / COMMUNITY_POSTS_SEED, `fsWrite`/`fsRead`, the localStorage booking / order /
+  registration / post / review / notification fakes (invented `SOKCOACH…`/`SOKVN…`/`SOKTN…`/`SOKMKT…` refs) or the
+  `4.5` rating fallback. Getters are async and read through `window.sokoniCallable` (firebase.js, App Check awaited),
+  memoised per page load (a failed read is not cached):
+  - `sportsDispatch` `teams.directory` (hub teams + team names on fixtures/standings), `tournaments.open` (hub list;
+    capacity / fee / deadlines on the tournament page), `tournament.view` (tournament page: status, start, standings,
+    fixtures), `me.overview` (eligible captain/manager teams), `registration.apply`, `team.register {submit:true}`.
+  - `bookingDispatch` `venueGetPublic` + `bookingGetAvailability` (sports-venue.html `?venueId=`, read-only).
+- **Neutral states:** players and community → "No data yet" / "Coming soon" (create buttons removed); venues → link to
+  `venue-booking.html` (no public venue list op exists); coaches → `services.html?cat=coaching`; gear →
+  `category.html?cat=sports`. Unknown figures render `—`; tournament "awards", default rules and invented prize amounts
+  removed. Success text only after the server resolves ("Submitted for review", "Registration sent to the organiser");
+  server refusals are shown verbatim. Signed-out writes are refused before any call, with a sign-in link.
+- **Files:** sokoni-sports.js, sports-hub.html, sports-tournament.html, sports-venue.html (the last two now load
+  `firebase.js`), scripts/test-sports-public-pages.js (new).
+- **Database changes:** none. **API changes:** none new (consumes existing sportsDispatch / bookingDispatch ops).
+- **Security:** all client writes from these pages removed (`teams`, `tournaments`, `sports*` collections, `sportsMembers`,
+  `applications` addDoc); every server string escaped before `innerHTML`; ids passed via `data-*` attributes, not inline JS.
+- **Tests:** test-sports-public-pages 34/0; test-merchant-sports 10/0.
+- **Release order:** requires the commercial-fn sportsDispatch build with `teams.directory` + signed-out public reads
+  (e984ac6+) live before this hosting change; until then the hub shows "Couldn't load — try again", never seed data.
+
 ## 2026-10-03 — Merchant-v2 Sports workspace: five Sports-group routes, one module, sportsDispatch only, role-aware from the server (NOT deployed)
 
 - **Files:** sokoni-merchant-sports.js (new); sokoni-merchant-routes.js (5 routes + Sports group, appended last); merchant-v2.html (MODULES + script); scripts/test-mv2-1-sidebar.js R3 (+Sports).
