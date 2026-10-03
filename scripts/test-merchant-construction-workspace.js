@@ -42,6 +42,8 @@
           N6 Cancel offered on paid_held                      → R14
           N7 "Paid" derived from a non-status field           → R12
           N8 an M-PESA default payment method                 → R13
+          N13 a pin / pinHash field rendered from the booking  → R22
+          N14 Confirm return sent without the PIN when held    → R19
           N9 "Approved" derived from applications.status      → V1   (control a)
           N10 read-only fails OPEN on a missing answer        → RO6  (control b)
           N11 a badge from verified === true                  → V3
@@ -76,69 +78,70 @@ const OWNER_MATRIX = {
 };
 
 /* ══ in-memory Firestore + the REAL rental handlers ══
-   NEW = sokoni-f3's owner rental lifecycle, functions/rentals-on-53100ff @ bb8634d (NOT deployed), read from the shared object store.
+   NEW = sokoni-f3's rentals line, functions/rentals-on-53100ff @ bebc922 (NOT deployed): the owner lifecycle (bb8634d) +
+         the ONE return PIN (booking-pin-core, source 'rentalBookings'). marketplace-extensions.js, booking-pin-core.js and
+         shared/ent-booking-identity.js are read from the shared object store and run on f3's own fake Firestore
+         (scripts/lib/fake-firestore-txn.js @ bebc922: buffered transactions, optimistic retry).
    OLD = this tree's functions/marketplace-extensions.js (== the live commerceDispatch archive): no rentalOwnerListings.
    A missing NEW source FAILS the run (fail closed) — the fixtures are never hand-written. */
-const F3_RENTALS_REF = process.env.RENTALS_REF || 'bb8634d';
-let NEW_SRC = null;
-try { NEW_SRC = require('child_process').execFileSync('git', ['-C', ROOT, 'show', F3_RENTALS_REF + ':functions/marketplace-extensions.js'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (_) { NEW_SRC = null; }
+const F3_RENTALS_REF = process.env.RENTALS_REF || 'bebc922';
+const gitShow = (f) => { try { return require('child_process').execFileSync('git', ['-C', ROOT, 'show', F3_RENTALS_REF + ':' + f], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (_) { return null; } };
+const NEW_FILES = { 'marketplace-extensions.js': gitShow('functions/marketplace-extensions.js'), 'booking-pin-core.js': gitShow('functions/booking-pin-core.js'),
+  'shared/ent-booking-identity.js': gitShow('functions/shared/ent-booking-identity.js') };
+const NEW_SRC = NEW_FILES['marketplace-extensions.js'];
 const OLD_SRC = read('functions/marketplace-extensions.js');
+const TMP = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cw-rent-'));
+process.on('exit', () => { try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (_) {} });
+const FAKE_SRC = gitShow('scripts/lib/fake-firestore-txn.js') || read('scripts/lib/fake-firestore-txn.js');
+fs.writeFileSync(path.join(TMP, 'fake-firestore-txn.js'), FAKE_SRC);
+const { makeFakeFirestore } = require(path.join(TMP, 'fake-firestore-txn.js'));
 class HttpsError extends Error { constructor (code, m) { super(m); this.code = code; this.httpErrorCode = { canonicalName: code }; } }
-function mkAdmin () {
-  const data = {}; let seq = 0, clock = Date.now() - 3600000;
-  const TS = (ms) => ({ __ts: ms, toDate: () => new Date(ms), toMillis: () => ms });
-  const SERVER = { __server: true }, INC = (n) => ({ __inc: n });
-  const resolve = (v, prev) => (v === SERVER ? TS(clock++) : (v && v.__inc != null ? ((prev || 0) + v.__inc) : v));
-  const coll = (name) => (data[name] = data[name] || {});
-  function docRef (c, id) {
-    return {
-      id,
-      async get () { const d = coll(c)[id]; return { exists: !!d, id, data: () => (d ? Object.assign({}, d) : undefined) }; },
-      async set (v) { const o = {}; for (const k of Object.keys(v)) o[k] = resolve(v[k]); coll(c)[id] = o; },
-      async create (v) { if (coll(c)[id]) throw new Error('ALREADY_EXISTS'); return this.set(v); },
-      async update (v) { const d = coll(c)[id]; if (!d) throw new Error('NOT_FOUND'); for (const k of Object.keys(v)) d[k] = resolve(v[k], d[k]); }
-    };
-  }
-  function query (c, filters, lim) {
-    return {
-      where (f, op, v) { return query(c, filters.concat([[f, op, v]]), lim); },
-      limit (n) { return query(c, filters, n); },
-      async get () {
-        let rows = Object.entries(coll(c)).filter(([, d]) => filters.every(([f, , v]) => d[f] === v));
-        if (lim) rows = rows.slice(0, lim);
-        return { empty: !rows.length, size: rows.length, docs: rows.map(([id, d]) => ({ id, data: () => Object.assign({}, d) })) };
-      }
-    };
-  }
-  const db = {
-    collection: (c) => Object.assign(query(c, [], 0), { doc: (id) => docRef(c, id || ('id' + (++seq))) }),
-    async runTransaction (fn) {
-      const w = [];
-      const out = await fn({ get: (r) => r.get(), set: (r, d) => w.push(() => r.set(d)), update: (r, d) => w.push(() => r.update(d)), create: (r, d) => w.push(() => r.create(d)) });
-      for (const x of w) await x();
-      return out;
-    }
-  };
-  const firestore = () => db;
-  firestore.FieldValue = { serverTimestamp: () => SERVER, increment: INC };
-  firestore.Timestamp = { fromDate: (d) => TS(d.getTime()) };
-  return { admin: { firestore }, data, TS };
+/* Each server gets its own copy of the handler files, so each module instance binds its own fake Firestore. */
+const STUBS = new Map();
+const _origLoad = Module._load;
+Module._load = function (req, parent) {
+  const pf = (parent && parent.filename) || '';
+  for (const [dir, st] of STUBS) if (pf.startsWith(dir)) { if (Object.prototype.hasOwnProperty.call(st, req)) return st[req]; break; }
+  return _origLoad.apply(this, arguments);
+};
+let _srvSeq = 0;
+function loadServerModules (old, F) {
+  const dir = path.join(TMP, 's' + (++_srvSeq)) + path.sep;
+  fs.mkdirSync(path.join(dir, 'shared'), { recursive: true });
+  if (old) fs.writeFileSync(path.join(dir, 'marketplace-extensions.js'), OLD_SRC);
+  else for (const [f, src] of Object.entries(NEW_FILES)) fs.writeFileSync(path.join(dir, f), src || '');
+  const fsFn = () => F.db; fsFn.FieldValue = F.FieldValue; fsFn.Timestamp = F.Timestamp;
+  STUBS.set(dir, {
+    'firebase-admin': { firestore: fsFn },
+    'firebase-admin/firestore': { getFirestore: () => F.db, FieldValue: F.FieldValue, Timestamp: F.Timestamp },
+    'firebase-functions/v2/https': { onCall: (o, h) => h, onRequest: (o, h) => h, HttpsError },
+    'firebase-functions/v2/scheduler': { onSchedule: (o, h) => h },
+    'firebase-functions/v2/firestore': { onDocumentWritten: (o, h) => h },
+    'firebase-functions/params': { defineSecret: () => ({ value: () => null }) },
+    'firebase-functions/logger': { info () {}, warn () {}, error () {}, log () {} }
+  });
+  const H = require(path.join(dir, 'marketplace-extensions.js'))._h;
+  const core = old ? null : require(path.join(dir, 'booking-pin-core.js'));
+  return { H, core };
 }
-function loadHandlers (adminStub, src) {
-  const tmp = path.join(require('os').tmpdir(), 'cw-mx-' + process.pid + '-' + Math.random().toString(36).slice(2) + '.js');
-  fs.writeFileSync(tmp, src);
-  const orig = Module._load;
-  Module._load = function (req, parent, isMain) {
-    if (req === 'firebase-admin') return adminStub;
-    if (req === 'firebase-functions/v2/https') return { onCall: (o, h) => h, onRequest: (o, h) => h, HttpsError };
-    if (req === 'firebase-functions/v2/scheduler') return { onSchedule: (o, h) => h };
-    return orig.apply(this, arguments);
-  };
-  try { return require(tmp)._h; } finally { Module._load = orig; try { fs.unlinkSync(tmp); } catch (_) {} }
+/* A synchronous view of the fake store for assertions and for the payment-authority writes (A.data.<col>[id]). */
+function dataView (F) {
+  const st = F.db._store;
+  return new Proxy({}, {
+    get (_, col) {
+      return new Proxy({}, {
+        get (__, id) { const e = st.get(col + '/' + String(id)); return e ? e.data : undefined; },
+        ownKeys () { return [...st.keys()].filter((k) => k.startsWith(col + '/') && k.split('/').length === 2).map((k) => k.split('/')[1]); },
+        getOwnPropertyDescriptor (__, id) { const e = st.get(col + '/' + String(id)); return e ? { enumerable: true, configurable: true, writable: true, value: e.data } : undefined; }
+      });
+    },
+    set (_, col, obj) { for (const id of Object.keys(obj)) st.set(col + '/' + id, { data: JSON.parse(JSON.stringify(obj[id])), v: 1 }); return true; }
+  });
 }
 /* callable wire: Timestamps → {_seconds,_nanoseconds}, as the Functions SDK encodes them */
 function wire (v) {
   if (v && typeof v === 'object') {
+    if (typeof v.toMillis === 'function') return { _seconds: Math.floor(v.toMillis() / 1000), _nanoseconds: 0 };
     if (typeof v.__ts === 'number') return { _seconds: Math.floor(v.__ts / 1000), _nanoseconds: 0 };
     if (Array.isArray(v)) return v.map(wire);
     const o = {}; for (const k of Object.keys(v)) o[k] = wire(v[k]); return o;
@@ -148,32 +151,52 @@ function wire (v) {
 const RENTAL_OPS = ['rentalOwnerListings', 'rentalProductCreate', 'rentalProductPublish', 'rentalProductPause', 'rentalGetAvailability', 'rentalList',
   'rentalAccept', 'rentalConfirm', 'rentalDecline', 'rentalStart', 'rentalConfirmReturn', 'rentalComplete', 'rentalCancel'];
 /* commerceDispatch, reproduced: unknown op → not-found "Unknown commerce operation"; HttpsError passes through with its
-   reason; a plain Error becomes internal "Operation failed unexpectedly." The client sees code 'functions/<code>'. */
+   reason; a plain Error becomes internal "Operation failed unexpectedly." The client sees code 'functions/<code>'.
+   After every successful booking op the rentalPinOnRentalBooking trigger is run (as Firestore would fire it). */
 function mkServer (opts) {
   const o = opts || {};
-  const A = mkAdmin(); const H = loadHandlers(A.admin, o.old ? OLD_SRC : NEW_SRC);
+  const F = makeFakeFirestore();
+  const { H, core } = loadServerModules(!!o.old, F);
+  const A = { data: dataView(F), db: F.db };
   const OWNER = 'owner1', SHOP = 'owner1';
   /* shops/{uid}: the identity model carries no ownerId (owner = doc id). */
   A.data.shops = { [SHOP]: Object.assign({ name: 'Mjengo Hardware' }, o.ownerId ? { ownerId: o.ownerId } : {}) };
   const calls = [];
+  async function sync (id) {
+    if (!core) return;
+    const s = await F.db.collection('rentalBookings').doc(String(id)).get();
+    await core.onSourceWritten('rentalBookings', String(id), s.exists ? s.data() : null);
+  }
   async function dispatch (payload) {
     calls.push(JSON.parse(JSON.stringify(payload)));
     const op = payload.op, h = H[op];
     if (!h) { const e = new Error('Unknown commerce operation: "' + op + '". Valid ops: ' + Object.keys(H).sort().join(', ')); e.code = 'functions/not-found'; throw e; }
-    try { return wire(await h({ auth: { uid: o.caller || OWNER, token: {} }, data: payload })); }
+    try { const out = wire(await h({ auth: { uid: o.caller || OWNER, token: {} }, data: payload })); if (payload.bookingId) await sync(payload.bookingId); return out; }
     catch (err) {
       if (err && err.httpErrorCode) { const e = new Error(err.message); e.code = 'functions/' + err.code; throw e; }
       const e = new Error('Operation failed unexpectedly.'); e.code = 'functions/internal'; e.cause = err && err.message; throw e;
     }
   }
-  return { A, H, dispatch, calls, OWNER, SHOP };
+  /* the payment authority (2f purpose + 5b webhook) HOLDS the money: a server write, then the PIN trigger issues the PIN */
+  async function hold (id, extra) {
+    await F.db.collection('rentalBookings').doc(String(id)).update(Object.assign({ status: 'paid_held', paymentStatus: 'held' }, extra || {}));
+    await sync(id);
+  }
+  /* the RENTER's own view (serviceBookingPin getMyBookingPin) — used only to know what the renter would say aloud */
+  async function pinOf (id) {
+    const b = A.data.rentalBookings[id];
+    const r = await core._internal.customerGetBookingPin({ auth: { uid: b.buyerId }, data: { bookingId: String(id), source: 'rentalBookings' } });
+    return r && r.pin;
+  }
+  return { A, H, core, dispatch, calls, OWNER, SHOP, sync, hold, pinOf };
 }
 const day = (n) => new Date(Date.now() + n * 86400000).toISOString();
-/* Every booking state, reached through the REAL bb8634d handlers wherever a handler exists. payment_pending / paid_held
+/* Every booking state, reached through the REAL bebc922 handlers wherever a handler exists. payment_pending / paid_held
    (and refunded) are written in production ONLY by the payment authority (2f rental_booking purpose + 5b webhook), which
-   is not in this module — so those writes are applied to the store directly, exactly as that authority would, and the
-   paid_held webhook write carries the IntaSend-reported method on ONE booking only. Legacy 'pending' / 'confirmed'
-   documents are planted as old servers wrote them. */
+   is not in this module — so those writes are applied as that authority would (server update + the PIN trigger), and the
+   paid_held webhook write carries the IntaSend-reported method on ONE booking only. Returns of HELD rentals go through
+   rentalConfirmReturn with the renter's real PIN. Legacy 'pending' / 'confirmed' documents are planted as old servers
+   wrote them. */
 async function seedRentals (srv) {
   const as = (uid) => ({ uid, token: { name: 'Renter ' + uid } });
   const own = as(srv.OWNER), S = srv.SHOP, H = srv.H, B = () => srv.A.data.rentalBookings;
@@ -182,19 +205,20 @@ async function seedRentals (srv) {
   const draftRefusal = await H.rentalBook({ auth: as('early'), data: { rentalProductId: pid, startDate: day(2), endDate: day(3), durationUnit: 'daily' } }).then(() => null, (e) => e.message);
   await H.rentalProductPublish({ auth: own, data: { rentalProductId: pid, shopId: S } });
   let slot = 5;
-  const book = async (uid) => { const s = slot; slot += 3; return (await H.rentalBook({ auth: as(uid), data: { rentalProductId: pid, startDate: day(s), endDate: day(s + 2), durationUnit: 'daily' } })).bookingId; };
-  const tr = (op, bookingId, extra) => H[op]({ auth: own, data: Object.assign({ bookingId, shopId: S }, extra || {}) });
+  const book = async (uid) => { const s = slot; slot += 3; const id = (await H.rentalBook({ auth: as(uid), data: { rentalProductId: pid, startDate: day(s), endDate: day(s + 2), durationUnit: 'daily' } })).bookingId; await srv.sync(id); return id; };
+  const tr = async (op, bookingId, extra) => { const out = await H[op]({ auth: own, data: Object.assign({ bookingId, shopId: S }, extra || {}) }); await srv.sync(bookingId); return out; };
+  const out = async (id) => { await tr('rentalAccept', id); await srv.hold(id); await tr('rentalStart', id); };   /* paid, handed over: active */
   const ids = { pid, draftRefusal };
   ids.requested = await book('r1');
   ids.accepted = await book('r2'); await tr('rentalAccept', ids.accepted);
   ids.payment_pending = await book('r3'); await tr('rentalAccept', ids.payment_pending); B()[ids.payment_pending].status = 'payment_pending';
-  ids.paid_held = await book('r4'); await tr('rentalAccept', ids.paid_held); Object.assign(B()[ids.paid_held], { status: 'paid_held', paymentStatus: 'held' });
-  ids.paid_held_m = await book('r5'); await tr('rentalAccept', ids.paid_held_m); Object.assign(B()[ids.paid_held_m], { status: 'paid_held', paymentStatus: 'held', paymentMethod: 'MPESA' });
-  ids.active = await book('r6'); await tr('rentalAccept', ids.active); Object.assign(B()[ids.active], { status: 'paid_held', paymentStatus: 'held' }); await tr('rentalStart', ids.active);
-  ids.return_pending = await book('r7'); await tr('rentalAccept', ids.return_pending); Object.assign(B()[ids.return_pending], { status: 'paid_held', paymentStatus: 'held' }); await tr('rentalStart', ids.return_pending);
-  await H.rentalReportReturn({ auth: as('r7'), data: { bookingId: ids.return_pending } });
-  ids.returned = await book('r8'); await tr('rentalAccept', ids.returned); Object.assign(B()[ids.returned], { status: 'paid_held', paymentStatus: 'held' }); await tr('rentalStart', ids.returned); await tr('rentalConfirmReturn', ids.returned);
-  ids.completed = await book('r9'); await tr('rentalAccept', ids.completed); Object.assign(B()[ids.completed], { status: 'paid_held', paymentStatus: 'held' }); await tr('rentalStart', ids.completed); await tr('rentalConfirmReturn', ids.completed); await tr('rentalComplete', ids.completed);
+  ids.paid_held = await book('r4'); await tr('rentalAccept', ids.paid_held); await srv.hold(ids.paid_held);
+  ids.paid_held_m = await book('r5'); await tr('rentalAccept', ids.paid_held_m); await srv.hold(ids.paid_held_m, { paymentMethod: 'MPESA' });
+  ids.active = await book('r6'); await out(ids.active);
+  ids.return_pending = await book('r7'); await out(ids.return_pending);
+  await H.rentalReportReturn({ auth: as('r7'), data: { bookingId: ids.return_pending } }); await srv.sync(ids.return_pending);
+  ids.returned = await book('r8'); await out(ids.returned); await tr('rentalConfirmReturn', ids.returned, { pin: await srv.pinOf(ids.returned) });
+  ids.completed = await book('r9'); await out(ids.completed); await tr('rentalConfirmReturn', ids.completed, { pin: await srv.pinOf(ids.completed) }); await tr('rentalComplete', ids.completed);
   ids.declined = await book('r10'); await tr('rentalDecline', ids.declined, { reason: 'Machine in service' });
   ids.cancelled = await book('r11'); await H.rentalCancel({ auth: as('r11'), data: { bookingId: ids.cancelled } });
   ids.refunded = await book('r12'); B()[ids.refunded].status = 'refunded';
@@ -203,6 +227,14 @@ async function seedRentals (srv) {
   ids.forged = await book('r15'); Object.assign(B()[ids.forged], { paymentStatus: 'paid', paidAt: Date.now(), paymentMethod: 'none' });   /* requested; a non-status "paid" field */
   ids.stale = await book('r16');
   ids.race = await book('r17'); await tr('rentalAccept', ids.race); B()[ids.race].status = 'payment_pending';
+  /* RETURN PIN fixtures: held + handed over */
+  ids.pin_ok = await book('r18'); await out(ids.pin_ok);
+  ids.pin_bad = await book('r19'); await out(ids.pin_bad);
+  ids.pin_exp = await book('r20'); await out(ids.pin_exp);
+  ids.pin_lock = await book('r21'); await out(ids.pin_lock);
+  ids.planted = await book('r22'); await out(ids.planted);
+  Object.assign(B()[ids.planted], { pin: '4821', pinHash: 'deadbeefcafe4821', returnPin: '4821', bookingPin: '4821' });   /* fields that must never render */
+  ids.active_unpaid = await book('r23'); await tr('rentalAccept', ids.active_unpaid); B()[ids.active_unpaid].status = 'active';   /* a pre-PIN (unheld) hire */
   ids.price1 = B()[ids.requested].totalAmount;
   return ids;
 }
@@ -222,8 +254,9 @@ function mkHost () {
   return { innerHTML: '', _h: {}, vals: {}, ownerDocument: null,
     addEventListener (t, f) { this._h[t] = f; }, removeEventListener () {},
     querySelector (sel) {
-      const m = /^\[data-(note|decline-reason)="(.+)"\]$/.exec(sel); if (!m || !this.innerHTML.includes('data-' + m[1] + '="' + m[2] + '"')) return null;
-      const k = (m[1] === 'note' ? 'note:' : 'decline:') + m[2]; return { value: this.vals[k] != null ? this.vals[k] : '' };
+      const m = /^\[data-(note|decline-reason|return-pin)="(.+)"\]$/.exec(sel); if (!m || !this.innerHTML.includes('data-' + m[1] + '="' + m[2] + '"')) return null;
+      const k = ({ note: 'note:', 'decline-reason': 'decline:', 'return-pin': 'returnpin:' })[m[1]] + m[2]; const vals = this.vals;
+      return { get value () { return vals[k] != null ? vals[k] : ''; }, set value (v) { vals[k] = v; } };
     },
     querySelectorAll (sel) {
       if (sel !== '[data-f]') return [];
@@ -379,7 +412,7 @@ async function suite (src, log) {
   ck('L8', 'refused write → error note, status unchanged (buttons still those of New)', /refused this \(permission\)/.test(text(t.host)) && buttons(t.host).filter((b) => b['data-act'] === 'lead-move').map((b) => b['data-to']).join(',') === 'responded,qualified,lost', text(t.host));
 
   /* ── R (REAL handlers: NEW = f3 bb8634d, OLD = live/tree) ── */
-  ck('R0', 'f3 rentals source ' + F3_RENTALS_REF + ' is readable and carries the owner lifecycle (fail closed: no hand-written fixtures)', !!NEW_SRC && /rentalProductPublish/.test(NEW_SRC) && /rentalConfirmReturn/.test(NEW_SRC), F3_RENTALS_REF);
+  ck('R0', 'f3 rentals source ' + F3_RENTALS_REF + ' is readable and carries the owner lifecycle + the return PIN (fail closed: no hand-written fixtures)', !!NEW_SRC && /rentalProductPublish/.test(NEW_SRC) && /_pinCore\(\)\.verify/.test(NEW_SRC) && !!NEW_FILES['booking-pin-core.js'] && !!NEW_FILES['shared/ent-booking-identity.js'], F3_RENTALS_REF);
   let srv = mkServer(); let ids = await seedRentals(srv);
   t = await mountView(V, 'rentals', { dispatch: srv.dispatch });
   const btnFor = (id) => buttons(t.host).filter((x) => x['data-id'] === id).map((x) => x['data-act']).join(',');
@@ -410,6 +443,59 @@ async function suite (src, log) {
   await click(t.host, (x) => x['data-act'] === 'rental-cancel-ask' && x['data-id'] === ids.race);
   await click(t.host, (x) => x['data-act'] === 'rental-cancel' && x['data-id'] === ids.race);
   ck('R14', 'paid while on screen → the server\'s refund-policy refusal is shown verbatim and nothing changes', /This rental is paid\. Cancelling it is handled under SOKONI's refund policy/.test(text(t.host)) && srv.A.data.rentalBookings[ids.race].status === 'paid_held', text(t.host).slice(0, 300));
+  /* ── RETURN PIN (bebc922: ONE PIN at RETURN, booking-pin-core) ── */
+  t = await mountView(V, 'rentals', { dispatch: srv.dispatch });
+  const hasPinField = (id) => new RegExp('data-return-pin="' + id + '"').test(t.host.innerHTML);
+  ck('R18', 'PIN field ONLY on a held rental at return (active / return_pending + paymentStatus held); none on the unheld hire, paid_held (hand-over first) or any other card',
+    hasPinField(ids.pin_ok) && hasPinField(ids.pin_bad) && !hasPinField(ids.active_unpaid) && !hasPinField(ids.paid_held) && !hasPinField(ids.requested) && !hasPinField(ids.returned) &&
+    btnFor(ids.active_unpaid) === 'rental-confirm-return' && btnFor(ids.paid_held) === 'rental-start',
+    { ok: hasPinField(ids.pin_ok), unpaid: hasPinField(ids.active_unpaid), ph: btnFor(ids.paid_held) });
+  ck('R18', 'before the money is held the card says "PIN arrives when the renter’s payment is held" (requested / accepted / payment_pending) — never "—"',
+    ['requested', 'accepted', 'payment_pending'].every((k) => /Return PIN: PIN arrives when the renter’s payment is held\./.test(cardOf(k))) && !/Return PIN: —/.test(text(t.host)), cardOf('requested'));
+  ck('R18', 'paid_held: no field, the card explains the PIN comes at return after hand-over', /after hand-over/.test(cardOf('paid_held_m')) && !hasPinField(ids.paid_held_m), cardOf('paid_held_m'));
+  /* client check: 4 digits only, no call otherwise */
+  let pinBefore = srv.calls.length;
+  t.host.vals['returnpin:' + ids.pin_ok] = '12a';
+  await click(t.host, (x) => x['data-act'] === 'rental-confirm-return' && x['data-id'] === ids.pin_ok);
+  ck('R19', 'client checks ONLY "4 digits": "12a" → no server call, "Enter the renter’s 4-digit PIN."', srv.calls.length === pinBefore && /Enter the renter’s 4-digit PIN\./.test(text(t.host)), srv.calls.slice(pinBefore));
+  const realPin = await srv.pinOf(ids.pin_ok);
+  t.host.vals['returnpin:' + ids.pin_ok] = realPin;
+  await click(t.host, (x) => x['data-act'] === 'rental-confirm-return' && x['data-id'] === ids.pin_ok);
+  const retCall = srv.calls.filter((x) => x.op === 'rentalConfirmReturn' && x.bookingId === ids.pin_ok).pop();
+  ck('R19', 'held: payload is EXACTLY {op:rentalConfirmReturn, bookingId, shopId, pin}; the real handler verifies the renter’s PIN → returned (returnPinVerified)',
+    retCall && Object.keys(retCall).sort().join(',') === 'bookingId,op,pin,shopId' && retCall.pin === realPin && stored('pin_ok') === 'returned' && srv.A.data.rentalBookings[ids.pin_ok].returnPinVerified === true,
+    { keys: retCall && Object.keys(retCall), st: stored('pin_ok') });
+  ck('R21', 'after the response the field is cleared and the PIN appears nowhere in the page', t.host.vals['returnpin:' + ids.pin_ok] === '' && !t.host.innerHTML.includes('>' + realPin + '<') && !new RegExp('value="' + realPin + '"').test(t.host.innerHTML), t.host.vals['returnpin:' + ids.pin_ok]);
+  await click(t.host, (x) => x['data-act'] === 'rental-confirm-return' && x['data-id'] === ids.active_unpaid);
+  const retUnpaid = srv.calls.filter((x) => x.op === 'rentalConfirmReturn' && x.bookingId === ids.active_unpaid).pop();
+  ck('R19', 'unheld hire: Confirm return sends {op, bookingId, shopId} with NO pin, and the server returns it', retUnpaid && Object.keys(retUnpaid).sort().join(',') === 'bookingId,op,shopId' && stored('active_unpaid') === 'returned', retUnpaid);
+  /* verbatim refusals: wrong, expired, locked */
+  const real2 = await srv.pinOf(ids.pin_bad);
+  const wrong = real2 === '0000' ? '1111' : '0000';
+  t.host.vals['returnpin:' + ids.pin_bad] = wrong;
+  await click(t.host, (x) => x['data-act'] === 'rental-confirm-return' && x['data-id'] === ids.pin_bad);
+  ck('R20', 'wrong PIN → the server’s message verbatim + "Nothing was changed."; still active', /That PIN does not match this booking\. Nothing was changed\./.test(text(t.host)) && stored('pin_bad') === 'active', text(t.host).slice(0, 200));
+  ck('R21', 'cleared after a refusal too', t.host.vals['returnpin:' + ids.pin_bad] === '' && !new RegExp('value="' + wrong + '"').test(t.host.innerHTML), t.host.vals['returnpin:' + ids.pin_bad]);
+  const realExp = await srv.pinOf(ids.pin_exp);
+  srv.core._internal._setClock(() => Date.now() + 400 * 86400000);
+  t.host.vals['returnpin:' + ids.pin_exp] = realExp;
+  await click(t.host, (x) => x['data-act'] === 'rental-confirm-return' && x['data-id'] === ids.pin_exp);
+  srv.core._internal._setClock(null);
+  ck('R20', 'expired PIN → the server’s expiry message verbatim (renter must tap "Get a new PIN"); still active', /This PIN has expired\. Ask the renter to open the rental and tap "Get a new PIN" — the payment stays safely held until then\. Nothing was changed\./.test(text(t.host)) && stored('pin_exp') === 'active', null);
+  const realLock = await srv.pinOf(ids.pin_lock);
+  const wrongL = realLock === '0000' ? '1111' : '0000';
+  for (let i = 0; i < 5; i++) { t.host.vals['returnpin:' + ids.pin_lock] = wrongL; await click(t.host, (x) => x['data-act'] === 'rental-confirm-return' && x['data-id'] === ids.pin_lock); }
+  t.host.vals['returnpin:' + ids.pin_lock] = realLock;
+  await click(t.host, (x) => x['data-act'] === 'rental-confirm-return' && x['data-id'] === ids.pin_lock);
+  ck('R20', 'too many attempts → even the right PIN is refused with the server’s lock message verbatim; still active', /Too many wrong PINs\. Wait a few minutes before trying again\. Nothing was changed\./.test(text(t.host)) && stored('pin_lock') === 'active', null);
+  /* no PIN from booking data, ever */
+  ck('R22', 'PIN-like fields planted on the booking doc (pin / pinHash / returnPin / bookingPin) are never rendered', !/4821/.test(t.host.innerHTML) && !/deadbeef/.test(t.host.innerHTML) && hasPinField(ids.planted), null);
+  const pcode = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  ck('R22', 'the module reads no PIN source: no b.pin / pinHash / returnPin / entBooking* / serviceBookingPin / getMyBookingPin, and logs nothing', !/\bb\.(pin|pinHash|returnPin|bookingPin)\b|pinHash|entBooking|serviceBookingPin|getMyBookingPin|console\./.test(pcode), null);
+  /* read-only: the field and the button are disabled */
+  t = await mountView(V, 'rentals', { dispatch: srv.dispatch, ws: WS({ ownerState: 'frozen', editable: false }) });
+  ck('R23', 'editable !== true (e.g. frozen, staff): the PIN field and Confirm return render disabled', /<input[^>]*data-return-pin="[^"]+"[^>]*disabled/.test(t.host.innerHTML) && buttons(t.host).filter((x) => x['data-act'] === 'rental-confirm-return').every((x) => 'disabled' in x), null);
+
   /* Equipment: listings via rentalOwnerListings, Draft / Available / Paused + publish / pause through the real handlers */
   t = await mountView(V, 'equipment', { dispatch: srv.dispatch });
   ck('R10', 'Equipment comes from rentalOwnerListings {op, shopId}; the direct read is NOT used on a server that knows the op', srv.calls.some((x) => x.op === 'rentalOwnerListings' && x.shopId === 'owner1' && Object.keys(x).length === 2) && t.rec.readEquipment === 0 && /Concrete mixer 350L/.test(text(t.host)), { reads: t.rec.readEquipment });
@@ -465,9 +551,10 @@ async function suite (src, log) {
   const decl = srv.calls.filter((x) => x.op === 'rentalDecline').pop();
   ck('R15', 'Decline sends {op:rentalDecline, bookingId, shopId, reason}; legacy pending → declined with the reason stored', decl && Object.keys(decl).sort().join(',') === 'bookingId,op,reason,shopId' && decl.reason === 'Booked for maintenance' && stored('legacy_pending') === 'declined' && srv.A.data.rentalBookings[ids.legacy_pending].declineReason === 'Booked for maintenance', decl);
   await click(t.host, (x) => x['data-act'] === 'rental-start' && x['data-id'] === ids.paid_held);
+  t.host.vals['returnpin:' + ids.return_pending] = await srv.pinOf(ids.return_pending);   /* the renter says it aloud at return */
   await click(t.host, (x) => x['data-act'] === 'rental-confirm-return' && x['data-id'] === ids.return_pending);
   await click(t.host, (x) => x['data-act'] === 'rental-complete' && x['data-id'] === ids.returned);
-  ck('R16', 'Start hire (paid_held → active), Confirm return (return_pending → returned), Complete (returned → completed) through the real handlers', stored('paid_held') === 'active' && stored('return_pending') === 'returned' && stored('returned') === 'completed' && ['rentalStart', 'rentalConfirmReturn', 'rentalComplete'].every((op) => srv.calls.some((x) => x.op === op && x.shopId === 'owner1')), [stored('paid_held'), stored('return_pending'), stored('returned')]);
+  ck('R16', 'Start hire (paid_held → active), Confirm return with the renter’s PIN (return_pending → returned), Complete (returned → completed) through the real handlers', stored('paid_held') === 'active' && stored('return_pending') === 'returned' && stored('returned') === 'completed' && ['rentalStart', 'rentalConfirmReturn', 'rentalComplete'].every((op) => srv.calls.some((x) => x.op === op && x.shopId === 'owner1')), [stored('paid_held'), stored('return_pending'), stored('returned')]);
   await click(t.host, (x) => x['data-act'] === 'rental-cancel-ask' && x['data-id'] === ids.accepted);
   before = srv.calls.length;
   ck('R9', 'Cancel is two-step (ask, then confirm)', buttons(t.host).some((x) => x['data-act'] === 'rental-cancel' && x['data-id'] === ids.accepted), null);
@@ -659,6 +746,8 @@ async function suite (src, log) {
     ['N5', 'direct rentalProducts read used although rentalOwnerListings exists', 'R10', ["return dispatch('rentalOwnerListings', { shopId: sid }).then(", "return Promise.reject({ code: 'functions/not-found', message: 'Unknown commerce operation' }).then("]],
     ['N6', 'Cancel offered on paid_held', 'R14', ["paid_held: ['start'],", "paid_held: ['start', 'cancel'],"]],
     ['N7', '"Paid" derived from a non-status field (paymentStatus)', 'R12', ["    var s = rentalStatus(b);\n    if (s === 'payment_pending') return 'Awaiting payment';", "    var s = rentalStatus(b);\n    if (b && b.paymentStatus === 'paid') return 'Paid — held by SOKONI';\n    if (s === 'payment_pending') return 'Awaiting payment';"]],
+    ['N13', 'a pin / pinHash field rendered from the booking doc', 'R22', ["        (pl ? '<div class=\"cw-meta\">' + esc(pl) + '</div>' : '') +", "        (pl ? '<div class=\"cw-meta\">' + esc(pl) + '</div>' : '') + (b.pin || b.pinHash ? '<div class=\"cw-meta\">PIN ' + esc(b.pin || b.pinHash) + '</div>' : '') +"]],
+    ['N14', 'Confirm return sent without the PIN when held', 'R19', ["        payload.pin = pin;   /* sent once", "        void pin;   /* sent once"]],
     ['N8', 'an M-PESA default payment method', 'R13', ["return (m && m.toLowerCase() !== 'none') ? m : '—';", "return (m && m.toLowerCase() !== 'none') ? m : 'M-PESA';"]],
     ['N4', "'0' rendered for an unknown count", 'O1', ["isFinite(n)) ? String(n) + (partial ? '+' : '') : '—'; }", "isFinite(n)) ? String(n) + (partial ? '+' : '') : '0'; }"]],
     ['N9', '"Approved" derived from applications.status (control a)', 'V1', ["      h += approvalCard(S) + '<h3>Application progress</h3>';", "      h += ((S.apps && S.apps.rows || []).some(function (a) { return a.status === 'approved'; }) ? '<div class=\"cw-card\" data-approval=\"approved\"><div class=\"cw-row\"><b>SOKONI approval</b><span class=\"cw-badge\">Approved</span></div></div>' : approvalCard(S)) + '<h3>Application progress</h3>';"]],
