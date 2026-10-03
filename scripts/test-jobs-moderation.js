@@ -47,6 +47,8 @@ const MUTANTS = {
   no_rereview:          ["if (['active', 'paused'].includes(current.status) && REVIEWED.some((k) => k in update)) {", "if (false) {"],
   restore_unapproved:   ["if (!job.approvedAt) throw new HttpsError('failed-precondition', 'This vacancy was never approved; review it instead.');", ""],
   feature_anything:     ["feature:         { from: ['active'], featured: true },", "feature:         { from: Object.keys(JOB_LABEL), featured: true },"],
+  employer_resumes_admin_pause: ["if (job.pausedByRole === 'admin') throw", "if (false) throw"],
+  employer_list_leak:   ["db.collection('jobs').where('employerUid', '==', req.auth.uid).limit(200)", "db.collection('jobs').limit(200)"],
   sweep_noop:           ["if (!(j.expiresAt && j.expiresAt.toMillis() < now)) continue;", "continue;"],
 };
 const M = process.env.JOBS_MUTANT;
@@ -139,8 +141,10 @@ const post = async (extra) => (await call('createJob', 'emp', Object.assign({ ti
   ck('P6 admin pause needs a reason', !r.ok && /reason/.test(r.msg), r);
   r = await call('adminModerateJob', 'adm', { jobId: j1, action: 'pause', reason: 'Reported by candidates; under investigation.' }, ADM);
   ck('P7 admin pause → paused AND unfeatured (never left featured off Published)', r.ok && job(j1).status === 'paused' && job(j1).featured === false, job(j1));
+  r = await call('resumeJob', 'emp', { jobId: j1 });
+  ck('P7b the employer cannot resume a vacancy SOKONI paused (sokoni-e3 finding)', !r.ok && r.code === 'failed-precondition' && /Only SOKONI/.test(r.msg) && job(j1).status === 'paused', r);
   r = await call('adminModerateJob', 'adm', { jobId: j1, action: 'restore' }, ADM);
-  ck('P8 admin restore of an approved vacancy → active', r.ok && job(j1).status === 'active', r);
+  ck('P8 admin restore of an approved vacancy → active, pausedByRole cleared', r.ok && job(j1).status === 'active' && !job(j1).pausedByRole, r);
   const j3 = await post({ submit: true });
   store.set('jobs/' + j3, Object.assign({}, job(j3), { status: 'paused' }));   /* paused without ever being approved */
   r = await call('adminModerateJob', 'adm', { jobId: j3, action: 'restore' }, ADM);
@@ -176,6 +180,18 @@ const post = async (extra) => (await call('createJob', 'emp', Object.assign({ ti
   ck('Q3 opening a vacancy shows its applications + counts + moderation trail', r.ok && r.r.applications.length === 1 && r.r.applicationCounts.pending === 1 && r.r.trail.length >= 5, r);
   r = await call('adminGetJob', 'emp', { jobId: j1 });
   ck('Q4 a non-admin cannot use adminGetJob', !r.ok && r.code === 'permission-denied', r);
+
+  /* ── L: employer list ops + capability probe (sokoni-e3 asks) ── */
+  store.set('jobs/otherEmpJob', { employerUid: 'emp2', title: 'Not yours', status: 'active', postedAt: ts(1), expiresAt: ts(Date.now() + 86400000) });
+  store.set('jobApplications/otherEmpJob_x', { jobId: 'otherEmpJob', seekerUid: 'x', employerUid: 'emp2', status: 'pending', statusVersion: 1 });
+  r = await call('listMyJobs', 'emp', {});
+  ck('L1 listMyJobs returns the caller\'s vacancies in every state, none of anyone else\'s', r.ok && r.r.jobs.length >= 5 && r.r.jobs.every((j) => j.jobId !== 'otherEmpJob') && r.r.jobs.some((j) => j.status === 'pending_review'), r.ok ? r.r.jobs.map((j) => j.status) : r);
+  r = await call('getEmployerApplications', 'emp', {});
+  ck('L2 getEmployerApplications returns only applications to the caller\'s vacancies (with jobId, statusVersion)', r.ok && r.r.applications.length >= 1 && r.r.applications.every((a) => a.id !== 'otherEmpJob_x' && a.jobId && a.statusVersion), r);
+  r = await call('getEmployerApplications', 'seek', {});
+  ck('L3 a non-employer gets an empty list (scoped to the caller)', r.ok && r.r.applications.length === 0, r);
+  r = await call('jobsCapabilities', null, {});
+  ck('L4 jobsCapabilities reports contract jobs-j2 with the transition table', r.ok && r.r.contract === 'jobs-j2' && r.r.employerTransitions && r.r.employerTransitions.offer_accepted[0] === 'hired', r);
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

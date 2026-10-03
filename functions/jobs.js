@@ -353,8 +353,13 @@ async function _employerJobTransition(req, { from, to, action }) {
     if (action === 'resumed') {
       if (!job.approvedAt) throw new HttpsError('failed-precondition', 'This vacancy has not been approved yet.');
       if (job.expiresAt && job.expiresAt.toMillis() < Date.now()) throw new HttpsError('failed-precondition', 'This vacancy has expired. Update its closing date first.');
+      /* A vacancy SOKONI paused can only be restored by SOKONI (found by sokoni-e3's review). */
+      if (job.pausedByRole === 'admin') throw new HttpsError('failed-precondition', 'SOKONI paused this vacancy' + (job.moderationReason ? ': ' + job.moderationReason : '') + '. Only SOKONI can restore it.');
     }
-    txn.update(jobRef, { status: to, ...(to === 'pending_review' ? { submittedAt: Timestamp.now(), moderationReason: null } : {}) });
+    txn.update(jobRef, { status: to,
+      ...(to === 'pending_review' ? { submittedAt: Timestamp.now(), moderationReason: null } : {}),
+      ...(to === 'paused' ? { pausedByRole: 'employer', pausedAt: Timestamp.now() } : {}),
+      ...(to === 'active' ? { pausedByRole: null } : {}) });
     _jobEventInTxn(txn, jobRef, { from: job.status, to, action, actorUid: uid, actorRole: 'employer' });
     return { success: true, status: to };
   });
@@ -410,7 +415,8 @@ exports._h.adminModerateJob = async (req) => {
       if (!job.approvedAt) throw new HttpsError('failed-precondition', 'This vacancy was never approved; review it instead.');
       if (job.expiresAt && job.expiresAt.toMillis() < Date.now()) throw new HttpsError('failed-precondition', 'This vacancy has expired; it cannot be restored.');
     }
-    const upd = { status: spec.to, moderationReason: spec.reason ? cleanReason : null, moderatedBy: uid, moderatedAt: Timestamp.now() };
+    const upd = { status: spec.to, moderationReason: spec.reason ? cleanReason : null, moderatedBy: uid, moderatedAt: Timestamp.now(),
+      pausedByRole: spec.to === 'paused' ? 'admin' : null, ...(spec.to === 'paused' ? { pausedAt: Timestamp.now() } : {}) };
     if (action === 'approve') upd.approvedAt = Timestamp.now();
     if (spec.to !== 'active') { upd.featured = false; }   /* a vacancy that leaves Published is never left featured */
     txn.update(jobRef, upd);
@@ -467,6 +473,41 @@ exports._h.adminGetJob = async (req) => {
     at: e.at && e.at.toMillis ? e.at.toMillis() : null })).sort((a, b) => (a.at || 0) - (b.at || 0));
   return { job: { ..._publicJobFields(jobId, j), statusLabel: JOB_LABEL[j.status] || j.status, employerUid: j.employerUid, description: j.description,
     requirements: j.requirements, moderationReason: j.moderationReason || null }, applicationCounts: byStatus, applications, trail };
+};
+
+/** Capability probe for clients (sokoni-e3): which Jobs contract this server speaks — instead of parsing error text. */
+exports._h.jobsCapabilities = async () => ({ contract: 'jobs-j2', moderation: true, applicationStates: Object.keys(STATUS_LABEL),
+  jobStates: Object.keys(JOB_LABEL), employerTransitions: EMPLOYER_TRANSITIONS, jobTypes: VALID_TYPES });
+
+/** The employer's own vacancies in every state (one single-field query; replaces the client's direct read). */
+exports._h.listMyJobs = async (req) => {
+  _requireAuth(req);
+  const db = getFirestore();
+  const snap = await db.collection('jobs').where('employerUid', '==', req.auth.uid).limit(200).get();
+  const jobs = snap.docs.map((d) => { const j = d.data();
+    return { ..._publicJobFields(d.id, j), statusLabel: JOB_LABEL[j.status] || j.status, moderationReason: j.moderationReason || null,
+      pausedByRole: j.pausedByRole || null, approvedAt: j.approvedAt || null, closedReason: j.closedReason || null,
+      description: j.description, requirements: j.requirements }; })
+    .sort((a, b) => ((b.postedAt && b.postedAt.toMillis ? b.postedAt.toMillis() : 0) - (a.postedAt && a.postedAt.toMillis ? a.postedAt.toMillis() : 0)));
+  return { jobs };
+};
+
+/** Every application to the caller's vacancies in ONE single-field query (employerUid is server-written at apply time),
+    replacing one getJobApplications call per vacancy. Same fields as getJobApplications, plus jobId / jobTitle. */
+exports._h.getEmployerApplications = async (req) => {
+  _requireAuth(req);
+  const db = getFirestore();
+  const snap = await db.collection('jobApplications').where('employerUid', '==', req.auth.uid).limit(500).get();
+  const apps = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const uids = [...new Set(apps.map((a) => a.seekerUid))].slice(0, 300);
+  const profiles = {};
+  if (uids.length) (await db.getAll(...uids.map((u) => db.collection('jobSeekerProfiles').doc(u)))).forEach((p) => {
+    if (p.exists) { const pd = p.data(); profiles[p.id] = { name: pd.name || null, headline: pd.headline || null, skills: pd.skills || [], location: pd.location || null }; } });
+  const applications = apps.map((a) => ({ id: a.id, jobId: a.jobId, jobTitle: a.jobTitle || null, seekerUid: a.seekerUid, coverLetter: a.coverLetter,
+    cvUrl: a.cvUrl, status: a.status, statusLabel: STATUS_LABEL[a.status] || a.status, statusVersion: Number(a.statusVersion) || 1,
+    appliedAt: a.appliedAt, updatedAt: a.updatedAt, seekerProfile: profiles[a.seekerUid] || null }))
+    .sort((a, b) => ((b.appliedAt && b.appliedAt.toMillis ? b.appliedAt.toMillis() : 0) - (a.appliedAt && a.appliedAt.toMillis ? a.appliedAt.toMillis() : 0)));
+  return { applications };
 };
 
 /** Expiry: closes Published / Paused vacancies whose closing date passed, so they leave search (the index removes
