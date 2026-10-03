@@ -103,7 +103,8 @@ const ITEMS = [{ name: 'Cement 50kg', qty: 100, unit: 'bag', targetPriceKES: 700
   const bB = store.get('businesses/bizSupB'); store.set('businesses/bizSupB', Object.assign({}, bB, { supply: Object.assign({}, bB.supply, { acceptsLeads: true }) }));
 
   /* with the commercial authority present: the price SNAPSHOT is spread into each lead row (sokoni-2f contract) */
-  global.__leadsStub = { monthOf: (d) => 'EAT-' + d.getUTCFullYear(), leadFields: async () => ({ priceKES: 200, priceSource: 'default' }) };
+  global.__leadsStub = { monthOf: (d) => 'EAT-' + d.getUTCFullYear(), leadFields: async () => ({ priceKES: 200, priceSource: 'default' }),
+    leadClaimWrite: (txn, d, c) => { (global.__claims = global.__claims || []).push(c); } };
   r = await call('uBuyer', { op: 'create', items: ITEMS, supplierBusinessIds: ['bizSupA'], deliveryLocation: 'Kiambu' });
   const snapLead = r.ok && store.get('b2bLeads/' + r.r.rfqId + '__bizSupA');
   ck('L4 with b2b-leads present: each lead carries the price snapshot {priceKES 200, priceSource} and the authority\'s monthOf', !!snapLead && snapLead.priceKES === 200 && snapLead.priceSource === 'default' && /^EAT-/.test(snapLead.month), snapLead);
@@ -198,6 +199,21 @@ const ITEMS = [{ name: 'Cement 50kg', qty: 100, unit: 'bag', targetPriceKES: 700
   ck('I13 a business cannot cancel an individual\'s RFQ', !r.ok && r.code === 'not-found', r);
   r = await callT('uInd', {}, { op: 'cancel', buyerType: 'individual', rfqId: r3.r && r3.r.rfqId });
   ck('I14 the individual cancels their own open RFQ', r.ok && r.r.status === 'cancelled', r);
+
+  console.log('\n── G: hub-aware lead ledger (sokoni-2f §23) ──');
+  global.__claims = []; const seenHubs = [];
+  global.__leadsStub = { monthOf: (d) => 'EAT-' + d.getUTCFullYear(),
+    leadFields: async (d, o) => { seenHubs.push(o && o.hub + '/' + o.tier); return o && o.hub === 'construction' ? { priceKES: 200, priceSource: 'construction.standard' } : { priceKES: 200, priceSource: 'b2b' }; },
+    leadClaimWrite: (txn, d, c) => { global.__claims.push(c); } };
+  store.set('businesses/bizSupA', Object.assign({}, store.get('businesses/bizSupA'), { supply: Object.assign({}, (store.get('businesses/bizSupA') || {}).supply, { categories: ['cement'] }) }));
+  r = await callT('uInd', {}, { op: 'create', buyerType: 'individual', items: [{ name: 'Cement', qty: 100 }], supplierBusinessIds: ['bizSupA'], deliveryLocation: 'Langata' });
+  const gId = r.ok ? r.r.rfqId : 'x'; const gLead = store.get('b2bLeads/' + gId + '__bizSupA') || {};
+  ck('G1 an individual cement RFQ is a CONSTRUCTION lead priced from the construction hub (standard)', gLead.hub === 'construction' && gLead.priceSource === 'construction.standard' && seenHubs.indexOf('construction/standard') !== -1, { gLead, seenHubs });
+  ck('G2 the bill-once claim is written for the lead (commercialEventId, hub, leadId, supplier)', global.__claims.some((c) => c.commercialEventId === 'rfq_' + gId + '__bizSupA' && c.hub === 'construction' && c.leadId === gId + '__bizSupA' && c.supplierBusinessId === 'bizSupA'), global.__claims);
+  global.__leadsStub.leadFields = async (d, o) => { if (o && o.hub === 'construction') { const e = new Error('no price'); e.code = 'failed-precondition'; throw e; } return { priceKES: 200 }; };
+  r = await callT('uInd', {}, { op: 'create', buyerType: 'individual', items: [{ name: 'Cement', qty: 100 }], supplierBusinessIds: ['bizSupA'], deliveryLocation: 'Karen' });
+  ck('G3 a hub with no configured price REFUSES the RFQ (no unpriced lead, no default)', !r.ok && r.code === 'failed-precondition' && /not open/.test(r.msg), r);
+  global.__leadsStub = null;
 
   console.log('\n── N: notifications ──');
   ck('N1 rfq_received → each recipient owner (uSupA, uSupB) once per RFQ', notes.filter((n) => n.type === 'rfq_received' && n.data.rfqId === rfqId).map((n) => n.uid).sort().join() === 'uSupA,uSupB');

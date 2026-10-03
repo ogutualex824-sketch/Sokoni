@@ -188,8 +188,21 @@ H.create = async function (request) {
   /* Price SNAPSHOT for each lead ({priceKES, priceSource}) from the commercial authority, read BEFORE the delivery
      transaction (sokoni-2f): a mid-month price change then applies only to later leads. Absent module → {} and the
      invoice prices the row at billing time (flagged unsnapshotted) — still billed, never invented here. */
-  let leadPrice = {};
-  try { const L = leadsMod(); if (L && typeof L.leadFields === 'function') leadPrice = (await L.leadFields(db())) || {}; } catch (e) { leadPrice = {}; }
+  /* HUB-AWARE LEAD LEDGER (sokoni-2f §23): one price snapshot per hub, read BEFORE the transaction. A hub with no price
+     makes the commercial authority throw failed-precondition — the RFQ is refused rather than leads written unpriced.
+     Business RFQs are hub 'b2b'; an individual's are 'construction' when its category / the supplier is construction. */
+  const L = leadsMod();
+  const hubOf = function (x) { return isInd ? hubFor(rfqCategory, x.categories) : 'b2b'; };
+  const priceByHub = {};
+  if (L && typeof L.leadFields === 'function') {
+    for (const h of Array.from(new Set(suppliers.map(hubOf)))) {
+      try { priceByHub[h] = (await L.leadFields(db(), { hub: h, tier: 'standard' })) || {}; }
+      catch (e) {
+        if (e && (e.code === 'failed-precondition' || /failed-precondition/.test(String(e.code || e.message)))) err('Quote requests in this category are not open on SOKONI yet.', 'failed-precondition');
+        priceByHub[h] = {};   /* any other read failure: the invoice prices the row at billing time (flagged unsnapshotted) */
+      }
+    }
+  }
   /* DELIVERY IS ONE TRANSACTION (sokoni-e3, 2026-10-03): each supplier's consent is RE-READ inside it, so a supplier
      who withdrew acceptsLeads between selection and delivery is never billed. The lead row records acceptsLeadsAt —
      the evidence of consent the monthly invoice relies on. A supplier whose consent vanished is dropped; if none remain
@@ -216,10 +229,14 @@ H.create = async function (request) {
          one, so the same lead can never be billed twice. hub picks the price row (commercial authority); every lead is
          'standard' until the owner defines explicit qualified-lead rules. The b2b price snapshot applies to b2b leads only. */
       /* business buyers keep the decided B2B lead rule; the construction hub applies to individual RFQs (owner 10-03) */
-      const hub = isInd ? hubFor(rfqCategory, x.categories) : 'b2b';
-      t.create(db().collection('b2bLeads').doc(rid(rfqId, x.id)), { supplierBusinessId: x.id, supplierOwnerUid: x.ownerUid, rfqId,
-        buyerBusinessId: buyerId, buyerType: buyer.buyerType, hub, tier: 'standard', commercialEventId: 'rfq_' + rid(rfqId, x.id),
-        month, source: 'rfq', consentAcceptsLeadsAt: x.acceptsLeadsAt, ...(hub === 'b2b' ? leadPrice : {}), createdAt: F.serverTimestamp() });
+      const hub = hubOf(x);
+      const leadId = rid(rfqId, x.id);
+      const commercialEventId = 'rfq_' + leadId;   /* one event per (rfq, supplier): a fan-out RFQ is N events, one per supplier */
+      t.create(db().collection('b2bLeads').doc(leadId), { supplierBusinessId: x.id, supplierOwnerUid: x.ownerUid, rfqId,
+        buyerBusinessId: buyerId, buyerType: buyer.buyerType, hub, tier: 'standard', commercialEventId,
+        month, source: 'rfq', consentAcceptsLeadsAt: x.acceptsLeadsAt, ...(priceByHub[hub] || {}), createdAt: F.serverTimestamp() });
+      /* the bill-once claim (leadClaims/{commercialEventId}, create()) — a second fee for the same event aborts the txn */
+      if (L && typeof L.leadClaimWrite === 'function') L.leadClaimWrite(t, db(), { commercialEventId, hub, leadId, supplierBusinessId: x.id });
     }
     return ok;
   });
