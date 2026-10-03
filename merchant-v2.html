@@ -3028,9 +3028,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     var responded = st === 'responded';
     var pid = String(q.productId || '');
     var pname = q.productName || 'Product';
-    var ke = waPhone(q.buyerPhone);
-    var digits = String(q.buyerPhone == null ? '' : q.buyerPhone).replace(/[^0-9]/g, '');
-    var tel = ke ? 'tel:+' + ke : (digits.length >= 9 ? 'tel:' + digits : null);
+    /* Contact stays IN SOKONI (owner 10-01, sokoni-f3/e3 10-03): no tel: link. Open chat = the product_enquiry
+       conversation anchored on THIS contactRequests id (server d5d81d6 re-derives buyer + seller on every send). */
+    var chat = 'messages.html?tx=product_enquiry&txId=' + encodeURIComponent(String(q.id || ''));
     return '<div class="enq" data-enq-id="' + esc(q.id) + '">' +
       '<div class="enq-top">' +
         (pid ? '<a class="enq-prod" href="' + esc('product.html?id=' + encodeURIComponent(pid)) + '">' + esc(pname) + '</a>'
@@ -3043,7 +3043,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       (q.message ? '<div class="enq-msg">' + esc(q.message) + '</div>'
                  : '<div class="enq-msg muted">No message</div>') +
       '<div class="sheet-actions">' +
-        (tel ? '<a class="act ghost" href="' + esc(tel) + '">📞 Call</a>' : '') +
+        (q.id ? '<a class="act ghost" data-enq-chat="1" href="' + esc(chat) + '">💬 Open chat</a>' : '') +
         (responded ? '' : '<button class="act" data-enq-respond="' + esc(q.id) + '">✓ Mark responded</button>') +
       '</div>' +
     '</div>';
@@ -3071,7 +3071,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 
   document.addEventListener('click', function (e) {
     var eqo = e.target.closest('[data-enquiries]');
-    if (eqo) { openEnquiries(); return; }
+    /* ONE enquiries surface: the Construction workspace's Leads route (e3 89afb97, the f9a5c45 lead lifecycle on
+       the same contactRequests) when this build carries it; this sheet only until that route is assembled. */
+    if (eqo) { if (CONTRACT.resolve('con-leads')) go('con-leads'); else openEnquiries(); return; }
     var eqr = e.target.closest('[data-enq-respond]');
     if (eqr) { markEnquiryResponded(eqr.dataset.enqRespond, eqr); return; }
     if (e.target.closest('[data-enq-retry]')) { openEnquiries(); return; }

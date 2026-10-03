@@ -1,3 +1,12 @@
+## [2026-10-03] — Product enquiries: Open chat on the product page + ONE merchant enquiries surface (no tel:) — NOT deployed
+
+- **product.js:** after the contactRequests write resolves, "💬 Open chat with the seller" → messages.html?tx=product_enquiry&txId=<request id> (server d5d81d6, inbox 74c9d50). The payload is byte-identical to df1a4cb, so f3's f9a5c45 exact-key rule still holds.
+- **merchant-v2.html Buyer enquiries:**
+  - the Dashboard button now opens e3's Construction **Leads** route (`con-leads`, 89afb97: the f9a5c45 lead lifecycle on the same contactRequests) whenever this build carries it, and falls back to this sheet only until that route is assembled;
+  - the `tel:` Call link is removed (contact stays in SOKONI); every enquiry gets "💬 Open chat" on its product_enquiry conversation.
+- **Tests:** test-contact-requests 49/0 (A23 Open chat; M8 Open chat + no tel:; M12 con-leads hand-off; deliberate breaks of each go red). merchant-v2-panels 20/0, merchant-v2-modules 41/0, mv2-1-sidebar 14/0.
+- **Assembly note (e3):** once con-leads is in the candidate, openEnquiries / paintEnquiries / markEnquiryResponded are unreachable and may be deleted.
+
 ## [2026-10-01] - Slice B2 closure: landlord rent is external (fake payment + rent commission removed), contact seller end to end, truthful notices and confirmations, landlord XSS — built, certified, NOT deployed
 
 **Branch `hosting/slice-b2-on-chain`, on top of the frozen B2 reference `63dc9b0`.** Hosting only. Owner decisions

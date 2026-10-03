@@ -175,7 +175,7 @@ function builderFindings (builderSrc, rulesKeys) {
   const unescapedFound = (html) => /<img|<script|<i>|<b>|onerror=alert\(1\)>/.test(html);
   const html = api.card(hostileRow);
   ck('M7  every rendered field is escaped (hostile product/buyer/message/status/id)', !unescapedFound(html) && html.includes('&lt;img'), html.slice(0, 300));
-  ck('M8  product links to product.html?id=<encoded id>; tel: is digits only; no wa.me', /href="product\.html\?id=p%221"/.test(html) && /href="tel:\+254712345678"/.test(html) && !/wa\.me/.test(html), html);
+  ck('M8  product links to product.html?id=<encoded id>; contact stays in SOKONI — Open chat (product_enquiry on the encoded request id), NO tel:, no wa.me', /href="product\.html\?id=p%221"/.test(html) && /data-enq-chat="1" href="messages\.html\?tx=product_enquiry&amp;txId=x%22%3E%3Cscript%3E1%3C%2Fscript%3E"/.test(html) && !/tel:/.test(html) && !/wa\.me/.test(html), html);
   const html2 = api.card({ id: 'r', productId: 'p', productName: 'P', buyerName: 'B', message: '', status: 'responded' });
   ck('M9  responded rows offer no Mark button; absent message and phone render neutrally (no tel:)', !/data-enq-respond/.test(html2) && /No message/.test(html2) && !/tel:/.test(html2), html2);
   const host = { innerHTML: '' };
@@ -185,7 +185,7 @@ function builderFindings (builderSrc, rulesKeys) {
   ck('M10 empty → "No enquiries yet" (no fabricated count)', /No enquiries yet/.test(host.innerHTML) && !/>0</.test(host.innerHTML), host.innerHTML);
   api.paint(host, 'permission-denied');
   ck('M11 permission-denied → a permissions state with retry, not an empty inbox', /cannot read these enquiries/.test(host.innerHTML) && /data-enq-retry/.test(host.innerHTML), host.innerHTML);
-  ck('M12 reachable: Dashboard quick action data-enquiries="open" + delegated click opens the sheet', /data-enquiries="open"/.test(M) && /closest\('\[data-enquiries\]'\)[\s\S]{0,40}openEnquiries\(\)/.test(M), null);
+  ck('M12 reachable: Dashboard quick action data-enquiries="open" → ONE surface: the con-leads route when the build carries it, else this sheet', /data-enquiries="open"/.test(M) && M.indexOf("if (eqo) { if (CONTRACT.resolve('con-leads')) go('con-leads'); else openEnquiries(); return; }") >= 0, null);
   ck('M13 staff (servedBy.role != owner) are told enquiries go to the owner — not shown an empty list', /S\.servedBy\.role !== 'owner'/.test(src.openEnquiries) && /Enquiries go to the shop owner/.test(src.openEnquiries), null);
   ck('M14 merchant-v2 still carries no wa.me link', !/wa\.me\//.test(M.replace(/\/\*[\s\S]*?\*\//g, '')), null);
 
