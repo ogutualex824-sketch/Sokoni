@@ -837,14 +837,20 @@ exports.adminGetProviders = onCall({ region: 'us-central1', maxInstances: 10, en
   let items = (snap.docs || []).map(d => { const x = d.data() || {}; return {
     uid: d.id, name: x.name || x.businessName || '', email: x.email || '', category: x.category || '',
     location: x.location || '', status: x.status || '', verified: !!x.verified, available: !!x.available,
-    rating: x.rating || 0, jobsCompleted: x.jobsCompleted || 0, acceptsBookings: !!x.acceptsBookings,
+    /* Tech Hub 4O (2026-10-03): an absent rating / job count is UNKNOWN (null → the UI shows —), never a fabricated 0. */
+    rating: typeof x.rating === 'number' ? x.rating : null, jobsCompleted: typeof x.jobsCompleted === 'number' ? x.jobsCompleted : null,
+    acceptsBookings: !!x.acceptsBookings,
+    /* the application whose AdminOS decision (applicationDecide approve | suspend) governs this listing */
+    sourceApplicationId: x.sourceApplicationId || null, suspendedAt: _iso(x.suspendedAt),
     createdAt: _iso(x.createdAt), updatedAt: _iso(x.updatedAt), _ms: _ms(x.createdAt) }; });
   items.sort((a, b) => b._ms - a._ms);
   if (search) { const q = String(search).toLowerCase(); items = items.filter(p => (p.name || '').toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q)); }
   const active = items.filter(p => ['active', 'approved'].includes(String(p.status).toLowerCase())).length;
+  const suspended = items.filter(p => String(p.status).toLowerCase() === 'suspended').length;
   const verified = items.filter(p => p.verified).length;
   items.forEach(p => { delete p._ms; });
-  return _env('providers', items, { active, verified, pending: items.length - active });
+  /* pending used to be total − active, which counted SUSPENDED listings as pending (4O). */
+  return _env('providers', items, { active, verified, suspended, pending: items.length - active - suspended });
 });
 
 exports.adminGetServices = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetServices = async (req) => {

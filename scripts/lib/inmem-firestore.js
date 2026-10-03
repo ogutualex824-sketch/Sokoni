@@ -17,13 +17,25 @@ function install(opts) {
   const DEL = { __delete: true };
   const clone = (x) => JSON.parse(JSON.stringify(x));
   const strip = (v) => JSON.parse(JSON.stringify(v, (key, x) => (x && x.__ts ? x.__ts : x)));
+  /* FieldValue sentinels resolved against the current value (top-level fields — enough for these handlers) */
+  const resolve = (cur, f, x) => {
+    if (x && x.__delete) { delete cur[f]; return; }
+    if (x && x.__arrayUnion) { const a = Array.isArray(cur[f]) ? cur[f].slice() : []; x.__arrayUnion.forEach((e) => { if (!a.some((y) => JSON.stringify(y) === JSON.stringify(e))) a.push(e); }); cur[f] = a; return; }
+    if (x && x.__arrayRemove) { const a = Array.isArray(cur[f]) ? cur[f] : []; cur[f] = a.filter((y) => !x.__arrayRemove.some((e) => JSON.stringify(e) === JSON.stringify(y))); return; }
+    if (x && typeof x.__increment === 'number') { cur[f] = (Number(cur[f]) || 0) + x.__increment; return; }
+    cur[f] = x;
+  };
   const applyUpdate = (k, v) => {
     if (!DOCS.has(k)) throw new Error('NOT_FOUND ' + k);
     const cur = Object.assign({}, DOCS.get(k));
-    for (const [f, x] of Object.entries(v)) { if (x && x.__delete) delete cur[f]; else cur[f] = x; }
+    for (const [f, x] of Object.entries(v)) resolve(cur, f, x);
     DOCS.set(k, strip(cur));
   };
-  const applySet = (k, v, so) => DOCS.set(k, so && so.merge ? Object.assign({}, DOCS.get(k) || {}, strip(v)) : strip(v));
+  const applySet = (k, v, so) => {
+    const cur = so && so.merge ? Object.assign({}, DOCS.get(k) || {}) : {};
+    for (const [f, x] of Object.entries(v || {})) resolve(cur, f, x);
+    DOCS.set(k, strip(cur));
+  };
   const snap = (k, id) => ({ exists: DOCS.has(k), id, ref: docRef(k), data: () => (DOCS.has(k) ? clone(DOCS.get(k)) : undefined) });
   function docRef(k) {
     const id = k.split('/').pop();
@@ -69,10 +81,14 @@ function install(opts) {
   };
   const fsStub = {
     getFirestore: () => db,
-    FieldValue: { delete: () => DEL, serverTimestamp: () => ({ __ts: 'TS' }), increment: (n) => n, arrayUnion: (...a) => a },
+    FieldValue: { delete: () => DEL, serverTimestamp: () => ({ __ts: 'TS' }), increment: (n) => ({ __increment: Number(n) || 0 }), arrayUnion: (...a) => ({ __arrayUnion: a }), arrayRemove: (...a) => ({ __arrayRemove: a }) },
     Timestamp: { now: () => ({ __ts: Date.now(), toMillis: () => Date.now() }), fromMillis: (ms) => ({ __ts: ms, toMillis: () => ms }), fromDate: (d) => ({ __ts: +d }) },
   };
-  const authStub = { getAuth: () => ({ getUser: async (u) => ({ uid: u, customClaims: ADMINS.has(u) ? { admin: true } : {} }) }) };
+  const CLAIMS = new Map();
+  const authStub = { getAuth: () => ({
+    getUser: async (u) => ({ uid: u, customClaims: Object.assign({}, ADMINS.has(u) ? { admin: true } : {}, CLAIMS.get(u) || {}) }),
+    setCustomUserClaims: async (u, c) => { CLAIMS.set(u, Object.assign({}, c || {})); },
+  }) };
   const origLoad = Module._load;
   Module._load = function (req) {
     if (req === 'firebase-admin/firestore') return fsStub;
@@ -84,12 +100,12 @@ function install(opts) {
     }
     return origLoad.apply(this, arguments);
   };
-  return { DOCS, db, ADMINS, reset: () => DOCS.clear() };
+  return { DOCS, db, ADMINS, CLAIMS, reset: () => { DOCS.clear(); CLAIMS.clear(); } };
 }
 
 /** Run a callable handler as `uid`; returns { ok } or { code, msg, det }. */
-async function call(fn, uid, data) {
-  try { return { ok: await fn({ auth: uid ? { uid, token: {} } : null, data }) }; }
+async function call(fn, uid, data, token) {
+  try { return { ok: await fn({ auth: uid ? { uid, token: token || {} } : null, data }) }; }
   catch (e) { return { code: e.code, msg: e.message, det: e.details }; }
 }
 

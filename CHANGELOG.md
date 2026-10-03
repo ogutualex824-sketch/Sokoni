@@ -1,3 +1,24 @@
+## [2026-10-03] — Tech Hub slice 4O (server): provider suspend / reinstate proven end to end; adminGetProviders honest — NOT deployed
+
+- **Suspend / reinstate already exist** — no new authority. AdminOS uses `applicationDecide` (suspend | approve), which writes adminAudit
+  and projects synchronously; projectProvider retracts (suspended, unsearchable, not bookable) or reinstates.
+- **Proven executed** (scripts/test-provider-suspend-restore.js 8/0):
+  - approve projects the provider + sourceApplicationId;
+  - a non-admin cannot decide;
+  - suspend is audited with admin + reason;
+  - a suspended provider has no workspace, no new leads, no bookings and no Tech services, and cannot re-publish itself;
+  - approve reinstates (searchable, workspace, leads).
+- **functions/admin-os.js adminGetProviders:**
+  - unknown rating / jobsCompleted → null (was a fabricated 0);
+  - `suspended` count added and no longer folded into `pending`;
+  - returns `sourceApplicationId` + `suspendedAt` so AdminOS can offer Suspend / Reinstate on the right application.
+  - BASE=906bd2f fails S-8 only.
+- **scripts/lib/inmem-firestore.js:** FieldValue arrayUnion / arrayRemove / increment are now resolved against the current value (the
+  decision path uses them); the auth stub has setCustomUserClaims. leads 12/0 and the others unchanged.
+- **Dependency (5b):** the approval-time category stamp. The test sets providers.business.category by hand after approval, because
+  this lineage's lifecycle does not stamp it.
+- **Deploy unit:** adminGetProviders (admin-os.js) — its own unit, not providerDispatch. Lineage gate applies.
+
 ## [2026-10-03] — Tech Hub slice 4F (server): service leads & quotes — the ONE lead / quote authority — NOT deployed
 
 **Files:**
