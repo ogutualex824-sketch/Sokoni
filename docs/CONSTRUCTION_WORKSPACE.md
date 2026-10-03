@@ -128,8 +128,9 @@ When the two lines are assembled, they must end up as one enquiries surface:
 
 ### Server contract consumed
 
-The page is built against **sokoni-f3's owner rental lifecycle**: `functions/rentals-on-53100ff` @ `bb8634d`, which sits
-on the earlier fix `74672f3` and on DE-2 Build B `53100ff`. It is **NOT deployed**. Production still serves the old
+The page is built against **sokoni-f3's rentals line**: `functions/rentals-on-53100ff` @ `bebc922`. That commit adds the
+ONE return PIN on top of the owner lifecycle `bb8634d`, which in turn sits on the earlier fix `74672f3` and on DE-2
+Build B `53100ff`. It is **NOT deployed**. Production still serves the old
 `marketplace-extensions.js`, which is byte-identical to this tree's copy and to the live `commerceDispatch` archive.
 
 **Listings** move `draft` → `active` (shown as "Available") ⇄ `paused`. A draft or paused listing cannot be booked.
@@ -163,6 +164,42 @@ while the page still shows Cancel, the server's refusal is shown verbatim: "This
 handled under SOKONI's refund policy…".
 
 **`rentalReportReturn` belongs to the renter.** It is not a seller button.
+
+### Return PIN (f3 bebc922: ONE PIN at RETURN)
+
+The PIN authority is `booking-pin-core.js`, source `'rentalBookings'`. It is the same module that service bookings use.
+
+**How the PIN is issued.**
+1. The `rentalPinOnRentalBooking` trigger issues the PIN once the payment authority has **held** the renter's money
+   (`paymentStatus === 'held'`).
+2. The renter gives the PIN when the equipment comes back.
+3. The seller types it into **Confirm return**. Confirming the return is what lets the held money be released on
+   Complete.
+
+**What the seller page does.**
+
+- **Before the money is held** (requested, accepted, payment_pending), the card says "Return PIN: PIN arrives when the
+  renter's payment is held." It does not show "—".
+- **At paid_held there is no field.** The order is hand-over first (**Start hire**), then **Confirm return**. A paid_held
+  rental cannot be returned, and the button table already reflects that.
+- **At active or return_pending with `paymentStatus === 'held'`**, the card shows a 4-digit PIN field next to **Confirm
+  return** and sends exactly `commerceDispatch {op:'rentalConfirmReturn', bookingId, shopId, pin}`.
+  - An unheld hire (legacy or unpaid) sends no `pin`.
+- **Client check:** the page only checks that 4 digits were typed. The server is the authority.
+- **Refusals** are shown verbatim, followed by "Nothing was changed." This covers:
+  - a wrong PIN: "That PIN does not match this booking.";
+  - an expired PIN: "This PIN has expired. Ask the renter to open the rental and tap "Get a new PIN"…";
+  - too many attempts: "Too many wrong PINs. Wait a few minutes before trying again."
+- **Clearing:** the field has no `value` attribute on any render. It is cleared on read and after every response. The
+  typed PIN is held only in the outgoing payload, never in the page state, and it is never logged.
+- **Never rendered:** the renter's PIN is not rendered or stored anywhere on this seller surface. PIN-like fields on a
+  booking document (`pin`, `pinHash`, `returnPin`, `bookingPin`) are ignored, and the module reads no PIN collection.
+- **Staff and read-only:** the field and the button follow the edit rule (`editable === true` only). Staff are therefore
+  disabled today.
+
+**The renter-side PIN view is NOT part of this workspace.** "PIN YAKO NI BOOKING YAKO" lives in the buyer's
+Messages / booking panel, owned by **sokoni-b2**. That panel calls `serviceBookingPin` with `getMyBookingPin` or
+`renewBookingPin` and `source: 'rentalBookings'`.
 
 ### Payment
 
@@ -281,13 +318,15 @@ Construction edits are read-only for everyone (owner rule) — the hosting chang
 
 ## Tests
 
-`scripts/test-merchant-construction-workspace.js` passes **76/0**: 64 rows plus 12 of 12 negative controls caught
+`scripts/test-merchant-construction-workspace.js` passes **84/0**: 70 rows plus 14 of 14 negative controls caught
 (N9 "Approved" from applications.status → V1; N10 read-only fails open on a missing answer → RO6; N11 a badge from
-`verified === true` → V3; N12 lane from applications.category → VL1). It runs
+`verified === true` → V3; N12 lane from applications.category → VL1; N13 a pin / pinHash field rendered from the booking → R22;
+N14 Confirm return sent without the PIN when held → R19). It runs
 in a node VM. The rental fixtures come from **running the real handlers** over an in-memory Firestore, with the
 dispatcher's error wrapping reproduced:
 
-- **NEW** is f3's `bb8634d` source (the owner rental lifecycle), read with `git show` (`RENTALS_REF` overrides it). If that source is missing, the run
+- **NEW** is f3's `bebc922` source (the owner lifecycle plus the return PIN: `marketplace-extensions.js`, `booking-pin-core.js`,
+  `shared/ent-booking-identity.js`), run on f3's own `fake-firestore-txn.js` @ `bebc922` and read with `git show` (`RENTALS_REF` overrides it). If that source is missing, the run
   fails closed.
 - **OLD** is this tree's copy, which equals live.
 
@@ -298,7 +337,7 @@ dispatcher's error wrapping reproduced:
 |---|---|
 | O | Unknown shows `—`, loaded zero shows `0`, capped shows `N+`; three layouts; every section resolves; reused routes exist; plan price only from a construction-priced entry; fees copy |
 | L | Legal lead buttons per status (owner matrix ⊆ rules `leadNext`); labels; exact payloads; shell writer refusals; chat runtime gate; permission, staff and failure copy; exact `hasMore`; refused write |
-| R | f3 bb8634d handlers: every booking state produced by the real handlers (payment-authority states written as that authority would); seller button matrix incl. legacy pending/confirmed; payment from STATUS only; method "—" until the webhook sets it; no Cancel on paid_held, refund-policy refusal verbatim; decline reason required; Accept → rentalConfirm alias on an old server; Start / Confirm return / Complete / seller Cancel; listing Draft / Available / Paused + publish / pause; Equipment via rentalOwnerListings (hasMore); direct read only on an unknown-op answer; reasons verbatim |
+| R | f3 bebc922 handlers: every booking state produced by the real handlers (payment-authority states written as that authority would); seller button matrix incl. legacy pending/confirmed; payment from STATUS only; method "—" until the webhook sets it; no Cancel on paid_held, refund-policy refusal verbatim; decline reason required; Accept → rentalConfirm alias on an old server; Start / Confirm return / Complete / seller Cancel; listing Draft / Available / Paused + publish / pause; Equipment via rentalOwnerListings (hasMore); direct read only on an unknown-op answer; reasons verbatim; RETURN PIN: field only on a held rental at return, exact payload with `pin`, client checks 4 digits only, wrong / expired / locked refusals verbatim, field cleared after every response, no PIN rendered from booking data, disabled when not editable |
 | H | Projects, RFQs, Quotes and Services are honest; staff Verification copy |
 | V | Status is "Application progress" only; Approved only for VALID_APPROVAL + services AVAILABLE; verified/adminApproved/approvedBy/status alone → not approved; failed/malformed/unwired answer → `—`; one businessWorkspace call per page load (module + shell memo) |
 | VL | Lane from `answer.lane` only: supplier VALID → Approved; supplier NO_APPROVAL → not; trade VALID + services unavailable → not; unknown/absent lane → `—` |
@@ -318,6 +357,8 @@ Each negative control is a mutant that must fail its named row:
 | N6 | Cancel offered on paid_held | R14 |
 | N7 | "Paid" derived from a non-status field (`paymentStatus`) | R12 |
 | N8 | An M-PESA default payment method | R13 |
+| N13 | A `pin` / `pinHash` field rendered from the booking document | R22 |
+| N14 | Confirm return sent without the PIN when held | R19 |
 
 Re-run on this branch:
 
@@ -362,9 +403,10 @@ owner.
 | Intake **98589b6** (`hosting/construction-intake-on-d824b58`) and containment **3a8f366** | sokoni-f3 | Construction applications existing to show |
 | `product_enquiry` TX (`74c9d50`, server d5d81d6) and df1a4cb contact flow | sokoni-b2 | "Open chat"; leads being created at all |
 | Commission line: materials 15%, construction_service 0%, unpriced layers OFF | sokoni-2f | The fees copy becoming live fact |
-| f3 owner rental lifecycle `bb8634d` (`functions/rentals-on-53100ff`, on `74672f3` / DE-2 Build B `53100ff`): **ship with or before this hosting change**. The old server still works through the fallbacks, but real owners are refused | sokoni-f3 | Rentals working for real owners |
+| f3 rentals line `bebc922` (owner lifecycle `bb8634d` + return PIN; `functions/rentals-on-53100ff`, on `74672f3` / DE-2 Build B `53100ff`): **ship with or before this hosting change**, together with `rentalPinOnRentalBooking`. That trigger is deployed scoped, only after the providerDispatch booking-PIN release is live and only from a byte-identical `booking-pin-core.js` (5b). The old server still works through the fallbacks, but real owners are refused | sokoni-f3 | Rentals working for real owners |
 | 2f `rental_booking` purpose + commission 10% (`64da94c`), 5b webhook (paid_held + paymentMethod) | sokoni-2f / 5b | Awaiting payment / Paid — held states existing at all |
 | Rental rules | sokoni-f3 | The old-server fallback read |
+| Renter PIN view (`serviceBookingPin` `getMyBookingPin` / `renewBookingPin`, `source:'rentalBookings'`) in the buyer's Messages / booking panel | sokoni-b2 | The renter having a PIN to give at return |
 | Server role or module answer (contractor / supplier / rental) | sokoni-5b | Per-role sections in place of all three |
 | RFQ module `sokoni-merchant-rfq.js` (`hosting/b2b-on-7b5171e`) | sokoni-f3 | RFQs and Quotes linking to `rfqs` |
 | SOKONI Work engine | owner programme | Projects |
