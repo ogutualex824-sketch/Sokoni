@@ -276,10 +276,11 @@
   <div class="ub-upload-sheet">
     <div class="ub-upload-handle"></div>
     <h2>📦 Share Your Unboxing</h2>
-    <p class="ub-upload-sub">Post a photo of your received package & earn <strong style="color:#71ff00;">+50 loyalty points</strong></p>
+    <p class="ub-upload-sub">Tell other buyers what arrived. Your post is checked by SOKONI and appears once it is approved.</p>
 
-    <!-- PHOTO DROP ZONE -->
-    <div class="ub-drop-zone" id="dropZone">
+    <!-- PHOTO DROP ZONE — hidden until photos can be uploaded to SOKONI (they were compressed in the browser and never
+         sent anywhere, so offering them was a promise the page could not keep). -->
+    <div class="ub-drop-zone" id="dropZone" hidden aria-hidden="true">
       <input type="file" class="ub-file-input" id="photoInput" accept="image/*" multiple onchange="handleFiles(this.files)">
       <div class="ub-drop-icon">📷</div>
       <div class="ub-drop-text">Tap to upload package photos</div>
@@ -392,11 +393,11 @@ window._fsUnboxReviews=[];
 function getReviews(){try{return JSON.parse(localStorage.getItem('sokoniUnboxingReviews'))||[];}catch{return [];}}
 function saveReviews(r){try{localStorage.setItem('sokoniUnboxingReviews',JSON.stringify(r));}catch{showToast('⚠️ Storage full — older reviews may be removed.',3000);}}
 
+/* THE WALL SHOWS SERVER-APPROVED POSTS ONLY (owner 2026-10-01/03; UI data integrity). It used to mix in made-up
+   sample posts (DEMO, some badged "verified") and posts saved only on this device — neither is a real, approved
+   unboxing. */
 function allReviews(){
-  const local=getReviews();
-  const localIds=new Set(local.map(r=>r.id));
-  const fsOnly=(window._fsUnboxReviews||[]).filter(r=>!localIds.has(r.id));
-  return [...local,...fsOnly,...DEMO];
+  return (window._fsUnboxReviews||[]).filter(r=>r.status==='approved');
 }
 
 /* ═══════ STATS ═══════ */
@@ -473,8 +474,7 @@ function toggleLike(id,btn){
   const user=JSON.parse(localStorage.getItem('sokoniUnboxingReviews')||'[]');
   const all=getReviews();
   const idx=all.findIndex(r=>r.id===id);
-  const demo=DEMO.find(r=>r.id===id);
-  const target=idx>=0?all[idx]:demo;
+  const target=idx>=0?all[idx]:(window._fsUnboxReviews||[]).find(r=>r.id===id||r._fsId===id);
   if(!target)return;
   target.liked=!target.liked;
   target.likes=(target.likes||0)+(target.liked?1:-1);
@@ -624,51 +624,31 @@ function submitReview(){
   const btn=document.getElementById('ubSubmitBtn');
   btn.disabled=true;btn.textContent='Posting...';
 
-  const review={
-    id:'ubr_'+Date.now(),
-    rating:formStar,
-    product,
-    category:formCat,
-    comment,
-    reviewer,
-    orderId,
-    date:new Date().toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'}),
-    likes:0,
-    liked:false,
-    verified:!!orderId,
-    photos:uploadedPhotos.length?uploadedPhotos:[CAT_EMOJIS[formCat]||'📦'],
-    photoCount:uploadedPhotos.length||1
-  };
-
-  setTimeout(()=>{
-    const reviews=getReviews();
-    reviews.unshift(review);
-    saveReviews(reviews);
-
-    /* Push to Firestore — photos excluded (base64 too large for Firestore) */
-    if(window.SokoniDB){
-      window.SokoniDB.saveUnboxingReview(review)
-        .catch(e=>console.warn('[SOKONI] Unboxing save failed:',e.message));
+  /* SERVER-SIDE SUBMIT (owner 2026-10-01/03): submitUnboxing checks the order is yours, paid and delivered, takes the
+     product from that order, and stores the post as PENDING for AdminOS. Nothing is saved on this device, no points
+     are invented, and nothing claims to be posted until the server has accepted it. */
+  if(!orderId){if(msgEl){msgEl.textContent='🧾 Enter the order number of the order you are unboxing.';msgEl.style.color='#ff6b6b';}btn.disabled=false;btn.textContent='📦 Post My Unboxing Review →';return;}
+  (async function(){
+    try{
+      const fn=(window.firebaseFunctions&&window.firebaseFunctions.httpsCallable)?window.firebaseFunctions.httpsCallable('submitUnboxing'):null;
+      if(!fn) throw new Error('Cannot reach SOKONI right now. Check your connection and try again.');
+      await fn({orderId:orderId,rating:formStar,comment:comment,category:formCat});
+      formStar=0;formCat='';uploadedPhotos=[];
+      document.querySelectorAll('.ub-star-btn').forEach(b=>b.classList.remove('lit'));
+      document.querySelectorAll('.ub-cat-btn').forEach(b=>b.classList.remove('active'));
+      ['ubProduct','ubComment','ubReviewer','ubOrderId'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+      renderPreviews();
+      closeUpload();
+      showToast('✅ Thanks! Your unboxing will appear once SOKONI approves it.',4500);
+    }catch(e){
+      const why=e&&e.details&&e.details.reason;
+      const MSG={NOT_YOUR_ORDER:'That order is not on your account.',NOT_ELIGIBLE:'You can share an unboxing once the order has been delivered.',
+        DUPLICATE:'You have already shared an unboxing for this product.',ORDER_REQUIRED:'Enter the order number of the order you are unboxing.'};
+      if(msgEl){msgEl.textContent=MSG[why]||(e&&e.message)||'Could not post your unboxing. Please try again.';msgEl.style.color='#ff6b6b';}
+    }finally{
+      btn.disabled=false;btn.textContent='📦 Post My Unboxing Review →';
     }
-
-    /* Add loyalty points */
-    try{const u=JSON.parse(localStorage.getItem('sokoniUser')||'{}');u.points=(u.points||0)+50;localStorage.setItem('sokoniUser',JSON.stringify(u));}catch{}
-
-    /* Reset form */
-    uploadedPhotos=[];formStar=0;formCat='';
-    document.querySelectorAll('.ub-star-btn').forEach(b=>b.classList.remove('lit'));
-    document.querySelectorAll('.ub-cat-btn').forEach(b=>b.classList.remove('active'));
-    ['ubProduct','ubComment','ubReviewer','ubOrderId'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-    renderPreviews();
-    btn.disabled=false;btn.textContent='📦 Post My Unboxing Review →';
-    if(msgEl){msgEl.textContent='';};
-
-    closeUpload();
-    confetti();
-    showToast('🎉 Review posted! +50 loyalty points added.',4000);
-    updateStats();
-    renderGallery();
-  },600);
+  })();
 }
 
 /* ═══════ CONFETTI ═══════ */

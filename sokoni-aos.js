@@ -488,20 +488,21 @@ window.SokoniAOS = (() => {
       /* THE REVIEW APPROVAL QUEUE (owner 2026-10-01: every review approved here before it is public). One canonical
          record (reviews/{id}); the server owns every transition (adminModerateReview) and the history. A failed load
          says so — it is never shown as an empty queue. */
-      const st = _revState.status, cur = _revState.cursor;
+      const st = _revState.status, cur = _revState.cursor, kd = _revState.kind;
       let data;
-      try { data = await _call("adminGetReviews", { status: st, limit: 30, cursor: cur || undefined }); }
+      try { data = await _call("adminGetReviews", { kind: kd, status: st, limit: 30, cursor: cur || undefined }); }
       catch (e) { body.innerHTML = _emptyMsg("Couldn't load the review queue — " + _esc(_actionFailure(e, "Review queue"))); return; }
       const reviews = data.reviews || [];
       const tabs = ["pending","flagged","approved","changes_requested","rejected","archived","removed"].map(s =>
-        `<button class="tab-btn${s === st ? " active" : ""}" aria-pressed="${s === st}" onclick="SokoniAOS.reviewQueue('${s}')">${_esc(s.replace("_"," "))}</button>`).join("");
+        `<button class="tab-btn${s === st ? " active" : ""}" aria-pressed="${s === st}" onclick="SokoniAOS.reviewQueue('${s}', null, '${kd}')">${_esc(s.replace("_"," "))}</button>`).join("");
       const ACTIONS = { approve:["pending","flagged","changes_requested","rejected","archived"], reject:["pending","flagged","changes_requested","approved"],
         request_changes:["pending","flagged"], archive:["pending","flagged","approved","rejected","changes_requested"],
         remove:["pending","flagged","approved","rejected","changes_requested","archived"], restore:["archived","removed"] };
       const LABEL = { approve:"Approve", reject:"Reject", request_changes:"Request changes", archive:"Archive", remove:"Remove", restore:"Restore" };
       const btns = (r) => Object.keys(ACTIONS).filter(k => ACTIONS[k].includes(r.status || "pending")).map(k =>
         `<button class="aos-btn-sm${k === "approve" ? " success" : (k === "remove" || k === "reject") ? " danger" : ""}" onclick="SokoniAOS.moderateReview('${_esc(r.id)}','${k}')">${LABEL[k]}</button>`).join("");
-      body.innerHTML = `<div class="tab-bar" role="group" aria-label="Review status">${tabs}</div>` + (reviews.length ? `<div class="review-list">${reviews.map(r => `
+      const kinds = [["review","Reviews"],["unboxing","Unboxing"]].map(([k, l]) => `<button class="tab-btn${k === kd ? " active" : ""}" aria-pressed="${k === kd}" onclick="SokoniAOS.reviewQueue('${_esc(st)}', null, '${k}')">${l}</button>`).join("");
+      body.innerHTML = `<div class="tab-bar" role="group" aria-label="Content type">${kinds}</div><div class="tab-bar" role="group" aria-label="Review status">${tabs}</div>` + (reviews.length ? `<div class="review-list">${reviews.map(r => `
         <div class="review-item">
           <div class="review-header">
             <strong>${"⭐".repeat(r.rating||0)}</strong>
@@ -516,7 +517,7 @@ window.SokoniAOS = (() => {
           </div>
           <div class="aos-muted" id="revhist-${_esc(r.id)}" style="font-size:.75rem"></div>
         </div>`).join("")}</div>` : _emptyMsg("No " + _esc(st.replace("_"," ")) + " reviews"))
-        + (data.nextCursor ? `<div style="text-align:center;margin-top:8px"><button class="aos-btn-sm" onclick="SokoniAOS.reviewQueue('${_esc(st)}','${_esc(data.nextCursor)}')">Next page</button></div>` : "");
+        + (data.nextCursor ? `<div style="text-align:center;margin-top:8px"><button class="aos-btn-sm" onclick="SokoniAOS.reviewQueue('${_esc(st)}','${_esc(data.nextCursor)}','${kd}')">Next page</button></div>` : "");
     }
   }
 
@@ -544,8 +545,8 @@ window.SokoniAOS = (() => {
     _marketplaceTab("orders");
   }
 
-  const _revState = { status: "pending", cursor: null };
-  function reviewQueue(status, cursor) { _revState.status = status || "pending"; _revState.cursor = cursor || null; _marketplaceTab("reviews"); }
+  const _revState = { status: "pending", cursor: null, kind: "review" };
+  function reviewQueue(status, cursor, kind) { _revState.status = status || "pending"; _revState.cursor = cursor || null; if (kind) _revState.kind = kind === "unboxing" ? "unboxing" : "review"; _marketplaceTab("reviews"); }
   async function reviewHistory(id) {
     const box = document.getElementById("revhist-" + id); if (!box) return;
     box.textContent = "Loading history…";
@@ -563,7 +564,7 @@ window.SokoniAOS = (() => {
     }
     let res;
     try {
-      res = await _call("adminModerateReview", { reviewId: id, action, note });
+      res = await _call("adminModerateReview", { kind: _revState.kind, reviewId: id, action, note });
     } catch (e) {
       _toast(_actionFailure(e, "Review moderation"), "error");
       return;

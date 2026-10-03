@@ -462,9 +462,13 @@ const SokoniDB = {
   },
 
   listenUnboxingReviews(callback) {
-    const q = query(collection(db, 'unboxingReviews'), orderBy('createdAt', 'desc'), limit(100));
+    /* APPROVED only (owner 2026-10-01/03): unboxing posts are approved in AdminOS before they are public, and a query
+       that is not constrained to approved posts is refused outright by the rules. Single equality, no composite index;
+       newest first is sorted here. */
+    const q = query(collection(db, 'unboxingReviews'), where('status', '==', 'approved'), limit(100));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))
+        .sort((a, b) => ((b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0) - (a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0)))),
       err  => _log.warn('[SokoniDB] unboxingReviews:', err.message)
     );
   },

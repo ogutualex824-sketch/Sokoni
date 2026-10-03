@@ -20,5 +20,16 @@ const biz = read('business.html');
 ck('B-1', /_res\.data\.status === 'approved'/.test(biz) && /awaiting approval/.test(biz) && !/showToast\('Review submitted — thank you!'\)/.test(biz), 'the shop page says the review is AWAITING APPROVAL, never that it is published');
 const rv = read('reviews.html');
 ck('B-2', !/showNotif\("Review submitted! Thank you ⭐","success"\)/.test(rv) && /Saved on this device only/.test(rv), 'reviews.html no longer claims a device-only testimonial was submitted');
+/* UNBOXING (owner 2026-10-01/03) */
+const ub = read('unboxing.html'), ubc = code(ub);
+const allR = (ubc.match(/function allReviews\(\)\{[\s\S]*?\n\}/) || [''])[0];
+ck('U-1', !/DEMO/.test(allR) && !/getReviews\(\)/.test(allR) && /status==='approved'/.test(allR), 'the wall shows SERVER-APPROVED posts only — no made-up sample posts, no device-only copies');
+ck('U-2', /httpsCallable\('submitUnboxing'\)/.test(ubc) && !/SokoniDB\.saveUnboxingReview\(/.test(ubc), 'the form submits through submitUnboxing (no direct browser write)');
+ck('U-3', !/u\.points=\(u\.points\|\|0\)\+50/.test(ubc) && !/\+50 loyalty points/.test(ub), 'no invented loyalty points (browser-written +50) and no promise of them');
+ck('U-4', /will appear once SOKONI approves it/.test(ubc) && !/Review posted!/.test(ubc), 'success says it awaits approval — never "posted"');
+ck('U-5', /id="dropZone" hidden/.test(ub), 'the photo picker is hidden until photos can actually be uploaded');
+const db = read('sokoni-db.js');
+ck('U-6', /query\(collection\(db, 'unboxingReviews'\), where\('status', '==', 'approved'\), limit\(100\)\)/.test(db), 'the public wall listener asks for APPROVED posts (the rules refuse an unconstrained query)');
+ck('U-7', /SokoniAOS\.reviewQueue\([^)]*'\$\{k\}'\)/.test(aos) && /kind: _revState\.kind, reviewId: id/.test(aos) && /kind: kd, status: st/.test(aos), 'AdminOS switches Reviews | Unboxing; list and moderation carry the kind');
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
