@@ -75,18 +75,21 @@ const HIGH_RISK_COLLECTIONS = ['payments', 'orders', 'posAuditLog', 'sellers', '
  */
 function _requireRole(auth, minRole) {
   if (!auth) throw new HttpsError('unauthenticated', 'Sign in required.');
-  const r     = auth.token.role;
-  const level = typeof r === 'number' ? r : (ROLE[r] ?? 0);
-  if (level < minRole) throw new HttpsError('permission-denied', 'Insufficient role.');
+  if (_roleLevel(auth) < minRole) throw new HttpsError('permission-denied', 'Insufficient role.');
 }
 
 /**
  * Numeric role level for an auth context (0 if absent).
  */
 function _roleLevel(auth) {
-  const r = auth?.token?.role;
-  if (r === undefined || r === null) return 0;
-  return typeof r === 'number' ? r : (ROLE[r] ?? 0);
+  const t = auth?.token || {};
+  /* SOKONI's admin authority is the server-set boolean claim (admin-os.js setUserRole writes { [role]: true }); a
+     `role` claim is never minted for admins, so reading only token.role refused EVERY AdminOS admin here. The
+     stronger of the two wins; neither can be set by a client. */
+  const fromClaim = t.superAdmin === true ? ROLE.super_admin : t.admin === true ? ROLE.admin : 0;
+  const r = t.role;
+  const fromRole = (r === undefined || r === null) ? 0 : (typeof r === 'number' ? r : (ROLE[r] ?? 0));
+  return Math.max(fromClaim, fromRole);
 }
 
 /**
@@ -161,7 +164,14 @@ async function _writeAuditEvent({ eventType, userId, targetId, metadata, severit
 
 /**
  * Compute the full 15-dimension security scorecard.
- * Returns { dimensions, totalScore, grade, criticalIssues, generatedAt }.
+ * Returns { dimensions, totalScore, grade, criticalIssues, generatedAt, scoreBasis, coverage, mfa, privileged }.
+ *
+ * HONESTY (2026-10-03, UI Data Integrity): every dimension carries a `basis`:
+ *   measured    — computed from live records now
+ *   declared    — a static self-assessment written in this file (NOT measured; never counted in totalScore)
+ *   unreadable  — the check failed; score null (it used to ASSUME 5–7/10)
+ *   no_data     — nothing to measure yet; score null (device trust used to assume 80%)
+ * totalScore / grade are computed over MEASURED dimensions only (null when none could be measured).
  */
 async function _computeScorecard() {
   const now        = new Date();
@@ -169,8 +179,11 @@ async function _computeScorecard() {
   const dimensions     = [];
 
   /* Helper to push a dimension result */
-  const dim = (name, score, maxScore, notes) =>
-    dimensions.push({ name, score: Math.min(score, maxScore), maxScore, notes });
+  const dim = (name, score, maxScore, notes, basis, metrics) =>
+    dimensions.push({ name, score: score == null ? null : Math.min(score, maxScore), maxScore, notes,
+      basis: basis || 'measured', ...(metrics ? { metrics } : {}) });
+  const unreadable = (name, maxScore, what) => dim(name, null, maxScore, 'Could not ' + what + ' — not scored.', 'unreadable');
+  let mfa = null, privileged = null;
 
   /* ── 1. App Check coverage ──────────────────────────────────────────────── */
   // enforceAppCheck: true is set on all CFs — static 10/10
@@ -178,30 +191,36 @@ async function _computeScorecard() {
     'App Check Coverage',
     10, 10,
     'enforceAppCheck: true enforced on all Cloud Functions via CF_OPTIONS.',
+    'declared',
   );
 
   /* ── 2. MFA adoption ────────────────────────────────────────────────────── */
   try {
-    const [adminSnap, mfaSnap] = await Promise.all([
-      db.collection('users')
-        .where('role', 'in', ['admin', 'super_admin', 'owner'])
-        .limit(200)
-        .get(),
-      db.collection('securityMFA')
-        .where('enrolled', '==', true)
-        .limit(200)
-        .get(),
-    ]);
-    const totalAdmins  = adminSnap.size || 1;
-    const enrolledMFA  = mfaSnap.size;
-    const mfaRate      = Math.min(enrolledMFA / totalAdmins, 1);
-    const mfaScore     = Math.round(mfaRate * 10);
-    if (mfaRate < 0.5) criticalIssues.push('MFA adoption below 50% for privileged users.');
-    dim('MFA Adoption', mfaScore, 10,
-      `${enrolledMFA}/${totalAdmins} privileged users enrolled in MFA (${Math.round(mfaRate * 100)}%).`);
+    /* the SAME population on both sides: the privileged users, and THEIR securityMFA/{uid} docs (shared predicate) */
+    const adminSnap = await db.collection('users')
+      .where('role', 'in', ['admin', 'super_admin', 'owner'])
+      .limit(200)
+      .get();
+    const byRole = {};
+    adminSnap.docs.forEach((d) => { const r = d.data().role; byRole[r] = (byRole[r] || 0) + 1; });
+    privileged = { total: adminSnap.size, byRole, truncated: adminSnap.size >= 200 };
+    if (adminSnap.size === 0) {
+      dim('MFA Adoption', null, 10, 'No privileged users found to measure.', 'no_data');
+    } else {
+      const MFA = require('./shared/mfa-enrollment');
+      const refs = adminSnap.docs.map((d) => db.collection('securityMFA').doc(d.id));
+      const mfaDocs = await db.getAll(...refs);
+      const enrolledMFA = mfaDocs.filter((s) => s.exists && MFA.isEnrolled(s.data())).length;
+      const mfaRate  = enrolledMFA / adminSnap.size;
+      const mfaScore = Math.round(mfaRate * 10);
+      mfa = { enrolled: enrolledMFA, privileged: adminSnap.size, rate: mfaRate };
+      if (mfaRate < 0.5) criticalIssues.push('MFA adoption below 50% for privileged users.');
+      dim('MFA Adoption', mfaScore, 10,
+        `${enrolledMFA}/${adminSnap.size} privileged users enrolled in MFA (${Math.round(mfaRate * 100)}%).`, 'measured', mfa);
+    }
   } catch (e) {
     logger.warn('scorecard: MFA query failed', e.message);
-    dim('MFA Adoption', 5, 10, 'Could not determine MFA adoption — assumed partial.');
+    unreadable('MFA Adoption', 10, 'determine MFA adoption');
   }
 
   /* ── 3. Firestore rules ─────────────────────────────────────────────────── */
@@ -210,6 +229,7 @@ async function _computeScorecard() {
     'Firestore Security Rules',
     9, 10,
     'Rules deny all client writes to audit/payment collections. CF-only write pattern enforced. Recommend periodic rules audit.',
+    'declared',
   );
 
   /* ── 4. Secret Manager ──────────────────────────────────────────────────── */
@@ -219,6 +239,7 @@ async function _computeScorecard() {
     'Secret Manager',
     9, 10,
     `Expected secrets: ${EXPECTED_SECRETS.join(', ')}. Verify SENDGRID_API_KEY and SOKONI_HMAC_KEY are set to real values in production.`,
+    'declared',
   );
 
   /* ── 5. Open security alerts ────────────────────────────────────────────── */
@@ -235,10 +256,11 @@ async function _computeScorecard() {
     else if (highCount > 2)    { alertScore = 5; }
     else if (total > 0)        { alertScore = 7; }
     dim('Open Security Alerts', alertScore, 10,
-      `${total} open alert(s): ${critCount} critical, ${highCount} high.`);
+      `${total} open alert(s): ${critCount} critical, ${highCount} high.`, 'measured',
+      { open: total, critical: critCount, high: highCount, truncated: total >= 100 });
   } catch (e) {
     logger.warn('scorecard: alerts query failed', e.message);
-    dim('Open Security Alerts', 5, 10, 'Could not query alerts — assumed some open.');
+    unreadable('Open Security Alerts', 10, 'query alerts');
   }
 
   /* ── 6. Active incidents ────────────────────────────────────────────────── */
@@ -251,10 +273,10 @@ async function _computeScorecard() {
     const incScore = openInc === 0 ? 10 : openInc <= 2 ? 7 : 3;
     if (openInc > 2) criticalIssues.push(`${openInc} security incidents currently open.`);
     dim('Active Incidents', incScore, 10,
-      `${openInc} open incident(s).`);
+      `${openInc} open incident(s).`, 'measured', { open: openInc, truncated: openInc >= 20 });
   } catch (e) {
     logger.warn('scorecard: incidents query failed', e.message);
-    dim('Active Incidents', 5, 10, 'Could not query incidents — assumed some open.');
+    unreadable('Active Incidents', 10, 'query incidents');
   }
 
   /* ── 7. Payment security (idempotency) ──────────────────────────────────── */
@@ -265,14 +287,18 @@ async function _computeScorecard() {
       .get();
     const total   = paySnap.size;
     const withKey = paySnap.docs.filter(d => d.data().idempotencyKey).length;
-    const pct     = total > 0 ? withKey / total : 1;
-    const payScore = pct >= 0.99 ? 10 : pct >= 0.9 ? 7 : pct >= 0.7 ? 5 : 2;
-    if (pct < 0.9) criticalIssues.push('Payment idempotency coverage below 90%.');
-    dim('Payment Security', payScore, 10,
-      `${withKey}/${total} recent payments carry idempotency keys (${Math.round(pct * 100)}%).`);
+    if (total === 0) {
+      dim('Payment Security', null, 10, 'No recent POS payments to sample.', 'no_data');
+    } else {
+      const pct      = withKey / total;
+      const payScore = pct >= 0.99 ? 10 : pct >= 0.9 ? 7 : pct >= 0.7 ? 5 : 2;
+      if (pct < 0.9) criticalIssues.push('Payment idempotency coverage below 90%.');
+      dim('Payment Security', payScore, 10,
+        `${withKey}/${total} recent payments carry idempotency keys (${Math.round(pct * 100)}%).`, 'measured', { withKey, sampled: total });
+    }
   } catch (e) {
     logger.warn('scorecard: payment query failed', e.message);
-    dim('Payment Security', 7, 10, 'Could not sample payments — assumed mostly compliant.');
+    unreadable('Payment Security', 10, 'sample payments');
   }
 
   /* ── 8. Audit log health ────────────────────────────────────────────────── */
@@ -288,7 +314,7 @@ async function _computeScorecard() {
       logSnap.empty ? 'No events in last 24h.' : 'Audit log is active (events in last 24h).');
   } catch (e) {
     logger.warn('scorecard: audit log health check failed', e.message);
-    dim('Audit Log Health', 5, 10, 'Could not verify audit log activity.');
+    unreadable('Audit Log Health', 10, 'verify audit log activity');
   }
 
   /* ── 9. Device trust ────────────────────────────────────────────────────── */
@@ -299,13 +325,21 @@ async function _computeScorecard() {
       .get();
     const total    = recentEvents.size;
     const trusted  = recentEvents.docs.filter(d => d.data().deviceTrusted === true).length;
-    const trustPct = total > 0 ? trusted / total : 0.8; // default optimistic if no data
-    const devScore = trustPct >= 0.85 ? 10 : trustPct >= 0.6 ? 7 : 4;
-    dim('Device Trust', devScore, 10,
-      `${Math.round(trustPct * 100)}% of recent login events from trusted devices (${trusted}/${total}).`);
+    /* only events that RECORD trust count; no data is no_data — never an assumed 80% */
+    const rated    = recentEvents.docs.filter(d => typeof d.data().deviceTrusted === 'boolean');
+    const untrusted = rated.length - trusted;
+    if (rated.length === 0) {
+      dim('Device Trust', null, 10, 'No recent login events record device trust.', 'no_data', { trusted: 0, untrusted: 0, unrated: total, sampled: total });
+    } else {
+      const trustPct = trusted / rated.length;
+      const devScore = trustPct >= 0.85 ? 10 : trustPct >= 0.6 ? 7 : 4;
+      dim('Device Trust', devScore, 10,
+        `${Math.round(trustPct * 100)}% of rated login events from trusted devices (${trusted}/${rated.length}).`, 'measured',
+        { trusted, untrusted, unrated: total - rated.length, sampled: total });
+    }
   } catch (e) {
     logger.warn('scorecard: device trust query failed', e.message);
-    dim('Device Trust', 7, 10, 'Could not sample device trust — assumed mostly trusted.');
+    unreadable('Device Trust', 10, 'sample device trust');
   }
 
   /* ── 10. Rate limiting ──────────────────────────────────────────────────── */
@@ -313,6 +347,7 @@ async function _computeScorecard() {
     'Rate Limiting',
     9, 10,
     'Rate limiting implemented in CF layer with dual IP+UID checks. Recommend WAF-level rate limiting for additional coverage.',
+    'declared',
   );
 
   /* ── 11. Data encryption ────────────────────────────────────────────────── */
@@ -320,6 +355,7 @@ async function _computeScorecard() {
     'Data Encryption',
     9, 10,
     'Firebase at-rest AES-256 encryption enabled by default. Sensitive fields (MFA seeds, payment keys) use AES-256-GCM via Cloud KMS.',
+    'declared',
   );
 
   /* ── 12. CORS / security headers ─────────────────────────────────────────── */
@@ -327,6 +363,7 @@ async function _computeScorecard() {
     'CORS / Security Headers',
     8, 10,
     'Firebase Hosting security headers configured (X-Frame-Options, CSP, HSTS). Recommend Content-Security-Policy tightening.',
+    'declared',
   );
 
   /* ── 13. Fraud engine ───────────────────────────────────────────────────── */
@@ -345,7 +382,7 @@ async function _computeScorecard() {
         : 'Fraud sweep ran within the last 2h.');
   } catch (e) {
     logger.warn('scorecard: fraud engine check failed', e.message);
-    dim('Fraud Engine', 5, 10, 'Could not verify fraud sweep — assumed not recently run.');
+    unreadable('Fraud Engine', 10, 'verify the fraud sweep');
   }
 
   /* ── 14. Incident response ──────────────────────────────────────────────── */
@@ -361,13 +398,17 @@ async function _computeScorecard() {
     ]);
     const total    = totalSnap.size;
     const resolved = resolvedSnap.size;
-    const rate     = total > 0 ? resolved / total : 1;
-    const irScore  = rate >= 0.9 ? 10 : rate >= 0.7 ? 7 : rate >= 0.5 ? 5 : 3;
-    dim('Incident Response', irScore, 10,
-      `${resolved}/${total} incidents resolved in last 90d (${Math.round(rate * 100)}% resolution rate).`);
+    if (total === 0) {
+      dim('Incident Response', null, 10, 'No incidents in the last 90 days to measure resolution against.', 'no_data', { resolved: 0, total: 0 });
+    } else {
+      const rate    = resolved / total;
+      const irScore = rate >= 0.9 ? 10 : rate >= 0.7 ? 7 : rate >= 0.5 ? 5 : 3;
+      dim('Incident Response', irScore, 10,
+        `${resolved}/${total} incidents resolved in last 90d (${Math.round(rate * 100)}% resolution rate).`, 'measured', { resolved, total });
+    }
   } catch (e) {
     logger.warn('scorecard: incident response check failed', e.message);
-    dim('Incident Response', 6, 10, 'Could not calculate incident resolution rate.');
+    unreadable('Incident Response', 10, 'calculate the incident resolution rate');
   }
 
   /* ── 15. Pen test coverage ──────────────────────────────────────────────── */
@@ -385,25 +426,31 @@ async function _computeScorecard() {
         : 'Automated security scan completed within last 30 days.');
   } catch (e) {
     logger.warn('scorecard: pen test check failed', e.message);
-    dim('Pen Test Coverage', 5, 10, 'Could not verify recent pen test.');
+    unreadable('Pen Test Coverage', 10, 'verify a recent pen test');
   }
 
   /* ── Weighted total ──────────────────────────────────────────────────────── */
-  // All 15 dimensions are equal weight (max 10 each = 150 raw → scale to 100)
-  const rawTotal   = dimensions.reduce((acc, d) => acc + d.score, 0);
-  const rawMax     = dimensions.reduce((acc, d) => acc + d.maxScore, 0);
-  const totalScore = Math.round((rawTotal / rawMax) * 100);
+  // Equal weight, MEASURED dimensions only. Declared (static) and unreadable / no-data dimensions are reported but never scored.
+  const measured   = dimensions.filter((d) => d.basis === 'measured' && d.score != null);
+  const rawTotal   = measured.reduce((acc, d) => acc + d.score, 0);
+  const rawMax     = measured.reduce((acc, d) => acc + d.maxScore, 0);
+  const totalScore = rawMax > 0 ? Math.round((rawTotal / rawMax) * 100) : null;
 
   /* ── Grade ───────────────────────────────────────────────────────────────── */
-  const grade =
+  const grade = totalScore == null ? null :
     totalScore >= 90 ? 'A (Excellent)' :
     totalScore >= 80 ? 'B (Good)'      :
     totalScore >= 70 ? 'C (Fair)'      : 'D (Needs Work)';
+  const count = (b) => dimensions.filter((d) => d.basis === b).length;
 
   return {
     dimensions,
     totalScore,
     grade,
+    scoreBasis: 'measured_only',
+    coverage: { measured: measured.length, declared: count('declared'), unreadable: count('unreadable'), noData: count('no_data'), total: dimensions.length },
+    mfa,
+    privileged,
     criticalIssues,
     generatedAt: now.toISOString(),
   };
@@ -701,6 +748,8 @@ exports.getSecurityScorecard = onCall(
       return {
         totalScore:  scorecard.totalScore,
         grade:       scorecard.grade,
+        scoreBasis:  scorecard.scoreBasis,
+        coverage:    scorecard.coverage,
         generatedAt: scorecard.generatedAt,
       };
     }
@@ -1055,15 +1104,19 @@ exports.getComplianceReport = onCall(
     const dimMap = {};
     for (const d of scorecard.dimensions) dimMap[d.name] = d;
 
-    const scoreToBadge = (score, max) => {
-      const pct = score / max;
+    /* A control is graded ONLY from a MEASURED dimension. Missing / unreadable / no-data → 'unverified'; a static
+       self-assessment → 'declared'. Neither counts toward complianceScore; both are listed as gaps (never assumed). */
+    const badgeOf = (d) => {
+      if (!d || d.score == null) return 'unverified';
+      if (d.basis === 'declared') return 'declared';
+      const pct = d.score / (d.maxScore || 10);
       if (pct >= 0.8) return 'pass';
       if (pct >= 0.5) return 'partial';
       return 'fail';
     };
 
     let controls = [];
-    let complianceScore = 0;
+    let complianceScore = null;   /* null = nothing measurable, never a fabricated 0 */
     const gaps = [];
 
     if (standard === 'pci_dss') {
@@ -1071,43 +1124,43 @@ exports.getComplianceReport = onCall(
         {
           controlId:   'PCI-DSS-6.4',
           controlName: 'Payment Security & Idempotency',
-          status:      scoreToBadge(dimMap['Payment Security']?.score ?? 0, 10),
+          status:      badgeOf(dimMap['Payment Security']),
           notes:       dimMap['Payment Security']?.notes ?? '',
         },
         {
           controlId:   'PCI-DSS-10.2',
           controlName: 'Audit Log — Security Events',
-          status:      scoreToBadge(dimMap['Audit Log Health']?.score ?? 0, 10),
+          status:      badgeOf(dimMap['Audit Log Health']),
           notes:       dimMap['Audit Log Health']?.notes ?? '',
         },
         {
           controlId:   'PCI-DSS-3.4',
           controlName: 'Data Encryption at Rest',
-          status:      scoreToBadge(dimMap['Data Encryption']?.score ?? 0, 10),
+          status:      badgeOf(dimMap['Data Encryption']),
           notes:       dimMap['Data Encryption']?.notes ?? '',
         },
         {
           controlId:   'PCI-DSS-7.1',
           controlName: 'Access Control — Least Privilege',
-          status:      scoreToBadge(dimMap['MFA Adoption']?.score ?? 0, 10),
+          status:      badgeOf(dimMap['MFA Adoption']),
           notes:       dimMap['MFA Adoption']?.notes ?? '',
         },
         {
           controlId:   'PCI-DSS-10.6',
           controlName: 'Security Monitoring & Alerts',
-          status:      scoreToBadge(dimMap['Open Security Alerts']?.score ?? 0, 10),
+          status:      badgeOf(dimMap['Open Security Alerts']),
           notes:       dimMap['Open Security Alerts']?.notes ?? '',
         },
         {
           controlId:   'PCI-DSS-11.3',
           controlName: 'Penetration Testing',
-          status:      scoreToBadge(dimMap['Pen Test Coverage']?.score ?? 0, 10),
+          status:      badgeOf(dimMap['Pen Test Coverage']),
           notes:       dimMap['Pen Test Coverage']?.notes ?? '',
         },
         {
           controlId:   'PCI-DSS-6.6',
           controlName: 'Firestore Security Rules (WAF equivalent)',
-          status:      scoreToBadge(dimMap['Firestore Security Rules']?.score ?? 0, 10),
+          status:      badgeOf(dimMap['Firestore Security Rules']),
           notes:       dimMap['Firestore Security Rules']?.notes ?? '',
         },
       ];
@@ -1122,31 +1175,31 @@ exports.getComplianceReport = onCall(
         {
           controlId:   'GDPR-Art25',
           controlName: 'Data Protection by Design — Access Control',
-          status:      scoreToBadge(dimMap['MFA Adoption']?.score ?? 0, 10),
+          status:      badgeOf(dimMap['MFA Adoption']),
           notes:       dimMap['MFA Adoption']?.notes ?? '',
         },
         {
           controlId:   'GDPR-Art30',
           controlName: 'Records of Processing — Audit Trail',
-          status:      scoreToBadge(dimMap['Audit Log Health']?.score ?? 0, 10),
+          status:      badgeOf(dimMap['Audit Log Health']),
           notes:       dimMap['Audit Log Health']?.notes ?? '',
         },
         {
           controlId:   'GDPR-Art33',
           controlName: 'Breach Notification — Incident Response',
-          status:      scoreToBadge(dimMap['Incident Response']?.score ?? 0, 10),
+          status:      badgeOf(dimMap['Incident Response']),
           notes:       dimMap['Incident Response']?.notes ?? '',
         },
         {
           controlId:   'GDPR-Art32',
           controlName: 'Security of Processing — Encryption',
-          status:      scoreToBadge(dimMap['Data Encryption']?.score ?? 0, 10),
+          status:      badgeOf(dimMap['Data Encryption']),
           notes:       dimMap['Data Encryption']?.notes ?? '',
         },
         {
           controlId:   'GDPR-Art32-2',
           controlName: 'App Check & Authentication Integrity',
-          status:      scoreToBadge(dimMap['App Check Coverage']?.score ?? 0, 10),
+          status:      badgeOf(dimMap['App Check Coverage']),
           notes:       dimMap['App Check Coverage']?.notes ?? '',
         },
       ];
@@ -1172,7 +1225,7 @@ exports.getComplianceReport = onCall(
       controls = annexMap.map(({ controlId, controlName, dim }) => ({
         controlId,
         controlName,
-        status: scoreToBadge(dimMap[dim]?.score ?? 5, 10),
+        status: badgeOf(dimMap[dim]),
         notes:  dimMap[dim]?.notes ?? `Maps to dimension: ${dim}`,
       }));
     } else {
@@ -1180,13 +1233,13 @@ exports.getComplianceReport = onCall(
       controls = scorecard.dimensions.map((d, i) => ({
         controlId:   `GEN-${String(i + 1).padStart(2, '0')}`,
         controlName: d.name,
-        status:      scoreToBadge(d.score, d.maxScore),
+        status:      badgeOf(d),
         notes:       d.notes,
       }));
     }
 
     /* Calculate compliance score (pass=1, partial=0.5, fail=0, not-applicable=skip) */
-    const applicable = controls.filter(c => c.status !== 'not-applicable');
+    const applicable = controls.filter(c => c.status === 'pass' || c.status === 'partial' || c.status === 'fail');
     if (applicable.length > 0) {
       const pts = applicable.reduce((acc, c) =>
         acc + (c.status === 'pass' ? 1 : c.status === 'partial' ? 0.5 : 0), 0);
@@ -1197,6 +1250,8 @@ exports.getComplianceReport = onCall(
     for (const c of controls) {
       if (c.status === 'fail')    gaps.push(`FAIL: [${c.controlId}] ${c.controlName}`);
       if (c.status === 'partial') gaps.push(`PARTIAL: [${c.controlId}] ${c.controlName}`);
+      if (c.status === 'unverified') gaps.push(`UNVERIFIED: [${c.controlId}] ${c.controlName} — not measured`);
+      if (c.status === 'declared') gaps.push(`DECLARED: [${c.controlId}] ${c.controlName} — self-assessment, not measured`);
     }
 
     logger.info('securityAudit: compliance report', { standard, complianceScore, uid: request.auth.uid });
@@ -1227,8 +1282,8 @@ exports.scheduledDailySecurityReport = onSchedule(
     } catch (e) {
       logger.error('scheduledDailySecurityReport: scorecard failed', e);
       scorecard = {
-        totalScore:    0,
-        grade:         'D (Needs Work)',
+        totalScore:    null,   /* unknown — never a fabricated 0 / D */
+        grade:         null,
         criticalIssues: ['Scorecard computation failed: ' + e.message],
         dimensions:    [],
         generatedAt:   new Date().toISOString(),
@@ -1261,7 +1316,10 @@ exports.scheduledDailySecurityReport = onSchedule(
       logger.warn('scheduledDailySecurityReport: incident count failed', e.message);
     }
 
-    const needsAlert = scorecard.totalScore < 70 || criticalAlertCount > 0;
+    /* null < 70 is TRUE in JS — an unmeasurable score is its own reason, never "below threshold (null/100)" */
+    const scoreUnknown = scorecard.totalScore == null;
+    const scoreLow     = !scoreUnknown && scorecard.totalScore < 70;
+    const needsAlert   = scoreUnknown || scoreLow || criticalAlertCount > 0;
 
     /* Write high-severity alert entry if threshold breached */
     if (needsAlert) {
@@ -1275,8 +1333,9 @@ exports.scheduledDailySecurityReport = onSchedule(
           openAlerts:         openAlertCount,
           openIncidents:      openIncidentCount,
           criticalIssues:     scorecard.criticalIssues,
-          reason:             scorecard.totalScore < 70
-            ? `Security score below threshold (${scorecard.totalScore}/100)`
+          reason:             scoreLow
+            ? `Security score below threshold (${scorecard.totalScore}/100, measured dimensions only)`
+            : scoreUnknown ? 'Security score could not be measured (no measurable dimension)'
             : `${criticalAlertCount} critical alert(s) open`,
         },
         severity:  SEVERITY.critical,
@@ -1330,4 +1389,5 @@ module.exports = {
   getLatestSecurityScan:        exports.getLatestSecurityScan,
   getComplianceReport:          exports.getComplianceReport,
   scheduledDailySecurityReport: exports.scheduledDailySecurityReport,
+  _computeScorecard,            /* internal (tests); a plain function, not a deployable trigger */
 };

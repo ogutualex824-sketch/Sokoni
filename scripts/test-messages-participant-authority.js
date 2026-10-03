@@ -200,7 +200,9 @@ const PKG_DOCS = { 'packageRequests/p1': PKG };
      !lookalike.ok && lookalike.code === 'permission-denied', lookalike.code);
 
   head('5 - idempotency and the existence oracle');
-  const existing = { 'orders/o1': ORDER, 'conversations/order_o1': { participants: [BUYER, SELLER, RIDER] } };
+  /* a SERVER-CREATED conversation (serverCreated stamp): re-opening is idempotent and writes nothing. An UNSTAMPED one is
+     untrusted and is re-derived from the transaction — that repair is proven by scripts/test-messages-preclaim.js. */
+  const existing = { 'orders/o1': ORDER, 'conversations/order_o1': { participants: [BUYER, SELLER, RIDER], serverCreated: true } };
   const again = await call(BUYER, { transactionType: 'order', transactionId: 'o1' }, existing);
   ck('a party re-opening gets the SAME conversation, idempotently',
      again.ok && again.r.existing === true && again.r.conversationId === 'order_o1',

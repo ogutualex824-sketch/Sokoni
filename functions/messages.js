@@ -26,7 +26,9 @@ function _union(v) { return admin.firestore.FieldValue.arrayUnion(v); }
 /* ── Transaction type → Firestore collection ──────────────────── */
 const TX_COLLECTIONS = {
   order:                    'orders',
-  service_booking:          'bookings',
+  service_booking:          'providerBookings',   /* Tech 4L: bookingCreateService writes providerBookings; legacy rows in `bookings` stay reachable (TX_FALLBACK) */
+  service_lead:             'serviceLeads',       /* Tech 4F / G7: a conversation before any booking hangs on the lead */
+  work_project:             'workProjects',       /* Work/Job Engine (WE1): a campaign / project conversation — txId = project id */
   food_order:               'foodOrders',
   pharmacy_order:           'pharmacyOrders',
   property_inquiry:         'propertyInquiries',
@@ -57,6 +59,16 @@ const TX_COLLECTIONS = {
 /* product_enquiry (2026-09-29): a buyer ↔ the product's seller, opened only by product-enquiries.productEnquirySend, which
    derives the seller from products/{id} — a client can neither create it nor pick its parties. */
 const SERVER_ANCHORED = new Set(['ent_booking', 'ent_enquiry', 'hc_booking', 'product_enquiry']);
+/* A type whose rows moved collections keeps its old collection readable (b2 4L). */
+const TX_FALLBACK = { service_booking: ['bookings'] };
+async function _txSnap(db, type, id) {
+  for (const col of [TX_COLLECTIONS[type]].concat(TX_FALLBACK[type] || [])) {
+    if (!col) continue;
+    const snap = await db.collection(col).doc(String(id)).get().catch(() => null);
+    if (snap && snap.exists) return { snap, col };
+  }
+  return { snap: null, col: TX_COLLECTIONS[type] };
+}
 
 /* ── Spam / fraud detection patterns ─────────────────────────── */
 const SPAM_PATTERNS = [
@@ -127,7 +139,9 @@ async function _sendFcm(token, title, body, data) {
    refused. Nine of the seventeen accepted types have no rules block at all. */
 const PARTY_FIELDS = {
   order:               ['buyerId', 'buyerUid', 'uid', 'userId', 'sellerUid', 'assignedDriverUid'],
-  service_booking:     ['buyerId', 'uid', 'userId', 'ownerId', 'customerId', 'providerId'],
+  service_booking:     ['customerUid', 'buyerId', 'uid', 'userId', 'ownerId', 'customerId', 'providerId'],   /* customerUid = the booking engine's customer field (4L) */
+  service_lead:        ['customerUid', 'providerId'],
+  work_project:        ['customerUid', 'providerUid'],      /* workProjects/{id}: the customer + the provider, both server-written */
   food_order:          ['buyerUid', 'restaurantId'],
   property_inquiry:    ['uid'],
   job_application:     ['uid'],
@@ -191,22 +205,23 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
   const conversationId = `${transactionType}_${transactionId}`;
   const convRef        = db.collection('conversations').doc(conversationId);
 
-  /* Fast path: already exists */
+  /* Fast path: already exists AND was created by the server (serverCreated) AND the caller is in it.
+     SECURITY (b2 2026-10-03): ids are deterministic and the served rules let a client create a conversation until the
+     rules lock ships — so a doc may have been PRE-CLAIMED by a non-party to lock the real parties out. Anything not stamped
+     serverCreated (every legacy conversation predates the stamp) is UNTRUSTED: it is re-derived from the transaction
+     below and repaired for a real party, never trusted and never used to refuse one. Existence is still never
+     acknowledged to a non-party (no oracle): a non-party is refused by the party check below either way. */
   const existingSnap = await convRef.get();
   if (existingSnap.exists) {
-    /* Confirm the caller belongs BEFORE acknowledging existence. Returning
-       {existing:true} to a non-party would confirm that a given transaction has a
-       conversation — an existence oracle — which the previous code did. */
     const cur = existingSnap.data() || {};
-    if (!Array.isArray(cur.participants) || cur.participants.indexOf(uid) === -1) {
-      throw new HttpsError('permission-denied', 'Not a party to this transaction');
+    if (cur.serverCreated === true && Array.isArray(cur.participants) && cur.participants.indexOf(uid) !== -1) {
+      return { conversationId, existing: true };
     }
-    return { conversationId, existing: true };
   }
 
   /* Verify transaction exists */
-  const txSnap = await db.collection(TX_COLLECTIONS[transactionType]).doc(transactionId).get().catch(() => null);
-  if (!txSnap?.exists) throw new HttpsError('not-found', `Transaction ${transactionId} not found in ${TX_COLLECTIONS[transactionType]}`);
+  const { snap: txSnap } = await _txSnap(db, transactionType, transactionId);
+  if (!txSnap?.exists) throw new HttpsError('not-found', 'Transaction not found.');
 
   /* THE CHECK THAT WAS MISSING. Parties come from the transaction itself, and the
      caller must be one of them — being able to name yourself is not entitlement. */
@@ -216,6 +231,27 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
   }
   if (participantUids.indexOf(uid) === -1) {
     throw new HttpsError('permission-denied', 'Not a party to this transaction');
+  }
+
+  /* An existing but UNTRUSTED doc (pre-claimed, or legacy without the stamp): the caller is a REAL party (checked above
+     from the transaction) — repair it from the transaction instead of refusing them. The replaced list is kept for audit;
+     messages already in the thread stay (the rules only ever showed them to the stored participants). */
+  if (existingSnap.exists) {
+    const repaired = await db.runTransaction(async (t) => {
+      const cur = (await t.get(convRef)).data() || {};
+      const before = Array.isArray(cur.participants) ? cur.participants : [];
+      const same = before.length === participantUids.length && before.every((p) => participantUids.indexOf(p) !== -1);
+      if (cur.serverCreated === true && same) return false;
+      const unread = {}; participantUids.forEach((p) => { unread[p] = (cur.unreadCounts && Number(cur.unreadCounts[p])) || 0; });
+      t.set(convRef, { transactionType, transactionId, participants: participantUids, unreadCounts: unread, serverCreated: true,
+        ...(same ? {} : { participantsReplacedFrom: before.slice(0, 10), repairedAt: _now() }), updatedAt: _now() }, { merge: true });
+      for (const p of before) if (participantUids.indexOf(p) === -1) t.delete(db.collection('userConversations').doc(p).collection('items').doc(conversationId));
+      for (const p of participantUids) t.set(db.collection('userConversations').doc(p).collection('items').doc(conversationId),
+        { conversationId, transactionType, transactionId, updatedAt: _now() }, { merge: true });
+      return !same;
+    });
+    if (repaired) logger.warn('[messages] untrusted conversation repaired from its transaction', { conversationId, transactionType });
+    return { conversationId, existing: true, repaired };
   }
 
   /* Fetch participant profiles */
@@ -261,6 +297,7 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
     isNew = true;
 
     t.create(convRef, {
+      serverCreated:     true,          /* the ONLY trusted creator (security 2026-10-03) */
       transactionType,
       transactionId,
       transactionTitle: title,
@@ -744,7 +781,7 @@ exports.getConversationContext = onCall({ region: REGION, timeoutSeconds: 20 }, 
   const col = TX_COLLECTIONS[conv.transactionType];
   if (!col || !conv.transactionId) return { context: conv.metadata || {} };
 
-  const txSnap = await db.collection(col).doc(conv.transactionId).get().catch(() => null);
+  const { snap: txSnap } = await _txSnap(db, conv.transactionType, conv.transactionId);
   if (!txSnap?.exists) return { context: conv.metadata || {} };
 
   const tx = txSnap.data();
@@ -1174,6 +1211,13 @@ exports.sendMessage = onCall(
        (cancelled / refunded → read-only), plus a server-side limit and duplicate suppression. */
     if (conv.transactionType === 'hc_booking') {
       await require('./healthcare-conversations').assertCanSend(db, conv, req.auth.uid, type === 'text' ? text : null);
+    }
+    /* Work/Job Engine: every send re-derives the parties from the PROJECT doc (server-written customerUid / providerUid). */
+    if (conv.transactionType === 'work_project') {
+      const wSnap = await db.collection('workProjects').doc(String(conv.transactionId || '')).get();
+      if (!wSnap.exists) throw new HttpsError('failed-precondition', 'This project no longer exists.');
+      const wp = wSnap.data() || {};
+      if (wp.customerUid !== req.auth.uid && wp.providerUid !== req.auth.uid) throw new HttpsError('permission-denied', 'Not a party to this project');
     }
     const userSnap   = await db.collection('users').doc(req.auth.uid).get();
     const ud         = userSnap.exists ? userSnap.data() : {};

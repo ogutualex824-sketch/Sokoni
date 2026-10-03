@@ -1038,10 +1038,21 @@ async function _marketingFields(uid, d, existing) {
 /* ── 10. providerAddService — enforces plan limits.listings ──────────────────
    Creates providerServices; a provider cannot exceed their subscription's
    listing cap (-1 = unlimited). This is the listings-limit enforcement point. */
+/* Restricted categories (owner 2026-10-03; shared/restricted-categories.js, the ONE policy): vape / tobacco-nicotine /
+   alcohol / adult are refused at every commercial gate — never mapped to a commission row to make a sale work. */
+function _assertSellable(categoryLike, what) {
+  try { require('./shared/restricted-categories').assertNotRestricted(categoryLike, what); }
+  catch (e) {
+    if (e && e.code === 'category_restricted') throw new HttpsError('failed-precondition', 'SOKONI does not offer this category.', { code: 'category_restricted', restrictedClass: e.restrictedClass || null });
+    throw e;
+  }
+}
+
 _h.providerAddService = async (req) => {
   const uid = _uid(req);
   await legal.assertLegalCompliance(uid, 'provider'); // dark-launched; no-op until enabled
   const d   = req.data || {};
+  _assertSellable({ category: d.category, subcategory: d.subcategory, categories: d.categories }, 'service');
   const name = _san(d.name, 200).trim();
   if (!name) throw new HttpsError('invalid-argument', 'Service name is required.');
   const techProfile = d.techProfile !== undefined && d.techProfile !== null ? await _techProfile(uid, d.techProfile) : null;
@@ -1229,7 +1240,7 @@ _h.providerUpdateService = async (req) => {
     if (!n) throw new HttpsError('invalid-argument', 'Service name cannot be empty.');
     patch.name = n;
   }
-  if (d.category !== undefined)    patch.category    = _san(d.category, 120);
+  if (d.category !== undefined)    { _assertSellable({ category: d.category }, 'service'); patch.category = _san(d.category, 120); }
   if (d.subcategory !== undefined) patch.subcategory = _san(d.subcategory, 120);
   if (d.description !== undefined) patch.description = _san(d.description, 1000);
   if (d.priceType !== undefined)   patch.priceType   = _san(d.priceType, 40) || 'quotation';
@@ -1267,6 +1278,7 @@ _h.providerToggleService = async (req) => {
   const next = req.data?.active !== undefined ? (req.data.active === true) : !(cur.active !== false);
   /* RE-ACTIVATING counts against the plan's service cap exactly as adding does (CHANGELOG 239): toggling a
      deactivated service back on skipped the cap, so a plan's limit could be exceeded one toggle at a time. */
+  if (next === true) _assertSellable(cur, 'service');   /* a legacy restricted record never becomes sellable again */
   if (next === true && cur.active === false && !_isAutoLegalCard(snap, uid)) {
     const [svcSnap, cap] = await Promise.all([
       _db().collection('providerServices').where('providerId', '==', uid).limit(200).get(),

@@ -657,7 +657,7 @@ const getMFAStatus = onCall(CF_OPTIONS, _h.getMFAStatus = async ({ auth }) => {
 
   const d = mfaSnap.data();
 
-  if (d.pending) {
+  if (!require('./shared/mfa-enrollment').isEnrolled(d)) {   /* the ONE enrolment predicate */
     return { enrolled: false, method: null, enrolledAt: null, backupCodesRemaining: 0 };
   }
 

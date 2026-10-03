@@ -23,7 +23,8 @@ const _OPTS = {
   enforceAppCheck: true,
   timeoutSeconds:  120,
   memory:          '512MiB',
-  minInstances:    1,     /* keep one warm — the provider dashboard's hot path (no cold start on load) */
+  minInstances:    0,     /* MATCHES THE LIVE SERVICE (minInstanceCount 0, 2026-09-30). The archive's source said 1 — a cost-bearing
+                             drift the Firebase CLI refused to deploy without --force; it is not part of the shell gate. */
   secrets:         [QR_SIGNING_SECRET],
 };
 
@@ -46,12 +47,19 @@ function _h() {
       /* CHANGELOG 238 (C2a) — the ONE business workspace authority, for every category. */
       require('./business-workspace')._h,
       /* CHANGELOG 244 (C3a-2) — the ONE public provider directory (C1 category + eligibility, server-decided). */
-      require('./provider-directory')._h);
+      require('./provider-directory')._h,
+      require('./service-leads')._h);              /* Tech Hub 4F + G7: the ONE service lead / quote authority (docs/SERVICE_LEADS.md) */
   }
   return _mod;
 }
 
 const ROUTES = [
+  'businessWorkspace',
+  // service-leads — Tech Hub 4F (docs/SERVICE_LEADS.md)
+  'leadCreate', 'leadListMine', 'leadListForProvider', 'leadMarkViewed', 'leadDecline', 'leadSendQuote', 'leadRespond', 'leadClose',
+  // G7 lead / quote lifecycle (same engine)
+  'leadQualify', 'leadMarkLost', 'leadRequestQuote', 'leadWithdrawQuote', 'leadViewQuote', 'leadSaveQuoteDraft',
+  'workspaceHome',
   'providerSaveDraft',
   'providerGetDraft',
   'providerSelectPlan',
@@ -90,6 +98,7 @@ const ROUTES = [
   'providerMarkNoShow',
   'providerRescheduleBooking',
   'providerContactCustomer',
+  'bookingContactProvider',   // Tech Hub 4M — the customer's booking-bound call to the provider
   'providerSaveBookingNote',
   'providerGetEarnings',
   'providerRequestPayout',
