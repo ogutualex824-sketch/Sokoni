@@ -37,9 +37,10 @@ const WS = (o) => Object.assign({ learner: { access: { ageStatus: 'unverified', 
     await new Promise((r) => setTimeout(r, 5));
     let H = (els.eduLearnerHome || {}).innerHTML || '';
     ck('H-1', !sec.classList.contains('hidden') && /Free self-paced courses/.test(H), 'signed in: the dashboard shows the SERVER\'s access state', H.slice(0, 160));
-    ck('H-2', /data-state="LOCKED" data-module="liveClasses"[^>]*disabled/.test(H) && /Needs an age check or a guardian link/.test(H), 'live classes are LOCKED and disabled for an unverified learner (the server said so)');
-    ck('H-3', /data-state="NOT_IMPLEMENTED" data-module="certificates"[^>]*disabled/.test(H) && /Coming soon/.test(H), 'unbuilt modules say "Coming soon" and do nothing — never shown as working');
-    ck('H-4', /data-state="AVAILABLE" data-module="myLearning"[^>]*onclick/.test(H), 'available modules open');
+    /* the module tiles moved to the sidebar shell (education-learn.html — owner: "yes lener dash also"); their rows are
+       in test-education-learn-shell.js. Here: the summary opens that dashboard. */
+    ck('H-2', /href="education-learn\.html">Open my learning dashboard/.test(H), 'the summary opens the learner dashboard shell (education-learn.html)');
+    ck('H-3', !/data-module=/.test(H), 'no second copy of the module tiles on education.html (one dashboard)');
     const tb = els.eduTeachBtn || {};
     ck('H-5', /Apply to teach/.test(tb.textContent || '') && !tb.classList.contains('hidden'), 'a learner WITHOUT an approved teacher workspace is offered the APPLICATION, not the course editor', tb.textContent);
 
@@ -50,7 +51,7 @@ const WS = (o) => Object.assign({ learner: { access: { ageStatus: 'unverified', 
     H = els.eduLearnerHome.innerHTML;
     ck('H-6', /href="provider-dashboard\.html">Teacher workspace/.test(H), 'an APPROVED teacher (server dashboards list) gets the link to their workspace');
     ck('H-7', /Company training: being built/.test(H) && !/href="[^"]*enterprise/.test(H), 'the enterprise dashboard is named as being built, never linked to a provider shell');
-    ck('H-8', /Institution application<\/strong> · pending/.test(H) && /SOKONI needs: Registration &lt;b&gt;number/.test(H) && /complete-application\.html/.test(H), 'the applicant sees their application status, what is missing (escaped) and where to track it');
+    /* applications moved to the shell overview (test-education-learn-shell.js L-6) */
     ck('H-9', /Teach on SOKONI/.test(els.eduTeachBtn.textContent), 'an approved teacher gets the teaching tool');
 
     reply = () => { throw new Error('down'); };
