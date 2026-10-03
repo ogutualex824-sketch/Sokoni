@@ -11,6 +11,8 @@ const admin      = require('firebase-admin');
 const { defineSecret } = require('firebase-functions/params');
 
 const SENDGRID_KEY = defineSecret('SENDGRID_API_KEY');
+/* THE canonical invoice model (owner 2026-10-04) — byte-identical copy shared with admin-invoices / invoice-allocation */
+const INV = require('./shared/invoice-model');
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function _db()  { return admin.firestore(); }
@@ -720,6 +722,10 @@ exports.invoiceCreate = onCall(_CALL, exports._h.invoiceCreate = async (req) => 
     notes: notes || null,
     dueDate: dueDate ? new Date(dueDate).toISOString() : null,
     status: 'draft',
+    /* canonical model (owner 2026-10-04): money in cents; paid only from verified allocations */
+    modelVersion: INV.MODEL_VERSION, source: 'manual', transactionRef: null,
+    totalCents: INV.toCents(total), paidCents: 0, balanceCents: INV.toCents(total), overpaidCents: 0, allocationCount: 0,
+    paymentStatus: 'pending',
     sentAt: null, paidAt: null, voidedAt: null,
     paymentRef: null, paymentMethod: null,
     createdBy: uid, createdAt: _ts(), updatedAt: _ts(),
@@ -763,7 +769,9 @@ exports.invoiceSend = onCall({ ..._CALL, secrets: [SENDGRID_KEY] }, exports._h.i
     } catch (_) { /* email failure is non-fatal */ }
   }
 
-  await ref.update({ status: 'sent', sentAt: _ts(), updatedAt: _ts() });
+  if (inv.status !== 'draft' && inv.status !== 'issued' && inv.status !== 'sent') throw new Error('only a draft invoice can be sent');
+  /* canonical: draft → issued (the legacy word 'sent' is read as issued) */
+  await ref.update({ status: 'issued', sentAt: _ts(), issuedAt: inv.issuedAt || _ts(), updatedAt: _ts() });
   return { success: true };
 });
 
@@ -815,8 +823,9 @@ exports.invoiceVoid = onCall(_CALL, exports._h.invoiceVoid = async (req) => {
     const ref  = _db().collection('invoices').doc(invoiceId);
     const snap = await tx.get(ref);
     if (!snap.exists || snap.data().shopId !== shopId) throw new Error('invoice not found');
-    if (snap.data().status === 'paid') throw new Error('cannot void a paid invoice');
-    if (snap.data().status === 'void') throw new Error('already voided');
+    const cur = snap.data();
+    if (cur.status === 'paid' || cur.status === 'partially_paid' || (Number.isInteger(cur.paidCents) && cur.paidCents > 0)) throw new Error('cannot void an invoice that holds a verified payment — refund it first');
+    if (cur.status === 'void') throw new Error('already voided');
     tx.update(ref, { status: 'void', voidedAt: _ts(), voidedBy: uid, voidReason: reason, updatedAt: _ts() });
   });
   return { success: true };
@@ -841,7 +850,7 @@ exports.invoiceList = onCall(_CALL, exports._h.invoiceList = async (req) => {
   let invoices = snap.docs.map(d => d.data());
   if (status) invoices = invoices.filter(i => i.status === status);
   invoices.forEach(inv => {
-    if (inv.status === 'sent' && inv.dueDate && new Date(inv.dueDate) < now) inv.isOverdue = true;
+    if ((inv.status === 'issued' || inv.status === 'partially_paid' || inv.status === 'sent') && inv.dueDate && new Date(inv.dueDate) < now) inv.isOverdue = true;
   });
   invoices.sort((a, b) => _mills(b.createdAt) - _mills(a.createdAt));
   return { invoices };

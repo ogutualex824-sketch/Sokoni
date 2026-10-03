@@ -76,6 +76,15 @@ const moneyDocs = () => Object.keys(store).filter((p) => MONEY.includes(p.split(
   ck('C6', /reference is required/.test(v1.err || '') && /exceeds/.test(v2.err || '') && /positive/.test(v3.err || ''), 'reference required; amount positive and ≤ the invoice total', { v1, v2, v3 });
   r = await call('invoiceVoid', as('merch', { shopId: 'shopA', invoiceId: 'inv3', reason: 'duplicate' }));
   ck('C7', store['invoices/inv3'].status === 'void', 'CONTROL: invoiceVoid unchanged for the owner', r);
+  /* canonical writers (owner 2026-10-04) */
+  r = await call('invoiceCreate', as('merch', { shopId: 'shopA', clientName: 'Acme', items: [{ description: 'Work', quantity: 2, unitPrice: 1250.5 }], taxRate: 16, dueDate: '2026-12-01' }));
+  const ci = store['invoices/' + r.invoiceId] || {};
+  ck('W1', ci.modelVersion === 1 && ci.source === 'manual' && ci.status === 'draft' && ci.totalCents === Math.round(ci.total * 100) && ci.paidCents === 0 && ci.balanceCents === ci.totalCents && ci.paymentStatus === 'pending', 'a new merchant invoice is CANONICAL from birth (source manual, cents, paid 0)', ci);
+  r = await call('invoiceSend', as('merch', { shopId: 'shopA', invoiceId: ci.id }));
+  ck('W2', store['invoices/' + ci.id].status === 'issued', 'send: draft → issued (canonical name)', store['invoices/' + ci.id].status);
+  store['invoices/' + ci.id].paidCents = 100; store['invoices/' + ci.id].status = 'partially_paid';
+  r = await call('invoiceVoid', as('merch', { shopId: 'shopA', invoiceId: ci.id, reason: 'oops' }));
+  ck('W3', /refund it first/.test(r.err || '') && store['invoices/' + ci.id].status === 'partially_paid', 'void is refused once a verified payment exists (refund first)', r);
   console.log('\n' + pass + ' passed, ' + fail + ' failed' + (process.env.SABOTAGE === '1' ? '   (SABOTAGE — failures EXPECTED)' : ''));
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('HARNESS ERROR:', e.stack || e.message); process.exit(2); });

@@ -1,3 +1,8 @@
+## [2026-10-04] — Merchant invoices are canonical from birth (financeSprintDispatch)
+
+**Owner:** `invoices`, restructured, is THE canonical invoice. **What:** `invoiceCreate` stamps `modelVersion 1`, `source:'manual'`, integer-cent `totalCents` / `paidCents 0` / `balanceCents`, and `paymentStatus:'pending'`. `invoiceSend` moves draft → **issued** (the canonical word; legacy `sent` is still read as issued). `invoiceVoid` is refused once a verified payment exists (refund first). The merchant list derives overdue for issued / partially paid. The model is `functions/shared/invoice-model.js`, byte-identical to the admin line (functions/admin-invoices-list-on-main).
+**Tests:** test-invoice-payment-claim 11/0 (claims C1–C7 + writers W1–W3). **Deployment:** NOT deployed; with the claim fix as one financeSprintDispatch unit.
+
 ## [2026-10-04] — Invoice money authority: a merchant "Mark Paid" is a PAYMENT CLAIM, never paid
 
 **Owner (2026-10-04):** a merchant-entered reference must never change payment truth. Record it as a claim ("Payment reference submitted — awaiting verification"); only a verified payment event may make an invoice paid.
