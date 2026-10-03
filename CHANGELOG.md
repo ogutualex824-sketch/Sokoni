@@ -1,3 +1,72 @@
+## [2026-10-03] - Fitness Memberships UI pass 2: aligned to the generated server contract, gym offer editor, AdminOS Fitness Memberships view (NOT deployed)
+
+**Branch `hosting/fitness-memberships-on-31f5844`. Hosting only. NOT deployed.** The source of truth is `docs/FITNESS_MEMBERSHIP_API.md` and `scripts/fixtures/fitness-api-fixtures.json` on `origin/feat/fitness-attendance-on-8bbfb34`. Those fixtures are generated from the real handlers. This branch first copied them at `3d315a2` and re-copied them at `d5fbd37`, after the new FX-SYNC row caught the source moving. See `docs/FITNESS_MEMBERSHIP_UI.md`.
+
+**Alignment (`sokoni-fitness-memberships.js`, `sokoni-fitness-member.js`):**
+- **Gym detail settlement** is the contract OBJECT `{releases[], releasedPeriods, releasedCents, netSettledCents}`. The drawer renders the releases list and the totals, with `null` → `—`. The array and `.rows` guesses were removed.
+- **The check-in card** reads only the real success/duplicate keys.
+  - `firstCheckIn` → "Refund no longer available — membership used".
+  - `duplicate` → "Already checked in today" with the ORIGINAL time.
+- **Refusals** follow the full contract tables:
+  - 15 check-in reasons, plus `unauthenticated` and `unavailable`;
+  - scope and scanner reasons, including `MODULE_NOT_AVAILABLE` and `MULTIPLE_GYMS`, in human text;
+  - create refusals, including `SALES_DISABLED`, plus 2f's purpose refusal `{code:'SALES_DISABLED'}` → "Memberships aren't on sale yet.".
+  - The reason is read from `details.reason || details.code`.
+- **Money states:**
+  - `payment_review` → "Payment under review";
+  - `refunded_late` → "Payment refunded — please start again";
+  - `refund.state` wording for requested / refunded (to the SOKONI wallet) / rejected;
+  - `expired`;
+  - gym rows: `refundEligible` `null` → `—`.
+- **Buy.**
+  - The review step is built from the `fitnessCreateMembership` response (title, price, length, `payBy`). When `reused` is true, it continues the existing pending membership.
+  - `createPaymentIntent` is called only on Pay, and its amount must equal the reviewed `priceCents` before any STK push.
+- **Day and week passes** read "Day pass" and "Week pass". Expiry comes only from the server's `endsAt`.
+
+**Gym offer editor** (owner decision, via 2f):
+- "Add membership offer" is pre-filled from the owner defaults, mirrored from `functions/shared/fitness-offer-defaults.js` @ `fe33bcc`: Daily 500, Weekly 1,500, Monthly 5,000, 3 Months 14,000 (save 7%), 6 Months 26,000 (save 13%) and Annual 48,000 (save 20%).
+- Writes go ONLY through `providerDispatch` `providerAddService`, `providerUpdateService` and `providerToggleService`, with the explicit typed payload `{name, price (integer cents), priceType:'fixed', serviceKind:'membership', periodCount, periodUnit}`.
+- "Saved" is shown only when the re-read service is a membership. Until 5b's provider-ops hooks ship, the server drops those fields, so the editor says "Membership offers aren't enabled on the server yet." and archives the stray plain rate card through `providerRemoveService`.
+
+**AdminOS view (`sokoni-aos-fitness.js`, new; `window.SokoniAOSFitness.mount(el)`):**
+- **Memberships list.** One filter at a time (`status` / `paymentStatus` / `refund.state`), `limit` 25 with a cursor, newest first.
+- **Detail.** Payment, lifecycle and refund fields, plus the "Why the refund is locked: Member attended N session(s)." line, taken from the DOCUMENT only. It also shows the attendance ledger with void corrections, the events timeline, and `providerPayouts` (`sourceType` membership).
+- **Actions.** `membershipDecideRefund`, `membershipRequestException` and `fitnessCorrectAttendance`. Each asks for a confirm first, and refusals (`separation_of_duties` …) are shown verbatim.
+- **Check-ins audit.** From `adminAudit` with `hub:'fitness'`.
+- **Sales switch.** Reads `featureFlags/fitness_membership_sales`. A toggle goes through `adminOsDispatch` `adminUpdateFeatureFlag`, ALWAYS with an explicit `enabled`, because the handler defaults a missing `enabled` to true. The new state is claimed only after a re-read.
+- **Wiring.** `admin-os.html` is NOT edited here. The exact minimal diffs against `origin/hosting/chain-on-3e8dd53` are in the doc: one Commerce nav parent, one panel, one script tag, one `sokoni-aos.js` loader line, and one `super-admin.html` "AdminOS Workspaces" link.
+
+**Files:**
+- `sokoni-fitness-memberships.js`
+- `sokoni-fitness-member.js`
+- `sokoni-aos-fitness.js` (new)
+- `scripts/fixtures/fitness-api-fixtures.json` (new, a copy)
+- `scripts/test-fitness-memberships-ui.js` (rewritten, fixture-driven)
+- `scripts/test-aos-fitness.js` (new)
+- `scripts/test-fitness-memberships-browser.js` (fixture-driven; QUEUED, not run)
+- `docs/FITNESS_MEMBERSHIP_UI.md`
+- `CHANGELOG.md`
+
+**Database:** no browser writes. New admin reads need composite indexes, which are listed in the doc and handed to the functions/rules lane:
+- `providerMemberships` × 3;
+- `adminAudit` × 2.
+
+**API:** none changed. The UI consumes e3's contract @ `d5fbd37` and 2f's `membershipDecideRefund` and `membershipRequestException`.
+
+**Security:**
+- All server text is escaped.
+- Offer and flag writes go only through server callables, and the flag is always written with an explicit boolean.
+- "Why locked" is never derived from client-loaded rows.
+
+**Tests:**
+- `scripts/test-fitness-memberships-ui.js`: 51 passed, 0 failed, 0 UNPROVEN. The FX-SYNC and OF-DEF source rows are among them. 6/6 negative controls are detected: (a) success before the response, (b) no escaping, (c) unknown → 0, (d) settlement as an array, (e) `SALES_DISABLED` → generic, (f) "Saved" without the `serviceKind` check.
+- `scripts/test-aos-fitness.js`: 16 passed, 0 failed. 3/3 controls are detected: the toggle omits `enabled`, "why locked" comes from client rows, unescaped text.
+- `scripts/test-fitness-containment.js`: 16/0.
+- `scripts/predeploy-syntax-gate.js`: clean.
+- The browser certification is QUEUED, because free RAM was about 210 MB, below the 512 MB floor.
+
+**Breaking changes:** none (not deployed).
+
 ## [2026-10-03] - Fitness Memberships UI: gym Memberships module, member "My memberships" page, and a flag-gated buy flow (selling OFF)
 
 **Branch `hosting/fitness-memberships-on-31f5844`, on F0 containment `31f5844`, which sits on live `72dca56`. Hosting only. NOT deployed.**
