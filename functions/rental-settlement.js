@@ -4,10 +4,10 @@
  *
  * ONE settlement, called by f3's rentalComplete INSIDE its transaction (returned → completed). Two phases:
  *
- *   1. quoteRentalSettlement(db, { booking })            — OUTSIDE the txn (the commission engine reads config).
- *      Prices commission from the SERVER intent (paymentIntents/{booking.intentRef}.metadata.commissionBaseCents,
- *      commissionCategory) through finos-utils.calculateCommission — never from booking fields. The category must have an
- *      EXPLICIT commission-config row: an unconfigured category would silently fall to the 5% default, so it is refused.
+ *   1. quoteRentalSettlement(db, { booking, deps })     — OUTSIDE the txn.
+ *      Prices commission from the BOOKING-TIME SNAPSHOT (owner rule): rentalBookings.commissionSnapshot, which must equal
+ *      paymentIntents/{intentRef}.metadata.commissionSnapshot, through shared/settlement-authority.settle — never today's
+ *      catalogue, never booking price fields. A missing or mismatched snapshot is REFUSED (no legacy pricing).
  *
  *   2. settleRentalBooking(txn, db, { bookingId, booking, ownerUid, actorUid, quote })  — INSIDE the txn, reads only.
  *      Returns { ok:true, apply(t) } or { ok:false, reason, apply(t) } — the caller does its own reads, then calls apply()
@@ -41,14 +41,19 @@ async function quoteRentalSettlement(db, { booking, deps }) {
   const rentCents = m.commissionBaseCents, depositCents = m.depositCents == null ? 0 : m.depositCents;
   if (!Number.isInteger(rentCents) || rentCents <= 0 || !Number.isInteger(depositCents) || depositCents < 0) return { ok: false, reason: 'intent_amounts_invalid' };
   if (!Number.isInteger(intent.amountCents) || intent.amountCents !== rentCents + depositCents) return { ok: false, reason: 'intent_amounts_inconsistent' };
-  const category = String(m.commissionCategory || '');
-  const CFG = require('./commission-config');
-  if (!category || !CFG.listCategories().includes(category)) return { ok: false, reason: 'commission_unpriced', category: category || null };
-  let comm;
-  try {
-    comm = await require('./finos-utils').calculateCommission(db, { orderAmountCents: rentCents, category, sellerId: m.sellerUid || null, hubId: 'rentals' });
-  } catch (e) { return { ok: false, reason: 'commission_refused', detail: String(e && e.message || e).slice(0, 120) }; }
-  if (!comm || !Number.isInteger(comm.commissionCents) || comm.commissionCents < 0 || comm.commissionCents > rentCents) return { ok: false, reason: 'commission_invalid' };
+  /* PRICING = THE BOOKING-TIME SNAPSHOT (owner rule, via 2f/f3 2026-10-03): the rate captured ONCE at payment start by 2f's
+     rental_booking pricer, stamped on rentalBookings.commissionSnapshot (server-write-only) and on the intent. Never today's
+     catalogue. Both copies must agree; a missing snapshot is REFUSED (no legacy pricing for rentals). */
+  const snap = b.commissionSnapshot, isnap = m.commissionSnapshot;
+  const SA = require('./shared/settlement-authority');
+  if (!SA.validSnapshot(snap) || !SA.validSnapshot(isnap)) return { ok: false, reason: 'no_commission_snapshot' };
+  if (Number(snap.commissionRate) !== Number(isnap.commissionRate) || String(snap.commissionRuleId) !== String(isnap.commissionRuleId)
+      || String(snap.commissionBase || '') !== String(isnap.commissionBase || '')) return { ok: false, reason: 'commission_snapshot_mismatch' };
+  if (snap.commissionBase !== 'rent_only_deposit_excluded') return { ok: false, reason: 'commission_base_unexpected', detail: snap.commissionBase || null };
+  const comm = SA.settle({ heldAmountCents: intent.amountCents, passThroughCents: depositCents, commissionSnapshot: snap });
+  if (!comm || comm.ok !== true) return { ok: false, reason: (comm && comm.reason) || 'settle_refused' };
+  if (comm.needsLegacy) return { ok: false, reason: 'no_commission_snapshot' };
+  if (comm.baseCents !== rentCents || comm.passThroughCents !== depositCents) return { ok: false, reason: 'settle_base_mismatch' };
   const D = deps || {};
   if (!D.BW || typeof D.BW.planMove !== 'function' || !D.SD || typeof D.SD.resolveSettlementDestination !== 'function') return { ok: false, reason: 'no_business_wallet' };
   const sellerUid = m.sellerUid || null;
@@ -56,9 +61,9 @@ async function quoteRentalSettlement(db, { booking, deps }) {
   let dest;
   try { dest = await D.SD.resolveSettlementDestination(db, { sellerUid, paymentVerified: true }); } catch (_) { dest = { ok: false, reason: 'destination_unreadable' }; }
   if (!dest || dest.ok !== true || !dest.businessId) return { ok: false, reason: 'no_business_wallet', detail: (dest && dest.reason) || null };
-  return { ok: true, intentRef, rentCents, depositCents, commissionCents: comm.commissionCents, netCents: rentCents - comm.commissionCents,
+  return { ok: true, intentRef, rentCents, depositCents, commissionCents: comm.commissionCents, netCents: comm.netCents,
     dest: { businessId: String(dest.businessId), ownerUid: dest.ownerUid || sellerUid, storeId: dest.storeId || null }, BW: D.BW,
-    commission: { effectiveRate: comm.effectiveRate, pricingSource: comm.pricingSource, ruleId: comm.ruleId, category: comm.category || category, engineVersion: comm.engineVersion || null },
+    commission: { effectiveRate: comm.rate, ruleId: comm.ruleId, source: comm.source, commissionBase: snap.commissionBase, category: snap.category || null, policyVersion: snap.policyVersion || null },
     paymentRef: intent.paymentRef || null };
 }
 
