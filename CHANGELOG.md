@@ -1,3 +1,11 @@
+## [2026-10-03] — messages.js merge item 2/5 — 2f 26697e5 idempotent send (offline outbox server change) — NOT deployed
+
+- **functions/shared/message-identity.js:** byte-identical copy of 2f 26697e5.
+- **functions/messages.js sendMessage:** an optional `clientMessageId` (8-128 chars) → a deterministic doc id namespaced by sender, written with create(). A retry lands ONCE (one message, unread +1 once) and answers duplicate:true. An invalid key is refused. No key = the previous behaviour. The client outbox (sokoni-outbox.js) is hosting, 2f's.
+- **scripts/lib/inmem-firestore.js:** batch.create() with atomic real-Firestore semantics (a collision fails the whole batch).
+- **Tests:** scripts/test-messages-outbox.js 4/0, SABOTAGE 2/2. Messages participant-authority 51/0, preclaim 5/0, product-enquiry 7/0, service-booking 7/0, jobs 8/0; work-engine 15/0, marketing-services 13/0, service-leads 14/0.
+- **Remaining merge items** (they need 2f's modules, which arrive with the money files): be20712 / 0799e1e (ent_booking / ent_enquiry + the object-arg ensureAnchoredConversation adapter), 469c001 / 1895db1 (hc_booking clinical gate + healthcare enquiries), 9fe09e2 (composer / reactions server). c2ad1f3 is DROPPED for d5d81d6.
+
 ## [2026-10-03] — messages.js merge (b2 copy = base, per sokoni-2f's lineage diff): item 1/5 — 2f f890075 concurrency fixes — NOT deployed
 
 - **Lineage (2f, read-only diff of live messagesDispatch gen 1787384541218290):** NEITHER copy is live — live messages.js is the common ancestor. The b2 copy is the base (closer to live, stricter product_enquiry, pre-claim repair); 2f's items are ported one per commit.

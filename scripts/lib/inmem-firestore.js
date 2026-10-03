@@ -77,7 +77,8 @@ function install(opts) {
       for (const op of ops) op();
       return out;
     },
-    batch: () => { const ops = []; return { set: (r, v, so) => ops.push(() => applySet(r.path, v, so)), update: (r, v) => ops.push(() => applyUpdate(r.path, v)), commit: async () => { for (const op of ops) op(); } }; },
+    /* batch.create() fails the WHOLE batch atomically when the doc exists (real Firestore semantics) */
+    batch: () => { const ops = [], creates = []; return { set: (r, v, so) => ops.push(() => applySet(r.path, v, so)), update: (r, v) => ops.push(() => applyUpdate(r.path, v)), create: (r, v) => { creates.push(r.path); ops.push(() => applySet(r.path, v)); }, commit: async () => { for (const c of creates) if (DOCS.has(c)) { const e = new Error('ALREADY_EXISTS ' + c); e.code = 6; throw e; } for (const op of ops) op(); } }; },
   };
   const fsStub = {
     getFirestore: () => db,

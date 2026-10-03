@@ -13,6 +13,8 @@ const logger                   = require('firebase-functions/logger');
 const admin                    = require('firebase-admin');
 
 const REGION = 'us-central1';
+/* (2f 26697e5) offline outbox: a retried send carries the SAME clientMessageId → one deterministic message doc */
+const MSGID = require('./shared/message-identity');
 
 exports._h = {}; // handler registry for messagesDispatch
 
@@ -991,6 +993,7 @@ exports.sendMessage = onCall(
       text, storageRef, thumbnailRef, fileName, fileSize, mimeType, duration,
       lat, lng, address,
       replyToId, replyToText, replyToSenderId,
+      clientMessageId,
     } = req.data || {};
 
     if (!conversationId || typeof conversationId !== 'string') {
@@ -1080,7 +1083,17 @@ exports.sendMessage = onCall(
     const ud         = userSnap.exists ? userSnap.data() : {};
     const senderName = String(ud.displayName || ud.name || ud.email || 'User').slice(0, 100);
 
-    const msgRef = convRef.collection('messages').doc();
+    /* IDEMPOTENCY (2f 26697e5). A client that retries an unacknowledged send supplies the SAME clientMessageId; it is
+       derived into a deterministic doc id (namespaced by sender, so nobody can squat another user's key) and written with
+       create(), which fails if the message already landed — so a retry never writes a second message nor bumps unread
+       twice. Optional: callers without a key keep the random-id behaviour. */
+    const idempotent = clientMessageId !== undefined && clientMessageId !== null;
+    if (idempotent && !MSGID.isValidClientMessageId(clientMessageId)) {
+      throw new HttpsError('invalid-argument', 'clientMessageId must be 8-128 chars of A-Z a-z 0-9 . _ : -');
+    }
+    const msgRef = idempotent
+      ? convRef.collection('messages').doc(MSGID.messageDocIdFor(req.auth.uid, String(conversationId), clientMessageId))
+      : convRef.collection('messages').doc();
     const now    = _now();
 
     const msgData = {
@@ -1115,7 +1128,9 @@ exports.sendMessage = onCall(
     }
 
     const batch = db.batch();
-    batch.set(msgRef, msgData);
+    if (idempotent) msgData.clientMessageId = String(clientMessageId);
+    /* create() for an idempotent send: a duplicate rejects the WHOLE batch, so the unread increment does not apply either */
+    if (idempotent) batch.create(msgRef, msgData); else batch.set(msgRef, msgData);
     batch.update(convRef, {
       lastMessage:   type === 'text' ? (msgData.text || '') : `📎 ${type}`,
       lastMessageAt: now,
@@ -1123,9 +1138,19 @@ exports.sendMessage = onCall(
       unread:        _inc(1),
       updatedAt:     now,
     });
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (e) {
+      /* ALREADY_EXISTS on an idempotent send is SUCCESS — the message being retried is already here */
+      const already = e && (e.code === 6 || e.code === 'already-exists' || /ALREADY_EXISTS/i.test(String(e.message || '')));
+      if (idempotent && already) {
+        logger.info('[messages] duplicate suppressed', { conversationId: String(conversationId), messageId: msgRef.id });
+        return { messageId: msgRef.id, accepted: true, duplicate: true };
+      }
+      throw e;
+    }
 
-    return { messageId: msgRef.id };
+    return { messageId: msgRef.id, accepted: true, duplicate: false };
   }
 );
 
