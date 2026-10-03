@@ -54,7 +54,8 @@ console.log('\nWork/Job Engine WE1 — core + Marketing skin\n');
   const D = (op, uid, data, token) => call((r) => WE.workDispatch.run(r), uid, Object.assign({ op }, data || {}), token);
   H.reset();
   DOCS.set('providers/mk', { uid: 'mk', status: 'active', marketingStatus: 'active', marketingListed: true, marketingCategories: ['branding'] });
-  DOCS.set('applicationDecisions/marketing_mk', { status: 'approved', decidedBy: 'admin1', approvedCategories: ['branding'] });
+  DOCS.set('applicationDecisions/marketing_mk', { applicationId: 'marketing_mk', applicantUid: 'mk', status: 'approved', decidedBy: 'admin1', approvedCategories: ['branding'] });
+  DOCS.set('applications/marketing_mk', { uid: 'mk', hub: 'marketing', applicationType: 'marketing', status: 'approved' });
   DOCS.set('providers/plain', { uid: 'plain', status: 'active' });
   /* forger: wrote marketing fields on their OWN provider doc (owner-writable on the served rules) — no decision record */
   DOCS.set('providers/forger', { uid: 'forger', status: 'active', marketingStatus: 'active', marketingListed: true, marketingCategories: ['branding'] });

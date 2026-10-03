@@ -1,3 +1,11 @@
+## [2026-10-03] — Marketing authority = a thin adapter over THE approval predicate (5b P0-C isAuthoritativelyApproved) — NOT deployed
+
+- **Owner rule:** Marketing consumes ONLY isAuthoritativelyApproved. No Marketing-local reading of approval.
+- **functions/shared/marketing-authority.js:** approval = isAuthoritativelyApproved(db, 'marketing_'+uid, {getUser}) (decision record, application, admin decider, not self-decided, not revoked, provider active, account not frozen). Categories = provider.marketingCategories ∩ the predicate's approvedCategories. Listing (marketingStatus / marketingListed) is listing state only. Fail closed on any refusal. The old local record read is removed.
+- **P0-C port (cherry-pick 78957b4 of 5b f85039a):** shared/approval-authority.js byte-identical; approvalStateFor uses it with NO adminAudit fallback (owner), so the SLICE 0 capability reader goes through the same predicate.
+- **Fixtures:** genuine marketers now carry applications/marketing_{uid} plus applicantUid on the record; the forgers still have neither.
+- **Tests:** p0-forged-approval 23/0, business-workspace 30/0, workspace-capability 51/0, marketing-services 13/0 (SABOTAGE 9/9, F1 re-pointed at the adapter's approval gate), work-engine 12/0 (SABOTAGE 9/9), work-milestones 9/0, service-leads 14/0.
+
 ## [2026-10-03] - P0-C: ONE approval authority, isAuthoritativelyApproved; no audit-log fallback
 
 Functions only (providerDispatch's `business-workspace.js` + new `functions/shared/approval-authority.js`). **Not deployed.**

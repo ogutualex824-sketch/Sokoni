@@ -1,38 +1,40 @@
 'use strict';
 /**
- * THE Marketing authority — who may sell which marketing service, RIGHT NOW (security, 2026-10-03).
+ * Marketing authority — a THIN ADAPTER over THE approval authority (5b P0-C, shared/approval-authority.js
+ * isAuthoritativelyApproved). Owner rule (2026-10-03): Marketing consumes ONLY that predicate — no Marketing-local
+ * interpretation of approval, no record re-read, no fallback.
  *
- * providers/{uid}.marketing* and applications/{id}.marketingApprovedCategories are written by the server projection, but
- * the SERVED rules let their owner write them too (the same class as the P0 forged approval). So neither is trusted
- * alone. Truth = the server-only decision record applicationDecisions/marketing_{uid} (written by applicationDecide; no
- * client rule), which carries the approved subset:
+ *   approval    isAuthoritativelyApproved(db, 'marketing_' + uid, { getUser })  — decision record, application, admin
+ *               decider, not self-decided, not revoked, provider active, account not frozen (all decided THERE)
+ *   categories  provider.marketingCategories ∩ approval.approvedCategories   (the predicate's set; never more)
+ *   listed      providers.marketingStatus === 'active' && marketingListed === true — LISTING state, not approval
  *
- *   active      record.status === 'approved' AND provider.marketingStatus === 'active' AND marketingListed === true
- *   categories  provider.marketingCategories ∩ record.approvedCategories      (never more than the admin approved)
- *
- * FAIL CLOSED: no record, a non-approved record, or a record without approvedCategories ⇒ not a marketer.
+ * FAIL CLOSED: any refusal reason, or an approval without approvedCategories, ⇒ not a marketer.
  * Every marketing check (service editor, booking gate, Work engine, workspace answer, directory) calls THIS.
  */
+const AUTH = require('./approval-authority');
 const APP_ID = (uid) => 'marketing_' + uid;
 
-function decide(provider, record) {
-  const p = provider || {}, r = record || null;
-  if (!r) return { active: false, categories: [], type: null, why: 'no_decision_record' };
-  if (r.status !== 'approved') return { active: false, categories: [], type: null, why: 'decision_not_approved' };
-  if (!Array.isArray(r.approvedCategories) || !r.approvedCategories.length) return { active: false, categories: [], type: null, why: 'record_without_categories' };
+function _getUser(uid) { return require('firebase-admin/auth').getAuth().getUser(uid); }
+
+/** Combine the predicate's verdict with the provider listing. Pure. */
+function combine(provider, verdict) {
+  const p = provider || {}, v = verdict || {};
+  if (!v.approved) return { active: false, categories: [], type: null, why: v.reason || 'NOT_APPROVED' };
+  if (!Array.isArray(v.approvedCategories) || !v.approvedCategories.length) return { active: false, categories: [], type: null, why: 'NO_APPROVED_CATEGORIES' };
   const mine = Array.isArray(p.marketingCategories) ? p.marketingCategories : [];
-  const categories = mine.filter((c) => r.approvedCategories.indexOf(c) >= 0);
+  const categories = mine.filter((c) => v.approvedCategories.indexOf(c) >= 0);
   const live = p.marketingStatus === 'active' && p.marketingListed === true;
-  return { active: live && categories.length > 0, categories: live ? categories : [], type: p.marketingType || null, why: live ? (categories.length ? 'ok' : 'no_approved_category') : 'listing_not_active' };
+  return { active: live && categories.length > 0, categories: live ? categories : [], type: p.marketingType || null, why: live ? (categories.length ? 'APPROVED' : 'NO_APPROVED_CATEGORY') : 'LISTING_NOT_ACTIVE' };
 }
 
-/** Reads providers/{uid} (unless given) + the decision record; returns the derived authority. */
-async function marketingAuthority(db, uid, providerData) {
-  const [p, rec] = await Promise.all([
+/** Reads providers/{uid} (unless given) and asks THE predicate; returns the derived Marketing authority. */
+async function marketingAuthority(db, uid, providerData, opts) {
+  const [p, v] = await Promise.all([
     providerData !== undefined ? Promise.resolve(providerData) : db.collection('providers').doc(String(uid)).get().then((s) => (s.exists ? s.data() : null)),
-    db.collection('applicationDecisions').doc(APP_ID(String(uid))).get().then((s) => (s.exists ? s.data() : null)),
+    AUTH.isAuthoritativelyApproved(db, APP_ID(String(uid)), { getUser: (opts && opts.getUser) || _getUser }),
   ]);
-  return decide(p, rec);
+  return combine(p, v);
 }
 
 /** A provider view whose marketing fields are REPLACED by the derived authority — for pure checks that take a provider. */
@@ -44,4 +46,4 @@ function effectiveProvider(provider, auth) {
   });
 }
 
-module.exports = { APP_ID, decide, marketingAuthority, effectiveProvider };
+module.exports = { APP_ID, combine, marketingAuthority, effectiveProvider };

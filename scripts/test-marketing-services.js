@@ -17,7 +17,8 @@ if (process.env.SABOTAGE) {
     ['B2', 'booking-service.js', "    if (!MSVC.approvedFor(MA.effectiveProvider(prov, mAuth), svc.category)) throw", "    if (false) throw"],
     ['B3', 'booking-service.js', "    if (!leadCtx && !(svc.marketing && svc.marketing.capabilities && svc.marketing.capabilities.booking === true)) {", "    if (false) {"],
     ['S6', 'shared/marketing-services.js', "    booking: (modelIn === 'fixed' || modelIn === 'hourly') && capsIn.booking !== false,", "    booking: capsIn.booking !== false,"],
-    ['F1', 'shared/marketing-authority.js', "  if (!r) return { active: false, categories: [], type: null, why: 'no_decision_record' };", "  if (!r) return { active: (provider || {}).marketingStatus === 'active', categories: (provider || {}).marketingCategories || [], type: null, why: 'forged' };"],
+    /* F1: the adapter trusts the provider's own fields when THE predicate refuses (no record) */
+    ['F1', 'shared/marketing-authority.js', "  if (!v.approved) return { active: false, categories: [], type: null, why: v.reason || 'NOT_APPROVED' };", "  if (!v.approved) return { active: p.marketingStatus === 'active', categories: p.marketingCategories || [], type: null, why: 'forged' };"],
   ];
   let caught = 0;
   for (const [row, file, a, b] of M) {
@@ -54,7 +55,8 @@ const seed = () => {
   DOCS.set('providers/mk', { uid: 'mk', status: 'active', acceptsBookings: true, category: 'cleaning', categories: ['cleaning'],
     marketingStatus: 'active', marketingListed: true, marketingCategories: ['branding', 'seo'], marketingType: 'agency' });
   /* the SERVER decision record (applicationDecide) — the marketing authority intersects the provider's fields with it */
-  DOCS.set('applicationDecisions/marketing_mk', { status: 'approved', decidedBy: 'admin1', approvedCategories: ['branding', 'seo'] });
+  DOCS.set('applicationDecisions/marketing_mk', { applicationId: 'marketing_mk', applicantUid: 'mk', status: 'approved', decidedBy: 'admin1', approvedCategories: ['branding', 'seo'] });
+  DOCS.set('applications/marketing_mk', { uid: 'mk', hub: 'marketing', applicationType: 'marketing', status: 'approved' });
   DOCS.set('providerSubscriptions/mk', { limits: { listings: -1 } });
   DOCS.set('providerAvailability/mk', { modes: ['open_24_7'], appt: {} });
   DOCS.set('users/mk', { displayName: 'mk', role: 'provider' }); DOCS.set('users/cust', { displayName: 'cust' });
@@ -81,7 +83,8 @@ const bookings = () => [...DOCS.keys()].filter((k) => k.startsWith('providerBook
   DOCS.set('providers/forger', { uid: 'forger', status: 'active', acceptsBookings: true, marketingStatus: 'active', marketingListed: true, marketingCategories: ['seo', 'branding'] });
   DOCS.set('providerSubscriptions/forger', { limits: { listings: -1 } }); DOCS.set('providerAvailability/forger', { modes: ['open_24_7'], appt: {} });
   DOCS.set('providers/mk2', { uid: 'mk2', status: 'active', marketingStatus: 'active', marketingListed: true, marketingCategories: ['branding', 'seo'] });
-  DOCS.set('applicationDecisions/marketing_mk2', { status: 'approved', decidedBy: 'admin1', approvedCategories: ['branding'] });
+  DOCS.set('applicationDecisions/marketing_mk2', { applicationId: 'marketing_mk2', applicantUid: 'mk2', status: 'approved', decidedBy: 'admin1', approvedCategories: ['branding'] });
+  DOCS.set('applications/marketing_mk2', { uid: 'mk2', hub: 'marketing', applicationType: 'marketing', status: 'approved' });
   DOCS.set('providerSubscriptions/mk2', { limits: { listings: -1 } });
   const f1 = await call(PO.providerAddService, 'forger', { name: 'SEO', category: 'seo', price: 100000 });
   const f2 = await call(PO.providerAddService, 'mk2', { name: 'SEO', category: 'seo', price: 100000 });
