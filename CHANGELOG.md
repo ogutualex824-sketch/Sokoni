@@ -146,7 +146,7 @@ Emulator: QUEUED (memory floor).
 - **Tests:** scripts/test-fitness-attendance.js 28/0, negative controls 4/4 caught. test-membership-settlement 45/0 on 57fe896. Emulator proof QUEUED.
 - **Docs:** docs/FITNESS_MEMBERSHIP_ATTENDANCE.md.
 - **Breaking:** none.
-/^>>>>>>> fe33bcc$/d
+
 ## 2026-10-03 — Fitness: default price catalogue (gyms edit), day/week passes, one sales-switch predicate, seller-terms commission wording, earn-page copy (NOT deployed)
 
 - **New files:** functions/shared/fitness-offer-defaults.js, functions/shared/fitness-sales-switch.js.
@@ -173,7 +173,6 @@ Emulator: QUEUED (memory floor).
 - **Cleanup:** provider-ops dead _commissionRate removed; comments updated.
 - **Terms:** seller-terms.html fee rows updated (the legal 'how commission is collected' paragraph is flagged for the owner, not edited).
 - **Tests:** commission-schedule 25/0.
->>>>>>> fe33bcc
 
 ## 2026-10-03 — Memberships: start at payment, pay-by deadline, member + gym notifications (NOT deployed)
 
