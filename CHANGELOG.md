@@ -1,3 +1,15 @@
+## [2026-10-03] - Provider pages show the booking commission from the ONE display source — hosting, NOT deployed
+
+- sokoni-commission-rates.js is copied WHOLE from convergence/commercial-fn-on-ef1e992 @ 21969e0. It is a generated file (commission-config),
+  byte-identical to 0a7a387, blob 202f561e. No hunks merged. services = 5; drift-checked on 2f's line by test-commission-schedule S7.
+- provider-onboarding.html (plans) and provider-dashboard.html (plan card) render "SOKONI commission: N% of each booking, the same on every
+  plan …" from SokoniCommission.pct('services'). Without the snapshot they show the neutral line, never a guessed number.
+  sokoni-5b and sokoni-2f agreed this is the only display source; there is no workspace field.
+- **Flagged to 2f, not changed (their generated file):** the snapshot still carries PROVIDER_PLAN_PCT (20 / 15 / 10 / 7 / 5) and
+  home_services: 14. Both contradict the owner's flat 5% on every service booking. Nothing on these pages reads them.
+- Test: test-tech-service-editor F3. It runs the helper against the real snapshot (5%) and without it (no number), and checks the file hash.
+  13/0. role-authority 155/0.
+
 ## [2026-10-03] - Provider onboarding + dashboard: no per-plan commission advertised (flat service commission) — hosting, NOT deployed
 
 - Owner decision 2026-10-03 (relayed by sokoni-2f; server commercial-fn @ 21969e0): one flat, provider-paid commission on every service booking

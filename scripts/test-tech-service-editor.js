@@ -121,6 +121,28 @@ const SRC = read('sokoni-tech-service-editor.js');
     'onboarding plans and the dashboard plan card advertise no per-plan commission (no stale 20/15/10/7/5% ladder, no legacy plan rate)');
 }
 
+/* F3 — the rate shown comes from the ONE display source (generated snapshot), never a guess */
+{
+  const po = read('provider-onboarding.html');
+  const helper = (po.match(/function _skCommissionLine\(\)\{[\s\S]*?\n\}/) || [''])[0];
+  const run = (withSnapshot) => {
+    const w = {};
+    const c = { window: w, console, isFinite, Number };
+    c.globalThis = c; vm.createContext(c);
+    if (withSnapshot) vm.runInContext(read('sokoni-commission-rates.js'), c);
+    c.SokoniCommission = w.SokoniCommission;
+    vm.runInContext(helper + '; window.__line = _skCommissionLine();', c);
+    return w.__line;
+  };
+  const withS = helper ? run(true) : '', without = helper ? run(false) : '';
+  const snap = read('sokoni-commission-rates.js');
+  const hash = require('crypto').createHash('sha1').update('blob ' + Buffer.byteLength(snap) + '\0' + snap).digest('hex');
+  const TPL = '${_skCommissionLine()}';
+  ck('F3', /SOKONI commission: 5% of each booking, the same on every plan/.test(withS) && !/\d/.test(without || '') && hash === '202f561e810cd8a43c49d6201842066ae89b52f2'
+    && read('provider-dashboard.html').includes(TPL) && po.includes(TPL),
+    'with the generated snapshot (byte-identical to 21969e0) the line shows its services rate; without it, no number', { withS, without, hash });
+}
+
 /* T10 — vocabulary parity with the server authority */
 {
   const serverFile = path.join(TECH_FN, 'functions', 'shared', 'tech-service-profile.js');

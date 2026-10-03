@@ -666,7 +666,7 @@ a{color:var(--acc);text-decoration:none}
                   </div>
                   <div style="font-size:.72rem;color:var(--sub);margin-top:4px">Customers book in blocks of this length, and time slots are generated to match. Use 30 for half-hour appointments, 240 for a 4-hour gig. Want several lengths? Add one service per length.</div>
                 </div>
-                <div class="fg"><div class="sk-lbl">SOKONI commission</div><div style="font-size:12px;opacity:.75;line-height:1.45">Customers pay your service price only. SOKONI's commission is deducted from your payout at settlement (owner decision 2026-10-03) — see Wallet &amp; earnings.</div></div>
+                <div class="fg"><div class="sk-lbl">SOKONI commission</div><div style="font-size:12px;opacity:.75;line-height:1.45">Customers pay your service price only. SOKONI's commission is deducted from your payout at settlement — see Wallet &amp; earnings.</div></div>
                 <div class="fg"><label class="sk-lbl">Deposit (KSh)</label><input class="sk-in" id="svDeposit" type="number" min="0" placeholder="optional"></div>
               </div>
               <div class="fg" style="margin-top:8px"><label class="sk-lbl">Description</label><textarea class="sk-in" id="svDesc" rows="2" placeholder="What's included"></textarea></div>
@@ -827,6 +827,7 @@ a{color:var(--acc);text-decoration:none}
 <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
      through SokoniCart; without this tag the pip cannot render a count. -->
 <script src="sokoni-cart.js"></script>
+<script src="sokoni-commission-rates.js"></script>
 <script src="shared-header.js" defer></script>
 <script src="sokoni-provider.js" defer></script>
 <!-- shell gate: the dashboard is a projection of the server workspace authority (providerDispatch businessWorkspace); a held account is sent to /complete-application -->
@@ -846,6 +847,15 @@ function toast(m,t='ok',ms=3500){const d=document.createElement('div');d.classNa
 let _sdk=null,_data=null,_bkFilter='all',_bkDocs=[];
 
 /* ── Panel switcher ─────────────────────────────────────────────────────── */
+/* The booking commission shown to providers — from the ONE display source, the generated snapshot
+   sokoni-commission-rates.js (commission-config; owner decision 2026-10-03: one flat, provider-paid rate on every service
+   booking). If the snapshot is missing or unreadable the line names no number — never a guessed rate. */
+function _skCommissionLine(){
+  var p = (window.SokoniCommission && typeof SokoniCommission.pct === 'function') ? SokoniCommission.pct('services') : null;
+  return (typeof p === 'number' && isFinite(p) && p >= 0)
+    ? 'SOKONI commission: ' + p + '% of each booking, the same on every plan — deducted from your payout at settlement. Customers pay your price only.'
+    : 'SOKONI commission: one rate on every plan, deducted from your payout at settlement. Customers pay your price only.';
+}
 const P={
   show(id,el,subTab){
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
@@ -1661,7 +1671,7 @@ const S={
     const renew=sub.renewalAt?.toDate?new Date(sub.renewalAt.toDate()):sub.renewalAt?new Date(sub.renewalAt):null;
     _q('subDetails').innerHTML=`<div style="margin-bottom:12px"><span class="sub-badge ${st[sub.status]||'sub-active'}">${sub.status}</span></div>
     <div style="font-size:.85rem;margin-bottom:8px"><strong>${(sub.tier||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</strong> plan</div>
-    <div style="font-size:.8rem;color:var(--sub)">SOKONI commission: one rate on every plan, deducted from your payout at settlement (owner decision 2026-10-03).</div>
+    <div style="font-size:.8rem;color:var(--sub)">${_skCommissionLine()}</div>
     <div style="font-size:.8rem;color:var(--sub);margin-top:3px">Renewal: ${renew?renew.toLocaleDateString('en-KE'):'—'}</div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
       <a href="provider-onboarding.html#step8" class="btn btn-p btn-sm">Upgrade Plan</a>

@@ -227,9 +227,19 @@ a{color:var(--acc);text-decoration:none}
 <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
      through SokoniCart; without this tag the pip cannot render a count. -->
 <script src="sokoni-cart.js"></script>
+<script src="sokoni-commission-rates.js"></script>
 <script src="shared-header.js" defer></script>
 <script src="sokoni-provider.js" defer></script>
 <script>
+/* The booking commission shown to providers — from the ONE display source, the generated snapshot
+   sokoni-commission-rates.js (commission-config; owner decision 2026-10-03: one flat, provider-paid rate on every service
+   booking). If the snapshot is missing or unreadable the line names no number — never a guessed rate. */
+function _skCommissionLine(){
+  var p = (window.SokoniCommission && typeof SokoniCommission.pct === 'function') ? SokoniCommission.pct('services') : null;
+  return (typeof p === 'number' && isFinite(p) && p >= 0)
+    ? 'SOKONI commission: ' + p + '% of each booking, the same on every plan — deducted from your payout at settlement. Customers pay your price only.'
+    : 'SOKONI commission: one rate on every plan, deducted from your payout at settlement. Customers pay your price only.';
+}
 /* ── Constants ─────────────────────────────────────────────────────── */
 const COUNTIES=['Nairobi','Mombasa','Kwale','Kilifi','Tana River','Lamu','Taita-Taveta','Garissa','Wajir','Mandera','Marsabit','Isiolo','Meru','Tharaka-Nithi','Embu','Kitui','Machakos','Makueni','Nyandarua','Nyeri','Kirinyaga',"Murang'a",'Kiambu','Turkana','West Pokot','Samburu','Trans-Nzoia','Uasin Gishu','Elgeyo-Marakwet','Nandi','Baringo','Laikipia','Nakuru','Narok','Kajiado','Kericho','Bomet','Kakamega','Vihiga','Bungoma','Busia','Siaya','Kisumu','Homa Bay','Migori','Kisii','Nyamira'];
 const PCATS={'Home Services':['Electrician','Plumber','Carpenter','Painter','Welder','Cleaner','Gardener','Pest Control','Appliance Repair','HVAC','Mover'],'Security':['Security Guard','CCTV Installation','Access Control'],'Education':['Tutor','Private Teacher','Skills Trainer','Music Teacher','Language Teacher'],'Creative & Media':['Photographer','Videographer','Graphic Designer','Content Creator','DJ','MC'],'Technology':['Software Developer','Web Designer','IT Support','Network Engineer','Data Analyst'],'Business Services':['Marketing Agency','PR Consultant','Business Consultant','Accountant','Bookkeeper'],'Legal':['Lawyer','Legal Consultant','Notary'],'Healthcare':['Doctor','Nurse','Clinical Officer','Dentist','Therapist','Physiotherapist','Nutritionist'],'Beauty & Wellness':['Salon','Barber','Makeup Artist','Nail Technician','Spa Therapist'],'Fashion & Textiles':['Tailor','Fashion Designer','Laundry Service','Dry Cleaner'],'Construction & Design':['Architect','Interior Designer','Structural Engineer','Quantity Surveyor'],'Events':['Event Planner','Caterer','Decorator','Sound Engineer','Lighting Technician'],'Logistics':['Delivery Service','Courier','Freight Agent'],'Freelance':['Virtual Assistant','Copywriter','Translator','Research Analyst','Data Entry']};
@@ -602,7 +612,7 @@ function sPricing(d){
 function sSub(d){
   return`<div class="sh">Choose Your Plan</div><p class="ss">Start free for 14 days, upgrade anytime. Cancel whenever.</p>
   <div class="btog"><button class="btg on" id="btMo" onclick="W.billing('monthly')">Monthly</button><button class="btg" id="btYr" onclick="W.billing('yearly')">Yearly <span style="font-size:.6rem;background:var(--acc);color:#000;padding:1px 5px;border-radius:99px;margin-left:3px">20% off</span></button></div>
-  <div class="pcom" style="margin:0 0 10px">SOKONI commission: one rate on every plan, paid from your payout at settlement — customers pay your price only.</div>
+  <div class="pcom" style="margin:0 0 10px">${_skCommissionLine()}</div>
   <div class="pgrid">${PLANS.map(p=>`<div class="pc${W._t===p.t?' sel':''}" onclick="W.plan('${p.t}',this)">${p.pop?'<div class="ppop">POPULAR</div>':''}<div class="pn">${p.l}</div><div class="pp" id="pp_${p.t}">${p.p}/month</div><div style="font-size:.7rem;color:var(--sub);margin-bottom:5px">${p.lim}</div><ul class="pft">${p.ft.map(f=>`<li>${f}</li>`).join('')}</ul><div class="pyr" id="pyr_${p.t}"></div></div>`).join('')}</div>`;
 }
 

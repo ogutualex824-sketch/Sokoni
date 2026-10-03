@@ -20,23 +20,27 @@
 
   var RATES = {
     "marketplace": {
-      "pct": 3,
+      "pct": 15,
       "fixedKES": 0
     },
     "food_delivery": {
-      "pct": 5,
+      "pct": 15,
       "fixedKES": 0
     },
     "property": {
-      "pct": 2,
-      "fixedKES": 0
+      "pct": 0,
+      "fixedKES": 5000
     },
     "vehicles": {
       "pct": 0,
       "fixedKES": 2000
     },
     "healthcare": {
-      "pct": 5,
+      "pct": 12,
+      "fixedKES": 0
+    },
+    "healthcare_products": {
+      "pct": 15,
       "fixedKES": 0
     },
     "legal": {
@@ -48,7 +52,7 @@
       "fixedKES": 0
     },
     "hotel": {
-      "pct": 5,
+      "pct": 15,
       "fixedKES": 0
     },
     "digital_products": {
@@ -56,15 +60,35 @@
       "fixedKES": 0
     },
     "event_tickets": {
-      "pct": 3,
+      "pct": 5,
       "fixedKES": 0
     },
     "ppv": {
       "pct": 15,
       "fixedKES": 0
     },
+    "entertainment_bookings": {
+      "pct": 5,
+      "fixedKES": 0
+    },
     "services": {
-      "pct": 15,
+      "pct": 5,
+      "fixedKES": 0
+    },
+    "home_services": {
+      "pct": 14,
+      "fixedKES": 0
+    },
+    "car_rental": {
+      "pct": 16,
+      "fixedKES": 0
+    },
+    "pos": {
+      "pct": 5,
+      "fixedKES": 0
+    },
+    "fitness": {
+      "pct": 5,
       "fixedKES": 0
     },
     "education": {
@@ -80,7 +104,7 @@
       "fixedKES": 0
     },
     "hub": {
-      "pct": 12,
+      "pct": 17,
       "fixedKES": 0
     },
     "subscriptions": {
@@ -102,15 +126,26 @@
   };
 
   var ALIASES = {
+    "product": "marketplace",
+    "products": "marketplace",
     "shopping": "marketplace",
-    "pos": "marketplace",
     "b2b": "marketplace",
+    "till": "pos",
+    "quick_charge": "pos",
+    "quickcharge": "pos",
+    "subscription": "subscriptions",
+    "healthcare_subscription": "subscriptions",
     "restaurant": "food_delivery",
     "food": "food_delivery",
-    "home_services": "services",
     "insurance": "services",
-    "fitness": "services",
-    "pharmacy": "healthcare",
+    "gym": "fitness",
+    "fitness_hub": "fitness",
+    "fitness-hub": "fitness",
+    "personal_training": "fitness",
+    "car-rental": "car_rental",
+    "car_hire": "car_rental",
+    "car-hire": "car_rental",
+    "pharmacy": "healthcare_products",
     "property_agent": "property",
     "bnb": "hotel",
     "car_dealer": "vehicles",
@@ -125,6 +160,37 @@
     "digital": "digital_products",
     "ai_services": "digital_products"
   };
+
+  /* MARKETPLACE lane — commission by the seller's PLAN, on orders SOKONI brought them. */
+  var MARKETPLACE_PLAN_PCT = {
+    "free": 15,
+    "professional": 15,
+    "business": 15,
+    "enterprise": 15
+  };
+
+  /* POS / TILL lane — shop sales the merchant made themselves. FLAT, every plan. A
+     subscription buys a better marketplace rate and changes NOTHING at the till. */
+  var POS_FLAT_PCT = 5;
+  var MARKETPLACE_PLAN_ALIAS = {"seller_free":"free","seller_basic":"professional","seller_pro":"business","seller_enterprise":"enterprise","free":"free","basic":"professional","pro":"business","professional":"professional","business":"business","enterprise":"enterprise","starter":"professional","growth":"business"};
+  var MARKETPLACE_DEFAULT_PLAN = "free";
+
+  /* PROVIDER BOOKING lane — plan-keyed (owner schedule 2026-09-28: 20 / 15 / 10 / 7 / 5), keyed by
+     PLAN ID. An unknown plan resolves to the HIGHEST rate, exactly as the server does. */
+  var PROVIDER_PLAN_PCT = {
+    "provider_free": 20,
+    "starter": 15,
+    "pro": 10,
+    "business": 7,
+    "enterprise": 5
+  };
+  var PROVIDER_DEFAULT_PLAN = "provider_free";
+  var PROVIDER_PLAN_ALIAS = {"free_trial":"provider_free"};
+
+  /* RAW category labels priced by the plan ladder. "pos" is deliberately ABSENT even though
+     it ALIASES to marketplace — keying on the resolved category would put every till sale on
+     the ladder and triple a Free merchant's till commission. */
+  var MARKETPLACE_CATEGORIES = ["marketplace","product","products","shopping","b2b"];
 
   var MIN_COMMISSION_KES = 10;
 
@@ -148,14 +214,40 @@
     ALIASES: ALIASES,
     MIN_COMMISSION_KES: MIN_COMMISSION_KES,
 
+    /* The rate a seller on planId pays on a MARKETPLACE order. An unrecognised or absent
+       plan resolves to Free — the HIGHEST rate — so a display can never under-quote. */
+    marketplacePct: function (planId) {
+      var k = String(planId || '').trim().toLowerCase();
+      /* Aliases are resolved by the server authority at build time (MARKETPLACE_PLAN_ALIAS); an
+         unknown spelling falls to the DEFAULT plan, which is the highest rate — never the cheapest. */
+      if (!Object.prototype.hasOwnProperty.call(MARKETPLACE_PLAN_PCT, k)) k = MARKETPLACE_PLAN_ALIAS[k] || MARKETPLACE_DEFAULT_PLAN;
+      if (!Object.prototype.hasOwnProperty.call(MARKETPLACE_PLAN_PCT, k)) k = MARKETPLACE_DEFAULT_PLAN;
+      return MARKETPLACE_PLAN_PCT[k];
+    },
+    /* The rate on a POS / till sale. Takes no plan, because it does not depend on one. */
+    posPct: function () { return POS_FLAT_PCT; },
+    /* The rate a service provider on planId pays on a booking. Unknown plan -> highest rate. */
+    /* Mirrors the server exactly: no plan -> Free (20%); an aliased spelling -> its plan; an unknown
+       or retired id -> null (the server REFUSES such a booking; the client must not quote a number). */
+    providerPct: function (planId) {
+      var k = String(planId == null ? '' : planId).trim().toLowerCase();
+      if (k === '') k = PROVIDER_DEFAULT_PLAN;
+      else if (Object.prototype.hasOwnProperty.call(PROVIDER_PLAN_ALIAS, k)) k = PROVIDER_PLAN_ALIAS[k];
+      return Object.prototype.hasOwnProperty.call(PROVIDER_PLAN_PCT, k) ? PROVIDER_PLAN_PCT[k] : null;
+    },
+    PROVIDER_PLAN_PCT: PROVIDER_PLAN_PCT,
+    isMarketplaceSellerSale: function (cat) {
+      return MARKETPLACE_CATEGORIES.indexOf(String(cat || '').trim().toLowerCase()) !== -1;
+    },
+    MARKETPLACE_PLAN_PCT: MARKETPLACE_PLAN_PCT,
+    POS_FLAT_PCT: POS_FLAT_PCT,
+
     /* Refresh from the server so a rate change reaches clients without a client rebuild.
        Merges in place, so anything already rendered keeps working. */
     refresh: function () {
       try {
         if (!window.firebase || !firebase.functions) return Promise.resolve(false);
-        /* COMMISSION CUTOVER — through the one door. Same handler, same
-           response; only the transport changed. */
-        return firebase.functions().httpsCallable('commissionDispatch')({ op: 'getCommissionConfig' })
+        return firebase.functions().httpsCallable('getCommissionConfig')({})
           .then(function (res) {
             var d = res && res.data;
             if (!d || !d.rates) return false;
@@ -170,4 +262,34 @@
       } catch (e) { return Promise.resolve(false); }
     },
   };
+
+  /* Declarative binding for copy that states a rate — one mechanism, no page-level literals.
+       <span data-sokoni-rate="marketplace"></span>                       -> "15%"  (or "KES 2,000" for a flat fee)
+       <span data-sokoni-rate="marketplace" data-sokoni-rate-format="keep"></span> -> "85%"  (the seller share)
+     A category the authority does not know renders an em dash — never the default bucket, never a guess.
+     Runs on DOMContentLoaded and again after refresh(); SokoniCommission.fill(root) re-binds injected markup. */
+  function fill(root) {
+    var scope = root && root.querySelectorAll ? root : (typeof document !== "undefined" ? document : null);
+    if (!scope) return 0;
+    var nodes = scope.querySelectorAll("[data-sokoni-rate]"), n = 0;
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i], r = resolve(el.getAttribute("data-sokoni-rate"));
+      var fmt = el.getAttribute("data-sokoni-rate-format") || "pct";
+      var text = "—";
+      if (r.matched) {
+        if (r.fixedKES && !r.pct) text = "KES " + Number(r.fixedKES).toLocaleString();
+        else if (fmt === "keep") text = (100 - r.pct) + "%";
+        else text = r.pct + "%";
+      }
+      el.textContent = text; n++;
+    }
+    return n;
+  }
+  window.SokoniCommission.fill = fill;
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { fill(document); });
+    else fill(document);
+  }
+  var _refresh = window.SokoniCommission.refresh;
+  window.SokoniCommission.refresh = function () { return _refresh().then(function (ok) { if (ok) fill(document); return ok; }); };
 })(window);
