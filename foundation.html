@@ -309,13 +309,15 @@
     <div class="wrap">
       <span class="eyebrow">Transparency</span>
       <h2 id="trH">Where the money stands</h2>
-      <p><span class="badge-warn">Foundation account — being reconciled</span></p>
-      <p class="muted">These figures come straight from the Foundation account. Some earlier entries are still being reconciled, so treat them as provisional, not audited. We never show who gave.</p>
+      <!-- Shown only if the server cannot yet separate verified from unverified entries (older dashboard answer). -->
+      <p id="trBadgeWrap" hidden><span class="badge-warn">Foundation account — being reconciled</span></p>
+      <p class="muted">Only donations whose M-Pesa payment SOKONI has verified are counted as received. These figures are not audited. We never show who gave.</p>
       <div class="figs" id="trFigs" aria-live="polite">
-        <div class="fig"><span class="muted">Available</span><b id="trAvail">—</b></div>
-        <div class="fig"><span class="muted">Received to date</span><b id="trRecv">—</b></div>
+        <div class="fig"><span class="muted">Verified donations received</span><b id="trRecv">—</b></div>
+        <div class="fig"><span class="muted">Verified donations available</span><b id="trAvail">—</b></div>
         <div class="fig"><span class="muted">Paid out to date</span><b id="trOut">—</b></div>
       </div>
+      <p class="muted" id="trRecon" hidden></p>
       <h3 style="margin-top:26px">Programmes</h3>
       <p class="muted">"Raised" moves only when a donation is confirmed by M-Pesa.</p>
       <div id="trProgStatus" class="muted" role="status" aria-live="polite">Loading programmes…</div>

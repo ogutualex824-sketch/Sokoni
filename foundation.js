@@ -92,7 +92,9 @@
   }
 
   /* ── 2. DONATION WIZARD ───────────────────────────────────────────────────────────── */
-  var D = { step: 1, amount: null, programmeId: '', purpose: 'GENERAL_FOUNDATION', anonymous: false, busy: false, pledgeId: null, pollTimer: null };
+  var D = { step: 1, amount: null, programmeId: '', purpose: 'GENERAL_FOUNDATION', anonymous: false, busy: false, pledgeId: null, pollTimer: null,
+    existing: null, pledgeLoaded: null };   /* existing = a pledge loaded from ?pledge=<id> (e.g. CHK_<orderId> from checkout) */
+  var PLEDGE_RE = /^(PLG|CHK)_[A-Za-z0-9_-]{1,200}$/;
 
   function parseAmount(raw) {
     var s = String(raw == null ? '' : raw).replace(/[\s,]/g, '');
@@ -108,8 +110,8 @@
     document.querySelectorAll('#donateForm .wiz-step').forEach(function (fs) { fs.hidden = Number(fs.getAttribute('data-step')) !== n; });
     document.querySelectorAll('#donateForm .wiz-steps li').forEach(function (li, i) { li.classList.toggle('on', i < n); });
     $('donateStepLabel').textContent = 'Step ' + n + ' of 4';
-    $('fdBack').hidden = n === 1;
-    $('fdNext').textContent = n === 4 ? 'Pledge and pay' : 'Continue';
+    $('fdBack').hidden = n === 1 || !!D.existing;
+    $('fdNext').textContent = n === 4 ? (D.existing ? 'Pay now' : 'Pledge and pay') : 'Continue';
     $('fdCheck').hidden = true;
     if (n === 3) renderAuthBox();
     if (n === 4) renderReview();
@@ -132,7 +134,11 @@
     box.appendChild(a);
   }
   function renderReview() {
-    var rows = [
+    var rows = D.existing ? [
+      ['Amount', money(D.existing.amount)],
+      ['For', D.existing.destination || 'SOKONI Foundation'],
+      ['Pledged', /^CHK_/.test(D.existing.pledgeId) ? 'With your order — paid separately here' : 'Earlier on SOKONI']
+    ] : [
       ['Amount', money(D.amount)],
       ['Programme', programmeTitle(D.programmeId)],
       ['Purpose', $('fdPurpose').options[$('fdPurpose').selectedIndex].text],
@@ -199,12 +205,20 @@
     D.busy = true;
     var btn = $('fdNext'), st = $('fdStatus');
     btn.disabled = true; $('fdBack').disabled = true;
-    setStatus(st, 'Recording your pledge…', 'wait');
-    var sig = pledgeSig();
-    var body = { amount: D.amount, requestId: requestIdFor(sig, false), purpose: D.purpose, anonymous: D.anonymous };
-    if (D.programmeId) body.programmeId = D.programmeId;
+    var sig = null, start;
+    if (D.existing) {
+      /* ?pledge=<id>: the pledge already exists and was read back from the server as the caller's own,
+         status 'pledged' (impactGetMyPledge). Never create a second pledge for it. */
+      start = Promise.resolve({ pledgeId: D.existing.pledgeId, amount: D.existing.amount });
+    } else {
+      setStatus(st, 'Recording your pledge…', 'wait');
+      sig = pledgeSig();
+      var body = { amount: D.amount, requestId: requestIdFor(sig, false), purpose: D.purpose, anonymous: D.anonymous };
+      if (D.programmeId) body.programmeId = D.programmeId;
+      start = call('impactPledgeDonation', body);
+    }
     var pledge;
-    call('impactPledgeDonation', body).then(function (r) {
+    start.then(function (r) {
       if (!r || !r.pledgeId) throw { code: 'internal' };
       if (r.amount !== D.amount) { var m = { code: 'mismatch' }; throw m; }
       pledge = r; D.pledgeId = r.pledgeId;
@@ -224,7 +238,8 @@
     }).catch(function (e) {
       D.busy = false; btn.disabled = false; $('fdBack').disabled = false;
       if (e && e.code === 'mismatch') { setStatus(st, "The amount recorded doesn't match what you entered, so we stopped before asking for payment. Please contact support.", 'bad'); return; }
-      if (e && e.code === 'already-exists') requestIdFor(sig, true);
+      if (e && e.code === 'already-exists' && !D.existing) requestIdFor(sig, true);
+      if (D.existing && e && e.stage === 'intent' && code(e) === 'already-exists') { setStatus(st, 'This donation is already paid or closed. Nothing more is needed.', 'bad'); btn.disabled = true; return; }
       if (e && e.stage === 'intent') { setStatus(st, isUnavailable(e) ? "Payment isn't available yet. Your pledge is saved — try again later and it will be reused." : pledgeError(e), 'bad'); return; }
       if (e && e.stage === 'pay') { setStatus(st, (e.message && !e.code) ? String(e.message) : "We couldn't send the M-Pesa request. Your pledge is saved — you can try again.", 'bad'); btn.textContent = 'Try payment again'; return; }
       setStatus(st, pledgeError(e), 'bad');
@@ -237,7 +252,7 @@
     call('impactGetMyPledge', { pledgeId: D.pledgeId }).then(function (r) {
       var s = r && r.status;
       if (s === 'completed') return done(r);
-      if (s === 'failed') return finish("The payment didn't go through. You can try again.", 'bad', true);
+      if (s === 'failed') return D.existing ? finish("The payment didn't go through. To try again, open the Foundation page and start a new donation.", 'bad', false) : finish("The payment didn't go through. You can try again.", 'bad', true);
       if (s === 'refunded' || s === 'partially_refunded') return finish('This donation has been refunded.', 'bad', false);
       if (s === 'review') setStatus($('fdStatus'), "We're checking this payment. This page will update when it's confirmed.", 'wait');
       next(n);
@@ -306,6 +321,45 @@
     showStep(1);
   }
 
+  /* ?pledge=<id> — complete a pledge made elsewhere (checkout creates CHK_<orderId>). The pledge must be
+     read back from the server as the caller's own (impactGetMyPledge refuses anyone else's) and be
+     status 'pledged'; only then does the wizard jump to "Review and pay" for exactly that amount. */
+  function pledgeParam() { var p = params.get('pledge'); return p && PLEDGE_RE.test(p) ? p : ''; }
+  var PLEDGE_STATE_WORDS = {
+    completed: 'This donation is already confirmed. Nothing more is needed.',
+    review: "We're checking the payment for this donation. Nothing more is needed for now.",
+    failed: "The payment for this donation didn't go through. You can make a new donation below.",
+    refunded: 'This donation was refunded.', partially_refunded: 'This donation was partly refunded.'
+  };
+  function loadPledge(id) {
+    if (D.busy || D.pledgeLoaded === id) return;
+    D.pledgeLoaded = id;
+    var st = $('fdStatus');
+    setStatus(st, 'Loading your donation…', 'wait');
+    call('impactGetMyPledge', { pledgeId: id }).then(function (r) {
+      if (!r || (r.pledgeId && r.pledgeId !== id)) { var nf = { code: 'not-found' }; throw nf; }
+      if (r.status !== 'pledged') { setStatus(st, PLEDGE_STATE_WORDS[r.status] || "This donation can't be paid here.", r.status === 'completed' ? 'ok' : 'bad'); return; }
+      if (typeof r.amount !== 'number' || r.amount < MIN || r.amount > MAX || Math.round(r.amount) !== r.amount) { setStatus(st, "This donation can't be paid here. Please contact support.", 'bad'); return; }
+      D.existing = { pledgeId: id, amount: r.amount, destination: typeof r.destination === 'string' ? r.destination : '' };
+      D.amount = r.amount; D.pledgeId = id;
+      setStatus(st, 'Complete your ' + money(r.amount) + ' donation below.', '');
+      showStep(4);
+      $('donate').scrollIntoView({ block: 'start' });
+    }).catch(function (e) {
+      D.pledgeLoaded = null;
+      var c = code(e);
+      setStatus(st, c === 'not-found' || c === 'invalid-argument' ? "We couldn't find that donation on your account. You can make a new donation below." :
+        c === 'unauthenticated' ? 'Please sign in again to complete your donation.' :
+        "Donations aren't available yet. Nothing was charged — please try again later.", 'bad');
+    });
+  }
+  function pledgeSignIn() {
+    var st = $('fdStatus'); st.className = 'status'; st.textContent = '';
+    st.appendChild(document.createTextNode('Sign in to complete your donation. '));
+    var a = document.createElement('a'); a.href = loginUrl('#donate'); a.textContent = 'Sign in';
+    st.appendChild(a);
+  }
+
   /* "Support this work" — from stories, programmes, or ?programme= in the URL. */
   function supportProgramme(id) {
     if (!D.busy) {
@@ -321,11 +375,16 @@
   function mediaHtml(m, title) {
     if (!m) return '';
     var url = safeUrl(m.url), thumb = safeUrl(m.thumbUrl);
-    if (m.type === 'video' && url) {
+    /* Processed media (addendum 2026-10-03): contentType is video/mp4 or image/webp; thumbUrl is the poster.
+       preload="none" — nothing downloads until the reader presses play. */
+    var ct = typeof m.contentType === 'string' ? m.contentType : '';
+    var isVideo = ct ? ct === 'video/mp4' : m.type === 'video';
+    var isImage = ct ? /^image\//.test(ct) : m.type === 'image';
+    if (isVideo && url) {
       return '<video class="story-media" controls playsinline preload="none"' + (thumb ? ' poster="' + esc(thumb) + '"' : '') +
-        ' src="' + esc(url) + '" aria-label="' + esc('Video: ' + title) + '"></video>';
+        ' aria-label="' + esc('Video: ' + title) + '"><source src="' + esc(url) + '"' + (ct ? ' type="video/mp4"' : '') + '></video>';
     }
-    if (m.type === 'image' && (thumb || url)) {
+    if (isImage && (thumb || url)) {
       return '<img class="story-media" loading="lazy" decoding="async" src="' + esc(thumb || url) + '" alt="' + esc('Photo shared with the story: ' + title) + '">';
     }
     return '';
@@ -561,9 +620,20 @@
   function loadDashboard() {
     call('impactGetPublicDashboard', {}).then(function (r) {
       var b = (r && r.balance) || {};
-      $('trAvail').textContent = money(b.available);
-      $('trRecv').textContent = money(b.totalReceived);
+      /* VERIFIED-only money (contract addendum 2026-10-03): balance.verified = verified paid donations,
+         balance.available = verified − reserved. An answer without a numeric `verified` is the older shape whose
+         totals mix unbacked pre-fix entries — show '—' and the reconciliation badge rather than those figures.
+         totalReceived (recorded, not proof of payment) is never shown publicly. */
+      var hasVerified = typeof b.verified === 'number' && isFinite(b.verified);
+      $('trRecv').textContent = hasVerified ? money(b.verified) : '—';
+      $('trAvail').textContent = hasVerified ? money(b.available) : '—';
       $('trOut').textContent = money(b.totalDisbursed);
+      $('trBadgeWrap').hidden = hasVerified;
+      var rec = b.requiresReconciliation, recEl = $('trRecon');
+      if (hasVerified && typeof rec === 'number' && isFinite(rec) && rec > 0) {
+        recEl.textContent = 'Still being reconciled: ' + money(rec) + ' (not counted as received)';
+        recEl.hidden = false;
+      } else { recEl.textContent = ''; recEl.hidden = true; }
       var camps = (r && Array.isArray(r.campaigns)) ? r.campaigns : [];
       $('trProgStatus').textContent = camps.length ? '' : 'No programmes are published yet.';
       /* recentActivity is deliberately NOT rendered: no donor identities on a public page. */
@@ -612,6 +682,8 @@
         renderShareAuth();
         if (D.step === 3) renderAuthBox();
         if (currentUser()) loadMine();
+        var pid = pledgeParam();
+        if (pid && !D.existing) { if (currentUser()) loadPledge(pid); else pledgeSignIn(); }
       };
       if (sdk && typeof sdk.onAuthStateChanged === 'function') sdk.onAuthStateChanged(onAuth); else onAuth();
     });
