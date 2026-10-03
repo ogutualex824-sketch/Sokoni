@@ -86,8 +86,23 @@
   G.trkSubscribe = NA('Vehicle tracking plans');
   G.trackMyCar = function () { note('Live vehicle location is not available — SOKONI shows a location only from a registered tracking device.'); };
 
-  /* ── buy & sell (localStorage "listings") ── */
-  G.submitCarForSale = NA('Listing a vehicle for sale');
+  /* ── buy & sell — Car Hub C4: the canonical vehicle-hub authority (sokoni-vehicles.js). Was localStorage "listings". ── */
+  G.submitCarForSale = function () { if (G.SokoniVehicles) return G.SokoniVehicles.sell(); note('Vehicle listing is still loading — please try again in a moment.'); };
+  G.renderBuySellGrid = function () { if (G.SokoniVehicles) return G.SokoniVehicles.browse(); };
+  G.setBuySellCategory = function (cat, btn) {
+    try { d.querySelectorAll('[onclick^="setBuySellCategory"]').forEach(function (b) { b.classList.remove('active'); }); if (btn) btn.classList.add('active'); } catch (e) {}
+    if (G.SokoniVehicles) G.SokoniVehicles.browse();
+  };
+  function mountVehicles() {
+    var panel = d.getElementById('tab-buysell'); if (!panel || !G.SokoniVehicles) return;
+    if (!d.getElementById('skVehMine')) {
+      var wrap = d.createElement('div');
+      wrap.style.cssText = 'max-width:1100px;margin:0 auto;padding:0 20px 30px;';
+      wrap.innerHTML = '<div style="font-size:16px;font-weight:900;color:#fff;margin:10px 0;">🚗 My vehicle listings</div><div id="skVehMine"></div>';
+      panel.appendChild(wrap);
+    }
+    G.SokoniVehicles.browse(); G.SokoniVehicles.mountMine(d.getElementById('skVehMine'));
+  }
 
   /* ── mechanics registration in the hub ── */
   G.submitRegisterMechanic = hubRegister('mechanic', 'mechanic');
@@ -148,7 +163,12 @@
   }
 
   /* Re-render the contained panels once, so the old localStorage views are not left on screen. */
-  function rerender() { try { G.renderBookings(); } catch (e) {} try { G.renderFleetManager(); } catch (e) {} try { addApplyCards(); } catch (e) {} }
+  function rerender() {
+    try { G.renderBookings(); } catch (e) {} try { G.renderFleetManager(); } catch (e) {} try { addApplyCards(); } catch (e) {}
+    try { mountVehicles(); } catch (e) {}
+    /* the seller's own listings need the Auth session, which may land after this runs */
+    try { if (G.firebase && G.firebase.auth) G.firebase.auth().onAuthStateChanged(function (u) { if (u && G.SokoniVehicles) G.SokoniVehicles.mountMine(d.getElementById('skVehMine')); }); } catch (e) {}
+  }
   if (d.readyState === 'loading') d.addEventListener('DOMContentLoaded', rerender); else rerender();
   G.__carhubContained = true;
 })(window);

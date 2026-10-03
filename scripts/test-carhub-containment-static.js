@@ -59,7 +59,7 @@ ck('A2 mechanic alias covers garage / auto_services', /mechanic:\s*\['mechanic',
 console.log('\n── H: car-hub.html + carhub-containment.js (C1b) ──');
 const CH = read('car-hub.html'), CC = read('carhub-containment.js'), cc = strip(CC), PRO = read('sokoni-carhub-pro.js');
 const fnSrc = (src, name) => fnBody(src, name);
-ck('H1 containment layer loaded LAST (after hub-register.js), deferred', /<script defer src="hub-register\.js"><\/script>\n(?:\s*<!--[^\n]*-->\n)?\s*<script defer src="carhub-containment\.js"><\/script>/.test(CH.replace(/\r/g, '')));
+ck('H1 containment layer loaded LAST (after hub-register.js), deferred', /<script defer src="hub-register\.js"><\/script>\n(?:\s*<!--[^\n]*-->\n)?(?:\s*<script defer src="sokoni-vehicles\.js"><\/script>\n)?\s*<script defer src="carhub-containment\.js"><\/script>/.test(CH.replace(/\r/g, '')));
 ck('H2 confirmBooking records NO commission / fee (b2 2ddaee5 text); no saveCommission / saveFee call left in car-hub', !/SokoniPay\.saveCommission\(|SokoniPay\.saveFee/.test(strip(CH)) && /No fee or commission is recorded here \(2026-10-03\)/.test(CH));
 ck('H3 rent / book → car-rental.html (approved providers + booking engine), not a browser booking', /G\.openBookingModal = function \(\) \{ goRent\(\); \}/.test(CC) && /G\.confirmBooking = function \(\) \{ goRent\(\); \}/.test(CC) && /G\.location\.href = 'car-rental\.html'/.test(CC));
 ck('H4 licence approval refused on the page; a browser "approved" is reported as unverified', /G\.approveDLFromQueue = G\.rejectDLFromQueue = function \(\) \{ note\('Driving licences are verified by SOKONI staff/.test(CC) && /status: 'unverified'/.test(CC));
@@ -84,6 +84,17 @@ ck('C6 the form grants nothing: no status / approved / verified / business writt
 ck('C7 AdminOS application card shows description + details, every value escaped through h()', /h\(String\(a\.description\)\.slice\(0,400\)\)/.test(AD) && /h\(String\(a\.details\[k\]\)\.slice\(0,200\)\)/.test(AD) && /Declared by the applicant — verify licences/.test(AD));
 ck('C8 each Car Hub service tab offers its application (12 tabs → HubRegister categories)', (CC.match(/'tab-[a-z-]+':\s+\['[a-z-]+'/g) || []).length === 12 && /box\.querySelector\('button'\)\.addEventListener\('click', hubRegister\(cat,/.test(CC));
 ck('C9 mechanics.html merges approved mechanic providers (SokoniProviders mechanic) with legacy mechanics/{uid}', /SokoniProviders\.list\(\{category:"mechanic"\}\)/.test(MC) && /const prov=await _loadProviderMechs\(\);/.test(MC) && MC.includes('src="sokoni-providers.js"'));
+
+console.log('\n── V: buy & sell on vehicle-hub (C4) ──');
+const SV = read('sokoni-vehicles.js'), sv = strip(SV);
+ck('V1 only the canonical vehicle-hub callables are used (list/search/enquiry/report/create/publish/close/mine/enquiries)', ['listVehicles', 'searchVehicles', 'submitVehicleEnquiry', 'reportVehicleListing', 'createVehicleListing', 'publishVehicleListing', 'closeVehicleListing', 'listMyVehicleListings', 'getVehicleEnquiries'].every((n) => SV.includes("'" + n + "'")));
+ck('V2 the browser never sets a listing status, never moderates, never writes Firestore directly', !/status\s*:\s*'(active|published|approved)'|moderateVehicleListing|setDoc|addDoc|updateDoc|\.collection\(/.test(sv));
+ck('V3 selling = create then publish → "submitted for review" (never "live")', /call\('createVehicleListing', data\)\.then\(function \(r\) \{\s*return call\('publishVehicleListing'/.test(SV) && /Submitted for review/.test(SV) && !/is now live|listed successfully/i.test(sv));
+ck('V4 marketplace-first copy: SOKONI takes no payment for the car; no checkout / STK / payment intent in the module', /SOKONI does not take payment for the car/.test(SV) && !/createPaymentIntent|initiateSTKPush|checkout/i.test(sv));
+ck('V5 every listing value rendered through esc(); listing ids validated before use', (sv.match(/esc\(v\./g) || []).length >= 6 && /\^\[A-Za-z0-9_-\]\{1,128\}\$/.test(SV));
+ck('V6 seller declarations are never shown as verified (no "verified" badge in the module)', !/verified/i.test(sv.replace(/never shown as verified/gi, '')));
+ck('V7 car-hub routes Buy & Sell to SokoniVehicles (browse / sell) and mounts My vehicle listings', /G\.submitCarForSale = function \(\) \{ if \(G\.SokoniVehicles\) return G\.SokoniVehicles\.sell\(\);/.test(CC) && /G\.renderBuySellGrid = function \(\) \{ if \(G\.SokoniVehicles\) return G\.SokoniVehicles\.browse\(\); \}/.test(CC) && /id="skVehMine"/.test(CC));
+ck('V8 the "verified sellers" claim and the WhatsApp phone field are gone from Buy & Sell', !/from verified sellers/.test(CH) && !/id="bsPhone" placeholder="07XX/.test(CH));
 
 console.log('\n── Z: negative controls (f799841) ──');
 const OCR = old('car-rental.html'), OMC = old('mechanics.html');

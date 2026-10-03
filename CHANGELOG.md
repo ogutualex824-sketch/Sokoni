@@ -20,6 +20,10 @@
 - **Database / API / rules changes**: none (the pages stop writing carRentals/mechanics/localStorage records).
 - **C1b car-hub.html** (same branch): carhub-containment.js (loaded last) re-points every money/approval/record entry point (rent → car-rental.html; bookings → My Bookings; list car/mechanic/parts → HubRegister; SOS/transport → support tickets; finance/inspection/estimates → not available; licence approval refused). Inline: confirmBooking commission/fee removed (b2 2ddaee5 text), simulated GPS stopped, tracking plan prices removed. sokoni-carhub-pro.js: invented finance/inspection/transport firms demo-only. test-carhub-containment-static 42/0; test-carhub-browser written, NOT run (memory below floor).
 - **C2 rules** (combined rules line 75229d4): trackingSubscriptions admin-only, EMULATOR PENDING.
+- **C4 buy & sell** (owner: marketplace first, free basic listing, 2% only on SOKONI-mediated sales, none at launch):
+  - Server: functions/carhub-caps-on-25ef259 @ b347c94 — vehicle-hub.js: review before public; status not seller-settable; dead role gate replaced; moderateVehicleListing / closeVehicleListing / listMyVehicleListings / listVehicleReviewQueue (re-exported).
+  - Client: sokoni-vehicles.js + car-hub Buy & Sell wiring; the "verified sellers" claim and the WhatsApp phone field are removed.
+  - Tests: static 59/0; unit 30/0.
 - **C3a applications**:
   - hub-register.js gains car-dealer, vehicle-inspection, towing-roadside, fleet-operator, vehicle-transport, vehicle-tracking, car-finance and ntsa-agent, plus category-specific questions for all 14 car categories (saved as applications.details; licence numbers are declarations AdminOS verifies).
   - New mechanic applications go to the provider role (bookable).

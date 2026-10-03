@@ -699,7 +699,7 @@ body{padding-bottom:70px;}
     <div style="max-width:900px;margin:0 auto;">
       <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);border-radius:999px;padding:4px 14px;font-size:11px;font-weight:700;color:#71ff00;margin-bottom:12px;">🤝 Buy &amp; Sell Cars</div>
       <h1 style="font-size:26px;font-weight:900;margin-bottom:6px;">🚗 Kenya's Car Marketplace</h1>
-      <p style="font-size:14px;color:rgba(255,255,255,0.45);margin-bottom:20px;">Browse used &amp; new cars from verified sellers. List your car and reach thousands of buyers.</p>
+      <p style="font-size:14px;color:rgba(255,255,255,0.45);margin-bottom:20px;">Browse used &amp; new cars — every listing is reviewed by SOKONI before it goes live. Listing is free; you agree the sale directly with the seller.</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button type="button" onclick="renderBuySellGrid()" style="padding:11px 22px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#050f05;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-family:inherit;font-size:13px;">🔍 Browse All Cars</button>
         <button type="button" onclick="document.getElementById('sellCarFormWrap').style.display='block';document.getElementById('sellCarFormWrap').scrollIntoView({behavior:'smooth'})" style="padding:11px 22px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.28);color:#71ff00;border-radius:12px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:800;">+ List My Car</button>
@@ -800,7 +800,7 @@ body{padding-bottom:70px;}
               <option value="Electric">Electric</option>
             </select>
           </div>
-          <div><label class="ch-input-label">Your Phone (WhatsApp)*</label><input class="ch-input" id="bsPhone" placeholder="07XX XXX XXX" type="tel"></div>
+          <div><label class="ch-input-label">Buyers contact you in SOKONI</label><input class="ch-input" id="bsPhone" placeholder="Not needed — enquiries arrive in SOKONI" type="tel" disabled aria-disabled="true"></div>
           <div><label class="ch-input-label">City</label>
             <select class="ch-input" id="bsCity">
               <option value="nairobi">Nairobi</option>
@@ -4941,6 +4941,7 @@ function _chFailed(el,topic,ref){
   </div>
   <script defer src="hub-register.js"></script>
   <!-- Car Hub C1b containment (2026-10-03): re-points every money / approval / record entry point at its authority. LAST. -->
+  <script defer src="sokoni-vehicles.js"></script>
   <script defer src="carhub-containment.js"></script>
   <script defer src="kass-widget.js"></script>
   <!-- Enterprise v2.0: core stack -->
