@@ -25,7 +25,7 @@ require.cache[fa] = { id: fa, filename: fa, loaded: true, exports: { apps: [1], 
 const fu = require.resolve(path.join(FN, 'finos-utils.js'));
 require.cache[fu] = { id: fu, filename: fu, loaded: true, exports: { intasendB2C: async () => ({ tracking_id: 'TRK1' }) } };
 /* IntaSend stubs: send-money status (payouts) and collection status (shared intasend-status helper) */
-const COLLECTIONS = { INVQ88: { invoice_id: 'INVQ88', state: 'COMPLETE', value: 3000, currency: 'KES' }, INVLOW: { invoice_id: 'INVLOW', state: 'COMPLETE', value: 300, currency: 'KES' }, INVPEND: { invoice_id: 'INVPEND', state: 'PENDING', value: 3000, currency: 'KES' } };
+const COLLECTIONS = { INVQ88: { invoice_id: 'INVQ88', state: 'COMPLETE', value: 3000, currency: 'KES' }, INVLOW: { invoice_id: 'INVLOW', state: 'COMPLETE', value: 300, currency: 'KES' }, INVPEND: { invoice_id: 'INVPEND', state: 'PENDING', value: 3000, currency: 'KES' }, INVUSD: { invoice_id: 'INVUSD', state: 'COMPLETE', value: 3000, currency: 'USD' } };
 let COLLECTION_DOWN = false;
 global.fetch = async (url) => {
   if (/payment\/collection\//.test(url)) {
@@ -72,6 +72,8 @@ const rid = (n) => 'b1c2d3e4-0000-4000-8000-' + String(n).padStart(12, '0');
   const p1 = await run('impactReconcileFoundation', 'adm1', { action: 'propose_verify', donationId: 'CHK_o2', providerReference: 'NOSUCH1' }, ADM);
   const p2 = await run('impactReconcileFoundation', 'adm1', { action: 'propose_verify', donationId: 'CHK_o2', providerReference: 'INVLOW' }, ADM);
   const p3 = await run('impactReconcileFoundation', 'adm1', { action: 'propose_verify', donationId: 'CHK_o2', providerReference: 'INVPEND' }, ADM);
+  const p4 = await run('impactReconcileFoundation', 'adm1', { action: 'propose_verify', donationId: 'CHK_o2', providerReference: 'INVUSD' }, ADM);
+  ck('P0 WRONG_CURRENCY: IntaSend shows USD 3000 for the reference → refused', !p4.ok && /USD 3000/.test(p4.msg), p4);
   ck('P1 IntaSend is asked: unknown reference / different amount / not COMPLETE → proposal refused', !p1.ok && /no payment/.test(p1.msg) && !p2.ok && /KES 300/.test(p2.msg) && !p3.ok && /PENDING/.test(p3.msg), { p1, p2, p3 });
   const c1 = await run('impactReconcileFoundation', 'adm1', { action: 'propose_verify', donationId: 'CHK_o2', providerReference: 'INVQ88' }, ADM);
   const c2 = await run('impactReconcileFoundation', 'adm1', { action: 'confirm', donationId: 'CHK_o2' }, ADM);
