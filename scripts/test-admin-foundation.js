@@ -14,7 +14,12 @@
      8  manual-rail copy; refund prefill from a completed donation
      9  stories: server refusal shown, notes required, Published vs Approved-not-published, consent
     10  story form: no uploader → text-only; uploader path + type checks; upload failure blocks save
-    11  partner promotions; 12 reconciliation; 13 both consoles wire ONE module
+    12  reconciliation ledger; 13 both consoles wire ONE module (partner promotions moved to test-admin-commercial.js)
+    14  overview: recorded vs verified, the server's Available, banner, tiles open filtered lists
+    15  reconciliation: classify, propose verify/close, confirm (only with a proposal; proposer refused), withdraw
+    16  rails + beneficiary validation; Authorize on requiresReview needs the acknowledgement checkbox
+    17  PesaLink bank list: not loaded / refresh / not deployed; manual rail payloads
+    18  story media processing states gate Publish
    ========================================================================= */
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm'), nodeCrypto = require('crypto');
@@ -109,7 +114,7 @@ function router(map) { return (name, data) => { const k = name + (data && data.o
     ck('2a overview: "Foundation summary not available yet", evidence unreadable', byFd(r.host, 'ov-status').textContent === 'Foundation summary not available yet' && byFd(r.host, 'ov-evidence').attrs['data-evidence'] === 'unreadable', byFd(r.host, 'ov-status').textContent);
     ck('2b overview: no money tile and no count rendered as 0', !/>0</.test(r.html()) && !/KES 0\b/.test(r.html()));
     const out = {};
-    for (const [k, p] of [['donations', 'don'], ['disbursements', 'dis'], ['stories', 'st'], ['promotions', 'pr']]) { await r.go(k); out[k] = byFd(r.host, p + '-status').textContent + '|' + byFd(r.host, p + '-evidence').attrs['data-evidence']; }
+    for (const [k, p] of [['donations', 'don'], ['disbursements', 'dis'], ['stories', 'st'], ['reconciliation', 'rc-held']]) { await r.go(k); out[k] = byFd(r.host, p + '-status').textContent + '|' + byFd(r.host, p + '-evidence').attrs['data-evidence']; }
     ck('2c every list tab: "not available yet" + unreadable, never "No …"', Object.values(out).every((s) => /not available yet\|unreadable$/.test(s) && !/^No /.test(s)), JSON.stringify(out));
     const r2 = await mountWith((n) => Promise.reject({ code: n === 'impactAdminFoundationData' ? 'functions/internal' : 'functions/unavailable' }));
     ck('2d internal / unavailable also read as not deployed', /not available yet/.test(byFd(r2.host, 'ov-status').textContent) && /not available yet/.test(byFd(r2.host, 'ov-stories-status').textContent));
@@ -125,7 +130,7 @@ function router(map) { return (name, data) => { const k = name + (data && data.o
     }));
     const money = find(r.host, (e) => e.attrs['data-fd-money']).map((e) => e.children[1].textContent);
     const counts = find(r.host, (e) => /^(donations|disbursements):/.test(e.attrs['data-fd-count'] || '')).map((e) => e.children[1].textContent);
-    ck('3a null balance → every money tile "—", evidence unreadable', money.length === 6 && money.every((t) => t === '—') && byFd(r.host, 'ov-evidence').attrs['data-evidence'] === 'unreadable', money.join(','));
+    ck('3a null balance → every money tile "—", evidence unreadable', money.length === 7 && money.every((t) => t === '—') && byFd(r.host, 'ov-evidence').attrs['data-evidence'] === 'unreadable', money.join(','));
     ck('3b null donation / disbursement counts → "—" (11 buttons)', counts.length === 11 && counts.every((t) => t === '—'), counts.join(','));
     const approved = find(r.host, (e) => e.attrs['data-fd-count'] === 'stories:approved')[0];
     const pending = find(r.host, (e) => e.attrs['data-fd-count'] === 'stories:pending')[0];
@@ -163,10 +168,10 @@ function router(map) { return (name, data) => { const k = name + (data && data.o
     ck('4e story count opens Stories filtered (adminList status pending)', l3.name === 'foundationContentDispatch' && l3.data.op === 'adminList' && l3.data.status === 'pending', JSON.stringify(l3));
     const strip = find(r.host, (e) => e.attrs.role === 'tablist')[0];
     const tabs = find(strip, (e) => e.attrs.role === 'tab');
-    ck('4f tablist of 6 role=tab buttons, exactly one aria-selected=true with tabindex 0', tabs.length === 6 && tabs.filter((t) => t.attrs['aria-selected'] === 'true').length === 1 && tabs.filter((t) => t.attrs.tabindex === '0').length === 1 && tabs.every((t) => t.tagName === 'BUTTON'));
+    ck('4f tablist of 5 role=tab buttons (promotions moved to the commercial module), exactly one aria-selected=true with tabindex 0', tabs.length === 5 && tabs.filter((t) => t.attrs['aria-selected'] === 'true').length === 1 && tabs.filter((t) => t.attrs.tabindex === '0').length === 1 && tabs.every((t) => t.tagName === 'BUTTON'));
     tab(r.host, 'stories').fire('keydown', { key: 'ArrowRight' });
     await flush();
-    ck('4g ArrowRight moves selection + focus to the next tab', r.host.attrs['data-fd-active'] === 'promotions' && tab(r.host, 'promotions').focused === true && tab(r.host, 'promotions').attrs['aria-selected'] === 'true');
+    ck('4g ArrowRight moves selection + focus to the next tab', r.host.attrs['data-fd-active'] === 'reconciliation' && tab(r.host, 'reconciliation').focused === true && tab(r.host, 'reconciliation').attrs['aria-selected'] === 'true');
     const r2 = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(SUMMARY), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}), 'impactAdminFoundationData:donations': () => Promise.resolve({ rows: [DON()], next: 'c1' }) }));
     await r2.go('donations');
     byFd(r2.host, 'don-more').fire('click'); await flush();
@@ -238,21 +243,33 @@ function router(map) { return (name, data) => { const k = name + (data && data.o
     let mode = 'fail';
     const r = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(SUMMARY), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}),
       'impactAdminFoundationData:disbursements': () => Promise.resolve({ rows: [] }), 'impactAdminFoundationData:donations': () => Promise.resolve({ rows: [DON({ id: 'pp9', gross: 800, amount: 800 })] }),
+      impactBankCodes: () => Promise.resolve({ ok: true, loaded: true, codes: [{ bankCode: '01', bankName: 'KCB Bank' }, { bankCode: '02', bankName: 'Equity Bank' }], fetchedAt: 1790000000000 }),
       impactInitiateDisbursement: () => mode === 'fail' ? Promise.reject({ code: 'functions/unavailable' }) : mode === 'noack' ? Promise.resolve({}) : Promise.resolve({ ok: true, disbursementId: 'dNEW', status: 'pending_approval' }) }));
     await r.go('disbursements');
     byFd(r.host, 'dis-new').fire('click'); await flush();
     const formEl = () => byFd(r.host, 'dis-form');
     const rid1 = formEl().attrs['data-request-id'];
     ck('7a opening the form generates a uuid requestId once', /^[0-9a-f-]{36}$/.test(rid1));
-    byFd(r.host, 'f-type').value = 'BANK'; byFd(r.host, 'f-type').fire('change');
-    ck('8a BANK shows the manual-rail copy verbatim', byFd(r.host, 'f-rail-note') && byFd(r.host, 'f-rail-note').textContent === 'No automated rail — you pay outside SOKONI, record the reference, a second admin confirms.');
-    ck('8b BANK asks for bank name, account name, account number', !!byFd(r.host, 'f-dest-bankName') && !!byFd(r.host, 'f-dest-accountName') && !!byFd(r.host, 'f-dest-accountNumber') && !byFd(r.host, 'f-dest-phone'));
+    byFd(r.host, 'f-type').value = 'BANK'; byFd(r.host, 'f-type').fire('change'); await flush();
+    const bankSel = () => byFd(r.host, 'f-dest-bankCode');
+    ck('8a BANK defaults to "IntaSend PesaLink (bank)" with a picker from impactBankCodes {} — no typed bank name, no manual copy',
+      byFd(r.host, 'f-rail').textContent === 'Rail: IntaSend PesaLink (bank)' && bankSel() && bankSel().children.length === 3 && !byFd(r.host, 'f-dest-bankName') && byFd(r.host, 'f-rail-note') === undefined
+      && r.calls.some((c) => c.name === 'impactBankCodes' && !('action' in c.data)), byFd(r.host, 'f-rail').textContent);
+    byFd(r.host, 'f-manual').checked = true; byFd(r.host, 'f-manual').fire('change'); await flush();
+    ck('8b "Pay manually outside SOKONI" → Rail: Manual, manual copy verbatim, typed bank name + account fields',
+      byFd(r.host, 'f-rail').textContent === 'Rail: Manual' && byFd(r.host, 'f-rail-note') && byFd(r.host, 'f-rail-note').textContent === 'No automated rail — you pay outside SOKONI, record the reference, a second admin confirms.'
+      && !!byFd(r.host, 'f-dest-bankName') && !!byFd(r.host, 'f-dest-accountName') && !!byFd(r.host, 'f-dest-accountNumber') && !bankSel() && !byFd(r.host, 'f-dest-phone'));
+    byFd(r.host, 'f-manual').checked = false; byFd(r.host, 'f-manual').fire('change'); await flush();
     byFd(r.host, 'f-amount').value = '1500'; byFd(r.host, 'f-beneficiary').value = 'Kibera Water Group'; byFd(r.host, 'f-description').value = 'Borehole repair';
-    byFd(r.host, 'f-dest-bankName').value = 'KCB'; byFd(r.host, 'f-dest-accountName').value = 'Kibera Water'; byFd(r.host, 'f-dest-accountNumber').value = '1234567890';
+    byFd(r.host, 'f-dest-accountName').value = 'Kibera Water'; byFd(r.host, 'f-dest-accountNumber').value = '1234567890';
     byFd(r.host, 'f-grant').value = 'g1';
+    const nPick = r.calls.length;
+    byFd(r.host, 'f-submit').fire('click'); await flush();
+    ck('8g automated BANK without a bank chosen is refused locally', r.calls.length === nPick && /Choose the bank/.test(byFd(r.host, 'f-msg').textContent), byFd(r.host, 'f-msg').textContent);
+    bankSel().value = '01';
     byFd(r.host, 'f-submit').fire('click'); await flush();
     const init1 = r.calls.filter((c) => c.name === 'impactInitiateDisbursement');
-    ck('7b payload: requestId, amount, beneficiary, description, BANK destination, grantId', init1.length === 1 && init1[0].data.requestId === rid1 && init1[0].data.amount === 1500 && init1[0].data.destinationType === 'BANK' && init1[0].data.destination.accountNumber === '1234567890' && init1[0].data.grantId === 'g1' && !('campaignId' in init1[0].data), JSON.stringify(init1[0] && init1[0].data));
+    ck('7b payload: requestId, amount, beneficiary, description, BANK destination {bankCode, bankName from the list}, grantId, no rail', init1.length === 1 && init1[0].data.requestId === rid1 && init1[0].data.amount === 1500 && init1[0].data.destinationType === 'BANK' && init1[0].data.destination.accountNumber === '1234567890' && init1[0].data.destination.bankCode === '01' && init1[0].data.destination.bankName === 'KCB Bank' && !('rail' in init1[0].data.destination) && init1[0].data.grantId === 'g1' && !('campaignId' in init1[0].data), JSON.stringify(init1[0] && init1[0].data));
     ck('7c not deployed → failure shown, no success, retry allowed', /not available yet/.test(byFd(r.host, 'f-msg').textContent) && !byFd(r.host, 'f-submit').disabled, byFd(r.host, 'f-msg').textContent);
     mode = 'noack';
     byFd(r.host, 'f-submit').fire('click'); await flush();
@@ -358,27 +375,6 @@ function router(map) { return (name, data) => { const k = name + (data && data.o
     ck('10h upload paths under foundation-media/admin/{random}.{ext}; saved as draft (no submit)', uploads.slice(-2).every((p) => /^foundation-media\/admin\/[0-9a-f]{24}\.(jpg|mov)$/.test(p)) && sv2 && sv2.data.media.length === 2 && /\.mov$/.test(sv2.data.media[1]) && !sv2.data.submit && byFd(r2.host, 's-msg').textContent === 'Saved as draft', uploads.join(','));
   }
 
-  /* 11 — partner promotions */
-  {
-    const r = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(SUMMARY), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}),
-      'financialPartnerDispatch:adminListPromotionRequests': () => Promise.resolve({ rows: [{ id: 'pr1', name: 'Sacco <b>A</b>', institutionType: 'SACCO', status: 'pending', requestedAt: 1790000000000 }] }),
-      'financialPartnerDispatch:adminDecidePromotion': () => Promise.resolve({ ok: true }) }));
-    await r.go('promotions');
-    const list = r.calls.filter((c) => c.data.op === 'adminListPromotionRequests');
-    ck('11a lists adminListPromotionRequests status pending; label verbatim', list.length === 1 && list[0].data.status === 'pending' && byFd(r.host, 'promo-label').textContent === 'Promotion ranks a listing; it never verifies it. No payment is taken.');
-    const row = rowOf(r.host, 'pr1');
-    byFd(row, 'promo-days').value = '91';
-    const n = r.calls.length;
-    byFd(row, 'act-grant').fire('click'); await flush();
-    ck('11b days outside 1–90 refused locally', r.calls.length === n && /1 to 90/.test(byFd(row, 'row-msg').textContent));
-    byFd(row, 'act-decline').fire('click'); await flush();
-    ck('11c decline without a note refused locally', r.calls.length === n && /note/.test(byFd(row, 'row-msg').textContent));
-    byFd(row, 'promo-days').value = '14';
-    byFd(row, 'act-grant').fire('click'); await flush();
-    const c = r.calls[r.calls.length - 1];
-    ck('11d grant → adminDecidePromotion {id, verdict:granted, days:14}; result after ok', c.data.op === 'adminDecidePromotion' && c.data.id === 'pr1' && c.data.verdict === 'granted' && c.data.days === 14 && byFd(row, 'row-msg').textContent === 'Promotion granted', JSON.stringify(c.data));
-  }
-
   /* 12 — reconciliation */
   {
     const r = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(SUMMARY), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}),
@@ -389,6 +385,205 @@ function router(map) { return (name, data) => { const k = name + (data && data.o
     const r2 = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(SUMMARY), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}), impactGetFinancialReport: () => Promise.resolve({ weird: true }) }));
     await r2.go('reconciliation');
     ck('12c unknown report shape → unreadable, not empty', byFd(r2.host, 'rc-evidence').attrs['data-evidence'] === 'unreadable');
+  }
+
+  /* 14 — overview: recorded vs verified money, server's Available, reconciliation banner */
+  {
+    const SUM2 = Object.assign({}, SUMMARY, {
+      balance: { recorded: 15000, verified: 9000, reserved: 2000, available: 7000, requiresReconciliation: 6000, balance: 15000, totalReceived: 15000, totalDisbursed: 3000, totalFees: 150 },
+      reconciliation: { counts: { recorded: 10, verifiedPaid: 6, unverified: 4, failed: 0, refunded: 0, pledged: 2, review: 0, held: 4, duplicates: 0 }, amounts: { recorded: 15000, verifiedPaid: 9000, unverified: 6000 }, computedAt: 1790000000000 },
+    });
+    const r = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(SUM2), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}),
+      'impactAdminFoundationData:donations': () => Promise.resolve({ rows: [] }), 'impactAdminFoundationData:disbursements': () => Promise.resolve({ rows: [] }) }));
+    const tiles = find(r.host, (e) => e.attrs['data-fd-money']);
+    const label = (k) => find(r.host, (e) => e.attrs['data-fd-money'] === k)[0];
+    ck('14a money tiles in order: Recorded (not proof of payment) · Verified paid · Requires reconciliation · Reserved · Available (verified) · Disbursed · Fees',
+      tiles.map((e) => e.children[0].textContent).join('|') === 'Recorded (not proof of payment)|Verified paid|Requires reconciliation|Reserved|Available (verified)|Disbursed|Fees', tiles.map((e) => e.children[0].textContent).join('|'));
+    ck('14b Available (verified) is the SERVER figure (KES 7,000) — not recorded (15,000), not recorded − reserved (13,000)',
+      /^KES 7,?000$/.test(label('available').children[1].textContent) && /^KES 15,?000$/.test(label('recorded').children[1].textContent) && /^KES 9,?000$/.test(label('verified').children[1].textContent), label('available').children[1].textContent);
+    ck('14c reconciliation counts/amounts under the tiles', /^10 donations · last classification KES 15,?000$/.test(label('recorded').children[2].textContent) && /^4 donations · last classification KES 6,?000$/.test(label('requiresReconciliation').children[2].textContent), label('recorded').children[2].textContent);
+    const ban = byFd(r.host, 'ov-recon-banner');
+    ck('14d banner "Payouts can only use verified money." visible with the unverified amount', ban && /^Payouts can only use verified money\. KES 6,?000 recorded but not verified \(4 donations/.test(ban.textContent), ban && ban.textContent);
+    label('requiresReconciliation').fire('click'); await flush();
+    let last = r.calls[r.calls.length - 1];
+    ck('14e "Requires reconciliation" tile opens Donations filtered to requires_reconciliation', last.data.view === 'donations' && last.data.status === 'requires_reconciliation' && byFd(r.host, 'don-filter').value === 'requires_reconciliation', JSON.stringify(last));
+    await r.go('overview');
+    label('reserved').fire('click'); await flush();
+    last = r.calls[r.calls.length - 1];
+    ck('14f "Reserved" tile opens Send support filtered to processing', last.data.view === 'disbursements' && last.data.status === 'processing', JSON.stringify(last));
+    await r.go('overview');
+    label('verified').fire('click'); await flush();
+    last = r.calls[r.calls.length - 1];
+    ck('14g "Verified paid" tile opens the donation list (completed)', last.data.view === 'donations' && last.data.status === 'completed', JSON.stringify(last));
+    const r2 = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(Object.assign({}, SUM2, { reconciliation: null, balance: Object.assign({}, SUM2.balance, { requiresReconciliation: 0 }) })), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}) }));
+    const ban2 = byFd(r2.host, 'ov-recon-banner');
+    const sub2 = find(r2.host, (e) => e.attrs['data-fd-money-sub'] === 'recorded')[0];
+    ck('14h reconciliation null → banner still shown ("not been classified"), counts "—" never 0', ban2 && /^Payouts can only use verified money\. The donation records have not been classified yet/.test(ban2.textContent) && sub2.textContent === '— donations', (ban2 && ban2.textContent) + ' | ' + sub2.textContent);
+    const r3 = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(Object.assign({}, SUM2, { balance: Object.assign({}, SUM2.balance, { requiresReconciliation: 0 }), reconciliation: { counts: { unverified: 0 }, amounts: {} } })), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}) }));
+    ck('14i nothing unverified and classified → no banner', byFd(r3.host, 'ov-recon-banner') === undefined);
+    const r4 = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(Object.assign({}, SUM2, { balance: Object.assign({}, SUM2.balance, { requiresReconciliation: null }), reconciliation: { counts: { unverified: 0 }, amounts: {} } })), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}) }));
+    ck('14j unknown requiresReconciliation → banner shown (unknown is not "fine")', byFd(r4.host, 'ov-recon-banner') && /could not be read/.test(byFd(r4.host, 'ov-recon-banner').textContent));
+  }
+
+  /* 15 — reconciliation actions (two admins) */
+  {
+    const HELD = (id, proposal) => DON({ id, status: 'completed', providerRef: null, verified: false, reconciliation: { state: 'REQUIRES_RECONCILIATION', proposal } });
+    const dd = deferred();
+    let recon = (d) => d.action === 'classify' ? dd.p : Promise.resolve({ ok: true, state: 'PENDING_SECOND_REVIEW' });
+    const r = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(SUMMARY), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}),
+      'impactAdminFoundationData:donations': (d) => Promise.resolve({ rows: d.status === 'requires_reconciliation' ? [HELD('CHK_1', null), HELD('CHK_2', { action: 'verify', by: 'adminA' }), HELD('CHK_3', { action: 'close', by: 'adminB' }), HELD('CHK_4', null)] : [DON({ id: 'PLG_9', verified: false, reconciliation: { state: 'REQUIRES_RECONCILIATION', proposal: { action: 'close', by: 'adminB' } } })] }),
+      impactGetFinancialReport: () => Promise.resolve({ entries: [] }), impactReconcileFoundation: (d) => recon(d) }));
+    await r.go('reconciliation');
+    const heldRead = r.calls.filter((c) => c.data.view === 'donations');
+    ck('15a held list = impactAdminFoundationData {view:donations, status:requires_reconciliation}; close copy verbatim', heldRead.length === 1 && heldRead[0].data.status === 'requires_reconciliation' && /Closing posts an adjustment that reverses the recorded credit; nothing is deleted\./.test(byFd(r.host, 'rc-close-copy').textContent));
+    const b = (id, k) => byFd(rowOf(r.host, id), 'act-' + k);
+    const m = (id) => byFd(rowOf(r.host, id), 'row-msg').textContent;
+    ck('15b Confirm/Withdraw ONLY where a proposal exists; Propose ONLY where none',
+      b('CHK_1', 'propose_verify') && b('CHK_1', 'propose_close') && !b('CHK_1', 'confirm') && !b('CHK_1', 'withdraw')
+      && b('CHK_2', 'confirm') && b('CHK_2', 'withdraw') && !b('CHK_2', 'propose_verify') && b('CHK_3', 'confirm') && !b('CHK_3', 'propose_close'));
+    ck('15c the proposal is described (who proposed what)', /Proposed: verified paid by adminA\. A different administrator must confirm\./.test(byFd(rowOf(r.host, 'CHK_2'), 'rc-proposal').textContent) && /closed — no payment/.test(byFd(rowOf(r.host, 'CHK_3'), 'rc-proposal').textContent));
+    let n = r.calls.length;
+    b('CHK_1', 'propose_verify').fire('click'); await flush();
+    ck('15d Propose verified without an IntaSend reference → refused locally, no call', r.calls.length === n && /IntaSend payment reference/.test(m('CHK_1')));
+    byFd(rowOf(r.host, 'CHK_1'), 'rc-ref').value = 'ISREF123';
+    b('CHK_1', 'propose_verify').fire('click'); await flush();
+    let c = r.calls[r.calls.length - 1];
+    ck('15e Propose verified → {action:propose_verify, donationId, providerReference}; result after ok', c.name === 'impactReconcileFoundation' && c.data.action === 'propose_verify' && c.data.donationId === 'CHK_1' && c.data.providerReference === 'ISREF123' && m('CHK_1') === 'Proposal recorded — a different administrator must confirm', JSON.stringify(c.data) + ' ' + m('CHK_1'));
+    n = r.calls.length;
+    b('CHK_4', 'propose_close').fire('click'); await flush();
+    ck('15f Propose closed without a note → refused locally', r.calls.length === n && /note/.test(m('CHK_4')));
+    byFd(rowOf(r.host, 'CHK_4'), 'note').value = 'no IntaSend record for this order';
+    b('CHK_4', 'propose_close').fire('click'); await flush();
+    c = r.calls[r.calls.length - 1];
+    ck('15g Propose closed → {action:propose_close, donationId, note}', c.data.action === 'propose_close' && c.data.donationId === 'CHK_4' && c.data.note === 'no IntaSend record for this order' && !('providerReference' in c.data), JSON.stringify(c.data));
+    recon = () => Promise.reject({ code: 'functions/permission-denied', message: 'A different admin must confirm.' });
+    b('CHK_2', 'confirm').fire('click'); await flush();
+    c = r.calls[r.calls.length - 1];
+    ck('15h Confirm by the proposer: the server\'s refusal is shown verbatim, row stays actionable', c.data.action === 'confirm' && c.data.donationId === 'CHK_2' && m('CHK_2') === 'A different admin must confirm.' && !b('CHK_2', 'confirm').disabled, m('CHK_2'));
+    recon = () => Promise.resolve({ ok: true, state: 'REQUIRES_RECONCILIATION' });
+    b('CHK_2', 'withdraw').fire('click'); await flush();
+    c = r.calls[r.calls.length - 1];
+    ck('15i Withdraw proposal → {action:withdraw}', c.data.action === 'withdraw' && c.data.donationId === 'CHK_2' && m('CHK_2') === 'Proposal withdrawn — still requires reconciliation', m('CHK_2'));
+    recon = () => Promise.resolve({ ok: true, state: 'CLOSED_NO_PAYMENT' });
+    b('CHK_3', 'confirm').fire('click'); await flush();
+    ck('15j Confirm by another admin → "Confirmed — closed, adjustment posted"', m('CHK_3') === 'Confirmed — closed, adjustment posted', m('CHK_3'));
+    recon = (d) => d.action === 'classify' ? dd.p : Promise.resolve({ ok: true });
+    byFd(r.host, 'rc-classify').fire('click'); await flush();
+    c = r.calls[r.calls.length - 1];
+    ck('15k Classify → {action:classify}; nothing shown until the server answers', c.data.action === 'classify' && Object.keys(c.data).length === 1 && byFd(r.host, 'rc-classify-counts').children.length === 0 && byFd(r.host, 'rc-classify-msg').textContent === 'Classifying the donation records…');
+    const before = r.calls.filter((x) => x.data.status === 'requires_reconciliation').length;
+    dd.res({ ok: true, counts: { recorded: 10, verifiedPaid: 6, unverified: 4, failed: 0, refunded: 1, pledged: 2, review: null, held: 4, duplicates: 1 }, amounts: { recorded: 15000, verifiedPaid: 9000, unverified: 6000 }, newlyMarked: 3 });
+    await flush();
+    const rc = (k) => find(r.host, (e) => e.attrs['data-fd-recon'] === k)[0].children[1].textContent;
+    ck('15l classify counts rendered after ok (null → "—", 0 stays 0), newlyMarked stated, held list re-read',
+      rc('unverified') === '4' && rc('failed') === '0' && rc('review') === '—' && rc('duplicates') === '1' && /^KES 6,?000$/.test(find(r.host, (e) => e.attrs['data-fd-recon-amount'] === 'unverified')[0].children[1].textContent)
+      && byFd(r.host, 'rc-classify-msg').textContent === 'Classified — 3 newly marked as requiring reconciliation.' && r.calls.filter((x) => x.data.status === 'requires_reconciliation').length === before + 1);
+    const r2 = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(SUMMARY), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}), impactGetFinancialReport: () => Promise.resolve({ entries: [] }) }));
+    await r2.go('reconciliation');
+    ck('15m not deployed: held list "not available yet" + unreadable', /not available yet$/.test(byFd(r2.host, 'rc-held-status').textContent) && byFd(r2.host, 'rc-held-evidence').attrs['data-evidence'] === 'unreadable');
+    byFd(r2.host, 'rc-classify').fire('click'); await flush();
+    ck('15n classify not deployed → "not available yet", no counts', /not available yet/.test(byFd(r2.host, 'rc-classify-msg').textContent) && byFd(r2.host, 'rc-classify-counts').children.length === 0);
+    await r.go('donations');
+    const opt = find(byFd(r.host, 'don-filter'), (e) => e.attrs.value === 'requires_reconciliation')[0];
+    ck('15o Donations: filter offers "Requires reconciliation"; rows show Verified + Reconciliation', opt && opt.textContent === 'Requires reconciliation'
+      && /Not verified/.test(rowOf(r.host, 'PLG_9').textContent) && /Requires reconciliation — proposed: closed — no payment \(by adminB\)/.test(rowOf(r.host, 'PLG_9').textContent));
+  }
+
+  /* 16 — rails, beneficiary validation, acknowledgement on requiresReview */
+  {
+    let auth = () => Promise.resolve({ ok: true, status: 'processing' });
+    const rowsR = [
+      DIS({ id: 'rv', status: 'pending_authorization', destinationType: 'TILL', rail: 'intasend_b2b', destination: 'Till ****567', requiresReview: true, validation: { status: 'unavailable', accountName: null } }),
+      DIS({ id: 'ok1', status: 'pending_authorization', destinationType: 'BANK', rail: 'intasend_pesalink', destination: 'KCB Bank ****7890', requiresReview: false, validation: { status: 'validated', accountName: 'KIBERA WATER' } }),
+      DIS({ id: 'tp', status: 'processing', destinationType: 'PAYBILL', rail: 'intasend_b2b', trackingId: 'T9' }),
+      DIS({ id: 'mn', status: 'processing', destinationType: 'MPESA', rail: 'manual' }),
+      DIS({ id: 'mp', status: 'pending_approval', rail: 'intasend_b2c' }),
+    ];
+    const r = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(SUMMARY), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}), 'impactAdminFoundationData:disbursements': () => Promise.resolve({ rows: rowsR }), impactAuthorizeDisbursement: (d) => auth(d) }));
+    await r.go('disbursements');
+    const cell = (id, l) => find(rowOf(r.host, id), (e) => e.attrs['data-label'] === l)[0].textContent;
+    ck('16a rail labels: "IntaSend M-PESA B2B (Till/PayBill)", "IntaSend PesaLink (bank)", "Manual", "IntaSend M-PESA"',
+      cell('rv', 'Rail') === 'IntaSend M-PESA B2B (Till/PayBill)' && cell('ok1', 'Rail') === 'IntaSend PesaLink (bank)' && cell('mn', 'Rail') === 'Manual' && cell('mp', 'Rail') === 'IntaSend M-PESA', [cell('rv', 'Rail'), cell('ok1', 'Rail'), cell('mn', 'Rail'), cell('mp', 'Rail')].join('|'));
+    ck('16b validation status / account name and "Requires review" shown', cell('ok1', 'Beneficiary check') === 'Validated by the provider — account name: KIBERA WATER' && cell('rv', 'Beneficiary check') === 'Provider could not validate · Requires review before authorization', cell('rv', 'Beneficiary check'));
+    const ack = byFd(rowOf(r.host, 'rv'), 'ack-review');
+    ck('16c requiresReview row carries the checkbox "I reviewed the beneficiary details"; a validated row does not', ack && /I reviewed the beneficiary details/.test(rowOf(r.host, 'rv').textContent) && !byFd(rowOf(r.host, 'ok1'), 'ack-review'));
+    let n = r.calls.length;
+    byFd(rowOf(r.host, 'rv'), 'act-authorize').fire('click'); await flush();
+    ck('16d Authorize on a requiresReview row WITHOUT the tick → refused locally, no call', r.calls.length === n && /I reviewed the beneficiary details/.test(byFd(rowOf(r.host, 'rv'), 'row-msg').textContent));
+    ack.checked = true;
+    byFd(rowOf(r.host, 'rv'), 'act-authorize').fire('click'); await flush();
+    let c = r.calls[r.calls.length - 1];
+    ck('16e ticked → impactAuthorizeDisbursement {disbursementId, acknowledgeUnvalidated:true}', c.name === 'impactAuthorizeDisbursement' && c.data.disbursementId === 'rv' && c.data.acknowledgeUnvalidated === true, JSON.stringify(c.data));
+    auth = () => Promise.reject({ code: 'functions/failed-precondition', message: 'The provider could not validate this beneficiary. Review the details and confirm to proceed.', details: { code: 'REVIEW_REQUIRED' } });
+    byFd(rowOf(r.host, 'ok1'), 'act-authorize').fire('click'); await flush();
+    c = r.calls[r.calls.length - 1];
+    ck('16f a validated row sends NO acknowledgement; a REVIEW_REQUIRED refusal is shown verbatim', c.data.disbursementId === 'ok1' && !('acknowledgeUnvalidated' in c.data) && byFd(rowOf(r.host, 'ok1'), 'row-msg').textContent === 'The provider could not validate this beneficiary. Review the details and confirm to proceed.', JSON.stringify(c.data));
+    ck('16g the rail decides the action: automated B2B processing → Check status; manual M-PESA → Record reference', !!byFd(rowOf(r.host, 'tp'), 'act-check') && !byFd(rowOf(r.host, 'tp'), 'act-record') && !!byFd(rowOf(r.host, 'mn'), 'act-record') && !byFd(rowOf(r.host, 'mn'), 'act-check'));
+  }
+
+  /* 17 — bank list not loaded / refresh / manual rail payloads */
+  {
+    let banks = (d) => Promise.resolve({ ok: true, loaded: false, codes: [] });
+    const r = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(SUMMARY), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}), 'impactAdminFoundationData:disbursements': () => Promise.resolve({ rows: [] }),
+      impactBankCodes: (d) => banks(d), impactInitiateDisbursement: () => Promise.resolve({ ok: true, disbursementId: 'dX', status: 'pending_approval' }) }));
+    await r.go('disbursements');
+    byFd(r.host, 'dis-new').fire('click'); await flush();
+    byFd(r.host, 'f-type').value = 'BANK'; byFd(r.host, 'f-type').fire('change'); await flush();
+    ck('17a list not loaded → says so; automated BANK submit disabled', /has not been loaded from IntaSend yet — automated bank payouts are disabled/.test(byFd(r.host, 'f-bank-status').textContent) && byFd(r.host, 'f-submit').disabled === true && byFd(r.host, 'f-submit').attrs['data-fd-gate'] === 'bank-list', byFd(r.host, 'f-bank-status').textContent);
+    byFd(r.host, 'f-amount').value = '500'; byFd(r.host, 'f-beneficiary').value = 'Group'; byFd(r.host, 'f-description').value = 'Fees';
+    byFd(r.host, 'f-dest-accountName').value = 'Group'; byFd(r.host, 'f-dest-accountNumber').value = '1234567';
+    byFd(r.host, 'f-submit').fire('click'); await flush();
+    ck('17b even a forced click cannot initiate automated BANK without the list', r.calls.every((c) => c.name !== 'impactInitiateDisbursement') && /bank list has not been loaded/.test(byFd(r.host, 'f-msg').textContent), byFd(r.host, 'f-msg').textContent);
+    banks = (d) => Promise.resolve(d.action === 'refresh' ? { ok: true, loaded: true, codes: [{ bankCode: '63', bankName: 'DTB' }], fetchedAt: 1790000000000 } : { ok: true, loaded: false, codes: [] });
+    byFd(r.host, 'f-bank-refresh').fire('click'); await flush();
+    const rf = r.calls.filter((c) => c.name === 'impactBankCodes');
+    ck('17c "Refresh bank list from IntaSend" → impactBankCodes {action:refresh}; picker appears, typed fields kept, submit enabled',
+      rf[rf.length - 1].data.action === 'refresh' && byFd(r.host, 'f-dest-bankCode') && byFd(r.host, 'f-dest-accountNumber').value === '1234567' && byFd(r.host, 'f-submit').disabled === false && /1 banks from IntaSend/.test(byFd(r.host, 'f-bank-status').textContent));
+    byFd(r.host, 'f-manual').checked = true; byFd(r.host, 'f-manual').fire('change'); await flush();
+    byFd(r.host, 'f-dest-bankName').value = 'Sidian'; byFd(r.host, 'f-dest-accountName').value = 'Group'; byFd(r.host, 'f-dest-accountNumber').value = '7654321';
+    byFd(r.host, 'f-submit').fire('click'); await flush();
+    const init = r.calls.filter((c) => c.name === 'impactInitiateDisbursement').pop();
+    ck('17d manual BANK → destination.rail "manual", typed bank name, no bankCode', init && init.data.destination.rail === 'manual' && init.data.destination.bankName === 'Sidian' && !('bankCode' in init.data.destination), JSON.stringify(init && init.data));
+    ck('17e success wording never says paid/sent: "… Nothing has been paid."', /Nothing has been paid\.$/.test(byFd(r.host, 'f-msg').textContent));
+    byFd(r.host, 'dis-new').fire('click'); await flush();
+    byFd(r.host, 'f-type').value = 'TILL'; byFd(r.host, 'f-type').fire('change'); await flush();
+    ck('17f TILL → "Rail: IntaSend M-PESA B2B (Till/PayBill)"; verified-only hint on the form', byFd(r.host, 'f-rail').textContent === 'Rail: IntaSend M-PESA B2B (Till/PayBill)' && /^Payouts can only use verified money\./.test(byFd(r.host, 'f-verified-only').textContent));
+    const r2 = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(SUMMARY), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}), 'impactAdminFoundationData:disbursements': () => Promise.resolve({ rows: [] }) }));
+    await r2.go('disbursements'); byFd(r2.host, 'dis-new').fire('click'); await flush();
+    byFd(r2.host, 'f-type').value = 'BANK'; byFd(r2.host, 'f-type').fire('change'); await flush();
+    ck('17g impactBankCodes not deployed → "not available yet", automated BANK stays disabled', /not available yet/.test(byFd(r2.host, 'f-bank-status').textContent) && byFd(r2.host, 'f-submit').disabled === true, byFd(r2.host, 'f-bank-status').textContent);
+  }
+
+  /* 18 — story media processing states gate Publish (the server still decides) */
+  {
+    let pub = () => Promise.reject({ code: 'functions/failed-precondition', message: 'Media is still processing. Try publishing again in a few minutes.' });
+    const r = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(SUMMARY), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}),
+      'foundationContentDispatch:adminList': () => Promise.resolve({ rows: [
+        STORY({ id: 'm1', status: 'approved', media: [{ type: 'image', processing: 'READY' }, { type: 'video', processing: 'PROCESSING' }] }),
+        STORY({ id: 'm2', status: 'approved', media: [{ type: 'image', processing: 'REJECTED', reason: '<b>unsafe</b>' }] }),
+        STORY({ id: 'm3', status: 'approved', media: [{ type: 'image', processing: 'READY' }] }),
+        STORY({ id: 'm4', status: 'approved', media: [{ type: 'image' }] }),
+        STORY({ id: 'm5', status: 'approved', kind: 'testimonial', consent: { publish: true, showName: true, showMedia: false }, media: [{ type: 'video', processing: 'PROCESSING' }] }),
+        STORY({ id: 'm6', status: 'approved', media: [{ type: 'image', processing: 'FAILED', reason: 'transcode' }] }),
+      ] }), 'foundationContentDispatch:adminPublish': () => pub() }));
+    await r.go('stories');
+    const media = (id) => find(rowOf(r.host, id), (e) => e.attrs['data-fd-media']).map((e) => e.textContent);
+    ck('18a per-media state listed: Ready / Processing / Rejected — reason (inert) / Failed — reason / State unknown',
+      media('m1').join('|') === 'image 1: Ready|video 2: Processing' && media('m2')[0] === 'image 1: Rejected — <b>unsafe</b>' && !/<b>/.test(ser(rowOf(r.host, 'm2'))) && media('m4')[0] === 'image 1: State unknown' && media('m6')[0] === 'image 1: Failed — transcode', JSON.stringify([media('m1'), media('m2'), media('m4')]));
+    const pb = (id) => byFd(rowOf(r.host, id), 'act-publish');
+    ck('18b Publish + Schedule disabled with a reason unless every item is READY', pb('m1').disabled && byFd(rowOf(r.host, 'm1'), 'act-schedule').disabled && /still processing/.test(byFd(rowOf(r.host, 'm1'), 'publish-blocked').textContent)
+      && pb('m2').disabled && /rejected \(<b>unsafe<\/b>\)/.test(byFd(rowOf(r.host, 'm2'), 'publish-blocked').textContent) && pb('m4').disabled && /could not be read/.test(byFd(rowOf(r.host, 'm4'), 'publish-blocked').textContent)
+      && pb('m6').disabled && /not processed \(transcode\)/.test(pb('m6').attrs.title) && !pb('m3').disabled && !byFd(rowOf(r.host, 'm3'), 'publish-blocked'));
+    const n = r.calls.length;
+    pb('m1').fire('click'); await flush();
+    ck('18c a forced click on a blocked Publish sends nothing and states the reason', r.calls.length === n && /still processing/.test(byFd(rowOf(r.host, 'm1'), 'row-msg').textContent));
+    ck('18d a testimonial published without its media (showMedia false) is not held by processing', !pb('m5').disabled);
+    pb('m3').fire('click'); await flush();
+    const c = r.calls[r.calls.length - 1];
+    ck('18e all READY → adminPublish sent; the server\'s refusal is shown verbatim and Publish stays usable', c.data.op === 'adminPublish' && c.data.id === 'm3' && byFd(rowOf(r.host, 'm3'), 'row-msg').textContent === 'Media is still processing. Try publishing again in a few minutes.' && !pb('m3').disabled);
+    byFd(rowOf(r.host, 'm1'), 'note').value = 'x';
+    byFd(rowOf(r.host, 'm1'), 'act-archive').fire('click'); await flush();
+    ck('18f a failed other action does not re-enable a media-blocked Publish', pb('m1').disabled === true);
   }
 
   /* 6 — "Sent" never appears (rendered + source strings) */

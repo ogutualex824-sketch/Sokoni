@@ -9,16 +9,20 @@
      super-admin.html  #panel-foundation  via SA.nav('foundation')              call = fns.httpsCallable()
 
    TABS (each loads lazily on first open; every list is bounded; no listeners):
-     Overview          impactAdminFoundationData {view:'summary'} + foundationContentDispatch {op:'adminCounts'}
-     Donations         impactAdminFoundationData {view:'donations', status?, cursor?}
+     Overview          impactAdminFoundationData {view:'summary'} (balance: recorded / verified / reserved /
+                       available(verified) / requiresReconciliation + reconciliation snapshot) +
+                       foundationContentDispatch {op:'adminCounts'}
+     Donations         impactAdminFoundationData {view:'donations', status?(incl. requires_reconciliation), cursor?}
      Send support      impactAdminFoundationData {view:'disbursements', status?, cursor?} + the chain:
                        impactInitiateDisbursement → impactApproveDisbursement → impactAuthorizeDisbursement
-                       → impactRefreshDisbursementStatus (M-PESA) | impactRecordManualDisbursement
-                       (record / confirm / fail, manual rails) · impactCancelDisbursement (before authorization)
+                       ({acknowledgeUnvalidated:true} on a requiresReview row) → impactRefreshDisbursementStatus
+                       (IntaSend rails) | impactRecordManualDisbursement (record / confirm / fail, manual rail)
+                       · impactCancelDisbursement (before authorization) · impactBankCodes (PesaLink bank list)
      Stories           foundationContentDispatch admin ops (adminList / adminSaveStory / adminSubmit /
-                       adminDecide / adminPublish / adminUnpublish)
-     Partner promotions financialPartnerDispatch {op:'adminListPromotionRequests' | 'adminDecidePromotion'}
-     Reconciliation    impactGetFinancialReport {} (live)
+                       adminDecide / adminPublish / adminUnpublish); Publish disabled unless every media READY
+     Reconciliation    impactReconcileFoundation (classify / propose_verify / propose_close / confirm /
+                       withdraw — two different admins) + impactGetFinancialReport {} (live)
+   Partner promotion requests moved to sokoni-admin-commercial.js ("Partner plans & promotions") — ONE place.
 
    NONE of the admin callables except impactGetFinancialReport are deployed yet: not-found /
    unavailable / internal render "not available yet" with evidence UNREADABLE — never "none", never 0.
@@ -48,12 +52,27 @@
     { key: 'donations', label: 'Donations' },
     { key: 'disbursements', label: 'Send support' },
     { key: 'stories', label: 'Stories & Media House' },
-    { key: 'promotions', label: 'Partner promotions' },
     { key: 'reconciliation', label: 'Reconciliation' },
   ];
 
-  var DON_STATUSES = ['pledged', 'completed', 'failed', 'review', 'refunded', 'partially_refunded'];
-  var DON_LABEL = { pledged: 'Pledged — not paid yet', completed: 'Completed (paid)', failed: 'Failed', review: 'Under review', refunded: 'Refunded', partially_refunded: 'Partially refunded' };
+  var DON_STATUSES = ['pledged', 'completed', 'failed', 'review', 'refunded', 'partially_refunded', 'requires_reconciliation'];
+  var DON_LABEL = { pledged: 'Pledged — not paid yet', completed: 'Completed (recorded)', failed: 'Failed', review: 'Under review', refunded: 'Refunded', partially_refunded: 'Partially refunded', requires_reconciliation: 'Requires reconciliation' };
+  var RECON_FN = 'impactReconcileFoundation';
+  var BANKS_FN = 'impactBankCodes';
+  var RECON_LABEL = { REQUIRES_RECONCILIATION: 'Requires reconciliation', VERIFIED_PAID: 'Verified paid', CLOSED_NO_PAYMENT: 'Closed — no payment' };
+  var RECON_DONE = { PENDING_SECOND_REVIEW: 'Proposal recorded — a different administrator must confirm', VERIFIED_PAID: 'Confirmed — now verified paid', CLOSED_NO_PAYMENT: 'Confirmed — closed, adjustment posted', REQUIRES_RECONCILIATION: 'Proposal withdrawn — still requires reconciliation' };
+  var CLOSE_COPY = 'Closing posts an adjustment that reverses the recorded credit; nothing is deleted.';
+  var VERIFIED_ONLY_COPY = 'Payouts can only use verified money.';
+  /* Overview money: every amount is the server's; Available is the server's verified − reserved, never recomputed here. */
+  var MONEY_TILES = [
+    { key: 'recorded', label: 'Recorded (not proof of payment)', count: 'recorded', amount: 'recorded', open: ['donations', 'completed'] },
+    { key: 'verified', label: 'Verified paid', count: 'verifiedPaid', amount: 'verifiedPaid', open: ['donations', 'completed'] },
+    { key: 'requiresReconciliation', label: 'Requires reconciliation', count: 'unverified', amount: 'unverified', open: ['donations', 'requires_reconciliation'] },
+    { key: 'reserved', label: 'Reserved', open: ['disbursements', 'processing'] },
+    { key: 'available', label: 'Available (verified)', open: ['donations', 'completed'] },
+  ];
+  var MONEY_EXTRA = [['totalDisbursed', 'Disbursed'], ['totalFees', 'Fees']];
+  var RECON_COUNT_KEYS = [['recorded', 'Recorded'], ['verifiedPaid', 'Verified paid'], ['unverified', 'Unverified'], ['held', 'Held'], ['pledged', 'Pledged'], ['review', 'Under review'], ['failed', 'Failed'], ['refunded', 'Refunded'], ['duplicates', 'Duplicate orders']];
   var DIS_STATUSES = ['pending_approval', 'pending_authorization', 'processing', 'awaiting_confirmation', 'completed', 'failed', 'cancelled'];
   var DIS_LABEL = {
     pending_approval: 'Needs approval',
@@ -66,23 +85,26 @@
   };
   var DIS_COUNT_KEYS = [['pendingApproval', 'pending_approval'], ['pendingAuthorization', 'pending_authorization'], ['processing', 'processing'], ['awaitingConfirmation', 'awaiting_confirmation'], ['completed', 'completed'], ['failed', 'failed']];
   var DON_COUNT_KEYS = ['completed', 'pledged', 'failed', 'review', 'refunded'];
-  var BAL_KEYS = [['balance', 'Balance'], ['reserved', 'Reserved'], ['available', 'Available'], ['totalReceived', 'Received'], ['totalDisbursed', 'Disbursed'], ['totalFees', 'Fees']];
 
   var STORY_STATUSES = ['draft', 'pending', 'approved', 'changes_requested', 'rejected', 'archived', 'removed'];
   var STORY_LABEL = { draft: 'Draft', pending: 'Waiting for review', approved: 'Approved, not published', scheduled: 'Approved, scheduled', published: 'Published', changes_requested: 'Changes requested', rejected: 'Rejected', archived: 'Archived', removed: 'Removed' };
   var DESTINATIONS = [['foundation_home', 'Foundation home'], ['donation_wizard', 'Donation wizard'], ['programme', 'Programme page'], ['banking_hub', 'Banking Hub']];
-  var PROMO_STATUSES = ['pending', 'granted', 'declined'];
-  var PROMO_LABEL = { pending: 'Waiting for a decision', granted: 'Promotion granted', declined: 'Declined' };
-
   var DEST_TYPES = ['MPESA', 'BANK', 'TILL', 'PAYBILL'];
   var DEST_LABEL = { MPESA: 'M-PESA phone', BANK: 'Bank account', TILL: 'Till (Buy Goods)', PAYBILL: 'Paybill' };
+  /* BANK on the automated rail uses the provider bank picker (bankCode) instead of a typed bank name. */
   var DEST_FIELDS = {
     MPESA: [['phone', 'M-PESA phone number', true]],
-    BANK: [['bankName', 'Bank name', true], ['bankCode', 'Bank code (optional)', false], ['accountName', 'Account name', true], ['accountNumber', 'Account number', true]],
+    BANK: [['bankName', 'Bank name', true], ['accountName', 'Account name', true], ['accountNumber', 'Account number', true]],
+    BANK_AUTO: [['accountName', 'Account name', true], ['accountNumber', 'Account number', true]],
     TILL: [['tillNumber', 'Till number', true]],
     PAYBILL: [['paybillNumber', 'Paybill number', true], ['accountRef', 'Account reference', true]],
   };
+  var RAIL_BY_TYPE = { MPESA: 'intasend_b2c', TILL: 'intasend_b2b', PAYBILL: 'intasend_b2b', BANK: 'intasend_pesalink' };
+  var RAIL_LABEL = { intasend_b2c: 'IntaSend M-PESA', intasend_b2b: 'IntaSend M-PESA B2B (Till/PayBill)', intasend_pesalink: 'IntaSend PesaLink (bank)', manual: 'Manual' };
+  var VALIDATION_LABEL = { validated: 'Validated by the provider', unavailable: 'Provider could not validate' };
+  var ACK_LABEL = 'I reviewed the beneficiary details';
   var MANUAL_RAIL_COPY = 'No automated rail — you pay outside SOKONI, record the reference, a second admin confirms.';
+  var MEDIA_STATE_LABEL = { UPLOADED: 'Uploaded — waiting to process', PROCESSING: 'Processing', READY: 'Ready', REJECTED: 'Rejected', FAILED: 'Failed' };
   var REFUND_COPY = 'Refund request — needs approval + super-admin authorization';
 
   var IMAGE_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
@@ -148,6 +170,16 @@
     return x.slice(0, 8) + '-' + x.slice(8, 12) + '-4' + x.slice(13, 16) + '-' + ((parseInt(x.charAt(16), 16) & 3) | 8).toString(16) + x.slice(17, 20) + '-' + x.slice(20, 32);
   }
   function rows(d) { return d && Array.isArray(d.rows) ? d.rows : null; }
+  function pick(a, b) { return isNum(a) ? a : b; }
+  function verifiedText(r) { return r.verified === true ? 'Verified paid' : r.verified === false ? 'Not verified' : NEUTRAL; }
+  function reconText(r) {
+    var x = r.reconciliation && typeof r.reconciliation === 'object' ? r.reconciliation : null;
+    if (!x) return NEUTRAL;
+    var t = RECON_LABEL[str(x.state)] || str(x.state) || NEUTRAL;
+    var p = x.proposal && typeof x.proposal === 'object' ? x.proposal : null;
+    if (p) t += ' — proposed: ' + (str(p.action) === 'verify' ? 'verified paid' : str(p.action) === 'close' ? 'closed — no payment' : str(p.action)) + (p.by ? ' (by ' + str(p.by) + ')' : '');
+    return t;
+  }
   function storyState(r) {
     var s = str(r && r.status);
     if (s !== 'approved') return s;
@@ -156,7 +188,24 @@
     if (pa == null) return 'approved';
     return pa <= Date.now() ? 'published' : 'scheduled';
   }
-  function isManualRail(r) { return str(r.rail) === 'manual' || (r.destinationType && str(r.destinationType) !== 'MPESA'); }
+  /* The server row carries `rail`; only a row without one falls back to the pre-rail rule (non-M-PESA = manual). */
+  function isManualRail(r) { if (r.rail) return str(r.rail) === 'manual'; return !!(r.destinationType && str(r.destinationType) !== 'MPESA'); }
+  function railOf(r) { return r.rail ? str(r.rail) : (isManualRail(r) ? 'manual' : 'intasend_b2c'); }
+  /* Why Publish is disabled for a story: '' when every media item is READY (or there is none). The server decides. */
+  function mediaBlock(media) {
+    if (!Array.isArray(media) || !media.length) return '';
+    var bad = null, pending = false, unknown = false;
+    media.forEach(function (m) {
+      var p = str(m && m.processing);
+      if ((p === 'REJECTED' || p === 'FAILED') && !bad) bad = m;
+      else if (p === 'PROCESSING' || p === 'UPLOADED') pending = true;
+      else if (p !== 'READY' && p !== 'REJECTED' && p !== 'FAILED') unknown = true;
+    });
+    if (bad) return 'A media file was ' + (str(bad.processing) === 'REJECTED' ? 'rejected' : 'not processed') + (bad.reason ? ' (' + str(bad.reason) + ')' : '') + ' — remove it or upload it again before publishing';
+    if (pending) return 'Media is still processing — publish when every file is ready';
+    if (unknown) return 'Media processing state could not be read — publishing waits until every file is ready';
+    return '';
+  }
   function maskedDestination(d) {
     if (d == null || d === '') return NEUTRAL;
     if (typeof d !== 'object') return str(d);
@@ -253,17 +302,19 @@
     var self = this;
     var b = h('button', { type: 'button', class: 'sk-pa-btn' + (spec.primary ? ' sk-pa-btn-primary' : ''), 'data-fd': 'act-' + spec.key, text: spec.label });
     if (spec.title) b.setAttribute('title', spec.title);
+    if (spec.blocked) { b._blocked = true; b.disabled = true; b.setAttribute('title', spec.blocked); b.setAttribute('aria-disabled', 'true'); }
     b.addEventListener('click', function () { self.run(spec, b); });
     this.buttons.push(b); this.bar.appendChild(b);
     return b;
   };
   Actions.prototype.setDisabled = function (v) {
-    this.buttons.forEach(function (b) { b.disabled = v; });
+    this.buttons.forEach(function (b) { b.disabled = v || !!b._blocked; });
     if (this.noteEl) this.noteEl.disabled = v;
     (this.inputs || []).forEach(function (i) { i.disabled = v; });
   };
   Actions.prototype.run = function (spec, btn) {
     if (this.busy) return;
+    if (btn && btn._blocked) { this.msg.textContent = spec.blocked; this.cell.setAttribute('data-fd-result', 'refused-locally'); return; }
     var self = this, payload = spec.prepare();
     if (typeof payload === 'string') { this.msg.textContent = payload; this.cell.setAttribute('data-fd-result', 'refused-locally'); return; }
     this.busy = true; this.setDisabled(true);
@@ -363,7 +414,7 @@
       h('header', { class: 'sk-pa-hero' }, [
         h('p', { class: 'sk-pa-eyebrow', text: 'Impact · admin' }),
         h('h2', { class: 'sk-pa-title', text: 'SOKONI Foundation' }),
-        h('p', { class: 'sk-pa-lede', text: 'Donations, support payments, stories and partner promotions. Every figure comes from the server; anything it could not read shows “—”. Money moves only through the approval chain: request → approve → super-admin authorization → confirmed.' }),
+        h('p', { class: 'sk-pa-lede', text: 'Donations, reconciliation, support payments and stories. Every figure comes from the server; anything it could not read shows “—”. Money moves only through the approval chain: request → approve → super-admin authorization → confirmed. Partner promotion requests live under “Partner plans & promotions”.' }),
       ]),
       strip, this.panelHost,
     ]));
@@ -394,6 +445,7 @@
   View.prototype.make_overview = function () {
     var self = this, st = new Status('ov'), stories = new Status('ov-stories');
     var money = h('div', { class: 'sk-pa-cols', 'data-fd': 'ov-money' });
+    var banner = h('div', { class: 'sk-pa-detail sk-fd-warn', role: 'note', 'data-fd': 'ov-recon-banner', hidden: true });
     var don = h('div', { class: 'sk-fd-counts', 'data-fd': 'ov-donations' });
     var dis = h('div', { class: 'sk-fd-counts', 'data-fd': 'ov-disbursements' });
     var sc = h('div', { class: 'sk-fd-counts', 'data-fd': 'ov-stories' });
@@ -405,11 +457,37 @@
     function render(d) {
       money.textContent = ''; don.textContent = ''; dis.textContent = '';
       var bal = d.balance && typeof d.balance === 'object' ? d.balance : null;
-      BAL_KEYS.forEach(function (k) {
+      var rec = d.reconciliation && typeof d.reconciliation === 'object' ? d.reconciliation : null;
+      var rc = rec && rec.counts && typeof rec.counts === 'object' ? rec.counts : {};
+      var ra = rec && rec.amounts && typeof rec.amounts === 'object' ? rec.amounts : {};
+      MONEY_TILES.forEach(function (t) {
+        var v = bal ? bal[t.key] : null;       /* the server's figure — Available is never derived here */
+        var sub = [];
+        if (t.count) {
+          sub.push(fmtCount(rc[t.count]) + ' donation' + (rc[t.count] === 1 ? '' : 's'));
+          if (isNum(ra[t.amount])) sub.push('last classification ' + fmtKES(ra[t.amount]));
+        }
+        money.appendChild(h('button', { type: 'button', class: 'sk-pa-col sk-fd-count' + (isNum(v) ? '' : ' sk-pa-ev-unreadable'), 'data-fd-money': t.key,
+          'aria-label': t.label + ': ' + fmtKES(v) + ' — open the list', onclick: function () { self.select(t.open[0], t.open[1]); } }, [
+          h('span', { class: 'sk-pa-col-label', text: t.label }), h('span', { class: 'sk-pa-col-value sk-pa-num', text: fmtKES(v) }),
+          t.count ? h('span', { class: 'sk-fd-hint', 'data-fd-money-sub': t.key, text: sub.join(' · ') }) : null]));
+      });
+      MONEY_EXTRA.forEach(function (k) {
         var v = bal ? bal[k[0]] : null;
         money.appendChild(h('div', { class: 'sk-pa-col' + (isNum(v) ? '' : ' sk-pa-ev-unreadable'), 'data-fd-money': k[0] }, [
           h('span', { class: 'sk-pa-col-label', text: k[1] }), h('span', { class: 'sk-pa-col-value sk-pa-num', text: fmtKES(v) })]));
       });
+      /* Banner: shown while anything is unverified, or the records have never been classified (unknown ≠ fine). */
+      var pendingAmt = bal && isNum(bal.requiresReconciliation) ? bal.requiresReconciliation : null;
+      var show = !rec || pendingAmt == null || pendingAmt > 0 || (isNum(rc.unverified) && rc.unverified > 0);
+      banner.textContent = ''; banner.hidden = !show;
+      if (show) {
+        banner.appendChild(h('strong', { text: VERIFIED_ONLY_COPY }));
+        banner.appendChild(document.createTextNode(' ' + (!rec
+          ? 'The donation records have not been classified yet — run “Classify records” on the Reconciliation tab.'
+          : pendingAmt == null ? 'The amount still requiring reconciliation could not be read (' + fmtCount(rc.unverified) + ' unverified donations at the last classification).'
+          : fmtKES(pendingAmt) + ' recorded but not verified (' + fmtCount(rc.unverified) + ' donations at the last classification). Verify or close them on the Reconciliation tab.')));
+      }
       var dc = d.donations && typeof d.donations === 'object' ? d.donations : {};
       DON_COUNT_KEYS.forEach(function (k) { don.appendChild(countBtn(DON_LABEL[k], dc[k], function () { self.select('donations', k); }, 'donations:' + k)); });
       var xc = d.disbursements && typeof d.disbursements === 'object' ? d.disbursements : {};
@@ -419,7 +497,7 @@
     function load() {
       var my = ++seq;
       st.set('not-attempted', 'Reading the Foundation summary…'); stories.set('not-attempted', 'Reading story counts…');
-      money.textContent = ''; don.textContent = ''; dis.textContent = ''; sc.textContent = '';
+      money.textContent = ''; don.textContent = ''; dis.textContent = ''; sc.textContent = ''; banner.hidden = true;
       Promise.resolve().then(function () { return self.call(DATA_FN, { view: 'summary' }); }).then(function (d) {
         if (my !== seq) return;
         if (!d || typeof d !== 'object') { st.set('unreadable', 'Could not read the Foundation summary', 'Unexpected response from ' + DATA_FN + '.'); return; }
@@ -438,7 +516,7 @@
     }
     var el = h('section', { class: 'sk-fd-panel', 'data-fd-panel': 'overview' }, [
       h('div', { class: 'sk-pa-controls' }, [refresh]), st.el,
-      h('h3', { class: 'sk-fd-h', text: 'Foundation account' }), money,
+      h('h3', { class: 'sk-fd-h', text: 'Foundation account' }), banner, money,
       h('h3', { class: 'sk-fd-h', text: 'Donations' }), don,
       h('h3', { class: 'sk-fd-h', text: 'Support payments' }), dis,
       h('h3', { class: 'sk-fd-h', text: 'Stories' }), stories.el, sc,
@@ -455,7 +533,7 @@
       payload: function () { var p = { view: 'donations' }; if (sel.value) p.status = sel.value; return p; },
       filterLabel: function () { return sel.value ? DON_LABEL[sel.value] : ''; },
       table: function (rs) {
-        return table('Foundation donations', ['Date', 'Amount', 'Gross / fee / net', 'Programme', 'Purpose', 'Donor', 'Receipt', 'Provider ref', 'Status', 'Action'], rs.map(function (r) { return donationRow(r || {}); }));
+        return table('Foundation donations', ['Date', 'Amount', 'Gross / fee / net', 'Programme', 'Purpose', 'Donor', 'Receipt', 'Provider ref', 'Status', 'Verified', 'Reconciliation', 'Action'], rs.map(function (r) { return donationRow(r || {}); }));
       },
     });
     function donationRow(r) {
@@ -463,20 +541,22 @@
       var donor = r.donor && typeof r.donor === 'object' ? str(r.donor.name || r.donor.displayName) : str(r.donor || r.donorName);
       var cell = h('td', { 'data-label': 'Action', class: 'sk-pa-action' });
       if (st === 'completed') {
-        var gross = isNum(r.gross) ? r.gross : (isNum(r.amount) ? r.amount : null);
+        var gross = isNum(r.grossKES) ? r.grossKES : isNum(r.gross) ? r.gross : (isNum(r.amount) ? r.amount : null);
         cell.appendChild(h('button', { type: 'button', class: 'sk-pa-btn', 'data-fd': 'act-refund', text: 'Refund', title: REFUND_COPY,
           onclick: function () { self.select('disbursements').openForm({ refundOfPledgeId: id, amount: gross, max: gross }); } }));
       }
       return h('tr', { 'data-fd-row': id }, [
         td('Date', fmtTime(r.completedAt || r.createdAt)),
         td('Amount', fmtKES(r.amount), 'sk-pa-num'),
-        td('Gross / fee / net', fmtKES(r.gross) + ' / ' + fmtKES(r.fee) + ' / ' + fmtKES(r.net), 'sk-pa-num'),
+        td('Gross / fee / net', fmtKES(pick(r.grossKES, r.gross)) + ' / ' + fmtKES(pick(r.feeKES, r.fee)) + ' / ' + fmtKES(pick(r.netKES, r.net)), 'sk-pa-num'),
         td('Programme', str(r.programmeName || r.programmeId)),
         td('Purpose', str(r.purpose)),
         td('Donor', donor),
         td('Receipt', str(r.receiptId), 'sk-pa-mono'),
         td('Provider ref', str(r.providerRef || r.providerReference), 'sk-pa-mono'),
-        td('Status', DON_LABEL[st] || st),
+        td('Status', (DON_LABEL[st] || st) + (r.reviewReason ? ' — ' + str(r.reviewReason) : '')),
+        td('Verified', verifiedText(r)),
+        td('Reconciliation', reconText(r)),
         cell,
       ]);
     }
@@ -497,7 +577,7 @@
       payload: function () { var p = { view: 'disbursements' }; if (sel.value) p.status = sel.value; return p; },
       filterLabel: function () { return sel.value ? DIS_LABEL[sel.value] : ''; },
       table: function (rs) {
-        return table('Foundation support payments', ['Created', 'Amount', 'Beneficiary', 'Purpose', 'Destination', 'Status', 'Reference', 'Actions'], rs.map(function (r) { return disRow(r || {}); }));
+        return table('Foundation support payments', ['Created', 'Amount', 'Beneficiary', 'Purpose', 'Destination', 'Rail', 'Beneficiary check', 'Status', 'Reference', 'Actions'], rs.map(function (r) { return disRow(r || {}); }));
       },
     });
     function disRow(r) {
@@ -508,7 +588,18 @@
       function plain(extra) { return function () { var p = { disbursementId: id }; Object.keys(extra || {}).forEach(function (k) { p[k] = extra[k]; }); return p; }; }
       if (st === 'pending_approval') A.add({ key: 'approve', label: 'Approve', primary: true, fn: 'impactApproveDisbursement', prepare: plain(), done: after, title: 'A different administrator from the requester' });
       if (st === 'pending_authorization') {
-        A.add({ key: 'authorize', label: 'Authorize', primary: true, fn: 'impactAuthorizeDisbursement', prepare: plain(), done: after });
+        var ack = null;
+        if (r.requiresReview === true) {
+          /* The provider could not validate this beneficiary: Authorize needs an explicit, per-row acknowledgement. */
+          ack = h('input', { type: 'checkbox', 'data-fd': 'ack-review' });
+          A.inputs = [ack];
+          A.extra.appendChild(h('label', { class: 'sk-fd-check' }, [ack, h('span', { text: ACK_LABEL })]));
+        }
+        A.add({ key: 'authorize', label: 'Authorize', primary: true, fn: 'impactAuthorizeDisbursement', done: after, prepare: function () {
+          if (!ack) return { disbursementId: id };
+          if (ack.checked !== true) return 'Tick “' + ACK_LABEL + '” first — the provider could not validate this beneficiary';
+          return { disbursementId: id, acknowledgeUnvalidated: true };
+        } });
         A.extra.appendChild(h('p', { class: 'sk-fd-hint', text: 'Super admin only — and a different person from the requester and the approver. Authorizing starts the payment.' }));
       }
       if (st === 'processing' && !manual) A.add({ key: 'check', label: 'Check status', primary: true, fn: 'impactRefreshDisbursementStatus', prepare: plain(), done: after });
@@ -531,13 +622,18 @@
         A.note('Note (required to cancel)');
         A.add({ key: 'cancel', label: 'Cancel', fn: 'impactCancelDisbursement', prepare: withNote({}, 'Add a note saying why it is cancelled'), done: after });
       }
-      var refText = [str(r.providerReference), str(r.trackingId)].filter(Boolean).join(' · ');
-      return h('tr', { 'data-fd-row': id, 'data-fd-status': st }, [
+      var refText = [str(r.providerReference || r.paymentRef), str(r.trackingId)].filter(Boolean).join(' · ');
+      var rail = railOf(r), v = r.validation && typeof r.validation === 'object' ? r.validation : null;
+      var check = v ? (VALIDATION_LABEL[str(v.status)] || str(v.status) || NEUTRAL) + (v.accountName ? ' — account name: ' + str(v.accountName) : '') : (rail === 'manual' || rail === 'intasend_b2c' ? 'Not checked on this rail' : NEUTRAL);
+      if (r.requiresReview === true) check += ' · Requires review before authorization';
+      return h('tr', { 'data-fd-row': id, 'data-fd-status': st, 'data-fd-rail': rail }, [
         td('Created', fmtTime(r.initiatedAt || r.createdAt)),   /* disbursement rows: initiatedAt */
         td('Amount', fmtKES(r.amount), 'sk-pa-num'),
         td('Beneficiary', str(r.beneficiaryName)),
-        td('Purpose', str(r.description) + (r.refundOfPledgeId ? ' (refund of ' + str(r.refundOfPledgeId) + ')' : '')),
-        td('Destination', (DEST_LABEL[str(r.destinationType)] || str(r.destinationType) || NEUTRAL) + ' · ' + maskedDestination(r.destination) + (manual ? ' · manual rail' : '')),
+        td('Purpose', str(r.description || r.purpose) + (r.refundOfPledgeId ? ' (refund of ' + str(r.refundOfPledgeId) + ')' : '')),
+        td('Destination', (DEST_LABEL[str(r.destinationType)] || str(r.destinationType) || NEUTRAL) + ' · ' + maskedDestination(r.destination)),
+        td('Rail', RAIL_LABEL[rail] || rail),
+        td('Beneficiary check', check),
         td('Status', DIS_LABEL[st] || st),
         td('Reference', refText, 'sk-pa-mono'),
         A.cell,
@@ -548,6 +644,23 @@
     /* "New support payment" — requestId is generated ONCE per form open; a retried submit reuses it. */
     var formHost = h('div', { class: 'sk-fd-formhost', 'data-fd': 'dis-formhost', hidden: true });
     var form = null;
+    var banks = { loaded: false, codes: [], fetchedAt: null, loading: false, tried: false, error: '' };
+    /* impactBankCodes: {} reads the cached IntaSend list; {action:'refresh'} re-fetches it from IntaSend. */
+    function loadBanks(refresh) {
+      banks.loading = true; banks.tried = true;
+      return Promise.resolve().then(function () { return self.call(BANKS_FN, refresh ? { action: 'refresh' } : {}); }).then(function (res) {
+        banks.loading = false;
+        if (!okReply(res)) { banks.error = 'The server did not return the bank list'; return; }
+        if (res.loaded === true && Array.isArray(res.codes) && res.codes.length) {
+          banks.loaded = true; banks.error = '';
+          banks.codes = res.codes.filter(function (c) { return c && c.bankCode; }).slice(0, 300);
+          banks.fetchedAt = toMs(res.fetchedAt);
+        } else if (!banks.loaded) banks.error = 'The bank list has not been loaded from IntaSend yet';
+      }, function (e) {
+        banks.loading = false;
+        banks.error = (refresh ? 'Refresh failed: ' : '') + errorText(e || {}, 'The bank list');
+      });
+    }
     function openForm(prefill) {
       prefill = prefill || {};
       var requestId = newRequestId();
@@ -561,21 +674,60 @@
       var grant = h('input', { type: 'text', maxlength: '80', class: 'sk-pa-input', 'data-fd': 'f-grant' });
       var camp = h('input', { type: 'text', maxlength: '80', class: 'sk-pa-input', 'data-fd': 'f-campaign' });
       var destBox = h('div', { class: 'sk-fd-grid', 'data-fd': 'f-dest' });
+      var manualCb = h('input', { type: 'checkbox', 'data-fd': 'f-manual' });
+      var railLine = h('p', { class: 'sk-fd-hint', 'data-fd': 'f-rail', role: 'status', 'aria-live': 'polite' });
       var railNote = h('p', { class: 'sk-pa-detail', 'data-fd': 'f-rail-note', hidden: true, text: MANUAL_RAIL_COPY });
-      var destInputs = {};
+      var bankBox = h('div', { class: 'sk-fd-media', 'data-fd': 'f-bankbox', hidden: true });
+      var destInputs = {}, bankSel = null;
+      var msg = h('p', { class: 'sk-pa-msg', role: 'status', 'aria-live': 'polite', 'data-fd': 'f-msg' });
+      var submit = h('button', { type: 'button', class: 'sk-pa-btn sk-pa-btn-primary', 'data-fd': 'f-submit', text: prefill.refundOfPledgeId ? 'Request refund' : 'Request support payment' });
+      function curType() { return DEST_TYPES.indexOf(type.value) >= 0 ? type.value : 'MPESA'; }
+      function bankAuto() { return curType() === 'BANK' && !manualCb.checked; }
+      /* BANK on PesaLink needs the provider list; until it is loaded the automated BANK rail is refused. */
+      function gate() {
+        var blocked = bankAuto() && !banks.loaded;
+        submit.disabled = !!blocked || submitDone;
+        submit.setAttribute('data-fd-gate', blocked ? 'bank-list' : '');
+      }
+      function drawBankBox() {
+        bankBox.textContent = ''; bankSel = null;
+        bankBox.hidden = !bankAuto();
+        if (!bankAuto()) return;
+        var status = h('p', { class: 'sk-fd-hint', 'data-fd': 'f-bank-status', role: 'status', 'aria-live': 'polite' });
+        var refreshBtn = h('button', { type: 'button', class: 'sk-pa-btn', 'data-fd': 'f-bank-refresh', text: 'Refresh bank list from IntaSend', onclick: function () { var p = loadBanks(true); redraw(); p.then(redraw); } });
+        if (banks.loaded) {
+          bankSel = h('select', { class: 'sk-pa-input', 'data-fd': 'f-dest-bankCode' }, [h('option', { value: '', text: 'Choose the bank' })].concat(banks.codes.map(function (c) { return h('option', { value: str(c.bankCode), text: str(c.bankName) + ' (' + str(c.bankCode) + ')' }); })));
+          bankBox.appendChild(field('Bank (from the IntaSend list)', bankSel));
+          status.textContent = banks.codes.length + ' banks from IntaSend' + (banks.fetchedAt != null ? ', fetched ' + fmtTime(banks.fetchedAt) : '') + '.' + (banks.loading ? ' Refreshing…' : banks.error ? ' ' + banks.error + ' — the previous list is kept.' : '');
+        } else {
+          status.textContent = banks.loading ? 'Reading the bank list…' : (banks.error || 'The bank list has not been loaded from IntaSend yet') + ' — automated bank payouts are disabled until it is. Refresh it, or tick “Pay manually outside SOKONI”.';
+        }
+        bankBox.appendChild(status); bankBox.appendChild(refreshBtn);
+      }
       function drawDest() {
         destBox.textContent = ''; destInputs = {};
-        var t = DEST_TYPES.indexOf(type.value) >= 0 ? type.value : 'MPESA';
-        DEST_FIELDS[t].forEach(function (f) {
+        var t = curType(), manual = manualCb.checked;
+        DEST_FIELDS[t === 'BANK' && !manual ? 'BANK_AUTO' : t].forEach(function (f) {
           var i = h('input', { type: f[0] === 'phone' ? 'tel' : 'text', maxlength: '80', class: 'sk-pa-input', 'data-fd': 'f-dest-' + f[0] });
           destInputs[f[0]] = { input: i, required: f[2] };
           destBox.appendChild(field(f[1], i));
         });
-        railNote.hidden = t === 'MPESA';
+        railNote.hidden = !manual;
+        railLine.textContent = 'Rail: ' + RAIL_LABEL[manual ? 'manual' : RAIL_BY_TYPE[t]];
+        drawBankBox(); gate();
       }
-      type.value = 'MPESA'; type.addEventListener('change', drawDest); drawDest();
-      var msg = h('p', { class: 'sk-pa-msg', role: 'status', 'aria-live': 'polite', 'data-fd': 'f-msg' });
-      var submit = h('button', { type: 'button', class: 'sk-pa-btn sk-pa-btn-primary', 'data-fd': 'f-submit', text: prefill.refundOfPledgeId ? 'Request refund' : 'Request support payment' });
+      function redraw() {
+        /* keep what the administrator typed when the bank list arrives */
+        var kept = {}, keptBank = bankSel ? bankSel.value : ''; Object.keys(destInputs).forEach(function (k) { kept[k] = destInputs[k].input.value; });
+        drawDest(); Object.keys(kept).forEach(function (k) { if (destInputs[k]) destInputs[k].input.value = kept[k]; });
+        if (bankSel && keptBank) bankSel.value = keptBank;
+      }
+      var submitDone = false;
+      type.value = 'MPESA';
+      function onDestChange() { var p = bankAuto() && !banks.loaded && !banks.tried ? loadBanks(false) : null; redraw(); if (p) p.then(redraw); }
+      type.addEventListener('change', onDestChange);
+      manualCb.addEventListener('change', onDestChange);
+      drawDest();
       var close = h('button', { type: 'button', class: 'sk-pa-btn', 'data-fd': 'f-close', text: 'Close', onclick: function () { formHost.hidden = true; formHost.textContent = ''; form = null; } });
       var busy = false, done = false;
       submit.addEventListener('click', function () {
@@ -587,9 +739,16 @@
         var bn = str(name.value).trim(), ds = str(desc.value).trim();
         if (!bn) { msg.textContent = 'Enter the beneficiary name'; return; }
         if (!ds) { msg.textContent = 'Enter the purpose'; return; }
-        var t = DEST_TYPES.indexOf(type.value) >= 0 ? type.value : 'MPESA', dest = {}, missing = '';
+        var t = curType(), dest = {}, missing = '';
         Object.keys(destInputs).forEach(function (k) { var v = str(destInputs[k].input.value).trim(); if (v) dest[k] = v; else if (destInputs[k].required && !missing) missing = k; });
         if (missing) { msg.textContent = 'Fill in every destination field'; return; }
+        if (bankAuto()) {
+          if (!banks.loaded || !bankSel) { msg.textContent = 'The bank list has not been loaded from IntaSend — refresh it, or tick “Pay manually outside SOKONI”'; return; }
+          var hit = null; banks.codes.forEach(function (c) { if (str(c.bankCode) === bankSel.value) hit = c; });
+          if (!hit) { msg.textContent = 'Choose the bank from the IntaSend list'; return; }
+          dest.bankCode = str(hit.bankCode); dest.bankName = str(hit.bankName);
+        }
+        if (manualCb.checked) dest.rail = 'manual';
         var payload = { requestId: requestId, amount: amt, beneficiaryName: bn, description: ds, destinationType: t, destination: dest };
         if (str(grant.value).trim()) payload.grantId = str(grant.value).trim();
         if (str(camp.value).trim()) payload.campaignId = str(camp.value).trim();
@@ -597,14 +756,14 @@
         busy = true; submit.disabled = true; msg.textContent = 'Submitting…'; formHost.setAttribute('data-fd-result', 'in-flight');
         Promise.resolve().then(function () { return self.call('impactInitiateDisbursement', payload); }).then(function (res) {
           if (okReply(res) || (res && res.disbursementId)) {
-            done = true; formHost.setAttribute('data-fd-result', 'ok');
+            done = submitDone = true; formHost.setAttribute('data-fd-result', 'ok');
             var s = DIS_LABEL[str(res.status)] ? str(res.status) : 'pending_approval';
             msg.textContent = 'Request created' + (res.disbursementId ? ' (' + str(res.disbursementId) + ')' : '') + ' — ' + DIS_LABEL[s] + '. Nothing has been paid.';
             submit.hidden = true;
             list.load(false);
           } else { formHost.setAttribute('data-fd-result', 'error'); msg.textContent = 'The server did not confirm the request — submit again (the same request id is reused, so it cannot be created twice)'; }
         }, function (e) { formHost.setAttribute('data-fd-result', 'error'); msg.textContent = errorText(e || {}, 'Send support') + ' — you can submit again safely (same request id)'; })
-          .then(function () { busy = false; if (!done) submit.disabled = false; });
+          .then(function () { busy = false; if (!done) gate(); });
       });
       var kids = [h('h3', { class: 'sk-fd-h', text: prefill.refundOfPledgeId ? 'Refund request' : 'New support payment' })];
       if (prefill.refundOfPledgeId) kids.push(h('p', { class: 'sk-pa-detail', 'data-fd': 'f-refund-note', text: REFUND_COPY + ' — refund of donation ' + str(prefill.refundOfPledgeId) + (isNum(prefill.max) ? ', at most ' + fmtKES(prefill.max) : '') }));
@@ -612,7 +771,8 @@
         field('Amount (KES)', amount), field('Beneficiary name', name), field('Destination type', type),
         field('Grant id (optional)', grant), field('Campaign id (optional)', camp)]));
       kids.push(field('Purpose', desc, 'sk-pa-field-note'));
-      kids.push(destBox, railNote);
+      kids.push(h('label', { class: 'sk-fd-check' }, [manualCb, h('span', { text: 'Pay manually outside SOKONI' })]), railLine, bankBox, destBox, railNote);
+      kids.push(h('p', { class: 'sk-fd-hint', 'data-fd': 'f-verified-only', text: VERIFIED_ONLY_COPY + ' The server refuses a request larger than the verified available balance.' }));
       kids.push(h('p', { class: 'sk-fd-hint', text: 'Creating a request moves no money. It needs a second administrator\'s approval, then a super admin\'s authorization.' }));
       kids.push(h('div', { class: 'sk-pa-confirm-actions' }, [submit, close]), msg);
       formHost.appendChild(h('div', { class: 'sk-pa-confirm sk-fd-form', 'data-fd': 'dis-form', 'data-request-id': requestId || '' }, kids));
@@ -629,6 +789,17 @@
   };
 
   /* 4 ── Stories & Media House */
+  /* Per-media processing state from adminList (media[i].processing / reason) — written only by the media worker. */
+  function mediaCell(media) {
+    if (!Array.isArray(media)) return td('Media', NEUTRAL);
+    if (!media.length) return td('Media', 'None');
+    return h('td', { 'data-label': 'Media', 'data-fd': 'media-states' }, [h('ul', { class: 'sk-fd-media-list' }, media.map(function (m, i) {
+      m = m || {};
+      var p = str(m.processing), label = MEDIA_STATE_LABEL[p] || (p ? p : 'State unknown');
+      if ((p === 'REJECTED' || p === 'FAILED') && m.reason) label += ' — ' + str(m.reason);
+      return h('li', { 'data-fd-media': p || 'unknown', text: (str(m.type) || 'file') + ' ' + (i + 1) + ': ' + label });
+    }))]);
+  }
   View.prototype.make_stories = function () {
     var self = this;
     var sel = select('st-filter', STORY_STATUSES.map(function (s) { return [s, STORY_LABEL[s]]; }), 'All statuses');
@@ -656,8 +827,12 @@
       if (s === 'approved' || s === 'scheduled') {
         var when = h('input', { type: 'datetime-local', class: 'sk-pa-input', 'data-fd': 'publish-at', 'aria-label': 'Publish at (your local time)' });
         A.inputs = [when]; A.extra.appendChild(when);
-        A.add({ key: 'publish', label: 'Publish now', primary: true, fn: CONTENT_FN, prepare: function () { return { op: 'adminPublish', id: id }; }, done: after });
-        A.add({ key: 'schedule', label: 'Schedule', fn: CONTENT_FN, done: after, prepare: function () {
+        /* A testimonial published without its media (consent.showMedia false) does not wait for processing. */
+        var hidesMedia = str(r.kind) === 'testimonial' && r.consent && r.consent.showMedia === false;
+        var blocked = hidesMedia ? '' : mediaBlock(r.media);
+        if (blocked) A.extra.appendChild(h('p', { class: 'sk-fd-hint sk-fd-warn', 'data-fd': 'publish-blocked', text: blocked + ' (the server checks again when you publish).' }));
+        A.add({ key: 'publish', label: 'Publish now', primary: true, fn: CONTENT_FN, blocked: blocked, prepare: function () { return { op: 'adminPublish', id: id }; }, done: after });
+        A.add({ key: 'schedule', label: 'Schedule', fn: CONTENT_FN, done: after, blocked: blocked, prepare: function () {
           var ms = when.value ? new Date(when.value).getTime() : NaN;
           if (!isFinite(ms)) return 'Choose a date and time first';
           if (ms <= Date.now()) return 'Choose a time in the future, or use Publish now';
@@ -681,7 +856,7 @@
       return h('tr', { 'data-fd-row': id, 'data-fd-status': s }, [
         td('Title', str(r.title)), td('Kind', str(r.kind)), td('Status', statusText),
         td('Byline', str(r.displayName || r.name)), td('Programme', str(r.programmeId)),
-        td('Consent', consent), td('Media', Array.isArray(r.media) ? String(r.media.length) : NEUTRAL),
+        td('Consent', consent), mediaCell(r.media),
         td('Updated', fmtTime(r.updatedAt || r.createdAt)), A.cell,
       ]);
     }
@@ -777,44 +952,6 @@
     return { el: el, load: function () { return list.load(false); }, preset: function (s) { sel.value = STORY_STATUSES.indexOf(s) >= 0 ? s : ''; return list.load(false); }, openForm: openStoryForm, list: list };
   };
 
-  /* 5 ── Partner promotions */
-  View.prototype.make_promotions = function () {
-    var self = this;
-    var sel = select('pr-filter', PROMO_STATUSES.map(function (s) { return [s, PROMO_LABEL[s]]; }));
-    sel.value = 'pending';
-    var list = new PagedList(this, {
-      prefix: 'pr', title: 'Promotion requests', fn: PARTNER_FN,
-      payload: function () { var p = { op: 'adminListPromotionRequests' }; if (sel.value) p.status = sel.value; return p; },
-      filterLabel: function () { return PROMO_LABEL[sel.value] || ''; },
-      table: function (rs) { return table('Partner promotion requests', ['Partner', 'Type', 'Requested', 'Status', 'Actions'], rs.map(function (r) { return promoRow(r || {}); })); },
-    });
-    function promoRow(r) {
-      var id = str(r.id), st = str(r.status), A = new Actions(self);
-      if (st === 'pending') {
-        var days = h('input', { type: 'number', min: '1', max: '90', step: '1', value: '30', class: 'sk-pa-input', 'data-fd': 'promo-days', 'aria-label': 'Days to promote (1–90)' });
-        A.inputs = [days]; A.extra.appendChild(field('Days (1–90)', days));
-        A.note('Note (required to decline)');
-        A.add({ key: 'grant', label: 'Grant promotion', primary: true, fn: PARTNER_FN, done: function () { return 'Promotion granted'; }, prepare: function () {
-          var d = Number(days.value); if (!(d >= 1 && d <= 90) || Math.floor(d) !== d) return 'Days must be a whole number from 1 to 90';
-          var p = { op: 'adminDecidePromotion', id: id, verdict: 'granted', days: d }, n = A.noteValue(); if (n) p.note = n; return p; } });
-        A.add({ key: 'decline', label: 'Decline', fn: PARTNER_FN, done: function () { return 'Declined'; }, prepare: function () {
-          var n = A.noteValue(); if (!n) return 'Add a note saying why it is declined'; return { op: 'adminDecidePromotion', id: id, verdict: 'declined', note: n }; } });
-      }
-      return h('tr', { 'data-fd-row': id }, [
-        td('Partner', str(r.name || r.partnerName || r.partnerUid)), td('Type', str(r.institutionType)),
-        td('Requested', fmtTime(r.requestedAt || r.createdAt)),
-        td('Status', (PROMO_LABEL[st] || st || NEUTRAL) + (r.note ? ' — ' + str(r.note) : '')), A.cell,
-      ]);
-    }
-    sel.addEventListener('change', function () { list.load(false); });
-    var el = h('section', { class: 'sk-fd-panel', 'data-fd-panel': 'promotions' }, [
-      h('p', { class: 'sk-pa-detail', 'data-fd': 'promo-label', text: 'Promotion ranks a listing; it never verifies it. No payment is taken.' }),
-      h('div', { class: 'sk-pa-controls' }, [field('Show', sel), h('button', { type: 'button', class: 'sk-pa-btn sk-pa-btn-primary', text: 'Refresh', onclick: function () { list.load(false); } })]),
-      list.el,
-    ]);
-    return { el: el, load: function () { return list.load(false); }, list: list };
-  };
-
   /* 6 ── Reconciliation */
   function ledgerGroups(d) {
     if (!d || typeof d !== 'object') return null;
@@ -855,13 +992,77 @@
         });
       }, function (e) { if (my === seq) st.fromError(e || {}, 'Ledger', REPORT_FN); });
     }
+    /* Classify: impactReconcileFoundation {action:'classify'} — counts shown only after the server answers ok. */
+    var clsMsg = h('p', { class: 'sk-pa-msg', role: 'status', 'aria-live': 'polite', 'data-fd': 'rc-classify-msg' });
+    var clsOut = h('div', { class: 'sk-fd-counts', 'data-fd': 'rc-classify-counts' });
+    var clsBusy = false;
+    var clsBtn = h('button', { type: 'button', class: 'sk-pa-btn sk-pa-btn-primary', 'data-fd': 'rc-classify', text: 'Classify records', onclick: function () {
+      if (clsBusy) return;
+      clsBusy = true; clsBtn.disabled = true; clsOut.textContent = ''; clsMsg.textContent = 'Classifying the donation records…';
+      Promise.resolve().then(function () { return self.call(RECON_FN, { action: 'classify' }); }).then(function (res) {
+        if (!okReply(res) || !res.counts || typeof res.counts !== 'object') { clsMsg.textContent = 'The server did not confirm the classification — nothing is shown in its place'; return; }
+        var a = res.amounts && typeof res.amounts === 'object' ? res.amounts : {};
+        RECON_COUNT_KEYS.forEach(function (k) {
+          clsOut.appendChild(h('div', { class: 'sk-pa-col', 'data-fd-recon': k[0] }, [h('span', { class: 'sk-pa-col-label', text: k[1] }), h('span', { class: 'sk-pa-col-value sk-pa-num', text: fmtCount(res.counts[k[0]]) })]));
+        });
+        [['recorded', 'Recorded amount'], ['verifiedPaid', 'Verified paid amount'], ['unverified', 'Unverified amount']].forEach(function (k) {
+          clsOut.appendChild(h('div', { class: 'sk-pa-col', 'data-fd-recon-amount': k[0] }, [h('span', { class: 'sk-pa-col-label', text: k[1] }), h('span', { class: 'sk-pa-col-value sk-pa-num', text: fmtKES(a[k[0]]) })]));
+        });
+        clsMsg.textContent = 'Classified — ' + fmtCount(res.newlyMarked) + ' newly marked as requiring reconciliation.';
+        held.load(false);
+      }, function (e) { clsMsg.textContent = errorText(e || {}, 'Classifying records'); }).then(function () { clsBusy = false; clsBtn.disabled = false; });
+    } });
+
+    /* Held donations: two administrators — one proposes, a DIFFERENT one confirms (the server refuses the proposer). */
+    var held = new PagedList(this, {
+      prefix: 'rc-held', title: 'Donations requiring reconciliation', fn: DATA_FN,
+      payload: function () { return { view: 'donations', status: 'requires_reconciliation' }; },
+      filterLabel: function () { return ''; },
+      table: function (rs) { return table('Donations requiring reconciliation', ['Date', 'Amount', 'Donor', 'Programme', 'Provider ref', 'Order', 'Reconciliation', 'Actions'], rs.map(function (r) { return heldRow(r || {}); })); },
+    });
+    function heldRow(r) {
+      var id = str(r.id || r.pledgeId), A = new Actions(self);
+      var x = r.reconciliation && typeof r.reconciliation === 'object' ? r.reconciliation : null;
+      var proposal = x && x.proposal && typeof x.proposal === 'object' && (x.proposal.action === 'verify' || x.proposal.action === 'close') ? x.proposal : null;
+      function done(res) { return RECON_DONE[str(res && res.state)] || 'Done — refresh to see the new state'; }
+      if (x && x.state === 'REQUIRES_RECONCILIATION' && !proposal) {
+        var ref = h('input', { type: 'text', class: 'sk-pa-input', maxlength: '80', 'data-fd': 'rc-ref', 'aria-label': 'IntaSend payment reference', placeholder: 'IntaSend payment reference' });
+        A.inputs = [ref]; A.extra.appendChild(ref);
+        A.note('Note (required to propose closing)');
+        A.add({ key: 'propose_verify', label: 'Propose verified', primary: true, fn: RECON_FN, done: done, prepare: function () {
+          var v = str(ref.value).trim(); if (v.length < 4) return 'Enter the IntaSend payment reference that proves the money arrived';
+          return { action: 'propose_verify', donationId: id, providerReference: v }; } });
+        A.add({ key: 'propose_close', label: 'Propose closed — no payment', fn: RECON_FN, done: done, prepare: function () {
+          var n = A.noteValue(); if (!n) return 'Add a note saying why this donation has no payment';
+          return { action: 'propose_close', donationId: id, note: n }; } });
+        A.extra.appendChild(h('p', { class: 'sk-fd-hint', text: CLOSE_COPY }));
+      } else if (x && x.state === 'REQUIRES_RECONCILIATION' && proposal) {
+        A.extra.appendChild(h('p', { class: 'sk-fd-hint', 'data-fd': 'rc-proposal', text: 'Proposed: ' + (proposal.action === 'verify' ? 'verified paid' : 'closed — no payment') + (proposal.by ? ' by ' + str(proposal.by) : '') + '. A different administrator must confirm.' + (proposal.action === 'close' ? ' ' + CLOSE_COPY : '') }));
+        A.add({ key: 'confirm', label: 'Confirm', primary: true, fn: RECON_FN, done: done, prepare: function () { return { action: 'confirm', donationId: id }; } });
+        A.add({ key: 'withdraw', label: 'Withdraw proposal', fn: RECON_FN, done: done, prepare: function () { return { action: 'withdraw', donationId: id }; } });
+      }
+      return h('tr', { 'data-fd-row': id, 'data-fd-recon-state': x ? str(x.state) : 'unknown' }, [
+        td('Date', fmtTime(r.completedAt || r.createdAt)), td('Amount', fmtKES(r.amount), 'sk-pa-num'),
+        td('Donor', r.donor && typeof r.donor === 'object' ? str(r.donor.name) : str(r.donor)), td('Programme', str(r.programmeId)),
+        td('Provider ref', str(r.providerReference), 'sk-pa-mono'), td('Order', str(r.orderId), 'sk-pa-mono'),
+        td('Reconciliation', reconText(r)), A.cell,
+      ]);
+    }
     var el = h('section', { class: 'sk-fd-panel', 'data-fd-panel': 'reconciliation' }, [
       h('p', { class: 'sk-pa-detail sk-fd-warn', role: 'note', 'data-fd': 'rc-warning', text: 'Pre-fix checkout donations (before the pledge fix is deployed) were recorded as completed without payment — reconcile before trusting the balance.' }),
+      h('p', { class: 'sk-pa-detail', role: 'note', 'data-fd': 'rc-close-copy', text: VERIFIED_ONLY_COPY + ' ' + CLOSE_COPY }),
+      h('h3', { class: 'sk-fd-h', text: 'Classify' }),
+      h('p', { class: 'sk-pa-note', text: 'Classifying reads every donation record and marks completed donations without provider evidence as requiring reconciliation. It moves no money.' }),
+      h('div', { class: 'sk-pa-controls' }, [clsBtn]), clsMsg, clsOut,
+      h('h3', { class: 'sk-fd-h', text: 'Donations requiring reconciliation' }),
+      h('div', { class: 'sk-pa-controls' }, [h('button', { type: 'button', class: 'sk-pa-btn', text: 'Refresh list', onclick: function () { held.load(false); } })]),
+      held.el,
+      h('h3', { class: 'sk-fd-h', text: 'Ledger' }),
       h('p', { class: 'sk-pa-note', text: 'The daily reconciliation compares the ledger against the Foundation balance. The entries below are the most recent ledger lines exactly as the server returned them.' }),
       h('div', { class: 'sk-pa-controls' }, [h('button', { type: 'button', class: 'sk-pa-btn sk-pa-btn-primary', text: 'Refresh', onclick: load })]),
       st.el, box,
     ]);
-    return { el: el, load: load };
+    return { el: el, load: function () { load(); return held.load(false); }, held: held };
   };
 
   var mounted = typeof WeakMap === 'function' ? new WeakMap() : null;
@@ -872,6 +1073,6 @@
       if (v) { v.refresh(); return v; }
       v = new View(host, opts); if (mounted) mounted.set(host, v); return v;
     },
-    _test: { classifyError: classifyError, errorText: errorText, fmtKES: fmtKES, fmtCount: fmtCount, fmtTime: fmtTime, storyState: storyState, checkMedia: checkMedia, newRequestId: newRequestId, ledgerGroups: ledgerGroups, isManualRail: isManualRail, DIS_LABEL: DIS_LABEL },
+    _test: { classifyError: classifyError, errorText: errorText, fmtKES: fmtKES, fmtCount: fmtCount, fmtTime: fmtTime, storyState: storyState, checkMedia: checkMedia, newRequestId: newRequestId, ledgerGroups: ledgerGroups, isManualRail: isManualRail, railOf: railOf, mediaBlock: mediaBlock, DIS_LABEL: DIS_LABEL, RAIL_LABEL: RAIL_LABEL },
   };
 })();

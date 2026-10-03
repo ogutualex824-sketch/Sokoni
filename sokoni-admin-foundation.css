@@ -31,6 +31,11 @@
 .sk-fd-warn{border-left-color:var(--pa-warn);color:var(--pa-text);font-weight:700}
 td[data-fd-result="error"] .sk-pa-msg,td[data-fd-result="refused-locally"] .sk-pa-msg,[data-fd-result="error"] > .sk-fd-form .sk-pa-msg{color:var(--pa-warn)}
 td[data-fd-result="ok"] .sk-pa-msg{color:var(--pa-accent)}
+/* Overview money tiles are buttons (open the filtered list); media processing states per story row. */
+button.sk-pa-col{font:inherit;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.sk-fd-media-list{margin:0;padding-left:16px;font-size:12px}
+.sk-fd-media-list li[data-fd-media="REJECTED"],.sk-fd-media-list li[data-fd-media="FAILED"]{color:var(--pa-warn)}
+.sk-pa-btn[aria-disabled="true"]{cursor:not-allowed}
 
 @media (max-width:768px){
   .sk-fd-tab{min-height:44px}
