@@ -20,6 +20,7 @@ record, which is an open rules item.
 | `sokoni-pay.js` saveFee (callers: car hub, checkout, food, IntaSend client) | wrote `bookingFees/{ref}` to Firestore with a page-supplied amount; admin.html reads it as revenue | Fixed this commit: local display cache only |
 | `sokoni-intasend.js` _recordCommission | after the webhook-written payment doc, the browser wrote `bookingFees/{ref}` ("intasend_confirmed") itself | Fixed: no-op; the server ledger is the record |
 | `pos-checkout.html` gift card | `PosLoyalty.redeemGiftCard` debits IndexedDB only (the direct `giftCards` update is refused and the error swallowed), then sends `{method:'gift_card', amount: total}` to `posCompleteCheckout`, which never verifies non-M-Pesa/card tenders | **OPEN — BROWSER_AUTHORITY.** Server half (fail-closed tender allow-list; gift card redeemed inside the checkout transaction through one `giftCards` authority) = sokoni-5b, POS lane, owner decisions pending |
+| POS manual "M-PESA Till" | the cashier typed a confirmation code and the sale completed as M-PESA paid | **Removed by owner decision 2026-10-03** (a typed code is not a confirmed payment): sokoni-5b 8a5a742, not deployed; my POS wording aligned (e154948) |
 | `sokoni-invoice.js` | every invoice said "Total Paid" / "Paid via M-Pesa", including unpaid bookings (27 callers) | Fixed this commit: PAID only with `paymentVerified:true`; checkout passes its server-verified flag |
 
 Test: `node scripts/test-browser-payment-authority.js` (5/0, 5/5 sabotages; the invoice check executes the real
