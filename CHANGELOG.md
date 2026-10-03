@@ -1,3 +1,16 @@
+## [2026-10-03] — Marketing dashboards copy merchant-v2.html style (owner) — NOT deployed
+
+- **Owner direction:** "dashboards should copy merchant-v2.html style".
+- **sokoni-mv2-skin.css (new):** merchant-v2's own tokens and components (stat / stats / act / seg / ord / badge / tag / note / state / skeleton / form fields), copied from merchant-v2.html and SCOPED under `.mv2s`, so the host AdminOS / Super Admin shells are not restyled. merchant-v2.html remains the source of truth for the values.
+- **sokoni-aos-marketing.js:** the AdminOS Marketing panel renders merchant-v2 components: KPI .stat tiles (an unknown/zero shows neutral), .seg tabs and filters, .ord cards instead of tables, toned badges, honest .state empty states, skeletons. Same data, same server calls, same applicationDecide-only decisions.
+- **super-admin.html:** the Marketing panel is restyled the same way (read-only, unchanged reads).
+- admin-os.html and super-admin.html link the skin.
+- **Tests:**
+  - test-aos-marketing 10/0 (new P8 style rule), SABOTAGE 6/6;
+  - test-sa-marketing 8/0 (new A7 style rule);
+  - marketing-hub-web 13/0, adminos-authority-honesty 28/0, admin-nav-context 3/0, legal-hub-web 21/0.
+- **Not run (memory floor, 110 MB free):** the Playwright suites test-admin-layouts and test-adminos-shell-final were started by mistake and gave run-to-run-varying results under memory pressure. They are recorded as NOT RUN — not passed, not failed — and must be re-run with ≥512 MB free.
+
 ## [2026-10-03] — Super Admin › Marketing Hub (MK5c): platform read-only view over the ONE read model — NOT deployed
 
 - **super-admin.html:** a Marketing Hub nav item and panel. SA.loadMarketing reads the SAME marketingDispatch admin reads as AdminOS: pipeline by status/type, marketers, coverage counted from ACTIVE services per category across the 10 groups / 71 services, and bookings with their server money state.

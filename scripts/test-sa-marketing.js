@@ -49,6 +49,8 @@ G.SA._fns = { httpsCallable: (name) => async (data) => { calls.push(Object.assig
   ck('A6', panelStart > 0 && !/<input|<select|<textarea|contenteditable/i.test(panel) && /admin-os\.html#marketing/.test(panel) && /data-section="marketing"/.test(html) && /sokoni-marketing-taxonomy\.js/.test(html)
     && /else if\(section==='marketing'\)this\.loadMarketing\(\);/.test(html),
     'the panel has NO editable field; decisions link to AdminOS › Marketing; nav + taxonomy + loader wired');
+  ck('A7', /<div class="mv2s">/.test(panel) && /class="stat/.test(method) && /class="ord"/.test(method) && /<link rel="stylesheet" href="sokoni-mv2-skin\.css">/.test(html) && !/sa-table/.test(method),
+    'owner style rule: the Super Admin Marketing panel renders merchant-v2 components (stat / ord / badge) under the scoped .mv2s skin');
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error(e); console.log('\nRESULT: ' + pass + ' passed, ' + (fail + 1) + ' failed'); process.exit(1); });

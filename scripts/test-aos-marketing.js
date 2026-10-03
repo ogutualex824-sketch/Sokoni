@@ -15,8 +15,8 @@ if (process.env.SABOTAGE) {
     ['P3b', 'sokoni-aos-marketing.js', "      if (decision === 'approve' && !cats.length) { msg('Tick at least one service to approve.', true); return; }", ''],
     ['P4', 'sokoni-aos-marketing.js', "if ((decision === 'revoke' || decision === 'request_info' || decision === 'reject') && reason.trim().length < 5)", 'if (false)'],
     ['P5', 'sokoni-aos-marketing.js', "        msg((e && e.message) || 'The server refused this decision.', true);", "        msg('Decision recorded by the server (audited).');"],
-    ['P2b', 'sokoni-aos-marketing.js', "+ '<h4>Decide</h4>' + (terminal ?", "+ '<h4>Decide</h4>' + (false ?"],
-    ['P1', 'sokoni-aos-marketing.js', "'<tr><td>' + esc(i.name) + '<div class=\"aos-muted\">'", "'<tr><td>' + i.name + '<div class=\"aos-muted\">'"],
+    ['P2b', 'sokoni-aos-marketing.js', "+ '<div class=\"sec-t\">Decide</div>' + (terminal ?", "+ '<div class=\"sec-t\">Decide</div>' + (false ?"],
+    ['P1', 'sokoni-aos-marketing.js', "esc(i.name)", "i.name"],
   ];
   let caught = 0;
   for (const [row, file, a, b] of M) {
@@ -124,7 +124,10 @@ const click = async (dataset) => { const b = Object.assign(el('btn'), { dataset 
     'leads, bookings, payments, receipts/wallets/commissions/settlements, reviews and audit open the CANONICAL AdminOS sections', navBtns);
 
   const html = fs.readFileSync(path.join(DIR, 'admin-os.html'), 'utf8'), aos = fs.readFileSync(path.join(DIR, 'sokoni-aos.js'), 'utf8');
-  ck('P7', !/collection\(|\.set\(|\.update\(|\.add\(|firestore/.test(src) && /data-section="marketing"/.test(html) && /id="panel-marketing"/.test(html) && /id="marketingBody"/.test(html)
+  ck('P8', /host\.classList && host\.classList\.add\('mv2s'\)/.test(src) && !/aos-table|aos-btn|aos-spinner/.test(src) && /class="stat/.test(src) && /class="seg/.test(src) && /class="ord"/.test(src)
+    && /<link rel="stylesheet" href="sokoni-mv2-skin\.css">/.test(html) && fs.existsSync(path.join(ROOT, 'sokoni-mv2-skin.css')),
+    'owner style rule: the panel renders merchant-v2 components (stat / seg / ord / badge) under the scoped .mv2s skin, linked in AdminOS');
+  ck('P7', !/collection\(|\.set\(|\.update\(|\.add\(|firestore/.test(src.replace(/classList\.add\(/g, '')) &&/data-section="marketing"/.test(html) && /id="panel-marketing"/.test(html) && /id="marketingBody"/.test(html)
     && /sokoni-aos-marketing\.js/.test(html) && /sokoni-marketing-taxonomy\.js/.test(html) && /marketing:\s+\(\) => _loadMarketing\(\)/.test(aos) && /SokoniAOSMarketing\.mount\(\{ host: body, call: _call \}\)/.test(aos),
     'the module writes no Firestore; AdminOS has the nav item, panel, scripts and loader');
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
