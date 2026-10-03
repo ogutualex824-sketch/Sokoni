@@ -19,12 +19,12 @@ const OK = async () => ({ ok: true });
 const seed = (bk, intentX) => { D = {
   'paymentIntents/RENT-b1': Object.assign({ resourceType: 'rentalBooking', resourceId: 'b1', amountCents: 650000, currency: 'KES', uid: 'renter1', metadata: { type: 'rental_booking', bookingId: 'b1', depositCents: 200000 } }, intentX || {}),
   'rentalBookings/b1': Object.assign({ buyerId: 'renter1', shopId: 's1', status: 'payment_pending', paymentStatus: 'unpaid' }, bk || {}) }; };
-const hold = (o) => RH.holdRentalBookingPayment(db, adminSdk, Object.assign({ apiRef: 'API1', intentRef: 'RENT-b1', grossAmount: 6500, providerMethod: 'M-PESA', confirm: OK }, o || {}));
+const hold = (o) => RH.holdRentalBookingPayment(db, adminSdk, Object.assign({ apiRef: 'API1', intentRef: 'RENT-b1', grossAmount: 6500, providerMethod: 'M-PESA', invoiceId: 'INV-9', confirm: OK }, o || {}));
 const B = () => D['rentalBookings/b1'] || {};
 
 (async () => {
   seed(); let r = await hold();
-  ck('R-1', r.outcome === 'held' && B().status === 'paid_held' && B().paymentStatus === 'held' && B().heldAmountCents === 650000 && B().depositCents === 200000 && B().paymentRef === 'API1' && B().intentRef === 'RENT-b1' && B().providerMethod === 'M-PESA'
+  ck('R-1', r.outcome === 'held' && B().status === 'paid_held' && B().paymentStatus === 'held' && B().heldAmountCents === 650000 && B().depositCents === 200000 && B().paymentRef === 'API1' && B().intentRef === 'RENT-b1' && B().invoiceId === 'INV-9' && B().providerMethod === 'M-PESA'
     && D['paymentIntents/RENT-b1'].status === 'paid', 'an exact, IntaSend-confirmed payment HOLDS the rental (paid_held/held, rent + deposit, ref, method)', [r, B()]);
   r = await hold();
   ck('R-2', r.outcome === 'noop' && B().status === 'paid_held', 'a replayed callback is a no-op', r);

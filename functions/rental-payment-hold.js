@@ -82,7 +82,8 @@ async function holdRentalBookingPayment(db, adminSdk, p) {
       status: 'paid_held', paymentStatus: 'held',
       heldAmountCents: grossCents,
       depositCents: Number.isInteger(meta.depositCents) ? meta.depositCents : (Number.isInteger(b.depositCents) ? b.depositCents : null),
-      paymentRef: apiRef, intentRef: intentId, providerMethod: p.providerMethod || null,   /* intentRef: settlement prices from the SERVER intent */
+      paymentRef: apiRef, intentRef: intentId, providerMethod: p.providerMethod || null,
+      invoiceId: p.invoiceId ? String(p.invoiceId) : null,   /* IntaSend's id for THIS payment — a refund (deposit) is raised against it, never api_ref */   /* intentRef: settlement prices from the SERVER intent */
       paidAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp(),
     });
     return { outcome: 'held' };

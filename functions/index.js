@@ -7550,7 +7550,7 @@ exports.webhookIntasend = onRequest(
       {
         const { holdRentalBookingPayment } = require("./rental-payment-hold");
         const _rent = await holdRentalBookingPayment(db, admin, {
-          apiRef, intentRef: existing.intentRef, providerMethod,
+          apiRef, intentRef: existing.intentRef, providerMethod, invoiceId: invoice.invoice_id || req.body?.invoice_id || null,
           grossAmount: (invoice.value !== undefined ? invoice.value : req.body?.value),
           confirm: async (expectedCents) => {
             const { intasendCollectionStatus } = require("./shared/intasend-status");
