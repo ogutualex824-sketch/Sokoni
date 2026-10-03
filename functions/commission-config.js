@@ -96,8 +96,13 @@ const RATES = {
      Owner 2026-10-03 (via sokoni-e3): memberships and packages pay the SAME 5% — price them with category 'fitness' too.
      Booking FEES, marketing and Marketplace equipment/clothing are separate products, not this row. */
   fitness:          { pct: 5,   fixedKES: 0,    _was: 'owner 2026-10-03: fitness bookings 5% per booking (was ALIASES.fitness -> services 5%, then the provider plan ladder 20–5%)' },
-  education:        { pct: 15,  fixedKES: 0,    _was: 'category only' },
-  jobs:             { pct: 15,  fixedKES: 0,    _was: 'category only' },
+  /* Owner 2026-10-03 (via sokoni-5b): 5% per sale, paid by the teacher / institution, never added on top for the learner — the Home Services model. */
+  education:        { pct: 5,   fixedKES: 0,    _was: "15% 'category only' (never owner-set)" },
+  /* Owner 2026-10-03 (via sokoni-f3): Jobs carries NO commission — applications are free; SOKONI earns only from employer
+     products (subscriptions, paid/featured listings, promotion, enterprise). Freelance gigs are a job type on the one
+     board, also 0%. An explicit FIXED, floor-exempt 0% row, so nothing falls through to the 5% default and no override
+     can turn it into a percentage. */
+  jobs:             { pct: 0,   fixedKES: 0,    _was: "15% 'category only' (never owner-set)" },
   classifieds:      { pct: 8,   fixedKES: 0,    _was: 'category only' },
   hub:              { pct: 17,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: SOKONI delivery share 17–25% per quote, settled by delivery-quote-authority.js (SHARE_MIN_PCT 17 / SHARE_MAX_PCT 25); this row is the FLOOR for a consumer that resolves by category, never the per-delivery share (was 12% / 88% rider)' },
 
@@ -107,6 +112,10 @@ const RATES = {
 
   /* ── zero-rated ── */
   saas:             { pct: 0,   fixedKES: 0,    _was: 'hub 0%' },
+  /* Owner 2026-10-03 (via sokoni-f3): a B2B wholesale ORDER carries NO commission — SOKONI earns a per-lead fee
+     (b2b-leads.js, invoiced monthly). A FIXED-RATE, floor-exempt row, so no commissionRule, revenueConfig override,
+     plan ladder or KES 10 minimum can ever turn a wholesale order into a percentage. */
+  b2b_order:        { pct: 0,   fixedKES: 0,    _was: "alias of marketplace (15% ladder) — owner 2026-10-03: lead model, 0% on orders" },
 
   /* Applied when a hub/category is unknown. The HUB default (5%), not the category
      default (10%) — an unrecognised hub must not be charged double by accident. */
@@ -126,7 +135,9 @@ const ALIASES = {
      silently CHANGED the moment anyone "corrected" the string to "marketplace".
      Mapping it deliberately is what makes the 5% intentional rather than incidental. */
   product: 'marketplace', products: 'marketplace',
-  shopping: 'marketplace', b2b: 'marketplace',
+  shopping: 'marketplace',
+  /* b2b → b2b_order (owner 2026-10-03). It was 'marketplace', which would have charged a wholesale order the 15% ladder. */
+  b2b: 'b2b_order', wholesale: 'b2b_order', b2b_wholesale: 'b2b_order', rfq: 'b2b_order',
   till: 'pos', quick_charge: 'pos', quickcharge: 'pos',
   /* C2 — the same accident as `product`, on the one category where it inverts the
      commercial meaning. RATES has `subscriptions` (plural, pct 100: the full amount
@@ -154,7 +165,7 @@ const ALIASES = {
   bnb: 'hotel',
   car_dealer: 'vehicles', car_hub: 'vehicles',
   entertainment: 'events', sports: 'events',
-  freelancer: 'jobs', freelance: 'jobs',
+  freelancer: 'jobs', freelance: 'jobs', gig: 'jobs', gigs: 'jobs',   /* no bare 'job' alias: the work engine's 'job' is a service job, never this 0% lane */
   logistics: 'hub', delivery: 'hub', driver: 'hub',
   digital: 'digital_products', ai_services: 'digital_products',
 };
@@ -232,7 +243,7 @@ const PLAN_ADJUSTMENTS_DOC = 'plan_adjustments';   /* revenueConfig/plan_adjustm
    must never move these rates — not the provider ladder, and not a seller-plan discount (features.commission_discount_pct
    / revenueConfig/plan_adjustments) if that rollout is ever switched on. finos-utils skips the plan step for them and
    records planSkipped 'flat_booking_rate'. */
-const FLAT_BOOKING_CATEGORIES = Object.freeze(['services', 'home_services', 'car_rental', 'healthcare', 'entertainment_bookings', 'fitness']);
+const FLAT_BOOKING_CATEGORIES = Object.freeze(['services', 'home_services', 'car_rental', 'healthcare', 'entertainment_bookings', 'fitness', 'education']);   /* education: owner 2026-10-03, flat 5% */
 function isFlatBookingCategory(key) {
   const r = resolveRate(key);
   return r.matched === true && FLAT_BOOKING_CATEGORIES.indexOf(r.category) !== -1;
@@ -359,12 +370,13 @@ function resolveRate(key) {
    (POS_PLAN_RATES) but dropped the guard, which left POS ladder-exempt yet override-able through
    the finos-utils chain. Restored 2026-09-30 — docs/COMMERCIAL_CONVERGENCE_2026-09-30.md. */
 /* 'fitness' added 2026-10-03 (owner: 5% per booking). Same absolute semantics as POS: RATES.fitness and nothing else. */
-const FIXED_RATE_CATEGORIES = Object.freeze(['pos', 'fitness']);
+/* 'b2b_order' added 2026-10-03 (owner: lead model, no commission on wholesale orders). */
+const FIXED_RATE_CATEGORIES = Object.freeze(['pos', 'fitness', 'b2b_order', 'jobs']);   /* jobs: owner 2026-10-03, 0% */
 
 /* Fixed lanes that carry NO platform minimum. Fitness is a provider BOOKING lane, and provider bookings never had the
    KES 10 floor (finos-utils: "a KES 20 booking at 20% charged KES 4"); the owner set "5% commission per booking", so a
    KES 100 session pays KES 5, not KES 10. POS keeps its floor (POS_PLAN_RATES.floorExempt false) — unchanged. */
-const FIXED_RATE_FLOOR_EXEMPT = Object.freeze(['fitness']);
+const FIXED_RATE_FLOOR_EXEMPT = Object.freeze(['fitness', 'b2b_order', 'jobs']);
 function isFloorExemptFixedCategory(key) {
   const r = resolveRate(key);
   return r.matched === true && FIXED_RATE_FLOOR_EXEMPT.indexOf(r.category) !== -1;
@@ -675,7 +687,8 @@ function resolveMarketplaceRate(planIdOrTier) {
    is load-bearing. The alias itself must stay: it also decides the SETTLEMENT TERM
    (index.js `_is48hCommission`), and moving that is a separate decision. */
 const MARKETPLACE_SELLER_CATEGORIES = Object.freeze(new Set([
-  'marketplace', 'product', 'products', 'shopping', 'b2b',
+  'marketplace', 'product', 'products', 'shopping',
+  /* 'b2b' removed 2026-10-03: a wholesale order is the b2b_order lane (0%, lead model), never the marketplace ladder. */
 ]));
 
 /** True when `rawCategory` is a marketplace seller sale priced by the plan ladder. */

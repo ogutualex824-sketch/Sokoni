@@ -648,6 +648,38 @@ const PURPOSES = {
       };
     },
   },
+  /* ── Car Hub vehicle boosts (owner 2026-10-03) — priced from vehicle-boosts.catalogue (code seed + AdminOS override),
+     never from the request. A single boost needs the listing; a bundle buys 7-day credits for the buyer's account. ── */
+  /* ── B2B lead invoice Pay Now (owner 2026-10-03) — the supplier owner pays EVERY outstanding issued lead invoice.
+     Amount = b2b-leads.payNowAmount (server read), never the request. The verified webhook applies it through the same
+     prepare/commit recovery path as a settlement deduction (claim per payment per invoice). Platform revenue. ── */
+  b2b_lead_invoice: {
+    resourceType: 'b2bLeadInvoice',
+    async price(uid) {
+      const due = await require('./b2b-leads').payNowAmount(db(), uid);
+      if (!(due.amountKES >= 1)) fail('failed-precondition', 'You have no lead invoice to pay.');
+      return {
+        amountCents: Math.round(due.amountKES * 100), currency: 'KES', resourceType: 'b2bLeadInvoice', resourceId: uid,
+        metadata: { invoiceKeys: due.invoiceKeys.slice(0, 50), amountKES: due.amountKES },
+      };
+    },
+  },
+
+  vehicle_boost: {
+    resourceType: 'vehicleBoost',
+    async price(uid, data) {
+      const p = await require('./vehicle-boosts').priceFor(db(), data.boostKey || data.key);
+      if (!p) fail('invalid-argument', 'Unknown vehicle boost.');
+      const listingId = String(data.listingId || '').trim();
+      if (!p.bundle && !/^[A-Za-z0-9_-]{4,128}$/.test(listingId)) fail('invalid-argument', 'Choose the vehicle listing to boost.');
+      return {
+        amountCents: p.kes * 100, currency: 'KES', resourceType: 'vehicleBoost',
+        resourceId: p.bundle ? uid : listingId,
+        metadata: { boostKey: p.key, days: p.ms / 86400000, count: p.count, bundle: !!p.bundle, priceSource: p.source },
+      };
+    },
+  },
+
   marketing_boost: {
     resourceType: 'marketingBoost',
     async price(uid, data) {

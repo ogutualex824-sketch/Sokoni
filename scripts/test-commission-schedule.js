@@ -50,7 +50,9 @@ const page = (f) => (CPM ? cp.execFileSync('git', ['show', '4e9607b:' + f], { cw
 
 /* ── THE SPEC: owner-confirmed 2026-09-28 ── */
 const SPEC = [
-  ['Online product sales',        ['marketplace', 'product', 'products', 'b2b'], 15, 0],
+  ['Online product sales',        ['marketplace', 'product', 'products'],        15, 0],
+  ['B2B wholesale orders',        ['b2b', 'wholesale', 'b2b_order'],              0, 0],   /* owner 2026-10-03: lead fee, 0% on orders */
+  ['Jobs (incl. freelance / gig)', ['jobs', 'freelance', 'freelancer', 'gig'],     0, 0],   /* owner 2026-10-03: 0%, employer products only */
   ['Food ordered online',         ['food_delivery', 'food', 'restaurant'],       15, 0],
   ['Digital products',            ['digital_products', 'digital'],               10, 0],
   ['POS / Till / Quick Charge',   ['pos', 'till', 'quick_charge'],                5, 0],
@@ -63,7 +65,7 @@ const SPEC = [
   ['Entertainment bookings',      ['entertainment_bookings'],                     5, 0],
   ['Legal bookings',              ['legal'],                                      5, 0],
   ['Other service bookings',      ['services', 'fitness', 'insurance'],           5, 0],
-  ['Education',                   ['education'],                                 15, 0],
+  ['Education',                   ['education'],                                  5, 0],   /* owner 2026-10-03: 5% paid by teacher/institution (was 15%) */
   ['Car Hub vehicle sales (2%)',  ['vehicles', 'car_hub', 'car_dealer'],         2, 0],   /* owner 2026-10-03: 2% of the sale price (was KES 2,000 flat) */
   ["SOKONI's own plans",          ['subscriptions', 'subscription'],            100, 0],
 ];

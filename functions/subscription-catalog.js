@@ -369,10 +369,13 @@ function _satisfies(features, feature, needed) {
   if (typeof v === 'number') return v === -1 || (needed == null ? v > 0 : Number(needed) <= v);
   return !!v;
 }
+/* Shape check only. The capability is ECHOED in upgradeRequired, never granted here, so validating it against the
+   capability engine is not a security boundary. The engine (shared/service-capabilities.js) lives on another lineage,
+   and the deploy require-closure gate refuses a module absent from the tree even behind try/catch — so this file no
+   longer requires it (2026-10-03). */
 function _capabilityOk(capability) {
   if (capability == null) return true;
-  try { return require('./shared/service-capabilities').isCapability(capability); }
-  catch (_) { return /^[A-Z][A-Z_]+$/.test(String(capability)); }  /* engine on another branch: shape check only */
+  return /^[A-Z][A-Z_]+$/.test(String(capability));
 }
 /**
  * requireFeature(subscription, { hubType, feature, capability, needed })

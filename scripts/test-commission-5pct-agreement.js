@@ -44,7 +44,12 @@ console.log('\nA. Online sales rate = 15%, by intent (owner schedule 2026-09-28)
   ck('  ...and matches a real category (not the default bucket)',
      m.matched === true && m.category === 'marketplace', m.category);
 }
-for (const alias of ['product', 'products', 'shopping', 'b2b']) {
+/* 'b2b' → b2b_order 0% since 2026-10-03 (owner: lead fee, no % on wholesale orders) — asserted below and in test-b2b-lead-fee.js. */
+{
+  const r = CC.resolveRate('b2b');
+  ck('"b2b" -> b2b_order @ 0% (lead model, never the marketplace rate)', r.pct === 0 && r.category === 'b2b_order' && r.matched === true, r.pct + '% ' + r.category);
+}
+for (const alias of ['product', 'products', 'shopping']) {
   const r = CC.resolveRate(alias);
   ck(`"${alias}" -> marketplace @ 15%`,
      r.pct === 15 && r.category === 'marketplace' && r.matched === true,
@@ -70,7 +75,7 @@ const EXPECTED = {   /* owner schedule 2026-09-28 (jobs/classifieds/ppv/advertis
   /* owner 2026-10-03: healthcare bookings 12 -> 5 (every service booking 5%); vehicles KES 2,000 flat -> 2% of the sale price */
   food_delivery: 15, property: 0, vehicles: 2, healthcare: 5, legal: 5, events: 5,
   hotel: 15, digital_products: 10, event_tickets: 5, ppv: 15, services: 5,
-  education: 15, jobs: 15, classifieds: 8, hub: 17, subscriptions: 100,
+  education: 5, jobs: 0, classifieds: 8, hub: 17, subscriptions: 100,
   advertising: 100, saas: 0,
 };
 let drift = [];

@@ -8026,6 +8026,40 @@ exports.webhookIntasend = onRequest(
         /* Membership payment (owner 2026-10-03): HELD by SOKONI, never credited here — membership-settlement releases
            it monthly after the first attendance. Decided on THIS read (no extra intent read); fitness_membership is also
            self-settling, so if this read fails the SECOND exit below still refuses any seller credit. */
+        /* B2B lead invoice Pay Now (owner 2026-10-03): the verified payment reduces the supplier's outstanding lead
+           invoices through the SAME prepare/commit path as a settlement deduction. Claims are per (payment, invoice), so
+           a replay recovers nothing twice; any surplus (an invoice already recovered by a deduction meanwhile) is
+           recorded for admin review — never auto-credited. */
+        if (_fiSnap.exists && _fiSnap.data().resourceType === 'b2bLeadInvoice') {
+          try {
+            const _bl = require('./b2b-leads');
+            const _in = _fiSnap.data();
+            const _paidKES = Number.isFinite(Number(_in.amount)) && Number(_in.amount) > 0 ? Number(_in.amount) : Number(_in.amountCents) / 100;
+            await db.runTransaction(async (t) => {
+              const st = await _bl.preparePayment(t, db, { paymentRef: apiRef, billToUid: _in.uid, amountKES: _paidKES });
+              const r = _bl.commitLeadRecovery(t, st, { serverTs: () => admin.firestore.FieldValue.serverTimestamp() });
+              if (r.deductedKES === 0 && r.replayedKES > 0) return;   /* replay of an applied payment */
+              if (r.netKES > 0) t.create(db.collection('b2bLeadOverpayments').doc(String(apiRef)), {
+                uid: _in.uid, paymentRef: String(apiRef), paidKES: _paidKES, appliedKES: r.totalRecoveredKES, surplusKES: r.netKES,
+                status: 'needs_review', createdAt: admin.firestore.FieldValue.serverTimestamp() });
+            });
+          } catch (blErr) {
+            if (!(blErr && (blErr.code === 6 || blErr.code === 'already-exists'))) logger.error('[webhookIntasend] lead invoice payment failed', { ref: apiRef, err: blErr && blErr.message });
+          }
+          res.status(200).send("OK"); return;
+        }
+        /* Car Hub vehicle boost (owner 2026-10-03): activated only by this VERIFIED payment; idempotent on the ref. */
+        if (_fiSnap.exists && _fiSnap.data().resourceType === 'vehicleBoost') {
+          try {
+            const _vb = require('./vehicle-boosts');
+            await _vb.fulfilVehicleBoost(db, _fiSnap.data(), apiRef, {
+              inc: (n) => admin.firestore.FieldValue.increment(n),
+              tsFromDate: (d) => admin.firestore.Timestamp.fromDate(d) });
+          } catch (vbErr) {
+            if (!(vbErr && (vbErr.code === 6 || vbErr.code === 'already-exists'))) logger.error('[webhookIntasend] vehicle boost fulfilment failed', { ref: apiRef, err: vbErr && vbErr.message });
+          }
+          res.status(200).send("OK"); return;
+        }
         if (_fiSnap.exists && _fiSnap.data().resourceType === 'providerMembership') {
           await require('./membership-settlement').holdMembershipPayment(db, admin, apiRef, existing.intentRef, amount);
           res.status(200).send("OK"); return;
@@ -13461,3 +13495,19 @@ exports.membershipReleaseSweep = _membershipSettlement.membershipReleaseSweep;
 exports.membershipRequestRefund = _membershipSettlement.membershipRequestRefund;
 exports.membershipDecideRefund     = _membershipSettlement.membershipDecideRefund;
 exports.membershipRequestException = _membershipSettlement.membershipRequestException;
+
+/* ── Car Hub vehicle boosts (owner 2026-10-03): catalogue (public read) + Super Admin price override. ── */
+const _vehicleBoosts = require('./vehicle-boosts');
+exports.vehicleBoostCatalogue      = _vehicleBoosts.vehicleBoostCatalogue;
+exports.adminSetVehicleBoostPrices = _vehicleBoosts.adminSetVehicleBoostPrices;
+
+/* ── B2B lead fee (owner 2026-10-03): KES 200 + 16% VAT per RFQ a supplier receives, invoiced monthly. ── */
+const _b2bLeads = require('./b2b-leads');
+exports.b2bLeadMonthlyInvoices = _b2bLeads.b2bLeadMonthlyInvoices;
+exports.b2bLeadInvoiceSweep    = _b2bLeads.b2bLeadInvoiceSweep;
+exports.b2bLeadPrice           = _b2bLeads.b2bLeadPrice;
+exports.adminSetB2bLeadPrice   = _b2bLeads.adminSetB2bLeadPrice;
+exports.b2bLeadStatement       = _b2bLeads.b2bLeadStatement;
+
+/* ── Platform-wide transaction receipts (owner 2026-10-03): the caller's own payment receipts. ── */
+exports.myTransactionReceipts = require('./transaction-receipts').myTransactionReceipts;

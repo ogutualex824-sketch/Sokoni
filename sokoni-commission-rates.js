@@ -92,11 +92,11 @@
       "fixedKES": 0
     },
     "education": {
-      "pct": 15,
+      "pct": 5,
       "fixedKES": 0
     },
     "jobs": {
-      "pct": 15,
+      "pct": 0,
       "fixedKES": 0
     },
     "classifieds": {
@@ -119,6 +119,10 @@
       "pct": 0,
       "fixedKES": 0
     },
+    "b2b_order": {
+      "pct": 0,
+      "fixedKES": 0
+    },
     "default": {
       "pct": 5,
       "fixedKES": 0
@@ -129,7 +133,10 @@
     "product": "marketplace",
     "products": "marketplace",
     "shopping": "marketplace",
-    "b2b": "marketplace",
+    "b2b": "b2b_order",
+    "wholesale": "b2b_order",
+    "b2b_wholesale": "b2b_order",
+    "rfq": "b2b_order",
     "till": "pos",
     "quick_charge": "pos",
     "quickcharge": "pos",
@@ -154,6 +161,8 @@
     "sports": "events",
     "freelancer": "jobs",
     "freelance": "jobs",
+    "gig": "jobs",
+    "gigs": "jobs",
     "logistics": "hub",
     "delivery": "hub",
     "driver": "hub",
@@ -179,7 +188,7 @@
   /* RAW category labels priced by the plan ladder. "pos" is deliberately ABSENT even though
      it ALIASES to marketplace — keying on the resolved category would put every till sale on
      the ladder and triple a Free merchant's till commission. */
-  var MARKETPLACE_CATEGORIES = ["marketplace","product","products","shopping","b2b"];
+  var MARKETPLACE_CATEGORIES = ["marketplace","product","products","shopping"];
 
   var MIN_COMMISSION_KES = 10;
 

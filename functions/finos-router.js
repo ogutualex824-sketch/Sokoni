@@ -58,7 +58,7 @@ const HUB_CATEGORY_MAP = {
   insurance: 'services',
   pharmacy: 'healthcare',
   sports: 'events', fitness: 'services',
-  b2b: 'marketplace',
+  b2b: 'b2b_order',          /* owner 2026-10-03: lead model, 0% on wholesale orders (commission-config RATES.b2b_order) */
   default: 'marketplace',
 };
 

@@ -706,3 +706,140 @@ No duplicate authority was found on the money side.
   - 48h 87/0 · invoice 52/0 · lane separation 22/0 (2 UNPROVEN, pre-existing) · settlement authority 53/0 · healthcare plan 16/0 · KASS 7/0 · POS lane 92/0 · POS rail 80/0 · subscription classification 21/0 · single-source verify PASS · schedule 25/0 · fixed-rate 32/0 · ladder 38/0 · pos-sale 78/0
   - `commission-balance-ui`: 2 FAIL, **pre-existing**. Identical on 6be1561, before today; these are page / callable checks, not rates.
 - **Sales switch.** `shared/fitness-sales-switch` logs `FLAG_UNREADABLE` (warn) on a read error and still fails closed (sokoni-e3's suggestion).
+
+## 15 · Car Hub paid products (owner 2026-10-03, via sokoni-f3): one catalogue, configurable prices
+
+**Plans** live in `sub-billing.js` PLANS and are read by `subscription-catalog`. They are monthly only (annual unpriced, so annual billing is refused). Prices are editable without a deploy through AdminOS `adminSubUpdatePlan` (`subscriptionPlans/{id}` overrides, read by `createPaymentIntent` at payment time).
+
+- **Dealer plans** (`hubType 'car_dealer'`):
+
+  | Plan | KES / month | Listings | Featured credits / month |
+  |---|---|---|---|
+  | Free (kept) | 0 | — | — |
+  | Starter | 1,500 | 10 | 2 |
+  | Growth | 3,000 | 30 | 5 |
+  | Pro | 5,000 | 75 | 10 |
+  | Business | 8,000 | 150 | 20 |
+  | Enterprise | 15,000 | 300 | 40 |
+
+  Every paid tier has `in_app_leads` (no WhatsApp hand-offs). The `car_dealer_pro` id is reused for the new Pro; production held 0 subscriptions on the old KES 2,499 Pro (read-only count, positive control: subscriptions total 7).
+- **Vehicle tracking** (`hubType 'vehicle_tracking'`):
+
+  | Plan | KES / month | Vehicles |
+  |---|---|---|
+  | Basic | 300 | 1 |
+  | Standard | 500 | 1 |
+  | Pro | 800 | 1 |
+  | Fleet5 | 2,000 | 5 |
+  | Fleet10 | 3,500 | 10 |
+  | Fleet25 | 7,500 | 25 |
+
+  Every tier has location + trip history + vehicle status. No further per-tier features are invented: Standard and Pro differ by price until the owner says otherwise.
+- **Entitlement names for Car Hub:**
+  - `listings_limit`, `featured_credits_monthly`, `in_app_leads` (`car_dealer`)
+  - `vehicle_limit`, `location_tracking`, `trip_history`, `vehicle_status` (`vehicle_tracking`)
+
+  Gates call `requireFeature(sub, {hubType, feature, needed})`.
+- **Payment:** the existing subscription path, `createPaymentIntent({planId, billingCycle:'monthly'})` → `reconcilePaidIntent`. No new purpose.
+
+**Boosts** (`functions/vehicle-boosts.js`):
+- **Seed prices:** Quick 24h 50 · Standard 3d 100 · Featured 7d 200 · Premium 14d 350 · Top Spotlight 30d 600 · bundles 5×7d 800, 10×7d 1,500, 20×7d 2,500.
+- **Overrides:** an override in `revenueConfig/vehicle_boosts.prices` is set via `adminSetVehicleBoostPrices` (Super Admin only, whole KES 1–100,000, audited in `adminAudit`). An invalid override is ignored and the seed stands. `vehicleBoostCatalogue` is the read.
+- **Purpose** `vehicle_boost` (resourceType `vehicleBoost`) is priced from the catalogue, never the request. It is **self-settling**.
+- **Fulfilment:** the webhook fulfils on the existing early intent read (`fulfilVehicleBoost`, idempotent on the payment ref).
+  - A single boost writes `listingBoosts/{ref}` (listing, placement, startsAt, endsAt).
+  - A bundle writes `boostCredits/{uid}.credits7d` + `boostCreditLedger`.
+  - `consumeBoostCredit` turns one credit into a 7-day boost. Car Hub must verify listing ownership first.
+
+**Finding:** the pre-existing generic `boost` purpose (marketplace listings, prices hard-coded) has **no fulfilment anywhere**. Paid boosts activate nothing. It is left as-is, flagged.
+
+**Not mine / open:**
+- sokoni-5b ports the webhook hook (same shape as the membership hold).
+- Car Hub reads `listingBoosts` for placement and consumes credits.
+- Vehicle sale stays 2% with no trigger.
+- Subscription ≠ sale commission.
+
+**Tests:** `scripts/test-carhub-catalogue.js` 16/0. hub-plan-entitlements 17/0 (all new plan ids resolve; none to FREE by accident). membership 77/0, schedule 25/0. creator-callback still has only its 4 pre-existing failures.
+
+## 16 · B2B Hub: lead fee + 0% on wholesale orders (owner 2026-10-03, via sokoni-f3)
+
+**Owner decisions:**
+- **Earning model:** a lead fee, with **no % cut on wholesale orders**. A lead is each RFQ/enquiry a supplier receives through SOKONI.
+- **Price:** KES 200 per lead + 16% VAT. VAT was chosen explicitly, so the treatment is standard-rated and stated exclusive of VAT.
+- **Billing:** per supplier, per calendar month (Africa/Nairobi), invoiced at month end as a SOKONI → supplier platform invoice.
+- **Price changes:** admin-editable.
+
+**Order exemption** (`commission-config`):
+- **New row:** `RATES.b2b_order` is 0%, a **fixed, floor-exempt** lane.
+- **Aliases:** `b2b`, `wholesale`, `b2b_wholesale` and `rfq` all resolve to it. `b2b` was an alias of `marketplace`, which would have charged a wholesale order 15%.
+- **Ladder:** `b2b` is removed from `MARKETPLACE_SELLER_CATEGORIES`.
+- **Router:** `finos-router` maps hub `b2b` to `b2b_order`.
+- **Why fixed:** a fixed lane means no commissionRule, revenueConfig override, plan ladder or KES 10 minimum can reprice it. A mutant proved this: without the fixed lane, a seller's 12% override charged KES 60,000 on a KES 500,000 order.
+- **Billing term:** `b2b` is no longer on the 48-hour per-sale commission term (nothing is owed).
+
+**Lead fee** (`functions/b2b-leads.js`): one writer per collection.
+- **Lead rows:** `b2bLeads/{rfqId}__{supplierBusinessId}` is written **only by rfq.js** (sokoni-f3, `functions/b2b-rfq-on-e61c73e @ 38ab5a8`), after it re-reads supplier consent. This module never writes a lead.
+- **Price snapshot:** rfq.js should spread `leadFields(db)` (`priceKES`, `priceSource`) into each row, so a price change applies only to later leads. A row without a snapshot is priced at invoice time and counted in `unsnapshottedLeads`.
+- **Month end:** `b2bLeadMonthlyInvoices` runs on the 1st at 07:00 EAT. It reads the previous month's ledger (paged, once), groups it by supplier and drops self-RFQs.
+  - It claims `b2bLeadMonths/{sup}__{month}` with the totals stored at first claim.
+  - It issues **one** invoice through `etims._issuePlatformInvoice` (`feeType 'lead'`, `taxCategory 'standard'`, `vatInclusive false`; billed to `supplierOwnerUid`).
+  - A failed or stale claim is retried by `b2bLeadInvoiceSweep` (daily) at the **stored** total, never a recount.
+  - Both schedulers bind the eTIMS secrets (now exported as `etims._ALL_SECRETS`).
+- **Price callables:** `b2bLeadPrice` is the public read. `b2bLeadStatement` is the supplier's own statement (caller = billToUid; invoiced months + month in progress; VAT via the tax engine; no internal claim fields). Rules keep `b2bLeadMonths` admin-read. `adminSetB2bLeadPrice` is Super Admin only, whole KES 1–100,000, and audited.
+
+**Open (owner):**
+- How a supplier **pays** the lead invoice (wallet debit, IntaSend link, or offset against B2B settlements). The invoice is the receivable; collection is not invented.
+- The held B2B order payment purpose (IntaSend, held until delivery, settled to the business wallet, priced under `b2b_order`) is still to be defined with 5b.
+
+**Finding (not changed):** `subscription-invoice.subIssuePendingInvoices` binds **no** eTIMS secrets. A v2 scheduled run that reaches `_issuePlatformInvoice` cannot read `ETIMS_PLATFORM_PIN`, so the sweep can only record `failed`. This needs its own commit.
+
+**Tests:**
+- `scripts/test-b2b-lead-fee.js` 21/0, including the real VAT engine (600 + 96 = 696) and the real `calculateCommission` with a live control.
+- Amended for the owner decision: 48h-destinations 87/0, 5pct-agreement 62/0, schedule 26/0 (client snapshot `sokoni-commission-rates.js` rebuilt).
+- commercial-facts 1c amended for vehicles 2% (stale since 9cab901).
+- Failures identical on base `09964a2`: commercial-facts 3b, commission-balance-ui ×2.
+
+## 17 · B2B lead invoice recovery: settlement deduction, Pay Now, overdue gate (owner 2026-10-03; agreed with sokoni-f3 / sokoni-5b)
+
+**When an invoice becomes owed.** The receivable opens at the **successful** issue:
+- `b2bLeadMonths.outstandingKES` = net + 16% VAT (tax engine), `paidKES` = 0.
+- A failed or deferred eTIMS attempt opens nothing, so the 2-day clock starts at `issuedAtMs` of the real issue.
+
+**One recovery path, two callers** (claims in `b2bLeadRecoveries`):
+- **Settlement deduction:** at release of a buyer-paid B2B order (5b owns hold/release and supplies the hook), the supplier payout is reduced by min(outstanding, settlement), oldest invoice first. The buyer is never touched. Claim `leaddeduct_<settlementId>_<invoiceKey>`.
+- **Pay Now:** purpose `b2b_lead_invoice`, priced from `payNowAmount` (the server balance), self-settling, platform revenue. The verified webhook applies it on the early intent read. Claim `leadpay_<ref>_<invoiceKey>`. A surplus (balance recovered meanwhile) goes to `b2bLeadOverpayments` for admin review and is never auto-credited.
+
+**Read/write split** (Firestore: all reads before writes):
+- `prepareLeadDeduction(t, db, {settlementId, billToUid, settlementKES})` (or `preparePayment`): discovers candidate invoice ids outside the transaction, then `t.get()`s every invoice **and** this operation's claim inside it. Amounts come only from those reads.
+- `commitLeadDeduction(t, state)`: `create()` per claim, decrement `outstandingKES`, set status `paid` at 0. Returns `{deductedKES, replayedKES, totalRecoveredKES, netKES, lines}`.
+- **Retries:** the **operation** is the idempotency unit. Every commit, zero lines included, creates `b2bLeadRecoveries/<opKey>` with its totals. `prepare` reads it first and, if present, returns a pure replay: 0 more and the **same** net, even if a new invoice was issued between runs (defect found in sokoni-f3's review, fixed). The same holds for a replayed Pay Now webhook.
+- **Late changes:** a Pay Now that commits between discovery and the release is re-read as 0. An invoice issued after discovery carries forward.
+- **Reversals:** a refund or void of the B2B order after a deduction does **not** reverse it (owner policy required).
+
+**Gate:** `leadInvoiceGate(db, uid, nowMs)` → `{overdue, overdueKES, invoiceKeys, since, enforce:false}`.
+- **Overdue:** issued more than 2 days ago and still outstanding.
+- **One definition:** the predicate lives in `functions/shared/lead-invoice-gate.js`, byte-identical on the gated POS line (`fix/pos-restock-on-approval-on-d4a167c @ 9db13df`), where `pos-commission-rail` consumes it.
+- **Owner of both ends:** 2f owns the producer and the consumer (a second reason inside evaluateMerchantGate/assertGateOpen on the gated POS line, with its own card).
+- **Enforcement:** it starts enforcing only after the Pay Now is certified.
+
+**Tests:** `scripts/test-b2b-lead-recovery.js` 21/0 (adds D3c/D3d/D3e and P1e).
+- **Mutants:** dropping the claim read fails D3; trusting discovery amounts instead of the in-transaction re-read fails D4.
+
+## 18 · Education commission (owner 2026-10-03, via sokoni-5b)
+
+- **Rate:** `RATES.education` is 5% (was 15%, "category only", never owner-set), paid by the teacher or institution once per sale and never added on top for the learner.
+- **Plan discounts:** education is added to `FLAT_BOOKING_CATEGORIES`, so no plan moves it.
+- **Plans:** education plans arrive from 5b with the owner's prices (`hubType 'education'`).
+- **Snapshot:** client snapshot rebuilt.
+
+## 19 · Jobs: 0% commission (owner 2026-10-03, via sokoni-f3) · Legal free-plan cap (owner 2026-10-03)
+
+**Jobs**
+- **Rate:** `RATES.jobs` is 0% (was 15%, "category only", never owner-set). It is a FIXED, floor-exempt lane, so no override, plan or KES 10 minimum applies.
+- **Aliases:** `freelance`, `freelancer`, `gig` and `gigs` resolve to it. There is deliberately no bare `job` alias, because the work engine's "job" is a service job.
+- **Earning model:** applications are free. SOKONI earns from Jobs only through employer products (subscriptions, paid/featured listings, promotion, enterprise). These are built **unpriced** and switched off until the owner sets prices; f3 sends catalogue rows then.
+
+**Legal free plan:** the consultation card that SOKONI's legal-verification projection creates does not count toward the active-service cap.
+- **Scope:** exactly `providerServices/legal_consult_{uid}` with `createdBy 'legal-verification'`, in `provider-ops` add, duplicate and re-activation.
+- **Copies:** a duplicate of the card counts like any other service.
+- **Test:** `scripts/test-legal-auto-card-cap.js` 9/0.

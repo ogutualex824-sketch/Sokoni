@@ -20,6 +20,21 @@
   - firm.teamDeclared stays private. firmUid / firmMembershipStatus are protected from self-service edits.
 - **Tests:** test-legal-profile FM1–FM4 (23/0); sabotage-legal-profile 10/10.
 - **Index:** where(firmUid ==) is a single field, so no composite index.
+## 2026-10-03 — Platform-wide transaction receipts: module + read callable (hooks not wired; NOT deployed)
+
+- **New:** functions/transaction-receipts.js (transactionReceipts + immutable events; SKN-RCT numbering reused; taxTreatment recorded, never computed); myTransactionReceipts callable.
+- **Doc:** docs/TRANSACTION_RECEIPTS_2026-10-03.md (census, model, hook contract for b2).
+- **Test:** test-transaction-receipts 13/0.
+
+## 2026-10-03 — B2B lead recovery: the OPERATION is the idempotency unit (op header) — a retry after a new invoice no longer cuts again (NOT deployed)
+
+- **Defect:** found in sokoni-f3's review.
+- **Fix:** b2bLeadRecoveries/<opKey> header created on every commit; prepare replays from it.
+- **Tests:** test-b2b-lead-recovery 21/0; header-read mutant fails 6 named rows.
+
+## 2026-10-03 — Jobs commission 0% (fixed lane; freelance/gig aliases) (NOT deployed)
+
+- **Change:** commission-config RATES.jobs 0%, FIXED + floor-exempt; client snapshot rebuilt; schedule/5pct suites amended.
 
 ## 2026-10-03 — Legal free plan: the auto consultation card does not count toward the service cap (owner decision; NOT deployed)
 
@@ -115,6 +130,26 @@
   - Removing both turns G2 red (CAUGHT). Ignoring acceptsBookings in both turns G4 red (CAUGHT).
 - **scripts/lib/inmem-firestore.js:** the shared in-memory harness, copied from the Tech Hub line (b2).
 - No code path changed. No database, API or security change.
+
+- **Receivable:** b2b-leads opens outstandingKES at a successful issue.
+- **Recovery:** prepareLeadDeduction/preparePayment + commitLeadRecovery (in-txn re-reads, create() claims).
+- **Gate:** leadInvoiceGate (enforce:false).
+- **Pay Now:** purpose b2b_lead_invoice (self-settling) + webhook hook.
+- **Education:** commission-config education 5% flat.
+- **Tests:** test-b2b-lead-recovery 16/0 (2 mutants caught); commission suites green.
+
+## 2026-10-03 — B2B lead fee (KES 200 + 16% VAT, monthly platform invoice) + 0% fixed lane for B2B orders (NOT deployed)
+
+- **Order exemption:** commission-config RATES.b2b_order (0%, fixed, floor-exempt); b2b/wholesale/rfq aliases; finos-router b2b → b2b_order.
+- **Lead fee:** functions/b2b-leads.js reads rfq.js's b2bLeads ledger and invoices each supplier monthly through the one eTIMS engine (fee type 'lead').
+- **Functions:** b2bLeadMonthlyInvoices, b2bLeadInvoiceSweep, b2bLeadPrice, adminSetB2bLeadPrice; etims exports _ALL_SECRETS.
+- **Tests:** test-b2b-lead-fee 21/0; commission suites amended; client rate snapshot rebuilt.
+
+## 2026-10-03 — Car Hub paid products: dealer + tracking plans, configurable vehicle boosts (NOT deployed)
+
+- **Plans:** sub-billing PLANS (car_dealer_* tiers, tracking_*), prices editable via adminSubUpdatePlan.
+- **Boosts:** functions/vehicle-boosts.js (vehicle_boost purpose, self-settling, webhook fulfilment, Super Admin price override); exports vehicleBoostCatalogue + adminSetVehicleBoostPrices.
+- **Tests:** test-carhub-catalogue 16/0.
 
 ## 2026-10-03 — Car Hub vehicle sales 2% of the sale price (owner, via sokoni-f3; no live trigger yet); commission suites swept (NOT deployed)
 
