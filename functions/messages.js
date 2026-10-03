@@ -42,6 +42,7 @@ const TX_COLLECTIONS = {
   logistics_request:        'packageRequests',
   support_ticket:           'supportTickets',
   rfq:                      'rfqRecipients',     /* B2B RFQ (sokoni-f3 38ab5a8): ONE conversation per (rfq, supplier) — txId = rfqId__supplierBusinessId */
+  product_enquiry:          'contactRequests',   /* product "Contact seller" (sokoni-f3 contract): the ONE enquiry = lead record (df1a4cb) — txId = request id */
 };
 
 /* Older collections a transaction type may still live in, read in order after TX_COLLECTIONS (Tech slice 4L). */
@@ -135,6 +136,7 @@ const PARTY_FIELDS = {
   job_application:     ['seekerUid', 'employerUid'],   /* J4: the applicant + the employer of THAT application, set by the server in applyForJob */
   legal_consultation:  ['clientUid', 'providerId'],
   rfq:                 ['buyerUid', 'supplierOwnerUid'],   /* rfqRecipients/{rfqId}__{supplierBusinessId}: the buyer account + the supplier business owner at delivery (account-scoped) */
+  product_enquiry:     ['buyerUid', 'sellerUid'],          /* contactRequests/{id}: the enquiring buyer + the product's seller (sellerUid bound to products/{productId} by rules) */
   logistics_request:   ['buyerUid', 'uid', 'sellerUid', 'assignedDriverId'],
   support_ticket:      ['uid'],
 };
@@ -153,6 +155,19 @@ function _partiesOf (transactionType, tx) {
   return out;
 }
 exports._PARTY_FIELDS = PARTY_FIELDS;
+
+/* product_enquiry (sokoni-f3 contract): the enquiry's seller must STILL be the product's seller. A product that was
+   transferred to another seller, or deleted, closes the thread for new messages — the old seller never keeps a channel
+   to a buyer about a product they no longer sell. Returns null when valid, else a refusal code. */
+async function _productEnquiryRefusal(db, enq) {
+  const pid = enq && typeof enq.productId === 'string' ? enq.productId : '';
+  if (!pid) return 'PRODUCT_ENQUIRY_NO_PRODUCT';
+  const p = await db.collection('products').doc(pid).get();
+  if (!p.exists) return 'PRODUCT_ENQUIRY_PRODUCT_GONE';
+  if ((p.data() || {}).sellerUid !== enq.sellerUid) return 'PRODUCT_ENQUIRY_SELLER_CHANGED';
+  if (enq.buyerUid === enq.sellerUid) return 'PRODUCT_ENQUIRY_SELF';
+  return null;
+}
 
 /* ══ SERVER-ANCHORED conversations (Sports, sokoni-2f contract adopted 2026-10-03) ═══════════════════════════════════
    Group relationships whose membership CHANGES (a roster, a tournament's registered teams). Rules gate reads on
@@ -321,6 +336,10 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
   }
   if (participantUids.indexOf(uid) === -1) {
     throw new HttpsError('permission-denied', 'Not a party to this transaction');
+  }
+  if (transactionType === 'product_enquiry') {
+    const why = await _productEnquiryRefusal(db, txSnap.data());
+    if (why) throw new HttpsError('failed-precondition', 'This enquiry can no longer be opened — the product has changed hands or was removed.', { code: why });
   }
 
   /* Fetch participant profiles */
@@ -990,6 +1009,16 @@ exports.sendMessage = onCall(
       if (!d || d.participants.indexOf(req.auth.uid) === -1) throw new HttpsError('permission-denied', 'Not a party to this conversation');
       if (d.readOnly) throw new HttpsError('failed-precondition', 'This conversation is read-only.', { code: 'ANCHORED_READ_ONLY' });
       if (d.senders.indexOf(req.auth.uid) === -1) throw new HttpsError('permission-denied', 'Only the organiser can post in this announcement channel.', { code: 'ANCHORED_ANNOUNCE_ONLY' });
+    }
+    /* product_enquiry (sokoni-f3 contract): re-derive the parties from the contactRequests doc on EVERY send, and refuse
+       once the product's seller is no longer the enquiry's seller (transferred / deleted product). */
+    if (conv.transactionType === 'product_enquiry') {
+      const eSnap = await db.collection('contactRequests').doc(String(conv.transactionId || '')).get();
+      if (!eSnap.exists) throw new HttpsError('failed-precondition', 'This enquiry no longer exists.');
+      const enq = eSnap.data() || {};
+      if (enq.buyerUid !== req.auth.uid && enq.sellerUid !== req.auth.uid) throw new HttpsError('permission-denied', 'Not a party to this enquiry');
+      const why = await _productEnquiryRefusal(db, enq);
+      if (why) throw new HttpsError('failed-precondition', 'This product has changed hands or was removed. The conversation stays readable, but new messages are closed.', { code: why });
     }
     /* Jobs J4 (owner hard security gate, via sokoni-f3): every send re-derives the parties from the APPLICATION doc —
        never from the stored participant list or the request — and a terminal application (hired / rejected / withdrawn /

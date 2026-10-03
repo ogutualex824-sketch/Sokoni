@@ -1,3 +1,22 @@
+## [2026-10-03] — Messaging: product_enquiry conversations anchored on contactRequests (sokoni-f3 contract, Construction + every hub) — NOT deployed
+
+- **functions/messages.js:**
+  - `product_enquiry` → contactRequests (the ONE enquiry = lead record the product page's "Contact seller" writes, df1a4cb); PARTY_FIELDS ['buyerUid','sellerUid']; txId = request id.
+  - createConversation and EVERY sendMessage re-derive the parties from the enquiry doc. Both also refuse when products/{productId}.sellerUid no longer equals the enquiry's sellerUid, with these codes:
+    - PRODUCT_ENQUIRY_SELLER_CHANGED: the product was transferred;
+    - PRODUCT_ENQUIRY_PRODUCT_GONE: the product was deleted;
+    - PRODUCT_ENQUIRY_NO_PRODUCT;
+    - PRODUCT_ENQUIRY_SELF.
+  - History stays readable. No new collection (no productEnquiries).
+- **Tests:**
+  - scripts/test-messages-product-enquiry.js E0–E6 7/0, mutations 8/8 caught by name (wrong party, third party, request-supplied parties, forged stored list, changed seller, deleted product).
+  - Regression: messages-jobs 8/0, messages-sports 8/0, messages-service-booking 7/0.
+  - messages-participant-authority 49/2: the same 2 rows fail at HEAD df3d57f before this change.
+  - messages-history-scoping NOT RUN: it needs @firebase/rules-unit-testing / the emulator, and memory is below the floor.
+- **Security:** contactRequests create/transition rules are f3's combined candidate f9a5c45 (sellerUid bound to the product via get(), no self-enquiry, exact df1a4cb key set).
+- **Hosting (separate):** ?tx=product_enquiry allowlist + SokoniInbox.TX_TYPES + an "Open chat" button after a request is created.
+- **API:** new transactionType value. **Database:** none. **Breaking:** none.
+
 ## [2026-10-03] — Marketing Hub MK1 + MK2 (server): one taxonomy, three separate application types, partial category approval through the shared AdminOS review — NOT deployed
 
 - **functions/shared/marketing-taxonomy.js (new):**
