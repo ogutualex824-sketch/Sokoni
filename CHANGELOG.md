@@ -1,3 +1,19 @@
+## [2026-10-03] — SECURITY: Marketing authority from the SERVER decision record (forged providers.marketing* refused) + workspace `marketing` flag — NOT deployed
+
+- **The hole:** the served rules let a provider write their own providers.marketingStatus / marketingListed / marketingCategories, and applications.marketingApprovedCategories. Every Marketing check trusted those fields. Same class as the P0 forged approval. Never live: Marketing is not deployed.
+- **Layer 1, rules (sokoni-f3 a408713):** all marketing* provider keys and the application decision keys are locked against owner create/update, in the P0 served-hotfix file and in the combined build.
+- **Layer 2, this commit — functions/shared/marketing-authority.js (new):**
+  - active = applicationDecisions/marketing_{uid}.status === 'approved' AND listing active;
+  - categories = provider.marketingCategories ∩ record.approvedCategories;
+  - FAIL CLOSED with no record, a non-approved record, or no approvedCategories.
+  - Used by provider-ops (service editor), booking-service (booking gate) and work-engine (campaign/project creation).
+- **business-workspace.js `businessWorkspace`:** returns `marketing` (boolean) + `marketingCategories`, server-computed. merchant-v2's provider session (sokoni-e3) reads this ONE flag, never providers fields.
+- **Depends on 5b:** the registry's marketing decide must write approvedCategories into applicationDecisions (requested). Until then no marketer is active on a tree that lacks it — fail closed, by design.
+- **Tests:**
+  - test-marketing-services 13/0 (new F1: self-written fields cannot list or be booked, claims cut to the record; WS: workspace flag) — SABOTAGE 9/9, including removing the record requirement.
+  - test-work-engine 12/0 (new W1f) — SABOTAGE 9/9.
+  - Regression: business-workspace 30/0, shell-approval-gate 21/0, shell-gate-mutations 9/0, workspace-capability 51/0, p0-forged-approval 11/0, candidate-shell-gate-compat 9/0, service-leads 14/0, tech-service-profile 18/0, service-capabilities 17/0, booking-contact 5/0, provider-suspend-restore 8/0, messages-product-enquiry 7/0.
+
 ## [2026-10-03] — Work/Job Engine WE1: the ONE category-neutral core for campaigns / projects (Marketing first skin; Construction next) — NOT deployed
 
 - **Ownership:** sokoni-f3 grepped 615 branch tips and found no existing engine. b2 owns the core. The shape is agreed with f3: origin link, typed scope lines, change requests with a money delta, evidence, typed completion, a disabled fee hook, business provider.

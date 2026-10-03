@@ -14,9 +14,10 @@ if (process.env.SABOTAGE) {
     ['S4', 'provider-ops.js', "  const mkt = await _marketingFields(uid, d, snap.data());", '  const mkt = null;'],
     ['S5', 'provider-ops.js', "  if (next && cur.hub === 'marketing') await _marketingFields(uid, {}, cur);", ''],
     ['B1', 'booking-service.js', "      ...svcSnapshot,", "      ...svcSnapshot, serviceCategory: _san(d.serviceCategory, 120) || svcSnapshot.serviceCategory,"],
-    ['B2', 'booking-service.js', "    if (!MSVC.approvedFor(prov, svc.category)) throw", "    if (false) throw"],
+    ['B2', 'booking-service.js', "    if (!MSVC.approvedFor(MA.effectiveProvider(prov, mAuth), svc.category)) throw", "    if (false) throw"],
     ['B3', 'booking-service.js', "    if (!leadCtx && !(svc.marketing && svc.marketing.capabilities && svc.marketing.capabilities.booking === true)) {", "    if (false) {"],
     ['S6', 'shared/marketing-services.js', "    booking: (modelIn === 'fixed' || modelIn === 'hourly') && capsIn.booking !== false,", "    booking: capsIn.booking !== false,"],
+    ['F1', 'shared/marketing-authority.js', "  if (!r) return { active: false, categories: [], type: null, why: 'no_decision_record' };", "  if (!r) return { active: (provider || {}).marketingStatus === 'active', categories: (provider || {}).marketingCategories || [], type: null, why: 'forged' };"],
   ];
   let caught = 0;
   for (const [row, file, a, b] of M) {
@@ -52,6 +53,8 @@ const seed = () => {
   H.reset();
   DOCS.set('providers/mk', { uid: 'mk', status: 'active', acceptsBookings: true, category: 'cleaning', categories: ['cleaning'],
     marketingStatus: 'active', marketingListed: true, marketingCategories: ['branding', 'seo'], marketingType: 'agency' });
+  /* the SERVER decision record (applicationDecide) — the marketing authority intersects the provider's fields with it */
+  DOCS.set('applicationDecisions/marketing_mk', { status: 'approved', decidedBy: 'admin1', approvedCategories: ['branding', 'seo'] });
   DOCS.set('providerSubscriptions/mk', { limits: { listings: -1 } });
   DOCS.set('providerAvailability/mk', { modes: ['open_24_7'], appt: {} });
   DOCS.set('users/mk', { displayName: 'mk', role: 'provider' }); DOCS.set('users/cust', { displayName: 'cust' });
@@ -74,6 +77,21 @@ const bookings = () => [...DOCS.keys()].filter((k) => k.startsWith('providerBook
     && s1.marketing.capabilities.booking === true && s1.marketing.capabilities.quote === true && s1.marketing.capabilities.campaign === true
     && s1.marketing.leadTimeDays === 7 && s1.marketing.deliverables.length === 3 && !/</.test(s1.marketing.deliverables.join('')),
     'a service in an APPROVED category: server writes hub marketing + group + capabilities; text sanitised', s1);
+  /* ── F: SECURITY — providers.marketing* is owner-writable on the served rules; only the server decision record counts ── */
+  DOCS.set('providers/forger', { uid: 'forger', status: 'active', acceptsBookings: true, marketingStatus: 'active', marketingListed: true, marketingCategories: ['seo', 'branding'] });
+  DOCS.set('providerSubscriptions/forger', { limits: { listings: -1 } }); DOCS.set('providerAvailability/forger', { modes: ['open_24_7'], appt: {} });
+  DOCS.set('providers/mk2', { uid: 'mk2', status: 'active', marketingStatus: 'active', marketingListed: true, marketingCategories: ['branding', 'seo'] });
+  DOCS.set('applicationDecisions/marketing_mk2', { status: 'approved', decidedBy: 'admin1', approvedCategories: ['branding'] });
+  DOCS.set('providerSubscriptions/mk2', { limits: { listings: -1 } });
+  const f1 = await call(PO.providerAddService, 'forger', { name: 'SEO', category: 'seo', price: 100000 });
+  const f2 = await call(PO.providerAddService, 'mk2', { name: 'SEO', category: 'seo', price: 100000 });
+  const f2ok = await call(PO.providerAddService, 'mk2', { name: 'Brand', category: 'branding', price: 100000 });
+  DOCS.set('providerServices/planted', { providerId: 'forger', name: 'Planted', category: 'seo', hub: 'marketing', price: 100000, active: true, durationMins: 60, marketing: { pricingModel: 'fixed', capabilities: { booking: true } } });
+  const f3 = await call(BS.bookingCreateService, 'cust', { providerId: 'forger', serviceId: 'planted', date: tomorrow(), startTime: '09:00' });
+  ck('F1', f1.det && f1.det.code === 'MKT_SERVICE_NOT_APPROVED' && f2.det && f2.det.code === 'MKT_SERVICE_NOT_APPROVED' && f2ok.ok && f3.det && f3.det.code === 'MKT_SERVICE_NOT_APPROVED'
+    && !bookings().some((b) => b.providerId === 'forger'),
+    'SECURITY: self-written marketing fields (no record) cannot list or be booked; fields claiming MORE than the record approves are cut to the record (seo refused, branding ok)', { f1, f2, f2ok: !!f2ok.ok, f3 });
+  DOCS.delete('providerServices/' + f2ok.ok.serviceId); DOCS.delete('providerServices/planted');
   r = await call(PO.providerAddService, 'mk', { name: 'Influencer push', category: 'influencer-marketing', price: 100000 });
   const r2 = await call(PO.providerAddService, 'plain', { name: 'SEO', category: 'seo', price: 100000 });
   ck('S2', r.code === 'permission-denied' && r.det && r.det.code === 'MKT_SERVICE_NOT_APPROVED' && r2.det && r2.det.code === 'MKT_SERVICE_NOT_APPROVED' && svcs().length === 1,
@@ -117,5 +135,11 @@ const bookings = () => [...DOCS.keys()].filter((k) => k.startsWith('providerBook
   await call(PO.providerToggleService, 'mk', { serviceId: sId, active: false });
   r = await call(PO.providerToggleService, 'mk', { serviceId: sId, active: true });
   ck('S5', r.det && r.det.code === 'MKT_SERVICE_NOT_APPROVED' && DOCS.get('providerServices/' + sId).active === false, 're-activating a marketing service needs a CURRENT approval', r);
+  /* ── WS: the ONE server flag merchant-v2's provider session reads (businessWorkspace.marketing) ── */
+  const BW = require(path.join(FN, 'business-workspace.js'))._h;
+  const wm = await call(BW.businessWorkspace, 'mk', {}), wf = await call(BW.businessWorkspace, 'forger', {}), w2 = await call(BW.businessWorkspace, 'mk2', {});
+  ck('WS', wm.ok && wm.ok.marketing === true && JSON.stringify(wm.ok.marketingCategories) === JSON.stringify(['seo'])
+    && wf.ok && wf.ok.marketing === false && wf.ok.marketingCategories.length === 0 && w2.ok && JSON.stringify(w2.ok.marketingCategories) === JSON.stringify(['branding']),
+    'businessWorkspace carries a server-computed marketing flag: genuine marketer true (current approved set); self-written fields false; claim cut to the record', { mk: wm.ok && [wm.ok.marketing, wm.ok.marketingCategories], forger: wf.ok && wf.ok.marketing, mk2: w2.ok && w2.ok.marketingCategories });
   done();
 })().catch((e) => { console.error(e); ck('CRASH', false, e.message); done(); });

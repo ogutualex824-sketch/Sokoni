@@ -162,7 +162,10 @@ _h.bookingCreateService = async (req) => {
      never the request's hubType. */
   const MSVC = require('./shared/marketing-services');
   if (svc.hub === 'marketing') {
-    if (!MSVC.approvedFor(prov, svc.category)) throw new HttpsError('failed-precondition', 'This marketing service is not currently approved on SOKONI.', { code: 'MKT_SERVICE_NOT_APPROVED' });
+    /* SECURITY: approval from the server decision record, never the provider's own (owner-writable) fields. */
+    const MA = require('./shared/marketing-authority');
+    const mAuth = await MA.marketingAuthority(db, providerId, prov);
+    if (!MSVC.approvedFor(MA.effectiveProvider(prov, mAuth), svc.category)) throw new HttpsError('failed-precondition', 'This marketing service is not currently approved on SOKONI.', { code: 'MKT_SERVICE_NOT_APPROVED' });
     if (!leadCtx && !(svc.marketing && svc.marketing.capabilities && svc.marketing.capabilities.booking === true)) {
       throw new HttpsError('failed-precondition', 'This service is priced by quote. Request a quote first.', { code: 'MKT_QUOTE_ONLY' });
     }

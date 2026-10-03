@@ -14,7 +14,7 @@ if (process.env.SABOTAGE) {
     ['W5', 'work-engine.js', "    if (actor !== 'customer') throw new HttpsError('permission-denied', 'Only the customer decides a change request.'", "    if (false) throw new HttpsError('permission-denied', 'Only the customer decides a change request.'"],
     ['W6', 'work-engine.js', "qty, rateCents: rate, amountCents: Math.round(qty * rate) };", "qty, rateCents: rate, amountCents: Number(l.amountCents) || Math.round(qty * rate) };"],
     ['W7', 'work-engine.js', "    const okRef = !raw || /^https:\\/\\/[^\\s]+$/i.test(raw) || raw.indexOf('workProjects/' + ref.id + '/') === 0;", '    const okRef = true;'],
-    ['W1', 'work-engine.js', "      if (!(p && p.marketingStatus === 'active' && p.marketingListed === true)) throw", '      if (false) throw'],
+    ['W1', 'work-engine.js', "      if (!mAuth.active) throw", '      if (false) throw'],
     ['W8', 'messages.js', "      if (wp.customerUid !== req.auth.uid && wp.providerUid !== req.auth.uid) throw new HttpsError('permission-denied', 'Not a party to this project');", ''],
     ['W9', 'work-engine.js', "  'active>cancelled': ['admin'],", "  'active>cancelled': ['admin', 'provider'],"],
   ];
@@ -54,7 +54,10 @@ console.log('\nWork/Job Engine WE1 — core + Marketing skin\n');
   const D = (op, uid, data, token) => call((r) => WE.workDispatch.run(r), uid, Object.assign({ op }, data || {}), token);
   H.reset();
   DOCS.set('providers/mk', { uid: 'mk', status: 'active', marketingStatus: 'active', marketingListed: true, marketingCategories: ['branding'] });
+  DOCS.set('applicationDecisions/marketing_mk', { status: 'approved', decidedBy: 'admin1', approvedCategories: ['branding'] });
   DOCS.set('providers/plain', { uid: 'plain', status: 'active' });
+  /* forger: wrote marketing fields on their OWN provider doc (owner-writable on the served rules) — no decision record */
+  DOCS.set('providers/forger', { uid: 'forger', status: 'active', marketingStatus: 'active', marketingListed: true, marketingCategories: ['branding'] });
   ['mk', 'plain', 'cust', 'x'].forEach((u) => DOCS.set('users/' + u, { displayName: u }));
   DOCS.set('serviceLeads/L1', { providerId: 'mk', customerUid: 'cust', status: 'quote_accepted', quote: { version: 2, amountCents: 9000000, serviceId: 's1', description: '3-month brand campaign' } });
   DOCS.set('serviceLeads/L2', { providerId: 'mk', customerUid: 'cust', status: 'quote_sent', quote: { version: 1, amountCents: 100 } });
@@ -64,6 +67,8 @@ console.log('\nWork/Job Engine WE1 — core + Marketing skin\n');
   let r = await D('workCreate', 'plain', { skin: 'marketing', kind: 'campaign', originType: 'direct', customerUid: 'cust', scope: { title: 'x' } });
   const r2 = await D('workCreate', 'mk', { skin: 'marketing', kind: 'campaign', originType: 'service_lead', leadId: 'L2' });
   const r3 = await D('workCreate', 'mk', { skin: 'marketing', kind: 'campaign', originType: 'rfq', rfqId: 'R1' });
+  const rf = await D('workCreate', 'forger', { skin: 'marketing', kind: 'campaign', originType: 'direct', customerUid: 'cust', scope: { title: 'x' } });
+  ck('W1f', rf.det && rf.det.code === 'WORK_NOT_APPROVED', 'SECURITY: self-written providers.marketing* (no server decision record) is NOT a marketer', rf);
   ck('W1', r.det && r.det.code === 'WORK_NOT_APPROVED' && r2.det && r2.det.code === 'WORK_QUOTE_NOT_ACCEPTED' && r3.det && r3.det.code === 'WORK_ORIGIN_UNSUPPORTED',
     'a non-marketer cannot create a marketing campaign; an UNaccepted quote cannot seed one; rfq origin is refused until Construction wires it', [r, r2, r3]);
 

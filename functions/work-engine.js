@@ -120,9 +120,9 @@ const _h = {
       providerBusinessId = b.id;
     }
     if (skin === 'marketing') {
-      const pr = await db().collection('providers').doc(uid).get();
-      const p = pr.exists ? pr.data() : null;
-      if (!(p && p.marketingStatus === 'active' && p.marketingListed === true)) throw new HttpsError('permission-denied', 'Only an approved SOKONI marketer can create marketing campaigns or projects.', { code: 'WORK_NOT_APPROVED' });
+      /* SECURITY: the server decision record decides (shared/marketing-authority.js), never providers.marketing* alone. */
+      const mAuth = await require('./shared/marketing-authority').marketingAuthority(db(), uid);
+      if (!mAuth.active) throw new HttpsError('permission-denied', 'Only an approved SOKONI marketer can create marketing campaigns or projects.', { code: 'WORK_NOT_APPROVED' });
     }
     const scope = W.sanitizeScope(d.scope);
     const lines = _lines(d.scope && d.scope.lines).length ? _lines(d.scope && d.scope.lines) : seedLines;

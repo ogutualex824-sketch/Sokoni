@@ -749,7 +749,11 @@ const MSVC = require('./shared/marketing-services');
 async function _marketingFields(uid, d, existing) {
   if (!MSVC.isMarketing(d, existing)) return null;
   const p = await _db().collection('providers').doc(uid).get();
-  try { return MSVC.shape(d, p.exists ? p.data() : null, existing); }
+  /* SECURITY: the provider's own marketing fields are owner-writable on the served rules — the approved set comes from
+     the server decision record (shared/marketing-authority.js), intersected, fail closed. */
+  const MA = require('./shared/marketing-authority');
+  const auth = await MA.marketingAuthority(_db(), uid, p.exists ? p.data() : null);
+  try { return MSVC.shape(d, MA.effectiveProvider(p.exists ? p.data() : null, auth), existing); }
   catch (e) {
     if (e instanceof MSVC.MarketingServiceError) throw new HttpsError(e.code === 'MKT_SERVICE_NOT_APPROVED' ? 'permission-denied' : 'invalid-argument', e.message, { code: e.code });
     throw e;

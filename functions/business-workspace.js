@@ -674,7 +674,12 @@ const _h = {
     const uid = req && req.auth && req.auth.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
     const { getFirestore } = require('firebase-admin/firestore');
-    return workspaceFor(getFirestore(), uid, { claims: (req.auth && req.auth.token) || null });
+    const ws = await workspaceFor(getFirestore(), uid, { claims: (req.auth && req.auth.token) || null });
+    /* Marketing (merchant-v2 provider session, sokoni-e3): ONE server-computed flag — the derived Marketing authority
+       (server decision record ∩ provider listing, fail closed). The browser never derives it from providers fields. */
+    let mAuth = { active: false, categories: [] };
+    try { mAuth = await require('./shared/marketing-authority').marketingAuthority(getFirestore(), uid); } catch (_) { mAuth = { active: false, categories: [], why: 'unreadable' }; }
+    return Object.assign({}, ws, { marketing: mAuth.active === true, marketingCategories: mAuth.active ? mAuth.categories : [] });
   },
   /* C2c: every workspace this account holds — the ONE answer behind workspace.html. Caller-only. */
   workspaceHome: async (req) => {
