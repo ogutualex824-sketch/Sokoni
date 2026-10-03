@@ -1,3 +1,19 @@
+## [2026-10-03] - Rental settlement: ONE release of a held rental at completion (shared module for f3's rentalComplete)
+
+Functions only (`functions/rental-settlement.js`, bundled by commerceDispatch). **Not deployed; NOT wired by itself.** f3's rentalComplete calls it.
+- **Interface:**
+  - `quoteRentalSettlement(db, {booking})` runs outside the txn. Commission comes from the SERVER intent (`metadata.commissionBaseCents` / `commissionCategory`) via `finos-utils.calculateCommission`, never from booking fields. A category with no explicit `commission-config` row is refused (never the silent 5% default).
+  - `settleRentalBooking(txn, db, {bookingId, booking, ownerUid, actorUid, quote, FieldValue})` does reads only and returns `{ok, apply(t), receipt}`. The caller writes status, then calls `apply`.
+- **Money (owner decisions 2026-10-03, relayed by f3 and pending direct confirmation):**
+  - Rent − commission goes to `wallets/{owner}.balance`, in whole shillings. It uses the same primitive as providerCompleteBooking, plus a `walletTransactions/{owner}_{booking}_rentalsettle` row written with create().
+  - The deposit becomes `rentalDepositRefunds/{booking}` with state `REQUESTED` (create()): a B2C refund REQUEST for the IntaSend B2C refund executor. It is never a wallet credit and never goes through refundRequests.
+- **Guards:** it settles only when paymentStatus `held`, `returnPinVerified === true` and `heldAmountCents === rent + deposit`. Anything else gives a review row (`commissionReviewQueue/rental_settle_{id}`) and moves no money. A replay is a no-op.
+- **Dependencies:**
+  - commerceDispatch must carry 2f's commission-config row `construction_equipment_rental` (10%). Until it does, every settlement is refused (`commission_unpriced`), which is the safe state.
+  - The B2C executor for `rentalDepositRefunds` is NOT built.
+  - The receipt is returned for the caller to record after commit.
+- **Tests:** `scripts/test-rental-settlement.js` 18/0. Sabotage caught 9/9.
+
 ## [2026-10-03] — Equipment rentals: ONE PIN at RETURN on the one booking-PIN authority
 
 **Owner decision (2026-10-03):** rentals use ONE PIN, at RETURN. The renter gives it when the equipment is back, and return_pending → returned lets the held money be released on completion. Hand-over stays a seller action. The PIN is re-viewable by the renter and never shown to the provider.
