@@ -117,7 +117,8 @@ const MODULES = Object.freeze({
   eduLessons:        { label: 'Lessons',             section: 'edulessons',        implemented: false, why: 'EDUCATION_E2_PENDING' },
   eduLearners:       { label: 'Learners',            section: 'edulearners',       implemented: false, why: 'EDUCATION_E2_PENDING' },
   eduClasses:        { label: 'Classes',             section: 'educlasses',        implemented: false, why: 'EDUCATION_E2_PENDING' },
-  eduProgrammes:     { label: 'Programmes',          section: 'eduprogrammes',     implemented: false, why: 'EDUCATION_E2_PENDING' },
+  /* E2 programmes slice: education-programmes.js manageMyProgrammes + the Programmes panel. */
+  eduProgrammes:     { label: 'Programmes',          section: 'eduprogrammes',     implemented: true },
   eduTeachers:       { label: 'Teachers',            section: 'eduteachers',       implemented: false, why: 'EDUCATION_E2_PENDING' },
   eduStudents:       { label: 'Students',            section: 'edustudents',       implemented: false, why: 'EDUCATION_E2_PENDING' },
   eduTimetable:      { label: 'Timetable',           section: 'edutimetable',      implemented: false, why: 'EDUCATION_E2_PENDING' },
