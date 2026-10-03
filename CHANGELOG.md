@@ -1,3 +1,23 @@
+## [2026-10-03] - Fitness rules candidate (memberships + F0-R containment) on served f259c0b5 — static 14/0 + 7 controls, emulator QUEUED (RAM), NOT released
+
+Branch `rules/fitness-memberships-on-served` (git base 14ef233; served ruleset re-fetched read-only 2026-10-03, still
+`f259c0b5`, sha256 78d938fd…). Full record: `docs/rules/FITNESS_RULES_DIFF.md`.
+
+- Files: `firestore.rules.served-f259c0b5` (served base), `firestore.rules.fitness-candidate` (157,363 B, 60.0 % of 256 KiB),
+  `scripts/build-fitness-rules-candidate.js` (sha-pinned; `--onto` merges onto f3's combined line),
+  `scripts/test-fitness-rules-static.js`, `scripts/test-fitness-rules-emulator.js`, `docs/rules/FITNESS_RULES_DIFF.md`.
+  `firestore.rules` is not edited.
+- Rules (candidate): new `providerMemberships` (+ attendance / events / releases) read-only matchers for the buyer, the
+  gym (providerId) and admin; `fitnessMembershipClaims` closed. Eight legacy `fitness_*` collections: client writes
+  false, reads admin-only (no client reader survives F0). `fitness_gyms`: rating / members / verified / status /
+  moderation fields are owner-immutable. Unchanged: `fitness_progress` (owner-only), `providerPayouts` (own + admin read;
+  no client writes), `providers` (the `business` lock is f3's, not duplicated).
+- Database / API / functions: none. Security: closes D-3 (client-minted confirmed bookings), D-5 (public unmoderated
+  listings with phones) and D-14 (self-stamped rating, forgeable pts, exposed phones/names) once released.
+- Release: AFTER the F0 hosting deploy and the functions it serves, inside the combined rules release only.
+- Proof: static 14/0, negative controls N1–N7 caught. Emulator suite M1–M16 + C1–C5 written, QUEUED (memory floor).
+- Breaking: the live 72dca56 fitness-hub.html listeners would be denied — hence the F0-first ordering.
+
 ## [2026-10-01] - AdminOS: head scripts deferred, admin gate order unchanged — static 7/0, browser proof QUEUED (RAM), NOT deployed
 
 admin-os.html loaded six classic scripts in <head> (security, sokoni-cart, sokoni-permissions, sokoni-role-authority,
