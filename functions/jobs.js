@@ -936,6 +936,7 @@ exports.getMyApplications = onCall(CF_OPTS, exports._h.getMyApplications = async
     /* what the applicant may do now (the server re-checks on the call) */
     canWithdraw: APPLICANT_WITHDRAWABLE.includes(app.status),
     canRespondToOffer: app.status === 'offer',
+    rejectionReason: app.status === 'rejected' ? (app.rejectionReason || null) : null,   /* the applicant's own reason, shown to them */
     appliedAt:   app.appliedAt,
     updatedAt:   app.updatedAt,
     job:         jobMap[app.jobId] || null,
