@@ -1,3 +1,18 @@
+## [2026-10-03] — Sports: server-anchored conversations (team / tournament announcements / private registration) + coach capability (sokoni-2f contract, owner decisions) — NOT deployed
+
+- **functions/messages.js:**
+  - ANCHORED resolvers re-derive participants from teams / sportsTeamMembers / tournaments / sportsTournamentRegs:
+    - sports_team = active members ∪ captain ∪ managers;
+    - sports_tournament = ANNOUNCEMENTS ONLY: organiser sends, registered captains and managers read, and captains cannot reply (owner);
+    - sports_registration = PRIVATE organiser ↔ that team's live captain and managers.
+  - Exported server helpers ensureAnchoredConversation (server-only creation) and syncAnchoredParticipants (rewrites participants plus the per-user index; archive or an ended registration → read_only).
+  - createConversation never lets a client create one; it opens an existing one for current participants only. sendMessage re-derives on every send.
+- **functions/shared/service-capabilities.js:** coach → DIRECT_BOOKING + QUOTE_REQUEST. Sports and specialities are profile data.
+- **Tests:**
+  - test-messages-sports S1–S8 8/0, 5/5 mutations by name (server-only creation, removed-member refusal, announce-only, registration privacy, archive read-only).
+  - test-service-capabilities A-9 (17/0); test-business-workspace 30/0; test-messages-jobs 8/0; test-messages-service-booking 7/0.
+- **Deploy:** messages functions + the providerDispatch release (capabilities). sports.js (2f aee1ed8) calls the helpers behind a typeof guard.
+
 ## [2026-10-03] — Jobs J4: job-application conversations (sokoni-f3 contract; owner hard security gate) — NOT deployed
 
 - **functions/messages.js:**

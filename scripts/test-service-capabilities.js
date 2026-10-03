@@ -39,6 +39,10 @@ if (!SC) { ck('A-0', false, 'shared/service-capabilities.js exists'); } else {
     ck('A-8', JSON.stringify(L1.capabilities) === JSON.stringify(['DIRECT_BOOKING', 'QUOTE_REQUEST']) && mods.includes('leads') && mods.includes('quotes') && mods.includes('bookings')
       && L2.capabilities.length === 0, 'Legal: a VALID approval of a legal application switches on leads/quotes + bookings; a self/invalid decision switches on nothing', { L1, L2, mods });
   }
+  { /* A-9 — Sports coach: a valid coach approval → direct booking + quotes; nothing sports-vertical invented */
+    const C1 = SC.compose([V('coach_u1', 'coach')]);
+    ck('A-9', JSON.stringify(C1.capabilities) === JSON.stringify(['DIRECT_BOOKING', 'QUOTE_REQUEST']) && !SC.isCapability('SPORTS_COACHING'), 'Sports coach: a VALID coach approval switches on bookings + quotes only (no unbuilt coaching module)', C1);
+  }
   ck('A-5', Object.values(SC.FROM_BUSINESS_ID).every((caps) => caps.every(SC.isCapability)) && Object.keys(SC.MODULES_OF).every(SC.isCapability),
     'every mapped capability and every module rule names a real capability');
   ck('A-6', SC.modulesFor(['DEVICE_REPAIR', 'WORKSHOP'], 'provider').join() === 'diagnostics,repairs,supportedDevices' && SC.modulesFor(['FOOD_MENU', 'BAKERY', 'KITCHEN'], 'merchant').join() === 'kitchen,menu',

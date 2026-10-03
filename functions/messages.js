@@ -153,6 +153,105 @@ function _partiesOf (transactionType, tx) {
   return out;
 }
 exports._PARTY_FIELDS = PARTY_FIELDS;
+
+/* ══ SERVER-ANCHORED conversations (Sports, sokoni-2f contract adopted 2026-10-03) ═══════════════════════════════════
+   Group relationships whose membership CHANGES (a roster, a tournament's registered teams). Rules gate reads on
+   conversations.participants, so the list is RE-DERIVED from the canonical docs — never taken from a client, never a
+   one-time snapshot:
+     sports_team          teams/{id}: sportsTeamMembers status 'active' ∪ captainUid ∪ managerUids   (read + send)
+     sports_tournament    tournaments/{id}: organiser + captains/managers of 'registered' regs
+                          (announcement channel: ONLY the organiser sends — owner decision; captains read)
+     sports_registration  sportsTournamentRegs/{id}: organiser ↔ that team's LIVE captain + managers   (private)
+   Created ONLY by the server (ensureAnchoredConversation, called from sports.js); a client can open an existing one only
+   as a current participant. Archived parent / ended registration → status 'read_only' (history stays readable).
+   syncAnchoredParticipants re-derives and rewrites participants + the per-user index after every membership change;
+   sendMessage re-derives on every send, so a removed member is refused even before a sync lands. */
+const ANCHOR_CAP = 120;
+const _uniq = (a) => [...new Set(a.filter((x) => typeof x === 'string' && x))];
+async function _teamCrew(db, teamId) {
+  const t = await db.collection('teams').doc(String(teamId)).get();
+  if (!t.exists) return null;
+  const td = t.data() || {};
+  return { team: td, crew: _uniq([td.captainUid].concat(Array.isArray(td.managerUids) ? td.managerUids : [])) };
+}
+const ANCHORED = {
+  sports_team: async (db, teamId) => {
+    const tc = await _teamCrew(db, teamId); if (!tc) return null;
+    const ms = await db.collection('sportsTeamMembers').where('teamId', '==', String(teamId)).where('status', '==', 'active').limit(ANCHOR_CAP).get();
+    const parts = _uniq(ms.docs.map((d) => (d.data() || {}).uid).concat(tc.crew)).slice(0, ANCHOR_CAP);
+    return { participants: parts, senders: parts, readOnly: tc.team.status === 'archived', title: (tc.team.name || 'Team') + ' — team' };
+  },
+  sports_tournament: async (db, tid) => {
+    const ts = await db.collection('tournaments').doc(String(tid)).get(); if (!ts.exists) return null;
+    const td = ts.data() || {};
+    const regs = await db.collection('sportsTournamentRegs').where('tournamentId', '==', String(tid)).where('status', '==', 'registered').limit(ANCHOR_CAP).get();
+    let captains = [];
+    for (const r of regs.docs) { const tc = await _teamCrew(db, (r.data() || {}).teamId); if (tc) captains = captains.concat(tc.crew); }
+    const parts = _uniq([td.organiserUid].concat(captains)).slice(0, ANCHOR_CAP);
+    return { participants: parts, senders: _uniq([td.organiserUid])   /* OWNER 2026-10-03: announcements only — captains read, never reply (team ↔ organiser = sports_registration) */, readOnly: td.status === 'archived', title: (td.name || 'Tournament') + ' — announcements' };
+  },
+  sports_registration: async (db, regId) => {
+    const rs = await db.collection('sportsTournamentRegs').doc(String(regId)).get(); if (!rs.exists) return null;
+    const rd = rs.data() || {};
+    const ts = await db.collection('tournaments').doc(String(rd.tournamentId || '')).get(); if (!ts.exists) return null;
+    const td = ts.data() || {};
+    const tc = await _teamCrew(db, rd.teamId); if (!tc) return null;
+    const parts = _uniq([td.organiserUid].concat(tc.crew));
+    return { participants: parts, senders: parts, readOnly: rd.status !== 'registered' || td.status === 'archived', title: (td.name || 'Tournament') + ' — ' + (tc.team.name || 'team') };
+  },
+};
+exports._ANCHORED = ANCHORED;
+
+async function _names(db, uids) {
+  const out = {};
+  await Promise.all(uids.map(async (u) => { const s = await db.collection('users').doc(u).get().catch(() => null); const d = (s && s.exists && s.data()) || {}; out[u] = d.displayName || d.name || 'User'; }));
+  return out;
+}
+/** Create (or re-sync) the server-anchored conversation for a parent. Called by sports.js; never by a client. */
+async function ensureAnchoredConversation(type, parentId) {
+  const resolve = ANCHORED[type]; if (!resolve) throw new Error('not an anchored conversation type: ' + type);
+  const db = _db();
+  const d = await resolve(db, parentId); if (!d || !d.participants.length) return { ok: false, reason: 'no_parent_or_participants' };
+  const conversationId = type + '_' + String(parentId);
+  const ref = db.collection('conversations').doc(conversationId);
+  const names = await _names(db, d.participants);
+  let created = false;
+  await db.runTransaction(async (t) => {
+    const cur = await t.get(ref);
+    if (cur.exists) return;
+    created = true;
+    t.set(ref, { transactionType: type, transactionId: String(parentId), transactionTitle: d.title, participants: d.participants, participantNames: names,
+      participantAvatars: {}, status: d.readOnly ? 'read_only' : 'active', anchored: true, lastMessage: null, lastMessageAt: null,
+      unreadCounts: Object.fromEntries(d.participants.map((p) => [p, 0])), metadata: {}, moderationFlags: [], reportCount: 0,
+      readOnlyAt: d.readOnly ? _now() : null, createdAt: _now(), updatedAt: _now() });
+    for (const p of d.participants) t.set(db.collection('userConversations').doc(p).collection('items').doc(conversationId), { conversationId, transactionType: type, transactionId: String(parentId), title: d.title, lastMessageAt: null, lastMessageText: null, unread: 0, updatedAt: _now() });
+  });
+  if (!created) return syncAnchoredParticipants(type, parentId);
+  return { ok: true, conversationId, created: true, participants: d.participants };
+}
+/** Re-derive participants after a membership / registration / archive change; maintains the per-user index. */
+async function syncAnchoredParticipants(type, parentId) {
+  const resolve = ANCHORED[type]; if (!resolve) throw new Error('not an anchored conversation type: ' + type);
+  const db = _db();
+  const conversationId = type + '_' + String(parentId);
+  const ref = db.collection('conversations').doc(conversationId);
+  const d = await resolve(db, parentId);
+  const out = await db.runTransaction(async (t) => {
+    const cur = await t.get(ref);
+    if (!cur.exists) return { ok: false, reason: 'no_conversation' };
+    const before = (cur.data() || {}).participants || [];
+    const after = d ? d.participants : [];
+    const added = after.filter((u) => before.indexOf(u) < 0), removed = before.filter((u) => after.indexOf(u) < 0);
+    const ro = !d || d.readOnly;
+    t.update(ref, { participants: after, status: ro ? 'read_only' : ((cur.data() || {}).status === 'read_only' ? 'active' : (cur.data() || {}).status || 'active'), ...(ro ? { readOnlyAt: _now() } : {}), updatedAt: _now() });
+    for (const u of added) t.set(db.collection('userConversations').doc(u).collection('items').doc(conversationId), { conversationId, transactionType: type, transactionId: String(parentId), title: d ? d.title : '', lastMessageAt: null, lastMessageText: null, unread: 0, updatedAt: _now() });
+    for (const u of removed) t.delete(db.collection('userConversations').doc(u).collection('items').doc(conversationId));
+    return { ok: true, conversationId, added, removed, readOnly: ro };
+  });
+  return out;
+}
+exports.ensureAnchoredConversation = ensureAnchoredConversation;
+exports.syncAnchoredParticipants = syncAnchoredParticipants;
 exports._partiesOf = _partiesOf;
 
 exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, exports._h.createConversation = async (req) => {
@@ -168,6 +267,15 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
 
   if (!transactionType || !transactionId) {
     throw new HttpsError('invalid-argument', 'transactionType and transactionId are required');
+  }
+  if (ANCHORED[transactionType]) {
+    /* Server-anchored (Sports): a client may only OPEN an existing conversation, and only as a current participant. */
+    const aRef = _db().collection('conversations').doc(transactionType + '_' + String(transactionId));
+    const aSnap = await aRef.get();
+    if (!aSnap.exists) throw new HttpsError('failed-precondition', 'This conversation is created by SOKONI when the team or registration is approved.', { code: 'ANCHORED_SERVER_ONLY' });
+    const aParts = (aSnap.data() || {}).participants || [];
+    if (aParts.indexOf(uid) === -1) throw new HttpsError('permission-denied', 'Not a party to this conversation');
+    return { conversationId: aRef.id, existing: true };
   }
   if (!PARTY_FIELDS[transactionType]) {
     /* Accepted as an anchor, but its collection has no rules naming parties, so
@@ -874,6 +982,14 @@ exports.sendMessage = onCall(
     }
     if (['closed', 'suspended', 'read_only'].includes(conv.status)) {
       throw new HttpsError('failed-precondition', `Conversation is ${conv.status}`);
+    }
+    /* Sports (server-anchored): re-derive from the canonical docs on EVERY send; the announcement channel lets only the
+       organiser send (owner decision). */
+    if (ANCHORED[conv.transactionType]) {
+      const d = await ANCHORED[conv.transactionType](db, conv.transactionId);
+      if (!d || d.participants.indexOf(req.auth.uid) === -1) throw new HttpsError('permission-denied', 'Not a party to this conversation');
+      if (d.readOnly) throw new HttpsError('failed-precondition', 'This conversation is read-only.', { code: 'ANCHORED_READ_ONLY' });
+      if (d.senders.indexOf(req.auth.uid) === -1) throw new HttpsError('permission-denied', 'Only the organiser can post in this announcement channel.', { code: 'ANCHORED_ANNOUNCE_ONLY' });
     }
     /* Jobs J4 (owner hard security gate, via sokoni-f3): every send re-derives the parties from the APPLICATION doc —
        never from the stored participant list or the request — and a terminal application (hired / rejected / withdrawn /
