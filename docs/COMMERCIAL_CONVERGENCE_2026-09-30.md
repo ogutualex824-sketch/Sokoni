@@ -818,6 +818,7 @@ No duplicate authority was found on the money side.
 
 **Gate:** `leadInvoiceGate(db, uid, nowMs)` → `{overdue, overdueKES, invoiceKeys, since, enforce:false}`.
 - **Overdue:** issued more than 2 days ago and still outstanding.
+- **One definition:** the predicate lives in `functions/shared/lead-invoice-gate.js`, byte-identical on the gated POS line (`fix/pos-restock-on-approval-on-d4a167c @ 9db13df`), where `pos-commission-rail` consumes it.
 - **Owner of both ends:** 2f owns the producer and the consumer (a second reason inside evaluateMerchantGate/assertGateOpen on the gated POS line, with its own card).
 - **Enforcement:** it starts enforcing only after the Pay Now is certified.
 

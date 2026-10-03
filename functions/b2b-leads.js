@@ -326,18 +326,10 @@ function commitLeadRecovery(t, state, deps) {
 }
 const commitLeadDeduction = commitLeadRecovery;
 
-/** Till/POS gate predicate: an issued invoice unpaid for more than 2 days. Enforcement waits for a certified Pay Now. */
-async function leadInvoiceGate(db, uid, nowMs) {
-  const now = Number(nowMs) || Date.now();
-  const list = await outstandingFor(db, uid);
-  const over = list.filter((m) => m.issuedAtMs > 0 && now - m.issuedAtMs > OVERDUE_MS);
-  return {
-    overdue: over.length > 0,
-    overdueKES: _r2(over.reduce((t, m) => t + m.outstandingKES, 0)),
-    invoiceKeys: over.map((m) => m.invoiceKey),
-    since: over.length ? over[0].issuedAtMs + OVERDUE_MS : null,
-    enforce: false,   /* owner: block only once a certified Pay Now exists — display only until then */
-  };
+/** Till/POS gate predicate — delegates to the ONE definition, shared/lead-invoice-gate.js (carried byte-identical on the
+    gated POS line, where pos-commission-rail consumes it as the second gate reason). Enforcement is the consumer's switch. */
+function leadInvoiceGate(db, uid, nowMs) {
+  return require('./shared/lead-invoice-gate').evaluate(db, uid, nowMs);
 }
 
 /** Amount the Pay Now purpose charges: every outstanding issued invoice, read on the server. */
