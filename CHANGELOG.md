@@ -1,3 +1,11 @@
+## [2026-10-04] — FinOS invoices only for a completed, verified payment — and only once
+
+**Census hole (H15):** live `fosGenerateInvoice` (00006-kuf, gen 1787386619201428) copied the transaction status and defaulted a MISSING one to `COMPLETED`, so a pending, failed or status-less payment produced an invoice reading as completed. Its duplicate check was a read-then-add, so two concurrent calls could issue two invoices for one transaction.
+**Fix:** invoices are issued only when the record is in the verified-complete state the webhook writes (`fosTransactions.status == COMPLETED`; payments fallback `COMPLETE`/`COMPLETED`); otherwise `failed-precondition PAYMENT_NOT_COMPLETED`, nothing written. The status is copied, never defaulted. The id is derived from the transaction (`fos_<txId>`) and written with create(), so a race returns the winner's invoice and no duplicate.
+**Baseline:** 91aaf84 restores the 4 modules where origin/main differed (commission-config, financial-os, finos-utils, payment-adapters — the PRE-repair adapter, unchanged here) to the LIVE bytes.
+**Files:** `functions/financial-os.js`, `scripts/test-fos-invoice-completed.js`. **Tests:** 6/0 (F1–F5 + race F4b); SABOTAGE (old default, no check) → F2/F3 fail.
+**Deployment:** NOT deployed; scoped `--only functions:fosGenerateInvoice` from this tree. Per the owner's canonical decision, fosInvoices later folds into `invoices`. No client calls it today, and production holds 0 fosInvoices.
+
 ## [2026-09-01] — fix(adminos): admin-os.js lineage convergence to production 252ff65 + pilot (UNMERGED / UNDEPLOYED)
 
 Reconciles `functions/admin-os.js` on main (`9d42fa9`) back to the **proven deployed source** of the

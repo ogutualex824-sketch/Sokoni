@@ -705,6 +705,15 @@ exports.fosGenerateInvoice = onCall(
     if (!isAdmin && tx.buyerUid !== auth.uid && tx.sellerUid !== auth.uid)
       throw new HttpsError('permission-denied', 'Access denied');
 
+    /* ONLY A VERIFIED, COMPLETED PAYMENT GETS AN INVOICE (owner 2026-10-04, invoice census H15). This used to copy
+       tx.status and default a MISSING status to 'COMPLETED' — so a pending, failed or status-less transaction produced
+       an invoice that read as completed. The verified webhook path writes fosTransactions.status 'COMPLETED'
+       (_processFOSTransaction) and payments.status 'COMPLETE' (fosSecureWebhook); nothing else qualifies. */
+    const txStatus = String(tx.status || '');
+    const VERIFIED = fosTransactionId ? ['COMPLETED'] : ['COMPLETE', 'COMPLETED'];
+    if (!VERIFIED.includes(txStatus))
+      throw new HttpsError('failed-precondition', 'An invoice is issued only for a completed, verified payment.', { reason: 'PAYMENT_NOT_COMPLETED', status: txStatus || null });
+
     /* Check for existing invoice */
     const existing = await db().collection('fosInvoices')
       .where('fosTransactionId', '==', txId).limit(1).get();
@@ -741,7 +750,7 @@ exports.fosGenerateInvoice = onCall(
       commissionCents:   tx.commissionCents || 0,
       netCents:          tx.netCents || (tx.amountCents - (tx.commissionCents || 0)),
       currency:          'KES',
-      status:            tx.status || 'COMPLETED',
+      status:            txStatus,                 /* verified above — never a default */
       items:             tx.items || tx.metadata?.items || [],
       metadata:          tx.metadata || tx.meta || {},
       platform:          'SOKONI',
@@ -749,7 +758,14 @@ exports.fosGenerateInvoice = onCall(
       createdAt:         now(),
     };
 
-    const invRef = await db().collection('fosInvoices').add(invoice);
+    /* ONE invoice per transaction, race-proof: the id is derived from the transaction and written with create() — two
+       concurrent calls can no longer both pass the check above and add two invoices. */
+    const invRef = db().collection('fosInvoices').doc('fos_' + String(txId).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 120));
+    try { await invRef.create(invoice); }
+    catch (e) {
+      if (e && (e.code === 6 || /ALREADY_EXISTS/i.test(String(e.message)))) { const s = await invRef.get(); return { invoice: { ...s.data(), id: s.id }, id: s.id, replay: true }; }
+      throw e;
+    }
     return { invoice: { ...invoice, id: invRef.id }, id: invRef.id };
   }
 );
