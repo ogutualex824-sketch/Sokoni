@@ -34,7 +34,12 @@ const st = (w, m) => (w.modules[m] || {}).state;
 
 /* signed URLs: firebase-admin/storage replaced — records which paths were signed, so "minted only when entitled" is observable */
 const SIGNED = [];
-stub('firebase-admin/storage', { getStorage: () => ({ bucket: () => ({ file: (p) => ({ getSignedUrl: async (o) => { SIGNED.push({ p, o }); return ['https://signed.example/' + encodeURIComponent(p) + '?exp=' + o.expires]; } }) }) }) });
+/* the stored objects: path → { contentType (client-declared), size, head (first bytes) } */
+const OBJ = {};
+stub('firebase-admin/storage', { getStorage: () => ({ bucket: () => ({ file: (p) => ({
+  getMetadata: async () => [OBJ[p] ? { contentType: OBJ[p].contentType, size: String(OBJ[p].size) } : {}],
+  download: async () => [OBJ[p] ? OBJ[p].head : Buffer.alloc(0)],
+  getSignedUrl: async (o) => { SIGNED.push({ p, o }); return ['https://signed.example/' + encodeURIComponent(p) + '?exp=' + o.expires]; } }) }) }) });
 const LS = require(Path.join(FN, 'education-lessons.js'));
 const EDU = require(Path.join(FN, 'education.js'));
 const call = async (uid, data, token) => { try { return await LS.courseLessons.run({ auth: uid ? { uid, token: token || {} } : null, data }); } catch (e) { return { err: e.code || 'error', reason: (e.details && e.details.reason) || e.message }; } };
@@ -91,11 +96,31 @@ const OWNMAT = (u, c) => 'course-materials/' + u + '/' + c + '/notes.pdf';
   r = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L2 });
   ck('L-5 an ENROLLED learner opens the lesson', r.ok && /youtube/.test(r.lesson.videoUrl), r);
   ck('L-6 no signed URL was minted for anyone NOT entitled (L-2 refused before signing)', SIGNED.length === 0, SIGNED);
+  OBJ[OWNMAT('teach1', 'c1')] = { contentType: 'application/pdf', size: 1000, head: Buffer.from('%PDF-1.7\n%xxxxxx') };
   r = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L3 });
   const stored = (await all('courseLessons'))[L3];
   ck('L-7 the material reaches an entitled learner as a SHORT-LIVED signed URL (15 min, read-only); the lesson stores only the path',
     r.ok && /^https:\/\/signed\.example\//.test(r.lesson.materialUrl) && r.lesson.materialExpiresInMinutes === 15 && SIGNED.length === 1 && SIGNED[0].o.action === 'read'
       && SIGNED[0].o.expires - Date.now() <= 15 * 60 * 1000 && stored.materialPath === OWNMAT('teach1', 'c1') && !('materialUrl' in stored), [r, SIGNED, stored]);
+
+  /* the object's bytes must match its declared type (contentType is client-declared) */
+  OBJ[OWNMAT('teach1', 'c1')] = { contentType: 'application/pdf', size: 1000, head: Buffer.from('<html><script>x') };
+  SIGNED.length = 0;
+  r = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L3 });
+  ck('M-1 a file DECLARED pdf whose bytes are not a PDF gets NO signed URL', r.reason === 'MATERIAL_UNVERIFIED' && SIGNED.length === 0, r);
+  OBJ[OWNMAT('teach1', 'c1')] = { contentType: 'text/html', size: 100, head: Buffer.from('<html>') };
+  r = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L3 });
+  ck('M-2 a disallowed type (text/html) is never served', r.reason === 'MATERIAL_UNVERIFIED' && SIGNED.length === 0, r);
+  OBJ[OWNMAT('teach1', 'c1')] = { contentType: 'application/pdf', size: 30 * 1024 * 1024, head: Buffer.from('%PDF-1.7') };
+  r = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L3 });
+  ck('M-3 an oversized object (> 25 MB) is never served', r.reason === 'MATERIAL_UNVERIFIED' && SIGNED.length === 0, r);
+  delete OBJ[OWNMAT('teach1', 'c1')];
+  r = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L3 });
+  ck('M-4 a missing object is never signed', r.reason === 'MATERIAL_UNVERIFIED' && SIGNED.length === 0, r);
+  const V = LS._internal.MATERIAL_TYPES;
+  ck('M-5 the signatures: PNG / JPEG / WEBP / OOXML(zip) accepted, a mislabelled one refused',
+    V['image/png'](Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) && V['image/jpeg'](Buffer.from([0xff, 0xd8, 0xff, 0xe0])) && V['image/webp'](Buffer.from('RIFF\0\0\0\0WEBP'))
+      && V['application/vnd.openxmlformats-officedocument.wordprocessingml.document'](Buffer.from([0x50, 0x4b, 0x03, 0x04])) && !V['image/png'](Buffer.from('%PDF-')) && !V['text/plain'](Buffer.from([0x41, 0x00])));
 
   /* progress + certificate */
   r = await call('learner1', { op: 'complete', courseId: 'c1', lessonId: 'lesson_999' });

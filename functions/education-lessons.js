@@ -50,10 +50,36 @@ function materialPath(v, ownerUid, courseId) {
   return s;
 }
 const SIGNED_URL_TTL_MS = 15 * 60 * 1000;
+const MATERIAL_MAX_BYTES = 25 * 1024 * 1024;
+/* The upload's contentType is CLIENT-declared (storage.rules can only check the claim). Before a signed URL is minted the
+   server checks the object itself: size, the declared type is allowed, and the first bytes match that type (PDF, PNG,
+   JPEG, WEBP; OOXML = a ZIP container; plain text must not look binary). A mismatch is refused, never served
+   (f3 storage review, 2026-10-03). */
+const MATERIAL_TYPES = Object.freeze({
+  'application/pdf': (b) => b.slice(0, 5).toString('latin1') === '%PDF-',
+  'image/png': (b) => b.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+  'image/jpeg': (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  'image/webp': (b) => b.slice(0, 4).toString('latin1') === 'RIFF' && b.slice(8, 12).toString('latin1') === 'WEBP',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': (b) => b.slice(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])),
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': (b) => b.slice(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])),
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': (b) => b.slice(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])),
+  'text/plain': (b) => !b.includes(0x00),
+});
+async function verifiedMaterial(file) {
+  const [meta] = await file.getMetadata();
+  const type = String((meta && meta.contentType) || '').toLowerCase();
+  const size = Number(meta && meta.size);
+  const check = MATERIAL_TYPES[type];
+  if (!check || !(size > 0) || size > MATERIAL_MAX_BYTES) return false;
+  const [head] = await file.download({ start: 0, end: 15 });
+  return !!(head && head.length && check(Buffer.from(head)));
+}
 async function signedMaterialUrl(path) {
   if (!path) return null;
   const { getStorage } = require('firebase-admin/storage');
-  const [url] = await getStorage().bucket().file(path).getSignedUrl({ action: 'read', expires: Date.now() + SIGNED_URL_TTL_MS });
+  const file = getStorage().bucket().file(path);
+  if (!(await verifiedMaterial(file))) _deny('failed-precondition', 'This lesson file could not be verified. The teacher needs to upload it again.', 'MATERIAL_UNVERIFIED');
+  const [url] = await file.getSignedUrl({ action: 'read', expires: Date.now() + SIGNED_URL_TTL_MS });
   return url;
 }
 function lessonFields(d, ownerUid, courseId) {
@@ -183,4 +209,4 @@ async function handle(req) {
 }
 
 exports.courseLessons = onCall({ region: 'us-central1', enforceAppCheck: true, maxInstances: 40 }, handle);
-exports._internal = { handle, recordProgress, lessonFields, materialPath, MAX_LESSONS, SIGNED_URL_TTL_MS };
+exports._internal = { handle, recordProgress, lessonFields, materialPath, verifiedMaterial, MATERIAL_TYPES, MAX_LESSONS, SIGNED_URL_TTL_MS };
