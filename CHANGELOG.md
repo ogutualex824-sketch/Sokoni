@@ -1,3 +1,27 @@
+## [2026-10-03] - EPRA fuel prices: read EPRA's new /pump-prices page; no invented prices (functions, NOT deployed)
+
+**Branch `fix/epra-pump-prices-on-093fd4f`**, built on the Daraja-removal commit `093fd4f` (the guard passes). The EPRA
+section of index.js on that base is byte-identical to the live fetchEPRAFuelPrices / triggerEPRAFuelFetch source.
+- **Cause**: since 2026-07-12 EPRA serves prices on ONE page, https://www.epra.go.ke/pump-prices (allowed by robots.txt).
+  It holds a table of From | To | Town | Super (PMS) | Diesel (AGO) | Kerosene (IK), every period back to 2020 (~6.5 MB).
+  The old /category/petroleum/maximum-pump-prices/ URLs return 404, so every 4-hour run failed and
+  sysConfig/fuelPrices held no prices.
+- **Fix**: `functions/epra-pump-prices.js` is a pure parser:
+  - columns located by header text;
+  - uses the newest period that has STARTED;
+  - prices limited to 80–600 KES/litre;
+  - throws unless Nairobi has all three fuels.
+  The scraper reads /pump-prices through it and writes `current` (same shape as before, now every published town),
+  `effectiveFrom` / `effectiveTo` (the period EPRA published) and `townCount`.
+- **Removed**: the old fill-ins that invented prices (diesel/kerosene from a petrol ratio; Mombasa/Kisumu/other from
+  fixed offsets). A failed run still keeps the last real prices and records scraperStatus "failed".
+- **Live data on 2026-10-03**: EPRA's newest period is 2026-08-15 → 2026-09-14 (Nairobi 214.03 / 217.86 / 191.38).
+  The September–October prices are not yet published, so readers must show the period and flag that it has ended.
+- **Tests**: test-epra-pump-prices 23/0 against real page markup (fixture trimmed from the live page); sabotage 3/3.
+  The full live page parses in about 215 ms (223 towns). Guard-functions-safety PASS. intasend-only-gate: 0 findings
+  under functions/; the remaining findings are pre-existing hosting pages (Gate 13), identical to the base.
+- **Deploy (separate)**: `--only functions:fetchEPRAFuelPrices,triggerEPRAFuelFetch`, with the memory gate ≥ 512 MB.
+
 ## [2026-10-03] - Payments: Daraja code removed from functions (owner order: IntaSend only) — functions source, NOT deployed
 
 The four live Daraja functions were deleted from production earlier today. This removes the code, so no deploy from this lineage
