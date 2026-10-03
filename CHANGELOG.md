@@ -1,3 +1,24 @@
+## [2026-10-03] - Tech Hub slice 3: one registration intake; services.html self-listing retired — hosting, NOT deployed
+
+- Correction to slices 1–2b: their "register" links pointed at `business-apply.html`, which nothing else links to.
+  sokoni-f3's be46c94 (owner-confirmed 2026-10-01) makes `HubRegister.open` (offer.html) the ONE intake. Every Tech /
+  Home register entry now uses it:
+  - `SokoniTechDirectory.apply(category, hub)` maps directory groups to an EXISTING HubRegister CATS id (networking →
+    it-support, gardening → landscaping, appliance → ac-repair, …). An unknown group opens the intake unselected; it
+    never invents a category. Without hub-register.js loaded, it goes to offer.html.
+  - The pages use it via `data-tech-act="apply"`: phone-repair / electrical CTAs (incl. their `provider.html?cat=` links),
+    the tech-hub tab empty states, and home-services registerProvider.
+- services.html registerProvider wrote `providers/{id}` from the browser "so they appear in listings immediately", plus a
+  PRV-id application and a localStorage profile, then opened the legacy provider.html — a public listing with no AdminOS
+  decision. It now opens the ONE intake. Listing happens only after AdminOS approval (applicationLifecycle → providers).
+- Tests: test-tech-directory 47/0, 10/10 sabotages (T8 intake mapping + fallback, P4 services.html no self-listing).
+  compact-cards 43/4 (= base). customer-nav 62/0, role-switch-routing 50/0.
+- Database / API / rules: none. Security: removes a browser self-listing path to the public provider registry. Rules
+  still permit some provider self-writes — slice 5 (rules release).
+- NOT changed (cross-hub, listed): provider.html is still the legal role's workspace route (auth.js) and a `?cat=` intake
+  for about 15 hubs, so retiring it is a role-routing change outside Tech Hub. services.html "Get Spotlighted" (paid
+  spotlight) still links it.
+
 ## [2026-10-03] - Tech Hub slice 2b: Home Services and services.html fallbacks on the service engine — hosting, NOT deployed
 
 - home-services.html:

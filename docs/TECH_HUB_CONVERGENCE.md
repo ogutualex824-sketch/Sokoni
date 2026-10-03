@@ -5,13 +5,13 @@ payment / booking / wallet / review / chat authority, no WhatsApp, AdminOS-gated
 dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]], [[Payments]], [[AdminOS]],
 [[IntaSend Convergence Brief]]. Strategy: no new hubs — Digital Hub folds into Tech Hub.
 
-**Status: slices 1, 2a and 2b built and tested; nothing deployed.**
+**Status: slices 1, 2a, 2b and 3 built and tested; nothing deployed.**
 
 ## Authority map (census 2026-10-03)
 
 | Capability | Canonical authority | State |
 |---|---|---|
-| Application | `business-apply.html` → `SokoniProviderApplication` → `applications/{uid}--provider` → AdminOS `applicationDecide` → `applicationLifecycle` `projectProvider` | exists; category is free text, never validated |
+| Application | **ONE intake: `HubRegister.open`** (offer.html; sokoni-f3 be46c94, owner 2026-10-01) → `applications/{id}` → AdminOS `applicationDecide` → `applicationLifecycle` → `providers/{uid}`. `business-apply.html` (deterministic `{uid}--provider`) is reachable from nothing — not used | exists; random ids allow duplicate applications; category free text (stamp at approval = sokoni-5b) |
 | Provider registry | `providers/{uid}` (status active/approved = public) via `sokoni-providers.js` | exists; owner can still change own `category` / `active` (rules) |
 | Service catalogue | `providerServices`, CF-only (`providerDispatch` add/update/toggle/duplicate/remove, rate cards in cents) | exists; services can be created before approval |
 | Booking | `sokoni-book-service.js` → `bookingCreateService` (server price, 5-min slot lock) → `service_booking` intent → IntaSend → webhook → `paid_held` | exists |
@@ -37,11 +37,12 @@ dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]]
 | `tech-hub.html` Ask Hub | localStorage feed with wa.me hand-off | 7 (becomes the lead / quote request) |
 | `tech-hub.html` freelancers / startups / courses / jobs / AI / compare | demo arrays, shown only on localhost or with `sokoniDemoData` (production shows nothing) | later; jobs → Work engine |
 | `providers.html` confirmBooking | fake "Confirmed" + client write to `providerBookings` | **2a — fixed** |
-| `provider.html` | legacy localStorage dashboard, fake "AI photo edit" | 3 (retire / redirect) |
+| `provider.html` | legacy localStorage dashboard, fake "AI photo edit"; also the legal role workspace route (auth.js) and a `?cat=` intake on ~15 hubs | cross-hub — needs a role-routing decision; Tech/Home links moved off it (slice 3) |
 | `home-services.html` | demo providers; WhatsApp booking to SOKONI; client `homeServiceBookings` / KES 30 `homeServiceLeads` / reviews writes | **2b — fixed** (quotes / requests remain → 7) |
 | `digital.html`, `digital-esoko.html` | client-created contracts / "escrow"; purchase marked completed on the client | 6 (fold into digital-store callables) |
 | `services.html` | legacy localStorage bookings / messages; bookNow / waConnect fallbacks | **2b — fixed** |
-| `hub-register.js` | random-id `applications` write duplicating the application primitive | 3 |
+| `hub-register.js` | the ONE intake (not a duplicate — corrected 10-03) | kept; Tech/Home entries use it (slice 3) |
+| `services.html` registerProvider | client `providers` write = public listing before AdminOS | **3 — fixed** |
 | Category lists | at least 6 definitions | 4 |
 
 ## Slice plan
@@ -50,7 +51,7 @@ dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]]
    booking; Message → in-app chat; honest loading / error / empty; register → `business-apply`.
 2. Tech Hub repair / IT / compare tabs, `providers.html`, `home-services.html`, `services.html` fallbacks onto the
    same directory and booking modal; compare from real provider data only.
-3. Retire `provider.html` and `hub-register.js` application writes (redirect to the dashboard / application primitive).
+3. **(done)** One intake: Tech/Home register entries → HubRegister; services.html self-listing retired. provider.html = cross-hub item.
 4. One tech taxonomy (Device Repair, IT Support, Networking, CCTV, POS Support, Smart Home, …) served from the
    existing `SERVICE_CATEGORIES` authority and validated server-side; capability names sent to sokoni-5b.
 5. Security / rules (rules release): provider `category`/`active` self-change, review self-approval,

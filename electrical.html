@@ -219,7 +219,7 @@
   <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
     <span style="font-size:40px;flex-shrink:0;">⚡</span>
     <div style="flex:1;"><div style="font-size:15px;font-weight:900;margin-bottom:3px;">Are You a Certified Electrician?</div><div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5;">Join SOKONI — get daily job requests and grow your electrical business across Kenya.</div></div>
-    <a href="provider.html?cat=electrical" style="flex-shrink:0;padding:10px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:10px;text-decoration:none;font-size:12px;font-weight:800;">Join as Provider →</a>
+    <a href="offer.html" data-tech-act="apply" data-cat="electrical" style="flex-shrink:0;padding:10px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:10px;text-decoration:none;font-size:12px;font-weight:800;">Join as Provider →</a>
   </div>
 </div>
 
@@ -233,7 +233,6 @@
 let activeType='',activeLoc='',_techMounted=false;
 const _TECH = {
   grid: 'pgProviderGrid', count: 'pgProvCount', category: 'electrical', prefix: 'pg', noun: 'electrician',
-  applyUrl: 'business-apply.html?offer=services&category=electrical&label=Electrical',
   search: () => document.getElementById('pgSearch')?.value || '',
   type: () => activeType, location: () => activeLoc,
 };
@@ -282,7 +281,7 @@ document.addEventListener('DOMContentLoaded', renderProviders);
   <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:22px 20px;text-align:center;margin-top:0;">
     <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a </div>
     <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
-    <button onclick="location.href='business-apply.html?offer=services&category=electrical&label=Electrical'" style="padding:12px 28px;background:#facc15;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
+    <button type="button" data-tech-act="apply" data-cat="electrical" style="padding:12px 28px;background:#facc15;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
   </div>
   <script defer src="hub-register.js"></script>
   <script defer src="kass-widget.js"></script>

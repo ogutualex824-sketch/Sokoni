@@ -1570,117 +1570,13 @@ function collectSpecFields(cat){
 
 /* ── Register new provider ── */
 function registerProvider(){
-  const name    = document.getElementById("pvName")?.value.trim();
-  const phone   = document.getElementById("pvPhone")?.value.trim();
-  const cat     = document.getElementById("pvCategory")?.value;
-  const loc     = document.getElementById("pvLocation")?.value;
-  const rate    = Number(document.getElementById("pvRate")?.value || 0);
-  const rateType= document.getElementById("pvRateType")?.value;
-  const skills  = (document.getElementById("pvSkills")?.value||"").split(",").map(s=>s.trim()).filter(Boolean);
-  const bio     = document.getElementById("pvBio")?.value.trim();
-  const msgEl   = document.getElementById("pvRegMsg");
-
-  if(!name||!phone||!cat||!rate||!bio){
-    if(msgEl){ msgEl.textContent="⚠️ Fill all required fields"; msgEl.style.color="#ff9800"; }
-    return;
-  }
-
-  /* Validate phone */
-  if(typeof SokoniSecurity !== "undefined" && !SokoniSecurity.validateKenyanPhone(phone)){
-    if(msgEl){ msgEl.textContent="⚠️ Enter a valid Kenyan phone number (07XX or 01XX)"; msgEl.style.color="#ff9800"; } return;
-  }
-
-  /* Collect service-specific fields */
-  const specData = collectSpecFields(cat);
-
-  const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
-  const provider = {
-    id: "SP"+Date.now(), name, phone, category: cat, location: loc,
-    rate, rateType, skills, bio,
-    /* `rating: 5.0` used to be written here — a perfect score invented for an
-       account that had never been rated by anyone. Ratings are earned, so a
-       new provider starts with none and the cards render "New on SOKONI". */
-    rating: 0, ratingCount: 0,
-    /* Explicitly pending. The registry serves `active` and `approved` only, so
-       a listing is not public until an admin reviews the application created
-       below — omitting the field entirely just made the record invisible for
-       an unexplained reason. */
-    status: "pending",
-    /* `verified` is NOT written here, and must never be added back.
-       firestore.rules noAdminFields() rejects a create carrying any of
-       isAdmin / suspended / banned / adminApproved / featured / verified /
-       flagged / adminNote / role / approved / approvedAt / approvedBy /
-       commissionRate — the KEY's presence is what fails, not its value. So
-       `verified: false`, which reads as a harmless honest default, made the
-       whole write 403 and self-registration had never once succeeded. That is
-       why the providers collection was empty despite this form existing.
-       Verified against production: identical payload with the key → 403,
-       without it → 200. Absence already means unverified; normalize() in
-       sokoni-providers.js tests `d.verified === true`. */
-    jobsCompleted: 0, available: true,
-    email: user?.email||"",
-    serviceSpec: specData,
-    socials: {
-      whatsapp: document.getElementById("pvWhatsApp")?.value.trim()||"",
-      instagram: document.getElementById("pvInstagram")?.value.trim()||"",
-      tiktok:    document.getElementById("pvTikTok")?.value.trim()||"",
-      facebook:  document.getElementById("pvFacebook")?.value.trim()||"",
-      youtube:   document.getElementById("pvYouTube")?.value.trim()||"",
-      website:   document.getElementById("pvWebsite")?.value.trim()||""
-    },
-    createdAt: Date.now()
-  };
-
-  /* The local array is a read-through cache of the registry, so pushing into
-     it only made the new listing appear on this one browser until the next
-     refresh — it looked like it had been published when nothing had been.
-     The authoritative write is SokoniDB.saveProvider below. */
-
-  /* Map services.html category to provider.html CATS key */
-  const catMap = {
-    'plumbing':'plumbing','electrical':'electrical','cleaning':'cleaning','phone-repair':'mechanic',
-    'computer-repair':'mechanic','graphic-design':'marketing','photography':'photography',
-    'videography':'photography','tutoring':'tutoring','catering':'catering','events':'events',
-    'hair-beauty':'hair-beauty','fitness':'fitness','dj':'entertainment','mc':'entertainment',
-    'marketing':'marketing','accounting':'accounting','legal':'legal','driving':'delivery',
-    'security':'delivery','delivery-service':'delivery','tailoring':'hair-beauty','mechanic':'mechanic',
-    'laundry':'cleaning','interior-design':'construction'
-  };
-  const pvCat = catMap[cat] || cat;
-
-  if(msgEl){ msgEl.innerHTML='✅ Listed! Opening your Provider Dashboard…'; msgEl.style.color="#71ff00"; }
-  /* Pre-seed provider.html with data from this form */
-  const pvId = 'PRV'+Date.now().toString(36).toUpperCase();
-  const pvProfile = { cat:pvCat, name, phone, location:loc, bio, status:'available',
-    extras:{ rate:String(rate) }, hours:{}, blockedDates:[], createdAt:Date.now(), id:pvId };
-  localStorage.setItem('sokoniProviderProfile', JSON.stringify(pvProfile));
-
-  /* Submit admin application to Firestore immediately */
-  const adminApp = {
-    id: pvId, name, phone, email: provider.email,
-    category: cat, location: loc, bio,
-    rate, rateType, skills,
-    type: 'provider', hub: 'service',
-    status: 'pending',
-    date: new Date().toLocaleDateString('en-KE'),
-    submittedAt: new Date().toISOString()
-  };
-  /* Save to sokoniPendingApplications for same-device access */
-  try {
-    const _pApps = JSON.parse(localStorage.getItem('sokoniPendingApplications')||'[]');
-    _pApps.unshift(adminApp);
-    localStorage.setItem('sokoniPendingApplications', JSON.stringify(_pApps));
-  } catch(e) {}
-  /* Save to Firestore so admin sees it on any device */
-  if(window.SokoniDB){
-    window.SokoniDB.saveApplication(adminApp)
-      .catch(e => console.warn('[SOKONI] Application save failed:', e.message));
-    /* Also save to providers collection so they appear in listings immediately */
-    window.SokoniDB.saveProvider(provider)
-      .catch(e => console.warn('[SOKONI] Provider save failed:', e.message));
-  }
-
-  setTimeout(()=>{ window.location.href='provider.html?cat='+pvCat; }, 1200);
+  /* 2026-10-03 (Tech Hub slice 3). This wrote providers/{id} from the browser "so they appear in listings immediately",
+     plus a PRV-id application and a localStorage provider profile, then opened the legacy provider.html — a listing with
+     no AdminOS decision. Registration is the ONE intake (HubRegister → applications → AdminOS → providers on approval). */
+  const cat = document.getElementById("pvCategory")?.value || '';
+  if(window.SokoniTechDirectory) SokoniTechDirectory.apply(cat);
+  else if(window.HubRegister) HubRegister.open({ category: cat });
+  else location.href = 'offer.html';
 }
 
 window.showTab              = showTab;
@@ -1930,6 +1826,7 @@ document.addEventListener('keydown', function(e){
 </script>
 
 <script src="sokoni-providers.js" defer></script>
+<script src="sokoni-tech-directory.js" defer></script>
 <script src="nav-active.js" defer></script>
 <script src="analytics.js" defer></script>
 <script src="sokoni-config.js" defer></script>

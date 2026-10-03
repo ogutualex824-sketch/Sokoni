@@ -774,7 +774,6 @@ function filterTechs() {
   const SPEC = { repair: 'phone-repair', network: 'networking', cctv: 'cctv', software: 'software', support: 'it-support', web: 'web-developer' };
   const spec = document.getElementById('techSpeciality')?.value || '';
   const cfg = { grid: 'techsGrid', category: SPEC[spec] || 'tech', prefix: 'stdir', noun: 'technician',
-    applyUrl: 'business-apply.html?offer=services&category=' + encodeURIComponent(SPEC[spec] || 'it-support'),
     search: () => document.getElementById('techSearch')?.value || '' };
   if (window.SokoniTechDirectory) SokoniTechDirectory.mount(cfg);
 }
@@ -908,8 +907,7 @@ function filterITServices(cat, btn) {
   if(btn) btn.classList.add('active');
   /* 2026-10-03 (Tech Hub slice 2): approved IT providers from the registry, not DEMO_IT (which carried wa.me links). */
   const CAT = { web: 'web-developer', app: 'app-developer', software: 'software', cloud: 'cloud', cyber: 'cybersecurity', consulting: 'it-consulting' };
-  if (window.SokoniTechDirectory) SokoniTechDirectory.mount({ grid: 'itsGrid', count: 'itsCount', category: CAT[cat] || 'tech', prefix: 'stdir', noun: 'IT provider',
-    applyUrl: 'business-apply.html?offer=services&category=' + encodeURIComponent(CAT[cat] || 'it-support') });
+  if (window.SokoniTechDirectory) SokoniTechDirectory.mount({ grid: 'itsGrid', count: 'itsCount', category: CAT[cat] || 'tech', prefix: 'stdir', noun: 'IT provider' });
 }
 window.filterITServices = filterITServices;
 

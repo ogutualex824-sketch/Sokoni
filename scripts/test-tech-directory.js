@@ -27,7 +27,7 @@ function sandbox(modSrc, listResult) {
   return { ctx, els, calls, api: win.SokoniTechDirectory };
 }
 const P = (o) => Object.assign({ uid: 'u1', name: 'Fix Ltd', categoryLabel: 'Phone Repair', category: 'phone-repair', categories: ['phone-repair'], location: 'Nairobi', city: 'Nairobi', description: 'Screens and batteries', skills: ['iPhone', 'Samsung'], rating: null, reviewCount: 0, jobsCompleted: 0, rate: null, rateType: '', photo: '', verified: false, acceptsBookings: true, chatEnabled: true, emoji: '📱', profileUrl: 'provider-profile.html?uid=u1' }, o);
-const CFG = { grid: 'g', count: 'c', category: 'phone-repair', prefix: 'pg', noun: 'technician', applyUrl: 'business-apply.html?offer=services&category=phone-repair' };
+const CFG = { grid: 'g', count: 'c', category: 'phone-repair', prefix: 'pg', noun: 'technician' };
 
 async function behaviour(modSrc) {
   const r = {};
@@ -58,7 +58,7 @@ async function behaviour(modSrc) {
   {
     const s = sandbox(modSrc, { providers: [], error: null });
     await s.api.mount(Object.assign({}, CFG));
-    r.T5 = /No approved technicians are listed here yet/.test(s.els.g.innerHTML) && /business-apply\.html\?offer=services&amp;category=phone-repair|business-apply\.html\?offer=services&category=phone-repair/.test(s.els.g.innerHTML);
+    r.T5 = /No approved technicians are listed here yet/.test(s.els.g.innerHTML) && /href="offer\.html" data-tech-act="apply" data-cat="phone-repair"/.test(s.els.g.innerHTML);
   }
   return r;
 }
@@ -72,7 +72,7 @@ function pages(read) {
       noWhatsApp: !/wa\.me|waConnect\(/.test(s),
       noFakeInvoice: !/SokoniInvoice\.generate\(/.test(s),
       noFakeReviews: !/class="pg-reviews"/.test(s),
-      register: s.includes(`business-apply.html?offer=services&category=${cat}`) && !/HubRegister\.open\(/.test(s),
+      register: s.includes(`data-tech-act="apply" data-cat="${cat}"`) && !/business-apply\.html|provider\.html\?cat=/.test(s),
       modules: ['firebase.js', 'sokoni-providers.js', 'sokoni-book-service.js', 'sokoni-inbox.js', 'sokoni-tech-directory.js'].every((m) => s.includes(`src="${m}"`)),
       mounted: new RegExp("category: '" + cat + "'").test(s) && /SokoniTechDirectory\.mount\(_TECH\)/.test(s),
     };
@@ -163,8 +163,10 @@ function homeServices(html) {
   };
   t.run('filterProviders();');
   r.findOnRegistry = t.calls.mounts.length === 1 && t.calls.mounts[0].grid === 'hsProvidersGrid' && t.calls.mounts[0].category === 'home-services';
+  t.ctx.SokoniTechDirectory.apply = (c, h) => { r._applied = c + '|' + h; };
   t.run('registerProvider();');
-  r.registerApplies = /^business-apply\.html\?offer=services&category=plumbing/.test(t.calls.href) && t.calls.wa === 0;
+  r.registerApplies = r._applied === 'plumbing|home-services' && t.calls.wa === 0;
+  delete r._applied;
   t.run('submitReview();');
   r.noClientReview = t.calls.writes.length === 0;
   r.noWhatsApp = !/wa\.me\//.test(html.replace(/\/\*[\s\S]*?\*\//g, ''));
@@ -185,11 +187,37 @@ function servicesPage(html) {
   return r;
 }
 
+
+/* slice 3: one intake */
+function intake(modSrc) {
+  const s = sandbox(modSrc, { providers: [] });
+  const opened = [];
+  s.ctx.window.location = { href: '' };
+  s.ctx.window.HubRegister = { open: (o) => opened.push(o) };
+  const r = {};
+  s.api.apply('networking');
+  s.api.apply('gardening');
+  s.api.apply('made-up-category', 'tech');
+  r.mapsToExistingIds = opened.length === 3 && opened[0].category === 'it-support' && opened[0].hub === 'tech'
+    && opened[1].category === 'landscaping' && opened[1].hub === 'home-services' && !('category' in opened[2]) && opened[2].hub === 'tech';
+  delete s.ctx.window.HubRegister;
+  s.api.apply('cctv');
+  r.fallbackOffer = s.ctx.window.location.href === 'offer.html';
+  return r;
+}
+function servicesRegister(html) {
+  const t = spyCtx({ SokoniTechDirectory: { apply: (c) => { t.applied = c; } } });
+  t.ctx.document.getElementById = (id) => ({ value: id === 'pvCategory' ? 'plumbing' : 'x' });
+  t.run(fnSrc(html, 'registerProvider'));
+  t.run('registerProvider();');
+  return { oneIntake: t.applied === 'plumbing' && t.calls.writes.length === 0 && t.calls.ls === 0, noSelfListing: !/saveProvider\(|saveApplication\(/.test(html.replace(/\/\*[\s\S]*?\*\//g, '')) };
+}
+
 (async () => {
   let pass = 0, fail = 0, caught = 0;
   const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d ? '   [' + d + ']' : '')); ok ? pass++ : fail++; };
-  console.log('\nTECH DIRECTORY — slices 1-2b\n');
-  const LABELS = { T1: 'lists approved providers from the registry by category', T2: 'ratings / jobs only when real; "New on SOKONI" otherwise; verified only from the record', T3: 'provider text is escaped', T4: 'an unreachable registry is NOT shown as an empty list', T5: 'a real empty registry invites applications (business-apply)', T6: 'Book → SokoniBookService.open(providerId); Message → in-app chat', T7: 'search / type / location filters' };
+  console.log('\nTECH DIRECTORY — slices 1-3\n');
+  const LABELS = { T1: 'lists approved providers from the registry by category', T2: 'ratings / jobs only when real; "New on SOKONI" otherwise; verified only from the record', T3: 'provider text is escaped', T4: 'an unreachable registry is NOT shown as an empty list', T5: 'a real empty registry invites applications through the ONE intake (HubRegister / offer.html)', T6: 'Book → SokoniBookService.open(providerId); Message → in-app chat', T7: 'search / type / location filters' };
   const b = await behaviour(MOD);
   for (const k of Object.keys(LABELS)) ck(k + '  ' + LABELS[k], b[k] === true);
   const pg = pages((f) => fs.readFileSync(path.join(ROOT, f), 'utf8'));
@@ -200,6 +228,8 @@ function servicesPage(html) {
   const rd = (x) => fs.readFileSync(path.join(ROOT, x), 'utf8');
   for (const [k, v] of Object.entries(homeServices(rd('home-services.html')))) ck('P3  home-services.html: ' + k, v);
   for (const [k, v] of Object.entries(servicesPage(rd('services.html')))) ck('P3  services.html: ' + k, v);
+  for (const [k, v] of Object.entries(intake(MOD))) ck('T8  one intake: ' + k, v);
+  for (const [k, v] of Object.entries(servicesRegister(rd('services.html')))) ck('P4  services.html: ' + k, v);
   console.log('\n  [sabotage]');
   const SAB = {
     T2: MOD.replace("'<span class=\"' + x + '-prov-rnum\">New on SOKONI</span>'", "'<span class=\"' + x + '-prov-rnum\">4.9 · 0 jobs</span>'"),
@@ -234,7 +264,12 @@ function servicesPage(html) {
     const red2 = bad2 !== sv && servicesPage(bad2).listingNoWhatsApp !== true;
     console.log('  ' + (red2 ? 'CAUGHT' : 'MISSED') + '  P3 services WhatsApp hand-off'); red2 ? caught++ : fail++;
   }
-  console.log('\n  ' + pass + ' passed, ' + fail + ' failed, ' + caught + '/9 sabotages caught');
+  {
+    const bad = MOD.replace("networking: 'it-support',", "networking: 'networking',");
+    const red = bad !== MOD && intake(bad).mapsToExistingIds !== true;
+    console.log('  ' + (red ? 'CAUGHT' : 'MISSED') + '  T8 intake mapping'); red ? caught++ : fail++;
+  }
+  console.log('\n  ' + pass + ' passed, ' + fail + ' failed, ' + caught + '/10 sabotages caught');
   console.log('  NOT proven here: a real browser render and a real booking (needs a browser run and an approved provider with services).\n');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH ' + (e && e.stack || e)); process.exit(2); });

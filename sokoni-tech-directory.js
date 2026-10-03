@@ -90,7 +90,7 @@
       var list = all.filter(function (p) { return matches(p, cfg); });
       if (cnt) cnt.textContent = list.length + ' ' + cfg.noun + (list.length === 1 ? '' : 's') + (r.stale ? ' (saved copy)' : '');
       if (!all.length) {
-        state(cfg, 'No approved ' + esc(cfg.noun) + 's are listed here yet.<br><a href="' + esc(cfg.applyUrl) + '" style="color:#3b82f6;font-weight:700;">Are you a ' + esc(cfg.noun) + '? Apply to be listed →</a>');
+        state(cfg, 'No approved ' + esc(cfg.noun) + 's are listed here yet.<br><a href="' + esc(cfg.applyUrl) + '" data-tech-act="apply" data-cat="' + esc(cfg.category || '') + '" style="color:#3b82f6;font-weight:700;">Are you a ' + esc(cfg.noun) + '? Apply to be listed →</a>');
         return;
       }
       if (!list.length) { state(cfg, 'No ' + esc(cfg.noun) + 's match these filters.'); return; }
@@ -147,10 +147,42 @@
     (document.head || document.documentElement).appendChild(st);
   }
 
+  /* ── One intake (Tech Hub slice 3) ──────────────────────────────────────────────────────────────────────────
+     Registration is HubRegister.open — the ONE intake every "Register a business" entry uses (offer.html, f3 be46c94,
+     owner 2026-10-01). It writes applications/{id}; AdminOS decides it (applicationDecide); nothing is listed before
+     approval. Directory groups map to an EXISTING HubRegister CATS id; anything else opens the intake unselected
+     rather than inventing a category. Without hub-register.js loaded, offer.html is the entry. */
+  var INTAKE_CAT = {
+    'phone-repair': 'phone-repair', electrical: 'electrical', 'it-support': 'it-support', networking: 'it-support',
+    cctv: 'cctv', software: 'software', 'web-developer': 'web-developer', 'app-developer': 'app-developer',
+    plumbing: 'plumbing', cleaning: 'cleaning', laundry: 'laundry', moving: 'moving', gardening: 'landscaping',
+    appliance: 'ac-repair', security: 'security-guard', painting: 'painting', carpentry: 'carpentry',
+  };
+  var TECH_IDS = ['phone-repair', 'it-support', 'cctv', 'software', 'web-developer', 'app-developer'];
+  function apply(category, hub) {
+    var id = INTAKE_CAT[String(category || '').toLowerCase()] || '';
+    var h = hub || (id ? (TECH_IDS.indexOf(id) > -1 ? 'tech' : 'home-services') : '');
+    if (G.HubRegister && typeof G.HubRegister.open === 'function') {
+      var o = {}; if (id) o.category = id; if (h) o.hub = h;
+      G.HubRegister.open(o);
+      return true;
+    }
+    G.location.href = 'offer.html';
+    return false;
+  }
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('click', function (e) {
+      var a = e.target && e.target.closest ? e.target.closest('[data-tech-act="apply"]') : null;
+      if (!a) return;
+      if (e.preventDefault) e.preventDefault();
+      apply(a.getAttribute('data-cat'), a.getAttribute('data-hub'));
+    });
+  }
+
   var byGrid = {};
 
   function mount(opts) {
-    var cfg = Object.assign({ prefix: 'pg', noun: 'technician', applyUrl: 'business-apply.html?offer=services' }, opts || {});
+    var cfg = Object.assign({ prefix: 'pg', noun: 'technician', applyUrl: 'offer.html' }, opts || {});
     if (cfg.prefix === 'stdir') injectStyles();
     if (byGrid[cfg.grid]) { Object.assign(byGrid[cfg.grid], opts || {}); return render(byGrid[cfg.grid]); }
     byGrid[cfg.grid] = cfg;
@@ -172,6 +204,7 @@
     refresh: function () { return Promise.all(mounts.map(render)); },
     /* Change a mounted grid's filters (e.g. a tab's category) and re-render, without a second mount. */
     update: function (grid, patch) { var c = byGrid[grid]; if (!c) return Promise.resolve(); Object.assign(c, patch || {}); return render(c); },
-    _internal: { card: card, matches: matches },
+    apply: apply,
+    _internal: { card: card, matches: matches, INTAKE_CAT: INTAKE_CAT },
   };
 }(typeof window !== 'undefined' ? window : globalThis));

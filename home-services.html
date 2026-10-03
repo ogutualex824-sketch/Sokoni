@@ -415,7 +415,6 @@ function filterProviders(){
     handyman:'home-repairs',security:'security'};
   const cat=_hsTypeFilter==='all'?'home-services':(GROUP[_hsTypeFilter]||_hsTypeFilter);
   if(window.SokoniTechDirectory) SokoniTechDirectory.mount({grid:'hsProvidersGrid',count:'hsProviderCount',category:cat,prefix:'stdir',noun:'provider',
-    applyUrl:'business-apply.html?offer=services&category='+encodeURIComponent(cat),
     search:()=>document.getElementById('hsSearch')?.value||'',location:()=>document.getElementById('hsArea')?.value||''});
 }
 
@@ -502,11 +501,12 @@ function renderHsAskFeed(){
 }
 
 function registerProvider(){
-  /* 2026-10-03 (Tech Hub slice 2b). Registration went to SOKONI's WhatsApp and into a homeServiceProviders record nobody
-     reviewed, with a preset 5.0 rating. Providers now apply through business-apply — the one application AdminOS reviews. */
+  /* 2026-10-03 (Tech Hub slices 2b + 3). Registration went to SOKONI's WhatsApp and into a homeServiceProviders record
+     nobody reviewed, with a preset 5.0 rating. It now opens HubRegister — the ONE intake AdminOS reviews. */
   const service=document.getElementById('regService')?.value||'';
   const hit=HS_TYPES.find(t=>service.toLowerCase().indexOf(t.label.toLowerCase())>-1);
-  location.href='business-apply.html?offer=services&category='+encodeURIComponent(hit?hit.key:'home-repairs')+'&label='+encodeURIComponent(hit?hit.label:'Home Services');
+  if(window.SokoniTechDirectory) SokoniTechDirectory.apply(hit?hit.key:'', 'home-services');
+  else location.href='offer.html';
 }
 window.registerProvider=registerProvider;
 
