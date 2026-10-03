@@ -1,3 +1,15 @@
+## [2026-10-03] — Owner decision: service commission applies to the DISCOUNTED amount — release gate row C6 — NOT deployed
+
+- **Decision (owner, 2026-10-03):** when an offer discounts a service booking, SOKONI's 5 % is charged on what the buyer actually pays, not on the list price.
+  Example: a KES 1,000 service with a KES 200 offer means the buyer pays KES 800, commission is KES 40 and the provider gets KES 760. This matches the existing
+  events rule ("commission is applied on the discounted price").
+- **scripts/gate-service-commission.js:** new row C6 and mutation "commission charged on the pre-discount list price", which turns C6 red.
+  - On 2f 93f5f13: 6/0, 5/5 mutations caught.
+  - On this line: still RED (C1–C4 and C6), because settlement charges the 20 % plan rate here. The release tree must exit 0.
+- **Binding requirement for 4J (shopOffers, owned by sokoni-5b):** `_settlementMath` reads `booking.price`, so an applied offer MUST store the post-discount
+  payable as `booking.price` (or settlement must read the server-verified paid amount). A booking row proving that lands with 4J.
+- No code path changed. No database, API or security change.
+
 ## [2026-10-03] — Tech Hub slice 4C (server, part): bookings record HOW they are delivered; Site visits / Remote support / Pickup & drop-off implemented — NOT deployed
 
 - **booking-service.js:** every booking stamps `serviceMode` from server facts only. In order: the customer's validated repairDetails, else the accepted quote's

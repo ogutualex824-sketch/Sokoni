@@ -50,6 +50,9 @@ if (process.argv[2] === '--child') {
     H.DOCS.set('providerSubscriptions/ent', { uid: 'ent', planId: 'enterprise', plan: 'enterprise', status: 'active' });
     const run = async (uid) => { try { return await calculateCommission(H.db, settleArgs(uid)); } catch (e) { return { error: e.message }; } };
     const f = await run('free'), e = await run('ent');
+    /* owner 2026-10-03: commission applies to the DISCOUNTED amount — KES 1,000 service, KES 200 offer → buyer pays 800 → 5 % = 40 */
+    let dsc; try { dsc = await calculateCommission(H.db, Object.assign(settleArgs('free'), { orderAmountCents: 80000 })); } catch (er) { dsc = { error: er.message }; }
+    r.disc = { commission: dsc.commissionCents, error: dsc.error || null };
     r.free = { commission: f.commissionCents, rate: f.effectiveRate, error: f.error || null };
     r.ent = { commission: e.commissionCents, rate: e.effectiveRate, error: e.error || null };
     const CC = require(path.join(FN, 'commission-config.js'));
@@ -76,6 +79,7 @@ const rows = (x) => ({
   'C4 ONE source: commission-config services = home_services = generated snapshot = 5': x.configServices === 5 && (x.configHome === null || x.configHome === 5)
     && !!x.snapshot && x.snapshot.services === 5 && x.snapshot.home === 5,
   'C5 the generated snapshot publishes no provider plan ladder': !!x.snapshot && x.snapshot.ladderExported === false,
+  'C6 discounted booking (owner 10-03): KES 1,000 less a KES 200 offer → commission KES 40 on the KES 800 paid, provider KES 760': !!x.disc && x.disc.commission === 4000 && 80000 - x.disc.commission === 76000,
 });
 const ck = (id, ok, got) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + '  ' + id + (ok ? '' : '   [got ' + JSON.stringify(got).slice(0, 220) + ']')); ok ? pass++ : fail++; };
 
@@ -93,6 +97,7 @@ const MUT = [
   ['plan ladder back (subscriptionRole on the settlement)', 'functions/provider-hub.js', (s) => s.replace("return { category: 'services', hubId: 'provider', skipMinimum: true };", "return { category: 'services', hubId: 'provider', subscriptionRole: 'provider' };"), 'C2'],
   ['home_services 14 % in config', 'functions/commission-config.js', (s) => s.replace(/(home_services:\s*\{\s*pct:\s*)5(\s*,)/, '$114$2'), 'C4'],
   ['ladder republished in the snapshot', 'sokoni-commission-rates.js', (s) => s.replace('window.SokoniCommission = {', 'window.SokoniCommission = { PROVIDER_PLAN_PCT: { provider_free: 20 },'), 'C5'],
+  ['commission charged on the pre-discount list price', 'functions/finos-utils.js', (s) => s.replace(/async function calculateCommission\(([^,]+),\s*(\w+)\)\s*\{/, (m, a, b) => m + ' if (' + b + ' && ' + b + '.orderAmountCents === 80000) ' + b + ' = Object.assign({}, ' + b + ', { orderAmountCents: 100000 });'), 'C6'],
 ];
 if (Object.values(R).every(Boolean)) {
   console.log('\n  [mutations]');
@@ -114,4 +119,5 @@ if (Object.values(R).every(Boolean)) {
 }
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
 console.log('Not covered here: buyer total / intent amount (bookingCreateService + createPaymentIntent, sokoni-5b) and providerServices.fee being ignored.');
+console.log('C6 proves the engine on the discounted base. Settlement reads booking.price, so 4J (shopOffers, sokoni-5b) MUST store the post-discount payable as booking.price; that binding row lands with 4J.');
 process.exit(fail ? 1 : 0);
