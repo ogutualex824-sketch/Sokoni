@@ -349,7 +349,7 @@ const PosDB = (function () {
     /* LOCAL CACHE primitive. Canonical `products.stock` for these paths is owned
        elsewhere: a sale by posCompleteCheckout, a correction by correctStock()
        above. Do not route a manual correction through here. */
-    adjustStock: async (id, delta, reason, cashierId) => {
+    adjustStock: async (id, delta, reason, cashierId, opts) => {
       const p = await _get('products', id);
       if (!p) return null;
       const before = p.stock || 0;
@@ -359,7 +359,12 @@ const PosDB = (function () {
       await _put('products', p);
       /* Interim inventory convergence: also push this delta to the CANONICAL products.stock
          (best-effort, online-only) so in-store sales/edits reflect on the marketplace. */
-      try { if (typeof window !== 'undefined' && window._posSyncCanonicalStock) window._posSyncCanonicalStock(id, delta, reason); } catch (_) {}
+      /* A SALE (and its rollback) is decremented canonically by posCompleteCheckout — pushing it from the browser too
+         would deduct it twice (2026-10-03 convergence). Refund / void still sync here until the server restock on an
+         approved refund/void exists (blocked on the owner-held void chain). */
+      const _r = String(reason || '');
+      const _skipCanon = (opts && opts.localOnly) || /^(sale|rollback):/.test(_r);
+      try { if (!_skipCanon && typeof window !== 'undefined' && window._posSyncCanonicalStock) window._posSyncCanonicalStock(id, delta, reason); } catch (_) {}
       await stock_movements.save({
         productId: id,
         productName: p.name,
@@ -703,11 +708,19 @@ const PosDB = (function () {
     receive: async (id, receivedItems) => {
       const po = await _get('purchase_orders', id);
       if (!po) return;
+      /* Server first (merchantAdjustStock, reason 'restock'), one stable adjustmentId per PO line so a retry is
+         applied once; the PO is marked received only after every line was accepted. */
+      const _uid = (typeof window !== 'undefined' && window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null;
+      for (const item of receivedItems) {
+        const p = await _get('products', item.productId);
+        await products.correctStock(item.productId, Number(item.qty), 'restock', {
+          adjustmentId: 'po_' + id + '_' + item.productId,
+          shopId: (p && (p.shopId || p.marketplaceShopId)) || _uid,
+          note: 'purchase_order:' + id,
+        });
+      }
       po.status = 'received';
       po.receivedAt = Date.now();
-      for (const item of receivedItems) {
-        await products.adjustStock(item.productId, item.qty, 'purchase_order:' + id, 'system');
-      }
       return _put('purchase_orders', po);
     },
   };

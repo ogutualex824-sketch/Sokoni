@@ -761,7 +761,7 @@
         var ref = d.checkoutId || d.ref || null;
         if (!ref) throw new Error('The payment request did not return a reference.');
         S.stk = { phase: 'waiting', phone: S.stk.phone, amount: keep, asked: amt,
-                  reference: ref, error: null, since: Date.now() };
+                  reference: ref, settleKey: d.idempotencyKey || null, error: null, since: Date.now() };
         paint();
         stkPoll(ref);
       }).catch(function (e) {
@@ -805,6 +805,9 @@
                 amount: (isFinite(paid) && paid > 0) ? paid : Number(S.stk.asked || 0),
                 ref: ref,
                 code: d.mpesaCode || null,
+                /* posCompleteCheckout only lets an M-PESA prompt settle the sale it was RAISED for (same idempotency
+                   key). buildSale uses this key for the sale (sokoni-merchant-data.js). */
+                settleKey: (S.stk && S.stk.settleKey) || null,
               }]);
             }
             /* Whatever is still owed is taken the ordinary way, so the sheet
@@ -1178,7 +1181,9 @@
        point: selecting M-Pesa is not paying with it. */
     function payments() {
       var out = S.tenders.map(function (t) {
-        return { method: t.method, amount: Number(t.amount) || 0, ref: t.ref || null };
+        var o = { method: t.method, amount: Number(t.amount) || 0, ref: t.ref || null };
+        if (t.settleKey) o.settleKey = t.settleKey;   /* the paid prompt's key — buildSale settles the sale under it */
+        return o;
       });
       /* Cash last, and only when there is some. A zero cash line on a sale settled
          entirely by M-Pesa would claim a drawer movement that never happened. */

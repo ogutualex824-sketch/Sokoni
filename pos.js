@@ -1335,6 +1335,14 @@ const SPos = (function () {
         return;
       }
 
+      /* CONVERGED TILL (2026-10-03): the server checkout settles only cash, a provider-confirmed M-PESA prompt, a
+         confirmed card payment or wallet. A manual Till code is REFUSED (owner ruling), and the card terminal's
+         reference is not a SOKONI-confirmed payment (POS card rail quarantined) — so both are stopped HERE, before the
+         customer is charged, instead of after. */
+      if (method === 'mpesa_till' || method === 'mpesa_till_manual') {
+        toast('Manual M-PESA Till codes cannot complete a sale. Send an M-PESA prompt or take cash.', 'error');
+        return;
+      }
       if (method === 'mpesa_till') {
         modal.open('mpesa-till-modal');
         _setVal('mpesa-till-amount-disp', total.toFixed(2));
@@ -1350,6 +1358,10 @@ const SPos = (function () {
       }
 
       if (method === 'card') {
+        toast('Card payments at this till are not confirmed by SOKONI yet, so they cannot complete a sale. Take cash or send an M-PESA prompt. Nothing was charged.', 'error');
+        return;
+      }
+      if (method === 'card' && false) {   /* retained for the day the card rail is proven; unreachable now */
         if (!window.PosTerminals) { toast('Terminal module not loaded', 'error'); return; }
         const tillId = state.settings.tillId || '1';
         const result = await PosTerminals.payment.initiate(total, tillId);
@@ -1508,77 +1520,104 @@ const SPos = (function () {
         }
       }
 
-      /* ── Saga: atomic multi-step write with compensating txns ─ */
-      const stockSnapshot = [];  // for rollback
-      const _legacyT0 = Date.now();   /* legacy local-commit timing (for the shadow comparison) */
+      /* ── CONVERGED CHECKOUT (owner 2026-10-03) ─────────────────────────────────────────────────────────────
+         The sale is decided by the SERVER: posCompleteCheckout re-prices every line, confirms every non-cash tender
+         (an M-PESA prompt must be provider-confirmed and raised for THIS sale), claims the idempotency key once and
+         decrements canonical products.stock in one transaction. This till no longer writes canonical stock for a sale
+         (pos-db adjustStock skips the browser sync for 'sale:' / 'rollback:'), and no longer queues the sale to the
+         legacy posTransactions mirror (the server's own sale record is the one analytics read; queueing both would
+         count the sale twice). Nothing local changes unless the server says the sale completed. */
+      const _legacyT0 = Date.now();
+      if ((typeof navigator !== 'undefined' && navigator.onLine === false) || !window.firebaseApp) {
+        if (window.PosIdempotency) PosIdempotency.unlockPayButton();
+        if (window.PosHealth)     PosHealth.endCheckoutTimer(_checkoutStart, false);
+        toast('This till needs a connection to complete a sale — nothing was recorded. Reconnect and try again.', 'error');
+        return;
+      }
+      const _merchantId = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid)
+        || (window.currentUser && window.currentUser.uid) || '';
+      const _branchId = (state.settings && state.settings.branchId) || 'default';
+      const _payments = (txn.payments || []).map((p) => {
+        const out = { method: String(p.method), amount: Number(p.amount) || 0 };
+        if (out.method === 'mpesa') out.ref = payInfo.paymentRef || p.ref || null;   /* the postill_ reference, not the M-PESA receipt code */
+        if (out.method === 'cash') out.amount = Number(p.amount) || 0;
+        return out;
+      });
+      /* The key: a sale paid by an M-PESA prompt settles under that PROMPT's key (the gate compares them); any
+         other sale uses the shared, cart-derived, persisted key so a double tap or a refresh reuses it. */
+      const _spec = { merchantId: _merchantId, branchId: _branchId,
+        items: txn.items.map((i) => ({ productId: i.id, qty: i.qty, price: i.price })),
+        tenders: _payments.map((p) => ({ method: p.method, amountMinor: Math.round(p.amount * 100) })),
+        totalMinor: Math.round(total * 100) };
+      const _idemKey = payInfo.paymentKey
+        || (window.SokoniSaleSubmit ? SokoniSaleSubmit.keyFor(_spec) : txnId);
+      txn.idempotencyKey = _idemKey;
+      const _payload = {
+        idempotencyKey: _idemKey, merchantId: _merchantId, branchId: _branchId,
+        shiftId: txn.shiftId || undefined,
+        items: txn.items.map((i) => ({ productId: i.id, qty: i.qty, unitPrice: i.price })),
+        payments: _payments,
+        subtotal: Number(sub) || 0, discountTotal: Number(disc) || 0, taxTotal: Number(tax) || 0, grandTotal: Number(total) || 0,
+        metadata: { source: 'pos.js', localTxnId: txnId, receiptNo },
+      };
+      let _server = null;
       try {
-        /* Step 1: Save transaction record */
+        if (!_merchantId) throw new Error('This till is not signed in to a shop.');
+        const fnMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+        const _call = fnMod.httpsCallable(fnMod.getFunctions(window.firebaseApp), 'posCompleteCheckout');
+        const res = window.SokoniSaleSubmit
+          ? await SokoniSaleSubmit.submit(_call, _payload)
+          : await _call(_payload).then((r) => ({ ok: true, data: (r && r.data) || {} }), (e) => ({ ok: false, error: (e && e.message) || 'failed' }));
+        if (!res.ok) {
+          if (window.PosIdempotency) PosIdempotency.unlockPayButton();
+          if (window.PosHealth) { PosHealth.recordError('checkout_refused', String(res.error || ''), { txnId, total }); PosHealth.endCheckoutTimer(_checkoutStart, false); }
+          toast(res.inFlight
+            ? 'The sale is still being completed on the server. Do NOT ring it up again — check Orders in a moment.'
+            : 'Sale NOT completed: ' + String(res.error || 'the server refused it') + ' Nothing was recorded.', 'error');
+          return;
+        }
+        _server = res.data || {};
+        if (!_server.saleId) throw new Error('The server did not return a sale.');
+      } catch (err) {
+        if (window.PosIdempotency) PosIdempotency.unlockPayButton();
+        if (window.PosHealth) { PosHealth.recordError('payment_failed', err.message, { txnId, total }); PosHealth.endCheckoutTimer(_checkoutStart, false); }
+        toast('Sale NOT completed: ' + String((err && err.message) || 'unknown error') + ' Nothing was recorded.', 'error');
+        console.error('[POS] converged checkout failed:', err);
+        return;
+      }
+      txn.serverSaleId = _server.saleId;
+      txn.authority    = 'posCompleteCheckout';
+      txn.synced       = true;            /* the server holds the sale; nothing is queued to the legacy mirror */
+      if (_server.receipt && _server.receipt.number) txn.serverReceiptNo = _server.receipt.number;
+
+      /* LOCAL records only — mirrors of what the server already did. A failure here does not undo the sale. */
+      try {
         await PosDB.transactions.save(txn);
-
-        /* Step 2: Deduct stock — collect pre-deduction values for rollback */
         for (const item of txn.items) {
-          const before = (await PosDB.products.get(item.id))?.stock ?? 0;
-          stockSnapshot.push({ id: item.id, before, delta: item.qty });
-          await PosDB.products.adjustStock(item.id, -item.qty, 'sale:' + txn.id, txn.cashierId);
+          await PosDB.products.adjustStock(item.id, -item.qty, 'sale:' + txn.id, txn.cashierId, { localOnly: true });
         }
-
-      /* Update shift totals */
-      if (state.currentShift) {
-        await PosDB.shifts.addTransaction(state.currentShift.id, txn);
-      }
-
-      /* Loyalty points */
-      if (state.currentCustomer) {
-        const pts = Math.floor(total / 100) * (state.settings.loyaltyRate || 1);
-        await PosDB.customers.recordPurchase(state.currentCustomer.id, total, pts);
-      }
-
-      txn._legacyMs = Date.now() - _legacyT0;   /* local commit duration — recorded in the shadow comparison */
-
-        /* Step 3: Queue for cloud sync */
-        await PosDB.syncQueue.add('transaction', txn);
-        /* Show offline queue count if not connected */
-        if (!navigator.onLine) {
-          PosDB.syncQueue.getPending().then(function(q){ _p7UpdateOfflineCount(q.length); }).catch(function(){});
+        if (state.currentShift) await PosDB.shifts.addTransaction(state.currentShift.id, txn);
+        if (state.currentCustomer) {
+          const pts = Math.floor(total / 100) * (state.settings.loyaltyRate || 1);
+          await PosDB.customers.recordPurchase(state.currentCustomer.id, total, pts);
         }
-
-        /* Step 4: Register idempotency key (prevent replay) */
-        if (window.PosIdempotency) await PosIdempotency.recordKey(receiptNo, { txnId, total });
-
-        /* Step 5: Save serial/IMEI records for electronics */
+        txn._legacyMs = Date.now() - _legacyT0;
+        if (window.PosIdempotency) await PosIdempotency.recordKey(receiptNo, { txnId, total, serverSaleId: _server.saleId });
         if (window.PosSerial) {
           for (const item of txn.items) {
             if (item.serial || item.imei) {
               await PosSerial.add({
-                productId:     item.id,
-                serial:        item.serial     || null,
-                imei:          item.imei       || null,
-                transactionId: txn.id,
-                customerId:    txn.customerId  || null,
-                soldAt:        Date.now(),
-                warrantyExpiry: item.warrantyMonths
-                  ? new Date(Date.now() + item.warrantyMonths * 30 * 86400000).toISOString()
-                  : null,
+                productId: item.id, serial: item.serial || null, imei: item.imei || null,
+                transactionId: txn.id, customerId: txn.customerId || null, soldAt: Date.now(),
+                warrantyExpiry: item.warrantyMonths ? new Date(Date.now() + item.warrantyMonths * 30 * 86400000).toISOString() : null,
               }).catch(() => {});
             }
           }
         }
-
-        /* ── All writes committed ─────────────────────────────── */
       } catch (err) {
-        /* ROLLBACK: restore stock for any items already deducted */
-        for (const snap of stockSnapshot) {
-          try { await PosDB.products.adjustStock(snap.id, snap.delta, 'rollback:' + txnId, txn.cashierId); } catch (_) {}
-        }
-        /* Mark transaction as failed if it was saved */
-        try { await PosDB.transactions.save({ ...txn, status: 'failed', failReason: err.message }); } catch (_) {}
-
-        if (window.PosHealth)     PosHealth.recordError('payment_failed', err.message, { txnId, total });
-        if (window.PosIdempotency) PosIdempotency.unlockPayButton();
-        if (window.PosHealth)     PosHealth.endCheckoutTimer(_checkoutStart, false);
-        toast('Payment error — transaction rolled back. Try again.', 'error');
-        console.error('[POS] payment.complete saga failed:', err);
-        return;
+        /* The SALE STANDS (the server completed it). Say so plainly rather than "rolled back". */
+        console.error('[POS] local mirror of a completed sale failed:', err);
+        toast('Sale completed on the server (' + _server.saleId + '), but this device could not update its local records. Refresh before the next sale.', 'warn');
       }
 
       if (window.PosIdempotency) PosIdempotency.unlockPayButton();
@@ -1682,10 +1721,7 @@ const SPos = (function () {
       /* Recommendations invalidation */
       if (window.PosAIEngine) PosAIEngine.recommendations.invalidate();
 
-      /* Canonical stock for marketplace-linked products already converged in Step 2 above:
-         adjustStock() → _posSyncCanonicalStock() applies the true signed delta in one
-         transaction. The former PosOmni.pushStock() loop here wrote an absolute local level
-         a second time and is retired — see _posSyncCanonicalStock for why. */
+      /* Canonical stock for this sale was decremented by posCompleteCheckout, server-side, once. */
 
       /* Check for low stock and notify */
       for (const item of txn.items) {
@@ -1839,10 +1875,11 @@ const SPos = (function () {
       if (state.mpesaPollTimer) { clearInterval(state.mpesaPollTimer); state.mpesaPollTimer = null; }
       if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Sending…'; }
       _setMpesaStep(1, 'active');
-      let ref;
+      let ref, payKey;
       try {
         const r = await callStk({ sellerUid: merchantId, phone: cleanPhone, amount: Math.ceil(total), description: 'SOKONI SmartPOS Sale' });
         ref = r && r.data && r.data.ref;
+        payKey = r && r.data && r.data.idempotencyKey;   /* the sale settles under THIS key (see payment.complete) */
         if (!ref) throw new Error('The payment request did not return a reference.');
       } catch (e) {
         _setMpesaStep(1, 'failed');
@@ -1877,7 +1914,7 @@ const SPos = (function () {
               show(true, '✓ M-PESA confirmed by the payment provider. Ref: ' + mpesaRef);
               setTimeout(async () => {
                 modal.close('mpesa-modal');
-                await payment.complete({ method: 'mpesa', amountPaid: total, change: 0, mpesaRef, mpesaPhone: cleanPhone, paymentRef: ref, paymentRail: 'intasend_pos' });
+                await payment.complete({ method: 'mpesa', amountPaid: total, change: 0, mpesaRef, mpesaPhone: cleanPhone, paymentRef: ref, paymentKey: payKey, paymentRail: 'intasend_pos' });
                 resolve({ ok: true });
               }, 1200);
             } else if (st === 'failed' || st === 'cancelled' || st === 'expired') {
@@ -2320,7 +2357,23 @@ const SPos = (function () {
       const expiry  = _v('si-expiry')            || null;
       const notes   = _v('si-notes').trim()      || 'manual_stock_in';
 
-      await PosDB.products.adjustStock(productId, qty, notes, state.currentCashier?.id);
+      /* Canonical stock moves on the SERVER (merchantAdjustStock, reason 'restock'); the local cache takes the
+         server's figure. One stable adjustmentId per submitted restock, so a double tap is applied once. */
+      const _siKey = (state._stockInPending && state._stockInPending.productId === productId && state._stockInPending.qty === qty)
+        ? state._stockInPending.id
+        : ('stockin_' + productId + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+      state._stockInPending = { productId, qty, id: _siKey };
+      try {
+        const _p0 = await PosDB.products.getById(productId);
+        const _uid = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || (window.currentUser && window.currentUser.uid) || null;
+        await PosDB.products.correctStock(productId, qty, 'restock', {
+          adjustmentId: _siKey, shopId: (_p0 && (_p0.shopId || _p0.marketplaceShopId)) || _uid, note: notes,
+        });
+        state._stockInPending = null;
+      } catch (e) {
+        toast('Stock NOT added: ' + String((e && e.message) || 'the server refused it') + ' Nothing changed.', 'error');
+        return;
+      }
       if (cost) {
         const p = await PosDB.products.getById(productId);
         if (p) { p.cost = cost; if (expiry) p.expiryDate = expiry; await PosDB.products.save(p); }

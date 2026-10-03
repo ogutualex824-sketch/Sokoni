@@ -739,9 +739,13 @@
     var payments = (o.payments || []).map(function (p) {
       return { method: String(p.method || 'cash'), amount: Number(p.amount) || 0, ref: p.ref || null };
     });
+    /* 2026-10-03: an M-PESA prompt can settle ONLY the sale whose idempotency key raised it (posCompleteCheckout →
+       assertConfirmableStk, 'wrong_sale'). So a sale with a confirmed prompt uses THAT key; every other sale keeps the
+       deterministic cart key. One prompt per sale: a second prompt would carry a different key and be refused. */
+    var settleKeys = (o.payments || []).map(function (p) { return p && p.settleKey; }).filter(Boolean);
 
     return {
-      idempotencyKey: idempotencyKey({ scope: scope, cart: cart, saleToken: o.saleToken }),
+      idempotencyKey: settleKeys.length ? String(settleKeys[0]) : idempotencyKey({ scope: scope, cart: cart, saleToken: o.saleToken }),
       merchantId: scope.shopId,          /* the SHOP owns the till, not the account */
       branchId: o.branchId || 'default',
       shiftId: o.shiftId || null,

@@ -36,15 +36,19 @@
     return function (a) {
       a = a || {};
       var shopId = String(a.sellerUid || a.merchantId || '');
+      /* The key that raised a PAID prompt is the key the sale must settle under: posCompleteCheckout's payment gate
+         (assertConfirmableStk) refuses an M-PESA payment whose intent was raised for a different idempotency key. A
+         caller may pass its own; otherwise each prompt is a fresh attempt. Either way the key is returned. */
+      var key = (typeof a.idempotencyKey === 'string' && a.idempotencyKey) ? a.idempotencyKey : attemptKey(shopId);
       return fn({
-        merchantId: shopId, idempotencyKey: attemptKey(shopId), phone: a.phone,
+        merchantId: shopId, idempotencyKey: key, phone: a.phone,
         amountKES: Number(a.amount), narrative: String(a.description || 'POS sale').slice(0, 60),
       }).then(function (r) {
         var d = (r && r.data) || r || {};
         if (!d.ref) throw new Error('The payment request did not return a reference.');
         if (d.state === 'failed') throw new Error(d.error || 'M-Pesa did not accept the payment request. Try again.');
         merchantOf[d.ref] = shopId;
-        return { data: { ref: d.ref, checkoutId: d.ref, state: d.state || 'pending', reused: !!d.reused } };
+        return { data: { ref: d.ref, checkoutId: d.ref, state: d.state || 'pending', reused: !!d.reused, idempotencyKey: key } };
       });
     };
   }

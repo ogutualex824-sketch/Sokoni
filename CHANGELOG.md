@@ -1,3 +1,9 @@
+## 2026-10-03 — POS till convergence: pos.html sales complete on the server; restocks via the server stock tool; M-PESA settles under the paid prompt's key (till + merchant-v2) (NOT deployed)
+
+- **Changes:** pos.js / pos-db.js / sokoni-pos-stk.js / sokoni-merchant-sell.js / sokoni-merchant-data.js / pos.html.
+- **Tests:** scripts/test-pos-till-converged.js 13/0 (base 0/13; sabotage detected); test-pos-architecture and test-pos-boot-budget failures pre-existing.
+- **Release rule:** ship ONLY with or after the gated posCompleteCheckout (d4a167c line). Docs: docs/POS_TILL_CONVERGENCE_2026-10-03.md.
+
 ## [2026-10-03] — SmartPOS M-PESA on the canonical IntaSend POS rail (hosting, NOT deployed)
 
 **Why (owner-authorized 2026-10-03):** pos.html "Send M-PESA Request" called darajaSTKPush (never deployed) and, failing that, invented a SIMULATED_ checkout and completed the sale — a sale with no payment. sokoni-b2 replaced it with a refusal floor (a436e12); this replaces the refusal with the EXISTING authoritative flow, not a new POS payment system.
