@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 /* SETTLEMENT AUTHORITY — owner 2026-10-03 deliberate breaks, executed through the REAL provider-ops settlement
      SA1 AMOUNT MANIPULATION: provider re-priced to 12,000 after KES 10,000 was held → base 10,000 (heldAmount), never price
      SA2 COMMISSION MANIPULATION: booking captured 10%; today's lane for its hub is 5% → settlement still 10% (snapshot)

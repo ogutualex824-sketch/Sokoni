@@ -24,6 +24,7 @@
  * A permanent block would strand real money belonging to a seller who did nothing wrong.
  */
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 
 const path = require('path');
 const Module = require('module');

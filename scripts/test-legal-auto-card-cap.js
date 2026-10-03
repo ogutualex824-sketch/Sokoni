@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 /* ============================================================================
    Legal free plan — the auto consultation card does NOT count toward the service cap (owner 2026-10-03)
    Drives the REAL provider-ops handlers (add / duplicate / toggle) on an in-memory Firestore.

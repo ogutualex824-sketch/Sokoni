@@ -8,6 +8,7 @@
  * past it, and the failure is invisible until reconciliation.
  */
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 const S = require('../functions/commission-settlement-authority');
 const MA = require('../functions/money-authority');
 

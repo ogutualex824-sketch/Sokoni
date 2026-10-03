@@ -29,6 +29,7 @@
  *   node scripts/test-event-settlement.js
  */
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:1';
 process.env.GCLOUD_PROJECT = process.env.GCLOUD_PROJECT || 'demo-event-test';
 delete process.env.GOOGLE_APPLICATION_CREDENTIALS;

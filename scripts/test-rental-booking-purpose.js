@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 /* rental_booking payment purpose (equipment rental → held payment) — contract with sokoni-f3 2026-10-03 (rentalBook shape)
      R1  amount = totalAmount + depositAmount read from the server-only booking; the client amount is ignored
      R2  commission base = rent ONLY (construction_equipment_rental 10%); the deposit is carried separately as refundable

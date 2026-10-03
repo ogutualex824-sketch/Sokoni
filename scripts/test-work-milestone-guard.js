@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 /* Work/Job Engine milestone refund guard on the commercial line (ported from sokoni-b2 a1234da; review by sokoni-2f)
      G1  a PAID (paid_held) work_milestone: customer cancel / provider cancel / decline / no-show → WORK_MILESTONE_HELD, booking untouched
      G2  an UNPAID work_milestone can still be cancelled (the guard only bites once money is held)
