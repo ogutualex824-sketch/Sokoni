@@ -429,15 +429,14 @@ const SPos = (function () {
       document.getElementById('mpesa-account-row').style.display = val === 'paybill' ? 'block' : 'none';
     },
 
+    /* 2026-10-03: no Daraja credentials. This step records the till / paybill number used for manual till
+       payments. It does NOT set mpesaConfigured, which would offer an M-PESA prompt this screen cannot send. */
     async verifyMpesa() {
-      const ck         = _v('mpesa-ck').trim();
-      const cs         = _v('mpesa-cs').trim();
-      const passkey    = _v('mpesa-passkey').trim();
       const shortcode  = _v('mpesa-shortcode').trim();
       const type       = _v('mpesa-type');
 
-      if (!ck || !cs || !passkey || !shortcode) {
-        toast('Please fill in all M-PESA fields', 'error');
+      if (!/^\d{5,7}$/.test(shortcode)) {
+        toast('Enter your till or paybill number (5 to 7 digits)', 'error');
         return;
       }
 
@@ -446,19 +445,15 @@ const SPos = (function () {
       btn.textContent = 'Verifying...';
 
       try {
-        /* Save credentials via Cloud Function for verification */
-        const saved = await mpesa.saveCredentials({ ck, cs, passkey, shortcode, type });
-        if (saved) {
-          toast('M-PESA connected successfully!', 'success');
-          await PosDB.settings.setMany({ mpesaConfigured: true, mpesaShortcode: shortcode, mpesaType: type });
-          state.wizardStep++;
-          wizard.showStep(state.wizardStep);
-        }
+        await PosDB.settings.setMany({ mpesaShortcode: shortcode, mpesaType: type });
+        toast('Till number saved', 'success');
+        state.wizardStep++;
+        wizard.showStep(state.wizardStep);
       } catch (e) {
-        toast('Verification failed: ' + e.message, 'error');
+        toast('Could not save: ' + e.message, 'error');
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Verify & Connect';
+        btn.textContent = 'Save & Continue';
       }
     },
 
@@ -1812,22 +1807,6 @@ const SPos = (function () {
   };
 
   const mpesa = {
-    /* RETIRED — the POS no longer stores merchant M-Pesa credentials.
-       This wrote darajaConsumerSecret and darajaPassKey to Firestore from the
-       till device: live API secrets, in plaintext, on shared shop hardware.
-       Collections are moving to one central SOKONI account whose keys live in
-       Secret Manager and never reach a client (functions/payment-config.js →
-       collectionRoute).
-
-       Kept as a rejecting stub rather than deleted so any caller fails loudly
-       and immediately instead of silently appearing to save. Audited 2026-07-22:
-       shopSettings held ZERO documents, so no till loses a working setup. */
-    async saveCredentials() {
-      throw new Error(
-        'M-Pesa collection is managed by SOKONI centrally — per-merchant Daraja ' +
-        'credentials are no longer stored on the device.'
-      );
-    },
 
     async sendSTK() {
       const phone  = _v('mpesa-phone').replace(/\s/g, '');
@@ -1837,103 +1816,22 @@ const SPos = (function () {
 
       const cleanPhone = phone.startsWith('0') ? '254' + phone.slice(1) : phone.startsWith('+') ? phone.slice(1) : phone;
 
-      document.getElementById('mpesa-send-btn').disabled = true;
-      document.getElementById('mpesa-send-btn').textContent = 'Sending...';
-
-      /* Step 1: active */
-      _setMpesaStep(1, 'active');
-
-      try {
-        const fn = window.firebaseApp
-          ? (await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js'))
-          : null;
-
-        let checkoutId = null;
-
-        if (fn && window.firebaseApp) {
-          const { getFunctions, httpsCallable } = fn;
-          const functions = getFunctions(window.firebaseApp);
-          const call = httpsCallable(functions, 'darajaSTKPush');
-          const uid  = window.currentUser?.uid;
-          const result = await call({
-            sellerUid:   uid,
-            phone:       cleanPhone,
-            amount:      Math.ceil(total),
-            description: 'SOKONI SmartPOS Sale',
-            hub:         'pos',
-          });
-          checkoutId = result.data?.checkoutId;
-        }
-
-        if (!checkoutId) {
-          /* Dev mode: simulate STK push */
-          checkoutId = 'SIMULATED_' + Date.now();
-        }
-
-        state.mpesaCheckoutId = checkoutId;
-        _setMpesaStep(1, 'done');
-        _setMpesaStep(2, 'active');
-
-        /* Poll for confirmation */
-        let attempts = 0;
-        state.mpesaPollTimer = setInterval(async () => {
-          attempts++;
-          if (attempts > 24) { /* 2 min timeout */
-            clearInterval(state.mpesaPollTimer);
-            _setMpesaStep(2, 'failed');
-            _setMpesaStep(3, 'failed');
-            document.getElementById('mpesa-result').style.display = 'block';
-            document.getElementById('mpesa-result').style.background = 'rgba(239,68,68,0.1)';
-            document.getElementById('mpesa-result').style.color = 'var(--red)';
-            document.getElementById('mpesa-result').textContent = 'Payment timed out. Ask customer to try again.';
-            document.getElementById('mpesa-send-btn').disabled = false;
-            document.getElementById('mpesa-send-btn').textContent = '📱 Send M-PESA Request';
-            return;
-          }
-
-          try {
-            let confirmed = false, mpesaRef = '';
-
-            if (fn && window.firebaseApp && !checkoutId.startsWith('SIMULATED_')) {
-              const { getFunctions, httpsCallable } = fn;
-              const functions = getFunctions(window.firebaseApp);
-              const call = httpsCallable(functions, 'verifyPaymentStatus');
-              const result = await call({ checkoutId });
-              confirmed = result.data?.status === 'completed';
-              mpesaRef  = result.data?.mpesaCode;
-            } else if (checkoutId.startsWith('SIMULATED_') && attempts >= 3) {
-              /* Simulation: confirm after 3 polls (~15s) */
-              confirmed = true;
-              mpesaRef  = 'SIM' + Date.now().toString().slice(-8);
-            }
-
-            if (confirmed) {
-              clearInterval(state.mpesaPollTimer);
-              _setMpesaStep(2, 'done');
-              _setMpesaStep(3, 'done');
-
-              document.getElementById('mpesa-result').style.display = 'block';
-              document.getElementById('mpesa-result').style.background = 'rgba(0,168,78,0.1)';
-              document.getElementById('mpesa-result').style.color = '#00a84e';
-              document.getElementById('mpesa-result').textContent = `✓ M-PESA confirmed. Ref: ${mpesaRef}`;
-
-              setTimeout(async () => {
-                modal.close('mpesa-modal');
-                await payment.complete({ method: 'mpesa', amountPaid: total, change: 0, mpesaRef, mpesaPhone: cleanPhone });
-              }, 1500);
-            }
-          } catch (_) {}
-        }, 5000);
-
-      } catch (e) {
-        _setMpesaStep(1, 'failed');
-        document.getElementById('mpesa-result').style.display = 'block';
-        document.getElementById('mpesa-result').style.background = 'rgba(239,68,68,0.1)';
-        document.getElementById('mpesa-result').style.color = 'var(--red)';
-        document.getElementById('mpesa-result').textContent = 'Error: ' + e.message;
-        document.getElementById('mpesa-send-btn').disabled = false;
-        document.getElementById('mpesa-send-btn').textContent = '📱 Send M-PESA Request';
+      /* RETIRED 2026-10-03 (owner: IntaSend only). This sent the prompt through darajaSTKPush, a Daraja
+         function that is not deployed, and when no Firebase app was present it invented a checkout id
+         ('SIMULATED_…') and "confirmed" it after three polls, completing an M-Pesa sale nobody paid.
+         The M-Pesa prompt is not available on this screen; the manual till payment (customer pays the
+         till number, cashier records the confirmation code) and cash remain. */
+      void cleanPhone; void total;
+      const res = document.getElementById('mpesa-result');
+      if (res) {
+        res.style.display = 'block';
+        res.style.background = 'rgba(239,68,68,0.1)';
+        res.style.color = 'var(--red)';
+        res.textContent = 'M-PESA prompts are not available on this screen. Ask the customer to pay your till number and record the confirmation code, or take cash. Nothing was charged.';
       }
+      const sendBtn = document.getElementById('mpesa-send-btn');
+      if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '📱 Send M-PESA Request'; }
+      toast('M-PESA prompts are not available here — nothing was charged', 'error');
     },
 
     cancelSTK() {
@@ -1954,45 +1852,24 @@ const SPos = (function () {
       modal.open('mpesa-config-modal');
     },
 
+    /* 2026-10-03: no Daraja credentials — saves the till / paybill number and type only. */
     async saveConfig() {
-      const ck       = (_v('cfg-mpesa-ck')       || '').trim();
-      const cs       = (_v('cfg-mpesa-cs')       || '').trim();
-      const passkey  = (_v('cfg-mpesa-passkey')  || '').trim();
-      const shortcode= (_v('cfg-mpesa-shortcode')|| '').trim();
-      const type     = _v('cfg-mpesa-type')       || 'CustomerPayBillOnline';
-      const env      = _v('cfg-mpesa-env')        || 'production';
-
-      if (!ck || !cs || !passkey || !shortcode) {
-        toast('Fill in all required fields', 'error');
-        return;
-      }
-
+      const shortcode = (_v('cfg-mpesa-shortcode') || '').trim();
+      const type      = _v('cfg-mpesa-type') || 'CustomerBuyGoodsOnline';
+      if (!/^\d{5,7}$/.test(shortcode)) { toast('Enter your till or paybill number (5 to 7 digits)', 'error'); return; }
       const btn = document.getElementById('cfg-mpesa-save-btn');
-      btn.disabled = true;
-      btn.textContent = 'Saving...';
-
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
       try {
-        await mpesa.saveCredentials({ ck, cs, passkey, shortcode, type, env });
-        await PosDB.settings.setMany({ mpesaConfigured: true, mpesaShortcode: shortcode, mpesaType: type });
-        state.settings.mpesaConfigured = true;
-        state.settings.mpesaShortcode  = shortcode;
-
-        /* Validate with Cloud Function (test OAuth token generation) */
-        if (window.firebaseApp) {
-          const { getFunctions, httpsCallable } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
-          const fn = getFunctions(window.firebaseApp);
-          await httpsCallable(fn, 'validateDarajaCredentials')({});
-        }
-
+        await PosDB.settings.setMany({ mpesaShortcode: shortcode, mpesaType: type });
+        state.settings.mpesaShortcode = shortcode;
         const statusEl = document.getElementById('mpesa-config-status');
-        if (statusEl) statusEl.textContent = 'Connected ✓';
+        if (statusEl) statusEl.textContent = 'Till ' + shortcode;
         modal.close('mpesa-config-modal');
-        toast('M-PESA configured successfully!', 'success');
+        toast('Till number saved', 'success');
       } catch (e) {
         toast('Save failed: ' + e.message, 'error');
       } finally {
-        btn.disabled = false;
-        btn.textContent = 'Save & Verify';
+        if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
       }
     },
   };
@@ -3663,7 +3540,7 @@ const SPos = (function () {
       if (pst) pst.textContent = PosPrinter.isConnected() ? '✓ ' + PosPrinter.getType() : 'Not connected';
 
       const mcs = document.getElementById('mpesa-config-status');
-      if (mcs) mcs.textContent = (s.mpesaConfigured === true || s.mpesaConfigured === 'true') ? '✓ Configured (shortcode: ' + (s.mpesaShortcode || '-') + ')' : 'Not configured';
+      if (mcs) mcs.textContent = s.mpesaShortcode ? 'Till ' + s.mpesaShortcode : 'Not set';
 
       cashier.renderList();
     },

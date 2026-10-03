@@ -1685,30 +1685,12 @@
     }
 
     if(!LANDLORD_INTASEND_KEY){
-      btn.disabled = true;
-      btn.innerHTML = '⏳ Sending STK Push...';
-      resultEl.innerHTML = '<span style="color:#71ff00;">📱 M-Pesa request sent — tenant should enter PIN on their phone.</span>';
-      setTimeout(()=>{
-        btn.innerHTML = '✓ Payment Confirmed!';
-        btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
-        btn.style.color = "black";
-        resultEl.innerHTML = '<span style="color:#71ff00;">✅ Rent collected — KES ' + amount.toLocaleString() + '</span>';
-        /* Mark rent paid in system */
-        const month = getCurrentMonth();
-        const props = getData();
-        const unit  = props.find(p=>p.id===_collectRentData.propId)?.units?.find(u=>u.id===_collectRentData.unitId);
-        if(unit){
-          unit.rentHistory = unit.rentHistory||[];
-          const idx = unit.rentHistory.findIndex(h=>h.month===month);
-          if(idx>=0) unit.rentHistory[idx] = {month,paid:true,amount,paidDate:new Date().toLocaleDateString("en-KE"),method:"mpesa"};
-          else unit.rentHistory.push({month,paid:true,amount,paidDate:new Date().toLocaleDateString("en-KE"),method:"mpesa"});
-          saveData(props);
-          updateStats();
-          renderRentSection();
-          showNotif("✅ Rent collected via M-Pesa","success");
-        }
-        setTimeout(()=>document.getElementById("collectRentModal").style.display="none", 2000);
-      }, 3000);
+      /* NO PROCESSOR, NO PAYMENT (2026-10-03). This used to show "M-Pesa request sent", then
+         "Payment Confirmed!" after 3 seconds, and write this month's rent as paid:true — with no
+         payment of any kind. Without a configured IntaSend key there is nothing to charge with. */
+      btn.disabled = false;
+      btn.innerHTML = '📨 Request Payment';
+      resultEl.innerHTML = '<span style="color:#ff6b6b;">Online rent collection isn\'t available right now. Nothing was charged and the rent was not marked paid.</span>';
       return;
     }
 

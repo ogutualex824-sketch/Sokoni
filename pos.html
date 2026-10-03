@@ -305,8 +305,8 @@
 
     <!-- Step 2: M-PESA -->
     <div class="wizard-panel" id="wpanel-2">
-      <div class="wizard-title">Connect M-PESA</div>
-      <div class="wizard-sub">Enter your Daraja API credentials from Safaricom Business</div>
+      <div class="wizard-title">Your M-PESA till</div>
+      <div class="wizard-sub">M-Pesa is collected by SOKONI through IntaSend — no API credentials are needed</div>
       <div class="wiz-row">
         <div class="wiz-field">
           <div class="wiz-label">SHORT CODE TYPE *</div>
@@ -324,22 +324,10 @@
         <div class="wiz-label">DEFAULT ACCOUNT REFERENCE</div>
         <input class="wiz-input" id="mpesa-account" placeholder="Account reference">
       </div>
-      <div class="wiz-field">
-        <div class="wiz-label">CONSUMER KEY *</div>
-        <input class="wiz-input" id="mpesa-ck" placeholder="Paste consumer key" autocomplete="off">
-      </div>
-      <div class="wiz-field">
-        <div class="wiz-label">CONSUMER SECRET *</div>
-        <input class="wiz-input" id="mpesa-cs" placeholder="Paste consumer secret" type="password" autocomplete="off">
-      </div>
-      <div class="wiz-field">
-        <div class="wiz-label">LIPA NA M-PESA PASSKEY *</div>
-        <input class="wiz-input" id="mpesa-passkey" placeholder="Paste passkey" type="password" autocomplete="off">
-      </div>
-      <div class="wiz-note">🔒 Credentials are stored encrypted. Never exposed in the browser after setup.</div>
+      <div class="wiz-note">Customers can pay this number directly; the cashier records the M-PESA confirmation code with the sale. No Safaricom API keys are needed.</div>
       <div class="wiz-row" style="margin-top:16px">
         <button class="wiz-btn wiz-btn-ghost" onclick="SPos.wizard.skip()">Skip for now</button>
-        <button class="wiz-btn wiz-btn-primary" id="mpesa-verify-btn" onclick="SPos.wizard.verifyMpesa()">Verify & Connect</button>
+        <button class="wiz-btn wiz-btn-primary" id="mpesa-verify-btn" onclick="SPos.wizard.verifyMpesa()">Save & Continue</button>
       </div>
     </div>
 
@@ -1386,30 +1374,12 @@
           <input class="form-input" id="cfg-mpesa-shortcode" placeholder="e.g. 247247" inputmode="numeric" style="font-size:16px">
         </div>
       </div>
-      <div class="form-field">
-        <label class="form-label">CONSUMER KEY *</label>
-        <input class="form-input" id="cfg-mpesa-ck" placeholder="Paste consumer key" autocomplete="off" style="font-size:16px">
-      </div>
-      <div class="form-field">
-        <label class="form-label">CONSUMER SECRET *</label>
-        <input class="form-input" id="cfg-mpesa-cs" type="password" placeholder="Paste consumer secret" autocomplete="off" style="font-size:16px">
-      </div>
-      <div class="form-field">
-        <label class="form-label">PASSKEY *</label>
-        <input class="form-input" id="cfg-mpesa-passkey" type="password" placeholder="Paste Lipa Na M-PESA passkey" autocomplete="off" style="font-size:16px">
-      </div>
-      <div class="form-field">
-        <label class="form-label">ENVIRONMENT</label>
-        <select class="form-input" id="cfg-mpesa-env" style="font-size:16px">
-          <option value="production">Production</option>
-          <option value="sandbox">Sandbox (Testing)</option>
-        </select>
-      </div>
-      <div style="font-size:12px;color:var(--text-muted);margin-top:8px">🔒 Credentials are saved to your Firestore account — never stored in the browser.</div>
+
+      <div style="font-size:12px;color:var(--text-muted);margin-top:8px">Customers pay this number directly; record the M-PESA confirmation code with each sale. No Safaricom API keys are needed.</div>
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('mpesa-config-modal')">Cancel</button>
-      <button class="modal-btn modal-btn-primary" id="cfg-mpesa-save-btn" onclick="SPos.mpesa.saveConfig()">Save & Verify</button>
+      <button class="modal-btn modal-btn-primary" id="cfg-mpesa-save-btn" onclick="SPos.mpesa.saveConfig()">Save</button>
     </div>
   </div>
 </div>

@@ -1,3 +1,20 @@
+## [2026-10-03] - Hosting: Daraja code removed — engine retired, POS fake payment removed, credential forms gone — NOT deployed
+
+Owner order "remove daraja code" (IntaSend only).
+
+- sokoni-mpesa.js: the Daraja STK engine (darajaSTKPush) replaced by a stub whose pay() refuses immediately (onFailure("unavailable"),
+  no phone prompt, no network). The global is kept so hub pages take their existing failure path instead of worse fallbacks
+  (a contract created with no payment, a WhatsApp hand-off).
+- pos.js: sendSTK no longer calls darajaSTKPush and no longer invents a SIMULATED_ checkout that "confirmed" after three polls and
+  completed an M-PESA sale nobody paid (the known live POS invented-payment defect). It refuses and points to the manual till code
+  or cash. The wizard step and the settings modal save only the till / paybill number (no consumer key, secret or passkey);
+  validateDarajaCredentials call and the throwing credential stub removed. mpesaConfigured is no longer set (it would offer a prompt
+  this screen cannot send); the status line shows the saved till.
+- pos.html / pos-printer-setup.html: Daraja credential fields and copy removed.
+- landlord.html: the no-processor branch that showed "Payment Confirmed!" after 3 s and wrote rent paid:true now refuses honestly.
+- scripts/test-daraja-leftovers.js: 19/0. PENDING shrinks to till.html and merchant-v2.html (fixed on sokoni-2f's union).
+  New behaviour checks D5-D9 each fail on the live versions. POS suites green (pos-architecture 9/5 identical on base: outstanding extraction).
+
 ## [2026-10-03] - Payments pages: Daraja setup console removed (owner: IntaSend only) — hosting, NOT deployed
 
 The four Daraja Cloud Functions were deleted from production today. The pages that told merchants to set up Daraja, copy the

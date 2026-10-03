@@ -2799,8 +2799,8 @@ Promise.race([
       (pd && pd.autoStkEnabled ? 'enabled' : 'not enabled') + '</span>');
     $('cc-pay').innerHTML = html;
     $('cc-stk-note').textContent = (pd && pd.autoStkEnabled) ? '' :
-      'You can sell now without automatic prompts. Automatic STK is an upgrade and ' +
-      'needs your own Safaricom Daraja app — SOKONI never asks for your API keys.';
+      'You can sell now without automatic prompts. Automatic M-Pesa prompts come through ' +
+      'SOKONI’s IntaSend account — SOKONI never asks for your API keys.';
     if (pd) {
       $('cc-till').value = pd.mpesaTill || '';
       $('cc-acct').value = pd.mpesaAccountName || '';
