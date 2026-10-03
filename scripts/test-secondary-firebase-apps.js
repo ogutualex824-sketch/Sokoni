@@ -88,8 +88,9 @@ const ck = (label, ok, detail) => {
    FAIL CLOSED: a script the tokenizer cannot lex is reported as a named FAIL row — an
    unanalysed file is an unknown, and an unknown is never rendered as "clean". The one
    distinction: if V8 itself refuses to compile the script, it is DEAD in the browser too (it
-   runs nothing), so it is listed as a named DEAD page defect rather than a detector failure —
-   and its file is still treated as UNKNOWN (never "clean", never "stale"). */
+   runs nothing). That is ALSO a named FAIL row (owner 2026-10-03: a DEAD page is not
+   release-ready), reported as a page defect rather than a detector gap — and its file is still
+   treated as UNKNOWN (never "clean", never "stale"). */
 const { extractInlineScripts, findSecondaryAppsInJs } = require('./lib/js-tokens');
 
 /* When the tokenizer refuses a script, ask the JS ENGINE (V8, via node) whether it compiles.
@@ -278,9 +279,12 @@ for (const f of files) {
 console.log('── every page/script was analysed (fail closed) ──');
 if (!unanalysed.length) ck('every executable script tokenized (' + files.length + ' files scanned)', true);
 for (const [f, why] of unanalysed) ck('NOT ANALYSED — ' + f + ' (unknown, never clean)', false, why);
-/* Dead scripts are not counted as detector failures — the browser cannot run them either —
-   but they are named every run so they cannot hide, and their files are UNKNOWN below. */
-for (const [f, why] of deadScripts) console.log('  DEAD  ' + f + ' — script does not compile in V8 (page defect; runs nothing)   [' + why.slice(0, 160) + ']');
+/* OWNER RULE (2026-10-03): a DEAD page FAILS the run. A page whose JavaScript cannot execute is not
+   release-ready, so it is a named FAIL row (non-zero exit), never a note. Its file also stays
+   UNKNOWN below (never "clean", never "stale"). PASS = valid + scanner checks pass; KNOWN_PROBLEM =
+   a BASELINE entry on an executable page; DEAD / NOT ANALYSED = failure. */
+if (!deadScripts.length) ck('no DEAD page — every inline script compiles in V8', true);
+for (const [f, why] of deadScripts) ck('DEAD — ' + f + ' — script does not compile in V8 (page defect; runs nothing)', false, why.slice(0, 160));
 console.log('');
 
 console.log('── the pages already converted must stay on the canonical app ──');
