@@ -24,7 +24,17 @@ service cloud.firestore {
   return request.auth != null &&
   (request.auth.token.get('deactivated', false) != true ||
   request.auth.token.admin == true ||
-  request.auth.token.superAdmin == true);
+  request.auth.token.superAdmin == true)
+  && accountNotSuspended();
+  }
+  /* 2026-10-04 OWNER (via sokoni-2f): the existing-session window is closed. A suspended account's still-valid ID token
+     (≤1h) must not write. suspendUser stamps users/{uid}.status / suspended; every isActive()-gated write (all 8 are
+     writes — no read uses it) re-reads it: one extra document read per gated write. A MISSING users doc is not
+     suspended (exists() first — never an expression error that would deny everything). Applies to admins too. */
+  function accountNotSuspended() {
+  return !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+  || (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', 'active') != 'suspended'
+  && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('suspended', false) != true);
   }
   function isOwner() {
   return isAuthed() && resource.data.uid == request.auth.uid;
@@ -243,6 +253,7 @@ service cloud.firestore {
   && uidUnchanged()
   && noAdminFields()
   && accountStateUnchanged()
+  && accountNotSuspended()
   && noPrivilegeEscalation()
   && noProviderForgery()
   && noPhoneVerificationForgery()
@@ -1719,6 +1730,11 @@ service cloud.firestore {
      only — never by a browser, an admin's raw client write included. Payment truth comes from a verified payment
      event; a merchant-entered reference is a CLAIM (invoicePaymentClaims, no client rule = default deny). No live page
      writes invoices from the client (census on hosting 72dca56). */
+  /* 2026-10-04 sokoni-e3 (owner-approved daily Platform Health snapshots): written by the scheduled platformHealthSnapshot,
+     read ONLY through the getPlatformHealthScores callable. Explicit; default-deny already held it. */
+  match /platformHealthHistory/{date} {
+  allow read, write: if false;
+  }
   match /invoices/{invoiceId} {
   allow read:  if isAdmin()
   || (isAuthed() && resource.data.sellerUid == request.auth.uid);

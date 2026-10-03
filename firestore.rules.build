@@ -24,7 +24,13 @@ service cloud.firestore {
   return request.auth != null &&
   (request.auth.token.get('deactivated', false) != true ||
   request.auth.token.admin == true ||
-  request.auth.token.superAdmin == true);
+  request.auth.token.superAdmin == true)
+  && accountNotSuspended();
+  }
+  function accountNotSuspended() {
+  return !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+  || (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', 'active') != 'suspended'
+  && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('suspended', false) != true);
   }
   function isOwner() {
   return isAuthed() && resource.data.uid == request.auth.uid;
@@ -221,6 +227,7 @@ service cloud.firestore {
   && uidUnchanged()
   && noAdminFields()
   && accountStateUnchanged()
+  && accountNotSuspended()
   && noPrivilegeEscalation()
   && noProviderForgery()
   && noPhoneVerificationForgery()
@@ -1570,6 +1577,9 @@ service cloud.firestore {
   allow create: if isAdmin();
   allow update: if isAdmin();
   allow delete: if isAdmin();
+  }
+  match /platformHealthHistory/{date} {
+  allow read, write: if false;
   }
   match /invoices/{invoiceId} {
   allow read:  if isAdmin()
