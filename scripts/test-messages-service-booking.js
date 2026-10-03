@@ -99,6 +99,15 @@ Module._load = function (req, parent, isMain) {
   ck('M-5', !!(cx.ok && cx.ok.context && cx.ok.context.status === 'pending'), 'the conversation context reads the engine booking (status from providerBookings)', cx);
   r = await call(M.createConversation, 'cust1', { transactionType: 'service_booking', transactionId: 'nope' });
   ck('M-6', r.code === 'not-found' && !/providerBookings|bookings/.test(r.msg || ''), 'an unknown booking is not-found without naming the collection', r);
+  /* M-7 — B2B RFQ (sokoni-f3): one conversation per (rfq, supplier) on rfqRecipients; buyer + supplier owner only */
+  DOCS.set('rfqRecipients/rfq1__bizS', { rfqId: 'rfq1', buyerUid: 'buyerA', buyerBusinessId: 'bizB', supplierBusinessId: 'bizS', supplierOwnerUid: 'ownerS', status: 'delivered' });
+  const rb = await call(M.createConversation, 'buyerA', { transactionType: 'rfq', transactionId: 'rfq1__bizS' });
+  const rs = await call(M.createConversation, 'ownerS', { transactionType: 'rfq', transactionId: 'rfq1__bizS' });
+  const rx = await call(M.createConversation, 'otherSupplier', { transactionType: 'rfq', transactionId: 'rfq1__bizS' });
+  const rc = DOCS.get('conversations/rfq_rfq1__bizS') || {};
+  ck('M-7', !!(rb.ok && rs.ok && rb.ok.conversationId === rs.ok.conversationId && rx.code === 'permission-denied'
+    && rc.participants && rc.participants.length === 2 && rc.participants.includes('buyerA') && rc.participants.includes('ownerS')),
+    'RFQ: buyer and supplier owner open ONE conversation (rfqRecipients); another supplier is refused', { rb, rs, rx: rx.code, parts: rc.participants });
   done();
 })().catch((e) => { console.log('CRASH (no verdict): ' + (e && e.stack || e)); process.exit(2); });
 function done() { console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed'); process.exit(fail ? 1 : 0); }

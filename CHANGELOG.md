@@ -1,3 +1,11 @@
+## [2026-10-03] — Messages: B2B RFQ conversations (for sokoni-f3 b2b-rfq 38ab5a8) — NOT deployed
+
+- **functions/messages.js:**
+  - TX_COLLECTIONS rfq → rfqRecipients (was rfqs). No rfq conversation could exist before, because PARTY_FIELDS lacked it and createConversation refused.
+  - PARTY_FIELDS rfq = buyerUid + supplierOwnerUid, account-scoped. txId = rfqId__supplierBusinessId, so there is ONE conversation per (rfq, supplier).
+- **Tests:** test-messages-service-booking M-7. The buyer and supplier owner share one conversation and another supplier is refused. 7/0; BASE=d580af8 fails M-7.
+- **Deploy unit:** createConversation / getConversationContext (messages.js). No rules change.
+
 ## [2026-10-03] — Owner decision: service commission applies to the DISCOUNTED amount — release gate row C6 — NOT deployed
 
 - **Decision (owner, 2026-10-03):** when an offer discounts a service booking, SOKONI's 5 % is charged on what the buyer actually pays, not on the list price.

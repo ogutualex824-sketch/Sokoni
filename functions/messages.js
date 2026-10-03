@@ -41,7 +41,7 @@ const TX_COLLECTIONS = {
   insurance_request:        'insuranceRequests',
   logistics_request:        'packageRequests',
   support_ticket:           'supportTickets',
-  rfq:                      'rfqs',
+  rfq:                      'rfqRecipients',     /* B2B RFQ (sokoni-f3 38ab5a8): ONE conversation per (rfq, supplier) — txId = rfqId__supplierBusinessId */
 };
 
 /* Older collections a transaction type may still live in, read in order after TX_COLLECTIONS (Tech slice 4L). */
@@ -130,6 +130,7 @@ const PARTY_FIELDS = {
   property_inquiry:    ['uid'],
   job_application:     ['uid'],
   legal_consultation:  ['clientUid', 'providerId'],
+  rfq:                 ['buyerUid', 'supplierOwnerUid'],   /* rfqRecipients/{rfqId}__{supplierBusinessId}: the buyer account + the supplier business owner at delivery (account-scoped) */
   logistics_request:   ['buyerUid', 'uid', 'sellerUid', 'assignedDriverId'],
   support_ticket:      ['uid'],
 };
