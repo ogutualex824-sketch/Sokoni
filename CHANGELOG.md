@@ -1,3 +1,13 @@
+## [2026-10-03] — G7: the brief's lead + quote lifecycles on the ONE lead engine (service-leads.js) — NOT deployed
+
+- **functions/service-leads.js:** new stored statuses qualified / quote_requested / lost; server-derived stage (new → contacted → qualified → quote_requested → quote_sent → negotiating → won | lost · cancelled · expired) and quoteStage (draft → sent → customer_viewed → negotiating → accepted | declined · expired · cancelled) on every list. New ops leadQualify, leadRequestQuote, leadSaveQuoteDraft, leadViewQuote, leadWithdrawQuote, leadMarkLost. Itemised quotes (quantity × unit rate + adjustments + STATED taxes; server-computed total, a client total is only compared → QUOTE_TOTAL_MISMATCH; tax never inferred), scope, fixed payment terms (paid on booking, held until PIN) + note, service snapshot. A marketing quote needs the server marketing approval (MKT_SERVICE_NOT_APPROVED). Accept requires quoteVersion (LEAD_QUOTE_CHANGED) and freezes acceptedQuote; booking prices from it. Idle pre-quote leads expire after 30 days (derived) and stop counting toward the 3-open limit.
+- **functions/booking-service.js:** a quote booking's pricingSnapshot.breakdown carries the quote lines when they sum to the price.
+- **functions/provider-dispatch.js:** 6 new routes. **functions/admin-os.js:** adminGetServiceLeads returns stage / quoteStage and won / lost / expired / cancelled counts.
+- **Database:** additive fields on serviceLeads (quoteDraft, acceptedQuote, quote.* lines). No migration; existing leads read as before.
+- **API (breaking for stale clients):** leadRespond{action:'accept'} now REQUIRES quoteVersion. Consumers updated on their branches: sokoni-leads.js (hosting/marketing-hub-on-legal-hub), sokoni-merchant-mktpro.js (hosting/marketer-workspace-on-e81d80a). Ship functions and hosting together.
+- **Security:** accept-what-you-saw (no unseen re-quote acceptance); acceptance locks terms; drafts never reach the customer; no client-computed money.
+- **Tests:** scripts/test-lead-lifecycle.js 11/0, SABOTAGE 8/8; service-leads 14/0; marketing-services 13/0, work-engine 15/0, work-milestones 9/0, tech-taxonomy 8/0, messages preclaim 5/0 / outbox 4/0 / participant-authority 51/0, booking-contact 5/0. NOT RUN (need functions/node_modules): test-business-workspace, test-candidate-shell-gate-compat.
+
 ## [2026-10-03] — messages.js merge item 2/5 — 2f 26697e5 idempotent send (offline outbox server change) — NOT deployed
 
 - **functions/shared/message-identity.js:** byte-identical copy of 2f 26697e5.

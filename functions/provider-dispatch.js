@@ -38,6 +38,8 @@ const ROUTES = [
   'businessWorkspace',
   // service-leads — Tech Hub 4F (docs/SERVICE_LEADS.md)
   'leadCreate', 'leadListMine', 'leadListForProvider', 'leadMarkViewed', 'leadDecline', 'leadSendQuote', 'leadRespond', 'leadClose',
+  // G7 lead / quote lifecycle (same engine)
+  'leadQualify', 'leadMarkLost', 'leadRequestQuote', 'leadWithdrawQuote', 'leadViewQuote', 'leadSaveQuoteDraft',
   'workspaceHome',
   'providerSaveDraft',
   'providerGetDraft',

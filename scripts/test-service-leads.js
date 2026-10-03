@@ -80,12 +80,12 @@ const tomorrow = () => new Date(Date.now() + 2 * 86400000).toISOString().slice(0
   ck('L-6a', r.code === 'failed-precondition' && ![...DOCS.keys()].some((k) => k.startsWith('providerBookings/')), 'booking an UNACCEPTED quote is refused and writes nothing', r);
   const saved = lead(lid).quote.validUntil;
   DOCS.set('serviceLeads/' + lid, Object.assign(lead(lid), { quote: Object.assign(lead(lid).quote, { validUntil: Date.now() - 1000 }) }));
-  r = await call(L.leadRespond, 'cust', { leadId: lid, action: 'accept' });
+  r = await call(L.leadRespond, 'cust', { leadId: lid, action: 'accept', quoteVersion: 1 });
   ck('L-6b', r.code === 'failed-precondition' && lead(lid).status === 'quote_sent', 'an EXPIRED quote cannot be accepted', r);
   DOCS.set('serviceLeads/' + lid, Object.assign(lead(lid), { quote: Object.assign(lead(lid).quote, { validUntil: saved }) }));
 
   /* L-7 accept → book at the QUOTED price; the lead converts in the same transaction */
-  r = await call(L.leadRespond, 'cust', { leadId: lid, action: 'accept' });
+  r = await call(L.leadRespond, 'cust', { leadId: lid, action: 'accept', quoteVersion: 1 });
   const bk = await call(BS.bookingCreateService, 'cust', { providerId: 'prov', serviceId: 's1', date: tomorrow(), startTime: '10:00', leadId: lid, price: 1, amount: 1 });
   const booking = bk.ok && DOCS.get('providerBookings/' + bk.ok.bookingId);
   ck('L-7', !!(booking && booking.price === 150000 && booking.leadId === lid && booking.pricingSnapshot.source === 'quote' && booking.durationMins === 90

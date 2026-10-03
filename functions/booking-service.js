@@ -185,7 +185,10 @@ _h.bookingCreateService = async (req) => {
     price = Math.max(0, Math.round(Number(q.amountCents) || 0));
     deposit = 0;
     pricingSnapshot = { pricingVersion: 'quote@1', currency: 'KES', source: 'quote', leadId, quoteVersion: q.version || 1,
-      totalCents: price, depositCents: 0, breakdown: [{ type: 'quote', label: 'Accepted quote', amount: price }] };
+      totalCents: price, depositCents: 0,
+      /* G7: the accepted quote's server-computed lines (quantity × rate, adjustments, stated taxes) when itemised; they sum to price */
+      breakdown: (Array.isArray(q.breakdown) && q.breakdown.length && q.breakdown.reduce((t, b) => t + (Number(b.amount) || 0), 0) === price)
+        ? q.breakdown.slice(0, 12) : [{ type: 'quote', label: 'Accepted quote', amount: price }] };
   } else if (svc.pricing && typeof svc.pricing === 'object') {
     const br = require('./service-pricing').computePrice(svc.pricing, selection, {
       date: date, startTime: startTime, durationMins: selection.durationMins, distanceKm: Number(d.distanceKm) || 0,

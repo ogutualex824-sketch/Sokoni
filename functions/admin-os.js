@@ -1054,10 +1054,12 @@ exports._h.adminGetServiceLeads = async (req) => {
   if (providerId) q = q.where('providerId', '==', String(providerId).slice(0, 128));
   else if (status) q = q.where('status', '==', String(status).slice(0, 40));
   const snap = await q.limit(cap).get().catch(() => ({ docs: [] }));
+  const SL = require('./service-leads');
+  const now = Date.now();
   const items = (snap.docs || []).map((d) => {
     const x = d.data() || {}; const qt = x.quote || null;
     return {
-      id: d.id, status: x.status || '', customerUid: x.customerUid || '', providerId: x.providerId || '', serviceId: x.serviceId || null,
+      id: d.id, status: x.status || '', stage: SL.leadStage(x, now), quoteStage: SL.quoteStage(x, now, 'admin'), customerUid: x.customerUid || '', providerId: x.providerId || '', serviceId: x.serviceId || null,
       message: String(x.message || '').slice(0, 280),
       quote: qt ? { amountCents: Number(qt.amountCents) || 0, version: qt.version || 1, validUntil: qt.validUntil || null, serviceMode: qt.serviceMode || '' } : null,
       bookingId: x.bookingId || null, monetization: (x.monetization && x.monetization.status) || 'not_configured',
@@ -1065,8 +1067,9 @@ exports._h.adminGetServiceLeads = async (req) => {
     };
   }).sort((p, q2) => (q2.createdAtMs || 0) - (p.createdAtMs || 0));
   const by = (st) => items.filter((i) => i.status === st).length;
-  return _env('serviceLeads', items, { open: items.filter((i) => ['created', 'viewed', 'quote_sent', 'clarification_requested', 'quote_accepted'].includes(i.status)).length,
-    converted: by('converted'), declined: by('declined') + by('quote_declined') });
+  const st = (s) => items.filter((i) => i.stage === s).length;
+  return _env('serviceLeads', items, { open: items.filter((i) => SL.OPEN.includes(i.status) && i.stage !== 'expired').length,
+    converted: by('converted'), declined: by('declined') + by('quote_declined'), won: st('won'), lost: st('lost'), expired: st('expired'), cancelled: st('cancelled') });
 };
 
 exports.adminGetBookings = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetBookings = async (req) => {
