@@ -189,7 +189,7 @@ H.create = async function (request) {
     try {
       await notifySvc().notify({ uid: s.ownerUid, type: 'rfq_received', title: 'New RFQ on SOKONI',
         body: (san(biz.name, 80) || 'A SOKONI business') + ' sent you a request for quotation: ' + title.slice(0, 80),
-        deepLink: '/merchant-v2.html#rfqs-received', dedupeKey: 'rfq:' + rfqId + ':' + s.id + ':received', data: { rfqId } });
+        deepLink: '/merchant-v2.html#rfqs', dedupeKey: 'rfq:' + rfqId + ':' + s.id + ':received', data: { rfqId } });
     } catch (e) { /* notification failure is not an RFQ failure */ }
   }
   return { rfqId, mode, recipients: suppliers.map(function (s) { return { supplierBusinessId: s.id, name: s.name }; }) };
@@ -374,7 +374,7 @@ H.respond = async function (request) {
     try {
       await notifySvc().notify({ uid: out.supplierOwnerUid, type: 'rfq_accepted', title: 'Your quotation was accepted',
         body: 'Your quote on "' + String(out.title).slice(0, 60) + '" was accepted (KES ' + Number(out.totalKES).toLocaleString('en-KE') + ').',
-        deepLink: '/merchant-v2.html#rfqs-received', dedupeKey: 'rfq:' + d.rfqId + ':accepted', data: { rfqId: d.rfqId, poId: out.poId } });
+        deepLink: '/merchant-v2.html#rfqs', dedupeKey: 'rfq:' + d.rfqId + ':accepted', data: { rfqId: d.rfqId, poId: out.poId } });
     } catch (e) {}
   }
   return { ok: true, status: 'accepted', poId: out.poId };
