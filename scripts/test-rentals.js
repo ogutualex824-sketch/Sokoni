@@ -58,7 +58,7 @@ const TR = { events: [], committedAtCall: [],
   recordEvent: async (db, id, e) => { TR.events.push({ id, e }); TR.committedAtCall.push(store.has('zzSettleApplied/' + id.replace(/^rental_booking_/, ''))); return { ok: true }; } };
 const RS = { quotes: [], settles: [], next: { ok: true },
   quoteRentalSettlement: async (db, a) => { RS.quotes.push(a); return { ok: true, q: 1 }; },
-  settleRentalBooking: async (txn, db, a) => { RS.settles.push(a); const n = RS.next;
+  settleRentalBooking: async (txn, db, a) => { RS.settles.push(a); const n = (a.booking && a.booking.paymentStatus === 'held') ? RS.next : { ok: false, reason: 'not_held' };   /* the module's contract: nothing held → not_held */
     return Object.assign({ receipt: n.ok ? { rentCents: 450000, commissionCents: 45000, netCents: 405000 } : undefined }, n, { apply: (tx) => tx.set(db.collection('zzSettleApplied').doc(a.bookingId), { ok: !!n.ok, reason: n.reason || null }) }); } };
 const _load = Module._load;
 Module._load = function (req) {
