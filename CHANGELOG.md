@@ -1,3 +1,10 @@
+## 2026-10-03 — Sports: public team directory + signed-out public reads (NOT deployed)
+
+- **Change:** sportsDispatch `teams.directory` — approved, non-restricted/suspended teams only; safe fields (no uids/roster); `verified` from the server verification state; optional sport/county filter; capped at 100. `PUBLIC_OPS` = tournaments.open / tournament.view / teams.directory work signed-out (App Check still enforced); every other op still requires sign-in. Replaces the hub page's invented TEAMS seed.
+- **Files:** functions/sports.js, scripts/test-sports-authority.js (TD1–TD4), firestore.indexes.json (teams: status+sport).
+- **DB:** new composite index teams(status, sport) — deploy with indexes before the hub page uses the sport filter. **Security:** read-only, no private fields.
+- **Tests:** test-sports-authority 65/0.
+
 ## 2026-10-03 — rental_booking payment purpose (equipment rental; createPaymentIntent half) (NOT deployed)
 
 - **Change:** `createPaymentIntent({purpose:'rental_booking', bookingId})` priced only from the server-only `rentalBookings/{id}` snapshot written by f3's rentalBook: payer = buyerId, status `confirmed`, paymentStatus `unpaid`; amount = totalAmount + depositAmount; commission base = rent only (`construction_equipment_rental` 10%), deposit carried as `depositCents` + `depositRefundable`; payee = shops/{shopId}.ownerId else shopId, business wallet; preferredRef `RENT-<bookingId>`; added to SELF_SETTLING_PURPOSES (held; 5b's webhook settles at completion).

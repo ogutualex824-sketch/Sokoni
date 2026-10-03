@@ -217,6 +217,22 @@ const refused = (x, code) => x.ok === false && (!code || x.code === code);
   const rr = S.roundRobin(['a', 'b', 'c']);
   ck('D2 roundRobin with an odd count: 3 teams → 3 matches, every pair once, no bye fixtures', rr.length === 3 && new Set(rr.map((p) => [p.home, p.away].sort().join())).size === 3);
 
+  /* ── public team directory (replaces the hub page's invented TEAMS seed) ── */
+  const P = fakeDb();
+  P._docs.set('teams/T1', { name: 'Kibera Lions', sport: 'football', county: 'Nairobi', status: 'approved', verification: 'verified', ownerUid: 'o1', captainUid: 'o1', managerUids: ['m1'] });
+  P._docs.set('teams/T2', { name: 'Draft FC', sport: 'football', status: 'draft', verification: 'pending', ownerUid: 'o2' });
+  P._docs.set('teams/T3', { name: 'Banned XI', sport: 'football', status: 'approved', verification: 'suspended', ownerUid: 'o3' });
+  P._docs.set('teams/T4', { name: 'Hoops', sport: 'basketball', county: 'Mombasa', status: 'approved', verification: 'pending', ownerUid: 'o4' });
+  const pub = async (auth, data) => { try { return { ok: true, r: await S.dispatch(P, auth, data, deps) }; } catch (e) { return { ok: false, code: e.code }; } };
+  let td = await pub(null, { op: 'teams.directory' });
+  ck('TD1 signed-out visitor can list the directory: approved + not restricted/suspended only (draft and suspended hidden)', td.ok && td.r.teams.map((t) => t.teamId).sort().join() === 'T1,T4', td);
+  ck('TD2 directory exposes NO uids / roster (safe fields only); verified flag from the server verification state',
+    td.ok && td.r.teams.every((t) => !('ownerUid' in t) && !('captainUid' in t) && !('managerUids' in t)) && td.r.teams.find((t) => t.teamId === 'T1').verified === true && td.r.teams.find((t) => t.teamId === 'T4').verified === false);
+  td = await pub(null, { op: 'teams.directory', sport: 'Basketball' });
+  ck('TD3 sport filter', td.ok && td.r.teams.length === 1 && td.r.teams[0].teamId === 'T4');
+  ck('TD4 only the three public read ops skip sign-in; me.overview / writes still refuse a signed-out caller',
+    S.PUBLIC_OPS.slice().sort().join() === 'teams.directory,tournament.view,tournaments.open' && refused(await pub(null, { op: 'me.overview' }), 'unauthenticated') && refused(await pub(null, { op: 'tournament.create', name: 'x' }), 'unauthenticated'));
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e && e.stack); process.exit(1); });

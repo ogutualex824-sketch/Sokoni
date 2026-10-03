@@ -595,6 +595,20 @@ async function tournamentsOpen (db, data) {
     capacity: t.capacity, entryFeeKES: t.entryFeeKES, regOpensAt: t.regOpensAt, regClosesAt: t.regClosesAt, startsAt: t.startsAt }; }).filter((t) => !sport || t.sport === sport) };
 }
 
+/** Public team directory: APPROVED, active teams only (restricted/suspended hidden), safe fields only — no uids, no roster.
+    Replaces the hub page's invented TEAMS seed. Optional sport/county filter; capped (no unbounded reads). */
+async function teamsDirectory (db, data) {
+  const sport = data && data.sport ? clean(data.sport, 40).toLowerCase() : null;
+  let q = db.collection('teams').where('status', '==', 'approved');
+  if (sport) q = q.where('sport', '==', sport);
+  const snap = await q.limit(100).get();
+  const county = data && data.county ? clean(data.county, 40).toLowerCase() : null;
+  return { ok: true, teams: (snap.docs || []).map((d) => ({ id: d.id, t: d.data() || {} })).filter(({ t }) => _activeTeam(t))
+    .filter(({ t }) => !county || String(t.county || '').toLowerCase() === county)
+    .map(({ id, t }) => ({ teamId: id, name: t.name, sport: t.sport, category: t.category || null, county: t.county || null,
+      verified: t.verification === 'verified' })) };
+}
+
 /** A tournament's public standings + fixtures (one record each; every view reads the same). */
 async function tournamentView (db, data) {
   const t = await db.collection('tournaments').doc(String(data.tournamentId || '')).get();
@@ -659,17 +673,22 @@ const OPS = {
   'me.overview': (db, a, d, deps) => meOverview(db, a.uid, deps),
   'tournaments.open': (db, a, d) => tournamentsOpen(db, d),
   'tournament.view': (db, a, d) => tournamentView(db, d),
+  'teams.directory': (db, a, d) => teamsDirectory(db, d),
   'admin.queue': (db, a) => { if (!a.admin) fail('permission-denied', 'Admins only.'); return adminQueue(db); },
   'admin.teamVerification': (db, a, d, deps) => { if (!a.admin) fail('permission-denied', 'Admins only.'); return adminTeamVerification(db, a.uid, d, deps); },
   'admin.teamDecide': (db, a, d, deps) => { if (!a.admin) fail('permission-denied', 'Admins only.'); return adminTeamDecide(db, a.uid, d, deps); },
   'admin.tournamentDecide': (db, a, d, deps) => { if (!a.admin) fail('permission-denied', 'Admins only.'); return adminTournamentDecide(db, a.uid, d, deps); },
 };
 
+/* Public reads (no account needed; App Check still enforced by the callable). Every other op requires sign-in. */
+const PUBLIC_OPS = Object.freeze(['tournaments.open', 'tournament.view', 'teams.directory']);
+
 async function dispatch (db, auth, data, deps) {
-  if (!auth || !auth.uid) fail('unauthenticated', 'Sign in to use Sports.');
-  const op = OPS[String((data || {}).op || '')];
+  const name = String((data || {}).op || '');
+  if ((!auth || !auth.uid) && !PUBLIC_OPS.includes(name)) fail('unauthenticated', 'Sign in to use Sports.');
+  const op = OPS[name];
   if (!op) fail('invalid-argument', 'Unknown Sports operation.');
-  return op(db, auth, data || {}, deps);
+  return op(db, auth || {}, data || {}, deps);
 }
 
 let sportsDispatch, sportsFixtureReminders;
@@ -709,6 +728,6 @@ let sportsDispatch, sportsFixtureReminders;
   });
 }
 
-module.exports = { OPS, dispatch, roundRobin, SportsError, memberId, regId, sportsDispatch, sportsFixtureReminders, remindFixtures, REMINDER_WINDOWS,
-  _internal: { meOverview, tournamentsOpen, tournamentView, teamRegister, adminTeamDecide, teamInvite, teamRespond, teamRemove, tournamentCreate, registrationApply, registrationDecide,
+module.exports = { OPS, PUBLIC_OPS, dispatch, roundRobin, SportsError, memberId, regId, sportsDispatch, sportsFixtureReminders, remindFixtures, REMINDER_WINDOWS,
+  _internal: { meOverview, tournamentsOpen, tournamentView, teamsDirectory, teamRegister, adminTeamDecide, teamInvite, teamRespond, teamRemove, tournamentCreate, registrationApply, registrationDecide,
     fixturesPublish, fixtureUpdate, resultSubmit, resultConfirm, resultDispute } };
