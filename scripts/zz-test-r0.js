@@ -123,6 +123,15 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await denies('H-6b', 'the live property.html payload (no date/time) stays refused', addDoc(collection(mallory, 'propertyViewings'), { propertyId: 'L1', uid: 'mallory', status: 'pending' }));
   await allows('H-6c', 'inverting control: the buyer reads their own SERVER-written viewing', getDoc(doc(alice, 'propertyViewings/L1_alice_2026-10-04')));
 
+  console.log('[M] money records — never minted by a browser (IntaSend brief)');
+  await denies('M-1', 'buyer CREATES an order already marked paymentStatus:paid',
+    setDoc(doc(mallory, 'orders/o-paid'), { uid: 'mallory', buyerUid: 'mallory', items: [], total: 10000, status: 'pending', paymentStatus: 'paid' }));
+  await denies('M-1b', 'buyer CREATES an order with status:paid', setDoc(doc(mallory, 'orders/o-paid2'), { uid: 'mallory', buyerUid: 'mallory', total: 10000, status: 'paid' }));
+  await denies('M-1c', 'buyer CREATES an order with paymentVerified:true', setDoc(doc(mallory, 'orders/o-pv'), { uid: 'mallory', buyerUid: 'mallory', total: 10000, status: 'pending', paymentVerified: true }));
+  await allows('M-1d', 'inverting control: a normal pending order (paymentStatus pending) is still created',
+    setDoc(doc(mallory, 'orders/o-ok'), { uid: 'mallory', buyerUid: 'mallory', items: [], total: 500, status: 'pending', paymentStatus: 'pending' }));
+  await denies('M-2', 'browser mints a bookingFees record for itself', setDoc(doc(mallory, 'bookingFees/f1'), { uid: 'mallory', amount: 5000, type: 'booking_fee' }));
+
   console.log('[C] controls — server-only neighbours unchanged');
   await denies('C-1', 'browser writes ratingsSummary', setDoc(doc(mallory, 'ratingsSummary/p1'), { avg: 5, count: 999 }));
   await denies('C-2', 'browser writes a flag subdoc directly', setDoc(doc(mallory, 'reviews/rv-approved/flags/mallory'), { reason: 'x' }));

@@ -178,7 +178,9 @@ service cloud.firestore {
   'deliveryAuthorizedBy', 'deliveryAuthorizedActor', 'deliveredAt'
   ])
   && (!request.resource.data.keys().hasAny(['assignedDriverUid']) || request.resource.data.assignedDriverUid == null)
-  && (!request.resource.data.keys().hasAny(['riderId']) || request.resource.data.riderId == null);
+  && (!request.resource.data.keys().hasAny(['riderId']) || request.resource.data.riderId == null)
+  && (!request.resource.data.keys().hasAny(['paymentStatus'])
+  || request.resource.data.paymentStatus in ['pending', 'unpaid', 'idle', 'pending_payment']);
   }
   function validOrderStatus() {
   return !request.resource.data.keys().hasAny(['status'])
@@ -1034,9 +1036,7 @@ service cloud.firestore {
   allow delete: if isAdmin() || ownsByUid() || ownsByEmail();
   }
   match /bookingFees/{feeId} {
-  allow create: if isAuthed()
-  && request.resource.data.keys().hasAll(['uid','amount','type'])
-  && request.resource.data.uid == request.auth.uid;
+  allow create: if false;
   allow read:   if isAdmin();
   allow update: if isAdmin();
   allow delete: if isAdmin();

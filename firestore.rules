@@ -189,7 +189,13 @@ service cloud.firestore {
   ])
   // P0: a rider is assigned by the claim/dispatch authority, never named by the order creator.
   && (!request.resource.data.keys().hasAny(['assignedDriverUid']) || request.resource.data.assignedDriverUid == null)
-  && (!request.resource.data.keys().hasAny(['riderId']) || request.resource.data.riderId == null);
+  && (!request.resource.data.keys().hasAny(['riderId']) || request.resource.data.riderId == null)
+  // 2026-10-03 (sokoni-b2, IntaSend brief Gate 5/13): a browser may not CREATE an order already marked paid.
+  // status 'paid' and paymentVerified were refused above; paymentStatus was not. Clients legitimately send
+  // pending / unpaid / idle / pending_payment (delivery-hub.js, sokoni-b2b.js, sokoni-redis.js); 'paid' only
+  // ever comes from the server's verified webhook.
+  && (!request.resource.data.keys().hasAny(['paymentStatus'])
+      || request.resource.data.paymentStatus in ['pending', 'unpaid', 'idle', 'pending_payment']);
   }
   function validOrderStatus() {
   return !request.resource.data.keys().hasAny(['status'])
@@ -1072,10 +1078,12 @@ service cloud.firestore {
   allow update: if isAdmin() || ownsByUid() || ownsByEmail();
   allow delete: if isAdmin() || ownsByUid() || ownsByEmail();
   }
+  /* 2026-10-03 (sokoni-b2): bookingFees had only BROWSER writers — sokoni-pay.js saveFee and sokoni-intasend.js
+     _recordCommission ("intasend_confirmed" decided in the page) — so any signed-in user could mint a fee or
+     commission record of any amount for themselves. No function writes it; admin.html only reads. Money records
+     are server-written or not written. */
   match /bookingFees/{feeId} {
-  allow create: if isAuthed()
-  && request.resource.data.keys().hasAll(['uid','amount','type'])
-  && request.resource.data.uid == request.auth.uid;
+  allow create: if false;
   allow read:   if isAdmin();
   allow update: if isAdmin();
   allow delete: if isAdmin();

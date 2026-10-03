@@ -83,6 +83,9 @@ const ROWS = [
   ['U-07 client writes the public unboxing path', 'unboxing-storage', /PASS\s+P-1 /],
   ['U-07b admin-claimed browser write to the public path', 'unboxing-storage', /PASS\s+P-2 /],
   ['U-xx upload into another uid\'s pending path', 'unboxing-storage', /PASS\s+Q-2 /],
+  ['M-01 buyer creates an order already marked paid (paymentStatus)', 'zz-test-r0', /PASS\s+M-1 /],
+  ['M-01d inverting: a normal pending order is still created', 'zz-test-r0', /PASS\s+M-1d /],
+  ['M-02 browser mints a bookingFees record', 'zz-test-r0', /PASS\s+M-2 /],
   ['A-02 browser approval of a review (admin-claimed)', 'zz-test-r0', /PASS\s+A-8 /],
   ['A-02b browser approval of an unboxing (admin-claimed)', 'zz-test-r0', /PASS\s+U-10 /],
 ];
