@@ -188,3 +188,20 @@ The owner could write their own `plan` / `vehicleLimit` (sokoni-tracking.js `sav
   merges single-field indexes. Add a `(supplierOwnerUid, month)` composite only if prod asks for one.
 - Suite `scripts/zz-test-b2b-leads-rules.js` (BL-L*, BL-M*, BL-P*, BL-R*, plus control BL-P4). **EMULATOR PENDING** (host
   memory is below the 512 MB floor). Baseline f259c0b5: BL-P1 must fail there.
+
+## 2026-10-03: Jobs Board containment (three LIVE holes, verified on served f259c0b5)
+
+1. `jobs` (legacy block): `create, update: false`; `delete: isAdmin()`. Live, any signed-in user can write a job with
+   `status:'active'`, which is public through the second `jobs` block, with any `employerUid` and counters, bypassing
+   `functions/jobs.js` validation. The poster can also rewrite `status` / `employerUid` / `expiresAt`.
+2. `jobApplications` (legacy block): `create: false`. Live, the client picks the doc id, so an attacker can pre-create
+   `{jobId}_{victimUid}` (the victim's `applyForJob` then returns `alreadyApplied`) or plant applications carrying an
+   employer's `employerUid`. Applications are created only by the `applyForJob` transaction.
+3. `jobSeekerProfiles`: read is now `isAdmin() || owner`. Live, it is `isAuthed()`, so any signed-in user reads raw
+   `cvUrl`, defeating `getJobSeekerProfile`'s deliberate redaction.
+
+No live client depends on the removed paths: `git grep` on 72dca56 finds only `sokoni-jobs.js:981`, a read of
+`jobs where employerUid == uid`, which is kept (JR-J8). Hotfix-sized: these three hunks can be cut onto the served
+ruleset as their own release if the owner wants them before the combined release. Owner decision.
+Suite `scripts/zz-test-jobs-rules.js` (JR-J*, JR-A*, JR-P*, with controls). **EMULATOR PENDING** (196 MB free).
+Baseline f259c0b5: JR-J1/J2/J3, JR-A1/A2 and JR-P1 must FAIL there.
