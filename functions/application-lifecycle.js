@@ -260,6 +260,29 @@ function _merchantCategoryOf(app) {
   const c = BCAT.categoryFromApplication(app, 'provider').category;
   return c && (BCAT.SELLER_CATEGORIES.includes(c) || MERCHANT_CATEGORIES.includes(c)) ? c : null;
 }
+/* ── H1 (owner 2026-10-03, E2E gate) — THE CATEGORY IS DECIDED AT APPROVAL ─────────────────────────────────────────
+   An approval that lands an account in the providers registry must carry a CATEGORY from business-category.js. It is
+   resolved by EXACT match on the application (categoryFromApplication), refused when nothing matches, frozen on the
+   server decision record (applicationDecisions.businessCategory), and stamped onto providers/{uid}.business IN THE
+   SAME WRITE that makes the provider active (projectProvider). So there is never an approved-but-uncategorized active
+   provider, and the client can never supply or change it: the decision record is client-unwritable, the rules lock
+   providers.business. An existing ADMIN stamp is never silently re-categorised. */
+function _decidedRoleOf(app) {
+  const _r = resolveRole(app);
+  const AT = applicantTypeOf(app);
+  const typedRole = AT ? AT.T.role(AT.m) : null;
+  /* the same precedence applyDecision uses */
+  return typedRole
+    || (_r.by === 'explicit' || _r.by === 'explicit-alias' || /\+category$/.test(_r.by) ? _r.role : (app.role || _r.role));
+}
+function _projectsToProviders(app, role) {
+  if (applicantTypeOf(app)) return false;                     /* typed applicants (education, marketing …) own their projection */
+  if (role == null) return false;                             /* quarantined: nothing is provisioned */
+  if (role === 'driver' || role === 'rider' || role === 'legal' || role === 'seller') return false;
+  if (ROLE_PROFILES[role] || DELEGATED_ROLES[role]) return false;   /* health → healthProviders, mechanic/landlord/tenant profiles */
+  return true;                                                /* applyDecision's final branch: projectProvider */
+}
+
 function resolveRole(app) {
   const r = _resolveDeclaredRole(app);
   if (r.role === 'provider') {
@@ -466,7 +489,7 @@ async function genProviderId(db) {
  * commit: status + searchable + updatedAt (the directory's orderBy) + the
  * search index, all together.
  */
-async function projectProvider(db, app, uid, approved) {
+async function projectProvider(db, app, uid, approved, popts) {
   const ref = db.collection('providers').doc(uid);
   const snap = await ref.get();
   const existing = snap.exists ? snap.data() : {};
@@ -564,8 +587,22 @@ async function projectProvider(db, app, uid, approved) {
     doc.createdAt = _ts();
   }
 
+  /* H1 — business.category from the SERVER decision record (never the applicant-writable application), in THIS write:
+     the same write that sets status 'active'. An existing ADMIN stamp with a different category is kept. */
+  let bizNote = null;
+  if (popts && popts.appId) {
+    const BCAT = require('./business-category');
+    const dSnap = await db.collection('applicationDecisions').doc(String(popts.appId)).get();
+    const dRec = dSnap.exists ? (dSnap.data() || {}) : {};
+    if (BCAT.isCategory(dRec.businessCategory)) {
+      const eb = existing.business || null;
+      if (eb && eb.source === 'admin' && BCAT.isCategory(eb.category) && eb.category !== dRec.businessCategory) bizNote = 'admin_category_kept';
+      else doc.business = { category: dRec.businessCategory, source: 'application', setBy: dRec.decidedBy || null, setAt: _ts(), applicationId: String(popts.appId) };
+    } else bizNote = 'no_decided_category';
+  }
+
   await ref.set(doc, { merge: true });
-  return { collection: 'providers', id: uid, action: snap.exists ? 'updated' : 'created', providerId };
+  return { collection: 'providers', id: uid, action: snap.exists ? 'updated' : 'created', providerId, ...(doc.business ? { businessCategory: doc.business.category } : {}), ...(bizNote ? { businessNote: bizNote } : {}) };
 }
 
 /**
@@ -1404,7 +1441,7 @@ async function applyDecision(appId, app, opts = {}) {
     } else if (DELEGATED_ROLES[role]) {
       receipt.writes.push({ collection: DELEGATED_ROLES[role], id: uid, action: 'delegated' });
     } else {
-      receipt.writes.push(await projectProvider(db, app, uid, approved));
+      receipt.writes.push(await projectProvider(db, app, uid, approved, { appId }));
     }
 
     /* the type stamps what it owns once projected (e.g. a teacher / institution provider record carries its type) */
@@ -1717,6 +1754,12 @@ exports.applicationAdmitExistingProvider = onCall(
     if (!category || !/^[a-z0-9_-]{2,60}$/.test(category)) throw new HttpsError('invalid-argument', 'A category is required.', { reason: 'CATEGORY_REQUIRED' });
     if (reason.length < 5) throw new HttpsError('invalid-argument', 'Give a reason for this approval.', { reason: 'REASON_REQUIRED' });
     if (uid === req.auth.uid) throw new HttpsError('permission-denied', 'An administrator cannot approve their own business.', { code: 'SELF_DECISION' });
+    /* H1 — the category must be a SOKONI category, fit the role, and not belong to a specialised authority */
+    const BCAT = require('./business-category');
+    if (!BCAT.isCategory(category)) throw new HttpsError('invalid-argument', 'That is not a SOKONI business category.', { reason: 'CATEGORY_UNKNOWN' });
+    const sellerCat = BCAT.SELLER_CATEGORIES.includes(category) || MERCHANT_CATEGORIES.includes(category);
+    if ((role === 'seller') !== sellerCat) throw new HttpsError('invalid-argument', 'That category does not fit a ' + role + '.', { reason: 'CATEGORY_ROLE_MISMATCH' });
+    if (BCAT.HEALTHCARE.includes(category) || category === 'lawyer') throw new HttpsError('failed-precondition', 'Healthcare and legal providers are approved through their own verification, not this action.', { reason: 'SPECIALISED_AUTHORITY' });
 
     const db = _db();
     const appId = 'ADM_' + uid;
@@ -1739,6 +1782,11 @@ exports.applicationAdmitExistingProvider = onCall(
       if (others.docs.some((x) => x.id !== appId)) {
         throw new HttpsError('failed-precondition', 'This account already has an application — decide it in Applications instead.', { reason: 'HAS_APPLICATION' });
       }
+      /* H1 — never silently re-categorise an ADMIN decision */
+      const eb = rec.business || null;
+      if (eb && eb.source === 'admin' && BCAT.isCategory(eb.category) && eb.category !== category) {
+        throw new HttpsError('failed-precondition', 'This business is already classified by an administrator as ' + eb.category + '. Reclassification is a separate, audited action.', { reason: 'CATEGORY_CONFLICT' });
+      }
       const at = _ts();
       t.create(appRef, {
         applicationId: appId, uid, role, hub: role === 'provider' ? 'services' : 'marketplace', category,
@@ -1747,7 +1795,10 @@ exports.applicationAdmitExistingProvider = onCall(
         projectionStatus: 'not_required', note: 'Admitted by an administrator: the business was already live with no application.',
       });
       t.create(decRef, { applicationId: appId, status: 'approved', decision: 'approve', decidedBy: req.auth.uid, applicantUid: uid,
-        reason, category, source: 'admin_existing_provider', decidedAt: at });
+        reason, category, businessCategory: category, approvedCategories: [category], source: 'admin_existing_provider', decidedAt: at });
+      /* H1 — the category is stamped in THIS transaction (the record is already live) */
+      const stamp = { category, source: 'admin', setBy: req.auth.uid, setAt: at, applicationId: appId };
+      t.update(recRef, { business: stamp, updatedAt: at });
       let provisioned = false;
       if (role === 'provider' && profSnap && !profSnap.exists) {
         t.create(profRef, { uid, providerId: rec.providerId || null, status: 'active', name: _sanText(rec.name || rec.businessName || '', 120),
@@ -1757,9 +1808,9 @@ exports.applicationAdmitExistingProvider = onCall(
         provisioned = true;
       }
       t.create(db.collection('adminAudit').doc(), { action: 'application_admit_existing', applicationId: appId, targetUid: uid, role, category,
-        performedBy: req.auth.uid, reason, before: { application: null, decision: null, providerProfile: role === 'provider' ? (profSnap && profSnap.exists ? 'present' : 'absent') : 'n/a' },
-        after: { application: 'approved', decision: 'approved', providerProfile: provisioned ? 'provisioned' : (role === 'provider' ? 'unchanged' : 'n/a') }, createdAt: at });
-      return { ok: true, applicationId: appId, replay: false, providerProfileProvisioned: provisioned };
+        performedBy: req.auth.uid, reason, before: { application: null, decision: null, business: eb ? { category: eb.category || null, source: eb.source || null } : null, providerProfile: role === 'provider' ? (profSnap && profSnap.exists ? 'present' : 'absent') : 'n/a' },
+        after: { application: 'approved', decision: 'approved', business: { category, source: 'admin' }, providerProfile: provisioned ? 'provisioned' : (role === 'provider' ? 'unchanged' : 'n/a') }, createdAt: at });
+      return { ok: true, applicationId: appId, replay: false, providerProfileProvisioned: provisioned, category };
     });
     return out;
   }
@@ -1836,6 +1887,20 @@ exports.applicationDecide = onCall(
     /* the type's own decision fields (e.g. Marketing: only the categories the reviewer approved) */
     const _mkt = decision === 'approve' && AT0 ? AT0.T.decide(snap.data() || {}, req.data || {}) : {};
 
+    /* H1 — the business category is decided HERE, server-side, from the application by exact match; never from the
+       request. An approval that would land an UNCATEGORIZED provider is refused (request the category instead). */
+    let _bizCat = null;
+    if (decision === 'approve') {
+      const _role = _decidedRoleOf(cur);
+      if (_projectsToProviders(cur, _role)) {
+        const BCAT = require('./business-category');
+        _bizCat = BCAT.categoryFromApplication(cur, _role).category;
+        if (!BCAT.isCategory(_bizCat)) {
+          throw new HttpsError('failed-precondition', 'This application cannot be approved yet: its business category does not match a SOKONI category. Request information so the applicant chooses one.', { reason: 'CATEGORY_UNRESOLVED' });
+        }
+      }
+    }
+
     /* K13-A — THE SERVER DECISION RECORD, written BEFORE the application is touched. `applicationDecisions/{appId}`
        has no client rule (default deny), so it is the one record of a decision that a browser cannot author; the
        application's own `status` / `decidedBy` are applicant-writable on the served rules and are therefore never
@@ -1852,6 +1917,8 @@ exports.applicationDecide = onCall(
       /* Marketing (b2, 2026-10-03): the APPROVED category subset lives on the server record too — the application's
          marketingApprovedCategories is applicant-writable. Record = the CURRENT decision: anything but approve → []. */
       ...(AT0 && AT0.T.key === 'marketing' ? { approvedCategories: decision === 'approve' ? (_mkt.marketingApprovedCategories || []) : [] } : {}),
+      /* H1: the category this approval decided — the ONLY source projectProvider stamps from */
+      ...(_bizCat ? { businessCategory: _bizCat, approvedCategories: [_bizCat] } : {}),
     });
 
     await ref.set({
