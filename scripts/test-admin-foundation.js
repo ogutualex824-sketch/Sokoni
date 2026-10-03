@@ -431,7 +431,7 @@ function router(map) { return (name, data) => { const k = name + (data && data.o
     const dd = deferred();
     let recon = (d) => d.action === 'classify' ? dd.p : Promise.resolve({ ok: true, state: 'PENDING_SECOND_REVIEW' });
     const r = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(SUMMARY), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}),
-      'impactAdminFoundationData:donations': (d) => Promise.resolve({ rows: d.status === 'requires_reconciliation' ? [HELD('CHK_1', null), HELD('CHK_2', { action: 'verify', by: 'adminA' }), HELD('CHK_3', { action: 'close', by: 'adminB' }), HELD('CHK_4', null)] : [DON({ id: 'PLG_9', verified: false, reconciliation: { state: 'REQUIRES_RECONCILIATION', proposal: { action: 'close', by: 'adminB' } } })] }),
+      'impactAdminFoundationData:donations': (d) => Promise.resolve({ rows: d.status === 'requires_reconciliation' ? [HELD('CHK_1', null), HELD('CHK_2', { action: 'verify', by: 'adminA', providerCheck: 'provider_confirmed' }), HELD('CHK_3', { action: 'close', by: 'adminB', providerCheck: null }), HELD('CHK_4', null), HELD('CHK_5', { action: 'verify', by: 'adminA', providerCheck: 'unchecked' })] : [DON({ id: 'PLG_9', verified: false, reconciliation: { state: 'REQUIRES_RECONCILIATION', proposal: { action: 'close', by: 'adminB' } } }), DON({ id: 'PLG_A', verified: true, reconciliation: { state: 'VERIFIED_PAID', evidence: 'provider_confirmed', proposal: null } }), DON({ id: 'PLG_B', verified: true, reconciliation: { state: 'VERIFIED_PAID', evidence: 'unchecked', proposal: null } })] }),
       impactGetFinancialReport: () => Promise.resolve({ entries: [] }), impactReconcileFoundation: (d) => recon(d) }));
     await r.go('reconciliation');
     const heldRead = r.calls.filter((c) => c.data.view === 'donations');
@@ -487,6 +487,42 @@ function router(map) { return (name, data) => { const k = name + (data && data.o
     const opt = find(byFd(r.host, 'don-filter'), (e) => e.attrs.value === 'requires_reconciliation')[0];
     ck('15o Donations: filter offers "Requires reconciliation"; rows show Verified + Reconciliation', opt && opt.textContent === 'Requires reconciliation'
       && /Not verified/.test(rowOf(r.host, 'PLG_9').textContent) && /Requires reconciliation — proposed: closed — no payment \(by adminB\)/.test(rowOf(r.host, 'PLG_9').textContent));
+    ck('15t evidence label on VERIFIED_PAID rows: "Confirmed by IntaSend" / "Confirmed manually (IntaSend unreachable)"',
+      /Verified paid — Confirmed by IntaSend/.test(rowOf(r.host, 'PLG_A').textContent) && /Verified paid — Confirmed manually \(IntaSend unreachable\)/.test(rowOf(r.host, 'PLG_B').textContent));
+  }
+
+  /* 15b — IntaSend provider check on reconciliation (contract update 2026-10-03) */
+  {
+    const HELD = (id, proposal) => DON({ id, status: 'completed', verified: false, reconciliation: { state: 'REQUIRES_RECONCILIATION', proposal } });
+    let recon = () => Promise.resolve({ ok: true, state: 'VERIFIED_PAID' });
+    const r = await mountWith(router({ 'impactAdminFoundationData:summary': () => Promise.resolve(SUMMARY), 'foundationContentDispatch:adminCounts': () => Promise.resolve({}), impactGetFinancialReport: () => Promise.resolve({ entries: [] }),
+      'impactAdminFoundationData:donations': () => Promise.resolve({ rows: [HELD('CHK_C', { action: 'verify', by: 'adminA', providerCheck: 'provider_confirmed' }), HELD('CHK_U', { action: 'verify', by: 'adminA', providerCheck: 'unchecked' }), HELD('CHK_N', { action: 'verify', by: 'adminA', providerCheck: null }), HELD('CHK_X', { action: 'close', by: 'adminA', providerCheck: null }), HELD('CHK_P', null)] }),
+      impactReconcileFoundation: (d) => recon(d) }));
+    await r.go('reconciliation');
+    const row = (id) => rowOf(r.host, id), m = (id) => byFd(row(id), 'row-msg').textContent;
+    ck('15p the acknowledgement checkbox appears ONLY on verify proposals IntaSend did not confirm (unchecked / not recorded); label verbatim',
+      !byFd(row('CHK_C'), 'ack-unchecked') && !!byFd(row('CHK_U'), 'ack-unchecked') && !!byFd(row('CHK_N'), 'ack-unchecked') && !byFd(row('CHK_X'), 'ack-unchecked')
+      && /IntaSend could not be reached; I checked this payment in the IntaSend dashboard/.test(row('CHK_U').textContent) && /IntaSend confirmed the payment/.test(byFd(row('CHK_C'), 'rc-provider-check').textContent));
+    let n = r.calls.length;
+    byFd(row('CHK_U'), 'act-confirm').fire('click'); await flush();
+    ck('15q Confirm an unchecked proposal WITHOUT the tick → refused locally, no call', r.calls.length === n && /I checked this payment in the IntaSend dashboard/.test(m('CHK_U')), m('CHK_U'));
+    byFd(row('CHK_U'), 'ack-unchecked').checked = true;
+    byFd(row('CHK_U'), 'act-confirm').fire('click'); await flush();
+    let c = r.calls[r.calls.length - 1];
+    ck('15r ticked → {action:confirm, donationId, acknowledgeUnchecked:true}; result after ok', c.data.action === 'confirm' && c.data.donationId === 'CHK_U' && c.data.acknowledgeUnchecked === true && m('CHK_U') === 'Confirmed — now verified paid', JSON.stringify(c.data));
+    byFd(row('CHK_C'), 'act-confirm').fire('click'); await flush();
+    c = r.calls[r.calls.length - 1];
+    ck('15s an IntaSend-confirmed proposal and a close proposal confirm WITHOUT acknowledgeUnchecked', c.data.donationId === 'CHK_C' && !('acknowledgeUnchecked' in c.data) && (byFd(row('CHK_X'), 'act-confirm').fire('click'), true));
+    await flush();
+    c = r.calls[r.calls.length - 1];
+    ck('15s2 close confirm payload', c.data.donationId === 'CHK_X' && Object.keys(c.data).sort().join() === 'action,donationId', JSON.stringify(c.data));
+    recon = () => Promise.reject({ code: 'functions/failed-precondition', message: 'IntaSend shows KES 300 for this reference, not KES 3000.' });
+    byFd(row('CHK_P'), 'rc-ref').value = 'ISREF999';
+    byFd(row('CHK_P'), 'act-propose_verify').fire('click'); await flush();
+    ck('15u IntaSend refusal of a proposal is shown verbatim; row stays actionable', m('CHK_P') === 'IntaSend shows KES 300 for this reference, not KES 3000.' && !byFd(row('CHK_P'), 'act-propose_verify').disabled, m('CHK_P'));
+    recon = () => Promise.resolve({ ok: true, state: 'PENDING_SECOND_REVIEW', providerCheck: 'unchecked' });
+    byFd(row('CHK_P'), 'act-propose_verify').fire('click'); await flush();
+    ck('15v success states the provider check: "… (IntaSend could not be reached — not checked)"', m('CHK_P') === 'Proposal recorded — a different administrator must confirm (IntaSend could not be reached — not checked)', m('CHK_P'));
   }
 
   /* 16 — rails, beneficiary validation, acknowledgement on requiresReview */

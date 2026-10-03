@@ -21,7 +21,9 @@
      Stories           foundationContentDispatch admin ops (adminList / adminSaveStory / adminSubmit /
                        adminDecide / adminPublish / adminUnpublish); Publish disabled unless every media READY
      Reconciliation    impactReconcileFoundation (classify / propose_verify / propose_close / confirm /
-                       withdraw — two different admins) + impactGetFinancialReport {} (live)
+                       withdraw — two different admins; propose_verify asks IntaSend → providerCheck; confirming
+                       a verify proposal IntaSend did not confirm needs acknowledgeUnchecked:true behind a
+                       per-row checkbox) + impactGetFinancialReport {} (live)
    Partner promotion requests moved to sokoni-admin-commercial.js ("Partner plans & promotions") — ONE place.
 
    NONE of the admin callables except impactGetFinancialReport are deployed yet: not-found /
@@ -61,7 +63,11 @@
   var BANKS_FN = 'impactBankCodes';
   var RECON_LABEL = { REQUIRES_RECONCILIATION: 'Requires reconciliation', VERIFIED_PAID: 'Verified paid', CLOSED_NO_PAYMENT: 'Closed — no payment' };
   var RECON_DONE = { PENDING_SECOND_REVIEW: 'Proposal recorded — a different administrator must confirm', VERIFIED_PAID: 'Confirmed — now verified paid', CLOSED_NO_PAYMENT: 'Confirmed — closed, adjustment posted', REQUIRES_RECONCILIATION: 'Proposal withdrawn — still requires reconciliation' };
-  var CLOSE_COPY = 'Closing posts an adjustment that reverses the recorded credit; nothing is deleted.';
+  /* propose_verify asks IntaSend (contract update 2026-10-03): proposal.providerCheck / VERIFIED_PAID evidence. */
+  var EVIDENCE_LABEL = { provider_confirmed: 'Confirmed by IntaSend', unchecked: 'Confirmed manually (IntaSend unreachable)' };
+  var PROVIDER_CHECK_LABEL = { provider_confirmed: 'IntaSend confirmed the payment', unchecked: 'IntaSend could not be reached — not checked' };
+  var ACK_UNCHECKED = 'IntaSend could not be reached; I checked this payment in the IntaSend dashboard';
+  var CLOSE_COPY ='Closing posts an adjustment that reverses the recorded credit; nothing is deleted.';
   var VERIFIED_ONLY_COPY = 'Payouts can only use verified money.';
   /* Overview money: every amount is the server's; Available is the server's verified − reserved, never recomputed here. */
   var MONEY_TILES = [
@@ -176,8 +182,12 @@
     var x = r.reconciliation && typeof r.reconciliation === 'object' ? r.reconciliation : null;
     if (!x) return NEUTRAL;
     var t = RECON_LABEL[str(x.state)] || str(x.state) || NEUTRAL;
+    if (str(x.state) === 'VERIFIED_PAID' && x.evidence) t += ' — ' + (EVIDENCE_LABEL[str(x.evidence)] || str(x.evidence));
     var p = x.proposal && typeof x.proposal === 'object' ? x.proposal : null;
-    if (p) t += ' — proposed: ' + (str(p.action) === 'verify' ? 'verified paid' : str(p.action) === 'close' ? 'closed — no payment' : str(p.action)) + (p.by ? ' (by ' + str(p.by) + ')' : '');
+    if (p) {
+      t += ' — proposed: ' + (str(p.action) === 'verify' ? 'verified paid' : str(p.action) === 'close' ? 'closed — no payment' : str(p.action)) + (p.by ? ' (by ' + str(p.by) + ')' : '');
+      if (str(p.action) === 'verify') t += ' · ' + (PROVIDER_CHECK_LABEL[str(p.providerCheck)] || 'IntaSend check not recorded');
+    }
     return t;
   }
   function storyState(r) {
@@ -1024,7 +1034,11 @@
       var id = str(r.id || r.pledgeId), A = new Actions(self);
       var x = r.reconciliation && typeof r.reconciliation === 'object' ? r.reconciliation : null;
       var proposal = x && x.proposal && typeof x.proposal === 'object' && (x.proposal.action === 'verify' || x.proposal.action === 'close') ? x.proposal : null;
-      function done(res) { return RECON_DONE[str(res && res.state)] || 'Done — refresh to see the new state'; }
+      function done(res) {
+        var t = RECON_DONE[str(res && res.state)] || 'Done — refresh to see the new state';
+        if (res && res.providerCheck && PROVIDER_CHECK_LABEL[str(res.providerCheck)]) t += ' (' + PROVIDER_CHECK_LABEL[str(res.providerCheck)] + ')';
+        return t;
+      }
       if (x && x.state === 'REQUIRES_RECONCILIATION' && !proposal) {
         var ref = h('input', { type: 'text', class: 'sk-pa-input', maxlength: '80', 'data-fd': 'rc-ref', 'aria-label': 'IntaSend payment reference', placeholder: 'IntaSend payment reference' });
         A.inputs = [ref]; A.extra.appendChild(ref);
@@ -1038,7 +1052,21 @@
         A.extra.appendChild(h('p', { class: 'sk-fd-hint', text: CLOSE_COPY }));
       } else if (x && x.state === 'REQUIRES_RECONCILIATION' && proposal) {
         A.extra.appendChild(h('p', { class: 'sk-fd-hint', 'data-fd': 'rc-proposal', text: 'Proposed: ' + (proposal.action === 'verify' ? 'verified paid' : 'closed — no payment') + (proposal.by ? ' by ' + str(proposal.by) : '') + '. A different administrator must confirm.' + (proposal.action === 'close' ? ' ' + CLOSE_COPY : '') }));
-        A.add({ key: 'confirm', label: 'Confirm', primary: true, fn: RECON_FN, done: done, prepare: function () { return { action: 'confirm', donationId: id }; } });
+        /* A verify proposal IntaSend did not confirm needs an explicit, per-row acknowledgement (server: PROVIDER_UNCHECKED). */
+        var ackU = null;
+        if (proposal.action === 'verify') {
+          A.extra.appendChild(h('p', { class: 'sk-fd-hint', 'data-fd': 'rc-provider-check', text: PROVIDER_CHECK_LABEL[str(proposal.providerCheck)] || 'IntaSend check not recorded' }));
+          if (str(proposal.providerCheck) !== 'provider_confirmed') {
+            ackU = h('input', { type: 'checkbox', 'data-fd': 'ack-unchecked' });
+            A.inputs = [ackU];
+            A.extra.appendChild(h('label', { class: 'sk-fd-check' }, [ackU, h('span', { text: ACK_UNCHECKED })]));
+          }
+        }
+        A.add({ key: 'confirm', label: 'Confirm', primary: true, fn: RECON_FN, done: done, prepare: function () {
+          if (!ackU) return { action: 'confirm', donationId: id };
+          if (ackU.checked !== true) return 'Tick “' + ACK_UNCHECKED + '” first';
+          return { action: 'confirm', donationId: id, acknowledgeUnchecked: true };
+        } });
         A.add({ key: 'withdraw', label: 'Withdraw proposal', fn: RECON_FN, done: done, prepare: function () { return { action: 'withdraw', donationId: id }; } });
       }
       return h('tr', { 'data-fd-row': id, 'data-fd-recon-state': x ? str(x.state) : 'unknown' }, [
