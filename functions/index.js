@@ -8895,6 +8895,10 @@ exports.initiateSellerPayout = onCall(
     if (!request.auth || !request.auth.token || !request.auth.token.admin) {
       throw new HttpsError("permission-denied", "Admin only.");
     }
+    /* An admin B2C still sends money OUT: the same withdrawal gate (owner P0, 2026-10-03). */
+    if (!(await require('./shared/withdrawal-gate').withdrawalsOpen(admin.firestore()))) {
+      throw new HttpsError("failed-precondition", require('./shared/withdrawal-gate').CLOSED_MESSAGE, { code: "WITHDRAWALS_DISABLED" });
+    }
     const { sellerId, amount, phone, method, reference } = request.data || {};
     if (!sellerId || !amount || !phone) {
       throw new HttpsError("invalid-argument", "sellerId, amount, and phone required.");

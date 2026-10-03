@@ -860,8 +860,16 @@ exports.getWalletTransactions = onCall({ cors: true, enforceAppCheck: true }, as
 
 // ─── 6. requestSellerPayout ────────────────────────────────────────────────
 
+/* WITHDRAWALS ARE OFF (owner P0, 2026-10-03): refused SERVER-side before any balance, PIN, risk or B2C step — the disabled
+   UI is not the control. ONE gate (shared/withdrawal-gate.js) for every money mover; opens only on
+   platformConfig/withdrawals { enabled: true }. */
+const { withdrawalsOpen: _withdrawalsOpen, CLOSED_MESSAGE: _WITHDRAWALS_CLOSED } = require('./shared/withdrawal-gate');
+
 exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secrets: [INTASEND_KEY] }, async (request) => {
   _requireAuth(request);
+  if (!(await _withdrawalsOpen(getFirestore()))) {
+    throw new HttpsError('failed-precondition', _WITHDRAWALS_CLOSED, { code: 'WITHDRAWALS_DISABLED' });
+  }
   /* HIGH-06: throttle a money/privilege endpoint. Throws resource-exhausted. */
   await checkRateLimit(request, 'payment');
 
@@ -1412,6 +1420,8 @@ exports.processPayoutRetries = onSchedule(
   { schedule: 'every 5 minutes', region: 'us-central1', timeoutSeconds: 300, memory: '256MiB', secrets: [INTASEND_KEY] },
   async () => {
     const db  = getFirestore();
+    /* A retry RE-SENDS money (B2C): gated. Closed → every retry_scheduled request stays untouched (amount stays reserved). */
+    if (!(await _withdrawalsOpen(db))) { require('firebase-functions/logger').warn('[withdrawal-gate] processPayoutRetries skipped — withdrawals are OFF (platformConfig/withdrawals)'); return; }
     const now = Date.now();
     const snap = await db.collection('payoutRequests')
       .where('status', '==', 'retry_scheduled').limit(50).get().catch(() => null);

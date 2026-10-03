@@ -421,6 +421,8 @@ exports.processPendingPayouts = onSchedule(
     timeoutSeconds: 540, memory: '256MiB' },
   async () => {
     const db      = _db();
+    /* Disburses money OUT (B2C): gated (owner P0, 2026-10-03). Closed → nothing is touched, incl. the stuck-processing reset. */
+    if (!(await require('./shared/withdrawal-gate').withdrawalsOpen(db))) { require('firebase-functions/logger').warn('[withdrawal-gate] processPendingPayouts skipped — withdrawals are OFF (platformConfig/withdrawals)'); return; }
     const privKey = INTASEND_PRIV.value();
 
     /* Recover payouts stuck in 'processing' for >10 min (CF crash recovery) */
