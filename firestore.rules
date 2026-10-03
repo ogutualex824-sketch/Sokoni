@@ -208,11 +208,28 @@ service cloud.firestore {
   'rider_assigned','rider_en_route','picked_up','in_transit'
   ];
   }
+  /* 2026-10-04 ONE CANONICAL SUSPENSION (owner via sokoni-2f; deliberate break #7 "client writes status=active to a
+     suspended account → DENIED"): account state is changed ONLY by suspendUser / setUserRole / adminUpdateUserRole
+     (server, audited, Auth disabled + sessions revoked). No browser — the owner, or an ordinary admin's raw client
+     write — may create or change these fields. On create, only an absent or 'active' status is accepted.
+     Census (sokoni-2f): the three live client users writes (driver.html ×2, sokoni-chat-engine.js) touch none of them. */
+  function accountStateKeys() {
+  return ['status','suspended','suspendedAt','suspendReason','suspendedBy','suspensionPriorStatus','suspensionSource',
+  'reinstatedAt','reinstatedBy','customClaims','roleUpdatedAt','roleUpdatedBy'];
+  }
+  function accountStateCreateOk() {
+  return !request.resource.data.keys().hasAny(accountStateKeys().removeAll(['status']))
+  && request.resource.data.get('status', 'active') == 'active';
+  }
+  function accountStateUnchanged() {
+  return !request.resource.data.diff(resource.data).affectedKeys().hasAny(accountStateKeys());
+  }
   match /users/{userId} {
   allow read:   if isAdmin() || (isAuthed() && request.auth.uid == userId);
   allow create: if isAuthed()
   && request.auth.uid == userId
   && noAdminFields()
+  && accountStateCreateOk()
   && noPrivilegeEscalation()
   && noProviderForgery()
   && noPhoneVerificationForgery();
@@ -220,10 +237,12 @@ service cloud.firestore {
   && request.auth.uid != userId
   && !request.resource.data.diff(resource.data)
   .affectedKeys().hasAny(['activeRole'])
+  && accountStateUnchanged()
   && noPrivilegeEscalation())
   || (isAuthed() && request.auth.uid == userId
   && uidUnchanged()
   && noAdminFields()
+  && accountStateUnchanged()
   && noPrivilegeEscalation()
   && noProviderForgery()
   && noPhoneVerificationForgery()
