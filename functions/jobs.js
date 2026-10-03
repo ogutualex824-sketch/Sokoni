@@ -477,19 +477,22 @@ exports._h.adminGetJob = async (req) => {
 
 /** Capability probe for clients (sokoni-e3): which Jobs contract this server speaks — instead of parsing error text. */
 exports._h.jobsCapabilities = async () => ({ contract: 'jobs-j2', moderation: true, applicationStates: Object.keys(STATUS_LABEL),
-  jobStates: Object.keys(JOB_LABEL), employerTransitions: EMPLOYER_TRANSITIONS, jobTypes: VALID_TYPES });
+  jobStates: Object.keys(JOB_LABEL), applicationStateLabels: STATUS_LABEL, jobStateLabels: JOB_LABEL,
+  employerTransitions: EMPLOYER_TRANSITIONS, jobTypes: VALID_TYPES, listCaps: { listMyJobs: 200, getEmployerApplications: 500 } });
 
 /** The employer's own vacancies in every state (one single-field query; replaces the client's direct read). */
 exports._h.listMyJobs = async (req) => {
   _requireAuth(req);
   const db = getFirestore();
-  const snap = await db.collection('jobs').where('employerUid', '==', req.auth.uid).limit(200).get();
-  const jobs = snap.docs.map((d) => { const j = d.data();
+  /* limit+1: one extra row tells the page there is more than it shows ("showing first 200"). */
+  const snap = await db.collection('jobs').where('employerUid', '==', req.auth.uid).limit(201).get();
+  const hasMore = snap.docs.length > 200;
+  const jobs = snap.docs.slice(0, 200).map((d) => { const j = d.data();
     return { ..._publicJobFields(d.id, j), statusLabel: JOB_LABEL[j.status] || j.status, moderationReason: j.moderationReason || null,
       pausedByRole: j.pausedByRole || null, approvedAt: j.approvedAt || null, closedReason: j.closedReason || null,
       description: j.description, requirements: j.requirements }; })
     .sort((a, b) => ((b.postedAt && b.postedAt.toMillis ? b.postedAt.toMillis() : 0) - (a.postedAt && a.postedAt.toMillis ? a.postedAt.toMillis() : 0)));
-  return { jobs };
+  return { jobs, hasMore };
 };
 
 /** Every application to the caller's vacancies in ONE single-field query (employerUid is server-written at apply time),
@@ -497,8 +500,9 @@ exports._h.listMyJobs = async (req) => {
 exports._h.getEmployerApplications = async (req) => {
   _requireAuth(req);
   const db = getFirestore();
-  const snap = await db.collection('jobApplications').where('employerUid', '==', req.auth.uid).limit(500).get();
-  const apps = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const snap = await db.collection('jobApplications').where('employerUid', '==', req.auth.uid).limit(501).get();
+  const hasMore = snap.docs.length > 500;
+  const apps = snap.docs.slice(0, 500).map((d) => ({ id: d.id, ...d.data() }));
   const uids = [...new Set(apps.map((a) => a.seekerUid))].slice(0, 300);
   const profiles = {};
   if (uids.length) (await db.getAll(...uids.map((u) => db.collection('jobSeekerProfiles').doc(u)))).forEach((p) => {
@@ -507,7 +511,7 @@ exports._h.getEmployerApplications = async (req) => {
     cvUrl: a.cvUrl, status: a.status, statusLabel: STATUS_LABEL[a.status] || a.status, statusVersion: Number(a.statusVersion) || 1,
     appliedAt: a.appliedAt, updatedAt: a.updatedAt, seekerProfile: profiles[a.seekerUid] || null }))
     .sort((a, b) => ((b.appliedAt && b.appliedAt.toMillis ? b.appliedAt.toMillis() : 0) - (a.appliedAt && a.appliedAt.toMillis ? a.appliedAt.toMillis() : 0)));
-  return { applications };
+  return { applications, hasMore };
 };
 
 /** Expiry: closes Published / Paused vacancies whose closing date passed, so they leave search (the index removes

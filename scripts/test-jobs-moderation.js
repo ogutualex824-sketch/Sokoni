@@ -192,6 +192,12 @@ const post = async (extra) => (await call('createJob', 'emp', Object.assign({ ti
   ck('L3 a non-employer gets an empty list (scoped to the caller)', r.ok && r.r.applications.length === 0, r);
   r = await call('jobsCapabilities', null, {});
   ck('L4 jobsCapabilities reports contract jobs-j2 with the transition table', r.ok && r.r.contract === 'jobs-j2' && r.r.employerTransitions && r.r.employerTransitions.offer_accepted[0] === 'hired', r);
+  ck('L5 jobsCapabilities carries the labels (no client copy of the label tables)', r.ok && r.r.jobStateLabels.active === 'Published' && r.r.applicationStateLabels.pending === 'Submitted', r);
+  r = await call('listMyJobs', 'emp', {});
+  ck('L6 hasMore is false under the cap', r.ok && r.r.hasMore === false, r.ok ? r.r.hasMore : r);
+  for (let i = 0; i < 201; i++) store.set('jobs/bulk' + i, { employerUid: 'bulkEmp', title: 'B' + i, status: 'draft', postedAt: ts(i) });
+  r = await call('listMyJobs', 'bulkEmp', {});
+  ck('L7 above the cap: 200 returned and hasMore true (the page can say "showing first 200")', r.ok && r.r.jobs.length === 200 && r.r.hasMore === true, r.ok ? [r.r.jobs.length, r.r.hasMore] : r);
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
