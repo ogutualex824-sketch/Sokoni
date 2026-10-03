@@ -216,7 +216,7 @@ Every commit was staged file by file after `git status --short`; no stash, reset
 
 ## 11. Deployment report
 
-**PRECONDITION (2026-10-03):** both functions trees still export the 5 retired Daraja functions; sokoni-b2's rewritten guard-functions-safety (chore/remove-daraja-code-on-6e7bfe2 @ 093fd4f) BLOCKS such trees. Merge 093fd4f into `feat/financial-partner-workspace-on-9012d90` and `feat/foundation-on-3a38f35` (re-run every suite) before step 1 / step 3.
+**PRECONDITION (2026-10-03):** both functions trees still export the 5 retired Daraja functions; sokoni-b2's rewritten guard-functions-safety (chore/remove-daraja-code-on-6e7bfe2 @ 093fd4f) BLOCKS such trees. CHERRY-PICK (never merge the branch — it sits on 6e7bfe2, a different lineage) the self-contained commit 093fd4f into `feat/financial-partner-workspace-on-9012d90` and `feat/foundation-on-3a38f35` then check: `node scripts/deploy/guard-functions-safety.js` passes, no identifier references a removed name (AST check), all gate scripts and suites green — before step 1 / step 3.
  (one deploy at a time; named scopes only; RAM ≥ 512 MB; live-archive diff per function first; never a bare `--only functions` — there are now 2 codebases)
 1. **Partner tree** (`feat/financial-partner-workspace-on-9012d90`):
    - sokoni-27's `applicationLifecycle` first (owner authorization)
