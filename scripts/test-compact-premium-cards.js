@@ -136,7 +136,11 @@ ck('providers / services / cleaning: the whole card opens the profile through ON
 Object.keys(PG).forEach((f) => {
   const body = fnBody(PG[f], f === 'car-rental.html' ? 'renderCars' : 'renderProviders') || '';
   ck(f + ': card action is the 📩 icon (same openBookingFor handler), no WhatsApp, no follow/share row',
-     /class="pg-ico"[^>]*>📩</.test(body) && /openBookingFor\(/.test(body) && !/toggleFollow/.test(body) && violations(body).length === 0, violations(body));
+     /class="pg-ico"[^>]*>📩</.test(body)
+     /* the same openBookingFor handler: inline, or (plumbing.html, 2026-10-03) one delegated listener reading the
+        escaped data-pg-book attribute — no provider value is interpolated into inline JS */
+     && (/openBookingFor\(/.test(body) || (/data-pg-book="/.test(body) && /openBookingFor\(book\.getAttribute\('data-pg-book'\)/.test(PG[f])))
+     && !/toggleFollow/.test(body) && violations(body).length === 0, violations(body));
 });
 /* shop cards */
 const nearby = fnBody(SC, 'displayNearbySection') || '', featured = fnBody(SC, 'displayFeaturedShops') || '';

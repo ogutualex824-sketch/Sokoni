@@ -9,12 +9,12 @@
   <script src="security.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>SOKONI — Plumbing Services Kenya</title>
-  <meta name="description" content="Book verified plumbers in Nairobi, Mombasa & across Kenya. Pipe repair, leaks, water heaters, blocked drains — same day on SOKONI.">
+  <meta name="description" content="Book verified plumbers in Nairobi, Mombasa & across Kenya. Pipe repair, leaks, water heaters, blocked drains — book and pay securely on SOKONI.">
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://mysokoni.co.ke/plumbing.html">
   <meta property="og:title" content="SOKONI — Plumbing Services Kenya">
-  <meta property="og:description" content="Book verified plumbers in Nairobi, Mombasa & across Kenya. Pipe repair, leaks, water heaters, blocked drains — same day on SOKONI.">
+  <meta property="og:description" content="Book verified plumbers in Nairobi, Mombasa & across Kenya. Pipe repair, leaks, water heaters, blocked drains — book and pay securely on SOKONI.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/logosokoni.png">
   <meta property="og:site_name" content="SOKONI">
   <meta property="og:locale" content="en_KE">
@@ -143,16 +143,16 @@
 <div class="pg-hero">
   <div class="pg-badge">🔧 Plumbing Hub</div>
   <h1>Expert Plumbers,<br><span>Fast Response.</span></h1>
-  <p>Book verified plumbers for pipe repairs, leak detection, water heaters, blocked drains, borehole pumps and more — across Kenya same day or scheduled.</p>
+  <p>Book verified plumbers for pipe repairs, leak detection, water heaters, blocked drains, borehole pumps and more — choose a time that suits you and pay securely in SOKONI.</p>
   <div class="pg-search">
     <input type="text" id="pgSearch" placeholder="🔍 Search plumbers, pipe repair, leak fix..." oninput="renderProviders()">
     <button type="button" class="pg-search-btn" onclick="renderProviders()">Search</button>
   </div>
   <div class="pg-hero-stats">
-    <div class="pg-stat"><strong>25+</strong> Verified Plumbers</div>
-    <div class="pg-stat"><strong>4.7★</strong> Avg. Rating</div>
-    <div class="pg-stat"><strong>Same Day</strong> Bookings</div>
-    <div class="pg-stat"><strong>6 Cities</strong> Kenya-wide</div>
+    <!-- Owner 2026-10-03 (UI data integrity): "25+ Verified Plumbers · 4.7★ · 6 Cities" were invented. Only the
+         registry count is shown, and "—" until it is known. -->
+    <div class="pg-stat"><strong id="pgStatCount">—</strong> Plumbers on SOKONI</div>
+    <div class="pg-stat"><strong>M-Pesa</strong> Paid in SOKONI, held until the job is done</div>
   </div>
 </div>
 
@@ -174,8 +174,8 @@
   <div class="pg-steps">
     <div class="pg-step"><div class="pg-step-num">1</div><h3>📝 Describe Problem</h3><p>Tell us what's leaking, blocked or broken</p></div>
     <div class="pg-step"><div class="pg-step-num">2</div><h3>🔍 Pick a Plumber</h3><p>Browse verified plumbers, check rates & reviews</p></div>
-    <div class="pg-step"><div class="pg-step-num">3</div><h3>📅 Book & Pay</h3><p>Book via M-Pesa or pay cash after the job</p></div>
-    <div class="pg-step"><div class="pg-step-num">4</div><h3>✅ Problem Solved!</h3><p>Plumber arrives on time — rate them after</p></div>
+    <div class="pg-step"><div class="pg-step-num">3</div><h3>📅 Book & Pay</h3><p>Pay with M-Pesa in SOKONI — held until you confirm with your booking PIN</p></div>
+    <div class="pg-step"><div class="pg-step-num">4</div><h3>✅ Problem Solved!</h3><p>Give the plumber your PIN when the job is done, then rate them</p></div>
   </div>
 </div>
 
@@ -192,35 +192,14 @@
   <div class="pg-provider-grid" id="pgProviderGrid"></div>
 </div>
 
-<div class="pg-pricing">
-  <div class="pg-section-title"><h2>💰 Price Guide</h2><span></span><span style="font-size:10px;color:rgba(255,255,255,0.25);">Typical Nairobi rates</span></div>
-  <div class="pg-price-table">
-    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">💧</span>Fix Leaking Pipe</div><div class="pg-price-range">KES 300 – 800</div></div>
-    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🪠</span>Unblock Drain / Toilet</div><div class="pg-price-range">KES 500 – 1,500</div></div>
-    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🌡️</span>Water Heater Install / Repair</div><div class="pg-price-range">KES 1,500 – 5,000</div></div>
-    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🚽</span>Replace Toilet Cistern</div><div class="pg-price-range">KES 800 – 2,000</div></div>
-    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🔩</span>Full Pipe Fitting (room)</div><div class="pg-price-range">KES 3,000 – 10,000</div></div>
-    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🚿</span>Shower Installation</div><div class="pg-price-range">KES 2,500 – 6,000</div></div>
-    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🏗️</span>Borehole Pump Repair</div><div class="pg-price-range">KES 3,000 – 15,000</div></div>
-  </div>
-  <p style="font-size:10px;color:rgba(255,255,255,0.22);margin-top:8px;padding:0 4px;">* Prices vary by complexity, location and provider. Get exact quotes below.</p>
-</div>
-
-<div class="pg-reviews">
-  <div class="pg-section-title"><h2>⭐ What Customers Say</h2><span></span></div>
-  <div class="pg-review-grid">
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Peter fixed our burst pipe within 2 hours of booking. Came with all tools, tidy and professional. Highly recommend."</div><div class="pg-review-author">Samuel K. — Westlands</div></div>
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Had a blocked drainage problem for weeks. PipePro came same day and sorted it in 45 mins. Very fair price."</div><div class="pg-review-author">Amina H. — Mombasa</div></div>
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★☆</div><div class="pg-review-text">"Installed my solar water heater and geyser. Clean work, explained everything. Will use again for my second unit."</div><div class="pg-review-author">John M. — Kilimani</div></div>
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Our office had a serious leak flooding the basement. AquaFix team contained it fast. Saved thousands in damage."</div><div class="pg-review-author">Finance Manager — Upperhill</div></div>
-  </div>
-</div>
-
+<!-- Owner 2026-10-03: the "Typical Nairobi rates" table and the four customer quotes were invented (no provider, no
+     booking, no review behind them). Prices are each plumber's own, shown by the server before payment; reviews
+     appear on a plumber's profile only from completed SOKONI bookings. -->
 <div style="padding:0 20px 24px;">
   <div style="background:linear-gradient(135deg,rgba(0,170,255,0.1),rgba(0,100,200,0.07));border:1px solid rgba(0,170,255,0.22);border-radius:20px;padding:24px 20px;text-align:center;">
     <div style="font-size:32px;margin-bottom:10px;">🔧💧</div>
     <h2 style="font-size:18px;font-weight:900;margin-bottom:6px;">🔧 Got a Plumbing Emergency?</h2>
-    <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:16px;">Our verified plumbers respond within 30 minutes across major Kenyan cities</p>
+    <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:16px;">Pick an available plumber, choose a time and pay securely in SOKONI</p>
     <button type="button" onclick="openBooking()" style="padding:12px 24px;background:linear-gradient(135deg,#00aaff,#0077cc);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-family:inherit;font-size:13px;">📅 Book a Plumber Now</button>
   </div>
 </div>
@@ -233,101 +212,127 @@
   </div>
 </div>
 
-<div class="pg-modal-overlay" id="pgModalOverlay" onclick="if(event.target===this)closeBooking()">
-  <div class="pg-modal">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-      <h2>📅 Book a Plumber</h2>
-      <button type="button" class="pg-modal-close" onclick="closeBooking()">✕</button>
-    </div>
-    <div class="pg-modal-sub" id="pgModalSub">Fill in the details and a verified plumber will confirm within 30 minutes.</div>
-    <label class="pg-label">Service Type</label>
-    <div class="pg-chips" id="pgChips">
-      <span class="pg-chip sel" data-svc="Leak Repair" onclick="this.classList.toggle('sel')">💧 Leak Repair</span>
-      <span class="pg-chip" data-svc="Blocked Drain" onclick="this.classList.toggle('sel')">🪠 Blocked Drain</span>
-      <span class="pg-chip" data-svc="Water Heater" onclick="this.classList.toggle('sel')">🌡️ Water Heater</span>
-      <span class="pg-chip" data-svc="Toilet / Sink" onclick="this.classList.toggle('sel')">🚽 Toilet / Sink</span>
-      <span class="pg-chip" data-svc="Pipe Fitting" onclick="this.classList.toggle('sel')">🔩 Pipe Fitting</span>
-      <span class="pg-chip" data-svc="Borehole / Pump" onclick="this.classList.toggle('sel')">🏗️ Borehole</span>
-    </div>
-    <label class="pg-label">Your Name</label>
-    <input class="pg-input" type="text" id="pgName" placeholder="e.g. John Kamau">
-    <label class="pg-label">Phone Number</label>
-    <input class="pg-input" type="tel" id="pgPhone" placeholder="07XXXXXXXX">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <div><label class="pg-label">Date</label><input class="pg-input" type="date" id="pgDate" style="margin-bottom:0;"></div>
-      <div><label class="pg-label">Time</label><input class="pg-input" type="time" id="pgTime" style="margin-bottom:12px;"></div>
-    </div>
-    <label class="pg-label">Your Location / Address</label>
-    <input class="pg-input" type="text" id="pgAddress" placeholder="e.g. Westlands, Nairobi — House 4">
-    <label class="pg-label">Additional Notes (optional)</label>
-    <textarea class="pg-input" id="pgNotes" rows="2" placeholder="e.g. Pipe burst in kitchen, water everywhere..." style="resize:none;"></textarea>
-    <button type="button" class="pg-submit-btn" onclick="submitBooking()">📋 Confirm Booking</button>
-    <a href="support.html?topic=booking" class="sk-support-cta" style="display:block;text-align:center;margin-top:8px;padding:11px;border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;text-decoration:none;background:rgba(113,255,0,0.05);">🛟 Need help? Contact Support</a>
-    <div class="pg-modal-msg" id="pgModalMsg"></div>
-  </div>
+<div class="pg-pick-note" id="pgPickNote" role="status" hidden style="margin:0 20px 16px;padding:12px 14px;border:1px solid rgba(0,170,255,0.3);background:rgba(0,170,255,0.08);border-radius:12px;font-size:13px;color:#cfeeff;">
+  Choose a plumber below and tap 📩 to book a time and pay securely in SOKONI. Sending one request to several plumbers is not available yet. Need help with a booking? <a href="support.html?topic=booking" style="color:#00aaff;font-weight:700;">Contact SOKONI Support</a>.
 </div>
 
 <nav class="bottom-nav" role="navigation" aria-label="Main navigation" data-sokoni-nav></nav>
 
 <script>
-const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-const PROVIDERS = [
-  { id:'PL01', name:'PipePro Kenya', emoji:'🔧', location:'nairobi', locationLabel:'Nairobi (All Areas)', rate:'KES 1,500', rateType:'per job', rating:4.9, jobs:420, phone:'0711000101', verified:true, available:true, skills:['Leak Repair','Pipe Fitting','Blocked Drains','Water Heater','Geyser'], bio:'Expert plumber — 8 yrs Nairobi. Fast response. Own tools. Corporate & residential.', type:['leak','pipe','drain','heater'] },
-  { id:'PL02', name:'AquaFix Services', emoji:'💧', location:'nairobi', locationLabel:'Nairobi CBD & Westlands', rate:'KES 2,000', rateType:'per job', rating:4.8, jobs:260, phone:'0722000202', verified:true, available:true, skills:['Emergency Repairs','Pipe Burst','Drain Unblocking','Toilet Repair','Shower Install'], bio:'24/7 emergency plumber. Fast response Nairobi. Bring all spare parts.', type:['leak','drain','toilet'] },
-  { id:'PL03', name:'Peter Njoroge Plumbing', emoji:'⚙️', location:'nairobi', locationLabel:'Kilimani / Karen / Lavington', rate:'KES 1,200', rateType:'per job', rating:4.8, jobs:310, phone:'0733000303', verified:true, available:true, skills:['Residential','Water Heaters','Pipe Fitting','Leak Detection','CCTV Drain'], bio:'Reliable solo plumber — 6 yrs south Nairobi. Affordable rates. Weekend available.', type:['heater','pipe','leak'] },
-  { id:'PL04', name:'Mombasa Plumbing Co', emoji:'🌊', location:'mombasa', locationLabel:'Mombasa & Coastal Region', rate:'KES 1,800', rateType:'per job', rating:4.7, jobs:180, phone:'0744000404', verified:true, available:true, skills:['Marine Plumbing','Hotels','Residential','Salt Water Corrosion','Borehole'], bio:'Coastal plumbing specialists — 5 yrs Mombasa. Hotel & resort contracts. Own transport.', type:['pipe','borehole','leak'] },
-  { id:'PL05', name:'James Odhiambo Plumbers', emoji:'🛠️', location:'kisumu', locationLabel:'Kisumu & Nyanza Region', rate:'KES 1,000', rateType:'per job', rating:4.7, jobs:145, phone:'0755000505', verified:true, available:true, skills:['All Plumbing','Water Tanks','Pipes','Drains','Pumps'], bio:'Experienced plumber — Kisumu. Quick response. Fair rates for all plumbing jobs.', type:['pipe','drain','borehole'] },
-  { id:'PL06', name:'DrainMaster Kenya', emoji:'🏗️', location:'nairobi', locationLabel:'Nairobi Industrial & Commercial', rate:'KES 3,500', rateType:'per job', rating:4.8, jobs:95, phone:'0766000606', verified:true, available:false, skills:['Commercial Drainage','CCTV Inspection','High Pressure Jetting','Septic Tank','Sewer Repair'], bio:'Commercial drain specialists. CCTV drain inspection available. Industrial-grade equipment.', type:['drain'] },
-];
-let activeType='', activeLoc='', selectedProv=null;
-function renderProviders(){
-  const q=(document.getElementById('pgSearch')?.value||'').toLowerCase();
-  let list=[...PROVIDERS];
-  if(activeType) list=list.filter(p=>p.type.includes(activeType));
-  if(activeLoc) list=list.filter(p=>p.location===activeLoc);
-  if(q) list=list.filter(p=>p.name.toLowerCase().includes(q)||p.bio.toLowerCase().includes(q)||p.skills.some(s=>s.toLowerCase().includes(q)));
-  const grid=document.getElementById('pgProviderGrid');
-  const cnt=document.getElementById('pgProvCount');
-  if(cnt) cnt.textContent=list.length+' providers found';
-  if(!list.length){grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:rgba(255,255,255,0.28);"><div style="font-size:40px;margin-bottom:10px;">🔍</div><div style="font-size:13px;">No plumbers found for this filter.<br><button type="button" onclick="clearFilters();" style="color:#00aaff;font-weight:700;background:none;border:none;cursor:pointer;font-size:inherit;padding:0;font-family:inherit;">Clear filters →</button></div></div>`;return;}
-  grid.innerHTML=list.map(p=>`<div class="pg-provider-card"><div class="pg-prov-top"><div class="pg-prov-avatar">${p.emoji}</div><div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;"><div class="pg-prov-name">${p.name}</div>${p.verified?'<span class="pg-verified-badge">✓ Verified</span>':''}</div><div class="pg-prov-loc"><i class="fas fa-map-marker-alt" style="color:#00aaff;font-size:9px;"></i> ${p.locationLabel}</div><div class="pg-prov-rating"><span class="pg-prov-stars">${'★'.repeat(Math.floor(p.rating))}${'☆'.repeat(5-Math.floor(p.rating))}</span><span class="pg-prov-rnum">${p.rating} · ${p.jobs}+ jobs</span>${p.available?'<span class="pg-avail-dot"></span><span style="font-size:9px;color:#22c55e;font-weight:700;">Available</span>':'<span style="font-size:9px;color:rgba(255,255,255,0.3);">Unavailable</span>'}</div></div></div><div class="pg-prov-bio">"${p.bio}"</div><div class="pg-prov-skills">${p.skills.map(s=>`<span class="pg-prov-skill">${s}</span>`).join('')}</div><div class="pg-prov-foot"><div class="pg-prov-rate">${p.rate} <small>${p.rateType}</small></div><div style="display:flex;gap:6px;align-items:center;"><button type="button" class="pg-ico" aria-label="Book ${p.name}" title="Book" onclick="openBookingFor('${p.id}','${p.name}')">📩</button></div></div></div>`).join('');
+/* Plumbing hub — the provider registry (SokoniProviders, category plumbing) and the ONE booking authority
+   (SokoniBookService: bookingCreateService → createPaymentIntent(service_booking) → IntaSend → money HELD →
+   released by the buyer's booking PIN, shown in My Bookings). Owner 2026-10-03: the six hard-coded plumbers
+   (invented names, phones, ratings, job counts), the localStorage / second-Firebase-app booking write and the
+   WhatsApp connector are gone. Every provider value is escaped; absent values stay absent. */
+let PROVIDERS = [], _pgLoaded = false, _pgError = null;
+let activeType = '', activeLoc = '';
+const PG_TYPE_MATCH = {
+  leak: ['leak'], drain: ['drain', 'unblock', 'sewer'], heater: ['heater', 'geyser', 'solar'],
+  toilet: ['toilet', 'sink', 'cistern', 'tap'], pipe: ['pipe', 'fitting'], borehole: ['borehole', 'pump'],
+};
+const _pgEsc = (v) => (window.SokoniProviders ? SokoniProviders.esc(v) : String(v == null ? '' : v).replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])));
+const _pgHay = (p) => [p.name, p.description, p.serviceType, p.categoryLabel].concat(p.skills || []).join(' ').toLowerCase();
+const _pgType = (p, t) => !t || (PG_TYPE_MATCH[t] || [t]).some((w) => _pgHay(p).indexOf(w) !== -1);
+const _pgLoc = (p, l) => !l || (p.location + ' ' + p.city).toLowerCase().indexOf(String(l).toLowerCase()) !== -1;
+
+function loadPlumbers(force) {
+  if (!window.SokoniProviders) return Promise.resolve();
+  return SokoniProviders.list({ category: 'plumbing', force: !!force }).then(function (r) {
+    PROVIDERS = r.providers || []; _pgError = r.error || null; _pgLoaded = true;
+    const st = document.getElementById('pgStatCount'); if (st) st.textContent = _pgError ? '—' : String(PROVIDERS.length);
+    renderProviders();
+  });
 }
-function _scrollToPlumbGrid(){setTimeout(function(){var g=document.getElementById('providers');if(g)g.scrollIntoView({behavior:'smooth',block:'start'});},100);}
-function filterByType(type,el){activeType=type;document.querySelectorAll('.pg-type-card').forEach(c=>c.classList.remove('active'));if(el)el.classList.add('active');renderProviders();_scrollToPlumbGrid();}
-function filterByLoc(loc,btn){activeLoc=loc;document.querySelectorAll('.pg-filter-pill').forEach(p=>p.classList.remove('active'));if(btn)btn.classList.add('active');renderProviders();_scrollToPlumbGrid();}
-function clearFilters(){activeType='';activeLoc='';document.querySelectorAll('.pg-type-card').forEach(c=>c.classList.remove('active'));document.querySelectorAll('.pg-filter-pill').forEach(p=>p.classList.remove('active'));document.querySelector('.pg-filter-pill')?.classList.add('active');document.getElementById('pgSearch').value='';renderProviders();}
-function openBooking(){selectedProv=null;document.getElementById('pgModalSub').textContent='Fill in the details and a verified plumber will confirm within 30 minutes.';document.getElementById('pgModalOverlay').classList.add('open');document.body.style.overflow='hidden';const t=new Date();t.setDate(t.getDate()+1);const d=document.getElementById('pgDate');if(d&&!d.value)d.value=t.toISOString().slice(0,10);}
-function openBookingFor(id,name){selectedProv=PROVIDERS.find(p=>p.id===id);document.getElementById('pgModalSub').textContent=`Booking with: ${selectedProv?.emoji||''} ${name}`;document.getElementById('pgModalOverlay').classList.add('open');document.body.style.overflow='hidden';const t=new Date();t.setDate(t.getDate()+1);const d=document.getElementById('pgDate');if(d&&!d.value)d.value=t.toISOString().slice(0,10);}
-function closeBooking(){document.getElementById('pgModalOverlay').classList.remove('open');document.body.style.overflow='';document.getElementById('pgModalMsg').textContent='';}
-function submitBooking(){
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('plumbing_book',10,300000)){(window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
-  const name=document.getElementById('pgName')?.value.trim();
-  const phone=document.getElementById('pgPhone')?.value.trim();
-  const date=document.getElementById('pgDate')?.value;
-  const time=document.getElementById('pgTime')?.value;
-  const address=document.getElementById('pgAddress')?.value.trim();
-  const notes=document.getElementById('pgNotes')?.value.trim();
-  const msgEl=document.getElementById('pgModalMsg');
-  const services=[...document.querySelectorAll('#pgChips .pg-chip.sel')].map(c=>c.dataset.svc).join(', ');
-  if(!name||!phone||!address){if(msgEl){msgEl.textContent='⚠️ Please fill name, phone and address.';msgEl.style.color='#ff6b6b';}return;}
-  const id='PLM'+Date.now().toString().slice(-7);
-  const msg=`Hi${selectedProv?' '+selectedProv.name:''}! I found you on SOKONI and need a plumber.\n\n📋 Booking ID: ${id}\n👤 Name: ${name}\n📞 Phone: ${phone}\n🔧 Service: ${services||'General Plumbing'}\n📅 Date: ${date||'TBD'} at ${time||'TBD'}\n📍 Location: ${address}\n${notes?'📝 Notes: '+notes+'\n':''}\nPlease confirm your availability. Thank you!`;
-  const _plWA = (selectedProv?.phone||'0705726803').replace(/^0/,'254').replace(/\D/g,'');
-  if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
-    SokoniPay.waConnect(_plWA, msg, {providerName:selectedProv?.name||'SOKONI Plumbers',category:'plumbing',serviceDesc:services||'Plumbing Service'});
+
+function renderProviders() {
+  const grid = document.getElementById('pgProviderGrid'), cnt = document.getElementById('pgProvCount');
+  if (!grid) return;
+  if (!_pgLoaded) {
+    if (cnt) cnt.textContent = 'Loading…';
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:rgba(255,255,255,0.28);"><div style="font-size:40px;margin-bottom:10px;">⏳</div><div style="font-size:14px;">Loading plumbers…</div></div>';
+    return;
   }
-  /* no WhatsApp hand-off (owner 2026-09-30) */
-  let _bks=[];try{_bks=JSON.parse(localStorage.getItem('sokoniBookings')||'[]');}catch(e){}
-  _bks.unshift({id,type:'plumbing',service:services||'General Plumbing',name,phone,date,time,address,notes,provider:selectedProv?.name||'Any Plumber',status:'requested',createdAt:new Date().toISOString()});
-  localStorage.setItem('sokoniBookings',JSON.stringify(_bks.slice(0,100)));
-  (async()=>{try{const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");const {getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};const _a=getApps().find(a=>a.name==="plm-write")||initializeApp(_cfg,"plm-write");await addDoc(collection(getFirestore(_a),'homeServiceBookings'),{id,hub:'plumbing',service:services||'General Plumbing',name,phone,date,time,address,notes,provider:selectedProv?.name||'Any Plumber',status:'pending',createdAt:serverTimestamp()});}catch(e){}})();
-  if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:services||'Plumbing Service',category:'Plumbing',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'WhatsApp Booking',paymentRef:id,sellerName:selectedProv?.name||'SOKONI Plumbers',date:new Date().toISOString(),notes:address});},700);
-  if(msgEl){msgEl.innerHTML=`✅ Booking <strong style="color:#00aaff;">${_esc(id)}</strong> recorded in SOKONI.`;msgEl.style.color='#22c55e';}
-  setTimeout(closeBooking,3000);
+  const q = (document.getElementById('pgSearch')?.value || '').toLowerCase().trim();
+  let list = PROVIDERS.filter((p) => _pgType(p, activeType) && _pgLoc(p, activeLoc) && (!q || _pgHay(p).indexOf(q) !== -1));
+  if (cnt) cnt.textContent = list.length + ' plumber' + (list.length === 1 ? '' : 's') + ' found';
+  if (!list.length) {
+    if (_pgError && window.SokoniProviders) { grid.innerHTML = SokoniProviders.emptyStateHtml(_pgError, null); return; }
+    const filtered = activeType || activeLoc || q;
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:rgba(255,255,255,0.28);"><div style="font-size:40px;margin-bottom:10px;">🔍</div><div style="font-size:14px;">No plumbers found' + (filtered ? ' for this filter' : ' yet') + '.<br>' +
+      (filtered ? '<button type="button" onclick="clearFilters()" style="color:#00aaff;font-weight:700;background:none;border:none;cursor:pointer;font:inherit;padding:0;">Clear filters →</button>'
+                : '<a href="provider-onboarding.html" style="color:#00aaff;font-weight:700;">Register as a plumber →</a>') + '</div></div>';
+    return;
+  }
+  const e = _pgEsc;
+  grid.innerHTML = list.map((p) => {
+    const id = /^[A-Za-z0-9_-]{1,128}$/.test(String(p.uid)) ? String(p.uid) : '';
+    const rating = p.rating
+      ? '<span class="pg-prov-stars">' + '★'.repeat(Math.floor(p.rating)) + '☆'.repeat(5 - Math.floor(p.rating)) + '</span><span class="pg-prov-rnum">' + p.rating.toFixed(1) + (p.jobsCompleted ? ' · ' + p.jobsCompleted + '+ jobs' : '') + '</span>'
+      : '<span class="pg-prov-rnum" style="color:rgba(255,255,255,0.4);">New on SOKONI</span>';
+    return '<div class="pg-provider-card" data-profile-href="' + e(p.profileUrl) + '">' +
+      '<div class="pg-prov-top"><div class="pg-prov-avatar">' + e(p.emoji || '🔧') + '</div><div style="flex:1;min-width:0;">' +
+        '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;"><div class="pg-prov-name"><a href="' + e(p.profileUrl) + '" style="color:inherit;text-decoration:none;">' + e(p.name || 'Plumber') + '</a></div>' + (p.verified ? '<span class="pg-verified-badge">✓ Verified</span>' : '') + '</div>' +
+        (p.location ? '<div class="pg-prov-loc"><i class="fas fa-map-marker-alt" style="color:#00aaff;font-size:9px;"></i> ' + e(p.location) + '</div>' : '') +
+        '<div class="pg-prov-rating">' + rating + (p.available ? '<span class="pg-avail-dot"></span><span style="font-size:9px;color:#22c55e;font-weight:700;">Available</span>' : '<span style="font-size:9px;color:rgba(255,255,255,0.3);">Unavailable</span>') + '</div>' +
+      '</div></div>' +
+      (p.description ? '<div class="pg-prov-bio">"' + e(p.description) + '"</div>' : '') +
+      '<div class="pg-prov-skills">' + (p.skills || []).slice(0, 6).map((x) => '<span class="pg-prov-skill">' + e(x) + '</span>').join('') + '</div>' +
+      '<div class="pg-prov-foot"><div class="pg-prov-rate">' + (p.rate != null ? 'KES ' + Number(p.rate).toLocaleString('en-KE') + (p.rateType ? ' <small>' + e(p.rateType) + '</small>' : '') : '<small style="color:rgba(255,255,255,0.35);">Price shown when you book</small>') + '</div>' +
+        '<div style="display:flex;gap:6px;align-items:center;">' +
+          (id ? '<button type="button" class="pg-ico" aria-label="Message ' + e(p.name) + '" title="Message in-app" data-pg-msg="' + e(id) + '" data-pg-name="' + e(p.name) + '">💬</button>' : '') +
+          (id && p.acceptsBookings ? '<button type="button" class="pg-ico" aria-label="Book ' + e(p.name) + '" title="Book" data-pg-book="' + e(id) + '" data-pg-name="' + e(p.name) + '">📩</button>' : '') +
+        '</div></div></div>';
+  }).join('');
 }
-window.openBooking=openBooking;window.openBookingFor=openBookingFor;window.closeBooking=closeBooking;window.submitBooking=submitBooking;
+
+/* One delegated listener: book / message icons, and a tap elsewhere on a card opens the profile. Ids and
+   names come from escaped data attributes — never interpolated into inline JS. */
+document.addEventListener('click', function (ev) {
+  const t = ev.target && ev.target.closest ? ev.target : null; if (!t) return;
+  const book = t.closest('[data-pg-book]'), msg = t.closest('[data-pg-msg]');
+  if (book) { ev.stopPropagation(); openBookingFor(book.getAttribute('data-pg-book'), book.getAttribute('data-pg-name')); return; }
+  if (msg) {
+    ev.stopPropagation();
+    const uid = msg.getAttribute('data-pg-msg'), nm = msg.getAttribute('data-pg-name');
+    if (window.SokoniInbox && SokoniInbox.openChat) SokoniInbox.openChat({ otherUid: uid, otherName: nm, type: 'customer-provider', context: 'Plumbing · SOKONI Services' });
+    else location.href = 'messages.html';
+    return;
+  }
+  const card = t.closest('.pg-provider-card[data-profile-href]');
+  if (card && !t.closest('a,button,input,select,textarea,label')) location.href = card.getAttribute('data-profile-href');
+});
+
+function _scrollToPlumbGrid(){ setTimeout(function(){ var g = document.getElementById('providers'); if (g) g.scrollIntoView({ behavior:'smooth', block:'start' }); }, 100); }
+function filterByType(type, el){ activeType = type; document.querySelectorAll('.pg-type-card').forEach(c => c.classList.remove('active')); if (el) el.classList.add('active'); renderProviders(); _scrollToPlumbGrid(); }
+function filterByLoc(loc, btn){ activeLoc = loc; document.querySelectorAll('.pg-filter-pill').forEach(x => x.classList.remove('active')); if (btn) btn.classList.add('active'); renderProviders(); _scrollToPlumbGrid(); }
+function clearFilters(){ activeType = ''; activeLoc = ''; document.querySelectorAll('.pg-type-card').forEach(c => c.classList.remove('active')); document.querySelectorAll('.pg-filter-pill').forEach(x => x.classList.remove('active')); document.querySelector('.pg-filter-pill')?.classList.add('active'); const q = document.getElementById('pgSearch'); if (q) q.value = ''; renderProviders(); }
+
+/* No provider chosen → there is no server path for "any plumber" yet (a quote request). Say how to book. */
+function openBooking(){
+  const note = document.getElementById('pgPickNote'), grid = document.getElementById('providers');
+  if (note) { note.hidden = false; if (grid && grid.parentNode) grid.parentNode.insertBefore(note, grid); }
+  if (grid) grid.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+function openBookingFor(id, name){
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(String(id || ''))) return;
+  if (window.SokoniBookService && typeof SokoniBookService.open === 'function') { SokoniBookService.open({ providerId: String(id), providerName: name || '' }); return; }
+  const p = PROVIDERS.find(x => String(x.uid) === String(id));
+  if (p && p.profileUrl) location.href = p.profileUrl;
+}
+window.openBooking = openBooking; window.openBookingFor = openBookingFor; window.renderProviders = renderProviders;
+window.filterByType = filterByType; window.filterByLoc = filterByLoc; window.clearFilters = clearFilters;
+
 renderProviders();
+(function _pgBoot(n){
+  n = n || 0;
+  if (window.SokoniProviders && window.firebaseDB) { loadPlumbers(); return; }
+  if (n > 40) { _pgLoaded = true; _pgError = new Error('init timeout'); renderProviders(); return; }
+  setTimeout(function(){ _pgBoot(n + 1); }, 150);
+}(0));
 </script>
+<script src="sokoni-providers.js" defer></script>
+<script src="sokoni-book-service.js" defer></script>
+<script src="sokoni-inbox.js" defer></script>
 <script src="scroll-top.js" defer></script>
 <script src="seo.js" defer></script>
 <script src="nav-active.js" defer></script>

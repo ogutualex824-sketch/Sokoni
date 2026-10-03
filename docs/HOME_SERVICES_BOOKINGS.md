@@ -50,3 +50,21 @@ Related: [[BOOKING_PAYMENT_CONTRACT]] · [[BOOKING_LIFECYCLE_CONTRACT]] · [[BOO
 - **5b**: `serviceBookingBalance` + `service_booking_balance` intent. When they ship, replace the read-only balance box with Accept/Decline + Pay.
 - **b2 4L** (`95f2ef6` server, `292936f` hosting): `SokoniInbox.openForTransaction('service_booking', id)`. Once it merges, prefer it over the `chat.html` link.
 - Deployment: `serviceBookingPin` must be live, from 5b's booking-PIN release, for the PIN box to work. Until then the page tells the buyer the PIN is "not available yet".
+
+## Cleaning and Plumbing hubs — booking through the one authority (2026-10-03)
+
+| Page | Before | After |
+|---|---|---|
+| `cleaning.html` | Providers already came from `SokoniProviders`. The "Book a Cleaner" form saved to localStorage, wrote `homeServiceBookings` from a second Firebase app (`cln-write`), called `SokoniPay.waConnect`, and announced "recorded" for a booking no provider saw. | 📩 opens `SokoniBookService.open({providerId, providerName})`. The generic "Book Now" shows a note telling the buyer to choose a cleaner, and opens no form. |
+| `plumbing.html` | Six **hard-coded plumbers** with invented names, phones, ratings and job counts. Four invented customer reviews. An invented "Typical Nairobi rates" price guide. Invented stats ("25+ / 4.7★ / 6 Cities", "respond within 30 minutes", "same day"). Same localStorage / `plm-write` / WhatsApp booking path. Unescaped card values. | `SokoniProviders.list({category:'plumbing'})`. Cards are escaped and show rating, jobs and rate only where real. Book and message use one delegated listener over escaped `data-` attributes. The hero count comes from the registry, showing `—` until known. The invented sections are removed. |
+
+Booking = `bookingCreateService` → `createPaymentIntent(service_booking)` → IntaSend STK → held → released by the buyer's booking PIN in [[#What the page does — `bookings.html`|My Bookings]].
+
+Sending one request to several providers is a **quote request**. It is not built on these pages; the server authority is b2's leads slice 4F (`service_lead`, `leadCreate`, `sokoni-leads.js` on `hosting/techhub-on-chain` @ `23b20f7`). It is not in this release line yet, so the pages say "not available yet" and do not imitate it.
+
+Tests: `test-home-services-hubs-browser` 30/0. Mutation check: removing the plumbing booking call fails K1 and K3. Retargeted suites:
+
+- `test-compact-premium-cards` now accepts the delegated handler;
+- `test-secondary-firebase-apps` no longer lists the removed `cln-write` / `plm-write` entries in its baseline.
+
+Results match the parent commit. The failures that remain exist there too: no Playwright path in the worktree, b2's `elc-write` baseline entry, and no emulator.

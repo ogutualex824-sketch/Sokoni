@@ -13,6 +13,7 @@
 - **Files**: bookings.html, my-bookings.html, shared-header.js, sokoni-profile-menu.js, profile.html, scripts/test-bookings-browser.js, docs/HOME_SERVICES_BOOKINGS.md.
 - **Database / API / rules changes**: none. The page reads under the existing providerBookings rule and makes no browser writes.
 - **Tests**: test-bookings-browser 42/0. The PIN-gate mutation is caught by 4 rows.
+- **Cleaning + Plumbing (same branch)**: both now book through SokoniBookService. The localStorage / second-Firebase-app (cln-write, plm-write) / WhatsApp-connector booking forms are removed. plumbing.html drops its six fabricated plumbers, invented reviews, price guide and stats, and reads SokoniProviders (escaped). The generic Book Now shows how to book, plus a Support link. Files: cleaning.html, plumbing.html, scripts/test-home-services-hubs-browser.js (30/0); retargeted test-compact-premium-cards and test-secondary-firebase-apps (baseline entries removed). No database, API or rules changes.
 
 ## [2026-10-03] - SOKONI Delivery Hub: the rider portal becomes a merchant-v2-style dashboard (driver.html, NOT deployed)
 

@@ -376,56 +376,14 @@
   </div>
 </div>
 
-<!-- ── BOOKING MODAL ── -->
-<div class="cl-modal-overlay" id="clModalOverlay" onclick="if(event.target===this)closeBooking()">
-  <div class="cl-modal">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-      <h2>📅 Book a Cleaner</h2>
-      <button type="button" class="cl-modal-close" onclick="closeBooking()">✕</button>
-    </div>
-    <div class="cl-modal-sub" id="clModalSub">Fill in the details below and a verified cleaner will confirm within 30 minutes.</div>
-
-    <label class="cl-label">Service Type</label>
-    <div class="cl-service-chips" id="clServiceChips">
-      <span class="cl-chip sel" data-svc="House Cleaning" onclick="toggleChip(this)">🏠 House Clean</span>
-      <span class="cl-chip" data-svc="Office Cleaning" onclick="toggleChip(this)">🏢 Office</span>
-      <span class="cl-chip" data-svc="Deep Clean" onclick="toggleChip(this)">🫧 Deep Clean</span>
-      <span class="cl-chip" data-svc="Laundry" onclick="toggleChip(this)">🧺 Laundry</span>
-      <span class="cl-chip" data-svc="Carpet Steam" onclick="toggleChip(this)">🛋️ Carpet Steam</span>
-      <span class="cl-chip" data-svc="Fumigation" onclick="toggleChip(this)">🪲 Fumigation</span>
-      <span class="cl-chip" data-svc="Move-out Clean" onclick="toggleChip(this)">📦 Move-out</span>
-      <span class="cl-chip" data-svc="Post-Construction" onclick="toggleChip(this)">🏗️ Post-Build</span>
-    </div>
-
-    <label class="cl-label">Your Name</label>
-    <input class="cl-input" type="text" id="clName" placeholder="e.g. John Kamau">
-
-    <label class="cl-label">Phone Number</label>
-    <input class="cl-input" type="tel" id="clPhone" placeholder="07XXXXXXXX">
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <div>
-        <label class="cl-label">Date</label>
-        <input class="cl-input" type="date" id="clDate" style="margin-bottom:0;">
-      </div>
-      <div>
-        <label class="cl-label">Time</label>
-        <input class="cl-input" type="time" id="clTime" style="margin-bottom:0;margin-bottom:12px;">
-      </div>
-    </div>
-
-    <label class="cl-label">Your Location / Address</label>
-    <input class="cl-input" type="text" id="clAddress" placeholder="e.g. Westlands, Nairobi — Apt 4B">
-
-    <label class="cl-label">Additional Notes (optional)</label>
-    <textarea class="cl-input" id="clNotes" rows="2" placeholder="e.g. 3-bedroom house, have dog, need eco products..." style="resize:none;"></textarea>
-
-    <button type="button" class="cl-submit-btn" onclick="submitBooking()">
-      📋 Confirm Booking
-    </button>
-    <a href="support.html?topic=booking" class="sk-support-cta" style="display:block;text-align:center;margin-top:8px;padding:11px;border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;text-decoration:none;background:rgba(113,255,0,0.05);">🛟 Need help? Contact Support</a>
-    <div class="cl-modal-msg" id="clModalMsg"></div>
-  </div>
+<!-- Booking (owner 2026-10-03): the old "Book a Cleaner" form saved to localStorage, wrote homeServiceBookings
+     from a second Firebase app, offered a WhatsApp hand-off and announced "recorded" for a booking no provider
+     ever saw. It is gone. A booking is made with a chosen cleaner through SokoniBookService: bookingCreateService
+     → createPaymentIntent(service_booking) → IntaSend → money HELD by SOKONI → released only by the buyer's
+     booking PIN (shown in My Bookings). A request to ANY cleaner is a quote request — not built until the
+     server lead authority ships, so the page says so instead of pretending. -->
+<div class="cl-pick-note" id="clPickNote" role="status" hidden style="margin:0 20px 16px;padding:12px 14px;border:1px solid rgba(0,212,255,0.3);background:rgba(0,212,255,0.08);border-radius:12px;font-size:13px;color:#bff4ff;">
+  Choose a cleaner below and tap 📩 to book a time and pay securely in SOKONI. Sending one request to several cleaners is not available yet. Need help with a booking? <a href="support.html?topic=booking" style="color:#00d4ff;font-weight:700;">Contact SOKONI Support</a>.
 </div>
 
 <!-- BOTTOM NAV -->
@@ -561,7 +519,7 @@ function renderProviders() {
            the profile. No WhatsApp, no labelled buttons, no follow/share row on the card. -->
       <div class="cl-icons">
         <button type="button" class="cl-ico cl-ico--msg" aria-label="Message ${esc(p.name)}" title="Message in-app" onclick="event.stopPropagation();window.SokoniInbox?SokoniInbox.openChat({otherUid:'${jsId}',otherName:'${jsNm}',type:'customer-provider',context:'Cleaning · SOKONI Services'}):location.href='messages.html'">💬</button>
-        <a class="cl-ico cl-ico--book" href="${esc(p.profileUrl)}" aria-label="Book ${esc(p.name)}" title="Book" onclick="event.stopPropagation()">📩</a>
+        <a class="cl-ico cl-ico--book" href="${esc(p.profileUrl)}" aria-label="Book ${esc(p.name)}" title="Book" onclick="event.stopPropagation();if(window.SokoniBookService){event.preventDefault();openBookingFor('${jsId}','${jsNm}');}">📩</a>
       </div>
       <div class="cl-prov-top">
         <div class="cl-prov-avatar">${esc(p.emoji || '🧹')}</div>
@@ -621,116 +579,28 @@ function clearFilters() {
   renderProviders();
 }
 
-/* ── BOOKING MODAL ── */
+/* ── BOOKING — the ONE booking authority (SokoniBookService), never a browser record ── */
 function openBooking() {
-  selectedProv = null;
-  document.getElementById('clModalSub').textContent = 'Fill in the details and a verified cleaner will confirm within 30 minutes.';
-  document.getElementById('clModalOverlay').classList.add('open');
-  document.body.style.overflow = 'hidden';
-  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
-  const d = document.getElementById('clDate');
-  if (d && !d.value) d.value = tomorrow.toISOString().slice(0,10);
+  /* No provider chosen: there is no server path for "any cleaner" yet (that is a quote request). Show the
+     cleaners and say how to book — never a form that books nothing. */
+  const note = document.getElementById('clPickNote');
+  const grid = document.getElementById('providers');
+  if (note) { note.hidden = false; if (grid && grid.parentNode) grid.parentNode.insertBefore(note, grid); }
+  if (grid) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function openBookingFor(id, name) {
-  selectedProv = PROVIDERS.find(p => String(p.uid) === String(id));
-  document.getElementById('clModalSub').textContent = `Booking with: ${selectedProv?.emoji || ''} ${name} — confirm your details below.`;
-  document.getElementById('clModalOverlay').classList.add('open');
-  document.body.style.overflow = 'hidden';
-  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
-  const d = document.getElementById('clDate');
-  if (d && !d.value) d.value = tomorrow.toISOString().slice(0,10);
-}
-
-function closeBooking() {
-  document.getElementById('clModalOverlay').classList.remove('open');
-  document.body.style.overflow = '';
-  document.getElementById('clModalMsg').textContent = '';
-}
-
-function toggleChip(el) {
-  el.classList.toggle('sel');
-}
-
-function submitBooking() {
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('cleaning_book',10,300000)){(window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
-  const name    = document.getElementById('clName')?.value.trim();
-  const phone   = document.getElementById('clPhone')?.value.trim();
-  const date    = document.getElementById('clDate')?.value;
-  const time    = document.getElementById('clTime')?.value;
-  const address = document.getElementById('clAddress')?.value.trim();
-  const notes   = document.getElementById('clNotes')?.value.trim();
-  const msgEl   = document.getElementById('clModalMsg');
-  const services = [...document.querySelectorAll('#clServiceChips .cl-chip.sel')].map(c => c.dataset.svc).join(', ');
-
-  if (!name || !phone || !address) {
-    if (msgEl) { msgEl.textContent = '⚠️ Please fill name, phone and address.'; msgEl.style.color = '#ff6b6b'; }
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(String(id || ''))) return;
+  if (window.SokoniBookService && typeof SokoniBookService.open === 'function') {
+    SokoniBookService.open({ providerId: String(id), providerName: name || '' });
     return;
   }
-
-  const booking = {
-    id: 'CLN' + Date.now().toString().slice(-7),
-    name, phone, date, time, address, notes, services,
-    provider: selectedProv?.name || 'Any Available Cleaner',
-    status: 'pending',
-    createdAt: Date.now()
-  };
-
-  /* Save locally */
-  let bookings = [];
-  try { bookings = JSON.parse(localStorage.getItem('sokoniCleaningBookings') || '[]'); } catch {}
-  bookings.unshift(booking);
-  localStorage.setItem('sokoniCleaningBookings', JSON.stringify(bookings));
-
-  /* Persist to Firestore */
-  (async()=>{try{
-    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-    const {getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
-    const _a=getApps().find(a=>a.name==="cln-write")||initializeApp(_cfg,"cln-write");
-    await addDoc(collection(getFirestore(_a),'homeServiceBookings'),{...booking,hub:'cleaning',createdAt:serverTimestamp()});
-  }catch(e){}})();
-
-  /* Open WhatsApp to confirm */
-  const provPhone = selectedProv?.phone || '0705726803';
-  const msg = `Hi${selectedProv ? ' ' + selectedProv.name : ''}! I'd like to book a cleaning service via SOKONI.\n\n` +
-    `📋 Booking ID: ${booking.id}\n` +
-    `👤 Name: ${name}\n` +
-    `📞 Phone: ${phone}\n` +
-    `🧹 Service: ${services || 'General Cleaning'}\n` +
-    `📅 Date: ${date || 'TBD'} at ${time || 'TBD'}\n` +
-    `📍 Location: ${address}\n` +
-    (notes ? `📝 Notes: ${notes}\n` : '') +
-    `\nPlease confirm your availability. Thank you!`;
-
-  const _waNum = provPhone.replace(/^0/,'254').replace(/\D/g,'');
-  if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
-    SokoniPay.waConnect(_waNum, msg, {providerName:booking.provider||'Cleaning Pro',category:'cleaning',serviceDesc:services||'Cleaning Service'});
-  }
-  /* no WhatsApp hand-off (owner 2026-09-30): the booking is recorded in SOKONI */
-
-  if (msgEl) { msgEl.innerHTML = `✅ Booking <strong style="color:#00d4ff;">${_esc(booking.id)}</strong> recorded in SOKONI! The cleaner will confirm in-app.`; msgEl.style.color = '#22c55e'; }
-
-  if(window.SokoniInvoice){
-    setTimeout(()=>{
-      SokoniInvoice.generate({
-        type:'service', buyerName:name, buyerPhone:phone,
-        items:[{name:services||'General Cleaning', category:'Cleaning Service', qty:1, price:0}],
-        subtotal:0, total:0, paymentMethod:'M-Pesa', paymentRef:booking.id,
-        sellerName:booking.provider, location:address,
-        notes:(notes||'')+' · Date: '+(date||'TBD')+' at '+(time||'TBD')
-      });
-    }, 500);
-  }
-
-  setTimeout(closeBooking, 3000);
+  const p = PROVIDERS.find(x => String(x.uid) === String(id));
+  if (p && p.profileUrl) location.href = p.profileUrl;   /* the profile carries the same Book button */
 }
 
 window.openBooking       = openBooking;
 window.openBookingFor    = openBookingFor;
-window.closeBooking      = closeBooking;
-window.toggleChip        = toggleChip;
-window.submitBooking     = submitBooking;
 window.filterByType      = filterByType;
 window.filterByLoc       = filterByLoc;
 window.filterProviders   = filterProviders;
@@ -759,6 +629,8 @@ renderProviders();
 <script src="analytics.js" defer></script>
 <script src="sokoni-ui-extras.js" defer></script>
   <script src="sokoni-providers.js" defer></script>
+<script src="sokoni-book-service.js" defer></script>
+<script src="sokoni-inbox.js" defer></script>
 <script src="sw-register.js" defer></script>
 <script>
 /* Nav state init */
