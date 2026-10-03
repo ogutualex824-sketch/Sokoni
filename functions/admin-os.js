@@ -987,12 +987,77 @@ exports.adminGetOrders = onCall({ region: 'us-central1', maxInstances: 10, enfor
   return { orders };
 });
 
+/* ── SECURITY CONVERGENCE (2026-10-03): an admin status change is a TRANSITION, not a free string ─────────────
+   LIVE: this wrote any `status` an administrator typed. A status is not proof that its event happened, and each of
+   these fires money: onOrderStatusChange counts GMV on `paid`, assigns a rider on `confirmed`, pays the rider on
+   `delivered`, and settleOrder credits the seller on `completed`. Now the target must be reachable from the order's
+   current state AND carry the evidence its own authority produces:
+     paid        never set here — the verified payment (webhook / verifyIntasendPayment) is the only author
+     delivered   only when delivery evidence exists (deliveredAt — completeDeliveryWithPin / buyerConfirmDelivery)
+     refunded    only when refund evidence exists (settlement REFUNDED / REVERSED, or refundStatus completed)
+     completed   only from delivered, on a paid order, with no open dispute (settleOrder pays on it)
+     cancelled   only while UNPAID — a paid cancellation is the refund programme, not a status write
+     fulfilment  (confirmed / processing / packing / ready / assigned / picked_up / shipped / in transit …) only on a
+                 PAID order, forward along the canonical lifecycle (fulfilment-lifecycle.canAdvance), never past
+                 delivery and never out of a terminal state.
+   Pure and exported for the certification suite. */
+const _ADMIN_FULFIL = ['confirmed', 'processing', 'accepted', 'packing', 'ready_for_pickup', 'awaiting_rider', 'rider_assigned',
+  'driver_assigned', 'assigned', 'rider_en_route', 'picked_up', 'shipped', 'out_for_delivery', 'in_transit'];
+function _orderPaid(o) {
+  return !!o && (o.paymentVerified === true || o.paid === true || ['paid', 'completed', 'success'].includes(String(o.paymentStatus || '').toLowerCase()));
+}
+function adminOrderTransition(order, toRaw) {
+  const FL = require('./fulfilment-lifecycle');
+  const o = order || {};
+  const to = String(toRaw || '').trim().toLowerCase();
+  const from = String(o.status || '').toLowerCase();
+  const fromN = FL.normalize(from);
+  if (!to) return { ok: false, reason: 'NO_STATUS' };
+  if (to === from) return { ok: true, noop: true };
+  if (FL.isTerminal(from)) return { ok: false, reason: 'TERMINAL', from };                 /* completed / returned family */
+  if (fromN === 'delivered' && to !== 'completed' && to !== 'refunded') return { ok: false, reason: 'TERMINAL', from };
+  if (to === 'paid') return { ok: false, reason: 'PAYMENT_AUTHORITY_ONLY' };
+  if (to === 'delivered') return o.deliveredAt ? { ok: true } : { ok: false, reason: 'DELIVERY_EVIDENCE_REQUIRED' };
+  if (to === 'refunded') {
+    const st = String(o.settlementStatus || '').toUpperCase();
+    return (st === 'REFUNDED' || st === 'REVERSED' || String(o.refundStatus || '').toLowerCase() === 'completed') ? { ok: true } : { ok: false, reason: 'REFUND_EVIDENCE_REQUIRED' };
+  }
+  if (to === 'completed') {
+    if (fromN !== 'delivered') return { ok: false, reason: 'NOT_DELIVERED', from };
+    if (!_orderPaid(o)) return { ok: false, reason: 'NOT_PAID' };
+    if (o.disputeOpen === true || o.hasDispute === true) return { ok: false, reason: 'DISPUTE_OPEN' };
+    return { ok: true };
+  }
+  if (to === 'cancelled') return _orderPaid(o) ? { ok: false, reason: 'PAID_CANCEL_IS_A_REFUND' } : { ok: true };
+  if (_ADMIN_FULFIL.includes(to)) {
+    if (!_orderPaid(o)) return { ok: false, reason: 'NOT_PAID' };
+    if (!FL.canAdvance(from || 'pending', to)) return { ok: false, reason: 'BACKWARDS', from };
+    return { ok: true };
+  }
+  return { ok: false, reason: 'UNKNOWN_STATUS' };
+}
+exports._adminOrderTransition = adminOrderTransition;
+
 exports.adminUpdateOrderStatus = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminUpdateOrderStatus = async (req) => {
   _requireAdmin(req);
   const { orderId, status, note } = req.data;
   if (!orderId || !status) throw new Error('orderId and status required');
   const db = getFirestore();
-  await db.collection('orders').doc(orderId).update({ status, adminNote: note || null, updatedAt: FieldValue.serverTimestamp(), updatedBy: req.auth.uid });
+  const _ref = db.collection('orders').doc(String(orderId));
+  /* read + decide + write in ONE transaction, so the evidence checked is the evidence that holds when written */
+  const _verdict = await db.runTransaction(async (t) => {
+    const snap = await t.get(_ref);
+    if (!snap.exists) return { ok: false, reason: 'ORDER_NOT_FOUND' };
+    const v = adminOrderTransition(snap.data() || {}, status);
+    if (!v.ok || v.noop) return v;
+    t.update(_ref, { status: String(status).trim().toLowerCase(), adminNote: note || null, updatedAt: FieldValue.serverTimestamp(), updatedBy: req.auth.uid });
+    return v;
+  });
+  if (!_verdict.ok) {
+    await db.collection('adminAudit').add({ action: 'order_status_refused', orderId, status, reason: _verdict.reason, performedBy: req.auth.uid, createdAt: FieldValue.serverTimestamp() }).catch(() => {});
+    throw new HttpsError('failed-precondition', 'That status change is not allowed for this order (' + _verdict.reason + ').', { reason: _verdict.reason });
+  }
+  if (_verdict.noop) return { success: true, unchanged: true };
   await db.collection('adminAudit').add({ action: 'order_status_updated', orderId, status, performedBy: req.auth.uid, createdAt: FieldValue.serverTimestamp() });
   return { success: true };
 });
