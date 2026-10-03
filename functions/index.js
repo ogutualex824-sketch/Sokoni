@@ -11533,6 +11533,8 @@ exports.updateConsultationStatus = legalHub.updateConsultationStatus;
 exports.rateLegalProvider        = legalHub.rateLegalProvider;
 
 /* ── Procurement Engine v1.0 ────────────────────────────────────────────── */
+/* B2B RFQ authority (sokoni-f3, 2026-10-03): one dispatcher — create / listMine / listReceived / get / decline / quote / respond / cancel */
+exports.rfqDispatch = require('./rfq').rfqDispatch;
 const procurement = require('./procurement');
 exports.resolveMerchantContext           = procurement.resolveMerchantContext;
 exports.listSuppliers                    = procurement.listSuppliers;

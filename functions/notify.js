@@ -128,6 +128,10 @@ const TYPES = {
   po_accepted:          { priority: 'commerce',  category: 'procurement',   smsTemplate: null },
   po_rejected:          { priority: 'commerce',  category: 'procurement',   smsTemplate: null },
   goods_received:       { priority: 'commerce',  category: 'procurement',   smsTemplate: null },
+  /* B2B RFQs (sokoni-f3, 2026-10-03 — functions/rfq.js). Commerce: a supplier receiving an RFQ is a business lead. */
+  rfq_received:         { priority: 'commerce',  category: 'procurement',   smsTemplate: null },
+  rfq_quoted:           { priority: 'commerce',  category: 'procurement',   smsTemplate: null },
+  rfq_accepted:         { priority: 'commerce',  category: 'procurement',   smsTemplate: null },
   support_reply:        { priority: 'commerce',  category: 'support',       smsTemplate: null },
   kass_reply:           { priority: 'commerce',  category: 'ai',            smsTemplate: null },
   system_update:        { priority: 'commerce',  category: 'system',        smsTemplate: null },
