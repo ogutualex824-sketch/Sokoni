@@ -1,3 +1,25 @@
+## [2026-10-03] — Legal Hub L3 + L6 (hosting): discovery cards → storefront, taxonomy filters, honest values, money-less booking removed — NOT deployed
+
+- **legal-profile.html (new):** the lawyer / law-firm storefront.
+  - Data comes from getLegalProvider (eligible only; no licence number or phone) and ACTIVE, priced providerServices rate cards.
+  - It shows verification chips only when the server says so, practice areas grouped by the taxonomy, offices for firms, and rating or "No reviews yet". Unknown details render "—".
+  - Booking uses the canonical SokoniBookService (availability → bookingCreateService → IntaSend → held → PIN).
+  - Share carries the public profile link only; Report goes to support. It self-updates via sw-register.
+- **legal-hub.html:**
+  - Lawyer cards are ONE accessible link to the storefront with NO buttons inside. The global-search lawyer hit is a link too.
+  - Filter chips come from sokoni-legal-taxonomy.js (six groups → areas, plus law firms). An unknown filter shows nothing.
+  - No fabricated fee (5000), deposit (500), city or rating (5.0). The localStorage advocate fallback is removed.
+  - Stats average only rated advocates; the case count shows "—".
+  - The money-less in-page modal (bookLegalConsultation) is removed. bookLawyer / confirmConsultation / retryLegalBooking route to the storefront.
+  - The broken "Open Now" chip is retired: it read a client-written availabilityStatus that the rules deny.
+- **sokoni-legal-taxonomy.js:** GENERATED copy, taken whole from feat/legal-hub-on-9cab901.
+- **Tests:**
+  - test-legal-hub-web 8/0 (BASE=38d2d60 fails); sabotage-legal-hub-web 7/7.
+  - test-secondary-firebase-apps 9/0: the lh-lead baseline entry is removed because the leadFees client writer is gone.
+  - test-legal-projection 96/0, test-role-authority 155/0, test-role-switch-routing 50/0 (all equal to base).
+  - Browser suites (test-legal-commission-link, test-slice-b-support-whatsapp, test-legal-in-app) UNRUN (memory floor).
+- **Order:** ships AFTER the Legal functions (L4), never before.
+
 ## [2026-10-03] — Legal Hub hosting base: 2f Legal UI merged onto the live-descended chain; AdminOS Legal Verification panel ported — NOT deployed
 
 - **legal-hub.html:** three-way merge of the 2f line (0718604 in-app booking/registration, b24b052 verification badges, 473de85) onto this chain (Slice B 14ea4f7). Two conflicts:

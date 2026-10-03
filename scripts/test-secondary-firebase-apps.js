@@ -130,7 +130,6 @@ const BASELINE = {
   'event-manager.html':        ['event-manager'],
   'executive-dashboard.html':  ['executive-dashboard'],
   'home-services.html':        ['hs-write'],
-  'legal-hub.html':            ['lh-lead'],
   'marketing.html':            ['mkt-write'],
   'plumbing.html':             ['plm-write'],
   'release-readiness.html':    ['release-readiness'],

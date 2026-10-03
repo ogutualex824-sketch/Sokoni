@@ -422,6 +422,7 @@
 <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
      through SokoniCart; without this tag the pip cannot render a count. -->
 <script src="sokoni-cart.js"></script>
+<script src="sokoni-legal-taxonomy.js"></script>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
   <script type="module" src="firebase.js"></script>
@@ -515,23 +516,16 @@
         <option value="rating">⭐ Top Rated</option>
         <option value="low">⬇️ Price: Low</option>
         <option value="high">⬆️ Price: High</option>
-        <option value="cases">📊 Most Cases</option>
       </select>
     </div>
 
     <!-- Category filter chips (horizontally scrollable) -->
-    <div class="lc-filter-bar">
+    <div class="lc-filter-bar" id="lawFilterBar" role="toolbar" aria-label="Filter advocates by practice area">
       <button type="button" onclick="filterLawyers('',this)" class="lc-filter-btn active-lf">⚖️ All</button>
-      <button type="button" id="lglOpenNowBtn" onclick="toggleLglOpenNow(this)" class="lc-filter-btn" style="border-color:rgba(16,185,129,.4);color:#10b981;">🟢 Open Now</button>
-      <button type="button" onclick="filterLawyers('property',this)" class="lc-filter-btn">🏠 Property</button>
-      <button type="button" onclick="filterLawyers('family',this)" class="lc-filter-btn">👨‍👩‍👧 Family</button>
-      <button type="button" onclick="filterLawyers('criminal',this)" class="lc-filter-btn">🏛️ Criminal</button>
-      <button type="button" onclick="filterLawyers('commercial',this)" class="lc-filter-btn">💼 Commercial</button>
-      <button type="button" onclick="filterLawyers('employment',this)" class="lc-filter-btn">⚖️ Employment</button>
-      <button type="button" onclick="filterLawyers('ip',this)" class="lc-filter-btn">💡 IP</button>
-      <button type="button" onclick="filterLawyers('immigration',this)" class="lc-filter-btn">🌍 Immigration</button>
-      <button type="button" onclick="filterLawyers('human_rights',this)" class="lc-filter-btn">🌿 Human Rights</button>
+      <button type="button" onclick="filterLawyers('firm:',this)" class="lc-filter-btn">🏢 Law firms</button>
+      <!-- the six practice groups are rendered from sokoni-legal-taxonomy.js (Legal Hub L1, ONE source) -->
     </div>
+    <div class="lc-filter-bar" id="lawAreaBar" role="toolbar" aria-label="Filter by service" hidden></div>
 
     <!-- Results count -->
     <div id="lawyerResultCount" style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:12px;"></div>
@@ -1662,16 +1656,9 @@ function isLawyerSaved(id){return _lhGet('sokoniSavedLawyers').some(function(l){
    LAWYERS DIRECTORY
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""" */
 function getLawyers(){
-  let providers = [];
-  try { providers = JSON.parse(localStorage.getItem("sokoniServiceProviders"))||[]; } catch(e){}
-  /* Filter by legal categories */
-  const legalCats = new Set(["legal","property","family","criminal","commercial","employment","ip","immigration","human_rights"]);
-  const legalProviders = providers.filter(p=>legalCats.has(p.category)||p.isLawyer);
-  /* Verified providers only. A fabricated advocate — invented name, phone, firm and LSK
-     roll number — is not a placeholder, it is a person who does not exist presented as
-     someone a user can retain for a legal matter. An empty directory is honest; a
-     populated fake one is not. The "No advocates found" empty state handles zero results. */
-  return legalProviders;
+  /* Legal Hub L3: the ONLY source of advocates is the server directory (getLegalProviders → eligible only). The old
+     fallback read localStorage "sokoniServiceProviders" and rendered whatever a browser held as if it were a lawyer. */
+  return [];
 }
 
 /* DEMO_LAWYERS removed 2026-07-19 (P0). The array held 8 fabricated advocates with invented
@@ -1768,48 +1755,39 @@ async function _lhCallCF(name, data) {
   return res.data;
 }
 
-/* Map HTML specialization keys → CF enum values */
-function _lhSpecToCF(category) {
-  const MAP = {
-    property:'property_law', family:'family_law', criminal:'criminal_law',
-    commercial:'corporate_law', employment:'employment_law', ip:'intellectual_property',
-    immigration:'immigration', human_rights:'litigation', environment:'other',
-    banking:'tax_law', general:'other',
-  };
-  return [MAP[category] || 'other'];
-}
+/* Legal Hub L1: practice areas are THE taxonomy ids (sokoni-legal-taxonomy.js). The old lossy map (human_rights →
+   litigation, banking → tax_law, …) is gone; registration sends practiceAreas directly. */
+const LT = window.SokoniLegalTaxonomy || null;
+function _lhAreaLabels(areas){ return (areas||[]).map(a => (LT && LT.label(a)) || a).filter(Boolean); }
 
 /* ── Provider directory: reads legalProviders via CF (enforces status:active, auth-less) */
 async function _loadLawyersFs(){
   try {
     const result = await _lhCallCF('getLegalProviders', { limit: 50 });
     if (!result || !Array.isArray(result.providers)) return null;
-    return result.providers.map(p => ({
-      id:           p.providerId,
-      name:         /^advocate\s/i.test(p.name||'') ? p.name : 'Advocate ' + (p.name||''),
-      phone:        p.phone || '',
-      email:        '',
-      category:     (p.specializations||[])[0] || 'other',
-      isLawyer:     true,
-      skills:       p.specializations || [],
-      firm:         p.firmName || '',
-      location:     p.county || 'Nairobi',
-      rate:         p.consultationFee || 5000,
-      rateType:     'per session',
-      bio:          p.bio || '',
-      rating:       p.rating || 0,
-      jobsCompleted:p.totalConsultations || 0,
-      available:    p.isOnline !== false,
-      /* CHANGELOG 220 — "✅ LSK" only when the canonical LSK verification is verified AND current;
-         the server lists only eligible advocates, but the badge still reads the server's answer. */
-      verified:     p.lskVerified === true,
-      sokoniVerified: p.sokoniVerified === true,
-      lskPractisingYear: p.lskPractisingYear || null,
-      rollNo:       p.licenseNumber || '',
-      spec:         (p.specializations||[]).map(s=>(SPEC_LABELS[s]||s)).join(', ') || '📋 General Practice',
-      sellerUid:    p.providerId,
-      depositAmount:p.consultationFee || 500,
-    }));
+    return result.providers.map(p => {
+      const areas = (LT ? LT.areasOfProfile(p) : (p.practiceAreas||[]));
+      return {
+        id:           p.providerId,
+        entityType:   p.entityType === 'firm' ? 'firm' : 'advocate',
+        name:         p.entityType === 'firm' ? (p.firmName || p.name || '') : (p.name || ''),
+        firm:         p.entityType === 'firm' ? '' : (p.firmName || ''),
+        practiceAreas: areas,
+        practiceGroups: p.practiceGroups || (LT ? [...new Set(areas.map(a => LT.groupOf(a)).filter(Boolean))] : []),
+        skills:       _lhAreaLabels(areas),
+        spec:         _lhAreaLabels(areas).slice(0, 2).join(' · ') || '',
+        location:     p.county || '',
+        /* NO defaults: an unpriced advocate shows "Fee on request", an unrated one "New on SOKONI" (Legal Hub L3). */
+        rate:         Number(p.consultationFee) > 0 ? Number(p.consultationFee) : null,
+        rating:       Number(p.ratingCount) > 0 && p.rating != null ? Number(p.rating) : null,
+        ratingCount:  Number(p.ratingCount) || 0,
+        bio:          p.bio || '',
+        isOnline:     p.isOnline === true,
+        verified:     p.lskVerified === true,
+        sokoniVerified: p.sokoniVerified === true,
+        lskPractisingYear: p.lskPractisingYear || null,
+      };
+    });
   } catch (e) {
     console.warn('[Legal Hub] getLegalProviders CF:', e.message);
     return null;
@@ -1843,8 +1821,10 @@ async function _saveLawyerFs(lawyer){
 
 function filterLawyers(cat, btn){
   _activeLawCat = cat;
-  document.querySelectorAll(".lc-filter-btn").forEach(b=>b.classList.remove("active-lf"));
+  const bar = btn && btn.parentNode;
+  (bar ? bar.querySelectorAll(".lc-filter-btn") : document.querySelectorAll(".lc-filter-btn")).forEach(b=>b.classList.remove("active-lf"));
   if(btn) btn.classList.add("active-lf");
+  _lhRenderAreaBar(cat);
   if(_fsLawyersCache !== null) {
     renderLawyers();
   } else {
@@ -1872,8 +1852,8 @@ function _renderLawyerCards(lawyers){
   if(!lawyers.length){
     grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:rgba(255,255,255,0.25);">
       <div style="font-size:48px;margin-bottom:14px;">⚖️</div>
-      <p style="font-size:14px;margin-bottom:6px;">No advocates found</p>
-      <p style="font-size:12px;margin-bottom:18px;">Try a different filter or search term</p>
+      <p style="font-size:14px;margin-bottom:6px;">No verified advocates available for this yet</p>
+      <p style="font-size:12px;margin-bottom:18px;">Advocates appear here once SOKONI has approved them and verified their LSK practising status.</p>
       <button type="button" onclick="filterLawyers('',document.querySelector('.lc-filter-btn'))" style="padding:10px 22px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);color:#c8ff80;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:8px;">Show All</button>
       <button type="button" onclick="showLawTab('register',null)" style="padding:10px 22px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);color:#c8ff80;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;">+ Register as Advocate</button>
     </div>`;
@@ -1883,50 +1863,56 @@ function _renderLawyerCards(lawyers){
   grid.innerHTML = lawyers.map(l=>{
     const displayName = l.name.replace(/^Advocate\s+/i,"");
     const initials    = displayName.split(" ").filter(Boolean).map(w=>w[0]).join("").substring(0,2).toUpperCase();
-    const rating      = Number(l.rating||5).toFixed(1);
-    const stars       = Math.min(5, Math.max(0, Math.round(l.rating||5)));
-    const starStr     = "⭐".repeat(stars) + "☆".repeat(5-stars);
-    const rateLabel   = RATE_LABELS[l.rateType] || "/ session";
-    const loc         = (l.location||"Kenya").charAt(0).toUpperCase()+(l.location||"kenya").slice(1);
+    const ratingHtml  = l.rating != null
+      ? `<span style="color:#ffc107;">★ ${lhEsc(l.rating.toFixed(1))}</span> <span>· ${lhEsc(l.ratingCount)} review${l.ratingCount===1?"":"s"}</span>`
+      : `<span>New on SOKONI · no reviews yet</span>`;
     const skills      = (l.skills||[]).slice(0,3);
-
-    return `<div class="lawyer-card" data-provider-id="lgl_${lhEsc(l.id)}" onclick="bookLawyer('${lhEsc(l.id)}')">
+    const kind        = l.entityType === 'firm' ? '🏢 Law firm' : '⚖️ Advocate';
+    const label       = `${displayName}, ${l.entityType==='firm'?'law firm':'advocate'}${l.verified?', LSK practising verified':''}. Open profile`;
+    /* Discovery only: the whole card opens the storefront, where Book / Share / availability live. No buttons here. */
+    return `<a class="lawyer-card" href="legal-profile.html?id=${encodeURIComponent(l.id)}" data-provider-id="${lhEsc(l.id)}" aria-label="${lhEsc(label)}" style="text-decoration:none;color:inherit;">
       <div class="lc-header">
-        <div class="lc-avatar">${lhEsc(initials)}</div>
+        <div class="lc-avatar" aria-hidden="true">${lhEsc(initials)}</div>
         <div class="lc-info">
           <div class="lc-name">${lhEsc(displayName)}</div>
-          <div class="lc-spec">${lhEsc(l.spec||l.category||"General Practice")}</div>
-          ${l.firm ? `<div class="lc-firm">🏢 ${lhEsc(l.firm)}</div>` : ""}
+          <div class="lc-spec">${lhEsc(l.spec||"Practice areas not listed yet")}</div>
+          <div class="lc-firm">${lhEsc(kind)}${l.firm ? " · " + lhEsc(l.firm) : ""}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-          <div class="lc-badge ${l.verified?"lc-badge-lsk":"lc-badge-pending"}" title="${l.verified?"Practising status verified with the Law Society of Kenya"+(l.lskPractisingYear?" for "+l.lskPractisingYear:""):"Not verified"}">${l.verified?"✅ LSK":"⏳ Pending"}</div>
-          <div data-avail-provider="lgl_${lhEsc(l.id)}" onclick="event.stopPropagation()"></div>
+          ${l.verified ? `<div class="lc-badge lc-badge-lsk" title="Practising status verified with the Law Society of Kenya${l.lskPractisingYear?" for "+lhEsc(l.lskPractisingYear):""}">✅ LSK</div>` : ""}
         </div>
       </div>
-
       <div class="lc-body">
-        <div class="lc-meta-row">
-          <div class="lc-stars">
-            <span style="color:#ffc107;">${starStr}</span>
-            <span>${lhEsc(rating)}  ${Number(l.jobsCompleted||0)} cases</span>
-          </div>
-        </div>
+        <div class="lc-meta-row"><div class="lc-stars">${ratingHtml}</div></div>
         ${skills.length ? `<div class="lc-skills">${skills.map(s=>`<span class="lc-skill">${lhEsc(s)}</span>`).join("")}</div>` : ""}
         ${l.bio ? `<div class="lc-bio">${lhEsc(l.bio)}</div>` : ""}
       </div>
-
       <div class="lc-footer">
         <div>
-          <div class="lc-rate-num">KES ${Number(l.rate||0).toLocaleString()} <span class="lc-rate-type">${lhEsc(rateLabel)}</span></div>
-          <div class="lc-location"><i class="fas fa-map-marker-alt" style="color:#c8ff80;font-size:9px;"></i> ${lhEsc(loc)}${l.rollNo ? `  Roll #${lhEsc(l.rollNo)}` : ""}</div>
+          <div class="lc-rate-num">${l.rate != null ? "KES " + Number(l.rate).toLocaleString() + ' <span class="lc-rate-type">/ consultation</span>' : '<span class="lc-rate-type">Fee on request</span>'}</div>
+          <div class="lc-location">${lhEsc(l.location || "—")}${l.isOnline ? " · online" : ""}</div>
         </div>
-        <button type="button" class="lc-book-btn" onclick="event.stopPropagation();bookLawyer('${lhEsc(l.id)}')">
-          💬 Book
-        </button>
+        <span class="lc-rate-type" aria-hidden="true">View profile →</span>
       </div>
-<div data-lid="${l.id}" data-lname="${(l.name||'').replace(/"/g,'')}" data-lspec="${(l.spec||l.category||'').replace(/"/g,'')}" style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);"><button type="button" onclick="event.stopPropagation();window.SokoniInbox?SokoniInbox.openChat({otherUid:'${l.id}',otherName:'${(l.name||'Lawyer').replace(/'/g,'')}',type:'client-lawyer',context:'Legal Consultation: ${(l.spec||l.category||'General').replace(/'/g,'')}'}):window.location.href='messages.html?with='+encodeURIComponent(this.parentNode.dataset.lid)" style="flex:1;padding:7px 10px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);border-radius:8px;color:#71ff00;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">💬 Message</button><button type="button" onclick="event.stopPropagation();(function(d){_toggleSaveLawyerBtn(this,d.lid,d.lname,d.lspec)}).call(this,this.parentNode.dataset)" style="padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">${isLawyerSaved(l.id)?"❤️ Saved":"🤍 Save"}</button><button type="button" onclick="event.stopPropagation();(function(d){window.SokoniSocial&&SokoniSocial.toggleFollow('legal_'+d.lid,d.lname,this,'legal')}).call(this,this.parentNode.dataset)" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">Follow</button><button type="button" onclick="event.stopPropagation();(function(d){window.SokoniSocial&&SokoniSocial.openShareModal({id:'legal_'+d.lid,name:d.lname,category:'legal',type:'legal'})}).call(this,this.parentNode.dataset)" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:8px;font-size:12px;cursor:pointer;flex-shrink:0;">📣</button></div>
-    </div>`;
+    </a>`;
   }).join("");
+}
+
+/* Practice-area chips for the chosen group (taxonomy-driven). */
+function _lhRenderAreaBar(cat){
+  const bar = document.getElementById('lawAreaBar');
+  if (!bar) return;
+  const gid = (cat||'').indexOf('group:') === 0 ? cat.slice(6) : ((cat||'').indexOf('area:') === 0 && LT ? LT.groupOf(cat.slice(5)) : null);
+  const g = gid && LT ? LT.GROUPS.filter(x => x.id === gid)[0] : null;
+  if (!g) { bar.hidden = true; bar.innerHTML = ''; return; }
+  bar.hidden = false;
+  bar.innerHTML = g.services.map(sv => `<button type="button" class="lc-filter-btn${cat==='area:'+sv.id?' active-lf':''}" onclick="filterLawyers('area:${sv.id}',this)">${lhEsc(sv.label)}</button>`).join('');
+}
+function _lhRenderGroupBar(){
+  const bar = document.getElementById('lawFilterBar');
+  if (!bar || !LT || bar.dataset.built) return;
+  bar.dataset.built = '1';
+  bar.insertAdjacentHTML('beforeend', LT.GROUPS.map(g => `<button type="button" class="lc-filter-btn" onclick="filterLawyers('group:${g.id}',this)">${lhEsc(g.icon + ' ' + g.label)}</button>`).join(''));
 }
 
 /* Pane search input  syncs to hero search and re-renders from cache */
@@ -1937,16 +1923,17 @@ function filterLawyersSearch(q){
 }
 
 function _updateStats(lawyers){
+  /* Legal Hub L3: only facts the server returned. An average over unrated advocates, or a case count the public
+     projection does not carry, is not shown — "—" instead. */
   const verified = lawyers.filter(l=>l.verified).length;
-  const totalCases = lawyers.reduce((s,l)=>s+(l.jobsCompleted||0),0);
-  const avgRating = lawyers.length ? (lawyers.reduce((s,l)=>s+(l.rating||0),0)/lawyers.length).toFixed(1) : "";
-  const cities = new Set(lawyers.map(l=>l.location).filter(Boolean)).size;
-
+  const rated = lawyers.filter(l=>l.rating != null);
+  const avgRating = rated.length ? (rated.reduce((s,l)=>s+l.rating,0)/rated.length).toFixed(1) : null;
+  const counties = new Set(lawyers.map(l=>l.location).filter(Boolean)).size;
   const s = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
-  s("statLawyers", verified+"+ LSK");
-  s("statRating",  avgRating+"⭐");
-  s("statCases",   totalCases.toLocaleString()+"+");
-  s("statCities",  cities+" Cities");
+  s("statLawyers", String(verified));
+  s("statRating",  avgRating ? avgRating + "⭐" : "—");
+  s("statCases",   "—");
+  s("statCities",  counties ? String(counties) : "—");
 }
 
 async function renderLawyers(){
@@ -1963,25 +1950,20 @@ async function renderLawyers(){
     else _fsLawyersCache = []; /* mark as loaded (even if empty) so skeleton never shows again */
   }
 
-  /* Firestore is the only source of verified advocates. */
-  let lawyers;
-  if(_fsLawyersCache && _fsLawyersCache.length > 0){
-    lawyers = [..._fsLawyersCache];
-  } else {
-    lawyers = getLawyers();
-  }
+  /* The server directory is the only source of verified advocates (Legal Hub L3). */
+  _lhRenderGroupBar();
+  let lawyers = [...(_fsLawyersCache || [])];
 
   /* Update stats */
   _updateStats(lawyers);
 
   /* Category filter  normalise underscores so 'human_rights' matches 'human rights' */
   if(_activeLawCat){
-    const catNorm = _activeLawCat.replace(/_/g," ");
-    lawyers = lawyers.filter(l=>
-      l.category===_activeLawCat ||
-      l.spec?.toLowerCase().includes(catNorm) ||
-      (l.skills||[]).some(s=>s.toLowerCase().includes(catNorm))
-    );
+    const c = _activeLawCat;
+    if (c === 'firm:') lawyers = lawyers.filter(l => l.entityType === 'firm');
+    else if (c.indexOf('group:') === 0) lawyers = lawyers.filter(l => (l.practiceGroups||[]).includes(c.slice(6)));
+    else if (c.indexOf('area:') === 0) lawyers = lawyers.filter(l => (l.practiceAreas||[]).includes(c.slice(5)));
+    else lawyers = [];   /* an unknown filter shows nothing, never everyone */
   }
 
   /* Search filter  read from either the hero search or the pane search */
@@ -2000,10 +1982,9 @@ async function renderLawyers(){
 
   /* Sort */
   const sort = document.getElementById("lawyerSort")?.value||"default";
-  if(sort==="rating")  lawyers.sort((a,b)=>(b.rating||0)-(a.rating||0));
-  else if(sort==="low")    lawyers.sort((a,b)=>(a.rate||0)-(b.rate||0));
-  else if(sort==="high")   lawyers.sort((a,b)=>(b.rate||0)-(a.rate||0));
-  else if(sort==="cases")  lawyers.sort((a,b)=>(b.jobsCompleted||0)-(a.jobsCompleted||0));
+  if(sort==="rating")  lawyers.sort((a,b)=>(b.rating==null?-1:b.rating)-(a.rating==null?-1:a.rating));
+  else if(sort==="low")    lawyers.sort((a,b)=>(a.rate==null?Infinity:a.rate)-(b.rate==null?Infinity:b.rate));
+  else if(sort==="high")   lawyers.sort((a,b)=>(b.rate==null?-1:b.rate)-(a.rate==null?-1:a.rate));
 
   _renderLawyerCards(lawyers);
 }
@@ -2014,124 +1995,21 @@ function _findLawyer(id){
   return all.find(x=>x.id===id) || null;
 }
 
-/*  Open consultation booking modal  */
+/* ── Booking (Legal Hub L4/L6) ─────────────────────────────────────────────────────────────────────────────────────
+   A consultation is a CANONICAL provider booking made on the advocate's storefront (legal-profile.html →
+   SokoniBookService: live availability → bookingCreateService → IntaSend → held → completion PIN → settlement).
+   The old in-page modal sent bookLegalConsultation — a record with no payment, no hold and no PIN — and is removed.
+   These globals stay so any older link or button still lands somewhere honest. */
 function bookLawyer(id){
-  const l = _findLawyer(id);
-  if(!l) return;
-  /* CHANGELOG 219 — no client-priced gateway (SokoniPay.bookNow priced from the browser).
-     The modal sends a booking REQUEST to the server (bookLegalConsultation). */
-  _openConsultModal(l.id);
+  if (id) { location.href = 'legal-profile.html?id=' + encodeURIComponent(id); return; }
+  location.href = 'legal-hub.html#lawyers';
 }
-function _openConsultModal(id){
-  const l=_findLawyer(id);if(!l)return;
-  const RATE_LBL={'per hour':'/ hr','per session':'/ session','per document':'/ doc','retainer':'/ mo','hourly':'/ hr','per job':'/ session'};
-  const initials=l.name.replace(/^Advocates*/i,'').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
-  const modalTitle=document.getElementById('consultModalTitle');
-  const modalBody=document.getElementById('consultModalBody');
-  if(modalTitle) modalTitle.textContent='Book  '+lhEsc(l.name);
-  if(modalBody) modalBody.innerHTML=((l.demo||_isDemoLawyer(l))?'<div style="padding:10px 12px;background:rgba(255,152,0,0.12);border:1px solid rgba(255,152,0,0.4);border-radius:12px;margin-bottom:14px;font-size:12px;color:#ffb74d;font-weight:700;line-height:1.45;">🧪 Demonstration profile — a sample to show how the directory works. This is <u>not</u> a real, bookable advocate. Real advocates are being onboarded.</div>':'')+'<div style="padding:14px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);border-radius:12px;margin-bottom:16px;"><div style="font-size:14px;font-weight:800;color:white;margin-bottom:3px;">'+lhEsc(l.name)+(l.verified?' <span style="font-size:9px;background:rgba(113,255,0,0.15);color:#c8ff80;padding:1px 6px;border-radius:3px;border:1px solid rgba(113,255,0,0.25);">✅ LSK</span>':'')+'</div><div style="font-size:11px;color:rgba(113,255,0,0.8);font-weight:700;">'+lhEsc(l.spec||l.category)+'</div>'+(l.firm?'<div style="font-size:10px;color:rgba(255,255,255,0.35);">🏢 '+lhEsc(l.firm)+'</div>':'')+'<div style="margin-top:6px;font-size:15px;font-weight:900;color:#c8ff80;">KES '+Number(l.rate||0).toLocaleString()+' <span style="font-size:10px;font-weight:400;color:rgba(255,255,255,0.3);">'+lhEsc(RATE_LBL[l.rateType]||'/ session')+'</span></div></div><label class="lh-label">Your Name *</label><input type="text" id="cbName" class="lh-input" placeholder="Full name"><label class="lh-label">Your Phone (M-Pesa / WhatsApp) *</label><input type="tel" id="cbPhone" class="lh-input" placeholder="07XXXXXXXX"><label class="lh-label">Legal Matter *</label><select id="cbMatter" class="lh-input"><option value="">-- Select matter --</option><option>🏠 Property / Land dispute</option><option>👨‍👩‍👧 Family law / Divorce</option><option>🏛️ Criminal defence</option><option>x Business / Contract dispute</option><option>⚖️ Employment / Wrongful dismissal</option><option>💡 IP / Copyright / Trademark</option><option>🌍 Immigration / Work permit</option><option>Debt recovery</option><option>⚖️ Human rights</option><option>x Document drafting</option><option>General legal advice</option></select><label class="lh-label">Preferred Date</label><input type="date" id="cbDate" class="lh-input"><label class="lh-label">Brief Description (optional)</label><textarea id="cbDetails" class="lh-input lh-textarea" style="min-height:64px;" placeholder="Briefly describe your situation..."></textarea><button type="button" onclick="confirmConsultation('+JSON.stringify(l.id)+')" style="width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-bottom:8px;">📲 Book via WhatsApp</button><button type="button" onclick="closeConsultModal()" style="width:100%;padding:11px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.45);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button><div id="cbMsg" style="margin-top:10px;font-size:12px;min-height:14px;"></div>';
-  const today=new Date().toISOString().slice(0,10);
-  const dateEl=document.getElementById('cbDate');
-  if(dateEl){dateEl.min=today;dateEl.value=today;}
-  const modal=document.getElementById('consultModal');
-  if(modal){modal.style.display='flex';document.body.style.overflow='hidden';}
-}
-function confirmConsultation(lawyerId){
-  const name    = document.getElementById("cbName")?.value.trim();
-  const phone   = document.getElementById("cbPhone")?.value.trim();
-  const matter  = document.getElementById("cbMatter")?.value;
-  const date    = document.getElementById("cbDate")?.value;
-  const time    = document.getElementById("cbTime")?.value;
-  const details = document.getElementById("cbDetails")?.value.trim();
-  const msgEl   = document.getElementById("cbMsg");
-
-  if(!name||!phone||!matter){ if(msgEl){msgEl.textContent="⚖️ Fill your name, phone and select a matter type"; msgEl.style.color="#ff9800";} return; }
-
-  const l = _findLawyer(lawyerId);
-  if(!l){ if(msgEl){msgEl.textContent="⚖️ Lawyer not found"; msgEl.style.color="#ff9800";} return; }
-
-  /* P1 — Refuse to "book" a demonstration profile. It has no real advocate behind it, so a
-     confirmation here would be false. Tell the user plainly and stop before any record or
-     Cloud Function call. */
-  if(l.demo || _isDemoLawyer(l)){
-    if(msgEl){ msgEl.innerHTML="🧪 This is a <strong>demonstration profile</strong>, not a real advocate — so it can't be booked. Real advocates are being onboarded to the Legal Hub; please check back soon."; msgEl.style.color="#ff9800"; }
-    return;
-  }
-
-  /* CHANGELOG 219 — the booking IS the server record (bookLegalConsultation → legalConsultations,
-     the legal hub's own authority). It used to request a deposit on the retired phone-number
-     M-PESA rail, which always failed and fell through to a WhatsApp hand-off with NO SOKONI
-     record; the no-deposit branch wrote a client "lead fee", printed an invoice for an unpaid
-     booking and opened WhatsApp. Now: signed-in only, one server call, success only once the
-     server has the consultation, and the conversation continues in SOKONI chat.
-     No payment is taken here — in-app legal payment is not yet enabled (it needs a payment
-     purpose bound to legalConsultations; see CHANGELOG 219, BLOCKED). */
-  const uid = window._sokoniUser?.uid || null;
-  if(!uid){
-    if(msgEl){ msgEl.innerHTML='⚖️ Please <a href="login.html?redirect='+encodeURIComponent(location.pathname+location.search)+'" style="color:#71ff00;font-weight:800;">sign in</a> to send a booking request — it goes to the advocate inside SOKONI.'; msgEl.style.color="#ff9800"; }
-    return;
-  }
-  const ref = "LAW"+Date.now().toString().slice(-6);
-  /* local cache — only so a failed call can be retried under the SAME idempotency key */
-  let bks=[];try{bks=JSON.parse(localStorage.getItem("sokoniLegalBookings"))||[];}catch(e){}
-  bks.unshift({ref,lawyerId,lawyerName:l.name,name,phone,matter,date,time,details,status:'sending',createdAt:Date.now()});
-  try{ localStorage.setItem("sokoniLegalBookings",JSON.stringify(bks)); }catch(e){}
-  if(msgEl){ msgEl.textContent="Sending your request to the advocate…"; msgEl.style.color="#c8ff80"; }
-  _registerLegalBooking(ref, lawyerId);
-}
-
-/* One server call for both the first attempt and a retry. Idempotent on ref+'_bk'. */
-async function _registerLegalBooking(ref, lawyerId){
-  const m = document.getElementById('cbMsg');
-  let rec = null;
-  try { rec = (JSON.parse(localStorage.getItem('sokoniLegalBookings')||'[]')).find(b => b.ref === ref); } catch(e){}
-  if(!rec){ if(m){ m.textContent = 'Could not find the booking request to send.'; m.style.color = '#ff9800'; } return; }
-  try {
-    const dtStr = (rec.date && rec.time)
-      ? new Date(rec.date + 'T' + rec.time).toISOString()
-      : new Date(Date.now() + 86400000).toISOString();
-    const result = await _lhCallCF('bookLegalConsultation', {
-      providerId:     lawyerId,
-      dateTime:       dtStr,
-      matter:         rec.matter || 'Legal consultation',
-      isOnline:       false,
-      idempotencyKey: ref + '_bk',
-    });
-    if(!result?.consultationId) throw new Error('no consultationId returned');
-    /* the SERVER's status (pending until the advocate confirms) — never promoted client-side */
-    try {
-      const st = JSON.parse(localStorage.getItem('sokoniLegalBookings')||'[]');
-      const i = st.findIndex(b => b.ref === ref);
-      if(i>=0){ st[i].consultationId = result.consultationId; st[i].status = result.status || 'pending'; localStorage.setItem('sokoniLegalBookings', JSON.stringify(st)); }
-    } catch(_){}
-    if(m){
-      m.innerHTML = '✅ Request sent to '+lhEsc(rec.lawyerName||'the advocate')+' in SOKONI · Ref <strong>'+lhEsc(ref)+'</strong>. '+
-        'The advocate confirms the time — no payment has been taken. '+
-        '<a href="messages.html?with='+encodeURIComponent(lawyerId)+'" style="color:#71ff00;font-weight:800;">💬 Message the advocate</a>';
-      m.style.color = '#71ff00';
-    }
-  } catch(e){
-    console.warn('[Legal Hub] bookLegalConsultation CF:', e.message);
-    try { const st = JSON.parse(localStorage.getItem('sokoniLegalBookings')||'[]'); const i = st.findIndex(b => b.ref === ref); if (i>=0){ st[i].status = 'sync_failed'; localStorage.setItem('sokoniLegalBookings', JSON.stringify(st)); } } catch(_){}
-    if(m){ m.innerHTML = '⚠️ We could not send this request to the advocate, so it is <strong>not booked</strong>. '+
-      '<button type="button" onclick="retryLegalBooking('+JSON.stringify(ref)+','+JSON.stringify(lawyerId)+')" style="margin-left:6px;padding:5px 12px;background:rgba(113,255,0,0.15);border:1px solid rgba(113,255,0,0.35);border-radius:8px;color:#c8ff80;font-weight:800;cursor:pointer;font-family:inherit;">Try again</button>';
-      m.style.color = '#ff9800'; }
-  }
-}
-
+function confirmConsultation(lawyerId){ bookLawyer(lawyerId); }
+function retryLegalBooking(ref, lawyerId){ bookLawyer(lawyerId); }
 function closeConsultModal(){
   const modal = document.getElementById("consultModal");
   if(modal) modal.style.display = "none";
   document.body.style.overflow = "";
-}
-
-/* P1 — Retry a booking whose bookLegalConsultation CF call failed. Re-runs the SAME
-   idempotency key (ref+'_bk'), so a retry after a partial success returns the existing
-   consultation rather than creating a duplicate (the CF is transactional + idempotent). */
-async function retryLegalBooking(ref, lawyerId){
-  const m = document.getElementById('cbMsg');
-  if(m){ m.textContent = 'Retrying…'; m.style.color = '#71ff00'; }
-  return _registerLegalBooking(ref, lawyerId);
 }
 
 window.filterLawyers       = filterLawyers;
@@ -3647,7 +3525,7 @@ function legalGlobalSearch(q) {
       if(h.type === 'lawyer') {
         const l = h.data;
         const initials = l.name.replace(/^Advocate\s*/i,'').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
-        return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(113,255,0,0.2);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        return `<a href="legal-profile.html?id=${encodeURIComponent(l.id)}" aria-label="${lhEsc(l.name)} — open profile" style="text-decoration:none;color:inherit;background:rgba(255,255,255,0.03);border:1px solid rgba(113,255,0,0.2);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
           <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,rgba(113,255,0,0.25),rgba(79,70,229,0.2));display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#c8ff80;flex-shrink:0;">${initials}</div>
           <div style="flex:1;min-width:0;">
             <div style="font-size:14px;font-weight:800;color:white;">${lhEsc(l.name)} ${l.verified?'<span style="font-size:9px;background:rgba(113,255,0,0.15);color:#c8ff80;padding:1px 6px;border-radius:4px;">✅ LSK</span>':'<span style="font-size:9px;background:rgba(255,152,0,0.12);color:#ff9800;padding:1px 6px;border-radius:4px;">⏳ Pending</span>'}</div>
@@ -3655,10 +3533,10 @@ function legalGlobalSearch(q) {
             ${l.firm?`<div style="font-size:10px;color:rgba(255,255,255,0.35);">🏢 ${lhEsc(l.firm)}</div>`:''}
           </div>
           <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
-            <div style="font-size:15px;font-weight:900;color:#c8ff80;">KES ${Number(l.rate||0).toLocaleString()} <span style="font-size:10px;color:rgba(255,255,255,0.3);font-weight:400;">${RATE_LBL[l.rateType]||'/ session'}</span></div>
-            <button type="button" onclick="bookLawyer('${l.id}')" style="padding:7px 14px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;font-weight:800;border:none;border-radius:9px;cursor:pointer;font-size:12px;font-family:inherit;">⚖️ Book</button>
+            <div style="font-size:15px;font-weight:900;color:#c8ff80;">${l.rate!=null ? "KES " + Number(l.rate).toLocaleString() : "Fee on request"} <span style="font-size:10px;color:rgba(255,255,255,0.3);font-weight:400;">${RATE_LBL[l.rateType]||'/ session'}</span></div>
+            <span style="font-size:11px;color:rgba(255,255,255,0.45);">View profile →</span>   <!-- no buttons inside a lawyer result (owner rule): the whole row is the link -->
           </div>
-        </div>`;
+        </a>`;
       }
       if(h.type === 'doc') return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;">
         <div style="font-size:28px;">📄</div>
