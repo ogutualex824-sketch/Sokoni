@@ -18,12 +18,12 @@
 'use strict';
 
 /* ONE LISTING AUTHORITY. The canonical "is this product publicly listed" predicate is SokoniSellability
-   (shared/sellability.js on the serving functions lineage, sokoni-sellability.js on hosting). Where that module is
-   present it IS the decision; this file only adds the moderation hold in front of it. This functions tree predates
-   shared/sellability.js (the 09-09 serving archives carry it), so the fallback below is a byte-for-byte copy of its
-   HIDDEN_STATUSES plus the indexers' 'spam' — never a second, divergent list. */
-let _sellability = null;
-try { _sellability = require('./shared/sellability'); } catch (_) { _sellability = null; }
+   (shared/sellability.js on the serving functions lineage, sokoni-sellability.js on hosting — which now also refuses
+   a moderation hold, hosting commit 7c17082). This functions tree predates shared/sellability.js (the 09-09 serving
+   archives carry it; gate-functions-require-closure refuses an undeclared require), so the decision below is the SAME
+   rule written out: its HIDDEN_STATUSES verbatim plus the indexers' 'spam', the deleted/visible flags, and the hold.
+   PORT NOTE: on the serving lineage, publicVisibility() must call isPubliclyListed() after the hold check instead of
+   this copy — never keep two lists there. */
 const HIDDEN_STATUSES = Object.freeze(['deleted', 'removed', 'hidden', 'draft', 'archived', 'banned', 'suspended',
   'paused', 'inactive', 'rejected', 'unpublished', 'spam']);
 const _HIDDEN = new Set(HIDDEN_STATUSES);
@@ -40,11 +40,6 @@ const TYPESENSE_STATUS_FILTER = 'status:!=[' + HIDDEN_STATUSES.join(',') + ']';
 function publicVisibility(p) {
   if (!p || typeof p !== 'object') return { visible: false, reason: 'missing' };
   if (p.moderationHold != null) return { visible: false, reason: 'moderation_hold' };
-  if (_sellability && typeof _sellability.isPubliclyListed === 'function') {
-    if (!_sellability.isPubliclyListed(p)) return { visible: false, reason: 'not_listed' };
-    if (String(p.status || '').toLowerCase() === 'spam') return { visible: false, reason: 'status_spam' };
-    return { visible: true, reason: null };
-  }
   if (p.isVisible === false) return { visible: false, reason: 'hidden' };
   if (p.visible === false) return { visible: false, reason: 'hidden_legacy' };
   if (p.isDeleted === true || p.deleted === true) return { visible: false, reason: 'deleted' };
