@@ -58,3 +58,16 @@ Related: [[COMMERCIAL_CONVERGENCE_2026-09-30]] · [[TRANSACTION_RECEIPTS_2026-10
 - **Functions first.** Then rules replace-blocks (f3), then hosting (Sports pages converted off the seed data, the merchant-v2 Sports group, AdminOS Sports).
 - **Fail closed:** any incomplete commercial capability stays OFF.
 - **Certification:** at least 512 MB free, emulator, browser.
+
+## Built: `functions/sports.js` (commercial-fn, 2026-10-03), not deployed
+
+- **Callable:** one callable, `sportsDispatch`, with operations: `team.register` / `submit` / `invite` / `respond` / `remove` / `setManager`, `tournament.create` / `submit` / `transition`, `registration.apply` / `decide` / `withdraw`, `fixtures.publish`, `fixture.update`, `result.submit` / `confirm` / `dispute`, and `admin.teamDecide` / `admin.tournamentDecide` (admin claim; every admin decision audited).
+- **Field contract:** in the header of `sports.js`; b2's messaging reads these fields.
+- **Entry fees:** fail closed. `pending_payment` cannot be approved until a held tournament-entry payment path exists (5b: a hold short-circuit is needed before the credit decision).
+- **Messaging hooks:** `syncConv` / `ensureConv` call `messages.syncAnchoredParticipants` / `ensureAnchoredConversation` when b2's line provides them. Until then they are no-ops.
+- **Messaging design (b2's amendments, adopted):**
+  - `sports_team` (team ↔ active members + captain/managers).
+  - `sports_tournament` as an **announcement** channel (organiser sends; captains of registered teams read; replies off by default).
+  - `sports_registration`: a private organiser ↔ one registration's captain channel.
+- **Notifications:** `notify.js` gains `sports_*` types (additive). Every send carries a deterministic `dedupeKey`.
+- **Tests:** `scripts/test-sports-authority.js` 50/0, covering the team and tournament acceptance paths and every protection in the owner brief. Five mutants (approved-team check, own-side confirm, roster leader, entry-fee lock, final-result lock) each fail a named row.

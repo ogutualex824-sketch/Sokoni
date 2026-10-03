@@ -13527,3 +13527,6 @@ exports.adminSearchReceipts       = require('./transaction-receipts').adminSearc
 exports.adminRetryReceiptFailures = require('./transaction-receipts').adminRetryReceiptFailures; /* Super Admin, audited */
 exports.retryReceiptFailuresSweep = require('./transaction-receipts').retryReceiptFailuresSweep;
 exports.receiptReconciliationDaily = require('./receipt-reconciliation').receiptReconciliationDaily;
+
+/* ── Sports (owner 2026-10-03; 2f): teams, memberships, tournaments, registrations, fixtures, results — one dispatch. ── */
+exports.sportsDispatch = require('./sports').sportsDispatch;

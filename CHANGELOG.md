@@ -1,3 +1,8 @@
+## 2026-10-03 — Sports server authority: teams, memberships, tournaments, registrations, one canonical fixture, results/standings (NOT deployed)
+
+- **New:** functions/sports.js (sportsDispatch); notify.js sports_* types.
+- **Test:** test-sports-authority 50/0 (5 mutants caught).
+
 ## 2026-10-03 — Sports commission: explicit venue booking / coaching / tournament entry rows at 5% (NOT deployed)
 
 - **Change:** commission-config sports_* rows + aliases; venue/coaching flat bookings; policy version 2026-10-03.sports; client snapshot rebuilt.

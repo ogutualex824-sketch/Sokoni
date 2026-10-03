@@ -179,6 +179,15 @@ const TYPES = {
   goods_received:       { priority: 'commerce',  category: 'procurement',   smsTemplate: null },
   support_reply:        { priority: 'commerce',  category: 'support',       smsTemplate: null },
   kass_reply:           { priority: 'commerce',  category: 'ai',            smsTemplate: null },
+  /* ── SPORTS (2f, 2026-10-03): team / tournament / fixture events; every send carries a dedupeKey from sports.js ── */
+  sports_team_decision:       { priority: 'commerce',  category: 'sports',        smsTemplate: null },
+  sports_team_invite:         { priority: 'commerce',  category: 'sports',        smsTemplate: null },
+  sports_team_member:         { priority: 'commerce',  category: 'sports',        smsTemplate: null },
+  sports_tournament_decision: { priority: 'commerce',  category: 'sports',        smsTemplate: null },
+  sports_registration_update: { priority: 'commerce',  category: 'sports',        smsTemplate: null },
+  sports_fixture_update:      { priority: 'commerce',  category: 'sports',        smsTemplate: null },
+  sports_fixture_reminder:    { priority: 'commerce',  category: 'sports',        smsTemplate: null },
+  sports_result_update:       { priority: 'commerce',  category: 'sports',        smsTemplate: null },
   system_update:        { priority: 'commerce',  category: 'system',        smsTemplate: null },
 
   /* ── marketing: opt-in, quiet-hour respecting ── */
