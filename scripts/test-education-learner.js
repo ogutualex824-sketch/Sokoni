@@ -21,21 +21,25 @@ const run = async (uid, data, token) => { try { return await M.educationLearner.
 const world = () => ({ users: { adult: { ageVerified: true }, adult2: { ageVerified: true }, kid: {}, kid2: {}, notVerified: {} } });
 const S = () => DB._store;
 const links = () => Object.values(S().guardianLinks || {}).filter((l) => l.status === 'active');
-const OWN = (uid) => 'https://firebasestorage.googleapis.com/v0/b/x.appspot.com/o/learner-photos%2F' + uid + '%2Fa.jpg?alt=media';
+const OWN = (uid) => 'learner-photos/' + uid + '/a.jpg';
 
 (async () => {
   DB = fakeDb(world());
   /* P: profile */
   let r = await run('kid', { op: 'save', profile: { displayName: 'Wanjiru <b>', interests: ['coding', 'coding', 'music'], level: 'beginner', formats: ['self_paced', 'live_online'], language: 'sw', subjects: ['Maths'], goals: 'KCSE', location: 'Nyeri',
-    ageVerified: true, guardianUid: 'x', status: 'approved', role: 'teacher', photoUrl: OWN('kid') } });
+    ageVerified: true, guardianUid: 'x', status: 'approved', role: 'teacher', photoPath: OWN('kid') } });
   const p = (S().learnerProfiles || {}).kid || {};
-  ck('P-1', r.ok === true && p.displayName === 'Wanjiru b' && p.interests.join() === 'coding,music' && p.level === 'beginner' && p.language === 'sw' && p.photoUrl === OWN('kid'),
+  ck('P-1', r.ok === true && p.displayName === 'Wanjiru b' && p.interests.join() === 'coding,music' && p.level === 'beginner' && p.language === 'sw' && p.photoPath === OWN('kid'),
     'a learner saves their profile at once (no application); text sanitised, lists de-duplicated', p);
   ck('P-2', !('ageVerified' in p) && !('guardianUid' in p) && !('status' in p) && !('role' in p) && !((S().users.kid || {}).ageVerified),
     'a profile save can NEVER set age, guardian, status or role (browser age claims are ignored; users untouched)', p);
   ck('P-3', p._noIndex === true && p.ownerUid === 'kid', 'the profile is never indexed for search and is owned by the learner');
-  r = await run('kid', { op: 'save', profile: { photoUrl: OWN('other') } });
-  ck('P-4', r.err === 'invalid-argument' && r.reason === 'PHOTO_NOT_OWN' && (S().learnerProfiles.kid || {}).photoUrl === OWN('kid'), 'a photo from ANOTHER account\'s folder (or any external URL) is refused', r);
+  r = await run('kid', { op: 'save', profile: { photoPath: OWN('other') } });
+  ck('P-4', r.err === 'invalid-argument' && r.reason === 'PHOTO_NOT_OWN' && (S().learnerProfiles.kid || {}).photoPath === OWN('kid'), 'a photo from ANOTHER account\'s folder is refused', r);
+  r = await run('kid', { op: 'save', profile: { photoPath: 'https://firebasestorage.googleapis.com/v0/b/x/o/learner-photos%2Fkid%2Fa.jpg?alt=media&token=t' } });
+  ck('P-4b', r.reason === 'PHOTO_NOT_OWN', 'a DOWNLOAD URL is refused — learners may be minors and a token URL is readable by anyone with it', r);
+  r = await run('kid', { op: 'save', profile: { photoPath: 'learner-photos/kid/a.exe' } });
+  ck('P-4c', r.reason === 'PHOTO_NOT_OWN', 'only jpg / png / webp file names are accepted', r);
   r = await run('kid', { op: 'save', profile: { level: 'genius' } });
   ck('P-5', r.reason === 'LEVEL_INVALID', 'an unknown level is refused', r);
   r = await run('kid', { op: 'save', profile: { formats: ['self_paced', 'teleport'] } });
