@@ -1,3 +1,46 @@
+## [2026-10-04] - Platform Health redesigned to the owner's reference layout — every figure from the server, no invented trend (hosting only; NOT deployed)
+
+Built on `55dd827` (the loading fix). Dark dashboard per the owner's reference: header row (title, subtitle, status pill,
+computed time, Refresh, small "← Back to AdminOS / Super Admin" link chosen by claim), KPI cards, "over time" card,
+breakdown card, top list, right details panel. **No sidebar and no brand block** (owner 2026-10-04): the page is reached
+from AdminOS and Super Admin, which already carry navigation; it lays out full width and hides the back link when embedded
+in a frame.
+
+**How each reference element was mapped (UI Data Integrity):**
+- **KPI cards** = Overall (ring) + the five server dimensions with their real score, grade, server weight label and the
+  server's failure code / `dataComplete:false` note. **No sparkline, no delta** — neither response carries a series or a
+  previous value (serving archive `f4422b4`). `sparkHtml`/`deltaHtml` render only when `SERIES_FIELD`/`COMPARISON_FIELD`
+  name a server field; both are `null`.
+- **"Over time" chart** → honest empty state "Trend history isn't recorded yet". Checked every live health callable's
+  serving source: `getPlatformHealthScores` computes on demand and stores nothing; `getPlatformHealth`
+  (operations-center.js) returns current counts; `platformHealth` (onRequest) is a liveness ping. No score history exists.
+- **Donut** → **"Dimension breakdown" bar list**. The overall weights (30/25/25/15/5) are formula constants, not response
+  fields, and a donut of five independent 0–100 scores would imply shares of a whole.
+- **"Top" list** → `topPriorities`: name, bar = `totalScore` out of 25 only when numeric, criterion scores as text,
+  server evidence gate. The client-invented "Phase B/C" labels are gone — only the server's `evidenceReady`.
+- **Right panel** → tabs Details / Evidence / Sources: scores + priorities `computedAt` (`<time datetime>`), index budget,
+  server `recommendation`, `evidenceSignals`, who can view (Admin & Super Admin), the collections each score reads (from
+  code — the response does not list them), Refresh. No Publish/Save/Schedule/Slack/Export/Upgrade/avatars.
+
+**Kept:** three states (data / "No health data yet" / error + Retry), 45 s timeout, escaping, admin‖superAdmin gate,
+self-update via `shared-header.js`. Refresh is disabled while loading and re-calls the server. AdminOS card and
+super-admin chips untouched (their API — `chipsHtml`, `chips`, `prioritiesList`, `hasHealthData`, `withTimeout` — unchanged).
+Hand-rolled inline SVG only; no chart library or CDN added. `prefers-reduced-motion` and `:focus-visible` respected.
+
+**Tests:** `scripts/test-platform-health-page.js` 87/0 (was 46): layout regions; no `<nav>`/sidebar/brand/avatar;
+**every digit rendered in a dynamic region traces to a fixture field** (with a positive control that the walk sees
+72/64/18/12.5/192); no sparkline/trend/delta without a series; withheld overall → pill "Overall withheld", no verdict;
+forbidden strings; escaping of a hostile priority name; mobile CSS has no fixed width > 288px outside min-width queries.
+Negative controls: (a) placeholder sparkline when no series → row "no sparkline/trend rendered when no series" FAILS;
+(b) invented delta → rows "no delta rendered…" and "every rendered number traces…" FAIL; existing unknown-as-0 control
+still FAILS its row. **Browser certification QUEUED** (RAM below 512 MB; `scripts/lib/memory-floor.js` does not exist on
+this tree, so no browser suite was written or run).
+
+- **Files:** `platform-health.html`, `platform-health-view.js`, `scripts/test-platform-health-page.js`, `CHANGELOG.md`.
+- **Database / API / security:** none / none (same two callables, same payload) / no change to the gate; all server
+  strings still escaped.
+- **Breaking:** none. **Deploy:** hosting only, from a tree descending from live; NOT deployed.
+
 ## [2026-10-03] - Platform Health loads on every admin surface — the pages now read the shape the server returns (hosting only; NOT deployed)
 
 **Diagnosis (read-only, evidence):** the server was healthy. Serving revisions `getplatformhealthscores-00014-jep` /

@@ -12,292 +12,424 @@
 <script src="shared-header.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0b0d17" />
   <title>Platform Health — SOKONI Admin</title>
   <link rel="manifest" href="/manifest.json" />
   <link rel="stylesheet" href="sokoni-tokens.css" />
+  <!-- REDESIGN 2026-10-04 (owner reference: dark premium dashboard). No sidebar and no
+       brand block of its own — the page is reached from AdminOS and Super Admin, which
+       already carry navigation, and must fit if ever embedded in the AdminOS panel.
+       Every figure on the page comes from getPlatformHealthScores /
+       getTopBusinessPriorities via platform-health-view.js; there is no sparkline,
+       delta or trend line because the server returns no history (see that file). -->
   <style>
     :root {
-      --score-green:  #16a34a;
-      --score-amber:  #d97706;
-      --score-red:    #dc2626;
-      --score-bg:     #f0fdf4;
-      --card-bg:      #fff;
-      --border:       #e5e7eb;
-      --text:         #111827;
-      --text-muted:   #6b7280;
-      --radius:       12px;
+      --ph-bg:        #0b0d17;
+      --ph-panel:     #12152a;
+      --ph-panel-2:   #171b33;
+      --ph-border:    rgba(255,255,255,.08);
+      --ph-text:      #f4f5fb;
+      --ph-muted:     #9aa0b8;
+      --ph-faint:     #8a90ab;
+      --ph-accent:    #6d5dfc;
+      --ph-accent-2:  #8b7dff;
+      --ph-good:      #22c55e;
+      --ph-warn:      #f59e0b;
+      --ph-bad:       #ef4444;
+      --ph-radius:    14px;
+      --ph-gutter:    16px;
+      --t-violet:     #6d5dfc;
+      --t-blue:       #3b82f6;
+      --t-teal:       #14b8a6;
+      --t-amber:      #f59e0b;
+      --t-pink:       #ec4899;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+    html, body { background: var(--ph-bg); }
     body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #f9fafb;
-      color: var(--text);
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--ph-text);
       min-height: 100vh;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
+    a { color: var(--ph-accent-2); }
+    :focus-visible { outline: 2px solid var(--ph-accent-2); outline-offset: 2px; border-radius: 6px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-    /* ── header ── */
-    .ph-header {
-      background: #0f172a;
-      color: #fff;
-      padding: 20px 24px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-    .ph-header h1 { font-size: 1.1rem; font-weight: 700; flex: 1; }
-    .ph-header small { font-size: .8rem; color: #94a3b8; }
-    .ph-back { color: #94a3b8; text-decoration: none; font-size: .85rem; }
-    .ph-back:hover { color: #fff; }
+    .ph-shell { width: 100%; max-width: 1480px; margin: 0 auto; padding: 20px var(--ph-gutter) 40px; }
 
-    /* ── overall hero ── */
-    .ph-hero {
-      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
-      color: #fff;
-      padding: 32px 24px;
-      text-align: center;
+    /* ── header row ── */
+    .ph-top { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 20px; margin-bottom: 20px; }
+    .ph-top-main { flex: 1 1 280px; min-width: 0; }
+    .ph-back { display: inline-block; font-size: .8rem; color: var(--ph-muted); text-decoration: none; margin-bottom: 8px; }
+    .ph-back:hover { color: var(--ph-text); }
+    html.ph-embedded .ph-back { display: none; }
+    .ph-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .ph-top h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -.01em; }
+    .ph-subtitle { color: var(--ph-muted); font-size: .9rem; margin-top: 4px; }
+    .ph-meta { color: var(--ph-faint); font-size: .8rem; margin-top: 6px; }
+    .ph-pill {
+      display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+      font-size: .75rem; font-weight: 600; border: 1px solid var(--ph-border); background: var(--ph-panel-2); color: var(--ph-muted);
     }
-    .ph-hero-label { font-size: .85rem; color: #94a3b8; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 8px; }
-    .ph-overall-ring {
-      width: 120px; height: 120px;
-      margin: 0 auto 16px;
-      position: relative;
+    .ph-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .ph-pill.good { color: var(--ph-good); }
+    .ph-pill.warn { color: var(--ph-warn); }
+    .ph-pill.bad  { color: var(--ph-bad); }
+    .ph-actions { display: flex; gap: 8px; align-items: center; }
+    .ph-btn {
+      display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 8px 16px;
+      border-radius: 10px; border: 1px solid var(--ph-border); background: var(--ph-panel-2); color: var(--ph-text);
+      font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer;
     }
-    .ph-overall-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-    .ph-overall-ring .track { fill: none; stroke: rgba(255,255,255,.1); stroke-width: 10; }
-    .ph-overall-ring .fill  { fill: none; stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .8s ease; }
-    .ph-overall-label {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column;
+    .ph-btn.primary { background: var(--ph-accent); border-color: var(--ph-accent); }
+    .ph-btn:hover:not(:disabled) { filter: brightness(1.12); }
+    .ph-btn:disabled { opacity: .55; cursor: progress; }
+
+    /* ── layout: canvas + details panel (single column below 1100px) ── */
+    .ph-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+    .ph-canvas { min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+    .ph-card {
+      background: var(--ph-panel); border: 1px solid var(--ph-border); border-radius: var(--ph-radius);
+      padding: 18px; min-width: 0;
+    }
+    .ph-card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; margin-bottom: 14px; }
+    .ph-card h2 { font-size: 1rem; font-weight: 650; }
+    .ph-card-sub { color: var(--ph-faint); font-size: .78rem; }
+
+    /* ── KPI row ── */
+    .ph-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+    .ph-kpis > #kpi-grid { display: contents; }
+    .ph-kpi {
+      background: var(--ph-panel); border: 1px solid var(--ph-border); border-radius: var(--ph-radius);
+      padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0;
+    }
+    .ph-kpi-top { display: flex; align-items: center; gap: 10px; }
+    .ph-kpi-label { font-size: .8rem; font-weight: 500; color: var(--ph-muted); }
+    .ph-kpi-value { display: flex; align-items: baseline; gap: 4px; }
+    .ph-kpi-num { font-size: 1.9rem; font-weight: 700; line-height: 1.1; color: var(--ph-text); }
+    .ph-kpi-unit { font-size: .8rem; color: var(--ph-faint); }
+    .ph-dot { width: 8px; height: 8px; border-radius: 50%; margin-left: 6px; align-self: center; }
+    .ph-kpi-note { font-size: .75rem; color: var(--ph-faint); }
+    .ph-kpi-note.bad { color: #fca5a5; }
+    .ph-kpi-spark svg { width: 100%; height: 28px; }
+    .ph-spark polyline { fill: none; stroke: var(--ph-accent-2); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+    .ph-delta { font-size: .75rem; font-weight: 600; }
+    .ph-delta.up { color: var(--ph-good); } .ph-delta.down { color: var(--ph-bad); } .ph-delta.flat { color: var(--ph-muted); }
+
+    .ph-tile {
+      width: 36px; height: 36px; flex-shrink: 0; border-radius: 10px; display: inline-flex;
       align-items: center; justify-content: center;
     }
-    .ph-overall-label .score-val { font-size: 2rem; font-weight: 800; line-height: 1; }
-    .ph-overall-label .grade-val { font-size: .9rem; color: #94a3b8; }
-    .ph-hero-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
-    .ph-hero-sub   { font-size: .85rem; color: #94a3b8; }
+    .ph-tile.sm { width: 30px; height: 30px; border-radius: 8px; }
+    .ph-ico { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .ph-tile.violet { background: rgba(109,93,252,.16); color: #a99fff; }
+    .ph-tile.blue   { background: rgba(59,130,246,.16); color: #93c5fd; }
+    .ph-tile.teal   { background: rgba(20,184,166,.16); color: #5eead4; }
+    .ph-tile.amber  { background: rgba(245,158,11,.16); color: #fcd34d; }
+    .ph-tile.pink   { background: rgba(236,72,153,.16); color: #f9a8d4; }
 
-    /* ── main content ── */
-    .ph-main { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+    /* overall KPI card (always visible; — until the server answers) */
+    .ph-kpi.overall { flex-direction: row; align-items: center; gap: 14px; grid-column: span 2; }
+    .ph-ring { width: 84px; height: 84px; position: relative; flex-shrink: 0; }
+    .ph-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .ph-ring .track { fill: none; stroke: rgba(255,255,255,.08); stroke-width: 10; }
+    .ph-ring .fill  { fill: none; stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .8s ease; }
+    .ph-ring-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .ph-ring-label .score-val { font-size: 1.5rem; font-weight: 800; line-height: 1; }
+    .ph-ring-label .grade-val { font-size: .7rem; color: var(--ph-muted); }
+    .ph-overall-text { min-width: 0; }
+    .ph-overall-title { font-size: .95rem; font-weight: 650; margin-top: 2px; }
+    .ph-overall-sub { font-size: .78rem; color: var(--ph-muted); margin-top: 2px; }
+
+    /* ── trend (honest empty state) ── */
+    .ph-trend-empty {
+      border: 1px dashed rgba(255,255,255,.12); border-radius: 12px; padding: 28px 18px; text-align: center;
+      color: var(--ph-muted); font-size: .85rem;
+    }
+    .ph-trend-empty strong { display: block; color: var(--ph-text); font-size: .95rem; margin-bottom: 6px; }
+    .ph-trend-empty p { max-width: 560px; margin: 0 auto; }
+
+    /* ── lower row ── */
+    .ph-row2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+    .ph-bars, .ph-top { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+    .ph-bar-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) 40px; grid-template-areas: "dot label val" "bar bar bar"; gap: 6px 10px; align-items: center; }
+    .ph-legend-dot { grid-area: dot; width: 10px; height: 10px; border-radius: 50%; }
+    .ph-legend-dot.violet, .ph-bar-fill.violet { background: var(--t-violet); }
+    .ph-legend-dot.blue,   .ph-bar-fill.blue   { background: var(--t-blue); }
+    .ph-legend-dot.teal,   .ph-bar-fill.teal   { background: var(--t-teal); }
+    .ph-legend-dot.amber,  .ph-bar-fill.amber  { background: var(--t-amber); }
+    .ph-legend-dot.pink,   .ph-bar-fill.pink   { background: var(--t-pink); }
+    .ph-bar-label { grid-area: label; font-size: .85rem; min-width: 0; }
+    .ph-bar-label small { color: var(--ph-faint); margin-left: 8px; font-size: .72rem; }
+    .ph-bar-val { grid-area: val; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .ph-bar-row .ph-bar { grid-area: bar; }
+    .ph-bar { display: block; height: 6px; border-radius: 99px; background: rgba(255,255,255,.07); overflow: hidden; }
+    .ph-bar.empty { background: repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 6px, transparent 6px 10px); }
+    .ph-bar-fill { display: block; height: 100%; border-radius: 99px; transition: width .8s ease; }
+
+    .ph-top-row { display: flex; gap: 12px; align-items: flex-start; }
+    .ph-top-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .ph-top-head { display: flex; justify-content: space-between; gap: 10px; }
+    .pri-name { font-weight: 600; font-size: .88rem; }
+    .ph-top-val { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .ph-top-val small { color: var(--ph-faint); font-weight: 500; }
+    .pri-desc, .pri-crit { font-size: .76rem; color: var(--ph-muted); }
+    .pri-gate { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: .74rem; color: var(--ph-faint); }
+    .ph-badge { padding: 2px 8px; border-radius: 99px; font-size: .7rem; font-weight: 600; background: rgba(255,255,255,.07); color: var(--ph-muted); }
+    .ph-badge.good { background: rgba(34,197,94,.15); color: #86efac; }
+
+    /* ── drill-down cards ── */
+    .ph-scores { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+    .score-card { background: var(--ph-panel-2); border: 1px solid var(--ph-border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .score-card-header { display: flex; align-items: center; gap: 10px; }
+    .score-card-name { font-size: .85rem; font-weight: 600; flex: 1; min-width: 0; }
+    .score-card-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .score-dims { display: flex; flex-direction: column; gap: 8px; }
+    .score-dim-header { display: flex; justify-content: space-between; gap: 8px; font-size: .75rem; margin-bottom: 3px; }
+    .score-dim-name  { color: var(--ph-muted); }
+    .score-dim-value { font-weight: 600; text-align: right; }
+    .score-dim-bar   { height: 4px; background: rgba(255,255,255,.07); border-radius: 9px; overflow: hidden; }
+    .score-dim-fill  { height: 100%; border-radius: 9px; transition: width .8s ease; }
+    .dim-missing { font-size: .74rem; color: var(--ph-faint); font-style: italic; overflow-wrap: anywhere; }
 
     /* ── alerts ── */
-    .ph-alerts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
-    .ph-alert {
-      display: flex; align-items: flex-start; gap: 10px;
-      padding: 12px 16px; border-radius: 8px; font-size: .875rem;
-    }
-    .ph-alert.high   { background: #fef2f2; border-left: 4px solid var(--score-red); }
-    .ph-alert.medium { background: #fffbeb; border-left: 4px solid var(--score-amber); }
-    .ph-alert.info   { background: #f0fdf4; border-left: 4px solid var(--score-green); }
-    .ph-alert-area   { font-weight: 700; white-space: nowrap; min-width: 100px; }
+    .ph-alerts { display: flex; flex-direction: column; gap: 8px; }
+    .ph-alert { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 10px 14px; border-radius: 10px; font-size: .84rem; background: var(--ph-panel); border: 1px solid var(--ph-border); border-left-width: 4px; }
+    .ph-alert.high   { border-left-color: var(--ph-bad); }
+    .ph-alert.medium { border-left-color: var(--ph-warn); }
+    .ph-alert.info   { border-left-color: var(--ph-good); }
+    .ph-alert-area   { font-weight: 700; }
 
-    /* ── 5 score cards ── */
-    .ph-scores {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 16px;
-      margin-bottom: 32px;
-    }
-    .score-card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px;
-      display: flex; flex-direction: column; gap: 16px;
-    }
-    .score-card-header { display: flex; align-items: center; gap: 10px; }
-    .score-ring-sm {
-      width: 64px; height: 64px; flex-shrink: 0; position: relative;
-    }
-    .score-ring-sm svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-    .score-ring-sm .track { fill: none; stroke: #f3f4f6; stroke-width: 8; }
-    .score-ring-sm .fill  { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset .8s ease; }
-    .score-ring-label {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-    }
-    .score-ring-label .sv { font-size: 1rem; font-weight: 800; line-height: 1; }
-    .score-ring-label .gv { font-size: .65rem; color: var(--text-muted); }
-    .score-card-name { font-size: .85rem; font-weight: 700; color: var(--text); line-height: 1.3; }
-    .score-card-weight { font-size: .75rem; color: var(--text-muted); }
-    .score-dims { display: flex; flex-direction: column; gap: 8px; }
-    .score-dim { }
-    .score-dim-header { display: flex; justify-content: space-between; font-size: .75rem; margin-bottom: 3px; }
-    .score-dim-name  { color: var(--text-muted); }
-    .score-dim-value { font-weight: 600; font-size: .75rem; }
-    .score-dim-bar   { height: 4px; background: #f3f4f6; border-radius: 9px; overflow: hidden; }
-    .score-dim-fill  { height: 100%; border-radius: 9px; transition: width .8s ease; }
-    .dim-missing { font-size: .72rem; color: #9ca3af; font-style: italic; }
+    /* ── details panel ── */
+    .ph-panel { align-self: start; }
+    .ph-tabs { display: flex; gap: 4px; padding: 4px; background: var(--ph-bg); border-radius: 10px; margin-bottom: 16px; }
+    .ph-tab { flex: 1; min-height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--ph-muted); font: inherit; font-size: .82rem; font-weight: 600; cursor: pointer; }
+    .ph-tab[aria-selected="true"] { background: var(--ph-panel-2); color: var(--ph-text); }
+    .ph-fields { display: flex; flex-direction: column; gap: 12px; }
+    .ph-fields > div { display: flex; flex-direction: column; gap: 2px; }
+    .ph-fields dt { font-size: .72rem; color: var(--ph-faint); text-transform: uppercase; letter-spacing: .05em; }
+    .ph-fields dd { font-size: .88rem; overflow-wrap: anywhere; }
+    .ph-panel h3 { font-size: .8rem; color: var(--ph-muted); font-weight: 600; margin: 18px 0 10px; }
+    .ph-sources { list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: .82rem; }
+    .ph-sources strong { display: block; font-weight: 600; }
+    .ph-sources span { color: var(--ph-muted); overflow-wrap: anywhere; }
+    .ph-panel-note { font-size: .74rem; color: var(--ph-faint); margin-top: 12px; }
+    .ph-panel .ph-btn { width: 100%; justify-content: center; margin-top: 16px; }
 
-    /* ── section headings ── */
-    .ph-section-title {
-      font-size: 1rem; font-weight: 700; margin-bottom: 16px;
-      padding-bottom: 8px; border-bottom: 2px solid var(--border);
-    }
+    .ph-links { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
+    .ph-links a { display: inline-block; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--ph-border); color: var(--ph-muted); text-decoration: none; font-size: .8rem; }
+    .ph-links a:hover { color: var(--ph-text); border-color: var(--ph-accent); }
 
-    /* ── priorities ── */
-    .priorities-table { width: 100%; border-collapse: collapse; font-size: .875rem; margin-bottom: 32px; }
-    .priorities-table th {
-      text-align: left; padding: 10px 12px;
-      background: #f9fafb; border-bottom: 2px solid var(--border);
-      font-size: .8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em;
-    }
-    .priorities-table td { padding: 12px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
-    .priorities-table tr:hover td { background: #f9fafb; }
-    .pri-score-badge {
-      display: inline-block;
-      padding: 2px 8px; border-radius: 20px;
-      font-size: .75rem; font-weight: 700; color: #fff;
-      min-width: 32px; text-align: center;
-    }
-    .pri-ready-badge {
-      display: inline-block;
-      padding: 2px 8px; border-radius: 20px;
-      font-size: .7rem; font-weight: 600;
-      background: #dcfce7; color: #16a34a;
-    }
-    .pri-wait-badge {
-      display: inline-block;
-      padding: 2px 8px; border-radius: 20px;
-      font-size: .7rem; font-weight: 600;
-      background: #fef3c7; color: #d97706;
-    }
-    .pri-block-badge {
-      display: inline-block;
-      padding: 2px 8px; border-radius: 20px;
-      font-size: .7rem; font-weight: 600;
-      background: #f3f4f6; color: #6b7280;
-    }
-    .pri-name { font-weight: 600; margin-bottom: 2px; }
-    .pri-desc { font-size: .78rem; color: var(--text-muted); }
-    .criterion-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
-    .criterion-pip {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: #e5e7eb;
-    }
-    .criterion-pip.filled { background: #6366f1; }
-
-    /* ── quick links ── */
-    .ph-links { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
-    .ph-link-card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px 16px;
-      text-decoration: none;
-      color: var(--text);
-      font-size: .85rem;
-      font-weight: 600;
-      display: flex; align-items: center; gap: 8px;
-      transition: border-color .15s, box-shadow .15s;
-    }
-    .ph-link-card:hover { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.08); }
-    .ph-link-icon { font-size: 1.1rem; }
-
-    /* ── loading / error ── */
-    .ph-loading { text-align: center; padding: 60px 24px; color: var(--text-muted); }
-    .ph-spinner {
-      width: 40px; height: 40px; border: 4px solid #e5e7eb;
-      border-top-color: #6366f1; border-radius: 50%;
-      animation: spin .8s linear infinite; margin: 0 auto 16px;
-    }
+    /* ── loading / empty / error ── */
+    .ph-loading { text-align: center; padding: 48px 16px; color: var(--ph-muted); }
+    .ph-spinner { width: 36px; height: 36px; border: 3px solid rgba(255,255,255,.1); border-top-color: var(--ph-accent); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 14px; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .ph-error { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 16px 20px; color: #dc2626; }
-    .ph-error-msg { margin: 6px 0 12px; color: #7f1d1d; font-size: .875rem; word-break: break-word; }
-    .ph-retry { background: #dc2626; color: #fff; border: 0; border-radius: 6px; padding: 8px 16px; font-weight: 600; cursor: pointer; min-height: 40px; }
-    .ph-retry:focus-visible { outline: 3px solid #fca5a5; outline-offset: 2px; }
-    .ph-empty-state { background: #fff; border: 1px dashed var(--border); border-radius: 8px; padding: 24px 20px; text-align: center; color: var(--text-muted); }
-    .ph-empty-state strong { display: block; color: var(--text); margin-bottom: 6px; }
-    .ph-empty { font-size: .875rem; color: var(--text-muted); margin-bottom: 24px; }
+    .ph-error { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.35); border-radius: 12px; padding: 16px 18px; color: #fca5a5; }
+    .ph-error-msg { margin: 6px 0 12px; color: #fecaca; font-size: .86rem; overflow-wrap: anywhere; }
+    .ph-retry { background: var(--ph-bad); color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer; min-height: 40px; }
+    .ph-empty-state { background: var(--ph-panel); border: 1px dashed rgba(255,255,255,.14); border-radius: 12px; padding: 24px 18px; text-align: center; color: var(--ph-muted); }
+    .ph-empty-state strong { display: block; color: var(--ph-text); margin-bottom: 6px; }
+    .ph-empty { font-size: .84rem; color: var(--ph-muted); }
+    .ph-footer { text-align: center; padding: 28px 0 0; font-size: .76rem; color: var(--ph-faint); }
 
-    /* ── footer ── */
-    .ph-footer { text-align: center; padding: 32px 16px; font-size: .8rem; color: #9ca3af; }
-
-    @media (max-width: 640px) {
-      .ph-scores { grid-template-columns: 1fr 1fr; }
-      .priorities-table .hide-mobile { display: none; }
+    @media (min-width: 760px) {
+      .ph-row2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    }
+    @media (min-width: 1100px) {
+      .ph-layout { grid-template-columns: minmax(0, 1fr) 320px; }
+      .ph-panel { position: sticky; top: 20px; }
+    }
+    @media (max-width: 420px) {
+      .ph-kpi.overall { grid-column: auto; }
+      .ph-actions { width: 100%; }
+      .ph-actions .ph-btn { flex: 1; justify-content: center; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; }
     }
   </style>
 </head>
 <body>
+<div class="ph-shell">
 
-<div class="ph-header">
-  <div>
-    <h1>Platform Health Dashboard</h1>
-    <small id="computed-at">Loading…</small>
-  </div>
-  <a href="admin.html" class="ph-back">← Admin</a>
-</div>
-
-<div class="ph-hero">
-  <div class="ph-hero-label">Overall SOKONI Health Score</div>
-  <div class="ph-overall-ring" id="overall-ring">
-    <svg viewBox="0 0 120 120">
-      <circle class="track" cx="60" cy="60" r="50"/>
-      <circle class="fill" id="overall-fill" cx="60" cy="60" r="50"
-              stroke-dasharray="314" stroke-dashoffset="314"/>
-    </svg>
-    <div class="ph-overall-label">
-      <span class="score-val" id="overall-score">—</span>
-      <span class="grade-val" id="overall-grade"></span>
-    </div>
-  </div>
-  <div class="ph-hero-title" id="overall-title">Computing scores…</div>
-  <div class="ph-hero-sub" id="overall-sub"></div>
-</div>
-
-<div class="ph-main">
-
-  <div id="alerts-area" class="ph-alerts" style="display:none"></div>
-
-  <div id="loading-state" class="ph-loading">
-    <div class="ph-spinner"></div>
-    <div>Loading platform metrics…</div>
-  </div>
-
-  <div id="main-content" style="display:none">
-
-    <div class="ph-section-title">Dimension Scores</div>
-    <div class="ph-scores" id="scores-grid"></div>
-
-    <div class="ph-section-title">Top Business Priorities</div>
-    <div id="priorities-area">
-      <div class="ph-loading" style="padding:20px">
-        <div class="ph-spinner"></div>
-        <div>Loading priorities…</div>
+  <header class="ph-top">
+    <div class="ph-top-main">
+      <a id="back-link" class="ph-back" href="admin-os.html">← Back to AdminOS</a>
+      <div class="ph-title-row">
+        <h1>Platform Health</h1>
+        <span id="status-pill" class="ph-pill unknown" role="status">Loading</span>
       </div>
+      <p class="ph-subtitle">Platform health across marketplace, sellers, buyers, operations and cost</p>
+      <p class="ph-meta" id="computed-at">Loading…</p>
     </div>
-
-    <div class="ph-section-title">Admin Tools</div>
-    <div class="ph-links">
-      <a href="ops-dashboard.html"     class="ph-link-card"><span class="ph-link-icon">📊</span> Ops Dashboard</a>
-      <a href="business-kpi.html"      class="ph-link-card"><span class="ph-link-icon">📈</span> Business KPIs</a>
-      <a href="reliability-center.html" class="ph-link-card"><span class="ph-link-icon">⚡</span> Reliability Center</a>
-      <a href="admin-feedback.html"    class="ph-link-card"><span class="ph-link-icon">💬</span> Feedback & Bugs</a>
-      <a href="moderation.html"        class="ph-link-card"><span class="ph-link-icon">🛡️</span> Moderation</a>
-      <a href="seller-success.html"    class="ph-link-card"><span class="ph-link-icon">🏪</span> Seller Success</a>
-      <a href="monitor.html"           class="ph-link-card"><span class="ph-link-icon">🖥️</span> System Monitor</a>
+    <div class="ph-actions">
+      <button id="refresh-btn" type="button" class="ph-btn primary" disabled>Refresh</button>
     </div>
+  </header>
 
+  <div class="ph-layout">
+    <main class="ph-canvas" id="ph-canvas">
+
+      <section class="ph-kpis" aria-label="Health scores">
+        <article class="ph-kpi overall" data-kpi="overall">
+          <div class="ph-ring" id="overall-ring">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="track" cx="60" cy="60" r="50"/>
+              <circle class="fill" id="overall-fill" cx="60" cy="60" r="50"
+                      stroke-dasharray="314" stroke-dashoffset="314"/>
+            </svg>
+            <div class="ph-ring-label">
+              <span class="score-val" id="overall-score">—</span>
+              <span class="grade-val" id="overall-grade"></span>
+            </div>
+          </div>
+          <div class="ph-overall-text">
+            <h2 class="ph-kpi-label">Overall SOKONI health score</h2>
+            <div class="ph-overall-title" id="overall-title">Computing scores…</div>
+            <div class="ph-overall-sub" id="overall-sub"></div>
+          </div>
+        </article>
+        <div id="kpi-grid"></div>
+      </section>
+
+      <div id="alerts-area" class="ph-alerts" style="display:none"></div>
+
+      <div id="loading-state" class="ph-loading" role="status">
+        <div class="ph-spinner" aria-hidden="true"></div>
+        <div>Loading platform metrics…</div>
+      </div>
+
+      <div id="main-content" style="display:none">
+        <div class="ph-canvas">
+          <section class="ph-card" id="trend-card" aria-labelledby="trend-h">
+            <div class="ph-card-head">
+              <h2 id="trend-h">Health score over time</h2>
+              <span class="ph-card-sub">No history recorded</span>
+            </div>
+            <div id="trend-area"></div>
+          </section>
+
+          <div class="ph-row2">
+            <section class="ph-card" id="breakdown-card" aria-labelledby="breakdown-h">
+              <div class="ph-card-head">
+                <h2 id="breakdown-h">Dimension breakdown</h2>
+                <span class="ph-card-sub">Score out of 100 · weight in overall</span>
+              </div>
+              <div id="breakdown-area"></div>
+            </section>
+            <section class="ph-card" id="priorities-card" aria-labelledby="priorities-h">
+              <div class="ph-card-head">
+                <h2 id="priorities-h">Top business priorities</h2>
+                <span class="ph-card-sub">Ranked by the server · score out of 25</span>
+              </div>
+              <div id="priorities-area"></div>
+            </section>
+          </div>
+
+          <section class="ph-card" aria-labelledby="dims-h">
+            <div class="ph-card-head">
+              <h2 id="dims-h">What drives each score</h2>
+              <span class="ph-card-sub">Inputs reported by the server</span>
+            </div>
+            <div class="ph-scores" id="scores-grid"></div>
+          </section>
+
+          <section aria-labelledby="links-h">
+            <h2 id="links-h" class="sr-only">Related admin tools</h2>
+            <ul class="ph-links">
+              <li><a href="ops-dashboard.html">Ops Dashboard</a></li>
+              <li><a href="business-kpi.html">Business KPIs</a></li>
+              <li><a href="reliability-center.html">Reliability Center</a></li>
+              <li><a href="admin-feedback.html">Feedback &amp; Bugs</a></li>
+              <li><a href="moderation.html">Moderation</a></li>
+              <li><a href="seller-success.html">Seller Success</a></li>
+              <li><a href="monitor.html">System Monitor</a></li>
+            </ul>
+          </section>
+        </div>
+      </div>
+
+      <div id="empty-state" style="display:none" class="ph-empty-state" role="status">
+        <strong>No health data yet</strong>
+        <p>The health service answered but returned no measurable dimension. Scores appear once orders, products and reports exist.</p>
+      </div>
+
+      <div id="error-state" style="display:none" class="ph-error" role="alert">
+        <strong id="error-title">Failed to load health data.</strong>
+        <p id="error-message" class="ph-error-msg"></p>
+        <button id="retry-btn" type="button" class="ph-retry">Retry</button>
+      </div>
+    </main>
+
+    <aside class="ph-card ph-panel" id="details-panel" aria-labelledby="details-h">
+      <h2 id="details-h" class="sr-only">Details</h2>
+      <div class="ph-tabs" role="tablist" aria-label="Details panel">
+        <button type="button" class="ph-tab" role="tab" id="tab-details" aria-controls="tabpanel-details" aria-selected="true">Details</button>
+        <button type="button" class="ph-tab" role="tab" id="tab-evidence" aria-controls="tabpanel-evidence" aria-selected="false" tabindex="-1">Evidence</button>
+        <button type="button" class="ph-tab" role="tab" id="tab-sources" aria-controls="tabpanel-sources" aria-selected="false" tabindex="-1">Sources</button>
+      </div>
+
+      <div role="tabpanel" id="tabpanel-details" aria-labelledby="tab-details">
+        <dl class="ph-fields">
+          <div><dt>Scores computed</dt><dd id="panel-computed">—</dd></div>
+          <div><dt>Priorities computed</dt><dd id="panel-pri-computed">—</dd></div>
+          <div><dt>Firestore index budget</dt><dd id="panel-budget">—</dd></div>
+          <div><dt>Server recommendation</dt><dd id="panel-recommendation">—</dd></div>
+          <div><dt>Who can view</dt><dd>Admin &amp; Super Admin</dd></div>
+          <div><dt>How scores are computed</dt><dd>On demand from live reads on each load; not stored.</dd></div>
+        </dl>
+        <button id="panel-refresh-btn" type="button" class="ph-btn" disabled>Refresh scores</button>
+      </div>
+
+      <div role="tabpanel" id="tabpanel-evidence" aria-labelledby="tab-evidence" hidden>
+        <p class="ph-panel-note" style="margin:0 0 12px">Signals the priorities ranking reads, as returned by the server.</p>
+        <div id="panel-signals"><p class="ph-empty">—</p></div>
+      </div>
+
+      <div role="tabpanel" id="tabpanel-sources" aria-labelledby="tab-sources" hidden>
+        <div id="panel-sources"></div>
+        <p class="ph-panel-note">Collections each score reads, from the health service's code. The response itself does not list them.</p>
+      </div>
+    </aside>
   </div>
 
-  <div id="empty-state" style="display:none" class="ph-empty-state" role="status">
-    <strong>No health data yet</strong>
-    <p>The health service answered but returned no measurable dimension. Scores appear once orders, products and reports exist.</p>
-  </div>
-
-  <div id="error-state" style="display:none" class="ph-error" role="alert">
-    <strong id="error-title">Failed to load health data.</strong>
-    <p id="error-message" class="ph-error-msg"></p>
-    <button id="retry-btn" type="button" class="ph-retry">Retry</button>
-  </div>
-</div>
-
-<div class="ph-footer">
-  SOKONI v2.0 Platform Health · Scores recompute on each page load from live Firestore data
+  <p class="ph-footer">SOKONI Platform Health · Scores recompute on each load from live Firestore data</p>
 </div>
 
 <script src="platform-health-view.js"></script>
+<script>
+/* Details panel tabs (WAI-ARIA tabs pattern: click, Left/Right, Home/End) and the
+   embedded flag. Runs before the module so the panel is usable while loading. */
+(function () {
+  try { if (window.self !== window.top) document.documentElement.classList.add('ph-embedded'); }
+  catch (_) { document.documentElement.classList.add('ph-embedded'); }
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.ph-tab'));
+  function select(t, focus) {
+    tabs.forEach(function (x) {
+      var on = x === t;
+      x.setAttribute('aria-selected', on ? 'true' : 'false');
+      x.tabIndex = on ? 0 : -1;
+      var p = document.getElementById(x.getAttribute('aria-controls'));
+      if (p) p.hidden = !on;
+    });
+    if (focus) t.focus();
+  }
+  tabs.forEach(function (t, i) {
+    t.addEventListener('click', function () { select(t, false); });
+    t.addEventListener('keydown', function (e) {
+      var n = e.key === 'ArrowRight' ? (i + 1) % tabs.length
+        : e.key === 'ArrowLeft' ? (i - 1 + tabs.length) % tabs.length
+        : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : -1;
+      if (n >= 0) { e.preventDefault(); select(tabs[n], true); }
+    });
+  });
+  var src = document.getElementById('panel-sources');
+  if (src && window.SokoniPlatformHealthView) src.innerHTML = window.SokoniPlatformHealthView.sourcesHtml();
+})();
+</script>
 <script type="module">
 /* SDK version MUST match firebase.js (10.12.2).
 
@@ -352,9 +484,13 @@ function start() {
     if (!user) { settled = true; clearTimeout(watchdog); location.href = "login.html?next=platform-health.html"; return; }
     user.getIdTokenResult(true).then((r) => {
       settled = true; clearTimeout(watchdog);
+      const claims = r && r.claims;
+      const back = PHV.backLink(claims);
+      const link = document.getElementById("back-link");
+      if (link) { link.href = back.href; link.textContent = "← " + back.label; }
       /* Same rule as the server's requireAdmin: admin OR superAdmin. Fail closed, and
          say why, instead of silently redirecting. */
-      if (!PHV.isAdminClaims(r && r.claims)) {
+      if (!PHV.isAdminClaims(claims)) {
         const e = new Error("This dashboard is for Admin and Super Admin accounts only.");
         e.code = "permission-denied";
         fail(e, true);

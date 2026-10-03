@@ -50,10 +50,22 @@ function loadView(src) {
 const IDS = ['computed-at', 'overall-fill', 'overall-score', 'overall-grade', 'overall-title',
   'overall-sub', 'alerts-area', 'loading-state', 'main-content', 'scores-grid',
   'priorities-area', 'empty-state', 'error-state', 'error-title', 'error-message', 'retry-btn',
-  'ring-marketplace', 'ring-seller', 'ring-buyer', 'ring-operational', 'ring-cost'];
+  'ring-marketplace', 'ring-seller', 'ring-buyer', 'ring-operational', 'ring-cost',
+  /* redesign 2026-10-04 */
+  'status-pill', 'kpi-grid', 'trend-area', 'breakdown-area', 'refresh-btn', 'panel-refresh-btn',
+  'panel-computed', 'panel-pri-computed', 'panel-budget', 'panel-recommendation', 'panel-signals'];
+/* Regions that carry server-derived content in the data state — the traceability walk
+   reads every digit in these and nowhere else (static copy is checked separately). */
+const DYNAMIC = ['overall-score', 'overall-grade', 'overall-title', 'overall-sub', 'status-pill',
+  'computed-at', 'alerts-area', 'kpi-grid', 'trend-area', 'breakdown-area', 'priorities-area',
+  'scores-grid', 'panel-computed', 'panel-pri-computed', 'panel-budget', 'panel-recommendation',
+  'panel-signals'];
 function fakeDoc() {
   const els = {};
-  IDS.forEach((id) => { els[id] = { id, textContent: '', innerHTML: '', style: {}, onclick: null }; });
+  IDS.forEach((id) => {
+    els[id] = { id, textContent: '', innerHTML: '', style: {}, onclick: null, disabled: false, className: '',
+      attrs: {}, setAttribute(k, v) { this.attrs[k] = String(v); } };
+  });
   els['overall-score'].textContent = DASH;
   els['loading-state'].style.display = 'block';
   els['main-content'].style.display = 'none';
@@ -90,7 +102,43 @@ const ZERO = JSON.parse(JSON.stringify(SUCCESS)); ZERO.overall = { score: 0, gra
 const PRIORITIES = { topPriorities: [
   { name: 'Wallet & Seller Payouts', description: 'Seller balance', totalScore: 18, revenueImpact: 5,
     userDemand: 3, effortInverse: 2, strategic: 5, costInverse: 3, evidenceReady: false,
-    evidenceGate: 'Need ≥50 active sellers (currently 3)' }] };
+    evidenceGate: 'Need ≥50 active sellers (currently 3)' },
+  /* hostile name + no numeric totalScore: escaped, and no bar */
+  { name: '<script>alert(1)</script>Jobs', description: 'Employer dashboard', evidenceReady: true,
+    evidenceGate: 'READY — 22 job-related searches logged' }],
+  recommendation: 'Wallet & Seller Payouts',
+  evidenceSignals: { activeSellerCount: 3, cartToPaidRate: 12.5, jobSearchCount: 22, loyaltyMentions: 1, walletMentions: 2 },
+  computedAt: '2026-10-03T08:00:05.000Z' };
+
+/* Every number a fixture carries, in the forms the view may print (raw, rounded,
+   one decimal) plus digit runs inside server strings. computedAt is excluded: times are
+   rendered inside <time datetime> and checked against the ISO value separately. */
+function fixtureNumbers(...objs) {
+  const out = new Set();
+  const add = (n) => { out.add(String(n)); out.add(String(Math.round(n))); out.add(String(Math.round(n * 10) / 10)); };
+  const walk = (v, k) => {
+    if (k === 'computedAt') return;
+    if (typeof v === 'number' && isFinite(v)) add(v);
+    else if (typeof v === 'string') (v.match(/\d+(?:\.\d+)?/g) || []).forEach((m) => out.add(m));
+    else if (v && typeof v === 'object') Object.keys(v).forEach((kk) => walk(v[kk], kk));
+  };
+  objs.forEach((o) => walk(o));
+  return out;
+}
+/* Constants of the SERVER's formulas, shown as labels: the five overall weights, the
+   0–100 score scale, and the priorities' 25-point maximum (5 criteria × 5). */
+const STATIC_NUMBERS = new Set(['30', '25', '15', '5', '100']);
+function renderedText(doc) {
+  return DYNAMIC.map((id) => doc.els[id].textContent + ' ' + doc.els[id].innerHTML).join(' ')
+    .replace(/<time\b[^>]*>[\s\S]*?<\/time>/g, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+}
+function untraced(doc, ...fixtures) {
+  const ok = fixtureNumbers(...fixtures);
+  return (renderedText(doc).match(/\d+(?:\.\d+)?/g) || []).filter((n) => !ok.has(n) && !STATIC_NUMBERS.has(n));
+}
+const FORBIDDEN = /Nexora|Publish|Save draft|Schedule|Upgrade to Pro|Slack|Export|99\.8%|\$/;
 
 async function run(V, scores, priorities, timeoutMs) {
   const doc = fakeDoc();
@@ -163,6 +211,57 @@ async function suite(V, tag) {
   ({ doc, state } = await run(V, () => Promise.resolve({ data: SUCCESS }), () => Promise.resolve({ data: { topPriorities: [] } })));
   row('priorities empty: honest "No priorities data yet"', doc.els['priorities-area'].innerHTML.includes('No priorities data yet'));
 
+  /* ── redesign 2026-10-04: layout + content integrity ── */
+  ({ doc, state } = await run(V, () => Promise.resolve({ data: SUCCESS })));
+  const kpi = doc.els['kpi-grid'].innerHTML;
+  row('kpi: five dimension cards with server scores', V.CARDS.every((c) => kpi.includes('data-kpi="' + c.id + '"'))
+    && ['64', '70', '81', '90', '55'].every((s) => kpi.includes('>' + s + '<')));
+  row('no sparkline/trend rendered when no series', !/<polyline|ph-spark|ph-trend-chart/.test(kpi + doc.els['trend-area'].innerHTML)
+    && doc.els['trend-area'].innerHTML.includes("Trend history isn't recorded yet"));
+  row('no delta rendered when server returns no comparison', !/ph-delta|vs previous|[▲▼]/.test(kpi));
+  const seen = renderedText(doc).match(/\d+(?:\.\d+)?/g) || [];
+  row('tracer positive control: the walk sees the rendered numbers', ['72', '64', '18', '12.5', '192'].every((n) => seen.includes(n)), seen.join(','));
+  row('every rendered number traces to a fixture field (success)', untraced(doc, SUCCESS, PRIORITIES).length === 0, untraced(doc, SUCCESS, PRIORITIES).join(','));
+  row('pill: known overall gets the server-score label', doc.els['status-pill'].textContent === 'Needs attention');
+  row('breakdown: bar list of server scores, no donut', /class="ph-bars"/.test(doc.els['breakdown-area'].innerHTML)
+    && !/<circle|donut/i.test(doc.els['breakdown-area'].innerHTML) && doc.els['breakdown-area'].innerHTML.includes('width:64%'));
+  const pa = doc.els['priorities-area'].innerHTML;
+  const priRows = pa.split('<li class="ph-top-row">').slice(1);
+  row('top list: bar only when totalScore is numeric', priRows.length === 2 && /ph-bar-fill/.test(priRows[0]) && /width:72%/.test(priRows[0])
+    && !/ph-bar/.test(priRows[1]) && priRows[1].includes('>' + DASH + '<'));
+  row('top list: hostile name escaped', !/<script/i.test(pa) && pa.includes('&lt;script&gt;'));
+  row('panel: computed time is the server ISO value', doc.els['panel-computed'].innerHTML.includes('datetime="2026-10-03T08:00:00.000Z"')
+    && doc.els['panel-pri-computed'].innerHTML.includes('datetime="2026-10-03T08:00:05.000Z"'));
+  row('panel: budget + recommendation + signals from the server', doc.els['panel-budget'].textContent === '192 / 200 indexes'
+    && doc.els['panel-recommendation'].textContent === 'Wallet & Seller Payouts' && doc.els['panel-signals'].innerHTML.includes('12.5%'));
+  row('no forbidden strings in rendered content', !FORBIDDEN.test(renderedText(doc)), (renderedText(doc).match(FORBIDDEN) || [])[0]);
+  row('refresh enabled after data and wired to re-call the server', doc.els['refresh-btn'].disabled === false
+    && doc.els['refresh-btn'].onclick === doc.els['panel-refresh-btn'].onclick && typeof doc.els['refresh-btn'].onclick === 'function');
+  let rc = 0;
+  ({ doc, state } = await run(V, () => { rc++; return Promise.resolve({ data: SUCCESS }); }));
+  const again = await doc.els['refresh-btn'].onclick();
+  row('refresh: re-calls getPlatformHealthScores and re-renders', again === 'data' && rc === 2);
+  const ld = fakeDoc(); V.renderLoading(ld);
+  row('refresh disabled while loading; panel shows —', ld.els['refresh-btn'].disabled === true && ld.els['panel-budget'].textContent === DASH && ld.els['status-pill'].textContent === 'Loading');
+
+  const NULLSIG = JSON.parse(JSON.stringify(PRIORITIES)); NULLSIG.evidenceSignals.cartToPaidRate = null;
+  ({ doc, state } = await run(V, () => Promise.resolve({ data: SUCCESS }), () => Promise.resolve({ data: NULLSIG })));
+  row('panel: null signal renders —, not 0', /Cart → paid rate<\/dt><dd>—</.test(doc.els['panel-signals'].innerHTML));
+
+  ({ doc, state } = await run(V, () => Promise.resolve({ data: PARTIAL })));
+  row('withheld overall: status pill carries no verdict', doc.els['status-pill'].textContent === 'Overall withheld'
+    && !/healthy|attention|critical/i.test(doc.els['status-pill'].textContent));
+  row('withheld: failed KPI card shows — and the server code', /data-kpi="operational" data-known="false"/.test(doc.els['kpi-grid'].innerHTML)
+    && /Could not be computed \(9\)/.test(doc.els['kpi-grid'].innerHTML));
+  row('withheld: unknown dimension has an empty bar and —', /data-dim="operational"[\s\S]*?ph-bar empty[\s\S]*?>—</.test(doc.els['breakdown-area'].innerHTML));
+  row('every rendered number traces to a fixture field (partial)', untraced(doc, PARTIAL, PRIORITIES).length === 0, untraced(doc, PARTIAL, PRIORITIES).join(','));
+
+  ({ doc, state } = await run(V, () => Promise.reject(err('internal', 'boom'))));
+  row('error: KPI grid + panel reset, pill "Not loaded", refresh retries', doc.els['kpi-grid'].innerHTML === ''
+    && doc.els['panel-budget'].textContent === DASH && doc.els['status-pill'].textContent === 'Not loaded'
+    && typeof doc.els['refresh-btn'].onclick === 'function');
+  row('back link by claim', V.backLink({ superAdmin: true }).href === 'super-admin.html' && V.backLink({ admin: true }).href === 'admin-os.html');
+
   /* AdminOS / super-admin chips */
   const ch = V.chipsHtml({ status: 'fulfilled', value: PARTIAL });
   row('chips: unknown dimension renders —, no "/100", no 0', ch.includes('<strong>' + DASH + '</strong>') && !/data-score="0"/.test(ch));
@@ -211,6 +310,50 @@ async function suite(V, tag) {
   const sa = read('super-admin.html');
   ck('super-admin: no data.dimensions / .priorities shape', !/data\.dimensions\|\|/.test(sa) && !/res\.data\.priorities\)/.test(sa));
   ck('super-admin: view loaded and used', sa.includes('<script src="platform-health-view.js"></script>') && /PHV\.prioritiesList\(res\.data\)/.test(sa) && /PHV\.chips\(outcome\.value\)/.test(sa));
+
+  console.log('\nLayout — reference design mapped honestly (static)');
+  const markup = page.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<!--[\s\S]*?-->/g, '');
+  const css = (page.match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
+  ck('layout: header row — h1, subtitle, status pill, computed time, Refresh', /<header class="ph-top">/.test(markup)
+    && /<h1>Platform Health<\/h1>/.test(markup) && /class="ph-subtitle">Platform health across marketplace, sellers, buyers, operations and cost</.test(markup)
+    && ['id="status-pill"', 'id="computed-at"', 'id="refresh-btn"', 'id="back-link"'].every((x) => markup.includes(x)));
+  ck('layout: KPI row (overall + dimension slot), trend, breakdown, top list, drill-down', ['data-kpi="overall"', 'id="kpi-grid"',
+    'id="trend-card"', 'id="trend-area"', 'id="breakdown-card"', 'id="priorities-card"', 'id="priorities-area"', 'id="scores-grid"'].every((x) => markup.includes(x)));
+  ck('layout: right details panel with tabs, fields and Refresh', /<aside class="ph-card ph-panel" id="details-panel"/.test(markup)
+    && /role="tablist"/.test(markup) && (markup.match(/role="tab"/g) || []).length === 3
+    && ['id="panel-computed"', 'id="panel-budget"', 'id="panel-signals"', 'id="panel-sources"', 'id="panel-refresh-btn"', 'Admin &amp; Super Admin'].every((x) => markup.includes(x)));
+  ck('layout: no <nav>, no sidebar, no brand/logo block, no avatar images', !/<nav\b/i.test(markup) && !/sidebar/i.test(markup + css)
+    && !/class="[^"]*\b(logo|brand)/i.test(markup) && !/<img\b/i.test(markup) && !/avatar/i.test(markup + css));
+  ck('layout: no forbidden strings in static markup', !FORBIDDEN.test(markup), (markup.match(FORBIDDEN) || [])[0]);
+  ck('layout: no placeholder figures in static markup (only — before load)', !/>\s*\d[\d.,%]*\s*</.test(markup));
+  /* phone width: every fixed px width outside a min-width media query fits a 320px viewport */
+  const cssMobile = css.replace(/@media\s*\(min-width:[^)]*\)\s*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '');
+  const widths = [...cssMobile.matchAll(/(?:^|[;{\s])(?:width|min-width|flex-basis)\s*:\s*(\d+)px/g)].map((m) => +m[1])
+    .concat([...cssMobile.matchAll(/minmax\(\s*(\d+)px/g)].map((m) => +m[1]));
+  ck('mobile: no fixed width > 288px (320 viewport − 2×16 gutter) outside min-width queries', widths.length > 0 && widths.every((w) => w <= 288), widths.join(','));
+  ck('mobile: overall card stops spanning 2 columns at phone width', /@media \(max-width: 420px\)[\s\S]*?\.ph-kpi\.overall \{ grid-column: auto; \}/.test(css));
+  ck('mobile: page guards horizontal scroll and uses a 16px gutter', /overflow-x:\s*hidden/.test(css) && /--ph-gutter:\s*16px/.test(css));
+  ck('a11y: prefers-reduced-motion and focus-visible styles present', /prefers-reduced-motion:\s*reduce/.test(css) && /:focus-visible/.test(css));
+  ck('a11y: charts carry text — breakdown list labelled, trend empty state is text', /aria-label="Dimension scores out of 100"/.test(VIEW_SRC)
+    && /role="status"><strong>Trend history/.test(VIEW_SRC));
+  ck('data sources: page draws no chart library (no new CDN)', !/chart\.js|chart\.umd|cdnjs|jsdelivr|unpkg/i.test(page));
+
+  console.log('\nNegative control (a) — placeholder sparkline when no series');
+  const SPARK_FROM = "if (!validSeries(series)) return '';";
+  ck('control (a): anchor present once', VIEW_SRC.split(SPARK_FROM).length === 2);
+  const mutA = loadView(VIEW_SRC.replace(SPARK_FROM, 'if (!validSeries(series)) series = [50, 50];'));
+  const arows = await suite(mutA, 'mutant');
+  ck('control (a): row "no sparkline/trend rendered when no series" FAILS', arows['no sparkline/trend rendered when no series'] === false);
+  ck('control (a): unrelated rows still pass (targeted)', arows['success: overall shows server score 72 + grade'] === true);
+
+  console.log('\nNegative control (b) — invented delta');
+  const DELTA_FROM = "if (!isNum(prev) || !isNum(x && x.score)) return '';";
+  ck('control (b): anchor present once', VIEW_SRC.split(DELTA_FROM).length === 2);
+  const mutB = loadView(VIEW_SRC.replace(DELTA_FROM, 'if (!isNum(prev)) prev = (x && x.score) - 11;'));
+  const brows = await suite(mutB, 'mutant');
+  ck('control (b): row "no delta rendered when server returns no comparison" FAILS', brows['no delta rendered when server returns no comparison'] === false);
+  ck('control (b): row "every rendered number traces to a fixture field (success)" FAILS', brows['every rendered number traces to a fixture field (success)'] === false);
+  ck('control (b): unrelated rows still pass (targeted)', brows['success: overall shows server score 72 + grade'] === true);
 
   console.log('\nNegative control — mutant renders unknown as 0');
   const MUT_FROM = 'function fmtScore(v) { return isNum(v) ? String(Math.round(v)) : DASH; }';
