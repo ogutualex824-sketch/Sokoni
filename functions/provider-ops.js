@@ -949,10 +949,17 @@ async function _legalArea(uid, raw) {
   if (raw === null || raw === '') return null;
   const TAX = require('./shared/legal-taxonomy');
   const id = String(raw).trim().toLowerCase();
-  if (!TAX.isArea(id)) throw new HttpsError('invalid-argument', 'That is not a SOKONI Legal practice area.', { code: 'LEGAL_AREA_UNKNOWN' });
+  if (!TAX.isArea(id) && !TAX.isSpecialist(id)) throw new HttpsError('invalid-argument', 'That is not a SOKONI Legal practice area.', { code: 'LEGAL_AREA_UNKNOWN' });
   const ps = await _db().collection('providers').doc(uid).get();
   if (!ps.exists || require('./business-category').categoryOf(ps.data()) !== 'lawyer') {
     throw new HttpsError('failed-precondition', 'Only a verified Legal provider can tag a service with a Legal practice area.', { code: 'LEGAL_AREA_NOT_LEGAL_PROVIDER' });
+  }
+  /* L10: a specialist area (criminal / immigration / tax) on a rate card only once SOKONI confirmed it for this advocate */
+  if (TAX.isSpecialist(id)) {
+    const ls = await _db().collection('legalProviders').doc(uid).get();
+    if (!ls.exists || TAX.specialistConfirmedOf(ls.data()).indexOf(id) < 0) {
+      throw new HttpsError('failed-precondition', 'SOKONI has not confirmed this specialist area for you yet.', { code: 'LEGAL_SPECIALIST_NOT_CONFIRMED' });
+    }
   }
   return id;
 }

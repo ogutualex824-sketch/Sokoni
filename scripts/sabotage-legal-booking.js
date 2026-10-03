@@ -17,6 +17,7 @@ const M = [
     "  requireAuth(req);\n  throw new HttpsError('failed-precondition', 'Legal consultations are booked",
     "  requireAuth(req); await db().collection('legalConsultations').doc('x').set({ ok: 1 });\n  throw new HttpsError('failed-precondition', 'Legal consultations are booked", 'C6'],
   ['any provider may tag a Legal practice area', 'provider-ops.js', "if (!ps.exists || require('./business-category').categoryOf(ps.data()) !== 'lawyer') {", 'if (false) {', 'C10'],
+  ['specialist rate card without confirmation', 'provider-ops.js', "if (!ls.exists || TAX.specialistConfirmedOf(ls.data()).indexOf(id) < 0) {", 'if (false) {', 'C11'],
 ];
 let caught = 0, missed = 0;
 for (const [name, file, a, b, row] of M) {

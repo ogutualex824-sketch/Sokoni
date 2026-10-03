@@ -424,6 +424,8 @@ function _summary(id, lp, now) {
     /* Legal Hub L7: AdminOS tells a LAWYER from a LAW FIRM and sees the canonical practice areas (taxonomy ids). */
     entityType: lp.entityType === 'firm' ? 'firm' : 'advocate',
     practiceAreas: require('./shared/legal-taxonomy').areasOfProfile(lp),
+    specialistRequested: require('./shared/legal-taxonomy').specialistRequestedOf(lp),
+    specialistConfirmed: require('./shared/legal-taxonomy').specialistConfirmedOf(lp),
     firm: lp.entityType === 'firm' && lp.firm ? { registrationNumber: lp.firm.registrationNumber || '', offices: (lp.firm.offices || []).length,
       teamDeclared: (lp.firm.teamDeclared || []).length, teamVerified: false } : null,
     admin: (v.admin && v.admin.status) || 'pending',
@@ -453,6 +455,35 @@ _adminH.legalAdminList = async (req) => {
   const et = _san(req.data && req.data.entityType, 12);
   if (et) rows = ['advocate', 'firm'].includes(et) ? rows.filter((r) => r.entityType === et) : [];
   return { view, advocates: rows, lskIntegration: { available: LSK.available(), statement: LSK.STATUS.reason } };
+};
+
+/* L10 — confirm / revoke a SPECIALIST practice area (criminal law, immigration, tax) for one advocate. Owner decision
+   2026-10-03: these are separately configured, admin-confirmed services. Audited (legalVerificationEvents + adminAudit).
+   Confirming needs the advocate's own request; it never changes booking eligibility (that stays eligibility()). */
+_adminH.legalAdminConfirmSpecialist = async (req) => {
+  const actor = _requireAdmin(req);
+  const d = req.data || {};
+  const uid = _uidArg(d);
+  const TAX = require('./shared/legal-taxonomy');
+  const area = _san(d.area, 40).toLowerCase();
+  if (!TAX.isSpecialist(area)) throw new HttpsError('invalid-argument', 'Not a specialist practice area.', { code: 'NOT_SPECIALIST_AREA' });
+  const confirm = d.confirm === true;
+  const reason = _san(d.reason, 500);
+  if (reason.length < 3) throw new HttpsError('invalid-argument', 'A reason is required (what you checked).');
+  const db = _db(); const ref = db.collection('legalProviders').doc(uid);
+  const evRef = db.collection('legalVerificationEvents').doc();
+  await db.runTransaction(async (txn) => {
+    const s = await txn.get(ref);
+    if (!s.exists) throw new HttpsError('not-found', 'No Legal record for this advocate.');
+    const lp = s.data();
+    if (confirm && TAX.specialistRequestedOf(lp).indexOf(area) < 0) throw new HttpsError('failed-precondition', 'The advocate has not requested this specialist area.', { code: 'NOT_REQUESTED' });
+    const cur = TAX.normalizeSpecialist(lp.specialistConfirmed);
+    const next = confirm ? (cur.indexOf(area) > -1 ? cur : cur.concat([area])) : cur.filter((a) => a !== area);
+    txn.set(ref, { specialistConfirmed: next, updatedAt: _ts() }, { merge: true });
+    txn.set(evRef, { uid, type: confirm ? 'specialist_confirmed' : 'specialist_revoked', area, reason, actor, atMs: Date.now(), createdAt: _ts() });
+  });
+  await db.collection('adminAudit').add({ action: confirm ? 'legal_specialist_confirm' : 'legal_specialist_revoke', targetUid: uid, area, reason, performedBy: actor, createdAt: _ts() }).catch(() => {});
+  return { ok: true, uid, area, confirmed: confirm };
 };
 
 _adminH.legalAdminGet = async (req) => {

@@ -128,6 +128,31 @@ const eligibleVerification = () => ({
   ck('A1', !!rowF && rowF.entityType === 'firm' && JSON.stringify(rowF.practiceAreas) === JSON.stringify(['company-registration', 'term-sheets']) && rowF.firm && rowF.firm.teamVerified === false
     && af.ok && af.ok.advocates.every((x) => x.entityType === 'firm') && af.ok.advocates.length >= 1 && ax.ok && ax.ok.advocates.length === 0,
     'AdminOS list distinguishes LAW FIRM from LAWYER, shows canonical practice areas, filters by type (unknown type → none)', { rowF, n: af.ok && af.ok.advocates.length });
+  /* ── SP: specialist practice areas (owner 10-03: criminal / immigration / tax — separately configured, admin-confirmed) ── */
+  ck('SP0', TAX.AREA_IDS.length === 30 && TAX.SPECIALIST_IDS.length === 3 && TAX.SPECIALIST_IDS.every((x) => TAX.AREA_IDS.indexOf(x) < 0)
+    && JSON.stringify(TAX.specialistRequestedOf({ specializations: ['criminal_law', 'family_law'] })) === JSON.stringify(['criminal-law'])
+    && TAX.specialistConfirmedOf({ specializations: ['criminal_law'] }).length === 0,
+    'specialist areas are a SEPARATE list (the 30 untouched); a legacy criminal_law profile maps to a REQUEST, never a confirmed area');
+  r = await D('legalUpdateProfile', 'adv1', { specialistAreas: ['criminal-law', 'bogus'] });
+  const pubBefore = (await call(run(LH.getLegalProviders), null, {})).ok.providers.find((p) => p.providerId === 'adv1');
+  const fBefore = await list({ specialistArea: 'criminal-law' });
+  const selfConfirm = await D('legalUpdateProfile', 'adv1', { specialistConfirmed: ['criminal-law'] });
+  ck('SP1', !!r.ok && JSON.stringify(DOCS.get('legalProviders/adv1').specialistRequested) === JSON.stringify(['criminal-law'])
+    && JSON.stringify(pubBefore.specialistAreas) === '[]' && JSON.stringify(fBefore) === '[]' && selfConfirm.det && selfConfirm.det.code === 'LEGAL_PROTECTED_FIELD',
+    'an advocate can only REQUEST a specialist area: not public, not filterable, and cannot self-confirm', { req: DOCS.get('legalProviders/adv1').specialistRequested, pub: pubBefore.specialistAreas });
+  const LVs = require(path.join(FN, 'legal-verification.js'));
+  const notAdmin = await call(LVs._adminH.legalAdminConfirmSpecialist, 'adv1', { uid: 'adv1', area: 'criminal-law', confirm: true, reason: 'self' });
+  const unreq = await call(LVs._adminH.legalAdminConfirmSpecialist, 'admin1', { uid: 'adv1', area: 'tax-law', confirm: true, reason: 'checked' }, { admin: true });
+  const ok1 = await call(LVs._adminH.legalAdminConfirmSpecialist, 'admin1', { uid: 'adv1', area: 'criminal-law', confirm: true, reason: 'Checked LSK + court record' }, { admin: true });
+  const pubAfter = (await call(run(LH.getLegalProviders), null, {})).ok.providers.find((p) => p.providerId === 'adv1');
+  const fAfter = await list({ specialistArea: 'criminal-law' });
+  const ev = [...DOCS.keys()].filter((k) => k.startsWith('legalVerificationEvents/')).map((k) => DOCS.get(k)).filter((e) => e.type === 'specialist_confirmed' && e.area === 'criminal-law' && e.actor === 'admin1');
+  ck('SP2', notAdmin.code === 'permission-denied' && unreq.det && unreq.det.code === 'NOT_REQUESTED' && !!ok1.ok
+    && JSON.stringify(pubAfter.specialistAreas) === '["criminal-law"]' && JSON.stringify(fAfter) === '["adv1"]' && ev.length === 1,
+    'only AdminOS confirms a REQUESTED specialist area (audited); then it is public and filterable', { notAdmin: notAdmin.code, unreq: unreq.det, ev: ev.length });
+  await D('legalUpdateProfile', 'adv1', { specialistAreas: [] });
+  const pubW = (await call(run(LH.getLegalProviders), null, {})).ok.providers.find((p) => p.providerId === 'adv1');
+  ck('SP3', JSON.stringify(pubW.specialistAreas) === '[]', 'withdrawing the request hides a confirmed specialist area at once (public = confirmed ∩ requested)', pubW.specialistAreas);
   const agreements = Object.keys(require(path.join(FN, 'legal-agreements.js'))._h), hub = Object.keys(LH._h || {});
   ck('D1', hub.length >= 4 && hub.every((k) => agreements.indexOf(k) < 0) && mine.ok && mine.ok.editable.indexOf('offices') > -1,
     'profile ops are routed by the EXISTING legalDispatch (no new Cloud Function); no name clash with agreement ops', hub);

@@ -1,3 +1,22 @@
+## [2026-10-03] — Legal Hub L10 (server): specialist practice areas (criminal, immigration, tax) — separately configured, admin-confirmed — NOT deployed
+
+- **Owner decision (10-03):** add criminal law, immigration and tax as separately configured services with their own eligibility, not appended to the 30.
+- **functions/shared/legal-taxonomy.js:** a SPECIALIST list (criminal-law, immigration-law, tax-law; eligibility admin_confirmed), outside GROUPS and AREA_IDS (the 30 are unchanged).
+  - Helpers: isSpecialist, normalizeSpecialist, specialistRequestedOf, specialistConfirmedOf. Public = confirmed AND still requested.
+  - Legacy criminal_law / immigration / tax_law become a REQUEST, never confirmed. The generated browser copy carries SPECIALIST.
+- **functions/legal-hub.js:**
+  - Registration and legalUpdateProfile accept specialistAreas as a request only. specialistConfirmed is protected.
+  - The public view and the directory show and filter (specialistArea) confirmed areas only. legalMyProfile returns requested and confirmed.
+- **functions/legal-verification.js:**
+  - New op _adminH.legalAdminConfirmSpecialist (admin; requires the advocate's request; reason required; legalVerificationEvents + adminAudit). It never touches booking eligibility.
+  - _summary carries requested/confirmed for AdminOS.
+- **functions/provider-ops.js:** _legalArea accepts a specialist area only once confirmed for that advocate (LEGAL_SPECIALIST_NOT_CONFIRMED).
+- **Tests:**
+  - test-legal-profile SP0–SP3 (19/0); sabotage-legal-profile 8/8.
+  - test-legal-booking-chain C11 (12/0); sabotage-legal-booking 7/7.
+  - test-legal-verification 93 server rows; test-booking-provider-gate 8/0.
+- **Deploy note:** the legal-verification.js and provider-ops.js pins move (5b).
+
 ## [2026-10-03] — Legal Hub L6 (server): Legal rate cards carry a taxonomy practice area; Legal search coverage proven through the canonical providers gate — NOT deployed
 
 - **functions/provider-ops.js:** providerAddService / providerUpdateService / providerDuplicateService accept `legalArea`.

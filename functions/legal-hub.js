@@ -60,7 +60,8 @@ exports.registerLegalProvider = onCall(CF_OPTS, async (req) => {
     ? specializations.filter(s => LEGAL_SPECIALIZATIONS.includes(s)).slice(0, 5)
     : [];
   const practiceAreas = TAX.normalizeAreas(d.practiceAreas);
-  if (!specs.length && !practiceAreas.length) throw new HttpsError('invalid-argument', 'Choose at least one practice area');
+  const specialistRequested = TAX.normalizeSpecialist(d.specialistAreas);   /* L10: requested only — SOKONI confirms */
+  if (!specs.length && !practiceAreas.length && !specialistRequested.length) throw new HttpsError('invalid-argument', 'Choose at least one practice area');
 
   const existing = await db().collection('legalProviders').where('uid', '==', uid).limit(1).get();
   if (!existing.empty) throw new HttpsError('already-exists', 'Profile already exists');
@@ -74,7 +75,7 @@ exports.registerLegalProvider = onCall(CF_OPTS, async (req) => {
     providerId: uid, uid,
     entityType,
     name: san(name, 120), firmName: san(firmName, 120),
-    specializations: specs, practiceAreas, licenseNumber: san(licenseNumber, 60),
+    specializations: specs, practiceAreas, specialistRequested, specialistConfirmed: [], licenseNumber: san(licenseNumber, 60),
     ...(entityType === 'firm' ? { firm: {
       registrationNumber: san(d.firmRegistrationNumber, 60), description: san(d.firmDescription, 2000),
       offices: _offices(d.offices), representativeRole: san(d.representativeRole, 60),
@@ -158,6 +159,8 @@ exports.getLegalProviders = onCall(CF_OPTS, async (req) => {
   if (area) providers = TAX.isArea(area) ? providers.filter(p => p.practiceAreas.includes(area)) : [];
   if (group) providers = TAX.isGroup(group) ? providers.filter(p => p.practiceGroups.includes(group)) : [];
   if (et) providers = ENTITY_TYPES.includes(et) ? providers.filter(p => p.entityType === et) : [];
+  const sp = req.data.specialistArea;
+  if (sp) providers = TAX.isSpecialist(sp) ? providers.filter(p => (p.specialistAreas || []).includes(sp)) : [];
   if (county) providers = providers.filter(p => (p.county || '').toLowerCase().includes(county.toLowerCase()));
   if (isOnline) providers = providers.filter(p => p.isOnline);
 
@@ -175,6 +178,8 @@ function _publicAdvocate(p, now) {
   return { providerId: p.providerId, name: p.name, firmName: p.firmName,
     entityType: p.entityType === 'firm' ? 'firm' : 'advocate',
     specializations: p.specializations, practiceAreas: areas, practiceGroups: TAX.groupsOf(areas), county: p.county,
+    /* L10: specialist areas are public only once SOKONI confirmed them for this advocate */
+    specialistAreas: TAX.specialistConfirmedOf(p),
     offices: p.entityType === 'firm' && p.firm ? p.firm.offices || [] : undefined,
     bio: p.bio || '',
     consultationFee: Number(p.consultationFee) > 0 ? p.consultationFee : null, currency: p.currency,
@@ -301,7 +306,7 @@ const _h = {};
    name / licenseNumber / firmName / entityType / firm.registrationNumber identify the advocate or firm that SOKONI
    and the LSK check verified — a change there is a re-verification, done through AdminOS, never self-service;
    status / verification / rating / counts are server-owned. */
-const SELF_EDITABLE = ['bio', 'location', 'county', 'languages', 'isOnline', 'practiceAreas', 'consultationFee', 'yearsOfExperience', 'phone'];
+const SELF_EDITABLE = ['bio', 'location', 'county', 'languages', 'isOnline', 'practiceAreas', 'specialistAreas', 'consultationFee', 'yearsOfExperience', 'phone'];
 const FIRM_EDITABLE = ['description', 'offices', 'team'];
 
 function _selfPatch(cur, d) {
@@ -323,6 +328,9 @@ function _selfPatch(cur, d) {
     if (!a.length) throw new HttpsError('invalid-argument', 'Choose at least one practice area');
     p.practiceAreas = a;
   }
+  /* L10: a specialist area is REQUESTED here; only AdminOS confirms it. Dropping a request hides it publicly at once
+     (public = confirmed ∩ requested), so a withdrawn specialism never lingers on the storefront. */
+  if ('specialistAreas' in d) p.specialistRequested = TAX.normalizeSpecialist(d.specialistAreas);
   if (cur.entityType === 'firm') {
     const f = Object.assign({}, cur.firm || {});
     let touched = false;
@@ -333,7 +341,7 @@ function _selfPatch(cur, d) {
   }
   return p;
 }
-const PROTECTED = ['name', 'licenseNumber', 'firmName', 'entityType', 'firmRegistrationNumber', 'status', 'verification', 'rating', 'ratingCount', 'uid', 'providerId'];
+const PROTECTED = ['name', 'licenseNumber', 'firmName', 'entityType', 'firmRegistrationNumber', 'status', 'verification', 'rating', 'ratingCount', 'uid', 'providerId', 'specialistConfirmed', 'firmUid', 'firmMembershipStatus'];
 
 _h.legalMyProfile = async (req) => {
   const uid = requireAuth(req);
@@ -345,6 +353,7 @@ _h.legalMyProfile = async (req) => {
     exists: true,
     profile: Object.assign(_publicAdvocate(p, now), {
       phone: p.phone || '', location: p.location || '', licenseNumber: p.licenseNumber || '',
+      specialistRequested: TAX.specialistRequestedOf(p), specialistConfirmed: TAX.specialistConfirmedOf(p),
       firm: p.entityType === 'firm' ? { registrationNumber: (p.firm && p.firm.registrationNumber) || '', description: (p.firm && p.firm.description) || '',
         offices: (p.firm && p.firm.offices) || [], team: (p.firm && p.firm.teamDeclared) || [], teamVerified: false } : null,
     }),

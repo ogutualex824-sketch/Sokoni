@@ -10,6 +10,8 @@ const M = [
   ['unknown practice area ignored (shows everyone)', 'legal-hub.js', "if (area) providers = TAX.isArea(area) ? providers.filter(p => p.practiceAreas.includes(area)) : [];", "if (area && TAX.isArea(area)) providers = providers.filter(p => p.practiceAreas.includes(area));", 'P1'],
   ['firm application not typed for AdminOS', 'legal-hub.js', "applicationType: entityType === 'firm' ? 'law_firm' : 'lawyer',", "applicationType: 'lawyer',", 'R2'],
   ['legacy criminal_law guessed onto litigation', 'shared/legal-taxonomy.js', 'criminal_law: null,', "criminal_law: 'litigation-support',", 'T3'],
+  ['public shows REQUESTED specialist areas', 'legal-hub.js', 'specialistAreas: TAX.specialistConfirmedOf(p),', 'specialistAreas: TAX.specialistRequestedOf(p),', 'SP1'],
+  ['specialist confirmed without the advocate request', 'legal-verification.js', "if (confirm && TAX.specialistRequestedOf(lp).indexOf(area) < 0) throw", 'if (false) throw', 'SP2'],
 ];
 let caught = 0, missed = 0;
 for (const [name, file, a, b, row] of M) {

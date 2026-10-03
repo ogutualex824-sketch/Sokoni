@@ -65,6 +65,36 @@ const GROUPS = Object.freeze([
 const AREA = Object.freeze(GROUPS.reduce((m, g) => { g.services.forEach((s) => { m[s.id] = Object.freeze({ id: s.id, label: s.label, group: g.id }); }); return m; }, {}));
 const AREA_IDS = Object.freeze(Object.keys(AREA));
 
+/* SPECIALIST practice areas (owner decision 2026-10-03): criminal law, immigration and tax are added as SEPARATELY
+   CONFIGURED services — NOT appended to the 30. Each carries its own eligibility rule: an advocate may REQUEST it, but it is
+   public, filterable and usable on a rate card only once SOKONI (AdminOS) CONFIRMS it for that advocate
+   (legalProviders.specialistConfirmed, written only by legal-verification _adminH.legalAdminConfirmSpecialist). */
+const SPECIALIST = Object.freeze([
+  { id: 'criminal-law', label: 'Criminal Law', icon: '🏛️', eligibility: 'admin_confirmed', note: 'Criminal defence and representation' },
+  { id: 'immigration-law', label: 'Immigration', icon: '🌍', eligibility: 'admin_confirmed', note: 'Visas, permits and citizenship' },
+  { id: 'tax-law', label: 'Tax Law', icon: '🧾', eligibility: 'admin_confirmed', note: 'Tax advisory, disputes and compliance' },
+].map((x) => Object.freeze(x)));
+const SPECIALIST_IDS = Object.freeze(SPECIALIST.map((x) => x.id));
+const isSpecialist = (id) => SPECIALIST_IDS.indexOf(String(id || '')) > -1;
+function normalizeSpecialist(input) {
+  if (!Array.isArray(input)) return [];
+  const out = [];
+  for (const v of input) { const id = typeof v === 'string' ? v.trim().toLowerCase() : ''; if (isSpecialist(id) && out.indexOf(id) < 0) out.push(id); }
+  return out;
+}
+/* Legacy profiles that carried these specialisations are mapped to a REQUEST (never to a confirmed area). */
+const LEGACY_TO_SPECIALIST = Object.freeze({ criminal_law: 'criminal-law', immigration: 'immigration-law', tax_law: 'tax-law' });
+function specialistRequestedOf(p) {
+  const own = normalizeSpecialist(p && p.specialistRequested);
+  (p && Array.isArray(p.specializations) ? p.specializations : []).forEach((s) => { const a = LEGACY_TO_SPECIALIST[s]; if (a && own.indexOf(a) < 0) own.push(a); });
+  return own;
+}
+/** What may be shown publicly: CONFIRMED and still requested. */
+function specialistConfirmedOf(p) {
+  const req = specialistRequestedOf(p);
+  return normalizeSpecialist(p && p.specialistConfirmed).filter((a) => req.indexOf(a) > -1);
+}
+
 /* Old 15-value list (legal-hub.js before L1). One-to-one matches only. */
 const LEGACY_TO_AREA = Object.freeze({
   family_law: 'family-law', employment_law: 'employment-law', debt_recovery: 'debt-recovery',
@@ -106,4 +136,5 @@ function isArea(id) { return !!AREA[id]; }
 function isGroup(id) { return GROUPS.some((g) => g.id === id); }
 
 module.exports = { GROUPS, AREA, AREA_IDS, LEGACY_TO_AREA, LEGACY_SPECIALIZATIONS, MAX_AREAS,
-  normalizeAreas, areasOfProfile, groupOf, groupsOf, isArea, isGroup };
+  normalizeAreas, areasOfProfile, groupOf, groupsOf, isArea, isGroup,
+  SPECIALIST, SPECIALIST_IDS, LEGACY_TO_SPECIALIST, isSpecialist, normalizeSpecialist, specialistRequestedOf, specialistConfirmedOf };

@@ -82,6 +82,13 @@ console.log('\nLegal Hub L4 — Legal consultation on the canonical booking + se
   ck('C10', !!newSvc && newSvc.legalArea === 'term-sheets' && sB.det && sB.det.code === 'LEGAL_AREA_UNKNOWN'
     && sC.det && sC.det.code === 'LEGAL_AREA_NOT_LEGAL_PROVIDER' && before === after && !!sD.ok && DOCS.get('providerServices/' + sA.ok.serviceId).legalArea === undefined,
     'Legal rate card carries a taxonomy practice area; unknown area refused; a non-Legal provider cannot claim one (nothing written); null clears it', { sA, sB: sB.det, sC: sC.det, sD });
+  /* C11 — a specialist area on a rate card only once SOKONI confirmed it (owner 10-03) */
+  await call(require(path.join(FN, 'legal-dispatch.js')).legalDispatch.run.bind(null), 'adv', { op: 'legalUpdateProfile', specialistAreas: ['tax-law'] });
+  const t1 = await call(PO._h.providerAddService, 'adv', { name: 'Tax dispute', price: 800000, priceType: 'fixed', legalArea: 'tax-law' });
+  await call(LV._adminH.legalAdminConfirmSpecialist, 'admin1', { uid: 'adv', area: 'tax-law', confirm: true, reason: 'Verified tax practice' }, { admin: true });
+  const t2 = await call(PO._h.providerAddService, 'adv', { name: 'Tax dispute', price: 800000, priceType: 'fixed', legalArea: 'tax-law' });
+  ck('C11', t1.det && t1.det.code === 'LEGAL_SPECIALIST_NOT_CONFIRMED' && !!t2.ok && DOCS.get('providerServices/' + t2.ok.serviceId).legalArea === 'tax-law',
+    'a specialist practice area (tax) is refused on a rate card until AdminOS confirms it, then allowed', { t1: t1.det, t2 });
   r = await call(run(LH.bookLegalConsultation), 'cust', { providerId: 'adv', dateTime: new Date(Date.now() + 86400000).toISOString(), matter: 'x', idempotencyKey: 'old1' });
   ck('C6', r.code === 'failed-precondition' && r.det && r.det.code === 'LEGAL_BOOKING_MOVED' && ![...DOCS.keys()].some((k) => k.startsWith('legalConsultations/')),
     'the retired Legal-only booking engine refuses and writes nothing (no legalConsultations, no money-less "booking")', r);
