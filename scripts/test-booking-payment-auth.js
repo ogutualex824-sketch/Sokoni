@@ -1,5 +1,6 @@
 /* Authorization tests for bookingCreate payment verification.
  *
+ * 2026-10-03: bookingCreate now refuses EVERY client-supplied paymentId (see functions/booking.js).
  * bookingCreate previously set paymentStatus from the TRUTHINESS of a
  * client-supplied paymentId, so any authenticated caller could send
  * { paymentId: 'x' } and receive a paid booking. These tests assert the server
@@ -65,35 +66,28 @@ const t = (n, v) => { v ? (pass++, console.log('  PASS  ' + n)) : (fail++, conso
 (async () => {
   const GOOD = { status: 'COMPLETE', uid: 'buyer1', amount: 5000 };
 
-  console.log('\n=== forgery attempts must NOT produce a paid booking ===');
-  let r = await run({ paymentId: 'totally-made-up', payments: {} });
-  t('invented reference rejected', r.paymentStatus === 'awaiting' && r.paymentNote === 'payment_not_found');
-  t('invented reference not stored as paymentId', r.verifiedPaymentId === null);
-
-  r = await run({ paymentId: 'p1', payments: { p1: { ...GOOD, uid: 'someone_else' } } });
-  t("another customer's payment rejected", r.paymentStatus === 'awaiting' && r.paymentNote === 'ownership_mismatch');
-
-  r = await run({ paymentId: 'p1', payments: { p1: { ...GOOD, status: 'PENDING' } } });
-  t('unpaid payment rejected', r.paymentNote === 'payment_not_terminal');
-
-  r = await run({ paymentId: 'p1', payments: { p1: { ...GOOD, status: 'REFUNDED' } } });
-  t('refunded payment rejected', r.paymentNote === 'payment_reversed');
-
-  r = await run({ paymentId: 'p1', payments: { p1: { ...GOOD, amount: 500 } }, total: 5000 });
-  t('cheaper payment replayed on expensive slot rejected', r.paymentNote === 'amount_short');
-
-  console.log('\n=== a genuine payment must still succeed (no false negative) ===');
-  r = await run({ paymentId: 'p1', payments: { p1: GOOD } });
-  t('valid payment accepted', r.paymentStatus === 'paid' && r.verifiedPaymentId === 'p1');
-
-  r = await run({ paymentId: 'p1', payments: { p1: { ...GOOD, amountCents: 500000, amount: undefined } } });
-  t('amountCents honoured', r.paymentStatus === 'paid');
-
-  r = await run({ paymentId: 'p1', payments: { p1: { ...GOOD, amount: 9999 } } });
-  t('overpayment accepted', r.paymentStatus === 'paid');
+  /* 2026-10-03 (venue money-path audit): a client-supplied paymentId NEVER pays a booking — not even a genuine, sufficient
+     payment of the caller's own, because nothing tied it to THIS booking (a marketplace payment or one already used elsewhere
+     passed) and the venue settlement was never created. A venue booking is paid only through its own intent + verified
+     webhook. Every route below must leave the booking awaiting, with no stored paymentId. */
+  console.log('\n=== EVERY client-supplied paymentId is refused ===');
+  const cases = [
+    ['invented reference', { paymentId: 'totally-made-up', payments: {} }],
+    ["another customer's payment", { paymentId: 'p1', payments: { p1: { ...GOOD, uid: 'someone_else' } } }],
+    ['unpaid payment', { paymentId: 'p1', payments: { p1: { ...GOOD, status: 'PENDING' } } }],
+    ['refunded payment', { paymentId: 'p1', payments: { p1: { ...GOOD, status: 'REFUNDED' } } }],
+    ['cheaper payment replayed on expensive slot', { paymentId: 'p1', payments: { p1: { ...GOOD, amount: 500 } }, total: 5000 }],
+    ["the caller's OWN genuine, sufficient payment (the old hole: not tied to this booking)", { paymentId: 'p1', payments: { p1: GOOD } }],
+    ['an overpayment', { paymentId: 'p1', payments: { p1: { ...GOOD, amount: 9999 } } }],
+  ];
+  for (const [label, args] of cases) {
+    const r = await run(args);
+    t(label + ' -> awaiting, not stored, note client_payment_not_accepted',
+      r.paymentStatus === 'awaiting' && r.verifiedPaymentId === null && r.paymentNote === 'client_payment_not_accepted');
+  }
 
   console.log('\n=== no payment supplied ===');
-  r = await run({ paymentId: null, payments: {} });
+  const r = await run({ paymentId: null, payments: {} });
   t('no paymentId -> awaiting, no note', r.paymentStatus === 'awaiting' && r.paymentNote === null);
 
   console.log('\n' + (fail ? fail + ' FAILED of ' + (pass + fail) : 'ALL ' + pass + ' PASSED'));

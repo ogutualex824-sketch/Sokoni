@@ -1,3 +1,9 @@
+## 2026-10-03 — Security: bookingCreate refuses every client-supplied paymentId (venue money-path audit, defect A) (NOT deployed)
+
+- **Defect:** any of the caller's terminal payments that covered the total (a marketplace payment, or one already used for another booking) marked a venue booking paid with no venueSettlements row, so the owner was never paid and a refund could target a foreign payment.
+- **Fix:** venue bookings are paid only via their own intent + verified webhook.
+- **Test:** test-booking-payment-auth 8/0 (base fails 7).
+
 ## 2026-10-03 — Sports match reminders: 24h + 3h, idempotent, reschedule-aware (NOT deployed)
 
 - **New:** sports.js remindFixtures + sportsFixtureReminders (every 15 min).
