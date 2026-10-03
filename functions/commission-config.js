@@ -224,6 +224,16 @@ const PLAN_MAX_DISCOUNT = 50;    /* no plan may take more than half the commissi
 const PLAN_ADJUSTMENTS_DOC = 'plan_adjustments';   /* revenueConfig/plan_adjustments */
 
 /** Is the plan-discount rollout switched on at all? Absent config => NO. Fail closed. */
+/* SERVICE BOOKING categories (owner 2026-10-03: a flat 5 % "for all", the plan ladder retired). A subscription plan
+   must never move these rates — not the provider ladder, and not a seller-plan discount (features.commission_discount_pct
+   / revenueConfig/plan_adjustments) if that rollout is ever switched on. finos-utils skips the plan step for them and
+   records planSkipped 'flat_booking_rate'. */
+const FLAT_BOOKING_CATEGORIES = Object.freeze(['services', 'home_services', 'car_rental', 'healthcare', 'entertainment_bookings', 'fitness']);
+function isFlatBookingCategory(key) {
+  const r = resolveRate(key);
+  return r.matched === true && FLAT_BOOKING_CATEGORIES.indexOf(r.category) !== -1;
+}
+
 function planRolloutEnabled(cfg) {
   return !!(cfg && cfg.enabled === true);
 }
@@ -751,6 +761,8 @@ module.exports = {
   listCategories,
   isFixedRateCategory,
   isFloorExemptFixedCategory,
+  isFlatBookingCategory,
+  FLAT_BOOKING_CATEGORIES,
   FIXED_RATE_FLOOR_EXEMPT,
   FIXED_RATE_CATEGORIES,
   resolveProviderRate,

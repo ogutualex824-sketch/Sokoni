@@ -560,3 +560,15 @@ It only reverses settled bookings, full reversals only (partial is not decided),
   - The `_settlementMath` comment now states the flat 5%.
 - **Snapshot** regenerated: services / home_services / car_rental / healthcare all 5.
 - **Tests:** commission-schedule 25/0 (S1, S6, S8 updated), healthcare-payment-convergence 40/0, healthcare-subscription-foundation 120/0, provider-plan-ladder 38/0, entertainment 95/0, reversal 7/0, membership 53/0.
+
+### 14.3 · No plan may move a service booking (2026-10-03, sokoni-b2's census finding)
+
+- **Finding.** `sub-billing.js` provider plans still carry `features.commission_pct`, and seller plans carry `commission_discount_pct`.
+  - `commission_pct` has NO reader; it appears only in comments in commission-config and money-authority.
+  - `commission_discount_pct` IS read by `finos-utils._resolveSellerPlan` in the plan-adjustment step. That step is off today (`revenueConfig/plan_adjustments.enabled` absent → `rollout_disabled`). If switched on, it could discount a provider's service booking below 5%: a ladder by the back door.
+- **Fix.**
+  - `commission-config.FLAT_BOOKING_CATEGORIES` = services, home_services, car_rental, healthcare, entertainment_bookings, fitness. `isFlatBookingCategory()` follows aliases.
+  - In `finos-utils` the plan step stands down for them, recording `planSkipped: 'flat_booking_rate'`, before any subscription lookup.
+- **Tests.** `test-pos-fixed-rate-bypass` B1–B2 (32/0), with plan discounts switched ON: services / home_services / healthcare / car-rental all stay KES 50 on KES 1,000.
+  - Sabotage (services dropped from the list) → B1 and B2 FAIL.
+  - Marketplace / product / POS are not flat (B1).

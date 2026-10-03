@@ -1,3 +1,8 @@
+## 2026-10-03 — No subscription plan may discount or surcharge a service booking (NOT deployed)
+
+- **Change:** commission-config FLAT_BOOKING_CATEGORIES; finos-utils plan step skips them (planSkipped flat_booking_rate).
+- **Tests:** pos-fixed-rate-bypass 32/0 (B1-B2 with plan discounts enabled); sabotage detected.
+
 ## 2026-10-03 — Car rental + healthcare bookings 5%; clawback debt policy confirmed; seller-terms fee table updated (NOT deployed)
 
 - **Rates:** commission-config car_rental 16→5 and healthcare 12→5; snapshot regenerated.
