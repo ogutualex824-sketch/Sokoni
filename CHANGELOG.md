@@ -1,3 +1,30 @@
+## [2026-10-03] — SECURITY: the scorecard reports only what it measured; MFA counted correctly; AdminOS admins can read it — NOT deployed
+
+- **functions/security-audit.js `_computeScorecard`:**
+  - **Basis on every dimension:** each one now carries `basis`:
+    - `measured`: computed from live records now.
+    - `declared`: one of the 6 static self-assessments (App Check, Firestore rules, Secret Manager, rate limiting, encryption, headers). These are NOT measured.
+    - `unreadable`: the check failed, so the score is null. Previously it ASSUMED 5–7/10.
+    - `no_data`: there is nothing to measure. Device trust previously assumed 80%; payments and incident response previously assumed a perfect rate.
+  - **Total:** `totalScore`/`grade` cover measured dimensions only (null when none could be measured). New fields: `scoreBasis: 'measured_only'`, `coverage`, `mfa`, `privileged`, and per-dimension `metrics`.
+- **MFA adoption (bug):** it queried `securityMFA where enrolled == true`, a field confirmTOTPEnrollment NEVER writes, so it always read 0.
+  - It also mixed populations: all enrolments were divided by admins only, capped at 100%.
+  - Now it counts the privileged users' OWN `securityMFA/{uid}` docs through the ONE predicate `shared/mfa-enrollment.js` (exists && pending !== true).
+  - getMFAStatus and the pen-test MFA row use the same predicate.
+- **Authorization (bug):** `_roleLevel` read only `token.role`, but AdminOS admins carry the server-set `{admin:true}` / `{superAdmin:true}` claims (admin-os.js setUserRole). So every security-audit callable refused every AdminOS admin, and security-center.html fell back to invented numbers. The stronger of claim and role now wins, and a client can set neither.
+- **getComplianceReport:**
+  - Controls are graded only from MEASURED dimensions. Declared ones become `declared` and unmeasured ones `unverified`; both are listed as gaps, never passes.
+  - `complianceScore` is null (not 0) when nothing is measurable. The old `?? 5` / `?? 0` defaults are removed.
+- **scheduledDailySecurityReport:**
+  - `null < 70` is true in JS, so an unmeasurable score is now its own alert reason ("could not be measured"), never "below threshold (null/100)".
+  - The failure fallback is null, not a fabricated 0 / D.
+- **Database / rules / API:**
+  - No new collections and no rules change.
+  - API additions to getSecurityScorecard: `scoreBasis`, `coverage`, `mfa`, `privileged`, plus `basis`/`metrics` per dimension.
+  - Behaviour change: a dimension's `score` can be null, and the totals cover measured dimensions only.
+- **Tests:** scripts/test-security-scorecard.js 7/0, SABOTAGE 7/7.
+- **Consumers to update (hosting):** security-center.html read `r.overall || 86`, but the server sends `totalScore`, so the page always showed 86. It also renders hard-coded domains and compliance figures. executive-dashboard.html has static security domain fallbacks. Both are fixed on the hosting branch with the AdminOS Security redesign.
+
 ## [2026-10-03] — G7: the brief's lead + quote lifecycles on the ONE lead engine (service-leads.js) — NOT deployed
 
 - **functions/service-leads.js:** new stored statuses qualified / quote_requested / lost; server-derived stage (new → contacted → qualified → quote_requested → quote_sent → negotiating → won | lost · cancelled · expired) and quoteStage (draft → sent → customer_viewed → negotiating → accepted | declined · expired · cancelled) on every list. New ops leadQualify, leadRequestQuote, leadSaveQuoteDraft, leadViewQuote, leadWithdrawQuote, leadMarkLost. Itemised quotes (quantity × unit rate + adjustments + STATED taxes; server-computed total, a client total is only compared → QUOTE_TOTAL_MISMATCH; tax never inferred), scope, fixed payment terms (paid on booking, held until PIN) + note, service snapshot. A marketing quote needs the server marketing approval (MKT_SERVICE_NOT_APPROVED). Accept requires quoteVersion (LEAD_QUOTE_CHANGED) and freezes acceptedQuote; booking prices from it. Idle pre-quote leads expire after 30 days (derived) and stop counting toward the 3-open limit.

@@ -288,3 +288,19 @@ Detection fails the build immediately.
 - [[docs/API]] — Cloud Functions API reference
 - [[docs/WEBHOOK]] — Webhook integration guide
 - [[CHANGELOG]] — Security change history
+
+## Security scorecard: measured, declared, unreadable (2026-10-03)
+
+`getSecurityScorecard` (functions/security-audit.js) labels every dimension with a `basis`. Related: [[Security]] · [[Authentication]] · [[Audit Logs]].
+
+| basis | meaning | counted in `totalScore` |
+|---|---|---|
+| `measured` | computed from live records now | yes |
+| `declared` | a static self-assessment written in code (App Check, rules, Secret Manager, rate limiting, encryption, headers) | **no** |
+| `unreadable` | the check failed; `score: null` | no |
+| `no_data` | nothing to measure yet; `score: null` | no |
+
+- **`totalScore`/`grade`:** computed over measured dimensions only, and `null` when none could be measured. A UI must show `—` for null and must label the score as measured-only.
+- **MFA enrolment:** one predicate, `shared/mfa-enrollment.js`: `securityMFA/{uid}` exists and `pending !== true`. Adoption = privileged users' own docs.
+- **Authorization:** the security callables accept SOKONI's server-set `{admin:true}` / `{superAdmin:true}` claims, as well as a `role` claim.
+- **getComplianceReport:** grades only measured dimensions. Declared and unverified controls are gaps, never passes.
