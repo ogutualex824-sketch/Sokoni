@@ -113,8 +113,9 @@ async function _reviewReportContext(db, entityType, entityId, uid) {
   }
   return {
     reviewKind: kind,
-    targetType: targetType || null,
-    targetId: targetId ? String(targetId).slice(0, 200) : null,
+    /* what the review is ABOUT (the product, or the seller for a seller review) */
+    listingType: targetType || null,
+    listingId: targetId ? String(targetId).slice(0, 200) : null,
     authorUid,
     listingSellerUid,
     excerpt: _reviewExcerpt(r),
@@ -626,8 +627,9 @@ async function _myListingReports(req) {
     reports.push({
       ref: _opaqueRef(d.id),
       entityType: r.entityType, subject: 'review_on_your_listing',
-      listingType: c.targetType || null, listingId: c.targetId || null,
-      moderationState, sellerStatus: _sellerStatusOf(r),
+      listingType: c.listingType || null, listingId: c.listingId || null,
+      /* a seller cannot change somebody else's review: 'needs information' is still under review to them */
+      moderationState, sellerStatus: r.status === 'changes_requested' ? 'under_review' : _sellerStatusOf(r),
       createdAt: _iso(r.createdAt), decidedAt: _iso(r.reviewedAt),
       sellerResponse: SELLER_RESPONSE,
     });
@@ -711,8 +713,8 @@ exports.tsGetReportCase = onCall(OPT, async (req) => {
         exists: true, kind, id: rs.id, status: x.status || null,
         excerpt: _reviewExcerpt(x), excerptAtReport: c.excerpt || null,
         rating: typeof x.rating === 'number' ? x.rating : null,
-        targetType: tType, targetId: tId,
-        targetHref: tId && tType === 'product' ? 'product.html?id=' + encodeURIComponent(String(tId))
+        listingType: tType, listingId: tId,
+        listingHref: tId && tType === 'product' ? 'product.html?id=' + encodeURIComponent(String(tId))
           : (tId && tType === 'seller' ? 'seller-public.html?id=' + encodeURIComponent(String(tId)) : null),
         authorUid: x.authorUid || x.uid || null,
         listingSellerUid: c.listingSellerUid || null,
@@ -1057,9 +1059,9 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
     if (out.reviewKind === 'review' && !out.reviewResult.unchanged && !out.reviewResult.missing && tId) {
       try {
         const sum = await _reviewModeration().recomputeRatingsSummary(db, FieldValue, String(tId));
-        res.ratingsSummary = { status: 'recomputed', targetId: String(tId), avg: sum.avg, count: sum.count };
+        res.ratingsSummary = { status: 'recomputed', listingId: String(tId), avg: sum.avg, count: sum.count };
       } catch (e) {
-        res.ratingsSummary = { status: 'failed', targetId: String(tId) };
+        res.ratingsSummary = { status: 'failed', listingId: String(tId) };
       }
     }
   }

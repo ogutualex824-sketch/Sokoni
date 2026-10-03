@@ -151,7 +151,7 @@ const logsFor = async (reviewId) => (await all('reviewModerationLog')).filter((x
   const c1 = (d1 && d1.context) || {};
   ck('R2 report a REVIEW: one report {uid}_review_{id}, pending; context server-built (author, listing seller, excerpt ≤280 tag-free, target) — client context/status ignored',
     rep1.ok === true && rep1.reportId === id1 && d1 && d1.status === 'pending' && d1.reasonCode === 'fake_review' && d1.severity === 'high'
-      && c1.reviewKind === 'review' && c1.authorUid === 'authorB' && c1.listingSellerUid === 'sellerA' && c1.targetId === 'p1' && c1.targetType === 'product'
+      && c1.reviewKind === 'review' && c1.authorUid === 'authorB' && c1.listingSellerUid === 'sellerA' && c1.listingId === 'p1' && c1.listingType === 'product'
       && c1.excerpt.length <= 280 && !/<b>/.test(c1.excerpt) && /^Absolutely perfect dress buy now/.test(c1.excerpt) && !c1.sellerUid
       && !JSON.stringify(d1).includes('forged') && !JSON.stringify(d1).includes('FORGED'), { rep1, d1 });
 
@@ -190,7 +190,7 @@ const logsFor = async (reviewId) => (await all('reviewModerationLog')).filter((x
   /* V1 — the case: excerpt, target link, the server's actions (uphold — no listing take-down) */
   const case1 = await tryv(TS.tsGetReportCase(as('adm1', { reportId: id1 }, ADMIN)));
   ck('V1 tsGetReportCase on a review report: the review (excerpt, status, target link product.html?id=p1), actions from the server (approve, no takedown, no restore)',
-    case1.review && case1.review.exists && case1.review.status === 'approved' && case1.review.targetHref === 'product.html?id=p1' && /^Absolutely/.test(case1.review.excerpt)
+    case1.review && case1.review.exists && case1.review.status === 'approved' && case1.review.listingHref === 'product.html?id=p1' && /^Absolutely/.test(case1.review.excerpt)
       && case1.target.enforcement === 'review_removal' && case1.actions.includes('approve') && !case1.actions.includes('takedown') && !case1.actions.includes('restore'), case1);
 
   /* U1 — UPHOLD removes the review through the module, in the same transaction; exactly ONE reviewModerationLog */
