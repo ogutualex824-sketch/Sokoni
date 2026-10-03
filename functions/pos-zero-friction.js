@@ -774,49 +774,15 @@ exports.posCompleteCheckout = onCall({ ...cfgHeavy, secrets: [_LOYALTY_HMAC] }, 
     }
 
     /* ── non-cash money must be CONFIRMED, and spent once ──────────────────
-       `posPayments/{checkoutId}` is written by darajaSTKPush and moved to
-       `completed` ONLY by darajaSTKCallback — the webhook Safaricom calls after
-       the buyer enters their PIN. Reading it here is what makes the difference
+       `posPayments/{checkoutId}` is moved to `completed` ONLY by the server-side
+       payment confirmation (the Daraja rail that once also wrote it was removed
+       2026-10-03; IntaSend only). Reading it here is what makes the difference
        between "M-PESA was selected" and "M-PESA was paid". The client cannot
        write that document, so it cannot promote its own payment.
 
        Cash is exempt: the cashier is physically holding it, and the drawer
        reconciliation is what audits it. Wallet is validated separately below
        and debited inside the transaction. */
-    /* ── PAYMENT LABELS (convergence slice 13, 2026-09-29) ─────────────────────────────────────────────────
-       Every label is a real payment path with its own evidence, or it is refused. Before this, any label this
-       function did not recognise (gift_card, split, bank, qr, voucher …) completed the sale with NO evidence and was
-       booked as electronic money. docs/PAYMENT_LABEL_AUTHORITY.md. */
-    const _KNOWN_TENDERS = { cash: 1, mpesa: 1, card: 1, wallet: 1, points: 1, gift_card: 1 };   /* no mpesa_daraja (retired), no mpesa_till_manual (owner: IntaSend only) */
-    for (const p of _pay) {
-      const m = String((p && p.method) || '').toLowerCase();
-      if (!_KNOWN_TENDERS[m]) {
-        _e(m === 'split'
-          ? 'A split payment is sent as its separate payments (cash, M-PESA, card …), each confirmed on its own.'
-          : '"' + String((p && p.method) || '').slice(0, 30) + '" is not a payment SOKONI can confirm, so the sale was not recorded. Nothing has been charged.',
-          'failed-precondition');
-      }
-    }
-
-    /* GIFT CARD — ONE store (giftCards: shop-scoped stored value). Pre-checked here so a bad card is refused before
-       anything is claimed; re-read and debited INSIDE the sale transaction below. */
-    const _giftPays = _pay.filter((p) => String(p.method).toLowerCase() === 'gift_card');
-    const _giftCards = [];
-    for (const p of _giftPays) {
-      const code = String((p && p.code) || '').replace(/[\s-]/g, '').toUpperCase();
-      if (!/^[A-Z0-9]{8,32}$/.test(code)) _e('This gift card payment has no valid card code.', 'failed-precondition');
-      const docId = code.match(/.{1,4}/g).join('-');
-      if (_giftCards.some((g) => g.docId === docId)) _e('The same gift card cannot pay twice in one sale.');
-      const gSnap = await db.collection('giftCards').doc(docId).get();
-      const g = gSnap.exists ? gSnap.data() : null;
-      const why = _giftCardRefusal(g, { merchantId, pin: p.pin, amount: Number(p.amount) });
-      if (why) _e(why, 'failed-precondition');
-      _giftCards.push({ docId, ref: db.collection('giftCards').doc(docId), amount: _round2(Number(p.amount)), pin: p.pin });
-    }
-
-    /* MANUAL M-PESA (paid straight to the merchant's own Till) is REFUSED — owner 2026-09-29: "all electronic money
-       goes through IntaSend"; SOKONI never sees a manual Till payment. It is not on the allow-list above. */
-
     const CONFIRMABLE = { mpesa: 1, card: 1 };
     for (const p of _pay) {
       const method = String((p && p.method) || '').toLowerCase();

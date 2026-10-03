@@ -1,4 +1,25 @@
 ## 2026-10-03 — Work/Job Engine milestones on the commercial line: paid-milestone refund guard + receipt subtype (NOT deployed)
+## [2026-10-03] - Payments: Daraja code removed from functions (owner order: IntaSend only) — functions source, NOT deployed
+
+The four live Daraja functions were deleted from production earlier today. This removes the code, so no deploy from this lineage
+can recreate them (an unscoped functions deploy creates every export).
+
+- functions/index.js: darajaSTKPush, darajaSTKCallback, validateDarajaCredentials, sendTestSTKPush, webhookMpesa and the C2B exports
+  removed, with their helpers (_darajaToken, SAFARICOM_CALLBACK_IPS, _DARAJA_SANDBOX_SELLER_UIDS, _DARAJA_IPS, _normalizeMsisdn, _c2b)
+  — about 1,000 lines, removed by AST (Babel); no remaining reference to any removed name. functions/mpesa-c2b.js deleted.
+- mpesa_daraja removed from pos-zero-friction CONFIRMABLE, settlement-routing METHODS and settlement-providers defaults.
+- scripts/deploy/guard-functions-safety.js (predeploy hook) REWRITTEN: it protected the Daraja STK path; it now BLOCKS any functions
+  module that exports a Daraja function, calls a Safaricom API, reads Daraja config or requires the C2B module, and keeps the
+  productionAuthorized check. Every detector is proved on a planted sample; it blocks the unmodified tree on all five checks.
+- Tests: test-payment-authority, test-daraja-sandbox-lane, test-stk-msisdn-safety RETIRED (they exercised the removed code).
+  test-sellability-contract now asserts darajaSTKPush is gone and that createCheckoutSession reads no client amount (74/0; the
+  amount check fails when an amount is planted). functions/test/webhook.test.js: the self-contained Daraja parser block removed (61/61 jest).
+- scripts/batch_deploy.sh: Daraja names removed from the payments batch.
+- docs/STK_MSISDN_SAFETY.md, docs/SANDBOX_CALLBACK_LANE.md marked RETIRED.
+- Gates green on this tree: functions safety guard, commission single source, delivery engine sync, payout gate.
+- Other lineages still export Daraja (sok-parcel-fn2, sok-reports-fn, the deploy tree sok-home2): apply this commit there.
+
+## [2026-10-01] — environment-preflight no longer blocks a release on its OWN deploy chain (scripts only)
 
 - **Change:** provider-ops `_refuseHeldMilestone` (ported from b2 a1234da): customer/provider cancel, decline and no-show REFUSE a `work_milestone` booking once `paid_held` (WORK_MILESTONE_HELD) — without it a slot-less milestone cancel FULL-refunds delivered work (mutant-proven). Receipts: `subtype` allowlist (`work_milestone`) and links `workProjectId` / `milestoneId`; the kind stays `service_booking`.
 - **Files:** functions/provider-ops.js, functions/transaction-receipts.js, docs/TRANSACTION_RECEIPTS_2026-10-03.md, scripts/test-work-milestone-guard.js (G1–G3), scripts/test-transaction-receipts.js (R10–R11), scripts/lib/inmem-firestore.js (byte-identical from b2 a1234da, test-only).

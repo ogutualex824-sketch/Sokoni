@@ -33,7 +33,7 @@ const DST_RATE = 0.015;
 /** Minimum payout amount to a seller (KES) */
 const MIN_PAYOUT_KES = 100;
 
-/** Maximum STK Push amount per transaction (IntaSend / Daraja limit) */
+/** Maximum STK Push amount per transaction (M-Pesa limit, enforced through IntaSend) */
 const MAX_STK_AMOUNT_KES = 150_000;
 
 /** Maximum refund window in days */

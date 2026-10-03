@@ -19,20 +19,6 @@ function parseIntasendPayload(body) {
   };
 }
 
-function parseMpesaPayload(body) {
-  const cb    = (body && body.Body && body.Body.stkCallback) || body || {};
-  const code  = cb.ResultCode != null ? cb.ResultCode : 1;
-  const items = (cb.CallbackMetadata && cb.CallbackMetadata.Item) || [];
-  const get   = (n) => { const i = items.find((x) => x.Name === n); return i && i.Value; };
-  return {
-    status:     code === 0 ? "COMPLETE" : "FAILED",
-    amount:     get("Amount"),
-    phone:      String(get("PhoneNumber") || ""),
-    mpesaCode:  get("MpesaReceiptNumber"),
-    reference:  cb.CheckoutRequestID || (body && body.TransID) || "",
-    resultDesc: cb.ResultDesc || "",
-  };
-}
 
 /* ─────────────────────────────────────────────────────────────
    IntaSend payload parsing
@@ -94,80 +80,6 @@ describe("IntaSend payload parser", () => {
   test("case-insensitive status matching", () => {
     const lower = { invoice: { invoice_id: "X", state: "complete" }, state: "complete" };
     expect(parseIntasendPayload(lower).status).toBe("COMPLETE");
-  });
-});
-
-/* ─────────────────────────────────────────────────────────────
-   M-Pesa (Daraja STK) payload parsing
-───────────────────────────────────────────────────────────── */
-describe("M-Pesa Daraja payload parser", () => {
-  const successPayload = {
-    Body: {
-      stkCallback: {
-        MerchantRequestID: "29115-34620561-1",
-        CheckoutRequestID: "ws_CO_191220191020363925",
-        ResultCode: 0,
-        ResultDesc: "The service request is processed successfully.",
-        CallbackMetadata: {
-          Item: [
-            { Name: "Amount",             Value: 1500 },
-            { Name: "MpesaReceiptNumber", Value: "NLJ7RT61SV" },
-            { Name: "TransactionDate",    Value: 20191219102115 },
-            { Name: "PhoneNumber",        Value: 254712345678 },
-          ],
-        },
-      },
-    },
-  };
-
-  const cancelledPayload = {
-    Body: {
-      stkCallback: {
-        ResultCode: 1032,
-        ResultDesc: "Request cancelled by user.",
-        CheckoutRequestID: "ws_CO_191220191020363926",
-      },
-    },
-  };
-
-  test("sets status COMPLETE when ResultCode is 0", () => {
-    expect(parseMpesaPayload(successPayload).status).toBe("COMPLETE");
-  });
-
-  test("sets status FAILED when ResultCode is non-zero", () => {
-    expect(parseMpesaPayload(cancelledPayload).status).toBe("FAILED");
-  });
-
-  test("extracts Amount from CallbackMetadata", () => {
-    expect(parseMpesaPayload(successPayload).amount).toBe(1500);
-  });
-
-  test("extracts MpesaReceiptNumber", () => {
-    expect(parseMpesaPayload(successPayload).mpesaCode).toBe("NLJ7RT61SV");
-  });
-
-  test("extracts PhoneNumber as string", () => {
-    expect(parseMpesaPayload(successPayload).phone).toBe("254712345678");
-  });
-
-  test("extracts CheckoutRequestID as reference", () => {
-    expect(parseMpesaPayload(successPayload).reference).toBe("ws_CO_191220191020363925");
-  });
-
-  test("extracts ResultDesc on failure", () => {
-    expect(parseMpesaPayload(cancelledPayload).resultDesc).toBe("Request cancelled by user.");
-  });
-
-  test("handles missing CallbackMetadata gracefully", () => {
-    const p = parseMpesaPayload(cancelledPayload);
-    expect(p.amount).toBeUndefined();
-    expect(p.mpesaCode).toBeUndefined();
-  });
-
-  test("handles empty body gracefully", () => {
-    const p = parseMpesaPayload({});
-    expect(p.status).toBe("FAILED"); // no ResultCode → defaults to failed
-    expect(p.reference).toBe("");
   });
 });
 
