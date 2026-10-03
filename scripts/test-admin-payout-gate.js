@@ -7,6 +7,7 @@
      A3  gate CLOSED: reject still works (it RETURNS the reserved money to the seller)
      A4  POSITIVE CONTROL — gate OPEN: approve passes the gate (reaches the existing approval logic)
      A5  45a837d preserved — gate OPEN: 'paid' on a NON-approved request is still refused (approved-only Mark Paid)
+     A7  an unreadable flag refuses approve (fail closed)
      A6  FAIL-CLOSED network firewall: zero requests to IntaSend (B2C is a recorder)
    NODE_PATH=<functions/node_modules> node scripts/test-admin-payout-gate.js */
 const path = require('path');
@@ -39,6 +40,11 @@ const run = (status, extra) => call((r) => W.adminProcessPayout.run(r), 'admin1'
   ck('A4', !(a4.det && a4.det.code === 'WITHDRAWALS_DISABLED') && DOCS.get('payoutRequests/rq1').status !== 'pending', 'POSITIVE CONTROL — gate OPEN: approve passes the gate into the existing approval logic', [a4, DOCS.get('payoutRequests/rq1').status]);
   seed('pending', true); const a5 = await run('paid');
   ck('A5', !a5.ok && !(a5.det && a5.det.code === 'WITHDRAWALS_DISABLED') && DOCS.get('payoutRequests/rq1').status === 'pending', '45a837d preserved — gate OPEN: Mark Paid on a non-approved request still refused', a5);
+  seed('pending', true);
+  { const fsA = require('firebase-admin/firestore').getFirestore(); const realColl = fsA.collection.bind(fsA); let threw = false;
+    fsA.collection = (c) => { if (c === 'platformConfig') { threw = true; throw new Error('UNAVAILABLE'); } return realColl(c); };
+    const a7 = await run('approved'); fsA.collection = realColl;
+    ck('A7', threw && a7.det && a7.det.code === 'WITHDRAWALS_DISABLED' && DOCS.get('payoutRequests/rq1').status === 'pending', 'an UNREADABLE withdrawal flag refuses approval (fail closed) even though the flag doc says enabled', a7); }
   ck('A6', NET.intasend === 0, 'FAIL-CLOSED: zero requests to IntaSend (B2C recorder calls: ' + B2C.length + ')', NET.urls);
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

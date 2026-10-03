@@ -1,0 +1,31 @@
+{
+  "functions": [
+    {
+      "source": "functions",
+      "predeploy": [
+        "node scripts/deploy/guard-tree-scope.js",
+        "node scripts/gate-functions-require-closure.js",
+        "node scripts/predeploy-syntax-gate.js",
+        "node scripts/verify-commission-single-source.js",
+        "node scripts/verify-delivery-engine-sync.js",
+        "node scripts/predeploy-payout-gate.js"
+      ],
+      "runtime": "nodejs22",
+      "concurrency": 80,
+      "minInstances": 0,
+      "maxInstances": 1000,
+      "memory": "512MiB",
+      "timeoutSeconds": 60,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local",
+        ".env",
+        ".env.*",
+        "test/**"
+      ]
+    }
+  ]
+}

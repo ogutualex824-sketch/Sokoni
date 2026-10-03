@@ -1,0 +1,5 @@
+{
+  "tree": "fix/payout-gate-admin-on-00024",
+  "allow": ["adminProcessPayout"],
+  "why": "wallet.js here = serving 00024-mih (45a837d) + the admin gate; requestSellerPayout / processPayoutRetries here are NOT gated — deploying them from this tree would un-gate withdrawals"
+}
