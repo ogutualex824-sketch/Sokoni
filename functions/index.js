@@ -7545,6 +7545,27 @@ exports.webhookIntasend = onRequest(
          isolation via the server-minted intent; skips all commission/credit/creation. */
       if (await _holdServiceBookingPayment(db, admin, apiRef, existing.intentRef, amount)) { res.status(200).send("OK"); return; }
 
+      /* Rentals (2f b2b8158 · f3 rentals): a rental_booking payment is HELD until the renter's PIN at return — never
+         credited here. Exact gross + IntaSend's own confirmation; a payment for a dead rental is refund_due, never held. */
+      {
+        const { holdRentalBookingPayment } = require("./rental-payment-hold");
+        const _rent = await holdRentalBookingPayment(db, admin, {
+          apiRef, intentRef: existing.intentRef, providerMethod,
+          grossAmount: (invoice.value !== undefined ? invoice.value : req.body?.value),
+          confirm: async (expectedCents) => {
+            const { intasendCollectionStatus } = require("./shared/intasend-status");
+            const { assessProviderConfirmation } = require("./payment-attribution");
+            const _st = await intasendCollectionStatus(String(invoice.invoice_id || req.body?.invoice_id || ""),
+              { privateKey: INTASEND_PRIVATE_KEY.value(), live: process.env.INTASEND_SANDBOX !== "true" });
+            return assessProviderConfirmation(_st, { apiRef, expectedCents });
+          },
+        });
+        if (_rent) {
+          logger.info("[webhookIntasend] rental payment", { ref: apiRef, outcome: _rent.outcome, reason: _rent.reason || null });
+          res.status(200).send("OK"); return;
+        }
+      }
+
       /* ══ D1 FIX (Q6) — financial attribution, resolved ONCE ═════════════════════════
          Everything below that used to read payData.meta directly for WHO gets
          paid or WHAT resource is finalised now reads `attribution` instead.
