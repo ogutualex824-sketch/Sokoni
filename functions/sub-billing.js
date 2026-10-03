@@ -77,6 +77,21 @@ const PLANS = {
   marketing_agency:         { id:'marketing_agency', hubType:'marketing', tier:'agency', name:'Marketing Agency', price:{monthly:499900, annual:null}, trial:{days:0}, grace:{days:3}, isActive:true,
     features:{services_limit:-1,portfolio_limit:-1,team_seats:10,campaigns_limit:-1,advanced_leads:true,quotations:true,invoicing:true,campaign_tools:true,client_management:true,reporting:true} },
 
+  /* ── SPORTS (owner brief 2026-10-03 §18): separate entitlements per Sports ROLE — Team / Venue / Coach / Tournament organiser /
+     Sports business. A FREE plan per role exists now; PAID tiers are added only when the owner prices them (no invented prices).
+     Role is never decided by a subscription: role → capability (sports.js / provider lanes) → entitlement (these plans).
+     Limits are starting values, configurable via adminSubUpdatePlan. ── */
+  sports_team_free:         { id:'sports_team_free', hubType:'sports_team', tier:'free', name:'Sports Team Free', price:{monthly:0, annual:0}, trial:{days:0}, grace:{days:0}, isActive:true,
+    features:{roster_limit:40,tournaments_per_season:3,team_page:true,promotions:false,analytics:false} },
+  sports_venue_free:        { id:'sports_venue_free', hubType:'sports_venue', tier:'free', name:'Sports Venue Free', price:{monthly:0, annual:0}, trial:{days:0}, grace:{days:0}, isActive:true,
+    features:{venues_limit:1,bookable_slots:true,promotions:false,analytics:false} },
+  sports_coach_free:        { id:'sports_coach_free', hubType:'sports_coach', tier:'free', name:'Sports Coach Free', price:{monthly:0, annual:0}, trial:{days:0}, grace:{days:0}, isActive:true,
+    features:{services_limit:3,athletes_limit:20,promotions:false,analytics:false} },
+  sports_tournament_free:   { id:'sports_tournament_free', hubType:'sports_tournament', tier:'free', name:'Tournament Organiser Free', price:{monthly:0, annual:0}, trial:{days:0}, grace:{days:0}, isActive:true,
+    features:{active_tournaments:1,team_capacity_max:16,announcements:true,promotions:false,analytics:false} },
+  sports_business_free:     { id:'sports_business_free', hubType:'sports_business', tier:'free', name:'Sports Business Free', price:{monthly:0, annual:0}, trial:{days:0}, grace:{days:0}, isActive:true,
+    features:{listings_limit:20,promotions:false,analytics:false} },
+
   /* ── SELLERS ── */
   seller_free:       { id:'seller_free',       hubType:'seller',       tier:'free',       name:'Seller Free',       price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ listings_limit:10,   photos_per_listing:3,  featured_listings:0, analytics:false, bulk_import:false, priority_support:false, ai_assistant:false, team_members:1, storage_gb:1,  badge_verified:false }},

@@ -191,6 +191,20 @@ const refused = (x, code) => x.ok === false && (!code || x.code === code);
     refused(await call(A('anyone'), { op: 'tournament.view', tournamentId: draft }), 'failed-precondition')
     && (await call(A('anyone'), { op: 'tournament.view', tournamentId: TR })).r.fixtures.length === 6);
 
+  /* ── verification states (owner brief §14) ── */
+  ck('VS1 a non-admin cannot change verification', refused(await call(A('cap1'), { op: 'admin.teamVerification', teamId: T1, state: 'suspended', reason: 'x' }), 'permission-denied'));
+  ck('VS2 restricting / suspending requires a reason', refused(await call(A('admin1', true), { op: 'admin.teamVerification', teamId: T1, state: 'restricted' }), 'invalid-argument'));
+  await call(A('admin1', true), { op: 'admin.teamVerification', teamId: T1, state: 'suspended', reason: 'Fake documents' });
+  ck('VS3 a suspended team cannot invite players or enter tournaments (history kept)', db._docs.get('teams/' + T1).verification === 'suspended'
+    && refused(await call(A('cap1'), { op: 'team.invite', teamId: T1, playerUid: 'p8' }), 'failed-precondition')
+    && refused(await call(A('cap1'), { op: 'registration.apply', tournamentId: TRF, teamId: T1 }), 'failed-precondition'));
+  await call(A('admin1', true), { op: 'admin.teamVerification', teamId: T1, state: 'verified' });
+  ck('VS4 re-verified → can invite again', (await call(A('cap1'), { op: 'team.invite', teamId: T1, playerUid: 'p8' })).ok);
+  const PL = require(path.join(FN, 'sub-billing.js')).PLANS;
+  ck('VS5 Sports plans: a FREE plan per role (team / venue / coach / tournament / business); no invented paid tier',
+    ['sports_team_free', 'sports_venue_free', 'sports_coach_free', 'sports_tournament_free', 'sports_business_free'].every((id) => PL[id] && PL[id].price.monthly === 0 && PL[id].tier === 'free')
+    && !Object.keys(PL).some((k) => /^sports_/.test(k) && PL[k].tier !== 'free'));
+
   /* ── AdminOS queue ── */
   await call(A('capQ'), { op: 'team.register', name: 'Queue FC', sport: 'football', submit: true });
   const q = await call(A('admin1', true), { op: 'admin.queue' });

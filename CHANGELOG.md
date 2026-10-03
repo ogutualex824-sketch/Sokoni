@@ -1,3 +1,7 @@
+## 2026-10-03 — Sports: verification states (verified / restricted / suspended, admin-only with reason) + a free plan per Sports role (NOT deployed)
+
+- **Tests:** test-sports-authority 61/0, hub-plan-entitlements 17/0.
+
 ## 2026-10-03 — Construction + Marketing catalogue: plans, rental 10%, marketing 10% over the one taxonomy, gated project fee (NOT deployed)
 
 - **Tests:** test-marketing-commercial 5/0, test-construction-commercial 8/0, test-rfq-quote-purpose 7/0.

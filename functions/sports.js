@@ -110,6 +110,29 @@ async function adminTeamDecide (db, adminUid, data, deps) {
   return { ok: true, status: decision };
 }
 
+/* Verification (owner brief §14): pending → verified → restricted / suspended. A restricted or suspended team keeps its history
+   but cannot invite players or enter tournaments. Only an admin moves it (adminTeamVerification), with a reason, audited. */
+const VERIFICATION_STATES = Object.freeze(['pending', 'verified', 'restricted', 'suspended']);
+function _activeTeam (team) { return team.status === 'approved' && !['restricted', 'suspended'].includes(team.verification); }
+async function adminTeamVerification (db, adminUid, data, deps) {
+  const c = _ctx(deps);
+  const state = String(data.state || '');
+  if (!['verified', 'restricted', 'suspended'].includes(state)) fail('invalid-argument', 'state must be verified, restricted or suspended.');
+  const reason = clean(data.reason, 300);
+  if (state !== 'verified' && !reason) fail('invalid-argument', 'A reason is required to restrict or suspend.');
+  const ref = db.collection('teams').doc(String(data.teamId));
+  const out = await db.runTransaction(async (t) => {
+    const s2 = await t.get(ref); if (!s2.exists) fail('not-found', 'Team not found.');
+    const tm = s2.data();
+    if (tm.status !== 'approved') fail('failed-precondition', 'Only an approved team has a verification state.');
+    t.update(ref, { verification: state, verificationReason: reason || null, verificationBy: adminUid, verificationAt: c.ts(), updatedAt: c.ts() });
+    return { ownerUid: tm.ownerUid, name: tm.name };
+  });
+  await _quiet(c.notify && (() => c.notify({ uid: out.ownerUid, type: 'sports_team_decision', title: 'Team ' + state, body: out.name + ' is now ' + state + (reason ? ': ' + reason : '.'),
+    dedupeKey: 'sports_team_verification_' + ref.id + '_' + state + '_' + Date.now().toString(36) })));
+  return { ok: true, verification: state };
+}
+
 function _isLeader (team, uid) { return team.captainUid === uid || team.ownerUid === uid || (Array.isArray(team.managerUids) && team.managerUids.includes(uid)); }
 
 async function teamInvite (db, uid, data, deps) {
@@ -122,7 +145,7 @@ async function teamInvite (db, uid, data, deps) {
     const [ts, ms] = await Promise.all([t.get(teamRef), t.get(mRef)]);
     if (!ts.exists) fail('not-found', 'Team not found.');
     const tm = ts.data();
-    if (tm.status !== 'approved') fail('failed-precondition', 'Only an approved team can invite players.');
+    if (!_activeTeam(tm)) fail('failed-precondition', tm.status !== 'approved' ? 'Only an approved team can invite players.' : 'This team is ' + tm.verification + ' and cannot invite players.');
     if (!_isLeader(tm, uid)) fail('permission-denied', 'Only the captain or a manager can invite players.');
     if (ms.exists && ['invited', 'active'].includes(ms.data().status)) fail('already-exists', 'That player is already invited or on the team.');
     const now = c.ts();
@@ -267,7 +290,7 @@ async function registrationApply (db, uid, data, deps) {
     if (!trS.exists || !tmS.exists) fail('not-found', 'Tournament or team not found.');
     const tr = trS.data(), tm = tmS.data();
     if (!_isLeader(tm, uid)) fail('permission-denied', 'Only the team captain or a manager can register the team.');
-    if (tm.status !== 'approved') fail('failed-precondition', 'Only an approved team can enter a tournament.');
+    if (!_activeTeam(tm)) fail('failed-precondition', tm.status !== 'approved' ? 'Only an approved team can enter a tournament.' : 'This team is ' + tm.verification + ' and cannot enter tournaments.');
     if (tr.status !== 'registration_open') fail('failed-precondition', 'Registration is not open for this tournament.');
     const now = c.now().getTime();
     if (now < tr.regOpensAt || now > tr.regClosesAt) fail('failed-precondition', 'Registration is closed for this tournament.');
@@ -637,6 +660,7 @@ const OPS = {
   'tournaments.open': (db, a, d) => tournamentsOpen(db, d),
   'tournament.view': (db, a, d) => tournamentView(db, d),
   'admin.queue': (db, a) => { if (!a.admin) fail('permission-denied', 'Admins only.'); return adminQueue(db); },
+  'admin.teamVerification': (db, a, d, deps) => { if (!a.admin) fail('permission-denied', 'Admins only.'); return adminTeamVerification(db, a.uid, d, deps); },
   'admin.teamDecide': (db, a, d, deps) => { if (!a.admin) fail('permission-denied', 'Admins only.'); return adminTeamDecide(db, a.uid, d, deps); },
   'admin.tournamentDecide': (db, a, d, deps) => { if (!a.admin) fail('permission-denied', 'Admins only.'); return adminTournamentDecide(db, a.uid, d, deps); },
 };
