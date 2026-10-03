@@ -192,7 +192,7 @@
 </div>
 
 <div class="pg-pricing">
-  <div class="pg-section-title"><h2>💰 Price Guide</h2><span></span><span style="font-size:10px;color:rgba(255,255,255,0.25);">Typical Nairobi rates</span></div>
+  <div class="pg-section-title"><h2>💰 Price Guide</h2><span></span><span style="font-size:10px;color:rgba(255,255,255,0.25);">Guide only — the provider confirms your price when you book</span></div>
   <div class="pg-price-table">
     <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🔌</span>Socket / Switch Install</div><div class="pg-price-range">KES 300 – 700</div></div>
     <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">💡</span>Security Light Install</div><div class="pg-price-range">KES 500 – 1,500</div></div>
@@ -205,15 +205,7 @@
   <p style="font-size:10px;color:rgba(255,255,255,0.22);margin-top:8px;padding:0 4px;">* Prices vary by complexity and location. Get exact quotes by booking below.</p>
 </div>
 
-<div class="pg-reviews">
-  <div class="pg-section-title"><h2>⭐ What Customers Say</h2><span></span></div>
-  <div class="pg-review-grid">
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"ElectroPro wired our new office — clean work, labelled everything and left zero mess. Worth every shilling."</div><div class="pg-review-author">CEO — Tech Startup, Westlands</div></div>
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Solar installation done in one day. System working perfectly. Saved 80% on KPLC bill."</div><div class="pg-review-author">James W. — Karen</div></div>
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★☆</div><div class="pg-review-text">"Fixed a tripping circuit breaker that 3 others couldn't diagnose. Found a hidden fault in the wall. Legend."</div><div class="pg-review-author">Grace M. — South B</div></div>
-    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Installed 8 CCTV cameras and full security lighting for our warehouse. Professional and on time."</div><div class="pg-review-author">Operations Manager — Mombasa Road</div></div>
-  </div>
-</div>
+<!-- Customer reviews of the former hardcoded providers removed (2026-10-03): they were invented. Real reviews appear on each provider's profile. -->
 
 <div style="padding:0 20px 24px;">
   <div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(180,100,0,0.07));border:1px solid rgba(245,158,11,0.22);border-radius:20px;padding:24px 20px;text-align:center;">
@@ -232,62 +224,31 @@
   </div>
 </div>
 
-<div class="pg-modal-overlay" id="pgModalOverlay" onclick="if(event.target===this)closeBooking()">
-  <div class="pg-modal">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-      <h2>📅 Book an Electrician</h2>
-      <button type="button" class="pg-modal-close" onclick="closeBooking()">✕</button>
-    </div>
-    <div class="pg-modal-sub" id="pgModalSub">Fill in the details and a certified electrician will confirm within 30 minutes.</div>
-    <label class="pg-label">Service Type</label>
-    <div class="pg-chips" id="pgChips">
-      <span class="pg-chip sel" data-svc="Wiring" onclick="this.classList.toggle('sel')">🔌 Wiring</span>
-      <span class="pg-chip" data-svc="Solar" onclick="this.classList.toggle('sel')">☀️ Solar</span>
-      <span class="pg-chip" data-svc="Security Lights" onclick="this.classList.toggle('sel')">💡 Security Lights</span>
-      <span class="pg-chip" data-svc="DB Board" onclick="this.classList.toggle('sel')">⚙️ DB Board</span>
-      <span class="pg-chip" data-svc="Generator / Inverter" onclick="this.classList.toggle('sel')">🔋 Generator</span>
-      <span class="pg-chip" data-svc="CCTV Wiring" onclick="this.classList.toggle('sel')">📷 CCTV Wiring</span>
-    </div>
-    <label class="pg-label">Your Name</label>
-    <input class="pg-input" type="text" id="pgName" placeholder="e.g. John Kamau">
-    <label class="pg-label">Phone Number</label>
-    <input class="pg-input" type="tel" id="pgPhone" placeholder="07XXXXXXXX">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <div><label class="pg-label">Date</label><input class="pg-input" type="date" id="pgDate" style="margin-bottom:0;"></div>
-      <div><label class="pg-label">Time</label><input class="pg-input" type="time" id="pgTime" style="margin-bottom:12px;"></div>
-    </div>
-    <label class="pg-label">Location / Address</label>
-    <input class="pg-input" type="text" id="pgAddress" placeholder="e.g. Westlands, Nairobi — Flat 3">
-    <label class="pg-label">Additional Notes (optional)</label>
-    <textarea class="pg-input" id="pgNotes" rows="2" placeholder="e.g. Power keeps tripping at kitchen circuit..." style="resize:none;"></textarea>
-    <button type="button" class="pg-submit-btn" onclick="submitBooking()">📋 Confirm Booking</button>
-    <a href="support.html?topic=booking" class="sk-support-cta" style="display:block;text-align:center;margin-top:8px;padding:11px;border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;text-decoration:none;background:rgba(113,255,0,0.05);">🛟 Need help? Contact Support</a>
-    <div class="pg-modal-msg" id="pgModalMsg"></div>
-  </div>
-</div>
-
 <nav class="bottom-nav" role="navigation" aria-label="Main navigation" data-sokoni-nav></nav>
 
 <script>
-const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-const PROVIDERS = [
-  { id:'EL01', name:'ElectroPro Kenya', emoji:'⚡', location:'nairobi', locationLabel:'Nairobi (All Areas)', rate:'KES 2,000', rateType:'per job', rating:4.9, jobs:380, phone:'0711100101', verified:true, available:true, skills:['Full Wiring','Solar','DB Board','CCTV','Security Lights'], bio:'Master electrician — 9 yrs Nairobi. ERC licensed. Residential & commercial. Own materials.', type:['wiring','solar','db','security','cctv'] },
-  { id:'EL02', name:'SunPower Solar Kenya', emoji:'☀️', location:'nairobi', locationLabel:'Nairobi & Central Kenya', rate:'KES 3,500', rateType:'per job', rating:4.8, jobs:210, phone:'0722100202', verified:true, available:true, skills:['Solar Panels','Inverters','Batteries','Off-Grid','Net Metering'], bio:'Solar specialist — 6 yrs. Design, supply & install. Post-install warranty 1 year.', type:['solar','generator'] },
-  { id:'EL03', name:'James Waweru Electric', emoji:'🔌', location:'nairobi', locationLabel:'Kilimani / Lavington / Karen', rate:'KES 1,500', rateType:'per job', rating:4.8, jobs:290, phone:'0733100303', verified:true, available:true, skills:['Sockets','Switches','Fault Finding','Lighting','Home Wiring'], bio:'Reliable solo electrician — 7 yrs south Nairobi. Fast fault diagnosis. Weekend bookings.', type:['wiring','db','security'] },
-  { id:'EL04', name:'Mombasa Electrics Ltd', emoji:'🏙️', location:'mombasa', locationLabel:'Mombasa & Coastal Region', rate:'KES 2,500', rateType:'per job', rating:4.7, jobs:155, phone:'0744100404', verified:true, available:true, skills:['Industrial','Marine','Hotel Electrical','Solar','Generator'], bio:'Coastal electrical company — 8 yrs. Hotel & industrial contracts. Licensed ERC.', type:['wiring','solar','generator','cctv'] },
-  { id:'EL05', name:'PowerSafe Electricians', emoji:'🛡️', location:'nairobi', locationLabel:'Nairobi CBD & Industrial Area', rate:'KES 4,000', rateType:'per job', rating:4.8, jobs:120, phone:'0755100505', verified:true, available:false, skills:['Industrial Wiring','Generator','Transfer Switch','DB Upgrade','Safety Audit'], bio:'Industrial electrician — 10 yrs. Factories, warehouses, offices. Safety audit certificates.', type:['generator','db','wiring'] },
-];
-let activeType='',activeLoc='',selectedProv=null;
-function renderProviders(){const q=(document.getElementById('pgSearch')?.value||'').toLowerCase();let list=[...PROVIDERS];if(activeType)list=list.filter(p=>p.type.includes(activeType));if(activeLoc)list=list.filter(p=>p.location===activeLoc);if(q)list=list.filter(p=>p.name.toLowerCase().includes(q)||p.bio.toLowerCase().includes(q)||p.skills.some(s=>s.toLowerCase().includes(q)));const grid=document.getElementById('pgProviderGrid');const cnt=document.getElementById('pgProvCount');if(cnt)cnt.textContent=list.length+' providers found';if(!list.length){grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:rgba(255,255,255,0.28);"><div style="font-size:40px;margin-bottom:10px;">🔍</div><div style="font-size:13px;">No electricians found.<br><button type="button" onclick="clearFilters();" style="color:#f59e0b;font-weight:700;background:none;border:none;cursor:pointer;font-size:inherit;padding:0;font-family:inherit;">Clear filters →</button></div></div>`;return;}grid.innerHTML=list.map(p=>`<div class="pg-provider-card"><div class="pg-prov-top"><div class="pg-prov-avatar">${p.emoji}</div><div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;"><div class="pg-prov-name">${p.name}</div>${p.verified?'<span class="pg-verified-badge">✓ Verified</span>':''}</div><div class="pg-prov-loc"><i class="fas fa-map-marker-alt" style="color:#f59e0b;font-size:9px;"></i> ${p.locationLabel}</div><div class="pg-prov-rating"><span class="pg-prov-stars">${'★'.repeat(Math.floor(p.rating))}${'☆'.repeat(5-Math.floor(p.rating))}</span><span class="pg-prov-rnum">${p.rating} · ${p.jobs}+ jobs</span>${p.available?'<span class="pg-avail-dot"></span><span style="font-size:9px;color:#22c55e;font-weight:700;">Available</span>':'<span style="font-size:9px;color:rgba(255,255,255,0.3);">Unavailable</span>'}</div></div></div><div class="pg-prov-bio">"${p.bio}"</div><div class="pg-prov-skills">${p.skills.map(s=>`<span class="pg-prov-skill">${s}</span>`).join('')}</div><div class="pg-prov-foot"><div class="pg-prov-rate">${p.rate} <small>${p.rateType}</small></div><div style="display:flex;gap:6px;align-items:center;"><button type="button" class="pg-ico" aria-label="Book ${p.name}" title="Book" onclick="openBookingFor('${p.id}','${p.name}')">📩</button></div></div></div>`).join('');}
+/* 2026-10-03 (Tech Hub convergence, slice 1). This page listed HARDCODED providers with invented ratings, job counts
+   and "verified" badges, and "booked" by WhatsApp hand-off / localStorage with a KES 0 invoice — "recorded in SOKONI"
+   when nothing reached SOKONI. It now lists approved providers from the canonical registry (providers/{uid}) through
+   SokoniTechDirectory: Book → SokoniBookService (server price, slot lock, IntaSend), Message → in-app chat. */
+let activeType='',activeLoc='',_techMounted=false;
+const _TECH = {
+  grid: 'pgProviderGrid', count: 'pgProvCount', category: 'electrical', prefix: 'pg', noun: 'electrician',
+  applyUrl: 'business-apply.html?offer=services&category=electrical&label=Electrical',
+  search: () => document.getElementById('pgSearch')?.value || '',
+  type: () => activeType, location: () => activeLoc,
+};
+function renderProviders(){
+  if (!window.SokoniTechDirectory) return;
+  if (!_techMounted) { _techMounted = true; SokoniTechDirectory.mount(_TECH); } else { SokoniTechDirectory.refresh(); }
+}
 function filterByType(type,el){activeType=type;document.querySelectorAll('.pg-type-card').forEach(c=>c.classList.remove('active'));if(el)el.classList.add('active');renderProviders();}
 function filterByLoc(loc,btn){activeLoc=loc;document.querySelectorAll('.pg-filter-pill').forEach(p=>p.classList.remove('active'));if(btn)btn.classList.add('active');renderProviders();}
-function clearFilters(){activeType='';activeLoc='';document.querySelectorAll('.pg-type-card').forEach(c=>c.classList.remove('active'));document.querySelectorAll('.pg-filter-pill').forEach(p=>p.classList.remove('active'));document.querySelector('.pg-filter-pill')?.classList.add('active');document.getElementById('pgSearch').value='';renderProviders();}
-function openBooking(){selectedProv=null;document.getElementById('pgModalSub').textContent='Fill in the details and a certified electrician will confirm within 30 minutes.';document.getElementById('pgModalOverlay').classList.add('open');document.body.style.overflow='hidden';const t=new Date();t.setDate(t.getDate()+1);const d=document.getElementById('pgDate');if(d&&!d.value)d.value=t.toISOString().slice(0,10);}
-function openBookingFor(id,name){selectedProv=PROVIDERS.find(p=>p.id===id);document.getElementById('pgModalSub').textContent=`Booking with: ${selectedProv?.emoji||''} ${name}`;document.getElementById('pgModalOverlay').classList.add('open');document.body.style.overflow='hidden';const t=new Date();t.setDate(t.getDate()+1);const d=document.getElementById('pgDate');if(d&&!d.value)d.value=t.toISOString().slice(0,10);}
-function closeBooking(){document.getElementById('pgModalOverlay').classList.remove('open');document.body.style.overflow='';document.getElementById('pgModalMsg').textContent='';}
-function submitBooking(){if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('elec_book',10,300000)){if(msgEl){msgEl.textContent='⚠️ Too many attempts. Wait 5 min.';msgEl.style.color='#ff9800';}return;};const name=document.getElementById('pgName')?.value.trim();const phone=document.getElementById('pgPhone')?.value.trim();const date=document.getElementById('pgDate')?.value;const time=document.getElementById('pgTime')?.value;const address=document.getElementById('pgAddress')?.value.trim();const notes=document.getElementById('pgNotes')?.value.trim();const msgEl=document.getElementById('pgModalMsg');const services=[...document.querySelectorAll('#pgChips .pg-chip.sel')].map(c=>c.dataset.svc).join(', ');if(!name||!phone||!address){if(msgEl){msgEl.textContent='⚠️ Please fill name, phone and address.';msgEl.style.color='#ff6b6b';}return;}const id='ELC'+Date.now().toString().slice(-7);const msg=`Hi${selectedProv?' '+selectedProv.name:''}! I found you on SOKONI and need an electrician.\n\n📋 Booking ID: ${id}\n👤 Name: ${name}\n📞 Phone: ${phone}\n⚡ Service: ${services||'General Electrical'}\n📅 Date: ${date||'TBD'} at ${time||'TBD'}\n📍 Location: ${address}\n${notes?'📝 Notes: '+notes+'\n':''}\nPlease confirm your availability. Thank you!`;(typeof SokoniPay!=='undefined'&&SokoniPay.waConnect?SokoniPay.waConnect((selectedProv?.phone||'0705726803').replace(/^0/,'254').replace(/\D/g,''),msg,{providerName:selectedProv?.name||'SOKONI Electricians',category:'electrical',serviceDesc:services||'Electrical Service'}):void 0 /* no WhatsApp hand-off (owner 2026-09-30) */);let _bks=[];try{_bks=JSON.parse(localStorage.getItem('sokoniBookings')||'[]');}catch(e){}; _bks.unshift({id,type:'electrical',service:services||'General Electrical',name,phone,date,time,address,notes,provider:selectedProv?.name||'Any Electrician',status:'requested',createdAt:new Date().toISOString()}); localStorage.setItem('sokoniBookings',JSON.stringify(_bks.slice(0,100))); (async()=>{try{const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");const {getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};const _a=getApps().find(a=>a.name==="elc-write")||initializeApp(_cfg,"elc-write");await addDoc(collection(getFirestore(_a),'homeServiceBookings'),{id,hub:'electrical',service:services||'General Electrical',name,phone,date,time,address,notes,provider:selectedProv?.name||'Any Electrician',status:'pending',createdAt:serverTimestamp()});}catch(e){}})(); if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:services||'Electrical Service',category:'Electrical',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'WhatsApp Booking',paymentRef:id,sellerName:selectedProv?.name||'SOKONI Electricians',date:new Date().toISOString(),notes:address});},700); if(msgEl){msgEl.innerHTML=`✅ Booking <strong style="color:#f59e0b;">${_esc(id)}</strong> recorded in SOKONI.`;msgEl.style.color='#22c55e';}setTimeout(closeBooking,3000);}
-window.openBooking=openBooking;window.openBookingFor=openBookingFor;window.closeBooking=closeBooking;window.submitBooking=submitBooking;
-renderProviders();
+function clearFilters(){activeType='';activeLoc='';document.querySelectorAll('.pg-type-card').forEach(c=>c.classList.remove('active'));document.querySelectorAll('.pg-filter-pill').forEach(p=>p.classList.remove('active'));const first=document.querySelector('.pg-filter-pill');if(first)first.classList.add('active');renderProviders();}
+/* "Book Now" with no provider chosen: booking needs a provider and a service, so take the visitor to the list. */
+function openBooking(){const el=document.getElementById('providers');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
+window.openBooking=openBooking;window.filterByType=filterByType;window.filterByLoc=filterByLoc;window.clearFilters=clearFilters;window.renderProviders=renderProviders;
+document.addEventListener('DOMContentLoaded', renderProviders);
 </script>
 <script src="scroll-top.js" defer></script>
 <script src="seo.js" defer></script>
@@ -299,6 +260,12 @@ renderProviders();
 <script src="sokoni-pay.js"></script>
 <script src="sokoni-intasend.js" defer></script>
 <script src="sokoni-ui-extras.js" defer></script>
+<!-- Canonical service engine (Tech Hub slice 1) -->
+<script src="firebase.js" type="module"></script>
+<script src="sokoni-providers.js" defer></script>
+<script src="sokoni-book-service.js" defer></script>
+<script src="sokoni-inbox.js" defer></script>
+<script src="sokoni-tech-directory.js" defer></script>
   <script src="sw-register.js" defer></script>
 <script>
 /* Nav state init */
@@ -316,7 +283,7 @@ renderProviders();
   <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:22px 20px;text-align:center;margin-top:0;">
     <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a </div>
     <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
-    <button onclick="HubRegister.open({hub:'home-services', category:'electrical'})" style="padding:12px 28px;background:#facc15;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
+    <button onclick="location.href='business-apply.html?offer=services&category=electrical&label=Electrical'" style="padding:12px 28px;background:#facc15;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
   </div>
   <script defer src="hub-register.js"></script>
   <script defer src="kass-widget.js"></script>

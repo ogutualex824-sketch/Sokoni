@@ -1,3 +1,16 @@
+## [2026-10-03] - Tech Hub slice 1: phone repair and electrical list real providers on the service engine — hosting, NOT deployed
+
+Both pages listed HARDCODED providers with invented ratings, job counts and verified badges, "booked" by WhatsApp hand-off or localStorage
+with a KES 0 invoice ("recorded in SOKONI" when nothing reached SOKONI), and showed invented customer reviews. They now list approved
+providers from providers/{uid} through the new sokoni-tech-directory.js: Book -> SokoniBookService (bookingCreateService, server price,
+slot lock, IntaSend); Message -> in-app chat; ratings / jobs only when real; an unreachable registry is never shown as empty.
+
+- Files: sokoni-tech-directory.js (new), phone-repair.html, electrical.html, sokoni-providers.js (Tech display grouping only — category is
+  never a pricing input), scripts/test-tech-directory.js (new, 21/0, 5/5 sabotages), docs/TECH_HUB_CONVERGENCE.md (authority map + plan).
+- "List my business" now opens business-apply (the one application primitive AdminOS reviews), not hub-register's random-id write.
+- Pre-existing, unrelated: test-secondary-firebase-apps fails identically on the base (stale electrical BASELINE entry).
+- Not proven: real browser render and a real booking (needs a browser run and an approved provider with services).
+
 ## [2026-10-01] - AdminOS: head scripts deferred, admin gate order unchanged — static 7/0, browser proof QUEUED (RAM), NOT deployed
 
 admin-os.html loaded six classic scripts in <head> (security, sokoni-cart, sokoni-permissions, sokoni-role-authority,

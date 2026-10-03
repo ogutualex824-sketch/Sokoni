@@ -108,7 +108,14 @@
     'home-repairs':['home-repairs', 'handyman', 'plumbing', 'electrical'],
     entertainment: ['entertainment', 'mc', 'dj', 'live-band', 'comedian', 'dancer'],
     beauty:        ['beauty', 'hair-beauty'],
-    tech:          ['phone-repair', 'computer-repair', 'electronics-repair'],
+    /* Tech Hub (2026-10-03). DISPLAY GROUPING ONLY — category is provider-settable free text and is never a
+       pricing input (see functions/provider-hub.js). Labels and ids both appear on approved records. */
+    tech:          ['phone-repair', 'phone repair', 'computer-repair', 'electronics-repair', 'device-repair',
+                    'it-support', 'it support', 'it repair', 'network', 'networking', 'network engineer', 'cctv',
+                    'cctv installation', 'software', 'pos-support', 'pos support', 'smart-home', 'web-developer',
+                    'app-developer', 'appliance repair'],
+    'phone-repair':['phone-repair', 'phone repair', 'device-repair', 'electronics-repair', 'screen-repair'],
+    electrical:    ['electrical', 'electrician', 'electrical work', 'electrical-work'],
     health:        ['healthcare', 'clinic', 'pharmacy', 'home-doctor'],
   };
 
