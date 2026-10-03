@@ -1,3 +1,8 @@
+## 2026-10-03 — Sports match reminders: 24h + 3h, idempotent, reschedule-aware (NOT deployed)
+
+- **New:** sports.js remindFixtures + sportsFixtureReminders (every 15 min).
+- **Test:** test-sports-reminders 6/0.
+
 ## 2026-10-03 — Sports coaches priced sports_coaching via the provider-hub lane (NOT deployed)
 
 - **Change:** provider-hub: decided coach applications → lane sports_coaching (stamped at approval) → commissionArgsForHub → sports_coaching 5%, no subscriptionRole.

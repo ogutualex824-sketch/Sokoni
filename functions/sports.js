@@ -499,6 +499,36 @@ async function resultDispute (db, uid, data, deps) {
   return { ok: true, status: 'disputed' };
 }
 
+/* ── MATCH REMINDERS ───────────────────────────────────────────────────────────── */
+/* Reminders hang off THE fixture record. Every RUN_EVERY_MS the job finds fixtures whose start falls inside a reminder
+   window and notifies the active members of both teams. The dedupeKey names fixture + window + person + startsAt, so a
+   retry or an overlapping run never sends twice, while a RESCHEDULED match (new startsAt) is reminded again.
+   Postponed / cancelled / completed fixtures are never reminded. */
+const REMINDER_WINDOWS = Object.freeze([{ key: '24h', ms: 24 * 3600000 }, { key: '3h', ms: 3 * 3600000 }]);
+const RUN_EVERY_MS = 15 * 60000;
+async function remindFixtures (db, deps) {
+  const c = _ctx(deps);
+  const now = c.now().getTime();
+  const out = { scanned: 0, sent: 0 };
+  for (const w of REMINDER_WINDOWS) {
+    /* fixtures starting in (now + w − RUN_EVERY, now + w] — one range field, so one index */
+    const snap = await db.collection('sportsFixtures').where('startsAt', '>', now + w.ms - RUN_EVERY_MS).where('startsAt', '<=', now + w.ms).limit(500).get();
+    for (const d of snap.docs || []) {
+      const f = d.data() || {};
+      if (!['scheduled', 'confirmed'].includes(f.status)) continue;
+      out.scanned++;
+      for (const uid of await _fixtureParties(db, f)) {
+        await _quiet(c.notify && (async () => {
+          await c.notify({ uid, type: 'sports_fixture_reminder', title: w.key === '24h' ? 'Match tomorrow' : 'Match in 3 hours',
+            body: 'You have a match coming up.', dedupeKey: 'sports_remind_' + d.id + '_' + w.key + '_' + uid + '_' + f.startsAt });
+          out.sent++;
+        }));
+      }
+    }
+  }
+  return out;
+}
+
 /* ── dispatch ──────────────────────────────────────────────────────────────────── */
 const OPS = {
   'team.register': (db, a, d, deps) => teamRegister(db, a.uid, d, deps),
@@ -529,9 +559,15 @@ async function dispatch (db, auth, data, deps) {
   return op(db, auth, data || {}, deps);
 }
 
-let sportsDispatch;
+let sportsDispatch, sportsFixtureReminders;
 {
   const { onCall, HttpsError } = require('firebase-functions/v2/https');
+  const { onSchedule } = require('firebase-functions/v2/scheduler');
+  sportsFixtureReminders = onSchedule({ schedule: 'every 15 minutes', region: 'us-central1', memory: '256MiB', timeoutSeconds: 300 }, async () => {
+    const admin = require('firebase-admin');
+    const out = await remindFixtures(admin.firestore(), { notify: (m) => require('./notify').notify(m) });
+    require('firebase-functions/logger').info('[sports] reminders', out);
+  });
   sportsDispatch = onCall({ region: 'us-central1', maxInstances: 20, enforceAppCheck: true }, async (req) => {
     const admin = require('firebase-admin');
     const tk = (req.auth && req.auth.token) || {};
@@ -560,6 +596,6 @@ let sportsDispatch;
   });
 }
 
-module.exports = { OPS, dispatch, roundRobin, SportsError, memberId, regId, sportsDispatch,
+module.exports = { OPS, dispatch, roundRobin, SportsError, memberId, regId, sportsDispatch, sportsFixtureReminders, remindFixtures, REMINDER_WINDOWS,
   _internal: { teamRegister, adminTeamDecide, teamInvite, teamRespond, teamRemove, tournamentCreate, registrationApply, registrationDecide,
     fixturesPublish, fixtureUpdate, resultSubmit, resultConfirm, resultDispute } };

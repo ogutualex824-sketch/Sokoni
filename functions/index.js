@@ -13530,3 +13530,4 @@ exports.receiptReconciliationDaily = require('./receipt-reconciliation').receipt
 
 /* ── Sports (owner 2026-10-03; 2f): teams, memberships, tournaments, registrations, fixtures, results — one dispatch. ── */
 exports.sportsDispatch = require('./sports').sportsDispatch;
+exports.sportsFixtureReminders = require('./sports').sportsFixtureReminders;   /* 24h / 3h match reminders, idempotent */
