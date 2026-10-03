@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════════════
-   MERCHANT V2 — ORDER SHARE (WhatsApp) beside PRINT
+   MERCHANT V2 — MESSAGE BUYER (in SOKONI) beside PRINT  (was: WhatsApp share, retired by Slice B2)
    ══════════════════════════════════════════════════════════════════════════════
    The risk in this feature is not layout, it is ADDRESSING. Messaging the wrong
    person about someone else's order is a privacy breach, and a "helpful" fallback
@@ -31,7 +31,7 @@ const ck = (l, ok, d) => {
   ok ? pass++ : fail++;
 };
 
-console.log('\nMERCHANT V2 — ORDER SHARE (WhatsApp)');
+console.log('\nMERCHANT V2 — MESSAGE BUYER (in SOKONI)');
 console.log('='.repeat(72));
 
 /* ── extract the real functions ───────────────────────────────────────────── */
@@ -52,10 +52,8 @@ const srcDest = grab('orderDestination');
 const srcWaMsg = grab('waMessage');
 const srcWaBtn = grab('waButton');
 ck('waPhone() extracted from the shell', !!srcWaPhone);
-ck('orderDestination() extracted', !!srcDest);
-ck('waMessage() extracted', !!srcWaMsg);
 ck('waButton() extracted', !!srcWaBtn);
-if (!srcWaPhone || !srcDest || !srcWaMsg || !srcWaBtn) {
+if (!srcWaPhone || !srcWaBtn) {
   console.error('\n  Shell shape changed — refusing to assert against a guess.\n'); process.exit(2);
 }
 
@@ -63,8 +61,8 @@ if (!srcWaPhone || !srcDest || !srcWaMsg || !srcWaBtn) {
 const sandbox = { esc: (s) => String(s), money: (n, c) => (c || 'KES') + ' ' + Number(n || 0).toLocaleString('en-KE'),
                   merchantDisplayName: () => "Alex's Store" };
 const F = new Function('esc', 'money', 'merchantDisplayName',
-  srcWaPhone + '\n' + srcDest + '\n' + srcWaMsg + '\n' + srcWaBtn +
-  '\nreturn { waPhone: waPhone, orderDestination: orderDestination, waMessage: waMessage, waButton: waButton };'
+  srcWaPhone + '\n' + srcWaBtn +
+  '\nreturn { waPhone: waPhone, waButton: waButton };'
 )(sandbox.esc, sandbox.money, sandbox.merchantDisplayName);
 
 /* ── 1. Kenyan normalisation ──────────────────────────────────────────────── */
@@ -81,42 +79,32 @@ console.log('\n2. Refusals — never manufacture a recipient');
  ['0812345678', 'invalid KE prefix 8'], ['0', 'single zero'],
 ].forEach(([i, label]) => ck('rejects ' + label, F.waPhone(i) === null, String(F.waPhone(i))));
 
-/* ── 3. Destination — read, never authored ────────────────────────────────── */
-console.log('\n3. Delivery destination');
-ck('pickup order gets NO address, even when one is present',
-   F.orderDestination({ fulfilment: 'pickup', deliveryAddress: 'Langata, Nairobi' }) === null);
-ck('delivery order with an address returns it',
-   F.orderDestination({ fulfilment: 'delivery', deliveryAddress: 'Langata, Nairobi' }) === 'Langata, Nairobi');
-ck('delivery order with NO address returns null (nothing invented)',
-   F.orderDestination({ fulfilment: 'delivery' }) === null);
-ck('blank address is not treated as an address',
-   F.orderDestination({ fulfilment: 'delivery', deliveryAddress: '   ' }) === null);
+/* ── 3–5. The control — IN SOKONI (Slice B2, owner 2026-09-30) ──────────────────
+   The WhatsApp message builder (orderDestination / waMessage) is retired: WhatsApp is
+   for OTP, invoices and marketing only. The merchant now messages the buyer through
+   chat.html?tx=order&txId=<orders doc id>; the SERVER derives the order's parties, so
+   no recipient is chosen client-side. A tel: link survives only for a well-formed
+   Kenyan mobile taken from the ORDER's own contact. */
+console.log('\n3. Retired WhatsApp builders are gone');
+ck('orderDestination() is gone from the shell', !srcDest, srcDest ? 'still present' : '');
+ck('waMessage() is gone from the shell', !srcWaMsg, srcWaMsg ? 'still present' : '');
+ck('the shell carries no wa.me link at all', !/wa\.me\//.test(SRC.replace(/\/\*[\s\S]*?\*\//g, '')));
 
-/* ── 4. Message ───────────────────────────────────────────────────────────── */
-console.log('\n4. Message content');
-const del = { ref: 'SO-1048', customer: 'Alex O.', total: 1850, currency: 'KES', fulfilment: 'delivery', deliveryAddress: 'Langata, Nairobi' };
-const pick = { ref: 'SO-1049', customer: 'Alex O.', total: 1850, currency: 'KES', fulfilment: 'pickup', deliveryAddress: 'Langata, Nairobi' };
-const mDel = F.waMessage(del, "Alex's Store");
-const mPick = F.waMessage(pick, "Alex's Store");
-ck('names the customer', mDel.indexOf('Alex O.') > -1);
-ck('names the shop', mDel.indexOf("Alex's Store") > -1);
-ck('names the order', mDel.indexOf('#SO-1048') > -1);
-ck('states the total', mDel.indexOf('1,850') > -1, mDel.split('\n').filter((l) => /total/i.test(l))[0]);
-ck('delivery order includes the location', mDel.indexOf('Langata, Nairobi') > -1);
-ck('PICKUP order does NOT include a location', mPick.indexOf('Langata') === -1);
-ck('walk-in customer is not greeted by the placeholder name',
-   F.waMessage({ ref: 'X', customer: 'Walk-in', total: 1, currency: 'KES' }, 'S').indexOf('Walk-in') === -1);
-
-/* ── 5. The button ────────────────────────────────────────────────────────── */
-console.log('\n5. The rendered control');
+console.log('\n4. Message buyer — in-app, server-anchored');
+const del = { id: 'ORD_1048', ref: 'SO-1048', customer: 'Alex O.', total: 1850, currency: 'KES' };
 const btnOk = F.waButton(Object.assign({ phone: '0712345678' }, del));
 const btnNo = F.waButton(Object.assign({ phone: '' }, del));
-ck('with a number -> a real wa.me anchor', /href="https:\/\/wa\.me\/254712345678\?text=/.test(btnOk), btnOk.slice(0, 60));
-ck('...message is URL-encoded', /text=[^"]*%20|text=[^"]*%0A/.test(btnOk));
-ck('...and carries rel="noopener"', /rel="noopener"/.test(btnOk));
-ck('without a number -> NOT a link', btnNo.indexOf('href') === -1, btnNo);
-ck('...and it explains itself', /data-wa-none/.test(btnNo) && /No buyer phone/i.test(btnNo));
-ck('...and no number appears anywhere in it', !/\d{9,}/.test(btnNo), btnNo);
+ck('opens the order thread: chat.html?tx=order&txId=<order id>', /href="chat\.html\?tx=order&txId=ORD_1048"/.test(btnOk), btnOk.slice(0, 90));
+ck('...labelled Message buyer', /Message buyer/.test(btnOk));
+ck('...even with no phone on the order (the server knows the parties)', /chat\.html\?tx=order&txId=ORD_1048/.test(btnNo), btnNo);
+const hostile = F.waButton({ id: 'x"><img src=x onerror=alert(1)>', phone: '' });
+ck('a hostile order id is URL-encoded, never markup', hostile.indexOf('<img') === -1 && /txId=x%22%3E%3Cimg/.test(hostile), hostile);
+
+console.log('\n5. Call — only the order\'s own, well-formed number');
+ck('with a valid number -> a tel: anchor to the normalised number', /href="tel:\+254712345678"/.test(btnOk), btnOk);
+ck('without a number -> no Call link', !/tel:/.test(btnNo), btnNo);
+ck('a malformed number -> no Call link (never "corrected")', !/tel:/.test(F.waButton(Object.assign({ phone: '0812345678' }, del))));
+ck('no number appears anywhere in the no-phone control', !/\d{9,}/.test(btnNo), btnNo);
 
 /* ── 6. Containment still holds ───────────────────────────────────────────── */
 console.log('\n6. The shell containment rule is not evaded');
@@ -188,9 +176,9 @@ ck('NC delegating bluetooth would FAIL this',
 /* ── 7. Negative controls ─────────────────────────────────────────────────── */
 console.log('\n7. Negative controls');
 ck('NC a bad number would be caught', F.waPhone('0812345678') !== '254812345678');
-ck('NC the encoder is real (a space does not survive raw)', btnOk.indexOf('text=Hello ') === -1);
-ck('NC pickup suppression is not vacuous — delivery DOES include it',
-   F.orderDestination({ fulfilment: 'delivery', deliveryAddress: 'X' }) === 'X');
+ck('NC the encoder is real (a space in an id does not survive raw)', F.waButton({ id: 'a b', phone: '' }).indexOf('txId=a b') === -1);
+ck('NC the wa.me detector is not vacuous — it fires on a wa.me line',
+   /wa\.me\//.test('<a href="https://wa.me/254712345678">x</a>'));
 ck('NC waPhone actually returns something for a valid number', F.waPhone('0712345678') === '254712345678');
 
 console.log('\n' + '='.repeat(72));

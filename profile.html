@@ -1866,10 +1866,9 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
             <img id="ieCoverPreview" alt="" style="display:none;margin-top:8px;width:100%;height:52px;border-radius:10px;object-fit:cover;border:1px solid rgba(255,255,255,0.12);">
           </div>
         </div>
-        <div class="up-field">
-          <label>M-Pesa Till / Paybill (Sellers)</label>
-          <input id="ieTillInput" type="tel" inputmode="numeric" placeholder="e.g. 522522">
-        </div>
+        <!-- The "M-Pesa Till / Paybill" field is removed (owner 2026-10-01): customer payments run through IntaSend,
+             and a business's payout destination is configured in its business workspace, never on the personal
+             profile. Any previously stored users.tillNumber is left untouched — this page no longer reads or writes it. -->
         <div style="display:flex;gap:10px;margin-top:4px;">
           <button type="button" class="up-save-btn" onclick="saveInlineEdit()">&#128190; Save Changes</button>
           <button type="button" onclick="toggleInlineEdit()" style="padding:13px 18px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);border-radius:13px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;">Cancel</button>
@@ -1878,19 +1877,11 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
     </div>
   </div>
 
-  <!-- 2. Role Switcher -->
-  <div class="up-role-switcher" id="upRoleSwitcher">
-    <div class="rs-label">Active Role</div>
-    <div class="rs-active" id="rsActiveDisplay">
-      <div class="rs-active-emoji" id="rsActiveEmoji">&#128100;</div>
-      <div class="rs-active-info">
-        <div class="rs-active-name" id="rsActiveName">Buyer</div>
-        <div class="rs-active-hub" id="rsActiveHub">Tap a role to switch</div>
-      </div>
-    </div>
-    <div class="rs-btns" id="rsBtns">
-      <!-- dynamically filled -->
-    </div>
+  <!-- 2. Roles — owner 2026-10-01: the sticky "Active Role" switcher that floated down the page is removed;
+       the ONE role switcher is the profile menu at the top-right of the header (sokoni-profile-menu.js).
+       Adding a role stays here, as a plain (non-sticky) action. renderRoleSwitcher() is null-safe without it. -->
+  <div class="up-role-add" id="upRoleAdd" style="margin-bottom:12px;">
+    <button type="button" class="rs-add-btn" onclick="openRoleModal()">&#43; Add a role</button>
   </div>
 
   <!-- Roles Phase 4 — the rental tenant's own profile (tenantProfiles/{uid}).
@@ -3819,7 +3810,6 @@ function toggleInlineEdit(){
     document.getElementById('ieHandleInput').value = escHtml(_user.username || slugify(_user.name||''));
     document.getElementById('iePhoneInput').value = escHtml(_user.phone || '');
     document.getElementById('ieLocationInput').value = escHtml(_user.location || '');
-    document.getElementById('ieTillInput').value = escHtml(_user.tillNumber || '');
     var bio = document.getElementById('ieBioInput');
     if(bio){ bio.value = _user.bio || ''; var bc=document.getElementById('ieBioCount'); if(bc) bc.textContent = bio.value.length; }
     /* Staged photos live here until Save, so Cancel discards them. */
@@ -3928,7 +3918,6 @@ function saveInlineEdit(){
   var username = (document.getElementById('ieHandleInput').value||'').trim().replace(/^@/,'');
   var phone    = (document.getElementById('iePhoneInput').value||'').trim();
   var location = (document.getElementById('ieLocationInput').value||'').trim();
-  var till     = (document.getElementById('ieTillInput').value||'').replace(/\D/g,'').trim();
 
   if(!name){ upToast('Name cannot be empty', false); return; }
 
@@ -3951,7 +3940,6 @@ function saveInlineEdit(){
   /* phone deliberately NOT written — the field is read-only, and persisting it here only
      ever updated the Firestore mirror while Firebase Auth kept the real credential. */
   if(location) _user.location = location;
-  if(till) _user.tillNumber = till; else delete _user.tillNumber;
   _user.bio = bio;
   if(_ieAvatarData) _user.avatarUrl = _ieAvatarData;
   if(_ieCoverData)  _user.coverUrl  = _ieCoverData;
@@ -3962,7 +3950,7 @@ function saveInlineEdit(){
      so saving a bio never blanks an existing photo. listenFirestoreProfile() already reads
      bio/avatarUrl/coverUrl back, so every surface refreshes without a reload. */
   var payload = {name:name, username:_user.username, location:location,
-                 tillNumber:till||null, bio:bio, updatedAt:_user.updatedAt,
+                 bio:bio, updatedAt:_user.updatedAt,
                  /* consume one edit — persisted atomically with the edit, so a
                     failed write costs nothing (the count only advances if the
                     whole setDoc lands) */

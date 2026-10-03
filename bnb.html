@@ -364,16 +364,8 @@
         localStorage.setItem("sokoniBnBBookings", JSON.stringify(bookings));
       } catch(e) {}
 
-      /* 2. Host notification */
-      /* Notify host via WhatsApp */
-      const hostPhone = b?.phone || b?.hostPhone || b?.contact || "";
-      if(hostPhone){
-        const waNum = hostPhone.replace(/^0/,"254").replace(/\D/g,"");
-        const msg = encodeURIComponent(
-          `🏨 *New SOKONI BnB Booking*\n\nRef: ${ref}\nProperty: ${b?.name}\nGuest: ${name} (${phone})\nCheck-in: ${checkIn}\nCheck-out: ${checkOut}\nNights: ${nights}\nTotal: KES ${total.toLocaleString()}${mpesaCode?'\n💚 M-Pesa: '+mpesaCode:''}\n\nPlease confirm the booking with your guest. 🙏`
-        );
-        setTimeout(()=> window.open(`https://wa.me/${waNum}?text=${msg}`, "_blank"), 1000);
-      }
+      /* 2. Host notification — the booking is committed server-side above; no WhatsApp
+         hand-off from the guest's device to the host (owner 2026-09-30). */
 
       /* 3. Invoice */
       /* Auto-invoice */

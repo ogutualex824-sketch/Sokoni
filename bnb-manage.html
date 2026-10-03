@@ -471,7 +471,7 @@
     const b = getBnBs().find(x=>x.id===id);
     if(!b) return;
     const msg = encodeURIComponent(`🏨 *${b.name}*\n\n📍 ${b.location}\n💰 KES ${Number(b.pricePerNight||0).toLocaleString()}/night\n🛏 ${b.bedrooms||1} bed · 🛁 ${b.bathrooms||1} bath · 👥 ${b.maxGuests||2} guests\n\nBook now on SOKONI: bnb.html`);
-    window.open('https://wa.me/?text='+msg,'_blank');
+    window.open('https://wa.me/?text='+msg,'_blank'); /* wa-allowed:marketing — share, no recipient chosen */
     showNotif("✅ Share link opened in WhatsApp","success");
   }
 

@@ -64,10 +64,15 @@ function loadHub(approved, mutate) {
   ck('WORKSPACE_HUBS exported from sokoni-role-authority.js', /WORKSPACE_HUBS:\s+WORKSPACE_HUBS/.test(RA));
   ck('hubFor exported', /hubFor:\s+hubFor/.test(RA));
   ck('admin has NO acting-context destination', all.HUBS.admin === undefined && all.HUBS.superAdmin === undefined);
+  /* Read from the REAL map (was a restated list that still named merchant.html after the
+     seller cutover). provider → provider-dashboard.html (register-routing slice): its
+     dashboard, not the public providers.html directory. */
   ck('destinations are ones already in use (no invented URLs)',
-     ['index.html', 'merchant.html', 'providers.html', 'driver.html', 'car-hub.html',
-      'healthcare.html', 'legal-hub.html', 'landlord.html', 'property.html']
-       .every((u) => PRO.includes(u)));
+     Object.keys(all.HUBS).length >= 9 &&
+     Object.keys(all.HUBS).map((k) => all.HUBS[k]).every((u) => PRO.includes(u)),
+     JSON.stringify(all.HUBS));
+  ck('provider -> provider-dashboard.html (its dashboard, not the providers.html directory)',
+     all.hubFor('provider') === 'provider-dashboard.html', all.hubFor('provider'));
 
   head('1 - an approved role routes to its workspace');
   const multi = loadHub(['buyer', 'seller', 'rider']);
@@ -97,7 +102,11 @@ function loadHub(approved, mutate) {
   head('4 - the switch routes, and never falls back to Profile');
   const sw = PM.slice(PM.indexOf('window._skSwitchRole = async function'), PM.indexOf('function _skMirrorRoleLocally'));
   ck('the switch consults RA.hubFor', /hubFor\(role\)/.test(sw));
-  ck('no hardcoded profile destination in the switch', !/profile\.html/.test(sw));
+  /* Owner 2026-10-01: BUYER opens the profile; every other role opens its workspace. So profile.html may
+     appear in the switch ONLY as the buyer's destination — never as a fallback for any other role (the
+     original defect this row guarded: every switch landing on Profile). */
+  ck('profile.html only as the BUYER destination — never a fallback for another role',
+    (sw.match(/profile\.html/g) || []).length === 1 && /if \(hub && role === 'buyer'\) hub = 'profile\.html';/.test(sw));
   ck('skips navigation when already on the destination', /here\.toLowerCase\(\) !== hub\.toLowerCase\(\)/.test(sw));
   ck('still refuses a role the authority declined', /res\.ok !== true/.test(sw));
   ck('mirrors only AFTER the authority agreed',

@@ -712,7 +712,7 @@
 
   <!-- Contact strip -->
   <div class="ms-contact-strip" style="display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap;">
-    <a id="storeWABtn" href="javascript:void(0)" target="_blank" style="display:flex;align-items:center;gap:6px;padding:9px 14px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.22);border-radius:11px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;flex:1;min-width:130px;"><i class="fab fa-whatsapp"></i> Chat on WhatsApp</a>
+    <a id="storeWABtn" href="javascript:void(0)" style="display:flex;align-items:center;gap:6px;padding:9px 14px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.22);border-radius:11px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;flex:1;min-width:130px;">🛍️ Shop this Store</a>
     <a id="storeCallBtn" href="javascript:void(0)" style="display:flex;align-items:center;gap:6px;padding:9px 14px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.22);border-radius:11px;color:#00aaff;font-size:11px;font-weight:700;text-decoration:none;flex:1;min-width:130px;">📞 Call Seller</a>
     <a href="messages.html" style="display:flex;align-items:center;gap:6px;padding:9px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);border-radius:11px;color:#71ff00;font-size:11px;font-weight:700;text-decoration:none;flex:1;min-width:130px;">💬 Message</a>
     <button type="button" id="storeLikeBtn" onclick="toggleStoreLike()" style="display:flex;align-items:center;gap:6px;padding:9px 14px;background:rgba(255,60,100,0.07);border:1px solid rgba(255,60,100,0.22);border-radius:11px;color:#ff6b9d;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;flex:1;min-width:100px;transition:all .2s;">❤️ Like <span id="storeLikeBtnCount" style="opacity:0.7;font-weight:500;"></span></button>
@@ -854,11 +854,12 @@ function loadStoreUI(){
   const linkEl = document.getElementById("storeLinkDisplay");
   if(linkEl) linkEl.textContent = link.replace("https://","");
 
-  /* WA/Call buttons in store mode */
+  /* Shop/Call buttons in store mode — enquiries stay in SOKONI: the buyer
+     orders on this store page (no WhatsApp hand-off). */
+  const shopEl = document.getElementById("storeWABtn");
+  if(shopEl) shopEl.href = link;
   if(s.phone){
     const phone = s.phone.replace(/^0/,"254");
-    const waEl = document.getElementById("storeWABtn");
-    if(waEl) waEl.href = "https://wa.me/"+phone+"?text="+encodeURIComponent("Hello! I found your store on SOKONI. I'd like to enquire about a product.");
     const callEl = document.getElementById("storeCallBtn");
     if(callEl) callEl.href = "tel:+"+phone;
   }
@@ -1071,7 +1072,6 @@ function renderOrders(){
     <div class="ms-order-total">KES ${Number(o.total||0).toLocaleString()}</div>
     <div class="ms-order-actions">
       ${o.phone?`<a href="tel:+254${o.phone.replace(/^0/,"")}" class="ms-oa-btn" style="background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.2);color:#71ff00;text-decoration:none;">📞 Call</a>`:""}
-      ${o.phone?`<a href="https://wa.me/254${o.phone.replace(/^0/,"")}?text=${encodeURIComponent("Hi "+o.name+"! Your Sokoni order "+o.id+" is being processed.")}" target="_blank" class="ms-oa-btn" style="background:rgba(37,211,102,0.08);border-color:rgba(37,211,102,0.2);color:#25d366;text-decoration:none;">💬 WhatsApp</a>`:""}
       <button type="button" class="ms-oa-btn" onclick="updateOrder('${o.id}','shipped')" style="background:rgba(0,170,255,0.08);border-color:rgba(0,170,255,0.2);color:#00aaff;">📦 Mark Shipped</button>
       <button type="button" class="ms-oa-btn" onclick="updateOrder('${o.id}','delivered')" style="background:rgba(16,185,129,0.08);border-color:rgba(16,185,129,0.2);color:#10b981;">✅ Mark Delivered</button>
     </div>
@@ -1185,7 +1185,7 @@ function saveSettings(){
   toast("Store settings saved!");
   setTimeout(()=>{if(msgEl)msgEl.textContent="";},3000);
 }
-function shareWA(){ const s=getStoreSettings();const name=s.storeName||"My Store";window.open(`https://wa.me/?text=${encodeURIComponent("Check out my store on SOKONI: "+name+" — "+window.location.href)}`) }
+function shareWA(){ const s=getStoreSettings();const name=s.storeName||"My Store";window.open(`https://wa.me/?text=${encodeURIComponent("Check out my store on SOKONI: "+name+" — "+window.location.href)}`) /* wa-allowed:marketing */ }
 function copyLink(){ navigator.clipboard.writeText(window.location.href).then(()=>toast("Store link copied!")); }
 function shareStore(){ if(navigator.share) navigator.share({title:"SOKONI Store",url:window.location.href}); else copyLink(); }
 function shareMyStore(){ shareStore(); }
@@ -1209,7 +1209,6 @@ function renderSocialLinks(s){
     {key:"socTW",  icon:"fab fa-twitter",   color:"#1da1f2", label:"X",         base:"https://x.com/"},
     {key:"socFB",  icon:"fab fa-facebook",  color:"#1877f2", label:"Facebook",  base:"https://facebook.com/"},
     {key:"socYT",  icon:"fab fa-youtube",   color:"#ff0000", label:"YouTube",   base:"https://youtube.com/@"},
-    {key:"socWA",  icon:"fab fa-whatsapp",  color:"#25d366", label:"WhatsApp",  base:"https://wa.me/254"},
     {key:"socLI",  icon:"fab fa-linkedin",  color:"#0077b5", label:"LinkedIn",  base:"https://linkedin.com/in/"},
     {key:"socWeb", icon:"fas fa-globe",     color:"#71ff00", label:"Website",   base:""},
   ];

@@ -1418,7 +1418,7 @@ function renderSpecialists(){
       <div style="display:flex;gap:6px;padding:0 16px 16px;">
         <button class="spec-btn spec-btn-book" onclick="bookSpecialist('${s.id}','${s.name.replace(/'/g,"\\'")}')">📅 Book</button>
         <button class="spec-btn spec-btn-call" onclick="callSpecialist('${s.phone}','${s.name.replace(/'/g,"\\'")}')">📞 Call</button>
-        <button class="spec-btn" style="background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.2);color:#25d366;" onclick="waSpecialist('${s.phone}','${s.name.replace(/'/g,"\\'")}')">💬 WA</button>
+        <button class="spec-btn" style="background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.2);color:#25d366;" onclick="waSpecialist('${s.phone}','${s.name.replace(/'/g,"\\'")}')">💬 Enquire</button>
       </div>
     </div>`).join('');
 }
@@ -1429,8 +1429,8 @@ function bookSpecialist(id, name){
 }
 function callSpecialist(phone){ window.location.href='tel:'+phone; }
 function waSpecialist(phone, name){
-  const msg = encodeURIComponent('Hi Dr. '+name+', I found you on Sokoni Healthcare and would like to book a consultation.');
-  window.open('https://wa.me/254'+phone.replace(/^0/,'')+'?text='+msg,'_blank');
+  /* In-app appointment booking on this page (owner 2026-09-30: no WhatsApp hand-off). */
+  bookSpecialist('', name);
 }
 
 /* ════════════════════════════════════════════════════════════

@@ -1585,9 +1585,7 @@ const SA={
          number is a live link — and where there is none that is stated, because
          it means this applicant cannot be verified by phone at all. */
       const contact=p
-        ? '<a href="tel:+'+_esc(intl)+'" style="color:var(--accent);font-weight:700;text-decoration:none">'+_esc(p)+'</a>'
-          +' <a href="https://wa.me/'+_esc(intl)+'" target="_blank" rel="noopener" style="text-decoration:none">&#x1F4AC;</a>'
-          +(a.email?'<div style="font-size:10px;color:var(--muted)">'+_esc(a.email)+'</div>':'')
+        ? '<a href="tel:+'+_esc(intl)+'" style="color:var(--accent);font-weight:700;text-decoration:none">'+_esc(p)+'</a>'          +(a.email?'<div style="font-size:10px;color:var(--muted)">'+_esc(a.email)+'</div>':'')
         : '<span style="color:#ff8c42;font-weight:700">no number</span>';
 
       let loc=a.location

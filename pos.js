@@ -2970,7 +2970,7 @@ const SPos = (function () {
           'Thank you for shopping with us!',
         ].filter(l => l !== undefined);
         const msg = encodeURIComponent(lines.join('\n'));
-        window.open(`https://wa.me/${e164}?text=${msg}`, '_blank');
+        window.open(`https://wa.me/${e164}?text=${msg}`, '_blank'); /* wa-allowed:invoice */
       };
     }
 

@@ -320,8 +320,8 @@
     if (number.length === 9) number = '254' + number;
 
     var url = number
-      ? 'https://wa.me/' + number + '?text=' + encodeURIComponent(msg)
-      : 'https://wa.me/?text=' + encodeURIComponent(msg);
+      ? 'https://wa.me/' + number + '?text=' + encodeURIComponent(msg) /* wa-allowed:invoice */
+      : 'https://wa.me/?text=' + encodeURIComponent(msg); /* wa-allowed:invoice */
 
     window.open(url, '_blank');
   }

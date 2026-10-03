@@ -272,6 +272,136 @@ test-adminos-nav-coverage, test-adminos-shell-final.
 
 **Deploy order.** After `functions:getErrorLog` is live; merged by sokoni-aa into their hosting sequence. Until then
 the view truthfully reads "Failure log not available yet".
+## 2026-10-03 — AdminOS: WhatsApp delivery tab (hosting half; NOT deployed)
+
+Comms → **WhatsApp** tab in `admin-os.html` / `sokoni-aos.js`. It reads `adminListWhatsappSends` through the one
+`adminOsDispatch` (functions half: `3699b4e` on `functions/whatsapp-channel-on-9894df2`).
+
+- Read-only. Each row shows: channel, template, masked number, Meta message id, status, and the accepted / sent /
+  delivered / read / failed times, error code and notification key.
+- Filters: status, and either a message id or a notification key.
+- The page says that **accepted ≠ delivered**.
+- If the backend op is not deployed, the tab says "trace unavailable". It never shows an empty or zero list.
+- All values are escaped. No codes or PINs are ever shown (the server returns a whitelist).
+- Files: `admin-os.html` (+1 tab button), `sokoni-aos.js` (+ops whitelist entry, tab renderer, `whatsappTraceFilter`).
+- DB/rules: none. Render check 6/0 (escaping, neutral states).
+
+**Deploy order:** functions op first. Until then the tab shows "unavailable". Related: [[WHATSAPP_PRODUCTION]].
+
+## [2026-10-01] - Register my business: one entry (/offer.html), one intake (hub-register), provider lands on its dashboard — built, tested, NOT deployed
+
+**Branch `hosting/register-routing-on-b2`, on `df1a4cb`.** Hosting only. Owner ask: "Register my business" always
+reachable and in sync with "What are you offering?"; every category flows into ONE application pipeline; after
+approval the user reaches the correct dashboard. Connects what exists — no new collection, server or rules change.
+
+**Summary.**
+- **offer.html.** Every service/product card (and the building-materials link) now opens the ONE intake,
+  `HubRegister.open({category, hub})`, with an EXISTING hub-register CATS id (`data-reg-category`) via
+  `offerRegister()`; it no longer reaches the second intake (`provider.html?cat=`, whose keys were not CATS ids) or
+  hub pages (seller / tech-hub / b2b / banking / construction). Healthcare opens with no pre-selection (applicant
+  picks one of 8). Ride Sharing keeps `onboarding-driver.html` (driver KYC intake, also files `applications`).
+  sessionStorage `offerCat` hand-off removed. "Already have a dashboard?" → merchant-v2 / provider-dashboard.
+  Hero copy no longer promises "straight to the right dashboard".
+- **Account dropdown (sokoni-profile-menu.js).** "🏪 Register a business" → `/offer.html`, every signed-in role
+  (also covers a new branch/second business). shared-header has no signed-out menu (avatar → login), so none added.
+- **Wrong links.** providers.html "Become a Provider" (was seller.html), businesses.html "Register Your Business"
+  (was business-os.html), account-centre "Register a Business" (was businesses.html) → `/offer.html`.
+- **hub-register.js.** Success screen: "Application submitted — SOKONI reviews it in AdminOS" + "Track my
+  application" → `complete-application.html` (asks `businessWorkspace`, shows pending/decided/"Open your
+  workspace"). Removed the `provider.html?cat=` link, "is now on SOKONI!" and "Your paid listing is live
+  immediately!". New read-only `HubRegister.category(id)` (a copy). Everything else untouched.
+- **sokoni-role-authority.js.** `WORKSPACE_HUBS.provider` → `provider-dashboard.html` (was the public providers.html
+  directory).
+
+**Files affected.** offer.html, hub-register.js, sokoni-profile-menu.js, sokoni-role-authority.js, providers.html,
+businesses.html, account-centre.html; tests `scripts/test-register-business-entry.js` (new, 41/0),
+`test-role-switch-routing.js`, `test-customer-nav.js`, `after-role-nav-header.mjs` (expectations updated).
+
+**Database changes.** None. **API changes.** None. **Security.** No new write; the intake's sign-in precondition and
+server-priced paid path are unchanged. **Breaking.** A provider's role switch now lands on provider-dashboard.html.
+
+## [2026-10-01] - Slice B2 closure: landlord rent is external (fake payment + rent commission removed), contact seller end to end, truthful notices and confirmations, landlord XSS — built, certified, NOT deployed
+
+**Branch `hosting/slice-b2-on-chain`, on top of the frozen B2 reference `63dc9b0`.** Hosting only. Owner decisions
+(2026-10-01): refunds stay ticket → human review; rent is the landlord's/agency's money (SOKONI earns from the Property
+Hub subscription, a separate slice); "sent" only when a transport accepted it. Record: `docs/SLICE_B2_WHATSAPP_IN_APP.md`
+§ Closure repair set.
+
+**Summary.**
+- **landlord.html — rent.** Retired all browser payment paths (Daraja `SokoniMpesa.pay`, IntaSend inline SDK, and a
+  3-second timer that showed "Payment Confirmed" and marked rent paid with no provider call). New **Record rent
+  received**: `paymentSource EXTERNAL`, `verification LANDLORD_RECORDED`, never SOKONI-verified. Payment instructions
+  say "paid directly to the landlord/agency — not processed or verified by SOKONI". Removed a browser-side 2%
+  "commission on rent" booked to a SOKONI ledger on every rent tick.
+- **landlord.html — XSS.** All tenant/landlord/property values escaped; inline handlers take validated ids only.
+- **Contact seller.** product.js writes `contactRequests` with `buyerUid` + product-doc `sellerUid` (passes the served
+  rule; previously every submit was denied); premium bounce loop removed; merchant-v2 **Buyer enquiries** sheet;
+  store.html chip honest.
+- **Approval notices (admin.html).** Lawyer/firm/facility decisions via `applicationDecide`; property via `notifySend`;
+  "Notified" only for a channel reporting `'sent'`, else pending/failed. Wrong-listing-under-filter bug and 0 ms error
+  toasts fixed.
+- **Hub confirmations.** car-hub, sokoni-carhub-pro, home-services, tech-hub, business-os: success only after the write
+  resolves; no "SOS sent", "Dispatched! ETA", "authorities alerted", fabricated tracker signal.
+
+**Files affected.** landlord.html, product.js, merchant-v2.html, store.html, admin.html, car-hub.html,
+sokoni-carhub-pro.js, home-services.html, tech-hub.html, business-os.html; tests `test-landlord-external-rent.js`,
+`test-contact-requests.js`, `test-admin-approval-notify.js`, `test-b2-inapp-e2e.js` (new); docs.
+
+**Database changes.** None to schema. landlord rent history entries gain `paymentSource`/`verification`; roadside
+requests store `status:'pending'` (was an invented `dispatched` + ETA). **API changes.** None (consumes live
+`applicationDecide`, `notifySend`, `messagesDispatch`, `adminOsDispatch`). **Breaking.** landlord "Collect via M-Pesa"
+is gone (it never collected through SOKONI); admin legal/health approvals no longer write local-only state.
+
+**Security.** Removes an unauthenticated browser payment path and fabricated payment state; closes landlord XSS
+(incl. raw tenant data spliced into inline JS); contact requests bound to the signed-in buyer; no client write of
+money state anywhere in the slice.
+
+**Certification.** slice-B 36/0 (incl. R rows, emulator) · My Orders e2e 12/0 (emulator, REAL createConversation +
+adminOsDispatch; no money moved) · contact 48/0 · admin notify 50/0 · landlord 19/0 · merchant order share 46/0 ·
+sabotage **13/13 CAUGHT**, byte-identical restore. Parent comparison: in the commit.
+
+## [2026-10-01] - Slice B2: WhatsApp only for OTP, invoices and marketing — every other hand-off now in SOKONI; in-app order chat + refund request — built, certified, NOT deployed
+
+**Branch `hosting/slice-b2-on-chain`, built on `hosting/chain-on-3e8dd53` @ `54b72cc`.** Hosting only; deploys after the
+chain. Owner decision (2026-09-30): "all communications and bookings happen within SOKONI and a refund system must be in
+place … we only use WhatsApp for OTP and invoices and marketing." Full record: `docs/SLICE_B2_WHATSAPP_IN_APP.md`.
+
+**Summary.** 176 WhatsApp hand-offs across 76 client files (chain tip census) replaced with the in-app path that already
+exists: SOKONI support numbers → `support.html` tickets; counterparties on an order/booking/parcel → the new
+`chat.html?tx=<type>&txId=<id>` (server `messagesDispatch.createConversation`, parties derived, non-parties refused);
+providers before a transaction → `provider-profile.html` / the page's own booking or enquiry modal; registrations,
+applications, quotes, SOS, commission payment → prefilled support tickets (or the existing Firestore write, hop dropped);
+admin/merchant notices → removed, `tel:` kept. What stays is marked on its line `wa-allowed:<otp|invoice|marketing>`
+(POS receipts, rent/water/service-charge invoices, booking invoices, recipient-less shares, referral invites, SEO brand
+profile). My Orders gains **💬 Message seller** and **↩ Request refund** (a support ticket a person reviews — never a
+money call).
+
+**Files affected.** 86 client files (the 76 hand-off files + share-only files marked + `chat.html`, `my-orders.html`),
+`scripts/test-slice-b-support-whatsapp.js` (W12–W19, N2–N3), `scripts/test-merchant-order-share.js` (contract updated:
+Message buyer replaces the retired WhatsApp share), `docs/SLICE_B2_WHATSAPP_IN_APP.md`.
+
+**Database changes.** None. **API changes.** None — `chat.html` consumes the existing `messagesDispatch` op
+`createConversation` (live archive byte-identical to this tree's `functions/messages.js`). **Breaking changes.** Pages no
+longer open WhatsApp for chat/booking/support; `landlord.html` loses its non-invoice WhatsApp sends (notices,
+agreements, bulk messages); `merchant-v2.html` loses `waMessage`/`orderDestination`.
+
+**Security.** Removes off-platform channels with no record, audit or moderation. `chat.html?tx=` accepts only
+server-derivable types (W14 = equality with `PARTY_FIELDS`) and a validated id; the server refuses non-parties. Every new
+link value is `encodeURIComponent`'d (reviewed). W19: no client page may write `refundRequests` (its creation credits a
+wallet).
+
+**FINDING — refund authority (owner decision needed, not changed).** Live `createDispute` refuses every checkout order
+(`buyerId|userId|customerId` vs checkout's `uid`/`buyerUid`), and widening it would feed `autoOnDisputeCreate`'s
+≤ KES 1,000 auto **buyer_wins** → `refundRequests` → automatic wallet credit, against the rule *refund = request, owner
+approves*. Ten further findings (landlord personal-M-Pesa invoices, landlord XSS, product contact modal denied by rules,
+success-before-write copy, silent admin approvals, …) are tabled in the doc.
+
+**Certification.** `test-slice-b-support-whatsapp.js --static` **32/0** (incl. B1–B4 in Chromium, N1–N3 negative
+controls); `test-merchant-order-share.js` **46/0**; `predeploy-syntax-gate.js` 1823 JS + 455 inline blocks parse.
+Parent (`54b72cc`) vs candidate over the 182 suites that read a changed file: see the commit that records the re-run.
+
+**Not changed, by agreement.** `index.html` footer WhatsApp links (sokoni-70's candidate), `opportunity.html` applyNow
+(sokoni-27's in-app application, 85b8516) — both named in W12's `PEER_OWNED`, removed after the rebase.
 
 ## [2026-09-30] - BnB: category pill strip made phone-safe (snap-scroll chips, sort on its own row) — built, browser certification QUEUED, NOT deployed
 ## [2026-09-27] — Home: hub-card buttons stay inside the card at every width (Sokoni Eats "Become Rider") — UNCOMMITTED, NOT deployed

@@ -171,7 +171,7 @@ function shareProduct(opts){
     return;
   }
   // Fallback: open WhatsApp
-  w.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  w.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); /* wa-allowed:marketing — share, no recipient chosen */
 }
 
 /* ── INJECT "SHARE & EARN" CHIP ONTO ANY PAGE ── */
@@ -266,7 +266,7 @@ function _attachShareBtns(link, code){
   var msg = 'Hey! Shop on SOKONI — Kenya\'s #1 marketplace 🛍️ Use my link and get 10% off your first order:\n' + link + '\n#SOKONI #ShopKenya';
   var btn;
   btn = document.getElementById('rfBtnWA');
-  if(btn) btn.onclick = function(){ w.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'); };
+  if(btn) btn.onclick = function(){ w.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'); }; /* wa-allowed:marketing — share, no recipient chosen */
   btn = document.getElementById('rfBtnTW');
   if(btn) btn.onclick = function(){ w.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(msg),'_blank'); };
   btn = document.getElementById('rfBtnTG');

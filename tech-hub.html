@@ -309,7 +309,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050a0f;color:white;
   <div class="th-body" style="max-width:700px;">
     <div style="padding-top:16px;margin-bottom:24px;">
       <div style="font-size:22px;font-weight:900;color:white;margin-bottom:6px;">➕ Sell Your Device</div>
-      <div style="font-size:13px;color:rgba(255,255,255,0.45);">List your phone, laptop or accessory and get buyers via WhatsApp</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.45);">List your phone, laptop or accessory and get buyers on SOKONI</div>
     </div>
     <div style="background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:20px;padding:24px;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
@@ -585,7 +585,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050a0f;color:white;
       <div style="font-size:22px;margin-bottom:8px;">⚙️</div>
       <div style="font-size:15px;font-weight:900;margin-bottom:6px;">Have an AI or SaaS product?</div>
       <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your tool and reach thousands of Kenyan businesses</div>
-      <a href="https://wa.me/254705726803?text=Hi%21%20I%20want%20to%20list%20my%20AI%2FSaaS%20tool%20on%20SOKONI%20Tech%20Hub." target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#c084fc,#818cf8);border:none;border-radius:10px;color:white;font-weight:900;font-size:13px;text-decoration:none;">List Your Tool →</a>
+      <a href="support.html?topic=request&amp;desc=I%20want%20to%20list%20my%20AI%2FSaaS%20tool%20on%20SOKONI%20Tech%20Hub." style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#c084fc,#818cf8);border:none;border-radius:10px;color:white;font-weight:900;font-size:13px;text-decoration:none;">List Your Tool →</a>
     </div>
   </div>
 </div>
@@ -684,7 +684,7 @@ function renderDevicesGrid(list) {
         <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.4);">📍 ${d.loc.charAt(0).toUpperCase()+d.loc.slice(1)}</span>
       </div>
       <div class="th-card-price">KES ${Number(d.price).toLocaleString()}</div>
-      <a href="https://wa.me/254${(d.phone||'').replace(/^0/,'')}?text=${encodeURIComponent('Hi, I saw your '+d.name+' ('+condLabel[d.cond]+') on SOKONI Tech Hub for KES '+Number(d.price).toLocaleString()+'. Is it still available?')}" target="_blank" rel="noopener" class="th-wa-btn">💬 WhatsApp Seller</a>
+      <a href="support.html?topic=hire&desc=${encodeURIComponent('I\'m interested in the '+d.name+' ('+condLabel[d.cond]+') listed on SOKONI Tech Hub for KES '+Number(d.price).toLocaleString()+'. Is it still available?')}" class="th-wa-btn">💬 Enquire</a>
     </div>`).join('');
 }
 
@@ -720,12 +720,16 @@ function bookRepair() {
   let bks = []; try { bks = JSON.parse(localStorage.getItem('sokoniRepairs'))||[]; } catch(e) {}
   bks.unshift({ ref, name, phone, device, type, date, loc, status:'sent', createdAt:Date.now() });
   localStorage.setItem('sokoniRepairs', JSON.stringify(bks.slice(0,20)));
-  _thFireWrite('techRepairs', { ref, name, phone, device, repairType:type, date, location:loc, notes:desc, status:'pending' });
+  _thPending(msgEl);
+  const _repWrite = _thFireWrite('techRepairs', { ref, name, phone, device, repairType:type, date, location:loc, notes:desc, status:'pending' });
   if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
     SokoniPay.waConnect('254705726803', msg, {providerName:'SOKONI Tech Hub',category:'default',serviceDesc:type||'Device Repair'});
   }
   /* no WhatsApp hand-off (owner 2026-09-30) */
-  if(msgEl) { msgEl.innerHTML=`✅ Booking recorded! Ref: <strong>${_esc(ref)}</strong>`; msgEl.style.color='#00d4ff'; }
+  _repWrite.then(function(ok){
+    if(!ok){ _thFailed(msgEl,'booking',ref); return; }
+    if(msgEl) { msgEl.innerHTML=`✅ Booking recorded on SOKONI. Ref: <strong>${_esc(ref)}</strong>`; msgEl.style.color='#00d4ff'; }
+  });
 }
 window.bookRepair = bookRepair;
 
@@ -828,11 +832,13 @@ function postTechRequest() {
   let reqs = []; try { reqs = JSON.parse(localStorage.getItem('askHub_tech'))||[]; } catch(e) {}
   reqs.unshift({ id:'TREQ'+Date.now(), text, cat: cat||'General', phone, ts: Date.now() });
   localStorage.setItem('askHub_tech', JSON.stringify(reqs.slice(0,30)));
-  _thFireWrite('techRequests', { text, category: cat||'General', phone, status:'open' });
   document.getElementById('techAskText').value = '';
   document.getElementById('techAskPhone').value = '';
   renderTechAskFeed();
-  showTechToast('Request posted to Tech Hub!');
+  showTechToast('Saving…');
+  _thFireWrite('techRequests', { text, category: cat||'General', phone, status:'open' }).then(function(ok){
+    showTechToast(ok ? 'Request posted to Tech Hub' : 'Couldn\'t save — please try again or contact Support.');
+  });
 }
 window.postTechRequest = postTechRequest;
 
@@ -849,7 +855,7 @@ function renderTechAskFeed() {
         <span style="margin-left:auto;font-size:9px;padding:2px 7px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:4px;color:#4ade80;font-weight:700;">OPEN</span>
       </div>
       <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.5;">${r.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-      ${r.phone ? `<a href="https://wa.me/254${r.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi, I saw your Tech Hub question: '+r.text+'\n\nI can help!')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>` : ''}
+      ${r.phone ? `<a href="support.html?topic=request&ref=${encodeURIComponent(r.id||'')}&desc=${encodeURIComponent('I can help with this Tech Hub question: '+r.text)}" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>` : ''}
     </div>`).join('');
 }
 
@@ -872,9 +878,12 @@ function listDevice() {
   };
   let local = []; try { local = JSON.parse(localStorage.getItem('sokoniDevices'))||[]; } catch(e) {}
   local.unshift(dev); localStorage.setItem('sokoniDevices', JSON.stringify(local.slice(0,50)));
-  _thFireWrite('techDevices', { ...dev, status:'active' });
-  if(msgEl) { msgEl.innerHTML='✅ Device listed! <a href="javascript:void(0)" onclick="goThPanel(\'devices\',null)" style="color:#00d4ff;font-weight:700;">View Listings →</a>'; msgEl.style.color='#00d4ff'; }
-  ['sellDevName','sellDevPrice','sellDevPhone','sellDevDesc'].forEach(id => { const el=document.getElementById(id); if(el)el.value=''; });
+  _thPending(msgEl);
+  _thFireWrite('techDevices', { ...dev, status:'active' }).then(function(ok){
+    if(!ok){ _thFailed(msgEl,'request',dev.id); return; }
+    if(msgEl) { msgEl.innerHTML='✅ Device listing recorded on SOKONI. <a href="javascript:void(0)" onclick="goThPanel(\'devices\',null)" style="color:#00d4ff;font-weight:700;">View Listings →</a>'; msgEl.style.color='#00d4ff'; }
+    ['sellDevName','sellDevPrice','sellDevPhone','sellDevDesc'].forEach(id => { const el=document.getElementById(id); if(el)el.value=''; });
+  });
 }
 window.listDevice = listDevice;
 
@@ -906,7 +915,10 @@ function goThPanel(name, btn) {
 }
 window.goThPanel = goThPanel;
 
-/* ── FIRESTORE WRITE (fire-and-forget) ── */
+/* ── FIRESTORE WRITE ──
+   Resolves true ONLY when addDoc resolved (Firestore acknowledged the write);
+   false on any failure. Never rejects. Callers must not say "recorded /
+   submitted / listed" unless it resolved true (CLAUDE.md "UI Data Integrity"). */
 async function _thFireWrite(coll, data) {
   try {
     const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
@@ -914,7 +926,15 @@ async function _thFireWrite(coll, data) {
     const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
     const _a=getApps().find(a=>a.name==="th-write")||initializeApp(_cfg,"th-write");
     await addDoc(collection(getFirestore(_a),coll),{...data,createdAt:serverTimestamp()});
-  } catch(e){}
+    return true;
+  } catch(e){ try{ console.warn('[TechHub] write failed:',coll,e&&e.code||''); }catch(_){} return false; }
+}
+/* Shared honest-state copy for _thFireWrite callers. */
+function _thPending(el){ if(el){ el.textContent='Saving…'; el.style.color='rgba(255,255,255,0.6)'; } }
+function _thFailed(el,topic,ref){
+  var href='support.html?topic='+encodeURIComponent(topic||'request')+(ref?'&ref='+encodeURIComponent(ref):'');
+  if(el){ el.innerHTML='⚠️ Couldn\'t save — please try again or <a href="'+href+'" style="color:#ff9800;">contact Support</a>.'; el.style.color='#ff9800'; }
+  else showTechToast('Couldn\'t save — please try again or contact Support.');
 }
 
 let _thDevicesUnsub = null;
@@ -962,7 +982,7 @@ function filterITServices(cat, btn) {
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${s.skills.slice(0,3).map(k=>`<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);color:#818cf8;">${k}</span>`).join('')}</div>
       <div class="th-card-price">${s.rate}</div>
       <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;">⭐ ${s.rating} · ${s.jobs} projects · 📍 ${s.loc}</div>
-      <a href="https://wa.me/254${s.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi '+s.name+', I found you on SOKONI Tech Hub. I need IT services: ')}" target="_blank" rel="noopener" class="th-wa-btn">💬 WhatsApp</a>
+      <a href="support.html?topic=hire&desc=${encodeURIComponent('I\'d like to hire '+s.name+' ('+s.title+', found on SOKONI Tech Hub). I need IT services: ')}" class="th-wa-btn">💬 Hire</a>
     </div>`).join('');
 }
 window.filterITServices = filterITServices;
@@ -978,11 +998,14 @@ function submitITRequest() {
   const budget=document.getElementById('itsBudget')?.value||'';
   const timeline=document.getElementById('itsTimeline')?.value||'';
   const desc=document.getElementById('itsDesc')?.value||'';
-  _thFireWrite('techITRequests',{ref,name,phone,company,service:svc,budget,timeline,desc,hub:'tech-hub'});
   const msg=`🖥️ *SOKONI Tech Hub — IT Service Request*\n\nRef: ${ref}\n👤 ${name}${company?' ('+company+')':''}\n📞 ${phone}\n🛠️ Service: ${svc}\n💰 Budget: ${budget}\n⏱️ Timeline: ${timeline}\n${desc?'\n📝 '+desc:''}\n\nPlease get back to me. Thank you!`;
-  /* IT service request → support ticket (owner 2026-09-30); techITRequests record above stands. */
-  if(msgEl){msgEl.innerHTML=`✅ Request recorded! Ref: <strong>${_esc(ref)}</strong> — opening SOKONI Support…`;msgEl.style.color='#818cf8';}
-  setTimeout(function(){ location.href = 'support.html?topic=request&desc=' + encodeURIComponent(msg); }, 600);
+  _thPending(msgEl);
+  /* IT service request → support ticket (owner 2026-09-30); "recorded" only once the techITRequests write resolved. */
+  _thFireWrite('techITRequests',{ref,name,phone,company,service:svc,budget,timeline,desc,hub:'tech-hub'}).then(function(ok){
+    if(!ok){ _thFailed(msgEl,'request',ref); return; }
+    if(msgEl){msgEl.innerHTML=`✅ Request recorded on SOKONI. Ref: <strong>${_esc(ref)}</strong> — opening SOKONI Support…`;msgEl.style.color='#818cf8';}
+    setTimeout(function(){ location.href = 'support.html?topic=request&desc=' + encodeURIComponent(msg); }, 600);
+  });
 }
 window.submitITRequest = submitITRequest;
 
@@ -1056,7 +1079,7 @@ function filterStartups(sector, btn) {
       <div style="margin-bottom:10px;"><span style="font-size:10px;padding:2px 8px;border-radius:5px;background:${stageColor[s.stage]||'rgba(255,255,255,0.05)'};color:rgba(255,255,255,0.7);font-weight:700;">${s.stage}</span> <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.4);">👥 ${s.team} team</span></div>
       <div style="font-size:12px;color:rgba(255,255,255,0.6);line-height:1.5;margin-bottom:10px;">${s.pitch}</div>
       <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;">🎯 Seeking: ${s.funding}</div>
-      <a href="https://wa.me/254${s.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi '+s.founder+', I saw '+s.name+' on SOKONI Startup Zone. I\'d love to connect!')}" target="_blank" rel="noopener" class="th-wa-btn" style="background:rgba(251,146,60,0.08);border-color:rgba(251,146,60,0.25);color:#fb923c;">💬 Connect</a>
+      <a href="support.html?topic=hire&desc=${encodeURIComponent('I\'d like to connect with '+s.founder+' of '+s.name+' (SOKONI Startup Zone).')}" class="th-wa-btn" style="background:rgba(251,146,60,0.08);border-color:rgba(251,146,60,0.25);color:#fb923c;">💬 Connect</a>
     </div>`).join('');
 }
 window.filterStartups = filterStartups;
@@ -1072,10 +1095,12 @@ function registerStartup() {
   const stage=document.getElementById('stStage')?.value||'';
   const funding=document.getElementById('stFunding')?.value||'';
   const pitch=document.getElementById('stPitch')?.value||'';
-  _thFireWrite('techStartups',{ref,name,founder,phone,sector,stage,funding,pitch,hub:'tech-hub'});
-  const msg=`🚀 *SOKONI Startup Zone — Registration*\n\nRef: ${ref}\n🏢 ${name}\n👤 ${founder}\n📞 ${phone}\n📂 Sector: ${sector}\n📈 Stage: ${stage}\n💰 Funding: ${funding}\n${pitch?'\n📝 '+pitch:''}\n\nPlease list us on SOKONI Tech Hub. Thank you!`;
-  window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
-  if(msgEl){msgEl.innerHTML=`✅ Submitted! Ref: <strong>${_esc(ref)}</strong>`;msgEl.style.color='#fb923c';}
+  _thPending(msgEl);
+  /* Recorded in techStartups — no WhatsApp hand-off to the admin (owner 2026-09-30). Success copy only after the write resolves. */
+  _thFireWrite('techStartups',{ref,name,founder,phone,sector,stage,funding,pitch,hub:'tech-hub'}).then(function(ok){
+    if(!ok){ _thFailed(msgEl,'request',ref); return; }
+    if(msgEl){msgEl.innerHTML=`✅ Submission recorded on SOKONI. Ref: <strong>${_esc(ref)}</strong>. Questions? <a href="support.html?topic=request&ref=${encodeURIComponent(ref)}" style="color:#fb923c;">Contact Support</a>`;msgEl.style.color='#fb923c';}
+  });
 }
 window.registerStartup = registerStartup;
 
@@ -1112,7 +1137,7 @@ function filterCourses() {
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${c.skills.slice(0,3).map(k=>`<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.2);color:#4ade80;">${k}</span>`).join('')}</div>
       <div class="th-card-price" style="color:#4ade80;">${c.price}</div>
       <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;">⭐ ${c.rating}</div>
-      <a href="https://wa.me/254${c.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi, I found '+c.name+' on SOKONI Tech Hub. Please share enrollment details.')}" target="_blank" rel="noopener" class="th-wa-btn" style="background:rgba(34,197,94,0.07);border-color:rgba(34,197,94,0.25);color:#4ade80;">💬 Enroll via WhatsApp</a>
+      <a href="support.html?topic=hire&desc=${encodeURIComponent('Please share enrollment details for '+c.name+' by '+c.provider+' (SOKONI Tech Hub).')}" class="th-wa-btn" style="background:rgba(34,197,94,0.07);border-color:rgba(34,197,94,0.25);color:#4ade80;">💬 Enroll via SOKONI</a>
     </div>`).join('');
 }
 window.filterCourses = filterCourses;
@@ -1149,7 +1174,7 @@ function filterJobs() {
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;">${j.skills.slice(0,3).map(k=>`<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(244,63,94,0.07);border:1px solid rgba(244,63,94,0.2);color:#fb7185;">${k}</span>`).join('')}</div>
       <div style="font-size:13px;font-weight:800;color:#fb7185;margin-bottom:10px;">${j.salary}</div>
-      <a href="https://wa.me/254${j.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi, I saw the '+j.title+' position at '+j.company+' on SOKONI Tech Hub. I\'d like to apply.')}" target="_blank" rel="noopener" class="th-wa-btn" style="background:rgba(244,63,94,0.07);border-color:rgba(244,63,94,0.25);color:#fb7185;">💬 Apply via WhatsApp</a>
+      <a href="support.html?topic=request&desc=${encodeURIComponent('I\'d like to apply for the '+j.title+' position at '+j.company+' (SOKONI Tech Hub).')}" class="th-wa-btn" style="background:rgba(244,63,94,0.07);border-color:rgba(244,63,94,0.25);color:#fb7185;">💬 Apply via SOKONI</a>
     </div>`).join('');
 }
 window.filterJobs = filterJobs;
@@ -1165,10 +1190,12 @@ function postJob() {
   const salary=document.getElementById('jobSalary')?.value||'';
   const loc=document.getElementById('jobLocation')?.value||'Nairobi';
   const desc=document.getElementById('jobDesc')?.value||'';
-  _thFireWrite('techJobs',{ref,title,company,phone,type,salary,loc,desc,hub:'tech-hub'});
-  const msg=`💼 *SOKONI Tech Hub — Job Posting*\n\nRef: ${ref}\n📌 ${title}\n🏢 ${company}\n📞 ${phone}\n🏷️ Type: ${type}\n💰 ${salary}\n📍 ${loc}\n${desc?'\n📝 '+desc:''}\n\nPlease list this job on SOKONI Tech Hub. Thank you!`;
-  window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
-  if(msgEl){msgEl.innerHTML=`✅ Job posted! Ref: <strong>${_esc(ref)}</strong>`;msgEl.style.color='#fb7185';}
+  _thPending(msgEl);
+  /* Recorded in techJobs — no WhatsApp hand-off to the admin (owner 2026-09-30). Success copy only after the write resolves. */
+  _thFireWrite('techJobs',{ref,title,company,phone,type,salary,loc,desc,hub:'tech-hub'}).then(function(ok){
+    if(!ok){ _thFailed(msgEl,'request',ref); return; }
+    if(msgEl){msgEl.innerHTML=`✅ Job post recorded on SOKONI. Ref: <strong>${_esc(ref)}</strong>. Questions? <a href="support.html?topic=request&ref=${encodeURIComponent(ref)}" style="color:#fb7185;">Contact Support</a>`;msgEl.style.color='#fb7185';}
+  });
 }
 window.postJob = postJob;
 
@@ -1197,7 +1224,7 @@ function filterAITools(cat, btn) {
       <div style="font-size:11px;color:#c084fc;font-weight:700;margin-bottom:6px;">${t.tagline}</div>
       <div style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.5;margin-bottom:10px;">${t.desc}</div>
       <div class="th-card-price" style="color:#c084fc;">${t.price}</div>
-      <a href="https://wa.me/254${t.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi, I found '+t.name+' on SOKONI Tech Hub. Tell me more about how it works.')}" target="_blank" rel="noopener" class="th-wa-btn" style="background:rgba(168,85,247,0.07);border-color:rgba(168,85,247,0.25);color:#c084fc;">💬 Learn More</a>
+      <a href="support.html?topic=hire&desc=${encodeURIComponent('Tell me more about '+t.name+' (SOKONI Tech Hub) and how it works.')}" class="th-wa-btn" style="background:rgba(168,85,247,0.07);border-color:rgba(168,85,247,0.25);color:#c084fc;">💬 Learn More</a>
     </div>`).join('');
 }
 window.filterAITools = filterAITools;

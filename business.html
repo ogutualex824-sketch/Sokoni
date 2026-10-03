@@ -816,8 +816,8 @@ function renderHeader() {
   const metaParts = [];
   if (b.location) metaParts.push(`<span>📍 ${escHtml(b.location)}</span>`);
   if (b.phone) {
-    const waNum = String(b.phone).replace(/\D/g, '');
-    metaParts.push(`<a href="https://wa.me/${waNum}" target="_blank" rel="noopener">📞 ${escHtml(b.phone)}</a>`);
+    const telNum = String(b.phone).replace(/[^\d+]/g, '');
+    metaParts.push(`<a href="tel:${escHtml(telNum)}">📞 ${escHtml(b.phone)}</a>`);
   }
   if (b.website) {
     const safe = b.website.startsWith('http') ? b.website : 'https://' + b.website;
@@ -1063,7 +1063,7 @@ window.bizShare = function () {
   if (navigator.share) {
     navigator.share({ title, url }).catch(() => {});
   } else {
-    window.open('https://wa.me/?text=' + encodeURIComponent(title + ': ' + url), '_blank');
+    window.open('https://wa.me/?text=' + encodeURIComponent(title + ': ' + url), '_blank'); /* wa-allowed:marketing */
   }
 };
 
@@ -1238,8 +1238,12 @@ async function loadServices() {
 }
 
 function serviceCardHtml(s) {
-  const waNum = String((_biz && _biz.phone) || '').replace(/\D/g, '');
-  const waMsg = encodeURIComponent(`Hi, I'd like to book: ${s.name || 'Service'} — KES ${Number(s.price || 0).toLocaleString()}`);
+  /* In-app booking (owner 2026-09-30: no WhatsApp hand-off): the owner's provider profile hosts
+     SokoniBookService; with no owner uid, SOKONI Support connects the customer. */
+  const ownerUid = (_biz && _biz.ownerUid) || '';
+  const bookHref = ownerUid
+    ? 'provider-profile.html?uid=' + encodeURIComponent(ownerUid)
+    : 'support.html?topic=booking&desc=' + encodeURIComponent(`I'd like to book: ${s.name || 'Service'} — KES ${Number(s.price || 0).toLocaleString()}` + ((_biz && _biz.name) ? ` at ${_biz.name}` : ''));
   return `
     <div class="biz-service-card">
       <div class="biz-service-info">
@@ -1249,8 +1253,8 @@ function serviceCardHtml(s) {
         </div>
       </div>
       <div class="biz-service-price">KES ${Number(s.price || 0).toLocaleString()}</div>
-      <a href="https://wa.me/${waNum}?text=${waMsg}" target="_blank" rel="noopener" class="biz-service-book">
-        <i class="fab fa-whatsapp"></i> Book Now
+      <a href="${escHtml(bookHref)}" class="biz-service-book">
+        <i class="fas fa-calendar-check"></i> Book Now
       </a>
     </div>`;
 }

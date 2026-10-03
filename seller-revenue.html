@@ -588,11 +588,11 @@ window.selectPlan = function(plan) {
   const PRICES = {free:0, pro:999, business:2999};
   msg.style.display = "block";
   msg.style.background = "#ff950011"; msg.style.color="#ff9500"; msg.style.border="1px solid #ff950033";
-  msg.textContent = `To ${plan==="free"?"downgrade to":"upgrade to"} the ${plan.charAt(0).toUpperCase()+plan.slice(1)} plan (${plan==="free"?"free":`KES ${PRICES[plan]}/month`}), contact support@mysokoni.co.ke or WhatsApp +254 705 726 803. Mention your seller ID: ${(_uid||"").slice(0,12)}`;
+  msg.textContent = `To ${plan==="free"?"downgrade to":"upgrade to"} the ${plan.charAt(0).toUpperCase()+plan.slice(1)} plan (${plan==="free"?"free":`KES ${PRICES[plan]}/month`}), contact support@mysokoni.co.ke or use Contact Support (support.html). Mention your seller ID: ${(_uid||"").slice(0,12)}`;
 };
 
 window.contactEnterprise = function() {
-  window.open("https://wa.me/254705726803?text=Hi+SOKONI%2C+I%27m+interested+in+the+Enterprise+plan+for+my+seller+account+"+(_uid||"").slice(0,8), "_blank");
+  window.location.href = "support.html?topic=request&desc=" + encodeURIComponent("Hi SOKONI, I'm interested in the Enterprise plan for my seller account " + (_uid||"").slice(0,8));
 };
 
 window.loadMyFeatured = async function() {

@@ -2502,8 +2502,8 @@
           <a href="https://youtube.com/@mysokoni_ke" target="_blank" rel="noopener noreferrer" class="social-handle-pill">
             <i class="fab fa-youtube"></i> @mysokoni_ke
           </a>
-          <a href="https://wa.me/254705726803" target="_blank" rel="noopener noreferrer" class="social-handle-pill social-whatsapp">
-            <i class="fab fa-whatsapp"></i> WhatsApp Us
+          <a href="support.html" class="social-handle-pill social-whatsapp" aria-label="Support" title="Support">
+            💬 Contact Support
           </a>
         </div>
       </div>
@@ -2823,9 +2823,10 @@
         deferredPrompt = window._sokoniInstallEvent || null;
       }
 
-      window.addEventListener("beforeinstallprompt", function () {
-        setTimeout(_showPrompt, 3000);
-      });
+      /* Owner 2026-10-01: the install offer is ONE banner on every phone (sw-register.js
+         _maybeOfferInstall — Android one-tap AND iOS steps, rate-limited). Home's compact prompt no
+         longer auto-shows, so the two never appear together; its buttons stay wired. */
+      void _showPrompt;
 
       window.addEventListener("DOMContentLoaded", function () {
         var installBtn = document.getElementById("pwaInstallBtn");
@@ -3239,8 +3240,14 @@ import SokoniDB from "./sokoni-db.js";
         if (text) text.textContent = "Back online — shopping continues!";
         void toast.offsetWidth;
         toast.classList.add("show");
-        setTimeout(function () { toast.classList.remove("show"); }, 3500);
+        setTimeout(function () { toast.classList.remove("show"); }, 2000);   /* owner 2026-10-01: pop, 2 s, gone */
       }
+      /* Owner 2026-10-01: "back online should pop and show for 2 s and disappear". This toast was defined
+         but never called. It fires only on a real reconnect (an 'online' after an 'offline' on this page),
+         never on load. The offline state itself is sokoni-ui.js's #sk-offline-bar, unchanged. */
+      var _wasOffline = (typeof navigator !== "undefined" && navigator.onLine === false);
+      window.addEventListener("offline", function () { _wasOffline = true; });
+      window.addEventListener("online",  function () { if (_wasOffline) { _wasOffline = false; showNetworkToast(true); } });
 
       /* offline banner managed exclusively by sokoni-ui.js (#sk-offline-bar) */
 
@@ -3938,7 +3945,7 @@ document.addEventListener('DOMContentLoaded',function(){
     if (Notification.permission === 'granted') {
       new Notification('💚 Payment Received — SOKONI', {
         body: 'KES ' + Number(p.amount || 0).toLocaleString() + (p.mpesaCode ? ' · ' + p.mpesaCode : ''),
-        icon: 'assets/sokoni logoo.jpeg',
+        icon: '/assets/logosokoni.png',
       });
     }
 
@@ -4005,7 +4012,7 @@ document.addEventListener('DOMContentLoaded',function(){
     if (Notification.permission === 'granted') {
       new Notification('🛒 New Order — SOKONI', {
         body: (o.buyerName || 'Customer') + (o.total ? ' · KES ' + Number(o.total).toLocaleString() : ''),
-        icon: 'assets/sokoni logoo.jpeg',
+        icon: '/assets/logosokoni.png',
       });
     }
 

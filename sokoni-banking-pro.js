@@ -592,7 +592,7 @@ window.BankingPro = (function(){
     const inv=all.find(i=>i.id===id); if(!inv) return;
     const msg=encodeURIComponent(`Hi ${inv.clientName},\n\nThis is a payment reminder from SOKONI.\n\n📜 Invoice: #${inv.number}\n💰 Amount: KES ${fmt(inv.amount)}\n📅 Due: ${inv.dueDate||'Immediately'}\n📋 For: ${inv.desc}\n\nPlease make payment at your earliest convenience.\n\nThank you!\nSOKONI Business`);
     const phone=inv.clientPhone.replace(/\D/g,'');
-    window.open(`https://wa.me/${phone.startsWith('0')?'254'+phone.slice(1):phone}?text=${msg}`,'_blank');
+    window.open(`https://wa.me/${phone.startsWith('0')?'254'+phone.slice(1):phone}?text=${msg}`,'_blank'); /* wa-allowed:invoice */
   }
 
   function deleteInvoice(id){

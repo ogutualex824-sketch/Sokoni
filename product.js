@@ -687,7 +687,7 @@ else{
                             &#x1F4AC; Chat Seller
                         </button>
                         <button class="prd-cta-icon-btn wishlist" onclick="addToWishlistProduct()">&#x2764;&#xFE0F; Save</button>
-                        <button class="prd-cta-icon-btn share" onclick="(function(){var url=window.SokoniReferral?SokoniReferral.getShareURL(window.location.href):window.location.href;if(window.SokoniSocial&&product)SokoniSocial.openShareModal({id:product.id||'p',name:product.name||'Product',category:product.category||'',tagline:product.description||'',rating:product.rating||5,type:'product',shareURL:url});else if(navigator.share)navigator.share({title:product&&product.name||'SOKONI',url:url}).catch(function(){});else window.open('https://wa.me/?text='+encodeURIComponent((product&&product.name||'Check this out')+' on SOKONI: '+url),'_blank');})()">&#x1F4E4; Share</button>
+                        <button class="prd-cta-icon-btn share" onclick="(function(){var url=window.SokoniReferral?SokoniReferral.getShareURL(window.location.href):window.location.href;if(window.SokoniSocial&&product)SokoniSocial.openShareModal({id:product.id||'p',name:product.name||'Product',category:product.category||'',tagline:product.description||'',rating:product.rating||5,type:'product',shareURL:url});else if(navigator.share)navigator.share({title:product&&product.name||'SOKONI',url:url}).catch(function(){});else window.open('https://wa.me/?text='+encodeURIComponent((product&&product.name||'Check this out')+' on SOKONI: '+url),'_blank');/* wa-allowed:marketing */})()">&#x1F4E4; Share</button>
                     </div>
                 </div>
 
@@ -876,7 +876,7 @@ else{
                     window._prdSellerWhatsApp = subData.whatsapp || product.sellerWhatsApp || '';
                     /* Update Chat button label */
                     var waBtn = document.getElementById('prdWaBtn');
-                    if(waBtn && isPremium) waBtn.innerHTML = '&#x1F4AC; WhatsApp Seller';
+                    if(waBtn && isPremium) waBtn.innerHTML = '&#x1F4AC; Contact Seller';
                 } catch(_){}
             }
 
@@ -1499,21 +1499,24 @@ async function contactSellerWhatsApp(){
         }catch(e){ console.warn("[ContactSeller] Firestore failed:", e.message); }
     }
 
-    /* Fallback: WhatsApp — fire commission gate then open */
-    const phone = (product.sellerPhone || product.phone || '').replace(/\D/g,'');
-    const waNum = phone.length >= 9 ? (phone.startsWith('254') ? phone : '254' + phone.replace(/^0/,'')) : '254705726803';
-    const pname = (product.name || 'this item').substring(0, 60);
-    const price = Number(product.price || 0).toLocaleString();
-    const plainMsg = `Hi, I'm interested in "${pname}" (KES ${price}) on SOKONI. Is it still available?`;
-    if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
-        SokoniPay.waConnect(waNum, plainMsg, {
-            providerName: product.sellerName || 'Seller',
-            category: product.category || 'product',
-            serviceDesc: 'Product inquiry: ' + pname,
-        });
-    } else {
-        window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(plainMsg)}`, '_blank');
+    /* Fallback: stay in SOKONI — the seller's store page, else a support request
+       (no WhatsApp hand-off; owner decision 2026-09-30). */
+    _prdInAppSellerContact();
+}
+
+/* In-app seller contact with no order yet: the seller's SOKONI store page
+   (same link as the seller card), or — with no seller id — a support request
+   naming the product so the SOKONI team connects the buyer. */
+function _prdInAppSellerContact() {
+    var p = (typeof product !== 'undefined' && product) ? product : {};
+    var sellerUid = p.sellerUid || p.sellerId || '';
+    if (sellerUid) {
+        window.location.href = 'store.html?id=' + encodeURIComponent(sellerUid);
+        return;
     }
+    var pid  = String(p.id || new URLSearchParams(location.search).get('id') || '');
+    var desc = 'Product enquiry: ' + String(p.name || 'a product').substring(0, 60) + (pid ? ' (id ' + pid + ')' : '');
+    window.location.href = 'support.html?topic=request' + (pid ? '&ref=' + encodeURIComponent(pid) : '') + '&desc=' + encodeURIComponent(desc);
 }
 window.contactSellerWhatsApp = contactSellerWhatsApp;
 
@@ -1529,7 +1532,7 @@ function shareProductWhatsApp(){
         return;
     }
     const text = encodeURIComponent(`🛍️ Check out "${product.name}" on SOKONI — KES ${Number(product.price).toLocaleString()}\n\nhttps://mysokoni.co.ke/product.html`);
-    window.open(`https://wa.me/?text=${text}`, "_blank");
+    window.open(`https://wa.me/?text=${text}`, "_blank"); /* wa-allowed:marketing */
 }
 
 /* MAKE AN OFFER */
@@ -2004,23 +2007,17 @@ function _maskPhone(phone) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   P13: WhatsApp gating — premium gets direct link,
-         non-premium gets in-app contact request modal
+   P13: Seller contact — premium goes to the seller's SOKONI store page,
+         non-premium gets in-app contact request modal (no WhatsApp hand-off)
 ═══════════════════════════════════════════════════════ */
 function contactSellerGated() {
     var isPremium = window._prdSellerIsPremium;
-    var waNumber  = window._prdSellerWhatsApp || window._prdSellerPhone || '';
-    if (isPremium && waNumber) {
-        /* Premium seller — direct WhatsApp */
-        var productTitle = (typeof product !== 'undefined' && product.name) ? product.name : 'this product';
-        var msg = 'Hi, I am interested in *' + productTitle + '* listed on SOKONI. ' + window.location.href;
-        var clean = waNumber.replace(/[^0-9]/g,'');
-        if (clean.startsWith('0')) clean = '254' + clean.slice(1);
-        window.open('https://wa.me/' + clean + '?text=' + encodeURIComponent(msg), '_blank');
-    } else {
-        /* Non-premium — open in-app contact request */
-        _openContactRequestModal();
-    }
+    /* Every seller, premium or not, is reached through the ONE in-app request
+       (contactRequests → the seller's Enquiries sheet in merchant-v2). The premium
+       branch used to send buyers to store.html, whose "Ask about a product" chip sends
+       them back to a product page — a loop that never reached the seller. */
+    void isPremium;
+    _openContactRequestModal();
 }
 window.contactSellerGated = contactSellerGated;
 
@@ -2040,7 +2037,7 @@ function _ensureContactModal() {
     modal.innerHTML =
         '<div class="prd-contact-box">' +
             '<h3>Contact Seller</h3>' +
-            '<p>Send a contact request. The seller will reach out to you directly.</p>' +
+            '<p>Your request goes to the seller\'s SOKONI dashboard with your name and phone number, so they can reply.</p>' +
             '<input class="prd-contact-inp" id="prdCrName"  type="text"  placeholder="Your name *" style="font-size:16px;">' +
             '<input class="prd-contact-inp" id="prdCrPhone" type="tel"   placeholder="Your phone number *" style="font-size:16px;">' +
             '<textarea class="prd-contact-inp" id="prdCrMsg" rows="2" placeholder="Message (optional)" style="resize:none;"></textarea>' +
@@ -2053,57 +2050,170 @@ function _ensureContactModal() {
     modal.addEventListener('click', function(e) { if (e.target === modal) modal.classList.remove('open'); });
 }
 
-function _openContactRequestModal() {
+/* ── CONTACT REQUEST PAYLOAD — pure, so it can be executed by a test ──────────
+   The ONE place the contactRequests document is shaped. It satisfies the served
+   rule exactly:
+     create: isAuthed() && request.resource.data.buyerUid == request.auth.uid
+             && keys().hasAll(['buyerUid','sellerUid','productId','message','createdAt'])
+
+   The previous writer sent no buyerUid, so the rule denied EVERY submit — and the
+   UI swallowed the denial. sellerUid now comes from the canonical products/{id}
+   document read at submit time (the field the products rule pins to the owner),
+   never from the localStorage-cached product object, which may be stale or carry
+   an empty id. No seller on the canonical doc → no payload; the caller offers
+   Support instead of writing a request that no seller can ever read.
+
+   createdAt is passed in (serverTimestamp() in the page, a sentinel in tests), so
+   this function has no dependency on the SDK.
+   Returns { ok:true, data } or { ok:false, reason }. */
+function buildContactRequest(user, productDoc, form, createdAt) {
+    var MSG_MAX = 1000;
+    if (!user || typeof user.uid !== 'string' || !user.uid) return { ok: false, reason: 'signed-out' };
+    if (!productDoc || typeof productDoc !== 'object' || !productDoc.id) return { ok: false, reason: 'no-product' };
+    var sellerUid = (typeof productDoc.sellerUid === 'string') ? productDoc.sellerUid.trim() : '';
+    if (!sellerUid) return { ok: false, reason: 'no-seller' };
+    if (sellerUid === user.uid) return { ok: false, reason: 'own-product' };
+    if (createdAt === undefined || createdAt === null) return { ok: false, reason: 'no-timestamp' };
+    form = form || {};
+    var name  = String(form.name  == null ? '' : form.name).trim().slice(0, 100);
+    var phone = String(form.phone == null ? '' : form.phone).replace(/[^0-9+]/g, '').slice(0, 20);
+    var msg   = String(form.message == null ? '' : form.message).trim().slice(0, MSG_MAX);
+    if (!name || !phone) return { ok: false, reason: 'name-phone-required' };
+    if (phone.length < 9) return { ok: false, reason: 'phone-invalid' };
+    return { ok: true, data: {
+        buyerUid:    user.uid,
+        buyerName:   name,
+        buyerPhone:  phone,
+        message:     msg,
+        productId:   String(productDoc.id),
+        productName: String(productDoc.name == null ? '' : productDoc.name).slice(0, 200),
+        sellerUid:   sellerUid,
+        sellerName:  String(productDoc.sellerName == null ? '' : productDoc.sellerName).slice(0, 120),
+        status:      'pending',
+        createdAt:   createdAt,
+        source:      'product_page'
+    } };
+}
+
+/* The signed-in Firebase user, once the persisted session has been restored.
+   A first null from currentUser is not proof of sign-out, so wait for
+   authStateReady() where the SDK offers it. */
+async function _prdCurrentUser() {
+    var auth = window.firebaseAuth;
+    var waited = 0;
+    while (!auth && waited++ < 40) { await new Promise(function(r){ setTimeout(r, 150); }); auth = window.firebaseAuth; }
+    if (!auth) return null;
+    if (typeof auth.authStateReady === 'function') { try { await auth.authStateReady(); } catch(_) {} }
+    return auth.currentUser || null;
+}
+
+function _prdLoginForContact() {
+    window.location.href = 'login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
+}
+
+function _prdContactProductId() {
+    return String(new URLSearchParams(location.search).get('id') ||
+        ((typeof product !== 'undefined' && product) ? (product.id || '') : ''));
+}
+
+/* Support hand-off for a request that cannot reach a seller account. Built with
+   DOM nodes so nothing user- or seller-supplied is ever parsed as HTML. */
+function _prdContactSupportLink(fb, lead) {
+    if (!fb) return;
+    var pid  = _prdContactProductId();
+    var name = (typeof product !== 'undefined' && product && product.name) ? String(product.name) : 'a product';
+    var desc = 'Product enquiry: ' + name.substring(0, 60) + (pid ? ' (id ' + pid + ')' : '');
+    fb.textContent = lead + ' ';
+    var a = document.createElement('a');
+    a.href = 'support.html?topic=request' + (pid ? '&ref=' + encodeURIComponent(pid) : '') + '&desc=' + encodeURIComponent(desc);
+    a.textContent = 'Ask SOKONI Support to connect you';
+    a.style.color = '#71ff00';
+    fb.appendChild(a);
+}
+
+async function _openContactRequestModal() {
+    /* Signed out → sign in first, then come back. Writing without a uid is what the
+       rules refuse, so there is no point letting a buyer fill in a form that cannot send. */
+    var user = await _prdCurrentUser();
+    if (!user) { _prdLoginForContact(); return; }
     _ensureContactModal();
+    var nm = document.getElementById('prdCrName');
+    if (nm && !nm.value && user.displayName) nm.value = user.displayName;
+    var fb0 = document.getElementById('prdCrFeedback'); if (fb0) fb0.textContent = '';
+    var b0 = document.getElementById('prdCrSubmit'); if (b0) { b0.disabled = false; b0.textContent = 'Send Request'; }
     document.getElementById('prd-contact-modal').classList.add('open');
     setTimeout(function() { var el = document.getElementById('prdCrName'); if (el) el.focus(); }, 150);
 }
 
 async function _submitContactRequest() {
-    var name  = (document.getElementById('prdCrName')  || {}).value || '';
-    var phone = (document.getElementById('prdCrPhone') || {}).value || '';
-    var msg   = (document.getElementById('prdCrMsg')   || {}).value || '';
-    var fb    = document.getElementById('prdCrFeedback');
-    var btn   = document.getElementById('prdCrSubmit');
-    if (!name.trim() || !phone.trim()) {
-        if (fb) { fb.textContent = 'Please enter your name and phone number.'; fb.style.color = '#ff9800'; }
-        return;
-    }
-    /* Basic phone sanitization — no internal storage of full number outside lead record */
-    var cleanPhone = phone.replace(/[^0-9+]/g, '');
-    if (cleanPhone.length < 9) {
-        if (fb) { fb.textContent = 'Please enter a valid phone number.'; fb.style.color = '#ff9800'; }
-        return;
-    }
+    var form = {
+        name:    (document.getElementById('prdCrName')  || {}).value || '',
+        phone:   (document.getElementById('prdCrPhone') || {}).value || '',
+        message: (document.getElementById('prdCrMsg')   || {}).value || ''
+    };
+    var fb  = document.getElementById('prdCrFeedback');
+    var btn = document.getElementById('prdCrSubmit');
+    var say = function(text, color) { if (fb) { fb.textContent = text; fb.style.color = color; } };
+    var reset = function() { if (btn) { btn.disabled = false; btn.textContent = 'Send Request'; } };
+
+    if (!String(form.name).trim() || !String(form.phone).trim()) { say('Please enter your name and phone number.', '#ff9800'); return; }
+    if (String(form.phone).replace(/[^0-9+]/g, '').length < 9) { say('Please enter a valid phone number.', '#ff9800'); return; }
+
+    var user = await _prdCurrentUser();
+    if (!user) { say('Please sign in to contact the seller — taking you to sign in…', '#ff9800'); _prdLoginForContact(); return; }
+
     if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+    var stage = 'product';
     try {
-        var {initializeApp,getApps} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
-        var {getFirestore,collection,addDoc,serverTimestamp} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-        var cfg = {apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",
-          projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",
-          messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
-        var app  = getApps().length ? getApps()[0] : initializeApp(cfg);
-        var db   = getFirestore(app);
-        var pid  = new URLSearchParams(location.search).get('id') || (typeof product !== 'undefined' ? (product.id || '') : '');
-        var lead = {
-            buyerName:    name.trim(),
-            buyerPhone:   cleanPhone,
-            message:      msg.trim(),
-            productId:    pid,
-            productName:  (typeof product !== 'undefined' && product.name) ? product.name : '',
-            sellerUid:    (typeof product !== 'undefined') ? (product.sellerUid || product.sellerId || '') : '',
-            sellerName:   (typeof product !== 'undefined') ? (product.sellerName || '') : '',
-            status:       'pending',
-            createdAt:    serverTimestamp(),
-            source:       'product_page',
-        };
-        await addDoc(collection(db, 'contactRequests'), lead);
-        if (fb) { fb.textContent = '✅ Request sent! The seller will contact you soon.'; fb.style.color = '#71ff00'; }
-        if (btn) { btn.textContent = 'Sent!'; }
-        setTimeout(function() { document.getElementById('prd-contact-modal').classList.remove('open'); }, 2000);
-    } catch(e) {
-        if (fb) { fb.textContent = 'Could not send request. Please try again.'; fb.style.color = '#ff4d4d'; }
-        if (btn) { btn.disabled = false; btn.textContent = 'Send Request'; }
+        /* The app's App-Check'd Firestore instance (see the product lookup above). */
+        var waited = 0;
+        while (!window.firebaseDB && waited++ < 40) { await new Promise(function(r){ setTimeout(r, 150); }); }
+        var fsm = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        var db  = window.firebaseDB || fsm.getFirestore();
+        var pid = _prdContactProductId();
+        if (!pid) { if (fb) { fb.style.color = '#ff9800'; _prdContactSupportLink(fb, 'This product could not be identified.'); } reset(); return; }
+
+        /* sellerUid from the CANONICAL product document, read now. */
+        var snap = await fsm.getDoc(fsm.doc(db, 'products', pid));
+        var productDoc = snap.exists() ? Object.assign({}, snap.data(), { id: snap.id }) : null;
+        var built = buildContactRequest(user, productDoc, form, fsm.serverTimestamp());
+        if (!built.ok) {
+            if (built.reason === 'no-product' || built.reason === 'no-seller') {
+                if (fb) { fb.style.color = '#ff9800'; _prdContactSupportLink(fb, 'This listing has no seller account we can send your request to.'); }
+            } else if (built.reason === 'own-product') {
+                say('This is your own listing — enquiries from buyers appear in your merchant dashboard.', '#ff9800');
+            } else if (built.reason === 'signed-out') {
+                say('Please sign in to contact the seller.', '#ff9800'); _prdLoginForContact();
+            } else {
+                say('Please check your name and phone number.', '#ff9800');
+            }
+            reset();
+            return;
+        }
+
+        stage = 'write';
+        await fsm.addDoc(fsm.collection(db, 'contactRequests'), built.data);
+        /* Success is shown ONLY after the canonical write resolved. */
+        say('✅ Request sent to the seller on SOKONI — they\'ll see it in their dashboard.', '#71ff00');
+        if (btn) { btn.textContent = 'Sent'; }
+        var msgEl = document.getElementById('prdCrMsg'); if (msgEl) msgEl.value = '';
+        setTimeout(function() { var m = document.getElementById('prd-contact-modal'); if (m) m.classList.remove('open'); }, 2500);
+    } catch (e) {
+        var code = (e && e.code) ? String(e.code) : '';
+        var offline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+        var lead;
+        if (code === 'permission-denied' || code === 'unauthenticated') {
+            lead = stage === 'write'
+                ? 'SOKONI refused this request (permission). It was not sent.'
+                : 'SOKONI could not verify this listing (permission). Nothing was sent.';
+        } else if (offline || code === 'unavailable' || code === 'deadline-exceeded' || /network|failed to fetch/i.test((e && e.message) || '')) {
+            lead = 'Network problem — your request was not sent. Check your connection and try again.';
+        } else {
+            lead = 'Your request was not sent' + (code ? ' (' + code + ')' : '') + '.';
+        }
+        try { console.error('[product] contact request failed at', stage, '-', code || (e && e.message)); } catch(_) {}
+        if (fb) { fb.style.color = '#ff4d4d'; _prdContactSupportLink(fb, lead); }
+        reset();
     }
 }
 window._submitContactRequest = _submitContactRequest;

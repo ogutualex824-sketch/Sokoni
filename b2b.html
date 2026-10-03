@@ -822,7 +822,7 @@ function enquireProduct(id) {
     <div style="margin-bottom:10px;"><label class="b2-label">Your Phone / Email</label><input id="enqPhone" class="b2-input" placeholder="07XXXXXXXX"></div>
     <div style="margin-bottom:14px;"><label class="b2-label">Message to Supplier</label><textarea id="enqMsg" class="b2-textarea" rows="2" placeholder="Delivery location, timeline, special requirements..."></textarea></div>
     <button class="b2-submit" style="width:100%;" onclick="sendEnquiry('${id}')">📤 Send Enquiry to Supplier</button>
-    <div style="text-align:center;margin-top:10px;"><a href="https://wa.me/${(p.supplierPhone||'254705726803').replace(/\D/g,'')}?text=${encodeURIComponent('Hi, I am interested in '+p.name+' (wholesale). Min order: '+p.moq+' '+p.unit+'. Please advise on availability. — via SOKONI B2B')}" target="_blank" style="font-size:12px;color:#25d366;font-weight:700;">💬 Or contact via WhatsApp →</a></div>
+    <div style="text-align:center;margin-top:10px;"><a href="support.html?topic=quote&ref=${encodeURIComponent(p.id||'')}&desc=${encodeURIComponent('Wholesale enquiry: '+p.name+' from '+(p.supplierName||'supplier')+'. Min order: '+p.moq+' '+(p.unit||'units')+'. Please advise on availability.')}" style="font-size:12px;color:#25d366;font-weight:700;">💬 Or ask SOKONI Support →</a></div>
   `);
 }
 window.enquireProduct = enquireProduct;

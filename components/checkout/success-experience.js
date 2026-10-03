@@ -219,7 +219,7 @@
     if (waBtn) waBtn.addEventListener('click', function () {
       var msg = 'My SOKONI order ' + (data.orderNumber || data.orderId || '') +
         ' is confirmed! Track it here: ' + track;
-      window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank', 'noopener');
+      window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank', 'noopener'); /* wa-allowed:marketing — share, no recipient chosen */
     });
     if (copyBtn) copyBtn.addEventListener('click', function () {
       var done = function () { copyBtn.textContent = '✅ Copied'; setTimeout(function () { copyBtn.textContent = '🔗 Copy link'; }, 1800); };

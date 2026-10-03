@@ -668,7 +668,18 @@ var TX_PAGES = {
   support_ticket:'profile',rfq:'marketplace',
 };
 
-if (!CONV_ID) { location.href = 'messages.html'; }
+/* ── chat.html?tx=<type>&txId=<id> — "Message them about this booking/order" (Slice B2).
+   The page supplies only the ANCHOR. messagesDispatch.createConversation derives the
+   parties from the transaction and refuses a caller who is not one of them, so the link
+   cannot open anyone else's thread. Only types the server can derive parties for. ── */
+var TX_OPENABLE = { order:1, service_booking:1, food_order:1, legal_consultation:1,
+  logistics_request:1, support_ticket:1, property_inquiry:1, job_application:1 };
+var _q        = new URLSearchParams(location.search);
+var TX_TYPE   = String(_q.get('tx') || '');
+var TX_ID     = String(_q.get('txId') || '').slice(0, 128);
+var OPEN_BY_TX = !CONV_ID && TX_OPENABLE.hasOwnProperty(TX_TYPE) && /^[A-Za-z0-9_-]{1,128}$/.test(TX_ID);
+
+if (!CONV_ID && !OPEN_BY_TX) { location.href = 'messages.html'; }
 
 /* ═══════════════════════════════════════════════════════════════════
    AUTH GATE
@@ -680,8 +691,25 @@ firebase.auth().onAuthStateChanged(function (user) {
   }
   UID      = user.uid;
   UID_NAME = user.displayName || user.email || 'You';
+  if (OPEN_BY_TX) { _openByTransaction(); return; }
   _loadConversation();
 });
+
+/* The server answers with the deterministic conversation id; nothing is shown until it does. */
+function _openByTransaction() {
+  SokoniChat.createConversation(TX_TYPE, TX_ID).then(function (r) {
+    var id = r && r.conversationId;
+    if (!id) throw new Error('no_conversation_id');
+    CONV_ID = id;
+    try { history.replaceState(null, '', 'chat.html?id=' + encodeURIComponent(id)); } catch (_) {}
+    _loadConversation();
+  }).catch(function (e) {
+    console.error('[chat] openByTransaction:', e && e.code);
+    var denied = e && /permission-denied|not-found|failed-precondition/.test(String(e.code || ''));
+    _toast(denied ? 'This conversation is only open to the people on this booking or order.' : 'Could not open the conversation. Please try again.');
+    setTimeout(function () { location.href = 'messages.html'; }, 2500);
+  });
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    LOAD CONVERSATION

@@ -304,9 +304,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
           <div style="font-size:14px;font-weight:800;color:white;">📄 Generated Agreement — Review &amp; Send</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" onclick="copyAgreement()" style="padding:8px 14px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Copy</button>
-            <button type="button" onclick="sendAgreementWhatsApp()" style="padding:8px 14px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">💬 Send via WhatsApp</button>
-            <button type="button" onclick="printAgreement()" style="padding:8px 14px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print / Save PDF</button>
+            <button type="button" onclick="copyAgreement()" style="padding:8px 14px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Copy</button>            <button type="button" onclick="printAgreement()" style="padding:8px 14px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print / Save PDF</button>
             <button type="button" onclick="saveAgreement()" style="padding:8px 14px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">💾 Save Agreement</button>
           </div>
         </div>
@@ -712,9 +710,7 @@
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;">📄 Generated Notice — Edit if needed</div>
         <div style="display:flex;gap:6px;">
-          <button type="button" onclick="copyNoticeText()" style="padding:5px 10px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Copy</button>
-          <button type="button" onclick="sendNoticeWhatsApp()" style="padding:5px 10px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">💬 WhatsApp</button>
-          <button type="button" onclick="printNotice()" style="padding:5px 10px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print/PDF</button>
+          <button type="button" onclick="copyNoticeText()" style="padding:5px 10px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Copy</button>          <button type="button" onclick="printNotice()" style="padding:5px 10px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print/PDF</button>
         </div>
       </div>
       <textarea id="noticeGeneratedText" style="width:100%;min-height:280px;padding:16px;background:rgba(255,255,255,0.05);border:1px solid rgba(113,255,0,0.2);border-radius:12px;color:rgba(255,255,255,0.85);font-size:16px;line-height:1.8;outline:none;font-family:'Courier New',monospace;resize:vertical;"></textarea>
@@ -884,47 +880,58 @@
     </select>
     <textarea id="bmMessage" class="modal-input" rows="6" placeholder="Type your message here..." style="resize:vertical;"></textarea>
     <div id="bmResult" style="min-height:14px;font-size:12px;margin:8px 0;color:#71ff00;"></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <button type="button" class="modal-confirm-btn" style="flex:1;" onclick="sendBulkMessageWA()">💬 Open in WhatsApp</button>
-      <button type="button" class="modal-confirm-btn" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);" onclick="saveCommunication()">💾 Save Log</button>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">      <button type="button" class="modal-confirm-btn" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);" onclick="saveCommunication()">💾 Save Log</button>
       <button type="button" class="modal-cancel-btn" onclick="document.getElementById('bulkMessageModal').style.display='none'">Cancel</button>
     </div>
   </div>
 </div>
 
-<!-- COLLECT RENT MODAL (M-Pesa STK Push) -->
+<!-- RECORD RENT RECEIVED MODAL (B2 closure, owner 2026-10-01)
+     Rent is the landlord's/agency's money, paid to THEIR OWN channel. SOKONI does not
+     collect it and does not verify it here. This form records what the landlord says
+     they received: paymentSource EXTERNAL, verification LANDLORD_RECORDED. It never
+     calls a payment provider and never shows "Payment confirmed". The old modal sent
+     an STK push from the browser (Daraja / IntaSend inline SDK) and, with no key set,
+     faked "Payment Confirmed" after 3 seconds. -->
 <div id="collectRentModal" class="modal-overlay" style="display:none;">
-  <div class="modal-box" style="max-width:400px;">
-    <h2>📱 Collect Rent via M-Pesa</h2>
+  <div class="modal-box" style="max-width:420px;">
+    <h2>🧾 Record rent received</h2>
     <div id="collectRentInfo" style="font-size:13px;color:rgba(255,255,255,0.55);margin-bottom:14px;line-height:1.6;"></div>
-    <input type="tel" id="collectRentPhone" placeholder="Tenant phone — 07XXXXXXXX" class="modal-input" oninput="this.value=this.value.replace(/[^0-9+]/g,'')">
-    <div id="collectRentSetupNotice" style="display:none;padding:10px 12px;background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.22);border-radius:10px;font-size:11px;color:rgba(255,152,0,0.9);line-height:1.7;margin-bottom:12px;">
-      ⚙️ To send real STK Push, set <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;">intasendKey</code> in <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;">sokoni-config.js</code>
+    <label for="recRentAmount" style="font-size:12px;color:rgba(255,255,255,0.6);">Amount received (KES)</label>
+    <input type="number" id="recRentAmount" min="1" step="1" inputmode="numeric" class="modal-input">
+    <label for="recRentChannel" style="font-size:12px;color:rgba(255,255,255,0.6);">How the tenant paid you</label>
+    <select id="recRentChannel" class="modal-input">
+      <option value="mpesa_to_landlord">M-Pesa to my own number / till</option>
+      <option value="bank">Bank transfer</option>
+      <option value="cash">Cash</option>
+      <option value="agency">Collected by my agency</option>
+      <option value="other">Other</option>
+    </select>
+    <label for="recRentRef" style="font-size:12px;color:rgba(255,255,255,0.6);">Reference (M-Pesa code, bank ref — optional)</label>
+    <input type="text" id="recRentRef" maxlength="40" class="modal-input" placeholder="e.g. QJK4XYZ12A">
+    <div style="padding:10px 12px;background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.22);border-radius:10px;font-size:11px;color:rgba(255,200,120,0.95);line-height:1.6;margin-bottom:12px;">
+      Recorded by you — this payment was made outside SOKONI, so SOKONI has not verified it.
     </div>
     <div id="collectRentResult" style="min-height:18px;font-size:13px;margin-bottom:10px;"></div>
     <div style="display:flex;gap:10px;">
-      <button type="button" class="modal-confirm-btn" id="sendRentStkBtn" onclick="sendRentStkPush()">📨 Send STK Push</button>
+      <button type="button" class="modal-confirm-btn" id="sendRentStkBtn" onclick="recordRentReceived()">🧾 Record payment</button>
       <button type="button" class="modal-cancel-btn" onclick="document.getElementById('collectRentModal').style.display='none'">Cancel</button>
-    </div>
-    <!-- IntaSend trust badge -->
-    <div id="rentIntasendBadge" style="display:none;margin-top:14px;padding:8px 12px;background:rgba(76,175,80,0.06);border:1px solid rgba(76,175,80,0.16);border-radius:10px;align-items:center;justify-content:center;gap:8px;">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L3 6v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V6L12 2z" fill="#4caf50" opacity=".85"/></svg>
-      <span style="font-size:11px;color:rgba(76,175,80,0.85);font-weight:700;">Secured by IntaSend</span>
-      <span style="width:1px;height:10px;background:rgba(76,175,80,0.25);"></span>
-      <span style="font-size:10px;color:rgba(255,255,255,0.32);">256-bit SSL · PCI Compliant</span>
     </div>
   </div>
 </div>
 
 <div id="notificationContainer"></div>
 
-<!-- Site config (IntaSend key etc.) -->
+<!-- Site config -->
 <script src="sokoni-config.js"></script>
-<!-- IntaSend for M-Pesa rent collection -->
-<script src="https://unpkg.com/intasend-inlinejs-sdk@3.0.3/build/intasend-inline.js"></script>
 <script>
   /* ══ DATA ══════════════════════════════════════ */
   const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  /* Ids and month keys interpolated into inline on* handlers. Every record here is
+     tenant/landlord-controlled (localStorage + landlordData sync), so a quoted handler
+     argument is only ever a validated token: anything outside [A-Za-z0-9_-] becomes ''
+     and the handler's lookup simply finds nothing. Never pass free text to a handler. */
+  const _jsId = s => { const v = String(s == null ? '' : s); return /^[A-Za-z0-9_-]+$/.test(v) ? v : ''; };
   function getData(){ try{ return JSON.parse(localStorage.getItem("sokoniLandlordProperties")) || []; }catch(e){ return []; } }
   function saveData(d){
     localStorage.setItem("sokoniLandlordProperties", JSON.stringify(d));
@@ -1013,11 +1020,11 @@
         <div class="ll-property-overview-card">
           <div class="ll-poc-header">
             <div>
-              <h3>${p.name}</h3>
-              <p>📍 ${p.address}, ${p.city}</p>
-              <p>👤 ${p.landlord} · ${p.phone}</p>
+              <h3>${_esc(p.name)}</h3>
+              <p>📍 ${_esc(p.address)}, ${_esc(p.city)}</p>
+              <p>👤 ${_esc(p.landlord)} · ${_esc(p.phone)}</p>
             </div>
-            <button type="button" class="ll-delete-prop-btn" onclick="deleteProperty('${p.id}')">🗑️</button>
+            <button type="button" class="ll-delete-prop-btn" onclick="deleteProperty('${_jsId(p.id)}')">🗑️</button>
           </div>
           <div class="ll-poc-stats">
             <div class="ll-poc-stat"><div>${units.length}</div><p>Units</p></div>
@@ -1029,7 +1036,7 @@
             <div class="ll-progress-label">Occupancy: ${occ_pct}%</div>
             <div class="ll-progress-bar-wrap"><div class="ll-progress-bar" style="width:${occ_pct}%"></div></div>
           </div>
-          <button type="button" class="ll-view-units-btn" onclick="viewPropertyUnits('${p.id}')">View Units →</button>
+          <button type="button" class="ll-view-units-btn" onclick="viewPropertyUnits('${_jsId(p.id)}')">View Units →</button>
         </div>
       `;
     }).join("");
@@ -1046,7 +1053,7 @@
     const filter = document.getElementById("unitPropertyFilter");
     // Populate filter
     filter.innerHTML = `<option value="all">All Properties</option>` +
-      props.map(p => `<option value="${p.id}">${p.name}</option>`).join("");
+      props.map(p => `<option value="${_esc(p.id)}">${_esc(p.name)}</option>`).join("");
     const selProp = filter.value;
     const units = selProp === "all"
       ? props.flatMap(p => (p.units||[]).map(u => ({...u, propName: p.name, propId: p.id})))
@@ -1075,16 +1082,16 @@
           ` : ""}
           <div class="unit-rent-row">
             <span>💰 KES ${Number(u.rent||0).toLocaleString()}/mo</span>
-            <span class="rent-status-tag ${rs.paid?'rent-paid':'rent-unpaid'}">${rs.paid?`✅ Paid ${rs.paidDate||""}` : "⏳ Pending"}</span>
+            <span class="rent-status-tag ${rs.paid?'rent-paid':'rent-unpaid'}">${rs.paid?`✅ Paid ${_esc(rs.paidDate||"")}` : "⏳ Pending"}</span>
           </div>
           <div class="unit-actions">
             ${u.status==='occupied' ? `
-              <button type="button" class="unit-btn ${rs.paid?'unit-btn-grey':'unit-btn-green'}" onclick="toggleRent('${u.propId}','${u.id}')">
+              <button type="button" class="unit-btn ${rs.paid?'unit-btn-grey':'unit-btn-green'}" onclick="toggleRent('${_jsId(u.propId)}','${_jsId(u.id)}')">
                 ${rs.paid?"↩ Mark Unpaid":"✅ Mark Paid"}
               </button>
-            ` : `<button type="button" class="unit-btn unit-btn-blue" onclick="markOccupied('${u.propId}','${u.id}')">🔑 Move In Tenant</button>`}
-            <button type="button" class="unit-btn unit-btn-grey" onclick="openEditUnit('${u.propId}','${u.id}')">✏️ Edit</button>
-            ${u.status==='occupied' ? `<button type="button" class="unit-btn unit-btn-red" onclick="vacateUnit('${u.propId}','${u.id}')">🚪 Vacate</button>` : ""}
+            ` : `<button type="button" class="unit-btn unit-btn-blue" onclick="markOccupied('${_jsId(u.propId)}','${_jsId(u.id)}')">🔑 Move In Tenant</button>`}
+            <button type="button" class="unit-btn unit-btn-grey" onclick="openEditUnit('${_jsId(u.propId)}','${_jsId(u.id)}')">✏️ Edit</button>
+            ${u.status==='occupied' ? `<button type="button" class="unit-btn unit-btn-red" onclick="vacateUnit('${_jsId(u.propId)}','${_jsId(u.id)}')">🚪 Vacate</button>` : ""}
           </div>
           <div class="unit-prop-label">${_esc(u.propName||"")}</div>
         </div>
@@ -1192,9 +1199,9 @@
           <div>${_esc(u.tenant||"—")} · ${_esc(u.tenantPhone||"")}</div>
           <div>KES ${Number(u.rent||0).toLocaleString()}</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button type="button" class="unit-btn unit-btn-green" onclick="toggleRentFromRentSection('${u.propId}','${u.id}')">✅ Mark Paid</button>
-            ${u.tenantPhone ? `<button type="button" class="unit-btn unit-btn-blue" onclick="sendRentInvoiceWA('${u.propId}','${u.id}','${month}')">📨 Invoice</button>` : ""}
-            ${u.tenantPhone ? `<button type="button" class="unit-btn unit-btn-grey" style="color:#f59e0b;border-color:rgba(245,158,11,0.3);" onclick="sendRentReminderWA('${u.propId}','${u.id}')">⏰ Remind</button>` : ""}
+            <button type="button" class="unit-btn unit-btn-green" onclick="toggleRentFromRentSection('${_jsId(u.propId)}','${_jsId(u.id)}')">✅ Mark Paid</button>
+            ${u.tenantPhone ? `<button type="button" class="unit-btn unit-btn-blue" onclick="sendRentInvoiceWA('${_jsId(u.propId)}','${_jsId(u.id)}','${_jsId(month)}')">📨 Invoice</button>` : ""}
+            ${u.tenantPhone ? `<button type="button" class="unit-btn unit-btn-grey" style="color:#f59e0b;border-color:rgba(245,158,11,0.3);" onclick="callTenantReminder('${_jsId(u.propId)}','${_jsId(u.id)}')">📞 Remind</button>` : ""}
           </div>
         </div>`).join("")}
       <h3 style="color:rgba(255,255,255,0.5);font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:24px 0 12px;">✅ Paid (${paid.length})</h3>
@@ -1204,8 +1211,8 @@
           <div>${_esc(u.tenant||"—")}</div>
           <div>KES ${Number(u.rent||0).toLocaleString()}</div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-            <span style="color:#71ff00;font-size:12px;">✅ Paid ${rentStatus(u,month).paidDate||""}</span>
-            ${u.tenantPhone ? `<button type="button" class="unit-btn unit-btn-grey" style="font-size:10px;padding:4px 8px;" onclick="sendRentReceiptWA('${u.propId}','${u.id}','${month}')">🧾 Receipt</button>` : ""}
+            <span style="color:#71ff00;font-size:12px;">✅ Paid ${_esc(rentStatus(u,month).paidDate||"")}</span>
+            ${u.tenantPhone ? `<button type="button" class="unit-btn unit-btn-grey" style="font-size:10px;padding:4px 8px;" onclick="sendRentReceiptWA('${_jsId(u.propId)}','${_jsId(u.id)}','${_jsId(month)}')">🧾 Receipt</button>` : ""}
           </div>
         </div>`).join("")}
     `;
@@ -1238,18 +1245,18 @@
           </div>
           ${bill ? `
             <div class="water-bill-detail">
-              <div class="water-reading">Prev: ${bill.prevReading} → Curr: ${bill.currReading} = <strong>${bill.units} units</strong></div>
+              <div class="water-reading">Prev: ${_esc(String(bill.prevReading))} → Curr: ${_esc(String(bill.currReading))} = <strong>${_esc(String(bill.units))} units</strong></div>
               <div class="water-amount">KES ${Number(bill.amount||0).toLocaleString()}</div>
               <div class="water-status ${bill.paid?'water-paid':'water-unpaid'}">${bill.paid?"✅ Paid":"⏳ Pending"}</div>
               <div class="unit-actions" style="margin-top:8px;flex-wrap:wrap;">
-                <button type="button" class="unit-btn ${bill.paid?'unit-btn-grey':'unit-btn-green'}" onclick="toggleWaterPaid('${u.propId}','${u.id}','${month}')">
+                <button type="button" class="unit-btn ${bill.paid?'unit-btn-grey':'unit-btn-green'}" onclick="toggleWaterPaid('${_jsId(u.propId)}','${_jsId(u.id)}','${_jsId(month)}')">
                   ${bill.paid?"↩ Unmark":"✅ Mark Paid"}
                 </button>
-                ${u.tenantPhone ? `<button type="button" class="unit-btn unit-btn-blue" onclick="sendWaterBillWA('${u.propId}','${u.id}','${month}')">💧 Send Bill</button>` : ""}
-                <button type="button" class="unit-btn unit-btn-grey" style="color:#f59e0b;border-color:rgba(245,158,11,0.3);" onclick="printWaterBill('${u.propId}','${u.id}','${month}')">🖨️ Print</button>
+                ${u.tenantPhone ? `<button type="button" class="unit-btn unit-btn-blue" onclick="sendWaterBillWA('${_jsId(u.propId)}','${_jsId(u.id)}','${_jsId(month)}')">💧 Send Bill</button>` : ""}
+                <button type="button" class="unit-btn unit-btn-grey" style="color:#f59e0b;border-color:rgba(245,158,11,0.3);" onclick="printWaterBill('${_jsId(u.propId)}','${_jsId(u.id)}','${_jsId(month)}')">🖨️ Print</button>
               </div>
             </div>
-          ` : `<div class="water-no-bill">No reading for ${month}<br><button type="button" class="unit-btn unit-btn-blue" onclick="quickAddWater('${u.propId}','${u.id}')">+ Add Reading</button></div>`}
+          ` : `<div class="water-no-bill">No reading for ${_esc(month)}<br><button type="button" class="unit-btn unit-btn-blue" onclick="quickAddWater('${_jsId(u.propId)}','${_jsId(u.id)}')">+ Add Reading</button></div>`}
         </div>
       `;
     }).join("") + "</div>";
@@ -1297,7 +1304,7 @@
             <span>KES ${Number(u.deposit||0).toLocaleString()}</span>
             <span class="${u.depositPaid?'deposit-paid':'deposit-unpaid'}">${u.depositPaid?"✅ Paid":"⏳ Pending"}</span>
             <span>
-              <button type="button" class="unit-btn ${u.depositPaid?'unit-btn-grey':'unit-btn-green'}" onclick="toggleDeposit('${u.propId}','${u.id}')">
+              <button type="button" class="unit-btn ${u.depositPaid?'unit-btn-grey':'unit-btn-green'}" onclick="toggleDeposit('${_jsId(u.propId)}','${_jsId(u.id)}')">
                 ${u.depositPaid?"↩ Refund":"✅ Mark Paid"}
               </button>
             </span>
@@ -1325,14 +1332,14 @@
     if(listings.length === 0){ grid.innerHTML = `<div class="ll-empty">🏠<p>No public listings. <button type="button" onclick="openAddListingModal()" style="color:#71ff00;background:none;border:none;cursor:pointer;font-weight:700;">Post one →</button></p></div>`; return; }
     grid.innerHTML = listings.map(l => `
       <div class="ll-listing-card">
-        <img loading="lazy" src="${l.image||'assets/backG2.jpeg'}" class="ll-listing-img">
+        <img loading="lazy" src="${_esc(l.image||'assets/backG2.jpeg')}" class="ll-listing-img">
         <div class="ll-listing-body">
-          <h3>${l.title}</h3>
-          <p>📍 ${l.location}</p>
+          <h3>${_esc(l.title)}</h3>
+          <p>📍 ${_esc(l.location)}</p>
           <p><strong>KES ${Number(l.rent||0).toLocaleString()}/month</strong> · Deposit: KES ${Number(l.deposit||0).toLocaleString()}</p>
           <div class="ll-listing-actions">
-            <button type="button" class="ll-action-btn ll-edit-btn" onclick="toggleListingAvail('${l.id}')">${l.available!==false?'✅ Available':'❌ Unavailable'}</button>
-            <button type="button" class="ll-action-btn ll-del-btn" onclick="deleteListing('${l.id}')">🗑️</button>
+            <button type="button" class="ll-action-btn ll-edit-btn" onclick="toggleListingAvail('${_jsId(l.id)}')">${l.available!==false?'✅ Available':'❌ Unavailable'}</button>
+            <button type="button" class="ll-action-btn ll-del-btn" onclick="deleteListing('${_jsId(l.id)}')">🗑️</button>
           </div>
         </div>
       </div>
@@ -1411,7 +1418,7 @@
     const sel = document.getElementById("waterUnitId");
     if(!sel.value || sel.value === ""){
       sel.innerHTML = `<option value="">Select unit...</option>` +
-        allUnits.map(u=>`<option value="${u.propId}__${u.id}">${_esc(u.number)} — ${_esc(u.propName)} (${_esc(u.tenant||"vacant")})</option>`).join("");
+        allUnits.map(u=>`<option value="${_esc(u.propId)}__${_esc(u.id)}">${_esc(u.number)} — ${_esc(u.propName)} (${_esc(u.tenant||"vacant")})</option>`).join("");
     }
     const wMonth = document.getElementById("waterBillMonth");
     if(wMonth && !wMonth.value) wMonth.value = new Date().toISOString().slice(0,7);
@@ -1473,7 +1480,7 @@
     const grid = document.getElementById("listPhotoGrid");
     grid.innerHTML = _listPhotoDataURLs.map((url,i)=>`
       <div style="position:relative;">
-        <img loading="lazy" src="${url}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;border:${i===0?'2px solid #71ff00':'1px solid rgba(255,255,255,0.1)'};">
+        <img loading="lazy" src="${_esc(url)}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;border:${i===0?'2px solid #71ff00':'1px solid rgba(255,255,255,0.1)'};">
         ${i===0?`<span style="position:absolute;top:3px;left:3px;background:#71ff00;color:black;font-size:8px;font-weight:900;padding:1px 4px;border-radius:3px;">COVER</span>`:""}
         <button type="button" onclick="removeListPhoto(${i})" style="position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.75);border:none;color:white;font-size:10px;cursor:pointer;">✕</button>
       </div>`).join("") + (_listPhotoDataURLs.length<8?`<div style="border:2px dashed rgba(255,255,255,0.1);border-radius:8px;height:80px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:22px;color:rgba(255,255,255,0.2);" onclick="document.getElementById('listPhotos').click()">+</div>`:"");
@@ -1598,152 +1605,72 @@
   };
 
   /* ═══════════════════════════════════════════
-     INTASEND CONFIG — paste your public key
-  ═══════════════════════════════════════════ */
-  const LANDLORD_INTASEND_KEY  = (window.SOKONI_CONFIG && window.SOKONI_CONFIG.intasendKey)  || "";
-  const LANDLORD_INTASEND_LIVE = (window.SOKONI_CONFIG && window.SOKONI_CONFIG.intasendLive !== undefined) ? window.SOKONI_CONFIG.intasendLive : true;
-
-  /* ═══════════════════════════════════════════
-     COLLECT RENT — M-PESA STK PUSH
+     RECORD RENT RECEIVED — landlord's own channel (B2 closure, owner 2026-10-01)
+     SOKONI does not collect rent here. This records the landlord's own statement that
+     rent arrived through THEIR channel: paymentSource EXTERNAL, verification
+     LANDLORD_RECORDED. No provider call, no "confirmed" wording. A SOKONI-verified rent
+     rail is a separate, future, server-certified Property payment slice.
   ═══════════════════════════════════════════ */
   let _collectRentData = null;
+  const RENT_CHANNELS = { mpesa_to_landlord:"M-Pesa to landlord", bank:"Bank transfer", cash:"Cash", agency:"Collected by agency", other:"Other" };
+
+  /* PURE — exported for tests. Refuses rather than inventing a figure. */
+  function buildExternalRentEntry(month, amountRaw, channel, refRaw, today){
+    const amount = Math.round(Number(amountRaw));
+    if(!/^\d{4}-\d{2}$/.test(String(month||""))) return { ok:false, reason:"bad_month" };
+    if(!Number.isFinite(amount) || amount <= 0 || amount > 10000000) return { ok:false, reason:"bad_amount" };
+    if(!Object.prototype.hasOwnProperty.call(RENT_CHANNELS, channel)) return { ok:false, reason:"bad_channel" };
+    const ref = String(refRaw||"").replace(/[^A-Za-z0-9 _-]/g,"").trim().slice(0,40);
+    return { ok:true, entry:{
+      month, paid:true, amount, paidDate: today, method: channel, ref,
+      paymentSource: "EXTERNAL", verification: "LANDLORD_RECORDED"
+    }};
+  }
+  window.buildExternalRentEntry = buildExternalRentEntry;
 
   function openCollectRent(propId, unitId){
     const props = getData();
     const unit  = props.find(p=>p.id===propId)?.units?.find(u=>u.id===unitId);
     if(!unit) return;
-    _collectRentData = { propId, unitId, rent: unit.rent, tenant: unit.tenant, phone: unit.tenantPhone };
-
+    _collectRentData = { propId, unitId, rent: unit.rent, tenant: unit.tenant };
     document.getElementById("collectRentInfo").innerHTML =
-      `<strong>${unit.tenant||"Tenant"}</strong> · Unit ${unit.number}<br>
+      `<strong>${_esc(unit.tenant||"Tenant")}</strong> · Unit ${_esc(unit.number)}<br>
        Rent due: <strong style="color:#71ff00;">KES ${Number(unit.rent||0).toLocaleString()}</strong>`;
-    document.getElementById("collectRentPhone").value = unit.tenantPhone || "";
+    document.getElementById("recRentAmount").value = Number(unit.rent||0) > 0 ? Number(unit.rent) : "";
+    document.getElementById("recRentChannel").value = "mpesa_to_landlord";
+    document.getElementById("recRentRef").value = "";
     document.getElementById("collectRentResult").textContent = "";
-    const notice = document.getElementById("collectRentSetupNotice");
-    if(notice) notice.style.display = LANDLORD_INTASEND_KEY ? "none" : "block";
-    const badge = document.getElementById("rentIntasendBadge");
-    if(badge) badge.style.display = LANDLORD_INTASEND_KEY ? "flex" : "none";
     const btn = document.getElementById("sendRentStkBtn");
-    if(btn){ btn.disabled = false; btn.innerHTML = '📨 Send STK Push'; btn.style.background = ""; btn.style.color = ""; }
+    if(btn){ btn.disabled = false; btn.innerHTML = '🧾 Record payment'; }
     document.getElementById("collectRentModal").style.display = "flex";
   }
 
-  function sendRentStkPush(){
+  function recordRentReceived(){
     if(!_collectRentData) return;
-    const rawPhone = document.getElementById("collectRentPhone").value.trim();
-    if(!rawPhone || rawPhone.length < 9){
-      document.getElementById("collectRentResult").innerHTML = '<span style="color:#ff6b6b;">Enter a valid phone number</span>';
-      return;
-    }
-
-    const phone    = rawPhone.replace(/^0/, "254").replace(/^\+/, "");
-    const amount   = Number(_collectRentData.rent || 0);
-    const btn      = document.getElementById("sendRentStkBtn");
     const resultEl = document.getElementById("collectRentResult");
-
-    /* Try Daraja (seller's own account) first */
-    const _landlordUid = (()=>{ try{ return JSON.parse(localStorage.getItem('sokoniUser')||'{}').uid||null; }catch(e){ return null; } })();
-    if(_landlordUid && window.SokoniMpesa){
-      btn.disabled = true;
-      btn.innerHTML = '⏳ Sending STK Push…';
-      resultEl.innerHTML = '<span style="color:#71ff00;">📲 Sending rent request via M-Pesa…</span>';
-      const _ordRef = 'RENT'+Date.now().toString().slice(-8);
-      SokoniMpesa.pay({
-        sellerUid: _landlordUid,
-        amount,
-        phone: rawPhone,
-        orderId: _ordRef,
-        hub: 'property',
-        sellerName: 'Landlord — SOKONI',
-        description: 'Rent Payment · '+(_collectRentData.tenant||'Tenant'),
-        onSuccess: r => {
-          btn.innerHTML = '✓ Paid!';
-          btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
-          btn.style.color = "black";
-          resultEl.innerHTML = '<span style="color:#71ff00;">✅ KES '+amount.toLocaleString()+' collected via M-Pesa!</span>';
-          const month = getCurrentMonth();
-          const props = getData();
-          const unit  = props.find(p=>p.id===_collectRentData.propId)?.units?.find(u=>u.id===_collectRentData.unitId);
-          if(unit){
-            unit.rentHistory = unit.rentHistory||[];
-            const idx = unit.rentHistory.findIndex(h=>h.month===month);
-            const entry = {month,paid:true,amount,paidDate:new Date().toLocaleDateString("en-KE"),method:"mpesa",ref:r.mpesaCode||_ordRef};
-            if(idx>=0) unit.rentHistory[idx]=entry; else unit.rentHistory.push(entry);
-            saveData(props); updateStats(); renderRentSection();
-            showNotif("✅ Rent collected via M-Pesa","success");
-          }
-          setTimeout(()=>document.getElementById("collectRentModal").style.display="none", 2000);
-        },
-        onFailure: reason => {
-          btn.disabled = false;
-          btn.innerHTML = '📨 Retry';
-          if(reason !== 'cancelled') resultEl.innerHTML = '<span style="color:#ff6b6b;">❌ Payment failed — please retry</span>';
-          else resultEl.innerHTML = '';
-        }
-      });
+    const month = getCurrentMonth();
+    const built = buildExternalRentEntry(month,
+      document.getElementById("recRentAmount").value,
+      document.getElementById("recRentChannel").value,
+      document.getElementById("recRentRef").value,
+      new Date().toLocaleDateString("en-KE"));
+    if(!built.ok){
+      resultEl.innerHTML = '<span style="color:#ff6b6b;">' + (built.reason === "bad_amount" ? "Enter the amount you received" : "Could not record this payment") + '</span>';
       return;
     }
-
-    if(!LANDLORD_INTASEND_KEY){
-      btn.disabled = true;
-      btn.innerHTML = '⏳ Sending STK Push...';
-      resultEl.innerHTML = '<span style="color:#71ff00;">📱 M-Pesa request sent — tenant should enter PIN on their phone.</span>';
-      setTimeout(()=>{
-        btn.innerHTML = '✓ Payment Confirmed!';
-        btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
-        btn.style.color = "black";
-        resultEl.innerHTML = '<span style="color:#71ff00;">✅ Rent collected — KES ' + amount.toLocaleString() + '</span>';
-        /* Mark rent paid in system */
-        const month = getCurrentMonth();
-        const props = getData();
-        const unit  = props.find(p=>p.id===_collectRentData.propId)?.units?.find(u=>u.id===_collectRentData.unitId);
-        if(unit){
-          unit.rentHistory = unit.rentHistory||[];
-          const idx = unit.rentHistory.findIndex(h=>h.month===month);
-          if(idx>=0) unit.rentHistory[idx] = {month,paid:true,amount,paidDate:new Date().toLocaleDateString("en-KE"),method:"mpesa"};
-          else unit.rentHistory.push({month,paid:true,amount,paidDate:new Date().toLocaleDateString("en-KE"),method:"mpesa"});
-          saveData(props);
-          updateStats();
-          renderRentSection();
-          showNotif("✅ Rent collected via M-Pesa","success");
-        }
-        setTimeout(()=>document.getElementById("collectRentModal").style.display="none", 2000);
-      }, 3000);
-      return;
-    }
-
-    /* Real IntaSend STK Push */
-    btn.disabled = true;
-    btn.innerHTML = '⏳ Connecting...';
-    resultEl.innerHTML = '<span style="color:#71ff00;">📲 Sending STK Push to phone...</span>';
-
-    new window.IntaSend({ publicAPIKey: LANDLORD_INTASEND_KEY, live: LANDLORD_INTASEND_LIVE })
-    .on("COMPLETE", result => {
-      btn.innerHTML = '✓ Paid!';
-      btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
-      btn.style.color = "black";
-      resultEl.innerHTML = '<span style="color:#71ff00;">✅ KES ' + amount.toLocaleString() + ' collected via M-Pesa!</span>';
-      const month = getCurrentMonth();
-      const props = getData();
-      const unit  = props.find(p=>p.id===_collectRentData.propId)?.units?.find(u=>u.id===_collectRentData.unitId);
-      if(unit){
-        unit.rentHistory = unit.rentHistory||[];
-        const idx = unit.rentHistory.findIndex(h=>h.month===month);
-        const entry = {month,paid:true,amount,paidDate:new Date().toLocaleDateString("en-KE"),method:"mpesa",ref:result.tracking_id||""};
-        if(idx>=0) unit.rentHistory[idx]=entry; else unit.rentHistory.push(entry);
-        saveData(props);
-        updateStats(); renderRentSection();
-        showNotif("✅ Rent collected via M-Pesa","success");
-      }
-      setTimeout(()=>document.getElementById("collectRentModal").style.display="none", 2000);
-    })
-    .on("IN-PROGRESS", ()=>{ resultEl.innerHTML='<span style="color:#71ff00;">📱 Enter M-Pesa PIN on your phone...</span>'; })
-    .on("FAILED", err=>{ btn.disabled=false; btn.innerHTML='📨 Retry'; resultEl.innerHTML='<span style="color:#ff6b6b;">❌ '+(err?.message||"Payment failed — retry")+'</span>'; })
-    .run({ amount, currency:"KES", phone_number:phone, email:"", first_name:(_collectRentData.tenant||"Tenant").split(" ")[0], last_name:"Tenant", api_ref:"RENT"+Date.now().toString().slice(-8), comment:"Sokoni Rent Collection" });
+    const props = getData();
+    const unit  = props.find(p=>p.id===_collectRentData.propId)?.units?.find(u=>u.id===_collectRentData.unitId);
+    if(!unit){ resultEl.innerHTML = '<span style="color:#ff6b6b;">This unit no longer exists</span>'; return; }
+    unit.rentHistory = unit.rentHistory||[];
+    const idx = unit.rentHistory.findIndex(h=>h.month===month);
+    if(idx>=0) unit.rentHistory[idx] = built.entry; else unit.rentHistory.push(built.entry);
+    saveData(props); updateStats(); renderRentSection();
+    showNotif("Payment recorded (" + RENT_CHANNELS[built.entry.method] + ") — recorded by you, not verified by SOKONI", "info");
+    document.getElementById("collectRentModal").style.display = "none";
   }
 
   window.openCollectRent = openCollectRent;
-  window.sendRentStkPush = sendRentStkPush;
+  window.recordRentReceived = recordRentReceived;
 
   /* ═══════════════════════════════════════════
      MAINTENANCE REQUESTS
@@ -1804,21 +1731,21 @@
     const STATUS_LABEL = { open:"🔴 Open", "in-progress":"🟡 In Progress", resolved:"🟢 Resolved" };
     grid.innerHTML = all.map(r => `
       <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px 18px;margin-bottom:10px;display:flex;align-items:flex-start;gap:14px;">
-        <div style="width:10px;height:10px;border-radius:50%;background:${PRIORITY_COL[r.priority]||'#71ff00'};flex-shrink:0;margin-top:5px;"></div>
+        <div style="width:10px;height:10px;border-radius:50%;background:${Object.prototype.hasOwnProperty.call(PRIORITY_COL,r.priority)?PRIORITY_COL[r.priority]:'#71ff00'};flex-shrink:0;margin-top:5px;"></div>
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
-            <span style="font-size:14px;font-weight:800;color:white;">${r.description}</span>
-            <span style="font-size:10px;background:rgba(255,255,255,0.06);border-radius:20px;padding:2px 9px;color:rgba(255,255,255,0.5);">${r.category}</span>
-            <span style="font-size:10px;color:rgba(255,255,255,0.4);">${r.date}</span>
+            <span style="font-size:14px;font-weight:800;color:white;">${_esc(r.description)}</span>
+            <span style="font-size:10px;background:rgba(255,255,255,0.06);border-radius:20px;padding:2px 9px;color:rgba(255,255,255,0.5);">${_esc(r.category)}</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.4);">${_esc(r.date)}</span>
           </div>
-          <div style="font-size:12px;color:rgba(255,255,255,0.45);">📍 ${r.unitRef}${r.tenant?' · '+r.tenant:''}${r.contractor?' · Contractor: '+r.contractor:''}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.45);">📍 ${_esc(r.unitRef)}${r.tenant?' · '+_esc(r.tenant):''}${r.contractor?' · Contractor: '+_esc(r.contractor):''}</div>
           ${r.cost > 0 ? `<div style="font-size:12px;color:#ffc107;margin-top:4px;">💰 KES ${Number(r.cost).toLocaleString()}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0;">
-          <span style="font-size:11px;font-weight:700;">${STATUS_LABEL[r.status]||r.status}</span>
+          <span style="font-size:11px;font-weight:700;">${STATUS_LABEL[r.status]||_esc(r.status)}</span>
           <div style="display:flex;gap:6px;">
-            ${r.status !== "resolved" ? `<button type="button" onclick="updateMaintStatus('${r.id}','${r.status==='open'?'in-progress':'resolved'}')" style="padding:5px 10px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">${r.status==='open'?"▶ Start":"✅ Resolve"}</button>` : ""}
-            <button type="button" onclick="deleteMaint('${r.id}')" style="padding:5px 8px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:7px;font-size:10px;cursor:pointer;font-family:inherit;">🗑</button>
+            ${r.status !== "resolved" ? `<button type="button" onclick="updateMaintStatus('${_jsId(r.id)}','${r.status==='open'?'in-progress':'resolved'}')" style="padding:5px 10px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">${r.status==='open'?"▶ Start":"✅ Resolve"}</button>` : ""}
+            <button type="button" onclick="deleteMaint('${_jsId(r.id)}')" style="padding:5px 8px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:7px;font-size:10px;cursor:pointer;font-family:inherit;">🗑</button>
           </div>
         </div>
       </div>
@@ -2456,7 +2383,7 @@ We will, without further notice, instruct our advocates to file proceedings in t
 • Costs of court proceedings and legal fees
 • Any damages to the property
 
-Pay to: ${prop?.phone || "[Landlord Payment Details]"}
+Pay to: ${prop?.phone || "[Landlord Payment Details]"} (paid directly to the landlord/agency — not processed or verified by SOKONI)
 
 THIS IS YOUR FINAL WARNING.
 
@@ -2560,11 +2487,8 @@ Date: ${formattedIssue}
     }, 1200);
   }
 
-  function sendNoticeWhatsApp(){
-    const text = document.getElementById("noticeGeneratedText")?.value;
-    if(!text) return;
-    window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank");
-  }
+  /* Slice B2: sendNoticeWhatsApp removed — a tenancy notice is not an invoice, so it
+     is not sent over WhatsApp (owner decision 2026-09-30). Print / Copy remain. */
 
   function copyNoticeText(){
     const text = document.getElementById("noticeGeneratedText")?.value;
@@ -2635,7 +2559,7 @@ Date: ${formattedIssue}
     saveNotices(all);
     document.getElementById("noticeModal").style.display = "none";
     renderNoticesSection();
-    showNotif("✅ Notice saved and issued!","success");
+    showNotif("Notice saved on this device — print or copy it to give to the tenant","success");
   }
 
   function renderNoticesSection(){
@@ -2658,35 +2582,33 @@ Date: ${formattedIssue}
     grid.innerHTML = all.map(n => {
       const daysLeft = Math.ceil((new Date(n.vacateDate) - Date.now()) / 86400000);
       const urgent   = daysLeft >= 0 && daysLeft <= 7;
-      const phone    = n.tenantPhone ? n.tenantPhone.replace(/^0/, "254") : "";
-      const waLink   = n.noticeText && phone
-          ? `https://wa.me/${phone}?text=${encodeURIComponent(n.noticeText)}`
-          : `https://wa.me/?text=${encodeURIComponent(n.noticeText||"")}`;
+      /* Slice B2: notices are not invoices — no WhatsApp hop; a tel: call link instead. */
+      const phone    = n.tenantPhone ? String(n.tenantPhone).replace(/\D/g, "").replace(/^0/, "254") : "";
       return `
       <div style="background:rgba(255,255,255,0.03);border:1px solid ${urgent?'rgba(255,100,0,0.3)':'rgba(255,255,255,0.07)'};border-radius:14px;padding:16px 18px;margin-bottom:12px;">
         <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;">
           <div style="flex:1;min-width:0;">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
-              <span style="font-size:14px;font-weight:800;color:white;">${TYPE_LABEL[n.type]||n.type}</span>
+              <span style="font-size:14px;font-weight:800;color:white;">${_esc(TYPE_LABEL[n.type]||n.type)}</span>
               <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${n.status==='active'?'rgba(113,255,0,0.1)':'rgba(255,255,255,0.05)'};color:${n.status==='active'?'#71ff00':'rgba(255,255,255,0.3)'};font-weight:700;">${n.status==='active'?"Active":"Archived"}</span>
               ${urgent ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(255,100,0,0.12);color:#ff6b6b;font-weight:700;">⚠️ ${daysLeft}d left</span>` : ""}
             </div>
-            <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:4px;">👤 ${n.tenant} · ${n.unit} — ${n.property}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.35);">Issued: ${n.issuedDate} · Effective: <strong style="color:rgba(255,255,255,0.6);">${n.vacateDate}</strong></div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:4px;">👤 ${_esc(n.tenant)} · ${_esc(n.unit)} — ${_esc(n.property)}</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.35);">Issued: ${_esc(n.issuedDate)} · Effective: <strong style="color:rgba(255,255,255,0.6);">${_esc(n.vacateDate)}</strong></div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;">
-            ${n.noticeText ? `<a href="${waLink}" target="_blank" style="padding:6px 11px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:8px;font-size:10px;font-weight:700;text-decoration:none;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;">💬 WhatsApp</a>` : ""}
-            ${n.noticeText ? `<button type="button" onclick="printNoticeById('${n.id}')" style="padding:6px 11px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print</button>` : ""}
-            ${n.noticeText ? `<button type="button" onclick="copyNoticeById('${n.id}')" style="padding:6px 11px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.2);color:#00aaff;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Copy</button>` : ""}
-            <button type="button" onclick="deleteNotice('${n.id}')" style="padding:6px 10px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:8px;font-size:10px;cursor:pointer;font-family:inherit;">🗑 Delete</button>
+            ${phone ? `<a href="tel:+${phone}" style="padding:6px 11px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:8px;font-size:10px;font-weight:700;text-decoration:none;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;">📞 Call</a>` : ""}
+            ${n.noticeText ? `<button type="button" onclick="printNoticeById('${_jsId(n.id)}')" style="padding:6px 11px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print</button>` : ""}
+            ${n.noticeText ? `<button type="button" onclick="copyNoticeById('${_jsId(n.id)}')" style="padding:6px 11px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.2);color:#00aaff;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Copy</button>` : ""}
+            <button type="button" onclick="deleteNotice('${_jsId(n.id)}')" style="padding:6px 10px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:8px;font-size:10px;cursor:pointer;font-family:inherit;">🗑 Delete</button>
           </div>
         </div>
         ${n.noticeText ? `
         <div style="margin-top:10px;">
-          <button type="button" onclick="toggleNoticeText('notice-text-${n.id}')" style="font-size:10px;color:rgba(255,255,255,0.35);background:none;border:none;cursor:pointer;padding:0;font-family:inherit;display:flex;align-items:center;gap:5px;">
-            <i class="fas fa-chevron-down" id="notice-chevron-${n.id}"></i> View full notice text
+          <button type="button" onclick="toggleNoticeText('notice-text-${_jsId(n.id)}')" style="font-size:10px;color:rgba(255,255,255,0.35);background:none;border:none;cursor:pointer;padding:0;font-family:inherit;display:flex;align-items:center;gap:5px;">
+            <i class="fas fa-chevron-down" id="notice-chevron-${_jsId(n.id)}"></i> View full notice text
           </button>
-          <pre id="notice-text-${n.id}" style="display:none;margin-top:8px;padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;font-size:10.5px;color:rgba(255,255,255,0.65);line-height:1.7;white-space:pre-wrap;font-family:'Courier New',monospace;max-height:240px;overflow-y:auto;">${n.noticeText}</pre>
+          <pre id="notice-text-${_jsId(n.id)}" style="display:none;margin-top:8px;padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;font-size:10.5px;color:rgba(255,255,255,0.65);line-height:1.7;white-space:pre-wrap;font-family:'Courier New',monospace;max-height:240px;overflow-y:auto;">${_esc(n.noticeText)}</pre>
         </div>` : ""}
       </div>`;
     }).join("");
@@ -2723,7 +2645,6 @@ Date: ${formattedIssue}
   window.openNoticeModal   = openNoticeModal;
   window.onNoticeTypeChange= onNoticeTypeChange;
   window.generateAINotice  = generateAINotice;
-  window.sendNoticeWhatsApp= sendNoticeWhatsApp;
   window.copyNoticeText    = copyNoticeText;
   window.printNotice       = printNotice;
   window.saveNotice        = saveNotice;
@@ -2742,7 +2663,7 @@ Date: ${formattedIssue}
     const sel = document.getElementById("expPropId");
     const props = getData();
     sel.innerHTML = '<option value="general">General / All Properties</option>' +
-      props.map(p=>`<option value="${p.id}">${p.name}</option>`).join("");
+      props.map(p=>`<option value="${_esc(p.id)}">${_esc(p.name)}</option>`).join("");
     document.getElementById("expDate").value = new Date().toISOString().slice(0,10);
     document.getElementById("expDesc").value = "";
     document.getElementById("expAmount").value = "";
@@ -2789,7 +2710,7 @@ Date: ${formattedIssue}
       statsEl.innerHTML = `
         <div class="ll-stat-card ll-stat-red"><div class="ll-stat-icon">💸</div><div>KES ${total.toLocaleString()}</div><p>Total Expenses</p></div>
         <div class="ll-stat-card"><div class="ll-stat-icon">📅</div><div>KES ${monthly.toLocaleString()}</div><p>This Month</p></div>
-        ${topCat ? `<div class="ll-stat-card"><div class="ll-stat-icon">📊</div><div>${topCat[0]}</div><p>Biggest Category</p></div>` : ""}
+        ${topCat ? `<div class="ll-stat-card"><div class="ll-stat-icon">📊</div><div>${_esc(topCat[0])}</div><p>Biggest Category</p></div>` : ""}
         <div class="ll-stat-card"><div class="ll-stat-icon">📋</div><div>${all.length}</div><p>Total Records</p></div>
       `;
     }
@@ -2810,12 +2731,12 @@ Date: ${formattedIssue}
       </tr></thead>
       <tbody>` +
       all.map(e => `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
-        <td style="padding:10px 8px;color:rgba(255,255,255,0.45);">${e.date}</td>
-        <td style="padding:10px 8px;color:white;">${e.description}${e.vendor?`<div style="font-size:10px;color:rgba(255,255,255,0.35);">${e.vendor}</div>`:""}</td>
-        <td style="padding:10px 8px;color:rgba(255,255,255,0.6);">${CAT_ICON[e.category]||"📋"} ${e.category}</td>
-        <td style="padding:10px 8px;color:rgba(255,255,255,0.4);">${e.propName}</td>
+        <td style="padding:10px 8px;color:rgba(255,255,255,0.45);">${_esc(e.date)}</td>
+        <td style="padding:10px 8px;color:white;">${_esc(e.description)}${e.vendor?`<div style="font-size:10px;color:rgba(255,255,255,0.35);">${_esc(e.vendor)}</div>`:""}</td>
+        <td style="padding:10px 8px;color:rgba(255,255,255,0.6);">${_esc(CAT_ICON[e.category]||"📋")} ${_esc(e.category)}</td>
+        <td style="padding:10px 8px;color:rgba(255,255,255,0.4);">${_esc(e.propName)}</td>
         <td style="padding:10px 8px;text-align:right;color:#ff6b6b;font-weight:700;">KES ${Number(e.amount).toLocaleString()}</td>
-        <td style="padding:8px;"><button type="button" onclick="deleteExpense('${e.id}')" style="background:none;border:none;color:rgba(255,77,77,0.5);cursor:pointer;font-size:13px;">🗑</button></td>
+        <td style="padding:8px;"><button type="button" onclick="deleteExpense('${_jsId(e.id)}')" style="background:none;border:none;color:rgba(255,77,77,0.5);cursor:pointer;font-size:13px;">🗑</button></td>
       </tr>`).join("") +
       `</tbody></table></div>`;
   }
@@ -2847,8 +2768,8 @@ Date: ${formattedIssue}
         btn.style.background = "rgba(76,175,80,0.12)";
         btn.style.borderColor = "rgba(76,175,80,0.3)";
         btn.style.color = "#4caf50";
-        btn.innerHTML = "📱 M-Pesa";
-        btn.setAttribute("title","Collect rent via M-Pesa STK Push");
+        btn.innerHTML = "🧾 Record payment";
+        btn.setAttribute("title","Record rent the tenant paid you (outside SOKONI)");
         btn.onclick = () => openCollectRent(propId, unitId);
         actions.appendChild(btn);
       }
@@ -2870,7 +2791,7 @@ Date: ${formattedIssue}
       const mpBtn = document.createElement("button");
       mpBtn.className = "unit-btn unit-btn-green mpesa-rent-btn";
       mpBtn.style.cssText = "background:rgba(76,175,80,0.1);border-color:rgba(76,175,80,0.25);color:#4caf50;";
-      mpBtn.innerHTML = "📱 Collect via M-Pesa";
+      mpBtn.innerHTML = "🧾 Record payment received";
       mpBtn.onclick = () => openCollectRent(propId, unitId);
       row.appendChild(mpBtn);
     });
@@ -3098,7 +3019,7 @@ Both parties should retain a signed copy of this agreement.
 
     /* Save draft reference for later save */
     window._currentAgreementData = { ref:agRef, llName, tName, propName, unitNo, startDate, leaseTerm, rent, deposit, agreementText, createdAt:Date.now() };
-    showNotif("✅ Tenancy Agreement generated! Review, then Save or Send.","success");
+    showNotif("✅ Tenancy Agreement generated! Review, then Save, Copy or Print.","success");
   }
 
   function saveAgreement(){
@@ -3114,13 +3035,9 @@ Both parties should retain a signed copy of this agreement.
     showNotif("✅ Agreement saved!","success");
   }
 
-  function sendAgreementWhatsApp(){
-    const text = document.getElementById("agreementText")?.value;
-    if(!text){ showNotif("Generate agreement first","error"); return; }
-    const tPhone = document.getElementById("agTenantPhone")?.value.replace(/^0/,"254").replace(/^\+/,"");
-    const url    = tPhone ? `https://wa.me/${tPhone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(url,"_blank");
-  }
+  /* Slice B2: sendAgreementWhatsApp / sendSavedAgreementWA removed — a tenancy
+     agreement is not an invoice/receipt/statement, so it is not sent over WhatsApp
+     (owner decision 2026-09-30). Copy / Print-PDF remain. */
 
   function copyAgreement(){
     const text = document.getElementById("agreementText")?.value;
@@ -3165,35 +3082,27 @@ Both parties should retain a signed copy of this agreement.
       <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(113,255,0,0.12);border-radius:14px;padding:16px 18px;margin-bottom:12px;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;">
         <div style="font-size:28px;flex-shrink:0;">📄</div>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;font-weight:800;color:white;margin-bottom:4px;">Tenancy Agreement — ${a.tName}</div>
-          <div style="font-size:12px;color:rgba(255,255,255,0.5);">🏢 ${a.unitNo} · ${a.propName} · ${a.startDate||"—"}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px;">Ref: ${a.ref} · Rent: KES ${Number(a.rent||0).toLocaleString()}/mo · Created: ${new Date(a.createdAt).toLocaleDateString("en-KE")}</div>
+          <div style="font-size:14px;font-weight:800;color:white;margin-bottom:4px;">Tenancy Agreement — ${_esc(a.tName)}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.5);">🏢 ${_esc(a.unitNo)} · ${_esc(a.propName)} · ${_esc(a.startDate||"—")}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px;">Ref: ${_esc(a.ref)} · Rent: KES ${Number(a.rent||0).toLocaleString()}/mo · Created: ${new Date(a.createdAt).toLocaleDateString("en-KE")}</div>
         </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;">
-          <button type="button" onclick="sendSavedAgreementWA('${a.ref}')" style="padding:6px 11px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">💬 WhatsApp</button>
-          <button type="button" onclick="printSavedAgreement('${a.ref}')" style="padding:6px 11px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print/PDF</button>
-          <button type="button" onclick="viewSavedAgreement('${a.ref}')" style="padding:6px 11px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">👁 View</button>
-          <button type="button" onclick="deleteSavedAgreement('${a.ref}')" style="padding:6px 10px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:8px;font-size:10px;cursor:pointer;font-family:inherit;">🗑</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;">          <button type="button" onclick="printSavedAgreement('${_jsId(a.ref)}')" style="padding:6px 11px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print/PDF</button>
+          <button type="button" onclick="viewSavedAgreement('${_jsId(a.ref)}')" style="padding:6px 11px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">👁 View</button>
+          <button type="button" onclick="deleteSavedAgreement('${_jsId(a.ref)}')" style="padding:6px 10px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:8px;font-size:10px;cursor:pointer;font-family:inherit;">🗑</button>
         </div>
       </div>`
     ).join("");
-  }
-
-  function sendSavedAgreementWA(ref){
-    const a = getAgreements().find(x=>x.ref===ref);
-    if(!a) return;
-    window.open("https://wa.me/?text=" + encodeURIComponent(a.agreementText), "_blank");
   }
 
   function printSavedAgreement(ref){
     const a = getAgreements().find(x=>x.ref===ref);
     if(!a) return;
     const html = `<!DOCTYPE html><html data-require-auth="true"><head><script src="security.js"><\/script>
-<script src="auth-guard.js"><\/script><meta charset="UTF-8"><title>Tenancy Agreement — ${a.tName}</title>
+<script src="auth-guard.js"><\/script><meta charset="UTF-8"><title>Tenancy Agreement — ${_esc(a.tName)}</title>
     <style>body{font-family:'Courier New',monospace;padding:40px;font-size:11.5px;line-height:1.9;max-width:760px;margin:0 auto;}pre{white-space:pre-wrap;word-wrap:break-word;}@media print{body{padding:20px;}}</style>
     <script src="shared-header.js" defer><\/script>
 </head><body>
-<pre>${a.agreementText.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre>
+<pre>${_esc(a.agreementText)}</pre>
     <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>
 
 <script src="sokoni-audit.js" defer><\/script>
@@ -3219,10 +3128,8 @@ Both parties should retain a signed copy of this agreement.
   window.openAgreementForm      = openAgreementForm;
   window.generateAgreement      = generateAgreement;
   window.saveAgreement          = saveAgreement;
-  window.sendAgreementWhatsApp  = sendAgreementWhatsApp;
   window.copyAgreement          = copyAgreement;
   window.printAgreement         = printAgreement;
-  window.sendSavedAgreementWA   = sendSavedAgreementWA;
   window.printSavedAgreement    = printSavedAgreement;
   window.viewSavedAgreement     = viewSavedAgreement;
   window.deleteSavedAgreement   = deleteSavedAgreement;
@@ -3256,9 +3163,10 @@ Both parties should retain a signed copy of this agreement.
       `AMOUNT DUE: KES ${Number(bill.amount||0).toLocaleString()}\n` +
       `────────────────────\n` +
       `Please pay via M-Pesa to: ${prop?.phone||"[Landlord Phone]"}\n` +
+      `(Paid directly to the landlord/agency — not processed or verified by SOKONI)\n` +
       `Thank you! — ${prop?.landlord||"Landlord"}`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
-    showNotif("Opening WhatsApp with water bill","success");
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank"); /* wa-allowed:invoice */
+    showNotif("WhatsApp opened with the water bill — tap Send in WhatsApp to deliver it","info");
   }
 
   function printWaterBill(propId, unitId, month){
@@ -3273,18 +3181,18 @@ Both parties should retain a signed copy of this agreement.
     table{width:100%;border-collapse:collapse;margin:16px 0;}td{padding:10px 0;border-bottom:1px solid #eee;}td:last-child{text-align:right;font-weight:700;}
     @media print{body{padding:20px;}}</style><script src="shared-header.js" defer><\/script>
 </head><body>
-    <div class="header"><h1>💧 Water Bill</h1><h2>${prop?.name||"Property"}</h2></div>
+    <div class="header"><h1>💧 Water Bill</h1><h2>${_esc(prop?.name||"Property")}</h2></div>
     <table>
-      <tr><td>Tenant</td><td>${unit.tenant||"—"}</td></tr>
-      <tr><td>Unit</td><td>${unit.number}</td></tr>
-      <tr><td>Period</td><td>${month}</td></tr>
-      <tr><td>Previous Reading</td><td>${bill.prevReading}</td></tr>
-      <tr><td>Current Reading</td><td>${bill.currReading}</td></tr>
-      <tr><td>Units Consumed</td><td>${bill.units}</td></tr>
-      <tr><td>Rate per Unit</td><td>KES ${bill.rate}</td></tr>
+      <tr><td>Tenant</td><td>${_esc(unit.tenant||"—")}</td></tr>
+      <tr><td>Unit</td><td>${_esc(unit.number)}</td></tr>
+      <tr><td>Period</td><td>${_esc(month)}</td></tr>
+      <tr><td>Previous Reading</td><td>${_esc(String(bill.prevReading))}</td></tr>
+      <tr><td>Current Reading</td><td>${_esc(String(bill.currReading))}</td></tr>
+      <tr><td>Units Consumed</td><td>${_esc(String(bill.units))}</td></tr>
+      <tr><td>Rate per Unit</td><td>KES ${_esc(String(bill.rate))}</td></tr>
     </table>
     <div class="amount">TOTAL: KES ${Number(bill.amount||0).toLocaleString()}</div>
-    <p style="text-align:center;">Pay via M-Pesa: ${prop?.phone||"[Landlord Phone]"}</p>
+    <p style="text-align:center;">Pay via M-Pesa: ${_esc(prop?.phone||"[Landlord Phone]")}<br><small>Paid directly to the landlord/agency — not processed or verified by SOKONI.</small></p>
     <p style="text-align:center;color:#999;font-size:12px;">Status: ${bill.paid?"PAID ✅":"PENDING ⏳"}</p>
     <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>
     <script src="sokoni-audit.js" defer><\/script>
@@ -3312,25 +3220,24 @@ Both parties should retain a signed copy of this agreement.
       `RENT DUE: KES ${Number(unit.rent||0).toLocaleString()}\n` +
       `────────────────────\n` +
       `Pay via M-Pesa: ${prop?.phone||"[Landlord M-Pesa]"}\n` +
+      `(Paid directly to the landlord/agency — not processed or verified by SOKONI)\n` +
       `Issued by: ${prop?.landlord||"Landlord"}\n` +
       `Address: ${prop?.address||""}, ${prop?.city||""}`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank"); /* wa-allowed:invoice */
     /* Log as sent invoice */
     _saveInvoiceRecord({ type:"rent", propId, unitId, tenant:unit.tenant, tenantPhone:unit.tenantPhone, unit:unit.number, prop:prop?.name, amount:unit.rent, month, status:"sent", sentAt:Date.now() });
-    showNotif("Rent invoice sent via WhatsApp","success");
+    showNotif("WhatsApp opened with the rent invoice — tap Send in WhatsApp to deliver it","info");
   }
 
-  function sendRentReminderWA(propId, unitId){
-    const { prop, unit } = _getUnit(propId, unitId);
+  /* Slice B2: a rent reminder is a notice, not an invoice — it no longer opens
+     WhatsApp (owner decision 2026-09-30). "Remind" now places a phone call; the
+     "📨 Invoice" button (sendRentInvoiceWA) remains the written channel. */
+  function callTenantReminder(propId, unitId){
+    const { unit } = _getUnit(propId, unitId);
     if(!unit) return;
     const phone = String(unit.tenantPhone||"").replace(/\D/g,'').replace(/^0/,"254");
-    const month = getCurrentMonth();
-    const text = `⏰ RENT REMINDER — ${prop?.name||"Property"}\n\n` +
-      `Hi ${unit.tenant}, your rent of KES ${Number(unit.rent||0).toLocaleString()} for ${month} is due.\n\n` +
-      `Please pay via M-Pesa to: ${prop?.phone||"[Landlord M-Pesa]"}\n\n` +
-      `Thank you! — ${prop?.landlord||"Landlord"}`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
-    showNotif("Rent reminder sent","success");
+    if(!phone){ showNotif("No phone number for this tenant","error"); return; }
+    window.location.href = `tel:+${phone}`;
   }
 
   function sendRentReceiptWA(propId, unitId, month){
@@ -3350,8 +3257,8 @@ Both parties should retain a signed copy of this agreement.
       `────────────────────\n` +
       `Thank you for your payment!\n` +
       `— ${prop?.landlord||"Landlord"}, ${prop?.name||""}`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
-    showNotif("Rent receipt sent via WhatsApp","success");
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank"); /* wa-allowed:invoice */
+    showNotif("WhatsApp opened with the rent receipt — tap Send in WhatsApp to deliver it","info");
   }
 
   /* ══════════════════════════════════════════════════════════
@@ -3365,7 +3272,7 @@ Both parties should retain a signed copy of this agreement.
     const props = getData();
     const allUnits = props.flatMap(p=>(p.units||[]).map(u=>({...u,propId:p.id,propName:p.name,propPhone:p.phone,propLandlord:p.landlord})));
     const sel = document.getElementById("invUnitId");
-    sel.innerHTML = allUnits.map(u=>`<option value="${u.propId}|${u.id}">${_esc(u.number)} — ${_esc(u.propName)} (${_esc(u.tenant||"vacant")})</option>`).join("");
+    sel.innerHTML = allUnits.map(u=>`<option value="${_esc(u.propId)}|${_esc(u.id)}">${_esc(u.number)} — ${_esc(u.propName)} (${_esc(u.tenant||"vacant")})</option>`).join("");
     if(prefillUnitKey) sel.value = prefillUnitKey;
     if(prefillType){ document.getElementById("invType").value = prefillType; onInvTypeChange(); }
     document.getElementById("invDate").value   = new Date().toISOString().slice(0,10);
@@ -3414,6 +3321,7 @@ Both parties should retain a signed copy of this agreement.
       `TOTAL DUE: KES ${total.toLocaleString()}\n` +
       `────────────────────────\n` +
       (inv.mpesaName?`Pay via M-Pesa:\nName: ${inv.mpesaName}\nNo:   ${inv.mpesaNo||""}\n`:`Pay to: ${prop?.phone||"[Landlord M-Pesa]"}\n`) +
+      `(Paid directly to the landlord/agency — not processed or verified by SOKONI)\n` +
       `\nIssued by: ${prop?.landlord||"Landlord"}`;
   }
 
@@ -3441,7 +3349,7 @@ Both parties should retain a signed copy of this agreement.
     const all = _getInvoices(); all.unshift(inv); _saveInvoices(all);
     document.getElementById("invoiceModal").style.display = "none";
     renderInvoicesSection();
-    showNotif("Invoice saved!","success");
+    showNotif("Invoice saved on this device","success");
   }
 
   function generateAndSendInvoiceWA(){
@@ -3469,10 +3377,10 @@ Both parties should retain a signed copy of this agreement.
     const all = _getInvoices(); all.unshift(inv); _saveInvoices(all);
     const phone = String(unit.tenantPhone||"").replace(/\D/g,'').replace(/^0/,"254");
     const text  = _buildInvoiceText(inv, unit, prop);
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank"); /* wa-allowed:invoice */
     document.getElementById("invoiceModal").style.display = "none";
     renderInvoicesSection();
-    showNotif("Invoice sent via WhatsApp!","success");
+    showNotif("Invoice saved on this device and WhatsApp opened — tap Send in WhatsApp to deliver it","info");
   }
 
   function resendInvoiceWA(invId){
@@ -3485,9 +3393,9 @@ Both parties should retain a signed copy of this agreement.
     inv.status="sent"; inv.sentAt=Date.now();
     _saveInvoices(all);
     const text = _buildInvoiceText(inv, unit, prop);
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank"); /* wa-allowed:invoice */
     renderInvoicesSection();
-    showNotif("Invoice resent","success");
+    showNotif("WhatsApp opened with the invoice — tap Send in WhatsApp to deliver it","info");
   }
 
   function markInvoicePaid(invId){
@@ -3514,11 +3422,11 @@ Both parties should retain a signed copy of this agreement.
       if(!phone) return;
       const { prop, unit } = _getUnit(inv.propId, inv.unitId);
       const text = _buildInvoiceText(inv, unit, prop);
-      setTimeout(()=>window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank"), count*800);
+      setTimeout(()=>window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank"), count*800); /* wa-allowed:invoice */
       inv.status="sent"; inv.sentAt=Date.now(); count++;
     });
     _saveInvoices(all.concat(_getInvoices().filter(i=>i.status==="paid")));
-    showNotif(`${count} invoice(s) queued to send via WhatsApp`,"success");
+    showNotif(count ? `Opening WhatsApp for ${count} invoice(s) — tap Send in each chat to deliver them` : "No pending invoices have a tenant phone number", count ? "info" : "error");
     renderInvoicesSection();
   }
 
@@ -3551,18 +3459,18 @@ Both parties should retain a signed copy of this agreement.
         <div style="font-size:26px;flex-shrink:0;">${TYPE_ICON[inv.type]||"📧"}</div>
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-            <span style="font-size:14px;font-weight:800;color:white;">${inv.desc||inv.type.toUpperCase()} — ${inv.unit||"—"}</span>
-            <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(255,255,255,0.05);color:${STATUS_COLOR[inv.status]||"white"};font-weight:700;">${inv.status?.toUpperCase()||"DRAFT"}</span>
+            <span style="font-size:14px;font-weight:800;color:white;">${_esc(inv.desc||String(inv.type||"").toUpperCase())} — ${_esc(inv.unit||"—")}</span>
+            <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(255,255,255,0.05);color:${Object.prototype.hasOwnProperty.call(STATUS_COLOR,inv.status)?STATUS_COLOR[inv.status]:"white"};font-weight:700;">${_esc(inv.status?.toUpperCase()||"DRAFT")}</span>
           </div>
-          <div style="font-size:12px;color:rgba(255,255,255,0.45);">${inv.tenant||"—"} · ${inv.prop||"—"} · ${inv.month||"—"}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px;">Due: ${inv.dueDate||"—"} · Ref: ${inv.id}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.45);">${_esc(inv.tenant||"—")} · ${_esc(inv.prop||"—")} · ${_esc(inv.month||"—")}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px;">Due: ${_esc(inv.dueDate||"—")} · Ref: ${_esc(inv.id)}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
           <div style="font-size:18px;font-weight:900;color:white;margin-bottom:8px;">KES ${Number(inv.amount||0).toLocaleString()}</div>
           <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
-            <button type="button" onclick="resendInvoiceWA('${inv.id}')" style="padding:5px 10px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">💬 Send</button>
-            <button type="button" onclick="markInvoicePaid('${inv.id}')" style="padding:5px 10px;background:${inv.status==="paid"?"rgba(255,255,255,0.06)":"rgba(113,255,0,0.1)"};border:1px solid ${inv.status==="paid"?"rgba(255,255,255,0.1)":"rgba(113,255,0,0.25)"};color:${inv.status==="paid"?"rgba(255,255,255,0.3)":"#71ff00"};border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">${inv.status==="paid"?"↩ Unpaid":"✅ Paid"}</button>
-            <button type="button" onclick="deleteInvoice('${inv.id}')" style="padding:5px 9px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:7px;font-size:10px;cursor:pointer;font-family:inherit;">🗑</button>
+            <button type="button" onclick="resendInvoiceWA('${_jsId(inv.id)}')" style="padding:5px 10px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">💬 Send</button>
+            <button type="button" onclick="markInvoicePaid('${_jsId(inv.id)}')" style="padding:5px 10px;background:${inv.status==="paid"?"rgba(255,255,255,0.06)":"rgba(113,255,0,0.1)"};border:1px solid ${inv.status==="paid"?"rgba(255,255,255,0.1)":"rgba(113,255,0,0.25)"};color:${inv.status==="paid"?"rgba(255,255,255,0.3)":"#71ff00"};border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">${inv.status==="paid"?"↩ Unpaid":"✅ Paid"}</button>
+            <button type="button" onclick="deleteInvoice('${_jsId(inv.id)}')" style="padding:5px 9px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:7px;font-size:10px;cursor:pointer;font-family:inherit;">🗑</button>
           </div>
         </div>
       </div>`).join("");
@@ -3579,7 +3487,7 @@ Both parties should retain a signed copy of this agreement.
     const selApp = document.getElementById("scApplyTo");
     const allUnits = props.flatMap(p=>(p.units||[]).filter(u=>u.status==="occupied").map(u=>({...u,propId:p.id,propName:p.name})));
     selApp.innerHTML = `<option value="all">All Occupied Units</option>` +
-      allUnits.map(u=>`<option value="${u.propId}|${u.id}">${_esc(u.number)} — ${_esc(u.propName)} (${_esc(u.tenant)})</option>`).join("");
+      allUnits.map(u=>`<option value="${_esc(u.propId)}|${_esc(u.id)}">${_esc(u.number)} — ${_esc(u.propName)} (${_esc(u.tenant)})</option>`).join("");
     const m = document.getElementById("scChargeMonth");
     if(m) m.value = new Date().toISOString().slice(0,7);
     document.getElementById("serviceChargeModal").style.display="flex";
@@ -3617,12 +3525,12 @@ Both parties should retain a signed copy of this agreement.
     const TYPE_NAME={garbage:"Garbage Collection",security:"Security Fee",lift:"Lift Fee",wifi:"Wi-Fi",caretaker:"Caretaker Fee",compound:"Compound Maintenance",electricity:"Common Electricity",parking:"Parking Fee",other:"Service Charge"};
     pending.forEach((c,i)=>{
       const phone=String(c.tenantPhone||"").replace(/\D/g,'').replace(/^0/,"254");
-      const text=`💡 SERVICE CHARGE — ${c.prop||"Property"}\n────────────────────\nTenant: ${c.tenant}\nUnit: ${c.unit}\nPeriod: ${c.month}\nCharge: ${TYPE_NAME[c.type]||c.type}\n${c.desc?`Details: ${c.desc}\n`:""}\nAMOUNT: KES ${Number(c.amount||0).toLocaleString()}\n────────────────────\nPay to: ${c.propPhone||"[Landlord M-Pesa]"}\nThank you!`;
-      setTimeout(()=>window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`,"_blank"),i*800);
+      const text=`💡 SERVICE CHARGE — ${c.prop||"Property"}\n────────────────────\nTenant: ${c.tenant}\nUnit: ${c.unit}\nPeriod: ${c.month}\nCharge: ${TYPE_NAME[c.type]||c.type}\n${c.desc?`Details: ${c.desc}\n`:""}\nAMOUNT: KES ${Number(c.amount||0).toLocaleString()}\n────────────────────\nPay to: ${c.propPhone||"[Landlord M-Pesa]"}\n(Paid directly to the landlord/agency — not processed or verified by SOKONI)\nThank you!`;
+      setTimeout(()=>window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`,"_blank"),i*800); /* wa-allowed:invoice */
       c.status="sent"; c.sentAt=Date.now();
     });
     _saveSC(_getSC().map(c=>pending.find(p=>p.id===c.id)||c));
-    showNotif(`${pending.length} charge(s) sent via WhatsApp`,"success");
+    showNotif(`Opening WhatsApp for ${pending.length} charge(s) — tap Send in each chat to deliver them`,"info");
     renderServiceChargesSection();
   }
 
@@ -3633,25 +3541,39 @@ Both parties should retain a signed copy of this agreement.
   }
   function deleteSC(id){ _saveSC(_getSC().filter(c=>c.id!==id)); renderServiceChargesSection(); showNotif("Deleted","error"); }
 
+  /* Single service-charge WhatsApp share. Replaces an inline onclick IIFE that spliced the
+     tenant phone, property, unit, tenant name and charge type straight into JS source (an
+     XSS sink). The button now passes only the validated record id; the record is looked
+     up here and the message text is identical to what that handler intended. */
+  function sendServiceChargeWA(id){
+    const c = _getSC().find(x=>x.id===id);
+    if(!c) return;
+    const ph = String(c.tenantPhone||"").replace(/\D/g,'').replace(/^0/,'254');
+    if(!ph){ showNotif("No phone number for this tenant","error"); return; }
+    const text = `💡 SERVICE CHARGE — ${c.prop||""}\nUnit: ${c.unit}\nTenant: ${c.tenant}\nCharge: ${c.type}\nPeriod: ${c.month}\nAMOUNT: KES ${Number(c.amount||0).toLocaleString()}\nPay to: ${c.propPhone||"[M-Pesa]"}\n(Paid directly to the landlord/agency — not processed or verified by SOKONI)`;
+    window.open('https://wa.me/'+ph+'?text='+encodeURIComponent(text),'_blank'); /* wa-allowed:invoice */
+    showNotif("WhatsApp opened with the service charge — tap Send in WhatsApp to deliver it","info");
+  }
+
   function renderServiceChargesSection(){
     const month = document.getElementById("scMonth")?.value||new Date().toISOString().slice(0,7);
     const all   = _getSC().filter(c=>c.month===month);
     const grid  = document.getElementById("scGrid");
     if(!grid) return;
-    if(!all.length){ grid.innerHTML=`<div class="ll-empty">💡<p>No service charges for ${month}. Click <strong>+ Add Charge</strong>.</p></div>`; return; }
+    if(!all.length){ grid.innerHTML=`<div class="ll-empty">💡<p>No service charges for ${_esc(month)}. Click <strong>+ Add Charge</strong>.</p></div>`; return; }
     const TYPE_ICON={garbage:"🗑️",security:"🔒",lift:"🛗",wifi:"📶",caretaker:"👷",compound:"🌿",electricity:"⚡",parking:"🚗",other:"📋"};
     grid.innerHTML=all.map(c=>`
       <div style="background:rgba(255,255,255,0.03);border:1px solid ${c.status==="paid"?"rgba(113,255,0,0.2)":"rgba(255,255,255,0.07)"};border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <span style="font-size:22px;">${TYPE_ICON[c.type]||"💡"}</span>
         <div style="flex:1;min-width:0;">
-          <div style="font-weight:800;color:white;font-size:13px;">${c.type.replace(/_/g," ").toUpperCase()} — ${c.unit} · ${c.tenant||"—"}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.4);">${c.prop||"—"} · ${c.month} ${c.desc?`· ${c.desc}`:""}</div>
+          <div style="font-weight:800;color:white;font-size:13px;">${_esc(String(c.type||"").replace(/_/g," ").toUpperCase())} — ${_esc(c.unit)} · ${_esc(c.tenant||"—")}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);">${_esc(c.prop||"—")} · ${_esc(c.month)} ${c.desc?`· ${_esc(c.desc)}`:""}</div>
         </div>
         <div style="font-weight:900;color:white;font-size:16px;">KES ${Number(c.amount||0).toLocaleString()}</div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
-          ${c.tenantPhone?`<button type="button" class="unit-btn unit-btn-blue" onclick="(()=>{ const ph=String('${c.tenantPhone||""}').replace(/\\D/g,'').replace(/^0/,'254'); window.open('https://wa.me/'+ph+'?text='+encodeURIComponent('💡 SERVICE CHARGE — ${c.prop||""}\nUnit: ${c.unit}\nTenant: ${c.tenant}\nCharge: ${c.type}\nPeriod: ${c.month}\nAMOUNT: KES ${Number(c.amount||0).toLocaleString()}\nPay to: ${c.propPhone||"[M-Pesa]"}'),'_blank'); })()">💬 Send</button>`:""}
-          <button type="button" class="unit-btn ${c.status==="paid"?"unit-btn-grey":"unit-btn-green"}" onclick="toggleSCPaid('${c.id}')">${c.status==="paid"?"↩ Unmark":"✅ Paid"}</button>
-          <button type="button" class="unit-btn unit-btn-red" onclick="deleteSC('${c.id}')">🗑️</button>
+          ${c.tenantPhone ?`<button type="button" class="unit-btn unit-btn-blue" data-wa-allowed="invoice" onclick="sendServiceChargeWA('${_jsId(c.id)}')">💬 Send</button>`:""}
+          <button type="button" class="unit-btn ${c.status==="paid"?"unit-btn-grey":"unit-btn-green"}" onclick="toggleSCPaid('${_jsId(c.id)}')">${c.status==="paid"?"↩ Unmark":"✅ Paid"}</button>
+          <button type="button" class="unit-btn unit-btn-red" onclick="deleteSC('${_jsId(c.id)}')">🗑️</button>
         </div>
       </div>`).join("");
   }
@@ -3666,7 +3588,7 @@ Both parties should retain a signed copy of this agreement.
     const props   = getData();
     const allUnits = props.flatMap(p=>(p.units||[]).filter(u=>u.status==="occupied").map(u=>({...u,propId:p.id,propName:p.name})));
     const sel = document.getElementById("bmUnitTarget");
-    sel.innerHTML = allUnits.map(u=>`<option value="${u.propId}|${u.id}">${_esc(u.number)} — ${_esc(u.propName)} (${_esc(u.tenant)})</option>`).join("");
+    sel.innerHTML = allUnits.map(u=>`<option value="${_esc(u.propId)}|${_esc(u.id)}">${_esc(u.number)} — ${_esc(u.propName)} (${_esc(u.tenant)})</option>`).join("");
     document.getElementById("bmMessage").value="";
     document.getElementById("bmResult").innerHTML="";
     document.getElementById("bulkMessageModal").style.display="flex";
@@ -3677,7 +3599,7 @@ Both parties should retain a signed copy of this agreement.
   });
 
   const MSG_TEMPLATES = {
-    rent_reminder:"Hi [TENANT], this is a friendly reminder that your rent of KES [RENT] for [MONTH] is due. Please pay via M-Pesa to [MPESA]. Thank you!",
+    rent_reminder:"Hi [TENANT], this is a friendly reminder that your rent of KES [RENT] for [MONTH] is due. Please pay via M-Pesa to [MPESA] (paid directly to the landlord/agency — not processed or verified by SOKONI). Thank you!",
     water_bill:"Hi [TENANT], your water bill for [MONTH] is ready. Please check with your landlord for the amount and settle promptly. Thank you!",
     maintenance:"Hi [TENANT], we want to update you that the maintenance work at [UNIT] is in progress. We apologise for any inconvenience and will complete it as soon as possible. Thank you for your patience.",
     general_notice:"Dear [TENANT], we wish to inform all tenants of an important notice regarding [PROPERTY]. Please contact the landlord for details. Thank you.",
@@ -3698,32 +3620,10 @@ Both parties should retain a signed copy of this agreement.
     if(type==="water_bill") document.getElementById("bmTarget").value="all";
   }
 
-  function sendBulkMessageWA(){
-    const target  = document.getElementById("bmTarget").value;
-    const message = document.getElementById("bmMessage").value.trim();
-    if(!message){ showNotif("Enter a message","error"); return; }
-    const props  = getData();
-    const month  = getCurrentMonth();
-    let targets=[];
-    if(target==="all"){
-      targets = props.flatMap(p=>(p.units||[]).filter(u=>u.status==="occupied"&&u.tenantPhone).map(u=>({...u,propId:p.id,propName:p.name,propPhone:p.phone})));
-    } else if(target==="unpaid"){
-      targets = props.flatMap(p=>(p.units||[]).filter(u=>u.status==="occupied"&&!rentStatus(u,month).paid&&u.tenantPhone).map(u=>({...u,propId:p.id,propName:p.name,propPhone:p.phone})));
-    } else {
-      const [pId,uId]=document.getElementById("bmUnitTarget").value.split("|");
-      const prop=props.find(p=>p.id===pId); const u=prop?.units?.find(u=>u.id===uId);
-      if(u&&u.tenantPhone) targets=[{...u,propId:pId,propName:prop?.name,propPhone:prop?.phone}];
-    }
-    if(!targets.length){ showNotif("No tenants with phone numbers found","error"); return; }
-    targets.forEach((u,i)=>{
-      const phone=String(u.tenantPhone||"").replace(/\D/g,'').replace(/^0/,"254");
-      const msg=message.replace(/\[TENANT\]/g,u.tenant||"Tenant").replace(/\[RENT\]/g,`KES ${Number(u.rent||0).toLocaleString()}`).replace(/\[MONTH\]/g,month).replace(/\[UNIT\]/g,u.number||"").replace(/\[MPESA\]/g,u.propPhone||"[M-Pesa]").replace(/\[PROPERTY\]/g,u.propName||"the property");
-      setTimeout(()=>window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`,"_blank"),i*800);
-    });
-    saveCommunication(message,target,targets.length);
-    document.getElementById("bmResult").innerHTML=`<span style="color:#71ff00;">✅ Opening WhatsApp for ${targets.length} tenant(s)...</span>`;
-    showNotif(`${targets.length} message(s) queued`,"success");
-  }
+  /* Slice B2: sendBulkMessageWA removed — bulk tenant messages (reminders, maintenance,
+     general and move-out notices) are notices, not invoices, so they are no longer
+     handed off to WhatsApp (owner decision 2026-09-30). The modal keeps "Save Log";
+     invoices/bills/receipts keep their own WhatsApp send buttons. */
 
   function saveCommunication(msg, target, count){
     const m = typeof msg==="string"?msg:document.getElementById("bmMessage")?.value.trim()||"";
@@ -3739,52 +3639,25 @@ Both parties should retain a signed copy of this agreement.
     const grid  = document.getElementById("commHistoryGrid");
     if(!grid) return;
     const comms = _getComms();
-    if(!comms.length){ grid.innerHTML=`<div class="ll-empty">💬<p>No messages sent yet. Use the quick actions above.</p></div>`; return; }
+    if(!comms.length){ grid.innerHTML=`<div class="ll-empty">💬<p>No messages logged yet. Use the quick actions above.</p></div>`; return; }
     grid.innerHTML=comms.map(c=>`
       <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px 16px;margin-bottom:10px;">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
           <span style="font-size:20px;">💬</span>
           <div style="flex:1;">
-            <div style="font-size:12px;font-weight:800;color:white;">To: ${c.target==="all"?"All Tenants":c.target==="unpaid"?"Tenants with unpaid rent":"Specific tenant"} · ${c.sentCount||0} sent</div>
+            <div style="font-size:12px;font-weight:800;color:white;">For: ${c.target==="all"?"All Tenants":c.target==="unpaid"?"Tenants with unpaid rent":"Specific tenant"} · Logged on this device — not sent</div>
             <div style="font-size:10px;color:rgba(255,255,255,0.3);">${new Date(c.sentAt).toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</div>
           </div>
-          <button type="button" onclick="_getComms().filter(x=>x.id!=='${c.id}'); _saveComms(_getComms().filter(x=>x.id!=='${c.id}')); renderCommunicationsSection();" style="width:24px;height:24px;background:rgba(255,77,77,0.1);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit;">✕</button>
+          <button type="button" onclick="_getComms().filter(x=>x.id!=='${_jsId(c.id)}'); _saveComms(_getComms().filter(x=>x.id!=='${_jsId(c.id)}')); renderCommunicationsSection();" style="width:24px;height:24px;background:rgba(255,77,77,0.1);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit;">✕</button>
         </div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.5);white-space:pre-wrap;background:rgba(255,255,255,0.02);border-radius:8px;padding:8px 10px;">${c.message.slice(0,180)}${c.message.length>180?"…":""}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);white-space:pre-wrap;background:rgba(255,255,255,0.02);border-radius:8px;padding:8px 10px;">${_esc(String(c.message||"").slice(0,180))}${String(c.message||"").length>180?"…":""}</div>
       </div>`).join("");
   }
 
-  /* ══════════════════════════════════════════════════════════
-     COMMISSION WIRING — 2% of rent collected → SOKONI ledger
-  ══════════════════════════════════════════════════════════ */
-  const SOKONI_COMMISSION_RATE = 0.02; /* 2% platform fee on rent collected */
-
-  function _recordCommission(amount, ref){
-    if(!amount||amount<=0) return;
-    const fee = Math.round(amount * SOKONI_COMMISSION_RATE);
-    try {
-      const ledger = JSON.parse(localStorage.getItem("sokoniCommissionLedger")||"[]");
-      ledger.unshift({ ref, amount, fee, type:"rent_collection", ts: Date.now() });
-      localStorage.setItem("sokoniCommissionLedger", JSON.stringify(ledger.slice(0,200)));
-    } catch(e){}
-    /* Wire to sokoni-pay.js if available */
-    if(window.SokoniPay && typeof window.SokoniPay.recordCommission === "function"){
-      window.SokoniPay.recordCommission({ type:"landlord_rent", amount, fee, ref, ts:Date.now() });
-    }
-  }
-
-  /* Hook toggleRent to record commission when rent is marked paid */
-  ;(function(){
-    var _origToggleRent = window.toggleRent || toggleRent;
-    window.toggleRent = function(propId, unitId){
-      const props = getData();
-      const unit  = props.find(p=>p.id===propId)?.units?.find(u=>u.id===unitId);
-      const month = getCurrentMonth();
-      const wasPaid = rentStatus(unit||{}, month).paid;
-      _origToggleRent(propId, unitId);
-      if(!wasPaid && unit){ _recordCommission(unit.rent, `RENT-${propId}-${unitId}-${month}`); }
-    };
-  })();
+  /* Rent is the landlord's/agency's money, never SOKONI revenue (owner 2026-10-01).
+     A browser-side "2% of rent → SOKONI commission ledger" (localStorage + SokoniPay.recordCommission
+     on every rent tick) was removed here: SOKONI earns from the Property Hub subscription through
+     the canonical subscription authority, not from rent. */
 
   /* Wire new sections into showSection dispatcher — IIFE avoids hoisting collision */
   ;(function(){
@@ -3822,15 +3695,15 @@ Both parties should retain a signed copy of this agreement.
   window.bulkSendServiceCharges    = bulkSendServiceCharges;
   window.toggleSCPaid              = toggleSCPaid;
   window.deleteSC                  = deleteSC;
+  window.sendServiceChargeWA       = sendServiceChargeWA;
   window.openBulkMessageModal      = openBulkMessageModal;
-  window.sendBulkMessageWA         = sendBulkMessageWA;
   window.saveCommunication         = saveCommunication;
   window.loadMsgTemplate           = loadMsgTemplate;
   window.openQuickMessage          = openQuickMessage;
   window.sendWaterBillWA           = sendWaterBillWA;
   window.printWaterBill            = printWaterBill;
   window.sendRentInvoiceWA         = sendRentInvoiceWA;
-  window.sendRentReminderWA        = sendRentReminderWA;
+  window.callTenantReminder        = callTenantReminder;
   window.sendRentReceiptWA         = sendRentReceiptWA;
   window.onInvTypeChange           = onInvTypeChange;
 
@@ -3855,7 +3728,6 @@ Both parties should retain a signed copy of this agreement.
 })();
 </script><script type="module" src="firebase.js"></script>
 <script src="sokoni-audit.js" defer></script>
-<script src="sokoni-mpesa.js" defer></script>
   <script defer src="kass-widget.js"></script>
   <!-- Enterprise v2.0: payment stack -->
   <script defer src="sokoni-event-bus.js"></script>

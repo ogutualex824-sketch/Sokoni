@@ -159,7 +159,7 @@ const PosMarketing = (() => {
     }));
   }
 
-  /* WhatsApp broadcast — opens wa.me for each customer */
+  /* WhatsApp broadcast (marketing campaign) — opens wa.me for each customer. wa-allowed:marketing */
   async function broadcastWhatsApp(message, segmentFilter) {
     const segs  = await segment();
     const targets = segs.filter(c => !segmentFilter || c.segment === segmentFilter)
@@ -170,7 +170,7 @@ const PosMarketing = (() => {
     for (const c of targets.slice(0, 20)) {
       const phone = c.phone.replace(/\D/g, '').replace(/^0/, '254');
       const text  = message.replace('{name}', c.name || 'Customer');
-      const url   = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+      const url   = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`; /* wa-allowed:marketing */
       window.open(url, '_blank');
       sent++;
       await new Promise(r => setTimeout(r, 300));
@@ -686,12 +686,10 @@ const PosRepair = (() => {
     const history = job.history || [];
     history.push({ status, note, ts: Date.now(), cashier: window.SPos?.state?.currentCashier?.name });
     await PosDB.repairs.update(jobId, { status, updatedAt: Date.now(), history });
-    /* Notify customer */
-    if (status === 'Ready' && job.customerPhone && window.PosBoss) {
-      const msg = `Hello ${job.customerName || 'Customer'}, your ${job.deviceName} (Job: ${job.jobNo}) is ready for collection at Sokoni. Thank you!`;
-      const phone = job.customerPhone.replace(/\D/g, '').replace(/^0/, '254');
-      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
-    }
+    /* Customer "ready for collection" notice: no WhatsApp hand-off (owner decision
+       2026-09-30 — WhatsApp is OTP/invoice/marketing only). The repair job is a
+       local PosDB record with no SOKONI transaction id, so there is no in-app chat
+       target; the cashier reaches the customer by phone (job.customerPhone). */
     if (window.PosAudit) PosAudit.log('repair_status', { jobId, jobNo: job.jobNo, status });
   }
 

@@ -372,16 +372,11 @@
       });
     } else {
       /* SokoniPay unavailable (script blocked / slow). Fall back to a real
-         contact path, never a dead page: message in-app, or WhatsApp/phone. */
+         contact path, never a dead page: message in-app, or SOKONI Support
+         (never a WhatsApp hand-off — owner 2026-09-30). */
       if (window.SokoniInbox && SokoniInbox.openChat) { chat(); return; }
-      var wa = String(_p.phone || '').replace(/\D/g, '').replace(/^0/, '254');
-      if (wa) {
-        window.open('https://wa.me/' + wa + '?text=' +
-          encodeURIComponent('Hi ' + _p.name + ', I found you on SOKONI and would like to book your service.'),
-          '_blank', 'noopener');
-      } else {
-        (window._skToast || window.alert)('Booking is loading — please try again in a moment.');
-      }
+      location.href = 'support.html?topic=booking&ref=' + encodeURIComponent(uid || '') +
+        '&desc=' + encodeURIComponent('I would like to book ' + (_p.name || 'this provider') + ' on SOKONI.');
     }
   }
 

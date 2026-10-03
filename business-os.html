@@ -375,7 +375,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
   <div style="background:rgba(0,180,90,0.04);border:1px solid rgba(0,180,90,0.12);border-radius:16px;padding:16px;margin-bottom:18px;">
     <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.5);margin-bottom:10px;">📢 WhatsApp Broadcast</div>
     <input type="text" id="broadcastMsg" class="bo-input" placeholder="Type your message to all customers…" style="margin-bottom:8px;">
-    <button type="button" onclick="sendBroadcast()" class="bo-btn bo-btn-success bo-btn-sm" style="width:100%;">📤 Send to All via WhatsApp</button>
+    <button type="button" onclick="sendBroadcast()" class="bo-btn bo-btn-success bo-btn-sm" style="width:100%;">📤 Share via WhatsApp</button>
     <div class="bo-msg" id="broadcastStatus"></div>
   </div>
 
@@ -613,11 +613,9 @@ function addOrder(){
   }
   msg('ordMsg','✅ Order #'+order.id+' recorded!',true);
   clearInputs(['ord-cust','ord-phone','ord-items','ord-total']);
-  /* WhatsApp confirmation */
-  if(phone){
-    var waMsg='📋 *SOKONI Order Confirmation*\n\nHi '+cust+'! Your order has been recorded.\n📦 '+items+'\n💰 Total: KES '+fmt(total)+'\n🔖 Ref: #'+order.id+'\nStatus: '+order.status+'\n\nThank you for your business!';
-    window.open('https://wa.me/254'+phone.replace(/^0/,'')+'?text='+encodeURIComponent(waMsg),'_blank');
-  }
+  /* Slice B2: the WhatsApp order-confirmation hop was removed. These orders are
+     local Business OS records (id 'ORD…', not an `orders` doc), so there is no
+     in-app chat thread to route to; the order card offers a tel: call instead. */
   renderOrders(_ordFilter);syncToFirestore();
 }
 window.addOrder=addOrder;
@@ -656,7 +654,7 @@ function renderOrders(f){
         var sr=hexRgb(STATUS_COLORS[s]);
         return '<button type="button" onclick="updateOrderStatus(\''+o.id+'\',\''+s+'\')" class="bo-btn bo-btn-sm" style="background:rgba('+sr+',0.07);border:1px solid rgba('+sr+',0.22);color:'+STATUS_COLORS[s]+';opacity:'+( o.status===s?'1':'0.45')+';">→ '+s+'</button>';
       }).join('')
-      +(o.phone?'<button type="button" onclick="waOrderUpdate(\''+o.id+'\')" class="bo-btn bo-btn-sm bo-btn-wa">💬</button>':'')
+      +(o.phone?'<a href="tel:+254'+String(o.phone).replace(/\D/g,'').replace(/^(254|0)/,'')+'" class="bo-btn bo-btn-sm bo-btn-wa" title="Call customer" aria-label="Call customer" style="text-decoration:none;">📞</a>':'')
       +'<button type="button" onclick="invoiceOrder(\''+o.id+'\')" class="bo-btn bo-btn-sm bo-btn-inv">🧾 Invoice</button>'
       +'<button type="button" onclick="deleteOrder(\''+o.id+'\')" class="bo-btn bo-btn-sm bo-btn-ghost" style="margin-left:auto;">🗑</button>'
       +'</div>'
@@ -671,13 +669,8 @@ function updateOrderStatus(id,status){
 }
 window.updateOrderStatus=updateOrderStatus;
 
-function waOrderUpdate(id){
-  var o=getBS('bosOrders').find(function(x){return x.id===id;});
-  if(!o||!o.phone)return;
-  var waMsg='Hi '+o.cust+', update on your SOKONI order #'+o.id+': status is now *'+o.status+'*. Thank you!';
-  window.open('https://wa.me/254'+o.phone.replace(/^0/,'')+'?text='+encodeURIComponent(waMsg),'_blank');
-}
-window.waOrderUpdate=waOrderUpdate;
+/* Slice B2: waOrderUpdate (WhatsApp order-status message) removed — the order card
+   now carries a tel: call link instead. */
 
 function deleteOrder(id,_c){
   if(!_c){_skConfirm('Delete this order?',()=>deleteOrder(id,true));return;}
@@ -783,8 +776,9 @@ function sendBroadcast(){
   var biz=getBSO('bosBizProfile');
   if(!custs.length){msg('broadcastStatus','No customers yet — add customers first',false);return;}
   var full='📢 *'+(biz.name||'SOKONI Business')+'*\n\n'+m;
-  window.open('https://wa.me/?text='+encodeURIComponent(full),'_blank');
-  msg('broadcastStatus','✅ Message ready — broadcast to '+custs.length+' customers via WhatsApp',true);
+  window.open('https://wa.me/?text='+encodeURIComponent(full),'_blank'); /* wa-allowed:marketing */
+  /* Only a share sheet is opened — nothing is sent to anyone by SOKONI, so no "broadcast to N" claim. */
+  msg('broadcastStatus','WhatsApp opened — choose who to send it to',true);
 }
 window.sendBroadcast=sendBroadcast;
 
@@ -805,7 +799,7 @@ function renderCustomers(){
       +'<div class="bo-item-meta">'+esc(c.phone||'—')+' · Spent: KES '+fmt(c.spent)+'</div>'
       +'</div>'
       +'<div class="bo-item-actions">'
-      +(c.phone?'<button type="button" onclick="window.open(\'https://wa.me/254'+c.phone.replace(/^0/,'')+'\',\'_blank\')" class="bo-btn bo-btn-sm bo-btn-wa">💬</button>':'')
+      +(c.phone?'<a href="tel:+254'+String(c.phone).replace(/\D/g,'').replace(/^(254|0)/,'')+'" class="bo-btn bo-btn-sm bo-btn-wa" title="Call" aria-label="Call customer" style="text-decoration:none;">📞</a>':'')
       +'<button type="button" onclick="deleteCust(\''+c.id+'\')" class="bo-btn bo-btn-sm bo-btn-ghost">🗑</button>'
       +'</div>'
       +'</div>';
@@ -853,7 +847,7 @@ function renderStaff(){
       +'<div class="bo-item-meta">'+esc(s.role)+(s.salary?' · KES '+fmt(s.salary)+'/mo':'')+' · Since '+new Date(s.since).toLocaleDateString('en-KE',{month:'short',year:'numeric'})+'</div>'
       +'</div>'
       +'<div class="bo-item-actions">'
-      +(s.phone?'<button type="button" onclick="window.open(\'https://wa.me/254'+s.phone.replace(/^0/,'')+'\',\'_blank\')" class="bo-btn bo-btn-sm bo-btn-wa">💬</button>':'')
+      +(s.phone?'<a href="tel:+254'+String(s.phone).replace(/\D/g,'').replace(/^(254|0)/,'')+'" class="bo-btn bo-btn-sm bo-btn-wa" title="Call" aria-label="Call staff member" style="text-decoration:none;">📞</a>':'')
       +'<button type="button" onclick="deleteStaff(\''+s.id+'\')" class="bo-btn bo-btn-sm bo-btn-ghost">🗑</button>'
       +'</div>'
       +'</div>';

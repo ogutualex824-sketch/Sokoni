@@ -460,7 +460,7 @@ function renderProvidersGrid(list){
       <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.55;margin-bottom:10px;">${p.bio}</div>
       <div style="font-size:15px;font-weight:900;color:#f59e0b;margin-bottom:12px;">${p.rate}</div>
       <div style="display:flex;gap:6px;">
-        <button type="button" onclick="contactProvider('${(p.id||'').replace(/'/g,'').replace(/"/g,'')}','${(p.name||'').replace(/'/g,'\\\'').replace(/"/g,'')}','${(p.phone||'').replace(/'/g,'').replace(/"/g,'')}')" class="hs-wa-btn" style="flex:1;">💬 WhatsApp</button>
+        <button type="button" onclick="contactProvider('${(p.id||'').replace(/'/g,'').replace(/"/g,'')}','${(p.name||'').replace(/'/g,'\\\'').replace(/"/g,'')}','${(p.phone||'').replace(/'/g,'').replace(/"/g,'')}','${encodeURIComponent(p.uid||'').replace(/'/g,'%27')}')" class="hs-wa-btn" style="flex:1;">💬 Book</button>
         <button type="button" onclick="openReviewModal('${(p.id||'').replace(/'/g,'').replace(/"/g,'')}','${(p.name||'').replace(/'/g,'\\\'').replace(/"/g,'')}')" style="padding:8px 12px;border:1px solid rgba(245,158,11,0.2);border-radius:9px;background:rgba(245,158,11,0.05);color:#f59e0b;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;" title="Rate this provider">⭐ Rate</button>
       </div>
     </div>`).join('');
@@ -486,9 +486,12 @@ function bookHomeService(){
     SokoniPay.waConnect('254705726803', msg, {providerName:'SOKONI Home Services',category:'home-services',serviceDesc:'Home service: '+service});
   }
   /* no WhatsApp hand-off (owner 2026-09-30) */
-  if(msgEl){msgEl.innerHTML=`✅ Booked! Ref: <strong>${_esc(ref)}</strong>`;msgEl.style.color='#f59e0b';}
-  /* Firestore write — fire-and-forget */
-  _hsFireWrite('homeServiceBookings',{ref,name,phone,service,loc,date,description:desc,status:'pending',hub:'home-services'});
+  /* Firestore write — success copy only after it resolves (was "✅ Booked!" before the write). */
+  _hsPending(msgEl);
+  _hsFireWrite('homeServiceBookings',{ref,name,phone,service,loc,date,description:desc,status:'pending',hub:'home-services'}).then(function(ok){
+    if(!ok){ _hsFailed(msgEl,'booking',ref); return; }
+    if(msgEl){msgEl.innerHTML=`✅ Booking request recorded on SOKONI. Ref: <strong>${_esc(ref)}</strong>`;msgEl.style.color='#f59e0b';}
+  });
   /* Invoice */
   if(window.SokoniInvoice){
     setTimeout(()=>SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:service,category:'Home Service',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'TBD',paymentRef:ref,sellerName:'SOKONI Home Services',location:loc,notes:'Date: '+(document.getElementById('bkDate')?.value||'ASAP')}),600);
@@ -507,12 +510,15 @@ function requestQuotes(){
   const budget=document.getElementById('qtBudget')?.value||'';
   quotes.unshift({id:'QT'+Date.now(),service,loc,phone,desc,budget,ts:Date.now()});
   localStorage.setItem('hsQuoteRequests',JSON.stringify(quotes.slice(0,30)));
-  _hsFireWrite('homeServiceQuotes',{service,location:loc,phone,description:desc,budget,status:'open'});
   const msg=`💰 *SOKONI Home Services — Quote Request*\n\n🔧 Service: ${service}\n📍 Location: ${loc}\n📞 Contact: ${phone}${budget?'\n💰 Budget: '+budget:''}\n\n📝 ${desc}\n\nPlease send your best quote!`;
-  /* Quote request → support ticket (owner 2026-09-30); homeServiceQuotes record above stands. */
-  if(msgEl){msgEl.innerHTML='✅ Quote request recorded — opening SOKONI Support…';msgEl.style.color='#f59e0b';}
-  setTimeout(function(){ location.href = 'support.html?topic=quote&desc=' + encodeURIComponent(msg); }, 600);
+  _hsPending(msgEl);
   renderQuotesFeed();
+  /* Quote request → support ticket (owner 2026-09-30); "recorded" only once the homeServiceQuotes write resolved. */
+  _hsFireWrite('homeServiceQuotes',{service,location:loc,phone,description:desc,budget,status:'open'}).then(function(ok){
+    if(!ok){ _hsFailed(msgEl,'quote'); return; }
+    if(msgEl){msgEl.innerHTML='✅ Quote request recorded — opening SOKONI Support…';msgEl.style.color='#f59e0b';}
+    setTimeout(function(){ location.href = 'support.html?topic=quote&desc=' + encodeURIComponent(msg); }, 600);
+  });
 }
 window.requestQuotes=requestQuotes;
 
@@ -530,7 +536,7 @@ function renderQuotesFeed(){
       </div>
       <div style="font-size:12px;color:rgba(255,255,255,0.65);">${q.desc.slice(0,120)}${q.desc.length>120?'…':''}</div>
       ${q.budget?`<div style="font-size:11px;color:#f59e0b;margin-top:4px;">Budget: ${q.budget}</div>`:''}
-      <a href="https://wa.me/254${q.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi! I saw your quote request for '+q.service+' on SOKONI Home Services. I can help. My rate is: ')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Send Quote</a>
+      <a href="support.html?topic=request&ref=${encodeURIComponent(q.id||'')}&desc=${encodeURIComponent('I can quote for this SOKONI Home Services request ('+q.service+'). My rate is: ')}" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Send Quote</a>
     </div>`).join('');
 }
 
@@ -542,11 +548,13 @@ function postHsRequest(){
   let reqs=[];try{reqs=JSON.parse(localStorage.getItem('askHub_homeservices')||'[]');}catch(e){}
   reqs.unshift({id:'HSR'+Date.now(),text,type,phone,ts:Date.now()});
   localStorage.setItem('askHub_homeservices',JSON.stringify(reqs.slice(0,30)));
-  _hsFireWrite('homeServiceRequests',{text,serviceType:type||'General',phone,status:'open'});
   document.getElementById('hsAskText').value='';
   document.getElementById('hsAskPhone').value='';
   renderHsAskFeed();
-  showHsToast('Posted to Home Services Hub!');
+  showHsToast('Saving…');
+  _hsFireWrite('homeServiceRequests',{text,serviceType:type||'General',phone,status:'open'}).then(function(ok){
+    showHsToast(ok ? 'Posted to Home Services Hub' : 'Couldn\'t save — please try again or contact Support.');
+  });
 }
 window.postHsRequest=postHsRequest;
 
@@ -562,7 +570,7 @@ function renderHsAskFeed(){
         <span style="font-size:11px;color:rgba(255,255,255,0.3);">${ago(r.ts)}</span>
       </div>
       <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.5;">${r.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-      ${r.phone?`<a href="https://wa.me/254${r.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi! I can help with your home service request: '+r.text)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>`:''}
+      ${r.phone?`<a href="support.html?topic=request&ref=${encodeURIComponent(r.id||'')}&desc=${encodeURIComponent('I can help with this home service request: '+r.text)}" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>`:''}
     </div>`).join('');
 }
 
@@ -584,12 +592,14 @@ function registerProvider(){
   };
   let local=[];try{local=JSON.parse(localStorage.getItem('sokoniHomeProviders')||'[]');}catch(e){}
   local.unshift(p);localStorage.setItem('sokoniHomeProviders',JSON.stringify(local.slice(0,50)));
-  const msg=`🏠 *SOKONI Home Services — New Provider Registration*\n\n👤 ${name}\n📞 ${phone}\n🔧 Service: ${service}\n📍 Area: ${area}\n${p.rate?'💰 Rate: '+p.rate:''}${p.bio?'\n\n'+p.bio:''}`;
-  window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
-  if(msgEl){msgEl.innerHTML='✅ Registered! You\'ll start receiving job alerts.';msgEl.style.color='#f59e0b';}
-  /* Firestore write — fire-and-forget */
-  _hsFireWrite('homeServiceProviders',{...p,registrationStatus:'pending',hub:'home-services'});
-  ['regName','regPhone','regArea','regRate','regBio'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  /* Recorded in homeServiceProviders below — no WhatsApp hand-off to the admin (owner 2026-09-30).
+     Registration is pending approval (registrationStatus:'pending'); nothing sends job alerts, so the copy must not promise them. */
+  _hsPending(msgEl);
+  _hsFireWrite('homeServiceProviders',{...p,registrationStatus:'pending',hub:'home-services'}).then(function(ok){
+    if(!ok){ _hsFailed(msgEl,'request'); return; }
+    if(msgEl){msgEl.innerHTML='✅ Registration recorded on SOKONI — pending approval. Questions? <a href="support.html?topic=request&desc='+encodeURIComponent('Home Services provider registration: '+name+' ('+service+')')+'" style="color:#f59e0b;">Contact Support</a>';msgEl.style.color='#f59e0b';}
+    ['regName','regPhone','regArea','regRate','regBio'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  });
 }
 window.registerProvider=registerProvider;
 
@@ -646,7 +656,10 @@ async function _initFsProviders(){
   }catch(e){}
 }
 
-/* ── FIRESTORE FIRE-AND-FORGET ── */
+/* ── FIRESTORE WRITE ──
+   Resolves true ONLY when addDoc resolved (Firestore acknowledged the write);
+   false on any failure. Never rejects. Callers must not say "recorded /
+   booked / registered" unless it resolved true (CLAUDE.md "UI Data Integrity"). */
 async function _hsFireWrite(coll, data) {
   try {
     const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
@@ -654,16 +667,28 @@ async function _hsFireWrite(coll, data) {
     const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
     const _a=getApps().find(a=>a.name==="hs-write")||initializeApp(_cfg,"hs-write");
     await addDoc(collection(getFirestore(_a),coll),{...data,createdAt:serverTimestamp()});
-  } catch(e){}
+    return true;
+  } catch(e){ try{ console.warn('[HomeServices] write failed:',coll,e&&e.code||''); }catch(_){} return false; }
 }
 window._hsFireWrite=_hsFireWrite;
+/* Shared honest-state copy for _hsFireWrite callers. */
+function _hsPending(el){ if(el){ el.textContent='Saving…'; el.style.color='rgba(255,255,255,0.6)'; } }
+function _hsFailed(el,topic,ref){
+  var href='support.html?topic='+encodeURIComponent(topic||'request')+(ref?'&ref='+encodeURIComponent(ref):'');
+  if(el){ el.innerHTML='⚠️ Couldn\'t save — please try again or <a href="'+href+'" style="color:#f97316;">contact Support</a>.'; el.style.color='#f97316'; }
+  else showHsToast('Couldn\'t save — please try again or contact Support.');
+}
 
 /* ── CONTACT PROVIDER (lead fee tracking) ── */
-function contactProvider(id, name, phone) {
+function contactProvider(id, name, phone, uidEnc) {
   /* Track lead fee — fire-and-forget */
   _hsFireWrite('homeServiceLeads',{providerId:id,providerName:name,hub:'home-services',feeKES:30,status:'pending'});
-  const msg=encodeURIComponent('Hi '+name+', I found you on SOKONI Home Services. I need help with: ');
-  window.open('https://wa.me/254'+phone.replace(/^0/,'')+'?text='+msg,'_blank');
+  /* In-app only (owner 2026-09-30): a provider with an account uid (homeServiceProviders.uid)
+     → their SOKONI profile, which hosts the booking flow; otherwise this page's own booking form. */
+  if(uidEnc){ location.href='provider-profile.html?uid='+uidEnc; return; }
+  goToPanel('book');
+  const d=document.getElementById('bkDesc');
+  if(d&&!d.value) d.value='Preferred provider: '+name+'. I need help with: ';
 }
 window.contactProvider=contactProvider;
 
@@ -691,12 +716,14 @@ async function submitReview(){
   const text=(document.getElementById('hsReviewText')?.value||'').trim();
   const reviewer=(document.getElementById('hsReviewerName')?.value||'').trim()||'Anonymous';
   const msgEl=document.getElementById('hsReviewMsg');
-  await _hsFireWrite('homeServiceReviews',{providerId:_reviewTarget.id,providerName:_reviewTarget.name,rating:_selectedStars,text,reviewer,hub:'home-services'});
+  _hsPending(msgEl);
+  const ok=await _hsFireWrite('homeServiceReviews',{providerId:_reviewTarget.id,providerName:_reviewTarget.name,rating:_selectedStars,text,reviewer,hub:'home-services'});
   /* Save to localStorage for immediate display */
   let revs=[];try{revs=JSON.parse(localStorage.getItem('hsReviews')||'[]');}catch(e){}
   revs.unshift({providerId:_reviewTarget.id,providerName:_reviewTarget.name,rating:_selectedStars,text,reviewer,ts:Date.now()});
   localStorage.setItem('hsReviews',JSON.stringify(revs.slice(0,50)));
-  if(msgEl){msgEl.textContent='✅ Thank you for your review!';msgEl.style.color='#f59e0b';}
+  if(!ok){ _hsFailed(msgEl,'request'); return; }
+  if(msgEl){msgEl.textContent='✅ Review recorded on SOKONI — thank you!';msgEl.style.color='#f59e0b';}
   setTimeout(closeReviewModal,1800);
 }
 window.openReviewModal=openReviewModal;

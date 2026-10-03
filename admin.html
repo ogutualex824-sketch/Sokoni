@@ -2297,7 +2297,11 @@ if(document.readyState==='loading'){
 function toast(msg,ms){
   var t=document.getElementById('adm-toast');
   t.textContent=msg; t.classList.add('show');
-  setTimeout(function(){ t.classList.remove('show'); },ms||2800);
+  /* Callers across this file pass a severity string ('error', 'success') here.
+     setTimeout coerced it to NaN → 0 ms, so every error toast vanished the instant
+     it appeared. A string now means "use the default duration" (longer for errors). */
+  var dur=(typeof ms==='number'&&ms>0)?ms:(ms==='error'?6000:2800);
+  setTimeout(function(){ t.classList.remove('show'); },dur);
 }
 
 /* ════════════════════════════════
@@ -3017,8 +3021,7 @@ function _appContactBlock(a){
   var out='<div style="margin:8px 0;font-size:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">';
   out += p
     ? '<a href="tel:+'+h(intl)+'" style="color:#71ff00;font-weight:800;text-decoration:none;">📞 '+h(p)+'</a>'
-      +'<a href="https://wa.me/'+h(intl)+'" target="_blank" rel="noopener" style="color:#25d366;font-weight:700;text-decoration:none;">💬 WhatsApp</a>'
-    : '<span style="color:#ff8c42;font-weight:800;">⚠ no reachable number</span>';
+    :'<span style="color:#ff8c42;font-weight:800;">⚠ no reachable number</span>';
   if(a.email) out+='<span style="color:rgba(255,255,255,0.45);">✉ '+h(a.email)+'</span>';
   var loc=a.location||a.city||'';
   out += loc
@@ -3169,7 +3172,7 @@ function _renderAppCard(a, i){
       +(st==='pending'?'<div class="adm-card-actions">'
         +'<button class="abtn abtn-green" onclick="approveApp('+i+')">✅ Approve</button>'
         +'<button class="abtn abtn-red" onclick="rejectApp('+i+')">❌ Reject</button>'
-        +'<button class="abtn abtn-blue" onclick="requestInfo('+i+')">📋 Request Info</button>'
+        +'<button class="abtn abtn-blue" onclick="requestInfo('+i+')">📞 Call for Info</button>'
       +'</div>':'')
     +'</div>';
   }).join('');
@@ -3228,12 +3231,153 @@ var _ROLE_MAP={seller:'seller',provider:'seller',driver:'driver',delivery:'deliv
    atomically, and returns a receipt this UI reports verbatim. */
 async function _decideApp(i, decision, reason){
   var a=D.apps[i]; if(!a) return null;
-  var fsId=a._fsId||a.id;
+  return _decideAppById(a._fsId||a.id, decision, reason);
+}
+/* The one applicationDecide call site. The applications pane, the Legal pane
+   (lawyers, law firms) and the Healthcare facility pane all decide through it, so
+   there is exactly one client path to a server decision and no local-only
+   approval anywhere. Throws the callable's error; returns null when it could not
+   even be attempted (already reported). */
+async function _decideAppById(fsId, decision, reason){
   if(!fsId){ toast('This application has no Firestore id — cannot decide','error'); return null; }
   if(!window.sokoniCallable){ toast('Callable bridge unavailable — reload','error'); return null; }
   var fn=window.sokoniCallable('applicationDecide');
   var res=await fn({applicationId:fsId,decision:decision,reason:reason||null});
   return (res&&res.data)||{};
+}
+
+/* <notify-status> ────────────────────────────────────────────────────────────
+   APPLICANT NOTIFICATION STATUS — the only place this page may say an applicant
+   was told anything. Owner rule (2026-10-01): "sent" appears ONLY when the
+   transport accepted the message, i.e. a notify() channel reported exactly
+   'sent'. Everything else is pending, queued or failed — never rounded up.
+
+   Accepts any of the shapes that can carry a notify() result:
+     • a notify()/notifySend result            { ok, key, channels:{inapp,push,sms,email} }
+     • an applicationDecide response/receipt    { receipt:{ notification|notify: <result> } }
+       — applyDecision does NOT return its notify() result today, so this falls
+         through to "pending" until the server reports it (functions owner gap)
+     • a bare channels map                      { inapp:'sent', push:'failed:no_token' }
+   Pure: no DOM, no globals — scripts/test-admin-approval-notify.js executes it. */
+var NOTIFY_PENDING_TEXT='Applicant notification pending (the server does not report delivery yet)';
+function notifyStatusText(x){
+  var CH=['inapp','push','sms','email'];
+  var LABEL={inapp:'in-app',push:'push',sms:'SMS',email:'email'};
+  var QUEUED_WORDS={queued:'queued',deduped:'deduplicated',no_address:'no address on file',
+    suppressed_by_preference:'off in the applicant\'s preferences',
+    not_needed_push_delivered:'not needed'};
+  function isChannelMap(o){
+    if(!o||typeof o!=='object') return false;
+    return CH.some(function(k){ return typeof o[k]==='string'; });
+  }
+  function find(o,depth){
+    if(!o||typeof o!=='object'||depth>3) return null;
+    if(o.channels&&typeof o.channels==='object') return {channels:o.channels,deduped:!!o.deduped};
+    if(o.deduped===true) return {channels:null,deduped:true};
+    if(isChannelMap(o)) return {channels:o,deduped:false};
+    return find(o.notification,depth+1)||find(o.notify,depth+1)||find(o.receipt,depth+1);
+  }
+  var r=find(x,0);
+  if(!r) return NOTIFY_PENDING_TEXT;
+  if(!r.channels){
+    /* notify() short-circuits a repeated dedupeKey with no channel report: an
+       earlier attempt exists, but whether IT was delivered is not known here. */
+    return 'Notification already attempted earlier (duplicate suppressed) — delivery status not reported';
+  }
+  var sent=[],failed=[],other=[];
+  CH.forEach(function(k){
+    var v=r.channels[k];
+    if(typeof v!=='string') return;
+    if(v==='sent') sent.push(k);
+    else if(v==='failed'||v.indexOf('failed')===0) failed.push(k);
+    /* Only notify()'s own non-delivered vocabulary is echoed. Anything else ('SENT',
+       'sent ', a future word) is NOT echoed — repeating a raw value that reads like
+       "sent" would be the fake-sent state this function exists to prevent. */
+    else other.push(LABEL[k]+': '+(QUEUED_WORDS[v]||'unconfirmed'));
+  });
+  if(sent.length){
+    var s='Notified '+sent.map(function(k){ return k==='inapp'?'in-app':'by '+LABEL[k]; }).join(' and ');
+    if(failed.length) s+=' · '+failed.map(function(k){ return LABEL[k]; }).join(', ')+' delivery failed';
+    return s;
+  }
+  if(failed.length){
+    return 'Delivery failed ('+failed.map(function(k){ return LABEL[k]; }).join(', ')+')'
+      +(other.length?' · '+other.join(', ')+' (not confirmed)':'');
+  }
+  if(other.length) return 'Notification pending — '+other.join(', ')+' (not confirmed delivered)';
+  return NOTIFY_PENDING_TEXT;
+}
+/* A notifySend refusal, in words an admin can act on. The code is the callable's
+   HttpsError code; permission-denied comes from notifySend's admin check, which
+   reads users/{caller}.roles — an admin holding only the custom claim is refused. */
+function notifyErrorText(e){
+  var code=String((e&&e.code)||'').replace(/^functions\//,'');
+  if(code==='permission-denied') return 'Notification not sent — your admin account isn\'t registered for notifications';
+  if(code==='unauthenticated') return 'Notification not sent — sign in again';
+  return 'Notification not sent: '+(code||'unknown error');
+}
+/* Display tone for a status line: ok (a channel said 'sent'), bad, or wait. */
+function notifyStatusTone(text){
+  var t=String(text||'');
+  if(/^Notified /.test(t)) return 'ok';
+  if(/failed|not sent|not possible|NOT provisioned/i.test(t)) return 'bad';
+  return 'wait';
+}
+/* </notify-status> ──────────────────────────────────────────────────────── */
+
+/* A per-record status line (decision + notification truth), keyed by Firestore id
+   so it survives the listener replacing the row objects. Session-only by design:
+   it reports what THIS admin's call returned, not a stored fact. */
+var _decisionNotes={};
+function _decisionNoteHtml(id){
+  var t=id&&_decisionNotes[id]; if(!t) return '';
+  var tone=notifyStatusTone(t);
+  var col=tone==='ok'?'#71ff00':(tone==='bad'?'#ff6b6b':'#ffcc4d');
+  return '<div role="status" style="font-size:10.5px;line-height:1.4;margin-top:4px;color:'+col+';white-space:normal;max-width:260px;">'+h(t)+'</div>';
+}
+/* Decide an applications/{fsId} record through applicationDecide and report the
+   receipt truthfully. Used by the Legal and Healthcare panes. */
+async function _decideServerApp(fsId, decision, label, rerender){
+  if(!fsId){ toast('No server application — ask the applicant to resubmit','error'); return; }
+  var a=(D.apps||[]).filter(function(x){ return x._fsId===fsId; })[0]||null;
+  var name=(a&&(a.name||a.fullName||a.businessName))||label;
+  var reason=null;
+  if(decision==='reject'){
+    reason=prompt('Reason for rejecting '+name+' (optional):');
+    if(reason===null) return;                       /* cancelled — not a decision */
+  }
+  var d;
+  try{
+    d=await _decideAppById(fsId, decision, reason);
+    if(!d) return;
+  }catch(e){
+    console.error('[Admin] '+label+' '+decision+' failed', { fsId: fsId, error: e && e.message });
+    /* Not "nothing changed": the callable records the status before projecting,
+       so a projection error can leave a decided-but-unprojected application. The
+       applications pane shows its projectionStatus. */
+    _decisionNotes[fsId]=(decision==='approve'?'Approve':'Reject')+' failed: '+((e&&e.message)||'unknown error')+' — applicant not notified; check the application\'s projection status';
+    toast(_decisionNotes[fsId],'error');
+    if(rerender) rerender();
+    return;
+  }
+  var r=d.receipt||{};
+  var verb=decision==='approve'?'Approved':'Rejected';
+  var line;
+  if(r.ok===false){
+    /* applyDecision recorded the status but could not provision (no uid / unknown
+       role). Nothing was granted and nobody can be notified — say so. */
+    line=verb+' but NOT provisioned ('+(r.reason||'unknown')+')'
+      +(r.reason==='no_uid'?' · no applicant account — notification not possible':' · applicant not notified');
+  }else if(decision==='approve'){
+    line=verb+' · '+notifyStatusText(d);
+  }else{
+    line=verb+' · applicant not notified (the server sends no rejection notice)';
+  }
+  if(a) a.status=decision==='approve'?'approved':'rejected';
+  _decisionNotes[fsId]=line;
+  var writes=(r.writes||[]).map(function(w){ return w.collection+' '+w.action; }).join('; ');
+  toast(name+': '+line+(writes?' — '+writes:''), notifyStatusTone(line)==='bad'?'error':7000);
+  if(rerender) rerender();
 }
 
 async function approveApp(i){
@@ -3249,7 +3393,7 @@ async function approveApp(i){
       return s;
     }).join('; ');
     /* Report what the server actually wrote, not what we hoped it wrote. */
-    toast('✅ Approved: '+a.name+' — '+(summary||'no registry change'));
+    toast('✅ Approved: '+a.name+' — '+(summary||'no registry change')+' · '+notifyStatusText(d),7000);
   }catch(e){
     console.error('[Admin] approve failed',e);
     toast('Approve FAILED for '+a.name+': '+(e.message||'unknown error'),'error');
@@ -3257,16 +3401,8 @@ async function approveApp(i){
     return;   /* status not changed locally — the decision did not happen */
   }
   renderApps(D.apps); renderStats();
-
-  /* WhatsApp is now a courtesy on top of the server-sent notification, not the
-     notification itself. Built from whichever phone shape is present — it used
-     to read only `a.phone`, so every driver application (which stored the number
-     as `mpesa`) silently produced no message at all. */
-  var p=_appLocalPhone(a);
-  if(p){
-    var waMsg=encodeURIComponent('Hello '+a.name+'! 🎉 Your SOKONI application has been approved. Log in at https://mysokoni.co.ke and start earning. Welcome aboard! — SOKONI Team');
-    window.open('https://wa.me/254'+p.slice(1)+'?text='+waMsg,'_blank','noopener');
-  }
+  /* Slice B2: the WhatsApp courtesy hop was removed — admin→applicant notices stay
+     inside SOKONI (applicationDecide sends the server-side notification). */
 }
 
 async function rejectApp(i){
@@ -3283,22 +3419,16 @@ async function rejectApp(i){
     return;
   }
   renderApps(D.apps); renderStats();
-
-  var p=_appLocalPhone(a);
-  if(p){
-    var rMsg=encodeURIComponent('Hello '+a.name+', your SOKONI application was reviewed'+(reason?' ('+reason+')':'')+'. Feel free to reapply. — SOKONI Team');
-    window.open('https://wa.me/254'+p.slice(1)+'?text='+rMsg,'_blank','noopener');
-  }
+  /* Slice B2: WhatsApp notice hop removed (in-app notification only). */
 }
 
+/* Slice B2: "Request Info" used to open a WhatsApp chat with the applicant.
+   Communications stay inside SOKONI — this now places a phone call (tel:). */
 function requestInfo(i){
-  var a=D.apps[i];
-  var phone=(a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(phone.length>=12){
-    var m=encodeURIComponent('Hello '+a.name+', we need more information about your SOKONI application. Please reply with your details. — SOKONI Team');
-    window.open('https://wa.me/'+phone+'?text='+m,'_blank','noopener');
-  }
-  toast('📋 WhatsApp opened for '+a.name);
+  var a=D.apps[i]; if(!a) return;
+  var p=_appLocalPhone(a);
+  if(!p){ toast('No valid phone number on this application','error'); return; }
+  window.location.href='tel:+254'+p.slice(1);
 }
 
 /* ════════════════════════════════
@@ -3412,8 +3542,8 @@ async function renderDriverApps(filter){
            inline handler decodes HTML entities before parsing the JS, so h() does
            not contain it — a name like `');SK.dialog.alert(1);//` executed in the admin's
            session. */
-        +'<button class="abtn abtn-blue" onclick="driverWhatsApp('+idx+')">'
-          +'📱 WhatsApp</button>'
+        +'<button class="abtn abtn-blue" onclick="driverCall('+idx+')">'
+          +'📞 Call</button>'
       +'</div>':'')
     +'</div>';
   }).join('');
@@ -3452,16 +3582,7 @@ async function approveDriver(fsId, idx){
     return;   /* status unchanged locally — the approval did not happen */
   }
   renderDriverApps(_drvFilter);
-
-  /* Built from whichever phone shape exists. It used to read only `a.phone`, so
-     every rider application (which stores the number as `mpesa`) produced no
-     message at all. */
-  var p = _appLocalPhone(a);
-  if(p){
-    /* Canonical public domain, extensionless (cleanUrls:true) to avoid a redirect hop. */
-    var msg = encodeURIComponent('Hello '+(a.fullName||a.name)+'! 🎉 Your SOKONI rider application has been approved. Log in at https://mysokoni.co.ke/driver and go online to start earning. Welcome aboard! — SOKONI Team');
-    window.open('https://wa.me/254'+p.slice(1)+'?text='+msg,'_blank','noopener');
-  }
+  /* Slice B2: WhatsApp notice hop removed — applicationDecide notifies the rider in-app. */
 }
 
 /* Rider equivalent of republishApp — indexes _drvApps, not D.apps. */
@@ -3500,25 +3621,19 @@ async function rejectDriver(fsId, idx){
     return;
   }
   renderDriverApps(_drvFilter);
-
-  var p = _appLocalPhone(a);
-  if(p){
-    var msg = encodeURIComponent('Hello '+(a.fullName||a.name)+', your SOKONI rider application was not approved'+(reason?' ('+reason+')':'')+'. Please contact support for assistance. — SOKONI Team');
-    window.open('https://wa.me/254'+p.slice(1)+'?text='+msg,'_blank','noopener');
-  }
+  /* Slice B2: WhatsApp notice hop removed (in-app notification only). */
 }
 
 /* Takes an INDEX into _drvApps rather than (phone, name) strings — see the note
    at the call site. Resolving the values here also means the number is read
    through _appLocalPhone, so a rider whose contact arrived as `mpesa` (which was
-   every rider) gets a working message instead of "No valid phone number". */
-function driverWhatsApp(idx){
+   every rider) gets a working number instead of "No valid phone number".
+   Slice B2: this used to open WhatsApp; it now places a phone call (tel:). */
+function driverCall(idx){
   var a = _drvApps[idx]; if(!a){ toast('Application not found','error'); return; }
   var local = _appLocalPhone(a);
   if(!local){ toast('No valid phone number on this application','error'); return; }
-  var name = a.fullName || a.name || 'there';
-  var msg = encodeURIComponent('Hello '+name+', this is SOKONI Admin. ');
-  window.open('https://wa.me/254'+local.slice(1)+'?text='+msg,'_blank','noopener');
+  window.location.href = 'tel:+254'+local.slice(1);
 }
 
 /* ════════════════════════════════
@@ -5259,16 +5374,6 @@ function renderPayouts(){
   }).catch(function(e){ setAll('#payoutsBody', errRow((e&&e.message)||'Unable to load withdrawals')); });
 }
 
-/* Normalise a Kenyan phone to wa.me international format WITHOUT double-prefixing.
-   The stored account number is already "2547…", so the old '254'+phone produced
-   "254254…" → WhatsApp reported "number not on WhatsApp". */
-function _waPhone(p){
-  var d = String(p||'').replace(/[^0-9]/g,'');
-  if (d.indexOf('254') === 0) return d;            /* already 2547… */
-  if (d.indexOf('0')   === 0) return '254'+d.slice(1);  /* 07… → 2547… */
-  if (d.length === 9)         return '254'+d;       /* 7xxxxxxxx → 2547… */
-  return d;
-}
 function approveWithdrawal(id, phone, amount, name, ref, _c){
   if(!_c){_skConfirm('Confirm payment of KES '+amount.toLocaleString()+' to '+name+' ('+phone+')?',()=>approveWithdrawal(id,phone,amount,name,ref,true));return;}
   /* Canonical approval: adminProcessPayout reserves→approving→IntaSend B2C on the
@@ -5277,8 +5382,7 @@ function approveWithdrawal(id, phone, amount, name, ref, _c){
   toast('Approving payout…');
   _invCall('adminProcessPayout', { requestId: id, status: 'approved' }).then(function(){
     toast('✅ Payout approved — B2C processing to '+phone);
-    var msg = '✅ *SOKONI Payout Approved*\n\nHi '+name+', your withdrawal of KES '+amount.toLocaleString()+' (Ref: '+ref+') has been approved and is being processed to '+phone+'.\n\nExpect funds within 24h.\n\n— SOKONI Team';
-    try { window.open('https://wa.me/'+_waPhone(phone)+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer'); } catch(_){}
+    /* Slice B2: WhatsApp notice hop to the payee removed — communications stay in SOKONI. */
     if (typeof renderPayouts==='function') setTimeout(renderPayouts, 1200);   /* refresh list (no live listener) */
   }).catch(function(e){ toast('⚠️ Payment could not be completed — '+((e&&e.message)||'unknown error')+' (ref '+ref+')'); });
 }
@@ -5292,8 +5396,7 @@ function rejectWithdrawal(id, phone, name){
   toast('Rejecting…');
   _invCall('adminProcessPayout', { requestId: id, status: 'rejected', note: reason }).then(function(){
     toast('❌ Withdrawal rejected — funds returned to wallet');
-    var msg = '❌ *SOKONI Withdrawal Update*\n\nHi '+name+', your withdrawal request was not processed.\n\nReason: '+reason+'\n\nThe funds have been returned to your wallet. — SOKONI Team';
-    try { if (phone) window.open('https://wa.me/'+_waPhone(phone)+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer'); } catch(_){}
+    /* Slice B2: WhatsApp notice hop to the payee removed — communications stay in SOKONI. */
     if (typeof renderPayouts==='function') setTimeout(renderPayouts, 1200);   /* refresh list (no live listener) */
   }).catch(function(e){ toast('⚠️ Rejection could not be completed — '+((e&&e.message)||'unknown error')); });
 }
@@ -5463,10 +5566,11 @@ function renderProperties(){
       +'<td>'+h(l.city||l.location||'—')+'</td>'
       +'<td>KES '+fmt(l.pricePerNight||l.price||0)+'/night</td>'
       +'<td>'+fmt(D.bnbBookings.filter(function(b){return b.propertyId===l.id;}).length)+'</td>'
-      +'<td><span class="badge '+sc+'">'+h(l.status||'pending')+'</span></td>'
+      +'<td><span class="badge '+sc+'">'+h(l.status||'pending')+'</span>'+_decisionNoteHtml(l._fsId||l.id)+'</td>'
       +'<td style="white-space:nowrap;">'
-        +'<button class="adm-btn-sm adm-btn-green" onclick="approveProp('+i+')">✅</button> '
-        +'<button class="adm-btn-sm adm-btn-red" onclick="rejectProp('+i+')">❌</button>'
+        /* data-id, not the filtered row index — see _propByRef. */
+        +'<button class="adm-btn-sm adm-btn-green" data-id="'+h(l._fsId||l.id||'')+'" onclick="approveProp(this.dataset.id)" aria-label="Approve property">✅</button> '
+        +'<button class="adm-btn-sm adm-btn-red" data-id="'+h(l._fsId||l.id||'')+'" onclick="rejectProp(this.dataset.id)" aria-label="Reject property">❌</button>'
       +'</td></tr>';
   }).join('');
   var bb=document.getElementById('bnbBookingsBody'); if(!bb) return;
@@ -5516,8 +5620,22 @@ function renderProperties(){
 
    The listener re-renders on the server's echo, so there is no local mutation to
    keep in step — what the admin sees after a decision is what Firestore holds. */
+/* Resolve a listing by Firestore id (buttons pass data-id) or, for any legacy
+   caller, by index into D.bnbListings. The buttons used to pass the index of the
+   FILTERED row (_visibleProperties) while this read D.bnbListings[i] — with a
+   search or type filter active, ✅ decided a DIFFERENT listing than the one the
+   admin clicked. An id cannot drift when the list is filtered or the listener
+   re-sorts it. */
+function _propByRef(ref){
+  var list = D.bnbListings || [];
+  if (typeof ref === 'number') return list[ref] || null;
+  for (var k = 0; k < list.length; k++) {
+    if ((list[k]._fsId || list[k].id) === ref) return list[k];
+  }
+  return null;
+}
 async function _decideProp(i, status, reason){
-  var a = (D.bnbListings || [])[i];
+  var a = _propByRef(i);
   if (!a) { toast('That listing is no longer in the list — refresh', 'error'); return; }
   var id = a._fsId || a.id;
   if (!id) { toast('This listing has no Firestore id — cannot decide', 'error'); return; }
@@ -5552,29 +5670,70 @@ async function _decideProp(i, status, reason){
   return a;
 }
 
-async function approveProp(i){
-  var a = await _decideProp(i, 'active');
+/* Tell the host, through the live notification engine (notifySend → notify():
+   in-app record + push/SMS/email per the host's preferences). Runs only AFTER the
+   decision is saved, and never undoes it: a notification failure is reported next
+   to the decision, not in place of it. Returns the status line to show. */
+function _plainNotifyText(s, n){
+  /* notify() interpolates body into the email HTML unescaped; listing names and
+     reasons are host/admin text. Strip markup characters rather than trust them. */
+  return String(s == null ? '' : s).replace(/[<>&"'`]/g, '').replace(/\s+/g, ' ').trim().slice(0, n || 120);
+}
+async function _notifyPropHost(a, status, reason){
+  var id = a._fsId || a.id;
+  var hostUid = a.hostUid || null;
+  if (!hostUid) return 'No applicant account — notification not possible';
+  if (!window.sokoniCallable) return 'Notification not sent: callable bridge unavailable';
+  var name = _plainNotifyText(a.name || a.title, 80) || 'Your property';
+  var approved = status === 'active';
+  try {
+    var res = await window.sokoniCallable('notifySend')({
+      uid: hostUid,
+      type: 'system_update',              /* registered TYPE in functions/notify.js; no SMS template */
+      title: approved ? 'Your property is approved' : 'Your property listing was not approved',
+      body: approved
+        ? name + ' is now live on SOKONI and guests can find it.'
+        : name + ' was not approved' + (reason ? ': ' + _plainNotifyText(reason, 200) : '.') + ' You can update the listing and resubmit it.',
+      deepLink: '/bnb-manage.html',
+      dedupeKey: 'bnb:' + id + ':' + status,
+      data: { listingId: String(id), status: status }
+    });
+    return notifyStatusText(res && res.data);
+  } catch (e) {
+    console.warn('[Admin][properties] host notification refused', { id: id, code: e && e.code });
+    return notifyErrorText(e);
+  }
+}
+
+async function _decidePropAndNotify(ref, status, reason){
+  var a = await _decideProp(ref, status, reason);
   if (!a) return;
-  toast('✅ Property approved');
+  var id = a._fsId || a.id;
+  var verb = status === 'active' ? 'Property approved' : 'Property rejected';
+  _decisionNotes[id] = verb + ' · notifying host…';
+  renderProperties();
+  var line = await _notifyPropHost(a, status, reason);
+  _decisionNotes[id] = verb + ' · ' + line;
+  renderProperties();
+  toast(_decisionNotes[id], notifyStatusTone(line) === 'bad' ? 'error' : 7000);
+}
+
+async function approveProp(ref){
   /* Host role grant deliberately NOT wired here. The old code read a.uid, but
      bnbListings documents carry hostUid (see bnb-hub.html / bnb-manage.html), so
      that branch never ran. Activating it would change user documents, which is a
      different concern from recording a moderation decision. Documented, not done. */
-  var phone = (a.phone || a.hostPhone || '').replace(/\D/g, '').replace(/^0/, '254');
-  if (phone.length >= 12) {
-    window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(
-      'Hello ' + (a.name || '') + '! 🎉 Your property is now live on SOKONI.'), '_blank');
-  }
+  /* Slice B2: WhatsApp notice hop to the host removed — the host is told through
+     notifySend (in-app record + push), and the UI reports what notify() returned. */
+  await _decidePropAndNotify(ref, 'active');
 }
 
-async function rejectProp(i){
+async function rejectProp(ref){
   var reason = prompt('Reason for rejection (recorded in the audit log and visible to the host):');
   if (reason === null) return;                     /* cancelled — not a decision */
   reason = String(reason).trim();
   if (reason.length < 5) { toast('Please give a reason of at least 5 characters', 'error'); return; }
-  var a = await _decideProp(i, 'rejected', reason);
-  if (!a) return;
-  toast('Property rejected');
+  await _decidePropAndNotify(ref, 'rejected', reason);
 }
 
 /* ════════════════════════════════
@@ -5597,16 +5756,14 @@ function renderLegal(){
       +'<td>'+h(a.city||'—')+'</td>'
       +'<td><span class="badge b-blue">'+h(a.plan||'basic')+'</span></td>'
       +'<td style="font-size:11px;">'+h((a.date||a.submittedAt||'').substring(0,10))+'</td>'
-      +'<td><span class="badge '+sc+'">'+h(a.status||'pending')+'</span></td>'
-      +'<td style="white-space:nowrap;">'
-        +'<button class="adm-btn-sm adm-btn-green" onclick="approveLawyer('+i+')">✅</button> '
-        +'<button class="adm-btn-sm adm-btn-red" onclick="rejectLawyer('+i+')">❌</button>'
-      +'</td></tr>';
+      +'<td><span class="badge '+sc+'">'+h(a.status||'pending')+'</span>'+_decisionNoteHtml(a._fsId)+'</td>'
+      +'<td style="white-space:nowrap;">'+_serverDecideButtons(a._fsId,'approveLawyer','rejectLawyer')+'</td></tr>';
   }).join('');
   var fb=document.getElementById('firmRegsBody'); if(!fb) return;
   if(!D.firmRegs.length){ fb.innerHTML=emptyRow(8,'🏢','No firm registrations'); }
   else fb.innerHTML=D.firmRegs.map(function(f,i){
-    var sc={pending:'b-yellow',active:'b-green',rejected:'b-red'}[f.status||'pending']||'b-yellow';
+    /* applicationDecide writes status 'approved'; 'active' is the legacy local value. */
+    var sc={pending:'b-yellow',approved:'b-green',active:'b-green',rejected:'b-red'}[f.status||'pending']||'b-yellow';
     return '<tr>'
       +'<td><b>'+h(f.name||'—')+'</b></td>'
       +'<td>'+h(f.city||'—')+'</td>'
@@ -5614,11 +5771,8 @@ function renderLegal(){
       +'<td style="font-size:11px;">'+h(f.phone||f.email||'—')+'</td>'
       +'<td><span class="badge b-blue">'+h(f.plan||'basic')+'</span></td>'
       +'<td style="font-size:11px;">'+h((f.registeredAt||'').substring(0,10))+'</td>'
-      +'<td><span class="badge '+sc+'">'+h(f.status||'pending')+'</span></td>'
-      +'<td style="white-space:nowrap;">'
-        +'<button class="adm-btn-sm adm-btn-green" onclick="approveFirm('+i+')">✅</button> '
-        +'<button class="adm-btn-sm adm-btn-red" onclick="rejectFirm('+i+')">❌</button>'
-      +'</td></tr>';
+      +'<td><span class="badge '+sc+'">'+h(f.status||'pending')+'</span>'+_decisionNoteHtml(f._fsId)+'</td>'
+      +'<td style="white-space:nowrap;">'+_serverDecideButtons(f._fsId,'approveFirm','rejectFirm')+'</td></tr>';
   }).join('');
   var lb=document.getElementById('legalBookingsBody'); if(!lb) return;
   if(!D.legalBkgs.length){ lb.innerHTML=emptyRow(7,'📅','No legal consultations'); }
@@ -5635,32 +5789,28 @@ function renderLegal(){
       +'</tr>';
   }).join('');
 }
-async function approveLawyer(i){
-  var a=D.lawyerApps[i]; a.status='approved';
-  localStorage.setItem('sokoniLawyerApp',JSON.stringify(D.lawyerApps));
-  if(a._fsId && window.SokoniDB) try{ await window.SokoniDB.updateApplicationStatus(a._fsId,'approved'); }catch(e){}
-  if(a.uid && window.firebaseDB) try{
-    var {doc,updateDoc}=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-    await updateDoc(doc(window.firebaseDB,'users',a.uid),{'registeredAs.legal':true,'approved':true});
-  }catch(e){}
-  renderLegal(); toast('✅ Lawyer approved');
-  var phone=(a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(phone.length>=12) window.open('https://wa.me/'+phone+'?text='+encodeURIComponent('Hello '+a.name+'! 🎉 Your lawyer profile on SOKONI Legal Hub is approved. Log in to manage your listing. — SOKONI Team'),'_blank','noopener');
+/* ── Legal decisions are server-authoritative ────────────────────────────────
+   These used to flip localStorage, write applications/{id}.status and
+   users/{uid}.registeredAs.legal from the browser — each in an empty catch — and
+   toast "approved" regardless. No legalProviders/lawyers record was created, no
+   role was granted, and the applicant was told nothing. Rejections were
+   localStorage-only: the server never learned of them.
+   They now decide through applicationDecide (projectLegal writes legalProviders
+   + lawyers, grants the role, and notifies on approval), and the row reports the
+   receipt. A row with no Firestore application cannot be decided at all — a
+   local-only approval is exactly the defect being removed. */
+function _serverDecideButtons(fsId, approveFn, rejectFn){
+  if(!fsId){
+    return '<button class="adm-btn-sm adm-btn-green" disabled aria-disabled="true" title="No server application — ask the applicant to resubmit" style="opacity:.4;cursor:not-allowed;">✅</button> '
+      +'<div style="font-size:10.5px;color:#ffcc4d;white-space:normal;max-width:180px;margin-top:4px;">No server application — ask the applicant to resubmit</div>';
+  }
+  return '<button class="adm-btn-sm adm-btn-green" data-id="'+h(fsId)+'" onclick="'+approveFn+'(this.dataset.id)" aria-label="Approve">✅</button> '
+    +'<button class="adm-btn-sm adm-btn-red" data-id="'+h(fsId)+'" onclick="'+rejectFn+'(this.dataset.id)" aria-label="Reject">❌</button>';
 }
-function rejectLawyer(i){ D.lawyerApps[i].status='rejected'; localStorage.setItem('sokoniLawyerApp',JSON.stringify(D.lawyerApps)); renderLegal(); toast('Lawyer rejected'); }
-async function approveFirm(i){
-  var a=D.firmRegs[i]; a.status='active';
-  localStorage.setItem('sokoni_firm_registrations',JSON.stringify(D.firmRegs));
-  if(a._fsId && window.SokoniDB) try{ await window.SokoniDB.updateApplicationStatus(a._fsId,'approved'); }catch(e){}
-  if(a.uid && window.firebaseDB) try{
-    var {doc,updateDoc}=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-    await updateDoc(doc(window.firebaseDB,'users',a.uid),{'registeredAs.legal':true,'approved':true});
-  }catch(e){}
-  renderLegal(); toast('✅ Firm approved');
-  var phone=(a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(phone.length>=12) window.open('https://wa.me/'+phone+'?text='+encodeURIComponent('Hello '+a.name+'! 🎉 Your law firm is now listed on SOKONI Legal Hub. — SOKONI Team'),'_blank','noopener');
-}
-function rejectFirm(i){ D.firmRegs[i].status='rejected'; localStorage.setItem('sokoni_firm_registrations',JSON.stringify(D.firmRegs)); renderLegal(); toast('Firm rejected'); }
+function approveLawyer(fsId){ return _decideServerApp(fsId,'approve','Lawyer',renderLegal); }
+function rejectLawyer(fsId){  return _decideServerApp(fsId,'reject','Lawyer',renderLegal); }
+function approveFirm(fsId){   return _decideServerApp(fsId,'approve','Law firm',renderLegal); }
+function rejectFirm(fsId){    return _decideServerApp(fsId,'reject','Law firm',renderLegal); }
 
 /* ════════════════════════════════
    HEALTHCARE
@@ -5669,7 +5819,7 @@ function renderHealthcare(){
   document.getElementById('healthStats').innerHTML=
     statBox('📅','b-blue',D.appointments.length,'Appointments')+
     statBox('💊','b-green',D.medOrders.length,'Med Orders')+
-    statBox('🏥','b-yellow',D.hcFacPending.length,'Pending Facilities')+
+    statBox('🏥','b-yellow',_hcFacRows().filter(function(r){return r.fsId&&(r.fac.status||'pending')==='pending';}).length,'Pending Facilities')+
     statBox('⏳','b-red',D.appointments.filter(function(a){return a.status==='pending';}).length,'Unconfirmed');
   var body=document.getElementById('appointmentsBody'); if(!body) return;
   if(!D.appointments.length){ body.innerHTML=emptyRow(7,'📅','No appointments'); }
@@ -5700,29 +5850,63 @@ function renderHealthcare(){
       +'</tr>';
   }).join('');
   var fg=document.getElementById('hcFacGrid'); if(!fg) return;
-  if(!D.hcFacPending.length){ fg.innerHTML=empty('🏥','No pending facility applications'); return; }
+  var rows=_hcFacRows();
+  if(!rows.length){ fg.innerHTML=empty('🏥','No facility applications'); return; }
   fg.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;">'
-    +D.hcFacPending.map(function(f,i){
+    +rows.map(function(r,i){
+      var f=r.fac;
+      /* A local row's status is this browser's claim (old local-only "approvals"
+         included), not a server fact — label it as such. */
+      var st=r.fsId?(f.status||'pending'):'local only';
+      var sc={pending:'b-yellow',approved:'b-green',rejected:'b-red',suspended:'b-red'}[st]||'b-yellow';
+      var actions;
+      if(r.fsId){
+        actions='<button class="adm-btn-sm adm-btn-green" data-id="'+h(r.fsId)+'" onclick="approveHcFac(this.dataset.id)">✅ Approve</button>'
+          +'<button class="adm-btn-sm adm-btn-red" data-id="'+h(r.fsId)+'" onclick="rejectHcFac(this.dataset.id)" aria-label="Reject facility">❌ Reject</button>';
+      }else{
+        /* Local-only record: this browser holds it, the server does not. It cannot be
+           approved (there is nothing server-side to approve); the local copy may be
+           cleared, which is housekeeping, not a decision. */
+        actions='<button class="adm-btn-sm adm-btn-green" disabled aria-disabled="true" title="No server application — ask the applicant to resubmit" style="opacity:.4;cursor:not-allowed;">✅ Approve</button>'
+          +'<button class="adm-btn-sm adm-btn-red" data-local-id="'+h(f.id||'')+'" onclick="removeLocalHcFac(this.dataset.localId)" aria-label="Remove local copy">🗑️ Local copy</button>';
+      }
       return '<div class="adm-card" style="padding:12px;">'
         +'<div class="adm-card-name">'+h(f.name||'Facility '+(i+1))+'</div>'
         +'<div class="adm-card-sub">📍 '+h(f.location||f.city||'—')+' · '+h(f.type||'clinic')+'</div>'
-        +'<div style="margin-top:8px;display:flex;gap:6px;">'
-          +'<button class="adm-btn-sm adm-btn-green" onclick="approveHcFac('+i+')">✅ Approve</button>'
-          +'<button class="adm-btn-sm adm-btn-red" onclick="deleteItem(D.hcFacPending,'+i+',\'sokoniHcFacPending\',renderHealthcare)">❌</button>'
-        +'</div></div>';
+        +'<div style="margin-top:6px;"><span class="badge '+sc+'">'+h(st)+'</span>'+_decisionNoteHtml(r.fsId)+'</div>'
+        +(r.fsId?'':'<div style="font-size:10.5px;color:#ffcc4d;margin-top:4px;">No server application — ask the applicant to resubmit</div>')
+        +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">'+actions+'</div></div>';
     }).join('')+'</div>';
 }
-async function approveHcFac(i){
-  var a=D.hcFacPending[i]; a.status='approved';
-  localStorage.setItem('sokoniHcFacPending',JSON.stringify(D.hcFacPending));
-  if(a._fsId && window.SokoniDB) try{ await window.SokoniDB.updateApplicationStatus(a._fsId,'approved'); }catch(e){}
-  if(a.uid && window.firebaseDB) try{
-    var {doc,updateDoc}=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-    await updateDoc(doc(window.firebaseDB,'users',a.uid),{'registeredAs.healthcare':true,'approved':true});
-  }catch(e){}
-  renderHealthcare(); toast('Facility approved');
-  var phone=(a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(phone.length>=12) window.open('https://wa.me/'+phone+'?text='+encodeURIComponent('Hello '+a.name+'! 🎉 Your facility is now listed on SOKONI Healthcare Hub. — SOKONI Team'),'_blank','noopener');
+/* ── Healthcare facilities decide on the SERVER record ────────────────────────
+   The pane used to list localStorage sokoniHcFacPending objects — this browser's
+   copy, with no _fsId and no uid — and "approve" them by writing localStorage and
+   two Firestore updates that could never run (no _fsId, no uid), then toast
+   "Facility approved". The applicant's real record is the applications document
+   healthcare.html writes with requestedRole:'health' (it carries the same FAC id).
+   Rows are now those Firestore applications; a local entry with no matching
+   server application is shown, but cannot be approved. */
+function _isHcApplication(a){
+  return !!(a && a._fsId && (a.requestedRole==='health'
+    || (a.hub==='healthcare' && /healthcare facility/i.test(String(a.category||'')))));
+}
+function _hcFacRows(){
+  var rows=(D.apps||[]).filter(_isHcApplication).map(function(a){ return {fac:a, fsId:a._fsId}; });
+  (D.hcFacPending||[]).forEach(function(f){
+    if(!f) return;
+    var matched=rows.some(function(r){ return f.id && r.fac.id===f.id; });
+    if(!matched) rows.push({fac:f, fsId:null});
+  });
+  return rows;
+}
+function approveHcFac(fsId){ return _decideServerApp(fsId,'approve','Healthcare facility',renderHealthcare); }
+function rejectHcFac(fsId){  return _decideServerApp(fsId,'reject','Healthcare facility',renderHealthcare); }
+function removeLocalHcFac(localId){
+  if(!localId) return;
+  D.hcFacPending=(D.hcFacPending||[]).filter(function(f){ return !f || f.id!==localId; });
+  try{ localStorage.setItem('sokoniHcFacPending',JSON.stringify(D.hcFacPending)); }catch(e){}
+  renderHealthcare();
+  toast('Local copy removed — no server record was changed');
 }
 
 /* ════════════════════════════════
@@ -6118,6 +6302,9 @@ function _mergeFirestoreApps(fsApps){
   /* Re-render legal pane if currently open */
   const lp = document.getElementById('adm-pane-legal');
   if(lp && lp.classList.contains('active') && typeof renderLegal==='function') renderLegal();
+  /* Healthcare facility rows are applications (requestedRole 'health') too. */
+  const hp = document.getElementById('adm-pane-healthcare');
+  if(hp && hp.classList.contains('active') && typeof renderHealthcare==='function') renderHealthcare();
   /* Update badge */
   const badge = document.getElementById('app-badge');
   const pend = D.apps.filter(a=>a.status==='pending').length;

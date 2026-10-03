@@ -686,6 +686,24 @@
     } else { _fillBottomNavEarly(); }
   } catch (_) {}
 
+  /* OWN-CHROME DASHBOARDS get the profile icon + role dropdown in THEIR header (owner 2026-10-01:
+     "all business types and professional dashboards"). A page that opts out of this header still
+     gets the ONE account control: sokoni-profile-menu.js (injected above for every page) mounts it
+     into the page's own top bar when this flag is set. Not on auth / landing / content / kiosk
+     pages (no dashboard), not inside the merchant shell (the shell's header already has it). */
+  (function _flagOwnChromeAccount() {
+    try {
+      var optedOut = _match(EXCLUDED) || document.documentElement.dataset.noHeader === 'true';
+      if (!optedOut || _inMerchantShell()) return;
+      var NOT_DASHBOARD = ['login', 'signup', 'register', 'success', 'offline', 'profile', 'pos-kiosk',
+        'customer-display', 'about', 'careers', 'contact', 'faq', 'press', 'cookie-policy', 'data-deletion',
+        'community-guidelines', 'privacy', 'privacy-policy', 'terms', 'seller-terms', 'provider-terms',
+        'refund-policy', 'returns-policy', 'payment-security', '404', 'maintenance', 'onboarding'];
+      if (NOT_DASHBOARD.indexOf(pageKey) !== -1 || /^onboarding/.test(pageKey)) return;
+      window.__skOwnChromeAccount = true;
+    } catch (_) { /* the page must render regardless */ }
+  }());
+
   if (_match(EXCLUDED)) return;
   if (document.documentElement.dataset.noHeader === 'true') return;
   /* Inside the merchant shell, /merchant owns the header and the bottom nav; an

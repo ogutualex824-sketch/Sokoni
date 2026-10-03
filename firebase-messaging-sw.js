@@ -35,7 +35,7 @@ messaging.onBackgroundMessage(payload => {
   /* The official icon set, generated from assets/logosokoni.png. The source itself is a
      512px, 300 KB image — shipping it as a 24px status-bar badge downloaded a third of a
      megabyte per notification on a Kenyan mobile connection. */
-  const icon  = notification.icon  || "/assets/icons/icon-192.png";
+  const icon  = notification.icon  || "/assets/logosokoni.png";
   const badge = "/assets/icons/icon-96.png";
 
   /* deepLink is what the notification engine sends. `url`/`click_action` are the

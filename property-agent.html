@@ -116,7 +116,6 @@ function renderPage() {
       ${a.specialties?.length?`<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:14px;">${a.specialties.map(s=>`<span style="font-size:11px;padding:4px 10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:6px;color:#10b981;">${s}</span>`).join('')}</div>`:''}
       <div class="ag-btns">
         <a href="tel:${a.phone}" class="ag-btn green">📞 Call</a>
-        <a href="https://wa.me/254${(a.phone||'').replace(/[^0-9]/g,'').replace(/^0/,'')}" target="_blank" class="ag-btn wa">💬 WhatsApp</a>
         <a href="mailto:${a.email||''}" class="ag-btn green">✉️ Email</a>
         <button class="ag-btn" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#f59e0b;" onclick="openContactModal()">📩 Send Message</button>
       </div>

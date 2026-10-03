@@ -351,7 +351,7 @@
   <div class="mk-section-h">📲 Share Sokoni on Social Media</div>
   <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:16px;">The more you share, the more buyers visit Sokoni — and your store. Every share helps everyone grow.</p>
   <div class="social-strip">
-    <a href="https://wa.me/?text=Shop%20everything%20on%20SOKONI%20%E2%80%94%20Kenya's%20#1%20marketplace%21%20https%3A%2F%2Fmysokoni.co.ke" target="_blank" class="social-btn soc-wa"><i class="fab fa-whatsapp"></i> Share on WhatsApp</a>
+    <a data-wa-allowed="marketing" href="https://wa.me/?text=Shop%20everything%20on%20SOKONI%20%E2%80%94%20Kenya's%20#1%20marketplace%21%20https%3A%2F%2Fmysokoni.co.ke" target="_blank" class="social-btn soc-wa"><i class="fab fa-whatsapp"></i> Share on WhatsApp</a>
     <a href="https://www.facebook.com/sharer/sharer.php?u=https://mysokoni.co.ke" target="_blank" class="social-btn soc-fb"><i class="fab fa-facebook"></i> Share on Facebook</a>
     <a href="https://www.instagram.com/" target="_blank" class="social-btn soc-ig"><i class="fab fa-instagram"></i> Post on Instagram</a>
     <a href="https://twitter.com/intent/tweet?text=Shop%20on%20SOKONI%20%E2%80%94%20Kenya's%20best%20marketplace%21&url=https://mysokoni.co.ke" target="_blank" class="social-btn soc-tw"><i class="fab fa-twitter"></i> Tweet This</a>
@@ -459,7 +459,7 @@
     </div>
     <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">Share directly to:</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <a href="https://wa.me/?text=Check%20out%20my%20store%20on%20SOKONI%20%F0%9F%9B%8D%EF%B8%8F%20https://mysokoni.co.ke/store.html" target="_blank" class="social-btn soc-wa" style="flex:1;justify-content:center;"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+      <a data-wa-allowed="marketing" href="https://wa.me/?text=Check%20out%20my%20store%20on%20SOKONI%20%F0%9F%9B%8D%EF%B8%8F%20https://mysokoni.co.ke/store.html" target="_blank" class="social-btn soc-wa" style="flex:1;justify-content:center;"><i class="fab fa-whatsapp"></i> WhatsApp</a>
       <a href="https://www.facebook.com/sharer/sharer.php?u=https://mysokoni.co.ke/store.html" target="_blank" class="social-btn soc-fb" style="flex:1;justify-content:center;"><i class="fab fa-facebook"></i> Facebook</a>
     </div>
   </div>
@@ -730,7 +730,7 @@ function openReferralTool(){
   const waMsg = encodeURIComponent('Join Sokoni and list your products free! Use code '+code+' when signing up.\n\nYou and I both benefit! 🎉 https://mysokoni.co.ke/register.html');
   _mkToast("🤝 Referral code: "+code+" — copied!");
   navigator.clipboard?.writeText(code).catch(()=>{});
-  setTimeout(()=>window.open('https://wa.me/?text='+waMsg,'_blank'),800);
+  setTimeout(()=>window.open('https://wa.me/?text='+waMsg,'_blank'),800); /* wa-allowed:marketing — share, no recipient chosen */
 }
 
 /* ── Bundle tool ── */

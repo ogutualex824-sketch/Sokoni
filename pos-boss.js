@@ -104,12 +104,12 @@ const PosBoss = (() => {
 
     send(txn, bizSettings, phone) {
       const text  = whatsapp.buildReceiptText(txn, bizSettings);
-      let   url   = `https://wa.me/?text=${text}`;
+      let   url   = `https://wa.me/?text=${text}`; /* wa-allowed:invoice */
 
       if (phone) {
         const clean = phone.replace(/\D/g, '');
         const e164  = clean.startsWith('254') ? clean : '254' + clean.replace(/^0/, '');
-        url = `https://wa.me/${e164}?text=${text}`;
+        url = `https://wa.me/${e164}?text=${text}`; /* wa-allowed:invoice */
       }
 
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -205,7 +205,7 @@ const PosBoss = (() => {
       ];
       const text  = encodeURIComponent(lines.join('\n'));
       const phone = (po.supplierPhone || '').replace(/\D/g, '');
-      const url   = phone.length >= 9 ? `https://wa.me/${phone.startsWith('254') ? phone : '254' + phone.replace(/^0/, '')}?text=${text}` : `https://wa.me/?text=${text}`;
+      const url   = phone.length >= 9 ? `https://wa.me/${phone.startsWith('254') ? phone : '254' + phone.replace(/^0/, '')}?text=${text}` : `https://wa.me/?text=${text}`; /* wa-allowed:invoice */
       window.open(url, '_blank', 'noopener,noreferrer');
     },
   };

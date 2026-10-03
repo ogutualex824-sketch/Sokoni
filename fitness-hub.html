@@ -963,7 +963,7 @@ function filterEquipment() {
         <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:${e.cond==='new'?'rgba(34,197,94,0.1)':'rgba(249,115,22,0.1)'};color:${e.cond==='new'?'#4ade80':'#fb923c'};font-weight:700;">${e.cond==='new'?'Brand New':'Used'}</span>
         <span style="font-size:10px;color:rgba(255,255,255,0.3);">📍 ${e.loc}</span>
       </div>
-      <button type="button" class="fh-wa-btn" onclick="fitEquipConnect('${(e.phone||'').replace(/'/g,"\\'")}','${(e.name||'').replace(/'/g,"\\'")}',${e.price||0})">💬 WhatsApp Seller</button>
+      <button type="button" class="fh-wa-btn" onclick="fitEquipConnect('${(e.phone||'').replace(/'/g,"\\'")}','${(e.name||'').replace(/'/g,"\\'")}',${e.price||0})">💬 Contact Seller</button>
     </div>`).join('');
 }
 
@@ -1076,7 +1076,7 @@ function shareGym() {
   let gym={}; try{gym=JSON.parse(localStorage.getItem('myGymProfile')||'{}');}catch(e){}
   const name=gym.name||'My Gym';
   const msg=`🏋️ *${name}* — SOKONI Fitness Hub\n\n📍 ${gym.loc||'Nairobi'}\n💰 KES ${gym.monthly||'?'}/month · Day pass: KES ${gym.daypass||'?'}\n🕐 ${gym.hours||'Mon–Sat'}\n\n✨ "${gym.tagline||'Train with us today'}"\n\nBook on SOKONI: https://mysokoni.co.ke/fitness-hub.html`;
-  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank'); /* wa-allowed:marketing */
 }
 window.shareGym=shareGym;
 
@@ -1117,7 +1117,7 @@ function renderFitAskFeed() {
         <span style="margin-left:auto;font-size:9px;padding:2px 7px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:4px;color:#4ade80;font-weight:700;">OPEN</span>
       </div>
       <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.5;">${r.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-      ${r.phone?`<a href="https://wa.me/254${r.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi! I can help with your fitness request: '+r.text)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>`:''}
+      ${r.phone?`<a href="support.html?topic=request&desc=${encodeURIComponent('I can help with this Fitness Hub request: '+r.text)}" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>`:''}
     </div>`).join('');
 }
 
@@ -1140,8 +1140,7 @@ function fitGymConnect(phone, gymName, monthlyRate){
       { providerName: gymName, category: 'fitness', serviceDesc: 'Gym membership enquiry · KES ' + Number(monthlyRate).toLocaleString() + '/mo' }
     );
   } else {
-    var ph = phone.replace(/^0/,'254').replace(/\D/g,'');
-    window.open('https://wa.me/' + ph + '?text=' + encodeURIComponent('Hi! I found ' + gymName + ' on SOKONI Fitness Hub. I\'d like to know more about membership options.'), '_blank');
+    window.location.href = 'support.html?topic=hire&desc=' + encodeURIComponent('Gym membership enquiry: ' + gymName + ' (SOKONI Fitness Hub)');
   }
 }
 window.fitGymConnect = fitGymConnect;
@@ -1154,8 +1153,7 @@ function fitEquipConnect(phone, itemName, price){
       { providerName: 'Equipment Seller', category: 'fitness', serviceDesc: itemName + ' · KES ' + Number(price).toLocaleString() }
     );
   } else {
-    var ph = phone.replace(/^0/,'254').replace(/\D/g,'');
-    window.open('https://wa.me/' + ph + '?text=' + encodeURIComponent('Hi! I saw your ' + itemName + ' on SOKONI Fitness Hub for KES ' + Number(price).toLocaleString() + '. Is it still available?'), '_blank');
+    window.location.href = 'support.html?topic=request&desc=' + encodeURIComponent('Equipment enquiry: ' + itemName + ' · KES ' + Number(price).toLocaleString() + ' (SOKONI Fitness Hub)');
   }
 }
 window.fitEquipConnect = fitEquipConnect;
@@ -1168,8 +1166,7 @@ function fitCoachConnect(phone, coachName, sessionRate){
       { providerName: coachName, category: 'fitness', serviceDesc: 'Fitness coaching session' + (sessionRate ? ' · KES ' + Number(sessionRate).toLocaleString() : '') }
     );
   } else {
-    var ph = phone.replace(/^0/,'254').replace(/\D/g,'');
-    window.open('https://wa.me/' + ph + '?text=' + encodeURIComponent('Hi ' + coachName + ', I found you on SOKONI Fitness Hub. I\'d like to book a session.'), '_blank');
+    window.location.href = 'support.html?topic=hire&desc=' + encodeURIComponent('Book a session with ' + coachName + ' (SOKONI Fitness Hub)');
   }
 }
 window.fitCoachConnect = fitCoachConnect;
@@ -1228,7 +1225,7 @@ function renderClasses() {
         <span style="font-size:10px;padding:2px 8px;background:rgba(57,255,20,0.08);border:1px solid rgba(57,255,20,0.18);border-radius:5px;color:#71ff00;font-weight:700;">${c.slots} available</span>
       </div>
       <button type="button" class="fh-book-btn" onclick="bookClass('${c.id}','${(c.name||'').replace(/'/g,"\\'")}','${(c.phone||'').replace(/'/g,"\\'")}',${c.fee||0})">📅 Book Class</button>
-      <button type="button" class="fh-wa-btn" style="margin-top:6px;" onclick="fitCoachConnect('${(c.phone||'').replace(/'/g,"\\'")}','${(c.instructor||'').replace(/'/g,"\\'")}',${c.fee||0})">💬 WhatsApp Instructor</button>
+      <button type="button" class="fh-wa-btn" style="margin-top:6px;" onclick="fitCoachConnect('${(c.phone||'').replace(/'/g,"\\'")}','${(c.instructor||'').replace(/'/g,"\\'")}',${c.fee||0})">💬 Contact Instructor</button>
     </div>`).join('');
 }
 
@@ -1247,8 +1244,7 @@ function bookClass(id, name, phone, fee) {
       }
     });
   } else {
-    const ph = phone.replace(/^0/,'254').replace(/\D/g,'');
-    window.open('https://wa.me/'+ph+'?text='+encodeURIComponent('Hi! I\'d like to book a spot in '+name+'. I found it on SOKONI Fitness Hub.'),'_blank');
+    window.location.href = 'support.html?topic=booking&desc=' + encodeURIComponent('Book a spot in class: ' + name + ' (SOKONI Fitness Hub)');
   }
 }
 window.bookClass = bookClass;
@@ -1371,11 +1367,6 @@ function makeBooking() {
     local.unshift(bk);localStorage.setItem('sokoniBookings',JSON.stringify(local.slice(0,50)));
     if(msgEl){msgEl.innerHTML='✅ Booking confirmed! Ref: '+(ref||'')+'';msgEl.style.color='#39ff14';}
     ['bkType','bkProvider','bkTime','bkName','bkNotes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-    if(phone){
-      const msg='📋 Booking Ref: *'+(ref||'')+'*\n\n📅 Booking confirmed!\n\nService: '+typeLabel+'\nProvider: '+provider+'\nDate: '+date+(time?' at '+time:'')+'\nName: '+(name||'Guest')+'\n\n_Booked via SOKONI Fitness Hub_';
-      const wa=phone.replace(/^0/,'254').replace(/\D/g,'');
-      setTimeout(()=>window.open('https://wa.me/'+wa+'?text='+encodeURIComponent(msg),'_blank'),800);
-    }
     _calSelectedDate=date; renderCalendar(); renderUpcomingBookings();
     scheduleBookingReminder(bk);
     _saveConfirmedBooking(bk);
@@ -1424,7 +1415,7 @@ function renderUpcomingBookings() {
       </div>
       ${b.notes?`<div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:8px;">${b.notes.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`:''}
       <div style="display:flex;gap:6px;">
-        ${b.phone?`<a href="https://wa.me/${b.phone.replace(/^0/,'254').replace(/\D/g,'')}?text=${encodeURIComponent('Hi, confirming my '+b.type+' booking on '+b.date+(b.time?' at '+b.time:''))}" target="_blank" rel="noopener" style="padding:6px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.2);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">💬 Confirm</a>`:''}
+        ${b.phone?`<a href="support.html?topic=booking&ref=${encodeURIComponent(b.ref||b.id||'')}&desc=${encodeURIComponent('My '+b.type+' booking with '+b.provider+' on '+b.date+(b.time?' at '+b.time:''))}" style="padding:6px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.2);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">💬 Contact Support</a>`:''}
         <button type="button" onclick="cancelBooking('${b.id}')" style="padding:6px 12px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:7px;color:#f87171;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Cancel</button>
       </div>
     </div>`).join('');
@@ -1434,7 +1425,7 @@ function scheduleBookingReminder(bk) {
   const ms = new Date(bk.date+'T'+(bk.time||'08:00')).getTime() - Date.now() - 3600000;
   if(ms > 0 && ms < 86400000*7 && 'Notification' in window) {
     Notification.requestPermission().then(p=>{
-      if(p==='granted') setTimeout(()=>new Notification('📅 SOKONI Reminder',{body:'Your '+bk.type+' with '+bk.provider+' starts in 1 hour!',icon:'/assets/sokoni logoo.jpeg'}), ms);
+      if(p==='granted') setTimeout(()=>new Notification('📅 SOKONI Reminder',{body:'Your '+bk.type+' with '+bk.provider+' starts in 1 hour!',icon:'/assets/logosokoni.png'}), ms);
     });
   }
 }
@@ -1483,7 +1474,7 @@ function filterNutritionists(spec, btn) {
         <span style="font-size:11px;color:rgba(255,255,255,0.35);">⭐ ${n.rating} · ${n.exp}yrs</span>
       </div>
       <button type="button" class="fh-book-btn" onclick="bookNutritionist('${n.id}','${(n.name||'').replace(/'/g,"\\'")}','${(n.phone||'').replace(/'/g,"\\'")}',${n.rate||0})">📅 Book Consultation</button>
-      <button type="button" class="fh-wa-btn" style="margin-top:6px;" onclick="fitCoachConnect('${(n.phone||'').replace(/'/g,"\\'")}','${(n.name||'').replace(/'/g,"\\'")}',${n.rate||0})">💬 WhatsApp</button>
+      <button type="button" class="fh-wa-btn" style="margin-top:6px;" onclick="fitCoachConnect('${(n.phone||'').replace(/'/g,"\\'")}','${(n.name||'').replace(/'/g,"\\'")}',${n.rate||0})">💬 Contact</button>
     </div>`).join('');
 }
 window.filterNutritionists = filterNutritionists;
@@ -1499,9 +1490,7 @@ function bookNutritionist(id, name, phone, rate) {
       providerPhone: phone,
       onSuccess: function(ref, deposit, balance) {
         _saveConfirmedBooking({type:'nutritionist', provider:name, phone, fee:rate, ref});
-        const ph = phone.replace(/^0/,'254').replace(/\D/g,'');
-        const msg = '📋 Booking Ref: *'+ref+'*\n\nHi '+name+', I\'d like to book a nutrition consultation.\n\nDeposit paid: KES '+deposit.toLocaleString()+'\nBalance due: KES '+balance.toLocaleString()+'\n\n_Booked via SOKONI Fitness Hub_';
-        window.open('https://wa.me/'+ph+'?text='+encodeURIComponent(msg),'_blank');
+        showFhToast('✅ Consultation booked! Ref: ' + ref);
       }
     });
   } else {
@@ -1590,8 +1579,7 @@ function renderClubs() {
 }
 
 function joinClub(phone, name) {
-  const ph=phone.replace(/^0/,'254').replace(/\D/g,'');
-  window.open(`https://wa.me/${ph}?text=${encodeURIComponent('Hi! I\'d like to join '+name+'. I found you on SOKONI Fitness Hub.')}`,'_blank');
+  window.location.href = 'support.html?topic=request&desc=' + encodeURIComponent('I\'d like to join the club: ' + name + ' (SOKONI Fitness Hub)');
 }
 window.joinClub=joinClub;
 
@@ -1651,8 +1639,7 @@ function registerEvent(phone, name, fee) {
       { providerName: name, category: 'fitness', serviceDesc: 'Event entry — '+name+' · '+fee }
     );
   } else {
-    const ph=phone.replace(/^0/,'254').replace(/\D/g,'');
-    window.open('https://wa.me/'+ph+'?text='+encodeURIComponent('Hi! I\'d like to register for '+name+' ('+fee+'). Found on SOKONI Fitness Hub.'),'_blank');
+    window.location.href = 'support.html?topic=booking&desc=' + encodeURIComponent('Register for event: ' + name + ' (' + fee + ') — SOKONI Fitness Hub');
   }
 }
 window.registerEvent=registerEvent;

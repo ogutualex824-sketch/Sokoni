@@ -628,7 +628,7 @@
      iOS:     Share sheet instructions
   ══════════════════════════════════════════════════════ */
 
-  const _COOLDOWN = 24 * 60 * 60 * 1000; /* 1 day */
+  const _COOLDOWN = 3 * 24 * 60 * 60 * 1000; /* "Maybe later" → not again for 3 days (owner 2026-10-01: rate-limited) */
   const _INSTALL_VER = "v20"; /* bump this to reset dismiss state on all devices */
   /* Reset dismiss flag when app version changes */
   if (localStorage.getItem("sokoniInstallVer") !== _INSTALL_VER) {
@@ -722,7 +722,7 @@
     b.innerHTML = `
       <!-- Header -->
       <div style="display:flex;align-items:center;gap:12px;padding:14px 14px 12px;border-bottom:1px solid rgba(255,255,255,0.07);">
-        <img src="assets/sokoni-logo-dark.png" style="width:42px;height:42px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
+        <img src="/assets/logosokoni.png" style="width:42px;height:42px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
         <div style="flex:1;min-width:0;">
           <div style="font-size:14px;font-weight:900;color:#fff;">Install SOKONI</div>
           <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:1px;">Free · Fast · Works offline</div>
@@ -788,6 +788,42 @@
     /* Auto-dismiss after 40 s */
     setTimeout(() => { const el=document.getElementById("swInstallBanner"); if(el) el.remove(); }, 40000);
   }
+
+  /* ── OFFER INSTALL ON EVERY PHONE, RATE-LIMITED (owner 2026-10-01) ──────────────────────
+     The banner above was built but never shown (nothing called _showInstallBanner), and home's
+     compact #pwaPrompt only fired on Android Chrome's beforeinstallprompt — so iPhones were never
+     offered install anywhere. This is now the ONE install offer, on every page that loads this file:
+       · phones only (coarse pointer + small screen, or a phone UA); never in a frame / the merchant shell
+       · never on pages where it would interrupt a task (checkout, payment, POS, login, onboarding)
+       · not installed already (standalone / iOS navigator.standalone)
+       · at most once per 24 h; "Maybe later" → 3 days; an accepted install → never again
+     Android gets one-tap install when the browser offered it (waits briefly for that event); iOS gets
+     the Share → Add to Home Screen steps; other Android browsers get the menu instruction. */
+  const _SHOWN_KEY = "sokoniInstallShownAt", _SHOW_EVERY = 24 * 60 * 60 * 1000;
+  const _NO_INSTALL_PAGES = /^(checkout|payment|pay|pos|pos-v2|till|login|signup|register|onboarding|success|offline)/;
+  function _isPhone() {
+    try {
+      const coarse = window.matchMedia && window.matchMedia("(pointer:coarse)").matches;
+      const small = Math.min(screen.width || 9999, screen.height || 9999) <= 820;
+      return (coarse && small) || /android|iphone|ipod/i.test(navigator.userAgent);
+    } catch (_) { return false; }
+  }
+  function _maybeOfferInstall() {
+    try {
+      if (_isInstalled() || !_isPhone() || window.self !== window.top) return;
+      if (new URLSearchParams(location.search).get("shell")) return;
+      const pg = (location.pathname.split("/").pop() || "index").replace(/\.html$/, "").toLowerCase();
+      if (_NO_INSTALL_PAGES.test(pg)) return;
+      if (_wasDismissed()) return;
+      if (Date.now() - Number(localStorage.getItem(_SHOWN_KEY) || 0) < _SHOW_EVERY) return;
+      localStorage.setItem(_SHOWN_KEY, String(Date.now()));
+      _showInstallBanner();
+    } catch (_) { /* never break a page over a prompt */ }
+  }
+  window._sokoniMaybeOfferInstall = _maybeOfferInstall;   /* exposed for tests */
+  function _scheduleInstallOffer() { setTimeout(_maybeOfferInstall, 8000); }   /* after the splash and first taps */
+  if (document.readyState === "complete") _scheduleInstallOffer();
+  else window.addEventListener("load", _scheduleInstallOffer, { once: true });
 
   window.addEventListener("appinstalled", () => {
     window._sokoniInstallEvent = null;

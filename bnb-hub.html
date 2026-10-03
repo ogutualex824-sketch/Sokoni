@@ -542,7 +542,7 @@ function openListing(id){
     '</div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
       '<button onclick="callHostGated(\''+escapeHTML(p.phone)+'\',\''+escapeHTML(p.hostName)+'\',\''+escapeHTML(p.title)+'\')" style="flex:1;padding:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#ef4444;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">&#128222; Call Host</button>'+
-      '<button onclick="waHostGated(\''+escapeHTML(p.phone)+'\',\''+escapeHTML(p.hostName)+'\',\''+escapeHTML(p.title)+'\')" style="flex:1;padding:10px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.25);border-radius:10px;color:#25d366;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">&#128172; WhatsApp Host</button>'+
+      '<button onclick="waHostGated(\''+escapeHTML(p.phone)+'\',\''+escapeHTML(p.hostName)+'\',\''+escapeHTML(p.title)+'\')" style="flex:1;padding:10px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.25);border-radius:10px;color:#25d366;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">&#128172; Enquire</button>'+
     '</div>'+
     '<div style="font-size:11px;color:rgba(255,255,255,0.3);text-align:center;">Check-in: 2:00 PM &nbsp;·&nbsp; Check-out: 11:00 AM</div>';
 
@@ -606,7 +606,7 @@ function callHostGated(phone,hostName,title){
 window.callHostGated=callHostGated;
 
 function waHostGated(phone,hostName,title){
-  if(!window.SokoniPay){window.open('https://wa.me/254'+phone.replace(/[^0-9]/g,'').replace(/^0/,''));return;}
+  if(!window.SokoniPay){window.location.href='support.html?topic=booking&desc='+encodeURIComponent('Enquiry: '+title+(hostName?' (host: '+hostName+')':''));return;}
   SokoniPay.waConnect(phone,'Hi, I am interested in: '+title,{providerName:hostName,category:'bnb',serviceDesc:'Enquiry: '+title});
 }
 window.waHostGated=waHostGated;

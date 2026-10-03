@@ -529,7 +529,7 @@ function showToast(msg) {
 
 document.getElementById('rfBtnWA').addEventListener('click', function() {
   var text = encodeURIComponent('Join me on SOKONI — Kenya\'s best marketplace! Use my referral link: ' + rfLink + ' — you\'ll get 10% off your first order! 🛍️');
-  window.open('https://wa.me/?text=' + text, '_blank', 'noopener');
+  window.open('https://wa.me/?text=' + text, '_blank', 'noopener'); /* wa-allowed:marketing */
 });
 
 document.getElementById('rfBtnSMS').addEventListener('click', function() {
@@ -577,7 +577,7 @@ function rfInvite() {
 
   /* send WhatsApp invite automatically */
   var waText = encodeURIComponent('Hey ' + name + '! Join me on SOKONI — Kenya\'s best marketplace! Use my link: ' + rfLink + ' — you get 10% off your first order! 🛍️');
-  window.open('https://wa.me/' + rfNormalizePhone(phone) + '?text=' + waText, '_blank', 'noopener');
+  window.open('https://wa.me/' + rfNormalizePhone(phone) + '?text=' + waText, '_blank', 'noopener'); /* wa-allowed:marketing */
 }
 
 function rfNormalizePhone(p) {

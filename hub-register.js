@@ -290,19 +290,23 @@
   function _showSuccess(data, applicationId) {
     var planLabels = { free:'Free', starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
     var planLabel = planLabels[data.plan] || 'Free';
-    var pvLink = 'provider.html?cat=' + encodeURIComponent(data.category || 'other');
+    /* The truthful next step. Writing the application is ALL that happened here: nothing
+       is approved or live until SOKONI decides it in AdminOS (applicationDecide). The
+       applicant follows it on complete-application.html, which asks the ONE workspace
+       authority (providerDispatch {op:'businessWorkspace'}) and shows pending / decided /
+       "Open your workspace" with the server-named route. This used to link
+       provider.html?cat=<id> — a second intake — and announce "is now on SOKONI!". */
+    var trackLink = 'complete-application.html';
     var subsLink = 'subscriptions.html';
 
     document.getElementById('sokoniRegInner').innerHTML =
       '<div class="sreg-success">' +
-        '<div class="sreg-big">🎉</div>' +
-        '<h3>' + _esc(data.name) + ' is now on SOKONI!</h3>' +
-        '<p>Your ' + _esc(planLabel) + ' listing has been submitted.<br>' +
-        (data.plan === 'free'
-          ? 'We\'ll review and activate your listing within 24 hours.'
-          : 'Your paid listing is live immediately!') +
+        '<div class="sreg-big">📨</div>' +
+        '<h3>Application submitted — SOKONI reviews it in AdminOS</h3>' +
+        '<p>' + _esc(data.name) + ' (' + _esc(planLabel) + ' plan) is with SOKONI for review.<br>' +
+        'You will be notified when it is decided. Your business dashboard opens after SOKONI approves it.' +
         '</p>' +
-        '<a href="' + pvLink + '">📋 Go to Provider Dashboard</a>' +
+        '<a href="' + trackLink + '">📋 Track my application</a>' +
         (data.plan === 'free'
           ? '<br><a href="' + subsLink + '" class="sreg-sec" style="margin-top:8px;">⚡ Upgrade to Paid Plan</a>'
           : '') +
@@ -491,6 +495,12 @@
       var ov = document.getElementById('sokoniRegOverlay');
       if (ov) ov.classList.remove('open');
       document.body.style.overflow = '';
+    },
+    /* Read-only lookup of ONE category (a copy), so an entry page can pass the id's hub
+       without restating this list. Unknown id → null. */
+    category: function (id) {
+      var c = CATS.filter(function (x) { return x.id === id; })[0];
+      return c ? { id: c.id, label: c.label, hub: c.hub, emoji: c.emoji } : null;
     },
     _selectPlan: _selectPlan,
     _submit:     _submit

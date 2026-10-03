@@ -712,9 +712,10 @@ ${reviews && reviews.length ? '<div class="ms-reviews-list">' + reviews.slice(0,
     const actEl = document.getElementById('msStatusActions');
     if (actEl) {
       const shopUrl = 'https://mysokoni.co.ke/shop/' + (_state.handle || '') + '?utm_source=whatsapp&utm_medium=status';
-      const waNum = (_esc(config?.socialLinks?.whatsapp || config?.contactPhone || '')).replace(/[^0-9]/g, '');
+      /* Enquiries stay in SOKONI: the featured product's own page (no WhatsApp hand-off). */
+      const prodHref = prod?.id ? '/product.html?id=' + encodeURIComponent(prod.id) : '';
       actEl.innerHTML = `<a href="${shopUrl}" class="ms-status-btn ms-status-primary">🛒 Shop Now on SOKONI</a>
-<a href="https://wa.me/${waNum}" class="ms-status-btn ms-status-chat">💬 Chat with Seller</a>
+${prodHref ? '<a href="' + _esc(prodHref) + '" class="ms-status-btn ms-status-chat">💬 View Product</a>' : ''}
 ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class="ms-status-btn ms-status-call">📞 Call</a>' : ''}`;
     }
     _trackView(_state.shopId);
@@ -930,8 +931,9 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
 
     // Social & contact links
     const socials = config.socialLinks || {};
+    /* The seller's WhatsApp number is not rendered as a contact hop — buyers order/enquire
+       on this SOKONI storefront. */
     const socialItems = [
-      { key: 'whatsapp', icon: '💬', label: 'WhatsApp', base: 'https://wa.me/' },
       { key: 'instagram', icon: '📸', label: 'Instagram', base: 'https://instagram.com/' },
       { key: 'facebook', icon: '👍', label: 'Facebook', base: 'https://facebook.com/' },
       { key: 'tiktok', icon: '🎵', label: 'TikTok', base: 'https://tiktok.com/@' },
@@ -1304,7 +1306,7 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
     const text = encodeURIComponent((_state.shop.name || 'Check this shop') + ' on SOKONI');
     const enc = encodeURIComponent(url);
     const platforms = [
-      { key: 'whatsapp', label: 'WhatsApp', color: '#25d366', icon: 'W', href: 'https://wa.me/?text=' + text + '%20' + enc },
+      { key: 'whatsapp', label: 'WhatsApp', color: '#25d366', icon: 'W', href: 'https://wa.me/?text=' + text + '%20' + enc }, /* wa-allowed:marketing */
       { key: 'instagram', label: 'Instagram', color: '#e1306c', icon: 'Ig', href: '#', onclick: 'SokoniMiniShop.copyLink()' },
       { key: 'facebook', label: 'Facebook', color: '#1877f2', icon: 'f', href: 'https://www.facebook.com/sharer/sharer.php?u=' + enc },
       { key: 'x', label: 'X', color: '#000', icon: 'X', href: 'https://x.com/intent/tweet?url=' + enc + '&text=' + text },
@@ -1333,7 +1335,7 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
     const text = encodeURIComponent((_state.shop.name || 'Check this out') + ' on SOKONI');
     const enc = encodeURIComponent(url);
     const targets = {
-      whatsapp: 'https://wa.me/?text=' + text + '%20' + enc,
+      whatsapp: 'https://wa.me/?text=' + text + '%20' + enc, /* wa-allowed:marketing */
       facebook: 'https://www.facebook.com/sharer/sharer.php?u=' + enc,
       twitter: 'https://x.com/intent/tweet?url=' + enc + '&text=' + text,
       telegram: 'https://t.me/share/url?url=' + enc + '&text=' + text,

@@ -224,7 +224,7 @@
         +'Payment: '+inv.paymentMethod+'\n\n'
         +'Powered by SOKONI — mysokoni.co.ke';
       /* Open in background tab — user may need to press Send on WhatsApp Web */
-      var url = 'https://wa.me/'+phone+'?text='+encodeURIComponent(msg);
+      var url = 'https://wa.me/'+phone+'?text='+encodeURIComponent(msg); /* wa-allowed:invoice */
       var tab = window.open(url,'_blank','noopener,noreferrer');
       /* If popup blocked, inject a "Notify Seller" button in the modal instead */
       if(!tab || tab.closed || typeof tab.closed==='undefined'){
@@ -436,7 +436,7 @@
       } else if(navigator.share){
         navigator.share({title:'SOKONI Invoice #'+inv.ref, text:text}).catch(function(){});
       } else {
-        window.open('https://wa.me/?text='+encodeURIComponent(text),'_blank');
+        window.open('https://wa.me/?text='+encodeURIComponent(text),'_blank'); /* wa-allowed:invoice */
       }
     },
 

@@ -168,7 +168,12 @@ function serve(root) {
     rect: (function () { const p = document.getElementById('sk-acct-popup'); if (!p) return null; const r = p.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; })(),
     vw: innerWidth, vh: innerHeight,
     roles: Array.from(document.querySelectorAll('#sk-acct-popup [data-sk-workspace]')).map((b) => b.getAttribute('data-sk-workspace')),
-    active: Array.from(document.querySelectorAll('#sk-acct-popup [data-sk-workspace].active')).map((b) => b.getAttribute('data-sk-workspace')),
+    active: Array.from(document.querySelectorAll('#sk-acct-popup [data-sk-workspace].ws-active[aria-current="true"]')).map((b) => b.getAttribute('data-sk-workspace')),
+    /* owner 2026-10-01 layout: ✕ close · My profile · My workspaces · Other roles */
+    closeBtn: !!document.querySelector('#sk-acct-popup [data-sk-close]'),
+    profileBtn: !!document.querySelector('#sk-acct-popup a[data-sk-profile][href="profile.html"]'),
+    workspacesSection: !!document.querySelector('#sk-acct-popup [data-sk-section="workspaces"] #sk-acct-myshops'),
+    myShopsText: ((document.getElementById('sk-acct-myshops') || {}).textContent || '').trim().slice(0, 80),
     switchLabel: /Switch Role/.test((document.getElementById('sk-acct-popup') || {}).textContent || ''),
     approved: window.SokoniRoleAuthority ? window.SokoniRoleAuthority.getApprovedRoles() : null,
     verified: !!(window.SokoniRoleAuthority && window.SokoniRoleAuthority.isVerified()),
@@ -200,8 +205,14 @@ function serve(root) {
     const st = await page.evaluate(popupState);
     ck('M6  click opens the dropdown; aria-expanded=true', st.open && st.expanded === 'true', st);
     ck('M7  dropdown lies fully inside the viewport (' + width + 'px)', st.rect && st.rect.l >= 0 && st.rect.t >= 0 && st.rect.r <= st.vw && st.rect.b <= st.vh && st.rect.w > 200 && st.rect.h > 100, st);
-    ck('M8  role list == the authority\'s approved set, exactly, in its order', JSON.stringify(st.roles) === JSON.stringify(st.approved) && JSON.stringify(st.roles) === JSON.stringify(EXPECTED), st);
-    ck('M9  the acting role (buyer baseline) is the one marked active', JSON.stringify(st.active) === JSON.stringify(['buyer']), st);
+    /* Restated 2026-10-01 (owner layout): "Other roles" = the authority's approved set MINUS buyer (the Profile
+       button) and seller (the shops under "My workspaces"), exactly, in its order. No fallback row. */
+    const OTHER = (st.approved || []).filter((r) => r !== 'buyer' && r !== 'seller');
+    ck('M8  Other roles == the authority\'s approved set minus buyer/seller, exactly, in its order', JSON.stringify(st.roles) === JSON.stringify(OTHER) && JSON.stringify(st.roles) === JSON.stringify(['rider']), st);
+    /* The acting role is buyer, which has no row any more (it is the Profile button) — so no role row is active. */
+    ck('M9  no Other-roles row is marked active while acting as buyer (buyer = the Profile button)', JSON.stringify(st.active) === JSON.stringify([]), st);
+    ck('M9b ✕ close and 👤 My profile are present; My workspaces is ALWAYS present (a seller-only account is not hidden: its shop row loads there, or an honest Loading…/Could not load state shows)',
+      st.closeBtn && st.profileBtn && st.workspacesSection && /Loading your workspaces|Could not load|Owner|No shop yet/.test(st.myShopsText), st);
     ck('M10 rider\'s hub per the authority is driver.html (the destination the shared header would take)', st.hubRider === 'driver.html', st);
 
     /* pick the other role: authority write -> event -> navigate to hubFor() */

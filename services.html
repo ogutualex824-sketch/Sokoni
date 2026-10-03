@@ -1330,7 +1330,7 @@ function renderClientBookings(){
       ${b.quote > 0 ? `<div style="font-size:13px;font-weight:800;color:#71ff00;margin-bottom:8px;">💰 Quoted: KES ${Number(b.quote).toLocaleString()}</div>` : ""}
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${b.providerPhone ? `<a href="tel:+254${b.providerPhone.replace(/^0/,'')}" style="padding:7px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">📞 Call Provider</a>` : ""}
-        ${b.providerPhone ? `<a href="https://wa.me/254${b.providerPhone.replace(/^0/,'')}?text=${encodeURIComponent(`Hi ${b.providerName}! Regarding my booking ${b.id} for ${CAT_LABEL[b.category]||b.category} on ${b.scheduledDate}...`)}" target="_blank" style="padding:7px 14px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);color:#25d366;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">💬 WhatsApp</a>` : ""}
+        ${b.providerPhone ? `<a href="support.html?topic=booking&ref=${encodeURIComponent(b.id||'')}&desc=${encodeURIComponent(`My booking ${b.id} with ${b.providerName} for ${CAT_LABEL[b.category]||b.category} on ${b.scheduledDate}`)}" style="padding:7px 14px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);color:#25d366;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">💬 Contact Support</a>` : ""}
         ${b.status==="pending" ? `<button type="button" onclick="cancelBooking('${b.id}')" style="padding:7px 12px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit;">Cancel</button>` : ""}
       </div>
     </div>
@@ -1378,7 +1378,7 @@ function renderProviderJobs(){
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${b.clientPhone ? `<a href="tel:${b.clientPhone}" style="padding:7px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">📞 Call Client</a>` : ""}
-        ${b.clientPhone ? `<a href="https://wa.me/254${b.clientPhone.replace(/^0/,'')}?text=${encodeURIComponent(`Hi ${b.clientName}! Regarding your service request ${b.id}...`)}" target="_blank" style="padding:7px 14px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);color:#25d366;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">💬 WhatsApp</a>` : ""}
+        ${b.clientPhone ? `<a href="support.html?topic=booking&ref=${encodeURIComponent(b.id||'')}&desc=${encodeURIComponent(`Service request ${b.id} from ${b.clientName} (${CAT_LABEL[b.category]||b.category} on ${b.scheduledDate})`)}" style="padding:7px 14px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);color:#25d366;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">💬 Contact Support</a>` : ""}
         ${b.status==="confirmed" ? `<button type="button" onclick="updateJobStatus('${b.id}','in_progress')" style="padding:7px 14px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);color:#00aaff;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">▶ Mark In Progress</button>` : ""}
         ${b.status==="in_progress" ? `<button type="button" onclick="updateJobStatus('${b.id}','completed')" style="padding:7px 14px;background:rgba(76,175,80,0.1);border:1px solid rgba(76,175,80,0.25);color:#4caf50;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">✅ Mark Completed</button>` : ""}
       </div>
@@ -2009,7 +2009,7 @@ function renderServices(){
           ${p.description ? `<span class="sv-tag">${p.description.substring(0,25)}${p.description.length>25?"...":""}</span>` : ""}
         </div>
         ${p.socials&&Object.values(p.socials).some(v=>v)?`<div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px;">${[
-          p.socials.whatsapp?`<a href="https://wa.me/${p.socials.whatsapp.replace(/^0/,"254")}" target="_blank" style="font-size:18px;text-decoration:none;line-height:1;" title="WhatsApp" onclick="event.stopPropagation()">💬</a>`:"",
+          p.socials.whatsapp?`<a href="javascript:void(0)" style="font-size:18px;text-decoration:none;line-height:1;" title="Book on SOKONI" aria-label="Book on SOKONI" onclick="event.stopPropagation();bookServiceListing('${p.id}')">💬</a>`:"",
           p.socials.instagram?`<a href="https://instagram.com/${p.socials.instagram.replace(/^@/,"")}" target="_blank" style="font-size:18px;text-decoration:none;line-height:1;" title="Instagram" onclick="event.stopPropagation()">📸</a>`:"",
           p.socials.tiktok?`<a href="https://tiktok.com/${p.socials.tiktok.replace(/^@/,"")}" target="_blank" style="font-size:18px;text-decoration:none;line-height:1;" title="TikTok" onclick="event.stopPropagation()">🎵</a>`:"",
           p.socials.facebook?`<a href="https://facebook.com/${p.socials.facebook}" target="_blank" style="font-size:18px;text-decoration:none;line-height:1;" title="Facebook" onclick="event.stopPropagation()">👥</a>`:"",

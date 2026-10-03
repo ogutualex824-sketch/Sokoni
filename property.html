@@ -400,7 +400,7 @@
     if(!p) return;
     const phone = (p.landlordPhone||"").replace(/\s/g,"");
     const waPhone = phone.startsWith("+") ? phone.slice(1) : phone.startsWith("07") ? "254"+phone.slice(1) : phone;
-    const waMsg = encodeURIComponent(`Hi, I saw your listing "${p.title}" on Sokoni and I'm interested. Is it available?`);
+    const waMsg = encodeURIComponent(`Enquiry about the listing "${p.title}" (ref ${p.id||''}) — I'm interested. Is it available?`);
 
     document.getElementById("propModalContent").innerHTML = `
       <img loading="lazy" src="${p.image||'assets/backG2.jpeg'}" style="width:100%;height:220px;object-fit:cover;border-radius:18px;margin-bottom:18px;">
@@ -456,8 +456,8 @@
 
       <!-- ACTION BUTTONS -->
       ${waPhone ? `
-      <a href="https://wa.me/${waPhone}?text=${waMsg}" target="_blank" class="prop-modal-btn prop-modal-btn-wa" onclick="_trackPropertyInquiry('${p.id}','${(p.title||'').replace(/'/g,'')}','whatsapp')">
-        <i class="fab fa-whatsapp" style="font-size:18px;"></i> WhatsApp Landlord
+      <a href="support.html?topic=request&ref=${encodeURIComponent(p.id||'')}&desc=${waMsg}" class="prop-modal-btn prop-modal-btn-wa" onclick="_trackPropertyInquiry('${p.id}','${(p.title||'').replace(/'/g,'')}','support')">
+        <i class="fas fa-comment-dots" style="font-size:18px;"></i> Enquire about this Property
       </a>` : ""}
 
       <a href="messages.html" class="prop-modal-btn prop-modal-btn-green">

@@ -136,6 +136,23 @@
       background: rgba(255,255,255,.2);
     }
     .sk-acct-ws-dot.active { background: #71ff00; }
+    .sk-acct-role-row { text-align: left; }
+    .sk-acct-head { position: relative; padding-right: 52px; }
+    .sk-acct-close { position: absolute; top: 6px; right: 6px; width: 44px; height: 44px; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); color: rgba(255,255,255,.75);
+      font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .sk-acct-close:hover { background: rgba(255,255,255,.09); color: #fff; }
+    .sk-acct-close:focus-visible { outline: 2px solid #71ff00; outline-offset: 2px; }
+    .sk-acct-profile-btn { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 8px 14px 10px;
+      min-height: 44px; border-radius: 12px; font-weight: 800; font-size: 14px; text-decoration: none; color: #050505;
+      background: linear-gradient(135deg, #71ff00, #4fd400); box-shadow: 0 6px 18px rgba(113,255,0,.18); }
+    .sk-acct-profile-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .sk-acct-shop-branches { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .sk-acct-branch { font-size: 10px; color: rgba(255,255,255,.6); background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.08); border-radius: 999px; padding: 1px 7px; }
+    .sk-acct-active-badge { flex-shrink: 0; font-size: 10px; font-weight: 800; letter-spacing: .04em;
+      color: #71ff00; background: rgba(113,255,0,.1); border: 1px solid rgba(113,255,0,.28);
+      border-radius: 999px; padding: 2px 8px; }
     .sk-acct-personal-item {
       display: flex; align-items: center; gap: 10px;
       padding: 10px 16px; cursor: pointer; transition: background .12s;
@@ -181,6 +198,53 @@
   }
 
   /* ── Account dropdown ──────────────────────────────────────────── */
+  /* ── My workspaces: shops OWNED and shops WORKED AT (owner 2026-10-01) ─────────────────────
+     Existing authorities only (census 2026-10-01):
+       owned     shops/{uid}                       — the shop document IS keyed by the owner (1 read)
+                 businesses where ownerId == uid → branches where merchantId in [ids]  (branch names; display)
+       employed  shopEmployees/{uid} → shops/{shopOwnerId}   — what merchant-v2 enforces (2 reads)
+     Served rules allow each read for the signed-in user. Cached per session for 5 minutes, so an
+     open costs nothing most of the time. Unknown is shown as "Loading…", never invented. */
+  var _MYWS_TTL = 5 * 60 * 1000;
+  function _myShopsCached(uid) {
+    try { var c = JSON.parse(sessionStorage.getItem('sk_myws_' + uid) || 'null'); if (c && Date.now() - c.at < _MYWS_TTL) return c.v; } catch (_) {}
+    return null;
+  }
+  async function _loadMyShops(uid) {
+    var db = window.firebaseDB;
+    if (!db || !uid) return null;
+    var F = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    var out = { owned: null, employed: null };
+    try {
+      var s = await F.getDoc(F.doc(db, 'shops', uid));
+      if (s.exists()) {
+        var sd = s.data() || {};
+        out.owned = { shopId: uid, name: sd.name || sd.storeName || 'My shop', branches: [] };
+        try {
+          var bz = await F.getDocs(F.query(F.collection(db, 'businesses'), F.where('ownerId', '==', uid), F.limit(10)));
+          var ids = bz.docs.map(function (d) { return d.id; });
+          if (ids.length) {
+            var br = await F.getDocs(F.query(F.collection(db, 'branches'), F.where('merchantId', 'in', ids.slice(0, 10)), F.limit(30)));
+            out.owned.branches = br.docs.map(function (d) { var x = d.data() || {}; return x.name || x.branchName || ''; }).filter(Boolean);
+          }
+        } catch (_) { /* branch names are optional detail */ }
+      }
+    } catch (_) {}
+    try {
+      var e = await F.getDoc(F.doc(db, 'shopEmployees', uid));
+      if (e.exists()) {
+        var ed = e.data() || {}, st = String(ed.status || 'active').toLowerCase();
+        if (ed.shopOwnerId && ed.shopOwnerId !== uid && (st === 'active' || st === 'accepted')) {
+          var es = await F.getDoc(F.doc(db, 'shops', ed.shopOwnerId));
+          var esd = es.exists() ? (es.data() || {}) : {};
+          out.employed = { shopId: ed.shopOwnerId, name: esd.name || esd.storeName || 'Shop', role: String(ed.role || 'staff') };
+        }
+      }
+    } catch (_) {}
+    try { sessionStorage.setItem('sk_myws_' + uid, JSON.stringify({ at: Date.now(), v: out })); } catch (_) {}
+    return out;
+  }
+
   function _buildAcctPopup(user) {
     const existing = document.getElementById('sk-acct-popup');
     if (existing) { existing.remove(); return; }
@@ -210,19 +274,14 @@
     const bizEmoji = type => ({ marketplace:'🛍️', food:'🍽️', services:'🔧', healthcare:'🏥',
       events:'🎪', property:'🏠', vehicle:'🚗', hotel:'🏨' }[type] || '🏢');
 
-    /* ── Workspace switcher HTML ── */
+    /* ── Owner 2026-10-01: ROLES and WORKSPACES are shown DIFFERENTLY, never mixed ──
+       My roles            — what this account is approved to act as (from the authority),
+                             each with the workspace it opens. Personal by nature.
+       Business workspaces — businesses where the account is owner/staff (sokoniWorkspaces),
+                             each with the job held there. A business, not a role.
+       The old "Workspaces" list put a "Personal Account" row (labelled with the acting
+       role) beside staff workspaces, and showed roles only as pills, only sometimes. */
     const isPersonalActive = !activeWsId;
-
-    const personalEntry =
-      '<button class="sk-acct-personal-item ' + (isPersonalActive ? 'ws-active' : '') + '" ' +
-        'onclick="window._skSwitchWorkspace(\'personal\')">' +
-        '<div class="sk-acct-personal-icon">' + (user.name || user.email || '?').charAt(0).toUpperCase() + '</div>' +
-        '<div class="sk-acct-ws-info">' +
-          '<div class="sk-acct-ws-name">Personal Account</div>' +
-          '<div class="sk-acct-ws-role">' + rName(active) + '</div>' +
-        '</div>' +
-        '<div class="sk-acct-ws-dot ' + (isPersonalActive ? 'active' : '') + '"></div>' +
-      '</button>';
 
     const wsEntries = workspaces.map(function (ws) {
       const isActive = ws.businessId === activeWsId;
@@ -233,16 +292,33 @@
         '<div class="sk-acct-ws-info">' +
           '<div class="sk-acct-ws-name">' + _hesc(ws.businessName || 'Business') + '</div>' +
           '<div class="sk-acct-ws-role">' + wsRoleName(ws.role) + (ws.roleTitle && ws.roleTitle !== wsRoleName(ws.role) ? ' · ' + _hesc(ws.roleTitle) : '') + clockedLabel + '</div>' +
+          /* the branch this employee works at (owner 2026-10-01: "shop names and branches for employees") */
+          (ws.activeBranchName || (Array.isArray(ws.branches) && ws.branches.length)
+            ? '<div class="sk-acct-shop-branches">' +
+                (ws.activeBranchName ? [ws.activeBranchName] : ws.branches.map(function (b) { return (b && (b.name || b.branchName)) || (typeof b === 'string' ? b : ''); }))
+                  .filter(Boolean).slice(0, 6).map(function (b) { return '<span class="sk-acct-branch">' + _hesc(b) + '</span>'; }).join('') +
+              '</div>' : '') +
         '</div>' +
         '<div class="sk-acct-ws-dot ' + (isActive ? 'active' : '') + '"></div>' +
       '</button>';
     }).join('');
 
-    const switcherSection =
-      '<div class="sk-acct-ws-section">' +
-        '<div class="sk-acct-ws-label">Workspaces</div>' +
-        personalEntry +
+    /* Business workspaces — only when the account belongs to at least one business. When one is
+       active, a "Back to my personal account" row returns to the roles above. */
+    /* My workspaces (owner 2026-10-01): shops OWNED (with their branches) and shops WORKED AT (with the
+       job held), from the server records (_loadMyShops), then any team workspaces (workspaceMemberships)
+       below them. The shop rows are filled asynchronously into #sk-acct-myshops: "Loading…" until they
+       answer, never an invented row. */
+    const wsSection =
+      '<div class="sk-acct-ws-section" data-sk-section="workspaces">' +
+        '<div class="sk-acct-ws-label">My workspaces</div>' +
+        '<div id="sk-acct-myshops"><div class="sk-acct-ws-role" style="padding:8px 16px;">Loading your workspaces…</div></div>' +
         wsEntries +
+        (isPersonalActive ? '' :
+          '<button class="sk-acct-ws-item" data-sk-personal onclick="window._skSwitchWorkspace(\'personal\')">' +
+            '<div class="sk-acct-ws-icon">↩</div>' +
+            '<div class="sk-acct-ws-info"><div class="sk-acct-ws-name">Back to my personal account</div>' +
+            '<div class="sk-acct-ws-role">Use your own roles</div></div></button>') +
       '</div>' +
       '<div class="sk-acct-separator"></div>';
 
@@ -267,21 +343,47 @@
     const _wsRoles = _st.roles || [];
     const _acting = _st.current || active;
 
-    const workspaceStrip = (isPersonalActive && _wsRoles.length > 1)
-      ? '<div class="sk-acct-role-strip">' +
-          '<div class="sk-acct-role-label">Switch Role</div>' +
-          '<div class="sk-acct-role-pills">' +
-            _wsRoles.map(r =>
-              /* data-sk-workspace mirrors the administrative menu's convention, so both
-                 menus are addressable the same way and a proof does not have to match
-                 on an onclick STRING to find a control. */
-              '<button class="sk-acct-role-pill ' + (r === _acting ? 'active' : '') + '" ' +
-                'data-sk-workspace="' + _hesc(r) + '" ' +
-                'onclick="window._skSwitchRole(\'' + _hesc(r) + '\')">' + _hesc(rName(r)) + '</button>'
-            ).join('') +
-          '</div>' +
-        '</div>'
-      : '';
+    /* My roles — EVERY approved role, always (one role still shows which one you are acting as),
+       each a row: icon · name · the workspace it opens · "Active". data-sk-workspace is kept (the
+       administrative menu's convention, used by proofs to address the control). Switching goes
+       through _skSwitchRole → SokoniRoleAuthority.setActiveRole → RA.hubFor() — unchanged. */
+    const ROLE_UI = {
+      buyer:    { i: '🛍️', l: 'Buyer',            w: 'My profile' },
+      seller:   { i: '🏪', l: 'Seller',           w: 'Merchant dashboard' },
+      provider: { i: '🛠️', l: 'Service provider', w: 'Provider dashboard' },
+      rider:    { i: '🛵', l: 'Rider',            w: 'Rider dashboard' },
+      driver:   { i: '🛵', l: 'Rider',            w: 'Rider dashboard' },
+      mechanic: { i: '🔧', l: 'Mechanic',         w: 'Car Hub workspace' },
+      health:   { i: '🩺', l: 'Healthcare',       w: 'Healthcare workspace' },
+      legal:    { i: '⚖️', l: 'Legal',            w: 'Legal workspace' },
+      landlord: { i: '🏠', l: 'Landlord',         w: 'Landlord dashboard' },
+      tenant:   { i: '🔑', l: 'Tenant',           w: 'My rental' },
+      employer: { i: '💼', l: 'Employer',         w: 'Hiring' },
+    };
+    const roleUI = r => (Object.prototype.hasOwnProperty.call(ROLE_UI, r) ? ROLE_UI[r] : { i: '👤', l: rName(r), w: '' });
+    /* Rows come ONLY from the authority (_skSwitcherState → SokoniRoleAuthority). No fallback to
+       the acting role or the localStorage mirror: a forged mirror role must never produce a row,
+       and an account with zero confirmed roles shows no role section (the "Acting as" line in the
+       head still states the current role). */
+    /* Owner 2026-10-01 layout: Buyer is the PROFILE button at the top and Seller is the shops under
+       "My workspaces", so this section lists the OTHER approved roles only (still authority-only). */
+    const _myRoles = _wsRoles.filter(function (r) { return r !== 'buyer' && r !== 'seller'; });
+    const workspaceStrip = !_myRoles.length ? '' :
+      '<div class="sk-acct-ws-section" data-sk-section="roles">' +
+        '<div class="sk-acct-ws-label">Other roles</div>' +
+        _myRoles.map(function (r) {
+          var u = roleUI(r), on = isPersonalActive && r === _acting;
+          return '<button class="sk-acct-ws-item sk-acct-role-row ' + (on ? 'ws-active' : '') + '" ' +
+            'data-sk-workspace="' + _hesc(r) + '" ' + (on ? 'aria-current="true" ' : '') +
+            'onclick="window._skSwitchRole(\'' + _hesc(r) + '\')">' +
+            '<div class="sk-acct-ws-icon">' + u.i + '</div>' +
+            '<div class="sk-acct-ws-info"><div class="sk-acct-ws-name">' + _hesc(u.l) + '</div>' +
+            (u.w ? '<div class="sk-acct-ws-role">Opens ' + _hesc(u.w) + '</div>' : '') + '</div>' +
+            (on ? '<span class="sk-acct-active-badge">Active</span>' : '') +
+          '</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="sk-acct-separator"></div>';
 
     /* Administration — rendered only for a claim the authority confirms. */
     var _adminEntries = [];
@@ -308,21 +410,24 @@
         '</div>'
       : '';
 
-    const rolePills = (workspaceStrip || adminStrip)
-      ? workspaceStrip + adminStrip + '<div class="sk-acct-separator"></div>'
-      : '';
+    const rolePills = adminStrip ? adminStrip + '<div class="sk-acct-separator"></div>' : '';
 
     const popup = document.createElement('div');
     popup.id = 'sk-acct-popup';
     popup.setAttribute('role', 'menu');
     popup.innerHTML =
       '<div class="sk-acct-head">' +
+        /* Close (owner 2026-10-01): top-right corner, 44px touch target. */
+        '<button type="button" class="sk-acct-close" aria-label="Close menu" data-sk-close onclick="window._skCloseAcct()">✕</button>' +
         '<div class="sk-acct-name">' + _hesc(user.name || user.displayName || 'User') + '</div>' +
         '<div class="sk-acct-email">' + _hesc(user.email || '') + '</div>' +
         _skActiveRoleLine(active) +
         _skDeliveryLine() +
       '</div>' +
-      switcherSection +
+      /* Profile first (owner 2026-10-01) — the buyer's place, and every account's. */
+      '<a class="sk-acct-profile-btn" href="profile.html" data-sk-profile onclick="window._skCloseAcct()">👤 My profile</a>' +
+      wsSection +
+      workspaceStrip +
       rolePills +
       '<div class="sk-acct-links">' +
         /* ONE ROUTE VOCABULARY. The five destinations are read from
@@ -343,7 +448,6 @@
             }).join('') + '<div class="sk-acct-separator"></div>';
           } catch (_) { return ''; }
         })() +
-        '<a class="sk-acct-link" href="profile.html" onclick="window._skCloseAcct()">👤 My Profile</a>' +
         /* Orders left the BAR, not the product — this and the header drawer are now
            its entry points, because profile.html carried no link to it at all. */
         '<a class="sk-acct-link" href="my-orders.html" onclick="window._skCloseAcct()">📦 My Orders</a>' +
@@ -353,9 +457,17 @@
         /* Role-aware entries kept exactly as they were: the emoji are presentation,
            and role/capability authority is unchanged by this slice. */
         '<a class="sk-acct-link" href="account-centre.html#employment" onclick="window._skCloseAcct()">💼 My Workspaces</a>' +
+        /* ALWAYS present, for every signed-in role — including an account that already
+           owns a business (a new branch or a second business is a new application). It is
+           the ONE entry: /offer.html ("What are you offering?"), whose every card opens the
+           single Register My Business intake (hub-register.js → applications → AdminOS). */
+        '<a class="sk-acct-link" href="/offer.html" data-sk-register-business onclick="window._skCloseAcct()">🏪 Register a business</a>' +
         '<a class="sk-acct-link" href="wallet.html" onclick="window._skCloseAcct()">👛 Wallet</a>' +
         '<a class="sk-acct-link" href="wishlist.html" onclick="window._skCloseAcct()">❤️ Wishlist</a>' +
-        '<a class="sk-acct-link" href="help.html" onclick="window._skCloseAcct()">❓ Help &amp; Support</a>' +
+        /* Owner 2026-10-01: Support AND Help, each its own entry — Support opens the in-app ticket
+           (support.html → SokoniSupportContact → AdminOS), Help the self-serve help centre. */
+        '<a class="sk-acct-link" href="support.html" data-sk-support onclick="window._skCloseAcct()">🛟 Support</a>' +
+        '<a class="sk-acct-link" href="help.html" data-sk-help onclick="window._skCloseAcct()">❓ Help</a>' +
         /* Sign Out stays visually separated — it is an account ACTION, not a
            destination, and a mis-tap costs the merchant their session. */
         '<div class="sk-acct-separator"></div>' +
@@ -364,6 +476,50 @@
 
     const wrap = document.getElementById('sk-acct-wrap');
     if (wrap) wrap.appendChild(popup);
+
+    /* Fill "My workspaces" shop rows: cached first (instant), then the server records. */
+    (function _fillMyShops() {
+      var host = popup.querySelector('#sk-acct-myshops');
+      if (!host) return;
+      var uid = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || user.uid || '';
+      function paint(v) {
+        if (!popup.isConnected) return;
+        if (!v) { host.innerHTML = '<div class="sk-acct-ws-role" style="padding:8px 16px;">Could not load your workspaces right now.</div>'; return; }
+        var h = '';
+        if (v.owned) {
+          h += '<a class="sk-acct-ws-item" data-sk-shop="owner" href="merchant-v2.html" onclick="window._skCloseAcct()">' +
+            '<div class="sk-acct-ws-icon">🏪</div><div class="sk-acct-ws-info">' +
+            '<div class="sk-acct-ws-name">' + _hesc(v.owned.name) + '</div><div class="sk-acct-ws-role">Owner</div>' +
+            (v.owned.branches && v.owned.branches.length
+              ? '<div class="sk-acct-shop-branches">' + v.owned.branches.slice(0, 8).map(function (b) { return '<span class="sk-acct-branch">' + _hesc(b) + '</span>'; }).join('') + '</div>' : '') +
+            '</div></a>';
+        }
+        if (v.employed) {
+          var job = wsRoleName(v.employed.role);
+          if (!v.owned) {
+            h += '<a class="sk-acct-ws-item" data-sk-shop="employee" href="merchant-v2.html" onclick="window._skCloseAcct()">' +
+              '<div class="sk-acct-ws-icon">🧑‍💼</div><div class="sk-acct-ws-info">' +
+              '<div class="sk-acct-ws-name">' + _hesc(v.employed.name) + '</div><div class="sk-acct-ws-role">' + _hesc(job) + '</div></div></a>';
+          } else {
+            /* merchant-v2 resolves an owner to their OWN shop; switching to the employer's shop is not
+               possible yet (server change) — say so instead of a link that opens the wrong shop. */
+            h += '<div class="sk-acct-ws-item" data-sk-shop="employee" aria-disabled="true" style="cursor:default;opacity:.75;">' +
+              '<div class="sk-acct-ws-icon">🧑‍💼</div><div class="sk-acct-ws-info">' +
+              '<div class="sk-acct-ws-name">' + _hesc(v.employed.name) + '</div><div class="sk-acct-ws-role">' + _hesc(job) +
+              ' · your own shop opens first — shop switching is coming</div></div></div>';
+          }
+        }
+        if (!h && !workspaces.length) {
+          h = '<a class="sk-acct-ws-item" href="/offer.html" onclick="window._skCloseAcct()"><div class="sk-acct-ws-icon">＋</div>' +
+            '<div class="sk-acct-ws-info"><div class="sk-acct-ws-name">No shop yet</div><div class="sk-acct-ws-role">Register a business</div></div></a>';
+        }
+        host.innerHTML = h;
+      }
+      var cached = uid ? _myShopsCached(uid) : null;
+      if (cached) paint(cached);
+      if (!uid) { paint(null); return; }
+      _loadMyShops(uid).then(function (v) { paint(v || cached); }).catch(function () { if (!cached) paint(null); });
+    })();
 
     /* Keep the open menu inside the viewport. It is anchored right:0 to the avatar,
        and on a narrow screen a 340px menu hangs off the left edge — the overflow
@@ -540,7 +696,11 @@
        current page avoids a pointless reload (Buyer selected from Home). */
     try {
       var RA2 = window.SokoniRoleAuthority;
+      /* Owner 2026-10-01: in the role dropdown, BUYER opens the buyer's PROFILE; every other role
+         opens its workspace (hubFor). Only this menu's destination changes — RA.hubFor('buyer')
+         stays 'index.html' because the header logo reads it. */
       var hub = (RA2 && typeof RA2.hubFor === 'function') ? RA2.hubFor(role) : null;
+      if (hub && role === 'buyer') hub = 'profile.html';
       if (hub) {
         var here = (location.pathname.split('/').pop() || 'index.html');
         if (here.indexOf('.') < 0) here += '.html';      /* cleanUrls serves /merchant */
@@ -883,11 +1043,72 @@
     };
   }
 
+  /* ── OWN-CHROME DASHBOARDS (owner 2026-10-01: "all 100+ business / professional dashboards") ──
+     Dashboards that draw their own header opt out of shared-header.js (data-no-header / EXCLUDED),
+     so they never received this control. shared-header.js sets window.__skOwnChromeAccount on
+     those pages (except non-dashboards) and loads this file; here the control mounts into the
+     page's OWN top bar as an ordinary flex child — the same host-then-fixed-fallback approach
+     sokoni-admin-entry.js uses — never a second header.
+     Skipped: inside a shell or any frame (the parent already carries the menu — one menu per
+     screen; SokoniInShell.inShell is the existing detector), signed out, or when a control is
+     already mounted (#sk-acct-wrap, or the admin consoles' #sk-admin-profile-wrap). */
+  var HOST_SELECTORS = ['[data-sk-account-slot]', '.aos-header', '.sa-topbar', '.app-header', '.dash-header',
+    '.topbar', '.top-bar', '.hdr', 'header', '.navbar', '[role="banner"]'];
+  function _ownChromeHost() {
+    var vw = window.innerWidth || document.documentElement.clientWidth || 0;
+    for (var i = 0; i < HOST_SELECTORS.length; i++) {
+      var list = document.querySelectorAll(HOST_SELECTORS[i]);
+      for (var j = 0; j < list.length; j++) {
+        var el = list[j], r = el.getBoundingClientRect(), cs = window.getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+        if (r.top > 100 || r.height < 24 || r.width < vw * 0.5) continue;      /* a TOP bar, not a card header */
+        if (!/flex/.test(cs.display)) continue;                                /* only a flex bar takes a flex child */
+        return { el: el, fixed: false };
+      }
+    }
+    var box = document.getElementById('sk-acct-fixed');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'sk-acct-fixed';
+      box.style.cssText = 'position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:calc(12px + env(safe-area-inset-right,0px));z-index:2147482000;';
+      (document.body || document.documentElement).appendChild(box);
+    }
+    return { el: box, fixed: true };
+  }
+  function autoMountOwnChrome() {
+    try {
+      if (window.self !== window.top) return null;                                       /* framed: parent owns the menu */
+      if (window.SokoniInShell && window.SokoniInShell.inShell) return null;
+      if (document.getElementById('sk-acct-wrap') || document.getElementById('sk-admin-profile-wrap')) return null;
+      if (!_readUser()) return null;                                                     /* signed out: nothing to show */
+      var host = _ownChromeHost();
+      var m = mount(host.el, { size: 40 });
+      if (m && m.el && !host.fixed) m.el.style.marginLeft = 'auto';                      /* push to the right end of the bar */
+      return m;
+    } catch (_) { return null; }                                                         /* the dashboard must render regardless */
+  }
+
   window.SokoniProfileMenu = {
     mount: mount,
+    autoMountOwnChrome: autoMountOwnChrome,
     open:  function () { if (!document.getElementById('sk-acct-popup')) { var u = _readUser(); if (u) _buildAcctPopup(u); } },
     close: function () { window._skCloseAcct(); },
     toggle: function (e) { window._skToggleAcct(e || { stopPropagation: function () {} }); },
     isOpen: function () { return !!document.getElementById('sk-acct-popup'); },
   };
+
+  /* Own-chrome dashboards (flag set by shared-header.js): mount after the page's own
+     DOMContentLoaded work, so a page that mounts the control itself still wins (mount is a
+     per-page singleton). Admin consoles carry their own control (sokoni-admin-entry.js), which
+     some mount after DOMContentLoaded — never race it. */
+  if (window.__skOwnChromeAccount) {
+    var _auto = function () {
+      setTimeout(function () {
+        if (document.querySelector('script[src*="sokoni-admin-entry"]')) return;
+        autoMountOwnChrome();
+      }, 0);
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _auto, { once: true });
+    else _auto();
+  }
 })();

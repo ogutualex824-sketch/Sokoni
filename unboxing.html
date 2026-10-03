@@ -490,7 +490,7 @@ function shareReview(id){
   const r=all.find(x=>x.id===id);
   if(!r)return;
   const msg=`📦 Unboxing on SOKONI!\n\n⭐ ${'★'.repeat(r.rating)} — ${r.product}\n"${r.comment.slice(0,120)}..."\n— ${r.reviewer||'Anonymous'}\n\nShop on SOKONI: https://mysokoni.co.ke`;
-  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank'); /* wa-allowed:marketing — share, no recipient chosen */
 }
 
 /* ═══════ LIGHTBOX ═══════ */

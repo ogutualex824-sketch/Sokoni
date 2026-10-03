@@ -1341,9 +1341,9 @@
       <!-- Buyer protection -->
       <div data-trust="protection" data-type="marketplace" style="margin-top:10px;"></div>
 
-      <!-- WhatsApp support link -->
-      <a href="https://wa.me/254705726803?text=Hi%20SOKONI%20Support%20-%20I%20need%20help%20with%20my%20order." target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;padding:11px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.2);border-radius:12px;color:#25d366;font-size:13px;font-weight:700;text-decoration:none;">
-        <i class="fab fa-whatsapp"></i> Chat with Support on WhatsApp
+      <!-- In-app support link (replaces WhatsApp hand-off, owner decision 2026-09-30) -->
+      <a href="support.html?topic=payment&amp;desc=I%20need%20help%20with%20my%20order%20at%20checkout." style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;padding:11px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.2);border-radius:12px;color:#25d366;font-size:13px;font-weight:700;text-decoration:none;">
+        💬 Chat with Support
       </a>
     </div>
 
@@ -1538,7 +1538,7 @@
       <a id="successTrackBtn" href="track.html" style="padding:12px 22px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:800;border-radius:12px;text-decoration:none;font-size:13px;">📍 Track Order</a>
       <a href="/" style="padding:12px 22px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);font-weight:700;border-radius:12px;text-decoration:none;font-size:13px;">🏠 Back to Home</a>
     </div>
-    <a href="https://wa.me/254705726803" target="_blank" style="display:block;margin-top:14px;color:rgba(37,211,102,0.8);font-size:12px;font-weight:700;">💬 Questions? Chat on WhatsApp</a>
+    <a href="support.html?topic=order" style="display:block;margin-top:14px;color:rgba(37,211,102,0.8);font-size:12px;font-weight:700;">💬 Questions? Chat with Support</a>
   </div>
 </div>
 <style>
@@ -2554,7 +2554,7 @@ async function sendStkPush(){
         btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
         btn.style.color = "black";
         showPushToast("✅ Payment Verified", "KES " + orderTotal.toLocaleString() + " confirmed by server.", "green");
-        if(Notification.permission === "granted") new Notification("✅ SOKONI — Payment Confirmed", {body:"KES "+orderTotal.toLocaleString()+" received via M-PESA!", icon:"assets/sokoni logoo.jpeg"});
+        if(Notification.permission === "granted") new Notification("✅ SOKONI — Payment Confirmed", {body:"KES "+orderTotal.toLocaleString()+" received via M-PESA!", icon:"/assets/logosokoni.png"});
         saveAndRedirect(result.tracking_id || phone, "mpesa", verifyData.orderId, verifyData.verificationToken);
       } else {
         showPushToast("❌ Verification Failed", (verifyData.error || "Payment could not be verified.") + " Support ref: " + apiRef, "orange");

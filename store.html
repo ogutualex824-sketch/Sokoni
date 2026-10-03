@@ -633,12 +633,18 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
   const ctBar   = document.getElementById("stContactBar");
   const contacts = [];
   if(store?.phone){
-    contacts.push(`<a href="https://wa.me/${store.phone.replace(/\D/g,'')}" target="_blank" class="st-contact-btn st-wa"><i class="fab fa-whatsapp"></i> WhatsApp</a>`);
     contacts.push(`<a href="tel:${store.phone}" class="st-contact-btn st-call">📞 Call</a>`);
   }
   if(store?.email)     contacts.push(`<a href="mailto:${store.email}" class="st-contact-btn st-mail">📧 Email</a>`);
   if(store?.instagram) contacts.push(`<a href="https://instagram.com/${store.instagram.replace('@','')}" target="_blank" class="st-contact-btn st-ig"><i class="fab fa-instagram"></i> ${store.instagram}</a>`);
-  contacts.push(`<a href="messages.html" class="st-contact-btn st-dm">💬 Message Seller</a>`);
+  /* Was "💬 Message Seller" → messages.html: a dead end before any transaction exists, since
+     a conversation needs an order (or other server-derivable transaction) to open. The
+     in-SOKONI path to this seller is a product's "Contact seller" request, which lands in
+     their merchant dashboard (contactRequests). So the chip takes the buyer to the products —
+     and is omitted when the store lists none, because then there is no honest target. */
+  if(products.length){
+    contacts.push(`<a href="#st-tab-products" onclick="return stAskAboutProduct()" class="st-contact-btn st-dm">💬 Ask about a product</a>`);
+  }
   if(store?.website)   contacts.push(`<a href="${store.website}" target="_blank" class="st-contact-btn st-web"><i class="fas fa-globe"></i> Website</a>`);
 
   if(contacts.length){ ctInner.innerHTML = contacts.join(""); ctBar.style.display = "block"; }
@@ -897,6 +903,26 @@ function stSwitchTab(name, btn){
   btn.classList.add("active");
   const panel = document.getElementById("st-tab-"+name);
   if(panel) panel.classList.add("active");
+}
+
+/* "Ask about a product": open the Products tab and bring it into view, with a one-line
+   hint that each product page has "Chat Seller" (a contact request that reaches the
+   seller inside SOKONI). */
+function stAskAboutProduct(){
+  const tabBtn = document.querySelector(".st-tab");
+  if(tabBtn) stSwitchTab("products", tabBtn);
+  const panel = document.getElementById("st-tab-products");
+  if(!panel) return true;
+  if(!document.getElementById("stAskHint")){
+    const hint = document.createElement("div");
+    hint.id = "stAskHint";
+    hint.setAttribute("role", "status");
+    hint.style.cssText = "margin:0 0 12px;padding:10px 12px;border-radius:10px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.25);color:rgba(255,255,255,0.85);font-size:13px;line-height:1.5;";
+    hint.textContent = "Open a product and tap “💬 Chat Seller” — your request goes to the seller’s SOKONI dashboard.";
+    panel.insertBefore(hint, panel.firstChild);
+  }
+  try { panel.scrollIntoView({ behavior: "smooth", block: "start" }); } catch(_) { panel.scrollIntoView(); }
+  return false;
 }
 
 /* ═══════════════════════════════════════════════════

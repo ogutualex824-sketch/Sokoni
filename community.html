@@ -625,7 +625,7 @@ function scrollToPost(id){
 
 function shareToWhatsApp(title){
   const url = encodeURIComponent("https://mysokoni.co.ke/community.html");
-  window.open(`https://wa.me/?text=${title}%20-%20Sokoni%20Community%20${url}`, "_blank");
+  window.open(`https://wa.me/?text=${title}%20-%20Sokoni%20Community%20${url}`, "_blank"); /* wa-allowed:marketing */
 }
 
 window.filterType    = filterType;
@@ -817,7 +817,7 @@ async function createGroup() {
   say('✅ Group created.', '#71ff00');
   document.getElementById('ccGName').value='';document.getElementById('ccGDesc').value='';document.getElementById('ccGPhone').value='';
   renderCCGroups();
-  if (phone) { const msg=`👥 Join my SOKONI Community Group: *${name}*\n\n${desc}\n\nJoin here: https://mysokoni.co.ke/community.html`; window.open(`https://wa.me/254${phone.replace(/^0/,'')}?text=${encodeURIComponent(msg)}`,'_blank'); }
+  if (phone) { const msg=`👥 Join my SOKONI Community Group: *${name}*\n\n${desc}\n\nJoin here: https://mysokoni.co.ke/community.html`; window.open(`https://wa.me/254${phone.replace(/^0/,'')}?text=${encodeURIComponent(msg)}`,'_blank'); } /* wa-allowed:marketing */
 }
 window.createGroup = createGroup;
 

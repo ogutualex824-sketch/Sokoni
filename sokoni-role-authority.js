@@ -458,7 +458,11 @@
   var WORKSPACE_HUBS = {
     buyer:    'index.html',
     seller:   'merchant-v2.html',
-    provider: 'providers.html',
+    /* provider → its DASHBOARD, not providers.html (the public provider directory, where an
+       approved provider had no workspace). provider-dashboard.html is itself gated: it asks
+       providerDispatch {op:'businessWorkspace'} and applies the server's shell gate
+       (sokoni-business-workspace.js), and WORKSPACE_ROUTES below already names it provider's. */
+    provider: 'provider-dashboard.html',
     rider:    'driver.html',
     mechanic: 'car-hub.html',
     health:   'healthcare.html',

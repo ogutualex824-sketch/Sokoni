@@ -286,6 +286,17 @@ a{color:inherit;text-decoration:none}
 }
 .frame-wrap.loaded .frame-load{display:none}
 
+/* ── BUYER ENQUIRIES (contactRequests) ───────────────────────────────────────*/
+.enq{padding:12px 0;border-bottom:1px solid var(--line)}
+.enq:last-child{border-bottom:0}
+.enq-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.enq-prod{font-size:14px;font-weight:800;color:var(--txt);text-decoration:none;overflow-wrap:anywhere}
+.enq-prod:hover{text-decoration:underline}
+.enq-who{font-size:12.5px;color:var(--txt2);margin-top:4px;overflow-wrap:anywhere}
+.enq-msg{font-size:13.5px;color:var(--txt);margin-top:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.enq-msg.muted{color:var(--txt3);font-style:italic}
+.enq .sheet-actions{margin-top:10px}
+
 /* ── AVAILABILITY EDITOR ─────────────────────────────────────────────────────*/
 .av-day{padding:12px 0;border-bottom:1px solid var(--line)}
 .av-day:last-child{border-bottom:0}
@@ -2114,6 +2125,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         '<button class="act ghost" data-route="orders">🧾 View orders</button>' +
         '<button class="act ghost" data-route="inventory">📦 Inventory</button>' +
         '<button class="act ghost" data-route="products">🏷️ Products</button>' +
+        /* Not a route: the route contract (sokoni-merchant-routes.js) is the only place a
+           destination may be declared, so Enquiries opens as an in-shell sheet — the same
+           surface Order detail uses. */
+        '<button class="act ghost" data-enquiries="open">💬 Buyer enquiries</button>' +
       '</div>' +
       '<div class="note"><b>Commission is 5% of each completed sale, or KES 10, ' +
       'whichever is greater.</b> The minimum dominates small sales — a KES 97 order is ' +
@@ -2869,22 +2884,25 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   }
   function row (k, v) { return '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>'; }
 
-  /* ══ WHATSAPP THE BUYER ═══════════════════════════════════════════════════
+  /* ══ MESSAGE THE BUYER (in SOKONI) ═══════════════════════════════════════
      One tap beside Print, because chasing a customer about an order is one of the
      most frequent things a merchant does and it should not live under "More".
 
-     THE DATA RULE, and it is the whole risk here: the number comes from the ORDER's
-     own buyer contact and nowhere else. Not the merchant's profile, not
-     localStorage, not the last customer served, not a guess from a name. Messaging
-     the WRONG person about someone's order is a privacy breach, so when the order
-     carries no usable number the honest answer is to say so.
+     IN-APP, NOT WHATSAPP (owner decision 2026-09-30: WhatsApp is OTP / invoice /
+     marketing only). o.id is the `orders` doc id (loadOrders maps d.id), so the
+     button opens chat.html?tx=order&txId=<o.id>. The SERVER derives the order's
+     participants and refuses non-parties — no phone number is chosen client-side,
+     so the wrong-recipient risk the old WhatsApp path had to guard is gone.
 
-     KENYAN NORMALISATION. wa.me needs digits only, in international form.
+     A `tel:` link is still offered when the ORDER's own buyer contact resolves to a
+     plausible Kenyan mobile — the number comes from the order and nowhere else.
+
+     KENYAN NORMALISATION (for tel:), digits in international form.
        0712 345 678   -> 254712345678
        +254 712 345678-> 254712345678
        712345678      -> 254712345678
      A number that does not resolve to a plausible Kenyan mobile returns null and
-     the button explains itself rather than opening a chat with nobody. */
+     no Call link is offered. */
   function waPhone (raw) {
     var d = String(raw == null ? '' : raw).replace(/[^0-9+]/g, '');
     if (!d) return null;
@@ -2897,57 +2915,172 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     return /^254[17]\d{8}$/.test(d) ? d : null;
   }
 
-  /* The delivery destination is READ, never authored. There is no canonical
-     order-destination field yet (docs/DELIVERY_DESTINATION_BLOCKER.md — eight
-     spellings, no authority), so this reads what the order already carries and
-     includes NOTHING when it carries nothing. A pickup order never gets an
-     invented address. */
-  function orderDestination (o) {
-    if (/pickup/i.test(String(o.fulfilment || ''))) return null;
-    var d = o.deliveryAddress || o.dropoffAddress || o.address || '';
-    d = String(d).trim();
-    return d || null;
-  }
-
-  function waMessage (o, shopName) {
-    var who = String(o.customer || '').trim();
-    var lines = [
-      'Hello' + (who && who !== 'Walk-in' ? ' ' + who : '') + ', this is ' + (shopName || 'our shop') +
-      ' on SOKONI regarding your order #' + o.ref + '.',
-    ];
-    var dest = orderDestination(o);
-    if (dest) lines.push('', 'Delivery location:', dest);
-    lines.push('', 'Order total: ' + money(o.total, o.currency) + '.');
-    lines.push('', 'We\'d like to confirm your order.');
-    return lines.join('\n');
-  }
-
-  /* Rendered as a real ANCHOR, deliberately. The shell forbids window.open and
+  /* Rendered as real ANCHORS, deliberately. The shell forbids window.open and
      target="_blank" — that containment rule is what stops a module throwing the
-     merchant out of the app, and it is not something a Share button gets to evade.
-     An <a href> the merchant taps is their own navigation, and on a phone wa.me
-     hands off to the WhatsApp app while the browser keeps the shell where it was. */
+     merchant out of the app. An <a href> the merchant taps is their own navigation. */
   function waButton (o) {
+    var chat = 'chat.html?tx=order&txId=' + encodeURIComponent(o.id);
+    var out = '<a class="act" href="' + esc(chat) + '">💬 Message buyer</a>';
     var num = waPhone(o.phone);
-    if (!num) {
-      /* No number is a real answer. Say it on the button itself rather than
-         offering an action that cannot work, and never invent a recipient. */
-      return '<button class="act ghost" data-wa-none="1" title="No buyer phone on this order">↗ Share</button>';
+    if (num) out += '<a class="act ghost" href="' + esc('tel:+' + num) + '">📞 Call</a>';
+    return out;
+  }
+
+  /* ══ BUYER ENQUIRIES — contactRequests addressed to this seller ════════════
+     A buyer's "Contact seller" on a product page writes contactRequests/{id} with
+     buyerUid (their auth uid) and sellerUid taken from the canonical products/{id}
+     document. This is the ONLY reader of that collection in the app.
+
+     Rules (served): read if resource.sellerUid == auth.uid; the seller may update
+     only status / respondedAt / sellerNote. So the query is keyed on the signed-in
+     auth uid (S.uid) — the same identity the rule checks — and "Mark responded"
+     writes exactly { status, respondedAt }.
+
+     NO orderBy: firestore.indexes.json has no (sellerUid, createdAt) composite, and
+     an equality + orderBy on a different field needs one. Rows are sorted newest
+     first on the client instead. Without an index-backed order the limit cannot
+     promise it returned the NEWEST rows, so hitting the limit is said out loud.
+
+     No notification exists: nothing tells the seller a new enquiry arrived; they
+     see it when they open this sheet. */
+  var ENQ = { rows: null, seq: 0 };
+  var ENQ_LIMIT = 200;
+  var ENQ_TITLE = 'Buyer enquiries';
+  function _enqDate (v) {
+    if (!v) return null;
+    if (v instanceof Date) return v;
+    if (typeof v.toDate === 'function') { try { return v.toDate(); } catch (_) { return null; } }
+    if (typeof v.seconds === 'number') return new Date(v.seconds * 1000);
+    return null;
+  }
+  function loadEnquiries () {
+    if (S.state !== 'in' || !S.uid) return Promise.resolve({ error: 'signed-out' });
+    return _q({ collection: 'contactRequests', where: [['sellerUid', '==', S.uid]], limit: ENQ_LIMIT },
+              'Enquiries are not available yet.')
+      .then(function (rows) {
+        rows.sort(function (a, b) {
+          var da = _enqDate(a.createdAt), db = _enqDate(b.createdAt);
+          return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);
+        });
+        return { rows: rows };
+      }, function (e) {
+        return { error: (e && e.code) || (window.firebaseDB ? 'read-failed' : 'no-firebase') };
+      });
+  }
+  function _enqSheetIsOpen () {
+    var t = document.getElementById('sheet-t');
+    return !!(sheet && sheet.classList.contains('on') && t && t.textContent === ENQ_TITLE);
+  }
+  function openEnquiries () {
+    ensureSheet();
+    document.getElementById('sheet-t').textContent = ENQ_TITLE;
+    var host = document.getElementById('sheet-b');
+    sheet.classList.add('on'); sheetScrim.classList.add('on');
+    /* Employees act on the owner's shop, but a contact request is addressed to the owner's
+       ACCOUNT and the rule matches auth.uid — an employee's query would truthfully return
+       nothing, which would read as "no enquiries". Say which it is instead. */
+    if (S.servedBy && S.servedBy.role && S.servedBy.role !== 'owner') {
+      host.innerHTML = '<div class="state"><span class="ico">🔒</span><b>Enquiries go to the shop owner</b>' +
+        '<small>Buyer enquiries are addressed to the owner’s account, so they are not shown to staff. ' +
+        'This is not an empty inbox.</small></div>';
+      return;
     }
-    var url = 'https://wa.me/' + num + '?text=' + encodeURIComponent(waMessage(o, merchantDisplayName()));
-    return '<a class="act" rel="noopener" href="' + esc(url) + '">↗ Share</a>';
+    skeleton(host, 3);
+    var mySeq = ++ENQ.seq;
+    loadEnquiries().then(function (r) {
+      if (mySeq !== ENQ.seq || !_enqSheetIsOpen()) return;   /* sheet reused or closed meanwhile */
+      ENQ.rows = r.rows || null;
+      paintEnquiries(host, r.error || null);
+    });
+  }
+  function paintEnquiries (host, code) {
+    if (!host) return;
+    if (code) {
+      var body;
+      if (code === 'signed-out' || code === 'no-firebase') {
+        body = '<b>Not signed in on this device</b><small>Enquiries are addressed to your seller account, so ' +
+               'they load once you are signed in.</small>';
+      } else if (code === 'permission-denied') {
+        body = '<b>This account cannot read these enquiries</b><small>The request was refused by the security ' +
+               'rules. That is a permissions result, not an empty inbox.</small>';
+      } else {
+        body = '<b>Enquiries could not be loaded</b><small>The request failed (<code>' + esc(code) + '</code>). ' +
+               'Nothing is guessed here — retry.</small>';
+      }
+      host.innerHTML = '<div class="state"><span class="ico">🔒</span>' + body +
+        '<button class="act ghost" data-enq-retry="1">↻ Try again</button></div>';
+      return;
+    }
+    var rows = ENQ.rows || [];
+    if (!rows.length) {
+      host.innerHTML = '<div class="state"><span class="ico">💬</span><b>No enquiries yet</b>' +
+        '<small>When a buyer taps “Chat Seller” on one of your products, their request appears here.</small></div>';
+      return;
+    }
+    host.innerHTML =
+      (rows.length >= ENQ_LIMIT
+        ? '<div class="note" style="margin:0 0 12px">Showing ' + esc(rows.length) + ' enquiries. You have at least ' +
+          'this many; older ones may not be included.</div>'
+        : '') +
+      '<div class="enq-list">' + rows.map(enqCard).join('') + '</div>';
+  }
+  function enqCard (q) {
+    var when = _enqDate(q.createdAt);
+    var st = String(q.status || 'pending');
+    var responded = st === 'responded';
+    var pid = String(q.productId || '');
+    var pname = q.productName || 'Product';
+    var ke = waPhone(q.buyerPhone);
+    var digits = String(q.buyerPhone == null ? '' : q.buyerPhone).replace(/[^0-9]/g, '');
+    var tel = ke ? 'tel:+' + ke : (digits.length >= 9 ? 'tel:' + digits : null);
+    return '<div class="enq" data-enq-id="' + esc(q.id) + '">' +
+      '<div class="enq-top">' +
+        (pid ? '<a class="enq-prod" href="' + esc('product.html?id=' + encodeURIComponent(pid)) + '">' + esc(pname) + '</a>'
+             : '<b class="enq-prod">' + esc(pname) + '</b>') +
+        '<span class="badge ' + (responded ? 'paid' : 'pending') + '">' + esc(st) + '</span>' +
+      '</div>' +
+      '<div class="enq-who">' + esc(q.buyerName || '—') +
+        (q.buyerPhone ? ' · ' + esc(q.buyerPhone) : '') +
+        ' · ' + esc(when ? ago(when) : '—') + '</div>' +
+      (q.message ? '<div class="enq-msg">' + esc(q.message) + '</div>'
+                 : '<div class="enq-msg muted">No message</div>') +
+      '<div class="sheet-actions">' +
+        (tel ? '<a class="act ghost" href="' + esc(tel) + '">📞 Call</a>' : '') +
+        (responded ? '' : '<button class="act" data-enq-respond="' + esc(q.id) + '">✓ Mark responded</button>') +
+      '</div>' +
+    '</div>';
+  }
+  function markEnquiryResponded (id, btn) {
+    if (!id) return;
+    btn.disabled = true; btn.textContent = 'Saving…';
+    sdk().then(function (m) {
+      if (!window.firebaseDB) throw new Error('no-firebase');
+      /* Exactly the two keys the rule's affectedKeys().hasOnly(...) allows. */
+      return m.fs.updateDoc(m.fs.doc(window.firebaseDB, 'contactRequests', id),
+                            { status: 'responded', respondedAt: m.fs.serverTimestamp() });
+    }).then(function () {
+      var row = (ENQ.rows || []).filter(function (x) { return x.id === id; })[0];
+      if (row) { row.status = 'responded'; row.respondedAt = new Date(); }
+      toast('Enquiry marked as responded.');
+      if (_enqSheetIsOpen()) paintEnquiries(document.getElementById('sheet-b'), null);
+    }, function (e) {
+      var code = (e && e.code) || (e && e.message) || 'error';
+      btn.disabled = false; btn.textContent = '✓ Mark responded';
+      toast(code === 'permission-denied' ? 'SOKONI refused this change (permission). Nothing was updated.'
+                                         : 'Could not update the enquiry (' + code + '). Nothing was changed.');
+    });
   }
 
   document.addEventListener('click', function (e) {
+    var eqo = e.target.closest('[data-enquiries]');
+    if (eqo) { openEnquiries(); return; }
+    var eqr = e.target.closest('[data-enq-respond]');
+    if (eqr) { markEnquiryResponded(eqr.dataset.enqRespond, eqr); return; }
+    if (e.target.closest('[data-enq-retry]')) { openEnquiries(); return; }
     var o = e.target.closest('[data-order]');
     if (o) { openOrder(o.dataset.order); return; }
     var pay = e.target.closest('[data-payment]');
     if (pay) { openPayment(pay.dataset.payment); return; }
-    /* Share with no usable number: explain, never open a chat with nobody. */
-    if (e.target.closest('[data-wa-none]')) {
-      toast('WhatsApp unavailable — no buyer phone number is attached to this order.');
-      return;
-    }
     /* Print routes through the shell's OWN device layer, the same connection POS
        uses. No second printer authority. */
     var pr = e.target.closest('[data-print-order]');

@@ -685,16 +685,12 @@
         /* Action buttons */
         var handle = data.handle || shop.handle || parseHandle();
         var baseUrl = 'https://mysokoni.co.ke/shop/' + encodeURIComponent(handle);
-        var raw = config.socialLinks && config.socialLinks.whatsapp
-          ? config.socialLinks.whatsapp
-          : (config.contactPhone || '');
-        var whatsapp = raw.replace(/[^0-9]/g, '');
         var phone = config.contactPhone || '';
-        var waMsg = encodeURIComponent('Hi, I saw your SOKONI store! ');
 
         var actionsHtml = '<a href="' + esc(baseUrl) + '?utm_source=whatsapp&amp;utm_medium=status" class="status-btn status-btn-primary">&#128722; Shop Now</a>';
-        if (whatsapp) {
-          actionsHtml += '<a href="https://wa.me/' + esc(whatsapp) + '?text=' + waMsg + '" class="status-btn status-btn-chat">&#128172; WhatsApp</a>';
+        /* Enquiries stay in SOKONI: the featured product's own page (no WhatsApp hand-off). */
+        if (prod && prod.id) {
+          actionsHtml += '<a href="/product.html?id=' + esc(encodeURIComponent(prod.id)) + '" class="status-btn status-btn-chat">&#128172; View Product</a>';
         }
         if (phone) {
           actionsHtml += '<a href="tel:' + esc(phone) + '" class="status-btn status-btn-call">&#128222; Call</a>';
@@ -776,11 +772,12 @@
           tiktok:    function (h) { return 'https://tiktok.com/@' + h; },
           youtube:   function (h) { return h; },
           facebook:  function (h) { return h.startsWith('http') ? h : 'https://facebook.com/' + h; },
-          website:   function (h) { return h.startsWith('http') ? h : 'https://' + h; },
-          whatsapp:  function (h) { return 'https://wa.me/' + h.replace(/[^0-9]/g, ''); }
+          website:   function (h) { return h.startsWith('http') ? h : 'https://' + h; }
         };
 
-        var socialHtml = Object.keys(socials).filter(function (k) { return socials[k]; }).map(function (k) {
+        /* The seller's WhatsApp number is not rendered as a contact hop —
+           enquiries go through the shop page on SOKONI (visitShopBtn above). */
+        var socialHtml = Object.keys(socials).filter(function (k) { return socials[k] && k !== 'whatsapp'; }).map(function (k) {
           var val = socials[k];
           var builder = socialUrlBuilders[k] || function (h) { return h; };
           var url = builder(val);

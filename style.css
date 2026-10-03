@@ -14242,6 +14242,17 @@ body.light-mode .verified-badge{ background:rgba(113,255,0,0.08); }
 #networkToast.show{ transform:translateX(-50%) translateY(0); }
 #networkToast.online { border-color:rgba(113,255,0,0.4); }
 #networkToast.offline{ border-color:rgba(255,80,80,0.4); }
+/* Owner 2026-10-01: "a small curved thing at the top middle, right on top of the cart button".
+   The hidden state relied ONLY on the -100px offset; on phones the toast is 41px tall (mobile
+   padding) and parked at top -30px, so its bottom 11px showed as a rounded sliver above the cart.
+   On desktop, sokoni-desktop.css forces `transform:none !important`, which cancelled the hiding
+   entirely. Hidden now means hidden — invisible and transparent — whatever any offset says. */
+#networkToast:not(.show){ opacity:0; visibility:hidden;
+  transition:transform .4s cubic-bezier(0.34,1.56,0.64,1), opacity .25s ease, visibility 0s linear .25s; }
+/* Pops BELOW the header, like the offline banner (#sk-offline-bar uses the same measured height). */
+@media (max-width: 768px){ html #networkToast{ top: calc(var(--sk-header-h, 64px) + 8px); } }
+#networkToast.show{ opacity:1; visibility:visible;
+  transition:transform .4s cubic-bezier(0.34,1.56,0.64,1), opacity .2s ease, visibility 0s; }
 
 /* PWA Install prompt â€” enhanced */
 .pwa-install-prompt{
