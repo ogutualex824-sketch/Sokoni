@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 /* ============================================================================
    PROVIDER BOOKING LADDER — plan id → canonical rate → engine → ledger row → invoice; FAIL CLOSED
    ----------------------------------------------------------------------------

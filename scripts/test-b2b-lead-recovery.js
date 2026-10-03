@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 /* ============================================================================
    B2B lead invoice RECOVERY — settlement deduction + Pay Now + overdue gate (owner 2026-10-03; contracts with f3 / 5b)
      I1  a successful issue opens the receivable (outstanding = net + 16% VAT, paid 0); a failed issue opens nothing

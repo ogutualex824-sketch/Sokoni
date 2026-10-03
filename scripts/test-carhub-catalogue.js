@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 /* ============================================================================
    Car Hub paid products in the ONE catalogue (owner 2026-10-03, via sokoni-f3)
      C1  dealer plans: Free + Starter 1,500 (10/2) · Growth 3,000 (30/5) · Pro 5,000 (75/10) · Business 8,000 (150/20)
