@@ -183,20 +183,17 @@ window.SokoniEducation = (() => {
 
       const myLearningBtn = document.getElementById('eduMyLearningBtn');
       const teachBtn      = document.getElementById('eduTeachBtn');
-      const authActionEl  = document.getElementById('eduAuthAction');
       const loginPrompt   = document.getElementById('eduLoginPrompt');
 
       if (user) {
         if (myLearningBtn) myLearningBtn.classList.remove('hidden');
         if (teachBtn)      teachBtn.classList.remove('hidden');
-        if (authActionEl)  { authActionEl.textContent = 'Sign Out'; authActionEl.onclick = () => firebase.auth().signOut(); }
         if (loginPrompt)   loginPrompt.classList.add('hidden');
         /* Refresh enrolments in background */
         _loadMyEnrollments().catch(() => {});
       } else {
         if (myLearningBtn) myLearningBtn.classList.add('hidden');
         if (teachBtn)      teachBtn.classList.add('hidden');
-        if (authActionEl)  { authActionEl.textContent = 'Sign In'; authActionEl.href = 'login.html?return=education.html'; }
         if (loginPrompt)   loginPrompt.classList.remove('hidden');
         _myEnrollments = [];
       }
@@ -371,8 +368,8 @@ window.SokoniEducation = (() => {
         /* Refresh My Learning list in background */
         _loadMyEnrollments().catch(() => {});
       } else if (data.paymentRequired) {
-        toast(`KSh ${_fmt(data.price)} required. Please top up your wallet.`, 'warn', 6000);
-        if (btn) { btn.disabled = false; btn.textContent = `Enrol for KSh ${_fmt(data.price)}`; }
+        toast('Paid enrolment is coming soon.', 'warn', 6000);
+        if (btn) { btn.disabled = true; btn.textContent = 'Paid enrolment coming soon'; }
       }
     } catch (err) {
       console.error('[Education] enrollCourse error:', err);
@@ -476,7 +473,9 @@ window.SokoniEducation = (() => {
         tags,
       });
 
-      toast(`Course "${res.data.course.title}" submitted for review!`, 'success', 6000);
+      /* EDUCATION E1: createCourse saves a DRAFT (status 'draft'); nothing submits it yet (E2 adds the review lifecycle).
+         Say what actually happened. */
+      toast(`Course "${res.data.course.title}" saved as a draft. Publishing opens soon.`, 'success', 6000);
       hideCreateForm();
 
       /* Reset form */
@@ -818,10 +817,13 @@ window.SokoniEducation = (() => {
         enrollBtn.onclick = () => enrollCourse(course.courseId);
         enrollBtn.disabled = false;
       } else {
-        enrollBtn.textContent = `Enrol for KSh ${_fmt(price)}`;
-        enrollBtn.className = 'btn btn-primary';
-        enrollBtn.onclick = () => enrollCourse(course.courseId);
-        enrollBtn.disabled = false;
+        /* OWNER DECISION 2026-10-03: paid enrolment is OFF until it runs through IntaSend (Education E4). The live
+           enrollCourse debited the wallet with no ledger, no instructor credit and no commission. The server refuses
+           it as well; this button only tells the truth. */
+        enrollBtn.textContent = `KSh ${_fmt(price)} · Paid enrolment coming soon`;
+        enrollBtn.className = 'btn btn-outline';
+        enrollBtn.onclick = null;
+        enrollBtn.disabled = true;
       }
     }
   }
