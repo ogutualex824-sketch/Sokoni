@@ -29,7 +29,7 @@ const db = { collection: (n) => ({ doc: (id) => ({ async get () { const d = ovDo
   const mats = ['cement', 'steel', 'timber', 'roofing', 'bricks', 'tiles', 'paint', 'plumbing-materials', 'electrical-materials', 'windows-doors', 'construction-tools', 'sand-gravel', 'safety-ppe', 'building-materials', 'hardware', 'construction'];
   ck('K1 every material label → marketplace 15% (matched)', mats.every((k) => { const r = CC.resolveRate(k); return r.matched && r.category === 'marketplace' && r.pct === 15; }), mats.filter((k) => CC.resolveRate(k).category !== 'marketplace'));
   const svc = ['contractor', 'welding', 'fabrication', 'electrical-contractor', 'plumbing-contractor', 'construction-contractor', 'construction_service',
-    'welding-fabrication', 'construction-company', 'construction-services', 'construction-transport'];
+    'welding-fabrication', 'construction-company', 'construction-services', 'construction-transport', 'construction-architect'];
   ck('K2 contractor work → construction_service 0%, fixed + floor-exempt', svc.every((k) => { const r = CC.resolveRate(k); return r.category === 'construction_service' && r.pct === 0 && CC.isFixedRateCategory(k) && CC.isFloorExemptFixedCategory(k); }));
   const c = await FU.calculateCommission(db, { orderAmountCents: 10000000, category: 'welding', sellerId: 'S1' });
   ck('K3 real engine: KES 100,000 welding contract → 0 commission despite 12% / 9% overrides (no % of contract value)', c.commissionCents === 0, { cents: c.commissionCents, rate: c.effectiveRate });

@@ -231,6 +231,7 @@
     "construction-company": "construction_service",
     "construction-services": "construction_service",
     "construction-transport": "construction_service",
+    "construction-architect": "construction_service",
     "equipment-rental": "construction_equipment_rental",
     "equipment_rental": "construction_equipment_rental",
     "plant-hire": "construction_equipment_rental",
