@@ -1,3 +1,21 @@
+## [2026-10-03] — RELEASE GATE: service-booking commission invariant (scripts/gate-service-commission.js) — RED on this line
+
+Owner rule (locked 10-03): KES 1,000 service → buyer pays 1,000 · SOKONI 5 % = 50 · provider 950 · one rate on every plan · once · ONE source.
+
+The gate runs the REAL finos-utils.calculateCommission with exactly the arguments the tree's settlement (provider-ops._settlementMath) builds,
+for a Free- and an Enterprise-plan provider, on an in-memory Firestore; then re-runs on deliberately broken copies.
+
+| Tree | Settlement path | KES 1,000 booking | Verdict |
+|---|---|---|---|
+| this line (13f74f3 → tip; = the LIVE providerDispatch lineage) | inline subscriptionRole:'provider' (compatibility mode) | KES 200 (20 %) for Free AND Enterprise (role default — the plan id is not mapped here) | **RED — release blocker** |
+| 2f commercial 93f5f13 | provider-hub.commissionArgsForHub | KES 50 / net 950, same on every plan; config = snapshot = 5 | GREEN; 4/4 mutations caught (14 %, ladder back, home_services 14, ladder republished) |
+
+**Release rule:** the ONE providerDispatch release (sokoni-5b) must carry 2f's commercial server changes. That means provider-hub.js commissionArgsForHub,
+commission-config RATES (services 5, home_services 5), subscription-core / finos-utils as on 93f5f13, and the provider-ops settlement call sites.
+This gate must be GREEN on the exact release tree. A providerDispatch deploy from this line as it stands would keep charging 20 %.
+**Not covered by the gate:** the buyer total / intent amount (bookingCreateService + createPaymentIntent) and providerServices.fee being ignored. Both are
+sokoni-5b's server change.
+
 ## [2026-10-03] — Tech Hub slice 4K (server): public search excludes unapproved / suspended providers; reinstatement re-indexes in full — NOT deployed
 
 - **New** `functions/shared/provider-search-eligibility.js` — the ONE rule for the providers registry in search, the same one the directory
