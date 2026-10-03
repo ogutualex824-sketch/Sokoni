@@ -163,6 +163,19 @@ const SRC = read('sokoni-tech-service-editor.js');
     'Repairs "Call customer" and the paid booking view "Call the provider" ask the server for the number (shown only once paid); no number is hard-coded');
 }
 
+/* C4 — Tech 4C delivery-mode views: bookings filtered by the server-stamped booking.serviceMode */
+{
+  const { api } = loadEditor(SRC);
+  const I = api._internal, pd = read('provider-dashboard.html');
+  const row = I.modeRow({ id: 'bk3', service: 'Router setup', status: 'confirmed', serviceMode: 'ONSITE_SUPPORT', customerName: '<b>x</b>', note: '<img src=x onerror=1>' });
+  const pick = (key, mode) => (I.MODE_OF[key] || []).indexOf(mode) > -1;
+  ck('C4', pick('siteVisits', 'ONSITE_SUPPORT') && pick('siteVisits', 'FIELD_SERVICE') && pick('remoteSupport', 'REMOTE_SUPPORT') && pick('pickupDropoff', 'PICKUP_DROP_OFF')
+    && !pick('siteVisits', 'REMOTE_SUPPORT') && !/<img|<b>/.test(row) && row.includes('data-tech-repair-open="bk3"')
+    && ['siteVisits', 'remoteSupport', 'pickupDropoff'].every((k) => new RegExp('data-hc-module="' + k + '" hidden').test(pd))
+    && pd.includes("loadModeJobs('siteVisits','svList')") && pd.includes("loadModeJobs('pickupDropoff','pdList')"),
+    'Site visits / Remote support / Pickup views filter by booking.serviceMode, escape customer text, start hidden and load on open');
+}
+
 /* T10 — vocabulary parity with the server authority */
 {
   const serverFile = path.join(TECH_FN, 'functions', 'shared', 'tech-service-profile.js');

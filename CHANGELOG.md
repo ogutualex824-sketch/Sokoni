@@ -1,3 +1,12 @@
+## [2026-10-03] - Tech Hub slice 4C (hosting, part): Site visits / Remote support / Pickup & drop-off views — hosting, NOT deployed
+
+- provider-dashboard.html: three sidebar items and panels (data-hc-module siteVisits / remoteSupport / pickupDropoff, hidden until the server says AVAILABLE).
+- sokoni-tech-service-editor.js loadModeJobs(): the provider's own bookings (providerGetBookings) filtered by the server-stamped booking.serviceMode, with
+  Manage in Bookings / Message / Call. No new lifecycle.
+- Server half: feat/tech-taxonomy-on-13f74f3 @ 5402ac2. Other capability screens (support tickets, network projects, CCTV installs, POS support, projects,
+  diagnostics) stay NOT_IMPLEMENTED; no authority exists for them yet.
+- Test: test-tech-service-editor C4 (16/0). service-leads-web 11/0.
+
 ## [2026-10-03] - Tech Hub slice 4U: devices come from the Marketplace; selling a device = the seller intake — hosting, NOT deployed
 
 - **Census:**

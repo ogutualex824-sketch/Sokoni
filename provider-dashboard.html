@@ -295,6 +295,9 @@ a{color:var(--acc);text-decoration:none}
       <div class="sb-item" onclick="P.show('bookings',this)"><span class="sb-icon">📅</span>Bookings</div>
       <div class="sb-item" data-hc-module="repairs" hidden aria-hidden="true" onclick="P.show('repairs',this)"><span class="sb-icon">🔧</span>Repairs</div>
       <div class="sb-item" data-hc-module="leads" hidden aria-hidden="true" onclick="P.show('leads',this)"><span class="sb-icon">📨</span>Leads &amp; quotes</div>
+      <div class="sb-item" data-hc-module="siteVisits" hidden aria-hidden="true" onclick="P.show('sitevisits',this)"><span class="sb-icon">📍</span>Site visits</div>
+      <div class="sb-item" data-hc-module="remoteSupport" hidden aria-hidden="true" onclick="P.show('remotesupport',this)"><span class="sb-icon">🖥️</span>Remote support</div>
+      <div class="sb-item" data-hc-module="pickupDropoff" hidden aria-hidden="true" onclick="P.show('pickupdropoff',this)"><span class="sb-icon">🚚</span>Pickup &amp; drop-off</div>
       <div class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Wallet</div>
       <div class="sb-item" onclick="P.show('customers',this)"><span class="sb-icon">👥</span>Customers</div>
       <div class="sb-item" onclick="P.show('reviews',this)"><span class="sb-icon">⭐</span>Reviews</div>
@@ -497,6 +500,11 @@ a{color:var(--acc);text-decoration:none}
       <div class="pg-header"><div><div class="pg-title">Leads &amp; quotes</div><div style="font-size:12px;opacity:.65">Requests from customers. Reply in messages, send a quote; an accepted quote is booked and paid like any booking.</div></div></div>
       <div style="padding:14px 20px"><div id="ldList"></div></div>
     </div>
+
+    <!-- ── Delivery-mode views (Tech Hub 4C) — bookings by booking.serviceMode; lifecycle stays in Bookings ── -->
+    <div class="panel" id="panel-sitevisits"><div class="pg-header"><div><div class="pg-title">Site visits</div><div style="font-size:12px;opacity:.65">Bookings you deliver on-site or as a field visit.</div></div></div><div style="padding:14px 20px"><div id="svList"></div></div></div>
+    <div class="panel" id="panel-remotesupport"><div class="pg-header"><div><div class="pg-title">Remote support</div><div style="font-size:12px;opacity:.65">Bookings you deliver remotely.</div></div></div><div style="padding:14px 20px"><div id="rsList"></div></div></div>
+    <div class="panel" id="panel-pickupdropoff"><div class="pg-header"><div><div class="pg-title">Pickup &amp; drop-off</div><div style="font-size:12px;opacity:.65">Bookings where you collect and return the device.</div></div></div><div style="padding:14px 20px"><div id="pdList"></div></div></div>
 
     <!-- ── Earnings ──────────────────────────────────────────────────── -->
     <div class="panel" id="panel-earnings">
@@ -871,6 +879,9 @@ const P={
     if(id==='analytics')An.load();
     if(id==='reviews')Rv.load();
     if(id==='repairs'&&window.SokoniTechEditor)SokoniTechEditor.loadRepairs();
+    if(window.SokoniTechEditor&&id==='sitevisits')SokoniTechEditor.loadModeJobs('siteVisits','svList');
+    if(window.SokoniTechEditor&&id==='remotesupport')SokoniTechEditor.loadModeJobs('remoteSupport','rsList');
+    if(window.SokoniTechEditor&&id==='pickupdropoff')SokoniTechEditor.loadModeJobs('pickupDropoff','pdList');
     if(id==='leads'&&window.SokoniLeads)SokoniLeads.mountProvider(_q('ldList'),{services:()=>(Sv._svc||[]).filter(x=>x.active!==false),caps:()=>((window.__sokoniWorkspace||{}).serviceCapabilities||[])});
   }
 };

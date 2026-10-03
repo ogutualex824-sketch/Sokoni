@@ -128,6 +128,29 @@
     });
   }
 
+  /* ── Tech 4C: delivery-mode views — the provider's own bookings filtered by booking.serviceMode (stamped server-side) ── */
+  var MODE_OF = { siteVisits: ['ONSITE_SUPPORT', 'FIELD_SERVICE'], remoteSupport: ['REMOTE_SUPPORT'], pickupDropoff: ['PICKUP_DROP_OFF'] };
+  function modeRow(b) {
+    return '<div class="card" style="padding:12px 14px;margin-bottom:10px">'
+      + '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><strong>' + esc(b.service || 'Booking') + '</strong><span class="badge">' + esc(statusLabel(b)) + '</span></div>'
+      + '<div style="font-size:12px;opacity:.7;margin-top:4px">' + esc(b.customerName || 'Customer') + ' · ' + esc(when(b)) + ' · ' + esc(MODE_LABEL[b.serviceMode] || b.serviceMode || '') + '</div>'
+      + (b.note ? '<div style="font-size:13px;margin-top:4px">“' + esc(b.note) + '”</div>' : '')
+      + '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-s" data-tech-repair-open="' + esc(b.id) + '">Manage in Bookings</button>'
+      + '<button type="button" class="btn btn-s" data-tech-repair-msg="' + esc(b.id) + '">💬 Message customer</button>'
+      + '<button type="button" class="btn btn-s" data-tech-repair-call="' + esc(b.id) + '">📞 Call customer</button></div></div>';
+  }
+  function loadModeJobs(moduleKey, elId) {
+    var box = document.getElementById(elId);
+    var modes = MODE_OF[moduleKey];
+    if (!box || !modes) return Promise.resolve();
+    box.innerHTML = '<div style="opacity:.6;padding:12px 0">Loading…</div>';
+    if (typeof firebase === 'undefined' || !firebase.functions) { box.innerHTML = '<div style="opacity:.7">This list could not be loaded — please refresh.</div>'; return Promise.resolve(); }
+    return firebase.functions().httpsCallable('providerDispatch')({ op: 'providerGetBookings', limit: 100 }).then(function (r) {
+      var list = ((r && r.data && r.data.bookings) || []).filter(function (b) { return b && modes.indexOf(b.serviceMode) > -1; });
+      box.innerHTML = list.length ? list.map(modeRow).join('') : '<div style="opacity:.7;padding:12px 0">No bookings delivered this way yet.</div>';
+    }).catch(function () { box.innerHTML = '<div style="opacity:.7;padding:12px 0">We couldn’t load these bookings just now. This is not an empty list — please try again shortly.</div>'; });
+  }
+
   function onWorkspace(w) {
     caps = (w && Array.isArray(w.serviceCapabilities)) ? w.serviceCapabilities.slice() : [];
     mountFieldset();
@@ -160,7 +183,7 @@
   }
 
   G.SokoniTechEditor = {
-    fill: fill, read: read, loadRepairs: loadRepairs,
-    _internal: { DEVICE_TYPES: DEVICE_TYPES, REPAIR_TYPES: REPAIR_TYPES, BRANDS: BRANDS, MODE_CAPS: MODE_CAPS, onWorkspace: onWorkspace, repairRow: repairRow },
+    fill: fill, read: read, loadRepairs: loadRepairs, loadModeJobs: loadModeJobs,
+    _internal: { MODE_OF: MODE_OF, modeRow: modeRow, DEVICE_TYPES: DEVICE_TYPES, REPAIR_TYPES: REPAIR_TYPES, BRANDS: BRANDS, MODE_CAPS: MODE_CAPS, onWorkspace: onWorkspace, repairRow: repairRow },
   };
 }(typeof window !== 'undefined' ? window : globalThis));
