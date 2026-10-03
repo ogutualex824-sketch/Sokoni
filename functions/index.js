@@ -7615,21 +7615,28 @@ exports.webhookIntasend = onRequest(
         }
       }
 
-      const category = payData.meta?.category || "default";
+      /* COMMISSION CATEGORY FROM SERVER RECORDS ONLY (owner rule; 2f lead confirmed 2026-10-03). payData.meta is copied
+         from the CLIENT's initiateSTKPush request, so its category could name a 0% lane. The category now comes from the
+         intent's products / the server pricer's stamp; unresolved → the seller credit is HELD for review below. The
+         seller-specific rule lookup uses the ATTRIBUTED seller, never the payer. */
+      const _cc = await require("./shared/commission-category-source").resolveCommissionCategory(db, { intentRef: existing.intentRef || apiRef });
+      const category = _cc.ok ? _cc.category : "unresolved";
+      let _commissionHold = _cc.ok ? null : (_cc.reason || "category_unresolved");
       let sokoniCut = 0, commissionPct = 0;
-      try {
+      if (!_commissionHold) try {
         const { calculateCommission } = require('./finos-utils');
         const commResult = await calculateCommission(db, {
           orderAmountCents: amount * 100,
           category,
-          sellerId: payData.uid,
+          sellerId: attribution.sellerUid || attribution.merchantUid || null,
         });
         sokoniCut     = commResult.commissionCents ? Math.round(commResult.commissionCents / 100) : 0;
         commissionPct = commResult.effectiveRate ?? 0;
       } catch (commErr) {
-        console.error('[webhookIntasend] Commission calc failed — flagging for manual review', commErr.message);
+        console.error('[webhookIntasend] Commission calc failed — seller credit HELD for review', commErr.message);
         commissionPct = null;
         sokoniCut = 0;
+        _commissionHold = "commission_calc_failed";   /* never credit 100% because the price could not be computed */
         await db.collection("commissionReviewQueue").add({
           ref: apiRef, amount, category, uid: payData.uid,
           reason: commErr.message,
@@ -7739,6 +7746,13 @@ exports.webhookIntasend = onRequest(
         if (_isPlatformRevenue) {
           console.log(`[webhookIntasend] wallet credit skipped (platform revenue): ${apiRef}`, { purpose: _intentPurpose, category });
           await db.collection("payments").doc(apiRef).set({ walletCreditSkipped: "platform_revenue" }, { merge: true }).catch(() => {});
+        } else if (_commissionHold) {
+          console.warn(`[webhookIntasend] wallet credit WITHHELD (commission not server-resolvable: ${_commissionHold}): ${apiRef}`);
+          await db.collection("commissionReviewQueue").doc(`commission_hold_${apiRef}`).set({
+            ref: apiRef, payerUid: payData.uid || null, amount, reason: _commissionHold, clientCategory: payData.meta?.category || null,
+            intentPurpose: _intentPurpose, createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true }).catch(() => {});
+          await db.collection("payments").doc(apiRef).set({ walletCreditSkipped: "commission_unresolved" }, { merge: true }).catch(() => {});
         } else if (_decision.reason === "intent_unreadable") {
           console.warn(`[webhookIntasend] wallet credit WITHHELD (intent unreadable — fail closed): ${apiRef}`);
           await _queueNoEarner("intent_unreadable");
