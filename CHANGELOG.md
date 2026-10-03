@@ -1,3 +1,12 @@
+## [2026-10-03] — Provider availability is server-authoritative from the provider dashboard (owner decision) — NOT deployed
+
+- **provider-dashboard.html:**
+  - AvQ (open today / emergency close / block a date / vacation) and AvE.save write NOTHING from the browser any more. They call bookingDispatch: addAvailabilityOverride, removeAvailabilityOverride, setVacationMode, and setProviderAvailability (the full config, since the canonical normaliser replaces rather than merges).
+  - The server scopes every op to the caller's uid, validates dates and periods, and rebuilds availabilityStatus. bookingCreateService re-checks overlap in three independent layers (server proof AV1–AV3, feat/legal-hub-on-9cab901 610d707).
+  - Vacation now needs an end date (the server requires one).
+- **Not changed (owner decision):** availability-manager.html is shared with the Merchant V2 shop schedule (6775b09, protected by test-availability-convergence 34/0). 2f's line replaced it with an A2 router (8d127ab). Which shop-availability authority wins is NOT decided here. Until it is, client writes to providerAvailability cannot be denied in rules without breaking that page.
+- **Tests:** test-legal-hub-web AV1W (17/0); sabotage-legal-hub-web 13/13; test-tech-service-editor 17/0; test-availability-convergence 34/0 (unchanged).
+
 ## [2026-10-03] — Legal Hub L9 (hosting): quotes for larger legal matters via the canonical leads engine — NOT deployed
 
 - **legal-profile.html:** a "Request a quote for a larger matter" button runs SokoniLeads.ask (providerDispatch leadCreate) with a Legal placeholder. If the client accepts the quote, they book and pay that amount through SokoniBookService: held until the PIN, one 5%.

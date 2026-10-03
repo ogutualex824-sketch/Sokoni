@@ -124,6 +124,10 @@ const run = async (cat) => { ctx._activeLawCat = cat; await ctx.renderLawyers();
     && acct.includes("W.SokoniLeads.mountMine(q)") && html.includes('id="lhMyQuotes"') && html.includes('<script src="sokoni-leads.js" defer></script>')
     && leadsJs.includes("esc(o.placeholder || ") && !/legalQuote|legalProject|legalInvoice/.test(prof + acct),
     'large matters: storefront "Request a quote" → the canonical leads engine; the client sees quotes in My bookings (mountMine); placeholder escaped; no Legal quote/invoice system');
+  const pdAv = pd.slice(pd.indexOf('const AvQ={'), pd.indexOf('window.AvE=AvE'));
+  ck('AV1W', pdAv.length > 0 && !/\.set\(|\.update\(|\.delete\(/.test(pdAv) && pd.includes("httpsCallable('bookingDispatch')")
+    && pdAv.includes("_avCall('addAvailabilityOverride'") && pdAv.includes("_avCall('removeAvailabilityOverride'") && pdAv.includes("_avCall('setVacationMode'") && pdAv.includes("_avCall('setProviderAvailability'"),
+    'availability is server-authoritative from the provider dashboard: it writes NOTHING itself (bookingDispatch availability ops). availability-manager.html (shared with the Merchant V2 shop schedule) is an owner decision, not changed here');
   done();
 })();
 function done() { console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed'); console.log('NOT proven here: a real browser render (memory floor) and a live booking.'); process.exit(fail ? 1 : 0); }

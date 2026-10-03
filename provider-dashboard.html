@@ -1981,21 +1981,23 @@ function snapGo(a){
   if(f){ _navTo('bookings'); setTimeout(()=>{const tab=document.querySelector(`.ftab[onclick*="filter('${f}'"]`);if(typeof B!=='undefined')B.filter(f,tab);},80); }
 }
 
-/* Availability Quick Actions — write DIRECTLY to the canonical providerAvailability
-   schema (same shape availability-manager.html uses): date closures live in the
-   overrides/{YYYY-MM-DD} subcollection {date,label,closed,type,createdAt}; vacation is
-   isOnVacation + vacationStartDate/EndDate on the main doc. No duplicate model. */
+/* Availability Quick Actions — SERVER-AUTHORITATIVE (owner 2026-10-03: "Availability is commercial booking data and
+   cannot be trusted from the browser"). Every change goes through bookingDispatch → functions/availability.js, which
+   scopes to the caller's own uid, validates dates/periods, normalises the ONE config and rebuilds availabilityStatus;
+   bookingCreateService re-checks availability inside its own transaction, so a write here can never create an overlap.
+   The page READS its own providerAvailability doc; it never writes it. */
+async function _avCall(op,data){return (await firebase.functions().httpsCallable('bookingDispatch')(Object.assign({op:op},data||{}))).data;}
 const AvQ={
   _ref(){const u=firebase.auth().currentUser;return u?firebase.firestore().collection('providerAvailability').doc(u.uid):null;},
   _today(){return new Date().toISOString().slice(0,10);},
   _stamp(){return firebase.firestore.FieldValue.serverTimestamp();},
-  async _close(date,label){const r=this._ref();if(!r)throw new Error('Sign in required');await r.collection('overrides').doc(date).set({date,label:String(label).slice(0,80),closed:true,type:'custom',createdAt:this._stamp()});},
-  async openToday(){const r=this._ref();if(!r)return;showLoad('Opening today…');try{await r.collection('overrides').doc(this._today()).delete().catch(()=>{});await r.set({isOnVacation:false,updatedAt:this._stamp()},{merge:true});toast("You're open today.");this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}},
+  async _close(date,label){if(!this._ref())throw new Error('Sign in required');await _avCall('addAvailabilityOverride',{date:date,closed:true,label:String(label).slice(0,80)});},
+  async openToday(){if(!this._ref())return;showLoad('Opening today…');try{await _avCall('removeAvailabilityOverride',{date:this._today()});await _avCall('setVacationMode',{active:false});toast("You're open today.");this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}},
   async emergencyClose(){if(!(await SK.dialog.confirm('Close TODAY for new bookings? Existing confirmed bookings are unaffected.', null, null, { title:'Close today', variant:'danger', confirmLabel:'Close today' })))return;showLoad('Closing…');try{await this._close(this._today(),'Emergency closure');toast('Closed for today.');this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}},
   async blockDate(){const d=(prompt('Block which date? (YYYY-MM-DD)')||'').trim();if(!d)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){toast('Use YYYY-MM-DD format.','err');return}showLoad('Blocking…');try{await this._close(d,'Blocked');toast('Date blocked: '+d);this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}},
   async vacation(){const r=this._ref();if(!r)return;let on=false;try{const s=await r.get();on=s.exists&&!!s.data().isOnVacation}catch(_){}
-    if(on){if(!(await SK.dialog.confirm('End vacation mode and go back online?', null, null, { title:'End vacation', confirmLabel:'Go online' })))return;showLoad('…');try{await r.set({isOnVacation:false,updatedAt:this._stamp()},{merge:true});toast("Vacation ended — you're back online.");this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}}
-    else{const end=(prompt('Vacation until? (YYYY-MM-DD, optional — leave blank for open-ended)')||'').trim();if(end&&!/^\d{4}-\d{2}-\d{2}$/.test(end)){toast('Use YYYY-MM-DD or leave blank.','err');return}showLoad('…');try{await r.set({isOnVacation:true,vacationStartDate:this._today(),vacationEndDate:end||null,updatedAt:this._stamp()},{merge:true});toast('Vacation mode ON — hidden from search, bookings paused.');this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}}},
+    if(on){if(!(await SK.dialog.confirm('End vacation mode and go back online?', null, null, { title:'End vacation', confirmLabel:'Go online' })))return;showLoad('…');try{await _avCall('setVacationMode',{active:false});toast("Vacation ended — you're back online.");this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}}
+    else{const end=(prompt('Vacation until? (YYYY-MM-DD)')||'').trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(end)){toast('Enter the last day of your vacation as YYYY-MM-DD.','err');return}showLoad('…');try{await _avCall('setVacationMode',{active:true,startDate:this._today(),endDate:end});toast('Vacation mode ON — hidden from search, bookings paused.');this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}}},
   _refresh(){try{if(typeof Cal!=='undefined'&&Cal.today)Cal.today()}catch(_){}try{if(typeof _data!=='undefined'&&_data)renderSnapshot('snapStripCal',_data.bookings||[])}catch(_){}}
 };window.AvQ=AvQ;
 
@@ -2077,7 +2079,13 @@ const AvE={
     const appt=Object.assign({},this._cfg.appt||{},{enabled:true,durationMins:parseInt((_q('avSlot')||{}).value)||60,bufferMins:parseInt((_q('avBuffer')||{}).value)||0,minNoticeHours:parseInt((_q('avNotice')||{}).value)||1,maxDaysAhead:parseInt((_q('avMaxDays')||{}).value)||30,allowSameDay:!!(_q('avSameDay')||{}).checked});
     const vac=!!(_q('avVac')||{}).checked;
     showLoad('Saving availability…');
-    try{await r.set({schedule,appt,isOnVacation:vac,vacationStartDate:vac?((_q('avVacStart')||{}).value||new Date().toISOString().slice(0,10)):null,vacationEndDate:vac?((_q('avVacEnd')||{}).value||null):null,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+    try{
+      const c=this._cfg||{};const vs=vac?((_q('avVacStart')||{}).value||new Date().toISOString().slice(0,10)):null,ve=vac?((_q('avVacEnd')||{}).value||null):null;
+      if(vac&&!ve){toast('Enter the last day of your vacation.','err');hideLoad();return;}
+      /* setProviderAvailability normalises and REPLACES the whole config, so the editor sends all of it (modes, capacity,
+         hub type and name kept from what it loaded). */
+      await _avCall('setProviderAvailability',{modes:(Array.isArray(c.modes)&&c.modes.length?c.modes:['appointment_only']),hubType:c.hubType||'services',businessName:c.businessName||'',
+        schedule,appt,cap:c.cap||{},vacation:{active:vac,startDate:vs,endDate:ve}});
       toast('Availability saved!');this.close();
       try{if(typeof AvQ!=='undefined')AvQ._refresh();}catch(_){}
     }catch(e){toast(e.message||'Save failed','err');}finally{hideLoad();}
