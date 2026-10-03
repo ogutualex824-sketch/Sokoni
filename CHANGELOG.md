@@ -1,3 +1,11 @@
+## [2026-10-04] — SaaS invoices: a client reference never makes an invoice paid; no cross-user leak
+
+**Owner decision (2026-10-04): fix now.** Live `sasosCreateInvoice` (00015-huz, gen 1787386918737171) created a tax invoice `status:'paid'` under SOKONI's KRA PIN from ANY client-supplied `paymentRef`. Its duplicate check also returned ANY user's invoice (phone included) to whoever typed a matching reference.
+**Fix:** the invoice is issued `status:'payment_unverified'`, `paymentStatus:'unverified'`, with a `paymentClaim`. Only a verified payment event may mark it paid. The duplicate check is scoped to the caller: their own repeat replays, and another user's reference is refused with nothing of theirs returned.
+**Baseline:** 7196333 restores the 3 modules where origin/main differed (company-identity, sasos-core, shared/constants) to the LIVE bytes, so the 5-module closure equals production.
+**Files:** `functions/sasos-billing.js`, `scripts/test-sasos-invoice-unverified.js`. **Tests:** 5/0 (SABOTAGE: status paid → S1 fails).
+**Deployment:** NOT deployed; scoped `--only functions:sasosCreateInvoice` from this tree. No live page calls it today.
+
 ## [2026-09-01] — fix(adminos): admin-os.js lineage convergence to production 252ff65 + pilot (UNMERGED / UNDEPLOYED)
 
 Reconciles `functions/admin-os.js` on main (`9d42fa9`) back to the **proven deployed source** of the

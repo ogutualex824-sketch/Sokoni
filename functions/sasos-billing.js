@@ -98,10 +98,14 @@ const sasosCreateInvoice = onCall(
     if (!planId || !payRef)
       throw new HttpsError('invalid-argument', 'planId and paymentRef are required.');
 
-    /* Prevent duplicate invoices for same payment */
+    /* Prevent duplicate invoices for the same reference — SCOPED TO THE CALLER (owner 2026-10-04). The old check returned
+       ANY user's invoice for a matching reference (another person's invoice, phone included, to whoever typed their
+       reference). A reference already used by someone else is refused, and nothing of theirs is returned. */
     const existing = await db().collection('sasosInvoices')
-      .where('paymentRef', '==', payRef).limit(1).get();
-    if (!existing.empty) return { success: true, invoice: existing.docs[0].data() };
+      .where('paymentRef', '==', payRef).limit(5).get();
+    const mine = existing.docs.find((d) => (d.data() || {}).uid === uid);
+    if (mine) return { success: true, invoice: mine.data(), replay: true };
+    if (!existing.empty) throw new HttpsError('already-exists', 'That payment reference is already attached to another invoice.');
 
     const plan = await _resolvePlan(planId);
     if (!plan) throw new HttpsError('not-found', `Plan ${planId} not found.`);
@@ -125,7 +129,13 @@ const sasosCreateInvoice = onCall(
       vatRate:     plan.tax?.vat_applicable ? (plan.tax.vat_rate || VAT_RATE) : 0,
       total,
       currency:    plan.billing.currency || 'KES',
-      status:      'paid',
+      /* PAYMENT TRUTH IS NEVER THE CLIENT'S (owner 2026-10-04). This invoice used to be created status:'paid' from a
+         client-supplied paymentRef — a "paid" tax invoice under SOKONI's KRA PIN on the caller's word. The reference is
+         now an UNVERIFIED CLAIM: the invoice is issued payment-unverified, and only a verified payment event (the
+         payment authority) may mark it paid. */
+      status:        'payment_unverified',
+      paymentStatus: 'unverified',
+      paymentClaim:  { reference: payRef, status: 'unverified', claimedBy: uid, at: now },
       issuedAt:    now,
       periodStart: now,
       periodEnd:   billing === 'annual' ? now + 365 * 86400000 : now + 30 * 86400000,
@@ -139,8 +149,8 @@ const sasosCreateInvoice = onCall(
     };
 
     await db().collection('sasosInvoices').add(invoice);
-    logger.info(`[SASOS-Billing] Invoice ${invoiceNo} created: uid=${uid} plan=${planId} total=${total}`);
-    return { success: true, invoice };
+    logger.info(`[SASOS-Billing] Invoice ${invoiceNo} issued payment-unverified: uid=${uid} plan=${planId} total=${total}`);
+    return { success: true, invoice, verified: false, message: 'Invoice issued — payment reference awaiting verification' };
   }
 );
 
