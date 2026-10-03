@@ -1,3 +1,9 @@
+## [2026-10-03] — Provider dashboard: P0-F edit-authority script; inbox: work_project conversations — NOT deployed
+
+- **provider-dashboard.html:** loads `sokoni-edit-authority.js` BEFORE sokoni-fitness-memberships.js (sokoni-e3, P0-F: only businessWorkspace answer.editable === true is editable; without it the gym module fails closed, read-only). Both files ship from e3's fitness branch (a27cd1f) at assembly.
+- **messages.html + sokoni-inbox.js:** `work_project` (Work/Job Engine campaign / project conversations; server parties re-derived per send) joins the ?tx allowlist and TX_TYPES.
+- **Tests:** tech-service-editor 17/0, legal-hub-web 21/0, service-leads-web 11/0, education-courses-ui 13/0, education-lessons-ui 13/0.
+
 ## [2026-10-03] — Messages: ?tx=job_application opens the Jobs conversation (for sokoni-f3 J4/J5) — NOT deployed
 
 - **messages.html / sokoni-inbox.js:** job_application joins the allowlist, with Jobs-specific refusal wording. The txId is the application id (jobId_seekerUid).

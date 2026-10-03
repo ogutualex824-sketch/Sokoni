@@ -874,6 +874,8 @@ a{color:var(--acc);text-decoration:none}
 <script src="sokoni-leads.js" defer></script>
 <script src="sokoni-legal-taxonomy.js" defer></script>
 <script src="sokoni-receipts.js" defer></script>
+<!-- P0-F read-only rule (sokoni-e3): only businessWorkspace answer.editable === true is editable; loads BEFORE the gym module, which otherwise fails closed (read-only). Both files ship from e3's fitness branch (a27cd1f) at assembly. -->
+<script src="sokoni-edit-authority.js" defer></script>
 <script src="sokoni-fitness-memberships.js" defer></script>
 <script src="sokoni-education-courses.js" defer></script>
 <script src="sokoni-education-lessons.js" defer></script>
