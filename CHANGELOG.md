@@ -1,3 +1,11 @@
+## [2026-10-03] — P0-F: deactivated, suspended and revoked owners lose ordinary edit authority
+
+**Files:** `firestore.rules.hotfix-jobs`, `firestore.rules`, `firestore.rules.build`, `scripts/zz-test-deactivated-owner-rules.js`, `CHANGELOG.md`.
+**Owner decision (2026-10-03):** lifecycle, not uid equality, decides owner edits. Active: edit permitted fields. Suspended: read-only. Revoked or deactivated: no owner edits; AdminOS functions make controlled changes.
+**Security:** on served `f259c0b5`, the providers and shops owner update paths checked only `isAuthed()` + uid. A deactivated owner could still change identity, contact details and storefront. New `providerOwnerEditable()` requires `isActive()` (refuses the deactivated token claim), deactivated != true and suspended != true, and a status on an allow-list (active, approved, pending, pending_approval, pending_review, info_requested, draft). A missing or unknown status fails closed. New `shopOwnerEditable()` requires `isActive()` and no deactivated, suspended or banned flag; shops carry no status, and their lifecycle is the server-written deactivated flag.
+**Breaking changes:** owners of providers with no status or an unlisted status lose self-edit until AdminOS sets one. Count before release (G3 read). **Database:** none. **API:** none.
+**Tests:** DO-P1..P10 and DO-S1..S7, EMULATOR PENDING. **Deployment:** NOT deployed. Ships in the owner-approved P0 hotfix unit.
+
 ## [2026-10-03] — P0-4: provider records lose self-written approval, commission, category and trust stamps
 
 **Files:** `firestore.rules.hotfix-jobs`, `firestore.rules`, `firestore.rules.build`, `scripts/zz-test-provider-approval-hotfix.js`, `CHANGELOG.md`.

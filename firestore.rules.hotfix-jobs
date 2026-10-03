@@ -243,6 +243,23 @@ service cloud.firestore {
   /* sokoni-5b P0-3 census: accountReactivate restores status from preDeactivationStatus (default active) — self-activation */
   'preDeactivationStatus','deactivated','deactivatedBy'];
   }
+  /* P0-F DEACTIVATED-OWNER WRITE RESTRICTION (owner 2026-10-03): lifecycle, not uid equality, decides ordinary owner
+     edits. Active → edit permitted fields; suspended → read-only; revoked / deactivated → no owner edits (AdminOS
+     functions make controlled changes). Fail closed: an unknown or MISSING provider status denies. Shops carry no
+     status — their lifecycle is the server-written deactivated flag (account-status.js) plus the admin suspended /
+     banned flags. isActive() also refuses a token carrying the deactivated claim. */
+  function providerOwnerEditable() {
+  return isActive()
+  && resource.data.get('deactivated', false) != true
+  && resource.data.get('suspended', false) != true
+  && resource.data.get('status', '') in ['active','approved','pending','pending_approval','pending_review','info_requested','draft'];
+  }
+  function shopOwnerEditable() {
+  return isActive()
+  && resource.data.get('deactivated', false) != true
+  && resource.data.get('suspended', false) != true
+  && resource.data.get('banned', false) != true;
+  }
   match /providers/{providerId} {
   allow read:   if resource.data.status == 'active' || resource.data.status == 'approved'
   || isAuthed();
@@ -253,6 +270,7 @@ service cloud.firestore {
   allow update: if isAdmin()
   || (isAuthed()
   && resource.data.uid == request.auth.uid
+  && providerOwnerEditable()
   && uidUnchanged()
   && noAdminFields()
   && !request.resource.data.diff(resource.data)
@@ -1101,6 +1119,7 @@ service cloud.firestore {
   || (isAuthed()
   && (resource.data.ownerId == request.auth.uid
   || (!("ownerId" in resource.data) && request.auth.uid == storeId))
+  && shopOwnerEditable()
   && uidUnchanged()
   && noAdminFields()
   && request.resource.data.diff(resource.data).affectedKeys()

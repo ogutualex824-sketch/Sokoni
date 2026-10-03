@@ -231,6 +231,18 @@ service cloud.firestore {
   match /invitations/{inviteId} {
   allow read:   if isAdmin();
   }
+  function providerOwnerEditable() {
+  return isActive()
+  && resource.data.get('deactivated', false) != true
+  && resource.data.get('suspended', false) != true
+  && resource.data.get('status', '') in ['active','approved','pending','pending_approval','pending_review','info_requested','draft'];
+  }
+  function shopOwnerEditable() {
+  return isActive()
+  && resource.data.get('deactivated', false) != true
+  && resource.data.get('suspended', false) != true
+  && resource.data.get('banned', false) != true;
+  }
   match /providers/{providerId} {
   allow read:   if resource.data.status == 'active' || resource.data.status == 'approved'
   || isAuthed();
@@ -254,6 +266,7 @@ service cloud.firestore {
   allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['business']))
   || (isAuthed()
   && resource.data.uid == request.auth.uid
+  && providerOwnerEditable()
   && uidUnchanged()
   && noAdminFields()
   && !request.resource.data.diff(resource.data)
@@ -1076,6 +1089,7 @@ service cloud.firestore {
   || (isAuthed()
   && (resource.data.ownerId == request.auth.uid
   || (!("ownerId" in resource.data) && request.auth.uid == storeId))
+  && shopOwnerEditable()
   && uidUnchanged()
   && noAdminFields()
   && request.resource.data.diff(resource.data).affectedKeys()
