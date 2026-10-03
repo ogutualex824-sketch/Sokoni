@@ -1,3 +1,12 @@
+## 2026-10-04 — Users workspace for AdminOS + Super Admin (shared module; sidebars unchanged) (NOT deployed)
+
+- **Change:** new `sokoni-admin-users.js` mounted inside each page's existing Users panel (admin-os.html `#ausRootAos`, super-admin.html `#ausRootSa`): header (Export CSV of server rows · Invite User via `inviteUser`), KPI cards (Total / Active / Pending Invites / Suspended), search + role/status/sort filters, list/grid toggle, bulk Change Role / Suspend, paginated table (user, role, team, status, last sign-in, derived access), right-hand detail drawer (Overview / Activity / Security). Mobile: KPI grid collapses, drawer full-width, table scrolls.
+- **Data integrity:** every figure from the server — `adminSearchUsers`, `adminGetUser`, new `adminUserStats` (count() aggregates), `listInvitations`. Unknown → "—" (KPIs stay "—" until adminUserStats is deployed). No percentage access bars, no teams, no invented trends; access is derived from the granted role.
+- **Actions keep each page's existing server authority (no new path):** AdminOS role → adminUpdateUserRole, suspend/restore → tsBanUser (both super-admin-only on the server; buttons enabled only for a super admin); Super Admin role → setUserRole, suspend/restore → suspendUser (Auth account disabled/re-enabled). Super Admin no longer reads the users collection directly (server reads via adminOsDispatch). Fixed: AdminOS's Ban button sent `userId`, tsBanUser reads `uid` (it never worked).
+- **Server (functions/admin-os.js — ships with adminOsDispatch, needs a live-lineage release):** adminSearchUsers adds Auth last sign-in (getUsers batches), suspended flag, team claim, https-only photo, scanned; new `adminUserStats` (suspension counted across both representations without double counting); adminGetUser adds mfaEnrolled + tokensValidAfter.
+- **Files:** sokoni-admin-users.js (new), admin-os.html, sokoni-aos.js, super-admin.html, functions/admin-os.js, scripts/test-admin-users-workspace.js (new).
+- **Tests:** test-admin-users-workspace 8/0 (mutant: an unescaped user field FAILS U6). Browser verification pending the ≥700 MB gate.
+
 ## 2026-10-03 — AdminOS Sports review queue (teams + tournaments; audited server decisions) (NOT deployed)
 
 - **Files:** sokoni-aos-sports.js (new); admin-os.html (nav + panel + script).

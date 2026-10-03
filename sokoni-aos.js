@@ -141,6 +141,7 @@ window.SokoniAOS = (() => {
 
   // Admin-OS ops whitelist — routes through adminOsDispatch to reduce Cloud Run services
   const _ADMIN_OS_OPS = new Set([
+    'adminUserStats',   /* Users workspace KPIs (server count() aggregates) */
     'adminCreateSupportTicket','adminDeleteBanner','adminDeleteFaq',
     'adminGetAiStats','adminGetAnnouncements','adminGetAuditLogs','adminGetBanners',
     'adminGetBookings','adminGetCategories','adminGetDeliveryStats','adminGetDisputes',
@@ -354,33 +355,30 @@ window.SokoniAOS = (() => {
   }
 
   // ── Users ────────────────────────────────────────────────────────────────────
-  async function _loadUsers(query = "", role = "", status = "", page = 1) {
-    const tbody = document.getElementById("usersBody");
-    if (!tbody) return;
-    tbody.innerHTML = _loadingRow(7);
-    try {
-      const data = await _call("adminSearchUsers", { query, role, status, page, limit: 20 });
-      const users = data.users || data.results || [];
-      if (!users.length) { tbody.innerHTML = _emptyRow(7, "No users found"); return; }
-      tbody.innerHTML = users.map(u => `
-        <tr>
-          <td><img class="avatar" src="${_esc(u.photoURL||"")||"/assets/logosokoni.png"}" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='/assets/logosokoni.png';}"> ${_esc(u.name || "—")}</td>
-          <td class="aos-muted">${_esc(u.email||"")}</td>
-          <td><span class="role-badge role-${u.role||"buyer"}">${_esc(u.role||"buyer")}</span></td>
-          <td><span class="status-badge st-${u.status||"active"}">${_esc(u.status||"active")}</span></td>
-          <td class="aos-muted">${_date(u.createdAt)}</td>
-          <td class="aos-muted">${_date(u.lastLogin)}</td>
-          <td>
-            <button class="aos-btn-sm" onclick="SokoniAOS.viewUser('${u.uid||u.id}')">View</button>
-            <button class="aos-btn-sm danger" onclick="SokoniAOS.banUser('${u.uid||u.id}','${u.status}')">
-              ${u.status==="banned"?"Restore":"Ban"}
-            </button>
-            <button class="aos-btn-sm" onclick="SokoniAOS.changeRole('${u.uid||u.id}')">Role</button>
-          </td>
-        </tr>`).join("");
-      const total = document.getElementById("userTotal");
-      if (total) total.textContent = _fmt(data.total || users.length) + " users";
-    } catch (e) { tbody.innerHTML = _emptyRow(7, "Error loading users: " + e.message); }
+  /* Users workspace (sokoni-admin-users.js, shared with super-admin.html). Data comes from the server only; actions use
+     THIS surface's existing authorities: role → adminUpdateUserRole, suspend / restore → tsBanUser (both super-admin-only
+     on the server, so the buttons are enabled only for a super admin). */
+  let _ausApi = null;
+  async function _loadUsers(query = "") {
+    const root = document.getElementById("ausRootAos");
+    if (!root || !window.SokoniAdminUsers) return;
+    if (!_ausApi) {
+      const isSuper = !!(_currentUser && _currentUser.isSuper);
+      _ausApi = window.SokoniAdminUsers.mount(root, {
+        surface: "adminos",
+        call: (name, data) => _call(name, data),
+        roles: ["buyer", "seller", "provider", "driver", "moderator", "admin"],
+        canChangeRole: isSuper, canSuspend: isSuper,
+        actions: {
+          role:    { fn: "adminUpdateUserRole", payload: (uid, x) => ({ uid, role: x.role }) },
+          suspend: { fn: "tsBanUser", payload: (uid, x) => ({ uid, action: "suspend", reason: x.reason }) },
+          restore: isSuper ? { fn: "tsBanUser", payload: (uid) => ({ uid, action: "restore" }) } : null,
+        },
+      });
+      if (query) _ausApi.search(query);
+      return;
+    }
+    if (query) _ausApi.search(query); else _ausApi.refresh();
   }
 
   async function viewUser(uid) {
@@ -407,7 +405,7 @@ window.SokoniAOS = (() => {
     const action = currentStatus === "banned" ? "restore" : "ban";
     if (!(await SK.dialog.confirm(`${_titleCase(action)} this user?`, null, null, { title: `${_titleCase(action)} user`, variant: 'danger', confirmLabel: _titleCase(action) }))) return;
     try {
-      await _call("tsBanUser", { userId: uid, action });
+      await _call("tsBanUser", { uid, action });   /* server reads uid (was userId: never worked) */
     } catch (e) {
       _toast(_actionFailure(e, "Moderation action"), "error");
       return;

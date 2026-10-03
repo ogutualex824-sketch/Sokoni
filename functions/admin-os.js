@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 
 function _requireAdmin(req) {
@@ -77,17 +77,66 @@ exports.adminSearchUsers = onCall({ region: 'us-central1', maxInstances: 10, enf
   }
   if (role) users = users.filter(u => u.role === role || (u.roles || []).includes(role));
 
+  const page = users.slice(0, lim || 50);
+  /* Users workspace (2026-10-04): last sign-in comes from Firebase Auth — the authoritative record — never a
+     client-written presence field. Batched (100 per getUsers call); an Auth read failure leaves it null ("—"). */
+  const authById = {};
+  try {
+    const auth = getAuth();
+    for (let i = 0; i < page.length; i += 100) {
+      const r = await auth.getUsers(page.slice(i, i + 100).map(u => ({ uid: u.id })));
+      for (const a of r.users) authById[a.uid] = a;
+    }
+  } catch (_) { /* leave lastSignIn null */ }
+  const cc = (u) => (u.customClaims && typeof u.customClaims === 'object') ? u.customClaims : {};
   return {
-    users: users.slice(0, lim || 50).map(u => ({
+    scanned: snap.size,
+    users: page.map(u => ({
       id: u.id,
       displayName: u.displayName || '',
       email: u.email || '',
       phone: u.phone || '',
       role: u.role || 'buyer',
       status: u.status || 'active',
+      suspended: u.suspended === true,
       verified: u.verified || false,
       createdAt: u.createdAt,
+      photoURL: typeof u.photoURL === 'string' && u.photoURL.startsWith('https://') ? u.photoURL : null,
+      team: cc(u).department || cc(u).teamId || null,
+      lastSignIn: authById[u.id] && authById[u.id].metadata.lastSignInTime ? Date.parse(authById[u.id].metadata.lastSignInTime) : null,
+      authDisabled: authById[u.id] ? authById[u.id].disabled === true : null,
     })),
+  };
+});
+
+/* ── adminUserStats — the Users workspace KPI cards (2026-10-04) ──────────────────────────────────
+   Server count() aggregates only; nothing is estimated in the browser. Two suspension
+   representations exist (tsBanUser writes status 'suspended'/'banned'; suspendUser writes
+   suspended:true and leaves status alone), so the suspended figure combines them without double
+   counting, and 'active' excludes accounts flagged suspended. */
+exports.adminUserStats = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminUserStats = async (req) => {
+  _requireAdmin(req);
+  const db = getFirestore();
+  const users = db.collection('users');
+  const since30 = Timestamp.fromMillis(Date.now() - 30 * 86400000);
+  const c = (q) => q.count().get().then(r => r.data().count);
+  const [total, activeStatus, statusSuspended, flaggedActive, joinedLast30, flagged] = await Promise.all([
+    c(users),
+    c(users.where('status', '==', 'active')),
+    c(users.where('status', 'in', ['suspended', 'banned'])),
+    c(users.where('suspended', '==', true).where('status', '==', 'active')),
+    c(users.where('createdAt', '>=', since30)),
+    users.where('suspended', '==', true).select('status').limit(1000).get(),
+  ]);
+  /* flagged suspended:true whose status is NOT already suspended/banned (incl. no status field) */
+  const flaggedOnly = flagged.docs.filter(d => !['suspended', 'banned'].includes(String((d.data() || {}).status || ''))).length;
+  return {
+    total,
+    active: Math.max(0, activeStatus - flaggedActive),
+    suspended: statusSuspended + flaggedOnly,
+    suspendedExact: flagged.size < 1000,
+    joinedLast30,
+    computedAt: Date.now(),
   };
 });
 
@@ -120,6 +169,9 @@ exports.adminGetUser = onCall({ region: 'us-central1', maxInstances: 10, enforce
       lastSignIn: authUser.metadata.lastSignInTime,
       creationTime: authUser.metadata.creationTime,
       providerData: authUser.providerData.map(p => p.providerId),
+      /* Users workspace security panel (2026-10-04) — straight from Auth, never inferred */
+      mfaEnrolled: authUser.multiFactor && Array.isArray(authUser.multiFactor.enrolledFactors) ? authUser.multiFactor.enrolledFactors.length : 0,
+      tokensValidAfter: authUser.tokensValidAfterTime || null,
     } : null,
     wallet: walletSnap.exists ? walletSnap.data() : null,
     reportCount: reportsSnap.size,

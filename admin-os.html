@@ -449,19 +449,8 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       </div>
 
       <div class="aos-panel" id="panel-users" hidden>
-        <div class="panel-toolbar">
-          <h2>User Management</h2>
-          <input type="search" placeholder="Search users&#x2026;" oninput="SokoniAOS.loadUsers(this.value)" style="min-width:200px">
-          <select onchange="SokoniAOS.loadUsers('',this.value,'')"><option value="">All Roles</option><option>buyer</option><option>seller</option><option>provider</option><option>driver</option><option>agent</option><option>doctor</option><option>lawyer</option><option>hotel</option><option>freelancer</option><option>employee</option><option>moderator</option><option>admin</option></select>
-          <select onchange="SokoniAOS.loadUsers('','',this.value)"><option value="">All Status</option><option>active</option><option>inactive</option><option>banned</option><option>suspended</option></select>
-          <span id="userTotal" style="color:var(--aos-muted);font-size:12px;margin-left:auto"></span>
-        </div>
-        <div style="overflow-x:auto">
-          <table class="aos-table">
-            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Last Login</th><th>Actions</th></tr></thead>
-            <tbody id="usersBody"><tr><td colspan="7" class="empty-cell"><div class="aos-spinner"><div></div></div></td></tr></tbody>
-          </table>
-        </div>
+        <!-- Users workspace (sokoni-admin-users.js) — shared with super-admin.html; server data only, actions via the server. -->
+        <div id="ausRootAos"></div>
       </div>
 
       <div class="aos-panel" id="panel-marketplace" hidden>
@@ -690,7 +679,8 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
 
     </div>
   </main>
-  <script src="sokoni-aos.js"></script>
+  <script src="/sokoni-admin-users.js" defer></script>
+<script src="sokoni-aos.js"></script>
   <script src="sokoni-aos-receipts.js" defer></script>
   <script src="sokoni-aos-sports.js" defer></script>
   <script>

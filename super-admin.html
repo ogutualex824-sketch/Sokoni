@@ -23,6 +23,7 @@
      context, so an administrator acting as a workspace role no longer keeps admin access.
      Loads AFTER sokoni-permissions.js, which owns that context. -->
 <script src="sokoni-admin-entry.js"></script>
+<script src="sokoni-admin-users.js" defer></script>
 <script src="shared-header.js"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -439,35 +440,8 @@
 
     <!-- ══ SECTION 2: User Management ══ -->
     <section class="sa-panel" id="panel-users" hidden>
-      <div class="panel-header">
-        <h2>&#x1F465; User Management</h2>
-        <p>View, search, and manage all platform users.</p>
-      </div>
-
-      <div class="panel-toolbar">
-        <h2>All Users</h2>
-        <input class="sa-input" id="saUsersSearch" placeholder="&#x1F50D; Search by email or name&hellip;" oninput="SA.filterUsers(this.value)" style="width:240px">
-        <button class="sa-btn" onclick="SA.loadUsers()">&#x21BB; Refresh</button>
-      </div>
-
-      <div class="table-wrap">
-        <table class="sa-table" id="saUsersTable">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>UID</th>
-              <th>Role</th>
-              <th>Created</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="saUsersBody">
-            <tr><td colspan="7" class="empty-cell"><div class="sa-spinner"><div></div></div></td></tr>
-          </tbody>
-        </table>
-      </div>
+      <!-- Users workspace (sokoni-admin-users.js) — shared with admin-os.html; server data only, actions via the server. -->
+      <div id="ausRootSa"></div>
     </section>
 
     <!-- ══ SECTION 2b: Applications & Onboarding ══
@@ -1135,101 +1109,30 @@ const SA={
   },
 
   // ══ SECTION 2: User Management ══════════════════════════
+  /* Users workspace (sokoni-admin-users.js, shared with admin-os.html). Reads are SERVER callables (adminSearchUsers /
+     adminGetUser / adminUserStats / listInvitations) — no direct client read of the users collection. Actions keep THIS
+     page's existing authorities: role → setUserRole, suspend / restore → suspendUser (Auth account disabled / re-enabled). */
   async loadUsers(){
-    document.getElementById('saUsersBody').innerHTML=`<tr><td colspan="7" class="empty-cell"><div class="sa-spinner"><div></div></div></td></tr>`;
-    try{
-      const snap=await this._db.collection('users').orderBy('createdAt','desc').limit(50).get();
-      this._users=snap.docs.map(d=>({id:d.id,...d.data()}));
-      this._renderUsers(this._users);
-    }catch(e){
-      document.getElementById('saUsersBody').innerHTML=`<tr><td colspan="7" class="empty-cell">Error: ${_esc(e.message)}</td></tr>`;
-    }
-  },
-
-  _renderUsers(list){
-    const tb=document.getElementById('saUsersBody');
-    if(!list.length){
-      tb.innerHTML='<tr><td colspan="7" class="empty-cell">No users found.</td></tr>';
-      return;
-    }
-    tb.innerHTML=list.map(u=>{
-      const role=u.role||'buyer';
-      const status=u.suspended?'suspended':(u.status||'active');
-      return `
-        <tr>
-          <td>${_esc(u.displayName||u.name||'—')}</td>
-          <td>${_esc(u.email||'—')}</td>
-          <td><span style="font-family:monospace;font-size:11px;color:var(--muted)">${_esc((u.id||'').substring(0,12)+'…')}</span></td>
-          <td><span class="badge badge-${_esc(role)}">${_esc(role)}</span></td>
-          <td style="font-size:11px;color:var(--muted)">${_esc(_fmtDate(u.createdAt))}</td>
-          <td><span class="badge badge-${_esc(status)}">${_esc(status)}</span></td>
-          <td>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="sa-btn-sm" onclick="SA.changeRole('${_esc(u.id)}','${_esc(u.displayName||u.email||u.id)}')">Role</button>
-              ${u.suspended
-                ? `<button class="sa-btn-sm success" onclick="SA.toggleSuspend('${_esc(u.id)}',false,'${_esc(u.displayName||u.email||u.id)}')">Restore</button>`
-                : `<button class="sa-btn-sm danger" onclick="SA.toggleSuspend('${_esc(u.id)}',true,'${_esc(u.displayName||u.email||u.id)}')">Suspend</button>`
-              }
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join('');
-  },
-
-  filterUsers(q){
-    const lq=q.toLowerCase();
-    const filtered=this._users.filter(u=>
-      (u.email||'').toLowerCase().includes(lq)||
-      (u.displayName||'').toLowerCase().includes(lq)||
-      (u.name||'').toLowerCase().includes(lq)
-    );
-    this._renderUsers(filtered);
-  },
-
-  changeRole(uid,name){
-    const sel=document.createElement('select');
-    sel.className='sa-select';
-    ['buyer','seller','driver','admin','provider'].forEach(r=>{
-      const o=document.createElement('option');
-      o.value=r;o.textContent=r;
-      sel.appendChild(o);
+    const root=document.getElementById('ausRootSa');
+    if(!root||!window.SokoniAdminUsers)return;
+    if(this._ausApi){this._ausApi.refresh();return;}
+    this._ausApi=window.SokoniAdminUsers.mount(root,{
+      surface:'superadmin',
+      /* adminSearchUsers / adminGetUser / adminUserStats live only inside adminOsDispatch (dispatch consolidation) */
+      call:(name,data)=>(['adminSearchUsers','adminGetUser','adminUserStats'].includes(name)
+        ? this._fns.httpsCallable('adminOsDispatch')(Object.assign({op:name},data||{}))
+        : this._fns.httpsCallable(name)(data||{})).then(r=>r.data),
+      roles:['buyer','seller','driver','provider','admin'],
+      canChangeRole:true, canSuspend:true,
+      actions:{
+        role:   {fn:'setUserRole',   payload:(uid,x)=>({uid,role:x.role})},
+        /* live suspendUser (super-admin.js): { uid, suspend, reason } — disables / re-enables the Auth account */
+        suspend:{fn:'suspendUser',   payload:(uid,x)=>({uid,suspend:true,reason:x.reason})},
+        restore:{fn:'suspendUser',   payload:(uid)=>({uid,suspend:false,reason:'Restored from the Super Admin Users workspace'})},
+      },
     });
-    _confirm(
-      'Change Role: '+name,
-      'Select a new role for this user. This calls setUserRole cloud function.',
-      ()=>{
-        const role=sel.value;
-        const fn=this._fns.httpsCallable('setUserRole');
-        fn({uid,role})
-          .then(()=>{_toast('Role updated to '+role,'success');this.loadUsers();})
-          .catch(e=>_toast('Error: '+e.message,'error'));
-      },
-      'Set Role',true
-    );
-    // Inject selector into modal body
-    setTimeout(()=>{
-      const b=document.getElementById('saModalBody');
-      if(b){b.textContent='New role: ';b.appendChild(sel);}
-    },10);
   },
 
-  toggleSuspend(uid,suspend,name){
-    _confirm(
-      (suspend?'Suspend':'Restore')+': '+name,
-      suspend
-        ? 'This user will be prevented from accessing SOKONI. You can restore them later.'
-        : 'This user will regain access to SOKONI.',
-      ()=>{
-        const fn=this._fns.httpsCallable('suspendUser');
-        fn({uid,suspend})
-          .then(()=>{_toast('User '+(suspend?'suspended':'restored'),'success');this.loadUsers();})
-          .catch(e=>_toast('Error: '+e.message,'error'));
-      },
-      suspend?'Suspend User':'Restore User',
-      suspend
-    );
-  },
 
   // ══ SECTION 2b: Applications & Onboarding ══════════════════
   /* One server-side read (`applicationList`) shared with the admin dashboard, so
