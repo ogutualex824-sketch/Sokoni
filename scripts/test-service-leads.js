@@ -24,6 +24,8 @@ const provider = (uid, appCategory, status, decidedBy) => {
   DOCS.set('users/' + uid, { role: 'provider', displayName: uid });
   DOCS.set('providerSubscriptions/' + uid, { limits: { listings: -1 } });
   DOCS.set('applications/' + uid + '--a', { uid, category: appCategory, role: 'provider', status: status || 'approved', decidedBy: decidedBy === undefined ? 'admin1' : decidedBy });
+  /* P0 (5b 0cb93bd): the server decision record applicationDecide writes for an admin decision. */
+  if ((decidedBy === undefined ? 'admin1' : decidedBy) === 'admin1') DOCS.set('applicationDecisions/' + uid + '--a', { status: status || 'approved', decidedBy: 'admin1' });
   DOCS.set('providerAvailability/' + uid, { modes: ['open_24_7'], appt: {} });
 };
 const service = (id, providerId, extra) => DOCS.set('providerServices/' + id, Object.assign({ providerId, name: 'Screen repair', priceType: 'quotation', price: 0, active: true, durationMins: 60 }, extra || {}));

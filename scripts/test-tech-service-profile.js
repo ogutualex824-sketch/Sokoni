@@ -101,6 +101,8 @@ const seedProvider = (uid, category, appCategory, status, decidedBy) => {
   DOCS.set('users/' + uid, { role: 'provider' });
   DOCS.set('providerSubscriptions/' + uid, { limits: { listings: -1 } });
   DOCS.set('applications/' + uid + '--a', { uid, category: appCategory, role: 'provider', status: status || 'approved', decidedBy: decidedBy === undefined ? 'admin1' : decidedBy });
+  /* P0 (5b 0cb93bd): the server decision record applicationDecide writes for an admin decision. */
+  if ((decidedBy === undefined ? 'admin1' : decidedBy) === 'admin1') DOCS.set('applicationDecisions/' + uid + '--a', { status: status || 'approved', decidedBy: 'admin1' });
 };
 (async () => {
   let PO = null, BS = null, loadErr = null;

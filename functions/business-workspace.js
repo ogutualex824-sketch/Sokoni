@@ -370,16 +370,32 @@ async function approvalStateFor(db, uid, opts) {
     /* resolve every decider ONCE, then hand the derivation a synchronous predicate */
     const deciders = [...new Set(applications.map((a) => (typeof a.decidedBy === 'string' ? a.decidedBy.trim() : '')).filter(Boolean))];
     const adminMap = {}; for (const d of deciders) adminMap[d] = await isAdminAsync(d);
+    /* P0 2026-10-03 — SERVER evidence for every application that claims approval: applicationDecisions/{id} (written ONLY by
+       applicationDecide; no client rule) or the immutable adminAudit 'application_approve' row it writes (covers decisions
+       made before applicationDecisions existed). Both must name the same decidedBy. Unreadable → not decided (fail closed). */
+    const serverDecided = {};   /* a plain map — this module performs NO writes (the gate suites assert it) */
+    for (const a of applications) {
+      const by = typeof a.decidedBy === 'string' ? a.decidedBy.trim() : '';
+      if (!by || String(a.statusCanonical || a.status || '').toLowerCase() !== 'approved' && !['active', 'accepted', 'verified'].includes(String(a.status || '').toLowerCase())) continue;
+      try {
+        const rec = await db.collection('applicationDecisions').doc(String(a.id)).get();
+        if (rec.exists && String((rec.data() || {}).status || '') === 'approved' && (rec.data() || {}).decidedBy === by) { serverDecided[a.id] = true; continue; }
+        const aud = await db.collection('adminAudit').where('applicationId', '==', String(a.id)).limit(20).get();
+        if (aud.docs.some((x) => (x.data() || {}).action === 'application_approve' && (x.data() || {}).performedBy === by)) serverDecided[a.id] = true;
+      } catch (_) { /* unreadable evidence is no evidence */ }
+    }
     let claims = o.claims || null;
     if (!claims) { try { const me = await getUser(String(uid)); claims = Object.keys((me && me.customClaims) || {}).filter((k) => me.customClaims[k] === true); } catch (_) { claims = []; } }
     else claims = Object.keys(claims).filter((k) => claims[k] === true);
     const user = u.exists ? (u.data() || {}) : null;
     const roles = user ? (Array.isArray(user.roles) ? user.roles : (user.role ? [user.role] : [])) : [];
     const derived = REM.deriveApprovalState({ uid: String(uid), claims, roles, provider: p.exists ? p.data() : null, seller: s.exists ? s.data() : null, businesses, shops, applications,
-      isAdminAccount: (d) => adminMap[d] === true, cleanupIds: (o.approval && o.approval.cleanupIds) || CLEANUP_IDS, agreementVersion: o.agreementVersion || null });
-    /* SLICE 0: the same evidence, judged by the same predicate (decisionValidity) — only VALID approvals grant capabilities. */
+      isAdminAccount: (d) => adminMap[d] === true, isServerDecided: (app) => serverDecided[app.id] === true, cleanupIds: (o.approval && o.approval.cleanupIds) || CLEANUP_IDS, agreementVersion: o.agreementVersion || null });
+    /* SLICE 0: the same evidence, judged by the same predicate (decisionValidity) — only VALID approvals grant capabilities.
+       P0 (5b 0cb93bd): the SAME server-evidence predicate is passed here, so this second reader can never grant a
+       capability from a forged application that the derived state already refuses. */
     const presentKinds = [p.exists && 'provider', s.exists && 'seller', businesses.length && 'business', shops.length && 'shop'].filter(Boolean);
-    const approvals = applications.map((a) => Object.assign({ id: a.id, app: a }, REM.decisionValidity(a, String(uid), (d) => adminMap[d] === true, presentKinds)));
+    const approvals = applications.map((a) => Object.assign({ id: a.id, app: a }, REM.decisionValidity(a, String(uid), (d) => adminMap[d] === true, presentKinds, (app) => serverDecided[app.id] === true)));
     return Object.assign({ readable: true, approvals }, derived);
   } catch (e) {
     return { readable: false, error: String(e && e.message || e) };

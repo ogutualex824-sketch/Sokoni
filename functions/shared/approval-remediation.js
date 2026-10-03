@@ -45,14 +45,20 @@ function isSelfDecision(deciderUid, applicantUid) {
   return !!deciderUid && !!applicantUid && String(deciderUid) === String(applicantUid);
 }
 
-/** Validity of one application's decision under the authority test. */
-function decisionValidity(app, applicantUid, isAdminAccount, presentKinds) {
+/** Validity of one application's decision under the authority test.
+ *  P0 2026-10-03 (owner): the application document is the REQUEST, never the authorisation. Its status / decidedBy are
+ *  client-writable on the served rules, so an approval is valid ONLY with SERVER evidence — applicationDecisions/{id}
+ *  (written by applicationDecide alone) or its immutable adminAudit 'application_approve' row, matching decidedBy.
+ *  `isServerDecided(app)` is supplied by the caller from server-only collections; absent → nothing is server-decided
+ *  (fail closed). This is the same rule applicationLifecycle.decisionAuthority already enforces. */
+function decisionValidity(app, applicantUid, isAdminAccount, presentKinds, isServerDecided) {
   const status = statusOf(app);
   const by = typeof app.decidedBy === 'string' ? app.decidedBy.trim() : '';
   if (status !== 'approved') return { valid: false, why: 'not_approved', status };
   if (!by) return { valid: false, why: 'no_decidedBy', status };
   if (isSelfDecision(by, applicantUid)) return { valid: false, why: 'self_decision', status };
   if (/[:/ ]/.test(by) || !isAdminAccount(by)) return { valid: false, why: 'decider_not_admin_account', status };
+  if (!(typeof isServerDecided === 'function' && isServerDecided(app) === true)) return { valid: false, why: 'no_server_decision_record', status };
   const kinds = KIND_OF_ROLE[lower(app.role)] || ['provider'];
   if (presentKinds.length && !kinds.some((k) => presentKinds.includes(k))) return { valid: false, why: 'approves_other_role', status, kinds };
   return { valid: true, why: 'admin_account', status };
@@ -60,6 +66,7 @@ function decisionValidity(app, applicantUid, isAdminAccount, presentKinds) {
 
 function deriveApprovalState(input) {
   const uid = input.uid; const isAdminAccount = input.isAdminAccount || (() => false); const cleanupIds = input.cleanupIds || new Set();
+  const isServerDecided = typeof input.isServerDecided === 'function' ? input.isServerDecided : () => false;   /* fail closed */
   const claims = (input.claims || []).map(lower), roles = (input.roles || []).map(lower);
   const regs = [];
   if (input.provider) regs.push({ kind: 'provider', id: uid, d: input.provider });
@@ -68,7 +75,7 @@ function deriveApprovalState(input) {
   (input.shops || []).forEach((s) => regs.push({ kind: 'shop', id: s.id || uid, d: s }));
   const presentKinds = regs.map((r) => r.kind);
   const liveRegs = regs.filter((r) => LIVE.includes(lower(r.d.status)));
-  const apps = (input.applications || []).map((a) => Object.assign({ validity: decisionValidity(a, uid, isAdminAccount, presentKinds) }, a));
+  const apps = (input.applications || []).map((a) => Object.assign({ validity: decisionValidity(a, uid, isAdminAccount, presentKinds, isServerDecided) }, a));
   const validApp = apps.find((a) => a.validity.valid) || null;
   const invalidApproved = apps.filter((a) => a.validity.status === 'approved' && !a.validity.valid && a.validity.why !== 'approves_other_role');
   const otherRoleApproved = apps.filter((a) => a.validity.why === 'approves_other_role');
@@ -85,8 +92,11 @@ function deriveApprovalState(input) {
   if (adminDecision && adminDecision.decision === 'refuse') { state = STATES.REFUSED; subtype = 'admin_decision_refuse'; reasons.push('providers.approvalDecision refuse by ' + adminDecision.decidedBy); }
   else if (!validApp && adminNegative.length && !liveRegs.some((r) => r.d.approvedAt)) { state = STATES.REFUSED; subtype = 'application_' + lower(adminNegative[0].statusCanonical || adminNegative[0].status) + '_by_admin'; reasons.push('application ' + adminNegative[0].id + ' ' + lower(adminNegative[0].status) + ' by admin account ' + adminNegative[0].decidedBy); }
   else if (validApp) { state = STATES.VALID; subtype = 'application_by_admin_account'; reasons.push('application ' + validApp.id + ' approved by admin account ' + validApp.decidedBy); }
-  else if (adminDecision && adminDecision.decision === 'approve' && !isSelfDecision(adminDecision.decidedBy, uid)) { state = STATES.VALID; subtype = 'admin_decision_approve'; reasons.push('providers.approvalDecision approve by ' + adminDecision.decidedBy); }
-  else if (invalidApproved.length || artefactRegs.length) { state = STATES.INVALID_LEGACY; subtype = 'approval_artefact_without_authority'; invalidApproved.forEach((a) => reasons.push('application ' + a.id + ' approved but ' + a.validity.why + ' (decidedBy ' + JSON.stringify(a.decidedBy) + ')')); artefactRegs.forEach((r) => reasons.push(r.kind + ' carries approval fields with no valid decision')); }
+  /* P0 2026-10-03: providers.approvalDecision 'approve' is NO LONGER an approval — the served rules let an owner write it on
+     their own providers doc (no admin check here either). It is an approval ARTEFACT (INVALID_LEGACY → an admin
+     re-decides). A 'refuse' above still stands: a forged refusal only harms the forger. */
+  else if (invalidApproved.length || artefactRegs.length || (adminDecision && adminDecision.decision === 'approve')) {
+    if (adminDecision && adminDecision.decision === 'approve') reasons.push('providers.approvalDecision approve is not server evidence'); state = STATES.INVALID_LEGACY; subtype = 'approval_artefact_without_authority'; invalidApproved.forEach((a) => reasons.push('application ' + a.id + ' approved but ' + a.validity.why + ' (decidedBy ' + JSON.stringify(a.decidedBy) + ')')); artefactRegs.forEach((r) => reasons.push(r.kind + ' carries approval fields with no valid decision')); }
   else if (liveRegs.length) { state = STATES.NONE; subtype = 'live_status_only'; liveRegs.forEach((r) => reasons.push(r.kind + ' status ' + lower(r.d.status) + ' with no approval evidence')); }
   else if (pending.length) { state = STATES.PENDING; subtype = 'undecided_application'; reasons.push(pending.length + ' undecided application(s)'); }
   else if (rejected.length && !regs.length) { state = STATES.REFUSED; subtype = 'application_rejected'; reasons.push('application(s) rejected, no registry record'); }

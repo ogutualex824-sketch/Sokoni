@@ -17,9 +17,18 @@ function stubAdminAuth(stub, extra) {
     setCustomUserClaims: async () => { throw new Error('direct claim write in a fixture'); },
   }) });
 }
+/* P0 2026-10-03: an ADMIN decision also writes the server evidence applicationDecide writes (applicationDecisions/{id}),
+   because the authority now requires it. `extra.__forged = true` seeds the client-writable application fields WITHOUT
+   that evidence — the forgery the authority must refuse. */
+async function seedDecision(db, id, decidedBy) {
+  await db.doc('applicationDecisions/' + id).set({ applicationId: id, status: 'approved', decidedBy: decidedBy || 'admin_1', decidedAt: '2026-09-01T09:00:00.000Z' });
+}
 async function seedApproved(db, uid, role, extra) {
   const id = String(uid) + '-app';
-  await db.doc('applications/' + id).set(Object.assign({ applicationId: id, uid: String(uid), role: role || 'provider', status: 'approved', statusCanonical: 'approved', decidedBy: 'admin_1', decidedAt: '2026-09-01T09:00:00.000Z', decisionAppliedFor: 'approved', projectionStatus: 'applied', agreementAccepted: true, agreementVersion: '2026-09-07-lanes-mkt-ladder-pos-5pct' }, extra || {}));
+  const x = Object.assign({}, extra || {}); const forged = x.__forged === true; delete x.__forged;
+  const app = Object.assign({ applicationId: id, uid: String(uid), role: role || 'provider', status: 'approved', statusCanonical: 'approved', decidedBy: 'admin_1', decidedAt: '2026-09-01T09:00:00.000Z', decisionAppliedFor: 'approved', projectionStatus: 'applied', agreementAccepted: true, agreementVersion: '2026-09-07-lanes-mkt-ladder-pos-5pct' }, x);
+  await db.doc('applications/' + id).set(app);
+  if (!forged && String(app.status).toLowerCase() === 'approved' && app.decidedBy) await seedDecision(db, id, app.decidedBy);
   return id;
 }
 /* Patches the fake store so that any providers/{uid} or sellers/{uid} write carrying `approvedAt` also seeds the admin
@@ -35,7 +44,10 @@ function autoApproveOnWrite(db) {
     if (!m || !data || data.approvedAt === undefined || data.approvedAt === null) return;
     const uid = m[2]; const role = m[1] === 'providers' ? 'provider' : 'seller';
     const ref = origDoc('applications/' + uid + '-app');
-    if (!(await ref.get()).exists) await ref.set({ applicationId: uid + '-app', uid, role, status: 'approved', statusCanonical: 'approved', decidedBy: 'admin_1', decidedAt: '2026-09-01T09:00:00.000Z', decisionAppliedFor: 'approved', projectionStatus: 'applied', agreementAccepted: true, agreementVersion: '2026-09-07-lanes-mkt-ladder-pos-5pct' });
+    if (!(await ref.get()).exists) {
+      await ref.set({ applicationId: uid + '-app', uid, role, status: 'approved', statusCanonical: 'approved', decidedBy: 'admin_1', decidedAt: '2026-09-01T09:00:00.000Z', decisionAppliedFor: 'approved', projectionStatus: 'applied', agreementAccepted: true, agreementVersion: '2026-09-07-lanes-mkt-ladder-pos-5pct' });
+      await seedDecision({ doc: origDoc }, uid + '-app', 'admin_1');   /* the server evidence the admin decision wrote */
+    }
   };
   const wrapRef = (ref) => {
     if (!ref || ref.__wrapped) return ref;
@@ -45,4 +57,4 @@ function autoApproveOnWrite(db) {
   db.doc = (p) => wrapRef(origDoc(p));
   db.collection = (c) => { const col = origColl(c); const d = col.doc; col.doc = (id) => wrapRef(d.call(col, id)); return col; };
 }
-module.exports = { stubAdminAuth, seedApproved, autoApproveOnWrite };
+module.exports = { stubAdminAuth, seedApproved, seedDecision, autoApproveOnWrite };
