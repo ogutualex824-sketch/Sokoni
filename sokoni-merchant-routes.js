@@ -337,6 +337,17 @@
            '"//". Update `next` when the merchant route contract settles its final URL; it is ' +
            'the ONE place that destination is written down.' },
 
+    /* SOKONI Support, reachable from the merchant sidebar (owner, 2026-10-03). A real navigation out of the
+       shell to the one support surface (support.html → the server ticket authority), declared here like every
+       other exit so the route gate can see it. Never a wa.me hand-off: WhatsApp is OTP / invoices / marketing
+       only (owner, 2026-10-01). `cashier` included — till staff need help as much as owners do. */
+    { id:'support', name:'Help & Support', icon:'🛟', tier:'hidden',
+      kind:'exit', href:'/support',
+      role:['seller','merchant','cashier'], ctx:[],
+      mobile:true, desktop:true, activeKey:'support',
+      note:'Leaves the shell (full-page navigation) to SOKONI Support. NEVER kind:page — support.html ' +
+           'boots its own Firebase/auth context.' },
+
     { id:'minishop', name:'My MiniShop', icon:'🏪', tier:'hidden',
       kind:'page', src:'minishop-admin.html?shell=merchant', dynamic:true,
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],

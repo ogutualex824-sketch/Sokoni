@@ -854,9 +854,13 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 
     /* The exit lives in the footer, visually separated, because it is the ONE control
        that leaves the application. */
+    var f = document.getElementById('side-foot');
+    /* Help & Support — always visible in the footer (and so in the phone drawer), a declared
+       contract exit like the marketplace one below; leaveShell() refuses anything undeclared. */
+    var support = CONTRACT.ROUTES.filter(function (r) { return r.id === 'support' && r.kind === 'exit'; })[0];
+    if (support) f.appendChild(navItem(support));
     var exit = CONTRACT.ROUTES.filter(function (r) { return r.kind === 'exit'; })[0];
     if (exit) {
-      var f = document.getElementById('side-foot');
       var h2 = document.createElement('div');
       h2.className = 'side-group';
       h2.style.margin = '2px 6px 6px';

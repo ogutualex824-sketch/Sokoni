@@ -1,3 +1,27 @@
+## [2026-10-03] - Merchant v2: Help & Support in the sidebar
+
+**Hosting only, NOT deployed.**
+- Branch: `hosting/merchant-support-button-on-72dca56`, off live hosting `72dca56`.
+- Requested by the owner, 2026-10-03.
+
+**Changed:**
+- `sokoni-merchant-routes.js` declares a `support` EXIT route:
+  - goes to `/support`, the SOKONI support ticket page;
+  - available to the seller, merchant and cashier roles;
+  - does not end the session.
+- `merchant-v2.html` renders it in the sidebar footer, which is also the phone drawer. It goes through the shell's `leaveShell()` like every exit; nothing is hardcoded.
+
+**Dependency:** the LIVE `support.html` still carries `wa.me` links. Slice B2 (`63dc9b0`, `hosting/slice-b2-on-chain`) replaces them with the in-app ticket authority, so the button should ship with or after B2.
+
+**Database / API / security:** none. The button only navigates; it uses no WhatsApp and no external host.
+
+**Tests:**
+- `scripts/test-merchant-support-button.js` 9/0; BASE=72dca56 fails 6.
+- Sabotage 3/3, each caught by its row (U-1, S-1, S-3).
+- `test-merchant-routes` 64/0.
+- `test-merchant-capability` 44/2 — both failures already exist on live `72dca56`.
+- Browser suites `test-merchant-route-gate` and `-overlays` are UNPROVEN: memory is below the 512 MB floor.
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
