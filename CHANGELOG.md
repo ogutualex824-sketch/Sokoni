@@ -646,6 +646,25 @@ uploads cannot start while gated. **Breaking:** none.
 **Root cause (proven from production):** `till.html` and merchant-v2's Sell tab called `darajaSTKPush`, `pos-checkout.html` called `posSendMpesa` — **neither is deployed** (Daraja outbound retired), so every push failed with the SDK's generic `internal`. The live rail `posInitiateIntasendPayment` (live since 2026-09-09) had **0 calls in 7 days**.
 **Files:** **new** `sokoni-pos-stk.js` (one adapter: the sell engine's callStk/callVerify → posInitiateIntasendPayment / posCheckPaymentStatus), `till.html` (wiring + `sw-register.js` so cashier devices self-update), `merchant-v2.html` (Sell tab wiring), `pos-checkout.html` (single IntaSend POS call per sale attempt; the SokoniPay booking branch that booked a till sale as a platform booking removed), **new** `scripts/test-pos-stk-intasend.js` (17/0: pages, adapter ↔ live contract, emulator chain with the LIVE functions code: request → postill_ ref → pending → webhook POS finaliser → completed; failed callback → failed; resend = new attempt).
 **Functions / rules / DB:** none — the server rail is already live. **Money:** a sale is finalised only when posCheckPaymentStatus reports the IntaSend webhook's confirmation; the shop is resolved server-side (assertShopAccess). Same fix as `7ffd640` / `3134e3f` (unpushed branch not based on live) — ported narrowly onto live `72dca56`.
+## [2026-10-03] — Food Hub CONTAINMENT: no payment, no browser-written orders, nothing made-up shown as real
+
+**Files:** `food.html`, `food-menu.html`, `food-dashboard.html`, `scripts/test-food-containment.js` (new), `CHANGELOG.md` · **Base:** live `72dca56`
+
+- **Live defect (census 2026-10-03):** the Food Hub took real IntaSend M-Pesa payments for 16 made-up restaurants (hard-coded names, phones, ratings, "Open Now"). Checkout charged a 50% deposit and recorded 100% as paid. The browser wrote the `foodOrders` document itself. The "Restaurant Portal" showed every signed-in user a made-up "Jambo Burgers" dashboard with invented analytics.
+- **Owner 2026-10-03:** contain now and deploy right after the webhook security fix; the real Food Hub replaces this later.
+- **`food-menu.html`:**
+  - no made-up restaurant is rendered; the page says ordering opens soon;
+  - `openCheckout()` / `placeOrder()` start no payment;
+  - the browser `foodOrders` writer is removed.
+- **`food.html`:** no made-up vendor grid or featured list, no invented "16+ / 30 min / 24/7" stats, and no first-order promo that checkout never applied. The real application route (`HubRegister`, hub `food`) stays.
+- **`food-dashboard.html`:**
+  - closed with an honest notice that restaurant tools are moving to the SOKONI business dashboard;
+  - the `foodOrders` listener and the `foodOrders` / `foodMenus` browser writers are removed.
+- **Tests:**
+  - food-containment 7/0 (live fails 6/7; FC-1 executes the menu script and sees live `platformBook` fire);
+  - cart suites 22 / 68 / 44 / 43 / 30 pass;
+  - `test-cart-universal`'s 2 failures are pre-existing (identical without this change).
+- **Security:** removes a browser payment + order path. **No server or rules change.** The `foodOrders` rules are tightened in the Food Hub programme.
 
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
