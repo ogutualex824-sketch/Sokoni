@@ -8,6 +8,7 @@
      R5  refused: another user · pending (not confirmed) · cancelled / completed · already paid · zero / NaN rent ·
          negative deposit · no shop · paying for your own equipment · bad bookingId
      R7  pricing moves accepted|confirmed → payment_pending in one txn (retry-safe); never writes a payment method
+     R9  commission snapshot captured at payment start, on booking + intent; R10 a later rate change cannot touch it
      R6  rental_booking is self-settling (HELD until completion — no generic credit at payment time)
    NODE_PATH=<functions/node_modules> node scripts/test-rental-booking-purpose.js */
 const path = require('path'), Module = require('module');
@@ -17,7 +18,8 @@ const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (
 class HttpsError extends Error { constructor (code, message) { super(message); this.code = code; } }
 let DOCS = {};
 const snapOf = (k) => { const d = DOCS[k]; return { exists: !!d, data: () => d && JSON.parse(JSON.stringify(d)) }; };
-const db = { collection: (c) => ({ doc: (id) => ({ _k: c + '/' + id, get: async () => snapOf(c + '/' + id) }) }),
+const emptyQ = () => ({ where: () => emptyQ(), orderBy: () => emptyQ(), limit: () => emptyQ(), get: async () => ({ empty: true, docs: [], size: 0, forEach () {} }) });   /* commission engine config reads: nothing configured → catalogue row */
+const db = { collection: (c) => Object.assign(emptyQ(), { doc: (id) => ({ _k: c + '/' + id, get: async () => snapOf(c + '/' + id) }) }),
   runTransaction: async (fn) => { if (BEFORE_TXN) { BEFORE_TXN(); BEFORE_TXN = null; } return fn({ get: async (ref) => snapOf(ref._k), update: (ref, patch) => { Object.assign(DOCS[ref._k], patch); } }); } };
 let BEFORE_TXN = null;   /* simulates a concurrent write landing between the pricer's first read and its transaction */
 const orig = Module.prototype.require;
@@ -84,6 +86,21 @@ function reset (over, shop) {
   reset(); BEFORE_TXN = () => { DOCS['rentalBookings/RB00001'].totalAmount = 9999; };
   x = await price('renter1', { bookingId: 'RB00001' });
   ck('R8b RACE: an amount change between read and txn aborts (no stale-priced intent)', !x.ok && x.code === 'aborted' && DOCS['rentalBookings/RB00001'].status === 'accepted', x);
+  reset(); x = await price('renter1', { bookingId: 'RB00001' });
+  const st = DOCS['rentalBookings/RB00001'].commissionSnapshot;
+  ck('R9 the 10% commission snapshot is captured when payment starts, stamped on the booking AND the intent (rent only, deposit excluded)',
+    x.ok && st && st.commissionRate === 10 && st.commissionBase === 'rent_only_deposit_excluded' && st.capturedOnCents === 450000
+    && x.r.metadata.commissionSnapshot && x.r.metadata.commissionSnapshot.commissionRate === 10, { st, meta: x.ok && x.r.metadata.commissionSnapshot });
+  const CC2 = require(path.join(FN, 'commission-config.js'));
+  const was = CC2.RATES.construction_equipment_rental.pct;
+  CC2.RATES.construction_equipment_rental.pct = 25;     /* the catalogue changes AFTER capture */
+  const y2 = await price('renter1', { bookingId: 'RB00001' });   /* a retry at payment_pending */
+  CC2.RATES.construction_equipment_rental.pct = was;
+  const SA = require(path.join(FN, 'shared/settlement-authority.js'));
+  const set = SA.settle({ heldAmountCents: 650000, passThroughCents: 200000, commissionSnapshot: DOCS['rentalBookings/RB00001'].commissionSnapshot });
+  ck('R10 a later catalogue change (10%→25%) does not touch the captured rental: retry keeps 10%; settlement of 6,500 held (2,000 deposit) = commission 450, owner 4,050',
+    y2.ok && y2.r.metadata.commissionSnapshot.commissionRate === 10 && DOCS['rentalBookings/RB00001'].commissionSnapshot.commissionRate === 10
+    && set.baseCents === 450000 && set.commissionCents === 45000 && set.netCents === 405000 && set.passThroughCents === 200000, { y2: y2.ok && y2.r.metadata.commissionSnapshot, set });
   ck('R6 rental_booking is self-settling (held; no generic credit at payment)', SS.isSelfSettling('rental_booking'));
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

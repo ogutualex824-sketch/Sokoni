@@ -39,7 +39,7 @@ const RECEIPTS = 'transactionReceipts';
 const FAILURES = 'transactionReceiptFailures';
 /* b2b_order: a buyer-paid wholesale order (0% commission; the supplier's lead-fee recovery is a DEDUCTION, never commission).
    enrolment: reserved for paid Education — NOT connected while paid enrolment stays shut (owner E1 rule). */
-const KINDS = Object.freeze(['service_booking', 'quote', 'order', 'b2b_order', 'enrolment']);
+const KINDS = Object.freeze(['service_booking', 'quote', 'order', 'b2b_order', 'enrolment', 'rental_booking']);   /* rental_booking: 5b 2026-10-03 — one receipt per rental (paid at hold, released at return-PIN settlement, refunded when the deposit chargeback completes) */
 /* Release deductions that are NOT SOKONI commission — shown separately on the receipt. */
 const DEDUCTION_KINDS = Object.freeze(['lead_fee_recovery']);
 /* A SUBTYPE narrows a kind without forking it: a Work/Job Engine milestone IS a providerBookings doc, so it stays kind

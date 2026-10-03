@@ -338,12 +338,25 @@ const PURPOSES = {
       const shop = await db().collection('shops').doc(shopId).get();
       const owner = shop.exists && (shop.data() || {}).ownerId ? String(shop.data().ownerId) : shopId;
       if (owner === uid) fail('failed-precondition', 'You cannot pay for your own equipment.');
+      /* COMMISSION SNAPSHOT (owner 2026-10-03): the rental's rate is captured HERE — the moment the renter commits to pay —
+         and stamped on the booking + the intent. Settlement (f3/5b, shared/settlement-authority.js) uses ONLY this stamp, so
+         it needs no commission table of its own and a later rate change never touches this rental. A retry keeps the stamp. */
+      let snap = b.commissionSnapshot && require('./shared/settlement-authority').validSnapshot(b.commissionSnapshot) ? b.commissionSnapshot : null;
+      if (!snap) {
+        const comm = await require('./finos-utils').calculateCommission(db(), { orderAmountCents: rentCents, sellerId: owner, category: 'construction_equipment_rental' });
+        snap = require('./shared/settlement-authority').snapshotFrom(comm, { policyVersion: require('./commission-config').COMMISSION_POLICY_VERSION,
+          commissionBase: 'rent_only_deposit_excluded', capturedOnCents: rentCents });
+        if (!snap) fail('failed-precondition', 'The platform fee for this rental could not be captured. Please try again.');
+      }
       /* accepted → payment_pending, atomically: re-read, same checks, same amounts (a concurrent change refuses). */
-      if (b.status !== 'payment_pending') {
+      if (b.status !== 'payment_pending' || !b.commissionSnapshot) {
         await db().runTransaction(async (t) => {
           const cur = check(await t.get(ref));
           if (cur.totalAmount !== b.totalAmount || Number(cur.depositAmount || 0) !== Number(b.depositAmount || 0)) fail('aborted', 'This rental changed. Please try again.');
-          if (cur.status !== 'payment_pending') t.update(ref, { status: 'payment_pending', paymentPendingAt: new Date() });
+          const patch = {};
+          if (cur.status !== 'payment_pending') Object.assign(patch, { status: 'payment_pending', paymentPendingAt: new Date() });
+          if (!cur.commissionSnapshot) patch.commissionSnapshot = snap;
+          if (Object.keys(patch).length) t.update(ref, patch);
         });
       }
       return {
@@ -351,7 +364,8 @@ const PURPOSES = {
         preferredRef: ('RENT-' + bookingId).slice(0, 128),
         metadata: { type: 'rental_booking', bookingId, rentalProductId: b.rentalProductId || null, shopId, sellerUid: owner,
           payeeWallet: 'business', commissionCategory: 'construction_equipment_rental',
-          commissionBaseCents: rentCents, depositCents, depositRefundable: true, durationUnit: b.durationUnit || null },
+          commissionBaseCents: rentCents, depositCents, depositRefundable: true, durationUnit: b.durationUnit || null,
+          commissionSnapshot: snap },
       };
     },
   },
