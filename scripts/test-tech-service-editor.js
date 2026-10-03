@@ -153,6 +153,16 @@ const SRC = read('sokoni-tech-service-editor.js');
     'a provider plan carrying legacy commission_pct / commission_discount_pct renders neither (features and limits only)', keys);
 }
 
+/* M — Tech 4M calling: booking-bound phone reveal through the server, never a number held by the page */
+{
+  const bs = read('sokoni-book-service.js');
+  const { api } = loadEditor(SRC);
+  const row = api._internal.repairRow({ id: 'bk7', service: 'Screen', status: 'confirmed', repairDetails: { deviceType: 'phone' } });
+  ck('M1', row.includes('data-tech-repair-call="bk7"') && SRC.includes("op: 'providerContactCustomer'")
+    && bs.includes("op: 'bookingContactProvider'") && /paymentStatus === 'paid_held' \|\| b\.paymentStatus === 'settled'[^\n]*_call\(\)/.test(bs) && !/tel:\+?2547\d{8}/.test(bs + SRC),
+    'Repairs "Call customer" and the paid booking view "Call the provider" ask the server for the number (shown only once paid); no number is hard-coded');
+}
+
 /* T10 — vocabulary parity with the server authority */
 {
   const serverFile = path.join(TECH_FN, 'functions', 'shared', 'tech-service-profile.js');

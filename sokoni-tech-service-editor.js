@@ -111,7 +111,8 @@
       + (rd.problem ? '<div style="font-size:13px;margin-top:4px">“' + esc(rd.problem) + '”</div>' : '')
       + '<div style="font-size:12px;opacity:.65;margin-top:4px">' + esc(b.customerName || 'Customer') + ' · ' + esc(when(b)) + (rd.serviceMode ? ' · ' + esc(MODE_LABEL[rd.serviceMode] || rd.serviceMode) : '') + '</div>'
       + '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-s" data-tech-repair-open="' + esc(b.id) + '">Manage in Bookings</button>'
-      + '<button type="button" class="btn btn-s" data-tech-repair-msg="' + esc(b.id) + '">💬 Message customer</button></div></div>';
+      + '<button type="button" class="btn btn-s" data-tech-repair-msg="' + esc(b.id) + '">💬 Message customer</button>'
+      + '<button type="button" class="btn btn-s" data-tech-repair-call="' + esc(b.id) + '">📞 Call customer</button></div></div>';
   }
   function loadRepairs() {
     var box = document.getElementById('rpList');
@@ -135,6 +136,13 @@
   if (typeof document !== 'undefined' && document.addEventListener) {
     document.addEventListener('sokoni:workspace', function (e) { onWorkspace(e && e.detail); });
     document.addEventListener('click', function (e) {
+      var cb = e.target && e.target.closest ? e.target.closest('[data-tech-repair-call]') : null;
+      if (cb) {   /* Tech 4M — providerContactCustomer: own booking only, reveal logged server-side */
+        G.firebase.functions().httpsCallable('providerDispatch')({ op: 'providerContactCustomer', bookingId: cb.getAttribute('data-tech-repair-call') })
+          .then(function (r) { var ph = r && r.data && r.data.customer && r.data.customer.phone; if (ph) G.location.href = 'tel:' + String(ph).replace(/[^+\d]/g, ''); else G.alert && G.alert('This customer has no phone on file — message them in SOKONI.'); })
+          .catch(function (er) { G.alert && G.alert((er && er.message) || 'Calling is not available for this booking.'); });
+        return;
+      }
       var mb = e.target && e.target.closest ? e.target.closest('[data-tech-repair-msg]') : null;
       if (mb) {   /* Tech slice 4L — the booking's own conversation; the server checks the provider is its party */
         var bid = mb.getAttribute('data-tech-repair-msg');

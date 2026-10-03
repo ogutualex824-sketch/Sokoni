@@ -1,3 +1,11 @@
+## [2026-10-03] - Tech Hub slice 4M (hosting): call buttons on the booking-bound reveal — hosting, NOT deployed
+
+- sokoni-book-service.js: the booking status view shows "📞 Call the provider" only once the booking is paid / confirmed. It asks bookingContactProvider
+  (server: own booking only, reveal logged) and dials. The page never holds the number before that.
+- sokoni-tech-service-editor.js Repairs rows: "📞 Call customer" through providerContactCustomer (own booking only, logged).
+- Server half: feat/tech-taxonomy-on-13f74f3 @ 508b0be. Number masking needs a voice provider and is not built (owner decision).
+- Test: test-tech-service-editor M1 (15/0). service-leads-web 11/0.
+
 ## [2026-10-03] - plans.html never advertises a plan commission rate or discount — hosting, NOT deployed
 
 - Owner 2026-10-03: one flat service commission, deducted at settlement, replaces every plan-based rate. Plans differ by features / limits only.

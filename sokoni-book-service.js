@@ -383,6 +383,7 @@
         title(st.tone === 'warn' ? 'Booking update' : 'Booking confirmed');
         body(`<div class="sbs-state">${st.label}</div>
           <div class="sbs-note" style="text-align:center">${esc(_ctx.serviceName || '')}${b.date ? ' · ' + esc(b.date) + ' ' + esc(b.startTime || '') : ''}</div>
+          ${_ctx.bookingId && (b.paymentStatus === 'paid_held' || b.paymentStatus === 'settled' || ['confirmed', 'in_progress'].indexOf(b.status) > -1) ? '<button class="sbs-btn" style="background:#1f1f1f;color:#eee;margin-bottom:8px" onclick="SokoniBookService._call()">📞 Call the provider</button>' : ''}
           ${_ctx.bookingId && b.status !== 'cancelled' ? '<a class="sbs-btn" style="display:block;text-align:center;text-decoration:none;background:#1f1f1f;color:#eee;margin-bottom:8px" href="messages.html?tx=service_booking&txId=' + encodeURIComponent(_ctx.bookingId) + '">💬 Message the provider</a>' : ''}
           <button class="sbs-btn" onclick="SokoniBookService.close()">Done</button>`);
         if (b.paymentStatus === 'paid_held' || b.paymentStatus === 'settled' || b.status === 'cancelled') sessionStorage.removeItem(K);
@@ -432,6 +433,14 @@
     _pick: pick, _pickSvc: pickSvc, _create: create, _pay: pay, _star: star, _review: submitReview,
     _chooseOptions: chooseOptions, _opt: updatePreview, _continue: continueToBooking,   /* Slice D */
     _device: deviceContinue,                                                            /* Tech Hub slice 4b */
+    /* Tech Hub 4M: booking-bound call — the server reveals the provider's phone only to this booking's customer once paid,
+       and logs it; the page never holds the number before that. */
+    _call() {
+      if (!_ctx.bookingId) return;
+      call('providerDispatch', { op: 'bookingContactProvider', bookingId: _ctx.bookingId })
+        .then(r => { const ph = r && r.provider && r.provider.phone; if (ph) location.href = 'tel:' + String(ph).replace(/[^+\d]/g, ''); else alert('This provider has no phone on file — message them in SOKONI.'); })
+        .catch(e => alert((e && e.message) || 'Calling is not available for this booking yet.'));
+    },
   };
   global.SokoniBookService = Api;
   /* Auto-resume if the customer refreshed mid-booking. */
