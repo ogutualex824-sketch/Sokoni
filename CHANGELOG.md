@@ -1,3 +1,55 @@
+## [2026-10-03] - STORAGE RULES CANDIDATE: media hold on the SERVED storage ruleset 182624f3 — NOT released
+
+**NOT RELEASED — QUEUED — MACHINE BELOW 512 MB MEMORY FLOOR.** Owner decision 2026-10-03: a taken-down product's photos
+are PRIVATE while the takedown hold exists, and work again on restore. The functions half (vault + strip the download
+token, reinstate the SAME token on restore) is on `feat/community-reports-fn-on-7091029` (`064d67d`).
+
+**Served input (read-only Rules API, 2026-10-03):**
+- release `firebase.storage/sokoni-aeb26.firebasestorage.app` → ruleset `182624f3-7088-49de-ad72-a4c4701cb9f2`
+  (created 2026-07-27T20:03:49Z, released 2026-08-11T05:18:05Z). It is the only storage release in the project.
+- 12,327 B, sha256 `a9f1d0d7…`, stored here as `storage.rules.served-182624f3`. It is byte-identical to the repo
+  `storage.rules` on this branch (measured).
+
+**Builder:** `scripts/build-media-hold-storage-candidate.js` refuses any other input (sha-pinned; a wrong file exits 3).
+Every hunk must apply exactly once, `product-images` must end with ONE match block, and reverse-applying the hunks must
+give back the served text byte for byte. Output: `storage.rules.media-hold-candidate`, 13,291 B (+964), sha `4adb0813db2d`.
+
+**Hunks**
+- **M0** — helpers `notModerationHeld()` (null-safe: no resource / no custom metadata → not held) and
+  `isModerationAdmin()` (admin or superAdmin claim, the Firestore `isAdmin()` definition).
+- **M1** — `product-images/{uid}/**`:
+  - `read` split: `list` stays `if true`; `get` is refused while the object carries `moderationHold == '1'`, except admins.
+  - `update` also requires the object NOT held. Without this the seller could drop the flag (or re-upload over the path)
+    and re-open the photo. This goes one step past "read only"; drop the clause if the owner wants read-only.
+  - `create` and `delete` unchanged. Every other block is byte-identical.
+
+**Who loses access (only while an object is held):**
+- Anonymous users and signed-in buyers: SDK get (getDownloadURL / getBytes / getMetadata) of a held product photo.
+- The seller: get of their own held photo, and update (metadata change or re-upload) of it. They can still create new
+  photos and delete their own.
+- Moderators without an admin / superAdmin claim, and `role == 'admin'`-only tokens: get of a held photo.
+- Unchanged: listing, every unheld object, every other path, the Admin SDK.
+- Token URLs (`?alt=media&token=`) bypass rules entirely. They are closed by the server stripping the token, not by this file.
+
+**Firestore:** `moderationMediaVault` needs no rule. Neither `firestore.rules.served-f259c0b5` nor the takedown
+candidate names it, and neither has a top-level wildcard (only `tenants/{tenantId}/{document=**}`), so it is
+default-deny. The functions suite checks this statically (row V1); the emulator row is below.
+
+**Tests:** `scripts/test-media-hold-storage-rules.js` is WRITTEN and QUEUED (emulators are not allowed under the memory floor).
+- Candidate rows SR1–SR9.
+- Served-ruleset controls C1–C2, which must show the gap.
+- Vault rows V1 on both Firestore rulesets.
+- Run: `firebase emulators:exec --only storage,firestore --project demo-media-hold "node scripts/test-media-hold-storage-rules.js"`.
+- The suite refuses to start without localhost emulators (verified: exit 2).
+- **UNPROVEN until that run:** that the Storage rules compiler accepts `'moderationHold' in resource.metadata`, and that
+  `resource.metadata` is null-safe as written.
+
+**Deploy unit:** `firebase deploy --only storage` with this file as the storage rules. Release it after the functions half
+serves, so the flag the rules read is the flag the server writes.
+
+**Files:** `storage.rules.served-182624f3`, `storage.rules.media-hold-candidate`, `scripts/build-media-hold-storage-candidate.js`,
+`scripts/test-media-hold-storage-rules.js`, `CHANGELOG.md`.
+
 ## [2026-10-02] - RULES CANDIDATE: takedown enforcement on the SERVED ruleset f259c0b5 — NOT released
 
 **NOT RELEASED — QUEUED — MACHINE BELOW 512 MB MEMORY FLOOR.** Built from the served source fetched read-only from the
