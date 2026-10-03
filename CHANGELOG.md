@@ -1,3 +1,26 @@
+## [2026-10-03] — Equipment rentals made real (Construction): owner resolution, transactions, honest payment state — functions source, NOT deployed
+
+**Summary (sokoni-e3 found six gaps by running the real handlers, which are byte-identical to live):** in
+`marketplace-extensions.js`, served through `commerceDispatch`:
+- **`_assertSeller`** now resolves owners like the served shops rule: `ownerId` when present, else shop id == uid. Every
+  real owner was refused because shops carry no `ownerId`. It also accepts admin claims and returns HttpsError reasons.
+- **`rentalBook`** is ONE transaction: the overlap is re-checked inside, so two renters can no longer book the same dates.
+  It validates dates, refuses self-rental, and records `paymentMethod:'none'` + `paymentStatus:'unpaid'` (the default
+  `'mpesa'` was false) until the rental_booking payment purpose (sokoni-2f) exists.
+- **`rentalConfirm` / `rentalComplete`** are transactional, legal from-states only. Complete was status-blind and would
+  complete a pending or cancelled booking.
+- **`rentalCancel`:** the seller path uses the shop authority. The `token.shopId` claim it relied on is minted by nothing,
+  so sellers could never cancel. The renter path is unchanged; completed / active bookings cannot be cancelled.
+- **New `rentalOwnerListings {shopId}`:** the shop's own listings in every state, with `hasMore`. This replaces the
+  workspace's direct read.
+
+**Files:** `functions/marketplace-extensions.js`, `scripts/test-rentals.js` (19/0; 4 mutants each fail named rows),
+`scripts/test-commerce-dispatch-retired-digital.js` (R3 expected set + named ADDED op; 12/0 against the live archive
+commercedispatch-00009-tub).
+**Base:** sokoni-e3's DE-2 hotfix `53100ff`. That hotfix ships alone and first; this is the next commerceDispatch revision on
+the same lineage.
+**Deploy:** scoped commerceDispatch, after DE-2 and the lineage diff. NOT authorized.
+
 ## [2026-10-03] - Security hotfix DE-2: commerceDispatch stops serving digitalProductPurchase / digitalProductDownload (NOT deployed)
 
 **What was wrong.** Through the live `commerceDispatch` (`commercedispatch-00009-tub`), any signed-in caller with App Check could do two things with no payment:

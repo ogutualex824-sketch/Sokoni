@@ -4,7 +4,7 @@
  * Auctions • Rentals • Digital Products • Q&A • Wishlist • Price History • SEO
  * 31 Cloud Functions — enforceAppCheck: true on all onCall CFs
  */
-const { onCall, onRequest } = require('firebase-functions/v2/https');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule }        = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
 
@@ -14,7 +14,7 @@ function _fv()  { return admin.firestore.FieldValue; }
 function _id()  { return _db().collection('_').doc().id; }
 
 async function _assertAuth(auth) {
-  if (!auth || !auth.uid) throw new Error('unauthenticated');
+  if (!auth || !auth.uid) throw new HttpsError('unauthenticated', 'Sign in required.');
   return auth;
 }
 
@@ -26,16 +26,18 @@ async function _assertAdmin(auth) {
 
 async function _assertSeller(auth, shopId) {
   await _assertAuth(auth);
-  if (!shopId) throw new Error('shopId-required');
+  if (!shopId || typeof shopId !== 'string') throw new HttpsError('invalid-argument', 'shopId is required.');
   const snap = await _db().collection('shops').doc(shopId).get();
-  if (!snap.exists) throw new Error('shop-not-found');
-  const shop = snap.data();
-  const role = (auth.token && auth.token.role) || '';
-  if (['admin', 'super_admin'].includes(role)) return shop;
-  if (shop.ownerId === auth.uid) return shop;
+  if (!snap.exists) throw new HttpsError('not-found', 'Shop not found.');
+  const shop = snap.data() || {};
+  const tk = auth.token || {};
+  if (tk.admin === true || tk.superAdmin === true || ['admin', 'super_admin'].includes(tk.role || '')) return shop;
+  /* Owner resolution = the served shops rule (sokoni-f3 rentals fix, sokoni-e3 finding: shops carry no ownerId in the
+     shop identity model, so every real owner was refused): ownerId when the doc has one, otherwise shopId === uid. */
+  if (shop.ownerId === auth.uid || (!('ownerId' in shop) && shopId === auth.uid)) return shop;
   const emp = await _db().collection('shopEmployees')
     .where('shopId', '==', shopId).where('uid', '==', auth.uid).limit(1).get();
-  if (emp.empty) throw new Error('forbidden');
+  if (emp.empty) throw new HttpsError('permission-denied', 'You do not manage this shop.');
   return shop;
 }
 
@@ -360,112 +362,114 @@ exports.rentalGetAvailability = onCall({ enforceAppCheck: true }, exports._h.ren
 });
 
 exports.rentalBook = onCall({ enforceAppCheck: true }, exports._h.rentalBook = async (req) => {
-  const {
-    rentalProductId, startDate, endDate, durationUnit,
-    customerName, customerPhone, paymentMethod, notes,
-  } = req.data;
+  const { rentalProductId, startDate, endDate, durationUnit, customerName, customerPhone, notes } = req.data || {};
   await _assertAuth(req.auth);
-  if (!rentalProductId || !startDate || !endDate) throw new Error('missing-required-fields');
-
-  const productSnap = await _db().collection('rentalProducts').doc(rentalProductId).get();
-  if (!productSnap.exists) throw new Error('product-not-found');
-  const product = productSnap.data();
-  if (product.status !== 'active') throw new Error('product-not-available');
-
-  const start = new Date(startDate);
-  const end   = new Date(endDate);
-  if (end <= start) throw new Error('end-must-be-after-start');
-
-  // Check availability (simple overlap detection, in-memory)
-  const existingSnap = await _db().collection('rentalBookings')
-    .where('rentalProductId', '==', rentalProductId).limit(200).get();
-  const conflict = existingSnap.docs.some(d => {
-    const b = d.data();
-    if (!['pending', 'confirmed', 'active'].includes(b.status)) return false;
-    const bs = b.startDate.toDate ? b.startDate.toDate() : new Date(b.startDate);
-    const be = b.endDate.toDate   ? b.endDate.toDate()   : new Date(b.endDate);
-    return start < be && end > bs;
-  });
-  if (conflict) throw new Error('dates-not-available');
-
-  // Calculate price
-  const hours   = (end - start) / 3600000;
-  const days    = hours / 24;
-  const weeks   = days / 7;
-  const months  = days / 30;
-
-  let totalAmount = 0;
-  const unit = durationUnit || 'daily';
-  if (unit === 'hourly'  && product.hourlyRate)  totalAmount = Math.ceil(hours)   * product.hourlyRate;
-  if (unit === 'daily'   && product.dailyRate)   totalAmount = Math.ceil(days)    * product.dailyRate;
-  if (unit === 'weekly'  && product.weeklyRate)  totalAmount = Math.ceil(weeks)   * product.weeklyRate;
-  if (unit === 'monthly' && product.monthlyRate) totalAmount = Math.ceil(months)  * product.monthlyRate;
-  if (totalAmount <= 0) throw new Error('unable-to-calculate-price');
-
-  const depositAmount = product.deposit || 0;
-
+  if (!rentalProductId || !startDate || !endDate) throw new HttpsError('invalid-argument', 'Choose the equipment and the rental dates.');
+  const start = new Date(startDate), end = new Date(endDate);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) throw new HttpsError('invalid-argument', 'The rental dates are not valid.');
+  if (end <= start) throw new HttpsError('invalid-argument', 'The end must be after the start.');
+  if (start.getTime() < Date.now() - 3600000) throw new HttpsError('invalid-argument', 'The rental cannot start in the past.');
+  const unit = ['hourly', 'daily', 'weekly', 'monthly'].includes(durationUnit) ? durationUnit : 'daily';
+  const productRef = _db().collection('rentalProducts').doc(String(rentalProductId));
   const id = _id();
-  await _db().collection('rentalBookings').doc(id).set({
-    rentalProductId,
-    shopId: product.shopId,
-    buyerId: req.auth.uid,
-    customerName: customerName || req.auth.token.name || 'Customer',
-    customerPhone: customerPhone || '',
-    startDate: admin.firestore.Timestamp.fromDate(start),
-    endDate:   admin.firestore.Timestamp.fromDate(end),
-    durationUnit: unit,
-    totalAmount,
-    depositAmount,
-    paymentMethod: paymentMethod || 'mpesa',
-    notes: notes || '',
-    status: 'pending',       // pending | confirmed | active | completed | cancelled
-    createdAt: _ts(),
+  const bookingRef = _db().collection('rentalBookings').doc(id);
+
+  /* ONE transaction (sokoni-f3): the overlap check used to run outside any transaction, so two renters could both book
+     the same dates. Product + existing bookings are read inside, then the booking is created. */
+  const out = await _db().runTransaction(async (t) => {
+    const productSnap = await t.get(productRef);
+    if (!productSnap.exists) throw new HttpsError('not-found', 'That equipment was not found.');
+    const product = productSnap.data();
+    if (product.status !== 'active') throw new HttpsError('failed-precondition', 'That equipment is not available for rent.');
+    if (product.shopId === req.auth.uid || product.createdBy === req.auth.uid) throw new HttpsError('failed-precondition', 'You cannot rent your own equipment.');
+    const existing = await t.get(_db().collection('rentalBookings').where('rentalProductId', '==', String(rentalProductId)).limit(200));
+    const conflict = existing.docs.some((d) => {
+      const b = d.data();
+      if (!['pending', 'confirmed', 'active'].includes(b.status)) return false;
+      const bs = b.startDate && b.startDate.toDate ? b.startDate.toDate() : new Date(b.startDate);
+      const be = b.endDate && b.endDate.toDate ? b.endDate.toDate() : new Date(b.endDate);
+      return start < be && end > bs;
+    });
+    if (conflict) throw new HttpsError('failed-precondition', 'Those dates are already booked.');
+    const hours = (end - start) / 3600000, days = hours / 24, weeks = days / 7, months = days / 30;
+    let totalAmount = 0;
+    if (unit === 'hourly'  && product.hourlyRate)  totalAmount = Math.ceil(hours)  * product.hourlyRate;
+    if (unit === 'daily'   && product.dailyRate)   totalAmount = Math.ceil(days)   * product.dailyRate;
+    if (unit === 'weekly'  && product.weeklyRate)  totalAmount = Math.ceil(weeks)  * product.weeklyRate;
+    if (unit === 'monthly' && product.monthlyRate) totalAmount = Math.ceil(months) * product.monthlyRate;
+    if (!(totalAmount > 0)) throw new HttpsError('failed-precondition', 'This equipment has no ' + unit + ' rate.');
+    const depositAmount = Number(product.deposit) > 0 ? Number(product.deposit) : 0;
+    t.create(bookingRef, {
+      rentalProductId: String(rentalProductId), shopId: product.shopId, buyerId: req.auth.uid,
+      customerName: String(customerName || req.auth.token.name || 'Customer').slice(0, 100),
+      customerPhone: String(customerPhone || '').replace(/[^0-9+]/g, '').slice(0, 20),
+      startDate: admin.firestore.Timestamp.fromDate(start), endDate: admin.firestore.Timestamp.fromDate(end),
+      durationUnit: unit, totalAmount, depositAmount,
+      /* No payment happens here (sokoni-e3 finding: the old default 'mpesa' was misleading). The rental_booking payment
+         purpose (commercial authority) moves this to paid; until then the booking is unpaid. */
+      paymentMethod: 'none', paymentStatus: 'unpaid',
+      notes: String(notes || '').slice(0, 1000), status: 'pending', createdAt: _ts(),
+    });
+    return { totalAmount, depositAmount };
   });
-
-  return { bookingId: id, totalAmount, depositAmount };
+  return { bookingId: id, totalAmount: out.totalAmount, depositAmount: out.depositAmount, paymentStatus: 'unpaid' };
 });
 
-exports.rentalConfirm = onCall({ enforceAppCheck: true }, exports._h.rentalConfirm = async (req) => {
-  const { bookingId, shopId } = req.data;
+/* Seller-side booking transition in ONE transaction: re-read, shop match, legal from-state. */
+async function _rentalTransition(req, { from, to, extra }) {
+  const { bookingId, shopId } = req.data || {};
   await _assertSeller(req.auth, shopId);
-  const ref = _db().collection('rentalBookings').doc(bookingId);
-  const snap = await ref.get();
-  if (!snap.exists) throw new Error('not-found');
-  if (snap.data().shopId !== shopId) throw new Error('forbidden');
-  if (snap.data().status !== 'pending') throw new Error('invalid-status');
-  await ref.update({ status: 'confirmed', confirmedAt: _ts(), confirmedBy: req.auth.uid });
-  return { success: true };
-});
+  if (!bookingId) throw new HttpsError('invalid-argument', 'bookingId is required.');
+  const ref = _db().collection('rentalBookings').doc(String(bookingId));
+  return _db().runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Booking not found.');
+    const b = snap.data();
+    if (b.shopId !== shopId) throw new HttpsError('permission-denied', 'That booking belongs to another shop.');
+    if (b.status === to) return { success: true, unchanged: true, status: to };
+    if (!from.includes(b.status)) throw new HttpsError('failed-precondition', 'A ' + b.status + ' booking cannot be ' + to + '.');
+    t.update(ref, Object.assign({ status: to }, extra(req, b)));
+    if (to === 'completed') t.update(_db().collection('rentalProducts').doc(b.rentalProductId), { bookingCount: _fv().increment(1) });
+    return { success: true, status: to };
+  });
+}
 
-exports.rentalComplete = onCall({ enforceAppCheck: true }, exports._h.rentalComplete = async (req) => {
-  const { bookingId, shopId, notes } = req.data;
-  await _assertSeller(req.auth, shopId);
-  const ref = _db().collection('rentalBookings').doc(bookingId);
-  const snap = await ref.get();
-  if (!snap.exists) throw new Error('not-found');
-  if (snap.data().shopId !== shopId) throw new Error('forbidden');
-  await ref.update({ status: 'completed', completedAt: _ts(), completionNotes: notes || '' });
-  await _db().collection('rentalProducts').doc(snap.data().rentalProductId)
-    .update({ bookingCount: _fv().increment(1) });
-  return { success: true };
-});
+exports.rentalConfirm = onCall({ enforceAppCheck: true }, exports._h.rentalConfirm = (req) =>
+  _rentalTransition(req, { from: ['pending'], to: 'confirmed', extra: (r) => ({ confirmedAt: _ts(), confirmedBy: r.auth.uid }) }));
+
+/* Was status-blind (sokoni-e3 finding): it would "complete" a pending or cancelled booking. */
+exports.rentalComplete = onCall({ enforceAppCheck: true }, exports._h.rentalComplete = (req) =>
+  _rentalTransition(req, { from: ['confirmed', 'active'], to: 'completed', extra: (r) => ({ completedAt: _ts(), completedBy: r.auth.uid, completionNotes: String((r.data || {}).notes || '').slice(0, 1000) }) }));
 
 exports.rentalCancel = onCall({ enforceAppCheck: true }, exports._h.rentalCancel = async (req) => {
-  const { bookingId, reason } = req.data;
+  const { bookingId, reason } = req.data || {};
   await _assertAuth(req.auth);
-  const ref = _db().collection('rentalBookings').doc(bookingId);
-  const snap = await ref.get();
-  if (!snap.exists) throw new Error('not-found');
-  const booking = snap.data();
-  const isOwner = booking.buyerId === req.auth.uid;
-  const role = (req.auth.token && req.auth.token.role) || '';
-  const isSeller = booking.shopId && req.auth.token.shopId === booking.shopId;
-  if (!isOwner && !isSeller && !['admin', 'super_admin'].includes(role)) {
-    throw new Error('forbidden');
-  }
-  if (['completed', 'cancelled'].includes(booking.status)) throw new Error('already-closed');
-  await ref.update({ status: 'cancelled', cancelledAt: _ts(), cancelReason: reason || '' });
-  return { success: true };
+  if (!bookingId) throw new HttpsError('invalid-argument', 'bookingId is required.');
+  const ref = _db().collection('rentalBookings').doc(String(bookingId));
+  const pre = await ref.get();
+  if (!pre.exists) throw new HttpsError('not-found', 'Booking not found.');
+  const isRenter = pre.data().buyerId === req.auth.uid;
+  /* The seller path used a token.shopId claim nothing mints (sokoni-e3 finding) — sellers could never cancel. It is now
+     the same shop authority as every other seller op. */
+  if (!isRenter) await _assertSeller(req.auth, pre.data().shopId);
+  return _db().runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    const b = snap.data();
+    if (b.status === 'cancelled') return { success: true, unchanged: true, status: 'cancelled' };
+    if (['completed', 'active'].includes(b.status)) throw new HttpsError('failed-precondition', 'A ' + b.status + ' booking cannot be cancelled.');
+    t.update(ref, { status: 'cancelled', cancelledAt: _ts(), cancelledBy: req.auth.uid, cancelledByRole: isRenter ? 'renter' : 'seller', cancelReason: String(reason || '').slice(0, 500) });
+    return { success: true, status: 'cancelled' };
+  });
+});
+
+/* The shop's own equipment listings in every state (sokoni-e3 asked: replaces the page's direct rentalProducts read). */
+exports.rentalOwnerListings = onCall({ enforceAppCheck: true }, exports._h.rentalOwnerListings = async (req) => {
+  const { shopId } = req.data || {};
+  await _assertSeller(req.auth, shopId);
+  const snap = await _db().collection('rentalProducts').where('shopId', '==', shopId).limit(201).get();
+  const listings = snap.docs.slice(0, 200).map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => ((b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0) - (a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0)));
+  return { listings, hasMore: snap.docs.length > 200 };
 });
 
 exports.rentalList = onCall({ enforceAppCheck: true }, exports._h.rentalList = async (req) => {

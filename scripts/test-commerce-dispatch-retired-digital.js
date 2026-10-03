@@ -128,7 +128,10 @@ function check(id, cond, detail) {
   }
 
   // R3 CONTROL
-  const expected = liveOps.filter(o => !RETIRED.includes(o)).sort();
+  /* ADDED: ops deliberately introduced on later revisions of the SAME commerceDispatch lineage (each named, never a wildcard).
+     rentalOwnerListings — sokoni-f3 rentals fix on 53100ff (owner list op for the Construction workspace). */
+  const ADDED = ['rentalOwnerListings'];
+  const expected = liveOps.filter(o => !RETIRED.includes(o)).concat(ADDED).sort();
   const got = tgtOps.slice().sort();
   const missing = expected.filter(o => !got.includes(o));
   const added = got.filter(o => !expected.includes(o));
