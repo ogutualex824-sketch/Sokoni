@@ -9,6 +9,9 @@
          money statement in this tree (static: first statement after auth is the throw)
      W5  DIRECT provider calls to requestWithdrawal / finosRequestBankPayout / requestPayout / approveWithdrawal → refused, wallet untouched
      W6  initiateSellerPayout refuses non-admins as its first statement
+     W7  gate CLOSED: processPendingPayouts / autoScheduledPayouts / processPayoutRetries move nothing
+     W8  reconcilePayouts (inspect-only) keeps running; W9 positive control — gate OPEN lets the mover proceed
+     W10 initiateSellerPayout honours the gate before any B2C
    NODE_PATH=<functions/node_modules> node scripts/test-withdrawals-off.js */
 const path = require('path'), fs = require('fs');
 const FN = path.join(path.resolve(__dirname, '..'), 'functions');
@@ -76,6 +79,41 @@ const ck = (id, ok, m, got) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + ' '
   const head = idx.slice(i, i + 400);
   ck('W6', /if \(!request\.auth \|\| !request\.auth\.token \|\| !request\.auth\.token\.admin\)\s*\{\s*throw new HttpsError\("permission-denied"/.test(head),
     'initiateSellerPayout: the FIRST statement refuses any non-admin caller (index.js is not loaded in-process; static on the exact guard)');
+
+  /* W7–W10 SCHEDULED money movers honour the SAME gate (b2 blocker, owner 2026-10-03).
+     Signal = whether the job touches the payout queues AT ALL (a closed gate must stop it before its first queue read);
+     the OPEN run is the positive control that the same job does reach the queues. */
+  const runJob = async (fn) => { try { await (fn.run ? fn.run({}) : fn({})); return { ok: true }; } catch (e) { return { ok: false, msg: String(e && e.message || e).slice(0, 120) }; } };
+  const fsA = require('firebase-admin/firestore').getFirestore();
+  const admA = require('firebase-admin').firestore();
+  const QUEUES = new Set(['payouts', 'payoutRequests']);
+  const spy = (fn) => async () => {
+    let touched = 0;
+    const wrap = (o) => { const orig = o.collection.bind(o); o.collection = (c) => { if (QUEUES.has(c)) touched++; return orig(c); }; return () => { o.collection = orig; }; };
+    const u1 = wrap(fsA), u2 = admA === fsA ? () => {} : wrap(admA);
+    const r = await runJob(fn); u1(); u2(); return { r, touched };
+  };
+  const seedQueues = (open) => {
+    H.reset();
+    DOCS.set('payouts/po1', { status: 'pending', entityId: 'prov1', netCents: 500000, requestedAt: new Date(Date.now() - 9 * 86400000) });
+    DOCS.set('payoutRequests/pr1', { status: 'retry_scheduled', sellerUid: 'prov1', amount: 5000, nextRetryAt: new Date(0) });
+    DOCS.set('automationRules/payouts', { enabled: true, holdDays: 1, autoProcessBelow: 100000000 });
+    if (open) DOCS.set('platformConfig/withdrawals', { enabled: true });
+  };
+  const FIN = require(path.join(FN, 'finos.js')), AE = require(path.join(FN, 'automation-engine.js'));
+  const jobs = [['processPendingPayouts', FIN.processPendingPayouts], ['autoScheduledPayouts', AE.autoScheduledPayouts], ['processPayoutRetries', W.processPayoutRetries]];
+  const closed = [], opened = [];
+  for (const [n, fn] of jobs) { seedQueues(false); const x = await spy(fn)(); closed.push([n, x.touched, DOCS.get('payouts/po1').status, DOCS.get('payoutRequests/pr1').status]); }
+  for (const [n, fn] of jobs) { seedQueues(true); const x = await spy(fn)(); opened.push([n, x.touched]); }
+  ck('W7', closed.every(([, t, po, pr]) => t === 0 && po === 'pending' && pr === 'retry_scheduled'),
+    'gate CLOSED: processPendingPayouts / autoScheduledPayouts / processPayoutRetries never touch the payout queues (nothing moves)', closed);
+  ck('W9', opened.every(([, t]) => t > 0), 'POSITIVE CONTROL — gate OPEN: each of the same jobs does reach the payout queues', opened);
+  seedQueues(false);
+  const rc = await spy(W.reconcilePayouts)();
+  ck('W8', rc.r.ok && rc.touched > 0, 'reconcilePayouts (inspect/flag only, moves no money) still runs and reads its queue while the gate is closed', rc);
+  const idx2 = fs.readFileSync(path.join(FN, 'index.js'), 'utf8'); const k = idx2.indexOf('exports.initiateSellerPayout = onCall'); const body = idx2.slice(k, k + 3000);
+  const gi = body.indexOf("require('./shared/withdrawal-gate').withdrawalsOpen(admin.firestore())"), si = body.indexOf('INTASEND_PRIVATE_KEY.value()');
+  ck('W10', gi > 0 && si > gi, 'initiateSellerPayout (admin B2C) checks the gate right after the admin check, before the secret / any B2C', { gi, si });
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e && e.stack); process.exit(1); });

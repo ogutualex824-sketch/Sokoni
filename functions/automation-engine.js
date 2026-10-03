@@ -821,6 +821,8 @@ exports.autoOnApprovalRequest = onDocumentCreated(
 exports.autoScheduledPayouts = onSchedule(
   { schedule: 'every 6 hours', region: 'us-central1', memory: '256MiB', timeoutSeconds: 300 },
   async () => {
+    /* Advances payouts toward disbursement and notifies sellers: gated (owner 2026-10-03). */
+    if (!(await require('./shared/withdrawal-gate').withdrawalsOpen(_db()))) { require('firebase-functions/logger').warn('[withdrawal-gate] autoScheduledPayouts skipped — withdrawals are OFF (platformConfig/withdrawals)'); return; }
     const rule     = await _getRule('payouts');
     if (!rule.enabled) return;
 

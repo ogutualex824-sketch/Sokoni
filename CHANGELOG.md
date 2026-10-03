@@ -1,3 +1,10 @@
+## 2026-10-03 — ONE withdrawal gate for every money mover, incl. the scheduled payout jobs (NOT deployed)
+
+- **Change:** new `shared/withdrawal-gate.js` (`platformConfig/withdrawals.enabled === true` opens; absent / non-boolean / unreadable → closed). Honoured by wallet.requestSellerPayout, wallet.processPayoutRetries, finos.processPendingPayouts (every 30 min B2C of pending payouts), automation-engine.autoScheduledPayouts (6-hourly pending → processing + 'expect M-Pesa'), index.initiateSellerPayout (admin arbitrary-amount B2C). wallet.reconcilePayouts (inspect/flag only) is NOT gated. Found by sokoni-b2.
+- **Production census (read-only, today):** payouts = 0 docs; payoutRequests = 7 (4 paid, 2 failed, 1 rejected) — the schedulers have nothing to disburse right now. The LIVE requestSellerPayout (gen 1790751875248535, 2026-09-30) has NO gate and supports instant B2C — the live exposure until this ships.
+- **Files:** functions/shared/withdrawal-gate.js (new), functions/wallet.js, functions/finos.js, functions/automation-engine.js, functions/index.js, scripts/test-withdrawals-off.js (W7–W10), scripts/infra/census-payout-queues.js (new, read-only).
+- **Tests:** withdrawals-off 10/0 — closed: the three scheduled movers never touch the payout queues; OPEN positive control: each does; reconcile still runs; initiateSellerPayout gated before the secret. Mutant (gate removed from processPendingPayouts) FAILS W7.
+
 ## 2026-10-03 — Construction quote orders: commission snapshot captured at payment start (NOT deployed)
 
 - **Change:** the rfq_quote pricer captures the commission rate ONCE (real engine, server-stamped category) on the quote's LINES and puts `commissionSnapshot` + `passThroughCents` (VAT + delivery) on the intent metadata. 5b's hold/settlement path settles through shared/settlement-authority with heldAmountCents = the verified payment — the same engine as bookings and rentals.
