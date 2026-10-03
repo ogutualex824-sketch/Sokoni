@@ -8778,7 +8778,8 @@ exports.initiateRefund = onCall({ timeoutSeconds: 30 }, async (request) => {
       .where("escrowRef", "==", escrowRef)
       .get();
     const priorTotal = priorSnap.docs
-      .filter(d => ["pending", "processing", "completed"].includes(d.data().status))
+      /* hotfix 2026-10-03: an unapproved buyer REQUEST reserves nothing — only admin-made refunds consume the ceiling */
+      .filter(d => ["pending", "processing", "completed"].includes(d.data().status) && d.data().requiresApproval !== true)
       .reduce((sum, d) => sum + (Number(d.data().amount) || 0), 0);
 
     const remaining = Math.max(0, originalAmt - priorTotal);
@@ -8810,6 +8811,9 @@ exports.initiateRefund = onCall({ timeoutSeconds: 30 }, async (request) => {
     currency: (escrow && escrow.currency) || "KES",
     reason: refundReason,
     initiatedBy: request.auth.uid,
+    /* SECURITY HOTFIX 2026-10-03: a buyer's call is a REQUEST. Nothing below moves money, escrow or settlement state
+       unless an administrator made the call; an admin approves a buyer's request by calling this as admin. */
+    requiresApproval: !isAdminCaller,
     status: "pending",
     serverTs: ts,
   });
@@ -8818,7 +8822,11 @@ exports.initiateRefund = onCall({ timeoutSeconds: 30 }, async (request) => {
      if the order was ALREADY SETTLED, reverse it (debit seller, reverse ledger); otherwise mark
      it REFUNDED so a pending settlement becomes a no-op. Best-effort + exactly-once; the refund
      record above stands regardless. */
-  if (orderId) {
+  /* SECURITY HOTFIX 2026-10-03 — LIVE: a buyer's own, still-PENDING request ran handleOrderRefund at once: it
+     REVERSED an already-settled seller credit (debit + ledger reversal) or marked the order REFUNDED so the seller's
+     settlement became a permanent no-op — with no administrator ever deciding. Settlement state now changes only on
+     an administrator's call. */
+  if (orderId && isAdminCaller) {
     try {
       const _ref = await require("./order-settlement").handleOrderRefund(db, admin, String(orderId), { reason: refundReason, refundRef });
       /* Canonical analytics (R1.x Phase 2) — count the refund once and keep the reconcilable
@@ -8846,7 +8854,9 @@ exports.initiateRefund = onCall({ timeoutSeconds: 30 }, async (request) => {
     catch (e) { console.error("[initiateRefund] settlement-state update failed (recoverable):", e.message); }
   }
 
-  if (escrowRef && escrow) {
+  /* SECURITY HOTFIX 2026-10-03 — the escrow refund + buyer ledger credit are an ADMIN action. A buyer's call used to
+     mark the escrow refunded and post escrow:holding → buyer:{uid} itself. */
+  if (escrowRef && escrow && isAdminCaller) {
     /* Transactional: assert the escrow has not already been refunded, so two
        concurrent calls cannot both pass the ceiling check above and both write a
        ledger credit. The read-modify-write must be atomic. */
@@ -8889,7 +8899,7 @@ exports.initiateRefund = onCall({ timeoutSeconds: 30 }, async (request) => {
     } catch (_) {}
   }
 
-  return { ref: refundRef, status: "pending", orderId: orderId || null, reason: refundReason };
+  return { ref: refundRef, status: isAdminCaller ? "pending" : "pending_review", requiresApproval: !isAdminCaller, orderId: orderId || null, reason: refundReason };
 });
 
 /* â”€â”€ Settlement report (admin) â”€â”€ */
