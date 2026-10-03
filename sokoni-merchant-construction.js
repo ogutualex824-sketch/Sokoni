@@ -14,12 +14,16 @@
                   Buttons follow the f9a5c45 seller lifecycle (sokoni-f3 combined rules, leadNext()).
                   respondedAt is a server timestamp, stamped by the shell (SERVER_TIME token).
      Equipment &  commerceDispatch ops in functions/marketplace-extensions.js — the contract of
-     Rentals      sokoni-f3's rentals fix (functions/rentals-on-53100ff @ 74672f3, NOT deployed):
+     Rentals      sokoni-f3's rentals line (functions/rentals-on-53100ff @ bb8634d, NOT deployed):
                   rentalOwnerListings {shopId} → {listings, hasMore} (Equipment), rentalProductCreate,
                   rentalGetAvailability, rentalList, rentalConfirm, rentalComplete, rentalCancel
-                  (seller cancel through the shop authority). Errors are HttpsError reasons, shown
-                  verbatim. Bookings are paymentStatus 'unpaid' — NO payment exists (rental commission
-                  is unpriced, calculateCommission refuses 'category_unpriced'), so there is no pay step.
+                  (seller cancel through the shop authority). Owner lifecycle bb8634d: listings
+                  draft → active (Available) ⇄ paused via rentalProductPublish / rentalProductPause;
+                  bookings requested → accepted | declined → payment_pending → paid_held → active →
+                  return_pending → returned → completed (rentalAccept / rentalDecline / rentalStart /
+                  rentalConfirmReturn / rentalComplete; rentalCancel only while unpaid). Payment states are
+                  written only by the payment authority (2f rental_booking + 5b webhook) and labelled
+                  from the status alone. Errors are HttpsError reasons, shown verbatim.
                   Old server (live today: no rentalOwnerListings) → the direct rentalProducts read is the
                   fallback, chosen ONLY on an "Unknown commerce operation" refusal; it has no rules yet,
                   so a refused read says "Rentals become visible once access rules ship".
@@ -126,15 +130,32 @@
   /* ── RENTALS — server vocabulary (functions/marketplace-extensions.js) ── */
   var PRICING_TYPES = ['hourly', 'daily', 'weekly', 'monthly', 'flexible'];
   var RATE_FIELD = { hourly: 'hourlyRate', daily: 'dailyRate', weekly: 'weeklyRate', monthly: 'monthlyRate' };
-  var RENTAL_LABEL = { pending: 'Requested', confirmed: 'Confirmed', active: 'On hire', completed: 'Completed', cancelled: 'Cancelled' };
-  /* The legal seller moves of f3's rentals fix (74672f3, _rentalTransition + rentalCancel): confirm from pending; complete
-     from confirmed / active; cancel (seller, through the shop authority) from pending / confirmed — an active hire
-     cannot be cancelled. */
-  var RENTAL_NEXT = { pending: ['confirm', 'cancel'], confirmed: ['complete', 'cancel'], active: ['complete'] };
+  /* OWNER RENTAL LIFECYCLE (sokoni-f3 bb8634d, functions/rentals-on-53100ff, NOT deployed):
+       requested → accepted | declined → payment_pending → paid_held → active → return_pending → returned → completed;
+       terminal declined / cancelled / refunded. Legacy documents: pending = requested, confirmed = accepted.
+     payment_pending and paid_held are written ONLY by the payment authority (2f rental_booking purpose + 5b webhook); the
+     page labels payment from the STATUS alone — never from paymentStatus / paidAt / paymentMethod. */
+  var RENTAL_LEGACY = { pending: 'requested', confirmed: 'accepted' };
+  var RENTAL_LABEL = { requested: 'Requested', accepted: 'Accepted', payment_pending: 'Awaiting payment',
+    paid_held: 'Paid — held by SOKONI', active: 'On hire', return_pending: 'Return reported', returned: 'Returned',
+    completed: 'Completed', declined: 'Declined', cancelled: 'Cancelled', refunded: 'Refunded' };
+  /* Seller buttons — ONLY these. Cancel only while unpaid (requested / accepted / payment_pending); never on paid_held
+     (a paid cancellation is the payment authority's refund policy). rentalReportReturn is the renter's, not a button here. */
+  var RENTAL_NEXT = { requested: ['accept', 'decline', 'cancel'], accepted: ['cancel'], payment_pending: ['cancel'],
+    paid_held: ['start'], active: ['confirm-return'], return_pending: ['confirm-return'], returned: ['complete'] };
+  var RENTAL_OP = { accept: 'rentalAccept', decline: 'rentalDecline', start: 'rentalStart', 'confirm-return': 'rentalConfirmReturn',
+    complete: 'rentalComplete', cancel: 'rentalCancel' };
+  var RENTAL_BTN = { accept: 'Accept', decline: 'Decline', start: 'Start hire', 'confirm-return': 'Confirm return',
+    complete: 'Complete', cancel: 'Cancel' };
+  var RENTAL_DONE = { accept: 'Accepted. SOKONI asks the renter to pay next.', decline: 'Declined.', start: 'Hire started.',
+    'confirm-return': 'Return confirmed.', complete: 'Completed. SOKONI releases the held payment to you.', cancel: 'Cancelled.' };
+  var LISTING_LABEL = { draft: 'Draft', active: 'Available', paused: 'Paused' };
+  var LISTING_NEXT = { draft: ['publish'], paused: ['publish'], active: ['pause'] };
   var RENTAL_LIST_CAP = 100;      /* rentalList shop-side .limit(100) */
   var EQUIP_LIMIT = 200;          /* rentalOwnerListings cap (exact hasMore); the old-server direct read asks limit+1 */
-  var UNPAID_COPY = 'Unpaid — paid rentals open once SOKONI sets rental pricing.';
-  var UNPRICED_COPY = 'Paid rentals open once SOKONI sets rental pricing. No payment is taken for a rental today.';
+  /* Rental payment IS priced on sokoni-2f's commercial line (64da94c: rental_booking purpose, construction_equipment_rental
+     10% on the hire, never the deposit), so the old "paid rentals open once…" copy is gone. The flow is stated instead. */
+  var RENTAL_FLOW_COPY = 'After you accept, SOKONI asks the renter to pay. SOKONI holds the payment and releases it to you when the rental is completed.';
   var RULES_COPY = 'Rentals become visible once access rules ship.';
   /* An op this server does not know (older commerceDispatch): the dispatcher answers not-found with
      "Unknown commerce operation". Only that answer selects the old-server fallback. */
@@ -142,12 +163,23 @@
     var c = String((e && e.code) || '');
     return (c === 'not-found' || c === 'functions/not-found') && /Unknown commerce operation/.test(String((e && e.message) || ''));
   }
+  function rentalStatus (b) { var s = String((b && b.status) || ''); return RENTAL_LEGACY[s] || s; }
+  function rentalLabel (b) { var s = rentalStatus(b); return RENTAL_LABEL[s] || (s ? titleCase(s) : '—'); }
+  /* Payment line from STATUS only. */
   function paymentText (b) {
-    if (b && b.paymentStatus === 'unpaid') return UNPAID_COPY;
-    if (b && b.paymentStatus) return 'Payment: ' + titleCase(b.paymentStatus) + '.';
-    return 'Not paid through SOKONI.';
+    var s = rentalStatus(b);
+    if (s === 'payment_pending') return 'Awaiting payment';
+    if (s === 'paid_held') return 'Paid — held by SOKONI';
+    return null;
   }
-  function rentalActions (b) { var s = String((b && b.status) || ''); return RENTAL_NEXT[s] ? RENTAL_NEXT[s].slice() : []; }
+  /* Method from the webhook only: '—' until set; 'none' is rentalBook's placeholder, not a method. Never a default. */
+  function paymentMethodText (b) {
+    var m = b && typeof b.paymentMethod === 'string' ? b.paymentMethod.trim() : '';
+    return (m && m.toLowerCase() !== 'none') ? m : '—';
+  }
+  function listingStatus (e) { return String((e && e.status) || ''); }
+  function listingActions (e) { var s = listingStatus(e); return LISTING_NEXT[s] ? LISTING_NEXT[s].slice() : []; }
+  function rentalActions (b) { var s = rentalStatus(b); return RENTAL_NEXT[s] ? RENTAL_NEXT[s].slice() : []; }
 
   /* ── VERIFICATION ── */
   var APP_LABEL = { pending: 'Submitted — awaiting review', info_requested: 'More information requested',
@@ -204,7 +236,7 @@
   }
   function rentalCounts (R) {
     if (!R || !Array.isArray(R.rows)) return { pending: null, partial: false };
-    var n = 0; R.rows.forEach(function (b) { if (b.status === 'pending') n++; });
+    var n = 0; R.rows.forEach(function (b) { if (rentalStatus(b) === 'requested') n++; });
     return { pending: n, partial: !!R.capped };
   }
   function equipmentCount (E) {
@@ -260,7 +292,7 @@
     if (!STORE || STORE.uid !== uid) {
       STORE = { uid: uid, leads: null, leadsLoading: false, leadNotes: {},
                 equip: null, equipLoading: false, created: [],
-                rentals: null, rentalsLoading: false, rentalNotes: {},
+                rentals: null, rentalsLoading: false, rentalNotes: {}, listingNotes: {},
                 avail: {}, apps: null, appsLoading: false, plans: null, plansLoading: false };
     }
     return STORE;
@@ -272,7 +304,7 @@
     var c = ctx || {};
     var view = VIEWS.indexOf(c.view) >= 0 ? c.view : 'overview';
     var dead = false;
-    var ui = { form: null, formNote: null, busy: false, cancelAsk: null, pick: '' };
+    var ui = { form: null, formNote: null, busy: false, cancelAsk: null, declineAsk: null, pick: '' };
     injectCss(host.ownerDocument || (global.document || null));
     function uid () { try { return typeof c.uid === 'function' ? c.uid() : null; } catch (_) { return null; } }
     function role () { try { return typeof c.role === 'function' ? c.role() : null; } catch (_) { return null; } }
@@ -373,8 +405,8 @@
       else if (p.err || !p.rows.length) planLine = 'Construction plans: — (SOKONI has not priced a construction plan)';
       else planLine = 'Construction plans: ' + p.rows.map(function (x) { return (x.name || x.id || 'Plan') + ' ' + fmtKes(x.price.monthly) + '/month'; }).join(' · ');
       return '<div class="cw-card"><b>Fees</b>' +
-        '<div class="cw-meta">Owner-set terms, applied by SOKONI’s commission release (not yet live): building materials sold through SOKONI — the marketplace commission (15%); construction services — 0%.</div>' +
-        '<div class="cw-meta">Featured listings, lead fees, rental commission and construction plans are not priced and are switched OFF. Nothing is charged for them.</div>' +
+        '<div class="cw-meta">Owner-set terms, applied by SOKONI’s commission release (not yet live): building materials sold through SOKONI — the marketplace commission (15%); construction services — 0%; equipment rental — 10% of the hire, never the deposit.</div>' +
+        '<div class="cw-meta">Featured listings, lead fees and construction plans are not priced and are switched OFF. Nothing is charged for them.</div>' +
         '<div class="cw-meta">' + esc(planLine) + '</div>' +
         '<div class="cw-acts">' + goBtn(REUSED.subscription, 'Open Plan') + '</div></div>';
     }
@@ -501,9 +533,15 @@
       if (!E.rows.length) return '<div class="cw-card"><b>No equipment listed yet</b></div>';
       return (E.hasMore ? note({ kind: 'warn', text: 'Showing the first ' + EQUIP_LIMIT + ' — more exist.' }) : '') + E.rows.map(function (e) {
         var rate = RATE_FIELD[e.pricingType] ? e[RATE_FIELD[e.pricingType]] : null;
-        return '<div class="cw-card"><div class="cw-row"><b>' + esc(e.title || 'Equipment') + '</b><span class="cw-chip">' + esc(titleCase(e.status || '—')) + '</span></div>' +
+        var st = listingStatus(e), ln = S.listingNotes[e.id];
+        var acts = (E.source === 'server' ? listingActions(e) : []).map(function (a) {
+          return '<button type="button" class="cw-btn' + (a === 'publish' ? ' pri' : '') + '" data-act="listing-' + a + '" data-id="' + esc(e.id) + '">' + (a === 'publish' ? 'Make available' : 'Pause') + '</button>';
+        }).join('');
+        return '<div class="cw-card"><div class="cw-row"><b>' + esc(e.title || 'Equipment') + '</b><span class="cw-chip">' + esc(LISTING_LABEL[st] || titleCase(st || '—')) + '</span></div>' +
           '<div class="cw-meta">' + esc(titleCase(e.pricingType || '—')) + (typeof rate === 'number' ? ' · ' + esc(fmtKes(rate)) : '') +
-          (typeof e.deposit === 'number' && e.deposit > 0 ? ' · deposit ' + esc(fmtKes(e.deposit)) : '') + '</div></div>';
+          (typeof e.deposit === 'number' && e.deposit > 0 ? ' · deposit ' + esc(fmtKes(e.deposit)) : '') + '</div>' +
+          (st === 'draft' || st === 'paused' ? '<div class="cw-meta">Renters cannot book a ' + esc((LISTING_LABEL[st] || st).toLowerCase()) + ' listing.</div>' : '') +
+          (acts ? '<div class="cw-acts">' + acts + '</div>' : '') + note(ln) + '</div>';
       }).join('');
     }
     function equipForm () {
@@ -518,7 +556,7 @@
         '<div class="cw-two">' + inp('weeklyRate', 'Per week (KES)', 'number', ' min="0" inputmode="decimal"') + inp('monthlyRate', 'Per month (KES)', 'number', ' min="0" inputmode="decimal"') + '</div>' +
         '<div class="cw-two">' + inp('deposit', 'Deposit (KES)', 'number', ' min="0" inputmode="decimal"') + inp('minDuration', 'Minimum hire (units)', 'number', ' min="1"') + '</div>' +
         '<label>Terms<textarea data-f="terms" rows="2" maxlength="1000">' + esc(f.terms || '') + '</textarea></label>' +
-        '<div class="cw-meta">SOKONI calculates every hire price from these rates. ' + esc(UNPRICED_COPY) + '</div>' +
+        '<div class="cw-meta">SOKONI calculates every hire price from these rates. The listing is saved as a Draft; make it available when you are ready.</div>' +
         '<div class="cw-acts"><button type="button" class="cw-btn pri" data-act="equip-create"' + (ui.busy ? ' disabled' : '') + '>Save listing</button>' +
         '<button type="button" class="cw-btn" data-act="equip-cancel">Cancel</button></div>' + note(ui.formNote) + '</div>';
     }
@@ -553,9 +591,8 @@
     function vEquipment (S) {
       var h = head('Equipment', 'Machines and tools you hire out.');
       if (!S.uid) return h + signedOut();
-      h += '<div class="cw-note warn">' + esc(UNPRICED_COPY) + '</div>';
       h += ui.form ? equipForm() : '<div class="cw-acts" style="margin:10px 0">' + (shopId() ? '<button type="button" class="cw-btn pri" data-act="equip-new">List equipment</button>' : '') + goBtn(ROUTE_OF.availability, 'Availability') + goBtn(ROUTE_OF.rentals, 'Rentals') + '</div>';
-      if (S.created.length) h += '<div class="cw-card"><b>Listed in this session</b><div class="cw-meta">' + S.created.map(function (e) { return esc(e.title); }).join(' · ') + '</div><div class="cw-meta">Saved by SOKONI. Buyers cannot see rental listings until access rules ship.</div></div>';
+      if (S.created.length) h += '<div class="cw-card"><b>Listed in this session</b><div class="cw-meta">' + S.created.map(function (e) { return esc(e.title); }).join(' · ') + '</div><div class="cw-meta">Saved as a Draft. Renters cannot book it until you make it available.</div></div>';
       return h + equipListBlock(S);
     }
     function createEquip (S) {
@@ -570,10 +607,20 @@
         var id = d && d.rentalProductId;
         if (isId(id)) S.created.push({ id: id, title: r.payload.title });
         ui.form = null; ui.formNote = null;
-        if (typeof c.onToast === 'function') c.onToast('Equipment listing saved.');
+        if (typeof c.onToast === 'function') c.onToast('Saved as a draft.');
         return loadEquip(S, true);
       }, function (e) { ui.formNote = { kind: 'err', text: errMsg(e) }; })
         .then(function () { ui.busy = false; paintAll(); });
+    }
+
+    function listingOp (S, kind, id) {
+      var e = (S.equip && S.equip.rows || []).filter(function (x) { return x.id === id; })[0];
+      if (!e || listingActions(e).indexOf(kind) < 0) return Promise.resolve();
+      S.listingNotes[id] = { text: 'Working…' }; paintAll();
+      return dispatch(kind === 'publish' ? 'rentalProductPublish' : 'rentalProductPause', { rentalProductId: id, shopId: shopId() }).then(function () {
+        S.listingNotes[id] = { text: kind === 'publish' ? 'Available to renters.' : 'Paused. Renters cannot book it.' };
+        return loadEquip(S, true);
+      }, function (err) { S.listingNotes[id] = { kind: 'err', text: errMsg(err) }; }).then(paintAll);
     }
 
     /* ── AVAILABILITY ── */
@@ -607,26 +654,36 @@
 
     /* ── RENTALS ── */
     function rentalCard (S, b) {
-      var acts = rentalActions(b), n = S.rentalNotes[b.id];
+      var acts = rentalActions(b), n = S.rentalNotes[b.id], pay = paymentText(b);
       var btns = acts.map(function (a) {
         if (a === 'cancel') {
           return ui.cancelAsk === b.id
-            ? '<button type="button" class="cw-btn dan" data-act="rental-cancel" data-id="' + esc(b.id) + '">Confirm cancel</button><button type="button" class="cw-btn" data-act="rental-cancel-no">Keep</button>'
+            ? '<button type="button" class="cw-btn dan" data-act="rental-cancel" data-id="' + esc(b.id) + '">Confirm cancel</button><button type="button" class="cw-btn" data-act="rental-ask-no">Keep</button>'
             : '<button type="button" class="cw-btn dan" data-act="rental-cancel-ask" data-id="' + esc(b.id) + '">Cancel</button>';
         }
-        return '<button type="button" class="cw-btn' + (a === 'confirm' ? ' pri' : '') + '" data-act="rental-' + a + '" data-id="' + esc(b.id) + '">' + (a === 'confirm' ? 'Confirm' : 'Mark returned') + '</button>';
+        if (a === 'decline') {
+          return ui.declineAsk === b.id ? '' : '<button type="button" class="cw-btn dan" data-act="rental-decline-ask" data-id="' + esc(b.id) + '">Decline</button>';
+        }
+        return '<button type="button" class="cw-btn' + (a === 'accept' || a === 'complete' ? ' pri' : '') + '" data-act="rental-' + a + '" data-id="' + esc(b.id) + '">' + esc(RENTAL_BTN[a]) + '</button>';
       }).join('');
-      return '<div class="cw-card"><div class="cw-row"><b>' + esc(b.customerName || 'Customer') + '</b><span class="cw-badge">' + esc(RENTAL_LABEL[b.status] || titleCase(b.status || '—')) + '</span></div>' +
+      var decline = ui.declineAsk === b.id
+        ? '<label class="cw-meta" style="display:grid;gap:4px;margin-top:8px">Reason for declining (the renter sees it) *' +
+          '<textarea rows="2" maxlength="500" data-decline-reason="' + esc(b.id) + '"></textarea></label>' +
+          '<div class="cw-acts"><button type="button" class="cw-btn dan" data-act="rental-decline" data-id="' + esc(b.id) + '">Confirm decline</button>' +
+          '<button type="button" class="cw-btn" data-act="rental-ask-no">Keep</button></div>'
+        : '';
+      return '<div class="cw-card"><div class="cw-row"><b>' + esc(b.customerName || 'Customer') + '</b><span class="cw-badge">' + esc(rentalLabel(b)) + '</span></div>' +
         '<div class="cw-meta">' + esc(fmtDate(b.startDate)) + ' → ' + esc(fmtDate(b.endDate)) + ' · ' + esc(titleCase(b.durationUnit || '—')) + '</div>' +
         '<div class="cw-meta">Hire price calculated by SOKONI: ' + esc(fmtKes(b.totalAmount)) + (typeof b.depositAmount === 'number' && b.depositAmount > 0 ? ' · deposit ' + esc(fmtKes(b.depositAmount)) : '') + '.</div>' +
-        '<div class="cw-meta">' + esc(paymentText(b)) + '</div>' +
+        (pay ? '<div class="cw-meta">Payment: ' + esc(pay) + '</div>' : '') +
+        '<div class="cw-meta">Payment method: ' + esc(paymentMethodText(b)) + '</div>' +
         (b.notes ? '<div class="cw-msg">' + esc(b.notes) + '</div>' : '') +
-        (btns ? '<div class="cw-acts">' + btns + '</div>' : '') + note(n) + '</div>';
+        (btns ? '<div class="cw-acts">' + btns + '</div>' : '') + decline + note(n) + '</div>';
     }
     function vRentals (S) {
       var h = head('Rentals', 'Hire requests for your equipment.');
       if (!S.uid) return h + signedOut();
-      h += '<div class="cw-note warn">' + esc(UNPRICED_COPY) + '</div>';
+      h += '<div class="cw-note">' + esc(RENTAL_FLOW_COPY) + '</div>';
       if (!shopId()) return h + '<div class="cw-card cw-meta">Your shop is still loading.</div>';
       var R = S.rentals;
       if (!R) return h + loadingCard();
@@ -641,13 +698,20 @@
     function rentalOp (S, kind, id) {
       var b = (S.rentals && S.rentals.rows || []).filter(function (x) { return x.id === id; })[0];
       if (!b || rentalActions(b).indexOf(kind) < 0) return Promise.resolve();
-      var sid = shopId();
-      var op = kind === 'confirm' ? 'rentalConfirm' : kind === 'complete' ? 'rentalComplete' : 'rentalCancel';
-      var payload = kind === 'cancel' ? { bookingId: id } : { bookingId: id, shopId: sid };
-      ui.cancelAsk = null;
+      var payload = kind === 'cancel' ? { bookingId: id } : { bookingId: id, shopId: shopId() };
+      if (kind === 'decline') {
+        var el = host.querySelector ? host.querySelector('[data-decline-reason="' + id + '"]') : null;
+        var reason = el ? String(el.value || '').trim() : '';
+        if (!reason) { S.rentalNotes[id] = { kind: 'err', text: 'Give the renter a reason before declining.' }; return Promise.resolve(paintAll()); }
+        payload.reason = reason.slice(0, 500);
+      }
+      ui.cancelAsk = null; ui.declineAsk = null;
       S.rentalNotes[id] = { text: 'Working…' }; paintAll();
-      return dispatch(op, payload).then(function () {
-        S.rentalNotes[id] = { text: kind === 'confirm' ? 'Confirmed.' : kind === 'complete' ? 'Marked returned.' : 'Cancelled.' };
+      var run = dispatch(RENTAL_OP[kind], payload);
+      /* rentalAccept is new in bb8634d; an older server knows only its alias rentalConfirm. */
+      if (kind === 'accept') run = run.catch(function (e) { if (isUnknownOp(e)) return dispatch('rentalConfirm', payload); throw e; });
+      return run.then(function () {
+        S.rentalNotes[id] = { text: RENTAL_DONE[kind] };
         return loadRentals(S, true);
       }, function (e) { S.rentalNotes[id] = { kind: 'err', text: errMsg(e) }; }).then(paintAll);
     }
@@ -705,11 +769,17 @@
         case 'equip-new': ui.form = {}; ui.formNote = null; return render();
         case 'equip-cancel': ui.form = null; ui.formNote = null; return render();
         case 'equip-create': return createEquip(S);
-        case 'rental-confirm': return rentalOp(S, 'confirm', id);
+        case 'rental-accept': return rentalOp(S, 'accept', id);
+        case 'rental-start': return rentalOp(S, 'start', id);
+        case 'rental-confirm-return': return rentalOp(S, 'confirm-return', id);
         case 'rental-complete': return rentalOp(S, 'complete', id);
-        case 'rental-cancel-ask': ui.cancelAsk = id; return render();
-        case 'rental-cancel-no': ui.cancelAsk = null; return render();
+        case 'rental-decline-ask': ui.declineAsk = id; ui.cancelAsk = null; return render();
+        case 'rental-decline': return rentalOp(S, 'decline', id);
+        case 'rental-cancel-ask': ui.cancelAsk = id; ui.declineAsk = null; return render();
+        case 'rental-ask-no': ui.cancelAsk = null; ui.declineAsk = null; return render();
         case 'rental-cancel': return rentalOp(S, 'cancel', id);
+        case 'listing-publish': return listingOp(S, 'publish', id);
+        case 'listing-pause': return listingOp(S, 'pause', id);
         case 'reload': ensure(true); return render();
       }
     }
@@ -747,7 +817,8 @@
              chatAvailable: chatAvailable, rentalActions: rentalActions, leadCounts: leadCounts, rentalCounts: rentalCounts,
              equipmentCount: equipmentCount, constructionPlans: constructionPlans, fmtCount: fmtCount, appLabel: appLabel,
              isVerified: isVerified, esc: esc, LEAD_NEXT: LEAD_NEXT, LEAD_TERMINAL: LEAD_TERMINAL, routeFor: routeFor,
-             UNPRICED_COPY: UNPRICED_COPY, RULES_COPY: RULES_COPY, UNPAID_COPY: UNPAID_COPY,
-             isUnknownOp: isUnknownOp, paymentText: paymentText, errMsg: errMsg, RENTAL_NEXT: RENTAL_NEXT }
+             RULES_COPY: RULES_COPY, RENTAL_FLOW_COPY: RENTAL_FLOW_COPY, isUnknownOp: isUnknownOp, paymentText: paymentText,
+             paymentMethodText: paymentMethodText, rentalStatus: rentalStatus, rentalLabel: rentalLabel, listingActions: listingActions,
+             errMsg: errMsg, RENTAL_NEXT: RENTAL_NEXT, RENTAL_OP: RENTAL_OP }
   };
 })(typeof window !== 'undefined' ? window : globalThis);
