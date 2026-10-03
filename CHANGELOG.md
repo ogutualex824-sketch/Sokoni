@@ -1,3 +1,9 @@
+## 2026-10-03 — Platform-wide transaction receipts: module + read callable (hooks not wired; NOT deployed)
+
+- **New:** functions/transaction-receipts.js (transactionReceipts + immutable events; SKN-RCT numbering reused; taxTreatment recorded, never computed); myTransactionReceipts callable.
+- **Doc:** docs/TRANSACTION_RECEIPTS_2026-10-03.md (census, model, hook contract for b2).
+- **Test:** test-transaction-receipts 13/0.
+
 ## 2026-10-03 — B2B lead recovery: the OPERATION is the idempotency unit (op header) — a retry after a new invoice no longer cuts again (NOT deployed)
 
 - **Defect:** found in sokoni-f3's review.

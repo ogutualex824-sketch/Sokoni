@@ -13508,3 +13508,6 @@ exports.b2bLeadInvoiceSweep    = _b2bLeads.b2bLeadInvoiceSweep;
 exports.b2bLeadPrice           = _b2bLeads.b2bLeadPrice;
 exports.adminSetB2bLeadPrice   = _b2bLeads.adminSetB2bLeadPrice;
 exports.b2bLeadStatement       = _b2bLeads.b2bLeadStatement;
+
+/* ── Platform-wide transaction receipts (owner 2026-10-03): the caller's own payment receipts. ── */
+exports.myTransactionReceipts = require('./transaction-receipts').myTransactionReceipts;
