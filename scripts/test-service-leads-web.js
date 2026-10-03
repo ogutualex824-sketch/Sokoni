@@ -40,15 +40,15 @@ const SRC = read('sokoni-leads.js');
 /* W1 customer card actions follow the server state, never ahead of it (a function, so the sabotage re-runs THIS row) */
 function w1Condition(src) {
   const { api } = load(src, true);
-  const acts = (st, q) => (api._internal.mineCard({ id: 'a', status: st, message: 'm', quote: q || null }).match(/data-lead-act="([a-z]+)"/g) || []).map((x) => x.split('"')[1]).sort().join();
+  const acts = (st, q) => (api._internal.mineCard({ id: 'a', status: st, message: 'm', quote: q || null }).match(/data-lead-act="([a-z_]+)"/g) || []).map((x) => x.split('"')[1]).sort().join();
   const q = { version: 1, amountCents: 150000, durationMins: 60, validUntil: Date.now() + 1e8 };
-  return acts('quote_sent', q) === 'accept,clarify,close,decline,msg' && acts('quote_accepted', q) === 'book,close,msg' && acts('created') === 'close,msg' && acts('converted', q) === 'msg';
+  return acts('quote_sent', q) === 'accept,clarify,close,decline,msg' && acts('quote_accepted', q) === 'book,close,msg' && acts('created') === 'close,msg,request_quote' && acts('converted', q) === 'msg';
 }
 {
   const { api } = load(SRC, true);
-  const acts = (st, q) => (api._internal.mineCard({ id: 'a', status: st, message: 'm', quote: q || null }).match(/data-lead-act="([a-z]+)"/g) || []).map((x) => x.split('"')[1]).sort().join();
+  const acts = (st, q) => (api._internal.mineCard({ id: 'a', status: st, message: 'm', quote: q || null }).match(/data-lead-act="([a-z_]+)"/g) || []).map((x) => x.split('"')[1]).sort().join();
   const q = { version: 1, amountCents: 150000, durationMins: 60, validUntil: Date.now() + 1e8 };
-  ck('W1', acts('quote_sent', q) === 'accept,clarify,close,decline,msg' && acts('quote_accepted', q) === 'book,close,msg' && acts('created') === 'close,msg' && acts('converted', q) === 'msg',
+  ck('W1', acts('quote_sent', q) === 'accept,clarify,close,decline,msg' && acts('quote_accepted', q) === 'book,close,msg' && acts('created') === 'close,msg,request_quote' && acts('converted', q) === 'msg',
     'customer actions per state: accept/clarify/decline only on a sent quote; Book only after acceptance; nothing after booking', { sent: acts('quote_sent', q), acc: acts('quote_accepted', q), conv: acts('converted', q) });
   const card = api._internal.mineCard({ id: 'a', status: 'quote_sent', message: '<img src=x onerror=1>', quote: Object.assign({}, q, { description: '<script>x</script>' }) });
   ck('W1b', !/<img|<script>/.test(card) && /KES 1,500/.test(card), 'customer text and quote text are escaped; the amount shown is the server amount', card.slice(0, 160));
@@ -56,9 +56,27 @@ function w1Condition(src) {
 /* W2 provider card actions */
 {
   const { api } = load(SRC, true);
-  const acts = (st) => (api._internal.provCard({ id: 'a', status: st, message: 'm' }).match(/data-plead-act="([a-z]+)"/g) || []).map((x) => x.split('"')[1]).sort().join();
-  ck('W2', acts('created') === 'decline,msg,quote' && acts('quote_sent') === 'msg,quote' && acts('quote_accepted') === 'msg' && acts('declined') === 'msg',
-    'provider actions per state: quote / decline while open, re-quote only before acceptance, nothing after', { created: acts('created'), sent: acts('quote_sent'), acc: acts('quote_accepted') });
+  const acts = (st, extra) => (api._internal.provCard(Object.assign({ id: 'a', status: st, message: 'm' }, extra || {})).match(/data-plead-act="([a-z_]+)"/g) || []).map((x) => x.split('"')[1]).sort().join();
+  ck('W2', acts('created') === 'decline,lost,msg,qualify,quote' && acts('qualified') === 'decline,lost,msg,quote' && acts('quote_sent') === 'lost,msg,quote,withdraw'
+    && acts('quote_accepted') === 'msg' && acts('declined') === 'msg' && acts('lost') === 'msg',
+    'provider actions per state (G7): quote / qualify / decline / lost while open, withdraw only a sent quote, nothing after acceptance', { created: acts('created'), sent: acts('quote_sent'), acc: acts('quote_accepted') });
+  /* W2b the server's derived stage: an idle (expired) request can only be declined / marked lost; the server's label shows */
+  const idleCard = api._internal.provCard({ id: 'a', status: 'viewed', stage: 'expired', message: 'm' });
+  ck('W2b', acts('viewed', { stage: 'expired' }) === 'decline,lost,msg' && />Expired</.test(idleCard), 'an expired (idle) lead offers no quote / qualify — only decline, lost, message', acts('viewed', { stage: 'expired' }));
+}
+/* W2c customer: accept carries the version on screen; an expired quote cannot be accepted; the itemised lines + payment terms show */
+{
+  const { api } = load(SRC, true);
+  const q = { version: 3, amountCents: 162400, durationMins: 60, validUntil: Date.now() + 1e8, scope: 'Three screens',
+    breakdown: [{ type: 'line', label: 'Screen repair × 3', amount: 150000 }, { type: 'adjustment', label: 'Returning', amount: -10000 }, { type: 'tax', label: 'VAT 16%', amount: 22400 }],
+    paymentTerms: { code: 'paid_on_booking_held_until_pin', text: 'Paid in full through SOKONI when booked; held until the customer confirms completion with their PIN.', note: '' } };
+  const live = api._internal.mineCard({ id: 'a', status: 'quote_sent', stage: 'quote_sent', quoteStage: 'customer_viewed', message: 'm', quote: q });
+  const lapsed = api._internal.mineCard({ id: 'a', status: 'quote_sent', stage: 'expired', quoteStage: 'expired', message: 'm', quote: q });
+  ck('W2c', /data-lead-act="accept"/.test(live) && !/data-lead-act="accept"/.test(lapsed) && /VAT 16%/.test(live) && /KES 1,624/.test(live) && /held until the customer confirms/.test(live)
+    && /Viewed by customer/.test(live) && /Ask for a new quote/.test(lapsed) && /\bdata\.quoteVersion = l\.quote\.version/.test(SRC.replace(/\s+/g, ' ')),
+    'customer card: itemised lines, payment terms and quote stage from the server; no Accept on an expired quote; accept sends the quote version on screen', lapsed.slice(0, 200));
+  ck('W2d', !/amountCents: amount/.test(SRC) && /unitRateCents: rate/.test(SRC) && /'leadSaveQuoteDraft'/.test(SRC),
+    'the quote form sends LINES (quantity / unit rate / discount / stated tax) — never a client total — and can save a draft');
 }
 /* W3 ask(): login first; the request goes to the server and nothing claims success before it answers */
 (async () => {
