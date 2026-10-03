@@ -286,19 +286,27 @@ exports.adminGetFeatureFlags = onCall({ region: 'us-central1', maxInstances: 10,
 
 exports.adminUpdateFeatureFlag = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminUpdateFeatureFlag = async (req) => {
   _requireSuperAdmin(req);
-  const { key, enabled, rolloutPct, enabledForRoles, description } = req.data;
+  const { key, enabled, rolloutPct, enabledForRoles, description } = req.data || {};
   if (!key) throw new Error('key required');
+  /* 2026-10-03 (reported by sokoni-2f, fixed by sokoni-b2): `enabled ?? true` switched a flag ON whenever the field was
+     omitted (featureFlags/fitness_membership_sales gates PAID memberships), and every call reset rolloutPct to 100 and
+     cleared enabledForRoles — a plain on/off toggle widened a staged rollout. Now: `enabled` must be a boolean, and only
+     the fields the caller actually sent are written. */
+  if (typeof enabled !== 'boolean') {
+    const { HttpsError } = require('firebase-functions/v2/https');
+    throw new HttpsError('invalid-argument', 'enabled must be true or false.');
+  }
+  const patch = { key, enabled, updatedBy: req.auth.uid, updatedAt: FieldValue.serverTimestamp() };
+  if (rolloutPct !== undefined && rolloutPct !== null) {
+    const n = Number(rolloutPct);
+    if (!Number.isFinite(n)) { const { HttpsError } = require('firebase-functions/v2/https'); throw new HttpsError('invalid-argument', 'rolloutPct must be a number.'); }
+    patch.rolloutPct = Math.min(Math.max(n, 0), 100);
+  }
+  if (Array.isArray(enabledForRoles)) patch.enabledForRoles = enabledForRoles.map(String).slice(0, 50);
+  if (typeof description === 'string') patch.description = description.slice(0, 500);
 
   const db = getFirestore();
-  await db.collection('featureFlags').doc(key).set({
-    key,
-    enabled: enabled ?? true,
-    rolloutPct: Math.min(Math.max(rolloutPct ?? 100, 0), 100),
-    enabledForRoles: enabledForRoles || [],
-    description: description || '',
-    updatedBy: req.auth.uid,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  await db.collection('featureFlags').doc(key).set(patch, { merge: true });
 
   return { success: true };
 });

@@ -1,4 +1,15 @@
 ## 2026-10-03 — Fitness memberships: server-side sales flag + API response contract and generated fixtures (NOT deployed)
+## [2026-10-03] — adminUpdateFeatureFlag can no longer switch a flag ON by omission or widen a staged rollout — NOT deployed
+
+- Reported by sokoni-2f, fixed by sokoni-b2. functions/admin-os.js adminUpdateFeatureFlag (super-admin) had three defects:
+  - it wrote `enabled: enabled ?? true`, so a call that omitted `enabled` turned a flag ON; featureFlags/fitness_membership_sales gates PAID memberships;
+  - it stored non-booleans ("true") verbatim;
+  - on every call it reset rolloutPct to 100 and cleared enabledForRoles, so a plain toggle widened a staged rollout to everyone.
+- Now `enabled` must be a boolean, and only the fields the caller sent are written. The AdminOS callers (sokoni-aos.js toggles) already pass an explicit boolean.
+- Test: test-feature-flag-update 4/0, executing the real handler. BASE=1f813e7 fails F-1 / F-2 / F-3.
+- Deploy unit: adminOsDispatch (+ standalone adminUpdateFeatureFlag if live). Lineage gate applies.
+
+## [2026-10-03] — Tech Hub slice 4Q (server): AdminOS sees service leads & quotes — NOT deployed
 
 **Summary**
 - **Sales flag (server-side).** `fitnessCreateMembership` now refuses with `failed-precondition` `{ reason: 'SALES_DISABLED' }` "Memberships aren't on sale yet." unless `featureFlags/fitness_membership_sales.enabled === true`.
