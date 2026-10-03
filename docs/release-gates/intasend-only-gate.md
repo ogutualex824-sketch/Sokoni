@@ -84,6 +84,10 @@ Columns count files. Functions = Daraja server code; Website = Daraja in pages o
   093fd4f does not cherry-pick onto that line (9 conflicts, no guard file), hence the hand port.
 - **fix/payment-method-from-provider-on-5a0935e** (sokoni-b2) @ f9e596d: card-method fix (Gates 8/12) plus that port; functions/
   CLEAN, guard PASS, executed method test 6/0. Ships alone: `--only functions:verifyIntasendPayment`.
+- **sok-reports-fn** (sokoni-e3) @ cd293bb: same hand port; functions/ CLEAN, guard PASS, AST 0 references (positive control 29),
+  their moderation/takedown/gateway work byte-for-byte intact. Pre-existing jest failure on that lineage, not from the port:
+  `application-lifecycle.test.js:132` expects Lawyer → legal; the a545818 line predates the Roles Phase 2 vocabulary (lineage drift).
+- **sok-parcel-fn2** e61c73e: confirmParcelPayment records the provider method (5aa7711 mapping), KES only; matrix 17/17.
 - LEGACY_INACTIVE cleanups found: `functions/financial-engine.js` has no caller since `darajaSTKCallback` went; four historical
   `certify-*` scripts still reference `mpesa-c2b.js`.
 
