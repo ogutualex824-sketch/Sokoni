@@ -55,6 +55,13 @@ const call = async (fn, req) => { try { return { ok: true, r: await fn(req) }; }
   ck('H-1', r.ok && r.r.history.map((h) => h.action).join(',') === 'submit,approve', 'each review\'s moderation history is readable in order', r.ok ? r.r.history : r);
   r = await call(H.adminGetReviewHistory, { auth: { uid: 'u', token: {} }, data: { reviewId: 'r1' } });
   ck('H-2', !r.ok, 'history is admin-only', r);
+  DOCS.set('unboxingReviews/buyer_p1', { status: 'pending', uid: 'buyer', productId: 'p1', product: 'Kettle', comment: 'Arrived sealed', rating: 5, createdAt: TS(9) });
+  r = await call(H.adminGetReviews, Object.assign({ data: { kind: 'unboxing' } }, ADM));
+  ck('K-1', r.ok && r.r.kind === 'unboxing' && r.r.reviews.length === 1 && r.r.reviews[0].authorUid === 'buyer' && r.r.reviews[0].targetId === 'p1' && r.r.reviews[0].body === 'Arrived sealed',
+    'kind:"unboxing" lists pending unboxing posts in the SAME queue (author / product / text mapped)', r.ok ? r.r : r);
+  r = await call(H.adminGetReviews, Object.assign({ data: {} }, ADM));
+  ck('K-2', r.ok && r.r.kind === 'review' && !r.r.reviews.some((x) => x.id === 'buyer_p1'), 'the default queue stays product/seller reviews (no mixing)');
+
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH ' + (e && e.stack || e)); process.exit(2); });

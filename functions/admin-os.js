@@ -1129,19 +1129,21 @@ exports.adminGetReviews = onCall({ region: 'us-central1', maxInstances: 10, enfo
   const status = d.flagged === true ? 'flagged' : (STATES.includes(d.status) ? d.status : 'pending');
   const lim = Math.min(Math.max(1, Number(d.limit) || 50), 100);
   const db = getFirestore();
-  let q = db.collection('reviews').where('status', '==', status).orderBy(FieldPath.documentId()).limit(lim + 1);
+  /* kind 'unboxing' (owner 2026-10-03): unboxing posts are moderated in the SAME queue, same vocabulary */
+  const kind = d.kind === 'unboxing' ? 'unboxing' : 'review';
+  let q = db.collection(kind === 'unboxing' ? 'unboxingReviews' : 'reviews').where('status', '==', status).orderBy(FieldPath.documentId()).limit(lim + 1);
   if (typeof d.cursor === 'string' && /^[A-Za-z0-9_-]{1,200}$/.test(d.cursor)) q = q.startAfter(d.cursor);
   const snap = await q.get();
   const page = snap.docs.slice(0, lim);
   const rows = page.map(x => { const v = x.data() || {}; return {
-    id: x.id, status: v.status || null, rating: v.rating || null, title: v.title || '', body: v.body || '',
-    images: Array.isArray(v.images) ? v.images.slice(0, 5) : [], targetType: v.targetType || null, targetId: v.targetId || null,
-    targetName: v.targetName || null, authorUid: v.authorUid || null, orderId: v.orderId || null, flags: v.flags || 0,
+    id: x.id, kind, status: v.status || null, rating: v.rating || null, title: v.title || '', body: v.body || v.comment || '',
+    images: Array.isArray(v.images) ? v.images.slice(0, 5) : [], targetType: v.targetType || (kind === 'unboxing' ? 'product' : null), targetId: v.targetId || v.productId || null,
+    targetName: v.targetName || v.product || null, authorUid: v.authorUid || v.uid || null, orderId: v.orderId || null, flags: v.flags || 0,
     moderatedBy: v.moderatedBy || null, moderationNote: v.moderationNote || null,
     createdAt: v.createdAt?.toDate?.()?.toISOString() || null, moderatedAt: v.moderatedAt?.toDate?.()?.toISOString() || null,
   }; }).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   const nextCursor = snap.docs.length > lim ? page[page.length - 1].id : null;
-  return { reviews: rows, items: rows, count: rows.length, status, nextCursor };
+  return { reviews: rows, items: rows, count: rows.length, status, kind, nextCursor };
 });
 
 /* The moderation history of one review (reviews.js writes reviewModerationLog on every transition). Admin only;
