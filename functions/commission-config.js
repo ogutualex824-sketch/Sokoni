@@ -89,7 +89,8 @@ const RATES = {
   /* Fitness Hub bookings (owner 2026-10-03: "5% commission per booking for the bookings"). Its own key and a FIXED-RATE
      category (below): a fitness booking is 5% on every provider plan — the provider ladder (Free 20% … Enterprise 5%)
      and admin overrides do not apply. Covers paid sessions, classes, consultations, packages and Quick Pay bookings.
-     Booking FEES, memberships, marketing and Marketplace equipment/clothing are separate products, not this row. */
+     Owner 2026-10-03 (via sokoni-e3): memberships and packages pay the SAME 5% — price them with category 'fitness' too.
+     Booking FEES, marketing and Marketplace equipment/clothing are separate products, not this row. */
   fitness:          { pct: 5,   fixedKES: 0,    _was: 'owner 2026-10-03: fitness bookings 5% per booking (was ALIASES.fitness -> services 5%, then the provider plan ladder 20–5%)' },
   education:        { pct: 15,  fixedKES: 0,    _was: 'category only' },
   jobs:             { pct: 15,  fixedKES: 0,    _was: 'category only' },

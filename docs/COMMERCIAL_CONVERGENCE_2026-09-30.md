@@ -398,7 +398,7 @@ Owner approval for Unit 3 (P0-4) · the four Gate B items (§9) · the `terms.ht
 - Aliases: `gym`, `fitness_hub`, `fitness-hub`, `personal_training`.
 - The browser snapshot (`sokoni-commission-rates.js`) was regenerated.
 
-**Scope.** The rate covers paid fitness BOOKINGS: sessions, classes, consultations, packages and Quick Pay. It does not cover:
+**Scope.** The rate covers paid fitness BOOKINGS (sessions, classes, consultations, packages, Quick Pay) AND, per the owner via sokoni-e3 on 2026-10-03, **memberships and packages at the same 5%**. Membership money is released **pro-rata per period**; on cancellation only the unused part is refunded. That release mechanism is not built yet (it extends the provider-ops settlement, see §13 when built). It does not cover:
 - booking fees
 - memberships
 - marketing
