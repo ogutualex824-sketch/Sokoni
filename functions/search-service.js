@@ -565,6 +565,50 @@ function _resolveCollection(collectionKey) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
+   TAKEDOWN ENFORCEMENT (2026-10-02) — the canonical visibility gate on every product result
+   An index can lag the canonical product (eventual consistency, a missed trigger, a backfill): a search hit is
+   therefore NEVER turned into a public result without re-checking `products/{id}` through product-visibility.js.
+   A product that is taken down / hidden / archived is dropped; the canonical read failing fails the call closed.
+   Records in sokoni_products that have no products document (foods, deals, inventory_products share the index)
+   pass through unchanged. Bounded: one getAll per page of hits (≤100 ids).
+══════════════════════════════════════════════════════════════════════════════ */
+const _visibility = require('./product-visibility');
+function _isProductIndex(indexKey) {
+  const e = _resolveCollection(indexKey);
+  return e.algoliaIndex === 'sokoni_products' || e.typesenseCollection === 'sokoni_products';
+}
+async function _gateResult(kind, req, r) {
+  if (!r || typeof r !== 'object') return r;
+  const d = req.data || {};
+  try {
+    if (kind === 'autocomplete' && Array.isArray(r.suggestions)) {
+      const idx = d.index || 'sokoni_products';
+      const all = idx === '__all__';
+      if (!all && !_isProductIndex(idx) && idx !== 'sokoni_products') return r;
+      const f = await _visibility.filterVisibleHits(db, r.suggestions, { isProduct: (s) => (all ? s.category === 'product' : true) });
+      r.suggestions = f.hits;
+      return r;
+    }
+    if (kind === 'similar' && Array.isArray(r.recommendations)) {
+      if (!_isProductIndex(d.index || 'products')) return r;
+      r.recommendations = (await _visibility.filterVisibleHits(db, r.recommendations)).hits;
+      return r;
+    }
+    if (Array.isArray(r.hits)) {
+      if (!_isProductIndex(d.index || 'products')) return r;
+      const f = await _visibility.filterVisibleHits(db, r.hits);
+      r.hits = f.hits;
+      if (f.removed) { r.total = Math.max(0, (Number(r.total) || 0) - f.removed); r.visibilityFiltered = f.removed; }
+    }
+    return r;
+  } catch (e) {
+    logger.error('[Search] canonical visibility re-check failed — failing closed', { kind, error: e && e.message });
+    throw new HttpsError('unavailable', 'Search is temporarily unavailable. Please try again.');
+  }
+}
+function _gated(kind, handler) { return async (req) => _gateResult(kind, req, await handler(req)); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
    1. searchQuery — main search callable
 ══════════════════════════════════════════════════════════════════════════════ */
 
@@ -605,7 +649,7 @@ exports.searchQuery = onCall(
     ...CF_OPTS,
     secrets: [ALGOLIA_SEARCH_KEY, TYPESENSE_SEARCH_KEY],
   },
-  async (req) => {
+  _gated('query', async (req) => {
     const uid      = _assertAuth(req);
     const isAdmin  = Boolean(req.auth?.token?.admin);
     const startMs  = Date.now();
@@ -757,7 +801,7 @@ exports.searchQuery = onCall(
     _recordAnalytics(uid, sanitizedQuery, index, usedEngine, result.total, result.latencyMs);
 
     return result;
-  }
+  })
 );
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -780,7 +824,7 @@ exports.searchAutocomplete = onCall(
     timeoutSeconds: 10,
     secrets:        [ALGOLIA_SEARCH_KEY, TYPESENSE_SEARCH_KEY],
   },
-  async (req) => {
+  _gated('autocomplete', async (req) => {
     const uid     = _assertAuth(req);
     const startMs = Date.now();
 
@@ -950,7 +994,7 @@ exports.searchAutocomplete = onCall(
     }
 
     return { suggestions: [], latencyMs: Date.now() - startMs };
-  }
+  })
 );
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -972,7 +1016,7 @@ exports.searchNearby = onCall(
     ...CF_OPTS,
     secrets: [ALGOLIA_SEARCH_KEY, TYPESENSE_SEARCH_KEY],
   },
-  async (req) => {
+  _gated('nearby', async (req) => {
     const uid      = _assertAuth(req);
     const startMs  = Date.now();
 
@@ -1062,7 +1106,7 @@ exports.searchNearby = onCall(
     }
 
     throw new HttpsError('unavailable', 'Geo search is temporarily unavailable. Please try again.');
-  }
+  })
 );
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -1086,7 +1130,7 @@ exports.searchSimilar = onCall(
     ...CF_OPTS,
     secrets: [ALGOLIA_ADMIN_KEY, ALGOLIA_SEARCH_KEY],
   },
-  async (req) => {
+  _gated('similar', async (req) => {
     const uid     = _assertAuth(req);
     const startMs = Date.now();
 
@@ -1198,7 +1242,7 @@ exports.searchSimilar = onCall(
       logger.error('[SearchSimilar] Category fallback failed', { error: err.message });
       throw new HttpsError('internal', 'Unable to retrieve recommendations at this time.');
     }
-  }
+  })
 );
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -1219,7 +1263,7 @@ exports.searchPersonalized = onCall(
     ...CF_OPTS,
     secrets: [ALGOLIA_SEARCH_KEY, TYPESENSE_SEARCH_KEY],
   },
-  async (req) => {
+  _gated('personalized', async (req) => {
     const uid     = _assertAuth(req);
     const startMs = Date.now();
 
@@ -1305,7 +1349,7 @@ exports.searchPersonalized = onCall(
     }
 
     throw new HttpsError('unavailable', 'Personalized search is temporarily unavailable.');
-  }
+  })
 );
 
 /* ══════════════════════════════════════════════════════════════════════════════

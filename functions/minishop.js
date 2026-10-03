@@ -39,6 +39,7 @@ const logger                            = require('firebase-functions/logger');
    aliases, sanitisation, and the read-time merge across the two stores this
    config was historically split between. See minishop-config-schema.js. */
 const { forWrite: configForWrite, resolve: resolveConfig } = require('./minishop-config-schema');
+const _visibility = require('./product-visibility');
 
 /* ── Secrets ──────────────────────────────────────────────────────────────── */
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
@@ -209,13 +210,20 @@ exports.getMinishopPublic = onRequest(
       delete shop.minishopConfig;
 
       /* 3 — Products (single-field query: shopId == shopId, no composite) */
+      /* TAKEDOWN ENFORCEMENT (2026-10-02): a public shop page never lists a product that is taken down, hidden,
+         archived or otherwise not public — the canonical gate (product-visibility.js) runs on every candidate and
+         moderation metadata never reaches the response. Bounded over-fetch (48) so a few hidden listings do not
+         empty the page; the shop itself is not hidden. */
       const productsSnap = await db
         .collection('products')
         .where('shopId', '==', shopId)
-        .limit(16)
+        .limit(48)
         .get();
 
-      const products = productsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const products = productsSnap.docs
+        .filter(d => _visibility.isPubliclyVisible(d.data()))
+        .slice(0, 16)
+        .map(d => _visibility.stripModeration({ id: d.id, ...d.data() }));
 
       /* 4 — Recent reviews (single-field query: targetId == shopId) */
       const reviewsSnap = await db

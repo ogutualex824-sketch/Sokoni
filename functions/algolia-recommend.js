@@ -44,12 +44,33 @@ function _assertConfigured(algolia) {
 
 /* ── Recommend helper ─────────────────────────────────────────────────── */
 
+/* TAKEDOWN ENFORCEMENT (2026-10-02): a recommendation model is trained on past events and can lag the index, so no
+   recommended product reaches a caller without the canonical re-check (product-visibility.js). sokoni_products hits
+   carry the product id; sokoni_global hits carry "products_<id>". A canonical-read failure fails the call closed. */
+const _visibility = require('./product-visibility');
+async function _gateRecommendations(requests, results) {
+  if (!Array.isArray(results)) return results;
+  const out = [];
+  for (let i = 0; i < results.length; i++) {
+    const res = results[i] || {};
+    const idx = String(((requests || [])[i] || {}).indexName || '');
+    if (!Array.isArray(res.hits) || !/^sokoni_(products|global)$/.test(idx)) { out.push(res); continue; }
+    const global = idx === 'sokoni_global';
+    const f = await _visibility.filterVisibleHits(_db(), res.hits, {
+      isProduct: (h) => !global || String((h && h.objectID) || '').startsWith('products_'),
+      idOf: (h) => { const id = String((h && (h.objectID || h.id)) || ''); return global ? id.replace(/^products_/, '') : id; },
+    });
+    out.push(Object.assign({}, res, { hits: f.hits }));
+  }
+  return out;
+}
+
 async function _recommend(requests) {
   const algolia = _client();
   _assertConfigured(algolia);
   try {
     const result = await algolia.getRecommendations(requests);
-    return { ok: true, results: result.results };
+    return { ok: true, results: await _gateRecommendations(requests, result.results) };
   } catch (err) {
     console.error('[AlgoliaRecommend] Request failed:', err.message);
     throw new HttpsError('internal', `Algolia Recommend error: ${err.message}`);

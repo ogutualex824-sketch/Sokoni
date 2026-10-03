@@ -27,6 +27,32 @@ const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https')
 const admin          = require('firebase-admin');
 const crypto         = require('crypto');
 const { FieldValue } = require('firebase-admin/firestore');
+/* TAKEDOWN ENFORCEMENT (2026-10-02): every public product response passes the canonical gate. */
+const _visibility    = require('./product-visibility');
+
+/* One page of PUBLIC products from an ordered Firestore query, filtered at the query layer: hidden / taken-down
+   docs are skipped and the page is refilled from the next batch (bounded: 4 batches), so page N never carries a
+   hidden product and never comes back short while visible products remain. The cursor is the last doc SCANNED. */
+async function _visiblePage(baseQuery, pageSize, keep) {
+  const items = []; let last = null; let exhausted = false; let hasMore = false;
+  let q = baseQuery;
+  for (let round = 0; round < 4 && !hasMore; round++) {
+    const batch = pageSize + 1;
+    const snap = await q.limit(batch).get();
+    for (const d of snap.docs) {
+      const ok = _visibility.isPubliclyVisible(d.data()) && (!keep || keep(d));
+      if (ok && items.length === pageSize) { hasMore = true; break; }
+      last = d;
+      if (ok) items.push(d);
+    }
+    if (hasMore) break;
+    if (snap.size < batch) { exhausted = true; break; }
+    if (items.length === pageSize) { hasMore = true; break; }
+    q = baseQuery.startAfter(last);
+  }
+  if (!hasMore && !exhausted && items.length < pageSize) hasMore = true;   /* bounded scan stopped early */
+  return { docs: items, hasMore, nextCursor: hasMore && last ? last.id : null };
+}
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -408,8 +434,7 @@ async function _handleSearch(req, res, opts) {
 
     let query = firestore.collection('products')
       .where('status', '==', 'active')
-      .orderBy('createdAt', 'desc')
-      .limit(fetchLimit);
+      .orderBy('createdAt', 'desc');
 
     if (category) {
       query = query.where('category', '==', category);
@@ -420,8 +445,15 @@ async function _handleSearch(req, res, opts) {
       if (cursorDoc.exists) query = query.startAfter(cursorDoc);
     }
 
-    const snap  = await query.get();
-    let   docs  = snap.docs;
+    let docs, hasMore, nextCursor;
+    if (!rawQ) {
+      const page = await _visiblePage(query, pageSize);
+      docs = page.docs; hasMore = page.hasMore; nextCursor = page.nextCursor;
+    } else {
+      const snap = await query.limit(fetchLimit).get();
+      docs = snap.docs.filter(d => _visibility.isPubliclyVisible(d.data()));
+      hasMore = false; nextCursor = null;
+    }
 
     /* In-memory keyword filter — case-insensitive substring match */
     if (rawQ) {
@@ -434,7 +466,6 @@ async function _handleSearch(req, res, opts) {
       });
     }
 
-    const hasMore = !rawQ && snap.size > pageSize;
     const items   = docs.slice(0, pageSize).map(d => {
       const data = d.data();
       return {
@@ -458,9 +489,7 @@ async function _handleSearch(req, res, opts) {
         results:    items,
         count:      items.length,
         hasMore,
-        nextCursor: hasMore && docs.length > 0
-          ? docs[Math.min(pageSize, docs.length) - 1].id
-          : null,
+        nextCursor,
       },
       { version, requestId, startTime, cacheControl: 'public, max-age=30, s-maxage=60' }
     );
@@ -647,8 +676,7 @@ async function _handleRoute(req, res, { routePath, version, requestId, auth, sta
 
         let query = db().collection('products')
           .where('status', '==', 'active')
-          .orderBy('createdAt', 'desc')
-          .limit(pageSize + 1);
+          .orderBy('createdAt', 'desc');
 
         if (category) query = query.where('category', '==', category);
 
@@ -657,9 +685,9 @@ async function _handleRoute(req, res, { routePath, version, requestId, auth, sta
           if (cursorDoc.exists) query = query.startAfter(cursorDoc);
         }
 
-        const snap    = await query.get();
-        const hasMore = snap.size > pageSize;
-        const items   = snap.docs.slice(0, pageSize).map(d => {
+        const page    = await _visiblePage(query, pageSize);
+        const hasMore = page.hasMore;
+        const items   = page.docs.map(d => {
           const data = d.data();
           return {
             id:       d.id,
@@ -676,7 +704,7 @@ async function _handleRoute(req, res, { routePath, version, requestId, auth, sta
         });
 
         return _success(res,
-          { products: items, hasMore, nextCursor: hasMore ? snap.docs[pageSize - 1].id : null },
+          { products: items, hasMore, nextCursor: page.nextCursor },
           { version, requestId, startTime, cacheControl: 'public, max-age=60, s-maxage=300' }
         );
       } catch (err) {

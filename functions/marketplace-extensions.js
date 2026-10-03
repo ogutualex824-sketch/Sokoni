@@ -816,6 +816,9 @@ exports.seoGetProductMeta = onCall({ enforceAppCheck: true }, exports._h.seoGetP
     const snap = await _db().collection(col).doc(productId).get();
     if (snap.exists) {
       const d = snap.data();
+      /* takedown enforcement (2026-10-02): no share/SEO metadata for a product that is not public — the same
+         answer as a missing product, so the response never reveals a take-down */
+      if (col === 'products' && !require('./product-visibility').isPubliclyVisible(d)) break;
       return {
         title: d.title || d.name || 'Product',
         description: (d.description || '').slice(0, 160),

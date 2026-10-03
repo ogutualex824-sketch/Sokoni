@@ -73,6 +73,7 @@ const logger              = require("firebase-functions/logger");
 const _brands             = require("./brands");            /* consumer brands; Bravilex stays the legal entity */
 const _ageVerify          = require("./age-verification");  /* server-side age gate */
 const _avail              = require("./availability-enforce"); /* pure shop/product availability gating (tested) */
+const _visibility         = require("./product-visibility");   /* takedown enforcement: the canonical public-visibility gate */
 
 /* ── Structured logging utility ─────────────────────────────────────────────
    Creates a scoped logger that prefixes every message with a unique
@@ -1338,6 +1339,8 @@ async function _execChatTool(name, input, ctx) {
         if (maxPrice)  q = q.where("price", "<=", maxPrice).orderBy("price");
         const snap = await q.get().catch(() => ({ docs: [] }));
         snap.docs.filter(d => {
+          /* takedown enforcement (2026-10-02): KASS never recommends a product that is not public */
+          if (!_visibility.isPubliclyVisible(d.data())) return false;
           const n = (d.data().name || "").toLowerCase();
           return !query || n.includes(query.toLowerCase()) || (d.data().category || "").toLowerCase().includes(query.toLowerCase());
         }).slice(0, 12).forEach(d => {
@@ -1491,7 +1494,8 @@ async function _execChatTool(name, input, ctx) {
          from the model, and a link to a 404 is another confident-looking dead end. The
          NAME and PRICE shown come from the catalogue document, never from the model. */
       const pSnap = await db.collection("products").doc(pid).get().catch(() => null);
-      if (!pSnap || !pSnap.exists) {
+      /* takedown enforcement (2026-10-02): a taken-down / hidden product answers exactly like a missing one */
+      if (!pSnap || !pSnap.exists || !_visibility.isPubliclyVisible(pSnap.data())) {
         ctx.addAction({ label: "🛍️ Browse Marketplace", url: "/" });
         return { added: false, found: false,
           message: "I couldn't find that product. Search the marketplace and try again." };
@@ -1620,7 +1624,7 @@ async function _execChatTool(name, input, ctx) {
       const ids = (input.productIds || []).slice(0, 3);
       if (ids.length < 2) return { error: "Need at least 2 product IDs to compare. Try searching first." };
       const docs = await Promise.all(ids.map(id => db.collection("products").doc(id).get().catch(() => null)));
-      const products = docs.filter(d => d?.exists).map(d => ({ id: d.id, ...d.data() }));
+      const products = docs.filter(d => d?.exists && _visibility.isPubliclyVisible(d.data())).map(d => ({ id: d.id, ...d.data() }));
       if (products.length < 2) return { error: "Could not find enough products to compare. Search first to find valid product IDs." };
       products.forEach(p => ctx.addResult({ type: "product", id: p.id, name: p.name, price: p.price, category: p.category, image: p.imageUrl || p.image, rating: p.avgRating || p.rating, url: `product.html?id=${p.id}` }));
       return { comparison: products.map(p => ({ name: p.name, price: `KES ${Number(p.price||0).toLocaleString()}`, rating: p.avgRating || p.rating || "No rating", seller: p.sellerName || p.shopName || "Unknown", inStock: p.stock > 0 || p.active !== false })) };
@@ -7152,11 +7156,12 @@ exports.generateTrending = onSchedule(
         .where("hub", "==", hub)
         .where("status", "==", "active")
         .orderBy("viewCount", "desc")
-        .limit(20)
+        .limit(40)
         .get()
         .catch(() => ({ docs: [] }));
 
-      const ids = snap.docs.map(d => d.id);
+      /* takedown enforcement (2026-10-02): only publicly visible products enter trending/{hub}; over-fetch 40 → 20 */
+      const ids = snap.docs.filter(d => _visibility.isPubliclyVisible(d.data())).slice(0, 20).map(d => d.id);
       batch.set(db.collection("trending").doc(hub), {
         hub,
         productIds:  ids,

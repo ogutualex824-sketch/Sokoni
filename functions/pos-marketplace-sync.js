@@ -60,7 +60,10 @@ exports.createClickAndCollect = onCall(CF_OPTIONS, async ({ auth, data }) => {
     const pd = prodSnap.data();
     if (String(pd.sellerUid || pd.uid || '') !== String(sellerId))
       throw new HttpsError('permission-denied', `Product ${productId} does not belong to this shop.`);
-    if (pd.active === false || String(pd.status || '').toLowerCase() === 'inactive')
+    /* takedown enforcement (2026-10-02): a product that is not public (moderation hold, hidden, archived, removed …)
+       cannot be ordered through click-and-collect. Same wording for every reason — the buyer is never told why. */
+    if (pd.active === false || String(pd.status || '').toLowerCase() === 'inactive'
+        || !require('./product-visibility').isPubliclyVisible(pd))
       throw new HttpsError('failed-precondition', `${pd.name} is not currently available.`);
     const _stk = Number(pd.stock ?? pd.stockQty ?? pd.quantity ?? 0);
     if (_stk < qty)
