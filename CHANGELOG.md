@@ -1,3 +1,12 @@
+## [2026-10-03] - Tech Hub slice 4P (hosting): the web Verified badge uses the server predicate — hosting, NOT deployed
+
+- sokoni-providers.js normalize: `verified` = the server-projected badge (functions/shared/provider-badge.js badgeValid). It is shown only while
+  the listing still carries the verified name and no re-review is pending. Owner-writable `providerVerified` / `isVerified` never count.
+  A legacy flag (no verifiedName) still shows and is labelled 'legacy' in AdminOS (server).
+- Every Tech / Home listing uses it: the directory card, provider-profile, providers.html, services.html.
+- Server half: feat/tech-taxonomy-on-13f74f3 @ 194efff (projection from verificationDecide / Revoke). Rules patch proposed (e5eb1d6).
+- Test: test-tech-directory P5 (55/0, 11/11). Positive control: the pre-change normalize fails P5 renamed + review.
+
 ## [2026-10-03] - Commission snapshot re-copied from 2f 93f5f13 (ladder removed, home_services 5) — hosting, NOT deployed
 
 - sokoni-commission-rates.js taken WHOLE from convergence/commercial-fn-on-ef1e992 @ 93f5f13 (generated; blob 731ab0a5).

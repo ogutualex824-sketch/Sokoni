@@ -81,6 +81,24 @@ function pages(read) {
 }
 
 
+/* slice 4P: the web badge uses the server's predicate (functions/shared/provider-badge.js badgeValid) */
+function badgeWeb() {
+  const vm = require('vm');
+  const src = fs.readFileSync(path.join(ROOT, 'sokoni-providers.js'), 'utf8');
+  const w = {}; const c = { window: w, document: { addEventListener() {} }, console, setTimeout };
+  c.globalThis = c; w.window = w; vm.createContext(c);
+  try { vm.runInContext(src, c); } catch (_) { return null; }
+  const norm = w.SokoniProviders && (w.SokoniProviders.normalize || (w.SokoniProviders._internal && w.SokoniProviders._internal.normalize));
+  if (typeof norm !== 'function') return null;
+  const v = (d) => norm('u1', Object.assign({ status: 'active', name: 'Fix Ltd' }, d)).verified;
+  return {
+    projected: v({ verified: true, verifiedName: 'Fix Ltd' }) === true,
+    renamed: v({ verified: true, verifiedName: 'Old Name' }) === false,
+    review: v({ verified: true, verifiedName: 'Fix Ltd', verificationReviewRequired: true }) === false,
+    ownerFlag: v({ providerVerified: true, isVerified: true }) === false,
+    legacy: v({ verified: true }) === true,
+  };
+}
 /* slice 2: tech-hub.html tabs + providers.html booking */
 function fnSrc(src, name) {
   const i = src.indexOf('function ' + name + '(');
@@ -250,6 +268,7 @@ function taxonomy(modSrc, hubSrc) {
   for (const [k, v] of Object.entries(intake(MOD))) ck('T8  one intake: ' + k, v);
   for (const [k, v] of Object.entries(servicesRegister(rd('services.html')))) ck('P4  services.html: ' + k, v);
   for (const [k, v] of Object.entries(taxonomy(MOD, rd('hub-register.js')))) ck('T9  taxonomy: ' + k, v);
+  { const bw = badgeWeb(); if (!bw) ck('P5  badge predicate loads', false); else for (const [k, v] of Object.entries(bw)) ck('P5  web badge: ' + k, v); }
   console.log('\n  [sabotage]');
   const SAB = {
     T2: MOD.replace("'<span class=\"' + x + '-prov-rnum\">New on SOKONI</span>'", "'<span class=\"' + x + '-prov-rnum\">4.9 · 0 jobs</span>'"),

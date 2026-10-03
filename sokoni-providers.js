@@ -203,7 +203,10 @@
       rate:          d.rate != null && d.rate !== '' ? Number(d.rate) : null,
       rateType:      d.rateType || '',
       photo:         d.photo || d.photoURL || d.image || '',
-      verified:      d.verified === true,
+      /* Tech Hub 4P: the server-projected badge (functions/shared/provider-badge.js badgeValid) — shown only while the listing
+         still carries the name that was verified and no re-review is pending. A legacy flag (no verifiedName) still shows. */
+      verified:      d.verified === true && d.verificationReviewRequired !== true
+                     && (d.verifiedName == null || d.verifiedName === String(d.name || d.businessName || '').trim()),
       featured:      d.featured === true,
       available:     d.available !== false && d.isAvailable !== false,
       acceptsBookings: d.acceptsBookings !== false,
