@@ -1,3 +1,10 @@
+## [2026-10-03] — P0: conversation pre-claim closed (client conversation create denied)
+
+**Files:** `firestore.rules.hotfix-jobs`, `scripts/zz-test-conversation-preclaim-rules.js`, `CHANGELOG.md`. The combined build already denied it (sokoni-4d, 2026-10-01).
+**Security (sokoni-b2, verified against the served ruleset):** served `f259c0b5` let any user create `conversations/<any id>` naming themselves as a participant. Conversation ids are deterministic (`<txType>_<txId>`), so an attacker could pre-claim a victim booking's or order's chat, and createConversation would then refuse the real parties. Client create is now `false`; messagesDispatch createConversation (Admin SDK) is the only creator.
+**Live census (hosting 72dca56):** both client creators are dead code. product.js:1480 `contactSellerWhatsApp` is rebound to `contactSellerGated` at :2028, and sokoni-inbox.js `createOrOpen` has no caller. Breaking changes: none.
+**Tests:** CV-C1..C5 and CV-P1..P3, EMULATOR PENDING. **Deployment:** NOT deployed; in the owner-approved P0 hotfix unit.
+
 ## [2026-10-03] — P0-F: deactivated, suspended and revoked owners lose ordinary edit authority
 
 **Files:** `firestore.rules.hotfix-jobs`, `firestore.rules`, `firestore.rules.build`, `scripts/zz-test-deactivated-owner-rules.js`, `CHANGELOG.md`.

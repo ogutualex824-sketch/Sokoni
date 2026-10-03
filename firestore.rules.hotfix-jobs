@@ -688,9 +688,12 @@ service cloud.firestore {
   allow update: if isParticipant()
   && request.resource.data.diff(resource.data)
   .affectedKeys().hasOnly(['lastMessage','lastMessageAt','lastSenderId','unread']);
-  allow create: if isActive() && isAuthed()
-  && request.auth.uid in request.resource.data.participants
-  && request.resource.data.participants.size() <= 2;
+  /* 2026-10-03 P0 conversation PRE-CLAIM (sokoni-b2): ids are deterministic (<txType>_<txId>), so any user could create
+     service_booking_<victim> with themselves as participant and lock the real parties out of that transaction's chat.
+     Conversations are created ONLY by messagesDispatch createConversation (Admin SDK). Live census on 72dca56: the two
+     client creators are dead (product.js:1480 contactSellerWhatsApp rebound to contactSellerGated at :2028;
+     sokoni-inbox.js createOrOpen has no caller). Same as the combined build. */
+  allow create: if false;
   allow delete: if isAdmin();
   match /messages/{msgId} {
   function _conv() {
