@@ -1196,6 +1196,9 @@ exports.getPayoutHistory = onCall({ cors: true, enforceAppCheck: true }, async (
    lost the binding (a redeploy alone does not restore it on an update), so the Pay
    button failed. App Check + _requireAdmin remain the real auth — allUsers only lets
    the request REACH the code, exactly like adminOsDispatch. */
+/* WITHDRAWAL GATE (owner H4, 2026-10-03) — the same shared predicate as every other payout mover. */
+const { withdrawalsOpen: _withdrawalsOpen, CLOSED_MESSAGE: _WITHDRAWALS_CLOSED } = require('./shared/withdrawal-gate');
+
 exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker: 'public', secrets: [INTASEND_KEY] }, async (request) => {
   _requireAuth(request);
   _requireAdmin(request);
@@ -1208,6 +1211,11 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker
   const validStatuses = ['approved', 'rejected', 'paid'];
   if (!validStatuses.includes(status)) {
     throw new HttpsError('invalid-argument', 'status must be "approved", "rejected", or "paid"');
+  }
+  /* Approving (which may auto-disburse B2C) or attesting 'paid' sends money OUT — refused while withdrawals are OFF.
+     Rejecting stays allowed: it RETURNS the reserved amount to the seller's wallet. */
+  if (status !== 'rejected' && !(await _withdrawalsOpen(db))) {
+    throw new HttpsError('failed-precondition', _WITHDRAWALS_CLOSED, { code: 'WITHDRAWALS_DISABLED' });
   }
 
   const rid     = _san(requestId, 128);
