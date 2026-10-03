@@ -105,4 +105,4 @@ adds the storage quarantine (`unboxing-pending/{uid}/` owner-only, `unboxing/{ui
 - [ ] re-fetch of live rules; the candidate re-based if live moved
 - [ ] then `--only firestore:rules` → verify pointer → probes → live browser proof per surface; rollback `f259c0b5`
 
-**`b6f9cee` (2026-10-03):** `propertyViewings` browser create closed. Viewings make a buyer review-eligible, so `scheduleViewing` (server) is the only writer. sokoni-5b found the forgeable create; tests H-6/H-6b/H-6c. **Open owner question:** `sportsVenueBookings` is still browser-created (claimsOwner), so for sports, "has a booking" means "asked for one".
+**`b6f9cee` (2026-10-03):** `propertyViewings` browser create closed. Viewings make a buyer review-eligible, so `scheduleViewing` (server) is the only writer. sokoni-5b found the forgeable create; tests H-6/H-6b/H-6c. **Owner decision (2026-10-03):** keep `sportsVenueBookings` browser-created (claimsOwner). A booking request in your own name is enough to submit a venue review; AdminOS moderation is the filter. The rules do not change for bookings.
