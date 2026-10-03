@@ -1,3 +1,21 @@
+## [2026-10-03] — B2B Hub: RFQ authority, assembly check, convergence contracts — functions source, NOT deployed
+
+**Summary:** `rfqDispatch` (RFQ → consented lead → versioned quote → accepted quote → draft purchase order with the
+quote's declared VAT, `commissionCategory: 'b2b_order'`). Owner decisions recorded in `docs/B2B_HUB_CONVERGENCE.md`
+(lead fee KES 200 + VAT per RFQ received, invoiced monthly; 0% order commission; held payment; lead fee deducted from
+supplier settlement; >2 days unpaid closes the till via the ONE gate).
+
+**Files:** `functions/rfq.js` (new), `functions/notify.js` (rfq_received / rfq_quoted / rfq_accepted),
+`functions/index.js` (re-export `rfqDispatch`), `scripts/test-rfq-authority.js` (40/0),
+`scripts/check-b2b-functions-assembly.js` (controls: assembled with 2f df1b281 = 11/0; without b2b-leads.js fails),
+`docs/B2B_HUB_CONVERGENCE.md`.
+
+**Database:** new `rfqs`, `rfqRecipients`, `rfqQuotes`, `b2bLeads` (server-only; rules on the combined candidate
+02a1034). Accepted quotes write `procPurchaseOrders/po_rfq_*` and reuse/create `procSuppliers` links.
+**API:** new callable `rfqDispatch` (ops create/listMine/listReceived/get/decline/quote/respond/cancel).
+**Security:** consent re-read in the delivery transaction; buyer contact never exposed to suppliers; caps 10 direct /
+5 open suppliers, 20 RFQs/day. **Breaking:** none. **Deploy:** scoped `--only functions:rfqDispatch` from an assembled
+tree that passes the assembly check; not authorized yet.
 ## [2026-10-03] — Procurement: purchase-order VAT is never inferred (supplier's own status; unknown ⇒ no VAT) — functions source, NOT deployed
 
 Before: `functions/procurement.js` held `VAT_RATE = 0.16`; `createPurchaseOrder` set `vatAmount = subtotal × 0.16` and
