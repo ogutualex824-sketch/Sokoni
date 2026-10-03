@@ -142,6 +142,9 @@
      so the same document cannot be listed by one authority and hidden by another. */
   function isPubliclyListed(p) {
     p = p || {};
+    /* takedown enforcement (2026-10-02): a listing under a moderation hold is never publicly listed, whatever any
+       other field says. The hold is written only by the trust-safety authority (tsReviewReport). */
+    if (p.moderationHold != null) return false;
     if (HIDDEN_STATUSES.indexOf(norm(p.status)) !== -1) return false;
     if (p.isDeleted === true || p.deleted === true)     return false;
     if (p.visible === false || p.isVisible === false)   return false;
@@ -152,6 +155,7 @@
      Returns null when it IS listable. */
   function listingBlockReason(p) {
     p = p || {};
+    if (p.moderationHold != null) return 'moderation';
     if (HIDDEN_STATUSES.indexOf(norm(p.status)) !== -1) return 'status:' + norm(p.status);
     if (p.isDeleted === true || p.deleted === true)     return 'deleted';
     if (p.visible === false || p.isVisible === false)   return 'hidden';
