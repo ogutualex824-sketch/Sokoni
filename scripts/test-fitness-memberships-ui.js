@@ -156,7 +156,7 @@ async function suite(src) {
       }
       if (d.op === 'providerUpdateService') { Object.assign(svcStore[d.serviceId], saveMode === 'hooks' ? { name: d.name, price: d.price, serviceKind: d.serviceKind, periodCount: d.periodCount, periodUnit: d.periodUnit } : { name: d.name, price: d.price }); return { success: true }; }
       if (d.op === 'providerToggleService') { svcStore[d.serviceId].active = d.active; return { success: true }; }
-      if (d.op === 'providerRemoveService') { svcStore[d.serviceId].active = false; svcStore[d.serviceId].removedAt = 'x'; return { success: true }; }
+      if (d.op === 'providerRemoveService') { if (g.rmFail) throw err('unavailable', 'remove failed'); svcStore[d.serviceId].active = false; svcStore[d.serviceId].removedAt = 'x'; return { success: true }; }
       throw err('invalid-argument', 'unknown op');
     },
   }, firestore: {
@@ -319,6 +319,24 @@ async function suite(src) {
   const rm = disp().filter((c) => c.data.op === 'providerRemoveService').pop();
   ck('OF-SAVE', okD === false && !/Saved/.test(dropTxt) && dropTxt.includes("Membership offers aren't enabled on the server yet.") && rm && /^SVC_NEW_/.test(rm.data.serviceId) && g.svc[rm.data.serviceId].removedAt,
     'server DROPS serviceKind (provider-ops without the 5b hooks) → never "Saved"; "Membership offers aren\'t enabled on the server yet."; the stray plain rate card is archived via providerRemoveService', dropTxt.slice(-300) + ' n=' + dropId);
+  /* owner 2026-10-03: the cleanup removes ONLY the service this failed attempt created, and nothing bookable is left behind */
+  const addsAll = disp().filter((c) => c.data.op === 'providerAddService');
+  const createdIds = Object.keys(g.svc).filter((k) => /^SVC_NEW_/.test(k));
+  const lastCreated = createdIds[createdIds.length - 1];
+  const bookablePlain = Object.keys(g.svc).filter((k) => g.svc[k].active && !g.svc[k].removedAt && g.svc[k].serviceKind !== 'membership' && g.svc[k].name === 'Monthly');
+  ck('OF-ORPHAN', rm && rm.data.serviceId === lastCreated && addsAll.length > 0 && bookablePlain.length === 0
+    && disp().filter((c) => c.data.op === 'providerRemoveService').length === 1,
+    'a rejected membership-offer creation leaves NO bookable plain service: exactly one removal, of exactly the service that attempt created', JSON.stringify({ removed: rm && rm.data.serviceId, lastCreated, bookablePlain }));
+  /* removal failure is surfaced, never reported as clean */
+  g.rmFail = true;
+  T.offerStart('monthly');
+  const okF = await T.saveOffer({ name: 'Monthly', priceKes: 5000, periodUnit: 'month', periodCount: 1 }); await flush();
+  const failTxt = H(ui.offers.innerHTML);
+  g.rmFail = false;
+  ck('OF-RMFAIL', okF === false && !/Saved/.test(failTxt) && !failTxt.includes('Nothing was published') && failTxt.includes('could not be removed') && failTxt.includes('archive it in Services'),
+    'if the cleanup removal itself fails, the gym is told a plain service exists and must be archived — never "Nothing was published"', failTxt.slice(-300));
+  /* tidy the failed-removal orphan out of the fake store so later rows see a clean catalogue */
+  Object.keys(g.svc).forEach((k) => { if (/^SVC_NEW_/.test(k) && g.svc[k].serviceKind !== 'membership' && !g.svc[k].removedAt) { g.svc[k].active = false; g.svc[k].removedAt = 'test'; } });
   /* server refusal verbatim */
   saveMode = 'hooks';
   T.offerStart('monthly');
@@ -336,6 +354,23 @@ async function suite(src) {
   ck('OF-5', /&lt;img src=x/.test(editForm) && !/<img src=x/.test(editForm) && upd && JSON.stringify(upd.data) === JSON.stringify({ op: 'providerUpdateService', serviceId: 'SVC_OLD', name: 'Monthly Plus', price: 550000, priceType: 'fixed', serviceKind: 'membership', periodCount: 1, periodUnit: 'month' })
     && tog && tog.data.active === false && tog.data.serviceId === 'SVC_OLD',
     'edit → providerUpdateService with serviceId + the same explicit typed fields (form value escaped); Pause → providerToggleService({active:false}) explicit', JSON.stringify(upd && upd.data) + ' ' + JSON.stringify(tog && tog.data));
+  /* owner 2026-10-03: an EXISTING service is never removed, even when the server drops the membership fields on an edit */
+  saveMode = 'drop';
+  const rmBefore = disp().filter((c) => c.data.op === 'providerRemoveService').length;
+  const oldBefore = JSON.stringify({ active: g.svc.SVC_OLD && g.svc.SVC_OLD.active, removedAt: g.svc.SVC_OLD && g.svc.SVC_OLD.removedAt });
+  await T.act('offer-edit', 'SVC_OLD');
+  /* the server's copy comes back WITHOUT the membership fields (e.g. provider-ops without the 5b hooks rewrote it) */
+  const kindBackup = { serviceKind: g.svc.SVC_OLD.serviceKind, periodCount: g.svc.SVC_OLD.periodCount, periodUnit: g.svc.SVC_OLD.periodUnit };
+  delete g.svc.SVC_OLD.serviceKind; delete g.svc.SVC_OLD.periodCount; delete g.svc.SVC_OLD.periodUnit;
+  const okE = await T.saveOffer({ name: 'Monthly Again', priceKes: 5000, periodUnit: 'month', periodCount: 1 }); await flush();
+  Object.assign(g.svc.SVC_OLD, kindBackup);
+  const editDropTxt = H(ui.offers.innerHTML);
+  saveMode = 'hooks';
+  ck('OF-EDIT-KEEP', okE === false && disp().filter((c) => c.data.op === 'providerRemoveService').length === rmBefore
+    && JSON.stringify({ active: g.svc.SVC_OLD.active, removedAt: g.svc.SVC_OLD.removedAt }) === oldBefore
+    && editDropTxt.includes("Membership offers aren't enabled on the server yet.") && !/Saved —/.test(editDropTxt.split('data-sfm-offer-msg')[1] || ''),
+    'editing an existing service whose membership fields the server drops → no removal call, the gym\'s existing service untouched, honest "not enabled" message', JSON.stringify({ rmBefore, oldBefore, after: g.svc.SVC_OLD }));
+  await T.act('offer-cancel');
   g.doc.dispatch('sokoni:workspace', { state: 'AVAILABLE', modules: { leads: { state: 'AVAILABLE' } } });
   ck('G-13', gel.innerHTML === '' && gel.hidden === true, 'a later workspace answer without \'memberships\' unmounts the module (fail closed)', gel.innerHTML.slice(0, 80));
 
@@ -492,6 +527,8 @@ async function suite(src) {
       "if (!Array.isArray(st)) return null;\n    return { releases: st.map(function (p) { return { periodIndex: p.periodIndex, grossCents: p.amountCents, netCents: p.amountCents, status: p.status, settledAt: p.createdAt }; }), releasedPeriods: null, releasedCents: null, netSettledCents: null };"), member: s.member })],
     ['e', 'map SALES_DISABLED to a generic error', 'M-SALES', (s) => ({ gym: s.gym, member: rp(s.member, '    SALES_DISABLED: SALES_DISABLED_TEXT,\n', '') })],
     ['f', 'report "Saved" without checking serviceKind', 'OF-SAVE', (s) => ({ gym: rp(s.gym, 'function savedAsMembership(doc, sent) {\n    return !!(', 'function savedAsMembership(doc, sent) {\n    return !!doc || !!('), member: s.member })],
+    ['g', 'cleanup also removes an EXISTING service (new-only guard dropped)', 'OF-EDIT-KEEP', (s) => ({ gym: rp(s.gym, '        if (!ed.serviceId) {\n          return call(\'providerDispatch\', { op: \'providerRemoveService\'', '        if (true) {\n          return call(\'providerDispatch\', { op: \'providerRemoveService\''), member: s.member })],
+    ['h', 'cleanup failure reported as clean', 'OF-RMFAIL', (s) => ({ gym: rp(s.gym, "could not be removed — archive it in Services before customers can book it.'); return false;", "'); offerMsg(NOT_ENABLED + ' Nothing was published.'); return false;"), member: s.member })],
   ];
   let ctlBad = 0;
   console.log('\nNegative controls (each must FAIL its named row):');

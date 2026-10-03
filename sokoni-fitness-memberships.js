@@ -637,7 +637,8 @@
           return call('providerDispatch', { op: 'providerRemoveService', serviceId: sid }).then(function () {
             offerMsg(NOT_ENABLED + ' Nothing was published.'); return false;
           }, function () {
-            offerMsg(NOT_ENABLED + ' A plain rate card named "' + p.data.name + '" may have been created — archive it in Services.'); return false;
+            /* The re-read above proved the plain card exists, so say so definitively (owner 2026-10-03: a failed cleanup is surfaced, never hidden). */
+            offerMsg(NOT_ENABLED + ' A plain service named "' + p.data.name + '" was created and could not be removed — archive it in Services before customers can book it.'); return false;
           });
         }
         offerMsg(NOT_ENABLED); return false;

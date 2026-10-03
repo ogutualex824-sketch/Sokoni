@@ -1,3 +1,7 @@
+## [2026-10-03] - Fitness offer editor: orphan-service cleanup kept and narrowed (owner decision; NOT deployed)
+
+The owner decided to keep the cleanup: when the server drops the membership fields from a NEW offer, the editor archives the plain service that attempt created, so a membership price can never become a bookable one-off service. It is scoped to that new service only. An edit of an existing service never removes anything. If the removal fails, the gym is told a plain service exists and must be archived, never "Nothing was published". **Files:** `sokoni-fitness-memberships.js` (removal-failure copy), `scripts/test-fitness-memberships-ui.js` (rows OF-ORPHAN, OF-RMFAIL, OF-EDIT-KEEP; controls g/h), `docs/FITNESS_MEMBERSHIP_UI.md`. **Tests:** UI suite 54/0, controls 8/8. **DB / API / rules:** none.
+
 ## [2026-10-03] - Fitness Memberships UI pass 2: aligned to the generated server contract, gym offer editor, AdminOS Fitness Memberships view (NOT deployed)
 
 **Branch `hosting/fitness-memberships-on-31f5844`. Hosting only. NOT deployed.** The source of truth is `docs/FITNESS_MEMBERSHIP_API.md` and `scripts/fixtures/fitness-api-fixtures.json` on `origin/feat/fitness-attendance-on-8bbfb34`. Those fixtures are generated from the real handlers. This branch first copied them at `3d315a2` and re-copied them at `d5fbd37`, after the new FX-SYNC row caught the source moving. See `docs/FITNESS_MEMBERSHIP_UI.md`.
