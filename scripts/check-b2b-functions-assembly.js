@@ -36,5 +36,20 @@ ok('B1', leads !== null, 'b2b-leads.js present — REQUIRED in an assembled tree
 const rateSrc = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => /commission/i.test(f) && f.endsWith('.js')).map(read).filter(Boolean).join('\n') : '';
 ok('C1', /\bb2b_order\b/.test(rateSrc), "commission authority defines the 0% 'b2b_order' lane (the accepted-quote PO's commissionCategory)");
 
+/* G — the lead-invoice gate predicate is SHARED (sokoni-2f b1be68e / 077b245): one copy must exist in this tree, and
+   when the caller names the other line's tree (GATE_PEER_DIR) the two copies must be byte-identical, so the gate the
+   POS rail enforces is the gate the invoice side computes. The closure gate refuses an optional require, so this
+   predicate is copied, not required, which makes byte equality the contract. */
+const gateRel = path.join('shared', 'lead-invoice-gate.js');
+const gate = (() => { try { return fs.readFileSync(path.join(dir, gateRel)); } catch (e) { return null; } })();
+ok('G1', gate !== null, 'shared/lead-invoice-gate.js present (leadInvoiceGate delegates to it)');
+const peer = process.env.GATE_PEER_DIR ? path.resolve(process.env.GATE_PEER_DIR) : null;
+if (peer) {
+  const other = (() => { try { return fs.readFileSync(path.join(peer, gateRel)); } catch (e) { return null; } })();
+  ok('G2', !!gate && !!other && Buffer.compare(gate, other) === 0, 'shared/lead-invoice-gate.js byte-identical to ' + peer);
+} else {
+  ok('G2', false, 'GATE_PEER_DIR not set: byte equality with the POS line was NOT checked (fails closed; set it to that line\'s functions dir)');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
