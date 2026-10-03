@@ -50,8 +50,9 @@ const st = (w, m) => (w.modules[m] || {}).state;
   const listed = (w, keys) => keys.every((k) => st(w, k) === S.NOT_IMPLEMENTED || st(w, k) === S.AVAILABLE);
   const absent = (w, keys) => keys.every((k) => st(w, k) === S.NOT_APPLICABLE);
 
-  ck('E-1 a TEACHER (server type) lands on provider-dashboard with the teacher modules, each NOT_IMPLEMENTED (EDUCATION_E2_PENDING) until its screen ships — never faked',
-    W.teach1.route === 'provider-dashboard.html' && listed(W.teach1, T) && T.every((k) => (W.teach1.modules[k] || {}).reason === 'EDUCATION_E2_PENDING'), W.teach1.modules && T.map((k) => st(W.teach1, k)));
+  const UNBUILT = ['eduLessons', 'eduLearners', 'eduClasses'];
+  ck('E-1 a TEACHER (server type) lands on provider-dashboard: Courses AVAILABLE (built, E2 courses slice); the other teacher modules NOT_IMPLEMENTED (EDUCATION_E2_PENDING) until their screens ship — never faked',
+    W.teach1.route === 'provider-dashboard.html' && st(W.teach1, 'eduCourses') === S.AVAILABLE && UNBUILT.every((k) => st(W.teach1, k) === S.NOT_IMPLEMENTED && (W.teach1.modules[k] || {}).reason === 'EDUCATION_E2_PENDING'), W.teach1.modules && T.map((k) => st(W.teach1, k)));
   ck('E-2 a teacher NEVER receives institution modules (programmes / teachers / students / timetable / assessments / certificates)', absent(W.teach1, I), I.map((k) => st(W.teach1, k)));
   ck('E-3 an INSTITUTION gets the institution modules (+ courses / classes) and staff', listed(W.inst1, I) && listed(W.inst1, ['eduCourses', 'eduClasses']) && st(W.inst1, 'staff') !== S.NOT_APPLICABLE, I.map((k) => st(W.inst1, k)));
   ck('E-4 an institution does not get the teacher-only lessons / learners modules', absent(W.inst1, ['eduLessons', 'eduLearners']));
@@ -62,11 +63,13 @@ const st = (w, m) => (w.modules[m] || {}).state;
   ck('E-9 an enterprise BUYER (no provider record) gets NO provider workspace at all', W.enterpriseBuyer.found === false && W.enterpriseBuyer.route === null, [W.enterpriseBuyer.found, W.enterpriseBuyer.route]);
   ck('E-10 CONTROL: a plumber is unchanged (no education modules, no educationType key)', absent(W.plumber, T.concat(I)) && !('educationType' in W.plumber) && st(W.plumber, 'quotes') === S.AVAILABLE);
   ck('E-11 the banner says the education modules are being built (honest notice, keyed to the type)', /Courses, lessons, learners and classes are being built/.test(W.teach1.message || '') && /Programmes, courses, teachers/.test(W.inst1.message || ''), [W.teach1.message, W.inst1.message]);
-  const gate = await codeOf(BW.assertModule(db, 'teach1', 'eduCourses', HE));
+  const gate = await codeOf(BW.assertModule(db, 'teach1', 'eduLessons', HE));
   ck('E-12 the server gate refuses a NOT_IMPLEMENTED education module (no operation can run behind an unbuilt screen)', gate !== null, gate);
   const gate2 = await codeOf(BW.assertModule(db, 'teach1', 'eduTimetable', HE));
   ck('E-13 the server gate refuses an institution module to a teacher', gate2 !== null, gate2);
 
+  ck('E-14 the server gate OPENS Courses for an approved teacher and institution (the courses slice is built)', (await codeOf(BW.assertModule(db, 'teach1', 'eduCourses', HE))) === null && (await codeOf(BW.assertModule(db, 'inst1', 'eduCourses', HE))) === null);
+  ck('E-15 … and keeps Courses CLOSED for a pending teacher, a legacy untyped education provider and a forged type', (await codeOf(BW.assertModule(db, 'teachPend', 'eduCourses', HE))) !== null && (await codeOf(BW.assertModule(db, 'legacyEdu', 'eduCourses', HE))) !== null && (await codeOf(BW.assertModule(db, 'forged', 'eduCourses', HE))) !== null);
   say('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { say('CRASH (no verdict): ' + (e && e.stack || e)); process.exit(2); });

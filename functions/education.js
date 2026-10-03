@@ -58,8 +58,54 @@ function _enrollId(uid, courseId) {
 }
 
 /** Throw a typed HttpsError */
-function _deny(code, msg) {
-  throw new HttpsError(code, msg);
+function _deny(code, msg, reason) {
+  throw new HttpsError(code, msg, reason ? { reason } : undefined);
+}
+
+/* ══ EDUCATION E2 — COURSE OWNERSHIP (owner brief 2026-10-03) ══════════════════════════════════════════════════════
+   Only an APPROVED teacher or institution may create, edit or submit a course, and only its own. "Approved" is the ONE
+   business workspace authority's answer (business-workspace.assertModule 'eduCourses': approval gate + server-stamped
+   providers/{uid}.education.type) — never a client field, never a second implementation. The owner is always the
+   caller (instructorUid = request.auth.uid); no teacherId / institutionId is ever read from the request. */
+async function _assertCourseOwnerCapability(uid) {
+  const BW = require('./business-workspace');
+  try {
+    await BW.assertModule(db, uid, 'eduCourses', HttpsError);
+  } catch (e) {
+    throw new HttpsError('permission-denied', 'Only an approved SOKONI teacher or institution can manage courses.',
+      { reason: 'NOT_AN_APPROVED_EDUCATOR', detail: (e && e.details && (e.details.code || e.details.reason)) || null });
+  }
+  const p = await db.collection('providers').doc(String(uid)).get();
+  return { educationType: BW.educationTypeOf(p.exists ? p.data() : null) };
+}
+
+/* Shared create / update validation → the clean course fields (no status, owner, counters or flags — server-owned). */
+function _courseFields(d) {
+  const out = {};
+  out.title = _req(d.title, 'title', 5, 100);
+  out.description = _req(d.description, 'description', 20, 3000);
+  if (!VALID_CATEGORIES.includes(d.category)) _deny('invalid-argument', `category must be one of: ${VALID_CATEGORIES.join(', ')}`);
+  if (!VALID_LEVELS.includes(d.level)) _deny('invalid-argument', `level must be one of: ${VALID_LEVELS.join(', ')}`);
+  out.category = d.category; out.level = d.level;
+  const priceNum = Number(d.price === undefined ? 0 : d.price);
+  if (!Number.isFinite(priceNum) || priceNum < 0) _deny('invalid-argument', 'price must be a non-negative number');
+  out.price = priceNum; out.currency = 'KES';
+  const url = (v, name) => {
+    if (!v) return '';
+    let u; try { u = new URL(String(v).trim()); } catch (_) { _deny('invalid-argument', name + ' is not a valid URL'); }
+    if (u.protocol !== 'https:') _deny('invalid-argument', name + ' must be an https URL');
+    return u.href;
+  };
+  out.videoUrl = url(d.videoUrl, 'videoUrl');
+  out.thumbnail = url(d.thumbnail, 'thumbnail');
+  out.lessonCount = Math.max(1, Math.min(500, Math.floor(Number(d.lessonCount) || 1)));
+  out.durationMinutes = Math.max(0, Math.min(100000, Math.floor(Number(d.durationMinutes) || 0)));
+  out.tags = Array.isArray(d.tags) ? d.tags.slice(0, 10).map((t) => _sanitize(String(t).trim()).slice(0, 40)).filter(Boolean) : [];
+  return out;
+}
+
+async function _audit(action, fields) {
+  await db.collection('educationAudit').add(Object.assign({ action, at: FieldValue.serverTimestamp() }, fields)).catch(() => {});
 }
 
 /** Validate required string param */
@@ -527,84 +573,14 @@ exports.createCourse = onCall(CF_OPTS, async (request) => {
 
   if (!request.auth) _deny('unauthenticated', 'Sign in to create a course');
   const uid = request.auth.uid;
-
-  const {
-    title,
-    description,
-    category,
-    level,
-    price       = 0,
-    videoUrl    = '',
-    thumbnail   = '',
-    lessonCount = 1,
-    durationMinutes = 0,
-    tags        = [],
-  } = request.data || {};
-
-  /* ── Input validation ───────────────────────────────────── */
-  const cleanTitle = _req(title, 'title', 5, 100);
-  const cleanDesc  = _req(description, 'description', 20, 3000);
-
-  if (!VALID_CATEGORIES.includes(category)) {
-    _deny('invalid-argument', `category must be one of: ${VALID_CATEGORIES.join(', ')}`);
-  }
-  if (!VALID_LEVELS.includes(level)) {
-    _deny('invalid-argument', `level must be one of: ${VALID_LEVELS.join(', ')}`);
-  }
-
-  const priceNum = Number(price);
-  if (isNaN(priceNum) || priceNum < 0) {
-    _deny('invalid-argument', 'price must be a non-negative number');
-  }
-
-  /* Validate videoUrl if provided */
-  let cleanVideoUrl = '';
-  if (videoUrl) {
-    try {
-      const u = new URL(String(videoUrl).trim());
-      if (!['https:', 'http:'].includes(u.protocol)) {
-        _deny('invalid-argument', 'videoUrl must be a valid URL');
-      }
-      cleanVideoUrl = u.href;
-    } catch (_) {
-      _deny('invalid-argument', 'videoUrl is not a valid URL');
-    }
-  }
-
-  /* Validate thumbnail if provided */
-  let cleanThumb = '';
-  if (thumbnail) {
-    try {
-      const u = new URL(String(thumbnail).trim());
-      if (!['https:', 'http:'].includes(u.protocol)) {
-        _deny('invalid-argument', 'thumbnail must be a valid URL');
-      }
-      cleanThumb = u.href;
-    } catch (_) {
-      _deny('invalid-argument', 'thumbnail is not a valid URL');
-    }
-  }
-
-  /* Tags: string array, max 10 items, each max 40 chars */
-  const cleanTags = Array.isArray(tags)
-    ? tags.slice(0, 10).map(t => _sanitize(String(t).trim()).slice(0, 40)).filter(Boolean)
-    : [];
-
+  /* EDUCATION E2: approved teacher / institution only (was: ANY signed-in account) */
+  const { educationType } = await _assertCourseOwnerCapability(uid);
+  const fields = _courseFields(request.data || {});
   const now = admin.firestore.Timestamp.now();
 
-  const course = {
+  const course = Object.assign({}, fields, {
     instructorUid:   uid,
-    title:           cleanTitle,
-    description:     cleanDesc,
-    category,
-    level,
-    price:           priceNum,
-    currency:        'KES',
-    videoUrl:        cleanVideoUrl,
-    thumbnail:       cleanThumb,
-    lessonCount:     Math.max(1, Number(lessonCount) || 1),
-    durationMinutes: Math.max(0, Number(durationMinutes) || 0),
-    tags:            cleanTags,
+    ownerType:       educationType,          /* server-derived: 'teacher' | 'institution' */
     enrollmentCount: 0,
     viewCount:       0,
     rating:          0,
@@ -613,11 +589,11 @@ exports.createCourse = onCall(CF_OPTS, async (request) => {
     isFeatured:      false,
     createdAt:       now,
     updatedAt:       now,
-  };
+  });
 
   const ref = await db.collection('courses').add(course);
 
-  log.info('courseCreated', { uid, courseId: ref.id, category, level });
+  log.info('courseCreated', { uid, courseId: ref.id, category: course.category, level: course.level });
   return { courseId: ref.id, course: { courseId: ref.id, ...course } };
 });
 
@@ -682,29 +658,79 @@ exports.getMyEnrollments = onCall(CF_OPTS, async (request) => {
   return { enrollments };
 });
 
+/* EDUCATION E2 — the course review lifecycle (was: an admin could publish ANY course from ANY state, with no audit):
+     owner:  draft ──submit──▶ pending_review          (approved educator, own course only)
+     admin:  pending_review ──publish──▶ published      (the owner must STILL be an approved educator)
+             pending_review ──reject──▶ draft (+ reviewNote)
+             published ──unpublish──▶ draft
+   Every transition is transactional on the course's current status and audited (educationAudit). */
 exports.publishCourse = onCall(CF_OPTS, async (request) => {
-  if (!request.auth) throw new HttpsError('unauthenticated', 'Login required');
-  const { courseId, action } = request.data;
-  if (!courseId || !action) throw new HttpsError('invalid-argument','courseId and action required');
-  if (!['submit','publish','unpublish'].includes(action)) throw new HttpsError('invalid-argument','invalid action');
-
-  const courseRef = db.collection('courses').doc(courseId);
-  const courseSnap = await courseRef.get();
-  if (!courseSnap.exists) throw new HttpsError('not-found','course not found');
-
-  const course = courseSnap.data();
+  if (!request.auth) _deny('unauthenticated', 'Login required');
+  const { courseId, action, note } = request.data || {};
+  if (!courseId || !action) _deny('invalid-argument', 'courseId and action required');
+  if (!['submit', 'publish', 'reject', 'unpublish'].includes(action)) _deny('invalid-argument', 'invalid action');
   const uid = request.auth.uid;
   const isAdmin = request.auth.token.admin === true || request.auth.token.superAdmin === true;
+  const courseRef = db.collection('courses').doc(String(courseId));
+  const pre = await courseRef.get();
+  if (!pre.exists) _deny('not-found', 'course not found');
+  const owner = pre.data().instructorUid;
 
   if (action === 'submit') {
-    if (course.instructorUid !== uid) throw new HttpsError('permission-denied','not course owner');
-    if (course.status !== 'draft') throw new HttpsError('failed-precondition','only drafts can be submitted');
-    await courseRef.update({ status: 'pending_review', submittedAt: FieldValue.serverTimestamp() });
-    return { success: true, status: 'pending_review' };
+    if (owner !== uid) _deny('permission-denied', 'not course owner', 'NOT_COURSE_OWNER');
+    await _assertCourseOwnerCapability(uid);
+  } else {
+    if (!isAdmin) _deny('permission-denied', 'admin required', 'ADMIN_REQUIRED');
+    if (action === 'publish') {
+      /* the OWNER must still be an approved educator at the moment of publication */
+      try { await _assertCourseOwnerCapability(owner); }
+      catch (_) { _deny('failed-precondition', 'The course owner is no longer an approved educator.', 'OWNER_NOT_ELIGIBLE'); }
+    }
   }
-  if (!isAdmin) throw new HttpsError('permission-denied','admin required');
-  const newStatus = action === 'publish' ? 'published' : 'draft';
-  await courseRef.update({ status: newStatus, reviewedAt: FieldValue.serverTimestamp(), reviewedBy: uid });
-  return { success: true, status: newStatus };
+  const FROM = { submit: 'draft', publish: 'pending_review', reject: 'pending_review', unpublish: 'published' };
+  const TO = { submit: 'pending_review', publish: 'published', reject: 'draft', unpublish: 'draft' };
+  const result = await db.runTransaction(async (t) => {
+    const snap = await t.get(courseRef);
+    const cur = snap.data() || {};
+    if (cur.status !== FROM[action]) _deny('failed-precondition', `only a ${FROM[action]} course can be ${action === 'submit' ? 'submitted' : action + 'ed'}`, 'WRONG_STATUS');
+    const patch = { status: TO[action], updatedAt: FieldValue.serverTimestamp() };
+    if (action === 'submit') patch.submittedAt = FieldValue.serverTimestamp();
+    else { patch.reviewedAt = FieldValue.serverTimestamp(); patch.reviewedBy = uid; }
+    if (action === 'reject') patch.reviewNote = _sanitize(String(note || '')).slice(0, 500) || null;
+    t.update(courseRef, patch);
+    return TO[action];
+  });
+  await _audit('course_' + action, { courseId: String(courseId), ownerUid: owner, by: uid, admin: isAdmin, note: action === 'reject' ? (_sanitize(String(note || '')).slice(0, 500) || null) : null });
+  return { success: true, status: result };
 });
+
+/* EDUCATION E2 — the owner's course workspace: list OWN courses (any status) and edit a draft. The caller is the owner;
+   there is no owner / teacher / institution parameter. A published or pending course is not editable (unpublish or
+   reject returns it to draft first). */
+exports.manageMyCourses = onCall(CF_OPTS, async (request) => {
+  if (!request.auth) _deny('unauthenticated', 'Sign in to continue');
+  const uid = request.auth.uid;
+  await _assertCourseOwnerCapability(uid);
+  const d = request.data || {};
+  if (d.op === 'list') {
+    const snap = await db.collection('courses').where('instructorUid', '==', uid).limit(100).get();
+    return { courses: snap.docs.map((x) => { const c = x.data(); return { courseId: x.id, title: c.title, status: c.status, price: c.price, level: c.level,
+      category: c.category, lessonCount: c.lessonCount, enrollmentCount: c.enrollmentCount || 0, reviewNote: c.reviewNote || null }; }) };
+  }
+  if (d.op === 'update') {
+    const fields = _courseFields(d.course || {});
+    const ref = db.collection('courses').doc(String(d.courseId || ''));
+    await db.runTransaction(async (t) => {
+      const snap = await t.get(ref);
+      if (!snap.exists) _deny('not-found', 'course not found');
+      const c = snap.data();
+      if (c.instructorUid !== uid) _deny('permission-denied', 'not course owner', 'NOT_COURSE_OWNER');
+      if (c.status !== 'draft') _deny('failed-precondition', 'Only a draft can be edited.', 'NOT_A_DRAFT');
+      t.update(ref, Object.assign({}, fields, { updatedAt: FieldValue.serverTimestamp() }));
+    });
+    return { success: true };
+  }
+  _deny('invalid-argument', 'Unknown operation.', 'OP_UNKNOWN');
+});
+
 
