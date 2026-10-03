@@ -13461,3 +13461,13 @@ exports.membershipReleaseSweep = _membershipSettlement.membershipReleaseSweep;
 exports.membershipRequestRefund = _membershipSettlement.membershipRequestRefund;
 exports.membershipDecideRefund     = _membershipSettlement.membershipDecideRefund;
 exports.membershipRequestException = _membershipSettlement.membershipRequestException;
+
+/* ── Fitness membership attendance (owner 2026-10-03, OWNER POLICY #2; fitness-attendance.js; NOT deployed):
+   server-authoritative QR check-in ledger. Check-in ≠ completion ≠ settlement; the first valid check-in locks refund
+   eligibility (attendedSessions / firstAttendedAt / refundEligible:false). Corrections are ADMIN-only and never
+   reset the lock. Gym OWNER scans; staff scanning BLOCKED on BUSINESS_IDENTITY_PENDING. */
+const _fitnessAttendance = require('./fitness-attendance');
+exports.fitnessMembershipQr      = _fitnessAttendance.fitnessMembershipQr;
+exports.fitnessCheckIn           = _fitnessAttendance.fitnessCheckIn;
+exports.fitnessCompleteSession   = _fitnessAttendance.fitnessCompleteSession;
+exports.fitnessCorrectAttendance = _fitnessAttendance.fitnessCorrectAttendance;
