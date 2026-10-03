@@ -213,6 +213,22 @@ async function stk(ref, o) {
     /* POS-12 / POS-14: replay the POS-01 payment on another sale */
     { const a12 = await tryPay([{ method: 'mpesa', amount: 100, ref: 'postill_pos01' }], 100, '12');
       ok(!a12.r.ok && (await salesByKey(a12.key)) === 0, 'POS-12/14', 'a payment already confirmed for another sale cannot settle this one', a12.r.ok ? 'completed' : a12.r.msg); }
+    /* GC-16 (owner P0 gift-card brief, sokoni-5b): two tills race to spend ONE KES 100 card on two KES 100 sales.
+       Real Firestore transaction contention — the reason this row lives in the emulator suite. Exactly one sale
+       completes; the card ends at 0 with ONE redemption and ONE payment record; the loser leaves no sale. */
+    { await db.collection('giftCards').doc('RACE-0016').set({ code: 'RACE-0016', shopId: A, balance: 100, initialBalance: 100, status: 'active',
+        expiryDate: admin.firestore.Timestamp.fromMillis(Date.now() + 864e5), redemptions: [] });
+      const [g1, g2] = await Promise.all([
+        tryPay([{ method: 'gift_card', code: 'RACE-0016', amount: 100 }], 100, 'GC16a'),
+        tryPay([{ method: 'gift_card', code: 'RACE-0016', amount: 100 }], 100, 'GC16b'),
+      ]);
+      const c = (await get('giftCards', 'RACE-0016')) || {};
+      const recs = (await db.collection('posGiftCardRedemptions').where('code', '==', 'RACE-0016').get()).size;
+      const won = [g1, g2].filter((x) => x.r.ok).length;
+      const salesMade = (await salesByKey(g1.key)) + (await salesByKey(g2.key));
+      ok(won === 1 && salesMade === 1 && c.balance === 0 && (c.redemptions || []).length === 1 && recs === 1,
+        'GC-16', 'two tills spending the same KES 100 card at once → exactly one sale, card 0, one redemption, one payment record',
+        { won, salesMade, balance: c.balance, redemptions: (c.redemptions || []).length, recs, msgs: [g1.r.msg, g2.r.msg] }); }
   }
 
   clearTimeout(WATCHDOG);
