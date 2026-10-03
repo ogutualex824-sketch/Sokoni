@@ -140,11 +140,27 @@ const CC = require(path.join(FN, 'commission-config.js'));
     c.commissionCents === 0, { commissionCents: c.commissionCents, rate: c.effectiveRate, src: c.pricingSource });
   ck('X2c control: the same overrides DO reprice a non-fixed category (proves the fixture is live)', ctl.commissionCents !== 50000, { commissionCents: ctl.commissionCents });
 
+  /* S1 — the supplier statement (scoped; no internal claim fields) */
+  const sdb = fakeDb({
+    'b2bLeadMonths/supA__2026-09': { month: '2026-09', billToUid: 'uidA', status: 'issued', invoiceId: 'INV9', billedLeadCount: 3, billedNetKES: 600, netKES: 600, leadCount: 3, error: 'eTIMS secret missing', issuingSinceMs: 1 },
+    'b2bLeadMonths/supB__2026-09': { month: '2026-09', billToUid: 'uidB', status: 'issued', invoiceId: 'INVB', billedLeadCount: 9, billedNetKES: 1800 },
+    'b2bLeads/r1__supA': row('r1', 'supA', 'uidA', 'b', { priceKES: 200 }),
+    'b2bLeads/r2__supA': row('r2', 'supA', 'uidA', 'c'),
+    'b2bLeads/r3__supB': row('r3', 'supB', 'uidB', 'c', { priceKES: 200 }),
+  });
+  const st = await L.statementFor(sdb, 'uidA', { now: () => new Date('2026-10-20T10:00:00Z') });
+  const sep = st.months[0];
+  ck('S1a statement: only the caller\'s months (uidA, not uidB); Sept invoiced 600 + 96 = 696 with its invoice id',
+    st.months.length === 1 && sep.month === '2026-09' && sep.leadCount === 3 && sep.netKES === 600 && sep.vatKES === 96 && sep.totalKES === 696 && sep.invoiceId === 'INV9' && sep.status === 'invoiced', st);
+  ck('S1b month in progress counted from the ledger (2 leads: 200 snapshot + 200 current = 400 net, 464 total)',
+    st.currentMonth.month === '2026-10' && st.currentMonth.leadCount === 2 && st.currentMonth.netKES === 400 && st.currentMonth.totalKES === 464, st.currentMonth);
+  ck('S1c no internal claim fields leak (engine error text, timings)', !JSON.stringify(st).includes('eTIMS secret') && !JSON.stringify(st).includes('issuingSinceMs'));
+
   /* W1 */
   const IX = fs.readFileSync(path.join(FN, 'index.js'), 'utf8');
   const ET = fs.readFileSync(path.join(FN, 'etims.js'), 'utf8');
   const SRC = fs.readFileSync(path.join(FN, 'b2b-leads.js'), 'utf8');
-  ck('W1a index exports the four functions by name', ['b2bLeadMonthlyInvoices', 'b2bLeadInvoiceSweep', 'b2bLeadPrice', 'adminSetB2bLeadPrice'].every((n) => new RegExp('exports\\.' + n + '\\s*=\\s*_b2bLeads\\.' + n).test(IX)));
+  ck('W1a index exports the four functions by name', ['b2bLeadMonthlyInvoices', 'b2bLeadInvoiceSweep', 'b2bLeadPrice', 'b2bLeadStatement', 'adminSetB2bLeadPrice'].every((n) => new RegExp('exports\\.' + n + '\\s*=\\s*_b2bLeads\\.' + n).test(IX)));
   ck('W1b the one invoice engine knows fee type lead; secrets exported for scheduled callers', /lead:"B2B Lead Fee"/.test(ET) && /^\s*_ALL_SECRETS,/m.test(ET));
   ck('W1c Super Admin only + audited; schedulers bind the eTIMS secrets', /tk\.superAdmin !== true/.test(SRC) && /adminAudit/.test(SRC) && (SRC.match(/secrets: _secrets\(\)/g) || []).length === 2);
   const RT = fs.readFileSync(path.join(FN, 'finos-router.js'), 'utf8');

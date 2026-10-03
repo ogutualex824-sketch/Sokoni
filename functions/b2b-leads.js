@@ -190,8 +190,38 @@ async function sweepPending(db, deps) {
   return out;
 }
 
+/* VAT through the ONE tax engine (never inline maths): net is exclusive, standard-rated. */
+function _withVat(netKES) {
+  const T = require('./etims-tax-engine');
+  const t = T.computeTotals([T.computeLine({ name: 'B2B Lead Fee', quantity: 1, unitPrice: Number(netKES) || 0, discountRate: 0, seq: 1 }, 'registered', { inclusive: false })]);
+  return { netKES: t.totTaxblAmt, vatKES: t.totTaxAmt, totalKES: t.totAmt };
+}
+
+/**
+ * The caller's own lead statement: invoiced months (from b2bLeadMonths, billToUid == uid) plus the month in progress
+ * (counted from the ledger). Internal claim fields (engine error text, timings) are never returned.
+ */
+async function statementFor(db, uid, deps) {
+  const d = deps || {};
+  const now = d.now ? d.now() : new Date();
+  const current = monthOf(now);
+  const snap = await db.collection(MONTHS).where('billToUid', '==', String(uid)).limit(24).get();
+  const months = snap.docs.map((doc) => {
+    const m = doc.data() || {};
+    const net = Number(m.billedNetKES != null ? m.billedNetKES : m.netKES) || 0;
+    return Object.assign({ month: m.month, leadCount: Number(m.billedLeadCount != null ? m.billedLeadCount : m.leadCount) || 0,
+      status: m.status === 'issued' ? 'invoiced' : 'being_invoiced', invoiceId: m.status === 'issued' ? (m.invoiceId || null) : null }, _withVat(net));
+  }).sort((a, b) => (a.month < b.month ? 1 : -1));
+  const cur = await db.collection(LEADS).where('supplierOwnerUid', '==', String(uid)).where('month', '==', current).limit(5000).get();
+  const price = await leadPrice(db);
+  let net = 0;
+  for (const doc of cur.docs) { const r = doc.data() || {}; net += Number.isInteger(r.priceKES) ? r.priceKES : price.priceKES; }
+  return { ok: true, currentMonth: Object.assign({ month: current, leadCount: cur.docs.length, status: 'in_progress' }, _withVat(net)),
+    months, priceKES: price.priceKES };
+}
+
 /* ── deployables ── */
-let b2bLeadMonthlyInvoices, b2bLeadInvoiceSweep, adminSetB2bLeadPrice, b2bLeadPrice;
+let b2bLeadMonthlyInvoices, b2bLeadInvoiceSweep, adminSetB2bLeadPrice, b2bLeadPrice, b2bLeadStatement;
 {
   const { onCall, HttpsError } = require('firebase-functions/v2/https');
   const { onSchedule } = require('firebase-functions/v2/scheduler');
@@ -214,6 +244,14 @@ let b2bLeadMonthlyInvoices, b2bLeadInvoiceSweep, adminSetB2bLeadPrice, b2bLeadPr
     const p = await leadPrice(_db());
     return { ok: true, priceKES: p.priceKES, vat: 'plus 16% VAT', billing: 'monthly, per lead received' };
   });
+  /* A supplier's own statement (merchant-v2). Scoped to the caller; b2bLeadMonths itself stays admin-read in rules. */
+  b2bLeadStatement = onCall({ region: 'us-central1', maxInstances: 20 }, async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in to see your lead statement.');
+    try { return await statementFor(_db(), req.auth.uid); } catch (e) {
+      logger.error('[b2b-leads] statement failed', { uid: req.auth.uid, err: String(e && e.message || e).slice(0, 200) });
+      throw new HttpsError('unavailable', 'Your lead statement could not be loaded. Try again shortly.');
+    }
+  });
   /* Super Admin only. Whole KES 1..100,000; applies to leads received after the change; audited. */
   adminSetB2bLeadPrice = onCall({ region: 'us-central1', maxInstances: 5 }, async (req) => {
     const tk = req.auth && req.auth.token;
@@ -231,6 +269,6 @@ let b2bLeadMonthlyInvoices, b2bLeadInvoiceSweep, adminSetB2bLeadPrice, b2bLeadPr
 
 module.exports = {
   LEAD_FEE_DEFAULT_KES, VAT_TREATMENT, FEE_TYPE, CONFIG_DOC, LEADS, MONTHS,
-  monthOf, previousMonth, leadPrice, leadFields, groupLeads, invoiceSupplierMonth, invoiceMonth, sweepPending,
-  b2bLeadMonthlyInvoices, b2bLeadInvoiceSweep, b2bLeadPrice, adminSetB2bLeadPrice,
+  monthOf, previousMonth, leadPrice, leadFields, groupLeads, statementFor, invoiceSupplierMonth, invoiceMonth, sweepPending,
+  b2bLeadMonthlyInvoices, b2bLeadInvoiceSweep, b2bLeadPrice, b2bLeadStatement, adminSetB2bLeadPrice,
 };

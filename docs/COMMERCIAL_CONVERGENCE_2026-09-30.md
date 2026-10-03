@@ -785,7 +785,7 @@ No duplicate authority was found on the money side.
   - It issues **one** invoice through `etims._issuePlatformInvoice` (`feeType 'lead'`, `taxCategory 'standard'`, `vatInclusive false`; billed to `supplierOwnerUid`).
   - A failed or stale claim is retried by `b2bLeadInvoiceSweep` (daily) at the **stored** total, never a recount.
   - Both schedulers bind the eTIMS secrets (now exported as `etims._ALL_SECRETS`).
-- **Price callables:** `b2bLeadPrice` is the public read. `adminSetB2bLeadPrice` is Super Admin only, whole KES 1–100,000, and audited.
+- **Price callables:** `b2bLeadPrice` is the public read. `b2bLeadStatement` is the supplier's own statement (caller = billToUid; invoiced months + month in progress; VAT via the tax engine; no internal claim fields). Rules keep `b2bLeadMonths` admin-read. `adminSetB2bLeadPrice` is Super Admin only, whole KES 1–100,000, and audited.
 
 **Open (owner):**
 - How a supplier **pays** the lead invoice (wallet debit, IntaSend link, or offset against B2B settlements). The invoice is the receivable; collection is not invented.
