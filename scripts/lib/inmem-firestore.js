@@ -56,7 +56,7 @@ function install(opts) {
       orderBy: () => coll(c, filters, lim), limit: (n) => coll(c, filters, n), startAfter: () => coll(c, filters, lim),
       get: async () => {
         const docs = [...DOCS.keys()].filter((k) => k.startsWith(c + '/') && k.split('/').length === c.split('/').length + 1)
-          .filter((k) => (filters || []).every(([f, op, v]) => { const x = (DOCS.get(k) || {})[f]; return op === 'in' ? v.includes(x) : x === v; }))
+          .filter((k) => (filters || []).every(([f, op, v]) => { const x = (DOCS.get(k) || {})[f]; return op === 'in' ? v.includes(x) : op === 'array-contains' ? (Array.isArray(x) && x.includes(v)) : x === v; }))
           .slice(0, lim || 1e9).map((k) => snap(k, k.split('/').pop()));
         return { docs, empty: !docs.length, size: docs.length, forEach: (fn) => docs.forEach(fn) };
       },

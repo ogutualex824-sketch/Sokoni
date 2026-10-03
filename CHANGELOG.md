@@ -1,3 +1,33 @@
+## [2026-10-03] — Marketing Hub MK1 + MK2 (server): one taxonomy, three separate application types, partial category approval through the shared AdminOS review — NOT deployed
+
+- **functions/shared/marketing-taxonomy.js (new):**
+  - THE Marketing taxonomy: the owner's 10 groups (Strategy, Digital, Content, Creative, Media, Advertising, PR, Creator, Events, Growth), 71 services, each with a buy model (booking | quote | project).
+  - APPLICATION_TYPES individual / agency / specialist (specialist = exactly one service).
+  - LEGACY_TO_AREA maps HubRegister's six marketing rows one-to-one (printing → nothing).
+- **sokoni-marketing-taxonomy.js:** generated browser copy (`node scripts/build-marketing-taxonomy.js --check`).
+- **functions/marketing-hub.js (new), `marketingDispatch` (one CF, exported in index.js):**
+  - marketingApply / marketingWithdraw / marketingMyStatus: server-validated type, categories, E.164 phone, https-only portfolio, agency registration + team size. The record is `applications/marketing_{uid}` with hub 'marketing' — never the generic business application. Resubmit only from info_requested / rejected / withdrawn.
+  - marketingDirectory / marketingProfile: a filtered view of APPROVED marketers only; the public card carries no phone or email.
+  - marketingAdminOverview: admin-only; every marketing application with type, categories and counts.
+- **functions/application-lifecycle.js:**
+  - applicationDecide accepts `approvedCategories` for a marketing application: it must be a non-empty subset of the request (MKT_NO_CATEGORY / MKT_CATEGORY_NOT_REQUESTED); declined categories are recorded.
+  - New projectMarketing writes the providers/{uid} marketing block (marketingType, marketingCategories = approved subset only, marketingGroups, marketingStatus, marketingListed).
+  - A rejected/suspended marketing application retracts ONLY the marketing block and never strips the provider claim, so an existing cleaning company keeps its cleaning listing.
+  - applicationList returns hub / marketingType / requestedCategories / approved categories / portfolio.
+- **Tests:**
+  - scripts/test-marketing-hub.js: 26/0; SABOTAGE=1 10/10 caught by name.
+  - Regression green: role-provisioning 57/0, legal-projection 96/0, role-vocabulary 66/0, provider-suspend-restore 8/0, provider-onboarding-intake 6/0, service-leads 14/0, messages-jobs 8/0, messages-sports 8/0.
+  - test-approval-provisioning P2 fails on business-bootstrap's missing `_ensureBusinessForOwner` export — this change does not touch that module, so it is not caused by it.
+  - scripts/lib/inmem-firestore.js gains `array-contains`.
+- **Database:** new fields on applications (hub, applicationType 'marketing', marketingType, requestedCategories, marketingApprovedCategories, marketingDeclinedCategories, agency) and on providers (marketing*). Directory uses single-field indexes only; no composite index.
+- **Security:**
+  - applicants cannot self-approve;
+  - admin-only decision and overview;
+  - no contact data in the public card.
+  - OPEN for f3: a client-written `applications` doc could claim hub 'marketing' (rules must refuse it); an admin still chooses the categories.
+- **Deploy (when authorised):** functions only — `marketingDispatch` (new) and `applicationLifecycle` / `applicationDecide` / `applicationList`. NEVER deploy applicationLifecycle from a hosting tree. Hosting (wizard, directory, dashboard, AdminOS panel) comes after.
+- **Breaking:** none.
+
 ## [2026-10-03] — Sports: server-anchored conversations (team / tournament announcements / private registration) + coach capability (sokoni-2f contract, owner decisions) — NOT deployed
 
 - **functions/messages.js:**

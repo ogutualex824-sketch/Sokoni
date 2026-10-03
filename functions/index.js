@@ -12416,6 +12416,9 @@ exports.subscriptionsDispatch = subsCoreDisp.subscriptionsDispatch;
 /* ── Legal Agreements & Digital Acceptance — versioned, auditable → 1 CF ── */
 const legalDisp = require('./legal-dispatch');
 exports.legalDispatch = legalDisp.legalDispatch;
+
+/* ── Marketing Hub — application (individual / agency / specialist), directory, AdminOS overview → 1 CF ── */
+exports.marketingDispatch = require('./marketing-hub').marketingDispatch;
 /* ══════════════════════════════════════════════════════════════════════
    RC1 REPRODUCIBILITY FIX — recovered orphaned Cloud Functions.
    These were DEPLOYED and live but NOT exported here, so a full
