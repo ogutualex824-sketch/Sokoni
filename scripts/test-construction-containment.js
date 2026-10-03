@@ -63,8 +63,24 @@ sandbox.SokoniProductVisibility = require(path.join(R, 'sokoni-product-visibilit
   fetchOk = false; await sandbox.loadConstructionProducts();
   const g2 = (els.cnGrid || {}).innerHTML || '';
   ok('F9', /This is not an empty catalogue/.test(g2), 'a failed load is never shown as an empty catalogue');
-  sandbox.submitRFQ(); sandbox.submitQuote();
-  ok('F10', /being upgraded/.test(els.rfqMsg.innerHTML) && /being upgraded/.test(els.qMsg.innerHTML), 'RFQ / quote forms are honest and store nothing');
+  /* R — RFQs go to the ONE RFQ authority as the signed-in individual (owner 2026-10-03) */
+  const sent = []; let reply = { recipients: [{ supplierBusinessId: 's1' }, { supplierBusinessId: 's2' }] };
+  sandbox.SokoniRfqTransport = async (p) => { sent.push(p); if (reply instanceof Error) throw reply; return reply; };
+  const setv = (id, v) => { el(id).value = v; };
+  setv('rfqType', 'materials'); setv('rfqLocation', 'Langata'); setv('rfqDesc', 'Cement — 500 bags'); setv('rfqDeadline', '2026-11-01'); setv('rfqBudget', ''); setv('rfqPref', '');
+  sandbox.firebaseAuth = null; await sandbox.submitRFQ();
+  ok('R1', /Sign in to request quotes/.test(els.rfqMsg.innerHTML) && sent.length === 0, 'signed out: asks to sign in and sends nothing');
+  sandbox.firebaseAuth = { currentUser: { uid: 'u1' } }; await sandbox.submitRFQ(); await new Promise((r) => setImmediate(r));
+  const p = sent[0] || {};
+  ok('R2', p.op === 'create' && p.buyerType === 'individual' && p.open && p.open.category === 'building-materials' && p.deliveryLocation === 'Langata', 'sends create as an individual, open RFQ in the mapped category', p);
+  ok('R3', !('buyerUid' in p) && !('uid' in p) && !('merchantId' in p) && !/0712|phone/i.test(JSON.stringify(Object.keys(p))), 'never sends a buyer identity — the server takes it from auth', Object.keys(p));
+  ok('R4', Array.isArray(p.items) && p.items[0].name === 'Cement' && p.items[0].qty === 500 && p.items[0].unit === 'bags', 'parses "Cement — 500 bags" into an item with quantity', p.items);
+  ok('R5', /Request sent to 2 suppliers/.test(els.rfqMsg.innerHTML), 'success only after the server returns, with the real recipient count');
+  reply = new Error('functions/failed-precondition: Verify your phone number on SOKONI before requesting quotes.');
+  els.rfqMsg.innerHTML = ''; els.rfqMsg.textContent = '';   /* the fake element keeps the two fields separately */
+  await sandbox.submitRFQ(); await new Promise((r) => setImmediate(r));
+  ok('R6', /Verify your phone number/.test(els.rfqMsg.textContent) && !/✅/.test(els.rfqMsg.innerHTML), 'the server refusal is shown verbatim, never a success');
+  ok('R7', !/localStorage\.setItem\('sokoniRFQs'|sokoniBuildQuotes/.test(html), 'no browser-only RFQ store');
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })();

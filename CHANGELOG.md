@@ -1,3 +1,16 @@
+## [2026-10-03] — Construction: real RFQs for individuals + the buyer's RFQ dashboard — hosting source, NOT deployed
+
+**Summary:** The bulk-quote and RFQ forms on `construction.html` now send real requests through the ONE RFQ authority
+(`rfqDispatch`, `buyerType:'individual'`, functions/b2b-rfq-on-e61c73e @ bd270db). The buyer comes from the signed-in
+account, never the form. Each request is an open RFQ in the mapped category, delivered to suppliers who accept RFQs. A
+signed-out user is asked to sign in. Success shows only after the server returns, with the real recipient count; a
+server refusal (e.g. "verify your phone") is shown verbatim. The dashboard lists the buyer's RFQs and quotes from
+`listMine`, with VAT as declared and an Accept button (a server transaction). The accepted quote becomes a normal SOKONI
+order at checkout once 2f / 5b ship the `rfq_quote` purpose; until then the page says so. RFQs are free for buyers.
+**Files:** `construction.html`, `scripts/test-construction-containment.js` (27/0; R1–R7 drive the real handlers through a
+transport seam; a business-identity mutant fails R2 / R3).
+**Deploy:** after rfqDispatch (bd270db) and the combined rules. NOT authorized.
+
 ## [2026-10-03] — Construction containment: no fabricated catalogue, clean cards → product page, no WhatsApp — hosting source, NOT deployed
 
 **Summary (owner decision 2026-10-03, "contain now"):** `construction.html` stops showing invented data and making

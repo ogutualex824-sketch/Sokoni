@@ -311,7 +311,7 @@
   <!--  Bulk Quote Form  -->
   <div class="cn-sec-h" style="margin-top:36px;" id="quoteSection">📋 Get a Bulk Quote</div>
   <div class="quote-form">
-    <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:18px;">Construction quote requests are being upgraded so suppliers actually receive them. Meanwhile, open a product and message its seller in SOKONI.</p>
+    <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:18px;">Tell us what you need — it goes to suppliers on SOKONI who accept quote requests in that category. Free for buyers; quotes appear in your dashboard.</p>
     <div class="cn-grid2">
       <div>
         <label class="cn-label">Your Name *</label>
@@ -433,7 +433,7 @@
 <div id="cntabpanel-rfq" class="cn-tab-panel">
   <div class="cn-body">
     <div class="cn-sec-h" style="margin-top:8px;">📋 Request for Quotation (RFQ)</div>
-    <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:20px;">Construction RFQs are being upgraded so suppliers and contractors actually receive them. Meanwhile, message sellers from their product pages.</p>
+    <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:20px;">Post your requirements — suppliers and contractors on SOKONI who accept quote requests in that category receive it. Free for buyers.</p>
 
     <!-- New RFQ form -->
     <div class="quote-form" id="rfqForm">
@@ -939,13 +939,49 @@ function submitOrder(){
 function openQuoteFor(name){ document.getElementById("qMaterials").value = name+" — "; document.getElementById("quoteSection").scrollIntoView({behavior:"smooth"}); document.getElementById("qMaterials").focus(); }
 
 /* ————————————————— BULK QUOTE ————————————————— */
-function submitQuote(){ _rfqNotYet('qMsg'); }
-/* CONTAINMENT: bulk-quote / RFQ submissions promised fast supplier responses but nothing dispatched
-   them, and open RFQs (with name + phone) were publicly readable. Construction RFQs move to SOKONI's RFQ authority in
-   the full build; until then the form is honest and stores nothing. */
-function _rfqNotYet(elId){
-  const msgEl = document.getElementById(elId);
-  if(msgEl){ msgEl.innerHTML = 'Construction quote requests are being upgraded so suppliers actually receive them. For now, open a product and use <b>Message</b> on its page to ask the seller directly.'; msgEl.style.color = '#ff9800'; }
+/* CONSTRUCTION RFQs (owner 2026-10-03): individuals request quotes through the ONE RFQ authority (rfqDispatch,
+   buyerType 'individual'). The server takes the buyer from the signed-in account (never the form), requires a
+   verified phone, routes an OPEN RFQ to suppliers in the category who accept RFQs, and records one lead per supplier.
+   Success is shown only after the server confirms; its refusal is shown verbatim. RFQ submission is free for buyers. */
+const RFQ_CATEGORY = { materials: 'building-materials', contractor: 'contractor', equipment: 'equipment-rental', 'full-project': 'construction', design: 'construction-architect' };
+async function _rfqCall(op, payload){
+  /* test seam: a certification harness may provide the transport; production always uses the Firebase SDK below */
+  if (typeof window.SokoniRfqTransport === 'function') return window.SokoniRfqTransport(Object.assign({ op, buyerType: 'individual' }, payload || {}));
+  const mod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+  const fns = mod.getFunctions(window.firebaseApp, 'us-central1');
+  const res = await mod.httpsCallable(fns, 'rfqDispatch')(Object.assign({ op, buyerType: 'individual' }, payload || {}));
+  return (res && res.data) || {};
+}
+function _rfqErr(e){ return String((e && e.message) || 'Could not send your request').replace(/^.*?:\s*/, '').slice(0, 300); }
+function _signedIn(){ try { return !!(window.firebaseAuth && window.firebaseAuth.currentUser); } catch (e) { return false; } }
+function _parseItems(text){
+  /* "Bamburi cement — 500 bags" → { name, qty: 500, unit: 'bags' }. A line without a number is qty 1. */
+  return String(text || '').split(/\n+/).map(function (l) { return l.trim(); }).filter(Boolean).slice(0, 50).map(function (l) {
+    const m = l.match(/(\d[\d,]*)\s*([A-Za-z²³]+)?\s*$/);
+    const qty = m ? Math.max(1, parseInt(m[1].replace(/,/g, ''), 10) || 1) : 1;
+    const name = (m ? l.slice(0, m.index) : l).replace(/[—–:-]+\s*$/, '').trim().slice(0, 200) || l.slice(0, 200);
+    return { name, qty, unit: m && m[2] ? m[2].slice(0, 30) : 'unit' };
+  });
+}
+async function _sendRfq(msgEl, payload, btn){
+  if(!_signedIn()){ msgEl.innerHTML = 'Sign in to request quotes — your request is sent from your SOKONI account. <a href="login.html?redirect=construction.html" style="color:#f59e0b;">Sign in</a>'; msgEl.style.color = '#ff9800'; return; }
+  if(btn) btn.disabled = true;
+  msgEl.textContent = 'Sending your request…'; msgEl.style.color = 'rgba(255,255,255,0.6)';
+  try {
+    const r = await _rfqCall('create', payload);
+    const n = (r.recipients || []).length;
+    msgEl.innerHTML = '✅ Request sent to ' + n + ' supplier' + (n === 1 ? '' : 's') + '. Quotes appear in your <b>Dashboard → My RFQs</b>, and suppliers can message you in SOKONI.';
+    msgEl.style.color = '#00c878';
+  } catch (e) { msgEl.textContent = _rfqErr(e); msgEl.style.color = '#ff6b6b'; }
+  finally { if(btn) btn.disabled = false; }
+}
+function submitQuote(){
+  const msgEl = document.getElementById('qMsg'); if(!msgEl) return;
+  const loc = document.getElementById('qLocation').value.trim();
+  const items = _parseItems(document.getElementById('qMaterials').value);
+  if(!loc || !items.length){ msgEl.textContent = '⚠️ Add the materials you need and the delivery location'; msgEl.style.color = '#ff9800'; return; }
+  const notes = ['Project: ' + (document.getElementById('qProjectType').value || '—'), 'Delivery: ' + (document.getElementById('qDelivery').value || '—'), 'Budget: ' + (document.getElementById('qBudget').value || '—')].join(' · ');
+  _sendRfq(msgEl, { items, deliveryLocation: loc, notes, open: { category: 'building-materials' } }, document.querySelector('#quoteSection ~ .quote-form button, #quoteSection + * button'));
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1092,7 +1128,18 @@ function bookEquipment(id){
 /* ════════════════════════════════════════════════════════════
    RFQ (TAB)
 ════════════════════════════════════════════════════════════ */
-function submitRFQ(){ _rfqNotYet('rfqMsg'); }
+function submitRFQ(){
+  const msgEl = document.getElementById('rfqMsg'); if(!msgEl) return;
+  const type = document.getElementById('rfqType').value;
+  const loc = document.getElementById('rfqLocation').value.trim();
+  const desc = document.getElementById('rfqDesc').value.trim();
+  if(!type || !loc || !desc){ msgEl.textContent = '⚠️ Choose a type, the location and describe what you need'; msgEl.style.color = '#ff9800'; return; }
+  const items = _parseItems(desc);
+  const deadline = document.getElementById('rfqDeadline').value;
+  const notes = desc.slice(0, 800) + ' · Budget: ' + (document.getElementById('rfqBudget').value || '—') + ' · Preference: ' + (document.getElementById('rfqPref').value || '—');
+  _sendRfq(msgEl, { title: desc.slice(0, 120), items, deliveryLocation: loc, neededBy: /^\d{4}-\d{2}-\d{2}$/.test(deadline) ? deadline : undefined, notes, open: { category: RFQ_CATEGORY[type] || 'construction' } },
+    document.querySelector('#rfqForm button'));
+}
 
 /* ════════════════════════════════════════════════════════════
    PROJECT MANAGEMENT
@@ -1148,12 +1195,43 @@ function loadDashboard(){
   let projs=[]; try{projs=JSON.parse(localStorage.getItem('sokoniProjects'))||[];}catch(e){}
   const activeProj = document.getElementById('dActiveProj'); if(activeProj) activeProj.textContent=projs.length;
   const spendEl = document.getElementById('dTotalSpend'); if(spendEl) spendEl.textContent='—';
-  const rfqEl = document.getElementById('dOpenRFQ'); if(rfqEl) rfqEl.textContent='—';
+  const rfqEl = document.getElementById('dOpenRFQ'); if(rfqEl) rfqEl.textContent='—';   /* filled by loadMyRfqs from the server */
   const ordersEl = document.getElementById('dashRecentOrders');
   if(ordersEl) ordersEl.innerHTML='<div style="text-align:center;padding:36px 0;color:rgba(255,255,255,0.4);"><p style="font-size:12px;">Your SOKONI orders are in <a href="orders.html" style="color:#f59e0b;">My Orders</a>.</p></div>';
-  const rfqListEl = document.getElementById('dashMyRFQs');
-  if(rfqListEl) rfqListEl.innerHTML='<div style="text-align:center;padding:36px 0;color:rgba(255,255,255,0.4);"><p style="font-size:12px;">Construction quote requests are being upgraded.</p></div>';
+  loadMyRfqs();
 }
+
+/* The buyer's RFQs and the quotes received — from rfqDispatch listMine. Accepting is a server transaction; the
+   accepted quote becomes a normal SOKONI order at checkout (opens when the quote checkout purpose is live). */
+async function loadMyRfqs(){
+  const el = document.getElementById('dashMyRFQs'); if(!el) return;
+  if(!_signedIn()){ el.innerHTML = '<p style="font-size:12px;color:rgba(255,255,255,0.4);text-align:center;padding:24px 0;">Sign in to see your quote requests.</p>'; return; }
+  el.innerHTML = '<p style="font-size:12px;color:rgba(255,255,255,0.4);text-align:center;padding:24px 0;">Loading your requests…</p>';
+  try {
+    const r = await _rfqCall('listMine', {});
+    const rfqs = r.rfqs || [];
+    const open = rfqs.filter(function (x) { return x.status === 'submitted'; }).length;
+    const rfqEl = document.getElementById('dOpenRFQ'); if(rfqEl) rfqEl.textContent = String(open);
+    if(!rfqs.length){ el.innerHTML = '<p style="font-size:12px;color:rgba(255,255,255,0.4);text-align:center;padding:24px 0;">No quote requests yet.</p>'; return; }
+    el.innerHTML = rfqs.slice(0, 10).map(function (x) {
+      const quotes = (x.recipients || []).map(function (rq) {
+        const q = rq.quote;
+        const acc = x.status === 'submitted' && q && q.status === 'quoted'
+          ? '<button type="button" class="cn-pill" data-accept-rfq="' + _esc(x.rfqId) + '" data-accept-sup="' + _esc(rq.supplierBusinessId) + '" data-accept-ver="' + _esc(q.version) + '">Accept</button>' : '';
+        return '<div style="font-size:11px;color:rgba(255,255,255,0.55);margin-top:4px;">' + _esc(rq.supplierName || 'Supplier') + ' — ' + (q ? 'KES ' + Number(q.totalKES).toLocaleString() + ' (VAT ' + _esc(q.vatRate) + '% as declared)' : _esc(rq.status)) + ' ' + acc + '</div>';
+      }).join('');
+      const tail = x.status === 'accepted' ? '<div style="font-size:11px;color:#00c878;margin-top:4px;">Accepted — checkout through SOKONI opens here shortly.</div>' : '';
+      return '<div class="dash-proj-card"><div style="font-size:13px;font-weight:800;color:white;">' + _esc(x.title) + '</div><div style="font-size:11px;color:rgba(255,255,255,0.38);">' + _esc(x.status) + ' · ' + _esc(x.deliveryLocation) + '</div>' + quotes + tail + '</div>';
+    }).join('');
+  } catch (e) { el.innerHTML = '<p style="font-size:12px;color:#ff6b6b;text-align:center;padding:24px 0;">Could not load your requests — ' + _esc(_rfqErr(e)) + ' This is not an empty list.</p>'; }
+}
+document.addEventListener('click', async function (ev) {
+  const b = ev.target && ev.target.closest && ev.target.closest('[data-accept-rfq]'); if(!b) return;
+  if(!window.confirm('Accept this quote? The other suppliers are told the request is closed.')) return;
+  b.disabled = true;
+  try { await _rfqCall('respond', { rfqId: b.getAttribute('data-accept-rfq'), supplierBusinessId: b.getAttribute('data-accept-sup'), action: 'accept', expectedVersion: Number(b.getAttribute('data-accept-ver')) }); loadMyRfqs(); }
+  catch (e) { b.disabled = false; (window._skToast || alert)(_rfqErr(e)); }
+});
 
 /* ════════════════════════════════════════════════════════════
    CONTRACTOR REGISTRATION MODAL
