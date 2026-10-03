@@ -44,7 +44,12 @@ console.log('\nA. Online sales rate = 15%, by intent (owner schedule 2026-09-28)
   ck('  ...and matches a real category (not the default bucket)',
      m.matched === true && m.category === 'marketplace', m.category);
 }
-for (const alias of ['product', 'products', 'shopping', 'b2b']) {
+/* 'b2b' → b2b_order 0% since 2026-10-03 (owner: lead fee, no % on wholesale orders) — asserted below and in test-b2b-lead-fee.js. */
+{
+  const r = CC.resolveRate('b2b');
+  ck('"b2b" -> b2b_order @ 0% (lead model, never the marketplace rate)', r.pct === 0 && r.category === 'b2b_order' && r.matched === true, r.pct + '% ' + r.category);
+}
+for (const alias of ['product', 'products', 'shopping']) {
   const r = CC.resolveRate(alias);
   ck(`"${alias}" -> marketplace @ 15%`,
      r.pct === 15 && r.category === 'marketplace' && r.matched === true,

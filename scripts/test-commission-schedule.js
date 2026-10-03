@@ -50,7 +50,8 @@ const page = (f) => (CPM ? cp.execFileSync('git', ['show', '4e9607b:' + f], { cw
 
 /* ── THE SPEC: owner-confirmed 2026-09-28 ── */
 const SPEC = [
-  ['Online product sales',        ['marketplace', 'product', 'products', 'b2b'], 15, 0],
+  ['Online product sales',        ['marketplace', 'product', 'products'],        15, 0],
+  ['B2B wholesale orders',        ['b2b', 'wholesale', 'b2b_order'],              0, 0],   /* owner 2026-10-03: lead fee, 0% on orders */
   ['Food ordered online',         ['food_delivery', 'food', 'restaurant'],       15, 0],
   ['Digital products',            ['digital_products', 'digital'],               10, 0],
   ['POS / Till / Quick Charge',   ['pos', 'till', 'quick_charge'],                5, 0],

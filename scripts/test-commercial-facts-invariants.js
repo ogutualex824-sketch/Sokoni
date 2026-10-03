@@ -99,7 +99,12 @@ async function invoiceFor(ledgerRow) {
     ck(`1b ${lane.label}: invoice amount == ledger amount == engine amount (KES ${r.commissionCents / 100})`, res.ok === true && call.amount === r.commissionCents / 100 && call.feeType === 'commission' && updated && updated.invoiceId && !('totalOwed' in updated), { res: res.reason, invoiced: call && call.amount });
   }
   /* flat-fee lanes: the fee, not a percentage, is what the ledger must carry */
-  for (const [cat, fee] of [['vehicles', 2000], ['property', 5000]]) {
+  /* vehicles: owner 2026-10-03 moved to 2% with no flat fee (9cab901) — asserted as a percentage lane below. */
+  {
+    const r = await FU.calculateCommission(engineDb, { orderAmountCents: 100000000, category: 'vehicles', sellerId: 'V1' });
+    ck('1c vehicles: KES 1,000,000 sale -> 2% = KES 20,000, no flat fee', r.commissionCents === 2000000 && r.effectiveRate === 2, { cents: r.commissionCents, rate: r.effectiveRate });
+  }
+  for (const [cat, fee] of [['property', 5000]]) {
     const r = await FU.calculateCommission(engineDb, { orderAmountCents: 100000000, category: cat, sellerId: 'V1' });
     ck(`1c ${cat}: KES 1,000,000 sale -> flat KES ${fee}, invoice would carry exactly that`, r.commissionCents === fee * 100 && r.effectiveRate === 0, { cents: r.commissionCents, rate: r.effectiveRate });
   }

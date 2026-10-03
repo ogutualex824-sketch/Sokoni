@@ -204,7 +204,10 @@ console.log('\nG. Scope — only marketplace sales enter the 48-hour model\n');
   let _d = 0, _i = IDX.indexOf('{', _s);
   for (; _i < IDX.length; _i++) { if (IDX[_i] === '{') _d++; else if (IDX[_i] === '}' && --_d === 0) break; }
   const is48 = new Function('__CC', IDX.slice(_s, _i + 1).replace(/require\("\.\/commission-config"\)/g, '__CC') + '\nreturn _is48hCommission;')(CFG);
-  for (const h of ['marketplace', 'product', 'products', 'pos', 'shopping', 'b2b']) {
+  /* 'b2b' left 2026-10-03: owner lead model — a wholesale order is the b2b_order lane at 0%, so it carries no
+     per-sale commission receivable (test-b2b-lead-fee.js). */
+  ck('"b2b" is NOT governed by the 48-hour model (lead model, 0% on orders)', is48('b2b') === false);
+  for (const h of ['marketplace', 'product', 'products', 'pos', 'shopping']) {
     ck(`"${h}" IS governed by the 48-hour model`, is48(h) === true);
   }
   for (const h of ['food_delivery', 'legal', 'healthcare', 'events', 'digital_products',

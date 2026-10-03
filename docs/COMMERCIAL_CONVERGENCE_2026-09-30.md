@@ -760,3 +760,41 @@ No duplicate authority was found on the money side.
 - Subscription ≠ sale commission.
 
 **Tests:** `scripts/test-carhub-catalogue.js` 16/0. hub-plan-entitlements 17/0 (all new plan ids resolve; none to FREE by accident). membership 77/0, schedule 25/0. creator-callback still has only its 4 pre-existing failures.
+
+## 16 · B2B Hub: lead fee + 0% on wholesale orders (owner 2026-10-03, via sokoni-f3)
+
+**Owner decisions:**
+- **Earning model:** a lead fee, with **no % cut on wholesale orders**. A lead is each RFQ/enquiry a supplier receives through SOKONI.
+- **Price:** KES 200 per lead + 16% VAT. VAT was chosen explicitly, so the treatment is standard-rated and stated exclusive of VAT.
+- **Billing:** per supplier, per calendar month (Africa/Nairobi), invoiced at month end as a SOKONI → supplier platform invoice.
+- **Price changes:** admin-editable.
+
+**Order exemption** (`commission-config`):
+- **New row:** `RATES.b2b_order` is 0%, a **fixed, floor-exempt** lane.
+- **Aliases:** `b2b`, `wholesale`, `b2b_wholesale` and `rfq` all resolve to it. `b2b` was an alias of `marketplace`, which would have charged a wholesale order 15%.
+- **Ladder:** `b2b` is removed from `MARKETPLACE_SELLER_CATEGORIES`.
+- **Router:** `finos-router` maps hub `b2b` to `b2b_order`.
+- **Why fixed:** a fixed lane means no commissionRule, revenueConfig override, plan ladder or KES 10 minimum can reprice it. A mutant proved this: without the fixed lane, a seller's 12% override charged KES 60,000 on a KES 500,000 order.
+- **Billing term:** `b2b` is no longer on the 48-hour per-sale commission term (nothing is owed).
+
+**Lead fee** (`functions/b2b-leads.js`): one writer per collection.
+- **Lead rows:** `b2bLeads/{rfqId}__{supplierBusinessId}` is written **only by rfq.js** (sokoni-f3, `functions/b2b-rfq-on-e61c73e @ 38ab5a8`), after it re-reads supplier consent. This module never writes a lead.
+- **Price snapshot:** rfq.js should spread `leadFields(db)` (`priceKES`, `priceSource`) into each row, so a price change applies only to later leads. A row without a snapshot is priced at invoice time and counted in `unsnapshottedLeads`.
+- **Month end:** `b2bLeadMonthlyInvoices` runs on the 1st at 07:00 EAT. It reads the previous month's ledger (paged, once), groups it by supplier and drops self-RFQs.
+  - It claims `b2bLeadMonths/{sup}__{month}` with the totals stored at first claim.
+  - It issues **one** invoice through `etims._issuePlatformInvoice` (`feeType 'lead'`, `taxCategory 'standard'`, `vatInclusive false`; billed to `supplierOwnerUid`).
+  - A failed or stale claim is retried by `b2bLeadInvoiceSweep` (daily) at the **stored** total, never a recount.
+  - Both schedulers bind the eTIMS secrets (now exported as `etims._ALL_SECRETS`).
+- **Price callables:** `b2bLeadPrice` is the public read. `adminSetB2bLeadPrice` is Super Admin only, whole KES 1–100,000, and audited.
+
+**Open (owner):**
+- How a supplier **pays** the lead invoice (wallet debit, IntaSend link, or offset against B2B settlements). The invoice is the receivable; collection is not invented.
+- The held B2B order payment purpose (IntaSend, held until delivery, settled to the business wallet, priced under `b2b_order`) is still to be defined with 5b.
+
+**Finding (not changed):** `subscription-invoice.subIssuePendingInvoices` binds **no** eTIMS secrets. A v2 scheduled run that reaches `_issuePlatformInvoice` cannot read `ETIMS_PLATFORM_PIN`, so the sweep can only record `failed`. This needs its own commit.
+
+**Tests:**
+- `scripts/test-b2b-lead-fee.js` 21/0, including the real VAT engine (600 + 96 = 696) and the real `calculateCommission` with a live control.
+- Amended for the owner decision: 48h-destinations 87/0, 5pct-agreement 62/0, schedule 26/0 (client snapshot `sokoni-commission-rates.js` rebuilt).
+- commercial-facts 1c amended for vehicles 2% (stale since 9cab901).
+- Failures identical on base `09964a2`: commercial-facts 3b, commission-balance-ui ×2.

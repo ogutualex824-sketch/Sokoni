@@ -13478,3 +13478,10 @@ exports.membershipRequestException = _membershipSettlement.membershipRequestExce
 const _vehicleBoosts = require('./vehicle-boosts');
 exports.vehicleBoostCatalogue      = _vehicleBoosts.vehicleBoostCatalogue;
 exports.adminSetVehicleBoostPrices = _vehicleBoosts.adminSetVehicleBoostPrices;
+
+/* ── B2B lead fee (owner 2026-10-03): KES 200 + 16% VAT per RFQ a supplier receives, invoiced monthly. ── */
+const _b2bLeads = require('./b2b-leads');
+exports.b2bLeadMonthlyInvoices = _b2bLeads.b2bLeadMonthlyInvoices;
+exports.b2bLeadInvoiceSweep    = _b2bLeads.b2bLeadInvoiceSweep;
+exports.b2bLeadPrice           = _b2bLeads.b2bLeadPrice;
+exports.adminSetB2bLeadPrice   = _b2bLeads.adminSetB2bLeadPrice;

@@ -1,3 +1,10 @@
+## 2026-10-03 — B2B lead fee (KES 200 + 16% VAT, monthly platform invoice) + 0% fixed lane for B2B orders (NOT deployed)
+
+- **Order exemption:** commission-config RATES.b2b_order (0%, fixed, floor-exempt); b2b/wholesale/rfq aliases; finos-router b2b → b2b_order.
+- **Lead fee:** functions/b2b-leads.js reads rfq.js's b2bLeads ledger and invoices each supplier monthly through the one eTIMS engine (fee type 'lead').
+- **Functions:** b2bLeadMonthlyInvoices, b2bLeadInvoiceSweep, b2bLeadPrice, adminSetB2bLeadPrice; etims exports _ALL_SECRETS.
+- **Tests:** test-b2b-lead-fee 21/0; commission suites amended; client rate snapshot rebuilt.
+
 ## 2026-10-03 — Car Hub paid products: dealer + tracking plans, configurable vehicle boosts (NOT deployed)
 
 - **Plans:** sub-billing PLANS (car_dealer_* tiers, tracking_*), prices editable via adminSubUpdatePlan.

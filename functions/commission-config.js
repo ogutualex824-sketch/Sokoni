@@ -107,6 +107,10 @@ const RATES = {
 
   /* ── zero-rated ── */
   saas:             { pct: 0,   fixedKES: 0,    _was: 'hub 0%' },
+  /* Owner 2026-10-03 (via sokoni-f3): a B2B wholesale ORDER carries NO commission — SOKONI earns a per-lead fee
+     (b2b-leads.js, invoiced monthly). A FIXED-RATE, floor-exempt row, so no commissionRule, revenueConfig override,
+     plan ladder or KES 10 minimum can ever turn a wholesale order into a percentage. */
+  b2b_order:        { pct: 0,   fixedKES: 0,    _was: "alias of marketplace (15% ladder) — owner 2026-10-03: lead model, 0% on orders" },
 
   /* Applied when a hub/category is unknown. The HUB default (5%), not the category
      default (10%) — an unrecognised hub must not be charged double by accident. */
@@ -126,7 +130,9 @@ const ALIASES = {
      silently CHANGED the moment anyone "corrected" the string to "marketplace".
      Mapping it deliberately is what makes the 5% intentional rather than incidental. */
   product: 'marketplace', products: 'marketplace',
-  shopping: 'marketplace', b2b: 'marketplace',
+  shopping: 'marketplace',
+  /* b2b → b2b_order (owner 2026-10-03). It was 'marketplace', which would have charged a wholesale order the 15% ladder. */
+  b2b: 'b2b_order', wholesale: 'b2b_order', b2b_wholesale: 'b2b_order', rfq: 'b2b_order',
   till: 'pos', quick_charge: 'pos', quickcharge: 'pos',
   /* C2 — the same accident as `product`, on the one category where it inverts the
      commercial meaning. RATES has `subscriptions` (plural, pct 100: the full amount
@@ -359,12 +365,13 @@ function resolveRate(key) {
    (POS_PLAN_RATES) but dropped the guard, which left POS ladder-exempt yet override-able through
    the finos-utils chain. Restored 2026-09-30 — docs/COMMERCIAL_CONVERGENCE_2026-09-30.md. */
 /* 'fitness' added 2026-10-03 (owner: 5% per booking). Same absolute semantics as POS: RATES.fitness and nothing else. */
-const FIXED_RATE_CATEGORIES = Object.freeze(['pos', 'fitness']);
+/* 'b2b_order' added 2026-10-03 (owner: lead model, no commission on wholesale orders). */
+const FIXED_RATE_CATEGORIES = Object.freeze(['pos', 'fitness', 'b2b_order']);
 
 /* Fixed lanes that carry NO platform minimum. Fitness is a provider BOOKING lane, and provider bookings never had the
    KES 10 floor (finos-utils: "a KES 20 booking at 20% charged KES 4"); the owner set "5% commission per booking", so a
    KES 100 session pays KES 5, not KES 10. POS keeps its floor (POS_PLAN_RATES.floorExempt false) — unchanged. */
-const FIXED_RATE_FLOOR_EXEMPT = Object.freeze(['fitness']);
+const FIXED_RATE_FLOOR_EXEMPT = Object.freeze(['fitness', 'b2b_order']);
 function isFloorExemptFixedCategory(key) {
   const r = resolveRate(key);
   return r.matched === true && FIXED_RATE_FLOOR_EXEMPT.indexOf(r.category) !== -1;
@@ -675,7 +682,8 @@ function resolveMarketplaceRate(planIdOrTier) {
    is load-bearing. The alias itself must stay: it also decides the SETTLEMENT TERM
    (index.js `_is48hCommission`), and moving that is a separate decision. */
 const MARKETPLACE_SELLER_CATEGORIES = Object.freeze(new Set([
-  'marketplace', 'product', 'products', 'shopping', 'b2b',
+  'marketplace', 'product', 'products', 'shopping',
+  /* 'b2b' removed 2026-10-03: a wholesale order is the b2b_order lane (0%, lead model), never the marketplace ladder. */
 ]));
 
 /** True when `rawCategory` is a marketplace seller sale priced by the plan ladder. */

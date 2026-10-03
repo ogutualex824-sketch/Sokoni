@@ -1137,6 +1137,8 @@ async function _issuePlatformInvoice({ sellerUid, feeType, amount, reference, de
     commission:"Platform Commission Fee", subscription:"Subscription Fee",
     advertising:"Advertising Fee", delivery:"Delivery Service Fee",
     verification:"Verification Fee", premium:"Premium Service Fee",
+    /* owner 2026-10-03: B2B lead fee, KES 200 + 16% VAT per lead, invoiced monthly by b2b-leads.js */
+    lead:"B2B Lead Fee",
   };
   if (!FEE_LABELS[feeType]) throw new HttpsError("invalid-argument","Invalid feeType");
   if (!amount || amount <= 0) throw new HttpsError("invalid-argument","Amount must be positive");
@@ -1511,6 +1513,9 @@ module.exports = {
      supply `vatInclusive` — it has no default by design. */
   _issuePlatformInvoice,
   _platformTaxStatusFor,
+  /* Secret bindings for any scheduled caller of _issuePlatformInvoice (b2b-leads.js) — a v2 function reads a secret
+     only when it declares it. */
+  _ALL_SECRETS,
   /* Event ticket fiscalisation (functions/event-fiscal.js) reuses the ONE order-invoice path and the
      ONE requeue path — no second eTIMS implementation. */
   generateForOrder,
