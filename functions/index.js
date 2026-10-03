@@ -4680,7 +4680,8 @@ function _is48hCommission(hub) {
     /* POS / Till / Quick Charge now resolve to their own `pos` category (2026-09-28) so the till can never follow the
        marketplace rate; they keep the 48-hour per-sale term they have always had. */
     const _cat = require("./commission-config").categoryForHub(hub);
-    return _cat === "marketplace" || _cat === "pos";
+    /* electronics (owner 2026-10-03): a marketplace product sale with its own explicit row — same 48h per-sale term. */
+    return _cat === "marketplace" || _cat === "pos" || _cat === "electronics";
   } catch (_e) {
     /* Config unreadable — fall back to MONTHLY, the pre-existing behaviour.
        Failing closed here means "bill it the old way", never "start a 48-hour
@@ -4759,6 +4760,8 @@ exports.onSellerPaymentCreated = onDocumentCreated(
         reason:          audit.reason,
         calculatedAt:    audit.calculatedAt,
         engineVersion:   audit.engineVersion,
+        policyVersion:   audit.policyVersion || null,
+        resolvedCategory: audit.resolvedCategory || null,
 
         status: "pending",
         invoiceId: null,
@@ -7902,6 +7905,15 @@ exports.webhookIntasend = onRequest(
     const apiRef     = invoice.api_ref         || req.body?.api_ref;
     const checkoutId = invoice.id              || req.body?.invoice_id;
     const amount     = Number(invoice.net_amount || invoice.amount || req.body?.net_amount || req.body?.value || 0);
+    /* RECEIPTS (2026-10-03): the payment METHOD as IntaSend reports it — identical to sokoni-5b's 525fd9f on the webhook
+       lineage (top-level `provider`: M-PESA, CARD-PAYMENT, APPLE-PAY, GOOGLE-PAY, PESALINK …). Raw, trimmed, capped,
+       control characters stripped; ABSENT IS NULL — never a guessed "M-PESA". Nothing decides money on it. */
+    const providerMethod = (() => {
+      const v = invoice.provider !== undefined ? invoice.provider : req.body?.provider;
+      if (v === undefined || v === null) return null;
+      const t = String(v).replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 40);
+      return t || null;
+    })();
     /* B2C send-money identifies the transfer by tracking_id/file_id, NOT api_ref. The
        api_ref guard is DEFERRED to after B2C settlement (below), else B2C confirmations
        are dropped and the payout sticks at 'processing'. */
@@ -8147,7 +8159,7 @@ exports.webhookIntasend = onRequest(
                 items: (Array.isArray(_qmd.items) ? _qmd.items : []).map((i) => ({ name: i.name, qty: i.qty, unitPrice: i.price })),
                 subtotal: _saleTotal, total: _saleTotal,
                 ...(_rid ? { pointsRedeemed: { points: Number(_qmd.pointsRedeemed) || 0, kes: Number(_qmd.pointsDiscount) || 0 } } : {}),
-                paidInMoney: amount, payments: _components, paymentMethod: "M-PESA", paymentRef: checkoutId || apiRef,
+                paidInMoney: amount, payments: _components, paymentMethod: providerMethod, paymentRef: checkoutId || apiRef,
                 status: "valid", createdAt: admin.firestore.FieldValue.serverTimestamp(), source: "webhookIntasend:quick_charge",
               }).catch((e) => { if (!(e && e.code === 6)) throw e; });
             } catch (qcErr) {
@@ -8474,7 +8486,7 @@ exports.webhookIntasend = onRequest(
             buyerName:     _pm.buyerName || null,
             address:       _pm.address || _pm.deliveryAddress || null,
             fulfillmentType: _pm.fulfillmentType || "delivery",
-            paymentMethod: "mpesa_intasend",
+            paymentMethod: providerMethod,   /* the method IntaSend REPORTED (null when absent); the rail stays in pathLabel */
             pathLabel:     "intasend",
             settlementStatus:   "settled",
             writeSellerPayment: false,
@@ -8546,7 +8558,7 @@ exports.webhookIntasend = onRequest(
               fulfillmentType: _pm.fulfillmentType || "delivery",
               deliveryAddress: (_pm.fulfillmentType === "pickup") ? null : (_pm.address || _pm.deliveryAddress || null),
               pickupLocation:  (_pm.fulfillmentType === "pickup") ? (_pm.sellerName || "Shop") : null,
-              paymentMethod:  "M-PESA",
+              paymentMethod:  providerMethod,   /* as IntaSend reported it; null = not reported */
               paymentRef:     checkoutId || apiRef,
               mpesaCode:      checkoutId || null,
               gatewayRef:     checkoutId || null,
@@ -8586,7 +8598,7 @@ exports.webhookIntasend = onRequest(
                   items:         _lines.map(i => ({ productId: i.productId, name: i.name, price: i.unitPrice, qty: i.qty, lineTotal: i.lineTotal })),
                   subtotal:      _subtotal,
                   total:         amount,
-                  paymentMethod: "M-PESA",
+                  paymentMethod: providerMethod,
                   paymentStatus: "paid",
                   receiptNumber: apiRef,
                   /* pickup → in-store collection (Ready for Pickup); delivery → rider
@@ -13511,3 +13523,7 @@ exports.b2bLeadStatement       = _b2bLeads.b2bLeadStatement;
 
 /* ── Platform-wide transaction receipts (owner 2026-10-03): the caller's own payment receipts. ── */
 exports.myTransactionReceipts = require('./transaction-receipts').myTransactionReceipts;
+exports.adminSearchReceipts       = require('./transaction-receipts').adminSearchReceipts;       /* AdminOS read, audited */
+exports.adminRetryReceiptFailures = require('./transaction-receipts').adminRetryReceiptFailures; /* Super Admin, audited */
+exports.retryReceiptFailuresSweep = require('./transaction-receipts').retryReceiptFailuresSweep;
+exports.receiptReconciliationDaily = require('./receipt-reconciliation').receiptReconciliationDaily;

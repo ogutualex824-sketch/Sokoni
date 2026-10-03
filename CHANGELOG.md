@@ -20,6 +20,16 @@
   - firm.teamDeclared stays private. firmUid / firmMembershipStatus are protected from self-service edits.
 - **Tests:** test-legal-profile FM1–FM4 (23/0); sabotage-legal-profile 10/10.
 - **Index:** where(firmUid ==) is a single field, so no composite index.
+## 2026-10-03 — Receipts convergence: retired the old recorder, Legal links, B2B deductions, balanced releases, replayable retry queue, audited admin search, reconciliation job, burst-safe numbering, real IntaSend method on the commercial webhook copy (NOT deployed)
+
+- **Files:** transaction-receipts.js, receipt-reconciliation.js (new), financial-engine.js (retired recorder + in-flight block share), index.js (providerMethod + exports).
+- **Tests:** test-receipts-convergence 14/0, test-webhook-provider-method-commercial 3/0, transaction-receipts 13/0, financial-engine 21/0.
+
+## 2026-10-03 — Electronics: explicit 15% commission row + policy version on every commission + electronics plans (Free 50, then retail ladder) (NOT deployed)
+
+- **Change:** commission-config electronics row + aliases + COMMISSION_POLICY_VERSION; finos-utils/index record policyVersion + resolvedCategory; sub-billing electronics_*.
+- **Tests:** test-electronics-commercial 6/0; commission sweep green; client snapshot rebuilt.
+
 ## 2026-10-03 — Platform-wide transaction receipts: module + read callable (hooks not wired; NOT deployed)
 
 - **New:** functions/transaction-receipts.js (transactionReceipts + immutable events; SKN-RCT numbering reused; taxTreatment recorded, never computed); myTransactionReceipts callable.

@@ -86,6 +86,8 @@ const BLOCK = 50;
 
 /** kind-year -> { next, end } for the block this instance currently holds. */
 const _blocks = new Map();
+/** kind-year -> the in-flight block reservation, shared by concurrent callers. */
+const _inflight = new Map();
 
 async function _reserveBlock(kind, year) {
   const counterRef = db().collection('_counters').doc(`${kind}-${year}`);
@@ -113,15 +115,26 @@ async function _nextNumber(kind /* 'INV' | 'RCT' | 'CRN' */) {
   const year = new Date().getUTCFullYear();
   const key = `${kind}-${year}`;
 
-  let block = _blocks.get(key);
-  if (!block || block.next > block.end) {
-    block = await _reserveBlock(kind, year);
-    _blocks.set(key, block);
-    logger.info('[fin] reserved number block', { kind, year, from: block.next, to: block.end });
+  /* Concurrent callers on one instance share ONE in-flight reservation (2026-10-03). Without this, a burst of payments
+     on a cold instance each reserved its own block at once — they contended on the single counter until transactions
+     gave up, and each burned a block. Numbers stay unique either way; this keeps bursts from failing. */
+  for (;;) {
+    let block = _blocks.get(key);
+    if (block && block.next <= block.end) {
+      const seq = block.next++;
+      return `SKN-${kind}-${year}-${String(seq).padStart(6, '0')}`;
+    }
+    let inflight = _inflight.get(key);
+    if (!inflight) {
+      inflight = _reserveBlock(kind, year).then((b) => {
+        _blocks.set(key, b);
+        logger.info('[fin] reserved number block', { kind, year, from: b.next, to: b.end });
+        return b;
+      }).finally(() => { _inflight.delete(key); });
+      _inflight.set(key, inflight);
+    }
+    await inflight;   /* then loop: take a number from the shared block, or reserve the next one if it ran out */
   }
-
-  const seq = block.next++;
-  return `SKN-${kind}-${year}-${String(seq).padStart(6, '0')}`;
 }
 
 /**
@@ -158,7 +171,11 @@ function _splitTax(grossKES, cfg) {
  * @param {string} [p.planId]       for subscriptions
  * @param {string} [p.source]       which path called us, for tracing
  */
-async function recordConfirmedPayment(p) {
+/* RETIRED 2026-10-03 (owner): this recorder applies a 16% VAT-inclusive split to the WHOLE payment and journals all of it
+   as SOKONI revenue — wrong for marketplace / provider money. Its only caller was the retired Daraja callback. It is
+   kept here, UNREACHABLE, until its accounting model is redesigned; the platform receipt authority is
+   transaction-receipts.js. The exported name below refuses and logs. */
+async function _retiredRecordConfirmedPayment(p) {
   const ref = String(p && p.ref || '').trim();
   if (!ref) { logger.error('[fin] recordConfirmedPayment called with no ref'); return { ok: false, reason: 'no-ref' }; }
 
@@ -287,6 +304,11 @@ async function recordConfirmedPayment(p) {
     } catch (_) { /* nothing further we can do here */ }
     return { ok: false, reason: 'write-failed' };
   }
+}
+
+async function recordConfirmedPayment(p) {
+  logger.warn('[fin] recordConfirmedPayment is RETIRED — no financial records written (use transaction-receipts)', { ref: p && p.ref, source: p && p.source });
+  return { ok: false, reason: 'retired' };
 }
 
 module.exports = { recordConfirmedPayment, _splitTax, _nextNumber, TAX_DEFAULTS };

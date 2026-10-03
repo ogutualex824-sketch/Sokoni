@@ -52,6 +52,7 @@ const page = (f) => (CPM ? cp.execFileSync('git', ['show', '4e9607b:' + f], { cw
 const SPEC = [
   ['Online product sales',        ['marketplace', 'product', 'products'],        15, 0],
   ['B2B wholesale orders',        ['b2b', 'wholesale', 'b2b_order'],              0, 0],   /* owner 2026-10-03: lead fee, 0% on orders */
+  ['Electronics retail',          ['electronics', 'phones', 'laptops', 'tablets'], 15, 0],   /* owner 2026-10-03: explicit 15% (was the 5% default) */
   ['Jobs (incl. freelance / gig)', ['jobs', 'freelance', 'freelancer', 'gig'],     0, 0],   /* owner 2026-10-03: 0%, employer products only */
   ['Food ordered online',         ['food_delivery', 'food', 'restaurant'],       15, 0],
   ['Digital products',            ['digital_products', 'digital'],               10, 0],

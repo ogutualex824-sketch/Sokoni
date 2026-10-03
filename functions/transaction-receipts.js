@@ -37,10 +37,22 @@
 
 const RECEIPTS = 'transactionReceipts';
 const FAILURES = 'transactionReceiptFailures';
-const KINDS = Object.freeze(['service_booking', 'quote', 'order']);
+/* b2b_order: a buyer-paid wholesale order (0% commission; the supplier's lead-fee recovery is a DEDUCTION, never commission).
+   enrolment: reserved for paid Education — NOT connected while paid enrolment stays shut (owner E1 rule). */
+const KINDS = Object.freeze(['service_booking', 'quote', 'order', 'b2b_order', 'enrolment']);
+/* Release deductions that are NOT SOKONI commission — shown separately on the receipt. */
+const DEDUCTION_KINDS = Object.freeze(['lead_fee_recovery']);
 const TAX = Object.freeze(['provider_fiscal_invoice', 'not_vat_registered', 'unknown']);
 const ID_RE = /^[A-Za-z0-9_-]{1,160}$/;
 const _int = (n) => (Number.isInteger(n) && n >= 0 ? n : null);
+
+function _links(l) {
+  const out = {};
+  for (const k of ['quoteId', 'bookingId', 'orderId', 'purchaseOrderId', 'settlementId']) {
+    if (l && l[k] != null && ID_RE.test(String(l[k]))) out[k] = String(l[k]);
+  }
+  return out;
+}
 
 function receiptIdFor(kind, sourceId) { return String(kind) + '_' + String(sourceId); }
 
@@ -75,7 +87,7 @@ async function recordPaid(db, p, deps) {
     const receiptNo = await nextNumber('RCT');
     const held = p.held === false ? 0 : paidCents;
     const pos = { paidCents, heldCents: held, releasedCents: p.held === false ? paidCents : 0, refundedCents: 0,
-      platformFeeCents: 0, providerNetCents: 0 };
+      platformFeeCents: 0, providerNetCents: 0, deductionsCents: 0 };
     t.create(ref, Object.assign({
       receiptNo, kind, sourceId, clientUid: String(p.clientUid), counterpartyId: p.counterpartyId ? String(p.counterpartyId) : null,
       counterpartyName: p.counterpartyName ? String(p.counterpartyName).slice(0, 160) : null,
@@ -84,6 +96,8 @@ async function recordPaid(db, p, deps) {
       paymentRef: String(p.paymentRef), providerRef: p.providerRef ? String(p.providerRef) : null,
       method: p.method ? String(p.method).slice(0, 40) : null,          /* as reported by IntaSend; null = not reported */
       taxTreatment, confirmation: { source: 'intasend_webhook', verifiedAt: ts() },
+      /* Cross-references (Legal: the accepted quote AND the booking it became; B2B: the purchase order). */
+      links: _links(p.links),
       issuedAt: ts(), updatedAt: ts(),
     }, pos, { status: _statusOf(pos) }));
     t.create(evRef, { type: 'paid', amountCents: paidCents, opKey: String(p.paymentRef), at: ts() });
@@ -101,6 +115,12 @@ async function recordEvent(db, receiptId, e, deps) {
   const type = String(e.type || '');
   const amount = _int(e.amountCents);
   if (!['released', 'refunded', 'adjusted'].includes(type) || amount == null || !e.opKey) return { ok: false, reason: 'bad_event' };
+  const fee = _int(e.platformFeeCents) || 0, net = _int(e.providerNetCents) || 0;
+  const deductions = Array.isArray(e.deductions) ? e.deductions : [];
+  for (const dd of deductions) {
+    if (!DEDUCTION_KINDS.includes(dd && dd.kind) || _int(dd.amountCents) == null) return { ok: false, reason: 'bad_deduction' };
+  }
+  const dedTotal = deductions.reduce((t, dd) => t + dd.amountCents, 0);
   const ref = db.collection(RECEIPTS).doc(String(receiptId));
   const evRef = ref.collection('events').doc(type + '_' + String(e.opKey).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 120));
   return db.runTransaction(async (t) => {
@@ -109,12 +129,16 @@ async function recordEvent(db, receiptId, e, deps) {
     if (ev.exists) return { ok: true, replay: true };
     const cur = s.data() || {};
     const pos = { paidCents: cur.paidCents || 0, heldCents: cur.heldCents || 0, releasedCents: cur.releasedCents || 0,
-      refundedCents: cur.refundedCents || 0, platformFeeCents: cur.platformFeeCents || 0, providerNetCents: cur.providerNetCents || 0 };
+      refundedCents: cur.refundedCents || 0, platformFeeCents: cur.platformFeeCents || 0, providerNetCents: cur.providerNetCents || 0,
+      deductionsCents: cur.deductionsCents || 0 };
     if (type === 'released') {
       if (amount > pos.heldCents) return { ok: false, reason: 'release_exceeds_held' };
+      /* A release must BALANCE: SOKONI fee + provider share + non-commission deductions = the amount released. */
+      if (fee + net + dedTotal !== amount) return { ok: false, reason: 'unbalanced_release', detail: { amount, fee, net, deductions: dedTotal } };
       pos.heldCents -= amount; pos.releasedCents += amount;
-      pos.platformFeeCents += _int(e.platformFeeCents) || 0;
-      pos.providerNetCents += _int(e.providerNetCents) || 0;
+      pos.platformFeeCents += fee;
+      pos.providerNetCents += net;
+      pos.deductionsCents += dedTotal;
     } else if (type === 'refunded') {
       if (pos.refundedCents + amount > pos.paidCents) return { ok: false, reason: 'refund_exceeds_paid' };
       const fromHeld = Math.min(amount, pos.heldCents);
@@ -124,20 +148,41 @@ async function recordEvent(db, receiptId, e, deps) {
       e.platformFeeCents != null ? { platformFeeCents: _int(e.platformFeeCents) || 0 } : {},
       e.providerNetCents != null ? { providerNetCents: _int(e.providerNetCents) || 0 } : {},
       e.reason ? { reason: String(e.reason).slice(0, 300) } : {},
-      e.milestoneId ? { milestoneId: String(e.milestoneId).slice(0, 120) } : {}));
+      e.milestoneId ? { milestoneId: String(e.milestoneId).slice(0, 120) } : {},
+      deductions.length ? { deductions: deductions.map((dd) => ({ kind: dd.kind, amountCents: dd.amountCents, ref: dd.ref ? String(dd.ref).slice(0, 160) : null })) } : {}));
     t.update(ref, Object.assign({}, pos, { status: _statusOf(pos), updatedAt: ts() }));
     return { ok: true, replay: false, status: _statusOf(pos) };
   });
 }
 
-/** Never-throwing wrapper for money paths: a failure is queued for the sweep, the payment is unaffected. */
-async function safely(db, label, fn) {
+/** Never-throwing wrapper for money paths: a failure is queued (with a replayable payload) and the payment is unaffected.
+    replay = { op: 'paid', args } | { op: 'event', receiptId, args } — retried by retryFailures; the receipt / event ids
+    are deterministic, so a retry can only ever produce ONE receipt / ONE event. */
+async function safely(db, label, fn, replay) {
   try { return await fn(); } catch (err) {
     try {
-      await db.collection(FAILURES).add({ label: String(label).slice(0, 200), error: String(err && err.message || err).slice(0, 300), at: new Date() });
+      await db.collection(FAILURES).add({ label: String(label).slice(0, 200), error: String(err && err.message || err).slice(0, 300),
+        replay: replay ? JSON.parse(JSON.stringify(replay)) : null, status: 'open', attempts: 1, at: new Date() });
     } catch (_) { /* nothing further */ }
     return { ok: false, reason: 'queued_for_retry' };
   }
+}
+
+/** Retry queued failures. Each replays the SAME call; the deterministic ids make a duplicate impossible. */
+async function retryFailures(db, deps, limit) {
+  const snap = await db.collection(FAILURES).where('status', '==', 'open').limit(Math.min(Number(limit) || 50, 200)).get();
+  const out = { scanned: snap.docs.length, resolved: 0, stillFailing: 0, notReplayable: 0 };
+  for (const doc of snap.docs) {
+    const f = doc.data() || {};
+    const rp = f.replay;
+    if (!rp || (rp.op !== 'paid' && rp.op !== 'event')) { out.notReplayable++; continue; }
+    let r;
+    try { r = rp.op === 'paid' ? await recordPaid(db, rp.args || {}, deps) : await recordEvent(db, rp.receiptId, rp.args || {}, deps); }
+    catch (e) { r = { ok: false, reason: String(e && e.message || e).slice(0, 200) }; }
+    if (r && r.ok) { await db.collection(FAILURES).doc(doc.id).set({ status: 'resolved', resolvedAt: new Date(), result: r.replay ? 'already_present' : 'written' }, { merge: true }); out.resolved++; }
+    else { await db.collection(FAILURES).doc(doc.id).set({ attempts: (Number(f.attempts) || 1) + 1, lastError: (r && r.reason) || 'unknown', lastAttemptAt: new Date() }, { merge: true }); out.stillFailing++; }
+  }
+  return out;
 }
 
 /** The caller's own receipts (client or counterparty). Server-scoped read; header + position + events. */
@@ -155,8 +200,21 @@ async function receiptsFor(db, uid, opts) {
   return out;
 }
 
+/** Admin search by receipt number, payment reference, source id or party uid. Returns header + position + events. */
+async function adminSearch(db, q) {
+  const field = q.receiptNo ? 'receiptNo' : q.paymentRef ? 'paymentRef' : q.sourceId ? 'sourceId' : q.clientUid ? 'clientUid' : q.counterpartyId ? 'counterpartyId' : null;
+  if (!field) return { ok: false, reason: 'no_query' };
+  const snap = await db.collection(RECEIPTS).where(field, '==', String(q[field])).limit(20).get();
+  const rows = [];
+  for (const doc of snap.docs) {
+    const ev = await db.collection(RECEIPTS).doc(doc.id).collection('events').limit(100).get();
+    rows.push(Object.assign({ receiptId: doc.id }, doc.data(), { events: ev.docs.map((x) => Object.assign({ eventId: x.id }, x.data())) }));
+  }
+  return { ok: true, field, receipts: rows };
+}
+
 /* ── deployable: the caller's receipts ── */
-let myTransactionReceipts;
+let myTransactionReceipts, adminSearchReceipts, adminRetryReceiptFailures, retryReceiptFailuresSweep;
 {
   const { onCall, HttpsError } = require('firebase-functions/v2/https');
   myTransactionReceipts = onCall({ region: 'us-central1', maxInstances: 20 }, async (req) => {
@@ -171,6 +229,34 @@ let myTransactionReceipts;
       throw new HttpsError('unavailable', 'Your receipts could not be loaded. Try again shortly.');
     }
   });
+  const admin = () => require('firebase-admin');
+  /* AdminOS read. Admin claim required; EVERY access is audited (who looked at which financial record). Read-only:
+     nothing here can rewrite a receipt or an event. */
+  adminSearchReceipts = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+    const tk = (req.auth && req.auth.token) || {};
+    if (!req.auth || !(tk.admin === true || tk.superAdmin === true)) throw new HttpsError('permission-denied', 'Admins only.');
+    const db = admin().firestore();
+    const r = await adminSearch(db, req.data || {});
+    if (!r.ok) throw new HttpsError('invalid-argument', 'Search by receiptNo, paymentRef, sourceId, clientUid or counterpartyId.');
+    await db.collection('adminAudit').add({ action: 'receipt_view', by: req.auth.uid, query: { field: r.field, value: String((req.data || {})[r.field]).slice(0, 160) },
+      results: r.receipts.map((x) => x.receiptId).slice(0, 20), createdAt: admin().firestore.FieldValue.serverTimestamp() });
+    return r;
+  });
+  /* Super Admin: replay queued receipt failures now (the daily sweep does the same). Audited. */
+  adminRetryReceiptFailures = onCall({ region: 'us-central1', maxInstances: 2 }, async (req) => {
+    const tk = (req.auth && req.auth.token) || {};
+    if (!req.auth || tk.superAdmin !== true) throw new HttpsError('permission-denied', 'Super Admin only.');
+    const db = admin().firestore();
+    const out = await retryFailures(db, null, (req.data || {}).limit);
+    await db.collection('adminAudit').add({ action: 'receipt_retry', by: req.auth.uid, out, createdAt: admin().firestore.FieldValue.serverTimestamp() });
+    return Object.assign({ ok: true }, out);
+  });
+  const { onSchedule } = require('firebase-functions/v2/scheduler');
+  retryReceiptFailuresSweep = onSchedule({ schedule: 'every 6 hours', region: 'us-central1', memory: '256MiB', timeoutSeconds: 300 }, async () => {
+    const out = await retryFailures(admin().firestore(), null, 200);
+    require('firebase-functions/logger').info('[receipts] retry sweep', out);
+  });
 }
 
-module.exports = { RECEIPTS, FAILURES, KINDS, TAX, receiptIdFor, recordPaid, recordEvent, safely, receiptsFor, myTransactionReceipts, _statusOf };
+module.exports = { RECEIPTS, FAILURES, KINDS, TAX, DEDUCTION_KINDS, receiptIdFor, recordPaid, recordEvent, safely, retryFailures, receiptsFor, adminSearch,
+  myTransactionReceipts, adminSearchReceipts, adminRetryReceiptFailures, retryReceiptFailuresSweep, _statusOf };
