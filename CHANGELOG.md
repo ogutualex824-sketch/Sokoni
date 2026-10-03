@@ -1,3 +1,12 @@
+## [2026-10-03] — RFQ: individual buyers in the ONE RFQ system (Construction) — functions source, NOT deployed
+
+**Summary (owner decision):** `rfqDispatch` accepts `buyerType:'individual'` (server-verified phone required; tighter caps).
+Leads carry hub / tier / commercialEventId (bill-once). An individual's accepted quote is recorded with a price
+snapshot and `next:'checkout'`, with no purchase order. Business behaviour is unchanged.
+**Files:** `functions/rfq.js`, `scripts/test-rfq-authority.js` (54/0; 3 mutants caught), `docs/B2B_HUB_CONVERGENCE.md`.
+**Database:** `rfqs`: buyerType, buyerKey, category, acceptedQuote, checkout. `b2bLeads`: buyerType, hub, tier, commercialEventId.
+**Breaking:** none for businesses. **Deploy:** scoped rfqDispatch, after the lineage + assembly checks. NOT authorized.
+
 ## [2026-10-03] — B2B Hub: RFQ authority, assembly check, convergence contracts — functions source, NOT deployed
 
 **Summary:** `rfqDispatch` (RFQ → consented lead → versioned quote → accepted quote → draft purchase order with the

@@ -161,6 +161,44 @@ const ITEMS = [{ name: 'Cement 50kg', qty: 100, unit: 'bag', targetPriceKES: 700
   r = await call('uBuyer', { op: 'cancel', rfqId: r2 });
   ck('R11 the buyer cancels an open RFQ; recipients closed', r.ok && store.get('rfqs/' + r2).status === 'cancelled' && store.get('rfqRecipients/' + r2 + '__bizSupB').status === 'closed', r);
 
+  console.log('\n── I: individual buyers (owner 2026-10-03: one RFQ system, buyer-type agnostic) ──');
+  const callT = async (uid, token, data) => { try { return { ok: true, r: await RFQ.rfqDispatch({ auth: { uid, token: token || {} }, data }) }; } catch (e) { return { ok: false, code: e.code, msg: e.message }; } };
+  store.set('users/uInd', { displayName: 'Jane Homeowner', phoneVerified: true });
+  store.set('users/uNoPhone', { displayName: 'Throwaway' });
+  r = await callT('uNoPhone', {}, { op: 'create', buyerType: 'individual', items: ITEMS, supplierBusinessIds: ['bizSupA'], deliveryLocation: 'Langata' });
+  ck('I1 an individual without a verified phone cannot send paid RFQs', !r.ok && r.code === 'failed-precondition' && /Verify your phone/.test(r.msg), r);
+  r = await callT('uInd', {}, { op: 'create', buyerType: 'individual', items: [{ name: 'Cement 50kg', qty: 500, unit: 'bag' }], supplierBusinessIds: ['bizSupA', 'bizSupB'], deliveryLocation: 'Langata', merchantId: 'bizSupA' });
+  const iRfq = r.ok ? r.r.rfqId : 'x';
+  const iDoc = store.get('rfqs/' + iRfq) || {};
+  ck('I2 an individual (no business) sends an RFQ; recorded as buyerType individual, no business id, the caller as buyer', r.ok && iDoc.buyerType === 'individual' && iDoc.buyerBusinessId === null && iDoc.createdBy === 'uInd' && iDoc.buyerKey === 'u_uInd', iDoc);
+  ck('I3 a merchantId in an individual payload is ignored (cannot act as / bill a business)', iDoc.buyerBusinessId === null && iDoc.buyerName === 'Jane Homeowner', iDoc);
+  const iLead = store.get('b2bLeads/' + iRfq + '__bizSupA') || {};
+  ck('I4 each supplier gets ONE lead with a commercialEventId (= its doc id), buyerType individual, tier standard', iLead.commercialEventId === 'rfq_' + iRfq + '__bizSupA' && iLead.buyerType === 'individual' && iLead.tier === 'standard', iLead);
+  ck('I5 the recipient row carries buyerUid (messages PARTY for rfq) and no business', (store.get('rfqRecipients/' + iRfq + '__bizSupA') || {}).buyerUid === 'uInd', store.get('rfqRecipients/' + iRfq + '__bizSupA'));
+  r = await callT('uInd', {}, { op: 'create', buyerType: 'individual', items: ITEMS, supplierBusinessIds: ['bizSupA', 'bizSupB', 'bizSupC', 'bizInactive', 'bizStranger', 'x6'], deliveryLocation: 'Langata' });
+  ck('I6 individuals are capped at 5 direct suppliers per RFQ', !r.ok && /at most 5/.test(r.msg), r);
+  r = await callT('uInd', {}, { op: 'listMine', buyerType: 'individual' });
+  ck('I7 the individual lists their own RFQs', r.ok && r.r.rfqs.some((x) => x.rfqId === iRfq), r);
+  r = await call('uBuyer', { op: 'listMine' });
+  ck('I8 a business buyer does not see the individual\'s RFQ', r.ok && !r.r.rfqs.some((x) => x.rfqId === iRfq), r);
+  r = await callT('uOther', { phone_number: '+254700000001' }, { op: 'get', buyerType: 'individual', rfqId: iRfq });
+  ck('I9 another individual cannot open the RFQ (not-found)', !r.ok && r.code === 'not-found', r);
+  await call('uSupA', { op: 'quote', rfqId: iRfq, lines: [{ name: 'Cement 50kg', qty: 500, unitPriceKES: 720 }], vatRate: 16, deliveryFeeKES: 3000, validDays: 7 });
+  r = await callT('uInd', {}, { op: 'respond', buyerType: 'individual', rfqId: iRfq, supplierBusinessId: 'bizSupA', action: 'accept' });
+  const iAfter = store.get('rfqs/' + iRfq) || {};
+  ck('I10 accepting as an individual records the acceptance + price snapshot and points to checkout — NO purchase order', r.ok && r.r.next === 'checkout' && r.r.poId === null
+    && iAfter.status === 'accepted' && iAfter.acceptedQuote && iAfter.acceptedQuote.totalKES === 500 * 720 * 1.16 + 3000
+    && ![...store.keys()].some((k) => k.startsWith('procPurchaseOrders/po_rfq_' + iRfq)), { r, iAfter });
+  r = await callT('uInd', {}, { op: 'respond', buyerType: 'individual', rfqId: iRfq, supplierBusinessId: 'bizSupB', action: 'accept' });
+  ck('I11 a second acceptance is refused', !r.ok, r);
+  r = await callT('uInd', {}, { op: 'quote', rfqId: iRfq, lines: [{ name: 'x', qty: 1, unitPriceKES: 1 }], vatRate: 0, validDays: 1 });
+  ck('I12 an individual cannot act as a supplier (supplier ops stay business-only)', !r.ok, r);
+  const r3 = await callT('uInd', {}, { op: 'create', buyerType: 'individual', items: ITEMS, supplierBusinessIds: ['bizSupB'], deliveryLocation: 'Karen' });
+  r = await call('uBuyer', { op: 'cancel', rfqId: r3.r && r3.r.rfqId });
+  ck('I13 a business cannot cancel an individual\'s RFQ', !r.ok && r.code === 'not-found', r);
+  r = await callT('uInd', {}, { op: 'cancel', buyerType: 'individual', rfqId: r3.r && r3.r.rfqId });
+  ck('I14 the individual cancels their own open RFQ', r.ok && r.r.status === 'cancelled', r);
+
   console.log('\n── N: notifications ──');
   ck('N1 rfq_received → each recipient owner (uSupA, uSupB) once per RFQ', notes.filter((n) => n.type === 'rfq_received' && n.data.rfqId === rfqId).map((n) => n.uid).sort().join() === 'uSupA,uSupB');
   ck('N2 rfq_quoted → the buyer who created it', notes.some((n) => n.type === 'rfq_quoted' && n.uid === 'uBuyer'));

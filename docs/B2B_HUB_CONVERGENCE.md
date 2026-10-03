@@ -116,3 +116,24 @@ Fixture: buyer pays KES 500,000, the supplier owes KES 696 → the buyer is char
 **Protected production data:** POS sale `mkHDKSm1oeIC1E4uXGXc` (the owner's id, 10-03), and `mkHDKSm1oeIC1E4uXGXa`
 (the id in earlier POS-void records). Both are protected: never modify, void, refund, migrate or use either as a
 test fixture. Neither id substitutes for the other.
+
+## Individual buyers (owner 2026-10-03, Construction convergence)
+
+The RFQ system is buyer-type agnostic: ONE `rfqDispatch`, with no separate construction / individual RFQ.
+- **Eligibility:** `buyerType:'individual'` needs no business. The uid comes from auth, and a SERVER-verified phone is
+  required (`token.phone_number` or `users.phoneVerified`, which the rules make non-forgeable), because suppliers pay for
+  every RFQ received. Individuals are capped at 5 direct / 3 open suppliers and 5 RFQs per day. Any `merchantId` in an
+  individual payload is ignored.
+- **Data:** `rfqs` gains `buyerType`, `buyerKey` (`u_<uid>` / `b_<businessId>`) and `category`. Recipients carry `buyerUid`, so
+  the messages `rfq` party fields work for both buyer types.
+- **Leads:** each lead row carries `buyerType`, `hub`, `tier:'standard'` and `commercialEventId` (= the doc id; `create()`
+  makes it bill-once). Business RFQs keep the decided B2B hub; individual RFQs are hub `construction` when the category or
+  the supplier's categories are construction. **The owner decided materials suppliers DO pay the lead fee** (plus 15% on a
+  sale). The price per hub comes from sokoni-2f's ledger, which is being generalised.
+- **Accept:** for an individual, the quote is accepted with an immutable price snapshot and `next:'checkout'`. **No
+  purchase order**, because that is the business procurement path. Per the owner, it becomes a NORMAL SOKONI order through
+  canonical checkout. That checkout link is the next slice; no payment is faked meanwhile.
+- **Supplier ops** (quote / decline / listReceived) stay business-only.
+
+`test-rfq-authority` 54/0 (I1–I14). Mutants: phone check removed → I1; individual gets a PO → I10; owner check opened →
+R2–R5, I9, I13, I14.

@@ -79,6 +79,37 @@ async function actingBusiness(request, requested, audienceMsg) {
   return { businessId: String(businessId), biz: biz || {} };
 }
 
+/* BUYER TYPE (owner 2026-10-03): ONE RFQ system for individuals and businesses — eligibility is decided here, never by
+   a second RFQ collection. An INDIVIDUAL needs no business account but must have a SERVER-verified phone (suppliers pay
+   for every RFQ they receive, so anonymous throwaway accounts must not be able to spray paid leads). The payload never
+   names who the caller is: the uid comes from auth, the business from procurement's authority. */
+const INDIVIDUAL_MAX_DIRECT = 5, INDIVIDUAL_MAX_OPEN = 3, INDIVIDUAL_MAX_PER_DAY = 5;
+async function actingBuyer(request, d) {
+  if (d && d.buyerType === 'individual') {
+    const uid = request.auth.uid;
+    const tokenPhone = request.auth.token && request.auth.token.phone_number;
+    let verified = !!tokenPhone, name = '';
+    const u = await db().collection('users').doc(uid).get();
+    if (u.exists) { const ud = u.data() || {}; verified = verified || ud.phoneVerified === true; name = san(ud.displayName || ud.name || ud.fullName, 150); }
+    if (!verified) err('Verify your phone number on SOKONI before requesting quotes (suppliers receive every request).', 'failed-precondition');
+    return { buyerType: 'individual', businessId: null, buyerKey: 'u_' + uid, buyerName: name || 'SOKONI customer' };
+  }
+  const { businessId, biz } = await actingBusiness(request, d && d.merchantId);
+  return { buyerType: 'business', businessId, buyerKey: 'b_' + businessId, buyerName: san(biz.name, 150) || 'SOKONI business' };
+}
+function ownsRfq(rfq, buyer, uid) {
+  return buyer.buyerType === 'individual' ? (rfq.buyerType === 'individual' && rfq.createdBy === uid) : (rfq.buyerBusinessId === buyer.businessId);
+}
+/* Which commercial hub a lead belongs to — derived on the server from the RFQ / supplier categories (owner: one lead,
+   one commercial event; the price per hub is the commercial authority's). */
+const CONSTRUCTION_CATS = ['cement','steel','timber','roofing','bricks','tiles','paint','plumbing-materials','electrical-materials','windows-doors',
+  'construction-tools','sand-gravel','safety-ppe','building-materials','hardware','construction','contractor','construction-company','welding-fabrication',
+  'equipment-rental','construction-services','construction-transport','construction-architect'];
+function hubFor(category, supplierCats) {
+  const cats = [String(category || '').toLowerCase()].concat((supplierCats || []).map(function (c) { return String(c).toLowerCase(); }));
+  return cats.some(function (c) { return CONSTRUCTION_CATS.indexOf(c) !== -1; }) ? 'construction' : 'b2b';
+}
+
 function cleanItems(items) {
   if (!Array.isArray(items) || !items.length) err('Add at least one item to your RFQ.');
   if (items.length > MAX_ITEMS) err('An RFQ can list at most ' + MAX_ITEMS + ' items.');
@@ -112,7 +143,9 @@ const H = {};
 /* create {merchantId?, title, items[], supplierBusinessIds[] | open:{category, county?}, deliveryLocation, neededBy?, notes} */
 H.create = async function (request) {
   const d = request.data || {};
-  const { businessId: buyerId, biz } = await actingBusiness(request, d.merchantId);
+  const buyer = await actingBuyer(request, d);
+  const buyerId = buyer.businessId;                        /* null for an individual */
+  const isInd = buyer.buyerType === 'individual';
   const items = cleanItems(d.items);
   const title = san(d.title, 150) || items[0].name;
   const deliveryLocation = san(d.deliveryLocation, 200);
@@ -121,8 +154,8 @@ H.create = async function (request) {
 
   /* rate limit per buyer business (each recipient is a paid lead for a supplier) */
   const since = Date.now() - 86400000;
-  const recent = await db().collection('rfqs').where('buyerBusinessId', '==', buyerId).limit(200).get();
-  if (recent.docs.filter(function (x) { const t = x.data().createdAtMs || 0; return t > since; }).length >= MAX_RFQS_PER_DAY) {
+  const recent = await db().collection('rfqs').where('buyerKey', '==', buyer.buyerKey).limit(200).get();
+  if (recent.docs.filter(function (x) { const t = x.data().createdAtMs || 0; return t > since; }).length >= (isInd ? INDIVIDUAL_MAX_PER_DAY : MAX_RFQS_PER_DAY)) {
     err('You have sent the maximum number of RFQs for today. Try again tomorrow.', 'resource-exhausted');
   }
 
@@ -130,8 +163,9 @@ H.create = async function (request) {
   let suppliers = [], mode;
   if (Array.isArray(d.supplierBusinessIds) && d.supplierBusinessIds.length) {
     mode = 'direct';
-    const ids = Array.from(new Set(d.supplierBusinessIds.map(String))).slice(0, MAX_DIRECT_SUPPLIERS + 1);
-    if (ids.length > MAX_DIRECT_SUPPLIERS) err('Send an RFQ to at most ' + MAX_DIRECT_SUPPLIERS + ' suppliers at a time.');
+    const capD = isInd ? INDIVIDUAL_MAX_DIRECT : MAX_DIRECT_SUPPLIERS;
+    const ids = Array.from(new Set(d.supplierBusinessIds.map(String))).slice(0, capD + 1);
+    if (ids.length > capD) err('Send an RFQ to at most ' + capD + ' suppliers at a time.');
     for (const id of ids) { if (id === buyerId) err('You cannot send an RFQ to your own business.'); suppliers.push(await consentingSupplier(id)); }
   } else if (d.open && typeof d.open === 'object') {
     mode = 'open';
@@ -143,13 +177,14 @@ H.create = async function (request) {
       .filter(function (x) { const s = x.d.supply || {}; return x.id !== buyerId && x.d.status === 'active' && s.enabled === true && s.discoverable === true
         && (s.categories || []).map(function (c) { return String(c).toLowerCase(); }).indexOf(category) !== -1
         && (!county || String(x.d.county || '').toLowerCase() === county); })
-      .slice(0, MAX_OPEN_SUPPLIERS)
-      .map(function (x) { const s = x.d.supply || {}; return { id: x.id, name: san(s.displayName || x.d.name, 150) || 'Supplier', ownerUid: x.d.ownerId || null }; });
+      .slice(0, isInd ? INDIVIDUAL_MAX_OPEN : MAX_OPEN_SUPPLIERS)
+      .map(function (x) { const s = x.d.supply || {}; return { id: x.id, name: san(s.displayName || x.d.name, 150) || 'Supplier', ownerUid: x.d.ownerId || null, categories: s.categories || [] }; });
     if (!suppliers.length) err('No supplier on SOKONI is accepting RFQs in that category yet. Try another category or send it to a specific supplier.', 'failed-precondition');
   } else err('Choose at least one supplier, or send an open RFQ by category.');
 
   const ref = db().collection('rfqs').doc();
   const rfqId = ref.id, now = Date.now(), month = ym();
+  const rfqCategory = mode === 'open' ? san(d.open.category, 60).toLowerCase() : null;
   /* Price SNAPSHOT for each lead ({priceKES, priceSource}) from the commercial authority, read BEFORE the delivery
      transaction (sokoni-2f): a mid-month price change then applies only to later leads. Absent module → {} and the
      invoice prices the row at billing time (flagged unsnapshotted) — still billed, never invented here. */
@@ -165,11 +200,11 @@ H.create = async function (request) {
     snaps.forEach(function (snap, i) {
       const bd = snap.exists ? (snap.data() || {}) : {};
       const sup = bd.supply || {};
-      if (bd.status === 'active' && sup.enabled === true && sup.acceptsLeads === true) ok.push(Object.assign({}, suppliers[i], { ownerUid: bd.ownerId || null, acceptsLeadsAt: sup.acceptsLeadsAt || null }));
+      if (bd.status === 'active' && sup.enabled === true && sup.acceptsLeads === true) ok.push(Object.assign({}, suppliers[i], { ownerUid: bd.ownerId || null, acceptsLeadsAt: sup.acceptsLeadsAt || null, categories: sup.categories || [] }));
     });
     if (!ok.length) err('The supplier is no longer accepting RFQs on SOKONI.', 'failed-precondition');
     if (mode === 'direct' && ok.length !== suppliers.length) err('One of the suppliers you chose has stopped accepting RFQs. Remove it and try again.', 'failed-precondition');
-    t.set(ref, { rfqId, buyerBusinessId: buyerId, buyerName: san(biz.name, 150) || 'SOKONI business', createdBy: request.auth.uid,
+    t.set(ref, { rfqId, buyerType: buyer.buyerType, buyerKey: buyer.buyerKey, buyerBusinessId: buyerId, buyerName: buyer.buyerName, createdBy: request.auth.uid, category: rfqCategory,
       title, items, deliveryLocation, neededBy, notes: san(d.notes, 1000), mode,
       recipientIds: ok.map(function (x) { return x.id; }), status: 'submitted',
       createdAt: F.serverTimestamp(), createdAtMs: now, expiresAtMs: now + RFQ_TTL_DAYS * 86400000 });
@@ -177,8 +212,14 @@ H.create = async function (request) {
       t.set(db().collection('rfqRecipients').doc(rid(rfqId, x.id)), { rfqId, supplierBusinessId: x.id, supplierName: x.name, supplierOwnerUid: x.ownerUid,
         buyerBusinessId: buyerId, buyerUid: request.auth.uid, title, status: 'received', receivedAt: F.serverTimestamp(), receivedAtMs: now });
       /* ONE lead per (rfq, supplier) — the monthly lead invoice (commercial authority) reads this; no price here. */
+      /* ONE commercial event per (rfq, supplier) — the doc id IS the commercialEventId, and create() refuses a second
+         one, so the same lead can never be billed twice. hub picks the price row (commercial authority); every lead is
+         'standard' until the owner defines explicit qualified-lead rules. The b2b price snapshot applies to b2b leads only. */
+      /* business buyers keep the decided B2B lead rule; the construction hub applies to individual RFQs (owner 10-03) */
+      const hub = isInd ? hubFor(rfqCategory, x.categories) : 'b2b';
       t.create(db().collection('b2bLeads').doc(rid(rfqId, x.id)), { supplierBusinessId: x.id, supplierOwnerUid: x.ownerUid, rfqId,
-        buyerBusinessId: buyerId, month, source: 'rfq', consentAcceptsLeadsAt: x.acceptsLeadsAt, ...leadPrice, createdAt: F.serverTimestamp() });
+        buyerBusinessId: buyerId, buyerType: buyer.buyerType, hub, tier: 'standard', commercialEventId: 'rfq_' + rid(rfqId, x.id),
+        month, source: 'rfq', consentAcceptsLeadsAt: x.acceptsLeadsAt, ...(hub === 'b2b' ? leadPrice : {}), createdAt: F.serverTimestamp() });
     }
     return ok;
   });
@@ -189,18 +230,18 @@ H.create = async function (request) {
     if (!s.ownerUid) continue;
     try {
       await notifySvc().notify({ uid: s.ownerUid, type: 'rfq_received', title: 'New RFQ on SOKONI',
-        body: (san(biz.name, 80) || 'A SOKONI business') + ' sent you a request for quotation: ' + title.slice(0, 80),
+        body: (isInd ? 'A SOKONI customer' : (san(buyer.buyerName, 80) || 'A SOKONI business')) + ' sent you a request for quotation: ' + title.slice(0, 80),
         deepLink: '/merchant-v2.html#rfqs', dedupeKey: 'rfq:' + rfqId + ':' + s.id + ':received', data: { rfqId } });
     } catch (e) { /* notification failure is not an RFQ failure */ }
   }
-  return { rfqId, mode, recipients: suppliers.map(function (s) { return { supplierBusinessId: s.id, name: s.name }; }) };
+  return { rfqId, mode, buyerType: buyer.buyerType, recipients: suppliers.map(function (s) { return { supplierBusinessId: s.id, name: s.name }; }) };
 };
 
 /* listMine {merchantId?} — the buyer's RFQs with each recipient's status and quote total */
 H.listMine = async function (request) {
   const d = request.data || {};
-  const { businessId } = await actingBusiness(request, d.merchantId);
-  const snap = await db().collection('rfqs').where('buyerBusinessId', '==', businessId).limit(100).get();
+  const buyer = await actingBuyer(request, d);
+  const snap = await db().collection('rfqs').where('buyerKey', '==', buyer.buyerKey).limit(100).get();
   const rfqs = snap.docs.map(function (x) { return x.data(); }).sort(function (a, b) { return (b.createdAtMs || 0) - (a.createdAtMs || 0); }).slice(0, 50);
   const out = [];
   for (const r of rfqs) {
@@ -233,11 +274,18 @@ H.listReceived = async function (request) {
 H.get = async function (request) {
   const d = request.data || {};
   if (!isId(d.rfqId)) err('rfqId is required.');
+  if (d.buyerType === 'individual') {
+    const ib = await actingBuyer(request, d);
+    const ir = await db().collection('rfqs').doc(d.rfqId).get();
+    if (!ir.exists || !ownsRfq(ir.data(), ib, request.auth.uid)) err('RFQ not found.', 'not-found');
+    const v = ir.data();
+    return { role: 'buyer', rfq: { rfqId: v.rfqId, title: v.title, items: v.items, deliveryLocation: v.deliveryLocation, neededBy: v.neededBy, notes: v.notes, status: v.status, mode: v.mode, createdAtMs: v.createdAtMs, expiresAtMs: v.expiresAtMs } };
+  }
   const { businessId } = await actingBusiness(request, d.merchantId);
   const r = await db().collection('rfqs').doc(d.rfqId).get();
   if (!r.exists) err('RFQ not found.', 'not-found');
   const rfq = r.data();
-  if (rfq.buyerBusinessId === businessId) return { role: 'buyer', rfq: { rfqId: rfq.rfqId, title: rfq.title, items: rfq.items, deliveryLocation: rfq.deliveryLocation, neededBy: rfq.neededBy, notes: rfq.notes, status: rfq.status, mode: rfq.mode, createdAtMs: rfq.createdAtMs, expiresAtMs: rfq.expiresAtMs } };
+  if (rfq.buyerType !== 'individual' && rfq.buyerBusinessId === businessId) return { role: 'buyer', rfq: { rfqId: rfq.rfqId, title: rfq.title, items: rfq.items, deliveryLocation: rfq.deliveryLocation, neededBy: rfq.neededBy, notes: rfq.notes, status: rfq.status, mode: rfq.mode, createdAtMs: rfq.createdAtMs, expiresAtMs: rfq.expiresAtMs } };
   const recRef = db().collection('rfqRecipients').doc(rid(d.rfqId, businessId));
   const rec = await recRef.get();
   if (!rec.exists) err('RFQ not found.', 'not-found');   /* not a recipient — same answer as missing */
@@ -315,14 +363,15 @@ H.respond = async function (request) {
   const d = request.data || {};
   if (!isId(d.rfqId) || !isId(d.supplierBusinessId)) err('rfqId and supplierBusinessId are required.');
   if (['accept', 'reject'].indexOf(d.action) === -1) err('action must be accept or reject.');
-  const { businessId: buyerId } = await actingBusiness(request, d.merchantId);
+  const buyer = await actingBuyer(request, d);
+  const buyerId = buyer.businessId;
   const rfqRef = db().collection('rfqs').doc(d.rfqId);
   const recRef = db().collection('rfqRecipients').doc(rid(d.rfqId, d.supplierBusinessId));
   const qRef = db().collection('rfqQuotes').doc(rid(d.rfqId, d.supplierBusinessId));
 
   if (d.action === 'reject') {
     const [r, q] = await Promise.all([rfqRef.get(), qRef.get()]);
-    if (!r.exists || r.data().buyerBusinessId !== buyerId) err('RFQ not found.', 'not-found');
+    if (!r.exists || !ownsRfq(r.data(), buyer, request.auth.uid)) err('RFQ not found.', 'not-found');
     if (!q.exists || q.data().status !== 'quoted') err('There is no open quotation to reject.', 'failed-precondition');
     await qRef.update({ status: 'rejected', rejectedAt: F.serverTimestamp() });
     await recRef.update({ status: 'rejected' });
@@ -332,7 +381,7 @@ H.respond = async function (request) {
   /* accept — all checks and writes in one transaction (no double acceptance, no stale quote) */
   const out = await db().runTransaction(async function (t) {
     const [r, rec, q] = await Promise.all([t.get(rfqRef), t.get(recRef), t.get(qRef)]);
-    if (!r.exists || r.data().buyerBusinessId !== buyerId) err('RFQ not found.', 'not-found');
+    if (!r.exists || !ownsRfq(r.data(), buyer, request.auth.uid)) err('RFQ not found.', 'not-found');
     const rfq = r.data();
     if (rfq.status !== 'submitted') err('This RFQ is already closed.', 'failed-precondition');
     if (!rec.exists || !q.exists) err('No quotation from that supplier.', 'failed-precondition');
@@ -341,6 +390,18 @@ H.respond = async function (request) {
     if (Date.now() > (quote.validUntilMs || 0)) err('That quotation has expired — ask the supplier to re-quote.', 'failed-precondition');
     if (d.expectedVersion != null && Number(d.expectedVersion) !== Number(quote.version)) err('The supplier updated this quotation — review the new version first.', 'aborted');
 
+    if (buyer.buyerType === 'individual') {
+      /* INDIVIDUAL (owner 2026-10-03): an accepted quote becomes a NORMAL SOKONI order (canonical checkout → IntaSend →
+         Shop Riders → 15% materials commission → supplier wallet → receipt). Until checkout accepts a quote reference,
+         the acceptance is recorded with an immutable price snapshot and the buyer is told checkout is next — no
+         purchase order (that is the business procurement path), no fake payment. */
+      const snap = { lines: quote.lines, subtotalKES: quote.subtotalKES, vatRate: quote.vatRate, vatKES: quote.vatKES, deliveryFeeKES: quote.deliveryFeeKES,
+        totalKES: quote.totalKES, version: quote.version, supplierBusinessId: d.supplierBusinessId, supplierName: quote.supplierName || 'Supplier' };
+      t.update(qRef, { status: 'accepted', acceptedAt: F.serverTimestamp(), checkout: 'pending' });
+      t.update(recRef, { status: 'accepted' });
+      t.update(rfqRef, { status: 'accepted', acceptedSupplierBusinessId: d.supplierBusinessId, acceptedQuote: snap, checkout: 'pending', acceptedAt: F.serverTimestamp() });
+      return { poId: null, checkout: 'pending', supplierOwnerUid: rec.data().supplierOwnerUid, recipientIds: rfq.recipientIds || [], title: rfq.title, totalKES: quote.totalKES };
+    }
     /* the buyer's link to this supplier in the procurement authority (procSuppliers) — reuse, or create once */
     const linkQ = await t.get(db().collection('procSuppliers').where('merchantId', '==', buyerId).where('supplierBusinessId', '==', d.supplierBusinessId).limit(1));
     let supplierId;
@@ -378,17 +439,17 @@ H.respond = async function (request) {
         deepLink: '/merchant-v2.html#rfqs', dedupeKey: 'rfq:' + d.rfqId + ':accepted', data: { rfqId: d.rfqId, poId: out.poId } });
     } catch (e) {}
   }
-  return { ok: true, status: 'accepted', poId: out.poId };
+  return out.checkout === 'pending' ? { ok: true, status: 'accepted', poId: null, next: 'checkout' } : { ok: true, status: 'accepted', poId: out.poId };
 };
 
 /* cancel {rfqId} — buyer, while still open */
 H.cancel = async function (request) {
   const d = request.data || {};
   if (!isId(d.rfqId)) err('rfqId is required.');
-  const { businessId } = await actingBusiness(request, d.merchantId);
+  const buyer = await actingBuyer(request, d);
   const ref = db().collection('rfqs').doc(d.rfqId);
   const r = await ref.get();
-  if (!r.exists || r.data().buyerBusinessId !== businessId) err('RFQ not found.', 'not-found');
+  if (!r.exists || !ownsRfq(r.data(), buyer, request.auth.uid)) err('RFQ not found.', 'not-found');
   if (r.data().status !== 'submitted') err('Only an open RFQ can be cancelled.', 'failed-precondition');
   await ref.update({ status: 'cancelled', closedAt: F.serverTimestamp() });
   for (const sid of r.data().recipientIds || []) { try { await db().collection('rfqRecipients').doc(rid(d.rfqId, sid)).update({ status: 'closed' }); } catch (e) {} }
