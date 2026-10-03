@@ -1,3 +1,34 @@
+## [2026-10-03] - Jobs workspace: d922713 — exact hasMore ("Showing the first N — more exist", counts "N+"), runtime state labels from jobsCapabilities; messaging dependency pinned to 4ef3301 / a51215b + 8aaa868 — NOT deployed
+
+- **Partial lists:** `listMyJobs` and `getEmployerApplications` return `hasMore`, which is exact (limit+1).
+  - When it is true, the page shows "Showing the first N vacancies — more exist" or "Showing the first N applications
+    — more exist".
+  - Every derived count in Overview and Analytics then shows as "N+" (for example "200+" or "500+"), never as an exact
+    total.
+  - Servers without `hasMore` treat a list that fills its cap as possibly partial. The caps come from
+    `jobsCapabilities.listCaps`, else 200 / 500, or 100 per vacancy and 50 on the direct read.
+  - The old "totals are not shown" withholding is replaced by lower bounds.
+- **Labels:** `jobsCapabilities.jobStateLabels` and `applicationStateLabels` are the runtime source. A state the
+  server leaves unlabelled shows raw. The copied tables are used only on the old-server path (a515270 / ffa2c47).
+- **Messaging release dependency, now concrete.** It requires hosting `4ef3301` (`hosting/techhub-on-chain`) or
+  `a51215b` (`hosting/legal-hub-on-38d2d60`, the line the assembly takes provider-dashboard.html from), plus server
+  messages.js @ `8aaa868` (b2 capability tip `427f3fb`), **in the same release**. Those hosting commits have
+  messages.html handling `?tx=job_application` and `SokoniInbox.TX_TYPES` including `job_application`. This
+  tree's messages.html still ignores tx/txId.
+- **Deploy together:** server `d922713` with these pages. The rules hotfix ships first, J2 ships with AdminOS Jobs, and
+  the owner decides.
+- **Fixtures:** regenerated from the d922713, be4e1b7, a515270 and ffa2c47 handlers. The `hasMore` cases come from 201
+  vacancies and 501 applications created through the real handlers, and the JSON is now written compact.
+- **Tests:** `scripts/test-merchant-jobs-workspace.js` 56/0 (42 rows plus 14 negative controls).
+  - New rows: P1 and P2 (banner and "N+"), T1 (capability labels), T2 (unlabelled state shown raw), T3 (old-server
+    copied labels), D5 (be4e1b7 without `hasMore`).
+  - New negative controls: N12 shows an exact count while `hasMore` is true (fails P1); N13 uses the copied labels on
+    a current server (fails T2).
+- **Files:** sokoni-merchant-jobs.js, scripts/test-merchant-jobs-workspace.js, scripts/gen-jobs-workspace-fixtures.js,
+  scripts/fixtures/jobs-workspace-server.json, docs/JOBS_EMPLOYER_WORKSPACE.md, CHANGELOG.md.
+- **Database / rules / functions:** none.
+- **API:** consumes the d922713 fields and adds none.
+
 ## [2026-10-03] - Jobs workspace: "Message applicant" (J4) + be4e1b7 contract (jobsCapabilities, listMyJobs, getEmployerApplications, pausedByRole) — NOT deployed
 
 - **What:** every application card in the merchant-v2 Jobs workspace now has an enabled "Message applicant" button.
