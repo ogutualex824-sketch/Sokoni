@@ -1,19 +1,33 @@
 {
-  "functions": {
-    "source": "functions",
-    "predeploy": [
-      "node scripts/predeploy-syntax-gate.js",
-      "node scripts/verify-commission-single-source.js",
-      "node scripts/verify-delivery-engine-sync.js",
-      "node scripts/predeploy-payout-gate.js"
-    ],
-    "runtime": "nodejs22",
-    "concurrency": 80,
-    "minInstances": 0,
-    "maxInstances": 1000,
-    "memory": "512MiB",
-    "timeoutSeconds": 60
-  },
+  "functions": [
+    {
+      "source": "functions",
+      "predeploy": [
+        "node scripts/predeploy-syntax-gate.js",
+        "node scripts/verify-commission-single-source.js",
+        "node scripts/verify-delivery-engine-sync.js",
+        "node scripts/predeploy-payout-gate.js"
+      ],
+      "runtime": "nodejs22",
+      "concurrency": 80,
+      "minInstances": 0,
+      "maxInstances": 1000,
+      "memory": "512MiB",
+      "timeoutSeconds": 60
+    },
+    {
+      "codebase": "media-worker",
+      "source": "media-worker",
+      "runtime": "nodejs22",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ],
   "hosting": {
     "404": "/404.html",
     "site": "sokoni-aeb26",
@@ -51,6 +65,7 @@
       "monitoring/**",
       "docs/**",
       "functions/**",
+      "media-worker/**",
       "sokoni-dev-mock.js",
       "sokoni-mock-data.js",
       "jest.config.js",
