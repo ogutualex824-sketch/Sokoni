@@ -97,3 +97,28 @@ Then:
 - **Files:** `functions/payment-attribution.js`, `functions/index.js`, `functions/shared/intasend-status.js`, `scripts/test-p0-payment-integrity.js`, `scripts/lib/p0-webhook-{harness,rows}.js`, `scripts/sabotage-p0-payment-integrity.js`, `scripts/test-product-intent-enforcement-webhook.js` (fixture: real intent owner + payer).
 - **Database:** no schema change; new REVIEW reasons on `payments/{ref}.reviewReason`.
 - **Breaking:** online checkouts without a product_order intent park REVIEW (see the deploy-order dependency above).
+
+## Route B — Daraja removal ported (owner 2026-10-03), a SEPARATE change from the payment repair
+
+- **What was ported:** 093fd4f (sokoni-b2, hosting lineage) does not cherry-pick onto this lineage (conflicts in index.js, pos-zero-friction.js and 7 files absent here). So its exact declaration set was removed BY NAME, on this lineage's own boundaries:
+  - helpers: `DARAJA_UTC_OFFSET_MS`, `_darajaTimestamp`, `_normalizeMsisdn`, `_darajaToken`;
+  - exports: `darajaSTKPush`, `darajaSTKCallback`, `validateDarajaCredentials`, `sendTestSTKPush`, `webhookMpesa`, `mpesaC2BValidation`, `mpesaC2BConfirmation`;
+  - constants: `SAFARICOM_CALLBACK_IPS`, `_DARAJA_SANDBOX_SELLER_UIDS`, `_DARAJA_IPS`, and the `./mpesa-c2b` require;
+  - `functions/mpesa-c2b.js` deleted.
+- **Result:** exactly those 7 exports gone, 0 added (1,073 lines). Kept and verified present: `webhookIntasend`, `initiateSTKPush`, `verifyPaymentStatus`, `_finalizeMarketplacePayment`.
+- **Guard:** `scripts/deploy/guard-functions-safety.js` byte-identical to 093fd4f (sha256 `5d1b4b295479bba1`). It **PASSES in full mode, no exemption**.
+- **AST:** `scripts/check-daraja-removed-names.js` (@babel/parser) finds 0 undeclared references to removed names and 0 `require("./mpesa-c2b")` across 402 modules. Positive controls: the pre-port tree reports the require; a planted `_darajaToken` / `SAFARICOM_CALLBACK_IPS` reference is reported by name and line.
+- **Regressions:** P0 suite 33/0 (+10 UNPROVEN), intent suite 29/0. The notification suite's 15 failures are byte-identical to base f076c64 (pre-existing).
+- **Live:** the 7 exports were already deleted live by sokoni-b2 on 2026-10-03. A scoped `--only functions:webhookIntasend` deploy neither recreates nor deletes them.
+
+## ⚠ Deploy-config finding (decision at deploy time)
+
+This lineage's `firebase.json` hooks name four gate scripts that **do not exist in the lineage**: `predeploy-syntax-gate`, `verify-commission-single-source`, `verify-delivery-engine-sync`, `predeploy-payout-gate`. They are also in the quoted form that never executes, so this was never noticed. The canonical copies from the main checkout don't fit this tree: two crash on missing companions, and the payout gate "skips (infra)" with exit 0, which fails open. `functions.ignore` is `[]`, so `.env` would be packaged.
+
+**Proposed scratch deploy config** (owner to approve at deploy time): relative fail-closed hooks:
+- `node scripts/deploy/guard-functions-safety.js`
+- `node scripts/check-daraja-removed-names.js`
+- `node scripts/test-product-intent-enforcement-webhook.js`
+- `node scripts/test-p0-payment-integrity.js`. Exit 3 (UNPROVEN rows) must be treated as a block until Layer B runs at ≥ 512 MB.
+
+`functions.ignore` adds `.env` and `.env.*`, and `.env` stays present for the CLI.
