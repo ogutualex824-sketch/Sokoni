@@ -7,7 +7,7 @@
  *                                                             # the tree's files are hashed before and after
  *
  * The REAL functions/trust-safety.js and the review owner's shared module functions/shared/review-moderation.js
- * (sokoni-5b, commit 85a5fcf — byte-identical, pinned by row M0) run on the transactional fake Firestore
+ * (sokoni-5b, commit be0e0c1 — byte-identical, pinned by FULL sha256 in row M0) run on the transactional fake Firestore
  * (scripts/lib/fake-firestore-txn.js, STRICT read order: a read after a write throws, as the Admin SDK does).
  *
  * NO PRODUCTION, NO NETWORK, NO EMULATOR. TRIPWIRES (incident 2026-10-01: a test wrote to production through
@@ -19,7 +19,8 @@
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process'), Module = require('module'), crypto = require('crypto');
 const ROOT = path.resolve(__dirname, '..'), FN = path.join(ROOT, 'functions');
 const MODULE_REL = 'shared/review-moderation.js';
-const MODULE_SHA_PREFIX = 'c3ea059ef602ad4e';   /* sokoni-5b's module at 85a5fcf — NEVER edit the copy; re-copy it */
+/* sokoni-5b's module at be0e0c1 (lockstep 2026-10-03; was 85a5fcf c3ea059e…) — NEVER edit the copy; re-copy it */
+const MODULE_SHA = '67f16dd03ca7c528fda184e325f87b850715644ebcebccbfae7c588a3f71786e';
 const FILES = ['trust-safety.js', MODULE_REL];
 
 /* ── failure injection: each fault, the exact text it replaces, and the NAMED row that must catch it ── */
@@ -115,8 +116,17 @@ const logsFor = async (reviewId) => (await all('reviewModerationLog')).filter((x
   const modBytes = fs.readFileSync(path.join(FN, MODULE_REL));
   const modSha = crypto.createHash('sha256').update(modBytes).digest('hex');
   const modText = modBytes.toString('utf8');
-  ck('M0 functions/shared/review-moderation.js is byte-identical to sokoni-5b 85a5fcf (sha256 starts ' + MODULE_SHA_PREFIX + '), no require/import',
-    modSha.startsWith(MODULE_SHA_PREFIX) && !/\brequire\s*\(|^\s*import\s/m.test(modText), modSha);
+  ck('M0 functions/shared/review-moderation.js is byte-identical to sokoni-5b be0e0c1 (sha256 ' + MODULE_SHA + '), no require/import',
+    modSha === MODULE_SHA && !/\brequire\s*\(|^\s*import\s/m.test(modText), modSha);
+
+  /* F0 — the fake honours FieldValue.delete() in a transactional update (the module now DELETES moderatedBy / moderationNote);
+     positive control so U1c / U5b cannot pass merely because a field was never written */
+  await db.doc('zz/fv').set({ keep: 1, gone: 'x' });
+  await db.runTransaction(async (tx) => { await tx.get(db.doc('zz/fv')); tx.update(db.doc('zz/fv'), { gone: F.FieldValue.delete() }); });
+  const fv = await get('zz/fv');
+  ck('F0 fake Firestore: tx.update with FieldValue.delete() REMOVES the field (key absent), other fields kept',
+    fv && fv.keep === 1 && !Object.prototype.hasOwnProperty.call(fv, 'gone'), fv);
+  await db.doc('zz/fv').delete();
 
   const TS = require(path.join(TMP, 'trust-safety.js'));
   if (typeof TS._setNotifier !== 'function' || !TS._reportModel || !TS._reportModel.REVIEW_REPORT_REASONS) {
@@ -134,6 +144,9 @@ const logsFor = async (reviewId) => (await all('reviewModerationLog')).filter((x
   await db.doc('reviews/rvSel').set({ authorUid: 'authorE', targetType: 'product', targetId: 'p1', status: 'approved', rating: 1, body: 'Reviewed listing belongs to sellerA.' });
   await db.doc('unboxingReviews/ub1').set({ uid: 'authorD', productId: 'p1', sellerUid: 'sellerA', status: 'approved', caption: 'Unboxing my new dress!' });
   await db.doc('ratingsSummary/p1').set({ targetId: 'p1', avg: 3, count: 4, marker: 'before' });
+  /* a listing whose only owner-ish field is shopId (no sellerUid / sellerId): a shopId is NOT a uid */
+  await db.doc('products/p2').set({ name: 'Shop-only listing', shopId: 'shopMod', price: 900, isVisible: true, status: 'active' });
+  await db.doc('reviews/rvShop').set({ authorUid: 'authorF', targetType: 'product', targetId: 'p2', status: 'approved', rating: 3, body: 'Review on a shopId-only listing.' });
 
   /* R1 — the reason list is the SERVER's, for both kinds */
   const rr = await tryv(TS.tsGetReportReasons(as('r1', { entityType: 'review' })));
@@ -186,6 +199,7 @@ const logsFor = async (reviewId) => (await all('reviewModerationLog')).filter((x
   await TS.tsReportContent(as('reporter3', { entityType: 'review', entityId: 'rvAdm', reasonCode: 'offensive' }));
   await TS.tsReportContent(as('reporter3', { entityType: 'review', entityId: 'rvSel', reasonCode: 'offensive' }));
   await TS.tsReportContent(as('reporter3', { entityType: 'review', entityId: 'rv2', reasonCode: 'off_topic' }));
+  await TS.tsReportContent(as('reporter3', { entityType: 'review', entityId: 'rvShop', reasonCode: 'spam' }));
 
   /* V1 — the case: excerpt, target link, the server's actions (uphold — no listing take-down) */
   const case1 = await tryv(TS.tsGetReportCase(as('adm1', { reportId: id1 }, ADMIN)));
@@ -198,11 +212,15 @@ const logsFor = async (reviewId) => (await all('reviewModerationLog')).filter((x
   const rv1 = await get('reviews/rv1');
   const L1 = await logsFor('rv1');
   const r1 = await get('reports/' + id1);
-  ck('U1 uphold → review REMOVED via the shared module (moderatedBy = moderator, fixed note), exactly ONE reviewModerationLog {action remove, source report:<id>}; report actioned, reviewEnforcement review_removed',
-    up1.success === true && up1.status === 'actioned' && rv1.status === 'removed' && rv1.moderatedBy === 'adm1' && rv1.moderationNote === 'Removed after a report about it was upheld.'
+  ck('U1 uphold → review REMOVED via the shared module, exactly ONE reviewModerationLog {action remove, source report:<id>}; report actioned, reviewEnforcement review_removed',
+    up1.success === true && up1.status === 'actioned' && rv1.status === 'removed'
       && L1.length === 1 && L1[0].action === 'remove' && L1[0].from === 'approved' && L1[0].to === 'removed' && L1[0].source === 'report:' + id1 && L1[0].actorUid === 'adm1'
       && L1[0].kind === 'review' && L1[0].targetId === 'p1'
       && r1.status === 'actioned' && r1.reviewEnforcement === 'review_removed' && up1.enforcement === 'review_removed', { up1, rv1, L1, r1 });
+  const has = (o, k) => !!o && Object.prototype.hasOwnProperty.call(o, k);
+  ck('U1c the PUBLIC review doc carries NO moderatedBy and NO moderationNote after uphold (keys absent); the admin-only log keeps actorUid adm1 + the note',
+    rv1 && !has(rv1, 'moderatedBy') && !has(rv1, 'moderationNote') && !JSON.stringify(rv1).includes('adm1')
+      && L1.length === 1 && L1[0].actorUid === 'adm1' && L1[0].note === 'Removed after a report about it was upheld.', { rv1, L1 });
   const aud1 = (await all('trustSafetyAudit')).filter((a) => a.reportId === id1);
   ck('U1b one audit row for the decision, enforcement review_removed, the review transition recorded; the review doc carries no reporter identity',
     aud1.length === 1 && aud1[0].enforcement === 'review_removed' && aud1[0].review && aud1[0].review.to === 'removed'
@@ -232,6 +250,9 @@ const logsFor = async (reviewId) => (await all('reviewModerationLog')).filter((x
       && replay.replayed === true && again.error === 'failed-precondition' && (await logsFor('rv1')).length === 1, { up2, replay, again });
 
   /* U5 — RESTORE of the upheld report → review back to PENDING (never approved); one restore log; a second restore refused */
+  /* an OLDER writer (pre-be0e0c1) left its moderator uid + internal note on the public doc */
+  await db.doc('reviews/rv1').set({ moderatedBy: 'legacyMod', moderationNote: 'legacy internal note' }, { merge: true });
+  const legacyBefore = await get('reviews/rv1');
   const case2 = await tryv(TS.tsGetReportCase(as('adm1', { reportId: id1 }, ADMIN)));
   const noNote = await tryv(TS.tsReviewReport(as('adm1', { reportId: id1, action: 'restore' }, ADMIN)));
   const rst = await tryv(TS.tsReviewReport(as('adm1', { reportId: id1, action: 'restore', internalNote: 'Reporter was a competitor' }, ADMIN)));
@@ -247,6 +268,10 @@ const logsFor = async (reviewId) => (await all('reviewModerationLog')).filter((x
       && r1b.status === 'actioned' && r1b.reviewEnforcement === 'review_restored'
       && rst2.error === 'failed-precondition' && rstOther.error === 'failed-precondition' && (await logsFor('rv1')).length === 2, { case2: case2.actions, noNote, rst, rv1b, L1b, rst2, rstOther });
 
+  ck('U5b a LEGACY moderatedBy / moderationNote on the review doc is SCRUBBED by the next transition (restore): both keys absent afterwards',
+    legacyBefore && legacyBefore.moderatedBy === 'legacyMod' && legacyBefore.moderationNote === 'legacy internal note'
+      && rv1b && !has(rv1b, 'moderatedBy') && !has(rv1b, 'moderationNote') && !JSON.stringify(rv1b).includes('legacy'), { legacyBefore, rv1b });
+
   /* E1 — SELF_REVIEW: the moderator wrote the review → refused as the module words it; nothing moves */
   const selfRev = await tryv(TS.tsReviewReport(as('admAuthor', { reportId: 'reporter3_review_rvAdm', action: 'approve' }, ADMIN)));
   ck('E1 SELF_REVIEW mapped: HttpsError(permission-denied, module message, {reason:SELF_REVIEW}); report still pending, review still approved, no log, no audit',
@@ -259,6 +284,13 @@ const logsFor = async (reviewId) => (await all('reviewModerationLog')).filter((x
   ck('E2 SELF_INTEREST mapped: the listing\'s seller cannot uphold a report on its review ({reason:SELF_INTEREST}); nothing written',
     selfInt.error === 'permission-denied' && selfInt.details && selfInt.details.reason === 'SELF_INTEREST'
       && (await get('reports/reporter3_review_rvSel')).status === 'pending' && (await get('reviews/rvSel')).status === 'approved' && (await logsFor('rvSel')).length === 0, selfInt);
+
+  /* O1 — the owner check reads UIDS only: a moderator whose uid equals the listing's shopId is not its owner */
+  const shopMod = await tryv(TS.tsReviewReport(as('shopMod', { reportId: 'reporter3_review_rvShop', action: 'approve', resolution: 'spam' }, ADMIN)));
+  const LS = await logsFor('rvShop');
+  ck('O1 owner check ignores shopId: product p2 has only shopId "shopMod"; moderator uid "shopMod" upholds → NOT SELF_INTEREST, review removed, ONE log by shopMod',
+    shopMod.success === true && shopMod.status === 'actioned' && (await get('reviews/rvShop')).status === 'removed'
+      && LS.length === 1 && LS[0].actorUid === 'shopMod' && LS[0].to === 'removed', { shopMod, LS });
 
   /* D1 — DISMISS touches no review */
   const dis = await tryv(TS.tsReviewReport(as('adm1', { reportId: 'reporter3_review_rv2', action: 'dismiss', resolution: 'On topic' }, ADMIN)));

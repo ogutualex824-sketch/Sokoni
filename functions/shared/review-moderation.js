@@ -54,7 +54,7 @@ async function transitionReview(tx, o) {
   else if (r.targetType === 'seller') owner = r.targetId || null;
   else if (r.targetType === 'product' && targetId) {
     const p = await tx.get(db.collection('products').doc(String(targetId)));
-    owner = p.exists ? (p.data().sellerUid || p.data().sellerId || p.data().shopId || null) : null;
+    owner = p.exists ? (p.data().sellerUid || p.data().sellerId || null) : null;   /* uids only — shopId is not a uid */
   }
   if ((r.authorUid || r.uid) === actor) throw new ModerationError('permission-denied', 'SELF_REVIEW', 'You cannot moderate your own review.');
   if (owner && String(owner) === actor) throw new ModerationError('permission-denied', 'SELF_INTEREST', 'You cannot moderate a review of your own listing.');
@@ -62,7 +62,10 @@ async function transitionReview(tx, o) {
   if (from === T.to) return { status: from, unchanged: true, targetId, kind, from };           /* idempotent */
   if (!T.from.includes(from)) throw new ModerationError('failed-precondition', 'BAD_TRANSITION', 'That action is not allowed on a ' + from + ' review.');
   const note = cleanNote(o.note);
-  tx.update(ref, { status: T.to, moderationNote: note, moderatedBy: actor,
+  /* The review doc is PUBLICLY READABLE, so it carries no moderator identity and no internal note (sokoni-e3 /
+     sokoni-5b 2026-10-03): both live only in the admin-only reviewModerationLog. A transition also DELETES any
+     moderatedBy / moderationNote an older writer left on the doc. */
+  tx.update(ref, { status: T.to, moderationNote: FieldValue.delete(), moderatedBy: FieldValue.delete(),
     moderatedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
   tx.set(db.collection(LOG_COLLECTION).doc(), { reviewId: String(o.reviewId), kind, from, to: T.to, action: o.action, actorUid: actor,
     note, source: typeof o.source === 'string' ? o.source.slice(0, 120) : 'admin',

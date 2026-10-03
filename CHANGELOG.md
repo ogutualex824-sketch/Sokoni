@@ -1,3 +1,34 @@
+## [2026-10-03] - Reviews: lockstep update of the shared review-moderation module to sokoni-5b be0e0c1 — NOT deployed
+
+**NOT DEPLOYED.** `functions/shared/review-moderation.js` is replaced byte-for-byte with
+`git show be0e0c1:functions/shared/review-moderation.js` (branch `fix/review-authority-on-76436b1`, sha256
+`67f16dd03ca7c528fda184e325f87b850715644ebcebccbfae7c588a3f71786e`). The previous copy was 85a5fcf (`c3ea059e…`).
+The update was agreed with the module's owner, sokoni-5b. The file was copied, not edited.
+
+### What the module changes
+- **Public review docs no longer carry moderator data.** A transition writes `FieldValue.delete()` to `moderatedBy`
+  and `moderationNote`, so a publicly readable review no longer exposes the moderator uid or the internal note. Both
+  stay in the admin-only `reviewModerationLog` (`actorUid`, `note`). A legacy value left on a doc by an older writer
+  is removed by the next transition.
+- **The owner check reads uids only.** The SELF_INTEREST check takes the product's `sellerUid || sellerId`.
+  `shopId` is not a uid, so it no longer counts.
+
+### Tests (`scripts/test-review-reports.js`, 26/0; failure injection 7/7 caught, tree unchanged)
+- **M0** pins the module by its full sha256.
+- **New rows:**
+  - F0: the fake Firestore's `FieldValue.delete()` really removes the field (positive control).
+  - U1c: after an uphold, the review doc has no `moderatedBy` and no `moderationNote`; the log keeps actorUid and note.
+  - U5b: a legacy `moderatedBy` / `moderationNote` is removed by the next transition.
+  - O1: the owner check ignores `shopId`.
+- **Counterproof:** run on the old module, rows M0, U1c, U5b and O1 fail (22/4).
+- **Other suites, unchanged:** report-authority 16/0, moderation-queue 40/0, takedown-enforcement 35/0,
+  hold-ref-privacy 9/0, gateway-order-authority 17/0.
+
+**Files:** `functions/shared/review-moderation.js`, `scripts/test-review-reports.js`, `CHANGELOG.md`.
+**Database:** no schema change. Review docs lose `moderatedBy` / `moderationNote` on their next transition.
+**API / breaking:** none. Clients reading `moderatedBy` from a review doc get nothing (that read is admin-only data
+that had leaked).
+
 ## [2026-10-03] - GATE 11: public create-order API prices from the server, and its orders are not payable (server) — NOT deployed
 
 **NOT DEPLOYED.** This closes INTASEND convergence brief §Gate 11 on `sokoniAPIGateway` `POST /api/v1/orders`.
