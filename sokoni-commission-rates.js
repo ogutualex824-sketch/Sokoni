@@ -170,10 +170,6 @@
     "b2b_order": {
       "pct": 0,
       "fixedKES": 0
-    },
-    "default": {
-      "pct": 5,
-      "fixedKES": 0
     }
   };
 
@@ -248,6 +244,16 @@
     "construction-services": "construction_service",
     "construction-transport": "construction_service",
     "construction-architect": "construction_service",
+    "fashion": "marketplace",
+    "furniture": "marketplace",
+    "books": "marketplace",
+    "appliances": "marketplace",
+    "beauty": "marketplace",
+    "shoes": "marketplace",
+    "cars": "vehicles",
+    "laundry": "services",
+    "hair-beauty": "services",
+    "dj": "entertainment_bookings",
     "equipment-rental": "construction_equipment_rental",
     "equipment_rental": "construction_equipment_rental",
     "plant-hire": "construction_equipment_rental",
@@ -361,7 +367,7 @@
     var k = String(key || '').trim().toLowerCase();
     var category = RATES[k] ? k : (ALIASES[k] || null);
     if (!category || !RATES[category]) {
-      return { pct: RATES.default.pct, fixedKES: RATES.default.fixedKES, category: 'default', matched: false };
+      return { pct: null, fixedKES: null, category: null, matched: false };   /* no generic default (owner 2026-10-03): render "—" */
     }
     return { pct: RATES[category].pct, fixedKES: RATES[category].fixedKES, category: category, matched: true, enabled: RATES[category].enabled !== false };
   }

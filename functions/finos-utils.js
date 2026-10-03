@@ -351,6 +351,14 @@ async function calculateCommission(db, opts) {
   if (opts && CC.isUnpricedCategory(opts.category)) {
     const e = new Error('This product has no price configured yet.'); e.code = 'category_unpriced'; throw e;
   }
+  /* NO GENERIC DEFAULT + RESTRICTED (owner 2026-10-03). A restricted category is never priced (SOKONI does not sell it);
+     an unmatched category has NO rate — refused, never 5%. Callers BEFORE payment surface the refusal; callers AFTER
+     payment HOLD the credit and flag it for review (they must never reject a payment already taken). */
+  if (opts && opts.category !== undefined) {
+    const _r = CC.resolveRate(opts.category);
+    if (_r.restricted) { const e = new Error('This category is not sold on SOKONI.'); e.code = 'category_restricted'; e.restrictedClass = _r.restrictedClass; throw e; }
+    if (!_r.matched) { const e = new Error('This category has no commission rule configured.'); e.code = 'category_unpriced'; e.category = String(opts.category); throw e; }
+  }
   /* Two call sites forgot the `db` argument and called calculateCommission({...}). `db` then
      bound to the options object, `opts` was undefined, and destructuring it threw a TypeError
      that BOTH call sites caught and treated as "commission = 0" (financial-os.js) or "charge

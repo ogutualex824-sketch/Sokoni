@@ -159,7 +159,9 @@ const RATES = {
 
   /* Applied when a hub/category is unknown. The HUB default (5%), not the category
      default (10%) — an unrecognised hub must not be charged double by accident. */
-  default:          { pct: 5,   fixedKES: 0,    _was: 'hub default 5% / category default 10%' },
+  /* NO GENERIC DEFAULT (owner 2026-10-03): "no recognized transaction silently receives a 5% commission". The former
+     `default: { pct: 5 }` row is removed; an unmatched category resolves to { matched:false, pct:null } and the engine
+     REFUSES it before payment (category_unpriced). After payment, callers HOLD + flag — never invent a rate. */
 };
 
 /* Hub and legacy names -> the category that prices them.
@@ -226,6 +228,12 @@ const ALIASES = {
      classifies it as professional_services — use a namespaced intake id (e.g. 'construction-architect'). */
   'welding-fabrication': 'construction_service', 'construction-company': 'construction_service', 'construction-services': 'construction_service',
   'construction-transport': 'construction_service', 'construction-architect': 'construction_service',
+  /* OWNER CLASSIFICATION 2026-10-03 (via sokoni-b2) of the production categories that fell to the 5% default
+     (scripts/infra/census-default-commission.js): general retail → marketplace; cars → vehicles (2%, vehicle sales only);
+     laundry / hair-beauty → services; dj → entertainment bookings. vape / alcohol / tobacco / adult are RESTRICTED —
+     shared/restricted-categories.js, never mapped to a commission row. */
+  fashion: 'marketplace', furniture: 'marketplace', books: 'marketplace', appliances: 'marketplace', beauty: 'marketplace', shoes: 'marketplace',
+  cars: 'vehicles', laundry: 'services', 'hair-beauty': 'services', dj: 'entertainment_bookings',
   'equipment-rental': 'construction_equipment_rental', equipment_rental: 'construction_equipment_rental', 'plant-hire': 'construction_equipment_rental',
   freelancer: 'jobs', freelance: 'jobs', gig: 'jobs', gigs: 'jobs',   /* no bare 'job' alias: the work engine's 'job' is a service job, never this 0% lane */
   logistics: 'hub', delivery: 'hub', driver: 'hub',
@@ -421,7 +429,9 @@ function resolveRate(key) {
   const k = String(key || '').trim().toLowerCase();
   const category = RATES[k] ? k : (ALIASES[k] || null);
   if (!category || !RATES[category]) {
-    return { ...RATES.default, category: 'default', matched: false };
+    const rc = require('./shared/restricted-categories').classify(k);
+    if (rc.restricted) return { pct: null, fixedKES: null, category: null, matched: false, restricted: true, restrictedClass: rc.class };
+    return { pct: null, fixedKES: null, category: null, matched: false };   /* NO generic default (owner 2026-10-03) */
   }
   const r = RATES[category];
   const out = { pct: r.pct, fixedKES: r.fixedKES, category, matched: true };

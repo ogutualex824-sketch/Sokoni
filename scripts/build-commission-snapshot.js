@@ -93,7 +93,7 @@ const body = `/* ===============================================================
     var k = String(key || '').trim().toLowerCase();
     var category = RATES[k] ? k : (ALIASES[k] || null);
     if (!category || !RATES[category]) {
-      return { pct: RATES.default.pct, fixedKES: RATES.default.fixedKES, category: 'default', matched: false };
+      return { pct: null, fixedKES: null, category: null, matched: false };   /* no generic default (owner 2026-10-03): render "—" */
     }
     return { pct: RATES[category].pct, fixedKES: RATES[category].fixedKES, category: category, matched: true, enabled: RATES[category].enabled !== false };
   }
