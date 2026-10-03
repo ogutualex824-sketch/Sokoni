@@ -46,8 +46,29 @@ function _sokoniId(uid) {
   return 'SKN-' + (hex || uid.slice(-8).toUpperCase());
 }
 
+/* AUTH FACTS (2026-10-03). Email verification belongs to Firebase Auth, not to users/{uid}: the live rules
+   (f259c0b5) guard phoneVerified (must match the token's phone_number) but NOT emailVerified, so a client could
+   write users/{uid}.emailVerified:true and collect +15 trust. The caller's own token answers for the caller;
+   anyone else is read from Auth. A failed lookup is "not verified", never "verified". */
+async function _authFacts(uid, req, getUser) {
+  if (req && req.auth && req.auth.uid === uid && req.auth.token) {
+    return { emailVerified: req.auth.token.email_verified === true, phoneNumber: req.auth.token.phone_number || null };
+  }
+  try {
+    /* getUser is injectable for the suite (admin.auth is a getter-only namespace property). */
+    const u = await (getUser || ((id) => admin.auth().getUser(id)))(uid);
+    return { emailVerified: u.emailVerified === true, phoneNumber: u.phoneNumber || null };
+  } catch (_) {
+    return { emailVerified: false, phoneNumber: null };
+  }
+}
+function _emailVerified(verif = {}, auth = {}) { return !!(auth.emailVerified || verif.emailVerified); }
+/* phoneVerified on users/{uid} IS rules-guarded (token phone_number must match), and an Auth phone number was
+   proven by OTP — either counts. */
+function _phoneVerified(user = {}, verif = {}, auth = {}) { return !!(verif.phoneVerified || user.phoneVerified || auth.phoneNumber); }
+
 /** Calculate trust score (0–100) across verification dimensions. */
-function _trustScore(user = {}, verif = {}, bizCount = 0) {
+function _trustScore(user = {}, verif = {}, auth = {}) {
   const factors = [];
   let score = 0;
 
@@ -59,10 +80,13 @@ function _trustScore(user = {}, verif = {}, bizCount = 0) {
      (10 → 15) so the reachable ceiling is unchanged. */
   const _active = _activeFacets(verif);
 
-  if (verif.emailVerified   || user.emailVerified)   { score += 15; factors.push('Email Verified'); }
-  if (verif.phoneVerified   || user.phoneVerified)   { score += 15; factors.push('Phone Verified'); }
+  if (_emailVerified(verif, auth))                   { score += 15; factors.push('Email Verified'); }
+  if (_phoneVerified(user, verif, auth))             { score += 15; factors.push('Phone Verified'); }
   if (_active.has('identity'))                       { score += 20; factors.push('Identity Verified'); }
-  if (_active.has('business') || bizCount > 0)       { score += 15; factors.push('Business Verified'); }
+  /* An APPROVED business facet only. Owning a businesses/{id} doc means "registered", not "verified" — the owner's
+     ruling keeps "Registration reviewed by SOKONI" separate from verification, and no verified state is ever
+     inferred. */
+  if (_active.has('business'))                       { score += 15; factors.push('Business Verified'); }
   if (_active.has('kra'))                            { score += 10; factors.push('KRA Verified'); }
   if (_active.has('address'))                        { score += 5;  factors.push('Address Verified'); }
   if (_active.has('bank'))                           { score += 10; factors.push('Payment Verified'); }
@@ -124,7 +148,7 @@ function _facetStates(verif = {}) {
   return out;
 }
 
-function _completion(user = {}, verif = {}, prof = {}) {
+function _completion(user = {}, verif = {}, prof = {}, auth = {}) {
   /* Facets, not the retired *Verified booleans. Reading the dead shape here made
      identity/address/bank/kra impossible to complete, so the strength percentage
      was permanently understated — a visibly wrong number, which is exactly what
@@ -133,8 +157,8 @@ function _completion(user = {}, verif = {}, prof = {}) {
   const steps = [
     { id:'photo',    label:'Add profile photo',         done: !!user.photoURL },
     { id:'bio',      label:'Write a bio / headline',    done: !!(prof.headline || prof.summary || user.bio) },
-    { id:'email',    label:'Verify email address',      done: !!(verif.emailVerified || user.emailVerified) },
-    { id:'phone',    label:'Verify phone number',       done: !!(verif.phoneVerified || user.phoneVerified) },
+    { id:'email',    label:'Verify email address',      done: _emailVerified(verif, auth) },
+    { id:'phone',    label:'Verify phone number',       done: _phoneVerified(user, verif, auth) },
     { id:'identity', label:'Verify identity (ID/passport)', done: _f.has('identity') },
     { id:'address',  label:'Add physical address',      done: !!(user.address || user.location) || _f.has('address') },
     { id:'skills',   label:'Add at least 3 skills',     done: (prof.skills || []).length >= 3 },
@@ -176,8 +200,9 @@ exports.profileGetOverview = onCall({ region: 'us-central1' }, async (req) => {
   const bizCount = bizSnap?.size   || 0;
   const wallet   = walletSnap?.exists ? walletSnap.data() : null;
 
-  const trust = _trustScore(user, verif, bizCount);
-  const compl = _completion(user, verif, prof);
+  const auth  = await _authFacts(uid, req);
+  const trust = _trustScore(user, verif, auth);
+  const compl = _completion(user, verif, prof, auth);
   const _facets = _activeFacets(verif);
   const sid   = _sokoniId(uid);
 
@@ -222,11 +247,11 @@ exports.profileGetOverview = onCall({ region: 'us-central1' }, async (req) => {
        and legal remain self-service booleans and were never admin-decided.
        `merchant` folded into `business`. */
     verifications: {
-      email:          !!(verif.emailVerified || user.emailVerified),
-      phone:          !!(verif.phoneVerified || user.phoneVerified),
+      email:          _emailVerified(verif, auth),
+      phone:          _phoneVerified(user, verif, auth),
       legal:          !!user.legalSigned,
       identity:       _facets.has('identity'),
-      business:       _facets.has('business') || bizCount > 0,
+      business:       _facets.has('business'),   /* approved facet only — registered ≠ verified */
       professional:   _facets.has('professional'),
       driver:         _facets.has('driver'),
       doctor:         _facets.has('doctor'),
@@ -276,8 +301,10 @@ exports.profileGetCompletion = onCall({ region: 'us-central1' }, async (req) => 
   const prof   = profSnap?.exists  ? profSnap.data()  : {};
   const hasBiz = (bizSnap?.size   || 0) > 0;
 
-  const compl = _completion(user, verif, prof);
-  const trust = _trustScore(user, verif, hasBiz ? 1 : 0);
+  const auth  = await _authFacts(uid, req);
+  const compl = _completion(user, verif, prof, auth);
+  const trust = _trustScore(user, verif, auth);
+  void hasBiz;   /* a registered business no longer adds trust (see _trustScore) */
 
   // Rule-based recommendations (KASS-style, no LLM call needed for this)
   const recommendations = [];
@@ -623,7 +650,7 @@ exports.profileGetPublicProfile = onRequest(
         isVerified:    verifiedTypes.length > 0,
         verifiedTypes,
         primaryBadge,
-        trustLevel:    _trustScore(user, verif, 0).level,
+        trustLevel:    _trustScore(user, verif, await _authFacts(uid, null)).level,
         memberSince,
         shop: shopDoc ? {
           handle: shopDoc.id,
@@ -828,3 +855,6 @@ exports.profileSaveProfessional = onCall({ region: 'us-central1' }, async (req) 
   await db.collection('professionalProfiles').doc(uid).set(patch, { merge: true });
   return { ok: true };
 });
+
+/* Test seam (2026-10-03): pure functions only. */
+exports._test = { _trustScore, _completion, _authFacts, _emailVerified, _phoneVerified };

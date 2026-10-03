@@ -1,3 +1,12 @@
+## 2026-10-03 — Profile trust score counts only real verifications (NOT deployed)
+
+- **Email:** comes from Firebase Auth. The self-writable users.emailVerified no longer earns +15.
+- **Business Verified:** needs an approved business facet. Owning a business doc no longer earns +15 or the badge.
+- **Phone:** an Auth phone number counts.
+- **Files:** functions/profile-engine.js (+ _authFacts, _test seam), scripts/test-profile-trust-authority.js (15/0, sabotage fails T1/T4a/T7c), docs/PROFILE_TRUST_AUTHORITY.md.
+- **Database / rules:** none; scores are computed on read.
+- **Deploy:** profileGetOverview and profileGetCompletion only. profileGetPublicProfile is excluded (AR specimen).
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
