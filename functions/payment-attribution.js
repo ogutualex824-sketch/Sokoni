@@ -269,7 +269,9 @@ function assessProviderConfirmation(st, want) {
 const PLATFORM_PURPOSES = Object.freeze(['subscription', 'boost', 'marketing_boost', 'hub_registration', 'ai_subscription', 'ai_credits', 'featured_listing',
   /* 2f 10-03: vehicle_boost self-settles earlier; listed here as belt-and-braces. NEVER add fitness_membership or b2b_order —
      those are the PROVIDER's / SUPPLIER's money (held), not SOKONI's; unattributed they fall to withhold + review. */
-  'vehicle_boost']);
+  'vehicle_boost',
+  /* 2f 539795c: the B2B lead-fee Pay Now — SOKONI revenue, self-settling on the early intent read. */
+  'b2b_lead_invoice']);
 const PLATFORM_CATEGORIES = Object.freeze(['subscription', 'boost', 'marketing', 'advertising', 'ai_subscription', 'ai_credits']);
 function walletCreditDecision(f) {
   const x = f || {};

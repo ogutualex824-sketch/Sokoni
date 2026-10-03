@@ -39,6 +39,7 @@ for (const [id, o, m] of [
   ['P-6', { category: 'advertising', attribution: { type: 'booking' } }, 'bookNow used as an advertising fee'],
   ['P-7', { isSubscription: true }, 'the existing subscription category'],
   ['P-8', { intentPurpose: 'vehicle_boost', category: 'default', attribution: { sellerUid: 'dealer1' } }, 'vehicle boost (2f 10-03) — even WITH a client-sent sellerUid'],
+  ['P-9', { intentPurpose: 'b2b_lead_invoice', category: 'default', attribution: { sellerUid: 'supplier1' } }, 'B2B lead-fee Pay Now (2f 539795c) — the supplier PAYS it; never credited back to them'],
 ]) { r = dec(o); ck(id, r.action === 'skip_platform' && r.earner === null, 'PLATFORM REVENUE is never credited: ' + m, r); }
 /* provider / supplier money is NOT platform revenue (2f 10-03): never skip_platform, never the payer */
 r = dec({ intentPurpose: 'fitness_membership', attribution: { sellerUid: 'gym1' } });
