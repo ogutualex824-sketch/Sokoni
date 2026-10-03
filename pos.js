@@ -429,7 +429,7 @@ const SPos = (function () {
       document.getElementById('mpesa-account-row').style.display = val === 'paybill' ? 'block' : 'none';
     },
 
-    /* 2026-10-03: no Daraja credentials. This step records the till / paybill number used for manual till
+    /* 2026-10-03: no Daraja credentials. This step records the till / paybill number for the business profile
        payments. It does NOT set mpesaConfigured, which would offer an M-PESA prompt this screen cannot send. */
     async verifyMpesa() {
       const shortcode  = _v('mpesa-shortcode').trim();
@@ -1819,15 +1819,15 @@ const SPos = (function () {
       /* RETIRED 2026-10-03 (owner: IntaSend only). This sent the prompt through darajaSTKPush, a Daraja
          function that is not deployed, and when no Firebase app was present it invented a checkout id
          ('SIMULATED_…') and "confirmed" it after three polls, completing an M-Pesa sale nobody paid.
-         The M-Pesa prompt is not available on this screen; the manual till payment (customer pays the
-         till number, cashier records the confirmation code) and cash remain. */
+         The M-Pesa prompt is not available on this screen. Manual till codes are also removed (owner 2026-10-03:
+         a typed code is not a confirmed payment), so cash and payments SOKONI confirms are what remain. */
       void cleanPhone; void total;
       const res = document.getElementById('mpesa-result');
       if (res) {
         res.style.display = 'block';
         res.style.background = 'rgba(239,68,68,0.1)';
         res.style.color = 'var(--red)';
-        res.textContent = 'M-PESA prompts are not available on this screen. Ask the customer to pay your till number and record the confirmation code, or take cash. Nothing was charged.';
+        res.textContent = 'M-PESA prompts are not available on this screen. Take cash, or a payment SOKONI confirms. Nothing was charged.';
       }
       const sendBtn = document.getElementById('mpesa-send-btn');
       if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '📱 Send M-PESA Request'; }

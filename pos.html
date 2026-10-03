@@ -324,7 +324,7 @@
         <div class="wiz-label">DEFAULT ACCOUNT REFERENCE</div>
         <input class="wiz-input" id="mpesa-account" placeholder="Account reference">
       </div>
-      <div class="wiz-note">Customers can pay this number directly; the cashier records the M-PESA confirmation code with the sale. No Safaricom API keys are needed.</div>
+      <div class="wiz-note">Your business till or paybill number. M-PESA is collected by SOKONI through IntaSend; no Safaricom API keys are needed.</div>
       <div class="wiz-row" style="margin-top:16px">
         <button class="wiz-btn wiz-btn-ghost" onclick="SPos.wizard.skip()">Skip for now</button>
         <button class="wiz-btn wiz-btn-primary" id="mpesa-verify-btn" onclick="SPos.wizard.verifyMpesa()">Save & Continue</button>
@@ -1375,7 +1375,7 @@
         </div>
       </div>
 
-      <div style="font-size:12px;color:var(--text-muted);margin-top:8px">Customers pay this number directly; record the M-PESA confirmation code with each sale. No Safaricom API keys are needed.</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:8px">Your business till or paybill number. M-PESA is collected by SOKONI through IntaSend: no confirmation codes are typed in, and no Safaricom API keys are needed.</div>
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('mpesa-config-modal')">Cancel</button>

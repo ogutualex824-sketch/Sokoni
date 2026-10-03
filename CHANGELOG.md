@@ -1,3 +1,9 @@
+## [2026-10-03] - POS wording follows the manual-till removal — hosting, NOT deployed
+
+Owner decision 2026-10-03: manual M-PESA till codes are removed (sokoni-5b, 8a5a742). My POS refusal message and the POS wizard /
+settings notes no longer tell the cashier to record a confirmation code. Files: pos.js (message + comments), pos.html (two notes).
+Merges with 8a5a742 with a CHANGELOG-only conflict.
+
 ## [2026-10-03] - Gate 13 follow-up: IntaSend client no longer writes fee records; till gift card recorded as open — NOT deployed
 
 - sokoni-intasend.js _recordCommission: no longer writes bookingFees after confirmation (browser-written ledger; rules candidate
