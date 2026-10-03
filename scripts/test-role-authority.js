@@ -130,14 +130,25 @@ console.log('\nPART A — role-authority primitive\n');
       && r.registeredAs.seller === false && !('approved' in r));
 }
 
-/* A6b: an unmapped role still defaults (this branch's behaviour is unchanged)
-   but the default is REPORTED. Phase 2 — which is not on this branch — replaces
-   the default with a throw; see the merge-hazard note in role-authority.js. */
+/* A6b (Roles Phase 2, merged in stage (c) 2026-10-04 — the replacement the merge-hazard note in role-authority.js
+   called for): every canonical role keeps its OWN key, and an unmapped role THROWS (and is logged) instead of
+   silently becoming 'provider'. */
 {
   ENV = makeEnv();
-  const key = RA.roleKeyFor('mechanic');
-  ck('A6b an unmapped role defaults to provider AND is logged, not silent',
-    key === 'provider' && ENV.errors.length === 1, key);
+  const own = ['mechanic', 'landlord', 'tenant', 'health', 'legal', 'event_organizer'].every((r) => RA.roleKeyFor(r) === r)
+    && RA.roleKeyFor('driver') === 'rider';
+  ck('A6b canonical roles keep their own key (mechanic/landlord/tenant/health/legal/event_organizer; driver→rider)', own);
+  let threw = null;
+  try { RA.roleKeyFor('wizard'); } catch (e) { threw = e.message; }
+  ck('A6c an unmapped role THROWS and is logged — it never defaults to provider', !!threw && /unmapped role "wizard"/.test(threw) && ENV.errors.length === 1, threw);
+  const c = RA.claimsFor('health', true, { rider: true });
+  ck('A6d health grants its canonical claim AND the legacy provider claim, keeping existing claims', c.health === true && c.provider === true && c.rider === true, JSON.stringify(c));
+  const p = RA.roleFieldPatch('seller', true, {}, { selectActive: true });
+  const q = RA.roleFieldPatch('seller', true);
+  ck('A6e activeRole is server-set ONLY when the grant selects the workspace (approval)', p.activeRole === 'seller' && p.activeRoleSetBy === 'approval' && !('activeRole' in q));
+  const d = RA.roleFieldPatch('seller', false, {}, { currentActiveRole: 'seller' });
+  const k = RA.roleFieldPatch('seller', false, {}, { currentActiveRole: 'rider' });
+  ck('A6f a revoked role that is the active workspace demotes to buyer; another active role is untouched', d.activeRole === 'buyer' && !('activeRole' in k));
 }
 
 /* A6: caller extras may not overwrite the canonical role fields. */

@@ -91,6 +91,10 @@ const FROM_BUSINESS_ID = Object.freeze({
   'security-guard': 'service_business',
   'it-support': 'it_services', 'web-developer': 'it_services', software: 'it_services', 'app-developer': 'it_services',
   cctv: 'it_services', 'phone-repair': 'it_services', 'data-entry': 'it_services',
+  /* Tech Hub slice 4 (2026-10-03): repair / networking / POS-support ids registered in hub-register.js. Services, not
+     goods — never 'electronics' (a merchant-v2 SELLER category). Capabilities: shared/service-capabilities.js. */
+  'laptop-repair': 'it_services', 'computer-repair': 'it_services', 'electronics-repair': 'it_services',
+  networking: 'it_services', 'pos-support': 'it_services',
   salon: 'salon', spa: 'salon', 'nail-art': 'salon', makeup: 'salon', tatoo: 'salon',
   lawyer: 'lawyer', notary: 'lawyer',
   accounting: 'professional_services', 'tax-consultant': 'professional_services', architect: 'professional_services',
@@ -114,6 +118,16 @@ const FROM_BUSINESS_ID = Object.freeze({
   tailor: 'service_business', 'shoe-repair': 'service_business',
   /* Owner, 2026-09-28 (the executed category→dashboard matrix): map to existing categories rather than add new ones. */
   'car-rental': 'auto_services',                                   /* fleet rental: an auto service (bookings) */
+  /* Car Hub C3 (sokoni-f3, 2026-10-03): the Car Hub services registrable in hub-register.js. Mapped to EXISTING categories
+     (owner 2026-09-28: map, don't add). Vehicle-for-sale inventory is the vehicle-hub authority (Car Hub C4), not merchant-v2. */
+  'car-dealer': 'auto_services', 'vehicle-inspection': 'auto_services', 'towing-roadside': 'auto_services',
+  'fleet-operator': 'auto_services', 'vehicle-transport': 'auto_services', 'vehicle-tracking': 'auto_services',
+  'ntsa-agent': 'professional_services',
+  /* CONSTRUCTION convergence (sokoni-f3, 2026-10-03): the construction trades registrable in hub-register.js, mapped to
+     EXISTING categories (owner 2026-09-28: map, don't add). Materials suppliers stay 'hardware' (goods → merchant-v2).
+     The architect id is namespaced: bare 'architect' already maps to professional_services above. */
+  'construction-company': 'trades', 'welding-fabrication': 'trades', 'construction-services': 'trades',
+  'construction-transport': 'service_business', 'equipment-rental': 'service_business', 'construction-architect': 'professional_services',
   'football-club': 'service_business', basketball: 'service_business',  /* clubs / academies: bookable services */
   /* B2B suppliers sell goods → merchant-v2. A wholesaler and an importer are distribution (the `wholesale` category,
      2026-09-28); a manufacturer is left `retail_store` — no category names it and one is not guessed. */
@@ -121,6 +135,7 @@ const FROM_BUSINESS_ID = Object.freeze({
   /* ADMIN REVIEW ONLY — never self-classified (owner, 2026-09-28). An application is accepted, but the category is
      decided by AdminOS at approval (bizAdminClassify): */
   forex: null, sacco: null, /* licensed financial services (CBK / SASRA): no self-serve listing */
+  'car-finance': null,      /* Car Hub C3: lenders / brokers are licensed financial services — AdminOS classifies (same rule) */
   other: null,              /* "Other / General Business": says nothing */
 });
 /* The registrable ids that are UNCLASSIFIED ON PURPOSE — AdminOS classifies them by hand. Not a gap. */

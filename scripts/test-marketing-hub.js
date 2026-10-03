@@ -116,6 +116,24 @@ const BASE_APP = { name: 'Achieng Creative', description: 'Brand identity and so
   ck('X1', li && li.hub === 'marketing' && li.marketingType === 'individual' && li.requestedCategories.length === 3 && li.status === 'pending',
     'the shared AdminOS application list shows the marketing application with its type and requested categories', li);
 
+  /* ── AG: commercial acceptance (stage (c) 2026-10-04) — a marketer is a SERVICE PROVIDER taking paid work through
+     SOKONI, so approval needs the canonical provider acceptances (legalAcceptances via legalAccept), never a Seller
+     Agreement tick. Without them the approval is refused and nothing is decided. ── */
+  {
+    const LA = require(path.join(FN, 'legal-agreements.js'));
+    DOCS.set('applications/marketing_u1', Object.assign({}, DOCS.get('applications/marketing_u1'), { agreementAccepted: true }));
+    const ag = await decide('admin1', { applicationId: 'marketing_u1', decision: 'approve', approvedCategories: ['branding'] }, ADM);
+    ck('AG1', ag.code === 'failed-precondition' && /required agreements/.test(ag.msg || ag.message || JSON.stringify(ag)) && !DOCS.get('applicationDecisions/marketing_u1')
+      && (DOCS.get('applications/marketing_u1') || {}).status === 'pending',
+      'a marketing approval without the canonical provider acceptances is REFUSED (a Seller Agreement tick does not satisfy it); no decision record', ag);
+    for (const u of ['u1', 'u2', 'u3', 'u4', 'u5']) {
+      for (const x of (await LA.complianceFor(u, 'provider')).required) {
+        DOCS.set('legalAcceptances/' + u + '_' + x.agreementId + '_' + x.version, { userId: u, agreementId: x.agreementId, version: x.version, accepted: true });
+      }
+    }
+    ck('AG2', (await LA.complianceFor('u1', 'provider')).compliant === true, 'control: the seeded acceptances make the applicant compliant');
+  }
+
   /* ── D: decision with partial approval ── */
   r = await decide('u1', { applicationId: 'marketing_u1', decision: 'approve', approvedCategories: ['branding'] }, {});
   ck('D3', r.code === 'permission-denied', 'a non-admin cannot decide', r);

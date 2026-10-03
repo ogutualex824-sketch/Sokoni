@@ -33,15 +33,20 @@ const HCAT = require(path.join(ROOT, 'functions/healthcare-category.js'));
    function does not). Approval = resolveRole(app) → categoryFromApplication(app, role), and for role `health` the
    category IS healthcare-category's decision — exactly as projectProvider stamps providers.business. */
 const resolveRole = (() => {
-  const src = fs.readFileSync(path.join(ROOT, 'functions/application-lifecycle.js'), 'utf8');
-  const head = 'function resolveRole(app) {';
-  const s = src.indexOf(head);
-  if (s < 0) { console.error('CANNOT RUN: resolveRole not found in application-lifecycle.js'); process.exit(2); }
-  let d = 0, e = -1;
-  for (let i = src.indexOf('{', s); i < src.length; i++) { if (src[i] === '{') d++; else if (src[i] === '}') { d--; if (d === 0) { e = i + 1; break; } } }
+  const src = fs.readFileSync(path.join(ROOT, 'functions/application-lifecycle.js'), 'utf8').replace(/\r\n/g, '\n');
+  /* Stage (c) 2026-10-04: resolveRole is the union of Roles Phase 1 (requestedRole → role-vocabulary), r2's
+     DECLARED_TYPES and the category upgrade, so it lives in a few top-level declarations. Each is extracted
+     verbatim; a missing one is a refusal to run, never a silent partial resolver. */
+  const grab = (head) => {
+    const s0 = src.indexOf('\n' + head);
+    if (s0 < 0) { console.error('CANNOT RUN: ' + head + ' not found in application-lifecycle.js'); process.exit(2); }
+    const e0 = src.indexOf(head.startsWith('const') ? ';\n' : '\n}\n', s0 + 1);
+    return src.slice(s0 + 1, e0 + 2);
+  };
+  const parts = [grab('const MERCHANT_CATEGORIES'), grab('function _resolveDeclaredRole('), grab('function _merchantCategoryOf('), grab('function resolveRole(')];
   /* resolveRole lazily requires sibling modules ('./business-category' …): resolve them from functions/ */
   const req = (p) => require(p.startsWith('.') ? path.join(ROOT, 'functions', p) : p);
-  return new Function('require', src.slice(s, e) + '\nreturn resolveRole;')(req);
+  return new Function('require', "const VOCAB = require('./role-vocabulary');\n" + parts.join('\n') + '\nreturn resolveRole;')(req);
 })();
 function approvalCategory(app) {
   const role = resolveRole(app).role;

@@ -68,43 +68,36 @@ const logger = require('firebase-functions/logger');
 const RECONCILE_COLLECTION = 'roleClaimReconcile';
 const ALERTS_COLLECTION = 'adminAlerts';
 
-/* Intake vocabulary → the canonical key used in BOTH `users.roles[]` and the
-   custom claim. `health` and `legal` are provider variants here: they are their
-   own registries but one provider role on the account.
-   ─────────────────────────────────────────────────────────────────────────────
-   MERGE HAZARD — this map is the PRE-Phase-2 vocabulary, which is what this
-   branch runs. Roles Phase 2 (commit 2f7fd5d, on rc/combined and the identity
-   branches — NOT an ancestor of this branch) replaced it with a 12-entry map
-   that gives mechanic / landlord / tenant / health / legal their own keys and
-   THROWS on an unmapped role instead of defaulting. Production rules already
-   speak that vocabulary.
-
-   When this branch meets that one, this map must be replaced by the Phase-2 map
-   and the throw preserved — do not resolve the conflict by keeping this table,
-   and do not let Phase 2's copy live inside grantAccountRole again: the map
-   belongs here, with the rest of the role authority. Until then the fallback
-   below is kept (changing the vocabulary ahead of the branch that owns it would
-   grant `provider` where prod expects `legal`), but it is no longer silent. */
+/* Intake vocabulary → the canonical key used in BOTH `users.roles[]` and the custom claim.
+   ── Roles Phase 2 (2f7fd5d), merged here in stage (c) 2026-10-04 per this module's own MERGE HAZARD note ──
+   The pre-Phase-2 map sent health and legal to 'provider' and defaulted anything unmapped to 'provider': a
+   mechanic, a landlord and a rental tenant all became `provider` on the account. Every canonical role now keeps
+   its own key and there is NO fallback — an unmapped role THROWS. `driver` stays as the legacy spelling of
+   `rider`. event_organizer (Entertainment › Events) is granted only by an admin decision on an application.
+   The legacy `provider` CLAIM is still set for provider/health/legal (live rules and client gates read it),
+   ALONGSIDE the canonical claim, never instead of it. */
 const ROLE_KEY = Object.freeze({
-  provider: 'provider',
-  driver: 'rider',
+  buyer: 'buyer',
   seller: 'seller',
-  health: 'provider',
-  legal: 'provider',
-  /* Entertainment › Events (shared/entertainment-registry.js). Granted ONLY by an admin decision
-     on an application; event-hub's organizer gate reads users.roles for it. */
+  provider: 'provider',
+  mechanic: 'mechanic',
+  driver: 'rider',      /* legacy spelling → canonical key */
+  rider: 'rider',
+  health: 'health',
+  legal: 'legal',
+  landlord: 'landlord',
+  tenant: 'tenant',
+  admin: 'admin',
+  staff: 'staff',
   event_organizer: 'event_organizer',
 });
 
 function roleKeyFor(role) {
   const key = ROLE_KEY[role];
   if (key) return key;
-  /* A role that reaches here unmapped is a bug in the caller, not an applicant
-     problem to smooth over. Behaviour is unchanged — but it is now visible. */
-  logger.error('[roleAuthority] UNMAPPED role defaulted to "provider"', {
-    role, known: Object.keys(ROLE_KEY).join(','),
-  });
-  return 'provider';
+  /* Fail loudly: a role that reaches here unmapped is a bug in the caller, not an applicant problem to smooth over. */
+  logger.error('[roleAuthority] UNMAPPED role refused', { role, known: Object.keys(ROLE_KEY).join(',') });
+  throw new Error('roleAuthority: unmapped role "' + role + '". Canonical roles: ' + Object.keys(ROLE_KEY).join(', ') + '.');
 }
 
 /**
@@ -113,11 +106,11 @@ function roleKeyFor(role) {
  * the rider claim because their seller application was decided.
  */
 function claimsFor(role, approved, existing) {
+  const key = roleKeyFor(role);
   const claims = { ...(existing || {}) };
-  if (role === 'provider' || role === 'health' || role === 'legal') claims.provider = !!approved;
-  if (role === 'driver') { claims.driver = !!approved; claims.rider = !!approved; }
-  if (role === 'seller') claims.seller = !!approved;
-  if (role === 'event_organizer') claims.event_organizer = !!approved;
+  claims[key] = !!approved;   /* one claim per canonical role, keyed the same way as users.roles */
+  if (role === 'provider' || role === 'health' || role === 'legal') claims.provider = !!approved;   /* legacy shape */
+  if (key === 'rider') { claims.driver = !!approved; claims.rider = !!approved; }
   return claims;
 }
 
@@ -138,11 +131,14 @@ function claimsFor(role, approved, existing) {
  * "registeredAs.seller" and leaves the real map untouched, which is how the
  * previous implementation silently never populated it.
  *
- * @param {string}  role      intake role vocabulary (provider|driver|seller|health|legal)
+ * @param {string}  role      intake role vocabulary (a ROLE_KEY key; unmapped throws)
  * @param {boolean} approved  true grants, false revokes
  * @param {object}  [extra]   caller-owned fields merged into the same write
+ * @param {object}  [opts]    { selectActive } — an APPROVAL that selects the workspace (applicationLifecycle):
+ *                            the server, not the browser, sets activeRole (Roles Phase 2). Other grant paths
+ *                            (e.g. a provider adding a shop) leave the active workspace alone.
  */
-function roleFieldPatch(role, approved, extra = {}) {
+function roleFieldPatch(role, approved, extra = {}, opts = {}) {
   const key = roleKeyFor(role);
   const patch = { updatedAt: FieldValue.serverTimestamp() };
 
@@ -152,14 +148,25 @@ function roleFieldPatch(role, approved, extra = {}) {
     patch.approved = true;
     patch.approvedAt = FieldValue.serverTimestamp();
     if (role === 'provider') patch.isProvider = true;
-    if (role === 'driver') { patch.isDriver = true; patch.isRider = true; }
+    if (key === 'rider') { patch.isDriver = true; patch.isRider = true; }
+    if (opts.selectActive) {
+      patch.activeRole = key;
+      patch.activeRoleSetBy = 'approval';
+      patch.activeRoleSetAt = FieldValue.serverTimestamp();
+    }
   } else {
     /* The role is removed; the account is otherwise untouched — a rejected
        provider is still a customer. */
     patch.roles = FieldValue.arrayRemove(key);
     patch.registeredAs = { [key]: false };
     if (role === 'provider') patch.isProvider = false;
-    if (role === 'driver') { patch.isDriver = false; patch.isRider = false; }
+    if (key === 'rider') { patch.isDriver = false; patch.isRider = false; }
+    /* a revoked role must not stay the active workspace — the caller supplies the stored value (no I/O here) */
+    if (opts.currentActiveRole === key) {
+      patch.activeRole = 'buyer';
+      patch.activeRoleSetBy = 'revocation';
+      patch.activeRoleSetAt = FieldValue.serverTimestamp();
+    }
   }
 
   /* Caller extras first: the canonical role fields always win, so no call site
@@ -251,7 +258,13 @@ async function syncRoleClaim(uid, role, approved, ctx = {}) {
  * Returns the `syncRoleClaim` result (always carries `key`).
  */
 async function grantAccountRole(db, uid, role, approved, ctx = {}) {
-  await db.collection('users').doc(uid).set(roleFieldPatch(role, approved), { merge: true });
+  const ref = db.collection('users').doc(uid);
+  let currentActiveRole = null;
+  if (!approved) {
+    try { const u = await ref.get(); currentActiveRole = u.exists ? (u.data() || {}).activeRole || null : null; }
+    catch (e) { logger.warn('[roleAuthority] activeRole demotion skipped', { uid, role, error: e.message }); }
+  }
+  await ref.set(roleFieldPatch(role, approved, {}, { selectActive: !!ctx.selectActive, currentActiveRole }), { merge: true });
   return syncRoleClaim(uid, role, approved, ctx);
 }
 

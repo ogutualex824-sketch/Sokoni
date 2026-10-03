@@ -62,26 +62,25 @@
 
 const { onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const { defineSecret } = require('firebase-functions/params');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 const logger = require('firebase-functions/logger');
+/* Canonical role vocabulary (Roles Phase 1). The single definition of what an
+   application may declare; see functions/role-vocabulary.js. */
+const VOCAB = require('./role-vocabulary');
+/* Marketing Hub MK2 — the ONE marketing taxonomy; approval activates only admin-approved categories. */
+const MKT = require('./shared/marketing-taxonomy');
 /* Roles (users.roles[] + the Auth claim) have ONE writer. */
 const { grantAccountRole } = require('./role-authority');
 /* The 14-day seller_free trial has ONE implementation, shared with POS onboarding. */
 const { startSellerFreeTrial } = require('./seller-trial');
+const DECISIONS = 'applicationDecisions';
+const { defineSecret } = require('firebase-functions/params');
+const QR_SIGNING_SECRET = defineSecret('QR_SIGNING_SECRET');
 
 const REGION = 'us-central1';
 const _db = () => getFirestore();
 const _ts = () => FieldValue.serverTimestamp();
-
-/* Till Approval Automation — same secret name functions/sokoni-till.js
-   already declares (defineSecret is safe to declare more than once for the
-   same secret name; this codebase already does this for ALGOLIA_ADMIN_KEY
-   across a dozen files). Must be listed in every entry point below that can
-   reach applyDecision's seller branch, or mintSokoniTillCore's
-   QR_SIGNING_SECRET.value() call throws at runtime. */
-const QR_SIGNING_SECRET = defineSecret('QR_SIGNING_SECRET');
 
 /* Intake normalizer version. Bump when the normalizer learns a new field so
    existing documents are re-normalized exactly once on their next write. */
@@ -191,13 +190,140 @@ function splitLocation(raw) {
    applied (a stalled application helps nobody) but it is reported, so an
    unrecognised intake vocabulary surfaces as an admin alert rather than as a
    silently mis-filed applicant. */
-function resolveRole(app) {
-  const hay = [
-    app.role, app.type, app.applicationType, app.category, app.categoryLabel,
-    app.hub, app.professionalType, app.businessType, app.serviceType,
-  ].filter(Boolean).join(' ').toLowerCase();
+/* ── FOOD HUB GATE 1 (2026-10-03): a goods/food business is a SELLER ──────────────────────────────────────────
+   hub-register.js declares `requestedRole: 'provider'` for every category it does not map (its _ROLE_BY_HUB names
+   only delivery / healthcare / legal / shopping), so a restaurant, café, bakery or butcher was approved as a SERVICE
+   provider — and the workspace authority (business-workspace.laneOf: these categories route to merchant-v2, the
+   products lane) then refused it with CATEGORY_CAPABILITY_DISAGREEMENT. Nothing reached a menu, a shop or a till.
 
-  const test = (re) => re.test(hay);
+   The category the applicant picked (an exact business id, through business-category — never free text) decides the
+   lane: when the role resolved to `provider` and that category is a merchant-v2 category (the seller categories +
+   restaurant), the role is `seller`. Only `provider` is ever re-filed; every other declared role stands. Recorded as
+   `<by>+category:<cat>` so a reviewer sees that the category, not the declaration, decided it. */
+/* ══ EDUCATION E1 (owner decisions 2026-10-03) — four applicant types through the ONE application framework ═════════
+   The type is decided HERE from the intake category id, never from a client-sent field:
+     · teacher      — an individual tutor / private teacher ('tutor');
+     · institution  — a school, college, training centre or e-learning business ('school', 'online-course');
+     · enterprise   — a COMPANY BUYING TRAINING for its staff ('education-enterprise'). It is a verified BUYER: it gets
+                      an educationEnterprises/{uid} record and NO provider listing, NO account role, NO claim;
+     · learner      — NOT an application: an instant self-service profile (owner decision), never routed here.
+   Teacher and institution approvals provision a provider exactly as before (education dashboards are E2) and stamp
+   the type on the application and the provider record. An approval is REFUSED until the documents the type requires
+   are declared (AdminOS verifies them): applicationDecide refuses up front, and applyDecision refuses again for any
+   other path, provisioning nothing either way. "Request info" is the change-request path. */
+const EDUCATION_TYPES = Object.freeze({
+  tutor: 'teacher', school: 'institution', 'online-course': 'institution', 'education-enterprise': 'enterprise',
+});
+const EDUCATION_REQUIRED = Object.freeze({
+  teacher:     [['subjects', 'Subjects you teach']],
+  institution: [['registrationNo', 'Registration / accreditation number']],
+  enterprise:  [['companyRegNo', 'Company registration number'], ['kraPin', 'KRA PIN']],
+});
+const KRA_PIN = /^[AP]\d{9}[A-Z]$/;
+function educationTypeOf(app) {
+  const id = String((app && app.category) || '').trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(EDUCATION_TYPES, id) ? EDUCATION_TYPES[id] : null;
+}
+/* → the labels of what an approval still needs (empty = complete). Reads applications/{id}.details only. */
+function educationMissing(app, type) {
+  const d = app && app.details && typeof app.details === 'object' ? app.details : {};
+  const miss = [];
+  for (const [k, label] of EDUCATION_REQUIRED[type] || []) if (!String(d[k] || '').trim()) miss.push(label);
+  if (type === 'enterprise' && String(d.kraPin || '').trim() && !KRA_PIN.test(String(d.kraPin).trim().toUpperCase())) {
+    miss.push('A valid KRA PIN (11 characters, e.g. P051234567X)');
+  }
+  return miss;
+}
+/* The verified enterprise BUYER. Server-only collection; idempotent (re-approval converges on one document). */
+async function projectEducationEnterprise(db, app, uid, approved) {
+  const ref = db.collection('educationEnterprises').doc(uid);
+  if (!approved) {
+    await ref.set({ ownerUid: uid, status: 'inactive', approved: false, updatedAt: _ts() }, { merge: true });
+    return { collection: 'educationEnterprises', id: uid, action: 'retracted' };
+  }
+  const d = app.details && typeof app.details === 'object' ? app.details : {};
+  const snap = await ref.get();
+  await ref.set({
+    ownerUid: uid,
+    companyName: _san(app.name || app.businessName || '', 140),
+    companyRegNo: _san(d.companyRegNo || '', 40),
+    kraPin: _san(String(d.kraPin || '').trim().toUpperCase(), 11),
+    staffSeats: Number.isFinite(Number(d.staffSeats)) ? Math.max(0, Math.floor(Number(d.staffSeats))) : null,
+    trainingNeeds: _sanText(d.trainingNeeds || '', 300),
+    phone: app.phoneNumber || app.phone || null,
+    location: _san(app.location || '', 120),
+    status: 'active', approved: true, approvedAt: _ts(),
+    sourceCollection: 'applications', sourceId: app.applicationId || null,
+    _noIndex: true,
+    updatedAt: _ts(),
+    ...(snap.exists ? {} : { createdAt: _ts() }),
+  }, { merge: true });
+  return { collection: 'educationEnterprises', id: uid, action: snap.exists ? 'updated' : 'created' };
+}
+
+const MERCHANT_CATEGORIES = Object.freeze(['restaurant']);
+function _merchantCategoryOf(app) {
+  const BCAT = require('./business-category');
+  const c = BCAT.categoryFromApplication(app, 'provider').category;
+  if (!c) return null;
+  if (BCAT.SELLER_CATEGORIES.includes(c) || MERCHANT_CATEGORIES.includes(c)) return c;
+  /* r2 (C1): a category whose workspace is merchant-v2 runs on a shop, so only the seller projection fits it */
+  try { return require('./business-workspace').ROUTE_OF[c] === 'merchant-v2.html' ? c : null; } catch (_) { return null; }
+}
+/* ── H1 (owner 2026-10-03, E2E gate) — THE CATEGORY IS DECIDED AT APPROVAL ─────────────────────────────────────────
+   An approval that lands an account in the providers registry must carry a CATEGORY from business-category.js. It is
+   resolved by EXACT match on the application (categoryFromApplication), refused when nothing matches, frozen on the
+   server decision record (applicationDecisions.businessCategory), and stamped onto providers/{uid}.business IN THE
+   SAME WRITE that makes the provider active (projectProvider). So there is never an approved-but-uncategorized active
+   provider, and the client can never supply or change it: the decision record is client-unwritable, the rules lock
+   providers.business. An existing ADMIN stamp is never silently re-categorised. */
+function _decidedRoleOf(app) {
+  const _r = resolveRole(app);
+  const AT = applicantTypeOf(app);
+  const typedRole = AT ? AT.T.role(AT.m) : null;
+  /* the same precedence applyDecision uses */
+  return typedRole
+    || (_r.by === 'explicit' || _r.by === 'explicit-alias' || /\+category(:|$)/.test(_r.by) ? _r.role : (app.role || _r.role));
+}
+function _projectsToProviders(app, role) {
+  if (applicantTypeOf(app)) return false;                     /* typed applicants (education, marketing …) own their projection */
+  if (role == null) return false;                             /* quarantined: nothing is provisioned */
+  if (role === 'driver' || role === 'rider' || role === 'legal' || role === 'seller') return false;
+  if (ROLE_PROFILES[role] || DELEGATED_ROLES[role]) return false;   /* health → healthProviders, mechanic/landlord/tenant profiles */
+  return true;                                                /* applyDecision's final branch: projectProvider */
+}
+
+function resolveRole(app) {
+  const r = _resolveDeclaredRole(app);
+  if (r.role === 'provider' && r.by !== 'declared') {   /* a stated intake type is never overridden (r2) */
+    const cat = _merchantCategoryOf(app);
+    if (cat) return Object.assign({}, r, { role: 'seller', by: r.by + '+category:' + cat, category: cat });
+  }
+  return r;
+}
+function _resolveDeclaredRole(app) {
+  /* ── EXPLICIT FIRST (Roles Phase 1) ───────────────────────────────────────
+     A surface that knows which role it is submitting says so. When it does, the
+     keyword pattern below is not consulted at all — inference exists to read
+     documents written before this field, not to second-guess a declaration.
+
+     An unrecognised declaration is NOT resolved. It returns role:null, and the
+     caller quarantines the application for a reviewer. That is the whole point
+     of the change: the old code answered `provider` to every question it did not
+     understand, so a landlord, a mechanic and a typo were indistinguishable
+     once they reached the registry. A stalled application is visible and
+     fixable; a silently mis-filed one is neither. */
+  if (app.requestedRole !== undefined && app.requestedRole !== null && app.requestedRole !== '') {
+    const canon = VOCAB.normalizeRole(app.requestedRole);
+    if (canon) {
+      return {
+        role: canon,
+        by: VOCAB.isCanonicalRole(app.requestedRole) ? 'explicit' : 'explicit-alias',
+        requested: String(app.requestedRole),
+      };
+    }
+    return { role: null, by: 'invalid-requested-role', requested: String(app.requestedRole) };
+  }
 
   /* ── An EXPLICIT declaration beats keyword guessing ──────────────────────
      The keyword pool below matches on EVERY descriptive field, including the
@@ -229,37 +355,42 @@ function resolveRole(app) {
   };
   const declared = String(app.type == null ? '' : app.type).trim().toLowerCase();
   if (Object.prototype.hasOwnProperty.call(DECLARED_TYPES, declared)) {
-    return { role: DECLARED_TYPES[declared], by: 'declared' };
+    return { role: DECLARED_TYPES[declared], by: 'declared' };   /* a stated intake `type` (r2): honoured before keyword guessing, never overridden by category */
   }
 
+
+  const hay = [
+    app.role, app.type, app.applicationType, app.category, app.categoryLabel,
+    app.hub, app.professionalType, app.businessType, app.serviceType,
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  const test = (re) => re.test(hay);
+
+  /* LEGACY PATH ONLY. Everything below reads documents written before
+     `requestedRole` existed. `by` is stamped 'legacy-*' so a reviewer can tell a
+     derived role from a declared one at a glance, and so the migration's progress
+     is measurable: when no application resolves by a legacy path any more, the
+     inference can be deleted. Behaviour is deliberately UNCHANGED — an existing
+     pending application must decide exactly as it would have yesterday. */
   if (test(/\b(driver|rider|boda|bodaboda|courier|dispatch|delivery\s*(guy|partner|person))\b/)) {
-    return { role: 'driver', by: 'keyword' };
+    return { role: 'driver', by: 'legacy-keyword' };
   }
-  if (test(/\b(law|legal|advocate|lawyer|attorney|notary)\b/)) return { role: 'legal', by: 'keyword' };
+  if (test(/\b(law|legal|advocate|lawyer|attorney|notary)\b/)) return { role: 'legal', by: 'legacy-keyword' };
   if (test(/\b(health|healthcare|clinic|doctor|hospital|pharmac|dentist|nurse)\b/)) {
-    return { role: 'health', by: 'keyword' };
+    return { role: 'health', by: 'legacy-keyword' };
   }
   if (test(/\b(seller|merchant|vendor|shop|store|retail|stockist|wholesal)\b/)) {
-    return { role: 'seller', by: 'keyword' };
-  }
-  /* ── The CATEGORY decides when the words do not (owner, 2026-09-28) ─────────
-     A business the category authority (C1) places EXACTLY in a category whose workspace is merchant-v2 is a
-     MERCHANT: merchant-v2 runs on a shop, and only the seller projection provisions one. Without this, a
-     "Supermarket / Minimart", a "Hardware" store, a butchery, a farm, a manufacturer or a restaurant — none of whose
-     words say "shop" — fell through to `provider`, was approved into a provider record, and was routed to a
-     merchant-v2 dashboard with no shop behind it. Declared types never reach this line (they returned above), so
-     an applicant's stated intake is never overridden. */
-  {
-    const BCAT = require('./business-category');
-    const cat = BCAT.categoryFromApplication(app, 'provider').category;
-    if (cat && require('./business-workspace').ROUTE_OF[cat] === 'merchant-v2.html') return { role: 'seller', by: 'category:' + cat };
+    return { role: 'seller', by: 'legacy-keyword' };
   }
   if (test(/\b(provider|professional|service|business|company|cleaning|housekeep|laundry|mama\s*fua|moving|relocat|salon|barber|dj|mc|plumb|electric|carpent|paint|tutor|photograph|caterer|mechanic)\b/)) {
-    return { role: 'provider', by: 'keyword' };
+    return { role: 'provider', by: 'legacy-keyword' };
   }
-  /* Unrecognised vocabulary. `provider` is the platform's broadest listing
-     class and the safest landing place, but the caller is told it was a guess. */
-  return { role: 'provider', by: 'default' };
+  /* Unrecognised LEGACY vocabulary. `provider` remains the landing place for a
+     document written before `requestedRole` existed — changing that would
+     re-file applicants who are already in the registry under it. New
+     applications never reach here: an unrecognised declaration is quarantined
+     above rather than defaulted. */
+  return { role: 'provider', by: 'legacy-default' };
 }
 
 /* Dispatch capacity keys (sokoni-dispatch.js VEHICLE_CAPACITY). The driver
@@ -360,8 +491,13 @@ async function buildIntakePatch(app, appId) {
      server-stamped `receivedAt` becomes the ordering key and the original value
      is preserved untouched for the audit trail. */
   const r = resolveRole(app);
-  patch.role = r.role;
+  /* A role is only stamped when one was actually resolved. An unrecognised
+     declaration leaves `role` untouched and records WHAT was asked for, so the
+     admin card shows the applicant's own word instead of a null — and so nothing
+     downstream reads a null as "no role yet" and re-derives it. */
+  if (r.role) patch.role = r.role;
   patch.roleResolvedBy = r.by;
+  if (r.by === 'invalid-requested-role') patch.requestedRoleInvalid = _san(r.requested || '', 60);
   patch.statusCanonical = canonStatus(app.status);
   if (!app.receivedAt) patch.receivedAt = _ts();
   if (!app.applicationId) patch.applicationId = appId;
@@ -397,7 +533,7 @@ async function genProviderId(db) {
  * commit: status + searchable + updatedAt (the directory's orderBy) + the
  * search index, all together.
  */
-async function projectProvider(db, app, uid, approved) {
+async function projectProvider(db, app, uid, approved, popts) {
   const ref = db.collection('providers').doc(uid);
   const snap = await ref.get();
   const existing = snap.exists ? snap.data() : {};
@@ -540,6 +676,19 @@ async function projectProvider(db, app, uid, approved) {
     };
     if (adminSet && priorB.classifiedBy) doc.business.classifiedBy = priorB.classifiedBy;
   }
+  /* H1 (owner 2026-10-03): the category this APPROVAL decided — frozen on the server decision record — wins over the
+     application-derived one above; the lane (r2) is kept. An administrator's stamp is never re-categorised. */
+  let bizNote = null;
+  if (popts && popts.appId) {
+    const BCAT = require('./business-category');
+    const dSnap = await db.collection('applicationDecisions').doc(String(popts.appId)).get();
+    const dRec = dSnap.exists ? (dSnap.data() || {}) : {};
+    if (BCAT.isCategory(dRec.businessCategory)) {
+      const eb = existing.business || null;
+      if (eb && eb.source === 'admin' && BCAT.isCategory(eb.category) && eb.category !== dRec.businessCategory) bizNote = 'admin_category_kept';
+      else doc.business = Object.assign({}, doc.business || {}, { category: dRec.businessCategory, source: 'application', setBy: dRec.decidedBy || null, setAt: _ts(), applicationId: String(popts.appId) });
+    } else bizNote = 'no_decided_category';
+  }
   doc.searchableTerms = buildProviderTerms({ ...existing, ...doc });
 
   /* Seed counters only on first creation — never reset a live provider's
@@ -563,7 +712,45 @@ async function projectProvider(db, app, uid, approved) {
   await db.collection('providerProfiles').doc(uid)
     .update({ searchable: true, suspendedAt: FieldValue.delete(), updatedAt: _ts() })
     .catch(() => {});
-  return { collection: 'providers', id: uid, action: snap.exists ? 'updated' : 'created', providerId };
+  return { collection: 'providers', id: uid, action: snap.exists ? 'updated' : 'created', providerId, ...(doc.business ? { businessCategory: doc.business.category } : {}), ...(bizNote ? { businessNote: bizNote } : {}) };
+}
+
+/**
+ * Marketing Hub MK2 — a marketing application (hub 'marketing', written ONLY by marketing-hub.js marketingApply) projects
+ * onto the SAME providers/{uid} record as every other service provider, plus its own marketing block:
+ *   marketingType        individual | agency | specialist (the applicant's declared type, server-validated at intake)
+ *   marketingCategories  ONLY the admin-approved subset of requestedCategories (applicationDecide approvedCategories) —
+ *                        a requested-but-unapproved category is never listed, never bookable
+ *   marketingStatus      the decision ('active' | 'rejected' | 'suspended')
+ * A NON-approval retracts ONLY the marketing block: an existing cleaning company that also applied as a marketer keeps its
+ * cleaning listing when the marketing application is rejected (projectProvider's retraction would suspend all of it).
+ */
+async function projectMarketing(db, app, uid, approved, status) {
+  const ref = db.collection('providers').doc(uid);
+  const snap = await ref.get();
+  const requested = MKT.normalizeCategories(app.requestedCategories, 30);
+  const approvedCats = MKT.normalizeCategories(app.marketingApprovedCategories, 30).filter((c) => requested.indexOf(c) >= 0);
+  if (!approved) {
+    if (!snap.exists) return { collection: 'providers', id: uid, action: 'marketing_noop_absent' };
+    await ref.set({ marketingStatus: status === 'rejected' ? 'rejected' : 'suspended', marketingCategories: [], marketingGroups: [],
+      marketingListed: false, marketingUpdatedAt: _ts(), updatedAt: _ts() }, { merge: true });
+    return { collection: 'providers', id: uid, action: 'marketing_retracted' };
+  }
+  if (!approvedCats.length) throw new Error('marketing approval has no approved categories');
+  let base = null;
+  if (!snap.exists) base = await projectProvider(db, app, uid, true);
+  await ref.set({
+    marketingType: MKT.APPLICATION_TYPES[app.marketingType] ? app.marketingType : 'individual',
+    marketingCategories: approvedCats,
+    marketingGroups: MKT.groupsOf(approvedCats),
+    marketingStatus: 'active',
+    marketingListed: true,
+    marketingApplicationId: app.applicationId || null,
+    marketingApprovedAt: _ts(),
+    marketingUpdatedAt: _ts(),
+    updatedAt: _ts(),
+  }, { merge: true });
+  return { collection: 'providers', id: uid, action: base ? 'marketing_created' : 'marketing_activated', categories: approvedCats };
 }
 
 /**
@@ -580,12 +767,6 @@ async function projectProvider(db, app, uid, approved) {
  * sokoni-dispatch.js applies its own neutral defaults, and inventing a 4.0 for
  * someone who has completed no deliveries would be fabricated performance data.
  */
-/* `opts.ensureBusiness` is injectable for one honest reason: `_ensureBusinessForOwner` closes
-   over business-bootstrap's OWN Firestore handle, not the `db` passed here. In production they
-   are the same database so it makes no difference, but it means this function's `db` parameter no
-   longer covers all of its writes — and that parameter exists precisely so the projection can be
-   driven with a stub. Rather than leave that dependency hidden (it silently hung the unit suite),
-   it is declared. Production never passes it. */
 async function projectDriver(db, app, uid, approved, opts) {
   const ensureBusiness = (opts && opts.ensureBusiness)
     || ((o) => require('./business-bootstrap')._ensureBusinessForOwner(o));
@@ -772,101 +953,72 @@ async function projectDriver(db, app, uid, approved, opts) {
   };
 }
 
-/* Roles whose registry is still owned by another pipeline. `seller` USED to be
-   in here — the projection recorded `action: 'delegated'` and wrote nothing, on
-   the assumption that "sellers has its own onboarding". The capability census
-   showed that assumption was false: the only writers of `sellers/{uid}` are
-   client-side forms, and `shops/{uid}` had exactly one production writer, inside
-   a trigger nothing reaches. So an approved merchant got a role and a claim and
-   NO shop — and merchant.html then had no canonical shop to resolve. Seller is
-   projected properly below.
+/* LEGAL: ONE authority — functions/legal-verification.js (SOKONI admin decision + LSK practising evidence →
+   eligibility()); it owns legalProviders and the public lawyers card. Ruling b2 2026-10-04: no second legal writer here. */
 
-   `health` LEFT for the same reason, 2026-09-13 (HC-23). The claim that it
-   "genuinely still has its own registry" was false in exactly the seller way.
-   The ONLY writer of `healthProviders/{uid}` is `registerHealthProvider`
-   (functions/healthcare-hub.js), which has no client invoker anywhere in the
-   repo; the production census on 2026-09-12 found zero real providers (one
-   synthetic fixture, since deleted) and zero applications carrying role
-   'health'. So an approved healthcare applicant received `claims.provider` and
-   landed in NO registry at all — this branch pushed a receipt object and
-   performed no write, and because it MATCHED it also skipped projectProvider().
-   Approved, claimed, invisible.
 
-   ADR-014 makes `providers/{uid}` the canonical healthcare provider identity
-   and retires healthProviders, so `health` now falls through to
-   projectProvider() like every other provider. Nothing else is needed: roleKeyFor
-   already maps health → 'provider', so the role field and the claim were always
-   correct — only the registry write was missing.
+/* Roles the platform already owns elsewhere. Projecting them from here would
+   duplicate an existing pipeline (sellers has its own onboarding + ade trigger;
+   healthProviders has its own registry), so the role is recorded, the account is
+   granted its role, and the projection is reported as delegated instead of being
+   silently skipped.
 
-   `legal` is no longer delegated (CHANGELOG 220). Delegation meant an approved
-   legal application wrote NOTHING to legalProviders — it only granted the
-   `provider` claim — while the registry's own approval (approveLegalProvider)
-   required a numeric role claim nothing mints. A `legal` decision now goes to
-   the Legal Verification Authority (functions/legal-verification.js), which
-   records the SOKONI administrative verification on the Legal record and links
-   the canonical providers/{uid} identity. It does NOT make the advocate
-   bookable: that also needs a current LSK verification (two authorities, one
-   predicate). The legal identity stays ONE record — legalProviders/{uid}. */
-/* Roles whose capability lives outside the provider registry. event_organizer: no provider profile
-   is projected — the organizer's capability is users.roles (read by event-hub requireOrganizer)
-   and the events they create through the server. */
-const DELEGATED_ROLES = { event_organizer: 'events' };
+   `legal` GRADUATED out of this map in Roles Phase 2: "delegated" meant nobody
+   wrote the document, so approving an advocate produced no profile and no search
+   presence. It now runs projectLegal above. */
+const DELEGATED_ROLES = { health: 'healthProviders', event_organizer: 'events' };   /* health = production (owner 2026-10-04); events = r2 */
 
-/* Shop ids that are not shop ids — the same placeholders the client rejects
-   (SokoniBranch synthesises {id:'main'} on an empty device). An application
-   that carries one must not activate a shop called "main". */
+/* ── SELLER PROVISIONING (Food Hub Gate 1, 2026-10-03) ──────────────────────────────────────────────────────────
+   `seller` GRADUATED out of DELEGATED_ROLES. "Delegated to its own onboarding" meant nobody wrote anything: the only
+   seller trigger (ade.adeOnSellerApplied) reacts to a `sellers` doc going `pending` and never approves, so an
+   approved seller — every approved food business among them — had no shop, no seller record and no category, and
+   the workspace authority had nothing to route. This is the C4 projectSeller design (convergence line, owner-reviewed
+   2026-09-28 stages 1–2), ported onto the live lifecycle with three deliberate differences:
+
+   1. APPROVED ≠ DISCOVERABLE (owner, 2026-09-28). Approval provisions the business; it does not publish it. A record
+      this approval CREATES is written `_noIndex: true` (the search sync's existing skip guard) with
+      `discovery: 'HELD'`; existing records keep exactly the visibility they had. Publication belongs to the one shop
+      discovery gate (business-category.shopEligibility), not to a side effect of approval.
+   2. APPROVAL EVIDENCE. sellers/{uid} carries `approvedAt` + `approvedBy` (noAdminFields() withholds both from every
+      client), which is what business-scope recognises as a LIVE seller. Without it the record reads as
+      `status_live_no_approval_evidence` — a CONFLICT, no workspace.
+   3. ONE POS BUSINESS. businesses/{uid} carries the category stamp (the served rules let no client write `business`
+      there: create is false and the owner's update allow-list excludes it) but NOT `ownerId` — the POS bootstrap
+      (_ensureBusinessForOwner) finds its business by `ownerId == uid`, and a second owned business would make it
+      report `already-provisioned` against a record with no branch and no till.
+
+   Runs BEFORE the role is granted: if provisioning fails, applyDecision records projectionStatus 'failed' and no
+   seller role or claim is handed out. Idempotent: deterministic ids + merge; createdAt only on first write. */
 const PLACEHOLDER_SHOP_IDS = ['main', 'default', 'branch', 'null', 'undefined', ''];
-const isPlaceholderShopId = (id) =>
-  PLACEHOLDER_SHOP_IDS.indexOf(String(id == null ? '' : id).trim().toLowerCase()) !== -1;
+const isPlaceholderShopId = (id) => PLACEHOLDER_SHOP_IDS.indexOf(String(id == null ? '' : id).trim().toLowerCase()) !== -1;
+const _SUSPENSION_HIDES = ['searchable', 'isPublic'];
 
-/**
- * Approval → a LIVE shop.
- *
- * Runs BEFORE the role is granted, deliberately: if the shop cannot be
- * established, applyDecision's catch records `projectionStatus: 'failed'` and
- * rethrows, so no seller role and no claim are handed out. The dangerous state
- * this removes is "approved merchant with no shop" — an account that is
- * authorised to sell and has nowhere to sell from.
- *
- * The shop id comes from the application when it named one (2A records
- * `shopId` with its provenance), otherwise the account's own marketplace shop
- * `shops/{uid}`. A merchant's account id and their shop id are NOT the same
- * concept even when they share a value.
- *
- * Idempotent: deterministic ids + merge, so re-approving converges instead of
- * forking a second shop. `createdAt` is written only when the shop is new.
- */
-async function projectSeller(db, app, uid, approved) {
-  const declared = app.shopId && !isPlaceholderShopId(app.shopId) ? String(app.shopId) : null;
+async function projectSeller(db, app, uid, approved, opts = {}) {
+  const BCAT = require('./business-category');
+  /* The application's shopId is APPLICANT-WRITABLE. It may name only a shop that is absent or already this account's;
+     a shop id that does not look like a document id is refused rather than sanitised into a different one. */
+  const rawShop = app.shopId == null ? '' : String(app.shopId).trim();
+  if (rawShop && !isPlaceholderShopId(rawShop) && !/^[A-Za-z0-9_-]{1,128}$/.test(rawShop)) {
+    const err = new Error('Application names an invalid shop id.');
+    err.code = 'SHOP_ID_INVALID';
+    throw err;
+  }
+  const declared = rawShop && !isPlaceholderShopId(rawShop) ? rawShop : null;
   const shopId = declared || String(uid);
   const shopRef = db.collection('shops').doc(shopId);
   const sellerRef = db.collection('sellers').doc(String(uid));
-  const userRef = db.collection('users').doc(String(uid));
-  /* The business DIRECTORY record. Until now its only writer was the shop
-     wizard inside seller.html — a client-side write on the very path approval
-     replaces — so a merchant who became live through APPROVAL existed in the
-     storefront (`shops` + `sellers`, which store.html reads) and was absent from
-     the directory. Same document id and same shape the wizard used, so the two
-     paths converge on one record instead of forking. */
   const bizRef = db.collection('businesses').doc(String(uid));
+  const userRef = db.collection('users').doc(String(uid));
 
-  const name = _sanText(app.name || app.businessName || app.storeName, 160) || 'My Shop';
-  /* Both reads before any write — the directory record's createdAt must be
-     preserved, and that cannot be decided after the batch has started. */
-  const [existing, bizExisting] = await Promise.all([
-    shopRef.get(),
-    bizRef.get().catch(() => null),
-  ]);
+  /* All reads before any write. */
+  const [shopSnap, sellerSnap, bizSnap, userSnap] = await Promise.all([shopRef.get(), sellerRef.get(), bizRef.get(), userRef.get()]);
+  const shop0 = shopSnap.exists ? (shopSnap.data() || {}) : null;
+  const seller0 = sellerSnap.exists ? (sellerSnap.data() || {}) : null;
+  const biz0 = bizSnap.exists ? (bizSnap.data() || {}) : null;
 
-  /* OWNERSHIP IS NEVER TRANSFERRED BY AN APPLICATION (2026-09-28, stage 2 of the shop discovery authority). The
-     application's `shopId` is applicant-writable (served rules: applications create/update need only claimsOwner +
-     noAdminFields), and the writes below set ownerId / sellerUid on that shop — so naming ANOTHER merchant's shop
-     would hand it to the applicant the moment an administrator approved, or suspend it on a suspension. A declared
-     shop that exists and names a different owner fails the projection (applyDecision records projectionStatus
-     'failed' and grants no role); the administrator sees why. */
-  if (declared && existing.exists) {
-    const d = existing.data() || {};
-    const owner = d.sellerUid || d.ownerId || d.ownerUid || null;
+  /* OWNERSHIP IS NEVER TRANSFERRED BY AN APPLICATION. */
+  if (shop0) {
+    const owner = shop0.sellerUid || shop0.ownerId || shop0.ownerUid || null;
     if (owner && String(owner) !== String(uid)) {
       const err = new Error(`Application names shop ${shopId}, which belongs to another account.`);
       err.code = 'SHOP_OWNED_BY_ANOTHER_ACCOUNT';
@@ -875,139 +1027,247 @@ async function projectSeller(db, app, uid, approved) {
   }
 
   if (!approved) {
-    /* A rejection has nothing to retract (no shop was ever created). A
-       suspension deactivates the shop but never deletes it — the merchant's
-       products, orders and history stay intact for reinstatement. */
-    if (existing.exists) {
-      /* searchable / isPublic false: the shop discovery gate (business-category.shopEligibility) reads these, exactly
-         as a provider suspension writes them (C3a-2). */
-      await shopRef.set({ status: 'suspended', suspendedAt: _ts(), searchable: false, isPublic: false, updatedAt: _ts() }, { merge: true });
-      await sellerRef.set({ status: 'suspended', active: false, searchable: false, isPublic: false, updatedAt: _ts() }, { merge: true }).catch(() => {});
-      /* Retract the directory listing too. A suspended merchant that stays
-         discoverable is the same defect as an approved one that never appears —
-         the registries must move together or they disagree about who is live. */
-      await bizRef.set({ status: 'suspended', searchable: false, isPublic: false, updatedAt: _ts() }, { merge: true }).catch(() => {});
-      return { collection: 'shops', id: shopId, action: 'suspended' };
-    }
-    return { collection: 'shops', id: shopId, action: 'none' };
+    /* Rejection of a never-provisioned seller: nothing to retract. Suspension: deactivate, never delete; remember
+       what visibility the suspension removed so a reinstatement restores exactly that and nothing more. */
+    const touched = [];
+    const hide = (coll, ref, d, extra) => {
+      if (!d) return;
+      const prior = {};
+      _SUSPENSION_HIDES.forEach((k) => { if (k in d) prior[k] = d[k]; });
+      const keep = d.suspendedBy === 'application_lifecycle' && d.preSuspension ? d.preSuspension : prior;
+      batch.set(ref, Object.assign({ status: 'suspended', searchable: false, isPublic: false, suspendedAt: _ts(),
+        suspendedBy: 'application_lifecycle', preSuspension: keep, updatedAt: _ts() }, extra || {}), { merge: true });
+      touched.push(coll);
+    };
+    const batch = db.batch();
+    hide('shops', shopRef, shop0);
+    hide('sellers', sellerRef, seller0, { active: false });
+    hide('businesses', bizRef, biz0);
+    if (!touched.length) return { collection: 'shops+sellers+businesses', id: shopId, action: 'none' };
+    await batch.commit();
+    return { collection: 'shops+sellers+businesses', id: shopId, action: 'suspended', touched };
   }
 
-  /* ── C1 CLASSIFICATION, stamped by the SERVER at approval (owner decision 2026-09-28) ──────────────────────────
-     Mirrors projectProvider: the category comes from the application through business-category (a seller with no
-     exact match is `retail_store`), an AdminOS classification already on the shop is never overwritten, and a
-     server caller that already holds a C1 category (providerRequestShop — the provider's own) passes it as
-     `__serverCategory`. The applicant's free-text `category` is kept only as display wording. */
-  const BCAT = require('./business-category');
-  const priorB = existing.exists ? (existing.data() || {}).business : null;
-  const adminSet = !!(priorB && priorB.source === 'admin' && BCAT.isCategory(priorB.category));
-  const serverCat = BCAT.isCategory(app.__serverCategory) ? app.__serverCategory : null;
-  const appCat = adminSet ? priorB.category : (serverCat || BCAT.categoryFromApplication(app, 'seller').category);
+  /* ── C1 CATEGORY, stamped by the SERVER at approval ──────────────────────────────────────────────────────────
+     From the application through business-category (exact business ids only; a seller with no match is
+     retail_store). An AdminOS classification already on the shop or the business is never overwritten, and a valid
+     prior category is never replaced by a failed derivation. */
+  const priorB = [shop0 && shop0.business, biz0 && biz0.business].find((b) => b && BCAT.isCategory(b.category)) || null;
+  const adminSet = !!(priorB && priorB.source === 'admin');
+  const serverCat = BCAT.isCategory(app.__serverCategory) ? app.__serverCategory : null;   /* r2: providerRequestShop passes its C1 category */
+  let category = adminSet ? priorB.category : (serverCat || BCAT.categoryFromApplication(app, 'seller').category);
+  if (!adminSet && !BCAT.isCategory(category) && priorB) category = priorB.category;
   const business = {
-    category: BCAT.isCategory(appCat) ? appCat : null,
+    category: BCAT.isCategory(category) ? category : null,
     source: adminSet ? 'admin' : 'application',
     applicationId: app.applicationId || null,
     setAt: _ts(),
   };
   if (adminSet && priorB.classifiedBy) business.classifiedBy = priorB.classifiedBy;
 
+  const name = _sanText(app.name || app.businessName || app.storeName, 160) || 'My Shop';
+  const decidedBy = opts.decidedBy ? String(opts.decidedBy) : null;
+  /* Reinstatement: restore exactly what a lifecycle suspension hid, and nothing it did not. */
+  const restore = (d) => {
+    if (!d || d.suspendedBy !== 'application_lifecycle') return {};
+    const out = { suspendedBy: FieldValue.delete(), preSuspension: FieldValue.delete(), suspendedAt: FieldValue.delete() };
+    const prev = d.preSuspension || {};
+    _SUSPENSION_HIDES.forEach((k) => { out[k] = k in prev ? prev[k] : FieldValue.delete(); });
+    return out;
+  };
+  const held = (d) => (d ? {} : { _noIndex: true, discovery: 'HELD', createdAt: _ts() });
+
   const batch = db.batch();
-
-  /* The canonical shop. `ownerId` is what every server-side ownership check
-     reads (analytics-engine, merchantAdjustStock); `sellerUid` states the same
-     fact in the merchant vocabulary. */
-  batch.set(shopRef, {
-    shopId,
-    ownerId: String(uid),
-    sellerUid: String(uid),
-    name,
-    nameLower: name.toLowerCase(),
-    status: 'active',
-    activatedAt: _ts(),
-    updatedAt: _ts(),
-    source: 'application_approval',
-    applicationId: app.applicationId || null,
+  batch.set(shopRef, Object.assign({
+    shopId, ownerId: String(uid), sellerUid: String(uid),
+    status: 'active', activatedAt: _ts(), updatedAt: _ts(),
+    source: 'application_approval', applicationId: app.applicationId || null,
+    approvedAt: _ts(), ...(decidedBy ? { approvedBy: decidedBy } : {}),
     business,
-    /* the discovery flags a suspension clears; approval (and reinstatement) restores them */
-    searchable: true,
-    isPublic: true,
-    ...(existing.exists ? {} : { createdAt: _ts() }),
-    ...(app.category ? { category: _sanText(app.category, 80) } : {}),
-    ...(app.phoneNumber ? { phoneNumber: app.phoneNumber } : {}),
-    ...(app.location ? { location: _sanText(app.location, 160) } : {}),
-  }, { merge: true });
+  }, shop0 ? {} : { name, nameLower: name.toLowerCase(),   /* r2 display fields — on CREATION only, never over an existing shop */
+      ...(app.category ? { category: _sanText(app.category, 80) } : {}), ...(app.phoneNumber ? { phoneNumber: app.phoneNumber } : {}),
+      ...(app.location ? { location: _sanText(app.location, 160) } : {}) }, held(shop0), restore(shop0)), { merge: true });
 
-  /* The seller registry the storefront reads. Keyed by the ACCOUNT (that is how
-     every existing reader addresses it) and carrying the shop it belongs to. */
-  batch.set(sellerRef, {
+  batch.set(sellerRef, Object.assign({
     uid: String(uid),
-    shopId,
-    name,
-    nameLower: name.toLowerCase(),
-    status: 'active',
-    active: true,
+    status: 'active', active: true,
+    approvedAt: _ts(), ...(decidedBy ? { approvedBy: decidedBy } : {}),
     business,
-    searchable: true,
-    isPublic: true,
-    /* `updatedAt` is load-bearing: the discovery queries order by it, so a
-       registry row without one is invisible to the very listing it just
-       joined. */
     updatedAt: _ts(),
-    ...(existing.exists ? {} : { createdAt: _ts() }),
-  }, { merge: true });
+  }, seller0 && seller0.shopId ? {} : { shopId },
+     seller0 && seller0.name ? {} : { name, nameLower: name.toLowerCase() },
+     held(seller0), restore(seller0)), { merge: true });
 
-  /* The business directory listing. `createdAt` is preserved on re-approval so
-     the directory's orderBy('createdAt') cannot silently drop a reinstated
-     merchant.
-
-     `verified` is deliberately NOT written here. The homepage counts
-     `businesses where verified == true` as its seller total and the field drives
-     a trust badge, so setting it would be a trust claim made as a side effect of
-     an approval — a commercial decision, not a projection. It stays an explicit
-     admin action. */
-  batch.set(bizRef, {
-    uid: String(uid),
-    ownerId: String(uid),
-    shopId,
-    name,
-    businessName: name,
-    nameLower: name.toLowerCase(),
+  batch.set(bizRef, Object.assign({
+    uid: String(uid), shopId,
     status: 'active',
-    source: 'application_approval',
-    applicationId: app.applicationId || null,
+    approvedAt: _ts(), ...(decidedBy ? { approvedBy: decidedBy } : {}),
     business,
-    searchable: true,
-    isPublic: true,
     updatedAt: _ts(),
-    ...(bizExisting && bizExisting.exists ? {} : { createdAt: _ts() }),
-    ...(app.category ? { category: _sanText(app.category, 80) } : {}),
-    ...(app.description ? { description: _sanText(app.description, 1000) } : {}),
-    ...(app.phoneNumber || app.phone ? { phone: app.phoneNumber || app.phone } : {}),
-    ...(app.email ? { email: app.email } : {}),
-    ...(app.location || app.city ? { city: _sanText(app.location || app.city, 160) } : {}),
-  }, { merge: true });
+  }, biz0 ? {} : { name, businessName: name, nameLower: name.toLowerCase(), source: 'application_approval',
+      ...(app.description ? { description: _sanText(app.description, 1000) } : {}), ...(app.phoneNumber || app.phone ? { phone: app.phoneNumber || app.phone } : {}),
+      ...(app.email ? { email: app.email } : {}), ...(app.location || app.city ? { city: _sanText(app.location || app.city, 160) } : {}) },
+     held(biz0), restore(biz0)), { merge: true });
 
-  /* The account's active shop — what the Seller Hub resolves first. Without
-     this, an approved merchant with a shop still lands in a workspace that
-     cannot tell which shop is theirs. */
-  batch.set(userRef, { activeShopId: shopId, updatedAt: _ts() }, { merge: true });
-
+  /* The account's active shop — set only when it has none; an existing choice is the merchant's. */
+  if (!(userSnap.exists && (userSnap.data() || {}).activeShopId)) {
+    batch.set(userRef, { activeShopId: shopId, updatedAt: _ts() }, { merge: true });
+  }
   await batch.commit();
 
   return {
     collection: 'shops+sellers+businesses', id: shopId,
-    action: existing.exists ? 'reactivated' : 'created',
-    shopId, sellerUid: String(uid), activeShopId: shopId,
-    businessId: String(uid),
+    action: shop0 ? 'reactivated' : 'created',
+    shopId, sellerUid: String(uid), category: business.category, categorySource: business.source,
+    discovery: shop0 ? 'unchanged' : 'HELD',
     shopIdSource: declared ? 'application.shopId' : 'account_shop',
   };
 }
 
-/* Account roles now live in ONE primitive — ./role-authority. Both halves of a
-   role (users.roles[] and the Auth custom claim) are written there, and a claim
-   that fails after the Firestore commit is recorded as an observable
-   divergence instead of a warn. This module used to own that logic; two other
-   paths granted roles without it and produced accounts whose `roles` said
-   "seller" while their token did not. See role-authority.js for the contract. */
+/* ── CANONICAL ROLE PROFILES (Roles Phase 2) ────────────────────────────────
+   One uid-keyed profile per canonical role that had none. These are the account's
+   record of "you are approved as X", separate from the listing registries that
+   already exist (providers, sellers, drivers …).
+
+   mechanic  mechanics/{uid}. The collection ALREADY EXISTS and is written
+             client-side by provider-wiring.js as mechanics/{arbitraryId} for
+             self-registered garages. That path is untouched: this adds a
+             uid-keyed document ALONGSIDE it so approval has a record it owns,
+             and no legacy document is read, rewritten or deleted.
+   landlord  landlordProfiles/{uid}. New. `landlordData/{uid}` is a write-only
+             localStorage mirror with no reader and is deliberately NOT reused.
+   tenant    tenantProfiles/{uid}. New, and PRIVATE — a rental tenant is personal
+             data, so it is never registered with any search engine. The name
+             avoids `tenants/`, which is inventory multi-tenancy (isTenantMember /
+             sellerId claim) and completely unrelated.
+
+   `indexable` is stamped so the indexing generators need no per-role special
+   case: the pipeline's existing skip guard already honours documents that say
+   they must not be indexed. */
+const ROLE_PROFILES = {
+  mechanic: { collection: 'mechanics',        indexable: true  },
+  landlord: { collection: 'landlordProfiles', indexable: true  },
+  tenant:   { collection: 'tenantProfiles',   indexable: false },
+};
+
+/* Write the uid-keyed role profile. Idempotent: a re-approval or a retried
+   trigger converges on the same document rather than creating a second one. */
+async function projectRoleProfile(db, app, uid, role, approved) {
+  const spec = ROLE_PROFILES[role];
+  if (!spec) return null;
+  const ref = db.collection(spec.collection).doc(uid);
+
+  if (!approved) {
+    /* Withdrawn, not deleted. The profile stops being discoverable and stops
+       claiming the role, but the record of the decision survives — the same
+       retraction shape projectProvider uses. */
+    await ref.set({
+      role, ownerUid: uid, status: 'inactive', visibility: 'private',
+      approved: false, updatedAt: _ts(),
+    }, { merge: true });
+    return { collection: spec.collection, id: uid, action: 'retracted' };
+  }
+
+  const patch = {
+    /* Canonical index fields, stamped on every role profile so the search
+       document builder needs no per-role knowledge. */
+    entityType: role,
+    role,
+    ownerUid: uid,
+    name: _san(app.name || app.businessName || app.fullName || '', 140),
+    description: _sanText(app.description || app.bio || app.about || '', 600),
+    category: _san(app.category || '', 80),
+    hub: _san(app.hub || '', 40),
+    location: _san(app.location || app.city || app.county || '', 120),
+    phone: app.phoneNumber || app.phone || null,
+    status: 'active',
+    visibility: spec.indexable ? 'public' : 'private',
+    approved: true,
+    approvedAt: _ts(),
+    sourceCollection: 'applications',
+    sourceId: app.applicationId || null,
+    updatedAt: _ts(),
+  };
+  /* A tenant profile carries NO discoverable content and says so explicitly, so
+     an indexer that ever sees it skips it on the document's own terms rather
+     than on a rule someone has to remember. */
+  if (!spec.indexable) patch._noIndex = true;
+
+  const snap = await ref.get();
+  if (!snap.exists) patch.createdAt = _ts();
+
+  await ref.set(patch, { merge: true });
+  return { collection: spec.collection, id: uid, action: snap.exists ? 'updated' : 'created' };
+}
+
+/* Account roles. `roles` must be written as an ARRAY — a provider whose account
+   carries only `isProvider: true` lands in the app as a buyer, and the analytics
+   gate reads `roles` (array), not a `role` string. Both the array and the
+   legacy booleans are maintained so no existing reader breaks. */
+/* grantAccountRole lives in ./role-authority (the ONE writer of users.roles + the Auth claim); the Phase-2 role map moved there. */
+
+
+/* ══ THE ONE APPLICANT-TYPE AUTHORITY (owner 2026-10-03: "one server-owned application capability — Application →
+   applicant type/category → requirements → verification → approval → capabilities"; Education and Marketing are TYPES
+   of it, never two competing copies). Each entry answers, from SERVER-read application fields only:
+     match(app)            → the applicant type, or null (not this hub)
+     role(m)               → the role this type provisions, or null = keep the resolved role
+     missing(app, m)       → the declared requirements still absent (approval is refused until empty)
+     decide(app, data)     → extra fields applicationDecide records with an APPROVE (e.g. the categories approved), or throws
+     project               → the type's own projection, or null = the normal role dispatch
+     grantsRole(m, ok)     → whether the account role / claim is granted or revoked by this decision
+     after(db, receipt, m) → what the type stamps once projected
+     stamp(m)              → fields recorded on the application
+     incompleteCode        → the refusal code applicationDecide returns
+   applyDecision and applicationDecide consult ONLY this list; a new hub adds an entry, not a branch. */
+const APPLICANT_TYPES = Object.freeze([
+  Object.freeze({
+    key: 'education',
+    match: (app) => { const t = educationTypeOf(app); return t ? { type: t } : null; },
+    role: (m) => (m.type === 'enterprise' ? 'education_enterprise' : 'provider'),
+    missing: (app, m) => educationMissing(app, m.type),
+    decide: () => ({}),
+    project: (m) => (m.type === 'enterprise' ? (db, app, uid, approved) => projectEducationEnterprise(db, app, uid, approved) : null),
+    grantsRole: (m) => m.type !== 'enterprise',
+    after: async (db, receipt, m) => {
+      if (m.type === 'enterprise') return;
+      for (const w of receipt.writes) {
+        if (w && w.collection === 'providers' && w.id) {
+          await db.collection('providers').doc(String(w.id)).set({ education: { type: m.type, setAt: _ts() } }, { merge: true });
+        }
+      }
+    },
+    stamp: (m) => ({ educationType: m.type }),
+    incompleteCode: 'EDUCATION_APPLICATION_INCOMPLETE',
+  }),
+  Object.freeze({
+    key: 'marketing',
+    match: (app) => (app && app.hub === 'marketing' && app.applicationType === 'marketing' ? { type: app.marketingType || 'individual' } : null),
+    role: () => null,
+    missing: () => [],
+    /* Marketing Hub MK2 — approval activates ONLY the categories the reviewer approved (a subset of the request). */
+    decide: (app, data) => {
+      const requested = MKT.normalizeCategories(app.requestedCategories, 30);
+      const asked = (data || {}).approvedCategories;
+      const chosen = MKT.normalizeCategories(asked === undefined ? app.marketingApprovedCategories : asked, 30);
+      const outside = chosen.filter((c) => requested.indexOf(c) < 0);
+      if (outside.length) throw new HttpsError('invalid-argument', 'approvedCategories must be a subset of the requested categories.', { code: 'MKT_CATEGORY_NOT_REQUESTED', outside });
+      if (!chosen.length) throw new HttpsError('invalid-argument', 'Choose at least one category to approve.', { code: 'MKT_NO_CATEGORY' });
+      return { marketingApprovedCategories: chosen, marketingDeclinedCategories: requested.filter((c) => chosen.indexOf(c) < 0) };
+    },
+    project: () => (db, app, uid, approved, status) => projectMarketing(db, app, uid, approved, status),
+    /* A REJECTED/SUSPENDED marketing application never strips the provider claim — the same account may be an
+       approved provider for other services; only the marketing block was retracted. */
+    grantsRole: (m, approved) => approved,
+    after: async () => {},
+    stamp: () => ({}),
+    incompleteCode: 'MARKETING_APPLICATION_INCOMPLETE',
+  }),
+]);
+function applicantTypeOf(app) {
+  for (const T of APPLICANT_TYPES) { const m = T.match(app || {}); if (m) return { T, m }; }
+  return null;
+}
 
 /**
  * Apply a decision. Returns a receipt describing exactly what was written —
@@ -1018,7 +1278,21 @@ async function applyDecision(appId, app, opts = {}) {
   const db = _db();
   const status = canonStatus(app.status);
   const approved = status === 'approved';
-  const role = app.role || resolveRole(app).role;
+  /* An EXPLICIT declaration outranks every legacy field. `app.role` keeps its old
+     precedence for legacy documents so an application already in the queue decides
+     exactly as it would have before Phase 1. */
+  const _resolved = resolveRole(app);
+  /* A category-decided seller (Gate 1) also outranks a stored `app.role`: applications already in the queue were
+     stamped `provider` at intake, before this rule existed, and must be decided by it. */
+  /* THE applicant-type authority: a typed application's role comes from its TYPE (e.g. Education teacher / institution
+     → provider, enterprise → a buyer record with no account role); a declared requestedRole cannot move it elsewhere. */
+  const AT = applicantTypeOf(app);
+  const eduType = AT && AT.T.key === 'education' ? AT.m.type : null;
+  const typedRole = AT ? AT.T.role(AT.m) : null;
+  const role = typedRole
+    || (_resolved.by === 'explicit' || _resolved.by === 'explicit-alias' || /\+category(:|$)/.test(_resolved.by)
+      ? _resolved.role
+      : (app.role || _resolved.role));
   const uid = app.uid;
 
   if (!uid) {
@@ -1035,31 +1309,97 @@ async function applyDecision(appId, app, opts = {}) {
     return { ok: false, reason: 'no_uid', appId };
   }
 
+  /* ── QUARANTINE, NEVER GUESS (Roles Phase 1) ──────────────────────────────
+     The application declared a role this platform does not recognise. Nothing is
+     provisioned: no registry record, no account role, no claim. Before Phase 1
+     this could not happen, because every unrecognised vocabulary resolved to
+     `provider` — which is exactly how a landlord ended up in the service
+     directory with nothing reporting it.
+     Reported the same way as the no-uid case above, so a reviewer finds it on the
+     application rather than in a log they were never going to read. */
+  if (role === null) {
+    const bad = _san(_resolved.requested || '', 60);
+    await db.collection('applications').doc(appId).set({
+      projectionStatus: 'blocked_unknown_role',
+      projectionError: 'requestedRole "' + bad + '" is not a canonical role. '
+        + 'Valid roles: ' + VOCAB.CANONICAL_ROLES.join(', ') + '.',
+      decisionAppliedFor: status,
+      decisionAppliedAt: _ts(),
+    }, { merge: true });
+    await db.collection('adminAlerts').add({
+      kind: 'application_role_invalid',
+      severity: 'medium',
+      message: 'Application ' + appId + ' declared requestedRole "' + bad
+             + '", which is not canonical. It was NOT provisioned and needs a reviewer.',
+      appId, uid, requestedRole: bad,
+      validRoles: VOCAB.CANONICAL_ROLES,
+      createdAt: _ts(),
+    }).catch(() => {});
+    logger.warn('[appLifecycle] unknown requestedRole — quarantined', { appId, requested: bad });
+    return { ok: false, reason: 'unknown_role', appId, requestedRole: bad };
+  }
+
+  if (AT && approved) {
+    const missing = AT.T.missing(app, AT.m);
+    if (missing.length) {
+      await db.collection('applications').doc(appId).set({
+        ...AT.T.stamp(AT.m),
+        applicantType: AT.T.key + ':' + AT.m.type,
+        projectionStatus: 'blocked_incomplete',
+        projectionError: 'Approval needs: ' + missing.join('; ') + '. Nothing was provisioned — request the information instead.',
+        missing,
+        decisionAppliedFor: status,
+        decisionAppliedAt: _ts(),
+      }, { merge: true });
+      logger.warn('[appLifecycle] approval incomplete — nothing provisioned', { appId, applicantType: AT.T.key, type: AT.m.type, missing });
+      return { ok: false, reason: 'incomplete', appId, applicantType: AT.T.key, ...(eduType ? { educationType: eduType } : {}), missing };
+    }
+  }
+
   const receipt = { appId, uid, role, status, writes: [] };
 
   try {
-    if (role === 'driver') {
+    const typedProject = AT ? AT.T.project(AT.m) : null;
+    if (typedProject) {
+      receipt.writes.push(await typedProject(db, app, uid, approved, status));
+    } else if (role === 'driver' || role === 'rider') {
+      /* Both spellings reach the same projection: `rider` is the Phase 1
+         declaration, `driver` the legacy application's word. */
       receipt.writes.push(await projectDriver(db, app, uid, approved));
-    } else if (role === 'seller') {
-      /* Before the role is granted — see projectSeller. A merchant is never
-         authorised to sell before they have somewhere to sell from. */
-      receipt.writes.push(await projectSeller(db, app, uid, approved));
     } else if (role === 'legal') {
-      /* SOKONI administrative verification only — LSK verification is the second, independent gate. */
+      /* legalProviders (authority) + lawyers (search projection), one commit.
+         Returns TWO receipt entries, so push them individually. */
+      /* SOKONI administrative verification only — LSK verification is the second, independent gate (legal-verification). */
       receipt.writes.push(await require('./legal-verification').applyAdminDecision(db, {
         uid, app, appId, status, decidedBy: opts.decidedBy || app.decidedBy || null,
       }));
+    } else if (ROLE_PROFILES[role]) {
+      /* mechanic / landlord / tenant — a uid-keyed profile this approval owns.
+         Before Phase 2 these fell through to projectProvider and were filed in
+         the service directory, which is exactly how a landlord ended up listed
+         as a cleaning company. */
+      receipt.writes.push(await projectRoleProfile(db, app, uid, role, approved));
+    } else if (role === 'seller') {
+      /* Before the role is granted — see projectSeller. A merchant is never authorised to sell before they have
+         somewhere to sell from. */
+      receipt.writes.push(await projectSeller(db, app, uid, approved, { decidedBy: opts.decidedBy }));
     } else if (DELEGATED_ROLES[role]) {
       receipt.writes.push({ collection: DELEGATED_ROLES[role], id: uid, action: 'delegated' });
     } else {
-      receipt.writes.push(await projectProvider(db, app, uid, approved));
+      receipt.writes.push(await projectProvider(db, app, uid, approved, { appId }));
     }
 
-    /* A pending application must not grant anything; only a decision does. */
+    /* the type stamps what it owns once projected (e.g. a teacher / institution provider record carries its type) */
+    if (AT) await AT.T.after(db, receipt, AT.m);
+
+    /* A pending application must not grant anything; only a decision does. An enterprise BUYER gets no account role. */
+    /* A REJECTED/SUSPENDED marketing application never strips the provider claim — the same account may be an
+       approved provider for other services; only the marketing block was retracted above. */
+    const typeGrantsRole = AT ? AT.T.grantsRole(AT.m, approved) : true;
     let claimPending = false;
-    if (status === 'approved' || status === 'rejected' || status === 'suspended') {
+    if (typeGrantsRole && (status === 'approved' || status === 'rejected' || status === 'suspended')) {
       const grant = await grantAccountRole(db, uid, role, approved, {
-        source: 'applicationLifecycle', entityId: appId,
+        source: 'applicationLifecycle', entityId: appId, selectActive: true,   /* approval selects the workspace (Phase 2) */
       });
       receipt.roleKey = grant.key;
       receipt.claim = grant.claim;
@@ -1149,12 +1489,6 @@ async function applyDecision(appId, app, opts = {}) {
       }
     }
 
-    /* The projection is only 'applied' when BOTH halves of the role landed. A
-       granted role whose Auth claim never minted leaves the applicant behaving
-       as a buyer, so it is reported as pending — `applicationList` already
-       surfaces anything that is approved but not 'applied', and the trigger's
-       idempotency guard (projectionStatus === 'applied') lets a later write
-       re-run the projection and re-attempt the mint. */
     await db.collection('applications').doc(appId).set({
       statusCanonical: status,
       decisionAppliedFor: status,
@@ -1164,8 +1498,55 @@ async function applyDecision(appId, app, opts = {}) {
         ? `Role "${receipt.roleKey}" granted in Firestore but the Auth claim did not mint — see roleClaimReconcile/${receipt.claimReconcileId}.`
         : FieldValue.delete(),
       projectionReceipt: receipt.writes,
+      /* The role this decision APPLIED, stamped on the application: the workspace authority judges the approval by
+         `app.role` (approval-remediation.decisionValidity), so an application filed `provider` at intake and decided
+         as a seller (Gate 1) must say so, or its own approval reads as approving another role. */
+      ...(role && app.role !== role ? { role, roleResolvedBy: eduType ? 'education:' + eduType : _resolved.by } : {}),
+      ...(AT ? Object.assign({ applicantType: AT.T.key + ':' + AT.m.type, missing: FieldValue.delete() }, AT.T.stamp(AT.m)) : {}),
       ...(opts.decidedBy ? { decidedBy: opts.decidedBy } : {}),
     }, { merge: true });
+
+    /* Stage (c) union: r2's entitlements above (seller_free trial, Till, business wallet — keyed by SHOP) AND the
+       live POS bootstrap below (ed1c16b, 2026-08-24 — the till reads `businesses where ownerId == uid`). They write
+       different documents; projectSeller deliberately leaves businesses/{uid} without ownerId so the two never collide. */
+    /* ── POS/BUSINESS PROVISIONING ────────────────────────────────────────
+       An approved merchant had a `sellers` record and NO `businesses` record,
+       because the only writer of one was the pos-setup wizard. The till asks
+       `businesses where ownerId == uid` and got nothing, so it told an
+       approved merchant "No shop on this account" — a provisioning failure
+       reported as a fact about their account.
+
+       Reuses _ensureBusinessForOwner rather than writing a second provisioning
+       implementation: two of them would drift, and this one already mints the
+       full identity set, the default branch and the setup checklist.
+
+       NON-FATAL BY DESIGN. Approval is the merchant's status change and must
+       not be rolled back because a POS default failed to write. The outcome is
+       recorded on the application so a reviewer can see it rather than
+       discovering it when a till says the wrong thing. */
+    if (status === 'approved' && (role === 'seller' || role === 'merchant')) {
+      try {
+        const bb = require('./business-bootstrap');
+        const prov = await bb._ensureBusinessForOwner({
+          uid,
+          businessName: app.businessName || app.name || '',
+          category: app.category || app.businessType || '',
+          phone: app.phoneNumber || '',
+          county: app.county || '', city: app.city || '',
+        });
+        await db.collection('applications').doc(appId).set({
+          posProvisioning: { ok: true, created: prov.created === true,
+                             reason: prov.reason || null,
+                             merchantId: prov.merchantId || null, at: _ts() },
+        }, { merge: true });
+        logger.info('[appLifecycle] pos provisioning', { appId, uid, ...prov });
+      } catch (e) {
+        await db.collection('applications').doc(appId).set({
+          posProvisioning: { ok: false, error: String(e && e.message || e).slice(0, 300), at: _ts() },
+        }, { merge: true }).catch(() => {});
+        logger.error('[appLifecycle] pos provisioning FAILED', { appId, uid, error: e.message });
+      }
+    }
 
     /* Tell the applicant. notify.js is the single entry point (it owns channel
        selection, quiet hours and dedupe) so this is one call, not a bespoke
@@ -1173,22 +1554,20 @@ async function applyDecision(appId, app, opts = {}) {
     if (status === 'approved') {
       try {
         const { notify } = require('./notify');
-        /* Do not promise an account the applicant cannot yet use. Until the
-           claim mints their token still reads as a buyer, so a "you are live"
-           message would be a success notice over a half-applied decision. */
-        /* Approval routes to ONE deterministic dashboard (shared/entertainment-registry.js
-           role → dashboard); roles the registry does not cover keep their message unchanged. */
-        /* CHANGELOG 240 (C2c): the approval link is the ONE resolver — workspace.html asks the server where this account
-           belongs now that it is approved (business-workspace.homeFor), instead of a second role → page table. */
-        const _dash = 'workspace.html';
-        const approvedBody = role === 'driver'
-          ? 'Your rider application is approved. Open the SOKONI driver app and go online to start receiving deliveries.'
-          : role === 'event_organizer'
-            ? 'You are approved as an event organizer. Open Event Manager to create your first event and start selling tickets.'
-            : role === 'legal'
-              /* Never "live": an advocate is bookable only once LSK verification is also current. */
-              ? 'SOKONI has approved your advocate application. You will appear to clients once your Law Society of Kenya practising status has been verified.'
-              : `${app.name || 'Your business'} is now live on SOKONI and customers can find you in search.`;
+        const _dash = 'workspace.html';   /* r2 C2c: ONE resolver for where an approved account belongs */
+        const approvedBody = role === 'education_enterprise'
+          ? `${app.name || 'Your organisation'} is verified on SOKONI Education. You can now arrange training for your staff.`
+          : eduType
+            ? `${app.name || 'Your application'} is approved on SOKONI Education. Your workspace is ready — set it up before learners can find you.`
+            : role === 'driver'
+              ? 'Your rider application is approved. Open the SOKONI driver app and go online to start receiving deliveries.'
+              : role === 'event_organizer'
+                ? 'You are approved as an event organizer. Open Event Manager to create your first event and start selling tickets.'
+                : role === 'legal'
+                  ? 'SOKONI has approved your advocate application. You will appear to clients once your Law Society of Kenya practising status has been verified.'
+                  : (role === 'seller' || role === 'merchant')
+                    ? `${app.name || 'Your business'} is approved on SOKONI. Your business workspace is ready — set it up before customers can find you.`
+                    : `${app.name || 'Your business'} is now live on SOKONI and customers can find you in search.`;
         await notify({
           uid,
           type: role === 'driver' ? 'rider_approved' : role === 'event_organizer' ? 'organizer_approved' : 'merchant_approved',
@@ -1196,11 +1575,9 @@ async function applyDecision(appId, app, opts = {}) {
           body: claimPending
             ? 'Your application is approved. We are finishing the last step of your account setup — you will be able to sign in to your new dashboard shortly.'
             : approvedBody,
-          phone: app.phoneNumber || undefined,
-          /* Distinct key per variant: a re-run that finally mints the claim must
-             still be able to send the real "you are live" message. */
+          /* no caller phone: the notification engine resolves the recipient itself (owner, Notifications E2E) */
           dedupeKey: claimPending ? `app_approved_pending:${appId}` : `app_approved:${appId}`,
-          data: { applicationId: appId, role, claimPending, ...(_dash ? { dashboard: _dash, link: _dash } : {}) },
+          data: { applicationId: appId, role, claimPending, dashboard: _dash, link: _dash },
         });
       } catch (e) {
         logger.warn('[appLifecycle] notify failed', { appId, error: e.message });
@@ -1239,18 +1616,30 @@ async function applyDecision(appId, app, opts = {}) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   A decision is an ADMIN act — so verify the DECIDER, not the document.
+   TRIGGER — applications/{appId}
+   Settles in at most two extra hops: normalise (1), project (1), then every
+   guard short-circuits.
+   ────────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+   DECISION AUTHORITY — restored 2026-09-06.
 
-   `firestore.rules` lets an applicant update their own application:
+   Originally shipped as `bc9bf4c` ("an application could approve itself — verify
+   the decider, not the document"). The reconciliation onto the live baseline
+   preserved LIVE's copy of this file, which never carried the fix, so the hole
+   was silently reopened. `test-application-decision-authority` — which executes
+   the real handler rather than reading source — caught it: A1 reported 1 minted
+   claim on a self-approval.
+
+   THE HOLE. `firestore.rules` lets an applicant update their own application:
 
        allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields())
 
-   and `noAdminFields()` withholds `approved`, `role`, `verified`, `approvedBy` —
-   none of which this engine reads. It does NOT withhold `status`, which is the
-   only field the projection consults. So any signed-in user could write
-   `status: 'approved'` (or 'active' / 'accepted' / 'verified' — canonStatus maps
-   all four) onto their OWN request and be granted the role and the Auth claim by
-   this trigger. The rule's own comment says self-approval is impossible; it
+   `noAdminFields()` withholds isAdmin/suspended/banned/adminApproved/featured/
+   verified/flagged/adminNote/role/approved/approvedAt/approvedBy/commissionRate —
+   but NOT `status`, the one field the projection consults. So any signed-in user
+   could write `status: 'approved'` (or 'active'/'accepted'/'verified' — canonStatus
+   maps all four) onto their OWN request and be granted the role and the Auth claim
+   by this trigger. The rule's own comment says self-approval is impossible; it
    guards a field the decision engine never looks at.
 
    Every legitimate decision goes through `applicationDecide`, which is admin-only
@@ -1262,44 +1651,43 @@ async function applyDecision(appId, app, opts = {}) {
    Returns { ok } — never throws: an unresolvable decider is a refusal, not a
    crash that leaves the application in limbo.
    ────────────────────────────────────────────────────────────────────────── */
-/* 2026-09-27 (Entertainment readiness sweep): the claims check alone was FORGEABLE. Admin uids are
-   readable in public documents (moderatedBy / reviewedBy), so an applicant could write
-   status:'approved' + decidedBy:<a real admin uid> onto their own request and pass. A decision is
-   now honoured only when applicationDecide's SERVER-ONLY record (applicationDecisions/{appId},
-   rules write:false) names the same status and the same decider. The claims check stays as the
-   second layer. */
-const DECISIONS = 'applicationDecisions';
+/* K13-B — naming an administrator is NOT a decision. Production evidence (2026-09-28): this check trusted
+   `decidedBy` alone, and `decidedBy` + `status` are applicant-writable on the served rules — so an applicant who
+   wrote any admin's uid into their own application was projected (K13). A decision is authoritative only when:
+     1. the decider is not the applicant (separation of duties);
+     2. the decider holds an admin / superAdmin claim;
+     3. the server decision record applicationDecisions/{appId} — written by applicationDecide BEFORE it touches the
+        application, and client-unwritable (no rule matches it) — records exactly this status AND this decider.
+   Already-applied decisions never reach this (the decisionAppliedFor guard returns first), so legacy projections are
+   not re-evaluated. */
 async function decisionAuthority(after, appId) {
   const by = typeof after.decidedBy === 'string' ? after.decidedBy.trim() : '';
   if (!by) {
     return { ok: false, reason: 'no decidedBy — a decision is only made through applicationDecide' };
   }
-  let rec = null;
-  try {
-    const s = appId ? await _db().collection(DECISIONS).doc(String(appId)).get() : null;
-    rec = s && s.exists ? s.data() : null;
-  } catch (e) {
-    return { ok: false, reason: `the server decision record could not be read (${e.message})` };
-  }
-  if (!rec) return { ok: false, reason: 'no server decision record — a decision is only made through applicationDecide' };
-  if (rec.status !== canonStatus(after.status) || rec.decidedBy !== by) {
-    return { ok: false, reason: `the application claims "${canonStatus(after.status)}" by "${by}", but the server decision record says "${rec.status}" by "${rec.decidedBy}"` };
+  if (after.uid && by === after.uid) {
+    return { ok: false, reason: 'decidedBy is the applicant — an administrator cannot decide their own application' };
   }
   try {
     const user = await getAuth().getUser(by);
     const claims = user.customClaims || {};
-    if (claims.admin === true || claims.superAdmin === true) return { ok: true, by };
-    return { ok: false, reason: `decidedBy "${by}" holds no admin claim` };
+    if (!(claims.admin === true || claims.superAdmin === true)) return { ok: false, reason: `decidedBy "${by}" holds no admin claim` };
   } catch (e) {
     return { ok: false, reason: `decidedBy "${by}" is not a resolvable account (${e.message})` };
   }
+  try {
+    const rec = await _db().collection('applicationDecisions').doc(String(appId)).get();
+    if (!rec.exists) return { ok: false, reason: 'no server decision record — only applicationDecide records a decision' };
+    const r = rec.data() || {};
+    if (r.status !== canonStatus(after.status) || r.decidedBy !== by) {
+      return { ok: false, reason: 'the application does not match its server decision record' };
+    }
+    return { ok: true, by };
+  } catch (e) {
+    return { ok: false, reason: `the server decision record could not be read (${e.message})` };
+  }
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   TRIGGER — applications/{appId}
-   Settles in at most two extra hops: normalise (1), project (1), then every
-   guard short-circuits.
-   ────────────────────────────────────────────────────────────────────────── */
 exports.applicationLifecycle = onDocumentWritten(
   { document: 'applications/{appId}', region: REGION, timeoutSeconds: 120, memory: '256MiB',
     secrets: [QR_SIGNING_SECRET] },
@@ -1324,19 +1712,17 @@ exports.applicationLifecycle = onDocumentWritten(
     if (after.decisionAppliedFor === status && after.projectionStatus === 'applied') return;
     if (status === 'pending') return;                     // nothing to grant yet
 
-    /* Phase 2a — authorise the decision before acting on it. A submitted
-       application is a REQUEST; only an admin turns it into a grant. */
     const authority = await decisionAuthority(after, appId);
     if (!authority.ok) {
-      /* Already recorded for this exact status: return WITHOUT writing. The
-         block below is itself a write to this document, so re-writing it would
-         re-fire this trigger forever. */
+      /* Already recorded for this exact status: return WITHOUT writing. The block
+         below is itself a write to this document, so re-writing it would re-fire
+         this trigger forever. */
       if (after.projectionStatus === 'blocked_unauthorised_decision' && after.blockedFor === status) return;
 
-      /* The status is left as the client wrote it — deliberately. Rewriting it
-         would silently downgrade a legitimately-decided legacy application that
-         predates `decidedBy`; blocking the PROJECTION grants nothing either way,
-         and an admin re-deciding through applicationDecide clears it. */
+      /* The status is left as the client wrote it — deliberately. Rewriting it would
+         silently downgrade a legitimately-decided legacy application that predates
+         `decidedBy`; blocking the PROJECTION grants nothing either way, and an admin
+         re-deciding through applicationDecide clears it. */
       await event.data.after.ref.set({
         projectionStatus: 'blocked_unauthorised_decision',
         blockedFor: status,
@@ -1379,20 +1765,172 @@ function _requireAdmin(req) {
   }
 }
 
+
+/* ══ ADMIT AN EXISTING PROVIDER (owner 2026-10-03, direct: "Build admin approve op") ═════════════════════════════════
+   Some live providers / sellers were made active DIRECTLY (onboarding scripts) — no application, no decision record — so
+   the ONE approval authority (shared/approval-authority.isAuthoritativelyApproved) rightly treats them as unapproved.
+   This is the audited, one-time way an ADMINISTRATOR approves such an existing record:
+     • admin / superAdmin with a satisfied second factor (same rule as index.js assertMFA); never the record's owner;
+     • the record must already exist and be live (providers or sellers status active/approved) with NO application;
+     • ONE transaction: create applications/ADM_<uid> (source 'admin_existing_provider', status approved) + its
+       applicationDecisions record (the same fields applicationDecide writes) + an immutable adminAudit row;
+     • idempotent: a second call finds the record and changes nothing; an existing application/decision is never touched;
+     • provider only: providerProfiles/{uid} is provisioned from the server's providers record when ABSENT (so
+       provider-dashboard loads), never overwritten when present;
+     • status, discoverability and the commercial lane are NOT changed. The category is RECORDED on the application;
+       stamping business.category stays with AdminOS bizAdminClassify (the one category writer). */
+const ADMIT_ROLES = Object.freeze({ provider: 'providers', seller: 'sellers' });
+function _mfaSatisfied(token) {
+  if (process.env.MFA_REQUIRED === 'false') return true;   /* dev only, same switch as index.js */
+  return !!(token && token.firebase && (token.firebase.sign_in_second_factor || (token.firebase.sign_in_attributes && token.firebase.sign_in_attributes.second_factor)));
+}
+
+exports.applicationAdmitExistingProvider = onCall(
+  { region: REGION, maxInstances: 5, enforceAppCheck: true },
+  async (req) => {
+    _requireAdmin(req);
+    if (!_mfaSatisfied(req.auth.token)) throw new HttpsError('unauthenticated', 'Administrator two-factor sign-in is required for this action.', { reason: 'MFA_REQUIRED' });
+    const d = req.data || {};
+    const uid = typeof d.uid === 'string' ? d.uid.trim() : '';
+    const role = typeof d.role === 'string' ? d.role : 'provider';
+    const category = _sanText(d.category, 60).toLowerCase();
+    const reason = _sanText(d.reason, 500);
+    if (!/^[A-Za-z0-9_-]{6,128}$/.test(uid)) throw new HttpsError('invalid-argument', '"uid" is required.');
+    if (!ADMIT_ROLES[role]) throw new HttpsError('invalid-argument', 'role must be provider | seller.');
+    if (!category || !/^[a-z0-9_-]{2,60}$/.test(category)) throw new HttpsError('invalid-argument', 'A category is required.', { reason: 'CATEGORY_REQUIRED' });
+    if (reason.length < 5) throw new HttpsError('invalid-argument', 'Give a reason for this approval.', { reason: 'REASON_REQUIRED' });
+    if (uid === req.auth.uid) throw new HttpsError('permission-denied', 'An administrator cannot approve their own business.', { code: 'SELF_DECISION' });
+    /* H1 — the category must be a SOKONI category, fit the role, and not belong to a specialised authority */
+    const BCAT = require('./business-category');
+    if (!BCAT.isCategory(category)) throw new HttpsError('invalid-argument', 'That is not a SOKONI business category.', { reason: 'CATEGORY_UNKNOWN' });
+    const sellerCat = BCAT.SELLER_CATEGORIES.includes(category) || MERCHANT_CATEGORIES.includes(category);
+    if ((role === 'seller') !== sellerCat) throw new HttpsError('invalid-argument', 'That category does not fit a ' + role + '.', { reason: 'CATEGORY_ROLE_MISMATCH' });
+    if (BCAT.HEALTHCARE.includes(category) || category === 'lawyer') throw new HttpsError('failed-precondition', 'Healthcare and legal providers are approved through their own verification, not this action.', { reason: 'SPECIALISED_AUTHORITY' });
+
+    const db = _db();
+    const appId = 'ADM_' + uid;
+    const appRef = db.collection('applications').doc(appId);
+    const decRef = db.collection('applicationDecisions').doc(appId);
+    const recRef = db.collection(ADMIT_ROLES[role]).doc(uid);
+    const profRef = db.collection('providerProfiles').doc(uid);
+    const out = await db.runTransaction(async (t) => {
+      /* ALL READS FIRST */
+      const [appSnap, decSnap, recSnap, profSnap, others] = await Promise.all([
+        t.get(appRef), t.get(decRef), t.get(recRef), role === 'provider' ? t.get(profRef) : Promise.resolve(null),
+        t.get(db.collection('applications').where('uid', '==', uid).limit(5)),
+      ]);
+      if (appSnap.exists || decSnap.exists) return { ok: true, applicationId: appId, replay: true };
+      if (!recSnap.exists) throw new HttpsError('not-found', 'No ' + role + ' record exists for this account.', { reason: 'NO_RECORD' });
+      const rec = recSnap.data() || {};
+      if (!['active', 'approved'].includes(String(rec.status || ''))) {
+        throw new HttpsError('failed-precondition', 'Only a live ' + role + ' can be admitted this way (status is ' + (rec.status || 'missing') + ').', { reason: 'NOT_LIVE' });
+      }
+      if (others.docs.some((x) => x.id !== appId)) {
+        throw new HttpsError('failed-precondition', 'This account already has an application — decide it in Applications instead.', { reason: 'HAS_APPLICATION' });
+      }
+      /* H1 — never silently re-categorise an ADMIN decision */
+      const eb = rec.business || null;
+      if (eb && eb.source === 'admin' && BCAT.isCategory(eb.category) && eb.category !== category) {
+        throw new HttpsError('failed-precondition', 'This business is already classified by an administrator as ' + eb.category + '. Reclassification is a separate, audited action.', { reason: 'CATEGORY_CONFLICT' });
+      }
+      const at = _ts();
+      t.create(appRef, {
+        applicationId: appId, uid, role, hub: role === 'provider' ? 'services' : 'marketplace', category,
+        source: 'admin_existing_provider', status: 'approved', statusCanonical: 'approved',
+        decidedBy: req.auth.uid, decidedAt: at, reviewReason: reason, createdAt: at, updatedAt: at,
+        projectionStatus: 'not_required', note: 'Admitted by an administrator: the business was already live with no application.',
+      });
+      t.create(decRef, { applicationId: appId, status: 'approved', decision: 'approve', decidedBy: req.auth.uid, applicantUid: uid,
+        reason, category, businessCategory: category, approvedCategories: [category], source: 'admin_existing_provider', decidedAt: at });
+      /* H1 — the category is stamped in THIS transaction (the record is already live) */
+      const stamp = { category, source: 'admin', setBy: req.auth.uid, setAt: at, applicationId: appId };
+      /* … and the CAPABILITY is activated in it: business-scope reads protected approval evidence (approvedAt), which a live-by-
+         status record without it lacks (CAPABILITY_CONFLICT). An existing approvedAt is history and is kept. */
+      t.update(recRef, Object.assign({ business: stamp, sourceApplicationId: appId, updatedAt: at }, rec.approvedAt ? {} : { approvedAt: at }));
+      let provisioned = false;
+      if (role === 'provider' && profSnap && !profSnap.exists) {
+        t.create(profRef, { uid, providerId: rec.providerId || null, status: 'active', name: _sanText(rec.name || rec.businessName || '', 120),
+          category: _sanText(rec.category || category, 100), bio: _sanText(rec.bio || '', 2000), rating: Number(rec.rating) || 0,
+          reviewCount: Number(rec.reviewCount) || 0, bookingCount: Number(rec.bookingCount) || 0,
+          provisionedBy: 'admin_existing_provider', provisionedAt: at, updatedAt: at });
+        provisioned = true;
+      }
+      t.create(db.collection('adminAudit').doc(), { action: 'application_admit_existing', applicationId: appId, targetUid: uid, role, category,
+        performedBy: req.auth.uid, reason, before: { application: null, decision: null, business: eb ? { category: eb.category || null, source: eb.source || null } : null, providerProfile: role === 'provider' ? (profSnap && profSnap.exists ? 'present' : 'absent') : 'n/a' },
+        after: { application: 'approved', decision: 'approved', business: { category, source: 'admin' }, providerProfile: provisioned ? 'provisioned' : (role === 'provider' ? 'unchanged' : 'n/a') }, createdAt: at });
+      return { ok: true, applicationId: appId, replay: false, providerProfileProvisioned: provisioned, category };
+    });
+    return out;
+  }
+);
+
 exports.applicationDecide = onCall(
   { region: REGION, maxInstances: 10, enforceAppCheck: true, secrets: [QR_SIGNING_SECRET] },
   async (req) => {
     _requireAdmin(req);
     const { applicationId, decision, reason } = req.data || {};
     if (!applicationId) throw new HttpsError('invalid-argument', '"applicationId" is required.');
-    if (!['approve', 'reject', 'suspend', 'request_info'].includes(decision)) {
-      throw new HttpsError('invalid-argument', 'decision must be approve | reject | suspend | request_info.');
+    if (!['approve', 'reject', 'suspend', 'request_info', 'mark_under_review', 'mark_verified', 'revoke'].includes(decision)) {
+      throw new HttpsError('invalid-argument', 'decision must be approve | reject | suspend | request_info | mark_under_review | mark_verified | revoke.');
     }
 
     const db = _db();
     const ref = db.collection('applications').doc(String(applicationId));
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'Application not found.');
+
+    /* EDUCATION E1: approving an education application that lacks the documents its type requires is refused before
+       anything is written — the reviewer uses "request info" instead. */
+    const AT0 = applicantTypeOf(snap.data());
+    if (decision === 'approve' && AT0) {
+      const missing = AT0.T.missing(snap.data(), AT0.m);
+      if (missing.length) {
+        throw new HttpsError('failed-precondition', 'This application cannot be approved yet. Missing: ' + missing.join('; ') + '.',
+          Object.assign({ reason: AT0.T.incompleteCode, applicantType: AT0.T.key, missing }, AT0.T.key === 'education' ? { educationType: AT0.m.type } : {}));
+      }
+    }
+
+    /* ══ REVIEW STAGES (owner briefs 2026-10-03; generic for every applicant type) ══════════════════════════════════
+       `status` stays canonical (pending / info_requested / approved / rejected / suspended) — a literal 'verified'
+       status would canonicalise to APPROVED and project, so the review sub-states live in `reviewStage`:
+         submitted → under_review → verified    (admin-only marks; NO projection, audited, like request_info)
+         revoke = suspend + reviewStage 'revoked' — TERMINAL: nothing further can be decided on that application.
+       "Active" is the applied projection (projectionStatus 'applied'), not a status. */
+    /* K13-A — SEPARATION OF DUTIES. An administrator never decides their OWN application: the approval authority
+       exists to be exercised over someone else's request. (Production evidence, 2026-09-28: an admin decided their
+       own driver applications.) Checked BEFORE the review-stage marks too: "verified" is shown to the applicant and to
+       AdminOS as a review fact, so staging one's own application is the same breach (b2, 2026-10-03). */
+    const applicantUid = snap.data().uid || null;
+    if (applicantUid && applicantUid === req.auth.uid) {
+      throw new HttpsError('permission-denied', 'An administrator cannot decide their own application.', { code: 'SELF_DECISION' });
+    }
+
+    const cur = snap.data() || {};
+    if (cur.reviewStage === 'revoked') {
+      throw new HttpsError('failed-precondition', 'This application was revoked. A new application is required.', { reason: 'REVOKED_TERMINAL' });
+    }
+    if (decision === 'mark_under_review' || decision === 'mark_verified') {
+      const open = ['pending', 'info_requested'].includes(String(cur.status || 'pending'));
+      if (!open) throw new HttpsError('failed-precondition', 'Only an undecided application can change review stage.', { reason: 'ALREADY_DECIDED' });
+      if (decision === 'mark_verified' && AT0) {
+        const missing = AT0.T.missing(cur, AT0.m);
+        if (missing.length) throw new HttpsError('failed-precondition', 'Cannot mark verified. Missing: ' + missing.join('; ') + '.', { reason: AT0.T.incompleteCode, missing });
+      }
+      const stage = decision === 'mark_verified' ? 'verified' : 'under_review';
+      await ref.set({ reviewStage: stage, reviewStageAt: _ts(), reviewStageBy: req.auth.uid, updatedAt: _ts() }, { merge: true });
+      await db.collection('adminAudit').add({ action: 'application_' + decision, applicationId: String(applicationId), targetUid: cur.uid || null,
+        performedBy: req.auth.uid, reason: _sanText(reason, 500) || null, createdAt: _ts() }).catch(() => {});
+      return { ok: true, applicationId, reviewStage: stage, projected: false };
+    }
+    if (decision === 'revoke' && _sanText(reason, 500).length < 5) {
+      throw new HttpsError('invalid-argument', 'Give a reason for revoking.', { reason: 'REASON_REQUIRED' });
+    }
+
+    const STATUS = { approve: 'approved', reject: 'rejected', suspend: 'suspended', request_info: 'info_requested', revoke: 'suspended' };
+    const STAGE = { approve: 'approved', reject: 'rejected', suspend: 'suspended', request_info: 'info_requested', revoke: 'revoked' };
+    const status = STATUS[decision];
+    const actor = req.auth.uid;
+
 
     /* ── Seller Agreement gate ────────────────────────────────────────────
        A business may not be APPROVED until it has acknowledged the commercial
@@ -1425,7 +1963,13 @@ exports.applicationDecide = onCall(
          not the Seller Agreement's commission rates — mapping it to that boolean would fabricate a
          commercial acceptance. An advocate taking bookings through SOKONI is a SERVICE PROVIDER, so the
          canonical versioned acceptances are checked against the provider catalogue. */
-      if (_role === 'health' || _role === 'event_organizer' || _role === 'legal') {
+      const _AT = applicantTypeOf(_a);
+      /* Typed applicants (Education, Marketing) are SERVICE PROVIDERS taking paid work through SOKONI — the same rule
+         r2 applies to advocates: their commission acceptance is the canonical provider catalogue, never a Seller
+         Agreement tick. An education ENTERPRISE buys training: it gets no provider role and owes no commission. */
+      if (_AT && _AT.T.key === 'education' && _AT.m.type === 'enterprise') {
+        /* education ENTERPRISE: a company buying training — no provider role, no commission → no seller/provider agreement */
+      } else if (_AT || _role === 'health' || _role === 'event_organizer' || _role === 'legal') {
         /* ── HEALTHCARE ACCEPTS A DIFFERENT INSTRUMENT ─────────────────────────
            The boolean below is the *Seller* Agreement acknowledgement — the
            marketplace listing ladder and the POS commission rate
@@ -1454,7 +1998,7 @@ exports.applicationDecide = onCall(
         }
         let comp;
         try {
-          comp = await require('./legal-agreements').complianceFor(uidForLegal, _role === 'legal' ? 'provider' : _role);
+          comp = await require('./legal-agreements').complianceFor(uidForLegal, (_AT || _role === 'legal') ? 'provider' : _role);
         } catch (e) {
           /* FAIL CLOSED. If the compliance record cannot be read we do not know
              whether the applicant accepted anything, and "unknown" must not
@@ -1467,7 +2011,7 @@ exports.applicationDecide = onCall(
         if (!comp.compliant) {
           const names = comp.missing.map((m) => `${m.name} (${m.reason})`).join(', ');
           throw new HttpsError('failed-precondition',
-            `This ${_role === 'health' ? 'healthcare' : _role === 'legal' ? 'advocate' : 'event organizer'} application cannot be approved: the applicant has not accepted the ` +
+            `This ${_AT ? _AT.T.key + ' service-provider' : _role === 'health' ? 'healthcare' : _role === 'legal' ? 'advocate' : 'event organizer'} application cannot be approved: the applicant has not accepted the ` +
             'required agreements. Outstanding: ' + (names || 'unknown') +
             '. Use "request_info" to ask them to complete the acceptance. Accepting the Seller ' +
             'Agreement does not satisfy this.');
@@ -1482,31 +2026,53 @@ exports.applicationDecide = onCall(
       }
     }
 
-    const STATUS = { approve: 'approved', reject: 'rejected', suspend: 'suspended', request_info: 'info_requested' };
-    const status = STATUS[decision];
-    const actor = req.auth.uid;
+    /* the type's own decision fields (e.g. Marketing: only the categories the reviewer approved) */
+    const _mkt = decision === 'approve' && AT0 ? AT0.T.decide(snap.data() || {}, req.data || {}) : {};
 
-    /* The SERVER-ONLY decision record the trigger and the reconcile path require (decisionAuthority).
-       Written FIRST: the application write below re-fires the trigger, which must find it. */
+    /* H1 — the business category is decided HERE, server-side, from the application by exact match; never from the
+       request. An approval that would land an UNCATEGORIZED provider is refused (request the category instead). */
+    let _bizCat = null;
+    if (decision === 'approve') {
+      const _role = _decidedRoleOf(cur);
+      if (_projectsToProviders(cur, _role)) {
+        const BCAT = require('./business-category');
+        _bizCat = BCAT.categoryFromApplication(cur, _role).category;
+        if (!BCAT.isCategory(_bizCat)) {
+          throw new HttpsError('failed-precondition', 'This application cannot be approved yet: its business category does not match a SOKONI category. Request information so the applicant chooses one.', { reason: 'CATEGORY_UNRESOLVED' });
+        }
+      }
+    }
+
+    /* K13-A — THE SERVER DECISION RECORD, written BEFORE the application is touched. `applicationDecisions/{appId}`
+       has no client rule (default deny), so it is the one record of a decision that a browser cannot author; the
+       application's own `status` / `decidedBy` are applicant-writable on the served rules and are therefore never
+       sufficient on their own (see _authoritativeDecision). One document per application = the CURRENT decision;
+       the full history stays in adminAudit. */
     await db.collection(DECISIONS).doc(String(applicationId)).set({
-      appId: String(applicationId), decision, status: canonStatus(status), decidedBy: actor, decidedAtMs: Date.now(),
+      applicationId: String(applicationId), appId: String(applicationId), decidedAtMs: Date.now(),
+      status: canonStatus(status),
+      decision,
+      decidedBy: actor,
+      applicantUid,
       reason: _sanText(reason, 500) || null,
+      decidedAt: _ts(),
+      /* Marketing (b2, 2026-10-03): the APPROVED category subset lives on the server record too — the application's
+         marketingApprovedCategories is applicant-writable. Record = the CURRENT decision: anything but approve → []. */
+      ...(AT0 && AT0.T.key === 'marketing' ? { approvedCategories: decision === 'approve' ? (_mkt.marketingApprovedCategories || []) : [] } : {}),
+      /* H1: the category this approval decided — the ONLY source projectProvider stamps from */
+      ...(_bizCat ? { businessCategory: _bizCat, approvedCategories: [_bizCat] } : {}),
     });
 
     await ref.set({
       status,
+      ..._mkt,   /* only the type's own decision fields (e.g. marketing categories) — never status */
       statusCanonical: canonStatus(status),
+      reviewStage: STAGE[decision], reviewStageAt: _ts(),
       reviewReason: _sanText(reason, 500) || null,
       decidedBy: actor,
       decidedAt: _ts(),
-      /* SERVER-stamped proof that the acknowledgement was present and verified
-         at the moment of approval. `agreementAcceptedAt` on the application is a
-         CLIENT clock (the browser wrote that document), so it is evidence of
-         intent but not of time. This field is the one to rely on. */
-      ...(decision === 'approve' ? {
-        agreementVerifiedAt:      _ts(),
-        agreementVerifiedVersion: (snap.data() || {}).agreementVersion || null,
-      } : {}),
+      /* r2: SERVER-stamped proof the acknowledgement was verified at approval (agreementAcceptedAt is a client clock) */
+      ...(decision === 'approve' ? { agreementVerifiedAt: _ts(), agreementVerifiedVersion: (snap.data() || {}).agreementVersion || null } : {}),
       /* Force re-projection even when the status is unchanged (a repair). */
       decisionAppliedFor: FieldValue.delete(),
       updatedAt: _ts(),
@@ -1535,8 +2101,48 @@ exports.applicationDecide = onCall(
   }
 );
 
+/* ── K13-A — what makes a stored status AUTHORITATIVE ─────────────────────────────────────
+   The served rules let an applicant write their own application's `status` (and `decidedBy`). The reconcile path
+   used to project whatever status it found, attributed to the admin who ran it — so an applicant who set
+   status:'approved' was approved by the next "reconcile all" sweep (K13b). A stored status is authoritative only when
+   an ADMINISTRATOR who is NOT the applicant decided exactly that status, evidenced by:
+     1. the server decision record applicationDecisions/{appId} (written by applicationDecide, client-unwritable), or
+     2. for decisions made before that record existed, an adminAudit row `application_<decision>` for this application.
+   Nothing else — not the application's own fields, not an operator label — makes a decision reconcilable. */
+const _DECISION_OF = { approved: 'approve', active: 'approve', verified: 'approve', rejected: 'reject', suspended: 'suspend' };
+async function _isAdminUid(uid, cache) {
+  if (!uid || typeof uid !== 'string') return false;
+  if (cache && Object.prototype.hasOwnProperty.call(cache, uid)) return cache[uid];
+  let ok = false;
+  try { const c = (await getAuth().getUser(uid)).customClaims || {}; ok = c.admin === true || c.superAdmin === true; }
+  catch (_) { ok = false; }                                /* an operator label is not an account */
+  if (cache) cache[uid] = ok;
+  return ok;
+}
+async function _authoritativeDecision(db, appId, app, cache) {
+  const status = canonStatus(app.status);
+  const applicant = app.uid || null;
+  const acceptable = async (by) => !!by && by !== applicant && await _isAdminUid(by, cache);
+
+  const rec = await db.collection('applicationDecisions').doc(String(appId)).get();
+  if (rec.exists) {
+    const r = rec.data() || {};
+    /* A record exists: it IS the current decision. A stored status that disagrees with it is not authoritative. */
+    return (r.status === status && await acceptable(r.decidedBy)) ? { ok: true, by: r.decidedBy, evidence: 'decision_record' } : { ok: false };
+  }
+  const decision = _DECISION_OF[status];
+  if (!decision) return { ok: false };
+  const audits = await db.collection('adminAudit').where('applicationId', '==', String(appId)).limit(50).get();
+  for (const a of audits.docs) {
+    const d = a.data() || {};
+    if (d.action === `application_${decision}` && await acceptable(d.performedBy)) return { ok: true, by: d.performedBy, evidence: 'admin_audit' };
+  }
+  return { ok: false };
+}
+
 /* Re-run the projection for an application whose registry record is missing or
-   stale — the repair path for anything approved before this engine existed. */
+   stale — the repair path for anything approved before this engine existed.
+   K13-A: only an AUTHORITATIVE decision is re-projected (_authoritativeDecision), attributed to its real decider. */
 exports.applicationReconcile = onCall(
   { region: REGION, maxInstances: 5, enforceAppCheck: true, timeoutSeconds: 300, secrets: [QR_SIGNING_SECRET] },
   async (req) => {
@@ -1553,10 +2159,11 @@ exports.applicationReconcile = onCall(
         await snap.ref.set(norm.patch, { merge: true });
         Object.assign(app, norm.patch);
       }
-      /* A repair re-applies a decision; it never MAKES one. A status with no matching server decision
-         record (e.g. one the applicant wrote) is refused — re-decide it through applicationDecide. */
-      const auth1 = await decisionAuthority(app, snap.id);
-      if (!auth1.ok) return { ok: true, results: [{ ok: false, appId: snap.id, refused: true, reason: auth1.reason }] };
+      const auth1 = await _authoritativeDecision(db, snap.id, app, {});
+      if (!auth1.ok) {
+        logger.warn('[appReconcile] refused: no authoritative decision', { appId: snap.id, status: app.status });
+        return { ok: true, results: [{ ok: false, appId: snap.id, refused: 'NO_AUTHORITATIVE_DECISION' }] };
+      }
       return { ok: true, results: [await applyDecision(snap.id, app, { decidedBy: auth1.by })] };
     }
 
@@ -1565,14 +2172,19 @@ exports.applicationReconcile = onCall(
     /* Bounded sweep of decided applications. */
     const snap = await db.collection('applications').where('status', 'in', ['approved', 'active', 'verified']).limit(300).get();
     const results = [];
+    const adminCache = {};
     for (const d of snap.docs) {
       const app = d.data();
       try {
         const norm = await buildIntakePatch(app, d.id);
         if (norm) { await d.ref.set(norm.patch, { merge: true }); Object.assign(app, norm.patch); }
-        const authN = await decisionAuthority(app, d.id);
-        if (!authN.ok) { results.push({ ok: false, appId: d.id, refused: true, reason: authN.reason }); continue; }
-        results.push(await applyDecision(d.id, app, { decidedBy: authN.by }));
+        const authz = await _authoritativeDecision(db, d.id, app, adminCache);
+        if (!authz.ok) {
+          logger.warn('[appReconcile] refused: no authoritative decision', { appId: d.id, status: app.status });
+          results.push({ ok: false, appId: d.id, refused: 'NO_AUTHORITATIVE_DECISION' });
+          continue;
+        }
+        results.push(await applyDecision(d.id, app, { decidedBy: authz.by }));
       } catch (e) {
         results.push({ ok: false, appId: d.id, error: e.message });
       }
@@ -1609,7 +2221,9 @@ exports.applicationList = onCall(
         applicationId: a.applicationId || d.id,
         uid: a.uid || null,
         name: a.name || a.businessName || a.fullName || '',
-        role: a.role || resolveRole(a).role,
+        /* null when the application declared a role we do not recognise — the list
+           shows it as unresolved rather than inventing one. */
+        role: a.role || resolveRole(a).role || null,
         rawType: a.type || '',
         category: a.category || '',
         categoryLabel: a.categoryLabel || '',
@@ -1630,6 +2244,13 @@ exports.applicationList = onCall(
         plate: a.plate || '',
         model: a.model || '',
         description: a.description || a.bio || '',
+        /* Marketing Hub MK2 — the reviewer sees the declared type and exactly which categories were asked for / approved. */
+        hub: a.hub || null,
+        applicationType: a.applicationType || null,
+        marketingType: a.marketingType || null,
+        requestedCategories: Array.isArray(a.requestedCategories) ? a.requestedCategories : [],
+        marketingApprovedCategories: Array.isArray(a.marketingApprovedCategories) ? a.marketingApprovedCategories : [],
+        portfolio: Array.isArray(a.portfolio) ? a.portfolio : [],
         /* Projection health — the difference between "approved" and "live". */
         projectionStatus: a.projectionStatus || (st === 'pending' ? 'n/a' : 'not_applied'),
         projectionError: a.projectionError || null,
@@ -1639,13 +2260,6 @@ exports.applicationList = onCall(
         receivedAt: a.receivedAt ? (a.receivedAt.toMillis ? a.receivedAt.toMillis() : a.receivedAt) : null,
         submittedAtRaw: a.submittedAt || null,
         createdAt: a.createdAt ? (a.createdAt.toMillis ? a.createdAt.toMillis() : a.createdAt) : null,
-        /* ── Agreement evidence ────────────────────────────────────────────────
-           A reviewer approving someone should be able to see WHAT they accepted
-           and at which version, not merely discover on failure that they did not.
-           These are the application's own fields, so they cost no extra read.
-           `agreementVerifiedAt` / `agreementVerifiedVersion` are the SERVER-stamped
-           pair written at approval — the ones to rely on; `agreementAcceptedAt` is
-           a browser clock on a client-written document. */
         agreementAccepted: a.agreementAccepted === true,
         agreementVersion: a.agreementVersion || null,
         agreementAcceptedAt: a.agreementAcceptedAt || null,
@@ -1668,14 +2282,6 @@ exports.applicationList = onCall(
       (i) => i.status === 'approved' && i.projectionStatus !== 'applied'
     ).length;
 
-    /* ── Canonical agreement evidence, healthcare only ─────────────────────────
-       Healthcare approval is gated on `legalAcceptances`, not on the application's
-       boolean, so a reviewer needs to see the canonical record — which instrument,
-       which version, which content hash — before deciding. That costs one query per
-       applicant, so it runs ONLY for role 'health' and is capped: a reviewer works a
-       page at a time, and an unbounded fan-out here is how an admin list becomes the
-       most expensive read on the platform. Beyond the cap the field stays null rather
-       than half-true, and the failure of one lookup never fails the listing. */
     const HEALTH_EVIDENCE_CAP = 25;
     const healthItems = items.filter((i) => i.role === 'health').slice(0, HEALTH_EVIDENCE_CAP);
     if (healthItems.length) {
@@ -1697,7 +2303,6 @@ exports.applicationList = onCall(
         }
       }));
     }
-
     return { ok: true, items, counts, unpublished, total: items.length };
   }
 );
@@ -1705,10 +2310,8 @@ exports.applicationList = onCall(
 /* Internals exported for unit tests and for the reconcile script. */
 exports._internal = {
   toE164KE, toLocalKE, splitLocation, resolveRole, canonStatus, normVehicle, _san, _sanText,
-  /* projectSeller is exported so provider-shop.js can provision a healthcare provider's
-     merchant identity through THIS function rather than a healthcare-specific copy. One
-     projection, one shop shape, whether the shop came from merchant approval or from a
-     clinic asking for one. */
-  buildIntakePatch, applyDecision, projectProvider, projectDriver, projectSeller,
+  buildIntakePatch, applyDecision, projectProvider, projectDriver, projectMarketing,
+  projectRoleProfile, ROLE_PROFILES, DELEGATED_ROLES, projectSeller, MERCHANT_CATEGORIES,
   INTAKE_VERSION, KE_COUNTIES,
+  EDUCATION_TYPES, EDUCATION_REQUIRED, educationTypeOf, educationMissing, projectEducationEnterprise, APPLICANT_TYPES, applicantTypeOf,
 };

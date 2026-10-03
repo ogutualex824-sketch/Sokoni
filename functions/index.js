@@ -13082,6 +13082,7 @@ exports.resendPasswordSetup = onCall(
 const _appLife = require('./application-lifecycle');
 exports.applicationLifecycle  = _appLife.applicationLifecycle;   // trigger: applications/{appId}
 exports.applicationDecide     = _appLife.applicationDecide;      // onCall (admin)
+exports.applicationAdmitExistingProvider = _appLife.applicationAdmitExistingProvider;   // onCall (admin + MFA): approve an already-live provider/seller that has no application (owner 2026-10-03)
 exports.applicationReconcile  = _appLife.applicationReconcile;   // onCall (admin) — drift repair
 exports.applicationList       = _appLife.applicationList;        // onCall (admin) — one canonical read
 
