@@ -1294,7 +1294,7 @@ const SPos = (function () {
 
       const total = cart.getTotal();
       const isM   = method === 'mpesa';
-      const isT   = method === 'mpesa_till';
+      const isT   = false;   /* manual Till REMOVED (owner 2026-10-03) */
       const isC   = method === 'card';
       const payBtn = document.getElementById('pay-btn');
       payBtn.className = 'pos-pay-btn' + (isM || isT ? ' mpesa' : isC ? ' card' : '');
@@ -1340,12 +1340,10 @@ const SPos = (function () {
         return;
       }
 
-      if (method === 'mpesa_till') {
-        modal.open('mpesa-till-modal');
-        _setVal('mpesa-till-amount-disp', total.toFixed(2));
-        const _ref = document.getElementById('mpesa-till-ref');
-        if (_ref) { _ref.value = ''; _ref.focus(); }
-        mpesaTill.onInput();
+      /* Manual M-PESA Till codes are REMOVED (owner 2026-10-03): a code typed by the cashier is not a confirmed
+         payment, and the server refuses it. A till that still holds the old method (cached state) is told plainly. */
+      if (method === 'mpesa_till' || method === 'mpesa_till_manual') {
+        toast('Manual M-PESA Till codes are no longer accepted. Take cash, or a confirmed M-PESA or card payment.', 'error');
         return;
       }
 
@@ -1479,9 +1477,6 @@ const SPos = (function () {
            deliberately left untouched rather than assigned a verification status
            this function cannot establish — an invented `true` would be worse than
            an absent field. */
-        ...(payInfo.method === 'mpesa_till_manual'
-          ? { paymentVerified: false, paymentAttestedBy: 'operator' }
-          : {}),
         cashierId:      state.currentCashier?.id,
         cashierName:    state.currentCashier?.name,
         shiftId:        state.currentShift?.id,
@@ -1723,93 +1718,9 @@ const SPos = (function () {
   /* ═══════════════════════════════════════════════════════════
      M-PESA
   ═══════════════════════════════════════════════════════════ */
-  /* ══════════════════════════════════════════════════════════════════════════
-     MANUAL M-PESA TILL PAYMENT
-
-     The customer has already paid the merchant's own Till directly. The cashier
-     records the confirmation code against this sale.
-
-     WHAT THIS DOES AND DOES NOT MEAN
-     Recording is not verification. With no C2B webhook or STK callback on this
-     path, SOKONI has no way to ask Safaricom whether the money arrived, so the
-     record says "the cashier recorded a Till payment and supplied this
-     reference" — never "SOKONI confirmed this payment". The distinction is kept
-     in the DATA (`paymentMethod: 'mpesa_till_manual'`, `paymentVerified: false`)
-     so that a future C2B or STK origin is distinguishable from this one rather
-     than collapsing into an undifferentiated "mpesa".
-
-     UNIQUENESS IS CLAIMED SERVER-SIDE, NOT HERE
-     The check below is a courtesy that catches the common case early. It CANNOT
-     be the guard: this POS is offline-first, so two devices can accept the same
-     reference with neither able to see the other. The authoritative claim is a
-     deterministic transactional write at sync — see functions/pos-mpesa-refs.js.
-     ══════════════════════════════════════════════════════════════════════════ */
-  const MPESA_REF_RE = /^[A-Z0-9]{10}$/;
-
-  /** Normalise operator input: strip spaces/punctuation, uppercase. */
-  function _normaliseMpesaRef(raw) {
-    return String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  }
-
-  const mpesaTill = {
-    _normalise: _normaliseMpesaRef,
-    isValid(raw) { return MPESA_REF_RE.test(_normaliseMpesaRef(raw)); },
-
-    onInput() {
-      const el   = document.getElementById('mpesa-till-ref');
-      const btn  = document.getElementById('mpesa-till-confirm-btn');
-      const hint = document.getElementById('mpesa-till-hint');
-      if (!el) return;
-      const norm = _normaliseMpesaRef(el.value);
-      if (el.value !== norm) el.value = norm;      /* show exactly what will be stored */
-      const ok = MPESA_REF_RE.test(norm);
-      if (btn) btn.disabled = !ok;
-      if (hint) {
-        hint.textContent = !norm.length
-          ? "10 characters, from the customer's M-PESA SMS."
-          : ok ? '✓ Looks like a valid M-PESA code.'
-               : `${norm.length}/10 characters.`;
-        hint.style.color = ok ? '#00a84e' : 'var(--txt2)';
-      }
-    },
-
-    async confirm() {
-      const el = document.getElementById('mpesa-till-ref');
-      const ref = _normaliseMpesaRef(el && el.value);
-      if (!MPESA_REF_RE.test(ref)) {
-        toast('Enter the 10-character M-PESA confirmation code', 'error');
-        return;
-      }
-
-      /* Early duplicate check against THIS device's history. Not the guard —
-         see the module note. A local hit is always a real duplicate, so it is
-         worth refusing here rather than at sync. */
-      try {
-        const prior = await PosDB.transactions.getAll();
-        if ((prior || []).some(t => t && t.mpesaRef === ref && t.status === 'completed')) {
-          const res = document.getElementById('mpesa-till-result');
-          if (res) {
-            res.style.display    = 'block';
-            res.style.background = 'rgba(255,59,48,0.10)';
-            res.style.color      = '#ff3b30';
-            res.textContent      = `${ref} is already recorded against another sale on this device.`;
-          }
-          toast('That M-PESA code is already used on this device', 'error');
-          return;
-        }
-      } catch (_) { /* history unavailable — the server claim still applies */ }
-
-      const total = cart.getTotal();
-      modal.close('mpesa-till-modal');
-      await payment.complete({
-        method:     'mpesa_till_manual',
-        amountPaid: total,
-        change:     0,
-        mpesaRef:   ref,
-        mpesaPhone: (state.currentCustomer && state.currentCustomer.phone) || null,
-      });
-    },
-  };
+  /* MANUAL M-PESA TILL PAYMENT — REMOVED (owner 2026-10-03). The cashier used to type the customer's M-PESA code
+     and the sale was recorded paid with no confirmation from Safaricom or IntaSend. A typed code is not a payment.
+     Past sales keep their recorded method (receipts still print "M-Pesa Till" for them). */
 
   const mpesa = {
     /* RETIRED — the POS no longer stores merchant M-Pesa credentials.
@@ -4353,7 +4264,7 @@ const SPos = (function () {
   };
 
   return {
-    state, wizard, ui, nav, products, cart, payment, mpesa, mpesaTill,
+    state, wizard, ui, nav, products, cart, payment, mpesa,
     barcode, inv, reports, customers, cashier, shift,
     settings, profile, sync, data, modal, printerSetup, bos,
     sales, orders, more, po, cats, split,

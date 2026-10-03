@@ -1,3 +1,17 @@
+## [2026-10-03] — Till: manual M-PESA Till codes removed
+
+**Files:** `pos.html`, `pos.js`, `scripts/test-pos-manual-till-removed.js` (new), `scripts/test-pos-manual-till-payment.js` (removed; it asserted the feature), `CHANGELOG.md` · **Base:** live `72dca56`
+
+- **Owner ruling 2026-10-03:** a code typed by the cashier is not a confirmed payment. The till takes cash, or an M-PESA / card payment SOKONI has confirmed.
+- **Removed:** the "M-PESA Till" button, the code-entry modal, the `mpesaTill` controller and its `SPos` export, and the `mpesa_till_manual` sale path with its `paymentAttestedBy:'operator'` flag. A till still holding the old method in cached state gets a plain refusal toast instead of falling through to another tender.
+- **Kept:** the receipt label for PAST manual-Till sales, so old receipts still print their real method. The server-side claim module (`pos-mpesa-refs.js`) still flags duplicate codes on historical offline sales.
+- **Server:** the converged `posCompleteCheckout` line already refuses `mpesa_till_manual` (closed tender lists).
+- **Tests:**
+  - manual-till-removed 7/0 (live 72dca56 fails 6/7);
+  - 17 other POS / merchant suites unchanged;
+  - `test-cart-universal` (2) and `test-pos-architecture` (5) failures are identical without this change, so pre-existing.
+- **Not deployed.**
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
