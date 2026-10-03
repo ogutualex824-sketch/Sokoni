@@ -8023,6 +8023,13 @@ exports.webhookIntasend = onRequest(
          refuses the credit on attribution.purpose/type instead. */
       try {
         const _fiSnap = await db.collection("paymentIntents").doc(existing.intentRef || apiRef).get();
+        /* Membership payment (owner 2026-10-03): HELD by SOKONI, never credited here — membership-settlement releases
+           it monthly after the first attendance. Decided on THIS read (no extra intent read); fitness_membership is also
+           self-settling, so if this read fails the SECOND exit below still refuses any seller credit. */
+        if (_fiSnap.exists && _fiSnap.data().resourceType === 'providerMembership') {
+          await require('./membership-settlement').holdMembershipPayment(db, admin, apiRef, existing.intentRef, amount);
+          res.status(200).send("OK"); return;
+        }
         /* Self-settling purposes (film_access, event_ticket) — see
            shared/self-settling-purposes.js. Each settles through its own adapter. */
         if (_fiSnap.exists && require("./shared/self-settling-purposes").isSelfSettling(_fiSnap.data().purpose)) {
@@ -13452,3 +13459,5 @@ exports.venuePaymentSweep           = _venuePay.venuePaymentSweep;              
 const _membershipSettlement = require('./membership-settlement');
 exports.membershipReleaseSweep = _membershipSettlement.membershipReleaseSweep;
 exports.membershipRequestRefund = _membershipSettlement.membershipRequestRefund;
+exports.membershipDecideRefund     = _membershipSettlement.membershipDecideRefund;
+exports.membershipRequestException = _membershipSettlement.membershipRequestException;

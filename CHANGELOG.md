@@ -1,3 +1,10 @@
+## 2026-10-03 — Membership payment intake + refund approval/execution + AdminOS exception (NOT deployed)
+
+- **Payment:** purpose fitness_membership; webhook holdMembershipPayment, on the existing intent read; fitness_membership is self-settling.
+- **New callables:** membershipDecideRefund (second admin; executes to the SOKONI wallet with a deterministic ledger row) and membershipRequestException (reasoned, attendance preserved).
+- **Audit:** providerMemberships/{id}/events.
+- **Tests:** test-membership-settlement 45/0; 5 mutants each detected; creator-callback unchanged vs HEAD.
+
 ## 2026-10-03 — Membership settlement: held until first attendance, then monthly; refund only with zero attendance (NOT deployed)
 
 - **New:** functions/membership-settlement.js (membershipReleaseSweep, membershipRequestRefund, initialSettlementFields). One more trigger on the provider settlement, at the 5% fitness lane.

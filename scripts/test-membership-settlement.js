@@ -27,6 +27,7 @@ let pass = 0, fail = 0;
 const ck = (l, ok, d) => { if (ok) { pass++; console.log('  PASS  ' + l); } else { fail++; console.log('  FAIL  ' + l + (d !== undefined ? '  -> ' + JSON.stringify(d).slice(0, 260) : '')); } };
 
 /* ── in-memory Firestore ── */
+fakeDb._n = 0;
 function fakeDb (seed) {
   const docs = new Map(Object.entries(seed || {}).map(([k, v]) => [k, JSON.parse(JSON.stringify(v))]));
   const INC = Symbol('inc');
@@ -40,7 +41,7 @@ function fakeDb (seed) {
   };
   const ref = (p) => ({ path: p, id: p.split('/').pop(), collection: (c) => col(p + '/' + c) });
   const col = (c) => ({
-    doc: (id) => ref(c + '/' + id),
+    doc: (id) => ref(c + '/' + (id === undefined ? 'auto' + (++fakeDb._n) : id)),
     where: (f, op, v) => ({ limit: () => ({ get: async () => {
       const hits = [...docs.entries()].filter(([k, d]) => k.startsWith(c + '/') && k.split('/').length === 2 && d[f] != null && (op === '<=' ? d[f] <= v : false));
       return { size: hits.length, docs: hits.map(([k]) => ({ id: k.split('/')[1] })) };
@@ -79,7 +80,7 @@ function fakeDb (seed) {
   db.collection = (c) => Object.assign(col(c), {});
   /* ref().get for the top-level reads */
   const origDoc = (c) => col(c).doc;
-  db.collection = (c) => ({ ...col(c), doc: (id) => { const r = origDoc(c)(id); r.get = async () => { const d = docs.get(r.path); return { exists: !!d, data: () => (d ? JSON.parse(JSON.stringify(d)) : undefined) }; }; return r; } });
+  db.collection = (c) => ({ ...col(c), doc: (id) => { const r = origDoc(c)(id); r.get = async () => { const d = docs.get(r.path); return { exists: !!d, data: () => (d ? JSON.parse(JSON.stringify(d)) : undefined) }; }; r.set = async (v, o) => { docs.set(r.path, apply(o && o.merge ? docs.get(r.path) : null, v)); }; return r; } });
   return db;
 }
 /* the REAL commission engine, with a stub Firestore that offers no overrides */
@@ -176,6 +177,85 @@ const D = (s) => new Date(s);
   ck('M9b settlement never WRITES the attendance fields (Fitness lane owns them)', !/(attendedSessions|firstAttendedAt|refundEligible)\s*:/.test(src.replace(/attendedSessionsAtRequest/g, '')));
   const init = MS.initialSettlementFields(mem());
   ck('M10 initialSettlementFields (for the payment webhook): nextReleaseAt = first month end, counters 0', String(init.nextReleaseAt).startsWith('2026-02-15') && init.releasedPeriods === 0 && init.status === 'active', init);
+
+  /* ══ P: PAYMENT INTAKE (purpose fitness_membership → verified webhook → hold) ══ */
+  const pend = { paymentStatus: 'pending', status: 'pending_payment', releasedPeriods: undefined, releasedCents: undefined };
+  const intent = (over) => Object.assign({ resourceType: 'providerMembership', resourceId: 'mem_000001', uid: 'member_1', amountCents: 600000, currency: 'KES' }, over || {});
+  const setupPay = (memOver, intentOver) => { const d = setup(Object.assign({}, pend, memOver || {})); d._docs.set('paymentIntents/int_1', intent(intentOver)); return d; };
+  db = setupPay();
+  let h = await MS.holdMembershipPayment(null, null, 'API_1', 'int_1', 6000);
+  let mp = db._docs.get('providerMemberships/mem_000001');
+  ck('P1 valid payment → paid_held + active, settlement fields initialised, NOTHING credited, intent paid',
+    h === true && mp.paymentStatus === 'paid_held' && mp.status === 'active' && mp.heldCents === 600000 && String(mp.nextReleaseAt).startsWith('2026-02-15') && bal(db) === 0 && db._docs.get('paymentIntents/int_1').status === 'paid', mp);
+  h = await MS.holdMembershipPayment(null, null, 'API_1', 'int_1', 6000);
+  ck('P2 replayed webhook → no-op (still held once, one event)', h === true && [...db._docs.keys()].filter((k) => k.startsWith('providerMemberships/mem_000001/events/')).length === 1);
+  db = setupPay();
+  await MS.holdMembershipPayment(null, null, 'API_2', 'int_1', 600);
+  mp = db._docs.get('providerMemberships/mem_000001');
+  ck('P3 wrong amount (KES 600 for KES 6,000) → payment_review, NOT activated', mp.paymentStatus === 'payment_review' && mp.paymentReviewReason === 'amount_mismatch' && mp.status === 'pending_payment', mp);
+  db = setupPay({}, { uid: 'someone_else' });
+  await MS.holdMembershipPayment(null, null, 'API_3', 'int_1', 6000);
+  ck('P4 intent minted by a different buyer → payment_review (intent_binding), not activated', db._docs.get('providerMemberships/mem_000001').paymentReviewReason === 'intent_binding');
+  db = setupPay({}, { amountCents: 100 });
+  await MS.holdMembershipPayment(null, null, 'API_4', 'int_1', 6000);
+  ck('P5 intent priced differently from the membership → payment_review', db._docs.get('providerMemberships/mem_000001').paymentStatus === 'payment_review');
+  db = setupPay({}, { resourceType: 'providerBooking' });
+  ck('P6 a non-membership intent is not handled here (returns false, membership untouched)', (await MS.holdMembershipPayment(null, null, 'API_5', 'int_1', 6000)) === false && db._docs.get('providerMemberships/mem_000001').paymentStatus === 'pending');
+  db = setupPay();
+  ck('P7 fake payment reference (no intent) → not handled, nothing activated', (await MS.holdMembershipPayment(null, null, 'FAKE', 'nope', 6000)) === false && db._docs.get('providerMemberships/mem_000001').status === 'pending_payment');
+  const PP = require(path.join(ROOT, 'functions/payment-purposes.js'));
+  ck('P8 purpose fitness_membership is registered and prices from the record (resourceType providerMembership)', PP.isRegistered && PP.isRegistered('fitness_membership') && PP.PURPOSES.fitness_membership.resourceType === 'providerMembership');
+
+  /* ══ R: REFUND DECISION (second actor) + EXECUTION ══ */
+  const reqd = () => { const d = setup({ paymentRef: 'API_1' }); return d; };
+  db = reqd();
+  await MS.requestRefund('mem_000001', { by: 'member_1', now: D('2026-01-25T10:00:00Z') });
+  r = await MS.decideRefund('mem_000001', { by: 'member_1', decision: 'approve' });
+  ck('R1 the requester (buyer) cannot approve their own refund (separation of duties)', r.ok === false && r.code === 'separation_of_duties', r);
+  r = await MS.decideRefund('mem_000001', { by: 'gym_A', decision: 'approve' });
+  ck('R1b the gym cannot approve it either', r.ok === false && r.code === 'separation_of_duties', r);
+  r = await MS.decideRefund('mem_000001', { by: 'admin_9', decision: 'approve', reason: 'zero attendance' });
+  const mf = db._docs.get('providerMemberships/mem_000001');
+  ck('R2 a second authorized actor approves → KES 6,000 to the buyer\'s SOKONI wallet + one ledger row; refunded',
+    r.ok && r.state === 'refunded' && (db._docs.get('users/member_1') || {}).walletBalance === 6000 && db._docs.has('ledger/member_1_mem_000001_membership_refund') && mf.paymentStatus === 'refunded' && mf.refund.destination === 'sokoni_wallet', { r, refund: mf.refund });
+  r = await MS.decideRefund('mem_000001', { by: 'admin_8', decision: 'approve' });
+  ck('R3 replayed approval → refused, no second credit (already refunded)', r.ok === false && db._docs.get('users/member_1').walletBalance === 6000, r);
+  r = await MS.releaseDueSlices('mem_000001', { now: D('2026-04-16T06:00:00Z'), deps });
+  ck('R4 a refunded membership never settles to the gym', r.skipped && bal(db) === 0, r);
+  db = reqd();
+  await MS.requestRefund('mem_000001', { by: 'member_1', now: D('2026-01-25T10:00:00Z') });
+  r = await MS.decideRefund('mem_000001', { by: 'admin_9', decision: 'reject', reason: 'policy window' });
+  const mj = db._docs.get('providerMemberships/mem_000001');
+  ck('R5 rejection → schedule resumes (active, paid_held, nextReleaseAt restored), nothing credited', r.ok && mj.status === 'active' && mj.paymentStatus === 'paid_held' && String(mj.nextReleaseAt).startsWith('2026-02-15') && !db._docs.has('users/member_1'), mj);
+  db = reqd();
+  await MS.requestRefund('mem_000001', { by: 'member_1', now: D('2026-01-25T10:00:00Z') });
+  /* the race: a check-in lands after the request (the Fitness lane must refuse it, but if it slipped through…) */
+  const cur = db._docs.get('providerMemberships/mem_000001'); db._docs.set('providerMemberships/mem_000001', Object.assign({}, cur, { attendedSessions: 1, refundEligible: false }));
+  r = await MS.decideRefund('mem_000001', { by: 'admin_9', decision: 'approve' });
+  ck('R6 check-in vs refund race: approval re-checks attendance inside its txn → refused "already been used"', r.ok === false && r.code === 'used' && !db._docs.has('users/member_1'), r);
+  db = setup({ paymentRef: 'API_1' });
+  await MS.requestRefund('mem_000001', { by: 'member_1', now: D('2026-01-25T10:00:00Z') });
+  const [rel, dec] = await Promise.all([MS.releaseDueSlices('mem_000001', { now: D('2026-04-16T06:00:00Z'), deps }), MS.decideRefund('mem_000001', { by: 'admin_9', decision: 'approve' })]);
+  ck('R7 refund approval vs payout worker at the same time: the gym gets nothing, the buyer is refunded once', bal(db) === 0 && db._docs.get('users/member_1').walletBalance === 6000 && dec.ok, { rel, dec });
+
+  /* ══ X: ADMINOS EXCEPTION ══ */
+  db = setup(Object.assign({ paymentRef: 'API_1' }, used));
+  await MS.releaseDueSlices('mem_000001', { now: D('2026-02-16T06:00:00Z'), deps });   /* month 1 settled to the gym */
+  r = await MS.requestException('mem_000001', { by: 'admin_1', reason: 'short' });
+  ck('X1 an exception needs a written reason', r.ok === false && r.code === 'reason_required', r);
+  r = await MS.requestException('mem_000001', { by: 'admin_1', reason: 'Member relocated — medical certificate on file' });
+  const mx = db._docs.get('providerMemberships/mem_000001');
+  ck('X2 exception on a USED membership: request for the UNRELEASED KES 4,000 only; attendance preserved; releases frozen',
+    r.ok && r.refundRequestedCents === 400000 && mx.refund.exception === true && mx.refund.used === true && mx.attendedSessions === 1 && mx.refundEligible === false && mx.status === 'refund_requested', mx.refund);
+  r = await MS.decideRefund('mem_000001', { by: 'admin_1', decision: 'approve' });
+  ck('X3 the admin who opened the exception cannot approve it', r.ok === false && r.code === 'separation_of_duties', r);
+  r = await MS.decideRefund('mem_000001', { by: 'admin_2', decision: 'approve', reason: 'reviewed' });
+  ck('X4 a second admin approves → KES 4,000 to the buyer wallet through the SAME execution; gym keeps month 1; attendance untouched',
+    r.ok && db._docs.get('users/member_1').walletBalance === 4000 && bal(db) === 1900 && db._docs.get('providerMemberships/mem_000001').attendedSessions === 1, r);
+  const evs = [...db._docs.entries()].filter(([k]) => k.startsWith('providerMemberships/mem_000001/events/')).map(([, v]) => v.type);
+  ck('X5 audit trail: settlement_released → refund_exception_requested → refund_executed', evs.join(',') === 'settlement_released,refund_exception_requested,refund_executed', evs);
+  const src2 = require('fs').readFileSync(path.join(ROOT, 'functions/membership-settlement.js'), 'utf8');
+  ck('X6 no client path writes refundRequests; decide/exception callables are admin-gated', !/collection\('refundRequests'\)/.test(src2) && /membershipDecideRefund = onCall[\s\S]{0,300}_admin\(req\)/.test(src2) && /membershipRequestException = onCall[\s\S]{0,300}_admin\(req\)/.test(src2));
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

@@ -447,3 +447,45 @@ Execution belongs to the canonical refund authority (B9.31), which is **not buil
 - Rules: `providerMemberships` has no client rules (default deny). Buyer and gym read access is the Fitness lane's.
 - The refund execution authority is not built.
 - Emulator / runtime proof is UNPROVEN (memory floor).
+
+### 13.1 · Payment intake, refund approval + execution, AdminOS exception (2026-10-03, later)
+
+The money-side gaps from the owner's "MEMBERSHIP FULL END-TO-END GREEN" brief:
+
+- **Payment.**
+  - `payment-purposes.fitness_membership` (resourceType `providerMembership`) is priced from `providerMemberships/{id}.priceCents`. It is buyer-bound and payable only when `paymentStatus 'pending'` + `status 'pending_payment'`.
+  - The webhook decides on its EXISTING early intent read (no extra read). For `resourceType providerMembership` it calls `holdMembershipPayment`, which binds intent → membership → buyer → amount → currency (KES) and treats a replay as a no-op.
+  - On success: `paid_held` + `active` + `initialSettlementFields`. Any mismatch → `payment_review`; it is never activated.
+  - `fitness_membership` is also a **self-settling** purpose (`shared/self-settling-purposes.js`), so the webhook's second exit refuses any seller credit if the early read fails.
+- **Refund decision** (`membershipDecideRefund`, admin only).
+  - The decider must differ from the requester, the buyer and the provider.
+  - **Approve:** inside the transaction it re-checks attendance (non-exception requests), the amount ≤ the still-held balance and a verified `paymentRef`. It then executes through the **canonical held-money refund destination**: the buyer's SOKONI wallet (`users/{uid}.walletBalance`) plus a deterministic `ledger/{buyer}_{id}_membership_refund` row via `create()`, exactly as `provider-ops._disburseHeldFunds` / the late-payment refund do. A replay is refused.
+  - **Reject:** the schedule resumes.
+- **AdminOS exception** (`membershipRequestException`, admin only).
+  - It needs a written reason (≥10 characters). Attendance is preserved (the record says `used: true`).
+  - It refunds only the unreleased held balance and still needs a SECOND admin's decision, via the same execution.
+- **Audit:** `providerMemberships/{id}/events`, append-only: payment_held / payment_review / settlement_released / refund_requested / refund_exception_requested / refund_rejected / refund_executed.
+
+**Tests:** `test-membership-settlement.js` 45/0, covering:
+- M1–M10 settlement
+- P1–P8 payment: valid, replay, wrong amount, wrong buyer, intent priced differently, non-membership intent, fake reference, purpose registered
+- R1–R7 refund: separation (buyer, gym), execution, replay, no gym payout after refund, reject resumes, check-in-vs-approval race, approval-vs-payout race
+- X1–X6 exception
+
+**Mutants:** each of the five requested breakages makes a named test fail:
+- hold-until-first-visit → M3
+- refund lock → M8 ×4
+- payment binding → P3–P5
+- approval attendance re-check → R6
+- settlement idempotency → M5b
+
+**Regressions:** creator-callback has only its 4 pre-existing FAILs (identical on HEAD). entertainment-bookings 95/0, event-settlement 111/0, commission-schedule 25/0, fixed-rate 27/0, hub plans 17/0.
+
+**Refund destination note.** The canonical destination for held booking money is the SOKONI wallet; the member withdraws to M-PESA through the existing wallet payout. A direct IntaSend B2C reversal is NOT used: it is field-proven only at KES 10 and a failed payout strands the chargeback. Switching to B2C would be an owner decision.
+
+**Still UNPROVEN / BLOCKED:**
+- Emulator + browser runs (memory floor).
+- Port of the webhook hook onto the LIVE webhookIntasend lineage (sokoni-5b).
+- Rules for buyer / gym reads (sokoni-e3's rules lane).
+- Attendance / check-in (sokoni-e3).
+- Gym, member and AdminOS screens (sokoni-e3).

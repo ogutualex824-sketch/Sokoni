@@ -16,7 +16,8 @@
  * Activation hangs off the payments/{ref} trigger of each module, so it runs whichever webhook
  * wrote the payment. Purpose is read from the server-minted INTENT, never from client meta.
  */
-const SELF_SETTLING_PURPOSES = Object.freeze(new Set(['film_access', 'event_ticket', 'venue_booking']));
+/* fitness_membership (2026-10-03): HELD by membership-settlement, released monthly after first attendance — never a seller credit. */
+const SELF_SETTLING_PURPOSES = Object.freeze(new Set(['film_access', 'event_ticket', 'venue_booking', 'fitness_membership']));
 
 function isSelfSettling(purposeOrType) {
   return SELF_SETTLING_PURPOSES.has(String(purposeOrType || ''));

@@ -35,9 +35,19 @@
    SLICES: integer cents, base = floor(price / periods); the LAST month carries the remainder (sum = price exactly).
    Month k is due at the end of month k (subscription-period.periodEnd applied k times, the one period copy).
 
-   REFUND: only a REQUEST (B9.31), only with zero attendance, only before the membership ends, only once. Execution
-   belongs to the canonical refund authority (not built yet); nothing is paid out here and the auto-crediting
-   `refundRequests` collection is never written. A request freezes all releases.
+   PAYMENT (owner 2026-10-03: money side owns intake): payment-purposes 'fitness_membership' prices the membership from
+   THIS record (never the browser), bound to the buyer; the verified webhook calls holdMembershipPayment, which checks
+   the intent → membership binding, the amount (provider-confirmed KES == priceCents) and replay, then marks it
+   paid_held + active. A mismatch is parked as 'payment_review' — never activated.
+
+   REFUND (B9.31): request → a SECOND authorized actor decides → execution. Requested only with zero attendance, before
+   the end, once (requestRefund) — or as an explicit AdminOS EXCEPTION (requestException: admin, reason required,
+   attendance preserved, refunds the unreleased held balance). decideRefund: an admin who is NOT the requester, buyer or
+   provider approves or rejects; approval EXECUTES through the canonical held-money refund destination — the buyer's
+   SOKONI wallet (users/{uid}.walletBalance + a deterministic `ledger` row), exactly as provider-ops._disburseHeldFunds and
+   the late-payment refund do. A normal (non-exception) approval re-checks attendance inside its transaction. Rejection
+   resumes the schedule. The auto-crediting `refundRequests` collection is never written. Every step is audited at
+   providerMemberships/{id}/events.
    ============================================================================ */
 'use strict';
 
@@ -205,6 +215,7 @@ async function releaseDueSlices(membershipId, opts) {
       nextReleaseAt: next ? _tsFromDate(next.dueAt) : null,
       updatedAt: _ts(),
     });
+    _event(t, ref, 'settlement_released', { months: priced.map((p) => p.slice.index), releasedCents, trigger });
     out = { released: priced.length, releasedCents, credited, trigger };
   });
   if (out && out.released) logger.info('membership release', { membershipId, providerId: m.providerId, released: out.released, releasedCents: out.releasedCents, trigger: out.trigger });
@@ -227,13 +238,154 @@ async function requestRefund(membershipId, opts) {
     if (!dec.ok) { out = { ok: false, code: dec.code, reason: dec.reason, detail: dec.detail || null }; return; }
     t.update(ref, {
       status: 'refund_requested', paymentStatus: 'refund_requested', nextReleaseAt: null, updatedAt: _ts(),
-      refund: { state: 'requested', amountCents: dec.amountCents, attendedSessionsAtRequest: Number(cur.attendedSessions) || 0,
+      refund: { state: 'requested', amountCents: dec.amountCents, attendedSessionsAtRequest: Number(cur.attendedSessions) || 0, previousPaymentStatus: cur.paymentStatus,
                 requestedBy: o.by || null, requestedAt: _ts(),
                 note: 'Zero attendance — awaiting the canonical refund authority (B9.31). Nothing has been paid out.' },
     });
+    _event(t, ref, 'refund_requested', { by: o.by || null, amountCents: dec.amountCents, attendedSessionsSeen: 0 });
     out = { ok: true, refundRequestedCents: dec.amountCents };
   });
   logger.info('membership refund request', { membershipId, by: o.by || null, ok: out && out.ok, code: out && out.code });
+  return out;
+}
+
+/* ── AUDIT: one append-only event per lifecycle step (AdminOS reads the whole story from here) ── */
+function _event(t, ref, type, data) {
+  t.set(ref.collection('events').doc(), Object.assign({ type, at: _ts() }, data || {}));
+}
+
+/**
+ * holdMembershipPayment(db, adminSdk, apiRef, intentRef, amountKES) — called by the verified IntaSend webhook next to
+ * holdServiceBookingPayment. Returns true when the intent is a membership (caller responds 200 and skips ALL credit
+ * logic). The membership id comes from the SERVER-MINTED intent, never client metadata. Moves no money.
+ */
+async function holdMembershipPayment(db, adminSdk, apiRef, intentRef, amountKES) {
+  const D = _hooks.db || db || _db();
+  let intent = null;
+  try {
+    const iSnap = await D.collection('paymentIntents').doc(intentRef || apiRef).get();
+    if (iSnap.exists && iSnap.data().resourceType === 'providerMembership') intent = iSnap.data();
+  } catch (_) { return false; }
+  if (!intent || !intent.resourceId) return false;
+  const ref = D.collection(COL).doc(String(intent.resourceId));
+  let outcome = null;
+  try {
+    outcome = await D.runTransaction(async (t) => {
+      const snap = await t.get(ref);
+      if (!snap.exists) return 'no-membership';
+      const m = snap.data();
+      if (m.paymentStatus && m.paymentStatus !== 'pending') return 'noop';                     /* replay / already handled */
+      const paidCents = Math.round((Number(amountKES) || 0) * 100);
+      const bound = intent.uid === m.buyerUid && (intent.currency || 'KES') === 'KES' && Number(intent.amountCents) === Number(m.priceCents);
+      if (!bound || paidCents !== Number(m.priceCents)) {
+        t.update(ref, { paymentStatus: 'payment_review', paymentRef: apiRef, paymentReviewReason: !bound ? 'intent_binding' : 'amount_mismatch',
+                        paidCentsReported: paidCents, updatedAt: _ts() });
+        _event(t, ref, 'payment_review', { apiRef, paidCents, expectedCents: m.priceCents, reason: !bound ? 'intent_binding' : 'amount_mismatch' });
+        return 'review';
+      }
+      t.update(ref, Object.assign({ paymentStatus: 'paid_held', paymentRef: apiRef, paidAt: _ts(), heldCents: paidCents, updatedAt: _ts() },
+        initialSettlementFields(m)));
+      _event(t, ref, 'payment_held', { apiRef, heldCents: paidCents });
+      return 'held';
+    });
+  } catch (e) {
+    logger.error('[membership] hold failed (recoverable, payment stands)', { apiRef, error: (e && e.message) || 'Error' });
+    return true;
+  }
+  if (outcome === 'held' || outcome === 'review') {
+    await D.collection('paymentIntents').doc(intentRef || apiRef).set({ status: outcome === 'held' ? 'paid' : 'review', paidRef: apiRef, paidAt: _ts() }, { merge: true }).catch(() => {});
+  }
+  if (outcome === 'held' && !_hooks.db) {
+    try {
+      const { notify } = require('./notify');
+      const m = (await ref.get()).data() || {};
+      await notify({ uid: m.buyerUid, type: 'subscription_activated', title: 'Membership active ✅', body: `Your ${m.title || 'membership'} is paid and active. Ref ${apiRef}.`,
+        dedupeKey: `membership_active_${apiRef}`, awaitDelivery: false }).catch(() => {});
+      await notify({ uid: m.providerId, type: 'booking_new', title: 'New membership 🏋️', body: `A member has paid for ${m.title || 'a membership'}. The money is held by SOKONI and released monthly after their first visit.`,
+        deepLink: '/provider-dashboard.html', dedupeKey: `membership_new_${apiRef}`, awaitDelivery: false }).catch(() => {});
+    } catch (_) { /* notify optional */ }
+  }
+  logger.info('[membership] payment ' + outcome, { apiRef, membershipId: intent.resourceId });
+  return true;
+}
+
+/**
+ * requestException(membershipId, { by, reason }) — AdminOS exception for a membership whose normal refund is locked.
+ * Explicit, reasoned, audited; attendance is PRESERVED; it refunds only the unreleased held balance and still needs a
+ * SECOND admin's decision (decideRefund).
+ */
+async function requestException(membershipId, opts) {
+  const o = opts || {};
+  const reason = String(o.reason || '').trim();
+  if (reason.length < 10) return { ok: false, code: 'reason_required', reason: 'An exception needs a written reason (at least 10 characters).' };
+  const ref = _db().collection(COL).doc(String(membershipId));
+  let out = null;
+  await _db().runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    const m = snap.exists ? snap.data() : null;
+    if (!m) { out = { ok: false, code: 'missing', reason: 'Membership not found.' }; return; }
+    if (m.refund && ['requested', 'refunded'].includes(m.refund.state)) { out = { ok: false, code: 'refund_exists', reason: 'A refund is already open or completed.' }; return; }
+    if (!HELD.includes(m.paymentStatus) || m.status !== 'active') { out = { ok: false, code: 'not_refundable_state', reason: 'This membership holds no refundable balance.' }; return; }
+    const remaining = Number(m.priceCents) - (Number(m.releasedCents) || 0);
+    if (!(remaining > 0)) { out = { ok: false, code: 'nothing_held', reason: 'Everything has already been settled to the gym.' }; return; }
+    t.update(ref, { status: 'refund_requested', paymentStatus: 'refund_requested', nextReleaseAt: null, updatedAt: _ts(),
+      refund: { state: 'requested', exception: true, amountCents: remaining, reason: reason.slice(0, 500),
+                attendedSessionsAtRequest: Number(m.attendedSessions) || 0, used: isUsed(m),
+                requestedBy: o.by || null, requestedAt: _ts(), previousPaymentStatus: m.paymentStatus } });
+    _event(t, ref, 'refund_exception_requested', { by: o.by || null, amountCents: remaining, reason: reason.slice(0, 500), attendedSessionsSeen: Number(m.attendedSessions) || 0 });
+    out = { ok: true, refundRequestedCents: remaining, exception: true };
+  });
+  return out;
+}
+
+/**
+ * decideRefund(membershipId, { by, decision: 'approve'|'reject', reason }) — the SECOND authorized actor. Approval
+ * executes through the canonical held-money refund destination (buyer SOKONI wallet + deterministic ledger row).
+ */
+async function decideRefund(membershipId, opts) {
+  const o = opts || {};
+  if (!['approve', 'reject'].includes(o.decision)) return { ok: false, code: 'bad_decision', reason: 'Decision must be approve or reject.' };
+  const ref = _db().collection(COL).doc(String(membershipId));
+  let out = null, notifyArgs = null;
+  await _db().runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    const m = snap.exists ? snap.data() : null;
+    if (!m) { out = { ok: false, code: 'missing', reason: 'Membership not found.' }; return; }
+    const r = m.refund || {};
+    if (r.state !== 'requested') { out = { ok: false, code: 'no_open_request', reason: r.state === 'refunded' ? 'This membership has already been refunded.' : 'There is no open refund request.' }; return; }
+    if (!o.by || o.by === r.requestedBy || o.by === m.buyerUid || o.by === m.providerId) {
+      out = { ok: false, code: 'separation_of_duties', reason: 'The refund must be decided by a different authorized person than the one who requested it.' }; return;
+    }
+    if (o.decision === 'reject') {
+      const resumeStatus = (Number(m.releasedPeriods) || 0) > 0 ? 'partially_released' : 'paid_held';
+      const next = slicesOf(m)[Number(m.releasedPeriods) || 0];
+      t.update(ref, { status: 'active', paymentStatus: r.previousPaymentStatus || resumeStatus, nextReleaseAt: next ? _tsFromDate(next.dueAt) : null, updatedAt: _ts(),
+        refund: Object.assign({}, r, { state: 'rejected', decidedBy: o.by, decidedAt: _ts(), decisionReason: String(o.reason || '').slice(0, 500) }) });
+      _event(t, ref, 'refund_rejected', { by: o.by, reason: String(o.reason || '').slice(0, 500) });
+      out = { ok: true, state: 'rejected' };
+      notifyArgs = { uid: m.buyerUid, type: 'booking_refund', title: 'Refund request declined', body: 'Your membership refund request was reviewed and declined.' + (o.reason ? ' Reason: ' + String(o.reason).slice(0, 200) : '') };
+      return;
+    }
+    /* APPROVE — re-verify everything inside the transaction */
+    if (!r.exception && isUsed(m)) { out = { ok: false, code: 'used', reason: 'Refund unavailable because this membership has already been used.' }; return; }
+    const remaining = Number(m.priceCents) - (Number(m.releasedCents) || 0);
+    const amount = Number(r.amountCents);
+    if (!(amount > 0) || amount > remaining) { out = { ok: false, code: 'amount_invalid', reason: 'The refund exceeds the balance SOKONI still holds.' }; return; }
+    if (!m.paymentRef) { out = { ok: false, code: 'no_verified_payment', reason: 'No verified payment is recorded for this membership.' }; return; }
+    const shillings = Math.floor(amount / 100);
+    const ledgerRef = _db().collection('ledger').doc(`${m.buyerUid}_${ref.id}_membership_refund`);
+    t.create(ledgerRef, { uid: m.buyerUid, type: 'membership_refund', credit: shillings, remainderCents: amount - shillings * 100,
+      membershipId: ref.id, paymentRef: m.paymentRef, exception: r.exception === true, approvedBy: o.by, createdAt: _ts() });
+    if (shillings >= 1) t.set(_db().collection('users').doc(m.buyerUid), { walletBalance: _inc(shillings) }, { merge: true });
+    t.update(ref, { status: 'refunded', paymentStatus: 'refunded', nextReleaseAt: null, refundedCents: amount, updatedAt: _ts(),
+      refund: Object.assign({}, r, { state: 'refunded', decidedBy: o.by, decidedAt: _ts(), decisionReason: String(o.reason || '').slice(0, 500),
+        executedAt: _ts(), destination: 'sokoni_wallet', walletCreditShillings: shillings, ledgerId: ledgerRef.id }) });
+    _event(t, ref, 'refund_executed', { by: o.by, amountCents: amount, shillings, exception: r.exception === true, destination: 'sokoni_wallet' });
+    out = { ok: true, state: 'refunded', amountCents: amount, walletCreditShillings: shillings };
+    notifyArgs = { uid: m.buyerUid, type: 'refund_processed', title: 'Membership refunded ↩', body: `KES ${shillings.toLocaleString()} has been returned to your SOKONI wallet.` };
+  });
+  if (notifyArgs && !_hooks.db) { try { await require('./notify').notify(Object.assign({ dedupeKey: `membership_refund_${membershipId}_${out.state}`, awaitDelivery: false }, notifyArgs)).catch(() => {}); } catch (_) {} }
+  logger.info('[membership] refund decision', { membershipId, by: o.by || null, decision: o.decision, ok: out && out.ok, code: out && out.code });
   return out;
 }
 
@@ -267,6 +419,28 @@ const membershipRequestRefund = onCall({ region: 'us-central1', maxInstances: 20
   return { ok: true, refundRequestedCents: r.refundRequestedCents, state: 'requested' };
 });
 
+const _admin = (req) => !!(req.auth && req.auth.token && (req.auth.token.admin === true || req.auth.token.superAdmin === true));
+const _idOf = (req) => { const id = String((req.data && req.data.membershipId) || ''); if (!/^[A-Za-z0-9_-]{6,128}$/.test(id)) throw new HttpsError('invalid-argument', 'membershipId required.'); return id; };
+
+/* AdminOS: approve / reject an open request. Admin only; the decider must differ from the requester (enforced inside). */
+const membershipDecideRefund = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+  if (!_admin(req)) throw new HttpsError('permission-denied', 'Only an authorized administrator can decide refunds.');
+  const r = await decideRefund(_idOf(req), { by: req.auth.uid, decision: req.data && req.data.decision, reason: req.data && req.data.reason });
+  if (!r || !r.ok) throw new HttpsError('failed-precondition', (r && r.reason) || 'Not possible.', { code: r && r.code });
+  return r;
+});
+
+/* AdminOS: exception for a used membership — admin only, written reason, still needs a SECOND admin's decision. */
+const membershipRequestException = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+  if (!_admin(req)) throw new HttpsError('permission-denied', 'Only an authorized administrator can open an exception.');
+  const r = await requestException(_idOf(req), { by: req.auth.uid, reason: req.data && req.data.reason });
+  if (!r || !r.ok) throw new HttpsError('failed-precondition', (r && r.reason) || 'Not possible.', { code: r && r.code });
+  return r;
+});
+
 module.exports = { slicesOf, initialSettlementFields, dueSlices, isUsed, endsAt, refundDecision, releaseDueSlices, requestRefund,
-                   membershipReleaseSweep, membershipRequestRefund, COL,
+                   holdMembershipPayment, requestException, decideRefund,
+                   membershipReleaseSweep, membershipRequestRefund, membershipDecideRefund, membershipRequestException, COL,
                    _test: { use: (h) => Object.assign(_hooks, h || {}) } };

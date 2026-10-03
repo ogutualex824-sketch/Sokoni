@@ -299,6 +299,30 @@ const PURPOSES = {
     },
   },
 
+  /* ── Fitness membership (owner 2026-10-03) ────────────────────────────
+     Priced from the membership's OWN server-written record (providerMemberships/{id}.priceCents), never from the
+     request; bound to the buyer; payable once (paymentStatus 'pending'). The webhook HOLDS it
+     (membership-settlement.holdMembershipPayment) — it is never credited at payment. */
+  fitness_membership: {
+    resourceType: 'providerMembership',
+    async price(uid, data) {
+      const membershipId = String(data.membershipId || '').trim();
+      if (!/^[A-Za-z0-9_-]{6,128}$/.test(membershipId)) fail('invalid-argument', 'membershipId is required.');
+      const snap = await db().collection('providerMemberships').doc(membershipId).get();
+      if (!snap.exists) fail('not-found', 'Membership not found.');
+      const m = snap.data();
+      if (m.buyerUid !== uid) fail('permission-denied', 'Not your membership.');
+      if (m.paymentStatus !== 'pending' || m.status !== 'pending_payment') fail('already-exists', 'This membership is already paid or closed.');
+      const cents = Number(m.priceCents);
+      if (!Number.isInteger(cents) || cents <= 0) fail('failed-precondition', 'Membership has no payable amount.');
+      if (!m.providerId) fail('failed-precondition', 'Membership has no provider.');
+      return {
+        amountCents: cents, currency: 'KES', resourceType: 'providerMembership', resourceId: membershipId,
+        metadata: { type: 'fitness-membership', membershipId, providerId: m.providerId, periodCount: m.periodCount || null },
+      };
+    },
+  },
+
   /* ── Healthcare subscription (clinic | hospital | enterprise) ─────────
      The price comes from functions/healthcare-plans.js — the one table for the
      Healthcare hub — and NEVER from the request. The client sends a tier; the
