@@ -35,6 +35,10 @@ const LOCKED_UPDATE = {
   business: { category: 'it_services' }, sourceApplicationId: 'app-forged', approvedAt: 1, suspendedAt: null,
   category: 'mechanic', linkedBusinessId: 'biz-someone-else',
   healthcare: { category: 'facility' }, legalProviderId: 'lp-forged', provisionedBy: 'legal-verification', legalVerification: { state: 'verified' },
+  /* 2026-10-03 (sokoni-5b / sokoni-e3): live approval-remediation trusts approvalDecision; owner update never called noAdminFields */
+  approvalDecision: { decision: 'approve', source: 'admin_decision' }, approvedBy: 'admin1', adminApproved: true, commissionRate: 0,
+  education: { tier: 'verified' }, discovery: { boost: 99 }, _noIndex: false, marketingApprovedCategories: ['all'], marketingDeclinedCategories: [],
+  role: 'admin', flagged: false,
 };
 
 (async () => {
@@ -62,7 +66,7 @@ const LOCKED_UPDATE = {
   console.log('── providers create ──');
   await allows('PT-C1', 'onboarding create: uid==self, status pending, profile fields only', setDoc(doc(bob, 'providers/bob'), { uid: 'bob', name: 'Bob Mechanic', phone: '0711', status: 'pending' }));
   await denies('PT-C2', 'create with status active', setDoc(doc(env.authenticatedContext('carol').firestore(), 'providers/carol'), { uid: 'carol', status: 'active' }));
-  for (const k of ['featured', 'providerVerified', 'rating', 'business', 'category', 'linkedBusinessId', 'searchable', 'jobsCompleted']) {
+  for (const k of ['featured', 'providerVerified', 'rating', 'business', 'category', 'linkedBusinessId', 'searchable', 'jobsCompleted', 'approvalDecision', 'approvedBy', 'education', 'discovery']) {
     const u = 'u_' + k; const v = LOCKED_UPDATE[k];
     await denies('PT-C-' + k, `create carrying ${k}`, setDoc(doc(env.authenticatedContext(u).firestore(), 'providers/' + u), { uid: u, status: 'pending', [k]: v }));
   }

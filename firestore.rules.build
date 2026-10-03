@@ -235,7 +235,9 @@ service cloud.firestore {
   'rating','reviewCount','jobsCompleted','verifiedFacets','verifiedName','verificationReviewRequired',
   'verificationProjectedAt','searchable','business','sourceApplicationId','approvedAt','suspendedAt',
   'category','linkedBusinessId',
-  'healthcare','legalProviderId','provisionedBy','legalVerification'];
+  'healthcare','legalProviderId','provisionedBy','legalVerification',
+  'approvalDecision','approvedBy','adminApproved','commissionRate','education','discovery','_noIndex',
+  'marketingApprovedCategories','marketingDeclinedCategories'];
   }
   allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
   && (!request.resource.data.keys().hasAny(['status'])
@@ -245,6 +247,7 @@ service cloud.firestore {
   || (isAuthed()
   && resource.data.uid == request.auth.uid
   && uidUnchanged()
+  && noAdminFields()
   && !request.resource.data.diff(resource.data)
   .affectedKeys()
   .hasAny(providerTrustKeys().concat(['status'])));

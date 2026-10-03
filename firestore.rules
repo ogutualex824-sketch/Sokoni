@@ -267,7 +267,11 @@ service cloud.firestore {
   /* 2026-10-03 sokoni-5b census: business-category.categoryOf() falls back to healthcare.category and to
      provisionedBy=='legal-verification' + legalProviderId — owner-writable, an unstamped provider could self-classify
      as clinic / lawyer and flip the !!p.healthcare boundary bizAdminClassify relies on. */
-  'healthcare','legalProviderId','provisionedBy','legalVerification'];
+  'healthcare','legalProviderId','provisionedBy','legalVerification',
+  /* 2026-10-03 sokoni-5b / sokoni-e3 (served f259c0b5): approvalDecision is trusted by live providerDispatch approval-remediation
+     with no admin check; an owner could write {decision:'approve', source:'admin_decision'} or overwrite an admin's refuse. */
+  'approvalDecision','approvedBy','adminApproved','commissionRate','education','discovery','_noIndex',
+  'marketingApprovedCategories','marketingDeclinedCategories'];
   }
   allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
   && (!request.resource.data.keys().hasAny(['status'])
@@ -277,6 +281,7 @@ service cloud.firestore {
   || (isAuthed()
   && resource.data.uid == request.auth.uid
   && uidUnchanged()
+  && noAdminFields()   /* the owner update path never called it (sokoni-e3): adminApproved / commissionRate / role were open */
   && !request.resource.data.diff(resource.data)
   .affectedKeys()
   .hasAny(providerTrustKeys().concat(['status'])));

@@ -333,3 +333,16 @@ the expression error; a missing tournament status reads as draft. Untouched by o
 sportsPosts (no server writer yet), sportsVenueBookings (owner b6f9cee) and sportsReviews (1925aaa). Retiring
 sportsOrders / sportsCoachBookings waits for zero-writer evidence. **Ships AFTER the functions carrying sportsDispatch.**
 Suite `scripts/zz-test-sports-rules.js` (S-R1a–g, R2a–d, R3a–f, R4a–b, R5, R6, R7). **EMULATOR PENDING.**
+
+## 2026-10-03: providers approval fields (sokoni-5b found, sokoni-e3 traced; served f259c0b5)
+
+Served: the providers owner-update rule protected only status / verified / suspended / approved and never called
+`noAdminFields()`; create lacked `approvalDecision` and `business`. So an owner could write
+`approvalDecision {decision:'approve', source:'admin_decision'}`, `adminApproved`, `approvedAt` / `approvedBy`,
+`business.category` and `commissionRate`, and could overwrite an admin's refusal. Live providerDispatch
+approval-remediation (00050-rur) trusts `approvalDecision` with no admin check; advisory today, but one forgeable
+authority. The combined candidate already locked `business`, `approvedAt` and `status` (provider trust lock). Added to
+`providerTrustKeys()`: `approvalDecision`, `approvedBy`, `adminApproved`, `commissionRate`, `education`, `discovery`,
+`_noIndex`, and the marketing category fields. The owner update path now also calls `noAdminFields()`. PT-D rows exist per
+key, and PT-C rows cover the create path. **EMULATOR PENDING.** Like the applications P0, this could join the served-based
+hotfix if the owner rates it P0; today it rides the combined release.
