@@ -551,6 +551,8 @@ _h.providerContactCustomer = async (req) => {
   if (!custUid) throw new HttpsError('failed-precondition', 'This booking has no linked customer account.');
   const uSnap = await _db().collection('users').doc(custUid).get();
   const u = uSnap.exists ? uSnap.data() : {};
+  /* Tech Hub 4M: every phone reveal is logged (who, whose, which booking) — server-written, never client-readable. */
+  await _db().collection('contactReveals').add({ bookingId: _san(req.data?.bookingId, 128), by: uid, byRole: 'provider', target: custUid, at: _ts() }).catch(() => {});
   /* Phone lives in `phoneNumber` ("+254…"), not `phone`. */
   return {
     success: true,

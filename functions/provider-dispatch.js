@@ -72,6 +72,7 @@ const ROUTES = [
   'providerMarkNoShow',
   'providerRescheduleBooking',
   'providerContactCustomer',
+  'bookingContactProvider',   // Tech Hub 4M — the customer's booking-bound call to the provider
   'providerSaveBookingNote',
   'providerGetEarnings',
   'providerRequestPayout',

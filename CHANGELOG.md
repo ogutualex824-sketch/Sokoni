@@ -1,3 +1,16 @@
+## [2026-10-03] — Tech Hub slice 4M (server): calling = a booking-bound, logged phone reveal — NOT deployed
+
+- **Census:** SOKONI has no voice / call-masking provider (Africa's Talking is used for SMS only; no Twilio). The only contact path was
+  provider-ops.providerContactCustomer: the provider of a booking gets the customer's raw phone, unlogged. Customer → provider calling did not exist.
+- **Privacy model (no external dependency invented):**
+  - before a booking, there is no phone at all; contact is in-app messaging on a service lead (4F);
+  - **customer → provider:** new providerDispatch op `bookingContactProvider`. Only the booking's own customer, only once the booking is PAID or CONFIRMED
+    (paid_held / settled / confirmed / in_progress / completed), so an unpaid hold reveals nothing and phones cannot be harvested;
+  - **provider → customer:** providerContactCustomer is unchanged in access (own booking only);
+  - every reveal, either direction, is written to `contactReveals` (server-only; no rules block, default deny).
+- **Tests:** test-booking-contact 5/0 (BASE=6168a5c: the op does not exist). leads 12/0, tech-service-profile 18/0, onboarding-intake 6/0.
+- **Not built:** number masking / call logging of actual calls (needs a voice provider; owner decision). Deploy unit: providerDispatch (5b's release).
+
 ## [2026-10-03] — Tech Hub slice 4N (server): provider-onboarding publishes INTO the one application queue — NOT deployed
 
 - **OB-1 hotfix ported** (c853665 from hotfix/provider-publish-selfgrant, built from the deployed archive; owner held its deploy 09-28) onto the capability

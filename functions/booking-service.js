@@ -336,6 +336,31 @@ _h.bookingCreateService = async (req) => {
   return { success: true, bookingId: outcome.bookingId, status: outcome.status, price, expiresAt: outcome.expiresAt };
 };
 
+/* ── bookingContactProvider (Tech Hub 4M, 2026-10-03) ─────────────────────────────────────────────────────
+   The customer's side of calling, the mirror of provider-ops.providerContactCustomer. SOKONI has no voice / masking
+   provider, so calling is a booking-bound phone reveal:
+     · only the booking's OWN customer (customerUid) may ask;
+     · only once the booking is PAID or CONFIRMED (paid_held / settled, or status confirmed / in_progress / completed) —
+       an unpaid hold reveals nothing, so a phone number cannot be harvested by creating holds;
+     · every reveal is logged in contactReveals (server-written);
+     · before any booking there is no phone at all — the customer asks through a service lead (in-app messaging).
+   Returns the provider's registry phone (providers/{uid}.phone) or account phone. */
+_h.bookingContactProvider = async (req) => {
+  const uid = _uid(req);
+  const bookingId = _san((req.data || {}).bookingId, 128);
+  if (!bookingId) throw new HttpsError('invalid-argument', 'bookingId is required.');
+  const snap = await db.collection('providerBookings').doc(bookingId).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Booking not found.');
+  const b = snap.data();
+  if (b.customerUid !== uid) throw new HttpsError('permission-denied', 'Not your booking.');
+  const paid = ['paid_held', 'settled'].includes(b.paymentStatus) || ['confirmed', 'in_progress', 'completed'].includes(b.status);
+  if (!paid) throw new HttpsError('failed-precondition', 'You can call the provider once your booking is paid or confirmed. Until then, message them in SOKONI.');
+  const [pSnap, uSnap] = await Promise.all([db.collection('providers').doc(b.providerId).get(), db.collection('users').doc(b.providerId).get()]);
+  const phone = (pSnap.exists && pSnap.data().phone) || (uSnap.exists && uSnap.data().phoneNumber) || null;
+  await db.collection('contactReveals').add({ bookingId, by: uid, byRole: 'customer', target: b.providerId, at: _ts() }).catch(() => {});
+  return { success: true, provider: { name: (pSnap.exists && pSnap.data().name) || null, phone } };
+};
+
 /* ── bookingReleaseHold (P3) ──────────────────────────────────────────────────
    Proactive hold release. The client calls this the instant the customer abandons
    payment — closes the sheet, cancels, or the STK push fails/times out — so the slot
