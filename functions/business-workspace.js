@@ -43,6 +43,10 @@ const CAPS = require('./shared/business-capabilities');
    approved?" — derived by shared/approval-remediation.js from the same evidence the remediation census used, never from
    a role, a claim or a status alone. Only VALID_APPROVAL proceeds to the category/capability routing below. */
 const REM = require('./shared/approval-remediation');
+/* SLICE 0 (2026-10-03): the ONE service-capability engine — what an APPROVED business does, composed across every VALID
+   approval (phone repair + laptop repair + IT support → one workspace, the union). Approval first; a category grants
+   nothing by itself; a capability whose screen does not exist yet is NOT_IMPLEMENTED, never shown as working. */
+const SC = require('./shared/service-capabilities');
 const CLEANUP = require('./shared/cleanup-claimed-ids.json');
 const CLEANUP_IDS = new Set(CLEANUP.ids);
 
@@ -84,6 +88,20 @@ const MODULES = Object.freeze({
   /* Property (owner, 2026-09-28): listings on propertyListings (owner binding 9a48051 / aecf7a7) — the dashboard
      screen is the next build, so it is surfaced as NOT_IMPLEMENTED, never hidden. */
   listings:      { label: 'Listings',            section: 'listings',     implemented: false, why: 'LISTINGS_MODULE_PENDING' },
+  /* SLICE 0 — Tech Hub capability modules (switched on by shared/service-capabilities, never by a profile). Their screens
+     are the Tech Hub build (sokoni-b2); until each ships it is NOT_IMPLEMENTED with this reason. */
+  leads:             { label: 'Leads',               section: 'leads',             implemented: false, why: 'TECH_HUB_PENDING' },
+  repairs:           { label: 'Repairs',             section: 'repairs',           implemented: false, why: 'TECH_HUB_PENDING' },
+  diagnostics:       { label: 'Diagnostics',         section: 'diagnostics',       implemented: false, why: 'TECH_HUB_PENDING' },
+  supportedDevices:  { label: 'Supported devices',   section: 'supporteddevices',  implemented: false, why: 'TECH_HUB_PENDING' },
+  supportTickets:    { label: 'Support tickets',     section: 'supporttickets',    implemented: false, why: 'TECH_HUB_PENDING' },
+  remoteSupport:     { label: 'Remote support',      section: 'remotesupport',     implemented: false, why: 'TECH_HUB_PENDING' },
+  siteVisits:        { label: 'Site visits',         section: 'sitevisits',        implemented: false, why: 'TECH_HUB_PENDING' },
+  networkProjects:   { label: 'Network projects',    section: 'networkprojects',   implemented: false, why: 'TECH_HUB_PENDING' },
+  cctvInstallations: { label: 'CCTV installations',  section: 'cctvinstallations', implemented: false, why: 'TECH_HUB_PENDING' },
+  posSupport:        { label: 'POS support',         section: 'possupport',        implemented: false, why: 'TECH_HUB_PENDING' },
+  projects:          { label: 'Projects',            section: 'projects',          implemented: false, why: 'TECH_HUB_PENDING' },
+  pickupDropoff:     { label: 'Pickup & drop-off',   section: 'pickupdropoff',     implemented: false, why: 'TECH_HUB_PENDING' },
 });
 Object.values(MODULES).forEach((m) => Object.freeze(m));   /* each entry too — no caller can flip `implemented` */
 const MODULE_KEYS = Object.freeze(Object.keys(MODULES));
@@ -235,7 +253,11 @@ async function capabilityFor(db, uid) {
    are the products lane; every other C1 category (healthcare included) is the services lane. */
 function laneOf(category) {
   if (!category) return null;
-  return BCAT.SELLER_CATEGORIES.includes(category) ? 'products' : 'services';
+  /* SLICE 0 fix (2026-10-03): a category this authority ROUTES to merchant-v2 is a products-lane business. `restaurant`
+     routes to merchant-v2 (owner 2026-09-28) and approval makes it a seller (application-lifecycle resolveRole), but it
+     is not one of the seven SELLER_CATEGORIES — so every approved food business met CATEGORY_CAPABILITY_DISAGREEMENT and
+     got no workspace. The route table and the lane can no longer disagree. */
+  return (BCAT.SELLER_CATEGORIES.includes(category) || ROUTE_OF[category] === 'merchant-v2.html') ? 'products' : 'services';
 }
 function categoryFor(providerDoc, businessDoc) {
   const fromProvider = providerDoc ? BCAT.categoryOf(providerDoc) : null;
@@ -310,7 +332,10 @@ async function approvalStateFor(db, uid, opts) {
     const roles = user ? (Array.isArray(user.roles) ? user.roles : (user.role ? [user.role] : [])) : [];
     const derived = REM.deriveApprovalState({ uid: String(uid), claims, roles, provider: p.exists ? p.data() : null, seller: s.exists ? s.data() : null, businesses, shops, applications,
       isAdminAccount: (d) => adminMap[d] === true, cleanupIds: (o.approval && o.approval.cleanupIds) || CLEANUP_IDS, agreementVersion: o.agreementVersion || null });
-    return Object.assign({ readable: true }, derived);
+    /* SLICE 0: the same evidence, judged by the same predicate (decisionValidity) — only VALID approvals grant capabilities. */
+    const presentKinds = [p.exists && 'provider', s.exists && 'seller', businesses.length && 'business', shops.length && 'shop'].filter(Boolean);
+    const approvals = applications.map((a) => Object.assign({ id: a.id, app: a }, REM.decisionValidity(a, String(uid), (d) => adminMap[d] === true, presentKinds)));
+    return Object.assign({ readable: true, approvals }, derived);
   } catch (e) {
     return { readable: false, error: String(e && e.message || e) };
   }
@@ -324,7 +349,8 @@ async function workspaceFor(db, uid, opts) {
   const lane = laneOf(category);
   const approval = await approvalStateFor(db, uid, opts);
   const approvalOut = approval.readable ? { state: approval.state, subtype: approval.subtype, transition: approval.transition, ownership: approval.ownership, applicationPath: approval.applicationPath, agreement: approval.agreement } : { state: 'UNREADABLE', error: approval.error };
-  const withCap = (w) => Object.assign(w, { capability, category: w.category === undefined ? category : w.category, lane, servicesWorkspace: w.servicesWorkspace === true, approval: approvalOut });
+  const withCap = (w) => Object.assign(w, { capability, category: w.category === undefined ? category : w.category, lane, servicesWorkspace: w.servicesWorkspace === true, approval: approvalOut,
+    serviceCapabilities: Array.isArray(w.serviceCapabilities) ? w.serviceCapabilities : [] });
   const K = CAPS.CLASSIFICATION;
 
   /* ── THE GATE: only a validly approved account reaches the category/capability routing ─────────────────── */
@@ -355,6 +381,9 @@ async function workspaceFor(db, uid, opts) {
       { route: 'complete-application.html', remediation: { applicationPath: approval.applicationPath, agreement: approval.agreement, preserve: approval.preserve } }));
   }
   /* VALID_APPROVAL — proceed exactly as before */
+  /* SLICE 0: capabilities from VALID approvals only; attached to the routed answers below, never to a holding state. */
+  const svc = SC.compose(approval.approvals);
+  const _svc = (w) => _applyServiceCaps(w, svc);
 
   if (!capability.readable) {
     return withCap(_holding('CAPABILITY_UNREADABLE', 'CAPABILITY_UNREADABLE', category,
@@ -396,17 +425,50 @@ async function workspaceFor(db, uid, opts) {
   /* products lane + PRODUCTS: the category's own route (merchant-v2), whose own authority decides its modules. */
   if (cls === K.PRODUCTS) {
     const route = Object.prototype.hasOwnProperty.call(ROUTE_OF, category) ? ROUTE_OF[category] : null;
-    return withCap({ found: true, category, label: BCAT.label(category), route, state: route ? STATE.AVAILABLE : STATE.NOT_IMPLEMENTED,
-      reason: route ? null : 'WORKSPACE_NOT_BUILT', modules: _moduleSet(STATE.NOT_APPLICABLE, 'OWN_WORKSPACE'), entitlement: { state: null, hub: 'merchant' } });
+    return withCap(_svc({ found: true, category, label: BCAT.label(category), route, state: route ? STATE.AVAILABLE : STATE.NOT_IMPLEMENTED,
+      reason: route ? null : 'WORKSPACE_NOT_BUILT', modules: _moduleSet(STATE.NOT_APPLICABLE, 'OWN_WORKSPACE'), entitlement: { state: null, hub: 'merchant' } }));
   }
 
   /* services lane + SERVICES, or both: the category path supplies route and module states (unchanged behaviour for a
      valid combination); both capabilities make it ONE business on merchant-v2 with the Services workspace. */
   const w = await _categoryWorkspace(db, uid, prov, category);
   if (cls === K.PRODUCTS_AND_SERVICES) {
-    return withCap(Object.assign(w, { route: 'merchant-v2.html', state: STATE.AVAILABLE, reason: null, servicesWorkspace: true }));
+    return withCap(_svc(Object.assign(w, { route: 'merchant-v2.html', state: STATE.AVAILABLE, reason: null, servicesWorkspace: true })));
   }
-  return withCap(w);
+  return withCap(_svc(w));
+}
+
+/**
+ * SLICE 0 — attach the composed service capabilities to a ROUTED answer.
+ *   provider-dashboard: each capability module is switched on — AVAILABLE when implemented, else NOT_IMPLEMENTED with
+ *     its reason — but ONLY where the module is currently NOT_APPLICABLE. A LOCKED / plan / Healthcare state is never
+ *     overridden (the entitlement and the category matrix stay the authorities for those).
+ *   merchant-v2: merchantModules (menu, kitchen, …) for the merchant shell to render, in the same six-state vocabulary.
+ * An answer with no route (holding, unrouted) gets the capability list but no modules.
+ */
+function _applyServiceCaps(w, svc) {
+  const caps = (svc && svc.capabilities) || [];
+  w.serviceCapabilities = caps;
+  w.capabilitySources = (svc && svc.sources) || {};
+  if (!w.route) return w;
+  if (w.route === 'provider-dashboard.html' && w.modules) {
+    for (const key of SC.modulesFor(caps, 'provider')) {
+      const def = MODULES[key];
+      const cur = w.modules[key];
+      if (!def || !cur || cur.state !== STATE.NOT_APPLICABLE) continue;
+      w.modules[key] = def.implemented ? { state: STATE.AVAILABLE, reason: null } : { state: STATE.NOT_IMPLEMENTED, reason: def.why || 'NOT_BUILT' };
+    }
+  }
+  if (w.route === 'merchant-v2.html') {
+    const mm = {};
+    for (const key of SC.modulesFor(caps, 'merchant')) {
+      const def = SC.MERCHANT_MODULES[key];
+      if (!def) continue;
+      mm[key] = def.implemented ? { state: STATE.AVAILABLE, reason: null } : { state: STATE.NOT_IMPLEMENTED, reason: def.why || 'NOT_BUILT' };
+    }
+    w.merchantModules = mm;
+  }
+  return w;
 }
 
 /* The category path for an APPROVED provider WITH a category: the category's route and the module states. Reached
@@ -561,4 +623,4 @@ const _h = {
   },
 };
 
-module.exports = { STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, PROFILE_NOT_BUILT, ROUTE_OF, modulesForProfile, notBuiltFor, healthcareModules, workspaceFor, approvalStateFor, capabilityFor, categoryFor, laneOf, homeFor, assertModule, gateCalendarModule, gateIfProvider, _h };
+module.exports = { _applyServiceCaps, STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, PROFILE_NOT_BUILT, ROUTE_OF, modulesForProfile, notBuiltFor, healthcareModules, workspaceFor, approvalStateFor, capabilityFor, categoryFor, laneOf, homeFor, assertModule, gateCalendarModule, gateIfProvider, _h };

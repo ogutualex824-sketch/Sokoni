@@ -1,3 +1,17 @@
+## [2026-10-03] — Slice 0: the ONE service-capability engine (Food Hub + Tech Hub), on the live providerDispatch lineage
+
+**Files:** `functions/shared/service-capabilities.js` (new), `functions/business-workspace.js`, `scripts/test-service-capabilities.js` (new), `scripts/sabotage-service-capabilities.js` (new), `docs/CAPABILITY_ENGINE.md` (new), `CHANGELOG.md` · **Base:** `95ff9e8` (live `c7e26b6`)
+
+- **What it does:** capabilities are derived from VALID approvals only (`decisionValidity`) and compose as a union across approvals.
+  - `workspaceFor` adds `serviceCapabilities` and `capabilitySources`.
+  - provider-dashboard gets 12 Tech Hub module keys (NOT_IMPLEMENTED `TECH_HUB_PENDING`).
+  - merchant-v2 gets `merchantModules` (menu / kitchen / drinks / catering, NOT_IMPLEMENTED `FOOD_HUB_PENDING`).
+  - A capability only switches on NOT_APPLICABLE modules and never overrides LOCKED / plan states.
+  - Holding states carry no capabilities.
+- **Fixed:** an approved food business routed to merchant-v2 met CATEGORY_CAPABILITY_DISAGREEMENT (restaurant is not one of SELLER_CATEGORIES). `laneOf` now follows the route table.
+- **Tests:** test-service-capabilities 15/0 (live base fails 7); sabotage 7/7 (+1 equivalent mutant); business-capabilities 46/0; shell-gate-mutations 9/0. Emulator suites NOT RUN (memory).
+- **Database / API:** no writes, no new collection; additive response fields. **Security:** capability can never come from a browser-selected category. **Not deployed.**
+
 ## [2026-09-30] - DEPLOYED c7e26b6 → providerdispatch-00050-rur 02:07:13Z (owner-authorized); archive byte-identical; rollback 00048-qiz
 
 ## [2026-09-30] - c7e26b6: minInstances 0 (matches live); re-certified; supersedes b28567c; NOT deployed
