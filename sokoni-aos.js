@@ -136,6 +136,7 @@ window.SokoniAOS = (() => {
       hubs:          () => _loadHubs(),
       workflows:     () => _loadWorkflows(),
       jobs:          () => window.SokoniAOSJobs && window.SokoniAOSJobs.load(),   /* Jobs J2 (sokoni-aos-jobs.js) */
+      construction:  () => window.SokoniAOSConstruction && window.SokoniAOSConstruction.load(),   /* Construction (sokoni-aos-construction.js) */
     };
     loaders[s]?.();
   }

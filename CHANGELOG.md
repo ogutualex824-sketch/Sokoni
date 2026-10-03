@@ -1,3 +1,21 @@
+## [2026-10-03] — AdminOS › Construction (read-only operational view) — hosting source, NOT deployed
+
+**Summary:** A Construction section in the ONE `admin-os.html`, read-only by design (every decision stays with its
+authority):
+- **Applications:** filtered by construction category, with counts. Decisions are made in AdminOS › Applications, where
+  each trade is approved separately.
+- **RFQs:** individual and business buyers, recipients, the accepted quote with its declared VAT, checkout state, and the
+  lead obligations per commercialEventId.
+- **Leads:** product enquiries and their lifecycle stage.
+- **Lead fees:** construction hub. A price is shown only when recorded.
+- **Rentals:** never shown as paid without the payment purpose.
+
+A denied read is an error, never an empty list.
+**Files:** `sokoni-aos-construction.js` (new), `admin-os.html` (nav, panel, script), `sokoni-aos.js` (loader line),
+`scripts/test-aos-construction-static.js` (15/0; parity with the intake's construction categories read from git, failing
+closed; a write mutant fails X1).
+**Deploy:** with the combined rules (admin reads for rfqs / leads / rentals) and the intake branch. NOT authorized.
+
 ## [2026-10-03] — Jobs pages on the J1/J2 contract (candidate actions, honest employer flow, Freelance/Gig) — hosting source, NOT deployed
 
 **Summary:**
