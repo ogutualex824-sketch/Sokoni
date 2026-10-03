@@ -12403,6 +12403,8 @@ exports.providerDispatch = provDisp.providerDispatch;
 const _bookingPin = require('./booking-pin-core');
 exports.serviceBookingPin           = _bookingPin.serviceBookingPin;
 exports.entBookingOnProviderBooking = _bookingPin.entBookingOnProviderBooking;   // trigger: providerBookings/{id}
+/* Equipment rentals (owner 2026-10-03): the SAME PIN authority, source 'rentalBookings' — ONE PIN at RETURN. */
+exports.rentalPinOnRentalBooking    = require('./rental-pin').rentalPinOnRentalBooking;   // trigger: rentalBookings/{id}
 
 /* ── Universal Enterprise Onboarding Engine — 12 ops → 1 onboardingDispatch ── */
 const onbDisp = require('./onboarding-dispatch');
