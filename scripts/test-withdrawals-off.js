@@ -16,22 +16,10 @@
      W12 fail-closed network firewall: zero requests to IntaSend (B2C is a recorder)
    NODE_PATH=<functions/node_modules> node scripts/test-withdrawals-off.js */
 const path = require('path'), fs = require('fs');
-/* ══ NETWORK FIREWALL (b2 finding 2026-10-04) — this suite must NEVER reach IntaSend ══════════════════════════════════
-   The "gate OPEN" positive control lets the payout jobs run their real code; processPendingPayouts then calls
-   intasendB2C → fetch('https://payment.intasend.com/...') — the LIVE send-money API. It failed only because no key was in
-   the environment. Now, BEFORE any functions module loads: no IntaSend key, sandbox forced, fetch / http / https to any
-   IntaSend host refused and COUNTED (row W12 fails the suite on a single attempt), and finos-utils.intasendB2C replaced by
-   a RECORDER, so a positive control proves the job REACHED disbursement without anything leaving this process. */
-process.env.INTASEND_PRIVATE_KEY = ''; process.env.INTASEND_SECRET_KEY = ''; process.env.INTASEND_SANDBOX = 'true';
-const NET = { intasend: 0, urls: [] };
-globalThis.fetch = async (url) => { const u = String(url && url.url || url); NET.urls.push(u); if (/intasend/i.test(u)) NET.intasend++;
-  return { ok: false, status: 599, json: async () => ({ blocked_by_test_firewall: true }), text: async () => 'blocked by test firewall' }; };
-for (const m of ['https', 'http']) {
-  const mod = require(m); const origReq = mod.request, origGet = mod.get;
-  const guard = (o) => { const h = typeof o === 'string' ? o : (o && (o.hostname || o.host || (o.href || ''))) || ''; if (/intasend/i.test(String(h))) { NET.intasend++; throw new Error('blocked by test firewall: ' + h); } };
-  mod.request = function (o, ...r) { guard(o); return origReq.call(this, o, ...r); };
-  mod.get = function (o, ...r) { guard(o); return origGet.call(this, o, ...r); };
-}
+/* NETWORK FIREWALL — the ONE implementation (scripts/lib/net-firewall.js): payment secrets blanked, sandbox forced, every call
+   to a payment host refused + counted; the suite fails closed on exit if one was attempted. The B2C recorder below proves a
+   positive control REACHED disbursement without anything leaving this process. */
+const FW = require('./lib/net-firewall').install();
 const B2C_CALLS = [];
 const FN = path.join(path.resolve(__dirname, '..'), 'functions');
 const H = require('./lib/inmem-firestore').install({ admins: ['admin1'] });
@@ -142,7 +130,7 @@ const ck = (id, ok, m, got) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + ' '
   const rj = await call((r) => W.adminProcessPayout.run(r), 'admin1', { requestId: 'rq1', status: 'rejected', note: 'withdrawals off' }, { admin: true });
   ck('W11', ap.det && ap.det.code === 'WITHDRAWALS_DISABLED' && pd.det && pd.det.code === 'WITHDRAWALS_DISABLED' && !(rj.det && rj.det.code === 'WITHDRAWALS_DISABLED'),
     'adminProcessPayout: approve / paid refused while withdrawals are OFF; reject (money back to the seller) still allowed', [ap.det || ap.code, pd.det || pd.code, rj.ok || rj.code]);
-  ck('W12', NET.intasend === 0, 'FAIL-CLOSED: not one request to any IntaSend host was attempted during the whole suite (B2C went to the recorder: ' + B2C_CALLS.length + ' call(s))', NET.urls);
+  ck('W12', FW.attempts() === 0, 'FAIL-CLOSED: not one request to any IntaSend host was attempted during the whole suite (B2C went to the recorder: ' + B2C_CALLS.length + ' call(s))', FW.urls);
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e && e.stack); process.exit(1); });

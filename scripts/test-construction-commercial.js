@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 /* Construction commercial rows (owner 2026-10-03, via sokoni-f3)
      K1  every construction MATERIAL label → marketplace 15% (never the 5% default)
      K2  contractor work (contractor / welding / fabrication / *-contractor) → construction_service 0%, FIXED + floor-exempt

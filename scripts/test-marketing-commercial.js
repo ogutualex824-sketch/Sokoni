@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 /* Marketing commercial catalogue (owner 2026-10-03, via sokoni-b2)
      MK1  all 71 taxonomy ids (shared/marketing-taxonomy.js) → marketing_services 10%, matched; none collides with another row
      MK2  marketing_services is a FLAT booking lane (no plan moves it); the real engine charges KES 1,000 on a KES 10,000 sale

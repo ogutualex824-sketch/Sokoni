@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 /* ============================================================================
    Sports server authority (functions/sports.js) — acceptance path + deliberate breaks (owner 2026-10-03)
    Team:        register → AdminOS approve → invite → accept → manager role → remove / leave

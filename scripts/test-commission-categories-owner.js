@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 /* OWNER CATEGORY RULES + RESTRICTED + NO GENERIC DEFAULT (owner 2026-10-03, via sokoni-b2)
      C1  the 14 production categories that fell to the 5% default now resolve EXPLICITLY: fashion/furniture/books/appliances/
          beauty/shoes → marketplace 15%; cars → vehicles; laundry / hair-beauty → services 5%; dj → entertainment bookings

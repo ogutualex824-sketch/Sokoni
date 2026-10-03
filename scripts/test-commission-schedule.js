@@ -13,6 +13,7 @@
  * delivery 16% floor — plus event 3% and POS following the online rate through an alias.
  */
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 const fs = require('fs'), path = require('path'), cp = require('child_process'), Module = require('module'), os = require('os');
 const ROOT = path.resolve(__dirname, '..'), FN = path.join(ROOT, 'functions');
 const CPM = !!process.env.COUNTERPROOF;

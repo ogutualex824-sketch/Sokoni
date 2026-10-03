@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 /* Provider money view (functions/provider-ledger.js) — read-only projection for b2's merchant-v2 provider screens
      L1  available = wallet balance (shillings); pending = paid_held bookings only (incl. a work milestone), with links
      L2  totals come from the caller's PROVIDER receipts only (counterpartyId) — a receipt where they are the CLIENT is excluded

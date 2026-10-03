@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 /* ============================================================================
    Service booking refund AFTER settlement — ledger reversal (owner 2026-10-03, relayed by sokoni-f3 / sokoni-5b)
    provider-ops.reverseServiceSettlement(bookingId, { decision:'refund_full', actor, reason })

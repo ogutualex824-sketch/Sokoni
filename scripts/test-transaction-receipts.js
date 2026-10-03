@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 /* ============================================================================
    Platform-wide transaction receipts (owner 2026-10-03, via sokoni-b2)
      R1  verified payment → ONE receipt (SKN-RCT number), every owner field present; held = paid; status paid_held

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 /* rfq_quote payment purpose (accepted RFQ quote → normal SOKONI order) — owner 2026-10-03, contract with f3 / 5b
      Q1  the buyer pays EXACTLY acceptedQuote.totalKES read on the server (subtotal + declared VAT + delivery); client amount ignored
      Q2  ONE live intent per (rfq, quote version): deterministic preferredRef RFQ-<id>-v<version>

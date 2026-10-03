@@ -36,6 +36,7 @@
  * normally and it cannot fail to LOAD and be mistaken for "nothing detected".
  */
 'use strict';
+require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any call to a payment host (b2 2026-10-04) */
 
 const fs = require('fs');
 const path = require('path');
