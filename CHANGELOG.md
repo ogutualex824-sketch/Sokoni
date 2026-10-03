@@ -1,3 +1,18 @@
+## [2026-10-03] - P0-C: ONE approval authority, isAuthoritativelyApproved; no audit-log fallback
+
+Functions only (providerDispatch's `business-workspace.js` + new `functions/shared/approval-authority.js`). **Not deployed.**
+
+- **`isAuthoritativelyApproved(db, applicationId, { category, isAdmin|getUser, application })`** → `{ approved, reason, applicationId, applicantUid, decidedBy, decidedAt, approvedCategories }`.
+  - It approves only when the server-only `applicationDecisions/{id}` names this application and says approved.
+  - The decider must be an admin by Auth claim, and must not be the applicant.
+  - The application must not be revoked, and the category, if asked for, must be in `approvedCategories`.
+  - The provider must not be suspended, deactivated or banned, and there must be no active `accountFreezes` record.
+  - Unreadable evidence → not approved. The module is read-only.
+- **Owner rule:** application status is workflow, never authorisation. There is no fallback to `status`, `adminApproved`, `approvedBy`, `providers.approvalDecision` or `adminAudit`.
+- **Removed:** the `adminAudit` fallback in `approvalStateFor`. Owner: the audit log is evidence for the one-time migration (P0-H) only.
+- **Migration (P0-H):** `scripts/infra/p0h-migrate-legacy-approvals.js`. It is a dry run by default. `--apply` runs only when the plan equals `--expect` exactly, and it uses `create()` (never overwrites). Prod dry run 2026-10-03: 5 to migrate, 4 to re-decide (2 self-decided, 2 with operator labels).
+- **Deploy order:** run the migration BEFORE this deploys. Otherwise the 5 legacy approvals lose their workspace.
+- **Tests:** `test-p0-forged-approval` 23/0 (F-3 flipped to the owner's rule; C-1..C-12 added). Sabotage caught 14/14. Workspace and shell-gate suites are green.
 ## [2026-10-03] — Work/Job Engine WE2: milestone money on the canonical booking path (no new payment code) — NOT deployed
 
 - **Owner 2026-10-03 (AskUserQuestion):** Marketing campaign/project milestones settle at **10%**, like marketing, with no extra fee. Construction contractor milestones are 0%.
