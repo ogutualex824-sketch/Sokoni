@@ -1,3 +1,34 @@
+## [2026-10-03] — The review authority: every review is approved in AdminOS before it is public
+
+**Files:** `functions/reviews.js`, `scripts/test-review-authority.js`, `CHANGELOG.md` · **Base:** `76436b1` = the LIVE archive of submitReview / getReviews / flagReview / markReviewHelpful / adminModerateReview (provenance audit 2026-10-01: 0 files differ, 0 missing)
+
+- **Live defects closed:**
+  - `autoApprove = true`, so every review was public on write;
+  - purchase was never verified (no caller sends orderId);
+  - the product widget's `product_<id>` key split the rating from the page;
+  - moderation had no state machine, history or self-interest check.
+- **submitReview:**
+  - product / seller only (other domains review through their own stores);
+  - the target id is canonicalised (bare id);
+  - the SERVER finds a PAID, delivered/completed order containing the product or sold by the seller (a client orderId is not authority);
+  - the doc id is deterministic `{uid}_{type}_{id}`, created once;
+  - the status is ALWAYS `pending`; browser status/approved/published are ignored;
+  - the submission is logged.
+- **adminModerateReview:**
+  - the shared vocabulary pending → approved | rejected | changes_requested | archived | removed, and restore → pending;
+  - transitions are validated in a transaction;
+  - an author cannot moderate their own review, nor a seller-admin a review of their own listing;
+  - a repeat is a no-op;
+  - every transition is written to `reviewModerationLog`;
+  - ratingsSummary recounts APPROVED only, so removal un-publishes.
+- **getReviews:** the same canonical key; approved only (unchanged).
+- **Tests:** review-authority 19/0 (live baseline fails 17); 9 sabotages, each caught by named rows; product-reviews 32/0; product-tombstone 34/0.
+- **Not here (separate units):**
+  - the AdminOS queue filter (adminGetReviews ignores status, on the adminOsDispatch lineage 18cfe7f);
+  - the rules R0 close of browser review create (sokoni-32's combined candidate);
+  - the client copy "submitted for approval".
+- **Deploy:** `--only functions:submitReview,functions:getReviews,functions:adminModerateReview` from this tree. Not deployed.
+
 ## [2026-08-22] - Admin shortcut, Marketplace return, and the Health INTERNAL traced.
 
 Hosting slice + a SEPARATE Functions commit. No rules, no schema.

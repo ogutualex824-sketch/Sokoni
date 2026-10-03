@@ -116,17 +116,52 @@ async function _recalcSummary(targetId) {
   return { avg, count };
 }
 
+/* ══ THE REVIEW AUTHORITY (owner, 2026-10-01: "all reviews approved in AdminOS before they are public") ══════════
+   Live provenance (2026-10-01 audit): submitReview / getReviews / flagReview / markReviewHelpful /
+   adminModerateReview all serve the 09-09 archive that equals 76436b1 (0 files differ). Callers: sokoni-reviews.js
+   (product page) and business.html (seller). Collection: reviews (+ ratingsSummary). Found and fixed here:
+     · autoApprove = true — every review was public the moment it was written;
+     · purchase was never verified — no caller sends orderId, so the check never ran;
+     · product.html keys the widget "product_<id>" while product.js reads the bare id — a split rating key;
+     · adminModerateReview had no state machine, no history and no self-interest check.
+   The browser may REQUEST a review. The server decides identity, eligibility, target, duplicate and status. */
+const REVIEW_TYPES = Object.freeze(['product', 'seller']);            /* other domains review through their own stores */
+/** "product_abc" → "abc" for a product target (the live widget's prefix); never a name; the BARE id is identity. */
+function _canonTarget(targetType, targetId) {
+  let id = String(targetId || '').trim();
+  const pre = targetType + '_';
+  if (id.indexOf(pre) === 0) id = id.slice(pre.length);
+  return id;
+}
+/** Server-side eligibility: the reviewer must hold a PAID order, delivered or completed, containing the product
+ *  (product review) or sold by the seller (seller review). Bounded reads; client-supplied orderId is not authority. */
+async function _eligibleOrder(db, uid, targetType, targetId) {
+  const DONE = ['delivered', 'completed'];
+  const seen = new Map();
+  for (const f of ['buyerUid', 'uid']) {
+    const snap = await db.collection('orders').where(f, '==', uid).limit(100).get().catch(() => null);
+    (snap ? snap.docs : []).forEach((d) => seen.set(d.id, d.data() || {}));
+  }
+  for (const [id, o] of seen) {
+    if (!DONE.includes(String(o.status || '')) || o.paymentVerified !== true) continue;
+    if (targetType === 'seller' && (String(o.sellerUid || '') === targetId || String(o.shopId || '') === targetId)) return id;
+    if (targetType === 'product' && Array.isArray(o.items) && o.items.some((it) => it && String(it.productId || it.id || '') === targetId)) return id;
+  }
+  return null;
+}
+
 // ── submitReview ──────────────────────────────────────────────────────────────
 exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
   const uid = _requireAuth(req);
 
   // Zero-trust input validation
-  const { targetId, targetType, targetName, rating, title, body, orderId, images } = req.data;
-
-  if (!targetId || typeof targetId !== "string" || targetId.length > 128) throw new HttpsError("invalid-argument", "targetId required.");
-  if (!["product","seller","service","food","healthcare","entertainment","education","legal","driver"].includes(targetType)) {
-    throw new HttpsError("invalid-argument", "Invalid targetType.");
+  const { targetName, rating, title, body, images } = req.data || {};
+  const targetType = String((req.data || {}).targetType || '');
+  if (!REVIEW_TYPES.includes(targetType)) {
+    throw new HttpsError("invalid-argument", "Reviews here are for products and sellers. Rate a service from your booking.", { reason: "UNSUPPORTED_TARGET" });
   }
+  const targetId = _canonTarget(targetType, (req.data || {}).targetId);
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(targetId)) throw new HttpsError("invalid-argument", "targetId required.");
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
     throw new HttpsError("invalid-argument", "Rating must be 1-5.");
   }
@@ -142,22 +177,17 @@ exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
 
   const db = _db();
 
-  // One review per user per target
+  // One review per user per target (legacy random-id docs included)
   const existing = await db.collection("reviews")
     .where("targetId", "==", targetId)
     .where("authorUid", "==", uid)
     .limit(1).get();
-  if (!existing.empty) throw new HttpsError("already-exists", "You have already reviewed this.");
+  if (!existing.empty) throw new HttpsError("already-exists", "You have already reviewed this.", { reason: "DUPLICATE" });
 
-  // Verify purchase (non-blocking for service reviews — orderId optional)
-  if (orderId) {
-    const orderDoc = await db.collection("orders").doc(orderId).get();
-    if (!orderDoc.exists || orderDoc.data().buyerUid !== uid) {
-      throw new HttpsError("permission-denied", "Order not found or not yours.");
-    }
-    if (!["completed","delivered"].includes(orderDoc.data().status)) {
-      throw new HttpsError("failed-precondition", "Order must be completed before reviewing.");
-    }
+  // ELIGIBILITY — the server finds the qualifying order itself (a client orderId is never the authority)
+  const eligibleOrderId = await _eligibleOrder(db, uid, targetType, targetId);
+  if (!eligibleOrderId) {
+    throw new HttpsError("failed-precondition", "You can review this after an order for it has been delivered.", { reason: "NOT_ELIGIBLE" });
   }
 
   const cleanTitle = _sanitize(title, 120);
@@ -166,11 +196,10 @@ exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
     ? images.filter(u => typeof u === "string" && u.startsWith("https://")).slice(0, 5)
     : [];
 
-  // Auto-approve unless body looks suspicious (profanity/spam check placeholder)
-  const autoApprove = true; // extend with moderation API as needed
-
-  const reviewRef = db.collection("reviews").doc();
-  await reviewRef.set({
+  /* PENDING ALWAYS — published only by adminModerateReview 'approve'. Deterministic id → create() is the
+     one-per-person-per-target claim even under a double tap. */
+  const reviewRef = db.collection("reviews").doc(uid + "_" + targetType + "_" + targetId);
+  await reviewRef.create({
     targetId,
     targetType,
     targetName: _sanitize(targetName, 120),
@@ -179,22 +208,27 @@ exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
     title:   cleanTitle,
     body:    cleanBody,
     images:  safeImages,
-    orderId: orderId || null,
+    orderId: eligibleOrderId,
     helpful: 0,
     flags:   0,
-    status:  autoApprove ? "approved" : "pending",
+    status:  "pending",
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  if (autoApprove) await _recalcSummary(targetId);
-
-  return { reviewId: reviewRef.id, status: autoApprove ? "approved" : "pending" };
+  await db.collection("reviewModerationLog").add({ reviewId: reviewRef.id, from: null, to: "pending", action: "submit",
+    actorUid: uid, targetId, targetType, at: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+  return { reviewId: reviewRef.id, status: "pending" };
 });
+
+exports._reviewAuthority = { REVIEW_TYPES, _canonTarget, _eligibleOrder };
 
 // ── getReviews ────────────────────────────────────────────────────────────────
 exports.getReviews = onCall({ region: "us-central1" }, async (req) => {
-  const { targetId, sort = "recent", limit: lim = 20, startAfter } = req.data;
+  const { sort = "recent", limit: lim = 20, startAfter } = req.data || {};
+  /* the same canonical key the writer uses: the live product widget asks for "product_<id>" */
+  const rawTarget = String((req.data || {}).targetId || "");
+  const targetId = rawTarget.replace(/^(product|seller)_/, "");
   if (!targetId) throw new HttpsError("invalid-argument", "targetId required.");
 
   const safeLimit = Math.min(50, Math.max(1, Number(lim) || 20));
@@ -332,26 +366,53 @@ exports.markReviewHelpful = onCall({ region: "us-central1" }, async (req) => {
 // ── adminModerateReview ───────────────────────────────────────────────────────
 exports.adminModerateReview = onCall({ region: "us-central1" }, async (req) => {
   if (!_isAdmin(req)) throw new HttpsError("permission-denied", "Admins only.");
-  const { reviewId, action, note } = req.data;
-  if (!reviewId) throw new HttpsError("invalid-argument", "reviewId required.");
-  if (!["approve","reject","restore"].includes(action)) throw new HttpsError("invalid-argument", "Invalid action.");
+  const { reviewId, action, note } = req.data || {};
+  if (!reviewId || typeof reviewId !== "string" || !/^[A-Za-z0-9_-]{1,200}$/.test(reviewId)) throw new HttpsError("invalid-argument", "reviewId required.");
+  /* The shared moderation vocabulary (one with the report queue): pending → approved | rejected |
+     changes_requested | archived | removed. 'flagged' (legacy) moderates like pending. Restore = back to pending. */
+  const T = {
+    approve:         { to: "approved",          from: ["pending", "flagged", "changes_requested", "rejected", "archived"] },
+    reject:          { to: "rejected",          from: ["pending", "flagged", "changes_requested", "approved"] },
+    request_changes: { to: "changes_requested", from: ["pending", "flagged"] },
+    archive:         { to: "archived",          from: ["pending", "flagged", "approved", "rejected", "changes_requested"] },
+    remove:          { to: "removed",           from: ["pending", "flagged", "approved", "rejected", "changes_requested", "archived"] },
+    restore:         { to: "pending",           from: ["archived", "removed"] },
+  }[action];
+  if (!T) throw new HttpsError("invalid-argument", "Invalid action.");
 
   const db  = _db();
   const ref = db.collection("reviews").doc(reviewId);
-  const doc = await ref.get();
-  if (!doc.exists) throw new HttpsError("not-found", "Review not found.");
-
-  const statusMap = { approve: "approved", reject: "rejected", restore: "approved" };
-  await ref.update({
-    status:          statusMap[action],
-    moderationNote:  _sanitize(note || "", 500),
-    moderatedBy:     req.auth.uid,
-    moderatedAt:     admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt:       admin.firestore.FieldValue.serverTimestamp(),
+  const actor = req.auth.uid;
+  const res = await db.runTransaction(async (tx) => {
+    const doc = await tx.get(ref);
+    if (!doc.exists) throw new HttpsError("not-found", "Review not found.");
+    const r = doc.data() || {};
+    if (r.authorUid === actor) throw new HttpsError("permission-denied", "You cannot moderate your own review.", { reason: "SELF_REVIEW" });
+    /* self-interest: an admin who owns the reviewed target */
+    let owner = null;
+    if (r.targetType === "seller") owner = r.targetId;
+    else if (r.targetType === "product") {
+      const p = await tx.get(db.collection("products").doc(String(r.targetId)));
+      owner = p.exists ? (p.data().sellerUid || p.data().sellerId || p.data().shopId || null) : null;
+    }
+    if (owner && String(owner) === actor) throw new HttpsError("permission-denied", "You cannot moderate a review of your own listing.", { reason: "SELF_INTEREST" });
+    const from = String(r.status || "pending");
+    if (from === T.to) return { status: from, unchanged: true, targetId: r.targetId };          /* idempotent: no second decision */
+    if (!T.from.includes(from)) throw new HttpsError("failed-precondition", "That action is not allowed on a " + from + " review.", { reason: "BAD_TRANSITION" });
+    tx.update(ref, {
+      status:          T.to,
+      moderationNote:  _sanitize(note || "", 500),
+      moderatedBy:     actor,
+      moderatedAt:     admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt:       admin.firestore.FieldValue.serverTimestamp(),
+    });
+    tx.set(db.collection("reviewModerationLog").doc(), { reviewId, from, to: T.to, action, actorUid: actor,
+      note: _sanitize(note || "", 500), targetId: r.targetId || null, targetType: r.targetType || null,
+      at: admin.firestore.FieldValue.serverTimestamp() });
+    return { status: T.to, unchanged: false, targetId: r.targetId };
   });
 
-  // Recalc summary after moderation
-  await _recalcSummary(doc.data().targetId);
-
-  return { status: statusMap[action] };
+  // Publication follows the authoritative state: the summary counts APPROVED reviews only
+  if (!res.unchanged && res.targetId) await _recalcSummary(res.targetId);
+  return { status: res.status, unchanged: res.unchanged };
 });
