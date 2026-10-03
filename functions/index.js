@@ -13027,6 +13027,8 @@ exports.auditInviteOnboarding = onCall(
 /* 2026-10-01 — Financial Partner Workspace: the dashboard approved banks / SACCOs / chamas / MFIs /
    insurers / forex bureaus / accountants / advisers / investment firms land on. See functions/financial-partner.js */
 exports.financialPartnerDispatch = require('./financial-partner').financialPartnerDispatch;
+/* Application review tools (claim/release/note/archive/history) — never a decision writer; see functions/application-review.js */
+exports.applicationReview = require('./application-review').applicationReview;
 
 exports.resendPasswordSetup = onCall(
   { region: 'us-central1', maxInstances: 5, enforceAppCheck: true,
