@@ -7421,7 +7421,7 @@ async function _associatePosQrCallback(apiRef, state, gatewayInvoiceId, tag) {
    A second handler, `intasendWebhook`, was retired 2026-09-14: a strict subset that had
    received 49 requests in 180 days and answered every one 401 or 405. */
 exports.webhookIntasend = onRequest(
-  { timeoutSeconds: 30, secrets: [INTASEND_WEBHOOK_CHALLENGE, require("./loyalty")._internal.LOYALTY_HMAC], invoker: "public", minInstances: 1 },   /* + Points P1 */
+  { timeoutSeconds: 30, secrets: [INTASEND_WEBHOOK_CHALLENGE, INTASEND_PRIVATE_KEY, require("./loyalty")._internal.LOYALTY_HMAC], invoker: "public", minInstances: 1 },   /* 5b: provider confirmation · 2f: Points P1 */
   async (req, res) => {
     if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
 
@@ -7453,9 +7453,10 @@ exports.webhookIntasend = onRequest(
     const apiRef     = invoice.api_ref         || req.body?.api_ref;
     const checkoutId = invoice.id              || req.body?.invoice_id;
     const amount     = Number(invoice.net_amount || invoice.amount || req.body?.net_amount || req.body?.value || 0);
-    /* RECEIPTS (2026-10-03): the payment METHOD as IntaSend reports it — identical to sokoni-5b's 525fd9f on the webhook
-       lineage (top-level `provider`: M-PESA, CARD-PAYMENT, APPLE-PAY, GOOGLE-PAY, PESALINK …). Raw, trimmed, capped,
-       control characters stripped; ABSENT IS NULL — never a guessed "M-PESA". Nothing decides money on it. */
+    /* RECEIPTS (2f request, 2026-10-03): the payment METHOD as IntaSend reports it — the collection event's top-level
+       `provider` (developers.intasend.com/docs/payment-collection-events: M-PESA, CARD-PAYMENT, APPLE-PAY, GOOGLE-PAY,
+       PESALINK …). Stored RAW (trimmed, capped, control characters stripped) as payments/{ref}.providerMethod; ABSENT IS
+       NULL — never a guessed "M-PESA". Receipts read this field; nothing decides money on it. */
     const providerMethod = (() => {
       const v = invoice.provider !== undefined ? invoice.provider : req.body?.provider;
       if (v === undefined || v === null) return null;
@@ -7519,6 +7520,94 @@ exports.webhookIntasend = onRequest(
 
     const fsStatus = state === "COMPLETE" ? "COMPLETE" : state === "FAILED" ? "FAILED" : "PENDING";
 
+    /* ══ ONLINE PRODUCT CHECKOUT GATE (owner repair #1, 2026-09-30) ═════════════════════════
+       A payment carrying a server-minted product_order intent settles ONLY on exact evidence:
+       the intent is THIS order's, the currency is KES, and the GROSS amount the buyer paid
+       (invoice.value — NOT net_amount, which is value minus IntaSend's charges) equals the
+       intent to the cent. Anything else is parked as REVIEW BEFORE the COMPLETE claim, so no
+       commission, wallet credit, stock move or order finalisation can follow. A replayed
+       delivery re-evaluates to the same answer. Unit 4b: an intent-less payment whose meta would
+       FINALISE a marketplace order (wouldFinalizeMarketplaceOrder — the same predicate the
+       settlement branch uses) parks as missing_intent: its seller, items and amount would all be
+       browser-supplied. Every other intent-less payment is untouched. ══ */
+    if (fsStatus === "COMPLETE") {
+      const { assessProductOrderPayment } = require("./payment-attribution");
+      const _gIntentRef = existing.intentRef || apiRef;
+      /* Park = the same REVIEW record in every refusal case: nothing settles, the evidence stays on
+         payments/{ref}, the provider gets 200 and stops retrying, and a replay re-evaluates. */
+      const _park = async (reason, extra) => {
+        await payRef.update(Object.assign({
+          status:            "REVIEW",
+          reviewReason:      reason,
+          intasendState:     state,
+          confirmedAmount:   amount,
+          providerMethod,
+          updatedAt:         admin.firestore.FieldValue.serverTimestamp(),
+          webhookReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, extra || {}));
+      };
+      let _gSnap = null;
+      try {
+        _gSnap = await db.collection("paymentIntents").doc(String(_gIntentRef)).get();
+      } catch (readErr) {
+        /* The gate cannot tell whether this is a product payment. Nothing may settle unverified, so
+           park it (reviewer re-drives it); only if even the park cannot be written, ask for a retry. */
+        logger.error("PRODUCT_ORDER_GATE_ERROR — intent unreadable, payment parked", { ref: apiRef, intentRef: _gIntentRef, err: String(readErr && readErr.message || readErr) });
+        try { await _park("gate_error"); res.status(200).send("OK"); }
+        catch (_) { res.status(500).send("RETRY"); }
+        return;
+      }
+      /* P0 (owner 2026-10-03): the order this payment would settle is read too — its buyer and status are part of
+         the decision. orders/{ref} shares the payment ref (checkout mints one id for both). Unreadable → park. */
+      let _gOrder = null;
+      if (_gSnap.exists) {
+        try {
+          const _oSnap = await db.collection("orders").doc(String(apiRef)).get();
+          _gOrder = _oSnap.exists ? (_oSnap.data() || {}) : null;
+        } catch (readErr) {
+          logger.error("PRODUCT_ORDER_GATE_ERROR — order unreadable, payment parked", { ref: apiRef, err: String(readErr && readErr.message || readErr) });
+          try { await _park("gate_error"); res.status(200).send("OK"); }
+          catch (_) { res.status(500).send("RETRY"); }
+          return;
+        }
+      }
+      const _gate = assessProductOrderPayment(_gSnap.exists ? _gSnap.data() : null, {   /* pure: never throws */
+        apiRef,
+        grossAmount: (invoice.value !== undefined ? invoice.value : req.body?.value),
+        currency:    invoice.currency || req.body?.currency || null,
+        legacyMeta:  existing.meta || null,   /* Unit 4b: decides only WHETHER to refuse, never who is paid */
+        payerUid:    existing.uid || null,    /* written by initiateSTKPush from request.auth — the payer */
+        order:       _gOrder,
+      });
+      if (_gate.applies && !_gate.ok) {
+        await _park(_gate.reason, { expectedAmountCents: _gate.expectedCents ?? null, confirmedGrossCents: _gate.confirmedCents ?? null });
+        logger.error("PRODUCT_ORDER_PAYMENT_REFUSED", { ref: apiRef, intentRef: _gIntentRef, reason: _gate.reason,
+          expectedCents: _gate.expectedCents ?? null, confirmedCents: _gate.confirmedCents ?? null });
+        res.status(200).send("OK");
+        return;
+      }
+      /* PROVIDER CONFIRMATION (P0): the callback body is a claim. A product order settles only when IntaSend itself,
+         asked server-to-server, reports THIS payment COMPLETE in KES at the intent's exact gross value. Unreachable,
+         not found or different → park REVIEW (the money is captured; a reviewer re-drives it). */
+      if (_gate.applies && _gate.ok) {
+        const { intasendCollectionStatus } = require("./shared/intasend-status");
+        const { assessProviderConfirmation } = require("./payment-attribution");
+        const _invId = String(invoice.invoice_id || req.body?.invoice_id || "");
+        let _st;
+        try {
+          _st = await intasendCollectionStatus(_invId, { privateKey: INTASEND_PRIVATE_KEY.value(), live: process.env.INTASEND_SANDBOX !== "true" });
+        } catch (e) { _st = { ok: false, error: "NETWORK" }; }
+        const _pc = assessProviderConfirmation(_st, { apiRef, expectedCents: _gate.expectedCents });
+        if (!_pc.ok) {
+          await _park(_pc.reason, { expectedAmountCents: _gate.expectedCents ?? null, confirmedGrossCents: _gate.confirmedCents ?? null,
+            providerCheck: _pc.detail ? String(_pc.detail).slice(0, 40) : null });
+          logger.error("PRODUCT_ORDER_PAYMENT_REFUSED", { ref: apiRef, intentRef: _gIntentRef, reason: _pc.reason, expectedCents: _gate.expectedCents ?? null });
+          res.status(200).send("OK");
+          return;
+        }
+      }
+    }
+
     let claimed = false;
     await db.runTransaction(async (txn) => {
       const s = await txn.get(payRef);
@@ -7539,6 +7628,7 @@ exports.webhookIntasend = onRequest(
           charges:   invoice.charges   ?? req.body?.charges   ?? null,
           currency:  invoice.currency  ?? req.body?.currency  ?? null,
         },
+        providerMethod,
         updatedAt:         admin.firestore.FieldValue.serverTimestamp(),
         webhookReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -7549,6 +7639,12 @@ exports.webhookIntasend = onRequest(
       console.log(`[webhookIntasend] Already processed (raced): ${apiRef}`);
       res.status(200).send("OK");
       return;
+    }
+    /* The intent carries the same method for receipt readers that start from it. Merge-only, best-effort: it never
+       touches the intent's status, and a failure here must not undo a payment that is already recorded. */
+    if (providerMethod && existing.intentRef) {
+      await db.collection("paymentIntents").doc(String(existing.intentRef)).set({ providerMethod }, { merge: true })
+        .catch((e) => logger.warn("[webhookIntasend] providerMethod not mirrored to intent", { ref: apiRef, err: String(e && e.message || e) }));
     }
 
     /* Terminal NON-payment for a service booking → release the held slot immediately
@@ -7568,6 +7664,27 @@ exports.webhookIntasend = onRequest(
          the provider is credited only by Phase C settlement at completion. Handled in
          isolation via the server-minted intent; skips all commission/credit/creation. */
       if (await _holdServiceBookingPayment(db, admin, apiRef, existing.intentRef, amount)) { res.status(200).send("OK"); return; }
+
+      /* Rentals (2f b2b8158 · f3 rentals): a rental_booking payment is HELD until the renter's PIN at return — never
+         credited here. Exact gross + IntaSend's own confirmation; a payment for a dead rental is refund_due, never held. */
+      {
+        const { holdRentalBookingPayment } = require("./rental-payment-hold");
+        const _rent = await holdRentalBookingPayment(db, admin, {
+          apiRef, intentRef: existing.intentRef, providerMethod, invoiceId: invoice.invoice_id || req.body?.invoice_id || null,
+          grossAmount: (invoice.value !== undefined ? invoice.value : req.body?.value),
+          confirm: async (expectedCents) => {
+            const { intasendCollectionStatus } = require("./shared/intasend-status");
+            const { assessProviderConfirmation } = require("./payment-attribution");
+            const _st = await intasendCollectionStatus(String(invoice.invoice_id || req.body?.invoice_id || ""),
+              { privateKey: INTASEND_PRIVATE_KEY.value(), live: process.env.INTASEND_SANDBOX !== "true" });
+            return assessProviderConfirmation(_st, { apiRef, expectedCents });
+          },
+        });
+        if (_rent) {
+          logger.info("[webhookIntasend] rental payment", { ref: apiRef, outcome: _rent.outcome, reason: _rent.reason || null });
+          res.status(200).send("OK"); return;
+        }
+      }
 
       /* Creator Hub film purchase: NOT a seller sale. Stop here — before the
          commissionLedger write and the seller wallet credit below — because
@@ -7760,21 +7877,28 @@ exports.webhookIntasend = onRequest(
         }
       }
 
-      const category = payData.meta?.category || "default";
+      /* COMMISSION CATEGORY FROM SERVER RECORDS ONLY (owner rule; 2f lead confirmed 2026-10-03). payData.meta is copied
+         from the CLIENT's initiateSTKPush request, so its category could name a 0% lane. The category now comes from the
+         intent's products / the server pricer's stamp; unresolved → the seller credit is HELD for review below. The
+         seller-specific rule lookup uses the ATTRIBUTED seller, never the payer. */
+      const _cc = await require("./shared/commission-category-source").resolveCommissionCategory(db, { intentRef: existing.intentRef || apiRef });
+      const category = _cc.ok ? _cc.category : "unresolved";
+      let _commissionHold = _cc.ok ? null : (_cc.reason || "category_unresolved");
       let sokoniCut = 0, commissionPct = 0;
-      try {
+      if (!_commissionHold) try {
         const { calculateCommission } = require('./finos-utils');
         const commResult = await calculateCommission(db, {
           orderAmountCents: amount * 100,
           category,
-          sellerId: payData.uid,
+          sellerId: attribution.sellerUid || attribution.merchantUid || null,
         });
         sokoniCut     = commResult.commissionCents ? Math.round(commResult.commissionCents / 100) : 0;
         commissionPct = commResult.effectiveRate ?? 0;
       } catch (commErr) {
-        console.error('[webhookIntasend] Commission calc failed — flagging for manual review', commErr.message);
+        console.error('[webhookIntasend] Commission calc failed — seller credit HELD for review', commErr.message);
         commissionPct = null;
         sokoniCut = 0;
+        _commissionHold = "commission_calc_failed";   /* never credit 100% because the price could not be computed */
         await db.collection("commissionReviewQueue").add({
           ref: apiRef, amount, category, uid: payData.uid,
           reason: commErr.message,
@@ -7868,46 +7992,65 @@ exports.webhookIntasend = onRequest(
            own merchant is credited instead, closing the gap where a PERMANENT
            Till QR's buyer-initiated payment would otherwise have credited the
            buyer's own wallet (docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md §5). */
-        const _isBooking = attribution.type === "booking" || attribution.type === "service-booking";
-        /* C1 — THE PAYER IS NEVER THEIR OWN EARNER (CHANGELOG 214). The last fallback here was payData.uid, the
-           account that STARTED the payment. For a merchant-initiated POS charge that is the merchant (the comment
-           above); for every BUYER-initiated gateway payment with no earner in its attribution — boosts, ads, food,
-           contact deposits, legal / property / bnb bookings, the referral "claim" — it credited the BUYER'S OWN
-           wallet with their payment minus commission (and, for type 'booking', into the WITHDRAWABLE balance).
-           Now the payer is the earner only on the merchant-initiated POS categories; any other payment with no
-           attributed earner is HELD (below) for review — the money is SOKONI's to settle, never the payer's. */
-        const _POS_MERCHANT_INITIATED = new Set(["pos", "pos_till", "pos_checkout"]);
-        const _explicitEarner = (_isBooking && attribution.providerId) ? attribution.providerId
-                              : (attribution.sellerUid || attribution.merchantUid || null);
-        const _payerIsMerchant = _POS_MERCHANT_INITIATED.has(String(category || "").toLowerCase());
-        const _sellerId  = _explicitEarner || (_payerIsMerchant ? payData.uid : null);
+        /* ══ SECURITY CONVERGENCE (2026-10-03) — NO PAYER CREDIT, NO PLATFORM-REVENUE CREDIT ═════════════════════════
+           LIVE: the earner fell back to `payData.uid` — the account that CALLED initiateSTKPush. Census (every live
+           caller): no flow legitimately needs that fallback; every one that reached it credited the PAYER — buyer-
+           initiated platformBook / gateway / waConnect / bookNow-without-provider payments (fitness, digital, food,
+           bnb, legal, healthcare, property …) and, worse, PLATFORM REVENUE: subscription checkout, sub-engine renewals,
+           listing / marketing boosts, hub registration fees and admin featured listings — the fee came back to the
+           payer as withdrawable balance. Now:
+             · the earner is ONLY the attributed provider (booking) or seller / till merchant — never payData.uid;
+             · platform revenue never credits anyone: decided by the SERVER's intent purpose (paymentIntents/{ref}
+               .purpose), not only by the client's category label, so a client-sent sellerUid cannot turn a fee
+               back into a credit; an unreadable intent fails CLOSED (no credit);
+             · a payment with no earner is QUEUED for review (commissionReviewQueue/no_earner_{ref}, idempotent) — the
+               money stays with SOKONI until an administrator attributes it. Nothing here touches the payment's own
+               status, which is already settled above. */
+        let _intentPurpose = null, _intentUnreadable = false;
+        try {
+          const _ip = await db.collection("paymentIntents").doc(String(existing.intentRef || apiRef)).get();
+          if (_ip.exists) _intentPurpose = String((_ip.data() || {}).purpose || "") || null;
+        } catch (_) { _intentUnreadable = true; }
+        const _decision = require("./payment-attribution").walletCreditDecision({
+          attribution, category, intentPurpose: _intentPurpose, intentUnreadable: _intentUnreadable,
+          metaPurpose: payData.meta?.purpose, isSubscription: _isSubscription,
+        });
+        const _isPlatformRevenue = _decision.action === "skip_platform";
+        const _isBooking = _decision.action === "credit_booking";
+        const _sellerId  = _decision.earner;
         const _netCents = Math.round(Math.max(0, amount - sokoniCut) * 100);
+        const _queueNoEarner = async (why) => {
+          await db.collection("commissionReviewQueue").doc(`no_earner_${apiRef}`).set({
+            ref: apiRef, payerUid: payData.uid || null, amount, category, intentPurpose: _intentPurpose,
+            reason: why, attributionSource: attribution.source || null,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true }).catch(() => {});
+          await db.collection("payments").doc(apiRef).set({ walletCreditSkipped: why }, { merge: true }).catch(() => {});
+        };
 
-        /* Creator Hub defence in depth: the early film branch above normally
-           returns first; if its intent read failed, this still refuses to credit
-           a film payment (purpose from the intent, type from intent metadata). */
+        /* Creator Hub defence in depth (2f): if the early intent read failed, still refuse to credit a self-settling purchase. */
         const _ssp = require("./shared/self-settling-purposes");
         const _isFilmAccess = _ssp.isSelfSettling(attribution.purpose) || _ssp.isSelfSettling(attribution.type);
         if (_isSubscription) {
           console.log(`[webhookIntasend] wallet credit skipped (subscription): ${apiRef}`);
         } else if (_isFilmAccess) {
-          console.log(`[webhookIntasend] wallet credit skipped (film_access → royalty ledger): ${apiRef}`);
+          console.log(`[webhookIntasend] wallet credit skipped (self-settling purpose → its own settlement): ${apiRef}`);
+        } else if (_isPlatformRevenue) {
+          console.log(`[webhookIntasend] wallet credit skipped (platform revenue): ${apiRef}`, { purpose: _intentPurpose, category });
+          await db.collection("payments").doc(apiRef).set({ walletCreditSkipped: "platform_revenue" }, { merge: true }).catch(() => {});
+        } else if (_commissionHold) {
+          console.warn(`[webhookIntasend] wallet credit WITHHELD (commission not server-resolvable: ${_commissionHold}): ${apiRef}`);
+          await db.collection("commissionReviewQueue").doc(`commission_hold_${apiRef}`).set({
+            ref: apiRef, payerUid: payData.uid || null, amount, reason: _commissionHold, clientCategory: payData.meta?.category || null,
+            intentPurpose: _intentPurpose, createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true }).catch(() => {});
+          await db.collection("payments").doc(apiRef).set({ walletCreditSkipped: "commission_unresolved" }, { merge: true }).catch(() => {});
+        } else if (_decision.reason === "intent_unreadable") {
+          console.warn(`[webhookIntasend] wallet credit WITHHELD (intent unreadable — fail closed): ${apiRef}`);
+          await _queueNoEarner("intent_unreadable");
         } else if (!_sellerId) {
-          /* HELD, not credited (C1): recorded for review and on the payment itself, idempotently. */
-          console.warn(`[webhookIntasend] UNATTRIBUTED payment held — no earner; the payer is never credited: ${apiRef}`);
-          const _payDoc = db.collection("payments").doc(apiRef);
-          const _held = await db.runTransaction(async (txn) => {
-            const snap = await txn.get(_payDoc);
-            if (!snap.exists || snap.data().settlementStatus === "UNATTRIBUTED_HOLD" || snap.data().walletCreditedAt) return false;
-            txn.update(_payDoc, { settlementStatus: "UNATTRIBUTED_HOLD", settlementHeldAt: admin.firestore.FieldValue.serverTimestamp() });
-            txn.set(db.collection("commissionReviewQueue").doc(`unattributed_${apiRef}`), {
-              ref: apiRef, payerUid: payData.uid || null, amount, category, purpose: attribution.purpose || null,
-              reason: "unattributed payment: no earner on the intent or meta — held, the payer is never credited (C1)",
-              createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
-            return true;
-          });
-          console.log(`[webhookIntasend] unattributed ${_held ? "held" : "already held"}`, { ref: apiRef });
+          console.warn(`[webhookIntasend] wallet credit WITHHELD (no attributed earner — never the payer): ${apiRef}`);
+          await _queueNoEarner("no_earner");
         } else if (_netCents <= 0) {
           console.warn(`[webhookIntasend] wallet credit skipped (zero net): ${apiRef}`);
         } else if (_isBooking) {
@@ -8014,10 +8157,9 @@ exports.webhookIntasend = onRequest(
           pointsDiscount: attribution.pointsDiscount || 0,
           pointsFunding:  attribution.pointsFunding || [],
         };
-        const _cat = String(_pm.category || "").toLowerCase();
-        const _isProductPay = !!_pm.orderId
-          && _pm.type !== "booking"
-          && !["subscription", "wallet_topup", "topup"].includes(_cat);
+        /* Unit 4b: the ONE predicate — the pre-claim gate refuses an intent-less payment by the same
+           test, so what it refuses can never drift from what this branch would finalise. */
+        const _isProductPay = require("./payment-attribution").wouldFinalizeMarketplaceOrder(_pm);
         if (_isProductPay) {
           const _fin = await _finalizeMarketplacePayment(db, admin, {
             checkoutId:    apiRef,
@@ -8034,7 +8176,9 @@ exports.webhookIntasend = onRequest(
             buyerName:     _pm.buyerName || null,
             address:       _pm.address || _pm.deliveryAddress || null,
             fulfillmentType: _pm.fulfillmentType || "delivery",
-            paymentMethod: providerMethod,   /* the method IntaSend REPORTED (null when absent); the rail stays in pathLabel */
+            /* RECEIPTS (2f, 2026-10-03): the method IntaSend REPORTED (null when it said nothing) — was hard-coded
+               "mpesa_intasend", so a card payment was recorded as M-PESA. The rail stays in pathLabel. */
+            paymentMethod: providerMethod,
             pathLabel:     "intasend",
             settlementStatus:   "settled",
             writeSellerPayment: false,
@@ -8106,7 +8250,7 @@ exports.webhookIntasend = onRequest(
               fulfillmentType: _pm.fulfillmentType || "delivery",
               deliveryAddress: (_pm.fulfillmentType === "pickup") ? null : (_pm.address || _pm.deliveryAddress || null),
               pickupLocation:  (_pm.fulfillmentType === "pickup") ? (_pm.sellerName || "Shop") : null,
-              paymentMethod:  providerMethod,   /* as IntaSend reported it; null = not reported */
+              paymentMethod:  providerMethod,   /* reported method; null → the receipt renders "—" (was "M-PESA") */
               paymentRef:     checkoutId || apiRef,
               mpesaCode:      checkoutId || null,
               gatewayRef:     checkoutId || null,
@@ -8146,7 +8290,7 @@ exports.webhookIntasend = onRequest(
                   items:         _lines.map(i => ({ productId: i.productId, name: i.name, price: i.unitPrice, qty: i.qty, lineTotal: i.lineTotal })),
                   subtotal:      _subtotal,
                   total:         amount,
-                  paymentMethod: providerMethod,
+                  paymentMethod: providerMethod,   /* reported method, never a default (was "M-PESA") */
                   paymentStatus: "paid",
                   receiptNumber: apiRef,
                   /* pickup → in-store collection (Ready for Pickup); delivery → rider
