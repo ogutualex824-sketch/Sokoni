@@ -245,6 +245,14 @@ service cloud.firestore {
   || (isOwner() && claimsOwner() && noAdminFields() && appUndecided() && appNoDecision());
   allow delete: if isAdmin() || (isOwner() && appUndecided());
   }
+  /* 2026-10-03 WORK/JOB ENGINE (sokoni-b2 WE1, workDispatch on feat/tech-taxonomy-on-13f74f3): ONE category-neutral
+     project record (Marketing first; Construction / garage skins later). Server-written only — states, scope totals,
+     change-request decisions, evidence and completion are all workDispatch's. Parties-only read; get() with a default
+     so a record without `parties` denies instead of erroring. */
+  match /workProjects/{projectId} {
+  allow read:  if isAdmin() || (isAuthed() && request.auth.uid in resource.data.get('parties', []));
+  allow write: if false;
+  }
   match /invitations/{inviteId} {
   allow read:   if isAdmin();
   }

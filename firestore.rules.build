@@ -224,6 +224,10 @@ service cloud.firestore {
   || (isOwner() && claimsOwner() && noAdminFields() && appUndecided() && appNoDecision());
   allow delete: if isAdmin() || (isOwner() && appUndecided());
   }
+  match /workProjects/{projectId} {
+  allow read:  if isAdmin() || (isAuthed() && request.auth.uid in resource.data.get('parties', []));
+  allow write: if false;
+  }
   match /invitations/{inviteId} {
   allow read:   if isAdmin();
   }
