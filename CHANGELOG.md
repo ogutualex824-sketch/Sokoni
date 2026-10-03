@@ -1,3 +1,47 @@
+## [2026-10-03] - REVIEW + UNBOXING as REPORT targets (hosting) — NOT deployed
+
+**NOT DEPLOYED.** Review and unboxing reviews are now report targets. The functions half goes through sokoni-5b's
+shared module `85a5fcf` (byte-identical, sha `c3ea059ef602ad4e`). It lives on branch
+feat/community-reports-fn-on-7091029, CHANGELOG entry "REVIEW + UNBOXING as REPORT targets (server)".
+
+**Deploy gate:** these must serve in this order, and hosting must not deploy before both are serving:
+1. sokoni-5b's review authority (`7ec04c5` / `85a5fcf`).
+2. The functions half.
+
+- **sokoni-trust-queues.js** (AdminOS and Super Admin, one console):
+  - **Queue:** review and unboxing rows show their kind, the server's excerpt, what the review is about and its rating.
+    They show no listing-seller column.
+  - **Case drawer:** shows the server's `review`: excerpt (now, and at report time), status, rating, and the writer
+    (admins only).
+  - **"View listing" link:** rendered only for the two relative shapes the server builds (`product.html?id=` and
+    `seller-public.html?id=`).
+  - **Actions:** exactly the server's, worded for a review:
+    - "Uphold + remove review"
+    - "Restore review (back to pending)", which needs an internal note of at least 10 characters
+    - No listing take-down
+  - **Outcome-note label:** says the note is NOT shown to the seller or to the writer.
+  - **Toasts and history:** follow the server: review removed, already removed, sent back to pending, or rating
+    recompute failed.
+- **sokoni-merchant-disputes-ui.js:**
+  - A report about a review of the seller's listing renders as "A review on your listing was reported", plus the
+    server's status label and the listing link.
+  - It shows no reason, review text, writer, reporter or outcome note, because the server does not send them.
+- **Files:**
+  - Changed: sokoni-trust-queues.js, sokoni-merchant-disputes-ui.js.
+  - New: scripts/test-review-report-console.js.
+- **Tests:**
+  - test-review-report-console 7/0. It drives the real authority (`SOKONI_FUNCTIONS_DIR=C:/temp/sok-reports-fn/functions`).
+    The firebase-admin and notify.js tripwires were asserted.
+  - Regression: test-moderation-console 13/0, test-takedown-hosting 6/0 (injection 5/5),
+    test-disputes-reports-convergence 4/0, test-admin-os-wiring 275/0, test-report-wizard 23/0.
+  - QUEUED (browser hold): the console and seller card in a real browser.
+- **Not done:** no "Report this review" entry point on the review or unboxing pages yet. The report wizard is
+  type-generic (`SokoniReportWizard.open({entityType:'review', entityId})`), so adding one is a separate hosting slice
+  that touches the review owner's pages.
+- **Database / API:** none from hosting.
+- **Security:** the server is the authority. The console only labels what the server allows, and every value is
+  escaped.
+
 ## [2026-10-02] - TAKEDOWN / HIDDEN PRODUCT enforcement (hosting) — NOT deployed
 
 **NOT DEPLOYED — DEPLOYMENT QUEUED — MACHINE BELOW 512 MB MEMORY FLOOR.** The functions half ships FIRST: branch
