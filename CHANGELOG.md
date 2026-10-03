@@ -1,3 +1,16 @@
+## [2026-10-03] — Rentals: the owner's full lifecycle — functions source, NOT deployed
+
+**Listing:** draft → active (Available) ⇄ paused. New `rentalProductPublish` / `rentalProductPause`. `rentalProductCreate`
+starts as draft, validates rates and deposit, and returns HttpsError reasons.
+**Booking:** requested → accepted (`rentalConfirm` / `rentalAccept`) | declined (`rentalDecline`) → payment_pending → paid_held (BOTH set
+only by the payment authority's rental_booking purpose + verified webhook) → active (`rentalStart`, hand-over) →
+return_pending (`rentalReportReturn`, renter) → returned (`rentalConfirmReturn`, seller) → completed (`rentalComplete`, ONLY
+from returned). Cancelling is free for either side before payment; a paid rental is a refund-policy decision and never
+a status flip. Every open state blocks dates.
+**Tests:** test-rentals 36/0. Mutants each fail named rows: owner-by-ownerId-only, complete status-blind, overlap
+unchecked, fake M-PESA, paid-cancel flip, start before paid. The DE-2 suite is 12/0 against live, with the 7 new ops named
+in ADDED.
+
 ## [2026-10-03] — Equipment rentals made real (Construction): owner resolution, transactions, honest payment state — functions source, NOT deployed
 
 **Summary (sokoni-e3 found six gaps by running the real handlers, which are byte-identical to live):** in

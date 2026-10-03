@@ -24,6 +24,16 @@ async function _assertAdmin(auth) {
   if (!['admin', 'super_admin'].includes(role)) throw new Error('forbidden');
 }
 
+/* ── EQUIPMENT RENTAL LIFECYCLE (owner 2026-10-03) ─────────────────────────────────────────────────────────────────
+   Listing:  draft → active (= Available) ⇄ paused
+   Booking:  requested → accepted → payment_pending → paid_held → active → return_pending → returned → completed
+             terminal: declined · cancelled · refunded
+   payment_pending / paid_held are written ONLY by the payment authority (rental_booking purpose + verified IntaSend
+   webhook; sokoni-2f / sokoni-5b) — never by these handlers, never by a browser. Completion requires 'returned'.
+   Legacy values on live docs read as: pending = requested, confirmed = accepted. */
+const RENTAL_BLOCKING = ['requested', 'pending', 'accepted', 'confirmed', 'payment_pending', 'paid_held', 'active', 'return_pending'];
+const RENTAL_UNPAID_OPEN = ['requested', 'pending', 'accepted', 'confirmed', 'payment_pending'];
+
 async function _assertSeller(auth, shopId) {
   await _assertAuth(auth);
   if (!shopId || typeof shopId !== 'string') throw new HttpsError('invalid-argument', 'shopId is required.');
@@ -309,40 +319,49 @@ exports.auctionCloseSweep = onSchedule('every 5 minutes', async () => {
 // Collections: rentalProducts/{id}, rentalBookings/{id}
 
 exports.rentalProductCreate = onCall({ enforceAppCheck: true }, exports._h.rentalProductCreate = async (req) => {
-  const {
-    shopId, title, description, images, category,
-    pricingType, hourlyRate, dailyRate, weeklyRate, monthlyRate,
-    deposit, minDuration, maxDuration, terms,
-  } = req.data;
+  const { shopId, title, description, images, category, pricingType, hourlyRate, dailyRate, weeklyRate, monthlyRate,
+    deposit, minDuration, maxDuration, terms } = req.data || {};
   await _assertSeller(req.auth, shopId);
-  if (!title || !pricingType) throw new Error('missing-required-fields');
-  if (!['hourly', 'daily', 'weekly', 'monthly', 'flexible'].includes(pricingType)) {
-    throw new Error('invalid-pricing-type');
-  }
-
+  const t = String(title || '').trim();
+  if (!t) throw new HttpsError('invalid-argument', 'Give the equipment a name.');
+  if (!['hourly', 'daily', 'weekly', 'monthly', 'flexible'].includes(pricingType)) throw new HttpsError('invalid-argument', 'Choose how the rental is priced (hourly, daily, weekly, monthly or flexible).');
+  const rate = (v) => (v == null || v === '' ? null : (Number(v) > 0 && Number(v) <= 1e8 ? Math.round(Number(v)) : NaN));
+  const rates = { hourlyRate: rate(hourlyRate), dailyRate: rate(dailyRate), weeklyRate: rate(weeklyRate), monthlyRate: rate(monthlyRate) };
+  if (Object.values(rates).some((v) => Number.isNaN(v))) throw new HttpsError('invalid-argument', 'Rates must be positive amounts in KES.');
+  if (!Object.values(rates).some((v) => v > 0)) throw new HttpsError('invalid-argument', 'Set at least one rental rate.');
+  const dep = deposit == null || deposit === '' ? 0 : Number(deposit);
+  if (!(dep >= 0) || dep > 1e8) throw new HttpsError('invalid-argument', 'The deposit must be zero or a positive amount.');
   const id = _id();
   await _db().collection('rentalProducts').doc(id).set({
-    shopId,
-    title,
-    description: description || '',
-    images: images || [],
-    category: category || 'general',
-    pricingType,
-    hourlyRate:  hourlyRate  || null,
-    dailyRate:   dailyRate   || null,
-    weeklyRate:  weeklyRate  || null,
-    monthlyRate: monthlyRate || null,
-    deposit:     deposit     || 0,
-    minDuration: minDuration || 1,
-    maxDuration: maxDuration || null,
-    terms:       terms       || '',
-    status: 'active',
-    bookingCount: 0,
-    createdBy: req.auth.uid,
-    createdAt: _ts(),
+    shopId, title: t.slice(0, 150), description: String(description || '').slice(0, 3000),
+    images: Array.isArray(images) ? images.filter((u) => typeof u === 'string' && /^https:\/\//.test(u)).slice(0, 12) : [],
+    category: String(category || 'general').slice(0, 60), pricingType, ...rates, deposit: Math.round(dep),
+    minDuration: Math.max(1, Math.floor(Number(minDuration) || 1)), maxDuration: maxDuration ? Math.floor(Number(maxDuration)) || null : null,
+    terms: String(terms || '').slice(0, 3000),
+    status: 'draft',            /* owner lifecycle: Draft → Available (rentalProductPublish) */
+    bookingCount: 0, createdBy: req.auth.uid, createdAt: _ts(),
   });
-  return { rentalProductId: id };
+  return { rentalProductId: id, status: 'draft' };
 });
+
+async function _listingTransition(req, from, to) {
+  const { rentalProductId, shopId } = req.data || {};
+  await _assertSeller(req.auth, shopId);
+  if (!rentalProductId) throw new HttpsError('invalid-argument', 'rentalProductId is required.');
+  const ref = _db().collection('rentalProducts').doc(String(rentalProductId));
+  return _db().runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Equipment listing not found.');
+    const p = snap.data();
+    if (p.shopId !== shopId) throw new HttpsError('permission-denied', 'That listing belongs to another shop.');
+    if (p.status === to) return { success: true, unchanged: true, status: to };
+    if (!from.includes(p.status)) throw new HttpsError('failed-precondition', 'A ' + p.status + ' listing cannot be made ' + to + '.');
+    t.update(ref, { status: to, statusChangedAt: _ts(), statusChangedBy: req.auth.uid });
+    return { success: true, status: to };
+  });
+}
+exports.rentalProductPublish = onCall({ enforceAppCheck: true }, exports._h.rentalProductPublish = (req) => _listingTransition(req, ['draft', 'paused'], 'active'));
+exports.rentalProductPause   = onCall({ enforceAppCheck: true }, exports._h.rentalProductPause   = (req) => _listingTransition(req, ['active'], 'paused'));
 
 exports.rentalGetAvailability = onCall({ enforceAppCheck: true }, exports._h.rentalGetAvailability = async (req) => {
   const { rentalProductId, fromDate, toDate } = req.data;
@@ -352,7 +371,7 @@ exports.rentalGetAvailability = onCall({ enforceAppCheck: true }, exports._h.ren
 
   const bookings = snap.docs
     .map(d => d.data())
-    .filter(b => ['pending', 'confirmed', 'active'].includes(b.status))
+    .filter(b => RENTAL_BLOCKING.includes(b.status))
     .map(b => ({
       start: b.startDate.toDate ? b.startDate.toDate().toISOString() : b.startDate,
       end:   b.endDate.toDate   ? b.endDate.toDate().toISOString()   : b.endDate,
@@ -385,7 +404,7 @@ exports.rentalBook = onCall({ enforceAppCheck: true }, exports._h.rentalBook = a
     const existing = await t.get(_db().collection('rentalBookings').where('rentalProductId', '==', String(rentalProductId)).limit(200));
     const conflict = existing.docs.some((d) => {
       const b = d.data();
-      if (!['pending', 'confirmed', 'active'].includes(b.status)) return false;
+      if (!RENTAL_BLOCKING.includes(b.status)) return false;
       const bs = b.startDate && b.startDate.toDate ? b.startDate.toDate() : new Date(b.startDate);
       const be = b.endDate && b.endDate.toDate ? b.endDate.toDate() : new Date(b.endDate);
       return start < be && end > bs;
@@ -408,7 +427,7 @@ exports.rentalBook = onCall({ enforceAppCheck: true }, exports._h.rentalBook = a
       /* No payment happens here (sokoni-e3 finding: the old default 'mpesa' was misleading). The rental_booking payment
          purpose (commercial authority) moves this to paid; until then the booking is unpaid. */
       paymentMethod: 'none', paymentStatus: 'unpaid',
-      notes: String(notes || '').slice(0, 1000), status: 'pending', createdAt: _ts(),
+      notes: String(notes || '').slice(0, 1000), status: 'requested', createdAt: _ts(),
     });
     return { totalAmount, depositAmount };
   });
@@ -434,12 +453,41 @@ async function _rentalTransition(req, { from, to, extra }) {
   });
 }
 
+/* Accept a request (legacy name rentalConfirm kept for the existing client). Payment is requested next by the payment
+   authority (rental_booking purpose), which moves accepted → payment_pending → paid_held. */
 exports.rentalConfirm = onCall({ enforceAppCheck: true }, exports._h.rentalConfirm = (req) =>
-  _rentalTransition(req, { from: ['pending'], to: 'confirmed', extra: (r) => ({ confirmedAt: _ts(), confirmedBy: r.auth.uid }) }));
-
-/* Was status-blind (sokoni-e3 finding): it would "complete" a pending or cancelled booking. */
+  _rentalTransition(req, { from: ['requested', 'pending'], to: 'accepted', extra: (r) => ({ acceptedAt: _ts(), acceptedBy: r.auth.uid }) }));
+exports.rentalAccept = onCall({ enforceAppCheck: true }, exports._h.rentalAccept = exports._h.rentalConfirm);
+exports.rentalDecline = onCall({ enforceAppCheck: true }, exports._h.rentalDecline = (req) =>
+  _rentalTransition(req, { from: ['requested', 'pending'], to: 'declined', extra: (r) => ({ declinedAt: _ts(), declinedBy: r.auth.uid, declineReason: String((r.data || {}).reason || '').slice(0, 500) }) }));
+/* Hand-over: equipment leaves the yard / is delivered — only once the payment authority has HELD the money. */
+exports.rentalStart = onCall({ enforceAppCheck: true }, exports._h.rentalStart = (req) =>
+  _rentalTransition(req, { from: ['paid_held'], to: 'active', extra: (r) => ({ startedAt: _ts(), startedBy: r.auth.uid }) }));
+/* Return is two-sided: the renter (or the seller) reports it, the seller confirms the equipment came back. */
+exports.rentalConfirmReturn = onCall({ enforceAppCheck: true }, exports._h.rentalConfirmReturn = (req) =>
+  _rentalTransition(req, { from: ['return_pending', 'active'], to: 'returned', extra: (r) => ({ returnedAt: _ts(), returnConfirmedBy: r.auth.uid, returnNotes: String((r.data || {}).notes || '').slice(0, 1000) }) }));
+/* Completion requires RETURNED (owner: never pending / cancelled / declined / expired → completed). Settlement is the
+   payment authority's release on 'completed' (ONE settlement path). */
 exports.rentalComplete = onCall({ enforceAppCheck: true }, exports._h.rentalComplete = (req) =>
-  _rentalTransition(req, { from: ['confirmed', 'active'], to: 'completed', extra: (r) => ({ completedAt: _ts(), completedBy: r.auth.uid, completionNotes: String((r.data || {}).notes || '').slice(0, 1000) }) }));
+  _rentalTransition(req, { from: ['returned'], to: 'completed', extra: (r) => ({ completedAt: _ts(), completedBy: r.auth.uid, completionNotes: String((r.data || {}).notes || '').slice(0, 1000) }) }));
+
+/* Renter reports the return (active → return_pending). */
+exports.rentalReportReturn = onCall({ enforceAppCheck: true }, exports._h.rentalReportReturn = async (req) => {
+  const { bookingId } = req.data || {};
+  await _assertAuth(req.auth);
+  if (!bookingId) throw new HttpsError('invalid-argument', 'bookingId is required.');
+  const ref = _db().collection('rentalBookings').doc(String(bookingId));
+  return _db().runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Booking not found.');
+    const b = snap.data();
+    if (b.buyerId !== req.auth.uid) throw new HttpsError('permission-denied', 'Not your rental.');
+    if (b.status === 'return_pending') return { success: true, unchanged: true, status: 'return_pending' };
+    if (b.status !== 'active') throw new HttpsError('failed-precondition', 'Only an active rental can be returned.');
+    t.update(ref, { status: 'return_pending', returnReportedAt: _ts() });
+    return { success: true, status: 'return_pending' };
+  });
+});
 
 exports.rentalCancel = onCall({ enforceAppCheck: true }, exports._h.rentalCancel = async (req) => {
   const { bookingId, reason } = req.data || {};
@@ -456,7 +504,10 @@ exports.rentalCancel = onCall({ enforceAppCheck: true }, exports._h.rentalCancel
     const snap = await t.get(ref);
     const b = snap.data();
     if (b.status === 'cancelled') return { success: true, unchanged: true, status: 'cancelled' };
-    if (['completed', 'active'].includes(b.status)) throw new HttpsError('failed-precondition', 'A ' + b.status + ' booking cannot be cancelled.');
+    /* Owner: the SERVER decides refunds. Before money is held, cancelling is free for either side. Once paid / held (or
+       later), a cancellation is a refund decision for the payment authority's refund policy — never a status flip here. */
+    if (b.status === 'paid_held') throw new HttpsError('failed-precondition', 'This rental is paid. Cancelling it is handled under SOKONI\'s refund policy — request it from your rental page or SOKONI support.');
+    if (!RENTAL_UNPAID_OPEN.includes(b.status)) throw new HttpsError('failed-precondition', 'A ' + b.status + ' booking cannot be cancelled.');
     t.update(ref, { status: 'cancelled', cancelledAt: _ts(), cancelledBy: req.auth.uid, cancelledByRole: isRenter ? 'renter' : 'seller', cancelReason: String(reason || '').slice(0, 500) });
     return { success: true, status: 'cancelled' };
   });

@@ -130,7 +130,9 @@ function check(id, cond, detail) {
   // R3 CONTROL
   /* ADDED: ops deliberately introduced on later revisions of the SAME commerceDispatch lineage (each named, never a wildcard).
      rentalOwnerListings — sokoni-f3 rentals fix on 53100ff (owner list op for the Construction workspace). */
-  const ADDED = ['rentalOwnerListings'];
+  /* + the owner rental lifecycle ops (sokoni-f3, owner 2026-10-03): accept / decline / start (hand-over) / report + confirm
+     return / listing publish + pause. */
+  const ADDED = ['rentalOwnerListings', 'rentalAccept', 'rentalDecline', 'rentalStart', 'rentalReportReturn', 'rentalConfirmReturn', 'rentalProductPublish', 'rentalProductPause'];
   const expected = liveOps.filter(o => !RETIRED.includes(o)).concat(ADDED).sort();
   const got = tgtOps.slice().sort();
   const missing = expected.filter(o => !got.includes(o));

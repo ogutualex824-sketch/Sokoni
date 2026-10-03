@@ -32,7 +32,9 @@ class HttpsError extends Error { constructor(code, m) { super(m); this.code = co
 let src = fs.readFileSync(path.join(ROOT, 'functions', 'marketplace-extensions.js'), 'utf8');
 const MUT = {
   owner_by_ownerId_only: ["if (shop.ownerId === auth.uid || (!('ownerId' in shop) && shopId === auth.uid)) return shop;", "if (shop.ownerId === auth.uid) return shop;"],
-  complete_status_blind:  ["_rentalTransition(req, { from: ['confirmed', 'active'], to: 'completed',", "_rentalTransition(req, { from: ['pending', 'confirmed', 'active', 'cancelled'], to: 'completed',"],
+  complete_status_blind:  ["_rentalTransition(req, { from: ['returned'], to: 'completed',", "_rentalTransition(req, { from: ['requested', 'pending', 'accepted', 'active', 'cancelled', 'declined', 'returned'], to: 'completed',"],
+  paid_cancel_flip:       ["    if (b.status === 'paid_held') throw new HttpsError(", "    if (false) throw new HttpsError("],
+  start_before_paid:      ["_rentalTransition(req, { from: ['paid_held'], to: 'active',", "_rentalTransition(req, { from: ['accepted', 'paid_held'], to: 'active',"],
   overlap_unchecked:      ["    if (conflict) throw new HttpsError('failed-precondition', 'Those dates are already booked.');", ""],
   fake_mpesa:             ["paymentMethod: 'none', paymentStatus: 'unpaid',", "paymentMethod: 'mpesa', paymentStatus: 'unpaid',"],
 };
@@ -83,9 +85,27 @@ const day = (n) => new Date(Date.now() + n * 86400000).toISOString();
   r = await call('rentalConfirm', 'stranger', { bookingId: b1, shopId: 'ownerU' });
   ck('C2 a stranger cannot confirm', !r.ok && r.code === 'permission-denied', r);
   r = await call('rentalConfirm', 'ownerU', { bookingId: b1, shopId: 'ownerU' });
-  ck('C3 the owner confirms (shop identity model)', r.ok && store.get('rentalBookings/' + b1).status === 'confirmed', r);
+  ck('C3 the owner ACCEPTS the request (requested → accepted, shop identity model)', r.ok && store.get('rentalBookings/' + b1).status === 'accepted', r);
   r = await call('rentalComplete', 'ownerU', { bookingId: b1, shopId: 'ownerU' });
-  ck('C4 confirmed → completed; listing bookingCount +1', r.ok && store.get('rentalBookings/' + b1).status === 'completed' && store.get('rentalProducts/rp1').bookingCount === 1, r);
+  ck('C4a an accepted (unpaid) rental cannot be completed', !r.ok && r.code === 'failed-precondition', r);
+  r = await call('rentalStart', 'ownerU', { bookingId: b1, shopId: 'ownerU' });
+  ck('C4b hand-over is refused until the payment authority has HELD the money', !r.ok && r.code === 'failed-precondition', r);
+  /* the payment authority (rental_booking purpose + verified webhook) — never these handlers — moves it to paid_held */
+  store.set('rentalBookings/' + b1, Object.assign({}, store.get('rentalBookings/' + b1), { status: 'paid_held', paymentStatus: 'held', paymentMethod: 'MPESA' }));
+  r = await call('rentalCancel', 'buyer1', { bookingId: b1 });
+  ck('C4c a PAID rental is not cancelled by a status flip (refund policy decides)', !r.ok && /refund policy/.test(r.msg) && store.get('rentalBookings/' + b1).status === 'paid_held', r);
+  r = await call('rentalStart', 'ownerU', { bookingId: b1, shopId: 'ownerU' });
+  ck('C4d paid_held → active (hand-over)', r.ok && store.get('rentalBookings/' + b1).status === 'active', r);
+  r = await call('rentalComplete', 'ownerU', { bookingId: b1, shopId: 'ownerU' });
+  ck('C4e an ACTIVE rental cannot be completed before it is returned', !r.ok && r.code === 'failed-precondition', r);
+  r = await call('rentalReportReturn', 'stranger', { bookingId: b1 });
+  ck('C4f only the renter reports the return', !r.ok && r.code === 'permission-denied', r);
+  r = await call('rentalReportReturn', 'buyer1', { bookingId: b1 });
+  ck('C4g renter reports the return → return_pending', r.ok && store.get('rentalBookings/' + b1).status === 'return_pending', r);
+  r = await call('rentalConfirmReturn', 'ownerU', { bookingId: b1, shopId: 'ownerU' });
+  ck('C4h seller confirms the equipment is back → returned', r.ok && store.get('rentalBookings/' + b1).status === 'returned', r);
+  r = await call('rentalComplete', 'ownerU', { bookingId: b1, shopId: 'ownerU' });
+  ck('C4 returned → completed; listing bookingCount +1', r.ok && store.get('rentalBookings/' + b1).status === 'completed' && store.get('rentalProducts/rp1').bookingCount === 1, r);
   r = await call('rentalCancel', 'ownerU', { bookingId: b1 });
   ck('C5 a completed booking cannot be cancelled', !r.ok && r.code === 'failed-precondition', r);
 
@@ -100,6 +120,27 @@ const day = (n) => new Date(Date.now() + n * 86400000).toISOString();
   ck('C8 a stranger cannot cancel someone\'s booking', !r.ok && r.code === 'permission-denied', r);
   r = await call('rentalCancel', 'buyer3', { bookingId: b3 });
   ck('C9 the renter cancels their own booking', r.ok && store.get('rentalBookings/' + b3).cancelledByRole === 'renter', r);
+  r = await call('rentalBook', 'buyer4', { rentalProductId: 'rp1', startDate: day(20), endDate: day(21) });
+  const b4 = r.r.bookingId;
+  r = await call('rentalDecline', 'ownerU', { bookingId: b4, shopId: 'ownerU', reason: 'booked offline' });
+  ck('D1 the seller declines a request → declined (terminal)', r.ok && store.get('rentalBookings/' + b4).status === 'declined', r);
+  r = await call('rentalComplete', 'ownerU', { bookingId: b4, shopId: 'ownerU' });
+  ck('D2 a DECLINED rental cannot be completed', !r.ok && r.code === 'failed-precondition', r);
+  r = await call('rentalComplete', 'ownerU', { bookingId: b3, shopId: 'ownerU' });
+  ck('D3 a CANCELLED rental cannot be completed', !r.ok && r.code === 'failed-precondition', r);
+  r = await call('rentalProductCreate', 'ownerU', { shopId: 'ownerU', title: '', pricingType: 'daily', dailyRate: 1000 });
+  ck('L1 listing create refuses a missing name WITH a reason (HttpsError, not "unexpected")', !r.ok && r.code === 'invalid-argument' && !r.plain, r);
+  r = await call('rentalProductCreate', 'ownerU', { shopId: 'ownerU', title: 'Generator 250kVA', pricingType: 'daily', dailyRate: 12000, deposit: 20000 });
+  const np = r.ok ? r.r.rentalProductId : 'x';
+  ck('L2 a new listing starts as DRAFT (owner lifecycle)', r.ok && store.get('rentalProducts/' + np).status === 'draft', r);
+  r = await call('rentalBook', 'buyer5', { rentalProductId: np, startDate: day(5), endDate: day(6) });
+  ck('L3 a draft listing cannot be booked', !r.ok && r.code === 'failed-precondition', r);
+  r = await call('rentalProductPublish', 'stranger', { rentalProductId: np, shopId: 'ownerU' });
+  ck('L4 a stranger cannot publish the listing', !r.ok && r.code === 'permission-denied', r);
+  r = await call('rentalProductPublish', 'ownerU', { rentalProductId: np, shopId: 'ownerU' });
+  ck('L5 the owner publishes: draft → active (Available)', r.ok && store.get('rentalProducts/' + np).status === 'active', r);
+  r = await call('rentalProductCreate', 'ownerU', { shopId: 'ownerU', title: 'X', pricingType: 'daily', dailyRate: -5 });
+  ck('L6 a negative rate is refused with a reason', !r.ok && r.code === 'invalid-argument', r);
   r = await call('rentalList', null, {});
   ck('E1 signed-out calls get unauthenticated (HttpsError)', !r.ok && r.code === 'unauthenticated' && !r.plain, r);
 
