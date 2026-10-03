@@ -3169,6 +3169,12 @@ function _renderAppCard(a, i){
         +(a.uid?'':' · <b style="color:#ff8c42;">no account linked</b>')
         +' · Applied: '+h(_appWhen(a))
       +'</div>'
+      /* Car Hub C3 (2026-10-03): the applicant's description and category-specific answers (applications/{id}.details,
+         written by HubRegister) — declarations the reviewer verifies before approving. Every value escaped. */
+      +(a.description?'<div style="margin:6px 0;font-size:12px;color:rgba(255,255,255,0.6);"><b style="color:rgba(255,255,255,0.7);">About:</b> '+h(String(a.description).slice(0,400))+'</div>':'')
+      +((a.details&&typeof a.details==='object'&&Object.keys(a.details).length)?'<div style="margin:6px 0 10px;font-size:12px;color:rgba(255,255,255,0.6);border-left:2px solid rgba(113,255,0,0.3);padding-left:8px;">'
+        +Object.keys(a.details).slice(0,20).map(function(k){return '<div><b style="color:rgba(255,255,255,0.7);">'+h(k.replace(/([A-Z])/g,' $1').replace(/^./,function(x){return x.toUpperCase();}))+':</b> '+h(String(a.details[k]).slice(0,200))+'</div>';}).join('')
+        +'<div style="color:#fbbf24;margin-top:4px;">Declared by the applicant — verify licences / documents before approving.</div></div>':'')
       +(st==='pending'?'<div class="adm-card-actions">'
         +'<button class="abtn abtn-green" onclick="approveApp('+i+')">✅ Approve</button>'
         +'<button class="abtn abtn-red" onclick="rejectApp('+i+')">❌ Reject</button>'

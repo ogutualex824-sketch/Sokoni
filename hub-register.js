@@ -67,6 +67,15 @@
     { id:'auto-parts',       label:'Auto Parts / Tyre Shop',           hub:'car',           emoji:'⚙️' },
     { id:'driving-school',   label:'Driving School',                   hub:'car',           emoji:'🎓' },
     { id:'insurance-auto',   label:'Car Insurance Agent',              hub:'car',           emoji:'🛡️' },
+    /* 2026-10-03 Car Hub C3 — every Car Hub service gets its own application (category-specific questions below). */
+    { id:'car-dealer',       label:'Car Dealer / Showroom',            hub:'car',           emoji:'🏪' },
+    { id:'vehicle-inspection', label:'Vehicle Inspection Centre',      hub:'car',           emoji:'🔍' },
+    { id:'towing-roadside',  label:'Towing / Roadside Assistance',     hub:'car',           emoji:'🆘' },
+    { id:'fleet-operator',   label:'Fleet Operator',                   hub:'car',           emoji:'🚐' },
+    { id:'vehicle-transport', label:'Vehicle Transport / Car Carrier', hub:'car',           emoji:'🚛' },
+    { id:'vehicle-tracking', label:'Vehicle Tracking / GPS Installer', hub:'car',           emoji:'📡' },
+    { id:'car-finance',      label:'Car Finance Partner (lender / broker)', hub:'car',      emoji:'💰' },
+    { id:'ntsa-agent',       label:'NTSA / Vehicle Documents Agent',   hub:'car',           emoji:'🏛️' },
     /* Property */
     { id:'property-agent',   label:'Property Agent / Broker',          hub:'property',      emoji:'🏠' },
     { id:'developer',        label:'Property Developer',               hub:'property',      emoji:'🏗️' },
@@ -147,6 +156,85 @@
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  /* ── Category-specific application questions (Car Hub C3, 2026-10-03) ─────────────────────────────────────
+     Rendered under "Business Type" when a category with questions is chosen; saved as applications/{id}.details
+     (strings only, length-capped) and shown to the reviewer in AdminOS. Licence numbers are declarations that AdminOS
+     verifies — SOKONI does not issue NTSA results, insurance cover or loan approvals. */
+  var Q = {
+    services: function (opts) { return { id: 'services', label: 'Services you offer *', type: 'multi', options: opts, required: true }; },
+    area:     { id: 'serviceArea', label: 'Service area (towns / counties) *', type: 'text', required: true, max: 160 },
+    hours:    { id: 'hours', label: 'Operating hours *', type: 'select', options: ['24/7', 'Daytime only', 'Set hours (describe in description)'], required: true },
+    mode:     { id: 'serviceMode', label: 'Where you work *', type: 'select', options: ['At my workshop / premises', 'I come to the customer (mobile)', 'Both'], required: true },
+    years:    { id: 'yearsInBusiness', label: 'Years in business', type: 'number', max: 3 },
+    regNo:    { id: 'businessRegNo', label: 'Business registration number (if registered)', type: 'text', max: 40 },
+  };
+  var CAT_QUESTIONS = {
+    'mechanic': [Q.services(['General repair & servicing', 'Diagnostics (OBD)', 'Auto electrical', 'Body work & paint', 'Tyres & alignment', 'Gearbox / transmission', 'Air conditioning', 'Detailing']), Q.mode,
+      { id: 'makes', label: 'Makes you specialise in', type: 'text', max: 120 }, Q.area, Q.years],
+    'car-dealer': [{ id: 'dealerStock', label: 'What do you sell? *', type: 'select', options: ['Used vehicles', 'New vehicles', 'New and used'], required: true },
+      { id: 'showroom', label: 'Showroom / yard location *', type: 'text', required: true, max: 160 },
+      { id: 'stockSize', label: 'Approximate vehicles in stock', type: 'number', max: 5 }, Q.regNo, Q.years],
+    'vehicle-inspection': [Q.services(['Pre-purchase inspection', 'Insurance / valuation inspection', 'Mechanical health check', 'Mobile inspection']), Q.mode,
+      { id: 'accreditation', label: 'Accreditation / certifying body (AdminOS verifies)', type: 'text', max: 120 }, Q.area],
+    'towing-roadside': [Q.services(['Towing', 'Recovery', 'Battery jump-start', 'Tyre change / puncture', 'Fuel delivery', 'Mechanical emergency']), Q.area, Q.hours,
+      { id: 'towTrucks', label: 'Number of tow / recovery vehicles', type: 'number', max: 3 },
+      { id: 'maxVehicle', label: 'Largest vehicle you can tow *', type: 'select', options: ['Saloon / SUV', 'Pickup / van', 'Minibus / light truck', 'Heavy commercial'], required: true }],
+    'fleet-operator': [{ id: 'fleetSize', label: 'Fleet size (vehicles) *', type: 'number', required: true, max: 5 },
+      Q.services(['Corporate hire', 'Staff transport', 'Logistics / deliveries', 'Tours & safari', 'Chauffeur services']),
+      { id: 'vehicleTypes', label: 'Vehicle types', type: 'text', max: 120 }, Q.area, Q.regNo],
+    'vehicle-transport': [{ id: 'carrierType', label: 'How you move vehicles *', type: 'select', options: ['Car carrier truck', 'Flatbed', 'Driven delivery (driver)', 'Several'], required: true },
+      { id: 'maxPerTrip', label: 'Maximum vehicles per trip', type: 'number', max: 3 },
+      { id: 'routes', label: 'Routes / coverage *', type: 'text', required: true, max: 160 }],
+    'vehicle-tracking': [Q.services(['Device supply & installation', '24/7 monitoring', 'Fleet tracking', 'Anti-theft immobiliser']),
+      { id: 'deviceBrands', label: 'Device brands you install', type: 'text', max: 120 }, Q.area],
+    'car-finance': [{ id: 'institutionType', label: 'Institution type *', type: 'select', options: ['Bank', 'SACCO', 'Microfinance institution', 'Asset finance company', 'Broker / agent'], required: true },
+      { id: 'licenceNo', label: 'Regulator licence number (AdminOS verifies) *', type: 'text', required: true, max: 60 },
+      Q.services(['New vehicle loans', 'Used vehicle loans', 'Logbook loans', 'Asset finance for fleets'])],
+    'insurance-auto': [{ id: 'intermediaryType', label: 'You are a *', type: 'select', options: ['Insurance agent', 'Insurance broker', 'Insurance company'], required: true },
+      { id: 'licenceNo', label: 'IRA licence number (AdminOS verifies) *', type: 'text', required: true, max: 60 },
+      { id: 'insurers', label: 'Insurers you represent', type: 'text', max: 160 }],
+    'ntsa-agent': [Q.services(['Logbook transfer assistance', 'Logbook / registration documents', 'Driving licence renewal assistance', 'Vehicle search (official)']),
+      { id: 'agentNote', label: 'How you work (customers visit / you visit / online)', type: 'text', max: 160 }, Q.area],
+    'car-rental': [{ id: 'fleetSize', label: 'Vehicles available to rent *', type: 'number', required: true, max: 4 },
+      { id: 'rentalMode', label: 'Rental type *', type: 'select', options: ['Self-drive', 'With driver', 'Both'], required: true }, Q.area],
+    'car-wash': [Q.services(['Exterior wash', 'Interior cleaning', 'Full detailing', 'Engine wash', 'Mobile car wash']), Q.mode, Q.area],
+    'auto-parts': [Q.services(['New parts', 'Used parts', 'Tyres', 'Batteries', 'Accessories']), { id: 'makes', label: 'Makes you stock for', type: 'text', max: 120 }],
+    'driving-school': [{ id: 'licenceNo', label: 'NTSA driving school licence number (AdminOS verifies) *', type: 'text', required: true, max: 60 },
+      Q.services(['Class B (car)', 'Class A (motorcycle)', 'Class C/D (commercial)', 'Refresher lessons']), Q.area],
+  };
+  function _qId(q, i) { return 'sreg_q_' + q.id + (i == null ? '' : '_' + i); }
+  function _renderQuestions(cat) {
+    var box = document.getElementById('sreg_details'); if (!box) return;
+    var qs = CAT_QUESTIONS[cat] || [];
+    if (!qs.length) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div style="margin-top:6px;padding:12px 14px;border:1px solid rgba(113,255,0,0.15);border-radius:14px;background:rgba(113,255,0,0.03);">'
+      + '<div style="font-size:12px;color:rgba(255,255,255,0.55);">A few questions for this business type. SOKONI checks what you declare before approving.</div>'
+      + qs.map(function (q) {
+        var lab = '<label class="sreg-label">' + _esc(q.label) + '</label>';
+        if (q.type === 'select') return lab + '<select id="' + _qId(q) + '" class="sreg-input"><option value="">— Select —</option>' + q.options.map(function (o) { return '<option>' + _esc(o) + '</option>'; }).join('') + '</select>';
+        if (q.type === 'multi') return lab + '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + q.options.map(function (o, i) { return '<label style="display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:10px;font-size:12px;color:#ddd;cursor:pointer;"><input type="checkbox" id="' + _qId(q, i) + '" value="' + _esc(o) + '"> ' + _esc(o) + '</label>'; }).join('') + '</div>';
+        return lab + '<input id="' + _qId(q) + '" class="sreg-input"' + (q.type === 'number' ? ' type="number" min="0" inputmode="numeric"' : '') + ' maxlength="' + (q.max || 120) + '">';
+      }).join('') + '</div>';
+  }
+  /* → { ok, details, error }. Strings only, length-capped; a number stays a digit string. */
+  function _collectDetails(cat) {
+    var qs = CAT_QUESTIONS[cat] || [], out = {};
+    for (var k = 0; k < qs.length; k++) {
+      var q = qs[k], v = '';
+      if (q.type === 'multi') {
+        var picked = []; for (var i = 0; i < q.options.length; i++) { var cb = document.getElementById(_qId(q, i)); if (cb && cb.checked) picked.push(q.options[i]); }
+        v = picked.join(', ');
+      } else {
+        var el = document.getElementById(_qId(q)); v = el && el.value ? String(el.value).trim() : '';
+        if (q.type === 'number') v = v.replace(/[^0-9]/g, '').slice(0, q.max || 5);
+        else v = v.slice(0, q.max || 160);
+      }
+      if (q.required && !v) return { ok: false, error: 'Please answer: ' + q.label.replace(/\s*\*$/, '') };
+      if (v) out[q.id] = v;
+    }
+    return { ok: true, details: out };
+  }
+
   /* ── Inject styles once ───────────────────────────────────── */
   function _injectStyles() {
     if (document.getElementById('sokoniRegStyles')) return;
@@ -223,7 +311,8 @@
       '<input id="sreg_name" class="sreg-input" placeholder="e.g. Nairobi Quick Cleaners" autocomplete="organization">' +
 
       '<label class="sreg-label">Business Type *</label>' +
-      '<select id="sreg_cat" class="sreg-input">' + _catOptions(preCategory) + '</select>' +
+      '<select id="sreg_cat" class="sreg-input" onchange="HubRegister._renderQuestions(this.value)">' + _catOptions(preCategory) + '</select>' +
+      '<div id="sreg_details"></div>' +
 
       '<label class="sreg-label">Phone Number *</label>' +
       '<input id="sreg_phone" class="sreg-input" type="tel" placeholder="07XX XXX XXX" inputmode="tel">' +
@@ -261,6 +350,7 @@
       '<div id="sreg_msg" class="sreg-msg"></div>';
 
     window._sokoniRegPlan = 'free';
+    if (preCategory) _renderQuestions(preCategory);
   }
 
   /* ── Plan selector ───────────────────────────────────────── */
@@ -385,6 +475,8 @@
     if (!_validPhone(phone)) { _err('Enter a valid Kenyan phone (07XX or 01XX).'); return; }
     if (!loc)   { _err('Enter your location.'); return; }
     if (!desc)  { _err('Add a brief description.'); return; }
+    var _det = _collectDetails(cat);
+    if (!_det.ok) { _err(_det.error); return; }
 
     if (msgEl) { msgEl.textContent = 'Saving…'; msgEl.style.color = 'rgba(255,255,255,0.4)'; }
 
@@ -429,7 +521,11 @@
        The choice is mapped here, at the surface that owns it. Specific category
        ids win; then the hub; then provider, which is what an unmapped service
        category genuinely is. */
-    var _ROLE_BY_CATEGORY = { mechanic: 'mechanic', landlord: 'landlord' };
+    /* 2026-10-03 Car Hub C3: a mechanic / garage is a bookable SERVICE PROVIDER (providers/{uid} + business category stamp →
+       booking engine, IntaSend, booking PIN, 5% at settlement, provider dashboard) — like every Home Services and Tech
+       category. The old 'mechanic' role projected only mechanics/{uid}: listed, never bookable, no dashboard. Existing
+       mechanics/{uid} profiles stay readable (mechanics.html merges both registries). */
+    var _ROLE_BY_CATEGORY = { landlord: 'landlord' };
     var _ROLE_BY_HUB = { delivery: 'rider', healthcare: 'health', legal: 'legal', shopping: 'seller' };
     var _requestedRole = _ROLE_BY_CATEGORY[cat] || _ROLE_BY_HUB[catObj.hub] || 'provider';
 
@@ -445,6 +541,7 @@
       email:       email || (user && user.email ? user.email : ''),
       location:    loc,
       description: desc,
+      details:     _det.details,
       plan:        plan,
       status:      'pending',
       type:        'business',
@@ -510,6 +607,7 @@
       return c ? { id: c.id, label: c.label, hub: c.hub, emoji: c.emoji } : null;
     },
     _selectPlan: _selectPlan,
+    _renderQuestions: _renderQuestions,
     _submit:     _submit
   };
 

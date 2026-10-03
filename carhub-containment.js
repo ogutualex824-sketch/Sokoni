@@ -117,8 +117,38 @@
   }
   if (!patchPro()) { var n = 0, iv = setInterval(function () { if (patchPro() || ++n > 40) clearInterval(iv); }, 150); }
 
+  /* ── C3: every Car Hub service tab offers ITS application (the ONE intake, category-specific questions, AdminOS review).
+        Nothing here grants anything: an application is a request until SOKONI approves it server-side. ── */
+  var APPLY = {
+    'tab-buysell':   ['car-dealer', 'Sell vehicles as a dealer'],
+    'tab-ntsa':      ['ntsa-agent', 'Offer NTSA / vehicle document services'],
+    'tab-insurance': ['insurance-auto', 'Offer car insurance (licensed agents / brokers)'],
+    'tab-fleet':     ['fleet-operator', 'Register your fleet'],
+    'tab-mechanics': ['mechanic', 'List your garage or mechanic service'],
+    'tab-parts':     ['auto-parts', 'Sell auto parts'],
+    'tab-roadside':  ['towing-roadside', 'Offer towing / roadside assistance'],
+    'tab-finance':   ['car-finance', 'Offer car finance (licensed lenders / brokers)'],
+    'tab-inspect':   ['vehicle-inspection', 'Offer vehicle inspections'],
+    'tab-transport': ['vehicle-transport', 'Offer vehicle transport'],
+    'tab-tracking-hub': ['vehicle-tracking', 'Offer tracking devices / installation'],
+    'tab-browse':    ['car-rental', 'Rent out your vehicles'],
+  };
+  function addApplyCards() {
+    Object.keys(APPLY).forEach(function (pid) {
+      var panel = d.getElementById(pid); if (!panel || panel.querySelector('[data-ch-apply]')) return;
+      var cat = APPLY[pid][0], label = APPLY[pid][1];
+      var box = d.createElement('div'); box.setAttribute('data-ch-apply', cat);
+      box.style.cssText = 'margin:18px 0;padding:16px 18px;border:1px solid rgba(113,255,0,0.2);border-radius:16px;background:rgba(113,255,0,0.04);display:flex;align-items:center;gap:12px;flex-wrap:wrap;';
+      box.innerHTML = '<div style="flex:1;min-width:200px;"><div style="font-size:14px;font-weight:900;color:#fff;">' + esc(label) + ' on SOKONI</div>'
+        + '<div style="font-size:12px;color:rgba(255,255,255,0.5);">Apply once — SOKONI reviews your application; after approval you get your business dashboard and appear here.</div></div>'
+        + '<button type="button" style="padding:10px 18px;background:#71ff00;color:#000;border:0;border-radius:10px;font-weight:800;cursor:pointer;">Apply</button>';
+      box.querySelector('button').addEventListener('click', hubRegister(cat, label.toLowerCase()));
+      panel.appendChild(box);
+    });
+  }
+
   /* Re-render the contained panels once, so the old localStorage views are not left on screen. */
-  function rerender() { try { G.renderBookings(); } catch (e) {} try { G.renderFleetManager(); } catch (e) {} }
+  function rerender() { try { G.renderBookings(); } catch (e) {} try { G.renderFleetManager(); } catch (e) {} try { addApplyCards(); } catch (e) {} }
   if (d.readyState === 'loading') d.addEventListener('DOMContentLoaded', rerender); else rerender();
   G.__carhubContained = true;
 })(window);

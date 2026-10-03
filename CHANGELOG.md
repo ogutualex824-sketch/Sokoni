@@ -20,6 +20,13 @@
 - **Database / API / rules changes**: none (the pages stop writing carRentals/mechanics/localStorage records).
 - **C1b car-hub.html** (same branch): carhub-containment.js (loaded last) re-points every money/approval/record entry point (rent → car-rental.html; bookings → My Bookings; list car/mechanic/parts → HubRegister; SOS/transport → support tickets; finance/inspection/estimates → not available; licence approval refused). Inline: confirmBooking commission/fee removed (b2 2ddaee5 text), simulated GPS stopped, tracking plan prices removed. sokoni-carhub-pro.js: invented finance/inspection/transport firms demo-only. test-carhub-containment-static 42/0; test-carhub-browser written, NOT run (memory below floor).
 - **C2 rules** (combined rules line 75229d4): trackingSubscriptions admin-only, EMULATOR PENDING.
+- **C3a applications**:
+  - hub-register.js gains car-dealer, vehicle-inspection, towing-roadside, fleet-operator, vehicle-transport, vehicle-tracking, car-finance and ntsa-agent, plus category-specific questions for all 14 car categories (saved as applications.details; licence numbers are declarations AdminOS verifies).
+  - New mechanic applications go to the provider role (bookable).
+  - admin.html application card shows description + details (escaped).
+  - mechanics.html merges approved mechanic providers.
+  - carhub-containment.js adds an Apply card to 12 service tabs.
+  - Static 51/0; role-override mutation caught.
 
 ## [2026-10-03] - Home Services: quote requests go through the one lead authority (b2 4F); owner fee model recorded (NOT deployed)
 

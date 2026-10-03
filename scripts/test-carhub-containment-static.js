@@ -72,6 +72,19 @@ ck('H10 the containment layer writes nothing: no Firestore / localStorage writes
 ck('H11 bookings view → My Bookings (bookings.html)', /G\.renderBookings = function \(\) \{[\s\S]{0,400}href="bookings\.html"/.test(CC));
 ck('H12 invented finance partners / inspection centres / transport firms are demo-only in sokoni-carhub-pro.js', ['FINANCE_PARTNERS', 'INSPECTION_CENTERS', 'TRANSPORT_PROVIDERS'].every((n) => new RegExp('const ' + n + ' = !_demoAllowed \\? \\[\\] : \\[').test(PRO)));
 
+console.log('\n── C: applications (C3) ──');
+const HR = read('hub-register.js'), AD = read('admin.html');
+const CAR_IDS = ['mechanic', 'car-wash', 'car-rental', 'auto-parts', 'driving-school', 'insurance-auto', 'car-dealer', 'vehicle-inspection', 'towing-roadside', 'fleet-operator', 'vehicle-transport', 'vehicle-tracking', 'car-finance', 'ntsa-agent'];
+ck('C1 every Car Hub service has an application category in the ONE intake (HubRegister CATS, hub car)', CAR_IDS.every((id) => new RegExp("\\{ id:'" + id + "',\\s+label:'[^']+',\\s+hub:'car'").test(HR)), CAR_IDS.filter((id) => !new RegExp("\\{ id:'" + id + "',").test(HR)));
+ck('C2 every car category has category-specific questions', CAR_IDS.every((id) => new RegExp("'" + id + "': \\[").test(HR)), CAR_IDS.filter((id) => !new RegExp("'" + id + "': \\[").test(HR)));
+ck('C3 answers are collected, required ones enforced, saved as applications.details (strings, capped)', /var _det = _collectDetails\(cat\);\n\s*if \(!_det\.ok\) \{ _err\(_det\.error\); return; \}/.test(HR) && /details:\s+_det\.details,/.test(HR) && /if \(q\.required && !v\) return \{ ok: false/.test(HR));
+ck('C4 licence numbers are declarations AdminOS verifies (labelled so); no NTSA / insurance / loan result issued by the form', /IRA licence number \(AdminOS verifies\)/.test(HR) && /Regulator licence number \(AdminOS verifies\)/.test(HR) && /SOKONI does not issue NTSA results, insurance cover or loan approvals/.test(HR));
+ck('C5 mechanics apply as bookable providers (no mechanic → mechanic role override)', /var _ROLE_BY_CATEGORY = \{ landlord: 'landlord' \};/.test(HR));
+ck('C6 the form grants nothing: no status / approved / verified / business written by HubRegister', !/status:\s*'(approved|active|verified)'|approved:\s*true|verified:\s*true|business:\s*\{/.test(strip(HR)));
+ck('C7 AdminOS application card shows description + details, every value escaped through h()', /h\(String\(a\.description\)\.slice\(0,400\)\)/.test(AD) && /h\(String\(a\.details\[k\]\)\.slice\(0,200\)\)/.test(AD) && /Declared by the applicant — verify licences/.test(AD));
+ck('C8 each Car Hub service tab offers its application (12 tabs → HubRegister categories)', (CC.match(/'tab-[a-z-]+':\s+\['[a-z-]+'/g) || []).length === 12 && /box\.querySelector\('button'\)\.addEventListener\('click', hubRegister\(cat,/.test(CC));
+ck('C9 mechanics.html merges approved mechanic providers (SokoniProviders mechanic) with legacy mechanics/{uid}', /SokoniProviders\.list\(\{category:"mechanic"\}\)/.test(MC) && /const prov=await _loadProviderMechs\(\);/.test(MC) && MC.includes('src="sokoni-providers.js"'));
+
 console.log('\n── Z: negative controls (f799841) ──');
 const OCR = old('car-rental.html'), OMC = old('mechanics.html');
 ck('Z1 the old car-rental really had hard-coded cars and a browser STK path (R3/R4 not vacuous)', /const CARS = \[/.test(OCR) && /SokoniMpesa|waConnect/.test(OCR));

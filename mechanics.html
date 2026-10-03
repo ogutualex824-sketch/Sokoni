@@ -407,6 +407,16 @@ async function _loadFs(){
     return snap.empty?[]:(snap.docs.map(d=>({id:d.id,...d.data()})));
   }catch(e){return null;}
 }
+async function _loadProviderMechs(){
+  /* SokoniProviders is deferred and firebase.js is a module — wait briefly for both; on failure the legacy registry still shows. */
+  for(let n=0;n<30&&!(window.SokoniProviders&&window.firebaseDB);n++) await new Promise(r=>setTimeout(r,150));
+  if(!window.SokoniProviders) return [];
+  try{
+    const r=await SokoniProviders.list({category:"mechanic"});
+    return (r&&r.providers||[]).map(p=>({id:p.uid,uid:p.uid,name:p.name,type:"garage",location:p.location||p.city||"",area:p.location||"",
+      services:p.skills||[],bio:p.description||"",rating:p.rating,jobs:p.jobsCompleted||0,verified:p.verified===true,rate:p.rate,emoji:"🔧"}));
+  }catch(e){ return []; }
+}
 async function _saveFs(doc){
   try{
     const db=await _getDb(); if(!db) return false;
@@ -432,8 +442,12 @@ async function loadMechs(){
 
   /* The registry only (mechanics/{uid}, projected on approval). The old merge of localStorage "listings" showed this
      browser's never-saved registrations as live garages. Demo rows stay localhost / opt-in only. */
-  const fsIds=new Set((_fsCache||[]).map(m=>m.id));
-  _all=[...(_fsCache||[]),...(_demoAllowed?DEMO_MECHS.filter(d=>!fsIds.has(d.id)):[])];
+  /* Car Hub C3: approved mechanics apply as providers (providers/{uid}, category mechanic → bookable). Merge them with the
+     legacy mechanics/{uid} profiles; one card per account uid. */
+  const prov=await _loadProviderMechs();
+  const fsIds=new Set([...(_fsCache||[]),...prov].map(m=>m.uid||m.id));
+  const legacy=(_fsCache||[]).filter(m=>!prov.some(p=>p.uid===(m.uid||m.id)));
+  _all=[...prov,...legacy,...(_demoAllowed?DEMO_MECHS.filter(d=>!fsIds.has(d.id)):[])];
 
   const verified=_all.filter(m=>m.verified).length;
   const garages =_all.filter(m=>m.type==="garage"||m.type==="bodyshop"||m.type==="dealer"||m.type==="tyre"||m.type==="electrician").length;
@@ -737,6 +751,7 @@ renderReminders();
 <script src="sokoni-config.js" defer></script>
 <script src="sokoni-ui-extras.js" defer></script>
 <script src="firebase.js" type="module"></script>
+<script src="sokoni-providers.js" defer></script>
 <script src="sokoni-book-service.js" defer></script>
 <script src="sokoni-leads.js" defer></script>
 <script src="sokoni-inbox.js" defer></script>
