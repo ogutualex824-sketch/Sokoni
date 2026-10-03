@@ -66,4 +66,4 @@
 - Still BLOCKED: emulator / browser (RAM) and the live webhook (sokoni-5b).
 
 ## Certification pair (later 2026-10-03)
-Functions `integration/fitness-membership-2f @ c90e526` (+ e3 6d555b7: audit method 'qr', 5 composite indexes) · Hosting `hosting/fitness-memberships-on-31f5844 @ d70eca5` (e3: UI 51/0, AdminOS 16/0, containment 16/0). AdminOS / Super Admin link wiring is an assembly-time diff (docs/FITNESS_MEMBERSHIP_UI.md) so live never links to pages before their server exists. Runtime still BLOCKED (RAM ~210–350 MB).
+Functions `integration/fitness-membership-2f @ c90e526` (+ e3 6d555b7: audit method 'qr', 5 composite indexes) · Hosting `hosting/fitness-memberships-on-31f5844 @ 2f2179b` (supersedes d70eca5: e3 offer-editor orphan cleanup; UI 54/0, AdminOS 16/0, containment 16/0). AdminOS / Super Admin link wiring is an assembly-time diff (docs/FITNESS_MEMBERSHIP_UI.md) so live never links to pages before their server exists. Runtime still BLOCKED (RAM ~210–350 MB).
