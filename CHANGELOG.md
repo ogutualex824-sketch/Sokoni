@@ -1,3 +1,14 @@
+## [2026-10-03] - Provider dashboard: no provider-declared booking fee (owner fee model) — hosting, NOT deployed
+
+- Owner decision 2026-10-03 (confirmed to sokoni-5b directly):
+  - the buyer pays the service / quote amount only;
+  - SOKONI's commission (5%, from commercial config) is deducted from the provider's settlement, once per booking;
+  - leads are free.
+- provider-dashboard.html service editor: the "Booking fee (KSh)" field and the `fee` it sent are removed. A read-only note says
+  customers pay the service price only and the commission is deducted at settlement. No rate is hard-coded; config owns it.
+- Existing `providerServices.fee` values stay as data. The server stops reading them (sokoni-5b, providerDispatch release).
+- Test: test-tech-service-editor F1 (11/0).
+
 ## [2026-10-03] - Tech Hub slice 4O (hosting): AdminOS can suspend / reinstate a provider — hosting, NOT deployed
 
 - sokoni-aos.js, Services → providers table:

@@ -107,6 +107,13 @@ const SRC = read('sokoni-tech-service-editor.js');
     'Repairs "Message customer" and the booking view "Message the provider" open the BOOKING conversation');
 }
 
+/* F — owner fee model 2026-10-03: the buyer pays the service price only; no provider-declared booking fee */
+{
+  const pd = read('provider-dashboard.html');
+  ck('F1', !/id="svFee"/.test(pd) && pd.indexOf("fee:this._k2c(") === -1 && /Customers pay your service price only/.test(pd),
+    'the service editor has no booking-fee field, the save sends no fee, and the commission note names no invented rate');
+}
+
 /* T10 — vocabulary parity with the server authority */
 {
   const serverFile = path.join(TECH_FN, 'functions', 'shared', 'tech-service-profile.js');

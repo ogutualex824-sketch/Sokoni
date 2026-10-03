@@ -666,7 +666,7 @@ a{color:var(--acc);text-decoration:none}
                   </div>
                   <div style="font-size:.72rem;color:var(--sub);margin-top:4px">Customers book in blocks of this length, and time slots are generated to match. Use 30 for half-hour appointments, 240 for a 4-hour gig. Want several lengths? Add one service per length.</div>
                 </div>
-                <div class="fg"><label class="sk-lbl">Booking fee (KSh)</label><input class="sk-in" id="svFee" type="number" min="0" placeholder="optional"></div>
+                <div class="fg"><div class="sk-lbl">SOKONI commission</div><div style="font-size:12px;opacity:.75;line-height:1.45">Customers pay your service price only. SOKONI's commission is deducted from your payout at settlement (owner decision 2026-10-03) — see Wallet &amp; earnings.</div></div>
                 <div class="fg"><label class="sk-lbl">Deposit (KSh)</label><input class="sk-in" id="svDeposit" type="number" min="0" placeholder="optional"></div>
               </div>
               <div class="fg" style="margin-top:8px"><label class="sk-lbl">Description</label><textarea class="sk-in" id="svDesc" rows="2" placeholder="What's included"></textarea></div>
@@ -1734,7 +1734,7 @@ const Sv={
   /* Money invariant: storage is integer CENTS; the form shows/accepts KSh. */
   _k2c(v){return Math.max(0,Math.round((parseFloat(v)||0)*100))},   // KSh → cents
   _c2k(v){return (Number(v)||0)/100},                               // cents → KSh
-  _set(s){s=s||{};_q('svId').value=s.id||'';_q('svName').value=s.name||'';_q('svCat').value=s.category||'';_q('svPrice').value=s.price?this._c2k(s.price):'';_q('svType').value=s.priceType||'fixed';_q('svDur').value=s.durationMins||'';_q('svFee').value=s.fee?this._c2k(s.fee):'';_q('svDeposit').value=s.deposit?this._c2k(s.deposit):'';_q('svDesc').value=s.description||'';this._imgs=Array.isArray(s.images)?s.images.slice():[];this._renderImgs();_q('svImgFile').value='';_q('svForm').style.display='block';_q('svName').focus()},
+  _set(s){s=s||{};_q('svId').value=s.id||'';_q('svName').value=s.name||'';_q('svCat').value=s.category||'';_q('svPrice').value=s.price?this._c2k(s.price):'';_q('svType').value=s.priceType||'fixed';_q('svDur').value=s.durationMins||'';_q('svDeposit').value=s.deposit?this._c2k(s.deposit):'';_q('svDesc').value=s.description||'';this._imgs=Array.isArray(s.images)?s.images.slice():[];this._renderImgs();_q('svImgFile').value='';_q('svForm').style.display='block';_q('svName').focus()},
   openAdd(){this._set({});if(window.SokoniTechEditor)SokoniTechEditor.fill(null)},
   openEdit(id){const s=this._svc.find(x=>x.id===id);if(s){this._set(s);if(window.SokoniTechEditor)SokoniTechEditor.fill(s.techProfile)}},
   closeForm(){_q('svForm').style.display='none'},
@@ -1756,7 +1756,7 @@ const Sv={
     const name=(_q('svName').value||'').trim();
     if(!name){toast('Service name is required.','err');return}
     const id=_q('svId').value;
-    const data={name,category:_q('svCat').value||'',description:_q('svDesc').value||'',priceType:_q('svType').value||'fixed',price:this._k2c(_q('svPrice').value),fee:this._k2c(_q('svFee').value),deposit:this._k2c(_q('svDeposit').value),images:this._imgs,durationMins:parseInt(_q('svDur').value)||0};
+    const data={name,category:_q('svCat').value||'',description:_q('svDesc').value||'',priceType:_q('svType').value||'fixed',price:this._k2c(_q('svPrice').value),deposit:this._k2c(_q('svDeposit').value),images:this._imgs,durationMins:parseInt(_q('svDur').value)||0};
     /* Tech Hub slice 4b: device / mode details — sent only when the server granted a Tech capability; validated there */
     const tp=window.SokoniTechEditor?SokoniTechEditor.read():undefined;if(tp!==undefined)data.techProfile=tp;
     showLoad('Saving…');
