@@ -111,6 +111,10 @@ function sandbox (extra) {
   ck('P7b the venue page books through the server-first call and stops on refusal', /await S\.recordServerVenueBooking\(/.test(SV) && /if \(!res\.ok\) \{ \(window\._skToast\|\|alert\)\(res\.message\); return; \}/.test(SV));
   ck('P8 the agent page shows no invented rating/review count and no review form fields', !/a\.reviews\b/.test(PA) && !/id="rvComment"/.test(PA) && /Agent reviews are not available yet/.test(PA));
 
+  const PH = R('property.html');
+  const phCatch = PH.slice(PH.indexOf('async function scheduleViewing'), PH.indexOf('function filterProp('));
+  ck('P9 property.html: a failed viewing write no longer reports success', /\}catch\(e\)\{[\s\S]*couldn't send this viewing request/.test(phCatch) && !/\}catch\(e\)\{\s*showNotif\("📅 Viewing request sent!"/.test(phCatch));
+
   console.log('\n── Z: negative controls ──');
   ck('Z1 the live (72dca56) property module DID file reviews into applications (M2 is not vacuous)', /SokoniDB\.saveApplication/.test(require('child_process').execSync('git show 72dca56:sokoni-property.js', { cwd: path.join(__dirname, '..') }).toString()));
   ck('Z2 the live sports page DID claim "Venue booked!" (P2 is not vacuous)', /✅ Venue booked!/.test(require('child_process').execSync('git show 72dca56:sports-venue.html', { cwd: path.join(__dirname, '..') }).toString()));

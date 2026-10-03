@@ -17,7 +17,8 @@
   unboxing quarantine storage) are in `rules/capability-decisions-on-f20be7d` @ `1925aaa` and **ship last**.
 - **Depends on:** sokoni-5b's `submitReview` property/sports_venue adapters. The live 09-09 version rejects these types,
   so these pages say "unavailable" until those functions are deployed.
-- **Tests:** test-hub-review-clients 31/0, sabotage 7/7. Related suites identical to live. Browser/live NOT run.
+- **property.html:** its direct `propertyViewings` write always failed (no date/time keys) and the catch showed "Viewing request sent!". It now says the request was not sent and points to the listing page. Browser create of `propertyViewings` is closed in the rules candidate (`b6f9cee`), because viewings make a buyer review-eligible.
+- **Tests:** test-hub-review-clients 32/0, sabotage 7/7. Related suites identical to live. Browser/live NOT run.
 
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 

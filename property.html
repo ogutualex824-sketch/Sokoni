@@ -514,7 +514,10 @@
       });
       showNotif("📅 Viewing request sent to landlord!", "success");
     }catch(e){
-      showNotif("📅 Viewing request sent!", "success");
+      /* 2026-10-03: this used to report SUCCESS on failure — and the write always failed (the rules require
+         date/time keys this payload never had; browser create is now server-only). Say what happened, and send
+         the buyer to the listing page, whose viewing form records the request on the server. */
+      showNotif("We couldn't send this viewing request. Open the listing to request a viewing.", "error");
     }
   }
 
