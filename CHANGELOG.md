@@ -1,3 +1,10 @@
+## 2026-10-03 — Work/Job Engine milestones on the commercial line: paid-milestone refund guard + receipt subtype (NOT deployed)
+
+- **Change:** provider-ops `_refuseHeldMilestone` (ported from b2 a1234da): customer/provider cancel, decline and no-show REFUSE a `work_milestone` booking once `paid_held` (WORK_MILESTONE_HELD) — without it a slot-less milestone cancel FULL-refunds delivered work (mutant-proven). Receipts: `subtype` allowlist (`work_milestone`) and links `workProjectId` / `milestoneId`; the kind stays `service_booking`.
+- **Files:** functions/provider-ops.js, functions/transaction-receipts.js, docs/TRANSACTION_RECEIPTS_2026-10-03.md, scripts/test-work-milestone-guard.js (G1–G3), scripts/test-transaction-receipts.js (R10–R11), scripts/lib/inmem-firestore.js (byte-identical from b2 a1234da, test-only).
+- **DB:** receipt field `subtype` (nullable). **Security:** held milestone money can only leave through the refund-request authority.
+- **Tests:** milestone guard 3/0 (mutant without the guard FAILS G1), transaction-receipts 16/0, receipt-contract 132/0, receipts-convergence 19/0, receipt-documents 49/0, receipt-number 58/0.
+
 ## 2026-10-03 — Work/Job Engine milestone commission lane + commissionRuleFor snapshot (NOT deployed)
 
 - **Change:** provider-hub.commissionArgsForBooking: kind `work_milestone` → the server-stamped `workCommissionCategory` from an allowlist ONLY — construction_service (0%, owner: contractor work 0%) and marketing_services (10%, owner via b2 2026-10-03: campaign/project milestones settle like marketing, no extra fee); anything else → REFUSED category_unpriced, never serviceHub/commissionHub fallback. New pure `commissionRuleFor(bookingLike)` → {category, pct, basis:'service_price', catalogueVersion, fixed, refused} for the owner's commissionRuleSnapshot (historical record; settlement still recomputes).

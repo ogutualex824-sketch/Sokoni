@@ -120,7 +120,8 @@ Every call is made **after** the money step has committed, wrapped in `safely(db
 - **Electronics:** no receipt until its commerce flow exists.
 
 **Model additions**
-- **`links`** (`quoteId`, `bookingId`, `orderId`, `purchaseOrderId`, `settlementId`): a Legal quote receipt references both the quote and the booking.
+- **`links`** (`quoteId`, `bookingId`, `orderId`, `purchaseOrderId`, `settlementId`, `workProjectId`, `milestoneId`): a Legal quote receipt references both the quote and the booking; a Work/Job Engine milestone references its project and milestone.
+- **`subtype`** (allowlist `SUBTYPES` = `work_milestone`; else `null`): narrows a kind without forking it. A [[Work Engine]] milestone IS a `providerBookings` doc, so it stays kind `service_booking` (reconciliation still matches `service_booking_<bookingId>`); the hook in `shared/booking-receipts.js` (sokoni-b2) passes `subtype` + the work links when `booking.kind === "work_milestone"`.
 - **`b2b_order` kind and deductions:** a release may carry `deductions: [{kind:'lead_fee_recovery', amountCents, ref}]`, tracked as `deductionsCents`. It is never `platformFeeCents`.
   - Example: gross 500,000, commission 0, lead-fee recovery 696, supplier 499,304.
 - **Balanced releases:** a release must satisfy fee + provider share + deductions = amount released, otherwise it is refused (`unbalanced_release`).

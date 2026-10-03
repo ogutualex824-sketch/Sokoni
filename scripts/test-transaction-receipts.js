@@ -113,6 +113,16 @@ const events = (db, id) => [...db._docs.keys()].filter((k) => k.startsWith('tran
   r = await TR.safely(db, 'paid:bkX', async () => { throw new Error('boom'); });
   ck('R9 safely(): a failing writer is queued (transactionReceiptFailures) and does not throw', r.ok === false && [...db._docs.keys()].some((k) => k.startsWith('transactionReceiptFailures/')));
 
+  /* Work/Job Engine milestone (b2 WE2): stays kind service_booking (reconciliation key service_booking_<bookingId>) + subtype */
+  db = fakeDb();
+  r = await TR.recordPaid(db, paid({ sourceId: 'wm_P1_m1_1', paymentRef: 'API_WM', subtype: 'work_milestone',
+    links: { bookingId: 'wm_P1_m1_1', workProjectId: 'P1', milestoneId: 'm1', evil: 'x' } }), deps);
+  const wm = db._docs.get('transactionReceipts/service_booking_wm_P1_m1_1');
+  ck('R10 milestone receipt: kind service_booking, subtype work_milestone, links carry workProjectId + milestoneId (unknown link keys dropped)',
+    r.ok && wm && wm.kind === 'service_booking' && wm.subtype === 'work_milestone' && wm.links.workProjectId === 'P1' && wm.links.milestoneId === 'm1' && !('evil' in wm.links), wm && { subtype: wm.subtype, links: wm.links });
+  r = await TR.recordPaid(db, paid({ sourceId: 'bk9', paymentRef: 'API_9', subtype: 'made_up' }), deps);
+  ck('R11 an unknown subtype is recorded as null (allowlist), an ordinary receipt has subtype null', db._docs.get('transactionReceipts/service_booking_bk9').subtype === null);
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e && e.stack); process.exit(1); });

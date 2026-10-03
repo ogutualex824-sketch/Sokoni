@@ -42,13 +42,16 @@ const FAILURES = 'transactionReceiptFailures';
 const KINDS = Object.freeze(['service_booking', 'quote', 'order', 'b2b_order', 'enrolment']);
 /* Release deductions that are NOT SOKONI commission — shown separately on the receipt. */
 const DEDUCTION_KINDS = Object.freeze(['lead_fee_recovery']);
+/* A SUBTYPE narrows a kind without forking it: a Work/Job Engine milestone IS a providerBookings doc, so it stays kind
+   'service_booking' (reconciliation keeps matching service_booking_<bookingId>) and carries subtype 'work_milestone'. */
+const SUBTYPES = Object.freeze(['work_milestone']);
 const TAX = Object.freeze(['provider_fiscal_invoice', 'not_vat_registered', 'unknown']);
 const ID_RE = /^[A-Za-z0-9_-]{1,160}$/;
 const _int = (n) => (Number.isInteger(n) && n >= 0 ? n : null);
 
 function _links(l) {
   const out = {};
-  for (const k of ['quoteId', 'bookingId', 'orderId', 'purchaseOrderId', 'settlementId']) {
+  for (const k of ['quoteId', 'bookingId', 'orderId', 'purchaseOrderId', 'settlementId', 'workProjectId', 'milestoneId']) {   /* work ids: Work/Job Engine milestones (b2 WE2) */
     if (l && l[k] != null && ID_RE.test(String(l[k]))) out[k] = String(l[k]);
   }
   return out;
@@ -98,6 +101,7 @@ async function recordPaid(db, p, deps) {
       taxTreatment, confirmation: { source: 'intasend_webhook', verifiedAt: ts() },
       /* Cross-references (Legal: the accepted quote AND the booking it became; B2B: the purchase order). */
       links: _links(p.links),
+      subtype: SUBTYPES.includes(p.subtype) ? p.subtype : null,
       issuedAt: ts(), updatedAt: ts(),
     }, pos, { status: _statusOf(pos) }));
     t.create(evRef, { type: 'paid', amountCents: paidCents, opKey: String(p.paymentRef), at: ts() });
@@ -272,5 +276,5 @@ let myTransactionReceipts, adminSearchReceipts, adminRetryReceiptFailures, retry
   });
 }
 
-module.exports = { RECEIPTS, FAILURES, KINDS, TAX, DEDUCTION_KINDS, receiptIdFor, recordPaid, recordEvent, safely, retryFailures, receiptsFor, adminSearch,
+module.exports = { RECEIPTS, FAILURES, KINDS, SUBTYPES, TAX, DEDUCTION_KINDS, receiptIdFor, recordPaid, recordEvent, safely, retryFailures, receiptsFor, adminSearch,
   myTransactionReceipts, adminSearchReceipts, adminRetryReceiptFailures, retryReceiptFailuresSweep, _statusOf };
