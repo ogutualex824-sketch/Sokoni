@@ -656,10 +656,104 @@ window.SokoniAOS = (() => {
           + ((i.categoryLabel || i.category) ? '<div class="app-sub">' + _esc(i.categoryLabel || i.category) + '</div>' : "") + '</td>'
         + '<td>' + contact + '</td>'
         + '<td>' + _ago(i.receivedAt || i.createdAt) + '</td>'
-        + '<td><span class="status-badge st-' + _esc(i.status) + '">' + _esc(_appStatusWord(i.status)) + '</span>' + _appProjection(i) + '</td>'
-        + '<td><div class="app-acts">' + (acts || '<span class="app-sub">—</span>') + '</div></td>'
-        + '</tr>';
+        + '<td><span class="status-badge st-' + _esc(i.status) + '">' + _esc(_appStatusWord(i.status)) + '</span>' + _appProjection(i) + _appReviewMarks(i.id) + '</td>'
+        + '<td><div class="app-acts">' + (acts || '<span class="app-sub">—</span>') + '</div>'
+          + '<div class="app-acts app-review" aria-label="Review tools">' + _appReviewButtons(i.id) + '</div></td>'
+        + '</tr>' + _appHistoryRow(i.id);
     }).join("");
+  }
+
+  /* ── Review tools (applicationReview callable, 2026-10-03) ─────────────────────────────
+     Claim / release (one reviewer at a time), internal admin-only notes, archive (a QUEUE VIEW state —
+     never an application status) and history (notes + audit events). The server writes ONLY
+     applicationReviews/* and adminAudit; decisions stay on applicationDecide above, untouched.
+     applicationList does not carry review state, so the reviewer / archived marks shown here are exactly
+     what applicationReview answered in this session (History loads them); nothing is guessed or stored. */
+  const _appReview = {};     /* id -> { reviewerUid, archived } as last answered by the server */
+  const _appHist = {};       /* id -> { notes, events } | { error } | null (loading) */
+  const _appHistOpen = {};   /* id -> true while its history row is open */
+  const _APP_EVENT_WORD = { application_review_claim: "Claimed", application_review_takeover: "Taken over",
+    application_review_release: "Released", application_review_note: "Note added",
+    application_review_archive: "Archived (queue view)", application_review_unarchive: "Unarchived" };
+  function _appWho(uid) { const me = _currentUser && _currentUser.uid; return uid ? (uid === me ? "you" : _esc(uid)) : "—"; }
+  function _appWhen(ms) { return typeof ms === "number" && ms > 0 ? _esc(new Date(ms).toLocaleString("en-KE", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })) : "—"; }
+  function _appReviewMarks(id) {
+    const r = _appReview[id];
+    if (!r) return "";
+    return (r.reviewerUid ? '<div class="app-sub">Reviewer: ' + _appWho(r.reviewerUid) + '</div>' : "")
+      + (r.archived ? '<div class="app-sub">Archived (queue view — status unchanged)</div>' : "");
+  }
+  function _appReviewButtons(id) {
+    const r = _appReview[id] || {};
+    const me = _currentUser && _currentUser.uid;
+    const rb = (act, label) => '<button class="aos-btn-sm" data-app-act="' + act + '" data-app-id="' + _esc(id) + '">' + label + '</button>';
+    return (r.reviewerUid && r.reviewerUid === me ? rb("rv_release", "Release") : rb("rv_claim", r.reviewerUid ? "Take over" : "Claim"))
+      + rb("rv_note", "Note")
+      + (r.archived ? rb("rv_unarchive", "Unarchive") : rb("rv_archive", "Archive"))
+      + rb(_appHistOpen[id] ? "rv_hide" : "rv_history", _appHistOpen[id] ? "Hide history" : "History");
+  }
+  function _appHistoryRow(id) {
+    if (!_appHistOpen[id]) return "";
+    const h = _appHist[id];
+    let inner;
+    if (!h) inner = _spinner();
+    else if (h.error) inner = '<span class="app-sub">Couldn’t load history — ' + _esc(h.error) + '</span>';
+    else {
+      const notes = (h.notes || []).map((n) => '<li><span class="app-sub">' + _appWhen(n.at) + ' · ' + _appWho(n.by) + '</span><div>' + _esc(n.text) + '</div></li>').join("");
+      const events = (h.events || []).map((ev) => '<li><span class="app-sub">' + _appWhen(ev.at) + ' · ' + _appWho(ev.by) + '</span> '
+        + _esc(_APP_EVENT_WORD[ev.action] || String(ev.action || "event").replace(/^application_/, "").replace(/_/g, " "))
+        + (ev.reason ? ' — ' + _esc(ev.reason) : "") + '</li>').join("");
+      inner = '<div class="app-hist-grid"><div><strong>Internal notes</strong> <span class="app-sub">(admins only — never shown to the applicant)</span><ul>'
+        + (notes || '<li class="app-sub">No notes yet</li>') + '</ul></div><div><strong>Audit events</strong><ul>'
+        + (events || '<li class="app-sub">No events recorded</li>') + '</ul></div></div>';
+    }
+    return '<tr class="app-hist"><td colspan="6">' + inner + '</td></tr>';
+  }
+  async function _showAppHistory(id) {
+    _appHistOpen[id] = true; _appHist[id] = null; _loadApplications(false);
+    try {
+      const r = await _call("applicationReview", { applicationId: id, action: "history" });
+      _appHist[id] = { notes: (r && r.notes) || [], events: (r && r.events) || [] };
+      if (r && r.review) _appReview[id] = { reviewerUid: r.review.reviewerUid || null, archived: r.review.archived === true };
+    } catch (e) {
+      _appHist[id] = { error: (e && e.message) || "server unavailable" };
+    }
+    _loadApplications(false);
+  }
+  async function _reviewApplication(id, act) {
+    if (!_findApp(id)) { _toast("Application not found — refresh the list", "error"); return; }
+    const me = _currentUser && _currentUser.uid;
+    const cur = _appReview[id] || {};
+    try {
+      if (act === "rv_claim") {
+        const takeOver = !!(cur.reviewerUid && cur.reviewerUid !== me);
+        if (takeOver && !confirm("Another reviewer has claimed this application. Take it over? The take-over is recorded in the audit history.")) return;
+        const r = await _call("applicationReview", takeOver ? { applicationId: id, action: "claim", takeOver: true } : { applicationId: id, action: "claim" });
+        _appReview[id] = Object.assign({}, cur, { reviewerUid: (r && r.reviewerUid) || me || null });
+        _toast(takeOver ? "Taken over — you are the reviewer" : "Claimed — you are the reviewer", "success");
+      } else if (act === "rv_release") {
+        await _call("applicationReview", { applicationId: id, action: "release" });
+        _appReview[id] = Object.assign({}, cur, { reviewerUid: null });
+        _toast("Released", "success");
+      } else if (act === "rv_note") {
+        let text = prompt("Internal note (admins only — the applicant never sees it):");
+        if (text === null) return;
+        text = text.trim();
+        if (!text) { _toast("Write a note", "error"); return; }
+        await _call("applicationReview", { applicationId: id, action: "note", text: text.slice(0, 2000) });
+        _toast("Note saved", "success");
+        if (_appHistOpen[id]) { _showAppHistory(id); return; }
+      } else if (act === "rv_archive" || act === "rv_unarchive") {
+        const r = await _call("applicationReview", { applicationId: id, action: act === "rv_archive" ? "archive" : "unarchive" });
+        _appReview[id] = Object.assign({}, cur, { archived: !!(r && r.archived) });
+        _toast(r && r.archived ? "Archived from the queue view — the application status is unchanged" : "Unarchived", "success");
+      }
+    } catch (e) {
+      const d = e && e.details;
+      if (act === "rv_claim" && d && d.reviewerUid) _appReview[id] = Object.assign({}, cur, { reviewerUid: d.reviewerUid });
+      _toast("Not done: " + (e && e.message || "server refused"), "error");
+    }
+    _loadApplications(false);
   }
   function _findApp(id) { return ((_appsCache && _appsCache.items) || []).find((x) => x.id === id) || null; }
   async function _decideApplication(id, decision) {
@@ -709,6 +803,9 @@ window.SokoniAOS = (() => {
     const act = btn.getAttribute("data-app-act"), id = btn.getAttribute("data-app-id");
     if (act === "reload") { _loadApplications(true); return; }
     if (act === "reconcile") { _reconcileApplication(id); return; }
+    if (act === "rv_history") { _showAppHistory(id); return; }
+    if (act === "rv_hide") { delete _appHistOpen[id]; _loadApplications(false); return; }
+    if (["rv_claim", "rv_release", "rv_note", "rv_archive", "rv_unarchive"].includes(act)) { _reviewApplication(id, act); return; }
     if (["approve", "reject", "suspend", "request_info"].includes(act)) _decideApplication(id, act);
   });
 
