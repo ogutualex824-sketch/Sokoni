@@ -125,6 +125,14 @@ async function holdServiceBookingPayment(db, adminSdk, apiRef, intentRef, amount
       return { outcome: 'held' };
     });
 
+    /* Transaction receipt (sokoni-2f contract 5d799e6, owner 2026-10-03): AFTER the money step committed, never throwing.
+       A late payment on a dead booking is still a payment received — receipted, then refunded in full. */
+    if (res.outcome === 'held' || res.outcome === 'refunded') {
+      const BR = require('./shared/booking-receipts');
+      await BR.paid(db, bookingId, apiRef);
+      if (res.outcome === 'refunded') await BR.refunded(db, bookingId, Math.round((Number(amountKES) || 0) * 100), apiRef + '_latepay', 'paid-after-' + res.status);
+    }
+
     /* Intent status mirrors the outcome so a re-read of the intent is truthful. */
     const intentStatus = res.outcome === 'refunded' ? 'refunded' : res.outcome === 'held' ? 'paid' : null;
     if (intentStatus) {

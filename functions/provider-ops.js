@@ -163,9 +163,12 @@ async function _disburseHeldFunds(data, ref, opts) {
   const payoutRef  = _db().collection('providerPayouts').doc(ref.id);
   const wTxRef     = _db().collection('walletTransactions').doc(`${data.providerId}_${ref.id}_forfeit`);
 
+  let _applied = false;
   await _db().runTransaction(async (t) => {
+    _applied = false;
     const bSnap = await t.get(ref);
     if (!bSnap.exists || bSnap.data().paymentStatus !== 'paid_held') return;   /* idempotent guard */
+    _applied = true;
     if (refundShillings >= 1 && custRef) {
       t.set(custRef, { walletBalance: _inc(refundShillings) }, { merge: true });
       t.set(_db().collection('ledger').doc(), { uid: data.customerUid, type: 'booking_refund',
@@ -184,6 +187,11 @@ async function _disburseHeldFunds(data, ref, opts) {
     t.update(ref, { paymentStatus: 'refunded', refundedCents: refundC, forfeitedCents: forfeitC,
       forfeitCommissionCents: forfeitCommissionC, disbursedAt: _ts(), updatedAt: _ts() });
   });
+  if (_applied) {   /* receipts AFTER the commit; never throwing (shared/booking-receipts → receipts.safely) */
+    const BR = require('./shared/booking-receipts');
+    await BR.refunded(_db(), ref.id, refundC, ref.id + '_refund', opts.isNoShow ? 'no_show' : (opts.by === 'provider' ? 'provider_cancel' : 'customer_cancel'));
+    await BR.forfeitReleased(_db(), ref.id, forfeitC, forfeitCommissionC, providerNetC);
+  }
   return { refundC, forfeitC, providerNetC, refundShillings, forfeitShillings };
 }
 
@@ -411,6 +419,7 @@ async function settleOnShowUp(bookingId) {
       statusPatch: { status: 'in_progress', startedAt: cur.startedAt || _ts(), showUpVerifiedAt: _ts() } });
   });
   if (out && out.credited !== undefined) logger.info('settleOnShowUp', { bookingId, uid, gross: m.gross, commission: m.commission, credited: out.credited });
+  if (out && out.credited !== undefined) await require('./shared/booking-receipts').released(_db(), bookingId, m);
   return out;
 }
 /* exported through the module.exports rebind at the end of this file */
@@ -440,6 +449,7 @@ async function settleOnPinRelease(bookingId, actorUid) {
       statusPatch: { status: 'completed', completedAt: _ts(), pinReleasedAt: _ts(), pinReleasedBy: actorUid || null } });
   });
   if (out && out.credited !== undefined) logger.info('settleOnPinRelease', { bookingId, uid, gross: m.gross, commission: m.commission, credited: out.credited });
+  if (out && out.credited !== undefined) await require('./shared/booking-receipts').released(_db(), bookingId, m);
   return out;
 }
 
@@ -511,6 +521,12 @@ async function reverseServiceSettlement(bookingId, opts) {
             commissionReversedCents: Number(p.commission) || 0 };
   });
   if (out && out.reversed) logger.info('reverseServiceSettlement', { bookingId, actor: o.actor || null, debit: out.providerDebitShillings, shortfall: out.clawbackShortfallShillings });
+  /* Transaction receipt: the full refund after settlement, AFTER the reversal committed; never throwing. */
+  if (out && out.reversed) {
+    const b2 = (await ref.get()).data() || {};
+    const paidC = Math.round(Number(b2.heldAmount) || 0) || (Math.round(Number(b2.price) || 0) + Math.round(Number(b2.fee) || 0));
+    await require('./shared/booking-receipts').refunded(DB(), ref.id, paidC, ref.id + '_reversal', 'refund_after_settlement');
+  }
   return out;
 }
 

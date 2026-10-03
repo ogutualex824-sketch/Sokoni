@@ -18,6 +18,10 @@ const M = [
     "  requireAuth(req); await db().collection('legalConsultations').doc('x').set({ ok: 1 });\n  throw new HttpsError('failed-precondition', 'Legal consultations are booked", 'C6'],
   ['any provider may tag a Legal practice area', 'provider-ops.js', "if (!ps.exists || require('./business-category').categoryOf(ps.data()) !== 'lawyer') {", 'if (false) {', 'C10'],
   ['specialist rate card without confirmation', 'provider-ops.js', "if (!ls.exists || TAX.specialistConfirmedOf(ls.data()).indexOf(id) < 0) {", 'if (false) {', 'C11'],
+  ['paid receipt hook removed from the webhook hold', 'booking-payment-sweep.js', '      await BR.paid(db, bookingId, apiRef);', '', 'C12'],
+  ['release receipt hook removed from PIN settlement', 'provider-ops.js', "settleOnPinRelease', { bookingId, uid, gross: m.gross, commission: m.commission, credited: out.credited });\n  if (out && out.credited !== undefined) await require('./shared/booking-receipts').released(_db(), bookingId, m);", "settleOnPinRelease', { bookingId, uid, gross: m.gross, commission: m.commission, credited: out.credited });", 'C13'],
+  ['refund receipt hook removed from cancellation disbursement', 'provider-ops.js', "    await BR.refunded(_db(), ref.id, refundC, ref.id + '_refund',", "    void (_db(), ref.id, refundC, ref.id + '_refund',", 'C14'],
+  ['refund receipt hook removed from the reversal after settlement', 'provider-ops.js', "    await require('./shared/booking-receipts').refunded(DB(), ref.id, paidC, ref.id + '_reversal', 'refund_after_settlement');", '', 'C15'],
 ];
 let caught = 0, missed = 0;
 for (const [name, file, a, b, row] of M) {

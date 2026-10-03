@@ -55,10 +55,23 @@ console.log('\nLegal Hub L4 — Legal consultation on the canonical booking + se
   ck('C3', !!B && B.providerId === 'adv' && B.customerUid === 'cust' && Number(B.price) === 500000 && B.paymentStatus !== 'paid_held' && B.paymentStatus !== 'paid',
     'client books via bookingCreateService: providerBookings row at the SERVER price (client price 100 ignored), not paid', { bk, B });
 
-  /* FIXTURE: the verified IntaSend webhook's effect on a service_booking (createPaymentIntent → webhook → paid_held). The
-     webhook/intent path itself is certified by the payment suites (2f), not here. */
+  /* The REAL webhook hold step (booking-payment-sweep.holdServiceBookingPayment, called by both IntaSend COMPLETE
+     handlers). FIXTURE, honestly scoped: the server-minted intent (createPaymentIntent's output) and the payment record the
+     verified webhook stores (incl. IntaSend's own method, 5b 525fd9f). The IntaSend HTTP leg itself is NOT exercised here. */
   if (!bid) { ck('C4', false, 'no booking to settle (C3 failed) — fail closed'); return done(); }
-  DOCS.set('providerBookings/' + bid, Object.assign({}, DOCS.get('providerBookings/' + bid), { paymentStatus: 'paid_held', status: 'confirmed' }));
+  DOCS.set('paymentIntents/INT_' + bid, { resourceType: 'providerBooking', resourceId: bid, amountCents: 500000, status: 'pending' });
+  DOCS.set('payments/API_' + bid, { apiRef: 'API_' + bid, providerMethod: 'M-PESA', invoiceId: 'INV-IS-1', status: 'COMPLETE' });
+  const SW = require(path.join(FN, 'booking-payment-sweep.js'));
+  const held = await SW.holdServiceBookingPayment(H.db, require('firebase-admin'), 'API_' + bid, 'INT_' + bid, 5000);
+  DOCS.set('providerBookings/' + bid, Object.assign({}, DOCS.get('providerBookings/' + bid), { status: 'confirmed' }));   /* provider confirms (state, not money) */
+  const RC = () => DOCS.get('transactionReceipts/service_booking_' + bid) || null;
+  const rc1 = RC();
+  const held2 = await SW.holdServiceBookingPayment(H.db, require('firebase-admin'), 'API_' + bid, 'INT_' + bid, 5000);
+  const evs = (pre) => [...DOCS.keys()].filter((k) => k.startsWith('transactionReceipts/service_booking_' + bid + '/events/' + pre));
+  ck('C12', DOCS.get('providerBookings/' + bid).paymentStatus === 'paid_held' && !!rc1 && rc1.paidCents === 500000 && rc1.heldCents === 500000 && rc1.status === 'paid_held'
+    && rc1.method === 'M-PESA' && rc1.taxTreatment === 'unknown' && rc1.clientUid === 'cust' && rc1.counterpartyId === 'adv' && !!rc1.receiptNo
+    && rc1.confirmation && rc1.confirmation.source === 'intasend_webhook' && evs('paid_').length === 1,
+    'webhook hold → ONE receipt: paid KES 5,000 held, IntaSend\'s own method recorded, tax treatment recorded (never inferred), numbered; a replayed webhook adds nothing', { held, held2, rc1 });
   const s1 = await PO.settleOnPinRelease(bid, 'cust');
   const B2 = DOCS.get('providerBookings/' + bid);
   const wtx = [...DOCS.keys()].filter((k) => /^walletTransactions\//.test(k)).map((k) => DOCS.get(k)).filter((t) => JSON.stringify(t).includes(bid));
@@ -67,7 +80,32 @@ console.log('\nLegal Hub L4 — Legal consultation on the canonical booking + se
     'PIN release settles ONCE through the shared pipeline: KES 5,000 → SOKONI 5% = 250 → provider 4,750 net: payout record gross/commission/net in cents, provider wallet +KES 4,750, one wallet transaction, booking settled', { s1, PAY, W, B2: { status: B2.status, paymentStatus: B2.paymentStatus }, wtx: wtx.length });
   const s2 = await PO.settleOnPinRelease(bid, 'cust');
   ck('C5', s2 && s2.skipped && s2.credited === undefined, 'a second PIN release is a no-op — no double commission, no double credit', s2);
+  const rc2 = RC();
+  ck('C13', !!rc2 && rc2.status === 'released' && rc2.heldCents === 0 && rc2.releasedCents === 500000 && rc2.platformFeeCents === 25000 && rc2.providerNetCents === 475000 && evs('released_').length === 1,
+    'PIN release → the receipt records the release ONCE: held 0, released KES 5,000, SOKONI fee 250, provider net 4,750', rc2);
 
+  /* C14 — refund before settlement (provider cancels a paid booking) → the receipt records the refund ONCE */
+  const bk2 = await call(BS.bookingCreateService, 'cust', { providerId: 'adv', serviceId: 'legal_consult_adv', date: tomorrow(), startTime: '15:00', idempotencyKey: 'k2' });
+  const bid2 = bk2.ok && (bk2.ok.bookingId || bk2.ok.id);
+  let rc3 = null, ev3 = 0, rep3 = 0;
+  if (bid2) {
+    DOCS.set('paymentIntents/INT_' + bid2, { resourceType: 'providerBooking', resourceId: bid2, amountCents: 500000, status: 'pending' });
+    DOCS.set('payments/API_' + bid2, { apiRef: 'API_' + bid2, providerMethod: 'CARD-PAYMENT', status: 'COMPLETE' });
+    await SW.holdServiceBookingPayment(H.db, require('firebase-admin'), 'API_' + bid2, 'INT_' + bid2, 5000);
+    const ref2 = H.db.collection('providerBookings').doc(bid2);
+    await PO._disburseHeldFunds(DOCS.get('providerBookings/' + bid2), ref2, { by: 'provider', isNoShow: false });
+    await PO._disburseHeldFunds(DOCS.get('providerBookings/' + bid2), ref2, { by: 'provider', isNoShow: false });
+    rc3 = DOCS.get('transactionReceipts/service_booking_' + bid2) || null;
+    ev3 = [...DOCS.keys()].filter((k) => k.startsWith('transactionReceipts/service_booking_' + bid2 + '/events/refunded_')).length;
+  }
+  ck('C14', !!rc3 && rc3.method === 'CARD-PAYMENT' && rc3.status === 'refunded' && rc3.refundedCents === 500000 && rc3.heldCents === 0 && rc3.releasedCents === 0 && ev3 === 1,
+    'provider cancels a paid booking → full refund recorded ONCE on the receipt (no release, no fee); a repeat cancel adds nothing', { rc3, ev3 });
+  /* C15 — refund AFTER settlement (the owner-decided reversal) → refund recorded on the released receipt, once */
+  const rv1 = await PO.reverseServiceSettlement(bid, { decision: 'refund_full', actor: 'admin1' });
+  const rv2 = await PO.reverseServiceSettlement(bid, { decision: 'refund_full', actor: 'admin1' });
+  const rc4 = RC();
+  ck('C15', rv1 && rv1.reversed && rv2 && rv2.alreadyReversed && !!rc4 && rc4.status === 'refunded' && rc4.refundedCents === 500000 && rc4.releasedCents === 500000 && evs('refunded_').length === 1,
+    'refund after settlement → the released receipt records the full refund ONCE (released stays as history; status refunded)', { rv1, rc4 });
   /* C10 — Legal rate cards name a taxonomy practice area; only a server-classified lawyer may set one (L6) */
   /* NO plan fixture (owner 10-03 + 2f 965c46d): on the FREE plan, the SOKONI-created consultation card does not count, so the advocate's own first rate card is allowed. */
   DOCS.set('providers/plumb', { status: 'active', category: 'plumbing', business: { category: 'plumbing', source: 'application' } });
