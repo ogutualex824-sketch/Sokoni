@@ -1688,8 +1688,8 @@ exports.applicationDecide = onCall(
     _requireAdmin(req);
     const { applicationId, decision, reason } = req.data || {};
     if (!applicationId) throw new HttpsError('invalid-argument', '"applicationId" is required.');
-    if (!['approve', 'reject', 'suspend', 'request_info'].includes(decision)) {
-      throw new HttpsError('invalid-argument', 'decision must be approve | reject | suspend | request_info.');
+    if (!['approve', 'reject', 'suspend', 'request_info', 'mark_under_review', 'mark_verified', 'revoke'].includes(decision)) {
+      throw new HttpsError('invalid-argument', 'decision must be approve | reject | suspend | request_info | mark_under_review | mark_verified | revoke.');
     }
 
     const db = _db();
@@ -1708,7 +1708,35 @@ exports.applicationDecide = onCall(
       }
     }
 
-    const STATUS = { approve: 'approved', reject: 'rejected', suspend: 'suspended', request_info: 'info_requested' };
+    /* ══ REVIEW STAGES (owner briefs 2026-10-03; generic for every applicant type) ══════════════════════════════════
+       `status` stays canonical (pending / info_requested / approved / rejected / suspended) — a literal 'verified'
+       status would canonicalise to APPROVED and project, so the review sub-states live in `reviewStage`:
+         submitted → under_review → verified    (admin-only marks; NO projection, audited, like request_info)
+         revoke = suspend + reviewStage 'revoked' — TERMINAL: nothing further can be decided on that application.
+       "Active" is the applied projection (projectionStatus 'applied'), not a status. */
+    const cur = snap.data() || {};
+    if (cur.reviewStage === 'revoked') {
+      throw new HttpsError('failed-precondition', 'This application was revoked. A new application is required.', { reason: 'REVOKED_TERMINAL' });
+    }
+    if (decision === 'mark_under_review' || decision === 'mark_verified') {
+      const open = ['pending', 'info_requested'].includes(String(cur.status || 'pending'));
+      if (!open) throw new HttpsError('failed-precondition', 'Only an undecided application can change review stage.', { reason: 'ALREADY_DECIDED' });
+      if (decision === 'mark_verified' && AT0) {
+        const missing = AT0.T.missing(cur, AT0.m);
+        if (missing.length) throw new HttpsError('failed-precondition', 'Cannot mark verified. Missing: ' + missing.join('; ') + '.', { reason: AT0.T.incompleteCode, missing });
+      }
+      const stage = decision === 'mark_verified' ? 'verified' : 'under_review';
+      await ref.set({ reviewStage: stage, reviewStageAt: _ts(), reviewStageBy: req.auth.uid, updatedAt: _ts() }, { merge: true });
+      await db.collection('adminAudit').add({ action: 'application_' + decision, applicationId: String(applicationId), targetUid: cur.uid || null,
+        performedBy: req.auth.uid, reason: _sanText(reason, 500) || null, createdAt: _ts() }).catch(() => {});
+      return { ok: true, applicationId, reviewStage: stage, projected: false };
+    }
+    if (decision === 'revoke' && _sanText(reason, 500).length < 5) {
+      throw new HttpsError('invalid-argument', 'Give a reason for revoking.', { reason: 'REASON_REQUIRED' });
+    }
+
+    const STATUS = { approve: 'approved', reject: 'rejected', suspend: 'suspended', request_info: 'info_requested', revoke: 'suspended' };
+    const STAGE = { approve: 'approved', reject: 'rejected', suspend: 'suspended', request_info: 'info_requested', revoke: 'revoked' };
     const status = STATUS[decision];
     const actor = req.auth.uid;
 
@@ -1719,6 +1747,7 @@ exports.applicationDecide = onCall(
       ..._mkt,
       status,
       statusCanonical: canonStatus(status),
+      reviewStage: STAGE[decision], reviewStageAt: _ts(),
       reviewReason: _sanText(reason, 500) || null,
       decidedBy: actor,
       decidedAt: _ts(),

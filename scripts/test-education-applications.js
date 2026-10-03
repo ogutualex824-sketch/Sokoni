@@ -150,6 +150,31 @@ const provOf = () => Object.values(S().providers || {})[0] || null;
   ck('U-4', !/educationTypeOf\(snap\.data\(\)\)/.test(src) && !/_mktRetract/.test(src) && !/app\.hub === 'marketing' && app\.applicationType === 'marketing'\) \{/.test(src),
     'no per-hub branches remain in applyDecision / applicationDecide — both consult the registry');
 
+  /* REVIEW STAGES (generic): submitted → under_review → verified, revoke = terminal; status stays canonical */
+  const ADM = { auth: { uid: ADMIN, token: { admin: true } } };
+  const decideAs = async (data, who) => { try { return await AD.run(Object.assign({ data }, who || ADM)); } catch (x) { return { err: x.code, reason: (x.details && x.details.reason) || x.message }; } };
+  DB = fakeDb(seed(mk({ category: 'school', status: 'pending', statusCanonical: 'pending', decidedBy: null, details: { registrationNo: 'MOE/1' } })));
+  let rs = await decideAs({ applicationId: 'APPE1', decision: 'mark_under_review' }, { auth: { uid: 'u1', token: {} } });
+  ck('RS-1', rs.err === 'permission-denied' && !S().applications.APPE1.reviewStage, 'only an administrator can move a review stage', rs);
+  rs = await decideAs({ applicationId: 'APPE1', decision: 'mark_under_review' });
+  ck('RS-2', rs.reviewStage === 'under_review' && S().applications.APPE1.status === 'pending' && !provOf(), 'mark_under_review: stage moves, status stays PENDING, nothing projected', [rs, S().applications.APPE1.status]);
+  rs = await decideAs({ applicationId: 'APPE1', decision: 'mark_verified' });
+  ck('RS-3', rs.reviewStage === 'verified' && S().applications.APPE1.status === 'pending' && !provOf() && LC.canonStatus(S().applications.APPE1.status) === 'pending',
+    'mark_verified: stage "verified" WITHOUT approving (a literal verified status would canonicalise to approved and project)', [rs, S().applications.APPE1]);
+  DB = fakeDb(seed(mk({ category: 'school', status: 'pending', statusCanonical: 'pending', decidedBy: null, details: {} })));
+  rs = await decideAs({ applicationId: 'APPE1', decision: 'mark_verified' });
+  ck('RS-4', rs.err === 'failed-precondition' && !S().applications.APPE1.reviewStage, 'an application missing required documents cannot be marked verified', rs);
+  DB = fakeDb(seed(mk({ category: 'school', status: 'pending', statusCanonical: 'pending', decidedBy: null, details: { registrationNo: 'MOE/1' } })));
+  rs = await decideAs({ applicationId: 'APPE1', decision: 'revoke', reason: 'x' });
+  ck('RS-5', rs.reason === 'REASON_REQUIRED', 'revoking needs a reason', rs);
+  rs = await decideAs({ applicationId: 'APPE1', decision: 'revoke', reason: 'Fraudulent registration' });
+  ck('RS-6', S().applications.APPE1.status === 'suspended' && S().applications.APPE1.reviewStage === 'revoked', 'revoke = suspended + reviewStage revoked', S().applications.APPE1);
+  rs = await decideAs({ applicationId: 'APPE1', decision: 'approve' });
+  ck('RS-7', rs.reason === 'REVOKED_TERMINAL' && S().applications.APPE1.reviewStage === 'revoked' && !(provOf() && ['active', 'approved'].includes(provOf().status)), 'a REVOKED application is terminal: it can never be approved again', rs);
+  DB = fakeDb(seed(mk({ category: 'school', status: 'approved', statusCanonical: 'approved', details: { registrationNo: 'MOE/1' } })));
+  rs = await decideAs({ applicationId: 'APPE1', decision: 'mark_under_review' });
+  ck('RS-8', rs.reason === 'ALREADY_DECIDED', 'a decided application cannot be moved back into review stages', rs);
+
   /* controls: non-education unchanged */
   DB = fakeDb(seed(mk({ category: 'plumbing', hub: 'service', details: {} })));
   r = await LC.applyDecision('APPE1', mk({ category: 'plumbing', hub: 'service', details: {} }), { decidedBy: ADMIN });
