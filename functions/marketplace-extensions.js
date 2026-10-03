@@ -548,7 +548,18 @@ exports.rentalComplete = onCall({ enforceAppCheck: true }, exports._h.rentalComp
     t.update(_db().collection('rentalProducts').doc(b.rentalProductId), { bookingCount: _fv().increment(1) });
     plan.apply(t);
   });
-  return { success: true, status: 'completed', settlement: plan.ok ? 'released' : plan.reason };
+  /* Receipt AFTER commit (sokoni-2f transaction-receipts: one receipt per rental, rental_booking_<id>; 'paid' was
+     recorded at the hold by the webhook). Only a settlement that actually released money gets a 'released' event, and
+     it must balance: SOKONI fee + shop net = rent released. Never blocks the completion; a failure queues for retry. */
+  let receipt = null;
+  if (plan.ok && plan.receipt) {
+    const TR = require('./transaction-receipts');
+    const rc = plan.receipt;
+    receipt = await TR.safely(_db(), 'rental_release', () => TR.recordEvent(_db(), TR.receiptIdFor('rental_booking', String(bookingId)),
+      { type: 'released', amountCents: rc.rentCents, platformFeeCents: rc.commissionCents, providerNetCents: rc.netCents, opKey: 'release_' + String(bookingId) }),
+      { kind: 'rental_booking', bookingId: String(bookingId), type: 'released' });
+  }
+  return { success: true, status: 'completed', settlement: plan.ok ? 'released' : plan.reason, receipt: receipt ? (receipt.ok ? 'recorded' : receipt.reason) : null };
 });
 
 /* Renter reports the return (active → return_pending). */

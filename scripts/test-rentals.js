@@ -36,6 +36,7 @@ const MUT = {
   complete_status_blind:  ["    if (b.status !== 'returned') throw new HttpsError('failed-precondition', 'A ' + b.status + ' booking cannot be completed.');", ""],
   settle_outside_txn:     ["    plan.apply(t);\n  });", "  });\n  plan.apply({ update: () => {}, set: () => {}, create: () => {} });"],
   settle_owner_from_caller: ["plan = await RS.settleRentalBooking(t, _db(), { bookingId: String(bookingId), booking: b, ownerUid,", "plan = await RS.settleRentalBooking(t, _db(), { bookingId: String(bookingId), booking: b, ownerUid: req.auth.uid,"],
+  receipt_on_refusal:     ["  if (plan.ok && plan.receipt) {\n    const TR", "  if (true) {\n    const TR"],
   complete_refund_due:    ["    if (b.paymentStatus === 'refund_due') throw new HttpsError('failed-precondition', RENTAL_REFUND_DUE_MSG);\n    /* phase 2", "    /* phase 2"],
   paid_cancel_flip:       ["    if (b.status === 'paid_held') throw new HttpsError(", "    if (false) throw new HttpsError("],
   start_before_paid:      ["_rentalTransition(req, { from: ['paid_held'], to: 'active',", "_rentalTransition(req, { from: ['accepted', 'paid_held'], to: 'active',"],
@@ -51,10 +52,14 @@ if (M) { const m = MUT[M]; if (!m || src.split(m[0]).length !== 2) { console.err
 const tmp = path.join(os.tmpdir(), 'mx-under-test-' + process.pid + '.js'); fs.writeFileSync(tmp, src);
 const PIN = { calls: [], verify: async (a) => { PIN.calls.push(a); return a.pin === '4321' ? { ok: true } : { ok: false, reason: a.pin ? 'That PIN does not match this booking.' : 'Ask the renter for their rental PIN.' }; } };
 const BW_STUB = { _bw: true }, SD_STUB = { _sd: true };
+const TR = { events: [], committedAtCall: [],
+  receiptIdFor: (k, id) => k + '_' + id,
+  safely: async (db, label, fn) => fn(),
+  recordEvent: async (db, id, e) => { TR.events.push({ id, e }); TR.committedAtCall.push(store.has('zzSettleApplied/' + id.replace(/^rental_booking_/, ''))); return { ok: true }; } };
 const RS = { quotes: [], settles: [], next: { ok: true },
   quoteRentalSettlement: async (db, a) => { RS.quotes.push(a); return { ok: true, q: 1 }; },
   settleRentalBooking: async (txn, db, a) => { RS.settles.push(a); const n = RS.next;
-    return Object.assign({}, n, { apply: (tx) => tx.set(db.collection('zzSettleApplied').doc(a.bookingId), { ok: !!n.ok, reason: n.reason || null }) }); } };
+    return Object.assign({ receipt: n.ok ? { rentCents: 450000, commissionCents: 45000, netCents: 405000 } : undefined }, n, { apply: (tx) => tx.set(db.collection('zzSettleApplied').doc(a.bookingId), { ok: !!n.ok, reason: n.reason || null }) }); } };
 const _load = Module._load;
 Module._load = function (req) {
   if (req === 'firebase-functions/v2/https') return { onCall: (o, f) => f, onRequest: (o, f) => f, HttpsError };
@@ -62,6 +67,7 @@ Module._load = function (req) {
   if (req === 'firebase-admin') return { firestore: firestoreFn };
   if (req === './booking-pin-core') return PIN;
   if (req === './rental-settlement') return RS;
+  if (req === './transaction-receipts') return TR;
   if (req === './business-wallet') return BW_STUB;
   if (req === './settlement-destination') return SD_STUB;
   return _load.apply(this, arguments);
@@ -206,6 +212,13 @@ const day = (n) => new Date(Date.now() + n * 86400000).toISOString();
   RS.next = { ok: true };
   r = await call('rentalComplete', 'ownerU', { bookingId: 'sR', shopId: 'ownerU' });
   ck('S6 completing again is a no-op (no second settlement call)', r.ok && r.r.unchanged === true && RS.settles.filter((s) => s.bookingId === 'sR').length === 1, r);
+
+  /* R — receipts (sokoni-2f transaction-receipts) */
+  const ev1 = TR.events.find((x) => x.id === 'rental_booking_' + b1);
+  ck('R1 a released settlement records ONE "released" event on receipt rental_booking_<id>, balanced (fee + net = rent)', ev1 && ev1.e.type === 'released' && ev1.e.amountCents === 450000 && ev1.e.platformFeeCents + ev1.e.providerNetCents === ev1.e.amountCents && ev1.e.opKey === 'release_' + b1, ev1);
+  ck('R2 the receipt is written AFTER the completion transaction committed', TR.committedAtCall[TR.events.indexOf(ev1)] === true, TR.committedAtCall);
+  ck('R3 a REFUSED settlement records NO receipt event', !TR.events.some((x) => x.id === 'rental_booking_sR'), TR.events.map((x) => x.id));
+  ck('R4 an UNPAID completion records NO receipt event', !TR.events.some((x) => x.id === 'rental_booking_sU'), TR.events.map((x) => x.id));
 
   /* RD — refund_due (sokoni-5b webhook: paid after the rental stopped being payable) */
   mk('rdA', { status: 'active', paymentStatus: 'refund_due' });
