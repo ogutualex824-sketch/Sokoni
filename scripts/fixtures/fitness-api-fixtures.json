@@ -1,0 +1,873 @@
+{
+  "_meta": {
+    "generatedBy": "scripts/gen-fitness-api-fixtures.js",
+    "contract": "docs/FITNESS_MEMBERSHIP_API.md",
+    "note": "Generated from the real handlers against an in-memory Firestore. Do not edit by hand — regenerate. Errors: httpsErrorCode is the server HttpsError code; the web SDK surfaces it as clientErrorCode (\"functions/<code>\"), message as error.message and details as error.details. The QR token is signed with a TEST-ONLY key and is opaque.",
+    "fixedNow": "2026-03-20T07:30:00.000Z"
+  },
+  "fitnessCreateMembership": {
+    "request": {
+      "serviceId": "svc_gold3"
+    },
+    "created": {
+      "membershipId": "mem_new001",
+      "reused": false,
+      "priceCents": 600000,
+      "periodCount": 3,
+      "periodUnit": "month",
+      "title": "Gold 3-month",
+      "payBy": "2026-03-20T07:35:00.000Z"
+    },
+    "reused": {
+      "membershipId": "mem_new001",
+      "reused": true,
+      "priceCents": 600000,
+      "periodCount": 3,
+      "periodUnit": "month",
+      "title": "Gold 3-month",
+      "payBy": "2026-03-20T07:35:00.000Z"
+    },
+    "errors": {
+      "SALES_DISABLED": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "Memberships aren't on sale yet.",
+        "details": {
+          "reason": "SALES_DISABLED"
+        }
+      },
+      "unauthenticated": {
+        "httpsErrorCode": "unauthenticated",
+        "clientErrorCode": "functions/unauthenticated",
+        "message": "Sign in required.",
+        "details": null
+      },
+      "invalid_serviceId": {
+        "httpsErrorCode": "invalid-argument",
+        "clientErrorCode": "functions/invalid-argument",
+        "message": "serviceId is required.",
+        "details": null
+      },
+      "missing": {
+        "httpsErrorCode": "not-found",
+        "clientErrorCode": "functions/not-found",
+        "message": "Membership offer not found.",
+        "details": {
+          "reason": "missing"
+        }
+      },
+      "self_purchase": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "You cannot buy a membership at your own gym.",
+        "details": {
+          "reason": "self_purchase"
+        }
+      },
+      "provider_not_active": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "This gym isn’t currently selling memberships.",
+        "details": {
+          "reason": "provider_not_active"
+        }
+      },
+      "not_fitness": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "Memberships can only be bought from a fitness business.",
+        "details": {
+          "reason": "not_fitness"
+        }
+      },
+      "not_membership": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "This service is not a membership offer.",
+        "details": {
+          "reason": "not_membership"
+        }
+      },
+      "inactive": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "This membership offer is not available.",
+        "details": {
+          "reason": "inactive"
+        }
+      }
+    }
+  },
+  "fitnessMembershipQr": {
+    "request": {
+      "membershipId": "mem_000001"
+    },
+    "success": {
+      "token": "fm1.eyJtIjoibWVtXzAwMDAwMSIsImIiOiJtZW1iZXJfMSIsInAiOiJneW1fQSIsImlhdCI6MTc3Mzk5MTgwMDAwMCwiZXhwIjoxNzczOTkyMTAwMDAwfQ.c79de2de9aa616307e247982e3151ad3a56b5ba29db034796b9cb690576836ed",
+      "expiresAt": "2026-03-20T07:35:00.000Z",
+      "ttlSeconds": 300
+    },
+    "errors": {
+      "not_found": {
+        "httpsErrorCode": "not-found",
+        "clientErrorCode": "functions/not-found",
+        "message": "Membership not found.",
+        "details": {
+          "reason": "not_found"
+        }
+      },
+      "not_covered": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "This membership does not cover a session right now.",
+        "details": {
+          "reason": "not_covered"
+        }
+      },
+      "expired": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "This membership has expired.",
+        "details": {
+          "reason": "expired"
+        }
+      }
+    }
+  },
+  "fitnessCheckIn": {
+    "request": {
+      "token": "<from fitnessMembershipQr>",
+      "sessionRef": "<optional, [A-Za-z0-9_-]{1,64}>"
+    },
+    "success_first": {
+      "ok": true,
+      "correlationId": "cid-1",
+      "duplicate": false,
+      "membershipId": "mem_000001",
+      "attendanceId": "d_2026-03-20",
+      "status": "checked_in",
+      "firstCheckIn": true,
+      "attendedSessions": 1,
+      "sessionsIncluded": 12,
+      "checkedInAt": "2026-03-20T07:30:00.000Z",
+      "title": "Gold 3-month",
+      "member": {
+        "displayName": "Alex bM/b"
+      }
+    },
+    "duplicate": {
+      "ok": true,
+      "correlationId": "cid-1",
+      "duplicate": true,
+      "membershipId": "mem_000001",
+      "attendanceId": "d_2026-03-20",
+      "status": "checked_in",
+      "firstCheckIn": false,
+      "attendedSessions": 1,
+      "sessionsIncluded": 12,
+      "checkedInAt": "2026-03-20T07:30:00.000Z",
+      "title": "Gold 3-month",
+      "member": {
+        "displayName": "Alex bM/b"
+      }
+    },
+    "success_staff_named_session": {
+      "ok": true,
+      "correlationId": "cid-1",
+      "duplicate": false,
+      "membershipId": "mem_000001",
+      "attendanceId": "s_evening_hiit",
+      "status": "checked_in",
+      "firstCheckIn": false,
+      "attendedSessions": 2,
+      "sessionsIncluded": 12,
+      "checkedInAt": "2026-03-20T07:30:00.000Z",
+      "title": "Gold 3-month",
+      "member": {
+        "displayName": "Alex bM/b"
+      }
+    },
+    "success_unlimited": {
+      "ok": true,
+      "correlationId": "cid-1",
+      "duplicate": false,
+      "membershipId": "mem_000001",
+      "attendanceId": "d_2026-03-20",
+      "status": "checked_in",
+      "firstCheckIn": true,
+      "attendedSessions": 1,
+      "sessionsIncluded": null,
+      "checkedInAt": "2026-03-20T07:30:00.000Z",
+      "title": "Gold 3-month",
+      "member": {
+        "displayName": "Alex bM/b"
+      }
+    },
+    "errors": {
+      "unauthenticated": {
+        "httpsErrorCode": "unauthenticated",
+        "clientErrorCode": "functions/unauthenticated",
+        "message": "Sign in required.",
+        "details": null
+      },
+      "invalid_sessionRef": {
+        "httpsErrorCode": "invalid-argument",
+        "clientErrorCode": "functions/invalid-argument",
+        "message": "sessionRef is invalid.",
+        "details": null
+      },
+      "token_invalid": {
+        "httpsErrorCode": "invalid-argument",
+        "clientErrorCode": "functions/invalid-argument",
+        "message": "This QR code is not valid. Ask the member to refresh it in their app.",
+        "details": {
+          "reason": "token_invalid"
+        }
+      },
+      "token_expired": {
+        "httpsErrorCode": "deadline-exceeded",
+        "clientErrorCode": "functions/deadline-exceeded",
+        "message": "This QR code has expired. Ask the member to refresh it in their app.",
+        "details": {
+          "reason": "token_expired"
+        }
+      },
+      "not_found": {
+        "httpsErrorCode": "not-found",
+        "clientErrorCode": "functions/not-found",
+        "message": "Membership not found.",
+        "details": {
+          "reason": "not_found"
+        }
+      },
+      "no_permission": {
+        "httpsErrorCode": "permission-denied",
+        "clientErrorCode": "functions/permission-denied",
+        "message": "You don't have permission to record attendance for this gym.",
+        "details": {
+          "reason": "no_permission"
+        }
+      },
+      "other_gym": {
+        "httpsErrorCode": "permission-denied",
+        "clientErrorCode": "functions/permission-denied",
+        "message": "This membership is not for your gym.",
+        "details": {
+          "reason": "other_gym"
+        }
+      },
+      "self_scan": {
+        "httpsErrorCode": "permission-denied",
+        "clientErrorCode": "functions/permission-denied",
+        "message": "You cannot check yourself in.",
+        "details": {
+          "reason": "self_scan"
+        }
+      },
+      "wrong_member": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "This QR code does not belong to this membership holder.",
+        "details": {
+          "reason": "wrong_member"
+        }
+      },
+      "expired": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "This membership has expired.",
+        "details": {
+          "reason": "expired"
+        }
+      },
+      "cancelled": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "This membership has been cancelled.",
+        "details": {
+          "reason": "cancelled"
+        }
+      },
+      "suspended": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "This membership is suspended.",
+        "details": {
+          "reason": "suspended"
+        }
+      },
+      "not_covered": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "This membership does not cover a session right now.",
+        "details": {
+          "reason": "not_covered"
+        }
+      },
+      "entitlement_exhausted": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "All sessions on this membership have been used.",
+        "details": {
+          "reason": "entitlement_exhausted"
+        }
+      },
+      "business_link_missing": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "Staff attendance isn't set up for this gym yet. Ask the gym owner to scan.",
+        "details": {
+          "reason": "business_link_missing"
+        }
+      },
+      "not_approved": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "This gym isn't approved to record attendance right now.",
+        "details": {
+          "reason": "not_approved"
+        }
+      },
+      "module_unavailable": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "Memberships aren't enabled for this business.",
+        "details": {
+          "reason": "module_unavailable"
+        }
+      },
+      "unavailable": {
+        "httpsErrorCode": "unavailable",
+        "clientErrorCode": "functions/unavailable",
+        "message": "Attendance could not be recorded. Please try again.",
+        "details": {
+          "correlationId": "cid-1"
+        }
+      }
+    }
+  },
+  "fitnessCompleteSession": {
+    "request": {
+      "membershipId": "mem_000001",
+      "attendanceId": "d_2026-03-20"
+    },
+    "success": {
+      "ok": true,
+      "correlationId": "cid-1",
+      "attendanceId": "d_2026-03-20",
+      "duplicate": false,
+      "status": "completed"
+    },
+    "duplicate": {
+      "ok": true,
+      "correlationId": "cid-1",
+      "attendanceId": "d_2026-03-20",
+      "duplicate": true,
+      "status": "completed"
+    },
+    "errors": {
+      "invalid_ids": {
+        "httpsErrorCode": "invalid-argument",
+        "clientErrorCode": "functions/invalid-argument",
+        "message": "membershipId and attendanceId required.",
+        "details": null
+      },
+      "attendance_not_found": {
+        "httpsErrorCode": "not-found",
+        "clientErrorCode": "functions/not-found",
+        "message": "Attendance record not found.",
+        "details": null
+      },
+      "other_gym": {
+        "httpsErrorCode": "permission-denied",
+        "clientErrorCode": "functions/permission-denied",
+        "message": "This membership is not for your gym.",
+        "details": {
+          "reason": "other_gym"
+        }
+      },
+      "not_checked_in": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "This attendance record cannot be completed.",
+        "details": {
+          "reason": "not_checked_in"
+        }
+      }
+    }
+  },
+  "fitnessCorrectAttendance": {
+    "request": {
+      "reason": "Scanned the wrong member",
+      "membershipId": "mem_000001",
+      "attendanceId": "d_2026-03-20"
+    },
+    "success": {
+      "ok": true,
+      "correlationId": "cid-1",
+      "attendanceId": "d_2026-03-20",
+      "refundLockUnchanged": true,
+      "duplicate": false,
+      "status": "voided_by_admin"
+    },
+    "duplicate": {
+      "ok": true,
+      "correlationId": "cid-1",
+      "attendanceId": "d_2026-03-20",
+      "refundLockUnchanged": true,
+      "duplicate": true,
+      "status": "voided_by_admin"
+    },
+    "errors": {
+      "no_permission": {
+        "httpsErrorCode": "permission-denied",
+        "clientErrorCode": "functions/permission-denied",
+        "message": "You don't have permission to record attendance for this gym.",
+        "details": {
+          "reason": "no_permission"
+        }
+      },
+      "reason_required": {
+        "httpsErrorCode": "invalid-argument",
+        "clientErrorCode": "functions/invalid-argument",
+        "message": "A correction reason is required.",
+        "details": null
+      }
+    }
+  },
+  "fitnessGymMemberships": {
+    "request": {
+      "status": "<active|pending|expired|refund|all (default all)>",
+      "limit": "<1..50, default 20>",
+      "cursor": "<nextCursor | omitted>"
+    },
+    "success_all": {
+      "rows": [
+        {
+          "membershipId": "mem_000001",
+          "member": {
+            "displayName": "Alex bM/b"
+          },
+          "title": "Gold 3-month",
+          "periodCount": 3,
+          "periodUnit": "month",
+          "startAt": "2026-01-15T09:00:00.000Z",
+          "endsAt": "2026-04-15T09:00:00.000Z",
+          "sessionsIncluded": null,
+          "attendedSessions": 2,
+          "remaining": null,
+          "lastAttendedAt": "2026-03-19T05:10:00.000Z",
+          "status": "active",
+          "paymentStatus": "partially_released",
+          "refundState": null,
+          "refundEligible": false,
+          "releasedPeriods": 2,
+          "releasedCents": 400000
+        },
+        {
+          "membershipId": "mem_000002",
+          "member": {
+            "displayName": "Wanjiru K."
+          },
+          "title": "Gold 3-month",
+          "periodCount": 3,
+          "periodUnit": "month",
+          "startAt": "2026-01-15T09:00:00.000Z",
+          "endsAt": "2026-04-15T09:00:00.000Z",
+          "sessionsIncluded": null,
+          "attendedSessions": 0,
+          "remaining": null,
+          "lastAttendedAt": null,
+          "status": "active",
+          "paymentStatus": "paid_held",
+          "refundState": null,
+          "refundEligible": true,
+          "releasedPeriods": 0,
+          "releasedCents": 0
+        },
+        {
+          "membershipId": "mem_cap001",
+          "member": {
+            "displayName": "Alex bM/b"
+          },
+          "title": "Gold 3-month",
+          "periodCount": 3,
+          "periodUnit": "month",
+          "startAt": "2026-01-15T09:00:00.000Z",
+          "endsAt": "2026-04-15T09:00:00.000Z",
+          "sessionsIncluded": 12,
+          "attendedSessions": 3,
+          "remaining": 10,
+          "lastAttendedAt": "2026-03-18T05:00:00.000Z",
+          "status": "active",
+          "paymentStatus": "paid_held",
+          "refundState": null,
+          "refundEligible": false,
+          "releasedPeriods": 0,
+          "releasedCents": 0
+        },
+        {
+          "membershipId": "mem_pen001",
+          "member": {
+            "displayName": "Wanjiru K."
+          },
+          "title": "Gold 3-month",
+          "periodCount": 3,
+          "periodUnit": "month",
+          "startAt": null,
+          "endsAt": null,
+          "sessionsIncluded": null,
+          "attendedSessions": 0,
+          "remaining": null,
+          "lastAttendedAt": null,
+          "status": "pending_payment",
+          "paymentStatus": "pending",
+          "refundState": null,
+          "refundEligible": null,
+          "releasedPeriods": null,
+          "releasedCents": null
+        },
+        {
+          "membershipId": "mem_unk001",
+          "member": {
+            "displayName": "Alex bM/b"
+          },
+          "title": "Gold 3-month",
+          "periodCount": 3,
+          "periodUnit": "month",
+          "startAt": "2026-01-15T09:00:00.000Z",
+          "endsAt": "2026-04-15T09:00:00.000Z",
+          "sessionsIncluded": null,
+          "attendedSessions": null,
+          "remaining": null,
+          "lastAttendedAt": null,
+          "status": "active",
+          "paymentStatus": "paid_held",
+          "refundState": null,
+          "refundEligible": null,
+          "releasedPeriods": 0,
+          "releasedCents": 0
+        }
+      ],
+      "nextCursor": null
+    },
+    "success_page1_limit2": {
+      "rows": [
+        {
+          "membershipId": "mem_000001",
+          "member": {
+            "displayName": "Alex bM/b"
+          },
+          "title": "Gold 3-month",
+          "periodCount": 3,
+          "periodUnit": "month",
+          "startAt": "2026-01-15T09:00:00.000Z",
+          "endsAt": "2026-04-15T09:00:00.000Z",
+          "sessionsIncluded": null,
+          "attendedSessions": 2,
+          "remaining": null,
+          "lastAttendedAt": "2026-03-19T05:10:00.000Z",
+          "status": "active",
+          "paymentStatus": "partially_released",
+          "refundState": null,
+          "refundEligible": false,
+          "releasedPeriods": 2,
+          "releasedCents": 400000
+        },
+        {
+          "membershipId": "mem_000002",
+          "member": {
+            "displayName": "Wanjiru K."
+          },
+          "title": "Gold 3-month",
+          "periodCount": 3,
+          "periodUnit": "month",
+          "startAt": "2026-01-15T09:00:00.000Z",
+          "endsAt": "2026-04-15T09:00:00.000Z",
+          "sessionsIncluded": null,
+          "attendedSessions": 0,
+          "remaining": null,
+          "lastAttendedAt": null,
+          "status": "active",
+          "paymentStatus": "paid_held",
+          "refundState": null,
+          "refundEligible": true,
+          "releasedPeriods": 0,
+          "releasedCents": 0
+        }
+      ],
+      "nextCursor": "mem_000002"
+    },
+    "success_page2": {
+      "rows": [
+        {
+          "membershipId": "mem_cap001",
+          "member": {
+            "displayName": "Alex bM/b"
+          },
+          "title": "Gold 3-month",
+          "periodCount": 3,
+          "periodUnit": "month",
+          "startAt": "2026-01-15T09:00:00.000Z",
+          "endsAt": "2026-04-15T09:00:00.000Z",
+          "sessionsIncluded": 12,
+          "attendedSessions": 3,
+          "remaining": 10,
+          "lastAttendedAt": "2026-03-18T05:00:00.000Z",
+          "status": "active",
+          "paymentStatus": "paid_held",
+          "refundState": null,
+          "refundEligible": false,
+          "releasedPeriods": 0,
+          "releasedCents": 0
+        },
+        {
+          "membershipId": "mem_pen001",
+          "member": {
+            "displayName": "Wanjiru K."
+          },
+          "title": "Gold 3-month",
+          "periodCount": 3,
+          "periodUnit": "month",
+          "startAt": null,
+          "endsAt": null,
+          "sessionsIncluded": null,
+          "attendedSessions": 0,
+          "remaining": null,
+          "lastAttendedAt": null,
+          "status": "pending_payment",
+          "paymentStatus": "pending",
+          "refundState": null,
+          "refundEligible": null,
+          "releasedPeriods": null,
+          "releasedCents": null
+        }
+      ],
+      "nextCursor": "mem_pen001"
+    },
+    "success_tab_pending": {
+      "rows": [
+        {
+          "membershipId": "mem_pen001",
+          "member": {
+            "displayName": "Wanjiru K."
+          },
+          "title": "Gold 3-month",
+          "periodCount": 3,
+          "periodUnit": "month",
+          "startAt": null,
+          "endsAt": null,
+          "sessionsIncluded": null,
+          "attendedSessions": 0,
+          "remaining": null,
+          "lastAttendedAt": null,
+          "status": "pending_payment",
+          "paymentStatus": "pending",
+          "refundState": null,
+          "refundEligible": null,
+          "releasedPeriods": null,
+          "releasedCents": null
+        }
+      ],
+      "nextCursor": null
+    },
+    "errors": {
+      "invalid_status": {
+        "httpsErrorCode": "invalid-argument",
+        "clientErrorCode": "functions/invalid-argument",
+        "message": "Unknown status filter.",
+        "details": null
+      },
+      "invalid_limit": {
+        "httpsErrorCode": "invalid-argument",
+        "clientErrorCode": "functions/invalid-argument",
+        "message": "limit must be a positive integer.",
+        "details": null
+      },
+      "invalid_cursor": {
+        "httpsErrorCode": "invalid-argument",
+        "clientErrorCode": "functions/invalid-argument",
+        "message": "Invalid cursor.",
+        "details": null
+      },
+      "NO_PERMISSION": {
+        "httpsErrorCode": "permission-denied",
+        "clientErrorCode": "functions/permission-denied",
+        "message": "You don't have permission to view this gym's memberships.",
+        "details": {
+          "reason": "NO_PERMISSION"
+        }
+      }
+    }
+  },
+  "fitnessGymMembership": {
+    "request": {
+      "membershipId": "mem_000001"
+    },
+    "success": {
+      "membership": {
+        "membershipId": "mem_000001",
+        "member": {
+          "displayName": "Alex bM/b"
+        },
+        "title": "Gold 3-month",
+        "periodCount": 3,
+        "periodUnit": "month",
+        "startAt": "2026-01-15T09:00:00.000Z",
+        "endsAt": "2026-04-15T09:00:00.000Z",
+        "sessionsIncluded": null,
+        "attendedSessions": 2,
+        "remaining": null,
+        "lastAttendedAt": "2026-03-19T05:10:00.000Z",
+        "status": "active",
+        "paymentStatus": "partially_released",
+        "refundState": null,
+        "refundEligible": false,
+        "releasedPeriods": 2,
+        "releasedCents": 400000
+      },
+      "attendance": [
+        {
+          "attendanceId": "d_2026-03-19",
+          "checkedInAt": "2026-03-19T05:10:00.000Z",
+          "status": "completed",
+          "method": "qr",
+          "actorRole": "staff",
+          "sessionRef": null,
+          "completedAt": "2026-03-19T06:15:00.000Z"
+        },
+        {
+          "attendanceId": "s_morning_spin",
+          "checkedInAt": "2026-02-01T06:00:00.000Z",
+          "status": "voided_by_admin",
+          "method": "qr",
+          "actorRole": "owner",
+          "sessionRef": "morning_spin",
+          "completedAt": null
+        }
+      ],
+      "attendanceTruncated": false,
+      "settlement": {
+        "releases": [
+          {
+            "periodIndex": 1,
+            "grossCents": 200000,
+            "commissionCents": 10000,
+            "netCents": 190000,
+            "status": "settled",
+            "settledAt": "2026-02-15T03:00:00.000Z"
+          },
+          {
+            "periodIndex": 2,
+            "grossCents": 200000,
+            "commissionCents": 10000,
+            "netCents": 190000,
+            "status": "settled",
+            "settledAt": "2026-03-15T03:00:00.000Z"
+          }
+        ],
+        "releasedPeriods": 2,
+        "releasedCents": 400000,
+        "netSettledCents": 380000
+      }
+    },
+    "success_no_payouts": {
+      "membership": {
+        "membershipId": "mem_pen001",
+        "member": {
+          "displayName": "Wanjiru K."
+        },
+        "title": "Gold 3-month",
+        "periodCount": 3,
+        "periodUnit": "month",
+        "startAt": null,
+        "endsAt": null,
+        "sessionsIncluded": null,
+        "attendedSessions": 0,
+        "remaining": null,
+        "lastAttendedAt": null,
+        "status": "pending_payment",
+        "paymentStatus": "pending",
+        "refundState": null,
+        "refundEligible": null,
+        "releasedPeriods": null,
+        "releasedCents": null
+      },
+      "attendance": [],
+      "attendanceTruncated": false,
+      "settlement": {
+        "releases": [],
+        "releasedPeriods": null,
+        "releasedCents": null,
+        "netSettledCents": null
+      }
+    },
+    "errors": {
+      "not_found": {
+        "httpsErrorCode": "not-found",
+        "clientErrorCode": "functions/not-found",
+        "message": "Membership not found.",
+        "details": {
+          "reason": "not_found"
+        }
+      },
+      "invalid_id": {
+        "httpsErrorCode": "invalid-argument",
+        "clientErrorCode": "functions/invalid-argument",
+        "message": "membershipId required.",
+        "details": null
+      }
+    }
+  },
+  "fitnessScannerStatus": {
+    "owner": {
+      "canScan": true,
+      "role": "owner"
+    },
+    "staff": {
+      "canScan": true,
+      "role": "staff"
+    },
+    "NO_PERMISSION": {
+      "canScan": false,
+      "role": null,
+      "reason": "NO_PERMISSION"
+    },
+    "NO_PERMISSION_stranger": {
+      "canScan": false,
+      "role": null,
+      "reason": "NO_PERMISSION"
+    },
+    "unauthenticated": {
+      "httpsErrorCode": "unauthenticated",
+      "clientErrorCode": "functions/unauthenticated",
+      "message": "Sign in required.",
+      "details": null
+    },
+    "BUSINESS_LINK_MISSING": {
+      "canScan": false,
+      "role": null,
+      "reason": "BUSINESS_LINK_MISSING"
+    },
+    "NOT_APPROVED": {
+      "canScan": false,
+      "role": "owner",
+      "reason": "NOT_APPROVED"
+    },
+    "NOT_APPROVED_staff": {
+      "canScan": false,
+      "role": "staff",
+      "reason": "NOT_APPROVED"
+    },
+    "MODULE_NOT_AVAILABLE": {
+      "canScan": false,
+      "role": "owner",
+      "reason": "MODULE_NOT_AVAILABLE"
+    },
+    "MULTIPLE_GYMS": {
+      "canScan": false,
+      "role": null,
+      "reason": "MULTIPLE_GYMS"
+    }
+  }
+}

@@ -4,6 +4,7 @@
 **Owner rules:** 2026-10-03, "server-authoritative attendance ledger" and OWNER POLICY #2 (QR check-in).
 **Modules:** `functions/fitness-attendance.js` · `functions/fitness-gym-memberships.js` (§11) · `functions/fitness-membership-create.js` · `functions/shared/membership-offer.js` (§10) · `functions/workforce-identity.js` (`attendance` key, §6).
 **Tests:** `scripts/test-fitness-attendance.js` · `scripts/test-fitness-membership-create.js`.
+**API contract (exact response shapes):** [[FITNESS_MEMBERSHIP_API]] · fixtures `scripts/fixtures/fitness-api-fixtures.json`, generated from the real handlers by `scripts/gen-fitness-api-fixtures.js`.
 **Related:** [[COMMERCIAL_CONVERGENCE_2026-09-30]] §13 / §13.1 (membership money, sokoni-2f) · [[Payments]] · [[Events]] (credential signing) · [[Authentication]]
 
 ---
@@ -224,7 +225,7 @@ Otherwise it returns **`BUSINESS_LINK_MISSING`**.
 - `_ensureBusinessForOwner` and `tenant-identity` would then trust that doc.
 - Served rules (create false) are safe. The tree's rule must not ship as written.
 
-## 7. Security matrix (`scripts/test-fitness-attendance.js`: 46/0, controls 8/8)
+## 7. Security matrix (`scripts/test-fitness-attendance.js`: 47/0, controls 9/9)
 
 | Row | Case |
 |---|---|
@@ -259,6 +260,7 @@ Otherwise it returns **`BUSINESS_LINK_MISSING`**.
 | N1 | Member notified on EACH recorded check-in (the first says it is no longer refundable), never on a duplicate; dedupeKey per ledger row |
 | N2 | Notification failure never fails the check-in |
 | N3 | Check-in response: displayName (sanitised), title, checkedInAt, Unlimited; no member uid/phone/email |
+| A22 | Check-in response contract: success AND duplicate carry the exact same key set (membershipId, attendanceId, member.displayName, title, ISO checkedInAt, attendedSessions after, sessionsIncluded|null, duplicate, firstCheckIn) — [[FITNESS_MEMBERSHIP_API]] §3 |
 | G1 | List: the owner sees only its own gym; client providerId/businessId ignored |
 | G2 | Detail of another gym's membership → not_found; non-gym caller → permission-denied; anonymous refused |
 | G3 | limit capped at 50 (query ≤51); cursor paging newest-first without overlap; foreign cursor / limit 0 / unknown tab → invalid-argument |
@@ -280,6 +282,7 @@ Otherwise it returns **`BUSINESS_LINK_MISSING`**.
 | NC-f | Workforce permission check skipped | S2 |
 | NC-g | Client providerId accepted by fitnessGymMemberships | G1 |
 | NC-h | Duplicate-scan idempotency dropped | A10 (and N1) |
+| NC-i | membershipId dropped from the check-in response | A22 |
 
 The suite loads the REAL `workforce-identity.js`. Its `admin.firestore()` is bound to the fake db, so `_assertBusinessPermission` itself decides every staff row.
 
@@ -384,6 +387,7 @@ These fields are added to the EXISTING record. Nothing else changes.
 
 **Server order of checks:**
 1. auth
+   - then **the sales flag** (owner 2026-10-03): `featureFlags/fitness_membership_sales.enabled === true`, read server-side; anything else, or a read error → `failed-precondition` `SALES_DISABLED` "Memberships aren't on sale yet." Details and the AdminOS writer: [[FITNESS_MEMBERSHIP_API]] §1.
 2. `providerServices/{serviceId}` is read server-side, then `validateMembershipOffer`
 3. buyer ≠ provider (`self_purchase`)
 4. `providers/{providerId}` passes these checks:
@@ -472,7 +476,7 @@ if (require('./shared/membership-offer').isMembershipOffer(svc)) throw new Https
   - the toggle re-activation cap.
   - Neither affects the hook, but 5b ports the hook onto the live text.
 
-### 10.7 Tests: `scripts/test-fitness-membership-create.js` (17/0, negative controls 6/6)
+### 10.7 Tests: `scripts/test-fitness-membership-create.js` (18/0, negative controls 8/8)
 
 | Row | What it covers |
 |---|---|
@@ -493,6 +497,7 @@ if (require('./shared/membership-offer').isMembershipOffer(svc)) throw new Https
 | C15 | payBy is set server-side (creation + 5 min); a client payBy is ignored; 2f's purpose refuses a new intent after it |
 | C16 | reused 1 ms before payBy; a new one AT payBy (inside 30 min); a record without payBy is never reused |
 | C17 | PAY_BY_MS equals booking-service `HOLD_MS` (drift fails) |
+| C18 | Sales flag: `featureFlags/fitness_membership_sales` missing / no field / false / `'true'` / 1 / read error → `SALES_DISABLED`, nothing written; `enabled === true` → created; `salesEnabled(db)` agrees with an explicit db |
 
 **Negative controls.** Each one fails its named row:
 
@@ -504,9 +509,11 @@ if (require('./shared/membership-offer').isMembershipOffer(svc)) throw new Https
 | NC-d | pricer re-reads the offer at pay time | C12 |
 | NC-e | reuse ignores payBy | C16 |
 | NC-f | payBy not written | C15 |
+| NC-g | sales-flag check removed | C18 |
+| NC-h | sales flag compared truthy (`'true'` / 1 accepted) | C18 |
 
 **Regression (after merging 2f df88d4b):**
-- test-fitness-attendance 46/0 (8/8)
+- test-fitness-attendance 47/0 (9/9)
 - test-membership-settlement 53/0
 - test-membership-offer-module 6/0
 - C12/C13 run on the real clock, because the purpose's payBy check reads `Date.now()`.
@@ -644,3 +651,5 @@ Do not add it to any `ROLE_PERMISSIONS` entry there. `owner` is `Object.values(P
 ### 13.5 2f
 
 Notifications (§12).
+
+**Sales flag, defence in depth (2026-10-03):** `payment-purposes.fitness_membership` should ALSO refuse a new intent while `featureFlags/fitness_membership_sales` is not `enabled === true`, by calling e3's exported `salesEnabled(db())`. The exact insertion text is in [[FITNESS_MEMBERSHIP_API]] §1 "Hand-off to sokoni-2f". It is NOT applied here, because that file belongs to 2f.

@@ -89,7 +89,8 @@ function rowOf(id, m, displayName) {
     status: typeof m.status === 'string' ? m.status : null,
     paymentStatus: typeof m.paymentStatus === 'string' ? m.paymentStatus : null,
     refundState: (m.refund && typeof m.refund.state === 'string') ? m.refund.state : null,
-    refundEligible: m.refundEligible === false ? false : (attended === 0 ? true : null),
+    /* false once used (never back); true only for a PAID membership with an empty ledger; unpaid / unknown → null (nothing to refund yet) */
+    refundEligible: m.refundEligible === false ? false : (PAID.includes(m.paymentStatus) && attended === 0 ? true : null),
     releasedPeriods: _int(m.releasedPeriods),
     releasedCents: _int(m.releasedCents),
   };

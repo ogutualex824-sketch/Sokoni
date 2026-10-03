@@ -16,6 +16,11 @@
      NC-f  workforce permission check skipped                               → S2 staff WITHOUT 'attendance' refused
      NC-g  client providerId accepted by fitnessGymMemberships              → G1 owner sees own gym only
      NC-h  duplicate-scan idempotency dropped                               → A10 duplicate scan is idempotent
+   RESPONSE CONTRACT (docs/FITNESS_MEMBERSHIP_API.md):
+     NC-i  membershipId dropped from the check-in response                  → A22 check-in response contract
+
+   Also a MODULE: required (not run) by scripts/gen-fitness-api-fixtures.js, which drives the REAL handlers through this
+   suite's fake db + fixtures to write scripts/fixtures/fitness-api-fixtures.json.
 
    workforce-identity.js is the REAL module (its firebase-admin firestore() is bound to the current fake db), so
    _assertBusinessPermission itself decides every staff row.
@@ -522,6 +527,21 @@ async function matrix (FA) {
       r.ok && r.r.member && r.r.member.displayName === 'Alex bM/b' && r.r.title === 'Gold 3-month' && r.r.checkedInAt === NOW.toISOString() && r.r.sessionsIncluded === null
       && !/member_1|254700|example\.com/.test(JSON.stringify(r.r)), r.r || r.reason); }
 
+  /* A22 — response contract: success AND duplicate carry the same key set, all server-derived */
+  { const h = harness(FA, seedBase({ sessionsIncluded: 12 }));
+    const tok = await qr(FA, 'member_1');
+    const a = await scan(FA, 'gym_A', tok);
+    const b = await scan(FA, 'gym_A', tok);
+    const KEYS = 'attendanceId,attendedSessions,checkedInAt,correlationId,duplicate,firstCheckIn,member,membershipId,ok,sessionsIncluded,status,title';
+    const shape = (x) => x && x.membershipId === MID && typeof x.attendanceId === 'string' && x.member && typeof x.member.displayName === 'string'
+      && typeof x.title === 'string' && typeof x.checkedInAt === 'string' && !isNaN(Date.parse(x.checkedInAt)) && new Date(x.checkedInAt).toISOString() === x.checkedInAt
+      && Number.isInteger(x.attendedSessions) && (x.sessionsIncluded === null || Number.isInteger(x.sessionsIncluded))
+      && typeof x.duplicate === 'boolean' && typeof x.firstCheckIn === 'boolean' && Object.keys(x).sort().join() === KEYS;
+    ck('A22 check-in response contract: success AND duplicate both carry membershipId, attendanceId, member.displayName, title, checkedInAt (ISO), attendedSessions (after), sessionsIncluded|null, duplicate, firstCheckIn — exact key set',
+      a.ok && b.ok && shape(a.r) && shape(b.r) && a.r.duplicate === false && a.r.firstCheckIn === true && a.r.attendedSessions === 1 && a.r.sessionsIncluded === 12
+      && b.r.duplicate === true && b.r.firstCheckIn === false && b.r.attendedSessions === 1 && b.r.attendanceId === a.r.attendanceId,
+      { a: a.r || a.reason, b: b.r || b.reason }); }
+
   /* ── gym reads (fitnessGymMemberships / fitnessGymMembership / fitnessScannerStatus) ── */
   const FG = loadFG(FA, FG_SRC_UNDER_TEST, FA.__tag);
   const L = (uid, data) => attempt(() => FG._h.gymMembershipsHandler(req(uid, data || {})));
@@ -572,7 +592,7 @@ async function matrix (FA) {
     const cap = by.mem_cap001 || {}; const unl = by[MID] || {}; const unk = by.mem_unk001 || {}; const pen = by.mem_pen001 || {};
     ck('G4 remaining = sessionsIncluded − (attended − voided) when capped (12−(3−1)=10); uncapped → null ("Unlimited"); unknown attendance → null, never 0; pending → no start/end, refund not decided',
       r.ok && cap.remaining === 10 && cap.sessionsIncluded === 12 && cap.attendedSessions === 3 && unl.remaining === null && unl.sessionsIncluded === null && unl.attendedSessions === 0
-      && unk.attendedSessions === null && unk.remaining === null && unk.refundEligible === null && pen.startAt === null && pen.endsAt === null && pen.attendedSessions === 0
+      && unk.attendedSessions === null && unk.remaining === null && unk.refundEligible === null && pen.startAt === null && pen.endsAt === null && pen.attendedSessions === 0 && pen.refundEligible === null && unl.refundEligible === true
       && typeof unl.endsAt === 'string' && unl.startAt === START, { cap, unl, unk, pen }); }
   { const h = harness(FA, gymSeed());
     const r = await L('gym_A');
@@ -639,7 +659,13 @@ const MUTANTS = [
     from: 'const providerId = scope.providerId;', to: 'const providerId = String(d.providerId || scope.providerId);' },
   { tag: 'h', row: 'A10 duplicate scan is idempotent: returns the existing result, attendedSessions unchanged, ledger and membership byte-identical', what: 'duplicate-scan idempotency dropped',
     from: 'if (as.exists) {', to: 'if (false && as.exists) {' },
+  { tag: 'i', row: 'A22 check-in response contract: success AND duplicate both carry membershipId, attendanceId, member.displayName, title, checkedInAt (ISO), attendedSessions (after), sessionsIncluded|null, duplicate, firstCheckIn — exact key set', what: 'membershipId dropped from the check-in response',
+    from: "out = { duplicate: false, membershipId, attendanceId: attId,", to: "out = { duplicate: false, attendanceId: attId," },
 ];
+
+/* Module use (scripts/gen-fitness-api-fixtures.js): the suite's fake db, fixtures and loaders — nothing runs. */
+module.exports = { fakeDb, harness, seedBase, seedLinked, mem, req, attempt, qr, scan, loadModule, loadFG, SRC, FG_SRC, NOW, START, MID, MID2, LINKED };
+if (require.main === module)
 
 (async () => {
   let fails = 0;

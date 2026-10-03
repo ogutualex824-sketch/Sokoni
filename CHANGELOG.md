@@ -1,3 +1,53 @@
+## 2026-10-03 — Fitness memberships: server-side sales flag + API response contract and generated fixtures (NOT deployed)
+
+**Summary**
+- **Sales flag (server-side).** `fitnessCreateMembership` now refuses with `failed-precondition` `{ reason: 'SALES_DISABLED' }` "Memberships aren't on sale yet." unless `featureFlags/fitness_membership_sales.enabled === true`.
+  - The flag is read server-side through the injectable db.
+  - A missing doc, a missing field, `false`, the string `'true'`, `1` or any non-true value refuses.
+  - A read error refuses too (fail closed).
+  - `salesEnabled(db?)` is exported so sokoni-2f's `payment-purposes.fitness_membership` can call the SAME predicate (hand-off text, not applied).
+  - Writer verified on this tree: AdminOS `adminOsDispatch` op `adminUpdateFeatureFlag` (superAdmin); rules `featureFlags` read true / write isAdmin.
+  - Operator caveat: that callable defaults `enabled` to TRUE when it is omitted.
+- **Check-in response contract.** Success AND duplicate now carry the same key set. `membershipId` was added. `sessionsIncluded` is a positive integer or null, using the same rule as the gym row.
+- **Gym row fix.** `refundEligible` is now `null` (not `true`) for an UNPAID membership, because there is nothing to refund.
+- **Contract doc + fixtures.** `docs/FITNESS_MEMBERSHIP_API.md` lists the exact shapes, null semantics and every refusal reason + code. `scripts/fixtures/fitness-api-fixtures.json` is generated from the real handlers by `scripts/gen-fitness-api-fixtures.js` (`--check` detects drift).
+
+**Files affected**
+- functions/fitness-membership-create.js
+- functions/fitness-attendance.js
+- functions/fitness-gym-memberships.js
+- scripts/test-fitness-membership-create.js (C18, NC-g, NC-h; seed carries the flag)
+- scripts/test-fitness-attendance.js (A22, NC-i, G4 assertion; also loadable as a module, run guarded by `require.main`)
+- scripts/gen-fitness-api-fixtures.js (new)
+- scripts/fixtures/fitness-api-fixtures.json (new, generated)
+- docs/FITNESS_MEMBERSHIP_API.md (new)
+- docs/FITNESS_MEMBERSHIP_ATTENDANCE.md
+
+**Database**
+- Reads `featureFlags/fitness_membership_sales` (an existing collection; no new rule).
+- No new writes.
+
+**API**
+- `fitnessCreateMembership` has a new refusal: `SALES_DISABLED`.
+- The `fitnessCheckIn` response gains `membershipId` (additive).
+- In `fitnessGymMemberships` / `fitnessGymMembership`, a row's `refundEligible` is `null` for an unpaid membership.
+
+**Security**
+- Sales are gated server-side and fail closed. The UI hiding the buy button is not the gate.
+
+**Breaking changes**
+- None for deployed code: nothing here is deployed.
+- **Deploy ordering:** turning the flag ON is required before memberships can be sold once this ships. Until the doc exists, every purchase refuses.
+
+**Tests**
+- test-fitness-membership-create 18/0 (negative controls 8/8)
+- test-fitness-attendance 47/0 (9/9)
+- test-membership-offer-module 6/0
+- test-membership-settlement (2f, via stub-admin-run) 53/0
+- `gen-fitness-api-fixtures --check` OK
+
+Emulator: QUEUED (memory floor).
+
 ## 2026-10-03 — Fitness memberships FINAL RELEASE, functions lane: staff scanning, gym read callables, check-in notifications, payBy (NOT deployed)
 
 **Summary**

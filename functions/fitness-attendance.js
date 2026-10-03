@@ -360,6 +360,10 @@ async function membershipQrHandler(req) {
   return { token: t.token, expiresAt: new Date(t.exp).toISOString(), ttlSeconds: TOKEN_TTL_MS / 1000 };
 }
 
+/* The session cap as the API reports it: a positive integer, else null ("Unlimited") — same rule as checkInRefusal
+   and fitness-gym-memberships.rowOf. Response contract: docs/FITNESS_MEMBERSHIP_API.md. */
+const _cap = (m) => (Number.isInteger(m.sessionsIncluded) && m.sessionsIncluded > 0 ? m.sessionsIncluded : null);
+
 async function checkInHandler(req) {
   const uid = req.auth && req.auth.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -395,8 +399,8 @@ async function checkInHandler(req) {
       if (as.exists) {                                         /* duplicate scan → the existing result, unchanged */
         const a = as.data();
         const at = _date(a.checkedInAt);
-        out = { duplicate: true, attendanceId: attId, status: a.status, firstCheckIn: false,
-                attendedSessions: Number(m.attendedSessions) || 0, sessionsIncluded: Number(m.sessionsIncluded) || null,
+        out = { duplicate: true, membershipId, attendanceId: attId, status: a.status, firstCheckIn: false,
+                attendedSessions: Number(m.attendedSessions) || 0, sessionsIncluded: _cap(m),
                 checkedInAt: at ? at.toISOString() : null, title: m.title || null };
         return;
       }
@@ -412,8 +416,8 @@ async function checkInHandler(req) {
       if (first) { patch.firstAttendedAt = _ts(); patch.refundEligible = false; }
       else if (m.refundEligible !== false) patch.refundEligible = false;   /* heal toward "used"; never back */
       t.update(ref, patch);
-      out = { duplicate: false, attendanceId: attId, status: 'checked_in', firstCheckIn: first,
-              attendedSessions: prior + 1, sessionsIncluded: Number(m.sessionsIncluded) || null,
+      out = { duplicate: false, membershipId, attendanceId: attId, status: 'checked_in', firstCheckIn: first,
+              attendedSessions: prior + 1, sessionsIncluded: _cap(m),
               checkedInAt: now.toISOString(), title: m.title || null };
     });
     await _audit({ action: out.duplicate ? 'fitness_checkin_duplicate' : 'fitness_checkin', outcome: 'ok', membershipId, providerId,
