@@ -619,9 +619,12 @@ service cloud.firestore {
   .hasOnly(['status','riderName','riderPhone','riderRating','updatedAt','statusHistory']));
   allow delete: if isAdmin();
   }
+  /* SECURITY CONVERGENCE (sokoni-5b, 2026-10-03): foodMenus is CLOSED. It was owner-writable with public read and has
+     NO reader anywhere (census: functions, hosting, AdminOS). Its only writer, food-dashboard.html's _updateFoodMenuFS,
+     is removed by the Food containment (2e5e33b), which ships before this ruleset. Food menus are canonical products
+     written by the foodMenu callable (Food Gate 2). Server (Admin SDK) access is unaffected. */
   match /foodMenus/{restaurantId} {
-  allow read:   if true;
-  allow write:  if isAdmin() || (isAuthed() && request.auth.uid == restaurantId);
+  allow read, write: if false;
   }
   match /legalBookings/{bookingId} {
   allow read:   if isAdmin()

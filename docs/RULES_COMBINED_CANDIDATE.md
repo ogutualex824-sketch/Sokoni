@@ -60,6 +60,9 @@ inside blocks those suites do not exercise). **Rollback for this release = f259c
 2. **Compiled size:** NOT measured. `scripts/measure-rules-compiled-delta.js` creates `sizeprobe-*` rulesets/releases in
    the production project (guarded, self-cleaning) — needs explicit owner authorization.
 3. Re-fetch the live release immediately before; it must still be `b87c94e4` or the candidate is re-based.
+3b. **foodMenus closed (sokoni-5b security convergence):** `allow read, write: if false`. Ship only AFTER the Food
+   containment hosting (`2e5e33b`, removes food-dashboard.html's only writer) is live. Suite
+   `scripts/zz-test-food-menus-rules.js` FM-1..FM-8 + control — **EMULATOR PENDING**.
 4. Release only `firestore:rules` (and verify `releases/cloud.firestore` → the new ruleset id afterwards — a scoped
    `--only firestore:rules` deploy can fail open), then run live probes (forged-badge create denied, anonymous job
    create denied, an applicant's own pending application still writable).

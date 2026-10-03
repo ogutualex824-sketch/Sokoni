@@ -579,8 +579,7 @@ service cloud.firestore {
   allow delete: if isAdmin();
   }
   match /foodMenus/{restaurantId} {
-  allow read:   if true;
-  allow write:  if isAdmin() || (isAuthed() && request.auth.uid == restaurantId);
+  allow read, write: if false;
   }
   match /legalBookings/{bookingId} {
   allow read:   if isAdmin()
