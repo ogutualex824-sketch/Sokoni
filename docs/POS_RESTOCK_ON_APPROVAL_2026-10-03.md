@@ -79,3 +79,13 @@ Related: [[POS_TILL_CONVERGENCE_2026-10-03]] · [[Orders]] · [[SmartPOS]]
 - **Scope:** functions `posProcessRefund`, `posVoidSale` (new), and `createApprovalRequest`/the approval module (shared file).
 - **Order:** deploy only with or after the gated checkout line (`d4a167c`). The till hosting change must ship **with or after** these functions; otherwise the till calls a function that does not exist yet, and its refund/void would refuse safely ("Nothing was changed").
 - **Rules:** sokoni-5b writes the stock phase-2 rules hunk (browser stock writes refused) on f3's combined rules line once this is routed.
+
+## Addendum — B2B lead invoice as a second gate reason (owner 2026-10-03)
+
+- **Owner rule:** an issued B2B lead invoice unpaid for more than 2 days closes the supplier's till. It is a **second reason inside the one gate**, never a second lock. 2f owns the producer (`b2b-leads.leadInvoiceGate`, commercial-fn `539795c`) and this consumer.
+- **The change:** `pos-commission-rail.evaluateMerchantGate` now returns `leadInvoice` with state `overdue | clear | unreadable | not_assembled`, for its own UI card, plus `closedBy`. `assertGateOpen` throws `POS_GATE_LEAD_INVOICE` when that reason closes the till.
+- **Enforcement:** `LEAD_INVOICE_GATE_ENFORCED = false`, so it is display only until a certified lead-invoice Pay Now exists (the P0 principle). Once switched on in that unit, an unreadable lead state closes the gate (fail closed).
+- **No new switch:** the sale rails still go through `enforceSaleGate` only.
+- **Assembly:** on this line `b2b-leads.js` is absent until assembly, so the reason reports `not_assembled`. f3's assembly check (`check-b2b-functions-assembly.js`) fails closed if the module is missing from the release tree.
+- **Tests:** `scripts/test-pos-lead-invoice-gate-reason.js` 8/0. Commission-rail 46/0, gate-behavioural 56/0 and gate-enforcement 42/0 are unchanged. The emulator suites are blocked (RAM).
+- **Not built yet:** the UI card itself (merchant settle screen), which comes with the Pay Now hosting.

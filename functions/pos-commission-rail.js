@@ -327,14 +327,35 @@ async function readOutstanding(db, merchantUid) {
  * This is what a POS surface must ask before it opens a new sales day, and what the settle
  * screen reads. It never writes.
  */
+/* SECOND REASON, SAME LOCK (owner 2026-10-03): a B2B lead invoice unpaid for more than 2 days closes the same till.
+   Producer: b2b-leads.leadInvoiceGate (keyed on the same uid = billToUid). It is NOT a second lock — it is one more
+   reason inside this one gate, with its own `leadInvoice` block so the screen shows its own card.
+   Enforcement waits for a certified lead-invoice Pay Now (the P0 principle): until LEAD_INVOICE_GATE_ENFORCED is
+   switched on in that certified unit, it is evaluated and displayed only. Once enforced, an UNREADABLE lead state
+   closes the gate (fail closed) exactly as an unreadable commission ledger does. */
+const LEAD_INVOICE_GATE_ENFORCED = false;
+async function _leadInvoiceReason(db, merchantUid, nowMs) {
+  let BL;
+  try { BL = require('./b2b-leads'); } catch (_) { return { available: false, state: 'not_assembled' }; }
+  try {
+    const g = await BL.leadInvoiceGate(db, merchantUid, nowMs);
+    return Object.assign({ available: true, state: g.overdue ? 'overdue' : 'clear' }, g, { enforce: LEAD_INVOICE_GATE_ENFORCED });
+  } catch (_) { return { available: false, state: 'unreadable' }; }
+}
+
 async function evaluateMerchantGate(db, merchantUid, nowMs) {
   const rows = await readOutstanding(db, merchantUid);
   const summary = P.summariseLiability(rows);
   const gate = S.evaluateGate({ nowMs, unpaid: summary.unpaid });
+  const leadInvoice = await _leadInvoiceReason(db, merchantUid, nowMs);
+  const leadCloses = LEAD_INVOICE_GATE_ENFORCED && (leadInvoice.available ? leadInvoice.overdue === true : leadInvoice.state === 'unreadable');
   return {
     merchantUid: String(merchantUid),
     /* `closed` is the answer to "may I trade?" — false means go. */
-    closed: gate.closed,
+    closed: gate.closed || leadCloses,
+    closedBy: gate.closed ? 'pos_commission' : (leadCloses ? 'lead_invoice' : null),
+    /* Its own card: state 'overdue' | 'clear' | 'unreadable' | 'not_assembled'; enforce false = shown, not blocking. */
+    leadInvoice,
     today: gate.today,
     overdue: gate.overdue,
     overdueDays: gate.overdueDays,
@@ -358,6 +379,11 @@ async function evaluateMerchantGate(db, merchantUid, nowMs) {
  */
 async function assertGateOpen(db, merchantUid, nowMs) {
   const gate = await evaluateMerchantGate(db, merchantUid, nowMs);
+  if (gate.closed && gate.closedBy === 'lead_invoice') {
+    throw new RailError('POS_GATE_LEAD_INVOICE',
+      'Your SOKONI lead invoice is more than 2 days overdue. Pay it to keep trading.',
+      { overdueKES: gate.leadInvoice.overdueKES || null, invoiceKeys: gate.leadInvoice.invoiceKeys || [], since: gate.leadInvoice.since || null });
+  }
   if (gate.closed) {
     throw new RailError('POS_GATE_CLOSED',
       gate.reason || 'Unpaid POS commission must be settled before trading continues.',
@@ -599,6 +625,7 @@ module.exports = {
   evaluateMerchantGate,
   assertGateOpen,
   GATE_ENFORCED,
+  LEAD_INVOICE_GATE_ENFORCED,
   enforceSaleGate,
   applySettlement,
   settleFromBusinessWallet,

@@ -1,3 +1,8 @@
+## 2026-10-03 — POS gate: B2B lead invoice as a second reason (display only, enforce off) (NOT deployed)
+
+- **Gate:** pos-commission-rail.evaluateMerchantGate returns leadInvoice + closedBy; assertGateOpen throws POS_GATE_LEAD_INVOICE when enforced.
+- **Test:** test-pos-lead-invoice-gate-reason 8/0.
+
 ## 2026-10-03 — POS restock on approval: refunds/voids restore stock on the server, exactly once, ledgered (NOT deployed)
 
 - **Refund:** posProcessRefund re-reads the sale in its transaction (closes the different-key double restock), restores through the new pos-stock-restore.js (stockMovements row via create(); unmetered never given a count).
