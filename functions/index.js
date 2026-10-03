@@ -4680,7 +4680,8 @@ function _is48hCommission(hub) {
     /* POS / Till / Quick Charge now resolve to their own `pos` category (2026-09-28) so the till can never follow the
        marketplace rate; they keep the 48-hour per-sale term they have always had. */
     const _cat = require("./commission-config").categoryForHub(hub);
-    return _cat === "marketplace" || _cat === "pos";
+    /* electronics (owner 2026-10-03): a marketplace product sale with its own explicit row — same 48h per-sale term. */
+    return _cat === "marketplace" || _cat === "pos" || _cat === "electronics";
   } catch (_e) {
     /* Config unreadable — fall back to MONTHLY, the pre-existing behaviour.
        Failing closed here means "bill it the old way", never "start a 48-hour
@@ -4759,6 +4760,8 @@ exports.onSellerPaymentCreated = onDocumentCreated(
         reason:          audit.reason,
         calculatedAt:    audit.calculatedAt,
         engineVersion:   audit.engineVersion,
+        policyVersion:   audit.policyVersion || null,
+        resolvedCategory: audit.resolvedCategory || null,
 
         status: "pending",
         invoiceId: null,

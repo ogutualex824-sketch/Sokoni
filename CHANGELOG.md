@@ -1,3 +1,8 @@
+## 2026-10-03 — Electronics: explicit 15% commission row + policy version on every commission + electronics plans (Free 50, then retail ladder) (NOT deployed)
+
+- **Change:** commission-config electronics row + aliases + COMMISSION_POLICY_VERSION; finos-utils/index record policyVersion + resolvedCategory; sub-billing electronics_*.
+- **Tests:** test-electronics-commercial 6/0; commission sweep green; client snapshot rebuilt.
+
 ## 2026-10-03 — Platform-wide transaction receipts: module + read callable (hooks not wired; NOT deployed)
 
 - **New:** functions/transaction-receipts.js (transactionReceipts + immutable events; SKN-RCT numbering reused; taxTreatment recorded, never computed); myTransactionReceipts callable.

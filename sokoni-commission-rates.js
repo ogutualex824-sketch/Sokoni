@@ -91,6 +91,10 @@
       "pct": 5,
       "fixedKES": 0
     },
+    "electronics": {
+      "pct": 15,
+      "fixedKES": 0
+    },
     "education": {
       "pct": 5,
       "fixedKES": 0
@@ -159,6 +163,15 @@
     "car_hub": "vehicles",
     "entertainment": "events",
     "sports": "events",
+    "phones": "electronics",
+    "phone": "electronics",
+    "smartphones": "electronics",
+    "laptops": "electronics",
+    "laptop": "electronics",
+    "tablets": "electronics",
+    "tablet": "electronics",
+    "computers": "electronics",
+    "device_accessories": "electronics",
     "freelancer": "jobs",
     "freelance": "jobs",
     "gig": "jobs",

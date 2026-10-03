@@ -843,3 +843,29 @@ No duplicate authority was found on the money side.
 - **Scope:** exactly `providerServices/legal_consult_{uid}` with `createdBy 'legal-verification'`, in `provider-ops` add, duplicate and re-activation.
 - **Copies:** a duplicate of the card counts like any other service.
 - **Test:** `scripts/test-legal-auto-card-cap.js` 9/0.
+
+## 20 · Electronics (Digital / phones / laptops): explicit commission + plans (owner 2026-10-03)
+
+**Commission**
+- **Rate:** `RATES.electronics` is 15%, the marketplace rate, as an explicit row. `electronics`, `phones`, `phone`, `smartphones`, `laptops`, `laptop`, `tablets`, `tablet`, `computers` and `device_accessories` resolve to it. They used to match **no** row and fall silently to the 5% default.
+- **Accessories:** device accessories are electronics taxonomy, never fashion.
+- **Billing term:** electronics keeps the 48-hour per-sale commission term of marketplace product sales.
+
+**Every commission is now attributable:** `calculateCommission` records `policyVersion` (`commission-config.COMMISSION_POLICY_VERSION`) and `resolvedCategory`, and the commissionLedger writer copies both. Each row therefore answers "order → category → policy version → commission → seller net". Bump the version on any rate or alias change.
+
+**Plans** (`hubType 'electronics'`, owner: "50 listings for free pack then next 100 as the rest retail"):
+
+| Plan | Listings | Price |
+|---|---|---|
+| electronics_free | 50 | KES 0 |
+| electronics_basic | 100 | KES 999 (retail) |
+| electronics_pro | 500 | KES 2,499 (retail) |
+| electronics_enterprise | Unlimited | KES 7,499 (retail) |
+
+- Tools match the retail seller tiers.
+- Prices are editable through `adminSubUpdatePlan`.
+- Gate listings with `requireFeature(sub, {hubType:'electronics', feature:'listings_limit', needed})`.
+
+**Not in this lane:** the rest of the Digital brief (approval routing, canonical taxonomy, IMEI/serial, inventory units, checkout/order states, search, AdminOS) belongs to sokoni-e3.
+
+**Tests:** `scripts/test-electronics-commercial.js` 6/0 (real engine: a KES 100,000 phone is charged KES 15,000 with the policy version recorded). The commission sweep is green except for the pre-existing commercial-facts 3b.

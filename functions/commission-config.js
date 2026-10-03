@@ -97,6 +97,9 @@ const RATES = {
      Booking FEES, marketing and Marketplace equipment/clothing are separate products, not this row. */
   fitness:          { pct: 5,   fixedKES: 0,    _was: 'owner 2026-10-03: fitness bookings 5% per booking (was ALIASES.fitness -> services 5%, then the provider plan ladder 20–5%)' },
   /* Owner 2026-10-03 (via sokoni-5b): 5% per sale, paid by the teacher / institution, never added on top for the learner — the Home Services model. */
+  /* Owner 2026-10-03: phones / laptops / electronics sales carry an EXPLICIT 15% (the marketplace rate) — they used to
+     match no row and fall silently to the 5% default. Own row so reports, promotions and AdminOS can see electronics. */
+  electronics:      { pct: 15,  fixedKES: 0,    _was: 'no row — fell to the 5% default (phones / laptops / electronics labels)' },
   education:        { pct: 5,   fixedKES: 0,    _was: "15% 'category only' (never owner-set)" },
   /* Owner 2026-10-03 (via sokoni-f3): Jobs carries NO commission — applications are free; SOKONI earns only from employer
      products (subscriptions, paid/featured listings, promotion, enterprise). Freelance gigs are a job type on the one
@@ -165,6 +168,9 @@ const ALIASES = {
   bnb: 'hotel',
   car_dealer: 'vehicles', car_hub: 'vehicles',
   entertainment: 'events', sports: 'events',
+  /* Electronics retail (owner 2026-10-03). Device accessories are ELECTRONICS taxonomy, never fashion accessories. */
+  phones: 'electronics', phone: 'electronics', smartphones: 'electronics', laptops: 'electronics', laptop: 'electronics',
+  tablets: 'electronics', tablet: 'electronics', computers: 'electronics', device_accessories: 'electronics',
   freelancer: 'jobs', freelance: 'jobs', gig: 'jobs', gigs: 'jobs',   /* no bare 'job' alias: the work engine's 'job' is a service job, never this 0% lane */
   logistics: 'hub', delivery: 'hub', driver: 'hub',
   digital: 'digital_products', ai_services: 'digital_products',
@@ -173,6 +179,10 @@ const ALIASES = {
 /* Minimum commission on any non-zero-rated transaction, so a KES 20 sale does not cost more
  * to process than it earns. Was hardcoded as `const minKES = 10` inside index.js. */
 const MIN_COMMISSION_KES = 10;
+
+/* The commercial policy version a commission was priced under — recorded on every ledger row with the resolved category,
+   so "order → category → policy version → commission → seller net" is reproducible. Bump on ANY rate/alias change. */
+const COMMISSION_POLICY_VERSION = '2026-10-03.electronics';
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
    SUBSCRIPTION PLAN ADJUSTMENTS — CAPABILITY SHIPPED, POLICY OFF
@@ -789,6 +799,7 @@ module.exports = {
   PROVIDER_RETIRED_IDS,
   categoryForHub,
   MIN_COMMISSION_KES,
+  COMMISSION_POLICY_VERSION,
   PLAN_ADJUSTMENTS_DOC,
   applyPlanAdjustment,
   planRolloutEnabled,

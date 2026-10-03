@@ -47,6 +47,17 @@ const S = { TRIALING:'trialing', ACTIVE:'active', PAST_DUE:'past_due',
 ================================================================ */
 const PLANS = {
 
+  /* ── ELECTRONICS SELLERS (owner 2026-10-03): free pack 50 listings, then the RETAIL ladder (Basic 100 / Pro 500 /
+     Enterprise unlimited, same prices and tools as seller_*). Prices editable via AdminOS adminSubUpdatePlan. ── */
+  electronics_free:       { id:'electronics_free',       hubType:'electronics', tier:'free',       name:'Electronics Free',       price:{monthly:0,      annual:0       }, trial:{days:0},  grace:{days:0}, isActive:true,
+    features:{ listings_limit:50,  photos_per_listing:3,  featured_listings:0, analytics:false, bulk_import:false, priority_support:false, ai_assistant:false, team_members:1, storage_gb:1,  badge_verified:false }},
+  electronics_basic:      { id:'electronics_basic',      hubType:'electronics', tier:'basic',      name:'Electronics Basic',      price:{monthly:99900,  annual:999000  }, trial:{days:3},  grace:{days:3}, isActive:true,
+    features:{ listings_limit:100, photos_per_listing:6,  featured_listings:2, analytics:true,  bulk_import:false, priority_support:false, ai_assistant:false, team_members:2, storage_gb:5,  badge_verified:true  }},
+  electronics_pro:        { id:'electronics_pro',        hubType:'electronics', tier:'pro',        name:'Electronics Pro',        price:{monthly:249900, annual:2499000 }, trial:{days:3},  grace:{days:5}, isActive:true,
+    features:{ listings_limit:500, photos_per_listing:10, featured_listings:5, analytics:true,  bulk_import:true,  priority_support:true,  ai_assistant:true,  team_members:5, storage_gb:20, badge_verified:true, api_access:true }},
+  electronics_enterprise: { id:'electronics_enterprise', hubType:'electronics', tier:'enterprise', name:'Electronics Enterprise', price:{monthly:749900, annual:7499000 }, trial:{days:30}, grace:{days:7}, isActive:true,
+    features:{ listings_limit:-1,  photos_per_listing:20, featured_listings:-1,analytics:true,  bulk_import:true,  priority_support:true,  ai_assistant:true,  team_members:-1,storage_gb:100,badge_verified:true, api_access:true, custom_domain:true, dedicated_account_manager:true }},
+
   /* ── SELLERS ── */
   seller_free:       { id:'seller_free',       hubType:'seller',       tier:'free',       name:'Seller Free',       price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ listings_limit:10,   photos_per_listing:3,  featured_listings:0, analytics:false, bulk_import:false, priority_support:false, ai_assistant:false, team_members:1, storage_gb:1,  badge_verified:false }},

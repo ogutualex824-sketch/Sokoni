@@ -741,6 +741,9 @@ async function calculateCommission(db, opts) {
        changed, so the version does — a ledger row written at 2 was priced by a different
        algorithm and must stay explainable under the rules that produced it. */
     engineVersion: 3,
+    /* 2026-10-03: the commercial policy and the category it resolved to, so every row says WHICH rate table priced it. */
+    policyVersion: CC.COMMISSION_POLICY_VERSION || null,
+    resolvedCategory: base.category,
   };
 }
 
