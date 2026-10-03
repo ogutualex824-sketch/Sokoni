@@ -393,4 +393,6 @@
   }
 
   window.SokoniProductsConsole = { mount, _internal: { F, stockState, discountPct, marginPct, esc, TABS } };
+  /* the shared admin-console look (Products, Invoices …): one stylesheet, injected once */
+  window.SokoniConsoleStyles = { inject: injectCss, esc };
 })();

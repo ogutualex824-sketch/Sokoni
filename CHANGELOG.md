@@ -1,3 +1,13 @@
+## [2026-10-04] — One Invoices page for AdminOS and Super Admin (merchant invoices only)
+
+**Owner:** "same here" (the invoices design). **Scope decision (owner 2026-10-04):** merchant invoices only, the `invoices` store.
+**What:** `sokoni-invoices-console.js`, ONE component mounted by a new AdminOS **Invoices** section (finance group) and a new Super Admin **Invoices** section. It has status tabs with server counts; summary cards (total invoiced, marked paid in 30 days, open, overdue); an aging summary (current / 1–30 / 31–60 / 61–90 / 91+, plus undated); a table (number, customer, shop, status, due date with days overdue or left, total, balance due, payment method); a drawer (customer, dates, line items, subtotal / tax / total / marked paid / balance, payment, notes); search over the loaded rows; cursor "Load more"; and CSV export (formula-safe). It reuses the Products console look (`SokoniConsoleStyles`).
+**Data integrity:** every figure comes from `adminInvoicesList` (functions/admin-invoices-list-on-main @ 1c92f7f): Firestore count / sum aggregates over the whole collection. An unavailable figure shows "—" plus the reason, never 0. Not shown, because the server doesn't compute them: average days to pay, "vs last 30 days" trends, card brand / last-4. "Paid" is labelled **marked paid**, because merchant invoices are marked paid by the merchant with their own reference.
+**Read-only:** there is no admin invoice write authority (send / void / mark-paid are shop-scoped merchant actions), so there are no such buttons.
+**Files:** `sokoni-invoices-console.js` (new), `sokoni-products-console.js` (exports the shared styles), `sokoni-aos.js`, `admin-os.html`, `super-admin.html`, `scripts/test-invoices-console.js`.
+**Tests:** test-invoices-console 13/0 (SABOTAGE: unavailable totals as KES 0 → V1 fails); products-console 18/0; AdminOS honesty 28 · 59 · 147; admit 9; nav 5 / 11 / 62. Browser render NOT run (RAM).
+**Deployment:** NOT deployed. Ship AFTER the server unit (indexes → scoped adminInvoicesList); before that the page reports the server error honestly.
+
 ## [2026-10-04] — One Products page for AdminOS and Super Admin
 
 **Owner request:** implement the products-catalogue design (status tabs, filters, product table, detail drawer) in admin-os.html and the Super Admin sidebar, without the design's left sidebar.

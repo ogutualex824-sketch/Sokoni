@@ -344,6 +344,9 @@
     <button class="nav-item" data-section="products" onclick="SA.nav('products');_closeSidebar()">
       <span class="nav-icon">&#x1F4E6;</span>Products
     </button>
+    <button class="nav-item" data-section="invoices" onclick="SA.nav('invoices');_closeSidebar()">
+      <span class="nav-icon">&#x1F9FE;</span>Invoices
+    </button>
   </div>
 
   <div class="nav-group">
@@ -480,6 +483,10 @@
          who was approved and never actually published. Reads the same
          server-side `applicationList` the admin dashboard uses, so both
          surfaces cannot disagree. -->
+    <section class="sa-panel" id="panel-invoices" hidden>
+      <div id="saInvoicesConsole" aria-live="polite"></div>
+    </section>
+
     <section class="sa-panel" id="panel-products" hidden>
       <div id="saProductsConsole" aria-live="polite"></div>
     </section>
@@ -1009,6 +1016,7 @@ const SA={
     else if(section==='users')this.loadUsers();
     else if(section==='applications')this.loadApplications();
     else if(section==='products')this.loadProducts();
+    else if(section==='invoices')this.loadInvoices();
     else if(section==='financial')this.loadFinancial();
     else if(section==='config')this.loadConfig();
     else if(section==='emergency')this.loadEmergency();
@@ -1030,6 +1038,21 @@ const SA={
       call:(op,data)=>fns.httpsCallable('adminOsDispatch')(Object.assign({op},data||{})).then(r=>r.data),
       toast:(msg,kind)=>{ if(typeof _toast==='function')_toast(msg,kind); else if(kind==='error')console.error(msg); },
       confirm:async(text,title)=>window.confirm((title?title+'\n\n':'')+text),
+    });
+  },
+
+  // Invoices ─────────────────────────────────────────────────
+  /* The ONE invoices page (sokoni-invoices-console.js), the same component AdminOS mounts. Merchant invoices only;
+     read-only; adminInvoicesList is admin/superAdmin-gated on the server. */
+  loadInvoices(){
+    const el=document.getElementById('saInvoicesConsole');
+    if(!el)return;
+    if(!window.SokoniInvoicesConsole){el.innerHTML='<p style="color:var(--muted)">The invoices console did not load — refresh the page.</p>';return;}
+    if(this._invoicesConsole){this._invoicesConsole.reload();return;}
+    const fns=this._fns;
+    this._invoicesConsole=window.SokoniInvoicesConsole.mount(el,{
+      call:(op,data)=>fns.httpsCallable(op)(data||{}).then(r=>r.data),
+      toast:(msg,kind)=>{ if(typeof _toast==='function')_toast(msg,kind); },
     });
   },
 
@@ -2021,5 +2044,6 @@ const SA={
 })();
 </script>
 <script src="sokoni-products-console.js"></script>
+<script src="sokoni-invoices-console.js"></script>
 </body>
 </html>

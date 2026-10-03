@@ -122,6 +122,7 @@ window.SokoniAOS = (() => {
       financial:     () => _loadFinancial(),
       bookings:      () => _loadBookings(),
       payments:      () => _loadPayments(),
+      invoices:      () => _loadInvoices(),
       support:       () => _loadSupport(),
       comms:         () => _loadComms(),
       content:       () => _loadContent(),
@@ -482,6 +483,15 @@ window.SokoniAOS = (() => {
   }
 
   // ── Marketplace ──────────────────────────────────────────────────────────────
+  /* Invoices — the ONE invoices page (sokoni-invoices-console.js), the same component Super Admin mounts.
+     Merchant invoices only (owner 2026-10-04); read-only; data from adminInvoicesList. */
+  function _loadInvoices() {
+    const el = document.getElementById("aosInvoicesConsole");
+    if (!el) return;
+    if (!window.SokoniInvoicesConsole) { el.innerHTML = _emptyMsg("The invoices console did not load — refresh the page."); return; }
+    window.SokoniInvoicesConsole.mount(el, { call: _call, toast: _toast });
+  }
+
   async function _loadMarketplace() {
     _marketplaceTab("products");
   }
