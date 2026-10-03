@@ -1,3 +1,11 @@
+## 2026-10-04 — Admin consoles: Integrations + Revenue Intelligence sidebar entries (NOT deployed)
+
+- **Change:** one sidebar entry per console for b2's Integrations Control Center (e57637a) and Revenue Intelligence (2bfe4c8): AdminOS — Revenue Intelligence under Intelligence (after Analytics), Integrations under Platform (after Security); Super Admin — Revenue Intelligence under Overview, Integrations under Operations (after Audit Log). Markup exactly as b2's certification specifies.
+- **Files:** admin-os.html, super-admin.html, scripts/test-adminos-sidebar-style.js, scripts/test-finance-center.js (sidebar = live + exactly these two entries).
+- **Dependency:** the panels and loaders live on b2's hosting branch; ship in the one assembled hosting candidate, never alone (an entry without its panel navigates nowhere).
+- **Tests:** sidebar-style 16/0, finance-center 23/0; inline scripts compile. Rendered check OWED (browser at >= 512 MB).
+- **Database / API / Security:** none.
+
 ## [2026-10-04] - Finance Center: every financial record view in AdminOS + Super Admin in one dashboard layout
 
 Hosting only. New `sokoni-finance-center.js` + `sokoni-finance-center.css` (scoped `.sfc`). `admin-os.html` (Financial + Payments panels), `sokoni-aos.js` (`_financialTab`, `_loadPayments`) and `super-admin.html` (Financial Oversight) are rewired. **Not deployed.** Owner request with an invoice-dashboard reference; both pages keep their own sidebar.

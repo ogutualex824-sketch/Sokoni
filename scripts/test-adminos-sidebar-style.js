@@ -23,8 +23,10 @@ for (const [page, pre] of [['admin-os.html', 'aos'], ['super-admin.html', 'sa']]
   ck(pre + '-1', links.indexOf('admin-sidebar-shell.css') > links.indexOf('sokoni-admin-responsive.css') && links.indexOf('admin-sidebar-shell.css') > Math.max(links.indexOf('sokoni-tokens.css'), -1) && links.slice(links.indexOf('admin-sidebar-shell.css') + 1).every((l) => l === 'sokoni-finance-center.css'),
     page + ': the shell stylesheet loads after the page styles and the responsive module (only the .sfc-scoped Finance Center may follow)', links.join(','));
   const asideOf = (h) => h.slice(h.indexOf('<aside class="' + pre + '-sidebar"'), h.indexOf('</aside>', h.indexOf('<aside class="' + pre + '-sidebar"')));
-  ck(pre + '-2', asideOf(H).replace(/\r/g, '') === asideOf(live(page)).replace(/\r/g, '') && asideOf(H).length > 200 && H.replace(/\r/g, '').includes(LINK_NEW.split('\n</head>')[0].split('\n').pop()),
-    page + ': SIDEBAR STYLE ONLY — the sidebar markup (every nav item and control) is byte-identical to live 72dca56; the shell <link> is present');
+  /* b2 2026-10-04: the ONLY markup added is one Integrations + one Revenue Intelligence entry per console */
+  const B2_NAV = /\n[ ]*<button class="nav-item" data-section="(integrations|revenue)"[^>]*>(?:(?!<\/button>)[\s\S])*<\/button>/g;
+  ck(pre + '-2', asideOf(H).replace(/\r/g, '').replace(B2_NAV, '') === asideOf(live(page)).replace(/\r/g, '') && (asideOf(H).replace(/\r/g, '').match(B2_NAV) || []).length === 2 && asideOf(H).length > 200 && H.replace(/\r/g, '').includes(LINK_NEW.split('\n</head>')[0].split('\n').pop()),
+    page + ': SIDEBAR STYLE ONLY — the sidebar markup is live 72dca56 + exactly the two b2 entries (Integrations, Revenue Intelligence); the shell <link> is present');
   ck(pre + '-3', new RegExp('\\.' + pre + '-sidebar[,)]').test(CSS) && new RegExp('\\.' + pre + '-sidebar-footer').test(CSS) && new RegExp('\\.' + pre + '-logo').test(CSS),
     page + ': its sidebar, logo header and footer are styled by the shell');
   ck(pre + '-4', /shared-header\.js|sw-register\.js/.test(H), page + ': still self-updates after deploys');

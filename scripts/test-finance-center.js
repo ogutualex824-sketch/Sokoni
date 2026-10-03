@@ -44,7 +44,8 @@ ck('A-5', /id="finBody" class="sfc"/.test(HTML) && /id="paymentsBody" class="sfc
   'admin-os.html mounts the Finance Center in Financial + Payments and loads the module before sokoni-aos.js');
 ck('A-6', /Receipts/.test(finBlock) && /no administrator listing endpoint/.test(finBlock), 'Receipts: no admin listing endpoint exists — stated honestly, nothing invented');
 const nav = (h) => h.slice(h.indexOf('<aside class="aos-sidebar"'), h.indexOf('</aside>'));
-ck('A-7', nav(HTML).replace(/\r/g, '') === nav(live('admin-os.html')).replace(/\r/g, ''), 'the AdminOS sidebar markup is byte-identical to live (the page keeps its own sidebar)');
+const B2_NAV = /\n[ ]*<button class="nav-item" data-section="(integrations|revenue)"[^>]*>(?:(?!<\/button>)[\s\S])*<\/button>/g;   /* b2 2026-10-04: Integrations + Revenue Intelligence entries */
+ck('A-7', nav(HTML).replace(/\r/g, '').replace(B2_NAV, '') === nav(live('admin-os.html')).replace(/\r/g, '') && (nav(HTML).match(B2_NAV) || []).length === 2, 'the AdminOS sidebar markup is live + exactly the two b2 entries (Integrations, Revenue Intelligence)');
 
 /* ── Super Admin ── */
 const SA = read('super-admin.html'), SA0 = live('super-admin.html');
@@ -55,7 +56,7 @@ ck('S-3', (SA.match(/SA\.processPayout\(/g) || []).length >= 5 && /'approve'/.te
 ck('S-4', ['saFinancialKpis', 'saRevenueChartBars', 'saPayoutOps', 'saPayoutsList', 'saCommissionRates'].every((id) => SA.includes('id="' + id + '"')), 'every element id other code relies on still exists');
 ck('S-5', SA.indexOf('sokoni-finance-center.css') > 0 && SA.indexOf('sokoni-finance-center.js') > 0, 'super-admin.html loads the Finance Center');
 const navS = (h) => h.slice(h.indexOf('<aside class="sa-sidebar"'), h.indexOf('</aside>'));
-ck('S-6', navS(SA).replace(/\r/g, '') === navS(SA0).replace(/\r/g, ''), 'the Super Admin sidebar markup is byte-identical to live');
+ck('S-6', navS(SA).replace(/\r/g, '').replace(B2_NAV, '') === navS(SA0).replace(/\r/g, '') && (navS(SA).match(B2_NAV) || []).length === 2, 'the Super Admin sidebar markup is live + exactly the two b2 entries');
 ck('S-7', (() => { const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g; let m; while ((m = re.exec(SA))) { try { new Function(m[1]); } catch (e) { return false; } } return true; })(), 'super-admin.html inline script compiles');
 /* S-8 EXECUTED: the real _renderRevenueChart with missing / short data draws NO bars */
 {
