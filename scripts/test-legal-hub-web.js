@@ -104,6 +104,10 @@ const run = async (cat) => { ctx._activeLawCat = cat; await ctx.renderLawyers();
     && html.includes('<script src="sokoni-legal-account.js" defer></script>') && html.includes("document.addEventListener('DOMContentLoaded', go, { once: true })")
     && /catch \(e\) \{ console\.warn\('\[Legal Hub\] tab '/.test(html),
     'the client-side "log case + pay 5% by Paybill" tab is gone (commission is deducted once at PIN settlement); legacy loaders replaced; tab restore waits for modules and cannot break navigation');
+  const aos = read('sokoni-aos-legal.js'), aosHtml = read('admin-os.html');
+  ck('AO1', aos.includes("call('legalAdminList', etype ? { view, entityType: etype } : { view })") &&aos.includes("chip(a.entityType === 'firm' ? 'LAW FIRM' : 'LAWYER')") && aos.includes('<option value=\"firm\">Law firms</option>')
+    && aos.includes('declared advocate(s), not verified') && aosHtml.indexOf('sokoni-legal-taxonomy.js') > -1 && aosHtml.indexOf('sokoni-legal-taxonomy.js') < aosHtml.indexOf('sokoni-aos-legal.js') && aosHtml.includes('id=\"panel-legal\"'),
+    'AdminOS Legal: lawyer vs law-firm column + filter, practice areas from the taxonomy, firm team shown as NOT verified; panel wired');
   done();
 })();
 function done() { console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed'); console.log('NOT proven here: a real browser render (memory floor) and a live booking.'); process.exit(fail ? 1 : 0); }

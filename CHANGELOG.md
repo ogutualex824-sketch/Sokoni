@@ -1,3 +1,10 @@
+## [2026-10-03] — Legal Hub L7 (hosting): AdminOS Legal shows Lawyer vs Law firm, practice areas, type filter — NOT deployed
+
+- **sokoni-aos-legal.js:** a Type column (LAWYER / LAW FIRM) and a Type filter (sends entityType to legalAdminList). Practice areas are labelled from the taxonomy. A firm row shows its responsible advocate, office count and declared advocates, marked "not verified".
+- **admin-os.html:** loads sokoni-legal-taxonomy.js before the Legal console.
+- **Server:** feat/legal-hub-on-9cab901 a353116.
+- **Tests:** test-legal-hub-web AO1 (13/0), sabotage-legal-hub-web 10/10.
+
 ## [2026-10-03] — Legal Hub L3b (hosting): one Lawyer / Law-firm application wizard, applicant status + resubmit, My legal bookings with completion PIN, fake commission and pro tabs retired — NOT deployed
 
 - **legal-hub.html — Register:**

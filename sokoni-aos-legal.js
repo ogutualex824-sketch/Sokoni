@@ -26,9 +26,12 @@
   function mount(opts) {
     const host = opts && opts.host; const call = opts && opts.call;
     if (!host || typeof call !== 'function') return false;
-    let view = 'all'; let current = null;
+    let view = 'all'; let current = null; let etype = '';
+    const T = root.SokoniLegalTaxonomy || null;
+    const areaLabels = (a) => (a || []).map((x) => (T && T.label(x)) || x).join(', ');
     host.innerHTML = `<form class="aos-filters" data-q>
         <label>Show <select name="view"><option value="all">All advocates</option><option value="pending">Not yet bookable</option><option value="bookable">Bookable</option><option value="quarantined">Quarantined legacy records</option></select></label>
+        <label>Type <select name="etype"><option value="">Lawyers &amp; law firms</option><option value="advocate">Lawyers</option><option value="firm">Law firms</option></select></label>
         <button class="aos-btn" type="submit">Show</button></form>
       <div class="aoscr-msg" data-msg role="status" aria-live="polite"></div><div data-body><div class="aos-spinner"><div></div></div></div>`;
     const body = host.querySelector('[data-body]');
@@ -37,13 +40,14 @@
     async function renderList() {
       body.innerHTML = '<div class="aos-spinner"><div></div></div>';
       try {
-        const r = await call('legalAdminList', { view });
+        const r = await call('legalAdminList', etype ? { view, entityType: etype } : { view });
         let html = `<p class="aos-muted" data-lsk-integration>${esc(r.lskIntegration ? r.lskIntegration.statement : '')}</p>`;
         if (view === 'quarantined') {
           html += table(['Legacy identity', 'Label', 'Reason', 'Removed', 'Script'], (r.quarantined || []).map((q) => `<tr><td class="aos-mono">${esc(q.uid)}</td><td>${esc(q.label || '—')}</td><td>${esc(q.reason || '—')}</td><td>${when(q.removedAtMs)}</td><td class="aos-mono">${esc(q.scriptVersion || '—')}</td></tr>`).join(''), 'No quarantined records.');
         } else {
-          html += table(['Advocate', 'SOKONI review', 'LSK', 'Practising status', 'Checked', 'Booking eligibility', ''], (r.advocates || []).map((a) => `<tr>
-            <td>${esc(a.name)}${a.firmName ? `<div class="aos-muted">${esc(a.firmName)}</div>` : ''}${a.legacyUnverified ? `<div class="aos-muted">legacy record — never verified</div>` : ''}</td>
+          html += table(['Advocate / firm', 'Type', 'Practice areas', 'SOKONI review', 'LSK', 'Practising status', 'Checked', 'Booking eligibility', ''], (r.advocates || []).map((a) => `<tr>
+            <td>${esc(a.entityType === 'firm' ? (a.firmName || a.name) : a.name)}${a.entityType === 'firm' ? `<div class="aos-muted">responsible advocate: ${esc(a.name)}${a.firm ? ' · ' + esc(a.firm.offices) + ' office(s) · ' + esc(a.firm.teamDeclared) + ' declared advocate(s), not verified' : ''}</div>` : (a.firmName ? `<div class="aos-muted">${esc(a.firmName)}</div>` : '')}${a.legacyUnverified ? `<div class="aos-muted">legacy record — never verified</div>` : ''}</td>
+            <td>${chip(a.entityType === 'firm' ? 'LAW FIRM' : 'LAWYER')}</td><td class="aos-muted">${esc(areaLabels(a.practiceAreas) || '—')}</td>
             <td>${chip(a.admin)}</td><td>${chip(a.lsk.status)}${a.lsk.stale ? ' ' + chip('STALE', '#ff9800') : ''}</td>
             <td>${esc(a.lsk.practiceStatus || '—')}</td><td>${day(a.lsk.checkedAtMs)}</td><td>${ELIG(a.eligibility)}</td>
             <td><button type="button" class="aos-btn aos-btn-ghost" data-open="${esc(a.uid)}">Open</button></td></tr>`).join(''), 'No advocates.');
@@ -121,7 +125,7 @@
     }
 
     host.addEventListener('submit', (ev) => {
-      if (ev.target.matches('[data-q]')) { ev.preventDefault(); view = ev.target.view.value; current = null; msg(''); renderList(); return; }
+      if (ev.target.matches('[data-q]')) { ev.preventDefault(); view = ev.target.view.value; etype = ev.target.etype ? ev.target.etype.value : ''; current = null; msg(''); renderList(); return; }
       if (ev.target.matches('[data-lsk]')) {
         ev.preventDefault();
         const f = ev.target;
