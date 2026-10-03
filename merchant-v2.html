@@ -2633,8 +2633,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                     callBulk: _callable('etimsBulkGenerate'), callResubmit: _callable('etimsResubmitInvoice'),
                     onToast: toast }; } },
     /* JOBS — the employer workspace (J5). One module, eleven views, one shared store.
-       Every write is servicesDispatch through _callable (the App Check path); the one read
-       is the employer's OWN vacancies, which the rules allow in any status. */
+       Every call is servicesDispatch through _callable (the App Check path): jobsCapabilities,
+       listMyJobs, getEmployerApplications and the writes. readMyJobs (a direct read of the employer's
+       OWN vacancies, allowed by rules in any status) is the fallback ONLY for a server without listMyJobs. */
     'jobs-overview': { global: 'SokoniMerchantJobs', ctx: function () { return _jobsCtx('overview'); } },
     'jobs': { global: 'SokoniMerchantJobs', ctx: function () { return _jobsCtx('jobs'); } },
     'jobs-applications': { global: 'SokoniMerchantJobs', ctx: function () { return _jobsCtx('applications'); } },

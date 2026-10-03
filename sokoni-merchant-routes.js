@@ -466,8 +466,8 @@
        Messages | Company | Wallet | Products | Analytics — routes in the shell, NOT a second
        dashboard. All eleven mount ONE module (sokoni-merchant-jobs.js) with a view key and
        share one store. Server: functions/jobs.js via servicesDispatch (ffa2c47 applications,
-       a515270 moderation); the only non-callable read is the employer's own jobs
-       (employerUid == uid). ctx is SELLER_UID ALONE: an employer is uid-keyed today
+       a515270 / be4e1b7 moderation); reads are listMyJobs + getEmployerApplications, with the
+       direct read of the employer's own jobs (employerUid == uid) only as an old-server fallback. ctx is SELLER_UID ALONE: an employer is uid-keyed today
        (jobs.employerUid = the poster's uid); business-keyed employers are a later server slice.
        Ids are jobs-prefixed because products / messages / analytics / offers already exist as
        shop routes; names say "Job…" where they would otherwise collide in the palette.

@@ -21,11 +21,17 @@
    allow in any status (sokoni-f3, 2026-10-03). This module never writes Firestore.
 
    FEATURE DETECTION (owner rule: fall back to ffa2c47 behaviour, never fake a status)
-     The page asks servicesDispatch for its op list once ({op:''} → invalid-argument naming every
-     valid op, services-dispatch.js:68-72) — no handler runs. submitJob present ⇒ J2: "Save draft"
-     + "Submit for review", never "Publish". Absent ⇒ J1: one "Post vacancy" (J1 publishes on
-     create, and the screen says so). Unreadable ⇒ the form is withheld with a retry; nothing is
-     guessed. Pause / Resume / Submit appear only when their op is in the list.
+     be4e1b7+: `jobsCapabilities` (no auth) → {contract:'jobs-j2', moderation, applicationStates,
+     jobStates, employerTransitions, jobTypes}. Its employerTransitions are the RUNTIME source for
+     application buttons; the tables below are the fallback only. moderation:true ⇒ J2: "Save draft"
+     + "Submit for review", never "Publish".
+     jobsCapabilities UNKNOWN (older server: the dispatcher answers not-found) ⇒ the "Valid ops:" text
+     in that refusal is read as a NON-contract hint: submitJob listed ⇒ J2 (a515270), otherwise J1
+     (one "Post vacancy", which publishes on create, and the screen says so).
+     Any other failure (network / internal) ⇒ the form is withheld with a retry; nothing is guessed.
+   READS: listMyJobs → {jobs[]} and getEmployerApplications → {applications[]} (one scoped query each).
+     Only when the server does not know those ops: the direct read of jobs where employerUid == uid
+     and one getJobApplications per vacancy.
 
    DATA INTEGRITY: every figure is derived from what THIS page loaded from the server. Unknown is
    '—', never 0 and never an estimate. Featured is a badge only — set by SOKONI admins.
@@ -71,9 +77,25 @@
   var EDITABLE = ['draft', 'pending_review', 'changes_requested', 'active', 'paused'];
   var INTERVIEW_VIEW = ['interview'];
   var OFFER_VIEW = ['offer', 'offer_accepted', 'offer_declined'];
-  var JOBS_LIMIT = 50;
+  var JOBS_LIMIT = 50;      /* direct-read fallback limit (shell _q) */
+  var LIST_LIMIT = 200;     /* listMyJobs server limit (be4e1b7) */
+  var J2_OPS = ['createJob', 'updateJob', 'closeJob', 'submitJob', 'pauseJob', 'resumeJob'];
   var CONFLICT_MSG = 'This application changed — reload';
-  var NO_MESSAGING = 'Messaging for applications is coming';
+  /* J4 (sokoni-b2, server 8aaa868): a conversation exists per TRANSACTION and the server derives its parties
+     (jobId + applicationId + employerUid + seekerUid) from the application. The page sends ONLY the application id —
+     never a seekerUid, phone, email or name — and never hands the merchant off to an external chat app or mail client. */
+  var TX_TYPE = 'job_application';
+  function messageUrl (applicationId) {
+    return '/messages.html?tx=' + TX_TYPE + '&txId=' + encodeURIComponent(String(applicationId));
+  }
+  function openApplicationChat (applicationId, win) {
+    var w = win || global;
+    if (!applicationId) return false;
+    var inbox = w.SokoniInbox;
+    if (inbox && typeof inbox.openForTransaction === 'function') { inbox.openForTransaction(TX_TYPE, String(applicationId)); return true; }
+    w.location.href = messageUrl(applicationId);
+    return true;
+  }
 
   /* ── escaping: the canonical escapeHTML (security.js), identical fallback if not yet loaded ── */
   function esc (s) {
@@ -109,9 +131,22 @@
   function jobStatusLabel (j) {
     if (!j || !j.status) return '—';
     if (j.status === 'closed' && j.closedReason === 'expired') return 'Closed — expired';
+    if (typeof j.statusLabel === 'string' && j.statusLabel) return j.statusLabel;   /* listMyJobs: the server's label */
     return JOB_LABEL[j.status] || String(j.status);   /* an unknown status is shown as stored, never relabelled */
   }
-  /* Op list from the dispatcher's own refusal message. null = could not read it. */
+  /* The dispatcher's "unknown op" refusal (services-dispatch.js: not-found 'Unknown services operation'). */
+  function isUnknownOp (e) {
+    var c = String((e && e.code) || '');
+    return (c === 'not-found' || c === 'functions/not-found') && /Unknown services operation/.test(String((e && e.message) || ''));
+  }
+  /* A capabilities answer is usable only with a contract and a transitions OBJECT whose values are arrays. */
+  function validCaps (d) {
+    if (!d || typeof d !== 'object' || typeof d.contract !== 'string') return false;
+    var t = d.employerTransitions;
+    if (!t || typeof t !== 'object') return false;
+    return Object.keys(t).every(function (k) { return Array.isArray(t[k]); });
+  }
+  /* Op list from the dispatcher's own refusal message — NON-contract text, used only for an old server. */
   function parseOps (message) {
     var m = /Valid ops:\s*(.+)$/.exec(String(message || ''));
     if (!m) return null;
@@ -129,16 +164,19 @@
     if (EDITABLE.indexOf(s) >= 0) out.push('edit');
     if ((s === 'draft' || s === 'changes_requested') && has('submitJob')) out.push('submit');
     if (s === 'active' && has('pauseJob')) out.push('pause');
-    /* Resume: only a vacancy SOKONI approved before (approvedAt) that has not expired, and not one
-       an admin paused (moderationReason set by adminModerateJob pause) — undoing a moderation
-       decision is not the employer's control even where the server would accept it. */
-    if (s === 'paused' && has('resumeJob') && ms(j.approvedAt) != null && !expired(j, now) && !j.moderationReason) out.push('resume');
+    /* Resume: only a vacancy SOKONI approved before (approvedAt), not expired, and NOT paused by SOKONI
+       (pausedByRole === 'admin', be4e1b7 — the server refuses that resume: "…Only SOKONI can restore it."). */
+    if (s === 'paused' && has('resumeJob') && ms(j.approvedAt) != null && !expired(j, now) && j.pausedByRole !== 'admin') out.push('resume');
     if (CLOSABLE.indexOf(s) >= 0) out.push('close');
     if (['active', 'paused', 'closed'].indexOf(s) >= 0) out.push('applications');
     return out;
   }
-  /* Legal application moves from the CURRENT status (server table, :55-62). */
-  function appActions (app) { return (app && EMPLOYER_TRANSITIONS[app.status]) ? EMPLOYER_TRANSITIONS[app.status].slice() : []; }
+  /* Legal application moves from the CURRENT status: the server's runtime table (jobsCapabilities) when
+     known, else the source-copied fallback (functions/jobs.js :55-62). */
+  function appActions (app, table) {
+    var t = (table && typeof table === 'object') ? table : EMPLOYER_TRANSITIONS;
+    return (app && Array.isArray(t[app.status])) ? t[app.status].slice() : [];
+  }
   function needsReReview (job, changes) {
     if (!job || REVIEW_LIVE.indexOf(job.status) < 0) return false;
     return REVIEWED_FIELDS.some(function (k) { return Object.prototype.hasOwnProperty.call(changes || {}, k); });
@@ -193,7 +231,7 @@
   var SUBS = [];
   function store (uid) {
     if (!STORE || STORE.uid !== uid) {
-      STORE = { uid: uid, jobs: null, jobsErr: null, jobsTrunc: false, jobsP: null,
+      STORE = { uid: uid, caps: null, listOp: null, empAppsOp: null, jobsVia: null, jobsLimit: JOBS_LIMIT, jobs: null, jobsErr: null, jobsTrunc: false, jobsP: null,
                 ops: null, opsErr: null, opsP: null, apps: {}, appsP: null, hist: {}, notes: {}, jobNotes: {}, jobFilter: '' };
     }
     return STORE;
@@ -261,24 +299,39 @@
     function loadOps (S, force) {
       if (S.opsP || (S.ops && !force)) return S.opsP;
       S.opsErr = null;
-      S.opsP = call('', {}).then(function () {
-        S.ops = null; S.opsErr = 'The server did not list its operations.';
+      S.opsP = call('jobsCapabilities', {}).then(function (d) {
+        if (!validCaps(d)) { S.caps = null; S.ops = null; S.opsErr = 'The server answered without a Jobs contract.'; return; }
+        S.caps = d; S.opsErr = null;
+        S.ops = d.moderation === true ? J2_OPS.slice() : [];
       }, function (e) {
-        var ops = parseOps(e && e.message);
-        if (ops) { S.ops = ops; S.opsErr = null; } else { S.ops = null; S.opsErr = errMsg(e); }
+        S.caps = null;
+        if (isUnknownOp(e)) { S.ops = parseOps(e && e.message) || []; S.opsErr = null; }   /* old server: hint, else J1 */
+        else { S.ops = null; S.opsErr = errMsg(e); }
       }).then(function () { S.opsP = null; notify(); });
       return S.opsP;
     }
+    function sortJobs (rows) { return rows.sort(function (a, b) { return (ms(b.postedAt) || 0) - (ms(a.postedAt) || 0); }); }
+    function directRead (S) {
+      if (typeof c.readMyJobs !== 'function') return Promise.reject(new Error('Your vacancies cannot be read in this shell.'));
+      return Promise.resolve(c.readMyJobs()).then(function (rows) {
+        rows = Array.isArray(rows) ? rows : [];
+        S.jobs = sortJobs(rows.filter(function (r) { return r && r.employerUid === S.uid; }));
+        S.jobsTrunc = rows.length >= JOBS_LIMIT; S.jobsLimit = JOBS_LIMIT; S.jobsVia = 'direct';
+      });
+    }
     function loadJobs (S, force) {
       if (S.jobsP || (S.jobs && !force)) return S.jobsP;
-      if (typeof c.readMyJobs !== 'function') { S.jobsErr = 'Your vacancies cannot be read in this shell.'; return null; }
       S.jobsErr = null;
-      S.jobsP = Promise.resolve(c.readMyJobs()).then(function (rows) {
-        rows = Array.isArray(rows) ? rows : [];
-        S.jobs = rows.filter(function (r) { return r && r.employerUid === S.uid; })
-          .sort(function (a, b) { return (ms(b.postedAt) || 0) - (ms(a.postedAt) || 0); });
-        S.jobsTrunc = rows.length >= JOBS_LIMIT;
-      }, function (e) { S.jobs = null; S.jobsErr = errMsg(e); })
+      var p = S.listOp === 'unknown' ? directRead(S) : call('listMyJobs', {}).then(function (d) {
+        if (!d || !Array.isArray(d.jobs)) throw new Error('The server returned no vacancy list.');
+        /* listMyJobs carries jobId (the public field set); the screen keys on id. */
+        S.jobs = sortJobs(d.jobs.filter(Boolean).map(function (j) { return Object.assign({}, j, { id: j.id || j.jobId }); }));
+        S.jobsTrunc = d.jobs.length >= LIST_LIMIT; S.jobsLimit = LIST_LIMIT; S.jobsVia = 'listMyJobs'; S.listOp = 'known';
+      }, function (e) {
+        if (isUnknownOp(e)) { S.listOp = 'unknown'; return directRead(S); }   /* old server only */
+        throw e;
+      });
+      S.jobsP = p.then(null, function (e) { S.jobs = null; S.jobsErr = errMsg(e); })
         .then(function () { S.jobsP = null; notify(); });
       return S.jobsP;
     }
@@ -289,9 +342,36 @@
                              : { list: null, err: 'The server returned no application list.' };
       }, function (e) { S.apps[jobId] = { list: null, err: errMsg(e) }; });
     }
+    /* ONE scoped query for every application to this employer (be4e1b7). Every loaded vacancy gets a list —
+       an empty one when it has none — so "complete" is a real answer, not a guess. */
+    function loadEmployerApps (S) {
+      return call('getEmployerApplications', {}).then(function (d) {
+        if (!d || !Array.isArray(d.applications)) throw new Error('The server returned no application list.');
+        var by = {};
+        (S.jobs || []).forEach(function (j) { by[j.id] = []; });
+        d.applications.forEach(function (a) { if (a && a.jobId) (by[a.jobId] = by[a.jobId] || []).push(a); });
+        S.apps = {}; Object.keys(by).forEach(function (k) { S.apps[k] = { list: by[k], err: null }; });
+        S.empAppsOp = 'known';
+      }).then(null, function (e) {
+        if (isUnknownOp(e)) { S.empAppsOp = 'unknown'; return null; }
+        (S.jobs || []).forEach(function (j) { S.apps[j.id] = { list: null, err: errMsg(e) }; });
+      });
+    }
+    function refreshApps (S, jobId) {
+      return S.empAppsOp === 'unknown' ? loadAppsFor(S, jobId) : loadEmployerApps(S);
+    }
     function loadAllApps (S, force) {
       if (S.appsP) return S.appsP;
       if (!Array.isArray(S.jobs)) return null;
+      if (S.empAppsOp !== 'unknown') {
+        if (!force && S.jobs.every(function (j) { return S.apps[j.id] && !S.apps[j.id].err; })) return null;
+        S.appsP = loadEmployerApps(S).then(function () {
+          S.appsP = null;
+          if (S.empAppsOp === 'unknown') return loadAllApps(S, force);   /* old server: per-vacancy fallback */
+          notify();
+        });
+        return S.appsP;
+      }
       var ids = S.jobs.filter(function (j) { return force || !S.apps[j.id] || S.apps[j.id].err; }).map(function (j) { return j.id; });
       if (!ids.length) return null;
       var i = 0;
@@ -320,7 +400,8 @@
       if (!Array.isArray(S.jobs)) return '<p class="jw-sub">Loading your vacancies…</p>';
       return null;
     }
-    function jobTitle (S, id) { var j = (S.jobs || []).filter(function (x) { return x.id === id; })[0]; return j ? j.title : null; }
+    function jobTitle (S, id, fallback) { var j = (S.jobs || []).filter(function (x) { return x.id === id; })[0]; return j ? j.title : (fallback || null); }
+    function transitions (S) { return (S.caps && validCaps(S.caps)) ? S.caps.employerTransitions : null; }
 
     function render () {
       if (dead) return;
@@ -438,7 +519,7 @@
     }
 
     function appCard (S, a) {
-      var moves = appActions(a), n = S.notes[a.id], h = S.hist[a.id];
+      var moves = appActions(a, transitions(S)), n = S.notes[a.id], h = S.hist[a.id];
       var p = a.seekerProfile || {};
       var cv = (typeof a.cvUrl === 'string' && /^https:\/\//i.test(a.cvUrl))
         ? '<a class="jw-btn" href="' + esc(a.cvUrl) + '" target="_blank" rel="noopener noreferrer">Open CV</a>' : '';
@@ -455,12 +536,12 @@
           }).join('') + '</ol>') : '';
       return '<div class="jw-card" data-appcard="' + esc(a.id) + '">' +
         '<div class="jw-row"><b>' + esc(p.name || 'Applicant') + '</b><span class="jw-chip" data-status="' + esc(a.status) + '">' + esc(a.statusLabel || APP_LABEL[a.status] || a.status) + '</span></div>' +
-        '<div class="jw-meta">' + (p.headline ? esc(p.headline) + ' · ' : '') + esc(jobTitle(S, a.jobId) || 'Vacancy') + ' · Applied ' + esc(fmtDate(a.appliedAt)) + '</div>' +
+        '<div class="jw-meta">' + (p.headline ? esc(p.headline) + ' · ' : '') + esc(jobTitle(S, a.jobId, a.jobTitle) || 'Vacancy') + ' · Applied ' + esc(fmtDate(a.appliedAt)) + '</div>' +
         (a.coverLetter ? '<details><summary>Cover letter</summary><p>' + esc(a.coverLetter) + '</p></details>' : '') +
         note(n) +
         '<div class="jw-acts">' + btns + cv +
           '<button class="jw-btn" type="button" data-act="history" data-app="' + esc(a.id) + '">History</button>' +
-          '<button class="jw-btn" type="button" disabled title="' + esc(NO_MESSAGING) + '">' + esc(NO_MESSAGING) + '</button></div>' +
+          '<button class="jw-btn" type="button" data-act="message" data-app="' + esc(a.id) + '">Message applicant</button></div>' +
         hist + '</div>';
     }
 
@@ -498,15 +579,16 @@
           return '<div class="jw-card"><div class="jw-row"><b>' + esc(p.name || 'Applicant') + '</b>' + (p.location ? '<span class="jw-chip">' + esc(p.location) + '</span>' : '') + '</div>' +
             (p.headline ? '<div class="jw-meta">' + esc(p.headline) + '</div>' : '') +
             (Array.isArray(p.skills) && p.skills.length ? '<div class="jw-meta">Skills: ' + esc(p.skills.slice(0, 12).join(', ')) + '</div>' : '') +
-            '<div class="jw-meta">' + x.apps.map(function (a) { return esc(jobTitle(S, a.jobId) || 'Vacancy') + ' — ' + esc(a.statusLabel || APP_LABEL[a.status] || a.status); }).join('<br>') + '</div></div>';
+            '<div class="jw-meta">' + x.apps.map(function (a) { return esc(jobTitle(S, a.jobId, a.jobTitle) || 'Vacancy') + ' — ' + esc(a.statusLabel || APP_LABEL[a.status] || a.status); }).join('<br>') + '</div></div>';
         }).join('') : '<p class="jw-sub">' + ((S.jobs || []).some(function (j) { return !S.apps[j.id]; }) ? 'Loading applications…' : 'No applicants yet.') + '</p>');
     }
 
     function vMessages () {
-      return head('Messages', 'Conversations with applicants will live here, inside SOKONI.') +
-        '<div class="jw-card"><p class="jw-sub">In-app messaging for job applications is being built. Until it ships, applicants are told about every ' +
-        'step of their application through SOKONI notifications.</p>' +
-        '<button class="jw-btn" type="button" disabled>' + esc(NO_MESSAGING) + '</button></div>';
+      return head('Messages', 'Conversations with applicants, one per application, inside SOKONI.') +
+        '<div class="jw-card"><p class="jw-sub">Open a conversation from any application with "Message applicant". SOKONI works out who ' +
+        'is in the conversation from the application itself, so nothing about the applicant is sent from this page. ' +
+        'Applicants are also told about every step of their application through SOKONI notifications.</p>' +
+        '<div class="jw-acts"><button class="jw-btn" type="button" data-go="applications">Go to applications</button></div></div>';
     }
     function vCompany () {
       var name = null; try { name = typeof c.companyName === 'function' ? c.companyName() : null; } catch (_) { name = null; }
@@ -617,13 +699,13 @@
         var n = d && typeof d.closedApplications === 'number' ? d.closedApplications : null;
         S.jobNotes[jobId] = { text: 'Vacancy closed. Applications closed: ' + fmtCount(n) + ' (those applicants were told). Interviews and offers stay open.' };
         delete S.apps[jobId];
-        return loadJobs(S, true).then(function () { return loadAppsFor(S, jobId); });
+        return loadJobs(S, true).then(function () { return refreshApps(S, jobId); });
       }, function (e) { S.jobNotes[jobId] = { kind: 'err', text: errMsg(e) }; }).then(render);
     }
 
     function move (S, appId, to) {
       var a = findApp(S, appId); if (!a) return;
-      if (appActions(a).indexOf(to) < 0) { S.notes[appId] = { kind: 'err', text: 'That step is not available from "' + (a.statusLabel || a.status) + '".' }; return render(); }
+      if (appActions(a, transitions(S)).indexOf(to) < 0) { S.notes[appId] = { kind: 'err', text: 'That step is not available from "' + (a.statusLabel || a.status) + '".' }; return render(); }
       var v = Number(a.statusVersion);
       if (!(v >= 1)) { S.notes[appId] = { kind: 'err', text: CONFLICT_MSG }; return render(); }
       var payload = { applicationId: appId, status: to, expectedVersion: v };
@@ -636,9 +718,9 @@
       return call('updateApplicationStatus', payload).then(function (d) {
         S.notes[appId] = { text: 'Moved to ' + (APP_LABEL[(d && d.status) || to] || to) + '. The applicant was told.' };
         delete S.hist[appId];
-        return loadAppsFor(S, a.jobId);
+        return refreshApps(S, a.jobId);
       }, function (e) {
-        if (isConflict(e)) { S.notes[appId] = { kind: 'err', text: CONFLICT_MSG + '. The latest version is shown.' }; return loadAppsFor(S, a.jobId); }
+        if (isConflict(e)) { S.notes[appId] = { kind: 'err', text: CONFLICT_MSG + '. The latest version is shown.' }; return refreshApps(S, a.jobId); }
         S.notes[appId] = { kind: 'err', text: errMsg(e) };
       }).then(render);
     }
@@ -675,6 +757,7 @@
         case 'see-apps': S.jobFilter = jobId; if (typeof c.go === 'function') c.go('jobs-applications'); return;
         case 'move': return move(S, appId, b.getAttribute('data-to'));
         case 'history': return history(S, appId);
+        case 'message': openApplicationChat(appId, c.window); return;
         case 'retry-ops': loadOps(S, true); return render();
         case 'reload': S.apps = {}; ensure(true); return render();
       }
@@ -712,8 +795,8 @@
     mount: mount, VIEWS: VIEWS, ROUTE_OF: ROUTE_OF,
     _reset: function () { STORE = null; SUBS.length = 0; },
     _pure: { jobActions: jobActions, appActions: appActions, needsReReview: needsReReview, counts: counts, fmtCount: fmtCount,
-             parseOps: parseOps, modeOf: modeOf, jobStatusLabel: jobStatusLabel, validateJob: validateJob, isConflict: isConflict,
+             parseOps: parseOps, modeOf: modeOf, isUnknownOp: isUnknownOp, validCaps: validCaps, jobStatusLabel: jobStatusLabel, validateJob: validateJob, isConflict: isConflict,
              esc: esc, ms: ms, EMPLOYER_TRANSITIONS: EMPLOYER_TRANSITIONS, JOB_LABEL: JOB_LABEL, CONFLICT_MSG: CONFLICT_MSG,
-             NO_MESSAGING: NO_MESSAGING }
+             TX_TYPE: TX_TYPE, messageUrl: messageUrl, openApplicationChat: openApplicationChat }
   };
 })(typeof window !== 'undefined' ? window : globalThis);
