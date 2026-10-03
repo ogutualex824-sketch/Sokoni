@@ -1,3 +1,16 @@
+## 2026-10-03 — Fitness membership QR check-in / attendance ledger (NOT deployed)
+
+- **New:** functions/fitness-attendance.js. Callables fitnessMembershipQr (buyer-only, 5-min signed token), fitnessCheckIn (gym OWNER), fitnessCompleteSession, fitnessCorrectAttendance (ADMIN). All are exported in functions/index.js.
+- **Rule:** the first valid check-in atomically sets attendedSessions, firstAttendedAt and refundEligible:false, which is irreversible. A correction voids the row and never resets the lock. Check-in ≠ completion ≠ settlement. After the first check-in the module calls 2f's releaseDueSlices; if that fails, the 06:00 sweep is the fallback.
+- **Reuse:** token signed with event-ops.credentialHash (SOKONI_HMAC_KEY, domain fitmem1|); audit to adminAudit; period window from membership-settlement.endsAt. No new secret, guard or audit log.
+- **Database:** providerMemberships/{id} adds attendedSessions, firstAttendedAt, refundEligible, lastAttendedAt and voidedSessions (written by this module only). New subcollections attendance/{d_<day>|s_<sessionRef>} (append-only) and attendanceCorrections/{attId}.
+- **Security:** check-in requires status 'active' plus a paid paymentStatus, re-checked inside the transaction (closes the refund-request race). No client field is trusted. Refusals leak no other gym's data.
+- **Blocked:** staff scanning (BUSINESS_IDENTITY_PENDING; no provider → business bridge). fitnessCreateMembership (no provider-published membership offer record).
+- **Rules:** required matchers are documented; this is a separate lane and rules were not edited.
+- **Tests:** scripts/test-fitness-attendance.js 28/0, negative controls 4/4 caught. test-membership-settlement 45/0 on 57fe896. Emulator proof QUEUED.
+- **Docs:** docs/FITNESS_MEMBERSHIP_ATTENDANCE.md.
+- **Breaking:** none.
+
 ## 2026-10-03 — Membership payment intake + refund approval/execution + AdminOS exception (NOT deployed)
 
 - **Payment:** purpose fitness_membership; webhook holdMembershipPayment, on the existing intent read; fitness_membership is self-settling.

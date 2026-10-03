@@ -240,7 +240,7 @@ async function matrix (FA) {
       h.releases.length === 1 && h.releases[0] === MID, h.releases); }
 
   /* A12 refused statuses (closes check-in vs refund-request race on the record side) */
-  { const want = { pending_payment: 'not_covered', refund_requested: 'not_covered', refunded: 'not_covered', expired: 'expired', cancelled: 'cancelled', suspended: 'suspended', disputed: 'not_covered' };
+  { const want = { pending_payment: 'not_covered', refund_requested: 'not_covered', refunded: 'not_covered', expired: 'expired', cancelled: 'cancelled', suspended: 'suspended', disputed: 'not_covered', payment_review: 'not_covered' };
     const got = {};
     for (const [st, reason] of Object.entries(want)) {
       const h = harness(FA, seedBase());
@@ -249,7 +249,7 @@ async function matrix (FA) {
       const r = await scan(FA, 'gym_A', tok);
       got[st] = r.reason === reason && h.get(P).attendedSessions === 0 && !h.get(P).firstAttendedAt && h.get(P).refundEligible === undefined && !h.db._docs.has(P + '/attendance/d_2026-03-20') ? 'ok' : r.reason;
     }
-    ck('A12 status !== active refused with nothing written: pending_payment, refund_requested, refunded, expired, cancelled, suspended, disputed',
+    ck('A12 status !== active refused with nothing written: pending_payment, refund_requested, refunded, expired, cancelled, suspended, disputed, payment_review',
       Object.values(got).every((x) => x === 'ok'), got);
     const h = harness(FA, seedBase({ status: 'refund_requested' }));
     const q = await attempt(() => H(FA).membershipQrHandler(req('member_1', { membershipId: MID })));
