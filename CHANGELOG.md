@@ -1,3 +1,8 @@
+## 2026-10-03 — AdminOS Sports review queue (teams + tournaments; audited server decisions) (NOT deployed)
+
+- **Files:** sokoni-aos-sports.js (new); admin-os.html (nav + panel + script).
+- **Test:** test-aos-sports 5/0.
+
 ## 2026-10-03 — AdminOS Finance → Receipts: read-only, audited receipt search + Super Admin retry (NOT deployed)
 
 - **Files:** sokoni-aos-receipts.js (new); admin-os.html (nav + panel + script).

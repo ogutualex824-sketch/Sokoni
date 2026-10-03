@@ -35,3 +35,13 @@ A **read-only** screen for platform transaction receipts, inside the one canonic
 - V5: real `card()` rendering — escaping, "—" method, B2B deduction distinct from fee, history order.
 
 Existing suites are unchanged: admin-nav-context 3/0, home-logo-routing 31/0.
+
+## AdminOS: Sports review queue (2026-10-03)
+
+- **What it shows:** submitted teams and submitted / under-review tournaments, read via `sportsDispatch {op:'admin.queue'}` (admin claim required).
+- **Decisions:** Approve, Reject (a reason is required and shown to the applicant), or Mark under review. These call `admin.teamDecide` / `admin.tournamentDecide`; the server validates the state, notifies the owner (dedupeKey) and audits the decision (`adminAudit`).
+- **Browser writes:** the browser writes no status.
+- **Wiring:** a self-loading module `sokoni-aos-sports.js`, plus one nav entry, one panel and one script tag. `sokoni-aos.js` is untouched.
+- **Paid tournaments:** labelled "payments not live yet" (registrations stay pending until the held entry-fee path exists).
+- **Release:** ships with or after commercial-fn `ba46a40` (`sportsDispatch` with `admin.queue`).
+- **Tests:** `scripts/test-aos-sports.js` 5/0; aos-receipts 8/0; admin-nav-context 3/0.

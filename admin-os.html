@@ -351,6 +351,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       <button class="nav-item" data-section="bookings" data-label="Bookings" onclick="SokoniAOS.navigate('bookings');_closeSidebar()"><span class="nav-icon">&#x1F4C5;</span>Bookings</button>
       <button class="nav-item" data-section="payments" data-label="Payments" onclick="SokoniAOS.navigate('payments');_closeSidebar()"><span class="nav-icon">&#x1F4B3;</span>Payments</button>
       <button class="nav-item" data-section="receipts" data-label="Finance — Receipts" onclick="SokoniAOS.navigate('receipts');_closeSidebar()"><span class="nav-icon">&#x1F9FE;</span>Receipts</button>
+      <button class="nav-item" data-section="sports" data-label="Sports — Review" onclick="SokoniAOS.navigate('sports');_closeSidebar()"><span class="nav-icon">&#x26BD;</span>Sports</button>
       <button class="nav-item" data-section="support" data-label="Customer Support" onclick="SokoniAOS.navigate('support');_closeSidebar()"><span class="nav-icon">&#x1F3A7;</span>Support<span class="nav-badge" id="sidebarTicketBadge" hidden>0</span></button>
       <button class="nav-item" data-section="comms" data-label="Communications" onclick="SokoniAOS.navigate('comms');_closeSidebar()"><span class="nav-icon">&#x1F4E2;</span>Communications</button>
       <button class="nav-item" data-section="content" data-label="Content Management" onclick="SokoniAOS.navigate('content');_closeSidebar()"><span class="nav-icon">&#x1F4DD;</span>Content</button>
@@ -540,6 +541,8 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       </div>
       <!-- Finance → Receipts (owner 2026-10-03): read-only, audited; rendered by sokoni-aos-receipts.js -->
       <div class="aos-panel" id="panel-receipts" hidden></div>
+      <!-- Sports review queue (owner 2026-10-03): decisions go through sportsDispatch admin ops; rendered by sokoni-aos-sports.js -->
+      <div class="aos-panel" id="panel-sports" hidden></div>
 
       <div class="aos-panel" id="panel-support" hidden>
         <div class="panel-toolbar">
@@ -689,6 +692,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
   </main>
   <script src="sokoni-aos.js"></script>
   <script src="sokoni-aos-receipts.js" defer></script>
+  <script src="sokoni-aos-sports.js" defer></script>
   <script>
     function _openSidebar()  { document.getElementById("aosSidebar").classList.add("open"); }
     function _closeSidebar() { document.getElementById("aosSidebar").classList.remove("open"); }
