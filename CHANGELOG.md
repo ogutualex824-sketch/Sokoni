@@ -1,3 +1,15 @@
+## [2026-10-03] - businessWorkspace: ownerState + editable (pages render read-only for frozen / suspended / deactivated owners)
+
+Functions only (`functions/business-workspace.js`, the capability line; NOT part of the P0 hotfix unit). **Not deployed.**
+- **API:** the `businessWorkspace` answer now carries `ownerState: 'active'|'deactivated'|'suspended'|'frozen'|'unknown'` and `editable: boolean`.
+- **Inputs:** they are derived on the server from providers status/flags, shops flags and `accountFreezes`, and mirror f3's P0-F rule (1896712).
+  - `editable` is false for any owner who is frozen, suspended or deactivated.
+  - It is also false for a provider status outside the P0-F allow-list.
+  - Unreadable evidence → `unknown` / false (fail closed).
+- **Who uses it:** e3's edit UIs consume it. Pages never derive this state themselves.
+- **Database / rules:** none. Two extra reads per call (`shops/{uid}`, `accountFreezes/{uid}`).
+- **Tests:** `scripts/test-owner-state.js` 19/0. Sabotage caught 6/6. The workspace, education and shell-gate suites are green.
+
 ## [2026-10-03] — Legal Hub L9 (capability line): legal applications switch on quotes + direct booking — NOT deployed
 
 - **functions/shared/service-capabilities.js:** legal → QUOTE_REQUEST + DIRECT_BOOKING. Only a VALID AdminOS approval composes (self-decided or invalid ones are ignored). Booking or receiving leads still needs an active provider, which the Legal Verification Authority grants only with a current LSK check.

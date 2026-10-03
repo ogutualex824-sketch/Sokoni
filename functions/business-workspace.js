@@ -386,15 +386,36 @@ async function approvalStateFor(db, uid, opts) {
   }
 }
 
+/* OWNER STATE (e3 + f3 P0-F, 2026-10-03) — tells a page whether the owner may edit their provider / shop profile, so edit
+   UIs render read-only instead of offering saves the rules will refuse. Mirrors f3's P0-F rule (1896712) exactly:
+   provider owner edits need no deactivated / suspended flag and a status in EDITABLE_STATUSES; shops need no
+   deactivated / suspended / banned flag; an active account freeze blocks both. Pure; unknown inputs → not editable. */
+const EDITABLE_STATUSES = Object.freeze(['active', 'approved', 'pending', 'pending_approval', 'pending_review', 'info_requested', 'draft']);
+function ownerStateOf(prov, shop, freeze) {
+  const p = prov || null, sh = shop || null, f = freeze || null;
+  if (f && f.active === true && f.by === 'admin') return { ownerState: 'frozen', editable: false };
+  const pst = p ? String(p.status || '') : '';
+  if ((p && (p.suspended === true || p.banned === true || ['suspended', 'banned', 'revoked'].includes(pst))) || (sh && (sh.suspended === true || sh.banned === true))) return { ownerState: 'suspended', editable: false };
+  if ((f && f.active === true) || (p && (p.deactivated === true || pst === 'deactivated')) || (sh && sh.deactivated === true)) return { ownerState: 'deactivated', editable: false };
+  if (p && !EDITABLE_STATUSES.includes(pst)) return { ownerState: 'active', editable: false };   /* missing / unknown status: P0-F denies */
+  return { ownerState: 'active', editable: true };
+}
+
 async function workspaceFor(db, uid, opts) {
   const capability = await capabilityFor(db, uid);
   const [p, b] = await Promise.all([db.collection('providers').doc(String(uid)).get(), db.collection('businesses').doc(String(uid)).get()]);
   const prov = p.exists ? (p.data() || {}) : null, biz = b.exists ? (b.data() || {}) : null;
+  let owner;
+  try {
+    const [sh, fz] = await Promise.all([db.collection('shops').doc(String(uid)).get(), db.collection('accountFreezes').doc(String(uid)).get()]);
+    owner = ownerStateOf(prov, sh.exists ? sh.data() : null, fz.exists ? fz.data() : null);
+  } catch (_) { owner = { ownerState: 'unknown', editable: false }; }   /* unreadable → read-only (fail closed) */
   const category = categoryFor(prov, biz);
   const lane = laneOf(category);
   const approval = await approvalStateFor(db, uid, opts);
   const approvalOut = approval.readable ? { state: approval.state, subtype: approval.subtype, transition: approval.transition, ownership: approval.ownership, applicationPath: approval.applicationPath, agreement: approval.agreement } : { state: 'UNREADABLE', error: approval.error };
   const withCap = (w) => Object.assign(w, { capability, category: w.category === undefined ? category : w.category, lane, servicesWorkspace: w.servicesWorkspace === true, approval: approvalOut,
+    ownerState: owner.ownerState, editable: owner.editable,
     serviceCapabilities: Array.isArray(w.serviceCapabilities) ? w.serviceCapabilities : [] });
   const K = CAPS.CLASSIFICATION;
 
@@ -670,4 +691,4 @@ const _h = {
   },
 };
 
-module.exports = { educationTypeOf, profileFor, EDUCATION_TYPES, _applyServiceCaps, STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, PROFILE_NOT_BUILT, ROUTE_OF, modulesForProfile, notBuiltFor, healthcareModules, workspaceFor, approvalStateFor, capabilityFor, categoryFor, laneOf, homeFor, assertModule, gateCalendarModule, gateIfProvider, _h };
+module.exports = { educationTypeOf, profileFor, EDUCATION_TYPES, _applyServiceCaps, STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, PROFILE_NOT_BUILT, ROUTE_OF, modulesForProfile, notBuiltFor, healthcareModules, workspaceFor, approvalStateFor, capabilityFor, categoryFor, laneOf, homeFor, assertModule, gateCalendarModule, gateIfProvider, _h , ownerStateOf, EDITABLE_STATUSES };
