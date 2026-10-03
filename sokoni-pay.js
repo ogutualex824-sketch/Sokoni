@@ -108,25 +108,13 @@ function saveRecords(key,data){ localStorage.setItem(key, JSON.stringify(data));
 function getConfig(key,def){ return localStorage.getItem(key)||def; }
 
 function saveBookingFee(record){
+  /* Local display cache ONLY (2026-10-03, IntaSend convergence Gate 13).
+     This also wrote bookingFees/{ref} to Firestore from the browser, with whatever amount the page passed —
+     car hub wrote one for a booking that took no payment at all, food wrote one when an order was merely
+     placed — and admin.html read bookingFees back as revenue. A browser-authored fee is a second, forgeable
+     financial ledger. Fees and commission are recorded by the server on a verified IntaSend payment
+     (commissionLedger, written by the webhook); this function no longer writes anything authoritative. */
   const r=getRecords("sokoniBookingFees"); r.unshift(record); saveRecords("sokoniBookingFees",r);
-  /* Use the v8 compat Firestore instance (window.firebaseDB) with the v8 API.
-     Previously this imported the v9 modular SDK and passed the v8 compat instance
-     to v9 doc() — causing silent write failures. Fixed to stay in v8 compat. */
-  (function(){
-    var db=window.firebaseDB; if(!db) return;
-    var auth=window.firebaseAuth; var uid=(auth&&auth.currentUser&&auth.currentUser.uid)||null;
-    if(!uid) return; /* Must be authenticated to write bookingFees */
-    var id=record.ref||('BF'+Date.now());
-    /* Firestore rule requires uid, amount, type fields */
-    var serverTs=window.firebase?.firestore?.FieldValue?.serverTimestamp?.();
-    var fsRecord=Object.assign({},record,{
-      uid:uid,
-      amount:record.totalPaid||record.depositAmount||record.amount||0,
-      type:'booking_fee',
-      savedAt:serverTs||Date.now()
-    });
-    db.collection('bookingFees').doc(id).set(fsRecord).catch(function(){});
-  })();
 }
 function saveCommissionRecord(record){
   /* localStorage ledger only — Firestore commissionLedger is written exclusively by

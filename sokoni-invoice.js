@@ -263,13 +263,16 @@
         delivery: data.delivery || 0,
         discount: data.discount || 0,
         total: data.total || 0,
-        paymentMethod: data.paymentMethod || 'M-Pesa',
+        paymentMethod: data.paymentMethod || '—',
         sellerName:  data.sellerName  || 'SOKONI Marketplace',
         sellerPhone: data.sellerPhone || '',
         sellerEmail: data.sellerEmail || '',
         location: data.location || '',
         notes: data.notes || '',
-        status: 'paid'
+        /* 2026-10-03 (Gate 13): an invoice says PAID only when the caller passes paymentVerified:true from a
+           server-confirmed payment. It used to say "Total Paid" and "Paid via M-Pesa" for every caller, including
+           bookings that took no payment — a customer-facing document claiming a payment that never happened. */
+        status: data.paymentVerified === true ? 'paid' : 'unconfirmed'
       };
     },
 
@@ -351,12 +354,12 @@
             +(inv.delivery>0?'<div class="inv-total-row"><span class="inv-total-label">Delivery</span><span class="inv-total-val">KES '+inv.delivery.toLocaleString()+'</span></div>':'')
             +(inv.discount>0?'<div class="inv-total-row"><span class="inv-total-label">Discount</span><span class="inv-total-val" style="color:#ff6464;">− KES '+inv.discount.toLocaleString()+'</span></div>':'')
             +'<div class="inv-grand-row">'
-              +'<span class="inv-grand-label">Total Paid</span>'
+              +'<span class="inv-grand-label">'+(inv.status==='paid'?'Total Paid':'Amount Due')+'</span>'
               +'<span class="inv-grand-val">KES '+inv.total.toLocaleString()+'</span>'
             +'</div>'
           +'</div>'
 
-          +'<div class="inv-payment-badge">'+methodIcon+' Paid via '+esc(inv.paymentMethod)+' · Ref: '+esc(inv.ref)+'</div>'
+          +'<div class="inv-payment-badge">'+(inv.status==='paid' ? methodIcon+' Paid via '+esc(inv.paymentMethod) : 'Payment not yet confirmed')+' · Ref: '+esc(inv.ref)+'</div>'
 
           +(metaHtml?'<div class="inv-meta">'+metaHtml+'</div>':'')
 

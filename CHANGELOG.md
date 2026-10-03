@@ -1,3 +1,16 @@
+## [2026-10-03] - Gate 13: the browser no longer authors payment facts — hosting, NOT deployed
+
+- sokoni-pay.js saveFee: no longer writes bookingFees to Firestore (any signed-in user could create a fee record with a page-supplied
+  amount; car hub wrote one for a booking with no payment, food on order placement; admin.html read it as revenue). Local cache only.
+- car-hub.html: the no-payment booking no longer records an auto-collected commission or a paid fee.
+- sokoni-invoice.js: invoices say PAID / "Paid via" only with paymentVerified:true; otherwise "Amount Due" and "Payment not yet
+  confirmed" (27 callers; many issued PAID documents for unpaid bookings). checkout.html passes its server-verified flag.
+- sokoni-payment-engine.js: recordCompleted removed (browser-side orders paid write + split; no caller, but console-callable).
+- scripts/browser-fabrication-census.js (new) and docs/release-gates/gate13-browser-fabrication-census.md: 64 writes classified;
+  0 BROWSER_AUTHORITY remain on this branch. scripts/test-browser-payment-authority.js 4/0, 4/4 sabotages (invoice executed).
+- Open: bookingFees rule must become server-only (rules release); legacy admin.html revenue reads.
+- Brief updated: Gate 4 server owner = POS workstream (owner decision); Gate 11 = sokoni-e3; webhook-first trade-off recorded.
+
 ## [2026-10-03] - IntaSend-only payment gate: evidence tool and first measurement — docs and tooling, NOT deployed
 
 - scripts/intasend-only-gate.js: read-only gate for any tree (ACTIVE Daraja, FABRICATED client payments, OLD Daraja guard, BLANKET

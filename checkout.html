@@ -3089,6 +3089,8 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
           total: total + delivFee,
           paymentMethod: methodMap[method] || method,
           paymentRef: orderId,
+          /* PAID only when the server verified this payment (verifyIntasendPayment / verification token). */
+          paymentVerified: _paid,
           sellerName: currentCart[0]?.sellerName || "SOKONI Marketplace",
           location: delivAddr,
           date: newOrder.date

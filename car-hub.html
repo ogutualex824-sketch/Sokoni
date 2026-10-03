@@ -2565,13 +2565,9 @@ function confirmBooking(){
     msgEl.style.color="#71ff00";
   }
   showFleetMsg("✅ Booking confirmed — M-Pesa request sent!");
-  /* Record SOKONI commission (12% car-rental rate) */
-  if(typeof SokoniPay !== 'undefined' && SokoniPay.saveCommission){
-    var _cPct =SokoniCommission.pct('car-rental');
-    var _cCut = Math.round(total * _cPct / 100);
-    SokoniPay.saveCommission({ref:bid,providerName:c.owner||'Car Owner',category:'car-rental',commissionPct:_cPct,sokoniCut:_cCut,providerNet:total-_cCut,serviceTotal:total,status:'auto_collected',note:'Car rental booking',createdAt:Date.now()});
-    SokoniPay.saveFee&&SokoniPay.saveFee({ref:bid,providerName:c.owner||'Car Owner',category:'car-rental',totalPaid:total,sokoniCut:_cCut,providerNet:total-_cCut,commissionPct:_cPct,phone:phone,providerPhone:c.ownerPhone||'',serviceDesc:c.make+' '+c.model+' rental',status:'paid',paymentType:'car_rental',createdAt:Date.now()});
-  }
+  /* No fee or commission is recorded here (2026-10-03). This booking takes NO payment, so the
+     "auto-collected" commission and the paid booking fee written from this point were fabricated
+     financial records. Commission is recorded by the server on a verified IntaSend payment. */
   if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'rental',buyerName:name,buyerPhone:phone,items:[{name:c.make+' '+c.model+' ('+c.plate+') Rental',category:'Car Rental',qty:days,price:dp},{name:'Security Deposit',category:'Deposit',qty:1,price:c.deposit||0}].concat(ins?[{name:'Insurance',category:'Insurance',qty:days,price:500}]:[]),subtotal:dp*days+(ins?500*days:0),total:total,paymentMethod:'M-Pesa',paymentRef:bid,sellerName:'SOKONI Car Hub',date:new Date().toISOString(),notes:'Pickup: '+p+' | Return: '+r});},1000);
   setTimeout(()=>{closeOverlay("bookingOverlay");showTab("bookings",null);renderBookings();filterCars();},3000);
 }

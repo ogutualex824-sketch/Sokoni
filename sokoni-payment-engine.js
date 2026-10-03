@@ -737,80 +737,9 @@ const SokoniPaymentEngine = (function () {
      PAYMENT RECORD  — convenience wrapper for order payments
   ════════════════════════════════════════════════════════════ */
   const PaymentRecord = {
-    /**
-     * Record a completed payment and optionally create an escrow.
-     * Called after M-Pesa STK callback or IntaSend webhook confirms payment.
-     */
-    async recordCompleted(opts) {
-      const {
-        orderId, buyerId, sellerId,
-        amount, currency = 'KES',
-        provider, providerRef, phone,
-        useEscrow = true,
-        commissionRate = PLATFORM_FEE_RATE,
-        metadata = {},
-      } = opts;
-
-      const idemKey = `payment::${orderId}::${providerRef}`;
-      const cached  = _idemGuard(idemKey);
-      if (cached) return cached;
-
-      const amt = _validateAmount(amount, currency);
-      const ref = _ref();
-
-      const { collection, doc, addDoc, setDoc, serverTimestamp } = await _fsImport();
-      const db = _db();
-
-      /* Save payment record */
-      const payment = {
-        ref, orderId, buyerId, sellerId,
-        amount: amt, currency,
-        provider, providerRef, phone,
-        status: PAYMENT_STATUS.COMPLETED,
-        serverTs: serverTimestamp(),
-        metadata,
-      };
-      await addDoc(collection(db, 'payments'), payment);
-
-      /* Create escrow if requested */
-      let escrowResult = null;
-      if (useEscrow && sellerId) {
-        escrowResult = await Escrow.create({
-          orderId, buyerId, sellerId,
-          amount: amt, currency, metadata,
-        });
-      } else {
-        /* No escrow — split immediately */
-        const tax = TaxCalc.calculate(amt, { currency, commissionRate });
-        await SplitPayment.execute({
-          total: amt, currency,
-          ref,
-          splits: [
-            { account: `seller:${sellerId}`, share: (amt - tax.commission) / amt, label: 'seller_net' },
-            { account: 'platform:revenue',   share: tax.commission / amt,          label: 'commission'  },
-          ],
-          metadata: { orderId },
-        });
-      }
-
-      /* Update order status */
-      await setDoc(doc(db, 'orders', orderId), {
-        paymentStatus: 'paid',
-        paidAt:        serverTimestamp(),
-        paymentRef:    ref,
-        escrowRef:     escrowResult?.ref ?? null,
-      }, { merge: true }).catch(() => {});
-
-      if (window.SokoniEventBus) {
-        await SokoniEventBus.emit(SokoniEventBus.EVENTS.PAYMENT_COMPLETED, {
-          ref, orderId, buyerId, sellerId, amount: amt, currency, provider, providerRef,
-        });
-      }
-
-      const result = { ref, status: PAYMENT_STATUS.COMPLETED, amount: amt, escrowRef: escrowResult?.ref };
-      _idemSet(idemKey, result);
-      return result;
-    },
+    /* recordCompleted REMOVED 2026-10-03 (IntaSend convergence Gate 13): it wrote orders/{id}.paymentStatus'paid'
+       and ran a payment split FROM THE BROWSER. No page called it, but it was loaded on live pages and callable from a
+       console. Payment completion is the server's: the IntaSend webhook / verifyIntasendPayment. */
 
     /** Record a failed payment attempt. */
     async recordFailed(opts) {

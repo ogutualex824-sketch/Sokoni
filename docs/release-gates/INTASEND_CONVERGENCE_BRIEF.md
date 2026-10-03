@@ -12,6 +12,14 @@ Two truths stay separate:
 - **IntaSend-only migration** stays uncertified until every tree and every payment surface converges. A green webhook
   is not a green estate.
 
+**"Webhook first" is not free (sokoni-5b, 2026-10-03).** Live checkout (72dca56) mints no `product_order` intent. Once
+the Gate 5 webhook (8b569d9, or bare f076c64) is live, every genuine online M-Pesa checkout parks in REVIEW
+(`missing_intent`): money captured, order not paid, seller not credited, until `createPaymentIntent` product_order
+(b5d0541) and checkout Unit 3 (3eb22ce) also ship. Owner decision:
+
+- **(a) webhook first:** the KES 1 attack closes now; legitimate checkouts need manual re-drive until the other two ship.
+- **(b) intent → checkout Unit 3 → webhook:** checkout stays automatic; the attack stays open for two more releases.
+
 ## Gate owners (proposed by sokoni-b2; each owner confirms or corrects)
 
 | Gate | Subject | Proposed owner |
@@ -19,14 +27,14 @@ Two truths stay separate:
 | 1 | 17-tree census, six-way classification | sokoni-b2 |
 | 2 | Daraja removal: cherry-pick of 093fd4f per tree (never a merge) | each tree's owner |
 | 3 | Till + merchant dashboard on the existing IntaSend authority | sokoni-2f (union 20b92fa) |
-| 4 | Old POS: client fake removed (99e1177 / 863f0f6); server sale completion requires a verified payment record | sokoni-2f (client) · POS lane (server `posCompleteCheckout`) |
+| 4 | Old POS: client fake removed (99e1177 / 863f0f6); server sale completion requires a verified payment record | sokoni-2f (client) · **POS workstream** (server `posCompleteCheckout`, seam `functions/pos-zero-friction.js`; owner decision 2026-10-03; acceptance SP-01…SP-10; no current session identified — owner to name one) |
 | 5 | Payment amount + ownership binding on the f076c64 baseline; mandatory attack tests | webhook repair owner (`C:/temp/sok-p0wh`) |
 | 6 | All hub payment routes: server-priced intent → IntaSend → webhook | sokoni-b2 |
 | 7 | Landlord / rent: no browser authority | sokoni-b2 |
 | 8 | Card through IntaSend, method = card | sokoni-b2 |
 | 9 | One authoritative IntaSend webhook | webhook repair owner |
 | 10 | Webhook idempotency | webhook repair owner |
-| 11 | Public create-order API: server economics | sokoni-e3 (their finding) |
+| 11 | Public create-order API: server economics | sokoni-e3 (confirmed; released by sokoni-5b) |
 | 12 | Payment method from the provider, never the UI | sokoni-b2 (with 8) |
 | 13 | Browser fabrication census across 17 trees | sokoni-b2 |
 | 14 | Foundation donations and payouts | sokoni-2f |
