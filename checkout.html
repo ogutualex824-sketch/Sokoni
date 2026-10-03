@@ -1234,7 +1234,7 @@
           </label>
         </div>
         <div id="coImpactOpts" style="display:none;">
-          <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:8px;">Add to your order to support community programs:</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:8px;">Choose an amount — after your order, you can complete a separate donation to SOKONI Foundation:</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;" id="coImpactPresets">
             <button onclick="_setImpact(this,10)" class="co-impact-btn">KSh 10</button>
             <button onclick="_setImpact(this,50)" class="co-impact-btn">KSh 50</button>
@@ -1588,8 +1588,8 @@ function _updateImpactRow() {
   const on = document.getElementById('coImpactToggle').checked;
   document.getElementById('coImpactOpts').style.display = on ? 'block' : 'none';
   document.getElementById('coImpactSummary').textContent = on
-    ? `KSh ${_impactAmt} will be added to your order total and donated to SOKONI Impact.`
-    : 'Enable to add a community contribution to your order.';
+    ? `After your order, you can complete a separate donation of KSh ${_impactAmt} to SOKONI Foundation. It is not added to your order total.`
+    : 'Turn on to give a separate donation to SOKONI Foundation after your order.';
   updateTotals();
 }
 
@@ -1597,8 +1597,28 @@ function _setImpact(btn, amt) {
   document.querySelectorAll('.co-impact-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   _impactAmt = amt;
-  document.getElementById('coImpactSummary').textContent = `KSh ${amt} will be donated to SOKONI Impact.`;
+  document.getElementById('coImpactSummary').textContent = `After your order, you can complete a separate donation of KSh ${amt} to SOKONI Foundation. It is not added to your order total.`;
   updateTotals();
+}
+
+/* Shown in the success overlay ONLY after impactCheckoutDonate has answered that the pledge exists and is
+   still 'pledged'. The link carries the server's pledge id; foundation.html re-reads it (impactGetMyPledge)
+   and takes the payment as its own IntaSend transaction. Built with DOM APIs — no HTML interpolation. */
+function _showDonationPledgeCta(pledgeId, amt) {
+  const ref = document.getElementById('successDeliveryInfo');
+  if (!ref || !ref.parentNode || document.getElementById('successDonateCta')) return;
+  const box = document.createElement('div');
+  box.id = 'successDonateCta';
+  box.style.cssText = 'background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:12px 14px;margin-bottom:16px;';
+  const a = document.createElement('a');
+  a.href = 'foundation.html?pledge=' + encodeURIComponent(pledgeId) + '#donate';
+  a.textContent = (typeof amt === 'number' && amt > 0) ? '💚 Complete your KES ' + amt.toLocaleString() + ' donation' : '💚 Complete your donation';
+  a.style.cssText = 'display:inline-block;padding:10px 18px;background:#f59e0b;color:#000;font-weight:800;border-radius:10px;text-decoration:none;font-size:13px;';
+  const note = document.createElement('div');
+  note.textContent = 'A separate payment to SOKONI Foundation — it was not included in your order.';
+  note.style.cssText = 'font-size:11px;color:rgba(255,255,255,.5);margin-top:6px;';
+  box.appendChild(a); box.appendChild(note);
+  ref.parentNode.insertBefore(box, ref.nextSibling);
 }
 
 /* Load cart items into summary.
@@ -1843,9 +1863,11 @@ function updateTotals(){
     }
   }
 
-  /* Add optional Impact contribution to total */
-  const impactOn = document.getElementById('coImpactToggle')?.checked;
-  if (impactOn) orderTotal += _impactAmt;
+  /* The optional Foundation donation is NOT part of the order total (2026-10-03). It used to be added
+     here, but the server-quoted total (_serverTotalOverride, below) replaced it, so the buyer was shown
+     a donation "added to your order" and never charged for it. The donation is now its own payment:
+     impactCheckoutDonate records a pledge (CHK_<orderId>) and the success overlay links to
+     foundation.html?pledge=<id> to pay it separately. */
 
   /* Once the server has quoted a higher authoritative total, that figure wins
      everywhere the total is shown — summary, pay button and every payment-method
@@ -3156,9 +3178,17 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
     const impactOn = document.getElementById('coImpactToggle')?.checked;
     if (impactOn && window.firebaseFunctions && window.httpsCallable && _impactAmt > 0) {
       const impactDest = document.getElementById('coImpactDest')?.value || 'General Foundation';
+      const impactAmtAtOrder = _impactAmt;
       window.httpsCallable(window.firebaseFunctions, 'impactCheckoutDonate')({
         amount: _impactAmt, orderId, destination: impactDest, type: 'checkout',
-      }).catch(() => {}); /* fire and forget — order is already saved */
+      }).then((res) => {
+        /* The server records a PLEDGE (CHK_<orderId>), not a donation — nothing was charged with the order.
+           Offer the separate payment only when the server confirms a still-'pledged' pledge. */
+        const d = res && res.data;
+        const pid = d && String(d.donationId || d.pledgeId || '');
+        if (!d || d.ok !== true || d.skipped || d.status !== 'pledged' || !/^CHK_[A-Za-z0-9_-]{1,128}$/.test(pid)) return;
+        _showDonationPledgeCta(pid, d.alreadyPledged ? null : impactAmtAtOrder);
+      }).catch(() => {}); /* order is already saved; no pledge → no donation button */
     }
   } catch(_) {}
 

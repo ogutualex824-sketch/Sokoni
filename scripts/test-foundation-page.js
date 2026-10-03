@@ -155,6 +155,47 @@ const a = ctx.out.a;
 ck('F8c amount is validated, never substituted (9/100001/12.5/""/-50 refused; 1,000→1000; bounds accepted)',
   a[0].err && a[0].value === undefined && a[1].err && a[2].err && a[3].err && a[7].err && a[4].value === 1000 && a[5].value === 10 && a[6].value === 100000, a);
 
+/* F9 — transparency is VERIFIED-only (addendum 2026-10-03); run the real loadDashboard against fake answers */
+ck('F9 labels: "Verified donations received" / "Verified donations available"; blanket "being reconciled" badge hidden by default',
+  /Verified donations received<\/span><b id="trRecv">—</.test(html) && /Verified donations available<\/span><b id="trAvail">—</.test(html) &&
+  /<p id="trBadgeWrap" hidden>/.test(html) && /<p class="muted" id="trRecon" hidden><\/p>/.test(html));
+ck('F9b totalReceived (recorded, not proof of payment) is never rendered publicly', !/b\.totalReceived/.test(code));
+async function dash(answer) {
+  const els = {};
+  const el = (id) => els[id] || (els[id] = { id, textContent: '', hidden: id === 'trBadgeWrap' || id === 'trRecon', innerHTML: '', addEventListener() {} });
+  const c = { $: el, esc: (v) => String(v), money: null, call: () => (answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer)), supportProgramme() {} };
+  vm.createContext(c);
+  vm.runInContext('money=' + grab(/var money = (function \(n\) \{[^\n]*\});/, js) + ';' + grab(/(function loadDashboard\(\) \{[\s\S]*?\n  \})/, js), c);
+  c.loadDashboard();
+  await new Promise((r) => setTimeout(r, 5));
+  return { recv: el('trRecv').textContent, avail: el('trAvail').textContent, out: el('trOut').textContent, badge: el('trBadgeWrap').hidden, rec: el('trRecon').textContent, recHidden: el('trRecon').hidden };
+}
+
+/* F10 — processed story media */
+const mctx = {};
+vm.runInNewContext('var esc=' + grab(/var esc = (function \(v\) \{[\s\S]*?\n  \});/, js) + ';' +
+  'var safeUrl=' + grab(/var safeUrl = (function \(u\) \{[^\n]*\});/, js) + ';' + grab(/(function mediaHtml\(m, title\) \{[\s\S]*?\n  \})/, js) +
+  'out={v:mediaHtml({type:"video",contentType:"video/mp4",url:"https://x.test/v.mp4",thumbUrl:"https://x.test/p.webp"},"T"),' +
+  'i:mediaHtml({type:"image",contentType:"image/webp",url:"https://x.test/i.webp",thumbUrl:"https://x.test/t.webp"},"T"),' +
+  'bad:mediaHtml({type:"video",contentType:"video/mp4",url:"javascript:alert(1)"},"T"),' +
+  'mis:mediaHtml({type:"image",contentType:"video/mp4",url:"https://x.test/v.mp4"},"T")};', mctx);
+const mo = mctx.out;
+ck('F10 video/mp4 renders <video preload="none" poster=thumbUrl><source type="video/mp4">; image/webp renders <img loading="lazy">; contentType wins over type; non-https refused',
+  /^<video class="story-media" controls playsinline preload="none" poster="https:\/\/x\.test\/p\.webp" aria-label="Video: T"><source src="https:\/\/x\.test\/v\.mp4" type="video\/mp4"><\/video>$/.test(mo.v) &&
+  /^<img class="story-media" loading="lazy" decoding="async" src="https:\/\/x\.test\/t\.webp"/.test(mo.i) && mo.bad === '' && /^<video/.test(mo.mis), mo);
+
+/* F11 — ?pledge=<id> completes an EXISTING pledge (checkout's CHK_<orderId>) */
+const fnLoadPledge = (code.match(/function loadPledge\(id\) \{[\s\S]*?\n  \}/) || [''])[0];
+ck('F11 ?pledge is format-checked (PLG_|CHK_) and loaded via impactGetMyPledge({ pledgeId }) only when signed in',
+  /var PLEDGE_RE = \/\^\(PLG\|CHK\)_\[A-Za-z0-9_-\]\{1,200\}\$\/;/.test(code) && /return p && PLEDGE_RE\.test\(p\) \? p : '';/.test(code) &&
+  /call\('impactGetMyPledge', \{ pledgeId: id \}\)/.test(fnLoadPledge) && /if \(pid && !D\.existing\) \{ if \(currentUser\(\)\) loadPledge\(pid\); else pledgeSignIn\(\); \}/.test(code));
+ck("F11b the wizard adopts the pledge ONLY when the server says status 'pledged' (own pledge; amount whole, 10..100000) — and never shows the thank-you there",
+  /if \(r\.status !== 'pledged'\) \{[^\n]*return; \}/.test(fnLoadPledge) && fnLoadPledge.indexOf("r.status !== 'pledged'") < fnLoadPledge.indexOf('D.existing = {') &&
+  /r\.amount < MIN \|\| r\.amount > MAX/.test(fnLoadPledge) && !/done\(|Thank you/.test(fnLoadPledge));
+ck('F11c an existing pledge skips impactPledgeDonation and goes straight to createPaymentIntent({purpose:"donation", pledgeId}) → STK → poll',
+  /if \(D\.existing\) \{[\s\S]{0,300}start = Promise\.resolve\(\{ pledgeId: D\.existing\.pledgeId, amount: D\.existing\.amount \}\);\s*\} else \{[\s\S]{0,400}start = call\('impactPledgeDonation', body\);\s*\}/.test(code) &&
+  (code.match(/call\('impactPledgeDonation'/g) || []).length === 1 && /start\.then\(function \(r\) \{/.test(code));
+
 /* B1 */
 const bkLive = stripHtmlComments(bkHtml);
 ck('B1 banking.html no longer loads sokoni-banking-pro.js and loads banking-hub.js',
@@ -223,5 +264,34 @@ ck('B4d licenceLine() reaches markup only through esc(); cards and profile use t
 ck('B4e "Listed by SOKONI" kept on cards and profile; reviewed registration never described as a regulator approval',
   (bkCode.match(/<span class="bkd-listed">Listed by SOKONI<\/span>/g) || []).length === 2 && /not a regulator\\'s approval/.test(bkCode));
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+(async () => {
+  const a1 = await dash({ balance: { verified: 12000, available: 9000, requiresReconciliation: 3500, totalReceived: 99999, totalDisbursed: 0 } });
+  const a2 = await dash({ balance: { verified: 0, available: 0, requiresReconciliation: 0, totalReceived: 5000 } });
+  const a3 = await dash({ balance: { available: 777, totalReceived: 99999, totalDisbursed: 100 } });
+  const a4 = await dash(new Error('functions/not-found'));
+  ck('F9c verified answer: received = verified, available = available; reconciliation line "Still being reconciled: KES n (not counted as received)" only when > 0',
+    a1.recv === 'KES 12,000' && a1.avail === 'KES 9,000' && a1.out === 'KES 0' && a1.badge === true && a1.rec === 'Still being reconciled: KES 3,500 (not counted as received)' && a1.recHidden === false &&
+    a2.recv === 'KES 0' && a2.avail === 'KES 0' && a2.recHidden === true && a2.rec === '', { a1, a2 });
+  ck('F9d older answer without `verified`: received/available render — (never the unverified totals) and the "being reconciled" badge shows; failure → —',
+    a3.recv === '—' && a3.avail === '—' && a3.badge === false && a3.recHidden === true && a4.recv === '—' && a4.avail === '—' && a4.out === '—', { a3, a4 });
+
+  /* C — checkout donation honesty (2026-10-03) */
+  const co = read('checkout.html');
+  const upd = (co.match(/function updateTotals\(\)\{[\s\S]*?\n\}/) || [''])[0];
+  ck('C1 the donation is NOT added to the order total (updateTotals never reads the toggle or the amount); server total still wins',
+    upd.length > 500 && !/_impactAmt|coImpactToggle/.test(upd) && !/orderTotal\s*\+=\s*_impactAmt/.test(co) && /if \(_serverTotalOverride != null\) orderTotal = _serverTotalOverride;/.test(upd));
+  ck('C2 copy says the donation is separate, after the order — never "added to your order total"',
+    !/will be added to your order total|will be donated to SOKONI Impact|Add to your order to support/.test(co) &&
+    (co.match(/After your order, you can complete a separate donation/g) || []).length === 2 && /you can complete a separate donation to SOKONI Foundation/.test(co));
+  const cta = (co.match(/function _showDonationPledgeCta\(pledgeId, amt\) \{[\s\S]*?\n\}/) || [''])[0];
+  ck('C3 impactCheckoutDonate payload unchanged; the "Complete your donation" link appears ONLY after the server confirms a CHK_ pledge with status pledged',
+    /window\.httpsCallable\(window\.firebaseFunctions, 'impactCheckoutDonate'\)\(\{\s*amount: _impactAmt, orderId, destination: impactDest, type: 'checkout',\s*\}\)\.then\(\(res\) => \{/.test(co) &&
+    /if \(!d \|\| d\.ok !== true \|\| d\.skipped \|\| d\.status !== 'pledged' \|\| !\/\^CHK_\[A-Za-z0-9_-\]\{1,128\}\$\/\.test\(pid\)\) return;\s*_showDonationPledgeCta\(pid,/.test(co) &&
+    (co.match(/_showDonationPledgeCta\(/g) || []).length === 2);
+  ck('C4 the link is foundation.html?pledge=<encoded id>, built with DOM APIs (textContent, no innerHTML)',
+    /a\.href = 'foundation\.html\?pledge=' \+ encodeURIComponent\(pledgeId\) \+ '#donate';/.test(cta) && /Complete your KES ' \+ amt\.toLocaleString\(\) \+ ' donation'/.test(cta) &&
+    !/innerHTML|insertAdjacentHTML/.test(cta) && /textContent/.test(cta));
+
+  console.log(`\n${pass} passed, ${fail} failed`);
+  process.exit(fail ? 1 : 0);
+})();
