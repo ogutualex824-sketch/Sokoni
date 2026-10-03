@@ -132,7 +132,8 @@ function concatOffenders(src, safeNames, skipRe) {
 const fOff = concatOffenders(codeN, ['esc', 'safeUrl', 'mediaHtml', 'storyCard', 'encodeURIComponent', 'money'],
   /^(rows|camps|T\.files)\b/);
 ck('F7 foundation.js: every concatenated server value is escaped', fOff.length === 0, fOff);
-const bOff = concatOffenders(bkCodeN, ['esc', 'safeUrl', 'list', 'emptyHtml', 'card', 'storyCard', 'encodeURIComponent', 'typeLabel', 'label', 'hoursText'],
+/* licenceLine() returns plain TEXT (escaped at every use — asserted in B4d), so it is not an HTML builder */
+const bOff = concatOffenders(bkCodeN.replace(/function licenceLine\(l\) \{[\s\S]*?\n  \}/, ''), ['esc', 'safeUrl', 'list', 'emptyHtml', 'card', 'storyCard', 'encodeURIComponent', 'typeLabel', 'label', 'hoursText'],
   /^(rows|services|items)\b/);
 ck('F7b banking-hub.js: every concatenated server value is escaped', bOff.length === 0, bOff);
 ck('F7c no server URL reaches src/href/poster without safeUrl()',
@@ -196,6 +197,31 @@ ck('B3d directory loads lazily per pane (bk:pane event, loaded/loading guard) an
   /document\.addEventListener\('bk:pane'/.test(bkCode) && /if \(st\.loading \|\| \(st\.loaded && !more\)\) return;/.test(bkCode) &&
   /The directory isn't available right now/.test(bkCode) && /new CustomEvent\('bk:pane'/.test(bkHtml));
 ck('B3e USSD banner is labelled external', /External — dial from your phone/.test(bkLive));
+
+/* B4 — trust markers (contract addendum 2026-10-03), run against the real helpers */
+const bctx = {};
+vm.runInNewContext(
+  'var esc=' + grab(/var esc = (function \(v\) \{[\s\S]*?\n  \});/, bkJs) + ';' +
+  'var when=function(ms){return typeof ms==="number"&&ms>0?"3 Oct 2026":"—";};' +
+  grab(/(function reviewedTag\(m, key\) \{[\s\S]*?\n  \})/, bkJs) + grab(/(function licenceLine\(l\) \{[\s\S]*?\n  \})/, bkJs) +
+  'out={no:[reviewedTag({registrationReviewed:false,reviewBadge:{tooltip:"t"}},"a"),reviewedTag({registrationReviewed:"true"},"a"),reviewedTag(null,"a"),reviewedTag({featured:true,promoted:true},"a")],' +
+  'yes:reviewedTag({registrationReviewed:true,reviewBadge:{label:"Registration reviewed by SOKONI",tooltip:"Not a <i>licence</i>"}},"c-u1\\"x"),' +
+  'l:[licenceLine({status:"verified_against_register",issuingAuthority:"SASRA",checkedAt:5}),licenceLine({status:"expired",issuingAuthority:"SASRA",expiryDate:"2026-02-01"}),licenceLine({status:"not_found_on_register",issuingAuthority:"SASRA"}),licenceLine(null)]};', bctx);
+const bo = bctx.out;
+ck('B4 "Registration reviewed by SOKONI" ONLY when registrationReviewed === true (false / "true" / null / promoted-only → nothing)',
+  bo.no.every((x) => x === ''), bo.no);
+ck('B4b badge text exact; server tooltip on title + aria-describedby → visually-hidden text with a sanitised id; tooltip escaped',
+  /^<span class="bkd-reviewed" title="Not a &lt;i&gt;licence&lt;\/i&gt;" aria-describedby="rv-c-u1x">Registration reviewed by SOKONI<\/span><span class="bkd-vh" id="rv-c-u1x">Not a &lt;i&gt;licence&lt;\/i&gt;<\/span>$/.test(bo.yes) &&
+  /\.bkd-vh\{position:absolute;width:1px;height:1px;overflow:hidden/.test(bkHtml), bo.yes);
+ck('B4c licence line: checked-against-register with date / expired with date / nothing for any other state',
+  bo.l[0] === 'Licence checked against the SASRA register on 3 Oct 2026' && bo.l[1] === 'Licence expired (2026-02-01)' && bo.l[2] === '' && bo.l[3] === '', bo.l);
+ck('B4d licenceLine() reaches markup only through esc(); cards and profile use the server markers (reviewedTag on r / mk), Featured only when featured === true',
+  [...bkCode.matchAll(/licenceLine\(/g)].length === 3 && (bkCode.match(/esc\(lic\)/g) || []).length === 2 && !/\+ lic \+/.test(bkCode) &&
+  /reviewedTag\(r, 'c-' \+ uid\)/.test(bkCode) && /reviewedTag\(mk, 'p-' \+ uid\)/.test(bkCode) &&
+  /var mk = \(r && typeof r\.registrationReviewed === 'boolean'\) \? r : base;/.test(bkCode) &&
+  /r\.featured === true \? '<span class="bkd-featured">Featured<\/span>'/.test(bkCode));
+ck('B4e "Listed by SOKONI" kept on cards and profile; reviewed registration never described as a regulator approval',
+  (bkCode.match(/<span class="bkd-listed">Listed by SOKONI<\/span>/g) || []).length === 2 && /not a regulator\\'s approval/.test(bkCode));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -53,6 +53,26 @@
   }
   function currentUser() { return (window.firebaseAuth && window.firebaseAuth.currentUser) || null; }
 
+  /* ── Trust markers (owner decision 2026-10-01) ─────────────────────────────────────────
+     "Registration reviewed by SOKONI" appears ONLY when the server says registrationReviewed === true, with
+     the server's tooltip (title + aria-describedby + visually-hidden text). A licence is a separate fact:
+     a line appears only for an admin check against the issuing authority's register, or its expiry.
+     Featured / Promoted rank a listing; they never vouch for it. Nothing here is inferred client-side. */
+  var when = function (ms) { return typeof ms === 'number' && ms > 0 ? new Date(ms).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'; };
+  function reviewedTag(m, key) {
+    if (!m || m.registrationReviewed !== true) return '';
+    var tip = (m.reviewBadge && m.reviewBadge.tooltip) || '';
+    var id = 'rv-' + String(key || '').replace(/[^\w-]/g, '');
+    return '<span class="bkd-reviewed"' + (tip ? ' title="' + esc(tip) + '" aria-describedby="' + esc(id) + '"' : '') + '>Registration reviewed by SOKONI</span>' +
+      (tip ? '<span class="bkd-vh" id="' + esc(id) + '">' + esc(tip) + '</span>' : '');
+  }
+  function licenceLine(l) {   /* plain text — escape at use */
+    if (!l || !l.issuingAuthority) return '';
+    if (l.status === 'expired') return 'Licence expired (' + (l.expiryDate || '—') + ')';
+    if (l.status === 'verified_against_register') return 'Licence checked against the ' + l.issuingAuthority + ' register on ' + when(l.checkedAt);
+    return '';
+  }
+
   /* ── Directory panes ──────────────────────────────────────────────────────────────── */
   var S = {};   /* paneName -> { loaded, loading, next, partners: {uid: row} } */
 
@@ -60,11 +80,14 @@
     var uid = String(r.partnerUid || '');
     var services = Array.isArray(r.services) ? r.services.slice(0, 6) : [];
     var site = safeUrl(r.website);
+    var lic = licenceLine(r.licenceVerification);
     return '<article class="bkd-card">' +
       '<div class="bkd-tags"><span class="bkd-listed">Listed by SOKONI</span>' +
-        (r.promoted === true ? '<span class="bkd-promo">Promoted</span>' : '') + '</div>' +
+        (r.featured === true ? '<span class="bkd-featured">Featured</span>' : '') +
+        (r.promoted === true ? '<span class="bkd-promo">Promoted</span>' : '') + reviewedTag(r, 'c-' + uid) + '</div>' +
       '<h3>' + esc(r.name || 'Unnamed institution') + '</h3>' +
       '<div class="bkd-type">' + esc(typeLabel(r.institutionType)) + (r.county ? ' · ' + esc(r.county) : '') + '</div>' +
+      (lic ? '<div class="bkd-meta">' + esc(lic) + '</div>' : '') +
       (r.institutionType === 'DIGITAL_LENDER' ? '<p class="bkd-warn">Check the lender\'s CBK licence before borrowing.</p>' : '') +
       (services.length ? '<div class="bkd-tags">' + services.map(function (s) { return '<span class="bkd-tag">' + esc(label(s)) + '</span>'; }).join('') + '</div>' : '') +
       (site ? '<div class="bkd-meta"><a href="' + esc(site) + '" target="_blank" rel="noopener noreferrer">' + esc(site.replace(/^https:\/\//i, '').replace(/\/$/, '')) + '</a></div>' : '') +
@@ -117,6 +140,8 @@
   var foundationLoaded = false;
   function storyCard(r) {
     var m = (Array.isArray(r.media) ? r.media : [])[0], media = '';
+    /* processed media carry contentType (video/mp4 | image/webp); older rows only `type` */
+    if (m && typeof m.contentType === 'string') m = { type: m.contentType === 'video/mp4' ? 'video' : (/^image\//.test(m.contentType) ? 'image' : ''), url: m.url, thumbUrl: m.thumbUrl };
     if (m && m.type === 'image' && safeUrl(m.thumbUrl || m.url)) media = '<img loading="lazy" decoding="async" src="' + esc(safeUrl(m.thumbUrl || m.url)) + '" alt="' + esc('Photo shared with the story: ' + (r.title || 'Story')) + '">';
     else if (m && m.type === 'video' && safeUrl(m.url)) media = '<video controls playsinline preload="none"' + (safeUrl(m.thumbUrl) ? ' poster="' + esc(safeUrl(m.thumbUrl)) + '"' : '') + ' src="' + esc(safeUrl(m.url)) + '" aria-label="' + esc('Video: ' + (r.title || 'Story')) + '"></video>';
     var who = [r.name, r.location].filter(Boolean).join(' · ');
@@ -202,15 +227,22 @@
       var p = (r && (r.profile || r.listing)) || r || {};
       var products = (r && Array.isArray(r.products)) ? r.products : (Array.isArray(p.products) ? p.products : []);
       var site = safeUrl(p.website || base.website);
-      var reg = p.licenceClaimed || p.registrationNumber || p.registration || base.licenceClaimed;
+      /* trust markers live at the TOP level of the publicProfile answer; the directory row is the fallback */
+      var mk = (r && typeof r.registrationReviewed === 'boolean') ? r : base;
+      var reviewed = mk.registrationReviewed === true;
+      var lic = licenceLine(mk.licenceVerification);
+      var regInfo = r && r.registration && typeof r.registration === 'object' ? r.registration : {};
+      var regText = [p.licenceClaimed || base.licenceClaimed, regInfo.regulator].filter(function (x) { return typeof x === 'string' && x; }).join(' · ');
       var itype = p.institutionType || base.institutionType;
       var county = p.county || base.county;
       var promoted = (p.promoted === true || base.promoted === true);
+      var featured = ((r && r.featured === true) || base.featured === true);
       var services = Array.isArray(p.services) ? p.services : [];
       var branches = Array.isArray(p.branches) ? p.branches : [];
       var hours = hoursText(p.hours);
       var body =
-        '<div class="bkd-tags"><span class="bkd-listed">Listed by SOKONI</span>' + (promoted ? '<span class="bkd-promo">Promoted</span>' : '') + '</div>' +
+        '<div class="bkd-tags"><span class="bkd-listed">Listed by SOKONI</span>' + (featured ? '<span class="bkd-featured">Featured</span>' : '') +
+          (promoted ? '<span class="bkd-promo">Promoted</span>' : '') + reviewedTag(mk, 'p-' + uid) + '</div>' +
         '<p class="bkd-type">' + esc(typeLabel(itype)) + (county ? ' · ' + esc(county) : '') + '</p>' +
         (itype === 'DIGITAL_LENDER' ? '<p class="bkd-warn">Check the lender\'s CBK licence before borrowing.</p>' : '') +
         (p.description ? '<h3>About</h3><p>' + esc(p.description) + '</p>' : '') +
@@ -218,7 +250,8 @@
         (branches.length ? '<h3>Branches</h3>' + list(branches, branchText) : '') +
         (hours ? '<h3>Hours</h3><p>' + esc(hours) + '</p>' : '') +
         (products.length ? '<h3>Products and rates</h3>' + list(products, productText) + '<p class="bkd-meta">Published by the institution. Confirm terms with them before you commit.</p>' : '') +
-        (reg ? '<h3>Registration</h3><p>' + esc(reg) + ' <span class="bkd-meta">(self-declared — not checked by SOKONI)</span></p>' : '') +
+        (regText ? '<h3>Registration</h3><p>' + esc(regText) + ' <span class="bkd-meta">' + (reviewed ? '(registration information reviewed by SOKONI — not a regulator\'s approval)' : '(self-declared — not checked by SOKONI)') + '</span></p>' : '') +
+        (lic ? '<h3>Licence</h3><p>' + esc(lic) + '</p>' : '') +
         (site ? '<h3>Website</h3><p><a href="' + esc(site) + '" target="_blank" rel="noopener noreferrer">' + esc(site) + '</a></p>' : '') +
         '<div class="bkd-sheet-actions"><button type="button" class="bkd-btn bkd-btn-acc" data-contact="' + esc(uid) + '">Contact</button></div>';
       var b = $('bkdModalBody'); if (b) b.innerHTML = body;
