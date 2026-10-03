@@ -139,7 +139,13 @@ ck('FT-12', panelLinks && fs.existsSync(path.join(ROOT, 'community.html')),
   'O-7: Community, Workouts and Ask Hub panels each link to the Community Hub (community.html, which exists in this tree)');
 ck('FT-13', /href="category\.html\?cat=sports"/.test(HTML) && fs.existsSync(path.join(ROOT, 'category.html')) && !/Sell Memberships|seller\.html|eqSellPrice|clsFee|bkProvider/.test(HTML),
   'equipment routes to the real marketplace category page (category.html?cat=sports); no second equipment catalogue, no "Sell Memberships", no class-fee / booking form');
-ck('FT-14', /src="sw-register\.js"/.test(HTML) && /src="shared-header\.js"/.test(HTML), 'CONTROL: the page still self-updates (sw-register.js + shared-header.js)');
+/* Fitness Memberships entry (2026-10-03): a PLAIN link to the member page — no handler, no payment, no booking. */
+const MB_LINKS = HTML.match(/<a\b[^>]*href="fitness-memberships\.html"[^>]*>/g) || [];
+ck('FT-15', process.env.BASE ? true : (MB_LINKS.length >= 1 && MB_LINKS.every((a) => !/\bon[a-z]+=/i.test(a)) && fs.existsSync(path.join(ROOT, 'fitness-memberships.html'))),
+  '"My memberships" entry is a plain <a href="fitness-memberships.html"> (no on* handler) and the page exists' + (process.env.BASE ? ' (n/a on BASE)' : ''), MB_LINKS.join(' '));
+ck('FT-16', !/SokoniPay\s*\.|platformBook|initiateSTKPush|createPaymentIntent|fitnessCreateMembership/.test(HTML.replace(/<script[^>]*\bsrc=[^>]*><\/script>/g, '').replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '')),
+  'fitness-hub.html itself still starts no payment: no SokoniPay / platformBook / initiateSTKPush / createPaymentIntent / fitnessCreateMembership anywhere in its markup or inline code (buying lives on fitness-memberships.html, flag-gated)');
+ck('FT-14',/src="sw-register\.js"/.test(HTML) && /src="shared-header\.js"/.test(HTML), 'CONTROL: the page still self-updates (sw-register.js + shared-header.js)');
 
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed' + (runErr ? '   (script error during execution: ' + runErr + ')' : ''));
 process.exit(fail ? 1 : 0);

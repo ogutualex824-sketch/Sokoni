@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>My Gym Memberships — SOKONI Fitness</title>
+<meta name="description" content="Your SOKONI gym memberships: status, sessions used, attendance history, membership QR and refund requests.">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#39ff14">
+<script src="security.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+/* Fitness Memberships (member side). Mobile-first: 390px has no horizontal scroll; every row wraps. */
+.fm{--fm-acc:#39ff14;--fm-acc2:#71ff00;--fm-bg:#060b06;--fm-surf:rgba(255,255,255,.03);--fm-line:rgba(255,255,255,.08);--fm-sub:rgba(255,255,255,.6);
+  max-width:760px;margin:0 auto;padding:16px 16px 100px;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;overflow-x:hidden}
+body{background:#060b06;color:#fff;margin:0}
+.fm *{box-sizing:border-box}
+.fm-back{display:inline-block;margin-bottom:10px;color:var(--fm-acc2);text-decoration:none;font-weight:700;font-size:13px}
+.fm-h1{font-size:22px;font-weight:900;margin:0 0 4px}.fm-h2{font-size:17px;font-weight:900;margin:18px 0 8px}
+.fm-sub{font-size:12.5px;color:var(--fm-sub);margin:2px 0;overflow-wrap:anywhere}
+.fm-note{font-size:13px;color:#ffb800;font-weight:700;margin:6px 0}
+.fm-empty{padding:28px 16px;text-align:center;border:1px dashed rgba(57,255,20,.2);border-radius:16px;color:var(--fm-sub)}
+.fm-empty a,.fm a{color:var(--fm-acc2)}
+.fm-card,.fm-offer,.fm-paybox{background:var(--fm-surf);border:1px solid var(--fm-line);border-radius:16px;padding:14px;margin-bottom:12px}
+.fm-card-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px}
+.fm-title{font-size:15px;font-weight:900;overflow-wrap:anywhere}
+.fm-pill{font-size:11px;font-weight:800;padding:4px 9px;border-radius:99px;background:rgba(255,255,255,.07);white-space:nowrap}
+.fm-pill-ok{background:rgba(57,255,20,.14);color:var(--fm-acc)}.fm-pill-wait{background:rgba(255,184,0,.14);color:#ffb800}
+.fm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;margin:8px 0}
+@media(min-width:640px){.fm-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.fm-kv span{display:block;font-size:11px;color:var(--fm-sub)}.fm-kv b{font-weight:700;overflow-wrap:anywhere}
+.fm-refund{border-top:1px solid var(--fm-line);padding-top:8px;margin-top:6px;font-size:13px}.fm-refund span{color:var(--fm-sub)}
+.fm-msg{margin-top:6px;font-size:13px;overflow-wrap:anywhere}
+.fm-confirm{margin-top:8px}.fm-confirm p{margin:0 0 6px;font-size:13px}
+.fm-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.fm-btn{min-height:44px;padding:10px 16px;border-radius:12px;border:none;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit}
+.fm-btn-p{background:linear-gradient(135deg,var(--fm-acc),var(--fm-acc2));color:#060b06}
+.fm-btn-s{background:rgba(57,255,20,.08);border:1px solid rgba(57,255,20,.3);color:var(--fm-acc2)}
+.fm-btn[disabled]{opacity:.45;cursor:not-allowed}
+.fm-btn:focus-visible,.fm a:focus-visible,.fm-in:focus-visible{outline:2px solid var(--fm-acc);outline-offset:2px}
+.fm-list{margin:8px 0 0;padding-left:18px;font-size:13px}
+.fm-offer{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.fm-offer>div:first-child{flex:1 1 160px}
+.fm-price{font-size:18px;font-weight:900;color:var(--fm-acc)}
+.fm-in{width:100%;min-height:44px;margin:6px 0 10px;padding:10px 12px;border-radius:12px;border:1px solid var(--fm-line);background:#0d130d;color:#fff;font-size:15px}
+.fm-qr{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:16px}
+.fm-qr[hidden]{display:none}
+.fm-qr-card{background:#0b120b;border:1px solid rgba(57,255,20,.3);border-radius:18px;padding:16px;width:100%;max-width:360px}
+.fm-qr-img{display:flex;justify-content:center;background:#fff;border-radius:12px;padding:12px;margin:8px 0}
+.fm-qr-img canvas{max-width:100%;height:auto}
+.fm-qr-img .fm-sub{color:#333}
+</style>
+<script src="sokoni-cart.js"></script>
+<script src="shared-header.js" defer></script>
+</head>
+<body>
+<main class="fm" id="fmRoot">
+  <a class="fm-back" href="fitness-hub.html">← Fitness Hub</a>
+  <h1 class="fm-h1">My memberships</h1>
+  <p class="fm-sub">Your gym memberships, sessions used and attendance. Every status here comes from SOKONI's records.</p>
+  <section id="fmBuy" aria-label="Membership plans"></section>
+  <h2 class="fm-h2">Your memberships</h2>
+  <section id="fmList" aria-live="polite"><p class="fm-sub">Loading…</p></section>
+  <div id="fmQr" class="fm-qr" hidden></div>
+</main>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-qr.js" defer></script>
+<script src="sokoni-intasend.js" defer></script>
+<script src="sokoni-fitness-memberships.js" defer></script>
+<script src="sokoni-fitness-member.js" defer></script>
+<script src="sw-register.js" defer></script>
+</body>
+</html>
