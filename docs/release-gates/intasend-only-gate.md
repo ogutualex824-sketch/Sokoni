@@ -78,6 +78,15 @@ Columns count files. Functions = Daraja server code; Website = Daraja in pages o
   `scripts/test-daraja-leftovers.js` only lets its pending list shrink.
 - **Another agent's tree:** never edited blindly. Each owner converges at its own deploy.
 
+## Progress since the first measurement
+
+- **sok-parcel-fn2** (sokoni-e3): Daraja removal hand-ported onto the 5a0935e line (8d64df0); functions/ CLEAN, guard PASS.
+  093fd4f does not cherry-pick onto that line (9 conflicts, no guard file), hence the hand port.
+- **fix/payment-method-from-provider-on-5a0935e** (sokoni-b2) @ f9e596d: card-method fix (Gates 8/12) plus that port; functions/
+  CLEAN, guard PASS, executed method test 6/0. Ships alone: `--only functions:verifyIntasendPayment`.
+- LEGACY_INACTIVE cleanups found: `functions/financial-engine.js` has no caller since `darajaSTKCallback` went; four historical
+  `certify-*` scripts still reference `mpesa-c2b.js`.
+
 ## Open items and owners
 
 | Item | Owner |
