@@ -31,8 +31,11 @@ async function _assertShop(uid, shopId) {
   if (!snap.exists) throw new Error('shop not found');
   const shop = snap.data();
   if (shop.ownerId === uid) return 'owner';
-  const userSnap = await _db().collection('users').doc(uid).get();
-  if (userSnap.exists && userSnap.data().role === 'admin') return 'admin';
+  /* ADMIN = the server-set Auth custom claim (admin / superAdmin), never users/{uid}.role — a profile field is not an
+     authority (owner 2026-10-04, census finding). An unreadable Auth record grants nothing. */
+  let isAdmin = false;
+  try { const c = (await admin.auth().getUser(uid)).customClaims || {}; isAdmin = c.admin === true || c.superAdmin === true; } catch (_) { isAdmin = false; }
+  if (isAdmin) return 'admin';
   const empSnap = await _db().collection('shopEmployees')
     .where('shopId', '==', shopId).where('userId', '==', uid).limit(1).get();
   if (empSnap.empty) throw new Error('forbidden');

@@ -17,6 +17,7 @@ const FN = path.join(__dirname, '..', 'functions');
 let pass = 0, fail = 0;
 const ck = (id, ok, m, d) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + '  ' + id + '  ' + m + (ok || d === undefined ? '' : '   [' + JSON.stringify(d).slice(0, 220) + ']')); ok ? pass++ : fail++; };
 const store = {}; let seq = 0;
+const CLAIMS = { realAdmin: { admin: true } };
 const clone = (o) => (o === undefined ? undefined : JSON.parse(JSON.stringify(o)));
 const snapOf = (p) => ({ exists: p in store, id: p.split('/').pop(), data: () => clone(store[p]) });
 function ref(p) { return { _p: p, id: p.split('/').pop(), get: async () => snapOf(p), set: async (v, o) => { store[p] = Object.assign({}, o && o.merge ? store[p] : {}, clone(v)); }, update: async (v) => { store[p] = Object.assign({}, store[p], clone(v)); } }; }
@@ -33,7 +34,7 @@ const _load = Module._load;
 Module._load = function (req) {
   if (req === 'firebase-functions/v2/https') return { onCall: (o, h) => h, HttpsError: Error };
   if (req === 'firebase-functions/params') return { defineSecret: () => ({ value: () => 'placeholder' }) };
-  if (req === 'firebase-admin') return { firestore: firestoreFn };
+  if (req === 'firebase-admin') return { firestore: firestoreFn, auth: () => ({ getUser: async (u) => ({ uid: u, customClaims: CLAIMS[u] || {} }) }) };
   return _load.apply(this, arguments);
 };
 let src = fs.readFileSync(path.join(FN, 'finance-os-sprint43.js'), 'utf8');
@@ -84,6 +85,10 @@ const moneyDocs = () => Object.keys(store).filter((p) => MONEY.includes(p.split(
   ck('W2', store['invoices/' + ci.id].status === 'issued', 'send: draft → issued (canonical name)', store['invoices/' + ci.id].status);
   store['invoices/' + ci.id].paidCents = 100; store['invoices/' + ci.id].status = 'partially_paid';
   r = await call('invoiceVoid', as('merch', { shopId: 'shopA', invoiceId: ci.id, reason: 'oops' }));
+  store['users/fakeAdmin'] = { role: 'admin' };   /* a PROFILE field, not the claim */
+  const fa = await call('invoiceMarkPaid', as('fakeAdmin', { shopId: 'shopA', invoiceId: 'inv1', paymentRef: 'FAKEADMIN1' }));
+  const ra = await call('invoiceList', as('realAdmin', { shopId: 'shopA' }));
+  ck('S1', fa.err === 'forbidden' && Array.isArray(ra.invoices), 'shop access as admin needs the Auth ADMIN CLAIM: users.role=admin is refused, a real admin claim is accepted', { fa, ra: !!ra.invoices });
   ck('W3', /refund it first/.test(r.err || '') && store['invoices/' + ci.id].status === 'partially_paid', 'void is refused once a verified payment exists (refund first)', r);
   console.log('\n' + pass + ' passed, ' + fail + ' failed' + (process.env.SABOTAGE === '1' ? '   (SABOTAGE — failures EXPECTED)' : ''));
   process.exit(fail ? 1 : 0);

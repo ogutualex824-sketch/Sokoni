@@ -1,3 +1,10 @@
+## [2026-10-04] — Finance shop access: "admin" means the Auth admin claim, never users.role
+
+**Census finding (invoice stores, H15):** `_assertShop` (every finance-os op in financeSprintDispatch: invoices, budgets, expenses, petty cash, reconciliation …) granted admin access to any account whose `users/{uid}.role` said 'admin' — a profile field, not an authority.
+**Fix:** when the caller is not the shop owner, admin access requires the server-set Auth custom claim (`admin` / `superAdmin`, read with admin.auth().getUser). An unreadable Auth record grants nothing; shop employees are unchanged.
+**Tests:** test-invoice-payment-claim 12/0, new S1 (users.role=admin refused, real admin claim accepted). Mutation: the old users.role check restored → S1 fails.
+**Deployment:** NOT deployed; part of the financeSprintDispatch unit (claim fix + canonical writers).
+
 ## [2026-10-04] — Merchant invoices are canonical from birth (financeSprintDispatch)
 
 **Owner:** `invoices`, restructured, is THE canonical invoice. **What:** `invoiceCreate` stamps `modelVersion 1`, `source:'manual'`, integer-cent `totalCents` / `paidCents 0` / `balanceCents`, and `paymentStatus:'pending'`. `invoiceSend` moves draft → **issued** (the canonical word; legacy `sent` is still read as issued). `invoiceVoid` is refused once a verified payment exists (refund first). The merchant list derives overdue for issued / partially paid. The model is `functions/shared/invoice-model.js`, byte-identical to the admin line (functions/admin-invoices-list-on-main).
