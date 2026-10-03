@@ -4,15 +4,18 @@ Functions only (`functions/rental-settlement.js`, bundled by commerceDispatch). 
 - **Interface:**
   - `quoteRentalSettlement(db, {booking})` runs outside the txn. Commission comes from the SERVER intent (`metadata.commissionBaseCents` / `commissionCategory`) via `finos-utils.calculateCommission`, never from booking fields. A category with no explicit `commission-config` row is refused (never the silent 5% default).
   - `settleRentalBooking(txn, db, {bookingId, booking, ownerUid, actorUid, quote, FieldValue})` does reads only and returns `{ok, apply(t), receipt}`. The caller writes status, then calls `apply`.
-- **Money (owner decisions 2026-10-03, relayed by f3 and pending direct confirmation):**
-  - Rent − commission goes to `wallets/{owner}.balance`, in whole shillings. It uses the same primitive as providerCompleteBooking, plus a `walletTransactions/{owner}_{booking}_rentalsettle` row written with create().
-  - The deposit becomes `rentalDepositRefunds/{booking}` with state `REQUESTED` (create()): a B2C refund REQUEST for the IntaSend B2C refund executor. It is never a wallet credit and never goes through refundRequests.
+- **Money (owner decisions 2026-10-03, confirmed directly):**
+  - Rent − commission goes to the SHOP's BUSINESS wallet `businessWallets/{businessId}` in integer CENTS (exactly netCents; rent = commission + net to the cent).
+  - It goes through the ONE business-wallet authority: `settlement-destination.resolveSettlementDestination` + `business-wallet.planMove` and its deterministic entry id (kind `rental_settlement`, the order-settlement recovery policy). Those modules are injected by the deploy tree.
+  - NEVER the owner's personal `wallets/{uid}`. With no wallet authority it is refused `no_business_wallet`.
+  - The deposit becomes `rentalDepositRefunds/{booking}` with state `REQUESTED` (create()): an IntaSend M-PESA B2C refund REQUEST, never a wallet credit, never refundRequests.
 - **Guards:** it settles only when paymentStatus `held`, `returnPinVerified === true` and `heldAmountCents === rent + deposit`. Anything else gives a review row (`commissionReviewQueue/rental_settle_{id}`) and moves no money. A replay is a no-op.
 - **Dependencies:**
   - commerceDispatch must carry 2f's commission-config row `construction_equipment_rental` (10%). Until it does, every settlement is refused (`commission_unpriced`), which is the safe state.
   - The B2C executor for `rentalDepositRefunds` is NOT built.
   - The receipt is returned for the caller to record after commit.
-- **Tests:** `scripts/test-rental-settlement.js` 18/0. Sabotage caught 9/9.
+- **Dependencies (wallet):** commerceDispatch must also carry the canonical business-wallet line (business-wallet.js, settlement-destination.js, store-identity.js, tenant-identity from release/merchant-launch-rc). Until then every settlement refuses `no_business_wallet` and held rentals stay held.
+- **Tests:** `scripts/test-rental-settlement.js` 24/0 against the REAL business-wallet.js. Sabotage caught 12/12 by name.
 
 ## [2026-10-03] — Equipment rentals: ONE PIN at RETURN on the one booking-PIN authority
 
