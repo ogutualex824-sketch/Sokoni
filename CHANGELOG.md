@@ -1,3 +1,27 @@
+## 2026-10-03 — Fitness membership offers in provider services + fitnessCreateMembership (NOT deployed)
+
+- **Owner decision:** "a gym publishes its membership offers IN ITS PROVIDER SERVICES".
+- **New:** functions/shared/membership-offer.js (pure).
+  - validateMembershipOffer checks `serviceKind 'membership'`, periodCount 1..60, periodUnit month, and the EXISTING `price` field (integer cents, whole shillings, KES 1–150,000). The price type must be fixed.
+  - The applyToServiceWrite / isMembershipOffer hooks are for sokoni-5b's providerDispatch release. They are NOT wired here; provider-ops.js and booking-service.js are untouched.
+- **New callable:** functions/fitness-membership-create.js, fitnessCreateMembership({serviceId}), exported in functions/index.js.
+  - It reads the offer server-side.
+  - The provider must be approved/active, not suspended, and classified `fitness_studio` by business-category.categoryOf.
+  - The buyer must not be the provider.
+  - It is single-flight per buyer+service: a pending membership < 30 min old is reused.
+- **Database:**
+  - providerMemberships/{id} is created with EXACTLY {providerId, buyerUid, priceCents, periodCount, periodUnit, startAt, category, title, paymentStatus:'pending', status:'pending_payment', serviceId, createdAt}. price, months and title are an immutable SNAPSHOT of the offer, so 2f's fitness_membership pricer never re-reads the offer.
+  - New server-only claim collection fitnessMembershipClaims/{hash}.
+  - providerServices gains optional serviceKind / periodCount / periodUnit once the hook lands.
+- **API:** the client calls fitnessCreateMembership, then createPaymentIntent({purpose:'fitness_membership', membershipId}). No change to 2f's purpose was needed.
+- **Security:**
+  - The client sends only serviceId. Price, months, provider and status are never taken from the request.
+  - A free-text category is never trusted.
+  - Rules: providerServices needs no change (client writes already denied). The claims collection is default-deny.
+- **Tests:** scripts/test-fitness-membership-create.js 14/0, negative controls 4/4 (client price, approval skipped, idempotency dropped, pricer re-reads the offer). Regression: test-fitness-attendance 28/0 (4/4), test-membership-settlement 45/0. Emulator QUEUED.
+- **Docs:** docs/FITNESS_MEMBERSHIP_ATTENDANCE.md §10 (census, offer shape, hooks for 5b, rules, open items).
+- **Breaking:** none.
+
 ## 2026-10-03 — Fitness membership QR check-in / attendance ledger (NOT deployed)
 
 - **New:** functions/fitness-attendance.js. Callables fitnessMembershipQr (buyer-only, 5-min signed token), fitnessCheckIn (gym OWNER), fitnessCompleteSession, fitnessCorrectAttendance (ADMIN). All are exported in functions/index.js.

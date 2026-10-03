@@ -2,8 +2,8 @@
 
 **Status:** BUILT on `feat/fitness-attendance-on-8bbfb34` (based on commercial-fn `57fe896`). **NOT deployed.**
 **Owner rules:** 2026-10-03, "server-authoritative attendance ledger" and OWNER POLICY #2 (QR check-in).
-**Module:** `functions/fitness-attendance.js`.
-**Tests:** `scripts/test-fitness-attendance.js`.
+**Modules:** `functions/fitness-attendance.js` · `functions/fitness-membership-create.js` · `functions/shared/membership-offer.js` (§10).
+**Tests:** `scripts/test-fitness-attendance.js` · `scripts/test-fitness-membership-create.js`.
 **Related:** [[COMMERCIAL_CONVERGENCE_2026-09-30]] §13 / §13.1 (membership money, sokoni-2f) · [[Payments]] · [[Events]] (credential signing) · [[Authentication]]
 
 ---
@@ -238,14 +238,9 @@ match /providerMemberships/{id} {
 
 ## 9. NOT built / open
 
-- **`fitnessCreateMembership`: BLOCKED.**
-  - The contract requires price, periodCount and title from a **provider-published server record**. None exists.
-  - `providerServices` has `price`/`priceType` but no period semantics.
-  - The fitness-hub "Monthly Membership (KES)" field is a browser form.
-  - Using either would invent a membership-offer authority. Needs an owner/2f decision on the offer record (e.g. `providerServices` with `priceType:'membership'` + `periodCount`, written by provider-ops).
-  - The CREATE shape is fixed by 2f: `{providerId, buyerUid, priceCents, periodCount, periodUnit:'month', startAt, category:'fitness', title, paymentStatus:'pending', status:'pending_payment'}`.
+- **`fitnessCreateMembership`: BUILT** (§10). The owner decided on 2026-10-03 that a gym publishes its membership offers **in its provider services**. A provider still **cannot publish** an offer until sokoni-5b's providerDispatch release carries the writer hook (§10.4), and the hosting form (§10.6) exists.
 - **Staff scanning:** BLOCKED (§6).
-- **Rules:** §8, a separate lane.
+- **Rules:** §8 and §10.5, a separate lane.
 - **Hosting:**
   - gym "SCAN MEMBER QR" scanner UI (camera; offline → "unavailable, retry"; success card only after the server returns);
   - member QR / history screen;
@@ -260,4 +255,173 @@ match /providerMemberships/{id} {
 - **Deploy:** NOT deployed.
   - Needs `SOKONI_HMAC_KEY` bound (it already exists).
   - `enforceAppCheck: true`, so the scanner page needs App Check.
-  - Scoped `--only functions:fitnessMembershipQr,fitnessCheckIn,fitnessCompleteSession,fitnessCorrectAttendance`, after 2f's membership functions.
+  - Scoped `--only functions:fitnessMembershipQr,fitnessCheckIn,fitnessCompleteSession,fitnessCorrectAttendance,fitnessCreateMembership`, after 2f's membership functions **and** after sokoni-5b's providerDispatch release carrying §10.4. Before that release, `fitnessCreateMembership` refuses every service, because no record can carry `serviceKind:'membership'`. That is safe, but it is useless.
+
+## 10. Membership offers in provider services + `fitnessCreateMembership` (owner 2026-10-03)
+
+**Owner decision (verbatim):** "a gym publishes its membership offers IN ITS PROVIDER SERVICES".
+
+**Files:**
+- `functions/shared/membership-offer.js` (pure)
+- `functions/fitness-membership-create.js`
+- `scripts/test-fitness-membership-create.js`
+
+### 10.1 Census: who owns `providerServices`
+
+This tree and the live providerDispatch lineage `c7e26b6` match. The full census is in scratchpad `fitness-attendance-reuse.md`, under "STEP 0 (membership offers)".
+
+**The record:**
+- **Path:** `providerServices/{autoId}`. Legal uses `legal_consult_<uid>`.
+- **Owner field:** `providerId`.
+- **`price`** is **integer cents**: provider-ops `_cents = max(0, round(Number(v)||0))`.
+- **`priceType`** is `fixed | hourly | quotation`. It is a pricing mode, not a kind.
+- **`active` / `removedAt`** handle soft delete.
+- **No kind or type field existed.**
+
+**Writers.** All are server-side, in `provider-ops.js` behind **providerDispatch**, which is sokoni-5b's ONE reconciliation release:
+- `providerAddService`
+- `providerUpdateService`
+- `providerToggleService`
+- `providerRemoveService`
+- `providerDuplicateService`
+- `providerUpdateServicePricing`
+- plus `ent-availability` (`availability{}`) and `legal-verification` (its own doc).
+
+Their field whitelists drop `serviceKind` / `periodCount`.
+
+**Rules** (tree and served `f259c0b5`): `allow read: if isAuthed()`, with no write rule, so **client writes are denied**.
+
+**Reader:** `bookingCreateService` prices `Math.round(Number(svc.price))` cents after a provider gate of `status ∈ {active, approved} && acceptsBookings !== false`.
+
+### 10.2 Offer shape
+
+These fields are added to the EXISTING record. Nothing else changes.
+
+| Field | Value |
+|---|---|
+| `serviceKind` | `'membership'`. This is a new field, because there was no existing kind field to reuse. |
+| `periodCount` | integer 1..60 (months) |
+| `periodUnit` | `'month'` |
+| `price` | The EXISTING field, in integer cents. It must be **whole shillings** (`% 100 === 0`) within KES 1..150,000. The reason: `priceFor` rounds to KES, and `holdMembershipPayment` requires paid KES × 100 === `priceCents`. A cents remainder would park every payment in `payment_review`. |
+| `priceType` | `'fixed'`. The hook forces it, because `providerAddService` defaults to `'quotation'`. A rate-card `pricing{}` is refused. |
+
+`validateMembershipOffer(doc)` returns `{ok, providerId, priceCents, periodCount, periodUnit, title}` or `{ok:false, reason, message}`. It **refuses rather than coerces**: a missing, zero, negative, string, fractional or out-of-range price is not an offer. The price "conversion" is the booking one (`price` is already integer cents). It is validated as an integer and never rounded.
+
+### 10.3 `fitnessCreateMembership({ serviceId })` (us-central1, App Check; NOT deployed)
+
+**Server order of checks:**
+1. auth
+2. `providerServices/{serviceId}` is read server-side, then `validateMembershipOffer`
+3. buyer ≠ provider (`self_purchase`)
+4. `providers/{providerId}` passes these checks:
+   - `status ∈ {active, approved}` (the booking gate);
+   - not `suspended`;
+   - `acceptsBookings !== false`;
+   - **`business-category.categoryOf(...) === 'fitness_studio'`**. The ids gym, yoga-studio, martial-arts, dance-fitness and spinning map to this category at approval. A free-text `category` is never trusted.
+5. single-flight transaction on `fitnessMembershipClaims/{sha256(buyer|service)}`:
+   - a `pending_payment`/`pending` membership for the same buyer+service that is **< 30 min old is returned** (`reused:true`);
+   - otherwise a new `providerMemberships/{autoId}` is created with `create()`.
+
+**Created doc (EXACT; the suite asserts the key set):**
+```
+{ providerId, buyerUid, priceCents, periodCount, periodUnit:'month', startAt, category:'fitness', title,
+  paymentStatus:'pending', status:'pending_payment', serviceId, createdAt }
+```
+
+**Snapshot (2f constraint).** At creation, `priceCents` / `periodCount` / `periodUnit` / `title` are **copied** from the offer. They are immutable on the membership. `payment-purposes.fitness_membership` prices from the membership doc and never re-reads the offer. So a later offer edit changes nothing already created (suite row C12; negative control NC-d).
+
+**2f pricer check.** On this tree, the pricer reads only `buyerUid`, `paymentStatus`, `status`, `priceCents`, `providerId` and (as metadata) `periodCount`. All of them are in the create shape, so **no extra fields are needed**.
+
+**`startAt` = server time at creation (purchase time).** The months run from here, not from payment or first visit, unless the owner decides otherwise.
+
+**Returns:** `{ membershipId, reused, priceCents, periodCount, periodUnit, title }`.
+
+**Client next step:** `createPaymentIntent({ purpose:'fitness_membership', membershipId })`.
+
+### 10.4 Hook for sokoni-5b's providerDispatch reconciliation release (NOT applied on this branch)
+
+`provider-ops.js` / `booking-service.js` are NOT edited here. The release must also ship `functions/shared/membership-offer.js`. Each hook is a call into the pure module:
+
+```js
+// providerAddService: build the object first (const doc = { providerId: uid, name, … }), then before .add(doc):
+const mo = require('./shared/membership-offer').applyToServiceWrite('create', d, null, doc);
+if (!mo.ok) throw new HttpsError('invalid-argument', mo.message, { reason: mo.reason });
+
+// providerUpdateService: before `await ref.update(patch)`:
+const mo = require('./shared/membership-offer').applyToServiceWrite('update', d, snap.data(), patch);
+if (!mo.ok) throw new HttpsError('invalid-argument', mo.message, { reason: mo.reason });
+
+// providerDuplicateService: build `const doc = {…}`, then before .add(doc):
+const mo = require('./shared/membership-offer').applyToServiceWrite('duplicate', null, s, doc);
+if (!mo.ok) throw new HttpsError('invalid-argument', mo.message, { reason: mo.reason });
+
+// providerUpdateServicePricing: after the ownership check (a membership has a fixed price, never a rate card):
+if (require('./shared/membership-offer').isMembershipOffer(snap.data())) throw new HttpsError('failed-precondition', 'A membership has a fixed price.');
+
+// booking-service.bookingCreateService: after the `svc.active === false || svc.removedAt` check:
+if (require('./shared/membership-offer').isMembershipOffer(svc)) throw new HttpsError('failed-precondition', 'This is a membership. Buy it from the gym page.', { code: 'MEMBERSHIP_NOT_BOOKABLE' });
+```
+
+**Why the booking hook matters.** Without it, a membership offer is slot-bookable at the membership price.
+
+**What the writer hook does** (suite row C14):
+- It forces `priceType:'fixed'` and `periodUnit:'month'`.
+- It validates the RESULTING record, so an edit cannot leave an unsellable offer listed.
+- It refuses `periodCount` on a non-membership service and refuses unknown kinds.
+- A duplicate keeps the kind.
+
+### 10.5 Rules for the rules lane
+
+- **`providerServices`:** **no change.** Client writes are already denied (served `f259c0b5` and the tree), and every writer is a server callable. Membership validation therefore lives in the hook, not in rules.
+- **`fitnessMembershipClaims/{id}`:** new and server-only. No rule is needed (default deny). Add an explicit one if the lane prefers:
+  ```
+  match /fitnessMembershipClaims/{id} { allow read, write: if false; }
+  ```
+- **`providerMemberships`:** as in §8 (buyer / gym / admin read, no client writes).
+
+### 10.6 Still open
+
+- **Provider dashboard form (hosting).** `provider-dashboard.html` needs a "Membership" kind and a months field that send `serviceKind:'membership', periodCount` to `providerAddService` / `providerUpdateService`. It also needs a member-facing "Buy membership" button that calls `fitnessCreateMembership`, then `createPaymentIntent`. Not built.
+- **Abandoned pending memberships.**
+  - A pending membership older than 30 min is not reused, but it stays `pending_payment` and payable by its id. The 2f pricer has no age limit.
+  - The status fields belong to 2f, so this module never writes them.
+  - An expiry or cancel of stale pending memberships is a 2f / owner decision.
+- **`startAt` at creation.** A member who pays late loses those days. The alternative (start at payment) would be a 2f hold change.
+- **Live lineage differences** (`c7e26b6` vs this tree):
+  - the service cap source: live reads `providerSubscriptions.limits.listings`, this tree uses `_serviceCapFor`;
+  - the toggle re-activation cap.
+  - Neither affects the hook, but 5b ports the hook onto the live text.
+
+### 10.7 Tests: `scripts/test-fitness-membership-create.js` (14/0, negative controls 4/4)
+
+| Row | What it covers |
+|---|---|
+| C1 | unauthenticated |
+| C2 | missing / malformed serviceId |
+| C3 | non-membership / inactive / deleted / wrong-case kind |
+| C4 | periodCount 0 / 61 / 2.5 / "3" / null / -1 / NaN, and unit week |
+| C5 | price missing / negative / string / 0 / cents remainder / fraction / > max / NaN, and quotation / rate card |
+| C6 | provider pending / rejected / suspended (status or flag) / not selling / missing; active accepted |
+| C7 | salon, and unclassified free-text "gym" |
+| C8 | buyer == provider |
+| C9 | client fields ignored |
+| C10 | sequential and concurrent double tap → one; other buyer; ≥30 min; paid → new |
+| C11 | exact doc shape |
+| C12 | offer edit after creation changes neither the doc nor the charge |
+| C13 | end to end: create → 2f `priceFor` → 2f `holdMembershipPayment` (real; `initialSettlementFields`) → QR check-in locks the refund (`refundDecision` → `used`) |
+| C14 | writer hook |
+
+**Negative controls.** Each one fails its named row:
+
+| Control | Mutation | Row that fails |
+|---|---|---|
+| NC-a | client price accepted | C9 |
+| NC-b | approval check skipped | C6 (and C7) |
+| NC-c | idempotency dropped | C10 |
+| NC-d | pricer re-reads the offer at pay time | C12 |
+
+**Regression:**
+- test-fitness-attendance 28/0 (4/4)
+- test-membership-settlement 45/0
+
+**Emulator:** QUEUED.
