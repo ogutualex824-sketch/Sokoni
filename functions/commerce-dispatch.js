@@ -44,6 +44,16 @@ const _H = _merge(
   marketingEng._h
 );
 
+// SECURITY HOTFIX DE-2 (2026-10-03). OWNER DECISION 2026-10-03: the digital-downloads store is
+// RETIRED (pages paused, data kept, server code dormant). DE-0 proved these two ops are live
+// through this dispatcher and grant a paid good with NO payment: digitalProductPurchase mints a
+// purchase + licence for any signed-in caller; digitalProductDownload signs a Storage URL for it.
+// They are removed from the served map so they fall through to the normal "not-found"
+// unknown-op error below. The handlers stay defined (dormant) in marketplace-extensions.js.
+// Do NOT re-add them without a payment-backed purchase (pending_payment + verified IntaSend webhook).
+const _RETIRED_OPS = ['digitalProductPurchase', 'digitalProductDownload'];
+for (const op of _RETIRED_OPS) delete _H[op];
+
 const _OPTS = {
   region:          'us-central1',
   enforceAppCheck: true,
