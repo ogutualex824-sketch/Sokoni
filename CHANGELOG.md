@@ -1,3 +1,148 @@
+## [2026-10-03] - REVIEW + UNBOXING as REPORT targets (server) — NOT deployed
+
+**NOT DEPLOYED.** Review + unboxing are report targets, through sokoni-5b's shared module `85a5fcf` (byte-identical, sha256
+`c3ea059ef602ad4e`). Built on the takedown closure (`c85621d`, also not deployed).
+
+### Deploy dependency (a GATE, not a note)
+- **The module's review writes are only correct once sokoni-5b's review authority (`7ec04c5` / `85a5fcf`, branch
+  `fix/review-authority-on-76436b1`) is the SERVING one.** Today the live review functions == `76436b1`. Until the
+  review authority deploys, the serving `adminModerateReview` writes review status by hand, with a different log and
+  recompute path, so two writers would disagree.
+- **Order:** sokoni-5b's review authority, then this trust-safety.js, then hosting.
+- Row M0 (byte-equality) must still pass against the module on the serving review lineage.
+
+### Authority (no second system)
+- **Module:** `functions/shared/review-moderation.js` is copied with `git show 85a5fcf:…` and is NEVER edited. Row M0
+  pins its sha256 prefix. The module has no requires: db and FieldValue are injected. trust-safety.js loads it on the
+  review path only, so the product-only suites that copy trust-safety.js alone still load.
+- **Targets:** `REPORT_ENTITY_TYPES` gains `unboxing`. `MODERATION_TARGETS.review` and `.unboxing` are enabled with
+  enforcement `review_removal`.
+- **Reasons (server list, no client copy):** fake_review, spam, offensive, off_topic, personal_info,
+  conflict_of_interest, and other (at least 10 characters). One list serves both kinds.
+  - A review report now needs a reason code. Before, review reports took free text, but no client sent them.
+
+#### tsReportContent
+- The target is verified server-side (`reviews/{id}` or `unboxingReviews/{id}`). A missing review → not-found.
+- The writer cannot report their own review (failed-precondition).
+- One report per user per target, through the existing `{uid}_{entityType}_{entityId}` + create().
+- The context is built by the SERVER; a client `context` is ignored. Fields:
+  - `reviewKind`
+  - `listingType` / `listingId` — what the review is about
+  - `authorUid` — admin-only
+  - `listingSellerUid` — from the product document, never from a client-written field
+  - `excerpt` — tags stripped, ≤280 characters
+  - `rating`, `reviewStatus`
+- The context deliberately has no `sellerUid`. The queue's seller filters and its "seller upheld ×N" facts count
+  reports AGAINST a seller, and a removed review is not one.
+
+#### tsReviewReport
+- **UPHOLD** calls `removeReview(tx, {db, FieldValue, kind, reviewId, actorUid, note, source:'report:<reportId>'})`
+  INSIDE the same transaction as the report transition.
+  - It is the LAST read, so every read precedes every write. The fake Firestore enforces this (strict read order).
+  - A `ModerationError` becomes `HttpsError(e.code, e.message, {reason: e.reason})`. SELF_REVIEW, SELF_INTEREST and
+    BAD_TRANSITION abort the whole decision, so the report does not move.
+  - A review deleted since the report was filed is recorded as `review_missing`; the uphold stands.
+- **After commit**, `recomputeRatingsSummary` runs for kind `review` only, and only when the review moved. A failure
+  comes back as `ratingsSummary.status:'failed'`, never as done.
+- **RESTORE** (`action:'restore'`, internal note ≥10) on the upheld report whose uphold removed the review calls
+  `restoreReview`.
+  - The review goes to PENDING, never to approved. The report stays upheld, with `reviewEnforcement` set to
+    `review_restored`.
+  - A second restore is refused. A restore from a report that did not remove the review (`already_removed`) is
+    refused.
+- **DISMISS** touches no review.
+- **Idempotent:**
+  - A repeated uphold (a second report on a review already removed) gets `unchanged:true` from the module, so no
+    second log is written. It is recorded as `already_removed`.
+  - A replayed requestId is replayed.
+  - A re-decision is refused by the report state machine.
+- **Review document note:** the note written onto the review is FIXED text. `reviews` is readable by the author and
+  `unboxingReviews` by everyone, so the note never carries the reporter, the reason or either moderator note.
+- **What gets recorded:**
+  - The trustSafetyAudit row carries `enforcement` and `review {kind, from, to, unchanged, missing}`.
+  - The report carries `reviewEnforcement`, `reviewModeration`, `reviewRestoredAt` and `reviewRestoredBy`.
+
+#### tsGetReportCase
+- Returns `review`: exists, status, excerpt (now and at report time), rating, listingType / listingId / listingHref,
+  author (admin-only) and moderatedBy.
+- Offers `restore` when this report removed the review and the review is still removed. `takedown` is never offered
+  for a review.
+
+#### tsGetReports scope:'mine'
+- The reviewed listing's seller (`context.listingSellerUid`) gets STATUS VOCABULARY ONLY: `{ref, entityType,
+  subject:'review_on_your_listing', listingType, listingId, moderationState, sellerStatus, createdAt, decidedAt,
+  sellerResponse}`.
+- The seller never gets the reason, reporter, report id, excerpt, writer or outcome note.
+- `changes_requested` is shown to the seller as `under_review`: they cannot edit somebody else's review.
+- The review's writer sees no report about it.
+
+#### Notifications
+- The reporter is told "a review" was reviewed, with no review text. There is no seller message for a review report.
+
+### Files
+- **New:** `functions/shared/review-moderation.js` (sokoni-5b's, byte-identical) and `scripts/test-review-reports.js`.
+- **Changed:** `functions/trust-safety.js`.
+
+### Database
+- **`reports`** gains:
+  - `context.{reviewKind, listingType, listingId, authorUid, listingSellerUid, excerpt, rating, reviewStatus}`
+  - `reviewEnforcement`, `reviewModeration`, `reviewRestoredAt` and `reviewRestoredBy`
+- **Through the module:**
+  - `reviews` / `unboxingReviews`: `status` becomes removed or pending, plus `moderatedBy`, `moderationNote`,
+    `moderatedAt` and `updatedAt`.
+  - One `reviewModerationLog` row per real transition.
+  - `ratingsSummary/{id}` is recomputed for reviews.
+- No migration and no index. The seller query is a single-field equality on `context.listingSellerUid`.
+
+### API
+- tsGetReportReasons and tsReportContent accept `review` and `unboxing`.
+- tsReviewReport:
+  - returns `review` and `ratingsSummary`
+  - returns error details `{reason}` from the module
+  - accepts `restore` on a review report
+- tsGetReportCase returns `review`.
+
+### Security
+- The reporter identity is admin-only. The writer never sees who reported. The listing seller sees status only.
+- No client value is trusted as a status, context, seller, author or target.
+- The self-interest refusals come from the shared module, the same rule adminModerateReview uses.
+
+### Tests
+- **test-review-reports: 22/0.** Rows:
+  - M0 byte-equality
+  - reasons
+  - report a review; report an unboxing review
+  - self-report refused; duplicate refused; missing review
+  - case view
+  - uphold → one log
+  - ratings recomputed for a review, not for unboxing
+  - repeated uphold → one log
+  - restore → pending
+  - SELF_REVIEW and SELF_INTEREST mapped
+  - dismiss leaves the review untouched
+  - a client status is ignored
+  - seller payload; writer view; notifications
+  - Z1 tripwires: firebase-admin and notify.js THROW on require and are absent from require.cache, with a positive
+    control
+- **`--failure-injection`: 7/7 caught** on their named rows, and the tree was unchanged afterwards:
+  - skip-module-call → U1
+  - recompute-for-unboxing → U3
+  - accept-client-status → C1
+  - leak-reporter-to-seller → S1
+  - allow-self-report → R4
+  - trust-client-context → R2
+  - restore-to-approved → U5
+- **Regression:** test-report-authority 16/0; test-moderation-queue 40/0 (injection all caught);
+  test-takedown-enforcement 35/0 (injection all caught).
+- **Gates:** require-closure PASS, predeploy-syntax PASS, commission single-source PASS.
+
+### For the review owner (sokoni-5b) — repo `firestore.rules` on this branch
+- `unboxingReviews` is `read: if true`. A REMOVED unboxing review therefore stays publicly readable, and so do the
+  `moderatedBy` and `moderationNote` the module writes.
+- The `update` rule lets the writer (`isOwner`) change `status`, so a writer can restore their own removed unboxing
+  review.
+- The module's unboxing SELF_INTEREST check reads `sellerUid` from a document the client can still create.
+
 ## [2026-10-02] - TAKEDOWN / HIDDEN PRODUCT enforcement (server) — NOT deployed
 
 **NOT DEPLOYED — DEPLOYMENT QUEUED — MACHINE BELOW 512 MB MEMORY FLOOR.** Built on C3 (`58c2a2d`, also not deployed). Owner spec 2026-10-01 §0–§35.
