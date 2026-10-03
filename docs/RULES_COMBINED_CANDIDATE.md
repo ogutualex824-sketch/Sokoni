@@ -86,3 +86,21 @@ Out of scope here:
 - Storage: v1 unboxing is text-only. sokoni-5b adds a `unboxing/{uid}/{file}` storage rule when photos are built.
 - The bnb / property / sports pages write `fsWrite('reviews', …)`, refused by both live and candidate rules. Those
   hubs need their own server path (sokoni-5b convergence item), never a rules loosening.
+
+## 2026-10-03 (later): hub reviews + unboxing quarantine (`1925aaa`). RELEASE PRECONDITION EXTENDED
+
+`1925aaa` closes `sportsReviews` to browser create/update, makes `applications` refuse `category:'reviews'`, and
+adds the storage quarantine (`unboxing-pending/{uid}/` owner-only, `unboxing/{uid}/` server-written).
+
+**RULE RELEASE = BLOCKED until every item is true:**
+- [ ] sokoni-5b functions live: `submitReview` with `property` + `sports_venue` (eligibility: `propertyViewings.buyerUid`,
+      `sportsVenueBookings.uid`, a cancelled booking does not count), `getReviews` with targetType + authorName,
+      `submitUnboxing`, and the approve photo copy
+- [ ] adminOsDispatch review queue live (`3684b64`)
+- [ ] hosting live: `hosting/hub-reviews-on-72dca56` @ `9476de3` + `hosting/review-approval-ui-on-72dca56` @ `307b84e`
+- [ ] storage rules released and the upload contract proven
+- [ ] emulator: `zz-test-r0.js` (incl. [H], [L]), `test-census-4d-rules.js`, `zz-test-unboxing-storage.js`,
+      and sokoni-5b's `test-hub-review-rules.js` with RULES_FILE=candidate (P-1 and S-1 flip to REFUSED by design)
+- [ ] compiled-size measurement authorized and within limit
+- [ ] re-fetch of live rules; the candidate re-based if live moved
+- [ ] then `--only firestore:rules` → verify pointer → probes → live browser proof per surface; rollback `f259c0b5`
