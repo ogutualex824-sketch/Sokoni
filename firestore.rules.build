@@ -1910,6 +1910,10 @@ service cloud.firestore {
   allow read:  if isAdmin();
   allow write: if false;
   }
+  match /courseReviews/{id} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
   function isPosOwner() {
   return isAuthed() && resource.data.sellerId == request.auth.uid;
   }

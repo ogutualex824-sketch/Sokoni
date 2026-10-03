@@ -294,3 +294,4 @@ when `status == 'active'`, or by the lister (`createdBy`) or an admin. `rentalBo
 (`buyerId`) or an admin; shop owners read theirs through `rentalList`, which asserts the seller. Every client write is
 false. Rows RN-1–RN-8 are in `zz-test-contact-requests-rules.js`. **EMULATOR PENDING.** Paid rentals stay closed: rental
 commission is UNPRICED (2f refuses `category_unpriced`) until the owner sets it.
+9. (later) `courseReviews/{id}` admin read, write false (5b @ 8a3e22b). Rows ED-R1–R3. **EMULATOR PENDING.**
