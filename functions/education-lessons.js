@@ -86,7 +86,9 @@ function lessonFields(d, ownerUid, courseId) {
   const title = _str(d.title, 140);
   if (title.length < 2) _deny('invalid-argument', 'Give the lesson a title.', 'TITLE_REQUIRED');
   const kind = KINDS.includes(d.kind) ? d.kind : _deny('invalid-argument', 'Choose a lesson type.', 'KIND_INVALID');
-  const out = { title, kind, body: _str(d.body, 20000) || null, videoUrl: videoUrl(d.videoUrl), materialPath: materialPath(d.materialPath, ownerUid, courseId), freePreview: d.freePreview === true };
+  const out = { title, kind, description: _str(d.description, 600) || null, durationMinutes: Math.max(0, Math.min(1440, Math.floor(Number(d.durationMinutes) || 0))) || null,
+    status: d.status === 'published' ? 'published' : 'draft',
+    body: _str(d.body, 20000) || null, videoUrl: videoUrl(d.videoUrl), materialPath: materialPath(d.materialPath, ownerUid, courseId), freePreview: d.freePreview === true };
   if (kind === 'video' && !out.videoUrl) _deny('invalid-argument', 'A video lesson needs a video link.', 'VIDEO_REQUIRED');
   if (kind === 'file' && !out.materialPath) _deny('invalid-argument', 'A file lesson needs an uploaded file.', 'MATERIAL_REQUIRED');
   return out;
@@ -101,7 +103,18 @@ async function _lessonsOf(db, courseId) {
   const q = await db.collection('courseLessons').where('courseId', '==', String(courseId)).limit(MAX_LESSONS + 1).get();
   return q.docs.map((x) => Object.assign({ lessonId: x.id }, x.data())).sort((a, b) => (a.order || 0) - (b.order || 0));
 }
-const outlineOf = (l) => ({ lessonId: l.lessonId, title: l.title, kind: l.kind, order: l.order || 0, freePreview: l.freePreview === true });
+const outlineOf = (l) => ({ lessonId: l.lessonId, title: l.title, kind: l.kind, order: l.order || 0, freePreview: l.freePreview === true,
+  description: l.description || null, durationMinutes: l.durationMinutes || null });
+/* a learner only ever sees / opens / completes PUBLISHED lessons (a draft lesson inside a published course stays hidden) */
+const isLive = (l) => l.status !== 'draft';
+/* ENTITLEMENT = an ACTIVE enrolment: none of cancelled / refunded / expired, and not past expiresAtMs */
+function entitled(e) {
+  if (!e || !e.exists) return false;
+  const x = e.data() || {};
+  if (x.status && x.status !== 'active') return false;
+  if (x.expiresAtMs && Number(x.expiresAtMs) <= Date.now()) return false;
+  return true;
+}
 
 /* The ONE progress rule — also used by education.updateCourseProgress. Real lessons only; legacy courses with no real
    lessons accept only lesson_1 … lesson_{lessonCount} (the synthetic ids the old page used). */
@@ -112,20 +125,28 @@ async function recordProgress(db, uid, courseId, lessonId, completed) {
   const lessons = await _lessonsOf(db, courseId);
   return db.runTransaction(async (t) => {
     const [e, p, c, cert] = [await t.get(enrollRef), await t.get(progressRef), await t.get(db.collection('courses').doc(String(courseId))), await t.get(certRef)];
-    if (!e.exists) _deny('permission-denied', 'Not enrolled in this course', 'NOT_ENROLLED');
+    /* ALL reads before any write (a Firestore transaction refuses a read after a write): the provider name for a possible certificate */
+    const prov = c.exists && c.data().instructorUid ? await t.get(db.collection('providers').doc(String(c.data().instructorUid))) : null;
+    if (!entitled(e)) _deny('permission-denied', 'Not enrolled in this course', 'NOT_ENROLLED');
     if (!c.exists) _deny('not-found', 'Course not found');
     const legacyN = Math.max(1, Number(c.data().lessonCount) || 1);
-    const valid = lessons.length ? lessons.map((l) => l.lessonId) : Array.from({ length: legacyN }, (_, i) => 'lesson_' + (i + 1));
+    const live = lessons.filter(isLive);
+    const valid = lessons.length ? live.map((l) => l.lessonId) : Array.from({ length: legacyN }, (_, i) => 'lesson_' + (i + 1));
     if (!valid.includes(String(lessonId))) _deny('invalid-argument', 'That lesson is not part of this course.', 'LESSON_NOT_IN_COURSE');
     const prev = (p.exists && Array.isArray(p.data().completedLessons) ? p.data().completedLessons : []).filter((x) => valid.includes(x));
     const done = completed ? [...new Set(prev.concat([String(lessonId)]))] : prev.filter((x) => x !== String(lessonId));
     const progress = Math.min(100, Math.round((done.length / valid.length) * 100));
+    const stateKey = 'lessonStates.' + String(lessonId).replace(/[.~*/[\]]/g, '_');
+    const prevState = (p.exists && p.data().lessonStates && p.data().lessonStates[String(lessonId).replace(/[.~*/[\]]/g, '_')]) || {};
     t.set(progressRef, { uid, courseId: String(courseId), completedLessons: done, currentLesson: String(lessonId), lastAccessedAt: _ts(), lastAccessedAtMs: Date.now() }, { merge: true });
+    t.update(progressRef, { [stateKey]: { state: completed ? 'completed' : 'in_progress', startedAtMs: prevState.startedAtMs || Date.now(), completedAtMs: completed ? Date.now() : null } });
     t.update(enrollRef, Object.assign({ progress, lastAccessedAt: _ts() }, progress >= 100 ? { completedAt: _ts() } : {}));
     let certificateId = cert.exists ? cert.id : null;
     if (progress >= 100 && !cert.exists) {
       t.create(certRef, { uid, courseId: String(courseId), courseTitle: c.data().title || null, ownerUid: c.data().instructorUid || null,
-        kind: 'self_paced_completion', serial: 'SOK-EDU-' + crypto.randomBytes(5).toString('hex').toUpperCase(), issuedAt: _ts(), _noIndex: true });
+        providerName: prov && prov.exists ? (prov.data().name || prov.data().businessName || null) : null,
+        issuer: 'SOKONI Education', kind: 'self_paced_completion', status: 'issued',
+        serial: 'SOK-EDU-' + crypto.randomBytes(5).toString('hex').toUpperCase(), issuedAt: _ts(), issuedAtMs: Date.now(), _noIndex: true });
       certificateId = certRef.id;
     }
     return { progress, certificateId, message: progress >= 100 ? 'Congratulations! You have completed this course.' : `Progress updated: ${progress}% complete` };
@@ -144,14 +165,29 @@ async function handle(req) {
   if (d.op === 'outline') {
     const c = await courseRef.get();
     if (!c.exists || (c.data().status !== 'published' && c.data().instructorUid !== uid)) _deny('not-found', 'Course not available');
-    return { ok: true, lessons: (await _lessonsOf(db, courseId)).map(outlineOf) };
+    return { ok: true, lessons: (await _lessonsOf(db, courseId)).filter(isLive).map(outlineOf) };
   }
   if (d.op === 'content') {
     const [c, l, e] = await Promise.all([courseRef.get(), db.collection('courseLessons').doc(_str(d.lessonId, 128)).get(), db.collection('courseEnrollments').doc(enrollId(uid, courseId)).get()]);
     if (!c.exists || !l.exists || l.data().courseId !== courseId) _deny('not-found', 'Lesson not found', 'LESSON_UNKNOWN');
     const owner = c.data().instructorUid === uid;
     if (!owner && c.data().status !== 'published') _deny('not-found', 'Course not available');
-    if (!owner && !e.exists && l.data().freePreview !== true) _deny('permission-denied', 'Enrol in this course to open this lesson.', 'NOT_ENROLLED');
+    if (!owner && !isLive(l.data())) _deny('not-found', 'Lesson not found', 'LESSON_UNKNOWN');
+    const isEntitled = entitled(e);
+    if (!owner && !isEntitled && l.data().freePreview !== true) _deny('permission-denied', 'Enrol in this course to open this lesson.', 'NOT_ENROLLED');
+    /* an entitled learner opening a lesson marks it in progress (server-owned; never a browser "completed") */
+    if (!owner && isEntitled) {
+      const key = 'lessonStates.' + l.id.replace(/[.~*/[\]]/g, '_');
+      const pRef = db.collection('courseProgress').doc(enrollId(uid, courseId));
+      await db.runTransaction(async (t) => {
+        const p = await t.get(pRef);
+        const cur = (p.exists && p.data().lessonStates && p.data().lessonStates[l.id.replace(/[.~*/[\]]/g, '_')]) || null;
+        if (!cur) {
+          if (p.exists) t.update(pRef, { [key]: { state: 'in_progress', startedAtMs: Date.now(), completedAtMs: null }, lastAccessedAtMs: Date.now() });
+          else t.set(pRef, { uid, courseId, completedLessons: [], lessonStates: { [l.id.replace(/[.~*/[\]]/g, '_')]: { state: 'in_progress', startedAtMs: Date.now(), completedAtMs: null } }, lastAccessedAtMs: Date.now() });
+        }
+      });
+    }
     const x = l.data();
     /* minted ONLY after the entitlement check above; expires in 15 minutes */
     const materialUrl = x.materialPath ? await signedMaterialUrl(x.materialPath) : null;
@@ -160,7 +196,38 @@ async function handle(req) {
   if (d.op === 'complete') return Object.assign({ ok: true }, await recordProgress(db, uid, courseId, _str(d.lessonId, 128), d.completed !== false));
   if (d.op === 'myCertificates') {
     const q = await db.collection('learnerCertificates').where('uid', '==', uid).limit(100).get();
-    return { ok: true, certificates: q.docs.map((x) => ({ certificateId: x.id, courseTitle: x.data().courseTitle || null, serial: x.data().serial, kind: x.data().kind })) };
+    return { ok: true, certificates: q.docs.map((x) => ({ certificateId: x.id, courseTitle: x.data().courseTitle || null, serial: x.data().serial, kind: x.data().kind,
+      status: x.data().status || 'issued', providerName: x.data().providerName || null, issuer: x.data().issuer || 'SOKONI Education', issuedAtMs: x.data().issuedAtMs || null })) };
+  }
+  /* VERIFY by serial — server-authoritative. Returns what a verifier needs and nothing about the learner beyond initials
+     (learners may be minors). An unknown serial is "not found", never "valid". */
+  if (d.op === 'verifyCertificate') {
+    const serial = _str(d.serial, 20).toUpperCase();
+    if (!/^SOK-EDU-[0-9A-F]{10}$/.test(serial)) _deny('invalid-argument', 'Enter a certificate number like SOK-EDU-XXXXXXXXXX.', 'SERIAL_FORMAT');
+    const q = await db.collection('learnerCertificates').where('serial', '==', serial).limit(1).get();
+    if (q.empty) return { ok: true, found: false };
+    const x = q.docs[0].data();
+    const lp = await db.collection('learnerProfiles').doc(String(x.uid)).get();
+    const name = lp.exists ? String(lp.data().displayName || '') : '';
+    const initials = name ? name.split(/\s+/).filter(Boolean).map((w) => w[0].toUpperCase() + '.').join(' ') : null;
+    return { ok: true, found: true, status: x.status || 'issued', courseTitle: x.courseTitle || null, providerName: x.providerName || null,
+      issuer: x.issuer || 'SOKONI Education', kind: x.kind, issuedAtMs: x.issuedAtMs || null, holderInitials: initials,
+      revokedReason: x.status === 'revoked' ? (x.revokedReason || null) : null };
+  }
+  if (d.op === 'revokeCertificate') {
+    const isAdmin = !!(req.auth.token && (req.auth.token.admin === true || req.auth.token.superAdmin === true));
+    if (!isAdmin) _deny('permission-denied', 'Administrator access required.', 'ADMIN_REQUIRED');
+    const reason = _str(d.reason, 300);
+    if (reason.length < 5) _deny('invalid-argument', 'Give a reason for revoking.', 'REASON_REQUIRED');
+    const ref = db.collection('learnerCertificates').doc(_str(d.certificateId, 300));
+    await db.runTransaction(async (t) => {
+      const c = await t.get(ref);
+      if (!c.exists) _deny('not-found', 'Certificate not found', 'CERT_UNKNOWN');
+      if (c.data().status === 'revoked') _deny('failed-precondition', 'Already revoked.', 'ALREADY_REVOKED');
+      t.update(ref, { status: 'revoked', revokedReason: reason, revokedBy: uid, revokedAt: _ts() });
+      t.set(db.collection('educationAudit').doc(), { action: 'certificate_revoked', certificateId: ref.id, by: uid, reason, at: _ts() });
+    });
+    return { ok: true, status: 'revoked' };
   }
 
   /* ── authoring (own DRAFT courses only) ── */
@@ -181,8 +248,10 @@ async function handle(req) {
     await db.runTransaction(async (t) => {
       const cur = await t.get(courseRef);
       if (!cur.exists || cur.data().instructorUid !== uid || cur.data().status !== 'draft') _deny('failed-precondition', 'Lessons can be changed only while the course is a draft.', 'NOT_A_DRAFT');
-      if (existingId) t.update(ref, Object.assign({}, f, { updatedAt: _ts() }));
-      else t.set(ref, Object.assign({}, f, { courseId, ownerUid: uid, order: lessons.length + 1, createdAt: _ts(), updatedAt: _ts() }));
+      const prevVersion = existingId ? Number((lessons.find((l) => l.lessonId === existingId) || {}).version || 0) : 0;
+      if (existingId) t.update(ref, Object.assign({}, f, { version: prevVersion + 1, updatedAt: _ts() }));
+      else t.set(ref, Object.assign({}, f, { courseId, ownerUid: uid, order: lessons.length + 1, version: 1, createdAt: _ts(), updatedAt: _ts() }));
+      t.create(db.collection('courseLessonHistory').doc(ref.id + '_v' + (prevVersion + 1)), Object.assign({}, f, { lessonId: ref.id, courseId, ownerUid: uid, version: prevVersion + 1, savedAt: _ts() }));
       t.update(courseRef, { lessonCount: existingId ? lessons.length : lessons.length + 1, updatedAt: _ts() });
     });
     return { ok: true, lessonId: ref.id };

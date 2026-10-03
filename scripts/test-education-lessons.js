@@ -58,11 +58,11 @@ const OWNMAT = (u, c) => 'course-materials/' + u + '/' + c + '/notes.pdf';
   ck('A-1 another teacher cannot add a lesson to this course', r.reason === 'NOT_COURSE_OWNER' && !Object.keys(await all('courseLessons')).length, r);
   r = await call('stranger', { op: 'save', courseId: 'c1', lesson: { title: 'x', kind: 'text' } });
   ck('A-2 a non-educator cannot author lessons', r.reason === 'NOT_AN_APPROVED_EDUCATOR', r);
-  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Intro', kind: 'text', body: 'Welcome', freePreview: true, ownerUid: 'teach2', courseId: 'c2' } });
+  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Intro', kind: 'text', body: 'Welcome', freePreview: true, status: 'published', description: 'Start here', durationMinutes: 10, ownerUid: 'teach2', courseId: 'c2' } });
   const L1 = r.lessonId;
-  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Video', kind: 'video', videoUrl: 'https://www.youtube.com/watch?v=abc' } });
+  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Video', kind: 'video', status: 'published', videoUrl: 'https://www.youtube.com/watch?v=abc' } });
   const L2 = r.lessonId;
-  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Notes', kind: 'file', materialPath: OWNMAT('teach1', 'c1') } });
+  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Notes', kind: 'file', status: 'published', materialPath: OWNMAT('teach1', 'c1') } });
   const L3 = r.lessonId;
   const LL = await all('courseLessons');
   ck('A-3 the owner adds text / video / file lessons to their DRAFT course; courseId / owner come from the server', !!(L1 && L2 && L3) && LL[L1].courseId === 'c1' && LL[L1].ownerUid === 'teach1', LL[L1]);
@@ -75,9 +75,18 @@ const OWNMAT = (u, c) => 'course-materials/' + u + '/' + c + '/notes.pdf';
   ck('A-6b a DOWNLOAD URL is refused (a token URL opens the file for anyone, whatever storage.rules say)', r.reason === 'MATERIAL_NOT_OWN', r);
   r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Bad', kind: 'file', materialPath: 'course-materials/teach1/c1/../../teach2/c2/x.pdf' } });
   ck('A-6c path traversal is refused', r.reason === 'MATERIAL_NOT_OWN', r);
+  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Draft extra', kind: 'text', body: 'hidden' } });
+  const LD = r.lessonId;
+  r = await call('teach1', { op: 'save', courseId: 'c1', lessonId: L1, lesson: { title: 'Intro v2', kind: 'text', body: 'Welcome', freePreview: true, status: 'published', description: 'Start here', durationMinutes: 10 } });
+  const hist = Object.values(await all('courseLessonHistory')).filter((h) => h.lessonId === L1).map((h) => h.version).sort();
+  ck('V-1 every save bumps the lesson version and appends an immutable history row', (await all('courseLessons'))[L1].version === 2 && hist.join() === '1,2', hist);
+  r = await call('teach1', { op: 'remove', courseId: 'c1', lessonId: LD });
+  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Draft extra', kind: 'text', body: 'hidden' } });
+  const LDRAFT = r.lessonId;
+  ck('A-4b a lesson saved WITHOUT a status is a DRAFT (never published by default)', (await all('courseLessons'))[LDRAFT].status === 'draft');
   r = await call('teach1', { op: 'reorder', courseId: 'c1', order: [L3, L1] });
   ck('A-7 a reorder must list every lesson exactly once', r.reason === 'ORDER_INVALID', r);
-  r = await call('teach1', { op: 'reorder', courseId: 'c1', order: [L3, L1, L2] });
+  r = await call('teach1', { op: 'reorder', courseId: 'c1', order: [L3, L1, L2, LDRAFT] });
   ck('A-8 a valid reorder applies', r.ok === true && (await all('courseLessons'))[L3].order === 1, r);
 
   /* publish, then learner access */
@@ -85,7 +94,10 @@ const OWNMAT = (u, c) => 'course-materials/' + u + '/' + c + '/notes.pdf';
   r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Late', kind: 'text' } });
   ck('A-9 lessons of a PUBLISHED course cannot be changed (unpublish / review first)', r.reason === 'NOT_A_DRAFT', r);
   r = await call('learner1', { op: 'outline', courseId: 'c1' });
-  ck('L-1 anyone sees a published course\'s outline (titles / kinds / preview flags only)', r.ok && r.lessons.length === 3 && !JSON.stringify(r).includes('Welcome') && !JSON.stringify(r).includes('youtube'), r);
+  ck('L-1 anyone sees a published course\'s outline (titles / kinds / preview flags / description / duration) — PUBLISHED lessons only, never bodies or links',
+    r.ok && r.lessons.length === 3 && !r.lessons.some((x) => x.lessonId === LDRAFT) && !JSON.stringify(r).includes('Welcome') && !JSON.stringify(r).includes('youtube') && r.lessons.some((x) => x.durationMinutes === 10), r);
+  r = await call('learner1', { op: 'content', courseId: 'c1', lessonId: LDRAFT });
+  ck('L-1b a DRAFT lesson inside a published course cannot be opened by a learner', r.reason === 'LESSON_UNKNOWN', r);
   r = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L2 });
   ck('L-2 a NOT-enrolled learner cannot open a paid / gated lesson', r.reason === 'NOT_ENROLLED', r);
   r = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L1 });
@@ -95,6 +107,17 @@ const OWNMAT = (u, c) => 'course-materials/' + u + '/' + c + '/notes.pdf';
   await db.doc('courseEnrollments/learner1_c1').set({ uid: 'learner1', courseId: 'c1', progress: 0 });
   r = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L2 });
   ck('L-5 an ENROLLED learner opens the lesson', r.ok && /youtube/.test(r.lesson.videoUrl), r);
+  const st = ((await all('courseProgress')).learner1_c1 || {}).lessonStates || {};
+  ck('P-1 opening a lesson marks it IN PROGRESS on the server (started timestamp), not completed', st[L2] && st[L2].state === 'in_progress' && st[L2].startedAtMs > 0 && st[L2].completedAtMs === null, st);
+  await call('learner1', { op: 'content', courseId: 'c1', lessonId: L1 });
+  const st2 = ((await all('courseProgress')).learner1_c1 || {}).lessonStates || {};
+  ck('P-1b a second lesson opened (progress record already exists) is also IN PROGRESS — opening never completes', st2[L1] && st2[L1].state === 'in_progress' && st2[L1].completedAtMs === null && (((await all('courseProgress')).learner1_c1 || {}).completedLessons || []).length === 0, st2);
+  for (const [status, extra, id] of [['cancelled', {}, 'P-2'], ['refunded', {}, 'P-3'], ['active', { expiresAtMs: Date.now() - 1 }, 'P-4']]) {
+    await db.doc('courseEnrollments/learner9_c1').set(Object.assign({ uid: 'learner9', courseId: 'c1', status }, extra));
+    const rr = await call('learner9', { op: 'content', courseId: 'c1', lessonId: L2 });
+    const rc = await call('learner9', { op: 'complete', courseId: 'c1', lessonId: L2 });
+    ck(id + ' a ' + (extra.expiresAtMs ? 'EXPIRED' : status.toUpperCase()) + ' enrolment opens nothing and records no progress', rr.reason === 'NOT_ENROLLED' && rc.reason === 'NOT_ENROLLED', [rr, rc]);
+  }
   ck('L-6 no signed URL was minted for anyone NOT entitled (L-2 refused before signing)', SIGNED.length === 0, SIGNED);
   OBJ[OWNMAT('teach1', 'c1')] = { contentType: 'application/pdf', size: 1000, head: Buffer.from('%PDF-1.7\n%xxxxxx') };
   r = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L3 });
@@ -135,7 +158,24 @@ const OWNMAT = (u, c) => 'course-materials/' + u + '/' + c + '/notes.pdf';
   await call('learner1', { op: 'complete', courseId: 'c1', lessonId: L2 });
   r = await call('learner1', { op: 'complete', courseId: 'c1', lessonId: L3 });
   const certs = await all('learnerCertificates');
-  ck('G-5 completing every REAL lesson → 100 % and exactly ONE certificate (self-paced completion, server serial)', r.progress === 100 && !!r.certificateId && Object.keys(certs).length === 1 && certs.learner1_c1.kind === 'self_paced_completion' && /^SOK-EDU-[0-9A-F]{10}$/.test(certs.learner1_c1.serial), [r, certs]);
+  ck('G-5 completing every PUBLISHED lesson → 100 % and exactly ONE certificate (self-paced completion, server serial, issued, issuer + provider)',
+    r.progress === 100 && !!r.certificateId && Object.keys(certs).length === 1 && certs.learner1_c1.kind === 'self_paced_completion' && /^SOK-EDU-[0-9A-F]{10}$/.test(certs.learner1_c1.serial)
+      && certs.learner1_c1.status === 'issued' && certs.learner1_c1.issuer === 'SOKONI Education' && certs.learner1_c1.providerName === 'teach1', [r, certs]);
+  r = await call('learner1', { op: 'complete', courseId: 'c1', lessonId: LDRAFT });
+  ck('G-5b a draft lesson cannot be completed (it is not part of the learner\'s course)', r.reason === 'LESSON_NOT_IN_COURSE', r);
+  await db.doc('learnerProfiles/learner1').set({ displayName: 'Wanjiru Achieng' });
+  const serial = (certs.learner1_c1 || {}).serial || 'SOK-EDU-FFFFFFFFFF';
+  r = await call('anyone', { op: 'verifyCertificate', serial });
+  ck('C-1 a certificate is VERIFIED by its serial on the server: status, course, provider, issuer, date — holder as INITIALS only (learners may be minors)',
+    r.found === true && r.status === 'issued' && r.courseTitle === 'Algebra' && r.holderInitials === 'W. A.' && !JSON.stringify(r).includes('learner1') && !JSON.stringify(r).includes('Wanjiru'), r);
+  r = await call('anyone', { op: 'verifyCertificate', serial: 'SOK-EDU-0000000000' });
+  ck('C-2 an unknown serial is NOT FOUND (never "valid")', r.found === false, r);
+  r = await call('learner1', { op: 'revokeCertificate', certificateId: 'learner1_c1', reason: 'self revoke' });
+  ck('C-3 a non-admin cannot revoke', r.reason === 'ADMIN_REQUIRED', r);
+  r = await call('admin1', { op: 'revokeCertificate', certificateId: 'learner1_c1', reason: 'Academic misconduct confirmed' }, { admin: true });
+  const rv = await call('anyone', { op: 'verifyCertificate', serial });
+  ck('C-4 an admin revokes with a reason (audited); verification then says REVOKED', r.status === 'revoked' && rv.status === 'revoked' && /misconduct/.test(rv.revokedReason || '')
+    && Object.values(await all('educationAudit')).some((x) => x.action === 'certificate_revoked'), rv);
   r = await call('learner1', { op: 'complete', courseId: 'c1', lessonId: L3 });
   ck('G-6 a replayed completion issues no second certificate', Object.keys(await all('learnerCertificates')).length === 1 && r.certificateId === 'learner1_c1', r);
   r = await call('learner1', { op: 'myCertificates' });
