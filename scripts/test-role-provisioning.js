@@ -76,7 +76,7 @@ ck('tenant → tenantProfiles (new)', /tenant:\s*\{\s*collection:\s*'tenantProfi
 ck('tenantProfiles is NOT named tenants/ (inventory multi-tenancy)',
    !/tenant:\s*\{\s*collection:\s*'tenants'/.test(SRC));
 ck('the projection is routed before the provider fallback',
-   SRC.indexOf('ROLE_PROFILES[role]') < SRC.indexOf('projectProvider(db, app, uid, approved))'));
+   SRC.indexOf('ROLE_PROFILES[role]') < SRC.indexOf('projectProvider(db, app, uid, approved, { appId }))') && SRC.indexOf('projectProvider(db, app, uid, approved, { appId }))') > 0);   /* anchor follows H1's call signature */
 
 /* ══ 5 · tenant privacy ══ */
 head('5 · a rental tenant is private and never searchable');

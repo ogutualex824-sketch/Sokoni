@@ -92,7 +92,8 @@ let pass = 0, fail = 0;
 const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d !== undefined ? '   [' + JSON.stringify(d).slice(0, 160) + ']' : '')); ok ? pass++ : fail++; };
 const asAdmin = (uid, d) => ({ auth: { uid, token: { admin: true } }, data: d, rawRequest: { headers: {} } });
 const code = async (p) => { try { return { r: await p }; } catch (e) { return { err: (e.details && e.details.code) || e.code || e.message }; } };
-const app = (id, uid, extra) => { data['applications/' + id] = Object.assign({ uid, type: 'provider', role: 'provider', name: 'Applicant ' + uid, status: 'pending', phone: '0712000000', location: 'Nairobi', intakeVersion: 999 }, extra || {}); };
+const app = (id, uid, extra) => { data['applications/' + id] = Object.assign({ uid, type: 'provider', role: 'provider', name: 'Applicant ' + uid, status: 'pending', phone: '0712000000', location: 'Nairobi', intakeVersion: 999,
+  category: 'cleaning' /* H1 (owner 2026-10-03): an approval that lands in providers must carry a real SOKONI category — a real application does */ }, extra || {}); };
 const projected = (uid) => (data['providers/' + uid] || {}).status === 'active';
 
 (async () => {
