@@ -3499,27 +3499,6 @@ exports.onNewOrderCreated = onDocumentCreated(
      7. POS listens real-time and auto-confirms the sale
 ============================================================ */
 
-/* ── Helper: canonical Kenyan MSISDN ───────────────────────────────────────────
-   Returns 254XXXXXXXXX, or NULL when the input is not a well-formed Kenyan mobile
-   number. Callers MUST refuse on null rather than send it onward.
-
-   Replaces `.replace(/^0/, "254")`, which rewrites only the FIRST zero — so an
-   international-prefixed 00254712345678 became 2540254712345678, sixteen digits,
-   and darajaSTKPush handed it to Daraja anyway. The same expression is copy-pasted
-   in 8 further modules (dispatch, finos, finos-utils, impact, payment-orchestrator,
-   pos-qr, sub-engine x2). Those are payout and dispatch paths and are deliberately
-   NOT touched by this change — converging them belongs in its own release. */
-function _normalizeMsisdn(raw) {
-  let d = String(raw === undefined || raw === null ? '' : raw).replace(/\D/g, '');
-  if (d.startsWith('00')) d = d.slice(2);              /* 00254… international */
-  if (!d.startsWith('254')) {
-    if (d.startsWith('0')) d = '254' + d.slice(1);     /* 07…, 01… national    */
-    else if (/^[17]\d{8}$/.test(d)) d = '254' + d;   /* bare 7…, 1…          */
-  }
-  /* Kenyan mobile ranges are 2547XXXXXXXX and 2541XXXXXXXX — exactly 12 digits. */
-  return /^254[17]\d{8}$/.test(d) ? d : null;
-}
-
 /* ── Helper: get Daraja OAuth access token ── */
 async function _darajaToken(consumerKey, consumerSecret, env) {
   const base = env === "production"
@@ -3802,12 +3781,8 @@ exports.darajaSTKPush = onCall(
     const password  = Buffer.from(`${darajaShortCode}${darajaPassKey}${timestamp}`).toString("base64");
 
     /* Normalise phone to 254XXXXXXXXX */
-    /* Normalise, and REFUSE anything that is not a Kenyan mobile number. This
-       path previously prepended "254" to whatever arrived and sent it. */
-    const normPhone = _normalizeMsisdn(phone);
-    if (!normPhone) {
-      throw new HttpsError("invalid-argument", "A valid Kenyan phone number is required (07XXXXXXXX).");
-    }
+    let normPhone = String(phone).replace(/\D/g, "").replace(/^0/, "254").replace(/^\+/, "");
+    if (!normPhone.startsWith("254")) normPhone = "254" + normPhone;
 
     const callbackUrl = "https://us-central1-sokoni-aeb26.cloudfunctions.net/darajaSTKCallback";
 
@@ -4111,23 +4086,6 @@ const SAFARICOM_CALLBACK_IPS = new Set([
   "196.201.214.208","196.201.213.109","196.201.213.115","196.201.214.202",
 ]);
 
-/* ── Sandbox callback lane — INERT unless explicitly configured ────────────────
-   Empty set ⇒ the lane does not exist: the callback rejects an untrusted IP
-   without reading Firestore, exactly as it did before. That is the production
-   configuration. It is set only for the duration of a sandbox certification run
-   and removed afterwards.
-
-   TWO conditions, not one. `posPayments.env` is copied from
-   shopSettings/{sellerUid}.darajaEnv, and firestore.rules lets a seller write
-   their OWN shopSettings — so `env === "sandbox"` is a SELLER-FORGEABLE claim.
-   Trusting it alone would let any merchant mark their live payments sandbox and
-   make them forge-completable by anyone who learns the CheckoutRequestID.
-   Pinning to UIDs fixed at deploy time is what makes the claim safe to act on. */
-const _DARAJA_SANDBOX_SELLER_UIDS = new Set(
-  String(process.env.DARAJA_SANDBOX_SELLER_UIDS || "")
-    .split(",").map((s) => s.trim()).filter(Boolean)
-);
-
 /* ── darajaSTKCallback — Safaricom posts payment result here ── */
 exports.darajaSTKCallback = onRequest(
   { timeoutSeconds: 30, invoker: "public" },
@@ -4139,14 +4097,7 @@ exports.darajaSTKCallback = onRequest(
       /* Validate origin IP against Safaricom's published callback IP list.
          In development (non-prod) we allow bypass so ngrok tunnels work. */
       const callerIp = (req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
-      const ipTrusted = process.env.NODE_ENV === "development"
-                     || SAFARICOM_CALLBACK_IPS.has(callerIp);
-
-      /* Untrusted IP and no sandbox lane configured — reject before touching
-         Firestore, exactly as before. Staying read-free on this branch also keeps
-         a public endpoint from being an amplifier for unauthenticated reads:
-         without it, anyone could force a document read per request. */
-      if (!ipTrusted && _DARAJA_SANDBOX_SELLER_UIDS.size === 0) {
+      if (process.env.NODE_ENV !== "development" && !SAFARICOM_CALLBACK_IPS.has(callerIp)) {
         console.warn(`[darajaSTKCallback] Rejected request from unexpected IP: ${callerIp}`);
         db.collection("auditLogs").add({
           type: "stk_callback_ip_rejected", ip: callerIp,
@@ -4158,12 +4109,7 @@ exports.darajaSTKCallback = onRequest(
       const body = req.body?.Body?.stkCallback;
       if (!body) return;
 
-      const checkoutId = String(body.CheckoutRequestID || "");
-      /* A caller-supplied document id containing "/" addresses a different
-         Firestore path entirely, and an empty one throws. Both become reachable
-         by an untrusted caller once the sandbox lane is open, so validate the id
-         before it is handed to .doc(). */
-      if (!checkoutId || checkoutId.length > 200 || checkoutId.includes("/")) return;
+      const checkoutId = body.CheckoutRequestID;
       const resultCode = body.ResultCode;
       const resultDesc = body.ResultDesc;
 
@@ -4175,32 +4121,6 @@ exports.darajaSTKCallback = onRequest(
         return;
       }
       const payData = paySnap.data();
-
-      /* Sandbox lane: an untrusted IP may settle ONLY a row that is explicitly
-         sandbox AND belongs to an explicitly enrolled sandbox seller. Anything
-         else is rejected on exactly the terms that applied before this lane
-         existed — same log line, same audit type. */
-      if (!ipTrusted) {
-        if (payData.env !== "sandbox"
-            || !_DARAJA_SANDBOX_SELLER_UIDS.has(payData.sellerUid)) {
-          console.warn(`[darajaSTKCallback] Rejected request from unexpected IP: ${callerIp}`);
-          db.collection("auditLogs").add({
-            type: "stk_callback_ip_rejected", ip: callerIp, checkoutId,
-            ts: admin.firestore.FieldValue.serverTimestamp(),
-          }).catch(() => {});
-          return;
-        }
-        console.warn(`[darajaSTKCallback] SANDBOX callback accepted from ${callerIp} for ${checkoutId}`);
-        db.collection("auditLogs").add({
-          type: "stk_callback_sandbox_accepted", ip: callerIp, checkoutId,
-          sellerUid: payData.sellerUid,
-          ts: admin.firestore.FieldValue.serverTimestamp(),
-        }).catch(() => {});
-      }
-      /* Sandbox money is not money. Read once here, used below to keep test
-         payments out of the seller-credit and financial-reporting paths. */
-      const _isSandbox = payData.env === "sandbox" || payData.isTest === true;
-
       if (payData.status === "completed" || payData.status === "failed") {
         console.log(`[darajaSTKCallback] Already processed: ${checkoutId} (${payData.status})`);
         return;
@@ -4280,11 +4200,6 @@ exports.darajaSTKCallback = onRequest(
           phone:       paidPhone          || payData.phone,
           mpesaCode:   mpesaCode          || null,
           sellerName:  payData.sellerName || null,
-          /* Carried across from the posPayments row. onSellerPaymentCreated already
-             has `if (!data || data.isTest) return;` but this record never copied the
-             flag, so that guard was unreachable from this path and a KES 1 test
-             booked a real commission. Propagating it is what arms the guard. */
-          isTest:      _isSandbox,
           description: payData.description || null,
           status:      "completed",
           createdAt:   ts,
@@ -4448,11 +4363,7 @@ exports.darajaSTKCallback = onRequest(
         }
       } catch (_tlErr) { /* observability must never fail a payment */ }
 
-      /* Sandbox money is not money. A sandbox row records a payment that never
-         moved, so booking paperwork against it would put fabricated figures into
-         production financial reporting — the UI Data Integrity rule, in the
-         ledger rather than on screen. */
-      if (resultCode === 0 && !_isSandbox) {
+      if (resultCode === 0) {
         try {
           const _fin = require("./financial-engine");
           await _fin.recordConfirmedPayment({
@@ -4608,8 +4519,8 @@ exports.sendTestSTKPush = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
     const uid   = request.auth.uid;
-    const phone = _normalizeMsisdn(request.data?.phone);
-    if (!phone) {
+    const phone = String(request.data?.phone || "").replace(/\D/g, "").replace(/^0/, "254").replace(/^\+/, "");
+    if (!phone.startsWith("254") || phone.length !== 12) {
       throw new HttpsError("invalid-argument", "Valid Kenyan phone number required (07XXXXXXXX).");
     }
 
@@ -4629,16 +4540,8 @@ exports.sendTestSTKPush = onCall(
     const cfg = snap.data();
 
     /* Verify the phone matches the seller's registered phone or their shop settings phone */
-    /* FAIL CLOSED. This guard was gated on the stored phone normalising to 12
-       digits, so a seller with no phone — or an unparseable one — skipped it
-       entirely and could send a live KES 1 push to ANY handset. An ownership
-       check that cannot be evaluated must refuse. */
-    const sellerPhone = _normalizeMsisdn(cfg.phone || cfg.ownerPhone);
-    if (!sellerPhone) {
-      throw new HttpsError("failed-precondition",
-        "Add a valid phone number to your shop profile before sending a test push.");
-    }
-    if (phone !== sellerPhone) {
+    const sellerPhone = String(cfg.phone || cfg.ownerPhone || "").replace(/\D/g, "").replace(/^0/, "254").replace(/^\+/, "");
+    if (sellerPhone && sellerPhone.length === 12 && phone !== sellerPhone) {
       throw new HttpsError("permission-denied", "Test pushes can only be sent to your own registered phone number.");
     }
 
@@ -5999,138 +5902,6 @@ exports.revokeShopInvite = onCall({}, async (request) => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════
-   SHOP TEAM — the three reads/writes the Staff surface needs.
-
-   The merchant shell called listShopEmployees, listShopInvites and
-   removeShopEmployee. NONE of the three existed, so Staff 404'd on the first
-   call and the client SDK reported it as the opaque code "internal" — which
-   told neither the merchant nor the log anything at all.
-
-   OWNERSHIP IS THE CALLER'S TOKEN, NEVER THE PAYLOAD. The client sends a
-   shopId for its own bookkeeping and it is deliberately ignored here: every
-   query binds shopOwnerId to request.auth.uid, so a forged shopId can only
-   ever return the caller's own team.
-   ══════════════════════════════════════════════════════════════════════ */
-
-/* merchant-identity.js decides employment from `status`, treating an ABSENT
-   status as active for records that predate the field. Revocation must therefore
-   write status, not only `active` — setting active:false alone would leave the
-   authorisation path untouched while the UI showed the person as removed. */
-const _SHOP_EMP_REVOKED = "revoked";
-function _shopEmpActive(e) {
-  const st = String((e && e.status) || "").toLowerCase();
-  if (!st) return e && e.active !== false;
-  return ["active", "approved", "enabled"].indexOf(st) > -1;
-}
-function _ms(v) {
-  try {
-    if (!v) return null;
-    if (typeof v.toMillis === "function") return v.toMillis();
-    if (v instanceof Date) return v.getTime();
-    if (typeof v === "number") return v;
-  } catch (_) {}
-  return null;
-}
-
-exports.listShopEmployees = onCall({}, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  const owner = request.auth.uid;
-
-  const snap = await db.collection("shopEmployees")
-    .where("shopOwnerId", "==", owner)
-    .limit(200).get();
-
-  const employees = snap.docs.map((d) => {
-    const e = d.data() || {};
-    return {
-      uid:      d.id,
-      name:     e.name  || "",
-      email:    e.email || "",
-      role:     e.role  || null,
-      shopName: e.shopName || null,
-      active:   _shopEmpActive(e),
-      status:   e.status || null,
-      joinedAt: _ms(e.joinedAt),
-    };
-  }).filter((e) => e.active);   /* a revoked record is not a team member */
-
-  return { shopId: owner, employees, count: employees.length };
-});
-
-exports.listShopInvites = onCall({}, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  const owner = request.auth.uid;
-
-  const snap = await db.collection("shopInvites")
-    .where("shopOwnerId", "==", owner)
-    .where("status", "==", "pending")
-    .limit(100).get();
-
-  const now = Date.now();
-  let staleCount = 0;
-  const invites = snap.docs.map((d) => {
-    const v = d.data() || {};
-    const expiresAt = _ms(v.expiresAt);
-    /* An expired invite is still PENDING in the record — acceptShopInvite is what
-       refuses it. Reporting the count separately lets the surface say so instead of
-       showing a live-looking link that cannot be accepted. */
-    const expired = expiresAt !== null && expiresAt < now;
-    if (expired) staleCount++;
-    return {
-      token:     d.id,
-      email:     v.email || "",
-      role:      v.role  || null,
-      status:    v.status || "pending",
-      expired:   expired,
-      createdAt: _ms(v.createdAt),
-      expiresAt: expiresAt,
-    };
-  });
-
-  return { shopId: owner, invites, count: invites.length, staleCount };
-});
-
-exports.removeShopEmployee = onCall({}, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  const owner = request.auth.uid;
-  const uid = String((request.data && request.data.uid) || "").trim();
-  if (!uid) throw new HttpsError("invalid-argument", "uid is required.");
-
-  const ref  = db.collection("shopEmployees").doc(uid);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError("not-found", "That person is not on your team.");
-  if ((snap.data() || {}).shopOwnerId !== owner) {
-    throw new HttpsError("permission-denied", "You can only remove your own team members.");
-  }
-
-  /* status is what merchant-identity.js reads, so it is what actually revokes the
-     authorisation. active:false is kept in step for anything reading that instead. */
-  await ref.update({
-    status:    _SHOP_EMP_REVOKED,
-    active:    false,
-    removedAt: admin.firestore.FieldValue.serverTimestamp(),
-    removedBy: owner,
-  });
-
-  /* The employment POINTERS on the user are cleared, so nothing still reads as
-     "works at this shop". `role` is deliberately NOT touched: demoting an account
-     is a role decision owned by the role authority, and a shop owner removing a
-     cashier must not be able to change what that person is on the platform.
-     Best-effort — the revocation above is the authoritative half. */
-  try {
-    await db.collection("users").doc(uid).set({
-      employeeRole: admin.firestore.FieldValue.delete(),
-      shopOwnerId:  admin.firestore.FieldValue.delete(),
-      shopName:     admin.firestore.FieldValue.delete(),
-    }, { merge: true });
-  } catch (e) {
-    logger.warn("[removeShopEmployee] pointer cleanup failed", { uid, err: e.message });
-  }
-
-  return { success: true, uid };
-});
-
-/* ══════════════════════════════════════════════════════════════════════
    PDQ TERMINAL PAYMENT CLOUD ADAPTER
    Called by pos-terminals.js CloudAdapter when a Cloud-connected
    terminal (e.g. Yoco, SumUp, iKhokha) is used for card payments.
@@ -6139,18 +5910,7 @@ exports.removeShopEmployee = onCall({}, async (request) => {
 ══════════════════════════════════════════════════════════════════════ */
 
 /* Initiate a card payment on a Cloud-connected terminal */
-/* RETIRED — superseded by pos-terminal-live.js, which provides the full set
-   (initiate, poll, cancel, reverse, settleBatch, capabilities, health, batch
-   report, event webhook). These two are 2026-era inline implementations with a
-   DIFFERENT tenancy check: they compare businesses.uid, while the canonical
-   guard everywhere else uses ownerId — so they are not merely older, they ask a
-   different question of the same document.
-
-   Census: zero callers in the repo and NO Cloud Run service in Cloud Monitoring,
-   i.e. never invoked. De-exported rather than deleted: the body is left intact
-   and inert so the change is reversible by restoring one word, and so no
-   surrounding line is disturbed in a 12,000-line file. */
-const _retired_posInitiateTerminalPaymentV1 = onCall({ timeoutSeconds: 30 }, async (request) => {
+exports.posInitiateTerminalPaymentV1 = onCall({ timeoutSeconds: 30 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
   const { terminalId, bizId, amount, currency = "KES", reference } = request.data || {};
@@ -6226,7 +5986,7 @@ exports.posPollTerminalPayment = onCall({ timeoutSeconds: 15 }, async (request) 
 });
 
 /* Cancel a pending terminal payment (v1 legacy — superseded by posTerminalLive) */
-const _retired_posCancelTerminalPaymentV1 = onCall({ timeoutSeconds: 15 }, async (request) => {
+exports.posCancelTerminalPaymentV1 = onCall({ timeoutSeconds: 15 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
   const { paymentId, bizId } = request.data || {};
@@ -11386,9 +11146,6 @@ exports.previewCommission         = commission.previewCommission;
 exports.getCommissionConfig       = commission.getCommissionConfig;
 exports.getSellerEarningsReport   = commission.getSellerEarningsReport;
 exports.getAdminRevenueByHub      = commission.getAdminRevenueByHub;
-/* ONE door in front of the thirteen above. They remain exported as
-   compatibility wrappers until the census proves nobody still calls them. */
-exports.commissionDispatch        = commission.commissionDispatch;
 
 /* ══════════════════════════════════════════════════════════════════
    Subscription & Billing Engine  v1.0
@@ -11571,11 +11328,6 @@ exports.posLogReprint          = posZF.posLogReprint;
 exports.posGetQueueMetrics     = posZF.posGetQueueMetrics;
 exports.posCleanupIdempotency  = posZF.posCleanupIdempotency;
 exports.posCheckPaymentStatus  = posZF.posCheckPaymentStatus;
-
-/* ── Manual M-PESA Till reference claims ────────────────────────────── */
-const posMpesaRefs = require('./pos-mpesa-refs');
-exports.claimPosMpesaReference   = posMpesaRefs.claimPosMpesaReference;
-exports.onPosTransactionMpesaRef = posMpesaRefs.onPosTransactionMpesaRef;
 
 /* ── Facebook / Meta Data Deletion Callback + Data Rights ───────────── */
 const fbDeletion = require('./facebook-data-deletion');
@@ -12355,21 +12107,6 @@ exports.validateDeviceAccess      = bootstrap.validateDeviceAccess;
 /* ── Device Manager v1.0 ────────────────────────────────────────────────── */
 const deviceMgr = require('./device-manager');
 exports.registerDevice            = deviceMgr.registerDevice;
-exports.registerPrinterHost       = deviceMgr.registerPrinterHost;
-exports.getPrinterHostStatus      = deviceMgr.getPrinterHostStatus;
-
-/* ── Durable print lifecycle ─────────────────────────────────────────────────
-   PENDING -> CLAIMED -> PRINTING -> PRINTED, with FAILED -> PENDING retry. The claim is a
-   server transaction so one sale cannot become two physical receipts across a reload, a
-   duplicate realtime event or a reconnect. A new Cloud Function that index.js does not
-   re-export by name is never deployed. */
-const printIntents = require('./print-intents');
-exports.createPrintIntent         = printIntents.createPrintIntent;
-exports.claimPrintJob             = printIntents.claimPrintJob;
-exports.advancePrintJob           = printIntents.advancePrintJob;
-/* Firestore trigger: the sale document is the commit signal, so a print intent can never be
-   created before the sale itself has landed. */
-exports.onPosSaleCompleted        = printIntents.onPosSaleCompleted;
 exports.deviceHeartbeat           = deviceMgr.deviceHeartbeat;
 exports.lockDevice                = deviceMgr.lockDevice;
 exports.unlockDevice              = deviceMgr.unlockDevice;
@@ -13052,16 +12789,3 @@ exports.applicationLifecycle  = _appLife.applicationLifecycle;   // trigger: app
 exports.applicationDecide     = _appLife.applicationDecide;      // onCall (admin)
 exports.applicationReconcile  = _appLife.applicationReconcile;   // onCall (admin) — drift repair
 exports.applicationList       = _appLife.applicationList;        // onCall (admin) — one canonical read
-
-/* ── POS COMMISSION RECEIVABLE COLLECTION ──────────────────────────────────────
-   The till rail accrued 5% as `pos_commission_receivable` and NOTHING ever read it —
-   no consumer, no scheduled job. These close that loop. The accrual itself is
-   untouched: calculateCommission and _postSaleFinancials stay exactly as they are.
-
-   FAILS CLOSED. No approved seller-collection rail exists yet (mpesa-c2b is inbound
-   only; IntaSend B2C is a PAYOUT rail and would pay sellers 5% daily instead of
-   collecting), so the registry ships empty and the daily job records
-   `blocked_no_rail` and moves NO money until an operator configures one. */
-const _posComm = require("./pos-commission-collection");
-exports.posCommissionDailyCollection = _posComm.posCommissionDailyCollection; // onSchedule 06:00 EAT
-exports.posCommissionReconcile       = _posComm.posCommissionReconcile;       // onCall (admin) — read-only
