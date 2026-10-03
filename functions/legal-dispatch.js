@@ -8,7 +8,9 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const _OPTS = { region: 'us-central1', enforceAppCheck: true, timeoutSeconds: 60, memory: '256MiB' };
 
 let _mod;
-function _h() { return _mod || (_mod = require('./legal-agreements')._h); }
+/* Legal Hub L2/L3 merges the advocate/firm profile ops (legal-hub._h) onto the SAME router — no new Cloud Function.
+   Agreement ops win a name clash (none today; test-legal-profile asserts the two maps are disjoint). */
+function _h() { return _mod || (_mod = Object.assign({}, require('./legal-hub')._h, require('./legal-agreements')._h)); }
 
 /* The route list is DERIVED from the handler map, never hand-maintained.
  *

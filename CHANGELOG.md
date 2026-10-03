@@ -1,3 +1,26 @@
+## [2026-10-03] — Legal Hub L1 + L2 (server): ONE Legal taxonomy; lawyer vs law-firm applications; self-service profile and needs-info resubmit — NOT deployed
+
+- **functions/shared/legal-taxonomy.js (new):** THE taxonomy, six groups × five services exactly as the owner brief.
+  - Legacy specializations map one-to-one only. criminal_law, immigration and tax_law map to nothing (owner decision).
+- **sokoni-legal-taxonomy.js (new, GENERATED):** built by scripts/build-legal-taxonomy.js (--check detects a stale copy). Hosting takes it WHOLE.
+- **functions/legal-hub.js:**
+  - registerLegalProvider takes  advocate|firm and canonical . A firm needs firmName; its offices and declared team are stored, and the team stays unverified.
+  - The application is stamped applicationType lawyer|law_firm with practice groups for AdminOS.
+  - Legacy specializations are still accepted.
+  - getLegalProviders filters by practiceArea / practiceGroup / entityType. An unknown id returns nothing.
+  - The public view gives rating:null when unrated (no default 5) and no licence number or phone.
+  - New  ops: legalMyProfile, legalUpdateProfile (protected identity and verification fields are refused and nothing changes), legalResubmitApplication (only info_requested → pending), legalTaxonomy.
+- **functions/legal-dispatch.js:** routes legal-hub._h alongside the agreement ops. No new Cloud Function.
+- **docs/LEGAL_HUB_CONVERGENCE.md (new):** Phase 0 authority map, the L1/L2 design, owner decisions and the slice plan.
+- **Tests:**
+  - test-legal-profile 14/0 (BASE=9cab901 fails); sabotage-legal-profile 6/6.
+  - test-legal-verification server rows 93 = base; test-legal-compliance 47/0; verify-legal-dispatch PASS.
+  - Browser and emulator suites UNRUN (memory floor).
+- **Database:** new fields legalProviders.entityType / practiceAreas / firm.*, and applications.applicationType / legalEntityType / practiceAreas / practiceGroups / applicantResponse. No migration: an absent entityType reads as advocate.
+- **API:** registerLegalProvider (additive), getLegalProviders (additive filters), legalDispatch (+4 ops).
+- **Security:** self-service cannot touch identity or verification. Resubmit cannot approve. No rules change.
+- **Deploy unit (when authorized):** registerLegalProvider, getLegalProviders, getLegalProvider, legalDispatch.
+
 ## [2026-10-03] — Legal Hub Phase 28: provider activation gate at booking creation PROVEN (pre-existing, two independent layers) — NOT deployed
 
 - **Finding:** the audit claim that bookingCreateService does not check provider status is STALE on this lineage (and on live 72dca56). It refuses unless providers/{uid}.status is active|approved and acceptsBookings !== false (booking-service.js). ent-availability.loadCalendar refuses again (SUSPENDED / NOT_APPROVED / NOT_ACCEPTING, plus the Legal Verification Authority bookingGate).

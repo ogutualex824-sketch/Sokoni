@@ -21,26 +21,46 @@ function requireAuth(req) {
 }
 function san(s, max = 200) { return s == null ? '' : String(s).trim().slice(0, max); }
 
-const LEGAL_SPECIALIZATIONS = [
-  'family_law', 'property_law', 'employment_law', 'corporate_law', 'criminal_law',
-  'immigration', 'intellectual_property', 'tax_law', 'conveyancing', 'debt_recovery',
-  'drafting', 'notary', 'mediation', 'litigation', 'other',
-];
+/* THE Legal taxonomy (Legal Hub L1) — six groups × five services, ONE source. The old 15-value list is the
+   taxonomy's LEGACY_SPECIALIZATIONS: still accepted from older clients and kept on old profiles, never extended. */
+const TAX = require('./shared/legal-taxonomy');
+const LEGAL_SPECIALIZATIONS = TAX.LEGACY_SPECIALIZATIONS;
+
+/* Legal Hub L2 — two application types on ONE identity record (legalProviders/{uid}) and ONE review item
+   (applications/legal_{uid}). An ADVOCATE applies as a person. A LAW FIRM applies as an organisation through its
+   responsible advocate: the account holder is that advocate, so the ONE eligibility predicate (admin approval +
+   that advocate's current LSK verification — legal-verification.js, owner-locked b24b052) is unchanged.
+   Firm-only facts (registration number, offices, declared team) are admin-reviewed data, never a credential:
+   a declared team member is NOT shown as verified anywhere until a team-verification path exists. */
+const ENTITY_TYPES = ['advocate', 'firm'];
+function _offices(v) {
+  return (Array.isArray(v) ? v : []).slice(0, 10).map((o) => ({ name: san(o && o.name, 80), county: san(o && o.county, 80), address: san(o && o.address, 200) }))
+    .filter((o) => o.name || o.county || o.address);
+}
+function _team(v) {
+  return (Array.isArray(v) ? v : []).slice(0, 50).map((m) => ({ name: san(m && m.name, 120), lskNumber: san(m && m.lskNumber, 60), role: san(m && m.role, 60) }))
+    .filter((m) => m.name);
+}
 
 /* ── 1. registerLegalProvider ── */
 exports.registerLegalProvider = onCall(CF_OPTS, async (req) => {
   const uid = requireAuth(req);
+  const d = req.data || {};
   const { name, firmName, specializations, licenseNumber, bio,
           location, county, phone, consultationFee, currency,
-          languages, isOnline, yearsOfExperience } = req.data;
+          languages, isOnline, yearsOfExperience } = d;
+  const entityType = d.entityType == null ? 'advocate' : String(d.entityType);
+  if (!ENTITY_TYPES.includes(entityType)) throw new HttpsError('invalid-argument', 'entityType must be advocate or firm');
 
-  if (!name || !specializations || !licenseNumber) {
-    throw new HttpsError('invalid-argument', 'name, specializations, licenseNumber required');
+  if (!name || !licenseNumber) {
+    throw new HttpsError('invalid-argument', 'name and licenseNumber (the responsible advocate\'s LSK admission number) required');
   }
+  if (entityType === 'firm' && !san(firmName, 120)) throw new HttpsError('invalid-argument', 'firmName is required for a law-firm application');
   const specs = Array.isArray(specializations)
     ? specializations.filter(s => LEGAL_SPECIALIZATIONS.includes(s)).slice(0, 5)
     : [];
-  if (!specs.length) throw new HttpsError('invalid-argument', 'At least one valid specialization required');
+  const practiceAreas = TAX.normalizeAreas(d.practiceAreas);
+  if (!specs.length && !practiceAreas.length) throw new HttpsError('invalid-argument', 'Choose at least one practice area');
 
   const existing = await db().collection('legalProviders').where('uid', '==', uid).limit(1).get();
   if (!existing.empty) throw new HttpsError('already-exists', 'Profile already exists');
@@ -52,8 +72,14 @@ exports.registerLegalProvider = onCall(CF_OPTS, async (req) => {
   const ref = db().collection('legalProviders').doc(uid);
   await ref.set({
     providerId: uid, uid,
+    entityType,
     name: san(name, 120), firmName: san(firmName, 120),
-    specializations: specs, licenseNumber: san(licenseNumber, 60),
+    specializations: specs, practiceAreas, licenseNumber: san(licenseNumber, 60),
+    ...(entityType === 'firm' ? { firm: {
+      registrationNumber: san(d.firmRegistrationNumber, 60), description: san(d.firmDescription, 2000),
+      offices: _offices(d.offices), representativeRole: san(d.representativeRole, 60),
+      teamDeclared: _team(d.team), teamVerified: false,
+    } } : {}),
     bio: san(bio, 2000),
     location: san(location, 150), county: san(county, 80), country: 'Kenya',
     phone: san(phone, 20),
@@ -76,7 +102,13 @@ exports.registerLegalProvider = onCall(CF_OPTS, async (req) => {
     name: san(name, 120), firmName: san(firmName, 120), phone: san(phone, 20),
     licenseNumber: san(licenseNumber, 60), county: san(county, 80),
   });
-  return { providerId: uid, status: 'pending_review', applicationId: app.applicationId };
+  /* AdminOS must tell a LAWYER application from a LAW-FIRM application (L2). Merged onto the ONE review item;
+     never a decision field. */
+  await db().collection('applications').doc(app.applicationId).set({
+    legalEntityType: entityType, applicationType: entityType === 'firm' ? 'law_firm' : 'lawyer',
+    practiceAreas, practiceGroups: TAX.groupsOf(practiceAreas), updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { providerId: uid, status: 'pending_review', applicationId: app.applicationId, entityType };
 });
 
 /* ── 2. approveLegalProvider (admin) ── */
@@ -120,6 +152,12 @@ exports.getLegalProviders = onCall(CF_OPTS, async (req) => {
   const now = Date.now();
   let providers = snap.docs.filter(d => LV.eligibility(d.data(), now).bookable).map(d => _publicAdvocate(d.data(), now));
 
+  /* Taxonomy filters (L1) run over the eligible set in memory: no new composite index, and an unknown id
+     filters to NOTHING (never "ignore the filter and show everyone"). */
+  const area = req.data.practiceArea, group = req.data.practiceGroup, et = req.data.entityType;
+  if (area) providers = TAX.isArea(area) ? providers.filter(p => p.practiceAreas.includes(area)) : [];
+  if (group) providers = TAX.isGroup(group) ? providers.filter(p => p.practiceGroups.includes(group)) : [];
+  if (et) providers = ENTITY_TYPES.includes(et) ? providers.filter(p => p.entityType === et) : [];
   if (county) providers = providers.filter(p => (p.county || '').toLowerCase().includes(county.toLowerCase()));
   if (isOnline) providers = providers.filter(p => p.isOnline);
 
@@ -132,10 +170,16 @@ exports.getLegalProviders = onCall(CF_OPTS, async (req) => {
    phone, reviewer, evidence or audit references. */
 function _publicAdvocate(p, now) {
   const pv = LV.publicVerification(p, now);
+  const areas = TAX.areasOfProfile(p);
+  const rated = Number(p.ratingCount) > 0;
   return { providerId: p.providerId, name: p.name, firmName: p.firmName,
-    specializations: p.specializations, county: p.county,
-    consultationFee: p.consultationFee, currency: p.currency,
-    rating: p.rating, ratingCount: p.ratingCount,
+    entityType: p.entityType === 'firm' ? 'firm' : 'advocate',
+    specializations: p.specializations, practiceAreas: areas, practiceGroups: TAX.groupsOf(areas), county: p.county,
+    offices: p.entityType === 'firm' && p.firm ? p.firm.offices || [] : undefined,
+    bio: p.bio || '',
+    consultationFee: Number(p.consultationFee) > 0 ? p.consultationFee : null, currency: p.currency,
+    /* an unrated advocate has NO rating — never 0 shown as a score, never a default 5 (L1/no-fakes) */
+    rating: rated ? p.rating : null, ratingCount: rated ? p.ratingCount : 0,
     isOnline: p.isOnline, yearsOfExperience: p.yearsOfExperience, languages: p.languages,
     sokoniVerified: pv.sokoniVerified, lskVerified: pv.lskVerified, lskPractisingYear: pv.lskPractisingYear };
 }
@@ -294,7 +338,115 @@ exports.rateLegalProvider = onCall(CF_OPTS, async (req) => {
   return { ok: true };
 });
 
+/* ── Legal Hub L2/L3 — the applicant's own profile + application, through legalDispatch (no new Cloud Function).
+   Every op authenticates itself first; the dispatcher is a router, not an authorization boundary. ── */
+const _h = {};
+/* Self-editable, PUBLIC profile facts. Everything else is protected:
+   name / licenseNumber / firmName / entityType / firm.registrationNumber identify the advocate or firm that SOKONI
+   and the LSK check verified — a change there is a re-verification, done through AdminOS, never self-service;
+   status / verification / rating / counts are server-owned. */
+const SELF_EDITABLE = ['bio', 'location', 'county', 'languages', 'isOnline', 'practiceAreas', 'consultationFee', 'yearsOfExperience', 'phone'];
+const FIRM_EDITABLE = ['description', 'offices', 'team'];
+
+function _selfPatch(cur, d) {
+  const p = {};
+  if ('bio' in d) p.bio = san(d.bio, 2000);
+  if ('location' in d) p.location = san(d.location, 150);
+  if ('county' in d) p.county = san(d.county, 80);
+  if ('phone' in d) p.phone = san(d.phone, 20);
+  if ('languages' in d) p.languages = Array.isArray(d.languages) ? d.languages.slice(0, 5).map((l) => san(l, 30)).filter(Boolean) : [];
+  if ('isOnline' in d) p.isOnline = d.isOnline === true;
+  if ('yearsOfExperience' in d) p.yearsOfExperience = Math.max(0, Math.min(70, parseInt(d.yearsOfExperience, 10) || 0));
+  if ('consultationFee' in d) {
+    const f = Number(d.consultationFee);
+    if (!Number.isFinite(f) || f < 0 || f > 10000000) throw new HttpsError('invalid-argument', 'consultationFee must be a KES amount between 0 and 10,000,000');
+    p.consultationFee = Math.round(f);
+  }
+  if ('practiceAreas' in d) {
+    const a = TAX.normalizeAreas(d.practiceAreas);
+    if (!a.length) throw new HttpsError('invalid-argument', 'Choose at least one practice area');
+    p.practiceAreas = a;
+  }
+  if (cur.entityType === 'firm') {
+    const f = Object.assign({}, cur.firm || {});
+    let touched = false;
+    if ('firmDescription' in d) { f.description = san(d.firmDescription, 2000); touched = true; }
+    if ('offices' in d) { f.offices = _offices(d.offices); touched = true; }
+    if ('team' in d) { f.teamDeclared = _team(d.team); f.teamVerified = false; touched = true; }
+    if (touched) p.firm = f;
+  }
+  return p;
+}
+const PROTECTED = ['name', 'licenseNumber', 'firmName', 'entityType', 'firmRegistrationNumber', 'status', 'verification', 'rating', 'ratingCount', 'uid', 'providerId'];
+
+_h.legalMyProfile = async (req) => {
+  const uid = requireAuth(req);
+  const [ps, as] = await Promise.all([db().collection('legalProviders').doc(uid).get(), db().collection('applications').doc('legal_' + uid).get()]);
+  if (!ps.exists) return { exists: false };
+  const p = ps.data(), a = as.exists ? as.data() : null, now = Date.now();
+  const el = LV.eligibility(p, now), pv = LV.publicVerification(p, now);
+  return {
+    exists: true,
+    profile: Object.assign(_publicAdvocate(p, now), {
+      phone: p.phone || '', location: p.location || '', licenseNumber: p.licenseNumber || '',
+      firm: p.entityType === 'firm' ? { registrationNumber: (p.firm && p.firm.registrationNumber) || '', description: (p.firm && p.firm.description) || '',
+        offices: (p.firm && p.firm.offices) || [], team: (p.firm && p.firm.teamDeclared) || [], teamVerified: false } : null,
+    }),
+    application: a ? { id: as.id, type: a.applicationType || (p.entityType === 'firm' ? 'law_firm' : 'lawyer'), status: a.status || 'pending',
+      reviewReason: a.reviewReason || null, decidedAtMs: a.decidedAt && a.decidedAt.toMillis ? a.decidedAt.toMillis() : null,
+      submittedAtMs: a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : null } : null,
+    verification: { sokoniVerified: pv.sokoniVerified, lskVerified: pv.lskVerified, lskPractisingYear: pv.lskPractisingYear, bookable: el.bookable, code: el.code },
+    editable: SELF_EDITABLE.concat(p.entityType === 'firm' ? FIRM_EDITABLE : []),
+  };
+};
+
+_h.legalUpdateProfile = async (req) => {
+  const uid = requireAuth(req);
+  const d = req.data || {};
+  const tried = PROTECTED.filter((k) => k in d);
+  if (tried.length) {
+    throw new HttpsError('failed-precondition', 'These details are verified by SOKONI and can only be changed through a re-verification request: ' + tried.join(', ') + '. Nothing was changed.', { code: 'LEGAL_PROTECTED_FIELD', fields: tried });
+  }
+  const ref = db().collection('legalProviders').doc(uid);
+  const out = await db().runTransaction(async (t) => {
+    const s = await t.get(ref);
+    if (!s.exists) throw new HttpsError('not-found', 'No Legal profile for this account. Register first.');
+    const patch = _selfPatch(s.data(), d);
+    if (!Object.keys(patch).length) throw new HttpsError('invalid-argument', 'Nothing to update.');
+    t.update(ref, Object.assign({}, patch, { updatedAt: FieldValue.serverTimestamp() }));
+    return Object.keys(patch);
+  });
+  return { ok: true, updated: out };
+};
+
+/* NEEDS INFORMATION → resubmit: the applicant answers an AdminOS request_info and the application returns to the
+   queue as 'pending'. It can ONLY leave info_requested; it never approves, and it re-reads the status in a txn. */
+_h.legalResubmitApplication = async (req) => {
+  const uid = requireAuth(req);
+  const d = req.data || {};
+  const note = san(d.note, 1000);
+  const appRef = db().collection('applications').doc('legal_' + uid);
+  const lpRef = db().collection('legalProviders').doc(uid);
+  await db().runTransaction(async (t) => {
+    const [as, ls] = await Promise.all([t.get(appRef), t.get(lpRef)]);
+    if (!as.exists || !ls.exists) throw new HttpsError('not-found', 'No Legal application for this account.');
+    if (as.data().status !== 'info_requested') throw new HttpsError('failed-precondition', 'SOKONI has not asked for more information on this application.', { code: 'NOT_INFO_REQUESTED' });
+    const tried = PROTECTED.filter((k) => k in d);
+    if (tried.length) throw new HttpsError('failed-precondition', 'Verified details cannot be changed here: ' + tried.join(', ') + '. Nothing was changed.', { code: 'LEGAL_PROTECTED_FIELD', fields: tried });
+    const patch = _selfPatch(ls.data(), d);
+    if (Object.keys(patch).length) t.update(lpRef, Object.assign({}, patch, { updatedAt: FieldValue.serverTimestamp() }));
+    t.update(appRef, { status: 'pending', statusCanonical: 'pending', applicantResponse: note || null,
+      applicantRespondedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      ...(patch.practiceAreas ? { practiceAreas: patch.practiceAreas, practiceGroups: TAX.groupsOf(patch.practiceAreas) } : {}) });
+  });
+  return { ok: true, status: 'pending' };
+};
+
+/* The taxonomy itself, for any client that cannot load the generated browser copy. Public, no auth. */
+_h.legalTaxonomy = async () => ({ groups: TAX.GROUPS, legacy: TAX.LEGACY_TO_AREA, maxAreas: TAX.MAX_AREAS });
+
 module.exports = {
+  _h,
   registerLegalProvider:    exports.registerLegalProvider,
   approveLegalProvider:     exports.approveLegalProvider,
   getLegalProviders:        exports.getLegalProviders,
