@@ -11979,6 +11979,11 @@ exports.submitVehicleEnquiry  = vehicleHub.submitVehicleEnquiry;
 exports.getVehicleEnquiries   = vehicleHub.getVehicleEnquiries;
 exports.compareVehicles       = vehicleHub.compareVehicles;
 exports.reportVehicleListing  = vehicleHub.reportVehicleListing;
+/* Car Hub C4 (2026-10-03): AdminOS moderation + seller close / own listings + review queue */
+exports.moderateVehicleListing = vehicleHub.moderateVehicleListing;
+exports.closeVehicleListing    = vehicleHub.closeVehicleListing;
+exports.listMyVehicleListings  = vehicleHub.listMyVehicleListings;
+exports.listVehicleReviewQueue = vehicleHub.listVehicleReviewQueue;
 
 /* ── Digital Products Hub v1.0 ──────────────────────────────────────────── */
 const digitalHub = require('./digital-hub');
