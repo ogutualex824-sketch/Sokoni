@@ -44,6 +44,23 @@ const COMPANY = Object.freeze({
   /* Registration (verified — BRS Certificate of Incorporation) */
   registrationNumber: 'CPR/2014/166272',
 
+  /* Data-protection registration (verified — ODPC Certificate of Registration).
+     This is the ODPC REGISTRATION status only — it certifies that Bravilex is a
+     registered Data Processor. It does NOT, on its own, attest to the platform's
+     ongoing technical/organisational compliance, which is tracked separately in
+     docs/ODPC_COMPLIANCE_CERTIFICATION.md (internal engineering assessment). */
+  dataProtection: Object.freeze({
+    authority:            'Office of the Data Protection Commissioner (ODPC), Kenya',
+    registrationNumber:   '630-8669-F056',        // primary ODPC registration/identification number
+    certificateSerialNo:  '24670',                // identifies the certificate document itself
+    category:             'Data Processor',
+    registeredEntity:     'Bravilex International Co. Limited',
+    validFrom:            '2026-07-28',            // 28/07/2026
+    validTo:              '2028-07-28',            // 28/07/2028
+    status:               'registered',
+    statementLine:        'Registered as a Data Processor with the Office of the Data Protection Commissioner (ODPC), Kenya — Registration No. 630-8669-F056, valid 28 July 2026 – 28 July 2028.',
+  }),
+
   /* Contact — executive */
   email:             'info@mysokoni.co.ke',           // general enquiries
   adminEmail:        'admin@mysokoni.co.ke',           // administration

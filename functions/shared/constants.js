@@ -159,6 +159,25 @@ function whtAmount(net) {
 }
 
 /* ── Exports ─────────────────────────────────────────────────── */
+/* ── Payment status vocabulary ─────────────────────────────────────────────
+   The payments collection stores UPPERCASE (COMPLETE | PENDING | FAILED) while
+   parts of the platform write lowercase. Comparing a raw status against a
+   literal is therefore unsafe in both directions, and doing so is what left the
+   small-dispute auto-resolve permanently disabled: it tested against
+   'completed', which matches neither COMPLETE nor complete.
+
+   TERMINAL_PAID had been defined independently in booking.js and
+   entitlement-engine.js. Two copies of a financial vocabulary is one drift away
+   from two different answers to "has this been paid?", so it lives here now.
+
+   ALWAYS normalise before testing:  TERMINAL_PAID.has(String(s||'').toUpperCase()) */
+const TERMINAL_PAID = new Set(['COMPLETE', 'COMPLETED', 'PAID', 'SUCCESS']);
+
+/** True when a payment has reached a terminal PAID state, whatever its case. */
+function isPaid(status) {
+  return TERMINAL_PAID.has(String(status || '').toUpperCase());
+}
+
 module.exports = {
   /* Financial */
   PLATFORM_FEE, VAT_RATE, WHT_RATE, WHT_THRESHOLD, DST_RATE,
@@ -188,4 +207,7 @@ module.exports = {
 
   /* Helpers */
   currentPeriod, periodMonthsAgo, withVat, whtAmount,
+
+  /* Payments */
+  TERMINAL_PAID, isPaid,
 };
