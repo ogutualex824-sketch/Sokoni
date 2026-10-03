@@ -14,6 +14,8 @@
      NC-d  pricer re-reads the OFFER at pay time (2f)     → C12 offer edit after creation changes nothing
      NC-e  reuse ignores payBy                            → C16 reuse never returns an expired membership
      NC-f  payBy not written                              → C15 payBy set server-side
+     NC-g  sales-flag check removed                       → C18 sales flag gates creation
+     NC-h  sales flag compared truthy (=='true' accepted)  → C18 sales flag gates creation
 
    Rows C12/C13 run on the REAL clock (payment-purposes' payBy check reads Date.now(), 2f df88d4b S3).
 
@@ -116,7 +118,9 @@ const offer = (over) => Object.assign({ providerId: 'gym_A', name: 'Gold 3-month
   priceType: 'fixed', price: 600000, fee: 0, deposit: 0, images: [], durationMins: 0, active: true,
   serviceKind: 'membership', periodCount: 3, periodUnit: 'month', createdAt: 'T0', updatedAt: 'T0' }, over || {});
 const FIT = { status: 'approved', business: { category: 'fitness_studio', source: 'application' } };
+const FLAG_ON = { key: 'fitness_membership_sales', enabled: true };
 const seedBase = (svcOver, extra) => Object.assign({
+  'featureFlags/fitness_membership_sales': FLAG_ON,
   [`providerServices/${SVC}`]: offer(svcOver),
   'providerServices/svc_pt': offer({ serviceKind: undefined, periodCount: undefined, periodUnit: undefined, name: 'PT session', price: 150000, durationMins: 60 }),
   'providers/gym_A': FIT,
@@ -355,6 +359,36 @@ async function matrix (FMC, PP) {
     ck('C17 PAY_BY_MS equals booking-service.js HOLD_MS (the platform pre-payment hold window) — drift fails here',
       hold != null && hold === FMC.PAY_BY_MS, { hold, payBy: FMC.PAY_BY_MS }); }
 
+  /* C18 — SALES FLAG (owner 2026-10-03): featureFlags/fitness_membership_sales.enabled === true, read server-side */
+  { const out = {};
+    const run = async (label, flagDoc, opts) => {
+      const seed = seedBase();
+      if (flagDoc === undefined) delete seed['featureFlags/fitness_membership_sales']; else seed['featureFlags/fitness_membership_sales'] = flagDoc;
+      const h = harness(FMC, seed);
+      if (opts && opts.readError) {
+        const realCol = h.db.collection;
+        const wrapped = Object.assign({}, h.db, { collection: (c) => (c === 'featureFlags'
+          ? { doc: () => ({ get: async () => { throw new Error('UNAVAILABLE: flag read failed'); } }) } : realCol(c)) });
+        FMC._test.use({ db: wrapped });
+      }
+      const r = await create(FMC, 'member_1', { serviceId: SVC });
+      out[label] = { ok: r.ok, code: r.code, reason: r.reason, msg: r.msg, mems: h.mems().length, claims: [...h.db._docs.keys()].filter((k) => k.startsWith('fitnessMembershipClaims/')).length };
+    };
+    await run('missing doc', undefined);
+    await run('missing field', { key: 'fitness_membership_sales' });
+    await run('false', { enabled: false });
+    await run("'true' string", { enabled: 'true' });
+    await run('1', { enabled: 1 });
+    await run('read error', FLAG_ON, { readError: true });
+    await run('true', FLAG_ON);
+    const refused = ['missing doc', 'missing field', 'false', "'true' string", '1', 'read error'].every((k) => {
+      const o = out[k]; return !o.ok && o.code === 'failed-precondition' && o.reason === 'SALES_DISABLED' && o.msg === "Memberships aren't on sale yet." && o.mems === 0 && o.claims === 0; });
+    /* the exported predicate with an EXPLICIT db (the handle 2f's payment-purposes would pass) */
+    const onDb = fakeDb({ 'featureFlags/fitness_membership_sales': FLAG_ON }); const offDb = fakeDb({ 'featureFlags/fitness_membership_sales': { enabled: 'true' } });
+    out.explicitDb = [await FMC.salesEnabled(onDb), await FMC.salesEnabled(offDb), await FMC.salesEnabled(fakeDb({}))];
+    ck("C18 sales flag gates creation: missing doc / missing field / false / 'true' string / 1 / read error → failed-precondition SALES_DISABLED, nothing written; enabled === true → created; salesEnabled(db) with an explicit db agrees",
+      refused && out.true.ok && out.true.mems === 1 && out.explicitDb.join() === 'true,false,false', out); }
+
   return rows;
 }
 
@@ -374,6 +408,10 @@ const MUTANTS = [
     from: '&& now.getTime() < _ms(prior.m.payBy)) {', to: ') {' },
   { tag: 'f', row: 'C15', what: 'payBy not written', file: 'fmc',
     from: 'startAt: _tsFromDate(now), payBy: _tsFromDate(new Date(now.getTime() + PAY_BY_MS)),', to: 'startAt: _tsFromDate(now),' },
+  { tag: 'g', row: 'C18', what: 'sales-flag check removed', file: 'fmc',
+    from: "if (!(await salesEnabled())) throw new HttpsError(", to: "if (false && !(await salesEnabled())) throw new HttpsError(" },
+  { tag: 'h', row: 'C18', what: "sales flag compared truthy ('true' string / 1 accepted)", file: 'fmc',
+    from: "(f.data() || {}).enabled === true", to: "!!(f.data() || {}).enabled" },
 ];
 
 (async () => {
