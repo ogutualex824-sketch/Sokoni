@@ -37,7 +37,7 @@ const FieldValue = { serverTimestamp: () => ({ __ts: true }), increment: (n) => 
 const seed = (bk, intentX) => { D = {
   'paymentIntents/RENT-b1': Object.assign({ resourceType: 'rentalBooking', resourceId: 'b1', amountCents: 650000, paymentRef: 'API1',
     metadata: { commissionBaseCents: 450000, depositCents: 200000, commissionCategory: 'construction_equipment_rental', sellerUid: 'owner1' } }, intentX || {}),
-  'rentalBookings/b1': Object.assign({ buyerId: 'renter1', shopId: 's1', status: 'returned', paymentStatus: 'held', heldAmountCents: 650000, intentRef: 'RENT-b1', paymentRef: 'API1', returnPinVerified: true }, bk || {}) }; };
+  'rentalBookings/b1': Object.assign({ buyerId: 'renter1', shopId: 's1', status: 'returned', paymentStatus: 'held', heldAmountCents: 650000, intentRef: 'RENT-b1', paymentRef: 'API1', invoiceId: 'INV-9', returnPinVerified: true }, bk || {}) }; };
 /* the caller (f3 rentalComplete): quote outside, then ONE txn: re-read booking, settle (reads), write status, apply */
 const complete = async (o) => {
   const pre = clone(D['rentalBookings/b1']);
@@ -57,7 +57,7 @@ const PERSONAL = () => Object.keys(D).some((k) => k.startsWith('wallets/') || k.
   seed(); let r = await complete();
   const B = D['rentalBookings/b1'];
   ck('S-1', r.ok && B.paymentStatus === 'released' && B.status === 'completed' && W() === 405000 && D['businessWalletEntries/' + BW.entryDocId('BIZ-shop1', 'rentalsettle_b1')].amountMinor === 405000 && D['businessWalletEntries/' + BW.entryDocId('BIZ-shop1', 'rentalsettle_b1')].kind === 'rental_settlement'
-    && B.settlement.commissionCents === 45000 && D['rentalDepositRefunds/b1'].state === 'REQUESTED' && D['rentalDepositRefunds/b1'].amountCents === 200000 && D['rentalDepositRefunds/b1'].renterUid === 'renter1',
+    && B.settlement.commissionCents === 45000 && D['rentalDepositRefunds/b1'].state === 'REQUESTED' && D['rentalDepositRefunds/b1'].amountCents === 200000 && D['rentalDepositRefunds/b1'].renterUid === 'renter1' && D['rentalDepositRefunds/b1'].invoiceId === 'INV-9',
     'KES 4,500 rent + 2,000 deposit: the SHOP BUSINESS wallet +405,000 cents (rent − 10%), commission 450, deposit = a B2C refund REQUEST to the renter', [W(), B.settlement, D['rentalDepositRefunds/b1']]);
   ck('S-2', !Object.keys(D).some((k) => /^wallets\/renter1|^refundRequests\//.test(k)), 'the deposit never credits any wallet and never touches refundRequests', Object.keys(D));
   r = await complete();

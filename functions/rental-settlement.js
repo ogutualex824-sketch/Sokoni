@@ -110,7 +110,7 @@ async function settleRentalBooking(txn, db, { bookingId, booking, ownerUid, acto
     }
     if (quote.depositCents > 0) {
       t.create(depositRef, { bookingId, state: 'REQUESTED', rail: 'intasend_b2c_refund', amountCents: quote.depositCents, renterUid: b.buyerId || null,
-        paymentRef: b.paymentRef || quote.paymentRef || null, intentRef: quote.intentRef, reason: 'rental_deposit_return', createdBy: actorUid || null,
+        paymentRef: b.paymentRef || quote.paymentRef || null, intentRef: quote.intentRef, invoiceId: b.invoiceId || null, reason: 'rental_deposit_return', createdBy: actorUid || null,
         createdAt: FV.serverTimestamp() });
     }
   };

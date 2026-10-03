@@ -1,3 +1,25 @@
+## [2026-10-03] - Rental deposit refunds: the executor for rentalDepositRefunds (IntaSend refund rail → renter's M-PESA)
+
+Functions only (`functions/rental-deposit-refunds.js`). **Not deployed; not wired to a trigger yet.**
+- **Entry points:** `executeDepositRefund(db, bookingId, {adapter, contract, minCents, FieldValue})` and `reconcileDepositRefund(...)`.
+- **Claim:** a transaction moves `REQUESTED → SENDING`, so a refund is sent AT MOST ONCE. It is sent through the repaired IntaSend adapter (1af3029: `/api/v1/chargebacks/`, against the original payment's `invoice_id`, exact amounts).
+- **Outcomes:**
+  - 201 = `PROVIDER_ACCEPTED`, not "returned". `COMPLETED` comes only from a provider status read (reconcile).
+  - No answer → `OUTCOME_UNKNOWN` + a review row. It is never re-sent, and without a chargebackId a person decides.
+  - Rejected → `REJECTED` + a review row; no automatic retry.
+- **Held for review, never sent:**
+  - the amount ≠ the settled deposit, or the booking isn't settled for it;
+  - the invoice is missing or isn't the booking's payment;
+  - the open field case `EKOQ6P0`;
+  - the pre-repair adapter;
+  - no configured B2C minimum (`minCents`; no guessed number, since a sub-minimum payout strands the chargeback), or an amount below it.
+- **Never touched:** refundRequests and every wallet.
+- The rental hold now records IntaSend's `invoiceId` (webhook edb0007), and settlement copies it into the request.
+- **Dependencies:**
+  - commerceDispatch carries the PRE-repair `payment-adapters.js`, so every refund holds `refund_adapter_unproven` until the repaired adapter (1af3029) is on the deploy tree.
+  - The owner must set the B2C minimum.
+- **Tests:** `scripts/test-rental-deposit-refunds.js` 19/0 against the REAL repaired contract and this tree's real pre-repair adapter. Sabotage caught 12/12.
+
 ## [2026-10-03] - Rental settlement: ONE release of a held rental at completion (shared module for f3's rentalComplete)
 
 Functions only (`functions/rental-settlement.js`, bundled by commerceDispatch). **Not deployed; NOT wired by itself.** f3's rentalComplete calls it.
