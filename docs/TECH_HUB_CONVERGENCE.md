@@ -179,13 +179,14 @@ The capability-specific screens marked NOT_IMPLEMENTED are shown honestly (not a
 | Approval-time category stamp | sokoni-5b |
 | Settlement 5 % port (gate must pass on the release tree) | sokoni-5b |
 | Buyer total / providerServices.fee ignored | sokoni-5b |
-| Offers (shopOffers service scope) | sokoni-5b, Food Gate 4 |
-| Commission on discounted amounts | owner decision |
+| Offers (shopOffers service scope); MUST store the post-discount payable as booking.price | sokoni-5b, Food Gate 4 |
 | Provider-trust rules emulator proof | sokoni-f3 |
 | Voice masking | owner decision (needs a voice provider) |
 
+**DECIDED (owner 2026-10-03):** commission applies to the DISCOUNTED amount. KES 1,000 less a KES 200 offer means the buyer pays 800, commission is 40 and the provider gets 760. Proven at the engine by gate-service-commission C6 (server d580af8; 6/0 on 2f 93f5f13, list-price mutation caught).
+
 **NOT BUILT:**
-- capability-specific screens (supportTickets, remoteSupport, siteVisits, networkProjects, cctvInstallations, posSupport, projects, diagnostics, pickupDropoff);
+- capability-specific screens with no backing authority (supportTickets, networkProjects, cctvInstallations, posSupport, projects, diagnostics); remoteSupport / siteVisits / pickupDropoff are BUILT (4C);
 - booking-status system messages for providerBookings (needs a new trigger);
 - AdminOS: lead moderation actions and a verification-history view (verification-admin.html already exists);
 - Ask Hub / Startups / Jobs browser writes on tech-hub (residue, other owners).
