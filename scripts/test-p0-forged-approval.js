@@ -47,9 +47,10 @@ const asState = async (uid) => (await BW.approvalStateFor(db, uid)).state;
   /* F-2 control: the same application WITH applicationDecide's record */
   await prov('real1'); await app('real1'); await db.doc('applicationDecisions/real1-app').set({ status: 'approved', decidedBy: 'admin_1' });
   ck('F-2 CONTROL: with the applicationDecisions record (written only by applicationDecide) it IS valid', (await asState('real1')) === ST.VALID, await asState('real1'));
-  /* F-3 legacy: decided before applicationDecisions existed, but applicationDecide's immutable audit row exists */
+  /* F-3 legacy: decided before applicationDecisions existed; only applicationDecide's audit row exists. OWNER 2026-10-03 (P0-C/H):
+     the audit log is MIGRATION evidence, never an ongoing authority → NOT valid until P0-H writes its decision record. */
   await prov('legacy1'); await app('legacy1'); await db.collection('adminAudit').add({ action: 'application_approve', applicationId: 'legacy1-app', performedBy: 'admin_1' });
-  ck('F-3 a LEGACY approval with applicationDecide\'s immutable adminAudit row stays valid (no lockout of real approvals)', (await asState('legacy1')) === ST.VALID, await asState('legacy1'));
+  ck('F-3 an adminAudit row ALONE is not an approval (owner: audit = migration evidence only; P0-H reconciles it once)', (await asState('legacy1')) !== ST.VALID, await asState('legacy1'));
   /* F-4 the audit row is by ANOTHER admin than the application names */
   await prov('swap1'); await app('swap1', { decidedBy: 'admin_2' }); await db.collection('adminAudit').add({ action: 'application_approve', applicationId: 'swap1-app', performedBy: 'admin_1' });
   ck('F-4 evidence by a DIFFERENT admin than the application names is not evidence', (await asState('swap1')) !== ST.VALID, await asState('swap1'));
@@ -75,6 +76,39 @@ const asState = async (uid) => (await BW.approvalStateFor(db, uid)).state;
   /* F-11 pure predicate: no isServerDecided supplied → fail closed */
   const pure = REM.deriveApprovalState({ uid: 'p', provider: { status: 'active' }, applications: [{ id: 'p-app', status: 'approved', decidedBy: 'admin_1', role: 'provider' }], isAdminAccount: () => true });
   ck('F-11 the pure derivation FAILS CLOSED when no server-evidence predicate is supplied', pure.state !== ST.VALID, pure.state);
+  /* ── P0-C: THE predicate, isAuthoritativelyApproved(applicationId, category) ── */
+  const AUTH = require(Path.join(FN, 'shared', 'approval-authority.js'));
+  const isAdmin = async (u) => /^admin/.test(String(u));
+  const ia = (id, o) => AUTH.isAuthoritativelyApproved(db, id, Object.assign({ isAdmin }, o || {}));
+  const mkA = async (id, uid, rec, appX) => { await db.doc('applications/' + id).set(Object.assign({ applicationId: id, uid, status: 'pending' /* workflow only */ }, appX || {})); if (rec) await db.doc('applicationDecisions/' + id).set(Object.assign({ applicationId: id, status: 'approved', decidedBy: 'admin_1', applicantUid: uid }, rec)); };
+  await mkA('c1', 'pc1', {}); let v = await ia('c1');
+  ck('C-1 CONTROL: a decision record by an admin approves — even while application.status says pending (status is workflow)', v.approved === true && v.reason === 'APPROVED', v);
+  await mkA('c2', 'pc2', null, { status: 'approved', statusCanonical: 'approved', decidedBy: 'admin_1', adminApproved: true, approvedBy: 'admin_1' }); v = await ia('c2');
+  ck('C-2 application status / adminApproved / approvedBy without a record are NOT an approval', !v.approved && v.reason === 'NO_DECISION_RECORD', v);
+  await mkA('c3', 'pc3', { decidedBy: 'user_9' }); v = await ia('c3');
+  ck('C-3 a record whose decider is not an administrator is refused', !v.approved && v.reason === 'DECIDER_NOT_ADMIN', v);
+  await mkA('c4', 'admin_7', { decidedBy: 'admin_7' }); v = await ia('c4');
+  ck('C-4 an admin deciding their OWN application is refused (separation of duties)', !v.approved && v.reason === 'SELF_DECIDED', v);
+  await mkA('c5', 'pc5', { status: 'suspended' }); v = await ia('c5');
+  ck('C-5 a record that is not approved (suspended) refuses', !v.approved && v.reason === 'NOT_APPROVED', v);
+  await mkA('c6', 'pc6', {}, { reviewStage: 'revoked' }); v = await ia('c6');
+  ck('C-6 a REVOKED application refuses', !v.approved && v.reason === 'REVOKED', v);
+  await mkA('c7', 'pc7', { approvedCategories: ['branding'] });
+  const v7a = await ia('c7', { category: 'branding' }), v7b = await ia('c7', { category: 'seo' });
+  await mkA('c7b', 'pc7b', {}); const v7c = await ia('c7b', { category: 'branding' });
+  ck('C-7 category: approved FOR branding, not for seo; a record with no approvedCategories refuses any category', v7a.approved && !v7b.approved && v7b.reason === 'CATEGORY_NOT_APPROVED' && !v7c.approved, [v7a.reason, v7b.reason, v7c.reason]);
+  await mkA('c8', 'pc8', {}); await db.doc('providers/pc8').set({ status: 'suspended' }); v = await ia('c8');
+  ck('C-8 a suspended provider is not currently approved', !v.approved && v.reason === 'PROVIDER_INACTIVE', v);
+  await mkA('c9', 'pc9', {}); await db.doc('accountFreezes/pc9').set({ active: true, by: 'admin' }); v = await ia('c9');
+  ck('C-9 an active account freeze holds the approval', !v.approved && v.reason === 'ACCOUNT_FROZEN', v);
+  await db.doc('applications/c10').set({ applicationId: 'c10', uid: 'pc10' }); await db.doc('applicationDecisions/c10').set({ applicationId: 'OTHER', status: 'approved', decidedBy: 'admin_1', applicantUid: 'pc10' }); v = await ia('c10');
+  await mkA('c11', 'pc11', { applicantUid: 'someone_else' }); const v11 = await ia('c11');
+  ck('C-10 a record for ANOTHER application, or naming another applicant, refuses', !v.approved && v.reason === 'RECORD_MISMATCH' && !v11.approved && v11.reason === 'APPLICANT_MISMATCH', [v.reason, v11.reason]);
+  const bad = { collection: () => ({ doc: () => ({ get: async () => { throw new Error('unavailable'); } }) }) };
+  v = await AUTH.isAuthoritativelyApproved(bad, 'x', { isAdmin });
+  ck('C-11 unreadable evidence → not approved (fail closed)', !v.approved && v.reason === 'UNREADABLE', v);
+  ck('C-12 the authority module performs NO writes', !/\.(set|update|add|delete|create)\(|runTransaction|batch\(/.test(fs.readFileSync(Path.join(FN, 'shared', 'approval-authority.js'), 'utf8')));
+
   say('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { say('CRASH (no verdict): ' + (e && e.stack || e)); process.exit(2); });
