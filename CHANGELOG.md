@@ -1,3 +1,47 @@
+## [2026-10-03] - FOOD HUB GATE 1: approval provisions the seller, stamps the C1 category, opens merchant-v2
+
+**Functions only, NOT deployed.**
+- Branch: `feat/food-gate1-approval-on-f66f2c1` (base `f66f2c1` = live applicationLifecycle, K13-B).
+- Record: `docs/FOOD_HUB_GATE1_APPROVAL.md`.
+
+**Why:** an approved food business got nothing.
+- hub-register files food as `provider`, but its category is in the products lane, so there was no workspace.
+- `seller` was DELEGATED, so nothing was written.
+- No C1 category was stamped.
+
+**Changed — `functions/application-lifecycle.js`:**
+- `resolveRole` re-files a `provider` as `seller` when its exact business id is a merchant-v2 category.
+- `projectSeller` provisions `shops` / `sellers` / `businesses` with:
+  - the server C1 stamp;
+  - approval evidence;
+  - an ownership check.
+- Approved ≠ discoverable: records this approval creates are `_noIndex` + `discovery:'HELD'`.
+- Suspension and reinstatement are exact.
+- The application records the role its decision applied.
+- The approval message no longer claims search visibility.
+
+**Added:** `functions/business-category.js` and `healthcare-category.js`, byte-identical to live providerDispatch `c7e26b6`.
+
+**Database:**
+- No migration.
+- New fields: `discovery`, `preSuspension`, `suspendedBy`.
+
+**API:** none.
+
+**Security:**
+- An applicant-written `shopId` cannot transfer or forge a shop.
+- FINDING (rules lane, not fixed): `providers/{uid}.business` is owner-writable on the served rules.
+
+**Breaking:** `seller` is no longer delegated; `test-legal-projection` is updated to match.
+
+**Tests:**
+- `test-food-gate1-approval` 28/0; BASE=f66f2c1 fails 21.
+- Sabotage 15/15.
+- Lifecycle suites green.
+- Emulator suite UNPROVEN.
+
+**Depends on:** the providerDispatch release carrying Slice 0 (`13f74f3`).
+
 ## [2026-09-28] - HOTFIX K13-B: applicationLifecycle projects only a server-recorded, admin decision
 
 **Functions only, one file, NOT deployed.** Branch `hotfix/k13b-lifecycle-decision-authority` sits on top of the

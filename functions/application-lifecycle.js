@@ -181,7 +181,31 @@ function splitLocation(raw) {
    applied (a stalled application helps nobody) but it is reported, so an
    unrecognised intake vocabulary surfaces as an admin alert rather than as a
    silently mis-filed applicant. */
+/* ── FOOD HUB GATE 1 (2026-10-03): a goods/food business is a SELLER ──────────────────────────────────────────
+   hub-register.js declares `requestedRole: 'provider'` for every category it does not map (its _ROLE_BY_HUB names
+   only delivery / healthcare / legal / shopping), so a restaurant, café, bakery or butcher was approved as a SERVICE
+   provider — and the workspace authority (business-workspace.laneOf: these categories route to merchant-v2, the
+   products lane) then refused it with CATEGORY_CAPABILITY_DISAGREEMENT. Nothing reached a menu, a shop or a till.
+
+   The category the applicant picked (an exact business id, through business-category — never free text) decides the
+   lane: when the role resolved to `provider` and that category is a merchant-v2 category (the seller categories +
+   restaurant), the role is `seller`. Only `provider` is ever re-filed; every other declared role stands. Recorded as
+   `<by>+category` so a reviewer sees that the category, not the declaration, decided it. */
+const MERCHANT_CATEGORIES = Object.freeze(['restaurant']);
+function _merchantCategoryOf(app) {
+  const BCAT = require('./business-category');
+  const c = BCAT.categoryFromApplication(app, 'provider').category;
+  return c && (BCAT.SELLER_CATEGORIES.includes(c) || MERCHANT_CATEGORIES.includes(c)) ? c : null;
+}
 function resolveRole(app) {
+  const r = _resolveDeclaredRole(app);
+  if (r.role === 'provider') {
+    const cat = _merchantCategoryOf(app);
+    if (cat) return Object.assign({}, r, { role: 'seller', by: r.by + '+category', category: cat });
+  }
+  return r;
+}
+function _resolveDeclaredRole(app) {
   /* ── EXPLICIT FIRST (Roles Phase 1) ───────────────────────────────────────
      A surface that knows which role it is submitting says so. When it does, the
      keyword pattern below is not consulted at all — inference exists to read
@@ -761,7 +785,158 @@ async function projectLegal(db, app, uid, approved) {
    `legal` GRADUATED out of this map in Roles Phase 2: "delegated" meant nobody
    wrote the document, so approving an advocate produced no profile and no search
    presence. It now runs projectLegal above. */
-const DELEGATED_ROLES = { seller: 'sellers', health: 'healthProviders' };
+const DELEGATED_ROLES = { health: 'healthProviders' };
+
+/* ── SELLER PROVISIONING (Food Hub Gate 1, 2026-10-03) ──────────────────────────────────────────────────────────
+   `seller` GRADUATED out of DELEGATED_ROLES. "Delegated to its own onboarding" meant nobody wrote anything: the only
+   seller trigger (ade.adeOnSellerApplied) reacts to a `sellers` doc going `pending` and never approves, so an
+   approved seller — every approved food business among them — had no shop, no seller record and no category, and
+   the workspace authority had nothing to route. This is the C4 projectSeller design (convergence line, owner-reviewed
+   2026-09-28 stages 1–2), ported onto the live lifecycle with three deliberate differences:
+
+   1. APPROVED ≠ DISCOVERABLE (owner, 2026-09-28). Approval provisions the business; it does not publish it. A record
+      this approval CREATES is written `_noIndex: true` (the search sync's existing skip guard) with
+      `discovery: 'HELD'`; existing records keep exactly the visibility they had. Publication belongs to the one shop
+      discovery gate (business-category.shopEligibility), not to a side effect of approval.
+   2. APPROVAL EVIDENCE. sellers/{uid} carries `approvedAt` + `approvedBy` (noAdminFields() withholds both from every
+      client), which is what business-scope recognises as a LIVE seller. Without it the record reads as
+      `status_live_no_approval_evidence` — a CONFLICT, no workspace.
+   3. ONE POS BUSINESS. businesses/{uid} carries the category stamp (the served rules let no client write `business`
+      there: create is false and the owner's update allow-list excludes it) but NOT `ownerId` — the POS bootstrap
+      (_ensureBusinessForOwner) finds its business by `ownerId == uid`, and a second owned business would make it
+      report `already-provisioned` against a record with no branch and no till.
+
+   Runs BEFORE the role is granted: if provisioning fails, applyDecision records projectionStatus 'failed' and no
+   seller role or claim is handed out. Idempotent: deterministic ids + merge; createdAt only on first write. */
+const PLACEHOLDER_SHOP_IDS = ['main', 'default', 'branch', 'null', 'undefined', ''];
+const isPlaceholderShopId = (id) => PLACEHOLDER_SHOP_IDS.indexOf(String(id == null ? '' : id).trim().toLowerCase()) !== -1;
+const _SUSPENSION_HIDES = ['searchable', 'isPublic'];
+
+async function projectSeller(db, app, uid, approved, opts = {}) {
+  const BCAT = require('./business-category');
+  /* The application's shopId is APPLICANT-WRITABLE. It may name only a shop that is absent or already this account's;
+     a shop id that does not look like a document id is refused rather than sanitised into a different one. */
+  const rawShop = app.shopId == null ? '' : String(app.shopId).trim();
+  if (rawShop && !isPlaceholderShopId(rawShop) && !/^[A-Za-z0-9_-]{1,128}$/.test(rawShop)) {
+    const err = new Error('Application names an invalid shop id.');
+    err.code = 'SHOP_ID_INVALID';
+    throw err;
+  }
+  const declared = rawShop && !isPlaceholderShopId(rawShop) ? rawShop : null;
+  const shopId = declared || String(uid);
+  const shopRef = db.collection('shops').doc(shopId);
+  const sellerRef = db.collection('sellers').doc(String(uid));
+  const bizRef = db.collection('businesses').doc(String(uid));
+  const userRef = db.collection('users').doc(String(uid));
+
+  /* All reads before any write. */
+  const [shopSnap, sellerSnap, bizSnap, userSnap] = await Promise.all([shopRef.get(), sellerRef.get(), bizRef.get(), userRef.get()]);
+  const shop0 = shopSnap.exists ? (shopSnap.data() || {}) : null;
+  const seller0 = sellerSnap.exists ? (sellerSnap.data() || {}) : null;
+  const biz0 = bizSnap.exists ? (bizSnap.data() || {}) : null;
+
+  /* OWNERSHIP IS NEVER TRANSFERRED BY AN APPLICATION. */
+  if (shop0) {
+    const owner = shop0.sellerUid || shop0.ownerId || shop0.ownerUid || null;
+    if (owner && String(owner) !== String(uid)) {
+      const err = new Error(`Application names shop ${shopId}, which belongs to another account.`);
+      err.code = 'SHOP_OWNED_BY_ANOTHER_ACCOUNT';
+      throw err;
+    }
+  }
+
+  if (!approved) {
+    /* Rejection of a never-provisioned seller: nothing to retract. Suspension: deactivate, never delete; remember
+       what visibility the suspension removed so a reinstatement restores exactly that and nothing more. */
+    const touched = [];
+    const hide = (ref, d, extra) => {
+      if (!d) return;
+      const prior = {};
+      _SUSPENSION_HIDES.forEach((k) => { if (k in d) prior[k] = d[k]; });
+      const keep = d.suspendedBy === 'application_lifecycle' && d.preSuspension ? d.preSuspension : prior;
+      batch.set(ref, Object.assign({ status: 'suspended', searchable: false, isPublic: false, suspendedAt: _ts(),
+        suspendedBy: 'application_lifecycle', preSuspension: keep, updatedAt: _ts() }, extra || {}), { merge: true });
+      touched.push(ref.parent.id);
+    };
+    const batch = db.batch();
+    hide(shopRef, shop0);
+    hide(sellerRef, seller0, { active: false });
+    hide(bizRef, biz0);
+    if (!touched.length) return { collection: 'shops+sellers+businesses', id: shopId, action: 'none' };
+    await batch.commit();
+    return { collection: 'shops+sellers+businesses', id: shopId, action: 'suspended', touched };
+  }
+
+  /* ── C1 CATEGORY, stamped by the SERVER at approval ──────────────────────────────────────────────────────────
+     From the application through business-category (exact business ids only; a seller with no match is
+     retail_store). An AdminOS classification already on the shop or the business is never overwritten, and a valid
+     prior category is never replaced by a failed derivation. */
+  const priorB = [shop0 && shop0.business, biz0 && biz0.business].find((b) => b && BCAT.isCategory(b.category)) || null;
+  const adminSet = !!(priorB && priorB.source === 'admin');
+  let category = adminSet ? priorB.category : BCAT.categoryFromApplication(app, 'seller').category;
+  if (!adminSet && !BCAT.isCategory(category) && priorB) category = priorB.category;
+  const business = {
+    category: BCAT.isCategory(category) ? category : null,
+    source: adminSet ? 'admin' : 'application',
+    applicationId: app.applicationId || null,
+    setAt: _ts(),
+  };
+  if (adminSet && priorB.classifiedBy) business.classifiedBy = priorB.classifiedBy;
+
+  const name = _sanText(app.name || app.businessName || app.storeName, 160) || 'My Shop';
+  const decidedBy = opts.decidedBy ? String(opts.decidedBy) : null;
+  /* Reinstatement: restore exactly what a lifecycle suspension hid, and nothing it did not. */
+  const restore = (d) => {
+    if (!d || d.suspendedBy !== 'application_lifecycle') return {};
+    const out = { suspendedBy: FieldValue.delete(), preSuspension: FieldValue.delete(), suspendedAt: FieldValue.delete() };
+    const prev = d.preSuspension || {};
+    _SUSPENSION_HIDES.forEach((k) => { out[k] = k in prev ? prev[k] : FieldValue.delete(); });
+    return out;
+  };
+  const held = (d) => (d ? {} : { _noIndex: true, discovery: 'HELD', createdAt: _ts() });
+
+  const batch = db.batch();
+  batch.set(shopRef, Object.assign({
+    shopId, ownerId: String(uid), sellerUid: String(uid),
+    status: 'active', activatedAt: _ts(), updatedAt: _ts(),
+    source: 'application_approval', applicationId: app.applicationId || null,
+    approvedAt: _ts(), ...(decidedBy ? { approvedBy: decidedBy } : {}),
+    business,
+  }, shop0 ? {} : { name, nameLower: name.toLowerCase() }, held(shop0), restore(shop0)), { merge: true });
+
+  batch.set(sellerRef, Object.assign({
+    uid: String(uid),
+    status: 'active', active: true,
+    approvedAt: _ts(), ...(decidedBy ? { approvedBy: decidedBy } : {}),
+    business,
+    updatedAt: _ts(),
+  }, seller0 && seller0.shopId ? {} : { shopId },
+     seller0 && seller0.name ? {} : { name, nameLower: name.toLowerCase() },
+     held(seller0), restore(seller0)), { merge: true });
+
+  batch.set(bizRef, Object.assign({
+    uid: String(uid), shopId,
+    status: 'active',
+    approvedAt: _ts(), ...(decidedBy ? { approvedBy: decidedBy } : {}),
+    business,
+    updatedAt: _ts(),
+  }, biz0 ? {} : { name, businessName: name, nameLower: name.toLowerCase(), source: 'application_approval' },
+     held(biz0), restore(biz0)), { merge: true });
+
+  /* The account's active shop — set only when it has none; an existing choice is the merchant's. */
+  if (!(userSnap.exists && (userSnap.data() || {}).activeShopId)) {
+    batch.set(userRef, { activeShopId: shopId, updatedAt: _ts() }, { merge: true });
+  }
+  await batch.commit();
+
+  return {
+    collection: 'shops+sellers+businesses', id: shopId,
+    action: shop0 ? 'reactivated' : 'created',
+    shopId, sellerUid: String(uid), category: business.category, categorySource: business.source,
+    discovery: shop0 ? 'unchanged' : 'HELD',
+    shopIdSource: declared ? 'application.shopId' : 'account_shop',
+  };
+}
 
 /* ── CANONICAL ROLE PROFILES (Roles Phase 2) ────────────────────────────────
    One uid-keyed profile per canonical role that had none. These are the account's
@@ -965,7 +1140,9 @@ async function applyDecision(appId, app, opts = {}) {
      precedence for legacy documents so an application already in the queue decides
      exactly as it would have before Phase 1. */
   const _resolved = resolveRole(app);
-  const role = _resolved.by === 'explicit' || _resolved.by === 'explicit-alias'
+  /* A category-decided seller (Gate 1) also outranks a stored `app.role`: applications already in the queue were
+     stamped `provider` at intake, before this rule existed, and must be decided by it. */
+  const role = _resolved.by === 'explicit' || _resolved.by === 'explicit-alias' || /\+category$/.test(_resolved.by)
     ? _resolved.role
     : (app.role || _resolved.role);
   const uid = app.uid;
@@ -1031,6 +1208,10 @@ async function applyDecision(appId, app, opts = {}) {
          the service directory, which is exactly how a landlord ended up listed
          as a cleaning company. */
       receipt.writes.push(await projectRoleProfile(db, app, uid, role, approved));
+    } else if (role === 'seller') {
+      /* Before the role is granted — see projectSeller. A merchant is never authorised to sell before they have
+         somewhere to sell from. */
+      receipt.writes.push(await projectSeller(db, app, uid, approved, { decidedBy: opts.decidedBy }));
     } else if (DELEGATED_ROLES[role]) {
       receipt.writes.push({ collection: DELEGATED_ROLES[role], id: uid, action: 'delegated' });
     } else {
@@ -1049,6 +1230,10 @@ async function applyDecision(appId, app, opts = {}) {
       projectionStatus: 'applied',
       projectionError: FieldValue.delete(),
       projectionReceipt: receipt.writes,
+      /* The role this decision APPLIED, stamped on the application: the workspace authority judges the approval by
+         `app.role` (approval-remediation.decisionValidity), so an application filed `provider` at intake and decided
+         as a seller (Gate 1) must say so, or its own approval reads as approving another role. */
+      ...(role && app.role !== role ? { role, roleResolvedBy: _resolved.by } : {}),
       ...(opts.decidedBy ? { decidedBy: opts.decidedBy } : {}),
     }, { merge: true });
 
@@ -1101,9 +1286,13 @@ async function applyDecision(appId, app, opts = {}) {
           uid,
           type: role === 'driver' ? 'rider_approved' : 'merchant_approved',
           title: 'You are approved on SOKONI',
+          /* Approval provisions a seller; it does not publish one (Gate 1 — approved ≠ discoverable). The message
+             says what is true, not that customers can already find a shop. */
           body: role === 'driver'
             ? 'Your rider application is approved. Open the SOKONI driver app and go online to start receiving deliveries.'
-            : `${app.name || 'Your business'} is now live on SOKONI and customers can find you in search.`,
+            : (role === 'seller' || role === 'merchant')
+              ? `${app.name || 'Your business'} is approved on SOKONI. Your business workspace is ready — set it up before customers can find you.`
+              : `${app.name || 'Your business'} is now live on SOKONI and customers can find you in search.`,
           phone: app.phoneNumber || undefined,
           dedupeKey: `app_approved:${appId}`,
           data: { applicationId: appId, role },
@@ -1468,6 +1657,6 @@ exports.applicationList = onCall(
 exports._internal = {
   toE164KE, toLocalKE, splitLocation, resolveRole, canonStatus, normVehicle, _san, _sanText,
   buildIntakePatch, applyDecision, projectProvider, projectDriver,
-  projectLegal, projectRoleProfile, LEGAL_SPECS, ROLE_PROFILES, DELEGATED_ROLES,
+  projectLegal, projectRoleProfile, LEGAL_SPECS, ROLE_PROFILES, DELEGATED_ROLES, projectSeller, MERCHANT_CATEGORIES,
   INTAKE_VERSION, KE_COUNTIES,
 };
