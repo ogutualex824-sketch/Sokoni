@@ -1,3 +1,10 @@
+## 2026-10-03 — Profile Bookings tab shows canonical service bookings (providerBookings) with PIN / message / review / refund help (NOT deployed)
+
+- **Fix:** profile.html loadBookings read only the legacy `bookings` collection, so every bookingCreateService booking (Tech, Home Services, Legal) was invisible. It now reads providerBookings (customerUid) + bookings (userId).
+- **Removed:** browser-only localStorage "bookings" (UI data integrity).
+- **States:** Loading until both reads answer; a failed read is labelled.
+- **Test:** scripts/test-profile-bookings.js 8/0 (base fails 6). Gap reported by sokoni-b2.
+
 ## 2026-10-03 — Profile verifications & trust display: real scores, honest states, working verify routes (NOT deployed)
 
 - **Trust score:** nine widgets read a field the server never sent and always showed 0. They now show the real score (_skNormOv). An unknown score shows —.
