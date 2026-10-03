@@ -271,8 +271,9 @@ const balanceOf = (L, sid) => ((L.data.procSuppliers || {})[sid] || {}).currentB
     const ghost = await verdict(() => pay(auth(UID_A, ADMIN), { invoiceId: 'nope', paymentMethod: 'mpesa' }));
     check('a nonexistent invoice fails closed', !ghost.ok && ghost.code === 'not-found');
 
-    const noMethod = await verdict(() => pay(auth(UID_A, ADMIN), { invoiceId: INV_A }));
-    check('paymentMethod is required', !noMethod.ok);
+    /* CONTRACT CHANGE 2026-10-04 (claim until verified): paymentMethod is no longer
+       required — approval without a reference is a plain approval ('unpaid'). Exercised in
+       scripts/test-supplier-invoice-claim.js. */
     check('no failed attempt wrote a ledger row', ledgerRows(L, INV_A).length === 0);
     check('no failed attempt moved the supplier balance', balanceOf(L, 'supA') === 1000);
   }
@@ -280,26 +281,28 @@ const balanceOf = (L, sid) => ((L.data.procSuppliers || {})[sid] || {}).currentB
   /* ══════════════════════════════════════════════════════════
      §5 PAYMENT — the money path, once and only once
   ══════════════════════════════════════════════════════════ */
-  console.log('\n§5 payment executes exactly once');
+  /* CONTRACT CHANGE 2026-10-04: approveAndPayInvoice now APPROVES + records a CLAIM. It
+     never marks paid, never writes paymentLedger, never moves the supplier balance. The
+     verified 'paid' path is markSupplierInvoicePaidVerified (test-supplier-invoice-claim.js). */
+  console.log('\n§5 approval records a claim exactly once (no money moves)');
   {
     const L = loadProcurement(freshData()); const pay = invoker(L, 'approveAndPayInvoice');
     const p1 = await verdict(() => pay(auth(UID_A, ADMIN), { invoiceId: INV_A, paymentMethod: 'mpesa', paymentRef: 'R1' }));
-    check('an authorized payment succeeds', p1.ok && p1.value.status === 'paid');
-    check('the invoice is marked paid', L.data.procSupplierInvoices[INV_A].status === 'paid');
-    check('exactly TWO ledger rows (double entry)', ledgerRows(L, INV_A).length === 2);
-    check('one debit to accounts_payable',
-      ledgerRows(L, INV_A).filter((r) => r.type === 'debit' && r.account === 'accounts_payable').length === 1);
-    check('one credit to the payment method',
-      ledgerRows(L, INV_A).filter((r) => r.type === 'credit' && r.account === 'mpesa').length === 1);
-    check('the supplier balance decreased by the invoice total once', balanceOf(L, 'supA') === 0);
-    check('the PO is marked paid', L.data.procPurchaseOrders[PO_A].status === 'paid');
+    check('an authorized approval succeeds', p1.ok && p1.value.status === 'approved');
+    check('the invoice is approved with a CLAIM, not paid',
+      L.data.procSupplierInvoices[INV_A].status === 'approved' &&
+      L.data.procSupplierInvoices[INV_A].paymentStatus === 'claimed');
+    check('NO ledger row is written on a claim', ledgerRows(L, INV_A).length === 0);
+    check('the supplier balance is untouched by a claim', balanceOf(L, 'supA') === 1000);
+    check('the PO is NOT marked paid', L.data.procPurchaseOrders[PO_A].status !== 'paid');
 
     /* SEQUENTIAL duplicate */
-    const p2 = await verdict(() => pay(auth(UID_A, ADMIN), { invoiceId: INV_A, paymentMethod: 'mpesa', paymentRef: 'R1' }));
-    check('a duplicate payment does not error', p2.ok);
+    const p2 = await verdict(() => pay(auth(UID_A, ADMIN), { invoiceId: INV_A, paymentMethod: 'mpesa', paymentRef: 'R2' }));
+    check('a duplicate approval does not error', p2.ok);
     check('a duplicate is reported as such', p2.ok && p2.value.duplicate === true);
-    check('DUPLICATE: still exactly two ledger rows', ledgerRows(L, INV_A).length === 2);
-    check('DUPLICATE: supplier balance unchanged', balanceOf(L, 'supA') === 0);
+    check('DUPLICATE: the first claim stands (not overwritten)',
+      L.data.procSupplierInvoices[INV_A].paymentClaim.ref === 'R1');
+    check('DUPLICATE: still no ledger row', ledgerRows(L, INV_A).length === 0);
   }
 
   /* ══════════════════════════════════════════════════════════
@@ -321,9 +324,12 @@ const balanceOf = (L, sid) => ((L.data.procSuppliers || {})[sid] || {}).currentB
     delete L.data.__beforeRead;
 
     check('CONCURRENT: both attempts resolve without an inconsistent error', !r1.__err && !r2.__err);
-    check('CONCURRENT: exactly two ledger rows — not four', ledgerRows(L, INV_A).length === 2);
-    check('CONCURRENT: supplier balance decremented ONCE', balanceOf(L, 'supA') === 0);
-    check('CONCURRENT: the invoice is paid exactly once', L.data.procSupplierInvoices[INV_A].status === 'paid');
+    check('CONCURRENT: no ledger row at all (a claim is not money)', ledgerRows(L, INV_A).length === 0);
+    check('CONCURRENT: supplier balance untouched', balanceOf(L, 'supA') === 1000);
+    check('CONCURRENT: the invoice is approved + claimed exactly once',
+      L.data.procSupplierInvoices[INV_A].status === 'approved' &&
+      L.data.procSupplierInvoices[INV_A].paymentStatus === 'claimed' &&
+      [r1, r2].filter((r) => r && r.duplicate === false).length === 1);
     check('CONCURRENT: both callers see the same invoice outcome',
       !r1.__err && !r2.__err && r1.invoiceId === r2.invoiceId && r1.total === r2.total);
   }
@@ -359,8 +365,8 @@ const balanceOf = (L, sid) => ((L.data.procSuppliers || {})[sid] || {}).currentB
   sab('the transactional detector is not vacuous',
     !/const approveAndPayInvoice[\s\S]{0,2500}db\.runTransaction/.test(
       'const approveAndPayInvoice = onCall(OPT, async (r) => { const b = db.batch(); await b.commit(); });'));
-  check('the paid-check is INSIDE the transaction',
-    /runTransaction\(async \(t\) => \{[\s\S]{0,400}if \(inv\.paidAt\)/.test(PROC));
+  check('the state check is INSIDE the transaction',
+    /runTransaction\(async \(t\) => \{[\s\S]{0,400}_invoicePaymentStatus\(inv\)/.test(PROC));
   sab('the detector catches a read-then-write paid check',
     !/runTransaction\(async \(t\) => \{[\s\S]{0,400}if \(inv\.paidAt\)/.test(
       "const inv = (await invRef.get()).data();\nif (inv.paidAt !== null) _err('paid');\nconst batch = db.batch();"));
@@ -370,7 +376,7 @@ const balanceOf = (L, sid) => ((L.data.procSuppliers || {})[sid] || {}).currentB
   check('the admin requirement is retained', /const approveAndPayInvoice[\s\S]{0,200}_requireAdmin\(request\)/.test(PROC));
   check('merchant scoping is composed with it', /_assertMerchantAuthority\(request, invPre\.merchantId\)/.test(PROC));
 
-  check('PRESERVED: double-entry semantics unchanged',
+  check('PRESERVED: double-entry semantics unchanged (now written only on a verified event)',
     /account: 'accounts_payable'/.test(PROC) && /type: 'credit', account: method/.test(PROC));
   check('PRESERVED: the 5% deviation tolerance (existing contract)', /deviation > 0\.05/.test(PROC));
   check('PRESERVED: Slice D receipt hardening', /_deterministicId\(keySeed, 'grn'\)/.test(PROC));

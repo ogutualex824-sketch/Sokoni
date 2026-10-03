@@ -1,3 +1,36 @@
+## [2026-10-04] — Procurement: supplier-invoice payment is a CLAIM until verified (owner decision) — functions source, NOT deployed
+
+Before: `approveAndPayInvoice` (admin, merchant-scoped) set `procSupplierInvoices.status = 'paid'` + `paidAt` from a
+client-typed `paymentMethod`/`paymentRef`, decremented `procSuppliers.currentBalance`, wrote two `paymentLedger` rows
+(DEBIT `accounts_payable` / CREDIT `<typed method>`, ids `led_<sha(invoiceId|debit|credit)>`) and set the PO `paid`. A typed
+reference is a claim, not payment truth.
+
+**Files:**
+- `functions/procurement.js`: `approveAndPayInvoice` (name kept for compatibility) now approves + records a claim:
+  `status 'approved'`, `paymentStatus 'claimed'` + `paymentClaim {method, ref, claimedBy, claimedAt}` when a ref is given,
+  else `'unpaid'`; no `paidAt`, no ledger, no balance, PO untouched; `paymentMethod` optional. New server-only
+  `markSupplierInvoicePaidVerified(invoiceId, verifiedEvent)` (plain function, NOT a callable, NOT in index.js) — the only
+  `paid` writer: verified flag + source/eventId, invoiceId-or-claim-ref match, amount-to-the-cent + currency match,
+  `create()` dedupe on `procSupplierPaymentEvents/spe_<sha(source|eventId)>`. `_invoicePaymentStatus` derives
+  `unpaid | claimed | verified_paid | recorded_unverified`. `listSupplierInvoices` projects `paymentStatus`,
+  `paymentClaim`, `paymentVerified`. `getProcurementDashboard` adds `unclaimedInvoices`, `claimedInvoices`,
+  `verifiedPaidLast30d`, `recordedUnverifiedLast30d`; `pendingInvoices` keeps claims (outstanding) and its total is
+  `null` when any total is unknown; `topSuppliers` spend = verified only.
+- `scripts/test-supplier-invoice-claim.js` (new, hermetic): 17 rows + 8 negative controls (mutated source compiled in
+  memory), each failing a named row.
+- `scripts/test-invoice-payment-slice-e.js`: §5/§6 rows that certified the typed-reference payment now pin the claim.
+- `docs/SUPPLY_A_TO_M_RELEASE_RECORD.md`: section "Supplier-invoice payment: a claim until verified" (old writes, rail
+  census, UI copy changes with file:line).
+
+**Verification rail:** none exists for supplier payments (no IntaSend payout/B2C to suppliers, no procurement payment
+intent). Invoices stay `claimed`/`unpaid` until one is built; UI must say "Payment claimed — not verified".
+**Database changes:** invoice fields `paymentStatus`, `paymentClaim`, `approvedBy/At`, `paymentVerification`; new
+server-only collection `procSupplierPaymentEvents`. No migration (legacy paid → derived `recorded_unverified`).
+**API changes:** `approveAndPayInvoice` returns `{invoiceId, status:'approved', paymentStatus, verified:false, duplicate,
+paymentClaim}` instead of `status:'paid'`; dashboard/list fields above. **Security:** payment truth never from client input;
+helper unreachable from clients. **Breaking:** callers expecting `status:'paid'` from `approveAndPayInvoice` (none found
+in hosting) — UI copy changes listed in the release record.
+
 ## [2026-10-03] — Procurement: purchase-order VAT is never inferred (supplier's own status; unknown ⇒ no VAT) — functions source, NOT deployed
 
 Before: `functions/procurement.js` held `VAT_RATE = 0.16`; `createPurchaseOrder` set `vatAmount = subtotal × 0.16` and

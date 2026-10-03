@@ -139,6 +139,96 @@ engine's own fallback (unrecognised → exempt) is deliberately NOT used: unknow
 Proof: `scripts/test-procurement-vat-not-inferred.js` — 18 named rows; controls (a) restore the 16%
 inference and (b) treat unknown as registered each fail `UNKNOWN_EXTERNAL` (and others).
 
+### Supplier-invoice payment: a claim until verified (2026-10-04)
+
+**Owner decision 2026-10-04 — implemented in source, NOT deployed.** Payment truth comes only from
+a verified payment event; a reference an admin types is a **claim**. See [[Payments]], [[Procurement]].
+
+**What the old `approveAndPayInvoice` wrote** (admin + merchant-scoped, one transaction), on a
+client-typed `paymentMethod` / `paymentRef`:
+
+* `procSupplierInvoices/{id}` → `status: 'paid'`, `paidAt`, `paidBy`, `paymentMethod`, `paymentRef`
+* `procSuppliers/{supplierId}.currentBalance` → `increment(-total)`
+* `paymentLedger/led_<sha(invoiceId|debit)>` → DEBIT `accounts_payable`; `paymentLedger/led_<sha(invoiceId|credit)>`
+  → CREDIT `<typed method>` — "Supplier invoice payment", i.e. money leaving the business
+* `procPurchaseOrders/{poId}.status` → `'paid'`; audit `supplier_invoice_paid`
+
+**Now.** The callable keeps its name (least breaking: `procurement.html` already calls it; a rename is
+a new function to deploy plus a dead one) but means **approve + claim**:
+
+| Input | Invoice result | Ledger / balance / PO |
+|---|---|---|
+| `paymentRef` supplied | `status: 'approved'`, `paymentStatus: 'claimed'`, `paymentClaim {method, ref (sanitised), claimedBy, claimedAt}` | nothing |
+| no `paymentRef` | `status: 'approved'`, `paymentStatus: 'unpaid'` | nothing |
+| retry / second claim | reported `duplicate: true`; the first claim stands | nothing |
+
+`paymentMethod` is no longer required. Any `status` / `paymentStatus` / `paidAt` / `verifiedEvent` in
+the payload is ignored. Audit: `supplier_invoice_approved` | `supplier_invoice_payment_claimed`.
+
+**Why the ledger rows are deferred, not re-typed as `payable_claim`.** Both rows describe money
+leaving, `paymentLedger` is the platform money ledger summed by account (`getLedgerBalance`,
+`sokoni-payment-engine.js`), and no procurement code ever posts the matching payable when an invoice
+is created (`currentBalance` is only ever decremented — a pre-existing half-entry). A claim row would
+be one more half-entry a reader can sum as money. The claim lives on the invoice and in
+`securityAuditLog`; the double-entry pair is written once, from a verified event.
+
+**Verified path — `markSupplierInvoicePaidVerified(invoiceId, verifiedEvent)`.** A plain server
+function in `functions/procurement.js`, **not** a callable and **not** re-exported from
+`functions/index.js`. It is the only writer of `status: 'paid'` / `paymentStatus: 'verified_paid'`.
+It requires `verified === true` (set by the rail after authenticating its event), `source` +
+`eventId`, refuses a callable-request shape and non-rail sources (`manual`, `admin`, `client` …),
+matches on `invoiceId` or the recorded claim ref, and refuses any amount (to the cent) or currency
+(invoice currency, KES) mismatch. Idempotency: `t.create()` of
+`procSupplierPaymentEvents/spe_<sha(source|eventId)>` inside the transaction — a replay is a no-op,
+one event cannot settle two invoices, a second distinct event for a paid invoice is refused (possible
+overpayment, surfaced). On success it writes what the old path wrote (invoice paid +
+`paymentVerification`, balance decrement, the same deterministic ledger pair with `verified: true`,
+PO `paid`). A legacy recorded-paid invoice is upgraded in place without a second balance decrement.
+
+**Verification-rail finding: NONE exists.** No IntaSend B2C / payout path targets a supplier
+invoice; `createPaymentIntent` has no procurement purpose; `finos` / `payment-adapters` invoice ids
+are IntaSend *collection* invoices; `posSupplierPayments` is a browser-mirrored record, not a
+provider event. **Nothing calls the helper today.** Until a verified supplier-payment rail exists,
+supplier invoices stay `claimed` or `unpaid`, and the UI must say **"Payment claimed — not
+verified"** — no "paid" anywhere.
+
+**Readers.** `paymentStatus` vocabulary: `unpaid` | `claimed` | `verified_paid` |
+`recorded_unverified` (derived only: marked paid by the pre-2026-10-04 typed-reference path; never
+verified; `verified_paid` without a `paymentVerification.eventId` also derives to this).
+
+* `listSupplierInvoices` projects `paymentStatus`, `paymentClaim`, `paymentVerified`.
+* `getProcurementDashboard`: `pendingInvoices` = outstanding (claims **included** — a claim is not
+  payment); new `unclaimedInvoices`, `claimedInvoices`, `verifiedPaidLast30d`,
+  `recordedUnverifiedLast30d`; each `{count, totalValue, unknownTotalCount}` and `totalValue: null`
+  when any member's total is unknown (was `?? 0`). `topSuppliers` spend counts **verified** only.
+* PO status `paid` is now set only by the verified helper.
+
+**UI copy that must change (hosting; not changed here):**
+
+* `procurement.html` (this tree): :603 button "Approve & Pay" → "Approve" (optionally a
+  "Record payment claim" ref field); :613 toast "Invoice approved for payment" → "Invoice approved —
+  payment not verified"; :278 badge map needs `claimed` ("Payment claimed — not verified");
+  :141 PO filter "Paid" now means verified-paid only. Pre-existing, separate: :587 reads
+  `procInvoices` (no such collection — the tab is always empty) and :341 reads
+  `d.pendingInvoicesTotal ?? 0` (no such field — renders a fabricated KES 0.00).
+* `sokoni-merchant-supply.js` on `C:/temp/sok-mv2p` (`hosting/chain-on-3e8dd53`, `28a3998`): :418
+  Invoices "Status" renders `r.status` → render `r.paymentStatus` (claimed → "Payment claimed — not
+  verified"); :421-:432 Payments — :422 sub, :424 `query: { status: 'paid' }` (now returns verified +
+  legacy recorded), :429 "Recorded" column → "Verified" from `r.paymentVerified`, with
+  `recorded_unverified` labelled "Recorded paid — not verified"; :431 note; :680 dashboard — add a
+  "Payment claimed — not verified" tile from `claimedInvoices` (`money(null)` already renders —).
+
+Proof: `scripts/test-supplier-invoice-claim.js` — 17 named rows on the executed module, 8 negative
+controls each failing a named row: (a) approve marks paid → R1; (b1) helper exposed as callable → R5;
+(b2) helper accepts unverified/client input → R7; (c1) claim dropped from outstanding → R15;
+(c2) recorded-unverified counted as spend → R16; (d) amount match removed → R10; (e) create()→set()
+→ R13; (f) list treats recorded paid as verified → R17. `scripts/test-invoice-payment-slice-e.js`
+§5/§6 now pin the claim contract (they previously certified the typed-reference payment).
+
+**Deploy note.** Functions slice only (`approveAndPayInvoice`, `listSupplierInvoices`,
+`getProcurementDashboard`); no rules change (`procSupplierPaymentEvents` is server-written; the
+default deny covers it). No migration — legacy paid invoices derive to `recorded_unverified`.
+
 ## What is NOT proven, and must not be claimed
 
 1. **No deployment.** Not attempted. Deployment is on HOLD and is blocked below.

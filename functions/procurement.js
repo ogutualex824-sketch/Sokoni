@@ -12,7 +12,9 @@
      4.  sendPurchaseOrder        — mark PO sent to supplier
      5.  receiveGoods             — GRN: receive items, update inventory
      6.  createSupplierInvoice    — attach supplier invoice to GRN
-     7.  approveAndPayInvoice     — admin: approve + post double-entry payment
+     7.  approveAndPayInvoice     — admin: approve + record a payment CLAIM (never 'paid')
+         markSupplierInvoicePaidVerified — SERVER-ONLY helper (not a callable): the only
+                                    'paid' writer, from a verified payment event
      8.  getSupplierPerformance   — trend data for a supplier
      9.  getProcurementForecast   — reorder suggestions for a branch
      10. getProcurementDashboard  — KPI summary for a merchant
@@ -25,7 +27,8 @@
      procVendorPerformance/{supplierId}_{YYYY-MM}
      procForecast/{merchantId}_{productId}
      stockMovements/{movId}
-     paymentLedger/{ledgerId}
+     paymentLedger/{ledgerId}        — only from a VERIFIED supplier payment event
+     procSupplierPaymentEvents/{key} — dedupe claim per verified payment event
      emailQueue/{emailId}           — processed by email CF
      securityAuditLog/{logId}
 
@@ -33,7 +36,8 @@
      - enforceAppCheck on all CFs
      - Role checks (manager/admin) on mutating operations
      - Server-side VAT from the SUPPLIER's own status, never inferred (client figures never trusted)
-     - Idempotency guard: paidAt field prevents double-payment
+     - Supplier payment is a CLAIM until a verified event settles it (owner, 2026-10-04)
+     - Idempotency: create() on a deterministic per-event id prevents double settlement
      - Deterministic poId via sha256 prevents duplicate POs on retry
      - No internal stack traces returned to callers
      - All string inputs sanitised before Firestore writes
@@ -1417,7 +1421,15 @@ const listSupplierInvoices = onCall(OPT, async (request) => {
       poId: d.poId || null, grnId: d.grnId || null, supplierId: d.supplierId || null,
       amount: d.amount ?? null, vatAmount: d.vatAmount ?? null, total: d.total ?? null,
       status: d.status || null, dueDate: d.dueDate || null,
-      /* paidAt records a BOOKKEEPING entry, not a transfer of funds. */
+      /* paymentStatus separates a CLAIM from verified money: 'unpaid' | 'claimed' |
+         'verified_paid' | 'recorded_unverified' (marked paid by the pre-2026-10-04 typed-
+         reference path — never verified). Only 'verified_paid' is payment truth. */
+      paymentStatus: _invoicePaymentStatus(d),
+      paymentClaim: d.paymentClaim
+        ? { method: d.paymentClaim.method || null, ref: d.paymentClaim.ref || null,
+            claimedAt: d.paymentClaim.claimedAt || null }
+        : null,
+      paymentVerified: _invoicePaymentStatus(d) === 'verified_paid',
       paidAt: d.paidAt || null, paymentMethod: d.paymentMethod || null,
       createdAt: d.createdAt || null,
     }),
@@ -2236,123 +2248,318 @@ const createSupplierInvoice = onCall(OPT, async (request) => {
 });
 
 /* ════════════════════════════════════════════════════════════════
-   7. approveAndPayInvoice
-   Admin: approve a supplier invoice and post a double-entry payment.
-   Idempotency guard: paidAt must be null before processing.
+   7. approveAndPayInvoice — APPROVE + CLAIM (never "paid")
+   Admin: approve a supplier invoice and, optionally, record the admin's CLAIM that it was
+   paid. OWNER DECISION 2026-10-04: supplier-invoice payment is a CLAIM UNTIL VERIFIED.
+
+   The callable name is kept for compatibility (procurement.html already calls it, and a
+   rename is a new function to deploy plus a dead old one). Its MEANING changed:
+
+     before  status 'paid' + paidAt + paymentMethod/paymentRef from the request, the supplier
+             balance decremented, two paymentLedger rows "Supplier invoice payment" (DEBIT
+             accounts_payable / CREDIT <typed method>), and the PO set to 'paid' — all on a
+             reference the admin TYPED. A typed reference is a claim, not payment truth.
+     now     status 'approved', paymentStatus 'claimed' (a reference was supplied, recorded
+             as paymentClaim {method, ref, claimedBy, claimedAt}) or 'unpaid' (none was).
+             NO paidAt, NO supplier-balance change, NO paymentLedger row, PO untouched.
+
+   Why the ledger rows are DEFERRED rather than re-typed as a 'payable_claim': both rows
+   record money LEAVING (asset credit to the payment account), and paymentLedger is the
+   platform money ledger read by account balance (getLedgerBalance / sokoni-payment-engine).
+   No procurement code ever posts the matching payable when an invoice is created
+   (currentBalance is only ever decremented), so a "claim" row would be a half-entry that a
+   later reader can sum as money. The claim lives on the invoice and in securityAuditLog;
+   the ledger rows are written once, by markSupplierInvoicePaidVerified, from a verified
+   payment event.
 ════════════════════════════════════════════════════════════════ */
+
+/* Supplier-invoice payment states. Distinct from the document status on purpose: an
+   'approved' invoice may be unpaid or merely claimed; only 'verified_paid' is money.
+   'recorded_unverified' is DERIVED, never written: an invoice the pre-2026-10-04 path
+   marked 'paid' from a typed reference. It is shown as what it is, not as verified. */
+const INV_PAYMENT_STATUSES = new Set(['unpaid', 'claimed', 'verified_paid', 'recorded_unverified']);
+
+/** The payment state of an invoice document, derived for documents written before the
+    field existed. Never upgrades anything to verified. */
+function _invoicePaymentStatus(inv) {
+  const d = inv || {};
+  if (d.paymentStatus === 'verified_paid') {
+    /* Defence in depth: 'verified_paid' without the verification record is not believed. */
+    return d.paymentVerification && d.paymentVerification.eventId ? 'verified_paid' : 'recorded_unverified';
+  }
+  if (d.paymentStatus === 'claimed' || d.paymentStatus === 'unpaid') return d.paymentStatus;
+  if (d.status === 'paid' || d.paidAt) return 'recorded_unverified';
+  return 'unpaid';
+}
+
 const approveAndPayInvoice = onCall(OPT, async (request) => {
   const uid = _requireAdmin(request);
+  /* ONLY these three fields are read. status / paymentStatus / paidAt / verifiedEvent in
+     the payload are ignored — a client can never set 'paid'. */
   const {
     invoiceId, paymentMethod, paymentRef,
   } = request.data ?? {};
 
-  if (!invoiceId)     _err('invoiceId is required.');
-  if (!paymentMethod) _err('paymentMethod is required (e.g. bank_transfer, mpesa, cash).');
+  if (!invoiceId) _err('invoiceId is required.');
+  const method = paymentMethod ? (_san(paymentMethod, 50) || null) : null;
+  const ref    = paymentRef ? (_san(paymentRef, 200) || null) : null;
 
-  const invRef  = db.collection('procSupplierInvoices').doc(invoiceId);
+  const invRef  = db.collection('procSupplierInvoices').doc(String(invoiceId));
   const invSnap = await invRef.get();
   if (!invSnap.exists) _err('Invoice not found.', 'not-found');
   const invPre = invSnap.data() || {};
 
-  /* MERCHANT SCOPING (Slice E), composed with the existing admin requirement rather than
-     replacing it. _requireAdmin proves a platform role, never that it is held FOR THIS
-     MERCHANT — the same gap Slice C closed on approval, and it matters more here because
-     this moves money. The merchant is read off the invoice. */
+  /* MERCHANT SCOPING (Slice E), composed with the existing admin requirement. */
   await _assertMerchantAuthority(request, invPre.merchantId);
 
-  /* ── ONE ATOMIC, IDEMPOTENT PAYMENT ─────────────────────────────────────────────
-     The paid-check was a read OUTSIDE the write batch. Two concurrent payment attempts
-     both observed paidAt === null, both proceeded, and both committed: the supplier
-     balance was decremented twice and four ledger rows were written for one debt. The
-     check now lives inside the transaction that performs the writes, so the loser's read
-     is invalidated and it retries into the already-paid branch.
-
-     Ledger ids are derived from the invoice too, so even a retry that somehow reached the
-     write stage would address the same two rows rather than appending new ones. */
+  /* One transaction: the state check and the write are atomic, so two concurrent approvals
+     cannot both record a claim, and a retry reports the original outcome. */
   const result = await db.runTransaction(async (t) => {
     const snap = await t.get(invRef);
     if (!snap.exists) _err('Invoice not found.', 'not-found');
     const inv = snap.data() || {};
+    const payState = _invoicePaymentStatus(inv);
 
-    /* Already paid: report the ORIGINAL outcome. A retry of a completed payment is not a
-       new payment, and must not be reported as a failure that invites another attempt. */
-    if (inv.paidAt) {
-      return { invoiceId, status: 'paid', total: inv.total, duplicate: true };
+    /* Already settled (verified) or recorded paid by the old path: report it, change nothing. */
+    if (payState === 'verified_paid' || payState === 'recorded_unverified') {
+      return { invoiceId, status: inv.status || 'paid', paymentStatus: payState, total: inv.total,
+               verified: payState === 'verified_paid', duplicate: true,
+               paymentClaim: inv.paymentClaim || null };
     }
     if (inv.status === 'disputed') {
-      _err('Cannot pay a disputed invoice. Resolve the dispute first.');
+      _err('Cannot approve a disputed invoice. Resolve the dispute first.');
     }
     if (!['pending', 'approved'].includes(inv.status)) {
-      _err("Cannot pay invoice in status '" + inv.status + "'.");
+      _err("Cannot approve invoice in status '" + inv.status + "'.");
     }
 
-    /* The supplier must exist. Unlike a stock document, a missing supplier is not
-       something to create on the fly — paying a counterparty the system has no record of
-       is exactly the state this slice exists to prevent. */
+    /* A claim is only recorded once. Approving again (with or without a reference) after a
+       claim exists is a retry, not a new claim; approving again WITHOUT a reference is a
+       retry too. Only an approved-but-unclaimed invoice may gain a claim later. */
+    if (inv.status === 'approved' && (inv.paymentClaim || !ref)) {
+      return { invoiceId, status: 'approved', paymentStatus: payState, total: inv.total,
+               verified: false, duplicate: true, paymentClaim: inv.paymentClaim || null };
+    }
+
+    /* The supplier must exist — approving a payable to a counterparty the system has no
+       record of is the state Slice E exists to prevent. */
     const supplierRef  = db.collection('procSuppliers').doc(String(inv.supplierId));
     const supplierSnap = await t.get(supplierRef);
     if (!supplierSnap.exists) _err('Supplier not found for this invoice.', 'failed-precondition');
 
-    const now = F.serverTimestamp();
-    const method = _san(paymentMethod, 50);
-    const ref    = paymentRef ? _san(paymentRef, 200) : null;
-
-    t.update(invRef, {
-      status:        'paid',
-      paidAt:        now,
-      paidBy:        uid,
-      paymentMethod: method,
-      paymentRef:    ref,
+    const now   = F.serverTimestamp();
+    const claim = ref ? { method, ref, claimedBy: uid, claimedAt: now } : null;
+    const update = {
+      status:        'approved',
+      paymentStatus: claim ? 'claimed' : 'unpaid',
       updatedAt:     now,
-    });
-
-    t.update(supplierRef, {
-      currentBalance: F.increment(-inv.total),
-      updatedAt:      now,
-    });
-
-    /* Double-entry, unchanged in meaning:
-         DEBIT  accounts_payable  (liability decreases)
-         CREDIT bank/cash/mpesa   (asset decreases) */
-    const common = {
-      amount:      inv.total,
-      currency:    'KES',
-      refType:     'supplier_invoice',
-      refId:       invoiceId,
-      supplierId:  inv.supplierId,
-      merchantId:  inv.merchantId,
-      poId:        inv.poId,
-      description: 'Supplier invoice payment - ' + inv.invoiceNumber,
-      performedBy: uid,
-      createdAt:   now,
     };
-    t.set(db.collection('paymentLedger').doc(_deterministicId(invoiceId + '|debit', 'led')),
-      Object.assign({ type: 'debit', account: 'accounts_payable' }, common));
-    t.set(db.collection('paymentLedger').doc(_deterministicId(invoiceId + '|credit', 'led')),
-      Object.assign({ type: 'credit', account: method, paymentRef: ref }, common));
+    if (inv.status === 'pending') { update.approvedBy = uid; update.approvedAt = now; }
+    if (claim) update.paymentClaim = claim;
+    t.update(invRef, update);
 
-    if (inv.poId) {
-      t.update(db.collection('procPurchaseOrders').doc(inv.poId), {
-        status:    'paid',
-        updatedAt: now,
-      });
-    }
-
-    return { invoiceId, status: 'paid', total: inv.total, duplicate: false };
+    return { invoiceId, status: 'approved', paymentStatus: update.paymentStatus, total: inv.total,
+             verified: false, duplicate: false,
+             paymentClaim: claim ? { method, ref, claimedBy: uid } : null };
   });
 
   if (!result.duplicate) {
-    await _audit(uid, 'supplier_invoice_paid', invoiceId, {
+    await _audit(uid, result.paymentStatus === 'claimed'
+      ? 'supplier_invoice_payment_claimed' : 'supplier_invoice_approved', invoiceId, {
       merchantId: invPre.merchantId, supplierId: invPre.supplierId,
-      total: result.total, paymentMethod,
+      total: result.total, paymentMethod: method, hasRef: !!ref, verified: false,
     });
   }
 
   logger.info('procurement.approveAndPayInvoice', {
-    invoiceId, total: result.total, paymentMethod, duplicate: result.duplicate,
+    invoiceId, total: result.total, paymentStatus: result.paymentStatus, duplicate: result.duplicate,
   });
   return result;
 });
+
+/* ════════════════════════════════════════════════════════════════
+   7b. markSupplierInvoicePaidVerified — SERVER-ONLY
+   The ONLY writer of status 'paid' / paymentStatus 'verified_paid' on a supplier invoice.
+   NOT a callable, NOT an HTTP trigger, NOT re-exported from functions/index.js. It is called
+   in-process by a verified payment rail AFTER that rail has authenticated its event (webhook
+   signature / provider status re-read).
+
+   VERIFICATION-RAIL FINDING (2026-10-04): NO verified supplier-payment rail exists. There is
+   no IntaSend B2C/payout path whose target is a supplier invoice, createPaymentIntent has no
+   procurement purpose, and posSupplierPayments is a browser-mirrored record, not a provider
+   event. Until a rail exists, nothing calls this helper and supplier invoices stay 'claimed'
+   or 'unpaid' — the UI must say "Payment claimed — not verified".
+
+   Contract:
+     verifiedEvent = { verified: true, source, eventId, amount, currency,
+                       invoiceId? , ref?, method? }
+     - verified must be the literal true, set by the rail after it authenticated the event
+     - source + eventId identify the provider event; the dedupe id is derived from them and
+       claimed with create() inside the transaction — a replay is a no-op, never a second
+       payment, and one event can never settle two invoices
+     - match on invoiceId (event.invoiceId === invoiceId) OR on the recorded claim reference
+       (event.ref === invoice.paymentClaim.ref); neither => refused
+     - amount must equal the invoice total to the cent; currency must equal the invoice's
+       (KES); mismatches are refused, never "partially paid"
+════════════════════════════════════════════════════════════════ */
+const SUPPLIER_PAYMENT_SOURCE_DENY = new Set(['client', 'manual', 'admin', 'admin_claim', 'callable', 'ui']);
+
+async function markSupplierInvoicePaidVerified(invoiceId, verifiedEvent) {
+  /* A callable request object must never reach here — refuse the shape outright. */
+  if (typeof invoiceId !== 'string' || !invoiceId.trim()) {
+    _err('markSupplierInvoicePaidVerified: invoiceId must be a non-empty string (server-only helper).');
+  }
+  const ev = verifiedEvent;
+  if (!ev || typeof ev !== 'object' || Array.isArray(ev)) _err('A verified payment event is required.');
+  if ('auth' in ev || 'rawRequest' in ev) {
+    _err('A callable request is not a verified payment event.', 'permission-denied');
+  }
+  if (ev.verified !== true) _err('Payment event is not verified.', 'failed-precondition');
+  const source  = typeof ev.source === 'string' ? _san(ev.source, 60) : '';
+  const eventId = (typeof ev.eventId === 'string' || typeof ev.eventId === 'number')
+    ? _san(String(ev.eventId), 200) : '';
+  if (!source || !eventId) _err('Verified event must carry source and eventId.');
+  if (SUPPLIER_PAYMENT_SOURCE_DENY.has(source.toLowerCase())) {
+    _err("Source '" + source + "' is not a payment rail.", 'permission-denied');
+  }
+  const amount = Number(ev.amount);
+  if (!Number.isFinite(amount) || amount <= 0) _err('Verified event amount is invalid.');
+  const currency = typeof ev.currency === 'string' ? ev.currency.trim().toUpperCase() : '';
+  if (!currency) _err('Verified event currency is required.');
+  const evInvoiceId = ev.invoiceId != null ? String(ev.invoiceId) : null;
+  const evRef       = ev.ref != null ? _san(String(ev.ref), 200) : null;
+  if (evInvoiceId && evInvoiceId !== invoiceId) _err('Verified event is for a different invoice.', 'failed-precondition');
+
+  const invRef   = db.collection('procSupplierInvoices').doc(invoiceId);
+  const eventKey = _deterministicId(source + '|' + eventId, 'spe');
+  const eventRef = db.collection('procSupplierPaymentEvents').doc(eventKey);
+
+  const result = await db.runTransaction(async (t) => {
+    /* All reads before any write. */
+    const invSnap = await t.get(invRef);
+    const evSnap  = await t.get(eventRef);
+    if (!invSnap.exists) _err('Invoice not found.', 'not-found');
+    const inv = invSnap.data() || {};
+
+    if (evSnap.exists) {
+      const prior = evSnap.data() || {};
+      if (prior.invoiceId === invoiceId) {
+        return { invoiceId, status: 'paid', paymentStatus: 'verified_paid', duplicate: true, eventKey };
+      }
+      _err('This payment event has already settled a different invoice.', 'already-exists');
+    }
+
+    if (_invoicePaymentStatus(inv) === 'verified_paid') {
+      /* A SECOND distinct verified event for a paid invoice is a possible overpayment. It is
+         refused here (nothing written) and surfaced to the rail, never absorbed silently. */
+      _err('Invoice is already verified paid by another payment event.', 'failed-precondition');
+    }
+    if (inv.status === 'disputed') _err('Cannot settle a disputed invoice.', 'failed-precondition');
+    const legacyRecorded = inv.status === 'paid' || !!inv.paidAt;
+    if (!legacyRecorded && !['pending', 'approved'].includes(inv.status)) {
+      _err("Cannot settle invoice in status '" + inv.status + "'.", 'failed-precondition');
+    }
+
+    /* MATCH: invoice id, or the recorded claim reference. */
+    const claimRef = inv.paymentClaim && inv.paymentClaim.ref ? inv.paymentClaim.ref
+                   : (legacyRecorded && inv.paymentRef ? inv.paymentRef : null);
+    const matched  = evInvoiceId === invoiceId || (!!evRef && !!claimRef && evRef === claimRef);
+    if (!matched) _err('Verified event does not match this invoice (invoiceId or claim reference).', 'failed-precondition');
+
+    const total = Number(inv.total);
+    if (!Number.isFinite(total) || total <= 0) _err('Invoice total is unknown; cannot verify.', 'failed-precondition');
+    if (Math.round(amount * 100) !== Math.round(total * 100)) {
+      _err('Verified amount does not match the invoice total.', 'failed-precondition');
+    }
+    const invCurrency = String(inv.currency || 'KES').toUpperCase();
+    if (currency !== invCurrency) _err('Verified currency does not match the invoice currency.', 'failed-precondition');
+
+    const supplierRef  = db.collection('procSuppliers').doc(String(inv.supplierId));
+    const supplierSnap = await t.get(supplierRef);
+    if (!supplierSnap.exists) _err('Supplier not found for this invoice.', 'failed-precondition');
+
+    const now    = F.serverTimestamp();
+    const actor  = 'system:' + source;
+    const method = ev.method ? (_san(String(ev.method), 50) || source) : source;
+    const verification = { source, eventId, eventKey, amount, currency, ref: evRef,
+                           matchedOn: evInvoiceId === invoiceId ? 'invoiceId' : 'claim_ref',
+                           verifiedAt: now };
+
+    /* create(): the dedupe claim. Two concurrent deliveries of one event cannot both commit. */
+    t.create(eventRef, { invoiceId, merchantId: inv.merchantId || null, supplierId: inv.supplierId || null,
+                         source, eventId, amount, currency, ref: evRef, createdAt: now });
+
+    t.update(invRef, {
+      status:              'paid',
+      paymentStatus:       'verified_paid',
+      paidAt:              now,
+      paidBy:              actor,
+      paymentMethod:       method,
+      paymentRef:          evRef,
+      paymentVerification: verification,
+      updatedAt:           now,
+    });
+
+    /* A legacy-recorded invoice already decremented the balance on the old path; doing it
+       again would double-count. */
+    if (!legacyRecorded) {
+      t.update(supplierRef, { currentBalance: F.increment(-total), updatedAt: now });
+    }
+
+    /* Double-entry, written ONLY here, ONLY from a verified event:
+         DEBIT  accounts_payable  (liability decreases)
+         CREDIT <rail method>     (asset decreases)
+       Same deterministic ids as the legacy path, so a legacy-recorded invoice is upgraded
+       in place rather than gaining a second pair. */
+    const common = {
+      amount:         total,
+      currency:       invCurrency,
+      refType:        'supplier_invoice',
+      refId:          invoiceId,
+      supplierId:     inv.supplierId,
+      merchantId:     inv.merchantId,
+      poId:           inv.poId || null,
+      description:    'Supplier invoice payment (verified) - ' + inv.invoiceNumber,
+      performedBy:    actor,
+      verified:       true,
+      paymentEventId: eventKey,
+      createdAt:      now,
+    };
+    t.set(db.collection('paymentLedger').doc(_deterministicId(invoiceId + '|debit', 'led')),
+      Object.assign({ type: 'debit', account: 'accounts_payable' }, common));
+    t.set(db.collection('paymentLedger').doc(_deterministicId(invoiceId + '|credit', 'led')),
+      Object.assign({ type: 'credit', account: method, paymentRef: evRef }, common));
+
+    if (inv.poId) {
+      t.update(db.collection('procPurchaseOrders').doc(inv.poId), { status: 'paid', updatedAt: now });
+    }
+    return { invoiceId, status: 'paid', paymentStatus: 'verified_paid', duplicate: false, eventKey,
+             merchantId: inv.merchantId, supplierId: inv.supplierId, total };
+  });
+
+  if (!result.duplicate) {
+    await _audit('system:' + source, 'supplier_invoice_paid_verified', invoiceId, {
+      merchantId: result.merchantId, supplierId: result.supplierId, total: result.total,
+      source, eventKey: result.eventKey,
+    });
+  }
+  logger.info('procurement.markSupplierInvoicePaidVerified', {
+    invoiceId, source, eventKey: result.eventKey, duplicate: result.duplicate,
+  });
+  return { invoiceId, status: result.status, paymentStatus: result.paymentStatus,
+           duplicate: result.duplicate, eventKey: result.eventKey };
+}
+
+/** Sum invoice totals honestly: an invoice with no finite total makes the bucket's total
+    unknown (null), never a silent 0. */
+function _sumInvoices(list) {
+  let total = 0; let unknown = 0;
+  for (const inv of list) {
+    const v = Number(inv && inv.total);
+    if (inv && inv.total != null && Number.isFinite(v)) total += v; else unknown++;
+  }
+  return { count: list.length, totalValue: unknown ? null : +total.toFixed(2), unknownTotalCount: unknown };
+}
 
 /* ════════════════════════════════════════════════════════════════
    8. getSupplierPerformance
@@ -2633,14 +2840,19 @@ const getProcurementDashboard = onCall(OPT, async (request) => {
     if (!_poVatKnown(po)) openPOsVatUnknown++;
   });
 
-  /* Pending invoices total */
-  let pendingInvoicesTotal = 0;
-  const overdueInvoices    = [];
+  /* Outstanding invoices (pending + approved). A CLAIMED invoice is still outstanding — a
+     claim is not payment — but it is reported separately so the payables view can say
+     "Payment claimed — not verified". Unknown totals make a bucket total null, never 0. */
+  const outstandingList = [];
+  const unclaimedList   = [];
+  const claimedList     = [];
+  const overdueInvoices = [];
   const now = new Date();
 
   pendingInvoicesSnap.forEach(d => {
     const inv = d.data();
-    pendingInvoicesTotal += inv.total ?? 0;
+    outstandingList.push(inv);
+    if (_invoicePaymentStatus(inv) === 'claimed') claimedList.push(inv); else unclaimedList.push(inv);
     if (inv.dueDate) {
       const due = inv.dueDate.toDate ? inv.dueDate.toDate() : new Date(inv.dueDate);
       if (due < now) overdueInvoices.push({ invoiceId: inv.invoiceId, total: inv.total, dueDate: due.toISOString() });
@@ -2654,10 +2866,18 @@ const getProcurementDashboard = onCall(OPT, async (request) => {
     const s = d.data();
     supplierNames[s.supplierId] = s.name;
   });
+  /* Spend counts VERIFIED payments only. Invoices the old typed-reference path marked
+     'paid' are reported separately and never as spend. */
+  const verifiedPaidList = [];
+  const recordedUnverifiedList = [];
   paidInvoicesSnap.forEach(d => {
     const inv = d.data();
+    if (_invoicePaymentStatus(inv) !== 'verified_paid') { recordedUnverifiedList.push(inv); return; }
+    verifiedPaidList.push(inv);
+    const v = Number(inv.total);
+    if (!Number.isFinite(v)) return;
     if (!spendBySupplierId[inv.supplierId]) spendBySupplierId[inv.supplierId] = 0;
-    spendBySupplierId[inv.supplierId] += inv.total ?? 0;
+    spendBySupplierId[inv.supplierId] += v;
   });
 
   const topSuppliers = Object.entries(spendBySupplierId)
@@ -2680,7 +2900,14 @@ const getProcurementDashboard = onCall(OPT, async (request) => {
                             vatUnknownCount: openPOsVatUnknown },
     pendingApproval:      { count: pendingApprovalSnap.size },
     goodsToReceive:       { count: goodsToReceiveSnap.size },
-    pendingInvoices:      { count: pendingInvoicesSnap.size, totalValue: +pendingInvoicesTotal.toFixed(2) },
+    /* Outstanding = not verified paid (claims INCLUDED — a claim is not payment). */
+    pendingInvoices:      _sumInvoices(outstandingList),
+    unclaimedInvoices:    _sumInvoices(unclaimedList),
+    /* "Payment claimed — not verified": never counted as paid. */
+    claimedInvoices:      _sumInvoices(claimedList),
+    verifiedPaidLast30d:  _sumInvoices(verifiedPaidList),
+    /* Marked paid by the pre-2026-10-04 path from a typed reference: NOT verified. */
+    recordedUnverifiedLast30d: _sumInvoices(recordedUnverifiedList),
     overdueInvoices:      { count: overdueInvoices.length,   items: overdueInvoices },
     topSuppliers,
     reorderAlerts,
@@ -2842,4 +3069,9 @@ module.exports = {
   _availability,
   _positiveNumber,
   _projectCatalogueEntry,
+  /* SERVER-ONLY. Plain function, deliberately NOT re-exported from functions/index.js. */
+  markSupplierInvoicePaidVerified,
+  _invoicePaymentStatus,
+  _INV_PAYMENT_STATUSES: INV_PAYMENT_STATUSES,
+  _sumInvoices,
 };
