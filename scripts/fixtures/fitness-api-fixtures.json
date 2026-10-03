@@ -1,9 +1,9 @@
 {
   "_copy": {
-    "note": "COPY for the hosting lane. Do not edit: the source of truth is the functions lane. Everything except this _copy key must equal the source byte-for-value; scripts/test-fitness-memberships-ui.js row FX-SYNC fails on drift.",
+    "note": "COPY for the hosting lane. Do not edit: the source of truth is the functions lane. Everything except this _copy key must equal the source byte-for-value; scripts/test-fitness-memberships-ui.js row FX-SYNC fails on drift. Re-copied 2026-10-03 when FX-SYNC caught the source moving 3d315a2 -> d5fbd37 (day/week passes).",
     "sourceRef": "origin/feat/fitness-attendance-on-8bbfb34",
     "sourcePath": "scripts/fixtures/fitness-api-fixtures.json",
-    "sourceCommit": "3d315a21f2ad6757481d4a7e8c678f03bbf8f4e9",
+    "sourceCommit": "d5fbd379e0591a9be11d0c4434ef11e1be8d2f58",
     "copiedAt": "2026-10-03"
   },
   "_meta": {
@@ -32,6 +32,24 @@
       "periodCount": 3,
       "periodUnit": "month",
       "title": "Gold 3-month",
+      "payBy": "2026-03-20T07:35:00.000Z"
+    },
+    "created_day_pass": {
+      "membershipId": "mem_new001",
+      "reused": false,
+      "priceCents": 50000,
+      "periodCount": 1,
+      "periodUnit": "day",
+      "title": "Daily Pass",
+      "payBy": "2026-03-20T07:35:00.000Z"
+    },
+    "created_week_pass": {
+      "membershipId": "mem_new001",
+      "reused": false,
+      "priceCents": 150000,
+      "periodCount": 1,
+      "periodUnit": "week",
+      "title": "Weekly Pass",
       "payBy": "2026-03-20T07:35:00.000Z"
     },
     "errors": {
@@ -101,6 +119,22 @@
         "message": "This membership offer is not available.",
         "details": {
           "reason": "inactive"
+        }
+      },
+      "bad_unit": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "Memberships are sold by the day, week or month.",
+        "details": {
+          "reason": "bad_unit"
+        }
+      },
+      "bad_period": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "A membership must run for a whole number of periods: 1–31 days, 1–8 weeks or 1–60 months.",
+        "details": {
+          "reason": "bad_period"
         }
       }
     }
@@ -206,6 +240,22 @@
       "sessionsIncluded": null,
       "checkedInAt": "2026-03-20T07:30:00.000Z",
       "title": "Gold 3-month",
+      "member": {
+        "displayName": "Alex bM/b"
+      }
+    },
+    "success_day_pass": {
+      "ok": true,
+      "correlationId": "cid-1",
+      "duplicate": false,
+      "membershipId": "mem_000001",
+      "attendanceId": "d_2026-03-20",
+      "status": "checked_in",
+      "firstCheckIn": true,
+      "attendedSessions": 1,
+      "sessionsIncluded": null,
+      "checkedInAt": "2026-03-20T07:30:00.000Z",
+      "title": "Daily Pass",
       "member": {
         "displayName": "Alex bM/b"
       }
@@ -350,6 +400,14 @@
         "details": {
           "correlationId": "cid-1"
         }
+      }
+    },
+    "day_pass_at_end": {
+      "httpsErrorCode": "failed-precondition",
+      "clientErrorCode": "functions/failed-precondition",
+      "message": "This membership has expired.",
+      "details": {
+        "reason": "expired"
       }
     }
   },

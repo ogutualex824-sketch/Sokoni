@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
  * Fitness Memberships UI — browser certification. QUEUED: written with the slice, NOT yet run
- * (2026-10-03: free RAM ≈270 MB < the 512 MB floor — no browsers launched).
+ * (2026-10-03: free RAM ≈270 MB < the 512 MB floor — no browsers launched; pass 2 again ≈210 MB — still NOT run).
+ * Pass 2: callable answers now come from scripts/fixtures/fitness-api-fixtures.json (the generated server contract);
+ * added FMB8a (review step from the create response, no intent before Pay) and FMB10 (offer editor defaults + savings).
  *
  * At 390x844 (phone) and 1280x800 (desktop):
  *   GYM (sokoni-fitness-memberships.js mounted in a harness page with the provider-dashboard tokens)
@@ -73,16 +75,17 @@ function stub(cfg) {
   if (cfg.offline) Object.defineProperty(navigator, 'onLine', { get: () => false });
 }
 
-const ROWS = [
-  { membershipId: 'MEMBERSHIPAAA111', member: { displayName: 'Hostile <img src=x onerror=alert(1)>' }, title: 'Gold', sessionsIncluded: null, attendedSessions: 3, remaining: null, status: 'active', paymentStatus: 'paid_held' },
-  { membershipId: 'MEMBERSHIPCCC333', member: {}, title: 'Mystery', sessionsIncluded: 8, status: 'active' },
-];
-const OK_CHECKIN = { ok: true, duplicate: false, attendanceId: 'd_1', status: 'checked_in', attendedSessions: 4, sessionsIncluded: 12, membershipId: 'MEMBERSHIPABC123', member: { displayName: 'Alex' }, checkedInAt: '2026-10-03T07:42:00Z' };
+/* Callable answers come from the server-contract fixtures (copy of the functions lane's GENERATED file, pass 2). */
+const FX = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/fixtures/fitness-api-fixtures.json'), 'utf8'));
+const ROWS = JSON.parse(JSON.stringify(FX.fitnessGymMemberships.success_all.rows));
+ROWS[0].member.displayName = 'Hostile <img src=x onerror=alert(1)>';
+const OK_CHECKIN = FX.fitnessCheckIn.success_first;
 const MEMBERS = [
   { id: 'MEM_ACTIVE_0001', data: { title: 'Gold', status: 'active', paymentStatus: 'paid_held', attendedSessions: 0, refundEligible: true, priceCents: 350000, periodCount: 1, periodUnit: 'month' } },
   { id: 'MEM_PENDING_001', data: { title: 'Silver', status: 'pending_payment', paymentStatus: 'pending' } },
 ];
-const OFFERS = [{ id: 'SVC_1', data: { name: 'Monthly', price: 350000, periodCount: 1, periodUnit: 'month', serviceKind: 'membership', active: true } }];
+const OFFERS = [{ id: 'svc_gold3', data: { name: 'Gold 3-month', price: 600000, periodCount: 3, periodUnit: 'month', serviceKind: 'membership', active: true } },
+  { id: 'svc_day01', data: { name: 'Day', price: 50000, periodCount: 1, periodUnit: 'day', serviceKind: 'membership', active: true } }];
 
 (async () => {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -120,7 +123,13 @@ const OFFERS = [{ id: 'SVC_1', data: { name: 'Monthly', price: 350000, periodCou
       await t.page.waitForSelector('[data-sfm-result="recorded"]', { timeout: 3000 }).catch(() => {});
       const fin = await t.page.evaluate(() => document.querySelector('.sfm-result').innerText);
       ck('FMB3 scan: "Checking with SOKONI…" first, then the server-built card', /Checking with SOKONI/.test(mid) && !/ATTENDANCE RECORDED/.test(mid)
-        && /ATTENDANCE RECORDED · Alex — Membership #ABC123 · Session 4 of 12 · Check-in: 10:42/.test(fin), { mid, fin });
+        && /ATTENDANCE RECORDED · Alex bM\/b — Membership #000001 · Gold 3-month · Session 1 of 12 · Check-in: 10:30/.test(fin)
+        && /Refund no longer available — membership used/.test(fin), { mid, fin });
+      /* FMB10 offer editor: defaults with savings, mobile layout (the stub's providerServices list is OFFERS) */
+      await t.page.click('button:has-text("Add membership offer")');
+      const ed = await t.page.evaluate(() => ({ txt: document.querySelector('.sfm-offers').innerText, price: (document.getElementById('sfmOfPrice') || {}).value }));
+      ck('FMB10 offer editor: owner defaults with savings (7/13/20%), Monthly 5,000 pre-filled; no horizontal scroll', /Save 7%/.test(ed.txt) && /Save 13%/.test(ed.txt) && /Save 20%/.test(ed.txt)
+        && ed.price === '5000' && await noScroll(t.page), ed);
       await t.ctx.close();
       t = await open(vp, '/__fitness-gym-harness.html', { workspace: { state: 'AVAILABLE', modules: { memberships: { state: 'AVAILABLE' } } },
         callables: { fitnessScannerStatus: { data: { canScan: false, reason: 'BUSINESS_LINK_MISSING' } }, fitnessGymMemberships: { data: { rows: [] } } } });
@@ -148,16 +157,19 @@ const OFFERS = [{ id: 'SVC_1', data: { name: 'Monthly', price: 350000, periodCou
       ck('FMB9a member page: no horizontal scroll; no uncaught page error', await noScroll(t.page) && t.errors.length === 0, t.errors);
       await t.ctx.close();
       t = await open(vp, '/fitness-memberships.html?provider=PROVIDER_1', { memberships: MEMBERS, offers: OFFERS, flag: { enabled: true },
-        callables: { fitnessCreateMembership: { data: { membershipId: 'MEM_PENDING_001' } }, createPaymentIntent: { data: { ref: 'SOK-REF-1', amount: 3500, currency: 'KES' } } } });
+        callables: { fitnessCreateMembership: { data: FX.fitnessCreateMembership.created }, createPaymentIntent: { data: { ref: 'SOK-REF-1', amount: 6000, currency: 'KES' } } } });
       await t.page.waitForTimeout(500);
-      await t.page.click('button:has-text("BUY MEMBERSHIP")');
+      await t.page.click('button:has-text("BUY MEMBERSHIP") >> nth=0');
       await t.page.waitForSelector('#fmPhone', { timeout: 3000 }).catch(() => {});
+      const review = await t.page.evaluate(() => ({ txt: document.getElementById('fmPay').innerText, intents: window.__calls.filter((c) => c.name === 'createPaymentIntent').length }));
+      ck('FMB8a review from the fitnessCreateMembership RESPONSE (fixture created); no intent before Pay', /Gold 3-month/.test(review.txt) && /KES 6,000/.test(review.txt)
+        && /3 months/.test(review.txt) && /Pay by 10:35/.test(review.txt) && review.intents === 0, review);
       await t.page.fill('#fmPhone', '0712345678');
       await t.page.click('#fmPayBtn');
       await t.page.waitForTimeout(300);
       const buyOn = await t.page.evaluate(() => ({ calls: window.__calls.map((c) => c.name), stk: window.__stk, list: document.getElementById('fmList').innerText, note: document.getElementById('fmPayNote').innerText }));
       ck('FMB8 flag ON: create → intent → STK (server amount); card still "Waiting for payment confirmation"', JSON.stringify(buyOn.calls.filter((n) => /fitnessCreateMembership|createPaymentIntent/.test(n))) === '["fitnessCreateMembership","createPaymentIntent"]'
-        && buyOn.stk.length === 1 && buyOn.stk[0].a === 3500 && /Waiting for payment confirmation/.test(buyOn.list) && !/success|confirmed/i.test(buyOn.note), buyOn);
+        && buyOn.stk.length === 1 && buyOn.stk[0].a === 6000 && /Waiting for payment confirmation/.test(buyOn.list) && !/success|confirmed/i.test(buyOn.note), buyOn);
       ck('FMB9b buy screen: no horizontal scroll', await noScroll(t.page));
       await t.ctx.close();
     }

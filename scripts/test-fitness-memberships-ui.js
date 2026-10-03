@@ -2,7 +2,7 @@
 /* FITNESS MEMBERSHIPS UI (2026-10-03, pass 2) — gym module (sokoni-fitness-memberships.js) + member page
  * (fitness-memberships.html + sokoni-fitness-member.js), DRIVEN BY THE SERVER CONTRACT FIXTURES:
  * scripts/fixtures/fitness-api-fixtures.json is a copy of the functions lane's GENERATED fixtures
- * (origin/feat/fitness-attendance-on-8bbfb34 @ 3d315a2, produced by the real handlers). Every success and error fixture of
+ * (origin/feat/fitness-attendance-on-8bbfb34 @ d5fbd37, produced by the real handlers; first copied @ 3d315a2, re-copied when FX-SYNC caught the drift). Every success and error fixture of
  * the callables this UI calls is pushed through its render path. Member-side Firestore documents (read under rules, not
  * callable output) are synthetic 2f-shaped docs.
  *
@@ -211,8 +211,12 @@ async function suite(src) {
   /* G-8 EVERY check-in error fixture → its contract text */
   const ciErr = FX.fitnessCheckIn.errors, ciBad = [];
   for (const k of Object.keys(ciErr)) { const t = T.refusalText(fxErr(ciErr[k])); if (t !== ciErr[k].message) ciBad.push(k + '→' + t); }
+  const dpe = FX.fitnessCheckIn.day_pass_at_end;
+  if (!dpe || T.refusalText(fxErr(dpe)) !== dpe.message) ciBad.push('day_pass_at_end');
+  const dpOk = H(T.checkInCardHTML(FX.fitnessCheckIn.success_day_pass));
+  if (!dpOk.includes('Daily Pass · Session 1 of Unlimited') || !dpOk.includes('Refund no longer available')) ciBad.push('success_day_pass→' + dpOk);
   ck('G-8', Object.keys(ciErr).length === 18 && ciBad.length === 0 && Object.keys(T.REFUSAL).length === 15,
-    'all 18 fitnessCheckIn error fixtures (15 reasons + unauthenticated + invalid_sessionRef + unavailable) render the contract text; REFUSAL table has the 15 reasons', ciBad.join(' | ') + ' n=' + Object.keys(ciErr).length);
+    'all 18 fitnessCheckIn error fixtures (15 reasons + unauthenticated + invalid_sessionRef + unavailable) + day_pass_at_end render the contract text; success_day_pass card; REFUSAL table has the 15 reasons', ciBad.join(' | ') + ' n=' + Object.keys(ciErr).length);
   ck('G-8b', T.refusalText(err('failed-precondition', 'x', { code: 'other_gym' })) === 'This membership is not for your gym.',
     'reason is read from details.reason || details.code (2f\'s shape)');
   const offA = T.refusalText(err('internal', 'internal'));
@@ -440,8 +444,17 @@ async function suite(src) {
   pr.doc.getElementById('fmPhone').value = '0712345678';
   await pr.ctx.SokoniFitnessMember._t.act('pay'); await flush();
   const prNote = pr.doc.getElementById('fmPayNote').textContent;
-  ck('M-SALES', salesBad.length === 0 && Object.keys(CM.errors).length === 9 && prNote === "Memberships aren't on sale yet." && pr.spy.stk.length === 0,
-    'all 9 fitnessCreateMembership error fixtures render their contract text; 2f\'s purpose refusal details {code:\'SALES_DISABLED\'} → "Memberships aren\'t on sale yet." (not the raw/generic text), no STK', salesBad.join(' | ') + ' pay=' + prNote);
+  /* day / week pass purchases (fixtures created_day_pass / created_week_pass): the review reads the RESPONSE's unit */
+  const dayRev = [];
+  for (const k of ['created_day_pass', 'created_week_pass']) {
+    const e2 = mk({ enabled: true }, { fitnessCreateMembership: () => CM[k] }); load(e2, true); await flush();
+    await e2.ctx.SokoniFitnessMember._t.act('buy', 'svc_day01'); await flush();
+    dayRev.push(H(e2.doc.getElementById('fmPay').innerHTML));
+  }
+  ck('M-DAY2', dayRev[0].includes('Daily Pass') && dayRev[0].includes('Day pass') && dayRev[0].includes('KES 500') && dayRev[1].includes('Weekly Pass') && dayRev[1].includes('Week pass') && dayRev[1].includes('KES 1,500'),
+    'fixtures created_day_pass / created_week_pass → review shows "Day pass" / "Week pass" and the server price', dayRev.map((x) => x.slice(0, 160)).join(' || '));
+  ck('M-SALES', salesBad.length === 0 && Object.keys(CM.errors).length >= 11 && CM.errors.bad_unit && CM.errors.bad_period && prNote === "Memberships aren't on sale yet." && pr.spy.stk.length === 0,
+    'every fitnessCreateMembership error fixture (incl. bad_unit, bad_period) renders their contract text; 2f\'s purpose refusal details {code:\'SALES_DISABLED\'} → "Memberships aren\'t on sale yet." (not the raw/generic text), no STK', salesBad.join(' | ') + ' pay=' + prNote);
 
   /* ── static + executed write audit ── */
   const allWrites = [g, o, m, s2, on, ru2, mm, pr, pg].reduce((a, e) => a.concat(e.spy.writes), []);

@@ -129,7 +129,7 @@
   };
   function label(map, v) { return v === null || v === undefined || v === '' ? DASH : (map[v] || String(v)); }
 
-  /* ── check-in refusals: the server's reason code → human text. The table is docs/FITNESS_MEMBERSHIP_API.md §3 (15 reasons);
+  /* ── check-in refusals: the server's reason code → human text. The table is docs/FITNESS_MEMBERSHIP_API.md §3 (15 reasons, @ d5fbd37);
      scripts/fixtures/fitness-api-fixtures.json is the source of truth and the UI suite drives every fixture through it. ── */
   var REFUSAL = {
     token_invalid: 'This QR code is not valid. Ask the member to refresh it in their app.',
