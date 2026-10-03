@@ -69,6 +69,15 @@ exports.createDispute = onCall({ enforceAppCheck: true }, async request => {
     const snap = await txn.get(disputeRef);
     if (snap.exists) { isReplay = true; replayData = snap.data(); return; }
 
+    /* SECURITY CONVERGENCE (2026-10-03): an open dispute HOLDS the seller's payout. Nothing wrote these flags, so the
+       settlement auto-confirm sweep (which already skips disputeOpen / hasDispute) completed and paid out disputed
+       orders. Written in the SAME transaction as the dispute, after its read. Opening a dispute moves NO money: an
+       already-settled order is not reversed here — that is the refund authority's decision on the resolution. */
+    txn.update(db.collection('orders').doc(orderId), {
+      disputeOpen: true, hasDispute: true, disputeStatus: 'open', disputeId: 'dp_' + orderId,
+      disputeOpenedAt: FieldValue.serverTimestamp(),
+    });
+
     txn.set(disputeRef, {
       orderId,
       buyerId:  uid,
@@ -297,10 +306,20 @@ exports.adminResolveDispute = onCall({ enforceAppCheck: true }, async request =>
   if (action === 'resolved' || action === 'closed') {
     const orderId = snap.data().orderId;
     if (orderId) {
+      /* hotfix 2026-10-03: the payout HOLD lifts only here, on an administrator's resolution — payout then proceeds
+         by the normal settlement rules (and any refund is the refund authority's, never this write). */
       await db.collection('orders').doc(orderId).update({
         disputeStatus: action,
+        disputeOpen: false, hasDispute: false,
         disputeResolvedAt: FieldValue.serverTimestamp(),
       }).catch(() => { /* order may not exist — safe to ignore */ });
+    }
+  } else if (action === 'open' || action === 'investigating') {
+    /* re-opened / under investigation → the hold is (re)applied */
+    const orderId = snap.data().orderId;
+    if (orderId) {
+      await db.collection('orders').doc(orderId).update({ disputeStatus: action, disputeOpen: true, hasDispute: true })
+        .catch(() => {});
     }
   }
 
