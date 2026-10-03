@@ -20,11 +20,11 @@ const PI = (o) => Object.assign({ purpose: 'product_order', metadata: { items: [
 (async () => {
   console.log('\nLAYER A — resolver');
   let r = await CC.resolveCommissionCategory(mem({ 'paymentIntents/I1': PI(), 'products/p1': { category: 'Electronics' } }), { intentRef: 'I1' });
-  ck('A-1', r.ok && r.category === 'electronics' && r.source === 'products', 'a product order is priced under its PRODUCT\'s category', r);
-  r = await CC.resolveCommissionCategory(mem({ 'paymentIntents/I1': PI({ metadata: { items: [{ productId: 'p1' }, { productId: 'p2' }] } }), 'products/p1': { category: 'electronics' }, 'products/p2': { category: 'jobs' } }), { intentRef: 'I1' });
-  ck('A-2', !r.ok && r.reason === 'mixed_categories', 'mixed categories in one order → unresolved (never pick one)', r);
+  ck('A-1', r.ok && r.category === 'marketplace' && r.source === 'purpose', 'a product order is priced under the ONE marketplace rate (owner 09-19: flat for every seller and product)', r);
+  r = await CC.resolveCommissionCategory(mem({ 'paymentIntents/I1': PI(), 'products/p1': { category: 'jobs' } }), { intentRef: 'I1' });
+  ck('A-2', r.ok && r.category === 'marketplace', 'a SELLER who labels the product "jobs" (0%) cannot move the rate — products.category is seller-writable and is not read', r);
   r = await CC.resolveCommissionCategory(mem({ 'paymentIntents/I1': PI(), 'products/p1': { name: 'x' } }), { intentRef: 'I1' });
-  ck('A-3', !r.ok && r.reason === 'product_category_missing', 'a product with no category → unresolved (no default)', r);
+  ck('A-3', r.ok && r.category === 'marketplace', 'a product with no category still prices normally (no surprise holds for legacy listings)', r);
   r = await CC.resolveCommissionCategory(mem({}), { intentRef: 'I1' });
   ck('A-4', !r.ok && r.reason === 'no_intent', 'no server intent → unresolved (the client label is never consulted)', r);
   r = await CC.resolveCommissionCategory(mem({ 'paymentIntents/I1': { purpose: 'marketing_plan', metadata: { category: 'marketing' } } }), { intentRef: 'I1' });
@@ -51,14 +51,15 @@ const PI = (o) => Object.assign({ purpose: 'product_order', metadata: { items: [
       H.DOCS.set('orders/' + ref, { uid: 'buyerA', buyerUid: 'buyerA', status: 'pending_payment', total: 10000, currency: 'KES', items: [{ productId: 'pc-' + ref, qty: 1 }] });
       confirm(ref);
     };
-    seed('CAT1', 'electronics', 'jobs'); let r1 = await H.invoke(cb('CAT1'));
+    seed('CAT1', 'jobs', 'jobs'); let r1 = await H.invoke(cb('CAT1'));
     const L1 = H.get('commissionLedger', 'CAT1') || {};
-    ck('B-1', !r1.threw && L1.category === 'electronics' && L1.category !== 'jobs', "THE LEAD: the client says 'jobs' (0%) — the ledger prices the PRODUCT's category", { L1, threw: r1.threw });
-    seed('CAT2', null, 'jobs'); const r2 = await H.invoke(cb('CAT2'));
+    ck('B-1', !r1.threw && L1.category === 'marketplace' && Number(L1.sokoniCut) > 0, "THE LEAD: client AND seller both say 'jobs' (0%) — the ledger prices the marketplace rate, commission > 0", { L1, threw: r1.threw });
+    seed('CAT2', 'electronics', 'jobs'); H.DOCS.set('paymentIntents/CAT2', Object.assign({}, H.get('paymentIntents', 'CAT2'), { purpose: 'unknown_purpose', metadata: { orderId: 'CAT2' } }));
+    const r2 = await H.invoke(cb('CAT2'));
     const p2 = H.get('payments', 'CAT2') || {}, q2 = H.get('commissionReviewQueue', 'commission_hold_CAT2');
     const credited2 = [...H.DOCS.keys()].some((k) => /^walletTransactions\/S1_CAT2|^sellerPayments\/.*CAT2/.test(k));
     ck('B-2', !r2.threw && p2.walletCreditSkipped === 'commission_unresolved' && !!q2 && q2.clientCategory === 'jobs' && !credited2,
-      'a product with no server category → the seller credit is HELD for review (never the client label, never 100%)', { p2, q2, credited2, threw: r2.threw });
+      'a payment whose server records name NO category → the seller credit is HELD for review (never the client label, never 100%)', { p2, q2, credited2, threw: r2.threw });
     const o2 = H.get('orders', 'CAT2') || {};
     ck('B-3', o2.status === 'paid' || o2.paymentVerified === true || p2.status === 'COMPLETE', 'the buyer\'s verified payment still records as paid — only the SELLER credit waits for review', { o2: { status: o2.status, pv: o2.paymentVerified }, p: p2.status });
   }
