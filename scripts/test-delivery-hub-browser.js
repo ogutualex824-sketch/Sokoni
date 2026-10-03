@@ -168,7 +168,7 @@ const XSS = '<img src=x onerror="window.__xss=1">';
     console.log('\n── D: Rider Drive ──');
     const pkg = { _fsId: 'pk1', deliveryRef: 'DELo9', status: 'in_transit', category: 'marketplace', pickupAddress: 'Shop ' + XSS, deliveryAddress: 'Kilimani', sellerName: 'Shop A', buyerName: 'Wanjiru', buyerPhone: '0712345678', riderEarning: 150, proofPin: '987654', deliveryPin: '987654' };
     const ord = { _fsId: 'or1', id: 'or1', status: 'rider_assigned', category: 'food', pickupAddress: 'Cafe', deliveryAddress: 'Ngong Rd', driverNet: 120, deliveryRef: 'DELor1', items: [{ name: 'Pilau', qty: 2 }] };
-        const stDrive = { ...stOnline, pkgJobs: [pkg], orderJobs: [ord], callable: { ...stOnline.callable, completeDeliveryWithPin: "() => window.__T.pinRes || { ok: true }", completeParcelWithPin: "() => ({ ok: true })", deliveryVerifyShadow: "() => ({ ok: true })", handleFailedDelivery: "() => ({ ok: true, reason: 'retry scheduled' })" } };
+        const stDrive = { ...stOnline, pkgJobs: [pkg], orderJobs: [ord], callable: { ...stOnline.callable, completeDeliveryWithPin: "() => window.__T.pinRes || { ok: true }", completeParcelWithPin: "() => ({ ok: true })", deliveryVerifyShadow: "() => ({ ok: true })", handleFailedDelivery: "(d) => ({ customer_unavailable: { action: 'retry', attemptsLeft: 1 }, wrong_address: { action: 'refund' }, rejected_order: { action: 'refund' }, rider_breakdown: { action: 'reassign' }, seller_delay: { action: 'retry', attemptsLeft: 0 } })[d.reason]" } };
     h = await openHub(browser, base, { profile: RIDER, board, state: stDrive }, { hash: '#/drive', wait: 900 });
     let dv = await text(h.page, '[data-view="drive"]');
     ck('D1 both active jobs shown (packageRequest + order) with pickup → customer route', dv.includes('Kilimani') && dv.includes('Ngong Rd') && dv.includes('2× Pilau'), dv.slice(0, 300));
@@ -196,12 +196,42 @@ const XSS = '<img src=x onerror="window.__xss=1">';
     await h.page.click('[data-act="fail"][data-reason="customer_unavailable"]'); await h.page.waitForTimeout(300);
     t = await T(h.page);
     ck('D10 "Customer unavailable" → handleFailedDelivery {deliveryRef, reason} (server decides retry/return)', t.calls.some((c) => c.name === 'handleFailedDelivery' && c.data.deliveryRef === 'DELo9' && c.data.reason === 'customer_unavailable'));
+    ck('D10b the SERVER\'s decision is shown after sending (retry, 1 attempt left)', (await text(h.page, '#dhModalBody')).includes('SOKONI scheduled a retry (1 attempt left)'));
+    const WANT = { wrong_address: 'started a refund', rejected_order: 'started a refund', rider_breakdown: 'reassigning this delivery', seller_delay: 'scheduled a retry' };
+    const seen = [];
+    for (const [reason, want] of Object.entries(WANT)) {
+      await h.page.evaluate(() => document.getElementById('dhModal').classList.remove('on'));
+      await h.page.click('[data-act="problem"][data-key="p_pk1"]'); await h.page.waitForTimeout(120);
+      await h.page.click('[data-act="fail"][data-reason="' + reason + '"]'); await h.page.waitForTimeout(250);
+      seen.push([reason, (await text(h.page, '#dhModalBody')).includes(want)]);
+    }
+    t = await T(h.page);
+    ck('D10c all five reasons go to handleFailedDelivery and each shows the server\'s returned decision', seen.every((x) => x[1]) && ['customer_unavailable', 'wrong_address', 'rejected_order', 'rider_breakdown', 'seller_delay'].every((r) => t.calls.some((c) => c.name === 'handleFailedDelivery' && c.data.reason === r)), seen);
+    ck('D10d the browser never writes a return/refund/retry status itself', !t.writes.some((w) => w.data && /return|refund|retry/.test(String(w.data.status || ''))));
     ck('D11 no page errors during the drive flow', h.errors.length === 0, h.errors);
     await h.ctx.close();
     h = await openHub(browser, base, { profile: RIDER, board, state: { ...stDrive, pkgJobs: [{ ...pkg, _fsId: 'pp2', kind: 'parcel', deliveryRef: 'PRCx' }], orderJobs: [] } }, { hash: '#/drive', wait: 900 });
     await h.page.fill('#pin_p_pp2', '123456'); await h.page.click('[data-act="complete"][data-key="p_pp2"]'); await h.page.waitForTimeout(300);
     t = await T(h.page);
     ck('D12 a parcel job completes through completeParcelWithPin (sokoni-e3 authority)', t.calls.some((c) => c.name === 'completeParcelWithPin' && c.data.deliveryRef === 'PRCx'));
+    await h.ctx.close();
+    h = await openHub(browser, base, { profile: RIDER, board, state: { ...stDrive, pkgJobs: [{ ...pkg, _fsId: 'pp3', kind: 'parcel', deliveryRef: 'PRCy' }], orderJobs: [], callable: { ...stDrive.callable, completeParcelWithPin: "() => ({ __throw: true, code: 'functions/not-found', message: 'not found' })" } } }, { hash: '#/drive', wait: 900 });
+    await h.page.fill('#pin_p_pp3', '123456'); await h.page.click('[data-act="complete"][data-key="p_pp3"]'); await h.page.waitForTimeout(300);
+    t = await T(h.page);
+    ck('D13 parcel completion not deployed → "Parcel completion is temporarily unavailable", no fallback write, delivery stays active', (await text(h.page, '#dhToast')).includes('Parcel completion is temporarily unavailable') && !t.writes.some((w) => w.data && w.data.status === 'delivered') && await h.page.$('#pin_p_pp3') !== null);
+    await h.ctx.close();
+    /* Served rules: the ASSIGNED rider may change only these packageRequests fields. Anything else is refused,
+       so a write outside this set is a broken feature (the old portal's Accept/Pass/report all were). */
+    const RIDER_ALLOW = ['status', 'driverNote', 'updatedAt', 'pickedUpAt', 'deliveredAt', 'arrivedAtSellerAt', 'acceptedAt', 'etaMin', 'payoutDue', 'proofNote', 'driverLat', 'driverLng', 'driverSpeed', 'driverLocUpdatedAt', 'timeline', '_lastTimelineEntry'];
+    h = await openHub(browser, base, { profile: RIDER, board, state: { ...stDrive, pkgJobs: [{ ...pkg, _fsId: 'pa1', deliveryRef: 'DELpa1', status: 'driver_assigned' }], orderJobs: [] } }, { hash: '#/drive', wait: 900 });
+    ck('D14 an assigned job offers Accept but no "Pass" (a rider cannot unassign under the rules)', await h.page.$('[data-act="pkg-accept"]') !== null && await h.page.$('[data-act="pkg-pass"]') === null);
+    await h.page.click('[data-act="pkg-accept"]'); await h.page.waitForTimeout(250);
+    await h.page.click('[data-act="problem"][data-key="p_pa1"]'); await h.page.waitForTimeout(150);
+    await h.page.fill('#issueTxt', 'Gate locked, guard not answering'); await h.page.click('[data-act="issue"][data-key="p_pa1"]'); await h.page.waitForTimeout(250);
+    t = await T(h.page);
+    const pw = t.writes.filter((w) => w.col === 'packageRequests');
+    ck('D15 every rider write to packageRequests stays inside the rules\' rider allowlist (accept = status+acceptedAt; problem = driverNote)', pw.length === 2 && pw.every((w) => Object.keys(w.data).every((k) => RIDER_ALLOW.includes(k))) && pw[0].data.status === 'driver_accepted' && pw[1].data.driverNote === 'Gate locked, guard not answering', pw.map((w) => Object.keys(w.data)));
+    ck('D16 proof photo is shown as "not available yet" (Storage has no deliveryProofs rule) — no dead upload control', (await text(h.page, '[data-view="drive"]')).includes('not available yet') && await h.page.$('input[type="file"]') === null);
     await h.ctx.close();
 
     console.log('\n── E: earnings / wallet / performance ──');
@@ -252,6 +282,18 @@ const XSS = '<img src=x onerror="window.__xss=1">';
     h = await openHub(browser, base, { profile: RIDER, board, state: stMoney }, { hash: '#documents', wait: 1000 });
     ck('N8 rider-email deep link driver.html#documents (no slash) opens Documents', await h.page.$eval('.dh-view.on', (e) => e.dataset.view) === 'documents');
     await h.ctx.close();
+
+    console.log('\n── R: one rider workspace ──');
+    const redir = async (pathq) => { const ctx = await browser.newContext({ serviceWorkers: 'block' }); const pg = await ctx.newPage(); await pg.route('**/*', (route) => { const u = route.request().url(); if (!u.startsWith(base)) return route.fulfill({ status: 204, body: '' }); if (/\/sw-register\.js$/.test(u)) return route.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); if (/\/driver(\?|#|$)/.test(new URL(u).pathname + (new URL(u).search || ''))) return route.fulfill({ status: 200, contentType: 'text/html', body: '<p>hub</p>' }); return route.continue(); }); await pg.goto(base + pathq).catch(() => {}); await pg.waitForTimeout(400); const u = new URL(pg.url()); await ctx.close(); return u.pathname + u.hash; };
+    ck('R1 rider-dashboard.html → /driver (no second online toggle survives)', (await redir('/rider-dashboard.html')) === '/driver');
+    ck('R2 rider-dashboard.html#earnings → /driver#/earnings', (await redir('/rider-dashboard.html#earnings')) === '/driver#/earnings');
+    ck('R3 food-rider.html (the fake portal) → /driver#/available', (await redir('/food-rider.html')) === '/driver#/available');
+    ck('R4 driver-dashboard.html#nav (was a 404 linked from profile) → /driver#/map', (await redir('/driver-dashboard.html#nav')) === '/driver#/map');
+    const noCmt = (x) => x.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const rd = noCmt(fs.readFileSync(path.join(ROOT, 'rider-dashboard.html'), 'utf8')), fr = noCmt(fs.readFileSync(path.join(ROOT, 'food-rider.html'), 'utf8'));
+    ck('R5 the legacy pages carry no rider logic (no riderLocations write, no localStorage orders, no Math.random)', !/riderLocations|setDoc|updateDoc/.test(rd) && !/localStorage|Math\.random|SokoniFood/.test(fr));
+    const ps = fs.readFileSync(path.join(ROOT, 'sokoni-profile-switcher.js'), 'utf8'), ob = fs.readFileSync(path.join(ROOT, 'onboarding.html'), 'utf8'), sv = fs.readFileSync(path.join(ROOT, 'services.html'), 'utf8'), ix = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+    ck('R6 entry links point at the Delivery Hub (switcher, onboarding, services, home)', /rider:\s*'driver\.html'/.test(ps) && /rider:'driver\.html'/.test(ob) && !/food-rider\.html/.test(sv + ix) && !/'rider-dashboard\.html'/.test(ps + ob));
 
     console.log('\n── X: static security ──');
     const strip = (x) => x.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, ''); const mod = strip(fs.readFileSync(path.join(ROOT, 'sokoni-rider-hub.js'), 'utf8')); const htmlSrc = strip(fs.readFileSync(path.join(ROOT, 'driver.html'), 'utf8'));

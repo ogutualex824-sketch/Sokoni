@@ -697,7 +697,7 @@ function rLoc(r,d){return`<div class="st-h">Location</div><p class="st-s">Set yo
 function rReady(r,d){
   const m=typeof SokoniOnboarding!=='undefined'?SokoniOnboarding.metaFor(r):{label:r,icon:'🎉'};
   const pid=d&&d.profileId?d.profileId:'';
-  const dash={merchant:'pos.html',provider:'provider-dashboard.html',rider:'rider-dashboard.html',driver:'driver-dashboard.html',property:'property-dashboard.html',hotel:'hotel-dashboard.html',restaurant:'restaurant-dashboard.html',healthcare:'healthcare-dashboard.html',employer:'employer-dashboard.html',freelancer:'provider-dashboard.html',buyer:'index.html'};
+  const dash={merchant:'pos.html',provider:'provider-dashboard.html',rider:'driver.html',driver:'driver.html',property:'property-dashboard.html',hotel:'hotel-dashboard.html',restaurant:'restaurant-dashboard.html',healthcare:'healthcare-dashboard.html',employer:'employer-dashboard.html',freelancer:'provider-dashboard.html',buyer:'index.html'};
   return`<div class="sscreen"><div class="scheck">${m.icon}</div><h2 class="st-ttl">You're live on <span class="ac">SOKONI</span>!</h2><p style="color:var(--sub);margin-bottom:14px">Your ${m.label} profile is active and ready.</p>${pid?`<div class="icard"><div class="il">${m.label} ID</div><div class="id">${_esc(pid)}</div></div>`:''}<div class="slinks"><a href="${dash[r]||'index.html'}" class="btn btn-p">Go to Dashboard →</a><a href="onboarding.html" class="btn btn-s">Add Another Role</a></div></div>`;
 }
 

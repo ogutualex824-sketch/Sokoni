@@ -22,6 +22,7 @@ carrying sokoni-4d's payout-safety fix `6f0a576` (cherry-picked as `f2d5f81`). F
   - test-delivery-completion-path 33/0, test-delivery-pin-unreachable 66/0, test-rider-navigation 25/0 and slice-B W8
     are retargeted to the module with the same contracts; they still pass in legacy mode.
   - Syntax gate clean; CSP pass.
+- **Closure (same day):** rider-dashboard.html (second online toggle) and food-rider.html (fake portal) are now redirects into /driver. driver-dashboard.html and courier-dashboard.html (404 on live, still linked from profile) now redirect. Entry links are repointed to driver.html. Rider writes are fitted to the served packageRequests allowlist (Accept and problem reports used to fail silently; Pass is removed; proof photo shows "not available yet"). Parcel completion unavailable is stated honestly, and the failed-delivery modal shows the server's returned decision. Browser suite 64/0, plus 3/3 more sabotages. **Security finding (OPEN, rules slice):** the served packageRequests rider branch allows any status, deliveredAt and payoutDue, so a rider can fabricate "delivered".
 - **DB / rules / functions**: none changed. Expects `completeParcelWithPin` (sokoni-e3, not live) for parcel jobs.
 - **Breaking**: none for live data. Old in-page anchors such as `#myDeliveries` are replaced by `#/section`; email links
   `#documents` / `#earnings` still work.

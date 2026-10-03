@@ -97,3 +97,53 @@ see rider sections; a non-rider deep link falls back to Application once the pro
 - The EPRA scraper fix (functions) is not built yet.
 - The profile dropdown (`sokoni-profile-menu.js`) mounts on this page once the register unit's `autoMountOwnChrome`
   is merged.
+
+## Closure round 2026-10-03 (later)
+
+**One rider workspace.**
+- `rider-dashboard.html` was a second online toggle: it wrote `riderLocations/{uid}.status` from the browser and
+  bypassed `riderPresence`. It is now a redirect to `/driver`.
+- `food-rider.html` was a fake portal (localStorage orders, Math.random location and fees, a hard-coded rider). It
+  now redirects to `/driver#/available`.
+- `driver-dashboard.html` and `courier-dashboard.html` returned **404 on live** while `profile.html`, the profile
+  switcher and onboarding linked to them. They are now redirects too, mapping `#nav` to `#/map`, `#earnings`,
+  `#stats` to `#/performance`, and so on.
+- Entry links are repointed to `driver.html`: the profile switcher (rider, driver, courier), onboarding,
+  services.html (2) and the home page (1).
+
+**Honest states.**
+- If `completeParcelWithPin` cannot be reached, the rider sees "Parcel completion is temporarily unavailable".
+  There is no fallback.
+- Failed delivery: the confirmation states SOKONI's published policy. Afterwards the modal shows the decision
+  `handleFailedDelivery` actually returned (`{action, attemptsLeft}`).
+
+**Rules-compliant rider writes.** The served `packageRequests` rules let the assigned rider change only `status`,
+`acceptedAt`, `arrivedAtSellerAt`, `pickedUpAt`, `driverNote` and a few location/timeline fields. The old portal's
+Accept (`driverName`), Pass (`assignedDriverId: null`) and problem report (`deliveryIssue*`) were all refused
+silently.
+- **Accept:** now writes only `status` and `acceptedAt`.
+- **Pass:** removed; declining goes through the dispatch offer, or Problem → breakdown, which the server reassigns.
+- **Problem report:** now writes `driverNote`.
+- **Proof photo:** Storage has no `deliveryProofs/` rule (default deny), so it shows "not available yet".
+
+**Security matrix (D-01…D-12).** Where each row stands today:
+
+| Row | Authority | Evidence | Status |
+|---|---|---|---|
+| D-01 unauthorized rider online | `riderPresence` eligibility | D2 emulator 37/0 (09-30); browser P1 shows the refusal | PASS (emulator 09-30) / UI PASS |
+| D-02 claim an already-claimed job | `claimAvailableDelivery` (`job_assigned` / `order_assigned` refusal) | dispatch-authority 45/0 (unit); browser B4 | code PASS; **two-rider race UNPROVEN** (emulator, blocked on RAM) |
+| D-03 wrong PIN | `completeDeliveryWithPin` (HMAC, attempts lock) | pin-unreachable 2.23–2.25; browser D6/D9 | PASS |
+| D-04 rider fabricates delivered | **served rules: the rider branch allows ANY status + `deliveredAt`/`payoutDue`** | rules read 10-03 | **FAIL — OPEN (rules slice; D2 owner gate)** |
+| D-05/06 another rider's / customer's data | `packageRequests` read = `assignedDriverId`; board shows the area only | pin-unreachable 3.5/3.6; delivery-authorization (emulator) | static PASS; emulator BLOCKED |
+| D-07 browser changes earnings | `walletTransactions` read-only, wallets admin-only | rules read; browser E1 | PASS (static) |
+| D-08 browser changes payout | `f2d5f81`; payout gate | payout-idempotency 11/11; browser X4 | PASS |
+| D-09 browser creates a delivery | `packageRequests` create = `claimsOwner` (any fields) | D1 finding | **OPEN** (same rules slice) |
+| D-10 browser changes failed-delivery outcome | `handleFailedDelivery` | browser D10c/D10d | PASS (client); rules allow the rider to write any status (see D-04) |
+| D-11 fake location | `_validGPS` on rider lat/lng; presence server-side | rules read | PARTIAL (format-validated, not authenticated) |
+| D-12 fake application approval | applications: no decision fields (`appNoDecision`) | rules candidate | PASS in candidate; served = K13-A/B |
+
+**Release preconditions (hosting, separate authorization):**
+- Merge live, sokoni-4d's `admin-failures-on-chain`, my B2/register unit, and **sokoni-5b's Food Hub containment
+  `2e5e33b`** (or the paying fake restaurants come back).
+- Re-run this suite, the retargeted suites and `test-admin-payout-approvals.js`.
+- Memory ≥ 512 MB and the deploy slot are free.

@@ -18,9 +18,9 @@
     merchant:     'pos.html',
     provider:     'provider-dashboard.html',
     freelancer:   'provider-dashboard.html',
-    rider:        'rider-dashboard.html',
-    driver:       'driver-dashboard.html',
-    courier:      'courier-dashboard.html',
+    rider:        'driver.html',            /* ONE rider workspace: the Delivery Hub (2026-10-03) */
+    driver:       'driver.html',            /* was a page that does not exist; driver canonicalises to rider */
+    courier:      'driver.html',            /* was a page that does not exist */
     property:     'property-dashboard.html',
     hotel:        'hotel-dashboard.html',
     restaurant:   'restaurant-dashboard.html',

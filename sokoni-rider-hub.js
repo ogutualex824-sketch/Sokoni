@@ -24,8 +24,6 @@ import SokoniDB from './sokoni-db.js';
 import SokoniOrders from './sokoni-orders.js';
 
 const FS_URL = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-const ST_URL = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
-const APP_URL = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 const AUTH_URL = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
 /* ── state ─────────────────────────────────────────────────────────────────────────────────── */
@@ -219,7 +217,7 @@ function driveCard (j) {
     ${j.items ? `<div class="dh-note">🛒 ${esc(j.items)}</div>` : ''}${j.notes ? `<div class="dh-note">📝 ${esc(j.notes)}</div>` : ''}
     <div class="dh-note">${j.km != null ? '📏 ' + esc(j.km) + ' km' : '📏 Distance —'}</div>
     <div class="btn-row"><button class="btn sm blue" data-act="nav" data-dest="${esc(nav || '')}" ${nav ? '' : 'disabled'}>🧭 Navigate</button>${call}${chat}
-      ${j.dRef ? `<label class="btn sm" for="proof_${idSafe(j.key)}">📷 Proof photo</label><input id="proof_${idSafe(j.key)}" type="file" accept="image/*" capture="environment" hidden data-act="proof" data-ref="${esc(j.dRef)}">` : ''}
+      <button class="btn sm" type="button" disabled title="Proof photos are not available yet">📷 Proof photo — not available yet</button>
       <button class="btn sm danger" data-act="problem" data-key="${esc(j.key)}">🚨 Problem</button></div>
     ${stageAction(j)}
   </div>`;
@@ -228,7 +226,7 @@ function stageAction (j) {
   const k = esc(j.key);
   const pair = (a, b) => `<div class="btn-row">${a}${b || ''}</div>`;
   switch (j.status) {
-    case 'driver_assigned': return pair(`<button class="btn pri" data-act="pkg-accept" data-key="${k}">✅ Accept delivery</button>`, `<button class="btn danger" data-act="pkg-pass" data-key="${k}">Pass</button>`);
+    case 'driver_assigned': return `<button class="btn pri block" data-act="pkg-accept" data-key="${k}">✅ Accept delivery</button><p class="dh-note" style="margin:6px 0 0">Can't take it? Use 🚨 Problem → "My vehicle broke down" and SOKONI reassigns it.</p>`;
     case 'rider_assigned': return pair(`<button class="btn pri" data-act="ord-accept" data-key="${k}">✅ Accept delivery</button>`, `<button class="btn danger" data-act="ord-pass" data-key="${k}">Pass</button>`);
     case 'driver_accepted': return `<button class="btn blue block" data-act="pkg-at-seller" data-key="${k}">📍 I'm at the pickup</button>`;
     case 'rider_en_route': return `<button class="btn blue block" data-act="ord-picked" data-key="${k}">📦 Picked up</button>`;
@@ -683,19 +681,14 @@ async function complete (j, btn) {
     if (inp) inp.value = '';
     btn.textContent = 'Completed ✓';   /* stays disabled — the job leaves Rider Drive when its record updates */
     setTimeout(() => { loadLedger(); loadWallet(); loadJobs(); }, 2500);
-  } catch (e) { btn.disabled = false; btn.textContent = o; toast((e && (e.message || e.code)) || 'Delivery could not be confirmed.', true); }
-}
-async function uploadProof (input) {
-  const file = input.files && input.files[0]; const dRef = input.dataset.ref; if (!file || !dRef) return;
-  try {
-    toast('Uploading photo…');
-    const app = await import(APP_URL), st = await import(ST_URL);
-    const storage = st.getStorage(app.getApp()); const r = st.ref(storage, 'deliveryProofs/' + idSafe(dRef) + '_' + (uid() || 'rider') + '_' + Date.now() + '.jpg');
-    await st.uploadBytes(r, file, { contentType: file.type || 'image/jpeg' }); const url = await st.getDownloadURL(r);
-    await SokoniDB.updatePackageRequest(dRef, { proofPhotoUrl: url, proofPhotoAt: new Date().toISOString() });
-    toast('Proof photo attached.');
-  } catch (e) { toast('Upload failed: ' + ((e && e.message) || 'try again'), true); }
-  finally { try { input.value = ''; } catch (_) {} }
+  } catch (e) {
+    btn.disabled = false; btn.textContent = o;
+    /* A parcel completes only through sokoni-e3's completeParcelWithPin. If that function is not reachable the
+       answer is "unavailable" — never a client-side fallback that marks the parcel delivered. */
+    const c = String((e && e.code) || '').replace(/^functions\//, '');
+    if (j.parcel && ['not-found', 'unavailable', 'internal', 'unimplemented'].includes(c)) { toast('Parcel completion is temporarily unavailable. Keep the parcel and try again shortly, or contact support.', true); return; }
+    toast((e && (e.message || e.code)) || 'Delivery could not be confirmed.', true);
+  }
 }
 const FAIL_REASONS = [
   ['customer_unavailable', 'Customer unavailable', 'SOKONI schedules a retry; after repeated attempts the package is returned.'],
@@ -712,16 +705,33 @@ function problemModal (j) {
     <textarea class="inp" id="issueTxt" rows="3" style="width:100%;padding:10px" placeholder="Describe the issue (e.g. damaged package, can't reach the customer)" data-autofocus></textarea>
     <button class="btn block" style="margin-top:8px" data-act="issue" data-key="${esc(j.key)}">Send to SOKONI support</button>`);
 }
+/* The SERVER decides the outcome (handleFailedDelivery → SokoniDispatch.getFailedDeliveryAction): the rider
+   picks only the reason. Before sending, the UI states SOKONI's published policy for that reason; after, it shows
+   the decision the server actually returned — never a status the browser chose. */
+const FAIL_DECISION = {
+  retry: (n) => 'SOKONI scheduled a retry' + (n > 0 ? ` (${n} attempt${n === 1 ? '' : 's'} left)` : '') + '.',
+  reassign: () => 'SOKONI is reassigning this delivery to another rider.',
+  return: () => 'SOKONI started a return to the seller.',
+  refund: () => 'SOKONI started a refund for the customer.',
+  support: () => 'SOKONI support will review this delivery.',
+};
 async function fail (j, reason) {
   const r = FAIL_REASONS.find((x) => x[0] === reason); if (!r) return;
-  if (!window.confirm(`${r[1]}?\n\n${r[2]}\n\nSOKONI records this attempt and decides what happens next.`)) return;
-  try { const res = await call('handleFailedDelivery', { deliveryRef: j.dRef, reason, note: null }); closeModal(); toast('Recorded. ' + ((res && res.reason) || 'SOKONI will take it from here.')); }
-  catch (e) { toast((e && e.message) || 'Could not record this — contact support.', true); }
+  if (!window.confirm(`${r[1]}?\n\nSOKONI's policy for this: ${r[2]}\n\nSOKONI records the attempt and makes the final decision.`)) return;
+  try {
+    const res = await call('handleFailedDelivery', { deliveryRef: j.dRef, reason, note: null });
+    const fn = res && FAIL_DECISION[res.action];
+    closeModal();
+    if (fn) modal(`<h2 id="dhModalTitle" style="margin:0 0 6px;font-size:18px">Recorded</h2><p class="dh-note" style="font-size:14px">${esc(fn(Number(res.attemptsLeft) || 0))}</p><button class="btn pri block" style="margin-top:12px" data-autofocus data-act="close-modal">OK</button>`);
+    else toast('Recorded. SOKONI will review this delivery.');
+  } catch (e) { toast((e && e.message) || 'Could not record this — contact support.', true); }
 }
 async function issue (j) {
   const txt = String(($('#issueTxt') || {}).value || '').trim().slice(0, 500);
   if (!txt) { toast('Describe the issue first.', true); return; }
-  if (j.kind === 'pkg' && j.dRef) { await pkgUpdate(j, { deliveryIssue: txt, deliveryIssueAt: new Date().toISOString(), deliveryIssueRider: uid() }, 'Issue reported — SOKONI support will review.'); closeModal(); return; }
+  /* driverNote is the rider-writable note field; deliveryIssue* is refused by the served rules (the old portal's
+     report silently failed). */
+  if (j.kind === 'pkg' && j.dRef) { await pkgUpdate(j, { driverNote: txt }, 'Issue noted on the delivery — SOKONI support can see it.'); closeModal(); return; }
   closeModal(); location.href = 'support.html?topic=delivery_issue&ref=' + encodeURIComponent(j.oId || '') + '&desc=' + encodeURIComponent(txt);
 }
 
@@ -736,8 +746,12 @@ document.addEventListener('click', (ev) => {
     case 'board-refresh': pollBoard(); break;
     case 'claim': claim(b.dataset.ref, b); break;
     case 'nav': { const d = b.dataset.dest; if (!d) { toast('No destination location yet.', true); break; } window.open('https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(d) + '&travelmode=driving', '_blank', 'noopener'); break; }
-    case 'pkg-accept': if (j) pkgUpdate(j, { status: 'driver_accepted', acceptedAt: SokoniDB.serverTimestamp(), assignedDriverId: uid(), driverName: (S.rider && S.rider.name) || 'SOKONI Rider' }, 'Delivery accepted — head to the pickup.'); break;
-    case 'pkg-pass': if (j) pkgUpdate(j, { status: 'ready_for_pickup', assignedDriverId: null }, 'Passed.'); break;
+    /* The served packageRequests rules let the ASSIGNED rider change only status / acceptedAt / arrivedAtSellerAt /
+       pickedUpAt / driverNote (+ timeline/updatedAt). The old portal also wrote driverName and, on "Pass",
+       assignedDriverId:null — both refused, so Accept and Pass failed silently. Only allowed fields are written now;
+       a rider cannot unassign themselves (declining is the dispatch offer, or Report a problem → breakdown, which
+       the SERVER reassigns). */
+    case 'pkg-accept': if (j) pkgUpdate(j, { status: 'driver_accepted', acceptedAt: SokoniDB.serverTimestamp() }, 'Delivery accepted — head to the pickup.'); break;
     case 'pkg-at-seller': if (j) pkgUpdate(j, { status: 'driver_at_seller', arrivedAtSellerAt: new Date().toISOString() }); break;
     case 'pkg-picked': if (j) pkgUpdate(j, { status: 'in_transit', pickedUpAt: new Date().toISOString() }, 'Picked up — navigate to the customer.'); break;
     case 'ord-accept': if (j) ordStep(j, 'riderAccept', 'Delivery accepted — head to the pickup.'); break;
@@ -756,11 +770,11 @@ document.addEventListener('click', (ev) => {
     case 'reload-jobs': loadJobs(); break;
     case 'reload-ledger': loadLedger(); break;
     case 'reload-wallet': loadWallet(); break;
+    case 'close-modal': closeModal(); break;
     case 'exit': try { SokoniDB.stopGPSTracking(); } catch (_) {} location.href = '/'; break;
     default: break;
   }
 });
-document.addEventListener('change', (ev) => { const i = ev.target.closest('input[data-act="proof"]'); if (i) uploadProof(i); });
 document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { if ($('#dhModal').classList.contains('on')) closeModal(); else drawer(false); } });
 $('#dhMenuBtn').addEventListener('click', () => drawer(!$('#dhSide').classList.contains('open')));
 $('#dhBnavMore').addEventListener('click', () => drawer(true));
