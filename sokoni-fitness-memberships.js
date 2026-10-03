@@ -14,6 +14,15 @@
  * VISIBILITY is the server workspace's decision (b2 shell, sokoni-business-workspace.js): this module renders only when
  * window.__sokoniWorkspace.modules.memberships.state === 'AVAILABLE' (or the sokoni:workspace event says so). It makes
  * no second call to decide visibility. fitnessScannerStatus decides ONLY the scan button's enable state and reason.
+ * Owner invariant 2026-10-03: application status is WORKFLOW, not authorization — this module reads NO application /
+ * provider field for approval (no status, adminApproved, approvedBy, verified); the modules state is the one answer.
+ *
+ * READ-ONLY (P0-F, owner 2026-10-03): the offer editor and the scanner consume the SAME workspace answer through
+ * sokoni-edit-authority.js — only answer.editable === true is editable. Otherwise (editable false / missing on an old
+ * server / no answer) the offer controls render disabled and scanning is disabled, each with
+ * "Your account can't make changes right now (<reason>)" (reason from ownerState: frozen by SOKONI / suspended /
+ * deactivated — reactivate your account / status unknown; interim: ID-token claim deactivated, approval.state !==
+ * 'VALID_APPROVAL'). Every offer write and every check-in re-checks before it calls the server. Fails CLOSED.
  *
  * Mount: provider-dashboard.html → P.show('memberships') → SokoniFitnessMemberships.mount(_q('mbList')).
  * The member page (fitness-memberships.html + sokoni-fitness-member.js) reuses the shared core (._core).
@@ -428,9 +437,34 @@
     return !!(m && m.state === 'AVAILABLE');
   }
 
+  /* ── edit gate (P0-F): the SAME answer, never a second call ── */
+  var NO_EDIT = { editable: false, readOnly: true, reasonCode: 'no_answer', reason: 'status unknown', ownerState: null, source: 'none', action: null };
+  function currentWorkspace() { return S.wsSeen ? S.ws : root.__sokoniWorkspace; }
+  function editState(w) {
+    var EA = root.SokoniEditAuthority;
+    if (!EA || typeof EA.decide !== 'function') return NO_EDIT;            /* authority not loaded → read-only */
+    w = w === undefined ? currentWorkspace() : w;
+    return EA.decide(w && typeof w === 'object' && !Array.isArray(w) ? w : null, S.claims);
+  }
+  function canEdit() { return editState().editable === true; }
+  function readOnlyText(d) {
+    var EA = root.SokoniEditAuthority;
+    return EA && typeof EA.message === 'function' ? EA.message(d) : 'Your account can\u2019t make changes right now (' + ((d && d.reason) || 'status unknown') + ')';
+  }
+  function readOnlyHTML(d) {
+    return esc(readOnlyText(d)) + (d && d.action && d.action.href ? ' <a href="' + esc(d.action.href) + '">' + esc(d.action.label || 'Open account') + '</a>' : '');
+  }
+  /* ID-token claims feed only the interim reason (old server). Unreadable → null, never "not deactivated". */
+  function loadClaims() {
+    var fb = root.firebase, u = fb && fb.auth && fb.auth().currentUser;
+    if (!u || typeof u.getIdTokenResult !== 'function') { S.claims = null; return Promise.resolve(null); }
+    return Promise.resolve().then(function () { return u.getIdTokenResult(); }).then(function (r) { S.claims = (r && r.claims) || null; }, function () { S.claims = null; })
+      .then(function () { if (S.ui) { renderOffers(); applyScanGate(); } });
+  }
+
   /* ── gym module state ── */
   var S = { el: null, ui: null, tab: 'active', cursor: null, rows: [], busy: false, canScan: false, scanStop: null, mounted: false,
-    offers: null, offerErr: '', offerMsg: '', ed: null, offerBusy: false };
+    offers: null, offerErr: '', offerMsg: '', ed: null, offerBusy: false, claims: null, ws: null, wsSeen: false, scanStatus: null };
   var TABS = [['active', 'Active'], ['pending', 'Pending'], ['expired', 'Expired'], ['refund', 'Refunds']];
 
   function mk(tag, cls, html) {
@@ -477,6 +511,7 @@
     loadStatus();
     loadTab('active');
     loadOffers();
+    loadClaims();
     return true;
   }
 
@@ -494,6 +529,7 @@
     if (name === 'submit') return submitToken(S.ui && S.ui.paste ? S.ui.paste.value : '');
     if (name === 'stop') { stopCamera(); if (S.ui) S.ui.scanBox.hidden = true; return null; }
     if (name === 'retry') return loadTab(S.tab);
+    if (/^offer-(add|default|edit|save|pause|activate)$/.test(name) && !canEdit()) { S.ed = null; S.offerMsg = readOnlyText(editState()); renderOffers(); return null; }
     if (name === 'offer-add') return offerStart('monthly');
     if (name === 'offer-default') return offerStart(arg);
     if (name === 'offer-edit') return offerStart(null, arg);
@@ -510,17 +546,35 @@
     }).join('');
   }
 
+  /* The scan button = fitnessScannerStatus (may this account scan?) AND the edit gate (may this owner make changes?). */
+  function applyScanGate() {
+    var ui = S.ui; if (!ui) return;
+    var d = editState();
+    if (d.editable !== true) {
+      S.canScan = false; ui.scan.disabled = true; ui.scan.setAttribute('data-sfm-readonly', d.reasonCode || 'unknown');
+      if (ui.scanBox && !ui.scanBox.hidden) { stopCamera(); ui.scanBox.hidden = true; }
+      ui.note.innerHTML = readOnlyHTML(d);
+      return;
+    }
+    if (ui.scan.removeAttribute) ui.scan.removeAttribute('data-sfm-readonly');
+    var s = S.scanStatus;
+    if (!s) return;   /* the scanner status is still being asked, or failed (its own note stands) */
+    if (s.canScan === true) {
+      S.canScan = true; ui.scan.disabled = false;
+      ui.note.textContent = 'Scan the member’s membership QR. Attendance is recorded only when SOKONI confirms it.';
+    } else {
+      S.canScan = false; ui.scan.disabled = true;
+      ui.note.innerHTML = scannerReasonHTML(s);
+    }
+  }
   function loadStatus() {
     var ui = S.ui; if (!ui) return Promise.resolve();
-    ui.scan.disabled = true; S.canScan = false;
+    ui.scan.disabled = true; S.canScan = false; S.scanStatus = null;
+    if (!canEdit()) { applyScanGate(); return Promise.resolve(); }   /* read-only: no scanner call, scanning disabled with the reason */
     return call('fitnessScannerStatus', {}).then(function (s) {
       if (!S.ui) return;
-      if (s && s.canScan === true) {
-        S.canScan = true; ui.scan.disabled = false;
-        ui.note.textContent = 'Scan the member’s membership QR. Attendance is recorded only when SOKONI confirms it.';
-      } else {
-        ui.note.innerHTML = scannerReasonHTML(s);
-      }
+      S.scanStatus = s || { canScan: false };
+      applyScanGate();
     }, function (err) {
       if (!S.ui) return;
       ui.note.innerHTML = (isOffline(err) ? esc(OFFLINE_TEXT) : 'Scanner access could not be checked.') +
@@ -572,6 +626,15 @@
       : S.offers === null ? '<p class="sfm-sub">Loading offers…</p>'
       : S.offers.length ? '<ul class="sfm-list">' + withSavings(S.offers.map(function (o) { var c = {}; Object.keys(o).forEach(function (k) { c[k] = o[k]; }); c.priceCents = o.price; return c; })).map(offerRowHTML).join('') + '</ul>'
       : '<p class="sfm-sub">No membership offers yet.</p>';
+    var d = editState();
+    if (d.editable !== true) {
+      /* READ-ONLY: the list stays; every offer control is disabled and the editor is closed. */
+      S.ed = null;
+      ui.offers.innerHTML = offersIntro() + '<p class="sfm-sub sfm-ro" role="status" data-sfm-readonly="' + esc(d.reasonCode || 'unknown') + '">' + readOnlyHTML(d) + '</p>' +
+        listHtml.replace(/<button type="button"([^>]*data-sfm-act="offer-)/g, '<button type="button" disabled aria-disabled="true"$1') +
+        '<button type="button" class="sfm-btn sfm-btn-p" data-sfm-act="offer-add" disabled aria-disabled="true">Add membership offer</button>';
+      return;
+    }
     ui.offers.innerHTML = offersIntro() + listHtml +
       (S.offerMsg ? '<p class="sfm-sub" role="status" data-sfm-offer-note>' + esc(S.offerMsg) + '</p>' : '') +
       (ed ? (ed.serviceId ? '' : defaultsPickerHTML()) + offerFormHTML(ed)
@@ -615,6 +678,7 @@
   }
   function saveOffer(draft) {
     var ed = S.ed; if (!ed || S.offerBusy) return Promise.resolve(false);
+    if (!canEdit()) { S.ed = null; S.offerMsg = readOnlyText(editState()); renderOffers(); return Promise.resolve(false); }
     var v = draft || offerFormValues() || ed;
     var p = offerPayload(v);
     if (p.error) { ed.name = v.name; ed.priceKes = v.priceKes; ed.periodUnit = v.periodUnit; ed.periodCount = v.periodCount; offerMsg(p.error); return Promise.resolve(false); }
@@ -650,6 +714,7 @@
   }
   function toggleOffer(id, active) {
     if (!id || S.offerBusy) return Promise.resolve(false);
+    if (!canEdit()) { S.offerMsg = readOnlyText(editState()); renderOffers(); return Promise.resolve(false); }
     S.offerBusy = true; S.offerMsg = 'Updating…'; renderOffers();
     return call('providerDispatch', { op: 'providerToggleService', serviceId: String(id), active: active === true }).then(function () {
       S.offerMsg = ''; return loadOffers().then(function () { return true; });
@@ -672,7 +737,7 @@
   function stopCamera() { if (typeof S.scanStop === 'function') { try { S.scanStop(); } catch (_) {} } S.scanStop = null; }
 
   function openScanner() {
-    var ui = S.ui; if (!ui || !S.canScan) return Promise.resolve();
+    var ui = S.ui; if (!ui || !S.canScan || !canEdit()) return Promise.resolve();
     if (root.navigator && root.navigator.onLine === false) { ui.result.innerHTML = refusalCardHTML(null); return Promise.resolve(); }
     ui.scanBox.hidden = false;
     ui.scanBox.innerHTML = '<video playsinline muted aria-label="Camera preview for the member QR"></video>' +
@@ -698,6 +763,7 @@
   function submitToken(raw) {
     var ui = S.ui; if (!ui) return Promise.resolve();
     var token = String(raw || '').trim();
+    if (!canEdit()) { ui.result.innerHTML = '<div class="sfm-card sfm-warn" role="alert" data-sfm-readonly="1">' + readOnlyHTML(editState()) + '</div>'; return Promise.resolve(); }
     if (!token) { ui.result.innerHTML = '<div class="sfm-card sfm-warn" role="alert">Scan or paste a member code first.</div>'; return Promise.resolve(); }
     if (S.busy) return Promise.resolve();
     if (root.navigator && root.navigator.onLine === false) { ui.result.innerHTML = refusalCardHTML(null); return Promise.resolve(); }
@@ -716,8 +782,10 @@
   if (root.document && root.document.addEventListener) {
     root.document.addEventListener('sokoni:workspace', function (ev) {
       if (!S.el) return;
+      if (ev && ev.detail !== undefined) { S.ws = ev.detail; S.wsSeen = true; }   /* the latest answer drives the edit gate too */
       var ok = moduleAvailable(ev && ev.detail ? ev.detail : undefined);
       if (!ok) unmount(S.el); else if (!S.mounted) mount(S.el);
+      else { renderOffers(); loadStatus(); }   /* same module, new answer: re-evaluate read-only */
     });
   }
 
@@ -731,7 +799,7 @@
     },
     _t: { checkInCardHTML: checkInCardHTML, refusalCardHTML: refusalCardHTML, refusalText: refusalText, rowHTML: rowHTML, detailHTML: detailHTML,
       offerRowHTML: offerRowHTML, offerPayload: offerPayload, savedAsMembership: savedAsMembership, saveOffer: saveOffer, toggleOffer: toggleOffer,
-      offerStart: offerStart, withSavings: withSavings, OFFER_DEFAULTS: OFFER_DEFAULTS, NOT_ENABLED: NOT_ENABLED, renderOffers: renderOffers, scannerReasonHTML: scannerReasonHTML, moduleAvailable: moduleAvailable, act: act, submitToken: submitToken,
+      offerStart: offerStart, withSavings: withSavings, OFFER_DEFAULTS: OFFER_DEFAULTS, NOT_ENABLED: NOT_ENABLED, renderOffers: renderOffers, scannerReasonHTML: scannerReasonHTML, moduleAvailable: moduleAvailable, editState: editState, canEdit: canEdit, act: act, submitToken: submitToken,
       openScanner: openScanner, loadStatus: loadStatus, state: S, REFUSAL: REFUSAL, SCOPE: SCOPE, scopeText: scopeText, refundableText: refundableText,
       settlementOf: settlementOf, settlementHTML: settlementHTML, USED_LINE: USED_LINE },
   };
