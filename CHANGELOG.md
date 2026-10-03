@@ -1,3 +1,13 @@
+## [2026-10-03] - BnB: a stay is never confirmed without a payment — hosting, NOT deployed
+
+On live, BnB "Confirm Booking" tried the retired Daraja engine (its server function is not deployed) and on any failure, or when
+the engine was absent after a 4-second "Payment confirmed!" timer, wrote the booking as status "confirmed", raised an invoice,
+recorded a commission and messaged the host, with no money taken. It now refuses honestly and changes nothing. Stays need a
+server-priced IntaSend purpose (not on live functions) before online payment can open.
+
+- Files: bnb.html, scripts/test-bnb-no-unpaid-confirmation.js (new, 4/0, 4/4 sabotages).
+- Overlap: sokoni-f3's B2 slice (hosting/register-routing-on-b2) also edits bnb.html and still carries the old block; adopt this hunk.
+
 ## [2026-10-03] - Checkout: card payment through IntaSend's secure form, server-verified — hosting, NOT deployed
 
 Owner: "implement IntaSend; the card checkout should show the wizard where you fill card details". Card was disabled because the old

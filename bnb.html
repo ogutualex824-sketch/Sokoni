@@ -397,37 +397,18 @@
       showNotif(`✅ Booking confirmed! ${b?.name} · ${nights} night${nights>1?"s":""} · KES ${total.toLocaleString()}`, "success");
     }
 
-    /* Real Daraja payment if host has configured it */
-    if((b?.sellerUid || b?.hostSellerUid) && total > 0 && window.SokoniMpesa){
-      SokoniMpesa.pay({
-        sellerUid: b.sellerUid || b.hostSellerUid,
-        amount: total,
-        phone,
-        orderId: ref,
-        hub: 'bnb',
-        sellerName: b?.hostName || b?.name || 'BnB Host',
-        description: (b?.name||'BnB Stay') + ' · '+nights+' night'+(nights>1?'s':''),
-        onSuccess: r => _finalise(r.mpesaCode),
-        onFailure: reason => { if(reason !== 'cancelled') _finalise(null); else if(_btn){ _btn.disabled = false; _btn.textContent = 'Confirm Booking'; } }
-      });
-      return;
-    }
-
-    /* Fallback: show simulated STK state and confirm after 4 s */
-    const content = document.getElementById("bookModalContent");
-    if(content){
-      content.innerHTML = `<div style="text-align:center;padding:28px 16px;">
-        <div style="font-size:48px;margin-bottom:12px;">📲</div>
-        <div style="font-size:15px;font-weight:800;color:white;margin-bottom:8px;">M-Pesa Request Sent!</div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.55);margin-bottom:18px;line-height:1.6;">Enter your M-Pesa PIN to pay <strong style="color:#71ff00;">KES ${total.toLocaleString()}</strong>.</div>
-        <div id="bnbPayStatus" style="font-size:12px;color:rgba(255,255,255,0.4);">⏳ Waiting for payment confirmation…</div>
-      </div>`;
-    }
-    setTimeout(()=>{
-      const st = document.getElementById("bnbPayStatus");
-      if(st){ st.innerHTML = `✅ <strong style="color:#71ff00;">Payment confirmed!</strong>`; }
-      setTimeout(()=>_finalise(null), 2000);
-    }, 4000);
+    /* NO PAYMENT, NO CONFIRMATION (2026-10-03).
+       This block used to (a) try a Daraja STK push through SokoniMpesa.pay, whose server function
+       (darajaSTKPush) is not deployed, and on ANY failure other than "cancelled" call _finalise(null);
+       and (b) when SokoniMpesa was absent, show "M-Pesa Request Sent!", then "Payment confirmed!" after a
+       4-second timer, and call _finalise(null). Both paths wrote the booking as status:"confirmed", raised an
+       invoice, recorded a commission and messaged the host, for a stay nobody paid for.
+       SOKONI collects through IntaSend only, and there is no server-priced IntaSend purpose for stays on the
+       live functions yet, so no payment can be taken here. The honest outcome is to say so and change
+       nothing: no booking, no invoice, no commission, no host message. */
+    if(_btn){ _btn.disabled = false; _btn.textContent = 'Confirm Booking'; }
+    showNotif("Online payment for stays isn't available yet. Your booking was not made and you have not been charged.", "error");
+    return;
   }
 
   function filterBnB(type, btn){
