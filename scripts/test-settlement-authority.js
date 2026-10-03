@@ -71,7 +71,7 @@ const run = async (fn) => { try { return { ok: true, r: await fn() }; } catch (e
   const s1 = await PH.commissionSnapshotFor(H.db || require('firebase-admin').firestore(), 'mk', { serviceHub: 'marketing', serviceCategory: 'brand-strategy', commissionHub: 'provider' }, 1000000);
   const s2 = await PH.commissionSnapshotFor(require('firebase-admin').firestore(), 'p2', { commissionHub: 'provider' }, 1000000);
   const s3 = await run(() => PH.commissionSnapshotFor(require('firebase-admin').firestore(), 'p2', { kind: 'work_milestone', workCommissionCategory: 'nope' }, 1000000));
-  ck('SA8', s1.commissionRate === 10 && s1.commissionRuleId && s1.commissionBase === 'service_price' && s2.commissionRate === 5 && !s3.ok && s3.code === 'category_unpriced',
+  ck('SA8', s1.commissionRate === 10 && /^marketing_services@/.test(s1.commissionRuleId) && s1.commissionRuleId.indexOf('default') === -1 && s1.commissionBase === 'service_price' && s2.commissionRate === 5 && !s3.ok && s3.code === 'category_unpriced',
     'capture: marketing 10%, services 5%; an unpriced milestone is refused before anything is held', { s1, s2, s3 });
 
   const before = W('mk');
