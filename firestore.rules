@@ -2773,17 +2773,50 @@ service cloud.firestore {
   && request.auth.uid == managerId
   && request.resource.data.uid == request.auth.uid);
   }
+  /* PRODUCT ENQUIRY = LEAD (sokoni-f3, Construction convergence 2026-10-03). contactRequests is the ONE in-app
+     "contact the seller" record (product page → the seller's merchant-v2 Enquiries; sokoni-b2's product_enquiry
+     conversation anchors on it). Hardened so a lead cannot be forged:
+       - create: the caller is the buyer; sellerUid MUST equal products/{productId}.sellerUid (no planting enquiries on
+         another seller); a buyer cannot enquire on their own product; status starts 'pending' (= New); fixed keys.
+       - seller: may only move the lead along the lifecycle below (plus a note). 'pending' = New, 'responded' =
+         Contacted (the names the live clients already use).
+       - buyer: may cancel their own open lead.
+     Lifecycle: pending → responded/contacted → qualified → quote_requested → quote_sent → negotiating → won;
+     lost / cancelled anywhere open; 'expired' is server-only. */
+  function leadNext() {
+    return {
+      'pending':         ['responded', 'contacted', 'qualified', 'lost'],
+      'responded':       ['qualified', 'quote_requested', 'quote_sent', 'lost'],
+      'contacted':       ['qualified', 'quote_requested', 'quote_sent', 'lost'],
+      'qualified':       ['quote_requested', 'quote_sent', 'lost'],
+      'quote_requested': ['quote_sent', 'lost'],
+      'quote_sent':      ['negotiating', 'won', 'lost'],
+      'negotiating':     ['quote_sent', 'won', 'lost']
+    };
+  }
   match /contactRequests/{reqId} {
   allow create: if isAuthed()
   && request.resource.data.buyerUid == request.auth.uid
-  && request.resource.data.keys().hasAll(['buyerUid','sellerUid','productId','message','createdAt']);
+  && request.resource.data.keys().hasAll(['buyerUid','sellerUid','productId','message','createdAt'])
+  && request.resource.data.keys().hasOnly(['buyerUid','buyerName','buyerPhone','message','productId','productName',
+       'sellerUid','sellerName','status','createdAt','source'])
+  && request.resource.data.productId is string
+  && request.resource.data.message is string && request.resource.data.message.size() <= 1000
+  && request.resource.data.get('status', 'pending') == 'pending'
+  && request.resource.data.sellerUid != request.auth.uid
+  && get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.sellerUid == request.resource.data.sellerUid;
   allow read:   if isAdmin()
   || (isAuthed() && resource.data.sellerUid == request.auth.uid)
   || (isAuthed() && resource.data.buyerUid  == request.auth.uid);
   allow update: if isAdmin()
   || (isAuthed() && resource.data.sellerUid == request.auth.uid
-  && request.resource.data.diff(resource.data)
-  .affectedKeys().hasOnly(['status','respondedAt','sellerNote']));
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','respondedAt','sellerNote'])
+  && (request.resource.data.get('status', 'pending') == resource.data.get('status', 'pending')
+      || request.resource.data.get('status', '') in leadNext()[resource.data.get('status', 'pending')]))
+  || (isAuthed() && resource.data.buyerUid == request.auth.uid
+  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+  && request.resource.data.status == 'cancelled'
+  && resource.data.get('status', 'pending') in ['pending','responded','contacted','qualified','quote_requested','quote_sent','negotiating']);
   allow delete: if isAdmin();
   }
   match /productQA/{qaId} {

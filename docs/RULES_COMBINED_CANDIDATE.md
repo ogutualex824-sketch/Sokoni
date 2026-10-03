@@ -270,3 +270,18 @@ baseline f259c0b5: CR-1/CR-2 must fail. **EMULATOR PENDING.** The rest of the co
 (constructOrders price/status, constructProviders status/rating, constructQuotations, constructReviews) stay for the
 full Construction build, which retires those collections behind server authorities.
 8. (later) `courseLessonHistory/{id}` admin read, write false (5b @ d990f2b). Rows ED-H1–H3. **EMULATOR PENDING.**
+
+## 2026-10-03: product enquiry = lead (`contactRequests`), Construction convergence
+
+The ONE in-app "contact the seller" record (product page → the seller's merchant-v2 Enquiries; b2's df1a4cb client).
+The served rule let a buyer name ANY `sellerUid`, which allowed planting enquiries on another seller, a free status and
+extra keys. The block is REPLACED (not duplicated) with:
+- **Create:** the caller is the buyer; `sellerUid == products/{productId}.sellerUid` via `get()`; no self-enquiry;
+  `status` 'pending'; a fixed key set (the exact df1a4cb payload); message ≤ 1000.
+- **Seller:** moves the lead only along `leadNext()`:
+  `pending → responded / contacted → qualified → quote_requested → quote_sent → negotiating → won`, with `lost` from
+  any open state. Note-only edits are allowed.
+- **Buyer:** may cancel their own open lead. `expired` is server-only.
+
+Suite `scripts/zz-test-contact-requests-rules.js` (CQ-C*, F1–F6, S1–S7, X1–X2, B1–B2, A1). **EMULATOR PENDING.**
+Baseline f259c0b5: the forged-seller, planted-status and lifecycle-jump rows must fail there.
