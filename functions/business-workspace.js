@@ -109,6 +109,19 @@ const MODULES = Object.freeze({
   posSupport:        { label: 'POS support',         section: 'possupport',        implemented: false, why: 'TECH_HUB_PENDING' },
   projects:          { label: 'Projects',            section: 'projects',          implemented: false, why: 'TECH_HUB_PENDING' },
   pickupDropoff:     { label: 'Pickup & drop-off',   section: 'pickupdropoff',     implemented: true }   /* Tech 4C: the provider's bookings by booking.serviceMode */,
+  /* EDUCATION E2 (sokoni-5b, owner 2026-10-03): teacher / institution modules on THIS dashboard, chosen by the
+     server-stamped providers/{uid}.education.type (application-lifecycle, from the application category — never a
+     client field). Each screen is an E2 build; until it ships it is NOT_IMPLEMENTED, never shown as working. */
+  eduCourses:        { label: 'Courses',             section: 'educourses',        implemented: false, why: 'EDUCATION_E2_PENDING' },
+  eduLessons:        { label: 'Lessons',             section: 'edulessons',        implemented: false, why: 'EDUCATION_E2_PENDING' },
+  eduLearners:       { label: 'Learners',            section: 'edulearners',       implemented: false, why: 'EDUCATION_E2_PENDING' },
+  eduClasses:        { label: 'Classes',             section: 'educlasses',        implemented: false, why: 'EDUCATION_E2_PENDING' },
+  eduProgrammes:     { label: 'Programmes',          section: 'eduprogrammes',     implemented: false, why: 'EDUCATION_E2_PENDING' },
+  eduTeachers:       { label: 'Teachers',            section: 'eduteachers',       implemented: false, why: 'EDUCATION_E2_PENDING' },
+  eduStudents:       { label: 'Students',            section: 'edustudents',       implemented: false, why: 'EDUCATION_E2_PENDING' },
+  eduTimetable:      { label: 'Timetable',           section: 'edutimetable',      implemented: false, why: 'EDUCATION_E2_PENDING' },
+  eduAssessments:    { label: 'Assessments',         section: 'eduassessments',    implemented: false, why: 'EDUCATION_E2_PENDING' },
+  eduCertificates:   { label: 'Certificates',        section: 'educertificates',   implemented: false, why: 'EDUCATION_E2_PENDING' },
 });
 Object.values(MODULES).forEach((m) => Object.freeze(m));   /* each entry too — no caller can flip `implemented` */
 const MODULE_KEYS = Object.freeze(Object.keys(MODULES));
@@ -120,7 +133,12 @@ const CORE = ['overview', 'storefront', 'services', 'availability', 'calendar', 
 const PROFILES = Object.freeze({
   quoted_service:   ['quotes', 'calls', 'bookedHours', 'staff'],                         /* trades, cleaning, IT, professional, lawyer, auto, service */
   appointment_shop: ['calls', 'bookedHours', 'staff', 'products', 'inventory', 'pos'],    /* salon, fitness studio */
-  learning:         ['calls', 'bookedHours', 'staff'],                                    /* education */
+  learning:         ['calls', 'bookedHours', 'staff'],                                    /* education with NO server type (legacy approvals) */
+  /* EDUCATION E2: a teacher never receives institution modules, and an institution never receives a teacher's — the
+     profile is chosen from the server-stamped type only (educationProfileFor). */
+  education_teacher:     ['calls', 'bookedHours', 'eduCourses', 'eduLessons', 'eduLearners', 'eduClasses'],
+  education_institution: ['calls', 'bookedHours', 'staff', 'eduProgrammes', 'eduCourses', 'eduTeachers', 'eduStudents',
+    'eduClasses', 'eduTimetable', 'eduAssessments', 'eduCertificates'],
   entertainment:    ['quotes', 'calls', 'bookingPin', 'bookedHours', 'content', 'staff'], /* artists, event services */
   accommodation:    ['calls', 'staff'],                                                    /* hotel, guesthouse, BnB host */
   property:         ['calls', 'staff', 'listings'],                                        /* agent, developer, landlord (viewings = bookings) */
@@ -137,6 +155,8 @@ const PROFILE_NOT_BUILT = Object.freeze({
 const PROFILE_NOTICE = Object.freeze({
   accommodation: 'Room bookings (stays) are being built. Guests can already find your rooms, enquire and message you; SOKONI will switch stays on when they are ready.',
   property: 'Listings management is being built. Clients can already find you, enquire and book viewings; SOKONI will switch listings on when it is ready.',
+  education_teacher: 'Courses, lessons, learners and classes are being built. Learners can already find you and book you; SOKONI switches each one on when it is ready.',
+  education_institution: 'Programmes, courses, teachers, students, timetable, assessments and certificates are being built. SOKONI switches each one on when it is ready.',
 });
 const PROFILE_OF = Object.freeze({
   trades: 'quoted_service', cleaning: 'quoted_service', it_services: 'quoted_service', professional_services: 'quoted_service',
@@ -183,8 +203,24 @@ function _moduleSet(state, reason) {
  * @param {string} category  a C1 category with a provider-dashboard profile
  * @param {{isCreator?: boolean}} model
  */
+/* EDUCATION E2 — the education profile from the SERVER-STAMPED provider type (providers/{uid}.education.type, written
+   by application-lifecycle from the application category). Anything else (absent, unknown, a browser string) falls
+   back to the legacy 'learning' profile: it never selects another type's modules. */
+const EDUCATION_TYPES = Object.freeze(['teacher', 'institution']);
+function educationTypeOf(prov) {
+  const t = prov && prov.education && typeof prov.education === 'object' ? prov.education.type : null;
+  return EDUCATION_TYPES.includes(t) ? t : null;
+}
+function profileFor(category, model) {
+  if (category === 'education') {
+    const t = model && EDUCATION_TYPES.includes(model.educationType) ? model.educationType : null;
+    if (t) return 'education_' + t;
+  }
+  return PROFILE_OF[category];
+}
+
 function modulesForProfile(category, model) {
-  const profile = PROFILE_OF[category];
+  const profile = profileFor(category, model);
   const extras = profile ? PROFILES[profile] : [];
   const mods = {};
   for (const k of MODULE_KEYS) {
@@ -530,10 +566,12 @@ async function _categoryWorkspace(db, uid, prov, category) {
   } else {
     let isCreator = false;
     try { const c = await db.collection('creators').doc(String(uid)).get(); isCreator = c.exists && String((c.data() || {}).state || '') === 'ACTIVE'; } catch (_) { isCreator = false; }
-    modules = modulesForProfile(category, { isCreator });
+    modules = modulesForProfile(category, { isCreator, educationType: educationTypeOf(prov) });
   }
-  const notice = PROFILE_NOTICE[PROFILE_OF[category]] || null;
-  return { found: true, category, label: BCAT.label(category), route, state: STATE.AVAILABLE, reason: null, message: notice, modules, entitlement, publicEligibility: elig };
+  const notice = PROFILE_NOTICE[profileFor(category, { educationType: educationTypeOf(prov) })] || null;
+  return { found: true, category, label: BCAT.label(category), route, state: STATE.AVAILABLE, reason: null, message: notice, modules, entitlement, publicEligibility: elig,
+    /* EDUCATION E2: the server's answer names the provider type, so no screen ever infers it */
+    ...(category === 'education' ? { educationType: educationTypeOf(prov) } : {}) };
 }
 
 /** Throws failed-precondition unless `module` is AVAILABLE for this account — the server gate (C2b). */
@@ -630,4 +668,4 @@ const _h = {
   },
 };
 
-module.exports = { _applyServiceCaps, STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, PROFILE_NOT_BUILT, ROUTE_OF, modulesForProfile, notBuiltFor, healthcareModules, workspaceFor, approvalStateFor, capabilityFor, categoryFor, laneOf, homeFor, assertModule, gateCalendarModule, gateIfProvider, _h };
+module.exports = { educationTypeOf, profileFor, EDUCATION_TYPES, _applyServiceCaps, STATE, MODULES, MODULE_KEYS, CORE, PROFILES, PROFILE_OF, PROFILE_NOT_BUILT, ROUTE_OF, modulesForProfile, notBuiltFor, healthcareModules, workspaceFor, approvalStateFor, capabilityFor, categoryFor, laneOf, homeFor, assertModule, gateCalendarModule, gateIfProvider, _h };
