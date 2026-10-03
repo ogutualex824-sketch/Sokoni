@@ -135,6 +135,7 @@ window.SokoniAOS = (() => {
       security:      () => _loadSecurity(),
       hubs:          () => _loadHubs(),
       workflows:     () => _loadWorkflows(),
+      jobs:          () => window.SokoniAOSJobs && window.SokoniAOSJobs.load(),   /* Jobs J2 (sokoni-aos-jobs.js) */
     };
     loaders[s]?.();
   }
@@ -2479,6 +2480,7 @@ window.SokoniAOS = (() => {
   return {
     init,
     navigate:            _navigate,
+    toast:               (m, k) => _toast(m, k),
     reloadDashboard:     _loadDashboard,
     loadBookings:        _loadBookings,
     loadPayments:        _loadPayments,

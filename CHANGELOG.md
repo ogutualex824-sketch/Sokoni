@@ -1,3 +1,17 @@
+## [2026-10-03] — AdminOS › Jobs (J2 moderation workspace) — hosting source, NOT deployed
+
+**Summary:** A Jobs section in the ONE canonical `admin-os.html`: tabs for the review queue, changes requested,
+published, paused, closed, rejected, archived and drafts. Opening a vacancy shows its full text, its applications and
+counts by status, and the moderation trail. Admin actions call the audited server op (approve, request changes,
+reject, pause, restore, close, archive, feature, unfeature); a reason is required where the server requires it, and
+success is shown only after the server confirms.
+**Files:** `sokoni-aos-jobs.js` (new module), `admin-os.html` (nav item, panel, script), `sokoni-aos.js` (loader
+line, `toast` exposed), `scripts/test-aos-jobs-static.js` (17/0; button parity with the server's ADMIN_ACTIONS read
+from the J2 tree, failing closed when it is unavailable).
+**API:** consumes servicesDispatch `adminListJobs` / `adminGetJob` / `adminModerateJob` (functions/jobs-on-ca55f8b @ a515270).
+**Deploy:** ATOMIC with J2 functions (servicesDispatch + jobsExpirySweep). Before J2 is deployed the panel shows an
+honest error. NOT authorized; the Jobs rules hotfix ships first.
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;

@@ -349,6 +349,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       <div class="nav-group-label">Operations</div>
       <button class="nav-item" data-section="financial" data-label="Financial Center" onclick="SokoniAOS.navigate('financial');_closeSidebar()"><span class="nav-icon">&#x1F4B0;</span>Financial</button>
       <button class="nav-item" data-section="bookings" data-label="Bookings" onclick="SokoniAOS.navigate('bookings');_closeSidebar()"><span class="nav-icon">&#x1F4C5;</span>Bookings</button>
+      <button class="nav-item" data-section="jobs" data-label="Jobs" onclick="SokoniAOS.navigate('jobs');_closeSidebar()"><span class="nav-icon">&#x1F4BC;</span>Jobs</button>
       <button class="nav-item" data-section="payments" data-label="Payments" onclick="SokoniAOS.navigate('payments');_closeSidebar()"><span class="nav-icon">&#x1F4B3;</span>Payments</button>
       <button class="nav-item" data-section="support" data-label="Customer Support" onclick="SokoniAOS.navigate('support');_closeSidebar()"><span class="nav-icon">&#x1F3A7;</span>Support<span class="nav-badge" id="sidebarTicketBadge" hidden>0</span></button>
       <button class="nav-item" data-section="comms" data-label="Communications" onclick="SokoniAOS.navigate('comms');_closeSidebar()"><span class="nav-icon">&#x1F4E2;</span>Communications</button>
@@ -529,6 +530,12 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
         <div id="bookingsBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
+      <!-- Jobs (J2) — vacancy moderation; sokoni-aos-jobs.js over servicesDispatch adminListJobs / adminGetJob / adminModerateJob -->
+      <div class="aos-panel" id="panel-jobs" hidden>
+        <div class="panel-toolbar"><h2>Jobs</h2></div>
+        <div id="jobsAdminBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
       <!-- Payments (P2b) — collections via adminGetPayments -->
       <div class="aos-panel" id="panel-payments" hidden>
         <div class="panel-toolbar">
@@ -685,6 +692,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
     </div>
   </main>
   <script src="sokoni-aos.js"></script>
+  <script src="sokoni-aos-jobs.js"></script>
   <script>
     function _openSidebar()  { document.getElementById("aosSidebar").classList.add("open"); }
     function _closeSidebar() { document.getElementById("aosSidebar").classList.remove("open"); }
