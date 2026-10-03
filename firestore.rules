@@ -4137,8 +4137,9 @@ service cloud.firestore {
   allow delete: if isAdmin() || isOwner();
   }
   match /constructRFQs/{docId} {
-  allow read:   if resource.data.status == 'open'
-  || isAdmin()
+  /* CONSTRUCTION CONTAINMENT (sokoni-f3, owner 2026-10-03): an 'open' RFQ was readable by ANYONE, signed-out included,
+     exposing the buyer's name + phone. Owner and admin only. Construction RFQs move to the server RFQ authority. */
+  allow read:   if isAdmin()
   || (isAuthed() && resource.data.uid == request.auth.uid);
   allow create: if claimsOwner() && noAdminFields();
   allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());

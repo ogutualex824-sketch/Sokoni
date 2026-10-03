@@ -3,7 +3,8 @@
         RULES_FILE=firestore.rules.build FIRESTORE_PORT=<port> \
           firebase emulators:exec --only firestore --project demo-jobs-rules "node scripts/zz-test-jobs-rules.js"
    Baseline (LIVE): RULES_FILE=firestore.rules.served-f259c0b5 — JR-J1, JR-J2, JR-J3, JR-A1, JR-A2 and JR-P1 must FAIL
-   there (they are the live holes); the controls must PASS on both. */
+   there (they are the live holes); the controls must PASS on both. CR-1/CR-2 (construction open RFQ PII) must also FAIL
+   there. */
 'use strict';
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
 const fs = require('fs'), path = require('path');
@@ -54,6 +55,12 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await allows('JR-P3', 'CONTROL: seeker reads own profile', getDoc(doc(seek, 'jobSeekerProfiles/seek')));
   await allows('JR-P4', 'CONTROL: admin reads a profile', getDoc(doc(admin, 'jobSeekerProfiles/seek')));
   await denies('JR-P5', 'seeker writes own profile directly (server saveJobSeekerProfile only)', setDoc(doc(seek, 'jobSeekerProfiles/seek'), { cvUrl: 'javascript:alert(1)' }));
+  // construction containment (owner 2026-10-03): open RFQs were publicly readable with the buyer's name + phone
+  await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'constructRFQs/r1'), { uid: 'seek', status: 'open', name: 'Buyer', phone: '0700000000' }); });
+  await denies('CR-1', 'signed-out read of an OPEN construction RFQ (name + phone)', getDoc(doc(anon, 'constructRFQs/r1')));
+  await denies('CR-2', 'another signed-in user reads an open construction RFQ', getDoc(doc(att, 'constructRFQs/r1')));
+  await allows('CR-3', 'CONTROL: the RFQ owner reads it', getDoc(doc(seek, 'constructRFQs/r1')));
+  await allows('CR-4', 'CONTROL: admin reads it', getDoc(doc(admin, 'constructRFQs/r1')));
   await env.cleanup();
   console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('HARNESS ERROR (not a rules result):', e.message); process.exit(2); });

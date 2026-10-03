@@ -258,3 +258,14 @@ RC-8 covers that. Rows RC-1–RC-10 are in `zz-test-b2b-leads-rules.js`. **EMULA
    allowed and contentType is client-declared, so the server should verify file type. The callables store paths, never
    download URLs. Suite `scripts/zz-test-education-storage.js` (ES-P1–9, ES-M1–8; needs the storage + firestore
    emulators). **EMULATOR PENDING.**
+
+## 2026-10-03: Construction containment, open RFQ PII (owner "contain now")
+
+`constructRFQs` read was `status == 'open' || admin || owner`, so any open RFQ (with the buyer's name + phone) was readable
+by anyone, signed out included (verified on served f259c0b5). It is now `admin || owner`. The hunk is in the combined
+candidate AND in the hotfix file `firestore.rules.hotfix-jobs`. A rules release replaces the whole ruleset, so a second
+hotfix cut from served would revert the first; the two security fixes therefore ship as ONE narrow rules release. The
+hotfix diff vs served is now the three Jobs hunks + this one (44 lines). Rows CR-1–CR-4 are in `zz-test-jobs-rules.js`;
+baseline f259c0b5: CR-1/CR-2 must fail. **EMULATOR PENDING.** The rest of the construct* client-writable holes
+(constructOrders price/status, constructProviders status/rating, constructQuotations, constructReviews) stay for the
+full Construction build, which retires those collections behind server authorities.
