@@ -384,12 +384,15 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
 
   /* Atomic create — transaction reads convRef inside; concurrent calls are serialised. */
   let isNew = false;
+  /* (2f f890075) the callback re-runs on retry: isNew is reset each attempt, and t.create() makes the losing racer fail,
+     retry, see the document and take the existing path — exactly one caller creates (no get()+set()). */
   await db.runTransaction(async (t) => {
+    isNew = false;                /* never carry over from a lost attempt */
     const snap = await t.get(convRef);
-    if (snap.exists) { return; } /* Race lost — another concurrent call won */
+    if (snap.exists) { return; }  /* race lost — another concurrent call won */
     isNew = true;
 
-    t.set(convRef, {
+    t.create(convRef, {
       serverCreated:     true,          /* the ONLY trusted creator (security 2026-10-03) */
       transactionType,
       transactionId,

@@ -1,3 +1,10 @@
+## [2026-10-03] — messages.js merge (b2 copy = base, per sokoni-2f's lineage diff): item 1/5 — 2f f890075 concurrency fixes — NOT deployed
+
+- **Lineage (2f, read-only diff of live messagesDispatch gen 1787384541218290):** NEITHER copy is live — live messages.js is the common ancestor. The b2 copy is the base (closer to live, stricter product_enquiry, pre-claim repair); 2f's items are ported one per commit.
+- **f890075:** the b2 copy already had its party map, server derivation, refusals and existence-oracle guard. Ported now: the creation transaction resets `isNew` on every attempt and uses `t.create()` (exactly one racer creates; no get()+set()). The rules / sabotage hunks of f890075 are NOT ported here (rules = sokoni-f3).
+- **test-messages-participant-authority 51/0** (was 49/2 on every line): the fake transaction gains create() with real semantics; the 'no derivable parties' rows used `rfq`, which became derivable (B2B RFQ), so they now use `insurance_request` (still underivable).
+- **Regression:** messages-preclaim 5/0, product-enquiry 7/0, service-booking 7/0, jobs 8/0, work-engine 15/0.
+
 ## [2026-10-03] — Work/Job Engine: customer acceptance on the SERVER's scope version + accepted-terms snapshot; customer "request changes"; terms + documents — NOT deployed
 
 - **functions/shared/work-engine.js:**

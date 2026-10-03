@@ -58,6 +58,9 @@ function makeDb (docs) {
     runTransaction: async (fn) => fn({
       get: async (r) => snap(r._p),
       set: (r, v) => { writes.push({ op: 'set', path: r._p, data: v }); store.set(r._p, v); },
+      /* create() fails when the document already exists — the real Firestore semantics createConversation relies on
+         (2f f890075: exactly one racer creates) */
+      create: (r, v) => { if (store.has(r._p)) throw Object.assign(new Error('ALREADY_EXISTS ' + r._p), { code: 'already-exists' }); writes.push({ op: 'create', path: r._p, data: v }); store.set(r._p, v); },
       update: (r, v) => { writes.push({ op: 'update', path: r._p, data: v }); },
     }),
     _writes: writes, _store: store,
@@ -135,7 +138,8 @@ ck('order rider spelling would NOT be found on a packageRequest',
    M._partiesOf('logistics_request', { buyerUid: BUYER, assignedDriverUid: RIDER }).indexOf(RIDER) === -1);
 ck('duplicates collapse (same uid in two fields)',
    M._partiesOf('order', { uid: BUYER, buyerUid: BUYER, sellerUid: SELLER }).length === 2);
-ck('a type with no rules block is UNDERIVABLE (null, not empty)', M._partiesOf('rfq', {}) === null);
+/* rfq became derivable (B2B RFQ, rfqRecipients buyerUid / supplierOwnerUid) — insurance_request is still a type with no party map */
+ck('a type with no rules block is UNDERIVABLE (null, not empty)', M._partiesOf('insurance_request', {}) === null);
 ck('...and empty is distinct from underivable', Array.isArray(M._partiesOf('order', {})));
 
 /* ── 2-5. the callable ────────────────────────────────────────────────────── */
@@ -176,7 +180,7 @@ const PKG_DOCS = { 'packageRequests/p1': PKG };
   const ghost = await call(BUYER, { transactionType: 'order', transactionId: 'nope' }, ORDER_DOCS);
   ck('nonexistent transaction DENIED', !ghost.ok && ghost.code === 'not-found', ghost.code);
 
-  const norules = await call(BUYER, { transactionType: 'rfq', transactionId: 'x' }, { 'rfqs/x': { uid: BUYER } });
+  const norules = await call(BUYER, { transactionType: 'insurance_request', transactionId: 'x' }, { 'insuranceRequests/x': { uid: BUYER } });
   ck('type with no derivable parties REFUSED, not defaulted',
      !norules.ok && norules.code === 'failed-precondition', norules.code);
 
