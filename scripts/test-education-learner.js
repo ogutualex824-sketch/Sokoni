@@ -67,6 +67,11 @@ const OWN = (uid) => 'https://firebasestorage.googleapis.com/v0/b/x.appspot.com/
   r = await run('kid', { op: 'load' });
   ck('G-6', r.access.ageStatus === 'guardian_linked' && r.access.interactive === true, 'the linked learner now has interactive access', r.access);
   ck('G-7', !JSON.stringify(r).includes('adult'), 'the learner\'s own view never exposes the guardian\'s identity', r);
+  r = await run('adult', { op: 'guardianOf' });
+  ck('G-11', r.ok === true && r.learners.length === 1 && r.learners[0].learnerUid === 'kid' && r.learners[0].displayName === 'Wanjiru b' && !JSON.stringify(r).includes('guardianUid'),
+    'the guardian sees the learners THEY guard (uid + name only)', r);
+  r = await run('teacher1', { op: 'guardianOf' }, { provider: true });
+  ck('G-12', r.ok === true && r.learners.length === 0 && !JSON.stringify(r).includes('adult'), 'a teacher (or anyone else) lists nothing — guardian identity is never returned to them', r);
   r = await run('kid', { op: 'guardianCode' });
   ck('G-8', r.reason === 'ALREADY_LINKED', 'a linked learner cannot mint another code', r);
   r = await run('adult', { op: 'guardianCode' });

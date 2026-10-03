@@ -161,6 +161,19 @@ async function handle(req) {
     });
   }
 
+  /* The GUARDIAN's own view (rules deny raw guardianLinks reads to everyone but admins): the learners THIS caller
+     guards — learner uid + display name only. It is keyed on the caller, so no teacher, learner or stranger can list
+     anyone else's links, and nothing here ever returns a guardian's identity to anyone. */
+  if (op === 'guardianOf') {
+    const q = await db.collection('guardianLinks').where('guardianUid', '==', uid).where('status', '==', 'active').limit(20).get();
+    const out = [];
+    for (const x of q.docs) {
+      const lp = await db.collection('learnerProfiles').doc(String(x.data().learnerUid)).get();
+      out.push({ learnerUid: x.data().learnerUid, displayName: lp.exists ? (lp.data().displayName || null) : null });
+    }
+    return { ok: true, learners: out };
+  }
+
   if (op === 'guardianRevoke') {
     const isAdmin = !!(req.auth.token && (req.auth.token.admin === true || req.auth.token.superAdmin === true));
     const learnerUid = _str(d.learnerUid || uid, 128);
