@@ -1062,7 +1062,7 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
       return { id, from: f, to, rv, report: r };
     };
     const decided = [apply(reportId, ref, report, true)].concat(siblings.map((s) => apply(s.id, s.ref, s.r, false)));
-    return { report, decided, productHidden, enforcement, reviewResult, reviewKind: reviewTarget ? target.type : null,
+    return { report, decided, productHidden, enforcement, reviewResult, reviewKind: reviewTarget ? target.type : null, holdRef,
       result: { status: decided[0].to, moderationState: REPORT_STATE[decided[0].to] || null, productHidden, enforcement, promotionsChanged } };
   });
 
@@ -1101,6 +1101,15 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
     }
   }
 
+  /* MEDIA (owner decision 2026-10-03): a taken-down listing's photos are PRIVATE while the hold exists. After the commit,
+     the hold's media step vaults + strips the download tokens (take-down) or reinstates the SAME tokens (restore). It
+     never undoes the decision; a failure is recorded on the report and returned as failed, never as done — the retry is
+     tsRetryModerationMedia. */
+  if (['listing_hidden', 'already_hidden', 'listing_restored'].includes(out.enforcement)) {
+    res.mediaHold = await _mediaStep(db, out.enforcement === 'listing_restored' ? 'release' : 'apply', String(out.report.entityId),
+      out.enforcement === 'already_hidden' ? null : out.holdRef, correlationId, uid, head.id);
+  }
+
   // Ban the reported entity (user) if requested — only superAdmin can auto-ban; only on an upheld USER report
   if (data.banUser && isSuper && out.report.entityType === 'user' && newStatus === 'actioned') {
     await db.collection('users').doc(String(out.report.entityId)).update({
@@ -1118,6 +1127,47 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
   }
   if (isRestore) res.notifications = await _notifyRestore(db, out.decided[0], correlationId);
   return res;
+});
+
+/* ── MODERATION MEDIA — the hold's photos (functions/moderation-media.js). The download token is a bearer credential:
+   it is only ever in moderationMediaVault (server-only). The report records counts and states, never a token or path. ── */
+let _media = null;
+function _mediaModule() { return _media || (_media = require('./moderation-media')); }
+async function _mediaStep(db, op, productId, holdRef, correlationId, actorUid, reportId) {
+  let r;
+  try {
+    const M = _mediaModule();
+    r = await (op === 'release' ? M.releaseMediaHold : M.applyMediaHold)({ db, FieldValue }, { productId, holdRef, correlationId, actorUid });
+  } catch (e) {
+    r = { status: 'failed', reason: String((e && e.code) || 'error').slice(0, 40), objects: null };
+  }
+  const rec = Object.assign({ op, correlationId, at: FieldValue.serverTimestamp() }, r);
+  if (reportId) {
+    try { await db.collection('reports').doc(reportId).update({ [op === 'release' ? 'mediaRelease' : 'mediaHold']: rec }); }
+    catch (_) { /* the result stands in the response and the audit; a missing record reads as "not recorded" */ }
+  }
+  return Object.assign({ op }, r);
+}
+
+/* tsRetryModerationMedia — admin: re-run the media step of THIS report's hold. Held by this report's holdRef → apply
+   (vault + strip, idempotent); hold lifted → release (reinstate the vaulted tokens). Anything else is refused. */
+exports.tsRetryModerationMedia = onCall(OPT, async (req) => {
+  _requireAdmin(req);
+  const reportId = _safeId((req.data || {}).reportId, 300);
+  if (!reportId) throw new HttpsError('invalid-argument', 'reportId is required.');
+  const db = getFirestore();
+  const rs = await db.collection('reports').doc(reportId).get();
+  if (!rs.exists) throw new HttpsError('not-found', 'Report not found.');
+  const r = rs.data() || {};
+  if (_targetOf(r.entityType).enforcement !== 'listing_visibility' || !r.holdRef || !r.entityId) {
+    throw new HttpsError('failed-precondition', 'This report did not take a listing down, so it has no media hold.');
+  }
+  const ps = await db.collection('products').doc(String(r.entityId)).get();
+  const hold = ps.exists ? (ps.data() || {}).moderationHold : null;
+  if (hold && hold.ref !== r.holdRef) throw new HttpsError('failed-precondition', 'The listing is held by a different report. Retry from that report.');
+  const correlationId = crypto.randomBytes(9).toString('hex');
+  const out = await _mediaStep(db, hold ? 'apply' : 'release', String(r.entityId), r.holdRef, correlationId, req.auth.uid, reportId);
+  return { success: true, mediaHold: out, correlationId };
 });
 
 /* Plain text only — notify() may place `body` inside an email; a product name is seller-controlled. */
