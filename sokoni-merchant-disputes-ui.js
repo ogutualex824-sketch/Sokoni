@@ -252,6 +252,18 @@
           'Nothing has been reported. Accurate photos, prices and descriptions keep it that way.</div></div>';
       }
       return '<div class="mdp-body">' + head + S.reports.map(function (r) {
+        /* 2026-10-03: a report about a REVIEW of this seller's listing — the server sends STATUS ONLY (no reason, no
+           review text, no writer, no reporter, no outcome note), so that is all this card can show */
+        if (r.subject === 'review_on_your_listing') {
+          var rs = SELLER_STATUS[r.sellerStatus] || { label: 'Status unknown', tone: 'wait' };
+          var rl = r.listingType === 'product' && r.listingId ? 'product.html?id=' + encodeURIComponent(r.listingId) : null;
+          return '<div class="mdp-card" style="cursor:default">' +
+            '<div class="mdp-hd"><div class="info"><div class="mdp-nm">A ' + (r.entityType === 'unboxing' ? 'unboxing review' : 'review') + ' on your listing was reported</div>' +
+            '<div class="mdp-sub">SOKONI moderates reviews. Who reported it is never shown' + (r.createdAt ? ' · ' + esc(String(r.createdAt).slice(0, 10)) : '') + '</div></div></div>' +
+            '<div class="mdp-status ' + rs.tone + '">' + esc(rs.label) + '</div>' +
+            (rl ? ' <a class="mdp-btn ghost" style="min-height:44px;margin-top:10px" href="' + esc(rl) + '">View listing</a>' : '') +
+          '</div>';
+        }
         var st = SELLER_STATUS[r.sellerStatus]
           || (r.productHidden ? { label: 'Listing taken down', tone: 'action' } : (REPORT_STATE[r.moderationState] || { label: 'Status unknown', tone: 'wait' }));
         var decided = r.moderationState && r.moderationState !== 'pending';

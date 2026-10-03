@@ -12,6 +12,9 @@
      act     tsReviewReport  { reportId, action, resolution, internalNote, hideProduct, applyToListing,
                                restoreListing, requestId, expectedRevision }
      reasons tsGetReportReasons { entityType:'product' } (the reason filter — the server's list, no client copy)
+   Review / unboxing reports (2026-10-03): the case carries the server's `review` (status, excerpt, target link); an
+   uphold REMOVES the review and a restore sends it back to PENDING — both done by the server through the review owner's
+   shared module. The console only labels the server's actions for that target; it never decides what they do.
    This file holds NO business state, NO reason list, NO transition table and NO status vocabulary of its own:
    the server derives queueStatus and the allowed actions; a status it does not recognise is shown as unknown and
    offers nothing. A decision is shown only after the server returns. A failed read says so — never an empty
@@ -77,6 +80,16 @@
        (e.g. SELLER_SUSPENDED) and says which — that message is shown as worded. */
     restore:         { l: 'Restore listing',               c: 'warn', done: 'Listing restored', note: 'internal10' },
   };
+  /* the same server actions, worded for a REVIEW target (enforcement 'review_removal'): the server decides what they do */
+  var REVIEW_ACTION = {
+    approve: { l: 'Uphold + remove review', c: 'bad',  done: 'Report upheld — review removed' },
+    restore: { l: 'Restore review (back to pending)', c: 'warn', done: 'Review sent back to pending re-review', note: 'internal10' },
+    /* nobody outside moderation is told about a review report's outcome — the note stays on the report */
+    request_changes: { l: 'Request information', c: 'warn', done: 'Report marked as needing information', note: 'any' },
+  };
+  function isReviewType(t) { return t === 'review' || t === 'unboxing'; }
+  /* the review's listing link — only the two relative shapes the server builds, anything else is dropped */
+  function safeHref(h) { return typeof h === 'string' && /^(product|seller-public)\.html\?id=[A-Za-z0-9%_.~-]{1,300}$/.test(h) ? h : null; }
   /* review assignment — not a decision; never changes the report status */
   var ASSIGN = {
     claim:    { l: 'Take under review', done: 'You have this report under review' },
@@ -257,6 +270,10 @@
 
     function title(r) {
       var c = r.context || {};
+      if (isReviewType(r.entityType)) {
+        var ex = typeof c.excerpt === 'string' && c.excerpt ? '“' + (c.excerpt.length > 60 ? c.excerpt.slice(0, 60) + '…' : c.excerpt) + '”' : (r.entityId || '');
+        return (r.entityType === 'unboxing' ? 'Unboxing review' : 'Review') + ' · ' + ex;
+      }
       return r.entityType === 'product' ? (c.productName || r.entityId || 'Product') : (r.entityType || 'report') + ' · ' + (r.entityId || '');
     }
     function hidden(r) { var f = r.facts || {}; return f.listingVisible === false || r.productHidden === true; }
@@ -291,8 +308,11 @@
       return '<button type="button" class="stq-row" data-act="open" data-i="' + i + '" aria-label="' + esc('Open report ' + (r.ref || '') + ' — ' + title(r)) + '">' +
         '<span class="t">' + esc(title(r)) + '</span>' +
         '<span class="a">' + esc(r.severity || '—') + '</span>' +
-        '<span class="s">' + esc(r.reason || '—') + ' · ref ' + esc(r.ref || '—') + ' · listing ' + esc(r.entityId || '—') +
-          ' · seller ' + esc(short(c.sellerUid)) + (c.shopId ? ' · shop ' + esc(c.shopId) : '') + '</span>' +
+        (isReviewType(r.entityType)
+          ? '<span class="s">' + esc(r.reason || '—') + ' · ref ' + esc(r.ref || '—') + ' · review of ' + esc(c.listingType || '—') + ' ' + esc(c.listingId || '—') +
+            (typeof c.rating === 'number' ? ' · ' + esc(String(c.rating)) + '★' : '') + '</span>'
+          : '<span class="s">' + esc(r.reason || '—') + ' · ref ' + esc(r.ref || '—') + ' · listing ' + esc(r.entityId || '—') +
+            ' · seller ' + esc(short(c.sellerUid)) + (c.shopId ? ' · shop ' + esc(c.shopId) : '') + '</span>') +
         '<span class="m"><span class="stq-pill ' + s.t + '">' + esc(s.l) + '</span>' +
           '<span class="stq-pill">' + esc(r.entityType || '—') + '</span>' +
           (r.entityType === 'product' ? '<span class="stq-pill ' + (f.listingVisible === null || f.listingVisible === undefined ? '' : (hidden(r) ? 'bad' : 'ok')) + '">' +
@@ -338,7 +358,8 @@
       return '<ol class="stq-tl">' + h.map(function (x) {
         var what = x.action === 'report_filed' ? 'Report filed'
           : x.action === 'report_claimed' ? 'Taken under review' : x.action === 'report_unclaimed' ? 'Released'
-          : x.action === 'report_reopened' ? 'Reopened' : x.action === 'listing_restored' ? 'Listing restored' : 'Decision: ' + (x.decision || '—');
+          : x.action === 'report_reopened' ? 'Reopened' : x.action === 'listing_restored' ? 'Listing restored'
+          : x.action === 'review_restored' ? 'Review sent back to pending re-review' : 'Decision: ' + (x.decision || '—');
         return '<li><b>' + esc(what) + '</b>' + (x.from && x.result && x.from !== x.result ? ' · ' + esc(x.from) + ' → ' + esc(x.result) : '') +
           (x.enforcement && x.enforcement !== 'none' ? ' · <span class="stq-pill bad">' + esc(x.enforcement.replace(/_/g, ' ')) + '</span>' : '') +
           (x.groupSize > 1 ? ' · <span class="stq-pill">with ' + (x.groupSize - 1) + ' other report(s)</span>' : '') +
@@ -407,6 +428,26 @@
           '<button type="button" class="stq-btn" data-act="history">View history</button></div>';
         }
       }
+      if (isReviewType(r.entityType)) {
+        /* the review as the SERVER reads it now (tsGetReportCase.review) — admins only */
+        var rv = K.review;
+        body += '<div class="stq-lbl">' + (r.entityType === 'unboxing' ? 'Unboxing review' : 'Review') + '</div>';
+        if (!rv) body += '<div class="stq-box">—</div>';
+        else if (rv.exists === false) body += '<div class="stq-box">This review no longer exists (' + esc(rv.id) + ').</div>';
+        else {
+          var href = safeHref(rv.listingHref);
+          body += '<div class="stq-box">' + esc(rv.excerpt || '(no text)') + '</div>' +
+            (rv.excerptAtReport && rv.excerptAtReport !== rv.excerpt ? '<div class="stq-kv" style="margin-top:6px"><span>When reported</span><span>' + esc(rv.excerptAtReport) + '</span></div>' : '') +
+            '<div class="stq-kv" style="margin-top:8px">' +
+              '<span>Review status</span><span><span class="stq-pill ' + (rv.status === 'removed' ? 'bad' : (rv.status === 'approved' ? 'ok' : 'wait')) + '">' + esc(rv.status || '—') + '</span></span>' +
+              '<span>Rating</span><span>' + (typeof rv.rating === 'number' ? esc(String(rv.rating)) + ' ★' : '—') + '</span>' +
+              '<span>About</span><span>' + esc(rv.listingType || '—') + ' · ' + esc(rv.listingId || '—') + '</span>' +
+              '<span>Written by</span><span>' + esc(rv.authorUid || '—') + ' <span class="stq-pill">admins only</span></span>' +
+              '<span>Last moderated</span><span>' + (rv.moderatedBy ? 'by ' + esc(short(rv.moderatedBy)) + ' · ' + esc(rv.moderatedAtIso ? whenIso(rv.moderatedAtIso) : '—') : '—') + '</span>' +
+            '</div>' +
+            (href ? '<div class="stq-acts" style="margin-top:8px"><a class="stq-btn" href="' + esc(href) + '" target="_blank" rel="noopener">View ' + (rv.listingType === 'seller' ? 'seller' : 'listing') + '</a></div>' : '');
+        }
+      }
       var others = (K.reports || []).filter(function (x) { return !x.self; });
       body += '<div class="stq-lbl">All reports on this ' + (r.entityType === 'product' ? 'listing' : 'target') + ' (' + ((K.reports || []).length || 1) + ')</div>' +
         (others.length ? '<ol class="stq-tl">' + others.map(function (x) {
@@ -421,7 +462,10 @@
         '<span>When</span><span>' + esc(r.reviewedAtIso ? whenIso(r.reviewedAtIso) : '—') + '</span>' +
         '<span>Outcome note</span><span>' + esc(r.resolution || '—') + '</span>' +
         '<span>Internal note</span><span>' + esc(r.internalNote || '—') + '</span>' +
-        '<span>Listing</span><span>' + (r.productHidden ? 'taken down by moderation' : '—') + '</span>' +
+        (isReviewType(r.entityType)
+          ? '<span>Review</span><span>' + esc(({ review_removed: 'removed by this report', already_removed: 'was already removed', review_missing: 'no longer existed',
+              review_restored: 'sent back to pending re-review' })[r.reviewEnforcement] || '—') + '</span>'
+          : '<span>Listing</span><span>' + (r.productHidden ? 'taken down by moderation' : '—') + '</span>') +
         (r.escalation ? '<span>Escalated</span><span>by ' + esc(short(r.escalation.by)) + (r.escalation.note ? ' — ' + esc(r.escalation.note) : '') + ' · next: senior review</span>' : '') +
         '</div>' +
         '<div class="stq-lbl">Notifications</div>' + notifHTML(r.notifications) +
@@ -438,7 +482,9 @@
         foot = (assign.length ? '<div class="stq-acts">' + assign.map(function (a) {
             return '<button type="button" class="stq-btn acc" data-act="assign" data-v="' + a + '"' + (S.busy ? ' disabled' : '') + '>' + esc(ASSIGN[a].l) + '</button>';
           }).join('') + '</div>' : '') +
-          (dec.length ? '<label class="stq-lbl" for="stqNote" style="margin:0">Message to the seller (shown on their listing once decided; required to request information)</label>' +
+          (dec.length ? '<label class="stq-lbl" for="stqNote" style="margin:0">' + (isReviewType(r.entityType)
+              ? 'Outcome note (kept on the report — for a review it is NOT shown to the seller or to the writer)'
+              : 'Message to the seller (shown on their listing once decided; required to request information)') + '</label>' +
             '<textarea id="stqNote" class="stq-ta" data-f="note" maxlength="500">' + esc(S.note) + '</textarea>' +
             '<label class="stq-lbl" for="stqINote" style="margin:0">Internal note (moderators only — never sent to the seller)</label>' +
             '<textarea id="stqINote" class="stq-ta" data-f="inote" maxlength="1000">' + esc(S.inote) + '</textarea>' +
@@ -447,7 +493,7 @@
             (K.listingHeldByThisReport && dec.indexOf('dismiss') >= 0
               ? '<label class="stq-chk"><input type="checkbox" data-f="restore"' + (S.restore ? ' checked' : '') + '> On dismiss, restore the listing this report took down</label>' : '') +
             '<div class="stq-acts">' + dec.map(function (a) {
-              var A = ACTION[a];
+              var A = actOf(a);
               return '<button type="button" class="stq-btn ' + A.c + '" data-act="decide" data-v="' + a + '"' + (S.busy ? ' disabled' : '') + '>' + esc(A.l) + '</button>';
             }).join('') + '</div>' : '') +
           (S.opErr ? '<div class="stq-err" role="alert">' + esc(S.opErr) + '</div>' : '') +
@@ -503,7 +549,10 @@
       return call('tsReviewReport', payload).then(function (res) {
         S.busy = false; S.intent = null;
         var extra = res && res.resolvedReports > 1 ? ' (' + res.resolvedReports + ' reports on this listing)' : '';
-        var enf = res && res.enforcement === 'listing_restored' ? ' — listing restored' : '';
+        var enf = res && res.enforcement === 'listing_restored' ? ' — listing restored'
+          : (res && res.enforcement === 'already_removed' ? ' — the review was already removed' : (res && res.enforcement === 'review_missing' ? ' — the review no longer exists' : ''));
+        /* the ratings recompute runs after the decision: a failure is said, never hidden */
+        if (res && res.ratingsSummary && res.ratingsSummary.status === 'failed') enf += ' (the listing rating could not be recalculated)';
         /* an uphold WITHOUT take-down can still report a hidden listing (already held by an earlier report) */
         var held = !payload.hideProduct && payload.action === 'approve' && res && res.productHidden ? ' — product taken down' : '';
         toast(done + extra + enf + held, 'success');
@@ -525,8 +574,13 @@
       if (a === 'takeover') payload.takeover = true;
       return send(payload, ASSIGN[a].done);
     }
+    /* the label for a server action on THIS report's target (a review uphold removes the review) */
+    function actOf(a) {
+      var t = (S.kase && S.kase.target && S.kase.target.type) || (S.open && S.open.entityType);
+      return (isReviewType(t) && REVIEW_ACTION[a]) || ACTION[a];
+    }
     function decide(a) {
-      var A = ACTION[a]; if (!A || !S.open || S.busy) return;
+      var A = actOf(a); if (!A || !S.open || S.busy) return;
       var note = S.note.trim(), inote = S.inote.trim();
       if (A.note === 'seller' && note.length < 2) { S.opErr = 'Write a note first — "' + A.l + '" needs a reason on record (the message to the seller).'; paint(); return; }
       if (A.note === 'any' && note.length < 2 && inote.length < 2) { S.opErr = 'Write a note first — "' + A.l + '" needs a reason on record.'; paint(); return; }
@@ -574,5 +628,5 @@
     return { reload: load, state: function () { return S; }, destroy: function () { host.innerHTML = ''; } };
   }
 
-  return { mount: mount, STATE: STATE, QSTATUS: QSTATUS, VIEWS: VIEWS, OFFER: OFFER, ACTION: ACTION, ASSIGN: ASSIGN };
+  return { mount: mount, STATE: STATE, QSTATUS: QSTATUS, VIEWS: VIEWS, OFFER: OFFER, ACTION: ACTION, REVIEW_ACTION: REVIEW_ACTION, ASSIGN: ASSIGN };
 }));
