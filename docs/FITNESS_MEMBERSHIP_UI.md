@@ -23,12 +23,13 @@ Selling is **OFF** until every release gate is green. Related: [[Fitness Hub]] �
 | File | Role |
 |---|---|
 | `sokoni-fitness-memberships.js` | Gym module, mounted in the provider workspace. It also exports the shared core (`SokoniFitnessMemberships._core`). |
+| `sokoni-edit-authority.js` | P0-F edit decision (pure, shared byte-identical with the Construction and provider-session branches). Must load before the gym module. |
 | `sokoni-fitness-member.js` | Member page logic: list, QR, refund request and the flag-gated buy flow. |
 | `fitness-memberships.html` | The "My memberships" page. It loads `shared-header.js` and `sw-register.js`. With `?provider=<id>` it also lists that gym's plans. |
 | `fitness-hub.html` | Two plain `<a href="fitness-memberships.html">` links, one under Progress and one under My Gym. |
 | `sokoni-aos-fitness.js` | AdminOS "Fitness Memberships" workspace: `window.SokoniAOSFitness.mount(el)`. Self-contained. |
 | `scripts/fixtures/fitness-api-fixtures.json` | Copy of the generated server contract (see above). Do not edit by hand. |
-| `scripts/test-fitness-memberships-ui.js` | Node/vm suite driven by the fixtures: 51 rows (FX-SYNC and OF-DEF are source rows) plus 6 negative controls. |
+| `scripts/test-fitness-memberships-ui.js` | Node/vm suite driven by the fixtures: 63/0 with 11/11 negative controls (incl. G-1b, G-SCAN and the RO read-only rows). |
 | `scripts/test-aos-fitness.js` | Node/vm suite for the AdminOS view: 16 rows plus 3 negative controls. |
 | `scripts/test-fitness-memberships-browser.js` | Browser certification at 390 and 1280, now fixture-driven, with FMB8a (review step) and FMB10 (offer editor). **QUEUED, not run.** |
 | `scripts/test-fitness-containment.js` | F0 suite, extended with FT-15 (plain link) and FT-16 (the hub page still starts no payment). |
@@ -56,6 +57,27 @@ Selling is **OFF** until every release gate is green. Related: [[Fitness Hub]] �
   - the answer lacks `memberships`;
   - the module reports any other state.
 - A later `sokoni:workspace` event re-evaluates. An answer without the module unmounts it, so the module fails closed.
+- **Owner invariant (2026-10-03): application status is WORKFLOW, not authorization.** Visibility is `modules.memberships.state`
+  ONLY — no application or provider field (status, `adminApproved`, `approvedBy`, `verified`) is read for approval, and
+  the module makes no second visibility call. Row G-1b (control k) and the source check in G-1b prove it.
+  `fitnessScannerStatus` is called in ONE place and feeds only the scan button (row G-SCAN).
+
+**Read-only mode (P0-F, owner 2026-10-03).** Deactivated / suspended / frozen owners cannot edit providers (f3 `1896712`),
+so the editor and scanner never offer an action the server refuses. The decision is `sokoni-edit-authority.js` over
+the SAME workspace answer (`window.__sokoniWorkspace` / the latest `sokoni:workspace` detail) plus the ID-token claims:
+
+| Answer | Result |
+|---|---|
+| `editable === true` (sokoni-5b `1a5c9e5`) | editor + scanner enabled — wins over the interim signals |
+| `editable` false / missing / non-boolean | read-only; reason from `ownerState`: frozen → "frozen by SOKONI", suspended → "suspended", deactivated → "deactivated — reactivate your account" (+ link to `/profile.html`), unknown → "status unknown" |
+| old server (no `ownerState`) | still read-only; reason: claim `deactivated === true` → deactivated; `approval.state !== 'VALID_APPROVAL'` → approval; otherwise "status unknown" |
+| edit authority not loaded | read-only (fails closed) |
+
+Read-only means: every offer button (Add / defaults / Edit / Pause / Activate / Save) is rendered disabled and the editor
+is closed; **SCAN MEMBER QR** is disabled with the reason, `fitnessScannerStatus` is not called, an open camera is
+stopped, and a pasted check-in is refused before `fitnessCheckIn`. Each line reads "Your account can't make changes right
+now (<reason>)". A later `sokoni:workspace` answer flips the state in place. Rows RO-1, RO-1b, RO-OLD, RO-OVR, RO-2,
+RO-3, RO-4; controls i (fails open on missing editable → RO-OLD) and j (authority missing → RO-3).
 
 **Scanner access.**
 - `fitnessScannerStatus()` sets only the **SCAN MEMBER QR** enable state and its reason:
@@ -126,8 +148,9 @@ In `P.show`, after the `leads` line:
 ```js
     if(id==='memberships'&&window.SokoniFitnessMemberships)SokoniFitnessMemberships.mount(_q('mbList'));
 ```
-Script, next to `sokoni-leads.js`:
+Script, next to `sokoni-leads.js` (the edit authority FIRST — without it the module is read-only):
 ```html
+<script src="sokoni-edit-authority.js" defer></script>
 <script src="sokoni-fitness-memberships.js" defer></script>
 ```
 
@@ -312,4 +335,7 @@ This adds one sidebar parent in the existing **Commerce** group, next to Service
 8. **AdminOS wiring.** The diffs above go onto `hosting/chain-on-3e8dd53` (owner of the AdminOS layout), together with `sokoni-aos-fitness.js`. They are not applied here. After wiring, run `scripts/test-adminos-nav-coverage.js` there.
 9. **Admin reads.** The `isAdmin()` reads on `providerMemberships`, its `attendance` / `events` / `releases` subcollections and `providerPayouts` are in the candidate rules. They are not proven here (emulator QUEUED).
 10. **`adminUpdateFeatureFlag` hardening (functions lane).** Suggest requiring a boolean `enabled` and not resetting `description` / `rolloutPct` / `enabledForRoles` on a partial call. Until then, every UI caller must pass `enabled` explicitly, as this view does.
+12. **`ownerState` + `editable`** on the businessWorkspace answer (sokoni-5b `1a5c9e5`, `feat/education-workspace-on-d377b28`)
+    and the ONE approval authority (5b `f85039a`). Until `1a5c9e5` is live the field is absent and the offer editor and
+    scanner are read-only for every gym (owner rule: anything other than `editable === true` is read-only).
 11. **Audit method.** `adminAudit` check-in rows carry no `method`. If the owner wants it in the audit list, e3 can add `method:'qr'` to `_audit()`.

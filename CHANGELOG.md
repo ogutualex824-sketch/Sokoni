@@ -1,3 +1,22 @@
+## [2026-10-03] - Fitness gym module: approval = modules state only + read-only mode for offers and scanner (P0-F) (NOT deployed)
+
+**Owner invariant (2026-10-03):** application status is WORKFLOW, not authorization. Verified: visibility is
+`modules.memberships.state === 'AVAILABLE'` only; no status / `adminApproved` / `approvedBy` / `verified` is read;
+`fitnessScannerStatus` feeds only the scan button. **DEPENDENCY:** sokoni-5b `f85039a` + `1a5c9e5` (`ownerState`/`editable`);
+until `1a5c9e5` is live the editor and scanner are read-only for every gym (owner rule).
+
+- **Read-only:** new shared `sokoni-edit-authority.js` over the same workspace answer + ID-token claims. Offer
+  add/default/edit/pause/activate/save rendered disabled, scanner disabled (no `fitnessScannerStatus` call, camera
+  stopped), each with "Your account can't make changes right now (<reason>)" (+ reactivate link); every write and
+  check-in re-checks before calling the server; a later `sokoni:workspace` answer re-evaluates in place.
+- **Tests:** UI suite 54/0 (8/8) → 63/0 (11/11): G-1b, G-SCAN, RO-1 (every ownerState × editable true/false/missing/"true"),
+  RO-1b, RO-OLD, RO-OVR, RO-2, RO-3, RO-4; controls i (fails open on missing editable → RO-OLD), j (authority missing →
+  RO-3), k (visibility from adminApproved → G-1b). Unchanged: containment 16/0, aos-fitness 16/0 (3/3). Browser harness
+  updated (edit authority + editable answer) but NOT run — QUEUED (RAM floor).
+- **DB / API / rules / functions:** none. **Files:** `sokoni-fitness-memberships.js`, `sokoni-edit-authority.js` (new),
+  `scripts/test-fitness-memberships-ui.js`, `scripts/test-fitness-memberships-browser.js`, `docs/FITNESS_MEMBERSHIP_UI.md`,
+  `CHANGELOG.md`. The b2 `provider-dashboard.html` diff in the doc now includes the `sokoni-edit-authority.js` script tag.
+
 ## [2026-10-03] - Fitness offer editor: orphan-service cleanup kept and narrowed (owner decision; NOT deployed)
 
 The owner decided to keep the cleanup: when the server drops the membership fields from a NEW offer, the editor archives the plain service that attempt created, so a membership price can never become a bookable one-off service. It is scoped to that new service only. An edit of an existing service never removes anything. If the removal fails, the gym is told a plain service exists and must be archived, never "Nothing was published". **Files:** `sokoni-fitness-memberships.js` (removal-failure copy), `scripts/test-fitness-memberships-ui.js` (rows OF-ORPHAN, OF-RMFAIL, OF-EDIT-KEEP; controls g/h), `docs/FITNESS_MEMBERSHIP_UI.md`. **Tests:** UI suite 54/0, controls 8/8. **DB / API / rules:** none.
