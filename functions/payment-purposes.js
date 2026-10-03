@@ -650,6 +650,21 @@ const PURPOSES = {
   },
   /* ── Car Hub vehicle boosts (owner 2026-10-03) — priced from vehicle-boosts.catalogue (code seed + AdminOS override),
      never from the request. A single boost needs the listing; a bundle buys 7-day credits for the buyer's account. ── */
+  /* ── B2B lead invoice Pay Now (owner 2026-10-03) — the supplier owner pays EVERY outstanding issued lead invoice.
+     Amount = b2b-leads.payNowAmount (server read), never the request. The verified webhook applies it through the same
+     prepare/commit recovery path as a settlement deduction (claim per payment per invoice). Platform revenue. ── */
+  b2b_lead_invoice: {
+    resourceType: 'b2bLeadInvoice',
+    async price(uid) {
+      const due = await require('./b2b-leads').payNowAmount(db(), uid);
+      if (!(due.amountKES >= 1)) fail('failed-precondition', 'You have no lead invoice to pay.');
+      return {
+        amountCents: Math.round(due.amountKES * 100), currency: 'KES', resourceType: 'b2bLeadInvoice', resourceId: uid,
+        metadata: { invoiceKeys: due.invoiceKeys.slice(0, 50), amountKES: due.amountKES },
+      };
+    },
+  },
+
   vehicle_boost: {
     resourceType: 'vehicleBoost',
     async price(uid, data) {

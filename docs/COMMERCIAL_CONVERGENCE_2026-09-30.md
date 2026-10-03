@@ -798,3 +798,35 @@ No duplicate authority was found on the money side.
 - Amended for the owner decision: 48h-destinations 87/0, 5pct-agreement 62/0, schedule 26/0 (client snapshot `sokoni-commission-rates.js` rebuilt).
 - commercial-facts 1c amended for vehicles 2% (stale since 9cab901).
 - Failures identical on base `09964a2`: commercial-facts 3b, commission-balance-ui ×2.
+
+## 17 · B2B lead invoice recovery: settlement deduction, Pay Now, overdue gate (owner 2026-10-03; agreed with sokoni-f3 / sokoni-5b)
+
+**When an invoice becomes owed.** The receivable opens at the **successful** issue:
+- `b2bLeadMonths.outstandingKES` = net + 16% VAT (tax engine), `paidKES` = 0.
+- A failed or deferred eTIMS attempt opens nothing, so the 2-day clock starts at `issuedAtMs` of the real issue.
+
+**One recovery path, two callers** (claims in `b2bLeadRecoveries`):
+- **Settlement deduction:** at release of a buyer-paid B2B order (5b owns hold/release and supplies the hook), the supplier payout is reduced by min(outstanding, settlement), oldest invoice first. The buyer is never touched. Claim `leaddeduct_<settlementId>_<invoiceKey>`.
+- **Pay Now:** purpose `b2b_lead_invoice`, priced from `payNowAmount` (the server balance), self-settling, platform revenue. The verified webhook applies it on the early intent read. Claim `leadpay_<ref>_<invoiceKey>`. A surplus (balance recovered meanwhile) goes to `b2bLeadOverpayments` for admin review and is never auto-credited.
+
+**Read/write split** (Firestore: all reads before writes):
+- `prepareLeadDeduction(t, db, {settlementId, billToUid, settlementKES})` (or `preparePayment`): discovers candidate invoice ids outside the transaction, then `t.get()`s every invoice **and** this operation's claim inside it. Amounts come only from those reads.
+- `commitLeadDeduction(t, state)`: `create()` per claim, decrement `outstandingKES`, set status `paid` at 0. Returns `{deductedKES, replayedKES, totalRecoveredKES, netKES, lines}`.
+- **Retries:** a retry of the same settlement recovers 0 more and returns the **same** net.
+- **Late changes:** a Pay Now that commits between discovery and the release is re-read as 0. An invoice issued after discovery carries forward.
+- **Reversals:** a refund or void of the B2B order after a deduction does **not** reverse it (owner policy required).
+
+**Gate:** `leadInvoiceGate(db, uid, nowMs)` → `{overdue, overdueKES, invoiceKeys, since, enforce:false}`.
+- **Overdue:** issued more than 2 days ago and still outstanding.
+- **Owner of both ends:** 2f owns the producer and the consumer (a second reason inside evaluateMerchantGate/assertGateOpen on the gated POS line, with its own card).
+- **Enforcement:** it starts enforcing only after the Pay Now is certified.
+
+**Tests:** `scripts/test-b2b-lead-recovery.js` 16/0.
+- **Mutants:** dropping the claim read fails D3; trusting discovery amounts instead of the in-transaction re-read fails D4.
+
+## 18 · Education commission (owner 2026-10-03, via sokoni-5b)
+
+- **Rate:** `RATES.education` is 5% (was 15%, "category only", never owner-set), paid by the teacher or institution once per sale and never added on top for the learner.
+- **Plan discounts:** education is added to `FLAT_BOOKING_CATEGORIES`, so no plan moves it.
+- **Plans:** education plans arrive from 5b with the owner's prices (`hubType 'education'`).
+- **Snapshot:** client snapshot rebuilt.

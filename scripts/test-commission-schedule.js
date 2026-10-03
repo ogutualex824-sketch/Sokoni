@@ -64,7 +64,7 @@ const SPEC = [
   ['Entertainment bookings',      ['entertainment_bookings'],                     5, 0],
   ['Legal bookings',              ['legal'],                                      5, 0],
   ['Other service bookings',      ['services', 'fitness', 'insurance'],           5, 0],
-  ['Education',                   ['education'],                                 15, 0],
+  ['Education',                   ['education'],                                  5, 0],   /* owner 2026-10-03: 5% paid by teacher/institution (was 15%) */
   ['Car Hub vehicle sales (2%)',  ['vehicles', 'car_hub', 'car_dealer'],         2, 0],   /* owner 2026-10-03: 2% of the sale price (was KES 2,000 flat) */
   ["SOKONI's own plans",          ['subscriptions', 'subscription'],            100, 0],
 ];

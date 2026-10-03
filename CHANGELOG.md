@@ -1,3 +1,12 @@
+## 2026-10-03 — B2B lead invoice recovery (settlement deduction + Pay Now + overdue gate predicate) and Education 5% (NOT deployed)
+
+- **Receivable:** b2b-leads opens outstandingKES at a successful issue.
+- **Recovery:** prepareLeadDeduction/preparePayment + commitLeadRecovery (in-txn re-reads, create() claims).
+- **Gate:** leadInvoiceGate (enforce:false).
+- **Pay Now:** purpose b2b_lead_invoice (self-settling) + webhook hook.
+- **Education:** commission-config education 5% flat.
+- **Tests:** test-b2b-lead-recovery 16/0 (2 mutants caught); commission suites green.
+
 ## 2026-10-03 — B2B lead fee (KES 200 + 16% VAT, monthly platform invoice) + 0% fixed lane for B2B orders (NOT deployed)
 
 - **Order exemption:** commission-config RATES.b2b_order (0%, fixed, floor-exempt); b2b/wholesale/rfq aliases; finos-router b2b → b2b_order.

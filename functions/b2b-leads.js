@@ -149,6 +149,8 @@ async function invoiceSupplierMonth(db, aggId, deps, totals) {
   }
   await aggRef.update({
     status: 'issued', invoiceId, invoicePending: false, error: null, issuedAtMs: nowMs,
+    /* The receivable starts HERE, at the successful issue — never on a failed / deferred attempt (agreed with f3). */
+    outstandingKES: _withVat(Number(a.netKES)).totalKES, paidKES: 0,
     billedLeadCount: Number(a.leadCount), billedNetKES: Number(a.netKES),
     taxCategory: VAT_TREATMENT.taxCategory, vatInclusive: VAT_TREATMENT.vatInclusive, engineDuplicate: r.duplicate === true,
   });
@@ -220,6 +222,130 @@ async function statementFor(db, uid, deps) {
     months, priceKES: price.priceKES };
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════════════════
+   RECOVERY of issued lead invoices (owner 2026-10-03, contracts agreed with sokoni-f3 / sokoni-5b)
+   ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Two ways an issued invoice is paid, ONE code path:
+     • SETTLEMENT DEDUCTION — at release of a buyer-paid B2B order, the supplier's payout is reduced by
+       min(outstanding, settlement), oldest invoice first. The buyer is never touched. Claim: leaddeduct_<settlementId>_<key>.
+     • PAY NOW — purpose 'b2b_lead_invoice' (IntaSend, verified webhook). Claim: leadpay_<paymentRef>_<key>.
+   READ / WRITE SPLIT (Firestore: all reads before any write). The caller's transaction does
+       const st = await prepareLeadDeduction(t, db, {...})   <- BEFORE any of the caller's writes
+       ... caller's own reads ...
+       const r  = commitLeadDeduction(t, st)                  <- with the caller's writes
+   prepare discovers candidate invoices with a NON-transactional query (discovery only) and then t.get()s EVERY one
+   of them, plus this operation's claim for each, INSIDE the transaction. Amounts come only from those in-txn reads,
+   so a Pay Now or another release that committed after discovery is re-read, and the same KES is never recovered
+   twice. An invoice issued after discovery is simply not in this round; it carries forward.
+   A retry of the same operation finds its own claims by t.get(): it recovers 0 more and reports what it already
+   recovered, so the caller computes the SAME net as the first time (never an aborted release, never a second cut).
+   A refund / void of the B2B order after a deduction does NOT reverse it: the lead invoice was a real debt
+   (owner policy needed for anything else).
+   ══════════════════════════════════════════════════════════════════════════════════════════════════════════════ */
+const RECOVERIES = 'b2bLeadRecoveries';
+const OVERDUE_MS = 2 * 86400000;
+const _r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+const _claimKey = (opKey, key) => String(opKey) + '_' + String(key);
+
+/** Outstanding issued invoices for a supplier owner, oldest first (non-transactional: display / discovery only). */
+async function outstandingFor(db, billToUid) {
+  const snap = await db.collection(MONTHS).where('billToUid', '==', String(billToUid)).where('status', '==', 'issued').limit(100).get();
+  return snap.docs.map((d) => Object.assign({ invoiceKey: d.id }, d.data() || {}))
+    .filter((m) => Number(m.outstandingKES) > 0)
+    .map((m) => ({ invoiceKey: m.invoiceKey, month: m.month, issuedAtMs: Number(m.issuedAtMs) || 0, outstandingKES: _r2(m.outstandingKES), invoiceId: m.invoiceId || null }))
+    .sort((a, b) => a.issuedAtMs - b.issuedAtMs);
+}
+
+async function _prepare(t, db, { opKey, kind, billToUid, capKES }) {
+  const uid = String(billToUid || '');
+  const cap = _r2(capKES);
+  if (!uid || !(cap >= 0)) throw new Error('bad recovery request');
+  /* Discovery (outside the txn): candidate invoices + any invoice this op already claimed. Ids only — no amounts. */
+  const [open, mine] = await Promise.all([
+    db.collection(MONTHS).where('billToUid', '==', uid).where('status', '==', 'issued').limit(100).get(),
+    db.collection(RECOVERIES).where('opKey', '==', String(opKey)).limit(100).get(),
+  ]);
+  const keys = [...new Set(open.docs.map((d) => d.id).concat(mine.docs.map((d) => String((d.data() || {}).invoiceKey || ''))).filter(Boolean))];
+  /* IN-TXN reads: every invoice and this op's claim on it. */
+  const reads = await Promise.all(keys.map(async (key) => {
+    const ref = db.collection(MONTHS).doc(key);
+    const claimRef = db.collection(RECOVERIES).doc(_claimKey(opKey, key));
+    const [m, c] = await Promise.all([t.get(ref), t.get(claimRef)]);
+    return { key, ref, claimRef, m: m.exists ? (m.data() || {}) : null, claim: c.exists ? (c.data() || {}) : null };
+  }));
+  let replayKES = 0;
+  const candidates = [];
+  for (const r of reads) {
+    if (r.claim) { replayKES = _r2(replayKES + Number(r.claim.amountKES || 0)); continue; }   /* this op already recovered it */
+    if (!r.m || r.m.billToUid !== uid || r.m.status !== 'issued') continue;                 /* paid / not issued / not theirs */
+    const out = _r2(r.m.outstandingKES);
+    if (!(out > 0)) continue;
+    candidates.push({ key: r.key, ref: r.ref, claimRef: r.claimRef, before: out, paidBefore: _r2(r.m.paidKES), issuedAtMs: Number(r.m.issuedAtMs) || 0, month: r.m.month || null });
+  }
+  candidates.sort((a, b) => a.issuedAtMs - b.issuedAtMs);
+  let left = _r2(cap - replayKES);
+  const lines = [];
+  for (const c of candidates) {
+    if (!(left > 0)) break;
+    const amount = _r2(Math.min(c.before, left));
+    left = _r2(left - amount);
+    lines.push(Object.assign({}, c, { amount }));
+  }
+  return { opKey: String(opKey), kind, billToUid: uid, capKES: cap, replayKES, lines, _prepared: true };
+}
+
+/** Read phase for a settlement deduction. Call BEFORE any write in the release transaction. */
+function prepareLeadDeduction(t, db, { settlementId, billToUid, settlementKES }) {
+  if (!ID_RE.test(String(settlementId || ''))) throw new Error('settlementId required');
+  return _prepare(t, db, { opKey: 'leaddeduct_' + settlementId, kind: 'settlement_deduction', billToUid, capKES: settlementKES });
+}
+/** Read phase for a verified Pay Now payment. */
+function preparePayment(t, db, { paymentRef, billToUid, amountKES }) {
+  if (!String(paymentRef || '')) throw new Error('paymentRef required');
+  return _prepare(t, db, { opKey: 'leadpay_' + String(paymentRef).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 120), kind: 'pay_now', billToUid, capKES: amountKES });
+}
+
+/** Write phase. Claims by create() (a concurrent duplicate aborts the whole txn); never touches the buyer. */
+function commitLeadRecovery(t, state, deps) {
+  if (!state || !state._prepared) throw new Error('commit without prepare');
+  const ts = (deps && deps.serverTs) || (() => new Date());
+  let recovered = 0;
+  const lines = [];
+  for (const l of state.lines) {
+    if (!(l.amount > 0)) continue;
+    const after = _r2(l.before - l.amount);
+    t.create(l.claimRef, { opKey: state.opKey, kind: state.kind, invoiceKey: l.key, month: l.month, billToUid: state.billToUid,
+      amountKES: l.amount, outstandingBefore: l.before, outstandingAfter: after, createdAt: ts() });
+    t.update(l.ref, { outstandingKES: after, paidKES: _r2(l.paidBefore + l.amount), status: after <= 0 ? 'paid' : 'issued',
+      lastRecoveryKind: state.kind, lastRecoveryOp: state.opKey });
+    recovered = _r2(recovered + l.amount);
+    lines.push({ invoiceKey: l.key, month: l.month, amountKES: l.amount, outstandingAfter: after });
+  }
+  const total = _r2(recovered + state.replayKES);
+  return { deductedKES: recovered, replayedKES: state.replayKES, totalRecoveredKES: total, netKES: _r2(state.capKES - total), lines };
+}
+const commitLeadDeduction = commitLeadRecovery;
+
+/** Till/POS gate predicate: an issued invoice unpaid for more than 2 days. Enforcement waits for a certified Pay Now. */
+async function leadInvoiceGate(db, uid, nowMs) {
+  const now = Number(nowMs) || Date.now();
+  const list = await outstandingFor(db, uid);
+  const over = list.filter((m) => m.issuedAtMs > 0 && now - m.issuedAtMs > OVERDUE_MS);
+  return {
+    overdue: over.length > 0,
+    overdueKES: _r2(over.reduce((t, m) => t + m.outstandingKES, 0)),
+    invoiceKeys: over.map((m) => m.invoiceKey),
+    since: over.length ? over[0].issuedAtMs + OVERDUE_MS : null,
+    enforce: false,   /* owner: block only once a certified Pay Now exists — display only until then */
+  };
+}
+
+/** Amount the Pay Now purpose charges: every outstanding issued invoice, read on the server. */
+async function payNowAmount(db, uid) {
+  const list = await outstandingFor(db, uid);
+  return { amountKES: _r2(list.reduce((t, m) => t + m.outstandingKES, 0)), invoiceKeys: list.map((m) => m.invoiceKey) };
+}
+
 /* ── deployables ── */
 let b2bLeadMonthlyInvoices, b2bLeadInvoiceSweep, adminSetB2bLeadPrice, b2bLeadPrice, b2bLeadStatement;
 {
@@ -269,6 +395,7 @@ let b2bLeadMonthlyInvoices, b2bLeadInvoiceSweep, adminSetB2bLeadPrice, b2bLeadPr
 
 module.exports = {
   LEAD_FEE_DEFAULT_KES, VAT_TREATMENT, FEE_TYPE, CONFIG_DOC, LEADS, MONTHS,
-  monthOf, previousMonth, leadPrice, leadFields, groupLeads, statementFor, invoiceSupplierMonth, invoiceMonth, sweepPending,
+  monthOf, previousMonth, leadPrice, leadFields, groupLeads, statementFor, invoiceSupplierMonth,
+  outstandingFor, prepareLeadDeduction, preparePayment, commitLeadRecovery, commitLeadDeduction, leadInvoiceGate, payNowAmount, RECOVERIES, OVERDUE_MS, invoiceMonth, sweepPending,
   b2bLeadMonthlyInvoices, b2bLeadInvoiceSweep, b2bLeadPrice, b2bLeadStatement, adminSetB2bLeadPrice,
 };

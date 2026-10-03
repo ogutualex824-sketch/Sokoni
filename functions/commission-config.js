@@ -96,7 +96,8 @@ const RATES = {
      Owner 2026-10-03 (via sokoni-e3): memberships and packages pay the SAME 5% — price them with category 'fitness' too.
      Booking FEES, marketing and Marketplace equipment/clothing are separate products, not this row. */
   fitness:          { pct: 5,   fixedKES: 0,    _was: 'owner 2026-10-03: fitness bookings 5% per booking (was ALIASES.fitness -> services 5%, then the provider plan ladder 20–5%)' },
-  education:        { pct: 15,  fixedKES: 0,    _was: 'category only' },
+  /* Owner 2026-10-03 (via sokoni-5b): 5% per sale, paid by the teacher / institution, never added on top for the learner — the Home Services model. */
+  education:        { pct: 5,   fixedKES: 0,    _was: "15% 'category only' (never owner-set)" },
   jobs:             { pct: 15,  fixedKES: 0,    _was: 'category only' },
   classifieds:      { pct: 8,   fixedKES: 0,    _was: 'category only' },
   hub:              { pct: 17,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: SOKONI delivery share 17–25% per quote, settled by delivery-quote-authority.js (SHARE_MIN_PCT 17 / SHARE_MAX_PCT 25); this row is the FLOOR for a consumer that resolves by category, never the per-delivery share (was 12% / 88% rider)' },
@@ -238,7 +239,7 @@ const PLAN_ADJUSTMENTS_DOC = 'plan_adjustments';   /* revenueConfig/plan_adjustm
    must never move these rates — not the provider ladder, and not a seller-plan discount (features.commission_discount_pct
    / revenueConfig/plan_adjustments) if that rollout is ever switched on. finos-utils skips the plan step for them and
    records planSkipped 'flat_booking_rate'. */
-const FLAT_BOOKING_CATEGORIES = Object.freeze(['services', 'home_services', 'car_rental', 'healthcare', 'entertainment_bookings', 'fitness']);
+const FLAT_BOOKING_CATEGORIES = Object.freeze(['services', 'home_services', 'car_rental', 'healthcare', 'entertainment_bookings', 'fitness', 'education']);   /* education: owner 2026-10-03, flat 5% */
 function isFlatBookingCategory(key) {
   const r = resolveRate(key);
   return r.matched === true && FLAT_BOOKING_CATEGORIES.indexOf(r.category) !== -1;

@@ -92,7 +92,7 @@
       "fixedKES": 0
     },
     "education": {
-      "pct": 15,
+      "pct": 5,
       "fixedKES": 0
     },
     "jobs": {

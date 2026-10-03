@@ -8026,6 +8026,28 @@ exports.webhookIntasend = onRequest(
         /* Membership payment (owner 2026-10-03): HELD by SOKONI, never credited here — membership-settlement releases
            it monthly after the first attendance. Decided on THIS read (no extra intent read); fitness_membership is also
            self-settling, so if this read fails the SECOND exit below still refuses any seller credit. */
+        /* B2B lead invoice Pay Now (owner 2026-10-03): the verified payment reduces the supplier's outstanding lead
+           invoices through the SAME prepare/commit path as a settlement deduction. Claims are per (payment, invoice), so
+           a replay recovers nothing twice; any surplus (an invoice already recovered by a deduction meanwhile) is
+           recorded for admin review — never auto-credited. */
+        if (_fiSnap.exists && _fiSnap.data().resourceType === 'b2bLeadInvoice') {
+          try {
+            const _bl = require('./b2b-leads');
+            const _in = _fiSnap.data();
+            const _paidKES = Number.isFinite(Number(_in.amount)) && Number(_in.amount) > 0 ? Number(_in.amount) : Number(_in.amountCents) / 100;
+            await db.runTransaction(async (t) => {
+              const st = await _bl.preparePayment(t, db, { paymentRef: apiRef, billToUid: _in.uid, amountKES: _paidKES });
+              const r = _bl.commitLeadRecovery(t, st, { serverTs: () => admin.firestore.FieldValue.serverTimestamp() });
+              if (r.deductedKES === 0 && r.replayedKES > 0) return;   /* replay of an applied payment */
+              if (r.netKES > 0) t.create(db.collection('b2bLeadOverpayments').doc(String(apiRef)), {
+                uid: _in.uid, paymentRef: String(apiRef), paidKES: _paidKES, appliedKES: r.totalRecoveredKES, surplusKES: r.netKES,
+                status: 'needs_review', createdAt: admin.firestore.FieldValue.serverTimestamp() });
+            });
+          } catch (blErr) {
+            if (!(blErr && (blErr.code === 6 || blErr.code === 'already-exists'))) logger.error('[webhookIntasend] lead invoice payment failed', { ref: apiRef, err: blErr && blErr.message });
+          }
+          res.status(200).send("OK"); return;
+        }
         /* Car Hub vehicle boost (owner 2026-10-03): activated only by this VERIFIED payment; idempotent on the ref. */
         if (_fiSnap.exists && _fiSnap.data().resourceType === 'vehicleBoost') {
           try {
