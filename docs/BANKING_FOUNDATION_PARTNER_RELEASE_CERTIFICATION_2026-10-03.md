@@ -244,4 +244,12 @@ Every commit was staged file by file after `git status --short`; no stash, reset
 - A test video goes READY; publishing serves the derivative; archiving makes the URL 404.
 - Re-fetch the deployed Firestore and Storage rulesets and diff them against the candidates.
 
+## 12. Owner authorization 2026-10-03 — progress
+
+**Applications (read-only production census, positive control on products):** 13 applications — 9 approved, 1 rejected, 3 pending; 0 `applicationDecisions` records. All 9 approvals carry `decidedBy` and were decided **2026-07-24 … 2026-09-03, before the K13-B gate went live (2026-10-01 02:10Z)** — legacy approvals, not post-gate bypasses. **No application was approved after the gate without a server-recorded decision.** `financialProviders`: **0 listings** (none can exist without an approved application). Submission ≠ approval holds on the live code path (K13-A/B). REVIEW: whether to back-fill decision records for the 9 legacy approvals.
+
+**SmartPOS M-PESA (owner-authorized fix):** `hosting/pos-stk-route-on-a436e12` @ 99e1177 (on sokoni-b2's a436e12, which removed the SIMULATED_ path). `pos.js` sendSTK now runs through the existing IntaSend POS rail (`SokoniPosStk` → posInitiateIntasendPayment → posCheckPaymentStatus); the sale completes only on the server's 'completed' status; no simulated path anywhere; split sales prompt for the M-PESA portion and no longer leak split metadata. Tests: pos-mpesa-intasend 9/0 (2 sabotages caught), daraja-leftovers 19/0. **OPEN (POS lane):** `posCompleteCheckout` (pos-zero-friction.js) accepts an `mpesa` payment line without reading `posPaymentStatus` — the client gate is not a server guarantee; the server check belongs to the POS convergence chain.
+
+**Deploys:** none yet — free memory 180–395 MB (< 512 MB floor) and sokoni-b2 holds the slot. Foundation gate goes first when RAM allows: lineage diff of each live archive, then `impactCheckoutDonate` (stops false completion) + pledge/status reads, then sokoni-5b's donation intent + webhook, then verify verifiedBalance = 0 and a KES 10 end-to-end donation.
+
 **NOT DEPLOYED. FOUNDATION BALANCE NOT TRUSTED UNTIL RECONCILIATION/FIX IS LIVE. ALL REGISTRATIONS/APPLICATIONS REQUIRE ADMINOS APPROVAL.**
