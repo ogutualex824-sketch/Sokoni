@@ -22,7 +22,7 @@
 'use strict';
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
 const fs = require('fs'), path = require('path');
-const { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs } = require('firebase/firestore');
+const { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs , addDoc } = require('firebase/firestore');
 
 let pass = 0, fail = 0;
 const ck = (id, ok, m, d) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + '  ' + id + '  ' + m + (ok || !d ? '' : '   [' + String(d).slice(0, 90) + ']')); ok ? pass++ : fail++; };
@@ -47,6 +47,7 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
     await setDoc(doc(d, 'unboxingReviews/UBR-2'), { uid: 'mallory', rating: 4, product: 'Cake', comment: 'nice', status: 'pending' });
     for (const c of ['reviewModerationLog', 'reviewRateLimits', 'smsSendAudit', 'deliveryPinLog']) await setDoc(doc(d, c + '/x'), { v: 1 });
     await setDoc(doc(d, 'sportsReviews/legacy'), { targetId: 'v1', rating: 4, body: 'old', uid: 'alice' });
+    await setDoc(doc(d, 'propertyViewings/L1_alice_2026-10-04'), { listingId: 'L1', buyerUid: 'alice', agentUid: 'ag1', status: 'requested' });
   });
   const anon = env.unauthenticatedContext().firestore();
   const alice = env.authenticatedContext('alice').firestore();
@@ -117,6 +118,10 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await denies('H-4', 'forged approved review straight to reviews (targetType property)',
     setDoc(doc(mallory, 'reviews/mallory_property_L1'), { authorUid: 'mallory', targetType: 'property', targetId: 'L1', rating: 5, status: 'approved' }));
   await allows('H-5', 'public can still read an existing legacy sportsReviews doc', getDoc(doc(anon, 'sportsReviews/legacy')));
+  await denies('H-6', 'browser forges a propertyViewings record to become review-eligible',
+    setDoc(doc(mallory, 'propertyViewings/L1_mallory_2026-10-04'), { propertyId: 'L1', listingId: 'L1', buyerUid: 'mallory', uid: 'mallory', date: '2026-10-04', time: 'am', status: 'requested' }));
+  await denies('H-6b', 'the live property.html payload (no date/time) stays refused', addDoc(collection(mallory, 'propertyViewings'), { propertyId: 'L1', uid: 'mallory', status: 'pending' }));
+  await allows('H-6c', 'inverting control: the buyer reads their own SERVER-written viewing', getDoc(doc(alice, 'propertyViewings/L1_alice_2026-10-04')));
 
   console.log('[C] controls — server-only neighbours unchanged');
   await denies('C-1', 'browser writes ratingsSummary', setDoc(doc(mallory, 'ratingsSummary/p1'), { avg: 5, count: 999 }));

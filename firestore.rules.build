@@ -1745,9 +1745,7 @@ service cloud.firestore {
   allow update, delete: if isAdmin();
   }
   match /propertyViewings/{docId} {
-  allow create: if isAuthed()
-  && request.resource.data.keys().hasAll(['propertyId','date','time','uid'])
-  && request.resource.data.uid == request.auth.uid;
+  allow create: if false;
   allow read:   if isAdmin()
   || (isAuthed() && resource.data.uid == request.auth.uid);
   allow update: if isAdmin();

@@ -1808,10 +1808,14 @@ service cloud.firestore {
   allow read:   if isAdmin();
   allow update, delete: if isAdmin();
   }
+  /* 2026-10-03: a viewing is what makes a buyer eligible to review a listing (owner decision), so it must be
+     SERVER-recorded: servicesDispatch op scheduleViewing (Admin SDK) is the only writer. This browser create let
+     anyone forge {buyerUid:me, listingId:X} (extra fields were never restricted) and become review-eligible
+     (found by sokoni-5b). The only browser writer, property.html scheduleViewing, never satisfied it (no date/time
+     keys) — it was already refused on live — so closing it breaks nothing that worked. Reads unchanged; the
+     second propertyViewings block further down adds buyer/agent reads (duplicate blocks OR together). */
   match /propertyViewings/{docId} {
-  allow create: if isAuthed()
-  && request.resource.data.keys().hasAll(['propertyId','date','time','uid'])
-  && request.resource.data.uid == request.auth.uid;
+  allow create: if false;
   allow read:   if isAdmin()
   || (isAuthed() && resource.data.uid == request.auth.uid);
   allow update: if isAdmin();
