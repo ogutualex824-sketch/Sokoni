@@ -153,12 +153,15 @@
      approval. Directory groups map to an EXISTING HubRegister CATS id; anything else opens the intake unselected
      rather than inventing a category. Without hub-register.js loaded, offer.html is the entry. */
   var INTAKE_CAT = {
-    'phone-repair': 'phone-repair', electrical: 'electrical', 'it-support': 'it-support', networking: 'it-support',
+    'phone-repair': 'phone-repair', electrical: 'electrical', 'it-support': 'it-support', networking: 'networking',
+    'laptop-repair': 'laptop-repair', 'computer-repair': 'computer-repair', 'electronics-repair': 'electronics-repair',
+    'pos-support': 'pos-support',
     cctv: 'cctv', software: 'software', 'web-developer': 'web-developer', 'app-developer': 'app-developer',
     plumbing: 'plumbing', cleaning: 'cleaning', laundry: 'laundry', moving: 'moving', gardening: 'landscaping',
     appliance: 'ac-repair', security: 'security-guard', painting: 'painting', carpentry: 'carpentry',
   };
-  var TECH_IDS = ['phone-repair', 'it-support', 'cctv', 'software', 'web-developer', 'app-developer'];
+  var TECH_IDS = ['phone-repair', 'laptop-repair', 'computer-repair', 'electronics-repair', 'it-support', 'networking', 'pos-support',
+    'cctv', 'software', 'web-developer', 'app-developer'];
   function apply(category, hub) {
     var id = INTAKE_CAT[String(category || '').toLowerCase()] || '';
     var h = hub || (id ? (TECH_IDS.indexOf(id) > -1 ? 'tech' : 'home-services') : '');

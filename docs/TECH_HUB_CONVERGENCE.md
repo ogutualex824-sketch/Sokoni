@@ -5,7 +5,7 @@ payment / booking / wallet / review / chat authority, no WhatsApp, AdminOS-gated
 dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]], [[Payments]], [[AdminOS]],
 [[IntaSend Convergence Brief]]. Strategy: no new hubs — Digital Hub folds into Tech Hub.
 
-**Status: slices 1, 2a, 2b and 3 built and tested; nothing deployed.**
+**Status: slices 1, 2a, 2b, 3 and 4a built and tested; nothing deployed.**
 
 ## Authority map (census 2026-10-03)
 
@@ -68,6 +68,26 @@ caps DEVICE_REPAIR, IT_SUPPORT, NETWORKING, CCTV_SECURITY, ELECTRONICS, POS_BUSI
 modules (leads, repairs, diagnostics, supportTickets, siteVisits, cctvInstallations, posSupport, …) are NOT_IMPLEMENTED `TECH_HUB_PENDING`
 until a screen ships (flip `implemented:true`, gate server ops with `assertModule`). Blocked on the approval-time category stamp
 (sokoni-5b building it on f66f2c1 + 7df7817). providerDispatch has three pending changes that must ship as ONE release.
+
+## Tech taxonomy (slice 4a, from the repository — nothing invented)
+
+| Intake id (HubRegister CATS) | Server category (business-category) | Capabilities (service-capabilities) | Provider modules switched on |
+|---|---|---|---|
+| phone-repair | it_services | DEVICE_REPAIR, WORKSHOP, PICKUP_DROP_OFF, QUOTE_REQUEST, DIRECT_BOOKING | repairs, diagnostics, supportedDevices, pickupDropoff, leads, quotes, bookings |
+| laptop-repair · computer-repair (new) | it_services | same as phone-repair | same |
+| electronics-repair (new) | it_services | ELECTRONICS, DEVICE_REPAIR, WORKSHOP, QUOTE_REQUEST | repairs, diagnostics, supportedDevices, leads, quotes |
+| it-support | it_services | IT_SUPPORT, REMOTE_SUPPORT, ONSITE_SUPPORT, QUOTE_REQUEST, DIRECT_BOOKING | supportTickets, remoteSupport, siteVisits, leads, quotes, bookings |
+| networking (new) | it_services | NETWORKING, FIELD_SERVICE, ONSITE_SUPPORT, QUOTE_REQUEST | networkProjects, siteVisits, leads, quotes |
+| cctv | it_services | CCTV_SECURITY, FIELD_SERVICE, ONSITE_SUPPORT, QUOTE_REQUEST | cctvInstallations, siteVisits, leads, quotes |
+| pos-support (new) | it_services | POS_BUSINESS_TECH, ONSITE_SUPPORT, REMOTE_SUPPORT, QUOTE_REQUEST | posSupport, siteVisits, remoteSupport, leads, quotes |
+| web-developer · software · app-developer | it_services | SOFTWARE_DEV, REMOTE_SUPPORT, QUOTE_REQUEST | projects, remoteSupport, leads, quotes |
+| data-entry | it_services | REMOTE_SUPPORT, QUOTE_REQUEST | remoteSupport, leads, quotes |
+| electrical | trades | FIELD_SERVICE, ONSITE_SUPPORT, QUOTE_REQUEST, DIRECT_BOOKING (new, service modes only) | siteVisits, leads, quotes, bookings |
+
+All Tech modules are NOT_IMPLEMENTED (`TECH_HUB_PENDING`) except where a plan already makes `quotes` / `bookings` available —
+a screen ships before its flag flips. Gaps found: provider-onboarding.html professions (`Network Engineer`, `IT Support`, …) classify through
+`FROM_PROFESSION` but are not business ids, so they grant no capability; a second intake to converge later. The approval-time
+category stamp (sokoni-5b) is required for any of this to reach `providers/{uid}.business`.
 
 ## Category matrix (honest)
 

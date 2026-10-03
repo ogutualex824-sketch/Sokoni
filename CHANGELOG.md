@@ -1,3 +1,18 @@
+## [2026-10-03] - Tech Hub slice 4a (hosting): every Tech business id is registrable — hosting, NOT deployed
+
+- hub-register.js CATS (the ONE intake) adds `laptop-repair`, `computer-repair`, `electronics-repair`, `networking`,
+  `pos-support` (hub `tech`). The labels for `it-support` (was "IT Support / Networking") and `phone-repair` (was "Phone
+  Repair / Electronics") now name one thing each.
+- The selection is a REQUEST. The server classifies each id (business-category → `it_services`) and maps capabilities
+  (shared/service-capabilities.js). Both are on `feat/tech-taxonomy-on-13f74f3` @ 81cde54, which ships inside sokoni-5b's
+  ONE providerDispatch release. AdminOS approval is what grants them.
+- sokoni-tech-directory.js INTAKE_CAT: networking now opens its own id (was folded into it-support). The new repair / POS
+  ids map 1:1. sokoni-providers.js tech display group gains laptop repair.
+- Tests: test-tech-directory 50/0, 11/11 sabotages. New T9: every intake id exists in hub-register, and every server
+  Tech id is registrable (positive control: the pre-slice CATS fails all three). Other suites: premium-catalogue-billing
+  32/32, agreement-acknowledge 21/0, merchant-templates 32/0. test-overlays fails 2, identical on base.
+- Database / API / rules: none here (server half: see 81cde54).
+
 ## [2026-10-03] - Tech Hub slice 3: one registration intake; services.html self-listing retired — hosting, NOT deployed
 
 - Correction to slices 1–2b: their "register" links pointed at `business-apply.html`, which nothing else links to.

@@ -198,7 +198,7 @@ function intake(modSrc) {
   s.api.apply('networking');
   s.api.apply('gardening');
   s.api.apply('made-up-category', 'tech');
-  r.mapsToExistingIds = opened.length === 3 && opened[0].category === 'it-support' && opened[0].hub === 'tech'
+  r.mapsToExistingIds = opened.length === 3 && opened[0].category === 'networking' && opened[0].hub === 'tech'
     && opened[1].category === 'landscaping' && opened[1].hub === 'home-services' && !('category' in opened[2]) && opened[2].hub === 'tech';
   delete s.ctx.window.HubRegister;
   s.api.apply('cctv');
@@ -213,10 +213,29 @@ function servicesRegister(html) {
   return { oneIntake: t.applied === 'plumbing' && t.calls.writes.length === 0 && t.calls.ls === 0, noSelfListing: !/saveProvider\(|saveApplication\(/.test(html.replace(/\/\*[\s\S]*?\*\//g, '')) };
 }
 
+
+/* slice 4a: the intake never names an id hub-register does not list, and every Tech id is registrable */
+function taxonomy(modSrc, hubSrc) {
+  const vm = require('vm');
+  const ctx = { window: {}, document: { addEventListener() {}, getElementById: () => null } }; ctx.window.window = ctx.window; ctx.window.document = ctx.document; vm.createContext(ctx);
+  vm.runInContext(hubSrc.replace("'use strict';", "'use strict'; window.__CATS = null;").replace('var CATS = [', 'var CATS = window.__CATS = ['), ctx);
+  const CATS = ctx.window.__CATS || [];
+  const ids = new Set(CATS.map((c) => c.id));
+  const s = sandbox(modSrc, { providers: [] });
+  const map = s.api._internal.INTAKE_CAT || {};
+  /* the Tech ids the capability engine maps (functions/shared/service-capabilities.js, feat/tech-taxonomy-on-13f74f3 81cde54) */
+  const SERVER_TECH = ['phone-repair', 'laptop-repair', 'computer-repair', 'electronics-repair', 'it-support', 'networking', 'cctv', 'pos-support', 'web-developer', 'software', 'app-developer', 'data-entry', 'electrical'];
+  return {
+    intakeIdsExist: Object.values(map).every((v) => ids.has(v)),
+    everyTechIdRegistrable: SERVER_TECH.every((id) => ids.has(id)),
+    techHubOnTech: ['laptop-repair', 'computer-repair', 'electronics-repair', 'networking', 'pos-support'].every((id) => (CATS.find((c) => c.id === id) || {}).hub === 'tech'),
+  };
+}
+
 (async () => {
   let pass = 0, fail = 0, caught = 0;
   const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d ? '   [' + d + ']' : '')); ok ? pass++ : fail++; };
-  console.log('\nTECH DIRECTORY — slices 1-3\n');
+  console.log('\nTECH DIRECTORY — slices 1-4a\n');
   const LABELS = { T1: 'lists approved providers from the registry by category', T2: 'ratings / jobs only when real; "New on SOKONI" otherwise; verified only from the record', T3: 'provider text is escaped', T4: 'an unreachable registry is NOT shown as an empty list', T5: 'a real empty registry invites applications through the ONE intake (HubRegister / offer.html)', T6: 'Book → SokoniBookService.open(providerId); Message → in-app chat', T7: 'search / type / location filters' };
   const b = await behaviour(MOD);
   for (const k of Object.keys(LABELS)) ck(k + '  ' + LABELS[k], b[k] === true);
@@ -230,6 +249,7 @@ function servicesRegister(html) {
   for (const [k, v] of Object.entries(servicesPage(rd('services.html')))) ck('P3  services.html: ' + k, v);
   for (const [k, v] of Object.entries(intake(MOD))) ck('T8  one intake: ' + k, v);
   for (const [k, v] of Object.entries(servicesRegister(rd('services.html')))) ck('P4  services.html: ' + k, v);
+  for (const [k, v] of Object.entries(taxonomy(MOD, rd('hub-register.js')))) ck('T9  taxonomy: ' + k, v);
   console.log('\n  [sabotage]');
   const SAB = {
     T2: MOD.replace("'<span class=\"' + x + '-prov-rnum\">New on SOKONI</span>'", "'<span class=\"' + x + '-prov-rnum\">4.9 · 0 jobs</span>'"),
@@ -265,11 +285,17 @@ function servicesRegister(html) {
     console.log('  ' + (red2 ? 'CAUGHT' : 'MISSED') + '  P3 services WhatsApp hand-off'); red2 ? caught++ : fail++;
   }
   {
-    const bad = MOD.replace("networking: 'it-support',", "networking: 'networking',");
+    const bad = MOD.replace("networking: 'networking',", "networking: 'network-engineer',");
     const red = bad !== MOD && intake(bad).mapsToExistingIds !== true;
     console.log('  ' + (red ? 'CAUGHT' : 'MISSED') + '  T8 intake mapping'); red ? caught++ : fail++;
   }
-  console.log('\n  ' + pass + ' passed, ' + fail + ' failed, ' + caught + '/10 sabotages caught');
+  {
+    const hub = rd('hub-register.js');
+    const badHub = hub.replace("{ id:'networking',", "{ id:'network-install',");
+    const red = badHub !== hub && taxonomy(MOD, badHub).intakeIdsExist !== true;
+    console.log('  ' + (red ? 'CAUGHT' : 'MISSED') + '  T9 intake id missing from hub-register'); red ? caught++ : fail++;
+  }
+  console.log('\n  ' + pass + ' passed, ' + fail + ' failed, ' + caught + '/11 sabotages caught');
   console.log('  NOT proven here: a real browser render and a real booking (needs a browser run and an approved provider with services).\n');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH ' + (e && e.stack || e)); process.exit(2); });
