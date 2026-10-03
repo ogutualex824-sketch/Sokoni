@@ -49,9 +49,9 @@
   function render() {
     if (!_el) return;
     var rows = _courses.map(function (c) {
-      var actions = c.status === 'draft'
-        ? '<button type="button" data-edu-edit="' + esc(c.courseId) + '" style="' + btn2Css + '">Edit</button> <button type="button" data-edu-submit="' + esc(c.courseId) + '" style="' + btnCss + '">Submit for review</button>'
-        : '';
+      var actions = (c.status === 'draft'
+        ? '<button type="button" data-edu-edit="' + esc(c.courseId) + '" style="' + btn2Css + '">Edit</button> <button type="button" data-edu-submit="' + esc(c.courseId) + '" style="' + btnCss + '">Submit for review</button> '
+        : '') + '<button type="button" data-edu-lessons="' + esc(c.courseId) + '" style="' + btn2Css + '">Lessons</button>';
       return '<div style="border-bottom:1px solid #222;padding:10px 0"><div style="font-weight:700">' + esc(c.title) + '</div>'
         + '<div style="font-size:12px;opacity:.7">' + esc(STATUS[c.status] || '—') + ' · ' + esc(c.lessonCount || 0) + ' lessons · ' + esc(c.enrollmentCount || 0) + ' learners'
         + (c.price > 0 ? ' · KES ' + esc(Number(c.price).toLocaleString('en-KE')) : ' · Free') + '</div>'
@@ -84,6 +84,13 @@
       var p = cid ? fn('manageMyCourses')({ op: 'update', courseId: cid, course: data }) : fn('createCourse')(data);
       p.then(function () { slot.innerHTML = ''; return load(); })
         .catch(function (x) { sv.disabled = false; sv.textContent = cid ? 'Save draft' : 'Create draft'; err.textContent = errText(x); });
+      return;
+    }
+    /* Lessons: the lesson editor (sokoni-education-lessons.js) takes over this panel; "← Courses" returns */
+    var ls = t.closest('[data-edu-lessons]');
+    if (ls && G.SokoniEducationLessons) {
+      var lc = _courses.filter(function (x) { return x.courseId === ls.getAttribute('data-edu-lessons'); })[0];
+      if (lc) G.SokoniEducationLessons.mount(_el, lc, function () { load(); });
       return;
     }
     var sb = t.closest('[data-edu-submit]');
