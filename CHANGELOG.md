@@ -1,3 +1,94 @@
+## [2026-10-02] - TAKEDOWN / HIDDEN PRODUCT enforcement (server) — NOT deployed
+
+**NOT DEPLOYED — DEPLOYMENT QUEUED — MACHINE BELOW 512 MB MEMORY FLOOR.** Built on C3 (`58c2a2d`, also not deployed). Owner spec 2026-10-01 §0–§35.
+
+**Invariant:** a TAKEN_DOWN listing cannot be restored by its seller and cannot be returned by any public surface (discovery, API, search index, cache or projection). Only the AdminOS / Super Admin restore brings it back. That restore is audited, is refused while another enforcement applies, and updates canonical state, then the index, then promotions.
+
+### Authority (one mechanism, unchanged)
+- **Take-down:** `tsReviewReport` approve with hideProduct → `products.isVisible:false` plus `moderationHold`.
+- **No new collection.** The gate is pure code in `functions/product-visibility.js`. It checks `moderationHold` first, then the SokoniSellability listing rule (HIDDEN_STATUSES, isVisible, visible, deleted).
+- **The hold is now PUBLIC-SAFE.** Products are world-readable, so the hold carries no reporter or moderator data. It is `{active, ref: sha16(reportId), at, correlationId, previousIsVisible}`. Before, it held `reportId` (which embeds the reporter's uid), `reason` and `by`. `moderationReleased` is `{ref, at, correlationId, restoredVisibility}`. `tsGetReportCase` maps `ref` back to the report, for admins only.
+- **RESTORE** = `tsReviewReport {action:'restore', internalNote ≥10}`.
+  - The caller must be an admin or super admin, acting on the upheld report that owns the hold. The reviewer lock is respected.
+  - It is **refused** (failed-precondition, `details.otherEnforcement`) if any of these apply: PRODUCT_REMOVED, PRODUCT_BANNED, PRODUCT_SUSPENDED, PRODUCT_DELETED, PRODUCT_REJECTED, SELLER_BANNED, SELLER_SUSPENDED, SELLER_DEACTIVATED, SHOP_DEACTIVATED, SHOP_SUSPENDED or SHOP_BANNED.
+  - The report stays upheld.
+  - It writes the audit row `listing_restored` and sends a seller notification (recorded on `notifications.sellerRestore`).
+  - The dismiss + restoreListing path now has the same check.
+  - `tsGetReportCase.actions` offers `restore`.
+  - `_reportModel.LISTING_ACTIONS = ['restore']`.
+- **PROMOTIONS:**
+  - On take-down, ACTIVE `featuredListings` move to `paused_by_moderation`.
+  - On restore, only the rows paused by this hold go back to their earlier status.
+  - Only the status changes. Payment, price, dates and billing are untouched.
+  - The count of changed rows is in the audit.
+
+### Discovery and index gates (canonical re-check before every public response, spec §10)
+- **search-service.js** — searchQuery, searchAutocomplete, searchNearby, searchSimilar (Recommend and the Firestore fallback) and searchPersonalized are wrapped with `_gated` → `filterVisibleHits`.
+  - One bounded `getAll` per page.
+  - Totals are corrected for removed hits.
+  - A failed canonical read fails CLOSED.
+- **algolia-recommend.js** — every Recommend result on `sokoni_products` and `sokoni_global` is re-checked.
+- **api-gateway.js** `/api/v1/products` and `/search` — `_visiblePage` filters at the query layer and refills each page. The cursor is the last document scanned. Every page is full and has no hidden product.
+- **minishop.js getMinishopPublic** — canonical filter with a bounded over-fetch (48 → 16). Moderation fields are stripped.
+- **index.js:**
+  - KASS `search_marketplace` filters through the gate.
+  - KASS `add_to_cart` and `compare_products` treat a hidden product as missing.
+  - `generateTrending` lists only visible products.
+- **createClickAndCollect** refuses a product that is not public. **seoGetProductMeta** treats one as missing.
+- **Indexes:**
+  - algolia-sync and typesense-sync also skip a held product.
+  - **The `enqueue` functions in algolia-queue.js and typesense-queue.js turn an upsert of a hidden or held product into a DELETE.** Every enqueuer goes through them: the triggers, backfills, the scheduled reconcilers and the repair callables. Before this, the reconcilers re-added hidden products.
+  - `typesenseBackfill` imports directly, so it skips them itself.
+- **Not changed:**
+  - `catalogue` — its serving body is a different lineage that already refuses isVisible:false. **Do not deploy catalogue from this tree.**
+  - Checkout and till — owned by sokoni-5b (`8b60947` / `b5d0541`), not live.
+
+### Lineage gates (read-only, serving revision by status.traffic)
+- **Byte-identical serving == tree** for search-service.js, api-gateway.js, algolia-recommend.js, algolia-queue.js, typesense-admin.js, typesense-reconcile.js, algolia-reconcile.js, search-repair.js, search-admin.js, algolia-admin.js, marketplace-extensions.js and trust-safety.js (== 7091029).
+- **minishop.js and pos-marketplace-sync.js:** the hunks apply cleanly to the serving copies.
+- **typesense-queue.js** was REPLACED by the serving copy from processTypesenseQueue 00022-fon, which carries the DLQ fix. The guard was then added.
+- **algolia-sync.js** carries the landlordProfiles block on serving. Apply the 7091029..HEAD diff when porting.
+- **index.js:** `_execChatTool`, `sokoniChat` and `generateTrending` bodies are IDENTICAL to serving. The catalogue body differs, so that hunk was reverted.
+- **A package-level diff is required before ANY deploy from this tree.**
+
+### Files
+- **New:** `functions/product-visibility.js`, `scripts/test-takedown-enforcement.js`, `scripts/takedown-index-reconcile.js`.
+- **Changed:** functions/trust-safety.js, algolia-sync.js, typesense-sync.js, algolia-queue.js, typesense-queue.js, typesense-admin.js, search-service.js, algolia-recommend.js, api-gateway.js, minishop.js, index.js, pos-marketplace-sync.js and marketplace-extensions.js; scripts/test-moderation-queue.js and test-report-authority.js.
+
+### Database
+- The hold and release shapes are as above. No migration is needed: no hold exists in production.
+- `reports` gains `listingRestoredAt`, `listingRestoredBy` and `notifications.sellerRestore`.
+- `featuredListings` gains the status `paused_by_moderation` and the fields `pausedFromStatus`, `pausedAt`, `pausedByRef` and `resumedAt`.
+- **Indexes:** none.
+
+### API
+- `tsReviewReport` gains the action `restore` and the error detail `details.otherEnforcement`.
+- Search callables may return `visibilityFiltered`.
+- In the gateway, `nextCursor` is now the last document scanned.
+
+### Security
+- The public product document carries no reporter or moderator identity.
+- Restore is admin-only, requires a note, is audited, and is refused while another enforcement applies.
+- A stale index record never becomes a public response.
+- The rules candidate is on `rules/takedown-enforcement-on-served` (`47c928b`) and is NOT released.
+
+### Tests
+- **test-takedown-enforcement: 35/0.** It covers the lifecycle, every surface, stale index, backfill guard, restore, promotions, privacy, 100-product pagination and the tripwires (Z1: the real firebase-admin is never loaded, notify.js cannot be loaded, no real socket is opened).
+  - `--failure-injection`: **16/16 caught**, each on its named row. The tree was unchanged afterwards.
+- **Regression:** test-report-authority 16/0; test-moderation-queue 40/0, with injection 8/8 (the SB6 anchor was re-pinned).
+- **Gates:** require-closure PASS, predeploy-syntax PASS, commission single-source PASS.
+- **Reconcile tool:** self-test PASS. **NOT run against production: RECONCILIATION REQUIRED.**
+
+### Deploy order (by name, one at a time, package-level lineage diff first)
+1. tsReviewReport and tsGetReportCase, then the C3 list.
+2. The rules candidate.
+3. ts_products_onUpdate, ts_products_onCreate, algoliaSync_products_update and algoliaSync_products_create.
+4. The enqueuers and processors: typesenseReconcile, algoliaReconcile, searchScheduledReconcile, searchRepairAll, searchFullReindex, searchBackfillAll, algoliaBackfill, typesenseBackfill, typesenseRepairDivergent and processTypesenseQueue.
+5. The five search callables and the four getAlgolia* Recommend callables.
+6. sokoniAPIGateway, getMinishopPublic, sokoniChat, generateTrending, createClickAndCollect and commerceDispatch.
+7. Hosting.
+8. The owner runs the read-only reconciliation, then the guarded reindex.
+
 ## [2026-10-01] - community C3: the MODERATION QUEUE on the one report authority (server) — NOT deployed
 
 **NOT DEPLOYED — DEPLOYMENT QUEUED — MACHINE BELOW 512 MB MEMORY FLOOR.** Built on C2 (`4c1afb4`, also not deployed).
