@@ -435,7 +435,7 @@ exports.rentalBook = onCall({ enforceAppCheck: true }, exports._h.rentalBook = a
 });
 
 /* Seller-side booking transition in ONE transaction: re-read, shop match, legal from-state. */
-async function _rentalTransition(req, { from, to, extra }) {
+async function _rentalTransition(req, { from, to, extra, guard }) {
   const { bookingId, shopId } = req.data || {};
   await _assertSeller(req.auth, shopId);
   if (!bookingId) throw new HttpsError('invalid-argument', 'bookingId is required.');
@@ -447,6 +447,7 @@ async function _rentalTransition(req, { from, to, extra }) {
     if (b.shopId !== shopId) throw new HttpsError('permission-denied', 'That booking belongs to another shop.');
     if (b.status === to) return { success: true, unchanged: true, status: to };
     if (!from.includes(b.status)) throw new HttpsError('failed-precondition', 'A ' + b.status + ' booking cannot be ' + to + '.');
+    if (guard) guard(b);
     t.update(ref, Object.assign({ status: to }, extra(req, b)));
     if (to === 'completed') t.update(_db().collection('rentalProducts').doc(b.rentalProductId), { bookingCount: _fv().increment(1) });
     return { success: true, status: to };
@@ -463,9 +464,45 @@ exports.rentalDecline = onCall({ enforceAppCheck: true }, exports._h.rentalDecli
 /* Hand-over: equipment leaves the yard / is delivered — only once the payment authority has HELD the money. */
 exports.rentalStart = onCall({ enforceAppCheck: true }, exports._h.rentalStart = (req) =>
   _rentalTransition(req, { from: ['paid_held'], to: 'active', extra: (r) => ({ startedAt: _ts(), startedBy: r.auth.uid }) }));
-/* Return is two-sided: the renter (or the seller) reports it, the seller confirms the equipment came back. */
-exports.rentalConfirmReturn = onCall({ enforceAppCheck: true }, exports._h.rentalConfirmReturn = (req) =>
-  _rentalTransition(req, { from: ['return_pending', 'active'], to: 'returned', extra: (r) => ({ returnedAt: _ts(), returnConfirmedBy: r.auth.uid, returnNotes: String((r.data || {}).notes || '').slice(0, 1000) }) }));
+/* Return is two-sided: the renter (or the seller) reports it, the seller confirms the equipment came back.
+   RENTAL PIN (owner 2026-10-03): ONE PIN, at RETURN. When the payment authority holds the renter's money
+   (paymentStatus 'held'), confirming the return REQUIRES the renter's PIN — the renter gives it only once the equipment
+   is back, and this return is what lets the held money be released on completion. The PIN authority is
+   booking-pin-core (source 'rentalBookings', the same module as service bookings); this handler only calls it.
+   Provider of record = the shop owner from shops/{shopId} (server data); the person typing is charged the attempts.
+   An unpaid / legacy rental (nothing held) returns without a PIN — there is no money to release. */
+const RENTAL_RETURNABLE = ['return_pending', 'active'];
+const _pinCore = () => require('./booking-pin-core');
+async function _shopOwnerUid(shopId) {
+  const s = await _db().collection('shops').doc(String(shopId)).get();
+  if (!s.exists) return null;
+  const shop = s.data() || {};
+  return 'ownerId' in shop ? (shop.ownerId || null) : String(shopId);   /* same model as _assertSeller */
+}
+exports.rentalConfirmReturn = onCall({ enforceAppCheck: true }, exports._h.rentalConfirmReturn = async (req) => {
+  const { bookingId, shopId, pin } = req.data || {};
+  await _assertSeller(req.auth, shopId);
+  if (!bookingId) throw new HttpsError('invalid-argument', 'bookingId is required.');
+  const pre = await _db().collection('rentalBookings').doc(String(bookingId)).get();
+  if (!pre.exists) throw new HttpsError('not-found', 'Booking not found.');
+  const b0 = pre.data();
+  if (b0.shopId !== shopId) throw new HttpsError('permission-denied', 'That booking belongs to another shop.');
+  if (b0.status === 'returned') return { success: true, unchanged: true, status: 'returned' };
+  /* state first: a PIN is never spent on a rental that is not being returned */
+  if (!RENTAL_RETURNABLE.includes(b0.status)) throw new HttpsError('failed-precondition', 'A ' + b0.status + ' booking cannot be returned.');
+  let pinVerified = false;
+  if (b0.paymentStatus === 'held') {
+    const v = await _pinCore().verify({ source: 'rentalBookings', bookingId: String(bookingId), providerUid: await _shopOwnerUid(shopId), actorUid: req.auth.uid, pin });
+    if (!v.ok) throw new HttpsError('failed-precondition', v.reason);
+    pinVerified = true;
+  }
+  return _rentalTransition(req, {
+    from: RENTAL_RETURNABLE, to: 'returned',
+    /* race: the payment landed between the read above and this transaction → the PIN was never asked for */
+    guard: (b) => { if (b.paymentStatus === 'held' && !pinVerified) throw new HttpsError('failed-precondition', 'This rental\'s payment is held by SOKONI. Ask the renter for their rental PIN to confirm the return.'); },
+    extra: (r) => ({ returnedAt: _ts(), returnConfirmedBy: r.auth.uid, returnPinVerified: pinVerified, returnNotes: String((r.data || {}).notes || '').slice(0, 1000) }),
+  });
+});
 /* Completion requires RETURNED (owner: never pending / cancelled / declined / expired → completed). Settlement is the
    payment authority's release on 'completed' (ONE settlement path). */
 exports.rentalComplete = onCall({ enforceAppCheck: true }, exports._h.rentalComplete = (req) =>

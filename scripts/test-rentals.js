@@ -16,8 +16,9 @@ const store = new Map(); let auto = 0; const TS = { __ts: true };
 const INC = (n) => ({ __inc: n });
 const apply = (prev, d) => { const o = Object.assign({}, prev || {}); for (const [k, v] of Object.entries(d)) o[k] = v && v.__inc != null ? (Number(o[k]) || 0) + v.__inc : v; return o; };
 const tsOf = (date) => ({ _d: date, toDate() { return this._d; }, toMillis() { return this._d.getTime(); } });
+const hooks = {};   /* path → fn run AFTER a read returns (race injection) */
 const ref = (p) => ({ id: p.split('/').pop(), path: p,
-  get: async () => ({ exists: store.has(p), id: p.split('/').pop(), data: () => store.get(p) }),
+  get: async () => { const snap = { exists: store.has(p), id: p.split('/').pop(), data: ((v) => () => v)(store.get(p)) }; if (hooks[p]) { const h = hooks[p]; delete hooks[p]; h(); } return snap; },
   set: async (d) => store.set(p, apply({}, d)), update: async (d) => { if (!store.has(p)) throw new Error('no doc ' + p); store.set(p, apply(store.get(p), d)); },
   create: async (d) => { if (store.has(p)) { const e = new Error('ALREADY_EXISTS'); e.code = 6; throw e; } store.set(p, apply({}, d)); } });
 const col = (c, f = [], lim = 0) => ({ _q: true,
@@ -37,15 +38,20 @@ const MUT = {
   start_before_paid:      ["_rentalTransition(req, { from: ['paid_held'], to: 'active',", "_rentalTransition(req, { from: ['accepted', 'paid_held'], to: 'active',"],
   overlap_unchecked:      ["    if (conflict) throw new HttpsError('failed-precondition', 'Those dates are already booked.');", ""],
   fake_mpesa:             ["paymentMethod: 'none', paymentStatus: 'unpaid',", "paymentMethod: 'mpesa', paymentStatus: 'unpaid',"],
+  return_pin_skipped:     ["  if (b0.paymentStatus === 'held') {\n    const v = await _pinCore()", "  if (false) {\n    const v = await _pinCore()"],
+  return_race_unguarded:  ["    guard: (b) => { if (b.paymentStatus === 'held' && !pinVerified)", "    guard: (b) => { if (false)"],
+  return_pin_wrong_owner: ["providerUid: await _shopOwnerUid(shopId), actorUid", "providerUid: req.auth.uid, actorUid"],
 };
 const M = process.env.RENTAL_MUTANT;
 if (M) { const m = MUT[M]; if (!m || src.split(m[0]).length !== 2) { console.error('mutant anchor missing: ' + M); process.exit(2); } src = src.replace(m[0], m[1]); console.log('MUTANT ' + M); }
 const tmp = path.join(os.tmpdir(), 'mx-under-test-' + process.pid + '.js'); fs.writeFileSync(tmp, src);
+const PIN = { calls: [], verify: async (a) => { PIN.calls.push(a); return a.pin === '4321' ? { ok: true } : { ok: false, reason: a.pin ? 'That PIN does not match this booking.' : 'Ask the renter for their rental PIN.' }; } };
 const _load = Module._load;
 Module._load = function (req) {
   if (req === 'firebase-functions/v2/https') return { onCall: (o, f) => f, onRequest: (o, f) => f, HttpsError };
   if (req === 'firebase-functions/v2/scheduler') return { onSchedule: (o, f) => f };
   if (req === 'firebase-admin') return { firestore: firestoreFn };
+  if (req === './booking-pin-core') return PIN;
   return _load.apply(this, arguments);
 };
 const X = require(tmp); fs.unlinkSync(tmp);
@@ -103,7 +109,13 @@ const day = (n) => new Date(Date.now() + n * 86400000).toISOString();
   r = await call('rentalReportReturn', 'buyer1', { bookingId: b1 });
   ck('C4g renter reports the return → return_pending', r.ok && store.get('rentalBookings/' + b1).status === 'return_pending', r);
   r = await call('rentalConfirmReturn', 'ownerU', { bookingId: b1, shopId: 'ownerU' });
-  ck('C4h seller confirms the equipment is back → returned', r.ok && store.get('rentalBookings/' + b1).status === 'returned', r);
+  ck('C4h1 money HELD: confirming the return WITHOUT the renter\'s PIN is refused (still return_pending)', !r.ok && r.code === 'failed-precondition' && /PIN/.test(r.msg) && store.get('rentalBookings/' + b1).status === 'return_pending', r);
+  r = await call('rentalConfirmReturn', 'staffU', { bookingId: b1, shopId: 'ownerU', pin: '1111' });
+  ck('C4h2 a WRONG PIN is refused with the PIN authority\'s reason', !r.ok && /does not match/.test(r.msg) && store.get('rentalBookings/' + b1).status === 'return_pending', r);
+  const lastV = PIN.calls[PIN.calls.length - 1] || {};
+  ck('C4h3 the PIN authority gets source rentalBookings, provider = SHOP OWNER (server-resolved), actor = the staff member typing', lastV.source === 'rentalBookings' && lastV.providerUid === 'ownerU' && lastV.actorUid === 'staffU' && lastV.bookingId === b1, lastV);
+  r = await call('rentalConfirmReturn', 'staffU', { bookingId: b1, shopId: 'ownerU', pin: '4321' });
+  ck('C4h seller (staff) enters the renter\'s PIN → returned, returnPinVerified stamped', r.ok && store.get('rentalBookings/' + b1).status === 'returned' && store.get('rentalBookings/' + b1).returnPinVerified === true, r);
   r = await call('rentalComplete', 'ownerU', { bookingId: b1, shopId: 'ownerU' });
   ck('C4 returned → completed; listing bookingCount +1', r.ok && store.get('rentalBookings/' + b1).status === 'completed' && store.get('rentalProducts/rp1').bookingCount === 1, r);
   r = await call('rentalCancel', 'ownerU', { bookingId: b1 });
@@ -143,6 +155,25 @@ const day = (n) => new Date(Date.now() + n * 86400000).toISOString();
   ck('L6 a negative rate is refused with a reason', !r.ok && r.code === 'invalid-argument', r);
   r = await call('rentalList', null, {});
   ck('E1 signed-out calls get unauthenticated (HttpsError)', !r.ok && r.code === 'unauthenticated' && !r.plain, r);
+
+  /* RP — rental PIN at return: state first, legacy unpaid, race */
+  const mk = (id, d) => store.set('rentalBookings/' + id, Object.assign({ rentalProductId: 'rp1', shopId: 'ownerU', buyerId: 'buyer9' }, d));
+  mk('rpA', { status: 'paid_held', paymentStatus: 'held' });
+  const nCalls = PIN.calls.length;
+  r = await call('rentalConfirmReturn', 'ownerU', { bookingId: 'rpA', shopId: 'ownerU', pin: '4321' });
+  ck('RP1 a rental not yet handed over (paid_held) cannot be returned — and the PIN is NOT spent on it', !r.ok && r.code === 'failed-precondition' && PIN.calls.length === nCalls && store.get('rentalBookings/rpA').status === 'paid_held', r);
+  mk('rpB', { status: 'active', paymentStatus: 'unpaid' });
+  r = await call('rentalConfirmReturn', 'ownerU', { bookingId: 'rpB', shopId: 'ownerU' });
+  ck('RP2 a legacy UNPAID active rental returns without a PIN (nothing held to release)', r.ok && store.get('rentalBookings/rpB').status === 'returned' && store.get('rentalBookings/rpB').returnPinVerified === false, r);
+  mk('rpC', { status: 'active', paymentStatus: 'unpaid' });
+  hooks['rentalBookings/rpC'] = () => store.set('rentalBookings/rpC', Object.assign({}, store.get('rentalBookings/rpC'), { paymentStatus: 'held' }));
+  r = await call('rentalConfirmReturn', 'ownerU', { bookingId: 'rpC', shopId: 'ownerU' });
+  ck('RP3 RACE: the payment is held between the read and the transaction → refused, still active (no PIN-less release)', !r.ok && r.code === 'failed-precondition' && /PIN/.test(r.msg) && store.get('rentalBookings/rpC').status === 'active', r);
+  mk('rpD', { status: 'return_pending', paymentStatus: 'held', shopId: 'otherShop' });
+  r = await call('rentalConfirmReturn', 'ownerU', { bookingId: 'rpD', shopId: 'ownerU', pin: '4321' });
+  ck('RP4 a booking of ANOTHER shop is refused before any PIN check', !r.ok && r.code === 'permission-denied' && store.get('rentalBookings/rpD').status === 'return_pending', r);
+  r = await call('rentalConfirmReturn', 'stranger', { bookingId: b1, shopId: 'ownerU', pin: '4321' });
+  ck('RP5 a stranger cannot confirm a return even with the right PIN', !r.ok && r.code === 'permission-denied', r);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

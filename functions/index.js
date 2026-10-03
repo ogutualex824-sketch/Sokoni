@@ -11738,6 +11738,10 @@ exports.adminResolveDispute     = disputes.adminResolveDispute;
 /* DISPATCH CONSOLIDATION: 75 onCall CFs → 1 commerceDispatch */
 const commerceDispatcher = require('./commerce-dispatch');
 exports.commerceDispatch = commerceDispatcher.commerceDispatch;
+/* Equipment rental PIN (owner 2026-10-03: ONE PIN at RETURN) — the one booking-PIN authority, source rentalBookings.
+   Exported ONCE. Deploy scoped (--only functions:rentalPinOnRentalBooking) only after the providerDispatch booking-PIN
+   release is live and the rental webhook path exists (sokoni-5b). */
+exports.rentalPinOnRentalBooking = require("./rental-pin").rentalPinOnRentalBooking;
 /* ── Auth Dispatcher — email verification challenge (issue / verify / status) ──
    Separate from commerceDispatch on purpose: authentication is a different blast radius,
    and keeping it apart keeps its rate limits, secrets and failure modes separable. Only

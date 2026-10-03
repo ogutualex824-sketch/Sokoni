@@ -1,3 +1,13 @@
+## [2026-10-03] — Equipment rentals: ONE PIN at RETURN on the one booking-PIN authority
+
+**Owner decision (2026-10-03):** rentals use ONE PIN, at RETURN. The renter gives it when the equipment is back, and return_pending → returned lets the held money be released on completion. Hand-over stays a seller action. The PIN is re-viewable by the renter and never shown to the provider.
+**Files:** `functions/booking-pin-core.js`, `functions/shared/ent-booking-identity.js` (byte-identical to sokoni-5b-approved `functions/rental-pin-on-6a9dd40` @ 7619acc), `functions/rental-pin.js` (new trigger `rentalPinOnRentalBooking`), `functions/marketplace-extensions.js` (rentalConfirmReturn), `functions/commerce-dispatch.js` (binds SOKONI_HMAC_KEY), `functions/index.js`, `scripts/test-rentals.js`, `scripts/test-rental-pin.js`.
+**API:** commerceDispatch `rentalConfirmReturn` takes `pin`. When paymentStatus is `held` it requires the renter's PIN. It checks state first (a PIN is never spent on a non-returnable rental), and a payment held between the read and the transaction is refused. serviceBookingPin get/renew accept `source: 'rentalBookings'`.
+**Database:** rentalBookings gains `returnPinVerified`. Envelopes go in entBookings (`rnt_<id>`), plus entBookingSecrets / Refs / PinAttempts (BK-RNT refs).
+**Security:** provider of record = the shop owner from shops/{shopId} (server); attempts are charged to the person typing. A missing shop means no PIN.
+**Tests:** test-rentals 44/0, every mutant caught (incl. return_pin_skipped, return_race_unguarded, return_pin_wrong_owner); test-rental-pin 33/0 (SABOTAGE 15 fail); DE-2 R3 12/0 vs live. test-booking-pin-release needs the emulator: PENDING.
+**Deployment:** NOT deployed. Order: providerDispatch booking-PIN release live → sokoni-5b rental webhook path (paid_held + held) → commerceDispatch + scoped `rentalPinOnRentalBooking` from a tree with identical core bytes.
+
 ## [2026-10-03] — Rentals: the owner's full lifecycle — functions source, NOT deployed
 
 **Listing:** draft → active (Available) ⇄ paused. New `rentalProductPublish` / `rentalProductPause`. `rentalProductCreate`

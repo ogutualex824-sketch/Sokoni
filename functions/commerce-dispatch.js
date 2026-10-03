@@ -23,6 +23,7 @@ const { defineSecret }       = require('firebase-functions/params');
 const INTASEND_PRIVATE_KEY = defineSecret('INTASEND_PRIVATE_KEY');
 const SENDGRID_API_KEY     = defineSecret('SENDGRID_API_KEY');
 const ANTHROPIC_API_KEY    = defineSecret('ANTHROPIC_API_KEY');
+const SOKONI_HMAC_KEY      = defineSecret('SOKONI_HMAC_KEY');
 
 const mktExt        = require('./marketplace-extensions');
 const merchantSuccess = require('./merchant-success');
@@ -57,7 +58,8 @@ for (const op of _RETIRED_OPS) delete _H[op];
 const _OPTS = {
   region:          'us-central1',
   enforceAppCheck: true,
-  secrets:         [INTASEND_PRIVATE_KEY, SENDGRID_API_KEY, ANTHROPIC_API_KEY],
+  /* SOKONI_HMAC_KEY: rentalConfirmReturn verifies the renter's PIN through booking-pin-core (owner 2026-10-03) */
+  secrets:         [INTASEND_PRIVATE_KEY, SENDGRID_API_KEY, ANTHROPIC_API_KEY, SOKONI_HMAC_KEY],
   timeoutSeconds:  120,
   memory:          '512MiB',
   maxInstances:    20,
