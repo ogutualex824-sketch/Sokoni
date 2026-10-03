@@ -1,3 +1,17 @@
+## [2026-10-03] — Legal Hub L11 (server): each advocate verified individually; firm membership by request + firm decision — NOT deployed
+
+- **Owner decision (10-03):** "Verify each advocate individually. Firm verification should not automatically make every advocate bookable."
+- **functions/legal-hub.js (legalDispatch ops):**
+  - legalRequestFirmMembership: an advocate with their OWN Lawyer record asks to join a firm.
+  - legalFirmDecideMember: accept / decline / remove, by the FIRM only.
+  - legalLeaveFirm, and legalFirmMembers: the firm's private view, with each member's own verification state.
+- **getLegalProvider:**
+  - A firm's public team = accepted members who are individually eligible now (admin + their own current LSK).
+  - A member's storefront shows the memberOf firm only while accepted and the firm is eligible.
+  - firm.teamDeclared stays private. firmUid / firmMembershipStatus are protected from self-service edits.
+- **Tests:** test-legal-profile FM1–FM4 (23/0); sabotage-legal-profile 10/10.
+- **Index:** where(firmUid ==) is a single field, so no composite index.
+
 ## 2026-10-03 — Legal free plan: the auto consultation card does not count toward the service cap (owner decision; NOT deployed)
 
 - **Change:** provider-ops add/duplicate/toggle exclude exactly providerServices/legal_consult_{uid} with createdBy 'legal-verification' from the active-service count.

@@ -189,6 +189,16 @@ function _publicAdvocate(p, now) {
     sokoniVerified: pv.sokoniVerified, lskVerified: pv.lskVerified, lskPractisingYear: pv.lskPractisingYear };
 }
 
+/* L11 (owner 2026-10-03: "Verify each advocate individually. Firm verification should not automatically make every advocate
+   bookable."). A firm's PUBLIC team = advocates who (1) have their OWN Legal record, (2) asked to join this firm and the firm
+   accepted, and (3) are individually eligible right now (admin approval + their OWN current LSK check). The firm's declared
+   team (firm.teamDeclared) is never public. */
+async function _verifiedTeam(firmUid, now) {
+  const snap = await db().collection('legalProviders').where('firmUid', '==', firmUid).limit(100).get();
+  return snap.docs.map((d) => d.data()).filter((m) => m.firmMembershipStatus === 'accepted' && m.entityType !== 'firm' && LV.eligibility(m, now).bookable)
+    .map((m) => { const pv = LV.publicVerification(m, now); return { providerId: m.providerId || m.uid, name: m.name, practiceAreas: TAX.areasOfProfile(m), lskVerified: pv.lskVerified, lskPractisingYear: pv.lskPractisingYear }; });
+}
+
 /* ── 4. getLegalProvider ── */
 exports.getLegalProvider = onCall(CF_OPTS, async (req) => {
   const { providerId } = req.data;
@@ -196,7 +206,16 @@ exports.getLegalProvider = onCall(CF_OPTS, async (req) => {
   const snap = await db().collection('legalProviders').doc(String(providerId)).get();
   const now = Date.now();
   if (!snap.exists || !LV.eligibility(snap.data(), now).bookable) throw new HttpsError('not-found', 'Provider not found');
-  return _publicAdvocate(snap.data(), now);
+  const out = _publicAdvocate(snap.data(), now);
+  if (out.entityType === 'firm') out.team = await _verifiedTeam(String(providerId), now);
+  else {
+    const m = snap.data();
+    if (m.firmMembershipStatus === 'accepted' && m.firmUid) {
+      const f = await db().collection('legalProviders').doc(String(m.firmUid)).get();
+      if (f.exists && LV.eligibility(f.data(), now).bookable) out.memberOf = { firmUid: m.firmUid, firmName: f.data().firmName || f.data().name || '' };
+    }
+  }
+  return out;
 });
 
 /* ── 5. bookLegalConsultation ── */
@@ -412,6 +431,62 @@ _h.legalResubmitApplication = async (req) => {
       ...(patch.practiceAreas ? { practiceAreas: patch.practiceAreas, practiceGroups: TAX.groupsOf(patch.practiceAreas) } : {}) });
   });
   return { ok: true, status: 'pending' };
+};
+
+/* ── L11 firm membership — a request by the ADVOCATE, a decision by the FIRM. Never makes anyone bookable. ── */
+_h.legalRequestFirmMembership = async (req) => {
+  const uid = requireAuth(req);
+  const firmUid = san(req.data && req.data.firmUid, 128);
+  if (!firmUid || firmUid === uid) throw new HttpsError('invalid-argument', 'Choose the law firm to join.');
+  const meRef = db().collection('legalProviders').doc(uid), firmRef = db().collection('legalProviders').doc(firmUid);
+  await db().runTransaction(async (t) => {
+    const [me, firm] = await Promise.all([t.get(meRef), t.get(firmRef)]);
+    if (!me.exists || me.data().entityType === 'firm') throw new HttpsError('failed-precondition', 'Apply as a Lawyer first — each advocate is verified individually.', { code: 'NEED_OWN_LAWYER_RECORD' });
+    if (!firm.exists || firm.data().entityType !== 'firm') throw new HttpsError('not-found', 'That law firm is not on SOKONI.');
+    if (me.data().firmMembershipStatus === 'accepted' && me.data().firmUid !== firmUid) throw new HttpsError('failed-precondition', 'Leave your current firm first.');
+    t.update(meRef, { firmUid, firmMembershipStatus: 'requested', firmMembershipAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  });
+  return { ok: true, status: 'requested' };
+};
+_h.legalFirmDecideMember = async (req) => {
+  const uid = requireAuth(req);
+  const d = req.data || {};
+  const memberUid = san(d.memberUid, 128);
+  const decision = ['accept', 'decline', 'remove'].includes(d.decision) ? d.decision : null;
+  if (!memberUid || !decision) throw new HttpsError('invalid-argument', 'memberUid and decision (accept | decline | remove) required');
+  const firmRef = db().collection('legalProviders').doc(uid), mRef = db().collection('legalProviders').doc(memberUid);
+  const out = await db().runTransaction(async (t) => {
+    const [firm, m] = await Promise.all([t.get(firmRef), t.get(mRef)]);
+    if (!firm.exists || firm.data().entityType !== 'firm') throw new HttpsError('permission-denied', 'Only the law firm can decide its members.');
+    if (!m.exists || m.data().firmUid !== uid) throw new HttpsError('not-found', 'No such membership request for this firm.');
+    const cur = m.data().firmMembershipStatus;
+    if ((decision === 'accept' || decision === 'decline') && cur !== 'requested') throw new HttpsError('failed-precondition', 'There is no pending request to decide.');
+    if (decision === 'remove' && cur !== 'accepted') throw new HttpsError('failed-precondition', 'This advocate is not a member.');
+    const next = decision === 'accept' ? 'accepted' : decision === 'decline' ? 'declined' : 'removed';
+    t.update(mRef, { firmMembershipStatus: next, firmMembershipDecidedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    return next;
+  });
+  return { ok: true, status: out };
+};
+_h.legalLeaveFirm = async (req) => {
+  const uid = requireAuth(req);
+  const ref = db().collection('legalProviders').doc(uid);
+  await db().runTransaction(async (t) => {
+    const s = await t.get(ref);
+    if (!s.exists || !s.data().firmUid) throw new HttpsError('failed-precondition', 'You are not linked to a firm.');
+    t.update(ref, { firmMembershipStatus: 'left', updatedAt: FieldValue.serverTimestamp() });
+  });
+  return { ok: true, status: 'left' };
+};
+/* The firm's own view of requests + members, each with THEIR OWN verification state (private to the firm owner). */
+_h.legalFirmMembers = async (req) => {
+  const uid = requireAuth(req);
+  const firm = await db().collection('legalProviders').doc(uid).get();
+  if (!firm.exists || firm.data().entityType !== 'firm') throw new HttpsError('permission-denied', 'Law firms only.');
+  const now = Date.now();
+  const snap = await db().collection('legalProviders').where('firmUid', '==', uid).limit(100).get();
+  return { members: snap.docs.map((d) => { const m = d.data(); const el = LV.eligibility(m, now);
+    return { uid: d.id, name: m.name, status: m.firmMembershipStatus || null, individuallyVerified: el.bookable, code: el.code }; }) };
 };
 
 /* The taxonomy itself, for any client that cannot load the generated browser copy. Public, no auth. */

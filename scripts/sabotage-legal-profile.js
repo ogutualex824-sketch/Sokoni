@@ -12,6 +12,8 @@ const M = [
   ['legacy criminal_law guessed onto litigation', 'shared/legal-taxonomy.js', 'criminal_law: null,', "criminal_law: 'litigation-support',", 'T3'],
   ['public shows REQUESTED specialist areas', 'legal-hub.js', 'specialistAreas: TAX.specialistConfirmedOf(p),', 'specialistAreas: TAX.specialistRequestedOf(p),', 'SP1'],
   ['specialist confirmed without the advocate request', 'legal-verification.js', "if (confirm && TAX.specialistRequestedOf(lp).indexOf(area) < 0) throw", 'if (false) throw', 'SP2'],
+  ['firm team lists unverified members', 'legal-hub.js', "m.entityType !== 'firm' && LV.eligibility(m, now).bookable)", "m.entityType !== 'firm')", 'FM2'],
+  ['anyone may decide firm members', 'legal-hub.js', "if (!firm.exists || firm.data().entityType !== 'firm') throw new HttpsError('permission-denied', 'Only the law firm can decide its members.');", '', 'FM3'],
 ];
 let caught = 0, missed = 0;
 for (const [name, file, a, b, row] of M) {

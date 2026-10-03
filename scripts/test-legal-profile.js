@@ -153,6 +153,33 @@ const eligibleVerification = () => ({
   await D('legalUpdateProfile', 'adv1', { specialistAreas: [] });
   const pubW = (await call(run(LH.getLegalProviders), null, {})).ok.providers.find((p) => p.providerId === 'adv1');
   ck('SP3', JSON.stringify(pubW.specialistAreas) === '[]', 'withdrawing the request hides a confirmed specialist area at once (public = confirmed ∩ requested)', pubW.specialistAreas);
+  /* ── FM: individual advocate verification inside a firm (owner 10-03) ── */
+  await call(run(LH.registerLegalProvider), 'adv2', { name: 'Pending Advocate', licenseNumber: 'P.105/55/20', practiceAreas: ['mediation'] });
+  const team = async () => { const x = await call(run(LH.getLegalProvider), null, { providerId: 'firm1' }); return x.ok ? (x.ok.team || []).map((m) => m.providerId).sort() : x; };
+  const rq1 = await D('legalRequestFirmMembership', 'adv1', { firmUid: 'firm1' });
+  const t0 = await team();
+  const acc1 = await D('legalFirmDecideMember', 'firm1', { memberUid: 'adv1', decision: 'accept' });
+  const t1 = await team();
+  ck('FM1', !!rq1.ok && JSON.stringify(t0) === '[]' && !!acc1.ok && JSON.stringify(t1) === '["adv1"]',
+    'an advocate (own verified record) asks to join; the firm accepts; only THEN the firm storefront lists them', { t0, t1 });
+  await D('legalRequestFirmMembership', 'adv2', { firmUid: 'firm1' });
+  const acc2 = await D('legalFirmDecideMember', 'firm1', { memberUid: 'adv2', decision: 'accept' });
+  const t2 = await team();
+  const fm = await D('legalFirmMembers', 'firm1', {});
+  const row2 = fm.ok && fm.ok.members.find((m) => m.uid === 'adv2');
+  ck('FM2', !!acc2.ok && JSON.stringify(t2) === '["adv1"]' && row2 && row2.status === 'accepted' && row2.individuallyVerified === false,
+    'firm acceptance does NOT make an advocate public or bookable: an unverified member stays off the firm team (firm sees "not individually verified")', { t2, row2 });
+  const byAdv = await D('legalFirmDecideMember', 'adv2', { memberUid: 'adv1', decision: 'remove' });
+  const firmAsMember = await D('legalRequestFirmMembership', 'firm1', { firmUid: 'firm1x' });
+  const noReq = await D('legalFirmDecideMember', 'firm1', { memberUid: 'adv1', decision: 'accept' });
+  const selfLink = await D('legalUpdateProfile', 'adv2', { firmMembershipStatus: 'accepted', firmUid: 'firm1' });
+  ck('FM3', byAdv.code === 'permission-denied' && !!firmAsMember.det && firmAsMember.det.code === 'NEED_OWN_LAWYER_RECORD' && noReq.code === 'failed-precondition' && !!selfLink.det && selfLink.det.code === 'LEGAL_PROTECTED_FIELD',
+    'only the firm decides members; a firm cannot join as a member; no double-accept; an advocate cannot self-set membership', { byAdv: byAdv.code, firmAsMember: firmAsMember.det || firmAsMember.code, noReq: noReq.code, selfLink: selfLink.det });
+  const rm = await D('legalFirmDecideMember', 'firm1', { memberUid: 'adv1', decision: 'remove' });
+  const t3 = await team();
+  const advPub = await call(run(LH.getLegalProvider), null, { providerId: 'adv1' });
+  ck('FM4', !!rm.ok && JSON.stringify(t3) === '[]' && advPub.ok && advPub.ok.memberOf === undefined,
+    'removal takes the advocate off the firm team at once (and off "member of" on their own storefront)', { t3, memberOf: advPub.ok && advPub.ok.memberOf });
   const agreements = Object.keys(require(path.join(FN, 'legal-agreements.js'))._h), hub = Object.keys(LH._h || {});
   ck('D1', hub.length >= 4 && hub.every((k) => agreements.indexOf(k) < 0) && mine.ok && mine.ok.editable.indexOf('offices') > -1,
     'profile ops are routed by the EXISTING legalDispatch (no new Cloud Function); no name clash with agreement ops', hub);
