@@ -30,7 +30,7 @@ const ROOT = path.resolve(__dirname, '..'), FN = path.join(ROOT, 'functions');
 const FILES = ['product-visibility.js', 'trust-safety.js', 'algolia-sync.js', 'typesense-sync.js', 'algolia-queue.js', 'typesense-queue.js',
   'algolia-indexer.js', 'algolia-sanitize.js', 'search-terms.js', 'typesense-client.js', 'search-service.js', 'search-sync.js',
   'algolia-recommend.js', 'api-gateway.js', 'minishop.js', 'minishop-config-schema.js', 'pos-marketplace-sync.js',
-  'marketplace-extensions.js', 'index.js'];
+  'marketplace-extensions.js', 'moderation-media.js', 'index.js'];
 
 /* ── failure injection: each fault, the exact text it replaces, and the NAMED row that must catch it ── */
 const SABOTAGES = {

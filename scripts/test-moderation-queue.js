@@ -128,6 +128,7 @@ const audits = async (pred) => (await db.collection('trustSafetyAudit').get()).d
 
 (async () => {
   say('\nSOURCE: working tree' + (SAB ? ' + SABOTAGE ' + SAB : '') + ' — ' + FN);
+  loadFrom('moderation-media.js', path.join(FN, 'moderation-media.js'));   /* trust-safety's media-hold closure (2026-10-03) */
   const TS = loadFrom('trust-safety.js', path.join(FN, 'trust-safety.js'));
   const sent = []; let notifyMode = 'ok';
   if (typeof TS._setNotifier !== 'function') { say('BLOCKED — no moderation queue in this trust-safety.js'); process.exit(2); }
