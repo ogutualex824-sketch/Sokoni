@@ -1,3 +1,10 @@
+## 2026-10-03 — Construction OFF items stored CONFIGURED BUT DISABLED, never as zero (owner FINAL rules via f3) (NOT deployed)
+
+- **Change:** featured (KES 500/wk), premium featured (NEW row: 1,500/wk, 4,000/mo), delivery margin (10%) and project fee (1.5%) now carry `{configured:true, enabled:false, effectiveFrom:null}` + their real amount/rate + a "Configured but disabled — …" label; no stored 0. `UNPRICED_CATEGORIES` is now DERIVED from `enabled === false` (the engine still refuses each with `category_unpriced`). `resolveRate` returns `enabled:false` for such rows; the client snapshot (`sokoni-commission-rates.js`, regenerated) carries `enabled` too so no page renders an OFF fee as active. Qualified lead KES 500 stays unused (every lead standard).
+- **Files:** functions/commission-config.js, scripts/build-commission-snapshot.js, sokoni-commission-rates.js, scripts/test-construction-commercial.js (K9).
+- **DB / API / security / breaking:** none; no charge changes.
+- **Tests:** construction 9/0, commission-single-source PASS, 5pct-agreement 62/0, lane-separation 22/0, schedule 34/0, plan-ladder 38/0, marketing 5/0, sports 61/0, rfq_quote 7/0 (Q3 = non-buyer refused), hub-plans 17/0.
+
 ## 2026-10-03 — Sports: verification states (verified / restricted / suspended, admin-only with reason) + a free plan per Sports role (NOT deployed)
 
 - **Tests:** test-sports-authority 61/0, hub-plan-entitlements 17/0.

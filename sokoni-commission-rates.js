@@ -112,16 +112,24 @@
       "fixedKES": 0
     },
     "construction_featured": {
-      "pct": 0,
-      "fixedKES": 0
+      "pct": null,
+      "fixedKES": null,
+      "enabled": false
+    },
+    "construction_premium_featured": {
+      "pct": null,
+      "fixedKES": null,
+      "enabled": false
     },
     "construction_delivery_margin": {
-      "pct": 0,
-      "fixedKES": 0
+      "pct": 10,
+      "fixedKES": null,
+      "enabled": false
     },
     "construction_project_fee": {
       "pct": 1.5,
-      "fixedKES": 0
+      "fixedKES": null,
+      "enabled": false
     },
     "marketing_services": {
       "pct": 10,
@@ -355,7 +363,7 @@
     if (!category || !RATES[category]) {
       return { pct: RATES.default.pct, fixedKES: RATES.default.fixedKES, category: 'default', matched: false };
     }
-    return { pct: RATES[category].pct, fixedKES: RATES[category].fixedKES, category: category, matched: true };
+    return { pct: RATES[category].pct, fixedKES: RATES[category].fixedKES, category: category, matched: true, enabled: RATES[category].enabled !== false };
   }
 
   window.SokoniCommission = {

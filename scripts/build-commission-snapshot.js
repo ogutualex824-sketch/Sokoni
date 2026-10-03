@@ -26,7 +26,8 @@ const OUT = path.join(__dirname, '..', 'sokoni-commission-rates.js');
 
 /* Strip the provenance notes — the browser does not need them, and they would double the file. */
 const rates = {};
-for (const [k, v] of Object.entries(CC.RATES)) rates[k] = { pct: v.pct, fixedKES: v.fixedKES };
+/* enabled:false (configured-but-disabled, owner 2026-10-03) travels to the client so no page renders an OFF fee as active. */
+for (const [k, v] of Object.entries(CC.RATES)) rates[k] = v.enabled === false ? { pct: v.pct, fixedKES: v.fixedKES, enabled: false } : { pct: v.pct, fixedKES: v.fixedKES };
 
 /* The two LANE schedules. Without these the browser knows only the category table, so a
    pricing page would show every seller a flat 5% while the engine charges a Free seller 15%
@@ -94,7 +95,7 @@ const body = `/* ===============================================================
     if (!category || !RATES[category]) {
       return { pct: RATES.default.pct, fixedKES: RATES.default.fixedKES, category: 'default', matched: false };
     }
-    return { pct: RATES[category].pct, fixedKES: RATES[category].fixedKES, category: category, matched: true };
+    return { pct: RATES[category].pct, fixedKES: RATES[category].fixedKES, category: category, matched: true, enabled: RATES[category].enabled !== false };
   }
 
   window.SokoniCommission = {

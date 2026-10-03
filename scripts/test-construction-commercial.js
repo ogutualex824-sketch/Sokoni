@@ -7,6 +7,7 @@
      K4  equipment rental / featured / delivery margin are UNPRICED: the engine REFUSES them (code category_unpriced) —
          never 0%, never the default
      K5  no bare 'service' / 'job' alias was introduced; existing hubs keep their rates; bare 'services' still 5%
+     K9  OFF items stored configured-but-disabled (owner rule 2026-10-03), never as a zero value
      K6  a KES 10,000 cement order through the real engine → 15% (KES 1,500)
    NODE_PATH=<functions/node_modules> node scripts/test-construction-commercial.js */
 const path = require('path'), Module = require('module');
@@ -44,6 +45,12 @@ const db = { collection: (n) => ({ doc: (id) => ({ async get () { const d = ovDo
   ck('K5 no bare service / job / architect alias; services 5%, jobs 0% unchanged', !CC.resolveRate('architect').matched && !CC.resolveRate('service').matched && !CC.resolveRate('job').matched && CC.resolveRate('services').pct === 5 && CC.resolveRate('jobs').pct === 0);
   const m = await FU.calculateCommission(db, { orderAmountCents: 1000000, category: 'cement', sellerId: 'S2' });
   ck('K6 real engine: KES 10,000 cement → KES 1,500 (15%)', m.commissionCents === 150000 && m.effectiveRate === 15, { cents: m.commissionCents, rate: m.effectiveRate });
+  const OFF = ['construction_featured', 'construction_premium_featured', 'construction_delivery_margin', 'construction_project_fee'];
+  const offBad = OFF.filter((k) => { const r = CC.RATES[k]; return !(r && r.configured === true && r.enabled === false && r.effectiveFrom === null && r.pct !== 0 && r.fixedKES !== 0
+    && /^Configured but disabled/.test(r.label || '') && CC.isUnpricedCategory(k) && CC.resolveRate(k).enabled === false); });
+  ck('K9 owner rule: every OFF item stored {configured:true, enabled:false, effectiveFrom:null}, never a 0 value, labelled, refused; UNPRICED = exactly the disabled rows',
+    offBad.length === 0 && CC.UNPRICED_CATEGORIES.slice().sort().join() === OFF.slice().sort().join()
+    && CC.RATES.construction_featured.weeklyKES === 500 && CC.RATES.construction_premium_featured.weeklyKES === 1500 && CC.RATES.construction_premium_featured.monthlyKES === 4000, offBad);
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e && e.stack); process.exit(1); });

@@ -112,13 +112,22 @@ const RATES = {
        UNPRICED_CATEGORIES and the engine REFUSES to price them (never a silent 0% and never the 5% default). */
   construction_service:          { pct: 0, fixedKES: 0, _was: 'new 2026-10-03 — owner: subscription + per-lead fee, no % of contract value' },
   construction_equipment_rental: { pct: 10, fixedKES: 0, _was: 'owner 2026-10-03 (Super Admin update via f3): 10% — was unpriced/refused' },
-  construction_featured:         { pct: 0, fixedKES: 0, _was: 'new 2026-10-03 — owner: unpriced, OFF (refused by the engine)' },
-  construction_delivery_margin:  { pct: 0, fixedKES: 0, _was: 'new 2026-10-03 — owner: 10% configured but DISABLED (refused by the engine)' },
+  /* OFF items — owner representation rule 2026-10-03 (via f3): an OFF item is stored CONFIGURED BUT DISABLED
+     ({configured:true, enabled:false, effectiveFrom:null} + its real amount/rate), NEVER as a zero value, so no reader can mistake
+     a stored number for an active charge. enabled:false puts the row in UNPRICED_CATEGORIES → the engine refuses it. */
+  construction_featured:         { pct: null, fixedKES: null, weeklyKES: 500, configured: true, enabled: false, effectiveFrom: null,
+                                   label: 'Configured but disabled — no featured-placement fee currently charged', _was: 'owner FINAL 2026-10-03: featured KES 500/week OFF' },
+  construction_premium_featured: { pct: null, fixedKES: null, weeklyKES: 1500, monthlyKES: 4000, configured: true, enabled: false, effectiveFrom: null,
+                                   label: 'Configured but disabled — no premium-featured fee currently charged', _was: 'owner FINAL 2026-10-03: premium KES 1,500/week, 4,000/month OFF' },
+  construction_delivery_margin:  { pct: 10, fixedKES: null, configured: true, enabled: false, effectiveFrom: null,
+                                   label: 'Configured but disabled — no delivery margin currently charged', _was: 'owner FINAL 2026-10-03: 10% OFF' },
   /* 1.5% project fee: CONFIGURED but GATED. It conflicts with the owner's standing "no % of contract value" for contractors and
      may only ever apply to a SOKONI-managed milestone/escrow project payment — which does not exist (the Work engine is unbuilt).
      So it stays in UNPRICED_CATEGORIES (refused) until that purpose exists AND the owner re-confirms. Never construction_service,
      bookings, leads or subscriptions. */
-  construction_project_fee:      { pct: 1.5, fixedKES: 0, _was: 'owner 2026-10-03: 1.5% on managed milestone/escrow payments only — GATED (refused) until that purpose exists + owner re-confirms' },
+  construction_project_fee:      { pct: 1.5, fixedKES: null, configured: true, enabled: false, effectiveFrom: null,
+                                   label: 'Configured but disabled — no project/milestone platform fee currently charged',
+                                   _was: 'owner FINAL 2026-10-03: 1.5% on managed milestone/escrow payments only — OFF' },
   /* MARKETING (owner 2026-10-03, via sokoni-b2): 10% per marketing service sale, a FLAT booking lane (no plan moves it). Every
      taxonomy id (shared/marketing-taxonomy.js, byte-identical with b2's line) aliases here. Eligibility per booking (the id is
      in provider.marketingCategories AND marketingStatus 'active') is enforced at settlement; otherwise refused. */
@@ -411,7 +420,9 @@ function resolveRate(key) {
     return { ...RATES.default, category: 'default', matched: false };
   }
   const r = RATES[category];
-  return { pct: r.pct, fixedKES: r.fixedKES, category, matched: true };
+  const out = { pct: r.pct, fixedKES: r.fixedKES, category, matched: true };
+  if (r.enabled === false) { out.configured = r.configured === true; out.enabled = false; out.effectiveFrom = r.effectiveFrom || null; }
+  return out;
 }
 
 /* ── FIXED-RATE CATEGORIES — the recorded POS decision is ABSOLUTE, not merely ladder-exempt ──
@@ -438,7 +449,8 @@ const FIXED_RATE_FLOOR_EXEMPT = Object.freeze(['fitness', 'b2b_order', 'jobs', '
 
 /* UNPRICED products (owner 2026-10-03): they exist so nothing falls to the default, but they are OFF until the owner sets a
    price. finos-utils.calculateCommission REFUSES them (code 'category_unpriced') — a payment for one must not proceed. */
-const UNPRICED_CATEGORIES = Object.freeze(['construction_featured', 'construction_delivery_margin', 'construction_project_fee']);   /* rental priced 10% 2026-10-03; featured refused until a fulfilling product exists */
+/* Derived, never hand-listed: every row stored configured-but-disabled (enabled:false) is refused. */
+const UNPRICED_CATEGORIES = Object.freeze(Object.keys(RATES).filter((k) => RATES[k].enabled === false));   /* rental priced 10% 2026-10-03; featured refused until a fulfilling product exists */
 function isUnpricedCategory(key) {
   const r = resolveRate(key);
   return r.matched === true && UNPRICED_CATEGORIES.indexOf(r.category) !== -1;
