@@ -964,15 +964,12 @@ exports.getWalletTransactions = onCall({ cors: true, enforceAppCheck: true }, as
    withdrawal may run until the owner opens it. A direct call is refused SERVER-side — the UI's disabled button is not the
    control. Opening requires platformConfig/withdrawals { enabled: true } written deliberately (no endpoint toggles it);
    anything else, including an unreadable flag, refuses (fail closed). */
-async function _withdrawalsOpen(db) {
-  try { const s = await db.collection('platformConfig').doc('withdrawals').get(); return s.exists && s.data().enabled === true; }
-  catch (_) { return false; }
-}
+const { withdrawalsOpen: _withdrawalsOpen, CLOSED_MESSAGE: _WITHDRAWALS_CLOSED } = require('./shared/withdrawal-gate');   /* ONE gate for every money mover */
 
 exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secrets: [INTASEND_KEY] }, async (request) => {
   _requireAuth(request);
   if (!(await _withdrawalsOpen(getFirestore()))) {
-    throw new HttpsError('failed-precondition', 'Withdrawals are not available yet. Your balance is safe and remains in your SOKONI wallet.', { code: 'WITHDRAWALS_DISABLED' });
+    throw new HttpsError('failed-precondition', _WITHDRAWALS_CLOSED, { code: 'WITHDRAWALS_DISABLED' });
   }
   /* HIGH-06: throttle a money/privilege endpoint. Throws resource-exhausted. */
   await checkRateLimit(request, 'payment');
@@ -1662,6 +1659,8 @@ exports.processPayoutRetries = onSchedule(
   { schedule: 'every 5 minutes', region: 'us-central1', timeoutSeconds: 300, memory: '256MiB' },
   async () => {
     const db   = getFirestore();
+    /* A retry RE-SENDS money (B2C): gated. Closed → leave every retry_scheduled request untouched (amount stays reserved). */
+    if (!(await _withdrawalsOpen(db))) { require('firebase-functions/logger').warn('[withdrawal-gate] processPayoutRetries skipped — withdrawals are OFF (platformConfig/withdrawals)'); return; }
     const snap = await db.collection('payoutRequests')
       .where('status', '==', 'retry_scheduled').limit(50).get().catch(() => null);
     if (!snap || snap.empty) return;
