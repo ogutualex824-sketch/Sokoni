@@ -823,6 +823,83 @@ const PURPOSES = {
       };
     },
   },
+  /* ── Canonical invoice (owner 2026-10-04: `invoices`, restructured, is THE invoice; contract with sokoni-f3 / sokoni-5b, H15) ──
+     Priced ONLY from the SERVER: invoices/{id}.balanceCents, cross-checked against totalCents − paidCents (both written only by
+     the canonical writers and invoice-allocation.js; `invoices` is write:false in rules). Never a client amount.
+     Payable: canonical (modelVersion 1 + a source), status issued | partially_paid, currency KES, source 'manual' ONLY —
+       order / booking / quote invoices are paid through their OWN purpose (paying the invoice too would double-charge), and
+       commission / subscription invoices are platform bills whose payee is SOKONI, not a merchant (separate path).
+     Payer: the invoice's customer when it names one (clientUid); canonical merchant invoices today identify the customer by
+       name / email / phone only, so any signed-in payer may pay — never the issuing merchant (owner call recorded in CHANGELOG).
+     Payee: shops/{shopId}.ownerId, else shopId IS the owner uid (shop identity model); business wallet.
+     Platform fee: captured as a commission SNAPSHOT at payment start on category 'merchant_invoice'. No rate is configured,
+       so the engine refuses (category_unpriced) and NO intent is minted until the owner sets one — never a default rate.
+     ONE open intent per invoice balance: ref INV-<invoiceId>-<balanceCents>; a retry by the same payer replays it, another
+       payer is refused while it is open, an expired / cancelled attempt is stepped past (-r1 … -r9), a paid one means the
+       allocation is landing (refresh). After a partial payment the balance — and so the ref — changes.
+     Self-settling: the verified webhook (sokoni-5b) allocates via invoice-allocation.applyVerifiedPayment and settles through the
+       one settlement path with this snapshot; the generic credit path never pays anyone at payment time. */
+  invoice: {
+    resourceType: 'invoice',
+    async price(uid, data) {
+      const invoiceId = String(data.invoiceId || '').trim();
+      if (!/^[A-Za-z0-9_-]{6,128}$/.test(invoiceId)) fail('invalid-argument', 'invoiceId is required.');
+      const M = require('./shared/invoice-model');
+      const s = await db().collection('invoices').doc(invoiceId).get();
+      if (!s.exists) fail('not-found', 'Invoice not found.');
+      const x = s.data() || {};
+      if (x.modelVersion !== M.MODEL_VERSION || !M.SOURCES.includes(x.source)) fail('failed-precondition', 'This invoice cannot be paid online.', { code: 'invoice_not_canonical' });
+      if (x.status !== 'issued' && x.status !== 'partially_paid') {
+        fail('failed-precondition', x.status === 'paid' ? 'This invoice is already paid.' : 'This invoice is not open for payment.', { code: 'invoice_not_payable' });
+      }
+      if (x.source !== 'manual') fail('failed-precondition', 'This invoice is paid through its own order, booking or bill — not here.', { code: 'invoice_source_not_payable' });
+      if (String(x.currency || 'KES').toUpperCase() !== 'KES') fail('failed-precondition', 'Only KES invoices can be paid online.', { code: 'invoice_currency' });
+      const bal = x.balanceCents;
+      if (!Number.isInteger(bal) || bal <= 0) fail('failed-precondition', 'This invoice has nothing left to pay.', { code: 'invoice_no_balance' });
+      if (!Number.isInteger(x.totalCents) || !Number.isInteger(x.paidCents) || bal !== Math.max(0, x.totalCents - x.paidCents)) {
+        fail('failed-precondition', 'This invoice balance is inconsistent. Ask the merchant to review it.', { code: 'invoice_inconsistent' });
+      }
+      if (x.clientUid && x.clientUid !== uid) fail('permission-denied', 'Only the customer on this invoice can pay it.');
+      const shopId = String(x.shopId || '');
+      if (!shopId) fail('failed-precondition', 'This invoice has no merchant to settle to.', { code: 'invoice_no_payee' });
+      const shop = await db().collection('shops').doc(shopId).get();
+      const owner = shop.exists && (shop.data() || {}).ownerId ? String(shop.data().ownerId) : shopId;
+      if (owner === uid || x.createdBy === uid) fail('failed-precondition', 'You cannot pay your own invoice.');
+      /* COMMISSION SNAPSHOT at payment start (no rate configured → refused before any intent exists) */
+      let comm;
+      try {
+        comm = await require('./finos-utils').calculateCommission(db(), { orderAmountCents: bal, sellerId: owner, category: 'merchant_invoice' });
+      } catch (e) {
+        if (e && e.code === 'category_unpriced') fail('failed-precondition', 'Online invoice payment is not enabled yet — the platform fee for invoice payments has not been set.', { code: 'category_unpriced' });
+        throw e;
+      }
+      const commissionSnapshot = require('./shared/settlement-authority').snapshotFrom(comm, {
+        policyVersion: require('./commission-config').COMMISSION_POLICY_VERSION, commissionBase: 'invoice_balance', capturedOnCents: bal });
+      if (!commissionSnapshot) fail('failed-precondition', 'The platform fee for this invoice could not be captured. Please try again.');
+      /* ONE open intent per balance */
+      const base = 'INV-' + invoiceId + '-' + bal;
+      let ref = null;
+      for (let k = 0; k < 10 && !ref; k++) {
+        const r = k ? base + '-r' + k : base;
+        const p = await db().collection('paymentIntents').doc(r).get();
+        if (!p.exists) { ref = r; break; }
+        const pi = p.data() || {};
+        const st = String(pi.status || '');
+        const exp = pi.expiresAt && typeof pi.expiresAt.toMillis === 'function' ? pi.expiresAt.toMillis() : null;
+        if (st === 'expired' || st === 'cancelled' || (st === 'created' && exp !== null && exp < Date.now())) continue;
+        if (st === 'paid' || st === 'completed') fail('failed-precondition', 'A payment for this balance was just received. Refresh the invoice.', { code: 'invoice_payment_received' });
+        if (pi.uid !== uid) fail('failed-precondition', 'This invoice is being paid right now. Try again in a few minutes.', { code: 'invoice_payment_in_progress' });
+        ref = r;
+      }
+      if (!ref) fail('resource-exhausted', 'Too many payment attempts for this invoice. Contact the merchant.');
+      return {
+        amountCents: bal, currency: 'KES', resourceType: 'invoice', resourceId: invoiceId, preferredRef: ref,
+        metadata: { type: 'invoice', invoiceId, invoiceNumber: x.invoiceNumber || null, source: x.source, shopId, sellerUid: owner,
+          payeeWallet: 'business', balanceCentsAtIntent: bal, commissionCategory: 'merchant_invoice', commissionSnapshot },
+      };
+    },
+  },
+
   commission_collection: {
     resourceType: 'commissionObligation',
     async price(uid) {
