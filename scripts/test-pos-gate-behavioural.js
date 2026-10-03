@@ -378,6 +378,24 @@ console.log('\nPART D — adversarial controls\n');
     rA.code + ' vs ' + rB.code);
 }
 
+/* PART K — MODERATION TAKEDOWN at the till (owner 2026-10-03; ported from 8b60947 onto this line). */
+console.log('\nPART K — a SOKONI takedown blocks the till; a seller switch-off does not\n');
+{
+  const H = { name: 'Taken down', price: 100, stock: 50, trackInventory: true, sellerUid: MERCHANT, shopId: MERCHANT, isVisible: false,
+    moderationHold: { active: true, ref: 'abcd1234abcd1234', at: 'TS' } };
+  reset(); let u = seedActor('owner'); DOCS.set('products/P1', Object.assign({}, H));
+  let r = await call(u);
+  ck('K-1 a product under a SOKONI takedown (moderationHold) cannot be sold at the till', !r.ok && r.code === 'failed-precondition' && noSale(), r.code + ' ' + (r.message || ''));
+  ck('K-2 ...and its stock is untouched', DOCS.get('products/P1').stock === 50);
+  reset(); u = seedActor('owner'); DOCS.set('products/P1', Object.assign({}, H, { moderationHold: undefined }));
+  delete DOCS.get('products/P1').moderationHold;
+  r = await call(u);
+  ck('K-3 CONTROL: a seller\'s own switch-off (isVisible:false, no hold) still sells in store', r.ok, r.code + ' ' + (r.message || ''));
+  reset(); u = seedActor('owner'); DOCS.set('products/P1', Object.assign({}, H));
+  try { r = await ZF.posCompleteCheckout({ data: { dryRun: true, idempotencyKey: 'IK_K_DRY', merchantId: MERCHANT, items: [{ productId: 'P1', qty: 1, unitPrice: 100 }], subtotal: 100, grandTotal: 100 }, auth: { uid: u, token: { posRole: 'cashier' } } }); } catch (e) { r = { err: e.message }; }
+  ck('K-4 the dry run reports the takedown as a difference (moderation)', r && (r.differences || []).some((x) => x.field === 'moderation' && x.error === 'PRODUCT_UNDER_MODERATION'), JSON.stringify(r).slice(0, 160));
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);
 })().catch((e) => { console.error('\nsuite crashed:', e.stack, '\n'); process.exit(1); });

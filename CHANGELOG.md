@@ -1,3 +1,12 @@
+## [2026-10-03] — Till: a product SOKONI has taken down cannot be sold (ported onto the converged POS line)
+
+**Files:** `functions/pos-zero-friction.js`, `functions/shared/product-sale-eligibility.js` (byte-identical to `8b60947`, sha256 `1d34747d00b527df`), `scripts/test-pos-gate-behavioural.js`, `CHANGELOG.md` · **Base:** `e534623` (sokoni-2f's SmartPOS server gate, on live `ee37437`)
+
+- **Owner 2026-10-03:** a moderation takedown (`products/{id}.moderationHold`) blocks SOKONI till sales, refused before any price, stock or money effect, and in the dry run. A seller's own `isVisible:false` still sells in store. Only an AdminOS restore (which deletes the hold) makes the product sellable.
+- **Supersedes** the standalone `8b60947` deploy item: the converged `posCompleteCheckout` line carries it.
+- **Not yet on this line:** price tiers (`4efc0ed`…`4aa2227`). A separate convergence, because the merchant-proof structures differ.
+- **Tests:** gate-behavioural 32/0 (K-1…K-4 new; mutations of either guard are caught by K-1 / K-4); gate-enforcement 42/0; emulator POS-01…15 NOT RUN (memory). **NOT DEPLOYED.**
+
 ## [2026-10-03] — SmartPOS server payment gate (sokoni-pos, owner P0; functions, NOT deployed)
 
 **Owner assignment:** POS workstream · posCompleteCheckout · functions/pos-zero-friction.js · P0. Built on the certified POS line (feat/pos-till-convergence-fn 3357619, which descends from live ee37437 and already added assertConfirmableStk: IntaSend intent + webhook status, same shop, same sale key, spent-once claim).

@@ -9,6 +9,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { writeAudit } = require('./pos-audit');
+const _PSE = require('./shared/product-sale-eligibility');   /* owner 2026-10-03: a moderation takedown blocks till sales */
 /* The employment authority. Required at LOAD, deliberately: if this cannot be
    resolved the deploy fails loudly, instead of every till silently losing
    discount authorisation and the "Served by" line at the same moment. */
@@ -597,6 +598,9 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       const it = items[i], s = snaps[i];
       if (!s.exists) { differences.push({ productId: it.productId, error: 'not-found' }); continue; }
       const p = s.data();
+      /* Same takedown rule as the real path. */
+      const _dblk = _PSE.saleBlock(p);
+      if (_dblk) { differences.push({ productId: it.productId, field: 'moderation', error: _dblk.reason }); continue; }
       const serverPrice = p.salePrice || p.price || 0;
       if (Math.abs(serverPrice - (it.unitPrice || 0)) > 1) {
         differences.push({ productId: it.productId, field: 'unitPrice', expected: it.unitPrice, canonical: serverPrice });
@@ -810,6 +814,11 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       const prodSnap = productSnaps[i];
       if (!prodSnap.exists) _e(`Product ${item.productId} not found`, 'not-found');
       const prod = prodSnap.data();
+      /* MODERATION TAKEDOWN (owner 2026-10-03): a product SOKONI has taken down cannot be sold through SOKONI's till,
+         whatever the client sends — refused before any price, stock or money effect. Only an AdminOS restore (which
+         removes moderationHold) makes it sellable again. A seller's own switch-off (isVisible:false alone) still sells. */
+      const _blk = _PSE.saleBlock(prod);
+      if (_blk) _e(_sanitize(prod.name || 'This product') + ': ' + _blk.message, 'failed-precondition');
       /* Price tolerance: allow minor rounding diff (≤1 KES per item) */
       const serverPrice = prod.salePrice || prod.price || 0;
       const diff = Math.abs(serverPrice - (item.unitPrice || 0));
