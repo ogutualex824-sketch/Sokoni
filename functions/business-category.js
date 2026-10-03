@@ -118,6 +118,11 @@ const FROM_BUSINESS_ID = Object.freeze({
   tailor: 'service_business', 'shoe-repair': 'service_business',
   /* Owner, 2026-09-28 (the executed category→dashboard matrix): map to existing categories rather than add new ones. */
   'car-rental': 'auto_services',                                   /* fleet rental: an auto service (bookings) */
+  /* Car Hub C3 (sokoni-f3, 2026-10-03): the Car Hub services registrable in hub-register.js. Mapped to EXISTING categories
+     (owner 2026-09-28: map, don't add). Vehicle-for-sale inventory is the vehicle-hub authority (Car Hub C4), not merchant-v2. */
+  'car-dealer': 'auto_services', 'vehicle-inspection': 'auto_services', 'towing-roadside': 'auto_services',
+  'fleet-operator': 'auto_services', 'vehicle-transport': 'auto_services', 'vehicle-tracking': 'auto_services',
+  'ntsa-agent': 'professional_services',
   'football-club': 'service_business', basketball: 'service_business',  /* clubs / academies: bookable services */
   /* B2B suppliers sell goods → merchant-v2. A wholesaler and an importer are distribution (the `wholesale` category,
      2026-09-28); a manufacturer is left `retail_store` — no category names it and one is not guessed. */
@@ -125,6 +130,7 @@ const FROM_BUSINESS_ID = Object.freeze({
   /* ADMIN REVIEW ONLY — never self-classified (owner, 2026-09-28). An application is accepted, but the category is
      decided by AdminOS at approval (bizAdminClassify): */
   forex: null, sacco: null, /* licensed financial services (CBK / SASRA): no self-serve listing */
+  'car-finance': null,      /* Car Hub C3: lenders / brokers are licensed financial services — AdminOS classifies (same rule) */
   other: null,              /* "Other / General Business": says nothing */
 });
 /* The registrable ids that are UNCLASSIFIED ON PURPOSE — AdminOS classifies them by hand. Not a gap. */

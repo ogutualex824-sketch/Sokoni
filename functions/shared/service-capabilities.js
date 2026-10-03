@@ -70,6 +70,21 @@ const FROM_BUSINESS_ID = Object.freeze({
   /* Electrical (Tech Hub slice 4, sokoni-b2): category 'trades' (business-category). Service-mode capabilities only —
      no trade vertical capability exists, and none is invented here. */
   'electrical':         ['FIELD_SERVICE', 'ONSITE_SUPPORT', 'QUOTE_REQUEST', 'DIRECT_BOOKING'],
+  /* Car Hub C3 (sokoni-f3, 2026-10-03): service-mode capabilities ONLY, electrical-style — no car vertical capability is
+     invented (no SOS-dispatch, inspection-report, NTSA or finance authority exists). car-finance has none (AdminOS-classified,
+     licensed). auto-parts is a goods seller (retail_store → merchant-v2), so no service capability either. */
+  'mechanic':           ['WORKSHOP', 'FIELD_SERVICE', 'QUOTE_REQUEST', 'DIRECT_BOOKING'],
+  'car-wash':           ['ONSITE_SUPPORT', 'DIRECT_BOOKING'],
+  'car-rental':         ['DIRECT_BOOKING'],
+  'car-dealer':         ['QUOTE_REQUEST', 'DIRECT_BOOKING'],
+  'vehicle-inspection': ['WORKSHOP', 'FIELD_SERVICE', 'QUOTE_REQUEST', 'DIRECT_BOOKING'],
+  'towing-roadside':    ['FIELD_SERVICE', 'ONSITE_SUPPORT', 'QUOTE_REQUEST', 'DIRECT_BOOKING'],
+  'fleet-operator':     ['QUOTE_REQUEST', 'DIRECT_BOOKING'],
+  'vehicle-transport':  ['PICKUP_DROP_OFF', 'QUOTE_REQUEST', 'DIRECT_BOOKING'],
+  'vehicle-tracking':   ['FIELD_SERVICE', 'ONSITE_SUPPORT', 'QUOTE_REQUEST', 'DIRECT_BOOKING'],
+  'ntsa-agent':         ['QUOTE_REQUEST', 'DIRECT_BOOKING'],
+  'insurance-auto':     ['QUOTE_REQUEST'],
+  'driving-school':     ['DIRECT_BOOKING'],
   'restaurant':         ['FOOD_MENU', 'KITCHEN', 'DRINKS'],
   'fast-food':          ['FOOD_MENU', 'KITCHEN', 'DRINKS'],
   'cafe':               ['FOOD_MENU', 'KITCHEN', 'DRINKS'],
