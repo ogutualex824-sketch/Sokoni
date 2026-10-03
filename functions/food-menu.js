@@ -326,6 +326,21 @@ async function opReorder(deps, ctx, data) {
   return { ok: true, count: owned.length };
 }
 
+/* The SHOP's food workspace, for anyone who works there: the owner's workspace answer (approval → category →
+   capability → merchantModules), projected to what merchant-v2 needs to show or hide the Menu / Drinks / Kitchen views.
+   providerDispatch businessWorkspace answers for the CALLER's account, which for a manager or cashier is not the
+   business — so the shop-scoped answer lives here, behind the same staff authority as every menu read. */
+async function opModules(deps, ctx) {
+  let w;
+  try { w = await deps.workspaceFor(deps.db, ctx.ownerUid); }
+  catch (e) { throw _fail('unavailable', 'Your business record could not be read just now.', 'WORKSPACE_UNREADABLE'); }
+  const routed = !!(w && w.state === 'AVAILABLE' && w.route === 'merchant-v2.html');
+  const mm = routed ? (w.merchantModules || {}) : {};
+  const pick = (k) => (mm[k] ? { state: mm[k].state, reason: mm[k].reason || null } : null);
+  return { ok: true, role: ctx.role, state: w ? w.state : null, route: w ? w.route : null, reason: (w && w.reason) || null,
+    message: (w && w.message) || null, merchantModules: { menu: pick('menu'), drinks: pick('drinks'), kitchen: pick('kitchen'), catering: pick('catering') } };
+}
+
 /* Public: what a buyer may see. No auth required; nothing private returned. */
 async function opPublic(deps, data) {
   const sid = _s(data.shopId, 128);
@@ -359,6 +374,7 @@ async function handle(deps, uid, data) {
   switch (op) {
     case 'public': return opPublic(deps, d);
     case 'load': return opLoad(deps, await _actor(deps, uid, d.shopId, null));
+    case 'modules': return opModules(deps, await _actor(deps, uid, d.shopId, null));
     case 'saveSections': return opSaveSections(deps, await _actor(deps, uid, d.shopId, MENU_WRITERS), d);
     case 'saveItem': return opSaveItem(deps, await _actor(deps, uid, d.shopId, MENU_WRITERS), d);
     case 'setStatus': return opSetStatus(deps, await _actor(deps, uid, d.shopId, MENU_WRITERS), d);

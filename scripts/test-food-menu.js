@@ -93,6 +93,17 @@ const SECTIONS = [{ name: 'Breakfast', kind: 'food' }, { name: 'Mains', kind: 'f
   ck('CAP-2', w.merchantModules && w.merchantModules.kitchen && w.merchantModules.kitchen.state === 'NOT_IMPLEMENTED' && w.merchantModules.kitchen.reason === 'FOOD_ORDERS_PENDING',
     'Kitchen stays NOT_IMPLEMENTED (FOOD_ORDERS_PENDING) until real food orders exist — never a fake working kitchen', w.merchantModules && w.merchantModules.kitchen);
 
+  /* ── MOD: the shop-scoped module answer merchant-v2 shows/hides the Food views by ── */
+  let mo = await call('uMgr', { op: 'modules', shopId: A });
+  ck('MOD-1', mo.ok && mo.role === 'manager' && mo.merchantModules.menu.state === 'AVAILABLE' && mo.merchantModules.kitchen.state === 'NOT_IMPLEMENTED',
+    'a MANAGER sees the shop owner\'s food modules (the caller\'s own account has no business)', mo);
+  mo = await call(RET, { op: 'modules', shopId: RET });
+  ck('MOD-2', mo.ok && mo.merchantModules.menu === null && mo.merchantModules.drinks === null, 'a non-food business gets no food modules', mo);
+  mo = await call('uStranger', { op: 'modules', shopId: A });
+  ck('MOD-3', mo.err && mo.reason === 'not-employed-here', 'a stranger cannot read another shop\'s modules', mo);
+  mo = await call(PEND, { op: 'modules', shopId: PEND });
+  ck('MOD-4', mo.ok && mo.merchantModules.menu === null && mo.state !== 'AVAILABLE', 'a pending business gets no modules (and its holding state)', mo);
+
   /* ── MENU ── */
   let r = await call(A, { op: 'saveSections', shopId: A, sections: SECTIONS });
   const secs = r.sections || [];
