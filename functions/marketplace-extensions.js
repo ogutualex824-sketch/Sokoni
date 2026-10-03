@@ -447,6 +447,9 @@ async function _rentalTransition(req, { from, to, extra, guard }) {
     if (b.shopId !== shopId) throw new HttpsError('permission-denied', 'That booking belongs to another shop.');
     if (b.status === to) return { success: true, unchanged: true, status: to };
     if (!from.includes(b.status)) throw new HttpsError('failed-precondition', 'A ' + b.status + ' booking cannot be ' + to + '.');
+    /* sokoni-5b rental webhook: a payment that arrived for a rental that was not payable is 'refund_due' — the money is
+       owed back, never held. Such a rental moves only to a terminal no-money state; never hand-over / return / completion. */
+    if (b.paymentStatus === 'refund_due' && !['declined', 'cancelled'].includes(to)) throw new HttpsError('failed-precondition', RENTAL_REFUND_DUE_MSG);
     if (guard) guard(b);
     t.update(ref, Object.assign({ status: to }, extra(req, b)));
     if (to === 'completed') t.update(_db().collection('rentalProducts').doc(b.rentalProductId), { bookingCount: _fv().increment(1) });
@@ -472,6 +475,7 @@ exports.rentalStart = onCall({ enforceAppCheck: true }, exports._h.rentalStart =
    Provider of record = the shop owner from shops/{shopId} (server data); the person typing is charged the attempts.
    An unpaid / legacy rental (nothing held) returns without a PIN — there is no money to release. */
 const RENTAL_RETURNABLE = ['return_pending', 'active'];
+const RENTAL_REFUND_DUE_MSG = 'A payment for this rental is being refunded by SOKONI. It cannot be handed over, returned or completed — contact SOKONI support.';
 const _pinCore = () => require('./booking-pin-core');
 async function _shopOwnerUid(shopId) {
   const s = await _db().collection('shops').doc(String(shopId)).get();
@@ -490,6 +494,7 @@ exports.rentalConfirmReturn = onCall({ enforceAppCheck: true }, exports._h.renta
   if (b0.status === 'returned') return { success: true, unchanged: true, status: 'returned' };
   /* state first: a PIN is never spent on a rental that is not being returned */
   if (!RENTAL_RETURNABLE.includes(b0.status)) throw new HttpsError('failed-precondition', 'A ' + b0.status + ' booking cannot be returned.');
+  if (b0.paymentStatus === 'refund_due') throw new HttpsError('failed-precondition', RENTAL_REFUND_DUE_MSG);
   let pinVerified = false;
   if (b0.paymentStatus === 'held') {
     const v = await _pinCore().verify({ source: 'rentalBookings', bookingId: String(bookingId), providerUid: await _shopOwnerUid(shopId), actorUid: req.auth.uid, pin });

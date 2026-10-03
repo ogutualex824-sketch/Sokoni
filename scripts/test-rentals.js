@@ -40,6 +40,7 @@ const MUT = {
   fake_mpesa:             ["paymentMethod: 'none', paymentStatus: 'unpaid',", "paymentMethod: 'mpesa', paymentStatus: 'unpaid',"],
   return_pin_skipped:     ["  if (b0.paymentStatus === 'held') {\n    const v = await _pinCore()", "  if (false) {\n    const v = await _pinCore()"],
   return_race_unguarded:  ["    guard: (b) => { if (b.paymentStatus === 'held' && !pinVerified)", "    guard: (b) => { if (false)"],
+  refund_due_unblocked:   ["    if (b.paymentStatus === 'refund_due' && !['declined', 'cancelled'].includes(to))", "    if (false)"],
   return_pin_wrong_owner: ["providerUid: await _shopOwnerUid(shopId), actorUid", "providerUid: req.auth.uid, actorUid"],
 };
 const M = process.env.RENTAL_MUTANT;
@@ -174,6 +175,19 @@ const day = (n) => new Date(Date.now() + n * 86400000).toISOString();
   ck('RP4 a booking of ANOTHER shop is refused before any PIN check', !r.ok && r.code === 'permission-denied' && store.get('rentalBookings/rpD').status === 'return_pending', r);
   r = await call('rentalConfirmReturn', 'stranger', { bookingId: b1, shopId: 'ownerU', pin: '4321' });
   ck('RP5 a stranger cannot confirm a return even with the right PIN', !r.ok && r.code === 'permission-denied', r);
+
+  /* RD — refund_due (sokoni-5b webhook: paid after the rental stopped being payable) */
+  mk('rdA', { status: 'active', paymentStatus: 'refund_due' });
+  r = await call('rentalConfirmReturn', 'ownerU', { bookingId: 'rdA', shopId: 'ownerU' });
+  ck('RD1 a REFUND-DUE active rental cannot be returned (no PIN-less path to a release)', !r.ok && r.code === 'failed-precondition' && /refunded/.test(r.msg) && store.get('rentalBookings/rdA').status === 'active', r);
+  mk('rdB', { status: 'returned', paymentStatus: 'refund_due' });
+  r = await call('rentalComplete', 'ownerU', { bookingId: 'rdB', shopId: 'ownerU' });
+  ck('RD2 a REFUND-DUE returned rental cannot be completed (no settlement)', !r.ok && r.code === 'failed-precondition' && store.get('rentalBookings/rdB').status === 'returned', r);
+  mk('rdC', { status: 'requested', paymentStatus: 'refund_due' });
+  r = await call('rentalAccept', 'ownerU', { bookingId: 'rdC', shopId: 'ownerU' });
+  ck('RD3 a REFUND-DUE request cannot be accepted (would re-open a payable state)', !r.ok && r.code === 'failed-precondition', r);
+  r = await call('rentalDecline', 'ownerU', { bookingId: 'rdC', shopId: 'ownerU' });
+  ck('RD4 CONTROL: a refund-due request can still be declined (terminal, no money)', r.ok && store.get('rentalBookings/rdC').status === 'declined', r);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
