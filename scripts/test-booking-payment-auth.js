@@ -1,0 +1,95 @@
+/* Authorization tests for bookingCreate payment verification.
+ *
+ * 2026-10-03: bookingCreate now refuses EVERY client-supplied paymentId (see functions/booking.js).
+ * bookingCreate previously set paymentStatus from the TRUTHINESS of a
+ * client-supplied paymentId, so any authenticated caller could send
+ * { paymentId: 'x' } and receive a paid booking. These tests assert the server
+ * now re-derives payment state from Firestore and refuses every forgery route:
+ * a made-up reference, another customer's real payment, an unpaid one, a
+ * refunded one, and a genuine payment for a cheaper slot replayed against an
+ * expensive one.
+ *
+ * The verification block is extracted from functions/booking.js and executed
+ * against a stubbed Firestore, so this runs with no credentials and asserts the
+ * shipped logic rather than a restatement of it.
+ *
+ *   node scripts/test-booking-payment-auth.js
+ */
+'use strict';
+const fs = require('fs');
+const path = require('path');
+const { assertSandboxProvides } = require('./harness-sandbox');
+
+const SRC = fs.readFileSync(path.resolve('functions/booking.js'), 'utf8');
+
+/* Pull the real block out of the source so the test cannot drift from it. */
+const start = SRC.indexOf('let verifiedPaymentId = null;');
+const end   = SRC.indexOf('/* Fetch user profile outside the transaction', start);
+if (start < 0 || end < 0) {
+  console.error('FAIL: could not locate the verification block in functions/booking.js');
+  process.exitCode = 2;
+  return;
+}
+const BLOCK = SRC.slice(start, end);
+
+/* The extracted block calls require('./shared/constants'). The synthetic
+ * new Function() scope below has no require, so it must be supplied — bound to
+ * functions/booking.js's directory so relative specifiers resolve EXACTLY as
+ * they do at runtime, not relative to this test file. */
+const bookingRequire = require('module').createRequire(path.resolve('functions/booking.js'));
+
+/* Fail early and clearly if the block gains a module dependency this sandbox
+ * does not expose, instead of dying mid-run with a cryptic ReferenceError. */
+assertSandboxProvides(
+  BLOCK,
+  ['db', 'uid', 'paymentId', 'pricingBreakdown', 'console', 'require'],
+  'test-booking-payment-auth'
+);
+
+function run({ paymentId, payments = {}, uid = 'buyer1', total = 5000 }) {
+  const db = {
+    collection: () => ({
+      doc: (id) => ({
+        get: async () => ({ exists: Object.hasOwn(payments, id), data: () => payments[id] }),
+      }),
+    }),
+  };
+  const console_ = { warn() {}, error() {} };
+  const fn = new Function('db', 'uid', 'paymentId', 'pricingBreakdown', 'console', 'require',
+    `return (async () => { ${BLOCK} return { verifiedPaymentId, paymentStatus, paymentNote }; })();`);
+  return fn(db, uid, paymentId, { total }, console_, bookingRequire);
+}
+
+let pass = 0, fail = 0;
+const t = (n, v) => { v ? (pass++, console.log('  PASS  ' + n)) : (fail++, console.log('  FAIL  ' + n)); };
+
+(async () => {
+  const GOOD = { status: 'COMPLETE', uid: 'buyer1', amount: 5000 };
+
+  /* 2026-10-03 (venue money-path audit): a client-supplied paymentId NEVER pays a booking — not even a genuine, sufficient
+     payment of the caller's own, because nothing tied it to THIS booking (a marketplace payment or one already used elsewhere
+     passed) and the venue settlement was never created. A venue booking is paid only through its own intent + verified
+     webhook. Every route below must leave the booking awaiting, with no stored paymentId. */
+  console.log('\n=== EVERY client-supplied paymentId is refused ===');
+  const cases = [
+    ['invented reference', { paymentId: 'totally-made-up', payments: {} }],
+    ["another customer's payment", { paymentId: 'p1', payments: { p1: { ...GOOD, uid: 'someone_else' } } }],
+    ['unpaid payment', { paymentId: 'p1', payments: { p1: { ...GOOD, status: 'PENDING' } } }],
+    ['refunded payment', { paymentId: 'p1', payments: { p1: { ...GOOD, status: 'REFUNDED' } } }],
+    ['cheaper payment replayed on expensive slot', { paymentId: 'p1', payments: { p1: { ...GOOD, amount: 500 } }, total: 5000 }],
+    ["the caller's OWN genuine, sufficient payment (the old hole: not tied to this booking)", { paymentId: 'p1', payments: { p1: GOOD } }],
+    ['an overpayment', { paymentId: 'p1', payments: { p1: { ...GOOD, amount: 9999 } } }],
+  ];
+  for (const [label, args] of cases) {
+    const r = await run(args);
+    t(label + ' -> awaiting, not stored, note client_payment_not_accepted',
+      r.paymentStatus === 'awaiting' && r.verifiedPaymentId === null && r.paymentNote === 'client_payment_not_accepted');
+  }
+
+  console.log('\n=== no payment supplied ===');
+  const r = await run({ paymentId: null, payments: {} });
+  t('no paymentId -> awaiting, no note', r.paymentStatus === 'awaiting' && r.paymentNote === null);
+
+  console.log('\n' + (fail ? fail + ' FAILED of ' + (pass + fail) : 'ALL ' + pass + ' PASSED'));
+  process.exitCode = fail ? 1 : 0;
+})();
