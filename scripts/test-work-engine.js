@@ -20,6 +20,9 @@ if (process.env.SABOTAGE) {
   ];
   /* W9 lives in shared/work-engine.js */
   M[M.length - 1][1] = 'shared/work-engine.js';
+  M.push(['W12', 'work-engine.js', "      if (d.expectedScopeVersion === undefined || Number(d.expectedScopeVersion) !== v) {", '      if (false) {']);
+  M.push(['W13', 'work-engine.js', "        if (crs[i].milestone) sc.milestones = (sc.milestones || []).concat([crs[i].milestone]);", "        if (crs[i].milestone) sc.milestones = (sc.milestones || []).concat([crs[i].milestone]);\n        if (cur.acceptedScope && cur.acceptedScope.snapshot) patch.acceptedScope = Object.assign({}, cur.acceptedScope, { snapshot: Object.assign({}, cur.acceptedScope.snapshot, { lines }) });"]);
+  M.push(['W11', 'shared/work-engine.js', "  'proposed>draft': ['provider', 'customer'],", "  'proposed>draft': ['provider'],"]);
   let caught = 0;
   for (const [row, file, a, b] of M) {
     const d = fs.mkdtempSync(path.join(os.tmpdir(), 'wke-'));
@@ -93,11 +96,29 @@ console.log('\nWork/Job Engine WE1 — core + Marketing skin\n');
   r = await D('workTransition', 'mk', { projectId: id, to: 'proposed' });
 
   /* ── W2 + W4: the customer accepts; the scope locks ── */
-  const pa = await D('workTransition', 'mk', { projectId: id, to: 'accepted' });
-  const xa = await D('workTransition', 'x', { projectId: id, to: 'accepted' });
-  const ca = await D('workTransition', 'cust', { projectId: id, to: 'accepted' });
+  /* W11: the customer REQUESTS CHANGES (reason required) → back to draft; the provider revises and re-proposes */
+  const rcNo = await D('workTransition', 'cust', { projectId: id, to: 'draft', reason: 'no' });
+  const rcOk = await D('workTransition', 'cust', { projectId: id, to: 'draft', reason: 'Please split month 2 into two milestones' });
+  const afterRc = P(id);
+  await D('workUpdateScope', 'mk', { projectId: id, scope: { terms: 'Net 7 days after each milestone', documents: ['https://docs.example/brief.pdf', 'javascript:alert(1)'] } });
+  await D('workTransition', 'mk', { projectId: id, to: 'proposed' });
+  ck('W11', rcNo.det && rcNo.det.code === 'WORK_CHANGES_REASON' && rcOk.ok && afterRc.status === 'draft' && /split month 2/.test(afterRc.changesRequested.reason)
+    && P(id).status === 'proposed' && P(id).scope.terms === 'Net 7 days after each milestone' && JSON.stringify(P(id).scope.documents) === '["https://docs.example/brief.pdf"]',
+    'the customer can request changes (with a reason) — the proposal returns to draft; terms + https documents are part of the scope', { rcNo, rcOk, scope: P(id).scope });
+
+  /* W2 + W12: only the customer accepts, and ONLY the version they saw; acceptance snapshots the commercial terms */
+  const seen = (await D('workGet', 'cust', { projectId: id })).ok.project.scopeVersion;
+  const pa = await D('workTransition', 'mk', { projectId: id, to: 'accepted', expectedScopeVersion: seen });
+  const xa = await D('workTransition', 'x', { projectId: id, to: 'accepted', expectedScopeVersion: seen });
+  const noV = await D('workTransition', 'cust', { projectId: id, to: 'accepted', totalCents: 1 });
+  const stale = await D('workTransition', 'cust', { projectId: id, to: 'accepted', expectedScopeVersion: seen - 1 });
+  const ca = await D('workTransition', 'cust', { projectId: id, to: 'accepted', expectedScopeVersion: seen, totalCents: 1 });
   ck('W2', r.ok && pa.code === 'permission-denied' && xa.code === 'permission-denied' && ca.ok && P(id).status === 'accepted' && P(id).acceptedScope.totalCents === 9000000,
-    'only the CUSTOMER accepts (not the provider, not a stranger); acceptance records the locked total', { pa, xa, ca });
+    'only the CUSTOMER accepts (not the provider, not a stranger); acceptance records the locked total (a client total is ignored)', { pa, xa, ca });
+  const snap = P(id).acceptedScope.snapshot || {};
+  ck('W12', noV.det && noV.det.code === 'WORK_SCOPE_CHANGED' && stale.det && stale.det.code === 'WORK_SCOPE_CHANGED' && P(id).acceptedScope.scopeVersion === seen
+    && snap.terms === 'Net 7 days after each milestone' && snap.milestones.length === 2 && snap.lines.length === 2 && snap.documents.length === 1,
+    'acceptance needs the server scope version the customer saw (missing / stale → WORK_SCOPE_CHANGED) and SNAPSHOTS lines, milestones, terms and documents', { noV, stale, snap });
   r = await D('workUpdateScope', 'mk', { projectId: id, scope: { lines: [{ description: 'Extra', qty: 1, rateCents: 1 }] } });
   ck('W4', r.det && r.det.code === 'WORK_SCOPE_LOCKED' && P(id).totalCents === 9000000, 'after proposing, the scope cannot be edited — changes go through a change request', r);
 
@@ -112,6 +133,8 @@ console.log('\nWork/Job Engine WE1 — core + Marketing skin\n');
   ck('W5', r.ok && r.ok.deltaCents === 2000000 && selfApprove.code === 'permission-denied' && custApprove.ok && twice.det && twice.det.code === 'WORK_CR_DECIDED'
     && pc.totalCents === 11000000 && pc.scope.milestones.length === 3 && pc.scope.milestones.reduce((s, m) => s + m.amountCents, 0) === 11000000,
     'nothing above the accepted scope without the CUSTOMER: provider cannot self-approve; approval adds the lines + a delta milestone (milestones still sum to the total); no double approval', { selfApprove, custApprove, twice, total: pc.totalCents });
+  ck('W13', P(id).acceptedScope.snapshot.lines.length === 2 && P(id).acceptedScope.totalCents === 9000000 && P(id).totalCents === 11000000,
+    'a later approved change moves the LIVE scope, never the accepted snapshot (what the customer accepted stays as accepted)', P(id).acceptedScope);
 
   /* ── W7: evidence refs ── */
   const e1 = await D('workAddEvidence', 'mk', { projectId: id, milestoneId: 'm1', type: 'photo', ref: 'workProjects/' + id + '/m1/proof.jpg' });

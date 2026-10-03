@@ -1,3 +1,16 @@
+## [2026-10-03] — Work/Job Engine: customer acceptance on the SERVER's scope version + accepted-terms snapshot; customer "request changes"; terms + documents — NOT deployed
+
+- **functions/shared/work-engine.js:**
+  - `proposed → draft` is now also the CUSTOMER's "request changes";
+  - scope gains `terms`, `paymentTerms` and `documents` (https or a storage path under the project).
+- **functions/work-engine.js:**
+  - every scope edit bumps `scopeVersion`;
+  - acceptance requires `expectedScopeVersion` = the server's current version (missing / stale → WORK_SCOPE_CHANGED) — never browser totals;
+  - acceptance SNAPSHOTS the commercial terms in `acceptedScope.snapshot` (title, description, deliverables, dates, lines, milestones, terms, paymentTerms, documents) + scopeVersion + acceptedBy, so later approved changes move the live scope, never the accepted snapshot;
+  - a customer's request-changes needs a reason (≥5 chars) and records `changesRequested`;
+  - the project read returns scopeVersion / acceptedScope / changesRequested / cancelReason.
+- **Tests:** test-work-engine 15/0 (new W11 request changes + terms/documents; W12 version gate + snapshot; W13 snapshot immune to later changes), SABOTAGE 12/12. work-milestones 9/0.
+
 ## [2026-10-03] — SECURITY: pre-claimed / legacy conversations are re-derived from the transaction, never trusted — NOT deployed
 
 - **The live hole:** the SERVED rules let any signed-in user create conversations/<id> (self in participants, ≤2), and ids are deterministic (service_booking_<id>, order_<id>, product_enquiry_<id> …). An attacker could pre-claim a transaction's conversation and lock the real parties out — or stay inside it with them.

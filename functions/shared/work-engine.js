@@ -18,7 +18,7 @@ const SKINS = Object.freeze({ marketing: { kinds: ['campaign', 'project'] } });
 /* [from, to] → the actors allowed to make that move. Anything absent is refused. */
 const MOVES = Object.freeze({
   'draft>proposed': ['provider'],              /* the provider sends the proposal (scope, milestones, budget) */
-  'proposed>draft': ['provider'],              /* withdraw to revise */
+  'proposed>draft': ['provider', 'customer'],  /* provider withdraws to revise · customer REQUESTS CHANGES (reason required) */
   'proposed>accepted': ['customer'],           /* acceptance LOCKS the scope + milestone amounts */
   'accepted>active': ['provider'],             /* work starts */
   'active>paused': ['provider', 'customer'],
@@ -70,6 +70,10 @@ function sanitizeScope(d) {
     deliverables: (Array.isArray(x.deliverables) ? x.deliverables : []).map((v) => _s(v, 200)).filter(Boolean).slice(0, 30),
     startDate: _date(x.startDate), endDate: _date(x.endDate),
     milestones: sanitizeMilestones(x.milestones),
+    /* the commercial terms + supporting documents the customer accepts (documents: https or a storage path under the project) */
+    terms: _s(x.terms, 4000),
+    paymentTerms: _s(x.paymentTerms, 1000),
+    documents: (Array.isArray(x.documents) ? x.documents : []).map((v) => _s(v, 400)).filter((v) => /^https:\/\/[^\s]+$/i.test(v) || /^workProjects\/[A-Za-z0-9_-]+\//.test(v)).slice(0, 20),
   };
 }
 /** The budget is DERIVED from the milestones — never a separate client number that could disagree with them. */

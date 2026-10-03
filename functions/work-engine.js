@@ -88,7 +88,8 @@ function _actor(req, p, allowAdmin) {
 function _view(id, p) {
   return { id, skin: p.skin, kind: p.kind, status: p.status, customerUid: p.customerUid, providerUid: p.providerUid, providerBusinessId: p.providerBusinessId || null,
     origin: p.origin || null, scope: p.scope || {}, totalCents: p.totalCents || 0, changeRequests: p.changeRequests || [], evidence: p.evidence || [],
-    completion: p.completion || null, commercial: p.commercial || null, history: (p.history || []).slice(-50) };
+    completion: p.completion || null, commercial: p.commercial || null, history: (p.history || []).slice(-50),
+    scopeVersion: Number(p.scopeVersion) || 0, acceptedScope: p.acceptedScope || null, changesRequested: p.changesRequested || null, cancelReason: p.cancelReason || null };
 }
 const _ev = (actor, uid, action, extra) => Object.assign({ actor, by: uid, action, atMs: Date.now() }, extra || {});
 
@@ -158,7 +159,9 @@ const _h = {
     const d = req.data || {};
     const scope = W.sanitizeScope(Object.assign({}, p.scope, d.scope || {}));
     const lines = d.scope && d.scope.lines !== undefined ? _lines(d.scope.lines) : (p.scope && p.scope.lines) || [];
-    await ref.update({ scope: Object.assign(scope, { lines }), totalCents: _total(lines), updatedAt: _ts(),
+    /* documents must live under THIS project when they are storage paths */
+    scope.documents = (scope.documents || []).filter((v) => /^https:/i.test(v) || v.indexOf('workProjects/' + ref.id + '/') === 0);
+    await ref.update({ scope: Object.assign(scope, { lines }), totalCents: _total(lines), scopeVersion: (Number(p.scopeVersion) || 0) + 1, updatedAt: _ts(),
       history: (p.history || []).concat([_ev('provider', req.auth.uid, 'scope_updated')]).slice(-100) });
     return { ok: true, totalCents: _total(lines) };
   },
@@ -180,7 +183,24 @@ const _h = {
         throw new HttpsError('failed-precondition', 'The scope total must equal the quote the customer accepted. Changes after acceptance go through a change request.', { code: 'WORK_TOTAL_NOT_QUOTE' });
       }
     }
-    if (to === 'accepted') patch.acceptedScope = { totalCents: p.totalCents || 0, lineIds: ((p.scope || {}).lines || []).map((l) => l.lineId), atMs: Date.now() };
+    if (to === 'accepted') {
+      /* Acceptance uses the SERVER's stored scope at the version the customer saw — never browser totals. A scope edited
+         since (version moved) is refused, and the accepted commercial terms are SNAPSHOT so later edits cannot touch them. */
+      const v = Number(p.scopeVersion) || 0;
+      if (d.expectedScopeVersion === undefined || Number(d.expectedScopeVersion) !== v) {
+        throw new HttpsError('failed-precondition', 'The proposal changed since you opened it. Review the latest version.', { code: 'WORK_SCOPE_CHANGED', scopeVersion: v });
+      }
+      const sc = p.scope || {};
+      patch.acceptedScope = { scopeVersion: v, totalCents: p.totalCents || 0, lineIds: (sc.lines || []).map((l) => l.lineId), atMs: Date.now(), acceptedBy: req.auth.uid,
+        snapshot: { title: sc.title || '', description: sc.description || '', deliverables: sc.deliverables || [], startDate: sc.startDate || null, endDate: sc.endDate || null,
+          lines: sc.lines || [], milestones: (sc.milestones || []).map((m) => ({ id: m.id, title: m.title, dueDate: m.dueDate || null, amountCents: m.amountCents })),
+          terms: sc.terms || '', paymentTerms: sc.paymentTerms || '', documents: sc.documents || [] } };
+    }
+    if (to === 'draft' && actor === 'customer') {
+      const why = _s(d.reason, 1000);
+      if (why.length < 5) throw new HttpsError('invalid-argument', 'Tell the provider what to change (at least 5 characters).', { code: 'WORK_CHANGES_REASON' });
+      patch.changesRequested = { reason: why, atMs: Date.now(), by: req.auth.uid };
+    }
     if (to === 'completed') {
       const kind = COMPLETION_KINDS.indexOf(d.completionKind) >= 0 ? d.completionKind : 'delivered';
       patch.completion = { kind, acceptedBy: req.auth.uid, atMs: Date.now() };
