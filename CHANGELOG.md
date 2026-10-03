@@ -1,3 +1,9 @@
+## 2026-10-03 — commission-config.workFeeFor(skin, kind) for the Work/Job Engine (read-only) (NOT deployed)
+
+- **Change:** returns the fee STATE for a managed project/milestone — construction project|milestone → the construction_project_fee row (1.5%, configured:true, enabled:false, effectiveFrom:null, label); marketing campaign|project → unpriced (configured:false, pct:null); unknown → {configured:false, enabled:false, pct:null}, never 0. Frozen; never a pricing input, never charges. Asked by b2's WE1 workDispatch via f3.
+- **Files:** functions/commission-config.js, scripts/test-construction-commercial.js (K10). **DB/API/security/breaking:** none.
+- **Tests:** construction 10/0, commission single-source PASS, snapshot in sync.
+
 ## 2026-10-03 — Marketing commission lane at provider settlement, from the booking snapshot (NOT deployed)
 
 - **Change:** provider-hub.commissionArgsForBooking(booking): `serviceHub === 'marketing'` AND `serviceCategory` ∈ marketing taxonomy → marketing_services (10%); a marketing booking with a missing/unknown category → REFUSED `category_unpriced`; everything else → commissionArgsForHub(commissionHub), unchanged. Both provider-ops call sites (completion + forfeited deposit) use it. Reads ONLY the booking's server snapshot (b2 9319925) — never providers.marketingCategories at settlement, never client hubType; a later category change cannot rewrite a historical booking.

@@ -451,6 +451,28 @@ const FIXED_RATE_FLOOR_EXEMPT = Object.freeze(['fitness', 'b2b_order', 'jobs', '
    price. finos-utils.calculateCommission REFUSES them (code 'category_unpriced') — a payment for one must not proceed. */
 /* Derived, never hand-listed: every row stored configured-but-disabled (enabled:false) is refused. */
 const UNPRICED_CATEGORIES = Object.freeze(Object.keys(RATES).filter((k) => RATES[k].enabled === false));   /* rental priced 10% 2026-10-03; featured refused until a fulfilling product exists */
+/* ── WORK FEES (Work/Job Engine, b2 WE1 workDispatch; asked via f3 2026-10-03) ─────────────────────────────────────────────
+   READ-ONLY description of the platform fee on a managed project/milestone, per skin + kind. It NEVER charges and is never
+   a pricing input: the engine shows the state ("configured, disabled" vs "not configured"). Owner-confirmed 2026-10-03:
+   construction project/milestone 1.5% is CONFIGURED BUT OFF; marketing campaigns/projects carry no fee (unpriced). Unknown
+   skin/kind → {configured:false, enabled:false} — never a 0 rate. */
+const WORK_FEE_ROWS = Object.freeze({
+  'construction:project': 'construction_project_fee',
+  'construction:milestone': 'construction_project_fee',
+});
+const WORK_FEE_UNPRICED = Object.freeze(['marketing:campaign', 'marketing:project']);
+function workFeeFor(skin, kind) {
+  const key = String(skin || '').trim().toLowerCase() + ':' + String(kind || '').trim().toLowerCase();
+  const cat = WORK_FEE_ROWS[key];
+  if (cat && RATES[cat]) {
+    const r = RATES[cat];
+    return Object.freeze({ configured: r.configured === true, enabled: r.enabled === true, effectiveFrom: r.effectiveFrom || null,
+      pct: r.pct, category: cat, label: r.label || null });
+  }
+  if (WORK_FEE_UNPRICED.indexOf(key) !== -1) return Object.freeze({ configured: false, enabled: false, effectiveFrom: null, pct: null, category: null, label: 'Unpriced — no platform fee' });
+  return Object.freeze({ configured: false, enabled: false, effectiveFrom: null, pct: null, category: null, label: null });
+}
+
 function isUnpricedCategory(key) {
   const r = resolveRate(key);
   return r.matched === true && UNPRICED_CATEGORIES.indexOf(r.category) !== -1;
@@ -869,6 +891,7 @@ module.exports = {
   MIN_COMMISSION_KES,
   COMMISSION_POLICY_VERSION,
   UNPRICED_CATEGORIES,
+  workFeeFor,
   isUnpricedCategory,
   PLAN_ADJUSTMENTS_DOC,
   applyPlanAdjustment,

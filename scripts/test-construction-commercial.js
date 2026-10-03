@@ -51,6 +51,10 @@ const db = { collection: (n) => ({ doc: (id) => ({ async get () { const d = ovDo
   ck('K9 owner rule: every OFF item stored {configured:true, enabled:false, effectiveFrom:null}, never a 0 value, labelled, refused; UNPRICED = exactly the disabled rows',
     offBad.length === 0 && CC.UNPRICED_CATEGORIES.slice().sort().join() === OFF.slice().sort().join()
     && CC.RATES.construction_featured.weeklyKES === 500 && CC.RATES.construction_premium_featured.weeklyKES === 1500 && CC.RATES.construction_premium_featured.monthlyKES === 4000, offBad);
+  const wp = CC.workFeeFor('construction', 'milestone'), wm = CC.workFeeFor('Marketing', 'campaign'), wu = CC.workFeeFor('cleaning', 'project');
+  ck('K10 workFeeFor (Work engine, read-only): construction milestone = 1.5% configured+disabled; marketing campaign unpriced; unknown → not configured, never 0',
+    wp.configured === true && wp.enabled === false && wp.pct === 1.5 && wp.effectiveFrom === null && wp.category === 'construction_project_fee'
+    && wm.configured === false && wm.pct === null && wu.configured === false && wu.enabled === false && wu.pct === null && Object.isFrozen(wu), { wp, wm, wu });
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e && e.stack); process.exit(1); });
