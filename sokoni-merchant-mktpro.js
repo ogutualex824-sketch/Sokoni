@@ -9,6 +9,8 @@
      services / rates   NOT here — mkt-services / mkt-rates mount sokoni-e3's ONE rate-card editor directly (approved categories)
                         (the server re-checks the category against the APPROVED set on every write — 9319925 / e4f9b7d)
      leads / quotes     providerDispatch leadListForProvider · leadMarkViewed · leadDecline · leadSendQuote (the ONE lead engine)
+                        G7: leadQualify · leadMarkLost · leadWithdrawQuote · leadSaveQuoteDraft; stages = the server's l.stage /
+                        l.quoteStage; a quote is sent as LINES (quantity · unit rate · discount · stated tax), the server totals it
      bookings           providerDispatch providerGetBookings
      campaigns/projects workDispatch workListMine · workGet · workCreate (from an ACCEPTED quote) · workUpdateScope ·
                         workTransition · workMilestoneDeliver · workProposeChange · workAddEvidence
@@ -135,23 +137,38 @@
     }
 
     /* ── leads / quotes — the ONE lead engine (service-leads via providerDispatch); the server owns every transition ── */
-    const LEAD_LABEL = { created: 'New', viewed: 'Opened', quote_sent: 'Quote sent', clarification_requested: 'Customer asked a question', quote_accepted: 'Quote accepted', quote_declined: 'Quote declined', declined: 'Declined', converted: 'Booked', closed: 'Closed by customer' };
+    const LEAD_LABEL = { created: 'New', viewed: 'Contacted', qualified: 'Qualified', quote_requested: 'Quote requested', quote_sent: 'Quote sent', clarification_requested: 'Negotiating',
+      quote_accepted: 'Won — quote accepted', quote_declined: 'Lost — quote declined', declined: 'Declined', lost: 'Lost', converted: 'Won — booked', closed: 'Cancelled by customer' };
+    const QUOTE_LABEL = { draft: 'Draft', sent: 'Sent', customer_viewed: 'Viewed by customer', negotiating: 'Negotiating', accepted: 'Accepted', declined: 'Declined', expired: 'Expired', cancelled: 'Withdrawn' };
     const QUOTE_STATES = ['quote_sent', 'clarification_requested', 'quote_accepted', 'quote_declined', 'converted'];
+    /* open, not yet accepted — the states the server lets a provider quote / decline / mark lost from (service-leads PRE_QUOTE) */
+    const PRE_QUOTE = ['created', 'viewed', 'qualified', 'quote_requested', 'clarification_requested'];
     async function leads(which) {
       paint('<div class="ord-list">' + SK + SK + '</div>');
       const [r, sv] = await Promise.all([pd('leadListForProvider'), pd('providerListServices').catch(() => ({ services: [] }))]);
       host._svcs = ((sv && sv.services) || []).filter((x) => x.hub === 'marketing' && x.active !== false && !x.removedAt);
       const list = ((r && r.leads) || []).filter((l) => (which === 'quotes' ? QUOTE_STATES.indexOf(l.status) >= 0 : QUOTE_STATES.indexOf(l.status) < 0));
-      const tone = (st) => (st === 'quote_accepted' || st === 'converted' ? 'paid' : /declin|closed/.test(st) ? 'failed' : 'pending');
+      const tone = (l) => (l.stage === 'won' ? 'paid' : ['lost', 'cancelled', 'expired'].indexOf(l.stage) >= 0 ? 'failed' : 'pending');
+      const label = (l) => (l.stage === 'expired' ? 'Expired' : (LEAD_LABEL[l.status] || l.status)) + (l.quoteStage && QUOTE_LABEL[l.quoteStage] ? ' · quote ' + QUOTE_LABEL[l.quoteStage].toLowerCase() : '');
+      const btn = (cls, attr, id, text) => '<button type="button" class="act' + (cls ? ' ' + cls : '') + '" ' + attr + '="' + esc(id) + '">' + text + '</button>';
       paint('<div class="greet"><b>' + (which === 'leads' ? 'Leads' : 'Quotes') + '</b><small>'
         + (which === 'leads' ? 'Customer requests. Open one, reply in Messages, and send a quote.' : 'Quotes you sent. The customer accepts on their side; an accepted quote can be booked or turned into a campaign / project.') + '</small></div>'
         + (list.length ? '<div class="ord-list">' + list.map((l) => card(
           '<span class="ord-id">' + esc(l.message || 'Request') + '</span><span class="ord-amt">' + esc(l.quote && l.quote.amountCents ? kes(l.quote.amountCents) : '') + '</span>',
-          '<span class="badge ' + tone(l.status) + '">' + esc(LEAD_LABEL[l.status] || l.status) + '</span>',
-          !canEdit() ? '<div class="actions" style="margin-top:4px"><a class="act ghost" href="messages.html?tx=service_lead&txId=' + encodeURIComponent(l.id) + '">💬 Messages</a></div>' : '<div class="actions" style="margin-top:4px">'
-            + (l.status === 'created' ? '<button type="button" class="act ghost" data-lead-view="' + esc(l.id) + '">Mark opened</button>' : '')
-            + (['created', 'viewed', 'clarification_requested', 'quote_declined'].indexOf(l.status) >= 0 ? '<button type="button" class="act" data-lead-quote="' + esc(l.id) + '">Send quote</button>' : '')
-            + (['created', 'viewed', 'clarification_requested'].indexOf(l.status) >= 0 ? '<button type="button" class="act danger" data-lead-decline="' + esc(l.id) + '">Decline</button>' : '')
+          '<span class="badge ' + tone(l) + '">' + esc(label(l)) + '</span>'
+            + (l.quote && Array.isArray(l.quote.breakdown) && l.quote.breakdown.length > 1 ? '<div class="note">' + l.quote.breakdown.map((x) => esc(x.label) + ' ' + esc(kes(x.amount))).join(' · ') + '</div>' : '')
+            + (l.quoteDraft ? '<div class="note">Draft saved · ' + esc(kes(l.quoteDraft.amountCents)) + ' (not sent)</div>' : ''),
+          !canEdit() ? '<div class="actions" style="margin-top:4px"><a class="act ghost" href="messages.html?tx=service_lead&txId=' + encodeURIComponent(l.id) + '">💬 Messages</a></div>' : (() => {
+            /* only controls the server will accept from this state; an idle (expired) request can only be declined / lost */
+            const idle = l.stage === 'expired' && l.status !== 'quote_sent';
+            return '<div class="actions" style="margin-top:4px">'
+            + (l.status === 'created' ? btn('ghost', 'data-lead-view', l.id, 'Mark opened') : '')
+            + (!idle && ['created', 'viewed'].indexOf(l.status) >= 0 ? btn('ghost', 'data-lead-qualify', l.id, 'Mark qualified') : '')
+            + (!idle && PRE_QUOTE.concat(['quote_sent']).indexOf(l.status) >= 0 ? btn('', 'data-lead-quote', l.id, l.quoteDraft ? 'Continue draft' : l.status === 'quote_sent' ? 'Send new quote' : 'Send quote') : '')
+            + (['quote_sent', 'clarification_requested'].indexOf(l.status) >= 0 ? btn('ghost', 'data-lead-withdraw', l.id, 'Withdraw quote') : '')
+            + (PRE_QUOTE.indexOf(l.status) >= 0 ? btn('danger', 'data-lead-decline', l.id, 'Decline') : '')
+            + (PRE_QUOTE.concat(['quote_sent']).indexOf(l.status) >= 0 ? btn('ghost', 'data-lead-lost', l.id, 'Mark lost') : '');
+          })()
             + '<a class="act ghost" href="messages.html?tx=service_lead&txId=' + encodeURIComponent(l.id) + '">💬 Messages</a></div><div data-quote-slot="' + esc(l.id) + '"></div>')).join('') + '</div>'
           : state('📨', which === 'leads' ? 'No open leads' : 'No quotes yet', which === 'leads' ? 'Customers reach you from the Marketing Hub.' : 'Send a quote from a lead.')));
     }
@@ -159,9 +176,17 @@
       const svc = host._svcs || [];
       if (!svc.length) return '<div class="note err">Create a marketing service first — a quote is for one of your services.</div>';
       return '<form class="note" data-quote-form data-lead="' + esc(leadId) + '"><label class="fld">Service<select name="serviceId">' + svc.map((x) => '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>').join('') + '</select></label>'
-        + '<label class="fld">Amount (KES)<input name="amount" inputmode="decimal" required></label><label class="fld">What is included<textarea name="description" rows="3" maxlength="1000"></textarea></label>'
-        + '<label class="fld">Valid for (days)<input name="validDays" type="number" min="1" max="30" value="7"></label><div class="msg" data-quote-msg role="alert"></div>'
-        + '<div class="actions"><button type="submit" class="act">Send quote</button></div></form>';
+        + '<label class="fld">Quantity<input name="quantity" type="number" min="1" step="1" value="1"></label>'
+        + '<label class="fld">Rate per unit (KES)<input name="amount" inputmode="decimal" required></label>'
+        + '<label class="fld">Discount (KES, optional)<input name="discount" inputmode="decimal"></label>'
+        + '<label class="fld">Tax you charge (optional, e.g. VAT)<input name="taxLabel" maxlength="40"></label><label class="fld">Tax rate %<input name="taxRate" inputmode="decimal"></label>'
+        + '<label class="fld">Scope of work<textarea name="scope" rows="2" maxlength="1000"></textarea></label>'
+        + '<label class="fld">What is included<textarea name="description" rows="3" maxlength="1000"></textarea></label>'
+        + '<label class="fld">Payment note (optional)<input name="paymentNote" maxlength="300"></label>'
+        + '<label class="fld">Valid for (days)<input name="validDays" type="number" min="1" max="30" value="7"></label>'
+        + '<div class="note">SOKONI totals the quote from these lines; no tax is added unless you state one. Payment: in full through SOKONI when booked, held until the customer confirms completion with their PIN.</div>'
+        + '<div class="msg" data-quote-msg role="alert"></div>'
+        + '<div class="actions"><button type="submit" class="act">Send quote</button><button type="submit" class="act ghost" data-quote-draft="1">Save draft</button></div></form>';
     }
 
     async function earnings() {
@@ -197,7 +222,10 @@
       const b = e.target.closest ? e.target.closest('button') : null; if (!b) return;
       const d = b.dataset;
       if (d.go) return ctx.go(d.go);
-      if ((d.leadView || d.leadDecline || d.leadQuote || d.workCreate || d.workMove || d.msDeliver) && !canEdit()) { toast('Read-only: editing is not available for this account right now.'); return; }
+      if ((d.leadView || d.leadDecline || d.leadQuote || d.leadQualify || d.leadLost || d.leadWithdraw || d.workCreate || d.workMove || d.msDeliver) && !canEdit()) { toast('Read-only: editing is not available for this account right now.'); return; }
+      if (d.leadQualify) { b.disabled = true; try { await pd('leadQualify', { leadId: d.leadQualify }); await run(); } catch (er) { b.disabled = false; toast(errText(er)); } return; }
+      if (d.leadLost) { b.disabled = true; try { await pd('leadMarkLost', { leadId: d.leadLost }); await run(); } catch (er) { b.disabled = false; toast(errText(er)); } return; }
+      if (d.leadWithdraw) { b.disabled = true; try { await pd('leadWithdrawQuote', { leadId: d.leadWithdraw }); await run(); } catch (er) { b.disabled = false; toast(errText(er)); } return; }
       if (d.leadView) { b.disabled = true; try { await pd('leadMarkViewed', { leadId: d.leadView }); await run(); } catch (er) { b.disabled = false; toast(errText(er)); } return; }
       if (d.leadDecline) { b.disabled = true; try { await pd('leadDecline', { leadId: d.leadDecline }); await run(); } catch (er) { b.disabled = false; toast(errText(er)); } return; }
       if (d.leadQuote) { const slot = host.querySelector('[data-quote-slot="' + d.leadQuote + '"]'); if (slot) slot.innerHTML = quoteForm(d.leadQuote); return; }
@@ -213,12 +241,20 @@
       if (f.matches && (f.matches('[data-quote-form]') || f.matches('[data-scope-form]')) && !canEdit()) { e.preventDefault(); toast('Read-only: editing is not available for this account right now.'); return; }
       if (f.matches && f.matches('[data-quote-form]')) {
         e.preventDefault();
-        const qm = f.querySelector('[data-quote-msg]'), amountCents = toCents(f.elements.amount.value);
-        if (!amountCents) { qm.textContent = 'Enter the quote amount.'; qm.className = 'msg bad'; return; }
-        qm.textContent = 'Sending…'; qm.className = 'msg';
+        const qm = f.querySelector('[data-quote-msg]'), unitRateCents = toCents(f.elements.amount.value);
+        if (!unitRateCents) { qm.textContent = 'Enter the rate.'; qm.className = 'msg bad'; return; }
+        const val = (n) => (f.elements[n] ? String(f.elements[n].value || '').trim() : '');
+        const draft = !!(e.submitter && e.submitter.dataset && e.submitter.dataset.quoteDraft);
+        /* LINES only — the server computes subtotal, tax and total; no client total is sent */
+        const data = { leadId: f.dataset.lead, serviceId: f.elements.serviceId.value, quantity: Math.max(1, Math.round(Number(val('quantity')) || 1)), unitRateCents,
+          scope: val('scope'), description: f.elements.description.value, paymentTermsNote: val('paymentNote'), validDays: Math.max(1, Math.min(30, Number(f.elements.validDays.value) || 7)) };
+        const disc = toCents(val('discount')); if (disc) data.adjustments = [{ label: 'Discount', amountCents: -disc }];
+        const rate = Number(val('taxRate'));
+        if (rate > 0) { if (!val('taxLabel')) { qm.textContent = 'Name the tax you charge (e.g. VAT), or clear the rate.'; qm.className = 'msg bad'; return; } data.taxes = [{ label: val('taxLabel'), ratePct: rate }]; }
+        qm.textContent = draft ? 'Saving…' : 'Sending…'; qm.className = 'msg';
         try {
-          await pd('leadSendQuote', { leadId: f.dataset.lead, serviceId: f.elements.serviceId.value, amountCents, description: f.elements.description.value, validDays: Math.max(1, Math.min(30, Number(f.elements.validDays.value) || 7)) });
-          toast('Quote sent.'); await run();
+          await pd(draft ? 'leadSaveQuoteDraft' : 'leadSendQuote', data);
+          toast(draft ? 'Draft saved.' : 'Quote sent.'); await run();
         } catch (er) { qm.textContent = errText(er); qm.className = 'msg bad'; }
         return;
       }

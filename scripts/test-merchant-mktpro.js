@@ -15,7 +15,8 @@ if (process.env.SABOTAGE) {
     ['K1', 'sokoni-merchant-mktpro.js', "      if (!(m && m.listed && (m.categories || []).length)) {", '      if (false) {'],
     ['K3', 'merchant-v2.html', "      filter: { categories: (S.workspace && Array.isArray(S.workspace.marketingCategories)) ? S.workspace.marketingCategories.slice() : [] },", "      filter: {},"],
     ['K8', 'sokoni-merchant-mktpro.js', "    const canEdit = () => !!(ctx.editable && ctx.editable() === true);", '    const canEdit = () => true;'],
-    ['K4', 'sokoni-merchant-mktpro.js', "          await pd('leadSendQuote', { leadId: f.dataset.lead, serviceId: f.elements.serviceId.value, amountCents,", "          await pd('leadSendQuote', { leadId: f.dataset.lead, serviceId: f.elements.serviceId.value, amountCents: f.elements.amount.value,"],
+    ['K4', 'sokoni-merchant-mktpro.js', "        const qm = f.querySelector('[data-quote-msg]'), unitRateCents = toCents(f.elements.amount.value);", "        const qm = f.querySelector('[data-quote-msg]'), unitRateCents = f.elements.amount.value;"],
+    ['K4b', 'sokoni-merchant-mktpro.js', "    const PRE_QUOTE = ['created', 'viewed', 'qualified', 'quote_requested', 'clarification_requested'];", "    const PRE_QUOTE = ['created', 'viewed', 'qualified', 'quote_requested', 'clarification_requested', 'quote_declined'];"],
     ['K6', 'sokoni-merchant-routes.js', "    { key:'mktpro', label:'Marketing services', requires:'marketing',", "    { key:'mktpro', label:'Marketing services',"],
     ['K6b', 'sokoni-merchant-routes.js', "    { id:'mkt-earnings', name:'Earnings', icon:'💰', tier:'more',\n      kind:'native',\n      role:['seller','merchant'], ctx:[CTX.SELLER_UID],\n      sessions:['provider'],", "    { id:'mkt-earnings', name:'Earnings', icon:'💰', tier:'more',\n      kind:'native',\n      role:['seller','merchant'], ctx:[CTX.SELLER_UID],\n      sessions:['provider','merchant'],"],
   ];
@@ -88,8 +89,16 @@ const APPROVED = { 'marketingDispatch:marketingMyStatus': { ok: true, applicatio
   for (const f of m.host.listeners.submit || []) await f({ target: form, preventDefault() {} });
   await flush();
   const q = h.calls.find((c) => c.op === 'leadSendQuote');
-  ck('K4', /Need a logo/.test(m.host.innerHTML) && q && q.amountCents === 1250050 && q.leadId === 'L1' && q.serviceId === 's1' && Number.isInteger(q.amountCents),
-    'leads: a quote goes to the ONE lead engine (leadSendQuote) in integer cents (KES 12,500.50 → 1250050)', q);
+  ck('K4', /Need a logo/.test(m.host.innerHTML) && q && q.unitRateCents === 1250050 && q.quantity === 1 && !('amountCents' in q) && q.leadId === 'L1' && q.serviceId === 's1' && Number.isInteger(q.unitRateCents),
+    'leads: a quote goes to the ONE lead engine (leadSendQuote) as LINES in integer cents (KES 12,500.50 → unit rate 1250050), no client total', q);
+  /* K4b G7: only controls the server accepts — no quote on a declined quote; qualify / lost / withdraw by state; idle = decline / lost */
+  {
+    const acts = (l, view) => { const hh = harness(Object.assign({}, APPROVED, { 'providerDispatch:leadListForProvider': { leads: [Object.assign({ id: 'X', message: 'm' }, l)] }, 'providerDispatch:providerListServices': { services: [] } }));
+      const mm = hh.mount(view || 'leads'); return flush().then(() => (mm.host.innerHTML.match(/data-lead-[a-z]+(?==)/g) || []).map((x) => x.slice(10)).sort().join()); };
+    const v = await acts({ status: 'viewed' }), qs = await acts({ status: 'quote_sent' }, 'quotes'), qd = await acts({ status: 'quote_declined' }, 'quotes'), idle = await acts({ status: 'viewed', stage: 'expired' });
+    ck('K4b', v === 'decline,lost,qualify,quote' && qs === 'lost,quote,withdraw' && qd === '' && idle === 'decline,lost',
+      'G7 lead controls follow the server: viewed → quote / qualify / decline / lost; sent → re-quote / withdraw / lost; a declined quote offers nothing; an idle lead only decline / lost', { v, qs, qd, idle });
+  }
 
   /* K5: campaign from an accepted quote */
   h = harness(Object.assign({}, APPROVED, { 'workDispatch:workListMine': { items: [] }, 'providerDispatch:leadListForProvider': { leads: [{ id: 'L9', status: 'quote_accepted', quote: { amountCents: 9000000, description: 'Q4 campaign' } }] },
