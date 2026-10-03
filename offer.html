@@ -168,10 +168,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
       <div class="of-prod-label">Physical Products</div>
       <div class="of-prod-sub">Clothes, electronics, groceries, hardware &amp; everything else</div>
     </a>
-    <a href="#register" class="of-prod-card p2" data-reg-category="software" onclick="return offerRegister(this.dataset.regCategory)">
-      <div class="of-prod-icon">💾</div>
-      <div class="of-prod-label">Digital Goods</div>
-      <div class="of-prod-sub">Templates, eBooks, music, software, codes &amp; downloads</div>
+    <!-- 2026-10-03 (owner, relayed by sokoni-e3): the digital-downloads store is RETIRED, so its "Digital Goods" tile is removed
+         (it opened HubRegister 'software' = Software / SaaS Company, the wrong intake anyway). Device RETAIL takes its place. -->
+    <a href="#register" class="of-prod-card p2" data-reg-category="electronics" onclick="return offerRegister(this.dataset.regCategory)">
+      <div class="of-prod-icon">📱</div>
+      <div class="of-prod-label">Phones, Laptops &amp; Electronics</div>
+      <div class="of-prod-sub">Phones, laptops, tablets, accessories &amp; electronics shops</div>
     </a>
     <a href="#register" class="of-prod-card p3" data-reg-category="wholesale" onclick="return offerRegister(this.dataset.regCategory)">
       <div class="of-prod-icon">🤝</div>
