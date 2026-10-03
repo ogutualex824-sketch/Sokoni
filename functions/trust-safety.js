@@ -43,7 +43,7 @@ function _requireSuperAdmin(req) {
    ═════════════════════════════════════════════════════════════════════════ */
 
 /* Entity types a report may target. 'listing' is the historical name the product page used for a product. */
-const REPORT_ENTITY_TYPES = ['product', 'user', 'business', 'message', 'review'];
+const REPORT_ENTITY_TYPES = ['product', 'user', 'business', 'message', 'review', 'unboxing'];
 const REPORT_ENTITY_ALIASES = { listing: 'product' };
 
 /* THE reason catalogue. The product page's wizard renders THIS list (tsGetReportReasons) — there is no client copy.
@@ -51,6 +51,16 @@ const REPORT_ENTITY_ALIASES = { listing: 'product' };
    reason (≤120 chars, severity inferred). */
 const REPORT_DETAIL_MAX = 500;
 const REPORT_DETAIL_MIN_WHEN_REQUIRED = 10;
+/* the review catalogue (2026-10-03) — shared by both review kinds */
+const REVIEW_REPORT_REASONS = Object.freeze([
+  { code: 'fake_review',          label: 'Fake or paid review',                       severity: 'high',   hint: 'Not a real buyer\'s experience, or written in exchange for payment or a reward.' },
+  { code: 'spam',                 label: 'Spam or advertising',                       severity: 'medium', hint: 'Adverts, links, repeated text or anything that is not a review.' },
+  { code: 'offensive',            label: 'Offensive or abusive',                      severity: 'medium', hint: 'Hateful, sexual, threatening or abusive words or images.' },
+  { code: 'off_topic',            label: 'Not about this product or seller',          severity: 'low',    hint: 'About something else entirely.' },
+  { code: 'personal_info',        label: 'Shares personal information',               severity: 'high',   hint: 'A phone number, address, ID number or other private details.' },
+  { code: 'conflict_of_interest', label: 'Written by the seller or a competitor',     severity: 'high',   hint: 'The writer has an interest in this listing doing well or badly.' },
+  { code: 'other',                label: 'Something else',                            severity: 'low',    hint: 'Tell us what is wrong in the next step.', detailRequired: true },
+].map(Object.freeze));
 const REPORT_REASONS = Object.freeze({
   product: Object.freeze([
     { code: 'counterfeit',    label: 'Counterfeit or fake product',        severity: 'high',     hint: 'A copy of a brand, or not the genuine item it claims to be.' },
@@ -61,7 +71,57 @@ const REPORT_REASONS = Object.freeze({
     { code: 'wrong_category', label: 'Wrong category',                     severity: 'low',      hint: 'Listed in a category it does not belong to.' },
     { code: 'other',          label: 'Something else',                     severity: 'low',      hint: 'Tell us what is wrong in the next step.', detailRequired: true },
   ].map(Object.freeze)),
+  /* 2026-10-03: a REVIEW (reviews/{id}) or an UNBOXING review (unboxingReviews/{id}) — one list for both kinds */
+  review: REVIEW_REPORT_REASONS,
+  unboxing: REVIEW_REPORT_REASONS,
 });
+/* review report targets — the moderation transition itself is the review owner's shared module (sokoni-5b,
+   functions/shared/review-moderation.js, byte-identical copy of 85a5fcf, pinned by scripts/test-review-reports.js) */
+function _isReviewType(t) { return t === 'review' || t === 'unboxing'; }
+let _rm = null;
+function _reviewModeration() {
+  /* loaded on the review path only (no try/catch: a missing module is a loud failure, and the require-closure gate
+     proves the file is in the deploy tree) */
+  if (!_rm) _rm = require('./shared/review-moderation');
+  return _rm;
+}
+const REVIEW_EXCERPT_MAX = 280;
+function _reviewExcerpt(r) {
+  const t = [r.body, r.comment, r.text, r.caption, r.review, r.title].find((x) => typeof x === 'string' && x.trim());
+  return _cleanText(String(t || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' '), REVIEW_EXCERPT_MAX);
+}
+/* REVIEW CONTEXT, captured by the SERVER at report time — nothing the reporter sent is used. The review must exist; its
+   writer cannot report it. `authorUid` is for administrators only (never returned to a seller, never to the author).
+   `listingSellerUid` is the seller of the reviewed listing, resolved from the canonical record (the product document,
+   or the seller id a server-written review targets) — never from a client-written field — and drives the seller's
+   status-only view. It is deliberately NOT `sellerUid`: the queue's seller filters and "seller upheld ×N" facts count
+   reports AGAINST a seller, and a removed review is not one. */
+async function _reviewReportContext(db, entityType, entityId, uid) {
+  const kind = entityType === 'unboxing' ? 'unboxing' : 'review';
+  const rs = await db.collection(kind === 'unboxing' ? 'unboxingReviews' : 'reviews').doc(entityId).get();
+  if (!rs.exists) throw new HttpsError('not-found', 'That review no longer exists.');
+  const r = rs.data() || {};
+  const authorUid = r.authorUid || r.uid || null;
+  if (authorUid && authorUid === uid) throw new HttpsError('failed-precondition', 'You cannot report your own review.');
+  const targetType = kind === 'unboxing' ? 'product' : (r.targetType || (r.productId ? 'product' : null));
+  const targetId = r.targetId || r.productId || null;
+  let listingSellerUid = null;
+  if (targetType === 'seller' && kind === 'review') listingSellerUid = _safeId(targetId) || null;
+  else if (targetType === 'product' && _safeId(targetId)) {
+    const ps = await db.collection('products').doc(String(targetId)).get();
+    if (ps.exists) { const p = ps.data() || {}; listingSellerUid = p.sellerUid || p.sellerId || null; }
+  }
+  return {
+    reviewKind: kind,
+    targetType: targetType || null,
+    targetId: targetId ? String(targetId).slice(0, 200) : null,
+    authorUid,
+    listingSellerUid,
+    excerpt: _reviewExcerpt(r),
+    rating: typeof r.rating === 'number' ? r.rating : null,
+    reviewStatus: r.status || null,
+  };
+}
 
 function _normEntityType(t) {
   const s = String(t || '');
@@ -158,14 +218,18 @@ const ASSIGN_ACTIONS = Object.freeze(['claim', 'unclaim']);
 
 /* TYPED TARGETS. One queue for every content type: a target type is a registry entry, not a new system. A report on a
    type that is not ENABLED here is refused by every moderation operation (failed-precondition). Enforcement exists for
-   product listings only (isVisible:false + moderationHold); the others are decided and recorded without enforcement,
-   as in C2. Future types are listed DISABLED so the queue can take them later without being rewritten. */
+   product listings (isVisible:false + moderationHold) and, since 2026-10-03, reviews / unboxing reviews (an upheld
+   report removes the review through functions/shared/review-moderation.js); the others are decided and recorded
+   without enforcement, as in C2. Future types are listed DISABLED so the queue can take them later without being
+   rewritten. */
 const MODERATION_TARGETS = Object.freeze({
   product:            { enabled: true,  enforcement: 'listing_visibility', label: 'Product / listing' },
   user:               { enabled: true,  enforcement: null,                 label: 'Profile' },
   business:           { enabled: true,  enforcement: null,                 label: 'Shop / business' },
   message:            { enabled: true,  enforcement: null,                 label: 'Message' },
-  review:             { enabled: true,  enforcement: null,                 label: 'Review' },
+  /* 2026-10-03: an upheld report REMOVES the review through the review owner's shared module (sokoni-5b) */
+  review:             { enabled: true,  enforcement: 'review_removal',     label: 'Review' },
+  unboxing:           { enabled: true,  enforcement: 'review_removal',     label: 'Unboxing review' },
   comment:            { enabled: false, enforcement: null,                 label: 'Comment' },
   media:              { enabled: false, enforcement: null,                 label: 'Media' },
   story:              { enabled: false, enforcement: null,                 label: 'Story' },
@@ -319,6 +383,8 @@ exports.tsReportContent = onCall(OPT_REPORT, async (req) => {
       isVisible: p.isVisible !== false,
     };
     if (context.sellerUid && context.sellerUid === uid) throw new HttpsError('failed-precondition', 'You cannot report your own product.');
+  } else if (_isReviewType(entityType)) {
+    context = await _reviewReportContext(db, entityType, entityId, uid);
   }
 
   const ref = db.collection('reports').doc(_reportDocId(uid, entityType, entityId));
@@ -547,8 +613,26 @@ async function _myListingReports(req) {
       decidedAt: _iso(r.reviewedAt),
       sellerResponse: SELLER_RESPONSE,
     };
-  }).filter((x) => x.moderationState !== 'removed')
-    .sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
+  }).filter((x) => x.moderationState !== 'removed');
+  /* REVIEWS of this seller's listings (2026-10-03): STATUS VOCABULARY ONLY. Not the reason, not the reporter's words,
+     not the excerpt, not the review id or its author, not the outcome note — the seller learns that a review on their
+     listing was reported and where that stands, nothing that could identify or pressure the reporter or the writer. */
+  const rv = await getFirestore().collection('reports').where('context.listingSellerUid', '==', uid).limit(100).get();
+  rv.docs.forEach((d) => {
+    const r = d.data() || {}; const c = r.context || {};
+    if (!_isReviewType(_normEntityType(r.entityType))) return;
+    const moderationState = _stateOf(r.status || 'pending');
+    if (moderationState === 'removed') return;
+    reports.push({
+      ref: _opaqueRef(d.id),
+      entityType: r.entityType, subject: 'review_on_your_listing',
+      listingType: c.targetType || null, listingId: c.targetId || null,
+      moderationState, sellerStatus: _sellerStatusOf(r),
+      createdAt: _iso(r.createdAt), decidedAt: _iso(r.reviewedAt),
+      sellerResponse: SELLER_RESPONSE,
+    });
+  });
+  reports.sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
   return { reports, scope: 'mine', sellerResponse: SELLER_RESPONSE };
 }
 
@@ -613,6 +697,30 @@ exports.tsGetReportCase = onCall(OPT, async (req) => {
     }
   }
 
+  /* REVIEW TARGET (2026-10-03): the review as it is NOW (canonical), plus the listing it is about. Admins only. */
+  let review = null;
+  if (_isReviewType(target.type) && _safeId(report.entityId, 200)) {
+    const kind = target.type;
+    const rs = await db.collection(kind === 'unboxing' ? 'unboxingReviews' : 'reviews').doc(String(report.entityId)).get();
+    if (!rs.exists) review = { exists: false, kind, id: report.entityId };
+    else {
+      const x = rs.data() || {}; const c = report.context || {};
+      const tType = kind === 'unboxing' ? 'product' : (x.targetType || (x.productId ? 'product' : null));
+      const tId = x.targetId || x.productId || null;
+      review = {
+        exists: true, kind, id: rs.id, status: x.status || null,
+        excerpt: _reviewExcerpt(x), excerptAtReport: c.excerpt || null,
+        rating: typeof x.rating === 'number' ? x.rating : null,
+        targetType: tType, targetId: tId,
+        targetHref: tId && tType === 'product' ? 'product.html?id=' + encodeURIComponent(String(tId))
+          : (tId && tType === 'seller' ? 'seller-public.html?id=' + encodeURIComponent(String(tId)) : null),
+        authorUid: x.authorUid || x.uid || null,
+        listingSellerUid: c.listingSellerUid || null,
+        moderatedBy: x.moderatedBy || null, moderatedAtIso: _iso(x.moderatedAt),
+      };
+    }
+  }
+
   /* every report on the same target — each its own record (reporter, reason, time, details): never collapsed */
   const sib = report.entityId ? await db.collection('reports').where('entityId', '==', report.entityId).limit(100).get() : { docs: [] };
   const reports = sib.docs.map(_adminRow).filter((r) => _normEntityType(r.entityType) === target.type)
@@ -642,8 +750,13 @@ exports.tsGetReportCase = onCall(OPT, async (req) => {
   /* RESTORE (takedown spec §22): offered on the upheld report that owns the hold. The server re-checks everything. */
   if (heldByThis && report.status === 'actioned' && target.enforcement === 'listing_visibility'
       && (!report.assignedTo || report.assignedTo === req.auth.uid || isSuper)) actions.push('restore');
+  /* REVIEW RESTORE: offered on the upheld report whose uphold removed the review, while the review is still removed.
+     The server re-checks everything (and the shared module refuses a moderator with a stake in the review). */
+  if (review && review.exists && review.status === 'removed' && report.status === 'actioned'
+      && report.reviewEnforcement === 'review_removed' && target.enforcement === 'review_removal'
+      && (!report.assignedTo || report.assignedTo === req.auth.uid || isSuper)) actions.push('restore');
   return {
-    report, target, product, shop, reports, history, listingHistory,
+    report, target, product, shop, review, reports, history, listingHistory,
     actions,
     openOnListing: reports.filter((r) => OPEN_STATUSES.includes(r.status)).length,
     /* the listing's take-down belongs to THIS report — dismissing it may restore the listing (restoreListing:true) */
@@ -751,7 +864,17 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
     /* enforcement exists for listings only; hideProduct on any other target is ignored (C2 behaviour) */
     const hide = wantHide && target.enforcement === 'listing_visibility';
     const restore = wantRestore && target.enforcement === 'listing_visibility';
-    if (isRestore && !restore) throw new HttpsError('failed-precondition', 'Only a listing take-down can be restored.');
+    /* REVIEW ENFORCEMENT (2026-10-03): an UPHOLD removes the review, a RESTORE of that upheld report sends it back to
+       PENDING (re-review — never straight to public); a dismiss touches no review. */
+    const reviewTarget = target.enforcement === 'review_removal';
+    const reviewRemove = reviewTarget && newStatus === 'actioned';
+    const reviewRestore = reviewTarget && isRestore;
+    if (isRestore && !restore && !reviewRestore) throw new HttpsError('failed-precondition', 'Only a listing take-down or a removed review can be restored.');
+    if (reviewRestore && report.reviewEnforcement !== 'review_removed') {
+      throw new HttpsError('failed-precondition', report.reviewEnforcement === 'review_restored'
+        ? 'This review was already restored from this report.'
+        : 'This report did not remove the review, so there is nothing to restore from it.');
+    }
     let pref = null, psnap = null, other = [], promos = [];
     if (hide || restore) {
       pref = db.collection('products').doc(String(report.entityId));
@@ -762,9 +885,35 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
       if (p0) promos = await _promotionsFor(tx, db, report.entityId, hide ? 'active' : PROMO_PAUSED);
     }
 
+    /* ── the review transition: the review owner's shared module, LAST among the reads (it reads the review and, for a
+       product review, the product, then writes the review and ONE reviewModerationLog row) — so every read of this
+       transaction still precedes every write. Its refusals (SELF_REVIEW, SELF_INTEREST, BAD_TRANSITION) abort the
+       whole decision: the report does not move either. ── */
+    let enforcement = 'none';
+    let reviewResult = null;
+    if (reviewRemove || reviewRestore) {
+      const RM = _reviewModeration();
+      const o = { db, FieldValue, kind: target.type === 'unboxing' ? 'unboxing' : 'review', reviewId: String(report.entityId),
+        actorUid: uid, source: 'report:' + reportId,
+        /* the review document is readable by its author (reviews) or by everyone (unboxingReviews): a FIXED note —
+           never the reporter, the reason, the outcome note or the internal note */
+        note: reviewRestore ? 'Restored for re-review after a report decision was reversed.' : 'Removed after a report about it was upheld.' };
+      try {
+        reviewResult = await (reviewRestore ? RM.restoreReview(tx, o) : RM.removeReview(tx, o));
+      } catch (e) {
+        if (!(e instanceof RM.ModerationError)) throw e;
+        /* a review deleted since the report was filed: the uphold stands, nothing to remove (as product_missing) */
+        if (reviewRemove && e.reason === 'NOT_FOUND') reviewResult = { missing: true };
+        else throw new HttpsError(e.code, e.message, { reason: e.reason });
+      }
+      enforcement = reviewResult.missing ? 'review_missing'
+        : reviewRestore ? 'review_restored'
+          /* a re-uphold after a reopen finds the review still removed BY THIS REPORT: it stays this report's removal */
+          : (reviewResult.unchanged ? (report.reviewEnforcement === 'review_removed' ? 'review_removed' : 'already_removed') : 'review_removed');
+    }
+
     /* ── writes ── */
     const now = FieldValue.serverTimestamp();
-    let enforcement = 'none';
     let promotionsChanged = 0;
     if (hide) {
       if (!psnap || !psnap.exists) enforcement = 'product_missing';
@@ -824,6 +973,10 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
       let to = f;
       if (action === 'claim') Object.assign(patch, { assignedTo: uid, assignedAt: now, assignedRole: actorRole });
       else if (action === 'unclaim') Object.assign(patch, { assignedTo: null, assignedAt: null });
+      else if (isRestore && reviewRestore) {
+        Object.assign(patch, { reviewEnforcement: 'review_restored', reviewRestoredAt: now, reviewRestoredBy: uid, internalNote,
+          reviewModeration: { kind: target.type, from: reviewResult.from || null, to: reviewResult.status || null, unchanged: reviewResult.unchanged === true, missing: false, at: now } });
+      }
       else if (isRestore) Object.assign(patch, { productHidden: false, listingRestoredAt: now, listingRestoredBy: uid, internalNote });
       else {
         to = newStatus;
@@ -831,6 +984,12 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
         if (internalNote) patch.internalNote = internalNote;
         if (productHidden) patch.productHidden = true;
         if (enforcement === 'listing_restored') patch.productHidden = false;
+        /* the review outcome is recorded on the PRIMARY report only — it is the one whose decision removed the review */
+        if (primary && reviewResult) {
+          patch.reviewEnforcement = enforcement;
+          patch.reviewModeration = { kind: target.type, from: reviewResult.from || null, to: reviewResult.status || null,
+            unchanged: reviewResult.unchanged === true, missing: reviewResult.missing === true, at: now };
+        }
         if (action === 'escalate') {
           Object.assign(patch, { assignedTo: null, assignedAt: null,
             escalation: { by: uid, byRole: actorRole, at: now, note: internalNote || null, previousReviewer: r.assignedTo || null, nextAction: 'senior_review' } });
@@ -843,7 +1002,7 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
       }
       tx.update(docRef, patch);
       tx.create(db.collection('trustSafetyAudit').doc(_auditId(id, rv)), {
-        action: isAssign ? 'report_' + action + 'ed' : (isRestore ? 'listing_restored' : (action === 'reopen' ? 'report_reopened' : 'report_reviewed')),
+        action: isAssign ? 'report_' + action + 'ed' : (isRestore ? (reviewRestore ? 'review_restored' : 'listing_restored') : (action === 'reopen' ? 'report_reopened' : 'report_reviewed')),
         decision: action,
         reportId: id, reportRef: _opaqueRef(id),
         entityId: r.entityId || null, entityType: r.entityType || null,
@@ -852,6 +1011,8 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
         result: to, resultState: REPORT_STATE[to] || null,
         productHidden: !isAssign && productHidden,
         enforcement: isAssign ? 'none' : enforcement,
+        review: primary && reviewResult ? { kind: target.type, from: reviewResult.from || null, to: reviewResult.status || null,
+          unchanged: reviewResult.unchanged === true, missing: reviewResult.missing === true } : null,
         promotions: primary && promotionsChanged ? { changed: promotionsChanged, to: enforcement === 'listing_hidden' ? PROMO_PAUSED : 'resumed' } : null,
         resolution: isAssign ? '' : resolution,
         internalNote: internalNote || null,
@@ -864,7 +1025,7 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
       return { id, from: f, to, rv, report: r };
     };
     const decided = [apply(reportId, ref, report, true)].concat(siblings.map((s) => apply(s.id, s.ref, s.r, false)));
-    return { report, decided, productHidden, enforcement,
+    return { report, decided, productHidden, enforcement, reviewResult, reviewKind: reviewTarget ? target.type : null,
       result: { status: decided[0].to, moderationState: REPORT_STATE[decided[0].to] || null, productHidden, enforcement, promotionsChanged } };
   });
 
@@ -884,6 +1045,24 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
   res.revision = head.rv;
   res.queueStatus = _queueStatusOf(Object.assign({}, out.report, { status: head.to,
     assignedTo: action === 'claim' ? uid : (['unclaim', 'escalate', 'reopen'].includes(action) ? null : out.report.assignedTo) }));
+
+  /* REVIEW (2026-10-03): the ratings summary is recomputed AFTER the commit, from approved reviews only, by the shared
+     module — for kind 'review' only (an unboxing review has no ratingsSummary). Only when the review actually moved.
+     A failed recompute does not undo the decision; it is reported as failed, never as done. */
+  if (out.reviewResult) {
+    res.review = { kind: out.reviewKind, enforcement: out.enforcement, from: out.reviewResult.from || null,
+      status: out.reviewResult.status || null, unchanged: out.reviewResult.unchanged === true };
+    res.ratingsSummary = null;
+    const tId = out.reviewResult.targetId;
+    if (out.reviewKind === 'review' && !out.reviewResult.unchanged && !out.reviewResult.missing && tId) {
+      try {
+        const sum = await _reviewModeration().recomputeRatingsSummary(db, FieldValue, String(tId));
+        res.ratingsSummary = { status: 'recomputed', targetId: String(tId), avg: sum.avg, count: sum.count };
+      } catch (e) {
+        res.ratingsSummary = { status: 'failed', targetId: String(tId) };
+      }
+    }
+  }
 
   // Ban the reported entity (user) if requested — only superAdmin can auto-ban; only on an upheld USER report
   if (data.banUser && isSuper && out.report.entityType === 'user' && newStatus === 'actioned') {
@@ -921,7 +1100,8 @@ async function _notifyDecision(db, decided, newStatus, productHidden, resolution
   const results = [];
   const first = decided[0] && decided[0].report ? decided[0].report : {};
   const c = first.context || {};
-  const name = _plain(c.productName || 'your listing');
+  /* a report about a review names no review text and no listing to the reporter — just 'a review' */
+  const name = _isReviewType(_normEntityType(first.entityType)) ? 'a review' : _plain(c.productName || 'your listing');
   const record = async (reportId, rv, audience, r) => {
     /* recorded on the report (the case view shows it in the history); revision unchanged — it is not a transition */
     try {
@@ -998,7 +1178,7 @@ async function _notifyRestore(db, head, correlationId) {
 }
 
 /* exported for tests and for the one documented mapping (CHANGELOG 2026-10-01 "community C2" / "community C3") */
-exports._reportModel = { REPORT_ENTITY_TYPES, REPORT_REASONS, REPORT_STATE, REPORT_ACTIONS, REPORT_TRANSITIONS,
+exports._reportModel = { REPORT_ENTITY_TYPES, REPORT_REASONS, REVIEW_REPORT_REASONS, REVIEW_EXCERPT_MAX, REPORT_STATE, REPORT_ACTIONS, REPORT_TRANSITIONS,
   REPORT_DETAIL_MAX, REPORT_DETAIL_MIN_WHEN_REQUIRED, OPEN_STATUSES, QUEUE_STATUS_STORED, ASSIGN_ACTIONS, MODERATION_TARGETS,
   SELLER_RESPONSE, PROMO_PAUSED, LISTING_ACTIONS: Object.freeze(['restore']), queueStatusOf: _queueStatusOf, sellerStatusOf: _sellerStatusOf, allowedActions: _allowedActions,
   holdOwnedBy: _holdOwnedBy, opaqueRef: _opaqueRef };
