@@ -733,16 +733,8 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
         <div id="configBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
+      <!-- Audit Center: the ONE audit view (sokoni-audit-center.js), fed by the four server-authorised audit callables below. -->
       <div class="aos-panel" id="panel-audit" hidden>
-        <div class="panel-toolbar">
-          <h2>Audit Center</h2>
-          <select id="auditTypeSelect" onchange="SokoniAOS.loadAudit(this.value)">
-            <option value="admin">Admin Actions</option><option value="payment">Payment Trail</option>
-            <option value="security">Security Events</option><option value="platform">Platform Events</option>
-          </select>
-          <input type="search" id="auditSearch" placeholder="Filter action or admin&#x2026;" style="width:200px;padding:7px 12px;background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);color:var(--aos-text);font-size:13px;outline:none" oninput="SokoniAOS.filterAuditRows(this.value)">
-          <button class="aos-btn" id="auditExportBtn">&#x1F4E5; Export CSV</button>
-        </div>
         <div id="auditBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
@@ -805,6 +797,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
 <link rel="stylesheet" href="sokoni-mv2-skin.css">  <!-- merchant-v2 design language, scoped to .mv2s (Marketing panels) -->
   <script src="sokoni-aos-marketing.js"></script>
   <script src="sokoni-aos-legal.js"></script>
+  <script src="sokoni-audit-center.js"></script>
   <script src="sokoni-aos.js"></script>
   <script>
     /* ── Sidebar chrome ──────────────────────────────────────────────────────

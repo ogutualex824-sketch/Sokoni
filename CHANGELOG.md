@@ -1,3 +1,23 @@
+## [2026-10-03] — AdminOS + Super Admin: ONE redesigned Audit Logs view (owner design) — NOT deployed
+
+- **sokoni-audit-center.js (new):** the ONE audit view, used by both pages. It renders only and never reads Firestore itself or writes.
+  - **Layout:** header, five summary cards, filter bar (search, source, severity, actor, date range) with removable chips and Clear all, a paged table (10/25/50 rows plus "Load more"), and a detail panel with Overview / Changes / Raw Data tabs. The panel sits beside the table on wide screens and becomes a full-screen sheet on phones.
+  - **Data integrity:** every card counts the LOADED records and says so ("of the N loaded"). There are no trends and no platform totals.
+  - **No inferred values:** severity, IP, location, device and environment show only when the record carries them, and an unrecorded value is "—". A column that no loaded record carries is not drawn.
+  - **Failures:** a failed load is a neutral "couldn't load" state with a retry, never "0".
+  - **Escaping:** everything is escaped, and Raw Data is escaped JSON.
+  - **CSV:** export is guarded against formula injection.
+  - **Accessibility:** keyboard rows (Enter opens the detail, Esc closes it) and an ARIA tablist.
+- **admin-os.html / sokoni-aos.js:** the audit panel mounts the view with the same four server-authorised callables: adminGetAuditLogs, getPaymentAuditTrail, eccGetAuditLog and platformGetEventLog. `SokoniAOS.loadAudit(type)` opens that feed, and `filterAuditRows` is kept as a compatibility shim.
+- **super-admin.html:** the audit panel mounts the view over the same `auditLog` read (high + critical, newest first). `SA.exportAuditCSV()` delegates to the view.
+- **Sidebar untouched:** the sidebar, nav and `<head>` of both pages are byte-identical to the base. The sidebar is owned by 5b's hosting/adminos-sidebar-style-on-72dca56; test row A11 enforces this.
+- **Database / API / security rules:** none changed (same reads).
+- **Tests:**
+  - scripts/test-audit-center.js: 12/0, SABOTAGE 7/7.
+  - Page suites green: admin-bulk-payout 14/0, drawer-close 8/0, nav-context 3/0, authority-honesty 28/0, route-parse 6/0, ticket-badge 4/0, tier1-dead-controls 59/0, tier2-action-honesty 147/0, aos-marketing 10/0, sa-marketing 8/0, legal-hub-web 21/0, home-logo-routing 31/0.
+  - test-adminos-provider-lifecycle A-5 FAILS identically on the untouched base (pre-existing; not this change).
+  - NOT RUN: browser suites (memory floor).
+
 ## [2026-10-03] — Browser gate: hard memory floor BEFORE any browser starts — tooling
 
 - **scripts/lib/memory-floor.js:** assertMemoryFloor({minMB,label}) reads AVAILABLE physical memory (Windows FreePhysicalMemory; else os.freemem) and EXITS 3 (BLOCKED) before any browser is launched when below the floor. The minimum never goes below 512 MB; an unreadable reading fails closed.

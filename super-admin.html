@@ -822,40 +822,8 @@
 
     <!-- ══ SECTION 6: Audit Log ══ -->
     <section class="sa-panel" id="panel-audit" hidden>
-      <div class="panel-header">
-        <h2>&#x1F4CB; Audit Log</h2>
-        <p>High and critical severity platform events. Admin-only access.</p>
-      </div>
-
-      <div class="filter-bar">
-        <select class="sa-select" id="saAuditSevFilter" onchange="SA.filterAudit()">
-          <option value="">All Severities</option>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-        </select>
-        <input class="sa-input" id="saAuditActorFilter" placeholder="Filter by actor UID&hellip;" oninput="SA.filterAudit()" style="width:220px">
-        <input class="sa-input" type="date" id="saAuditDateFilter" oninput="SA.filterAudit()">
-        <button class="sa-btn" onclick="SA.exportAuditCSV()">&#x1F4E5; Export CSV</button>
-        <button class="sa-btn" onclick="SA.loadAudit()">&#x21BB; Refresh</button>
-      </div>
-
-      <div class="table-wrap">
-        <table class="sa-table" id="saAuditTable">
-          <thead>
-            <tr>
-              <th>Timestamp</th>
-              <th>Actor UID</th>
-              <th>Action</th>
-              <th>Resource</th>
-              <th>Severity</th>
-            </tr>
-          </thead>
-          <tbody id="saAuditBody">
-            <tr><td colspan="5" class="empty-cell"><div class="sa-spinner"><div></div></div></td></tr>
-          </tbody>
-        </table>
-      </div>
+      <!-- Audit Log: the ONE audit view (sokoni-audit-center.js) over auditLog (high + critical; admin-only rules). -->
+      <div id="saAuditBody"><div class="sa-spinner"><div></div></div></div>
     </section>
 
     <!-- ══ SECTION 7: Platform Broadcast ══ -->
@@ -2016,72 +1984,28 @@ const SA={
   },
 
   // ══ SECTION 6: Audit Log ════════════════════════════════
-  async loadAudit(){
-    document.getElementById('saAuditBody').innerHTML=`<tr><td colspan="5" class="empty-cell"><div class="sa-spinner"><div></div></div></td></tr>`;
-    try{
-      const snap=await this._db.collection('auditLog')
-        .where('severity','in',['high','critical'])
-        .orderBy('timestamp','desc')
-        .limit(50)
-        .get();
-      this._auditAll=snap.docs.map(d=>({id:d.id,...d.data()}));
-      this.filterAudit();
-    }catch(e){
-      document.getElementById('saAuditBody').innerHTML=`<tr><td colspan="5" class="empty-cell">Error: ${_esc(e.message)}</td></tr>`;
+  /* The ONE audit view (sokoni-audit-center.js) over auditLog — high + critical, newest first (admin-only in the served
+     rules). It counts only what it loaded, shows "—" for anything a record does not carry, and never writes. */
+  loadAudit(){
+    const host=document.getElementById('saAuditBody');
+    if(!host)return;
+    if(!(window.SokoniAuditCenter&&typeof window.SokoniAuditCenter.mount==='function')){
+      host.innerHTML='<div class="empty-cell">The audit view (sokoni-audit-center.js) is not loaded.</div>';return;
     }
-  },
-
-  filterAudit(){
-    const sev=(document.getElementById('saAuditSevFilter')||{}).value||'';
-    const actor=((document.getElementById('saAuditActorFilter')||{}).value||'').toLowerCase();
-    const date=(document.getElementById('saAuditDateFilter')||{}).value||'';
-
-    const list=this._auditAll.filter(e=>{
-      if(sev&&e.severity!==sev)return false;
-      if(actor&&!(e.actorUid||'').toLowerCase().includes(actor))return false;
-      if(date){
-        const eDate=e.timestamp&&e.timestamp.toDate?e.timestamp.toDate():new Date(e.timestamp||0);
-        if(eDate.toISOString().slice(0,10)!==date)return false;
-      }
-      return true;
+    const db=this._db;
+    this._auditView=window.SokoniAuditCenter.mount(host,{
+      title:'Audit Logs',
+      subtitle:'High and critical severity platform events. Admin-only access.',
+      limits:[50,200,500],
+      feeds:[{key:'auditLog',label:'High & critical events',load:async(limit)=>{
+        const snap=await db.collection('auditLog').where('severity','in',['high','critical']).orderBy('timestamp','desc').limit(limit).get();
+        return snap.docs.map(d=>({id:d.id,...d.data()}));
+      }}],
     });
-
-    const tb=document.getElementById('saAuditBody');
-    if(!list.length){tb.innerHTML='<tr><td colspan="5" class="empty-cell">No matching audit entries.</td></tr>';return;}
-    tb.innerHTML=list.map(e=>`
-      <tr>
-        <td style="font-size:11px;white-space:nowrap;color:var(--muted)">${_esc(_fmtDate(e.timestamp))}</td>
-        <td><span style="font-family:monospace;font-size:11px">${_esc((e.actorUid||'—').substring(0,14)+'…')}</span></td>
-        <td><span class="audit-action">${_esc(e.action||'—')}</span></td>
-        <td style="font-size:12px">${_esc(e.resource||e.collection||'—')}</td>
-        <td><span class="sev-${_esc(e.severity||'low')}">${_esc((e.severity||'low').toUpperCase())}</span></td>
-      </tr>
-    `).join('');
   },
-
-  exportAuditCSV(){
-    const sev=(document.getElementById('saAuditSevFilter')||{}).value||'';
-    const actor=((document.getElementById('saAuditActorFilter')||{}).value||'').toLowerCase();
-    const list=this._auditAll.filter(e=>{
-      if(sev&&e.severity!==sev)return false;
-      if(actor&&!(e.actorUid||'').toLowerCase().includes(actor))return false;
-      return true;
-    });
-    const header='Timestamp,Actor UID,Action,Resource,Severity\n';
-    const rows=list.map(e=>[
-      '"'+(_fmtDate(e.timestamp)).replace(/"/g,'""')+'"',
-      '"'+(e.actorUid||'').replace(/"/g,'""')+'"',
-      '"'+(e.action||'').replace(/"/g,'""')+'"',
-      '"'+(e.resource||e.collection||'').replace(/"/g,'""')+'"',
-      '"'+(e.severity||'').replace(/"/g,'""')+'"',
-    ].join(',')).join('\n');
-    const blob=new Blob([header+rows],{type:'text/csv'});
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download='sokoni-audit-log-'+new Date().toISOString().slice(0,10)+'.csv';
-    a.click();
-    _toast('Audit log exported','success');
-  },
+  /* kept for older callers: the view owns filtering and export now */
+  filterAudit(){},
+  exportAuditCSV(){ if(this._auditView)this._auditView.exportCsv(); },
 
   // ══ SECTION 7: Platform Broadcast ═══════════════════════
   previewBroadcast(){
@@ -2218,6 +2142,7 @@ const SA={
 </script>
 <script src="sokoni-legal-taxonomy.js"></script>
 <link rel="stylesheet" href="sokoni-mv2-skin.css">  <!-- merchant-v2 design language, scoped to .mv2s (Marketing panels) -->
+<script src="sokoni-audit-center.js"></script>   <!-- the ONE audit view (AdminOS + Super Admin) -->
 <script src="sokoni-marketing-taxonomy.js"></script>   <!-- Marketing Hub MK5c: the ONE Marketing taxonomy (generated) -->   <!-- Legal Hub L8: the ONE Legal taxonomy (generated) -->
 <script src="sokoni-commission-rates.js"></script>   <!-- Tech Hub 4R: the canonical, generated commission snapshot (read-only view) -->
 </body>

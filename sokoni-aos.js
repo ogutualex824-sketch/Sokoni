@@ -2062,54 +2062,33 @@ window.SokoniAOS = (() => {
   }
 
   // ── Audit ─────────────────────────────────────────────────────────────────────
-  async function _loadAudit(type = "admin") {
+  /* The ONE audit view (sokoni-audit-center.js). Each feed is a server-authorised callable (admin-only on the server);
+     the view counts only what it loaded, shows "—" for anything a record does not carry, and never writes. */
+  const _AUDIT_FEEDS = [
+    { key: "admin",    label: "Admin actions",   op: "adminGetAuditLogs" },
+    { key: "payment",  label: "Payment trail",   op: "getPaymentAuditTrail" },
+    { key: "security", label: "Security events", op: "eccGetAuditLog" },
+    { key: "platform", label: "Platform events", op: "platformGetEventLog" },
+  ];
+  let _auditView = null;
+  function _loadAudit(type) {
     const body = document.getElementById("auditBody");
     if (!body) return;
-    body.innerHTML = _spinner();
-    try {
-      let data;
-      if (type === "admin")   data = await _call("adminGetAuditLogs",   { limit: 50 });
-      else if (type === "payment") data = await _call("getPaymentAuditTrail", { limit: 50 });
-      else if (type === "security") data = await _call("eccGetAuditLog",  { limit: 50 });
-      else if (type === "platform") data = await _call("platformGetEventLog", { limit: 50 });
-
-      const logs = data?.logs || data?.events || data?.entries || [];
-      body.innerHTML = logs.length ? `<table class="aos-table"><thead><tr>
-          <th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Details</th>
-        </tr></thead><tbody>${logs.map(l => `<tr>
-          <td class="aos-muted aos-mono">${_date(l.createdAt||l.timestamp)}</td>
-          <td>${_esc(l.adminEmail||l.adminUid||l.uid||"system")}</td>
-          <td><span class="audit-action">${_esc(l.action||l.event||l.type||"—")}</span></td>
-          <td class="aos-muted">${_esc(l.targetId||l.target||"—")}</td>
-          <td class="aos-muted">${_esc(typeof l.details==="object"?JSON.stringify(l.details).slice(0,80):l.details||"—")}</td>
-        </tr>`).join("")}</tbody></table>` : _emptyMsg("No audit logs");
-
-      const exportBtn = document.getElementById("auditExportBtn");
-      if (exportBtn) exportBtn.onclick = () => _exportAuditLogs(logs, type);
-    } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
+    if (!(window.SokoniAuditCenter && typeof window.SokoniAuditCenter.mount === "function")) {
+      body.innerHTML = _emptyMsg("The audit view (sokoni-audit-center.js) is not loaded.");
+      return;
+    }
+    const feeds = _AUDIT_FEEDS.map(f => ({ key: f.key, label: f.label,
+      load: async (limit) => { const d = await _call(f.op, { limit }); return d?.logs || d?.events || d?.entries || d?.items || []; } }));
+    if (type) feeds.sort((a, b) => (a.key === type ? -1 : b.key === type ? 1 : 0));   /* SokoniAOS.loadAudit('payment') opens that feed */
+    _auditView = window.SokoniAuditCenter.mount(body, { title: "Audit Logs", subtitle: "Audit trail of admin, payment, security and platform activity.", feeds, limits: [50, 200, 500] });
   }
-
+  /* kept for callers of the old API: filters the live view by text */
   function filterAuditRows(query) {
-    const q = (query || "").toLowerCase();
-    document.querySelectorAll("#auditBody .aos-table tbody tr").forEach(row => {
-      row.style.display = !q || row.textContent.toLowerCase().includes(q) ? "" : "none";
-    });
-  }
-
-  function _exportAuditLogs(logs, type) {
-    const cols = ["time","admin","action","target","details"];
-    const rows = logs.map(l => [
-      _date(l.createdAt||l.timestamp),
-      l.adminEmail||l.adminUid||"system",
-      l.action||l.event||l.type||"—",
-      l.targetId||l.target||"—",
-      typeof l.details==="object" ? JSON.stringify(l.details) : (l.details||"—"),
-    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(","));
-    const csv = cols.join(",") + "\n" + rows.join("\n");
-    const a   = document.createElement("a");
-    a.href    = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
-    a.download = "audit-" + type + "-" + new Date().toISOString().slice(0,10) + ".csv";
-    a.click();
+    const input = document.querySelector('#auditBody [data-sac="q"]');
+    if (!input) return;
+    input.value = String(query || "");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
   // ── Security ──────────────────────────────────────────────────────────────────
