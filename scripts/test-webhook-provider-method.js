@@ -40,6 +40,10 @@ ck('B-3', /collection\("paymentIntents"\)\.doc\(String\(existing\.intentRef\)\)\
   'mirrored to the intent MERGE-ONLY (never its status) and only when a method was reported');
 ck('B-4', !/providerMethod/.test(LEGACY), 'the legacy intasendWebhook (own P0-4 gate) is untouched');
 ck('B-5', !/providerMethod\s*[=:]\s*["']M-PESA["']/.test(WH), 'nothing in the handler defaults the method to "M-PESA"');
+/* the downstream records (order finalisation, buyer receipt, merchant posReceipt) carry the REPORTED method */
+const whEnd = WH.indexOf('\nexports.', 10); const WHB = whEnd > 0 ? WH.slice(0, whEnd) : WH;
+const pmVals = [...WHB.matchAll(/paymentMethod:\s*([^,\n]+)/g)].map((x) => x[1].trim());
+ck('B-6', pmVals.length >= 3 && pmVals.every((v) => v === 'providerMethod'), 'every paymentMethod the handler writes (order, receipt, posReceipt) is providerMethod — no "mpesa_intasend" / "M-PESA" literal', pmVals);
 
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

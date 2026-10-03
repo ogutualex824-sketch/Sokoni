@@ -7862,7 +7862,9 @@ exports.webhookIntasend = onRequest(
             buyerName:     _pm.buyerName || null,
             address:       _pm.address || _pm.deliveryAddress || null,
             fulfillmentType: _pm.fulfillmentType || "delivery",
-            paymentMethod: "mpesa_intasend",
+            /* RECEIPTS (2f, 2026-10-03): the method IntaSend REPORTED (null when it said nothing) — was hard-coded
+               "mpesa_intasend", so a card payment was recorded as M-PESA. The rail stays in pathLabel. */
+            paymentMethod: providerMethod,
             pathLabel:     "intasend",
             settlementStatus:   "settled",
             writeSellerPayment: false,
@@ -7903,7 +7905,7 @@ exports.webhookIntasend = onRequest(
               fulfillmentType: _pm.fulfillmentType || "delivery",
               deliveryAddress: (_pm.fulfillmentType === "pickup") ? null : (_pm.address || _pm.deliveryAddress || null),
               pickupLocation:  (_pm.fulfillmentType === "pickup") ? (_pm.sellerName || "Shop") : null,
-              paymentMethod:  "M-PESA",
+              paymentMethod:  providerMethod,   /* reported method; null → the receipt renders "—" (was "M-PESA") */
               paymentRef:     checkoutId || apiRef,
               mpesaCode:      checkoutId || null,
               gatewayRef:     checkoutId || null,
@@ -7943,7 +7945,7 @@ exports.webhookIntasend = onRequest(
                   items:         _lines.map(i => ({ productId: i.productId, name: i.name, price: i.unitPrice, qty: i.qty, lineTotal: i.lineTotal })),
                   subtotal:      _subtotal,
                   total:         amount,
-                  paymentMethod: "M-PESA",
+                  paymentMethod: providerMethod,   /* reported method, never a default (was "M-PESA") */
                   paymentStatus: "paid",
                   receiptNumber: apiRef,
                   /* pickup → in-store collection (Ready for Pickup); delivery → rider
