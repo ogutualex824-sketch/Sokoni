@@ -2490,6 +2490,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         return _q({ collection: 'contactRequests', where: [['sellerUid', '==', S.uid]], limit: limit }, 'Leads are not available yet.');
       },
       writeLead: _conWriteLead,
+      /* OLD-SERVER FALLBACK ONLY: the module uses commerceDispatch rentalOwnerListings and calls this direct read only
+         when the server answers "Unknown commerce operation" (a commerceDispatch without f3's rentals fix). */
       readEquipment: function (limit) {
         if (!S.activeShopId) return Promise.resolve([]);
         return _q({ collection: 'rentalProducts', where: [['shopId', '==', S.activeShopId]], limit: limit }, 'Equipment is not available yet.');

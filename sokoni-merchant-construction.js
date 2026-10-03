@@ -13,12 +13,16 @@
                   {status, respondedAt?, sellerNote?} — the keys the rule's affectedKeys() allows.
                   Buttons follow the f9a5c45 seller lifecycle (sokoni-f3 combined rules, leadNext()).
                   respondedAt is a server timestamp, stamped by the shell (SERVER_TIME token).
-     Equipment &  commerceDispatch ops in functions/marketplace-extensions.js (live == tree,
-     Rentals      verified against the commerceDispatch archive): rentalProductCreate,
-                  rentalGetAvailability, rentalList, rentalConfirm, rentalComplete, rentalCancel.
-                  The server computes every rental price; NO payment exists (rental commission is
-                  unpriced, calculateCommission refuses 'category_unpriced'), so there is no pay step.
-                  rentalProducts / rentalBookings have no rules yet: a refused read says so.
+     Equipment &  commerceDispatch ops in functions/marketplace-extensions.js — the contract of
+     Rentals      sokoni-f3's rentals fix (functions/rentals-on-53100ff @ 74672f3, NOT deployed):
+                  rentalOwnerListings {shopId} → {listings, hasMore} (Equipment), rentalProductCreate,
+                  rentalGetAvailability, rentalList, rentalConfirm, rentalComplete, rentalCancel
+                  (seller cancel through the shop authority). Errors are HttpsError reasons, shown
+                  verbatim. Bookings are paymentStatus 'unpaid' — NO payment exists (rental commission
+                  is unpriced, calculateCommission refuses 'category_unpriced'), so there is no pay step.
+                  Old server (live today: no rentalOwnerListings) → the direct rentalProducts read is the
+                  fallback, chosen ONLY on an "Unknown commerce operation" refusal; it has no rules yet,
+                  so a refused read says "Rentals become visible once access rules ship".
      Verification applications where uid == uid (owner-only read); the status shown is the
                   application's own field. "Verified" appears ONLY when verified === true (an
                   admin-only field under noAdminFields()).
@@ -123,13 +127,26 @@
   var PRICING_TYPES = ['hourly', 'daily', 'weekly', 'monthly', 'flexible'];
   var RATE_FIELD = { hourly: 'hourlyRate', daily: 'dailyRate', weekly: 'weeklyRate', monthly: 'monthlyRate' };
   var RENTAL_LABEL = { pending: 'Requested', confirmed: 'Confirmed', active: 'On hire', completed: 'Completed', cancelled: 'Cancelled' };
-  /* rentalComplete does not check the booking's status server-side, so the page only offers it
-     on a booking that is actually out (confirmed / active). */
-  var RENTAL_NEXT = { pending: ['confirm', 'cancel'], confirmed: ['complete', 'cancel'], active: ['complete', 'cancel'] };
+  /* The legal seller moves of f3's rentals fix (74672f3, _rentalTransition + rentalCancel): confirm from pending; complete
+     from confirmed / active; cancel (seller, through the shop authority) from pending / confirmed — an active hire
+     cannot be cancelled. */
+  var RENTAL_NEXT = { pending: ['confirm', 'cancel'], confirmed: ['complete', 'cancel'], active: ['complete'] };
   var RENTAL_LIST_CAP = 100;      /* rentalList shop-side .limit(100) */
-  var EQUIP_LIMIT = 100;          /* direct read, queried as limit+1 for an exact hasMore */
+  var EQUIP_LIMIT = 200;          /* rentalOwnerListings cap (exact hasMore); the old-server direct read asks limit+1 */
+  var UNPAID_COPY = 'Unpaid — paid rentals open once SOKONI sets rental pricing.';
   var UNPRICED_COPY = 'Paid rentals open once SOKONI sets rental pricing. No payment is taken for a rental today.';
   var RULES_COPY = 'Rentals become visible once access rules ship.';
+  /* An op this server does not know (older commerceDispatch): the dispatcher answers not-found with
+     "Unknown commerce operation". Only that answer selects the old-server fallback. */
+  function isUnknownOp (e) {
+    var c = String((e && e.code) || '');
+    return (c === 'not-found' || c === 'functions/not-found') && /Unknown commerce operation/.test(String((e && e.message) || ''));
+  }
+  function paymentText (b) {
+    if (b && b.paymentStatus === 'unpaid') return UNPAID_COPY;
+    if (b && b.paymentStatus) return 'Payment: ' + titleCase(b.paymentStatus) + '.';
+    return 'Not paid through SOKONI.';
+  }
   function rentalActions (b) { var s = String((b && b.status) || ''); return RENTAL_NEXT[s] ? RENTAL_NEXT[s].slice() : []; }
 
   /* ── VERIFICATION ── */
@@ -165,14 +182,18 @@
   function fmtCount (n, partial) { return (typeof n === 'number' && isFinite(n)) ? String(n) + (partial ? '+' : '') : '—'; }
   function fmtKes (n) { return (typeof n === 'number' && isFinite(n) && n >= 0) ? 'KES ' + n.toLocaleString('en-KE') : '—'; }
   function errCode (e) { return String((e && e.code) || '').replace(/^functions\//, '') || null; }
-  function errMsg (e) {
-    var c = errCode(e);
-    if (c === 'permission-denied') return 'SOKONI refused this (permission). Nothing was changed.';
-    if (c === 'internal') return 'SOKONI could not complete this (internal). Nothing was changed.';
-    if (c === 'unauthenticated') return 'Sign in again, then retry.';
-    var m = e && e.message ? String(e.message) : 'error';
-    return 'Could not complete this (' + m + '). Nothing was changed.';
+  /* Server reasons are shown VERBATIM (f3 74672f3: rental handlers throw HttpsError with a reason). Only a missing
+     message falls back to the code. */
+  /* Lead writes are Firestore rule decisions (no server reason text): a refusal is named as one. */
+  function leadErrMsg (e) {
+    return errCode(e) === 'permission-denied' ? 'SOKONI refused this (permission). Nothing was changed.' : errMsg(e);
   }
+  function errMsg (e) {
+    var m = e && e.message ? String(e.message) : (errCode(e) || 'error');
+    if (errCode(e) === 'unauthenticated' && !(e && e.message)) m = 'Sign in again, then retry.';
+    return m + (/[.!?]$/.test(m) ? '' : '.') + ' Nothing was changed.';
+  }
+
 
   /* ── counts for Overview: only from loaded server data ── */
   function leadCounts (L) {
@@ -276,16 +297,26 @@
       }, function (e) { S.leads = { rows: null, hasMore: false, err: errCode(e) || 'read-failed' }; })
         .then(function () { S.leadsLoading = false; paintAll(); });
     }
+    /* Equipment = commerceDispatch rentalOwnerListings {shopId} → {listings, hasMore} (every status, newest first, 200 cap,
+       owner / staff / admin shop authority). The direct rentalProducts read is used ONLY when the server answers that it
+       does not know the op (an older commerceDispatch) — never on any other failure. */
     function loadEquip (S, force) {
-      if (!S.uid || !shopId() || typeof c.readEquipment !== 'function') return Promise.resolve();
+      var sid = shopId();
+      if (!S.uid || !sid) return Promise.resolve();
       if (S.equipLoading || (S.equip && !force)) return Promise.resolve();
       S.equipLoading = true;
-      return Promise.resolve(c.readEquipment(EQUIP_LIMIT + 1)).then(function (rows) {
-        rows = Array.isArray(rows) ? rows.slice() : [];
-        var hasMore = rows.length > EQUIP_LIMIT;
-        S.equip = { rows: hasMore ? rows.slice(0, EQUIP_LIMIT) : rows, hasMore: hasMore, err: null };
-      }, function (e) { S.equip = { rows: null, hasMore: false, err: errCode(e) || 'read-failed' }; })
-        .then(function () { S.equipLoading = false; paintAll(); });
+      return dispatch('rentalOwnerListings', { shopId: sid }).then(function (d) {
+        var rows = d && Array.isArray(d.listings) ? d.listings : null;
+        S.equip = rows ? { rows: rows, hasMore: d.hasMore === true, err: null, source: 'server' }
+                       : { rows: null, hasMore: false, err: 'malformed', msg: 'The equipment list came back malformed. Nothing is guessed here.' };
+      }, function (e) {
+        if (!isUnknownOp(e) || typeof c.readEquipment !== 'function') { S.equip = { rows: null, hasMore: false, err: errCode(e) || 'failed', msg: e && e.message ? String(e.message) : null }; return; }
+        return Promise.resolve(c.readEquipment(EQUIP_LIMIT + 1)).then(function (rows) {
+          rows = Array.isArray(rows) ? rows.slice() : [];
+          var hasMore = rows.length > EQUIP_LIMIT;
+          S.equip = { rows: hasMore ? rows.slice(0, EQUIP_LIMIT) : rows, hasMore: hasMore, err: null, source: 'direct' };
+        }, function (e2) { S.equip = { rows: null, hasMore: false, err: errCode(e2) || 'read-failed', source: 'direct' }; });
+      }).then(function () { S.equipLoading = false; paintAll(); });
     }
     function loadRentals (S, force) {
       var sid = shopId();
@@ -296,7 +327,7 @@
         var rows = d && Array.isArray(d.bookings) ? d.bookings : null;
         S.rentals = rows ? { rows: rows, capped: rows.length >= RENTAL_LIST_CAP, err: null }
                          : { rows: null, capped: false, err: 'malformed' };
-      }, function (e) { S.rentals = { rows: null, capped: false, err: errCode(e) || 'failed', msg: errMsg(e) }; })
+      }, function (e) { S.rentals = { rows: null, capped: false, err: errCode(e) || 'failed', msg: e && e.message ? String(e.message) : null }; })
         .then(function () { S.rentalsLoading = false; paintAll(); });
     }
     function loadApps (S, force) {
@@ -413,7 +444,7 @@
         var r = findLead(S, id);
         if (r) { if ('status' in payload) r.status = payload.status; if ('sellerNote' in payload) r.sellerNote = payload.sellerNote; }
         S.leadNotes[id] = { text: done };
-      }, function (e) { S.leadNotes[id] = { kind: 'err', text: errMsg(e) }; }).then(paintAll);
+      }, function (e) { S.leadNotes[id] = { kind: 'err', text: leadErrMsg(e) }; }).then(paintAll);
     }
     function moveLead (S, id, to) {
       var r = findLead(S, id); if (!r) return Promise.resolve();
@@ -465,10 +496,10 @@
       var E = S.equip;
       if (!shopId()) return '<div class="cw-card cw-meta">Your shop is still loading.</div>';
       if (!E) return loadingCard();
-      if (E.err === 'permission-denied') return '<div class="cw-card"><b>' + esc(RULES_COPY) + '</b><div class="cw-meta">Your equipment list cannot be read yet. That is an access result, not an empty list.</div></div>';
-      if (E.err) return '<div class="cw-card"><b>Equipment could not be loaded</b><div class="cw-meta">The request failed (' + esc(E.err) + ').</div><div class="cw-acts"><button type="button" class="cw-btn" data-act="reload">Try again</button></div></div>';
+      if (E.err === 'permission-denied' && E.source === 'direct') return '<div class="cw-card"><b>' + esc(RULES_COPY) + '</b><div class="cw-meta">Your equipment list cannot be read yet. That is an access result, not an empty list.</div></div>';
+      if (E.err) return '<div class="cw-card"><b>Equipment could not be loaded</b><div class="cw-meta">' + esc(E.msg || ('The request failed (' + E.err + ').')) + ' This is not an empty list.</div><div class="cw-acts"><button type="button" class="cw-btn" data-act="reload">Try again</button></div></div>';
       if (!E.rows.length) return '<div class="cw-card"><b>No equipment listed yet</b></div>';
-      return (E.hasMore ? note({ kind: 'warn', text: 'Showing the first ' + EQUIP_LIMIT + ' items — more exist.' }) : '') + E.rows.map(function (e) {
+      return (E.hasMore ? note({ kind: 'warn', text: 'Showing the first ' + EQUIP_LIMIT + ' — more exist.' }) : '') + E.rows.map(function (e) {
         var rate = RATE_FIELD[e.pricingType] ? e[RATE_FIELD[e.pricingType]] : null;
         return '<div class="cw-card"><div class="cw-row"><b>' + esc(e.title || 'Equipment') + '</b><span class="cw-chip">' + esc(titleCase(e.status || '—')) + '</span></div>' +
           '<div class="cw-meta">' + esc(titleCase(e.pricingType || '—')) + (typeof rate === 'number' ? ' · ' + esc(fmtKes(rate)) : '') +
@@ -551,7 +582,7 @@
       if (!S.uid) return h + signedOut();
       var known = equipKnown(S);
       if (!known.length) {
-        var why = (S.equip && S.equip.err === 'permission-denied') ? RULES_COPY + ' Items you list in this session appear here.' : 'No equipment to show yet.';
+        var why = (S.equip && S.equip.err === 'permission-denied' && S.equip.source === 'direct') ? RULES_COPY + ' Items you list in this session appear here.' : 'No equipment to show yet.';
         return h + '<div class="cw-card"><b>' + esc(why) + '</b></div>';
       }
       h += '<div class="cw-card cw-form"><label>Equipment<select data-pick="1"><option value="">Choose…</option>' +
@@ -587,7 +618,8 @@
       }).join('');
       return '<div class="cw-card"><div class="cw-row"><b>' + esc(b.customerName || 'Customer') + '</b><span class="cw-badge">' + esc(RENTAL_LABEL[b.status] || titleCase(b.status || '—')) + '</span></div>' +
         '<div class="cw-meta">' + esc(fmtDate(b.startDate)) + ' → ' + esc(fmtDate(b.endDate)) + ' · ' + esc(titleCase(b.durationUnit || '—')) + '</div>' +
-        '<div class="cw-meta">Hire price calculated by SOKONI: ' + esc(fmtKes(b.totalAmount)) + (typeof b.depositAmount === 'number' && b.depositAmount > 0 ? ' · deposit ' + esc(fmtKes(b.depositAmount)) : '') + '. Not paid through SOKONI.</div>' +
+        '<div class="cw-meta">Hire price calculated by SOKONI: ' + esc(fmtKes(b.totalAmount)) + (typeof b.depositAmount === 'number' && b.depositAmount > 0 ? ' · deposit ' + esc(fmtKes(b.depositAmount)) : '') + '.</div>' +
+        '<div class="cw-meta">' + esc(paymentText(b)) + '</div>' +
         (b.notes ? '<div class="cw-msg">' + esc(b.notes) + '</div>' : '') +
         (btns ? '<div class="cw-acts">' + btns + '</div>' : '') + note(n) + '</div>';
     }
@@ -599,8 +631,7 @@
       var R = S.rentals;
       if (!R) return h + loadingCard();
       if (R.err) {
-        var body = R.err === 'permission-denied' ? '<b>' + esc(RULES_COPY) + '</b><div class="cw-meta">That is an access result, not an empty list.</div>'
-          : '<b>Rental requests could not be loaded</b><div class="cw-meta">' + esc(R.msg || R.err) + ' This is not an empty list.</div>';
+        var body = '<b>Rental requests could not be loaded</b><div class="cw-meta">' + esc(R.msg || R.err) + ' This is not an empty list.</div>';
         return h + '<div class="cw-card">' + body + '<div class="cw-acts"><button type="button" class="cw-btn" data-act="reload">Try again</button></div></div>';
       }
       if (!R.rows.length) return h + '<div class="cw-card"><b>No rental requests yet</b></div>';
@@ -716,6 +747,7 @@
              chatAvailable: chatAvailable, rentalActions: rentalActions, leadCounts: leadCounts, rentalCounts: rentalCounts,
              equipmentCount: equipmentCount, constructionPlans: constructionPlans, fmtCount: fmtCount, appLabel: appLabel,
              isVerified: isVerified, esc: esc, LEAD_NEXT: LEAD_NEXT, LEAD_TERMINAL: LEAD_TERMINAL, routeFor: routeFor,
-             UNPRICED_COPY: UNPRICED_COPY, RULES_COPY: RULES_COPY }
+             UNPRICED_COPY: UNPRICED_COPY, RULES_COPY: RULES_COPY, UNPAID_COPY: UNPAID_COPY,
+             isUnknownOp: isUnknownOp, paymentText: paymentText, errMsg: errMsg, RENTAL_NEXT: RENTAL_NEXT }
   };
 })(typeof window !== 'undefined' ? window : globalThis);
