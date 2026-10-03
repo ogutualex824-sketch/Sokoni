@@ -108,6 +108,10 @@ const run = async (cat) => { ctx._activeLawCat = cat; await ctx.renderLawyers();
   ck('AO1', aos.includes("call('legalAdminList', etype ? { view, entityType: etype } : { view })") &&aos.includes("chip(a.entityType === 'firm' ? 'LAW FIRM' : 'LAWYER')") && aos.includes('<option value=\"firm\">Law firms</option>')
     && aos.includes('declared advocate(s), not verified') && aosHtml.indexOf('sokoni-legal-taxonomy.js') > -1 && aosHtml.indexOf('sokoni-legal-taxonomy.js') < aosHtml.indexOf('sokoni-aos-legal.js') && aosHtml.includes('id=\"panel-legal\"'),
     'AdminOS Legal: lawyer vs law-firm column + filter, practice areas from the taxonomy, firm team shown as NOT verified; panel wired');
+  const pd = read('provider-dashboard.html');
+  ck('PD1', pd.includes("_isLawyer(){return !!(window.__sokoniWorkspace&&window.__sokoniWorkspace.category==='lawyer'&&window.SokoniLegalTaxonomy)}") && pd.includes("if(this._isLawyer()){const la=_q('svLegalArea').value;data.legalArea=la||null}")
+    && pd.includes('id="svLegalAreaWrap" hidden') && pd.includes('<script src="sokoni-legal-taxonomy.js" defer></script>') && pd.includes('T.GROUPS.map(g=>'),
+    'provider dashboard: Legal practice-area picker only for a server-classified lawyer workspace, options from the taxonomy, sent as legalArea (server re-validates)');
   done();
 })();
 function done() { console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed'); console.log('NOT proven here: a real browser render (memory floor) and a live booking.'); process.exit(fail ? 1 : 0); }

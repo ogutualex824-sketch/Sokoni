@@ -1,3 +1,12 @@
+## [2026-10-03] — Legal Hub L6 (hosting): provider dashboard rate cards carry a Legal practice area — NOT deployed
+
+- **provider-dashboard.html:**
+  - The service editor shows a "Legal practice area" picker only when the server-classified workspace category is lawyer.
+  - Options come from sokoni-legal-taxonomy.js. The value is sent as legalArea (null clears) and the server re-validates it (provider-ops _legalArea, f7d4467).
+  - Loads sokoni-legal-taxonomy.js.
+- **Tests:** test-legal-hub-web PD1 (14/0); sabotage-legal-hub-web 11/11. test-tech-service-editor 17/0.
+- **Merge note:** provider-dashboard.html is shared with hosting/techhub-on-chain. This hunk sits next to the Tech editor lines, so keep both.
+
 ## [2026-10-03] — Legal Hub L7 (hosting): AdminOS Legal shows Lawyer vs Law firm, practice areas, type filter — NOT deployed
 
 - **sokoni-aos-legal.js:** a Type column (LAWYER / LAW FIRM) and a Type filter (sends entityType to legalAdminList). Practice areas are labelled from the taxonomy. A firm row shows its responsible advocate, office count and declared advocates, marked "not verified".
