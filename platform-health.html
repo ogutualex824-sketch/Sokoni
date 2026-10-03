@@ -203,6 +203,12 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .ph-error { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 16px 20px; color: #dc2626; }
+    .ph-error-msg { margin: 6px 0 12px; color: #7f1d1d; font-size: .875rem; word-break: break-word; }
+    .ph-retry { background: #dc2626; color: #fff; border: 0; border-radius: 6px; padding: 8px 16px; font-weight: 600; cursor: pointer; min-height: 40px; }
+    .ph-retry:focus-visible { outline: 3px solid #fca5a5; outline-offset: 2px; }
+    .ph-empty-state { background: #fff; border: 1px dashed var(--border); border-radius: 8px; padding: 24px 20px; text-align: center; color: var(--text-muted); }
+    .ph-empty-state strong { display: block; color: var(--text); margin-bottom: 6px; }
+    .ph-empty { font-size: .875rem; color: var(--text-muted); margin-bottom: 24px; }
 
     /* ── footer ── */
     .ph-footer { text-align: center; padding: 32px 16px; font-size: .8rem; color: #9ca3af; }
@@ -275,13 +281,23 @@
 
   </div>
 
-  <div id="error-state" style="display:none" class="ph-error"></div>
+  <div id="empty-state" style="display:none" class="ph-empty-state" role="status">
+    <strong>No health data yet</strong>
+    <p>The health service answered but returned no measurable dimension. Scores appear once orders, products and reports exist.</p>
+  </div>
+
+  <div id="error-state" style="display:none" class="ph-error" role="alert">
+    <strong id="error-title">Failed to load health data.</strong>
+    <p id="error-message" class="ph-error-msg"></p>
+    <button id="retry-btn" type="button" class="ph-retry">Retry</button>
+  </div>
 </div>
 
 <div class="ph-footer">
   SOKONI v2.0 Platform Health · Scores recompute on each page load from live Firestore data
 </div>
 
+<script src="platform-health-view.js"></script>
 <script type="module">
 /* SDK version MUST match firebase.js (10.12.2).
 
@@ -293,221 +309,78 @@
 
      Firebase: No Firebase App '[DEFAULT]' has been created (app/no-app)
 
-   It surfaced as an unhandled REJECTION, not a console error, so the page simply
-   sat on "Computing scores..." forever - for every visitor, signed in or not.
-   The health callable was never reached, which is why this looked like an
-   authorization problem rather than a bootstrap one.
+   Do not bump this file's SDK independently of firebase.js.
 
-   Do not bump this file's SDK independently of firebase.js. */
-import { initializeApp, getApps }    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+   LOADING CONTRACT (2026-10-03). Every path ends in exactly one visible state —
+   data | "No health data yet" | error with the server's message and Retry — and
+   rendering is owned by platform-health-view.js (shared with AdminOS and
+   super-admin.html). Previously a failed firebase.js import or token refresh was an
+   unhandled rejection and the spinner ran forever; a Super Admin without the admin
+   claim was bounced to "/" although the callable admits them; and a withheld overall
+   score (null) was drawn as a red ring titled "requires immediate attention". */
+import { getApps }                     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFunctions, httpsCallable }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 
-const cfg = window.__SOKONI_CONFIG__;
-if (!cfg || !getApps().length) { import("./firebase.js").then(() => boot()); }
-else { boot(); }
+const PHV = window.SokoniPlatformHealthView;
+const AUTH_WAIT_MS = 20000;
 
-function boot() {
+function fail(err, noRetry) {
+  console.error("[platform-health]", err && err.code, err && err.message);
+  if (PHV) { PHV.renderError(document, err, { onRetry: () => location.reload(), noRetry }); return; }
+  /* the view script itself failed to load — still never spin */
+  document.getElementById("loading-state").style.display = "none";
+  const box = document.getElementById("error-state");
+  box.style.display = "block";
+  document.getElementById("error-title").textContent = "Platform Health could not start.";
+  document.getElementById("error-message").textContent = "A required script did not load. Reload the page.";
+}
+
+function start() {
+  if (!PHV) { fail(new Error("platform-health-view.js missing")); return; }
+  PHV.renderLoading(document);
+  let settled = false;
+  const watchdog = setTimeout(() => {
+    if (settled) return;
+    const e = new Error("Sign-in state did not resolve. Check your connection and retry.");
+    e.code = "deadline-exceeded";
+    fail(e);
+  }, AUTH_WAIT_MS);
+
   const auth = getAuth();
-  onAuthStateChanged(auth, user => {
-    if (!user) { location.href = "login.html?next=platform-health.html"; return; }
-    user.getIdTokenResult(true).then(r => {
-      if (!r.claims.admin) { location.href = "/"; return; }
-      loadScores();
-    });
-  });
-}
-
-function scoreColor(s) {
-  if (s >= 80) return "#16a34a";
-  if (s >= 60) return "#d97706";
-  return "#dc2626";
-}
-
-function setRing(fillEl, score, r = 50) {
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (score / 100) * circ;
-  fillEl.style.strokeDasharray  = circ;
-  fillEl.style.strokeDashoffset = circ; // start at 0, animate in
-  fillEl.style.stroke = scoreColor(score);
-  requestAnimationFrame(() => {
-    setTimeout(() => { fillEl.style.strokeDashoffset = offset; }, 80);
-  });
-}
-
-function buildDimBar(dim) {
-  if (dim.missing) {
-    return `<div class="score-dim">
-      <div class="score-dim-header"><span class="score-dim-name">${dim.name}</span></div>
-      <div class="dim-missing">${dim.value}</div>
-    </div>`;
-  }
-  const pct = Math.round((dim.contribution / dim.max) * 100);
-  const col = scoreColor(pct);
-  return `<div class="score-dim">
-    <div class="score-dim-header">
-      <span class="score-dim-name">${dim.name}</span>
-      <span class="score-dim-value">${dim.value}</span>
-    </div>
-    <div class="score-dim-bar">
-      <div class="score-dim-fill" style="width:${pct}%;background:${col}"></div>
-    </div>
-  </div>`;
-}
-
-function buildScoreCard(id, label, weight, data) {
-  const dims = (data.dimensions || []).map(buildDimBar).join("");
-  const col   = scoreColor(data.score);
-  const circ  = 2 * Math.PI * 28; // r=28 for small ring
-  return `<div class="score-card">
-    <div class="score-card-header">
-      <div class="score-ring-sm">
-        <svg viewBox="0 0 64 64">
-          <circle class="track" cx="32" cy="32" r="28"/>
-          <circle class="fill" id="ring-${id}" cx="32" cy="32" r="28"
-                  stroke-dasharray="${circ}" stroke-dashoffset="${circ}"/>
-        </svg>
-        <div class="score-ring-label">
-          <span class="sv" style="color:${col}">${data.score}</span>
-          <span class="gv">${data.grade}</span>
-        </div>
-      </div>
-      <div>
-        <div class="score-card-name">${label}</div>
-        <div class="score-card-weight">${weight}% of overall</div>
-      </div>
-    </div>
-    <div class="score-dims">${dims}</div>
-  </div>`;
-}
-
-const CARDS = [
-  { id: "marketplace", label: "Marketplace Health",  weight: 30, key: "marketplace" },
-  { id: "seller",      label: "Seller Success",       weight: 25, key: "seller"      },
-  { id: "buyer",       label: "Buyer Satisfaction",   weight: 25, key: "buyer"       },
-  { id: "operational", label: "Operational Health",   weight: 15, key: "operational" },
-  { id: "cost",        label: "Cost Efficiency",      weight:  5, key: "cost"        },
-];
-
-function pips(val, max = 5) {
-  return Array.from({ length: max }, (_, i) =>
-    `<div class="criterion-pip${i < val ? " filled" : ""}"></div>`
-  ).join("");
-}
-
-function buildPrioritiesTable(result) {
-  const rows = (result.topPriorities || []).map((p, i) => {
-    const badgeStyle = `background:${i === 0 ? "#6366f1" : i === 1 ? "#3b82f6" : "#6b7280"}`;
-    const readyBadge = p.evidenceReady
-      ? `<span class="pri-ready-badge">Ready</span>`
-      : (p.totalScore >= 18
-        ? `<span class="pri-wait-badge">Phase B</span>`
-        : `<span class="pri-block-badge">Phase C</span>`);
-    return `<tr>
-      <td><span class="pri-score-badge" style="${badgeStyle}">${p.totalScore}</span></td>
-      <td>
-        <div class="pri-name">${p.name}</div>
-        <div class="pri-desc">${p.description}</div>
-      </td>
-      <td class="hide-mobile">
-        <div style="font-size:.75rem;margin-bottom:4px">Revenue · Demand · Effort · Strategic · Cost</div>
-        <div class="criterion-row">
-          ${pips(p.revenueImpact)}
-          <span style="width:8px"></span>
-          ${pips(p.userDemand)}
-          <span style="width:8px"></span>
-          ${pips(p.effortInverse)}
-          <span style="width:8px"></span>
-          ${pips(p.strategic)}
-          <span style="width:8px"></span>
-          ${pips(p.costInverse)}
-        </div>
-      </td>
-      <td>${readyBadge}<div style="font-size:.72rem;color:#6b7280;margin-top:4px">${p.evidenceGate}</div></td>
-    </tr>`;
-  }).join("");
-
-  return `<table class="priorities-table">
-    <thead><tr>
-      <th>Score</th>
-      <th>Initiative</th>
-      <th class="hide-mobile">Scoring</th>
-      <th>Evidence Gate</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-  <p style="font-size:.8rem;color:#6b7280;margin-bottom:24px">
-    Each criterion scored 1–5 (max 25). Scores adjust based on live Firestore evidence.
-    Only start "Ready" initiatives — all others wait for Phase A/B data.
-  </p>`;
-}
-
-async function loadScores() {
-  const fns = getFunctions(undefined, "us-central1");
-  const getScores     = httpsCallable(fns, "getPlatformHealthScores");
-  const getPriorities = httpsCallable(fns, "getTopBusinessPriorities");
-
-  try {
-    const [scoreRes, priRes] = await Promise.all([
-      getScores({}),
-      getPriorities({}),
-    ]);
-    const d = scoreRes.data;
-
-    /* Overall ring */
-    const overallFill = document.getElementById("overall-fill");
-    setRing(overallFill, d.overall.score, 50);
-    document.getElementById("overall-score").textContent = d.overall.score;
-    document.getElementById("overall-grade").textContent = "Grade " + d.overall.grade;
-    document.getElementById("overall-title").textContent =
-      d.overall.score >= 80 ? "Platform is healthy" :
-      d.overall.score >= 60 ? "Platform needs attention in some areas" :
-      "Platform requires immediate attention";
-    document.getElementById("overall-sub").textContent =
-      "Index budget: " + d.indexBudget.used + "/" + d.indexBudget.max + " · Computed at " +
-      new Date(d.computedAt).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" });
-    document.getElementById("computed-at").textContent =
-      "Last updated: " + new Date(d.computedAt).toLocaleString("en-KE");
-
-    /* Alerts */
-    if (d.alerts?.length) {
-      const area = document.getElementById("alerts-area");
-      area.style.display = "flex";
-      area.innerHTML = d.alerts.map(a =>
-        `<div class="ph-alert ${a.severity}">
-          <strong class="ph-alert-area">${a.area}</strong>
-          <span>${a.message}</span>
-        </div>`
-      ).join("");
-    }
-
-    /* Score cards */
-    const grid = document.getElementById("scores-grid");
-    grid.innerHTML = CARDS.map(c => buildScoreCard(c.id, c.label, c.weight, d[c.key])).join("");
-
-    /* Animate small rings after DOM insertion */
-    requestAnimationFrame(() => {
-      CARDS.forEach(c => {
-        const el = document.getElementById("ring-" + c.id);
-        if (el) setRing(el, d[c.key].score, 28);
+  onAuthStateChanged(auth, (user) => {
+    if (!user) { settled = true; clearTimeout(watchdog); location.href = "login.html?next=platform-health.html"; return; }
+    user.getIdTokenResult(true).then((r) => {
+      settled = true; clearTimeout(watchdog);
+      /* Same rule as the server's requireAdmin: admin OR superAdmin. Fail closed, and
+         say why, instead of silently redirecting. */
+      if (!PHV.isAdminClaims(r && r.claims)) {
+        const e = new Error("This dashboard is for Admin and Super Admin accounts only.");
+        e.code = "permission-denied";
+        fail(e, true);
+        return;
+      }
+      const fns = getFunctions(getApps()[0], "us-central1");
+      const opts = { timeout: PHV.DEFAULT_TIMEOUT_MS };
+      const scores = httpsCallable(fns, "getPlatformHealthScores", opts);
+      const priorities = httpsCallable(fns, "getTopBusinessPriorities", opts);
+      PHV.load({
+        doc: document,
+        callScores: () => scores({}),
+        callPriorities: () => priorities({}),
+        timeoutMs: PHV.DEFAULT_TIMEOUT_MS,
+        raf: (f) => requestAnimationFrame(() => setTimeout(f, 80)),
       });
-    });
-
-    /* Priorities */
-    document.getElementById("priorities-area").innerHTML =
-      buildPrioritiesTable(priRes.data);
-
-    document.getElementById("loading-state").style.display = "none";
-    document.getElementById("main-content").style.display  = "block";
-
-  } catch (err) {
-    console.error(err);
-    document.getElementById("loading-state").style.display = "none";
-    const errEl = document.getElementById("error-state");
-    errEl.style.display = "block";
-    errEl.textContent = "Failed to load health data: " + (err.message || "unknown error");
-  }
+    }).catch((err) => { settled = true; clearTimeout(watchdog); fail(err); });
+  }, (err) => { settled = true; clearTimeout(watchdog); fail(err); });
 }
+
+/* firebase.js initialises the DEFAULT app (and App Check) in this same 10.12.2
+   registry. Import it unless an app already exists; a failed import is an error
+   state, not an endless spinner. */
+(getApps().length ? Promise.resolve() : import("./firebase.js"))
+  .then(start)
+  .catch((err) => fail(err));
 </script>
 </body>
 </html>

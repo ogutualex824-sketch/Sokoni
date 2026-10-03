@@ -390,7 +390,10 @@ window.SokoniAOS = (() => {
     try {
       const [metrics, health, daily, execRes, finRes, sysRes, pipeRes] = await Promise.allSettled([
         _call("adminGetPlatformOverview"),
-        _call("getPlatformHealthScores"),
+        /* bounded: a hung health call must not hold the whole dashboard on skeletons */
+        (window.SokoniPlatformHealthView
+          ? window.SokoniPlatformHealthView.withTimeout(_call("getPlatformHealthScores"), window.SokoniPlatformHealthView.DEFAULT_TIMEOUT_MS, "Platform health scores")
+          : _call("getPlatformHealthScores")),
         _call("getDailyReport"),
         _call("adminGetExecutiveDashboard"),
         _call("adminGetFinance"),
@@ -399,7 +402,6 @@ window.SokoniAOS = (() => {
       ]);
 
       const m = metrics.value || {};
-      const h = health.value  || {};
       const d = daily.value   || {};
       /* Command center — canonical single entry + reused Finance + real health + pipeline. */
       _renderExecCommand(execRes.value || {}, (finRes.value && finRes.value.reconciliation) || {}, sysRes.value || {}, pipeRes.value || {});
@@ -423,16 +425,17 @@ window.SokoniAOS = (() => {
       _set("kpiMRR",              NA);   /* revenueToday is daily, not MRR — no canonical MRR source */
       _set("kpiPlatformUptime",   NA);   /* real 7-day uptime lives in health.scores dimensions; the old static default was fabricated */
 
-      // Health scores
-      if (h.scores) {
-        const scores = h.scores;
-        const scoreEl = document.getElementById("healthScores");
-        if (scoreEl) scoreEl.innerHTML = Object.entries(scores)
-          .map(([k, v]) => `<div class="health-chip" data-score="${v}">
-            <span>${_titleCase(k)}</span>
-            <strong>${v}<small>/100</small></strong>
-            <div class="health-bar"><div style="width:${v}%"></div></div>
-          </div>`).join("");
+      /* Health scores. This read `h.scores`, a field getPlatformHealthScores has never
+         returned (it returns overall + marketplace/seller/buyer/operational/cost — serving
+         archive f4422b4), so the card kept its spinner forever, and a rejected call did
+         too. platform-health-view.js owns the response shape for every surface; it renders
+         data, "No health data yet", or the server's error — unknown scores as "—". */
+      const scoreEl = document.getElementById("healthScores");
+      if (scoreEl) {
+        const PHV = window.SokoniPlatformHealthView;
+        scoreEl.innerHTML = PHV
+          ? PHV.chipsHtml(health)
+          : '<p style="color:var(--aos-muted);font-size:12px">Health scores unavailable. <a href="platform-health.html">Open Platform Health</a></p>';
       }
 
       // Revenue chart from daily report

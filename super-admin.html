@@ -1011,6 +1011,8 @@
     </div>
   </div>
 </div>
+<!-- Platform Health response shape + chips (shared with platform-health.html and AdminOS). -->
+<script src="platform-health-view.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════
    SOKONI Super Admin Portal — Inline JS
@@ -1196,18 +1198,21 @@ const SA={
       const fn=this._fns.httpsCallable('getPlatformHealthScores');
       const res=await fn({});
       const data=res.data||{};
-      this._renderHealthDims(data.dimensions||{});
+      this._renderHealthDims({status:'fulfilled',value:data});
       this._renderOverviewKpis(data);
     }catch(e){
       document.getElementById('saOverviewKpis').innerHTML='<p style="color:var(--muted);font-size:13px">Could not load health scores: '+_esc(e.message)+'</p>';
-      this._renderHealthDims({});
+      this._renderHealthDims({status:'rejected',reason:e});
     }
 
     // Load business priorities
     try{
       const fn=this._fns.httpsCallable('getTopBusinessPriorities');
       const res=await fn({});
-      const items=(res.data&&res.data.priorities)||[];
+      /* The callable returns `topPriorities` (serving archive f4422b4); this read
+         `.priorities` only, so the panel always said "No priorities data available". */
+      const PHV=window.SokoniPlatformHealthView;
+      const items=PHV?PHV.prioritiesList(res.data):(((res.data||{}).topPriorities)||[]);
       const el=document.getElementById('saBusinessPriorities');
       if(!items.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No priorities data available.</p>';return;}
       el.innerHTML=items.map((p,i)=>`
@@ -1283,23 +1288,30 @@ const SA={
     }catch(_){}
   },
 
-  _renderHealthDims(dims){
+  /* Health chips. This expected data.dimensions keyed users/revenue/performance/security/
+     reliability — a shape getPlatformHealthScores has never returned (it returns
+     overall + marketplace/seller/buyer/operational/cost), so the grid always read
+     "Health dimension data unavailable." The shape now lives in platform-health-view.js
+     for every surface; unknown scores render "—", never 0. */
+  _renderHealthDims(outcome){
     const el=document.getElementById('saHealthDims');
-    const labels={users:'Users',revenue:'Revenue',performance:'Performance',security:'Security',reliability:'Reliability'};
-    const keys=Object.keys(labels);
-    if(!keys.some(k=>dims[k]!=null)){
-      el.innerHTML='<p style="color:var(--muted);font-size:13px;width:100%">Health dimension data unavailable.</p>';
+    if(!el)return;
+    const PHV=window.SokoniPlatformHealthView;
+    const note=(html)=>'<div style="color:var(--muted);font-size:13px;width:100%">'+html+'</div>';
+    if(!PHV){el.innerHTML=note('Health dimension data unavailable.');return;}
+    if(!outcome||outcome.status!=='fulfilled'||!PHV.hasHealthData(outcome.value)){
+      el.innerHTML=note(PHV.chipsHtml(outcome));
       return;
     }
-    el.innerHTML=keys.map(k=>{
-      const v=dims[k]!=null?Math.round(dims[k]):null;
-      const pct=v!=null?v:0;
-      const cls=pct>=75?'good':pct>=50?'warn':'bad';
-      const color=pct>=75?'var(--green)':pct>=50?'var(--gold)':'var(--red)';
+    el.innerHTML=PHV.chips(outcome.value).map(c=>{
+      const known=PHV.isNum(c.score);
+      const pct=known?Math.max(0,Math.min(100,Math.round(c.score))):0;
+      const cls=!known?'':pct>=75?'good':pct>=50?'warn':'bad';
+      const color=!known?'var(--muted)':pct>=75?'var(--green)':pct>=50?'var(--gold)':'var(--red)';
       return `
         <div class="health-chip">
-          <span>${_esc(labels[k])}</span>
-          <strong style="color:${color}">${v!=null?v+'%':'—'}</strong>
+          <span>${_esc(c.label)}</span>
+          <strong style="color:${color}">${PHV.fmtScore(c.score)}</strong>
           <div class="health-bar ${cls}"><div style="width:${pct}%"></div></div>
         </div>
       `;

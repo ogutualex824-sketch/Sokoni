@@ -1,3 +1,52 @@
+## [2026-10-03] - Platform Health loads on every admin surface — the pages now read the shape the server returns (hosting only; NOT deployed)
+
+**Diagnosis (read-only, evidence):** the server was healthy. Serving revisions `getplatformhealthscores-00014-jep` /
+`gettopbusinesspriorities-00015-hin` (100% traffic, created 2026-08-22) run archive = `f4422b4`
+(`fix(health): the INTERNAL was a missing index`). 45 days of Cloud Run logs: every call HTTP 200, zero WARNING/ERROR
+entries (filter positive-controlled against `runscheduledselfheal` ERRORs). Guard = `admin === true || superAdmin === true`,
+typed `unauthenticated` / `permission-denied`; no `enforceAppCheck`; computes live (no dependency on `platformHealthSweep`).
+The defects were in the three surfaces that call it, identical on live `72dca56` and chain `cccd530`:
+
+- **AdminOS dashboard card spun forever** — `sokoni-aos.js` rendered only `if (h.scores)`, a field the callable has never
+  returned; a rejected call also left the spinner (`#healthScores`) in place.
+- **super-admin.html Overview always said "unavailable"** — read `data.dimensions` keyed users/revenue/performance/
+  security/reliability (never returned) and `res.data.priorities` (server returns `topPriorities`) → false "No priorities
+  data available".
+- **platform-health.html** — gate admitted only `claims.admin` (server also admits `superAdmin`; Super Admins were
+  bounced to `/`); a failed `firebase.js` import or `getIdTokenResult` was an unhandled rejection (spinner forever); no
+  client timeout; the hero stayed "Computing scores…" after an error; f4422b4's withheld overall (`score:null`) was drawn
+  as a red ring titled "Platform requires immediate attention" and dimension cards printed `null`; server strings went
+  into `innerHTML` unescaped.
+
+**What changed:**
+- `platform-health-view.js` (new) — one renderer that owns the response shape for all three surfaces: explicit
+  loading → data | "No health data yet" | error (server message + code + Retry); 45s timeout; unknown score → `—`
+  (single `fmtScore`), grey empty ring, no verdict; canonical `0` still renders `0`; withheld overall names the failed
+  dimensions; failed dimension shows the server's reason; priorities failure is local; all server strings escaped.
+- `platform-health.html` — thin bootstrap: SDK 10.12.2 (matches firebase.js), handled import/token failures, 20s auth
+  watchdog, gate = admin OR superAdmin (fails closed with "Admin and Super Admin accounts only", no silent redirect),
+  empty/error/Retry containers. Still self-updates via `shared-header.js`.
+- `sokoni-aos.js` + `admin-os.html` — card rendered by `chipsHtml(health)` in every outcome; health call bounded by
+  `withTimeout` so it cannot hold the dashboard.
+- `super-admin.html` — health chips from the real five dimensions + overall; priorities from `topPriorities`.
+
+**Tests:** new `scripts/test-platform-health-page.js` 46/0 (VM + fake DOM + fake callables, fixtures copied from the
+serving archive: success, canonical 0, withheld overall, empty `{}`/`null`, permission-denied, internal, hang→timeout,
+Retry, priorities-only failure, chips, claims; static wiring of all three surfaces; every inline script compiles in V8).
+Negative control: a mutant whose `fmtScore` renders unknown as `0` makes row "unknown overall renders — (never 0)" FAIL.
+No browser suite run (RAM floor) — browser certification QUEUED.
+
+**Server-side follow-up (not changed here):** chain `cccd530`'s `functions/platform-health.js` is the PRE-f4422b4
+vintage (`orderBy("__name__","desc")` on `ops_reports` / `funnelStats`, `Promise.all`). A functions deploy of this
+module from the chain line would re-break the callable with `FAILED_PRECONDITION` → INTERNAL. Any deploy of
+`getPlatformHealthScores` / `getTopBusinessPriorities` must carry `f4422b4`.
+
+- **Database / API / security:** none / none / removes unescaped server strings from `innerHTML`; page gate now equals the
+  server guard (no widening — the server already admitted superAdmin).
+- **Files:** `platform-health-view.js` (new), `platform-health.html`, `sokoni-aos.js`, `admin-os.html`,
+  `super-admin.html`, `scripts/test-platform-health-page.js` (new), `CHANGELOG.md`.
+- **Breaking:** none. **Deploy:** hosting only, from a tree descending from live; NOT deployed.
+
 ## [2026-10-03] - setShopAvailability — Merchant V2 schedule saves through the server (no browser write; NOT deployed)
 
 **DEPLOY PRECONDITION (hard):** requires functions: setShopAvailability live (verify with a functions list before the hosting deploy).
