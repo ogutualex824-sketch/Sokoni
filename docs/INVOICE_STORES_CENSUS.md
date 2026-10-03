@@ -6,6 +6,8 @@ Related: [[E2E_RELEASE_GATE]] · [[Payments]] · [[Orders]] · [[FINANCIAL_CORE]
 quote) and its authoritative payment record. A store is never chosen because it holds the most documents. Only a
 VERIFIED payment event makes an invoice paid; a merchant-entered reference is a claim.
 
+**Production state (2026-10-04, read-only count; positive control providers = 11): all six stores hold 0 documents.** The convergence is a clean start: no legacy invoice, no merchant-marked "paid" and no duplicate exist in production, and the migration script is a no-op.
+
 Evidence: the deployed source (adminOsDispatch archive gen 1788271885523075; financeSprintDispatch gen 1787386169391458)
 plus the main checkout. Read-only; no production data was read.
 
