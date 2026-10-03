@@ -5,8 +5,9 @@
    functions branch functions/jobs-on-ca55f8b. That file is NOT in this tree, so the fixtures are produced by running
    the REAL handlers of two server commits in memory and recording exactly what they returned:
 
-     a515270  J2 moderation (the contract this page is built against)
-     ffa2c47  J1 application state machine (the fallback the page must still behave correctly against)
+     be4e1b7  J2 + jobsCapabilities / listMyJobs / getEmployerApplications / pausedByRole (the contract this page is built against)
+     a515270  J2 moderation without those ops (old-server fallback: op-list hint, direct read, per-vacancy applications)
+     ffa2c47  J1 application state machine (the J1 fallback)
 
    Method — the same module-stub harness the server's own suites use (a515270:scripts/test-jobs-moderation.js:11-60):
    `git show <sha>:functions/jobs.js` is written to a temp file, firebase-functions/v2/https and firebase-admin/firestore
@@ -154,6 +155,9 @@ async function build (sha, j2) {
     rec('x_resume_approve', await call('adminModerateJob', 'adm', { jobId: resume, action: 'approve' }, ADM));
     rec('x_resume_pause', await call('pauseJob', 'emp', { jobId: resume }));
     rec('resumeJob', await call('resumeJob', 'emp', { jobId: resume }));
+    /* be4e1b7: an employer resume of a SOKONI pause is refused (pausedByRole). Only where the server knows pausedByRole —
+       on a515270 the same call SUCCEEDS (the defect the fix closed) and would un-pause the fixture. */
+    if (H.J._h.jobsCapabilities) rec('err_resume_admin_paused', await call('resumeJob', 'emp', { jobId: apaused }));
     Object.assign(out.jobs, { draft: jobDoc(draft2), pending_review: jobDoc(pend), changes_requested: jobDoc(chg), rejected: jobDoc(rej),
       featured_active: jobDoc(feat2), paused: jobDoc(paused), admin_paused: jobDoc(apaused), closed_expired: jobDoc(exp),
       archived: jobDoc(arch), back_to_review: jobDoc(feat) });
@@ -161,6 +165,10 @@ async function build (sha, j2) {
 
   /* closeJob last on the live vacancy: closes pending/reviewing/shortlisted, keeps interview/offer. */
   out.jobs.active = jobDoc(live);
+  /* be4e1b7 ops (recorded as unknown-op errors on older servers, exactly as the dispatcher answers). */
+  rec('jobsCapabilities', await call('jobsCapabilities', null, {}));
+  rec('listMyJobs', await call('listMyJobs', 'emp', {}));
+  rec('getEmployerApplications', await call('getEmployerApplications', 'emp', {}));
   rec('closeJob', await call('closeJob', 'emp', { jobId: live }));
   out.jobs.closed = jobDoc(live);
   rec('getJobApplications_afterClose', await call('getJobApplications', 'emp', { jobId: live }));
@@ -169,7 +177,7 @@ async function build (sha, j2) {
 
 (async () => {
   const fixtures = { generatedAtMs: Date.now(), generator: 'scripts/gen-jobs-workspace-fixtures.js', versions: {} };
-  for (const [sha, j2] of [['a515270', true], ['ffa2c47', false]]) {
+  for (const [sha, j2] of [['be4e1b7', true], ['a515270', true], ['ffa2c47', false]]) {
     fixtures.versions[sha] = await build(sha, j2);
   }
   const dir = path.join(ROOT, 'scripts', 'fixtures'); fs.mkdirSync(dir, { recursive: true });

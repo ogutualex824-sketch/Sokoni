@@ -1,7 +1,1939 @@
 {
- "generatedAtMs": 1791034693345,
+ "generatedAtMs": 1791036492015,
  "generator": "scripts/gen-jobs-workspace-fixtures.js",
  "versions": {
+  "be4e1b7": {
+   "sha": "be4e1b7",
+   "tables": {
+    "EMPLOYER_TRANSITIONS": {
+     "pending": [
+      "reviewing",
+      "shortlisted",
+      "rejected"
+     ],
+     "reviewing": [
+      "shortlisted",
+      "rejected"
+     ],
+     "shortlisted": [
+      "interview",
+      "rejected"
+     ],
+     "interview": [
+      "offer",
+      "rejected"
+     ],
+     "offer": [
+      "rejected"
+     ],
+     "offer_accepted": [
+      "hired"
+     ]
+    },
+    "STATUS_LABEL": {
+     "pending": "Submitted",
+     "reviewing": "Under review",
+     "shortlisted": "Shortlisted",
+     "interview": "Interview",
+     "offer": "Offer made",
+     "offer_accepted": "Offer accepted",
+     "hired": "Hired",
+     "rejected": "Not selected",
+     "withdrawn": "Withdrawn",
+     "offer_declined": "Offer declined",
+     "closed": "Vacancy closed"
+    },
+    "JOB_LABEL": {
+     "draft": "Draft",
+     "pending_review": "Pending review",
+     "changes_requested": "Changes requested",
+     "active": "Published",
+     "paused": "Paused",
+     "closed": "Closed",
+     "archived": "Archived",
+     "rejected": "Rejected"
+    }
+   },
+   "opsMessage": "\"op\" field is required. Valid ops: adminGetJob, adminListJobs, adminModerateJob, applyForJob, closeJob, createJob, getApplicationHistory, getEmployerApplications, getFeaturedJobs, getJob, getJobApplications, getJobSeekerProfile, getMyApplications, jobsCapabilities, listJobs, listMyJobs, pauseJob, respondToJobOffer, resumeJob, saveJobSeekerProfile, submitJob, updateApplicationStatus, updateJob, withdrawApplication",
+   "responses": {
+    "createJob_submit": {
+     "jobId": "job1",
+     "job": {
+      "jobId": "job1",
+      "title": "Cashier (live)",
+      "companyName": "Company",
+      "category": "retail",
+      "type": "full-time",
+      "location": "Nairobi",
+      "salaryMin": 20000,
+      "salaryMax": 30000,
+      "salaryCurrency": "KES",
+      "postedAt": {
+       "_seconds": 1791036492,
+       "_nanoseconds": 159000000
+      },
+      "expiresAt": {
+       "_seconds": 1793628492,
+       "_nanoseconds": 159000000
+      },
+      "applicationCount": 0,
+      "viewCount": 0,
+      "featured": false,
+      "status": "pending_review",
+      "employerUid": "emp"
+     }
+    },
+    "adminApprove": {
+     "success": true,
+     "status": "active"
+    },
+    "applyForJob_s1": {
+     "success": true,
+     "applicationId": "job1_s1"
+    },
+    "applyForJob_s2": {
+     "success": true,
+     "applicationId": "job1_s2"
+    },
+    "applyForJob_s3": {
+     "success": true,
+     "applicationId": "job1_s3"
+    },
+    "applyForJob_s4": {
+     "success": true,
+     "applicationId": "job1_s4"
+    },
+    "applyForJob_s5": {
+     "success": true,
+     "applicationId": "job1_s5"
+    },
+    "applyForJob_s6": {
+     "success": true,
+     "applicationId": "job1_s6"
+    },
+    "move_reviewing": {
+     "success": true,
+     "status": "reviewing",
+     "statusVersion": 2
+    },
+    "move_shortlisted": {
+     "success": true,
+     "status": "shortlisted",
+     "statusVersion": 3
+    },
+    "move_interview": {
+     "success": true,
+     "status": "interview",
+     "statusVersion": 4
+    },
+    "m3a": {
+     "success": true,
+     "status": "shortlisted",
+     "statusVersion": 2
+    },
+    "m3b": {
+     "success": true,
+     "status": "interview",
+     "statusVersion": 3
+    },
+    "move_offer": {
+     "success": true,
+     "status": "offer",
+     "statusVersion": 4
+    },
+    "m4a": {
+     "success": true,
+     "status": "shortlisted",
+     "statusVersion": 2
+    },
+    "m4b": {
+     "success": true,
+     "status": "interview",
+     "statusVersion": 3
+    },
+    "m4c": {
+     "success": true,
+     "status": "offer",
+     "statusVersion": 4
+    },
+    "respondToJobOffer_accept": {
+     "success": true,
+     "status": "offer_accepted",
+     "statusVersion": 5
+    },
+    "move_rejected": {
+     "success": true,
+     "status": "rejected",
+     "statusVersion": 2
+    },
+    "getJobApplications": {
+     "applications": [
+      {
+       "id": "job1_s4",
+       "jobId": "job1",
+       "seekerUid": "s4",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s4",
+       "status": "offer_accepted",
+       "statusLabel": "Offer accepted",
+       "statusVersion": 5,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 171000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 174000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s5",
+       "jobId": "job1",
+       "seekerUid": "s5",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s5",
+       "status": "rejected",
+       "statusLabel": "Not selected",
+       "statusVersion": 2,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 171000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 174000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s6",
+       "jobId": "job1",
+       "seekerUid": "s6",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s6",
+       "status": "pending",
+       "statusLabel": "Submitted",
+       "statusVersion": 1,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 171000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 171000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s2",
+       "jobId": "job1",
+       "seekerUid": "s2",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s2",
+       "status": "interview",
+       "statusLabel": "Interview",
+       "statusVersion": 4,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 169000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 173000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s3",
+       "jobId": "job1",
+       "seekerUid": "s3",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s3",
+       "status": "offer",
+       "statusLabel": "Offer made",
+       "statusVersion": 4,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 169000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 173000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s1",
+       "jobId": "job1",
+       "seekerUid": "s1",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s1",
+       "status": "pending",
+       "statusLabel": "Submitted",
+       "statusVersion": 1,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 168000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 168000000
+       },
+       "seekerProfile": null
+      }
+     ]
+    },
+    "getApplicationHistory": {
+     "applicationId": "job1_s2",
+     "status": "interview",
+     "label": "Interview",
+     "statusVersion": 4,
+     "events": [
+      {
+       "from": null,
+       "to": "pending",
+       "label": "Submitted",
+       "actorRole": "applicant",
+       "reason": null,
+       "at": 1791036492169
+      },
+      {
+       "from": "pending",
+       "to": "reviewing",
+       "label": "Under review",
+       "actorRole": "employer",
+       "reason": null,
+       "at": 1791036492172
+      },
+      {
+       "from": "reviewing",
+       "to": "shortlisted",
+       "label": "Shortlisted",
+       "actorRole": "employer",
+       "reason": null,
+       "at": 1791036492173
+      },
+      {
+       "from": "shortlisted",
+       "to": "interview",
+       "label": "Interview",
+       "actorRole": "employer",
+       "reason": null,
+       "at": 1791036492173
+      }
+     ]
+    },
+    "updateJob_salary": {
+     "success": true,
+     "status": "active",
+     "backToReview": false
+    },
+    "createJob_draft": {
+     "jobId": "job21",
+     "job": {
+      "jobId": "job21",
+      "title": "Shop assistant (draft)",
+      "companyName": "Company",
+      "category": "retail",
+      "type": "full-time",
+      "location": "Nairobi",
+      "salaryMin": 20000,
+      "salaryMax": 30000,
+      "salaryCurrency": "KES",
+      "postedAt": {
+       "_seconds": 1791036492,
+       "_nanoseconds": 181000000
+      },
+      "expiresAt": {
+       "_seconds": 1793628492,
+       "_nanoseconds": 181000000
+      },
+      "applicationCount": 0,
+      "viewCount": 0,
+      "featured": false,
+      "status": "draft",
+      "employerUid": "emp"
+     }
+    },
+    "createJob_pending": {
+     "jobId": "job22",
+     "job": {
+      "jobId": "job22",
+      "title": "Stock clerk (pending)",
+      "companyName": "Company",
+      "category": "retail",
+      "type": "full-time",
+      "location": "Nairobi",
+      "salaryMin": 20000,
+      "salaryMax": 30000,
+      "salaryCurrency": "KES",
+      "postedAt": {
+       "_seconds": 1791036492,
+       "_nanoseconds": 181000000
+      },
+      "expiresAt": {
+       "_seconds": 1793628492,
+       "_nanoseconds": 181000000
+      },
+      "applicationCount": 0,
+      "viewCount": 0,
+      "featured": false,
+      "status": "pending_review",
+      "employerUid": "emp"
+     }
+    },
+    "x_chg": {
+     "jobId": "job23",
+     "job": {
+      "jobId": "job23",
+      "title": "Delivery rider (changes requested)",
+      "companyName": "Company",
+      "category": "retail",
+      "type": "full-time",
+      "location": "Nairobi",
+      "salaryMin": 20000,
+      "salaryMax": 30000,
+      "salaryCurrency": "KES",
+      "postedAt": {
+       "_seconds": 1791036492,
+       "_nanoseconds": 181000000
+      },
+      "expiresAt": {
+       "_seconds": 1793628492,
+       "_nanoseconds": 181000000
+      },
+      "applicationCount": 0,
+      "viewCount": 0,
+      "featured": false,
+      "status": "pending_review",
+      "employerUid": "emp"
+     }
+    },
+    "adminRequestChanges": {
+     "success": true,
+     "status": "changes_requested"
+    },
+    "x_rej": {
+     "jobId": "job26",
+     "job": {
+      "jobId": "job26",
+      "title": "Fee job (rejected)",
+      "companyName": "Company",
+      "category": "retail",
+      "type": "full-time",
+      "location": "Nairobi",
+      "salaryMin": 20000,
+      "salaryMax": 30000,
+      "salaryCurrency": "KES",
+      "postedAt": {
+       "_seconds": 1791036492,
+       "_nanoseconds": 181000000
+      },
+      "expiresAt": {
+       "_seconds": 1793628492,
+       "_nanoseconds": 181000000
+      },
+      "applicationCount": 0,
+      "viewCount": 0,
+      "featured": false,
+      "status": "pending_review",
+      "employerUid": "emp"
+     }
+    },
+    "adminReject": {
+     "success": true,
+     "status": "rejected"
+    },
+    "x_feat": {
+     "jobId": "job29",
+     "job": {
+      "jobId": "job29",
+      "title": "Head cashier (featured)",
+      "companyName": "Company",
+      "category": "retail",
+      "type": "freelance-gig",
+      "location": "Nairobi",
+      "salaryMin": 20000,
+      "salaryMax": 30000,
+      "salaryCurrency": "KES",
+      "postedAt": {
+       "_seconds": 1791036492,
+       "_nanoseconds": 181000000
+      },
+      "expiresAt": {
+       "_seconds": 1793628492,
+       "_nanoseconds": 181000000
+      },
+      "applicationCount": 0,
+      "viewCount": 0,
+      "featured": false,
+      "status": "pending_review",
+      "employerUid": "emp"
+     }
+    },
+    "x_feat_approve": {
+     "success": true,
+     "status": "active"
+    },
+    "adminFeature": {
+     "success": true,
+     "status": "active",
+     "featured": true
+    },
+    "x_paused": {
+     "jobId": "job34",
+     "job": {
+      "jobId": "job34",
+      "title": "Barista (paused)",
+      "companyName": "Company",
+      "category": "retail",
+      "type": "full-time",
+      "location": "Nairobi",
+      "salaryMin": 20000,
+      "salaryMax": 30000,
+      "salaryCurrency": "KES",
+      "postedAt": {
+       "_seconds": 1791036492,
+       "_nanoseconds": 182000000
+      },
+      "expiresAt": {
+       "_seconds": 1793628492,
+       "_nanoseconds": 182000000
+      },
+      "applicationCount": 0,
+      "viewCount": 0,
+      "featured": false,
+      "status": "pending_review",
+      "employerUid": "emp"
+     }
+    },
+    "x_paused_approve": {
+     "success": true,
+     "status": "active"
+    },
+    "pauseJob": {
+     "success": true,
+     "status": "paused"
+    },
+    "x_apaused": {
+     "jobId": "job38",
+     "job": {
+      "jobId": "job38",
+      "title": "Guard (admin paused)",
+      "companyName": "Company",
+      "category": "retail",
+      "type": "full-time",
+      "location": "Nairobi",
+      "salaryMin": 20000,
+      "salaryMax": 30000,
+      "salaryCurrency": "KES",
+      "postedAt": {
+       "_seconds": 1791036492,
+       "_nanoseconds": 183000000
+      },
+      "expiresAt": {
+       "_seconds": 1793628492,
+       "_nanoseconds": 183000000
+      },
+      "applicationCount": 0,
+      "viewCount": 0,
+      "featured": false,
+      "status": "pending_review",
+      "employerUid": "emp"
+     }
+    },
+    "x_apaused_approve": {
+     "success": true,
+     "status": "active"
+    },
+    "adminPause": {
+     "success": true,
+     "status": "paused"
+    },
+    "x_exp": {
+     "jobId": "job43",
+     "job": {
+      "jobId": "job43",
+      "title": "Cleaner (expired)",
+      "companyName": "Company",
+      "category": "retail",
+      "type": "full-time",
+      "location": "Nairobi",
+      "salaryMin": 20000,
+      "salaryMax": 30000,
+      "salaryCurrency": "KES",
+      "postedAt": {
+       "_seconds": 1791036492,
+       "_nanoseconds": 183000000
+      },
+      "expiresAt": {
+       "_seconds": 1791122892,
+       "_nanoseconds": 183000000
+      },
+      "applicationCount": 0,
+      "viewCount": 0,
+      "featured": false,
+      "status": "pending_review",
+      "employerUid": "emp"
+     }
+    },
+    "x_exp_approve": {
+     "success": true,
+     "status": "active"
+    },
+    "sweep": {
+     "closed": 1
+    },
+    "x_arch": {
+     "jobId": "job47",
+     "job": {
+      "jobId": "job47",
+      "title": "Porter (archived)",
+      "companyName": "Company",
+      "category": "retail",
+      "type": "full-time",
+      "location": "Nairobi",
+      "salaryMin": 20000,
+      "salaryMax": 30000,
+      "salaryCurrency": "KES",
+      "postedAt": {
+       "_seconds": 1791036492,
+       "_nanoseconds": 184000000
+      },
+      "expiresAt": {
+       "_seconds": 1793628492,
+       "_nanoseconds": 184000000
+      },
+      "applicationCount": 0,
+      "viewCount": 0,
+      "featured": false,
+      "status": "pending_review",
+      "employerUid": "emp"
+     }
+    },
+    "x_arch_reject": {
+     "success": true,
+     "status": "rejected"
+    },
+    "x_arch_archive": {
+     "success": true,
+     "status": "archived"
+    },
+    "submitJob": {
+     "success": true,
+     "status": "pending_review"
+    },
+    "x_draft2": {
+     "jobId": "job53",
+     "job": {
+      "jobId": "job53",
+      "title": "Shop assistant (draft)",
+      "companyName": "Company",
+      "category": "retail",
+      "type": "full-time",
+      "location": "Nairobi",
+      "salaryMin": 20000,
+      "salaryMax": 30000,
+      "salaryCurrency": "KES",
+      "postedAt": {
+       "_seconds": 1791036492,
+       "_nanoseconds": 185000000
+      },
+      "expiresAt": {
+       "_seconds": 1793628492,
+       "_nanoseconds": 185000000
+      },
+      "applicationCount": 0,
+      "viewCount": 0,
+      "featured": false,
+      "status": "draft",
+      "employerUid": "emp"
+     }
+    },
+    "updateJob_content_backToReview": {
+     "success": true,
+     "status": "pending_review",
+     "backToReview": true
+    },
+    "x_feat2": {
+     "jobId": "job54",
+     "job": {
+      "jobId": "job54",
+      "title": "Senior cashier (featured)",
+      "companyName": "Company",
+      "category": "retail",
+      "type": "full-time",
+      "location": "Nairobi",
+      "salaryMin": 20000,
+      "salaryMax": 30000,
+      "salaryCurrency": "KES",
+      "postedAt": {
+       "_seconds": 1791036492,
+       "_nanoseconds": 185000000
+      },
+      "expiresAt": {
+       "_seconds": 1793628492,
+       "_nanoseconds": 185000000
+      },
+      "applicationCount": 0,
+      "viewCount": 0,
+      "featured": false,
+      "status": "pending_review",
+      "employerUid": "emp"
+     }
+    },
+    "x_feat2_approve": {
+     "success": true,
+     "status": "active"
+    },
+    "x_feat2_feature": {
+     "success": true,
+     "status": "active",
+     "featured": true
+    },
+    "x_resume": {
+     "jobId": "job59",
+     "job": {
+      "jobId": "job59",
+      "title": "Baker (resumable)",
+      "companyName": "Company",
+      "category": "retail",
+      "type": "full-time",
+      "location": "Nairobi",
+      "salaryMin": 20000,
+      "salaryMax": 30000,
+      "salaryCurrency": "KES",
+      "postedAt": {
+       "_seconds": 1791036492,
+       "_nanoseconds": 185000000
+      },
+      "expiresAt": {
+       "_seconds": 1793628492,
+       "_nanoseconds": 185000000
+      },
+      "applicationCount": 0,
+      "viewCount": 0,
+      "featured": false,
+      "status": "pending_review",
+      "employerUid": "emp"
+     }
+    },
+    "x_resume_approve": {
+     "success": true,
+     "status": "active"
+    },
+    "x_resume_pause": {
+     "success": true,
+     "status": "paused"
+    },
+    "resumeJob": {
+     "success": true,
+     "status": "active"
+    },
+    "jobsCapabilities": {
+     "contract": "jobs-j2",
+     "moderation": true,
+     "applicationStates": [
+      "pending",
+      "reviewing",
+      "shortlisted",
+      "interview",
+      "offer",
+      "offer_accepted",
+      "hired",
+      "rejected",
+      "withdrawn",
+      "offer_declined",
+      "closed"
+     ],
+     "jobStates": [
+      "draft",
+      "pending_review",
+      "changes_requested",
+      "active",
+      "paused",
+      "closed",
+      "archived",
+      "rejected"
+     ],
+     "employerTransitions": {
+      "pending": [
+       "reviewing",
+       "shortlisted",
+       "rejected"
+      ],
+      "reviewing": [
+       "shortlisted",
+       "rejected"
+      ],
+      "shortlisted": [
+       "interview",
+       "rejected"
+      ],
+      "interview": [
+       "offer",
+       "rejected"
+      ],
+      "offer": [
+       "rejected"
+      ],
+      "offer_accepted": [
+       "hired"
+      ]
+     },
+     "jobTypes": [
+      "full-time",
+      "part-time",
+      "contract",
+      "internship",
+      "remote",
+      "freelance-gig"
+     ]
+    },
+    "listMyJobs": {
+     "jobs": [
+      {
+       "jobId": "job53",
+       "title": "Shop assistant (draft)",
+       "companyName": "Company",
+       "category": "retail",
+       "type": "full-time",
+       "location": "Nairobi",
+       "salaryMin": 20000,
+       "salaryMax": 30000,
+       "salaryCurrency": "KES",
+       "postedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 185000000
+       },
+       "expiresAt": {
+        "_seconds": 1793628492,
+        "_nanoseconds": 185000000
+       },
+       "applicationCount": 0,
+       "viewCount": 0,
+       "featured": false,
+       "status": "draft",
+       "statusLabel": "Draft",
+       "moderationReason": null,
+       "pausedByRole": null,
+       "approvedAt": null,
+       "closedReason": null,
+       "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+       "requirements": "KCSE"
+      },
+      {
+       "jobId": "job54",
+       "title": "Senior cashier (featured)",
+       "companyName": "Company",
+       "category": "retail",
+       "type": "full-time",
+       "location": "Nairobi",
+       "salaryMin": 20000,
+       "salaryMax": 30000,
+       "salaryCurrency": "KES",
+       "postedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 185000000
+       },
+       "expiresAt": {
+        "_seconds": 1793628492,
+        "_nanoseconds": 185000000
+       },
+       "applicationCount": 0,
+       "viewCount": 0,
+       "featured": true,
+       "status": "active",
+       "statusLabel": "Published",
+       "moderationReason": null,
+       "pausedByRole": null,
+       "approvedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 185000000
+       },
+       "closedReason": null,
+       "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+       "requirements": "KCSE"
+      },
+      {
+       "jobId": "job59",
+       "title": "Baker (resumable)",
+       "companyName": "Company",
+       "category": "retail",
+       "type": "full-time",
+       "location": "Nairobi",
+       "salaryMin": 20000,
+       "salaryMax": 30000,
+       "salaryCurrency": "KES",
+       "postedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 185000000
+       },
+       "expiresAt": {
+        "_seconds": 1793628492,
+        "_nanoseconds": 185000000
+       },
+       "applicationCount": 0,
+       "viewCount": 0,
+       "featured": false,
+       "status": "active",
+       "statusLabel": "Published",
+       "moderationReason": null,
+       "pausedByRole": null,
+       "approvedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 185000000
+       },
+       "closedReason": null,
+       "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+       "requirements": "KCSE"
+      },
+      {
+       "jobId": "job47",
+       "title": "Porter (archived)",
+       "companyName": "Company",
+       "category": "retail",
+       "type": "full-time",
+       "location": "Nairobi",
+       "salaryMin": 20000,
+       "salaryMax": 30000,
+       "salaryCurrency": "KES",
+       "postedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 184000000
+       },
+       "expiresAt": {
+        "_seconds": 1793628492,
+        "_nanoseconds": 184000000
+       },
+       "applicationCount": 0,
+       "viewCount": 0,
+       "featured": false,
+       "status": "archived",
+       "statusLabel": "Archived",
+       "moderationReason": null,
+       "pausedByRole": null,
+       "approvedAt": null,
+       "closedReason": null,
+       "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+       "requirements": "KCSE"
+      },
+      {
+       "jobId": "job38",
+       "title": "Guard (admin paused)",
+       "companyName": "Company",
+       "category": "retail",
+       "type": "full-time",
+       "location": "Nairobi",
+       "salaryMin": 20000,
+       "salaryMax": 30000,
+       "salaryCurrency": "KES",
+       "postedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 183000000
+       },
+       "expiresAt": {
+        "_seconds": 1793628492,
+        "_nanoseconds": 183000000
+       },
+       "applicationCount": 0,
+       "viewCount": 0,
+       "featured": false,
+       "status": "paused",
+       "statusLabel": "Paused",
+       "moderationReason": "Reported by applicants; under review.",
+       "pausedByRole": "admin",
+       "approvedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 183000000
+       },
+       "closedReason": null,
+       "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+       "requirements": "KCSE"
+      },
+      {
+       "jobId": "job43",
+       "title": "Cleaner (expired)",
+       "companyName": "Company",
+       "category": "retail",
+       "type": "full-time",
+       "location": "Nairobi",
+       "salaryMin": 20000,
+       "salaryMax": 30000,
+       "salaryCurrency": "KES",
+       "postedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 183000000
+       },
+       "expiresAt": {
+        "_seconds": 1791122892,
+        "_nanoseconds": 183000000
+       },
+       "applicationCount": 0,
+       "viewCount": 0,
+       "featured": false,
+       "status": "closed",
+       "statusLabel": "Closed",
+       "moderationReason": null,
+       "pausedByRole": null,
+       "approvedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 183000000
+       },
+       "closedReason": "expired",
+       "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+       "requirements": "KCSE"
+      },
+      {
+       "jobId": "job34",
+       "title": "Barista (paused)",
+       "companyName": "Company",
+       "category": "retail",
+       "type": "full-time",
+       "location": "Nairobi",
+       "salaryMin": 20000,
+       "salaryMax": 30000,
+       "salaryCurrency": "KES",
+       "postedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 182000000
+       },
+       "expiresAt": {
+        "_seconds": 1793628492,
+        "_nanoseconds": 182000000
+       },
+       "applicationCount": 0,
+       "viewCount": 0,
+       "featured": false,
+       "status": "paused",
+       "statusLabel": "Paused",
+       "moderationReason": null,
+       "pausedByRole": "employer",
+       "approvedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 182000000
+       },
+       "closedReason": null,
+       "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+       "requirements": "KCSE"
+      },
+      {
+       "jobId": "job21",
+       "title": "Shop assistant (draft)",
+       "companyName": "Company",
+       "category": "retail",
+       "type": "full-time",
+       "location": "Nairobi",
+       "salaryMin": 20000,
+       "salaryMax": 30000,
+       "salaryCurrency": "KES",
+       "postedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 181000000
+       },
+       "expiresAt": {
+        "_seconds": 1793628492,
+        "_nanoseconds": 181000000
+       },
+       "applicationCount": 0,
+       "viewCount": 0,
+       "featured": false,
+       "status": "pending_review",
+       "statusLabel": "Pending review",
+       "moderationReason": null,
+       "pausedByRole": null,
+       "approvedAt": null,
+       "closedReason": null,
+       "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+       "requirements": "KCSE"
+      },
+      {
+       "jobId": "job22",
+       "title": "Stock clerk (pending)",
+       "companyName": "Company",
+       "category": "retail",
+       "type": "full-time",
+       "location": "Nairobi",
+       "salaryMin": 20000,
+       "salaryMax": 30000,
+       "salaryCurrency": "KES",
+       "postedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 181000000
+       },
+       "expiresAt": {
+        "_seconds": 1793628492,
+        "_nanoseconds": 181000000
+       },
+       "applicationCount": 0,
+       "viewCount": 0,
+       "featured": false,
+       "status": "pending_review",
+       "statusLabel": "Pending review",
+       "moderationReason": null,
+       "pausedByRole": null,
+       "approvedAt": null,
+       "closedReason": null,
+       "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+       "requirements": "KCSE"
+      },
+      {
+       "jobId": "job23",
+       "title": "Delivery rider (changes requested)",
+       "companyName": "Company",
+       "category": "retail",
+       "type": "full-time",
+       "location": "Nairobi",
+       "salaryMin": 20000,
+       "salaryMax": 30000,
+       "salaryCurrency": "KES",
+       "postedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 181000000
+       },
+       "expiresAt": {
+        "_seconds": 1793628492,
+        "_nanoseconds": 181000000
+       },
+       "applicationCount": 0,
+       "viewCount": 0,
+       "featured": false,
+       "status": "changes_requested",
+       "statusLabel": "Changes requested",
+       "moderationReason": "Add the shift hours please.",
+       "pausedByRole": null,
+       "approvedAt": null,
+       "closedReason": null,
+       "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+       "requirements": "KCSE"
+      },
+      {
+       "jobId": "job26",
+       "title": "Fee job (rejected)",
+       "companyName": "Company",
+       "category": "retail",
+       "type": "full-time",
+       "location": "Nairobi",
+       "salaryMin": 20000,
+       "salaryMax": 30000,
+       "salaryCurrency": "KES",
+       "postedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 181000000
+       },
+       "expiresAt": {
+        "_seconds": 1793628492,
+        "_nanoseconds": 181000000
+       },
+       "applicationCount": 0,
+       "viewCount": 0,
+       "featured": false,
+       "status": "rejected",
+       "statusLabel": "Rejected",
+       "moderationReason": "Asks applicants to pay a fee.",
+       "pausedByRole": null,
+       "approvedAt": null,
+       "closedReason": null,
+       "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+       "requirements": "KCSE"
+      },
+      {
+       "jobId": "job29",
+       "title": "Head cashier (renamed)",
+       "companyName": "Company",
+       "category": "retail",
+       "type": "freelance-gig",
+       "location": "Nairobi",
+       "salaryMin": 20000,
+       "salaryMax": 30000,
+       "salaryCurrency": "KES",
+       "postedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 181000000
+       },
+       "expiresAt": {
+        "_seconds": 1793628492,
+        "_nanoseconds": 181000000
+       },
+       "applicationCount": 0,
+       "viewCount": 0,
+       "featured": true,
+       "status": "pending_review",
+       "statusLabel": "Pending review",
+       "moderationReason": null,
+       "pausedByRole": null,
+       "approvedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 181000000
+       },
+       "closedReason": null,
+       "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+       "requirements": "KCSE"
+      },
+      {
+       "jobId": "job1",
+       "title": "Cashier (live)",
+       "companyName": "Company",
+       "category": "retail",
+       "type": "full-time",
+       "location": "Nairobi",
+       "salaryMin": 25000,
+       "salaryMax": 30000,
+       "salaryCurrency": "KES",
+       "postedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 159000000
+       },
+       "expiresAt": {
+        "_seconds": 1793628492,
+        "_nanoseconds": 159000000
+       },
+       "applicationCount": 6,
+       "viewCount": 0,
+       "featured": false,
+       "status": "active",
+       "statusLabel": "Published",
+       "moderationReason": null,
+       "pausedByRole": null,
+       "approvedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 162000000
+       },
+       "closedReason": null,
+       "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+       "requirements": "KCSE"
+      }
+     ]
+    },
+    "getEmployerApplications": {
+     "applications": [
+      {
+       "id": "job1_s4",
+       "jobId": "job1",
+       "jobTitle": "Cashier (live)",
+       "seekerUid": "s4",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s4",
+       "status": "offer_accepted",
+       "statusLabel": "Offer accepted",
+       "statusVersion": 5,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 171000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 174000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s5",
+       "jobId": "job1",
+       "jobTitle": "Cashier (live)",
+       "seekerUid": "s5",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s5",
+       "status": "rejected",
+       "statusLabel": "Not selected",
+       "statusVersion": 2,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 171000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 174000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s6",
+       "jobId": "job1",
+       "jobTitle": "Cashier (live)",
+       "seekerUid": "s6",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s6",
+       "status": "pending",
+       "statusLabel": "Submitted",
+       "statusVersion": 1,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 171000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 171000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s2",
+       "jobId": "job1",
+       "jobTitle": "Cashier (live)",
+       "seekerUid": "s2",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s2",
+       "status": "interview",
+       "statusLabel": "Interview",
+       "statusVersion": 4,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 169000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 173000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s3",
+       "jobId": "job1",
+       "jobTitle": "Cashier (live)",
+       "seekerUid": "s3",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s3",
+       "status": "offer",
+       "statusLabel": "Offer made",
+       "statusVersion": 4,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 169000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 173000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s1",
+       "jobId": "job1",
+       "jobTitle": "Cashier (live)",
+       "seekerUid": "s1",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s1",
+       "status": "pending",
+       "statusLabel": "Submitted",
+       "statusVersion": 1,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 168000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 168000000
+       },
+       "seekerProfile": null
+      }
+     ]
+    },
+    "closeJob": {
+     "success": true,
+     "closedApplications": 2
+    },
+    "getJobApplications_afterClose": {
+     "applications": [
+      {
+       "id": "job1_s4",
+       "jobId": "job1",
+       "seekerUid": "s4",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s4",
+       "status": "offer_accepted",
+       "statusLabel": "Offer accepted",
+       "statusVersion": 5,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 171000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 174000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s5",
+       "jobId": "job1",
+       "seekerUid": "s5",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s5",
+       "status": "rejected",
+       "statusLabel": "Not selected",
+       "statusVersion": 2,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 171000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 174000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s6",
+       "jobId": "job1",
+       "seekerUid": "s6",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s6",
+       "status": "closed",
+       "statusLabel": "Vacancy closed",
+       "statusVersion": 2,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 171000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 189000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s2",
+       "jobId": "job1",
+       "seekerUid": "s2",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s2",
+       "status": "interview",
+       "statusLabel": "Interview",
+       "statusVersion": 4,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 169000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 173000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s3",
+       "jobId": "job1",
+       "seekerUid": "s3",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s3",
+       "status": "offer",
+       "statusLabel": "Offer made",
+       "statusVersion": 4,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 169000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 173000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s1",
+       "jobId": "job1",
+       "seekerUid": "s1",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s1",
+       "status": "closed",
+       "statusLabel": "Vacancy closed",
+       "statusVersion": 2,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 168000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 189000000
+       },
+       "seekerProfile": null
+      }
+     ]
+    }
+   },
+   "errors": {
+    "err_reject_no_reason": {
+     "code": "invalid-argument",
+     "message": "Give the applicant a short reason (at least 3 characters)."
+    },
+    "err_stale_version": {
+     "code": "aborted",
+     "message": "This application was updated elsewhere. Reload and try again."
+    },
+    "err_illegal": {
+     "code": "failed-precondition",
+     "message": "An application that is \"Submitted\" cannot move to \"Hired\"."
+    },
+    "err_updateJob_salary": {
+     "code": "invalid-argument",
+     "message": "salaryMin cannot be greater than salaryMax"
+    },
+    "err_pauseJob_draft": {
+     "code": "failed-precondition",
+     "message": "A vacancy that is \"Draft\" cannot be paused."
+    },
+    "err_resumeJob_unapproved": {
+     "code": "failed-precondition",
+     "message": "A vacancy that is \"Pending review\" cannot be resumed."
+    },
+    "err_updateJob_rejected": {
+     "code": "failed-precondition",
+     "message": "This vacancy can no longer be edited."
+    },
+    "err_resume_admin_paused": {
+     "code": "failed-precondition",
+     "message": "SOKONI paused this vacancy: Reported by applicants; under review.. Only SOKONI can restore it."
+    }
+   },
+   "jobs": {
+    "draft": {
+     "id": "job53",
+     "employerUid": "emp",
+     "companyName": "Company",
+     "title": "Shop assistant (draft)",
+     "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+     "requirements": "KCSE",
+     "category": "retail",
+     "type": "full-time",
+     "location": "Nairobi",
+     "salaryMin": 20000,
+     "salaryMax": 30000,
+     "salaryCurrency": "KES",
+     "status": "draft",
+     "featured": false,
+     "postedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 185000000
+     },
+     "expiresAt": {
+      "_seconds": 1793628492,
+      "_nanoseconds": 185000000
+     },
+     "viewCount": 0,
+     "applicationCount": 0
+    },
+    "pending_review": {
+     "id": "job22",
+     "employerUid": "emp",
+     "companyName": "Company",
+     "title": "Stock clerk (pending)",
+     "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+     "requirements": "KCSE",
+     "category": "retail",
+     "type": "full-time",
+     "location": "Nairobi",
+     "salaryMin": 20000,
+     "salaryMax": 30000,
+     "salaryCurrency": "KES",
+     "status": "pending_review",
+     "featured": false,
+     "postedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 181000000
+     },
+     "expiresAt": {
+      "_seconds": 1793628492,
+      "_nanoseconds": 181000000
+     },
+     "viewCount": 0,
+     "applicationCount": 0
+    },
+    "changes_requested": {
+     "id": "job23",
+     "employerUid": "emp",
+     "companyName": "Company",
+     "title": "Delivery rider (changes requested)",
+     "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+     "requirements": "KCSE",
+     "category": "retail",
+     "type": "full-time",
+     "location": "Nairobi",
+     "salaryMin": 20000,
+     "salaryMax": 30000,
+     "salaryCurrency": "KES",
+     "status": "changes_requested",
+     "featured": false,
+     "postedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 181000000
+     },
+     "expiresAt": {
+      "_seconds": 1793628492,
+      "_nanoseconds": 181000000
+     },
+     "viewCount": 0,
+     "applicationCount": 0,
+     "moderationReason": "Add the shift hours please.",
+     "moderatedBy": "adm",
+     "moderatedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 181000000
+     },
+     "pausedByRole": null
+    },
+    "rejected": {
+     "id": "job26",
+     "employerUid": "emp",
+     "companyName": "Company",
+     "title": "Fee job (rejected)",
+     "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+     "requirements": "KCSE",
+     "category": "retail",
+     "type": "full-time",
+     "location": "Nairobi",
+     "salaryMin": 20000,
+     "salaryMax": 30000,
+     "salaryCurrency": "KES",
+     "status": "rejected",
+     "featured": false,
+     "postedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 181000000
+     },
+     "expiresAt": {
+      "_seconds": 1793628492,
+      "_nanoseconds": 181000000
+     },
+     "viewCount": 0,
+     "applicationCount": 0,
+     "moderationReason": "Asks applicants to pay a fee.",
+     "moderatedBy": "adm",
+     "moderatedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 181000000
+     },
+     "pausedByRole": null
+    },
+    "featured_active": {
+     "id": "job54",
+     "employerUid": "emp",
+     "companyName": "Company",
+     "title": "Senior cashier (featured)",
+     "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+     "requirements": "KCSE",
+     "category": "retail",
+     "type": "full-time",
+     "location": "Nairobi",
+     "salaryMin": 20000,
+     "salaryMax": 30000,
+     "salaryCurrency": "KES",
+     "status": "active",
+     "featured": true,
+     "postedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 185000000
+     },
+     "expiresAt": {
+      "_seconds": 1793628492,
+      "_nanoseconds": 185000000
+     },
+     "viewCount": 0,
+     "applicationCount": 0,
+     "moderationReason": null,
+     "moderatedBy": "adm",
+     "moderatedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 185000000
+     },
+     "pausedByRole": null,
+     "approvedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 185000000
+     },
+     "featuredAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 185000000
+     },
+     "featuredBy": "adm"
+    },
+    "paused": {
+     "id": "job34",
+     "employerUid": "emp",
+     "companyName": "Company",
+     "title": "Barista (paused)",
+     "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+     "requirements": "KCSE",
+     "category": "retail",
+     "type": "full-time",
+     "location": "Nairobi",
+     "salaryMin": 20000,
+     "salaryMax": 30000,
+     "salaryCurrency": "KES",
+     "status": "paused",
+     "featured": false,
+     "postedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 182000000
+     },
+     "expiresAt": {
+      "_seconds": 1793628492,
+      "_nanoseconds": 182000000
+     },
+     "viewCount": 0,
+     "applicationCount": 0,
+     "moderationReason": null,
+     "moderatedBy": "adm",
+     "moderatedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 182000000
+     },
+     "pausedByRole": "employer",
+     "approvedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 182000000
+     },
+     "pausedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 182000000
+     }
+    },
+    "admin_paused": {
+     "id": "job38",
+     "employerUid": "emp",
+     "companyName": "Company",
+     "title": "Guard (admin paused)",
+     "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+     "requirements": "KCSE",
+     "category": "retail",
+     "type": "full-time",
+     "location": "Nairobi",
+     "salaryMin": 20000,
+     "salaryMax": 30000,
+     "salaryCurrency": "KES",
+     "status": "paused",
+     "featured": false,
+     "postedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 183000000
+     },
+     "expiresAt": {
+      "_seconds": 1793628492,
+      "_nanoseconds": 183000000
+     },
+     "viewCount": 0,
+     "applicationCount": 0,
+     "moderationReason": "Reported by applicants; under review.",
+     "moderatedBy": "adm",
+     "moderatedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 183000000
+     },
+     "pausedByRole": "admin",
+     "approvedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 183000000
+     },
+     "pausedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 183000000
+     }
+    },
+    "closed_expired": {
+     "id": "job43",
+     "employerUid": "emp",
+     "companyName": "Company",
+     "title": "Cleaner (expired)",
+     "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+     "requirements": "KCSE",
+     "category": "retail",
+     "type": "full-time",
+     "location": "Nairobi",
+     "salaryMin": 20000,
+     "salaryMax": 30000,
+     "salaryCurrency": "KES",
+     "status": "closed",
+     "featured": false,
+     "postedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 183000000
+     },
+     "expiresAt": {
+      "_seconds": 1791122892,
+      "_nanoseconds": 183000000
+     },
+     "viewCount": 0,
+     "applicationCount": 0,
+     "moderationReason": null,
+     "moderatedBy": "adm",
+     "moderatedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 183000000
+     },
+     "pausedByRole": null,
+     "approvedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 183000000
+     },
+     "closedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 184000000
+     },
+     "closedReason": "expired"
+    },
+    "archived": {
+     "id": "job47",
+     "employerUid": "emp",
+     "companyName": "Company",
+     "title": "Porter (archived)",
+     "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+     "requirements": "KCSE",
+     "category": "retail",
+     "type": "full-time",
+     "location": "Nairobi",
+     "salaryMin": 20000,
+     "salaryMax": 30000,
+     "salaryCurrency": "KES",
+     "status": "archived",
+     "featured": false,
+     "postedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 184000000
+     },
+     "expiresAt": {
+      "_seconds": 1793628492,
+      "_nanoseconds": 184000000
+     },
+     "viewCount": 0,
+     "applicationCount": 0,
+     "moderationReason": null,
+     "moderatedBy": "adm",
+     "moderatedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 184000000
+     },
+     "pausedByRole": null
+    },
+    "back_to_review": {
+     "id": "job29",
+     "employerUid": "emp",
+     "companyName": "Company",
+     "title": "Head cashier (renamed)",
+     "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+     "requirements": "KCSE",
+     "category": "retail",
+     "type": "freelance-gig",
+     "location": "Nairobi",
+     "salaryMin": 20000,
+     "salaryMax": 30000,
+     "salaryCurrency": "KES",
+     "status": "pending_review",
+     "featured": true,
+     "postedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 181000000
+     },
+     "expiresAt": {
+      "_seconds": 1793628492,
+      "_nanoseconds": 181000000
+     },
+     "viewCount": 0,
+     "applicationCount": 0,
+     "moderationReason": null,
+     "moderatedBy": "adm",
+     "moderatedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 181000000
+     },
+     "pausedByRole": null,
+     "approvedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 181000000
+     },
+     "featuredAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 182000000
+     },
+     "featuredBy": "adm",
+     "resubmittedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 185000000
+     }
+    },
+    "active": {
+     "id": "job1",
+     "employerUid": "emp",
+     "companyName": "Company",
+     "title": "Cashier (live)",
+     "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+     "requirements": "KCSE",
+     "category": "retail",
+     "type": "full-time",
+     "location": "Nairobi",
+     "salaryMin": 25000,
+     "salaryMax": 30000,
+     "salaryCurrency": "KES",
+     "status": "active",
+     "featured": false,
+     "postedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 159000000
+     },
+     "expiresAt": {
+      "_seconds": 1793628492,
+      "_nanoseconds": 159000000
+     },
+     "viewCount": 0,
+     "applicationCount": 6,
+     "moderationReason": null,
+     "moderatedBy": "adm",
+     "moderatedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 162000000
+     },
+     "pausedByRole": null,
+     "approvedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 162000000
+     }
+    },
+    "closed": {
+     "id": "job1",
+     "employerUid": "emp",
+     "companyName": "Company",
+     "title": "Cashier (live)",
+     "description": "We need a reliable cashier for our Nairobi shop, weekday shifts.",
+     "requirements": "KCSE",
+     "category": "retail",
+     "type": "full-time",
+     "location": "Nairobi",
+     "salaryMin": 25000,
+     "salaryMax": 30000,
+     "salaryCurrency": "KES",
+     "status": "closed",
+     "featured": false,
+     "postedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 159000000
+     },
+     "expiresAt": {
+      "_seconds": 1793628492,
+      "_nanoseconds": 159000000
+     },
+     "viewCount": 0,
+     "applicationCount": 6,
+     "moderationReason": null,
+     "moderatedBy": "adm",
+     "moderatedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 162000000
+     },
+     "pausedByRole": null,
+     "approvedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 162000000
+     },
+     "closedAt": {
+      "_seconds": 1791036492,
+      "_nanoseconds": 189000000
+     }
+    }
+   },
+   "applications": {
+    "liveJobId": "job1"
+   }
+  },
   "a515270": {
    "sha": "a515270",
    "tables": {
@@ -69,12 +2001,12 @@
       "salaryMax": 30000,
       "salaryCurrency": "KES",
       "postedAt": {
-       "_seconds": 1791034693,
-       "_nanoseconds": 546000000
+       "_seconds": 1791036492,
+       "_nanoseconds": 321000000
       },
       "expiresAt": {
-       "_seconds": 1793626693,
-       "_nanoseconds": 544000000
+       "_seconds": 1793628492,
+       "_nanoseconds": 321000000
       },
       "applicationCount": 0,
       "viewCount": 0,
@@ -178,12 +2110,12 @@
        "statusLabel": "Not selected",
        "statusVersion": 2,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 556000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 325000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 560000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 328000000
        },
        "seekerProfile": null
       },
@@ -197,31 +2129,12 @@
        "statusLabel": "Submitted",
        "statusVersion": 1,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 556000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 325000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 556000000
-       },
-       "seekerProfile": null
-      },
-      {
-       "id": "job1_s3",
-       "jobId": "job1",
-       "seekerUid": "s3",
-       "coverLetter": "I have three years of retail experience and I am available immediately.",
-       "cvUrl": "https://cv.example/s3",
-       "status": "offer",
-       "statusLabel": "Offer made",
-       "statusVersion": 4,
-       "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 553000000
-       },
-       "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 559000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 325000000
        },
        "seekerProfile": null
       },
@@ -235,12 +2148,12 @@
        "statusLabel": "Offer accepted",
        "statusVersion": 5,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 553000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 324000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 560000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 328000000
        },
        "seekerProfile": null
       },
@@ -254,12 +2167,31 @@
        "statusLabel": "Interview",
        "statusVersion": 4,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 552000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 323000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 559000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 326000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s3",
+       "jobId": "job1",
+       "seekerUid": "s3",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s3",
+       "status": "offer",
+       "statusLabel": "Offer made",
+       "statusVersion": 4,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 323000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 327000000
        },
        "seekerProfile": null
       },
@@ -273,12 +2205,12 @@
        "statusLabel": "Submitted",
        "statusVersion": 1,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 551000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 322000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 551000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 322000000
        },
        "seekerProfile": null
       }
@@ -296,7 +2228,7 @@
        "label": "Submitted",
        "actorRole": "applicant",
        "reason": null,
-       "at": 1791034693552
+       "at": 1791036492323
       },
       {
        "from": "pending",
@@ -304,7 +2236,7 @@
        "label": "Under review",
        "actorRole": "employer",
        "reason": null,
-       "at": 1791034693558
+       "at": 1791036492326
       },
       {
        "from": "reviewing",
@@ -312,7 +2244,7 @@
        "label": "Shortlisted",
        "actorRole": "employer",
        "reason": null,
-       "at": 1791034693559
+       "at": 1791036492326
       },
       {
        "from": "shortlisted",
@@ -320,7 +2252,7 @@
        "label": "Interview",
        "actorRole": "employer",
        "reason": null,
-       "at": 1791034693559
+       "at": 1791036492326
       }
      ]
     },
@@ -342,12 +2274,12 @@
       "salaryMax": 30000,
       "salaryCurrency": "KES",
       "postedAt": {
-       "_seconds": 1791034693,
-       "_nanoseconds": 565000000
+       "_seconds": 1791036492,
+       "_nanoseconds": 332000000
       },
       "expiresAt": {
-       "_seconds": 1793626693,
-       "_nanoseconds": 565000000
+       "_seconds": 1793628492,
+       "_nanoseconds": 332000000
       },
       "applicationCount": 0,
       "viewCount": 0,
@@ -369,12 +2301,12 @@
       "salaryMax": 30000,
       "salaryCurrency": "KES",
       "postedAt": {
-       "_seconds": 1791034693,
-       "_nanoseconds": 565000000
+       "_seconds": 1791036492,
+       "_nanoseconds": 332000000
       },
       "expiresAt": {
-       "_seconds": 1793626693,
-       "_nanoseconds": 565000000
+       "_seconds": 1793628492,
+       "_nanoseconds": 332000000
       },
       "applicationCount": 0,
       "viewCount": 0,
@@ -396,12 +2328,12 @@
       "salaryMax": 30000,
       "salaryCurrency": "KES",
       "postedAt": {
-       "_seconds": 1791034693,
-       "_nanoseconds": 567000000
+       "_seconds": 1791036492,
+       "_nanoseconds": 332000000
       },
       "expiresAt": {
-       "_seconds": 1793626693,
-       "_nanoseconds": 565000000
+       "_seconds": 1793628492,
+       "_nanoseconds": 332000000
       },
       "applicationCount": 0,
       "viewCount": 0,
@@ -427,12 +2359,12 @@
       "salaryMax": 30000,
       "salaryCurrency": "KES",
       "postedAt": {
-       "_seconds": 1791034693,
-       "_nanoseconds": 567000000
+       "_seconds": 1791036492,
+       "_nanoseconds": 332000000
       },
       "expiresAt": {
-       "_seconds": 1793626693,
-       "_nanoseconds": 567000000
+       "_seconds": 1793628492,
+       "_nanoseconds": 332000000
       },
       "applicationCount": 0,
       "viewCount": 0,
@@ -458,12 +2390,12 @@
       "salaryMax": 30000,
       "salaryCurrency": "KES",
       "postedAt": {
-       "_seconds": 1791034693,
-       "_nanoseconds": 568000000
+       "_seconds": 1791036492,
+       "_nanoseconds": 334000000
       },
       "expiresAt": {
-       "_seconds": 1793626693,
-       "_nanoseconds": 568000000
+       "_seconds": 1793628492,
+       "_nanoseconds": 334000000
       },
       "applicationCount": 0,
       "viewCount": 0,
@@ -494,12 +2426,12 @@
       "salaryMax": 30000,
       "salaryCurrency": "KES",
       "postedAt": {
-       "_seconds": 1791034693,
-       "_nanoseconds": 568000000
+       "_seconds": 1791036492,
+       "_nanoseconds": 335000000
       },
       "expiresAt": {
-       "_seconds": 1793626693,
-       "_nanoseconds": 568000000
+       "_seconds": 1793628492,
+       "_nanoseconds": 335000000
       },
       "applicationCount": 0,
       "viewCount": 0,
@@ -529,12 +2461,12 @@
       "salaryMax": 30000,
       "salaryCurrency": "KES",
       "postedAt": {
-       "_seconds": 1791034693,
-       "_nanoseconds": 570000000
+       "_seconds": 1791036492,
+       "_nanoseconds": 336000000
       },
       "expiresAt": {
-       "_seconds": 1793626693,
-       "_nanoseconds": 570000000
+       "_seconds": 1793628492,
+       "_nanoseconds": 336000000
       },
       "applicationCount": 0,
       "viewCount": 0,
@@ -564,12 +2496,12 @@
       "salaryMax": 30000,
       "salaryCurrency": "KES",
       "postedAt": {
-       "_seconds": 1791034693,
-       "_nanoseconds": 571000000
+       "_seconds": 1791036492,
+       "_nanoseconds": 336000000
       },
       "expiresAt": {
-       "_seconds": 1791121093,
-       "_nanoseconds": 570000000
+       "_seconds": 1791122892,
+       "_nanoseconds": 336000000
       },
       "applicationCount": 0,
       "viewCount": 0,
@@ -598,12 +2530,12 @@
       "salaryMax": 30000,
       "salaryCurrency": "KES",
       "postedAt": {
-       "_seconds": 1791034693,
-       "_nanoseconds": 572000000
+       "_seconds": 1791036492,
+       "_nanoseconds": 337000000
       },
       "expiresAt": {
-       "_seconds": 1793626693,
-       "_nanoseconds": 572000000
+       "_seconds": 1793628492,
+       "_nanoseconds": 337000000
       },
       "applicationCount": 0,
       "viewCount": 0,
@@ -637,12 +2569,12 @@
       "salaryMax": 30000,
       "salaryCurrency": "KES",
       "postedAt": {
-       "_seconds": 1791034693,
-       "_nanoseconds": 573000000
+       "_seconds": 1791036492,
+       "_nanoseconds": 338000000
       },
       "expiresAt": {
-       "_seconds": 1793626693,
-       "_nanoseconds": 573000000
+       "_seconds": 1793628492,
+       "_nanoseconds": 338000000
       },
       "applicationCount": 0,
       "viewCount": 0,
@@ -669,12 +2601,12 @@
       "salaryMax": 30000,
       "salaryCurrency": "KES",
       "postedAt": {
-       "_seconds": 1791034693,
-       "_nanoseconds": 577000000
+       "_seconds": 1791036492,
+       "_nanoseconds": 338000000
       },
       "expiresAt": {
-       "_seconds": 1793626693,
-       "_nanoseconds": 576000000
+       "_seconds": 1793628492,
+       "_nanoseconds": 338000000
       },
       "applicationCount": 0,
       "viewCount": 0,
@@ -705,12 +2637,12 @@
       "salaryMax": 30000,
       "salaryCurrency": "KES",
       "postedAt": {
-       "_seconds": 1791034693,
-       "_nanoseconds": 577000000
+       "_seconds": 1791036492,
+       "_nanoseconds": 338000000
       },
       "expiresAt": {
-       "_seconds": 1793626693,
-       "_nanoseconds": 577000000
+       "_seconds": 1793628492,
+       "_nanoseconds": 338000000
       },
       "applicationCount": 0,
       "viewCount": 0,
@@ -747,12 +2679,12 @@
        "statusLabel": "Not selected",
        "statusVersion": 2,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 556000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 325000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 560000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 328000000
        },
        "seekerProfile": null
       },
@@ -766,31 +2698,12 @@
        "statusLabel": "Vacancy closed",
        "statusVersion": 2,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 556000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 325000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 580000000
-       },
-       "seekerProfile": null
-      },
-      {
-       "id": "job1_s3",
-       "jobId": "job1",
-       "seekerUid": "s3",
-       "coverLetter": "I have three years of retail experience and I am available immediately.",
-       "cvUrl": "https://cv.example/s3",
-       "status": "offer",
-       "statusLabel": "Offer made",
-       "statusVersion": 4,
-       "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 553000000
-       },
-       "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 559000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 339000000
        },
        "seekerProfile": null
       },
@@ -804,12 +2717,12 @@
        "statusLabel": "Offer accepted",
        "statusVersion": 5,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 553000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 324000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 560000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 328000000
        },
        "seekerProfile": null
       },
@@ -823,12 +2736,31 @@
        "statusLabel": "Interview",
        "statusVersion": 4,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 552000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 323000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 559000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 326000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s3",
+       "jobId": "job1",
+       "seekerUid": "s3",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s3",
+       "status": "offer",
+       "statusLabel": "Offer made",
+       "statusVersion": 4,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 323000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 327000000
        },
        "seekerProfile": null
       },
@@ -842,12 +2774,12 @@
        "statusLabel": "Vacancy closed",
        "statusVersion": 2,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 551000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 322000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 579000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 339000000
        },
        "seekerProfile": null
       }
@@ -882,6 +2814,18 @@
     "err_updateJob_rejected": {
      "code": "failed-precondition",
      "message": "This vacancy can no longer be edited."
+    },
+    "jobsCapabilities": {
+     "code": "not-found",
+     "message": "Unknown services operation: \"jobsCapabilities\". Valid ops: adminGetJob, adminListJobs, adminModerateJob, applyForJob, closeJob, createJob, getApplicationHistory, getFeaturedJobs, getJob, getJobApplications, getJobSeekerProfile, getMyApplications, listJobs, pauseJob, respondToJobOffer, resumeJob, saveJobSeekerProfile, submitJob, updateApplicationStatus, updateJob, withdrawApplication"
+    },
+    "listMyJobs": {
+     "code": "not-found",
+     "message": "Unknown services operation: \"listMyJobs\". Valid ops: adminGetJob, adminListJobs, adminModerateJob, applyForJob, closeJob, createJob, getApplicationHistory, getFeaturedJobs, getJob, getJobApplications, getJobSeekerProfile, getMyApplications, listJobs, pauseJob, respondToJobOffer, resumeJob, saveJobSeekerProfile, submitJob, updateApplicationStatus, updateJob, withdrawApplication"
+    },
+    "getEmployerApplications": {
+     "code": "not-found",
+     "message": "Unknown services operation: \"getEmployerApplications\". Valid ops: adminGetJob, adminListJobs, adminModerateJob, applyForJob, closeJob, createJob, getApplicationHistory, getFeaturedJobs, getJob, getJobApplications, getJobSeekerProfile, getMyApplications, listJobs, pauseJob, respondToJobOffer, resumeJob, saveJobSeekerProfile, submitJob, updateApplicationStatus, updateJob, withdrawApplication"
     }
    },
    "jobs": {
@@ -901,12 +2845,12 @@
      "status": "draft",
      "featured": false,
      "postedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 573000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 338000000
      },
      "expiresAt": {
-      "_seconds": 1793626693,
-      "_nanoseconds": 573000000
+      "_seconds": 1793628492,
+      "_nanoseconds": 338000000
      },
      "viewCount": 0,
      "applicationCount": 0
@@ -927,12 +2871,12 @@
      "status": "pending_review",
      "featured": false,
      "postedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 565000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 332000000
      },
      "expiresAt": {
-      "_seconds": 1793626693,
-      "_nanoseconds": 565000000
+      "_seconds": 1793628492,
+      "_nanoseconds": 332000000
      },
      "viewCount": 0,
      "applicationCount": 0
@@ -953,20 +2897,20 @@
      "status": "changes_requested",
      "featured": false,
      "postedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 567000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 332000000
      },
      "expiresAt": {
-      "_seconds": 1793626693,
-      "_nanoseconds": 565000000
+      "_seconds": 1793628492,
+      "_nanoseconds": 332000000
      },
      "viewCount": 0,
      "applicationCount": 0,
      "moderationReason": "Add the shift hours please.",
      "moderatedBy": "adm",
      "moderatedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 567000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 332000000
      }
     },
     "rejected": {
@@ -985,20 +2929,20 @@
      "status": "rejected",
      "featured": false,
      "postedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 567000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 332000000
      },
      "expiresAt": {
-      "_seconds": 1793626693,
-      "_nanoseconds": 567000000
+      "_seconds": 1793628492,
+      "_nanoseconds": 332000000
      },
      "viewCount": 0,
      "applicationCount": 0,
      "moderationReason": "Asks applicants to pay a fee.",
      "moderatedBy": "adm",
      "moderatedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 568000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 334000000
      }
     },
     "featured_active": {
@@ -1017,28 +2961,28 @@
      "status": "active",
      "featured": true,
      "postedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 577000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 338000000
      },
      "expiresAt": {
-      "_seconds": 1793626693,
-      "_nanoseconds": 576000000
+      "_seconds": 1793628492,
+      "_nanoseconds": 338000000
      },
      "viewCount": 0,
      "applicationCount": 0,
      "moderationReason": null,
      "moderatedBy": "adm",
      "moderatedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 577000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 338000000
      },
      "approvedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 577000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 338000000
      },
      "featuredAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 577000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 338000000
      },
      "featuredBy": "adm"
     },
@@ -1058,24 +3002,24 @@
      "status": "paused",
      "featured": false,
      "postedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 568000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 335000000
      },
      "expiresAt": {
-      "_seconds": 1793626693,
-      "_nanoseconds": 568000000
+      "_seconds": 1793628492,
+      "_nanoseconds": 335000000
      },
      "viewCount": 0,
      "applicationCount": 0,
      "moderationReason": null,
      "moderatedBy": "adm",
      "moderatedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 568000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 335000000
      },
      "approvedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 568000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 335000000
      }
     },
     "admin_paused": {
@@ -1094,24 +3038,24 @@
      "status": "paused",
      "featured": false,
      "postedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 570000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 336000000
      },
      "expiresAt": {
-      "_seconds": 1793626693,
-      "_nanoseconds": 570000000
+      "_seconds": 1793628492,
+      "_nanoseconds": 336000000
      },
      "viewCount": 0,
      "applicationCount": 0,
      "moderationReason": "Reported by applicants; under review.",
      "moderatedBy": "adm",
      "moderatedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 570000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 336000000
      },
      "approvedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 570000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 336000000
      }
     },
     "closed_expired": {
@@ -1130,28 +3074,28 @@
      "status": "closed",
      "featured": false,
      "postedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 571000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 336000000
      },
      "expiresAt": {
-      "_seconds": 1791121093,
-      "_nanoseconds": 570000000
+      "_seconds": 1791122892,
+      "_nanoseconds": 336000000
      },
      "viewCount": 0,
      "applicationCount": 0,
      "moderationReason": null,
      "moderatedBy": "adm",
      "moderatedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 571000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 336000000
      },
      "approvedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 571000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 336000000
      },
      "closedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 572000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 337000000
      },
      "closedReason": "expired"
     },
@@ -1171,20 +3115,20 @@
      "status": "archived",
      "featured": false,
      "postedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 572000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 337000000
      },
      "expiresAt": {
-      "_seconds": 1793626693,
-      "_nanoseconds": 572000000
+      "_seconds": 1793628492,
+      "_nanoseconds": 337000000
      },
      "viewCount": 0,
      "applicationCount": 0,
      "moderationReason": null,
      "moderatedBy": "adm",
      "moderatedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 573000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 337000000
      }
     },
     "back_to_review": {
@@ -1203,33 +3147,33 @@
      "status": "pending_review",
      "featured": true,
      "postedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 568000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 334000000
      },
      "expiresAt": {
-      "_seconds": 1793626693,
-      "_nanoseconds": 568000000
+      "_seconds": 1793628492,
+      "_nanoseconds": 334000000
      },
      "viewCount": 0,
      "applicationCount": 0,
      "moderationReason": null,
      "moderatedBy": "adm",
      "moderatedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 568000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 335000000
      },
      "approvedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 568000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 335000000
      },
      "featuredAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 568000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 335000000
      },
      "featuredBy": "adm",
      "resubmittedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 576000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 338000000
      }
     },
     "active": {
@@ -1248,24 +3192,24 @@
      "status": "active",
      "featured": false,
      "postedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 546000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 321000000
      },
      "expiresAt": {
-      "_seconds": 1793626693,
-      "_nanoseconds": 544000000
+      "_seconds": 1793628492,
+      "_nanoseconds": 321000000
      },
      "viewCount": 0,
      "applicationCount": 6,
      "moderationReason": null,
      "moderatedBy": "adm",
      "moderatedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 549000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 321000000
      },
      "approvedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 549000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 321000000
      }
     },
     "closed": {
@@ -1284,28 +3228,28 @@
      "status": "closed",
      "featured": false,
      "postedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 546000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 321000000
      },
      "expiresAt": {
-      "_seconds": 1793626693,
-      "_nanoseconds": 544000000
+      "_seconds": 1793628492,
+      "_nanoseconds": 321000000
      },
      "viewCount": 0,
      "applicationCount": 6,
      "moderationReason": null,
      "moderatedBy": "adm",
      "moderatedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 549000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 321000000
      },
      "approvedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 549000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 321000000
      },
      "closedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 579000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 339000000
      }
     }
    },
@@ -1371,12 +3315,12 @@
       "salaryMax": 30000,
       "salaryCurrency": "KES",
       "postedAt": {
-       "_seconds": 1791034693,
-       "_nanoseconds": 870000000
+       "_seconds": 1791036492,
+       "_nanoseconds": 449000000
       },
       "expiresAt": {
-       "_seconds": 1793626693,
-       "_nanoseconds": 870000000
+       "_seconds": 1793628492,
+       "_nanoseconds": 448000000
       },
       "applicationCount": 0,
       "viewCount": 0,
@@ -1467,21 +3411,21 @@
     "getJobApplications": {
      "applications": [
       {
-       "id": "job1_s6",
+       "id": "job1_s2",
        "jobId": "job1",
-       "seekerUid": "s6",
+       "seekerUid": "s2",
        "coverLetter": "I have three years of retail experience and I am available immediately.",
-       "cvUrl": "https://cv.example/s6",
-       "status": "pending",
-       "statusLabel": "Submitted",
-       "statusVersion": 1,
+       "cvUrl": "https://cv.example/s2",
+       "status": "interview",
+       "statusLabel": "Interview",
+       "statusVersion": 4,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 874000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 450000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 874000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 451000000
        },
        "seekerProfile": null
       },
@@ -1495,12 +3439,12 @@
        "statusLabel": "Offer made",
        "statusVersion": 4,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 873000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 450000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 877000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 451000000
        },
        "seekerProfile": null
       },
@@ -1514,12 +3458,12 @@
        "statusLabel": "Offer accepted",
        "statusVersion": 5,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 873000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 450000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 878000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 452000000
        },
        "seekerProfile": null
       },
@@ -1533,12 +3477,31 @@
        "statusLabel": "Not selected",
        "statusVersion": 2,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 873000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 450000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 879000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 452000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s6",
+       "jobId": "job1",
+       "seekerUid": "s6",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s6",
+       "status": "pending",
+       "statusLabel": "Submitted",
+       "statusVersion": 1,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 450000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 450000000
        },
        "seekerProfile": null
       },
@@ -1552,31 +3515,12 @@
        "statusLabel": "Submitted",
        "statusVersion": 1,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 872000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 449000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 872000000
-       },
-       "seekerProfile": null
-      },
-      {
-       "id": "job1_s2",
-       "jobId": "job1",
-       "seekerUid": "s2",
-       "coverLetter": "I have three years of retail experience and I am available immediately.",
-       "cvUrl": "https://cv.example/s2",
-       "status": "interview",
-       "statusLabel": "Interview",
-       "statusVersion": 4,
-       "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 872000000
-       },
-       "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 877000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 449000000
        },
        "seekerProfile": null
       }
@@ -1594,7 +3538,7 @@
        "label": "Submitted",
        "actorRole": "applicant",
        "reason": null,
-       "at": 1791034693872
+       "at": 1791036492450
       },
       {
        "from": "pending",
@@ -1602,7 +3546,7 @@
        "label": "Under review",
        "actorRole": "employer",
        "reason": null,
-       "at": 1791034693877
+       "at": 1791036492451
       },
       {
        "from": "reviewing",
@@ -1610,7 +3554,7 @@
        "label": "Shortlisted",
        "actorRole": "employer",
        "reason": null,
-       "at": 1791034693877
+       "at": 1791036492451
       },
       {
        "from": "shortlisted",
@@ -1618,7 +3562,7 @@
        "label": "Interview",
        "actorRole": "employer",
        "reason": null,
-       "at": 1791034693877
+       "at": 1791036492451
       }
      ]
     },
@@ -1632,21 +3576,21 @@
     "getJobApplications_afterClose": {
      "applications": [
       {
-       "id": "job1_s6",
+       "id": "job1_s2",
        "jobId": "job1",
-       "seekerUid": "s6",
+       "seekerUid": "s2",
        "coverLetter": "I have three years of retail experience and I am available immediately.",
-       "cvUrl": "https://cv.example/s6",
-       "status": "closed",
-       "statusLabel": "Vacancy closed",
-       "statusVersion": 2,
+       "cvUrl": "https://cv.example/s2",
+       "status": "interview",
+       "statusLabel": "Interview",
+       "statusVersion": 4,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 874000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 450000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 883000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 451000000
        },
        "seekerProfile": null
       },
@@ -1660,12 +3604,12 @@
        "statusLabel": "Offer made",
        "statusVersion": 4,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 873000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 450000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 877000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 451000000
        },
        "seekerProfile": null
       },
@@ -1679,12 +3623,12 @@
        "statusLabel": "Offer accepted",
        "statusVersion": 5,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 873000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 450000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 878000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 452000000
        },
        "seekerProfile": null
       },
@@ -1698,12 +3642,31 @@
        "statusLabel": "Not selected",
        "statusVersion": 2,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 873000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 450000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 879000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 452000000
+       },
+       "seekerProfile": null
+      },
+      {
+       "id": "job1_s6",
+       "jobId": "job1",
+       "seekerUid": "s6",
+       "coverLetter": "I have three years of retail experience and I am available immediately.",
+       "cvUrl": "https://cv.example/s6",
+       "status": "closed",
+       "statusLabel": "Vacancy closed",
+       "statusVersion": 2,
+       "appliedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 450000000
+       },
+       "updatedAt": {
+        "_seconds": 1791036492,
+        "_nanoseconds": 455000000
        },
        "seekerProfile": null
       },
@@ -1717,31 +3680,12 @@
        "statusLabel": "Vacancy closed",
        "statusVersion": 2,
        "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 872000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 449000000
        },
        "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 883000000
-       },
-       "seekerProfile": null
-      },
-      {
-       "id": "job1_s2",
-       "jobId": "job1",
-       "seekerUid": "s2",
-       "coverLetter": "I have three years of retail experience and I am available immediately.",
-       "cvUrl": "https://cv.example/s2",
-       "status": "interview",
-       "statusLabel": "Interview",
-       "statusVersion": 4,
-       "appliedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 872000000
-       },
-       "updatedAt": {
-        "_seconds": 1791034693,
-        "_nanoseconds": 877000000
+        "_seconds": 1791036492,
+        "_nanoseconds": 455000000
        },
        "seekerProfile": null
       }
@@ -1764,6 +3708,18 @@
     "err_updateJob_salary": {
      "code": "invalid-argument",
      "message": "salaryMin cannot be greater than salaryMax"
+    },
+    "jobsCapabilities": {
+     "code": "not-found",
+     "message": "Unknown services operation: \"jobsCapabilities\". Valid ops: applyForJob, closeJob, createJob, getApplicationHistory, getFeaturedJobs, getJob, getJobApplications, getJobSeekerProfile, getMyApplications, listJobs, respondToJobOffer, saveJobSeekerProfile, updateApplicationStatus, updateJob, withdrawApplication"
+    },
+    "listMyJobs": {
+     "code": "not-found",
+     "message": "Unknown services operation: \"listMyJobs\". Valid ops: applyForJob, closeJob, createJob, getApplicationHistory, getFeaturedJobs, getJob, getJobApplications, getJobSeekerProfile, getMyApplications, listJobs, respondToJobOffer, saveJobSeekerProfile, updateApplicationStatus, updateJob, withdrawApplication"
+    },
+    "getEmployerApplications": {
+     "code": "not-found",
+     "message": "Unknown services operation: \"getEmployerApplications\". Valid ops: applyForJob, closeJob, createJob, getApplicationHistory, getFeaturedJobs, getJob, getJobApplications, getJobSeekerProfile, getMyApplications, listJobs, respondToJobOffer, saveJobSeekerProfile, updateApplicationStatus, updateJob, withdrawApplication"
     }
    },
    "jobs": {
@@ -1783,12 +3739,12 @@
      "status": "active",
      "featured": false,
      "postedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 870000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 449000000
      },
      "expiresAt": {
-      "_seconds": 1793626693,
-      "_nanoseconds": 870000000
+      "_seconds": 1793628492,
+      "_nanoseconds": 448000000
      },
      "viewCount": 0,
      "applicationCount": 6
@@ -1809,18 +3765,18 @@
      "status": "closed",
      "featured": false,
      "postedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 870000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 449000000
      },
      "expiresAt": {
-      "_seconds": 1793626693,
-      "_nanoseconds": 870000000
+      "_seconds": 1793628492,
+      "_nanoseconds": 448000000
      },
      "viewCount": 0,
      "applicationCount": 6,
      "closedAt": {
-      "_seconds": 1791034693,
-      "_nanoseconds": 883000000
+      "_seconds": 1791036492,
+      "_nanoseconds": 455000000
      }
     }
    },
