@@ -1061,7 +1061,7 @@ exports.impactCancelDisbursement = onCall(
    'close' (no money arrived) posts an append-only 'adjustment' debit reversing the unbacked credit and unwinds
    foundationStats / programme raised. Nothing is deleted. */
 exports.impactReconcileFoundation = onCall(
-  { timeoutSeconds: 120, enforceAppCheck: true },
+  { timeoutSeconds: 120, enforceAppCheck: true, secrets: [INTASEND_PRIVATE_KEY] },
   async (request) => {
     if (!_isAdmin(request.auth)) throw new HttpsError('permission-denied', 'Admin only.');
     const uid = request.auth.uid;
@@ -1115,15 +1115,35 @@ exports.impactReconcileFoundation = onCall(
       const refNo = _san(providerReference, 80);
       if (action === 'propose_verify' && (!refNo || refNo.length < 4)) throw new HttpsError('invalid-argument', 'Enter the IntaSend payment reference that proves the money arrived.');
       if (action === 'propose_close' && !why) throw new HttpsError('invalid-argument', 'Say why this donation has no payment.');
+      let providerCheck = null;
+      if (action === 'propose_verify') {
+        const pre = await ref.get();
+        const amt0 = pre.exists ? Number(pre.data().amount) || 0 : 0;
+        let st;
+        try { st = await require('./shared/intasend-status').intasendCollectionStatus(refNo, { privateKey: INTASEND_PRIVATE_KEY.value(), live: process.env.INTASEND_SANDBOX !== 'true' }); }
+        catch (_) { st = { ok: false, error: 'NETWORK' }; }
+        if (st && st.ok && st.found) {
+          const paid = String(st.state || '').toUpperCase() === 'COMPLETE';
+          const sameAmount = Number(st.value) === amt0;
+          const kes = !st.currency || String(st.currency).toUpperCase() === 'KES';
+          if (!paid) throw new HttpsError('failed-precondition', 'IntaSend reports this payment as ' + String(st.state || 'unknown') + ', not COMPLETE.');
+          if (!sameAmount || !kes) throw new HttpsError('failed-precondition', 'IntaSend shows ' + String(st.currency || 'KES') + ' ' + st.value + ' for this reference, not KES ' + amt0 + '.');
+          providerCheck = { result: 'provider_confirmed', state: 'COMPLETE', value: Number(st.value), invoiceId: st.invoice_id || null, apiRef: st.api_ref || null, checkedAt: Date.now() };
+        } else if (st && st.ok && !st.found) {
+          throw new HttpsError('failed-precondition', 'IntaSend has no payment with that reference.');
+        } else {
+          providerCheck = { result: 'unchecked', error: String((st && st.error) || 'UNKNOWN').slice(0, 40), checkedAt: Date.now() };
+        }
+      }
       await fdb().runTransaction(async (txn) => {
         const s0 = await txn.get(ref);
         if (!s0.exists) throw new HttpsError('not-found', 'Donation not found.');
         const d = s0.data();
         if (d.status !== 'completed' || !d.reconciliation || d.reconciliation.state !== 'REQUIRES_RECONCILIATION') throw new HttpsError('failed-precondition', 'This donation is not awaiting reconciliation.');
-        txn.update(ref, { 'reconciliation.proposal': { action: action === 'propose_verify' ? 'verify' : 'close', by: uid, providerReference: refNo || null, note: why || null, at: _now() } });
+        txn.update(ref, { 'reconciliation.proposal': { action: action === 'propose_verify' ? 'verify' : 'close', by: uid, providerReference: refNo || null, note: why || null, providerCheck, at: _now() } });
         txn.set(fdb().collection('adminActions').doc(), { type: 'foundation_reconciliation_propose', donationId: ref.id, action, adminUid: uid, createdAt: _now() });
       });
-      return { ok: true, state: 'PENDING_SECOND_REVIEW' };
+      return { ok: true, state: 'PENDING_SECOND_REVIEW', providerCheck: providerCheck ? providerCheck.result : null };
     }
     if (action === 'confirm' || action === 'withdraw') {
       const out = await fdb().runTransaction(async (txn) => {
@@ -1134,12 +1154,15 @@ exports.impactReconcileFoundation = onCall(
         if (!pr || d.reconciliation.state !== 'REQUIRES_RECONCILIATION') throw new HttpsError('failed-precondition', 'Nothing awaiting a second review.');
         if (action === 'withdraw') { txn.update(ref, { 'reconciliation.proposal': null }); return { state: 'REQUIRES_RECONCILIATION' }; }
         if (pr.by === uid) throw new HttpsError('permission-denied', 'A different admin must confirm.');
+        if (pr.action === 'verify' && !(pr.providerCheck && pr.providerCheck.result === 'provider_confirmed') && (request.data || {}).acknowledgeUnchecked !== true) {
+          throw new HttpsError('failed-precondition', 'IntaSend could not confirm this payment. Check it in the IntaSend dashboard and confirm explicitly.', { code: 'PROVIDER_UNCHECKED' });
+        }
         const amt = Number(d.amount) || 0;
         const balRef = fdb().collection('impactBalance').doc('current');
         if (pr.action === 'verify') {
           const bs = await txn.get(balRef);
           txn.set(balRef, { verifiedBalance: _incr(amt), lastUpdated: _now() }, { merge: true });
-          txn.update(ref, { 'reconciliation.state': 'VERIFIED_PAID', 'reconciliation.providerReference': pr.providerReference, 'reconciliation.confirmedBy': uid, 'reconciliation.confirmedAt': _now() });
+          txn.update(ref, { 'reconciliation.state': 'VERIFIED_PAID', 'reconciliation.providerReference': pr.providerReference, 'reconciliation.evidence': (pr.providerCheck && pr.providerCheck.result) || 'unchecked', 'reconciliation.confirmedBy': uid, 'reconciliation.confirmedAt': _now() });
           void bs;
         } else {
           await _writeLedgerEntry(txn, { type: 'adjustment', debit: amt, credit: 0, uid: d.uid || null, campaignId: d.programmeId || null,
@@ -1197,7 +1220,7 @@ exports.impactAdminFoundationData = onCall(
         id: x.id, status: d.status, amount: d.amount, grossKES: d.grossKES ?? null, feeKES: d.feeKES ?? null, netKES: d.netKES ?? null, currency: d.currency || 'KES',
         destination: d.destination || null, programmeId: d.programmeId || null, purpose: d.purpose || null, method: d.method || null,
         donor: d.anonymous ? 'Anonymous' : (d.donorName || 'SOKONI User'), receiptId: d.receiptId || null, providerReference: d.providerReference || null,
-        orderId: d.orderId || null, reconciliation: d.reconciliation ? { state: d.reconciliation.state, proposal: d.reconciliation.proposal ? { action: d.reconciliation.proposal.action, by: d.reconciliation.proposal.by } : null } : null,
+        orderId: d.orderId || null, reconciliation: d.reconciliation ? { state: d.reconciliation.state, evidence: d.reconciliation.evidence || null, proposal: d.reconciliation.proposal ? { action: d.reconciliation.proposal.action, by: d.reconciliation.proposal.by, providerCheck: d.reconciliation.proposal.providerCheck ? d.reconciliation.proposal.providerCheck.result : null } : null } : null,
         verified: !!(d.providerReference && d.grossKES != null) || (d.reconciliation && d.reconciliation.state === 'VERIFIED_PAID'),
         refundDisbursementId: d.refundDisbursementId || null, refundedKES: d.refundedKES || 0, reviewReason: d.reviewReason || null,
         createdAt: ms(d.createdAt), completedAt: ms(d.completedAt) }; }) };

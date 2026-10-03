@@ -24,7 +24,17 @@ const fa = Module._resolveFilename('firebase-admin', { id: path.join(FN, 'x.js')
 require.cache[fa] = { id: fa, filename: fa, loaded: true, exports: { apps: [1], initializeApp() {}, firestore: ff } };
 const fu = require.resolve(path.join(FN, 'finos-utils.js'));
 require.cache[fu] = { id: fu, filename: fu, loaded: true, exports: { intasendB2C: async () => ({ tracking_id: 'TRK1' }) } };
-global.fetch = async () => ({ ok: true, json: async () => ({ transactions: [{ status: 'Completed', transaction_id: 'X1' }] }) });
+/* IntaSend stubs: send-money status (payouts) and collection status (shared intasend-status helper) */
+const COLLECTIONS = { INVQ88: { invoice_id: 'INVQ88', state: 'COMPLETE', value: 3000, currency: 'KES' }, INVLOW: { invoice_id: 'INVLOW', state: 'COMPLETE', value: 300, currency: 'KES' }, INVPEND: { invoice_id: 'INVPEND', state: 'PENDING', value: 3000, currency: 'KES' } };
+let COLLECTION_DOWN = false;
+global.fetch = async (url) => {
+  if (/payment\/collection\//.test(url)) {
+    if (COLLECTION_DOWN) return { ok: false, status: 503, json: async () => ({}) };
+    const ref = decodeURIComponent(String(url).split('invoice_id=')[1] || '');
+    return { ok: true, status: 200, json: async () => ({ results: COLLECTIONS[ref] ? [COLLECTIONS[ref]] : [] }) };
+  }
+  return { ok: true, json: async () => ({ transactions: [{ status: 'Completed', transaction_id: 'X1' }] }) };
+};
 const M = require(path.join(FN, 'impact.js'));
 const run = async (fn, uid, data, token = {}) => { try { return { ok: true, v: await M[fn].run({ auth: uid ? { uid, token } : null, data }) }; } catch (e) { return { ok: false, code: e.code, msg: e.message }; } };
 const ADM = { admin: true }, SUP = { superAdmin: true };
@@ -59,12 +69,16 @@ const rid = (n) => 'b1c2d3e4-0000-4000-8000-' + String(n).padStart(12, '0');
 
   /* C */
   const c0 = await run('impactReconcileFoundation', 'adm1', { action: 'propose_verify', donationId: 'CHK_o2' }, ADM);
+  const p1 = await run('impactReconcileFoundation', 'adm1', { action: 'propose_verify', donationId: 'CHK_o2', providerReference: 'NOSUCH1' }, ADM);
+  const p2 = await run('impactReconcileFoundation', 'adm1', { action: 'propose_verify', donationId: 'CHK_o2', providerReference: 'INVLOW' }, ADM);
+  const p3 = await run('impactReconcileFoundation', 'adm1', { action: 'propose_verify', donationId: 'CHK_o2', providerReference: 'INVPEND' }, ADM);
+  ck('P1 IntaSend is asked: unknown reference / different amount / not COMPLETE → proposal refused', !p1.ok && /no payment/.test(p1.msg) && !p2.ok && /KES 300/.test(p2.msg) && !p3.ok && /PENDING/.test(p3.msg), { p1, p2, p3 });
   const c1 = await run('impactReconcileFoundation', 'adm1', { action: 'propose_verify', donationId: 'CHK_o2', providerReference: 'INVQ88' }, ADM);
   const c2 = await run('impactReconcileFoundation', 'adm1', { action: 'confirm', donationId: 'CHK_o2' }, ADM);
   const c3 = await run('impactReconcileFoundation', 'adm2', { action: 'confirm', donationId: 'CHK_o2' }, ADM);
   const c4 = await run('impactReconcileFoundation', 'adm2', { action: 'confirm', donationId: 'CHK_o2' }, ADM);
-  ck('C1 verify needs a provider reference; proposer cannot confirm; second admin confirms → verifiedBalance 3,000; replay refused',
-    !c0.ok && c1.ok && !c2.ok && c2.code === 'permission-denied' && c3.ok && c3.v.state === 'VERIFIED_PAID' && (await bal()).verifiedBalance === 3000 && !c4.ok, { c0, c2, c3, c4, b: await bal() });
+  ck('C1 verify needs a provider reference; IntaSend confirms it; proposer cannot confirm; second admin confirms → verifiedBalance 3,000, evidence provider_confirmed; replay refused',
+    !c0.ok && c1.ok && c1.v.providerCheck === 'provider_confirmed' && (await don('CHK_o2')).reconciliation.evidence === 'provider_confirmed' && !c2.ok && c2.code === 'permission-denied' && c3.ok && c3.v.state === 'VERIFIED_PAID' && (await bal()).verifiedBalance === 3000 && !c4.ok, { c0, c2, c3, c4, b: await bal() });
   const c5 = await run('impactReconcileFoundation', 'adm2', { action: 'propose_close', donationId: 'CHK_o1', note: 'Order o1 was paid without the add-on; no donation money received' }, ADM);
   const c6 = await run('impactReconcileFoundation', 'adm1', { action: 'confirm', donationId: 'CHK_o1' }, ADM);
   const adj = ledger().filter((e) => e.type === 'adjustment');
@@ -75,6 +89,15 @@ const rid = (n) => 'b1c2d3e4-0000-4000-8000-' + String(n).padStart(12, '0');
     && after.status === 'completed' && after.amount === 5000 && after.reconciliation.state === 'CLOSED_NO_PAYMENT', { c5, c6, adj, after, b: await bal() });
   const c7 = await run('impactReconcileFoundation', 'adm1', { action: 'propose_close', donationId: 'PLG_d1_x', note: 'x' }, ADM);
   ck('C3 a webhook-verified donation cannot be put through reconciliation', !c7.ok && c7.code === 'failed-precondition');
+
+  await F.db.collection('foundationDonations').doc('CHK_o9').set({ uid: 'b9', status: 'completed', amount: 400, orderId: 'o9', reconciliation: { state: 'REQUIRES_RECONCILIATION' } });
+  COLLECTION_DOWN = true;
+  const u1 = await run('impactReconcileFoundation', 'adm1', { action: 'propose_verify', donationId: 'CHK_o9', providerReference: 'INVDOWN1' }, ADM);
+  COLLECTION_DOWN = false;
+  const u2 = await run('impactReconcileFoundation', 'adm2', { action: 'confirm', donationId: 'CHK_o9' }, ADM);
+  const u3 = await run('impactReconcileFoundation', 'adm2', { action: 'confirm', donationId: 'CHK_o9', acknowledgeUnchecked: true }, ADM);
+  ck('P2 IntaSend unreachable → proposal flagged unchecked; confirm refused without explicit acknowledgement; with it → VERIFIED_PAID (evidence unchecked)',
+    u1.ok && u1.v.providerCheck === 'unchecked' && !u2.ok && u2.code === 'failed-precondition' && u3.ok && (await don('CHK_o9')).reconciliation.evidence === 'unchecked', { u1, u2, u3 });
 
   /* D */
   await F.db.collection('impactBalance').doc('current').set({ verifiedBalance: 3000 + 970, reservedKES: 0 }, { merge: true });   /* + the webhook-verified net */
