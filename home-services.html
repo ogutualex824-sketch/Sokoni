@@ -352,24 +352,7 @@ const HS_TYPES = [
 ];
 
 var _demoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
-const DEMO_PROVIDERS = [
-  {id:'HS01',type:'plumbing',emoji:'🔧',name:'James Mwangi',area:'Nairobi',specialty:'Plumber',exp:'8 years',rate:'KES 2,500/day',rating:4.9,jobs:312,phone:'0712100001',bio:'Licensed plumber. Burst pipes, drainage, bathroom fitting, borehole pumps.',certified:true},
-  {id:'HS02',type:'electrical',emoji:'⚡',name:'Peter Otieno',area:'Nairobi',specialty:'Electrician',exp:'12 years',rate:'KES 3,000/day',rating:5.0,jobs:445,phone:'0723100002',bio:'KEBS certified. Wiring, solar, security systems, phase balancing.',certified:true},
-  {id:'HS03',type:'cleaning',emoji:'🧹',name:'Grace Wanjiku',area:'Nairobi',specialty:'Cleaning Specialist',exp:'5 years',rate:'KES 1,500/visit',rating:4.8,jobs:280,phone:'0734100003',bio:'Deep cleaning, move-in/out, carpet, sofa, curtain cleaning. Team available.',certified:false},
-  {id:'HS04',type:'painting',emoji:'🎨',name:'Samuel Kariuki',area:'Nairobi',specialty:'Painter & Decorator',exp:'10 years',rate:'KES 150/sqm',rating:4.7,jobs:156,phone:'0745100004',bio:'Interior & exterior painting, texture finishes, waterproofing, wallpaper.',certified:false},
-  {id:'HS05',type:'moving',emoji:'📦',name:'Quick Movers Kenya',area:'Nairobi',specialty:'Movers & Packers',exp:'7 years',rate:'From KES 5,000',rating:4.8,jobs:623,phone:'0756100005',bio:'Trucks from 1 ton to 10 ton. Packing, assembly, same-day moves. All Nairobi.',certified:true},
-  {id:'HS06',type:'carpentry',emoji:'🪟',name:'David Njoroge',area:'Nairobi',specialty:'Carpenter',exp:'15 years',rate:'KES 2,000/day',rating:4.9,jobs:198,phone:'0767100006',bio:'Fitted wardrobes, doors, windows, decking, custom furniture. Hardwood specialist.',certified:true},
-  {id:'HS07',type:'plumbing',emoji:'🔧',name:'Coastal Plumbing Ltd',area:'Mombasa',specialty:'Plumber',exp:'9 years',rate:'KES 2,000/day',rating:4.7,jobs:220,phone:'0700100007',bio:'All plumbing works in Mombasa, Kilifi, Malindi. Emergency 24hr service.',certified:true},
-  {id:'HS08',type:'appliance',emoji:'❄️',name:'Cool Air Services',area:'Nairobi',specialty:'AC & Appliance',exp:'6 years',rate:'KES 1,500–4,000',rating:4.6,jobs:134,phone:'0711100008',bio:'AC install, service & repair. Fridge, washer, dryer, oven repair. All brands.',certified:false},
-  {id:'HS09',type:'gardening',emoji:'🌿',name:'Green Thumb Gardens',area:'Nairobi',specialty:'Gardener & Landscaper',exp:'8 years',rate:'KES 1,200/visit',rating:4.8,jobs:167,phone:'0722100009',bio:'Lawn mowing, hedge trimming, garden design, irrigation systems, tree felling.',certified:false},
-  {id:'HS10',type:'handyman',emoji:'🧰',name:'Fix It Fast Kenya',area:'Nairobi',specialty:'General Handyman',exp:'4 years',rate:'KES 1,000/hr',rating:4.7,jobs:89,phone:'0733100010',bio:'Everything your home needs — assembly, repairs, installations, tiling, grouting.',certified:false},
-  {id:'HS11',type:'security',emoji:'🔒',name:'SecureHome Kenya',area:'Nairobi',specialty:'Security & Locks',exp:'5 years',rate:'KES 2,500–8,000',rating:4.9,jobs:201,phone:'0744100011',bio:'Locks, door grills, burglar bars, safes, alarm systems, CCTV installation.',certified:true},
-  {id:'HS12',type:'electrical',emoji:'⚡',name:'Mombasa Electrical Pro',area:'Mombasa',specialty:'Electrician',exp:'7 years',rate:'KES 2,500/day',rating:4.6,jobs:123,phone:'0755100012',bio:'Residential & commercial electrical. Generator install. Solar PV systems.',certified:true},
-  {id:'HS13',type:'painting',emoji:'🎨',name:'Decor Pro Painters',area:'Nairobi',specialty:'Painter & Decorator',exp:'6 years',rate:'KES 120–180/sqm',rating:4.8,jobs:145,phone:'0766100013',bio:'Interior & exterior painting. Texture finishes, epoxy floors, waterproofing. Clean finish guaranteed.',certified:false},
-  {id:'HS14',type:'moving',emoji:'🚚',name:'Swift Movers Kenya',area:'Kisumu',specialty:'Movers & Packers',exp:'5 years',rate:'From KES 4,500',rating:4.7,jobs:312,phone:'0777100014',bio:'Kisumu region moves. Trucks from 1 to 14 ton. Packaging materials provided. Fragile handling.',certified:false},
-  {id:'HS15',type:'installation',emoji:'🔌',name:'TechInstall Kenya',area:'Nairobi',specialty:'AC & Appliance Install',exp:'4 years',rate:'KES 1,500–5,000',rating:4.7,jobs:203,phone:'0788100015',bio:'AC installation & service (all brands), water heater, washing machine, dishwasher install. Solar connections.',certified:true},
-  {id:'HS16',type:'carpentry',emoji:'🪵',name:'Master Craft Carpentry',area:'Nairobi',specialty:'Carpenter & Furniture',exp:'11 years',rate:'KES 1,800/day',rating:4.9,jobs:267,phone:'0799100016',bio:'Custom wardrobes, kitchen cabinets, beds, office furniture. Hardwood & MDF. Quote visits free.',certified:true},
-];
+/* DEMO_PROVIDERS removed 2026-10-03 (Tech Hub slice 2b): invented providers; Find lists the provider registry. */
 
 let _hsTypeFilter = 'all';
 function showHsPanel(name,btn){
@@ -424,75 +407,29 @@ function goFindType(key){
 window.goFindType=goFindType;
 
 function filterProviders(){
-  const q=(document.getElementById('hsSearch')?.value||'').toLowerCase();
-  const area=document.getElementById('hsArea')?.value||'';
-  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniHomeProviders')||'[]');}catch(e){}
-  const allIds=new Set([..._fsProviders.map(d=>d.id||d._id),...local.map(d=>d.id)]);
-  let list=[
-    ..._fsProviders.map(d=>({...d,id:d._id||d.id})),
-    ...local.filter(d=>!_fsProviders.some(f=>(f._id||f.id)===d.id)),
-    ...(_demoAllowed?DEMO_PROVIDERS.filter(d=>!allIds.has(d.id)):[]),
-  ];
-  if(_hsTypeFilter!=='all'){
-    const mapped=window.HS_TYPE_MAP&&window.HS_TYPE_MAP[_hsTypeFilter];
-    if(mapped)list=list.filter(p=>mapped.includes(p.type));
-    else list=list.filter(p=>p.type===_hsTypeFilter);
-  }
-  if(area)list=list.filter(p=>p.area.toLowerCase()===area.toLowerCase());
-  if(q)list=list.filter(p=>(p.name+p.specialty+p.bio).toLowerCase().includes(q));
-  const cnt=document.getElementById('hsProviderCount');if(cnt)cnt.textContent=list.length+' found';
-  renderProvidersGrid(list);
+  /* 2026-10-03 (Tech Hub slice 2b). Listed a separate homeServiceProviders feed (self-registered over WhatsApp, rating 5.0
+     preset) plus localStorage and demo entries. It now lists approved providers from providers/{uid} — the registry AdminOS
+     approves into — with Book → SokoniBookService (server price, slot lock, IntaSend) and Message → in-app chat. */
+  const GROUP={cleaning:'cleaning',repairs:'home-repairs',installation:'appliance',outdoor:'gardening',moving:'moving',interiors:'home-interiors',
+    plumbing:'plumbing',electrical:'electrical',painting:'home-interiors',carpentry:'home-interiors',gardening:'gardening',appliance:'appliance',
+    handyman:'home-repairs',security:'security'};
+  const cat=_hsTypeFilter==='all'?'home-services':(GROUP[_hsTypeFilter]||_hsTypeFilter);
+  if(window.SokoniTechDirectory) SokoniTechDirectory.mount({grid:'hsProvidersGrid',count:'hsProviderCount',category:cat,prefix:'stdir',noun:'provider',
+    applyUrl:'business-apply.html?offer=services&category='+encodeURIComponent(cat),
+    search:()=>document.getElementById('hsSearch')?.value||'',location:()=>document.getElementById('hsArea')?.value||''});
 }
 
-function renderProvidersGrid(list){
-  const grid=document.getElementById('hsProvidersGrid');if(!grid)return;
-  if(!list.length){grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px;color:rgba(255,255,255,0.3);">No providers found</div>';return;}
-  grid.innerHTML=list.map(p=>`
-    <div class="hs-card">
-      <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;">
-        <div style="width:48px;height:48px;border-radius:12px;background:rgba(245,158,11,0.1);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;border:1px solid rgba(245,158,11,0.15);">${p.emoji}</div>
-        <div style="flex:1;">
-          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:1px;">${p.name} ${p.certified?'<span style="font-size:8px;background:rgba(245,158,11,0.1);color:#f59e0b;padding:1px 5px;border-radius:3px;border:1px solid rgba(245,158,11,0.2);">✓ Verified</span>':''}</div>
-          <div style="font-size:11px;color:#f59e0b;font-weight:700;">${p.specialty}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.35);">📍 ${p.area} · ${p.exp} · ⭐ ${p.rating} <span style="color:rgba(255,255,255,0.2);">(${p.jobs} jobs)</span></div>
-        </div>
-      </div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.55;margin-bottom:10px;">${p.bio}</div>
-      <div style="font-size:15px;font-weight:900;color:#f59e0b;margin-bottom:12px;">${p.rate}</div>
-      <div style="display:flex;gap:6px;">
-        <button type="button" onclick="contactProvider('${(p.id||'').replace(/'/g,'').replace(/"/g,'')}','${(p.name||'').replace(/'/g,'\\\'').replace(/"/g,'')}','${(p.phone||'').replace(/'/g,'').replace(/"/g,'')}')" class="hs-wa-btn" style="flex:1;">💬 WhatsApp</button>
-        <button type="button" onclick="openReviewModal('${(p.id||'').replace(/'/g,'').replace(/"/g,'')}','${(p.name||'').replace(/'/g,'\\\'').replace(/"/g,'')}')" style="padding:8px 12px;border:1px solid rgba(245,158,11,0.2);border-radius:9px;background:rgba(245,158,11,0.05);color:#f59e0b;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;" title="Rate this provider">⭐ Rate</button>
-      </div>
-    </div>`).join('');
-}
+function renderProvidersGrid(){ filterProviders(); }
 
 function bookHomeService(){
-  const name=(document.getElementById('bkName')?.value||'').trim();
-  const phone=(document.getElementById('bkPhone')?.value||'').trim();
+  /* 2026-10-03 (Tech Hub slice 2b). This form messaged SOKONI's own WhatsApp number, said "✅ Booked!", wrote
+     homeServiceBookings from the browser and issued a KES 0 invoice — for a job no provider had accepted and no one had
+     priced. A booking needs a provider and a service, so the visitor picks a provider and books through the engine. */
   const service=document.getElementById('bkService')?.value||'';
-  const loc=(document.getElementById('bkLocation')?.value||'').trim();
-  const desc=(document.getElementById('bkDesc')?.value||'').trim();
   const msgEl=document.getElementById('bkMsg');
-  if(!name||!phone||!service||!loc){if(msgEl){msgEl.textContent='Please fill all required fields';msgEl.style.color='#f97316';}return;}
-  const date=document.getElementById('bkDate')?.value||'ASAP';
-  const time=document.getElementById('bkTime')?.value||'Any time';
-  const urgent=document.getElementById('bkUrgent')?.checked?'\n🚨 URGENT':'';
-  const ref='HS'+Date.now().toString().slice(-6);
-  const msg=`🏠 *SOKONI Home Services Booking*${urgent}\n\nRef: ${ref}\n👤 ${name}\n📞 ${phone}\n🔧 Service: ${service}\n📍 Location: ${loc}\n📅 ${date} · ${time}\n\n${desc}`;
-  let bks=[];try{bks=JSON.parse(localStorage.getItem('sokoniHomeBookings')||'[]');}catch(e){}
-  bks.unshift({ref,name,phone,service,loc,date,status:'sent',ts:Date.now()});
-  localStorage.setItem('sokoniHomeBookings',JSON.stringify(bks.slice(0,30)));
-  if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
-    SokoniPay.waConnect('254705726803', msg, {providerName:'SOKONI Home Services',category:'home-services',serviceDesc:'Home service: '+service});
-  }
-  /* no WhatsApp hand-off (owner 2026-09-30) */
-  if(msgEl){msgEl.innerHTML=`✅ Booked! Ref: <strong>${_esc(ref)}</strong>`;msgEl.style.color='#f59e0b';}
-  /* Firestore write — fire-and-forget */
-  _hsFireWrite('homeServiceBookings',{ref,name,phone,service,loc,date,description:desc,status:'pending',hub:'home-services'});
-  /* Invoice */
-  if(window.SokoniInvoice){
-    setTimeout(()=>SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:service,category:'Home Service',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'TBD',paymentRef:ref,sellerName:'SOKONI Home Services',location:loc,notes:'Date: '+(document.getElementById('bkDate')?.value||'ASAP')}),600);
-  }
+  const hit=HS_TYPES.find(t=>service.toLowerCase().indexOf(t.label.toLowerCase())>-1);
+  if(msgEl){msgEl.textContent='Choose a provider below to book — the price is confirmed when you book.';msgEl.style.color='#f59e0b';}
+  goFindType(hit?hit.key:'all');
 }
 window.bookHomeService=bookHomeService;
 
@@ -530,7 +467,6 @@ function renderQuotesFeed(){
       </div>
       <div style="font-size:12px;color:rgba(255,255,255,0.65);">${q.desc.slice(0,120)}${q.desc.length>120?'…':''}</div>
       ${q.budget?`<div style="font-size:11px;color:#f59e0b;margin-top:4px;">Budget: ${q.budget}</div>`:''}
-      <a href="https://wa.me/254${q.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi! I saw your quote request for '+q.service+' on SOKONI Home Services. I can help. My rate is: ')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Send Quote</a>
     </div>`).join('');
 }
 
@@ -562,34 +498,15 @@ function renderHsAskFeed(){
         <span style="font-size:11px;color:rgba(255,255,255,0.3);">${ago(r.ts)}</span>
       </div>
       <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.5;">${r.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-      ${r.phone?`<a href="https://wa.me/254${r.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi! I can help with your home service request: '+r.text)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>`:''}
     </div>`).join('');
 }
 
 function registerProvider(){
-  const name=(document.getElementById('regName')?.value||'').trim();
-  const phone=(document.getElementById('regPhone')?.value||'').trim();
+  /* 2026-10-03 (Tech Hub slice 2b). Registration went to SOKONI's WhatsApp and into a homeServiceProviders record nobody
+     reviewed, with a preset 5.0 rating. Providers now apply through business-apply — the one application AdminOS reviews. */
   const service=document.getElementById('regService')?.value||'';
-  const area=(document.getElementById('regArea')?.value||'').trim();
-  const msgEl=document.getElementById('regMsg');
-  if(!name||!phone||!area){if(msgEl){msgEl.textContent='Please fill name, phone and area';msgEl.style.color='#f97316';}return;}
-  const typeMap={'🔧 Plumber':'plumbing','⚡ Electrician':'electrical','🧹 Cleaner':'cleaning','🎨 Painter':'painting','📦 Mover':'moving','🪟 Carpenter':'carpentry','🌿 Gardener':'gardening','❄️ AC / Appliance':'appliance','🧰 Handyman':'handyman','🔒 Security / Locks':'security'};
-  const p={
-    id:'HS'+Date.now(),type:typeMap[service]||'handyman',emoji:service.split(' ')[0]||'🔧',
-    name,phone,specialty:service,area,
-    exp:document.getElementById('regExp')?.value||'',
-    rate:document.getElementById('regRate')?.value||'',
-    bio:document.getElementById('regBio')?.value||'',
-    rating:5.0,jobs:0,certified:false
-  };
-  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniHomeProviders')||'[]');}catch(e){}
-  local.unshift(p);localStorage.setItem('sokoniHomeProviders',JSON.stringify(local.slice(0,50)));
-  const msg=`🏠 *SOKONI Home Services — New Provider Registration*\n\n👤 ${name}\n📞 ${phone}\n🔧 Service: ${service}\n📍 Area: ${area}\n${p.rate?'💰 Rate: '+p.rate:''}${p.bio?'\n\n'+p.bio:''}`;
-  window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
-  if(msgEl){msgEl.innerHTML='✅ Registered! You\'ll start receiving job alerts.';msgEl.style.color='#f59e0b';}
-  /* Firestore write — fire-and-forget */
-  _hsFireWrite('homeServiceProviders',{...p,registrationStatus:'pending',hub:'home-services'});
-  ['regName','regPhone','regArea','regRate','regBio'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const hit=HS_TYPES.find(t=>service.toLowerCase().indexOf(t.label.toLowerCase())>-1);
+  location.href='business-apply.html?offer=services&category='+encodeURIComponent(hit?hit.key:'home-repairs')+'&label='+encodeURIComponent(hit?hit.label:'Home Services');
 }
 window.registerProvider=registerProvider;
 
@@ -630,21 +547,7 @@ let _hsProvidersUnsub = null;
 window.addEventListener('beforeunload', () => { if (_hsProvidersUnsub) _hsProvidersUnsub(); });
 
 /* ── FIRESTORE LISTENER — live provider listings ── */
-async function _initFsProviders(){
-  if (_hsProvidersUnsub) { _hsProvidersUnsub(); _hsProvidersUnsub = null; }
-  try{
-    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-    const {getFirestore,collection,query,where,orderBy,limit,onSnapshot}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
-    const _a=getApps().find(a=>a.name==="hs-read")||initializeApp(_cfg,"hs-read");
-    /* Single orderBy — no composite index needed; filter status client-side */
-    const q=query(collection(getFirestore(_a),'homeServiceProviders'),orderBy('createdAt','desc'),limit(100));
-    _hsProvidersUnsub = onSnapshot(q,snap=>{
-      _fsProviders=snap.docs.map(d=>({_id:d.id,...d.data()})).filter(d=>d.registrationStatus==='approved'||d.registrationStatus==='active');
-      filterProviders();
-    },()=>{});
-  }catch(e){}
-}
+function _initFsProviders(){ /* retired 2026-10-03 (Tech Hub slice 2b): homeServiceProviders is not the provider registry */ }
 
 /* ── FIRESTORE FIRE-AND-FORGET ── */
 async function _hsFireWrite(coll, data) {
@@ -659,11 +562,11 @@ async function _hsFireWrite(coll, data) {
 window._hsFireWrite=_hsFireWrite;
 
 /* ── CONTACT PROVIDER (lead fee tracking) ── */
-function contactProvider(id, name, phone) {
-  /* Track lead fee — fire-and-forget */
-  _hsFireWrite('homeServiceLeads',{providerId:id,providerName:name,hub:'home-services',feeKES:30,status:'pending'});
-  const msg=encodeURIComponent('Hi '+name+', I found you on SOKONI Home Services. I need help with: ');
-  window.open('https://wa.me/254'+phone.replace(/^0/,'')+'?text='+msg,'_blank');
+function contactProvider(id, name) {
+  /* 2026-10-03 (Tech Hub slice 2b): wrote a KES 30 "lead fee" from the browser (homeServiceLeads) and opened wa.me.
+     Lead fees need a server authority (Tech Hub slice 7, owner decision); contact is in-app chat. */
+  if(window.SokoniInbox&&typeof SokoniInbox.openChat==='function'){SokoniInbox.openChat({otherUid:String(id),otherName:name,type:'customer-provider',context:{hub:'home-services'}});return;}
+  location.href='provider-profile.html?uid='+encodeURIComponent(String(id));
 }
 window.contactProvider=contactProvider;
 
@@ -687,17 +590,10 @@ function setReviewStar(n){
   document.querySelectorAll('.hs-star-btn').forEach((b,i)=>{b.style.opacity=i<n?'1':'0.3';b.style.color=i<n?'#f59e0b':'rgba(255,255,255,0.3)';});
 }
 async function submitReview(){
-  if(!_selectedStars){showHsToast('Please select a star rating');return;}
-  const text=(document.getElementById('hsReviewText')?.value||'').trim();
-  const reviewer=(document.getElementById('hsReviewerName')?.value||'').trim()||'Anonymous';
+  /* 2026-10-03 (Tech Hub slice 2b): anonymous reviews were written from the browser for any provider, with no booking.
+     Reviews are left from a completed booking (bookingSubmitReview → providerReviews). */
   const msgEl=document.getElementById('hsReviewMsg');
-  await _hsFireWrite('homeServiceReviews',{providerId:_reviewTarget.id,providerName:_reviewTarget.name,rating:_selectedStars,text,reviewer,hub:'home-services'});
-  /* Save to localStorage for immediate display */
-  let revs=[];try{revs=JSON.parse(localStorage.getItem('hsReviews')||'[]');}catch(e){}
-  revs.unshift({providerId:_reviewTarget.id,providerName:_reviewTarget.name,rating:_selectedStars,text,reviewer,ts:Date.now()});
-  localStorage.setItem('hsReviews',JSON.stringify(revs.slice(0,50)));
-  if(msgEl){msgEl.textContent='✅ Thank you for your review!';msgEl.style.color='#f59e0b';}
-  setTimeout(closeReviewModal,1800);
+  if(msgEl){msgEl.textContent='Reviews are left from a completed booking — open it under Profile → Bookings.';msgEl.style.color='#f59e0b';}
 }
 window.openReviewModal=openReviewModal;
 window.closeReviewModal=closeReviewModal;
@@ -706,44 +602,10 @@ window.submitReview=submitReview;
 
 /* ── MY JOBS TRACKER ── */
 function renderMyJobs(){
+  /* 2026-10-03 (Tech Hub slice 2b): this tracked localStorage "bookings" that no provider ever received. Real bookings and
+     their status live in providerBookings and are shown on the profile. */
   const feed=document.getElementById('hsMyJobsList');if(!feed)return;
-  let jobs=[];try{jobs=JSON.parse(localStorage.getItem('sokoniHomeBookings')||'[]');}catch(e){}
-  if(!jobs.length){
-    feed.innerHTML='<div style="text-align:center;padding:50px 20px;color:rgba(255,255,255,0.3);"><div style="font-size:36px;margin-bottom:10px;">📋</div><div style="font-size:14px;margin-bottom:12px;">No bookings yet</div><button type="button" onclick="goToPanel(\'book\')" style="padding:10px 20px;background:linear-gradient(135deg,#f59e0b,#fbbf24);border:none;border-radius:10px;color:#0a0805;font-weight:900;font-size:12px;cursor:pointer;font-family:inherit;">Book a Service →</button></div>';
-    return;
-  }
-  const STEPS=['Sent','Confirmed','In Progress','Completed'];
-  const ago=ts=>{const s=Math.floor((Date.now()-ts)/1000);return s<60?'just now':s<3600?Math.floor(s/60)+'m ago':s<86400?Math.floor(s/3600)+'h ago':Math.floor(s/86400)+'d ago';};
-  feed.innerHTML=jobs.slice(0,15).map(j=>{
-    const rawStatus=j.status||'sent';
-    const stepIdx=rawStatus==='sent'||rawStatus==='pending'?0:rawStatus==='confirmed'?1:rawStatus==='in_progress'?2:rawStatus==='completed'?3:0;
-    const stepsHtml=STEPS.map((s,i)=>{
-      const done=i<stepIdx,active=i===stepIdx;
-      const circleCss=active?'background:rgba(245,158,11,0.25);border:2px solid #f59e0b;color:#f59e0b;font-weight:900;':done?'background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);color:#f59e0b;':'background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.2);';
-      const lineCss=i<STEPS.length-1?(i<stepIdx?'background:rgba(245,158,11,0.3);':'background:rgba(255,255,255,0.07);'):'';
-      return `<div style="display:flex;align-items:center;flex:1;">`
-        +`<div style="display:flex;flex-direction:column;align-items:center;min-width:48px;">`
-        +`<div style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;margin-bottom:3px;${circleCss}">${done?'✓':i+1}</div>`
-        +`<div style="font-size:8px;font-weight:700;color:${active?'#f59e0b':done?'rgba(245,158,11,0.6)':'rgba(255,255,255,0.25)'};text-align:center;white-space:nowrap;">${s}</div>`
-        +`</div>`
-        +(i<STEPS.length-1?`<div style="flex:1;height:1px;margin:0 2px;margin-bottom:14px;${lineCss}"></div>`:'')
-        +'</div>';
-    }).join('');
-    return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px;transition:border-color .2s;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px;">
-        <div>
-          <div style="font-size:13px;font-weight:900;color:white;margin-bottom:2px;">${(j.service||'Home Service').replace(/</g,'&lt;')}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.35);">Ref: ${j.ref} · ${ago(j.ts||Date.now())}</div>
-        </div>
-        <span style="flex-shrink:0;font-size:9px;padding:3px 8px;border-radius:5px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;font-weight:700;white-space:nowrap;">${STEPS[stepIdx]}</span>
-      </div>
-      <div style="display:flex;align-items:flex-start;margin-bottom:12px;">${stepsHtml}</div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.35);display:flex;gap:12px;flex-wrap:wrap;">
-        ${j.loc?`<span>📍 ${j.loc.replace(/</g,'&lt;')}</span>`:''}
-        ${j.date&&j.date!=='ASAP'?`<span>📅 ${j.date}</span>`:'<span>📅 ASAP</span>'}
-      </div>
-    </div>`;
-  }).join('');
+  feed.innerHTML='<div style="text-align:center;padding:40px 20px;color:rgba(255,255,255,0.45);font-size:13px;">Your bookings and their status are on your profile.<br><a href="profile.html" style="color:#f59e0b;font-weight:800;">Profile → Bookings</a></div>';
 }
 window.renderMyJobs=renderMyJobs;
 
@@ -765,6 +627,12 @@ const HS_TYPE_MAP={
 <script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js"></script>
 <script src="sokoni-intasend.js" defer></script>
+<!-- Canonical service engine (Tech Hub slice 2b) -->
+<script src="firebase.js" type="module"></script>
+<script src="sokoni-providers.js" defer></script>
+<script src="sokoni-book-service.js" defer></script>
+<script src="sokoni-inbox.js" defer></script>
+<script src="sokoni-tech-directory.js" defer></script>
 <script src="sw-register.js" defer></script>
 <script src="sokoni-audit.js" defer></script>
 <script src="sokoni-social.js" defer></script>

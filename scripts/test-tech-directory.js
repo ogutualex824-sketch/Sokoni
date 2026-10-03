@@ -128,10 +128,67 @@ function pages2(read) {
   };
 }
 
+
+/* slice 2b: home-services.html + services.html fallbacks */
+function spyCtx(extra) {
+  const vm = require('vm');
+  const calls = { open: [], writes: [], wa: 0, ls: 0, href: '', chat: [], mounts: [] };
+  const el = () => ({ value: '', textContent: '', innerHTML: '', style: {}, classList: { add() {}, remove() {} } });
+  const ctx = Object.assign({
+    SokoniBookService: { open: (o) => calls.open.push(o) },
+    SokoniInbox: { openChat: (o) => calls.chat.push(o) },
+    SokoniTechDirectory: { mount: (o) => calls.mounts.push(o) },
+    SokoniDB: { saveDoc: () => { calls.writes.push('saveDoc'); return Promise.resolve(); }, saveBooking: () => { calls.writes.push('saveBooking'); return Promise.resolve(); } },
+    SokoniPay: { waConnect: () => { calls.wa++; }, bookNow: () => { calls.writes.push('bookNow'); } },
+    SokoniInvoice: { generate: () => calls.writes.push('invoice') },
+    _hsFireWrite: (c) => { calls.writes.push(c); return Promise.resolve(); },
+    localStorage: { getItem: () => '[]', setItem: () => { calls.ls++; } },
+    document: { getElementById: (id) => Object.assign(el(), { value: id === 'bkService' || id === 'regService' ? '🔧 Plumbing' : 'x' }), querySelector: () => null, querySelectorAll: () => [] },
+    location: { set href(v) { calls.href = v; }, get href() { return calls.href; } },
+    open: () => { calls.wa++; },
+    setTimeout: () => 0, encodeURIComponent, String, Number,
+  }, extra || {});
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  return { ctx, calls, run: (code) => vm.runInContext(code, ctx) };
+}
+function homeServices(html) {
+  const went = {};
+  const t = spyCtx({ _hsTypeFilter: 'all', HS_TYPES: [{ key: 'plumbing', label: 'Plumbing' }], goFindType: (k) => { went.k = k; } });
+  t.run(['filterProviders', 'bookHomeService', 'contactProvider', 'registerProvider', 'submitReview'].map((n) => fnSrc(html, n)).join('\n'));
+  t.run("bookHomeService(); contactProvider('p7','Pipes Ltd');");
+  const r = {
+    bookNoWrite: t.calls.writes.length === 0 && t.calls.ls === 0 && t.calls.wa === 0 && went.k === 'plumbing',
+    contactInApp: t.calls.chat.length === 1 && t.calls.chat[0].otherUid === 'p7',
+  };
+  t.run('filterProviders();');
+  r.findOnRegistry = t.calls.mounts.length === 1 && t.calls.mounts[0].grid === 'hsProvidersGrid' && t.calls.mounts[0].category === 'home-services';
+  t.run('registerProvider();');
+  r.registerApplies = /^business-apply\.html\?offer=services&category=plumbing/.test(t.calls.href) && t.calls.wa === 0;
+  t.run('submitReview();');
+  r.noClientReview = t.calls.writes.length === 0;
+  r.noWhatsApp = !/wa\.me\//.test(html.replace(/\/\*[\s\S]*?\*\//g, ''));
+  r.modules = ['firebase.js', 'sokoni-providers.js', 'sokoni-book-service.js', 'sokoni-inbox.js', 'sokoni-tech-directory.js'].every((m) => html.includes('src="' + m + '"'));
+  return r;
+}
+function servicesPage(html) {
+  const t = spyCtx({ getProviders: () => [{ uid: 's1', name: 'Clean Co' }], _currentBookingProviderId: 's1', allProducts: [{ id: 'L1', name: 'Gutter clean' }] });
+  t.run(['openBookingModal', 'submitBooking', 'bookServiceListing'].map((n) => fnSrc(html, n)).join('\n'));
+  t.run("submitBooking();");
+  const r = { submitEngine: t.calls.open.length === 1 && t.calls.open[0].providerId === 's1', submitNoWrite: t.calls.writes.length === 0 && t.calls.ls === 0 };
+  delete t.ctx.SokoniBookService;
+  t.run("openBookingModal('s1');");
+  r.fallbackStorefront = t.calls.href === 'provider-profile.html?uid=s1' && t.calls.writes.indexOf('bookNow') < 0;
+  t.run("bookServiceListing('L1');");
+  r.listingNoWhatsApp = t.calls.wa === 0 && t.calls.href === 'product.html?id=L1';
+  r.noWhatsApp = !/wa\.me\//.test(html.replace(/\/\*[\s\S]*?\*\//g, ''));
+  return r;
+}
+
 (async () => {
   let pass = 0, fail = 0, caught = 0;
   const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d ? '   [' + d + ']' : '')); ok ? pass++ : fail++; };
-  console.log('\nTECH DIRECTORY — slices 1-2\n');
+  console.log('\nTECH DIRECTORY — slices 1-2b\n');
   const LABELS = { T1: 'lists approved providers from the registry by category', T2: 'ratings / jobs only when real; "New on SOKONI" otherwise; verified only from the record', T3: 'provider text is escaped', T4: 'an unreachable registry is NOT shown as an empty list', T5: 'a real empty registry invites applications (business-apply)', T6: 'Book → SokoniBookService.open(providerId); Message → in-app chat', T7: 'search / type / location filters' };
   const b = await behaviour(MOD);
   for (const k of Object.keys(LABELS)) ck(k + '  ' + LABELS[k], b[k] === true);
@@ -140,6 +197,9 @@ function pages2(read) {
 
   const pg2 = pages2((f) => fs.readFileSync(path.join(ROOT, f), 'utf8'));
   for (const f of Object.keys(pg2)) for (const [k, v] of Object.entries(pg2[f])) ck('P2  ' + f + ': ' + k, v);
+  const rd = (x) => fs.readFileSync(path.join(ROOT, x), 'utf8');
+  for (const [k, v] of Object.entries(homeServices(rd('home-services.html')))) ck('P3  home-services.html: ' + k, v);
+  for (const [k, v] of Object.entries(servicesPage(rd('services.html')))) ck('P3  services.html: ' + k, v);
   console.log('\n  [sabotage]');
   const SAB = {
     T2: MOD.replace("'<span class=\"' + x + '-prov-rnum\">New on SOKONI</span>'", "'<span class=\"' + x + '-prov-rnum\">4.9 · 0 jobs</span>'"),
@@ -164,7 +224,17 @@ function pages2(read) {
   const thSab = pages2((f) => { const t = fs.readFileSync(path.join(ROOT, f), 'utf8'); return f === 'tech-hub.html' ? t + '<script>const DEMO_TECHS=[];</script>' : t; });
   const redTh = !thSab['tech-hub.html'].noDemo;
   console.log('  ' + (redTh ? 'CAUGHT' : 'MISSED') + '  P2 tech-hub demo'); redTh ? caught++ : fail++;
-  console.log('\n  ' + pass + ' passed, ' + fail + ' failed, ' + caught + '/7 sabotages caught');
+  {
+    const hs = fs.readFileSync(path.join(ROOT, 'home-services.html'), 'utf8');
+    const bad = hs.replace("goFindType(hit?hit.key:'all');", "_hsFireWrite('homeServiceBookings',{}); goFindType(hit?hit.key:'all');");
+    const red = bad !== hs && homeServices(bad).bookNoWrite !== true;
+    console.log('  ' + (red ? 'CAUGHT' : 'MISSED') + '  P3 home-services booking write'); red ? caught++ : fail++;
+    const sv = fs.readFileSync(path.join(ROOT, 'services.html'), 'utf8');
+    const bad2 = sv.replace("window.location.href = 'product.html?id=' + encodeURIComponent(p.id);", "SokoniPay.waConnect('2547', 'hi', {});");
+    const red2 = bad2 !== sv && servicesPage(bad2).listingNoWhatsApp !== true;
+    console.log('  ' + (red2 ? 'CAUGHT' : 'MISSED') + '  P3 services WhatsApp hand-off'); red2 ? caught++ : fail++;
+  }
+  console.log('\n  ' + pass + ' passed, ' + fail + ' failed, ' + caught + '/9 sabotages caught');
   console.log('  NOT proven here: a real browser render and a real booking (needs a browser run and an approved provider with services).\n');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH ' + (e && e.stack || e)); process.exit(2); });

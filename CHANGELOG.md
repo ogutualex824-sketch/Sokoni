@@ -1,3 +1,33 @@
+## [2026-10-03] - Tech Hub slice 2b: Home Services and services.html fallbacks on the service engine — hosting, NOT deployed
+
+- home-services.html:
+  - "Book" messaged SOKONI's own WhatsApp number, said "✅ Booked!", wrote `homeServiceBookings` from the browser and issued
+    a KES 0 invoice. It now sends the visitor to pick a provider and book through SokoniBookService.
+  - Find listed a self-registered `homeServiceProviders` feed (preset 5.0 rating) plus localStorage and demo entries. It now
+    lists approved `providers/{uid}` through sokoni-tech-directory.js, using new Home display groups in sokoni-providers.js.
+  - Contact wrote a KES 30 "lead fee" from the browser (`homeServiceLeads`) and opened wa.me. It now opens in-app chat.
+  - Register went to WhatsApp. It now goes to business-apply.
+  - Anonymous reviews without a booking are no longer written.
+  - My Jobs pointed at local-only records. It now points to Profile → Bookings.
+  - wa.me links are removed from the quote / ask feeds.
+- services.html:
+  - The SokoniPay.bookNow fallback is retired; the storefront is the fallback.
+  - submitBooking no longer writes localStorage / SokoniDB.saveBooking or invents a provider reply.
+  - Client / provider "My bookings / Jobs" localStorage trackers, including a fake provider "confirm", are replaced by
+    pointers to Profile → Bookings and the provider dashboard.
+  - The service-listing WhatsApp hand-off now goes to `product.html?id=`.
+  - The WhatsApp social icon is removed from provider cards.
+- sokoni-tech-directory.js: the Book icon is 📩, matching the compact premium card contract. electrical / phone-repair drop
+  their dead `.pg-wa-btn` CSS.
+- Tests:
+  - test-tech-directory: 43/0, 9/9 sabotages.
+  - test-compact-premium-cards: its electrical / phone-repair static check now reads the shared directory card (same
+    contract; sabotage-checked). It is 43/4, the 4 browser failures identical on the base 14ef233.
+- Database / API / rules: none. Security: removes client writes to booking / lead / review collections and every wa.me
+  hand-off on these pages.
+- Residue (own slices): `homeServiceQuotes` / `homeServiceRequests` client writes stay until the lead / quote authority
+  (slice 7). The quote → support-ticket path is the owner's 2026-09-30 decision.
+
 ## [2026-10-03] - Tech Hub slice 2a: Tech Hub technicians / IT tabs and providers.html book on the service engine — hosting, NOT deployed
 
 - tech-hub.html: the Technicians and IT Services tabs listed DEMO_TECHS / DEMO_IT (invented ratings, wa.me links). They now mount

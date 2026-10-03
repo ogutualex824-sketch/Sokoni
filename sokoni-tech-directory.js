@@ -58,7 +58,7 @@
       + '<div class="' + x + '-prov-foot"><div class="' + x + '-prov-rate">' + rate + '</div>'
       + '<div style="display:flex;gap:6px;align-items:center;">'
       + (p.chatEnabled !== false ? '<button type="button" class="' + x + '-ico" data-tech-act="chat" data-uid="' + esc(p.uid) + '" aria-label="Message ' + esc(p.name) + '" title="Message">💬</button>' : '')
-      + (canBook ? '<button type="button" class="' + x + '-ico" data-tech-act="book" data-uid="' + esc(p.uid) + '" aria-label="Book ' + esc(p.name) + '" title="Book">📅</button>' : '')
+      + (canBook ? '<button type="button" class="' + x + '-ico" data-tech-act="book" data-uid="' + esc(p.uid) + '" aria-label="Book ' + esc(p.name) + '" title="Book">📩</button>' : '')
       + '</div></div></div>';
   }
 

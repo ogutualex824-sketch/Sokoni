@@ -5,7 +5,7 @@ payment / booking / wallet / review / chat authority, no WhatsApp, AdminOS-gated
 dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]], [[Payments]], [[AdminOS]],
 [[IntaSend Convergence Brief]]. Strategy: no new hubs — Digital Hub folds into Tech Hub.
 
-**Status: slices 1 and 2a built and tested; nothing deployed.**
+**Status: slices 1, 2a and 2b built and tested; nothing deployed.**
 
 ## Authority map (census 2026-10-03)
 
@@ -38,9 +38,9 @@ dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]]
 | `tech-hub.html` freelancers / startups / courses / jobs / AI / compare | demo arrays, shown only on localhost or with `sokoniDemoData` (production shows nothing) | later; jobs → Work engine |
 | `providers.html` confirmBooking | fake "Confirmed" + client write to `providerBookings` | **2a — fixed** |
 | `provider.html` | legacy localStorage dashboard, fake "AI photo edit" | 3 (retire / redirect) |
-| `home-services.html` | demo providers; client writes to `homeService*` | 2 |
+| `home-services.html` | demo providers; WhatsApp booking to SOKONI; client `homeServiceBookings` / KES 30 `homeServiceLeads` / reviews writes | **2b — fixed** (quotes / requests remain → 7) |
 | `digital.html`, `digital-esoko.html` | client-created contracts / "escrow"; purchase marked completed on the client | 6 (fold into digital-store callables) |
-| `services.html` | legacy localStorage bookings / messages; bookNow / waConnect fallbacks | 2 |
+| `services.html` | legacy localStorage bookings / messages; bookNow / waConnect fallbacks | **2b — fixed** |
 | `hub-register.js` | random-id `applications` write duplicating the application primitive | 3 |
 | Category lists | at least 6 definitions | 4 |
 
@@ -59,6 +59,14 @@ dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]]
 7. Leads / quotes authority (new, additive, on the existing booking engine) — owner decision on lead fees.
 8. AdminOS provider suspend / restore / verify (+ sokoni-e3's takedown entityType).
 9. Messaging context → `providerBookings`; completion PIN for provider bookings (existing PIN authority).
+
+## Capability engine (sokoni-5b, 2026-10-03)
+
+Tech dashboards build on sokoni-5b's capability engine `feat/capability-engine-on-c7e26b6` @ 13f74f3 (docs/CAPABILITY_ENGINE.md):
+caps DEVICE_REPAIR, IT_SUPPORT, NETWORKING, CCTV_SECURITY, ELECTRONICS, POS_BUSINESS_TECH, SOFTWARE_DEV + service-mode caps; provider
+modules (leads, repairs, diagnostics, supportTickets, siteVisits, cctvInstallations, posSupport, …) are NOT_IMPLEMENTED `TECH_HUB_PENDING`
+until a screen ships (flip `implemented:true`, gate server ops with `assertModule`). Blocked on the approval-time category stamp
+(sokoni-5b building it on f66f2c1 + 7df7817). providerDispatch has three pending changes that must ship as ONE release.
 
 ## Category matrix (honest)
 

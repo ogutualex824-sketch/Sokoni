@@ -117,6 +117,14 @@
     'phone-repair':['phone-repair', 'phone repair', 'device-repair', 'electronics-repair', 'screen-repair'],
     electrical:    ['electrical', 'electrician', 'electrical work', 'electrical-work'],
     health:        ['healthcare', 'clinic', 'pharmacy', 'home-doctor'],
+    /* Home Services (2026-10-03, Tech Hub slice 2b). DISPLAY GROUPING ONLY, same rule as tech. */
+    'home-services':['home-repairs', 'handyman', 'plumbing', 'plumber', 'electrical', 'electrician', 'cleaning',
+                    'housekeeping', 'laundry', 'painting', 'painter', 'moving', 'movers', 'carpentry', 'carpenter',
+                    'gardening', 'appliance', 'appliance-repair', 'appliance repair', 'security'],
+    'home-interiors':['carpentry', 'carpenter', 'painting', 'painter', 'interiors'],
+    plumbing:      ['plumbing', 'plumber'],
+    appliance:     ['appliance', 'appliance-repair', 'appliance repair', 'ac repair'],
+    moving:        ['moving', 'movers', 'moving-packing'],
   };
 
   /* Display labels. A provider carries its own categoryLabel; this is the

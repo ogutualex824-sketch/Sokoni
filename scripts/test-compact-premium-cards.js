@@ -133,7 +133,18 @@ ck('cleaning.html renderProviders: 💬 + 📩 icons, no wa.me, no follow/share 
    /cl-ico--msg[^>]*>💬</.test(cl) && /cl-ico--book[^>]*>📩</.test(cl) && !/toggleFollow/.test(cl) && violations(cl).length === 0, violations(cl));
 ck('providers / services / cleaning: the whole card opens the profile through ONE delegated listener reading an escaped data attribute',
    [PROV, SVC, CLEAN].every((s) => /closest\('\.(pv|cl-provider)-card\[data-profile-href\]'\)/.test(s) && /getAttribute\('data-profile-href'\)/.test(s)));
-Object.keys(PG).forEach((f) => {
+/* Tech Hub slice 1 (2026-10-03) moved the electrical / phone-repair card into the shared sokoni-tech-directory.js
+   (registry listing + canonical booking). Same card contract, checked where the card now lives. */
+const TDIR = read('sokoni-tech-directory.js');
+const TCARD = fnBody(TDIR, 'card') || '';
+const TECH_DIR_PAGES = ['electrical.html', 'phone-repair.html'];
+TECH_DIR_PAGES.forEach((f) => {
+  ck(f + ': card action is the 📩 icon on the shared tech directory card, 💬 in-app chat, no WhatsApp, no follow/share row',
+     /SokoniTechDirectory\.mount\(/.test(PG[f]) && !/<div|<button|<a /.test(fnBody(PG[f], 'renderProviders') || '')
+     && /-ico" data-tech-act="book"[^>]*>📩</.test(TCARD) && /-ico" data-tech-act="chat"[^>]*>💬</.test(TCARD)
+     && !/toggleFollow/.test(TCARD) && violations(TCARD).length === 0 && violations(PG[f]).length === 0, violations(TCARD).concat(violations(PG[f])));
+});
+Object.keys(PG).filter((f) => TECH_DIR_PAGES.indexOf(f) < 0).forEach((f) => {
   const body = fnBody(PG[f], f === 'car-rental.html' ? 'renderCars' : 'renderProviders') || '';
   ck(f + ': card action is the 📩 icon (same openBookingFor handler), no WhatsApp, no follow/share row',
      /class="pg-ico"[^>]*>📩</.test(body) && /openBookingFor\(/.test(body) && !/toggleFollow/.test(body) && violations(body).length === 0, violations(body));

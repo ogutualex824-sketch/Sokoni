@@ -1179,23 +1179,10 @@ let _svcBkgId = null;
 function openBookingModal(providerId){
   const p = getProviders().find(x=>String(x.uid)===String(providerId));
   if(!p) return;
-  /* Phase E WS2 — canonical held-payment booking flow (server-authoritative). The
-     legacy SokoniPay.bookNow path below stays as a fallback until WS4 retires it. */
+  /* Canonical held-payment booking flow (server-authoritative). 2026-10-03 (Tech Hub slice 2b): the SokoniPay.bookNow
+     fallback is retired (pay-time provider credit STOPPED by owner decision); without the engine, go to the storefront. */
   if(window.SokoniBookService){ SokoniBookService.open({ providerId: providerId, providerName: p.name }); return; }
-  if(typeof SokoniPay !== "undefined"){
-    SokoniPay.bookNow({
-      providerName:  p.name,
-      category:      p.category || "default",
-      serviceDesc:   (p.skills||[]).slice(0,2).join(", ") || "Professional Service",
-      providerPhone: p.phone || ""
-    }, function(ref){
-      _currentBookingRef = ref;
-      _openBookingDetails(providerId);
-      try { if(typeof window.onSokoniPurchase==='function') window.onSokoniPurchase(p.price||0); } catch(e){}
-    });
-  } else {
-    _openBookingDetails(providerId);
-  }
+  location.href = 'provider-profile.html?uid=' + encodeURIComponent(String(p.uid || providerId));
 }
 
 function _openBookingDetails(providerId){
@@ -1230,232 +1217,38 @@ function _openBookingDetails(providerId){
 
 /* ── Submit booking ── */
 function submitBooking(){
-  const btn = document.querySelector('#bookingModal button[onclick="submitBooking()"]');
-  if(btn){ btn.disabled = true; btn.textContent = '⏳ Booking...'; }
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('svc_book',10,300000)){ if(btn){ btn.disabled = false; btn.textContent = '📩 Submit Booking Request'; } (window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
-  const name    = document.getElementById("bkClientName")?.value.trim();
-  const phone   = document.getElementById("bkClientPhone")?.value.trim();
-  const jobDesc = document.getElementById("bkJobDesc")?.value.trim();
-  const loc     = document.getElementById("bkLocation")?.value.trim();
-  const date    = document.getElementById("bkDate")?.value;
-  const time    = document.getElementById("bkTime")?.value || "09:00";
-  const msgEl   = document.getElementById("bkMsg");
-
-  if(!name||!phone||!jobDesc||!loc||!date){
-    if(btn){ btn.disabled = false; btn.textContent = '📩 Submit Booking Request'; }
-    if(msgEl){ msgEl.textContent="⚠️ Please fill all required fields"; msgEl.style.color="#ff9800"; }
-    return;
-  }
-
-  const p = getProviders().find(x=>String(x.uid)===String(_currentBookingProviderId));
-  if(!p) return;
-
-  const booking = {
-    id:           _svcBkgId || ("BK" + Date.now()),
-    providerId:   p.id,
-    providerName: p.name,
-    providerPhone:p.phone,
-    category:     p.category,
-    clientName:   name,
-    clientPhone:  phone,
-    jobDesc,
-    location:     loc,
-    scheduledDate:date,
-    scheduledTime:time,
-    status:       "pending",
-    quote:        0,
-    sokoniRef:    _currentBookingRef || "",
-    createdAt:    Date.now(),
-    updatedAt:    Date.now()
-  };
-
-  const all = getBookings();
-  all.unshift(booking);
-  saveBookings(all);
-
-  /* Persist to Firestore so provider sees it on any device */
-  if(window.SokoniDB){
-    window.SokoniDB.saveBooking(booking)
-      .catch(e=>console.warn('[SOKONI] Booking save failed:',e.message));
-  }
-
-  /* Notify provider (if same device) */
-  if(window.sokoniNotify) {
-    window.sokoniNotify(
-      `📩 New Booking — ${p.name}`,
-      `${name} wants to book ${CAT_LABEL[p.category]||p.category} on ${date}`,
-      "/assets/sokoni logoo.jpeg",
-      "/services.html"
-    );
-  }
-
-  /* Add to messages */
-  let msgs = [];
-  try { msgs = JSON.parse(localStorage.getItem("sokoniMessages"))||[]; } catch(e){}
-  msgs.unshift({
-    id: "conv_bk_"+booking.id,
-    productName: `Booking: ${CAT_LABEL[p.category]||p.category}`,
-    sellerName:  p.name,
-    messages:[{
-      sender:"seller",
-      text:`Hi ${name}! 👋 Your booking request for ${CAT_LABEL[p.category]||p.category} on ${date} at ${time} has been received!\n\n📍 Location: ${loc}\n📝 Job: ${jobDesc}\n\nWe'll confirm within 2 hours. Booking ID: ${booking.id}`,
-      time: new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})
-    }],
-    unread:1, spam:false, createdAt:Date.now()
-  });
-  localStorage.setItem("sokoniMessages", JSON.stringify(msgs));
-
-  _svcBkgId = null;
-  if(msgEl){ msgEl.innerHTML = '✅ Booking submitted! <a href="messages.html" style="color:#71ff00;">Check Messages →</a>'; msgEl.style.color="#71ff00"; }
-  if(window.SokoniInvoice) setTimeout(function(){SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:(CAT_LABEL[p.category]||p.category)+' Service',category:CAT_LABEL[p.category]||'Service',qty:1,price:p.rate||0}],subtotal:p.rate||0,total:p.rate||0,paymentMethod:'Pending — Provider Confirms',paymentRef:booking.id,sellerName:p.name,date:new Date().toISOString(),notes:loc+' · '+date+' '+time});},700);
-  setTimeout(()=>{ document.getElementById("bookingModal").style.display="none"; }, 2500);
+  /* 2026-10-03 (Tech Hub slice 2b). Saved a "pending" booking to localStorage + SokoniDB.saveBooking from the browser,
+     invented a provider reply in localStorage messages, said "✅ Booking submitted!" and issued an invoice — no price, slot,
+     payment or provider acceptance. It now only hands over to the canonical booking flow. */
+  const m = document.getElementById("bookingModal"); if(m) m.style.display = "none";
+  if(_currentBookingProviderId) openBookingModal(_currentBookingProviderId);
 }
 
 /* ── Client: view their bookings ── */
 function renderClientBookings(){
+  /* 2026-10-03 (Tech Hub slice 2b): listed localStorage "bookings" (no provider ever received them) with a wa.me link.
+     Real bookings live in providerBookings and are shown on the profile. */
   const listEl = document.getElementById("clientBookingsList");
   if(!listEl) return;
-  const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
-  const all  = getBookings();
-  const mine = user ? all.filter(b=>b.clientName===user.name||b.clientPhone===user.phone) : all;
-
-  if(!mine.length){
-    listEl.innerHTML = `<div class="sv-empty"><div class="sv-empty-icon">📅</div><p>No bookings yet.<br>Book a service provider from the Verified Providers tab.</p></div>`;
-    return;
-  }
-
-  listEl.innerHTML = mine.map(b => `
-    <div class="job-card">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
-        <div>
-          <div style="font-size:14px;font-weight:800;color:white;margin-bottom:4px;">${CAT_EMOJI[b.category]||"🛠️"} ${CAT_LABEL[b.category]||b.category}</div>
-          <div style="font-size:12px;color:rgba(255,255,255,0.5);">Provider: <strong>${b.providerName}</strong> · ${b.scheduledDate} at ${b.scheduledTime}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:3px;">📍 ${b.location} · ID: ${b.id}</div>
-        </div>
-        <span class="job-status ${STATUS_CLASS[b.status]||'job-pending'}">${STATUS_LABEL[b.status]||b.status}</span>
-      </div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.55);margin-bottom:10px;">"${b.jobDesc}"</div>
-      ${b.quote > 0 ? `<div style="font-size:13px;font-weight:800;color:#71ff00;margin-bottom:8px;">💰 Quoted: KES ${Number(b.quote).toLocaleString()}</div>` : ""}
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        ${b.providerPhone ? `<a href="tel:+254${b.providerPhone.replace(/^0/,'')}" style="padding:7px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">📞 Call Provider</a>` : ""}
-        ${b.providerPhone ? `<a href="https://wa.me/254${b.providerPhone.replace(/^0/,'')}?text=${encodeURIComponent(`Hi ${b.providerName}! Regarding my booking ${b.id} for ${CAT_LABEL[b.category]||b.category} on ${b.scheduledDate}...`)}" target="_blank" style="padding:7px 14px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);color:#25d366;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">💬 WhatsApp</a>` : ""}
-        ${b.status==="pending" ? `<button type="button" onclick="cancelBooking('${b.id}')" style="padding:7px 12px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit;">Cancel</button>` : ""}
-      </div>
-    </div>
-  `).join("");
+  listEl.innerHTML = '<div class="sv-empty"><div class="sv-empty-icon">📅</div><p>Your bookings, payments and their status are on your profile.<br><a href="profile.html" style="color:#71ff00;font-weight:800;">Profile → Bookings</a></p></div>';
 }
 
-function cancelBooking(id){
-  const all = getBookings();
-  const bk  = all.find(b=>b.id===id);
-  if(bk){ bk.status="cancelled"; bk.updatedAt=Date.now(); saveBookings(all); renderClientBookings(); }
-}
+function cancelBooking(){ /* retired 2026-10-03 (Tech Hub slice 2b): local-only booking states; managed on the profile / provider dashboard */ }
 
 /* ── Provider: view & manage incoming jobs ── */
 function renderProviderJobs(){
+  /* 2026-10-03 (Tech Hub slice 2b): let a provider "confirm" and quote localStorage bookings, with a wa.me link and a
+     "Booking Confirmed" notification. Incoming bookings are managed on the provider dashboard (providerBookings). */
   const listEl = document.getElementById("providerJobsList");
   if(!listEl) return;
-  const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
-  const all  = getBookings();
-  const mine = user ? all.filter(b=>b.providerName===user.name) : all.filter(b=>b.status!=="cancelled");
-
-  if(!mine.length){
-    listEl.innerHTML = `<div class="sv-empty"><div class="sv-empty-icon">📋</div><p>No job requests yet.<br>Register as a provider and wait for clients to find you!</p></div>`;
-    return;
-  }
-
-  listEl.innerHTML = mine.map(b => `
-    <div class="job-card">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
-        <div>
-          <div style="font-size:14px;font-weight:800;color:white;margin-bottom:4px;">${b.clientName} — ${CAT_EMOJI[b.category]||"🛠️"} ${CAT_LABEL[b.category]||b.category}</div>
-          <div style="font-size:12px;color:rgba(255,255,255,0.5);">📅 ${b.scheduledDate} at ${b.scheduledTime} · 📍 ${b.location}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:3px;">Client: ${b.clientPhone} · ID: ${b.id}</div>
-        </div>
-        <span class="job-status ${STATUS_CLASS[b.status]||'job-pending'}">${STATUS_LABEL[b.status]||b.status}</span>
-      </div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:12px;">"${b.jobDesc}"</div>
-
-      <!-- Quote input -->
-      ${b.status==="pending" ? `
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-        <input type="number" id="quote_${b.id}" placeholder="Set your quote (KES)" value="${b.quote||""}" style="padding:9px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:white;font-size:16px;outline:none;font-family:inherit;width:180px;">
-        <button type="button" onclick="confirmJob('${b.id}')" style="padding:9px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✅ Confirm &amp; Quote</button>
-        <button type="button" onclick="declineJob('${b.id}')" style="padding:9px 12px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit;">Decline</button>
-      </div>` : ""}
-
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        ${b.clientPhone ? `<a href="tel:${b.clientPhone}" style="padding:7px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">📞 Call Client</a>` : ""}
-        ${b.clientPhone ? `<a href="https://wa.me/254${b.clientPhone.replace(/^0/,'')}?text=${encodeURIComponent(`Hi ${b.clientName}! Regarding your service request ${b.id}...`)}" target="_blank" style="padding:7px 14px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);color:#25d366;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">💬 WhatsApp</a>` : ""}
-        ${b.status==="confirmed" ? `<button type="button" onclick="updateJobStatus('${b.id}','in_progress')" style="padding:7px 14px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);color:#00aaff;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">▶ Mark In Progress</button>` : ""}
-        ${b.status==="in_progress" ? `<button type="button" onclick="updateJobStatus('${b.id}','completed')" style="padding:7px 14px;background:rgba(76,175,80,0.1);border:1px solid rgba(76,175,80,0.25);color:#4caf50;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">✅ Mark Completed</button>` : ""}
-      </div>
-    </div>
-  `).join("");
+  listEl.innerHTML = '<div class="sv-empty"><div class="sv-empty-icon">📋</div><p>Incoming bookings are managed on your provider dashboard.<br><a href="provider-dashboard.html" style="color:#71ff00;font-weight:800;">Open dashboard</a></p></div>';
 }
 
-function confirmJob(id){
-  const all   = getBookings();
-  const bk    = all.find(b=>b.id===id);
-  if(!bk) return;
-  const quote = Number(document.getElementById("quote_"+id)?.value || 0);
-  bk.status   = "confirmed";
-  bk.quote    = quote;
-  bk.updatedAt= Date.now();
-  saveBookings(all);
-  renderProviderJobs();
-  /* Notify client */
-  if(window.sokoniNotify) window.sokoniNotify("✅ Booking Confirmed!", `${bk.providerName} confirmed your booking for ${bk.scheduledDate}${quote > 0 ? ` — KES ${quote.toLocaleString()}` : ""}`, "/assets/sokoni logoo.jpeg", "/services.html");
-}
+function confirmJob(){ /* retired 2026-10-03 (Tech Hub slice 2b): local-only booking states; managed on the profile / provider dashboard */ }
 
-function declineJob(id){
-  const all = getBookings();
-  const bk  = all.find(b=>b.id===id);
-  if(bk){ bk.status="cancelled"; bk.updatedAt=Date.now(); saveBookings(all); renderProviderJobs(); }
-}
+function declineJob(){ /* retired 2026-10-03 (Tech Hub slice 2b): local-only booking states; managed on the profile / provider dashboard */ }
 
-function updateJobStatus(id, status){
-  const all = getBookings();
-  const bk  = all.find(b=>b.id===id);
-  if(!bk) return;
-
-  if(status === "completed"){
-    /* Ask provider to declare the total service value → generates commission invoice */
-    const raw = prompt(
-      "SOKONI Commission — Enter total service value received (KES):\n" +
-      "Platform will invoice " +
-      (typeof SokoniCommission !== "undefined" ? SokoniCommission.pct(bk.category) : 10) +
-      "% of this.\n\nNon-payment will suspend your listing."
-    );
-    const total = raw ? Number(raw.replace(/[^0-9.]/g,"")) : 0;
-    if(total > 0){
-      const pct  = (typeof SokoniCommission !== "undefined" ? SokoniCommission.pct(bk.category) : 10);
-      const owed = Math.round(total * pct / 100);
-      const ref  = bk.sokoniRef || ("BK"+id.slice(-6));
-      if(typeof SokoniPay !== "undefined") SokoniPay.sendCommissionInvoice(ref, total);
-      bk.serviceTotal = total;
-      setTimeout(()=> (window._skToast||alert)(
-        "✅ Job marked complete!\n\n" +
-        "SOKONI Commission ("+pct+"%):\n" +
-        "KES "+owed.toLocaleString()+"\n\n" +
-        "Pay to M-PESA:\n" +
-        "Paybill: " + ((window.SOKONI_PAY && window.SOKONI_PAY.commissionPaybill) || "522522") + "\n" +
-        "Account: SOK-"+ref+"\n\n" +
-        "Non-payment suspends your listing."
-      ), 100);
-    }
-    /* Job counts are server-owned and derive from completed bookings. This
-       used to increment the local copy and "save" it, which changed a number
-       on one browser and was discarded on the next read from the registry. */
-  }
-
-  bk.status    = status;
-  bk.updatedAt = Date.now();
-  saveBookings(all);
-  renderProviderJobs();
-  if(window.sokoniNotify && status==="completed")
-    window.sokoniNotify("🎉 Job Completed!", `${bk.jobDesc.substring(0,40)} — marked complete.`, "/assets/sokoni logoo.jpeg", "/services.html");
-}
+function updateJobStatus(){ /* retired 2026-10-03 (Tech Hub slice 2b): local-only booking states; managed on the profile / provider dashboard */ }
 
 /* ════════════════════════════════════════════════════════════
    SERVICE-SPECIFIC FORM FIELDS
@@ -2017,7 +1810,6 @@ function renderServices(){
           ${p.description ? `<span class="sv-tag">${p.description.substring(0,25)}${p.description.length>25?"...":""}</span>` : ""}
         </div>
         ${p.socials&&Object.values(p.socials).some(v=>v)?`<div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px;">${[
-          p.socials.whatsapp?`<a href="https://wa.me/${p.socials.whatsapp.replace(/^0/,"254")}" target="_blank" style="font-size:18px;text-decoration:none;line-height:1;" title="WhatsApp" onclick="event.stopPropagation()">💬</a>`:"",
           p.socials.instagram?`<a href="https://instagram.com/${p.socials.instagram.replace(/^@/,"")}" target="_blank" style="font-size:18px;text-decoration:none;line-height:1;" title="Instagram" onclick="event.stopPropagation()">📸</a>`:"",
           p.socials.tiktok?`<a href="https://tiktok.com/${p.socials.tiktok.replace(/^@/,"")}" target="_blank" style="font-size:18px;text-decoration:none;line-height:1;" title="TikTok" onclick="event.stopPropagation()">🎵</a>`:"",
           p.socials.facebook?`<a href="https://facebook.com/${p.socials.facebook}" target="_blank" style="font-size:18px;text-decoration:none;line-height:1;" title="Facebook" onclick="event.stopPropagation()">👥</a>`:"",
@@ -2041,31 +1833,11 @@ function bookService(id){
 
 /* ── Book a service listing (seller-listed product) through SokoniPay ── */
 function bookServiceListing(productId){
+  /* 2026-10-03 (Tech Hub slice 2b): opened a WhatsApp hand-off (or the retired bookNow). The listing's own product page is
+     the canonical purchase route. */
   const p = allProducts.find(function(x){ return x.id === productId; });
   if(!p) return;
-  const waNum = (p.socials && p.socials.whatsapp) ? p.socials.whatsapp : (p.sellerPhone || '');
-  if(typeof SokoniPay !== 'undefined'){
-    if(waNum){
-      SokoniPay.waConnect(
-        waNum,
-        'Hi ' + (p.sellerName || 'Provider') + '! I found your service "' + p.name + '" on SOKONI and would like to book it. Price: KES ' + Number(p.price || 0).toLocaleString('en-KE') + '.',
-        { providerName: p.sellerName || 'Provider', category: p.category || 'default', serviceDesc: p.name }
-      );
-    } else {
-      SokoniPay.bookNow({
-        providerName:  p.sellerName  || 'Provider',
-        category:      p.category    || 'default',
-        serviceDesc:   p.name,
-        providerPhone: ''
-      }, function(){
-        localStorage.setItem('selectedProduct', JSON.stringify(p));
-        window.location.href = 'product.html';
-      });
-    }
-  } else {
-    localStorage.setItem('selectedProduct', JSON.stringify(p));
-    window.location.href = 'product.html';
-  }
+  window.location.href = 'product.html?id=' + encodeURIComponent(p.id);
 }
 window.bookServiceListing = bookServiceListing;
 
