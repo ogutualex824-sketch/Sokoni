@@ -124,7 +124,6 @@ const BASELINE = {
   'cleaning.html':             ['cln-write'],
   'commerce-os.html':          ['commerce-os'],
   'developer-portal.html':     ['developer-portal'],
-  'digital.html':              ['dh-wd'],
   'electrical.html':           ['elc-write'],
   'email-center.html':         ['email-center'],
   'event-hub.html':            ['event-hub'],
@@ -209,7 +208,7 @@ console.log('\n' + '─'.repeat(70));
 console.log('  OUTSTANDING: ' + Object.keys(BASELINE).length + ' files, ' + total + ' secondary apps still to convert.');
 console.log('  Each one reads/writes Firestore with NO App Check token. The write paths');
 console.log('  (cln-write, elc-write, plm-write, cr-write, ch-write, hs-write, th-write,');
-console.log('  mkt-write, dh-wd) fail SILENTLY — a booking that was never stored still');
+console.log('  mkt-write) fail SILENTLY — a booking that was never stored still');
 console.log('  reports success to the customer.');
 if (fail) { console.log('\nFAILURES'); failures.forEach((f) => console.log('  x ' + f)); }
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
