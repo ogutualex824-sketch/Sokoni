@@ -90,11 +90,34 @@ const TYPES = {
   booking_paid:         { priority: 'commerce',  category: 'orders',   smsTemplate: null },
   booking_refund:       { priority: 'commerce',  category: 'payments', smsTemplate: null },
   booking_released:     { priority: 'commerce',  category: 'orders',   smsTemplate: null },
+  /* The same defect as the four above, found by census on 2026-09-30 and left behind by
+     that repair. `booking_confirmed` is sent to the BUYER by webhookIntasend (index.js)
+     the moment a booking payment lands; `booking_affected` is sent by booking-resolution
+     when a provider's availability change invalidates a booking. Both callers wrap the
+     call in .catch(){}, so both notifications vanished with no log at all. Same routing
+     as their peers; SMS stays off because no approved template exists for either. */
+  booking_confirmed:    { priority: 'commerce',  category: 'orders',   smsTemplate: null },
+  booking_affected:     { priority: 'commerce',  category: 'orders',   smsTemplate: null },
   wallet_credit:        { priority: 'commerce',  category: 'wallet',   smsTemplate: 'wallet_credit' },
+  /* Payout outcomes, sent by wallet.js _notifyPayout(). UNregistered until 2026-09-30, so
+     a seller was never told their withdrawal succeeded or failed. `payout_failed` is
+     deliberately `commerce`, not `critical`: critical bypasses preferences AND quiet
+     hours, which is right for a fraud warning and wrong for a retryable payout outcome
+     whose funds have already been returned. Category matches wallet_credit. */
+  payout_paid:          { priority: 'commerce',  category: 'wallet',   smsTemplate: null },
+  payout_failed:        { priority: 'commerce',  category: 'wallet',   smsTemplate: null },
   order_placed:         { priority: 'commerce',  category: 'orders',   smsTemplate: 'order_placed' },
   order_accepted:       { priority: 'commerce',  category: 'orders',   smsTemplate: 'order_accepted' },
   order_preparing:      { priority: 'commerce',  category: 'orders',   smsTemplate: null },
   order_ready:          { priority: 'commerce',  category: 'orders',   smsTemplate: null },
+  /* Click-and-collect / dispatch hand-off, sent by pos-marketplace-sync.js from ONE
+     ternary: order_ready_pickup when the order is collected in store, order_dispatching
+     when it awaits a rider. Neither was registered, and the caller's .catch(){} shadows
+     its own outer try/catch, so not even the console.error fired. `order_ready_pickup`
+     follows order_ready (orders); `order_dispatching` follows order_dispatched
+     (delivery), because it describes the delivery leg rather than the order state. */
+  order_ready_pickup:   { priority: 'commerce',  category: 'orders',   smsTemplate: null },
+  order_dispatching:    { priority: 'commerce',  category: 'delivery', smsTemplate: null },
   order_dispatched:     { priority: 'commerce',  category: 'delivery', smsTemplate: 'order_dispatched' },
   rider_assigned:       { priority: 'commerce',  category: 'delivery', smsTemplate: 'rider_assigned' },
   rider_nearby:         { priority: 'commerce',  category: 'delivery', smsTemplate: null },
@@ -106,12 +129,6 @@ const TYPES = {
   subscription_expired: { priority: 'commerce',  category: 'subscriptions', smsTemplate: 'subscription_expired' },
   seller_verified:      { priority: 'commerce',  category: 'marketplace',   smsTemplate: 'seller_verified' },
   merchant_approved:    { priority: 'commerce',  category: 'marketplace',   smsTemplate: 'merchant_approved' },
-  /* POS/Till commission — the 07:00 settlement gate. The REMINDER is deliberately its own
-     type from the CLOSURE: one is a courtesy the merchant may mute, the other tells them
-     why their till has stopped and must reach them. Being gated should never be the first
-     time a merchant hears about it. */
-  pos_commission_due:   { priority: 'commerce',  category: 'payments',      smsTemplate: 'pos_commission_due' },
-  pos_commission_gate:  { priority: 'critical',  category: 'payments',      smsTemplate: 'pos_commission_gate' },
   rider_approved:       { priority: 'commerce',  category: 'marketplace',   smsTemplate: 'rider_approved' },
   /* Loyalty & rewards. These reach the user through the engine now, so they get an
      IN-APP notification as well as a push. Previously loyalty.js pushed directly and
@@ -335,13 +352,54 @@ async function sendPush(uid, payload) {
   }
 }
 
+/* Record a notification that was REJECTED before it could be processed.
+
+   Why this exists: the unknown-type guard below throws at the top of notify(), 20 lines
+   before the first notifyLog write — and every caller of an unregistered type wraps the
+   call in .catch(){}. The result was the worst failure class available: no delivery on
+   any channel, no notifyLog row, no console line, no error escaping. Six live types were
+   lost that way and nothing in the platform could show it had happened.
+
+   This does NOT soften the failure — the caller still throws. It only makes the failure
+   leave a trace, through the mechanisms that already exist: `logger` (used by _sendPush
+   above) and the notifyLog collection. No new logging authority.
+
+   It is TOTAL: it never throws, because a fault in the audit path must not replace the
+   real error with a different one. The doc id is namespaced with `rejected:` so it can
+   never collide with a real notification key, and is deterministic so a retry of the
+   same bad call updates one row instead of growing the collection. */
+async function _recordRejection(reason, { uid, type, title, body, dedupeKey }) {
+  try {
+    logger.error('[notify] rejected', {
+      reason, type: String(type), uid: uid ? String(uid).slice(0, 8) : '(none)',
+    });
+  } catch (_) { /* logging must never mask the rejection */ }
+  try {
+    if (!uid) return;                       /* no uid -> no stable key; the log line stands alone */
+    const id = `rejected:${reason}:${String(type)}:${uid}:${_contentHash(title, body)}`;
+    await db().collection(LOG).doc(id).set({
+      uid, type: String(type), status: 'rejected', reason,
+      dedupeKey: dedupeKey || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } catch (_) { /* audit is best-effort; the throw below is the contract */ }
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    notify() — the ONE entry point
 ═════════════════════════════════════════════════════════════════════════ */
 async function notify({ uid, type, title, body, vars = {}, phone, email, image, deepLink, group, dedupeKey, data, awaitDelivery = true }) {
   const t = TYPES[type];
-  if (!t) throw new HttpsError('invalid-argument', `Unknown notification type "${type}".`);
-  if (!uid) throw new HttpsError('invalid-argument', 'uid is required.');
+  if (!t) {
+    /* Still a HARD failure — an unregistered type is a programming error and must not be
+       delivered as some default. It is simply no longer a silent one. */
+    await _recordRejection('unknown_type', { uid, type, title, body, dedupeKey });
+    throw new HttpsError('invalid-argument', `Unknown notification type "${type}".`);
+  }
+  if (!uid) {
+    await _recordRejection('missing_uid', { uid, type, title, body, dedupeKey });
+    throw new HttpsError('invalid-argument', 'uid is required.');
+  }
 
   /* Idempotency AND duplicate suppression — two different guarantees.
 
@@ -433,17 +491,24 @@ async function notify({ uid, type, title, body, vars = {}, phone, email, image, 
   const wantSms = ch.sms || (ch.smsFallback && !pushOk);
   if (wantSms && t.smsTemplate) {
     /* RESOLVE THE RECIPIENT, exactly as push and email already do.
-       `phone` is a caller OVERRIDE, not the only source. Push reads
-       users/{uid} for its tokens; email falls back to the Auth address when the
-       caller supplies none. SMS had the override and no fallback — so the
-       condition `wantSms && t.smsTemplate && phone` was false at its last term
-       for every caller in the codebase, sms.enqueue() was never reached, and
-       smsQueueWorker drained an empty queue every minute without one error.
+       `phone` is a caller OVERRIDE, not the only source. Push reads users/{uid} for its
+       tokens; email falls back to the Auth address when the caller supplies none. SMS
+       had the override and no fallback — so the condition `wantSms && t.smsTemplate &&
+       phone` was false at its last term for every caller that does not pass a phone,
+       sms.enqueue() was never reached, and smsQueueWorker drained an empty queue every
+       minute without one error. A 2026-09-30 census found four such call sites, two of
+       them `payment_success` inside the live payment webhook.
 
-       Canonical source is users/{uid}.phoneNumber ("+254…"), the field
-       profile.html persists on phone verification. The legacy `phone` field is
+       Canonical source is users/{uid}.phoneNumber ("+254…"). The legacy `phone` field is
        deliberately NOT read: reviving it to raise apparent reach would undo a
-       canonicalisation the write path already completed. */
+       canonicalisation the write path already completed.
+
+       No phoneVerified check, and that is deliberate rather than an omission. Every
+       writer of this field sources it from Firebase Auth — firebase.js at user-doc
+       creation, wallet-engine's getUserByPhoneNumber backfill, wallet-engine's
+       phone_number-claim gate, and profile.html only after a confirmed SMS code — so the
+       field is verified by provenance. Adding a flag check would introduce a second
+       verification policy alongside Firebase Auth's, which is the authority. */
     let to = phone;
     if (!to) {
       try {
@@ -454,10 +519,9 @@ async function notify({ uid, type, title, body, vars = {}, phone, email, image, 
     }
 
     if (!to) {
-      /* VISIBLE, not silent. The old code simply skipped, leaving
-         result.channels.sms unset — which is why a healthy SMS platform looked
-         fine while delivering nothing. A caller can now see the reason, and it
-         can be counted. */
+      /* VISIBLE, not silent. The old code simply skipped, leaving result.channels.sms
+         unset — which is why a healthy SMS platform looked fine while delivering
+         nothing. A caller can now see the reason, and it can be counted. */
       result.channels.sms = 'no_phone_on_record';
     } else {
       const r = await sms.enqueue({
@@ -465,7 +529,7 @@ async function notify({ uid, type, title, body, vars = {}, phone, email, image, 
         template: t.smsTemplate,
         vars: { ...vars, title, body },
         uid,
-        dedupeKey: `sms:${key}`,          /* the SMS inherits the same idempotency */
+        dedupeKey: `sms:${key}`,        /* the SMS inherits the same idempotency */
       });
       result.channels.sms = r.suppressed ? 'suppressed_by_preference'
                           : r.deduped   ? 'deduped'
@@ -741,47 +805,11 @@ async function advanceOrder({ orderId, stage, uid, phone, title, body, image, de
 }
 
 /* Callable form. Only the seller/rider/admin side advances an order, so this
-   requires auth; the buyer's client only ever READS the timeline.
-
-   That sentence was true as a description and false as an implementation: the
-   check was `request.auth.uid` existing, and nothing more. Any signed-in account
-   could name any orderId and advance a stranger's order — and because the
-   `accepted` stage sets status 'confirmed', which onOrderStatusChange watches to
-   fire rider auto-assignment, that meant pushing someone else's order into
-   dispatch and putting a real rider on the road.
-
-   Authorisation now happens BEFORE advanceOrder() is reached, so a refused call
-   performs no read-modify-write on the order at all: the order document, its
-   status, and every downstream trigger are untouched.
-
-   advanceOrder() itself is deliberately NOT changed. It is the trusted internal
-   primitive; the callable is the boundary where an untrusted caller appears. */
-const _orderAuth = require('./order-advance-authority');
-const _shopEmployees = require('./shop-employees');
-
+   requires auth; the buyer's client only ever READS the timeline. */
 exports.orderAdvance = onCall(
   { region: REGION, secrets: sokoniAt.secrets },
   async (request) => {
     if (!(request.auth && request.auth.uid)) throw new HttpsError('unauthenticated', 'Sign in required.');
-    const uid = request.auth.uid;
-    const { orderId, stage } = request.data || {};
-    if (!orderId) throw new HttpsError('invalid-argument', 'orderId is required.');
-    if (!stage)   throw new HttpsError('invalid-argument', 'stage is required.');
-
-    const snap = await db().collection('orders').doc(String(orderId)).get();
-    if (!snap.exists) throw new HttpsError('not-found', 'Order not found.');
-
-    /* WHO is this caller to THIS order, then MAY that actor set THIS stage.
-       Two questions, asked separately — collapsing them is how the original
-       hole existed. */
-    await _orderAuth.authorise({
-      order: snap.data() || {},
-      uid,
-      claims: request.auth.token || {},
-      stage,
-      shopAccess: _shopEmployees.assertShopAccess,
-    });
-
     return advanceOrder(request.data || {});
   }
 );

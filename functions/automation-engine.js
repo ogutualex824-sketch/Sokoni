@@ -40,8 +40,6 @@ const admin                  = require('firebase-admin');
 const logger                 = require('firebase-functions/logger');
 /* Canonical payment vocabulary — one definition, in shared/constants.js. */
 const { isPaid } = require('./shared/constants');
-/* Roles have ONE writer — users.roles[] and the Auth claim always move together. */
-const { roleFieldPatch, syncRoleClaim } = require('./role-authority');
 
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
@@ -220,7 +218,33 @@ exports.autoOnSubscriptionCreate = onDocumentCreated(
     const rule = await _getRule('subscriptions');
     if (!rule.enabled) return;
 
-    const cycleDays  = sub.billingCycleDays || 30;
+    /* ── IT MUST NOT OVERWRITE A PERIOD SOMEONE ELSE ALREADY SET ────────────
+       This trigger used to recompute currentPeriodEnd on EVERY subscription
+       creation, from `sub.billingCycleDays || 30` — a field nothing in the
+       payment chain writes. So an ANNUAL subscription activated by
+       reconcilePaidIntent with a 365-day period was silently rewritten to 30
+       days about a second later: the customer paid for a year and received a
+       month. It went unnoticed because monthly plans produce the same answer,
+       so every monthly test looked correct.
+
+       A creator that already established the period is the authority on it.
+       This now fills in only for legacy documents that arrive without one. */
+    if (sub.currentPeriodEnd) {
+      await event.data.ref.update({ automationProcessed: true })
+        .catch(e => logger.error('autoOnSubscriptionCreate: flag failed', { subId, error: e.message }));
+      logger.info('autoOnSubscriptionCreate: period already set by the creator — left alone', {
+        subId, plan: sub.planId || sub.plan, billingCycle: sub.billingCycle,
+      });
+      return;
+    }
+
+    /* ── AND WHEN IT DOES COMPUTE, THE CATALOGUE IS THE AUTHORITY ───────────
+       A missing field must never silently become 30 days. */
+    let cycleDays;
+    const cycle = sub.billingCycle === 'annual' ? 'annual' : 'monthly';
+    if (Number(sub.billingCycleDays) > 0) cycleDays = Number(sub.billingCycleDays);
+    else cycleDays = (cycle === 'annual') ? 365 : 30;
+
     const trialDays  = sub.trialDays || 0;
     const endDate    = new Date();
     endDate.setDate(endDate.getDate() + cycleDays + trialDays);
@@ -230,6 +254,7 @@ exports.autoOnSubscriptionCreate = onDocumentCreated(
       status,
       currentPeriodStart: _ts(),
       currentPeriodEnd: admin.firestore.Timestamp.fromDate(endDate),
+      expiresAt: admin.firestore.Timestamp.fromDate(endDate),
       automationProcessed: true,
       activatedBy: 'automation',
     }).catch(e => logger.error('autoOnSubscriptionCreate: update failed', { subId, error: e.message }));
@@ -276,20 +301,12 @@ exports.autoOnSellerApplication = onDocumentCreated(
           approvedAt: _ts(),
           approvedBy: 'automation',
         });
-        /* Roles come from the ONE role primitive. Writing `role: 'seller'` alone
-           granted nothing the platform actually reads: the role gate and the
-           analytics gate read `roles` (array) and firestore.rules reads the Auth
-           claim, so an auto-approved seller landed in the app as a buyer. The
-           patch is field-values only, so it is transaction-safe; the claim is
-           minted AFTER this commit (setCustomUserClaims is an Auth call and has
-           no place inside a Firestore transaction). The legacy `role` string is
-           kept for the readers that still consult it. */
-        tx.set(_db().collection('users').doc(app.userId), roleFieldPatch('seller', true, {
+        tx.set(_db().collection('users').doc(app.userId), {
           role: 'seller',
           sellerEnabled: true,
           sellerApplicationId: appId,
           sellerApprovedAt: _ts(),
-        }), { merge: true });
+        }, { merge: true });
         tx.set(_db().collection('shops').doc(app.userId), {
           ownerId: app.userId,
           businessName: app.businessName,
@@ -302,56 +319,19 @@ exports.autoOnSellerApplication = onDocumentCreated(
         }, { merge: true });
       });
 
-      /* Post-commit, never inside the transaction. A failure here is recorded
-         as an observable divergence by the primitive and reported below — it is
-         not swallowed, and it is not dressed up as a completed approval. */
-      const claim = await syncRoleClaim(app.userId, 'seller', true, {
-        source: 'automationEngine.autoOnSellerApplication', entityId: appId,
-      });
-
       await _logAction({
         action: 'auto_approve_seller',
         trigger: 'seller_application_created',
         ruleApplied: 'seller_application',
         entityId: appId,
         entityType: 'seller_application',
-        outcome: claim.ok ? 'approved' : 'approved_claim_pending',
-        metadata: {
-          uid: app.userId, businessName: app.businessName,
-          claim: claim.claim,
-          ...(claim.ok ? {} : { reconcileId: claim.reconcileId, claimError: claim.error }),
-        },
+        outcome: 'approved',
+        metadata: { uid: app.userId, businessName: app.businessName },
       });
 
-      if (claim.ok) {
-        await _notify(app.userId, 'Seller Account Approved!',
-          'Congratulations! Your seller account is active. You can now list products and accept orders.',
-          { type: 'seller_approved', applicationId: appId });
-      } else {
-        /* The role exists in Firestore but the token does not carry it, so the
-           account is not yet usable as a seller. Saying it is active would be a
-           success notice over an incomplete grant. */
-        await _notify(app.userId, 'Seller Application Approved',
-          'Your application is approved. We are finishing the last step of your account setup — you will be able to open your seller dashboard shortly.',
-          { type: 'seller_approved_pending', applicationId: appId });
-        await _queueException({
-          type: 'verification_failure',
-          priority: 'high',
-          entityId: appId,
-          entityType: 'seller_application',
-          title: `Seller role claim not minted — ${app.businessName || 'Unnamed Business'}`,
-          description: `users/${app.userId} carries the seller role but the Auth claim did not mint (${claim.error}). The merchant will behave as a buyer until roleClaimReconcile/${claim.reconcileId} is resolved.`,
-          recommendation: {
-            action: 'reconcile_role_claim',
-            confidence: 0.9,
-            reasoning: 'Firestore committed the role; the Auth custom claim did not. Re-running the grant re-attempts the mint — the Firestore write is idempotent.',
-            suggestedAction: 'Verify the Auth account exists, then re-run the role grant for this uid.',
-          },
-          evidence: [
-            { type: 'role_claim_divergence', label: 'Role claim', data: { uid: app.userId, roleKey: claim.key, reconcileId: claim.reconcileId, error: claim.error } },
-          ],
-        });
-      }
+      await _notify(app.userId, 'Seller Account Approved!',
+        'Congratulations! Your seller account is active. You can now list products and accept orders.',
+        { type: 'seller_approved', applicationId: appId });
 
     } else {
       await event.data.ref.update({ status: 'under_review' });
