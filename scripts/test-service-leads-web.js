@@ -86,7 +86,7 @@ function w1Condition(src) {
     pd = read('provider-dashboard.html'), sr = read('service-requests.html'), pp = read('provider-profile.html');
   const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '');
   ck('W4a', bs.includes('if (_ctx.leadId) return create();') && bs.includes('leadId: _ctx.leadId || undefined'), 'booking an accepted quote skips options and sends only the leadId (price applied server-side)');
-  ck('W4b', mh.includes("['service_booking','service_lead','order']") && ib.includes("'service_lead'") && dir.includes('G.SokoniLeads.ask({ providerId: p.uid'),
+  ck('W4b', /\[(?:'[a-z_]+',)*'service_lead'(?:,'[a-z_]+')*\]\.indexOf\(t\)===-1/.test(mh) && ib.includes("'service_lead'") && dir.includes('G.SokoniLeads.ask({ providerId: p.uid'),
     'a lead conversation opens in messages; a directory "Message" asks the provider (creates the lead)');
   ck('W4c', /data-hc-module="leads" hidden/.test(pd) && pd.includes('id="panel-leads"') && pd.includes('SokoniLeads.mountProvider(') && pd.includes('src="sokoni-leads.js"'),
     'provider-dashboard: Leads & quotes is hidden until the server makes `leads` AVAILABLE');
