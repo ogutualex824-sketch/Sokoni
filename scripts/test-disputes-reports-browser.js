@@ -90,7 +90,7 @@ const MERCHANT_PAGE = SHELL(`<div id="host" style="height:100vh;display:flex;fle
     await act('take the product down', async () => { await R.click('.stq-row', T); await R.fill('#stqNote', 'Counterfeit confirmed.', T);
       await R.click('[data-act="decide"][data-v="takedown"]', T); await R.waitForFunction(() => /product taken down/.test(document.body.innerText), null, T); });
     const p = (await db.doc('products/pT').get()).data();
-    ck('TB4 a product report is listed and "Uphold + take product down" hides it (server)', listed && p.isVisible === false && p.moderationHold && !!p.moderationHold.reportId, { listed, vis: p.isVisible });
+    ck('TB4 a product report is listed and "Uphold + take product down" hides it (server)', listed && p.isVisible === false && p.moderationHold && !!p.moderationHold.ref && p.moderationHold.reportId === undefined, { listed, vis: p.isVisible });
     await act('drawer + Esc', async () => { await R.click('[data-act="filter"][data-v="upheld"]', T); await R.waitForSelector('.stq-row', T); await R.click('.stq-row', T);
       await R.waitForSelector('.stq-drawer', T); await R.keyboard.press('Escape'); await R.waitForFunction(() => !document.querySelector('.stq-drawer'), null, T); });
     const geo = await R.evaluate(() => ({ noH: document.documentElement.scrollWidth <= window.innerWidth + 1,

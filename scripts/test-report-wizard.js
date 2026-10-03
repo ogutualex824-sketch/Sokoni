@@ -227,7 +227,8 @@ const reportsOn = async (pid) => (await db.collection('reports').where('entityId
   ck('QU1 the queue lists through tsGetReports {state:"pending"} and shows the product (entityId-backed), never "targetId"',
     qcalls[0] && qcalls[0].name === 'tsGetReports' && qcalls[0].payload.state === 'pending' && /Kitenge Dress/.test(qhtml()) && /Pending review/.test(qhtml())
       && !/targetId/.test(src('sokoni-trust-queues.js')), qcalls[0]);
-  const serverActions = Object.keys(TS._reportModel.REPORT_ACTIONS);
+  /* decisions (REPORT_ACTIONS) + the listing actions that change no report status (takedown spec: 'restore') */
+  const serverActions = Object.keys(TS._reportModel.REPORT_ACTIONS).concat(TS._reportModel.LISTING_ACTIONS || []);
   const sent = Object.keys(TQ.ACTION).map((a) => (a === 'takedown' ? 'approve' : a));
   ck('QU2 NEGATIVE CONTROL: every action the queue can send is accepted by the server; "action" is not one, and the server refuses it',
     sent.every((a) => serverActions.includes(a)) && !sent.includes('action') && !serverActions.includes('action'), { sent, serverActions });

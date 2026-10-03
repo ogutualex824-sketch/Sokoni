@@ -72,6 +72,10 @@
     archive:         { l: 'Archive',                       c: '',     done: 'Report archived' },
     remove:          { l: 'Remove report',                 c: '',     done: 'Report removed', note: 'any' },
     reopen:          { l: 'Reopen',                        c: 'warn', done: 'Report reopened', note: 'internal10' },
+    /* takedown enforcement (2026-10-02): the explicit restore of an upheld take-down. Offered only when the server
+       lists it (the report owns the listing's hold). The server refuses it while another enforcement applies
+       (e.g. SELLER_SUSPENDED) and says which — that message is shown as worded. */
+    restore:         { l: 'Restore listing',               c: 'warn', done: 'Listing restored', note: 'internal10' },
   };
   /* review assignment — not a decision; never changes the report status */
   var ASSIGN = {
@@ -334,7 +338,7 @@
       return '<ol class="stq-tl">' + h.map(function (x) {
         var what = x.action === 'report_filed' ? 'Report filed'
           : x.action === 'report_claimed' ? 'Taken under review' : x.action === 'report_unclaimed' ? 'Released'
-          : x.action === 'report_reopened' ? 'Reopened' : 'Decision: ' + (x.decision || '—');
+          : x.action === 'report_reopened' ? 'Reopened' : x.action === 'listing_restored' ? 'Listing restored' : 'Decision: ' + (x.decision || '—');
         return '<li><b>' + esc(what) + '</b>' + (x.from && x.result && x.from !== x.result ? ' · ' + esc(x.from) + ' → ' + esc(x.result) : '') +
           (x.enforcement && x.enforcement !== 'none' ? ' · <span class="stq-pill bad">' + esc(x.enforcement.replace(/_/g, ' ')) + '</span>' : '') +
           (x.groupSize > 1 ? ' · <span class="stq-pill">with ' + (x.groupSize - 1) + ' other report(s)</span>' : '') +

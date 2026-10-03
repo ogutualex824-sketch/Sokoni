@@ -70,7 +70,9 @@ const as = (uid, data, token) => ({ auth: uid ? { uid, token: token || {} } : nu
   const p = await get('products/pR');
   const audit = (await db.collection('trustSafetyAudit').get()).docs.map((d) => d.data()).find((a) => a.reportId === (r1 && r1.reportId));
   ck('RP5 admin take-down hides the product and audits it; a seller cannot decide; "action" is refused', bySeller === 'permission-denied' && badAct === 'invalid-argument'
-    && done && done.productHidden === true && p.isVisible === false && p.moderationHold && p.moderationHold.reportId === r1.reportId && !!audit && audit.productHidden === true,
+    && done && done.productHidden === true && p.isVisible === false && p.moderationHold
+    /* takedown spec (2026-10-02): the hold on the PUBLIC product doc is opaque — no reporter-derived id */
+    && p.moderationHold.ref === require('crypto').createHash('sha256').update(String(r1.reportId)).digest('hex').slice(0, 16) && p.moderationHold.reportId === undefined && !!audit && audit.productHidden === true,
     { bySeller, badAct, done });
 
   const st = src('sokoni-trust.js'), ph = src('product.html');
@@ -82,7 +84,7 @@ const as = (uid, data, token) => ({ auth: uid ? { uid, token: token || {} } : nu
   const vr = aos.slice(aos.indexOf('async function viewReports()'), aos.indexOf('async function investigateAlert('));
   ck('AD1 AdminOS mounts the shared queue (entityId + context rows) and sends only server actions',
     /_mountTrustQueue\(/.test(vr) && !/r\.targetId/.test(vr.replace(/\/\*[\s\S]*?\*\//g, '')) && /c\.productName \|\| r\.entityId/.test(tq)
-      && !/'action'\)/.test(vr.replace(/\/\*[\s\S]*?\*\//g, '')) && Object.keys(require(path.join(ROOT, 'sokoni-trust-queues.js')).ACTION).every((a) => a === 'takedown' || a in TS._reportModel.REPORT_ACTIONS));
+      && !/'action'\)/.test(vr.replace(/\/\*[\s\S]*?\*\//g, '')) && Object.keys(require(path.join(ROOT, 'sokoni-trust-queues.js')).ACTION).every((a) => a === 'takedown' || a in TS._reportModel.REPORT_ACTIONS || (TS._reportModel.LISTING_ACTIONS || []).includes(a)));
   const md = src('moderation.html');
   ck('MD1 moderation.html: no report data in onclick script, escapes \', ban only on a user report', !/onclick="reportAction\(/.test(md) && /replace\(\/'\/g,'&#39;'\)/.test(md) && /r\.type==='user' \? '<button class="mod-action-btn btn-ban"/.test(md));
 
