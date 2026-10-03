@@ -24,7 +24,7 @@ const B = () => D['rentalBookings/b1'] || {};
 
 (async () => {
   seed(); let r = await hold();
-  ck('R-1', r.outcome === 'held' && B().status === 'paid_held' && B().paymentStatus === 'held' && B().heldAmountCents === 650000 && B().depositCents === 200000 && B().paymentRef === 'API1' && B().providerMethod === 'M-PESA'
+  ck('R-1', r.outcome === 'held' && B().status === 'paid_held' && B().paymentStatus === 'held' && B().heldAmountCents === 650000 && B().depositCents === 200000 && B().paymentRef === 'API1' && B().intentRef === 'RENT-b1' && B().providerMethod === 'M-PESA'
     && D['paymentIntents/RENT-b1'].status === 'paid', 'an exact, IntaSend-confirmed payment HOLDS the rental (paid_held/held, rent + deposit, ref, method)', [r, B()]);
   r = await hold();
   ck('R-2', r.outcome === 'noop' && B().status === 'paid_held', 'a replayed callback is a no-op', r);

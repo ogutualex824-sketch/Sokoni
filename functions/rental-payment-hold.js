@@ -82,7 +82,7 @@ async function holdRentalBookingPayment(db, adminSdk, p) {
       status: 'paid_held', paymentStatus: 'held',
       heldAmountCents: grossCents,
       depositCents: Number.isInteger(meta.depositCents) ? meta.depositCents : (Number.isInteger(b.depositCents) ? b.depositCents : null),
-      paymentRef: apiRef, providerMethod: p.providerMethod || null,
+      paymentRef: apiRef, intentRef: intentId, providerMethod: p.providerMethod || null,   /* intentRef: settlement prices from the SERVER intent */
       paidAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp(),
     });
     return { outcome: 'held' };
