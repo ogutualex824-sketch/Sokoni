@@ -10638,6 +10638,8 @@ exports.recordSearchQuery   = searchInsights.recordSearchQuery;
 const platformHealth = require('./platform-health');
 exports.getPlatformHealthScores   = platformHealth.getPlatformHealthScores;
 exports.getTopBusinessPriorities  = platformHealth.getTopBusinessPriorities;
+/* Daily platform-health score snapshot (03:00 Africa/Nairobi) -> platformHealthHistory/{YYYY-MM-DD}. */
+exports.platformHealthSnapshot     = platformHealth.platformHealthSnapshot;
 
 /* ── Product Analytics & Trust Engine ────────────────────────────────── */
 const productAnalytics = require('./product-analytics');

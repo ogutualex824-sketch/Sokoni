@@ -26,10 +26,18 @@
  * Both now read date-keyed documents directly via getAll(), so the claim above is
  * true again — by construction rather than by assertion. Before adding an ordered
  * query here, check whether the collection is date-keyed; if it is, compute the keys.
+ *
+ * DAILY HISTORY (owner decision 2026-10-04): platformHealthSnapshot (scheduled, 03:00
+ * Africa/Nairobi) records ONE document per Nairobi calendar day in
+ * platformHealthHistory/{YYYY-MM-DD}. It calls computeScores() — the SAME function the
+ * callable uses, so there is one formula, not two. getPlatformHealthScores returns the
+ * last 90 days as `history`, read with getAll() over the 90 computed date keys (the
+ * collection is date-keyed by construction; no ordered query, no index).
  */
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { getFirestore, Timestamp } = require("firebase-admin/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { getFirestore, Timestamp, FieldValue } = require("firebase-admin/firestore");
 
 /* ── helpers ───────────────────────────────────────────────────── */
 function clamp(v)              { return Math.min(100, Math.max(0, Math.round(v))); }
@@ -401,15 +409,14 @@ async function _costEfficiency() {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   getPlatformHealthScores
-   Returns all 5 scores, an overall weighted score, and computed-at.
+   computeScores(db) — THE formula. Used by the callable AND the daily
+   snapshot; there is no second copy. Returns the five dimension
+   results, the failed dimension names, and the weighted overall
+   (null = withheld because a dimension could not be computed).
 ════════════════════════════════════════════════════════════════ */
-exports.getPlatformHealthScores = onCall(
-  { maxInstances: 5, timeoutSeconds: 120, memory: "512MiB" },
-  async (request) => {
-    requireAdmin(request);
-    const db = getFirestore();
+const DIMENSION_NAMES = ["marketplace", "seller", "buyer", "operational", "cost"];
 
+async function computeScores(db) {
     /* ── ONE FAILING DIMENSION MUST NOT ERASE THE OTHER FOUR ──────────────────
        This was Promise.all, so the missing ops_reports index above rejected the
        whole call and every dimension came back as a single word: INTERNAL. The
@@ -420,7 +427,7 @@ exports.getPlatformHealthScores = onCall(
        score: null with the reason attached — NOT a zero. A zero is a measurement
        that says "this is bad"; the truth is "this is unknown", and the two must not
        render the same. */
-    const NAMES = ["marketplace", "seller", "buyer", "operational", "cost"];
+    const NAMES = DIMENSION_NAMES;
     const settled = await Promise.allSettled([
       _marketplaceHealth(db),
       _sellerSuccess(db),
@@ -454,6 +461,143 @@ exports.getPlatformHealthScores = onCall(
       cost.score         * 0.05
     );
 
+    return { marketplace, seller, buyer, operational, cost, failedDimensions, overall };
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Daily history — date keys, snapshot document, bounded read
+════════════════════════════════════════════════════════════════ */
+const HISTORY_COLLECTION = "platformHealthHistory";
+const HISTORY_DAYS = 90;
+const SNAPSHOT_VERSION = 1;
+
+/* YYYY-MM-DD of the Africa/Nairobi calendar day containing `ms`. The day boundary is
+   Nairobi's (UTC+3, no DST), not UTC's: a 03:00 EAT run is 00:00 UTC and would otherwise
+   straddle two UTC dates depending on scheduler jitter. */
+function nairobiDateKey(ms) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date(ms));
+  const get = (t) => parts.find((p) => p.type === t).value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/* The last `days` Nairobi date keys, OLDEST FIRST, ending with the day containing nowMs.
+   Stepping by 24h is exact: Nairobi has no DST. */
+function historyDateKeys(nowMs, days = HISTORY_DAYS) {
+  const keys = [];
+  for (let i = days - 1; i >= 0; i--) keys.push(nairobiDateKey(nowMs - i * 86400000));
+  return keys;
+}
+
+/* A score is recorded only if it is a finite number. A failed dimension is null —
+   never 0: zero is a measurement, null is "not measured". */
+function scoreOrNull(x) {
+  return x && typeof x.score === "number" && Number.isFinite(x.score) ? x.score : null;
+}
+
+function buildSnapshotDoc(computed, date) {
+  const dimensions = {};
+  DIMENSION_NAMES.forEach((n) => {
+    dimensions[n] = computed.failedDimensions.includes(n) ? null : scoreOrNull(computed[n]);
+  });
+  return {
+    date,
+    overall: typeof computed.overall === "number" && Number.isFinite(computed.overall) ? computed.overall : null,
+    dimensions,
+    failed: computed.failedDimensions.slice(),
+    /* computed, but one or more inputs were absent (the server's own dataComplete flag) */
+    incomplete: DIMENSION_NAMES.filter((n) => computed[n] && computed[n].dataComplete === false &&
+      !computed.failedDimensions.includes(n)),
+    computedAt: FieldValue.serverTimestamp(),
+    version: SNAPSHOT_VERSION,
+  };
+}
+
+const ALREADY_EXISTS = 6; /* gRPC status code */
+function isAlreadyExists(err) {
+  return !!err && (err.code === ALREADY_EXISTS || err.code === "already-exists" ||
+    err.code === "ALREADY_EXISTS" || /ALREADY_EXISTS/.test(String(err.message || "")));
+}
+
+/* One snapshot per Nairobi day. create() is the claim: a rerun the same day (manual
+   trigger, scheduler retry, duplicate delivery) never overwrites the recorded reading.
+   The exists() pre-check only avoids recomputing; create() is what guarantees it.
+   Returns {status:'written'|'skipped', date, doc?}. */
+async function runSnapshot(db, nowMs = Date.now()) {
+  const date = nairobiDateKey(nowMs);
+  const ref = db.collection(HISTORY_COLLECTION).doc(date);
+  const existing = await ref.get();
+  if (existing.exists) {
+    console.log(`[platform-health] snapshot ${date} already recorded — skipped`);
+    return { status: "skipped", date };
+  }
+  const computed = await computeScores(db);
+  const doc = buildSnapshotDoc(computed, date);
+  try {
+    await ref.create(doc);
+  } catch (err) {
+    if (isAlreadyExists(err)) {
+      console.log(`[platform-health] snapshot ${date} created concurrently — skipped`);
+      return { status: "skipped", date };
+    }
+    throw err;
+  }
+  console.log(`[platform-health] snapshot ${date} recorded: overall=${doc.overall} failed=[${doc.failed.join(",")}]`);
+  return { status: "written", date, doc };
+}
+
+/* Last HISTORY_DAYS days, OLDEST FIRST (chronological — the order a chart draws).
+   Days with no snapshot are simply absent; nothing is interpolated. Exactly one getAll
+   of ≤90 computed keys — no query, no index. */
+async function readHistory(db, nowMs = Date.now(), days = HISTORY_DAYS) {
+  const keys = historyDateKeys(nowMs, days);
+  const snaps = await db.getAll(...keys.map((k) => db.collection(HISTORY_COLLECTION).doc(k)));
+  const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  return snaps.filter((s) => s.exists).map((s) => {
+    const d = s.data() || {};
+    const dims = d.dimensions && typeof d.dimensions === "object" ? d.dimensions : {};
+    const dimensions = {};
+    DIMENSION_NAMES.forEach((n) => { dimensions[n] = num(dims[n]); });
+    return { date: s.id, overall: num(d.overall), dimensions };
+  });
+}
+
+exports.platformHealthSnapshot = onSchedule(
+  { schedule: "0 3 * * *", timeZone: "Africa/Nairobi", region: "us-central1",
+    memory: "512MiB", timeoutSeconds: 120 },
+  async () => { await runSnapshot(getFirestore()); }
+);
+
+/* ════════════════════════════════════════════════════════════════
+   getPlatformHealthScores
+   Returns all 5 scores, an overall weighted score, computed-at, and
+   the recorded daily history (last 90 days).
+════════════════════════════════════════════════════════════════ */
+exports.getPlatformHealthScores = onCall(
+  { maxInstances: 5, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    requireAdmin(request);
+    const db = getFirestore();
+
+    /* History is read alongside the live computation. A failed history read must not
+       erase the live scores: it degrades to history:null (unknown), never to []
+       (which would claim "no snapshots exist"). */
+    const [computed, historyResult] = await Promise.all([
+      computeScores(db),
+      readHistory(db).then((h) => ({ ok: true, h }), (e) => ({ ok: false, e })),
+    ]);
+    const { marketplace, seller, buyer, operational, cost, failedDimensions, overall } = computed;
+    let history = null;
+    let historyError;
+    if (historyResult.ok) history = historyResult.h;
+    else {
+      const e = historyResult.e || {};
+      console.error("[platform-health] history read failed:", e);
+      historyError = { code: e.code != null ? String(e.code) : "unknown",
+                       message: String(e.message || e).slice(0, 400) };
+    }
+
     /* Surface actionable alerts */
     /* A failed dimension has score null, and null < 60 is TRUE in JavaScript — so
        without this guard a missing index would have raised "Marketplace health is
@@ -486,9 +630,20 @@ exports.getPlatformHealthScores = onCall(
       alerts,
       computedAt:  new Date().toISOString(),
       indexBudget: { used: 192, max: 200 },
+      /* [{date:'YYYY-MM-DD', overall:number|null, dimensions:{marketplace,seller,buyer,
+         operational,cost: number|null}}], oldest first, ≤90 entries. [] = no snapshot
+         recorded yet; null = the history read failed (see historyError). */
+      history,
+      ...(historyError ? { historyError } : {}),
     };
   }
 );
+
+/* Exposed for the hermetic suite (scripts/test-platform-health-history.js). */
+exports._internals = {
+  computeScores, runSnapshot, readHistory, buildSnapshotDoc, nairobiDateKey, historyDateKeys,
+  HISTORY_COLLECTION, HISTORY_DAYS, DIMENSION_NAMES, SNAPSHOT_VERSION,
+};
 
 /* ════════════════════════════════════════════════════════════════
    getTopBusinessPriorities

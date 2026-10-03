@@ -1,3 +1,50 @@
+## [2026-10-04] - Platform Health daily score history: platformHealthSnapshot + getPlatformHealthScores.history (functions; NOT deployed)
+
+Owner decision 2026-10-04: record a daily snapshot of the five platform health scores so the Platform Health
+"over time" card draws a real trend. Branch `feat/platform-health-history-on-669e5ba`. The base `669e5ba` has a
+`functions/` tree byte-identical (379/379 files) to the archive serving `getPlatformHealthScores` and
+`platformHealthSweep` (sha256 `6a312842…`).
+
+**Reuse check.** Nothing already stored these scores:
+- `platformHealthSweep` (serving revision `00015-qib`, read-only download) only marks `platformHealth/*` heartbeat
+  docs stale.
+- None of the 170 us-central1 Scheduler jobs stores the five scores.
+
+**Summary**
+- `computeScores(db)`: the existing allSettled formula, moved out of the callable unchanged. The callable and the
+  snapshot both use it, so there is one formula.
+- New `platformHealthSnapshot`:
+  - runs on `onSchedule '0 3 * * *'`, Africa/Nairobi, us-central1;
+  - writes `platformHealthHistory/{YYYY-MM-DD Nairobi}` with `create()`, so a rerun the same day skips and never
+    overwrites;
+  - stores `{date, overall|null, dimensions{5: number|null}, failed[], incomplete[], computedAt, version:1}`. A failed
+    dimension is `null`, never `0`.
+- `getPlatformHealthScores` also returns `history`:
+  - `[{date, overall, dimensions}]`, oldest first, ≤90 entries;
+  - read by one `getAll` of 90 computed date keys: no query, no index;
+  - a failed read returns `history:null` + `historyError`, and the live scores are unaffected.
+  - The admin||superAdmin gate is unchanged.
+
+**Files:**
+- `functions/platform-health.js`
+- `functions/index.js` (export `platformHealthSnapshot`)
+- `scripts/test-platform-health-history.js` (new, 37 rows, 2 negative controls)
+- `docs/PLATFORM_HEALTH_HISTORY.md` (new)
+
+**Database:** new collection `platformHealthHistory` (server-only, about 1 doc/day). No index.
+
+**API:** `getPlatformHealthScores` adds `history` (+ `historyError` on read failure). All legacy keys are unchanged.
+
+**Security:** the collection needs the rules matcher `match /platformHealthHistory/{date} { allow read, write: if
+false; }`. It goes on the f3 combined rules line; rules are not edited here.
+
+**Infra:** adds 1 Cloud Scheduler job.
+
+**Breaking changes:** none.
+
+**Deploy (NOT done):** run `firebase deploy --only functions:platformHealthSnapshot,functions:getPlatformHealthScores`
+from this branch, then the rules matcher (f3), then hosting (`SERIES_FIELD='history'`).
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
