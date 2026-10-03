@@ -131,6 +131,13 @@ _h.bookingCreateService = async (req) => {
   if (svc.providerId !== providerId) throw new HttpsError('failed-precondition', 'Service does not belong to this provider.');
   if (svc.active === false) throw new HttpsError('failed-precondition', 'This service is not available.');
   const serviceName = _san(svc.name, 200);
+  /* Tech Hub slice 4b: a service with a device profile needs the customer's device (validated against what the
+     service covers). Repair details are descriptive — they never change the server price below. */
+  let repairDetails = null;
+  if (svc.techProfile) {
+    try { repairDetails = require('./shared/tech-service-profile').sanitizeRepairDetails(d.repairDetails, svc.techProfile); }
+    catch (e) { throw new HttpsError('invalid-argument', e.message, { code: 'REPAIR_DETAILS_' + (e.code || 'BAD_VALUE') }); }
+  }
   const fee         = Math.max(0, Math.round(Number(svc.fee) || 0));     /* cents — declared per-service fee (D3) */
 
   /* ── Canonical pricing (Slice B): the SERVER computes the authoritative total from the
@@ -258,6 +265,7 @@ _h.bookingCreateService = async (req) => {
       status,                        /* server-authoritative */
       expiresAt: admin.firestore.Timestamp.fromMillis(holdExpiresMs),   /* pre-payment hold window; cleared on paid_held */
       note: _san(d.note, 300),
+      ...(repairDetails ? { repairDetails } : {}),
       hubType: _san(d.hubType, 40) || 'services',
       idempotencyKey,
       /* Provenance — which path/engine/rev priced & reserved this booking, so a

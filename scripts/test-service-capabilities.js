@@ -68,8 +68,10 @@ try { BW = require(path.join(FN, 'business-workspace.js')); } catch (e) { loadEr
   w = await BW.workspaceFor(db, 't1', OPTS);
   ck('B-1', w.route === 'provider-dashboard.html' && ['DEVICE_REPAIR', 'IT_SUPPORT', 'REMOTE_SUPPORT'].every((c) => (w.serviceCapabilities || []).includes(c)),
     'an APPROVED tech provider (phone repair + IT support) gets ONE provider dashboard with the UNION of capabilities', { route: w.route, state: w.state, reason: w.reason, caps: w.serviceCapabilities });
-  ck('B-2', w.modules && w.modules.repairs && w.modules.repairs.state === 'NOT_IMPLEMENTED' && w.modules.repairs.reason === 'TECH_HUB_PENDING' && (w.modules.supportTickets || {}).state === 'NOT_IMPLEMENTED',
-    'capability modules whose screens do not exist yet are NOT_IMPLEMENTED with the reason — never shown as working', w.modules && { repairs: w.modules.repairs, supportTickets: w.modules.supportTickets });
+  ck('B-2', /* Tech slice 4b (sokoni-b2) shipped repairs + supportedDevices; diagnostics is still pending, so the honesty rule is asserted on it */
+    w.modules && w.modules.diagnostics && w.modules.diagnostics.state === 'NOT_IMPLEMENTED' && w.modules.diagnostics.reason === 'TECH_HUB_PENDING' && (w.modules.supportTickets || {}).state === 'NOT_IMPLEMENTED'
+    && (w.modules.repairs || {}).state === 'AVAILABLE',
+    'capability modules whose screens do not exist yet are NOT_IMPLEMENTED with the reason — never shown as working', w.modules && { diagnostics: w.modules.diagnostics, repairs: w.modules.repairs, supportTickets: w.modules.supportTickets });
   ck('B-3', w.modules && w.modules.quotes && w.modules.quotes.state === 'AVAILABLE' && (w.modules.overview || {}).state === 'AVAILABLE' && (w.modules.cctvInstallations || {}).state === 'NOT_APPLICABLE',
     'existing profile modules are unchanged; a capability the business was NOT approved for stays NOT_APPLICABLE', w.modules && { quotes: w.modules.quotes, cctv: w.modules.cctvInstallations });
   /* B-4 approval first: same provider record, application still pending */

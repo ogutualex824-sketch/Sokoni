@@ -1,3 +1,28 @@
+## [2026-10-03] — Tech Hub slice 4b (server): device-repair service profile + repair details, capability-gated — NOT deployed
+
+**Files:** `functions/shared/tech-service-profile.js` (new), `functions/provider-ops.js`, `functions/booking-service.js`,
+`functions/business-workspace.js`, `scripts/test-tech-service-profile.js` (new), `scripts/test-service-capabilities.js` (B-2 row).
+
+- **providerServices.techProfile** (new optional block): deviceTypes / repairTypes / brands (closed vocabularies — SOKONI had no device
+  taxonomy; built from the lists the Tech pages already showed), models (free text, max 30), serviceModes (WORKSHOP / ONSITE_SUPPORT /
+  FIELD_SERVICE / PICKUP_DROP_OFF / REMOTE_SUPPORT), turnaroundHours (provider estimate, 1–720), serviceArea. Validated by add / update /
+  duplicate:
+  - device fields need DEVICE_REPAIR or ELECTRONICS; every service mode must be a GRANTED capability;
+  - the workspace must be AVAILABLE (`assertModule`: supportedDevices for device fields, services otherwise);
+  - duplicate re-validates against today's capabilities; `techProfile: null` clears it. No price field — price stays on the service / rate card.
+- **providerBookings.repairDetails**: bookingCreateService requires the customer's device for a service with a device profile and checks
+  device / brand / repair / mode against what the service covers. Descriptive only — the server price is unchanged.
+- **Modules**: `repairs` (= the provider's bookings carrying repairDetails, on the EXISTING booking lifecycle / PIN completion / settlement —
+  no second repair state machine) and `supportedDevices` (the editor) are now implemented. `diagnostics` stays NOT_IMPLEMENTED.
+- **Tests**: test-tech-service-profile 17/0 (BASE=81cde54 fails 9 of 10 server rows: a pending / self-approved applicant could save anything,
+  on-site could be claimed). Mutations: "grant every capability" caught (B-4, B-5). "assertModule → plain workspace read" NOT caught — the
+  workspace composes NO capabilities when it is not AVAILABLE (pending, self-decided, suspended all verified), so the capability check
+  already refuses; assertModule is defence in depth. test-service-capabilities 15/0 (B-2 now asserts honesty on diagnostics), sabotage 7/7,
+  test-business-workspace 30/0, test-tech-taxonomy 8/0.
+- **Not changed / found**: plain (non-tech) services can still be added before approval (the pre-existing gap stays — approval is enforced
+  at booking); that is a cross-vertical decision.
+- Release: inside sokoni-5b's ONE providerDispatch release (provider-ops / booking-service / business-workspace are providerDispatch).
+
 ## [2026-10-03] — Tech Hub slice 4a: Tech business ids classifiable + capable (functions, on 13f74f3) — NOT deployed
 
 **Files:** `functions/business-category.js`, `functions/shared/service-capabilities.js`, `scripts/test-tech-taxonomy.js` (new).

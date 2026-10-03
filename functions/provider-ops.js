@@ -22,6 +22,7 @@ const subCore                      = require('./subscription-core');
 const legal                        = require('./legal-agreements');
 const rc                           = require('./reservation-core');
 const { bookingEvent, TYPES }      = require('./booking-events');
+const TSP                          = require('./shared/tech-service-profile');
 
 const _db  = () => getFirestore();
 const _ts  = () => FieldValue.serverTimestamp();
@@ -719,6 +720,26 @@ _h.providerGetPortfolio = async (req) => {
   return { portfolio: snap.exists ? snap.data() : null };
 };
 
+/* ── Tech service profile (Tech Hub slice 4b) ──────────────────────────────────
+   A service's devices / brands / repairs / service modes. The FIRST caller of business-workspace.assertModule: device
+   fields need the supportedDevices module AVAILABLE (an approved device-repair / electronics business), anything else
+   needs the services module AVAILABLE; every service mode must be a capability the provider was granted. Lazy require —
+   business-workspace is loaded beside this module by provider-dispatch. */
+async function _techProfile(uid, raw) {
+  if (raw === null) return null;                                   /* explicit clear */
+  const BW = require('./business-workspace');
+  const d = raw && typeof raw === 'object' ? raw : {};
+  const wantsDevice = ['deviceTypes', 'repairTypes', 'brands', 'models'].some((k) => Array.isArray(d[k]) && d[k].length);
+  const w = await BW.assertModule(_db(), uid, wantsDevice ? 'supportedDevices' : 'services', HttpsError);
+  try { return TSP.sanitizeProfile(d, w.serviceCapabilities || []); }
+  catch (e) {
+    if (e instanceof TSP.ProfileError) {
+      throw new HttpsError(e.code === 'BAD_VALUE' ? 'invalid-argument' : 'failed-precondition', e.message, { code: 'TECH_PROFILE_' + e.code });
+    }
+    throw e;
+  }
+}
+
 /* ── 10. providerAddService — enforces plan limits.listings ──────────────────
    Creates providerServices; a provider cannot exceed their subscription's
    listing cap (-1 = unlimited). This is the listings-limit enforcement point. */
@@ -728,6 +749,7 @@ _h.providerAddService = async (req) => {
   const d   = req.data || {};
   const name = _san(d.name, 200).trim();
   if (!name) throw new HttpsError('invalid-argument', 'Service name is required.');
+  const techProfile = d.techProfile !== undefined && d.techProfile !== null ? await _techProfile(uid, d.techProfile) : null;
 
   const [subSnap, svcSnap] = await Promise.all([
     _db().collection('providerSubscriptions').doc(uid).get(),
@@ -747,6 +769,7 @@ _h.providerAddService = async (req) => {
     deposit: _cents(d.deposit),                  /* cents — upfront hold (collected in Phase E) */
     images:  _images(d.images),                  /* https URLs */
     durationMins: Math.max(0, Math.round(Number(d.durationMins ?? d.duration) || 0)),
+    ...(techProfile ? { techProfile } : {}),
     active: true,
     createdAt: _ts(), updatedAt: _ts(),
   });
@@ -801,6 +824,7 @@ _h.providerDuplicateService = async (req) => {
     priceType: s.priceType || 'quotation', price: Number(s.price) || 0, fee: Number(s.fee) || 0,
     deposit: Number(s.deposit) || 0, images: Array.isArray(s.images) ? s.images : [],
     durationMins: Math.max(0, Math.round(Number(s.durationMins) || 0)), active: true,
+    ...(s.techProfile ? { techProfile: await _techProfile(uid, s.techProfile) } : {}),
     createdAt: _ts(), updatedAt: _ts(),
   });
   return { success: true, serviceId: ref.id };
@@ -921,6 +945,10 @@ _h.providerUpdateService = async (req) => {
     patch.durationMins = Math.max(0, Math.round(Number(d.durationMins ?? d.duration) || 0));
   }
   if (d.active !== undefined)      patch.active      = d.active === true;
+  if (d.techProfile !== undefined) {
+    const tp = await _techProfile(uid, d.techProfile);
+    patch.techProfile = tp === null ? FieldValue.delete() : tp;
+  }
   await ref.update(patch);
   return { success: true };
 };
