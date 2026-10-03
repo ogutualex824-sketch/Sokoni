@@ -236,7 +236,9 @@ service cloud.firestore {
      verification stamps — server-written only */
   'marketingStatus','marketingCategories','searchable','isPublic','acceptsBookings','providerId',
   'verification','verificationStatus','verifiedFacets','verifiedName','verificationReviewRequired','verificationProjectedAt',
-  'legalVerification','provisionedBy'];
+  'legalVerification','provisionedBy',
+  /* sokoni-5b P0-3 census: accountReactivate restores status from preDeactivationStatus (default active) — self-activation */
+  'preDeactivationStatus','deactivated'];
   }
   match /providers/{providerId} {
   allow read:   if resource.data.status == 'active' || resource.data.status == 'approved'

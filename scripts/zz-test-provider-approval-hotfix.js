@@ -17,6 +17,7 @@ const LOCKED = {
   /* sokoni-5b 7db4c76 */
   marketingStatus: 'approved', marketingCategories: ['all'], searchable: true, isPublic: true, acceptsBookings: true, providerId: 'other',
   verification: { level: 'verified' }, verificationStatus: 'verified', legalVerification: { ok: true }, provisionedBy: 'legal-verification',
+  preDeactivationStatus: 'active', deactivated: false,
 };
 (async () => {
   const file = process.env.RULES_FILE || 'firestore.rules.hotfix-jobs';
