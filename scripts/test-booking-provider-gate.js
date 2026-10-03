@@ -28,7 +28,7 @@ if (process.argv[2] === '--child') {
     DOCS.set('providerAvailability/' + uid, { modes: ['open_24_7'], appt: {} });
     DOCS.set('providerServices/svc_' + uid, { providerId: uid, name: 'Consultation', priceType: 'fixed', price: 100000, active: true, durationMins: 60 });
   };
-  const book = (uid, time) => call(require(path.join(FN, 'booking-service.js'))._h.bookingCreateService, 'cust',
+  const book = (uid, time, who) => call(require(path.join(FN, 'booking-service.js'))._h.bookingCreateService, who || 'cust',
     { providerId: uid, serviceId: 'svc_' + uid, date: tomorrow(), startTime: time || '10:00', idempotencyKey: 'k-' + uid + '-' + (time || '10:00') + '-' + Math.random() });
   const bookings = (uid) => [...DOCS.keys()].filter((k) => k.startsWith('providerBookings/') && DOCS.get(k).providerId === uid).length;
   const refused = (r) => r.ok === undefined && r.code === 'failed-precondition';
@@ -50,6 +50,20 @@ if (process.argv[2] === '--child') {
     r = await book('lawyer'); out.G7 = { refused: refused(r), n: bookings('lawyer'), err: r.msg, code: (r.det && r.det.code) || r.code };
     const sp = DOCS.get('providers/susp'); DOCS.set('providers/susp', Object.assign({}, sp, { status: 'active', suspendedAt: null }));
     r = await book('susp', '11:00'); out.G5 = { ok: r.ok !== undefined, err: r.msg, n: bookings('susp') };
+    /* AV — availability is server-authoritative (owner 10-03): the booking transaction re-checks it */
+    const AVm = require(path.join(FN, 'availability.js'))._h;
+    const day = tomorrow();
+    const ov = await call(AVm.addAvailabilityOverride, 'gen', { date: day, closed: true, label: 'Court day', providerId: 'tech' });
+    r = await book('gen', '15:00');
+    out.AV1 = { ovOk: ov.ok !== undefined, refused: r.ok === undefined, n: bookings('gen'), ownWritten: DOCS.has('providerAvailability/gen/overrides/' + day), otherUntouched: !DOCS.has('providerAvailability/tech/overrides/' + day) };
+    DOCS.set('users/cust2', { displayName: 'cust2' });
+    const t1 = await book('tech', '13:00');
+    const t2 = await book('tech', '13:00', 'cust2');
+    const at13 = [...DOCS.keys()].filter((k) => k.startsWith('providerBookings/') && DOCS.get(k).providerId === 'tech' && DOCS.get(k).startTime === '13:00').length;
+    out.AV2 = { first: t1.ok !== undefined, second: t2.ok === undefined, code: t2.code, at13 };
+    const sa = await call(AVm.setProviderAvailability, 'gen', { providerId: 'tech', modes: ['open_24_7'], schedule: {}, appt: { durationMins: 45 } });
+    const techAv = DOCS.get('providerAvailability/tech') || {};
+    out.AV3 = { ok: sa.ok !== undefined, techUntouched: !(techAv.appt && techAv.appt.durationMins === 45), genSet: !!((DOCS.get('providerAvailability/gen') || {}).appt && DOCS.get('providerAvailability/gen').appt.durationMins === 45) };
     console.log('RESULT_JSON ' + JSON.stringify(out));
   })().catch((e) => { console.error(e && e.stack || e); process.exit(2); });
   return;
@@ -81,6 +95,9 @@ const rows = (x) => ({
   'G5 reinstated provider (status active again): bookable again': !!x.G5 && x.G5.ok && x.G5.n === 1,
   'G6 pending (unapproved) provider: refused': !!x.G6 && x.G6.refused && x.G6.n === 0,
   'G7 legal provider without LSK + admin verification (and booking flag closed): refused': !!x.G7 && x.G7.refused && x.G7.n === 0,
+  'AV1 a date closed through the server override refuses a booking; the override lands ONLY on the caller (a providerId in the request is ignored)': !!x.AV1 && x.AV1.ovOk && x.AV1.refused && x.AV1.ownWritten && x.AV1.otherUntouched,
+  'AV2 the booking transaction re-checks availability: a second booking on the same slot is refused': !!x.AV2 && x.AV2.first && x.AV2.second && x.AV2.at13 === 1,
+  'AV3 a non-admin cannot configure another provider\'s availability (writes its own)': !!x.AV3 && x.AV3.ok && x.AV3.techUntouched && x.AV3.genSet,
 });
 let pass = 0, fail = 0;
 const ck = (id, ok, got) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + '  ' + id + (ok ? '' : '   [got ' + JSON.stringify(got).slice(0, 300) + ']')); ok ? pass++ : fail++; };
@@ -115,6 +132,13 @@ if (Object.values(R).every(Boolean)) {
   const k4 = Object.keys(R).find((k) => k.startsWith('G4 '));
   const c2 = !!acc && !acc.crash && rows(acc)[k4] === false;
   console.log('  ' + (acc === null ? 'MISSED (anchor 0x — UNPROVEN)' : c2 ? 'CAUGHT' : 'MISSED') + '  acceptsBookings ignored in both layers → G4'); if (!c2) fail++;
+  const kA = Object.keys(R).find((k) => k.startsWith('AV2 '));
+  const l1 = mutate([['booking-service.js', '    if (lock.exists) {', '    if (false) {']]);
+  const h1 = !!l1 && !l1.crash && rows(l1)[kA] === true;
+  console.log('  ' + (h1 ? 'HOLDS ' : 'BROKE ') + ' slot-lock check removed → the availability authority claim still refuses the overlap'); if (!h1) fail++;
+  const l2 = mutate([['booking-service.js', '    if (lock.exists) {', '    if (false) {'], ['booking-service.js', "    if (!claimed.ok) { outcome = { conflict: 'avail', code: claimed.code }; return; }", ''], ['booking-service.js', "    if (overlapCount >= maxConcurrent) { outcome = { conflict: 'already-exists' }; return; }", '']]);
+  const c3 = !!l2 && !l2.crash && rows(l2)[kA] === false;
+  console.log('  ' + (l2 === null ? 'MISSED (anchor 0x — UNPROVEN)' : c3 ? 'CAUGHT' : 'MISSED') + '  all three overlap layers removed (slot lock + concurrency count + availability claim) → AV2'); if (!c3) fail++;
 } else console.log('\n  [mutations] skipped — invariant does not hold on this tree.');
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

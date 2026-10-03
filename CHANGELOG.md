@@ -1,3 +1,12 @@
+## [2026-10-03] — Availability server-authoritative: proof that the server availability ops are scoped to the caller and that the booking transaction re-checks (owner decision) — NOT deployed
+
+- **scripts/test-booking-provider-gate.js:**
+  - AV1: a date closed through addAvailabilityOverride refuses a booking. The override lands only on the caller; a providerId in the request is ignored.
+  - AV2: a second customer's booking on the same slot is refused.
+  - AV3: a non-admin cannot configure another provider's availability.
+  - THREE independent overlap layers inside the booking transaction: the slot lock, the concurrency count and the availability-authority claim. Removing the slot lock alone HOLDS; removing all three turns AV2 red (CAUGHT). 11/0.
+- No server code changed: functions/availability.js callables (bookingDispatch) were already uid-scoped and normalising. The client write path was the gap, closed in hosting (provider-dashboard) plus a proposed rules hunk (f3).
+
 ## [2026-10-03] — Legal Hub L11 (server): each advocate verified individually; firm membership by request + firm decision — NOT deployed
 
 - **Owner decision (10-03):** "Verify each advocate individually. Firm verification should not automatically make every advocate bookable."
