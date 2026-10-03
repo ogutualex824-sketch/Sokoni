@@ -1,3 +1,23 @@
+## [2026-10-03] — Marketing Hub MK4 (server): services only in APPROVED categories, on the ONE provider-services authority; the booking snapshots the service so commission follows the BOOKED service — NOT deployed
+
+- **functions/shared/marketing-services.js (new, pure):**
+  - approvedFor(provider, category): the category must be ∈ providers/{uid}.marketingCategories (the admin-approved subset), with marketingStatus 'active' and marketingListed.
+  - shape(): server-writes hub 'marketing', the category, serviceGroup and marketing {pricingModel fixed|hourly|project|quote, deliverables, minPriceCents, leadTimeDays, serviceArea, remote, capabilities}.
+  - A project/quote-priced service can never be directly booked.
+  - bookingSnapshot(): serviceHub, serviceCategory, serviceSnapshot.
+- **functions/provider-ops.js:**
+  - providerAddService / providerUpdateService / providerDuplicateService / providerToggleService re-check the CURRENT approval for marketing services.
+  - Refusal codes: MKT_SERVICE_NOT_APPROVED, MKT_HUB_LOCKED, MKT_UNKNOWN_CATEGORY, MKT_PRICING_MODEL.
+  - Client-sent hub/marketing fields are never stored. Non-marketing services are unchanged.
+- **functions/booking-service.js:**
+  - A marketing booking requires the provider to STILL be approved for the service's category, and a quote-only service requires an accepted quote (MKT_QUOTE_ONLY).
+  - EVERY booking now snapshots serviceHub / serviceCategory / serviceSnapshot from the server's service record. This is the key 2f's settlement uses for the 10% marketing_services lane. hubType stays descriptive, as before.
+- **Tests:**
+  - scripts/test-marketing-services.js: 11/0, SABOTAGE 8/8. Covers approved-only, client cannot set hub, edit/re-activate re-checks, quote-only, request hubType/serviceCategory/price ignored, the same provider's cleaning booking stays cleaning, and a later rate/category change never rewrites the booking.
+  - Regression: service-leads 14/0, tech-service-profile 18/0, provider-suspend-restore 8/0, booking-contact 5/0, marketing-hub 26/0.
+- **Database:** new fields on providerServices (hub, serviceGroup, marketing) and providerBookings (serviceHub, serviceCategory, serviceSnapshot). No index changes.
+- **Deploy (when authorised):** providerDispatch (provider-ops) + the booking engine host. Port onto the serving lineage per the functions lineage gate.
+
 ## [2026-10-03] — Messaging: product_enquiry conversations anchored on contactRequests (sokoni-f3 contract, Construction + every hub) — NOT deployed
 
 - **functions/messages.js:**

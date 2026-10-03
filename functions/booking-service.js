@@ -156,6 +156,18 @@ _h.bookingCreateService = async (req) => {
      provider sent it); the request carries only leadId. The lead converts inside this booking's transaction. */
   const leadId = _san(d.leadId, 128) || null;
   const leadCtx = leadId ? await require('./service-leads').quoteForBooking(db, { leadId, customerUid, providerId, serviceId }) : null;
+  /* Marketing Hub MK4: a marketing service is bookable only while the provider is STILL approved for its category, and a
+     quote-only service (project / quote pricing) is booked only from an accepted quote. The booking snapshots the
+     service's hub + category from the SERVER record — commission follows the booked service, never the provider and
+     never the request's hubType. */
+  const MSVC = require('./shared/marketing-services');
+  if (svc.hub === 'marketing') {
+    if (!MSVC.approvedFor(prov, svc.category)) throw new HttpsError('failed-precondition', 'This marketing service is not currently approved on SOKONI.', { code: 'MKT_SERVICE_NOT_APPROVED' });
+    if (!leadCtx && !(svc.marketing && svc.marketing.capabilities && svc.marketing.capabilities.booking === true)) {
+      throw new HttpsError('failed-precondition', 'This service is priced by quote. Request a quote first.', { code: 'MKT_QUOTE_ONLY' });
+    }
+  }
+  const svcSnapshot = MSVC.bookingSnapshot(svc);
   /* Tech Hub 4C: HOW the service is delivered, stamped on the booking from server facts only — the customer's validated
      repair details, else the accepted quote, else the service's single declared mode. Drives the provider's Site visits /
      Remote support / Pickup & drop-off views. Never priced from. */
@@ -287,7 +299,8 @@ _h.bookingCreateService = async (req) => {
       ...(repairDetails ? { repairDetails } : {}),
       ...(leadCtx ? { leadId } : {}),
       ...(serviceMode ? { serviceMode } : {}),
-      hubType: _san(d.hubType, 40) || 'services',
+      hubType: _san(d.hubType, 40) || 'services',   /* descriptive only (FinOS reads it); commission keys on serviceHub/serviceCategory below */
+      ...svcSnapshot,                /* serviceHub / serviceCategory / serviceSnapshot — the commission + history key */
       idempotencyKey,
       /* Provenance — which path/engine/rev priced & reserved this booking, so a
          record is reproducible and future engine/pricing revisions need no

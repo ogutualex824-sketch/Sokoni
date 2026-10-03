@@ -742,6 +742,20 @@ async function _techProfile(uid, raw) {
   }
 }
 
+/* Marketing Hub MK4 — a marketing service is a providerServices doc whose category is a marketing taxonomy id the provider
+   is APPROVED for (providers/{uid}.marketingCategories, admin-approved subset). hub/serviceGroup/marketing are written by
+   the SERVER here; the request can never set them. Returns null for a non-marketing service (behaviour unchanged). */
+const MSVC = require('./shared/marketing-services');
+async function _marketingFields(uid, d, existing) {
+  if (!MSVC.isMarketing(d, existing)) return null;
+  const p = await _db().collection('providers').doc(uid).get();
+  try { return MSVC.shape(d, p.exists ? p.data() : null, existing); }
+  catch (e) {
+    if (e instanceof MSVC.MarketingServiceError) throw new HttpsError(e.code === 'MKT_SERVICE_NOT_APPROVED' ? 'permission-denied' : 'invalid-argument', e.message, { code: e.code });
+    throw e;
+  }
+}
+
 /* ── 10. providerAddService — enforces plan limits.listings ──────────────────
    Creates providerServices; a provider cannot exceed their subscription's
    listing cap (-1 = unlimited). This is the listings-limit enforcement point. */
@@ -752,6 +766,7 @@ _h.providerAddService = async (req) => {
   const name = _san(d.name, 200).trim();
   if (!name) throw new HttpsError('invalid-argument', 'Service name is required.');
   const techProfile = d.techProfile !== undefined && d.techProfile !== null ? await _techProfile(uid, d.techProfile) : null;
+  const mkt = await _marketingFields(uid, d, null);
 
   const [subSnap, svcSnap] = await Promise.all([
     _db().collection('providerSubscriptions').doc(uid).get(),
@@ -772,6 +787,7 @@ _h.providerAddService = async (req) => {
     images:  _images(d.images),                  /* https URLs */
     durationMins: Math.max(0, Math.round(Number(d.durationMins ?? d.duration) || 0)),
     ...(techProfile ? { techProfile } : {}),
+    ...(mkt || {}),                              /* marketing: server-written hub/category/serviceGroup/marketing */
     active: true,
     createdAt: _ts(), updatedAt: _ts(),
   });
@@ -827,6 +843,7 @@ _h.providerDuplicateService = async (req) => {
     deposit: Number(s.deposit) || 0, images: Array.isArray(s.images) ? s.images : [],
     durationMins: Math.max(0, Math.round(Number(s.durationMins) || 0)), active: true,
     ...(s.techProfile ? { techProfile: await _techProfile(uid, s.techProfile) } : {}),
+    ...((await _marketingFields(uid, {}, s)) || {}),   /* a marketing copy is re-checked against the CURRENT approval */
     createdAt: _ts(), updatedAt: _ts(),
   });
   return { success: true, serviceId: ref.id };
@@ -951,6 +968,8 @@ _h.providerUpdateService = async (req) => {
     const tp = await _techProfile(uid, d.techProfile);
     patch.techProfile = tp === null ? FieldValue.delete() : tp;
   }
+  const mkt = await _marketingFields(uid, d, snap.data());
+  if (mkt) Object.assign(patch, mkt);           /* category re-validated against the CURRENT approval; hub stays marketing */
   await ref.update(patch);
   return { success: true };
 };
@@ -969,6 +988,7 @@ _h.providerToggleService = async (req) => {
   if (cur.providerId !== uid) throw new HttpsError('permission-denied', 'Not your service.');
   if (cur.removedAt) throw new HttpsError('failed-precondition', 'This service was deleted.');
   const next = req.data?.active !== undefined ? (req.data.active === true) : !(cur.active !== false);
+  if (next && cur.hub === 'marketing') await _marketingFields(uid, {}, cur);   /* re-activating needs a CURRENT approval */
   await ref.update({ active: next, updatedAt: _ts() });
   return { success: true, active: next };
 };
