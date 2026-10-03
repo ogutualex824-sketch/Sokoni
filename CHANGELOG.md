@@ -1,3 +1,10 @@
+## [2026-10-03] — Browser gate: hard memory floor BEFORE any browser starts — tooling
+
+- **scripts/lib/memory-floor.js:** assertMemoryFloor({minMB,label}) reads AVAILABLE physical memory (Windows FreePhysicalMemory; else os.freemem) and EXITS 3 (BLOCKED) before any browser is launched when below the floor. The minimum never goes below 512 MB; an unreadable reading fails closed.
+- **scripts/run-browser-gate.js:** wraps ONE browser suite (`--min-mb 700` for the final Marketing run) and only spawns it when the floor holds.
+- **Owner rule:** a browser result produced under insufficient memory is not evidence. BLOCKED is never pass or fail.
+- **Verified:** blocked at 300 MB (exit 3, suite not run); allowed at 900 MB; a requested floor below 512 is clamped to 512. Real reading at commit time: 315 MB available, so the browser gates stay BLOCKED.
+
 ## [2026-10-03] — Campaign / project CUSTOMER screens (my-projects.html) — NOT deployed
 
 - **my-projects.html + sokoni-work-customer.js (new):** the customer side of the Work/Job Engine, in the merchant-v2 skin.
