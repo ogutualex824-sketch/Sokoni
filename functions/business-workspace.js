@@ -65,9 +65,13 @@ const MODULES = Object.freeze({
   calendar:      { label: 'Calendar',            section: 'calendar',     implemented: true },
   bookings:      { label: 'Bookings',            section: 'bookings',     implemented: true },
   customers:     { label: 'Customers',           section: 'customers',    implemented: true },
-  quotes:        { label: 'Rate cards & quotes', section: 'ratecards',    implemented: true },
-  enquiries:     { label: 'Enquiries',           section: 'enquiries',    implemented: true },
-  calls:         { label: 'Call requests',       section: 'calls',        implemented: true },
+  /* 2026-10-03 (sokoni-5b decision, Tech slice 4b): no per-customer quote exists yet — this is the rate-card editor
+     (settings → services, Pricing Studio), which IS built. Relabelled; Tech slice 4F adds real quotes. */
+  quotes:        { label: 'Rate cards',          section: 'ratecards',    implemented: true },
+  /* 2026-10-03 (sokoni-5b decision): no enquiry collection / callable / screen backs these on provider-dashboard, so they
+     are NOT_IMPLEMENTED, never shown as working. Tech slice 4F (leads) and a calls slice build them. */
+  enquiries:     { label: 'Enquiries',           section: 'enquiries',    implemented: false, why: 'NOT_BUILT' },
+  calls:         { label: 'Call requests',       section: 'calls',        implemented: false, why: 'NOT_BUILT' },
   bookingPin:    { label: 'Verify booking PIN',  section: 'bookingpin',   implemented: true },
   bookedHours:   { label: 'Booked hours',        section: 'bookedhours',  implemented: true },
   messages:      { label: 'Messages',            section: 'messages',     implemented: true },

@@ -188,6 +188,9 @@ const seedProvider = (uid, category, appCategory, status, decidedBy) => {
   const M = BW.MODULES || {};
   ck('B-9', (M.repairs || {}).implemented === true && (M.supportedDevices || {}).implemented === true && (M.diagnostics || {}).implemented === false,
     'repairs + supportedDevices are implemented; diagnostics (no screen yet) stays NOT_IMPLEMENTED', { repairs: M.repairs, supportedDevices: M.supportedDevices, diagnostics: M.diagnostics });
+  ck('B-11', (M.enquiries || {}).implemented === false && (M.enquiries || {}).why === 'NOT_BUILT' && (M.calls || {}).implemented === false && (M.calls || {}).why === 'NOT_BUILT'
+    && (M.quotes || {}).implemented === true && (M.quotes || {}).label === 'Rate cards',
+    'modules with no backing (enquiries, call requests) are NOT_IMPLEMENTED; the built rate-card editor is labelled as what it is', { enquiries: M.enquiries, calls: M.calls, quotes: M.quotes });
   done();
 })().catch((e) => { console.log('CRASH (no verdict): ' + (e && e.stack || e)); process.exit(2); });
 function done() { console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed'); process.exit(fail ? 1 : 0); }

@@ -1,3 +1,12 @@
+## [2026-10-03] — Provider dashboard: modules with no backing are NOT_IMPLEMENTED (sokoni-5b decision) — NOT deployed
+
+- business-workspace MODULES: `enquiries` and `calls` were implemented:true with no collection, callable or screen behind them (census
+  10-03) → implemented:false, why NOT_BUILT. `quotes` IS the built rate-card editor (settings → services, Pricing Studio) → relabelled
+  "Rate cards" (was "Rate cards & quotes"); Tech slice 4F adds per-customer quotes. Applicability per category is unchanged.
+- Tests: test-business-workspace rows for plumber calls and hotel enquiries now expect NOT_IMPLEMENTED (30/0); test-tech-service-profile
+  B-11 (BASE=5c95390 fails it). Decision: sokoni-5b as file owner, 2026-10-03.
+- OPEN (release notes): plain non-tech services can be added before approval (only booking checks approval) — owner question via sokoni-5b.
+
 ## [2026-10-03] — Tech Hub slice 4b (server): device-repair service profile + repair details, capability-gated — NOT deployed
 
 **Files:** `functions/shared/tech-service-profile.js` (new), `functions/provider-ops.js`, `functions/booking-service.js`,
