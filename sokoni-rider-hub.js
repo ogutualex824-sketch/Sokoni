@@ -377,29 +377,40 @@ R.performance = () => {
 };
 
 /* ── Fuel (EPRA) ─────────────────────────────────────────────────────────────────────────────── */
+/* sysConfig/fuelPrices, as fetchEPRAFuelPrices writes it (fix/epra-pump-prices): current.<fuel>.<town> per EPRA's
+   published table, effectiveFrom/effectiveTo = the period EPRA published. Shown EXACTLY as stored — no estimate, no
+   trend, no fill-in. The rider's zone town is used when EPRA lists it, otherwise Nairobi. */
+function fuelView () {
+  const d = (S.fuel && S.fuel.doc) || {};
+  const cur = d.current && typeof d.current === 'object' ? d.current : null;
+  const zoneKey = String((S.rider && S.rider.zone) || '').toLowerCase().split(/[^a-z]+/).filter(Boolean)[0] || '';
+  const town = cur && cur.super_petrol && zoneKey && num(cur.super_petrol[zoneKey]) !== null ? zoneKey : 'nairobi';
+  const at = (f) => (cur && cur[f] ? num(cur[f][town]) : null);
+  const to = d.effectiveTo ? Date.parse(d.effectiveTo + 'T23:59:59+03:00') : null;
+  return { d, town, pms: at('super_petrol'), ago: at('diesel'), ik: at('kerosene'), from: d.effectiveFrom || null, to: d.effectiveTo || null, ended: !!(to && Date.now() > to) };
+}
+const fmtDay = (iso) => { const t = iso ? Date.parse(iso + 'T00:00:00+03:00') : NaN; return isNaN(t) ? '—' : new Date(t).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }); };
 R.fuel = () => {
   const f = S.fuel;
   if (f.state === 'idle' || f.state === 'loading') return `<h1 class="dh-h1">Fuel prices (EPRA)</h1>${skel(2)}`;
-  const d = f.doc || {};
-  const p = d.prices && typeof d.prices === 'object' ? d.prices : null;
-  const pick = (k) => { if (!p) return null; const v = p[k]; if (v && typeof v === 'object') return num(v.price != null ? v.price : (v.nairobi != null ? v.nairobi : v.current)); return num(v); };
-  const pms = pick('petrol') ?? pick('super') ?? pick('pms'), ago = pick('diesel') ?? pick('ago'), ik = pick('kerosene') ?? pick('ik');
-  const have = pms !== null || ago !== null || ik !== null;
-  const status = d.scraperStatus === 'failed' ? `<div class="dh-err" style="margin-bottom:12px"><span>EPRA prices unavailable — SOKONI's automatic check failed${d.scraperLastAttempt ? ' at ' + esc(when(d.scraperLastAttempt)) : ''}.</span><button class="btn sm" data-act="fuel-refresh">Check again</button></div>` : '';
-  const card = (lbl, v) => `<div class="dh-kpi"><div class="v">${v !== null ? 'KES ' + v.toFixed(2) : '—'}</div><div class="l">${lbl}</div><div class="n">per litre</div></div>`;
-  return `<h1 class="dh-h1">Fuel prices (EPRA)</h1><p class="dh-sub">Maximum pump prices published by the Energy &amp; Petroleum Regulatory Authority.</p>${status}
-    ${have ? `<div class="fuel-grid">${card('Super petrol', pms)}${card('Diesel', ago)}${card('Kerosene', ik)}</div>
-      <div class="dh-card" style="margin-top:12px"><div class="row"><span class="k">Source</span><span class="v">${esc(d.source || 'EPRA')}</span></div><div class="row"><span class="k">Effective period</span><span class="v">${esc(d.period || d.effectivePeriod || '—')}</span></div><div class="row"><span class="k">Last updated</span><span class="v">${esc(when(d.lastUpdated || d.updatedAt))}</span></div></div>
+  const v = fuelView(), d = v.d;
+  const have = v.pms !== null || v.ago !== null || v.ik !== null;
+  const status = d.scraperStatus === 'failed' ? `<div class="dh-err" style="margin-bottom:12px"><span>${have ? 'SOKONI could not check EPRA for newer prices' : 'EPRA prices unavailable — SOKONI\'s automatic check failed'}${d.scraperLastAttempt ? ' at ' + esc(when(d.scraperLastAttempt)) : ''}.</span><button class="btn sm" data-act="fuel-refresh">Check again</button></div>` : '';
+  const ended = have && v.ended ? `<div class="dh-err" style="margin-bottom:12px;background:var(--amber-dim);border-color:rgba(255,180,0,.3);color:#ffd27a"><span>These are EPRA's prices for ${esc(fmtDay(v.from))} – ${esc(fmtDay(v.to))}. That period has ended and EPRA has not yet published newer prices.</span></div>` : '';
+  const card = (lbl, n) => `<div class="dh-kpi"><div class="v">${n !== null ? 'KES ' + n.toFixed(2) : '—'}</div><div class="l">${lbl}</div><div class="n">per litre</div></div>`;
+  const townLbl = v.town.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return `<h1 class="dh-h1">Fuel prices (EPRA)</h1><p class="dh-sub">Maximum pump prices published by the Energy &amp; Petroleum Regulatory Authority${have ? ' — ' + esc(townLbl) : ''}.</p>${status}${ended}
+    ${have ? `<div class="fuel-grid">${card('Super petrol', v.pms)}${card('Diesel', v.ago)}${card('Kerosene', v.ik)}</div>
+      <div class="dh-card" style="margin-top:12px"><div class="row"><span class="k">Source</span><span class="v">${esc(d.source || 'EPRA')}</span></div><div class="row"><span class="k">Pricing period</span><span class="v">${v.from ? esc(fmtDay(v.from)) + ' – ' + esc(fmtDay(v.to)) : '—'}</span></div><div class="row"><span class="k">Last checked</span><span class="v">${esc(when(d.scraperLastSuccess || d.updatedAt))}</span></div></div>
       <div class="dh-sec-h"><h2>Trip fuel estimate</h2></div><div class="dh-card"><div class="filters"><input class="inp" id="fuelKm" type="number" min="0" step="0.1" inputmode="decimal" placeholder="Trip distance in km" aria-label="Trip distance in km"><input class="inp" id="fuelEff" type="number" min="1" step="0.5" inputmode="decimal" placeholder="Your km per litre" aria-label="Your vehicle km per litre"><select class="sel" id="fuelType" aria-label="Fuel type"><option value="pms">Super petrol</option><option value="ago">Diesel</option></select></div><div class="dh-note" id="fuelOut">Enter the distance and your vehicle's km per litre.</div></div>`
-    : (status ? '' : empty('⛽', 'EPRA prices are not available yet.', '<button class="btn" data-act="fuel-refresh">Check for updates</button>'))}
-    <p class="dh-note" style="margin-top:12px">Prices are shown exactly as SOKONI received them from EPRA — no estimates, no trends.</p>`;
+    : (status ? '' : empty('⛽', 'Fuel prices are currently unavailable.', '<button class="btn" data-act="fuel-refresh">Check for updates</button>'))}
+    <p class="dh-note" style="margin-top:12px">Prices are shown exactly as EPRA published them — no estimates, no trends.</p>`;
 };
 H.fuel = () => {
   if (S.fuel.state === 'idle') loadFuel();
   const out = $('#fuelOut'); if (!out) return;
-  const d = S.fuel.doc || {}; const p = d.prices || {};
-  const val = (k) => { const v = p[k]; return v && typeof v === 'object' ? num(v.price) : num(v); };
-  const f = () => { const km = num($('#fuelKm').value), eff = num($('#fuelEff').value); const pr = $('#fuelType').value === 'ago' ? (val('diesel') ?? val('ago')) : (val('petrol') ?? val('super') ?? val('pms'));
+  const v = fuelView();
+  const f = () => { const km = num($('#fuelKm').value), eff = num($('#fuelEff').value); const pr = $('#fuelType').value === 'ago' ? v.ago : v.pms;
     out.textContent = (km !== null && eff && pr !== null) ? `About ${(km / eff).toFixed(2)} L ≈ KES ${Math.round(km / eff * pr).toLocaleString('en-KE')} at the published price.` : 'Enter the distance and your vehicle\'s km per litre.'; };
   ['fuelKm', 'fuelEff', 'fuelType'].forEach((id) => { const e = $('#' + id); if (e) e.oninput = f; });
 };

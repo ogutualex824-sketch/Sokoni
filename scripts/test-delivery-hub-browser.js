@@ -258,9 +258,16 @@ const XSS = '<img src=x onerror="window.__xss=1">';
     const fu = await text(h.page, '[data-view="fuel"]');
     ck('F1 failed EPRA scrape → "EPRA prices unavailable", no hard-coded price', fu.includes('EPRA prices unavailable') && !/KES\s*\d{3}\.\d{2}/.test(fu), fu.slice(0, 200));
     await h.ctx.close();
-    h = await openHub(browser, base, { profile: RIDER, board, state: { ...stOnline, fsSnap: { 'sysConfig/fuelPrices': { prices: { petrol: 214.03, diesel: 217.86, kerosene: 191.38 }, source: 'EPRA Kenya (live)', lastUpdated: '2026-10-01T00:00:00Z' } } } }, { hash: '#/fuel', wait: 900 });
+    /* The document exactly as fetchEPRAFuelPrices (fix/epra-pump-prices) writes it. */
+    const EPRA_DOC = { current: { super_petrol: { nairobi: 214.03, mombasa: 203.11 }, diesel: { nairobi: 217.86, mombasa: 206.50 }, kerosene: { nairobi: 191.38, mombasa: 180.02 } }, effectiveFrom: '2026-08-15', effectiveTo: '2026-09-14', source: 'EPRA Kenya (live)', scraperStatus: 'success', scraperLastSuccess: '2026-10-03T05:00:00Z' };
+    h = await openHub(browser, base, { profile: RIDER, board, state: { ...stOnline, fsSnap: { 'sysConfig/fuelPrices': EPRA_DOC } } }, { hash: '#/fuel', wait: 900 });
     const fu2 = await text(h.page, '[data-view="fuel"]');
-    ck('F2 server prices shown exactly as received (214.03 / 217.86 / 191.38) with source', fu2.includes('214.03') && fu2.includes('217.86') && fu2.includes('191.38') && fu2.includes('EPRA Kenya'), fu2.slice(0, 200));
+    ck('F2 server prices (current.<fuel>.nairobi) shown exactly as stored (214.03 / 217.86 / 191.38) with source and period', fu2.includes('214.03') && fu2.includes('217.86') && fu2.includes('191.38') && fu2.includes('EPRA Kenya') && /15 Aug 2026/.test(fu2) && /14 Sept? 2026/.test(fu2), fu2.slice(0, 300));
+    ck('F3 the published period has ended (today > 14 Sep) → "EPRA has not yet published newer prices" (no implied freshness)', fu2.includes('has not yet published newer prices'), fu2.slice(0, 300));
+    await h.ctx.close();
+    h = await openHub(browser, base, { profile: { ...RIDER, rider: { ...RIDER.rider, zone: 'Mombasa Island' } }, board, state: { ...stOnline, fsSnap: { 'sysConfig/fuelPrices': EPRA_DOC } } }, { hash: '#/fuel', wait: 900 });
+    const fu3 = await text(h.page, '[data-view="fuel"]');
+    ck('F4 a rider zoned in Mombasa sees EPRA\'s Mombasa prices (a published town, not an offset)', fu3.includes('203.11') && fu3.includes('Mombasa') && !fu3.includes('214.03'), fu3.slice(0, 200));
     await h.ctx.close();
 
     console.log('\n── N: navigation & responsive ──');
