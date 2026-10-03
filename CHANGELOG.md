@@ -1,3 +1,58 @@
+## [2026-10-03] - Payments: Daraja removal PORTED from 093fd4f onto this (7091029 / feat/community-reports-fn) lineage — functions source, NOT deployed
+
+**NOT DEPLOYED.** This closes owner brief Gate 2 for this tree: copy the approved removal (093fd4f), do not merge it.
+- A cherry-pick conflicts on this lineage, so the change was hand-ported. It mirrors the completed port 8d64df0
+  (`C:/temp/sok-parcel-fn2`), which has the same base, a545818 / 7091029.
+- **Other files:** every file 8d64df0 touches, except `functions/index.js`, had the SAME pre-image blob here as
+  8d64df0^. So each now equals 8d64df0's post-image, blob for blob.
+- **`functions/index.js`:** 8d64df0's index.js hunks applied cleanly here, at offsets of 4–7 lines. That offset comes
+  from this branch's moderation, take-down and gateway edits, and those edits survive byte-for-byte. The diff
+  8d64df0→this index.js is identical, hunk for hunk, to the diff 7091029→HEAD-before.
+
+**Files:**
+- `functions/index.js`:
+  - **Exports removed:** `darajaSTKCallback`, `webhookMpesa`, `mpesaC2BValidation`, `mpesaC2BConfirmation`.
+  - **Helpers removed:** `_normalizeMsisdn` (it had no other caller), `SAFARICOM_CALLBACK_IPS`,
+    `_DARAJA_SANDBOX_SELLER_UIDS` (which read `process.env.DARAJA_SANDBOX_SELLER_UIDS`), `_DARAJA_IPS`, `_c2b`, and the
+    stray Daraja comments.
+  - **Unchanged:** an AST compare shows that all 1,880 surviving top-level statements are byte-identical to
+    HEAD-before. 9 statements were removed. That includes every IntaSend path and this branch's
+    moderation/take-down/gateway code.
+- `functions/mpesa-c2b.js`: deleted.
+- **Same edits as 8d64df0 / 093fd4f:**
+  - `functions/pos-zero-friction.js`
+  - `functions/settlement-providers.js`
+  - `functions/settlement-routing.js`
+  - `functions/shared/constants.js`
+  - `functions/test/constants.test.js`
+  - `functions/test/webhook.test.js`
+  - `scripts/batch_deploy.sh`
+- `scripts/deploy/guard-functions-safety.js`: new. It is byte-identical to 093fd4f (blob 68da325) and is not wired
+  into firebase.json.
+- `scripts/test-daraja-sandbox-lane.js` and `scripts/test-payment-authority.js` are retired, as in 093fd4f.
+- **Not ported, because these files are absent here:** docs/SANDBOX_CALLBACK_LANE.md, docs/STK_MSISDN_SAFETY.md,
+  scripts/test-sellability-contract.js, scripts/test-stk-msisdn-safety.js.
+
+**Database changes:** none.
+
+**API changes:** four HTTP endpoints no longer exist in source. Production deleted them on 2026-10-03.
+
+**Security:** this removes unauthenticated, IP-allowlisted Safaricom endpoints from the deploy unit.
+- **Follow-up, for its own commit:** `posCompleteCheckout` skips confirmation for any method not in `CONFIRMABLE`. This
+  fail-open behaviour already existed. `mpesa_daraja` now falls into that set.
+
+**Breaking:** none.
+
+**Checks:**
+- **Guard:** guard-functions-safety PASSES. On HEAD-before it FAILED 4 checks.
+- **AST:** 0 references to removed names across 428 functions files. The positive control on HEAD-before index.js
+  found 29. There are 0 new unbound identifiers and 0 newly orphaned bindings.
+- **Gates that PASS:** require-closure, predeploy-syntax, commission single source, delivery engine sync.
+- **jest functions/test:** 823/824. The 1 failure is application-lifecycle resolveRole "Lawyer → legal". It already
+  existed, and its module and test are unchanged by this port.
+- **intasend-only-gate (c01f317) on functions/:** CLEAN. HEAD-before was NOT CLEAN, with 2 active exports.
+- **Review/report suites, re-run:** 26/0, 16/0, 40/0, 35/0, 9/0, 17/0.
+
 ## [2026-10-03] - Reviews: lockstep update of the shared review-moderation module to sokoni-5b be0e0c1 — NOT deployed
 
 **NOT DEPLOYED.** `functions/shared/review-moderation.js` is replaced byte-for-byte with

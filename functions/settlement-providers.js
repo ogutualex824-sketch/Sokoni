@@ -35,7 +35,6 @@ function _assertAdmin(req) {
 function _defaults() {
   return {
     intasend:     { supportsSplit: true,  splitEnabled: false, adapter: 'intasend', note: 'split via IntaSend split/wallets API — verify in sandbox before enabling' },
-    mpesa_daraja: { supportsSplit: false, splitEnabled: false, adapter: null,       note: 'Daraja STK cannot split a single charge natively → collect-then-payout' },
     card:         { supportsSplit: true,  splitEnabled: false, adapter: 'intasend', note: 'card via IntaSend; split inherits IntaSend capability' },
     wallet:       { supportsSplit: false, splitEnabled: false, adapter: null,       note: 'internal wallet — settled in-ledger, no external split' },
     smartpos:     { supportsSplit: false, splitEnabled: false, adapter: null,       note: 'terminal-dependent' },

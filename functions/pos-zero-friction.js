@@ -620,16 +620,16 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     }
 
     /* ── non-cash money must be CONFIRMED, and spent once ──────────────────
-       `posPayments/{checkoutId}` is written by darajaSTKPush and moved to
-       `completed` ONLY by darajaSTKCallback — the webhook Safaricom calls after
-       the buyer enters their PIN. Reading it here is what makes the difference
+       `posPayments/{checkoutId}` is moved to `completed` ONLY by the server-side
+       payment confirmation (the Daraja rail that once also wrote it was removed
+       2026-10-03; IntaSend only). Reading it here is what makes the difference
        between "M-PESA was selected" and "M-PESA was paid". The client cannot
        write that document, so it cannot promote its own payment.
 
        Cash is exempt: the cashier is physically holding it, and the drawer
        reconciliation is what audits it. Wallet is validated separately below
        and debited inside the transaction. */
-    const CONFIRMABLE = { mpesa: 1, card: 1, mpesa_daraja: 1 };
+    const CONFIRMABLE = { mpesa: 1, card: 1 };
     for (const p of _pay) {
       const method = String((p && p.method) || '').toLowerCase();
       if (!CONFIRMABLE[method]) continue;
