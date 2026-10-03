@@ -1210,6 +1210,11 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker
   if (!validStatuses.includes(status)) {
     throw new HttpsError('invalid-argument', 'status must be "approved", "rejected", or "paid"');
   }
+  /* WITHDRAWAL GATE (owner 2026-10-03): approving (which may auto-disburse B2C) or attesting 'paid' sends money OUT —
+     refused while withdrawals are OFF. Rejecting stays allowed: it RETURNS the reserved amount to the seller's wallet. */
+  if (status !== 'rejected' && !(await _withdrawalsOpen(db))) {
+    throw new HttpsError('failed-precondition', _WITHDRAWALS_CLOSED, { code: 'WITHDRAWALS_DISABLED' });
+  }
 
   const rid     = _san(requestId, 128);
   const reqRef  = db.collection('payoutRequests').doc(rid);
