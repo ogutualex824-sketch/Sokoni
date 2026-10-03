@@ -17,6 +17,7 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (c) => {
     await setDoc(doc(c.firestore(), 'conversations/service_booking_b1'), { participants: ['cust', 'prov'], serverCreated: true, lastMessage: '' });
+    await setDoc(doc(c.firestore(), 'conversations/legacy1'), { participants: ['cust', 'prov'], lastMessage: '' });   /* pre-stamp legacy doc */
   });
   const atk = env.authenticatedContext('atk').firestore(), cust = env.authenticatedContext('cust').firestore();
   const str = env.authenticatedContext('str').firestore();
@@ -27,7 +28,7 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await denies('CV-C5', 'a party cannot rewrite participants', updateDoc(doc(cust, 'conversations/service_booking_b1'), { participants: ['cust', 'atk'] }));
   await allows('CV-P1', 'CONTROL: a party reads the conversation', getDoc(doc(cust, 'conversations/service_booking_b1')));
   await allows('CV-P2', 'CONTROL: a party updates lastMessage / unread', updateDoc(doc(cust, 'conversations/service_booking_b1'), { lastMessage: 'hi', unread: { prov: 1 } }));
-  await denies('CV-C6', 'a party cannot stamp serverCreated (b2 fast-path marker)', updateDoc(doc(cust, 'conversations/service_booking_b1'), { serverCreated: true }));
+  await denies('CV-C6', 'a party cannot stamp serverCreated on an UNSTAMPED doc (would buy the b2 fast path)', updateDoc(doc(cust, 'conversations/legacy1'), { serverCreated: true }));
   await denies('CV-C7', 'a party cannot clear serverCreated on a server doc', updateDoc(doc(cust, 'conversations/service_booking_b1'), { serverCreated: false, lastMessage: 'x' }));
   await denies('CV-P3', 'a stranger cannot read it', getDoc(doc(str, 'conversations/service_booking_b1')));
   await env.cleanup();
