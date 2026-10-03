@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <script src="security.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Verify a Certificate — SOKONI Education</title>
+  <meta name="description" content="Check a SOKONI Education certificate by its number.">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#050505">
+  <!-- PUBLIC certificate verification (Education G4, 2026-10-03). The server (courseLessons verifyCertificate) is the
+       only authority: it answers found / not found, status (issued / revoked), course, provider, issuer, date and the
+       holder's INITIALS only — learners may be minors. Nothing here can mark a certificate valid. -->
+  <style>
+    :root{--bg:#050505;--surface:#0d0d0d;--line:rgba(255,255,255,.09);--txt:#f4f4f4;--txt2:#a8a8a8;--acc:#71ff00;--danger:#ff5252}
+    *,*::before,*::after{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--txt);font:400 15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;overflow-x:hidden}
+    main{max-width:560px;margin:0 auto;padding:24px 16px}
+    .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px}
+    .muted{color:var(--txt2);font-size:13px}
+    input{width:100%;background:#1a1a1a;border:1px solid #333;color:var(--txt);border-radius:10px;padding:11px;font:inherit;text-transform:uppercase;margin:8px 0}
+    button{background:var(--acc);color:#000;border:0;border-radius:10px;padding:10px 16px;font:inherit;font-weight:800;cursor:pointer}
+    .ok{color:var(--acc);font-weight:800}.bad{color:var(--danger);font-weight:800}
+    dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:10px 0 0}dt{color:var(--txt2)}dd{margin:0}
+  </style>
+</head>
+<body>
+<main>
+  <h1 style="font-size:22px;margin:0">Verify a certificate</h1>
+  <p class="muted">Enter the certificate number printed on a SOKONI Education certificate (for example SOK-EDU-1A2B3C4D5E).</p>
+  <form id="cvForm" class="card" autocomplete="off">
+    <label for="cvSerial" class="muted">Certificate number</label>
+    <input id="cvSerial" maxlength="18" placeholder="SOK-EDU-XXXXXXXXXX" inputmode="text" aria-describedby="cvHelp">
+    <button type="submit">Check</button>
+    <p id="cvHelp" class="muted">SOKONI shows only what a verifier needs. The holder is shown by initials.</p>
+  </form>
+  <section id="cvResult" class="card" aria-live="polite" hidden></section>
+</main>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-certificate-verify.js" defer></script>
+<!-- self-update after deploys (this page does not load shared-header.js) -->
+<script src="/sw-register.js" defer></script>
+</body>
+</html>

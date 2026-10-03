@@ -25,7 +25,9 @@
   };
   var WS_LABEL = { teacher: 'Teacher workspace', institution: 'Institution workspace', enterprise: 'Company training' };
   var APP_LABEL = { tutor: 'Teacher application', school: 'Institution application', 'online-course': 'Institution application', 'education-enterprise': 'Company application' };
-  var S = { ws: null, enrol: null, view: 'overview' };
+  var S = { ws: null, enrol: null, view: 'overview', course: null, lesson: null, certs: null };
+  var lessonsCall = function (op, data) { return fn('courseLessons')(Object.assign({ op: op }, data || {})); };
+  var STATE_LABEL = { not_started: 'Not started', in_progress: 'In progress', completed: 'Completed' };
   var $ = function (id) { return document.getElementById(id); };
 
   function item(key) { for (var i = 0; i < NAV.length; i++) for (var j = 0; j < NAV[i][1].length; j++) if (NAV[i][1][j][0] === key) return NAV[i][1][j]; return null; }
@@ -63,13 +65,85 @@
       + (apps ? '<div class="card"><b>Your applications</b>' + apps + '</div>' : '')
       + '<div class="card"><b>Teach on SOKONI</b><p class="muted">Teachers, schools and training companies apply once; SOKONI checks their documents.</p><button type="button" class="btn2" data-ln-apply>Apply to teach</button></div>';
   }
+  /* ── D/E: My learning → course → lesson (every view is the SERVER's learner-safe answer) ── */
   function viewMyLearning() {
+    if (S.lesson) return viewLesson();
+    if (S.course) return viewCourse();
     if (S.enrol === null) return '<div class="card"><p class="muted">Your courses are unavailable right now (—).</p></div>';
     var rows = S.enrol.map(function (e) {
       var c = e.course || {};
-      return '<div class="row"><div><strong>' + esc(c.title || '—') + '</strong><br><span class="muted">' + esc(Math.round(Number(e.progress) || 0)) + '% complete · ' + esc(c.lessonCount || 0) + ' lessons</span></div></div>';
+      return '<div class="row"><div><strong>' + esc(c.title || '—') + '</strong><br><span class="muted">' + esc(Math.round(Number(e.progress) || 0)) + '% complete · ' + esc(c.lessonCount || 0) + ' lessons</span></div>'
+        + '<button type="button" class="btn2" data-ln-course="' + esc(e.courseId) + '">Open</button></div>';
     }).join('');
     return '<div class="card"><b>My learning</b>' + (rows || '<p class="muted">You have not enrolled in a course yet. Browse courses to start.</p>') + '</div>';
+  }
+
+  function viewCourse() {
+    var c = S.course;
+    if (c.error) return '<div class="card"><p class="muted">This course is unavailable right now (—). ' + esc(c.error) + '</p><button type="button" class="btn2" data-ln-back>← My learning</button></div>';
+    var rows = (c.lessons || []).map(function (l, i) {
+      return '<div class="row"><div><strong>' + esc((i + 1) + '. ' + l.title) + '</strong><br><span class="muted">' + esc(STATE_LABEL[l.state] || '—') + (l.durationMinutes ? ' · ' + esc(l.durationMinutes) + ' min' : '') + (l.freePreview ? ' · free preview' : '') + '</span></div>'
+        + (l.locked ? '<span class="muted">🔒 Enrol to open</span>' : '<button type="button" class="btn2" data-ln-lesson="' + esc(l.lessonId) + '">Open</button>') + '</div>';
+    }).join('');
+    return '<div class="card"><button type="button" class="btn2" data-ln-back>← My learning</button>'
+      + '<div style="font-size:18px;font-weight:800;margin:8px 0">' + esc((c.course || {}).title || '—') + '</div>'
+      + '<div class="muted">' + (c.enrolled ? 'Progress: ' + esc(c.progress) + '%' : 'Not enrolled — free-preview lessons only') + '</div>'
+      + (c.certificate ? '<p>🎓 Certificate ' + esc(c.certificate.serial) + ' · ' + esc(c.certificate.status === 'revoked' ? 'Revoked' : 'Issued') + '</p>' : '') + '</div>'
+      + '<div class="card">' + (rows || '<p class="muted">No lessons yet.</p>') + '</div>';
+  }
+  function viewLesson() {
+    var L = S.lesson; var c = S.course || {}; var list = c.lessons || [];
+    if (L.error) return '<div class="card"><p class="muted">This lesson is unavailable (—). ' + esc(L.error) + '</p><button type="button" class="btn2" data-ln-back-course>← Lessons</button></div>';
+    var l = L.lesson || {};
+    var idx = list.findIndex(function (x) { return x.lessonId === l.lessonId; });
+    var open = function (j) { return list[j] && !list[j].locked ? list[j].lessonId : null; };
+    var prev = open(idx - 1), next = open(idx + 1);
+    var me = list[idx] || {};
+    return '<div class="card"><button type="button" class="btn2" data-ln-back-course>← Lessons</button>'
+      + '<div style="font-size:18px;font-weight:800;margin:8px 0">' + esc(l.title || '—') + '</div>'
+      + (me.description ? '<div class="muted">' + esc(me.description) + '</div>' : '') + (me.durationMinutes ? '<div class="muted">' + esc(me.durationMinutes) + ' min</div>' : '')
+      + (l.body ? '<div style="white-space:pre-wrap;margin-top:10px">' + esc(l.body) + '</div>' : '')
+      + (l.videoUrl ? '<p><a class="btn2" href="' + esc(l.videoUrl) + '" target="_blank" rel="noopener noreferrer">Watch the video</a></p>' : '')
+      + (l.materialUrl ? '<p><a class="btn2" href="' + esc(l.materialUrl) + '" target="_blank" rel="noopener noreferrer">Open the lesson file</a> <span class="muted">(this link expires in ' + esc(l.materialExpiresInMinutes || 15) + ' min — reopen the lesson for a new one)</span></p>' : '')
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'
+      + (prev ? '<button type="button" class="btn2" data-ln-lesson="' + esc(prev) + '">← Previous</button>' : '')
+      + (c.enrolled ? (me.state === 'completed' ? '<span class="muted">✓ Completed</span>' : '<button type="button" class="btn" data-ln-complete="' + esc(l.lessonId) + '">Mark complete</button>') : '')
+      + (next ? '<button type="button" class="btn2" data-ln-lesson="' + esc(next) + '">Next →</button>' : '') + '</div>'
+      + (L.notice ? '<p class="muted">' + esc(L.notice) + '</p>' : '') + '</div>';
+  }
+  /* ── F: certificates ── */
+  function viewCertificates() {
+    if (S.certs === null) return '<div class="card"><p class="muted">Your certificates are unavailable right now (—).</p></div>';
+    var rows = (S.certs || []).map(function (c) {
+      var verify = 'certificate-verify.html?serial=' + encodeURIComponent(c.serial);
+      return '<div class="row"><div><strong>' + esc(c.courseTitle || '—') + '</strong><br><span class="muted">' + esc(c.serial) + ' · ' + esc(c.status === 'revoked' ? 'Revoked' : 'Issued')
+        + ' · ' + esc(c.issuer || 'SOKONI Education') + (c.providerName ? ' · ' + esc(c.providerName) : '') + (c.issuedAtMs ? ' · ' + esc(new Date(c.issuedAtMs).toISOString().slice(0, 10)) : '') + '</span></div>'
+        + '<a class="btn2" href="' + esc(verify) + '">Verify</a></div>';
+    }).join('');
+    return '<div class="card"><b>Certificates</b><p class="muted">Issued when you complete every lesson of a course. Anyone can check one with its number.</p>'
+      + (rows || '<p class="muted">No certificates yet.</p>') + '</div>';
+  }
+
+  function openCourse(courseId) {
+    S.view = 'myLearning'; S.lesson = null; S.course = { loading: true };
+    renderView();
+    return lessonsCall('learnerCourse', { courseId: courseId }).then(function (r) { S.course = r; }).catch(function (e) { S.course = { error: (e && e.message) || '' }; }).then(renderView);
+  }
+  function openLesson(lessonId) {
+    var courseId = S.course && S.course.course && S.course.course.courseId;
+    if (!courseId) return Promise.resolve();
+    return lessonsCall('content', { courseId: courseId, lessonId: lessonId }).then(function (r) { S.lesson = r; })
+      .catch(function (e) { S.lesson = { error: (e && e.message) || '' }; })
+      /* opening marks the lesson in progress on the server — refresh the course states */
+      .then(function () { return lessonsCall('learnerCourse', { courseId: courseId }).then(function (r) { S.course = r; }).catch(function () {}); })
+      .then(renderView);
+  }
+  function complete(lessonId) {
+    var courseId = S.course && S.course.course && S.course.course.courseId;
+    return lessonsCall('complete', { courseId: courseId, lessonId: lessonId }).then(function (r) {
+      S.lesson = Object.assign({}, S.lesson, { notice: r && r.certificateIssued ? 'Course complete — your certificate is in Certificates.' : (r && r.message) || null });
+      return lessonsCall('learnerCourse', { courseId: courseId }).then(function (c) { S.course = c; });
+    }).catch(function (e) { S.lesson = Object.assign({}, S.lesson, { notice: (e && e.message) || 'Could not record completion.' }); }).then(renderView);
   }
 
   function renderView() {
@@ -80,7 +154,11 @@
       root.innerHTML = '<div class="card"><b>' + esc(it ? it[1] : '—') + '</b><p class="muted">' + (st === 'LOCKED' ? 'This needs an age check or a guardian link — see Profile.' : st === 'NOT_IMPLEMENTED' ? 'Coming soon.' : 'Unavailable (—).') + '</p></div>';
       return;
     }
-    if (key === 'myLearning') { root.innerHTML = viewMyLearning(); return; }
+    if (key === 'myLearning') { root.innerHTML = S.course && S.course.loading ? '<div class="card"><p class="muted">Loading…</p></div>' : viewMyLearning(); return; }
+    if (key === 'certificates') {
+      if (S.certs === undefined || S.certs === 'loading') { root.innerHTML = '<div class="card"><p class="muted">Loading…</p></div>'; return; }
+      root.innerHTML = viewCertificates(); return;
+    }
     if (key === 'profile') {
       root.innerHTML = '<div class="card"><section id="eduLearnerProfile" aria-label="My learner profile"></section></div>';
       if (G.SokoniEducation && G.SokoniEducation.loadLearnerProfile) G.SokoniEducation.loadLearnerProfile();
@@ -124,7 +202,20 @@
 
   function onClick(ev) {
     var t = ev.target; if (!t || !t.closest) return;
-    var nv = t.closest('[data-ln-nav]'); if (nv) { go(nv.getAttribute('data-ln-nav')); return; }
+    var nv = t.closest('[data-ln-nav]');
+    if (nv) {
+      var k = nv.getAttribute('data-ln-nav'); S.course = null; S.lesson = null;
+      if (k === 'certificates' && stateOf('certificates') === 'AVAILABLE') {
+        S.certs = 'loading';
+        lessonsCall('myCertificates').then(function (r) { S.certs = (r && r.certificates) || []; }).catch(function () { S.certs = null; }).then(renderView);
+      }
+      go(k); return;
+    }
+    var oc = t.closest('[data-ln-course]'); if (oc) { openCourse(oc.getAttribute('data-ln-course')); return; }
+    var ol = t.closest('[data-ln-lesson]'); if (ol) { openLesson(ol.getAttribute('data-ln-lesson')); return; }
+    var cp = t.closest('[data-ln-complete]'); if (cp) { cp.disabled = true; complete(cp.getAttribute('data-ln-complete')); return; }
+    if (t.closest('[data-ln-back]')) { S.course = null; S.lesson = null; renderView(); return; }
+    if (t.closest('[data-ln-back-course]')) { S.lesson = null; renderView(); return; }
     if (t.closest('[data-ln-apply]')) { if (G.HubRegister) G.HubRegister.open({ hub: 'education', category: 'tutor' }); else G.location.href = 'complete-application.html'; }
   }
 
@@ -137,5 +228,5 @@
       load();
     });
   }
-  G.SokoniEducationLearn = { init: init, go: go, _state: S, _load: load };
+  G.SokoniEducationLearn = { init: init, go: go, openCourse: openCourse, openLesson: openLesson, complete: complete, _state: S, _load: load, _renderView: renderView };
 })(typeof window !== 'undefined' ? window : this);
