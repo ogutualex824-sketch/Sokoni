@@ -33,5 +33,10 @@ ck('C-11', /typeof window\.sokoniCallable === 'function'/.test(INV) && INV.index
 ck('C-12', /async function _writeProduct\(product\) \{\n    if \(_RETIRED\) return;/.test(SW.replace(/\r\n/g, '\n')) && /function _syncLocalProducts\(\) \{\n    if \(_RETIRED\) return;/.test(SW.replace(/\r\n/g, '\n')),
   'seller-wiring\'s login-time catalogue sync and product writer are RETIRED (they recreated products from localStorage)');
 
+const AV = strip(read('sokoni-availability.js'));
+const avb = ((AV.split('async function setProductAvailability')[1] || '').split('root.AvailabilityService')[0]);
+ck('C-13', !!avb && !/updateDoc|setDoc/.test(avb) && /sokoniCallable\('merchantProduct'\)\(\{ op: 'setStatus'/.test(avb),
+  'merchant.html availability (pause / resume) is a server setStatus — no browser updateDoc that could revive an archived or removed product');
+
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

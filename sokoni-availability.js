@@ -172,13 +172,17 @@
   /* Set a product's availability via the CANONICAL fields only (isVisible / status).
      Never touches stock. Emits SokoniSync so every module re-derives its state. */
   async function setProductAvailability (id, available) {
-    if (!id || !root.firebaseDB) throw new Error('Not signed in');
-    var m = await _fs();
-    /* available=true → visible + active; available=false → hidden (isVisible:false).
-       We flip isVisible (reversible) and never archive here — pausing ≠ deleting. */
-    var patch = { isVisible: !!available, updatedAt: m.serverTimestamp() };
-    if (available) patch.status = 'active';
-    await m.updateDoc(m.doc(root.firebaseDB, 'products', String(id)), patch);
+    if (!id) throw new Error('Not signed in');
+    /* SECURITY CONVERGENCE (2026-10-03): publication is the SERVER's (merchantProduct setStatus — the transition
+       matrix: an archived product goes back to draft first, a product SOKONI removed stays locked, a suspended shop
+       cannot publish). This used to updateDoc isVisible / status:'active' straight from the browser, which could
+       re-activate an archived or admin-removed product. Pause = draft (hidden, reversible), resume = active. */
+    if (root.__sokoniAppCheckReady) { try { await root.__sokoniAppCheckReady; } catch (_) {} }
+    if (typeof root.sokoniCallable !== 'function') throw new Error('SOKONI is still loading — try again in a moment.');
+    var shopId = await ownedShopId();
+    var res = await root.sokoniCallable('merchantProduct')({ op: 'setStatus', shopId: shopId, productId: String(id), status: available ? 'active' : 'draft' });
+    var d = (res && res.data) || {};
+    var patch = { isVisible: d.status === 'active', status: d.status || (available ? 'active' : 'draft') };
     try { if (root.SokoniSync) root.SokoniSync.productChanged({ id: String(id), patch: patch, available: !!available }); } catch (_) {}
     return patch;
   }
