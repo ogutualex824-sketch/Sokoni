@@ -22,7 +22,7 @@
   - test-legal-hub-web 12/0; sabotage-legal-hub-web 10/10.
   - test-legal-projection 96/0, test-role-authority 155/0, test-role-switch-routing 50/0, test-secondary-firebase-apps 9/0.
   - Browser suites UNRUN (memory floor).
-- **Known gap:** profile.html Bookings reads the legacy  collection, not providerBookings, so service bookings are not listed there (profile.html is owned by sokoni-2f 53715a3).
+- **Known gap:** profile.html Bookings reads the legacy `bookings` collection, not providerBookings, so service bookings are not listed there (profile.html is owned by sokoni-2f 53715a3).
 
 ## [2026-10-03] — Legal Hub L3 + L6 (hosting): discovery cards → storefront, taxonomy filters, honest values, money-less booking removed — NOT deployed
 
