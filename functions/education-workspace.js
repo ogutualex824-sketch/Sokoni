@@ -24,6 +24,9 @@ const LEARNER_MODULES = Object.freeze(['overview', 'myLearning', 'discover', 'co
 const LEARNER_BUILT = Object.freeze(['overview', 'myLearning', 'discover', 'courses', 'profile']);
 /* Interactive learner modules additionally need learnerAccess().interactive (E1 owner rule). */
 const LEARNER_INTERACTIVE = Object.freeze(['liveClasses', 'tutoring', 'messages']);
+/* What exists today for a company (E2 enterprise slice: consent-based training assignments, education-enterprise.js). */
+const ENTERPRISE_BUILT = Object.freeze(['employees', 'training', 'companyProfile']);
+const ENTERPRISE_ROUTE = 'education-enterprise.html';
 
 const _st = (state, reason) => ({ state, reason: reason || null });
 
@@ -80,10 +83,13 @@ async function educationWorkspaceFor(db, uid, opts) {
     const state = enterpriseState(e.exists ? e.data() : null);
     if (state) {
       const mods = {};
-      for (const k of ENTERPRISE_MODULES) mods[k] = state === 'ACTIVE' ? _st('NOT_IMPLEMENTED', 'EDUCATION_E2_PENDING') : _st('LOCKED', 'ENTERPRISE_SUSPENDED');
+      for (const k of ENTERPRISE_MODULES) {
+        mods[k] = state !== 'ACTIVE' ? _st('LOCKED', 'ENTERPRISE_SUSPENDED')
+          : ENTERPRISE_BUILT.includes(k) ? _st('AVAILABLE') : _st('NOT_IMPLEMENTED', 'EDUCATION_E2_PENDING');
+      }
       out.enterprise = { state, companyName: (e.data() || {}).companyName || null, modules: mods };
-      /* The enterprise dashboard is an E2 build (its own shell, never provider-dashboard): named, not yet routable. */
-      out.dashboards.push({ actor: 'enterprise', route: null, state: state === 'ACTIVE' ? 'NOT_IMPLEMENTED' : 'LOCKED' });
+      /* The company's OWN shell — never provider-dashboard. A suspended company is not routed. */
+      out.dashboards.push({ actor: 'enterprise', route: state === 'ACTIVE' ? ENTERPRISE_ROUTE : null, state: state === 'ACTIVE' ? 'AVAILABLE' : 'LOCKED' });
     }
   } catch (_) {
     out.enterprise = { state: 'UNREADABLE', companyName: null, modules: {} };
@@ -111,4 +117,4 @@ exports.educationWorkspace = onCall({ region: 'us-central1', enforceAppCheck: tr
   /* the caller only — there is no uid parameter */
   return educationWorkspaceFor(getFirestore(), uid, { claims: req.auth.token || {} });
 });
-exports._internal = { educationWorkspaceFor, learnerModules, enterpriseState, ENTERPRISE_MODULES, LEARNER_MODULES, LEARNER_BUILT };
+exports._internal = { educationWorkspaceFor, learnerModules, enterpriseState, ENTERPRISE_MODULES, ENTERPRISE_BUILT, ENTERPRISE_ROUTE, LEARNER_MODULES, LEARNER_BUILT };

@@ -60,9 +60,13 @@ const EW = require(Path.join(FN, 'education-workspace.js'));
     && Object.keys(A.teach1.provider.modules).sort().join() === 'eduClasses,eduCourses,eduLearners,eduLessons', A.teach1.provider);
   ck('X-5 an INSTITUTION: the institution dashboard; never teacher-only lessons / learners', dash(A.inst1).includes('institution:AVAILABLE') && !('eduLessons' in A.inst1.provider.modules) && 'eduTimetable' in A.inst1.provider.modules, A.inst1.provider);
   ck('X-6 a PENDING teacher gets NO teacher dashboard', !dash(A.teachPend).includes('teacher') && A.teachPend.provider === null || (A.teachPend.provider && A.teachPend.provider.state !== 'AVAILABLE' && !dash(A.teachPend).includes('teacher')), [dash(A.teachPend), A.teachPend.provider]);
-  ck('X-7 an ENTERPRISE buyer: its own (not yet built) dashboard, NO provider workspace, no provider modules', A.acme.enterprise.state === 'ACTIVE' && A.acme.provider === null && dash(A.acme) === 'learner:AVAILABLE,enterprise:NOT_IMPLEMENTED'
+  const entDash = A.acme.dashboards.find((d) => d.actor === 'enterprise') || {};
+  ck('X-7 an ENTERPRISE buyer: its OWN shell (education-enterprise.html — never provider-dashboard), NO provider workspace, no provider modules; employees / training AVAILABLE, the rest NOT_IMPLEMENTED',
+    A.acme.enterprise.state === 'ACTIVE' && A.acme.provider === null && dash(A.acme) === 'learner:AVAILABLE,enterprise:AVAILABLE' && entDash.route === 'education-enterprise.html'
+      && A.acme.enterprise.modules.employees.state === 'AVAILABLE' && A.acme.enterprise.modules.training.state === 'AVAILABLE' && A.acme.enterprise.modules.payments.state === 'NOT_IMPLEMENTED'
     && !Object.keys(A.acme.enterprise.modules).some((k) => /^edu|storefront|earnings|services/.test(k)), [dash(A.acme), A.acme.provider]);
-  ck('X-8 a suspended enterprise is LOCKED', A.gone.enterprise.state === 'SUSPENDED' && Object.values(A.gone.enterprise.modules).every((m) => m.state === 'LOCKED'));
+  ck('X-8 a suspended enterprise is LOCKED and NOT routed', A.gone.enterprise.state === 'SUSPENDED' && Object.values(A.gone.enterprise.modules).every((m) => m.state === 'LOCKED')
+    && (A.gone.dashboards.find((d) => d.actor === 'enterprise') || {}).route === null);
   ck('X-9 the caller sees ONLY their own EDUCATION applications, with what is missing (a plumbing app and another user\'s tutor app are not listed)',
     A.kid.applications.length === 1 && A.kid.applications[0].id === 'APPX' && A.kid.applications[0].missing.length === 1, A.kid.applications);
   ck('X-10 a plain learner has no provider and no enterprise section (null, not invented)', A.kid.provider === null && A.kid.enterprise === null);
