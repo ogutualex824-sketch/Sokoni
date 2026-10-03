@@ -80,16 +80,66 @@ function pages(read) {
   return out;
 }
 
+
+/* slice 2: tech-hub.html tabs + providers.html booking */
+function fnSrc(src, name) {
+  const i = src.indexOf('function ' + name + '(');
+  if (i < 0) return '';
+  let d = 0, j = src.indexOf('{', i);
+  for (; j < src.length; j++) { if (src[j] === '{') d++; else if (src[j] === '}') { d--; if (!d) return src.slice(i, j + 1); } }
+  return '';
+}
+function providersBooking(html) {
+  const vm = require('vm');
+  const calls = { open: [], saveDoc: 0, ls: 0, toast: [], href: '' };
+  const ctx = {
+    PROVIDERS: [{ uid: 'u9', name: 'Wire Pro', role: 'Electrician', location: 'Nakuru' }],
+    _bookingProviderId: null,
+    SokoniBookService: { open: (o) => calls.open.push(o) },
+    SokoniDB: { saveDoc: () => { calls.saveDoc++; return Promise.resolve(); } },
+    localStorage: { getItem: () => '[]', setItem: () => { calls.ls++; } },
+    document: { getElementById: (id) => ({ value: id === 'pvBookPhone' ? '0712345678' : 'x', classList: { add() {}, remove() {} }, textContent: '' }) },
+    location: { set href(v) { calls.href = v; } },
+    _skToast: (m) => calls.toast.push(m), alert: (m) => calls.toast.push(m),
+    encodeURIComponent,
+  };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(['openBookModal', 'closeBookModal', 'confirmBooking'].map((n) => fnSrc(html, n)).join('\n'), ctx);
+  vm.runInContext("openBookModal('u9'); confirmBooking();", ctx);
+  const engine = calls.open.length >= 1 && calls.open[0].providerId === 'u9';
+  const noWrite = calls.saveDoc === 0 && calls.ls === 0;
+  const noFake = !calls.toast.some((m) => /confirmed/i.test(m));
+  delete ctx.SokoniBookService;
+  vm.runInContext("openBookModal('u9');", ctx);
+  return { engine, noWrite, noFake, fallback: calls.href === 'provider-profile.html?uid=u9' };
+}
+function pages2(read) {
+  const th = read('tech-hub.html'), pv = read('providers.html');
+  return {
+    'tech-hub.html': {
+      noDemo: !/(?:const|let|var)\s+DEMO_(?:TECHS|IT)\b|DEMO_(?:TECHS|IT)\s*[.\[]/.test(th.replace(/\/\*[\s\S]*?\*\//g, '')),
+      noClientRepairWrite: !/['"]techRepairs['"]/.test(th),
+      techsMounted: /SokoniTechDirectory\.mount\(cfg\)/.test(fnSrc(th, 'filterTechs')) && /grid: 'techsGrid'/.test(th),
+      itMounted: /grid: 'itsGrid'/.test(fnSrc(th, 'filterITServices')),
+      modules: ['firebase.js', 'sokoni-providers.js', 'sokoni-book-service.js', 'sokoni-inbox.js', 'sokoni-tech-directory.js'].every((m) => th.includes('src="' + m + '"')),
+    },
+    'providers.html': Object.assign({ modules: ['sokoni-intasend.js', 'sokoni-book-service.js'].every((m) => pv.includes('src="' + m + '"')) }, providersBooking(pv)),
+  };
+}
+
 (async () => {
   let pass = 0, fail = 0, caught = 0;
   const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d ? '   [' + d + ']' : '')); ok ? pass++ : fail++; };
-  console.log('\nTECH DIRECTORY — slice 1\n');
+  console.log('\nTECH DIRECTORY — slices 1-2\n');
   const LABELS = { T1: 'lists approved providers from the registry by category', T2: 'ratings / jobs only when real; "New on SOKONI" otherwise; verified only from the record', T3: 'provider text is escaped', T4: 'an unreachable registry is NOT shown as an empty list', T5: 'a real empty registry invites applications (business-apply)', T6: 'Book → SokoniBookService.open(providerId); Message → in-app chat', T7: 'search / type / location filters' };
   const b = await behaviour(MOD);
   for (const k of Object.keys(LABELS)) ck(k + '  ' + LABELS[k], b[k] === true);
   const pg = pages((f) => fs.readFileSync(path.join(ROOT, f), 'utf8'));
   for (const f of Object.keys(pg)) for (const [k, v] of Object.entries(pg[f])) ck('P   ' + f + ': ' + k, v);
 
+  const pg2 = pages2((f) => fs.readFileSync(path.join(ROOT, f), 'utf8'));
+  for (const f of Object.keys(pg2)) for (const [k, v] of Object.entries(pg2[f])) ck('P2  ' + f + ': ' + k, v);
   console.log('\n  [sabotage]');
   const SAB = {
     T2: MOD.replace("'<span class=\"' + x + '-prov-rnum\">New on SOKONI</span>'", "'<span class=\"' + x + '-prov-rnum\">4.9 · 0 jobs</span>'"),
@@ -106,7 +156,15 @@ function pages(read) {
   const pageSab = pages((f) => fs.readFileSync(path.join(ROOT, f), 'utf8').replace('<script>\n/* 2026-10-03 (Tech Hub', '<script>\nconst PROVIDERS=[{id:"X"}];\n/* 2026-10-03 (Tech Hub').replace('<script>\r\n/* 2026-10-03 (Tech Hub', '<script>\r\nconst PROVIDERS=[{id:"X"}];\r\n/* 2026-10-03 (Tech Hub'));
   const redP = !pageSab['phone-repair.html'].noArray;
   console.log('  ' + (redP ? 'CAUGHT' : 'MISSED') + '  P noArray'); redP ? caught++ : fail++;
-  console.log('\n  ' + pass + ' passed, ' + fail + ' failed, ' + caught + '/5 sabotages caught');
+  const pvSrc = fs.readFileSync(path.join(ROOT, 'providers.html'), 'utf8');
+  const pvBad = pvSrc.replace(/closeBookModal\(\);(\r?\n  if \(_bookingProviderId\))/, "SokoniDB.saveDoc('providerBookings', {status:'Confirmed'}); _skToast('Booking confirmed!'); closeBookModal();$1");
+  const pvSab = pvBad === pvSrc ? { noWrite: true, noFake: true } : providersBooking(pvBad);
+  const redPv = !pvSab.noWrite && !pvSab.noFake;
+  console.log('  ' + (redPv ? 'CAUGHT' : 'MISSED') + '  P2 providers fake confirm'); redPv ? caught++ : fail++;
+  const thSab = pages2((f) => { const t = fs.readFileSync(path.join(ROOT, f), 'utf8'); return f === 'tech-hub.html' ? t + '<script>const DEMO_TECHS=[];</script>' : t; });
+  const redTh = !thSab['tech-hub.html'].noDemo;
+  console.log('  ' + (redTh ? 'CAUGHT' : 'MISSED') + '  P2 tech-hub demo'); redTh ? caught++ : fail++;
+  console.log('\n  ' + pass + ' passed, ' + fail + ' failed, ' + caught + '/7 sabotages caught');
   console.log('  NOT proven here: a real browser render and a real booking (needs a browser run and an approved provider with services).\n');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH ' + (e && e.stack || e)); process.exit(2); });

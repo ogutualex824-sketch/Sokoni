@@ -625,14 +625,7 @@ const DEMO_DEVICES = [
   { id:'DEV012', name:'PS4 Slim + 2 Controllers', brand:'sony', cat:'console', price:32000, cond:'used', loc:'nairobi', phone:'0755500012', emoji:'🎮', ram:'8GB', storage:'1TB', battery:'N/A', screen:'N/A', camera:'N/A', os:'PS4 OS' },
 ];
 
-const DEMO_TECHS = [
-  { id:'T001', name:'Brian Mwangi', spec:'repair', skills:['iPhone Screen','Samsung Screen','Battery Replacement','Water Damage'], loc:'Nairobi / CBD', phone:'0712600001', rate:800, exp:6, rating:4.9, jobs:312, emoji:'🔧', certified:true },
-  { id:'T002', name:'Mercy Wanjiku', spec:'software', skills:['Web Dev','App Dev','UI/UX','WordPress'], loc:'Nairobi / Westlands', phone:'0723600002', rate:3000, exp:4, rating:4.8, jobs:87, emoji:'💻', certified:true },
-  { id:'T003', name:'James Oduya', spec:'network', skills:['WiFi Setup','LAN/WAN','Mikrotik','Fiber'], loc:'Nairobi / Industrial', phone:'0734600003', rate:2500, exp:8, rating:4.7, jobs:156, emoji:'🌐', certified:true },
-  { id:'T004', name:'Sarah Njeri', spec:'cctv', skills:['CCTV Install','Access Control','Alarm Systems','DVR Setup'], loc:'Nairobi / Kilimani', phone:'0745600004', rate:3500, exp:10, rating:5.0, jobs:203, emoji:'📹', certified:true },
-  { id:'T005', name:'Peter Kamau', spec:'repair', skills:['Laptop Repair','Screen Replacement','Motherboard','Data Recovery'], loc:'Mombasa / CBD', phone:'0756600005', rate:1500, exp:9, rating:4.8, jobs:445, emoji:'🔧', certified:true },
-  { id:'T006', name:'Grace Achieng', spec:'support', skills:['IT Support','Printer Setup','Office 365','Remote Support'], loc:'Nairobi / Karen', phone:'0767600006', rate:2000, exp:5, rating:4.6, jobs:134, emoji:'🖥️', certified:false },
-];
+/* DEMO_TECHS removed 2026-10-03 (Tech Hub slice 2): demo providers with invented ratings; the tab lists the registry. */
 
 const PHONE_COMPARE_DATA = _demoAllowed ? DEMO_DEVICES.filter(d => d.cat === 'phone' || d.cat === 'laptop') : [];
 let _selectedCompare = [];
@@ -706,26 +699,14 @@ function selectRepairType(btn, type) {
 window.selectRepairType = selectRepairType;
 
 function bookRepair() {
-  const name   = (document.getElementById('repName')?.value||'').trim();
-  const phone  = (document.getElementById('repPhone')?.value||'').trim();
-  const device = (document.getElementById('repDevice')?.value||'').trim();
-  const type   = document.getElementById('repType')?.value || _repairType || 'Repair';
-  const desc   = document.getElementById('repDesc')?.value || '';
-  const date   = document.getElementById('repDate')?.value || 'ASAP';
-  const loc    = document.getElementById('repLoc')?.value || 'Nairobi';
-  const msgEl  = document.getElementById('repMsg');
-  if (!name || !phone || !device) { if(msgEl) { msgEl.textContent='Fill your name, phone and device'; msgEl.style.color='#ff9800'; } return; }
-  const ref = 'REP'+Date.now().toString().slice(-6);
-  const msg = `🔧 *SOKONI Tech Hub — Repair Booking*\n\nRef: ${ref}\n👤 Name: ${name}\n📞 Phone: ${phone}\n📱 Device: ${device}\n🔧 Repair: ${type}\n📅 Date: ${date}\n📍 Location: ${loc}\n${desc?'\n📝 '+desc:''}\n\nPlease confirm this booking. Thank you!`;
-  let bks = []; try { bks = JSON.parse(localStorage.getItem('sokoniRepairs'))||[]; } catch(e) {}
-  bks.unshift({ ref, name, phone, device, type, date, loc, status:'sent', createdAt:Date.now() });
-  localStorage.setItem('sokoniRepairs', JSON.stringify(bks.slice(0,20)));
-  _thFireWrite('techRepairs', { ref, name, phone, device, repairType:type, date, location:loc, notes:desc, status:'pending' });
-  if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
-    SokoniPay.waConnect('254705726803', msg, {providerName:'SOKONI Tech Hub',category:'default',serviceDesc:type||'Device Repair'});
-  }
-  /* no WhatsApp hand-off (owner 2026-09-30) */
-  if(msgEl) { msgEl.innerHTML=`✅ Booking recorded! Ref: <strong>${_esc(ref)}</strong>`; msgEl.style.color='#00d4ff'; }
+  /* 2026-10-03 (Tech Hub slice 2). This form wrote techRepairs from the browser and said "Booking recorded" for a
+     request no technician owned (SOKONI has no lead/quote authority yet — Tech Hub plan, slice 7). A real booking
+     needs a provider and a service, so the visitor picks a repair technician and books through the canonical engine. */
+  const msgEl = document.getElementById('repMsg');
+  if (msgEl) { msgEl.textContent = 'Choose a repair technician below to book — the price is confirmed when you book.'; msgEl.style.color = '#00d4ff'; }
+  const sel = document.getElementById('techSpeciality'); if (sel) sel.value = 'repair';
+  goThPanel('technicians');
+  filterTechs();
 }
 window.bookRepair = bookRepair;
 
@@ -788,36 +769,17 @@ window.clearCompare = clearCompare;
 
 /* ── TECHNICIANS ── */
 function filterTechs() {
-  const q    = (document.getElementById('techSearch')?.value||'').toLowerCase();
-  const spec = document.getElementById('techSpeciality')?.value||'';
-  let list   = [...(_demoAllowed?DEMO_TECHS:[])];
-  if (spec) list = list.filter(t => t.spec === spec);
-  if (q)    list = list.filter(t => (t.name+t.skills.join(' ')+t.loc).toLowerCase().includes(q));
-  renderTechsGrid(list);
-  setTimeout(function(){var g=document.getElementById('techsGrid');if(g)g.scrollIntoView({behavior:'smooth',block:'start'});},100);
+  /* 2026-10-03 (Tech Hub slice 2): approved providers from the registry, not DEMO_TECHS.
+     Book → SokoniBookService (server price, IntaSend); Message → in-app chat. */
+  const SPEC = { repair: 'phone-repair', network: 'networking', cctv: 'cctv', software: 'software', support: 'it-support', web: 'web-developer' };
+  const spec = document.getElementById('techSpeciality')?.value || '';
+  const cfg = { grid: 'techsGrid', category: SPEC[spec] || 'tech', prefix: 'stdir', noun: 'technician',
+    applyUrl: 'business-apply.html?offer=services&category=' + encodeURIComponent(SPEC[spec] || 'it-support'),
+    search: () => document.getElementById('techSearch')?.value || '' };
+  if (window.SokoniTechDirectory) SokoniTechDirectory.mount(cfg);
 }
 
-function renderTechsGrid(list) {
-  const grid = document.getElementById('techsGrid'); if (!grid) return;
-  if (!list.length) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:rgba(255,255,255,0.3);">No technicians found</div>'; return; }
-  grid.innerHTML = list.map(t => `
-    <div class="th-card">
-      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">
-        <div style="width:48px;height:48px;border-radius:12px;background:rgba(0,212,255,0.1);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${t.emoji}</div>
-        <div style="flex:1;min-width:0;">
-          <div class="th-card-name" style="font-size:14px;">${t.name} ${t.certified?'<span style="font-size:8px;background:rgba(0,212,255,0.1);color:#00d4ff;padding:1px 5px;border-radius:3px;border:1px solid rgba(0,212,255,0.2);">✓ Certified</span>':''}</div>
-          <div style="font-size:11px;color:#00d4ff;font-weight:700;margin-bottom:2px;">${{repair:'Repair Technician',software:'Software Developer',network:'Network Engineer',cctv:'CCTV Installer',support:'IT Support',web:'Web Designer'}[t.spec]||t.spec}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.4);">📍 ${t.loc}</div>
-        </div>
-      </div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${t.skills.slice(0,3).map(s=>`<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(0,212,255,0.07);border:1px solid rgba(0,212,255,0.15);color:#38bdf8;">${s}</span>`).join('')}</div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <div class="th-card-price" style="font-size:15px;">KES ${Number(t.rate).toLocaleString()}<span>/hr</span></div>
-        <span style="font-size:11px;color:rgba(255,255,255,0.4);">⭐ ${t.rating} · ${t.jobs} jobs</span>
-      </div>
-      <a href="support.html?topic=hire&ref=${encodeURIComponent(t.name)}" class="th-wa-btn">🛟 Hire via SOKONI</a>
-    </div>`).join('');
-}
+function renderTechsGrid() { filterTechs(); }
 
 /* ── ASK THE TECH HUB ── */
 function postTechRequest() {
@@ -939,31 +901,15 @@ async function _initFsDevices() {
 }
 
 /* ── IT SERVICES DATA ── */
-const DEMO_IT = [
-  {id:'IT001',name:'Kubwa Digital',cat:'web',title:'Web Development Agency',skills:['React','WordPress','E-Commerce','SEO'],loc:'Nairobi',phone:'0712700001',rate:'From KES 25,000',rating:4.9,jobs:143,emoji:'🌐',verified:true},
-  {id:'IT002',name:'AppFoundry Kenya',cat:'app',title:'Mobile App Developer',skills:['React Native','Flutter','iOS','Android'],loc:'Nairobi',phone:'0723700002',rate:'From KES 50,000',rating:4.8,jobs:67,emoji:'📱',verified:true},
-  {id:'IT003',name:'SkyCloud Africa',cat:'cloud',title:'Cloud Services Provider',skills:['AWS','Azure','Google Cloud','DevOps'],loc:'Nairobi',phone:'0734700003',rate:'From KES 30,000',rating:4.7,jobs:89,emoji:'☁️',verified:true},
-  {id:'IT004',name:'SecureShield IT',cat:'cyber',title:'Cybersecurity Specialists',skills:['Penetration Testing','SIEM','Firewall','Compliance'],loc:'Nairobi',phone:'0745700004',rate:'From KES 60,000',rating:5.0,jobs:34,emoji:'🛡️',verified:true},
-  {id:'IT005',name:'CodeCraft Studios',cat:'software',title:'Software Development',skills:['Python','Java','Node.js','Microservices'],loc:'Nairobi',phone:'0756700005',rate:'From KES 45,000',rating:4.8,jobs:112,emoji:'💻',verified:true},
-  {id:'IT006',name:'TechMentor Consulting',cat:'consulting',title:'IT Consulting & Strategy',skills:['Digital Transformation','IT Audit','ERP','Project Mgmt'],loc:'Nairobi',phone:'0767700006',rate:'From KES 15,000',rating:4.9,jobs:58,emoji:'🎯',verified:false},
-];
+/* DEMO_IT removed 2026-10-03 (Tech Hub slice 2): demo providers with invented ratings; the tab lists the registry. */
 
 function filterITServices(cat, btn) {
   document.querySelectorAll('#thpanel-itservices .th-pill').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  let list = !_demoAllowed ? [] : (cat==='all' ? [...DEMO_IT] : DEMO_IT.filter(s=>s.cat===cat));
-  const cnt=document.getElementById('itsCount'); if(cnt) cnt.textContent=list.length+' providers';
-  const grid=document.getElementById('itsGrid'); if(!grid) return;
-  grid.innerHTML=list.map(s=>`
-    <div class="th-card">
-      <span class="th-card-emoji">${s.emoji}</span>
-      <div class="th-card-name">${s.name} ${s.verified?'<span style="font-size:8px;background:rgba(0,212,255,0.1);color:#00d4ff;padding:1px 5px;border-radius:3px;border:1px solid rgba(0,212,255,0.2);">✓</span>':''}</div>
-      <div class="th-card-meta">${s.title}</div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${s.skills.slice(0,3).map(k=>`<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);color:#818cf8;">${k}</span>`).join('')}</div>
-      <div class="th-card-price">${s.rate}</div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;">⭐ ${s.rating} · ${s.jobs} projects · 📍 ${s.loc}</div>
-      <a href="https://wa.me/254${s.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi '+s.name+', I found you on SOKONI Tech Hub. I need IT services: ')}" target="_blank" rel="noopener" class="th-wa-btn">💬 WhatsApp</a>
-    </div>`).join('');
+  /* 2026-10-03 (Tech Hub slice 2): approved IT providers from the registry, not DEMO_IT (which carried wa.me links). */
+  const CAT = { web: 'web-developer', app: 'app-developer', software: 'software', cloud: 'cloud', cyber: 'cybersecurity', consulting: 'it-consulting' };
+  if (window.SokoniTechDirectory) SokoniTechDirectory.mount({ grid: 'itsGrid', count: 'itsCount', category: CAT[cat] || 'tech', prefix: 'stdir', noun: 'IT provider',
+    applyUrl: 'business-apply.html?offer=services&category=' + encodeURIComponent(CAT[cat] || 'it-support') });
 }
 window.filterITServices = filterITServices;
 
@@ -1224,6 +1170,12 @@ filterAITools('all', null);
 <script src="seo.js" defer></script>
 <script type="module" src="sokoni-init.js"></script>
 <script src="nav-active.js" defer></script>
+<!-- Canonical service engine (Tech Hub slice 2) -->
+<script src="firebase.js" type="module"></script>
+<script src="sokoni-providers.js" defer></script>
+<script src="sokoni-book-service.js" defer></script>
+<script src="sokoni-inbox.js" defer></script>
+<script src="sokoni-tech-directory.js" defer></script>
 <script src="sw-register.js" defer></script>
 <script src="sokoni-audit.js" defer></script>
 <script src="sokoni-social.js" defer></script>

@@ -5,7 +5,7 @@ payment / booking / wallet / review / chat authority, no WhatsApp, AdminOS-gated
 dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]], [[Payments]], [[AdminOS]],
 [[IntaSend Convergence Brief]]. Strategy: no new hubs — Digital Hub folds into Tech Hub.
 
-**Status: slice 1 built and tested; nothing deployed.**
+**Status: slices 1 and 2a built and tested; nothing deployed.**
 
 ## Authority map (census 2026-10-03)
 
@@ -32,8 +32,11 @@ dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]]
 | Surface | Problem | Slice |
 |---|---|---|
 | `phone-repair.html`, `electrical.html` | hardcoded providers with invented ratings / jobs / verified; WhatsApp / localStorage booking; KES 0 invoice; invented reviews | **1 — fixed** |
-| `tech-hub.html` repair / IT tabs, compare | demo arrays; `techRepairs` / `techDevices` client writes, auto-active listings; compare on demo data | 2 |
-| `providers.html` confirmBooking | fake "Confirmed" + client write to `providerBookings` | 2 |
+| `tech-hub.html` repair / IT tabs | demo arrays; `techRepairs` client write with "Booking recorded" | **2a — fixed** |
+| `tech-hub.html` device listings | `techDevices` client write, auto-active, no review | 3 (route to the marketplace product authority) |
+| `tech-hub.html` Ask Hub | localStorage feed with wa.me hand-off | 7 (becomes the lead / quote request) |
+| `tech-hub.html` freelancers / startups / courses / jobs / AI / compare | demo arrays, shown only on localhost or with `sokoniDemoData` (production shows nothing) | later; jobs → Work engine |
+| `providers.html` confirmBooking | fake "Confirmed" + client write to `providerBookings` | **2a — fixed** |
 | `provider.html` | legacy localStorage dashboard, fake "AI photo edit" | 3 (retire / redirect) |
 | `home-services.html` | demo providers; client writes to `homeService*` | 2 |
 | `digital.html`, `digital-esoko.html` | client-created contracts / "escrow"; purchase marked completed on the client | 6 (fold into digital-store callables) |
@@ -63,7 +66,7 @@ dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]]
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | Phone / device repair | yes | yes | generic | yes | **slice 1** | engine | engine | plan rate | in-app | engine | read-only |
 | Electrical | yes | yes | generic | yes | **slice 1** | engine | engine | plan rate | in-app | engine | read-only |
-| IT support / networking / CCTV / POS support | yes (free text) | yes | generic | yes | demo (slice 2) | engine once listed | engine | plan rate | in-app | engine | read-only |
+| IT support / networking / CCTV / POS support | yes (free text) | yes | generic | yes | **slice 2a** | engine once listed | engine | plan rate | in-app | engine | read-only |
 
 "Engine" = the canonical service engine is available once the provider is approved and has services; none of it is
 proven end to end in a browser on this branch yet.

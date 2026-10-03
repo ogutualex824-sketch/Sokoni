@@ -351,6 +351,9 @@
 <script src="sokoni-image.js" defer></script>
 <script src="sw-register.js" defer></script>
 <script src="sokoni-providers.js" defer></script>
+<!-- Canonical booking engine (Tech Hub slice 2) -->
+<script src="sokoni-intasend.js" defer></script>
+<script src="sokoni-book-service.js" defer></script>
 <script>
 /* ── Provider directory ───────────────────────────────────────────────────────
    Reads the canonical `providers` registry through SokoniProviders. The 17
@@ -506,19 +509,18 @@ function loadProviders() {
 var _bookingProviderId = null;
 
 function openBookModal(pid) {
+  /* 2026-10-03 (Tech Hub slice 2). The local modal said "Booking confirmed!" and wrote providerBookings from the
+     browser — no price, no slot, no payment, no provider acceptance. Book now goes through the canonical engine:
+     SokoniBookService → bookingCreateService (server price + slot lock) → service_booking intent → IntaSend → webhook. */
   var p = PROVIDERS.find(function(x) { return String(x.uid) === String(pid); });
   if (!p) return;
   _bookingProviderId = pid;
-  var modal = document.getElementById('pvBookModal');
-  var title = document.getElementById('pvModalTitle');
-  var sub = document.getElementById('pvModalSub');
-  if (title) title.textContent = 'Book — '+p.name;
-  if (sub) sub.textContent = p.role+' · '+p.location;
-  /* Pre-fill date with tomorrow */
-  var tmr = new Date(); tmr.setDate(tmr.getDate()+1); tmr.setHours(9,0,0,0);
-  var dtInput = document.getElementById('pvBookDate');
-  if (dtInput) dtInput.value = tmr.toISOString().slice(0,16);
-  if (modal) modal.classList.add('open');
+  if (window.SokoniBookService && typeof SokoniBookService.open === 'function') {
+    SokoniBookService.open({ providerId: String(p.uid), providerName: p.name });
+    return;
+  }
+  /* engine not loaded: the storefront carries the same booking flow */
+  location.href = 'provider-profile.html?uid=' + encodeURIComponent(String(p.uid));
 }
 
 function closeBookModal() {
@@ -581,45 +583,9 @@ function pvToggleFollow(pid, pname) {
 }
 
 function confirmBooking() {
-  var name  = (document.getElementById('pvBookName') || {}).value || '';
-  var phone = (document.getElementById('pvBookPhone') || {}).value || '';
-  var date  = (document.getElementById('pvBookDate') || {}).value || '';
-  var loc   = (document.getElementById('pvBookLocation') || {}).value || '';
-
-  if (!name.trim()) { (window._skToast||alert)('Please enter your name'); return; }
-  if (!phone.match(/^0[17]\d{8}$/)) { (window._skToast||alert)('Enter a valid phone number (07... or 01...)'); return; }
-  if (!date) { (window._skToast||alert)('Please select a date and time'); return; }
-
-  var p = PROVIDERS.find(function(x) { return String(x.uid) === String(_bookingProviderId); });
-  var notes = (document.getElementById('pvBookNotes') || {}).value || '';
-
-  var booking = {
-    id: 'BKG-'+Date.now(),
-    providerId: _bookingProviderId,
-    providerName: p ? p.name : 'Provider',
-    providerRole: p ? p.role : '',
-    customerName: name,
-    customerPhone: phone,
-    date: date,
-    location: loc,
-    notes: notes,
-    status: 'Confirmed',
-    createdAt: new Date().toISOString()
-  };
-
-  /* Save to localStorage */
-  var bookings = [];
-  try { bookings = JSON.parse(localStorage.getItem('sokoniProviderBookings') || '[]'); } catch(e) {}
-  bookings.push(booking);
-  localStorage.setItem('sokoniProviderBookings', JSON.stringify(bookings));
-
-  /* Save to Firestore if available */
-  if (window.SokoniDB && SokoniDB.saveDoc) {
-    SokoniDB.saveDoc('providerBookings', booking).catch(function(){});
-  }
-
+  /* 2026-10-03 (Tech Hub slice 2): never confirms or writes anything — hands over to the canonical booking flow. */
   closeBookModal();
-  (window._skToast||alert)('✅ Booking confirmed!\n\n'+( p ? p.name : 'Provider')+' will contact you at '+phone+' to confirm your appointment.');
+  if (_bookingProviderId) openBookModal(_bookingProviderId);
 }
 
 /* Close modal on backdrop click */

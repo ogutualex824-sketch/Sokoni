@@ -133,8 +133,27 @@
     });
   }
 
+  /* Built-in card styles for pages that do not carry the pg-* card CSS (prefix 'stdir'). Injected once. */
+  function injectStyles() {
+    if (document.getElementById('stdir-css') || !document.createElement) return;
+    var st = document.createElement('style'); st.id = 'stdir-css';
+    st.textContent = '.stdir-provider-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:8px}'
+      + '.stdir-prov-top{display:flex;gap:10px;align-items:flex-start}.stdir-prov-avatar{width:44px;height:44px;border-radius:12px;background:rgba(0,212,255,0.1);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;overflow:hidden}'
+      + '.stdir-prov-name{font-weight:800;font-size:14px}.stdir-verified-badge{font-size:9px;font-weight:800;color:#00d4ff;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.25);padding:1px 6px;border-radius:5px}'
+      + '.stdir-prov-loc,.stdir-prov-rnum{font-size:11px;color:rgba(255,255,255,0.5)}.stdir-prov-stars{color:#fbbf24;font-size:11px;margin-right:4px}.stdir-prov-bio{font-size:12px;color:rgba(255,255,255,0.65);line-height:1.5}'
+      + '.stdir-prov-skills{display:flex;gap:5px;flex-wrap:wrap}.stdir-prov-skill{font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(0,212,255,0.07);border:1px solid rgba(0,212,255,0.15)}'
+      + '.stdir-prov-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto}.stdir-prov-rate{font-size:13px;font-weight:800}.stdir-prov-rate small{font-weight:500;color:rgba(255,255,255,0.45)}'
+      + '.stdir-ico{min-width:44px;min-height:44px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:inherit;font-size:18px;cursor:pointer}.stdir-ico:focus-visible{outline:2px solid #00d4ff;outline-offset:2px}';
+    (document.head || document.documentElement).appendChild(st);
+  }
+
+  var byGrid = {};
+
   function mount(opts) {
     var cfg = Object.assign({ prefix: 'pg', noun: 'technician', applyUrl: 'business-apply.html?offer=services' }, opts || {});
+    if (cfg.prefix === 'stdir') injectStyles();
+    if (byGrid[cfg.grid]) { Object.assign(byGrid[cfg.grid], opts || {}); return render(byGrid[cfg.grid]); }
+    byGrid[cfg.grid] = cfg;
     mounts.push(cfg);
     var grid = document.getElementById(cfg.grid);
     if (grid && !grid.__techBound) {
@@ -151,6 +170,8 @@
   G.SokoniTechDirectory = {
     mount: mount,
     refresh: function () { return Promise.all(mounts.map(render)); },
+    /* Change a mounted grid's filters (e.g. a tab's category) and re-render, without a second mount. */
+    update: function (grid, patch) { var c = byGrid[grid]; if (!c) return Promise.resolve(); Object.assign(c, patch || {}); return render(c); },
     _internal: { card: card, matches: matches },
   };
 }(typeof window !== 'undefined' ? window : globalThis));

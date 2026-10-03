@@ -1,3 +1,18 @@
+## [2026-10-03] - Tech Hub slice 2a: Tech Hub technicians / IT tabs and providers.html book on the service engine — hosting, NOT deployed
+
+- tech-hub.html: the Technicians and IT Services tabs listed DEMO_TECHS / DEMO_IT (invented ratings, wa.me links). They now mount
+  sokoni-tech-directory.js on the registry (speciality / IT pill -> category group, display only). The repair form wrote `techRepairs`
+  from the browser and said "Booking recorded" for a request no technician owned; it now sends the visitor to the repair technicians
+  list to book through the engine (no lead/quote authority exists yet — slice 7). Replaced functions: filterTechs, renderTechsGrid,
+  filterITServices, bookRepair.
+- providers.html: confirmBooking wrote `providerBookings` from the browser with status "Confirmed" and toasted "Booking confirmed!" — no
+  price, slot, payment or provider acceptance. Book now opens SokoniBookService (server price, slot lock, IntaSend, webhook); with the
+  engine absent it falls back to the provider's storefront. No client booking write remains.
+- Tests: scripts/test-tech-directory.js 31/0, 7/7 sabotages (adds tech-hub + providers behaviour checks).
+- Database / API / rules: none. Security: removes a client write to a canonical collection and a fabricated confirmation.
+- Still open on tech-hub.html (own slices): device listings auto-activate from the browser (`techDevices`); Ask Hub hands off to wa.me.
+  The freelancers / startups / courses / jobs / AI / device demo arrays render only on localhost or with the sokoniDemoData flag.
+
 ## [2026-10-03] - Tech Hub slice 1: phone repair and electrical list real providers on the service engine — hosting, NOT deployed
 
 Both pages listed HARDCODED providers with invented ratings, job counts and verified badges, "booked" by WhatsApp hand-off or localStorage
