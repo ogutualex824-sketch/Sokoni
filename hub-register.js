@@ -148,7 +148,9 @@
     { id:'agri-input',       label:'Agrovet / Farm Inputs',            hub:'agri',          emoji:'🌱' },
     /* Construction */
     { id:'contractor',       label:'Contractor / Builder',             hub:'construction',  emoji:'🏗️' },
-    { id:'architect',        label:'Architect / Civil Engineer',       hub:'construction',  emoji:'📐' },
+    /* id namespaced 2026-10-03: bare 'architect' is a professional_services label in business-category.js (sokoni-2f).
+       Applications filed earlier as 'architect' stay classifiable there; new ones use construction-architect. */
+    { id:'construction-architect', label:'Architect / Engineer / Quantity Surveyor', hub:'construction', emoji:'📐' },
     /* CONSTRUCTION convergence (owner 2026-10-03): every construction trade applies through this ONE intake, each with
        its own questions; AdminOS approves each declared capability separately (approving one does not approve all). */
     { id:'construction-company', label:'Construction Company',          hub:'construction',  emoji:'🏢' },
@@ -259,7 +261,7 @@
       { id: 'ownership', label: 'You are *', type: 'select', required: true, options: ['The owner of the equipment', 'Authorised by the owner (AdminOS verifies)'] },
       { id: 'operator', label: 'Operator / driver provided?', type: 'select', options: ['Yes', 'No', 'Optional'] },
       { id: 'delivery', label: 'Delivery to site?', type: 'select', options: ['Yes', 'No', 'At extra cost'] }, Q.area],
-    'architect': [Q.services(['Architecture', 'Structural engineering', 'Quantity surveying', 'Land surveying', 'Project management', 'Inspection', 'Interior design']),
+    'construction-architect': [Q.services(['Architecture', 'Structural engineering', 'Quantity surveying', 'Land surveying', 'Project management', 'Inspection', 'Interior design']),
       { id: 'professionalRegNo', label: 'Professional registration number (BORAQS / EBK / ISK — AdminOS verifies) *', type: 'text', required: true, max: 60 },
       { id: 'portfolio', label: 'Recent projects', type: 'text', max: 200 }, Q.area, Q.years],
     'construction-services': [Q.services(['Construction labour', 'Site services', 'Demolition', 'Maintenance', 'Repairs', 'Cleaning after construction']),

@@ -15,7 +15,7 @@ const block = (src, start) => { const i = src.indexOf(start); if (i < 0) return 
 let CQ = {};
 try { CQ = vm.runInNewContext('var Q = ' + block(HR, 'var Q = {') + '; (' + block(HR, 'var CAT_QUESTIONS = {') + ')'); } catch (e) { console.log('  (CAT_QUESTIONS not evaluable: ' + e.message + ')'); }
 const cats = (HR.match(/\{ id:'[a-z-]+',\s+label:'[^']+',\s+hub:'construction'/g) || []).map((m) => m.match(/id:'([a-z-]+)'/)[1]);
-const CONSTRUCTION = ['hardware', 'contractor', 'architect', 'construction-company', 'welding-fabrication', 'equipment-rental', 'construction-services', 'construction-transport'];
+const CONSTRUCTION = ['hardware', 'contractor', 'construction-architect', 'construction-company', 'welding-fabrication', 'equipment-rental', 'construction-services', 'construction-transport'];
 const q = (cat, id) => (CQ[cat] || []).find((x) => x.id === id);
 const has = (cat, id, opts) => { const x = q(cat, id); return !!x && opts.every((o) => (x.options || []).indexOf(o) > -1); };
 
@@ -29,7 +29,7 @@ ck('C3', has('welding-fabrication', 'services', ['Welding', 'Metal fabrication',
 ck('C4', has('hardware', 'materialCats', ['Cement', 'Steel', 'Timber', 'Tiles', 'Paint', 'Construction chemicals']) && q('hardware', 'delivery').required, 'material supplier: material categories + delivery capability');
 ck('C5', has('equipment-rental', 'equipmentCats', ['Excavators & loaders', 'Cranes & lifting', 'Generators & compressors', 'Scaffolding']) && q('equipment-rental', 'ownership').required,
   'equipment rental: equipment categories + ownership / authorisation declared');
-ck('C6', q('architect', 'professionalRegNo') && q('architect', 'professionalRegNo').required, 'architect / engineer / QS: professional registration number required');
+ck('C6', q('construction-architect', 'professionalRegNo') && q('construction-architect', 'professionalRegNo').required, 'architect / engineer / QS: professional registration number required');
 const all = CONSTRUCTION.reduce((a, c) => a.concat((CQ[c] || []).map((x) => [c, x])), []);
 ck('S1', !all.some(([, x]) => /verified|approved|status|badge/i.test(x.id)), 'no question lets an applicant declare themselves verified / approved');
 ck('S2', all.every(([, x]) => x.type !== 'text' || (x.max > 0 && x.max <= 200)), 'every text answer is length-capped');
