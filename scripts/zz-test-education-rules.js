@@ -36,6 +36,25 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await denies('ED-E4', 'owner updates own enterprise record', updateDoc(doc(ent, 'educationEnterprises/ent'), { name: 'Self-approved' }));
   await denies('ED-E5', 'owner deletes own enterprise record', deleteDoc(doc(ent, 'educationEnterprises/ent')));
   await allows('ED-E6', 'admin reads an enterprise record', getDoc(doc(admin, 'educationEnterprises/ent')));
+  // learner profile + guardian links (written only by the educationLearner callable)
+  await env.withSecurityRulesDisabled(async (c) => {
+    const f = c.firestore();
+    await setDoc(doc(f, 'learnerProfiles/ent'), { uid: 'ent', grade: 7 });
+    await setDoc(doc(f, 'guardianLinks/L1'), { learnerUid: 'ent', guardianUid: 'other', guardianPhone: 'x' });
+    await setDoc(doc(f, 'guardianCodes/ABC123'), { learnerUid: 'ent' });
+    await setDoc(doc(f, 'educationAudit/a1'), { action: 'link' });
+  });
+  await allows('ED-L1', 'learner reads own learnerProfile', getDoc(doc(ent, 'learnerProfiles/ent')));
+  await denies('ED-L2', 'another user reads the learnerProfile', getDoc(doc(other, 'learnerProfiles/ent')));
+  await denies('ED-L3', 'learner writes own learnerProfile (callable only)', setDoc(doc(ent, 'learnerProfiles/ent'), { grade: 12 }));
+  await denies('ED-L4', 'the GUARDIAN reads the raw guardianLink (callable only; identity never exposed raw)', getDoc(doc(other, 'guardianLinks/L1')));
+  await denies('ED-L5', 'the learner reads the raw guardianLink', getDoc(doc(ent, 'guardianLinks/L1')));
+  await denies('ED-L6', 'a client forges a guardianLink', setDoc(doc(other, 'guardianLinks/L2'), { learnerUid: 'ent', guardianUid: 'other' }));
+  await denies('ED-L7', 'a client reads a guardianCode (code harvesting)', getDoc(doc(other, 'guardianCodes/ABC123')));
+  await denies('ED-L8', 'a client mints a guardianCode', setDoc(doc(other, 'guardianCodes/ZZZ999'), { learnerUid: 'ent' }));
+  await denies('ED-L9', 'a client reads educationAudit', getDoc(doc(ent, 'educationAudit/a1')));
+  await denies('ED-L10', 'a client writes educationAudit', setDoc(doc(ent, 'educationAudit/a2'), { action: 'x' }));
+  await allows('ED-L11', 'admin reads guardianLinks / guardianCodes / educationAudit', Promise.all([getDoc(doc(admin, 'guardianLinks/L1')), getDoc(doc(admin, 'guardianCodes/ABC123')), getDoc(doc(admin, 'educationAudit/a1'))]));
   await env.cleanup();
   console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('HARNESS ERROR (not a rules result):', e.message); process.exit(2); });

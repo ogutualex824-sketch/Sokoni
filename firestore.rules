@@ -1990,6 +1990,25 @@ service cloud.firestore {
   allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
   allow write: if false;
   }
+  /* (sokoni-5b Education, learner profile + guardian links; feat/education-applications-on-cbbce0c @ 95f4317) all four
+     written ONLY by the educationLearner callable. Guardian identity must never reach a teacher or the public (owner):
+     learner and guardian see their link only through the callable, so guardianLinks / guardianCodes are admin-read. */
+  match /learnerProfiles/{uid} {
+  allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+  allow write: if false;
+  }
+  match /guardianLinks/{linkId} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /guardianCodes/{code} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
+  match /educationAudit/{id} {
+  allow read:  if isAdmin();
+  allow write: if false;
+  }
   function isPosOwner() {
   return isAuthed() && resource.data.sellerId == request.auth.uid;
   }

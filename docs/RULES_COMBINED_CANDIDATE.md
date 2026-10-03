@@ -229,3 +229,7 @@ write false. Server writer: bookingDispatch availability callables (b2 feat/lega
 
 Suite `scripts/zz-test-education-rules.js` (ED-W*, ED-R*, ED-E*). **EMULATOR PENDING.** Baseline f259c0b5: ED-W1/W2/W3
 must fail there.
+3. (later the same day) `learnerProfiles/{uid}` owner/admin read; `guardianLinks`, `guardianCodes`, `educationAudit`
+   admin read only; all four write false. Written only by the `educationLearner` callable (5b @ 95f4317). Guardian
+   identity never reaches a teacher or the public (owner), so guardians and learners see links only through the
+   callable. Rows ED-L1–L11 added to the same suite. **EMULATOR PENDING.**
