@@ -282,7 +282,8 @@ function fill(host, values) {
   head('5 - DELETE reaches the writer');
   db.reset();
   click(ui.host, '[data-pr="del"]');
-  ck('a confirmation is required first', ui.host.innerHTML.indexOf('Delete this product?') > -1,
+  /* 2026-10-03: the destructive action is an ARCHIVE now (canonical tombstone, restorable) — still confirmed first */
+  ck('a confirmation is required first', ui.host.innerHTML.indexOf('Archive this product?') > -1,
      'no single-tap destruction');
   ck('nothing deleted merely by asking', db.log.length === 0);
   click(ui.host, '[data-pr="submit"]');

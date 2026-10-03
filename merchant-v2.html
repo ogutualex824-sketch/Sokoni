@@ -2203,38 +2203,25 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       }
       return data;
     },
+    /* SECURITY CONVERGENCE (2026-10-03): the browser REQUESTS, the server DECIDES. Every product write — create,
+       edit, photo attach — is the merchantProduct callable (functions/merchant-product.js): ownership, shop, the field
+       allow-list, price validation, the plan limit and publication are server-side, and timestamps are server-stamped
+       there. This adapter no longer writes products/{id} itself. A replayed create still claims the SAME document
+       (the server answers { replayed:true }). */
     writeProduct: function (o) {
       var self = this;
-      return sdk().then(function (m) {
-        if (!window.firebaseDB) throw new Error('Products cannot be saved just now.');
-        self._refuseAuthorityFields(o && o.data, 'writeProduct');
-        var ref = m.fs.doc(window.firebaseDB, 'products', o.id);
-        /* Timestamps are stamped HERE, with serverTimestamp(), not by the writer
-           and never from Date.now(). A device clock is not a timestamp authority:
-           a merchant whose phone is a day slow would file today's product under
-           yesterday and sort it to the bottom of their own catalogue. */
-        var data = Object.assign({}, o.data, { updatedAt: m.fs.serverTimestamp() });
-        if (o.mode === 'create') {
-          data.createdAt = m.fs.serverTimestamp();
-          return m.fs.runTransaction(window.firebaseDB, function (tx) {
-            return tx.get(ref).then(function (snap) {
-              /* A replay claims the SAME document rather than adding a second.
-                 Read-then-write inside the transaction, so two taps racing each
-                 other cannot both see "absent". */
-              if (snap.exists()) return { replayed: true };
-              tx.set(ref, data);
-              return { replayed: false };
-            });
-          });
-        }
-        return m.fs.setDoc(ref, data, { merge: true }).then(function () { return { replayed: false }; });
-      });
+      self._refuseAuthorityFields(o && o.data, 'writeProduct');
+      var data = Object.assign({}, (o && o.data) || {});
+      ['id', 'shopId', 'sellerUid', 'createdAt', 'updatedAt'].forEach(function (k) { delete data[k]; });   /* server-owned */
+      return _callable('merchantProduct')({ op: 'write', shopId: S.activeShopId || ((o && o.data) || {}).shopId || null,
+        productId: o.id, mode: o.mode === 'create' ? 'create' : 'update', data: data })
+        .then(function (r) { var d = (r && r.data) || {}; return { replayed: d.replayed === true, status: d.status || null, ignored: d.ignored || [] }; });
     },
+    /* "Delete" is an ARCHIVE: the canonical tombstone (status archived, isVisible false). Orders, receipts, reviews
+       and stock history keep their product; the merchant can restore it. Nothing is ever hard-deleted from here. */
     deleteProduct: function (o) {
-      return sdk().then(function (m) {
-        if (!window.firebaseDB) throw new Error('Products cannot be changed just now.');
-        return m.fs.deleteDoc(m.fs.doc(window.firebaseDB, 'products', o.id));
-      });
+      return _callable('merchantProduct')({ op: 'archive', shopId: S.activeShopId || null, productId: o.id })
+        .then(function (r) { return (r && r.data) || { ok: true }; });
     },
     getProduct: function (id) {
       return sdk().then(function (m) {

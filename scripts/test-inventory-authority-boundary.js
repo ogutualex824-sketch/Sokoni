@@ -271,8 +271,10 @@ const lastWrite = (db) => db.calls.writes[db.calls.writes.length - 1];
      /self\._refuseAuthorityFields\(o && o\.data, 'writeProduct'\)/.test(MV2));
   const wp = MV2.indexOf('writeProduct: function (o)');
   const wpBody = MV2.slice(wp, wp + 900);
-  ck('and it runs BEFORE the document reference is built',
-     wpBody.indexOf('_refuseAuthorityFields') < wpBody.indexOf('m.fs.doc('),
+  /* 2026-10-03 security convergence: the write is now the merchantProduct callable (the server decides), not a
+     document reference — the invariant is unchanged: the guard runs BEFORE anything leaves for the server. */
+  ck('and it runs BEFORE the write is sent',
+     wpBody.indexOf('_refuseAuthorityFields') > -1 && wpBody.indexOf('_refuseAuthorityFields') < wpBody.indexOf("_callable('merchantProduct')"),
      'a guard after the write is decoration');
 
   head('13 - the gate that blocked hosting now passes, for the right reason');

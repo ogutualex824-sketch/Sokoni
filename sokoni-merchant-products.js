@@ -1657,16 +1657,16 @@
       /* Render from the TYPED values, falling back to the stored record. */
       var p = (E.mode === 'delete') ? (E.product || {}) : (E.values || {});
       if (E.mode === 'delete') {
-        return '<div class="pr-sheet"><div class="pr-scrim" data-pr="close"></div><div class="pr-panel" role="dialog" aria-modal="true" aria-label="Delete product">' +
-          '<div class="pr-ph2">Delete this product?</div>' +
+        return '<div class="pr-sheet"><div class="pr-scrim" data-pr="close"></div><div class="pr-panel" role="dialog" aria-modal="true" aria-label="Archive product">' +
+          '<div class="pr-ph2">Archive this product?</div>' +
           '<div class="pr-psub">' + esc(p.name || 'Untitled') + '</div>' +
           '<div class="pr-warn">It will be removed from your catalogue and from the till. ' +
-          'Orders already placed keep their record. This cannot be undone.</div>' +
+          'Orders, receipts and reviews keep their record, and you can restore it later.</div>' +
           (E.err ? '<div class="pr-err">' + esc(E.err) + '</div>' : '') +
           '<div class="pr-foot">' +
             '<button class="pr-cancel" data-pr="close">Keep it</button>' +
             '<button class="pr-danger" data-pr="submit"' + (E.busy ? ' disabled' : '') + '>' +
-              (E.busy ? 'Deleting…' : 'Delete') + '</button>' +
+              (E.busy ? 'Archiving…' : 'Archive') + '</button>' +
           '</div></div></div>';
       }
       var creating = E.mode === 'create';
