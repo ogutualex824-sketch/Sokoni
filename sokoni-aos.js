@@ -495,20 +495,18 @@ window.SokoniAOS = (() => {
     body.innerHTML = _spinner();
 
     if (tab === "products") {
-      const data = await _call("adminGetProducts", { limit: 30 }).catch(() => ({ products: [] }));
-      const prods = data.products || [];
-      body.innerHTML = prods.length ? `<table class="aos-table"><thead><tr>
-          <th>Product</th><th>Seller</th><th>Price</th><th>Status</th><th>Actions</th>
-        </tr></thead><tbody>${prods.map(p => `<tr>
-          <td>${_esc(p.name||"—")}</td>
-          <td class="aos-muted">${_esc(p.sellerName||p.sellerUid||"—")}</td>
-          <td>KES ${_fmt(p.price||0)}</td>
-          <td><span class="status-badge st-${p.status||"active"}">${_esc(p.status||"active")}</span></td>
-          <td>
-            <button class="aos-btn-sm" onclick="SokoniAOS.updateProduct('${p.id}','active')">Approve</button>
-            <button class="aos-btn-sm danger" onclick="SokoniAOS.updateProduct('${p.id}','removed')">Remove</button>
-          </td>
-        </tr>`).join("")}</tbody></table>` : _emptyMsg("No products");
+      /* The ONE products page (sokoni-products-console.js) — the same component Super Admin mounts. Data from
+         adminGetProducts; status changes through adminUpdateProductStatus (admin-gated, audited). */
+      if (window.SokoniProductsConsole) {
+        body.innerHTML = "";
+        window.SokoniProductsConsole.mount(body, {
+          call: _call,
+          toast: _toast,
+          confirm: (text, title) => SK.dialog.confirm(text, null, null, { title: title || "Confirm", variant: "danger", confirmLabel: title || "Confirm" }),
+        });
+      } else {
+        body.innerHTML = _emptyMsg("The products console did not load — refresh the page.");
+      }
     } else if (tab === "orders") {
       const data = await _call("adminGetOrders", { limit: 30 }).catch(() => ({ orders: [] }));
       const orders = data.orders || [];

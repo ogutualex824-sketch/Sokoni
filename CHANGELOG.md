@@ -1,3 +1,13 @@
+## [2026-10-04] — One Products page for AdminOS and Super Admin
+
+**Owner request:** implement the products-catalogue design (status tabs, filters, product table, detail drawer) in admin-os.html and the Super Admin sidebar, without the design's left sidebar.
+**What:** `sokoni-products-console.js`, ONE component mounted by AdminOS (Marketplace → Products) and by a new Super Admin **Products** section. It has status tabs, search, category / sort filters, list ⇄ grid, row selection with bulk Approve / Remove, CSV export of the shown rows, and a right-hand drawer (price, compare-at, margin, inventory, stock health, variants, listing, actions, provenance). On phones the drawer becomes a bottom sheet and the table scrolls inside its card.
+**Data integrity:** reads `adminGetProducts` (live adminOsDispatch 00025-muh: a newest-first page, no totals). Tab counts are "—" unless the server returns `counts`; the footer reports LOADED rows. Unknown stock is "—", never 0. "Low stock" appears only with the product's own threshold. Margin appears only with a cost price, and discount only when compare-at > price. Channels show only the real SOKONI listing (no invented Amazon/eBay). No level bar, because a scale would be invented.
+**Authority:** actions call `adminUpdateProductStatus` (admin-gated, audited); success shows only on `success:true`, and a refusal shows the server's reason. Feature keeps the current status and is hidden when the status is unknown. No controls without a server behind them (no Import / Duplicate / Discount). All fields are escaped; CSV cells are formula-safe.
+**Files:** `sokoni-products-console.js` (new), `sokoni-aos.js`, `admin-os.html`, `super-admin.html`, `scripts/test-products-console.js`.
+**Tests:** test-products-console 18/0 (SABOTAGE: page-length counts → P1 fails); AdminOS honesty 28/0 · 59/0 · 147/0; admit-existing 9/0; provider-nav-home 5/0; navigation 11 PASS; customer-nav 62/0. Browser render NOT run (RAM below the 700 MB browser floor).
+**Follow-up (server, optional):** an `adminGetProductCounts` (Firestore count() per status / stock band) would let the tab counts show real catalogue totals. **Deployment:** NOT deployed; hosting, for the b2 assembly.
+
 ## [2026-10-03] — AdminOS: admit an EXISTING live provider/seller that has no application
 
 **Owner decision (2026-10-03):** an admin approves Shave 'n' Trims and DJ Bambi now. Both went live with no application and no admin decision, so the strict approval authority would switch their dashboards off.

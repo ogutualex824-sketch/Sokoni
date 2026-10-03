@@ -341,6 +341,9 @@
     <button class="nav-item" data-section="users" onclick="SA.nav('users');_closeSidebar()">
       <span class="nav-icon">&#x1F465;</span>User Management
     </button>
+    <button class="nav-item" data-section="products" onclick="SA.nav('products');_closeSidebar()">
+      <span class="nav-icon">&#x1F4E6;</span>Products
+    </button>
   </div>
 
   <div class="nav-group">
@@ -477,6 +480,10 @@
          who was approved and never actually published. Reads the same
          server-side `applicationList` the admin dashboard uses, so both
          surfaces cannot disagree. -->
+    <section class="sa-panel" id="panel-products" hidden>
+      <div id="saProductsConsole" aria-live="polite"></div>
+    </section>
+
     <section class="sa-panel" id="panel-applications" hidden>
       <div class="panel-header">
         <h2>&#x1F4EC; Applications &amp; Onboarding</h2>
@@ -1001,11 +1008,29 @@ const SA={
     if(section==='overview')this.loadOverview();
     else if(section==='users')this.loadUsers();
     else if(section==='applications')this.loadApplications();
+    else if(section==='products')this.loadProducts();
     else if(section==='financial')this.loadFinancial();
     else if(section==='config')this.loadConfig();
     else if(section==='emergency')this.loadEmergency();
     else if(section==='audit')this.loadAudit();
     else if(section==='broadcast')this.loadBroadcastHistory();
+  },
+
+  // Products ─────────────────────────────────────────────────
+  /* The ONE products page (sokoni-products-console.js), the same component AdminOS mounts. Reads adminGetProducts and
+     changes status through adminUpdateProductStatus — both via adminOsDispatch, both admin/superAdmin-gated and audited
+     on the server. Mounted once; re-entering the section reloads. */
+  loadProducts(){
+    const el=document.getElementById('saProductsConsole');
+    if(!el)return;
+    if(!window.SokoniProductsConsole){el.innerHTML='<p style="color:var(--muted)">The products console did not load — refresh the page.</p>';return;}
+    if(this._productsConsole){this._productsConsole.reload();return;}
+    const fns=this._fns;
+    this._productsConsole=window.SokoniProductsConsole.mount(el,{
+      call:(op,data)=>fns.httpsCallable('adminOsDispatch')(Object.assign({op},data||{})).then(r=>r.data),
+      toast:(msg,kind)=>{ if(typeof _toast==='function')_toast(msg,kind); else if(kind==='error')console.error(msg); },
+      confirm:async(text,title)=>window.confirm((title?title+'\n\n':'')+text),
+    });
   },
 
   // Sign Out ────────────────────────────────────────────────
@@ -1995,5 +2020,6 @@ const SA={
   })();
 })();
 </script>
+<script src="sokoni-products-console.js"></script>
 </body>
 </html>
