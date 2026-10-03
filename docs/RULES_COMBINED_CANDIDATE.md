@@ -305,3 +305,17 @@ candidate already closes this with `appNoDecision()` (no decided status or decis
 decision list, and they are now. Suite `scripts/zz-test-applications-reviewer.js` (AR-1–8). **EMULATOR PENDING.**
 Whether any LIVE consumer acts on a forged status is sokoni-5b's question (applicationLifecycle); e3's Construction
 Verification view already trusts only `verified === true`.
+
+## 2026-10-03 P0: application decision fields — SERVED-based HOTFIX (owner via sokoni-5b)
+
+The hotfix file `firestore.rules.hotfix-jobs` (re-fetched served f259c0b5, still identical) now carries FOUR narrow fixes as
+ONE rules release: Jobs ×3, the construction open-RFQ PII fix, and this one. Its `applications` block:
+- **Create:** no decision key (`appDecisionKeys()`, 26 keys from 5b's list); status `pending` / `pending_review`
+  (business-apply).
+- **Update:** no decision key touched; editable only while the application is `pending` / `pending_review` /
+  `info_requested`; the only owner status move is `withdrawn` (complete-application).
+
+5b's spec said "create status absent or pending only", which would have broken business-apply's `pending_review` and
+complete-application's withdraw (K13-C), so both are admitted narrowly. The combined candidate's `appNoDecision` list now
+carries the same 26 keys (+17), so the combined release cannot regress the hotfix. Rows AR-9–AR-14 are added; run them
+against BOTH files. **EMULATOR PENDING.**

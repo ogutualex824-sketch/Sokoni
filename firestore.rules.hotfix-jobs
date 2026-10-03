@@ -204,10 +204,22 @@ service cloud.firestore {
   match /users/{uid}/analytics/{doc} {
   allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
   }
+  /* P0 APPLICATION DECISION FIELDS (owner via sokoni-5b / sokoni-e3 finding, 2026-10-03): noAdminFields() omitted status and
+     every decision field, so an applicant could approve themselves and forge the decider. Decision fields are server-only;
+     status on create is pending / pending_review (business-apply); the only owner status move is withdrawing an open
+     application (complete-application); the applicant edits only while the application is open. */
+  function appDecisionKeys() { return ['statusCanonical','decidedBy','decidedAt','reviewedBy','reviewedAt','reviewReason','reviewStage','reviewStageAt','reviewStageBy','decisionAppliedFor','decisionAppliedAt','projectionStatus','projectionReceipt','projectionError','blockedFor','approvedAt','rejectedAt','verifiedAt','role','roleResolvedBy','educationType','applicantType','missing','marketingApprovedCategories','marketingDeclinedCategories','posProvisioning']; }
+  function appOpenStatus(s) { return s == null || (s is string && s in ['pending','pending_review','info_requested']); }
   match /applications/{appId} {
-  allow create: if claimsOwner() && noAdminFields();
+  allow create: if claimsOwner() && noAdminFields()
+  && !request.resource.data.keys().hasAny(appDecisionKeys())
+  && request.resource.data.get('status', 'pending') in ['pending','pending_review'];
   allow read:   if isAdmin() || isOwner();
-  allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields());
+  allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields()
+  && !request.resource.data.diff(resource.data).affectedKeys().hasAny(appDecisionKeys())
+  && appOpenStatus(resource.data.get('status', 'pending'))
+  && (request.resource.data.get('status', 'pending') == resource.data.get('status', 'pending')
+      || request.resource.data.get('status', '') == 'withdrawn'));
   allow delete: if isAdmin() || isOwner();
   }
   match /invitations/{inviteId} {

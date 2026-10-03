@@ -88,8 +88,8 @@ service cloud.firestore {
   function appNoDecision() {
   let d = request.resource.data;
   /* reviewedBy / reviewedAt added 2026-10-03 (sokoni-e3 finding): reviewer identity is server-written, never the applicant's. */
-  let dk = ['decidedBy','decidedAt','reviewedBy','reviewedAt','decisionAppliedFor','projectionStatus','blockedFor','statusCanonical','reviewReason',
-  'agreementVerifiedAt','agreementVerifiedVersion','priorDecisions'];
+  /* P0 2026-10-03: the full applicant-immutable list (sokoni-5b) — mirrors firestore.rules.hotfix-jobs. */
+  let dk = ['decidedBy','decidedAt','reviewedBy','reviewedAt','decisionAppliedFor','projectionStatus','blockedFor','statusCanonical','reviewReason','agreementVerifiedAt','agreementVerifiedVersion','priorDecisions','reviewStage','reviewStageAt','reviewStageBy','decisionAppliedAt','projectionReceipt','projectionError','approvedAt','rejectedAt','verifiedAt','role','roleResolvedBy','educationType','applicantType','missing','marketingApprovedCategories','marketingDeclinedCategories','posProvisioning'];
   return (resource == null ? !d.keys().hasAny(dk) : !d.diff(resource.data).affectedKeys().hasAny(dk))
   && (!d.keys().hasAny(['status']) || (d.status is string && !(d.status.lower() in ['approved','active','accepted','verified','rejected','declined','denied','suspended','revoked','banned','disabled'])));
   }

@@ -2,7 +2,8 @@
    Run: node scripts/build-firestore-rules.js
         RULES_FILE=firestore.rules.build FIRESTORE_PORT=<port> \
           firebase emulators:exec --only firestore --project demo-app-reviewer "node scripts/zz-test-applications-reviewer.js"
-   Baseline f259c0b5: AR-1..AR-5 must FAIL there (the served update rule only checks noAdminFields, which omits status /
+   Also: RULES_FILE=firestore.rules.hotfix-jobs (the P0 served-based hotfix) must pass every row.
+   Baseline f259c0b5: AR-1..AR-5, AR-9..AR-11, AR-14 must FAIL there (the served update rule only checks noAdminFields, which omits status /
    decidedBy / decidedAt / reviewedBy). */
 'use strict';
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
@@ -29,6 +30,14 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await allows('AR-6', 'CONTROL: applicant edits their description while pending', updateDoc(doc(me, 'applications/a1'), { description: 'Updated portfolio' }));
   await allows('AR-7', 'CONTROL: admin records the decision', updateDoc(doc(admin, 'applications/a1'), { status: 'approved', decidedBy: 'adm', reviewedBy: 'adm' }));
   await denies('AR-8', 'applicant edits after the decision', updateDoc(doc(me, 'applications/a1'), { description: 'sneaky' }));
+  /* P0 rows (owner via sokoni-5b) — ALSO run against the served-based hotfix: RULES_FILE=firestore.rules.hotfix-jobs */
+  await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'applications/p1'), Object.assign({}, base, { status: 'pending' })); });
+  await denies('AR-9', 'applicant writes reviewStage', updateDoc(doc(me, 'applications/p1'), { reviewStage: 'final' }));
+  await denies('AR-10', 'applicant writes posProvisioning / marketingApprovedCategories', updateDoc(doc(me, 'applications/p1'), { posProvisioning: { till: true }, marketingApprovedCategories: ['all'] }));
+  await denies('AR-11', 'applicant creates with approvedAt', setDoc(doc(me, 'applications/p2'), Object.assign({}, base, { approvedAt: 1 })));
+  await allows('AR-12', 'CONTROL: business-apply creates with status pending_review', setDoc(doc(me, 'applications/p3'), Object.assign({}, base, { status: 'pending_review' })));
+  await allows('AR-13', 'CONTROL: complete-application withdraws an open application', updateDoc(doc(me, 'applications/p1'), { status: 'withdrawn' }));
+  await denies('AR-14', 'applicant moves status to anything but withdrawn (e.g. info_requested → under_review)', updateDoc(doc(me, 'applications/p3'), { status: 'under_review' }));
   await env.cleanup();
   console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('HARNESS ERROR (not a rules result):', e.message); process.exit(2); });
