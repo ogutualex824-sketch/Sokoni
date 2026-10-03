@@ -269,3 +269,4 @@ hotfix diff vs served is now the three Jobs hunks + this one (44 lines). Rows CR
 baseline f259c0b5: CR-1/CR-2 must fail. **EMULATOR PENDING.** The rest of the construct* client-writable holes
 (constructOrders price/status, constructProviders status/rating, constructQuotations, constructReviews) stay for the
 full Construction build, which retires those collections behind server authorities.
+8. (later) `courseLessonHistory/{id}` admin read, write false (5b @ d990f2b). Rows ED-H1–H3. **EMULATOR PENDING.**

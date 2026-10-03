@@ -83,6 +83,10 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await allows('ED-C3', 'the learner reads their own certificate', getDoc(doc(ent, 'learnerCertificates/cert1')));
   await denies('ED-C4', 'another user reads the certificate', getDoc(doc(other, 'learnerCertificates/cert1')));
   await denies('ED-C5', 'a learner mints a certificate', setDoc(doc(ent, 'learnerCertificates/cert2'), { uid: 'ent', courseId: 'c9' }));
+  await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'courseLessonHistory/h1'), { lessonId: 'l1', ownerUid: 'owner' }); });
+  await denies('ED-H1', 'the course owner reads lesson history raw', getDoc(doc(owner, 'courseLessonHistory/h1')));
+  await denies('ED-H2', 'a client writes lesson history', setDoc(doc(owner, 'courseLessonHistory/h2'), { lessonId: 'l1' }));
+  await allows('ED-H3', 'admin reads lesson history', getDoc(doc(admin, 'courseLessonHistory/h1')));
   await env.cleanup();
   console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('HARNESS ERROR (not a rules result):', e.message); process.exit(2); });
