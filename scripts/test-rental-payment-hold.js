@@ -11,15 +11,19 @@ let D = {};
 const clone = (o) => (o === undefined ? undefined : JSON.parse(JSON.stringify(o)));
 const apply = (k, d, merge) => { const out = Object.assign({}, merge && D[k] ? D[k] : {}); for (const [f, v] of Object.entries(d)) out[f] = v && v.__ts ? 'TS' : v; D[k] = out; };
 const ref = (c, id) => ({ _k: c + '/' + id, get: async () => ({ exists: (c + '/' + id) in D, data: () => clone(D[c + '/' + id]) }),
-  set: async (d, o) => apply(c + '/' + id, d, o && o.merge), update: async (d) => apply(c + '/' + id, d, true) });
-const db = { collection: (c) => ({ doc: (id) => ref(c, id) }),
-  runTransaction: async (fn) => { const w = []; const r = await fn({ get: (x) => x.get(), update: (x, d) => w.push(() => apply(x._k, d, true)), set: (x, d, o) => w.push(() => apply(x._k, d, o && o.merge)) }); w.forEach((f) => f()); return r; } };
+  set: async (d, o) => apply(c + '/' + id, d, o && o.merge), update: async (d) => apply(c + '/' + id, d, true),
+  collection: (sub) => ({ doc: (sid) => ref(c + '/' + id + '/' + sub, sid) }) });
+let RECEIPT_FAILS = false;
+const db = { collection: (c) => ({ doc: (id) => ref(c, id), add: async (d) => { const k = c + '/auto' + Object.keys(D).length; apply(k, d, false); return { id: k }; } }),
+  runTransaction: async (fn) => { const w = []; const r = await fn({ get: (x) => x.get(), update: (x, d) => w.push(() => apply(x._k, d, true)), set: (x, d, o) => w.push(() => apply(x._k, d, o && o.merge)),
+    create: (x, d) => w.push(() => { if (RECEIPT_FAILS && /^transactionReceipts\//.test(x._k)) throw new Error('receipt store down'); if (x._k in D) throw new Error('ALREADY_EXISTS'); apply(x._k, d, false); }) }); w.forEach((f) => f()); return r; } };
 const adminSdk = { firestore: { FieldValue: { serverTimestamp: () => ({ __ts: true }) } } };
 const OK = async () => ({ ok: true });
+const RCPT = { nextNumber: async () => 'RCT-TEST-1', serverTs: () => 'TS' };   /* receipt numbering injected (financial-engine in prod) */
 const seed = (bk, intentX) => { D = {
   'paymentIntents/RENT-b1': Object.assign({ resourceType: 'rentalBooking', resourceId: 'b1', amountCents: 650000, currency: 'KES', uid: 'renter1', metadata: { type: 'rental_booking', bookingId: 'b1', depositCents: 200000 } }, intentX || {}),
   'rentalBookings/b1': Object.assign({ buyerId: 'renter1', shopId: 's1', status: 'payment_pending', paymentStatus: 'unpaid' }, bk || {}) }; };
-const hold = (o) => RH.holdRentalBookingPayment(db, adminSdk, Object.assign({ apiRef: 'API1', intentRef: 'RENT-b1', grossAmount: 6500, providerMethod: 'M-PESA', invoiceId: 'INV-9', confirm: OK }, o || {}));
+const hold = (o) => RH.holdRentalBookingPayment(db, adminSdk, Object.assign({ apiRef: 'API1', intentRef: 'RENT-b1', grossAmount: 6500, providerMethod: 'M-PESA', invoiceId: 'INV-9', confirm: OK, receiptDeps: RCPT }, o || {}));
 const B = () => D['rentalBookings/b1'] || {};
 
 (async () => {
@@ -28,6 +32,15 @@ const B = () => D['rentalBookings/b1'] || {};
     && D['paymentIntents/RENT-b1'].status === 'paid', 'an exact, IntaSend-confirmed payment HOLDS the rental (paid_held/held, rent + deposit, ref, method)', [r, B()]);
   r = await hold();
   ck('R-2', r.outcome === 'noop' && B().status === 'paid_held', 'a replayed callback is a no-op', r);
+  const RC = D['transactionReceipts/rental_booking_b1'] || {};
+  ck('R-2r', RC.kind === 'rental_booking' && RC.paidCents === 650000 && RC.heldCents === 650000 && RC.clientUid === 'renter1' && RC.paymentRef === 'API1' && RC.providerRef === 'INV-9' && RC.method === 'M-PESA'
+    && D['transactionReceipts/rental_booking_b1/events/paid_API1'] && Object.keys(D).filter((k) => /^transactionReceipts\/[^/]+$/.test(k)).length === 1,
+    'the hold records ONE rental_booking receipt (paid = held = rent + deposit, IntaSend invoice + method) — f3\'s release event needs it', RC);
+  seed(); RECEIPT_FAILS = true; r = await hold(); RECEIPT_FAILS = false;
+  ck('R-2f', r.outcome === 'held' && B().paymentStatus === 'held' && r.receipt && r.receipt.reason === 'queued_for_retry' && Object.keys(D).some((k) => k.startsWith('transactionReceiptFailures/') || /Failures\//.test(k)),
+    'a receipt failure never undoes the hold — it is queued for retry', [r, Object.keys(D)]);
+  seed({ status: 'cancelled' }); r = await hold();
+  ck('R-2n', !D['transactionReceipts/rental_booking_b1'], 'a refund_due payment (dead rental) gets NO paid receipt', Object.keys(D));
   for (const st of ['accepted', 'confirmed']) { seed({ status: st }); r = await hold(); ck('R-3 ' + st, r.outcome === 'held', 'a ' + st + ' rental (2f PAYABLE) is held', r); }
 
   seed(); r = await hold({ grossAmount: 1 });

@@ -86,7 +86,7 @@ async function holdRentalBookingPayment(db, adminSdk, p) {
       invoiceId: p.invoiceId ? String(p.invoiceId) : null,   /* IntaSend's id for THIS payment — a refund (deposit) is raised against it, never api_ref */   /* intentRef: settlement prices from the SERVER intent */
       paidAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp(),
     });
-    return { outcome: 'held' };
+    return { outcome: 'held', renterUid: b.buyerId, shopId: b.shopId || meta.shopId || null };
   });
   if (res.outcome === 'park') return park(res.reason);
 
@@ -94,6 +94,14 @@ async function holdRentalBookingPayment(db, adminSdk, p) {
   if (intentStatus) {
     await db.collection('paymentIntents').doc(intentId).set({ status: intentStatus, paymentRef: apiRef, updatedAt: FV.serverTimestamp() }, { merge: true })
       .catch(() => {});   /* the booking is the authority; the intent mirror never undoes it */
+  }
+  /* THE RECEIPT (2f transaction-receipts, kind rental_booking): one receipt per rental, recorded AFTER the hold commits.
+     safely() queues a failure for retry — a receipt problem never undoes the hold. f3's settlement adds the 'released' event. */
+  if (res.outcome === 'held') {
+    const TR = require('./transaction-receipts');
+    const args = { kind: 'rental_booking', sourceId: bookingId, clientUid: res.renterUid, counterpartyId: res.shopId, paymentRef: apiRef,
+      providerRef: p.invoiceId ? String(p.invoiceId) : null, paidCents: grossCents, method: p.providerMethod || null, serviceLabel: 'Equipment rental' };
+    res.receipt = await TR.safely(db, 'rental_paid_' + bookingId, () => TR.recordPaid(db, args, p.receiptDeps), { op: 'paid', args });
   }
   return res;
 }
