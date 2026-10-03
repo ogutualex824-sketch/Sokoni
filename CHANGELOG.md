@@ -1,3 +1,13 @@
+## [2026-10-03] — Legal Hub L6 (server): Legal rate cards carry a taxonomy practice area; Legal search coverage proven through the canonical providers gate — NOT deployed
+
+- **functions/provider-ops.js:** providerAddService / providerUpdateService / providerDuplicateService accept .
+  - It must be a taxonomy id, and only a provider the server classifies as a lawyer (categoryOf lawyer) may set it. Otherwise LEGAL_AREA_UNKNOWN / LEGAL_AREA_NOT_LEGAL_PROVIDER, and nothing is written.
+  - null clears it.
+- **Search:** no change. The legacy  registry stays de-indexed (owner decision 09-28). An eligible lawyer is discoverable through the canonical providers gate (business-category.publicEligibility → category lawyer), because L4 sets searchable/status from eligibility. Suspension removes it.
+- **Tests:** test-legal-booking-chain C9 (search) + C10 (legalArea), 11/0; sabotage-legal-booking 6/6.
+- **OPEN (plan owner):** the auto-created legal_consult card counts against the plan's active-service cap, so a free-plan lawyer (cap 1) cannot add a second rate card. Plan logic was NOT changed (no ownership).
+- **Deploy unit:** providerDispatch (5b release). This file merges with the Tech line's provider-ops hunks (_techProfile) in the same handlers. Keep both.
+
 ## [2026-10-03] — Legal Hub L7 (server): AdminOS sees lawyer vs law firm and the canonical practice areas — NOT deployed
 
 - **functions/legal-verification.js:**

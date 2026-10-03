@@ -941,12 +941,29 @@ _h.providerGetPortfolio = async (req) => {
 /* ── 10. providerAddService — enforces plan limits.listings ──────────────────
    Creates providerServices; a provider cannot exceed their subscription's
    listing cap (-1 = unlimited). This is the listings-limit enforcement point. */
+/* Legal Hub L6 — a Legal rate card names the practice area it serves (functions/shared/legal-taxonomy.js). Only a
+   provider the SERVER classifies as a lawyer (legal-verification projection → business-category.categoryOf 'lawyer')
+   may set it, and only to a taxonomy id; anything else is refused, never guessed. '' / null clears it. */
+async function _legalArea(uid, raw) {
+  if (raw === undefined) return undefined;
+  if (raw === null || raw === '') return null;
+  const TAX = require('./shared/legal-taxonomy');
+  const id = String(raw).trim().toLowerCase();
+  if (!TAX.isArea(id)) throw new HttpsError('invalid-argument', 'That is not a SOKONI Legal practice area.', { code: 'LEGAL_AREA_UNKNOWN' });
+  const ps = await _db().collection('providers').doc(uid).get();
+  if (!ps.exists || require('./business-category').categoryOf(ps.data()) !== 'lawyer') {
+    throw new HttpsError('failed-precondition', 'Only a verified Legal provider can tag a service with a Legal practice area.', { code: 'LEGAL_AREA_NOT_LEGAL_PROVIDER' });
+  }
+  return id;
+}
+
 _h.providerAddService = async (req) => {
   const uid = _uid(req);
   await legal.assertLegalCompliance(uid, 'provider'); // dark-launched; no-op until enabled
   const d   = req.data || {};
   const name = _san(d.name, 200).trim();
   if (!name) throw new HttpsError('invalid-argument', 'Service name is required.');
+  const legalArea = await _legalArea(uid, d.legalArea);
 
   const [svcSnap, cap] = await Promise.all([
     _db().collection('providerServices').where('providerId', '==', uid).limit(200).get(),
@@ -965,6 +982,7 @@ _h.providerAddService = async (req) => {
     deposit: _cents(d.deposit),                  /* cents — upfront hold (collected in Phase E) */
     images:  _images(d.images),                  /* https URLs */
     durationMins: Math.max(0, Math.round(Number(d.durationMins ?? d.duration) || 0)),
+    ...(legalArea ? { legalArea } : {}),
     active: true,
     createdAt: _ts(), updatedAt: _ts(),
   });
@@ -1018,6 +1036,7 @@ _h.providerDuplicateService = async (req) => {
     priceType: s.priceType || 'quotation', price: Number(s.price) || 0, fee: Number(s.fee) || 0,
     deposit: Number(s.deposit) || 0, images: Array.isArray(s.images) ? s.images : [],
     durationMins: Math.max(0, Math.round(Number(s.durationMins) || 0)), active: true,
+    ...(s.legalArea ? { legalArea: s.legalArea } : {}),
     createdAt: _ts(), updatedAt: _ts(),
   });
   return { success: true, serviceId: ref.id };
@@ -1138,6 +1157,8 @@ _h.providerUpdateService = async (req) => {
     patch.durationMins = Math.max(0, Math.round(Number(d.durationMins ?? d.duration) || 0));
   }
   if (d.active !== undefined)      patch.active      = d.active === true;
+  const legalArea = await _legalArea(uid, d.legalArea);
+  if (legalArea !== undefined) patch.legalArea = legalArea === null ? FieldValue.delete() : legalArea;
   await ref.update(patch);
   return { success: true };
 };

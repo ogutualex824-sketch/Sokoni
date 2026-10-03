@@ -44,6 +44,8 @@ console.log('\nLegal Hub L4 — Legal consultation on the canonical booking + se
 
   r = await call(LV._adminH.legalAdminRecordLsk, 'admin1', { uid: 'adv', p105Number: 'P.105/1234/15', practiceStatus: 'Active', verifiedName: 'Wanjiru Kamau', evidenceRef: 'LSK search screenshot #1', checkedAt: Date.now() - 3600000 }, { admin: true });
   const prov2 = DOCS.get('providers/adv') || {}, svc = DOCS.get('providerServices/legal_consult_adv') || {};
+  const BCAT = require(path.join(FN, 'business-category.js'));
+  const pe2 = BCAT.publicEligibility(DOCS.get('providers/adv'));
   ck('C2', !!r.ok && prov2.acceptsBookings === true && prov2.searchable === true && prov2.status === 'active' && svc.active === true && svc.price === 500000 && svc.priceType === 'fixed',
     'admin approval + current LSK Active → providers/{uid} bookable & discoverable; consultation rate card active at the advocate fee (KES 5,000 = 500000 cents)', { r: r.code || 'ok', prov2, svc });
 
@@ -66,6 +68,20 @@ console.log('\nLegal Hub L4 — Legal consultation on the canonical booking + se
   const s2 = await PO.settleOnPinRelease(bid, 'cust');
   ck('C5', s2 && s2.skipped && s2.credited === undefined, 'a second PIN release is a no-op — no double commission, no double credit', s2);
 
+  /* C10 — Legal rate cards name a taxonomy practice area; only a server-classified lawyer may set one (L6) */
+  /* fixture: an unlimited plan — the free plan's 1 active service is already the auto consultation card (OPEN owner decision, docs) */
+  DOCS.set('providerSubscriptions/adv', { limits: { listings: -1 } }); DOCS.set('providerSubscriptions/plumb', { limits: { listings: -1 } });
+  DOCS.set('providers/plumb', { status: 'active', category: 'plumbing', business: { category: 'plumbing', source: 'application' } });
+  const sA = await call(PO._h.providerAddService, 'adv', { name: 'Term sheet review', price: 1500000, priceType: 'fixed', durationMins: 90, legalArea: 'term-sheets' });
+  const sB = await call(PO._h.providerAddService, 'adv', { name: 'Bogus', price: 1000, legalArea: 'astrology' });
+  const before = [...DOCS.keys()].filter((k) => k.startsWith('providerServices/')).length;
+  const sC = await call(PO._h.providerAddService, 'plumb', { name: 'Pipe law', price: 1000, legalArea: 'mediation' });
+  const after = [...DOCS.keys()].filter((k) => k.startsWith('providerServices/')).length;
+  const newSvc = sA.ok && DOCS.get('providerServices/' + sA.ok.serviceId);
+  const sD = sA.ok ? await call(PO._h.providerUpdateService, 'adv', { serviceId: sA.ok.serviceId, legalArea: null }) : { code: 'skip' };
+  ck('C10', !!newSvc && newSvc.legalArea === 'term-sheets' && sB.det && sB.det.code === 'LEGAL_AREA_UNKNOWN'
+    && sC.det && sC.det.code === 'LEGAL_AREA_NOT_LEGAL_PROVIDER' && before === after && !!sD.ok && DOCS.get('providerServices/' + sA.ok.serviceId).legalArea === undefined,
+    'Legal rate card carries a taxonomy practice area; unknown area refused; a non-Legal provider cannot claim one (nothing written); null clears it', { sA, sB: sB.det, sC: sC.det, sD });
   r = await call(run(LH.bookLegalConsultation), 'cust', { providerId: 'adv', dateTime: new Date(Date.now() + 86400000).toISOString(), matter: 'x', idempotencyKey: 'old1' });
   ck('C6', r.code === 'failed-precondition' && r.det && r.det.code === 'LEGAL_BOOKING_MOVED' && ![...DOCS.keys()].some((k) => k.startsWith('legalConsultations/')),
     'the retired Legal-only booking engine refuses and writes nothing (no legalConsultations, no money-less "booking")', r);
@@ -80,6 +96,9 @@ console.log('\nLegal Hub L4 — Legal consultation on the canonical booking + se
   const b3 = await call(BS.bookingCreateService, 'cust', { providerId: 'adv', serviceId: 'legal_consult_adv', date: tomorrow(), startTime: '12:00', idempotencyKey: 'k3' });
   ck('C8', prov3.acceptsBookings === false && prov3.searchable === false && svc3.active === false && b3.code === 'failed-precondition',
     'AdminOS suspension re-projects: not bookable, not discoverable, rate card off, new booking refused', { prov3, svc3: svc3.active, b3: b3.code });
+  const pe3 = BCAT.publicEligibility(DOCS.get('providers/adv'));
+  ck('C9', pe2.eligible === true && pe2.category === 'lawyer' && pe3.eligible === false && pe3.reasons.includes('SUSPENDED'),
+    'search: the eligible lawyer is publicly discoverable through the canonical providers gate (C1 category lawyer); suspension removes it (owner 09-28: legacy lawyers registry stays de-indexed)', { pe2, pe3 });
   done();
 })().catch((e) => { console.log('CRASH (fail closed): ' + (e && e.stack || e)); process.exit(2); });
 function done() {
