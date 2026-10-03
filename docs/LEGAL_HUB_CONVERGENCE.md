@@ -127,3 +127,71 @@ There is ONE identity record (`legalProviders/{uid}`) and ONE review item (`appl
 | `scripts/verify-legal-dispatch.js` | PASS |
 | Browser suites (`test-legal-verification` Chromium part, `test-legal-in-app`) | **UNRUN**: memory floor, and no playwright in the worktree |
 | Rules / emulator | **UNRUN** |
+
+
+## Status board — end of pass 2026-10-03 (nothing deployed; Legal Hub NOT user-ready)
+
+**Functions** `feat/legal-hub-on-9cab901`: c9f54aa · 0e216a3 · 5fd4d8a · a353116 · f7d4467 (+ CHANGELOG fixes).
+**Hosting** `hosting/legal-hub-on-38d2d60`: 541ea2f · b2a3025 · ef5f608 · 194b649 · f7ae6f4.
+
+| Area | State | Evidence |
+|---|---|---|
+| One taxonomy (6 × 5) | **FIXED** | test-legal-profile T1–T3; generated browser copy checked with `--check` |
+| Lawyer vs law-firm application | **FIXED** | R1–R5 (server); R1 web wizard |
+| Needs info → resubmit; reviewer reason shown | **FIXED** | U3; R2 web |
+| Self-service profile; identity and verification protected | **FIXED** | U1, U2 |
+| AdminOS: lawyer/firm, practice areas, type filter | **FIXED** | A1 (server), AO1 (web) |
+| AdminOS approve / reject / suspend / LSK record | PRE-EXISTING (b24b052) | test-legal-verification, 93 server rows |
+| Directory: eligible only, no fakes, buttonless cards → storefront | **FIXED** | P1, P2; W1–W6 |
+| Storefront (lawyer + firm) | **FIXED** (data + booking entry) | S1, S2 |
+| Booking on providerBookings, server price | **FIXED** | C1–C3 |
+| PIN settlement: 5% once → business wallet | **PROVEN** in-process (shared pipeline) | C4, C5 |
+| Suspended / unapproved provider not bookable | **PROVEN** (pre-existing, two layers) | test-booking-provider-gate 8/0 |
+| Suspension closes booking + search | **FIXED** | C8, C9 |
+| Retired money-less engine (bookLegalConsultation) | **FIXED** | C6; W6 |
+| Rate cards per practice area | **FIXED** | C10; PD1 |
+| Search via the canonical providers gate | **PROVEN** | C9 |
+| Client: My legal bookings, PIN, message, refund request | **FIXED** (read-only on canonical) | A1 web |
+| Fake "log case 5% + Paybill" tab; fake pro dashboard | **FIXED** (retired) | A2 web |
+| createPaymentIntent + IntaSend webhook for a Legal booking | **UNPROVEN** | `paid_held` fixture only |
+| All account-enabled IntaSend methods | **UNPROVEN / not built here** | owned by the IntaSend convergence (2f) |
+| Invoices / receipts for provider bookings | **NOT BUILT, platform-wide** | `financialDocuments` only written by the deleted Daraja callback |
+| Large-project milestones | **NOT BUILT** | no milestone billing authority exists; the leads/quotes → booking engine (Tech 4F) can carry one quoted engagement |
+| Availability single write path | **NOT BUILT** | provider-dashboard writes `providerAvailability` from the client (rules allow non-healthcare) |
+| Firm team verification | **BLOCKED** (owner decision) | team kept private |
+| Reschedule / no-show / provider-cancel | **PRE-EXISTING gap** in the shared booking engine | — |
+| Browser / emulator proof | **UNRUN** | memory floor (free memory < 512 MB); no playwright in the worktrees |
+
+### Category matrix (all 30 services)
+
+Every service of the six groups is the same row, because Legal providers and services are keyed by taxonomy id and none has a category-specific path:
+
+| Category | Public | Provider | Application | Booking | AdminOS | Super Admin |
+|---|---|---|---|---|---|---|
+| each of the 30 taxonomy services | ✔ group + area filters (W4) | ✔ rate-card `legalArea` (C10, PD1) | ✔ practice-area picker (R1) | ✔ via rate card → `bookingCreateService` | ✔ practice areas column (AO1) | ✗ no Legal view (gap G-7) |
+
+### Gaps and owners
+
+| # | Gap | Owner |
+|---|---|---|
+| G-1 | Invoices and receipts for provider-booking payments (platform-wide) | owner decision → 2f (financial documents) |
+| G-2 | Legal payment-intent + webhook proof; IntaSend method coverage | 2f (IntaSend convergence) |
+| G-3 | Free-plan service cap counts the auto consultation card | plan owner (no active owner; brief: designate before change) |
+| G-4 | Criminal / immigration / tax in the taxonomy | owner |
+| G-5 | Firm team per-advocate LSK verification | owner |
+| G-6 | Availability: one server write path for provider-dashboard | 5b (provider shell) / b2 |
+| G-7 | Super Admin Legal view (read-only) | b2, next pass |
+| G-8 | Milestone billing for large legal projects | owner decision (new authority) |
+| G-9 | Rules / emulator proof (`legalProviders` and `providerServices.legalArea`, which is server-written only) | f3 (combined rules) |
+
+### Release order (when authorized)
+
+1. **Functions in sokoni-5b's ONE provider release.** It carries:
+   - `legal-verification.js` @ a353116 and `shared/legal-taxonomy.js`;
+   - `provider-ops.js` with the `legalArea` hunks (merged with the Tech `_techProfile` hunks).
+2. **Then:**
+   - adminOsDispatch (rebuild rule: live archive + 5b 2de50e0 + b2 hunks);
+   - applicationLifecycle;
+   - registerLegalProvider, getLegalProviders, getLegalProvider, bookLegalConsultation (refusal), legalDispatch.
+3. **Re-project eligible advocates.** Use an LSK re-record or `applicationReconcile`. No bulk edits.
+4. **The combined Hosting release.** It includes `hosting/legal-hub-on-38d2d60`. Never ship it before step 1.
