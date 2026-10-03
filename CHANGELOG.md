@@ -1,3 +1,21 @@
+## 2026-10-03 — Fitness: one sales predicate (2f's), day / week membership offers, default-catalogue validation (NOT deployed)
+
+**Summary**
+- **Merged sokoni-2f `fe33bcc`** (spec §13.5) into the fitness attendance lane. CHANGELOG conflict resolved by keeping both sides; no other conflict.
+- **ONE sales predicate.** `fitnessCreateMembership` now calls `salesEnabled(db)` from 2f's `functions/shared/fitness-sales-switch.js` — the same function `payment-purposes.fitness_membership` calls. e3's private copy and its `salesEnabled` / `SALES_FLAG` exports were deleted (nothing else imported them). Behaviour is unchanged: `enabled === true` only, fail closed on a read error. The read-error log line moved out with the copy (2f's predicate is silent).
+- **Day / week passes (owner, via 2f).** `functions/shared/membership-offer.js` accepts `periodUnit` `day` | `week` | `month` (absent = month). Per-unit bounds are EXACTLY `membership-settlement.slicesOf`'s: day 1..31, week 1..8, month 1..60 — settlement supports multi-day / multi-week single-slice passes, so the module does not restrict them to ×1. Whole-shilling and KES 1..150,000 rules unchanged. The writer hook keeps the unit on update / duplicate and re-validates a unit switch against the new bound.
+- **Snapshot.** `fitnessCreateMembership` copies `periodUnit` from the offer (it was effectively always `'month'`).
+- **Check-in window.** `fitness-attendance` already uses `membership-settlement.endsAt` (read-only), so a day pass ends at start + 24 h and a week pass at start + 7 d. Proven by A23.
+- **Defaults.** All six of 2f's `OFFER_DEFAULTS` validate as published offers (C22, M7).
+
+**Files affected:** `functions/fitness-membership-create.js`, `functions/shared/membership-offer.js`, `scripts/test-fitness-membership-create.js`, `scripts/test-fitness-attendance.js`, `scripts/test-membership-offer-module.js`, `scripts/gen-fitness-api-fixtures.js`, `scripts/fixtures/fitness-api-fixtures.json`, `docs/FITNESS_MEMBERSHIP_API.md`, `docs/FITNESS_MEMBERSHIP_ATTENDANCE.md`.
+- **Database:** none. `providerServices` records may now carry `periodUnit: 'day' | 'week'`; `providerMemberships.periodUnit` follows the offer.
+- **API:** `fitnessCreateMembership` may return `periodUnit` `"day"` / `"week"`; `bad_unit` / `bad_period` messages reworded. Fixtures add `created_day_pass`, `created_week_pass`, `errors.bad_unit`, `errors.bad_period`, `fitnessCheckIn.success_day_pass`, `fitnessCheckIn.day_pass_at_end`.
+- **Security:** one flag reader (C19 + controls NC-i/NC-j catch a re-grown copy). Client `periodUnit` is ignored (C20).
+- **Hand-off:** `membership-offer.js` sha256 is now `a15598d13284b6e8d384fc78659da240273c434bac82057600a17184bde4583f` (was `f6fabf69…`) — sokoni-5b must byte-copy it into the providerDispatch release.
+- **Tests:** test-fitness-membership-create 23/0, controls 14/14; test-fitness-attendance 48/0, controls 10/10; test-membership-offer-module 8/0; test-membership-settlement 77/0; test-commission-schedule 25/0; fixtures `--check` OK. Emulator: QUEUED.
+- **Breaking:** none (an offer without `periodUnit` still reads as month).
+
 ## 2026-10-03 — Fitness memberships: server-side sales flag + API response contract and generated fixtures (NOT deployed)
 ## [2026-10-03] — adminUpdateFeatureFlag can no longer switch a flag ON by omission or widen a staged rollout — NOT deployed
 
@@ -157,6 +175,7 @@ Emulator: QUEUED (memory floor).
 - **Tests:** scripts/test-fitness-attendance.js 28/0, negative controls 4/4 caught. test-membership-settlement 45/0 on 57fe896. Emulator proof QUEUED.
 - **Docs:** docs/FITNESS_MEMBERSHIP_ATTENDANCE.md.
 - **Breaking:** none.
+
 ## 2026-10-03 — Fitness: default price catalogue (gyms edit), day/week passes, one sales-switch predicate, seller-terms commission wording, earn-page copy (NOT deployed)
 
 - **New files:** functions/shared/fitness-offer-defaults.js, functions/shared/fitness-sales-switch.js.

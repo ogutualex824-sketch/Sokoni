@@ -95,7 +95,17 @@ async function build () {
       errors.not_membership = mustFail('not membership', await call('member_9', { serviceId: SVC }), 'not_membership'); }
     { const h = setup({ enabled: true }); setDoc(h, `providerServices/${SVC}`, { active: false });
       errors.inactive = mustFail('inactive', await call('member_9', { serviceId: SVC }), 'inactive'); }
-    out.fitnessCreateMembership = { request: { serviceId: SVC }, created, reused, errors };
+    { const h = setup({ enabled: true }); setDoc(h, `providerServices/${SVC}`, { periodUnit: 'year' });
+      errors.bad_unit = mustFail('bad unit', await call('member_9', { serviceId: SVC }), 'bad_unit'); }
+    { const h = setup({ enabled: true }); setDoc(h, `providerServices/${SVC}`, { periodUnit: 'week', periodCount: 9 });
+      errors.bad_period = mustFail('bad period', await call('member_9', { serviceId: SVC }), 'bad_period'); }
+    /* short passes (owner 2026-10-03, 2f fe33bcc): the SOKONI defaults Daily Pass / Weekly Pass, published by the gym */
+    const passes = {};
+    for (const [key, unit, price, name] of [['created_day_pass', 'day', 50000, 'Daily Pass'], ['created_week_pass', 'week', 150000, 'Weekly Pass']]) {
+      const h = setup({ enabled: true }); setDoc(h, `providerServices/${SVC}`, { periodUnit: unit, periodCount: 1, price, name });
+      passes[key] = must(key, await call('member_9', { serviceId: SVC }));
+    }
+    out.fitnessCreateMembership = { request: { serviceId: SVC }, created, reused, created_day_pass: passes.created_day_pass, created_week_pass: passes.created_week_pass, errors };
   }
 
   /* ── fitnessMembershipQr ── */
@@ -157,9 +167,18 @@ async function build () {
       FA._test.use({ ts: () => { throw new Error('simulated Firestore outage'); } });
       errors.unavailable = mustFail('unavailable', await scan('gym_A', t));
       FA._test.use({ ts: () => clock.toISOString() }); }
+    /* a Daily Pass (paid an hour before NOW) — inside its 24 h window it checks in; at its end (membership-settlement.endsAt) → expired */
+    let dayPass, dayPassExpired;
+    { const over = { periodUnit: 'day', periodCount: 1, priceCents: 50000, title: 'Daily Pass', startAt: new Date(NOW.getTime() - 3600000).toISOString() };
+      const end = new Date(NOW.getTime() - 3600000 + 86400000);
+      useClock(harness(FA, seedLinked(over)));
+      dayPass = must('day pass', await scan('gym_A', await qr('member_1')));
+      setClock(new Date(end.getTime() - 120000)); const t = await qr('member_1'); setClock(end);
+      dayPassExpired = mustFail('day pass at end', await scan('gym_A', t), 'expired'); setClock(NOW); }
     out.fitnessCheckIn = {
       request: { token: '<from fitnessMembershipQr>', sessionRef: '<optional, [A-Za-z0-9_-]{1,64}>' },
-      success_first: first, duplicate, success_staff_named_session: staffSession, success_unlimited: unlimited, errors,
+      success_first: first, duplicate, success_staff_named_session: staffSession, success_unlimited: unlimited, success_day_pass: dayPass, errors,
+      day_pass_at_end: dayPassExpired,
     };
   }
 

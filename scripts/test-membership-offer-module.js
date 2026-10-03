@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 /* Standalone test for functions/shared/membership-offer.js — needs ONLY the module, so it runs on any
    tree that carries the byte-identical copy (e.g. sokoni-5b's providerDispatch release).
-   M0 pins the module bytes; M1–M5 cover the writer hook and the booking refusal predicate.
-   Usage: node scripts/test-membership-offer-module.js [FN_DIR=functions] */
+   M0 pins the module bytes; M1–M5 cover the writer hook and the booking refusal predicate; M6 the day / week units
+   (owner 2026-10-03 via sokoni-2f fe33bcc); M7 that every SOKONI default (2f's functions/shared/fitness-offer-defaults.js)
+   validates when published as a service.
+   M7 needs the defaults file. On a tree that does not carry it, M7 FAILS (fail closed) unless SKIP_DEFAULTS=1 is set,
+   which prints it as NOT ATTEMPTED — never as a pass.
+   Usage: node scripts/test-membership-offer-module.js [FN_DIR=functions] [SKIP_DEFAULTS=1] */
 'use strict';
 const path = require('path');
 const fs = require('fs');
@@ -10,7 +14,7 @@ const crypto = require('crypto');
 
 const FN = process.env.FN_DIR || path.join(__dirname, '..', 'functions');
 const FILE = path.join(FN, 'shared', 'membership-offer.js');
-const PIN = 'f6fabf6969d99888d4bcc7df10cc0b9211a5d91dc9f763041a74a0dfedf21d83';
+const PIN = 'a15598d13284b6e8d384fc78659da240273c434bac82057600a17184bde4583f';
 const OFFER = require(FILE);
 
 let pass = 0, fail = 0;
@@ -62,6 +66,42 @@ ck('M4 edits re-validated (price 0 refused, priceType pinned fixed); duplicate k
 ck('M5 isMembershipOffer drives the booking refusal: true for a membership, false for a plain service',
   OFFER.isMembershipOffer(c1.out) === true && OFFER.isMembershipOffer(plain.out) === false
   && OFFER.isMembershipOffer(null) === false, null);
+
+/* M6 — short units */
+const day = mk({ name: 'Daily Pass', price: 50000, serviceKind: 'membership', periodUnit: 'day', periodCount: 1 });
+const week = mk({ name: 'Weekly Pass', price: 150000, serviceKind: 'membership', periodUnit: 'week', periodCount: 1 });
+const shortBad = {
+  day32: mk({ price: 50000, serviceKind: 'membership', periodUnit: 'day', periodCount: 32 }).v.reason,
+  week9: mk({ price: 150000, serviceKind: 'membership', periodUnit: 'week', periodCount: 9 }).v.reason,
+  year: mk({ price: 150000, serviceKind: 'membership', periodUnit: 'year', periodCount: 1 }).v.reason,
+  upper: mk({ price: 150000, serviceKind: 'membership', periodUnit: 'Week', periodCount: 1 }).v.reason,
+  proto: OFFER.validateMembershipOffer(Object.assign({}, day.out, { periodUnit: 'toString' })).reason,
+  noKindUnit: mk({ price: 150000, periodUnit: 'week' }).v.reason,
+};
+const dv = OFFER.validateMembershipOffer(day.out); const wv = OFFER.validateMembershipOffer(week.out);
+const legacy = OFFER.validateMembershipOffer(Object.assign({}, c1.out, { periodUnit: undefined }));
+ck('M6 day×1 / week×1 accepted and returned with their unit; bounds day 31 / week 8 / month 60; day×32, week×9, unit year / Week / toString refused; unit without kind refused; absent unit = month',
+  day.v.ok && week.v.ok && dv.ok && dv.periodUnit === 'day' && wv.ok && wv.periodUnit === 'week'
+  && OFFER.PERIOD_LIMITS.day === 31 && OFFER.PERIOD_LIMITS.week === 8 && OFFER.PERIOD_LIMITS.month === 60
+  && shortBad.day32 === 'bad_period' && shortBad.week9 === 'bad_period' && shortBad.year === 'bad_unit' && shortBad.upper === 'bad_unit'
+  && shortBad.proto === 'bad_unit' && shortBad.noKindUnit === 'not_membership' && legacy.ok && legacy.periodUnit === 'month', { dv, wv, shortBad, legacy });
+
+/* M7 — SOKONI defaults (2f) are publishable as-is */
+const DEF_FILE = path.join(FN, 'shared', 'fitness-offer-defaults.js');
+if (!fs.existsSync(DEF_FILE) && process.env.SKIP_DEFAULTS === '1') {
+  console.log('  NOT ATTEMPTED  M7 (functions/shared/fitness-offer-defaults.js absent on this tree; SKIP_DEFAULTS=1) — not a pass');
+} else {
+  let res = null; let err = null;
+  try {
+    res = require(DEF_FILE).OFFER_DEFAULTS.map((d) => {
+      const o = mk({ name: d.label, price: d.priceCents, serviceKind: 'membership', periodUnit: d.periodUnit, periodCount: d.periodCount });
+      const v = OFFER.validateMembershipOffer(o.out);
+      return { key: d.key, ok: o.v.ok && v.ok && v.priceCents === d.priceCents && v.periodUnit === d.periodUnit && v.periodCount === d.periodCount, reason: o.v.reason || v.reason };
+    });
+  } catch (e) { err = String(e && e.message || e); }
+  ck('M7 every OFFER_DEFAULTS entry (2f) passes the writer hook AND validateMembershipOffer when shaped as a service (6 entries)',
+    !err && res.length === 6 && res.every((x) => x.ok), { err, res });
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -348,6 +348,36 @@ async function matrix (FA) {
     ck('A14 period window: before startAt → not_covered; at/after the end (membership-settlement.endsAt) → expired',
       early.reason === 'not_covered' && late.reason === 'expired' && h.get(P).attendedSessions === 0 && h2.get(P).attendedSessions === 0, [early.reason, late.reason]); }
 
+  /* A23 SHORT PASSES (owner 2026-10-03 via 2f fe33bcc): a day / week pass ends at membership-settlement.endsAt — ONE
+     slice, start + 24 h / start + 7 d. Check-in inside the window OK; the same day again is idempotent; at/after the end
+     → expired with nothing written. */
+  { const out = {};
+    for (const [unit, spanMs] of [['day', 86400000], ['week', 7 * 86400000]]) {
+      const startAt = new Date(NOW.getTime() - 3600000).toISOString();            /* paid an hour ago */
+      const passOver = { periodUnit: unit, periodCount: 1, priceCents: unit === 'day' ? 50000 : 150000, startAt, title: unit + ' pass' };
+      const end = MS.endsAt(mem(passOver)).getTime();
+      const h = harness(FA, seedBase(passOver));
+      const tok = await qr(FA, 'member_1');
+      const inside = await scan(FA, 'gym_A', tok);
+      const snapM = JSON.stringify(h.get(P));
+      const dup = await scan(FA, 'gym_A', tok);
+      const dupUnchanged = snapM === JSON.stringify(h.get(P));
+      let laterOk = true;
+      if (unit === 'week') {                                                        /* day 6 of the week: still covered */
+        h.setNow(new Date(end - 86400000)); const r6 = await scan(FA, 'gym_A', await qr(FA, 'member_1')); laterOk = r6.ok && r6.r.duplicate === false && h.get(P).attendedSessions === 2;
+      }
+      const before = JSON.stringify(h.get(P));
+      h.setNow(new Date(end - 120000)); const tokEnd = await qr(FA, 'member_1');   /* minted 2 min before the end … */
+      h.setNow(new Date(end)); const atEnd = await scan(FA, 'gym_A', tokEnd);        /* … scanned exactly at the end */
+      h.setNow(new Date(end + 3600000)); const qAfter = await attempt(() => H(FA).membershipQrHandler(req('member_1', { membershipId: MID })));
+      out[unit] = { span: end - Date.parse(startAt) === spanMs, inside: inside.ok && inside.r.duplicate === false && inside.r.firstCheckIn === true,
+        dup: dup.ok && dup.r.duplicate === true && dup.r.attendanceId === inside.r.attendanceId && dup.r.attendedSessions === 1, dupUnchanged,
+        laterOk, atEnd: atEnd.reason, after: qAfter.reason, untouched: JSON.stringify(h.get(P)) === before };
+    }
+    const good = (o) => o.span && o.inside && o.dup && o.dupUnchanged && o.laterOk && o.atEnd === 'expired' && o.after === 'expired' && o.untouched;
+    ck('A23 short passes end at membership-settlement.endsAt: day = start+24h, week = start+7d; check-in inside OK, same-day repeat idempotent, week day 6 OK; at the end → expired, after → no QR (expired), nothing written',
+      good(out.day) && good(out.week), out); }
+
   /* A15 entitlement */
   { const h = harness(FA, seedBase({ sessionsIncluded: 2 }));
     const tok = await qr(FA, 'member_1');
@@ -662,6 +692,9 @@ const MUTANTS = [
   { tag: 'i', row: 'A22 check-in response contract: success AND duplicate both carry membershipId, attendanceId, member.displayName, title, checkedInAt (ISO), attendedSessions (after), sessionsIncluded|null, duplicate, firstCheckIn — exact key set', what: 'membershipId dropped from the check-in response',
     from: "out = { duplicate: false, membershipId, attendanceId: attId,", to: "out = { duplicate: false, attendanceId: attId," },
 ];
+
+MUTANTS.push({ tag: 'j', row: 'A23 short passes end at membership-settlement.endsAt: day = start+24h, week = start+7d; check-in inside OK, same-day repeat idempotent, week day 6 OK; at the end → expired, after → no QR (expired), nothing written', what: 'period end computed as a month regardless of periodUnit',
+  from: 'end = _settlement().endsAt(m);', to: "end = _settlement().endsAt(Object.assign({}, m, { periodUnit: 'month' }));" });
 
 /* Module use (scripts/gen-fitness-api-fixtures.js): the suite's fake db, fixtures and loaders — nothing runs. */
 module.exports = { fakeDb, harness, seedBase, seedLinked, mem, req, attempt, qr, scan, loadModule, loadFG, SRC, FG_SRC, NOW, START, MID, MID2, LINKED };
