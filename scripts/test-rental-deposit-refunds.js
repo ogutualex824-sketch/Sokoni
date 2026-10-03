@@ -28,7 +28,7 @@ const FieldValue = { serverTimestamp: () => ({ __ts: true }) };
 let SENT = [], NEXT = { outcome: 'PROVIDER_ACCEPTED', chargebackId: 'CB1', providerStatus: 'PENDING' }, STATUS = { outcome: 'PROVIDER_COMPLETED', providerStatus: 'COMPLETED' };
 const adapter = { initiateRefund: async (o) => { SENT.push(o); if (NEXT === 'THROW_PRE') throw new Error('REFUND_INVOICE_REQUIRED'); return Object.assign({}, NEXT); },
   getRefundStatus: async () => Object.assign({}, STATUS) };
-const deps = (o) => Object.assign({ adapter, contract: CONTRACT, minCents: 5000, FieldValue }, o || {});
+const deps = (o) => Object.assign({ adapter, contract: CONTRACT, minCents: RD.OWNER_B2C_MIN_CENTS, FieldValue }, o || {});
 const seed = (req, bk) => { SENT = []; D = {
   'rentalBookings/b1': Object.assign({ paymentStatus: 'released', heldAmountCents: 650000, invoiceId: 'INV-9', settlement: { depositCents: 200000, depositRefund: 'requested' } }, bk || {}),
   'rentalDepositRefunds/b1': Object.assign({ bookingId: 'b1', state: 'REQUESTED', amountCents: 200000, invoiceId: 'INV-9', renterUid: 'renter1' }, req || {}) }; };
@@ -73,6 +73,9 @@ const reviewed = (reason) => !!D['commissionReviewQueue/rental_deposit_' + reaso
   ck('X-17', r.outcome === 'not_requested' && SENT.length === 0, 'a request already being sent (SENDING) is never sent again', r);
   seed({ state: 'PROVIDER_ACCEPTED', chargebackId: 'CB1' }); STATUS = { outcome: CONTRACT.UNKNOWN }; r = await RD.reconcileDepositRefund(db, 'b1', deps());
   ck('X-18', r.outcome === 'unchanged' && R().state === 'PROVIDER_ACCEPTED' && SENT.length === 0, 'a status read with no answer changes nothing (never downgrades, never re-sends)', r);
+  ck('X-20', RD.OWNER_B2C_MIN_CENTS === 10000, 'the owner floor is KES 100 (10,000 cents)', RD.OWNER_B2C_MIN_CENTS);
+  seed({ amountCents: 9999 }, { settlement: { depositCents: 9999, depositRefund: 'requested' } }); r = await RD.executeDepositRefund(db, 'b1', deps());
+  ck('X-21', r.reason === 'below_b2c_minimum' && SENT.length === 0, 'KES 99.99 is below the owner floor → held, never sent', r);
   ck('X-19', !/refundRequests|collection\('wallets'\)|businessWallets/.test(fs.readFileSync(path.join(FN, 'rental-deposit-refunds.js'), 'utf8')), 'the executor never touches refundRequests or any wallet', null);
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

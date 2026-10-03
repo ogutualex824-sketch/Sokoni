@@ -20,6 +20,9 @@
 
 const BLOCKED_INVOICES = new Set(['EKOQ6P0']);   /* the open field case — never re-POST (docs/INTASEND_REFUND_OPEN_CASE_EKOQ6P0.md) */
 const COL = 'rentalDepositRefunds';
+/* OWNER 2026-10-03 (direct): the B2C refund floor is KES 100. A deposit below it is HELD for a person, never sent — the real
+   provider minimum is unknown (KES 1 failed TF106 and stranded EKOQ6P0). The wiring passes this as deps.minCents. */
+const OWNER_B2C_MIN_CENTS = 10000;
 const TERMINAL = new Set(['COMPLETED', 'REJECTED', 'CANCELLED', 'HELD_FOR_REVIEW']);
 
 const OUTCOME_TO_STATE = {
@@ -111,4 +114,4 @@ async function reconcileDepositRefund(db, bookingId, deps) {
   return { outcome: next };
 }
 
-module.exports = { executeDepositRefund, reconcileDepositRefund, isProvenAdapter, BLOCKED_INVOICES, TERMINAL, COL };
+module.exports = { executeDepositRefund, reconcileDepositRefund, isProvenAdapter, OWNER_B2C_MIN_CENTS, BLOCKED_INVOICES, TERMINAL, COL };
