@@ -759,6 +759,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-merchant-offers.js"></script>
 <script src="sokoni-merchant-supply.js"></script>
 <!-- MV2-2a: Chat with a supplier enters the existing in-app inbox, never a second chat system -->
+<!-- Marketing services (sokoni-b2 MK6): the marketer workspace + the ONE Marketing taxonomy (generated) -->
+<script src="sokoni-marketing-taxonomy.js"></script>
+<script src="sokoni-merchant-mktpro.js"></script>
 <script src="sokoni-inbox.js"></script>
 <script src="sokoni-merchant-staff.js"></script>
 <script src="sokoni-merchant-team.js"></script>
@@ -2617,6 +2620,21 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     };
   }
 
+  /* ── MARKETING SERVICES ctx (sokoni-b2) ───────────────────────────────────────────
+     Provider session only (routes sessions:['provider'], group requires:'marketing'). NO shop: every call is a server
+     op keyed on auth.uid. The module re-asks the server (marketingMyStatus) before painting anything. */
+  function _mktCtx (view) {
+    return {
+      view: view,
+      uid: function () { return S.uid || null; },
+      call: function (name, payload) { return _callable(name)(payload).then(function (r) { return (r && r.data) || r; }); },
+      callable: _callable,
+      hasRoute: function (id) { return !!byId[id]; },
+      go: go,
+      onToast: toast
+    };
+  }
+
   /* ══ PORTED NATIVE SURFACES ═══════════════════════════════════════════════
      One table instead of nine near-identical render functions. Each entry names the
      global the module publishes and builds the context that module expects — taken
@@ -2767,6 +2785,16 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                         onOpenAvailability: function () { go('availability'); },
                         onToast: toast });
                     } }; } },
+    'mkt-overview':     { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('overview'); } },
+    'mkt-services':     { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('services'); } },
+    'mkt-rates':        { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('rates'); } },
+    'mkt-leads':        { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('leads'); } },
+    'mkt-quotes':       { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('quotes'); } },
+    'mkt-bookings':     { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('bookings'); } },
+    'mkt-campaigns':    { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('campaigns'); } },
+    'mkt-projects':     { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('projects'); } },
+    'mkt-earnings':     { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('earnings'); } },
+    'mkt-verification': { global: 'SokoniMerchantMktPro', ctx: function () { return _mktCtx('verification'); } },
     'kra-tax':  { global: 'SokoniMerchantTaxUI',       ctx: function () { return {
                     scope: _scope(), shopName: _shopName(), origin: location.origin,
                     callProfile: _callable('etimsGetProfile'), callRegister: _callable('etimsRegisterSeller'),

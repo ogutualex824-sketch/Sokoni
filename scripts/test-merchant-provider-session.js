@@ -196,15 +196,21 @@ const holdingAnswer = (extra) => Object.assign({
   console.log('\nC  contract: sessions + requires');
   const C = loadContract();
   ck('C1  validate() is clean on the real contract', C.validate().length === 0, C.validate());
-  const prov = C.ROUTES.filter((r) => C.sessionsOf(r.id).includes('provider')).map((r) => r.id).sort();
-  ck('C2  provider-capable routes are EXACTLY home, messages, signout (conservative)', JSON.stringify(prov) === '["home","messages","signout"]', prov);
+  /* sokoni-b2 MK6: capability-GATED provider routes (a MORE_GROUPS entry with requires:) are allowed — they mount only when the
+     server grants that capability. Every UNGATED provider-capable route is still EXACTLY home, messages, signout. */
+  const prov = C.ROUTES.filter((r) => C.sessionsOf(r.id).includes('provider') && C.groupRequires(r.id) == null).map((r) => r.id).sort();
+  const gatedProv = C.ROUTES.filter((r) => C.sessionsOf(r.id).includes('provider') && C.groupRequires(r.id) != null).map((r) => r.id);
+  ck('C2  ungated provider-capable routes are EXACTLY home, messages, signout (conservative); every other provider route is capability-gated', JSON.stringify(prov) === '["home","messages","signout"]' && gatedProv.every((id) => C.mountRefusal(id, 'provider', () => false) === 'requires:' + C.groupRequires(id)), { prov, gatedProv });
   const undeclared = C.ROUTES.filter((r) => r.sessions == null);
   ck('C3  every route without a sessions key defaults to ["merchant"]', undeclared.length > 20 && undeclared.every((r) => JSON.stringify(C.sessionsOf(r.id)) === '["merchant"]'), undeclared.length);
   const shopTools = ['pos', 'inventory', 'sell', 'products', 'devices', 'staff', 'sales-control', 'pos-setup', 'pos-provision', 'orders', 'shop', 'supply', 'plan', 'settings', 'payments', 'dashboard'];
   const leaked = shopTools.filter((id) => C.mountRefusal(id, 'provider', () => true) !== 'session:provider');
   ck('C4  shop/POS/inventory/till/devices/staff… are refused for providers even with every capability', leaked.length === 0, leaked);
-  const merchantBlocked = C.ROUTES.filter((r) => C.mountRefusal(r.id, null, () => false) !== null).map((r) => r.id);
-  ck('C5  with no provider session (null) every existing route mounts exactly as before', merchantBlocked.length === 0, merchantBlocked);
+  /* every route that is open to the MERCHANT session mounts exactly as before; provider-only routes (sessions:['provider'])
+     are by design refused to merchants (sokoni-b2 MK6 mkt-*) */
+  const merchantBlocked = C.ROUTES.filter((r) => C.sessionsOf(r.id).includes('merchant') && C.mountRefusal(r.id, null, () => false) !== null).map((r) => r.id);
+  const providerOnly = C.ROUTES.filter((r) => !C.sessionsOf(r.id).includes('merchant')).map((r) => r.id);
+  ck('C5  with no provider session (null) every merchant route mounts exactly as before; provider-only routes are refused', merchantBlocked.length === 0 && providerOnly.every((id) => /^session:/.test(String(C.mountRefusal(id, null, () => true)))), { merchantBlocked, providerOnly });
   ck('C6  an unknown session is refused, never treated as merchant', C.mountRefusal('messages', 'admin') === 'session:admin', C.mountRefusal('messages', 'admin'));
   ck('C7  aliases resolve before the session check (#cashier → pos, refused for provider)', C.mountRefusal('cashier', 'provider') === 'session:provider', C.mountRefusal('cashier', 'provider'));
 
@@ -271,7 +277,8 @@ const holdingAnswer = (extra) => Object.assign({
   await h.api.resolveShop(); h.api.emit();
   ck('S1  owner WITH a providers doc → MERCHANT session (shop wins)', h.S.session === 'merchant' && h.S.activeShopId === 'u1', { session: h.S.session, shop: h.S.activeShopId });
   ck('S2  …capabilities are exactly merchantIdentity\'s; businessWorkspace never called; providers/{uid} never read', JSON.stringify(h.S.capabilities) === '["sell","view_orders"]' && bwCalls(h).length === 0 && !h.log.reads.includes('providers/u1'), { caps: h.S.capabilities, reads: h.log.reads });
-  const expectMerchantNav = C.primary().map((r) => r.id).concat(C.moreGroups().flatMap((g) => g.routes.map((r) => r.id)));
+  /* the projection a MERCHANT session can mount (provider-only routes such as sokoni-b2's mkt-* are not part of it) */
+  const expectMerchantNav = C.primary().map((r) => r.id).concat(C.moreGroups().flatMap((g) => g.routes.map((r) => r.id))).filter((id) => C.sessionsOf(id).includes('merchant'));
   ck('S3  merchant sidebar = the contract\'s full projection, unchanged (primary order + every group)', JSON.stringify(navIds(h.doc)) === JSON.stringify(expectMerchantNav), navIds(h.doc));
   ck('S3b merchant bottom nav + footer exit unchanged', JSON.stringify(bnavIds(h.doc)) === JSON.stringify(C.BOTTOM_NAV.map((b) => b.id)) && JSON.stringify(footIds(h.doc)) === '["home"]', { b: bnavIds(h.doc), f: footIds(h.doc) });
 
@@ -325,7 +332,14 @@ const holdingAnswer = (extra) => Object.assign({
     return hh;
   }
   h = await providerHarness();
-  ck('N1  provider sidebar = Messages only (+ Marketplace exit in the footer)', JSON.stringify(navIds(h.doc)) === '["messages"]' && JSON.stringify(footIds(h.doc)) === '["home"]', { nav: navIds(h.doc), foot: footIds(h.doc), heads: navHeads(h.doc) });
+  /* sokoni-b2 MK6: this harness's server answer grants marketing:true, so the capability-gated 'Marketing services' group
+     joins Messages; with marketing:false the sidebar is Messages only. */
+  const mktGroup = C.moreGroups().filter((g) => g.requires === 'marketing').flatMap((g) => g.routes.map((r) => r.id));
+  const hNo = await providerHarness({ callables: { providerDispatch: () => ({ data: routedAnswer({ marketing: false }) }) } });
+  ck('N1  provider sidebar = Messages + ONLY the groups whose capability the server granted (+ Marketplace exit in the footer)',
+    JSON.stringify(navIds(h.doc)) === JSON.stringify(['messages'].concat(mktGroup)) && JSON.stringify(footIds(h.doc)) === '["home"]'
+    && JSON.stringify(navIds(hNo.doc)) === '["messages"]',
+    { nav: navIds(h.doc), navWithoutMarketing: navIds(hNo.doc), foot: footIds(h.doc), heads: navHeads(h.doc) });
   ck('N2  provider bottom nav drops Orders and Sell (home + More only)', JSON.stringify(bnavIds(h.doc)) === '["home","__more"]', bnavIds(h.doc));
   async function rowN3 (shellSrc) {
     const hh = await providerHarness({ shellSrc });

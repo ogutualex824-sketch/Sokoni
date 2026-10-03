@@ -349,6 +349,62 @@
        href, so it stays a validated clean URL instead of the hardcoded '/merchant-v2.html'
        that shipped in the v2 shell: that target 301s on the way back AND names a file rather
        than the route the contract establishes. */
+    /* ── MARKETING SERVICES — the MARKETER workspace (sokoni-b2, Marketing Hub MK6, 2026-10-03) ─────────────────────
+       Owner: provider mode in merchant-v2. PROVIDER session only; the group requires the server capability 'marketing'
+       (businessWorkspace.marketing — decision-record backed). ONE module (sokoni-merchant-mktpro.js), ten views, ctx is
+       SELLER_UID alone: every read/write is a server op keyed on auth.uid (providerDispatch / workDispatch /
+       marketingDispatch). Services + Rate cards mount sokoni-e3's ONE provider rate-card editor. Not
+       sokoni-merchant-marketing.js (a merchant promoting their own shop). */
+    { id:'mkt-overview', name:'Marketing', icon:'📣', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      sessions:['provider'],
+      mobile:true, desktop:true, activeKey:'mkt-overview' },
+    { id:'mkt-services', name:'Marketing services', icon:'🧾', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      sessions:['provider'],
+      mobile:true, desktop:true, activeKey:'mkt-services' },
+    { id:'mkt-rates', name:'Rate cards', icon:'💲', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      sessions:['provider'],
+      mobile:true, desktop:true, activeKey:'mkt-rates' },
+    { id:'mkt-leads', name:'Leads', icon:'📨', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      sessions:['provider'],
+      mobile:true, desktop:true, activeKey:'mkt-leads' },
+    { id:'mkt-quotes', name:'Quotes', icon:'🧮', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      sessions:['provider'],
+      mobile:true, desktop:true, activeKey:'mkt-quotes' },
+    { id:'mkt-bookings', name:'Marketing bookings', icon:'📅', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      sessions:['provider'],
+      mobile:true, desktop:true, activeKey:'mkt-bookings' },
+    { id:'mkt-campaigns', name:'Campaigns', icon:'🚀', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      sessions:['provider'],
+      mobile:true, desktop:true, activeKey:'mkt-campaigns' },
+    { id:'mkt-projects', name:'Projects', icon:'📐', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      sessions:['provider'],
+      mobile:true, desktop:true, activeKey:'mkt-projects' },
+    { id:'mkt-earnings', name:'Earnings', icon:'💰', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      sessions:['provider'],
+      mobile:true, desktop:true, activeKey:'mkt-earnings' },
+    { id:'mkt-verification', name:'Marketing verification', icon:'✅', tier:'more',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
+      sessions:['provider'],
+      mobile:true, desktop:true, activeKey:'mkt-verification' },
     { id:'signout', name:'Sign out', icon:'↩', tier:'hidden',
       kind:'exit', href:'/login', next:'/merchant-v2', terminatesSession:true,
       role:['seller','merchant','cashier'], ctx:[],
@@ -525,7 +581,10 @@
        configured once alongside Devices and POS Setup, not a surface a merchant reads
        daily the way they read Reports. */
     { key:'operations', label:'Back office',
-      ids:['kra-tax','devices','pos-setup'] }
+      ids:['kra-tax','devices','pos-setup'] },
+    /* Marketing services (sokoni-b2): fails CLOSED unless the server granted 'marketing'. */
+    { key:'mktpro', label:'Marketing services', requires:'marketing',
+      ids:['mkt-overview','mkt-services','mkt-rates','mkt-leads','mkt-quotes','mkt-bookings','mkt-campaigns','mkt-projects','mkt-earnings','mkt-verification'] }
   ];
 
   /* ── ROUTE ACTION CHIPS ─────────────────────────────────────────────────────────

@@ -1,3 +1,36 @@
+## [2026-10-03] — merchant-v2 › Marketing services: the MARKETER workspace in provider mode (Marketing Hub MK6) — NOT deployed
+
+- **Owner:** provider mode in merchant-v2 (one shell for merchants and providers); dashboards copy merchant-v2 style. Built on sokoni-e3's provider-session shell (89f4d47).
+- **sokoni-merchant-mktpro.js (new)** — ONE module, ten views, every call an EXISTING server op:
+  - **gate:** re-asks marketingMyStatus. A non-marketer sees an honest "opens once SOKONI approves you" and NOTHING else is called.
+  - **overview:** stat tiles from providerGetEarnings and providerListServices, plus the APPROVED services.
+  - **services / rate cards:** mount sokoni-e3's ONE provider rate-card editor (SokoniMerchantRateCard), filtered to the server's approved categories. No own pricing form. Until the editor is assembled: a read-only list and an honest notice; a service whose category is no longer approved is flagged.
+  - **leads / quotes:** the ONE lead engine (providerDispatch leadListForProvider / leadMarkViewed / leadDecline / leadSendQuote, integer cents); conversations open in Messages.
+  - **bookings:** providerGetBookings (marketing only); price = the booking snapshot.
+  - **campaigns / projects (Work/Job Engine):**
+    - start from an ACCEPTED quote (workCreate service_lead);
+    - draft scope / milestones (workUpdateScope);
+    - propose / start / pause (workTransition);
+    - mark a milestone delivered;
+    - Messages tx work_project.
+  - **earnings:** providerGetEarnings. **verification:** approved / declined services.
+- **sokoni-merchant-routes.js:**
+  - ten mkt-* routes, `sessions:['provider']`, ctx SELLER_UID;
+  - MORE_GROUPS 'Marketing services' with `requires:'marketing'` (fail closed; granted only by the server's businessWorkspace.marketing, decision-record backed);
+  - validate() is clean.
+- **merchant-v2.html:** loads the taxonomy + the module; `_mktCtx` (no shop: uid, call, callable, hasRoute, go, toast); native map for every mkt-* route.
+- **sokoni-e3's contract tests made capability-aware** (for e3 review; nothing loosened for e3's own routes):
+  - C2: the UNGATED provider routes are still exactly home / messages / signout;
+  - C5 / S3: the merchant projection excludes provider-only routes;
+  - N1: the sidebar shows the Marketing group only when the server grants marketing, and Messages-only otherwise;
+  - R3: the five ungated headings are unchanged.
+- **Tests:**
+  - scripts/test-merchant-mktpro.js 9/0, SABOTAGE 5/5;
+  - test-merchant-provider-session 75/0 (incl. its 4 negative controls), test-merchant-routes 65/0, test-mv2-1-sidebar 14/0;
+  - test-merchant-shell-callables 18/1 — the same row fails at e3's base 89f4d47.
+- **Not run (memory floor):** the browser suites test-merchant-route-gate, test-merchant-route-overlays and test-merchant-shell-boundary.
+- **Gaps (named, not faked):** business wallet / payouts / receipts / plan for provider sessions are sokoni-e3's Financial Center + Plan provider gaps; customer-side campaign / project acceptance screens.
+
 ## [2026-10-03] - Merchant V2 provider session + group gate — one shell for merchants AND providers (SHELL half; NOT deployed)
 
 **Owner decision (2026-10-03, via sokoni-b2): "Provider mode in merchant-v2".** This is the shell half; the Marketing
