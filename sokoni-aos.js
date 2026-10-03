@@ -556,6 +556,8 @@ window.SokoniAOS = (() => {
     });
     const body = document.getElementById("mktBody");
     if (!body) return;
+    /* A late Orders response must never paint over another tab's body. */
+    if (window.SokoniAOSOrders) window.SokoniAOSOrders.unmount();
     body.innerHTML = _spinner();
 
     if (tab === "products") {
@@ -574,18 +576,21 @@ window.SokoniAOS = (() => {
           </td>
         </tr>`).join("")}</tbody></table>` : _emptyMsg("No products");
     } else if (tab === "orders") {
-      const data = await _call("adminGetOrders", { limit: 30 }).catch(() => ({ orders: [] }));
-      const orders = data.orders || [];
-      body.innerHTML = orders.length ? `<table class="aos-table"><thead><tr>
-          <th>Order ID</th><th>Buyer</th><th>Total</th><th>Status</th><th>Date</th><th>Actions</th>
-        </tr></thead><tbody>${orders.map(o => `<tr>
-          <td class="aos-mono">${o.id?.slice(0,8)||"—"}</td>
-          <td class="aos-muted">${_esc(o.buyerName||o.buyerUid||"—")}</td>
-          <td>KES ${_fmt(o.total||0)}</td>
-          <td><span class="status-badge st-${o.status||"pending"}">${_esc(o.status||"pending")}</span></td>
-          <td class="aos-muted">${_date(o.createdAt)}</td>
-          <td><button class="aos-btn-sm" onclick="SokoniAOS.updateOrder('${o.id}')">Update</button></td>
-        </tr>`).join("")}</tbody></table>` : _emptyMsg("No orders");
+      /* Orders redesign (owner reference, 2026-10-04): sokoni-aos-orders.js owns the view —
+         KPIs, status tabs, table, detail drawer and every state. It reads only server
+         fields; see that file's header and docs/ADMINOS_ORDERS_REDESIGN.md. */
+      if (!window.SokoniAOSOrders) {
+        body.innerHTML = '<div class="empty-state" role="alert"><p>The Orders view did not load. Reload the page.</p></div>';
+        return;
+      }
+      window.SokoniAOSOrders.mount(body, {
+        call: _call,
+        viewUser: (uid) => viewUser(uid),
+        toast: _toast,
+        confirm: (msg, opts) => (window.SK && SK.dialog && SK.dialog.confirm)
+          ? SK.dialog.confirm(msg, null, null, Object.assign({ variant: "danger" }, opts || {}))
+          : Promise.resolve(window.confirm(msg)),
+      });
     } else if (tab === "categories") {
       const data = await _call("adminGetCategories").catch(() => ({ categories: [] }));
       const cats = data.categories || [];

@@ -1,3 +1,61 @@
+## [2026-10-04] - AdminOS Orders redesigned to the owner's reference layout — every figure from the server (hosting only; NOT deployed)
+
+Owner 2026-10-04: "same for orders". Marketplace → Orders now uses the Platform Health style: dark panels, header row,
+KPI cards, status tabs, table, right detail drawer. There is no sidebar of its own, no brand, no avatars, and only
+honest states. The census and full mapping are in `docs/ADMINOS_ORDERS_REDESIGN.md`.
+
+**Server contract (serving `adminosdispatch-00025-muh` / `getordertrends-00015-yuw`):**
+- `adminGetOrders` returns raw order docs, with a limit of at most 200. It returns no total, no counts and no cursor.
+- KPIs come from `adminGetExecutiveDashboard` (`totalOrders`, `activeOrders`) and from `adminGetFinance`
+  (`reconciliation.productRevenue`, 30 days).
+- The sparkline comes from `getOrderTrends`, using `orders` per day only.
+
+**Mapping:**
+- Average order value and Orders shipped show `—`; no server field exists for either.
+- "Pending fulfilment" is renamed to **Active orders**, which is what the server counts.
+- A server 0 is shown as unconfirmed, because the server turns failures into 0.
+- No deltas are shown and the tabs carry no counts.
+- Filters are status tabs only, and each tab is filtered by the server.
+- Paging walks the rows already loaded ("of N loaded"). Load more re-asks the server, up to its 200 cap.
+- The drawer shows order-doc fields only, and unknown fields show `—`.
+- "Payment verified on…" appears only when `paymentVerified` and `paidAt` are both set.
+- Payment method is shown "as recorded".
+
+**Omitted:**
+- Create Order and Duplicate Order: not a canonical flow.
+- Export: no order export exists.
+- Request Refund: no live request-for-approval op exists, and `refundRequests` auto-credits a wallet.
+- Resend Receipt: no order-receipt op exists.
+- Date, channel, carrier and payment filters: the server can't apply them.
+
+**Kept:** the existing status update (`adminUpdateOrderStatus`, audited by the server). It now uses a vocabulary
+select, a confirm step, and shows the server's refusal verbatim.
+
+**Fixed along the way:** the old tab turned a failed call into "No orders", rendered unknown totals as KES 0,
+abbreviated money (1.2K), and showed raw buyer UIDs.
+
+**Files:**
+- `sokoni-aos-orders.js` (new)
+- `sokoni-aos.js` (orders branch mounts the module; every Marketplace tab change unmounts it)
+- `admin-os.html` (one script tag)
+- `scripts/test-aos-orders.js` (new, 80/0, with negative controls (a) page-sum revenue, (b) a refundRequests write and
+  (c) client-side status filter, each failing its named row)
+- `docs/ADMINOS_ORDERS_REDESIGN.md` (new)
+
+**API changes:** none. Reads existing ops only.
+
+**Database changes:** none.
+
+**Security:** escaping on every server string. The module never accesses Firestore.
+
+**Breaking changes:** none.
+
+**Server gaps (functions owners):**
+- `adminGetOrders` has no cursor or counts.
+- The status-filter index (status, createdAt DESC) is not in the repo.
+- Counts turn errors into 0.
+- `getOrderTrends.gmv` reads `amount`, not `total`.
+
 ## [2026-10-04] - Platform Health "over time" chart draws the server's daily snapshots (hosting; NOT deployed)
 
 Owner decision 2026-10-04. Pairs with functions branch `feat/platform-health-history-on-669e5ba` (`031fea8`), which
