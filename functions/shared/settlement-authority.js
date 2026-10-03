@@ -25,7 +25,9 @@ function snapshotFrom(comm, extra) {
   const e = extra || {};
   return {
     commissionRate: rate,
-    commissionRuleId: String((comm.ruleId) || ((comm.category || 'unknown') + '@' + (e.policyVersion || comm.engineVersion || 'unknown'))),
+    /* an admin commissionRule's id when one applied; otherwise the CATALOGUE rule '<category>@<policyVersion>' — never the
+       engine's placeholder 'default' (there is no default rule any more; b2 2026-10-04) */
+    commissionRuleId: String((comm.ruleId && comm.ruleId !== 'default') ? comm.ruleId : ((comm.category || 'unknown') + '@' + (e.policyVersion || comm.engineVersion || 'unknown'))),
     commissionBase: e.commissionBase || 'service_price',
     category: comm.category || null,
     pricingSource: comm.pricingSource || null,
