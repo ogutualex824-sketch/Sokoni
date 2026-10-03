@@ -11654,6 +11654,8 @@ exports.manageMyCourses       = education.manageMyCourses;
 /* Education (owner 2026-10-03): the learner profile + guardian links, and the ONE Education capability answer (E2). */
 exports.educationLearner      = require('./education-learner').educationLearner;
 exports.educationWorkspace    = require('./education-workspace').educationWorkspace;
+exports.educationEnterprise   = require('./education-enterprise').educationEnterprise;
+exports.manageMyProgrammes    = require('./education-programmes').manageMyProgrammes;
 
 /* ── QR Code System v1.0 ───────────────────────────────────────── */
 const qr = require('./qr');
