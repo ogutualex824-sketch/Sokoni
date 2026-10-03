@@ -1,3 +1,17 @@
+## [2026-10-03] — Construction intake: every trade applies through the ONE intake with its own questions — hosting source, NOT deployed
+
+**Summary:** `hub-register.js` adds the construction company, welding & metal fabrication, construction equipment rental,
+construction labour & site services, and construction haulage categories (hub `construction`). The existing contractor,
+material supplier (`hardware`) and architect categories get their own question sets: all 13 contractor kinds as a
+required multi-select (AdminOS approves each separately); the company needs registration, KRA PIN and NCA number;
+welding needs specialisations and the workshop; the supplier needs materials and delivery; rental needs equipment
+categories and ownership; the architect needs a professional registration number. Licence numbers are declarations that
+AdminOS verifies. No question lets an applicant declare themselves verified.
+**Files:** `hub-register.js`, `scripts/test-construction-intake.js` (13/0, CAT_QUESTIONS evaluated in a vm, the collector
+executed; BASE=d824b58 fails 10), `docs/CONSTRUCTION_HUB_CONVERGENCE.md`.
+**Regression:** test-carhub-containment-static 66/0; test-education-intake 17/0.
+**Deploy:** hosting, with the construction containment branch, after tests and owner approval. NOT authorized.
+
 ## [2026-10-03] - Car Hub C1a: car rental + mechanics contained onto the provider registry, booking engine and lead/intake authorities (NOT deployed)
 
 **Branch hosting/carhub-containment-on-adb5f4d.** Plan + authority map: docs/CAR_HUB_CONVERGENCE.md.
