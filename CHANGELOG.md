@@ -1,3 +1,12 @@
+## [2026-10-04] — H2 + H3: real providers are never cleanup-owned; an admitted Shave 'n' Trims reaches its equipped dashboard (E2E gate)
+
+**Owner (E2E gate):** "Those names must not exist as special-case authorization/visibility rules … identity does not determine whether the provider is allowed to use the dashboard. Server-authoritative approval + capability does."
+**H3:** `functions/shared/cleanup-claimed-ids.json` = the C3 manifest (digest 028299e7…) MINUS the 6 records of the two REAL phone-OTP businesses (Shave 'n' Trims, Maina Groceries) that R1 misread as synthetic because of their placeholder `.invalid` email. 34 → 28 ids; the correction is recorded in the file (`correction`, `removedCount`) and in [[C3_CLEANUP_MANIFEST_CORRECTION]] (030a3f2). No business is named as a rule; the genuinely synthetic probe accounts remain claimed.
+**H2 regression** (`scripts/test-shell-approval-gate.js`): unapproved Shave 'n' Trims is no longer CLEANUP_OWNED; it is REAPPLICATION_REQUIRED like any status-only provider. ADMITTED as `salon` (exactly the admit transaction's writes, f4bd2ab), it is VALID_APPROVAL → AVAILABLE → provider-dashboard.html with the appointment_shop modules (booked hours, staff, POS); home = provider-dashboard. Once suspended it loses the workspace. A synthetic claimed probe still derives CLEANUP_OWNED, so cleanup ownership is still enforced (keeps mutation M3 caught).
+**Files:** `functions/shared/cleanup-claimed-ids.json`, `scripts/test-shell-approval-gate.js`, `CHANGELOG.md`.
+**Tests:** test-shell-approval-gate 28/0; test-shell-gate-mutations 9/0 (M3 caught again via the probe); SABOTAGE re-claiming the barber fails 4 named rows. business-capabilities 46/0, business-workspace 30/0, shell-gate-compat 9/0, p0-forged-approval 23/0, workspace-capability 51/0.
+**Deployment:** NOT deployed. Ships with the providerDispatch release; sokoni-5b merges this branch into release/providerdispatch-p0-combined.
+
 ## [2026-10-03] - P0-C: ONE approval authority, isAuthoritativelyApproved; no audit-log fallback
 
 Functions only (providerDispatch's `business-workspace.js` + new `functions/shared/approval-authority.js`). **Not deployed.**
