@@ -32,12 +32,15 @@ const seed = (uid, doc) => db.doc('providers/' + uid).set(Object.assign({ name: 
 const biz = (category) => ({ business: { category, source: 'application', lane: { hub: 'provider', entClass: null } } });
 const st = (w, m) => (w.modules[m] || {}).state;
 
+/* signed URLs: firebase-admin/storage replaced — records which paths were signed, so "minted only when entitled" is observable */
+const SIGNED = [];
+stub('firebase-admin/storage', { getStorage: () => ({ bucket: () => ({ file: (p) => ({ getSignedUrl: async (o) => { SIGNED.push({ p, o }); return ['https://signed.example/' + encodeURIComponent(p) + '?exp=' + o.expires]; } }) }) }) });
 const LS = require(Path.join(FN, 'education-lessons.js'));
 const EDU = require(Path.join(FN, 'education.js'));
 const call = async (uid, data, token) => { try { return await LS.courseLessons.run({ auth: uid ? { uid, token: token || {} } : null, data }); } catch (e) { return { err: e.code || 'error', reason: (e.details && e.details.reason) || e.message }; } };
 const legacy = async (uid, data) => { try { return await EDU.updateCourseProgress.run({ auth: { uid, token: {} }, data }); } catch (e) { return { err: e.code || 'error', reason: (e.details && e.details.reason) || e.message }; } };
 const all = async (c) => { const q = await db.collection(c).get(); const o = {}; q.docs.forEach((d) => { o[d.id] = d.data(); }); return o; };
-const OWNMAT = (u, c) => 'https://firebasestorage.googleapis.com/v0/b/x.appspot.com/o/' + encodeURIComponent('course-materials/' + u + '/' + c + '/notes.pdf') + '?alt=media';
+const OWNMAT = (u, c) => 'course-materials/' + u + '/' + c + '/notes.pdf';
 (async () => {
   say('\nEducation lessons — ownership, entitlement, real progress, one certificate\n');
   const edu = (type) => Object.assign(biz('education'), { education: { type } });
@@ -54,15 +57,19 @@ const OWNMAT = (u, c) => 'https://firebasestorage.googleapis.com/v0/b/x.appspot.
   const L1 = r.lessonId;
   r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Video', kind: 'video', videoUrl: 'https://www.youtube.com/watch?v=abc' } });
   const L2 = r.lessonId;
-  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Notes', kind: 'file', materialUrl: OWNMAT('teach1', 'c1') } });
+  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Notes', kind: 'file', materialPath: OWNMAT('teach1', 'c1') } });
   const L3 = r.lessonId;
   const LL = await all('courseLessons');
   ck('A-3 the owner adds text / video / file lessons to their DRAFT course; courseId / owner come from the server', !!(L1 && L2 && L3) && LL[L1].courseId === 'c1' && LL[L1].ownerUid === 'teach1', LL[L1]);
   ck('A-4 the server keeps lessonCount = real lessons', (await all('courses')).c1.lessonCount === 3);
   r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Bad', kind: 'video', videoUrl: 'https://evil.example/v.mp4' } });
   ck('A-5 video links must be https YouTube / Vimeo', r.reason === 'VIDEO_HOST_NOT_ALLOWED', r);
-  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Bad', kind: 'file', materialUrl: OWNMAT('teach2', 'c2') } });
+  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Bad', kind: 'file', materialPath: OWNMAT('teach2', 'c2') } });
   ck('A-6 a material from ANOTHER account\'s folder is refused', r.reason === 'MATERIAL_NOT_OWN', r);
+  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Bad', kind: 'file', materialPath: 'https://firebasestorage.googleapis.com/v0/b/x/o/' + encodeURIComponent(OWNMAT('teach1', 'c1')) + '?alt=media&token=abc' } });
+  ck('A-6b a DOWNLOAD URL is refused (a token URL opens the file for anyone, whatever storage.rules say)', r.reason === 'MATERIAL_NOT_OWN', r);
+  r = await call('teach1', { op: 'save', courseId: 'c1', lesson: { title: 'Bad', kind: 'file', materialPath: 'course-materials/teach1/c1/../../teach2/c2/x.pdf' } });
+  ck('A-6c path traversal is refused', r.reason === 'MATERIAL_NOT_OWN', r);
   r = await call('teach1', { op: 'reorder', courseId: 'c1', order: [L3, L1] });
   ck('A-7 a reorder must list every lesson exactly once', r.reason === 'ORDER_INVALID', r);
   r = await call('teach1', { op: 'reorder', courseId: 'c1', order: [L3, L1, L2] });
@@ -83,6 +90,12 @@ const OWNMAT = (u, c) => 'https://firebasestorage.googleapis.com/v0/b/x.appspot.
   await db.doc('courseEnrollments/learner1_c1').set({ uid: 'learner1', courseId: 'c1', progress: 0 });
   r = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L2 });
   ck('L-5 an ENROLLED learner opens the lesson', r.ok && /youtube/.test(r.lesson.videoUrl), r);
+  ck('L-6 no signed URL was minted for anyone NOT entitled (L-2 refused before signing)', SIGNED.length === 0, SIGNED);
+  r = await call('learner1', { op: 'content', courseId: 'c1', lessonId: L3 });
+  const stored = (await all('courseLessons'))[L3];
+  ck('L-7 the material reaches an entitled learner as a SHORT-LIVED signed URL (15 min, read-only); the lesson stores only the path',
+    r.ok && /^https:\/\/signed\.example\//.test(r.lesson.materialUrl) && r.lesson.materialExpiresInMinutes === 15 && SIGNED.length === 1 && SIGNED[0].o.action === 'read'
+      && SIGNED[0].o.expires - Date.now() <= 15 * 60 * 1000 && stored.materialPath === OWNMAT('teach1', 'c1') && !('materialUrl' in stored), [r, SIGNED, stored]);
 
   /* progress + certificate */
   r = await call('learner1', { op: 'complete', courseId: 'c1', lessonId: 'lesson_999' });

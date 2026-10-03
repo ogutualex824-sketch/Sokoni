@@ -36,22 +36,33 @@ function videoUrl(v) {
   }
   return u.href;
 }
-function materialUrl(v, ownerUid, courseId) {
+/* A material is stored as a STORAGE PATH in the owner's own folder — never a download URL. Firebase download URLs carry a
+   token that opens the file for anyone holding the link, whatever storage.rules say, which would make paid materials
+   shareable. Entitled learners get a short-lived SIGNED URL from 'content' instead (f3 storage review, 2026-10-03). */
+const MATERIAL_NAME = /^[A-Za-z0-9][A-Za-z0-9 ._()-]{0,120}\.(pdf|png|jpg|jpeg|webp|docx|pptx|xlsx|txt)$/i;
+function materialPath(v, ownerUid, courseId) {
   if (!v) return null;
   const s = String(v);
-  const prefix = '/o/' + encodeURIComponent('course-materials/' + ownerUid + '/' + courseId + '/');
-  if (!s.startsWith('https://firebasestorage.googleapis.com/v0/b/') || !s.includes(prefix) || s.length > 800) {
+  const prefix = 'course-materials/' + ownerUid + '/' + courseId + '/';
+  if (!s.startsWith(prefix) || s.includes('..') || !MATERIAL_NAME.test(s.slice(prefix.length))) {
     _deny('invalid-argument', 'Upload course materials through SOKONI.', 'MATERIAL_NOT_OWN');
   }
   return s;
+}
+const SIGNED_URL_TTL_MS = 15 * 60 * 1000;
+async function signedMaterialUrl(path) {
+  if (!path) return null;
+  const { getStorage } = require('firebase-admin/storage');
+  const [url] = await getStorage().bucket().file(path).getSignedUrl({ action: 'read', expires: Date.now() + SIGNED_URL_TTL_MS });
+  return url;
 }
 function lessonFields(d, ownerUid, courseId) {
   const title = _str(d.title, 140);
   if (title.length < 2) _deny('invalid-argument', 'Give the lesson a title.', 'TITLE_REQUIRED');
   const kind = KINDS.includes(d.kind) ? d.kind : _deny('invalid-argument', 'Choose a lesson type.', 'KIND_INVALID');
-  const out = { title, kind, body: _str(d.body, 20000) || null, videoUrl: videoUrl(d.videoUrl), materialUrl: materialUrl(d.materialUrl, ownerUid, courseId), freePreview: d.freePreview === true };
+  const out = { title, kind, body: _str(d.body, 20000) || null, videoUrl: videoUrl(d.videoUrl), materialPath: materialPath(d.materialPath, ownerUid, courseId), freePreview: d.freePreview === true };
   if (kind === 'video' && !out.videoUrl) _deny('invalid-argument', 'A video lesson needs a video link.', 'VIDEO_REQUIRED');
-  if (kind === 'file' && !out.materialUrl) _deny('invalid-argument', 'A file lesson needs an uploaded file.', 'MATERIAL_REQUIRED');
+  if (kind === 'file' && !out.materialPath) _deny('invalid-argument', 'A file lesson needs an uploaded file.', 'MATERIAL_REQUIRED');
   return out;
 }
 
@@ -116,7 +127,9 @@ async function handle(req) {
     if (!owner && c.data().status !== 'published') _deny('not-found', 'Course not available');
     if (!owner && !e.exists && l.data().freePreview !== true) _deny('permission-denied', 'Enrol in this course to open this lesson.', 'NOT_ENROLLED');
     const x = l.data();
-    return { ok: true, lesson: { lessonId: l.id, title: x.title, kind: x.kind, body: x.body || null, videoUrl: x.videoUrl || null, materialUrl: x.materialUrl || null, freePreview: x.freePreview === true } };
+    /* minted ONLY after the entitlement check above; expires in 15 minutes */
+    const materialUrl = x.materialPath ? await signedMaterialUrl(x.materialPath) : null;
+    return { ok: true, lesson: { lessonId: l.id, title: x.title, kind: x.kind, body: x.body || null, videoUrl: x.videoUrl || null, materialUrl, materialExpiresInMinutes: materialUrl ? 15 : null, freePreview: x.freePreview === true } };
   }
   if (d.op === 'complete') return Object.assign({ ok: true }, await recordProgress(db, uid, courseId, _str(d.lessonId, 128), d.completed !== false));
   if (d.op === 'myCertificates') {
@@ -129,7 +142,7 @@ async function handle(req) {
   await _assertEducator(db, uid);
   const c0 = await courseRef.get();
   if (!c0.exists || c0.data().instructorUid !== uid) _deny('permission-denied', 'not course owner', 'NOT_COURSE_OWNER');
-  if (d.op === 'list') return { ok: true, lessons: (await _lessonsOf(db, courseId)).map((l) => Object.assign(outlineOf(l), { body: l.body || null, videoUrl: l.videoUrl || null, materialUrl: l.materialUrl || null })) };
+  if (d.op === 'list') return { ok: true, lessons: (await _lessonsOf(db, courseId)).map((l) => Object.assign(outlineOf(l), { body: l.body || null, videoUrl: l.videoUrl || null, materialPath: l.materialPath || null })) };
   if (c0.data().status !== 'draft') _deny('failed-precondition', 'Lessons can be changed only while the course is a draft.', 'NOT_A_DRAFT');
   const lessons = await _lessonsOf(db, courseId);
 
@@ -170,4 +183,4 @@ async function handle(req) {
 }
 
 exports.courseLessons = onCall({ region: 'us-central1', enforceAppCheck: true, maxInstances: 40 }, handle);
-exports._internal = { handle, recordProgress, lessonFields, MAX_LESSONS };
+exports._internal = { handle, recordProgress, lessonFields, materialPath, MAX_LESSONS, SIGNED_URL_TTL_MS };

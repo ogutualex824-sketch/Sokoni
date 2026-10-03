@@ -38,12 +38,14 @@ const _list = (v, maxItems, maxLen) => (Array.isArray(v) ? v : [])
   .map((x) => _str(x, maxLen)).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, maxItems);
 const _deny = (code, msg, reason) => { throw new HttpsError(code, msg, reason ? { reason } : undefined); };
 
-/* A profile photo is accepted only from the learner's OWN storage folder (no hot-linking, no other account's file). */
+/* A profile photo is a STORAGE PATH in the learner's OWN folder (learner-photos/{uid}/…) — never a download URL: a
+   download token opens the file for anyone with the link, and learners may be MINORS. storage.rules let only the owner
+   and admins read it (f3 storage review, 2026-10-03). */
 function _photo(v, uid) {
   if (v === null || v === '') return null;
   const s = String(v || '');
-  const own = 'https://firebasestorage.googleapis.com/v0/b/';
-  return s.startsWith(own) && s.includes('/o/learner-photos%2F' + encodeURIComponent(uid) + '%2F') && s.length <= 600 ? s : undefined;
+  const prefix = 'learner-photos/' + uid + '/';
+  return s.startsWith(prefix) && !s.includes('..') && /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.(jpg|jpeg|png|webp)$/i.test(s.slice(prefix.length)) ? s : undefined;
 }
 
 /* → the sanitised patch, or throws. Unknown keys are ignored; no age / guardian / status key is ever accepted. */
@@ -51,10 +53,10 @@ function sanitizeProfile(input, uid) {
   const d = input && typeof input === 'object' ? input : {};
   const out = {};
   if ('displayName' in d) out.displayName = _str(d.displayName, 80);
-  if ('photoUrl' in d) {
-    const p = _photo(d.photoUrl, uid);
+  if ('photoPath' in d) {
+    const p = _photo(d.photoPath, uid);
     if (p === undefined) _deny('invalid-argument', 'Upload your photo through SOKONI.', 'PHOTO_NOT_OWN');
-    out.photoUrl = p;
+    out.photoPath = p;
   }
   if ('interests' in d) out.interests = _list(d.interests, 10, 40);
   if ('subjects' in d) out.subjects = _list(d.subjects, 15, 40);
