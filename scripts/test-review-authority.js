@@ -10,9 +10,11 @@ let pass = 0, fail = 0;
 const ck = (id, ok, m, got) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + ' ' + id + ' ' + m + (ok || got === undefined ? '' : '   [got ' + JSON.stringify(got).slice(0, 200) + ']')); ok ? pass++ : fail++; };
 
 const DOCS = new Map(); let AUTO = 0;
+const DEL = { __del: true };
+const _apply = (prev, d) => { const o = Object.assign({}, prev || {}); for (const [k, v] of Object.entries(d || {})) { if (v === DEL) delete o[k]; else o[k] = v; } return o; };
 const ref = (c, id) => { const p = c + '/' + id; return { path: p, id, get: async () => ({ exists: DOCS.has(p), id, data: () => DOCS.get(p) }),
-  set: async (d, o) => { DOCS.set(p, Object.assign({}, (o && o.merge) ? DOCS.get(p) : {}, d)); },
-  update: async (d) => { DOCS.set(p, Object.assign({}, DOCS.get(p), d)); },
+  set: async (d, o) => { DOCS.set(p, _apply((o && o.merge) ? DOCS.get(p) : {}, d)); },
+  update: async (d) => { DOCS.set(p, _apply(DOCS.get(p), d)); },
   create: async (d) => { if (DOCS.has(p)) throw Object.assign(new Error('already exists'), { code: 6 }); DOCS.set(p, d); } }; };
 const query = (c, filters, lim) => ({
   where: (f, op, v) => query(c, filters.concat([[f, op, v]]), lim), orderBy: () => query(c, filters, lim), limit: (n) => query(c, filters, n), startAfter: () => query(c, filters, lim),
@@ -28,7 +30,7 @@ const FILES = new Set(); let COPY_FAIL = false;
 const storageStub = () => ({ bucket: (b) => ({ file: (f) => ({
   copy: async (dst) => { if (COPY_FAIL) throw Object.assign(new Error('copy failed'), { code: 500 }); if (!FILES.has(b + '/' + f)) throw Object.assign(new Error('no such object'), { code: 404 }); FILES.add(dst._key); },
   delete: async () => { FILES.delete(b + '/' + f); }, _key: b + '/' + f }) }) });
-const adminStub = { apps: [1], initializeApp() {}, storage: storageStub, firestore: Object.assign(() => db, { FieldValue: { serverTimestamp: () => 'TS', increment: (n) => n }, Timestamp: { fromDate: (d) => d } }) };
+const adminStub = { apps: [1], initializeApp() {}, storage: storageStub, firestore: Object.assign(() => db, { FieldValue: { serverTimestamp: () => 'TS', increment: (n) => n, delete: () => DEL }, Timestamp: { fromDate: (d) => d } }) };
 const adminPath = require.resolve('firebase-admin', { paths: [NM] });
 require.cache[adminPath] = { id: adminPath, filename: adminPath, loaded: true, exports: adminStub };
 let file = path.join(ROOT, 'functions', 'reviews.js');
@@ -85,6 +87,15 @@ const ADM = { admin: true };
   ck('M-8', r.ok && r.r.status === 'pending', 'restore goes back to PENDING for re-review — never straight to public', r);
   const hist = [...DOCS.entries()].filter(([k, v]) => k.indexOf('reviewModerationLog/') === 0 && v.reviewId === rid).map(([, v]) => v.from + '→' + v.to);
   ck('M-9', hist.join(',') === 'null→pending,pending→approved,approved→removed,removed→pending', 'every transition is in the moderation history, in order', hist);
+  const pub = DOCS.get('reviews/' + rid) || {};
+  const logA = [...DOCS.values()].find((v) => v && v.reviewId === rid && v.action === 'remove') || {};
+  ck('M-10', !('moderatedBy' in pub) && !('moderationNote' in pub) && pub.moderatedAt === 'TS' && logA.actorUid === 'admin1' && logA.note === 'abusive',
+    'the PUBLIC review doc carries no moderator uid and no internal note — both are kept only in the admin moderation log', { pub, logA });
+  DOCS.set('reviews/legacy_r', { authorUid: 'buyer', targetType: 'product', targetId: 'p1', status: 'pending', rating: 3, moderatedBy: 'oldAdmin', moderationNote: 'old internal note' });
+  r = await call(RV.adminModerateReview, 'admin1', { reviewId: 'legacy_r', action: 'approve', note: 'ok now' }, ADM);
+  const lg = DOCS.get('reviews/legacy_r') || {};
+  ck('M-11', r.ok && lg.status === 'approved' && !('moderatedBy' in lg) && !('moderationNote' in lg),
+    'a transition SCRUBS moderatedBy / moderationNote that an older writer left on a public doc', lg);
   /* self-interest */
   user('buyerA'); DOCS.set('orders/o3', { buyerUid: 'admin1', status: 'completed', paymentVerified: true, items: [{ productId: 'p1' }] });
   r = await call(RV.submitReview, 'admin1', { targetType: 'product', targetId: 'p1', rating: 5, body: 'admin reviewing as a buyer here' }, ADM);
@@ -94,6 +105,10 @@ const ADM = { admin: true };
   DOCS.set('reviews/x_product_p2', { authorUid: 'buyer', targetType: 'product', targetId: 'p2', status: 'pending', rating: 1 });
   r = await call(RV.adminModerateReview, 'adminSeller', { reviewId: 'x_product_p2', action: 'reject' }, ADM);
   ck('S-2', !r.ok && r.reason === 'SELF_INTEREST', 'an admin who SELLS the product cannot moderate its reviews', r);
+  DOCS.set('products/pShop', { shopId: 'admin1' });   /* shopId is a shop id, not a uid — it must not decide self-interest */
+  DOCS.set('reviews/x_product_pShop', { authorUid: 'buyer', targetType: 'product', targetId: 'pShop', status: 'pending', rating: 4 });
+  r = await call(RV.adminModerateReview, 'admin1', { reviewId: 'x_product_pShop', action: 'approve' }, ADM);
+  ck('S-3', r.ok && r.r.status === 'approved', 'the self-interest owner is read from uids only (sellerUid / sellerId), never from shopId', r);
   /* ── HUB TYPES: property + sports_venue through the same authority (owner 2026-10-03) ── */
   {
     const _c = () => [...DOCS.keys()].filter((k) => k.indexOf('reviewRateLimits/') === 0).forEach((k) => DOCS.delete(k));

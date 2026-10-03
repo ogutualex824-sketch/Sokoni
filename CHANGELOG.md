@@ -1,3 +1,15 @@
+## [2026-10-03] — Public review documents no longer carry the moderator's uid or internal note
+
+**Files:** `functions/shared/review-moderation.js`, `scripts/test-review-authority.js`, `scripts/sabotage-review-authority.js`, `CHANGELOG.md` · **Base:** `e8609fb`
+
+- **Finding (sokoni-e3):** `reviews` / `unboxingReviews` are publicly readable, and every transition wrote `moderatedBy` (an admin uid) and `moderationNote` (internal text) onto the doc.
+- **Fix:** a transition now writes only `status`, `moderatedAt` and `updatedAt`, and DELETES any `moderatedBy` / `moderationNote` an older writer left (the live 76436b1 `adminModerateReview` wrote both). The moderator and the note stay in the admin-only `reviewModerationLog`.
+- **Self-interest owner:** read from uids only (`sellerUid` / `sellerId`); `shopId` is not a uid.
+- **Lockstep:** the module hash changes `c3ea059e…` → `67f16dd0…`. sokoni-e3 copies it byte-identical and re-pins; neither tree deploys the module until both pins match.
+- **AdminOS:** the queue's inline "note:" is now blank. The note remains in each review's History view (read from the log).
+- **Migration:** existing docs keep the legacy fields until their next transition. A backfill would need an authorised production write; NOT done.
+- **Tests:** 54/0; sabotage 16/16 caught by named rows. **NOT DEPLOYED.**
+
 ## [2026-10-03] — Property and sports-venue reviews through the one review authority; unboxing photo quarantine
 
 **Files:** `functions/reviews.js`, `scripts/test-review-authority.js`, `scripts/sabotage-review-authority.js`, `CHANGELOG.md` · **Base:** `85a5fcf` (on the live lineage `76436b1`)

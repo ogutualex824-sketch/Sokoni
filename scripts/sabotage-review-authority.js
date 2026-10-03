@@ -6,7 +6,9 @@
      node scripts/sabotage-review-authority.js        (run with the repo QUIESCENT — it edits functions/reviews.js) */
 const fs = require('fs'), path = require('path'), { spawnSync } = require('child_process');
 const F = path.join(__dirname, '..', 'functions', 'reviews.js');
+const FM = path.join(__dirname, '..', 'functions', 'shared', 'review-moderation.js');
 const ORIG = fs.readFileSync(F, 'utf8');
+const ORIGM = fs.readFileSync(FM, 'utf8');
 const M = [
   ['eligibility always satisfied', "return hit ? a.collection + '/' + hit.id : null;", "return a.collection + '/x';", 'H-2'],
   ['cancelled viewing counts', "return st !== 'cancelled' && st !== 'canceled';", 'return true;', 'H-3'],
@@ -22,23 +24,27 @@ const M = [
   ['rejected review served publicly', '    .where("status", "==", "approved");\n', '    ;\n', 'A-04'],
   ['reject publishes photos', 'kind === "unboxing" && (res.status === "approved" || res.from === "approved")) {\n    photos = await _syncUnboxingPhotos(db, admin.storage(), String(d.reviewId), res.status === "approved");',
     'kind === "unboxing") {\n    photos = await _syncUnboxingPhotos(db, admin.storage(), String(d.reviewId), res.status !== "removed");', 'A-04u'],
+  ['public doc names the moderator', 'moderatedBy: FieldValue.delete(),', 'moderatedBy: actor,', 'M-10', 'M'],
+  ['legacy moderator fields not scrubbed', 'tx.update(ref, { status: T.to, moderationNote: FieldValue.delete(), moderatedBy: FieldValue.delete(),', 'tx.update(ref, { status: T.to,', 'M-11', 'M'],
+  ['shopId treated as an owner uid', 'owner = p.exists ? (p.data().sellerUid || p.data().sellerId || null) : null;', 'owner = p.exists ? (p.data().sellerUid || p.data().sellerId || p.data().shopId || null) : null;', 'S-3', 'M'],
 ];
 const rows = [];
 try {
-  for (const [name, find, repl, row] of M) {
-    if (ORIG.split(find).length !== 2) { rows.push([name, row + ' FAILS', 'anchor not found / not unique', '—', 'UNPROVEN']); continue; }
-    fs.writeFileSync(F, ORIG.replace(find, repl));
+  for (const [name, find, repl, row, which] of M) {
+    const FILE = which === 'M' ? FM : F, SRC = which === 'M' ? ORIGM : ORIG;
+    if (SRC.split(find).length !== 2) { rows.push([name, row + ' FAILS', 'anchor not found / not unique', '—', 'UNPROVEN']); continue; }
+    fs.writeFileSync(FILE, SRC.replace(find, repl));
     const r = spawnSync(process.execPath, [path.join(__dirname, 'test-review-authority.js')], { encoding: 'utf8', timeout: 120000 });
-    fs.writeFileSync(F, ORIG);
+    fs.writeFileSync(FILE, SRC);
     const out = (r.stdout || '') + (r.stderr || '');
     const done = /RESULT: \d+ passed, \d+ failed/.test(out);
     const failed = new RegExp('^\\s*FAIL ' + row.replace('-', '\\-') + ' ', 'm').test(out);
     rows.push([name, row + ' FAILS', !done ? 'crash / no RESULT' : (failed ? row + ' FAILED' : row + ' passed'), row, !done ? 'UNPROVEN' : (failed ? 'CAUGHT' : 'MISSED')]);
   }
-} finally { fs.writeFileSync(F, ORIG); }
+} finally { fs.writeFileSync(F, ORIG); fs.writeFileSync(FM, ORIGM); }
 console.log('\nSabotage — review authority\n');
 console.log('  MUTATION                              | EXPECTED     | ACTUAL              | ASSERTION | RESULT');
 rows.forEach((x) => console.log('  ' + x[0].padEnd(38) + '| ' + x[1].padEnd(13) + '| ' + x[2].padEnd(20) + '| ' + x[3].padEnd(10) + '| ' + x[4]));
 const caught = rows.filter((x) => x[4] === 'CAUGHT').length;
-console.log('\nSABOTAGE: ' + caught + '/' + rows.length + ' caught' + (fs.readFileSync(F, 'utf8') === ORIG ? '' : '   !! FILE NOT RESTORED'));
+console.log('\nSABOTAGE: ' + caught + '/' + rows.length + ' caught' + (fs.readFileSync(F, 'utf8') === ORIG && fs.readFileSync(FM, 'utf8') === ORIGM ? '' : '   !! FILE NOT RESTORED'));
 process.exit(caught === rows.length ? 0 : 1);
