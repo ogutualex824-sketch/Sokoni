@@ -256,6 +256,52 @@ const PURPOSES = {
      link the webhook trusts instead of client metadata. */
   /* Venue bookings (owner decision 2026-09-27): priced from the booking's SERVER total by
      venue-payments.priceVenueBooking; self-settling (settled on the buyer's show-up). */
+  /* ── Accepted RFQ quote → a NORMAL SOKONI order (owner 2026-10-03; contract agreed with sokoni-f3 / sokoni-5b) ──
+     Priced ONLY from the server-held snapshot rfqs/{rfqId}.acceptedQuote written by rfqDispatch accept — never the client.
+     Payer must be the RFQ's buyer (createdBy, individual buyer), status accepted + checkout pending. ONE live intent per
+     (rfq, quote version): the deterministic ref makes a retry return the same intent and refuses a changed amount.
+     Self-settling here: the webhook hook (sokoni-5b) creates the ONE order, HOLDS the money and settles to the supplier's
+     business wallet through the one settlement path; the generic credit path never pays anyone at payment time.
+     commissionCategory is stamped on the rfq by the SERVER at accept: a materials label (marketplace 15%) or
+     construction_service (0%). VAT is exactly as declared on the quote (vatBasis 'declared_on_quote'). */
+  rfq_quote: {
+    resourceType: 'rfqQuote',
+    async price(uid, data) {
+      const rfqId = String(data.rfqId || '').trim();
+      if (!/^[A-Za-z0-9_-]{4,128}$/.test(rfqId)) fail('invalid-argument', 'rfqId is required.');
+      const s = await db().collection('rfqs').doc(rfqId).get();
+      if (!s.exists) fail('not-found', 'Quote request not found.');
+      const r = s.data() || {};
+      if (r.createdBy !== uid) fail('permission-denied', 'Only the buyer who requested this quote can pay it.');
+      if (r.buyerType !== 'individual') fail('failed-precondition', 'Business buyers pay through their purchase order.');
+      if (r.status !== 'accepted' || r.checkout !== 'pending') fail('failed-precondition', 'This quote is not awaiting payment.');
+      const q = r.acceptedQuote || {};
+      const kes = (v) => Math.round(Number(v) * 100) / 100;
+      const lines = Array.isArray(q.lines) ? q.lines : [];
+      const sub = kes(lines.reduce((t, l) => t + Number(l.lineTotalKES || 0), 0));
+      const vatRate = Number(q.vatRate);
+      if (!lines.length || !(sub > 0) || kes(q.subtotalKES) !== sub) fail('failed-precondition', 'The accepted quote is inconsistent. Ask the supplier to re-quote.');
+      if (![0, 16].includes(vatRate) || Math.abs(kes(q.vatKES) - kes(sub * vatRate / 100)) > 0.01) fail('failed-precondition', 'The quote VAT is inconsistent. Ask the supplier to re-quote.');
+      const total = kes(sub + kes(q.vatKES) + kes(q.deliveryFeeKES || 0));
+      if (kes(q.totalKES) !== total || !(total >= 1)) fail('failed-precondition', 'The quote total is inconsistent. Ask the supplier to re-quote.');
+      const ALLOWED = ['building-materials', 'construction_service'];
+      const cat = String(r.commissionCategory || '');
+      if (!ALLOWED.includes(cat)) fail('failed-precondition', 'This quote has no commission category on record.');
+      const bizId = String(q.supplierBusinessId || '');
+      const b = bizId ? await db().collection('businesses').doc(bizId).get() : null;
+      const payee = b && b.exists ? ((b.data() || {}).ownerId || null) : null;
+      if (!payee) fail('failed-precondition', 'The supplier is not available for payment.');
+      if (payee === uid) fail('failed-precondition', 'You cannot pay your own quote.');
+      const version = Number.isInteger(q.version) ? q.version : 1;
+      return {
+        amountCents: Math.round(total * 100), currency: 'KES', resourceType: 'rfqQuote', resourceId: rfqId,
+        preferredRef: ('RFQ-' + rfqId + '-v' + version).slice(0, 128),
+        metadata: { rfqId, quoteVersion: version, supplierBusinessId: bizId, sellerUid: payee, commissionCategory: cat,
+          vatBasis: 'declared_on_quote', vatRate, vatKES: kes(q.vatKES), subtotalKES: sub, deliveryFeeKES: kes(q.deliveryFeeKES || 0) },
+      };
+    },
+  },
+
   venue_booking: {
     resourceType: 'venueBooking',
     price: (uid, data) => require('./venue-payments').priceVenueBooking(uid, data),

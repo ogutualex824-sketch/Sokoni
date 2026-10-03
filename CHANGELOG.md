@@ -1,3 +1,8 @@
+## 2026-10-03 — rfq_quote payment purpose (accepted RFQ quote → normal order; createPaymentIntent half) (NOT deployed)
+
+- **Change:** priced only from rfqs/{id}.acceptedQuote; one live intent per (rfq, quote version); server-stamped commissionCategory; VAT as declared; self-settling (5b's webhook holds + creates the order).
+- **Test:** test-rfq-quote-purpose 6/0.
+
 ## 2026-10-03 — Hub-aware lead ledger (b2b + construction prices by hub/tier, one fee per commercialEventId) (NOT deployed)
 
 - **Test:** test-lead-ledger-hubs 7/0.
