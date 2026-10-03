@@ -1,3 +1,38 @@
+## [2026-10-02] - TAKEDOWN / HIDDEN PRODUCT enforcement (hosting) — NOT deployed
+
+**NOT DEPLOYED — DEPLOYMENT QUEUED — MACHINE BELOW 512 MB MEMORY FLOOR.** The functions half ships FIRST: branch
+feat/community-reports-fn-on-7091029, CHANGELOG entry "TAKEDOWN / HIDDEN PRODUCT enforcement (server)". The rules
+candidate is `rules/takedown-enforcement-on-served` (`47c928b`, NOT released).
+
+- **sokoni-sellability.js** (THE listing predicate, shared with the serving functions as `shared/sellability.js`; the copy
+  is kept byte-identical, test-sellability-contract 74/0): `isPubliclyListed` refuses a listing under a `moderationHold`
+  whatever isVisible says; `listingBlockReason` = `'moderation'`, so availabilityOf / itemAvailability treat it as
+  unavailable.
+- **product.js**: under the rules candidate, a public single-document read of a held product is DENIED. Both the direct-link
+  path and the cached-revalidation path now fail CLOSED to a neutral "This product isn't available right now" that names
+  no reason and drops the cached copy. Before, a denied revalidation kept rendering the cached product as live. Caveat: a
+  transient App Check denial now also shows "unavailable" instead of the cached page.
+- **store.html**: the storefront drops non-listed products through SokoniSellability. This is defence in depth: a public
+  LIST query cannot be gated by rules, so the server gates and indexes remain the authority.
+- **merchant.html availability**: a held listing shows "Taken down by SOKONI" with no switch, and links to
+  merchant-v2 Disputes. The toggle refuses it.
+- **sokoni-trust-queues.js** (AdminOS + Super Admin): adds a "Restore listing" action. It is offered only when the server
+  lists it, and needs an internal note of at least 10 characters. The server's refusal (e.g. SELLER_SUSPENDED) is shown as
+  worded. The history shows "Listing restored".
+- **Files**: sokoni-sellability.js, functions/shared/sellability.js, product.js, store.html, merchant.html,
+  sokoni-trust-queues.js, scripts/test-takedown-hosting.js (new), scripts/test-report-wizard.js,
+  scripts/test-trust-integrity.js, scripts/test-disputes-reports-browser.js.
+- **Tests**:
+  - test-takedown-hosting 6/0, with `--failure-injection` 5/5 caught.
+  - Regression: test-moderation-console 13/0, test-report-wizard 23/0, test-trust-integrity 8/0,
+    test-disputes-reports-convergence 4/0, test-admin-os-wiring 275/0, test-catalogue-authority 67/0,
+    test-merchant-v2-panels 20/0, test-sellability-contract 74/0, test-availability-enforcement 27/0,
+    test-availability-convergence 34/0, predeploy-syntax-gate PASS.
+  - QU2/AD1 now accept the server's `LISTING_ACTIONS`. RP5/TB4 assert the opaque hold.
+  - QUEUED (browser hold): test-disputes-reports-browser and the C3 browser list.
+- **Database / API**: none from hosting.
+- **Security**: no client-only fix is the authority. The rules candidate and server gates are.
+
 ## [2026-10-01] - community C3: the MODERATION QUEUE (hosting) — AdminOS Moderation section, Super Admin Moderation, seller status — NOT deployed
 
 **NOT DEPLOYED — DEPLOYMENT QUEUED — MACHINE BELOW 512 MB MEMORY FLOOR.** The functions half must ship FIRST:
