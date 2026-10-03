@@ -388,6 +388,7 @@ service cloud.firestore {
   || resource.data.buyerUid == request.auth.uid))
   && uidUnchanged()
   && request.resource.data.status in ['cancelled']
+  && resource.data.status in ['pending_payment','pending']
   && request.resource.data.diff(resource.data).affectedKeys()
   .hasOnly(['status','cancelReason','updatedAt','review']))
   || (isAuthed() && resource.data.sellerUid == request.auth.uid
@@ -493,8 +494,7 @@ service cloud.firestore {
   allow read:   if resource.data.status == "approved"
   || (request.auth != null && (request.auth.uid == resource.data.authorUid || isAdmin()));
   allow create: if false;
-  allow update: if isAdmin();
-  allow delete: if isAdmin();
+  allow update, delete: if false;
   }
   match /etims_submissions/{docId} {
   allow create:               if claimsOwner();
@@ -1060,14 +1060,7 @@ service cloud.firestore {
   match /unboxingReviews/{reviewId} {
   allow read:   if resource.data.status == "approved"
   || (request.auth != null && (request.auth.uid == resource.data.uid || isAdmin()));
-  allow create: if claimsOwner()
-  && request.resource.data.rating is int
-  && request.resource.data.rating >= 1
-  && request.resource.data.rating <= 5
-  && !request.resource.data.keys().hasAny(['status','verified','orderVerified','orderVerifiedAt','approved','approvedAt','approvedBy',
-  'featured','likes','archived','archivedAt','declinedAt','moderatedBy','moderatedAt','moderationNote']);
-  allow update: if isAdmin();
-  allow delete: if isAdmin();
+  allow create, update, delete: if false;
   }
   match /shopEmployees/{empUid} {
   allow read:   if isAdmin()
@@ -1725,6 +1718,9 @@ service cloud.firestore {
   || (isAuthed() && resource.data.applicantUid == request.auth.uid);
   allow write:  if false;
   }
+  match /bookingPaymentReviews/{ref} { allow read: if isAdmin(); allow write: if false; }
+  match /pinDeliveryFailures/{id}    { allow read: if isAdmin(); allow write: if false; }
+  match /pinSecurityEvents/{id}      { allow read: if isAdmin(); allow write: if false; }
   match /adminLog/{logId} {
   allow create: if isAdmin();
   allow read:   if isAdmin();

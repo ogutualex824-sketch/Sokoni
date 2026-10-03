@@ -53,7 +53,27 @@ const ck = async (label, p) => { try { await p; console.log('  PASS  ' + label);
     await ck('O-' + st + '  a seller cannot set status "' + st + '"', assertFails(seller.doc('orders/o1').update({ status: st, updatedAt: 1 })));
   }
   await ck('O5  POSITIVE: a seller still marks the order shipped', assertSucceeds(seller.doc('orders/o1').update({ status: 'shipped', updatedAt: 1 })));
-  await ck('O6  POSITIVE: the buyer still cancels', assertSucceeds(buyer.doc('orders/o2').update({ status: 'cancelled', updatedAt: 1 })));
+  await ck('O6  POSITIVE: the buyer still cancels an unpaid (pending) order', assertSucceeds(buyer.doc('orders/o2').update({ status: 'cancelled', updatedAt: 1 })));
+  await env.withSecurityRulesDisabled(async (c) => {
+    for (const [id, st] of [['o3', 'paid'], ['o4', 'shipped'], ['o5', 'delivered'], ['o6', 'pending_payment']]) {
+      await c.firestore().doc('orders/' + id).set({ uid: 'buyer1', buyerUid: 'buyer1', sellerUid: 'seller1', status: st, total: 500 });
+    }
+  });
+  await ck('O7  a buyer cannot cancel a PAID order (no refund flow behind it)', assertFails(buyer.doc('orders/o3').update({ status: 'cancelled', updatedAt: 1 })));
+  await ck('O8  a buyer cannot cancel a SHIPPED order', assertFails(buyer.doc('orders/o4').update({ status: 'cancelled', updatedAt: 1 })));
+  await ck('O9  a buyer cannot cancel a DELIVERED order', assertFails(buyer.doc('orders/o5').update({ status: 'cancelled', updatedAt: 1 })));
+  await ck('O10 POSITIVE: the buyer cancels an order still awaiting payment', assertSucceeds(buyer.doc('orders/o6').update({ status: 'cancelled', updatedAt: 1 })));
+
+  console.log('\n── P: completion-PIN server records (sokoni-70) ──');
+  await env.withSecurityRulesDisabled(async (c) => {
+    for (const col of ['bookingPaymentReviews', 'pinDeliveryFailures', 'pinSecurityEvents', 'deliveryPins']) await c.firestore().doc(col + '/x1').set({ uid: 'buyer1', v: 1 });
+  });
+  for (const col of ['bookingPaymentReviews', 'pinDeliveryFailures', 'pinSecurityEvents']) {
+    await ck('P-' + col + '  POSITIVE: an admin reads it', assertSucceeds(adm.doc(col + '/x1').get()));
+    await ck('P-' + col + '  the subject user cannot read it', assertFails(buyer.doc(col + '/x1').get()));
+    await ck('P-' + col + '  not even an admin writes it from a client', assertFails(adm.doc(col + '/x2').set({ v: 1 })));
+  }
+  await ck('P-deliveryPins  stays deny-all, even for an admin', assertFails(adm.doc('deliveryPins/x1').get()));
 
   await env.cleanup();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
