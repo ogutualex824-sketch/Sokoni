@@ -211,15 +211,25 @@ const holdingAnswer = (extra) => Object.assign({
   console.log('\nC  contract: sessions + requires');
   const C = loadContract();
   ck('C1  validate() is clean on the real contract', C.validate().length === 0, C.validate());
-  const prov = C.ROUTES.filter((r) => C.sessionsOf(r.id).includes('provider')).map((r) => r.id).sort();
-  ck('C2  provider-capable routes are EXACTLY home, messages, signout (conservative)', JSON.stringify(prov) === '["home","messages","signout"]', prov);
+  /* C2 (refined 2026-10-03, rate cards): the rule was always about what a provider reaches
+     WITHOUT a server grant. Gated provider routes are allowed only behind a requires group. */
+  const prov = C.ROUTES.filter((r) => C.sessionsOf(r.id).includes('provider') && C.groupRequires(r.id) == null).map((r) => r.id).sort();
+  ck('C2  UNGATED provider-capable routes are EXACTLY home, messages, signout (conservative)', JSON.stringify(prov) === '["home","messages","signout"]', prov);
+  const provGated = C.ROUTES.filter((r) => C.sessionsOf(r.id).includes('provider') && C.groupRequires(r.id) != null).map((r) => r.id + '=' + C.groupRequires(r.id)).sort();
+  ck('C2b gated provider routes are exactly rates=module:services (refused without it, mounts with it)', JSON.stringify(provGated) === '["rates=module:services"]' &&
+     C.mountRefusal('rates', 'provider', () => false) === 'requires:module:services' && C.mountRefusal('rates', 'provider', (c) => c === 'module:services') === null &&
+     C.mountRefusal('rates', 'provider', (c) => c === 'marketing') === 'requires:module:services', provGated);
   const undeclared = C.ROUTES.filter((r) => r.sessions == null);
   ck('C3  every route without a sessions key defaults to ["merchant"]', undeclared.length > 20 && undeclared.every((r) => JSON.stringify(C.sessionsOf(r.id)) === '["merchant"]'), undeclared.length);
   const shopTools = ['pos', 'inventory', 'sell', 'products', 'devices', 'staff', 'sales-control', 'pos-setup', 'pos-provision', 'orders', 'shop', 'supply', 'plan', 'settings', 'payments', 'dashboard'];
   const leaked = shopTools.filter((id) => C.mountRefusal(id, 'provider', () => true) !== 'session:provider');
   ck('C4  shop/POS/inventory/till/devices/staff… are refused for providers even with every capability', leaked.length === 0, leaked);
-  const merchantBlocked = C.ROUTES.filter((r) => C.mountRefusal(r.id, null, () => false) !== null).map((r) => r.id);
-  ck('C5  with no provider session (null) every existing route mounts exactly as before', merchantBlocked.length === 0, merchantBlocked);
+  /* C5 (refined): every route that declares the merchant session still mounts as before; a
+     provider-ONLY route (rates) is refused for a merchant, and that set is pinned exactly. */
+  const merchantBlocked = C.ROUTES.filter((r) => C.sessionsOf(r.id).includes('merchant') && C.mountRefusal(r.id, null, () => false) !== null).map((r) => r.id);
+  ck('C5  with no provider session (null) every merchant route mounts exactly as before', merchantBlocked.length === 0, merchantBlocked);
+  const provOnly = C.ROUTES.filter((r) => !C.sessionsOf(r.id).includes('merchant')).map((r) => r.id + '=' + C.mountRefusal(r.id, null, () => true));
+  ck('C5b provider-only routes are exactly [rates], refused for a merchant even with every capability', JSON.stringify(provOnly) === '["rates=session:merchant"]', provOnly);
   ck('C6  an unknown session is refused, never treated as merchant', C.mountRefusal('messages', 'admin') === 'session:admin', C.mountRefusal('messages', 'admin'));
   ck('C7  aliases resolve before the session check (#cashier → pos, refused for provider)', C.mountRefusal('cashier', 'provider') === 'session:provider', C.mountRefusal('cashier', 'provider'));
 
@@ -286,7 +296,9 @@ const holdingAnswer = (extra) => Object.assign({
   await h.api.resolveShop(); h.api.emit();
   ck('S1  owner WITH a providers doc → MERCHANT session (shop wins)', h.S.session === 'merchant' && h.S.activeShopId === 'u1', { session: h.S.session, shop: h.S.activeShopId });
   ck('S2  …capabilities are exactly merchantIdentity\'s; businessWorkspace never called; providers/{uid} never read', JSON.stringify(h.S.capabilities) === '["sell","view_orders"]' && bwCalls(h).length === 0 && !h.log.reads.includes('providers/u1'), { caps: h.S.capabilities, reads: h.log.reads });
-  const expectMerchantNav = C.primary().map((r) => r.id).concat(C.moreGroups().flatMap((g) => g.routes.map((r) => r.id)));
+  /* Provider-only routes (rates) are not part of the merchant projection. */
+  const expectMerchantNav = C.primary().map((r) => r.id).concat(C.moreGroups().flatMap((g) => g.routes.map((r) => r.id)))
+    .filter((id) => C.sessionsOf(id).includes('merchant'));
   ck('S3  merchant sidebar = the contract\'s full projection, unchanged (primary order + every group)', JSON.stringify(navIds(h.doc)) === JSON.stringify(expectMerchantNav), navIds(h.doc));
   ck('S3b merchant bottom nav + footer exit unchanged', JSON.stringify(bnavIds(h.doc)) === JSON.stringify(C.BOTTOM_NAV.map((b) => b.id)) && JSON.stringify(footIds(h.doc)) === '["home"]', { b: bnavIds(h.doc), f: footIds(h.doc) });
 
