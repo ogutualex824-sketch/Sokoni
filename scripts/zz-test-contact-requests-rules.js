@@ -49,6 +49,22 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await allows('CQ-B1', 'buyer cancels their own open lead', updateDoc(doc(buyer, 'contactRequests/n1'), { status: 'cancelled' }));
   await denies('CQ-B2', 'buyer marks their lead won', updateDoc(doc(buyer, 'contactRequests/n1'), { status: 'won' }));
   await allows('CQ-A1', 'admin reads a lead', getDoc(doc(admin, 'contactRequests/q1')));
+  // equipment rental (server-written by marketplace-extensions rental callables)
+  await env.withSecurityRulesDisabled(async (c) => {
+    const f = c.firestore();
+    await setDoc(doc(f, 'rentalProducts/rp1'), { shopId: 'shopS', createdBy: 'seller', title: 'Excavator', dailyRate: 28000, status: 'active' });
+    await setDoc(doc(f, 'rentalProducts/rp2'), { shopId: 'shopS', createdBy: 'seller', title: 'Draft crane', status: 'paused' });
+    await setDoc(doc(f, 'rentalBookings/rb1'), { rentalProductId: 'rp1', shopId: 'shopS', buyerId: 'buyer', totalAmount: 56000, status: 'pending' });
+  });
+  const anon = env.unauthenticatedContext().firestore();
+  await allows('RN-1', 'the public reads an ACTIVE rental listing (the rental page can load)', getDoc(doc(anon, 'rentalProducts/rp1')));
+  await denies('RN-2', 'the public reads a non-active rental listing', getDoc(doc(anon, 'rentalProducts/rp2')));
+  await allows('RN-3', 'the lister reads their own non-active listing', getDoc(doc(seller, 'rentalProducts/rp2')));
+  await denies('RN-4', 'a client writes a rental listing (server-only: price + seller assert)', setDoc(doc(seller, 'rentalProducts/rp3'), { shopId: 'shopS', dailyRate: 1, status: 'active' }));
+  await denies('RN-5', 'the renter edits their booking total / status', updateDoc(doc(buyer, 'rentalBookings/rb1'), { totalAmount: 1, status: 'confirmed' }));
+  await allows('RN-6', 'the renter reads their booking', getDoc(doc(buyer, 'rentalBookings/rb1')));
+  await denies('RN-7', 'another user reads the booking (customer phone / dates)', getDoc(doc(other, 'rentalBookings/rb1')));
+  await denies('RN-8', 'a client forges a booking', setDoc(doc(buyer, 'rentalBookings/rb9'), { rentalProductId: 'rp1', buyerId: 'buyer', totalAmount: 1, status: 'confirmed' }));
   await env.cleanup();
   console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('HARNESS ERROR (not a rules result):', e.message); process.exit(2); });

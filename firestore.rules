@@ -2794,6 +2794,18 @@ service cloud.firestore {
       'negotiating':     ['quote_sent', 'won', 'lost']
     };
   }
+  /* EQUIPMENT RENTAL (sokoni-f3, Construction convergence 2026-10-03). Written ONLY by marketplace-extensions.js rental
+     callables via commerceDispatch (server price, date-conflict check, _assertSeller). There was no rule at all, so the
+     public rental page could never load. Active listings are public; a booking is readable by its renter (shop owners
+     read theirs through rentalList, which asserts the seller). */
+  match /rentalProducts/{id} {
+  allow read:  if resource.data.status == 'active' || isAdmin() || (isAuthed() && resource.data.createdBy == request.auth.uid);
+  allow write: if false;
+  }
+  match /rentalBookings/{id} {
+  allow read:  if isAdmin() || (isAuthed() && resource.data.buyerId == request.auth.uid);
+  allow write: if false;
+  }
   match /contactRequests/{reqId} {
   allow create: if isAuthed()
   && request.resource.data.buyerUid == request.auth.uid

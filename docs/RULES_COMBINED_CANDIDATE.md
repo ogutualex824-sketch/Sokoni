@@ -285,3 +285,12 @@ extra keys. The block is REPLACED (not duplicated) with:
 
 Suite `scripts/zz-test-contact-requests-rules.js` (CQ-C*, F1–F6, S1–S7, X1–X2, B1–B2, A1). **EMULATOR PENDING.**
 Baseline f259c0b5: the forged-seller, planted-status and lifecycle-jump rows must fail there.
+
+## 2026-10-03: equipment rental (Construction convergence)
+
+`rentalProducts` and `rentalBookings` had NO rule, so `rental.html` could never load. Both are written only by the
+marketplace-extensions rental callables (server price, date-conflict check, `_assertSeller`). `rentalProducts` is read
+when `status == 'active'`, or by the lister (`createdBy`) or an admin. `rentalBookings` is read by the renter
+(`buyerId`) or an admin; shop owners read theirs through `rentalList`, which asserts the seller. Every client write is
+false. Rows RN-1–RN-8 are in `zz-test-contact-requests-rules.js`. **EMULATOR PENDING.** Paid rentals stay closed: rental
+commission is UNPRICED (2f refuses `category_unpriced`) until the owner sets it.
