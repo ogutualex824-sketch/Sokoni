@@ -2785,6 +2785,16 @@ exports.verifyIntasendPayment = onRequest(
         return res.status(400).json({ verified: false, error: `Payment state: ${payment.state}` });
       }
 
+      /* ── Payment method from the PROVIDER (IntaSend convergence Gates 8/12, 2026-10-03) ──
+         This order write used to say paymentMethod "mpesa" for every payment, so a card payment was recorded as
+         M-Pesa. The method now comes from IntaSend's own collection record (provider), never from the UI. An
+         absent provider is recorded as "unknown" — never assumed. The raw value is kept for audit. */
+      const _providerRaw = String(payment.provider || payment.method || "").trim().toUpperCase();
+      const _paymentMethod = _providerRaw === "M-PESA" || _providerRaw === "MPESA" ? "mpesa"
+        : _providerRaw === "CARD-PAYMENT" || _providerRaw === "CARD" ? "card"
+        : _providerRaw ? _providerRaw.toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 32) || "unknown"
+        : "unknown";
+
       /* ── Amount cross-check: trust the API, not the client ── */
       const apiAmount    = Number(payment.value || payment.amount || payment.paid_amount || 0);
       const clientAmount = Number(amount) || 0;
@@ -2907,7 +2917,8 @@ exports.verifyIntasendPayment = onRequest(
         items:           resolvedItems,
         sellerUid,
         sellerName:      resolvedItems?.[0]?.sellerName || null,
-        paymentMethod:   "mpesa",
+        paymentMethod:   _paymentMethod,
+        paymentProvider: _providerRaw || null,
         sessionId:       sessionId || null,
         escrow:          { held: confirmedAmount, released: 0, refunded: 0 },
         /* Product Settlement Convergence — funds are HELD by SOKONI at payment; released

@@ -1,3 +1,15 @@
+## [2026-10-03] - verifyIntasendPayment records the payment method IntaSend reports (Gates 8/12) — functions, NOT deployed
+
+Built on 5a0935e, whose verifyIntasendPayment is byte-identical to the live archive (sha256 prefix 4d67b6a1f472). The order write
+said paymentMethod "mpesa" for every payment, so a card payment was recorded as M-Pesa. It now derives the method from IntaSend's
+collection record (provider): M-PESA -> mpesa, CARD-PAYMENT -> card, other -> normalised provider, absent -> "unknown" (never
+assumed). paymentProvider keeps the raw value. No other behaviour changes.
+
+- Files: functions/index.js (verifyIntasendPayment only), scripts/test-payment-method-from-provider.js (new).
+- Evidence: the REAL handler executed against an in-memory Firestore and a stubbed IntaSend API: 6/0. COUNTERPROOF=5a0935e
+  (live source) fails exactly P2/P3/P4 (card recorded as mpesa, no provider kept, absent provider assumed mpesa).
+- Deploy: scoped only — firebase deploy --only functions:verifyIntasendPayment — after the 093fd4f cherry-pick, gates, and >=512 MB.
+
 ## [2026-09-30] — F1 (server): the pickup-location authority — NOT deployed
 
 **Files:**
