@@ -300,6 +300,7 @@ a{color:var(--acc);text-decoration:none}
       <div class="sb-item" data-hc-module="remoteSupport" hidden aria-hidden="true" onclick="P.show('remotesupport',this)"><span class="sb-icon">🖥️</span>Remote support</div>
       <div class="sb-item" data-hc-module="pickupDropoff" hidden aria-hidden="true" onclick="P.show('pickupdropoff',this)"><span class="sb-icon">🚚</span>Pickup &amp; drop-off</div>
       <div class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Wallet</div>
+      <div class="sb-item" onclick="P.show('receipts',this)"><span class="sb-icon">🧾</span>Receipts</div>
       <div class="sb-item" onclick="P.show('customers',this)"><span class="sb-icon">👥</span>Customers</div>
       <div class="sb-item" onclick="P.show('reviews',this)"><span class="sb-icon">⭐</span>Reviews</div>
       <div class="sb-item" onclick="P.show('analytics',this)"><span class="sb-icon">📊</span>Analytics</div>
@@ -514,6 +515,11 @@ a{color:var(--acc);text-decoration:none}
     <div class="panel" id="panel-pickupdropoff"><div class="pg-header"><div><div class="pg-title">Pickup &amp; drop-off</div><div style="font-size:12px;opacity:.65">Bookings where you collect and return the device.</div></div></div><div style="padding:14px 20px"><div id="pdList"></div></div></div>
 
     <!-- ── Earnings ──────────────────────────────────────────────────── -->
+    <!-- ── Finance → Receipts (platform transaction receipts; owner 2026-10-03). Read-only: myTransactionReceipts returns
+         only this provider's receipts; every figure is the server's position (paid / held / released / refunded / SOKONI fee
+         / your settlement). ── -->
+    <div class="panel" id="panel-receipts"><div class="pg-header"><div><div class="pg-title">Receipts</div><div style="font-size:12px;opacity:.65">Each paid booking: what the client paid, what SOKONI held, your settlement after SOKONI's fee, refunds.</div></div></div><div style="padding:14px 20px"><div id="rcProvList"></div></div></div>
+
     <div class="panel" id="panel-earnings">
       <div class="pg-header"><div><div class="pg-title">Wallet</div><div class="pg-sub">Live from the wallet engine — every figure is server-authoritative</div></div></div>
       <div style="padding:14px 20px">
@@ -852,6 +858,7 @@ a{color:var(--acc);text-decoration:none}
 <script src="sokoni-tech-service-editor.js" defer></script>
 <script src="sokoni-leads.js" defer></script>
 <script src="sokoni-legal-taxonomy.js" defer></script>
+<script src="sokoni-receipts.js" defer></script>
 <script src="sokoni-fitness-memberships.js" defer></script>
 <script src="sokoni-business-workspace.js" defer></script>
 <script src="sokoni-booking-resolution.js" defer></script>
@@ -896,6 +903,7 @@ const P={
     if(window.SokoniTechEditor&&id==='pickupdropoff')SokoniTechEditor.loadModeJobs('pickupDropoff','pdList');
     if(id==='leads'&&window.SokoniLeads)SokoniLeads.mountProvider(_q('ldList'),{services:()=>(Sv._svc||[]).filter(x=>x.active!==false),caps:()=>((window.__sokoniWorkspace||{}).serviceCapabilities||[])});
     if(id==='memberships'&&window.SokoniFitnessMemberships)SokoniFitnessMemberships.mount(_q('mbList'));
+    if(id==='receipts'&&window.SokoniReceipts)SokoniReceipts.mount(_q('rcProvList'),{role:'provider'});
   }
 };
 

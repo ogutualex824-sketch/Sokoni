@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>My receipts · SOKONI</title>
+  <meta name="description" content="Your SOKONI payment receipts: what you paid, what SOKONI held, what was released or refunded.">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0b0b10">
+  <script src="security.js"></script>
+  <style>
+    :root { --bg:#0b0b10; --text:#f3f1ea; --muted:rgba(243,241,234,.62); --acc:#71ff00; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif; line-height:1.5; }
+    .wrap { max-width:760px; margin:0 auto; padding:16px 16px 80px; }
+    a { color:var(--acc); }
+    h1 { font-size:22px; margin:10px 0 4px; }
+    .sub { color:var(--muted); font-size:13px; margin-bottom:16px; }
+    summary { cursor:pointer; }
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <a href="profile.html" style="text-decoration:none;color:var(--muted);font-size:13px">← Account</a>
+  <h1>My receipts</h1>
+  <p class="sub">Every payment you made through SOKONI: the amount, the method IntaSend reported, what SOKONI held for you and what was released or refunded. Tax invoices are issued by the provider where they are registered for eTIMS.</p>
+  <div id="rcList" aria-live="polite"></div>
+</main>
+<script src="firebase.js" type="module"></script>
+<script src="sokoni-receipts.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script>
+  /* Buyer view: only receipts where the signed-in account is the CLIENT (the callable already scopes to the caller). */
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.SokoniReceipts) SokoniReceipts.mount(document.getElementById('rcList'), { role: 'client' });
+  });
+</script>
+</body>
+</html>

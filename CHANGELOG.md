@@ -1,3 +1,14 @@
+## [2026-10-03] — Receipt screens: buyer (receipts.html) and provider (Finance → Receipts) on myTransactionReceipts — NOT deployed
+
+- **sokoni-receipts.js (new):** ONE read-only renderer.
+  - Shows receipt number, transaction, provider, service, payment method ("—" when IntaSend reported none), payment reference, paid / held / released / refunded, SOKONI fee, status, tax treatment, issued date, and the immutable history (2f bb341b1: r.events, oldest first; B2B deductions shown as "not commission").
+  - The provider view adds its settlement and never shows the client's account id. It computes and writes nothing.
+- **receipts.html (new, self-updating):** the buyer's receipts, linked from My legal bookings.
+- **provider-dashboard.html:** a Receipts sidebar item and panel, mounted with role provider.
+- **Not reused:** sokoni-invoice.js / invoice.html, which are localStorage-only.
+- **Tests:** test-legal-hub-web RC1–RC2 (19/0); sabotage-legal-hub-web 15/15.
+- **Order:** ships with or after the commercial-fn receipt callables (myTransactionReceipts).
+
 ## [2026-10-03] — Provider availability is server-authoritative from the provider dashboard (owner decision) — NOT deployed
 
 - **provider-dashboard.html:**

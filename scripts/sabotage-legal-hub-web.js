@@ -3,7 +3,7 @@
 'use strict';
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..');
-const FILES = ['legal-hub.html', 'legal-profile.html', 'sokoni-legal-taxonomy.js', 'sokoni-legal-account.js', 'provider-dashboard.html', 'sokoni-aos-legal.js', 'admin-os.html', 'super-admin.html', 'availability-manager.html'];
+const FILES = ['legal-hub.html', 'legal-profile.html', 'sokoni-legal-taxonomy.js', 'sokoni-legal-account.js', 'provider-dashboard.html', 'sokoni-aos-legal.js', 'admin-os.html', 'super-admin.html', 'sokoni-receipts.js', 'receipts.html'];
 const M = [
   ['a Book button back inside the lawyer card', 'legal-hub.html', '<span class="lc-rate-type" aria-hidden="true">View profile →</span>', '<button type="button" class="lc-book-btn">Book</button>', 'W1'],
   ['unrated advocate shown with a default 5 stars', 'legal-hub.html', '`<span>New on SOKONI · no reviews yet</span>`', '`<span>★ 5.0</span>`', 'W2'],
@@ -18,6 +18,8 @@ const M = [
   ['legal area offered to every provider', 'provider-dashboard.html', "window.__sokoniWorkspace.category==='lawyer'&&", '', 'PD1'],
   ['super admin coverage counts non-bookable providers', 'super-admin.html', 'rows.filter(a=>a.eligibility&&a.eligibility.bookable)', 'rows', 'SA1'],
   ['dashboard writes availability from the browser again', 'provider-dashboard.html', "  async _close(date,label){if(!this._ref())throw new Error('Sign in required');await _avCall('addAvailabilityOverride',{date:date,closed:true,label:String(label).slice(0,80)});},", "  async _close(date,label){const r=this._ref();await r.collection('overrides').doc(date).set({date,closed:true});},", 'AV1W'],
+  ['provider receipt view leaks the client account id', 'sokoni-receipts.js', "prov ? 'SOKONI customer' : (r.counterpartyName || '—')", "prov ? (r.clientUid || '—') : (r.counterpartyName || '—')", 'RC1'],
+  ['receipt view invents a method when IntaSend reported none', 'sokoni-receipts.js', "['Payment method', r.method || '—'],", "['Payment method', r.method || 'M-PESA'],", 'RC1'],
 ];
 let caught = 0, missed = 0;
 for (const [name, file, a, b, row] of M) {

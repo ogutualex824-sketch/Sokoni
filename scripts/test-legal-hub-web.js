@@ -128,6 +128,25 @@ const run = async (cat) => { ctx._activeLawCat = cat; await ctx.renderLawyers();
   ck('AV1W', pdAv.length > 0 && !/\.set\(|\.update\(|\.delete\(/.test(pdAv) && pd.includes("httpsCallable('bookingDispatch')")
     && pdAv.includes("_avCall('addAvailabilityOverride'") && pdAv.includes("_avCall('removeAvailabilityOverride'") && pdAv.includes("_avCall('setVacationMode'") && pdAv.includes("_avCall('setProviderAvailability'"),
     'availability is server-authoritative from the provider dashboard: it writes NOTHING itself (bookingDispatch availability ops). availability-manager.html (shared with the Merchant V2 shop schedule) is an owner decision, not changed here');
+  /* RC — receipt screens (buyer receipts.html, provider Finance → Receipts) on myTransactionReceipts */
+  const rcJs = read('sokoni-receipts.js'), rcHtml = read('receipts.html');
+  let rcOk = false, rcGot = {};
+  try {
+    const c3 = { window: {}, console }; c3.window = c3; vm.createContext(c3); vm.runInContext(rcJs, c3);
+    const base = { receiptNo: 'SKN-RCT-2026-000001', kind: 'service_booking', sourceId: 'adv_2026_x', counterpartyName: 'Wanjiru Kamau', serviceLabel: 'Legal consultation',
+      method: null, paymentRef: 'API_1', paidCents: 500000, heldCents: 0, releasedCents: 500000, refundedCents: 0, platformFeeCents: 25000, providerNetCents: 475000,
+      status: 'released', taxTreatment: 'unknown', issuedAt: 1790000000000, clientUid: 'cust-secret-uid' };
+    const asClient = c3.SokoniReceipts._card(base, 'client'), asProv = c3.SokoniReceipts._card(Object.assign({}, base, { events: [{ type: 'paid', amountCents: 500000, at: 1790000000000 }, { type: 'released', amountCents: 500000, platformFeeCents: 25000, at: 1790000900000 }] }), 'provider');
+    rcGot = { asClient, asProv };
+    rcOk = asClient.includes('SKN-RCT-2026-000001') && asClient.includes('Wanjiru Kamau') && /Payment method<\/dt><dd[^>]*>—/.test(asClient) && asClient.includes('KES 250') && !asClient.includes('Your settlement')
+      && asClient.includes('No history entries.') && asClient.includes('Completed — released')
+      && asProv.includes('Your settlement') && asProv.includes('KES 4,750') && !asProv.includes('cust-secret-uid') && asProv.includes('SOKONI customer') && asProv.includes('Released after completion');
+  } catch (e) { rcGot = { err: e.message }; }
+  ck('RC1', rcOk, 'receipt card: number, provider, service, method "—" when IntaSend reported none, SOKONI fee, status, honest history; the provider view adds its settlement and never shows the client\'s account id', rcGot);
+  ck('RC2', rcHtml.includes('<script src="sw-register.js" defer></script>') && rcHtml.includes("SokoniReceipts.mount(document.getElementById('rcList'), { role: 'client' })")
+    && pd.includes("if(id==='receipts'&&window.SokoniReceipts)SokoniReceipts.mount(_q('rcProvList'),{role:'provider'});") && pd.includes('<script src="sokoni-receipts.js" defer></script>')
+    && rcJs.includes("httpsCallable('myTransactionReceipts')") && !/\.set\(|\.update\(|\.add\(|localStorage|sokoni-invoice/.test(rcJs) && html.includes('href="receipts.html"'),
+    'buyer receipts page (self-updating) + provider Finance → Receipts read ONLY myTransactionReceipts (caller-scoped); write nothing; no localStorage invoice module; linked from My legal bookings');
   done();
 })();
 function done() { console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed'); console.log('NOT proven here: a real browser render (memory floor) and a live booking.'); process.exit(fail ? 1 : 0); }
