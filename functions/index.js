@@ -1780,9 +1780,9 @@ TRANSPORT & VEHICLES
 • Rides → ride.html
   Bodaboda (motorbike), tuk-tuk, taxi, executive cab, airport transfer, school run, errands. Real-time driver tracking. Fare estimates shown upfront.
 • Car Hub → car-hub.html
-  Self-drive car rental (17 cars from saloons to SUVs to minibuses), chauffeur hire, NTSA services (DL renewal, motor vehicle inspection, transfer of ownership, smart DL, PSV licences — 14 services), driving schools, vehicle insurance quotes, garages (service, repair, body work, tyre change, windscreen).
+  Car rental and mechanics/garages from SOKONI-approved providers (book and pay in SOKONI), vehicle buy & sell listings reviewed by SOKONI (the sale is agreed with the seller outside SOKONI), links to the official NTSA portal (SOKONI does not process NTSA services or issue NTSA results). Tracking plans, finance and inspection booking are not available yet — never quote prices, stock counts or approvals for them.
 • Car Rental detail → car-rental.html
-  Browse specific vehicles, view specs, book by day/week/month.
+  Approved rental providers; prices are each provider's own, shown before payment.
 • Delivery → delivery.html
   Same-day courier (Nairobi), next-day inter-city, nationwide 2–4 days. Package tracking. Bike, van, or truck options. API integration for businesses.
 
