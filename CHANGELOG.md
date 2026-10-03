@@ -1,3 +1,42 @@
+## [2026-10-03] - invoice.html is an honest order summary — NOT deployed
+
+**NOT DEPLOYED.** invoice.html is an honest order summary: fabricated KRA/VAT/ETR/fee/payout/paid claims removed
+(owner decision); server + eTIMS rebuild = later slice; NOT deployed.
+
+- **Owner decision (2026-10-03):** "Make it an honest order summary now — remove every fabricated tax/fee claim now
+  (no KRA heading, no ETR serial, no inferred VAT, no fixed delivery/fee labels), show only facts the order record
+  carries or '—', and label it 'Order summary — not a KRA eTIMS tax invoice'. Rebuild on server order data + real
+  eTIMS invoices later as its own slice."
+- **Removed (all fabricated or unsupported by the order record):**
+  - "KRA TAX INVOICE" tag in the seller block and the injected `#invKraTag` header tag; "INVOICE" heading and
+    "Invoice #id"; "(KRA)" on the print button; "Tax Dashboard" toolbar link (seller tax area, not part of a buyer's
+    order summary).
+  - VAT always inferred at 16% (Subtotal VAT Excl., VAT @ 16%, TOTAL VAT Incl., Taxable Amount / VAT Amount).
+  - "VAT Reg. No." and "Seller KRA PIN" printed from the browser's `kraPinSaved` (the read is gone).
+  - "ETR Serial: SKN-ETR-<orderId>" (an invented serial).
+  - "Delivery FREE"; "Sokoni Platform Fee (12%)" (label disagreed with the computed rate); client-computed
+    "Seller net payout".
+  - Status ribbon default "PAID", "PROCESSING — PAYMENT RECEIVED", "DELIVERED & PAID"; static "Status: PAID".
+  - Defaults "M-PESA", "Valued Customer", "Sokoni Seller", "Verified Seller", quantity hard-coded `1`, issue date
+    defaulting to today, total falling back to the sum of item prices.
+  - Download title "SOKONI Tax Invoice" / filename `sokoni-tax-invoice.html`.
+- **Now shown (record field, else `—`):** order id; `date`; buyer `name`/`buyerName`, `address`/`deliveryAddress`,
+  `phone`/`buyerPhone`; seller `items[0].sellerName`/`sellerName`; per item `name`, `category`, `price` (number),
+  `qty ?? quantity` (number), line total only when both are numbers; `deliveryFee` (number); `total` (number, never
+  summed); `method` uppercased as-is; status mapped to neutral labels (pending_payment → AWAITING PAYMENT, placed,
+  processing, shipped, out_for_delivery, delivered), anything else → STATUS UNKNOWN. Visible line
+  "Order summary — not a KRA eTIMS tax invoice." inside the printed/downloaded shell. Download title
+  "SOKONI Order summary".
+- **Interim data source:** still the browser's `sokoniOrders` copy (owner's interim decision, noted in code).
+- **Also fixed:** the `?order=` deep link now runs after the summary constants are initialised; the order picker
+  shows `—` for a missing total/date instead of `KES NaN`.
+- **Files:** changed invoice.html; new scripts/test-invoice-honest-summary.js.
+- **Database / API / security-rule changes:** none. **Breaking changes:** none (function names
+  `generateInvoice`/`downloadInvoice`/`printInvoice` kept).
+- **Tests:** test-invoice-honest-summary.js 60/0 (negative controls: re-inserted VAT row and a "PAID" default each
+  fail named rows; the pre-change page fails 45 rows); test-copied-image-placeholders.js 18/0. Browser cert
+  (disclaimer present, no tax claims, at 390 and 1280) QUEUED, not run.
+
 ## [2026-10-03] - Copied-image placeholders for orders/receipts/carts while a product's media is held — NOT deployed
 
 **NOT DEPLOYED.** When moderation holds a product, its photo files go private and their download token is withdrawn
