@@ -178,6 +178,11 @@ function wouldFinalizeMarketplaceOrder(meta) {
  *                               that a refusal applies, never to decide who is paid or how much)
  * @returns {{applies:false}|{applies:true, ok:boolean, reason?:string, expectedCents?:number, confirmedCents?:number}}
  */
+/* Order statuses from which a product order may become paid (census 2026-10-03: checkout.html writes
+   'pending_payment'; nothing writes a failed-payment status to orders). Anything else — paid, cancelled,
+   processing, shipped, delivered, refunded … — is not payable: the payment parks as REVIEW. */
+const PAYABLE_ORDER_STATUSES = Object.freeze(['', 'pending_payment', 'pending', 'awaiting_payment']);
+
 function assessProductOrderPayment(intent, evidence) {
   const e = evidence || {};
   if (!intent) {
@@ -194,7 +199,28 @@ function assessProductOrderPayment(intent, evidence) {
   if (!e.apiRef || String(md.orderId || '') !== String(e.apiRef) || String(intent.resourceId || '') !== String(e.apiRef)) {
     return refuse('wrong_order');
   }
-  if (TERMINAL_INTENT_STATUSES.includes(intent.status) && intent.status !== 'paid') return refuse('intent_terminal');
+  /* SINGLE USE (P0, owner 2026-10-03). Nothing in this lineage marks a product_order intent paid (only subscription
+     and till intents are), so a product intent that is already terminal — paid included — was consumed or closed
+     elsewhere: it cannot settle this payment. A replay of THIS payment never reaches here (payments/{ref} COMPLETE
+     returns first). */
+  if (TERMINAL_INTENT_STATUSES.includes(intent.status)) {
+    return refuse(intent.status === 'paid' ? 'intent_consumed' : 'intent_terminal');
+  }
+  /* BUYER BINDING (P0). The server intent names its owner. The payment record's initiator (payments/{ref}.uid,
+     written by initiateSTKPush from request.auth) must be that owner, and an existing order's buyer must be too —
+     a payment started by buyer A can never settle buyer B's order. A missing owner is not "anyone". */
+  const owner = String(intent.uid || '');
+  if (!owner) return refuse('intent_owner_missing');
+  if (String(e.payerUid || '') !== owner) return refuse('wrong_buyer');
+  const order = (e.order && typeof e.order === 'object') ? e.order : null;
+  if (order) {
+    const buyer = String(order.buyerUid || order.uid || order.buyerId || '');
+    if (buyer && buyer !== owner) return refuse('wrong_buyer');
+    /* ORDER STILL PAYABLE (P0): only an order awaiting payment can become paid. */
+    if (!PAYABLE_ORDER_STATUSES.includes(String(order.status || ''))) return refuse('order_not_payable', { orderStatus: String(order.status || '') });
+    /* payment.currency == order.currency (brief Gate 5): an order that names a currency must name KES. */
+    if (order.currency && String(order.currency).toUpperCase() !== 'KES') return refuse('wrong_currency');
+  }
   if (!Number.isInteger(expectedCents) || expectedCents <= 0) return refuse('intent_amount_invalid');
   const cur = String(e.currency || '').toUpperCase();
   if (!cur) return refuse('missing_evidence');
@@ -208,4 +234,26 @@ function assessProductOrderPayment(intent, evidence) {
   return { applies: true, ok: true, expectedCents, confirmedCents };
 }
 
-module.exports = { mergeAttribution, resolveFinancialAttribution, decidePaidTransition, assessProductOrderPayment, wouldFinalizeMarketplaceOrder, TERMINAL_INTENT_STATUSES };
+/**
+ * PROVIDER CONFIRMATION (P0, owner 2026-10-03): "payment status actually verified by IntaSend". The webhook is
+ * authenticated by the shared challenge, but its body is still a claim. Before a product order settles, the server
+ * asks IntaSend itself (shared/intasend-status.js) and this decides, purely, whether that answer confirms THIS
+ * payment: found, COMPLETE, the same api_ref, KES, and the same GROSS value to the cent as the server intent.
+ * Unreachable / not found / anything different → a refusal reason (the caller parks REVIEW). Never throws.
+ * @param {object} st  intasendCollectionStatus result
+ * @param {{apiRef:string, expectedCents:number}} want
+ */
+function assessProviderConfirmation(st, want) {
+  const w = want || {};
+  if (!st || st.ok !== true) return { ok: false, reason: 'provider_unverified', detail: st && st.error ? String(st.error) : 'NO_RESULT' };
+  if (!st.found) return { ok: false, reason: 'provider_not_found' };
+  if (String(st.state || '').toUpperCase() !== 'COMPLETE') return { ok: false, reason: 'provider_not_complete', detail: String(st.state || '') };
+  if (!w.apiRef || String(st.api_ref || '') !== String(w.apiRef)) return { ok: false, reason: 'provider_ref_mismatch' };
+  if (String(st.currency || '').toUpperCase() !== 'KES') return { ok: false, reason: 'provider_currency_mismatch' };
+  if (st.value === null || st.value === undefined || !Number.isFinite(Number(st.value))) return { ok: false, reason: 'provider_amount_missing' };
+  const cents = Math.round(Number(st.value) * 100);
+  if (!Number.isInteger(w.expectedCents) || cents !== w.expectedCents) return { ok: false, reason: 'provider_amount_mismatch', providerCents: cents };
+  return { ok: true, providerCents: cents };
+}
+
+module.exports = { mergeAttribution, resolveFinancialAttribution, decidePaidTransition, assessProductOrderPayment, assessProviderConfirmation, wouldFinalizeMarketplaceOrder, TERMINAL_INTENT_STATUSES, PAYABLE_ORDER_STATUSES };

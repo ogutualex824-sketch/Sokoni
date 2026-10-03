@@ -17,7 +17,7 @@ const ROOT = path.resolve(process.env.WH_ROOT || path.join(__dirname, '..'));
 const A = require(path.join(ROOT, 'functions', 'payment-attribution.js'));
 let pass = 0, fail = 0;
 const ck = (id, c, m, got) => { c ? pass++ : fail++; console.log('  ' + (c ? 'PASS' : 'FAIL') + ' ' + id + ' ' + m + (c || got === undefined ? '' : '   [got ' + JSON.stringify(got) + ']')); };
-const G = (intent, meta, extra) => A.assessProductOrderPayment(intent, Object.assign({ apiRef: 'ord-1', grossAmount: 390, currency: 'KES', legacyMeta: meta }, extra || {}));
+const G = (intent, meta, extra) => A.assessProductOrderPayment(intent, Object.assign({ apiRef: 'ord-1', grossAmount: 390, currency: 'KES', legacyMeta: meta, payerUid: 'B1' }, extra || {}));
 const refused = (r) => r && r.applies === true && r.ok === false && r.reason === 'missing_intent';
 const untouched = (r) => r && r.applies === false;
 const show = (m) => (m === undefined ? 'undefined' : JSON.stringify(m));
@@ -49,7 +49,8 @@ for (const [m, label] of [
 ]) ck('P-3 ', untouched(G(null, m)), 'CONTROL no intent + ' + label + ' → untouched', G(null, m));
 
 /* P-4 — the Unit 2 gate is unchanged when a product_order intent exists. */
-const I = { purpose: 'product_order', amountCents: 39000, currency: 'KES', status: 'pending', resourceId: 'ord-1', metadata: { orderId: 'ord-1' } };
+/* P0 2026-10-03: real intents always carry their owner (createPaymentIntent writes uid) and the payment record its payer. */
+const I = { purpose: 'product_order', uid: 'B1', amountCents: 39000, currency: 'KES', status: 'pending', resourceId: 'ord-1', metadata: { orderId: 'ord-1' } };
 ck('P-4a', (() => { const r = G(I, LEGACY_CHECKOUT); return r.applies && r.ok; })(), 'valid intent + exact gross settles');
 ck('P-4b', G(I, LEGACY_CHECKOUT, { grossAmount: 389.6 }).reason === 'amount_mismatch', 'valid intent + short gross still amount_mismatch');
 ck('P-4c', G(I, null).ok === true, 'valid intent with no meta still settles (meta never required when the intent exists)');

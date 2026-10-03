@@ -8311,7 +8311,7 @@ async function _processWebhook(req, res, opts) {
    Challenge-based auth (body.challenge); full payment + subscription activation.
    intasendWebhook is a secondary deployment that receives no real IntaSend traffic. */
 exports.webhookIntasend = onRequest(
-  { timeoutSeconds: 30, secrets: [INTASEND_WEBHOOK_CHALLENGE], invoker: "public", minInstances: 1 },
+  { timeoutSeconds: 30, secrets: [INTASEND_WEBHOOK_CHALLENGE, INTASEND_PRIVATE_KEY], invoker: "public", minInstances: 1 },
   async (req, res) => {
     if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
 
@@ -8443,11 +8443,27 @@ exports.webhookIntasend = onRequest(
         catch (_) { res.status(500).send("RETRY"); }
         return;
       }
+      /* P0 (owner 2026-10-03): the order this payment would settle is read too — its buyer and status are part of
+         the decision. orders/{ref} shares the payment ref (checkout mints one id for both). Unreadable → park. */
+      let _gOrder = null;
+      if (_gSnap.exists) {
+        try {
+          const _oSnap = await db.collection("orders").doc(String(apiRef)).get();
+          _gOrder = _oSnap.exists ? (_oSnap.data() || {}) : null;
+        } catch (readErr) {
+          logger.error("PRODUCT_ORDER_GATE_ERROR — order unreadable, payment parked", { ref: apiRef, err: String(readErr && readErr.message || readErr) });
+          try { await _park("gate_error"); res.status(200).send("OK"); }
+          catch (_) { res.status(500).send("RETRY"); }
+          return;
+        }
+      }
       const _gate = assessProductOrderPayment(_gSnap.exists ? _gSnap.data() : null, {   /* pure: never throws */
         apiRef,
         grossAmount: (invoice.value !== undefined ? invoice.value : req.body?.value),
         currency:    invoice.currency || req.body?.currency || null,
         legacyMeta:  existing.meta || null,   /* Unit 4b: decides only WHETHER to refuse, never who is paid */
+        payerUid:    existing.uid || null,    /* written by initiateSTKPush from request.auth — the payer */
+        order:       _gOrder,
       });
       if (_gate.applies && !_gate.ok) {
         await _park(_gate.reason, { expectedAmountCents: _gate.expectedCents ?? null, confirmedGrossCents: _gate.confirmedCents ?? null });
@@ -8455,6 +8471,26 @@ exports.webhookIntasend = onRequest(
           expectedCents: _gate.expectedCents ?? null, confirmedCents: _gate.confirmedCents ?? null });
         res.status(200).send("OK");
         return;
+      }
+      /* PROVIDER CONFIRMATION (P0): the callback body is a claim. A product order settles only when IntaSend itself,
+         asked server-to-server, reports THIS payment COMPLETE in KES at the intent's exact gross value. Unreachable,
+         not found or different → park REVIEW (the money is captured; a reviewer re-drives it). */
+      if (_gate.applies && _gate.ok) {
+        const { intasendCollectionStatus } = require("./shared/intasend-status");
+        const { assessProviderConfirmation } = require("./payment-attribution");
+        const _invId = String(invoice.invoice_id || req.body?.invoice_id || "");
+        let _st;
+        try {
+          _st = await intasendCollectionStatus(_invId, { privateKey: INTASEND_PRIVATE_KEY.value(), live: process.env.INTASEND_SANDBOX !== "true" });
+        } catch (e) { _st = { ok: false, error: "NETWORK" }; }
+        const _pc = assessProviderConfirmation(_st, { apiRef, expectedCents: _gate.expectedCents });
+        if (!_pc.ok) {
+          await _park(_pc.reason, { expectedAmountCents: _gate.expectedCents ?? null, confirmedGrossCents: _gate.confirmedCents ?? null,
+            providerCheck: _pc.detail ? String(_pc.detail).slice(0, 40) : null });
+          logger.error("PRODUCT_ORDER_PAYMENT_REFUSED", { ref: apiRef, intentRef: _gIntentRef, reason: _pc.reason, expectedCents: _gate.expectedCents ?? null });
+          res.status(200).send("OK");
+          return;
+        }
       }
     }
 
