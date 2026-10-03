@@ -5,7 +5,7 @@
 **Security:** on served `f259c0b5`, a provider could write `approvalDecision` (live providerDispatch trusts it with no admin
 check), `adminApproved`, `approvedAt/By`, `commissionRate`, a `business` category stamp and discovery/verification stamps. All
 of these are now locked on create AND owner update, and owner update calls `noAdminFields`. Profile edits (name, bio, phone,
-services, hours) are unchanged. **Breaking changes:** none — the client census found no page writing these keys.
+services, hours) are unchanged. Follow-up 773d4b2: `preDeactivationStatus` and `deactivated` are also locked. On live, accountReactivate restores status from preDeactivationStatus (default active), so a self-created provider doc could activate itself. The server fix is sokoni-5b's. **Breaking changes:** none — the client census found no page writing these keys.
 **Tests:** PA rows per key + refusal-overwrite / commission-0 / role / bio-control / admin-control — EMULATOR PENDING (RAM below the
 512 MB floor); not claimed passed. **Deployment:** NOT deployed. Ships in the f3 hotfix via the Rules REST API after the 2f search fix.
 
