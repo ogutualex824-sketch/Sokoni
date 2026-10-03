@@ -1,3 +1,31 @@
+## [2026-10-03] - Tech Hub slice 4b (hosting): device-repair service editor, Repairs view, booking device step — hosting, NOT deployed
+
+- **sokoni-tech-service-editor.js** (new):
+  - Adds a "Tech service details" fieldset to the provider-dashboard service editor. It renders only when the server
+    workspace grants a Tech capability, offers only the GRANTED service modes, and shows device / repair / brand / model
+    fields only for DEVICE_REPAIR or ELECTRONICS.
+  - It sends `techProfile`, which the server validates (feat/tech-taxonomy-on-13f74f3 @ 5c95390). A business with no
+    Tech capability sends nothing.
+  - **Repairs** panel: the provider's own bookings that carry repairDetails (providerGetBookings). Each row links to
+    Bookings, where confirm / PIN completion / settlement already live. No second lifecycle.
+- **sokoni-business-workspace.js**: new `[data-hc-module]` attribute, keyed by MODULE.
+  - The old `[data-hc-section]` lookup used the section name, which never matched ratecards / bookingpin /
+    supporteddevices.
+  - Marked elements start hidden and stay hidden without a workspace answer (fail closed).
+  - The answer is shared via `window.__sokoniWorkspace` and a `sokoni:workspace` event, with no second call.
+- **provider-dashboard.html**: Repairs sidebar item (`data-hc-module="repairs"`, hidden) + panel; the editor's fill / save
+  hooks; script tag. Existing sections unchanged.
+- **sokoni-book-service.js**: a service with a device profile asks for device / brand / model / repair / mode / problem
+  before options or payment, and sends `repairDetails` with bookingCreateService. Never an amount; the server re-validates.
+- Tests:
+  - test-tech-service-editor: 8/0, sabotage caught. It uses a minimal fake DOM; T10 checks the vocabularies are
+    identical to the server validator.
+  - test-tech-directory 50/0, role-authority 155/0, convergence-server 14/14, role-entry-convergence 15/15.
+  - UNRUN (memory below the 512 MB floor): test-complete-application-browser and any real browser render of the
+    dashboard / booking modal.
+- Database / rules: none (server half adds the fields). Security: client fields are advisory; the server checks the
+  capability, the workspace and the vocabulary.
+
 ## [2026-10-03] - Tech Hub slice 4a (hosting): every Tech business id is registrable — hosting, NOT deployed
 
 - hub-register.js CATS (the ONE intake) adds `laptop-repair`, `computer-repair`, `electronics-repair`, `networking`,

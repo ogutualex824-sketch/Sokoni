@@ -53,6 +53,18 @@
       el.hidden = !show;
       if (show) el.removeAttribute('aria-hidden'); else el.setAttribute('aria-hidden', 'true');
     });
+    /* [data-hc-module] (Tech Hub slice 4b): looked up by MODULE key — [data-hc-section] above is keyed by section name,
+       which differs from the module key for ratecards / bookingpin / supporteddevices … and so never matched them.
+       Elements carrying it start hidden in the markup: no workspace answer → they stay hidden (fail closed). */
+    Array.prototype.forEach.call(document.querySelectorAll('[data-hc-module]'), function (el) {
+      var m = mods[el.getAttribute('data-hc-module')];
+      var show = !!(m && m.state === 'AVAILABLE');
+      el.hidden = !show;
+      if (show) el.removeAttribute('aria-hidden'); else el.setAttribute('aria-hidden', 'true');
+    });
+    /* Consumers that need the granted capabilities (the Tech service editor) read the same answer — never a second call. */
+    window.__sokoniWorkspace = w;
+    try { document.dispatchEvent(new CustomEvent('sokoni:workspace', { detail: w })); } catch (_) {}
     Array.prototype.forEach.call(document.querySelectorAll('.sb-group'), function (g) {
       var items = g.querySelectorAll ? g.querySelectorAll('[data-hc-section]') : [];
       g.hidden = !Array.prototype.some.call(items, function (el) { return !el.hidden; });

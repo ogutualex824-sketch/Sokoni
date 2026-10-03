@@ -293,6 +293,7 @@ a{color:var(--acc);text-decoration:none}
       <div class="sb-item" onclick="P.show('settings',this,'services')"><span class="sb-icon">🧰</span>Services</div>
       <div class="sb-item" onclick="P.show('calendar',this)"><span class="sb-icon">📆</span>Calendar</div>
       <div class="sb-item" onclick="P.show('bookings',this)"><span class="sb-icon">📅</span>Bookings</div>
+      <div class="sb-item" data-hc-module="repairs" hidden aria-hidden="true" onclick="P.show('repairs',this)"><span class="sb-icon">🔧</span>Repairs</div>
       <div class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Wallet</div>
       <div class="sb-item" onclick="P.show('customers',this)"><span class="sb-icon">👥</span>Customers</div>
       <div class="sb-item" onclick="P.show('reviews',this)"><span class="sb-icon">⭐</span>Reviews</div>
@@ -482,6 +483,12 @@ a{color:var(--acc);text-decoration:none}
           <button class="btn btn-s" onclick="B.loadMore()">Load more</button>
         </div>
       </div>
+    </div>
+
+    <!-- ── Repairs (Tech Hub slice 4b) — bookings carrying repairDetails; lifecycle stays in Bookings ── -->
+    <div class="panel" id="panel-repairs">
+      <div class="pg-header"><div><div class="pg-title">Repairs</div><div style="font-size:12px;opacity:.65">Device repair bookings — the device and problem your customer gave. Confirm, complete (booking PIN) and get paid in Bookings.</div></div></div>
+      <div style="padding:14px 20px"><div id="rpList"></div></div>
     </div>
 
     <!-- ── Earnings ──────────────────────────────────────────────────── -->
@@ -816,6 +823,7 @@ a{color:var(--acc);text-decoration:none}
 <script src="shared-header.js" defer></script>
 <script src="sokoni-provider.js" defer></script>
 <!-- shell gate: the dashboard is a projection of the server workspace authority (providerDispatch businessWorkspace); a held account is sent to /complete-application -->
+<script src="sokoni-tech-service-editor.js" defer></script>
 <script src="sokoni-business-workspace.js" defer></script>
 <script src="sokoni-booking-resolution.js" defer></script>
 <script src="sokoni-pricing-studio.js" defer></script>
@@ -844,6 +852,7 @@ const P={
     if(id==='customers')Cu.load();
     if(id==='analytics')An.load();
     if(id==='reviews')Rv.load();
+    if(id==='repairs'&&window.SokoniTechEditor)SokoniTechEditor.loadRepairs();
   }
 };
 
@@ -1717,8 +1726,8 @@ const Sv={
   _k2c(v){return Math.max(0,Math.round((parseFloat(v)||0)*100))},   // KSh → cents
   _c2k(v){return (Number(v)||0)/100},                               // cents → KSh
   _set(s){s=s||{};_q('svId').value=s.id||'';_q('svName').value=s.name||'';_q('svCat').value=s.category||'';_q('svPrice').value=s.price?this._c2k(s.price):'';_q('svType').value=s.priceType||'fixed';_q('svDur').value=s.durationMins||'';_q('svFee').value=s.fee?this._c2k(s.fee):'';_q('svDeposit').value=s.deposit?this._c2k(s.deposit):'';_q('svDesc').value=s.description||'';this._imgs=Array.isArray(s.images)?s.images.slice():[];this._renderImgs();_q('svImgFile').value='';_q('svForm').style.display='block';_q('svName').focus()},
-  openAdd(){this._set({})},
-  openEdit(id){const s=this._svc.find(x=>x.id===id);if(s)this._set(s)},
+  openAdd(){this._set({});if(window.SokoniTechEditor)SokoniTechEditor.fill(null)},
+  openEdit(id){const s=this._svc.find(x=>x.id===id);if(s){this._set(s);if(window.SokoniTechEditor)SokoniTechEditor.fill(s.techProfile)}},
   closeForm(){_q('svForm').style.display='none'},
   _renderImgs(){_q('svImgs').innerHTML=this._imgs.map(u=>`<div style="position:relative"><img src="${this._esc(u)}" style="width:52px;height:52px;object-fit:cover;border-radius:8px"><button type="button" onclick="Sv.removeImage('${this._esc(u)}')" style="position:absolute;top:-6px;right:-6px;background:var(--warn);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:.7rem;cursor:pointer">×</button></div>`).join('')},
   removeImage(u){this._imgs=this._imgs.filter(x=>x!==u);this._renderImgs()},
@@ -1739,6 +1748,8 @@ const Sv={
     if(!name){toast('Service name is required.','err');return}
     const id=_q('svId').value;
     const data={name,category:_q('svCat').value||'',description:_q('svDesc').value||'',priceType:_q('svType').value||'fixed',price:this._k2c(_q('svPrice').value),fee:this._k2c(_q('svFee').value),deposit:this._k2c(_q('svDeposit').value),images:this._imgs,durationMins:parseInt(_q('svDur').value)||0};
+    /* Tech Hub slice 4b: device / mode details — sent only when the server granted a Tech capability; validated there */
+    const tp=window.SokoniTechEditor?SokoniTechEditor.read():undefined;if(tp!==undefined)data.techProfile=tp;
     showLoad('Saving…');
     try{
       if(id){await this._fn()({op:'providerUpdateService',serviceId:id,...data})}

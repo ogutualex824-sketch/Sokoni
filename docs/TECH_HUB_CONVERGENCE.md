@@ -5,7 +5,7 @@ payment / booking / wallet / review / chat authority, no WhatsApp, AdminOS-gated
 dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]], [[Payments]], [[AdminOS]],
 [[IntaSend Convergence Brief]]. Strategy: no new hubs — Digital Hub folds into Tech Hub.
 
-**Status: slices 1, 2a, 2b, 3 and 4a built and tested; nothing deployed.**
+**Status: slices 1, 2a, 2b, 3, 4a and 4b built and tested; nothing deployed.**
 
 ## Authority map (census 2026-10-03)
 
@@ -88,6 +88,18 @@ All Tech modules are NOT_IMPLEMENTED (`TECH_HUB_PENDING`) except where a plan al
 a screen ships before its flag flips. Gaps found: provider-onboarding.html professions (`Network Engineer`, `IT Support`, …) classify through
 `FROM_PROFESSION` but are not business ids, so they grant no capability; a second intake to converge later. The approval-time
 category stamp (sokoni-5b) is required for any of this to reach `providers/{uid}.business`.
+
+## Slice 4b — device repair, end to end (what is real)
+
+| Step | Authority | State |
+|---|---|---|
+| Device / brand / repair / mode on a service | `providerServices.techProfile` via provider-ops add/update/duplicate + shared/tech-service-profile.js | built, executed tests (server 18/0) |
+| Only granted modes / device fields only with DEVICE_REPAIR or ELECTRONICS | workspaceFor capabilities + assertModule | built; mutation "grant all caps" caught |
+| Customer gives device + problem when booking | sokoni-book-service device step → bookingCreateService `repairDetails` | built; server rejects uncovered device; price unchanged |
+| Provider sees repair requests | Repairs panel = providerGetBookings with repairDetails | built (fake-DOM test); browser UNRUN |
+| Confirm / complete / settle | existing Bookings + booking PIN + `_disburseHeldFunds` | existing (not re-proven here) |
+| Diagnostics module | — | NOT_IMPLEMENTED (no screen) |
+| Message the customer about a repair | messages.js maps service_booking → `bookings` (wrong; engine writes providerBookings); messages.html ignores ctx | **BROKEN — slice 4L** |
 
 ## Category matrix (honest)
 

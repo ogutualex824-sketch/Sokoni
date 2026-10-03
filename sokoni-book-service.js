@@ -129,6 +129,45 @@
     let svc;
     try { svc = (await firebase.firestore().collection('providerServices').doc(_ctx.serviceId).get()).data() || {}; }
     catch (e) { return create(); }
+    /* Tech Hub slice 4b: a service with a device profile asks for the customer's device first. The server validates it
+       against what the service covers (bookingCreateService → repairDetails) and never prices from it. */
+    if (svc.techProfile && Array.isArray(svc.techProfile.deviceTypes) && svc.techProfile.deviceTypes.length && !_ctx.repairDetails) {
+      _ctx.svcDoc = svc;
+      return renderDevice(svc.techProfile);
+    }
+    return afterDevice(svc);
+  }
+  const DEVICE_LABEL = { phone: 'Phone', tablet: 'Tablet', laptop: 'Laptop', desktop: 'Desktop / PC', tv: 'TV', audio: 'Audio / speakers',
+    console: 'Game console', smartwatch: 'Smartwatch', printer: 'Printer', appliance: 'Small appliance', other: 'Other device' };
+  const REPAIR_LABEL = { diagnostics: 'Diagnostics / inspection', screen: 'Screen / display', battery: 'Battery', charging: 'Charging port / power',
+    water: 'Water damage', software: 'Software / OS', data: 'Data recovery / transfer', keyboard: 'Keyboard / trackpad',
+    board: 'Motherboard / board-level', camera: 'Camera', audio: 'Speaker / microphone', buttons: 'Buttons / housing',
+    network: 'Network / Wi-Fi / SIM', upgrade: 'Upgrade (RAM / storage)', other: 'Other repair' };
+  const MODE_LABEL = { WORKSHOP: 'At the workshop', ONSITE_SUPPORT: 'On-site (they come to you)', FIELD_SERVICE: 'Field service / site visit',
+    PICKUP_DROP_OFF: 'Pickup & drop-off', REMOTE_SUPPORT: 'Remote support' };
+  function renderDevice(tp) {
+    title('Your device');
+    const opt = (v, l) => '<option value="' + esc(v) + '">' + esc(l) + '</option>';
+    let html = '<div class="sbs-day">Device</div><select class="sbs-in" id="sbsDev">' + opt('', 'Choose…') + tp.deviceTypes.map(d => opt(d, DEVICE_LABEL[d] || d)).join('') + '</select>';
+    if (tp.brands && tp.brands.length) html += '<div class="sbs-day">Brand</div><select class="sbs-in" id="sbsBrand">' + opt('', 'Choose…') + tp.brands.map(b => opt(b, b)).join('') + '</select>';
+    html += '<div class="sbs-day">Model (optional)</div><input class="sbs-in" id="sbsModel" maxlength="60" placeholder="e.g. Galaxy A54">';
+    if (tp.repairTypes && tp.repairTypes.length) html += '<div class="sbs-day">What needs fixing</div><select class="sbs-in" id="sbsRepair">' + opt('', 'Not sure') + tp.repairTypes.map(r => opt(r, REPAIR_LABEL[r] || r)).join('') + '</select>';
+    if (tp.serviceModes && tp.serviceModes.length > 1) html += '<div class="sbs-day">How</div><select class="sbs-in" id="sbsMode">' + tp.serviceModes.map(m => opt(m, MODE_LABEL[m] || m)).join('') + '</select>';
+    html += '<div class="sbs-day">Describe the problem</div><textarea class="sbs-in" id="sbsProblem" maxlength="500" rows="3" placeholder="What happened, any error messages…"></textarea>';
+    html += '<div id="sbsDevErr" class="sbs-empty" style="color:#ff6b6b;display:none"></div>';
+    html += '<button class="sbs-btn" onclick="SokoniBookService._device()">Continue</button>';
+    body(html);
+  }
+  function deviceContinue() {
+    const val = (id) => { const el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; };
+    const tp = (_ctx.svcDoc && _ctx.svcDoc.techProfile) || {};
+    const err = document.getElementById('sbsDevErr');
+    if (!val('sbsDev')) { if (err) { err.textContent = 'Choose your device.'; err.style.display = 'block'; } return; }
+    _ctx.repairDetails = { deviceType: val('sbsDev'), brand: val('sbsBrand'), model: val('sbsModel'), repairType: val('sbsRepair'),
+      serviceMode: val('sbsMode') || ((tp.serviceModes || []).length === 1 ? tp.serviceModes[0] : ''), problem: val('sbsProblem') };
+    return afterDevice(_ctx.svcDoc || {});
+  }
+  function afterDevice(svc) {
     const p = svc.pricing;
     const advanced = p && ((p.packages && p.packages.length) || (p.addOns && p.addOns.filter(a => a.available !== false).length) || p.extraHourRate);
     if (!advanced) return create();                       /* simple/legacy service → unchanged flow */
@@ -207,7 +246,8 @@
          authoritative total (computePrice) and snapshots it on the booking. */
       const sel = _ctx.selection || {};
       bk = await call('providerDispatch', { op: 'bookingCreateService', providerId: _ctx.providerId, serviceId: _ctx.serviceId, date: _ctx.date, startTime: _ctx.time,
-        packageId: sel.packageId || undefined, addOns: sel.addOns || [], durationMins: sel.durationMins || undefined, distanceKm: Number(_ctx.distanceKm) || undefined });
+        packageId: sel.packageId || undefined, addOns: sel.addOns || [], durationMins: sel.durationMins || undefined, distanceKm: Number(_ctx.distanceKm) || undefined,
+        repairDetails: _ctx.repairDetails || undefined });   /* Tech slice 4b — descriptive; the server validates it and never prices from it */
     } catch (e) { if (go) { go.disabled = false; go.textContent = 'Try another time'; } title('Slot unavailable'); alert(e.message || 'That slot is no longer available.'); return loadSlots(); }
     _ctx.bookingId = bk.bookingId;
     _ctx.expiresAt = Number(bk.expiresAt) || null;                     /* pre-payment hold deadline (epoch ms) */
@@ -387,6 +427,7 @@
     },
     _pick: pick, _pickSvc: pickSvc, _create: create, _pay: pay, _star: star, _review: submitReview,
     _chooseOptions: chooseOptions, _opt: updatePreview, _continue: continueToBooking,   /* Slice D */
+    _device: deviceContinue,                                                            /* Tech Hub slice 4b */
   };
   global.SokoniBookService = Api;
   /* Auto-resume if the customer refreshed mid-booking. */
