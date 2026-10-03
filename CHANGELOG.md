@@ -1,3 +1,12 @@
+## [2026-10-03] — Legal Hub hosting base: 2f Legal UI merged onto the live-descended chain; AdminOS Legal Verification panel ported — NOT deployed
+
+- **legal-hub.html:** three-way merge of the 2f line (0718604 in-app booking/registration, b24b052 verification badges, 473de85) onto this chain (Slice B 14ea4f7). Two conflicts:
+  - Commission link: the owner's Slice B support-ticket wording is kept.
+  - Booking modal: 2f's server-record version is taken, dropping the client-written leadFees and the old WhatsApp path.
+- **sokoni-aos-legal.js:** taken whole from 9cab901.
+- **admin-os.html / sokoni-aos.js:** the Legal Verification nav item, panel, loader, ops whitelist and script tag, ported by hand onto this layout from b24b052. They were in no hosting input before.
+- The booking itself moves to bookingCreateService in L3. This commit only assembles the base.
+
 ## [2026-10-03] — Fitness Memberships wired into the provider dashboard (e3 d70eca5 exact diff) — NOT deployed
 
 - **provider-dashboard.html:** adds a Memberships sidebar item, hidden behind data-hc-module="memberships" (fail closed); panel-memberships with mbList; a P.show mount line; and the sokoni-fitness-memberships.js script.

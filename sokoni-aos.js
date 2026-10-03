@@ -246,6 +246,8 @@ window.SokoniAOS = (() => {
       config:        () => _loadConfig(),
       audit:         () => _loadAudit(),
       security:      () => _loadSecurity(),
+      /* Legal Verification — sokoni-aos-legal.js over functions/legal-verification.js (_adminH). Ported from b24b052. */
+      legal:         () => _loadLegal(),
       hubs:          () => _loadHubs(),
       workflows:     () => _loadWorkflows(),
     };
@@ -254,6 +256,7 @@ window.SokoniAOS = (() => {
 
   // Admin-OS ops whitelist — routes through adminOsDispatch to reduce Cloud Run services
   const _ADMIN_OS_OPS = new Set([
+    ...((window.SokoniAOSLegal && window.SokoniAOSLegal.OPS) || []),
     'adminCreateSupportTicket','adminDeleteBanner','adminDeleteFaq',
     'adminGetAiStats','adminGetAnnouncements','adminGetAuditLogs','adminGetBanners',
     'adminGetBookings','adminGetCategories','adminGetDeliveryStats','adminGetDisputes',
@@ -2108,6 +2111,17 @@ window.SokoniAOS = (() => {
   }
 
   // ── Security ──────────────────────────────────────────────────────────────────
+  async function _loadLegal() {
+    const body = document.getElementById("legalBody");
+    if (!body) return;
+    if (!(window.SokoniAOSLegal && typeof window.SokoniAOSLegal.mount === "function")) {
+      body.innerHTML = "<p class='aos-muted'>Legal verification console (sokoni-aos-legal.js) is not loaded.</p>";
+      return;
+    }
+    try { window.SokoniAOSLegal.mount({ host: body, call: _call }); }
+    catch (e) { body.innerHTML = "<p class='aos-muted'>Legal verification console failed to start: " + _esc(e && e.message) + "</p>"; }
+  }
+
   async function _loadSecurity() {
     const body = document.getElementById("securityBody");
     if (!body) return;
