@@ -310,7 +310,7 @@ async function handle(req) {
   }
 
   /* ── authoring (own course; DRAFT freely, PUBLISHED through re-review) ── */
-  if (!['list', 'save', 'remove', 'reorder', 'setLessonStatus', 'submitRevision', 'revisionSummary'].includes(d.op)) _deny('invalid-argument', 'Unknown operation.', 'OP_UNKNOWN');
+  if (!['list', 'save', 'remove', 'reorder', 'setLessonStatus', 'submitRevision', 'revisionSummary', 'uploadTarget'].includes(d.op)) _deny('invalid-argument', 'Unknown operation.', 'OP_UNKNOWN');
   await _assertEducator(db, uid);
   const c0 = await courseRef.get();
   if (!c0.exists || c0.data().instructorUid !== uid) _deny('permission-denied', 'not course owner', 'NOT_COURSE_OWNER');
@@ -394,6 +394,18 @@ async function handle(req) {
     };
   };
   if (d.op === 'revisionSummary') return { ok: true, live: liveCourse, summary: summaryOf() };
+  /* the SERVER names where a material may be uploaded: authenticated educator → OWN course → own namespace. The browser
+     never chooses the folder; storage.rules and materialPath() re-check it, and the bytes are verified before signing. */
+  if (d.op === 'uploadTarget') {
+    const base = _str(d.fileName, 120).replace(/[^A-Za-z0-9 ._()-]/g, '_').replace(/^[^A-Za-z0-9]+/, '');
+    const type = String(d.contentType || '').toLowerCase();
+    const size = Number(d.size);
+    if (!MATERIAL_TYPES[type]) _deny('invalid-argument', 'That file type is not allowed. Use PDF, images, Word, PowerPoint, Excel or text.', 'TYPE_NOT_ALLOWED');
+    if (!(size > 0) || size > MATERIAL_MAX_BYTES) _deny('invalid-argument', 'Files can be up to 25 MB.', 'TOO_LARGE');
+    const name = Date.now() + '_' + (base || 'file');
+    if (!MATERIAL_NAME.test(name)) _deny('invalid-argument', 'Rename the file with a normal extension (e.g. notes.pdf).', 'NAME_INVALID');
+    return { ok: true, path: 'course-materials/' + uid + '/' + courseId + '/' + name, contentType: type, maxBytes: MATERIAL_MAX_BYTES };
+  }
   if (d.op === 'submitRevision') {
     if (!liveCourse) _deny('failed-precondition', 'Submit a draft course with "Submit for review" instead.', 'NOT_PUBLISHED');
     const summary = summaryOf();
