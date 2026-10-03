@@ -12,6 +12,7 @@
      W7  gate CLOSED: processPendingPayouts / autoScheduledPayouts / processPayoutRetries move nothing
      W8  reconcilePayouts (inspect-only) keeps running; W9 positive control — gate OPEN lets the mover proceed
      W10 initiateSellerPayout honours the gate before any B2C
+     W11 adminProcessPayout: approve (may auto-B2C) / paid refused while OFF; reject still allowed
    NODE_PATH=<functions/node_modules> node scripts/test-withdrawals-off.js */
 const path = require('path'), fs = require('fs');
 const FN = path.join(path.resolve(__dirname, '..'), 'functions');
@@ -114,6 +115,13 @@ const ck = (id, ok, m, got) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + ' '
   const idx2 = fs.readFileSync(path.join(FN, 'index.js'), 'utf8'); const k = idx2.indexOf('exports.initiateSellerPayout = onCall'); const body = idx2.slice(k, k + 3000);
   const gi = body.indexOf("require('./shared/withdrawal-gate').withdrawalsOpen(admin.firestore())"), si = body.indexOf('INTASEND_PRIVATE_KEY.value()');
   ck('W10', gi > 0 && si > gi, 'initiateSellerPayout (admin B2C) checks the gate right after the admin check, before the secret / any B2C', { gi, si });
+  /* W11 admin approval (may auto-B2C) / attest paid refused while OFF; reject (returns money) still allowed */
+  H.reset(); DOCS.set('payoutRequests/rq1', { sellerUid: 'prov1', amount: 5000, status: 'pending' }); DOCS.set('wallets/prov1', { balance: 0, pendingPayout: 5000 });
+  const ap = await call((r) => W.adminProcessPayout.run(r), 'admin1', { requestId: 'rq1', status: 'approved' }, { admin: true });
+  const pd = await call((r) => W.adminProcessPayout.run(r), 'admin1', { requestId: 'rq1', status: 'paid' }, { admin: true });
+  const rj = await call((r) => W.adminProcessPayout.run(r), 'admin1', { requestId: 'rq1', status: 'rejected', note: 'withdrawals off' }, { admin: true });
+  ck('W11', ap.det && ap.det.code === 'WITHDRAWALS_DISABLED' && pd.det && pd.det.code === 'WITHDRAWALS_DISABLED' && !(rj.det && rj.det.code === 'WITHDRAWALS_DISABLED'),
+    'adminProcessPayout: approve / paid refused while withdrawals are OFF; reject (money back to the seller) still allowed', [ap.det || ap.code, pd.det || pd.code, rj.ok || rj.code]);
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e && e.stack); process.exit(1); });
