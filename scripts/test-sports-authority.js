@@ -175,6 +175,22 @@ const refused = (x, code) => x.ok === false && (!code || x.code === code);
   ck('X8 organiser corrects + resolves → audit history keeps submit/dispute/correction/confirm; standings reflect 1-2',
     x.ok && db._docs.get('sportsFixtures/' + G).history.filter((h) => /^result_/.test(h.event)).length === 4 && db._docs.get('tournaments/' + TR).standings[g0.awayTeamId].pts === 3);
 
+  /* ── dashboard reads ── */
+  const me = await call(A('cap1'), { op: 'me.overview' });
+  ck('V1 me.overview: roles derived from real relationships (cap1 = player + captain, not organiser); own team listed; fixtures for the team only',
+    me.ok && me.r.roles.captain === true && me.r.roles.player === true && me.r.roles.organiser === false && me.r.teams.some((t) => t.teamId === T1 && t.myRole === 'captain')
+    && me.r.fixtures.length > 0 && me.r.fixtures.every((f) => f.homeTeamId === T1 || f.awayTeamId === T1));
+  const org = await call(A('org1'), { op: 'me.overview' });
+  ck('V2 the organiser sees the tournaments they run (not other organisers\')', org.ok && org.r.roles.organiser === true && org.r.organising.some((t) => t.tournamentId === TR) && !org.r.organising.some((t) => t.tournamentId === TRF));
+  const pend = await call(A('p3'), { op: 'me.overview' });
+  ck('V3 a pending invitation shows under invitations, not as membership', pend.ok && pend.r.invitations.some((t) => t.teamId === T1) && pend.r.roles.player === false);
+  const open = await call(A('anyone'), { op: 'tournaments.open', sport: 'football' });
+  ck('V4 tournaments.open lists only registration_open tournaments (the paid cup is open; the fixtures_published cup is not)', open.ok && open.r.tournaments.some((t) => t.tournamentId === TRF) && !open.r.tournaments.some((t) => t.tournamentId === TR));
+  const draft = (await call(A('org9'), Object.assign({ op: 'tournament.create', name: 'Secret Cup', sport: 'football', capacity: 4 }, dates))).r.tournamentId;
+  ck('V5 tournament.view: a draft is not public; a published tournament shows standings + fixtures (only confirmed results)',
+    refused(await call(A('anyone'), { op: 'tournament.view', tournamentId: draft }), 'failed-precondition')
+    && (await call(A('anyone'), { op: 'tournament.view', tournamentId: TR })).r.fixtures.length === 6);
+
   /* ── AdminOS queue ── */
   await call(A('capQ'), { op: 'team.register', name: 'Queue FC', sport: 'football', submit: true });
   const q = await call(A('admin1', true), { op: 'admin.queue' });

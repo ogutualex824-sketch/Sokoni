@@ -515,6 +515,75 @@ async function adminQueue (db) {
   };
 }
 
+/* ── ME (dashboards read this — server-scoped, never another person's private data) ── */
+/** The caller's Sports picture: roles derived from REAL relationships (never a browser-chosen role), memberships,
+    invitations, teams they lead, tournaments they organise, their teams' registrations and upcoming fixtures. */
+async function meOverview (db, uid, deps) {
+  const c = _ctx(deps);
+  const now = c.now().getTime();
+  const ms = await db.collection('sportsTeamMembers').where('uid', '==', uid).limit(50).get();
+  const memberships = (ms.docs || []).map((d) => d.data() || {}).filter((m) => ['active', 'invited'].includes(m.status));
+  const teamIds = [...new Set(memberships.map((m) => m.teamId))];
+  const teams = [];
+  for (const id of teamIds) {
+    const t = await db.collection('teams').doc(id).get();
+    if (!t.exists) continue;
+    const td = t.data() || {};
+    const m = memberships.find((x) => x.teamId === id) || {};
+    teams.push({ teamId: id, name: td.name, sport: td.sport, status: td.status, verification: td.verification,
+      myStatus: m.status, myRole: td.captainUid === uid ? 'captain' : (Array.isArray(td.managerUids) && td.managerUids.includes(uid)) ? 'manager' : m.role || 'player' });
+  }
+  const owned = await db.collection('teams').where('ownerUid', '==', uid).limit(50).get();
+  for (const d of owned.docs || []) {
+    if (!teams.some((t) => t.teamId === d.id)) { const td = d.data() || {}; teams.push({ teamId: d.id, name: td.name, sport: td.sport, status: td.status, verification: td.verification, myStatus: 'owner', myRole: 'captain' }); }
+  }
+  const org = await db.collection('tournaments').where('organiserUid', '==', uid).limit(50).get();
+  const organising = (org.docs || []).map((d) => { const t = d.data() || {}; return { tournamentId: d.id, name: t.name, sport: t.sport, status: t.status, capacity: t.capacity, entryFeeKES: t.entryFeeKES, regClosesAt: t.regClosesAt, startsAt: t.startsAt }; });
+  const led = teams.filter((t) => ['captain', 'manager'].includes(t.myRole)).map((t) => t.teamId);
+  const registrations = [];
+  for (const teamId of led) {
+    const rs = await db.collection('sportsTournamentRegs').where('teamId', '==', teamId).limit(50).get();
+    for (const d of rs.docs || []) { const r = d.data() || {}; registrations.push({ registrationId: d.id, tournamentId: r.tournamentId, teamId, status: r.status }); }
+  }
+  const activeTeams = teams.filter((t) => t.myStatus === 'active' || t.myStatus === 'owner').map((t) => t.teamId);
+  const fixtures = [];
+  for (const teamId of activeTeams) {
+    for (const side of ['homeTeamId', 'awayTeamId']) {
+      const fs = await db.collection('sportsFixtures').where(side, '==', teamId).limit(50).get();
+      for (const d of fs.docs || []) {
+        const f = d.data() || {};
+        if (fixtures.some((x) => x.fixtureId === d.id)) continue;
+        if (f.startsAt && f.startsAt < now - 7 * 86400000) continue;
+        fixtures.push({ fixtureId: d.id, tournamentId: f.tournamentId, round: f.round, homeTeamId: f.homeTeamId, awayTeamId: f.awayTeamId, venueId: f.venueId || null,
+          startsAt: f.startsAt || null, status: f.status, result: f.result ? { home: f.result.home, away: f.result.away, status: f.result.status } : null });
+      }
+    }
+  }
+  fixtures.sort((a, b) => (a.startsAt || 9e15) - (b.startsAt || 9e15));
+  const roles = { player: teams.some((t) => t.myStatus === 'active'), captain: led.length > 0, organiser: organising.length > 0 };
+  return { ok: true, roles, teams, invitations: teams.filter((t) => t.myStatus === 'invited'), organising, registrations, fixtures };
+}
+
+/** Public tournament view for registration: approved/open tournaments of a sport (no private fields). */
+async function tournamentsOpen (db, data) {
+  const snap = await db.collection('tournaments').where('status', '==', 'registration_open').limit(100).get();
+  const sport = data && data.sport ? String(data.sport).toLowerCase() : null;
+  return { ok: true, tournaments: (snap.docs || []).map((d) => { const t = d.data() || {}; return { tournamentId: d.id, name: t.name, sport: t.sport, category: t.category || null,
+    capacity: t.capacity, entryFeeKES: t.entryFeeKES, regOpensAt: t.regOpensAt, regClosesAt: t.regClosesAt, startsAt: t.startsAt }; }).filter((t) => !sport || t.sport === sport) };
+}
+
+/** A tournament's public standings + fixtures (one record each; every view reads the same). */
+async function tournamentView (db, data) {
+  const t = await db.collection('tournaments').doc(String(data.tournamentId || '')).get();
+  if (!t.exists) fail('not-found', 'Tournament not found.');
+  const td = t.data() || {};
+  if (['draft', 'submitted', 'under_review', 'rejected'].includes(td.status)) fail('failed-precondition', 'This tournament is not public yet.');
+  const fx = await db.collection('sportsFixtures').where('tournamentId', '==', t.id).limit(500).get();
+  return { ok: true, tournament: { tournamentId: t.id, name: td.name, sport: td.sport, status: td.status, startsAt: td.startsAt, standings: td.standings || {} },
+    fixtures: (fx.docs || []).map((d) => { const f = d.data() || {}; return { fixtureId: d.id, round: f.round, homeTeamId: f.homeTeamId, awayTeamId: f.awayTeamId, startsAt: f.startsAt || null, venueId: f.venueId || null, status: f.status,
+      result: f.result && ['confirmed', 'resolved'].includes(f.result.status) ? { home: f.result.home, away: f.result.away } : null }; }) };
+}
+
 /* ── MATCH REMINDERS ───────────────────────────────────────────────────────────── */
 /* Reminders hang off THE fixture record. Every RUN_EVERY_MS the job finds fixtures whose start falls inside a reminder
    window and notifies the active members of both teams. The dedupeKey names fixture + window + person + startsAt, so a
@@ -564,6 +633,9 @@ const OPS = {
   'result.submit': (db, a, d, deps) => resultSubmit(db, a.uid, d, deps),
   'result.confirm': (db, a, d, deps) => resultConfirm(db, a.uid, d, deps),
   'result.dispute': (db, a, d, deps) => resultDispute(db, a.uid, d, deps),
+  'me.overview': (db, a, d, deps) => meOverview(db, a.uid, deps),
+  'tournaments.open': (db, a, d) => tournamentsOpen(db, d),
+  'tournament.view': (db, a, d) => tournamentView(db, d),
   'admin.queue': (db, a) => { if (!a.admin) fail('permission-denied', 'Admins only.'); return adminQueue(db); },
   'admin.teamDecide': (db, a, d, deps) => { if (!a.admin) fail('permission-denied', 'Admins only.'); return adminTeamDecide(db, a.uid, d, deps); },
   'admin.tournamentDecide': (db, a, d, deps) => { if (!a.admin) fail('permission-denied', 'Admins only.'); return adminTournamentDecide(db, a.uid, d, deps); },
@@ -614,5 +686,5 @@ let sportsDispatch, sportsFixtureReminders;
 }
 
 module.exports = { OPS, dispatch, roundRobin, SportsError, memberId, regId, sportsDispatch, sportsFixtureReminders, remindFixtures, REMINDER_WINDOWS,
-  _internal: { teamRegister, adminTeamDecide, teamInvite, teamRespond, teamRemove, tournamentCreate, registrationApply, registrationDecide,
+  _internal: { meOverview, tournamentsOpen, tournamentView, teamRegister, adminTeamDecide, teamInvite, teamRespond, teamRemove, tournamentCreate, registrationApply, registrationDecide,
     fixturesPublish, fixtureUpdate, resultSubmit, resultConfirm, resultDispute } };
