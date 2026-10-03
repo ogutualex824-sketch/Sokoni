@@ -6,6 +6,7 @@
      MK3  plans: marketing_free 0 / professional 1,499 / agency 4,999, monthly; entitlement keys agreed with b2
      MK4  requireFeature: Free has no campaign tools → Professional; 11th campaign on Professional → Agency
      MK6-9 settlement lane from the BOOKING snapshot: serviceHub marketing + taxonomy id → 10%; unknown → refused; else unchanged
+     WM1-4 Work engine milestones: stamped workCommissionCategory allowlist (construction 0%, marketing 10%), else refused; commissionRuleFor snapshot
      MK5  shared/marketing-taxonomy.js is byte-identical to sokoni-b2's d5d81d6 copy (one taxonomy, two lines)
    NODE_PATH=<functions/node_modules> node scripts/test-marketing-commercial.js */
 const path = require('path'), Module = require('module'), cp = require('child_process'), fs = require('fs');
@@ -49,6 +50,20 @@ const db = { collection: () => ({ doc: () => ({ async get () { return { exists: 
   const src = fs.readFileSync(path.join(FN, 'provider-ops.js'), 'utf8');
   ck('MK9 BOTH provider-ops commission call sites (completion + forfeited deposit) use the per-booking selector; none left on commissionArgsForHub',
     (src.match(/commissionArgsForBooking\(data\)/g) || []).length === 2 && !/commissionArgsForHub\(/.test(src));
+  /* Work/Job Engine milestones (b2 WE2; owner: construction 0%, marketing campaign/project 10%) */
+  const wc = args({ kind: 'work_milestone', workCommissionCategory: 'construction_service', serviceHub: 'marketing', serviceCategory: 'brand-strategy', commissionHub: 'provider' });
+  const wcC = await FU.calculateCommission(db, { orderAmountCents: 10000000, sellerId: 'P1', ...wc });
+  const wmk = args({ kind: 'work_milestone', workCommissionCategory: 'marketing_services' });
+  const wmC = await FU.calculateCommission(db, { orderAmountCents: 1000000, sellerId: 'P1', ...wmk });
+  ck('WM1 construction milestone → construction_service 0% (KES 100,000 → 0), even with a marketing serviceHub on the doc (never falls back)', wc.category === 'construction_service' && wcC.commissionCents === 0, wc);
+  ck('WM2 marketing milestone → marketing_services 10% (KES 10,000 → 1,000)', wmk.category === 'marketing_services' && wmC.commissionCents === 100000);
+  ck('WM3 milestone with no / unknown / prototype-key category → REFUSED category_unpriced (never services 5%)',
+    ['', 'services', 'construction_project_fee', 'toString', '__proto__'].every((c) => args({ kind: 'work_milestone', workCommissionCategory: c, commissionHub: 'provider' }).refused === 'category_unpriced')
+    && args({ kind: 'work_milestone' }).refused === 'category_unpriced');
+  const r1 = PH.commissionRuleFor({ kind: 'work_milestone', workCommissionCategory: 'marketing_services' }), r2 = PH.commissionRuleFor({ kind: 'work_milestone', workCommissionCategory: 'x' }), r3 = PH.commissionRuleFor({ commissionHub: 'healthcare' });
+  ck('WM4 commissionRuleFor is pure + never throws: {category, pct, basis, catalogueVersion}; unpriced → refused; ordinary bookings described too',
+    r1.category === 'marketing_services' && r1.pct === 10 && r1.basis === 'service_price' && r1.catalogueVersion === CC.COMMISSION_POLICY_VERSION && r1.refused === null
+    && r2.refused === 'category_unpriced' && r2.pct === null && r3.category === 'healthcare' && r3.pct === 5, { r1, r2, r3 });
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e && e.stack); process.exit(1); });

@@ -206,8 +206,21 @@ function commissionArgsForHub(hub) {
    (shared/marketing-taxonomy.js, byte-identical with b2's line). Approval was checked by bookingCreateService at booking time;
    a later category change must NOT rewrite a historical booking's commission. A 'marketing' booking whose category is missing
    or unknown is REFUSED (category_unpriced) — never the 5 % services default. Every other booking → commissionArgsForHub. */
+/* Work/Job Engine milestones (b2 WE2; owner 2026-10-03): the lane is the category workDispatch STAMPED on the milestone booking
+   at mint time from the project skin — never serviceHub / commissionHub. Allowlist only: contractor work 0% (construction_service)
+   and marketing 10% (owner via b2: campaign/project milestones settle like marketing, no extra fee). Anything else is refused. */
+const WORK_MILESTONE_CATEGORIES = Object.freeze({
+  construction_service: { hubId: 'construction', skipMinimum: true },
+  marketing_services: { hubId: 'marketing', skipMinimum: true },
+});
 function commissionArgsForBooking(booking) {
   const b = booking || {};
+  if (b.kind === 'work_milestone') {
+    const cat = String(b.workCommissionCategory || '');
+    const lane = Object.prototype.hasOwnProperty.call(WORK_MILESTONE_CATEGORIES, cat) ? WORK_MILESTONE_CATEGORIES[cat] : null;
+    if (!lane) { const e = new Error('This milestone has no priced commission category.'); e.code = 'category_unpriced'; throw e; }
+    return { category: cat, hubId: lane.hubId, skipMinimum: lane.skipMinimum };
+  }
   if (b.serviceHub === 'marketing') {
     if (require('./shared/marketing-taxonomy').isArea(String(b.serviceCategory || ''))) {
       return { category: 'marketing_services', hubId: 'marketing', skipMinimum: true };
@@ -217,4 +230,19 @@ function commissionArgsForBooking(booking) {
   return commissionArgsForHub(b.commissionHub);
 }
 
-module.exports = { resolveProviderHub, resolveProviderClassification, classifyDecidedApplication, commissionArgsForHub, commissionArgsForBooking, isCoachApplication, ROLE_TO_HUB, DEFAULT_HUB };
+/* PURE snapshot of the catalogue rule a booking will settle under (owner: every booking / accepted quote stores
+   commissionRuleSnapshot). For STAMPING at mint/booking time as the historical record — settlement still recomputes through
+   finos-utils.calculateCommission (which may apply admin commissionRules / revenueConfig adjustments), and a mismatch between
+   the two is something to flag, not to charge from. Never throws: an unpriced booking returns {refused:'category_unpriced'}. */
+function commissionRuleFor(bookingLike) {
+  const CC = require('./commission-config');
+  let args;
+  try { args = commissionArgsForBooking(bookingLike); } catch (e) {
+    return { category: null, pct: null, basis: null, catalogueVersion: CC.COMMISSION_POLICY_VERSION, refused: e.code || 'category_unpriced' };
+  }
+  const r = CC.resolveRate(args.category);
+  return { category: r.category, pct: r.pct, basis: 'service_price', catalogueVersion: CC.COMMISSION_POLICY_VERSION,
+    fixed: CC.isFixedRateCategory(args.category) === true, refused: null };
+}
+
+module.exports = { resolveProviderHub, resolveProviderClassification, classifyDecidedApplication, commissionArgsForHub, commissionArgsForBooking, commissionRuleFor, WORK_MILESTONE_CATEGORIES, isCoachApplication, ROLE_TO_HUB, DEFAULT_HUB };

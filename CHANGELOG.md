@@ -1,3 +1,10 @@
+## 2026-10-03 — Work/Job Engine milestone commission lane + commissionRuleFor snapshot (NOT deployed)
+
+- **Change:** provider-hub.commissionArgsForBooking: kind `work_milestone` → the server-stamped `workCommissionCategory` from an allowlist ONLY — construction_service (0%, owner: contractor work 0%) and marketing_services (10%, owner via b2 2026-10-03: campaign/project milestones settle like marketing, no extra fee); anything else → REFUSED category_unpriced, never serviceHub/commissionHub fallback. New pure `commissionRuleFor(bookingLike)` → {category, pct, basis:'service_price', catalogueVersion, fixed, refused} for the owner's commissionRuleSnapshot (historical record; settlement still recomputes).
+- **Files:** functions/provider-hub.js, scripts/test-marketing-commercial.js (WM1–WM4).
+- **Depends on:** b2 WE2 (workPayMilestone stamps workCommissionCategory; provider-ops cancel refuses a paid_held work_milestone).
+- **Tests:** marketing 13/0, entertainment 98/0, healthcare-payment 40/0, legal-cap 9/0, plan-ladder 38/0, construction 10/0.
+
 ## 2026-10-03 — commission-config.workFeeFor(skin, kind) for the Work/Job Engine (read-only) (NOT deployed)
 
 - **Change:** returns the fee STATE for a managed project/milestone — construction project|milestone → the construction_project_fee row (1.5%, configured:true, enabled:false, effectiveFrom:null, label); marketing campaign|project → unpriced (configured:false, pct:null); unknown → {configured:false, enabled:false, pct:null}, never 0. Frozen; never a pricing input, never charges. Asked by b2's WE1 workDispatch via f3.
