@@ -1,3 +1,11 @@
+## 2026-10-03 — Venue defect B: commission ledger re-priced with the settlement on a partial refund (NOT deployed)
+
+- **Bug:** onVenueRefundProcessed (partial refund) re-priced venueSettlements on the kept fee but left commissionLedger/ven_<ref> at the FULL-gross commission, which _release then marked collected — SOKONI revenue overstated (e.g. 500 recorded instead of 100 on a 10,000 booking with 2,000 kept). A replay after release fell through to engine.revoke (false refund_after_release exception).
+- **Fix:** settlement + ledger updated in ONE transaction (re-read; HELD and not-yet-adjusted guards; ledger keeps originalCommissionCents + adjustedFor:'partial_refund'); replay returns skipped 'partial_refund_already_applied'.
+- **Files:** functions/venue-payments.js, scripts/test-entertainment-bookings.js (3 DEFECT B rows; mutant without the ledger update FAILS).
+- **DB:** new fields only (originalCommissionCents, adjustedFor, refundedCents on the ledger). **Security/breaking:** none.
+- **Tests:** entertainment 98/0, event-settlement 111 passed, 0 failed.
+
 ## 2026-10-03 — Sports: public team directory + signed-out public reads (NOT deployed)
 
 - **Change:** sportsDispatch `teams.directory` — approved, non-restricted/suspended teams only; safe fields (no uids/roster); `verified` from the server verification state; optional sport/county filter; capped at 100. `PUBLIC_OPS` = tournaments.open / tournament.view / teams.directory work signed-out (App Check still enforced); every other op still requires sign-in. Replaces the hub page's invented TEAMS seed.

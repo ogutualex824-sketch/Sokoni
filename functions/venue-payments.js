@@ -298,11 +298,24 @@ async function onVenueRefundProcessed({ payRef, amountCents }) {
     const s = (await setRef.get()).data();
     const gross = s ? Number(s.grossCents) : null;
     const reqRef = _db().collection(COL.REQUESTS).doc(String(intent.resourceId));
+    if (s && s.originalGrossCents !== undefined) return { skipped: 'partial_refund_already_applied' };   /* replay: never fall through to revoke */
     if (s && Number.isFinite(gross) && Number(amountCents) < gross && s.status === SETTLEMENT.HELD) {
-      const kept = gross - Number(amountCents);
-      const k = computeSettlement({ grossCents: kept, providerFeeCents: s.providerFeeCents });
-      await setRef.update({ grossCents: kept, commissionCents: k.commissionCents, netCents: k.netCents, originalGrossCents: gross,
-        refundedCents: Number(amountCents), keptFeeCents: kept, updatedAt: FieldValue.serverTimestamp() });
+      /* Defect B (2026-10-03): the settlement was re-priced on the kept fee but commissionLedger/ven_<ref> kept the commission
+         on the FULL gross and was then marked collected — overstating SOKONI revenue. Both now move in ONE transaction,
+         re-read and guarded (still HELD, not already adjusted) so a replayed hook changes nothing. */
+      const ledRef = _db().collection(COL.COMMISSION).doc(`ven_${payRef}`);
+      await _db().runTransaction(async (txn) => {
+        const [cs, ls] = await Promise.all([txn.get(setRef), txn.get(ledRef)]);
+        const cur = cs.data();
+        if (!cur || cur.status !== SETTLEMENT.HELD || cur.originalGrossCents !== undefined) return;
+        const kept = Number(cur.grossCents) - Number(amountCents);
+        const k = computeSettlement({ grossCents: kept, providerFeeCents: cur.providerFeeCents });
+        txn.update(setRef, { grossCents: kept, commissionCents: k.commissionCents, netCents: k.netCents, originalGrossCents: Number(cur.grossCents),
+          originalCommissionCents: cur.commissionCents, refundedCents: Number(amountCents), keptFeeCents: kept, updatedAt: FieldValue.serverTimestamp() });
+        if (ls.exists) txn.update(ledRef, { commissionCents: k.commissionCents, sokoniCut: k.commissionCents / 100, serviceTotal: kept / 100,
+          providerNet: k.netCents === null ? null : k.netCents / 100, originalCommissionCents: Number(ls.data().commissionCents) || 0,
+          adjustedFor: 'partial_refund', refundedCents: Number(amountCents), updatedAt: FieldValue.serverTimestamp() });
+      });
       await _cancelAndRelease(String(intent.resourceId), { status: 'cancelled', paymentStatus: 'partially_refunded', updatedAt: Date.now() });
       await _release(payRef, 'cancellation_fee', null);
     } else {

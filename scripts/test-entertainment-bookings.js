@@ -316,6 +316,14 @@ const h = (op, uid, data = {}, token) => EB._h[op]({ ...who(uid, token), data })
   await VP.onVenueRefundProcessed({ payRef: 'VB-VB1', amountCents: 800000 });
   const vs2 = await get('venueSettlements/VB-VB1');
   ck('refund executed (8,000) → the kept 2,000 fee is released to the VENUE (less 5 % and the provider fee)', vs2.status === 'RELEASED' && vs2.releasedBy === 'cancellation_fee' && ((((await get('wallets/owner2')) || {}).balance || 0) - ow0) === Math.floor(vs2.netCents / 100) && (await get('bookings/VB1')).status === 'cancelled');
+  const led2 = await get('commissionLedger/ven_VB-VB1');
+  ck('DEFECT B: the commission ledger is re-priced with the settlement on a partial refund (5 % of the kept 2,000 = 100, not 500) and collected once',
+    led2 && led2.commissionCents === vs2.commissionCents && vs2.commissionCents === 10000 && led2.originalCommissionCents === 50000 && led2.adjustedFor === 'partial_refund' && led2.status === 'collected', led2 && { c: led2.commissionCents, s: vs2.commissionCents });
+  const ow2 = ((await get('wallets/owner2')) || {}).balance || 0;
+  const rp = await VP.onVenueRefundProcessed({ payRef: 'VB-VB1', amountCents: 800000 });
+  ck('DEFECT B: the replay is skipped explicitly, never revoked (no false refund_after_release exception)', rp.skipped === 'partial_refund_already_applied' && !(await get('venueExceptions/refund_after_release_VB-VB1')) && !(await get('reconciliationExceptions/refund_after_release_VB-VB1')));
+  const vs3 = await get('venueSettlements/VB-VB1');
+  ck('DEFECT B: a replayed refund hook changes nothing (no second re-price, no second credit)', vs3.grossCents === vs2.grossCents && vs3.commissionCents === vs2.commissionCents && ((((await get('wallets/owner2')) || {}).balance || 0) === ow2));
   /* show-up release on a second paid booking */
   NOW = Date.now();
   const vpay2 = { ...vpay, startTs: NOW + 1 * H, endTs: NOW + 5 * H };
