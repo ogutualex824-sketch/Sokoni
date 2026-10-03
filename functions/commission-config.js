@@ -131,9 +131,10 @@ const RATES = {
   /* MARKETING (owner 2026-10-03, via sokoni-b2): 10% per marketing service sale, a FLAT booking lane (no plan moves it). Every
      taxonomy id (shared/marketing-taxonomy.js, byte-identical with b2's line) aliases here. The LANE is chosen per booking from
      the booking's own server snapshot (provider-hub.commissionArgsForBooking: serviceHub 'marketing' + a taxonomy id; anything
-     else marked marketing is REFUSED, category_unpriced). ELIGIBILITY is NOT decided here and NOT at settlement: it is enforced
-     at service publish, quote and booking by shared/marketing-authority (the server decision record ∩ approvedCategories).
-     NEVER wire a check to providers/{uid}.marketingCategories or marketingStatus — those fields are OWNER-WRITABLE. */
+     else marked marketing is REFUSED, category_unpriced).
+     Marketing eligibility is determined from the authoritative category-specific approval decision. Provider-editable
+     profile/application fields are never an authorization source. (Enforced at service publish, quote and booking by
+     shared/marketing-authority; settlement introduces no second eligibility authority.) */
   marketing_services:            { pct: 10, fixedKES: 0, _was: 'new 2026-10-03 — owner: 10% marketing commission' },
   electronics:      { pct: 15,  fixedKES: 0,    _was: 'no row — fell to the 5% default (phones / laptops / electronics labels)' },
   education:        { pct: 5,   fixedKES: 0,    _was: "15% 'category only' (never owner-set)" },
