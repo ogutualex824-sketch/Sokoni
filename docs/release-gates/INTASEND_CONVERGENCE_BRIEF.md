@@ -20,6 +20,12 @@ the Gate 5 webhook (8b569d9, or bare f076c64) is live, every genuine online M-Pe
 - **(a) webhook first:** the KES 1 attack closes now; legitimate checkouts need manual re-drive until the other two ship.
 - **(b) intent → checkout Unit 3 → webhook:** checkout stays automatic; the attack stays open for two more releases.
 
+**OWNER DECISION (2026-10-03): (a), security first** — webhook fix as soon as memory and guard prerequisites clear, then
+`createPaymentIntent` product_order and its checkout consumer immediately afterwards.
+
+**Four P0 controls** (owner, 2026-10-03): webhook (sokoni-5b) · SmartPOS electronic payment (POS lane) · Finance OS seller
+payout (sokoni-b2) · till / POS-checkout gift card (sokoni-5b, see `TILL_GIFT_CARD_P0_BRIEF.md`).
+
 ## Gate owners (proposed by sokoni-b2; each owner confirms or corrects)
 
 | Gate | Subject | Proposed owner |
