@@ -1,3 +1,37 @@
+## [2026-10-03] - test infra: secondary-Firebase-app detector rebuilt on a tokenizer — electrical 'elc-write' was a false "fixed" (no product change)
+
+`scripts/test-secondary-firebase-apps.js` reported 8/1 on this chain: "electrical.html no longer has elc-write — remove it
+from BASELINE". False. `submitBooking` still creates `initializeApp(_cfg,"elc-write")` and writes `homeServiceBookings`
+with no App Check token (live 72dca56 is detected correctly). **Cause:** the old comment/string stripper tracked quotes
+but not REGEX LITERALS. electrical.html line 272 (`_esc`: `.replace(/"/g,'&quot;').replace(/'/g,'&#39;')`) opened a
+"string" at the `"` in `/"/g`; the stripper stayed out of phase down to `submitBooking`, kept the real block comment
+`/* no WhatsApp hand-off … */` as "string", then cut `"https://…"` at `//` as a line comment and swallowed the rest
+of the line, including the call. Baseline KEPT; the detector was fixed.
+
+- **Fix:** new `scripts/lib/js-tokens.js` — dependency-free JS tokenizer (no parser package resolves from the repo root):
+  strings, templates with nested `${…}`, regex literals (classes, escapes, the regex-vs-division rule), comments incl.
+  HTML-compat, bracket matching. Inline `<script>` bodies are extracted as a browser would (HTML comments and raw-text
+  elements such as `<style>` skipped; non-JS types skipped). The call is found on tokens: `initializeApp(` /
+  `.initializeApp(` with ≥2 args and a single string-literal second arg.
+- **Fail closed:** a script the tokenizer cannot lex but V8 compiles = named FAIL row (detector blind spot). A script
+  V8 also refuses = named `DEAD` line (it runs nothing in the browser); its file is UNKNOWN — never "clean", never
+  "stale" (a missing baseline name there prints a NOTE and the entry is kept).
+- **New rows:** 6 detector fixtures — (1) electrical `_esc` + `submitBooking` verbatim → elc-write; (2) regex literal
+  with quotes; (3) `${a?'x':'y'}` and nested templates; (4) call in comments → not detected; (5) call in strings → not
+  detected; (6) inline object-literal config (seller.html shape) — plus "every executable script tokenized".
+- **Negative control:** the old stripper on fixture (1) returns `[]` (misses); on the submitBooking line alone it finds
+  elc-write — the `_esc` context is what breaks it, so row (1) catches a regression to the old detector.
+- **Before / after:** 8 passed, 1 failed → 16 passed, 0 failed (the original 9 rows all green, electrical kept).
+  `SECONDARY_APPS_REF=<commit>` scans a commit via `git show` (no checkout); at 72dca56 the new detector finds the
+  same names as the old one in every file except the three DEAD pages — no new false positives (its one ratchet
+  FAIL, digital.html:dh-wd, is reported identically by the old detector; DE-1 f9a71be removed it on this chain).
+- **Page defects surfaced (NOT fixed here, live at 72dca56 too):** `revenue.html` main `type="module"` script does not
+  compile (line ~639: `"…refresh."</div>"` — stray quote), so the whole revenue dashboard module never runs;
+  `email-preview.html` and `pos-ios-print-test.html` each have a `<script src="/sw-register.js">` injected INSIDE a JS
+  string/template, which ends the inline script early.
+- Files: scripts/test-secondary-firebase-apps.js, scripts/lib/js-tokens.js (new). Database / API / rules / functions /
+  security rules: none. Breaking: none.
+
 ## [2026-10-01] - AdminOS: head scripts deferred, admin gate order unchanged — static 7/0, browser proof QUEUED (RAM), NOT deployed
 
 admin-os.html loaded six classic scripts in <head> (security, sokoni-cart, sokoni-permissions, sokoni-role-authority,

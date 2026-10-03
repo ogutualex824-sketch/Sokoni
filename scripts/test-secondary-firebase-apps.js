@@ -47,34 +47,6 @@ const ck = (label, ok, detail) => {
   if (ok) pass++; else { fail++; failures.push(label + (detail ? ' — ' + detail : '')); }
 };
 
-/* Strip block comments, line comments and string literals before matching. Without this
-   the scan reports the two files that were already FIXED, because each keeps a comment
-   naming the call it no longer makes. */
-function stripNonCode(src) {
-  let out = '';
-  let i = 0;
-  const n = src.length;
-  let mode = 'code';       /* code | line | block | sq | dq | tpl */
-  while (i < n) {
-    const c = src[i], d = src[i + 1];
-    if (mode === 'code') {
-      if (c === '/' && d === '*') { mode = 'block'; i += 2; out += ' '; continue; }
-      if (c === '/' && d === '/') { mode = 'line';  i += 2; out += ' '; continue; }
-      if (c === "'")  { mode = 'sq';  out += c; i++; continue; }
-      if (c === '"')  { mode = 'dq';  out += c; i++; continue; }
-      if (c === '`')  { mode = 'tpl'; out += c; i++; continue; }
-      out += c; i++; continue;
-    }
-    if (mode === 'block') { if (c === '*' && d === '/') { mode = 'code'; i += 2; } else i++; continue; }
-    if (mode === 'line')  { if (c === '\n') { mode = 'code'; out += '\n'; } i++; continue; }
-    /* Inside a string: keep it (the app NAME is a string we need), but honour escapes. */
-    if (c === '\\') { out += src.slice(i, i + 2); i += 2; continue; }
-    if ((mode === 'sq' && c === "'") || (mode === 'dq' && c === '"') || (mode === 'tpl' && c === '`')) mode = 'code';
-    out += c; i++;
-  }
-  return out;
-}
-
 /* Finds `initializeApp(<config>, 'name')` — modular or compat — where <config> may be an
    INLINE OBJECT LITERAL, not just an identifier.
 
@@ -89,29 +61,80 @@ function stripNonCode(src) {
    the shapes it was written for is worse than no scanner: it converts an unknown into a
    false assurance. Argument boundaries are now found by BALANCING brackets rather than by
    forbidding the characters that make a literal a literal. */
-function findSecondaryApps(code) {
-  const names = [];
-  const CALL = /(?:firebase\s*\.\s*)?initializeApp\s*\(/g;
-  let m;
-  while ((m = CALL.exec(code))) {
-    let i = CALL.lastIndex;
-    let depth = 0, arg = '', args = [];
-    for (; i < code.length; i++) {
-      const c = code[i];
-      if (c === '(' || c === '[' || c === '{') depth++;
-      else if (c === ')' && depth === 0) { args.push(arg); break; }
-      else if (c === ')' || c === ']' || c === '}') depth--;
-      if (c === ',' && depth === 0) { args.push(arg); arg = ''; continue; }
-      arg += c;
-    }
-    /* Two arguments and a quoted second one === a NAMED (secondary) app.
-       initializeApp(cfg) alone is the DEFAULT app and is correct — App Check attaches there. */
-    if (args.length >= 2) {
-      const q = args[1].trim().match(/^['"]([^'"]+)['"]$/);
-      if (q) names.push(q[1]);
+/* The scan is a TOKEN pass (scripts/lib/js-tokens.js), not a comment/string stripper.
+
+   DETECTOR BLIND SPOT #2, found the hard way (2026-10-03). The first version stripped
+   comments and strings with a hand-written quote-tracking state machine run over the WHOLE
+   html file. It knew nothing about REGEX LITERALS. electrical.html's escaper
+
+       const _esc = s => String(s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+   opened a "string" at the `"` inside /"/g, and from there the stripper was out of phase for
+   the rest of the script: a real block comment in submitBooking survived as "string", then the
+   `//` inside "https://www.gstatic.com/…" was taken as a line comment and swallowed the rest of
+   the line — including `initializeApp(_cfg,"elc-write")`, a secondary app WRITING
+   homeServiceBookings with no App Check token. The suite then reported electrical.html as
+   FIXED and demanded its BASELINE entry be removed: a detector failure presented as progress.
+   The fix is in the detector, never in the baseline.
+
+   Now: inline <script> bodies a browser would execute are extracted (HTML comments skipped;
+   non-JS types such as ld+json skipped), .js files are taken whole, and each is TOKENIZED —
+   strings, templates with nested ${…}, regex literals and comments are all real tokens. A call
+   is `initializeApp(` (bare or as `.initializeApp(` on any object) whose argument list has ≥2
+   arguments and whose second argument is a single string (or substitution-free template)
+   literal. Comments are not tokens, so prose that DESCRIBES the call cannot match; a string
+   that CONTAINS the call text is one token, so it cannot match either.
+
+   FAIL CLOSED: a script the tokenizer cannot lex is reported as a named FAIL row — an
+   unanalysed file is an unknown, and an unknown is never rendered as "clean". The one
+   distinction: if V8 itself refuses to compile the script, it is DEAD in the browser too (it
+   runs nothing), so it is listed as a named DEAD page defect rather than a detector failure —
+   and its file is still treated as UNKNOWN (never "clean", never "stale"). */
+const { extractInlineScripts, findSecondaryAppsInJs } = require('./lib/js-tokens');
+
+/* When the tokenizer refuses a script, ask the JS ENGINE (V8, via node) whether it compiles.
+     · V8 compiles it  → the tokenizer has a blind spot: FAIL, the file is unanalysed.
+     · V8 refuses it too → the script is DEAD in the browser as well: it executes nothing, so it
+       cannot create any app. That is a page defect (reported by name, below), not a hole in
+       this detector — and the file's names are still UNKNOWN, so it is never called stale. */
+const vm = require('vm');
+const os = require('os');
+const { spawnSync } = require('child_process');
+function engineRejects(code, kind) {
+  const tries = kind === 'module' ? ['module'] : kind === 'classic' ? ['classic'] : ['classic', 'module'];
+  let why = '';
+  for (const t of tries) {
+    if (t === 'classic') {
+      try { new vm.Script(code); return ''; } catch (e) { why = why || 'SyntaxError: ' + e.message; }
+    } else {
+      const tmp = path.join(os.tmpdir(), 'secapps-' + process.pid + '-' + Date.now() + '.mjs');
+      fs.writeFileSync(tmp, code);
+      try {
+        const r = spawnSync(process.execPath, ['--check', tmp], { encoding: 'utf8' });
+        if (r.status === 0) return '';
+        const line = (r.stderr || '').split('\n').find((l) => /Error/.test(l));
+        why = why || (line || 'node --check failed').trim();
+      } finally { try { fs.unlinkSync(tmp); } catch (_) { /* best effort */ } }
     }
   }
-  return names;
+  return why;
+}
+
+/** File → { names, blind, dead }. blind/dead = [ "unit: reason" ] — never swallowed. */
+function scanSource(file, src) {
+  const names = new Set(), blind = [], dead = [];
+  const units = /\.html$/i.test(file)
+    ? extractInlineScripts(src).map((s) => ({ label: 'inline script #' + s.index + ' (body starts line ' + s.line + ')', code: s.code, kind: s.module ? 'module' : 'classic' }))
+    : [{ label: 'file', code: src, kind: 'either' }];
+  for (const u of units) {
+    try { findSecondaryAppsInJs(u.code).forEach((n) => names.add(n)); }
+    catch (e) {
+      const engine = engineRejects(u.code, u.kind);
+      if (engine) dead.push(u.label + ': ' + engine + ' [tokenizer: ' + e.message + ']');
+      else blind.push(u.label + ': ' + e.message + ' — but V8 compiles it');
+    }
+  }
+  return { names: [...names].sort(), blind, dead };
 }
 
 /* Known, accepted-for-now instances. file → sorted app names. */
@@ -156,26 +179,115 @@ const BASELINE = {
 /* Fixed by 81ca4f2 and asserted to STAY fixed — the whole point of the exercise. */
 const MUST_BE_CLEAN = ['business.html', 'businesses.html', 'search.html'];
 
-console.log('\nSECONDARY FIREBASE APPS — App Check rides on the default app only\n');
+/* Optional: SECONDARY_APPS_REF=<commit> scans that commit's root files via `git show` instead
+   of the working tree (e.g. to compare against the live hosting commit). No checkout needed. */
+const REF = process.env.SECONDARY_APPS_REF || '';
+if (REF && !/^[\w./-]+$/.test(REF)) { console.error('bad SECONDARY_APPS_REF'); process.exit(2); }
+const { execFileSync } = require('child_process');
+const git = (args) => execFileSync('git', ['-C', ROOT, ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+const listRoot = () => (REF ? git(['ls-tree', '--name-only', REF]).split('\n').filter(Boolean) : fs.readdirSync(ROOT));
+const readRoot = (f) => (REF ? git(['show', REF + ':' + f]) : fs.readFileSync(path.join(ROOT, f), 'utf8'));
 
-const files = fs.readdirSync(ROOT)
+console.log('\nSECONDARY FIREBASE APPS — App Check rides on the default app only' + (REF ? '   (ref ' + REF + ')' : '') + '\n');
+
+/* ── detector self-test: the shapes that have fooled a scanner before ──────────────────────
+   Each row is a fixture with a KNOWN answer. If the detector regresses to a quote-tracking
+   stripper, row (1) goes red — that is the regression row for blind spot #2. */
+/* (1) electrical.html as of e3e7274, verbatim: the _esc line (regex literals containing both
+   quote characters) followed by the single-line submitBooking that creates 'elc-write'. */
+const FX_ELECTRICAL =
+  "const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&" +
+  "gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');\nfunction submitBooking(){if(typeof Sok" +
+  "oniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('elec_book',10,300000)){if(" +
+  "msgEl){msgEl.textContent='⚠️ Too many attempts. Wait 5 min.';msgEl.style.color='#ff9800';}" +
+  "return;};const name=document.getElementById('pgName')?.value.trim();const phone=document.g" +
+  "etElementById('pgPhone')?.value.trim();const date=document.getElementById('pgDate')?.value" +
+  ";const time=document.getElementById('pgTime')?.value;const address=document.getElementById" +
+  "('pgAddress')?.value.trim();const notes=document.getElementById('pgNotes')?.value.trim();c" +
+  "onst msgEl=document.getElementById('pgModalMsg');const services=[...document.querySelector" +
+  "All('#pgChips .pg-chip.sel')].map(c=>c.dataset.svc).join(', ');if(!name||!phone||!address)" +
+  "{if(msgEl){msgEl.textContent='⚠️ Please fill name, phone and address.';msgEl.style.color='" +
+  "#ff6b6b';}return;}const id='ELC'+Date.now().toString().slice(-7);const msg=`Hi${selectedPr" +
+  "ov?' '+selectedProv.name:''}! I found you on SOKONI and need an electrician.\\n\\n📋 Booking " +
+  "ID: ${id}\\n👤 Name: ${name}\\n📞 Phone: ${phone}\\n⚡ Service: ${services||'General Electrical'" +
+  "}\\n📅 Date: ${date||'TBD'} at ${time||'TBD'}\\n📍 Location: ${address}\\n${notes?'📝 Notes: '+n" +
+  "otes+'\\n':''}\\nPlease confirm your availability. Thank you!`;(typeof SokoniPay!=='undefine" +
+  "d'&&SokoniPay.waConnect?SokoniPay.waConnect((selectedProv?.phone||'0705726803').replace(/^" +
+  "0/,'254').replace(/\\D/g,''),msg,{providerName:selectedProv?.name||'SOKONI Electricians',ca" +
+  "tegory:'electrical',serviceDesc:services||'Electrical Service'}):void 0 /* no WhatsApp han" +
+  "d-off (owner 2026-09-30) */);let _bks=[];try{_bks=JSON.parse(localStorage.getItem('sokoniB" +
+  "ookings')||'[]');}catch(e){}; _bks.unshift({id,type:'electrical',service:services||'Genera" +
+  "l Electrical',name,phone,date,time,address,notes,provider:selectedProv?.name||'Any Electri" +
+  "cian',status:'requested',createdAt:new Date().toISOString()}); localStorage.setItem('sokon" +
+  "iBookings',JSON.stringify(_bks.slice(0,100))); (async()=>{try{const {initializeApp,getApps" +
+  "}=await import(\"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js\");const {getFir" +
+  "estore,collection,addDoc,serverTimestamp}=await import(\"https://www.gstatic.com/firebasejs" +
+  "/10.12.0/firebase-firestore.js\");const _cfg={apiKey:\"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hz" +
+  "VE\",authDomain: \"auth.mysokoni.co.ke\",projectId:\"sokoni-aeb26\",storageBucket:\"sokoni-aeb26" +
+  ".firebasestorage.app\",messagingSenderId:\"24799054989\",appId:\"1:24799054989:web:e1cf6ca8c28" +
+  "1bf1abf26c4\"};const _a=getApps().find(a=>a.name===\"elc-write\")||initializeApp(_cfg,\"elc-wr" +
+  "ite\");await addDoc(collection(getFirestore(_a),'homeServiceBookings'),{id,hub:'electrical'" +
+  ",service:services||'General Electrical',name,phone,date,time,address,notes,provider:select" +
+  "edProv?.name||'Any Electrician',status:'pending',createdAt:serverTimestamp()});}catch(e){}" +
+  "})(); if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'service'" +
+  ",buyerName:name,buyerPhone:phone,items:[{name:services||'Electrical Service',category:'Ele" +
+  "ctrical',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'WhatsApp Booking',paymentRef:id" +
+  ",sellerName:selectedProv?.name||'SOKONI Electricians',date:new Date().toISOString(),notes:" +
+  "address});},700); if(msgEl){msgEl.innerHTML=`✅ Booking <strong style=\"color:#f59e0b;\">${_e" +
+  "sc(id)}</strong> recorded in SOKONI.`;msgEl.style.color='#22c55e';}setTimeout(closeBooking" +
+  ",3000);}";
+const FIXTURES = [
+  ['(1) electrical.html _esc + submitBooking (verbatim) → elc-write', FX_ELECTRICAL, ['elc-write']],
+  ['(2) regex literal containing quotes before the call → detected',
+    "const r = /'\"/g; const t = s.replace(/[\"']/g, ''); const a = initializeApp(cfg, 'rx-app'); // \"'", ['rx-app']],
+  ['(3) template ${a?\'x\':\'y\'} (quotes inside a substitution) before the call → detected',
+    "const m = `pre ${a ? 'x' : \"y\"} ${`nested ${b ? '}' : '{'}`} post`; const ap = initializeApp(cfg, \"tpl-app\");", ['tpl-app']],
+  ['(4) the call inside comments → NOT detected',
+    "/* initializeApp(cfg, 'blk-app') */ // initializeApp(cfg, 'line-app')\nconst x = 1;", []],
+  ['(5) the call inside strings/templates → NOT detected',
+    "const a = \"initializeApp(cfg, 'dq-app')\"; const b = 'initializeApp(c, \"sq-app\")'; const c = `initializeApp(c, 'tq-app')`;", []],
+  ['(6) inline object-literal config (seller.html shape) → detected',
+    "const app = firebase.initializeApp({ apiKey: \"k\", authDomain: \"a,b\", nested: { x: [1, 2] } }, \"revSnap\");", ['revSnap']],
+];
+console.log('── the detector finds the shapes it exists for (fixtures) ──');
+for (const [label, code, want] of FIXTURES) {
+  let got, err = '';
+  try { got = [...new Set(findSecondaryAppsInJs(code))].sort(); } catch (e) { err = e.message; }
+  ck(label, !err && JSON.stringify(got) === JSON.stringify([...want].sort()), err ? 'tokenize error: ' + err : 'got ' + JSON.stringify(got));
+}
+console.log('');
+
+const files = listRoot()
   .filter((f) => /\.(html|js)$/.test(f))
   .filter((f) => !/^service-worker|^firebase-messaging-sw/.test(f))
   .sort();
 
 const found = {};
+const unanalysed = [];      /* [file, reason] — detector could not read/lex; V8 can → FAIL */
+const deadScripts = [];     /* [file, reason] — V8 refuses too: dead in the browser */
+const unknownFiles = new Set();
 for (const f of files) {
   let src;
-  try { src = fs.readFileSync(path.join(ROOT, f), 'utf8'); } catch (_) { continue; }
-  const code = stripNonCode(src);
-  const names = new Set(findSecondaryApps(code));
-  if (names.size) found[f] = [...names].sort();
+  try { src = readRoot(f); } catch (e) { unanalysed.push([f, 'unreadable — ' + e.message.split('\n')[0]]); unknownFiles.add(f); continue; }
+  const r = scanSource(f, src);
+  if (r.names.length) found[f] = r.names;
+  r.blind.forEach((e) => { unanalysed.push([f, e]); unknownFiles.add(f); });
+  r.dead.forEach((e) => { deadScripts.push([f, e]); unknownFiles.add(f); });
 }
+
+console.log('── every page/script was analysed (fail closed) ──');
+if (!unanalysed.length) ck('every executable script tokenized (' + files.length + ' files scanned)', true);
+for (const [f, why] of unanalysed) ck('NOT ANALYSED — ' + f + ' (unknown, never clean)', false, why);
+/* Dead scripts are not counted as detector failures — the browser cannot run them either —
+   but they are named every run so they cannot hide, and their files are UNKNOWN below. */
+for (const [f, why] of deadScripts) console.log('  DEAD  ' + f + ' — script does not compile in V8 (page defect; runs nothing)   [' + why.slice(0, 160) + ']');
+console.log('');
 
 console.log('── the pages already converted must stay on the canonical app ──');
 for (const f of MUST_BE_CLEAN) {
-  ck(f + ' creates no secondary Firebase app', !found[f], found[f] ? found[f].join(', ') : '');
-  const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+  ck(f + ' creates no secondary Firebase app', !found[f] && !unknownFiles.has(f),
+     found[f] ? found[f].join(', ') : unknownFiles.has(f) ? 'UNKNOWN — not fully analysed' : '');
+  const src = readRoot(f);
   ck(f + ' imports db from firebase.js', /import\s*\{[^}]*\bdb\b[^}]*\}\s*from\s*['"]\.\/firebase\.js['"]/.test(src));
 }
 
@@ -197,7 +309,11 @@ const stale = [];
 for (const f of Object.keys(BASELINE)) {
   const now = found[f] || [];
   const gone = BASELINE[f].filter((n) => !now.includes(n));
-  if (gone.length) stale.push(f + ' no longer has ' + gone.join('/') + ' — remove it from BASELINE');
+  if (!gone.length) continue;
+  /* Absence in a file that was not fully analysed is an UNKNOWN, not evidence of a fix — the
+     exact mistake blind spot #2 made. Never ask for a baseline entry to be removed on it. */
+  if (unknownFiles.has(f)) { console.log('  NOTE  ' + f + ': ' + gone.join('/') + ' not seen, but the file is not fully analysed (see DEAD / NOT ANALYSED) — entry kept, status unknown'); continue; }
+  stale.push(f + ' no longer has ' + gone.join('/') + ' — remove it from BASELINE');
 }
 /* A converted file leaving its name in BASELINE would quietly re-permit the pattern there
    forever. Fixing a file must therefore also shrink the list. */
