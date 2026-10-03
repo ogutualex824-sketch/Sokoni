@@ -9798,7 +9798,8 @@ exports.adminSubManualAction      = subBilling.adminSubManualAction;
 exports.adminSubProcessRefund     = subBilling.adminSubProcessRefund;
 exports.adminSubExportBilling     = subBilling.adminSubExportBilling;
 /* Admin Invoices page (owner 2026-10-04: merchant invoices only) — read-only list + database-computed summary. */
-exports.adminInvoicesList = require('./admin-invoices').adminInvoicesList;
+exports.adminInvoicesList   = require('./admin-invoices').adminInvoicesList;
+exports.adminInvoicesExport = require('./admin-invoices').adminInvoicesExport;   /* audited, server-built CSV */
 exports.subProcessExpirations     = subBilling.subProcessExpirations;
 exports.subSendRenewalReminders   = subBilling.subSendRenewalReminders;
 

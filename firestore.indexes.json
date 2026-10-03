@@ -5853,6 +5853,24 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "modelVersion",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "modelVersion",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "status",
           "order": "ASCENDING"
         },
@@ -5866,6 +5884,10 @@
       "collectionGroup": "invoices",
       "queryScope": "COLLECTION",
       "fields": [
+        {
+          "fieldPath": "modelVersion",
+          "order": "ASCENDING"
+        },
         {
           "fieldPath": "status",
           "order": "ASCENDING"
@@ -5881,12 +5903,30 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "status",
+          "fieldPath": "modelVersion",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "paidAt",
+          "fieldPath": "paymentClaim.status",
           "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "classification",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
         }
       ]
     }

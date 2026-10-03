@@ -1,3 +1,16 @@
+## [2026-10-04] — THE canonical invoice: model, verified-payment allocation, legacy migration, admin read + audited export
+
+**Owner decisions (2026-10-04):** `invoices`, restructured, is the ONE canonical invoice. Payment truth comes only from a verified payment event, and merchant / admin references are claims. Admin totals come from canonical records only, and export is a server-side, audited query.
+**What:**
+- `functions/shared/invoice-model.js` (pure, byte-identical on every line): sources, invoice.status vs payment.status, totals from VERIFIED allocations, derived overdue, legacy classifier.
+- `functions/invoice-allocation.js` — the ONLY code that makes an invoice (partially) paid: `applyVerifiedPayment` (one allocation per verified paymentId via create(); duplicate webhook = no-op; overpayment flagged) and `refundAllocation` (one per refundId; re-opens and recalculates). Server-only; the payment authority (sokoni-5b webhook) calls it.
+- `scripts/migrate-invoices-canonical.js` (DRY RUN default): classifies the three legacy shapes (manual / commission / order). Legacy "paid" (merchant- or admin-recorded) becomes an unverified claim with the original preserved under `legacy`. Unknown docs are flagged and excluded. Idempotent, batched, and audited per run.
+- `adminInvoicesList` is re-scoped to canonical docs (`modelVersion == 1`). Confirmed paid = verified allocations; unverified claims are separate; unclassified and unmigrated docs are excluded and counted. Tabs: all, draft, issued, partially paid, overdue, paid, void, unverified, unclassified.
+- `adminInvoicesExport`: the same query, complete set up to 5,000 rows, no phone or line items, formula-safe, `adminAudit` written before returning.
+- `firestore.indexes.json`: the 3 earlier invoices composites are replaced by 5 canonical ones.
+**Tests:** test-admin-invoices 31/0 (A1–A8 allocation, G1–G7 migration, L1–L11 list incl. break B and "same order in etimsInvoices = ONE invoice", X1–X5 export). SABOTAGE: claimed totals counted as confirmed paid → L2 fails.
+**Deployment:** NOT deployed. Order: indexes → migration DRY RUN (read-only) → owner go → migration APPLY → adminInvoicesList / Export → hosting. sokoni-5b wires applyVerifiedPayment into the verified webhook.
+
 ## [2026-10-04] — adminInvoicesList: the admin Invoices page's server read (merchant invoices only)
 
 **Owner decision (2026-10-04):** the admin Invoices page covers merchant invoices only (the `invoices` store behind finance-os invoiceCreate / Send / MarkPaid / Void). The other invoice stores (etims, hub, procurement supplier, sasos, fos) are not mixed in until the Financial Core names its one document system.
