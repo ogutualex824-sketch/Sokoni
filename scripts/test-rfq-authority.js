@@ -130,7 +130,7 @@ const ITEMS = [{ name: 'Cement 50kg', qty: 100, unit: 'bag', targetPriceKES: 700
   r = await call('uBuyer', { op: 'respond', rfqId, supplierBusinessId: 'bizSupA', action: 'accept', expectedVersion: 2 });
   ck('R3 the buyer accepts v2 → a purchase order id', r.ok && /^po_rfq_/.test(r.r.poId), r);
   const po = r.ok && store.get('procPurchaseOrders/' + r.r.poId);
-  ck('R4 ONE canonical procPurchaseOrders doc priced from the quote: total 80,880, VAT 16 from the quote, source rfq, unpaid draft', !!po && po.total === 80880 && po.vatRate === 16 && po.source.kind === 'rfq' && po.status === 'draft' && po.paymentStatus === 'unpaid' && po.buyerBusinessId === 'bizBuyer' && po.supplierBusinessId === 'bizSupA', po);
+  ck('R4 ONE canonical procPurchaseOrders doc priced from the quote: total 80,880, VAT 16 from the quote, source rfq, unpaid draft', !!po && po.total === 80880 && po.vatRate === 16 && po.vatBasis === 'declared_on_quote' && po.source.kind === 'rfq' && po.status === 'draft' && po.paymentStatus === 'unpaid' && po.buyerBusinessId === 'bizBuyer' && po.supplierBusinessId === 'bizSupA', po);
   const link = [...store.entries()].find(([k, v]) => k.startsWith('procSuppliers/') && v.merchantId === 'bizBuyer' && v.supplierBusinessId === 'bizSupA');
   ck('R5 the buyer\'s supplier link exists in the procurement authority (procSuppliers, createdVia rfq) and the PO points at it', !!link && po.supplierId === link[1].supplierId, link && link[1]);
   ck('R6 RFQ converted; A accepted; B closed', store.get('rfqs/' + rfqId).status === 'converted' && store.get('rfqRecipients/' + rfqId + '__bizSupA').status === 'accepted' && store.get('rfqRecipients/' + rfqId + '__bizSupB').status === 'closed');

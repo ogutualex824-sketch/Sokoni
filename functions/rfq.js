@@ -341,7 +341,7 @@ H.respond = async function (request) {
       poId, poNumber: 'RFQ-' + d.rfqId.slice(0, 8).toUpperCase(), merchantId: buyerId, supplierId, supplierName: quote.supplierName || 'Supplier',
       buyerBusinessId: buyerId, supplierBusinessId: d.supplierBusinessId,
       items: quote.lines.map(function (l, i) { return { productId: 'rfq_line_' + (i + 1), sku: '', name: l.name, qty: l.qty, unitCost: l.unitPriceKES, totalCost: l.lineTotalKES }; }),
-      subtotal: quote.subtotalKES, vatAmount: quote.vatKES, vatRate: quote.vatRate, deliveryFee: quote.deliveryFeeKES, total: quote.totalKES,
+      subtotal: quote.subtotalKES, vatAmount: quote.vatKES, vatRate: quote.vatRate, vatBasis: 'declared_on_quote', deliveryFee: quote.deliveryFeeKES, total: quote.totalKES,
       source: { kind: 'rfq', rfqId: d.rfqId, quoteVersion: quote.version },
       status: 'draft', paymentStatus: 'unpaid',   /* held payment through SOKONI = separate purpose (sokoni-5b) */
       notes: 'From RFQ "' + san(rfq.title, 100) + '"', createdBy: request.auth.uid, createdAt: F.serverTimestamp(), updatedAt: F.serverTimestamp() });
