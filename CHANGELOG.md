@@ -1,3 +1,20 @@
+## [2026-10-03] — Campaign / project CUSTOMER screens (my-projects.html) — NOT deployed
+
+- **my-projects.html + sokoni-work-customer.js (new):** the customer side of the Work/Job Engine, in the merchant-v2 skin.
+  - **List:** projects where I am the customer.
+  - **Detail:** provider proposal — scope lines, deliverables, timeline, milestones, terms, payment terms, documents (https), change requests, status.
+  - **Accept:** sends ONLY `expectedScopeVersion` (the server's version shown), never a total. If the provider edited the proposal since, it is NOT accepted: the customer is told and the latest version is reloaded.
+  - **Request changes:** reason ≥5 chars → back to draft.
+  - **Decline** (proposed) · **Cancel** before work starts (accepted) · **Pause / resume** · **Confirm completion** (typed 'delivered').
+  - **Change requests:** approve / decline (the customer is the only approver).
+  - **After acceptance:** the pricing shown is the ACCEPTED SNAPSHOT; later approved changes are listed separately.
+  - **Pay milestone:** workPayMilestone → SokoniBookService.payExisting on the server-minted booking (createPaymentIntent → IntaSend → held → completion PIN → release).
+  - **Messages:** tx work_project.
+- **sokoni-book-service.js:** new `payExisting({bookingId})` reuses the canonical flow (observe the booking + server-priced createPaymentIntent) for a server-minted booking.
+- **Tests:** scripts/test-work-customer-web.js 8/0, SABOTAGE 5/5. Regression: marketing-hub-web 13/0, service-leads-web 11/0, tech-directory 62/0 (11/11), tech-service-editor 17/0.
+- **Not run (memory floor):** a real browser render.
+- **Server dependency:** workDispatch with scopeVersion / acceptedScope.snapshot (capability line 6a05c9b) + workPayMilestone (a1234da), on a tree carrying sokoni-2f's commercial selector.
+
 ## [2026-10-03] — Marketing dashboards copy merchant-v2.html style (owner) — NOT deployed
 
 - **Owner direction:** "dashboards should copy merchant-v2.html style".

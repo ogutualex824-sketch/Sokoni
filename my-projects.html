@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>My campaigns &amp; projects — SOKONI</title>
+<meta name="description" content="Review, accept and pay for campaigns and projects from providers you hired on SOKONI.">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#050505">
+<script src="security.js"></script>
+<script src="sokoni-cart.js"></script>
+<!-- shared-header.js injects sw-register.js, so this page self-updates after deploys. -->
+<script src="shared-header.js"></script>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="sokoni-mv2-skin.css">
+<style>
+body{margin:0;background:#050505;color:#f4f4f4;min-height:100vh;padding-bottom:90px}
+.wc-wrap{max-width:860px;margin:0 auto;padding:16px}
+</style>
+<script type="module" src="firebase.js"></script>
+</head>
+<body>
+<main class="wc-wrap mv2s">
+  <div class="msg" id="wcMsg" role="status" aria-live="polite"></div>
+  <div id="wcBody"><div class="sk"><div class="sk-line" style="width:60%"></div><div class="sk-line" style="width:30%"></div></div></div>
+</main>
+<script src="sokoni-book-service.js" defer></script>
+<script src="sokoni-work-customer.js" defer></script>
+</body>
+</html>

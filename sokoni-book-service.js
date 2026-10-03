@@ -409,6 +409,15 @@
       show(); title('Your booking'); body('<div class="sbs-empty">Loading…</div>');
       observe(_ctx.bookingId);                 /* renders reviewPrompt (completed+unreviewed) or reviewDone */
     },
+    /* Pay an EXISTING server-minted booking (Work/Job Engine milestone: workPayMilestone mints it, priced from the LOCKED
+       milestone). Same canonical path as a fresh booking: observe the doc + createPaymentIntent (server amount) → IntaSend. */
+    payExisting(opts) {
+      _ctx = Object.assign({ date: '', time: '' }, opts || {});
+      if (!firebase.auth().currentUser) { location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search); return; }
+      if (!_ctx.bookingId) return;
+      _ctx.settled = false;
+      show(); observe(_ctx.bookingId); preparePayment();
+    },
     /* Resume an in-flight booking after a refresh — recover from the doc, not the flow. */
     resume() {
       let saved; try { saved = JSON.parse(sessionStorage.getItem(K) || 'null'); } catch (_) { saved = null; }
