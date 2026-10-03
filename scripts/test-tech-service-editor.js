@@ -138,9 +138,9 @@ const SRC = read('sokoni-tech-service-editor.js');
   const snap = read('sokoni-commission-rates.js');
   const hash = require('crypto').createHash('sha1').update('blob ' + Buffer.byteLength(snap) + '\0' + snap).digest('hex');
   const TPL = '${_skCommissionLine()}';
-  ck('F3', /SOKONI commission: 5% of each booking, the same on every plan/.test(withS) && !/\d/.test(without || '') && hash === '202f561e810cd8a43c49d6201842066ae89b52f2'
+  ck('F3', /SOKONI commission: 5% of each booking, the same on every plan/.test(withS) && !/\d/.test(without || '') && hash === '731ab0a5cf5d70d00a7f12b239e3a6f60e53b981'
     && read('provider-dashboard.html').includes(TPL) && po.includes(TPL),
-    'with the generated snapshot (byte-identical to 21969e0) the line shows its services rate; without it, no number', { withS, without, hash });
+    'with the generated snapshot (byte-identical to 93f5f13) the line shows its services rate; without it, no number', { withS, without, hash });
 }
 
 /* T10 — vocabulary parity with the server authority */

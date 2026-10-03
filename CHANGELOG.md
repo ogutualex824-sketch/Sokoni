@@ -1,3 +1,10 @@
+## [2026-10-03] - Commission snapshot re-copied from 2f 93f5f13 (ladder removed, home_services 5) — hosting, NOT deployed
+
+- sokoni-commission-rates.js taken WHOLE from convergence/commercial-fn-on-ef1e992 @ 93f5f13 (generated; blob 731ab0a5).
+  The PROVIDER_PLAN_PCT ladder and providerPct() are no longer exported; home_services 14 → 5; providerBookingPct() = services = 5.
+  No page in this tree called the removed exports (grep-checked). car_rental 16% is left open by 2f, pending the owner.
+- test-tech-service-editor F3 now pins the 93f5f13 blob. 13/0.
+
 ## [2026-10-03] - Provider pages show the booking commission from the ONE display source — hosting, NOT deployed
 
 - sokoni-commission-rates.js is copied WHOLE from convergence/commercial-fn-on-ef1e992 @ 21969e0. It is a generated file (commission-config),

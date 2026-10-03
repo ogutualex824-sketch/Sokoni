@@ -76,7 +76,7 @@
       "fixedKES": 0
     },
     "home_services": {
-      "pct": 14,
+      "pct": 5,
       "fixedKES": 0
     },
     "car_rental": {
@@ -175,17 +175,6 @@
   var MARKETPLACE_PLAN_ALIAS = {"seller_free":"free","seller_basic":"professional","seller_pro":"business","seller_enterprise":"enterprise","free":"free","basic":"professional","pro":"business","professional":"professional","business":"business","enterprise":"enterprise","starter":"professional","growth":"business"};
   var MARKETPLACE_DEFAULT_PLAN = "free";
 
-  /* PROVIDER BOOKING lane — plan-keyed (owner schedule 2026-09-28: 20 / 15 / 10 / 7 / 5), keyed by
-     PLAN ID. An unknown plan resolves to the HIGHEST rate, exactly as the server does. */
-  var PROVIDER_PLAN_PCT = {
-    "provider_free": 20,
-    "starter": 15,
-    "pro": 10,
-    "business": 7,
-    "enterprise": 5
-  };
-  var PROVIDER_DEFAULT_PLAN = "provider_free";
-  var PROVIDER_PLAN_ALIAS = {"free_trial":"provider_free"};
 
   /* RAW category labels priced by the plan ladder. "pos" is deliberately ABSENT even though
      it ALIASES to marketplace — keying on the resolved category would put every till sale on
@@ -226,16 +215,8 @@
     },
     /* The rate on a POS / till sale. Takes no plan, because it does not depend on one. */
     posPct: function () { return POS_FLAT_PCT; },
-    /* The rate a service provider on planId pays on a booking. Unknown plan -> highest rate. */
-    /* Mirrors the server exactly: no plan -> Free (20%); an aliased spelling -> its plan; an unknown
-       or retired id -> null (the server REFUSES such a booking; the client must not quote a number). */
-    providerPct: function (planId) {
-      var k = String(planId == null ? '' : planId).trim().toLowerCase();
-      if (k === '') k = PROVIDER_DEFAULT_PLAN;
-      else if (Object.prototype.hasOwnProperty.call(PROVIDER_PLAN_ALIAS, k)) k = PROVIDER_PLAN_ALIAS[k];
-      return Object.prototype.hasOwnProperty.call(PROVIDER_PLAN_PCT, k) ? PROVIDER_PLAN_PCT[k] : null;
-    },
-    PROVIDER_PLAN_PCT: PROVIDER_PLAN_PCT,
+    /* The rate EVERY service booking pays (owner 2026-10-03: flat 5 %, provider-paid at settlement, on every plan). */
+    providerBookingPct: function () { return resolve('services').pct; },
     isMarketplaceSellerSale: function (cat) {
       return MARKETPLACE_CATEGORIES.indexOf(String(cat || '').trim().toLowerCase()) !== -1;
     },
