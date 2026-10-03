@@ -38,7 +38,9 @@
    PAYMENT (owner 2026-10-03: money side owns intake): payment-purposes 'fitness_membership' prices the membership from
    THIS record (never the browser), bound to the buyer; the verified webhook calls holdMembershipPayment, which checks
    the intent → membership binding, the amount (provider-confirmed KES == priceCents) and replay, then marks it
-   paid_held + active. A mismatch is parked as 'payment_review' — never activated.
+   paid_held + active. A mismatch is parked as 'payment_review' — never activated. A payment landing AFTER payBy (or on an
+   expired record) never resurrects it: it is refunded to the buyer's SOKONI wallet (paymentStatus 'refunded_late'),
+   exactly as a late booking payment is.
 
    REFUND (B9.31): request → a SECOND authorized actor decides → execution. Requested only with zero attendance, before
    the end, once (requestRefund) — or as an explicit AdminOS EXCEPTION (requestException: admin, reason required,
@@ -297,6 +299,27 @@ async function holdMembershipPayment(db, adminSdk, apiRef, intentRef, amountKES)
       if (!snap.exists) return 'no-membership';
       const m = snap.data();
       if (m.paymentStatus && m.paymentStatus !== 'pending') return 'noop';                     /* replay / already handled */
+      /* LATE PAYMENT (owner 2026-10-03: a stale callback "MUST NOT silently resurrect" an expired unpaid membership).
+         The canonical answer is the one the booking hold already gives a payment that lands on a dead booking
+         (booking-payment-sweep.holdServiceBookingPayment): do NOT activate; return the money to the buyer's SOKONI
+         wallet with a deterministic ledger row, mark the record, tell the member. Expired = the creation path's payBy
+         has passed, or the record was explicitly expired. */
+      const nowL = _now();
+      const payByMs = m.payBy ? (_date(m.payBy) || new Date(0)).getTime() : null;
+      if (m.status === 'expired' || (payByMs !== null && nowL.getTime() > payByMs)) {
+        const paidL = Math.max(0, Math.round((Number(amountKES) || 0) * 100));
+        const shillingsL = Math.floor(paidL / 100);
+        if (shillingsL >= 1 && m.buyerUid) {
+          t.set(D.collection('users').doc(m.buyerUid), { walletBalance: _inc(shillingsL) }, { merge: true });
+          t.create(D.collection('ledger').doc(`${m.buyerUid}_${apiRef}_membership_latepay_refund`), {
+            uid: m.buyerUid, type: 'membership_refund', credit: shillingsL, membershipId: ref.id, paymentRef: apiRef,
+            reason: 'paid_after_expiry', createdAt: _ts() });
+        }
+        t.update(ref, { paymentStatus: 'refunded_late', status: 'expired', paymentRef: apiRef, refundedCents: paidL,
+                        refundReason: 'paid_after_expiry', updatedAt: _ts() });
+        _event(t, ref, 'payment_late_refunded', { apiRef, paidCents: paidL, shillings: shillingsL });
+        return 'late_refunded';
+      }
       const paidCents = Math.round((Number(amountKES) || 0) * 100);
       const bound = intent.uid === m.buyerUid && (intent.currency || 'KES') === 'KES' && Number(intent.amountCents) === Number(m.priceCents);
       if (!bound || paidCents !== Number(m.priceCents)) {
@@ -320,8 +343,13 @@ async function holdMembershipPayment(db, adminSdk, apiRef, intentRef, amountKES)
     logger.error('[membership] hold failed (recoverable, payment stands)', { apiRef, error: (e && e.message) || 'Error' });
     return true;
   }
-  if (outcome === 'held' || outcome === 'review') {
-    await D.collection('paymentIntents').doc(intentRef || apiRef).set({ status: outcome === 'held' ? 'paid' : 'review', paidRef: apiRef, paidAt: _ts() }, { merge: true }).catch(() => {});
+  if (outcome === 'held' || outcome === 'review' || outcome === 'late_refunded') {
+    const st = outcome === 'held' ? 'paid' : outcome === 'review' ? 'review' : 'refunded';
+    await D.collection('paymentIntents').doc(intentRef || apiRef).set({ status: st, paidRef: apiRef, paidAt: _ts() }, { merge: true }).catch(() => {});
+  }
+  if (outcome === 'late_refunded') {
+    const m = (await ref.get()).data() || {};
+    await _notify({ uid: m.buyerUid, type: 'booking_refund', title: 'Payment refunded ↩', body: `Your payment for ${m.title || 'a membership'} arrived after the offer expired, so the membership was not started and the money is back in your SOKONI wallet. Ref ${apiRef}.`, dedupeKey: `membership_latepay_${apiRef}` });
   }
   if (outcome === 'review') {
     const m = (await ref.get()).data() || {};

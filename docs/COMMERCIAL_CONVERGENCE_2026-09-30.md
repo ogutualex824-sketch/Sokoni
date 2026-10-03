@@ -580,3 +580,58 @@ It only reverses settled bookings, full reversals only (partial is not decided),
 - **Refund executed:** the gym is now told too ("Membership refunded", remaining payouts cancelled).
 - **Ops:** a failed refund execution leaves nothing half-done (the wallet credit is inside the decision transaction). It returns "nothing was changed" to the deciding admin and logs `REFUND_EXECUTION_FAILED` as a structured error for monitoring. No admin recipient list exists to notify, and none is invented.
 - **Tests:** 57/0 (+N6–N9); mutants re-run, all detected.
+
+### 13.4 · Integration closure on the money side (2026-10-03, "MEMBERSHIP FINAL INTEGRATION")
+
+**Late payment vs the five-minute unpaid expiry.**
+- A payment landing after `payBy`, or on a record with `status 'expired'`, is NEVER activated.
+- Like a late booking payment (`booking-payment-sweep`), it is refunded to the buyer's SOKONI wallet: deterministic ledger row `{buyer}_{apiRef}_membership_latepay_refund` via `create()`, then `paymentStatus 'refunded_late'`, `status 'expired'`, intent `'refunded'`, and member notice "Payment refunded".
+- A replay refunds nothing twice, and the gym is never settled.
+- Tests L1–L6 cover the 1-second boundary on both sides.
+
+**Refund atomicity under a real failure.** An injected commit failure on the wallet write (A1–A5) leaves nothing changed:
+- refund still `requested`
+- no ledger row, no wallet credit
+- no "refund paid" notice to the member or the gym
+- payouts still frozen
+The callable answers "nothing was changed, please retry" and logs `REFUND_EXECUTION_FAILED`. A retry completes the refund exactly once.
+
+**Sales switch** (defence in depth with sokoni-e3's `fitnessCreateMembership`). The `fitness_membership` purpose refuses unless `featureFlags/fitness_membership_sales.enabled === true` (`SALES_DISABLED`). The check runs before the membership is read, and a read error fails closed (F1–F2 are static; runtime proof needs the emulator).
+
+**Mutants** (`scratchpad ms-mutants.js`, 8). Each newly fails a named row:
+
+| Breakage | Failing rows |
+|---|---|
+| hold-until-first-visit | M3 |
+| refund lock | M8 ×3 + M8b |
+| payment binding | P3 / P4 / P5 (+1) |
+| approval attendance re-check | R6 |
+| settlement idempotency | M5b |
+| late-payment guard | L2 / L3 |
+| refund approval separation | R1 / R1b / X3 (+) |
+| refund atomicity (wallet credit outside the transaction) | A2 (+) |
+
+**Notification matrix (money side).** All go through `notify.js`; none are triggered by browser state.
+
+| Event | Authority (server function) | Recipient(s) | Condition |
+|---|---|---|---|
+| Payment confirmed / membership active | `holdMembershipPayment` | member | verified intent, buyer, amount and currency match, before `payBy` |
+| New membership | `holdMembershipPayment` | gym | same |
+| Payment under review | `holdMembershipPayment` | member | intent / amount binding mismatch |
+| Payment refunded (late) | `holdMembershipPayment` | member | payment after `payBy` / on an expired record |
+| Refund request received | `requestRefund` | member + gym | zero attendance, before the end, once |
+| Exception refund opened | `requestException` | member + gym | admin, written reason, held balance > 0 |
+| Refund declined (with reason) | `decideRefund` (reject) | member | second admin |
+| Membership refunded | `decideRefund` (approve) | member + gym | transaction COMMITTED (never on failure) |
+| Earnings released | `releaseDueSlices` | gym | ≥1 month released |
+| Membership ended | `releaseDueSlices` | member | last month released |
+
+Attendance notifications are sokoni-e3's.
+
+**Tests:** `test-membership-settlement` 70/0. Regressions: creator-callback only its 4 pre-existing FAILs, entertainment 95/0, events 111/0, schedule 25/0, fixed-rate 32/0, reversal 7/0.
+
+**Money-side status against the owner's 36 GREEN criteria.**
+- **PROVEN at unit level (in-memory Firestore):** 2–4, 11, 14–27 (money parts).
+- **UNPROVEN:** emulator and browser runs (RAM about 270 MB, below the 512 MB floor).
+- **BLOCKED:** the live webhook hook (sokoni-5b's port, after their P0 + REVIEW slices).
+- **Not mine:** QR, scanner, staff/business linkage, attendance, access rules, AdminOS/Super Admin screens (sokoni-e3).

@@ -66,7 +66,7 @@ function fakeDb (seed) {
       const t = {
         get: async (r) => { const d = docs.get(r.path); reads.set(r.path, JSON.stringify(d === undefined ? null : d)); return { exists: !!d, data: () => (d ? JSON.parse(JSON.stringify(d)) : undefined) }; },
         create: (r, v) => writes.push(() => { if (docs.has(r.path)) { const e = new Error('ALREADY_EXISTS'); e.code = 6; throw e; } docs.set(r.path, apply(null, v)); }),
-        set: (r, v, o) => writes.push(() => docs.set(r.path, apply(o && o.merge ? docs.get(r.path) : null, v))),
+        set: (r, v, o) => writes.push(() => { if (db._failOn && r.path.startsWith(db._failOn)) { throw new Error('INJECTED_COMMIT_FAILURE on ' + r.path); } docs.set(r.path, apply(o && o.merge ? docs.get(r.path) : null, v)); }),
         update: (r, v) => writes.push(() => { if (!docs.has(r.path)) throw new Error('NOT_FOUND'); docs.set(r.path, apply(docs.get(r.path), v)); }),
       };
       const out = await fn(t);
@@ -309,6 +309,53 @@ const D = (s) => new Date(s);
   const srcN = require('fs').readFileSync(path.join(ROOT, 'functions/membership-settlement.js'), 'utf8');
   ck('N9 a failed refund execution is an ops-visible structured error (REFUND_EXECUTION_FAILED) and tells the admin nothing changed',
     /logger\.error\('\[membership\] REFUND_EXECUTION_FAILED'/.test(srcN) && /nothing was changed/.test(srcN));
+
+  /* ══ L: LATE PAYMENT vs FIVE-MINUTE UNPAID EXPIRY (the race) ══ */
+  const PAYBY = '2026-01-15T09:05:00.000Z';                                   /* creation 09:00 + 5 min */
+  db = setupPay({ payBy: PAYBY }); NOTES.length = 0;
+  MS._test.use({ now: () => new Date('2026-01-15T09:04:59.000Z') });          /* 1 s before payBy */
+  await MS.holdMembershipPayment(null, null, 'API_L1', 'int_1', 6000);
+  ck('L1 boundary: payment 1 s BEFORE payBy → held + active', db._docs.get('providerMemberships/mem_000001').paymentStatus === 'paid_held');
+  db = setupPay({ payBy: PAYBY }); NOTES.length = 0;
+  MS._test.use({ now: () => new Date('2026-01-15T09:05:01.000Z') });          /* 1 s after */
+  await MS.holdMembershipPayment(null, null, 'API_L2', 'int_1', 6000);
+  const ml = db._docs.get('providerMemberships/mem_000001');
+  ck('L2 payment 1 s AFTER payBy → NOT resurrected: refunded_late + expired, KES 6,000 back to the buyer wallet, ledger row',
+    ml.paymentStatus === 'refunded_late' && ml.status === 'expired' && db._docs.get('users/member_1').walletBalance === 6000 && db._docs.has('ledger/member_1_API_L2_membership_latepay_refund') && !ml.nextReleaseAt, ml);
+  ck('L3 the member is told "Payment refunded" — and NEVER "Membership active"', NOTES.some((n) => n.title === 'Payment refunded ↩') && !NOTES.some((n) => n.type === 'subscription_activated'), NOTES.map((n) => n.title));
+  await MS.holdMembershipPayment(null, null, 'API_L2', 'int_1', 6000);
+  ck('L4 the late callback replayed → no second refund (still KES 6,000)', db._docs.get('users/member_1').walletBalance === 6000);
+  db = setupPay({ status: 'expired' });
+  MS._test.use({ now: () => new Date('2026-01-15T09:01:00.000Z') });
+  await MS.holdMembershipPayment(null, null, 'API_L5', 'int_1', 6000);
+  ck('L5 an explicitly expired record is not resurrected either (refunded_late)', db._docs.get('providerMemberships/mem_000001').paymentStatus === 'refunded_late');
+  r = await MS.releaseDueSlices('mem_000001', { now: D('2026-05-01T06:00:00Z'), deps });
+  ck('L6 a late-refunded membership never settles to the gym', r.skipped && bal(db) === 0, r);
+
+  /* ══ A: REFUND ATOMICITY under a real commit failure ══ */
+  db = setup({ paymentRef: 'API_1' });
+  await MS.requestRefund('mem_000001', { by: 'member_1', now: D('2026-01-25T10:00:00Z') });
+  NOTES.length = 0; db._failOn = 'users/';                                     /* the wallet credit write fails at commit */
+  let threw = null;
+  try { await MS.decideRefund('mem_000001', { by: 'admin_9', decision: 'approve' }); } catch (e) { threw = e.message; }
+  db._failOn = null;
+  const ma = db._docs.get('providerMemberships/mem_000001');
+  ck('A1 the wallet write fails → the decision THROWS (the callable turns it into "nothing was changed, please retry")', !!threw && /INJECTED_COMMIT_FAILURE/.test(threw), threw);
+  ck('A2 NOTHING changed: refund still "requested", no ledger row, no wallet, membership still refund_requested',
+    ma.refund.state === 'requested' && ma.status === 'refund_requested' && !db._docs.has('ledger/member_1_mem_000001_membership_refund') && !db._docs.has('users/member_1'), { refund: ma.refund, status: ma.status });
+  ck('A3 no false "refund paid" notification to the member or the gym', !NOTES.some((n) => n.type === 'refund_processed' || n.title === 'Membership refunded'), NOTES);
+  r = await MS.releaseDueSlices('mem_000001', { now: D('2026-04-16T06:00:00Z'), deps });
+  ck('A4 a failed refund does not cancel or release payouts: still frozen, gym unpaid', r.skipped && bal(db) === 0, r);
+  r = await MS.decideRefund('mem_000001', { by: 'admin_9', decision: 'approve' });
+  ck('A5 the admin retries → refund completes once (KES 6,000), notifications sent now', r.ok && db._docs.get('users/member_1').walletBalance === 6000 && NOTES.some((n) => n.type === 'refund_processed'), r);
+
+  /* ══ F: SALES SWITCH (defence in depth; runtime proof = emulator run, UNPROVEN offline) ══ */
+  const pp2 = require('fs').readFileSync(path.join(ROOT, 'functions/payment-purposes.js'), 'utf8');
+  const fm = pp2.slice(pp2.indexOf('fitness_membership: {'), pp2.indexOf('fitness_membership: {') + 3000);
+  ck('F1 the purpose refuses unless featureFlags/fitness_membership_sales.enabled === true (SALES_DISABLED), BEFORE reading the membership',
+    /doc\('fitness_membership_sales'\)/.test(fm) && /enabled === true/.test(fm) && /code: 'SALES_DISABLED'/.test(fm)
+    && fm.indexOf("doc('fitness_membership_sales')") < fm.indexOf("collection('providerMemberships')"));
+  ck('F2 a flag read error FAILS CLOSED (salesOpen stays false)', /catch \(_\) \{ salesOpen = false; \}/.test(fm));
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

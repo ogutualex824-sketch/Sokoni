@@ -1,3 +1,8 @@
+## 2026-10-03 — Memberships: a late payment never resurrects an expired membership (refunded to wallet); refund atomicity proven under failure; sales-switch check (NOT deployed)
+
+- **Changes:** membership-settlement (late-payment branch); payment-purposes (featureFlags/fitness_membership_sales gate).
+- **Tests:** test-membership-settlement 70/0 (+L1-L6, A1-A5, F1-F2); 8 mutants each detected.
+
 ## 2026-10-03 — Membership notifications completed: payment under review, exception filed, gym told of refunds, ops error on failed execution (NOT deployed)
 
 - **Tests:** test-membership-settlement 57/0.
