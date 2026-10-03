@@ -1575,6 +1575,28 @@ service cloud.firestore {
   allow read:  if isAdmin();
   allow write: if false;
   }
+  /* B2B lead recovery ledger (sokoni-2f 15e66ab): op headers + per-invoice claims, and Pay Now surpluses. Server-only. */
+  match /b2bLeadRecoveries/{id} {
+  allow read, write: if false;
+  }
+  match /b2bLeadOverpayments/{id} {
+  allow read, write: if false;
+  }
+  /* Platform receipts (sokoni-2f convergence/commercial-fn-on-ef1e992 @ bc9af28). Owner brief: "customer reads another
+     customer's receipt -> reject". Every read goes through callables that scope to the caller (myTransactionReceipts)
+     or audit the admin (adminSearchReceipts), so even a customer's OWN receipt is never a raw client read. */
+  match /transactionReceipts/{id} {
+  allow read, write: if false;
+  match /events/{eid} {
+  allow read, write: if false;
+  }
+  }
+  match /transactionReceiptFailures/{id} {
+  allow read, write: if false;
+  }
+  match /receiptReconciliationExceptions/{id} {
+  allow read, write: if false;
+  }
   match /subscriptionPlans/{planId} {
   allow read:  if true;
   allow write: if isAdmin();

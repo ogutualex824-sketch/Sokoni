@@ -53,6 +53,23 @@ const denies = async (id, m, p) => { try { await assertFails(p); ck(id, true, m)
   await denies('BL-R4', 'supplier rewrites own quote total', updateDoc(doc(sup, 'rfqQuotes/r1__supA'), { totalKES: 1 }));
   await denies('BL-R5', 'buyer reads the supplier quote raw', getDoc(doc(buyer, 'rfqQuotes/r1__supA')));
   await allows('BL-R6', 'admin reads an rfq', getDoc(doc(admin, 'rfqs/r1')));
+  // receipts + recovery ledger (sokoni-2f bc9af28 / 15e66ab): server-only; reads go through scoped callables
+  await env.withSecurityRulesDisabled(async (c) => {
+    const f = c.firestore();
+    await setDoc(doc(f, 'transactionReceipts/rc1'), { customerUid: 'buyer', amountKES: 500 });
+    await setDoc(doc(f, 'transactionReceipts/rc1/events/e1'), { kind: 'issued' });
+    await setDoc(doc(f, 'b2bLeadRecoveries/leaddeduct_S1'), { header: true, netKES: 700 });
+  });
+  await denies('RC-1', 'a customer reads ANOTHER customer\'s receipt', getDoc(doc(sup, 'transactionReceipts/rc1')));
+  await denies('RC-2', 'a customer reads their OWN receipt raw (myTransactionReceipts only)', getDoc(doc(buyer, 'transactionReceipts/rc1')));
+  await denies('RC-3', 'a client reads a receipt event', getDoc(doc(buyer, 'transactionReceipts/rc1/events/e1')));
+  await denies('RC-4', 'a client forges a receipt', setDoc(doc(buyer, 'transactionReceipts/rc9'), { customerUid: 'buyer', amountKES: 1 }));
+  await denies('RC-5', 'admin client reads a receipt raw (adminSearchReceipts audits admins)', getDoc(doc(admin, 'transactionReceipts/rc1')));
+  await denies('RC-6', 'client read / write of transactionReceiptFailures', setDoc(doc(admin, 'transactionReceiptFailures/f1'), { x: 1 }));
+  await denies('RC-7', 'client read of receiptReconciliationExceptions', getDoc(doc(admin, 'receiptReconciliationExceptions/x1')));
+  await denies('RC-8', 'supplier reads / forges a recovery header (pre-claim the op to skip a deduction)', setDoc(doc(sup, 'b2bLeadRecoveries/leaddeduct_S2'), { header: true, netKES: 1000 }));
+  await denies('RC-9', 'client reads a recovery header', getDoc(doc(sup, 'b2bLeadRecoveries/leaddeduct_S1')));
+  await denies('RC-10', 'client writes b2bLeadOverpayments', setDoc(doc(sup, 'b2bLeadOverpayments/o1'), { amountKES: 9999 }));
   await env.cleanup();
   console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('HARNESS ERROR (not a rules result):', e.message); process.exit(2); });

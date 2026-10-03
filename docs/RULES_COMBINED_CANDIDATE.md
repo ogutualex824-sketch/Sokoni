@@ -233,3 +233,12 @@ must fail there.
    admin read only; all four write false. Written only by the `educationLearner` callable (5b @ 95f4317). Guardian
    identity never reaches a teacher or the public (owner), so guardians and learners see links only through the
    callable. Rows ED-L1–L11 added to the same suite. **EMULATOR PENDING.**
+
+## 2026-10-03: receipts + B2B recovery ledger explicit deny (sokoni-2f)
+
+`transactionReceipts/{id}` (plus `/events/{eid}`), `transactionReceiptFailures`, `receiptReconciliationExceptions`,
+`b2bLeadRecoveries` and `b2bLeadOverpayments` are `read, write: false` for every client, admins included. Reads go
+through `myTransactionReceipts` (scoped to the caller) and `adminSearchReceipts` (audited). Default deny already
+applied; the explicit blocks make the owner's "customer reads another customer's receipt → reject" provable. A client
+pre-creating a `b2bLeadRecoveries` op header would make a settlement replay as "already done" and skip the deduction;
+RC-8 covers that. Rows RC-1–RC-10 are in `zz-test-b2b-leads-rules.js`. **EMULATOR PENDING.**
