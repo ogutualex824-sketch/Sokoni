@@ -12398,6 +12398,11 @@ exports.analyticsSnapshotDaily = _aeMod.analyticsSnapshotDaily;
 /* ── Provider Onboarding & Dashboard — 19 onCall ops → 1 providerDispatch ── */
 const provDisp = require('./provider-dispatch');
 exports.providerDispatch = provDisp.providerDispatch;
+/* PIN YAKO NI BOOKING YAKO (owner 2026-09-30): the PIN is issued when a booking's payment is held and is the only
+   release of that money (booking-pin-core.js). Names match the full entertainment envelope module, which supersedes it. */
+const _bookingPin = require('./booking-pin-core');
+exports.serviceBookingPin           = _bookingPin.serviceBookingPin;
+exports.entBookingOnProviderBooking = _bookingPin.entBookingOnProviderBooking;   // trigger: providerBookings/{id}
 
 /* ── Universal Enterprise Onboarding Engine — 12 ops → 1 onboardingDispatch ── */
 const onbDisp = require('./onboarding-dispatch');

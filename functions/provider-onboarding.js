@@ -409,7 +409,7 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
   const _regCur  = pubSnap.exists ? (pubSnap.data() || {}) : {};
   const approved = pubSnap.exists && ['active', 'approved'].includes(_regCur.status);
 
-  const providerId = d.providerId || await _genProviderId();
+  const providerId = d.providerId || _regCur.providerId || await _genProviderId();   /* keep the registry id on re-publish (booking-pin line 6a9dd40) */
   /* /provider/{providerId} has no hosting rewrite — firebase.json routes
      /shop, /@, /card and /pay, but not /provider — so every QR code and
      profile link built from it resolved to a 404. The public profile page is
@@ -493,7 +493,7 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     ...(_pubRate || {}),
     /* Verification and featuring are admin decisions and are never granted by
        the act of publishing. merge:true leaves an existing admin value alone. */
-    rating: 0, reviewCount: 0, jobsCompleted: 0,
+    ...(pubSnap.exists ? {} : { rating: 0, reviewCount: 0, jobsCompleted: 0 }),   /* never reset a live rating on re-publish (6a9dd40) */
     publishedAt: _ts(), updatedAt: _ts(),
   }, { merge: true });
 
@@ -527,7 +527,9 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
 
   await batch.commit();
   logger.info('[provider] profile published', { uid, providerId });
-  return { success: true, providerId, qrCode: qrData, profileUrl: `https://mysokoni.co.ke/provider-profile.html?uid=${uid}` };
+  /* the client is told the truth: published content is not approval (6a9dd40) */
+  return { success: true, providerId, qrCode: qrData, profileUrl: `https://mysokoni.co.ke/provider-profile.html?uid=${uid}`,
+           approved, status: approved ? _regCur.status : (pubSnap.exists ? (_regCur.status || 'pending_approval') : 'pending_approval') };
 };
 
 /* ── 6. providerGetProfile ───────────────────────────────────────────────────── */
