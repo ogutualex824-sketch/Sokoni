@@ -129,6 +129,9 @@
     let svc;
     try { svc = (await firebase.firestore().collection('providerServices').doc(_ctx.serviceId).get()).data() || {}; }
     catch (e) { return create(); }
+    /* Tech Hub slice 4F: booking an accepted quote — the price, duration and details come from the quote server-side,
+       so no device / options step: pick the time and reserve. */
+    if (_ctx.leadId) return create();
     /* Tech Hub slice 4b: a service with a device profile asks for the customer's device first. The server validates it
        against what the service covers (bookingCreateService → repairDetails) and never prices from it. */
     if (svc.techProfile && Array.isArray(svc.techProfile.deviceTypes) && svc.techProfile.deviceTypes.length && !_ctx.repairDetails) {
@@ -247,7 +250,7 @@
       const sel = _ctx.selection || {};
       bk = await call('providerDispatch', { op: 'bookingCreateService', providerId: _ctx.providerId, serviceId: _ctx.serviceId, date: _ctx.date, startTime: _ctx.time,
         packageId: sel.packageId || undefined, addOns: sel.addOns || [], durationMins: sel.durationMins || undefined, distanceKm: Number(_ctx.distanceKm) || undefined,
-        repairDetails: _ctx.repairDetails || undefined });   /* Tech slice 4b — descriptive; the server validates it and never prices from it */
+        repairDetails: _ctx.repairDetails || undefined, leadId: _ctx.leadId || undefined });   /* Tech slice 4b — descriptive; the server validates it and never prices from it */
     } catch (e) { if (go) { go.disabled = false; go.textContent = 'Try another time'; } title('Slot unavailable'); alert(e.message || 'That slot is no longer available.'); return loadSlots(); }
     _ctx.bookingId = bk.bookingId;
     _ctx.expiresAt = Number(bk.expiresAt) || null;                     /* pre-payment hold deadline (epoch ms) */

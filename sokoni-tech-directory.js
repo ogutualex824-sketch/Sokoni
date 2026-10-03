@@ -112,7 +112,10 @@
         location.href = p.profileUrl;   /* the storefront carries the same booking flow */
       }
     } else if (kind === 'chat') {
-      if (G.SokoniInbox && typeof G.SokoniInbox.openChat === 'function') {
+      /* Tech slice 4F: a conversation needs a transaction — asking the provider creates the lead it hangs on. */
+      if (G.SokoniLeads && typeof G.SokoniLeads.ask === 'function') {
+        G.SokoniLeads.ask({ providerId: p.uid, providerName: p.name });
+      } else if (G.SokoniInbox && typeof G.SokoniInbox.openChat === 'function') {
         G.SokoniInbox.openChat({ otherUid: p.uid, otherName: p.name, type: 'customer-provider', context: p.categoryLabel + ' · SOKONI Tech' });
       } else {
         location.href = 'messages.html';

@@ -5,7 +5,7 @@ payment / booking / wallet / review / chat authority, no WhatsApp, AdminOS-gated
 dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]], [[Payments]], [[AdminOS]],
 [[IntaSend Convergence Brief]]. Strategy: no new hubs — Digital Hub folds into Tech Hub.
 
-**Status: slices 1, 2a, 2b, 3, 4a and 4b built and tested; nothing deployed.**
+**Status: slices 1, 2a, 2b, 3, 4a, 4b, 4L and 4F built and tested; nothing deployed.**
 
 ## Authority map (census 2026-10-03)
 
@@ -17,7 +17,7 @@ dashboards, provider-controlled storefronts. Related: [[Services]], [[Bookings]]
 | Booking | `sokoni-book-service.js` → `bookingCreateService` (server price, 5-min slot lock) → `service_booking` intent → IntaSend → webhook → `paid_held` | exists |
 | Completion / settlement | `providerCompleteBooking` → `_disburseHeldFunds`; cancel / no-show / reschedule; `booking-resolution.js` refunds | exists; no completion PIN (provider self-completes) |
 | Commission | plan rate in provider compatibility mode; healthcare by decided role (`provider-hub.js`) | exists; no lead fee |
-| Leads / quotes | — | **missing** (no collection, no callable, no rules); `priceType:'quotation'` unused |
+| Leads / quotes | `serviceLeads` via service-leads.js (providerDispatch lead* ops), `bookingCreateService({leadId})` books at the quoted price; docs/SERVICE_LEADS.md | **built 4F** (server 906bd2f + hosting); no lead fee (not configured) |
 | Messaging | `conversations` + `sendMessage` CF; `sokoni-inbox.js` | partial: `service_booking` context points at legacy `bookings`, not `providerBookings` |
 | Reviews | `bookingSubmitReview` → `providerReviews/{bookingId}` | exists; ratings split across three places; generic `reviews` rule lets an author self-approve |
 | Offers | promotions admin-only; shop offers keyed to shops | **missing** for providers |

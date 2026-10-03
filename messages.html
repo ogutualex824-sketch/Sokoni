@@ -385,7 +385,7 @@ function _openFromTransaction(){
   var t=_params.get('tx'), id=_params.get('txId');
   if(!t||!id)return false;
   var n=$('notice');
-  if(['service_booking','order'].indexOf(t)===-1){ n.innerHTML='<b>This conversation can’t be opened from here.</b>'; n.hidden=false; return true; }
+  if(['service_booking','service_lead','order'].indexOf(t)===-1){ n.innerHTML='<b>This conversation can’t be opened from here.</b>'; n.hidden=false; return true; }
   n.innerHTML='Opening the conversation…'; n.hidden=false;
   SokoniChat.createConversation(t,id,null,{}).then(function(r){
     n.hidden=true;

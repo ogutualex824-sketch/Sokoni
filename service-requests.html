@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en" data-require-auth="true">
+<head>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>My service requests — SOKONI</title>
+  <meta name="description" content="Your requests to SOKONI service providers, their quotes, and booking an accepted quote.">
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <script src="security.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body { background:#0a0a0a; color:#eee; font-family:system-ui, -apple-system, Segoe UI, sans-serif; margin:0; }
+    .sr-wrap { max-width:720px; margin:0 auto; padding:16px; }
+    .sr-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:8px 0 16px; }
+    .sr-head h1 { font-size:20px; margin:0; }
+    .sr-note { font-size:12px; opacity:.65; margin-bottom:14px; line-height:1.5; }
+    a.sr-back { color:#71ff00; text-decoration:none; font-size:13px; }
+  </style>
+</head>
+<body>
+  <!-- Tech Hub slice 4F (2026-10-03): the customer side of service leads & quotes (functions/service-leads.js).
+       Every state shown here comes from the server (providerDispatch leadListMine); accepting, declining, closing and
+       booking are server operations — the quoted price is applied by bookingCreateService, never by this page. -->
+  <main class="sr-wrap">
+    <div class="sr-head"><h1>My service requests</h1><a class="sr-back" href="tech-hub.html">Tech Hub →</a></div>
+    <div class="sr-note">Requests you sent to providers, and the quotes they sent back. Accept a quote to book a time — you pay
+      through SOKONI and the provider is paid after the job is done.</div>
+    <div id="srList" aria-live="polite"><div style="opacity:.6">Loading…</div></div>
+  </main>
+
+  <script src="firebase.js" type="module"></script>
+  <script src="sokoni-intasend.js" defer></script>
+  <script src="sokoni-book-service.js" defer></script>
+  <script src="sokoni-inbox.js" defer></script>
+  <script src="sokoni-leads.js" defer></script>
+  <script src="shared-header.js" defer></script>
+  <script src="sw-register.js" defer></script>
+  <script>
+  (function () {
+    'use strict';
+    var el = document.getElementById('srList');
+    (function boot(n) {
+      n = n || 0;
+      if (window.firebase && firebase.auth && window.SokoniLeads) {
+        var off = firebase.auth().onAuthStateChanged(function (u) {
+          if (typeof off === 'function') off();
+          if (!u) { location.href = 'login.html?next=' + encodeURIComponent('service-requests.html'); return; }
+          SokoniLeads.mountMine(el);
+        });
+        return;
+      }
+      if (n > 60) { el.innerHTML = '<div style="opacity:.75">This page could not start — please refresh.</div>'; return; }
+      setTimeout(function () { boot(n + 1); }, 150);
+    }(0));
+  }());
+  </script>
+</body>
+</html>

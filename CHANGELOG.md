@@ -1,3 +1,29 @@
+## [2026-10-03] - Tech Hub slice 4F (hosting): ask a provider, get a quote, book it — hosting, NOT deployed
+
+- **sokoni-leads.js** (new) over the server authority (functions/service-leads.js, feat/tech-taxonomy-on-13f74f3 @ 906bd2f):
+  - `ask()` → leadCreate, then opens the lead's conversation. Nothing says "sent" before the server answers.
+  - `mountMine()` (customer): quotes with accept / ask a question / decline / close; **Book a time** only after acceptance,
+    through SokoniBookService with the leadId.
+  - `mountProvider()` (provider): send / re-send a quote for one of their services, within granted modes; decline; message.
+- **Customer entry points:**
+  - directory card "Message" (sokoni-tech-directory.js) and storefront "Message" (provider-profile.html) now ASK the
+    provider. They used to land on "direct messaging isn't available".
+  - Storefront: the retired SokoniPay.bookNow fallback (pay-time credit STOPPED) and its wa.me hand-off are removed.
+- **service-requests.html** (new, sign-in required, self-updating via sw-register.js): the customer's requests and quotes.
+  Linked from the Tech Hub repair panel.
+- **provider-dashboard.html**: "Leads & quotes" sidebar item + panel (`data-hc-module="leads"`, hidden until the server
+  says AVAILABLE).
+- **sokoni-book-service.js**: `open({ leadId })` skips options / device and sends only the leadId. The quoted price is
+  applied by bookingCreateService.
+- **messages.html / sokoni-inbox.js**: `service_lead` is an allowed transaction type.
+- **Pages loading the module:** phone-repair, electrical, tech-hub, providers, provider-profile, provider-dashboard,
+  service-requests.
+- **Tests:**
+  - test-service-leads-web 11/0. The sabotage "Book on an unaccepted quote" turns row W1 red.
+  - test-tech-service-editor 10/0 (L1 allow-list updated), test-tech-directory 50/0, role-authority 155/0, customer-nav 62/0.
+  - Browser run UNRUN (memory floor).
+- **Lead monetization:** not configured (server records it). Nothing is charged for a lead.
+
 ## [2026-10-03] - Tech Hub slice 4L (hosting): message the other party of a booking, inside SOKONI — hosting, NOT deployed
 
 - messages.html:

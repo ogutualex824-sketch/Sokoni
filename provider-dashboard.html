@@ -294,6 +294,7 @@ a{color:var(--acc);text-decoration:none}
       <div class="sb-item" onclick="P.show('calendar',this)"><span class="sb-icon">📆</span>Calendar</div>
       <div class="sb-item" onclick="P.show('bookings',this)"><span class="sb-icon">📅</span>Bookings</div>
       <div class="sb-item" data-hc-module="repairs" hidden aria-hidden="true" onclick="P.show('repairs',this)"><span class="sb-icon">🔧</span>Repairs</div>
+      <div class="sb-item" data-hc-module="leads" hidden aria-hidden="true" onclick="P.show('leads',this)"><span class="sb-icon">📨</span>Leads &amp; quotes</div>
       <div class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Wallet</div>
       <div class="sb-item" onclick="P.show('customers',this)"><span class="sb-icon">👥</span>Customers</div>
       <div class="sb-item" onclick="P.show('reviews',this)"><span class="sb-icon">⭐</span>Reviews</div>
@@ -489,6 +490,12 @@ a{color:var(--acc);text-decoration:none}
     <div class="panel" id="panel-repairs">
       <div class="pg-header"><div><div class="pg-title">Repairs</div><div style="font-size:12px;opacity:.65">Device repair bookings — the device and problem your customer gave. Confirm, complete (booking PIN) and get paid in Bookings.</div></div></div>
       <div style="padding:14px 20px"><div id="rpList"></div></div>
+    </div>
+
+    <!-- ── Leads & quotes (Tech Hub slice 4F) — serviceLeads via providerDispatch lead* ops ── -->
+    <div class="panel" id="panel-leads">
+      <div class="pg-header"><div><div class="pg-title">Leads &amp; quotes</div><div style="font-size:12px;opacity:.65">Requests from customers. Reply in messages, send a quote; an accepted quote is booked and paid like any booking.</div></div></div>
+      <div style="padding:14px 20px"><div id="ldList"></div></div>
     </div>
 
     <!-- ── Earnings ──────────────────────────────────────────────────── -->
@@ -824,6 +831,7 @@ a{color:var(--acc);text-decoration:none}
 <script src="sokoni-provider.js" defer></script>
 <!-- shell gate: the dashboard is a projection of the server workspace authority (providerDispatch businessWorkspace); a held account is sent to /complete-application -->
 <script src="sokoni-tech-service-editor.js" defer></script>
+<script src="sokoni-leads.js" defer></script>
 <script src="sokoni-business-workspace.js" defer></script>
 <script src="sokoni-booking-resolution.js" defer></script>
 <script src="sokoni-pricing-studio.js" defer></script>
@@ -853,6 +861,7 @@ const P={
     if(id==='analytics')An.load();
     if(id==='reviews')Rv.load();
     if(id==='repairs'&&window.SokoniTechEditor)SokoniTechEditor.loadRepairs();
+    if(id==='leads'&&window.SokoniLeads)SokoniLeads.mountProvider(_q('ldList'),{services:()=>(Sv._svc||[]).filter(x=>x.active!==false),caps:()=>((window.__sokoniWorkspace||{}).serviceCapabilities||[])});
   }
 };
 
